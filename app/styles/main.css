@@ -1,0 +1,119 @@
+/* Noto Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100..900;1,100..900&family=Noto+Serif:ital,wght@0,100..900;1,100..900&display=swap');
+
+@import 'tailwindcss' source('..');
+
+@theme {
+  --font-sans: 'Noto Sans', sans-serif;
+  --font-serif: 'Noto Serif', serif;
+
+  --spacing-md: calc(5 * var(--spacing));
+  --spacing-sm: calc(1/2 * var(--spacing-md));
+  --spacing-lg: calc(2 * var(--spacing-md));
+  --spacing-xl: calc(2 * var(--spacing-lg));
+
+  --color-*: initial;
+
+  --color-white: white;
+  --color-black: black;
+  --color-bw: light-dark(white, black);
+  --color-bw-reverse: light-dark(black, white);
+
+  --color-accent: oklch(
+    var(--lightness-accent) var(--chroma-accent) var(--hue-accent)
+  );
+
+  --color-bg-1: light-dark(
+    oklch(100% 0.01 var(--hue-accent)),
+    oklch(12% 0.016 var(--hue-accent))
+  );
+  --color-bg-2: light-dark(
+    oklch(97% 0.01 var(--hue-accent)),
+    oklch(18% 0.01 var(--hue-accent))
+  );
+  --color-bg-3: light-dark(
+    oklch(90% 0.01 var(--hue-accent)),
+    oklch(24% 0.01 var(--hue-accent))
+  );
+  --color-bg-4: light-dark(
+    oklch(80% 0.01 var(--hue-accent)),
+    oklch(30% 0.01 var(--hue-accent))
+  );
+
+  --color-bg-accent: light-dark(
+    oklch(95% 0.04 var(--hue-accent)),
+    oklch(24% 0.04 var(--hue-accent))
+  );
+
+  --color-border-1: light-dark(
+    oklch(80% 0.02 var(--hue-accent)),
+    oklch(26% 0.02 var(--hue-accent))
+  );
+  --color-border-2: light-dark(
+    oklch(72% 0.025 var(--hue-accent)),
+    oklch(38% 0.025 var(--hue-accent))
+  );
+  --color-border-3: light-dark(
+    oklch(55% 0.03 var(--hue-accent)),
+    oklch(65% 0.03 var(--hue-accent))
+  );
+
+  --color-shadow-1: light-dark(
+    oklch(10% 0.05 var(--hue-accent) / 0.1),
+    oklch(90% 0.009 var(--hue-accent) / 0.04)
+  );
+  --color-shadow-2: light-dark(
+    oklch(20% 0.05 var(--hue-accent) / 0.15),
+    oklch(90% 0.06 var(--hue-accent) / 0.05)
+  );
+  --color-shadow-3: light-dark(
+    oklch(30% 0.05 var(--hue-accent) / 0.2),
+    oklch(100% 0.06 var(--hue-accent) / 0.1)
+  );
+
+  --color-text-1: light-dark(
+    oklch(14% 0.1 var(--hue-accent)),
+    oklch(96% 0.02 var(--hue-accent))
+  );
+  --color-text-2: light-dark(
+    oklch(48% 0.02 var(--hue-accent)),
+    oklch(56% 0.02 var(--hue-accent))
+  );
+  --color-text-3: light-dark(
+    oklch(66% 0.02 var(--hue-accent)),
+    oklch(40% 0.02 var(--hue-accent))
+  );
+}
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+@custom-variant hactive (&:hover, &:active);
+
+@layer base {
+  :root {
+    font-family: var(--font-default);
+    color: var(--color-text-1);
+  }
+
+  :root[data-theme='light'] {
+    color-scheme: light;
+    --lightness-accent: 52%;
+    --chroma-accent: 0.2;
+  }
+
+  :root[data-theme='dark'] {
+    color-scheme: dark;
+    --lightness-accent: 64%;
+    --chroma-accent: 0.16;
+  }
+
+  ::selection {
+    @apply bg-accent/50;
+    color: inherit;
+  }
+
+  svg[thei-icon] {
+    display: inline-block;
+    vertical-align: bottom;
+  }
+}

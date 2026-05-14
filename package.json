@@ -1,4 +1,33 @@
 {
-    "name": "thei",
-    "version": "0.0.0"
+  "name": "thei",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "nuxt dev .playground",
+    "build": "nuxt build .playground",
+    "start": "nuxt start .playground",
+    "format": "prettier --write .",
+    "db:push": "drizzle-kit push",
+    "db:generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "@floating-ui/vue": "^1.1.11",
+    "@tailwindcss/vite": "^4.3.0",
+    "better-sqlite3": "^12.9.0",
+    "chokidar": "^5.0.0",
+    "drizzle-orm": "^0.45.2",
+    "nuxt": "^4.4.5",
+    "perfect-debounce": "^2.1.0",
+    "picocolors": "^1.1.1",
+    "tailwindcss": "^4.3.0",
+    "unslash": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.7.0",
+    "drizzle-kit": "^0.31.10",
+    "prettier": "^3.8.3",
+    "prettier-plugin-classnames": "^0.10.1",
+    "prettier-plugin-merge": "^0.10.1",
+    "prettier-plugin-tailwindcss": "^0.8.0"
+  }
 }
