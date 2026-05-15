@@ -4,6 +4,7 @@ export default defineLanguagePhrases({
   language_code: 'ru',
   language_name: 'Русский',
 
+  install_thei: 'Установка Thei',
   visuals: 'Внешний вид',
   visuals_description:
     'Применяется только для вас. Посетители могут выбрать свои настройки.',

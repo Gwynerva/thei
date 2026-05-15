@@ -1,22 +1,27 @@
 <script lang="ts" setup>
-import { type Language, loadLanguage } from '#layers/thei/shared/language';
 import {
-  getBrowserLanguageCode,
-  installLanguageSymbol,
-} from './install-language';
+  isLanguageCode,
+  type Language,
+  type LanguageCode,
+  loadLanguage,
+} from '#layers/thei/shared/language';
+
 import InstallLoading from './components/InstallLoading.vue';
 import InstallForm from './components/InstallForm.vue';
 
 useHead({ title: 'Thei' });
 
-const installLanguage = shallowRef<Language>();
-provide(installLanguageSymbol, installLanguage);
-
 const ready = ref(false);
 
 onMounted(async () => {
-  const initialLanguageCode = getBrowserLanguageCode();
-  installLanguage.value = await loadLanguage(initialLanguageCode);
+  let languageCode: LanguageCode = 'en';
+  let browserLanguageCode = navigator.language.toLowerCase().slice(0, 2);
+
+  if (isLanguageCode(browserLanguageCode)) {
+    languageCode = browserLanguageCode;
+  }
+
+  language.value = await loadLanguage(languageCode);
   ready.value = true;
 });
 </script>

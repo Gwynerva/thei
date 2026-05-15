@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { IconName } from '#thei/icons';
-import { useInstallPhrases } from '../../../install-language';
+import { useInstallPhrase } from '../../../install-language';
 import FormField from '../FormField.vue';
 import FormFieldLabel from '../FormFieldLabel.vue';
 
@@ -22,7 +22,7 @@ const {
   install_access_closed,
   install_access_open_description,
   install_access_closed_description,
-} = useInstallPhrases();
+} = useInstallPhrase();
 
 const options: Record<AccessType, AccessOption> = {
   open: {
@@ -61,7 +61,7 @@ watch(accessType, (val) => emit('change', val === 'open'));
                 dark:bg-green-900/30`
               : `border-red-500 bg-red-100 dark:border-red-400
                 dark:bg-red-900/30`
-            : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800',
+            : 'border-gray-300 dark:border-gray-600 dark:bg-gray-800 bg-white',
         ]"
         @click="accessType = option"
       >
@@ -92,7 +92,7 @@ watch(accessType, (val) => emit('change', val === 'open'));
           </span>
         </div>
 
-        <div class="text-xs text-gray-600 dark:text-gray-300">
+        <div class="text-gray-600 dark:text-gray-300 text-xs">
           {{ options[option].description }}
         </div>
       </button>

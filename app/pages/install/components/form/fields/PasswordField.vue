@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import FormField from '../FormField.vue';
 import FormFieldLabel from '../FormFieldLabel.vue';
-import { useInstallPhrases } from '../../../install-language';
+import { useInstallPhrase } from '../../../install-language';
 
 const emit = defineEmits<{
   change: [value: string];
@@ -13,7 +13,7 @@ const {
   install_confirm_password_label,
   install_confirm_password_placeholder,
   install_error_passwords_mismatch,
-} = useInstallPhrases();
+} = useInstallPhrase();
 
 const passwordInput = useTemplateRef('password');
 const confirmInput = useTemplateRef('confirm');
@@ -49,10 +49,10 @@ const confirmError = computed((): string | undefined =>
         type="password"
         autocomplete="new-password"
         :placeholder="install_password_placeholder"
-        class="hactive:border-blue-500 hactive:ring-1 hactive:ring-blue-500
-          hactive:outline-none w-full rounded-lg border border-gray-300 bg-white
-          px-3 py-2 text-sm text-gray-800 shadow-sm dark:border-gray-600
-          dark:bg-gray-800 dark:text-gray-100"
+        class="hactive:border-blue-500 hactive:ring-blue-500 border-gray-300
+          text-gray-800 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100
+          w-full rounded-lg border bg-white px-3 py-2 text-sm shadow-sm
+          hactive:ring-1 hactive:outline-none"
       />
     </FormField>
     <FormField>
@@ -66,13 +66,13 @@ const confirmError = computed((): string | undefined =>
           type="password"
           autocomplete="new-password"
           :placeholder="install_confirm_password_placeholder"
-          class="hactive:border-blue-500 hactive:ring-1 hactive:ring-blue-500
-            hactive:outline-none w-full rounded-lg border border-gray-300
-            bg-white px-3 py-2 text-sm text-gray-800 shadow-sm
-            dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+          class="hactive:border-blue-500 hactive:ring-blue-500 border-gray-300
+            text-gray-800 dark:border-gray-600 dark:bg-gray-800
+            dark:text-gray-100 w-full rounded-lg border bg-white px-3 py-2
+            text-sm shadow-sm hactive:ring-1 hactive:outline-none"
           @blur="confirmTouched = true"
         />
-        <p v-if="confirmError" class="text-xs text-red-500 dark:text-red-400">
+        <p v-if="confirmError" class="text-red-500 dark:text-red-400 text-xs">
           {{ confirmError }}
         </p>
       </div>

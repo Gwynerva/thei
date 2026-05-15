@@ -1,40 +1,28 @@
-import {
-  loadLanguage,
-  type Language,
-  type LanguageCode,
-} from '#layers/thei/shared/language';
-
-const languageCache = new Map<LanguageCode, Promise<Language>>();
+import { loadLanguage } from '#layers/thei/shared/language';
+import { language } from '../composables/language';
 
 export default defineNuxtPlugin(async () => {
-  const languageCode = useLanguageCode();
-  const language = shallowRef<Language>();
-
   if (import.meta.server) {
     const event = useRequestEvent();
-    languageCode.value = event?.context.languageCode;
-  }
 
-  if (languageCode.value) {
-    let cachedLanguage = languageCache.get(languageCode.value);
-
-    if (!cachedLanguage) {
-      cachedLanguage = loadLanguage(languageCode.value);
-      languageCache.set(languageCode.value, cachedLanguage);
+    if (!event) {
+      return;
     }
 
-    language.value = await cachedLanguage;
+    const languageCode = event.context.languageCode;
+
+    if (!languageCode) {
+      return;
+    }
+
+    if (language.value === undefined || language.value.code !== languageCode) {
+      language.value = await loadLanguage(languageCode);
+    }
   }
 
-  useHead(() => ({
+  useHead({
     htmlAttrs: {
-      lang: languageCode,
+      lang: computed(() => language.value?.code),
     },
-  }));
-
-  return {
-    provide: {
-      language,
-    },
-  };
+  });
 });

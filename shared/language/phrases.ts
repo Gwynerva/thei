@@ -6,16 +6,44 @@ export type ValidateLanguagePhrases<
 
 export type LanguagePhraseId = Extract<keyof LanguagePhrases, string>;
 
-export function defineLanguagePhrases<T extends LanguagePhrases>(
-  language: T & { [K in Exclude<keyof T, keyof LanguagePhrases>]: never },
-): T {
-  return language;
+export function defineLanguagePhrases(
+  phrases: LanguagePhrases,
+): LanguagePhrases {
+  return new Proxy(
+    {},
+    {
+      get(_, key) {
+        if (key in phrases) {
+          return phrases[key as keyof LanguagePhrases];
+        }
+
+        const missingPhrase = function () {
+          return key;
+        };
+
+        Object.defineProperty(missingPhrase, 'toString', {
+          value() {
+            return key.toString();
+          },
+        });
+
+        Object.defineProperty(missingPhrase, Symbol.toPrimitive, {
+          value() {
+            return key.toString();
+          },
+        });
+
+        return missingPhrase;
+      },
+    },
+  ) as any;
 }
 
 export type LanguagePhrases = ValidateLanguagePhrases<{
   language_code: string;
   language_name: string;
 
+  install_thei: string;
   visuals: string;
   visuals_description: string;
   theme: string;

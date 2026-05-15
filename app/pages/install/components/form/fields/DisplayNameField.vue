@@ -2,7 +2,7 @@
 import FormField from '../FormField.vue';
 import FormFieldHint from '../FormFieldHint.vue';
 import FormFieldLabel from '../FormFieldLabel.vue';
-import { useInstallPhrases } from '../../../install-language';
+import { useInstallPhrase } from '../../../install-language';
 
 const emit = defineEmits<{
   change: [value: string];
@@ -12,7 +12,7 @@ const {
   install_display_name_label,
   install_display_name_variants,
   install_display_name_description,
-} = useInstallPhrases();
+} = useInstallPhrase();
 
 const inputElement = useTemplateRef('input');
 
@@ -52,10 +52,10 @@ watch(displayName, (val) => emit('change', val));
       autocomplete="name"
       spellcheck="false"
       :placeholder="sampleName"
-      class="hactive:border-blue-500 hactive:ring-1 hactive:ring-blue-500
-        hactive:outline-none w-full rounded-lg border border-gray-300 bg-white
-        px-3 py-2 text-sm text-gray-800 shadow-sm dark:border-gray-600
-        dark:bg-gray-800 dark:text-gray-100"
+      class="hactive:border-blue-500 hactive:ring-blue-500 border-gray-300
+        text-gray-800 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100
+        w-full rounded-lg border bg-white px-3 py-2 text-sm shadow-sm
+        hactive:ring-1 hactive:outline-none"
     />
     <FormFieldHint>
       {{ install_display_name_description(displayName || sampleName) }}

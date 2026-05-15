@@ -8,8 +8,8 @@ export const languagesInfo = {
 export type LanguageCode = keyof typeof languagesInfo;
 
 export interface Language {
-  code: LanguageCode;
-  phrases: LanguagePhrases;
+  code: Readonly<LanguageCode>;
+  phrases: Readonly<LanguagePhrases>;
 }
 
 export type LanguageLoader = () => Promise<{ default: LanguagePhrases }>;

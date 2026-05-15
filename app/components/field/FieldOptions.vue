@@ -3,8 +3,8 @@ import type { IconName } from '#thei/icons';
 
 export interface FieldOptionValue {
   icon?: IconName;
-  title?: string | ComputedRef<string>;
-  description?: string | ComputedRef<string>;
+  title?: string;
+  description?: string;
   classes?: string;
 }
 

@@ -1,13 +1,6 @@
 <script lang="ts" setup>
-import { useInstallPhrases } from '../install-language';
-import SettingsGlobals from './SettingsGlobals.vue';
-import SettingsVisuals from './SettingsVisuals.vue';
-import SettingsAdmin from './SettingsAdmin.vue';
-
-const { install_title } = useInstallPhrases();
-
 useHead({
-  title: install_title,
+  title: computed(() => phrase.value.install_thei),
 });
 </script>
 

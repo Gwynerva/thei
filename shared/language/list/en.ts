@@ -4,6 +4,7 @@ export default defineLanguagePhrases({
   language_code: 'en',
   language_name: 'English',
 
+  install_thei: 'Install Thei',
   visuals: 'Visuals',
   visuals_description:
     'Only applies for you. Visitors can choose their own settings.',

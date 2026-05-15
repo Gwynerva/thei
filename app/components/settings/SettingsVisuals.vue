@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-import { useInstallPhrases } from '../install-language';
 import {
   visualsAccentHues,
   type VisualsFontStyle,
@@ -9,41 +8,35 @@ import type { FieldOptionValue } from '#layers/thei/app/components/field/FieldOp
 
 const visuals = useVisuals();
 
-const {
-  visuals: visuals_title,
-  visuals_description,
-  theme,
-  theme_system,
-  theme_light,
-  theme_dark,
-  accent_color,
-  font_style,
-  font_sans,
-  font_serif,
-} = useInstallPhrases();
+const themeOptions: ComputedRef<Record<VisualsTheme, FieldOptionValue>> =
+  computed(() => ({
+    system: { icon: 'contrast', title: phrase.value.theme_system },
+    light: { icon: 'sun', title: phrase.value.theme_light },
+    dark: { icon: 'moon', title: phrase.value.theme_dark },
+  }));
 
-const themeOptions: Record<VisualsTheme, FieldOptionValue> = {
-  system: { icon: 'contrast', title: theme_system },
-  light: { icon: 'sun', title: theme_light },
-  dark: { icon: 'moon', title: theme_dark },
-} as const;
-
-const fontStyleOptions: Record<VisualsFontStyle, FieldOptionValue> = {
-  sans: { icon: 'font-sans', title: font_sans },
-  serif: { icon: 'font-serif', title: font_serif },
-};
+const fontStyleOptions: ComputedRef<
+  Record<VisualsFontStyle, FieldOptionValue>
+> = computed(() => ({
+  sans: { icon: 'font-sans', title: phrase.value.font_sans },
+  serif: { icon: 'font-serif', title: phrase.value.font_serif },
+}));
 </script>
 
 <template>
-  <Box icon="palette" :title="visuals_title" :description="visuals_description">
+  <Box
+    icon="palette"
+    :title="phrase.visuals"
+    :description="phrase.visuals_description"
+  >
     <div class="flex flex-col gap-md">
       <Field>
-        <FieldLabel>{{ theme }}</FieldLabel>
+        <FieldLabel>{{ phrase.theme }}</FieldLabel>
         <FieldOptions :options="themeOptions" v-model="visuals.theme" />
       </Field>
 
       <Field>
-        <FieldLabel>{{ accent_color }}</FieldLabel>
+        <FieldLabel>{{ phrase.accent_color }}</FieldLabel>
         <div class="flex flex-wrap gap-md">
           <button
             v-for="accentHue of visualsAccentHues"
@@ -62,7 +55,7 @@ const fontStyleOptions: Record<VisualsFontStyle, FieldOptionValue> = {
       </Field>
 
       <Field>
-        <FieldLabel>{{ font_style }}</FieldLabel>
+        <FieldLabel>{{ phrase.font_style }}</FieldLabel>
         <FieldOptions :options="fontStyleOptions" v-model="visuals.fontStyle" />
       </Field>
     </div>

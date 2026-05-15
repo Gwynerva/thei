@@ -3,7 +3,7 @@ import type { IconName } from '#thei/icons';
 import FormField from '../FormField.vue';
 import FormFieldHint from '../FormFieldHint.vue';
 import FormFieldLabel from '../FormFieldLabel.vue';
-import { useInstallPhrases } from '../../../install-language';
+import { useInstallPhrase } from '../../../install-language';
 import {
   visualsThemes,
   type VisualsTheme,
@@ -15,7 +15,7 @@ const {
   install_theme_system,
   install_theme_light,
   install_theme_dark,
-} = useInstallPhrases();
+} = useInstallPhrase();
 
 const visuals = useVisuals();
 
@@ -36,8 +36,8 @@ const theme2Icon: Record<VisualsTheme, IconName> = {
   <FormField>
     <FormFieldLabel>{{ install_theme_label }}</FormFieldLabel>
     <div
-      class="flex overflow-hidden rounded-lg border border-gray-300 shadow-sm
-        dark:border-gray-600"
+      class="border-gray-300 dark:border-gray-600 flex overflow-hidden
+        rounded-lg border shadow-sm"
     >
       <button
         v-for="(option, i) of visualsThemes"
@@ -48,9 +48,9 @@ const theme2Icon: Record<VisualsTheme, IconName> = {
         :class="[
           visuals.theme === option
             ? 'bg-blue-100 text-blue-500 dark:bg-blue-900/30'
-            : `bg-white text-gray-600 dark:bg-gray-800 dark:text-gray-300
-              hactive:bg-gray-100 dark:hactive:bg-gray-700`,
-          i > 0 ? 'border-l border-gray-300 dark:border-gray-600' : '',
+            : `text-gray-600 dark:bg-gray-800 dark:text-gray-300
+              hactive:bg-gray-100 dark:hactive:bg-gray-700 bg-white`,
+          i > 0 ? 'border-gray-300 dark:border-gray-600 border-l' : '',
         ]"
         @click="visuals.theme = option"
       >

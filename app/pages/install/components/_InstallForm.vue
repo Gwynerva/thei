@@ -7,10 +7,10 @@ import PasswordField from './form/fields/PasswordField.vue';
 import ThemeField from './form/fields/ThemeField.vue';
 import AccessField from './form/fields/AccessField.vue';
 import LanguageField from './form/fields/LanguageField.vue';
-import { useInstallLanguage, useInstallPhrases } from '../install-language';
+import { useInstallLanguage, useInstallPhrase } from '../install-language';
 
 const { install_title, install_subtitle, install_installing, install_submit } =
-  useInstallPhrases();
+  useInstallPhrase();
 
 const { language } = useInstallLanguage();
 
@@ -82,18 +82,18 @@ async function handleInstall() {
       <div class="flex flex-col items-center text-center">
         <Icon
           name="thei"
-          class="mb-3 text-6xl text-gray-800 dark:text-gray-100"
+          class="text-gray-800 dark:text-gray-100 mb-3 text-6xl"
         />
         <h1
-          class="text-2xl font-bold tracking-tight text-gray-900
-            dark:text-gray-100"
+          class="text-gray-900 dark:text-gray-100 text-2xl font-bold
+            tracking-tight"
         >
           {{ install_title }}
         </h1>
-        <p class="mt-1 font-semibold text-gray-500 dark:text-gray-400">
+        <p class="text-gray-500 dark:text-gray-400 mt-1 font-semibold">
           {{ install_subtitle }}
         </p>
-        <hr class="my-8 w-full border-b border-gray-300 dark:border-gray-600" />
+        <hr class="border-gray-300 dark:border-gray-600 my-8 w-full border-b" />
       </div>
 
       <!-- Form -->
@@ -111,9 +111,9 @@ async function handleInstall() {
 
         <div
           v-if="errorMessage"
-          class="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3
-            text-center text-sm text-red-700 dark:border-red-800
-            dark:bg-red-900/20 dark:text-red-400"
+          class="border-red-200 bg-red-50 text-red-700 dark:border-red-800
+            dark:bg-red-900/20 dark:text-red-400 mt-3 rounded-lg border px-4
+            py-3 text-center text-sm"
         >
           {{ errorMessage }}
         </div>
