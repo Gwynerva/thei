@@ -1,9 +1,74 @@
-import { sn } from 'unslash';
+import { isAdminRequest } from '../thei/auth';
 import { bootPromise } from '../thei/boot/promise';
 import { bootResult } from '../thei/boot/result';
-import { isAdminRequest } from '../thei/auth';
 
-type PublicWhitelistRule = string | ((path: string) => boolean);
+export default defineEventHandler(async (event) => {
+  await bootPromise;
+
+  const url = event.node.req.url || '/';
+  const path = url.split('?')[0] || '/';
+
+  const isInternalPath =
+    path.startsWith('/_nuxt') || path.startsWith('/__nuxt');
+  if (isInternalPath) {
+    return;
+  }
+
+  const isPublicAsset = !path.startsWith('/assets/') && /\.\w+$/.test(path);
+  if (isPublicAsset) {
+    return;
+  }
+
+  const alwaysAvailable = ['/api/public-admin/'];
+  if (alwaysAvailable.includes(path)) {
+    return;
+  }
+
+  const isInstallPath = path === '/install/' || path === '/api/install/';
+  const isUpdatePath = path === '/update/' || path === '/api/update/';
+  const isAdminPath =
+    path.startsWith('/admin/') || path.startsWith('/api/admin/');
+  const isAdmin = isAdminRequest(event);
+
+  switch (bootResult.type) {
+    case 'ready':
+      event.context.languageCode = THEI_SERVER.language.code;
+
+      if (isInstallPath || isUpdatePath) {
+        return sendRedirect(event, '/');
+      }
+
+      const isAuthPath = path === '/sign-in/' || path === '/api/sign-in/';
+      if (isAuthPath && isAdmin) {
+        return sendRedirect(event, '/admin/');
+      }
+
+      if (isAdminPath && !isAdmin) {
+        return blockRequest();
+      }
+
+      return;
+
+    case 'install':
+      if (!isInstallPath) {
+        return sendRedirect(event, '/install/');
+      }
+      return;
+
+    case 'update':
+      if (!isUpdatePath) {
+        return sendRedirect(event, '/update/');
+      }
+      return;
+
+    case 'error':
+      throw createError({
+        statusCode: 503,
+        statusMessage: 'Thei Boot Error',
+        message: bootResult.message,
+      });
+  }
+});
 
 function blockRequest(): never {
   throw createError({
@@ -12,144 +77,158 @@ function blockRequest(): never {
   });
 }
 
-const snt = sn(/t/);
+// import { sn } from 'unslash';
+// import { bootPromise } from '../thei/boot/promise';
+// import { bootResult } from '../thei/boot/result';
+// import { isAdminRequest } from '../thei/auth';
 
-export default defineEventHandler(async (event) => {
-  await bootPromise;
+// type PublicWhitelistRule = string | ((path: string) => boolean);
 
-  const url = event.node.req.url || '/';
-  const path = url.split('?')[0] || '/';
+// function blockRequest(): never {
+//   throw createError({
+//     statusCode: 403,
+//     statusMessage: 'Forbidden',
+//   });
+// }
 
-  /* Nuxt internal assets */
-  const isInternalAsset =
-    path.startsWith('/_nuxt') || path.startsWith('/__nuxt');
+// const snt = sn(/t/);
 
-  if (isInternalAsset) {
-    return;
-  }
+// export default defineEventHandler(async (event) => {
+//   await bootPromise;
 
-  const isAdmin = isAdminRequest(event);
-  const isSiteOpen = THEI_SERVER?.config?.globalOpenAccess ?? true;
+//   const url = event.node.req.url || '/';
+//   const path = url.split('?')[0] || '/';
 
-  /* Content assets */
-  const isContentAsset = path.startsWith('/assets/');
+//   /* Nuxt internal assets */
+//   const isInternalAsset =
+//     path.startsWith('/_nuxt') || path.startsWith('/__nuxt');
 
-  /* Special routes */
-  const isInstallPath =
-    snt(path) === '/install/' || snt(path) === '/api/install/';
+//   if (isInternalAsset) {
+//     return;
+//   }
 
-  const isUpdatePath = snt(path) === '/update/' || snt(path) === '/api/update/';
+//   const isAdmin = isAdminRequest(event);
+//   const isSiteOpen = THEI_SERVER?.config?.siteAccessLevel === 'public';
 
-  const isAdminPath =
-    path.startsWith('/admin/') || path.startsWith('/api/admin/');
+//   /* Content assets */
+//   const isContentAsset = path.startsWith('/assets/');
 
-  const isAuthPage = path.startsWith('/auth/');
-  const isAuthApi = path.startsWith('/api/auth/');
+//   /* Special routes */
+//   const isInstallPath =
+//     snt(path) === '/install/' || snt(path) === '/api/install/';
 
-  switch (bootResult.type) {
-    case 'ready': {
-      /* Prevent install/update access after boot */
-      if (isInstallPath || isUpdatePath) {
-        return sendRedirect(event, '/');
-      }
+//   const isUpdatePath = snt(path) === '/update/' || snt(path) === '/api/update/';
 
-      event.context.languageCode = THEI_SERVER.language.code;
-      event.context.isAdmin = isAdmin;
+//   const isAdminPath =
+//     path.startsWith('/admin/') || path.startsWith('/api/admin/');
 
-      /* Admin-only routes */
-      if (isAdminPath && !isAdmin) {
-        blockRequest();
-      }
+//   const isAuthPage = path.startsWith('/auth/');
+//   const isAuthApi = path.startsWith('/api/auth/');
 
-      /* Validate auth path secret page and API endpoint */
-      if (isAuthPage || isAuthApi) {
-        let authSegment = '';
+//   switch (bootResult.type) {
+//     case 'ready': {
+//       /* Prevent install/update access after boot */
+//       if (isInstallPath || isUpdatePath) {
+//         return sendRedirect(event, '/');
+//       }
 
-        try {
-          authSegment = decodeURIComponent(
-            path
-              .split('/')
-              .slice(isAuthPage ? 2 : 3)
-              .join('/'),
-          );
-        } catch {
-          blockRequest();
-        }
+//       event.context.languageCode = THEI_SERVER.language.code;
+//       event.context.isAdmin = isAdmin;
 
-        const correctAuthSegment = decodeURIComponent(
-          THEI_SERVER.config.authPath,
-        );
+//       /* Admin-only routes */
+//       if (isAdminPath && !isAdmin) {
+//         blockRequest();
+//       }
 
-        if (authSegment !== correctAuthSegment) {
-          blockRequest();
-        }
-      }
+//       /* Validate auth path secret page and API endpoint */
+//       if (isAuthPage || isAuthApi) {
+//         let authSegment = '';
 
-      /*
-       * Closed site protection
-       *
-       * Only evaluated when site is closed
-       * to avoid unnecessary checks in open mode.
-       */
-      if (!isSiteOpen && !isAdmin) {
-        /*
-         * Public routes accessible while closed
-         */
-        const publicWhitelist: PublicWhitelistRule[] = ['/api/public-admin'];
+//         try {
+//           authSegment = decodeURIComponent(
+//             path
+//               .split('/')
+//               .slice(isAuthPage ? 2 : 3)
+//               .join('/'),
+//           );
+//         } catch {
+//           blockRequest();
+//         }
 
-        const isWhitelisted = publicWhitelist.some((rule) => {
-          if (typeof rule === 'string') {
-            return path === rule;
-          }
+//         const correctAuthSegment = decodeURIComponent(
+//           THEI_SERVER.config.secretPhrase,
+//         );
 
-          return rule(path);
-        });
+//         if (authSegment !== correctAuthSegment) {
+//           blockRequest();
+//         }
+//       }
 
-        const isPublicAllowedPath = isAuthPage || isAuthApi || isWhitelisted;
+//       /*
+//        * Closed site protection
+//        *
+//        * Only evaluated when site is closed
+//        * to avoid unnecessary checks in open mode.
+//        */
+//       if (!isSiteOpen && !isAdmin) {
+//         /*
+//          * Public routes accessible while closed
+//          */
+//         const publicWhitelist: PublicWhitelistRule[] = ['/api/public-admin'];
 
-        /*
-         * Allow:
-         * - auth pages
-         * - explicitly whitelisted routes
-         * - public assets and not content assets (which are assets uploaded by admin)
-         *
-         * Block everything else
-         */
-        if (!isPublicAllowedPath && !isContentAsset) {
-          blockRequest();
-        }
-      }
+//         const isWhitelisted = publicWhitelist.some((rule) => {
+//           if (typeof rule === 'string') {
+//             return path === rule;
+//           }
 
-      return;
-    }
+//           return rule(path);
+//         });
 
-    case 'error':
-      throw createError({
-        statusCode: 503,
-        statusMessage: 'Thei Boot Error',
-        message: bootResult.message,
-      });
+//         const isPublicAllowedPath = isAuthPage || isAuthApi || isWhitelisted;
 
-    case 'install':
-      if (isInstallPath) {
-        return;
-      }
+//         /*
+//          * Allow:
+//          * - auth pages
+//          * - explicitly whitelisted routes
+//          * - public assets and not content assets (which are assets uploaded by admin)
+//          *
+//          * Block everything else
+//          */
+//         if (!isPublicAllowedPath && !isContentAsset) {
+//           blockRequest();
+//         }
+//       }
 
-      THEI_SERVER.console.warn(
-        `Attempting to visit "${url}" while in install mode! Redirecting...`,
-      );
+//       return;
+//     }
 
-      return sendRedirect(event, '/install/');
+//     case 'error':
+//       throw createError({
+//         statusCode: 503,
+//         statusMessage: 'Thei Boot Error',
+//         message: bootResult.message,
+//       });
 
-    case 'update':
-      if (isUpdatePath) {
-        return;
-      }
+//     case 'install':
+//       if (isInstallPath) {
+//         return;
+//       }
 
-      THEI_SERVER.console.warn(
-        `Attempting to visit "${url}" while in update mode! Redirecting...`,
-      );
+//       THEI_SERVER.console.warn(
+//         `Attempting to visit "${url}" while in install mode! Redirecting...`,
+//       );
 
-      return sendRedirect(event, '/update/');
-  }
-});
+//       return sendRedirect(event, '/install/');
+
+//     case 'update':
+//       if (isUpdatePath) {
+//         return;
+//       }
+
+//       THEI_SERVER.console.warn(
+//         `Attempting to visit "${url}" while in update mode! Redirecting...`,
+//       );
+
+//       return sendRedirect(event, '/update/');
+//   }
+// });

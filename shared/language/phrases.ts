@@ -54,7 +54,7 @@ export type LanguagePhrases = ValidateLanguagePhrases<{
   font_style: string;
   font_sans: string;
   font_serif: string;
-  global_settings_title: string;
+  global_settings: string;
   global_settings_description: string;
   ui_language: string;
   ui_language_hint: string;
@@ -65,39 +65,17 @@ export type LanguagePhrases = ValidateLanguagePhrases<{
   site_access_closed_description: string;
   admin_data: string;
   admin_data_description: string;
-
-  // #region Install
-  install_title: string;
-  install_subtitle: string;
-  install_language_label: string;
-  install_language_hint: string;
-  install_display_name_label: string;
-  install_display_name_variants: string;
-  install_display_name_description: (name: string) => string;
-  install_auth_path_label: string;
-  install_auth_path_prefix: string;
-  install_auth_path_placeholder: string;
-  install_auth_path_description: string;
-  install_password_label: string;
-  install_password_placeholder: string;
-  install_confirm_password_label: string;
-  install_confirm_password_placeholder: string;
-  install_theme_label: string;
-  install_theme_hint: string;
-  install_theme_system: string;
-  install_theme_light: string;
-  install_theme_dark: string;
-  install_access_label: string;
-  install_access_open: string;
-  install_access_closed: string;
-  install_access_open_description: string;
-  install_access_closed_description: string;
-  install_submit: string;
-  install_installing: string;
-  install_error_passwords_mismatch: string;
-  install_error_fields_required: string;
-  install_error_auth_path_spaces: string;
-  // #endregion
+  how_to_address_you: string;
+  display_name_variants: string;
+  display_name_hint: (name: string) => string;
+  secret_phrase: string;
+  secret_phrase_variants: string;
+  secret_phrase_hint: string;
+  password: string;
+  repeat_password: string;
+  install: string;
+  installing: string;
+  this_field_must_be_filled: string;
 
   // #region Auth
   auth_tab_title: string;

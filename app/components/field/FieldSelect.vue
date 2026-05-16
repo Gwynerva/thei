@@ -1,6 +1,4 @@
 <script lang="ts" setup>
-import type { ShallowRef } from 'vue';
-
 defineProps<{
   options: Record<string, string>;
 }>();
@@ -26,12 +24,13 @@ watch(selectElement, (newElement) => {
   <div>
     <div
       class="group relative inline-block rounded-lg border-2 border-border-1
-        bg-bg-1 transition hactive:border-border-3"
+        bg-bg-1 transition has-focus:border-border-3
+        has-hactive:border-border-3"
     >
       <select
         ref="select"
         v-model="model"
-        class="cursor-pointer appearance-none bg-transparent py-2 pr-9 pl-sm
+        class="cursor-pointer appearance-none bg-transparent py-2 pr-10 pl-xs
           text-sm"
       >
         <option

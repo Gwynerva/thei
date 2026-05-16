@@ -11,15 +11,15 @@ defineProps<{
 <template>
   <div>
     <div
-      class="mb-md flex flex-col gap-sm px-md align-top sm:flex-row
-        sm:justify-between sm:px-0"
+      class="mb-md flex flex-col gap-sm align-top sm:flex-row
+        sm:justify-between"
     >
       <div class="flex flex-col">
         <div
-          class="flex flex-col items-center justify-center gap-sm text-lg
+          class="flex flex-col items-center justify-center gap-xs text-lg
             font-semibold text-text-2 sm:flex-row sm:justify-start"
         >
-          <Icon v-if="icon" :name="icon" class="text-[1.4em]" />
+          <Icon v-if="icon" :name="icon" />
           <h2 v-if="title" class="text-center sm:text-left">{{ title }}</h2>
         </div>
         <p v-if="description" class="text-center text-text-3 sm:text-left">
@@ -29,8 +29,8 @@ defineProps<{
       <slot name="actions"></slot>
     </div>
     <section
-      class="relative border border-border-1 bg-bg-2 p-md shadow-md
-        shadow-shadow-1 sm:rounded-lg"
+      class="relative rounded-lg border border-border-1 bg-bg-2 p-sm shadow-md
+        shadow-shadow-1 sm:p-md"
     >
       <slot></slot>
     </section>

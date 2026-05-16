@@ -7,10 +7,11 @@ export async function bootTheiConfig() {
   const config = JSON.parse(configRaw);
 
   setTheiConfig({
-    languageCode: config.language,
-    globalOpenAccess: config.globalOpenAccess,
+    version: config.version,
+    languageCode: config.languageCode,
+    siteAccessLevel: config.siteAccessLevel,
     displayName: config.displayName,
-    authPath: config.authPath,
+    secretPhrase: config.secretPhrase,
     password: config.password,
   });
 

@@ -21,9 +21,8 @@ const { floatingStyles } = useFloating(anchor, floatingEl, {
         thei-title-popup-el
         :style="floatingStyles"
         :class="popupClass || undefined"
-        class="pointer-events-none fixed z-9999 rounded bg-gray-900/90 px-2 py-1
-          text-xs font-medium whitespace-nowrap text-gray-100 shadow-md
-          dark:bg-white/90 dark:text-gray-900"
+        class="pointer-events-none fixed z-9999 max-w-[300px] rounded
+          bg-bw-reverse px-2 py-1 text-xs font-normal text-bw shadow-md"
       >
         {{ label }}
       </div>

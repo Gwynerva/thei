@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "languageCode": "ru",
+  "siteAccessLevel": "public",
+  "displayName": "Петра",
+  "secretPhrase": "Я DTFер",
+  "password": {
+    "hash": "3cc90a2bc2dfed8be914ed278b98aa17b9000e7459677c5af5ceff265e307f3a5a134be9b3e74a028ac28d65f4767ec0d9a4a34c51bd0bc8d77d7365b7f324ee",
+    "salt": "7b868b447de2b025f8105c12f2bcfc47d5e9b3b0238c4574d732ce579033240a",
+    "iterations": 100625
+  }
+}

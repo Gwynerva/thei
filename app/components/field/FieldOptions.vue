@@ -28,16 +28,15 @@ const model = defineModel<string>();
         v-for="(option, key) in options"
         :key
         @click="model = key"
-        class="cursor-pointer rounded-lg border-2 transition"
+        :thei-title-popup="direction === 'row' ? option.description : undefined"
+        class="cursor-pointer rounded-lg border-2 p-xs transition"
         :class="[
           option.classes,
           model === key
             ? 'border-accent bg-bg-accent text-accent'
             : `border-border-1 bg-bg-1 text-text-2 hactive:border-border-3
               hactive:bg-bg-1 hactive:text-text-1`,
-          direction === 'column'
-            ? 'flex flex-col gap-2 p-md text-left'
-            : 'p-sm',
+          direction === 'column' ? 'flex flex-col gap-2 text-left' : '',
         ]"
       >
         <div
@@ -48,7 +47,7 @@ const model = defineModel<string>();
               : 'flex-wrap items-center justify-center gap-y-1',
           ]"
         >
-          <Icon v-if="option.icon" :name="option.icon" class="text-[1.4em]" />
+          <Icon v-if="option.icon" :name="option.icon" />
           <span v-if="option.title" class="font-semibold">
             {{ option.title }}
           </span>

@@ -1,44 +1,96 @@
 <script lang="ts" setup>
+import { SiteAccessLevel } from '#layers/thei/shared/access-level';
+
 useHead({
   title: computed(() => phrase.value.install_thei),
 });
+
+const installError = ref<string | undefined>();
+const installing = ref(false);
+
+const languageCode = computed(() => language.value?.code);
+const siteAccessLevel = ref<SiteAccessLevel>();
+const displayName = ref('');
+const secretPhrase = ref('');
+const password = ref('');
+
+const installData = computed(() => {
+  return {
+    languageCode: languageCode.value,
+    siteAccessLevel: siteAccessLevel.value,
+    displayName: displayName.value.trim(),
+    secretPhrase: secretPhrase.value.trim(),
+    password: password.value.trim(),
+  };
+});
+
+const canInstall = computed(() => {
+  return (
+    !installing.value &&
+    installData.value.languageCode &&
+    installData.value.siteAccessLevel &&
+    installData.value.displayName &&
+    installData.value.secretPhrase &&
+    installData.value.password
+  );
+});
+
+async function installClick() {
+  installError.value = undefined;
+  installing.value = true;
+
+  try {
+    const installResponse = await $fetch('/api/install/', {
+      method: 'POST',
+      body: installData.value,
+    });
+
+    if (installResponse.type === 'error') {
+      throw installResponse.message;
+    }
+
+    window.location.href = '/sign-in/';
+  } catch (error) {
+    installError.value = error instanceof Error ? error.message : String(error);
+    installing.value = false;
+  }
+}
 </script>
 
 <template>
-  <Container width="narrow">
-    <div class="flex flex-col gap-lg">
-      <SettingsGlobals />
-      <SettingsVisuals />
-      <SettingsAdmin />
-    </div>
-
-    <Box>
-      <div class="flex flex-wrap gap-3">
-        <div
-          v-for="_class of [
-            'bg-accent',
-            'bg-bg-1',
-            'bg-bg-2',
-            'bg-bg-3',
-            'bg-bg-4',
-            'bg-bg-accent',
-            'bg-border-1',
-            'bg-border-2',
-            'bg-border-3',
-            'bg-shadow-1',
-            'bg-shadow-2',
-            'bg-shadow-3',
-            'bg-text-1',
-            'bg-text-2',
-            'bg-text-3',
-          ]"
-          class="flex size-[64px] shrink-0 items-center justify-center
-            rounded-full border-2 border-bw-reverse/50 text-xs"
-          :class="_class"
-        >
-          {{ _class.replace('bg-', '') }}
+  <!-- Wrapper to make transition from install loading icon work -->
+  <div>
+    <StickyGlassHeader
+      width="var(--width-narrow)"
+      class="py-xs"
+      :error="installError"
+    >
+      <div class="flex items-center justify-between gap-xs">
+        <div class="flex min-w-0 items-center gap-sm text-xl font-bold">
+          <Icon name="thei" class="shrink-0 text-2xl text-accent" />
+          <h1 class="truncate">{{ phrase.install_thei }}</h1>
         </div>
+        <Button
+          @click="installClick"
+          :disabled="!canInstall"
+          class="flex items-center gap-xs font-semibold"
+        >
+          <Icon v-if="installing" name="loading" />
+          <span>{{ installing ? phrase.installing : phrase.install }}</span>
+        </Button>
       </div>
-    </Box>
-  </Container>
+    </StickyGlassHeader>
+
+    <div class="m-auto w-(--width-narrow) px-window py-lg">
+      <div class="flex flex-col gap-lg">
+        <SettingsGlobals v-model:access="siteAccessLevel" />
+        <SettingsVisuals />
+        <SettingsAdmin
+          v-model:display-name="displayName"
+          v-model:secret-phrase="secretPhrase"
+          v-on:password="password = $event"
+        />
+      </div>
+    </div>
+  </div>
 </template>

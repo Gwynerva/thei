@@ -5,6 +5,8 @@ export const languagesInfo = {
   ru: 'Русский',
 } as const satisfies Record<string, string>;
 
+export const languageCodes = Object.keys(languagesInfo) as LanguageCode[];
+
 export type LanguageCode = keyof typeof languagesInfo;
 
 export interface Language {
@@ -18,10 +20,6 @@ export const languageLoaders: Record<LanguageCode, LanguageLoader> = {
   en: () => import('./list/en'),
   ru: () => import('./list/ru'),
 };
-
-export function isLanguageCode(code: any): code is LanguageCode {
-  return code in languagesInfo;
-}
 
 export async function loadLanguage(
   languageCode: LanguageCode,

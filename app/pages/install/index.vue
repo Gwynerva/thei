@@ -1,8 +1,8 @@
 <script lang="ts" setup>
 import {
-  isLanguageCode,
   type Language,
   type LanguageCode,
+  languageCodes,
   loadLanguage,
 } from '#layers/thei/shared/language';
 
@@ -17,7 +17,7 @@ onMounted(async () => {
   let languageCode: LanguageCode = 'en';
   let browserLanguageCode = navigator.language.toLowerCase().slice(0, 2);
 
-  if (isLanguageCode(browserLanguageCode)) {
+  if (isOneOf(browserLanguageCode, languageCodes)) {
     languageCode = browserLanguageCode;
   }
 
@@ -29,8 +29,8 @@ onMounted(async () => {
 <template>
   <AdminGridWrapper>
     <TransitionFade mode="out-in">
-      <InstallForm v-if="ready" key="form" />
-      <InstallLoading v-else key="loading" />
+      <InstallForm v-if="ready" />
+      <InstallLoading v-else />
     </TransitionFade>
   </AdminGridWrapper>
 </template>

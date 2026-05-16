@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { SiteAccessLevel } from '#layers/thei/shared/access-level';
 import {
   type LanguageCode,
   languagesInfo,
@@ -11,13 +12,13 @@ watch(languageCode, async (newCode) => {
   language.value = await loadLanguage(newCode);
 });
 
-const siteAccess = ref<'open' | 'admin'>('open');
+const accessModel = defineModel<SiteAccessLevel>('access');
 </script>
 
 <template>
   <Box
     icon="globe"
-    :title="phrase.global_settings_title"
+    :title="phrase.global_settings"
     :description="phrase.global_settings_description"
   >
     <div class="flex flex-col gap-md">
@@ -45,18 +46,18 @@ const siteAccess = ref<'open' | 'admin'>('open');
         <FieldOptions
           direction="column"
           :options="{
-            open: {
+            [SiteAccessLevel.Public]: {
               icon: 'lock-open',
               title: phrase.site_access_open,
               description: phrase.site_access_open_description,
             },
-            admin: {
+            [SiteAccessLevel.Private]: {
               icon: 'lock-close',
               title: phrase.site_access_closed,
               description: phrase.site_access_closed_description,
             },
           }"
-          v-model="siteAccess"
+          v-model="accessModel"
         />
       </Field>
     </div>

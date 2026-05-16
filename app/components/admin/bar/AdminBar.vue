@@ -6,18 +6,6 @@ const { data: adminBarData } = await useFetch('/api/admin/bar', {
   key: 'admin-bar',
 });
 
-const {
-  to_admin_panel,
-  to_website,
-  sign_out,
-  x_projects,
-  x_events,
-  new_project,
-  new_event,
-  edit_project,
-  edit_event,
-} = useLanguagePhrases();
-
 const publicAdmin = await usePublicAdmin();
 
 const route = useRoute();
@@ -28,7 +16,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
     return {
       to: '/admin/projects/add',
       icon: 'plus',
-      label: new_project.value,
+      label: phrase.value.new_project,
     };
   }
 
@@ -36,7 +24,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
     return {
       to: '/admin/events/add',
       icon: 'plus',
-      label: new_event.value,
+      label: phrase.value.new_event,
     };
   }
 
@@ -45,7 +33,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
     return {
       to: `/admin/projects/${projectId}`,
       icon: 'edit',
-      label: edit_project.value,
+      label: phrase.value.edit_project,
     };
   }
 
@@ -54,7 +42,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
     return {
       to: `/admin/events/${eventId}`,
       icon: 'edit',
-      label: edit_event.value,
+      label: phrase.value.edit_event,
     };
   }
 
@@ -72,7 +60,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
         target: '_blank',
       },
       icon: 'edit',
-      label: isProject ? edit_project.value : edit_event.value,
+      label: isProject ? phrase.value.edit_project : phrase.value.edit_event,
     };
   }
 });
@@ -81,14 +69,14 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
 <template>
   <header
     v-if="isAdmin && adminBarData"
-    class="sticky top-0 z-50 flex h-[40px] items-center justify-center
-      bg-gray-900/80 shadow-lg shadow-black/20 backdrop-blur dark:bg-white/80
+    class="bg-gray-900/80 sticky top-0 z-50 flex h-[40px] items-center
+      justify-center shadow-lg shadow-black/20 backdrop-blur dark:bg-white/80
       dark:shadow-black/6"
   >
     <AdminBarButton
       :to="isOnAdminPage ? '/' : '/admin/'"
       :icon="isOnAdminPage ? 'home' : 'thei'"
-      :label="isOnAdminPage ? to_website : to_admin_panel"
+      :label="isOnAdminPage ? phrase.to_website : phrase.to_admin_panel"
     />
 
     <AdminBarButton
@@ -102,7 +90,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
       to="/admin/projects"
       icon="project"
       :label="adminBarData.projectCount + ''"
-      :title="x_projects(adminBarData.projectCount)"
+      :title="phrase.x_projects(adminBarData.projectCount)"
       class="font-semibold"
     />
 
@@ -110,7 +98,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
       to="/admin/events"
       icon="event"
       :label="adminBarData.eventCount + ''"
-      :title="x_events(adminBarData.eventCount)"
+      :title="phrase.x_events(adminBarData.eventCount)"
       class="font-semibold"
     />
 
@@ -118,8 +106,8 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
       <template #icon>
         <Media
           :src="publicAdmin.avatarUrl"
-          class="size-6 rounded-full border border-gray-100
-            dark:border-gray-600"
+          class="border-gray-100 dark:border-gray-600 size-6 rounded-full
+            border"
         />
       </template>
     </AdminBarButton>

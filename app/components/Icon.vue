@@ -15,7 +15,13 @@ const href = computed(() => {
 </script>
 
 <template>
-  <svg thei-icon thei-icon-bundle width="1em" height="1em" fill="currentColor">
+  <svg
+    thei-icon
+    thei-icon-bundle
+    width="1.25em"
+    height="1.25em"
+    fill="currentColor"
+  >
     <use :href></use>
   </svg>
 </template>

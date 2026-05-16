@@ -3,9 +3,9 @@ import { type LanguagePhrases } from '#layers/thei/shared/language/phrases';
 import {
   loadLanguage,
   getLanguagePhrase,
+  languageCodes,
   type Language,
   type LanguageCode,
-  isLanguageCode,
 } from '#layers/thei/shared/language';
 import { setBootError } from './boot/result';
 
@@ -27,7 +27,7 @@ export async function setCurrentLanguage(languageCode: LanguageCode) {
 export async function bootTheiLanguage() {
   const languageCode = THEI_SERVER.config.languageCode;
 
-  if (!isLanguageCode(languageCode)) {
+  if (!isOneOf(languageCode, languageCodes)) {
     THEI_SERVER.console.error(
       `Invalid language code in config: ${pc.red(
         pc.bold(String(languageCode)),

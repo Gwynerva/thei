@@ -1,4 +1,4 @@
-import Database, { type Database as TDatabase } from 'better-sqlite3';
+import Database from 'better-sqlite3';
 import {
   generateSQLiteMigration,
   generateSQLiteDrizzleJson,

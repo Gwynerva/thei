@@ -16,7 +16,7 @@ export default defineLanguagePhrases({
   font_style: 'Font Style',
   font_sans: 'Sans',
   font_serif: 'Serif',
-  global_settings_title: 'Global Settings',
+  global_settings: 'Global Settings',
   global_settings_description:
     'These settings apply for everyone. Choose wisely.',
   ui_language: 'UI Language',
@@ -32,45 +32,20 @@ export default defineLanguagePhrases({
   admin_data: 'Admin Data',
   admin_data_description:
     'Basic information about you and how to log in to the admin panel.',
-
-  // #region Install
-  install_title: 'Install Thei',
-  install_subtitle: "Your life's digital archive!",
-  install_language_label: 'UI Language',
-  install_language_hint:
-    'Choose the same language you will use for writing content. This setting applies to all users.',
-  install_display_name_label: 'Display Name',
-  install_display_name_variants: 'Alex,Jordan,Morgan,Taylor,Casey',
-  install_display_name_description: (name: string) =>
+  how_to_address_you: 'How to address you?',
+  display_name_variants: 'Peter,Petra,Alex,Jordan,Morgan,Taylor,Casey',
+  display_name_hint: (name: string) =>
     `Can be a name or nickname: "Hello, ${name}!"`,
-  install_auth_path_label: 'Admin Panel Login URL',
-  install_auth_path_prefix: '/auth/',
-  install_auth_path_placeholder: 'my/secret/path',
-  install_auth_path_description:
-    'Keep it secret along with the password! Do not disclose it to third parties.',
-  install_password_label: 'Password',
-  install_password_placeholder: 'Enter password',
-  install_confirm_password_label: 'Confirm Password',
-  install_confirm_password_placeholder: 'Repeat password',
-  install_theme_label: 'Theme',
-  install_theme_hint:
-    'Only applies for you. Visitors can choose their own theme.',
-  install_theme_system: 'System',
-  install_theme_light: 'Light',
-  install_theme_dark: 'Dark',
-  install_access_label: 'Site Access',
-  install_access_open: 'Open',
-  install_access_closed: 'Closed',
-  install_access_open_description:
-    'Anyone can visit the site. You can restrict access to individual projects, events, and files. Suitable for most people.',
-  install_access_closed_description:
-    'Only you and no one else will be able to view any content on the site. Suitable for secret agents who keep all aspects of their lives in strict secrecy.',
-  install_submit: 'Install',
-  install_installing: 'Installing...',
-  install_error_passwords_mismatch: 'Passwords do not match!',
-  install_error_fields_required: 'All fields are required.',
-  install_error_auth_path_spaces: 'Auth URL path must not contain spaces.',
-  // #endregion
+  secret_phrase: 'Secret Phrase',
+  secret_phrase_variants:
+    'My favorite 🐈 - Fluffy;To be or not to be, that is the question;No one ever goes back to 2007;Nothing is true, everything is permitted',
+  secret_phrase_hint:
+    'Any phrase to log in to the admin panel along with the password. The more complex, the better! Can include emojis 😎',
+  password: 'Password',
+  repeat_password: 'Repeat Password',
+  install: 'Install',
+  installing: 'Installing',
+  this_field_must_be_filled: 'This field must be filled!',
 
   // #region Auth
   auth_tab_title: 'Sign In',

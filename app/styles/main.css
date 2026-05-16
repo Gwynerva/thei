@@ -7,12 +7,20 @@
   --font-sans: 'Noto Sans', sans-serif;
   --font-serif: 'Noto Serif', serif;
 
-  --spacing-md: calc(5 * var(--spacing));
-  --spacing-sm: calc(1/2 * var(--spacing-md));
+  --spacing-md: calc(5.5 * var(--spacing));
+  --spacing-xs: calc(0.45 * var(--spacing-md));
+  --spacing-sm: calc(0.75 * var(--spacing-md));
   --spacing-lg: calc(2 * var(--spacing-md));
   --spacing-xl: calc(2 * var(--spacing-lg));
 
+  /** Space between element and window edge */
+  --spacing-window: var(--spacing-sm);
+
   --color-*: initial;
+
+  --color-text-error: light-dark(oklch(60% 0.2 25), oklch(70% 0.15 25));
+  --color-bg-error: light-dark(oklch(95% 0.04 25), oklch(24% 0.04 25));
+  --color-border-error: light-dark(oklch(80% 0.1 25), oklch(40% 0.1 25));
 
   --color-white: white;
   --color-black: black;
@@ -21,6 +29,10 @@
 
   --color-accent: oklch(
     var(--lightness-accent) var(--chroma-accent) var(--hue-accent)
+  );
+  --color-bg-accent: light-dark(
+    oklch(95% 0.04 var(--hue-accent)),
+    oklch(24% 0.04 var(--hue-accent))
   );
 
   --color-bg-1: light-dark(
@@ -38,11 +50,6 @@
   --color-bg-4: light-dark(
     oklch(80% 0.01 var(--hue-accent)),
     oklch(30% 0.01 var(--hue-accent))
-  );
-
-  --color-bg-accent: light-dark(
-    oklch(95% 0.04 var(--hue-accent)),
-    oklch(24% 0.04 var(--hue-accent))
   );
 
   --color-border-1: light-dark(
@@ -89,10 +96,24 @@
 
 @custom-variant hactive (&:hover, &:active);
 
+@custom-variant sticky-stuck (&:where([data-sticky-stuck], [data-sticky-stuck] *));
+
 @layer base {
   :root {
+    --width-narrow: min(700px, 100%);
+    --width-wide: min(1100px, 100%);
+
+    @variant sm {
+      --spacing-window: var(--spacing-md);
+    }
+
     font-family: var(--font-default);
+    font-size: 0.9rem;
     color: var(--color-text-1);
+
+    @variant sm {
+      font-size: 1rem;
+    }
   }
 
   :root[data-theme='light'] {
@@ -112,8 +133,15 @@
     color: inherit;
   }
 
+  button,
+  input,
+  select,
+  textarea {
+    @apply outline-none;
+  }
+
   svg[thei-icon] {
     display: inline-block;
-    vertical-align: bottom;
+    vertical-align: -0.22em;
   }
 }

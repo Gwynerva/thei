@@ -9,3 +9,8 @@ export enum AssetAccessLevel {
   // Assets can't be LinkOnly, because the link is the asset itself, so it would be the same as public.
   Private = 'private',
 }
+
+export enum SiteAccessLevel {
+  Public = 'public',
+  Private = 'private',
+}
