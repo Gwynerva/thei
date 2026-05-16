@@ -23,9 +23,8 @@ watch(selectElement, (newElement) => {
 <template>
   <div>
     <div
-      class="group relative inline-block rounded-lg border-2 border-border-1
-        bg-bg-1 transition has-focus:border-border-3
-        has-hactive:border-border-3"
+      class="group has-hocus:border-border-3 relative inline-block rounded-lg
+        border-2 border-border-1 bg-bg-1 transition has-focus:border-border-3"
     >
       <select
         ref="select"
@@ -45,8 +44,8 @@ watch(selectElement, (newElement) => {
 
       <Icon
         name="chevron-right"
-        class="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2
-          rotate-90 text-text-3 transition group-hactive:text-text-1"
+        class="group-hocus:text-text-1 pointer-events-none absolute top-1/2
+          right-3 -translate-y-1/2 rotate-90 text-text-3 transition"
       />
     </div>
   </div>

@@ -44,22 +44,16 @@ export default defineLanguagePhrases({
   install: 'Установить',
   installing: 'Установка',
   this_field_must_be_filled: 'Это поле должно быть заполнено!',
-
-  // #region Auth
-  auth_tab_title: 'Вход',
-  auth_subtitle: 'Вход в админ-панель Thei',
-  auth_password_placeholder: 'Введите пароль',
-  auth_submit: 'Войти',
-  auth_submitting: 'Вход...',
-  auth_error_wrong_password: 'Неверный пароль!',
-  auth_error_rate_limited:
-    'Слишком много попыток входа! Подождите перед следующей попыткой!',
-  // #endregion
+  administrator: 'Администратор',
+  thei_admin_panel_sign_in: 'Вход в админ-панель Thei',
+  sign_in: 'Войти',
+  sign_out: 'Выйти',
+  signing_in: 'Вход',
+  invalid_secret_phrase_or_password: 'Неверная секретная фраза или пароль!',
 
   secret_admin: 'Секретный админ',
   to_admin_panel: 'В админ-панель',
   to_website: 'На сайт',
-  sign_out: 'Выйти',
   project: 'Проект',
   x_projects: (count: number) => m(count, 'проект', 'проекта', 'проектов'),
   event: 'Событие',

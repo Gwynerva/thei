@@ -25,18 +25,18 @@ const alwaysTitlePopup = computed(() => {
     :thei-title-popup="title ?? label"
     :thei-title-popup-class="alwaysTitlePopup ? '' : 'sm:hidden'"
     :aria-label="title ?? label"
-    class="flex h-full min-w-0 cursor-pointer items-center gap-3 px-3 opacity-80
-      transition hactive:bg-gray-500/50 hactive:opacity-100"
+    class="hocus:bg-gray-500/50 hocus:opacity-100 flex h-full min-w-0
+      cursor-pointer items-center gap-3 px-3 opacity-80 transition"
   >
     <Icon
       v-if="icon"
       :name="icon"
-      class="shrink-0 text-2xl text-gray-300 dark:text-gray-700"
+      class="text-gray-300 dark:text-gray-700 shrink-0 text-2xl"
     />
     <slot v-else name="icon" />
     <span
       v-if="label"
-      class="hidden truncate text-gray-100 sm:block dark:text-gray-900"
+      class="text-gray-100 dark:text-gray-900 hidden truncate sm:block"
     >
       {{ label }}
     </span>

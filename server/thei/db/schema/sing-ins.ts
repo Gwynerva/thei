@@ -1,19 +1,19 @@
 import { sql } from 'drizzle-orm';
 import { primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
-export const logins = sqliteTable(
-  'logins',
+export const signIns = sqliteTable(
+  'sign_ins',
   {
     ip: text().notNull(),
-    loggedAt: text()
+    at: text()
       .notNull()
       .default(sql`(current_timestamp)`),
     location: text(),
-    device: text(),
+    ua: text(),
   },
   (table) => [
     primaryKey({
-      columns: [table.ip, table.loggedAt],
+      columns: [table.ip, table.at],
     }),
   ],
 );

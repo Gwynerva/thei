@@ -1,23 +1,28 @@
+import { SiteAccessLevel } from '#layers/thei/shared/access-level';
 import { isAdminRequest } from '../thei/auth';
 
 interface PublicAdmin {
-  globalOpenAccess: boolean;
+  siteAccessLevel: SiteAccessLevel;
   displayName: string;
   avatarUrl: string;
 }
 
 export default defineEventHandler(async (event): Promise<PublicAdmin> => {
-  if (THEI_SERVER.config.globalOpenAccess === false && !isAdminRequest(event)) {
-    // Return dummy data to keep even "public" data secured
+  const isPrivateSite =
+    THEI_SERVER.config.siteAccessLevel === SiteAccessLevel.Private;
+  const isAdmin = isAdminRequest(event);
+
+  if (isPrivateSite && !isAdmin) {
+    // Return dummy data
     return {
-      globalOpenAccess: false,
-      displayName: THEI_SERVER.phrase('secret_admin'),
+      siteAccessLevel: SiteAccessLevel.Private,
+      displayName: THEI_SERVER.phrase.administrator,
       avatarUrl: '/avatar-fallback.webp',
     };
   }
 
   return {
-    globalOpenAccess: THEI_SERVER.config.globalOpenAccess,
+    siteAccessLevel: THEI_SERVER.config.siteAccessLevel,
     displayName: THEI_SERVER.config.displayName,
     avatarUrl: '/avatar-fallback.webp',
   };

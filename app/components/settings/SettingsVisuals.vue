@@ -45,7 +45,7 @@ const fontStyleOptions: ComputedRef<
             :class="[
               visuals.accentHue === accentHue
                 ? 'ring-bw-reverse'
-                : 'ring-transparent hactive:ring-bw-reverse/50',
+                : 'hocus:ring-bw-reverse/50 ring-transparent',
             ]"
             class="size-[20px] shrink-0 cursor-pointer rounded-full
               bg-(--_accent-variant) ring-2 ring-offset-2 ring-offset-bg-2

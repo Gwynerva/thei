@@ -23,10 +23,10 @@ const {
       disabled:opacity-40"
     :class="
       variant === 'normal'
-        ? `enabled:hactive:opacity-90 bg-gray-900 text-white transition-opacity
-          dark:bg-white dark:text-gray-900`
-        : `enabled:hactive:bg-blue-700 dark:enabled:hactive:bg-blue-600
-          bg-blue-600 text-white transition-colors dark:bg-blue-500`
+        ? `enabled:hocus:opacity-90 bg-gray-900 dark:text-gray-900 text-white
+          transition-opacity dark:bg-white`
+        : `enabled:hocus:bg-blue-700 dark:enabled:hocus:bg-blue-600 bg-blue-600
+          dark:bg-blue-500 text-white transition-colors`
     "
   >
     <Icon v-if="icon" :name="icon" />

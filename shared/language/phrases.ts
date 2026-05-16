@@ -76,21 +76,16 @@ export type LanguagePhrases = ValidateLanguagePhrases<{
   install: string;
   installing: string;
   this_field_must_be_filled: string;
-
-  // #region Auth
-  auth_tab_title: string;
-  auth_subtitle: string;
-  auth_password_placeholder: string;
-  auth_submit: string;
-  auth_submitting: string;
-  auth_error_wrong_password: string;
-  auth_error_rate_limited: string;
-  // #endregion
+  administrator: string;
+  thei_admin_panel_sign_in: string;
+  sign_in: string;
+  sign_out: string;
+  signing_in: string;
+  invalid_secret_phrase_or_password: string;
 
   secret_admin: string;
   to_admin_panel: string;
   to_website: string;
-  sign_out: string;
   project: string;
   x_projects: (count: number) => string;
   event: string;

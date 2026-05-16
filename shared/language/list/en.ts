@@ -46,22 +46,16 @@ export default defineLanguagePhrases({
   install: 'Install',
   installing: 'Installing',
   this_field_must_be_filled: 'This field must be filled!',
-
-  // #region Auth
-  auth_tab_title: 'Sign In',
-  auth_subtitle: 'Thei Admin Panel Sign In',
-  auth_password_placeholder: 'Enter password',
-  auth_submit: 'Sign In',
-  auth_submitting: 'Signing in...',
-  auth_error_wrong_password: 'Wrong password!',
-  auth_error_rate_limited:
-    'Too many attempts! Please wait before trying again!',
-  // #endregion
+  administrator: 'Administrator',
+  thei_admin_panel_sign_in: 'Thei Admin Panel Sign In',
+  sign_in: 'Sign In',
+  sign_out: 'Sign Out',
+  signing_in: 'Signing in',
+  invalid_secret_phrase_or_password: 'Invalid secret phrase or password!',
 
   secret_admin: 'Secret Admin',
   to_admin_panel: 'To Admin Panel',
   to_website: 'To Website',
-  sign_out: 'Sign Out',
   project: 'Project',
   x_projects: (count: number) => m(count, 'project', 'projects'),
   event: 'Event',

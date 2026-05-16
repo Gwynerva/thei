@@ -34,8 +34,8 @@ const model = defineModel<string>();
           option.classes,
           model === key
             ? 'border-accent bg-bg-accent text-accent'
-            : `border-border-1 bg-bg-1 text-text-2 hactive:border-border-3
-              hactive:bg-bg-1 hactive:text-text-1`,
+            : `hocus:border-border-3 hocus:bg-bg-1 hocus:text-text-1
+              border-border-1 bg-bg-1 text-text-2`,
           direction === 'column' ? 'flex flex-col gap-2 text-left' : '',
         ]"
       >

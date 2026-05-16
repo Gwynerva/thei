@@ -34,6 +34,10 @@
     oklch(95% 0.04 var(--hue-accent)),
     oklch(24% 0.04 var(--hue-accent))
   );
+  --color-shadow-accent: light-dark(
+    oklch(50% 0.2 var(--hue-accent) / 0.3),
+    oklch(60% 0.2 var(--hue-accent) / 0.3)
+  );
 
   --color-bg-1: light-dark(
     oklch(100% 0.01 var(--hue-accent)),
@@ -94,7 +98,7 @@
 
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
-@custom-variant hactive (&:hover, &:active);
+@custom-variant hocus (&:hover, &:focus-visible);
 
 @custom-variant sticky-stuck (&:where([data-sticky-stuck], [data-sticky-stuck] *));
 

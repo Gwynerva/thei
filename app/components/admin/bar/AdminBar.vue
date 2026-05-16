@@ -113,9 +113,9 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
     </AdminBarButton>
 
     <AdminBarButton
-      :to="{ href: '/api/admin/logout', external: true }"
+      :to="{ href: '/sign-out/', external: true }"
       icon="power"
-      :label="sign_out"
+      :label="phrase.sign_out"
     />
   </header>
 </template>

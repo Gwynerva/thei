@@ -2,11 +2,11 @@
   "version": "0.0.1",
   "languageCode": "ru",
   "siteAccessLevel": "public",
-  "displayName": "Петра",
-  "secretPhrase": "Я DTFер",
+  "displayName": "Петра Радько",
+  "secretPhrase": "Ничто не 👩🏻‍🦰",
   "password": {
-    "hash": "3cc90a2bc2dfed8be914ed278b98aa17b9000e7459677c5af5ceff265e307f3a5a134be9b3e74a028ac28d65f4767ec0d9a4a34c51bd0bc8d77d7365b7f324ee",
-    "salt": "7b868b447de2b025f8105c12f2bcfc47d5e9b3b0238c4574d732ce579033240a",
-    "iterations": 100625
+    "hash": "5760dd5ac67fa6c18f41f35af5a9b096fcdc68ac44d3c3c51e065994961f95a16300cfff2e605349c1c557be20b7e3145cc54433c6327a0d9aa2055891ddecfd",
+    "salt": "3c94b393791e2502850341c0c4b8e52e165752138d72405659e145cb201caedf",
+    "iterations": 129183
   }
 }

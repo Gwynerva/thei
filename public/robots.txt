@@ -1,4 +1,8 @@
 User-agent: *
-Disallow: /auth/
+Disallow: /sign-in/
+Disallow: /sign-out/
 Disallow: /admin/
 Disallow: /assets/
+Disallow: /install/
+Disallow: /update/
+Disallow: /api/

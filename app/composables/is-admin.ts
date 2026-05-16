@@ -1,1 +1,1 @@
-export const useIsAdmin = () => useState<boolean>('is-admin', () => false);
+export const useIsAdmin = () => readonly(useState<boolean>('is-admin'));

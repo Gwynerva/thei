@@ -3,7 +3,7 @@ import { version } from '#thei/static-public';
 import { projectPath, theiPath } from '#thei/static';
 import { bootResult as _bootResult } from './boot/result';
 import { makeLogger, tag } from './logger';
-import { currentLanguage, getCurrentLanguagePhrase } from './language';
+import { currentLanguage, getCurrentLanguagePhrases } from './language';
 import { theiConfig } from './config/index';
 import { getTheiDbContext } from './db/global';
 import { countProjects } from './projects/repository/count';
@@ -29,7 +29,9 @@ export const THEI_SERVER = {
   useDb() {
     return getTheiDbContext();
   },
-  phrase: getCurrentLanguagePhrase,
+  get phrase() {
+    return getCurrentLanguagePhrases();
+  },
   console: {
     ...makeLogger(),
     tag,

@@ -1,8 +1,6 @@
 import pc from 'picocolors';
-import { type LanguagePhrases } from '#layers/thei/shared/language/phrases';
 import {
   loadLanguage,
-  getLanguagePhrase,
   languageCodes,
   type Language,
   type LanguageCode,
@@ -11,13 +9,11 @@ import { setBootError } from './boot/result';
 
 export let currentLanguage: Language | undefined;
 
-export function getCurrentLanguagePhrase<
-  TPhraseId extends keyof LanguagePhrases,
->(phraseId: TPhraseId): LanguagePhrases[TPhraseId] {
+export function getCurrentLanguagePhrases() {
   if (!currentLanguage) {
     throw new Error('Current language is not loaded!');
   }
-  return getLanguagePhrase(currentLanguage, phraseId);
+  return currentLanguage.phrases;
 }
 
 export async function setCurrentLanguage(languageCode: LanguageCode) {
@@ -39,5 +35,5 @@ export async function bootTheiLanguage() {
   await setCurrentLanguage(THEI_SERVER.config.languageCode);
   THEI_SERVER.console
     .tag('Boot')
-    .log(`Language ${pc.cyan(THEI_SERVER.phrase('language_name'))} loaded!`);
+    .log(`Language ${pc.cyan(THEI_SERVER.phrase.language_name)} loaded!`);
 }

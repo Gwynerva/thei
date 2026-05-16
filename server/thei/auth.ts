@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { H3Event } from 'h3';
+import { UAParser } from 'ua-parser-js';
 import { lt, sql } from 'drizzle-orm';
 
 const TOKEN_TTL = 7 * 24 * 60 * 60 * 1_000; // 7 days
@@ -61,8 +62,8 @@ setInterval(async () => {
     const { db, schema } = THEI_SERVER.useDb();
 
     await db
-      .delete(schema.logins)
-      .where(lt(schema.logins.loggedAt, sql`(datetime('now', '-1 year'))`));
+      .delete(schema.signIns)
+      .where(lt(schema.signIns.at, sql`(datetime('now', '-1 year'))`));
   } catch {
     // Never let cleanup break the interval
   }
@@ -126,15 +127,17 @@ async function fetchLocation(ip: string): Promise<string | undefined> {
   }
 }
 
-export async function logLogin(ip: string): Promise<void> {
+export async function logSignIn(ip: string, userAgent: string): Promise<void> {
   try {
     const { db, schema } = THEI_SERVER.useDb();
     const location = isPrivateIp(ip) ? undefined : await fetchLocation(ip);
+    const parser = new UAParser(userAgent);
+    const ua = `${parser.getBrowser().name ?? 'Unknown browser'} on ${parser.getOS().name ?? 'Unknown OS'} (${parser.getDevice().type ?? 'Unknown Device'})`;
     await db
-      .insert(schema.logins)
-      .values({ ip, location })
+      .insert(schema.signIns)
+      .values({ ip, location, ua })
       .onConflictDoUpdate({
-        target: [schema.logins.ip, schema.logins.loggedAt],
+        target: [schema.signIns.ip, schema.signIns.at],
         set: { location: sql`excluded.location` },
       });
   } catch {

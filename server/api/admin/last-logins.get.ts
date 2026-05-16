@@ -5,8 +5,8 @@ export default defineEventHandler(async () => {
 
   const logins = await db
     .select()
-    .from(schema.logins)
-    .orderBy(desc(schema.logins.loggedAt))
+    .from(schema.signIns)
+    .orderBy(desc(schema.signIns.at))
     .limit(10);
 
   return { logins };

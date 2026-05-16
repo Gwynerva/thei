@@ -20,6 +20,7 @@ const model = defineModel<string>();
 
 const emit = defineEmits<{
   element: [HTMLInputElement];
+  submit: [];
 }>();
 
 const inputElement = useTemplateRef('input');
@@ -81,8 +82,8 @@ function onBlur() {
       v-bind="attrs"
       ref="input"
       v-model="model"
-      class="w-full min-w-[160px] border-2 bg-bg-1 p-xs text-text-1 transition
-        focus:border-border-3 hactive:border-border-3"
+      class="hocus:border-border-3 w-full min-w-[160px] border-2 bg-bg-1 p-xs
+        text-text-1 transition focus:border-border-3"
       :class="[
         shownError
           ? 'rounded-t-lg border-border-error'
@@ -90,6 +91,7 @@ function onBlur() {
       ]"
       @focus="onFocus"
       @blur="onBlur"
+      @keyup.enter.prevent="$emit('submit')"
     />
 
     <div
