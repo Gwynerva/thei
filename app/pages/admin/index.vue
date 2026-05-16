@@ -19,9 +19,9 @@ function formatBytes(bytes: number): string {
 <template>
   <div class="space-y-6 p-6">
     <!-- Last Logins -->
-    <div class="rounded-xl bg-white shadow dark:bg-gray-900">
-      <div class="border-b border-gray-200 px-5 py-4 dark:border-gray-700">
-        <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+    <div class="dark:bg-gray-900 rounded-xl bg-white shadow">
+      <div class="border-gray-200 dark:border-gray-700 border-b px-5 py-4">
+        <h2 class="text-gray-700 dark:text-gray-300 text-sm font-semibold">
           Last Logins
         </h2>
       </div>
@@ -29,8 +29,8 @@ function formatBytes(bytes: number): string {
         <table class="w-full text-sm">
           <thead>
             <tr
-              class="border-b border-gray-100 text-left text-xs text-gray-500
-                dark:border-gray-800 dark:text-gray-400"
+              class="border-gray-100 text-gray-500 dark:border-gray-800
+                dark:text-gray-400 border-b text-left text-xs"
             >
               <th class="px-5 py-3 font-medium">IP</th>
               <th class="px-5 py-3 font-medium">Location</th>
@@ -46,20 +46,20 @@ function formatBytes(bytes: number): string {
             </tr>
             <tr
               v-for="entry in loginsData?.logins"
-              :key="entry.ip + entry.loggedAt"
-              class="border-b border-gray-50 last:border-0 dark:border-gray-800"
+              :key="entry.ip + entry.at"
+              class="border-gray-50 dark:border-gray-800 border-b last:border-0"
             >
-              <td class="px-5 py-3 font-mono text-gray-800 dark:text-gray-200">
+              <td class="text-gray-800 dark:text-gray-200 px-5 py-3 font-mono">
                 {{ entry.ip }}
               </td>
-              <td class="px-5 py-3 text-gray-500 dark:text-gray-400">
+              <td class="text-gray-500 dark:text-gray-400 px-5 py-3">
                 {{ entry.location ?? '—' }}
               </td>
               <td
-                class="w-full px-5 py-3 text-right text-gray-500
-                  dark:text-gray-400"
+                class="text-gray-500 dark:text-gray-400 w-full px-5 py-3
+                  text-right"
               >
-                <HumanTime :timestamp="entry.loggedAt" />
+                <HumanTime :timestamp="entry.at" />
               </td>
             </tr>
           </tbody>
@@ -68,13 +68,13 @@ function formatBytes(bytes: number): string {
     </div>
 
     <!-- Disk Usage -->
-    <div class="rounded-xl bg-white shadow dark:bg-gray-900">
-      <div class="border-b border-gray-200 px-5 py-4 dark:border-gray-700">
-        <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+    <div class="dark:bg-gray-900 rounded-xl bg-white shadow">
+      <div class="border-gray-200 dark:border-gray-700 border-b px-5 py-4">
+        <h2 class="text-gray-700 dark:text-gray-300 text-sm font-semibold">
           Disk Usage
         </h2>
       </div>
-      <dl class="divide-y divide-gray-100 dark:divide-gray-800">
+      <dl class="divide-gray-100 dark:divide-gray-800 divide-y">
         <template v-if="diskData">
           <div
             v-for="row in [
@@ -101,7 +101,7 @@ function formatBytes(bytes: number): string {
             :class="row.sub ? 'pr-5 pl-10' : 'px-5'"
           >
             <dt
-              class="text-sm dark:text-gray-400"
+              class="dark:text-gray-400 text-sm"
               :class="row.sub ? 'text-gray-400' : 'text-gray-500'"
             >
               {{ row.label }}
@@ -122,13 +122,13 @@ function formatBytes(bytes: number): string {
     </div>
 
     <!-- System Info -->
-    <div class="rounded-xl bg-white shadow dark:bg-gray-900">
-      <div class="border-b border-gray-200 px-5 py-4 dark:border-gray-700">
-        <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+    <div class="dark:bg-gray-900 rounded-xl bg-white shadow">
+      <div class="border-gray-200 dark:border-gray-700 border-b px-5 py-4">
+        <h2 class="text-gray-700 dark:text-gray-300 text-sm font-semibold">
           System Info
         </h2>
       </div>
-      <dl class="divide-y divide-gray-100 dark:divide-gray-800">
+      <dl class="divide-gray-100 dark:divide-gray-800 divide-y">
         <template v-if="systemData">
           <div
             v-for="row in [
@@ -142,12 +142,12 @@ function formatBytes(bytes: number): string {
             :key="row.label"
             class="flex items-center justify-between px-5 py-3"
           >
-            <dt class="text-sm text-gray-500 dark:text-gray-400">
+            <dt class="text-gray-500 dark:text-gray-400 text-sm">
               {{ row.label }}
             </dt>
             <dd
-              class="font-mono text-sm font-medium text-gray-800
-                dark:text-gray-200"
+              class="text-gray-800 dark:text-gray-200 font-mono text-sm
+                font-medium"
             >
               {{ row.value }}
             </dd>

@@ -21,8 +21,7 @@ function formatRelative(date: Date, locale: string): string {
   );
 }
 
-const languageCode = useLanguageCode();
-const locale = computed(() => languageCode.value ?? 'en');
+const locale = computed(() => language.value!.code ?? 'en');
 
 const date = computed(() => {
   const ts = props.timestamp;

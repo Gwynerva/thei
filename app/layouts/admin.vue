@@ -1,6 +1,7 @@
 <template>
   <AdminGridWrapper>
     <AdminBar />
+    <SiteLoadingIndicator />
     <div class="flex justify-between">
       <aside>
         <!-- Left Aside -->

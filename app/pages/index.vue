@@ -25,4 +25,5 @@ function click() {
   <p>I waited you!</p>
   <button @click="click">Cycle theme</button>
   <TheiLink to="/test">To Test</TheiLink>
+  <div class="h-[2000px]"></div>
 </template>

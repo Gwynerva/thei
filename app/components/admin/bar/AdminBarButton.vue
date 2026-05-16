@@ -5,10 +5,15 @@ export interface AdminBarButtonProps {
   to: string | { href: string; target?: string; external?: boolean };
   icon?: IconName;
   label?: string;
+  labelVisibility?: 'always' | 'auto';
   title?: string;
 }
 
-const { label, title } = defineProps<AdminBarButtonProps>();
+const {
+  label,
+  title,
+  labelVisibility = 'auto',
+} = defineProps<AdminBarButtonProps>();
 
 const alwaysTitlePopup = computed(() => {
   if (!label) return true;
@@ -25,18 +30,15 @@ const alwaysTitlePopup = computed(() => {
     :thei-title-popup="title ?? label"
     :thei-title-popup-class="alwaysTitlePopup ? '' : 'sm:hidden'"
     :aria-label="title ?? label"
-    class="hocus:bg-gray-500/50 hocus:opacity-100 flex h-full min-w-0
-      cursor-pointer items-center gap-3 px-3 opacity-80 transition"
+    class="flex h-full min-w-0 cursor-pointer items-center gap-3 bg-transparent
+      px-3 opacity-80 transition hocus:bg-accent/25 hocus:opacity-100"
   >
-    <Icon
-      v-if="icon"
-      :name="icon"
-      class="text-gray-300 dark:text-gray-700 shrink-0 text-2xl"
-    />
+    <Icon v-if="icon" :name="icon" class="shrink-0 text-[1.2em]" />
     <slot v-else name="icon" />
     <span
       v-if="label"
-      class="text-gray-100 dark:text-gray-900 hidden truncate sm:block"
+      class="truncate"
+      :class="[labelVisibility === 'always' ? '' : 'hidden sm:block']"
     >
       {{ label }}
     </span>

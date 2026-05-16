@@ -136,10 +136,7 @@ export async function logSignIn(ip: string, userAgent: string): Promise<void> {
     await db
       .insert(schema.signIns)
       .values({ ip, location, ua })
-      .onConflictDoUpdate({
-        target: [schema.signIns.ip, schema.signIns.at],
-        set: { location: sql`excluded.location` },
-      });
+      .onConflictDoNothing();
   } catch {
     // Never let login logging break auth
   }

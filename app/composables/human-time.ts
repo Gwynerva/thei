@@ -20,8 +20,6 @@ function formatRelative(date: Date, locale: string): string {
 }
 
 export function useHumanTime(timestamp: MaybeRefOrGetter<string>) {
-  const languageCode = useLanguageCode();
-
   const date = computed(() => {
     const ts = toValue(timestamp);
     // SQLite current_timestamp is 'YYYY-MM-DD HH:MM:SS' (UTC, no trailing Z)
@@ -34,7 +32,7 @@ export function useHumanTime(timestamp: MaybeRefOrGetter<string>) {
     return date.value > threshold;
   });
 
-  const locale = computed(() => languageCode.value ?? 'en');
+  const locale = computed(() => language.value!.code ?? 'en');
 
   const formatted = computed(() =>
     isRecent.value

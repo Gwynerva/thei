@@ -69,53 +69,56 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
 <template>
   <header
     v-if="isAdmin && adminBarData"
-    class="bg-gray-900/80 sticky top-0 z-50 flex h-[40px] items-center
-      justify-center shadow-lg shadow-black/20 backdrop-blur dark:bg-white/80
-      dark:shadow-black/6"
+    class="sticky top-0 z-10 h-(--height-admin-bar) bg-bg-1/60 backdrop-blur-md"
   >
-    <AdminBarButton
-      :to="isOnAdminPage ? '/' : '/admin/'"
-      :icon="isOnAdminPage ? 'home' : 'thei'"
-      :label="isOnAdminPage ? phrase.to_website : phrase.to_admin_panel"
-    />
+    <div class="flex h-full items-stretch justify-center bg-accent/35">
+      <AdminBarButton
+        :to="isOnAdminPage ? '/' : '/admin/'"
+        :icon="isOnAdminPage ? 'home' : 'thei'"
+        :label="isOnAdminPage ? phrase.to_website : phrase.to_admin_panel"
+      />
 
-    <AdminBarButton
-      v-if="contextAdminButton"
-      :to="contextAdminButton.to"
-      :icon="contextAdminButton.icon"
-      :label="contextAdminButton.label"
-    />
+      <AdminBarButton
+        v-if="contextAdminButton"
+        :to="contextAdminButton.to"
+        :icon="contextAdminButton.icon"
+        :label="contextAdminButton.label"
+        label-visibility="always"
+      />
 
-    <AdminBarButton
-      to="/admin/projects"
-      icon="project"
-      :label="adminBarData.projectCount + ''"
-      :title="phrase.x_projects(adminBarData.projectCount)"
-      class="font-semibold"
-    />
+      <AdminBarButton
+        to="/admin/projects"
+        icon="project"
+        :label="adminBarData.projectCount + ''"
+        :title="phrase.x_projects(adminBarData.projectCount)"
+        label-visibility="always"
+        class="font-semibold"
+      />
 
-    <AdminBarButton
-      to="/admin/events"
-      icon="event"
-      :label="adminBarData.eventCount + ''"
-      :title="phrase.x_events(adminBarData.eventCount)"
-      class="font-semibold"
-    />
+      <AdminBarButton
+        to="/admin/events"
+        icon="event"
+        :label="adminBarData.eventCount + ''"
+        :title="phrase.x_events(adminBarData.eventCount)"
+        label-visibility="always"
+        class="font-semibold"
+      />
 
-    <AdminBarButton to="/admin/" :label="publicAdmin.displayName">
-      <template #icon>
-        <Media
-          :src="publicAdmin.avatarUrl"
-          class="border-gray-100 dark:border-gray-600 size-6 rounded-full
-            border"
-        />
-      </template>
-    </AdminBarButton>
+      <AdminBarButton to="/admin/" :label="publicAdmin.displayName">
+        <template #icon>
+          <Media
+            :src="publicAdmin.avatarUrl"
+            class="border-gray-100 dark:border-gray-600 size-6 rounded-full
+              border"
+          />
+        </template>
+      </AdminBarButton>
 
-    <AdminBarButton
-      :to="{ href: '/sign-out/', external: true }"
-      icon="power"
-      :label="phrase.sign_out"
-    />
+      <AdminBarButton
+        :to="{ href: '/sign-out/', external: true }"
+        icon="power"
+        :label="phrase.sign_out"
+      />
+    </div>
   </header>
 </template>

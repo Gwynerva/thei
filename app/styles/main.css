@@ -34,10 +34,6 @@
     oklch(95% 0.04 var(--hue-accent)),
     oklch(24% 0.04 var(--hue-accent))
   );
-  --color-shadow-accent: light-dark(
-    oklch(50% 0.2 var(--hue-accent) / 0.3),
-    oklch(60% 0.2 var(--hue-accent) / 0.3)
-  );
 
   --color-bg-1: light-dark(
     oklch(100% 0.01 var(--hue-accent)),
@@ -106,11 +102,14 @@
   :root {
     --width-narrow: min(700px, 100%);
     --width-wide: min(1100px, 100%);
+    --height-admin-bar: calc(var(--spacing) * 12);
 
     @variant sm {
       --spacing-window: var(--spacing-md);
     }
+  }
 
+  :root {
     font-family: var(--font-default);
     font-size: 0.9rem;
     color: var(--color-text-1);
@@ -135,6 +134,13 @@
   ::selection {
     @apply bg-accent/50;
     color: inherit;
+  }
+
+  :root,
+  html,
+  body,
+  #nuxt {
+    @apply bg-bg-1;
   }
 
   button,
