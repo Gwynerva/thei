@@ -21,7 +21,7 @@ const accessModel = defineModel<SiteAccessLevel>('access');
     :title="phrase.global_settings"
     :description="phrase.global_settings_description"
   >
-    <div class="flex flex-col gap-md">
+    <div class="flex flex-col gap-md p-sm sm:p-md">
       <Field>
         <FieldLabel :focus="languageSelectElement">{{
           phrase.ui_language

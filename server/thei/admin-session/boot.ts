@@ -1,25 +1,25 @@
-import { eq } from 'drizzle-orm';
-import { memorySessions, type AdminSessionData } from '.';
-import { startSessionCleanupInterval } from './cleanup';
+import { memorySessions, loopAdminSessionSnapshotJob } from '.';
 
 export async function bootAdminSessions() {
   const { db, schema } = THEI_SERVER.useDb();
-  const dbSessions = await db
-    .select()
-    .from(schema.adminSessions)
-    .where(eq(schema.adminSessions.destroyed, false));
+  const sessions = await db.select().from(schema.adminSessions);
+  const now = Date.now();
 
-  for (const dbSession of dbSessions) {
-    const session: AdminSessionData = dbSession.sessionData;
+  for (const row of sessions) {
+    const session = row.data;
 
-    if (Date.now() >= session.sessionExpiresAt) {
+    if (session.state !== 'active') {
       continue;
     }
 
-    memorySessions.set(dbSession.token, session);
+    if (now >= session.expiresAt) {
+      continue;
+    }
+
+    memorySessions.set(session.token, session);
   }
 
-  startSessionCleanupInterval();
+  loopAdminSessionSnapshotJob();
 
   THEI_SERVER.console.log(
     `Booted ${memorySessions.size} active admin session(s).`,

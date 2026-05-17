@@ -1,5 +1,4 @@
 import { SiteAccessLevel } from '#layers/thei/shared/access-level';
-import { isAdminSession } from '../thei/admin-session';
 
 interface PublicAdmin {
   siteAccessLevel: SiteAccessLevel;
@@ -10,7 +9,7 @@ interface PublicAdmin {
 export default defineEventHandler(async (event): Promise<PublicAdmin> => {
   const isPrivateSite =
     THEI_SERVER.config.siteAccessLevel === SiteAccessLevel.Private;
-  const isAdmin = await isAdminSession(event);
+  const isAdmin = await THEI_SERVER.isAdmin(event);
 
   if (isPrivateSite && !isAdmin) {
     // Return dummy data

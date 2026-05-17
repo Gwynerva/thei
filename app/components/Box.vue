@@ -29,8 +29,8 @@ defineProps<{
       <slot name="actions"></slot>
     </div>
     <section
-      class="relative rounded-lg border border-border-1 bg-bg-2 p-sm shadow-md
-        shadow-shadow-1 sm:p-md"
+      class="relative rounded-lg border border-border-1 bg-bg-2 shadow-md
+        shadow-shadow-1"
     >
       <slot></slot>
     </section>

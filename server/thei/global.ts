@@ -1,3 +1,4 @@
+import { H3Event } from 'h3';
 import { sn } from 'unslash';
 import { version } from '#thei/static-public';
 import { projectPath, theiPath } from '#thei/static';
@@ -9,6 +10,7 @@ import { getTheiDbContext } from './db/global';
 import { countProjects } from './projects/repository/count';
 import { countEvents } from './events/repository/count';
 import { getPublicAdminSessions } from './admin-session/repository/publicSessions';
+import { getCurrentAdminSession } from './admin-session';
 
 export const THEI_SERVER = {
   version,
@@ -32,6 +34,13 @@ export const THEI_SERVER = {
   },
   get phrase() {
     return getCurrentLanguagePhrases();
+  },
+  async getAdmin(event: H3Event) {
+    return await getCurrentAdminSession(event);
+  },
+  async isAdmin(event: H3Event) {
+    const session = await getCurrentAdminSession(event);
+    return Boolean(session);
   },
   console: {
     ...makeLogger(),

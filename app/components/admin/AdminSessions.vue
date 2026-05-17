@@ -1,6 +1,4 @@
 <script lang="ts" setup>
-const { state } = defineProps<{ state: 'destroyed' | 'active' }>();
-
 const { data, error, refresh, pending } = await useFetch(
   '/api/admin/sessions/',
   { key: 'admin-sessions' },
@@ -17,10 +15,10 @@ const structuredSessions = computed(() => {
     for (const session of data.value) {
       if (session.current) {
         current = session;
-      } else if (session.destroyed) {
-        destroyed.push(session);
-      } else {
+      } else if (session.state === 'active') {
         active.push(session);
+      } else {
+        destroyed.push(session);
       }
     }
   }
@@ -50,14 +48,8 @@ onUnmounted(() => {
 <template>
   <Box
     icon="person-key"
-    :title="
-      state === 'active' ? phrase.active_sessions : phrase.archived_sessions
-    "
-    :description="
-      state === 'active'
-        ? phrase.active_sessions_description
-        : phrase.archived_sessions_description
-    "
+    :title="phrase.admin_sessions"
+    :description="phrase.admin_sessions_description"
   >
     <div
       v-if="error"
@@ -69,7 +61,31 @@ onUnmounted(() => {
       <span v-if="error.message">{{ error.message }}</span>
     </div>
     <div v-else-if="structuredSessions">
-      <div v-if="structuredSessions.current"></div>
+      <table class="w-full">
+        <thead class="text-left font-semibold tracking-tight text-text-2">
+          <tr>
+            <th class="w-1/2">{{ phrase.session_details }}</th>
+            <th>{{ phrase.created_at }}</th>
+            <th>{{ phrase.last_active_at }}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="structuredSessions.current">
+            <td>
+              {{ phrase.this_is_you }}
+            </td>
+            <td>
+              <HumanTime
+                :timestamp="structuredSessions.current.createdAt"
+                :static="true"
+              />
+            </td>
+            <td class="font-semibold text-accent">{{ phrase.online }}</td>
+            <td class="text-text-2 italic">{{ phrase.this_is_you }}</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </Box>
 </template>

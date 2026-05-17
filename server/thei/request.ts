@@ -1,8 +1,13 @@
+import { H3Event } from 'h3';
 import { UAParser } from 'ua-parser-js';
 
 export function isPrivateIp(ip: string): boolean {
   const prefixes = ['127.', '10.', '192.168.', '172.16.', '::1'];
   return prefixes.some((prefix) => ip.startsWith(prefix));
+}
+
+export function getRequestIp(event: H3Event) {
+  return getRequestIP(event, { xForwardedFor: true });
 }
 
 export interface RequestMeta {

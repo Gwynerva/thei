@@ -52,12 +52,20 @@ export default defineLanguagePhrases({
   invalid_secret_phrase_or_password: 'Неверная секретная фраза или пароль!',
   unknown: 'Неизвестно',
   system: 'Система',
-  active_sessions: 'Активные сессии',
-  active_sessions_description:
-    'Перечисленные сессии имеют доступ к админ-панели прямо сейчас.',
-  archived_sessions: 'Архив сессий',
-  archived_sessions_description:
-    'Старые сессии, которые более не имеют доступа к админ-панели.',
+  admin_sessions: 'Сессии администратора',
+  admin_sessions_description:
+    'Последние сессии, которые задействовали админ-доступ.',
+  active_admin_sessions: 'Активные сессии администратора',
+  active_admin_sessions_description:
+    'Сессии, которые имеют доступ к админ-панели прямо сейчас.',
+  destroyed_admin_sessions: 'Уничтоженные сессии администратора',
+  destroyed_admin_sessions_description:
+    'Отключенные сессии, которые больше не имеют доступа к админ-панели.',
+  session_details: 'Детали сессии',
+  created_at: 'Дата создания',
+  last_active_at: 'Последняя активность',
+  online: 'Онлайн',
+  this_is_you: 'Это вы',
   failed_to_fetch_data: 'Не удалось загрузить данные!',
   to_admin_panel: 'В админ-панель',
   to_website: 'На сайт',

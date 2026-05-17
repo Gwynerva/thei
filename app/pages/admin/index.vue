@@ -6,6 +6,6 @@ definePageMeta({
 
 <template>
   <div class="m-auto w-(--width-wide) px-window py-lg">
-    <AdminSessions state="active" />
+    <AdminSessions />
   </div>
 </template>

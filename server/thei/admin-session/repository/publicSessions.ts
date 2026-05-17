@@ -1,45 +1,56 @@
 import type { H3Event } from 'h3';
-import { sql } from 'drizzle-orm';
-import type { RequestLocation, RequestUserAgent } from '../../request';
-import { memorySessions } from '..';
-import { getTokenCookie } from '../token';
+import { inArray, not } from 'drizzle-orm';
+import { cloneSession, memorySessions, type AdminSessionState } from '..';
+import type { RequestMeta } from '../../request';
 
 export interface PublicAdminSession {
   sessionUuid: string;
   current: boolean;
-  destroyed: boolean;
+  state: AdminSessionState;
   createdAt: number;
   lastUsedAt: number;
-  location: RequestLocation;
-  userAgent: RequestUserAgent;
+  ip?: string;
+  meta: RequestMeta;
 }
 
 export async function getPublicAdminSessions(
   event?: H3Event,
 ): Promise<PublicAdminSession[]> {
+  const clonedMemorySessions = [...memorySessions.values()].map(cloneSession);
+
+  const currentSessionUuid = event
+    ? (await THEI_SERVER.getAdmin(event))?.sessionUuid
+    : undefined;
+
   const { db, schema } = THEI_SERVER.useDb();
-  const dbSessions = await db
+  const restDbSessions = await db
     .select()
     .from(schema.adminSessions)
-    .orderBy(
-      sql`json_extract(${schema.adminSessions.sessionData}, '$.lastUsedAt') DESC`,
+    .where(
+      not(
+        inArray(
+          schema.adminSessions.sessionUuid,
+          clonedMemorySessions.map(
+            (memorySession) => memorySession.sessionUuid,
+          ),
+        ),
+      ),
     );
 
-  const currentToken = event ? getTokenCookie(event) : undefined;
-  const currentSessionUuid = memorySessions.get(
-    currentToken || '',
-  )?.sessionUuid;
-
-  return dbSessions.map((dbSession) => {
-    const jsonSession = dbSession.sessionData;
+  const sessions = [
+    ...clonedMemorySessions,
+    ...restDbSessions.map((dbSession) => dbSession.data),
+  ].map((session) => {
     return {
-      sessionUuid: dbSession.sessionUuid,
-      current: dbSession.sessionUuid === currentSessionUuid,
-      destroyed: dbSession.destroyed,
-      createdAt: jsonSession.createdAt,
-      lastUsedAt: jsonSession.lastUsedAt,
-      location: jsonSession.location,
-      userAgent: jsonSession.userAgent,
+      sessionUuid: session.sessionUuid,
+      current: session.sessionUuid === currentSessionUuid,
+      state: session.state,
+      createdAt: session.createdAt,
+      lastUsedAt: session.lastUsedAt,
+      ip: session.ip,
+      meta: session.meta,
     };
   });
+
+  return sessions.sort((a, b) => b.lastUsedAt - a.lastUsedAt);
 }

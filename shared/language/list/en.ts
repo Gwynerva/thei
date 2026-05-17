@@ -54,12 +54,20 @@ export default defineLanguagePhrases({
   invalid_secret_phrase_or_password: 'Invalid secret phrase or password!',
   unknown: 'Unknown',
   system: 'System',
-  active_sessions: 'Active Sessions',
-  active_sessions_description:
-    'Listed sessions have full access to the admin panel right now.',
-  archived_sessions: 'Archived Sessions',
-  archived_sessions_description:
-    'Old sessions that no longer have access to the admin panel.',
+  admin_sessions: 'Admin Sessions',
+  admin_sessions_description:
+    'Recent sessions that have accessed admin privileges.',
+  active_admin_sessions: 'Active Admin Sessions',
+  active_admin_sessions_description:
+    'Sessions that have access to the admin panel right now.',
+  destroyed_admin_sessions: 'Destroyed Admin Sessions',
+  destroyed_admin_sessions_description:
+    'Terminated sessions that no longer have access to the admin panel.',
+  session_details: 'Session Details',
+  created_at: 'Created At',
+  last_active_at: 'Last Active At',
+  online: 'Online',
+  this_is_you: 'This is you',
   failed_to_fetch_data: 'Failed to fetch data!',
   to_admin_panel: 'To Admin Panel',
   to_website: 'To Website',

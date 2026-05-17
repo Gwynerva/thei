@@ -67,7 +67,7 @@ watchEffect(() => {
     :title="phrase.admin_data"
     :description="phrase.admin_data_description"
   >
-    <div class="flex flex-col gap-md">
+    <div class="flex flex-col gap-md p-sm sm:p-md">
       <Field>
         <FieldLabel :focus="displayNameElement">
           {{ phrase.how_to_address_you }}

@@ -29,7 +29,7 @@ const fontStyleOptions: ComputedRef<
     :title="phrase.visuals"
     :description="phrase.visuals_description"
   >
-    <div class="flex flex-col gap-md">
+    <div class="flex flex-col gap-md p-sm sm:p-md">
       <Field>
         <FieldLabel>{{ phrase.theme }}</FieldLabel>
         <FieldOptions :options="themeOptions" v-model="visuals.theme" />
@@ -45,7 +45,7 @@ const fontStyleOptions: ComputedRef<
             :class="[
               visuals.accentHue === accentHue
                 ? 'ring-bw-reverse'
-                : 'hocus:ring-bw-reverse/50 ring-transparent',
+                : 'ring-transparent hocus:ring-bw-reverse/50',
             ]"
             class="size-[20px] shrink-0 cursor-pointer rounded-full
               bg-(--_accent-variant) ring-2 ring-offset-2 ring-offset-bg-2

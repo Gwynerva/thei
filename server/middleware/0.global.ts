@@ -1,7 +1,6 @@
 import { SiteAccessLevel } from '#layers/thei/shared/access-level';
 import { bootPromise } from '../thei/boot/promise';
 import { bootResult } from '../thei/boot/result';
-import { isAdminSession } from '../thei/admin-session';
 
 export default defineEventHandler(async (event) => {
   await bootPromise;
@@ -29,7 +28,7 @@ export default defineEventHandler(async (event) => {
   const isUpdatePath = path === '/update/' || path === '/api/update/';
   const isAdminPath =
     path.startsWith('/admin/') || path.startsWith('/api/admin/');
-  const isAdmin = await isAdminSession(event);
+  const isAdmin = await THEI_SERVER.isAdmin(event);
 
   switch (bootResult.type) {
     case 'ready':

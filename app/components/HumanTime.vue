@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-const props = defineProps<{ timestamp: string; static?: boolean }>();
+const props = defineProps<{ timestamp: string | number; static?: boolean }>();
 
 const UNITS: { unit: Intl.RelativeTimeFormatUnit; ms: number }[] = [
   { unit: 'year', ms: 365 * 24 * 60 * 60 * 1000 },
@@ -25,8 +25,11 @@ const locale = computed(() => language.value!.code ?? 'en');
 
 const date = computed(() => {
   const ts = props.timestamp;
-  // SQLite current_timestamp is 'YYYY-MM-DD HH:MM:SS' (UTC, no trailing Z)
-  return new Date(ts.includes('T') ? ts : ts.replace(' ', 'T') + 'Z');
+  return new Date(
+    typeof ts === 'string' && !ts.includes('T')
+      ? ts.replace(' ', 'T') + 'Z'
+      : ts,
+  );
 });
 
 const isRecent = computed(() => {

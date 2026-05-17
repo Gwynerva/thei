@@ -2,6 +2,7 @@ import type { H3Event } from 'h3';
 import type { SignInData } from '#layers/thei/shared/api/sign-in';
 import { verifyPassword } from '../thei/password';
 import { createAdminSession } from '../thei/admin-session';
+import { getRequestIp } from '../thei/request';
 
 type SignInResponse = { type: 'success' } | { type: 'error'; message: string };
 
@@ -52,7 +53,7 @@ function validateSignInData(signInData: SignInData): string | SignInData {
 const rateLimits = new Map<string, number>();
 const rateLimitCooldown = 3000;
 function isRateLimited(event: H3Event): boolean {
-  const ip = getRequestIP(event) ?? 'unknown';
+  const ip = getRequestIp(event) ?? 'unknown';
   const now = Date.now();
   const blockedUntil = rateLimits.get(ip) ?? 0;
 

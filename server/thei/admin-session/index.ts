@@ -1,18 +1,22 @@
 import type { H3Event } from 'h3';
+import { getHeader } from 'h3';
 import { randomUUID } from 'node:crypto';
-import { eq, inArray, sql } from 'drizzle-orm';
-import { debounce } from 'perfect-debounce';
-import { getRequestMeta, type RequestMeta } from '../request';
+import { inArray, sql } from 'drizzle-orm';
+import { getRequestIp, getRequestMeta, type RequestMeta } from '../request';
 import {
+  cleanupExpiredTokenAliases,
   clearTokenCookie,
   createToken,
   getTokenCookie,
+  resolveToken,
   setTokenCookie,
+  tokenAliases,
 } from './token';
 import {
+  dbSnapshotInterval,
   maxDbSessions,
   sessionDuration,
-  sessionSyncDebounce,
+  tokenAliasLifetime,
   tokenRotationInterval,
 } from './const';
 
@@ -29,51 +33,23 @@ export interface AdminSessionData {
   meta: RequestMeta;
   token: string;
   tokenCreatedAt: number;
-  __updateMeta?: boolean;
 }
 
 export const memorySessions = new Map<string, AdminSessionData>();
-export const syncRequests = new Map<string, Promise<void>>();
+export const toSnapshotSessions = new Map<string, AdminSessionData>();
 
-async function syncSessionWithDb(session: AdminSessionData) {
-  if (session.__updateMeta) {
-    session.meta = await getRequestMeta({ ip: session.ip, ua: session.ua });
-    delete session.__updateMeta;
-  }
-
-  const { db, schema } = THEI_SERVER.useDb();
-  await db
-    .update(schema.adminSessions)
-    .set({ data: session })
-    .where(eq(schema.adminSessions.sessionUuid, session.sessionUuid));
+export function cloneSession(session: AdminSessionData): AdminSessionData {
+  return structuredClone(session);
 }
 
-function requestSessionSync(session: AdminSessionData) {
-  const sessionUuid = session.sessionUuid;
-
-  const existingRequest = syncRequests.get(sessionUuid);
-  if (existingRequest) {
-    return existingRequest;
-  }
-
-  const task = (async () => {
-    try {
-      await debounce(async () => {
-        await syncSessionWithDb(session);
-      }, sessionSyncDebounce)();
-    } finally {
-      syncRequests.delete(sessionUuid);
-    }
-  })();
-
-  syncRequests.set(sessionUuid, task);
-  return task;
+export function markSessionForSnapshot(session: AdminSessionData) {
+  toSnapshotSessions.set(session.sessionUuid, cloneSession(session));
 }
 
 export async function createAdminSession(event: H3Event) {
   const now = Date.now();
   const token = createToken();
-  const ip = getRequestIP(event);
+  const ip = getRequestIp(event);
   const ua = getHeader(event, 'user-agent');
 
   const session: AdminSessionData = {
@@ -84,39 +60,44 @@ export async function createAdminSession(event: H3Event) {
     expiresAt: now + sessionDuration,
     ip,
     ua,
-    meta: await getRequestMeta({ ip, ua }),
+    meta: await getRequestMeta({
+      ip,
+      ua,
+    }),
     token,
     tokenCreatedAt: now,
   };
 
-  const { db, schema } = THEI_SERVER.useDb();
-  await db.insert(schema.adminSessions).values({
-    sessionUuid: session.sessionUuid,
-    data: session,
-  });
-
   memorySessions.set(token, session);
+  markSessionForSnapshot(session);
   setTokenCookie(event, token);
-  await enforceDbLimit();
+
+  await flushSessionsToDb();
 
   return session;
 }
 
 export async function destroyAdminSession(token: string) {
+  token = resolveToken(token);
   const session = memorySessions.get(token);
 
   if (!session) {
     return;
   }
 
-  const { db, schema } = THEI_SERVER.useDb();
-  await db
-    .update(schema.adminSessions)
-    .set({ data: { ...session, state: 'destroyed' } })
-    .where(eq(schema.adminSessions.sessionUuid, session.sessionUuid));
+  session.state = 'destroyed';
+  session.lastUsedAt = Date.now();
 
+  markSessionForSnapshot(session);
   memorySessions.delete(token);
-  syncRequests.delete(session.sessionUuid);
+
+  for (const [oldToken, alias] of tokenAliases) {
+    if (alias.token === token) {
+      tokenAliases.delete(oldToken);
+    }
+  }
+
+  await flushSessionsToDb();
 }
 
 export async function destroyCurrentAdminSession(event: H3Event) {
@@ -138,88 +119,159 @@ export async function rotateAdminSessionTokenIfNeeded(
   const now = Date.now();
 
   if (now - session.tokenCreatedAt < tokenRotationInterval) {
+    return session;
+  }
+
+  if (token !== session.token) {
+    return session;
+  }
+
+  const oldToken = token;
+  const newToken = createToken();
+
+  session.token = newToken;
+  session.tokenCreatedAt = now;
+  session.lastUsedAt = now;
+
+  memorySessions.set(newToken, session);
+
+  tokenAliases.set(oldToken, {
+    token: newToken,
+    expiresAt: now + tokenAliasLifetime,
+  });
+
+  memorySessions.delete(oldToken);
+
+  markSessionForSnapshot(session);
+
+  setTokenCookie(event, newToken);
+
+  return session;
+}
+
+export async function getCurrentAdminSession(event: H3Event) {
+  cleanupExpiredTokenAliases();
+
+  let token = getTokenCookie(event);
+
+  if (!token) {
     return;
   }
 
-  const newToken = createToken();
-
-  const rotated: AdminSessionData = {
-    ...session,
-    token: newToken,
-    tokenCreatedAt: now,
-    lastUsedAt: now,
-  };
-
-  await syncSessionWithDb(rotated);
-
-  memorySessions.set(newToken, rotated);
-  memorySessions.delete(token);
-  setTokenCookie(event, newToken);
-}
-
-export async function isAdminSession(event: H3Event) {
-  const token = getTokenCookie(event);
-
-  if (!token) {
-    return false;
-  }
+  token = resolveToken(token);
 
   const session = memorySessions.get(token);
 
   if (!session) {
     clearTokenCookie(event);
-    return false;
+    return;
   }
 
   const now = Date.now();
 
   if (now >= session.expiresAt) {
     await destroyCurrentAdminSession(event);
-    return false;
+    return;
   }
 
-  await rotateAdminSessionTokenIfNeeded(event, token, session);
+  const currentSession = await rotateAdminSessionTokenIfNeeded(
+    event,
+    token,
+    session,
+  );
+
+  const ip = getRequestIp(event);
+  const ua = getHeader(event, 'user-agent');
+
+  const needMetaUpdate = currentSession.ip !== ip || currentSession.ua !== ua;
+
+  currentSession.ip = ip;
+  currentSession.ua = ua;
+
+  if (needMetaUpdate) {
+    currentSession.meta = await getRequestMeta({
+      ip,
+      ua,
+    });
+  }
 
   if (
     event.path.startsWith('/admin/') ||
     event.path.startsWith('/api/admin/')
   ) {
-    const ip = getRequestIP(event);
-    const ua = getHeader(event, 'user-agent');
-    const needMetaUpdate = session.ip !== ip || session.ua !== ua;
-
-    session.ip = ip;
-    session.ua = ua;
-
-    if (needMetaUpdate) {
-      session.__updateMeta = true;
-    }
-
-    session.lastUsedAt = now;
-    session.expiresAt = now + sessionDuration;
-
-    requestSessionSync(session);
+    // Admin session is actually used
+    currentSession.lastUsedAt = now;
+    currentSession.expiresAt = now + sessionDuration;
   }
 
-  return true;
+  markSessionForSnapshot(currentSession);
+
+  return currentSession;
 }
 
-export async function enforceDbLimit() {
-  const { db, schema } = THEI_SERVER.useDb();
+//
+// Flushing sessions to the database
+//
 
-  const sessions = await db
-    .select()
-    .from(schema.adminSessions)
-    .orderBy(sql`json_extract(${schema.adminSessions.data}, '$.lastUsedAt')`);
+let flushRunning = false;
 
-  if (sessions.length <= maxDbSessions) {
+export async function flushSessionsToDb() {
+  if (flushRunning) {
     return;
   }
 
-  const toDelete = sessions.slice(0, sessions.length - maxDbSessions);
-  const uuids = toDelete.map((s) => s.sessionUuid);
+  flushRunning = true;
 
-  await db
-    .delete(schema.adminSessions)
-    .where(inArray(schema.adminSessions.sessionUuid, uuids));
+  try {
+    const pendingSessions = [...toSnapshotSessions.values()].map(cloneSession);
+
+    for (const session of pendingSessions) {
+      toSnapshotSessions.delete(session.sessionUuid);
+    }
+
+    const { db, schema } = THEI_SERVER.useDb();
+    db.transaction((transaction) => {
+      for (const session of pendingSessions) {
+        transaction
+          .insert(schema.adminSessions)
+          .values({
+            sessionUuid: session.sessionUuid,
+            data: session,
+          })
+          .onConflictDoUpdate({
+            target: schema.adminSessions.sessionUuid,
+            set: {
+              data: session,
+            },
+          })
+          .run();
+      }
+
+      const sessions = transaction
+        .select()
+        .from(schema.adminSessions)
+        .orderBy(
+          sql`json_extract(${schema.adminSessions.data}, '$.lastUsedAt') DESC`,
+        )
+        .all();
+
+      if (sessions.length > maxDbSessions) {
+        const toDelete = sessions.slice(maxDbSessions);
+
+        const uuids = toDelete.map((s) => s.sessionUuid);
+
+        transaction
+          .delete(schema.adminSessions)
+          .where(inArray(schema.adminSessions.sessionUuid, uuids))
+          .run();
+      }
+    });
+  } finally {
+    flushRunning = false;
+  }
+}
+
+export async function loopAdminSessionSnapshotJob() {
+  await flushSessionsToDb();
+  setTimeout(loopAdminSessionSnapshotJob, dbSnapshotInterval);
 }
