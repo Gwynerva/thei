@@ -8,6 +8,7 @@ import { theiConfig } from './config/index';
 import { getTheiDbContext } from './db/global';
 import { countProjects } from './projects/repository/count';
 import { countEvents } from './events/repository/count';
+import { getPublicAdminSessions } from './admin-session/repository/publicSessions';
 
 export const THEI_SERVER = {
   version,
@@ -41,5 +42,8 @@ export const THEI_SERVER = {
   },
   events: {
     count: countEvents,
+  },
+  adminSessions: {
+    getPublic: getPublicAdminSessions,
   },
 };

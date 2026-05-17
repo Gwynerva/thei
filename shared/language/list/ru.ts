@@ -50,8 +50,15 @@ export default defineLanguagePhrases({
   sign_out: 'Выйти',
   signing_in: 'Вход',
   invalid_secret_phrase_or_password: 'Неверная секретная фраза или пароль!',
-
-  secret_admin: 'Секретный админ',
+  unknown: 'Неизвестно',
+  system: 'Система',
+  active_sessions: 'Активные сессии',
+  active_sessions_description:
+    'Перечисленные сессии имеют доступ к админ-панели прямо сейчас.',
+  archived_sessions: 'Архив сессий',
+  archived_sessions_description:
+    'Старые сессии, которые более не имеют доступа к админ-панели.',
+  failed_to_fetch_data: 'Не удалось загрузить данные!',
   to_admin_panel: 'В админ-панель',
   to_website: 'На сайт',
   project: 'Проект',

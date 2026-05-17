@@ -1,10 +1,8 @@
 import { SiteAccessLevel } from '#layers/thei/shared/access-level';
-import { deleteAuthToken, TOKEN_COOKIE } from '../thei/auth';
+import { destroyCurrentAdminSession } from '../thei/admin-session';
 
 export default defineEventHandler(async (event) => {
-  const token = getCookie(event, TOKEN_COOKIE) ?? '';
-  deleteAuthToken(token);
-  deleteCookie(event, TOKEN_COOKIE, { path: '/' });
+  await destroyCurrentAdminSession(event);
 
   if (THEI_SERVER.config.siteAccessLevel === SiteAccessLevel.Private) {
     return sendRedirect(event, '/sign-in/');

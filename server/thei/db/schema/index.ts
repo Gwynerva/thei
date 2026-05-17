@@ -1,11 +1,11 @@
 import { assets } from './assets';
 import { events } from './events';
-import { signIns } from './sing-ins';
 import { projects } from './projects';
+import { adminSessions } from './admin-sessions';
 
 export const schema = {
   assets,
   events,
-  signIns,
   projects,
+  adminSessions,
 };

@@ -52,8 +52,15 @@ export default defineLanguagePhrases({
   sign_out: 'Sign Out',
   signing_in: 'Signing in',
   invalid_secret_phrase_or_password: 'Invalid secret phrase or password!',
-
-  secret_admin: 'Secret Admin',
+  unknown: 'Unknown',
+  system: 'System',
+  active_sessions: 'Active Sessions',
+  active_sessions_description:
+    'Listed sessions have full access to the admin panel right now.',
+  archived_sessions: 'Archived Sessions',
+  archived_sessions_description:
+    'Old sessions that no longer have access to the admin panel.',
+  failed_to_fetch_data: 'Failed to fetch data!',
   to_admin_panel: 'To Admin Panel',
   to_website: 'To Website',
   project: 'Project',

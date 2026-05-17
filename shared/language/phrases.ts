@@ -82,8 +82,13 @@ export type LanguagePhrases = ValidateLanguagePhrases<{
   sign_out: string;
   signing_in: string;
   invalid_secret_phrase_or_password: string;
-
-  secret_admin: string;
+  unknown: string;
+  system: string;
+  active_sessions: string;
+  active_sessions_description: string;
+  archived_sessions: string;
+  archived_sessions_description: string;
+  failed_to_fetch_data: string;
   to_admin_panel: string;
   to_website: string;
   project: string;

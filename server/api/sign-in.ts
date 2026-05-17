@@ -1,18 +1,12 @@
+import type { H3Event } from 'h3';
 import type { SignInData } from '#layers/thei/shared/api/sign-in';
-import {
-  createAuthToken,
-  logSignIn,
-  TOKEN_COOKIE,
-  tokenCookieOptions,
-} from '../thei/auth';
 import { verifyPassword } from '../thei/password';
+import { createAdminSession } from '../thei/admin-session';
 
 type SignInResponse = { type: 'success' } | { type: 'error'; message: string };
 
 export default defineEventHandler(async (event): Promise<SignInResponse> => {
-  const ip = getRequestIP(event, { xForwardedFor: true }) ?? 'unknown';
-
-  if (isRateLimited(ip)) {
+  if (isRateLimited(event)) {
     return {
       type: 'error',
       message: 'Too many sign-in attempts! Try again later.',
@@ -29,10 +23,7 @@ export default defineEventHandler(async (event): Promise<SignInResponse> => {
     };
   }
 
-  const token = createAuthToken();
-  setCookie(event, TOKEN_COOKIE, token, tokenCookieOptions);
-  const userAgent = getHeader(event, 'user-agent') ?? '';
-  await logSignIn(ip, userAgent);
+  await createAdminSession(event);
   return { type: 'success' };
 });
 
@@ -58,27 +49,26 @@ function validateSignInData(signInData: SignInData): string | SignInData {
   };
 }
 
-//
-// Rate Limiting Sign-In Attempts
-//
-
-const rateLimitCooldown = 3_000;
-const clearRateLimitColdown = 60_000;
-const rateLimitTable: Record<string, number> = {};
-
-function isRateLimited(ip: string): boolean {
+const rateLimits = new Map<string, number>();
+const rateLimitCooldown = 3000;
+function isRateLimited(event: H3Event): boolean {
+  const ip = getRequestIP(event) ?? 'unknown';
   const now = Date.now();
-  const lastAttempt = rateLimitTable[ip] ?? 0;
-  const rateLimited = now - lastAttempt < rateLimitCooldown;
-  rateLimitTable[ip] = now;
-  return rateLimited;
-}
+  const blockedUntil = rateLimits.get(ip) ?? 0;
 
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, lastAttempt] of Object.entries(rateLimitTable)) {
-    if (now - lastAttempt > clearRateLimitColdown) {
-      delete rateLimitTable[ip];
+  if (now < blockedUntil) {
+    return true;
+  }
+
+  rateLimits.set(ip, now + rateLimitCooldown);
+
+  if (Math.random() < 0.01) {
+    for (const [ip, expires] of rateLimits) {
+      if (now >= expires) {
+        rateLimits.delete(ip);
+      }
     }
   }
-}, clearRateLimitColdown);
+
+  return false;
+}

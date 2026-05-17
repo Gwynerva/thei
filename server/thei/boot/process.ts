@@ -9,7 +9,7 @@ import {
 } from './result';
 import { bootTheiLanguage } from '../language';
 import { bootTheiDb } from '../db/boot';
-import { bootTheiAuth } from '../auth';
+import { bootAdminSessions } from '../admin-session/boot';
 
 export async function bootTheiServer() {
   THEI_SERVER.console.tag('Boot').log('Booting...');
@@ -19,7 +19,7 @@ export async function bootTheiServer() {
     await bootTheiConfig();
     await bootTheiDb();
     await bootTheiLanguage();
-    await bootTheiAuth();
+    await bootAdminSessions();
     setBootReady();
   } catch (decideOrError) {
     if (decideOrError instanceof BootDecided) {
