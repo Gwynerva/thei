@@ -21,7 +21,7 @@ const model = defineModel<string>();
 <template>
   <div class="flex">
     <div
-      class="flex gap-1 rounded-lg bg-bg-3 p-1 text-sm"
+      class="flex gap-1 rounded-normal bg-bg-3 p-1 text-sm"
       :class="[direction === 'column' ? 'flex-1 flex-col' : '']"
     >
       <button
@@ -29,7 +29,7 @@ const model = defineModel<string>();
         :key
         @click="model = key"
         :thei-title-popup="direction === 'row' ? option.description : undefined"
-        class="cursor-pointer rounded-lg border-2 p-xs transition"
+        class="cursor-pointer rounded-normal border-2 p-xs transition"
         :class="[
           option.classes,
           model === key

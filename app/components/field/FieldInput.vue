@@ -87,7 +87,7 @@ function onBlur() {
       :class="[
         shownError
           ? 'rounded-t-lg border-border-error'
-          : 'rounded-lg border-border-1',
+          : 'rounded-normal border-border-1',
       ]"
       @focus="onFocus"
       @blur="onBlur"

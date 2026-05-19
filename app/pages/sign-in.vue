@@ -91,9 +91,10 @@ watch(secretPhraseElement, (newElement) => {
   <AdminGridWrapper>
     <div class="flex min-h-screen min-w-screen items-center justify-center">
       <section
-        class="intems-center flex min-h-screen w-[min(380px,100%)] min-w-screen
-          flex-col justify-center gap-md rounded-lg border border-border-1
-          bg-bg-2 p-md shadow-lg shadow-shadow-1 sm:min-h-auto sm:min-w-auto"
+        class="intems-center rounded-normal flex min-h-screen
+          w-[min(380px,100%)] min-w-screen flex-col justify-center gap-md border
+          border-border-1 bg-bg-2 p-md shadow-lg shadow-shadow-1 sm:min-h-auto
+          sm:min-w-auto"
       >
         <div class="flex items-center justify-around">
           <Media
@@ -155,8 +156,8 @@ watch(secretPhraseElement, (newElement) => {
         </Button>
         <div
           v-if="signInError"
-          class="rounded-lg border border-border-error bg-bg-error p-xs text-xs
-            text-text-error"
+          class="rounded-normal border border-border-error bg-bg-error p-xs
+            text-xs text-text-error"
         >
           <Icon name="warning" class="mr-xs" />
           <span>{{ signInError }}</span>

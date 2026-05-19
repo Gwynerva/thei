@@ -57,15 +57,17 @@ export default defineLanguagePhrases({
   admin_sessions: 'Admin Sessions',
   admin_sessions_description:
     'Recent sessions that have accessed admin privileges.',
-  active_admin_sessions: 'Active Admin Sessions',
-  active_admin_sessions_description:
-    'Sessions that have access to the admin panel right now.',
-  destroyed_admin_sessions: 'Destroyed Admin Sessions',
+  active_admin_sessions: 'Active Sessions',
+  active_admin_sessions_description: 'These sessions have admin access.',
+  destroyed_admin_sessions: 'Terminated Sessions',
   destroyed_admin_sessions_description:
-    'Terminated sessions that no longer have access to the admin panel.',
+    'These sessions no longer have admin access.',
+  destroy_session: 'Terminate session',
+  show_x_destroyed_sessions: (count: number) =>
+    `Show ${m(count, 'terminated session', 'terminated sessions')}`,
   session_details: 'Session Details',
-  created_at: 'Created At',
-  last_active_at: 'Last Active At',
+  created_at: 'Created',
+  last_active_at: 'Last Active',
   online: 'Online',
   this_is_you: 'This is you',
   failed_to_fetch_data: 'Failed to fetch data!',

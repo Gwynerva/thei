@@ -9,7 +9,7 @@ import { theiConfig } from './config/index';
 import { getTheiDbContext } from './db/global';
 import { countProjects } from './projects/repository/count';
 import { countEvents } from './events/repository/count';
-import { getPublicAdminSessions } from './admin-session/repository/publicSessions';
+import { getPublicAdminSessions } from './admin-session/repository/public';
 import { getCurrentAdminSession } from './admin-session';
 
 export const THEI_SERVER = {

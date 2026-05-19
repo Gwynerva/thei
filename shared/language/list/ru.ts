@@ -55,15 +55,17 @@ export default defineLanguagePhrases({
   admin_sessions: 'Сессии администратора',
   admin_sessions_description:
     'Последние сессии, которые задействовали админ-доступ.',
-  active_admin_sessions: 'Активные сессии администратора',
-  active_admin_sessions_description:
-    'Сессии, которые имеют доступ к админ-панели прямо сейчас.',
-  destroyed_admin_sessions: 'Уничтоженные сессии администратора',
+  active_admin_sessions: 'Активные сессии',
+  active_admin_sessions_description: 'Эти сессии имеют админ-доступ.',
+  destroyed_admin_sessions: 'Отключенные сессии',
   destroyed_admin_sessions_description:
-    'Отключенные сессии, которые больше не имеют доступа к админ-панели.',
+    'Эти сессии больше не имеют админ-доступа.',
+  destroy_session: 'Отключить сессию',
+  show_x_destroyed_sessions: (count: number) =>
+    `Показать ${m(count, 'отключенную сессию', 'отключенные сессии', 'отключенных сессий')}`,
   session_details: 'Детали сессии',
   created_at: 'Дата создания',
-  last_active_at: 'Последняя активность',
+  last_active_at: 'Активность',
   online: 'Онлайн',
   this_is_you: 'Это вы',
   failed_to_fetch_data: 'Не удалось загрузить данные!',

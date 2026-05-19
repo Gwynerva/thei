@@ -13,6 +13,8 @@
   --spacing-lg: calc(2 * var(--spacing-md));
   --spacing-xl: calc(2 * var(--spacing-lg));
 
+  --radius-normal: var(--radius-lg);
+
   /** Space between element and window edge */
   --spacing-window: var(--spacing-sm);
 
@@ -97,6 +99,41 @@
 @custom-variant hocus (&:hover, &:focus-visible);
 
 @custom-variant sticky-stuck (&:where([data-sticky-stuck], [data-sticky-stuck] *));
+
+@utility tr-normal {
+  @apply transition hocus:bg-accent/8;
+  &:has(+ tr.tr-normal) {
+    @apply border-b border-border-1/60;
+  }
+}
+
+@utility tr-section {
+  @apply border-y border-border-1 bg-bg-3/50 px-sm py-xs tracking-tight;
+  &:first-child {
+    border-top: none;
+  }
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+@utility th {
+  @apply border-b border-border-1 bg-bg-3 tracking-tight text-text-2;
+}
+
+@utility p-td {
+  @apply px-[calc(var(--spacing-xs)/2)] py-sm sm:px-xs;
+  &:first-child {
+    @apply pl-sm;
+  }
+}
+
+@utility p-td-tight {
+  @apply px-[calc(var(--spacing-xs)/2)] py-xs;
+  &:first-child {
+    @apply pl-sm;
+  }
+}
 
 @layer base {
   :root {

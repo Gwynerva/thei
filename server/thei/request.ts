@@ -1,6 +1,8 @@
 import { H3Event } from 'h3';
 import { UAParser } from 'ua-parser-js';
 
+const locationCache = new Map<string, { country?: string; city?: string }>();
+
 export function isPrivateIp(ip: string): boolean {
   const prefixes = ['127.', '10.', '192.168.', '172.16.', '::1'];
   return prefixes.some((prefix) => ip.startsWith(prefix));
@@ -35,14 +37,26 @@ export async function getRequestMeta(args: {
     meta.browser = uaParser.getBrowser().name;
 
     if (ip && !isPrivateIp(ip)) {
-      const response = await fetch(`https://ipapi.co/${ip}/json/`, {
-        signal: AbortSignal.timeout(3000),
-      });
+      if (locationCache.has(ip)) {
+        const cached = locationCache.get(ip);
+        if (cached) {
+          meta.country = cached.country;
+          meta.city = cached.city;
+        }
+      } else {
+        const response = await fetch(`https://ipwho.is/${ip}`, {
+          signal: AbortSignal.timeout(3000),
+        });
 
-      if (response.ok) {
-        const data = await response.json();
-        meta.country = data.country_name;
-        meta.city = data.city;
+        if (response.ok) {
+          const data = await response.json();
+          meta.country = data.country;
+          meta.city = data.city;
+          locationCache.set(ip, {
+            country: data.country,
+            city: data.city,
+          });
+        }
       }
     }
   } catch {

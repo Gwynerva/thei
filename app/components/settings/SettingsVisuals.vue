@@ -24,11 +24,13 @@ const fontStyleOptions: ComputedRef<
 </script>
 
 <template>
-  <Box
+  <SectionHeader
     icon="palette"
     :title="phrase.visuals"
     :description="phrase.visuals_description"
-  >
+    class="mb-md"
+  />
+  <Box>
     <div class="flex flex-col gap-md p-sm sm:p-md">
       <Field>
         <FieldLabel>{{ phrase.theme }}</FieldLabel>

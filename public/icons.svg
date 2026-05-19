@@ -1,8 +1,10 @@
-<!-- Thei Bundled Icons 7ZeknxWARxSeL7Se3lOW7tEW -->
+<!-- Thei Bundled Icons gMjnSq130ATbEodpyAbt8iZj -->
 <svg xmlns="http://www.w3.org/2000/svg"><symbol id="chevron-right" viewBox="0 -960 960 960">
   <path d="m321-80-71-71 329-329-329-329 71-71 400 400L321-80Z"/>
 </symbol><symbol id="contrast" viewBox="0 0 24 24">
   <path fill="currentColor" d="M17 3.34A10 10 0 1 1 2 12l.005-.324A10 10 0 0 1 17 3.34M8 5.072A8 8 0 0 0 12.001 20L12 4a8 8 0 0 0-4 1.072"/>
+</symbol><symbol id="delete" viewBox="0 -960 960 960">
+  <path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/>
 </symbol><symbol id="edit" viewBox="0 -960 960 960">
   <path d="M238-200q-100-5-149-42T40-349q0-65 53.5-105.5T242-503q39-3 58.5-12.5T320-542q0-26-29.5-39T193-600l7-80q103 8 151.5 41.5T400-542q0 53-38.5 83T248-423q-64 5-96 23.5T120-349q0 35 28 50.5t94 18.5l-4 80Zm317-30L390-395l345-345q20-20 47.5-20t47.5 20l70 70q20 20 20 47.5T900-575L555-230Zm-196 70q-17 4-30-9t-9-30l31-151 158 158-150 32Z"/>
 </symbol><symbol id="event" viewBox="0 0 640 640">

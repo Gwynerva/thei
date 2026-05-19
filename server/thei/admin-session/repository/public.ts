@@ -1,6 +1,11 @@
 import type { H3Event } from 'h3';
 import { inArray, not } from 'drizzle-orm';
-import { cloneSession, memorySessions, type AdminSessionState } from '..';
+import {
+  cloneSession,
+  memorySessions,
+  type AdminSessionData,
+  type AdminSessionState,
+} from '..';
 import type { RequestMeta } from '../../request';
 
 export interface PublicAdminSession {
@@ -11,6 +16,21 @@ export interface PublicAdminSession {
   lastUsedAt: number;
   ip?: string;
   meta: RequestMeta;
+}
+
+export function toPublicAdminSession(
+  session: AdminSessionData,
+  currentSessionUuid?: string,
+): PublicAdminSession {
+  return {
+    sessionUuid: session.sessionUuid,
+    current: session.sessionUuid === currentSessionUuid,
+    state: session.state,
+    createdAt: session.createdAt,
+    lastUsedAt: session.lastUsedAt,
+    ip: session.ip,
+    meta: session.meta,
+  };
 }
 
 export async function getPublicAdminSessions(
@@ -41,15 +61,7 @@ export async function getPublicAdminSessions(
     ...clonedMemorySessions,
     ...restDbSessions.map((dbSession) => dbSession.data),
   ].map((session) => {
-    return {
-      sessionUuid: session.sessionUuid,
-      current: session.sessionUuid === currentSessionUuid,
-      state: session.state,
-      createdAt: session.createdAt,
-      lastUsedAt: session.lastUsedAt,
-      ip: session.ip,
-      meta: session.meta,
-    };
+    return toPublicAdminSession(session, currentSessionUuid);
   });
 
   return sessions.sort((a, b) => b.lastUsedAt - a.lastUsedAt);

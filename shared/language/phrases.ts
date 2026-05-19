@@ -90,6 +90,8 @@ export type LanguagePhrases = ValidateLanguagePhrases<{
   active_admin_sessions_description: string;
   destroyed_admin_sessions: string;
   destroyed_admin_sessions_description: string;
+  destroy_session: string;
+  show_x_destroyed_sessions: (count: number) => string;
   session_details: string;
   created_at: string;
   last_active_at: string;

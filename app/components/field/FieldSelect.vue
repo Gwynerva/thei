@@ -23,7 +23,7 @@ watch(selectElement, (newElement) => {
 <template>
   <div>
     <div
-      class="group has-hocus:border-border-3 relative inline-block rounded-lg
+      class="group has-hocus:border-border-3 relative inline-block rounded-normal
         border-2 border-border-1 bg-bg-1 transition has-focus:border-border-3"
     >
       <select
