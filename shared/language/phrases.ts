@@ -98,6 +98,7 @@ export type LanguagePhrases = ValidateLanguagePhrases<{
   online: string;
   this_is_you: string;
   failed_to_fetch_data: string;
+  admin_panel: string;
   to_admin_panel: string;
   to_website: string;
   project: string;
@@ -106,6 +107,9 @@ export type LanguagePhrases = ValidateLanguagePhrases<{
   x_events: (count: number) => string;
   new_project: string;
   new_event: string;
+  create: string;
   edit_project: string;
   edit_event: string;
+  drafts: string;
+  save: string;
 }>;

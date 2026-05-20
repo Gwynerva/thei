@@ -2,6 +2,8 @@
 definePageMeta({
   layout: 'admin',
 });
+
+await useAdminTabTitle(computed(() => phrase.value.admin_panel));
 </script>
 
 <template>

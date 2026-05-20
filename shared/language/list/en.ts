@@ -71,6 +71,7 @@ export default defineLanguagePhrases({
   online: 'Online',
   this_is_you: 'This is you',
   failed_to_fetch_data: 'Failed to fetch data!',
+  admin_panel: 'Admin Panel',
   to_admin_panel: 'To Admin Panel',
   to_website: 'To Website',
   project: 'Project',
@@ -79,8 +80,11 @@ export default defineLanguagePhrases({
   x_events: (count: number) => m(count, 'event', 'events'),
   new_project: 'New Project',
   new_event: 'New Event',
+  create: 'Create',
   edit_project: 'Edit Project',
   edit_event: 'Edit Event',
+  drafts: 'Drafts',
+  save: 'Save',
 });
 
 export function m(

@@ -1,7 +1,7 @@
 <template>
   <div>
     <AdminBar />
-    <SiteLoadingIndicator />
+    <TheiLoadingIndicator />
     <slot></slot>
   </div>
 </template>

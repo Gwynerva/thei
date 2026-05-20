@@ -1,11 +1,11 @@
 <script lang="ts" setup>
+import AdminAddEditProject from '../components/AdminAddEditProject.vue';
+
 definePageMeta({
   layout: 'admin',
 });
-
-await useAdminTabTitle(phrase.value.new_project);
 </script>
 
 <template>
-  <p>New Project</p>
+  <AdminAddEditProject />
 </template>

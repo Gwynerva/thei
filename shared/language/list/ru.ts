@@ -69,6 +69,7 @@ export default defineLanguagePhrases({
   online: 'Онлайн',
   this_is_you: 'Это вы',
   failed_to_fetch_data: 'Не удалось загрузить данные!',
+  admin_panel: 'Админ-панель',
   to_admin_panel: 'В админ-панель',
   to_website: 'На сайт',
   project: 'Проект',
@@ -77,8 +78,11 @@ export default defineLanguagePhrases({
   x_events: (count: number) => m(count, 'событие', 'события', 'событий'),
   new_project: 'Новый проект',
   new_event: 'Новое событие',
+  create: 'Создать',
   edit_project: 'Изменить проект',
   edit_event: 'Изменить событие',
+  drafts: 'Черновики',
+  save: 'Сохранить',
 });
 
 export function m(

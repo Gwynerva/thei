@@ -83,7 +83,6 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
         :to="contextAdminButton.to"
         :icon="contextAdminButton.icon"
         :label="contextAdminButton.label"
-        label-visibility="always"
       />
 
       <AdminBarButton

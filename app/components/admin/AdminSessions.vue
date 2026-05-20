@@ -5,65 +5,57 @@ const { data, error, refresh } = await useFetch('/api/admin/sessions/', {
   key: 'admin-sessions',
 });
 
+const refreshInterval = 5000;
+const { forceRefresh } = useAutoRefresh(refresh, refreshInterval);
+
 type Session = NonNullable<typeof data.value>[number];
 
 const structuredSessions = computed(() => {
-  let current: Session | undefined;
-  let active: Session[] = [];
-  let destroyed: Session[] = [];
-
-  if (data.value) {
-    for (const session of data.value) {
-      if (session.current) {
-        current = session;
-      } else if (session.state === 'active') {
-        active.push(session);
-      } else {
-        destroyed.push(session);
-      }
-    }
+  if (!data.value) {
+    return undefined;
   }
 
-  if (!current && !active.length && !destroyed.length) {
+  const grouped = groupSessions(data.value);
+
+  if (!grouped.current && !grouped.active.length && !grouped.destroyed.length) {
     return undefined;
   }
 
   return {
-    current,
-    active: active.length > 0 ? active : undefined,
-    destroyed: destroyed.length > 0 ? destroyed : undefined,
+    current: grouped.current,
+    active: grouped.active.length > 0 ? grouped.active : undefined,
+    destroyed: grouped.destroyed.length > 0 ? grouped.destroyed : undefined,
   };
 });
 
+function groupSessions(sessions: Session[]) {
+  let current: Session | undefined;
+  const active: Session[] = [];
+  const destroyed: Session[] = [];
+
+  for (const session of sessions) {
+    if (session.current) {
+      current = session;
+    } else if (session.state === 'active') {
+      active.push(session);
+    } else {
+      destroyed.push(session);
+    }
+  }
+
+  return { current, active, destroyed };
+}
+
 function sessionDetails(session: Session) {
-  const infoBlocks: string[] = [];
-
-  if (session.ip) {
-    infoBlocks.push(`${session.ip}`);
-  }
-
-  if (session.meta.browser || session.meta.os) {
-    infoBlocks.push(
-      [session.meta.browser, session.meta.os].filter(Boolean).join(', '),
-    );
-  }
-
-  if (session.meta.device || session.meta.deviceVendor) {
-    infoBlocks.push(
-      [session.meta.deviceVendor, session.meta.device]
-        .filter(Boolean)
-        .join(', '),
-    );
-  }
-
-  if (session.meta.country || session.meta.city) {
-    const location = [session.meta.city, session.meta.country]
+  const parts = [
+    session.ip,
+    [session.meta.browser, session.meta.os].filter(Boolean).join(', '),
+    [session.meta.deviceVendor, session.meta.device]
       .filter(Boolean)
-      .join(', ');
-    infoBlocks.push(`${location}`);
-  }
-
-  return infoBlocks.join(' - ');
+      .join(', '),
+    [session.meta.city, session.meta.country].filter(Boolean).join(', '),
+  ].filter(Boolean);
+  return parts.join(' - ');
 }
 
 const showDestroyedSessions = ref(false);
@@ -81,56 +73,13 @@ async function destroySession(sessionUuid: string) {
       method: 'DELETE',
     });
     await forceRefresh();
-  } catch {
+  } catch (e) {
+    console.error('Failed to destroy session:', e);
   } finally {
     destroyingSessions.delete(sessionUuid);
   }
 }
 
-const refreshInterval = 5000;
-let refreshTimeout: ReturnType<typeof setTimeout> | undefined;
-let refreshStopped = false;
-let refreshPromise: Promise<void> | undefined;
-async function _refresh() {
-  clearTimeout(refreshTimeout);
-
-  if (refreshPromise) {
-    return refreshPromise;
-  }
-
-  refreshPromise = refresh()
-    .catch(() => {})
-    .finally(() => {
-      refreshPromise = undefined;
-
-      if (!refreshStopped) {
-        refreshTimeout = setTimeout(_refresh, refreshInterval);
-      }
-    });
-
-  return refreshPromise;
-}
-async function forceRefresh() {
-  clearTimeout(refreshTimeout);
-  try {
-    await refresh();
-  } catch {
-  } finally {
-    if (!refreshStopped) {
-      refreshTimeout = setTimeout(_refresh, refreshInterval);
-    }
-  }
-}
-
-onMounted(() => {
-  refreshStopped = false;
-  refreshTimeout = setTimeout(_refresh, refreshInterval);
-});
-
-onUnmounted(() => {
-  refreshStopped = true;
-  clearTimeout(refreshTimeout);
-});
 </script>
 
 <template>
@@ -154,16 +103,16 @@ onUnmounted(() => {
       <table class="w-full">
         <thead>
           <tr class="th">
-            <th class="w-full rounded-tl-normal p-td-tight text-left">
+            <th scope="col" class="w-full rounded-tl-normal p-td-tight text-left">
               {{ phrase.session_details }}
             </th>
-            <th class="min-w-42 p-td-tight text-left max-sm:hidden">
+            <th scope="col" class="min-w-42 p-td-tight text-left max-sm:hidden">
               {{ phrase.created_at }}
             </th>
-            <th class="min-w-38 p-td-tight text-left sm:min-w-42">
+            <th scope="col" class="min-w-38 p-td-tight text-left sm:min-w-42">
               {{ phrase.last_active_at }}
             </th>
-            <th class="min-w-22 rounded-tr-normal"></th>
+            <th scope="col" class="min-w-22 rounded-tr-normal"></th>
           </tr>
         </thead>
         <tbody>
