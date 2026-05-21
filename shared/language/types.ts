@@ -1,46 +1,13 @@
-export type LanguagePhraseValue = string | ((...args: any[]) => string);
+export const languagesInfo = {
+  en: 'English',
+  ru: 'Русский',
+} as const satisfies Record<string, string>;
 
-export type ValidateLanguagePhrases<
-  T extends Record<keyof T, LanguagePhraseValue>,
-> = T;
+export const languageCodes = Object.keys(languagesInfo) as LanguageCode[];
 
-export type LanguagePhraseId = Extract<keyof LanguagePhrases, string>;
+export type LanguageCode = keyof typeof languagesInfo;
 
-export function defineLanguagePhrases(
-  phrases: LanguagePhrases,
-): LanguagePhrases {
-  return new Proxy(
-    {},
-    {
-      get(_, key) {
-        if (key in phrases) {
-          return phrases[key as keyof LanguagePhrases];
-        }
-
-        const missingPhrase = function () {
-          return key;
-        };
-
-        Object.defineProperty(missingPhrase, 'toString', {
-          value() {
-            return key.toString();
-          },
-        });
-
-        Object.defineProperty(missingPhrase, Symbol.toPrimitive, {
-          value() {
-            return key.toString();
-          },
-        });
-
-        return missingPhrase;
-      },
-    },
-  ) as any;
-}
-
-export type LanguagePhrases = ValidateLanguagePhrases<{
-  language_code: string;
+export type LanguagePhrases = {
   language_name: string;
 
   install_thei: string;
@@ -66,10 +33,8 @@ export type LanguagePhrases = ValidateLanguagePhrases<{
   admin_data: string;
   admin_data_description: string;
   how_to_address_you: string;
-  display_name_variants: string;
   display_name_hint: (name: string) => string;
   secret_phrase: string;
-  secret_phrase_variants: string;
   secret_phrase_hint: string;
   password: string;
   repeat_password: string;
@@ -112,4 +77,24 @@ export type LanguagePhrases = ValidateLanguagePhrases<{
   edit_event: string;
   drafts: string;
   save: string;
-}>;
+};
+
+export type I18nModuleSpec = {
+  code: LanguageCode;
+  normalize?: (text: string) => string;
+  sampleDisplayNames?: string[];
+  sampleSecretPhrases?: string[];
+  phrases: Partial<LanguagePhrases>;
+};
+
+export type I18nBaseModule = I18nModuleSpec & {
+  phrases: LanguagePhrases;
+};
+
+export type I18nController = {
+  code: LanguageCode;
+  normalize: (text: string) => string;
+  sampleDisplayNames: string[];
+  sampleSecretPhrases: string[];
+  phrase: LanguagePhrases;
+};

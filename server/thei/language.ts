@@ -2,18 +2,18 @@ import pc from 'picocolors';
 import {
   loadLanguage,
   languageCodes,
-  type Language,
+  type LanguageInstance,
   type LanguageCode,
 } from '#layers/thei/shared/language';
 import { setBootError } from './boot/result';
 
-export let currentLanguage: Language | undefined;
+export let currentLanguage: LanguageInstance | undefined;
 
 export function getCurrentLanguagePhrases() {
   if (!currentLanguage) {
     throw new Error('Current language is not loaded!');
   }
-  return currentLanguage.phrases;
+  return currentLanguage.phrase;
 }
 
 export async function setCurrentLanguage(languageCode: LanguageCode) {

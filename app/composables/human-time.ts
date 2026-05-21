@@ -32,7 +32,7 @@ export function useHumanTime(timestamp: MaybeRefOrGetter<string>) {
     return date.value > threshold;
   });
 
-  const locale = computed(() => language.value!.code ?? 'en');
+  const locale = computed(() => language.value.code);
 
   const formatted = computed(() =>
     isRecent.value

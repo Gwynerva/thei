@@ -11,7 +11,7 @@ const dateOptions: Intl.DateTimeFormatOptions = {
   day: 'numeric',
 };
 
-const locale = computed(() => language.value?.code || 'en');
+const locale = computed(() => language.value.code);
 
 const relative = computed(() => {
   const date = new Date(datetime);

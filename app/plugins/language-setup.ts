@@ -1,5 +1,5 @@
 import { type LanguageCode, loadLanguage } from '#layers/thei/shared/language';
-import { language } from '../composables/language';
+import { _language, language } from '../composables/language';
 
 export default defineNuxtPlugin(async () => {
   const languageCode = useState<LanguageCode | undefined>('languageCode');
@@ -19,15 +19,15 @@ export default defineNuxtPlugin(async () => {
   }
 
   if (
-    language.value === undefined ||
-    language.value.code !== languageCode.value
+    _language.value === undefined ||
+    _language.value.code !== languageCode.value
   ) {
-    language.value = await loadLanguage(languageCode.value);
+    _language.value = await loadLanguage(languageCode.value);
   }
 
   useHead({
     htmlAttrs: {
-      lang: computed(() => language.value?.code),
+      lang: computed(() => language.value.code),
     },
   });
 });

@@ -8,7 +8,7 @@ useHead({
 const installError = ref<string | undefined>();
 const installing = ref(false);
 
-const languageCode = computed(() => language.value?.code);
+const languageCode = computed(() => language.value.code);
 const siteAccessLevel = ref<SiteAccessLevel>();
 const displayName = ref('');
 const secretPhrase = ref('');

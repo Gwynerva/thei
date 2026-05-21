@@ -16,12 +16,7 @@ const sampleNicknames = [
 ];
 
 const sampleName = computed(() => {
-  const samplePool = phrase.value.display_name_variants
-    .split(',')
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-
-  samplePool.push(...sampleNicknames);
+  const samplePool = [...language.value.sampleDisplayNames, ...sampleNicknames];
 
   return samplePool[Math.floor(Math.random() * samplePool.length)]!;
 });
@@ -34,10 +29,7 @@ const displayNameModel = defineModel<string>('displayName');
 //
 
 const sampleSecretPhrase = computed(() => {
-  const samplePool = phrase.value.secret_phrase_variants
-    .split(';')
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+  const samplePool = language.value.sampleSecretPhrases;
 
   return samplePool[Math.floor(Math.random() * samplePool.length)]!;
 });
@@ -62,77 +54,79 @@ watchEffect(() => {
 </script>
 
 <template>
-  <SectionHeader
-    icon="person-key"
-    :title="phrase.admin_data"
-    :description="phrase.admin_data_description"
-    class="mb-md"
-  />
-  <Box>
-    <div class="flex flex-col gap-md p-sm sm:p-md">
-      <Field>
-        <FieldLabel :focus="displayNameElement">
-          {{ phrase.how_to_address_you }}
-        </FieldLabel>
-        <FieldInput
-          v-model="displayNameModel"
-          v-on:element="displayNameElement = $event"
-          :placeholder="sampleName"
-          type="text"
-          autocomplete="off"
-          spellcheck="false"
-          :required="true"
-        />
-        <FieldHint>
-          {{ phrase.display_name_hint(displayName || sampleName) }}
-        </FieldHint>
-      </Field>
-
-      <Field>
-        <FieldLabel :focus="secretPhraseElement">
-          {{ phrase.secret_phrase }}
-        </FieldLabel>
-        <FieldInput
-          v-model="secretPhraseModel"
-          v-on:element="secretPhraseElement = $event"
-          :placeholder="sampleSecretPhrase"
-          type="text"
-          autocomplete="off"
-          spellcheck="false"
-          :required="true"
-        />
-        <FieldHint>
-          {{ phrase.secret_phrase_hint }}
-        </FieldHint>
-      </Field>
-
-      <div class="flex flex-wrap gap-md">
-        <Field class="min-w-[200px] flex-1">
-          <FieldLabel :focus="passwordElement">
-            {{ phrase.password }}
+  <div>
+    <SectionHeader
+      icon="person-key"
+      :title="phrase.admin_data"
+      :description="phrase.admin_data_description"
+      class="mb-md"
+    />
+    <Box>
+      <div class="flex flex-col gap-md p-sm sm:p-md">
+        <Field>
+          <FieldLabel :focus="displayNameElement">
+            {{ phrase.how_to_address_you }}
           </FieldLabel>
           <FieldInput
-            v-model="password"
-            v-on:element="passwordElement = $event"
-            type="password"
+            v-model="displayNameModel"
+            v-on:element="displayNameElement = $event"
+            :placeholder="sampleName"
+            type="text"
             autocomplete="off"
+            spellcheck="false"
             :required="true"
           />
+          <FieldHint>
+            {{ phrase.display_name_hint(displayName || sampleName) }}
+          </FieldHint>
         </Field>
 
-        <Field class="flex-1">
-          <FieldLabel :focus="confirmPasswordElement">
-            {{ phrase.repeat_password }}
+        <Field>
+          <FieldLabel :focus="secretPhraseElement">
+            {{ phrase.secret_phrase }}
           </FieldLabel>
           <FieldInput
-            v-model="confirmPassword"
-            v-on:element="confirmPasswordElement = $event"
-            type="password"
+            v-model="secretPhraseModel"
+            v-on:element="secretPhraseElement = $event"
+            :placeholder="sampleSecretPhrase"
+            type="text"
             autocomplete="off"
-            :error="password !== confirmPassword && 'Не совпадает бля!'"
+            spellcheck="false"
+            :required="true"
           />
+          <FieldHint>
+            {{ phrase.secret_phrase_hint }}
+          </FieldHint>
         </Field>
+
+        <div class="flex flex-wrap gap-md">
+          <Field class="min-w-[200px] flex-1">
+            <FieldLabel :focus="passwordElement">
+              {{ phrase.password }}
+            </FieldLabel>
+            <FieldInput
+              v-model="password"
+              v-on:element="passwordElement = $event"
+              type="password"
+              autocomplete="off"
+              :required="true"
+            />
+          </Field>
+
+          <Field class="flex-1">
+            <FieldLabel :focus="confirmPasswordElement">
+              {{ phrase.repeat_password }}
+            </FieldLabel>
+            <FieldInput
+              v-model="confirmPassword"
+              v-on:element="confirmPasswordElement = $event"
+              type="password"
+              autocomplete="off"
+              :error="password !== confirmPassword && 'Не совпадает бля!'"
+            />
+          </Field>
+        </div>
       </div>
-    </div>
-  </Box>
+    </Box>
+  </div>
 </template>

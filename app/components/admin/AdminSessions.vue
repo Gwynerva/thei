@@ -50,9 +50,7 @@ function sessionDetails(session: Session) {
   const parts = [
     session.ip,
     [session.meta.browser, session.meta.os].filter(Boolean).join(', '),
-    [session.meta.deviceVendor, session.meta.device]
-      .filter(Boolean)
-      .join(', '),
+    [session.meta.deviceVendor, session.meta.device].filter(Boolean).join(', '),
     [session.meta.city, session.meta.country].filter(Boolean).join(', '),
   ].filter(Boolean);
   return parts.join(' - ');
@@ -79,7 +77,6 @@ async function destroySession(sessionUuid: string) {
     destroyingSessions.delete(sessionUuid);
   }
 }
-
 </script>
 
 <template>
@@ -103,7 +100,10 @@ async function destroySession(sessionUuid: string) {
       <table class="w-full">
         <thead>
           <tr class="th">
-            <th scope="col" class="w-full rounded-tl-normal p-td-tight text-left">
+            <th
+              scope="col"
+              class="w-full rounded-tl-normal p-td-tight text-left"
+            >
               {{ phrase.session_details }}
             </th>
             <th scope="col" class="min-w-42 p-td-tight text-left max-sm:hidden">

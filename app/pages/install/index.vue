@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import {
-  type Language,
   type LanguageCode,
   languageCodes,
   loadLanguage,
@@ -21,7 +20,7 @@ onMounted(async () => {
     languageCode = browserLanguageCode;
   }
 
-  language.value = await loadLanguage(languageCode);
+  _language.value = await loadLanguage(languageCode);
   ready.value = true;
 });
 </script>
