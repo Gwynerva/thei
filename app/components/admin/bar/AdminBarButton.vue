@@ -27,8 +27,8 @@ const alwaysTitlePopup = computed(() => {
     :to="typeof to === 'string' ? to : to.href"
     :target="typeof to === 'object' ? to.target : undefined"
     :external="typeof to === 'object' ? to.external : undefined"
-    :thei-title-popup="title ?? label"
-    :thei-title-popup-class="alwaysTitlePopup ? '' : 'sm:hidden'"
+    :data-title-popup="title ?? label"
+    :data-title-popup-class="alwaysTitlePopup ? '' : 'sm:hidden'"
     :aria-label="title ?? label"
     class="flex h-full min-w-0 cursor-pointer items-center gap-3 bg-transparent
       px-3 opacity-80 transition hocus:bg-accent/25 hocus:opacity-100"

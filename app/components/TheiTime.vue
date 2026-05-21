@@ -28,7 +28,7 @@ const relative = computed(() => {
     :relative
     v-bind="dateOptions"
     :class="relative && 'cursor-help'"
-    :thei-title-popup="
+    :data-title-popup="
       relative
         ? new Date(datetime).toLocaleDateString(locale, {
             ...dateOptions,

@@ -18,7 +18,7 @@ const { floatingStyles } = useFloating(anchor, floatingEl, {
       <div
         v-if="visible && label"
         ref="floatingEl"
-        thei-title-popup-el
+        data-title-popup-el
         :style="floatingStyles"
         :class="popupClass || undefined"
         class="pointer-events-none fixed z-9999 max-w-[300px] rounded

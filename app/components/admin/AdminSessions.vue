@@ -169,7 +169,7 @@ async function destroySession(sessionUuid: string) {
               </td>
               <td
                 v-else
-                :thei-title-popup="phrase.destroy_session"
+                :data-title-popup="phrase.destroy_session"
                 class="cursor-pointer p-td text-center text-text-error/50
                   transition hocus:text-text-error"
               >

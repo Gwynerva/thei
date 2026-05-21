@@ -1,9 +1,9 @@
 function getTitlePopup(
   el: HTMLElement,
 ): { text: string; popupClass: string } | null {
-  const text = el.getAttribute('thei-title-popup');
-  if (text === null) return null;
-  const popupClass = el.getAttribute('thei-title-popup-class') ?? '';
+  const text = el.dataset.titlePopup;
+  if (text === undefined) return null;
+  const popupClass = el.dataset.titlePopupClass ?? '';
   return { text, popupClass };
 }
 
@@ -68,9 +68,9 @@ export default defineNuxtPlugin(() => {
     const target = e.target as HTMLElement | null;
     if (!target) return;
     // Cursor entered the popup itself — ignore
-    if (target.closest('[thei-title-popup-el]')) return;
+    if (target.closest('[data-title-popup-el]')) return;
 
-    const anchor = target.closest<HTMLElement>('[thei-title-popup]');
+    const anchor = target.closest<HTMLElement>('[data-title-popup]');
     if (anchor === currentAnchor) return;
     currentAnchor = anchor;
 
@@ -84,7 +84,7 @@ export default defineNuxtPlugin(() => {
   });
 
   // Cursor left the viewport
-  document.addEventListener('mouseleave', () => {
+  document.documentElement.addEventListener('mouseleave', () => {
     currentAnchor = null;
     hide();
   });
@@ -96,9 +96,9 @@ export default defineNuxtPlugin(() => {
     (e) => {
       const target = e.target as HTMLElement | null;
       if (!target) return;
-      if (target.closest('[thei-title-popup-el]')) return;
+      if (target.closest('[data-title-popup-el]')) return;
 
-      const anchor = target.closest<HTMLElement>('[thei-title-popup]');
+      const anchor = target.closest<HTMLElement>('[data-title-popup]');
       if (!anchor) {
         hide();
         disableTouchListeners();

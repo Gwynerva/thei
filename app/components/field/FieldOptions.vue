@@ -28,14 +28,14 @@ const model = defineModel<string>();
         v-for="(option, key) in options"
         :key
         @click="model = key"
-        :thei-title-popup="direction === 'row' ? option.description : undefined"
+        :data-title-popup="direction === 'row' ? option.description : undefined"
         class="cursor-pointer rounded-normal border-2 p-xs transition"
         :class="[
           option.classes,
           model === key
             ? 'border-accent bg-bg-accent text-accent'
-            : `hocus:border-border-3 hocus:bg-bg-1 hocus:text-text-1
-              border-border-1 bg-bg-1 text-text-2`,
+            : `border-border-1 bg-bg-1 text-text-2 hocus:border-border-3
+              hocus:bg-bg-1 hocus:text-text-1`,
           direction === 'column' ? 'flex flex-col gap-2 text-left' : '',
         ]"
       >

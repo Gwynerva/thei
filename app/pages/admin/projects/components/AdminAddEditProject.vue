@@ -21,7 +21,7 @@ await useAdminTabTitle(
       </div>
 
       <div class="flex items-center gap-xs">
-        <Button :secondary="true" :thei-title-popup="phrase.drafts">
+        <Button :secondary="true" :data-title-popup="phrase.drafts">
           <Icon name="history" class="scale-120" />
         </Button>
         <Button class="font-semibold">
