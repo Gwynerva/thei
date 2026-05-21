@@ -77,6 +77,7 @@ export type LanguagePhrases = {
   edit_event: string;
   drafts: string;
   save: string;
+  delete: string;
 };
 
 export type I18nModuleSpec = {

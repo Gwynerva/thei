@@ -1,7 +1,10 @@
 <script lang="ts" setup>
+import ProjectMain from './ProjectMain.vue';
+
 const { projectId } = defineProps<{ projectId?: string }>();
 
 const isEdit = computed(() => Boolean(projectId));
+const saving = ref(false);
 
 await useAdminTabTitle(
   computed(() =>
@@ -21,11 +24,15 @@ await useAdminTabTitle(
       </div>
 
       <div class="flex items-center gap-xs">
-        <Button :secondary="true" :data-title-popup="phrase.drafts">
-          <Icon name="history" class="scale-120" />
+        <Button
+          v-if="isEdit"
+          variant="delete"
+          :data-title-popup="phrase.delete"
+        >
+          <Icon name="delete" class="scale-120" />
         </Button>
-        <Button class="font-semibold">
-          <Icon name="loading" class="mr-xs" />
+        <Button class="font-semibold" :disabled="saving">
+          <Icon v-if="saving" name="loading" class="mr-xs" />
           <span>
             {{ isEdit ? phrase.save : phrase.create }}
           </span>
@@ -33,9 +40,7 @@ await useAdminTabTitle(
       </div>
     </div>
   </StickyGlassHeader>
-  <div class="m-auto w-(--width-wide) px-window py-lg">
-    <Box>
-      <p>New Project</p>
-    </Box>
+  <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
+    <ProjectMain />
   </div>
 </template>

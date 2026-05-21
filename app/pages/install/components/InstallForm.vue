@@ -81,16 +81,14 @@ async function installClick() {
       </div>
     </StickyGlassHeader>
 
-    <div class="m-auto w-(--width-narrow) px-window py-lg">
-      <div class="flex flex-col gap-lg">
-        <SettingsGlobals v-model:access="siteAccessLevel" />
-        <SettingsVisuals />
-        <SettingsAdmin
-          v-model:display-name="displayName"
-          v-model:secret-phrase="secretPhrase"
-          v-on:password="password = $event"
-        />
-      </div>
+    <div class="m-auto flex w-(--width-narrow) flex-col gap-lg px-window py-lg">
+      <SettingsGlobals v-model:access="siteAccessLevel" />
+      <SettingsVisuals />
+      <SettingsAdmin
+        v-model:display-name="displayName"
+        v-model:secret-phrase="secretPhrase"
+        v-on:password="password = $event"
+      />
     </div>
   </div>
 </template>

@@ -122,5 +122,6 @@ export default defineI18nModule({
     edit_event: 'Изменить событие',
     drafts: 'Черновики',
     save: 'Сохранить',
+    delete: 'Удалить',
   },
 });

@@ -120,5 +120,6 @@ export default defineI18nBase({
     edit_event: 'Edit Event',
     drafts: 'Drafts',
     save: 'Save',
+    delete: 'Delete',
   },
 });
