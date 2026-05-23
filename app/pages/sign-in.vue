@@ -79,22 +79,15 @@ watch(cooldown, (newCooldown) => {
     cooldown.value = newCooldown - 1;
   }, 1000);
 });
-
-watch(secretPhraseElement, (newElement) => {
-  if (newElement) {
-    newElement.focus();
-  }
-});
 </script>
 
 <template>
   <AdminGridWrapper>
     <div class="flex min-h-screen min-w-screen items-center justify-center">
       <section
-        class="intems-center rounded-normal flex min-h-screen
-          w-[min(380px,100%)] min-w-screen flex-col justify-center gap-md border
-          border-border-1 bg-bg-2 p-md shadow-lg shadow-shadow-1 sm:min-h-auto
-          sm:min-w-auto"
+        class="intems-center flex min-h-screen w-[min(380px,100%)] min-w-screen
+          flex-col justify-center gap-md rounded-normal border border-border-1
+          bg-bg-2 p-md shadow-lg shadow-shadow-1 sm:min-h-auto sm:min-w-auto"
       >
         <div class="flex items-center justify-around">
           <Media
@@ -112,12 +105,13 @@ watch(secretPhraseElement, (newElement) => {
           </div>
         </div>
         <Field>
-          <FieldLabel :focus="secretPhraseElement" class="tracking-tight">
+          <FieldLabel class="tracking-tight">
             {{ phrase.secret_phrase }}
           </FieldLabel>
           <FieldInput
             type="text"
             v-model="secretPhrase"
+            autofocus
             v-on:element="secretPhraseElement = $event"
             autocomplete="off"
             spellcheck="false"
@@ -126,7 +120,7 @@ watch(secretPhraseElement, (newElement) => {
           />
         </Field>
         <Field>
-          <FieldLabel :focus="passwordElement" class="tracking-tight">
+          <FieldLabel class="tracking-tight">
             {{ phrase.password }}
           </FieldLabel>
           <FieldInput

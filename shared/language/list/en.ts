@@ -39,9 +39,38 @@ export default defineI18nBase({
     'No one ever goes back to 2007',
     'Nothing is true, everything is permitted',
   ],
+  sampleProjects: [
+    {
+      title: 'Marathon Training',
+      summary:
+        'Went from couch to 42 km in 6 months with a structured training plan.',
+    },
+    {
+      title: '6-Month Gym Journey',
+      summary:
+        'Tracked strength progress from beginner to intermediate lifter.',
+    },
+    {
+      title: 'Short Film: Echoes',
+      summary: 'A 12-minute thriller shot on a weekend with a two-person crew.',
+    },
+    {
+      title: 'Film Log 2024',
+      summary: 'Watched and reviewed 150+ films over the course of the year.',
+    },
+    {
+      title: 'Indie Game: Luminos',
+      summary:
+        'A puzzle platformer built in Godot over three months, released on itch.io.',
+    },
+    {
+      title: 'Elden Ring — All Achievements',
+      summary:
+        'Completed the full game including all DLC, earning every achievement.',
+    },
+  ],
   phrases: {
     language_name: 'English',
-
     install_thei: 'Install Thei',
     visuals: 'Visuals',
     visuals_description:
@@ -117,6 +146,12 @@ export default defineI18nBase({
     new_event: 'New Event',
     create: 'Create',
     edit_project: 'Edit Project',
+    project_title: 'Project Title',
+    project_title_hint:
+      'One or a few words: the name of the product, completed game, attended event...',
+    project_summary: 'Project Summary',
+    project_summary_hint:
+      'What is the project about? Describe it in one or a few sentences. The shorter, the better.',
     edit_event: 'Edit Event',
     drafts: 'Drafts',
     save: 'Save',

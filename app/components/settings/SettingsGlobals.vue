@@ -6,7 +6,6 @@ import {
   loadLanguage,
 } from '#layers/thei/shared/language';
 
-const languageSelectElement = shallowRef<HTMLSelectElement>();
 const languageCode = ref<LanguageCode>(language.value.code);
 watch(languageCode, async (newCode) => {
   _language.value = await loadLanguage(newCode);
@@ -26,11 +25,8 @@ const accessModel = defineModel<SiteAccessLevel>('access');
     <Box>
       <div class="flex flex-col gap-md p-sm sm:p-md">
         <Field>
-          <FieldLabel :focus="languageSelectElement">{{
-            phrase.ui_language
-          }}</FieldLabel>
+          <FieldLabel>{{ phrase.ui_language }}</FieldLabel>
           <FieldSelect
-            v-on:element="languageSelectElement = $event"
             :options="
               Object.fromEntries(
                 Object.entries(languagesInfo).map(([code, label]) => [
@@ -45,7 +41,7 @@ const accessModel = defineModel<SiteAccessLevel>('access');
         </Field>
 
         <Field>
-          <FieldLabel>{{ phrase.site_access }}</FieldLabel>
+          <FieldLabel required>{{ phrase.site_access }}</FieldLabel>
           <FieldOptions
             direction="column"
             :options="{

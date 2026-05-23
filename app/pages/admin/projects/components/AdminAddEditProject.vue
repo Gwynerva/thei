@@ -1,7 +1,14 @@
 <script lang="ts" setup>
+import type { ProjectEditData } from '#layers/thei/shared/admin/project';
+import { projectDataInjectionKey } from '../composables';
 import ProjectMain from './ProjectMain.vue';
 
 const { projectId } = defineProps<{ projectId?: string }>();
+const projectData = ref<ProjectEditData>({
+  title: '',
+  summary: '',
+});
+provide(projectDataInjectionKey, projectData);
 
 const isEdit = computed(() => Boolean(projectId));
 const saving = ref(false);

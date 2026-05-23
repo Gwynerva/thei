@@ -9,7 +9,6 @@ export type LanguageCode = keyof typeof languagesInfo;
 
 export type LanguagePhrases = {
   language_name: string;
-
   install_thei: string;
   visuals: string;
   visuals_description: string;
@@ -74,17 +73,27 @@ export type LanguagePhrases = {
   new_event: string;
   create: string;
   edit_project: string;
+  project_title: string;
+  project_title_hint: string;
+  project_summary: string;
+  project_summary_hint: string;
   edit_event: string;
   drafts: string;
   save: string;
   delete: string;
 };
 
+export interface I18nProjectSample {
+  title: string;
+  summary: string;
+}
+
 export type I18nModuleSpec = {
   code: LanguageCode;
   normalize?: (text: string) => string;
   sampleDisplayNames?: string[];
   sampleSecretPhrases?: string[];
+  sampleProjects?: I18nProjectSample[];
   phrases: Partial<LanguagePhrases>;
 };
 
@@ -97,5 +106,6 @@ export type I18nController = {
   normalize: (text: string) => string;
   sampleDisplayNames: string[];
   sampleSecretPhrases: string[];
+  sampleProjects: I18nProjectSample[];
   phrase: LanguagePhrases;
 };

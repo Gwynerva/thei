@@ -16,6 +16,7 @@ export function createI18nController(
       primary.sampleDisplayNames ?? base.sampleDisplayNames ?? [],
     sampleSecretPhrases:
       primary.sampleSecretPhrases ?? base.sampleSecretPhrases ?? [],
+    sampleProjects: primary.sampleProjects ?? base.sampleProjects ?? [],
     phrase: createPhraseProxy(
       primary.phrases,
       base.phrases,

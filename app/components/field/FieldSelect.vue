@@ -23,12 +23,13 @@ watch(selectElement, (newElement) => {
 <template>
   <div>
     <div
-      class="group has-hocus:border-border-3 relative inline-block rounded-normal
-        border-2 border-border-1 bg-bg-1 transition has-focus:border-border-3"
+      class="group relative inline-block rounded-normal border-2 border-border-1
+        bg-bg-1 transition has-focus:border-border-3 has-hocus:border-border-3"
     >
       <select
         ref="select"
         v-model="model"
+        data-label-focus
         class="cursor-pointer appearance-none bg-transparent py-2 pr-10 pl-xs
           text-sm"
       >
@@ -44,8 +45,8 @@ watch(selectElement, (newElement) => {
 
       <Icon
         name="chevron-right"
-        class="group-hocus:text-text-1 pointer-events-none absolute top-1/2
-          right-3 -translate-y-1/2 rotate-90 text-text-3 transition"
+        class="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2
+          rotate-90 text-text-3 transition group-hocus:text-text-1"
       />
     </div>
   </div>
