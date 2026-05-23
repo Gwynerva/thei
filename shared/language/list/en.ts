@@ -24,6 +24,7 @@ export function plural(
 export default defineI18nBase({
   code: 'en',
   normalize,
+  sizeUnits: { b: 'bytes', kb: 'Kb', mb: 'Mb', gb: 'Gb' },
   sampleDisplayNames: [
     'Peter',
     'Petra',
@@ -44,29 +45,35 @@ export default defineI18nBase({
       title: 'Marathon Training',
       summary:
         'Went from couch to 42 km in 6 months with a structured training plan.',
+      slug: 'marathon-training',
     },
     {
       title: '6-Month Gym Journey',
       summary:
         'Tracked strength progress from beginner to intermediate lifter.',
+      slug: 'gym-journey',
     },
     {
       title: 'Short Film: Echoes',
       summary: 'A 12-minute thriller shot on a weekend with a two-person crew.',
+      slug: 'short-film-echoes',
     },
     {
       title: 'Film Log 2024',
       summary: 'Watched and reviewed 150+ films over the course of the year.',
+      slug: 'film-log-2024',
     },
     {
       title: 'Indie Game: Luminos',
       summary:
         'A puzzle platformer built in Godot over three months, released on itch.io.',
+      slug: 'indie-game-luminos',
     },
     {
       title: 'Elden Ring — All Achievements',
       summary:
         'Completed the full game including all DLC, earning every achievement.',
+      slug: 'elden-ring-achievements',
     },
   ],
   phrases: {
@@ -156,5 +163,12 @@ export default defineI18nBase({
     drafts: 'Drafts',
     save: 'Save',
     delete: 'Delete',
+    asset_profile_hint_icon:
+      'Recommended aspect ratio: <strong>1:1</strong>.<br/>Will be resized to <strong>256×256</strong>.',
+    asset_profile_hint_banner:
+      'Recommended aspect ratio: <strong>16:9</strong>.<br/>Will be resized to <strong>1200×675</strong>.',
+    file_formats: 'Formats',
+    file_max_size: 'Max size',
+    file_any_format: 'any',
   },
 });

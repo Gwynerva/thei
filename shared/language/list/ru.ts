@@ -25,6 +25,7 @@ export function plural(
 export default defineI18nModule({
   code: 'ru',
   normalize,
+  sizeUnits: { b: 'байт', kb: 'Кб', mb: 'Мб', gb: 'Гб' },
   sampleDisplayNames: [
     'Петр',
     'Петра',
@@ -46,28 +47,34 @@ export default defineI18nModule({
       title: 'Марафонская подготовка',
       summary:
         'За 6 месяцев прошёл путь от дивана до 42 км по структурированному плану тренировок.',
+      slug: 'marathon-training',
     },
     {
       title: 'Полгода в тренажёрном зале',
       summary:
         'Отслеживал прогресс в силовых упражнениях от новичка до уверенного атлета.',
+      slug: 'gym-journey',
     },
     {
       title: 'Короткометражка: Эхо',
       summary: '12-минутный триллер, снятый за один уикенд вдвоём.',
+      slug: 'short-film-echoes',
     },
     {
       title: 'Кинодневник 2024',
       summary: 'Посмотрел и оценил более 150 фильмов за год.',
+      slug: 'film-log-2024',
     },
     {
       title: 'Инди-игра: Luminos',
       summary:
         'Головоломка-платформер на Godot, разработанная за три месяца и выложенная на itch.io.',
+      slug: 'indie-game-luminos',
     },
     {
       title: 'Elden Ring — все достижения',
       summary: 'Прошёл игру вместе со всеми DLC, открыв каждое достижение.',
+      slug: 'elden-ring-achievements',
     },
   ],
   phrases: {
@@ -157,5 +164,12 @@ export default defineI18nModule({
     drafts: 'Черновики',
     save: 'Сохранить',
     delete: 'Удалить',
+    asset_profile_hint_icon:
+      'Рекомендуемое соотношение: <strong>1:1</strong>.<br/>Будет изменено до <strong>256×256</strong>.',
+    asset_profile_hint_banner:
+      'Рекомендуемое соотношение: <strong>16:9</strong>.<br/>Будет изменено до <strong>1200×675</strong>.',
+    file_formats: 'Форматы',
+    file_max_size: 'Макс. размер',
+    file_any_format: 'любой',
   },
 });

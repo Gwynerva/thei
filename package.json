@@ -18,6 +18,7 @@
     "nuxt": "^4.4.6",
     "perfect-debounce": "^2.1.0",
     "picocolors": "^1.1.1",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4.3.0",
     "ua-parser-js": "^2.0.9",
     "unslash": "^2.0.0"
@@ -25,6 +26,7 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.9.0",
+    "@types/sharp": "^0.32.0",
     "drizzle-kit": "^0.31.10",
     "prettier": "^3.8.3",
     "prettier-plugin-classnames": "^0.10.1",

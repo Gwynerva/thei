@@ -81,11 +81,24 @@ export type LanguagePhrases = {
   drafts: string;
   save: string;
   delete: string;
+  asset_profile_hint_icon: string;
+  asset_profile_hint_banner: string;
+  file_formats: string;
+  file_max_size: string;
+  file_any_format: string;
+};
+
+export type LanguageSizeUnits = {
+  b: string;
+  kb: string;
+  mb: string;
+  gb: string;
 };
 
 export interface I18nProjectSample {
   title: string;
   summary: string;
+  slug: string;
 }
 
 export type I18nModuleSpec = {
@@ -94,11 +107,13 @@ export type I18nModuleSpec = {
   sampleDisplayNames?: string[];
   sampleSecretPhrases?: string[];
   sampleProjects?: I18nProjectSample[];
+  sizeUnits?: Partial<LanguageSizeUnits>;
   phrases: Partial<LanguagePhrases>;
 };
 
 export type I18nBaseModule = I18nModuleSpec & {
   phrases: LanguagePhrases;
+  sizeUnits: LanguageSizeUnits;
 };
 
 export type I18nController = {
@@ -107,5 +122,6 @@ export type I18nController = {
   sampleDisplayNames: string[];
   sampleSecretPhrases: string[];
   sampleProjects: I18nProjectSample[];
+  sizeUnits: LanguageSizeUnits;
   phrase: LanguagePhrases;
 };

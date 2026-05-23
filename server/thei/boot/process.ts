@@ -10,6 +10,7 @@ import {
 import { bootTheiLanguage } from '../language';
 import { bootTheiDb } from '../db/boot';
 import { bootAdminSessions } from '../admin-session/boot';
+import { bootTheiAssets } from '../assets/boot';
 
 export async function bootTheiServer() {
   THEI_SERVER.console.tag('Boot').log('Booting...');
@@ -20,6 +21,7 @@ export async function bootTheiServer() {
     await bootTheiDb();
     await bootTheiLanguage();
     await bootAdminSessions();
+    bootTheiAssets();
     setBootReady();
   } catch (decideOrError) {
     if (decideOrError instanceof BootDecided) {

@@ -14,8 +14,12 @@ export default defineEventHandler(async (event) => {
     return;
   }
 
-  const isPublicAsset = !path.startsWith('/assets/') && /\.\w+$/.test(path);
-  if (isPublicAsset) {
+  // Only skip middleware for genuine static public files at the root level
+  // (e.g. /favicon.svg, /robots.txt, /icons.svg).
+  // Multi-segment paths like /projects/slug/icon/abc.webp must NOT be skipped —
+  // they are dynamic routes that enforce container access control.
+  const isPublicStaticFile = /^\/[^/]+\.\w+$/.test(path);
+  if (isPublicStaticFile) {
     return;
   }
 

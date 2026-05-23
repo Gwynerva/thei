@@ -4,11 +4,6 @@ export enum ProjectEventAccessLevel {
   Private = 'private',
 }
 
-export enum AssetAccessLevel {
-  Public = 'public',
-  Private = 'private',
-}
-
 export enum SiteAccessLevel {
   Public = 'public',
   Private = 'private',

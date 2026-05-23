@@ -24,6 +24,9 @@ export default defineNuxtConfig({
   },
   nitro: {
     plugins: ['#layers/thei/server/thei/plugin.ts'],
+    externals: {
+      external: ['sharp'],
+    },
     typescript: {
       tsConfig: {
         compilerOptions: {

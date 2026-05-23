@@ -6,7 +6,7 @@ import type {
   LanguageCode,
 } from './types';
 
-export type { LanguageCode, LanguagePhrases } from './types';
+export type { LanguageCode, LanguagePhrases, LanguageSizeUnits } from './types';
 export { languagesInfo, languageCodes } from './types';
 
 /** Public alias for the runtime language object. */

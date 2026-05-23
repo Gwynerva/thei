@@ -11,6 +11,18 @@ import { countProjects } from './projects/repository/count';
 import { countEvents } from './events/repository/count';
 import { getPublicAdminSessions } from './admin-session/repository/public';
 import { getCurrentAdminSession } from './admin-session';
+import { createAsset } from './assets/repository/create';
+import { touchAsset } from './assets/repository/touch';
+import { findAssetByHash } from './assets/repository/find-by-hash';
+import { findAssetByLink } from './assets/repository/find-by-link';
+import { findOrphanedAssets } from './assets/repository/find-orphaned';
+import { attachAssetUsage } from './assets/repository/usages/attach';
+import { detachAssetUsage } from './assets/repository/usages/detach';
+import { findAssetsByContainer } from './assets/repository/usages/find-by-container';
+import { findAssetUsage } from './assets/repository/usages/find-one';
+import { deleteAsset } from './assets/repository/delete';
+import { processAsset } from './assets/process';
+import { assetFilePath } from './assets/file-path';
 
 export const THEI_SERVER = {
   version,
@@ -54,5 +66,21 @@ export const THEI_SERVER = {
   },
   adminSessions: {
     getPublic: getPublicAdminSessions,
+  },
+  assets: {
+    filePath: assetFilePath,
+    create: createAsset,
+    findByHash: findAssetByHash,
+    findByLink: findAssetByLink,
+    touch: touchAsset,
+    findOrphaned: findOrphanedAssets,
+    delete: deleteAsset,
+    process: processAsset,
+    usages: {
+      attach: attachAssetUsage,
+      detach: detachAssetUsage,
+      findByContainer: findAssetsByContainer,
+      findOne: findAssetUsage,
+    },
   },
 };
