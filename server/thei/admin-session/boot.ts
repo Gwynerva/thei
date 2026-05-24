@@ -21,7 +21,9 @@ export async function bootAdminSessions() {
 
   loopAdminSessionSnapshotJob();
 
-  THEI_SERVER.console.log(
-    `Booted ${memorySessions.size} active admin session(s).`,
-  );
+  if (memorySessions.size > 0) {
+    THEI_SERVER.console.log(
+      `Booted ${memorySessions.size} active admin session(s).`,
+    );
+  }
 }

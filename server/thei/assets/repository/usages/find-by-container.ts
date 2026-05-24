@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import type { AssetContainerType } from '#layers/thei/shared/asset';
 
-export function findAssetsByContainer(
+export async function findAssetsByContainer(
   containerType: AssetContainerType,
   containerId: string,
 ) {
@@ -18,6 +18,5 @@ export function findAssetsByContainer(
         eq(schema.assetUsages.containerType, containerType),
         eq(schema.assetUsages.containerId, containerId),
       ),
-    )
-    .all();
+    );
 }

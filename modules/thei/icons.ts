@@ -1,4 +1,4 @@
-import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { addTemplate, updateTemplates } from 'nuxt/kit';
 import type { Nuxt } from 'nuxt/schema';
 import chokidar from 'chokidar';
@@ -13,7 +13,6 @@ interface IconsData {
 
 export async function setupTheiIcons(nuxt: Nuxt, theiPath: string) {
   const iconAssetsPath = `${theiPath}/app/assets/icons`;
-  const publicIconsPath = `${theiPath}/public/icons.svg`;
 
   let iconsDataPromise: Promise<IconsData> | undefined;
   let rebuildIconsData = true;
@@ -69,11 +68,15 @@ export async function setupTheiIcons(nuxt: Nuxt, theiPath: string) {
     return await iconsDataPromise;
   }
 
-  async function writeIconsFile() {
-    const iconsData = await getIconsData();
+  const iconsSvgTemplate = addTemplate({
+    write: true,
+    filename: 'thei/public/icons.svg',
 
-    await writeFile(publicIconsPath, iconsData.iconsSvg, 'utf-8');
-  }
+    async getContents() {
+      const iconsData = await getIconsData();
+      return iconsData.iconsSvg;
+    },
+  });
 
   const iconsTsTemplate = addTemplate({
     write: true,
@@ -99,16 +102,14 @@ export const iconsHref = '/icons.svg?' + '${urlHash}';
   nuxt.options.alias ??= {};
   nuxt.options.alias['#thei/icons'] = iconsTsTemplate.dst;
 
-  await writeIconsFile();
-
   if (nuxt.options.dev) {
     const rebuild = debounce(async () => {
       rebuildIconsData = true;
 
-      await writeIconsFile();
-
       await updateTemplates({
-        filter: (template) => template.dst === iconsTsTemplate.dst,
+        filter: (template) =>
+          template.dst === iconsTsTemplate.dst ||
+          template.dst === iconsSvgTemplate.dst,
       });
     }, 200);
 

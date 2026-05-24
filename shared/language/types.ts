@@ -7,6 +7,44 @@ export const languageCodes = Object.keys(languagesInfo) as LanguageCode[];
 
 export type LanguageCode = keyof typeof languagesInfo;
 
+export type LanguageSizeUnits = {
+  b: string;
+  kb: string;
+  mb: string;
+  gb: string;
+};
+
+export interface I18nProjectSample {
+  title: string;
+  summary: string;
+  slug: string;
+}
+
+export type I18nModuleSpec = {
+  code: LanguageCode;
+  normalize?: (text: string) => string;
+  sampleDisplayNames?: string[];
+  sampleSecretPhrases?: string[];
+  sampleProjects?: I18nProjectSample[];
+  sizeUnits?: Partial<LanguageSizeUnits>;
+  phrases: Partial<LanguagePhrases>;
+};
+
+export type I18nBaseModule = I18nModuleSpec & {
+  phrases: LanguagePhrases;
+  sizeUnits: LanguageSizeUnits;
+};
+
+export type I18nController = {
+  code: LanguageCode;
+  normalize: (text: string) => string;
+  sampleDisplayNames: string[];
+  sampleSecretPhrases: string[];
+  sampleProjects: I18nProjectSample[];
+  sizeUnits: LanguageSizeUnits;
+  phrase: LanguagePhrases;
+};
+
 export type LanguagePhrases = {
   language_name: string;
   install_thei: string;
@@ -73,6 +111,8 @@ export type LanguagePhrases = {
   new_event: string;
   create: string;
   edit_project: string;
+  view_project: string;
+  unsaved_changes_confirm: string;
   project_title: string;
   project_title_hint: string;
   project_summary: string;
@@ -86,42 +126,28 @@ export type LanguagePhrases = {
   file_formats: string;
   file_max_size: string;
   file_any_format: string;
-};
-
-export type LanguageSizeUnits = {
-  b: string;
-  kb: string;
-  mb: string;
-  gb: string;
-};
-
-export interface I18nProjectSample {
-  title: string;
-  summary: string;
-  slug: string;
-}
-
-export type I18nModuleSpec = {
-  code: LanguageCode;
-  normalize?: (text: string) => string;
-  sampleDisplayNames?: string[];
-  sampleSecretPhrases?: string[];
-  sampleProjects?: I18nProjectSample[];
-  sizeUnits?: Partial<LanguageSizeUnits>;
-  phrases: Partial<LanguagePhrases>;
-};
-
-export type I18nBaseModule = I18nModuleSpec & {
-  phrases: LanguagePhrases;
-  sizeUnits: LanguageSizeUnits;
-};
-
-export type I18nController = {
-  code: LanguageCode;
-  normalize: (text: string) => string;
-  sampleDisplayNames: string[];
-  sampleSecretPhrases: string[];
-  sampleProjects: I18nProjectSample[];
-  sizeUnits: LanguageSizeUnits;
-  phrase: LanguagePhrases;
+  project_slug: string;
+  project_slug_hint: string;
+  generate_random: string;
+  duplicate_slug: string;
+  project_access: string;
+  public: string;
+  public_hint: string;
+  link_only: string;
+  link_only_hint: string;
+  private: string;
+  private_hint: string;
+  site_access_close_priority: string;
+  view_event: string;
+  saved: string;
+  important_project: string;
+  important_project_hint: string;
+  cv_project: string;
+  cv_project_hint: string;
+  project_files: string;
+  project_files_description: string;
+  project_icon: string;
+  project_icon_hint: string;
+  delete_project: string;
+  delete_project_confirm: string;
 };

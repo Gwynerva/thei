@@ -6,9 +6,9 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 export async function runAssetCleanup() {
   const cutoffMs = Date.now() - ONE_DAY_MS;
-  let orphans: ReturnType<typeof findOrphanedAssets>;
+  let orphans: Awaited<ReturnType<typeof findOrphanedAssets>>;
   try {
-    orphans = findOrphanedAssets(cutoffMs);
+    orphans = await findOrphanedAssets(cutoffMs);
   } catch {
     THEI_SERVER.console.tag('Assets').error('Failed to query orphaned assets');
     return;
@@ -20,7 +20,7 @@ export async function runAssetCleanup() {
     );
     await rm(filePath, { force: true }).catch(() => {});
     try {
-      deleteAsset(asset.assetUuid);
+      await deleteAsset(asset.assetUuid);
     } catch {
       THEI_SERVER.console
         .tag('Assets')

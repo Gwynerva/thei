@@ -8,13 +8,18 @@ import { currentLanguage, getCurrentLanguagePhrases } from './language';
 import { theiConfig } from './config/index';
 import { getTheiDbContext } from './db/global';
 import { countProjects } from './projects/repository/count';
+import { findProjectBySlug } from './projects/repository/find-by-slug';
+import { findProjectByUuid } from './projects/repository/find-by-id';
+import { createProject } from './projects/repository/create';
+import { updateProject } from './projects/repository/update';
+import { deleteProject } from './projects/repository/delete';
 import { countEvents } from './events/repository/count';
 import { getPublicAdminSessions } from './admin-session/repository/public';
 import { getCurrentAdminSession } from './admin-session';
 import { createAsset } from './assets/repository/create';
 import { touchAsset } from './assets/repository/touch';
 import { findAssetByHash } from './assets/repository/find-by-hash';
-import { findAssetByLink } from './assets/repository/find-by-link';
+import { findAssetBySlug } from './assets/repository/find-by-slug';
 import { findOrphanedAssets } from './assets/repository/find-orphaned';
 import { attachAssetUsage } from './assets/repository/usages/attach';
 import { detachAssetUsage } from './assets/repository/usages/detach';
@@ -60,6 +65,11 @@ export const THEI_SERVER = {
   },
   projects: {
     count: countProjects,
+    findBySlug: findProjectBySlug,
+    findByUuid: findProjectByUuid,
+    create: createProject,
+    update: updateProject,
+    delete: deleteProject,
   },
   events: {
     count: countEvents,
@@ -71,7 +81,7 @@ export const THEI_SERVER = {
     filePath: assetFilePath,
     create: createAsset,
     findByHash: findAssetByHash,
-    findByLink: findAssetByLink,
+    findBySlug: findAssetBySlug,
     touch: touchAsset,
     findOrphaned: findOrphanedAssets,
     delete: deleteAsset,

@@ -1,15 +1,11 @@
 import { and, eq } from 'drizzle-orm';
 
-export function findAssetByHash(rawHash: string, profileId: string) {
+export async function findAssetByHash(rawHash: string, profileId: string) {
   const { db, schema } = THEI_SERVER.useDb();
-  return db
-    .select()
-    .from(schema.assets)
-    .where(
-      and(
-        eq(schema.assets.rawHash, rawHash),
-        eq(schema.assets.profileId, profileId),
-      ),
-    )
-    .get();
+  return db.query.assets.findFirst({
+    where: and(
+      eq(schema.assets.rawHash, rawHash),
+      eq(schema.assets.profileId, profileId),
+    ),
+  });
 }

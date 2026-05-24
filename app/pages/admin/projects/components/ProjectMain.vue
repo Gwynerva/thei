@@ -1,19 +1,69 @@
 <script lang="ts" setup>
-import { projectDataInjectionKey } from '../composables';
-import type { AssetUploadResponse } from '#layers/thei/shared/api/asset';
+import { debounce } from 'perfect-debounce';
+import type { ProjectSlugCheckResponse } from '#layers/thei/shared/api/project';
+import {
+  ProjectEventAccessLevel,
+  SiteAccessLevel,
+} from '#layers/thei/shared/access-level';
+import {
+  projectDataInjectionKey,
+  projectValidationKey,
+  currentProjectUuidKey,
+} from '../composables';
 
 const projectData = inject(projectDataInjectionKey)!;
+const projectValidation = inject(projectValidationKey)!;
+const currentProjectUuid = inject(currentProjectUuidKey);
+
+const publicAdmin = await usePublicAdmin();
+
+const accessHint = computed(() => {
+  switch (projectData.value.access) {
+    case ProjectEventAccessLevel.Public:
+      return phrase.value.public_hint;
+    case ProjectEventAccessLevel.LinkOnly:
+      return phrase.value.link_only_hint;
+    case ProjectEventAccessLevel.Private:
+      return phrase.value.private_hint;
+  }
+});
 
 const { randomArrayElement } = useRandom();
 const sampleProject = randomArrayElement(language.value.sampleProjects);
 
-// Preview URL is built from the upload result — not stored in projectData
-const iconPreviewUrl = ref<string>();
+type SlugError = { message: string; hard: true } | false;
 
-function removeIcon() {
-  projectData.value.iconAssetUuid = undefined;
-  iconPreviewUrl.value = undefined;
-}
+const slugError = ref<SlugError>(false);
+
+let slugCheckId = 0;
+
+const checkSlugUniqueness = debounce(async (slug: string) => {
+  const id = ++slugCheckId;
+  try {
+    const { taken } = await $fetch<ProjectSlugCheckResponse>(
+      '/api/admin/projects/slug-check/',
+      { query: { slug, excludeProjectUuid: currentProjectUuid } },
+    );
+    if (id !== slugCheckId) return;
+    slugError.value = taken
+      ? { message: phrase.value.duplicate_slug, hard: true }
+      : false;
+    projectValidation.value.isSlugUnique = !taken;
+  } catch {}
+}, 500);
+
+watch(
+  () => projectData.value.slug,
+  (slug) => {
+    if (!slug.trim()) {
+      slugError.value = false;
+      projectValidation.value.isSlugUnique = true;
+      return;
+    }
+
+    checkSlugUniqueness(slug);
+  },
+);
 </script>
 
 <template>
@@ -44,82 +94,75 @@ function removeIcon() {
     </Field>
 
     <div class="flex flex-wrap gap-md">
-      <Field>
-        <FieldLabel required>Доступ к проекту</FieldLabel>
-        <FieldOptions
-          direction="row"
-          :options="{
-            public: { title: 'Публичный' },
-            link: { title: 'По ссылке' },
-            private: { title: 'Приватный' },
-          }"
-        />
-      </Field>
       <Field class="flex-1">
-        <FieldLabel required>Ссылка на проект</FieldLabel>
-        <div class="flex items-center gap-xs">
+        <FieldLabel required>{{ phrase.project_slug }}</FieldLabel>
+        <div class="flex items-start">
           <FieldInput
+            v-model="projectData.slug"
+            autocomplete="off"
+            spellcheck="false"
             type="text"
-            class="flex-1"
+            wrapper-class="flex-1 min-w-50"
+            class="rounded-r-none"
             :placeholder="sampleProject.slug"
+            :error="slugError"
+            required
           />
-          <Button variant="secondary">
-            <Icon name="dice" />
+          <Button
+            variant="secondary"
+            class="h-12 rounded-l-none"
+            :data-title-popup="phrase.generate_random"
+            @mousedown.prevent
+            @click="projectData.slug = randomId(14)"
+          >
+            <Icon name="dice" class="scale-125" />
           </Button>
         </div>
-        <FieldHint>Входит в состав ссылки на проект.</FieldHint>
+        <FieldHint>{{ phrase.project_slug_hint }}</FieldHint>
+      </Field>
+      <Field>
+        <FieldLabel required>{{ phrase.project_access }}</FieldLabel>
+        <FieldOptions
+          v-model="projectData.access"
+          direction="row"
+          :options="{
+            [ProjectEventAccessLevel.Public]: {
+              icon: 'lock-open',
+              title: phrase.public,
+            },
+            [ProjectEventAccessLevel.LinkOnly]: {
+              icon: 'lock-partial',
+              title: phrase.link_only,
+            },
+            [ProjectEventAccessLevel.Private]: {
+              icon: 'lock-close',
+              title: phrase.private,
+            },
+          }"
+        />
+        <FieldHint v-if="accessHint">{{ accessHint }}</FieldHint>
+        <FieldHint
+          v-if="publicAdmin.siteAccessLevel === SiteAccessLevel.Private"
+          class="font-semibold text-text-warning"
+        >
+          <Icon name="warning" class="mr-xs" />
+          {{ phrase.site_access_close_priority }}
+        </FieldHint>
       </Field>
     </div>
 
     <div class="flex flex-wrap gap-md">
-      <Field>
-        <FieldLabel>Иконка проекта</FieldLabel>
-        <div class="relative inline-block">
-          <AssetUpload
-            profile-id="icon"
-            v-model="projectData.iconAssetUuid"
-            @uploaded="
-              (e: AssetUploadResponse) =>
-                (iconPreviewUrl = `/api/admin/assets/preview/${e.link}.${e.extension}`)
-            "
-          >
-            <div
-              class="flex size-12 items-center justify-center overflow-hidden
-                rounded-normal border-2 border-border-1 bg-bg-1 transition
-                hover:border-border-3 hover:bg-bg-3"
-            >
-              <img
-                v-if="iconPreviewUrl"
-                :src="iconPreviewUrl"
-                class="h-full w-full object-cover"
-                alt="Project icon"
-              />
-              <Icon v-else name="plus" class="text-xl text-text-2" />
-            </div>
-          </AssetUpload>
-          <button
-            v-if="iconPreviewUrl"
-            class="absolute -top-1.5 -right-1.5 rounded-full bg-bg-1 p-0.5
-              text-text-2 shadow-shadow-1 transition hover:bg-bg-error
-              hover:text-text-error"
-            @click="removeIcon"
-          >
-            <Icon name="delete" class="text-xs" />
-          </button>
-        </div>
-        <FieldHint>Яркая и запоминающаяся.</FieldHint>
+      <Field class="flex-1">
+        <FieldToggle v-model="projectData.important">{{
+          phrase.important_project
+        }}</FieldToggle>
+        <FieldHint>{{ phrase.important_project_hint }}</FieldHint>
       </Field>
       <Field class="flex-1">
-        <FieldToggle>Важный проект?</FieldToggle>
-        <FieldHint>
-          Проект запомнился надолго и/или сильно повлиял на вашу жизнь.
-        </FieldHint>
-      </Field>
-      <Field class="flex-1">
-        <FieldToggle>Часть резюме?</FieldToggle>
-        <FieldHint>
-          Потенциальному работодателю будет интересно увидеть этот проект.
-        </FieldHint>
+        <FieldToggle v-model="projectData.cv">{{
+          phrase.cv_project
+        }}</FieldToggle>
+        <FieldHint>{{ phrase.cv_project_hint }}</FieldHint>
       </Field>
     </div>
   </Box>

@@ -14,7 +14,7 @@ import { Modal } from '#components';
 const props = defineProps<{ profileId: AssetProfileId }>();
 
 const emit = defineEmits<{
-  uploaded: [{ assetUuid: string; link: string; extension: string }];
+  uploaded: [{ assetUuid: string; slug: string; extension: string }];
 }>();
 
 const modelValue = defineModel<string>();
@@ -39,7 +39,7 @@ type UploadState =
   | { type: 'idle' }
   | { type: 'hashing' }
   | { type: 'checking' }
-  | { type: 'duplicate'; assetUuid: string; link: string; extension: string }
+  | { type: 'duplicate'; assetUuid: string; slug: string; extension: string }
   | { type: 'uploading'; filename: string; size: number; progress: number }
   | { type: 'processing' }
   | { type: 'done'; result: AssetUploadResponse }
@@ -138,7 +138,7 @@ async function handleFile(file: File) {
     modelValue.value = checkResult.assetUuid;
     emit('uploaded', {
       assetUuid: checkResult.assetUuid,
-      link: checkResult.link,
+      slug: checkResult.slug,
       extension: checkResult.extension,
     });
     setTimeout(close, 1500);
@@ -366,7 +366,7 @@ function onDragover(e: DragEvent) {
     <template v-else-if="state.type === 'done'">
       <div class="flex flex-col items-center gap-md py-md text-center">
         <img
-          :src="`/api/admin/assets/preview/${state.result.link}.${state.result.extension}`"
+          :src="`/api/admin/assets/preview/${state.result.slug}.${state.result.extension}`"
           class="h-20 w-20 rounded-normal object-cover shadow-shadow-1"
           alt="Uploaded asset preview"
         />

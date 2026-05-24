@@ -2,7 +2,7 @@ import type { AssetType } from '#layers/thei/shared/asset';
 
 export interface CreateAssetData {
   assetUuid: string;
-  link: string;
+  slug: string;
   extension: string;
   profileId: string;
   rawHash: string;
@@ -10,9 +10,7 @@ export interface CreateAssetData {
   size: number;
 }
 
-export function createAsset(data: CreateAssetData) {
+export async function createAsset(data: CreateAssetData) {
   const { db, schema } = THEI_SERVER.useDb();
-  db.insert(schema.assets)
-    .values({ ...data, touchedAt: Date.now() })
-    .run();
+  await db.insert(schema.assets).values({ ...data, touchedAt: Date.now() });
 }

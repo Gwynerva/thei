@@ -29,9 +29,9 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
   }
 
   if (route.path.startsWith('/projects/')) {
-    const projectId = route.path.split('/')[2];
+    const projectUuid = route.path.split('/')[2];
     return {
-      to: `/admin/projects/${projectId}`,
+      to: `/admin/projects/edit/${projectUuid}/`,
       icon: 'edit',
       label: phrase.value.edit_project,
     };
@@ -46,21 +46,21 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
     };
   }
 
-  const isEditProject = route.path.startsWith('/admin/projects/edit');
-  const isEditEvent = route.path.startsWith('/admin/events/edit');
-
-  if (isEditProject || isEditEvent) {
+  if (route.path.startsWith('/admin/projects/edit')) {
     const id = route.path.split('/')[4];
-    const isProject = isEditProject;
-
     return {
-      to: {
-        href: isProject ? `/projects/${id}` : `/events/${id}`,
-        external: true,
-        target: '_blank',
-      },
-      icon: 'edit',
-      label: isProject ? phrase.value.edit_project : phrase.value.edit_event,
+      to: { href: `/projects/${id}/`, external: true },
+      icon: 'eye-open',
+      label: phrase.value.view_project,
+    };
+  }
+
+  if (route.path.startsWith('/admin/events/edit')) {
+    const id = route.path.split('/')[4];
+    return {
+      to: { href: `/events/${id}/`, external: true },
+      icon: 'eye-open',
+      label: phrase.value.view_event,
     };
   }
 });

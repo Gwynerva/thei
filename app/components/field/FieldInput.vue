@@ -14,6 +14,7 @@ type ErrorProp =
 const { required, error } = defineProps<{
   required?: boolean;
   error?: ErrorProp;
+  wrapperClass?: string;
 }>();
 
 const model = defineModel<string>();
@@ -77,7 +78,7 @@ function onBlur() {
 </script>
 
 <template>
-  <div>
+  <div :class="wrapperClass">
     <input
       v-bind="attrs"
       ref="input"

@@ -25,8 +25,6 @@ function inferAssetType(ext: string): AssetType {
 
 export default defineEventHandler(
   async (event): Promise<AssetUploadResponse> => {
-    await THEI_SERVER.getAdmin(event);
-
     const parts = await readMultipartFormData(event);
     if (!parts)
       throw createError({ statusCode: 400, message: 'No multipart data' });
@@ -73,12 +71,12 @@ export default defineEventHandler(
     }
 
     // Race condition guard: check dedup again server-side
-    const existing = THEI_SERVER.assets.findByHash(rawHash, profileId);
+    const existing = await THEI_SERVER.assets.findByHash(rawHash, profileId);
     if (existing) {
-      THEI_SERVER.assets.touch(existing.assetUuid);
+      await THEI_SERVER.assets.touch(existing.assetUuid);
       return {
         assetUuid: existing.assetUuid,
-        link: existing.link,
+        slug: existing.slug,
         extension: existing.extension,
       };
     }
@@ -90,27 +88,27 @@ export default defineEventHandler(
     );
 
     const assetUuid = randomUUID();
-    let link: string | undefined;
+    let slug: string | undefined;
     for (let attempt = 0; attempt < 10; attempt++) {
       const candidate = randomId(32);
-      if (!THEI_SERVER.assets.findByLink(candidate)) {
-        link = candidate;
+      if (!(await THEI_SERVER.assets.findBySlug(candidate))) {
+        slug = candidate;
         break;
       }
     }
-    if (!link)
+    if (!slug)
       throw createError({
         statusCode: 500,
-        message: 'Failed to generate unique asset link',
+        message: 'Failed to generate unique asset slug',
       });
     const filePath = THEI_SERVER.assets.filePath(assetUuid, extension);
     await mkdir(dirname(filePath), { recursive: true });
     await writeFile(filePath, buffer);
 
     try {
-      THEI_SERVER.assets.create({
+      await THEI_SERVER.assets.create({
         assetUuid,
-        link,
+        slug,
         extension,
         profileId,
         rawHash,
@@ -122,6 +120,6 @@ export default defineEventHandler(
       throw createError({ statusCode: 500, message: 'Failed to save asset' });
     }
 
-    return { assetUuid, link, extension };
+    return { assetUuid, slug, extension };
   },
 );

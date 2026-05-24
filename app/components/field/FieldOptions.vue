@@ -21,7 +21,7 @@ const model = defineModel<string>();
 <template>
   <div class="flex">
     <div
-      class="flex gap-1 rounded-normal bg-bg-3 p-1 text-sm"
+      class="flex flex-wrap gap-1 rounded-normal bg-bg-3 p-1 text-sm"
       :class="[direction === 'column' ? 'flex-1 flex-col' : '']"
     >
       <button

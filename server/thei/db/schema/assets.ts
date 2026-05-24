@@ -11,7 +11,7 @@ export const assets = sqliteTable(
   {
     assetUuid: text().primaryKey(),
     /** Random URL token — embedded in container-scoped serving URLs for cache busting. */
-    link: text().notNull().unique(),
+    slug: text().notNull().unique(),
     extension: text().notNull(),
     profileId: text().notNull(),
     /** SHA-256 of the original file before any processing. Used for deduplication together with profileId. */

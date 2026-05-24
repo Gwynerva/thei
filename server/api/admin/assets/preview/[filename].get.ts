@@ -20,16 +20,14 @@ const MIME: Record<string, string> = {
  *  Used by AssetUpload.vue to preview a newly uploaded asset before it is
  *  attached to a container. Not intended for public consumption. */
 export default defineEventHandler(async (event) => {
-  await THEI_SERVER.getAdmin(event);
-
   const filename = getRouterParam(event, 'filename') ?? '';
   const dot = filename.lastIndexOf('.');
   if (dot === -1) throw createError({ statusCode: 404 });
 
-  const link = filename.slice(0, dot);
+  const slug = filename.slice(0, dot);
   const ext = filename.slice(dot + 1).toLowerCase();
 
-  const asset = THEI_SERVER.assets.findByLink(link);
+  const asset = await THEI_SERVER.assets.findBySlug(slug);
   if (!asset || asset.extension !== ext) throw createError({ statusCode: 404 });
 
   const filePath = THEI_SERVER.assets.filePath(

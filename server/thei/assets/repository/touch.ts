@@ -1,10 +1,10 @@
 import { eq } from 'drizzle-orm';
 
 /** Refresh touchedAt so the orphan cleanup grace period resets. Call when dedup returns an existing asset. */
-export function touchAsset(assetUuid: string) {
+export async function touchAsset(assetUuid: string) {
   const { db, schema } = THEI_SERVER.useDb();
-  db.update(schema.assets)
+  await db
+    .update(schema.assets)
     .set({ touchedAt: Date.now() })
-    .where(eq(schema.assets.assetUuid, assetUuid))
-    .run();
+    .where(eq(schema.assets.assetUuid, assetUuid));
 }

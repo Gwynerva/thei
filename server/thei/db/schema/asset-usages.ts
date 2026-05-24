@@ -2,7 +2,7 @@ import { index, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import type { AssetContainerType, AssetRole } from '#layers/thei/shared/asset';
 
 export const assetUsages = sqliteTable(
-  'asset_usages',
+  'asset-usages',
   {
     assetUuid: text().notNull(),
     containerType: text().notNull().$type<AssetContainerType>(),
@@ -13,7 +13,7 @@ export const assetUsages = sqliteTable(
     primaryKey({
       columns: [t.assetUuid, t.containerType, t.containerId, t.role],
     }),
-    index('asset_usages_container_idx').on(t.containerType, t.containerId),
-    index('asset_usages_asset_idx').on(t.assetUuid),
+    index('asset-usages-container-idx').on(t.containerType, t.containerId),
+    index('asset-usages-asset-idx').on(t.assetUuid),
   ],
 );

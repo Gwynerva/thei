@@ -42,38 +42,64 @@ export default defineI18nBase({
   ],
   sampleProjects: [
     {
-      title: 'Marathon Training',
+      title: 'Digital Garden',
       summary:
-        'Went from couch to 42 km in 6 months with a structured training plan.',
-      slug: 'marathon-training',
+        'A personal site for thinking in public — notes, half-baked ideas, and essays that grow over time.',
+      slug: 'digital-garden',
     },
     {
-      title: '6-Month Gym Journey',
+      title: '365 Days of Photography',
       summary:
-        'Tracked strength progress from beginner to intermediate lifter.',
-      slug: 'gym-journey',
+        'Shot one photo every day for a full year to develop an eye for composition.',
+      slug: '365-photography',
     },
     {
-      title: 'Short Film: Echoes',
-      summary: 'A 12-minute thriller shot on a weekend with a two-person crew.',
-      slug: 'short-film-echoes',
-    },
-    {
-      title: 'Film Log 2024',
-      summary: 'Watched and reviewed 150+ films over the course of the year.',
-      slug: 'film-log-2024',
-    },
-    {
-      title: 'Indie Game: Luminos',
+      title: 'Japanese: Year One',
       summary:
-        'A puzzle platformer built in Godot over three months, released on itch.io.',
-      slug: 'indie-game-luminos',
+        'Reached conversational level in Japanese through daily study and a month-long immersion experiment.',
+      slug: 'japanese-year-one',
     },
     {
-      title: 'Elden Ring — All Achievements',
+      title: 'Custom Keyboard Build',
       summary:
-        'Completed the full game including all DLC, earning every achievement.',
-      slug: 'elden-ring-achievements',
+        'Designed and soldered a 65% mechanical keyboard from bare PCB to finished keycaps.',
+      slug: 'custom-keyboard',
+    },
+    {
+      title: 'Open Source Month',
+      summary:
+        'Spent a month submitting pull requests to open source projects I use every day.',
+      slug: 'open-source-month',
+    },
+    {
+      title: 'Campaign: The Iron Coast',
+      summary:
+        'Wrote, ran, and improvised a 12-session tabletop RPG campaign for five players.',
+      slug: 'campaign-iron-coast',
+    },
+    {
+      title: 'Chess: 1000 → 1500',
+      summary:
+        'Studied endgames and tactics puzzles for three months and climbed 500 rating points.',
+      slug: 'chess-climb',
+    },
+    {
+      title: 'Podcast: Side Effects',
+      summary:
+        'Hosted and edited six episodes about unexpected consequences in tech and science.',
+      slug: 'podcast-side-effects',
+    },
+    {
+      title: 'Blender Basics',
+      summary:
+        'Completed a structured 3D modeling course and built five scenes from scratch.',
+      slug: 'blender-basics',
+    },
+    {
+      title: 'CTF Season',
+      summary:
+        'Competed in eight capture-the-flag competitions with a team, solving over 40 challenges.',
+      slug: 'ctf-season',
     },
   ],
   phrases: {
@@ -153,6 +179,8 @@ export default defineI18nBase({
     new_event: 'New Event',
     create: 'Create',
     edit_project: 'Edit Project',
+    view_project: 'View on Site',
+    unsaved_changes_confirm: 'You have unsaved changes. Leave anyway?',
     project_title: 'Project Title',
     project_title_hint:
       'One or a few words: the name of the product, completed game, attended event...',
@@ -170,5 +198,32 @@ export default defineI18nBase({
     file_formats: 'Formats',
     file_max_size: 'Max size',
     file_any_format: 'any',
+    project_slug: 'Project Slug',
+    project_slug_hint: 'Unique ID for the project in the URL.',
+    generate_random: 'Generate random',
+    duplicate_slug: 'This slug is already taken! Choose another one.',
+    project_access: 'Project Access',
+    public: 'Public',
+    link_only: 'Link-only',
+    private: 'Private',
+    public_hint: 'Anyone can view.',
+    link_only_hint: 'Anyone with the link can view.',
+    private_hint: 'Only you can view.',
+    site_access_close_priority: 'Site closed! Only you will have access!',
+    view_event: 'View on Site',
+    saved: 'Saved!',
+    important_project: 'Important Project?',
+    important_project_hint:
+      'This project stayed with you for a long time and/or strongly influenced your life.',
+    cv_project: 'In Your CV?',
+    cv_project_hint:
+      'A potential employer would be interested to see this project.',
+    project_files: 'Project Files',
+    project_files_description: 'Icon, banner, showcase, and other files...',
+    project_icon: 'Project Icon',
+    project_icon_hint: 'Bright and memorable.',
+    delete_project: 'Delete Project',
+    delete_project_confirm:
+      'This action is irreversible. Enter the project title to confirm deletion:',
   },
 });

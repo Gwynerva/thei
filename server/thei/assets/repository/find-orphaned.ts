@@ -1,6 +1,6 @@
 import { and, eq, isNull, lt } from 'drizzle-orm';
 
-export function findOrphanedAssets(cutoffMs: number) {
+export async function findOrphanedAssets(cutoffMs: number) {
   const { db, schema } = THEI_SERVER.useDb();
   return db
     .select({
@@ -17,6 +17,5 @@ export function findOrphanedAssets(cutoffMs: number) {
         isNull(schema.assetUsages.assetUuid),
         lt(schema.assets.touchedAt, cutoffMs),
       ),
-    )
-    .all();
+    );
 }

@@ -30,19 +30,19 @@ export default defineEventHandler(async (event) => {
 
   const dot = filename.lastIndexOf('.');
   if (dot === -1) throw createError({ statusCode: 404 });
-  const link = filename.slice(0, dot);
+  const assetSlug = filename.slice(0, dot);
   const ext = filename.slice(dot + 1).toLowerCase();
 
   // Resolve project
   const { db, schema } = THEI_SERVER.useDb();
-  const project = db
+  const [project] = await db
     .select({
-      projectId: schema.projects.projectId,
+      projectUuid: schema.projects.projectUuid,
       access: schema.projects.access,
     })
     .from(schema.projects)
-    .where(eq(schema.projects.url, slug))
-    .get();
+    .where(eq(schema.projects.slug, slug))
+    .limit(1);
   if (!project) throw createError({ statusCode: 404 });
 
   // Enforce project access level
@@ -52,14 +52,14 @@ export default defineEventHandler(async (event) => {
   }
 
   // Resolve asset
-  const asset = THEI_SERVER.assets.findByLink(link);
+  const asset = await THEI_SERVER.assets.findBySlug(assetSlug);
   if (!asset || asset.extension !== ext) throw createError({ statusCode: 404 });
 
   // Verify this asset is actually attached to this project with this role
-  const usage = THEI_SERVER.assets.usages.findOne(
+  const usage = await THEI_SERVER.assets.usages.findOne(
     asset.assetUuid,
     'project',
-    project.projectId,
+    project.projectUuid,
     role as AssetRole,
   );
   if (!usage) throw createError({ statusCode: 404 });

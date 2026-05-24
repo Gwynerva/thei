@@ -47,6 +47,12 @@ export default defineNuxtModule({
         driver: 'fs',
         base: join(projectPath, '.thei'),
       };
+
+      nitroConfig.publicAssets ??= [];
+      nitroConfig.publicAssets.push({
+        dir: join(nuxt.options.buildDir, 'thei/public'),
+        maxAge: nuxt.options.dev ? 0 : 60 * 60 * 24 * 365,
+      });
     });
 
     addServerImports({

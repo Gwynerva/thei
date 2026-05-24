@@ -24,6 +24,10 @@
   --color-bg-error: light-dark(oklch(95% 0.04 25), oklch(24% 0.04 25));
   --color-border-error: light-dark(oklch(80% 0.1 25), oklch(40% 0.1 25));
 
+  --color-text-warning: light-dark(oklch(60% 0.18 60), oklch(78% 0.16 60));
+  --color-bg-warning: light-dark(oklch(96% 0.04 60), oklch(24% 0.04 60));
+  --color-border-warning: light-dark(oklch(80% 0.1 60), oklch(42% 0.1 60));
+
   --color-white: white;
   --color-black: black;
   --color-bw: light-dark(white, black);

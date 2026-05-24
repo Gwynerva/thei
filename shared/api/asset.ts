@@ -7,10 +7,10 @@ export interface AssetCheckRequest {
 
 export type AssetCheckResponse =
   | { exists: false }
-  | { exists: true; assetUuid: string; link: string; extension: string };
+  | { exists: true; assetUuid: string; slug: string; extension: string };
 
 export interface AssetUploadResponse {
   assetUuid: string;
-  link: string;
+  slug: string;
   extension: string;
 }
