@@ -42,7 +42,7 @@ const checkSlugUniqueness = debounce(async (slug: string) => {
   try {
     const { taken } = await $fetch<ProjectSlugCheckResponse>(
       '/api/admin/projects/slug-check/',
-      { query: { slug, excludeProjectUuid: currentProjectUuid } },
+      { query: { slug, excludeProjectUuid: currentProjectUuid?.value } },
     );
     if (id !== slugCheckId) return;
     slugError.value = taken

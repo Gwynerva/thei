@@ -17,4 +17,4 @@ export const iconPreviewUrlKey = Symbol('iconPreviewUrl') as InjectionKey<
 
 export const currentProjectUuidKey = Symbol(
   'currentProjectUuid',
-) as InjectionKey<string | undefined>;
+) as InjectionKey<Ref<string | undefined>>;

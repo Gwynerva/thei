@@ -165,11 +165,14 @@ export default defineI18nModule({
       `Показать ${plural(count, 'отключенную сессию', 'отключенные сессии', 'отключенных сессий')}`,
     session_details: 'Детали сессии',
     created_at: 'Дата создания',
+    updated_at: 'Изменено',
     last_active_at: 'Активность',
     online: 'Онлайн',
     this_is_you: 'Это вы',
     failed_to_fetch_data: 'Не удалось загрузить данные!',
     admin_panel: 'Админ-панель',
+    admin_projects: 'Проекты',
+    admin_projects_description: 'Все проекты, управляемые на этом сайте.',
     to_admin_panel: 'В админ-панель',
     to_website: 'На сайт',
     project: 'Проект',
@@ -228,5 +231,6 @@ export default defineI18nModule({
     delete_project: 'Удалить проект',
     delete_project_confirm:
       'Это действие необратимо. Введите название проекта, чтобы подтвердить удаление:',
+    size: 'Размер',
   },
 });

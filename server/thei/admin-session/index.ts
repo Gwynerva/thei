@@ -230,9 +230,9 @@ export async function flushSessionsToDb() {
     }
 
     const { db, schema } = THEI_SERVER.useDb();
-    await db.transaction(async (transaction) => {
+    db.transaction((transaction) => {
       for (const session of pendingSessions) {
-        await transaction
+        transaction
           .insert(schema.adminSessions)
           .values({
             sessionUuid: session.sessionUuid,
@@ -243,24 +243,27 @@ export async function flushSessionsToDb() {
             set: {
               data: session,
             },
-          });
+          })
+          .run();
       }
 
-      const sessions = await transaction
+      const sessions = transaction
         .select()
         .from(schema.adminSessions)
         .orderBy(
           sql`json_extract(${schema.adminSessions.data}, '$.lastUsedAt') DESC`,
-        );
+        )
+        .all();
 
       if (sessions.length > maxDbSessions) {
         const toDelete = sessions.slice(maxDbSessions);
 
         const uuids = toDelete.map((s) => s.sessionUuid);
 
-        await transaction
+        transaction
           .delete(schema.adminSessions)
-          .where(inArray(schema.adminSessions.sessionUuid, uuids));
+          .where(inArray(schema.adminSessions.sessionUuid, uuids))
+          .run();
       }
     });
   } finally {

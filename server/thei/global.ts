@@ -13,6 +13,7 @@ import { findProjectByUuid } from './projects/repository/find-by-id';
 import { createProject } from './projects/repository/create';
 import { updateProject } from './projects/repository/update';
 import { deleteProject } from './projects/repository/delete';
+import { listProjects } from './projects/repository/list';
 import { countEvents } from './events/repository/count';
 import { getPublicAdminSessions } from './admin-session/repository/public';
 import { getCurrentAdminSession } from './admin-session';
@@ -25,6 +26,7 @@ import { attachAssetUsage } from './assets/repository/usages/attach';
 import { detachAssetUsage } from './assets/repository/usages/detach';
 import { findAssetsByContainer } from './assets/repository/usages/find-by-container';
 import { findAssetUsage } from './assets/repository/usages/find-one';
+import { findAssetsByContainerTypeAndRole } from './assets/repository/usages/find-by-container-type-and-role';
 import { deleteAsset } from './assets/repository/delete';
 import { processAsset } from './assets/process';
 import { assetFilePath } from './assets/file-path';
@@ -70,6 +72,7 @@ export const THEI_SERVER = {
     create: createProject,
     update: updateProject,
     delete: deleteProject,
+    list: listProjects,
   },
   events: {
     count: countEvents,
@@ -91,6 +94,7 @@ export const THEI_SERVER = {
       detach: detachAssetUsage,
       findByContainer: findAssetsByContainer,
       findOne: findAssetUsage,
+      findByContainerTypeAndRole: findAssetsByContainerTypeAndRole,
     },
   },
 };

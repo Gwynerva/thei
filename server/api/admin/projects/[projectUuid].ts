@@ -8,12 +8,16 @@ import type {
 } from '#layers/thei/shared/api/project';
 
 export default defineEventHandler(async (event) => {
-  const projectUuid = getRouterParam(event, 'projectUuid')!;
-  const project = await THEI_SERVER.projects.findByUuid(projectUuid);
+  const identifier = getRouterParam(event, 'projectUuid')!;
+  const project =
+    (await THEI_SERVER.projects.findByUuid(identifier)) ??
+    (await THEI_SERVER.projects.findBySlug(identifier));
 
   if (!project) {
     throw createError({ statusCode: 404, message: 'Project not found' });
   }
+
+  const projectUuid = project.projectUuid;
 
   switch (event.method) {
     case 'GET': {
@@ -24,6 +28,7 @@ export default defineEventHandler(async (event) => {
       const iconUsage = usages.find((u) => u.role === 'icon');
 
       return {
+        projectUuid: project.projectUuid,
         title: project.title,
         summary: project.summary,
         slug: project.slug,

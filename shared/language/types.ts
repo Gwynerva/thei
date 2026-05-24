@@ -96,11 +96,14 @@ export type LanguagePhrases = {
   show_x_destroyed_sessions: (count: number) => string;
   session_details: string;
   created_at: string;
+  updated_at: string;
   last_active_at: string;
   online: string;
   this_is_you: string;
   failed_to_fetch_data: string;
   admin_panel: string;
+  admin_projects: string;
+  admin_projects_description: string;
   to_admin_panel: string;
   to_website: string;
   project: string;
@@ -150,4 +153,5 @@ export type LanguagePhrases = {
   project_icon_hint: string;
   delete_project: string;
   delete_project_confirm: string;
+  size: string;
 };

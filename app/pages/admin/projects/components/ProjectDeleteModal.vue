@@ -21,6 +21,7 @@ async function handleDelete() {
   try {
     const url = `/api/admin/projects/${projectUuid}/`;
     await requestFetch(url, { method: 'DELETE' });
+    await refreshNuxtData('admin-bar');
     await navigateTo('/admin/projects/');
   } finally {
     deleting.value = false;

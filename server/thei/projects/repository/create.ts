@@ -12,5 +12,8 @@ export interface CreateProjectData {
 
 export async function createProject(data: CreateProjectData) {
   const { db, schema } = THEI_SERVER.useDb();
-  await db.insert(schema.projects).values(data);
+  const now = Date.now();
+  await db
+    .insert(schema.projects)
+    .values({ ...data, createdAt: now, updatedAt: now });
 }

@@ -5,6 +5,7 @@ export type ProjectSlugCheckResponse = {
 };
 
 export type ProjectGetResponse = {
+  projectUuid: string;
   title: string;
   summary: string;
   slug: string;
@@ -18,3 +19,14 @@ export type ProjectGetResponse = {
 export type ProjectSaveResponse =
   | { type: 'success'; projectUuid: string }
   | { type: 'error'; message: string };
+
+export type ProjectListItem = {
+  projectUuid: string;
+  title: string;
+  summary: string;
+  slug: string;
+  iconPreviewUrl?: string;
+  createdAt: number;
+  updatedAt: number;
+  totalSize: number;
+};

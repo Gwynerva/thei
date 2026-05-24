@@ -17,6 +17,6 @@ export async function updateProject(
   const { db, schema } = THEI_SERVER.useDb();
   await db
     .update(schema.projects)
-    .set(data)
+    .set({ ...data, updatedAt: Date.now() })
     .where(eq(schema.projects.projectUuid, projectUuid));
 }

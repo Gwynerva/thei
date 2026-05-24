@@ -9,4 +9,6 @@ export const projects = sqliteTable('projects', {
   slug: text().notNull().unique(),
   important: integer({ mode: 'boolean' }).notNull().default(false),
   cv: integer({ mode: 'boolean' }).notNull().default(false),
+  createdAt: integer().notNull(),
+  updatedAt: integer().notNull(),
 });

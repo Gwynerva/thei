@@ -164,11 +164,14 @@ export default defineI18nBase({
       `Show ${plural(count, 'terminated session', 'terminated sessions')}`,
     session_details: 'Session Details',
     created_at: 'Created',
+    updated_at: 'Updated',
     last_active_at: 'Last Active',
     online: 'Online',
     this_is_you: 'This is you',
     failed_to_fetch_data: 'Failed to fetch data!',
     admin_panel: 'Admin Panel',
+    admin_projects: 'Projects',
+    admin_projects_description: 'All projects managed on this site.',
     to_admin_panel: 'To Admin Panel',
     to_website: 'To Website',
     project: 'Project',
@@ -225,5 +228,6 @@ export default defineI18nBase({
     delete_project: 'Delete Project',
     delete_project_confirm:
       'This action is irreversible. Enter the project title to confirm deletion:',
+    size: 'Size',
   },
 });

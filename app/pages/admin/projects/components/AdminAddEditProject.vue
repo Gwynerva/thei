@@ -36,7 +36,9 @@ provide(projectValidationKey, projectValidation);
 
 const iconPreviewUrl = ref<string | undefined>();
 provide(iconPreviewUrlKey, iconPreviewUrl);
-provide(currentProjectUuidKey, projectUuid);
+
+const resolvedProjectUuid = ref<string | undefined>(projectUuid);
+provide(currentProjectUuidKey, resolvedProjectUuid);
 
 const isEdit = computed(() => Boolean(projectUuid));
 const saving = ref(false);
@@ -75,6 +77,12 @@ if (isEdit.value) {
   };
   iconPreviewUrl.value = data.iconPreviewUrl;
   savedSnapshot.value = JSON.stringify(projectData.value);
+  resolvedProjectUuid.value = data.projectUuid;
+  if (projectUuid !== data.projectUuid) {
+    await navigateTo(`/admin/projects/edit/${data.projectUuid}/`, {
+      replace: true,
+    });
+  }
 }
 
 async function handleSave() {
@@ -101,6 +109,8 @@ async function handleSave() {
         headerError.value = result.message;
         return;
       }
+      savedSnapshot.value = JSON.stringify(projectData.value);
+      await refreshNuxtData('admin-bar');
       await navigateTo(`/admin/projects/edit/${result.projectUuid}/`, {
         external: true,
       });
@@ -138,7 +148,7 @@ await useAdminTabTitle(
   <StickyGlassHeader width="var(--width-wide)" :error="headerError">
     <div class="flex items-center justify-between gap-xs py-xs">
       <div class="flex min-w-0 items-center gap-xs text-xl font-bold">
-        <Icon name="plus-circle" />
+        <Icon :name="isEdit ? 'edit' : 'plus-circle'" class="shrink-0" />
         <span class="truncate">
           {{ isEdit ? phrase.edit_project : phrase.new_project }}
         </span>
@@ -173,8 +183,8 @@ await useAdminTabTitle(
     <ProjectAssets />
   </div>
   <ProjectDeleteModal
-    v-if="isEdit && projectUuid"
+    v-if="resolvedProjectUuid"
     ref="deleteModalRef"
-    :project-uuid="projectUuid"
+    :project-uuid="resolvedProjectUuid"
   />
 </template>
