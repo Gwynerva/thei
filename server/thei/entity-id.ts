@@ -22,7 +22,9 @@ export async function generateUnique<T>(
     const value = generate();
     if (await isUnique(value)) return value;
   }
-  throw new Error(`Failed to generate unique value after ${maxAttempts} attempts`);
+  throw new Error(
+    `Failed to generate unique value after ${maxAttempts} attempts`,
+  );
 }
 
 /**
@@ -35,5 +37,9 @@ export function generateUniqueId(
   isUnique: (id: string) => Promise<boolean>,
   maxAttempts = 10,
 ): Promise<string> {
-  return generateUnique(() => `${prefix}-${randomUUID()}`, isUnique, maxAttempts);
+  return generateUnique(
+    () => `${prefix}-${randomUUID()}`,
+    isUnique,
+    maxAttempts,
+  );
 }

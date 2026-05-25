@@ -10,7 +10,11 @@ import {
   AUDIO_EXTENSIONS,
 } from '#layers/thei/shared/asset';
 import { randomId } from '#layers/thei/shared/utils/random-id';
-import { EntityPrefix, generateUnique, generateUniqueId } from '../../../thei/entity-id';
+import {
+  EntityPrefix,
+  generateUnique,
+  generateUniqueId,
+} from '../../../thei/entity-id';
 
 const IMAGE_EXTS = new Set<string>(IMAGE_EXTENSIONS);
 const VIDEO_EXTS = new Set<string>(VIDEO_EXTENSIONS);
