@@ -9,7 +9,7 @@ const { data: adminBarData } = await useFetch('/api/admin/bar', {
 const publicAdmin = await usePublicAdmin();
 
 const route = useRoute();
-const isOnAdminPage = computed(() => route.path.startsWith('/admin'));
+const isOnAdminPage = computed(() => route.path.startsWith('/admin/'));
 
 const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
   if (route.path === '/projects/') {
@@ -86,6 +86,13 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
       />
 
       <AdminBarButton
+        v-if="isOnAdminPage && route.path !== '/admin/'"
+        to="/admin/"
+        icon="thei"
+        :title="phrase.to_admin_panel"
+      />
+
+      <AdminBarButton
         to="/admin/projects"
         icon="project"
         :label="adminBarData.projectCount + ''"
@@ -103,7 +110,11 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
         class="font-semibold"
       />
 
-      <AdminBarButton to="/admin/" :label="publicAdmin.displayName">
+      <AdminBarButton
+        to="/admin/"
+        :label="publicAdmin.displayName"
+        class="shrink-0 sm:shrink-1"
+      >
         <template #icon>
           <Media
             :src="publicAdmin.avatarUrl"

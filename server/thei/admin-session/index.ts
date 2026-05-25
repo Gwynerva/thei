@@ -1,8 +1,8 @@
 import type { H3Event } from 'h3';
 import { getHeader } from 'h3';
-import { randomUUID } from 'node:crypto';
 import { inArray, sql } from 'drizzle-orm';
 import { getRequestIp, getRequestMeta, type RequestMeta } from '../request';
+import { EntityPrefix, generateUniqueId } from '../entity-id';
 import {
   cleanupExpiredTokenAliases,
   clearTokenCookie,
@@ -52,8 +52,14 @@ export async function createAdminSession(event: H3Event) {
   const ip = getRequestIp(event);
   const ua = getHeader(event, 'user-agent');
 
+  const sessionUuid = await generateUniqueId(
+    EntityPrefix.Session,
+    async (id) =>
+      !Array.from(memorySessions.values()).some((s) => s.sessionUuid === id),
+  );
+
   const session: AdminSessionData = {
-    sessionUuid: randomUUID(),
+    sessionUuid,
     state: 'active',
     createdAt: now,
     lastUsedAt: now,

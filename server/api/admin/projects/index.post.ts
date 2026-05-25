@@ -1,9 +1,9 @@
-import { randomUUID } from 'node:crypto';
 import {
   validateProjectData,
   type ProjectEditData,
 } from '#layers/thei/shared/admin/project';
 import type { ProjectSaveResponse } from '#layers/thei/shared/api/project';
+import { EntityPrefix, generateUniqueId } from '../../../thei/entity-id';
 
 export default defineEventHandler(
   async (event): Promise<ProjectSaveResponse> => {
@@ -14,7 +14,10 @@ export default defineEventHandler(
     const existing = await THEI_SERVER.projects.findBySlug(result.slug);
     if (existing) return { type: 'error', message: 'Slug is already taken' };
 
-    const projectUuid = randomUUID();
+    const projectUuid = await generateUniqueId(
+      EntityPrefix.Project,
+      async (id) => !(await THEI_SERVER.projects.findByUuid(id)),
+    );
 
     await THEI_SERVER.projects.create({
       projectUuid,

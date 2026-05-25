@@ -7,6 +7,6 @@
  * of entries, which degrades filesystem performance at scale.
  */
 export function assetFilePath(assetUuid: string, extension: string): string {
-  const shard = assetUuid.slice(0, 2);
+  const shard = assetUuid.slice(2, 4);
   return THEI_SERVER.contentPath('assets', shard, `${assetUuid}.${extension}`);
 }

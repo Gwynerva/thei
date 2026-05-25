@@ -21,6 +21,7 @@ import { createAsset } from './assets/repository/create';
 import { touchAsset } from './assets/repository/touch';
 import { findAssetByHash } from './assets/repository/find-by-hash';
 import { findAssetBySlug } from './assets/repository/find-by-slug';
+import { findAssetByUuid } from './assets/repository/find-by-uuid';
 import { findOrphanedAssets } from './assets/repository/find-orphaned';
 import { attachAssetUsage } from './assets/repository/usages/attach';
 import { detachAssetUsage } from './assets/repository/usages/detach';
@@ -83,6 +84,7 @@ export const THEI_SERVER = {
   assets: {
     filePath: assetFilePath,
     create: createAsset,
+    findByUuid: findAssetByUuid,
     findByHash: findAssetByHash,
     findBySlug: findAssetBySlug,
     touch: touchAsset,

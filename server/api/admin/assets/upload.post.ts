@@ -1,6 +1,5 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { randomUUID } from 'node:crypto';
 import type { AssetUploadResponse } from '#layers/thei/shared/api/asset';
 import { ASSET_PROFILES } from '#layers/thei/shared/asset-profiles';
 import type { AssetProfileId } from '#layers/thei/shared/asset-profiles';
@@ -11,6 +10,7 @@ import {
   AUDIO_EXTENSIONS,
 } from '#layers/thei/shared/asset';
 import { randomId } from '#layers/thei/shared/utils/random-id';
+import { EntityPrefix, generateUnique, generateUniqueId } from '../../../thei/entity-id';
 
 const IMAGE_EXTS = new Set<string>(IMAGE_EXTENSIONS);
 const VIDEO_EXTS = new Set<string>(VIDEO_EXTENSIONS);
@@ -87,20 +87,14 @@ export default defineEventHandler(
       originalExt,
     );
 
-    const assetUuid = randomUUID();
-    let slug: string | undefined;
-    for (let attempt = 0; attempt < 10; attempt++) {
-      const candidate = randomId(32);
-      if (!(await THEI_SERVER.assets.findBySlug(candidate))) {
-        slug = candidate;
-        break;
-      }
-    }
-    if (!slug)
-      throw createError({
-        statusCode: 500,
-        message: 'Failed to generate unique asset slug',
-      });
+    const assetUuid = await generateUniqueId(
+      EntityPrefix.Asset,
+      async (id) => !(await THEI_SERVER.assets.findByUuid(id)),
+    );
+    const slug = await generateUnique(
+      () => randomId(32),
+      async (candidate) => !(await THEI_SERVER.assets.findBySlug(candidate)),
+    );
     const filePath = THEI_SERVER.assets.filePath(assetUuid, extension);
     await mkdir(dirname(filePath), { recursive: true });
     await writeFile(filePath, buffer);

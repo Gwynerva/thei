@@ -113,8 +113,8 @@ onUnmounted(() => {
               <td class="max-w-0">
                 <TheiLink
                   :to="`/admin/projects/edit/${project.projectUuid}/`"
-                  class="flex min-w-0 items-center gap-sm py-sm pl-sm transition
-                    hocus:opacity-75"
+                  class="group flex min-w-0 items-center gap-sm py-sm pl-sm
+                    transition"
                 >
                   <img
                     :src="project.iconPreviewUrl ?? '/avatar-fallback.webp'"
@@ -122,7 +122,12 @@ onUnmounted(() => {
                     alt=""
                   />
                   <div class="min-w-0">
-                    <p class="truncate font-semibold">{{ project.title }}</p>
+                    <p
+                      class="truncate font-semibold transition
+                        group-hocus:text-accent"
+                    >
+                      {{ project.title }}
+                    </p>
                     <p class="truncate text-sm text-text-2 max-sm:hidden">
                       {{ project.summary }}
                     </p>
