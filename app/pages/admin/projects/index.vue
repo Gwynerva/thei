@@ -92,11 +92,8 @@ onUnmounted(() => {
               </th>
               <th
                 scope="col"
-                class="min-w-42 p-td-tight text-left max-sm:hidden"
+                class="min-w-36 p-td-tight text-left max-sm:hidden"
               >
-                {{ phrase.created_at }}
-              </th>
-              <th scope="col" class="min-w-42 p-td-tight text-left">
                 {{ phrase.updated_at }}
               </th>
               <th scope="col" class="p-td-tight text-left">
@@ -111,42 +108,87 @@ onUnmounted(() => {
               :key="project.projectUuid"
               class="tr-normal"
             >
-              <td class="max-w-0">
-                <TheiLink
-                  :to="`/admin/projects/edit/${project.projectUuid}/`"
-                  class="group flex min-w-0 items-center gap-sm py-sm pl-sm
-                    transition"
-                >
-                  <img
-                    v-if="project.iconPreviewUrl"
-                    :src="project.iconPreviewUrl"
-                    class="size-8 shrink-0 rounded-sm object-cover"
-                    alt=""
-                  />
-                  <TintedIcon
-                    v-else
-                    :svg="projectSvg"
-                    :seed="project.projectUuid"
-                    class="size-8 shrink-0 rounded-sm"
-                  />
-                  <div class="min-w-0">
-                    <p
-                      class="truncate font-semibold transition
-                        group-hocus:text-accent"
-                    >
-                      {{ project.title }}
-                    </p>
-                    <p class="truncate text-sm text-text-2 max-sm:hidden">
-                      {{ project.summary }}
-                    </p>
+              <td class="max-w-0 min-w-70">
+                <div class="flex min-w-0 items-center justify-between gap-sm">
+                  <TheiLink
+                    :to="`/admin/projects/edit/${project.projectUuid}/`"
+                    class="group flex min-w-0 items-center gap-sm py-sm pl-sm
+                      transition"
+                  >
+                    <img
+                      v-if="project.iconPreviewUrl"
+                      :src="project.iconPreviewUrl"
+                      class="size-8 shrink-0 rounded-sm object-cover"
+                      alt=""
+                    />
+                    <TintedIcon
+                      v-else
+                      :svg="projectSvg"
+                      :seed="project.projectUuid"
+                      class="size-8 shrink-0 rounded-sm"
+                    />
+                    <div class="min-w-0">
+                      <p
+                        class="font-semibold wrap-break-word transition
+                          group-hocus:text-accent"
+                      >
+                        {{ project.title }}
+                      </p>
+                      <p
+                        class="text-sm wrap-break-word text-text-2
+                          max-sm:hidden"
+                      >
+                        {{ project.summary }}
+                      </p>
+                    </div>
+                  </TheiLink>
+                  <div
+                    class="flex shrink-0 items-center gap-xs pr-sm text-base"
+                  >
+                    <Icon
+                      v-if="project.important"
+                      name="star"
+                      :data-title-popup="phrase.important_project_label"
+                      class="cursor-help text-text-3 transition
+                        hocus:text-text-1"
+                    />
+                    <Icon
+                      v-if="project.cv"
+                      name="case-important"
+                      :data-title-popup="phrase.cv_project_label"
+                      class="cursor-help text-text-3 transition
+                        hocus:text-text-1"
+                    />
+                    <Icon
+                      :name="
+                        project.access === 'public'
+                          ? 'lock-open'
+                          : project.access === 'link-only'
+                            ? 'lock-partial'
+                            : 'lock-close'
+                      "
+                      :data-title-popup="
+                        project.access === 'public'
+                          ? phrase.public_hint
+                          : project.access === 'link-only'
+                            ? phrase.link_only_hint
+                            : phrase.private_hint
+                      "
+                      class="cursor-help text-text-3 transition
+                        hocus:text-text-1"
+                    />
                   </div>
-                </TheiLink>
+                </div>
               </td>
               <td class="p-td text-text-2 max-sm:hidden">
-                <TheiTime :datetime="project.createdAt" />
-              </td>
-              <td class="p-td text-text-2">
-                <TheiTime :datetime="project.updatedAt" />
+                <TheiTime :datetime="project.updatedAt" class="text-sm" />
+                <div
+                  v-if="project.createdAt !== project.updatedAt"
+                  class="mt-0.5 block text-xs text-text-3"
+                >
+                  <Icon name="plus-circle" class="mr-1" />
+                  <TheiTime :datetime="project.createdAt" class="" />
+                </div>
               </td>
               <td class="p-td whitespace-nowrap text-text-2">
                 {{ humanSize(project.totalSize) }}

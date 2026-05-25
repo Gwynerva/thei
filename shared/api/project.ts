@@ -26,6 +26,9 @@ export type ProjectListItem = {
   title: string;
   summary: string;
   slug: string;
+  access: ProjectEventAccessLevel;
+  important: boolean;
+  cv: boolean;
   iconPreviewUrl?: string;
   iconDominantHue?: number;
   createdAt: number;

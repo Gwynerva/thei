@@ -10,20 +10,31 @@ export default defineEventHandler(async (event): Promise<ProjectListItem[]> => {
   const projects = await THEI_SERVER.projects.list(offset, LIMIT);
 
   const { db, schema } = THEI_SERVER.useDb();
+
+  // Subquery: deduplicate assets per project (same asset may appear with different roles)
+  const distinctAssets = db
+    .selectDistinct({
+      containerId: schema.assetUsages.containerId,
+      assetUuid: schema.assets.assetUuid,
+      size: schema.assets.size,
+    })
+    .from(schema.assets)
+    .innerJoin(
+      schema.assetUsages,
+      eq(schema.assets.assetUuid, schema.assetUsages.assetUuid),
+    )
+    .where(eq(schema.assetUsages.containerType, 'project'))
+    .as('distinct_assets');
+
   const [iconUsages, sizeRows] = await Promise.all([
     THEI_SERVER.assets.usages.findByContainerTypeAndRole('project', 'icon'),
     db
       .select({
-        containerId: schema.assetUsages.containerId,
-        totalSize: sum(schema.assets.size),
+        containerId: distinctAssets.containerId,
+        totalSize: sum(distinctAssets.size),
       })
-      .from(schema.assets)
-      .innerJoin(
-        schema.assetUsages,
-        eq(schema.assets.assetUuid, schema.assetUsages.assetUuid),
-      )
-      .where(eq(schema.assetUsages.containerType, 'project'))
-      .groupBy(schema.assetUsages.containerId),
+      .from(distinctAssets)
+      .groupBy(distinctAssets.containerId),
   ]);
 
   const iconUrlByProjectUuid = new Map(
@@ -44,6 +55,9 @@ export default defineEventHandler(async (event): Promise<ProjectListItem[]> => {
       title: project.title,
       summary: project.summary,
       slug: project.slug,
+      access: project.access,
+      important: project.important,
+      cv: project.cv,
       iconPreviewUrl: iconAsset
         ? `/api/admin/assets/preview/${iconAsset.slug}.${iconAsset.extension}/`
         : undefined,

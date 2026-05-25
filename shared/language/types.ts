@@ -145,8 +145,10 @@ export type LanguagePhrases = {
   saved: string;
   important_project: string;
   important_project_hint: string;
+  important_project_label: string;
   cv_project: string;
   cv_project_hint: string;
+  cv_project_label: string;
   project_files: string;
   project_files_description: string;
   project_icon: string;

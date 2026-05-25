@@ -221,9 +221,11 @@ export default defineI18nModule({
     important_project: 'Важный проект?',
     important_project_hint:
       'Проект запомнился надолго и/или сильно повлиял на вашу жизнь.',
+    important_project_label: 'Важный проект',
     cv_project: 'Часть резюме?',
     cv_project_hint:
       'Потенциальному работодателю будет интересно увидеть этот проект.',
+    cv_project_label: 'Резюме',
     project_files: 'Файлы проекта',
     project_files_description: 'Иконка, баннер, витрина и остальные файлы...',
     project_icon: 'Иконка проекта',

@@ -218,9 +218,11 @@ export default defineI18nBase({
     important_project: 'Important Project?',
     important_project_hint:
       'This project stayed with you for a long time and/or strongly influenced your life.',
+    important_project_label: 'Important project',
     cv_project: 'In Your CV?',
     cv_project_hint:
       'A potential employer would be interested to see this project.',
+    cv_project_label: 'CV',
     project_files: 'Project Files',
     project_files_description: 'Icon, banner, showcase, and other files...',
     project_icon: 'Project Icon',

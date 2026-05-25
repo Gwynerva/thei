@@ -121,7 +121,7 @@ async function destroySession(sessionUuid: string) {
             <td class="p-td">
               {{ sessionDetails(structuredSessions.current) }}
             </td>
-            <td class="p-td text-text-2 max-sm:hidden">
+            <td class="p-td text-sm text-text-2 max-sm:hidden">
               <TheiTime :datetime="structuredSessions.current.createdAt" />
             </td>
             <td class="p-td font-semibold text-accent">
@@ -151,13 +151,14 @@ async function destroySession(sessionUuid: string) {
               <td class="p-td">
                 {{ sessionDetails(session) }}
               </td>
-              <td class="p-td text-text-2 max-sm:hidden">
+              <td class="p-td text-sm text-text-2 max-sm:hidden">
                 <TheiTime :datetime="session.createdAt" />
               </td>
               <td class="p-td font-semibold text-text-2">
                 <TheiTime
                   v-if="liveNow - session.lastUsedAt > 60 * 1000"
                   :datetime="session.lastUsedAt"
+                  class="text-sm"
                 />
                 <span v-else class="text-accent">{{ phrase.online }}</span>
               </td>
@@ -203,10 +204,10 @@ async function destroySession(sessionUuid: string) {
                 <td class="p-td text-text-2">
                   {{ sessionDetails(session) }}
                 </td>
-                <td class="p-td text-text-2 max-sm:hidden">
+                <td class="p-td text-sm text-text-2 max-sm:hidden">
                   <TheiTime :datetime="session.createdAt" />
                 </td>
-                <td class="p-td font-semibold text-text-2">
+                <td class="p-td text-sm font-semibold text-text-2">
                   <TheiTime :datetime="session.lastUsedAt" />
                 </td>
                 <td></td>
