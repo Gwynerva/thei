@@ -232,5 +232,6 @@ export default defineI18nModule({
     delete_project_confirm:
       'Это действие необратимо. Введите название проекта, чтобы подтвердить удаление:',
     size: 'Размер',
+    just_now: 'Сейчас',
   },
 });

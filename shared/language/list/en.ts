@@ -229,5 +229,6 @@ export default defineI18nBase({
     delete_project_confirm:
       'This action is irreversible. Enter the project title to confirm deletion:',
     size: 'Size',
+    just_now: 'Just now',
   },
 });
