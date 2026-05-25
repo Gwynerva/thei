@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { ProjectListItem } from '#layers/thei/shared/api/project';
+import projectSvg from '~/assets/fallback/project.svg?raw';
 
 definePageMeta({ layout: 'admin' });
 
@@ -117,9 +118,16 @@ onUnmounted(() => {
                     transition"
                 >
                   <img
-                    :src="project.iconPreviewUrl ?? '/avatar-fallback.webp'"
+                    v-if="project.iconPreviewUrl"
+                    :src="project.iconPreviewUrl"
                     class="size-8 shrink-0 rounded-sm object-cover"
                     alt=""
+                  />
+                  <TintedIcon
+                    v-else
+                    :svg="projectSvg"
+                    :seed="project.projectUuid"
+                    class="size-8 shrink-0 rounded-sm"
                   />
                   <div class="min-w-0">
                     <p

@@ -14,6 +14,7 @@ export type ProjectGetResponse = {
   cv: boolean;
   iconAssetUuid?: string;
   iconPreviewUrl?: string;
+  iconDominantHue?: number;
 };
 
 export type ProjectSaveResponse =
@@ -26,6 +27,7 @@ export type ProjectListItem = {
   summary: string;
   slug: string;
   iconPreviewUrl?: string;
+  iconDominantHue?: number;
   createdAt: number;
   updatedAt: number;
   totalSize: number;

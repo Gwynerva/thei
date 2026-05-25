@@ -1,4 +1,5 @@
 import type { AssetType } from '#layers/thei/shared/asset';
+import type { AssetMeta } from '../../db/schema/assets';
 
 export interface CreateAssetData {
   assetUuid: string;
@@ -8,6 +9,7 @@ export interface CreateAssetData {
   rawHash: string;
   type: AssetType;
   size: number;
+  meta?: AssetMeta | null;
 }
 
 export async function createAsset(data: CreateAssetData) {

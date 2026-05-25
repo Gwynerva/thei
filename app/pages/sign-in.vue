@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import userSvg from '~/assets/fallback/user.svg?raw';
 if (useIsAdmin().value) {
   await navigateTo('/admin/');
 }
@@ -90,11 +91,22 @@ watch(cooldown, (newCooldown) => {
           bg-bg-2 p-md shadow-lg shadow-shadow-1 sm:min-h-auto sm:min-w-auto"
       >
         <div class="flex items-center justify-around">
-          <Media
-            :src="publicAdmin.avatarUrl"
-            class="size-[64px] rounded-full ring-2 ring-accent ring-offset-2
-              ring-offset-bg-2"
-          />
+          <div
+            class="size-[64px] overflow-clip rounded-full ring-2 ring-border-3
+              ring-offset-2 ring-offset-bg-2"
+          >
+            <Media
+              v-if="publicAdmin.avatarUrl"
+              :src="publicAdmin.avatarUrl"
+              class="size-full"
+            />
+            <TintedIcon
+              v-else
+              :svg="userSvg"
+              :seed="publicAdmin.displayName"
+              class="size-full"
+            />
+          </div>
         </div>
         <div class="text-center">
           <div class="text-2xl font-bold">

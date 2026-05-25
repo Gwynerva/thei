@@ -27,10 +27,7 @@ export default defineEventHandler(async (event): Promise<ProjectListItem[]> => {
   ]);
 
   const iconUrlByProjectUuid = new Map(
-    iconUsages.map(({ containerId, asset }) => [
-      containerId,
-      `/api/admin/assets/preview/${asset.slug}.${asset.extension}/`,
-    ]),
+    iconUsages.map(({ containerId, asset }) => [containerId, asset]),
   );
 
   const sizeByProjectUuid = new Map(
@@ -40,14 +37,20 @@ export default defineEventHandler(async (event): Promise<ProjectListItem[]> => {
     ]),
   );
 
-  return projects.map((project) => ({
-    projectUuid: project.projectUuid,
-    title: project.title,
-    summary: project.summary,
-    slug: project.slug,
-    iconPreviewUrl: iconUrlByProjectUuid.get(project.projectUuid),
-    createdAt: project.createdAt,
-    updatedAt: project.updatedAt,
-    totalSize: sizeByProjectUuid.get(project.projectUuid) ?? 0,
-  }));
+  return projects.map((project) => {
+    const iconAsset = iconUrlByProjectUuid.get(project.projectUuid);
+    return {
+      projectUuid: project.projectUuid,
+      title: project.title,
+      summary: project.summary,
+      slug: project.slug,
+      iconPreviewUrl: iconAsset
+        ? `/api/admin/assets/preview/${iconAsset.slug}.${iconAsset.extension}/`
+        : undefined,
+      iconDominantHue: iconAsset?.meta?.dominantHue,
+      createdAt: project.createdAt,
+      updatedAt: project.updatedAt,
+      totalSize: sizeByProjectUuid.get(project.projectUuid) ?? 0,
+    };
+  });
 });

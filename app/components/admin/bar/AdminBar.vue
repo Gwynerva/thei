@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { AdminBarButtonProps } from './AdminBarButton.vue';
+import userSvg from '~/assets/fallback/user.svg?raw';
 
 const isAdmin = useIsAdmin();
 const { data: adminBarData } = await useFetch('/api/admin/bar', {
@@ -116,11 +117,19 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
         class="shrink-0 sm:shrink-1"
       >
         <template #icon>
-          <Media
-            :src="publicAdmin.avatarUrl"
-            class="border-gray-100 dark:border-gray-600 size-6 rounded-full
-              border"
-          />
+          <div class="size-6 overflow-clip rounded-full border border-border-3">
+            <Media
+              v-if="publicAdmin.avatarUrl"
+              :src="publicAdmin.avatarUrl"
+              class="size-full"
+            />
+            <TintedIcon
+              v-else
+              :svg="userSvg"
+              :seed="publicAdmin.displayName"
+              class="size-full"
+            />
+          </div>
         </template>
       </AdminBarButton>
 

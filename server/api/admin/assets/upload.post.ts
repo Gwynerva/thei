@@ -15,6 +15,7 @@ import {
   generateUnique,
   generateUniqueId,
 } from '../../../thei/entity-id';
+import { extractDominantHue } from '../../../thei/assets/image-color';
 
 const IMAGE_EXTS = new Set<string>(IMAGE_EXTENSIONS);
 const VIDEO_EXTS = new Set<string>(VIDEO_EXTENSIONS);
@@ -91,6 +92,9 @@ export default defineEventHandler(
       originalExt,
     );
 
+    const dominantHue = await extractDominantHue(buffer, extension);
+    const meta = dominantHue !== undefined ? { dominantHue } : null;
+
     const assetUuid = await generateUniqueId(
       EntityPrefix.Asset,
       async (id) => !(await THEI_SERVER.assets.findByUuid(id)),
@@ -112,6 +116,7 @@ export default defineEventHandler(
         rawHash,
         type: inferAssetType(extension),
         size: buffer.length,
+        meta,
       });
     } catch {
       await rm(filePath, { force: true }).catch(() => {});

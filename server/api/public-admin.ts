@@ -3,7 +3,7 @@ import { SiteAccessLevel } from '#layers/thei/shared/access-level';
 interface PublicAdmin {
   siteAccessLevel: SiteAccessLevel;
   displayName: string;
-  avatarUrl: string;
+  avatarUrl: string | null;
 }
 
 export default defineEventHandler(async (event): Promise<PublicAdmin> => {
@@ -16,13 +16,13 @@ export default defineEventHandler(async (event): Promise<PublicAdmin> => {
     return {
       siteAccessLevel: SiteAccessLevel.Private,
       displayName: THEI_SERVER.phrase.administrator,
-      avatarUrl: '/avatar-fallback.webp',
+      avatarUrl: null,
     };
   }
 
   return {
     siteAccessLevel: THEI_SERVER.config.siteAccessLevel,
     displayName: THEI_SERVER.config.displayName,
-    avatarUrl: '/avatar-fallback.webp',
+    avatarUrl: null,
   };
 });

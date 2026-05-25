@@ -39,6 +39,7 @@ export default defineEventHandler(async (event) => {
         iconPreviewUrl: iconUsage
           ? `/api/admin/assets/preview/${iconUsage.asset.slug}.${iconUsage.asset.extension}/`
           : undefined,
+        iconDominantHue: iconUsage?.asset.meta?.dominantHue,
       } satisfies ProjectGetResponse;
     }
 
