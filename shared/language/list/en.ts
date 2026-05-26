@@ -191,6 +191,7 @@ export default defineI18nBase({
     project_summary_hint:
       'What is the project about? Describe it in one or a few sentences. The shorter, the better.',
     edit_event: 'Edit Event',
+    edit: 'Edit',
     drafts: 'Drafts',
     save: 'Save',
     delete: 'Delete',
@@ -227,6 +228,8 @@ export default defineI18nBase({
     project_files_description: 'Icon, banner, showcase, and other files...',
     project_icon: 'Project Icon',
     project_icon_hint: 'Bright and memorable.',
+    project_banner: 'Project Banner',
+    project_banner_hint: 'Wide image for the project page.',
     delete_project: 'Delete Project',
     delete_project_confirm:
       'This action is irreversible. Enter the project title to confirm deletion:',

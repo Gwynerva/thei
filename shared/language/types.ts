@@ -121,6 +121,7 @@ export type LanguagePhrases = {
   project_summary: string;
   project_summary_hint: string;
   edit_event: string;
+  edit: string;
   drafts: string;
   save: string;
   delete: string;
@@ -153,6 +154,8 @@ export type LanguagePhrases = {
   project_files_description: string;
   project_icon: string;
   project_icon_hint: string;
+  project_banner: string;
+  project_banner_hint: string;
   delete_project: string;
   delete_project_confirm: string;
   size: string;

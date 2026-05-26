@@ -109,11 +109,11 @@ onUnmounted(() => {
               class="tr-normal"
             >
               <td class="max-w-0 min-w-70">
-                <div class="flex min-w-0 items-center justify-between gap-sm">
+                <div class="flex min-w-0 items-center gap-sm">
                   <TheiLink
                     :to="`/admin/projects/edit/${project.projectUuid}/`"
-                    class="group flex min-w-0 items-center gap-sm py-sm pl-sm
-                      transition"
+                    class="group flex min-w-0 flex-1 items-center gap-sm py-sm
+                      pl-sm transition"
                   >
                     <img
                       v-if="project.iconPreviewUrl"
@@ -186,11 +186,15 @@ onUnmounted(() => {
                   v-if="project.createdAt !== project.updatedAt"
                   class="mt-0.5 block text-xs text-text-3"
                 >
-                  <Icon name="plus-circle" class="mr-1" />
+                  <Icon
+                    name="plus-circle"
+                    class="mr-1 cursor-help"
+                    :data-title-popup="phrase.created_at"
+                  />
                   <TheiTime :datetime="project.createdAt" class="" />
                 </div>
               </td>
-              <td class="p-td whitespace-nowrap text-text-2">
+              <td class="p-td text-sm whitespace-nowrap text-text-2">
                 {{ humanSize(project.totalSize) }}
               </td>
               <td class="p-td pr-sm text-center">

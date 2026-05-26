@@ -17,4 +17,5 @@ useHead({
     <NuxtPage></NuxtPage>
   </NuxtLayout>
   <TitlePopup />
+  <Modal />
 </template>

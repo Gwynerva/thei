@@ -19,6 +19,7 @@ export default defineEventHandler(
       assetUuid: existing.assetUuid,
       slug: existing.slug,
       extension: existing.extension,
+      meta: existing.meta ?? null,
     };
   },
 );

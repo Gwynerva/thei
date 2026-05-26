@@ -4,12 +4,9 @@ import {
   integer,
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
-import type { AssetType } from '#layers/thei/shared/asset';
+import type { AssetType, AssetMeta } from '#layers/thei/shared/asset';
 
-export interface AssetMeta {
-  /** OKLCH hue (0–359) of the dominant color, extracted at upload time. Only set for raster images. */
-  dominantHue?: number;
-}
+export type { AssetMeta };
 
 export const assets = sqliteTable(
   'assets',

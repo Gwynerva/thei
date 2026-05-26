@@ -38,6 +38,15 @@ export default defineEventHandler(
       );
     }
 
+    if (result.bannerAssetUuid) {
+      await THEI_SERVER.assets.usages.attach(
+        result.bannerAssetUuid,
+        'project',
+        projectUuid,
+        'banner',
+      );
+    }
+
     return { type: 'success', projectUuid };
   },
 );

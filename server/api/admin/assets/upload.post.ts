@@ -9,6 +9,7 @@ import {
   VIDEO_EXTENSIONS,
   AUDIO_EXTENSIONS,
 } from '#layers/thei/shared/asset';
+import type { AssetMeta } from '#layers/thei/shared/asset';
 import { randomId } from '#layers/thei/shared/utils/random-id';
 import {
   EntityPrefix,
@@ -83,17 +84,25 @@ export default defineEventHandler(
         assetUuid: existing.assetUuid,
         slug: existing.slug,
         extension: existing.extension,
+        meta: existing.meta ?? null,
       };
     }
 
-    const { buffer, extension } = await THEI_SERVER.assets.process(
-      filePart.data,
-      profile,
-      originalExt,
-    );
+    const { buffer, extension, width, height } =
+      await THEI_SERVER.assets.process(filePart.data, profile, originalExt);
 
+    const assetType = inferAssetType(extension);
     const dominantHue = await extractDominantHue(buffer, extension);
-    const meta = dominantHue !== undefined ? { dominantHue } : null;
+    const meta: AssetMeta | null =
+      assetType === AssetType.Image &&
+      width !== undefined &&
+      height !== undefined
+        ? {
+            width,
+            height,
+            ...(dominantHue !== undefined ? { dominantHue } : {}),
+          }
+        : null;
 
     const assetUuid = await generateUniqueId(
       EntityPrefix.Asset,
@@ -123,6 +132,6 @@ export default defineEventHandler(
       throw createError({ statusCode: 500, message: 'Failed to save asset' });
     }
 
-    return { assetUuid, slug, extension };
+    return { assetUuid, slug, extension, meta };
   },
 );

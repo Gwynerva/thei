@@ -21,7 +21,7 @@ const model = defineModel<boolean>();
       <slot></slot>
     </div>
     <div
-      class="rounded-full border-2 border-border-1 transition
+      class="group rounded-full border-2 border-border-1 transition
         hocus:border-border-3"
     >
       <button
@@ -34,8 +34,12 @@ const model = defineModel<boolean>();
         :class="model ? 'bg-accent' : 'bg-bg-1'"
       >
         <span
-          class="absolute top-1 size-4 rounded-full shadow-sm transition-all"
-          :class="model ? 'left-6 bg-white' : 'left-1 bg-border-1'"
+          class="absolute top-1 size-4 rounded-full transition-all"
+          :class="
+            model
+              ? 'left-6 bg-white'
+              : 'left-1 bg-border-1 group-hocus:bg-border-2'
+          "
         />
       </button>
     </div>

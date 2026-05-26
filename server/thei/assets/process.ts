@@ -10,23 +10,37 @@ const SHARP_RASTER_EXTS = new Set([
   'avif',
 ]);
 
-async function stripRasterMetadata(buf: Buffer, ext: string): Promise<Buffer> {
+async function stripRasterMetadata(
+  buf: Buffer,
+  ext: string,
+): Promise<{ buffer: Buffer; width: number; height: number }> {
   const img = sharp(buf);
+  let pipeline: sharp.Sharp;
   switch (ext) {
     case 'jpg':
     case 'jpeg':
-      return img.jpeg().toBuffer();
+      pipeline = img.jpeg();
+      break;
     case 'png':
-      return img.png().toBuffer();
+      pipeline = img.png();
+      break;
     case 'gif':
-      return img.gif().toBuffer();
+      pipeline = img.gif();
+      break;
     case 'webp':
-      return img.webp().toBuffer();
+      pipeline = img.webp();
+      break;
     case 'avif':
-      return img.avif().toBuffer();
+      pipeline = img.avif();
+      break;
     default:
-      return buf;
+      pipeline = img;
+      break;
   }
+  const { data: buffer, info } = await pipeline.toBuffer({
+    resolveWithObject: true,
+  });
+  return { buffer, width: info.width, height: info.height };
 }
 
 // SVG is XML — strip the standardised <metadata> element which editors
@@ -42,16 +56,26 @@ export async function processAsset(
   inputBuffer: Buffer,
   profile: AssetUploadProfile,
   originalExtension: string,
-): Promise<{ buffer: Buffer; extension: string }> {
+): Promise<{
+  buffer: Buffer;
+  extension: string;
+  width?: number;
+  height?: number;
+}> {
   if (!profile.process) {
     // No format conversion — strip metadata where possible by type.
     const ext = originalExtension.toLowerCase();
     if (SHARP_RASTER_EXTS.has(ext)) {
-      const buffer = await stripRasterMetadata(inputBuffer, ext);
-      return { buffer, extension: originalExtension };
+      const { buffer, width, height } = await stripRasterMetadata(
+        inputBuffer,
+        ext,
+      );
+      return { buffer, extension: originalExtension, width, height };
     }
     if (ext === 'svg') {
-      return { buffer: stripSvgMetadata(inputBuffer), extension: 'svg' };
+      const buffer = stripSvgMetadata(inputBuffer);
+      const { width, height } = await sharp(buffer).metadata();
+      return { buffer, extension: 'svg', width, height };
     }
     // Audio, video, and unknown formats: no stripping without additional deps.
     return { buffer: inputBuffer, extension: originalExtension };
@@ -67,10 +91,15 @@ export async function processAsset(
           fit: resize.fit,
         });
       }
-      const buffer = await pipeline
+      const { data: buffer, info } = await pipeline
         .webp({ quality, ...(effort !== undefined && { effort }) })
-        .toBuffer();
-      return { buffer, extension: 'webp' };
+        .toBuffer({ resolveWithObject: true });
+      return {
+        buffer,
+        extension: 'webp',
+        width: info.width,
+        height: info.height,
+      };
     }
     case 'mp4': {
       throw new Error('MP4 processing not yet implemented');

@@ -15,6 +15,8 @@ export type ProjectGetResponse = {
   iconAssetUuid?: string;
   iconPreviewUrl?: string;
   iconDominantHue?: number;
+  bannerAssetUuid?: string;
+  bannerPreviewUrl?: string;
 };
 
 export type ProjectSaveResponse =

@@ -193,6 +193,7 @@ export default defineI18nModule({
     project_summary_hint:
       'О чём проект? Опишите одним или несколькими предложениями. Чем короче, тем лучше.',
     edit_event: 'Изменить событие',
+    edit: 'Изменить',
     drafts: 'Черновики',
     save: 'Сохранить',
     delete: 'Удалить',
@@ -230,6 +231,8 @@ export default defineI18nModule({
     project_files_description: 'Иконка, баннер, витрина и остальные файлы...',
     project_icon: 'Иконка проекта',
     project_icon_hint: 'Яркая и запоминающаяся.',
+    project_banner: 'Баннер проекта',
+    project_banner_hint: 'Широкое изображение для страницы проекта.',
     delete_project: 'Удалить проект',
     delete_project_confirm:
       'Это действие необратимо. Введите название проекта, чтобы подтвердить удаление:',

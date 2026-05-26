@@ -9,6 +9,7 @@ export type ProjectEditData = {
   important: boolean;
   cv: boolean;
   iconAssetUuid?: string;
+  bannerAssetUuid?: string;
 };
 
 export type ProjectEditClientValidation = {

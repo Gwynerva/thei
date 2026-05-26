@@ -11,11 +11,12 @@ import {
   projectDataInjectionKey,
   projectValidationKey,
   iconPreviewUrlKey,
+  bannerPreviewUrlKey,
   currentProjectUuidKey,
 } from '../composables';
 import ProjectMain from './ProjectMain.vue';
 import ProjectAssets from './ProjectAssets.vue';
-import ProjectDeleteModal from './ProjectDeleteModal.vue';
+import ProjectDeletePane from './ProjectDeletePane.vue';
 
 const { projectUuid } = defineProps<{ projectUuid?: string }>();
 
@@ -36,6 +37,9 @@ provide(projectValidationKey, projectValidation);
 
 const iconPreviewUrl = ref<string | undefined>();
 provide(iconPreviewUrlKey, iconPreviewUrl);
+
+const bannerPreviewUrl = ref<string | undefined>();
+provide(bannerPreviewUrlKey, bannerPreviewUrl);
 
 const resolvedProjectUuid = ref<string | undefined>(projectUuid);
 provide(currentProjectUuidKey, resolvedProjectUuid);
@@ -74,8 +78,10 @@ if (isEdit.value) {
     important: data.important,
     cv: data.cv,
     iconAssetUuid: data.iconAssetUuid,
+    bannerAssetUuid: data.bannerAssetUuid,
   };
   iconPreviewUrl.value = data.iconPreviewUrl;
+  bannerPreviewUrl.value = data.bannerPreviewUrl;
   savedSnapshot.value = JSON.stringify(projectData.value);
   resolvedProjectUuid.value = data.projectUuid;
   if (projectUuid !== data.projectUuid) {
@@ -120,7 +126,13 @@ async function handleSave() {
   }
 }
 
-const deleteModalRef = ref<InstanceType<typeof ProjectDeleteModal>>();
+const modal = useModal();
+
+await useAdminTabTitle(
+  computed(() =>
+    isEdit.value ? phrase.value.edit_project : phrase.value.new_project,
+  ),
+);
 
 onMounted(() => {
   window.addEventListener('beforeunload', handleBeforeUnload);
@@ -136,12 +148,6 @@ onBeforeRouteLeave(() => {
     return window.confirm(phrase.value.unsaved_changes_confirm);
   }
 });
-
-await useAdminTabTitle(
-  computed(() =>
-    isEdit.value ? phrase.value.edit_project : phrase.value.new_project,
-  ),
-);
 </script>
 
 <template>
@@ -159,7 +165,16 @@ await useAdminTabTitle(
           v-if="isEdit"
           variant="delete"
           :data-title-popup="phrase.delete"
-          @click="deleteModalRef?.open()"
+          @click="
+            modal.open({
+              title: phrase.delete_project,
+              component: ProjectDeletePane,
+              props: {
+                projectUuid: resolvedProjectUuid!,
+                projectTitle: projectData.title,
+              },
+            })
+          "
         >
           <Icon name="delete" class="scale-120" />
         </Button>
@@ -182,9 +197,4 @@ await useAdminTabTitle(
     <ProjectMain />
     <ProjectAssets />
   </div>
-  <ProjectDeleteModal
-    v-if="resolvedProjectUuid"
-    ref="deleteModalRef"
-    :project-uuid="resolvedProjectUuid"
-  />
 </template>

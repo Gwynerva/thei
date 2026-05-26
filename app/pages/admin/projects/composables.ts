@@ -15,6 +15,10 @@ export const iconPreviewUrlKey = Symbol('iconPreviewUrl') as InjectionKey<
   Ref<string | undefined>
 >;
 
+export const bannerPreviewUrlKey = Symbol('bannerPreviewUrl') as InjectionKey<
+  Ref<string | undefined>
+>;
+
 export const currentProjectUuidKey = Symbol(
   'currentProjectUuid',
 ) as InjectionKey<Ref<string | undefined>>;

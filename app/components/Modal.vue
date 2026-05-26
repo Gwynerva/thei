@@ -1,45 +1,98 @@
 <script lang="ts" setup>
-defineProps<{ title: string }>();
-
-const emit = defineEmits<{ close: [] }>();
+const modal = useModal();
+const { isOpen, stack, currentPane } = modal;
 
 const dialogRef = ref<HTMLDialogElement>();
 
-function open() {
-  dialogRef.value?.showModal();
+watch(isOpen, (val) => {
+  if (val) {
+    nextTick(() => dialogRef.value?.showModal());
+  } else {
+    dialogRef.value?.close();
+  }
+});
+
+/** Escape key — prevent native dialog auto-close, route through our stack. */
+function onCancel(e: Event) {
+  e.preventDefault();
+  dismiss();
 }
 
-function close() {
-  dialogRef.value?.close();
+/** Backdrop click — the dialog element itself is the backdrop. */
+function onDialogClick(e: MouseEvent) {
+  if (e.target === dialogRef.value) dismiss();
 }
 
-defineExpose({ open, close });
+function dismiss() {
+  if (stack.value.length > 1) {
+    modal.pop();
+  } else {
+    modal.close();
+  }
+}
 </script>
 
 <template>
-  <dialog
-    ref="dialogRef"
-    class="m-auto w-[min(28rem,calc(100vw-2rem))] rounded-normal border-2
-      border-border-1 bg-bg-2 p-0 shadow-lg shadow-shadow-1 backdrop:bg-bg-1/80
-      backdrop:backdrop-blur-sm"
-    @close="emit('close')"
-  >
-    <div
-      class="flex items-center justify-between border-b border-border-1 px-md
-        py-sm"
+  <Teleport to="body">
+    <dialog
+      ref="dialogRef"
+      class="m-auto w-[min(28rem,calc(100vw-2rem))] rounded-normal border-2
+        border-border-1 bg-bg-2 p-0 shadow-lg shadow-shadow-1
+        backdrop:bg-bg-1/80 backdrop:backdrop-blur-sm"
+      @cancel="onCancel"
+      @click="onDialogClick"
     >
-      <div class="font-semibold tracking-tight">{{ title }}</div>
-      <button
-        class="block cursor-pointer rounded-full p-1 text-text-2 transition
-          hover:bg-bg-3 hover:text-text-1"
-        @click="close"
+      <!-- Header -->
+      <div
+        class="flex items-center gap-sm border-b border-border-1 px-md py-sm"
       >
-        <Icon name="close" class="block size-6" />
-      </button>
-    </div>
+        <!-- Back button (shown when there is a previous pane) -->
+        <button
+          v-if="stack.length > 1"
+          class="shrink-0 cursor-pointer rounded-full p-1 text-text-2 transition
+            hocus:bg-bg-3 hocus:text-text-1"
+          @click="modal.pop()"
+        >
+          <Icon name="chevron-right" class="block size-5 rotate-180" />
+        </button>
 
-    <div class="p-md">
-      <slot />
-    </div>
-  </dialog>
+        <!-- Breadcrumb + current title -->
+        <div class="min-w-0 flex-1">
+          <!-- Previous pane titles -->
+          <div
+            v-if="stack.length > 1"
+            class="flex min-w-0 items-center gap-0.5 truncate text-xs
+              text-text-2"
+          >
+            <template v-for="(pane, i) in stack.slice(0, -1)" :key="i">
+              <span v-if="i > 0" class="shrink-0">›</span>
+              <span class="truncate">{{ pane.title }}</span>
+            </template>
+          </div>
+          <!-- Current title -->
+          <div class="truncate font-semibold tracking-tight">
+            {{ currentPane?.title }}
+          </div>
+        </div>
+
+        <!-- Close button -->
+        <button
+          class="shrink-0 cursor-pointer rounded-full p-1 text-text-2 transition
+            hocus:bg-bg-3 hocus:text-text-1"
+          @click="modal.close()"
+        >
+          <Icon name="close" class="block size-6" />
+        </button>
+      </div>
+
+      <!-- Active pane content -->
+      <div class="p-md">
+        <component
+          :is="currentPane?.component"
+          v-if="currentPane"
+          v-bind="currentPane.props"
+        />
+      </div>
+    </dialog>
+  </Teleport>
 </template>

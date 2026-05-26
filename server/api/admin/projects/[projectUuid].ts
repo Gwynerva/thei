@@ -26,6 +26,7 @@ export default defineEventHandler(async (event) => {
         projectUuid,
       );
       const iconUsage = usages.find((u) => u.role === 'icon');
+      const bannerUsage = usages.find((u) => u.role === 'banner');
 
       return {
         projectUuid: project.projectUuid,
@@ -37,9 +38,13 @@ export default defineEventHandler(async (event) => {
         cv: project.cv,
         iconAssetUuid: iconUsage?.asset.assetUuid,
         iconPreviewUrl: iconUsage
-          ? `/api/admin/assets/preview/${iconUsage.asset.slug}.${iconUsage.asset.extension}/`
+          ? `/api/admin/assets/preview/${iconUsage.asset.slug}.${iconUsage.asset.extension}`
           : undefined,
         iconDominantHue: iconUsage?.asset.meta?.dominantHue,
+        bannerAssetUuid: bannerUsage?.asset.assetUuid,
+        bannerPreviewUrl: bannerUsage
+          ? `/api/admin/assets/preview/${bannerUsage.asset.slug}.${bannerUsage.asset.extension}`
+          : undefined,
       } satisfies ProjectGetResponse;
     }
 
@@ -90,6 +95,28 @@ export default defineEventHandler(async (event) => {
             'project',
             projectUuid,
             'icon',
+          );
+        }
+      }
+
+      const currentBanner = usages.find((u) => u.role === 'banner');
+      const newBannerUuid = result.bannerAssetUuid;
+
+      if (currentBanner?.asset.assetUuid !== newBannerUuid) {
+        if (currentBanner) {
+          await THEI_SERVER.assets.usages.detach(
+            currentBanner.asset.assetUuid,
+            'project',
+            projectUuid,
+            'banner',
+          );
+        }
+        if (newBannerUuid) {
+          await THEI_SERVER.assets.usages.attach(
+            newBannerUuid,
+            'project',
+            projectUuid,
+            'banner',
           );
         }
       }
