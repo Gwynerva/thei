@@ -183,8 +183,12 @@ function openBannerUpload() {
         class="border-y border-border-1 bg-bg-3 px-md py-xs text-sm
           tracking-tight"
       >
-        <div class="font-semibold text-text-2">Showcase</div>
-        <div class="text-text-3">Images and videos on display</div>
+        <div class="font-semibold text-text-2">
+          {{ phrase.showcase }}
+        </div>
+        <div class="text-text-3">
+          {{ phrase.showcase_description }}
+        </div>
       </div>
     </Box>
   </div>

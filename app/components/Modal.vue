@@ -1,24 +1,31 @@
 <script lang="ts" setup>
 const modal = useModal();
 const { isOpen, stack, currentPane } = modal;
-
 const dialogRef = ref<HTMLDialogElement>();
 
-watch(isOpen, (val) => {
-  if (val) {
-    nextTick(() => dialogRef.value?.showModal());
-  } else {
-    dialogRef.value?.close();
-  }
-});
+watch(
+  isOpen,
+  (val) => {
+    if (!import.meta.client) {
+      return;
+    }
 
-/** Escape key — prevent native dialog auto-close, route through our stack. */
+    document.documentElement.style.overflow = val ? 'hidden' : '';
+
+    if (val) {
+      nextTick(() => dialogRef.value?.showModal());
+    } else {
+      dialogRef.value?.close();
+    }
+  },
+  { immediate: true },
+);
+
 function onCancel(e: Event) {
   e.preventDefault();
   dismiss();
 }
 
-/** Backdrop click — the dialog element itself is the backdrop. */
 function onDialogClick(e: MouseEvent) {
   if (e.target === dialogRef.value) dismiss();
 }
@@ -88,8 +95,8 @@ function dismiss() {
       <!-- Active pane content -->
       <div class="p-md">
         <component
-          :is="currentPane?.component"
           v-if="currentPane"
+          :is="currentPane?.component"
           v-bind="currentPane.props"
         />
       </div>

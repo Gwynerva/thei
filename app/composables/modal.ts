@@ -17,23 +17,10 @@ export const isModalOpen = computed(() => stack.value.length > 0);
 export const modalStack = readonly(stack);
 export const currentModalPane = computed(() => stack.value.at(-1));
 
-function lockScroll() {
-  if (import.meta.client) {
-    document.documentElement.classList.add('modal-open');
-  }
-}
-
-function unlockScroll() {
-  if (import.meta.client) {
-    document.documentElement.classList.remove('modal-open');
-  }
-}
-
 export function useModal() {
   /** Open a fresh modal session (clears any existing stack). */
   function open(pane: ModalPane) {
     stack.value = [pane];
-    lockScroll();
   }
 
   /** Push a new pane onto an already-open modal. */
@@ -50,15 +37,11 @@ export function useModal() {
     const top = stack.value.at(-1)!;
     stack.value = stack.value.slice(0, -1);
     top.onBack?.(result);
-    if (stack.value.length === 0) {
-      unlockScroll();
-    }
   }
 
   /** Close the modal entirely, discarding all panes. */
   function close() {
     stack.value = [];
-    unlockScroll();
   }
 
   return {

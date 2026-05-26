@@ -235,5 +235,8 @@ export default defineI18nBase({
       'This action is irreversible. Enter the project title to confirm deletion:',
     size: 'Size',
     just_now: 'Just now',
+    showcase: 'Showcase',
+    showcase_description:
+      'Images and videos that show what the project looks like.',
   },
 });

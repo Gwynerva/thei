@@ -160,4 +160,6 @@ export type LanguagePhrases = {
   delete_project_confirm: string;
   size: string;
   just_now: string;
+  showcase: string;
+  showcase_description: string;
 };
