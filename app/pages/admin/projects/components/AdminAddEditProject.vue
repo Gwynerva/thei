@@ -4,15 +4,23 @@ import type {
   ProjectEditData,
 } from '#layers/thei/shared/admin/project';
 import type {
+  OtherAssetGetItem,
   ProjectGetResponse,
   ProjectSaveResponse,
+  ShowcaseAssetGetItem,
 } from '#layers/thei/shared/api/project';
 import {
   projectDataInjectionKey,
   projectValidationKey,
   iconPreviewUrlKey,
   bannerPreviewUrlKey,
+  iconVideoUrlKey,
+  bannerVideoUrlKey,
+  iconSizeKey,
+  bannerSizeKey,
   currentProjectUuidKey,
+  otherItemsKey,
+  showcaseItemsKey,
 } from '../composables';
 import ProjectMain from './ProjectMain.vue';
 import ProjectAssets from './ProjectAssets.vue';
@@ -41,8 +49,26 @@ provide(iconPreviewUrlKey, iconPreviewUrl);
 const bannerPreviewUrl = ref<string | undefined>();
 provide(bannerPreviewUrlKey, bannerPreviewUrl);
 
+const iconVideoUrl = ref<string | undefined>();
+provide(iconVideoUrlKey, iconVideoUrl);
+
+const bannerVideoUrl = ref<string | undefined>();
+provide(bannerVideoUrlKey, bannerVideoUrl);
+
+const iconSize = ref<number | undefined>();
+provide(iconSizeKey, iconSize);
+
+const bannerSize = ref<number | undefined>();
+provide(bannerSizeKey, bannerSize);
+
 const resolvedProjectUuid = ref<string | undefined>(projectUuid);
 provide(currentProjectUuidKey, resolvedProjectUuid);
+
+const showcaseItems = ref<ShowcaseAssetGetItem[]>([]);
+provide(showcaseItemsKey, showcaseItems);
+
+const otherItems = ref<OtherAssetGetItem[]>([]);
+provide(otherItemsKey, otherItems);
 
 const isEdit = computed(() => Boolean(projectUuid));
 const saving = ref(false);
@@ -79,9 +105,26 @@ if (isEdit.value) {
     cv: data.cv,
     iconAssetUuid: data.iconAssetUuid,
     bannerAssetUuid: data.bannerAssetUuid,
+    showcaseAssets: (data.showcaseAssets ?? []).map((item) => ({
+      assetUuid: item.assetUuid,
+      caption: item.caption,
+      access: item.access,
+    })),
+    otherAssets: (data.otherAssets ?? []).map((item) => ({
+      assetUuid: item.assetUuid,
+      title: item.title,
+      caption: item.caption,
+      access: item.access,
+    })),
   };
+  showcaseItems.value = data.showcaseAssets ?? [];
+  otherItems.value = data.otherAssets ?? [];
   iconPreviewUrl.value = data.iconPreviewUrl;
+  iconVideoUrl.value = data.iconVideoUrl;
+  iconSize.value = data.iconAssetSize;
   bannerPreviewUrl.value = data.bannerPreviewUrl;
+  bannerVideoUrl.value = data.bannerVideoUrl;
+  bannerSize.value = data.bannerAssetSize;
   savedSnapshot.value = JSON.stringify(projectData.value);
   resolvedProjectUuid.value = data.projectUuid;
   if (projectUuid !== data.projectUuid) {

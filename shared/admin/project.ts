@@ -1,6 +1,20 @@
 import { ProjectEventAccessLevel } from '../access-level';
 import { isOneOf } from '../utils/isOneOf';
 
+/** Base save item for any project asset list (showcase, other-assets, …). */
+export type AssetListSaveItem = { assetUuid: string };
+
+export type ShowcaseAssetEditItem = AssetListSaveItem & {
+  caption?: string;
+  access: 'project' | 'private';
+};
+
+export type OtherAssetSaveItem = AssetListSaveItem & {
+  title: string;
+  caption?: string;
+  access: 'project' | 'private';
+};
+
 export type ProjectEditData = {
   title: string;
   summary: string;
@@ -10,6 +24,10 @@ export type ProjectEditData = {
   cv: boolean;
   iconAssetUuid?: string;
   bannerAssetUuid?: string;
+  /** Showcase assets in display order. Array index = sort order. */
+  showcaseAssets?: ShowcaseAssetEditItem[];
+  /** Other files in display order. Array index = sort order. */
+  otherAssets?: OtherAssetSaveItem[];
 };
 
 export type ProjectEditClientValidation = {

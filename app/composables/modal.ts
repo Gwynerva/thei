@@ -1,4 +1,4 @@
-import type { Component } from 'vue';
+import { type Component, markRaw } from 'vue';
 
 export interface ModalPane {
   title: string;
@@ -8,10 +8,16 @@ export interface ModalPane {
   onBack?: (result?: unknown) => void;
 }
 
+// Internal: each push gets a stable unique ID so Modal.vue v-for :key never
+// maps the same DOM node to two different pushes of the same component.
+type StackEntry = ModalPane & { readonly _id: number };
+
+let _nextId = 0;
+
 // Module-level singleton — modal state is client-only UI, safe per browser tab.
 // shallowRef: we always replace stack.value entirely (never mutate in place),
 // and components must not be made deeply reactive.
-const stack = shallowRef<ModalPane[]>([]);
+const stack = shallowRef<StackEntry[]>([]);
 
 export const isModalOpen = computed(() => stack.value.length > 0);
 export const modalStack = readonly(stack);
@@ -20,12 +26,17 @@ export const currentModalPane = computed(() => stack.value.at(-1));
 export function useModal() {
   /** Open a fresh modal session (clears any existing stack). */
   function open(pane: ModalPane) {
-    stack.value = [pane];
+    stack.value = [
+      { ...pane, component: markRaw(pane.component), _id: ++_nextId },
+    ];
   }
 
   /** Push a new pane onto an already-open modal. */
   function push(pane: ModalPane) {
-    stack.value = [...stack.value, pane];
+    stack.value = [
+      ...stack.value,
+      { ...pane, component: markRaw(pane.component), _id: ++_nextId },
+    ];
   }
 
   /**

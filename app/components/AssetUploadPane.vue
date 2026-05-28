@@ -5,58 +5,31 @@ import type {
   AssetUploadResponse,
 } from '#layers/thei/shared/api/asset';
 import { ASSET_PROFILES } from '#layers/thei/shared/asset-profiles';
-import type {
-  AssetProfileId,
-  AssetUploadProfile,
-} from '#layers/thei/shared/asset-profiles';
-
-const props = defineProps<{ profileId: AssetProfileId }>();
-
-const modal = useModal();
-
-const profile = computed(() => ASSET_PROFILES[props.profileId]);
-
-const profileHint = computed<string | null>(() => {
-  const key = (profile.value as AssetUploadProfile).hintKey;
-  if (!key) return null;
-  const val = phrase.value[key];
-  return typeof val === 'string' ? val : null;
-});
-
-const fileInputRef = ref<HTMLInputElement>();
-const isDragging = ref(false);
-const activeXhr = ref<XMLHttpRequest>();
-const autoCloseTimer = ref<ReturnType<typeof setTimeout>>();
-
-// ── State machine ────────────────────────────────────────────────────────────
+import type { AssetProfileId } from '#layers/thei/shared/asset-profiles';
 
 type UploadState =
-  | { type: 'idle' }
   | { type: 'hashing' }
   | { type: 'checking' }
-  | { type: 'duplicate'; assetUuid: string; slug: string; extension: string }
   | { type: 'uploading'; filename: string; size: number; progress: number }
   | { type: 'processing' }
-  | { type: 'done'; result: AssetUploadResponse }
   | { type: 'error'; message: string };
 
-const state = ref<UploadState>({ type: 'idle' });
-
-function scheduleClose(result: AssetUploadResponse) {
-  autoCloseTimer.value = setTimeout(() => {
-    modal.pop(result);
-  }, 1500);
-}
+const props = defineProps<{ profileId: AssetProfileId; initialFile: File }>();
+const modal = useModal();
+const profile = computed(() => ASSET_PROFILES[props.profileId]);
+const activeXhr = ref<XMLHttpRequest>();
+const state = ref<UploadState>({ type: 'hashing' });
+const currentFile = shallowRef<File>(props.initialFile);
 
 function retry() {
-  state.value = { type: 'idle' };
+  handleFile(currentFile.value);
 }
 
+onMounted(() => {
+  handleFile(props.initialFile);
+});
+
 onBeforeUnmount(() => {
-  if (autoCloseTimer.value) {
-    clearTimeout(autoCloseTimer.value);
-    autoCloseTimer.value = undefined;
-  }
   if (state.value.type === 'uploading' || state.value.type === 'processing') {
     activeXhr.value?.abort();
     activeXhr.value = undefined;
@@ -72,14 +45,6 @@ async function hashFile(file: File): Promise<string> {
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
 }
-
-const acceptAttr = computed(() => {
-  const exts = profile.value.acceptedExtensions;
-  if (exts === '*') return undefined;
-  return (exts as string[]).map((e) => `.${e}`).join(',');
-});
-
-// ── Upload flow ──────────────────────────────────────────────────────────────
 
 async function handleFile(file: File) {
   const ext = file.name.includes('.')
@@ -127,8 +92,7 @@ async function handleFile(file: File) {
   }
 
   if (checkResult.exists) {
-    state.value = { type: 'duplicate', ...checkResult };
-    scheduleClose(checkResult);
+    modal.pop(checkResult);
     return;
   }
 
@@ -168,8 +132,7 @@ async function handleFile(file: File) {
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
           const result: AssetUploadResponse = JSON.parse(xhr.responseText);
-          state.value = { type: 'done', result };
-          scheduleClose(result);
+          modal.pop(result);
           resolve();
         } catch {
           state.value = { type: 'error', message: 'Invalid server response.' };
@@ -204,107 +167,20 @@ async function handleFile(file: File) {
     xhr.send(formData);
   }).catch(() => {});
 }
-
-function onFileInput(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0];
-  if (file) handleFile(file);
-  if (fileInputRef.value) fileInputRef.value.value = '';
-}
-
-function onDrop(e: DragEvent) {
-  e.preventDefault();
-  isDragging.value = false;
-  const file = e.dataTransfer?.files[0];
-  if (file) handleFile(file);
-}
-
-function onDragover(e: DragEvent) {
-  e.preventDefault();
-  isDragging.value = true;
-}
 </script>
 
 <template>
-  <!-- idle: drop zone -->
-  <template v-if="state.type === 'idle'">
-    <div
-      class="relative flex cursor-pointer flex-col items-center justify-center
-        gap-sm rounded-normal border-4 border-dashed p-md text-center transition
-        select-none"
-      :class="
-        isDragging
-          ? 'border-accent bg-bg-accent text-accent'
-          : 'border-border-1 hocus:border-border-3 hocus:bg-bg-2'
-      "
-      @click="fileInputRef?.click()"
-      @dragover="onDragover"
-      @dragleave="isDragging = false"
-      @drop="onDrop"
-    >
-      <Icon
-        name="upload"
-        class="absolute top-1/2 left-1/2 size-[90%] -translate-x-1/2
-          -translate-y-1/2 text-text-2/10"
-      />
-      <div class="relative text-shadow-bg-2 text-shadow-lg">
-        <p class="text-shadow font-semibold">
-          Drop or <span class="text-accent">Browse</span> file...
-        </p>
-        <div
-          class="mt-xs flex flex-col items-center gap-sm text-sm text-text-2"
-        >
-          <p
-            v-if="profileHint"
-            class="text-center text-sm"
-            v-html="profileHint"
-          ></p>
-          <div class="flex flex-col items-center gap-0.5">
-            <span class="font-semibold">{{ phrase.file_formats }}</span>
-            <span>
-              <template v-if="profile.acceptedExtensions !== '*'">
-                {{ (profile.acceptedExtensions as string[]).join(' · ') }}
-              </template>
-              <template v-else>{{ phrase.file_any_format }}</template>
-            </span>
-          </div>
-          <div class="flex flex-col items-center gap-0.5">
-            <span class="font-semibold">{{ phrase.file_max_size }}</span>
-            <span>
-              {{ formatSize((profile as AssetUploadProfile).maxSizeBytes) }}
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-    <input
-      ref="fileInputRef"
-      type="file"
-      class="hidden"
-      :accept="acceptAttr"
-      @change="onFileInput"
-    />
-  </template>
-
   <!-- hashing / checking: indeterminate spinner -->
-  <template v-else-if="state.type === 'hashing' || state.type === 'checking'">
+  <template v-if="state.type === 'hashing' || state.type === 'checking'">
     <div class="flex flex-col items-center gap-sm py-lg text-center">
-      <Icon name="loading" class="animate-spin text-3xl text-accent" />
+      <Icon name="loading" class="text-3xl text-accent" />
       <p class="text-sm text-text-2">
         {{
           state.type === 'hashing'
-            ? 'Calculating file hash…'
-            : 'Checking for duplicate…'
+            ? phrase.asset_upload_hashing
+            : phrase.asset_upload_checking
         }}
       </p>
-    </div>
-  </template>
-
-  <!-- duplicate found -->
-  <template v-else-if="state.type === 'duplicate'">
-    <div class="flex flex-col items-center gap-sm py-lg text-center">
-      <Icon name="check" class="text-3xl text-accent" />
-      <p class="font-semibold">File already on server</p>
-      <p class="text-sm text-text-2">Reusing the existing asset.</p>
     </div>
   </template>
 
@@ -324,7 +200,7 @@ function onDragover(e: DragEvent) {
         />
       </div>
       <p class="text-sm text-text-2">
-        Uploading… {{ Math.round(state.progress * 100) }}%
+        {{ phrase.asset_upload_uploading(Math.round(state.progress * 100)) }}
       </p>
     </div>
   </template>
@@ -332,25 +208,8 @@ function onDragover(e: DragEvent) {
   <!-- processing: server-side -->
   <template v-else-if="state.type === 'processing'">
     <div class="flex flex-col items-center gap-sm py-lg text-center">
-      <Icon name="loading" class="animate-spin text-3xl text-accent" />
-      <p class="text-sm text-text-2">Processing image…</p>
-      <div class="h-1.5 w-full overflow-hidden rounded-full bg-bg-3">
-        <div
-          class="animate-indeterminate h-full w-1/3 rounded-full bg-accent"
-        />
-      </div>
-    </div>
-  </template>
-
-  <!-- done: thumbnail -->
-  <template v-else-if="state.type === 'done'">
-    <div class="flex flex-col items-center gap-md py-md text-center">
-      <img
-        :src="`/api/admin/assets/preview/${state.result.slug}.${state.result.extension}`"
-        class="h-20 w-20 rounded-normal object-cover shadow-shadow-1"
-        alt="Uploaded asset preview"
-      />
-      <p class="font-semibold text-text-1">Uploaded!</p>
+      <Icon name="loading" class="text-3xl text-accent" />
+      <p class="text-sm text-text-2">{{ phrase.asset_upload_processing }}</p>
     </div>
   </template>
 
@@ -360,11 +219,13 @@ function onDragover(e: DragEvent) {
       class="flex flex-col gap-xs rounded-normal border border-border-error
         bg-bg-error p-sm text-text-error"
     >
-      <p class="font-semibold">Upload failed</p>
+      <p class="font-semibold">{{ phrase.asset_upload_failed }}</p>
       <p class="text-sm">{{ state.message }}</p>
     </div>
     <div class="mt-sm flex justify-end">
-      <Button variant="secondary" @click="retry">Try again</Button>
+      <Button variant="secondary" @click="retry">{{
+        phrase.asset_upload_retry
+      }}</Button>
     </div>
   </template>
 </template>

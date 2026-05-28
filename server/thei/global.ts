@@ -28,6 +28,9 @@ import { detachAssetUsage } from './assets/repository/usages/detach';
 import { findAssetsByContainer } from './assets/repository/usages/find-by-container';
 import { findAssetUsage } from './assets/repository/usages/find-one';
 import { findAssetsByContainerTypeAndRole } from './assets/repository/usages/find-by-container-type-and-role';
+import { findShowcaseAssets } from './assets/repository/usages/find-showcase';
+import { findOtherAssets } from './assets/repository/usages/find-other';
+import { updateAssetUsage } from './assets/repository/usages/update';
 import { deleteAsset } from './assets/repository/delete';
 import { processAsset } from './assets/process';
 import { assetFilePath } from './assets/file-path';
@@ -97,6 +100,9 @@ export const THEI_SERVER = {
       findByContainer: findAssetsByContainer,
       findOne: findAssetUsage,
       findByContainerTypeAndRole: findAssetsByContainerTypeAndRole,
+      findShowcase: findShowcaseAssets,
+      findOther: findOtherAssets,
+      update: updateAssetUsage,
     },
   },
 };

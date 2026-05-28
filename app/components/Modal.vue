@@ -26,8 +26,14 @@ function onCancel(e: Event) {
   dismiss();
 }
 
+let mousedownOnBackdrop = false;
+
+function onDialogMousedown(e: MouseEvent) {
+  mousedownOnBackdrop = e.target === dialogRef.value;
+}
+
 function onDialogClick(e: MouseEvent) {
-  if (e.target === dialogRef.value) dismiss();
+  if (e.target === dialogRef.value && mousedownOnBackdrop) dismiss();
 }
 
 function dismiss() {
@@ -47,6 +53,7 @@ function dismiss() {
         border-border-1 bg-bg-2 p-0 shadow-lg shadow-shadow-1
         backdrop:bg-bg-1/80 backdrop:backdrop-blur-sm"
       @cancel="onCancel"
+      @mousedown="onDialogMousedown"
       @click="onDialogClick"
     >
       <!-- Header -->
@@ -92,13 +99,15 @@ function dismiss() {
         </button>
       </div>
 
-      <!-- Active pane content -->
-      <div class="p-md">
-        <component
-          v-if="currentPane"
-          :is="currentPane?.component"
-          v-bind="currentPane.props"
-        />
+      <!-- Pane content: all panes in the stack stay mounted (v-show) so their
+           reactive state survives navigating back to a previous pane. -->
+      <div
+        v-for="(pane, i) in stack"
+        :key="(pane as any)._id"
+        class="p-md"
+        v-show="i === stack.length - 1"
+      >
+        <component :is="pane.component" v-bind="pane.props" />
       </div>
     </dialog>
   </Teleport>

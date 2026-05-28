@@ -1,5 +1,9 @@
 import { index, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-import type { AssetContainerType, AssetRole } from '#layers/thei/shared/asset';
+import type {
+  AssetContainerType,
+  AssetRole,
+  AssetUsageMeta,
+} from '#layers/thei/shared/asset';
 
 export const assetUsages = sqliteTable(
   'asset-usages',
@@ -8,6 +12,8 @@ export const assetUsages = sqliteTable(
     containerType: text().notNull().$type<AssetContainerType>(),
     containerId: text().notNull(),
     role: text().notNull().$type<AssetRole>(),
+    /** Role-specific JSON metadata (e.g. showcase order, caption, access). */
+    meta: text({ mode: 'json' }).$type<AssetUsageMeta | null>(),
   },
   (t) => [
     primaryKey({
