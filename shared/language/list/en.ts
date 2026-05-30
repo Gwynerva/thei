@@ -274,5 +274,12 @@ export default defineI18nBase({
     asset_upload_processing: 'Processing…',
     asset_upload_failed: 'Upload failed',
     asset_upload_retry: 'Try again',
+    drop_browse_paste: 'Drop • Browse • Paste',
+    format: 'Format',
+    max_size: 'Max size',
+    image: 'Image',
+    video: 'Video',
+    audio: 'Audio',
+    any_file: 'Any file',
   },
 });

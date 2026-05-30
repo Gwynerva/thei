@@ -1,67 +1,50 @@
-import { type Component, markRaw } from 'vue';
+import { type Component, markRaw, shallowRef } from 'vue';
+import type {
+  ActiveModal,
+  BaseModalResult,
+  ExtractModalData,
+  ModalDescriptor,
+} from '#layers/thei/app/modals/types';
 
-export interface ModalPane {
-  title: string;
-  component: Component;
-  props?: Record<string, unknown>;
-  /** Called when this pane is popped off the stack, with optional result data. */
-  onBack?: (result?: unknown) => void;
-}
+export { defineModal, type ModalData } from '#layers/thei/app/modals/types';
 
-// Internal: each push gets a stable unique ID so Modal.vue v-for :key never
-// maps the same DOM node to two different pushes of the same component.
-type StackEntry = ModalPane & { readonly _id: number };
+// Module-level singleton — one modal active at a time across the whole app.
+export const activeModal = shallowRef<ActiveModal | null>(null);
 
-let _nextId = 0;
-
-// Module-level singleton — modal state is client-only UI, safe per browser tab.
-// shallowRef: we always replace stack.value entirely (never mutate in place),
-// and components must not be made deeply reactive.
-const stack = shallowRef<StackEntry[]>([]);
-
-export const isModalOpen = computed(() => stack.value.length > 0);
-export const modalStack = readonly(stack);
-export const currentModalPane = computed(() => stack.value.at(-1));
-
-export function useModal() {
-  /** Open a fresh modal session (clears any existing stack). */
-  function open(pane: ModalPane) {
-    stack.value = [
-      { ...pane, component: markRaw(pane.component), _id: ++_nextId },
-    ];
+/**
+ * Open a modal, passing typed `modalData` when the component requires it.
+ * Returns a Promise that resolves with a typed ModalResult when the modal
+ * completes (via @complete emit), is closed/aborted (empty), or throws (error).
+ *
+ * Usage (no data):   const result = await openModal(myModal);
+ * Usage (with data): const result = await openModal(myModal, { foo: 'bar' });
+ */
+export async function openModal<
+  TResult extends { type: string },
+  TComponent extends Component,
+>(
+  descriptor: ModalDescriptor<TResult, TComponent>,
+  ...args: ExtractModalData<TComponent> extends never
+    ? []
+    : [modalData: ExtractModalData<TComponent>]
+): Promise<TResult> {
+  if (activeModal.value) {
+    throw new Error(
+      `Cannot open modal "${descriptor.name}" while "${activeModal.value.name}" is already active!`,
+    );
   }
 
-  /** Push a new pane onto an already-open modal. */
-  function push(pane: ModalPane) {
-    stack.value = [
-      ...stack.value,
-      { ...pane, component: markRaw(pane.component), _id: ++_nextId },
-    ];
-  }
+  const module = await descriptor.component();
+  const component = markRaw(module.default);
+  const props = args.length > 0 ? { modalData: args[0] } : {};
 
-  /**
-   * Pop the current pane. Calls the pane's onBack with the optional result.
-   * Closes the modal if the stack becomes empty.
-   */
-  function pop(result?: unknown) {
-    if (stack.value.length === 0) return;
-    const top = stack.value.at(-1)!;
-    stack.value = stack.value.slice(0, -1);
-    top.onBack?.(result);
-  }
-
-  /** Close the modal entirely, discarding all panes. */
-  function close() {
-    stack.value = [];
-  }
-
-  return {
-    stack: readonly(stack),
-    isOpen: isModalOpen,
-    currentPane: currentModalPane,
-    open,
-    push,
-    pop,
-    close,
-  };
+  return new Promise<TResult>((resolve) => {
+    activeModal.value = {
+      name: descriptor.name,
+      component,
+      props,
+      resolve: resolve as (result: { type: string }) => void,
+      close: (result: BaseModalResult) => resolve(result as TResult),
+    };
+  });
 }

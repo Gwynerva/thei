@@ -179,15 +179,10 @@
 
   :root,
   html,
-  body {
+  body,
+  #__nuxt {
     @apply bg-bg-1;
     height: 100%;
-  }
-
-  #nuxt {
-    @apply bg-bg-1;
-    height: 100%;
-    scrollbar-gutter: stable;
   }
 
   button,

@@ -278,5 +278,12 @@ export default defineI18nModule({
     asset_upload_processing: 'Обработка…',
     asset_upload_failed: 'Ошибка загрузки',
     asset_upload_retry: 'Попробовать снова',
+    drop_browse_paste: 'Перетащите • Выберите • Вставьте',
+    format: 'Формат',
+    max_size: 'Макс. размер',
+    image: 'Изображение',
+    video: 'Видео',
+    audio: 'Аудио',
+    any_file: 'Любой файл',
   },
 });

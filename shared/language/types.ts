@@ -198,4 +198,11 @@ export type LanguagePhrases = {
   asset_upload_processing: string;
   asset_upload_failed: string;
   asset_upload_retry: string;
+  drop_browse_paste: string;
+  format: string;
+  max_size: string;
+  image: string;
+  video: string;
+  audio: string;
+  any_file: string;
 };

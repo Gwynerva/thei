@@ -5,6 +5,7 @@
     "dev": "nuxt dev .playground",
     "build": "nuxt build .playground",
     "start": "nuxt start .playground",
+    "test": "bun vitest",
     "format": "prettier --write .",
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate"
