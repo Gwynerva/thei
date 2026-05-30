@@ -88,7 +88,7 @@ onErrorCaptured((err) => {
       v-if="activeModal"
       :is="activeModal.component"
       v-bind="activeModal.props"
-      @complete="settle"
+      @modalResult="settle"
     />
   </dialog>
 </template>

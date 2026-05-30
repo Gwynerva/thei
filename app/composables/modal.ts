@@ -12,9 +12,31 @@ export { defineModal, type ModalData } from '#layers/thei/app/modals/types';
 export const activeModal = shallowRef<ActiveModal | null>(null);
 
 /**
+ * Programmatically close the active modal with an `empty` result.
+ * Useful in modal components that don't use a `modalResult` emit.
+ */
+export function closeModal() {
+  const modal = activeModal.value;
+  if (!modal) return;
+  activeModal.value = null;
+  modal.close({ type: 'empty' });
+}
+
+/**
+ * Programmatically close the active modal with an `error` result.
+ * Useful in modal components that don't use a `modalResult` emit.
+ */
+export function errorModal(message: string) {
+  const modal = activeModal.value;
+  if (!modal) return;
+  activeModal.value = null;
+  modal.close({ type: 'error', message });
+}
+
+/**
  * Open a modal, passing typed `modalData` when the component requires it.
  * Returns a Promise that resolves with a typed ModalResult when the modal
- * completes (via @complete emit), is closed/aborted (empty), or throws (error).
+ * completes (via @modalResult emit), is closed/aborted (empty), or throws (error).
  *
  * Usage (no data):   const result = await openModal(myModal);
  * Usage (with data): const result = await openModal(myModal, { foo: 'bar' });

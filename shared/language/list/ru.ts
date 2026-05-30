@@ -285,5 +285,7 @@ export default defineI18nModule({
     video: 'Видео',
     audio: 'Аудио',
     any_file: 'Любой файл',
+    file_wrong_type: (ext) => `Неподдерживаемый тип файла: .${ext}!`,
+    file_too_large: (size) => `Файл слишком большой: ${size}!`,
   },
 });

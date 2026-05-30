@@ -281,5 +281,7 @@ export default defineI18nBase({
     video: 'Video',
     audio: 'Audio',
     any_file: 'Any file',
+    file_wrong_type: (ext) => `Unsupported file type: .${ext}`,
+    file_too_large: (size) => `File is too large: ${size}`,
   },
 });

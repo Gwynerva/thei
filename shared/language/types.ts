@@ -205,4 +205,6 @@ export type LanguagePhrases = {
   video: string;
   audio: string;
   any_file: string;
+  file_wrong_type: (ext: string) => string;
+  file_too_large: (size: string) => string;
 };

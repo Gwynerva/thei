@@ -7,17 +7,17 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  complete: [result: ModalResultOf<PickTestResult>];
+  modalResult: [result: ModalResultOf<PickTestResult>];
 }>();
 
 const num = ref(props.modalData.min);
 
 function pick() {
-  emit('complete', { type: 'test', value: num.value });
+  emit('modalResult', { type: 'test', value: num.value });
 }
 
 function cancel() {
-  emit('complete', { type: 'empty' });
+  emit('modalResult', { type: 'empty' });
 }
 </script>
 

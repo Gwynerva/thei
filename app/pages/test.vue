@@ -28,13 +28,16 @@ async function openTestModal() {
 }
 
 async function openPickFileModal() {
-  await openModal(pickFileModal, {
+  return openModal(pickFileModal, {
     accept: [videoExtensionProfile, imageExtensionProfile, 'txt'],
-    maxSize: 10 * 1024 * 1024,
+    maxSize: 10,
   });
 }
 
-openPickFileModal();
+onMounted(async () => {
+  const data = await openPickFileModal();
+  console.log('Picked file:', data);
+});
 </script>
 
 <template>
