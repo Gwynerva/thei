@@ -4,6 +4,8 @@ import type { BaseModalResult } from '#layers/thei/app/modals/types';
 
 const dialogElement = useTemplateRef('dialog');
 
+let isProgrammaticClose = false;
+
 watchEffect(() => {
   if (!import.meta.client) {
     return;
@@ -21,6 +23,7 @@ watchEffect(() => {
     document.body.style.scrollbarGutter = 'stable';
   } else {
     if (dialogElement.value.open) {
+      isProgrammaticClose = true;
       dialogElement.value.close();
     }
     document.body.style.overflow = '';
@@ -51,6 +54,10 @@ function closeWithBase(result: BaseModalResult) {
 }
 
 function onNativeClose() {
+  if (isProgrammaticClose) {
+    isProgrammaticClose = false;
+    return;
+  }
   if (activeModal.value) {
     closeWithBase({ type: 'empty' });
   }
@@ -81,8 +88,8 @@ onErrorCaptured((err) => {
     @close="onNativeClose"
     @mousedown="onBackdropMousedown"
     @click="onBackdropClick"
-    class="relative min-h-screen min-w-screen overscroll-contain bg-bg-1/50
-      backdrop-blur outline-none"
+    class="relative min-h-screen min-w-screen overscroll-contain bg-transparent
+      outline-none"
   >
     <component
       v-if="activeModal"

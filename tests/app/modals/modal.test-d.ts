@@ -87,12 +87,14 @@ test('defineModal returns ModalDescriptor<BaseModalResult> for component without
   >();
 });
 
-test('defineModal returns never for component with invalid modalResult emit', () => {
+test('defineModal errors at call site for component with invalid modalResult emit', () => {
   type InvalidEmit = abstract new (...args: any[]) => {
     $props: { onModalResult?: (result: string) => void }; // string doesn't satisfy { type: string }
   };
-  type Result = ReturnType<typeof defineModal<InvalidEmit & Component>>;
-  expectTypeOf<Result>().toBeNever();
+  // @ts-expect-error: modalResult emit result type must satisfy { type: string }
+  defineModal('test', () =>
+    Promise.resolve({ default: {} as InvalidEmit & Component }),
+  );
 });
 
 test('defineModal descriptor satisfies ModalDescriptor shape', () => {

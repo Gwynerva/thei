@@ -65,8 +65,8 @@ export interface ModalDescriptor<
  * If the component has no `modalResult` emit, the result type is `BaseModalResult`
  * (the modal can only be closed via `closeModal()` or `errorModal()`).
  *
- * Returns `never` (compile-time error) if the component has a `modalResult` emit
- * whose result type does not satisfy `{ type: string }`.
+ * Produces a compile-time error at the call site if the component has a
+ * `modalResult` emit whose result type does not satisfy `{ type: string }`.
  *
  * `BaseModalResult` is automatically added to the result union since
  * `Modal.vue` can always produce `empty` (backdrop click / closeModal()) or
@@ -78,14 +78,15 @@ export interface ModalDescriptor<
 export function defineModal<TComponent extends Component>(
   name: string,
   component: () => Promise<{ default: TComponent }>,
+  ..._: [ExtractModalResult<TComponent>] extends [{ type: string }]
+    ? []
+    : ['ERROR: modalResult emit result type must satisfy { type: string }']
 ): [ExtractModalResult<TComponent>] extends [never]
   ? ModalDescriptor<BaseModalResult, TComponent>
-  : [ExtractModalResult<TComponent>] extends [{ type: string }]
-    ? ModalDescriptor<
-        ExtractModalResult<TComponent> | BaseModalResult,
-        TComponent
-      >
-    : never {
+  : ModalDescriptor<
+      ExtractModalResult<TComponent> | BaseModalResult,
+      TComponent
+    > {
   return { name, component } as any;
 }
 

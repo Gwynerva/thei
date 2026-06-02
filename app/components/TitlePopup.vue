@@ -5,6 +5,10 @@ const { anchor, label, visible, popupClass } = useTitlePopup();
 
 const floatingEl = ref<HTMLElement>();
 
+const teleportTarget = computed<string | HTMLElement>(
+  () => anchor.value?.closest('dialog') ?? 'body',
+);
+
 const { floatingStyles } = useFloating(anchor, floatingEl, {
   placement: 'bottom',
   middleware: [offset(6), flip(), shift({ padding: 8 })],
@@ -13,7 +17,7 @@ const { floatingStyles } = useFloating(anchor, floatingEl, {
 </script>
 
 <template>
-  <Teleport to="body">
+  <Teleport :to="teleportTarget">
     <TransitionFade>
       <div
         v-if="visible && label"

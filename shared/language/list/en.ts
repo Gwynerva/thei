@@ -283,5 +283,9 @@ export default defineI18nBase({
     any_file: 'Any file',
     file_wrong_type: (ext) => `Unsupported file type: .${ext}`,
     file_too_large: (size) => `File is too large: ${size}`,
+    only_site_owner_has_access_to_asset:
+      'Only the site owner has access to this file!',
+    direct_link_to_asset: 'Direct link to asset',
+    asset: 'Asset',
   },
 });

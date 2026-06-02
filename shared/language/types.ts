@@ -207,4 +207,7 @@ export type LanguagePhrases = {
   any_file: string;
   file_wrong_type: (ext: string) => string;
   file_too_large: (size: string) => string;
+  only_site_owner_has_access_to_asset: string;
+  direct_link_to_asset: string;
+  asset: string;
 };

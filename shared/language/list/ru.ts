@@ -287,5 +287,9 @@ export default defineI18nModule({
     any_file: 'Любой файл',
     file_wrong_type: (ext) => `Неподдерживаемый тип файла: .${ext}!`,
     file_too_large: (size) => `Файл слишком большой: ${size}!`,
+    only_site_owner_has_access_to_asset:
+      'Только владелец сайта имеет доступ к этому файлу!',
+    direct_link_to_asset: 'Прямая ссылка на файл',
+    asset: 'Файл',
   },
 });
