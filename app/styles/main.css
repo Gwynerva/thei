@@ -139,6 +139,20 @@
   }
 }
 
+@utility aside-content-panel {
+  interpolate-size: allow-keywords;
+  overflow: hidden;
+  height: var(--aside-h);
+  transition: height 0.25s ease-out;
+
+  @variant sm {
+    height: auto;
+    flex: 1;
+    min-height: 0;
+    overflow: visible;
+  }
+}
+
 @layer base {
   :root {
     --width-narrow: min(700px, 100%);
