@@ -65,7 +65,7 @@ const mediaPreview =
       </AssetModalButton>
     </template>
     <template #aside>
-      <div class="h-[1000px]">Formalism</div>
+      <div class="">Formalism</div>
     </template>
   </AssetModal>
 </template>

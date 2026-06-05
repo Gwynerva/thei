@@ -150,32 +150,47 @@ defineExpose({ zoomPercent, handleZoomButtonClick });
       class="absolute inset-0 flex items-center justify-center"
       :style="{ transform: transformStyle, willChange: 'transform' }"
     >
-      <video
-        v-if="isVideo"
-        v-show="isReady"
-        ref="media"
-        :src="src"
-        class="pointer-events-none block max-h-none max-w-none"
-        :style="mediaStyle"
-        @loadedmetadata="onVideoMeta"
-        @durationchange="onDurationChange"
-        @timeupdate="onTimeUpdate"
-        @play="isPaused = false"
-        @pause="isPaused = true"
-        @volumechange="onVideoVolumeChange"
-      />
-      <img
-        v-else
-        v-show="isReady"
-        ref="media"
-        :src="src"
-        alt=""
-        draggable="false"
-        @load="onImgLoad"
-        class="pointer-events-none block max-h-none max-w-none"
-        :style="mediaStyle"
-      />
+      <TransitionFade>
+        <video
+          v-if="isVideo"
+          v-show="isReady"
+          ref="media"
+          :src="src"
+          class="pointer-events-none block max-h-none max-w-none"
+          :style="mediaStyle"
+          @loadedmetadata="onVideoMeta"
+          @durationchange="onDurationChange"
+          @timeupdate="onTimeUpdate"
+          @play="isPaused = false"
+          @pause="isPaused = true"
+          @volumechange="onVideoVolumeChange"
+        />
+      </TransitionFade>
+      <TransitionFade>
+        <img
+          v-if="!isVideo"
+          v-show="isReady"
+          ref="media"
+          :src="src"
+          alt=""
+          draggable="false"
+          class="pointer-events-none block max-h-none max-w-none"
+          :style="mediaStyle"
+          @load="onImgLoad"
+        />
+      </TransitionFade>
     </div>
+
+    <!-- loading spinner — shown until media dimensions are known and isReady is set -->
+    <TransitionFade>
+      <div
+        v-if="!isReady"
+        class="pointer-events-none absolute inset-0 flex items-center
+          justify-center"
+      >
+        <Icon name="loading" class="text-5xl text-text-2" />
+      </div>
+    </TransitionFade>
 
     <!-- custom video controls — rendered outside the transform div so they stay fixed on-screen -->
     <div
