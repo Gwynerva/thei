@@ -5,7 +5,6 @@ import {
   getPathExtension,
   isExtensionAllowed,
 } from '#layers/thei/shared/assets/extensions';
-import type { ModalResultOf } from '#layers/thei/app/modals/types';
 import type { PickedFile } from './picked-file';
 
 const props = defineProps<{
@@ -123,8 +122,8 @@ onUnmounted(() => document.removeEventListener('paste', handlePaste));
     @dragleave="stopDragging()"
     @drop.prevent="handleDrop"
     :data-dragging="dragging ? '' : undefined"
-    class="group absolute h-screen w-screen cursor-pointer bg-bg-1 p-md
-      backdrop-blur select-none sm:p-lg"
+    class="group absolute h-dvh w-dvw cursor-pointer bg-bg-1 p-md backdrop-blur
+      select-none sm:p-lg"
   >
     <div
       class="absolute top-0 left-0 h-full w-full bg-transparent transition

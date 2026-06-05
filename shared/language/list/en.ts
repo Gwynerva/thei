@@ -287,5 +287,8 @@ export default defineI18nBase({
       'Only the site owner has access to this file!',
     direct_link_to_asset: 'Direct link to asset',
     asset: 'Asset',
+    upload_variants: 'Upload Variants',
+    pick_another_file: 'Pick another file',
+    upload_without_changes: 'Upload without changes',
   },
 });

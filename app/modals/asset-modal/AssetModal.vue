@@ -28,7 +28,7 @@ const isAsideOpen = ref(true);
     >
       <div
         class="flex shrink-0 items-center justify-between border-b
-          border-border-1 px-md py-sm font-bold tracking-tight text-text-2"
+          border-border-1 p-sm font-bold tracking-tight text-text-2"
       >
         <div>{{ asideTitle || phrase.asset }}</div>
         <button

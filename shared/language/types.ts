@@ -210,4 +210,7 @@ export type LanguagePhrases = {
   only_site_owner_has_access_to_asset: string;
   direct_link_to_asset: string;
   asset: string;
+  upload_variants: string;
+  pick_another_file: string;
+  upload_without_changes: string;
 };

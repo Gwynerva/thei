@@ -1,10 +1,6 @@
 <script lang="ts" setup>
-import {
-  anyFileExtensionProfile,
-  imageExtensionProfile,
-  videoExtensionProfile,
-} from '#layers/thei/shared/assets/extensions';
-import { editFileModal } from '../modals/edit-file/modal';
+import { anyFileExtensionProfile } from '#layers/thei/shared/assets/extensions';
+import { editFileModal } from '../modals/upload-settings/modal';
 import { pickFileModal } from '../modals/pick-file/modal';
 import type { PickedFile } from '../modals/pick-file/picked-file';
 
@@ -18,17 +14,7 @@ function click() {
 }
 
 onMounted(async () => {
-  openModal(editFileModal, {
-    file: {
-      name: 'test.png',
-      extension: 'mp4',
-      objectUrl:
-        'https://ru.omath.net/file/content/01-foundations/02-equations/01-elementary/assets/explaining-meme.mp4',
-      size: 10 * 1024,
-    },
-  });
-
-  //launchAssetWizard();
+  launchAssetWizard();
 });
 
 async function launchAssetWizard() {
@@ -48,6 +34,10 @@ async function launchAssetWizard() {
         URL.revokeObjectURL(pickedFile.objectUrl);
       }
 
+      // Preload the upload-settings bundle in the background so it is already
+      // cached by the time the user picks a file and openModal() needs it.
+      editFileModal.component();
+
       const modalResult = await openModal(pickFileModal, {
         accept: anyFileExtensionProfile,
         maxSize: 10 * 1024 * 1024,
@@ -66,10 +56,14 @@ async function launchAssetWizard() {
     }
 
     if (step === 'edit') {
-      console.log('edit');
       const modalResult = await openModal(editFileModal, {
         file: pickedFile!,
       });
+
+      if (modalResult.type === 'upload-new') {
+        step = 'pick';
+        continue;
+      }
 
       beforeClose();
       return;

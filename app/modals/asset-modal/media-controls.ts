@@ -2,7 +2,6 @@ import { computed, onUnmounted, ref } from 'vue';
 
 const ZOOM_MIN = 0.05;
 const ZOOM_MAX = 5.0;
-const OVERFLOW = 300;
 const FIT_PADDING = 48; // 24px each side
 
 interface PointerState {
@@ -97,9 +96,13 @@ export function useMediaControls() {
   function clampBounds(z: number): { maxTx: number; maxTy: number } {
     const scaledW = naturalW.value * z;
     const scaledH = naturalH.value * z;
+    const overflow = Math.min(
+      300,
+      Math.min(window.innerWidth, window.innerHeight) * 0.25,
+    );
     return {
-      maxTx: Math.max(scaledW / 2 - containerW / 2 + OVERFLOW, 0),
-      maxTy: Math.max(scaledH / 2 - containerH / 2 + OVERFLOW, 0),
+      maxTx: Math.max(scaledW / 2 - containerW / 2 + overflow, 0),
+      maxTy: Math.max(scaledH / 2 - containerH / 2 + overflow, 0),
     };
   }
 
@@ -462,9 +465,9 @@ export function useMediaControls() {
   }
 
   function onMediaLoaded(w: number, h: number): void {
-    // SVGs without intrinsic dimensions report 0×0 — fall back to container size
-    const effectiveW = w > 0 ? w : containerW;
-    const effectiveH = h > 0 ? h : containerH;
+    // SVGs without intrinsic dimensions report 0×0 — fall back to 80% of container
+    const effectiveW = w > 0 ? w : containerW * 0.8;
+    const effectiveH = h > 0 ? h : containerH * 0.8;
     if (effectiveW > 0 && effectiveH > 0) {
       naturalW.value = effectiveW;
       naturalH.value = effectiveH;

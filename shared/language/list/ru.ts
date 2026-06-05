@@ -291,5 +291,8 @@ export default defineI18nModule({
       'Только владелец сайта имеет доступ к этому файлу!',
     direct_link_to_asset: 'Прямая ссылка на файл',
     asset: 'Файл',
+    upload_variants: 'Варианты загрузки',
+    pick_another_file: 'Выбрать другой файл',
+    upload_without_changes: 'Загрузить без изменений',
   },
 });

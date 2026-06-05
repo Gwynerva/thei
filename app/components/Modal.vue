@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { activeModal } from '#layers/thei/app/composables/modal';
+import { activeModal, modalLoading } from '#layers/thei/app/composables/modal';
 import type { BaseModalResult } from '#layers/thei/app/modals/types';
 
 const dialogElement = useTemplateRef('dialog');
@@ -15,7 +15,7 @@ watchEffect(() => {
     return;
   }
 
-  if (activeModal.value) {
+  if (activeModal.value || modalLoading.value) {
     if (!dialogElement.value.open) {
       dialogElement.value.showModal();
     }
@@ -97,5 +97,12 @@ onErrorCaptured((err) => {
       v-bind="activeModal.props"
       @modalResult="settle"
     />
+    <div
+      v-else-if="modalLoading"
+      class="absolute inset-0 flex min-h-screen min-w-screen items-center
+        justify-center"
+    >
+      <Icon name="loading" class="text-[5em] text-text-2" />
+    </div>
   </dialog>
 </template>

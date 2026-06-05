@@ -111,7 +111,13 @@ onMounted(() => {
 
 function onImgLoad(e: Event): void {
   const img = e.target as HTMLImageElement;
-  onMediaLoaded(img.naturalWidth, img.naturalHeight);
+  // SVGs scale to any size; don't use naturalWidth/naturalHeight (which may
+  // reflect viewBox extents) — pass 0,0 to trigger the container-based fallback.
+  if (extension === 'svg') {
+    onMediaLoaded(0, 0);
+  } else {
+    onMediaLoaded(img.naturalWidth, img.naturalHeight);
+  }
 }
 
 function onVideoMeta(e: Event): void {
@@ -188,7 +194,7 @@ defineExpose({ zoomPercent, handleZoomButtonClick });
         class="pointer-events-none absolute inset-0 flex items-center
           justify-center"
       >
-        <Icon name="loading" class="text-5xl text-text-2" />
+        <Icon name="loading" class="text-[5em] text-text-2" />
       </div>
     </TransitionFade>
 
