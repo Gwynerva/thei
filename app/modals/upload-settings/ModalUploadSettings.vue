@@ -144,6 +144,20 @@ const quality = ref(100);
             </template>
           </FieldSlider>
 
+          <div class="flex items-end text-sm text-text-2">
+            <div class="flex flex-1 flex-col gap-xs">
+              <div>Ширина</div>
+              <FieldInput type="text" class="min-w-2! p-2!" />
+            </div>
+            <button class="p-2 text-lg">
+              <Icon name="link" />
+            </button>
+            <div class="flex flex-1 flex-col gap-xs">
+              <div>Высота</div>
+              <FieldInput type="text" class="min-w-2! p-2!" />
+            </div>
+          </div>
+
           <!-- TODO: Выставлять их по умолчанию, показывать кнопку только тогда, когда есть изменения -->
           <Button variant="secondary">
             <Icon name="check-shield" class="mr-xs" />

@@ -12,13 +12,6 @@ export { defineModal, type ModalData } from '#layers/thei/app/modals/types';
 export const activeModal = shallowRef<ActiveModal | null>(null);
 
 /**
- * True while openModal() is awaiting a dynamic import but before the modal
- * component has been rendered. Used by Modal.vue to keep the dialog open
- * (showing a loading spinner) so there is no blank gap between modals.
- */
-export const modalLoading = shallowRef(false);
-
-/**
  * Programmatically close the active modal with an `empty` result.
  * Useful in modal components that don't use a `modalResult` emit.
  */
@@ -63,13 +56,11 @@ export async function openModal<
     );
   }
 
-  modalLoading.value = true;
   const module = await descriptor.component();
   const component = markRaw(module.default);
   const props = args.length > 0 ? { modalData: args[0] } : {};
 
   return new Promise<TResult>((resolve) => {
-    modalLoading.value = false;
     activeModal.value = {
       name: descriptor.name,
       component,
