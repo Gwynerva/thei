@@ -18,8 +18,10 @@ import { countEvents } from './events/repository/count';
 import { getPublicAdminSessions } from './admin-session/repository/public';
 import { getCurrentAdminSession } from './admin-session';
 import { createAsset } from './assets/repository/create';
+import { updateAsset } from './assets/repository/update';
 import { touchAsset } from './assets/repository/touch';
-import { findAssetByHash } from './assets/repository/find-by-hash';
+import { findAssetBySettingsKey } from './assets/repository/find-by-hash';
+import { findAssetsByRawHash } from './assets/repository/find-by-raw-hash';
 import { findAssetBySlug } from './assets/repository/find-by-slug';
 import { findAssetByUuid } from './assets/repository/find-by-uuid';
 import { findOrphanedAssets } from './assets/repository/find-orphaned';
@@ -32,7 +34,6 @@ import { findShowcaseAssets } from './assets/repository/usages/find-showcase';
 import { findOtherAssets } from './assets/repository/usages/find-other';
 import { updateAssetUsage } from './assets/repository/usages/update';
 import { deleteAsset } from './assets/repository/delete';
-import { processAsset } from './assets/process';
 import { assetFilePath } from './assets/file-path';
 
 export const THEI_SERVER = {
@@ -87,13 +88,14 @@ export const THEI_SERVER = {
   assets: {
     filePath: assetFilePath,
     create: createAsset,
+    update: updateAsset,
     findByUuid: findAssetByUuid,
-    findByHash: findAssetByHash,
+    findBySettingsKey: findAssetBySettingsKey,
+    findByRawHash: findAssetsByRawHash,
     findBySlug: findAssetBySlug,
     touch: touchAsset,
     findOrphaned: findOrphanedAssets,
     delete: deleteAsset,
-    process: processAsset,
     usages: {
       attach: attachAssetUsage,
       detach: detachAssetUsage,

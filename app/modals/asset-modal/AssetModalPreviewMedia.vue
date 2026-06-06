@@ -3,14 +3,24 @@ import {
   isExtensionAllowed,
   videoExtensionProfile,
 } from '#layers/thei/shared/assets/extensions';
+import type { MediaViewState } from './media-controls';
 import { useMediaControls } from './media-controls';
 
-const { extension, src } = defineProps<{
+export interface VideoPlaybackState {
+  currentTime: number;
+  volume: number;
+  muted: boolean;
+}
+
+const props = defineProps<{
   extension: string;
   src: string;
+  hasAudio?: boolean;
+  initialViewState?: MediaViewState;
+  initialPlaybackState?: VideoPlaybackState;
 }>();
 
-const isVideo = isExtensionAllowed(extension, videoExtensionProfile);
+const isVideo = isExtensionAllowed(props.extension, videoExtensionProfile);
 
 const {
   transformStyle,
@@ -20,6 +30,8 @@ const {
   isDragging,
   isReady,
   handleZoomButtonClick,
+  getViewState,
+  restoreViewState,
   onPointerDown,
   onPointerMove,
   onPointerUp,
@@ -30,6 +42,7 @@ const {
 
 const containerRef = useTemplateRef<HTMLElement>('container');
 const mediaRef = useTemplateRef<HTMLVideoElement | HTMLImageElement>('media');
+let initialViewStateRestored = false;
 
 // ─── video playback state ──────────────────────────────────────────────────
 
@@ -38,6 +51,15 @@ const currentTime = ref(0);
 const duration = ref(0);
 const isMuted = ref(false);
 const volume = ref(1);
+const hasAudio = ref(props.hasAudio ?? true);
+let initialPlaybackStateRestored = false;
+
+watch(
+  () => props.hasAudio,
+  (value) => {
+    if (value !== undefined) hasAudio.value = value;
+  },
+);
 
 const seekPct = computed(() =>
   duration.value > 0 ? `${(currentTime.value / duration.value) * 100}%` : '0%',
@@ -65,6 +87,8 @@ function togglePlay(): void {
 
 function seek(e: Event): void {
   const val = parseFloat((e.target as HTMLInputElement).value);
+  if (!Number.isFinite(val)) return;
+  initialPlaybackStateRestored = true;
   currentTime.value = val;
   (mediaRef.value as HTMLVideoElement).currentTime = val;
 }
@@ -88,6 +112,16 @@ function onVideoVolumeChange(e: Event): void {
   volume.value = v.volume;
 }
 
+function getPlaybackState(): VideoPlaybackState | undefined {
+  if (!isVideo) return undefined;
+  const v = mediaRef.value as HTMLVideoElement | undefined;
+  return {
+    currentTime: v?.currentTime ?? currentTime.value,
+    volume: v?.volume ?? volume.value,
+    muted: v?.muted ?? isMuted.value,
+  };
+}
+
 // ─── mount ────────────────────────────────────────────────────────────────
 
 onMounted(() => {
@@ -107,23 +141,48 @@ onMounted(() => {
         : null;
     }
   });
+  nextTick(restoreInitialViewState);
 });
+
+function restoreInitialViewState(): void {
+  if (initialViewStateRestored || !props.initialViewState || !isReady.value) {
+    return;
+  }
+  initialViewStateRestored = true;
+  restoreViewState(props.initialViewState);
+}
 
 function onImgLoad(e: Event): void {
   const img = e.target as HTMLImageElement;
   // SVGs scale to any size; don't use naturalWidth/naturalHeight (which may
   // reflect viewBox extents) — pass 0,0 to trigger the container-based fallback.
-  if (extension === 'svg') {
+  if (props.extension === 'svg') {
     onMediaLoaded(0, 0);
   } else {
     onMediaLoaded(img.naturalWidth, img.naturalHeight);
   }
+  restoreInitialViewState();
 }
 
 function onVideoMeta(e: Event): void {
   const v = e.target as HTMLVideoElement;
   onMediaLoaded(v.videoWidth, v.videoHeight);
+  restoreInitialViewState();
   duration.value = v.duration;
+  const initial = props.initialPlaybackState;
+  if (initial && !initialPlaybackStateRestored) {
+    initialPlaybackStateRestored = true;
+    v.currentTime = Math.min(
+      initial.currentTime,
+      v.duration || initial.currentTime,
+    );
+    v.volume = initial.volume;
+    v.muted = initial.muted;
+    currentTime.value = v.currentTime;
+    volume.value = v.volume;
+    isMuted.value = v.muted;
+  }
+  hasAudio.value = props.hasAudio ?? true;
 }
 
 function onDurationChange(e: Event): void {
@@ -134,7 +193,12 @@ function onTimeUpdate(e: Event): void {
   currentTime.value = (e.target as HTMLVideoElement).currentTime;
 }
 
-defineExpose({ zoomPercent, handleZoomButtonClick });
+defineExpose({
+  zoomPercent,
+  handleZoomButtonClick,
+  getViewState,
+  getPlaybackState,
+});
 </script>
 
 <template>
@@ -161,7 +225,7 @@ defineExpose({ zoomPercent, handleZoomButtonClick });
           v-if="isVideo"
           v-show="isReady"
           ref="media"
-          :src="src"
+          :src="props.src"
           class="pointer-events-none block max-h-none max-w-none"
           :style="mediaStyle"
           @loadedmetadata="onVideoMeta"
@@ -177,7 +241,7 @@ defineExpose({ zoomPercent, handleZoomButtonClick });
           v-if="!isVideo"
           v-show="isReady"
           ref="media"
-          :src="src"
+          :src="props.src"
           alt=""
           draggable="false"
           class="pointer-events-none block max-h-none max-w-none"
@@ -203,9 +267,9 @@ defineExpose({ zoomPercent, handleZoomButtonClick });
       v-if="isVideo && isReady"
       class="absolute right-md bottom-md left-md z-10 flex min-w-80
         cursor-default items-center rounded-full border-2 border-border-3/30
-        bg-bg-2/60 shadow-[0_0_10px_2px_var(--color-shadow-3)] backdrop-blur
-        transition sm:right-0 sm:left-1/2 sm:w-5/8 sm:-translate-x-1/2
-        hocus:border-border-3/50 hocus:bg-bg-2/80"
+        bg-bg-2/60 px-xs shadow-[0_0_10px_2px_var(--color-shadow-3)]
+        backdrop-blur transition sm:right-0 sm:left-1/2 sm:w-5/8
+        sm:-translate-x-1/2 hocus:border-border-3/50 hocus:bg-bg-2/80"
       @pointerdown.stop
       @pointermove.stop
       @pointerup.stop
@@ -244,6 +308,7 @@ defineExpose({ zoomPercent, handleZoomButtonClick });
 
       <!-- mute / unmute -->
       <button
+        v-if="hasAudio"
         class="flex shrink-0 cursor-pointer items-center justify-center
           rounded-full p-xs text-text-1/70 transition hocus:text-text-1"
         @click="toggleMute"
@@ -253,6 +318,7 @@ defineExpose({ zoomPercent, handleZoomButtonClick });
 
       <!-- volume slider -->
       <input
+        v-if="hasAudio"
         type="range"
         class="volume-bar mr-xs"
         min="0"

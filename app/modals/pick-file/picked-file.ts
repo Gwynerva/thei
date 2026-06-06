@@ -5,4 +5,5 @@ export interface PickedFile {
   extension: string;
   size: number;
   name: string;
+  rawHash: string;
 }

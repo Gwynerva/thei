@@ -25,6 +25,13 @@ interface PanStartState {
   py: number;
 }
 
+export interface MediaViewState {
+  zoom: number;
+  tx: number;
+  ty: number;
+  isFitMode: boolean;
+}
+
 export function useMediaControls() {
   // ─── state ────────────────────────────────────────────────────────────────
 
@@ -245,6 +252,30 @@ export function useMediaControls() {
     } else {
       enterOriginalMode();
     }
+  }
+
+  function getViewState(): MediaViewState {
+    snapToTarget();
+    return {
+      zoom: zoom.value,
+      tx: tx.value,
+      ty: ty.value,
+      isFitMode: isFitMode.value,
+    };
+  }
+
+  function restoreViewState(state: MediaViewState): void {
+    if (naturalW.value === 0 || naturalH.value === 0) return;
+    stopAnimation();
+    isFitMode.value = state.isFitMode;
+    const nextZoom = clampZoom(state.zoom);
+    const clamped = clampPair(nextZoom, state.tx, state.ty);
+    zoom.value = nextZoom;
+    tx.value = clamped.tx;
+    ty.value = clamped.ty;
+    targetZoom = zoom.value;
+    targetTx = tx.value;
+    targetTy = ty.value;
   }
 
   // ─── wheel ────────────────────────────────────────────────────────────────
@@ -496,6 +527,8 @@ export function useMediaControls() {
     fitZoom,
     isReady,
     handleZoomButtonClick,
+    getViewState,
+    restoreViewState,
     onPointerDown,
     onPointerMove,
     onPointerUp,

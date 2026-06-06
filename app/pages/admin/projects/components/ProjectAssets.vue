@@ -1,10 +1,19 @@
 <script lang="ts" setup>
 import type {
-  AssetPickResult,
   AssetReplaceResult,
+  AssetVariantInfo,
 } from '#layers/thei/shared/api/asset';
+import {
+  launchAssetWizard,
+  mapAssetVariantToReplaceResult,
+} from '#layers/thei/app/composables/asset-wizard';
+import { AssetType } from '#layers/thei/shared/asset';
+import {
+  anyFileExtensionProfile,
+  imageExtensionProfile,
+  videoExtensionProfile,
+} from '#layers/thei/shared/assets/extensions';
 import AssetAddEdit from '#layers/thei/app/components/AssetAddEdit.vue';
-import AssetPickPane from '#layers/thei/app/components/AssetPickPane.vue';
 import AssetEditPane from '#layers/thei/app/components/AssetEditPane.vue';
 import type {
   OtherAssetGetItem,
@@ -21,8 +30,8 @@ import {
   otherItemsKey,
   showcaseItemsKey,
 } from '../composables';
-import ShowcaseAddPane from './ShowcaseAddPane.vue';
-import OtherAddPane from './OtherAddPane.vue';
+import ShowcaseConfigPane from './ShowcaseConfigPane.vue';
+import OtherConfigPane from './OtherConfigPane.vue';
 import type {
   OtherAssetAddedResult,
   ShowcaseAssetAddedResult,
@@ -40,6 +49,49 @@ const showcaseItems = inject(showcaseItemsKey)!;
 const otherItems = inject(otherItemsKey)!;
 
 const modal = useModal();
+const PROJECT_ASSET_MAX_SIZE = 100 * 1024 * 1024;
+
+type PickedAsset = {
+  asset: AssetVariantInfo;
+  result: AssetReplaceResult;
+};
+
+async function pickProjectMediaAsset(): Promise<PickedAsset | undefined> {
+  const asset = await launchProjectAssetWizard({
+    accept: [imageExtensionProfile, videoExtensionProfile],
+    maxSize: PROJECT_ASSET_MAX_SIZE,
+  });
+  if (
+    !asset ||
+    (asset.type !== AssetType.Image && asset.type !== AssetType.Video)
+  ) {
+    return undefined;
+  }
+
+  const result = mapAssetVariantToReplaceResult(asset);
+  return result.previewUrl ? { asset, result } : undefined;
+}
+
+async function pickAnyProjectAsset(): Promise<PickedAsset | undefined> {
+  const asset = await launchProjectAssetWizard({
+    accept: anyFileExtensionProfile,
+    maxSize: PROJECT_ASSET_MAX_SIZE,
+  });
+  return asset
+    ? { asset, result: mapAssetVariantToReplaceResult(asset) }
+    : undefined;
+}
+
+async function launchProjectAssetWizard(
+  options: Parameters<typeof launchAssetWizard>[0],
+) {
+  try {
+    return await launchAssetWizard(options);
+  } catch (error) {
+    console.error(error);
+    return undefined;
+  }
+}
 
 function applyIconAsset(result: AssetReplaceResult) {
   if (!result.previewUrl) return;
@@ -57,7 +109,7 @@ function applyBannerAsset(result: AssetReplaceResult) {
   bannerSize.value = result.size;
 }
 
-// ── Showcase asset list ───────────────────────────────────────────────────────
+// Showcase asset list
 
 const { addItem, updateItem, removeItem, dragSort } = useProjectAssetList(
   showcaseItems,
@@ -84,25 +136,13 @@ const {
   }));
 });
 
-// ── Icon handlers ─────────────────────────────────────────────────────────────
+// Icon handlers
 
-function openIconUpload() {
-  modal.open({
-    title: phrase.value.project_icon,
-    component: AssetPickPane,
-    props: {
-      imageProfileId: 'icon',
-      imageOriginalProfileId: 'icon-original',
-      videoProfileId: 'icon-video',
-      videoOriginalProfileId: 'icon-video-original',
-    },
-    onBack(result: unknown) {
-      if (!result) return;
-      applyIconAsset(result as AssetPickResult);
-      // Immediately open the edit pane after upload
-      openIconModal();
-    },
-  });
+async function openIconUpload() {
+  const picked = await pickProjectMediaAsset();
+  if (!picked) return;
+  applyIconAsset(picked.result);
+  openIconModal();
 }
 
 function openIconModal() {
@@ -113,11 +153,14 @@ function openIconModal() {
       previewUrl: iconPreviewUrl.value!,
       videoUrl: iconVideoUrl.value,
       size: iconSize.value,
-      imageProfileId: 'icon',
-      imageOriginalProfileId: 'icon-original',
-      videoProfileId: 'icon-video',
-      videoOriginalProfileId: 'icon-video-original',
       primaryLabel: phrase.value.save,
+      async onReplaceClick(
+        updatePreview: (result: AssetReplaceResult) => void,
+      ) {
+        const picked = await pickProjectMediaAsset();
+        if (!picked) return;
+        updatePreview(picked.result);
+      },
       onReplaced(result: AssetReplaceResult) {
         applyIconAsset(result);
       },
@@ -131,24 +174,13 @@ function openIconModal() {
   });
 }
 
-// ── Banner handlers ───────────────────────────────────────────────────────────
+// Banner handlers
 
-function openBannerUpload() {
-  modal.open({
-    title: phrase.value.project_banner,
-    component: AssetPickPane,
-    props: {
-      imageProfileId: 'banner',
-      imageOriginalProfileId: 'banner-original',
-      videoProfileId: 'banner-video',
-      videoOriginalProfileId: 'banner-video-original',
-    },
-    onBack(result: unknown) {
-      if (!result) return;
-      applyBannerAsset(result as AssetPickResult);
-      openBannerModal();
-    },
-  });
+async function openBannerUpload() {
+  const picked = await pickProjectMediaAsset();
+  if (!picked) return;
+  applyBannerAsset(picked.result);
+  openBannerModal();
 }
 
 function openBannerModal() {
@@ -159,11 +191,14 @@ function openBannerModal() {
       previewUrl: bannerPreviewUrl.value!,
       videoUrl: bannerVideoUrl.value,
       size: bannerSize.value,
-      imageProfileId: 'banner',
-      imageOriginalProfileId: 'banner-original',
-      videoProfileId: 'banner-video',
-      videoOriginalProfileId: 'banner-video-original',
       primaryLabel: phrase.value.save,
+      async onReplaceClick(
+        updatePreview: (result: AssetReplaceResult) => void,
+      ) {
+        const picked = await pickProjectMediaAsset();
+        if (!picked) return;
+        updatePreview(picked.result);
+      },
       onReplaced(result: AssetReplaceResult) {
         applyBannerAsset(result);
       },
@@ -177,13 +212,22 @@ function openBannerModal() {
   });
 }
 
-// ── Showcase handlers ─────────────────────────────────────────────────────────
+// Showcase handlers
 
-function openShowcaseAdd() {
+async function openShowcaseAdd() {
+  const picked = await pickProjectMediaAsset();
+  if (!picked || !picked.result.previewUrl) return;
+
   modal.open({
-    title: phrase.value.showcase_add,
-    component: ShowcaseAddPane,
+    title: phrase.value.showcase_details,
+    component: ShowcaseConfigPane,
     props: {
+      assetUuid: picked.result.assetUuid,
+      assetType: picked.asset.type,
+      previewUrl: picked.result.previewUrl,
+      videoUrl: picked.result.videoUrl,
+      assetUrl: picked.result.assetUrl,
+      size: picked.result.size,
       onAdded(result: ShowcaseAssetAddedResult) {
         addItem({
           assetUuid: result.assetUuid,
@@ -202,6 +246,7 @@ function openShowcaseAdd() {
 function openShowcaseAsset(index: number) {
   const snapshot = showcaseItems.value[index];
   if (!snapshot) return;
+  let currentAssetUuid = snapshot.assetUuid;
   modal.open({
     title: phrase.value.showcase,
     component: AssetEditPane,
@@ -216,49 +261,48 @@ function openShowcaseAsset(index: number) {
       initialAccess: snapshot.access,
       primaryLabel: phrase.value.save,
       onReplaceClick(updatePreview: (result: AssetReplaceResult) => void) {
-        modal.push({
-          title: phrase.value.showcase_add,
-          component: ShowcaseAddPane,
-          props: {
-            onReplaced(result: AssetReplaceResult) {
-              if (!result.previewUrl) return;
-              updateItem(snapshot.assetUuid, {
-                assetUuid: result.assetUuid,
-                previewUrl: result.previewUrl,
-                videoUrl: result.videoUrl,
-                size: result.size,
-              } as Partial<ShowcaseAssetGetItem>);
-              updatePreview(result);
-            },
-          },
-        });
+        void (async () => {
+          const picked = await pickProjectMediaAsset();
+          if (!picked || !picked.result.previewUrl) return;
+          updatePreview(picked.result);
+        })();
       },
       onSave(patch: { caption?: string; access?: 'project' | 'private' }) {
-        updateItem(snapshot.assetUuid, patch as Partial<ShowcaseAssetGetItem>);
+        updateItem(currentAssetUuid, patch as Partial<ShowcaseAssetGetItem>);
       },
       onReplaced(result: AssetReplaceResult) {
         if (!result.previewUrl) return;
-        updateItem(snapshot.assetUuid, {
+        updateItem(currentAssetUuid, {
           assetUuid: result.assetUuid,
           previewUrl: result.previewUrl,
           videoUrl: result.videoUrl,
           size: result.size,
         } as Partial<ShowcaseAssetGetItem>);
+        currentAssetUuid = result.assetUuid;
       },
       onDeleted() {
-        removeItem(snapshot.assetUuid);
+        removeItem(currentAssetUuid);
       },
     },
   });
 }
 
-// ── Other-files handlers ─────────────────────────────────────────────────────
+// Other-files handlers
 
-function openOtherAdd() {
+async function openOtherAdd() {
+  const picked = await pickAnyProjectAsset();
+  if (!picked) return;
+
   modal.open({
-    title: phrase.value.other_add,
-    component: OtherAddPane,
+    title: phrase.value.other_details,
+    component: OtherConfigPane,
     props: {
+      assetUuid: picked.result.assetUuid,
+      extension: picked.result.extension,
+      previewUrl: picked.result.previewUrl,
+      videoUrl: picked.result.videoUrl,
+      assetUrl: picked.result.assetUrl,
+      size: picked.result.size,
       onAdded(result: OtherAssetAddedResult) {
         addOtherItem({
           assetUuid: result.assetUuid,
@@ -279,6 +323,7 @@ function openOtherAdd() {
 function openOtherAsset(index: number) {
   const snapshot = otherItems.value[index];
   if (!snapshot) return;
+  let currentAssetUuid = snapshot.assetUuid;
   modal.open({
     title: phrase.value.other_files,
     component: AssetEditPane,
@@ -300,36 +345,21 @@ function openOtherAsset(index: number) {
       initialAccess: snapshot.access,
       primaryLabel: phrase.value.save,
       onReplaceClick(updatePreview: (result: AssetReplaceResult) => void) {
-        modal.push({
-          title: phrase.value.other_add,
-          component: OtherAddPane,
-          props: {
-            onReplaced(result: AssetReplaceResult) {
-              updateOtherItem(snapshot.assetUuid, {
-                assetUuid: result.assetUuid,
-                previewUrl: result.previewUrl,
-                videoUrl: result.videoUrl,
-                assetUrl: result.assetUrl,
-                extension: result.extension,
-                size: result.size,
-              } as Partial<OtherAssetGetItem>);
-              updatePreview(result);
-            },
-          },
-        });
+        void (async () => {
+          const picked = await pickAnyProjectAsset();
+          if (!picked) return;
+          updatePreview(picked.result);
+        })();
       },
       onSave(patch: {
         title?: string;
         caption?: string;
         access?: 'project' | 'private';
       }) {
-        updateOtherItem(
-          snapshot.assetUuid,
-          patch as Partial<OtherAssetGetItem>,
-        );
+        updateOtherItem(currentAssetUuid, patch as Partial<OtherAssetGetItem>);
       },
       onReplaced(result: AssetReplaceResult) {
-        updateOtherItem(snapshot.assetUuid, {
+        updateOtherItem(currentAssetUuid, {
           assetUuid: result.assetUuid,
           previewUrl: result.previewUrl,
           videoUrl: result.videoUrl,
@@ -337,9 +367,10 @@ function openOtherAsset(index: number) {
           extension: result.extension,
           size: result.size,
         } as Partial<OtherAssetGetItem>);
+        currentAssetUuid = result.assetUuid;
       },
       onDeleted() {
-        removeOtherItem(snapshot.assetUuid);
+        removeOtherItem(currentAssetUuid);
       },
     },
   });

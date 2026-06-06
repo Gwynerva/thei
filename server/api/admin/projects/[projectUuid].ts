@@ -10,6 +10,7 @@ import type {
   ShowcaseAssetGetItem,
 } from '#layers/thei/shared/api/project';
 import { AssetType } from '#layers/thei/shared/asset';
+import { findVideoPreviewAsset } from '../../../thei/assets/storage';
 
 export default defineEventHandler(async (event) => {
   const identifier = getRouterParam(event, 'projectUuid')!;
@@ -32,58 +33,20 @@ export default defineEventHandler(async (event) => {
       const iconUsage = usages.find((u) => u.role === 'icon');
       const bannerUsage = usages.find((u) => u.role === 'banner');
 
-      // Resolve icon URLs (image or video)
       let iconPreviewUrl: string | undefined;
       let iconVideoUrl: string | undefined;
       if (iconUsage) {
-        const iconAsset = iconUsage.asset;
-        if (
-          iconAsset.type === AssetType.Video &&
-          iconAsset.meta?.previewAssetUuid
-        ) {
-          const thumb = await THEI_SERVER.assets.findByUuid(
-            iconAsset.meta.previewAssetUuid,
-          );
-          iconPreviewUrl = thumb
-            ? buildAssetPreviewUrl(thumb.slug, 'webp')
-            : buildAssetPreviewUrl(iconAsset.slug, iconAsset.extension);
-          iconVideoUrl = buildAssetPreviewUrl(
-            iconAsset.slug,
-            iconAsset.extension,
-          );
-        } else if (iconUsage) {
-          iconPreviewUrl = buildAssetPreviewUrl(
-            iconAsset.slug,
-            iconAsset.extension,
-          );
-        }
+        const urls = await buildProjectAssetUrls(iconUsage.asset);
+        iconPreviewUrl = urls.previewUrl;
+        iconVideoUrl = urls.videoUrl;
       }
 
-      // Resolve banner URLs (image or video)
       let bannerPreviewUrl: string | undefined;
       let bannerVideoUrl: string | undefined;
       if (bannerUsage) {
-        const bannerAsset = bannerUsage.asset;
-        if (
-          bannerAsset.type === AssetType.Video &&
-          bannerAsset.meta?.previewAssetUuid
-        ) {
-          const thumb = await THEI_SERVER.assets.findByUuid(
-            bannerAsset.meta.previewAssetUuid,
-          );
-          bannerPreviewUrl = thumb
-            ? buildAssetPreviewUrl(thumb.slug, 'webp')
-            : buildAssetPreviewUrl(bannerAsset.slug, bannerAsset.extension);
-          bannerVideoUrl = buildAssetPreviewUrl(
-            bannerAsset.slug,
-            bannerAsset.extension,
-          );
-        } else {
-          bannerPreviewUrl = buildAssetPreviewUrl(
-            bannerAsset.slug,
-            bannerAsset.extension,
-          );
-        }
+        const urls = await buildProjectAssetUrls(bannerUsage.asset);
+        bannerPreviewUrl = urls.previewUrl;
+        bannerVideoUrl = urls.videoUrl;
       }
 
       const rawShowcase =
@@ -92,26 +55,13 @@ export default defineEventHandler(async (event) => {
       const showcaseAssets: ShowcaseAssetGetItem[] = await Promise.all(
         rawShowcase.map(async ({ asset, meta }) => {
           const isVideo = asset.type === AssetType.Video;
-          let previewUrl: string;
-
-          if (isVideo && asset.meta?.previewAssetUuid) {
-            const thumb = await THEI_SERVER.assets.findByUuid(
-              asset.meta.previewAssetUuid,
-            );
-            previewUrl = thumb
-              ? buildAssetPreviewUrl(thumb.slug, 'webp')
-              : buildAssetPreviewUrl(asset.slug, asset.extension);
-          } else {
-            previewUrl = buildAssetPreviewUrl(asset.slug, asset.extension);
-          }
+          const urls = await buildProjectAssetUrls(asset);
 
           return {
             assetUuid: asset.assetUuid,
             type: asset.type as AssetType,
-            previewUrl,
-            videoUrl: isVideo
-              ? buildAssetPreviewUrl(asset.slug, asset.extension)
-              : undefined,
+            previewUrl: urls.previewUrl ?? urls.assetUrl,
+            videoUrl: isVideo ? urls.videoUrl : undefined,
             caption: meta?.role === 'showcase-asset' ? meta.caption : undefined,
             access: meta?.role === 'showcase-asset' ? meta.access : 'project',
             size: asset.size,
@@ -123,30 +73,13 @@ export default defineEventHandler(async (event) => {
 
       const otherAssets: OtherAssetGetItem[] = await Promise.all(
         rawOther.map(async ({ asset, meta }) => {
-          const assetUrl = buildAssetPreviewUrl(asset.slug, asset.extension);
-          const isVideo = asset.type === AssetType.Video;
-          const isImage = asset.type === AssetType.Image;
-
-          let previewUrl: string | undefined;
-          let videoUrl: string | undefined;
-
-          if (isVideo && asset.meta?.previewAssetUuid) {
-            const thumb = await THEI_SERVER.assets.findByUuid(
-              asset.meta.previewAssetUuid,
-            );
-            previewUrl = thumb
-              ? buildAssetPreviewUrl(thumb.slug, 'webp')
-              : undefined;
-            videoUrl = assetUrl;
-          } else if (isImage) {
-            previewUrl = assetUrl;
-          }
+          const urls = await buildProjectAssetUrls(asset);
 
           return {
             assetUuid: asset.assetUuid,
-            previewUrl,
-            videoUrl,
-            assetUrl,
+            previewUrl: urls.previewUrl,
+            videoUrl: urls.videoUrl,
+            assetUrl: urls.assetUrl,
             size: asset.size,
             extension: asset.extension,
             title: meta?.role === 'other-asset' ? meta.title : undefined,
@@ -260,7 +193,7 @@ export default defineEventHandler(async (event) => {
       const newShowcase = result.showcaseAssets ?? [];
       const newShowcaseUuids = new Set(newShowcase.map((s) => s.assetUuid));
 
-      // Detach removed showcase assets (and their previews)
+      // Detach removed showcase assets
       for (const { asset } of currentShowcase) {
         if (!newShowcaseUuids.has(asset.assetUuid)) {
           await THEI_SERVER.assets.usages.detach(
@@ -269,18 +202,10 @@ export default defineEventHandler(async (event) => {
             projectUuid,
             'showcase-asset',
           );
-          if (asset.meta?.previewAssetUuid) {
-            await THEI_SERVER.assets.usages.detach(
-              asset.meta.previewAssetUuid,
-              'project',
-              projectUuid,
-              'showcase-preview',
-            );
-          }
         }
       }
 
-      // Attach new showcase assets (and their previews), update meta for all
+      // Attach new showcase assets, update meta for all
       for (let i = 0; i < newShowcase.length; i++) {
         const item = newShowcase[i]!;
         const usageMeta = {
@@ -297,18 +222,6 @@ export default defineEventHandler(async (event) => {
             projectUuid,
             'showcase-asset',
           );
-          // Also attach the video thumbnail preview if present
-          const assetRecord = await THEI_SERVER.assets.findByUuid(
-            item.assetUuid,
-          );
-          if (assetRecord?.meta?.previewAssetUuid) {
-            await THEI_SERVER.assets.usages.attach(
-              assetRecord.meta.previewAssetUuid,
-              'project',
-              projectUuid,
-              'showcase-preview',
-            );
-          }
         }
 
         await THEI_SERVER.assets.usages.update(
@@ -329,7 +242,7 @@ export default defineEventHandler(async (event) => {
       const newOther = result.otherAssets ?? [];
       const newOtherUuids = new Set(newOther.map((o) => o.assetUuid));
 
-      // Detach removed other assets (and their video previews)
+      // Detach removed other assets
       for (const { asset } of currentOther) {
         if (!newOtherUuids.has(asset.assetUuid)) {
           await THEI_SERVER.assets.usages.detach(
@@ -338,18 +251,10 @@ export default defineEventHandler(async (event) => {
             projectUuid,
             'other-asset',
           );
-          if (asset.meta?.previewAssetUuid) {
-            await THEI_SERVER.assets.usages.detach(
-              asset.meta.previewAssetUuid,
-              'project',
-              projectUuid,
-              'showcase-preview',
-            );
-          }
         }
       }
 
-      // Attach new other assets (and their video previews), update meta for all
+      // Attach new other assets, update meta for all
       for (let i = 0; i < newOther.length; i++) {
         const item = newOther[i]!;
         const usageMeta = {
@@ -367,17 +272,6 @@ export default defineEventHandler(async (event) => {
             projectUuid,
             'other-asset',
           );
-          const assetRecord = await THEI_SERVER.assets.findByUuid(
-            item.assetUuid,
-          );
-          if (assetRecord?.meta?.previewAssetUuid) {
-            await THEI_SERVER.assets.usages.attach(
-              assetRecord.meta.previewAssetUuid,
-              'project',
-              projectUuid,
-              'showcase-preview',
-            );
-          }
         }
 
         await THEI_SERVER.assets.usages.update(
@@ -410,3 +304,29 @@ export default defineEventHandler(async (event) => {
     }
   }
 });
+
+async function buildProjectAssetUrls(
+  asset: Parameters<typeof findVideoPreviewAsset>[0],
+) {
+  const assetUrl = buildAssetPreviewUrl(asset.slug, asset.extension);
+
+  if (asset.type === AssetType.Video) {
+    const preview = await findVideoPreviewAsset(asset);
+    return {
+      assetUrl,
+      previewUrl: preview
+        ? buildAssetPreviewUrl(preview.slug, preview.extension)
+        : undefined,
+      videoUrl: assetUrl,
+    };
+  }
+
+  return {
+    assetUrl,
+    previewUrl:
+      asset.type === AssetType.Image || asset.type === AssetType.Video
+        ? assetUrl
+        : undefined,
+    videoUrl: undefined,
+  };
+}

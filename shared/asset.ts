@@ -17,7 +17,7 @@ export const IMAGE_EXTENSIONS = [
 export const VIDEO_EXTENSIONS = ['mp4', 'webm', 'mov', 'avi'] as const;
 export const AUDIO_EXTENSIONS = ['mp3', 'wav', 'ogg', 'flac'] as const;
 
-export const ASSET_CONTAINER_TYPES = ['project', 'event'] as const;
+export const ASSET_CONTAINER_TYPES = ['project', 'event', 'asset'] as const;
 export type AssetContainerType = (typeof ASSET_CONTAINER_TYPES)[number];
 
 export const ASSET_ROLES = [
@@ -26,23 +26,54 @@ export const ASSET_ROLES = [
   'gallery',
   'content',
   'showcase-asset',
-  'showcase-preview',
   'other-asset',
+  'preview',
 ] as const;
 export type AssetRole = (typeof ASSET_ROLES)[number];
 
-export interface ImageAssetMeta {
-  /** Pixel width after transformation. Present for all newly uploaded raster images and SVGs. */
-  width?: number;
-  /** Pixel height after transformation. Present for all newly uploaded raster images and SVGs. */
-  height?: number;
-  /** OKLCH hue (0–359) of the dominant color. Only set for colorful raster images. */
-  dominantHue?: number;
-  /** UUID of the first-frame thumbnail asset. Set only for processed video assets. */
-  previewAssetUuid?: string;
+export interface AssetMetaBase {
+  /** Extension point for future computed asset properties. */
+  properties?: Record<string, unknown>;
 }
 
-export type AssetMeta = ImageAssetMeta;
+export interface ImageAssetMeta extends AssetMetaBase {
+  /** Pixel width after upload/transformation when the file has intrinsic dimensions. */
+  width?: number;
+  /** Pixel height after upload/transformation when the file has intrinsic dimensions. */
+  height?: number;
+  /** OKLCH hue (0-359) of the dominant color. */
+  dominantHue?: number;
+}
+
+export interface VideoAssetMeta extends AssetMetaBase {
+  /** Pixel width after upload/transformation when available. */
+  width?: number;
+  /** Pixel height after upload/transformation when available. */
+  height?: number;
+  /** OKLCH hue (0-359) of the generated first-frame preview. */
+  dominantHue?: number;
+  /** Whether the stored video keeps or strips audio. */
+  audio?: 'keep' | 'strip' | 'none' | 'unknown';
+}
+
+export interface AudioAssetMeta extends AssetMetaBase {}
+
+export interface OtherAssetMeta extends AssetMetaBase {}
+
+export type AssetMeta =
+  | ImageAssetMeta
+  | VideoAssetMeta
+  | AudioAssetMeta
+  | OtherAssetMeta;
+
+export type AssetMetaForType<TType extends AssetType> =
+  TType extends AssetType.Image
+    ? ImageAssetMeta
+    : TType extends AssetType.Video
+      ? VideoAssetMeta
+      : TType extends AssetType.Audio
+        ? AudioAssetMeta
+        : OtherAssetMeta;
 
 export interface ShowcaseAssetUsageMeta {
   role: 'showcase-asset';
@@ -61,5 +92,12 @@ export interface OtherAssetUsageMeta {
   access: 'project' | 'private';
 }
 
+export interface PreviewAssetUsageMeta {
+  role: 'preview';
+}
+
 /** Discriminated union of per-role usage metadata stored in asset_usages.meta. */
-export type AssetUsageMeta = ShowcaseAssetUsageMeta | OtherAssetUsageMeta;
+export type AssetUsageMeta =
+  | ShowcaseAssetUsageMeta
+  | OtherAssetUsageMeta
+  | PreviewAssetUsageMeta;

@@ -22,6 +22,7 @@ const humanSize = useHumanSize();
 
 const errorMessage = ref('');
 const dragging = ref(false);
+const isHashing = ref(false);
 const stopDragging = debounce(() => {
   dragging.value = false;
 }, 50);
@@ -52,7 +53,17 @@ const acceptAttr = computed(() => {
   return acceptAll ? '' : exts.join(',');
 });
 
-function validateAndEmit(file: File) {
+async function hashFile(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const digest = await crypto.subtle.digest('SHA-256', buffer);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+async function validateAndEmit(file: File) {
+  if (isHashing.value) return;
+
   const ext = getPathExtension(file.name);
 
   if (!isExtensionAllowed(ext, props.modalData.accept)) {
@@ -69,15 +80,23 @@ function validateAndEmit(file: File) {
   }
 
   errorMessage.value = '';
-  const objectUrl = URL.createObjectURL(file);
-  emit('modalResult', {
-    type: 'picked-file',
-    objectUrl,
-    file,
-    extension: ext,
-    size: file.size,
-    name: file.name,
-  });
+  isHashing.value = true;
+  try {
+    const rawHash = await hashFile(file);
+    const objectUrl = URL.createObjectURL(file);
+    emit('modalResult', {
+      type: 'picked-file',
+      objectUrl,
+      file,
+      extension: ext,
+      size: file.size,
+      name: file.name,
+      rawHash,
+    });
+  } catch {
+    errorMessage.value = 'Failed to calculate file hash.';
+    isHashing.value = false;
+  }
 }
 
 function browse() {
@@ -114,7 +133,7 @@ onUnmounted(() => document.removeEventListener('paste', handlePaste));
 
 <template>
   <section
-    @click="browse"
+    @click="!isHashing && browse()"
     @dragover.prevent="
       dragging = true;
       stopDragging.cancel();
@@ -148,6 +167,10 @@ onUnmounted(() => document.removeEventListener('paste', handlePaste));
       <div v-if="errorMessage" class="text-xl font-semibold text-text-error">
         <Icon name="warning" class="mr-xs" />
         <span>{{ errorMessage }}</span>
+      </div>
+      <div v-if="isHashing" class="text-xl font-semibold text-accent">
+        <Icon name="loading" class="mr-xs" />
+        <span>Calculating file hash</span>
       </div>
       <div
         class="group/icon rounded-full border-2 border-border-1/50 bg-bg-2 p-md

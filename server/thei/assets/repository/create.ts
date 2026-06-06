@@ -1,12 +1,15 @@
 import type { AssetType } from '#layers/thei/shared/asset';
 import type { AssetMeta } from '../../db/schema/assets';
+import type { AssetUploadSettings } from '#layers/thei/shared/asset-upload-settings';
 
 export interface CreateAssetData {
   assetUuid: string;
   slug: string;
   extension: string;
-  profileId: string;
   rawHash: string;
+  settingsKey: string;
+  settingsVersion: number;
+  settings?: AssetUploadSettings | null;
   type: AssetType;
   size: number;
   meta?: AssetMeta | null;

@@ -6,20 +6,10 @@
  * - Optional caption + access fields (showCaption / showAccess)
  * - Buttons: primary (Save/Add), Replace, View+size, Delete
  *
- * Replace modes
- *   imageProfileId provided → pushes AssetPickPane for image (+ video if videoProfileId set)
- *   onReplaceClick provided → caller handles the replace flow (e.g. ShowcaseAddPane quality picker)
- *
  * After replace, internal state updates and onReplaced is fired.
  * After delete, onDeleted is fired and the modal is closed.
  */
-import type {
-  AssetReplaceResult,
-  AssetUploadResponse,
-} from '#layers/thei/shared/api/asset';
-import type { AssetProfileId } from '#layers/thei/shared/asset-profiles';
-import AssetPickPane from './AssetPickPane.vue';
-import { mapUploadResponseToPickResult } from './AssetPickPane.vue';
+import type { AssetReplaceResult } from '#layers/thei/shared/api/asset';
 
 const props = defineProps<{
   previewUrl?: string;
@@ -28,15 +18,6 @@ const props = defineProps<{
   assetUuid?: string;
   extension?: string;
   assetUrl?: string;
-
-  /** If provided, enables Replace via AssetPickPane (image + optional video). */
-  imageProfileId?: AssetProfileId;
-  /** Optional original-variant image profile (uncompressed/as-is). */
-  imageOriginalProfileId?: AssetProfileId;
-  /** Passed through to AssetPickPane for video support. */
-  videoProfileId?: AssetProfileId;
-  /** Optional original-variant video profile (uncompressed/as-is). */
-  videoOriginalProfileId?: AssetProfileId;
 
   /** Optional caption field. */
   showCaption?: boolean;
@@ -74,9 +55,9 @@ const props = defineProps<{
   onDeleted?: () => void;
 
   /**
-   * Custom replace trigger.  When set, Replace button calls this with an
+   * Custom replace trigger. When set, Replace button calls this with an
    * `updatePreview` callback that the caller invokes with the new AssetReplaceResult
-   * when the custom flow completes.  Used by showcase (quality picker) and other-files.
+   * when the custom flow completes.
    */
   onReplaceClick?: (
     updatePreview: (result: AssetReplaceResult) => void,
@@ -125,23 +106,6 @@ function onReplace() {
     props.onReplaceClick(updatePreview);
     return;
   }
-  if (!props.imageProfileId) return;
-  modal.push({
-    title: phrase.value.asset_replace,
-    component: AssetPickPane,
-    props: {
-      imageProfileId: props.imageProfileId,
-      imageOriginalProfileId: props.imageOriginalProfileId,
-      videoProfileId: props.videoProfileId,
-      videoOriginalProfileId: props.videoOriginalProfileId,
-    },
-    onBack(result: unknown) {
-      if (!result) return;
-      updatePreview(
-        mapUploadResponseToPickResult(result as AssetUploadResponse),
-      );
-    },
-  });
 }
 
 function onPrimary() {
@@ -242,7 +206,7 @@ function viewRaw() {
 
       <!-- Replace -->
       <Button
-        v-if="imageProfileId || onReplaceClick"
+        v-if="onReplaceClick"
         variant="secondary"
         :class="primaryLabel ? '' : 'flex-1'"
         @click="onReplace"

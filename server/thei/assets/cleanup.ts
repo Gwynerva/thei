@@ -1,4 +1,5 @@
 import { rm } from 'node:fs/promises';
+import { AssetType } from '#layers/thei/shared/asset';
 import { findOrphanedAssets } from './repository/find-orphaned';
 import { deleteAsset } from './repository/delete';
 
@@ -30,22 +31,31 @@ export async function runAssetCleanup() {
     return;
   }
 
-  // Track which UUIDs are already in the orphan set so we don't double-delete.
   const orphanUuidSet = new Set(orphans.map((a) => a.assetUuid));
 
   for (const asset of orphans) {
+    const preview =
+      asset.type === AssetType.Video
+        ? (
+            await THEI_SERVER.assets.usages.findByContainer(
+              'asset',
+              asset.assetUuid,
+            )
+          ).find((usage) => usage.role === 'preview')?.asset
+        : undefined;
+
     await deleteOrphanedAsset(asset.assetUuid, asset.extension);
 
-    // If this is a video asset with a preview thumbnail, and the preview was not
-    // independently caught by the orphan query (e.g. its touchedAt was bumped
-    // recently by a dedup hit), delete it here as well — the video-preview link
-    // exists only in meta JSON and is not reflected in asset_usages.
-    const previewUuid = asset.meta?.previewAssetUuid;
-    if (previewUuid && !orphanUuidSet.has(previewUuid)) {
-      const preview = await THEI_SERVER.assets.findByUuid(previewUuid);
-      if (preview) {
-        await deleteOrphanedAsset(preview.assetUuid, preview.extension);
-      }
+    if (!preview) continue;
+
+    await THEI_SERVER.assets.usages.detach(
+      preview.assetUuid,
+      'asset',
+      asset.assetUuid,
+      'preview',
+    );
+    if (!orphanUuidSet.has(preview.assetUuid)) {
+      await deleteOrphanedAsset(preview.assetUuid, preview.extension);
     }
   }
 }
