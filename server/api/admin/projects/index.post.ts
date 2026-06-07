@@ -47,6 +47,55 @@ export default defineEventHandler(
       );
     }
 
+    for (let i = 0; i < (result.showcaseAssets ?? []).length; i++) {
+      const item = result.showcaseAssets![i]!;
+      await THEI_SERVER.assets.usages.attach(
+        item.assetUuid,
+        'project',
+        projectUuid,
+        'showcase-asset',
+      );
+      await THEI_SERVER.assets.usages.update(
+        item.assetUuid,
+        'project',
+        projectUuid,
+        'showcase-asset',
+        {
+          meta: {
+            role: 'showcase-asset',
+            order: i,
+            caption: item.caption,
+            access: item.access,
+          },
+        },
+      );
+    }
+
+    for (let i = 0; i < (result.otherAssets ?? []).length; i++) {
+      const item = result.otherAssets![i]!;
+      await THEI_SERVER.assets.usages.attach(
+        item.assetUuid,
+        'project',
+        projectUuid,
+        'other-asset',
+      );
+      await THEI_SERVER.assets.usages.update(
+        item.assetUuid,
+        'project',
+        projectUuid,
+        'other-asset',
+        {
+          meta: {
+            role: 'other-asset',
+            order: i,
+            title: item.title,
+            caption: item.caption,
+            access: item.access,
+          },
+        },
+      );
+    }
+
     return { type: 'success', projectUuid };
   },
 );

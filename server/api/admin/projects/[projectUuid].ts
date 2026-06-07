@@ -9,7 +9,7 @@ import type {
   ProjectSaveResponse,
   ShowcaseAssetGetItem,
 } from '#layers/thei/shared/api/project';
-import { AssetType } from '#layers/thei/shared/asset';
+import { AssetType, type AssetMeta } from '#layers/thei/shared/asset';
 import { findVideoPreviewAsset } from '../../../thei/assets/storage';
 
 export default defineEventHandler(async (event) => {
@@ -84,9 +84,9 @@ export default defineEventHandler(async (event) => {
             extension: asset.extension,
             archivedOriginal:
               asset.type === AssetType.Other
-                ? asset.meta?.archivedOriginal
+                ? archivedOriginalFromMeta(asset.meta)
                 : undefined,
-            title: meta?.role === 'other-asset' ? meta.title : undefined,
+            title: meta?.role === 'other-asset' ? (meta.title ?? '') : '',
             caption: meta?.role === 'other-asset' ? meta.caption : undefined,
             access: meta?.role === 'other-asset' ? meta.access : 'project',
           };
@@ -104,7 +104,7 @@ export default defineEventHandler(async (event) => {
         iconAssetUuid: iconUsage?.asset.assetUuid,
         iconPreviewUrl,
         iconVideoUrl,
-        iconDominantHue: iconUsage?.asset.meta?.dominantHue,
+        iconDominantHue: dominantHueFromMeta(iconUsage?.asset.meta),
         iconAssetSize: iconUsage?.asset.size,
         bannerAssetUuid: bannerUsage?.asset.assetUuid,
         bannerPreviewUrl,
@@ -327,10 +327,15 @@ async function buildProjectAssetUrls(
 
   return {
     assetUrl,
-    previewUrl:
-      asset.type === AssetType.Image || asset.type === AssetType.Video
-        ? assetUrl
-        : undefined,
+    previewUrl: asset.type === AssetType.Image ? assetUrl : undefined,
     videoUrl: undefined,
   };
+}
+
+function archivedOriginalFromMeta(meta: AssetMeta | null | undefined) {
+  return meta && 'archivedOriginal' in meta ? meta.archivedOriginal : undefined;
+}
+
+function dominantHueFromMeta(meta: AssetMeta | null | undefined) {
+  return meta && 'dominantHue' in meta ? meta.dominantHue : undefined;
 }

@@ -24,7 +24,7 @@ import {
 } from '../composables';
 import ProjectMain from './ProjectMain.vue';
 import ProjectAssets from './ProjectAssets.vue';
-import ProjectDeletePane from './ProjectDeletePane.vue';
+import { projectDeleteModal } from './project-delete-modal';
 
 const { projectUuid } = defineProps<{ projectUuid?: string }>();
 
@@ -169,8 +169,6 @@ async function handleSave() {
   }
 }
 
-const modal = useModal();
-
 await useAdminTabTitle(
   computed(() =>
     isEdit.value ? phrase.value.edit_project : phrase.value.new_project,
@@ -191,6 +189,20 @@ onBeforeRouteLeave(() => {
     return window.confirm(phrase.value.unsaved_changes_confirm);
   }
 });
+
+async function openDeleteProjectModal() {
+  if (!resolvedProjectUuid.value) return;
+
+  const result = await openModal(projectDeleteModal, {
+    projectUuid: resolvedProjectUuid.value,
+    projectTitle: projectData.value.title,
+  });
+
+  if (result.type !== 'deleted') return;
+  savedSnapshot.value = JSON.stringify(projectData.value);
+  await refreshNuxtData('admin-bar');
+  await navigateTo('/admin/projects/');
+}
 </script>
 
 <template>
@@ -208,16 +220,7 @@ onBeforeRouteLeave(() => {
           v-if="isEdit"
           variant="delete"
           :data-title-popup="phrase.delete"
-          @click="
-            modal.open({
-              title: phrase.delete_project,
-              component: ProjectDeletePane,
-              props: {
-                projectUuid: resolvedProjectUuid!,
-                projectTitle: projectData.title,
-              },
-            })
-          "
+          @click="openDeleteProjectModal"
         >
           <Icon name="delete" class="scale-120" />
         </Button>

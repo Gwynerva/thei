@@ -15,7 +15,6 @@ import {
 } from '#layers/thei/shared/assets/extensions';
 import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
 import AssetAddEdit from '#layers/thei/app/components/AssetAddEdit.vue';
-import AssetEditPane from '#layers/thei/app/components/AssetEditPane.vue';
 import type {
   OtherAssetGetItem,
   ShowcaseAssetGetItem,
@@ -31,13 +30,8 @@ import {
   otherItemsKey,
   showcaseItemsKey,
 } from '../composables';
-import ShowcaseConfigPane from './ShowcaseConfigPane.vue';
-import OtherConfigPane from './OtherConfigPane.vue';
-import type {
-  OtherAssetAddedResult,
-  ShowcaseAssetAddedResult,
-} from '../composables';
 import { useProjectAssetList } from '../composables/use-project-asset-list';
+import { projectAssetDetailsModal } from './project-asset-details-modal';
 
 const projectData = inject(projectDataInjectionKey)!;
 const iconPreviewUrl = inject(iconPreviewUrlKey)!;
@@ -49,7 +43,6 @@ const bannerSize = inject(bannerSizeKey)!;
 const showcaseItems = inject(showcaseItemsKey)!;
 const otherItems = inject(otherItemsKey)!;
 
-const modal = useModal();
 const PROJECT_ASSET_MAX_SIZE = 100 * 1024 * 1024;
 
 type PickedAsset = {
@@ -57,8 +50,18 @@ type PickedAsset = {
   result: AssetReplaceResult;
 };
 
+type AccessLevel = 'project' | 'private';
+
 function archivedOriginalFromMeta(meta: AssetMeta | null | undefined) {
   return meta && 'archivedOriginal' in meta ? meta.archivedOriginal : undefined;
+}
+
+function extensionFromUrl(url: string | undefined, fallback: string) {
+  if (!url) return fallback;
+  const path = url.split('?')[0]?.replace(/\/$/, '') ?? '';
+  const filename = path.split('/').pop() ?? '';
+  const dot = filename.lastIndexOf('.');
+  return dot === -1 ? fallback : filename.slice(dot + 1).toLowerCase();
 }
 
 async function pickProjectMediaAsset(
@@ -117,6 +120,39 @@ function applyBannerAsset(result: AssetReplaceResult) {
   bannerSize.value = result.size;
 }
 
+function pickedToShowcaseItem(
+  picked: PickedAsset,
+  patch: { caption?: string; access?: AccessLevel },
+): ShowcaseAssetGetItem {
+  return {
+    assetUuid: picked.result.assetUuid,
+    type: picked.asset.type,
+    previewUrl: picked.result.previewUrl!,
+    videoUrl: picked.result.videoUrl,
+    caption: patch.caption,
+    access: patch.access ?? 'project',
+    size: picked.result.size,
+  };
+}
+
+function pickedToOtherItem(
+  picked: PickedAsset,
+  patch: { title?: string; caption?: string; access?: AccessLevel },
+): OtherAssetGetItem {
+  return {
+    assetUuid: picked.result.assetUuid,
+    previewUrl: picked.result.previewUrl,
+    videoUrl: picked.result.videoUrl,
+    assetUrl: picked.result.assetUrl,
+    extension: picked.result.extension,
+    archivedOriginal: archivedOriginalFromMeta(picked.result.meta),
+    size: picked.result.size,
+    title: patch.title!,
+    caption: patch.caption,
+    access: patch.access ?? 'project',
+  };
+}
+
 // Showcase asset list
 
 const { addItem, updateItem, removeItem, dragSort } = useProjectAssetList(
@@ -150,36 +186,48 @@ async function openIconUpload() {
   const picked = await pickProjectMediaAsset('project-icon');
   if (!picked) return;
   applyIconAsset(picked.result);
-  openIconModal();
+  await openIconModal();
 }
 
-function openIconModal() {
-  modal.open({
-    title: phrase.value.project_icon,
-    component: AssetEditPane,
-    props: {
-      previewUrl: iconPreviewUrl.value!,
-      videoUrl: iconVideoUrl.value,
-      size: iconSize.value,
-      primaryLabel: phrase.value.save,
-      async onReplaceClick(
-        updatePreview: (result: AssetReplaceResult) => void,
-      ) {
-        const picked = await pickProjectMediaAsset('project-icon');
-        if (!picked) return;
-        updatePreview(picked.result);
-      },
-      onReplaced(result: AssetReplaceResult) {
-        applyIconAsset(result);
-      },
-      onDeleted() {
-        projectData.value.iconAssetUuid = undefined;
-        iconPreviewUrl.value = undefined;
-        iconVideoUrl.value = undefined;
-        iconSize.value = undefined;
-      },
-    },
-  });
+async function openIconModal() {
+  if (!projectData.value.iconAssetUuid || !iconPreviewUrl.value) return;
+
+  let current: AssetReplaceResult = {
+    assetUuid: projectData.value.iconAssetUuid,
+    slug: projectData.value.iconAssetUuid,
+    extension: extensionFromUrl(
+      iconVideoUrl.value ?? iconPreviewUrl.value,
+      'webp',
+    ),
+    size: iconSize.value ?? 0,
+    previewUrl: iconPreviewUrl.value,
+    videoUrl: iconVideoUrl.value,
+    assetUrl: iconVideoUrl.value ?? iconPreviewUrl.value,
+  };
+
+  while (true) {
+    const result = await openModal(projectAssetDetailsModal, {
+      asideTitle: phrase.value.project_icon,
+      asset: current,
+    });
+
+    if (result.type === 'replace') {
+      const picked = await pickProjectMediaAsset('project-icon');
+      if (!picked) continue;
+      current = picked.result;
+      applyIconAsset(picked.result);
+      continue;
+    }
+
+    if (result.type === 'detach') {
+      projectData.value.iconAssetUuid = undefined;
+      iconPreviewUrl.value = undefined;
+      iconVideoUrl.value = undefined;
+      iconSize.value = undefined;
+    }
+
+    return;
+  }
 }
 
 // Banner handlers
@@ -188,204 +236,266 @@ async function openBannerUpload() {
   const picked = await pickProjectMediaAsset('project-banner');
   if (!picked) return;
   applyBannerAsset(picked.result);
-  openBannerModal();
+  await openBannerModal();
 }
 
-function openBannerModal() {
-  modal.open({
-    title: phrase.value.project_banner,
-    component: AssetEditPane,
-    props: {
-      previewUrl: bannerPreviewUrl.value!,
-      videoUrl: bannerVideoUrl.value,
-      size: bannerSize.value,
-      primaryLabel: phrase.value.save,
-      async onReplaceClick(
-        updatePreview: (result: AssetReplaceResult) => void,
-      ) {
-        const picked = await pickProjectMediaAsset('project-banner');
-        if (!picked) return;
-        updatePreview(picked.result);
-      },
-      onReplaced(result: AssetReplaceResult) {
-        applyBannerAsset(result);
-      },
-      onDeleted() {
-        projectData.value.bannerAssetUuid = undefined;
-        bannerPreviewUrl.value = undefined;
-        bannerVideoUrl.value = undefined;
-        bannerSize.value = undefined;
-      },
-    },
-  });
+async function openBannerModal() {
+  if (!projectData.value.bannerAssetUuid || !bannerPreviewUrl.value) return;
+
+  let current: AssetReplaceResult = {
+    assetUuid: projectData.value.bannerAssetUuid,
+    slug: projectData.value.bannerAssetUuid,
+    extension: extensionFromUrl(
+      bannerVideoUrl.value ?? bannerPreviewUrl.value,
+      'webp',
+    ),
+    size: bannerSize.value ?? 0,
+    previewUrl: bannerPreviewUrl.value,
+    videoUrl: bannerVideoUrl.value,
+    assetUrl: bannerVideoUrl.value ?? bannerPreviewUrl.value,
+  };
+
+  while (true) {
+    const result = await openModal(projectAssetDetailsModal, {
+      asideTitle: phrase.value.project_banner,
+      asset: current,
+    });
+
+    if (result.type === 'replace') {
+      const picked = await pickProjectMediaAsset('project-banner');
+      if (!picked) continue;
+      current = picked.result;
+      applyBannerAsset(picked.result);
+      continue;
+    }
+
+    if (result.type === 'detach') {
+      projectData.value.bannerAssetUuid = undefined;
+      bannerPreviewUrl.value = undefined;
+      bannerVideoUrl.value = undefined;
+      bannerSize.value = undefined;
+    }
+
+    return;
+  }
 }
 
 // Showcase handlers
 
 async function openShowcaseAdd() {
-  const picked = await pickProjectMediaAsset();
+  let picked = await pickProjectMediaAsset();
   if (!picked || !picked.result.previewUrl) return;
+  let patch: { caption?: string; access?: AccessLevel } = {};
 
-  modal.open({
-    title: phrase.value.showcase_details,
-    component: ShowcaseConfigPane,
-    props: {
-      assetUuid: picked.result.assetUuid,
-      assetType: picked.asset.type,
-      previewUrl: picked.result.previewUrl,
-      videoUrl: picked.result.videoUrl,
-      assetUrl: picked.result.assetUrl,
-      size: picked.result.size,
-      onAdded(result: ShowcaseAssetAddedResult) {
-        addItem({
-          assetUuid: result.assetUuid,
-          type: result.assetType,
-          previewUrl: result.previewUrl,
-          videoUrl: result.videoUrl,
-          caption: result.caption,
-          access: result.access,
-          size: result.size,
-        });
-      },
-    },
-  });
+  while (true) {
+    const result = await openModal(projectAssetDetailsModal, {
+      asideTitle: phrase.value.showcase_details,
+      asset: picked.result,
+      primaryLabel: phrase.value.showcase_confirm_add,
+      showCaption: true,
+      initialCaption: patch.caption,
+      showAccess: true,
+      initialAccess: patch.access,
+      showDetach: false,
+    });
+
+    if (result.type === 'replace') {
+      patch = { caption: result.caption, access: result.access };
+      const replacement = await pickProjectMediaAsset();
+      if (!replacement || !replacement.result.previewUrl) continue;
+      picked = replacement;
+      continue;
+    }
+
+    if (result.type === 'confirm') {
+      addItem(pickedToShowcaseItem(picked, result));
+    }
+
+    return;
+  }
 }
 
-function openShowcaseAsset(index: number) {
+async function openShowcaseAsset(index: number) {
   const snapshot = showcaseItems.value[index];
   if (!snapshot) return;
   let currentAssetUuid = snapshot.assetUuid;
-  modal.open({
-    title: phrase.value.showcase,
-    component: AssetEditPane,
-    props: {
-      previewUrl: snapshot.previewUrl,
-      videoUrl: snapshot.videoUrl,
-      size: snapshot.size,
-      assetUuid: snapshot.assetUuid,
-      showCaption: true,
-      showAccess: true,
-      initialCaption: snapshot.caption,
-      initialAccess: snapshot.access,
+  let current: AssetReplaceResult = {
+    assetUuid: snapshot.assetUuid,
+    slug: snapshot.assetUuid,
+    extension: extensionFromUrl(
+      snapshot.videoUrl ?? snapshot.previewUrl,
+      'webp',
+    ),
+    size: snapshot.size,
+    previewUrl: snapshot.previewUrl,
+    videoUrl: snapshot.videoUrl,
+    assetUrl: snapshot.videoUrl ?? snapshot.previewUrl,
+  };
+  let patch = {
+    caption: snapshot.caption,
+    access: snapshot.access,
+  } satisfies { caption?: string; access?: AccessLevel };
+
+  while (true) {
+    const result = await openModal(projectAssetDetailsModal, {
+      asideTitle: phrase.value.showcase,
+      asset: current,
       primaryLabel: phrase.value.save,
-      onReplaceClick(updatePreview: (result: AssetReplaceResult) => void) {
-        void (async () => {
-          const picked = await pickProjectMediaAsset();
-          if (!picked || !picked.result.previewUrl) return;
-          updatePreview(picked.result);
-        })();
-      },
-      onSave(patch: { caption?: string; access?: 'project' | 'private' }) {
-        updateItem(currentAssetUuid, patch as Partial<ShowcaseAssetGetItem>);
-      },
-      onReplaced(result: AssetReplaceResult) {
-        if (!result.previewUrl) return;
-        updateItem(currentAssetUuid, {
-          assetUuid: result.assetUuid,
-          previewUrl: result.previewUrl,
-          videoUrl: result.videoUrl,
-          size: result.size,
-        } as Partial<ShowcaseAssetGetItem>);
-        currentAssetUuid = result.assetUuid;
-      },
-      onDeleted() {
-        removeItem(currentAssetUuid);
-      },
-    },
-  });
+      showCaption: true,
+      initialCaption: patch.caption,
+      showAccess: true,
+      initialAccess: patch.access,
+    });
+
+    if (result.type === 'replace') {
+      patch = {
+        caption: result.caption,
+        access: result.access ?? patch.access,
+      };
+      const picked = await pickProjectMediaAsset();
+      if (!picked || !picked.result.previewUrl) continue;
+      updateItem(currentAssetUuid, {
+        assetUuid: picked.result.assetUuid,
+        type: picked.asset.type,
+        previewUrl: picked.result.previewUrl,
+        videoUrl: picked.result.videoUrl,
+        size: picked.result.size,
+      } as Partial<ShowcaseAssetGetItem>);
+      currentAssetUuid = picked.result.assetUuid;
+      current = picked.result;
+      continue;
+    }
+
+    if (result.type === 'confirm') {
+      updateItem(currentAssetUuid, {
+        caption: result.caption,
+        access: result.access ?? 'project',
+      } as Partial<ShowcaseAssetGetItem>);
+    } else if (result.type === 'detach') {
+      removeItem(currentAssetUuid);
+    }
+
+    return;
+  }
 }
 
 // Other-files handlers
 
 async function openOtherAdd() {
-  const picked = await pickAnyProjectAsset();
+  let picked = await pickAnyProjectAsset();
   if (!picked) return;
+  let patch: { title?: string; caption?: string; access?: AccessLevel } = {};
 
-  modal.open({
-    title: phrase.value.other_details,
-    component: OtherConfigPane,
-    props: {
-      assetUuid: picked.result.assetUuid,
-      extension: picked.result.extension,
-      previewUrl: picked.result.previewUrl,
-      videoUrl: picked.result.videoUrl,
-      assetUrl: picked.result.assetUrl,
-      size: picked.result.size,
+  while (true) {
+    const result = await openModal(projectAssetDetailsModal, {
+      asideTitle: phrase.value.other_details,
+      asset: picked.result,
       archivedOriginal: archivedOriginalFromMeta(picked.result.meta),
-      onAdded(result: OtherAssetAddedResult) {
-        addOtherItem({
-          assetUuid: result.assetUuid,
-          previewUrl: result.previewUrl,
-          videoUrl: result.videoUrl,
-          assetUrl: result.assetUrl,
-          extension: result.extension,
-          archivedOriginal: result.archivedOriginal,
-          size: result.size,
-          title: result.title,
-          caption: result.caption,
-          access: result.access,
-        });
-      },
-    },
-  });
-}
-
-function openOtherAsset(index: number) {
-  const snapshot = otherItems.value[index];
-  if (!snapshot) return;
-  let currentAssetUuid = snapshot.assetUuid;
-  modal.open({
-    title: phrase.value.other_files,
-    component: AssetEditPane,
-    props: {
-      previewUrl: snapshot.previewUrl,
-      videoUrl: snapshot.videoUrl,
-      size: snapshot.size,
-      assetUuid: snapshot.assetUuid,
-      extension: snapshot.extension,
-      assetUrl: snapshot.assetUrl,
-      archivedOriginal: snapshot.archivedOriginal,
+      primaryLabel: phrase.value.other_add,
       showTitle: true,
       requireTitle: true,
+      initialTitle: patch.title,
       showCaption: true,
+      initialCaption: patch.caption,
       captionAsTextarea: true,
       captionLabel: phrase.value.other_description,
       showAccess: true,
-      initialTitle: snapshot.title,
-      initialCaption: snapshot.caption,
-      initialAccess: snapshot.access,
+      initialAccess: patch.access,
+      showDetach: false,
+    });
+
+    if (result.type === 'replace') {
+      patch = {
+        title: result.title,
+        caption: result.caption,
+        access: result.access,
+      };
+      const replacement = await pickAnyProjectAsset();
+      if (!replacement) continue;
+      picked = replacement;
+      continue;
+    }
+
+    if (result.type === 'confirm') {
+      addOtherItem(pickedToOtherItem(picked, result));
+    }
+
+    return;
+  }
+}
+
+async function openOtherAsset(index: number) {
+  const snapshot = otherItems.value[index];
+  if (!snapshot) return;
+  let currentAssetUuid = snapshot.assetUuid;
+  let current: AssetReplaceResult = {
+    assetUuid: snapshot.assetUuid,
+    slug: snapshot.assetUuid,
+    extension: snapshot.extension,
+    size: snapshot.size,
+    previewUrl: snapshot.previewUrl,
+    videoUrl: snapshot.videoUrl,
+    assetUrl: snapshot.assetUrl,
+  };
+  let currentArchivedOriginal = snapshot.archivedOriginal;
+  let patch = {
+    title: snapshot.title,
+    caption: snapshot.caption,
+    access: snapshot.access,
+  } satisfies { title?: string; caption?: string; access?: AccessLevel };
+
+  while (true) {
+    const result = await openModal(projectAssetDetailsModal, {
+      asideTitle: phrase.value.other_files,
+      asset: current,
+      archivedOriginal: currentArchivedOriginal,
       primaryLabel: phrase.value.save,
-      onReplaceClick(updatePreview: (result: AssetReplaceResult) => void) {
-        void (async () => {
-          const picked = await pickAnyProjectAsset();
-          if (!picked) return;
-          updatePreview(picked.result);
-        })();
-      },
-      onSave(patch: {
-        title?: string;
-        caption?: string;
-        access?: 'project' | 'private';
-      }) {
-        updateOtherItem(currentAssetUuid, patch as Partial<OtherAssetGetItem>);
-      },
-      onReplaced(result: AssetReplaceResult) {
-        updateOtherItem(currentAssetUuid, {
-          assetUuid: result.assetUuid,
-          previewUrl: result.previewUrl,
-          videoUrl: result.videoUrl,
-          assetUrl: result.assetUrl,
-          extension: result.extension,
-          archivedOriginal: archivedOriginalFromMeta(result.meta),
-          size: result.size,
-        } as Partial<OtherAssetGetItem>);
-        currentAssetUuid = result.assetUuid;
-      },
-      onDeleted() {
-        removeOtherItem(currentAssetUuid);
-      },
-    },
-  });
+      showTitle: true,
+      requireTitle: true,
+      initialTitle: patch.title,
+      showCaption: true,
+      initialCaption: patch.caption,
+      captionAsTextarea: true,
+      captionLabel: phrase.value.other_description,
+      showAccess: true,
+      initialAccess: patch.access,
+    });
+
+    if (result.type === 'replace') {
+      patch = {
+        title: result.title ?? patch.title,
+        caption: result.caption,
+        access: result.access ?? patch.access,
+      };
+      const picked = await pickAnyProjectAsset();
+      if (!picked) continue;
+      currentArchivedOriginal = archivedOriginalFromMeta(picked.result.meta);
+      updateOtherItem(currentAssetUuid, {
+        assetUuid: picked.result.assetUuid,
+        previewUrl: picked.result.previewUrl,
+        videoUrl: picked.result.videoUrl,
+        assetUrl: picked.result.assetUrl,
+        extension: picked.result.extension,
+        archivedOriginal: currentArchivedOriginal,
+        size: picked.result.size,
+      } as Partial<OtherAssetGetItem>);
+      currentAssetUuid = picked.result.assetUuid;
+      current = picked.result;
+      continue;
+    }
+
+    if (result.type === 'confirm') {
+      updateOtherItem(currentAssetUuid, {
+        title: result.title!,
+        caption: result.caption,
+        access: result.access ?? 'project',
+      } as Partial<OtherAssetGetItem>);
+    } else if (result.type === 'detach') {
+      removeOtherItem(currentAssetUuid);
+    }
+
+    return;
+  }
 }
 </script>
 

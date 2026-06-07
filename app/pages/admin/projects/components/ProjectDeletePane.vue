@@ -1,14 +1,25 @@
 <script lang="ts" setup>
-const { projectUuid, projectTitle } = defineProps<{
-  projectUuid: string;
-  projectTitle: string;
+import AssetModal from '#layers/thei/app/modals/asset-modal/AssetModal.vue';
+import AssetModalPreviewFile from '#layers/thei/app/modals/asset-modal/AssetModalPreviewFile.vue';
+import UploadSettingsSection from '#layers/thei/app/modals/upload-settings/UploadSettingsSection.vue';
+
+const emit = defineEmits<{
+  modalResult: [result: { type: 'deleted' }];
 }>();
 
-const modal = useModal();
+const props = defineProps<{
+  modalData: {
+    projectUuid: string;
+    projectTitle: string;
+  };
+}>();
+
 const confirmInput = ref('');
 const deleting = ref(false);
 
-const isConfirmed = computed(() => confirmInput.value === projectTitle.trim());
+const isConfirmed = computed(
+  () => confirmInput.value === props.modalData.projectTitle.trim(),
+);
 
 const requestFetch = useRequestFetch();
 
@@ -16,12 +27,10 @@ async function handleDelete() {
   if (!isConfirmed.value || deleting.value) return;
   deleting.value = true;
   try {
-    await requestFetch(`/api/admin/projects/${projectUuid}/`, {
+    await requestFetch(`/api/admin/projects/${props.modalData.projectUuid}/`, {
       method: 'DELETE',
     });
-    await refreshNuxtData('admin-bar');
-    modal.close();
-    await navigateTo('/admin/projects/');
+    emit('modalResult', { type: 'deleted' });
   } finally {
     deleting.value = false;
   }
@@ -29,26 +38,34 @@ async function handleDelete() {
 </script>
 
 <template>
-  <div class="flex flex-col gap-md">
-    <p class="text-sm text-text-2">{{ phrase.delete_project_confirm }}</p>
-    <Field>
-      <FieldInput
-        v-model="confirmInput"
-        type="text"
-        autocomplete="off"
-        spellcheck="false"
-        :placeholder="projectTitle"
-      />
-    </Field>
-    <Button
-      variant="delete"
-      class="w-full font-semibold"
-      :disabled="!isConfirmed || deleting"
-      @click="handleDelete"
-    >
-      <Icon v-if="deleting" name="loading" class="mr-xs" />
-      <Icon v-else name="delete" class="mr-xs" />
-      <span>{{ phrase.delete }}</span>
-    </Button>
-  </div>
+  <AssetModal :aside-title="phrase.delete_project">
+    <template #preview>
+      <AssetModalPreviewFile icon="delete" class="text-text-error" />
+    </template>
+
+    <template #aside>
+      <UploadSettingsSection :active="true" :title="phrase.delete_project">
+        <p class="text-sm text-text-2">{{ phrase.delete_project_confirm }}</p>
+        <Field>
+          <FieldInput
+            v-model="confirmInput"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            :placeholder="modalData.projectTitle"
+          />
+        </Field>
+        <Button
+          variant="delete"
+          class="w-full font-semibold"
+          :disabled="!isConfirmed || deleting"
+          @click="handleDelete"
+        >
+          <Icon v-if="deleting" name="loading" class="mr-xs" />
+          <Icon v-else name="delete" class="mr-xs" />
+          <span>{{ phrase.delete }}</span>
+        </Button>
+      </UploadSettingsSection>
+    </template>
+  </AssetModal>
 </template>

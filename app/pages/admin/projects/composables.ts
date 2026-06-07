@@ -3,7 +3,6 @@ import type {
   ProjectEditData,
 } from '#layers/thei/shared/admin/project';
 import { AssetType } from '#layers/thei/shared/asset';
-import type { ArchivedOriginalFileMeta } from '#layers/thei/shared/asset';
 import type {
   OtherAssetGetItem,
   ShowcaseAssetGetItem,
@@ -57,29 +56,3 @@ export const showcaseItemsKey = Symbol('showcaseItems') as InjectionKey<
 export const otherItemsKey = Symbol('otherItems') as InjectionKey<
   Ref<OtherAssetGetItem[]>
 >;
-
-/** Payload emitted by ShowcaseConfigPane when the user clicks "Add". */
-export type ShowcaseAssetAddedResult = {
-  assetUuid: string;
-  assetType: AssetType;
-  previewUrl: string;
-  videoUrl?: string;
-  assetUrl: string;
-  caption?: string;
-  access: 'project' | 'private';
-  size: number;
-};
-
-/** Payload emitted by OtherConfigPane when the user clicks "Add". */
-export type OtherAssetAddedResult = {
-  assetUuid: string;
-  previewUrl?: string;
-  videoUrl?: string;
-  assetUrl: string;
-  extension: string;
-  archivedOriginal?: ArchivedOriginalFileMeta;
-  title: string;
-  caption?: string;
-  access: 'project' | 'private';
-  size: number;
-};
