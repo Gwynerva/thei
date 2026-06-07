@@ -3,6 +3,7 @@ import type {
   ProjectEditData,
 } from '#layers/thei/shared/admin/project';
 import { AssetType } from '#layers/thei/shared/asset';
+import type { ArchivedOriginalFileMeta } from '#layers/thei/shared/asset';
 import type {
   OtherAssetGetItem,
   ShowcaseAssetGetItem,
@@ -76,6 +77,7 @@ export type OtherAssetAddedResult = {
   videoUrl?: string;
   assetUrl: string;
   extension: string;
+  archivedOriginal?: ArchivedOriginalFileMeta;
   title: string;
   caption?: string;
   access: 'project' | 'private';

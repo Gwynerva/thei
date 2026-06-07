@@ -94,7 +94,7 @@ async function validateAndEmit(file: File) {
       rawHash,
     });
   } catch {
-    errorMessage.value = 'Failed to calculate file hash.';
+    errorMessage.value = phrase.value.file_hash_failed;
     isHashing.value = false;
   }
 }
@@ -170,7 +170,7 @@ onUnmounted(() => document.removeEventListener('paste', handlePaste));
       </div>
       <div v-if="isHashing" class="text-xl font-semibold text-accent">
         <Icon name="loading" class="mr-xs" />
-        <span>Calculating file hash</span>
+        <span>{{ phrase.file_hash_calculating }}</span>
       </div>
       <div
         class="group/icon rounded-full border-2 border-border-1/50 bg-bg-2 p-md

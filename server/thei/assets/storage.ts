@@ -14,6 +14,7 @@ import type {
 } from '#layers/thei/shared/asset';
 import {
   ASSET_UPLOAD_SETTINGS_VERSION,
+  type AssetFileZipSettings,
   type AssetImageTransformSettings,
   type AssetOriginalSettings,
   type AssetUploadSettings,
@@ -237,7 +238,10 @@ export async function buildAssetVariantInfo(
     ...base,
     type: AssetType.Other,
     meta: asset.meta as OtherAssetMeta | null,
-    settings: asset.settings as AssetOriginalSettings | null,
+    settings: asset.settings as
+      | AssetOriginalSettings
+      | AssetFileZipSettings
+      | null,
   };
 }
 

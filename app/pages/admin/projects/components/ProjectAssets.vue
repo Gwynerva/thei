@@ -7,12 +7,13 @@ import {
   launchAssetWizard,
   mapAssetVariantToReplaceResult,
 } from '#layers/thei/app/composables/asset-wizard';
-import { AssetType } from '#layers/thei/shared/asset';
+import { AssetType, type AssetMeta } from '#layers/thei/shared/asset';
 import {
   anyFileExtensionProfile,
   imageExtensionProfile,
   videoExtensionProfile,
 } from '#layers/thei/shared/assets/extensions';
+import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
 import AssetAddEdit from '#layers/thei/app/components/AssetAddEdit.vue';
 import AssetEditPane from '#layers/thei/app/components/AssetEditPane.vue';
 import type {
@@ -56,10 +57,17 @@ type PickedAsset = {
   result: AssetReplaceResult;
 };
 
-async function pickProjectMediaAsset(): Promise<PickedAsset | undefined> {
+function archivedOriginalFromMeta(meta: AssetMeta | null | undefined) {
+  return meta && 'archivedOriginal' in meta ? meta.archivedOriginal : undefined;
+}
+
+async function pickProjectMediaAsset(
+  uploadProfile?: AssetUploadProfile,
+): Promise<PickedAsset | undefined> {
   const asset = await launchProjectAssetWizard({
     accept: [imageExtensionProfile, videoExtensionProfile],
     maxSize: PROJECT_ASSET_MAX_SIZE,
+    uploadProfile,
   });
   if (
     !asset ||
@@ -139,7 +147,7 @@ const {
 // Icon handlers
 
 async function openIconUpload() {
-  const picked = await pickProjectMediaAsset();
+  const picked = await pickProjectMediaAsset('project-icon');
   if (!picked) return;
   applyIconAsset(picked.result);
   openIconModal();
@@ -157,7 +165,7 @@ function openIconModal() {
       async onReplaceClick(
         updatePreview: (result: AssetReplaceResult) => void,
       ) {
-        const picked = await pickProjectMediaAsset();
+        const picked = await pickProjectMediaAsset('project-icon');
         if (!picked) return;
         updatePreview(picked.result);
       },
@@ -177,7 +185,7 @@ function openIconModal() {
 // Banner handlers
 
 async function openBannerUpload() {
-  const picked = await pickProjectMediaAsset();
+  const picked = await pickProjectMediaAsset('project-banner');
   if (!picked) return;
   applyBannerAsset(picked.result);
   openBannerModal();
@@ -195,7 +203,7 @@ function openBannerModal() {
       async onReplaceClick(
         updatePreview: (result: AssetReplaceResult) => void,
       ) {
-        const picked = await pickProjectMediaAsset();
+        const picked = await pickProjectMediaAsset('project-banner');
         if (!picked) return;
         updatePreview(picked.result);
       },
@@ -303,6 +311,7 @@ async function openOtherAdd() {
       videoUrl: picked.result.videoUrl,
       assetUrl: picked.result.assetUrl,
       size: picked.result.size,
+      archivedOriginal: archivedOriginalFromMeta(picked.result.meta),
       onAdded(result: OtherAssetAddedResult) {
         addOtherItem({
           assetUuid: result.assetUuid,
@@ -310,6 +319,7 @@ async function openOtherAdd() {
           videoUrl: result.videoUrl,
           assetUrl: result.assetUrl,
           extension: result.extension,
+          archivedOriginal: result.archivedOriginal,
           size: result.size,
           title: result.title,
           caption: result.caption,
@@ -334,6 +344,7 @@ function openOtherAsset(index: number) {
       assetUuid: snapshot.assetUuid,
       extension: snapshot.extension,
       assetUrl: snapshot.assetUrl,
+      archivedOriginal: snapshot.archivedOriginal,
       showTitle: true,
       requireTitle: true,
       showCaption: true,
@@ -365,6 +376,7 @@ function openOtherAsset(index: number) {
           videoUrl: result.videoUrl,
           assetUrl: result.assetUrl,
           extension: result.extension,
+          archivedOriginal: archivedOriginalFromMeta(result.meta),
           size: result.size,
         } as Partial<OtherAssetGetItem>);
         currentAssetUuid = result.assetUuid;

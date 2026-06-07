@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import AssetEditPane from '#layers/thei/app/components/AssetEditPane.vue';
+import type { ArchivedOriginalFileMeta } from '#layers/thei/shared/asset';
 import type { OtherAssetAddedResult } from '../composables';
 
 const props = defineProps<{
@@ -9,6 +10,7 @@ const props = defineProps<{
   videoUrl?: string;
   assetUrl: string;
   size?: number;
+  archivedOriginal?: ArchivedOriginalFileMeta;
   onAdded?: (result: OtherAssetAddedResult) => void;
 }>();
 
@@ -23,6 +25,7 @@ const modal = useModal();
     :asset-uuid="assetUuid"
     :extension="extension"
     :asset-url="assetUrl"
+    :archived-original="archivedOriginal"
     :primary-label="phrase.other_add"
     :show-title="true"
     :require-title="true"
@@ -36,6 +39,7 @@ const modal = useModal();
         props.onAdded?.({
           assetUuid,
           extension,
+          archivedOriginal,
           previewUrl,
           videoUrl,
           assetUrl,

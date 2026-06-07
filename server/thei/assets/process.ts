@@ -12,10 +12,13 @@ import {
   VIDEO_EXTENSIONS,
 } from '#layers/thei/shared/asset';
 import type {
+  AssetFileZipSettings,
   AssetImageTransformSettings,
   AssetTransformSettings,
   AssetVideoTransformSettings,
 } from '#layers/thei/shared/asset-upload-settings';
+import { videoQualityToVp9Crf } from '#layers/thei/shared/asset-upload-quality';
+import { zipSingleFile } from './zip';
 
 const IMAGE_EXTS = new Set<string>(IMAGE_EXTENSIONS);
 const VIDEO_EXTS = new Set<string>(VIDEO_EXTENSIONS);
@@ -133,6 +136,22 @@ export async function processOriginalAsset(
   };
 }
 
+export async function processFileZipAsset(
+  inputBuffer: Buffer,
+  originalFilename: string,
+  _settings: AssetFileZipSettings,
+  options: AssetProcessOptions = {},
+): Promise<ProcessedAsset> {
+  return {
+    buffer: await zipSingleFile(inputBuffer, originalFilename, {
+      onProgress: options.onProgress,
+    }),
+    extension: 'zip',
+    type: AssetType.Other,
+    dimensions: {},
+  };
+}
+
 export async function processMediaTransformAsset(
   inputBuffer: Buffer,
   settings: AssetTransformSettings,
@@ -154,8 +173,8 @@ async function processImageToWebp(
 
   if (width || height) {
     pipeline = pipeline.resize(width, height, {
-      fit: 'inside',
-      withoutEnlargement: true,
+      fit: settings.resizeMode,
+      withoutEnlargement: !settings.allowUpscale,
     });
   }
 
@@ -186,10 +205,11 @@ async function processVideoToWebm(
       () => undefined,
     );
     const inputDuration = inputInspection?.duration;
+    const shouldStripAudio = settings.stripAudio || !inputInspection?.hasAudio;
 
     const outputOptions = [
       '-map 0:v:0',
-      ...(settings.audio === 'strip'
+      ...(shouldStripAudio
         ? ['-an']
         : ['-map 0:a?', '-c:a libopus', '-b:a 128k']),
       ...buildVideoCodecOptions(settings),
@@ -241,11 +261,6 @@ async function processVideoToWebm(
   }
 }
 
-function qualityToVp9Crf(quality: number): number {
-  const normalized = Math.max(10, Math.min(100, quality));
-  return Math.round(45 - ((normalized - 10) / 90) * 30);
-}
-
 async function readFfmpegInputInfo(filePath: string): Promise<string> {
   return await new Promise<string>((resolve, reject) => {
     const child = spawn(
@@ -292,14 +307,14 @@ function parseFfmpegInputInfo(text: string): VideoInspection {
 function buildVideoCodecOptions(
   settings: AssetVideoTransformSettings,
 ): string[] {
-  if (settings.mode === 'fast') {
+  if (settings.fastConversion) {
     return [
       '-c:v libvpx-vp9',
       '-deadline realtime',
       '-cpu-used 8',
       '-row-mt 1',
       '-b:v 0',
-      `-crf ${qualityToVp9Crf(settings.quality)}`,
+      `-crf ${videoQualityToVp9Crf(settings.quality)}`,
     ];
   }
 
@@ -309,7 +324,7 @@ function buildVideoCodecOptions(
     '-cpu-used 2',
     '-row-mt 1',
     '-b:v 0',
-    `-crf ${qualityToVp9Crf(settings.quality)}`,
+    `-crf ${videoQualityToVp9Crf(settings.quality)}`,
   ];
 }
 
@@ -462,28 +477,42 @@ function buildVideoScaleFilters(
 ): string[] {
   const width = settings.dimensions.width;
   const height = settings.dimensions.height;
-  const scaleFlags = settings.mode === 'fast' ? 'fast_bilinear' : 'lanczos';
+  const scaleFlags = settings.fastConversion ? 'fast_bilinear' : 'lanczos';
 
   if (!width && !height) {
     return [];
   }
 
   if (width && height) {
+    const widthExpression = settings.allowUpscale
+      ? String(width)
+      : `min(${width}\\,iw)`;
+    const heightExpression = settings.allowUpscale
+      ? String(height)
+      : `min(${height}\\,ih)`;
+    if (settings.resizeMode === 'cover') {
+      return [
+        `scale=${width}:${height}:force_original_aspect_ratio=increase:flags=${scaleFlags}`,
+        `crop=${width}:${height}`,
+        'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+      ];
+    }
+
     return [
-      `scale='min(${width}\\,iw)':'min(${height}\\,ih)':force_original_aspect_ratio=decrease:flags=${scaleFlags}`,
+      `scale='${widthExpression}':'${heightExpression}':force_original_aspect_ratio=decrease:flags=${scaleFlags}`,
       'scale=trunc(iw/2)*2:trunc(ih/2)*2',
     ];
   }
 
   if (width) {
     return [
-      `scale='min(${width}\\,iw)':-2:flags=${scaleFlags}`,
+      `scale='${settings.allowUpscale ? width : `min(${width}\\,iw)`}':-2:flags=${scaleFlags}`,
       'scale=trunc(iw/2)*2:trunc(ih/2)*2',
     ];
   }
 
   return [
-    `scale=-2:'min(${height}\\,ih)':flags=${scaleFlags}`,
+    `scale=-2:'${settings.allowUpscale ? height : `min(${height}\\,ih)`}':flags=${scaleFlags}`,
     'scale=trunc(iw/2)*2:trunc(ih/2)*2',
   ];
 }

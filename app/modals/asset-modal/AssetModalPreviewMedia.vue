@@ -16,6 +16,7 @@ const props = defineProps<{
   extension: string;
   src: string;
   hasAudio?: boolean;
+  displayDimensions?: { width: number; height: number };
   initialViewState?: MediaViewState;
   initialPlaybackState?: VideoPlaybackState;
 }>();
@@ -30,6 +31,7 @@ const {
   isDragging,
   isReady,
   handleZoomButtonClick,
+  resetView,
   getViewState,
   restoreViewState,
   onPointerDown,
@@ -43,6 +45,11 @@ const {
 const containerRef = useTemplateRef<HTMLElement>('container');
 const mediaRef = useTemplateRef<HTMLVideoElement | HTMLImageElement>('media');
 let initialViewStateRestored = false;
+const displayDimensionsKey = computed(() =>
+  props.displayDimensions
+    ? `${props.displayDimensions.width}x${props.displayDimensions.height}`
+    : '',
+);
 
 // ─── video playback state ──────────────────────────────────────────────────
 
@@ -59,6 +66,20 @@ watch(
   (value) => {
     if (value !== undefined) hasAudio.value = value;
   },
+);
+
+watch(
+  displayDimensionsKey,
+  () => {
+    if (!props.displayDimensions) return;
+    initialViewStateRestored = true;
+    onMediaLoaded(
+      props.displayDimensions.width,
+      props.displayDimensions.height,
+    );
+    resetView();
+  },
+  { flush: 'post' },
 );
 
 const seekPct = computed(() =>
@@ -131,6 +152,12 @@ onMounted(() => {
 
   initMedia(container, () => {
     if (!media) return null;
+    if (props.displayDimensions) {
+      return {
+        w: props.displayDimensions.width,
+        h: props.displayDimensions.height,
+      };
+    }
     if (isVideo) {
       const v = media as HTMLVideoElement;
       return v.videoWidth > 0 ? { w: v.videoWidth, h: v.videoHeight } : null;
@@ -153,6 +180,14 @@ function restoreInitialViewState(): void {
 }
 
 function onImgLoad(e: Event): void {
+  if (props.displayDimensions) {
+    onMediaLoaded(
+      props.displayDimensions.width,
+      props.displayDimensions.height,
+    );
+    restoreInitialViewState();
+    return;
+  }
   const img = e.target as HTMLImageElement;
   // SVGs scale to any size; don't use naturalWidth/naturalHeight (which may
   // reflect viewBox extents) — pass 0,0 to trigger the container-based fallback.
@@ -166,7 +201,10 @@ function onImgLoad(e: Event): void {
 
 function onVideoMeta(e: Event): void {
   const v = e.target as HTMLVideoElement;
-  onMediaLoaded(v.videoWidth, v.videoHeight);
+  onMediaLoaded(
+    props.displayDimensions?.width ?? v.videoWidth,
+    props.displayDimensions?.height ?? v.videoHeight,
+  );
   restoreInitialViewState();
   duration.value = v.duration;
   const initial = props.initialPlaybackState;
@@ -196,6 +234,7 @@ function onTimeUpdate(e: Event): void {
 defineExpose({
   zoomPercent,
   handleZoomButtonClick,
+  resetView,
   getViewState,
   getPlaybackState,
 });

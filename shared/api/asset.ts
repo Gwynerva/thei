@@ -1,4 +1,5 @@
 import type {
+  AssetMeta,
   AssetMetaForType,
   AudioAssetMeta,
   ImageAssetMeta,
@@ -8,6 +9,7 @@ import type {
 import { AssetType } from '../asset';
 import type {
   AssetImageTransformSettings,
+  AssetFileZipSettings,
   AssetOriginalSettings,
   AssetUploadSettings,
   AssetVideoTransformSettings,
@@ -65,7 +67,7 @@ export interface AudioAssetVariantInfo extends BaseAssetVariantInfo<
 export interface OtherAssetVariantInfo extends BaseAssetVariantInfo<
   AssetType.Other,
   OtherAssetMeta,
-  AssetOriginalSettings | null
+  AssetOriginalSettings | AssetFileZipSettings | null
 > {
   previewUrl?: never;
   videoUrl?: never;
@@ -115,6 +117,7 @@ export type AssetReplaceResult = {
   videoUrl?: string;
   /** Canonical download URL. Always present for View on unknown files. */
   assetUrl: string;
+  meta?: AssetMeta | null;
 };
 
 export interface AssetVariantsRequest {

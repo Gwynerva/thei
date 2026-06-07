@@ -58,7 +58,15 @@ export interface VideoAssetMeta extends AssetMetaBase {
 
 export interface AudioAssetMeta extends AssetMetaBase {}
 
-export interface OtherAssetMeta extends AssetMetaBase {}
+export interface ArchivedOriginalFileMeta {
+  extension: string;
+  size: number;
+  name?: string;
+}
+
+export interface OtherAssetMeta extends AssetMetaBase {
+  archivedOriginal?: ArchivedOriginalFileMeta;
+}
 
 export type AssetMeta =
   | ImageAssetMeta

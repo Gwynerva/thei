@@ -82,6 +82,10 @@ export default defineEventHandler(async (event) => {
             assetUrl: urls.assetUrl,
             size: asset.size,
             extension: asset.extension,
+            archivedOriginal:
+              asset.type === AssetType.Other
+                ? asset.meta?.archivedOriginal
+                : undefined,
             title: meta?.role === 'other-asset' ? meta.title : undefined,
             caption: meta?.role === 'other-asset' ? meta.caption : undefined,
             access: meta?.role === 'other-asset' ? meta.access : 'project',

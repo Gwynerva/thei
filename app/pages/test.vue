@@ -22,8 +22,8 @@ const maxSizeBytes = computed(() => {
 
 const parsedExtensions = computed<string[] | '*'>(() => {
   const raw = extensionsInput.value.trim();
-  if (!raw || raw === '*') return '*';
-  return Array.from(
+  if (!raw) return '*';
+  const extensions = Array.from(
     new Set(
       raw
         .split(/[\s,;]+/)
@@ -31,6 +31,8 @@ const parsedExtensions = computed<string[] | '*'>(() => {
         .filter(Boolean),
     ),
   );
+  if (extensions.includes('*')) return '*';
+  return extensions;
 });
 
 async function launchWizard() {

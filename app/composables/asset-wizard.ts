@@ -5,6 +5,7 @@ import type {
 import { AssetType } from '#layers/thei/shared/asset';
 import type { ExtensionProfile } from '#layers/thei/shared/assets/extensions';
 import { anyFileExtensionProfile } from '#layers/thei/shared/assets/extensions';
+import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
 import { editFileModal } from '#layers/thei/app/modals/upload-settings/modal';
 import { pickFileModal } from '#layers/thei/app/modals/pick-file/modal';
 import type { PickedFile } from '#layers/thei/app/modals/pick-file/picked-file';
@@ -18,6 +19,7 @@ export interface AssetWizardOptions {
   accept?: AssetWizardAccept;
   maxSize?: number;
   acceptedExtensions?: string[] | '*';
+  uploadProfile?: AssetUploadProfile;
 }
 
 export async function launchAssetWizard(
@@ -64,6 +66,7 @@ export async function launchAssetWizard(
         file: pickedFile!,
         maxSize: options.maxSize,
         acceptedExtensions,
+        uploadProfile: options.uploadProfile,
       });
 
       if (editResult.type === 'error') {
@@ -100,6 +103,7 @@ export function mapAssetVariantToReplaceResult(
         : undefined,
     videoUrl: asset.type === AssetType.Video ? asset.videoUrl : undefined,
     assetUrl: asset.assetUrl,
+    meta: asset.meta,
   };
 }
 

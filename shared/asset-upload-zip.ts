@@ -1,0 +1,40 @@
+const ZIP_EXCLUDED_EXTENSIONS = new Set([
+  'zip',
+  'rar',
+  '7z',
+  'tar',
+  'gz',
+  'tgz',
+  'bz2',
+  'xz',
+  'pdf',
+  'doc',
+  'docx',
+  'xls',
+  'xlsx',
+  'ppt',
+  'pptx',
+  'odt',
+  'ods',
+  'odp',
+  'jpg',
+  'jpeg',
+  'png',
+  'gif',
+  'webp',
+  'avif',
+  'svg',
+  'mp4',
+  'webm',
+  'mov',
+  'avi',
+  'mp3',
+  'wav',
+  'ogg',
+  'flac',
+]);
+
+export function canZipAssetExtension(extension: string): boolean {
+  const normalized = extension.trim().replace(/^\./, '').toLowerCase();
+  return normalized.length > 0 && !ZIP_EXCLUDED_EXTENSIONS.has(normalized);
+}

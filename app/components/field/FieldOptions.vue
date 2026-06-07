@@ -13,6 +13,7 @@ export type FieldOptions = Record<string, FieldOptionValue>;
 const { direction = 'row' } = defineProps<{
   options: FieldOptions;
   direction?: 'row' | 'column';
+  classes?: string;
 }>();
 
 const model = defineModel<string>();
@@ -22,14 +23,14 @@ const model = defineModel<string>();
   <div class="flex">
     <div
       class="flex flex-wrap gap-1 rounded-normal bg-bg-3 p-1 text-sm"
-      :class="[direction === 'column' ? 'flex-1 flex-col' : '']"
+      :class="[direction === 'column' ? 'flex-1 flex-col' : '', classes]"
     >
       <button
         v-for="(option, key) in options"
         :key
         @click="model = key"
         :data-title-popup="direction === 'row' ? option.description : undefined"
-        class="cursor-pointer rounded-normal border-2 p-xs transition"
+        class="flex-1 cursor-pointer rounded-normal border-2 p-xs transition"
         :class="[
           option.classes,
           model === key

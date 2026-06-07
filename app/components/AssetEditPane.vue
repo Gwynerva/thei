@@ -10,6 +10,11 @@
  * After delete, onDeleted is fired and the modal is closed.
  */
 import type { AssetReplaceResult } from '#layers/thei/shared/api/asset';
+import type {
+  ArchivedOriginalFileMeta,
+  AssetMeta,
+} from '#layers/thei/shared/asset';
+import AssetModalFileInfo from '#layers/thei/app/modals/asset-modal/AssetModalFileInfo.vue';
 
 const props = defineProps<{
   previewUrl?: string;
@@ -18,6 +23,7 @@ const props = defineProps<{
   assetUuid?: string;
   extension?: string;
   assetUrl?: string;
+  archivedOriginal?: ArchivedOriginalFileMeta;
 
   /** Optional caption field. */
   showCaption?: boolean;
@@ -76,6 +82,7 @@ const currentSize = ref(props.size);
 const currentAssetUuid = ref(props.assetUuid);
 const currentExtension = ref(props.extension);
 const currentAssetUrl = ref(props.assetUrl);
+const currentArchivedOriginal = ref(props.archivedOriginal);
 
 const caption = ref(props.initialCaption ?? '');
 const title = ref(props.initialTitle ?? '');
@@ -98,7 +105,14 @@ function updatePreview(result: AssetReplaceResult) {
   currentAssetUuid.value = result.assetUuid;
   currentExtension.value = result.extension;
   currentAssetUrl.value = result.assetUrl;
+  currentArchivedOriginal.value = getArchivedOriginal(result.meta);
   props.onReplaced?.(result);
+}
+
+function getArchivedOriginal(
+  meta: AssetMeta | null | undefined,
+): ArchivedOriginalFileMeta | undefined {
+  return meta && 'archivedOriginal' in meta ? meta.archivedOriginal : undefined;
 }
 
 function onReplace() {
@@ -159,6 +173,13 @@ function viewRaw() {
         {{ currentExtension.toUpperCase() }}
       </span>
     </div>
+
+    <AssetModalFileInfo
+      v-if="currentArchivedOriginal"
+      :extension="currentExtension"
+      :size="currentSize"
+      :archived-original="currentArchivedOriginal"
+    />
 
     <!-- Title -->
     <Field v-if="showTitle">

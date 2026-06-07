@@ -1,9 +1,22 @@
 <script lang="ts" setup>
+defineProps<{
+  label?: string;
+}>();
+
 const model = defineModel<boolean>();
 </script>
 
 <template>
   <div class="flex items-center gap-sm">
+    <div
+      v-if="label"
+      class="cursor-pointer font-semibold tracking-tight select-none"
+      @click="model = !model"
+    >
+      {{ label }}
+    </div>
+    <slot v-else></slot>
+
     <div
       v-if="$slots.inactive"
       class="cursor-pointer font-semibold tracking-tight transition-colors
@@ -12,13 +25,6 @@ const model = defineModel<boolean>();
       @click="model = !model"
     >
       <slot name="inactive"></slot>
-    </div>
-    <div
-      v-if="$slots.default"
-      class="cursor-pointer font-semibold tracking-tight select-none"
-      @click="model = !model"
-    >
-      <slot></slot>
     </div>
     <div
       class="group rounded-full border-2 border-border-1 transition

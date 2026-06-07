@@ -3,20 +3,24 @@ import { AssetType } from '#layers/thei/shared/asset';
 import type {
   AssetMeta,
   ImageAssetMeta,
+  OtherAssetMeta,
   VideoAssetMeta,
 } from '#layers/thei/shared/asset';
 import {
   ASSET_UPLOAD_SETTINGS_VERSION,
   buildAssetSettingsKey,
+  type AssetFileZipSettings,
   type AssetImageTransformSettings,
   type AssetOriginalSettings,
   type AssetUploadSettings,
   type AssetVideoTransformSettings,
 } from '#layers/thei/shared/asset-upload-settings';
 import { getPathExtension } from '#layers/thei/shared/assets/extensions';
+import { canZipAssetExtension } from '#layers/thei/shared/asset-upload-zip';
 import { extractDominantHue } from '../../../thei/assets/image-color';
 import {
   inferAssetType,
+  processFileZipAsset,
   processMediaTransformAsset,
   processOriginalAsset,
 } from '../../../thei/assets/process';
@@ -35,135 +39,167 @@ import {
 
 export default defineEventHandler(
   async (event): Promise<AssetUploadResponse> => {
-    const parts = await readMultipartFormData(event);
-    if (!parts) {
-      throw createError({ statusCode: 400, message: 'No multipart data' });
-    }
+    let uploadId: string | undefined;
+    try {
+      const parts = await readMultipartFormData(event);
+      if (!parts) {
+        throw createError({ statusCode: 400, message: 'No multipart data' });
+      }
 
-    const filePart = parts.find((part) => part.name === 'file');
-    const rawHash = readPartString(parts, 'rawHash');
-    const settings = parseSettings(readPartString(parts, 'settings'));
-    const previousAssetUuid = readPartString(parts, 'previousAssetUuid', false);
-    const uploadId = readPartString(parts, 'uploadId', false);
-    const maxSizeBytes = parseOptionalInt(
-      readPartString(parts, 'maxSizeBytes', false),
-    );
-    const acceptedExtensions = parseAcceptedExtensions(
-      readPartString(parts, 'acceptedExtensions', false),
-    );
+      const filePart = parts.find((part) => part.name === 'file');
+      const rawHash = readPartString(parts, 'rawHash');
+      const settings = parseSettings(readPartString(parts, 'settings'));
+      const previousAssetUuid = readPartString(
+        parts,
+        'previousAssetUuid',
+        false,
+      );
+      uploadId = readPartString(parts, 'uploadId', false);
+      const maxSizeBytes = parseOptionalInt(
+        readPartString(parts, 'maxSizeBytes', false),
+      );
+      const acceptedExtensions = parseAcceptedExtensions(
+        readPartString(parts, 'acceptedExtensions', false),
+      );
 
-    if (!filePart?.data || !filePart.filename || !rawHash) {
-      throw createError({
-        statusCode: 400,
-        message: 'Missing required fields: file, rawHash, settings',
+      if (!filePart?.data || !filePart.filename || !rawHash) {
+        throw createError({
+          statusCode: 400,
+          message: 'Missing required fields: file, rawHash, settings',
+        });
+      }
+
+      if (sha256(filePart.data) !== rawHash) {
+        throw createError({
+          statusCode: 400,
+          message: 'File hash does not match rawHash',
+        });
+      }
+
+      const originalExtension = getPathExtension(filePart.filename);
+      validateFileInput({
+        extension: originalExtension,
+        size: filePart.data.length,
+        maxSizeBytes,
+        acceptedExtensions,
       });
-    }
+      const originalType = inferAssetType(originalExtension);
 
-    if (sha256(filePart.data) !== rawHash) {
-      throw createError({
-        statusCode: 400,
-        message: 'File hash does not match rawHash',
+      if (
+        settings.type === 'image-transform' &&
+        originalType !== AssetType.Image
+      ) {
+        throw createError({
+          statusCode: 400,
+          message:
+            'Selected image settings do not match the uploaded file type',
+        });
+      }
+
+      if (
+        settings.type === 'video-transform' &&
+        originalType !== AssetType.Video
+      ) {
+        throw createError({
+          statusCode: 400,
+          message:
+            'Selected video settings do not match the uploaded file type',
+        });
+      }
+
+      if (
+        settings.type === 'file-zip' &&
+        (originalType !== AssetType.Other ||
+          !canZipAssetExtension(originalExtension))
+      ) {
+        throw createError({
+          statusCode: 400,
+          message: 'Selected zip settings do not match the uploaded file type',
+        });
+      }
+
+      const settingsKey = buildAssetSettingsKey(settings);
+      const existing = await THEI_SERVER.assets.findBySettingsKey(
+        rawHash,
+        settingsKey,
+      );
+
+      if (existing) {
+        await THEI_SERVER.assets.touch(existing.assetUuid);
+        if (previousAssetUuid && previousAssetUuid !== existing.assetUuid) {
+          await deleteStoredAsset(previousAssetUuid);
+        }
+        const variant = await buildAssetVariantInfo(existing);
+        clearAssetUploadProgress(uploadId);
+        return {
+          ...variant,
+          created: false,
+        };
+      }
+
+      const processed = await processAsset(
+        filePart.data,
+        filePart.filename,
+        originalExtension,
+        settings,
+        {
+          onProgress: (progress) =>
+            setAssetUploadProgress(uploadId, {
+              phase: 'processing',
+              progress,
+            }),
+        },
+      );
+
+      const { meta, previewAssetUuid } = await buildProcessedAssetMeta(
+        processed.buffer,
+        processed.extension,
+        processed.type,
+        processed.dimensions,
+        settings,
+        processed.hasAudio,
+        {
+          extension: originalExtension,
+          size: filePart.data.length,
+          name: filePart.filename,
+        },
+      );
+
+      const storeResult = await storeAsset({
+        buffer: processed.buffer,
+        extension: processed.extension,
+        rawHash,
+        settingsKey,
+        settingsVersion: settings.version,
+        settings,
+        type: processed.type,
+        meta,
       });
-    }
 
-    const originalExtension = getPathExtension(filePart.filename);
-    validateFileInput({
-      extension: originalExtension,
-      size: filePart.data.length,
-      maxSizeBytes,
-      acceptedExtensions,
-    });
-    const originalType = inferAssetType(originalExtension);
+      if (previewAssetUuid) {
+        await attachVideoPreviewUsage(
+          storeResult.asset.assetUuid,
+          previewAssetUuid,
+        );
+      }
 
-    if (
-      settings.type === 'image-transform' &&
-      originalType !== AssetType.Image
-    ) {
-      throw createError({
-        statusCode: 400,
-        message: 'Selected image settings do not match the uploaded file type',
-      });
-    }
-
-    if (
-      settings.type === 'video-transform' &&
-      originalType !== AssetType.Video
-    ) {
-      throw createError({
-        statusCode: 400,
-        message: 'Selected video settings do not match the uploaded file type',
-      });
-    }
-
-    const settingsKey = buildAssetSettingsKey(settings);
-    const existing = await THEI_SERVER.assets.findBySettingsKey(
-      rawHash,
-      settingsKey,
-    );
-
-    if (existing) {
-      await THEI_SERVER.assets.touch(existing.assetUuid);
-      if (previousAssetUuid && previousAssetUuid !== existing.assetUuid) {
+      if (
+        previousAssetUuid &&
+        previousAssetUuid !== storeResult.asset.assetUuid
+      ) {
         await deleteStoredAsset(previousAssetUuid);
       }
-      const variant = await buildAssetVariantInfo(existing);
+
+      const variant = await buildAssetVariantInfo(storeResult.asset);
+      clearAssetUploadProgress(uploadId);
       return {
         ...variant,
-        created: false,
+        created: storeResult.created,
       };
+    } catch (error) {
+      clearAssetUploadProgress(uploadId);
+      throw error;
     }
-
-    const processed =
-      settings.type === 'original'
-        ? await processOriginalAsset(filePart.data, originalExtension)
-        : await processMediaTransformAsset(filePart.data, settings, {
-            onProgress: (progress) =>
-              setAssetUploadProgress(uploadId, {
-                phase: 'processing',
-                progress,
-              }),
-          });
-
-    const { meta, previewAssetUuid } = await buildProcessedAssetMeta(
-      processed.buffer,
-      processed.extension,
-      processed.type,
-      processed.dimensions,
-      settings,
-      processed.hasAudio,
-    );
-
-    const storeResult = await storeAsset({
-      buffer: processed.buffer,
-      extension: processed.extension,
-      rawHash,
-      settingsKey,
-      settingsVersion: settings.version,
-      settings,
-      type: processed.type,
-      meta,
-    });
-
-    if (previewAssetUuid) {
-      await attachVideoPreviewUsage(
-        storeResult.asset.assetUuid,
-        previewAssetUuid,
-      );
-    }
-
-    if (
-      previousAssetUuid &&
-      previousAssetUuid !== storeResult.asset.assetUuid
-    ) {
-      await deleteStoredAsset(previousAssetUuid);
-    }
-
-    const variant = await buildAssetVariantInfo(storeResult.asset);
-    clearAssetUploadProgress(uploadId);
-    return {
-      ...variant,
-      created: storeResult.created,
-    };
   },
 );
 
@@ -180,6 +216,24 @@ function readPartString(
     });
   }
   return value ?? '';
+}
+
+async function processAsset(
+  buffer: Buffer,
+  filename: string,
+  extension: string,
+  settings: AssetUploadSettings,
+  options: Parameters<typeof processMediaTransformAsset>[2],
+) {
+  if (settings.type === 'original') {
+    return await processOriginalAsset(buffer, extension);
+  }
+
+  if (settings.type === 'file-zip') {
+    return await processFileZipAsset(buffer, filename, settings, options);
+  }
+
+  return await processMediaTransformAsset(buffer, settings, options);
 }
 
 function parseSettings(value: string): AssetUploadSettings {
@@ -213,6 +267,10 @@ function parseSettings(value: string): AssetUploadSettings {
     return settings;
   }
 
+  if (isFileZipSettings(settings)) {
+    return settings;
+  }
+
   throw createError({ statusCode: 400, message: 'Invalid upload settings' });
 }
 
@@ -236,6 +294,18 @@ function isDimensions(
   );
 }
 
+function isResizeMode(value: unknown): value is 'inside' | 'cover' {
+  return value === 'inside' || value === 'cover';
+}
+
+function hasResizeSettings(settings: Record<string, unknown>): boolean {
+  return (
+    isDimensions(settings.dimensions) &&
+    isResizeMode(settings.resizeMode) &&
+    typeof settings.allowUpscale === 'boolean'
+  );
+}
+
 function isOriginalSettings(
   settings: Record<string, unknown>,
 ): settings is AssetOriginalSettings {
@@ -248,7 +318,7 @@ function isImageTransformSettings(
   return (
     settings.type === 'image-transform' &&
     isQuality(settings.quality) &&
-    isDimensions(settings.dimensions)
+    hasResizeSettings(settings)
   );
 }
 
@@ -258,10 +328,16 @@ function isVideoTransformSettings(
   return (
     settings.type === 'video-transform' &&
     isQuality(settings.quality) &&
-    isDimensions(settings.dimensions) &&
-    (settings.audio === 'keep' || settings.audio === 'strip') &&
-    (settings.mode === 'quality' || settings.mode === 'fast')
+    hasResizeSettings(settings) &&
+    typeof settings.stripAudio === 'boolean' &&
+    typeof settings.fastConversion === 'boolean'
   );
+}
+
+function isFileZipSettings(
+  settings: Record<string, unknown>,
+): settings is AssetFileZipSettings {
+  return settings.type === 'file-zip';
 }
 
 function parseOptionalInt(value: string): number | undefined {
@@ -271,15 +347,18 @@ function parseOptionalInt(value: string): number | undefined {
 }
 
 function parseAcceptedExtensions(value: string): string[] | '*' | undefined {
-  if (!value) return undefined;
-  if (value === '*') return '*';
+  const normalizedValue = value.trim();
+  if (!normalizedValue) return undefined;
+  if (normalizedValue === '*') return '*';
   try {
-    const parsed = JSON.parse(value);
+    const parsed = JSON.parse(normalizedValue);
     if (
       Array.isArray(parsed) &&
       parsed.every((extension) => typeof extension === 'string')
     ) {
-      return parsed;
+      const normalized = parsed.map(normalizeExtension).filter(Boolean);
+      if (normalized.includes('*')) return '*';
+      return normalized;
     }
   } catch {
     // handled below
@@ -299,7 +378,7 @@ function validateFileInput(input: {
   if (
     input.acceptedExtensions &&
     input.acceptedExtensions !== '*' &&
-    !input.acceptedExtensions.includes(input.extension)
+    !input.acceptedExtensions.includes(normalizeExtension(input.extension))
   ) {
     throw createError({
       statusCode: 400,
@@ -315,6 +394,10 @@ function validateFileInput(input: {
   }
 }
 
+function normalizeExtension(extension: string): string {
+  return extension.trim().replace(/^\./, '').toLowerCase();
+}
+
 async function buildProcessedAssetMeta(
   buffer: Buffer,
   extension: string,
@@ -322,6 +405,7 @@ async function buildProcessedAssetMeta(
   dimensions: { width?: number; height?: number },
   settings: AssetUploadSettings,
   hasAudio?: boolean,
+  originalFile?: { extension: string; size: number; name?: string },
 ): Promise<{ meta: AssetMeta | null; previewAssetUuid?: string }> {
   if (type === AssetType.Image) {
     const dominantHue = await extractDominantHue(buffer, extension);
@@ -336,19 +420,23 @@ async function buildProcessedAssetMeta(
     const preview = await createVideoPreviewAsset(buffer);
     const meta: VideoAssetMeta = {
       ...dimensions,
-      audio:
-        settings.type === 'video-transform' && settings.audio === 'strip'
-          ? 'none'
-          : hasAudio === false
-            ? 'none'
-            : settings.type === 'video-transform'
-              ? settings.audio
-              : 'unknown',
+      audio: hasAudio === true ? 'keep' : 'none',
       ...(preview.dominantHue !== undefined
         ? { dominantHue: preview.dominantHue }
         : {}),
     };
     return { meta, previewAssetUuid: preview.previewAssetUuid };
+  }
+
+  if (settings.type === 'file-zip' && originalFile) {
+    const meta: OtherAssetMeta = {
+      archivedOriginal: {
+        extension: originalFile.extension,
+        size: originalFile.size,
+        ...(originalFile.name ? { name: originalFile.name } : {}),
+      },
+    };
+    return { meta };
   }
 
   return { meta: Object.keys(dimensions).length > 0 ? dimensions : null };

@@ -17,11 +17,11 @@ const isActive = computed({
 </script>
 
 <template>
-  <section class="flex flex-col gap-sm p-sm">
+  <section class="flex flex-col p-sm">
     <div class="flex items-center justify-between gap-sm">
       <button
         type="button"
-        class="cursor-pointer text-left font-semibold tracking-tight
+        class="flex-1 cursor-pointer text-left font-semibold tracking-tight
           transition-colors"
         :class="active ? 'text-accent' : 'text-text-1'"
         @click="emit('activate')"
@@ -43,7 +43,7 @@ const isActive = computed({
       "
     >
       <div class="min-h-0 overflow-hidden">
-        <div class="flex flex-col gap-sm">
+        <div class="flex flex-col gap-sm pt-sm">
           <slot></slot>
         </div>
       </div>

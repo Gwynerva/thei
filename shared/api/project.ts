@@ -1,5 +1,5 @@
 import type { ProjectEventAccessLevel } from '../access-level';
-import type { AssetType } from '../asset';
+import type { ArchivedOriginalFileMeta, AssetType } from '../asset';
 
 export type ProjectSlugCheckResponse = {
   taken: boolean;
@@ -33,6 +33,7 @@ export type OtherAssetGetItem = {
   assetUrl: string;
   size: number;
   extension: string;
+  archivedOriginal?: ArchivedOriginalFileMeta;
   title: string;
   caption?: string;
   access: 'project' | 'private';

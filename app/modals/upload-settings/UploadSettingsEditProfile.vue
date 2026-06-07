@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-import type { FieldOptions } from '#layers/thei/app/components/field/FieldOptions.vue';
 import UploadSettingsFileComparison from './UploadSettingsFileComparison.vue';
 
 type BusyAction = 'variants' | 'upload-original' | 'apply';
@@ -13,16 +12,15 @@ const quality = defineModel<number>('quality', { required: true });
 const widthInput = defineModel<string>('widthInput', { required: true });
 const heightInput = defineModel<string>('heightInput', { required: true });
 const keepAspect = defineModel<boolean>('keepAspect', { required: true });
-const muteAudio = defineModel<boolean>('muteAudio', { required: true });
-const videoConversionMode = defineModel<'quality' | 'fast'>(
-  'videoConversionMode',
-  { required: true },
-);
+const muteAudio = defineModel<boolean>('muteAudio');
+const fastConversion = defineModel<boolean>('fastConversion');
 
 defineProps<{
   isVideo: boolean;
   qualityValues: number[];
-  videoModeOptions: FieldOptions;
+  availableSizePresets: number[];
+  showResetDimensions: boolean;
+  showRecommendedButton: boolean;
   busyAction?: BusyAction;
   applyButtonText: string;
   canUseTransformed: boolean;
@@ -41,6 +39,8 @@ defineProps<{
 
 const emit = defineEmits<{
   applyRecommendedSettings: [];
+  resetDimensions: [];
+  applySizePreset: [size: number];
   syncHeightFromWidth: [];
   syncWidthFromHeight: [];
   applySettings: [];
@@ -52,30 +52,41 @@ const emit = defineEmits<{
   <FieldSlider
     v-model="quality"
     :values="qualityValues"
-    :format="(value) => `${value} %`"
+    :format="(value) => `${value}%`"
     class="-mt-3"
   >
     <template #before>
       <div class="relative -top-3 text-sm leading-0 tracking-tight text-text-2">
-        Качество
+        {{ phrase.upload_quality }}
       </div>
     </template>
   </FieldSlider>
 
-  <div class="flex flex-col gap-xs text-sm text-text-2">
-    <div class="flex min-w-0 flex-col gap-xs">
-      <div>Ширина</div>
-      <FieldInput
-        v-model="widthInput"
-        inputmode="numeric"
-        type="text"
-        class="min-w-2! p-2!"
-        @blur="emit('syncHeightFromWidth')"
-        @submit="emit('syncHeightFromWidth')"
-      />
-    </div>
+  <div class="flex items-center justify-between">
+    <div class="text-sm text-text-2">{{ phrase.upload_dimensions }}</div>
     <button
-      class="cursor-pointer self-center p-1 text-lg transition"
+      v-if="showResetDimensions"
+      class="cursor-pointer rounded-normal bg-bg-3 px-2 py-1 text-xs text-text-2
+        transition hocus:bg-accent/50 hocus:text-text-1"
+      @click="emit('resetDimensions')"
+    >
+      {{ phrase.upload_reset_dimensions }}
+    </button>
+  </div>
+
+  <div class="flex items-center gap-xs text-sm text-text-2">
+    <FieldInput
+      v-model="widthInput"
+      inputmode="numeric"
+      type="text"
+      class="min-w-2! p-2!"
+      @blur="emit('syncHeightFromWidth')"
+      @submit="emit('syncHeightFromWidth')"
+    />
+    <button
+      class="flex size-9 shrink-0 cursor-pointer items-center justify-center
+        rounded-full bg-transparent transition hocus:bg-bg-3"
+      :data-title-popup="phrase.upload_keep_aspect"
       :class="
         keepAspect
           ? 'text-accent hocus:text-accent'
@@ -83,36 +94,61 @@ const emit = defineEmits<{
       "
       @click="keepAspect = !keepAspect"
     >
-      <Icon name="link" />
+      <Icon name="link" class="size-3/5" />
     </button>
-    <div class="flex min-w-0 flex-col gap-xs">
-      <div>Высота</div>
-      <FieldInput
-        v-model="heightInput"
-        inputmode="numeric"
-        type="text"
-        class="min-w-2! p-2!"
-        @blur="emit('syncWidthFromHeight')"
-        @submit="emit('syncWidthFromHeight')"
-      />
-    </div>
+    <FieldInput
+      v-model="heightInput"
+      inputmode="numeric"
+      type="text"
+      class="min-w-2! p-2!"
+      @blur="emit('syncWidthFromHeight')"
+      @submit="emit('syncWidthFromHeight')"
+    />
   </div>
 
-  <Button variant="secondary" @click="emit('applyRecommendedSettings')">
-    <Icon name="check-shield" class="mr-xs" />
-    <span>Рекомендуемые настройки</span>
-  </Button>
+  <div
+    v-if="availableSizePresets.length"
+    class="flex items-center gap-px text-xs"
+  >
+    <button
+      v-for="size of availableSizePresets"
+      :key="size"
+      class="cursor-pointer bg-bg-3 px-2 py-1 text-text-2 transition
+        first:rounded-l-normal last:rounded-r-normal hocus:bg-accent/50
+        hocus:text-text-1"
+      @click="emit('applySizePreset', size)"
+    >
+      {{ size }}
+    </button>
+  </div>
 
   <FieldToggle v-if="isVideo" v-model="muteAudio">
-    <template #inactive>С аудио</template>
-    <template #active>Без аудио</template>
+    <div
+      @click="muteAudio = !muteAudio"
+      class="w-full cursor-pointer text-sm text-text-2"
+    >
+      {{ phrase.upload_strip_audio }}
+    </div>
   </FieldToggle>
 
-  <FieldOptions
-    v-if="isVideo"
-    v-model="videoConversionMode"
-    :options="videoModeOptions"
-  />
+  <FieldToggle v-if="isVideo" v-model="fastConversion">
+    <div
+      @click="fastConversion = !fastConversion"
+      :data-title-popup="phrase.upload_fast_conversion_hint"
+      class="w-full cursor-pointer text-sm text-text-2"
+    >
+      {{ phrase.upload_fast_conversion }}
+    </div>
+  </FieldToggle>
+
+  <Button
+    v-if="showRecommendedButton"
+    variant="secondary"
+    @click="emit('applyRecommendedSettings')"
+  >
+    <Icon name="check-shield" class="mr-xs" />
+    <span>{{ phrase.upload_recommended_settings }}</span>
+  </Button>
 
   <Button
     variant="secondary"
@@ -128,6 +164,7 @@ const emit = defineEmits<{
 
   <UploadSettingsFileComparison
     v-if="showResult"
+    include-dimensions
     :previous="previousFile"
     :current="currentFile"
   />
@@ -138,7 +175,7 @@ const emit = defineEmits<{
     class="font-semibold"
     @click="emit('finish')"
   >
-    <span>Использовать</span>
+    <span>{{ phrase.upload_use }}</span>
     <Icon name="chevron-right" class="ml-xs" />
   </Button>
 </template>

@@ -228,6 +228,19 @@ export function useMediaControls() {
     startAnimation();
   }
 
+  function resetView(): void {
+    stopAnimation();
+    fitZoom.value = computeFitZoom();
+    uncappedFitZoom.value = computeUncappedFitZoom();
+    isFitMode.value = true;
+    zoom.value = fitZoom.value;
+    tx.value = 0;
+    ty.value = 0;
+    targetZoom = fitZoom.value;
+    targetTx = 0;
+    targetTy = 0;
+  }
+
   function onDimensionsKnown(): void {
     if (isReady.value) return; // guard against duplicate calls (sync read + load event)
     fitZoom.value = computeFitZoom();
@@ -500,9 +513,25 @@ export function useMediaControls() {
     const effectiveW = w > 0 ? w : containerW * 0.8;
     const effectiveH = h > 0 ? h : containerH * 0.8;
     if (effectiveW > 0 && effectiveH > 0) {
+      const dimensionsChanged =
+        naturalW.value !== effectiveW || naturalH.value !== effectiveH;
       naturalW.value = effectiveW;
       naturalH.value = effectiveH;
-      onDimensionsKnown();
+      if (!isReady.value) {
+        onDimensionsKnown();
+      } else if (dimensionsChanged) {
+        if (isFitMode.value) {
+          resetView();
+        } else {
+          fitZoom.value = computeFitZoom();
+          uncappedFitZoom.value = computeUncappedFitZoom();
+          const clamped = clampPair(zoom.value, tx.value, ty.value);
+          tx.value = clamped.tx;
+          ty.value = clamped.ty;
+          targetTx = clamped.tx;
+          targetTy = clamped.ty;
+        }
+      }
     }
   }
 
@@ -527,6 +556,7 @@ export function useMediaControls() {
     fitZoom,
     isReady,
     handleZoomButtonClick,
+    resetView,
     getViewState,
     restoreViewState,
     onPointerDown,
