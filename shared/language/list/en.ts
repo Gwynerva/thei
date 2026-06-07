@@ -316,10 +316,8 @@ export default defineI18nBase({
     upload_compress_to_zip: 'Compress to ZIP',
     upload_compress_to_zip_hint:
       'Packaging the file into an archive can reduce its size.',
-    upload_preview_uploaded: 'Show uploaded version',
-    upload_preview_original: 'Show original',
-    upload_preview_uploaded_short: 'NEW',
-    upload_preview_original_short: 'ORG',
+    upload_compare_original: 'Original',
+    upload_compare_modified: 'Modified',
     upload_variant_original: 'Original',
     upload_variant_modified: (index) => `Modified ${index}`,
     upload_variant_uploaded_file: 'Uploaded file',

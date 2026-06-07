@@ -33,11 +33,10 @@ import {
 } from '#layers/thei/shared/assets/extensions';
 import AssetModal from '../asset-modal/AssetModal.vue';
 import AssetModalButton from '../asset-modal/AssetModalButton.vue';
+import AssetModalCompareMedia from '../asset-modal/AssetModalCompareMedia.vue';
 import AssetModalFileInfo from '../asset-modal/AssetModalFileInfo.vue';
 import AssetModalPreviewFile from '../asset-modal/AssetModalPreviewFile.vue';
 import AssetModalPreviewMedia from '../asset-modal/AssetModalPreviewMedia.vue';
-import type { VideoPlaybackState } from '../asset-modal/AssetModalPreviewMedia.vue';
-import type { MediaViewState } from '../asset-modal/media-controls';
 import { useFileInfo } from '../asset-modal/use-file-info';
 import UploadSettingsDivider from './UploadSettingsDivider.vue';
 import UploadSettingsEditProfile from './UploadSettingsEditProfile.vue';
@@ -54,6 +53,15 @@ type UploadSettingsResult = { type: 'upload-new' } | AssetWizardResult;
 type UseCandidate = 'original' | 'transformed' | 'selected' | null;
 type ActiveProfile = 'original' | 'uploaded' | 'edit';
 type EditableSettings = AssetTransformSettings | AssetFileZipSettings;
+interface PreviewSource {
+  key: string;
+  extension: string;
+  src: string;
+  href: string;
+  isMedia: boolean;
+  hasAudio?: boolean;
+  displayDimensions?: FileDimensions;
+}
 
 const emit = defineEmits<{
   modalResult: [result: UploadSettingsResult];
@@ -78,15 +86,11 @@ const {
 
 const errorMessage = ref('');
 const selectedVariantUuid = ref('');
-const activeAsset = shallowRef<AssetVariantInfo | null>(null);
 const currentOriginalAsset = shallowRef<AssetVariantInfo | null>(null);
 const currentTransformedAsset = shallowRef<AssetVariantInfo | null>(null);
 const activeUseCandidate = ref<UseCandidate>(null);
 const activeProfile = ref<ActiveProfile>('original');
 const profileSelectedByUser = ref(false);
-const previewMode = ref<'original' | 'asset'>('original');
-const previewViewStates = reactive(new Map<string, MediaViewState>());
-const previewPlaybackStates = reactive(new Map<string, VideoPlaybackState>());
 
 const quality = ref(70);
 const widthInput = ref('');
@@ -266,12 +270,12 @@ const showRecommendedButton = computed(
     currentEditSettingsKey.value !== recommendedEditSettingsKey.value,
 );
 
-const activeAssetIsEdit = computed(() =>
+const transformedAssetIsEdit = computed(() =>
   isEditableSettings(currentTransformedAsset.value?.settings),
 );
 const currentTransformedAssetMatchesSettings = computed(
   () =>
-    activeAssetIsEdit.value &&
+    transformedAssetIsEdit.value &&
     Boolean(currentEditSettingsKey.value) &&
     currentTransformedAsset.value?.settingsKey === currentEditSettingsKey.value,
 );
@@ -301,7 +305,7 @@ const editApplyButtonText = computed(() =>
       : phrase.value.upload_apply_settings,
 );
 
-const activeAssetDimensions = computed(() =>
+const transformedAssetDimensions = computed(() =>
   currentTransformedAsset.value
     ? variantDimensions(currentTransformedAsset.value)
     : undefined,
@@ -321,8 +325,9 @@ const transformedFileComparison = computed(() => ({
     ? currentTransformedAsset.value?.size
     : undefined,
   dimensions:
-    currentTransformedAssetMatchesSettings.value && activeAssetDimensions.value
-      ? activeAssetDimensions.value
+    currentTransformedAssetMatchesSettings.value &&
+    transformedAssetDimensions.value
+      ? transformedAssetDimensions.value
       : previewDimensions.value,
 }));
 const expectedEditExtension = computed(() => {
@@ -343,54 +348,73 @@ const uploadedVariantItems = computed(() =>
   })),
 );
 
-const currentPreviewDisplayDimensions = computed(() =>
-  previewMode.value === 'original' &&
-  activeProfile.value === 'edit' &&
-  isOriginalMedia.value &&
-  !currentTransformedAssetMatchesSettings.value
-    ? previewDimensions.value
-    : undefined,
-);
-const currentPreview = computed(() => {
-  if (previewMode.value === 'asset' && activeAsset.value) {
-    const asset = activeAsset.value;
-    const src =
-      asset.type === AssetType.Video ? asset.videoUrl : asset.assetUrl;
-    return {
-      key: `asset:${asset.assetUuid}:${asset.assetUrl}`,
-      extension: asset.extension,
-      src,
-      href: asset.assetUrl,
-      isMedia: asset.type === AssetType.Image || asset.type === AssetType.Video,
-      hasAudio:
-        asset.type === AssetType.Video
-          ? asset.meta?.audio !== 'none' && asset.meta?.audio !== 'strip'
-          : false,
-      displayDimensions: undefined,
-    };
+const originalPreviewSource = computed<PreviewSource>(() => ({
+  key: `original:${props.modalData.file.objectUrl}:native`,
+  extension: props.modalData.file.extension,
+  src: props.modalData.file.objectUrl,
+  href: props.modalData.file.objectUrl,
+  isMedia: isOriginalMedia.value,
+  hasAudio: originalAssetType.value === AssetType.Video ? undefined : false,
+  displayDimensions: originalDimensions.value,
+}));
+const modifiedPreviewSource = computed<PreviewSource | null>(() => {
+  if (activeProfile.value === 'original') return null;
+
+  if (activeProfile.value === 'uploaded') {
+    if (selectedVariant.value?.isOriginal) return null;
+    return selectedVariant.value
+      ? variantPreviewSource(selectedVariant.value)
+      : null;
   }
 
-  const display = currentPreviewDisplayDimensions.value;
+  if (activeProfile.value !== 'edit') return null;
+
+  if (
+    currentTransformedAssetMatchesSettings.value &&
+    currentTransformedAsset.value
+  ) {
+    return variantPreviewSource(currentTransformedAsset.value);
+  }
+
+  if (!isOriginalMedia.value || !showResetDimensions.value) return null;
+
+  const display = previewDimensions.value;
   const displayKey = display ? `${display.width}x${display.height}` : 'native';
   return {
-    key: `original:${props.modalData.file.objectUrl}:${displayKey}`,
+    key: `edit-preview:${props.modalData.file.objectUrl}:${displayKey}`,
     extension: props.modalData.file.extension,
     src: props.modalData.file.objectUrl,
     href: props.modalData.file.objectUrl,
-    isMedia: isOriginalMedia.value,
+    isMedia: true,
     hasAudio: originalAssetType.value === AssetType.Video ? undefined : false,
     displayDimensions: display,
   };
 });
-const currentPreviewViewState = computed(() =>
-  currentPreview.value.displayDimensions
-    ? undefined
-    : previewViewStates.get(currentPreview.value.key),
+const comparePreview = computed(() => {
+  const modified = modifiedPreviewSource.value;
+  if (!originalPreviewSource.value.isMedia || !modified?.isMedia) return null;
+
+  return {
+    key: `${originalPreviewSource.value.key}|${modified.key}`,
+    original: originalPreviewSource.value,
+    modified,
+  };
+});
+const disableSeamlessCompare = computed(
+  () =>
+    activeProfile.value === 'edit' &&
+    showResetDimensions.value &&
+    !currentTransformedAssetMatchesSettings.value,
 );
-const currentPreviewPlaybackState = computed(() =>
-  currentPreview.value.displayDimensions
-    ? undefined
-    : previewPlaybackStates.get(currentPreview.value.key),
+const singlePreview = computed(() =>
+  activeProfile.value === 'original' && reusableOriginalAsset.value
+    ? variantPreviewSource(reusableOriginalAsset.value)
+    : activeProfile.value === 'uploaded' && selectedVariant.value?.isOriginal
+      ? variantPreviewSource(selectedVariant.value)
+      : (modifiedPreviewSource.value ?? originalPreviewSource.value),
+);
+const directPreviewHref = computed(
+  () => comparePreview.value?.modified.href ?? singlePreview.value.href,
 );
 const qualityValues = computed(() =>
   new Array(91).fill(0).map((_, index) => 10 + index),
@@ -429,16 +453,6 @@ watch(heightInput, () => {
   if (syncingDimensions || !keepAspect.value) return;
   syncWidthFromHeight();
 });
-watch(currentEditSettingsKey, () => {
-  if (activeProfile.value !== 'edit' || !isOriginalMedia.value) return;
-  if (currentTransformedAssetMatchesSettings.value) {
-    activeAsset.value = currentTransformedAsset.value;
-    previewMode.value = 'asset';
-    return;
-  }
-  previewMode.value = 'original';
-});
-
 onMounted(async () => {
   try {
     const loadedVariants = await loadVariants();
@@ -447,10 +461,8 @@ onMounted(async () => {
         (a, b) => a.size - b.size,
       )[0]!;
       selectedVariantUuid.value = preferredVariant.assetUuid;
-      activeAsset.value = preferredVariant;
       activeUseCandidate.value = 'selected';
       activeProfile.value = 'uploaded';
-      previewMode.value = 'asset';
     }
   } catch (error) {
     errorMessage.value = errorToMessage(
@@ -463,17 +475,14 @@ onMounted(async () => {
 async function uploadOriginal() {
   const settings = createOriginalAssetSettings();
   errorMessage.value = '';
-  saveCurrentPreviewViewState();
 
   const reusableAsset = reusableOriginalAsset.value;
   if (reusableAsset) {
     currentOriginalAsset.value = reusableAsset;
-    activeAsset.value = reusableAsset;
     selectedVariantUuid.value = '';
     activeUseCandidate.value = 'original';
     profileSelectedByUser.value = true;
     activeProfile.value = 'original';
-    previewMode.value = 'asset';
     return;
   }
 
@@ -481,12 +490,10 @@ async function uploadOriginal() {
   try {
     const response = await uploadWithSettings(settings);
     currentOriginalAsset.value = response;
-    activeAsset.value = response;
     selectedVariantUuid.value = '';
     activeUseCandidate.value = 'original';
     profileSelectedByUser.value = true;
     activeProfile.value = 'original';
-    previewMode.value = 'asset';
   } catch (error) {
     errorMessage.value = errorToMessage(
       error,
@@ -513,17 +520,14 @@ async function applySettings() {
   const reusableAsset = cachedAsset ?? matchingVariant;
 
   errorMessage.value = '';
-  saveCurrentPreviewViewState();
 
   try {
     if (reusableAsset) {
       currentTransformedAsset.value = reusableAsset;
-      activeAsset.value = reusableAsset;
       selectedVariantUuid.value = '';
       activeUseCandidate.value = 'transformed';
       profileSelectedByUser.value = true;
       activeProfile.value = 'edit';
-      previewMode.value = 'asset';
       return;
     }
 
@@ -532,12 +536,10 @@ async function applySettings() {
       previousAssetUuid: temporaryAssetUuid.value,
     });
     currentTransformedAsset.value = response;
-    activeAsset.value = response;
     selectedVariantUuid.value = '';
     activeUseCandidate.value = 'transformed';
     profileSelectedByUser.value = true;
     activeProfile.value = 'edit';
-    previewMode.value = 'asset';
     temporaryAssetUuid.value = response.created ? response.assetUuid : null;
   } catch (error) {
     errorMessage.value = errorToMessage(error, phrase.value.upload_error_apply);
@@ -548,13 +550,10 @@ async function applySettings() {
 }
 
 function selectVariant(variant: AssetVariantInfo) {
-  saveCurrentPreviewViewState();
   selectedVariantUuid.value = variant.assetUuid;
-  activeAsset.value = variant;
   activeUseCandidate.value = 'selected';
   profileSelectedByUser.value = true;
   activeProfile.value = 'uploaded';
-  previewMode.value = 'asset';
 }
 
 function selectVariantByUuid(assetUuid: string) {
@@ -590,33 +589,18 @@ async function finishWithAsset(asset: AssetVariantInfo) {
 }
 
 function setActiveProfile(profile: ActiveProfile) {
-  saveCurrentPreviewViewState();
   profileSelectedByUser.value = true;
   activeProfile.value = profile;
   if (profile === 'original') {
-    previewMode.value = reusableOriginalAsset.value ? 'asset' : 'original';
     if (reusableOriginalAsset.value) {
       currentOriginalAsset.value = reusableOriginalAsset.value;
-      activeAsset.value = reusableOriginalAsset.value;
       selectedVariantUuid.value = '';
       activeUseCandidate.value = 'original';
     }
   }
-  if (profile === 'edit' && isOriginalMedia.value) {
-    if (currentTransformedAssetMatchesSettings.value) {
-      activeAsset.value = currentTransformedAsset.value;
-      previewMode.value = 'asset';
-      return;
-    }
-    previewMode.value = 'original';
-  }
 }
 
 function cleanupDiscardedTemporary(assetUuid: string) {
-  if (activeAsset.value?.assetUuid === assetUuid) {
-    activeAsset.value = null;
-    previewMode.value = 'original';
-  }
   if (currentTransformedAsset.value?.assetUuid === assetUuid) {
     currentTransformedAsset.value = null;
   }
@@ -711,20 +695,19 @@ function normalizeDimensionsForCurrentType(
   };
 }
 
-function togglePreviewMode() {
-  saveCurrentPreviewViewState();
-  previewMode.value = previewMode.value === 'original' ? 'asset' : 'original';
-}
-
-function saveCurrentPreviewViewState() {
-  const state = mediaPreview.value?.getViewState();
-  if (state) {
-    previewViewStates.set(currentPreview.value.key, state);
-  }
-  const playbackState = mediaPreview.value?.getPlaybackState();
-  if (playbackState) {
-    previewPlaybackStates.set(currentPreview.value.key, playbackState);
-  }
+function variantPreviewSource(variant: AssetVariantInfo): PreviewSource {
+  const isMedia =
+    variant.type === AssetType.Image || variant.type === AssetType.Video;
+  return {
+    key: `asset:${variant.assetUuid}:${variant.assetUrl}`,
+    extension: variant.extension,
+    src: variant.type === AssetType.Video ? variant.videoUrl : variant.assetUrl,
+    href: variant.assetUrl,
+    isMedia,
+    hasAudio:
+      variant.type === AssetType.Video ? variantHasAudio(variant) : false,
+    displayDimensions: variantDimensions(variant),
+  };
 }
 
 function variantDimensions(variant: AssetVariantInfo) {
@@ -796,51 +779,41 @@ function errorToMessage(error: unknown, fallback: string): string {
 <template>
   <AssetModal :aside-title="phrase.upload_variants">
     <template #preview>
+      <AssetModalCompareMedia
+        v-if="comparePreview"
+        :key="`compare:${comparePreview.key}`"
+        :original="comparePreview.original"
+        :modified="comparePreview.modified"
+        :original-label="phrase.upload_compare_original"
+        :modified-label="phrase.upload_compare_modified"
+        :disable-seamless="disableSeamlessCompare"
+      />
       <AssetModalPreviewMedia
-        v-if="currentPreview.isMedia"
-        :key="`media:${currentPreview.key}`"
+        v-else-if="singlePreview.isMedia"
+        :key="`media:${singlePreview.key}`"
         ref="mediaPreview"
-        :extension="currentPreview.extension"
-        :src="currentPreview.src"
-        :has-audio="currentPreview.hasAudio"
-        :display-dimensions="currentPreview.displayDimensions"
-        :initial-view-state="currentPreviewViewState"
-        :initial-playback-state="currentPreviewPlaybackState"
+        :extension="singlePreview.extension"
+        :src="singlePreview.src"
+        :has-audio="singlePreview.hasAudio"
+        :display-dimensions="singlePreview.displayDimensions"
       />
       <AssetModalPreviewFile
         v-else
-        :key="`file:${currentPreview.key}`"
-        :extension="currentPreview.extension"
+        :key="`file:${singlePreview.key}`"
+        :extension="singlePreview.extension"
       />
     </template>
 
     <template #buttons>
       <AssetModalButton
-        :key="`direct:${currentPreview.href}`"
+        :key="`direct:${directPreviewHref}`"
         icon="arrow-outward"
         target="_blank"
-        :href="currentPreview.href"
+        :href="directPreviewHref"
         :data-title-popup="phrase.direct_link_to_asset"
       />
       <AssetModalButton
-        v-if="activeAsset && currentPreview.isMedia"
-        @click="togglePreviewMode"
-        :data-title-popup="
-          previewMode === 'original'
-            ? phrase.upload_preview_uploaded
-            : phrase.upload_preview_original
-        "
-      >
-        <span class="text-xs font-bold transition">
-          {{
-            previewMode === 'original'
-              ? phrase.upload_preview_uploaded_short
-              : phrase.upload_preview_original_short
-          }}
-        </span>
-      </AssetModalButton>
-      <AssetModalButton
-        v-if="currentPreview.isMedia"
+        v-if="!comparePreview && singlePreview.isMedia"
         @click="mediaPreview?.handleZoomButtonClick()"
       >
         <span class="text-xs font-bold transition">

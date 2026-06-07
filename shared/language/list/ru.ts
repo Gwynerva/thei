@@ -320,10 +320,8 @@ export default defineI18nModule({
     upload_compress_to_zip: 'Сжать в ZIP',
     upload_compress_to_zip_hint:
       'Упаковка в архив позволит уменьшить размер файла.',
-    upload_preview_uploaded: 'Показать загруженную версию',
-    upload_preview_original: 'Показать оригинал',
-    upload_preview_uploaded_short: 'NEW',
-    upload_preview_original_short: 'ORG',
+    upload_compare_original: 'Оригинал',
+    upload_compare_modified: 'Измененный',
     upload_variant_original: 'Оригинал',
     upload_variant_modified: (index) => `Измененный ${index}`,
     upload_variant_uploaded_file: 'Загруженный файл',

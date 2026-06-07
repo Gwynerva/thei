@@ -1,8 +1,8 @@
 import { computed, onUnmounted, ref } from 'vue';
 
 const ZOOM_MIN = 0.05;
-const ZOOM_MAX = 5.0;
-const FIT_PADDING = 48; // 24px each side
+const DEFAULT_ZOOM_MAX = 5.0;
+const FIT_PADDING = 48;
 
 interface PointerState {
   x: number;
@@ -25,16 +25,19 @@ interface PanStartState {
   py: number;
 }
 
-export interface MediaViewState {
-  zoom: number;
-  tx: number;
-  ty: number;
-  isFitMode: boolean;
+interface MediaControlsOptions {
+  maxZoom?: () => number;
+  fitZoom?: (
+    container: { width: number; height: number },
+    content: { width: number; height: number },
+  ) => number | undefined;
+  uncappedFitZoom?: (
+    container: { width: number; height: number },
+    content: { width: number; height: number },
+  ) => number | undefined;
 }
 
-export function useMediaControls() {
-  // ─── state ────────────────────────────────────────────────────────────────
-
+export function useMediaControls(options: MediaControlsOptions = {}) {
   const zoom = ref(1);
   const tx = ref(0);
   const ty = ref(0);
@@ -43,70 +46,58 @@ export function useMediaControls() {
   const uncappedFitZoom = ref(1);
   const isDragging = ref(false);
 
-  // intrinsic media dimensions (set after load, reactive for computed)
-  const naturalW = ref(0);
-  const naturalH = ref(0);
-  // whether dimensions are known and media is ready to display
+  const contentW = ref(0);
+  const contentH = ref(0);
   const isReady = ref(false);
-  // container dimensions (set by ResizeObserver)
+
   let containerW = 0;
   let containerH = 0;
-
-  // pointer tracking
-  const activePointers = new Map<number, PointerState>();
-  let pinchStart: PinchStartState | null = null;
-  let panStart: PanStartState | null = null;
-
-  // cleanup handles
-  let resizeObserver: ResizeObserver | null = null;
-  let containerEl: HTMLElement | null = null;
-  let wheelHandler: ((e: WheelEvent) => void) | null = null;
-
-  // smooth animation — wheel events update targets, rAF lerps current → target
-  // pinch/pan bypass animation and set current directly for zero-latency response
   let targetZoom = 1;
   let targetTx = 0;
   let targetTy = 0;
   let rafId: number | null = null;
   let lastRafTime: number | null = null;
 
-  // ─── derived ─────────────────────────────────────────────────────────────
+  const activePointers = new Map<number, PointerState>();
+  let pinchStart: PinchStartState | null = null;
+  let panStart: PanStartState | null = null;
 
-  // Media is only draggable when it actually overflows the container, i.e. zoom
-  // exceeds the uncapped fill zoom (not the capped fitZoom which stops at 1.0).
+  let resizeObserver: ResizeObserver | null = null;
+  let containerEl: HTMLElement | null = null;
+  let wheelHandler: ((e: WheelEvent) => void) | null = null;
+
   const isDraggable = computed(() => zoom.value > uncappedFitZoom.value + 0.01);
 
-  // Translate only — zoom is expressed via explicit width/height on the media element.
-  // This ensures SVGs (and images) are re-rendered at display resolution, not scaled bitmaps.
   const transformStyle = computed(
     () => `translate(${tx.value}px, ${ty.value}px)`,
   );
 
-  // Applied directly to <img>/<video> so the browser renders at the correct size.
   const mediaStyle = computed(() => {
-    if (naturalW.value === 0 || naturalH.value === 0) return {};
+    if (contentW.value === 0 || contentH.value === 0) return {};
     return {
-      width: `${naturalW.value * zoom.value}px`,
-      height: `${naturalH.value * zoom.value}px`,
+      width: `${contentW.value * zoom.value}px`,
+      height: `${contentH.value * zoom.value}px`,
     };
   });
 
   const zoomPercent = computed(() => Math.round(zoom.value * 100));
 
-  // ─── helpers ─────────────────────────────────────────────────────────────
-
-  function clampZoom(z: number): number {
-    return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
+  function maxZoom(): number {
+    return Math.max(DEFAULT_ZOOM_MAX, options.maxZoom?.() ?? DEFAULT_ZOOM_MAX);
   }
 
-  // Returns the max allowed |tx| and |ty| for a given zoom level.
-  function clampBounds(z: number): { maxTx: number; maxTy: number } {
-    const scaledW = naturalW.value * z;
-    const scaledH = naturalH.value * z;
+  function clampZoom(value: number): number {
+    return Math.min(maxZoom(), Math.max(ZOOM_MIN, value));
+  }
+
+  function clampBounds(value: number): { maxTx: number; maxTy: number } {
+    const scaledW = contentW.value * value;
+    const scaledH = contentH.value * value;
     const overflow = Math.min(
       300,
       Math.min(window.innerWidth, window.innerHeight) * 0.25,
     );
+
     return {
       maxTx: Math.max(scaledW / 2 - containerW / 2 + overflow, 0),
       maxTy: Math.max(scaledH / 2 - containerH / 2 + overflow, 0),
@@ -114,20 +105,19 @@ export function useMediaControls() {
   }
 
   function clampPair(
-    z: number,
-    ttx: number,
-    tty: number,
+    nextZoom: number,
+    nextTx: number,
+    nextTy: number,
   ): { tx: number; ty: number } {
-    const { maxTx, maxTy } = clampBounds(z);
+    const bounds = clampBounds(nextZoom);
     return {
-      tx: Math.min(maxTx, Math.max(-maxTx, ttx)),
-      ty: Math.min(maxTy, Math.max(-maxTy, tty)),
+      tx: Math.min(bounds.maxTx, Math.max(-bounds.maxTx, nextTx)),
+      ty: Math.min(bounds.maxTy, Math.max(-bounds.maxTy, nextTy)),
     };
   }
 
-  // Clamp the live refs (used after pan/pinch).
   function clampTranslation(): void {
-    if (naturalW.value === 0 || naturalH.value === 0) return;
+    if (contentW.value === 0 || contentH.value === 0) return;
     const clamped = clampPair(zoom.value, tx.value, ty.value);
     tx.value = clamped.tx;
     ty.value = clamped.ty;
@@ -135,34 +125,63 @@ export function useMediaControls() {
 
   function computeFitZoom(): number {
     if (
-      naturalW.value === 0 ||
-      naturalH.value === 0 ||
+      contentW.value === 0 ||
+      contentH.value === 0 ||
       containerW === 0 ||
       containerH === 0
-    )
+    ) {
       return 1;
-    const availW = containerW - FIT_PADDING;
-    const availH = containerH - FIT_PADDING;
-    return Math.min(availW / naturalW.value, availH / naturalH.value, 1.0);
+    }
+
+    const customFit = options.fitZoom?.(
+      { width: containerW, height: containerH },
+      { width: contentW.value, height: contentH.value },
+    );
+    if (customFit !== undefined && Number.isFinite(customFit)) {
+      return clampZoom(customFit);
+    }
+
+    const availW = Math.max(containerW - FIT_PADDING, 1);
+    const availH = Math.max(containerH - FIT_PADDING, 1);
+    return Math.min(availW / contentW.value, availH / contentH.value, 1);
   }
 
-  // Same as computeFitZoom but without the 1.0 cap — the zoom level at which media
-  // would exactly fill the container. Used to determine whether panning is possible.
   function computeUncappedFitZoom(): number {
     if (
-      naturalW.value === 0 ||
-      naturalH.value === 0 ||
+      contentW.value === 0 ||
+      contentH.value === 0 ||
       containerW === 0 ||
       containerH === 0
-    )
+    ) {
       return 1;
-    const availW = containerW - FIT_PADDING;
-    const availH = containerH - FIT_PADDING;
-    return Math.min(availW / naturalW.value, availH / naturalH.value);
+    }
+
+    const availW = Math.max(containerW - FIT_PADDING, 1);
+    const availH = Math.max(containerH - FIT_PADDING, 1);
+    return Math.min(availW / contentW.value, availH / contentH.value);
   }
 
-  // ─── rAF animation loop ───────────────────────────────────────────────────
-  // LERP_SPEED: time-constant in 1/s — higher = snappier (14 ≈ ~70ms settle time)
+  function computeEffectiveUncappedFitZoom(): number {
+    if (
+      contentW.value === 0 ||
+      contentH.value === 0 ||
+      containerW === 0 ||
+      containerH === 0
+    ) {
+      return 1;
+    }
+
+    const customFit = options.uncappedFitZoom?.(
+      { width: containerW, height: containerH },
+      { width: contentW.value, height: contentH.value },
+    );
+    if (customFit !== undefined && Number.isFinite(customFit)) {
+      return Math.max(ZOOM_MIN, customFit);
+    }
+
+    return computeUncappedFitZoom();
+  }
+
   const LERP_SPEED = 14;
 
   function animateTick(time: number): void {
@@ -173,38 +192,36 @@ export function useMediaControls() {
     lastRafTime = time;
 
     const k = 1 - Math.exp(-LERP_SPEED * dt);
-    const newZoom = zoom.value + (targetZoom - zoom.value) * k;
-    const newTx = tx.value + (targetTx - tx.value) * k;
-    const newTy = ty.value + (targetTy - ty.value) * k;
+    const nextZoom = zoom.value + (targetZoom - zoom.value) * k;
+    const nextTx = tx.value + (targetTx - tx.value) * k;
+    const nextTy = ty.value + (targetTy - ty.value) * k;
 
     const done =
-      Math.abs(newZoom - targetZoom) < 0.0002 &&
-      Math.abs(newTx - targetTx) < 0.1 &&
-      Math.abs(newTy - targetTy) < 0.1;
+      Math.abs(nextZoom - targetZoom) < 0.0002 &&
+      Math.abs(nextTx - targetTx) < 0.1 &&
+      Math.abs(nextTy - targetTy) < 0.1;
 
-    zoom.value = done ? targetZoom : newZoom;
-    tx.value = done ? targetTx : newTx;
-    ty.value = done ? targetTy : newTy;
+    zoom.value = done ? targetZoom : nextZoom;
+    tx.value = done ? targetTx : nextTx;
+    ty.value = done ? targetTy : nextTy;
 
     rafId = done ? null : requestAnimationFrame(animateTick);
     if (done) lastRafTime = null;
   }
 
   function startAnimation(): void {
-    if (rafId !== null) return; // already running
+    if (rafId !== null) return;
     lastRafTime = null;
     rafId = requestAnimationFrame(animateTick);
   }
 
   function stopAnimation(): void {
-    if (rafId !== null) {
-      cancelAnimationFrame(rafId);
-      rafId = null;
-      lastRafTime = null;
-    }
+    if (rafId === null) return;
+    cancelAnimationFrame(rafId);
+    rafId = null;
+    lastRafTime = null;
   }
 
-  // Snap live state to targets and stop animation (called before pan/pinch).
   function snapToTarget(): void {
     stopAnimation();
     zoom.value = targetZoom;
@@ -220,9 +237,9 @@ export function useMediaControls() {
     startAnimation();
   }
 
-  function enterOriginalMode(): void {
+  function enterZoomMode(value: number): void {
     isFitMode.value = false;
-    targetZoom = clampZoom(1);
+    targetZoom = clampZoom(value);
     targetTx = 0;
     targetTy = 0;
     startAnimation();
@@ -231,7 +248,7 @@ export function useMediaControls() {
   function resetView(): void {
     stopAnimation();
     fitZoom.value = computeFitZoom();
-    uncappedFitZoom.value = computeUncappedFitZoom();
+    uncappedFitZoom.value = computeEffectiveUncappedFitZoom();
     isFitMode.value = true;
     zoom.value = fitZoom.value;
     tx.value = 0;
@@ -241,13 +258,35 @@ export function useMediaControls() {
     targetTy = 0;
   }
 
-  function onDimensionsKnown(): void {
-    if (isReady.value) return; // guard against duplicate calls (sync read + load event)
-    fitZoom.value = computeFitZoom();
-    uncappedFitZoom.value = computeUncappedFitZoom();
-    isReady.value = true;
+  function syncFitAfterResize(): void {
+    const nextFit = computeFitZoom();
+    fitZoom.value = nextFit;
+    uncappedFitZoom.value = computeEffectiveUncappedFitZoom();
+
     if (isFitMode.value) {
-      // snap immediately on first load — no animation needed
+      targetZoom = nextFit;
+      targetTx = 0;
+      targetTy = 0;
+      startAnimation();
+      return;
+    }
+
+    const nextZoom = clampZoom(zoom.value);
+    const clamped = clampPair(nextZoom, tx.value, ty.value);
+    zoom.value = nextZoom;
+    tx.value = clamped.tx;
+    ty.value = clamped.ty;
+    targetZoom = nextZoom;
+    targetTx = clamped.tx;
+    targetTy = clamped.ty;
+  }
+
+  function onDimensionsKnown(): void {
+    fitZoom.value = computeFitZoom();
+    uncappedFitZoom.value = computeEffectiveUncappedFitZoom();
+    isReady.value = true;
+
+    if (isFitMode.value) {
       zoom.value = fitZoom.value;
       tx.value = 0;
       ty.value = 0;
@@ -257,113 +296,102 @@ export function useMediaControls() {
     }
   }
 
-  // ─── public API ───────────────────────────────────────────────────────────
-
   function handleZoomButtonClick(): void {
     if (!isFitMode.value) {
       enterFitMode();
-    } else {
-      enterOriginalMode();
+      return;
     }
+
+    enterZoomMode(1);
   }
 
-  function getViewState(): MediaViewState {
-    snapToTarget();
-    return {
-      zoom: zoom.value,
-      tx: tx.value,
-      ty: ty.value,
-      isFitMode: isFitMode.value,
-    };
+  function handleZoomTargetButtonClick(value: number): void {
+    const nextZoom = clampZoom(value);
+    const isAtTarget =
+      !isFitMode.value && Math.abs(targetZoom - nextZoom) < 0.0005;
+
+    if (isAtTarget) {
+      enterFitMode();
+      return;
+    }
+
+    enterZoomMode(nextZoom);
   }
 
-  function restoreViewState(state: MediaViewState): void {
-    if (naturalW.value === 0 || naturalH.value === 0) return;
-    stopAnimation();
-    isFitMode.value = state.isFitMode;
-    const nextZoom = clampZoom(state.zoom);
-    const clamped = clampPair(nextZoom, state.tx, state.ty);
-    zoom.value = nextZoom;
-    tx.value = clamped.tx;
-    ty.value = clamped.ty;
-    targetZoom = zoom.value;
-    targetTx = tx.value;
-    targetTy = ty.value;
+  function zoomTo(value: number): void {
+    enterZoomMode(value);
   }
 
-  // ─── wheel ────────────────────────────────────────────────────────────────
+  function fitToCurrentTarget(): void {
+    fitZoom.value = computeFitZoom();
+    enterFitMode();
+  }
 
   function onWheel(e: WheelEvent): void {
     e.preventDefault();
 
     let delta = e.deltaY;
-    if (e.deltaMode === 1 /* DOM_DELTA_LINE */) delta *= 16;
-    if (e.deltaMode === 2 /* DOM_DELTA_PAGE */) delta *= 400;
+    if (e.deltaMode === 1) delta *= 16;
+    if (e.deltaMode === 2) delta *= 400;
 
     const factor = Math.pow(0.999, delta);
-    // apply zoom factor to TARGET (not current) so rapid scrolling accumulates correctly
-    const newZoom = clampZoom(targetZoom * factor);
+    const nextZoom = clampZoom(targetZoom * factor);
 
     const rect = containerEl!.getBoundingClientRect();
     const cx = e.clientX - rect.left - containerW / 2;
     const cy = e.clientY - rect.top - containerH / 2;
+    const ratio = nextZoom / targetZoom;
+    const nextTx = cx - (cx - targetTx) * ratio;
+    const nextTy = cy - (cy - targetTy) * ratio;
+    const clamped = clampPair(nextZoom, nextTx, nextTy);
 
-    // cursor-anchor computed against target state
-    const ratio = newZoom / targetZoom;
-    const newTx = cx - (cx - targetTx) * ratio;
-    const newTy = cy - (cy - targetTy) * ratio;
-
-    const clamped = clampPair(newZoom, newTx, newTy);
-    targetZoom = newZoom;
+    targetZoom = nextZoom;
     targetTx = clamped.tx;
     targetTy = clamped.ty;
-
     isFitMode.value = false;
     startAnimation();
   }
 
-  // ─── pointer ──────────────────────────────────────────────────────────────
-
   function pointerDist(): number {
-    const pts = [...activePointers.values()];
-    const dx = pts[0]!.x - pts[1]!.x;
-    const dy = pts[0]!.y - pts[1]!.y;
+    const points = [...activePointers.values()];
+    const dx = points[0]!.x - points[1]!.x;
+    const dy = points[0]!.y - points[1]!.y;
     return Math.sqrt(dx * dx + dy * dy);
   }
 
   function pointerMidpoint(): { cx: number; cy: number } {
-    const pts = [...activePointers.values()];
+    const points = [...activePointers.values()];
     const rect = containerEl!.getBoundingClientRect();
-    const mx = (pts[0]!.x + pts[1]!.x) / 2 - rect.left - containerW / 2;
-    const my = (pts[0]!.y + pts[1]!.y) / 2 - rect.top - containerH / 2;
+    const mx = (points[0]!.x + points[1]!.x) / 2 - rect.left - containerW / 2;
+    const my = (points[0]!.y + points[1]!.y) / 2 - rect.top - containerH / 2;
     return { cx: mx, cy: my };
   }
 
   function onPointerDown(e: PointerEvent): void {
-    // snap any in-flight wheel animation so pan/pinch start from a clean state
     snapToTarget();
-
     activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const el = e.currentTarget as HTMLElement;
 
     if (activePointers.size === 2) {
-      // start pinch — capture both active pointers so moves are always received
       for (const id of activePointers.keys()) {
         el.setPointerCapture(id);
       }
-      const { cx, cy } = pointerMidpoint();
+
+      const midpoint = pointerMidpoint();
       pinchStart = {
         dist: pointerDist(),
         zoom: zoom.value,
         tx: tx.value,
         ty: ty.value,
-        cx,
-        cy,
+        cx: midpoint.cx,
+        cy: midpoint.cy,
       };
       isDragging.value = false;
       panStart = null;
-    } else if (activePointers.size === 1 && isDraggable.value) {
-      // start pan — capture this pointer so moves outside the element are received
+      return;
+    }
+
+    if (activePointers.size === 1 && isDraggable.value) {
       el.setPointerCapture(e.pointerId);
       isDragging.value = true;
       panStart = {
@@ -374,39 +402,29 @@ export function useMediaControls() {
       };
       pinchStart = null;
     }
-    // else: single tap, not draggable — don't capture so native controls (e.g. video)
-    // can receive the pointer normally
   }
 
   function onPointerMove(e: PointerEvent): void {
     activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     if (activePointers.size === 2 && pinchStart !== null) {
-      // pinch zoom — anchor the content point under the START midpoint to the
-      // CURRENT midpoint, so the image stays under the fingers throughout the
-      // gesture (fixes misalignment on zoom-out and enables two-finger pan).
       const currentDist = pointerDist();
       const factor = currentDist / pinchStart.dist;
-      const newZoom = clampZoom(pinchStart.zoom * factor);
-      const ratio = newZoom / pinchStart.zoom;
+      const nextZoom = clampZoom(pinchStart.zoom * factor);
+      const ratio = nextZoom / pinchStart.zoom;
 
-      // Use the fixed start midpoint as anchor — panning is intentionally
-      // disabled during pinch; finger drift is ignored.
       tx.value = pinchStart.cx - (pinchStart.cx - pinchStart.tx) * ratio;
       ty.value = pinchStart.cy - (pinchStart.cy - pinchStart.ty) * ratio;
-      zoom.value = newZoom;
+      zoom.value = nextZoom;
       clampTranslation();
-      // keep targets in sync so a subsequent wheel starts from the right place
       targetZoom = zoom.value;
       targetTx = tx.value;
       targetTy = ty.value;
       isFitMode.value = false;
-    } else if (
-      activePointers.size === 1 &&
-      isDragging.value &&
-      panStart !== null
-    ) {
-      // pan
+      return;
+    }
+
+    if (activePointers.size === 1 && isDragging.value && panStart !== null) {
       tx.value = panStart.tx + (e.clientX - panStart.px);
       ty.value = panStart.ty + (e.clientY - panStart.py);
       clampTranslation();
@@ -423,7 +441,6 @@ export function useMediaControls() {
     }
 
     if (activePointers.size === 1 && isDragging.value) {
-      // dropped one finger during pinch — restart pan from current state
       const remaining = [...activePointers.entries()][0]!;
       isDragging.value = isDraggable.value;
       panStart = isDraggable.value
@@ -434,7 +451,6 @@ export function useMediaControls() {
     if (activePointers.size === 0) {
       isDragging.value = false;
       panStart = null;
-      // gravitate to center when media is smaller than the container
       if (!isDraggable.value) {
         targetTx = 0;
         targetTy = 0;
@@ -445,20 +461,18 @@ export function useMediaControls() {
 
   function onPointerCancel(e: PointerEvent): void {
     activePointers.delete(e.pointerId);
-    if (activePointers.size === 0) {
-      isDragging.value = false;
-      panStart = null;
-      pinchStart = null;
-      // gravitate to center when media is smaller than the container
-      if (!isDraggable.value) {
-        targetTx = 0;
-        targetTy = 0;
-        startAnimation();
-      }
+
+    if (activePointers.size !== 0) return;
+
+    isDragging.value = false;
+    panStart = null;
+    pinchStart = null;
+    if (!isDraggable.value) {
+      targetTx = 0;
+      targetTy = 0;
+      startAnimation();
     }
   }
-
-  // ─── init / teardown ─────────────────────────────────────────────────────
 
   function initMedia(
     container: HTMLElement,
@@ -471,68 +485,49 @@ export function useMediaControls() {
       if (!entry) return;
       containerW = entry.contentRect.width;
       containerH = entry.contentRect.height;
-      const newFit = computeFitZoom();
-      fitZoom.value = newFit;
-      uncappedFitZoom.value = computeUncappedFitZoom();
-      if (isFitMode.value) {
-        // animate to new fit on window resize
-        targetZoom = newFit;
-        targetTx = 0;
-        targetTy = 0;
-        startAnimation();
-      } else {
-        const clamped = clampPair(zoom.value, tx.value, ty.value);
-        tx.value = clamped.tx;
-        ty.value = clamped.ty;
-        targetTx = clamped.tx;
-        targetTy = clamped.ty;
-      }
+      syncFitAfterResize();
     });
     resizeObserver.observe(container);
 
-    // read initial container size synchronously if already laid out
     const rect = container.getBoundingClientRect();
     containerW = rect.width;
     containerH = rect.height;
 
-    // set up wheel listener with { passive: false } to allow preventDefault
     wheelHandler = onWheel;
     container.addEventListener('wheel', wheelHandler, { passive: false });
 
-    // try to get dimensions immediately (if already loaded)
-    const dims = getMediaDimensions();
-    if (dims && dims.w > 0 && dims.h > 0) {
-      naturalW.value = dims.w;
-      naturalH.value = dims.h;
+    const dimensions = getMediaDimensions();
+    if (dimensions && dimensions.w > 0 && dimensions.h > 0) {
+      contentW.value = dimensions.w;
+      contentH.value = dimensions.h;
       onDimensionsKnown();
     }
   }
 
   function onMediaLoaded(w: number, h: number): void {
-    // SVGs without intrinsic dimensions report 0×0 — fall back to 80% of container
     const effectiveW = w > 0 ? w : containerW * 0.8;
     const effectiveH = h > 0 ? h : containerH * 0.8;
-    if (effectiveW > 0 && effectiveH > 0) {
-      const dimensionsChanged =
-        naturalW.value !== effectiveW || naturalH.value !== effectiveH;
-      naturalW.value = effectiveW;
-      naturalH.value = effectiveH;
-      if (!isReady.value) {
-        onDimensionsKnown();
-      } else if (dimensionsChanged) {
-        if (isFitMode.value) {
-          resetView();
-        } else {
-          fitZoom.value = computeFitZoom();
-          uncappedFitZoom.value = computeUncappedFitZoom();
-          const clamped = clampPair(zoom.value, tx.value, ty.value);
-          tx.value = clamped.tx;
-          ty.value = clamped.ty;
-          targetTx = clamped.tx;
-          targetTy = clamped.ty;
-        }
-      }
+    if (effectiveW <= 0 || effectiveH <= 0) return;
+
+    const dimensionsChanged =
+      contentW.value !== effectiveW || contentH.value !== effectiveH;
+
+    contentW.value = effectiveW;
+    contentH.value = effectiveH;
+
+    if (!isReady.value) {
+      onDimensionsKnown();
+      return;
     }
+
+    if (!dimensionsChanged) return;
+
+    if (isFitMode.value) {
+      resetView();
+      return;
+    }
+
+    syncFitAfterResize();
   }
 
   onUnmounted(() => {
@@ -547,6 +542,7 @@ export function useMediaControls() {
   });
 
   return {
+    zoom,
     transformStyle,
     mediaStyle,
     zoomPercent,
@@ -556,9 +552,10 @@ export function useMediaControls() {
     fitZoom,
     isReady,
     handleZoomButtonClick,
+    handleZoomTargetButtonClick,
+    zoomTo,
+    fitToCurrentTarget,
     resetView,
-    getViewState,
-    restoreViewState,
     onPointerDown,
     onPointerMove,
     onPointerUp,

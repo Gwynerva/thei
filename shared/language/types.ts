@@ -237,10 +237,8 @@ export type LanguagePhrases = {
   upload_recommended_settings: string;
   upload_compress_to_zip: string;
   upload_compress_to_zip_hint: string;
-  upload_preview_uploaded: string;
-  upload_preview_original: string;
-  upload_preview_uploaded_short: string;
-  upload_preview_original_short: string;
+  upload_compare_original: string;
+  upload_compare_modified: string;
   upload_variant_original: string;
   upload_variant_modified: (index: number) => string;
   upload_variant_uploaded_file: string;
