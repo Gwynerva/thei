@@ -30,8 +30,9 @@ const model = defineModel<string>();
         :key
         @click="model = key"
         :data-title-popup="direction === 'row' ? option.description : undefined"
-        class="flex-1 cursor-pointer rounded-normal border-2 p-xs transition"
+        class="cursor-pointer rounded-normal border-2 p-xs transition"
         :class="[
+          direction === 'column' ? 'flex-1' : 'flex-[1_1_max-content]',
           option.classes,
           model === key
             ? 'border-accent bg-bg-accent text-accent'

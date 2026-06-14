@@ -1,16 +1,12 @@
 import type { LanguagePhrases } from '../language';
+import {
+  AUDIO_EXTENSIONS,
+  IMAGE_EXTENSIONS,
+  VIDEO_EXTENSIONS,
+  normalizeAssetExtension,
+} from './formats';
 
-export const IMAGE_EXTENSIONS = [
-  'jpg',
-  'jpeg',
-  'png',
-  'gif',
-  'webp',
-  'avif',
-  'svg',
-] as const;
-export const VIDEO_EXTENSIONS = ['mp4', 'webm', 'mov', 'avi'] as const;
-export const AUDIO_EXTENSIONS = ['mp3', 'wav', 'ogg', 'flac'] as const;
+export { AUDIO_EXTENSIONS, IMAGE_EXTENSIONS, VIDEO_EXTENSIONS };
 
 export interface ExtensionProfile {
   title: keyof LanguagePhrases;
@@ -45,7 +41,7 @@ export function getPathExtension(path: string): string {
     return '';
   }
 
-  return filename.slice(dotIndex + 1).toLowerCase();
+  return normalizeAssetExtension(filename.slice(dotIndex + 1));
 }
 
 export function isExtensionAllowed(extension: string, allowed: any): boolean {
@@ -65,7 +61,7 @@ export function isExtensionAllowed(extension: string, allowed: any): boolean {
     }
   }
 
-  if ('extensions' in allowed) {
+  if (allowed && typeof allowed === 'object' && 'extensions' in allowed) {
     return isExtensionAllowed(extension, allowed.extensions);
   }
 

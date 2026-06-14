@@ -235,8 +235,10 @@ export default defineI18nBase({
     project_banner: 'Project Banner',
     project_banner_hint: 'Wide image for the project page.',
     delete_project: 'Delete Project',
-    delete_project_confirm:
-      'This action is irreversible. Enter the project title to confirm deletion:',
+    delete_project_confirm: 'Enter its title to confirm:',
+    delete_project_permanent_prefix: 'Project ',
+    delete_project_permanent_suffix:
+      ' will be deleted without a way to restore it.',
     size: 'Size',
     just_now: 'Just now',
     showcase: 'Showcase',

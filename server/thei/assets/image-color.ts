@@ -1,5 +1,5 @@
 import sharp from 'sharp';
-import { IMAGE_EXTENSIONS } from '#layers/thei/shared/asset';
+import { IMAGE_EXTENSIONS } from '#layers/thei/shared/assets/formats';
 
 const IMAGE_EXTS = new Set<string>(IMAGE_EXTENSIONS);
 

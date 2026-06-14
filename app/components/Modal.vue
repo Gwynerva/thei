@@ -4,31 +4,102 @@ import type { BaseModalResult } from '#layers/thei/app/modals/types';
 
 const dialogElement = useTemplateRef('dialog');
 
-let isProgrammaticClose = false;
+let scrollLock:
+  | {
+      x: number;
+      y: number;
+      previousActiveElement: HTMLElement | null;
+      documentOverflow: string;
+    }
+  | undefined;
 
-watchEffect(() => {
+function lockPageScroll() {
+  if (scrollLock) {
+    return;
+  }
+
+  scrollLock = {
+    x: window.scrollX,
+    y: window.scrollY,
+    previousActiveElement:
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null,
+    documentOverflow: document.documentElement.style.overflow,
+  };
+
+  document.documentElement.style.overflow = 'clip';
+}
+
+function unlockPageScroll() {
+  if (!scrollLock) {
+    return;
+  }
+
+  const { x, y } = scrollLock;
+
+  document.documentElement.style.overflow = scrollLock.documentOverflow;
+
+  scrollLock.previousActiveElement?.focus({ preventScroll: true });
+  scrollLock = undefined;
+
+  window.scrollTo(x, y);
+}
+
+function restorePageScroll() {
+  if (!scrollLock) {
+    return;
+  }
+
+  const { x, y } = scrollLock;
+
+  requestAnimationFrame(() => {
+    window.scrollTo(x, y);
+  });
+}
+
+watch(
+  activeModal,
+  async (modal) => {
+    if (!import.meta.client) {
+      return;
+    }
+
+    const dialog = dialogElement.value;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (modal) {
+      lockPageScroll();
+
+      await nextTick();
+
+      if (!dialog.open) {
+        dialog.showModal();
+        dialog.focus({ preventScroll: true });
+      }
+    } else {
+      if (dialog.open) {
+        dialog.close();
+      }
+      unlockPageScroll();
+    }
+  },
+  { flush: 'post' },
+);
+
+onBeforeUnmount(() => {
   if (!import.meta.client) {
     return;
   }
 
-  if (!dialogElement.value) {
-    return;
+  if (dialogElement.value?.open) {
+    dialogElement.value.close();
   }
 
-  if (activeModal.value) {
-    if (!dialogElement.value.open) {
-      dialogElement.value.showModal();
-    }
-    document.body.style.overflow = 'hidden';
-    document.body.style.scrollbarGutter = 'stable';
-  } else {
-    if (dialogElement.value.open) {
-      isProgrammaticClose = true;
-      dialogElement.value.close();
-    }
-    document.body.style.overflow = '';
-    document.body.style.scrollbarGutter = '';
-  }
+  unlockPageScroll();
 });
 
 function settle(result: { type: string }) {
@@ -53,11 +124,15 @@ function closeWithBase(result: BaseModalResult) {
   modal.close(result);
 }
 
+onErrorCaptured((err) => {
+  const message = err instanceof Error ? err.message : String(err);
+  closeWithBase({ type: 'error', message });
+  return false;
+});
+
 function onNativeClose() {
-  if (isProgrammaticClose) {
-    isProgrammaticClose = false;
-    return;
-  }
+  restorePageScroll();
+
   if (activeModal.value) {
     closeWithBase({ type: 'empty' });
   }
@@ -74,22 +149,17 @@ function onBackdropClick(e: MouseEvent) {
     closeWithBase({ type: 'empty' });
   }
 }
-
-onErrorCaptured((err) => {
-  const message = err instanceof Error ? err.message : String(err);
-  closeWithBase({ type: 'error', message });
-  return false;
-});
 </script>
 
 <template>
   <dialog
     ref="dialog"
+    autofocus
+    class="m-0 h-dvh max-h-none w-dvw max-w-none overflow-hidden border-0
+      bg-transparent p-0 outline-none backdrop:bg-transparent"
     @close="onNativeClose"
     @mousedown="onBackdropMousedown"
     @click="onBackdropClick"
-    class="relative min-h-screen min-w-screen overscroll-contain bg-transparent
-      outline-none"
   >
     <component
       v-if="activeModal"

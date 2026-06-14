@@ -1,23 +1,8 @@
-import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
 import { eq } from 'drizzle-orm';
 import { ASSET_ROLES, type AssetRole } from '#layers/thei/shared/asset';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
-
-const MIME: Record<string, string> = {
-  webp: 'image/webp',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  png: 'image/png',
-  gif: 'image/gif',
-  avif: 'image/avif',
-  svg: 'image/svg+xml',
-  mp4: 'video/mp4',
-  webm: 'video/webm',
-  mp3: 'audio/mpeg',
-  wav: 'audio/wav',
-  ogg: 'audio/ogg',
-};
+import { assetUsageIsPrivate } from '../../../../thei/assets/access';
+import { sendAssetFile } from '../../../../thei/assets/send-file';
 
 const KNOWN_ROLES = new Set<string>(ASSET_ROLES);
 
@@ -45,10 +30,9 @@ export default defineEventHandler(async (event) => {
     .limit(1);
   if (!project) throw createError({ statusCode: 404 });
 
-  // Enforce project access level
-  if (project.access === ProjectEventAccessLevel.Private) {
-    const isAdmin = await THEI_SERVER.isAdmin(event);
-    if (!isAdmin) throw createError({ statusCode: 404 });
+  const isAdmin = await THEI_SERVER.isAdmin(event);
+  if (project.access === ProjectEventAccessLevel.Private && !isAdmin) {
+    throw createError({ statusCode: 404 });
   }
 
   // Resolve asset
@@ -64,20 +48,19 @@ export default defineEventHandler(async (event) => {
   );
   if (!usage) throw createError({ statusCode: 404 });
 
+  const isPrivateAsset = assetUsageIsPrivate(usage.meta);
+  if (isPrivateAsset && !isAdmin) throw createError({ statusCode: 404 });
+
+  const isPrivate =
+    project.access === ProjectEventAccessLevel.Private || isPrivateAsset;
   const filePath = THEI_SERVER.assets.filePath(
     asset.assetUuid,
     asset.extension,
   );
-  const fileStat = await stat(filePath).catch(() => null);
-  if (!fileStat) throw createError({ statusCode: 404 });
-
-  const isPrivate = project.access === ProjectEventAccessLevel.Private;
-  setHeader(event, 'Content-Type', MIME[ext] ?? 'application/octet-stream');
-  setHeader(event, 'Content-Length', fileStat.size);
-  setHeader(
-    event,
-    'Cache-Control',
-    isPrivate ? 'private, no-cache' : 'public, max-age=31536000, immutable',
-  );
-  return sendStream(event, createReadStream(filePath));
+  return sendAssetFile(event, filePath, asset.extension, {
+    cacheControl: isPrivate
+      ? 'private, no-cache'
+      : 'public, max-age=31536000, immutable',
+    filename,
+  });
 });

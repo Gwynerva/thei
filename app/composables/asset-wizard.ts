@@ -6,6 +6,10 @@ import { AssetType } from '#layers/thei/shared/asset';
 import type { ExtensionProfile } from '#layers/thei/shared/assets/extensions';
 import { anyFileExtensionProfile } from '#layers/thei/shared/assets/extensions';
 import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
+import {
+  ASSET_UPLOAD_LIMITS,
+  type AssetUploadLimitPolicy,
+} from '#layers/thei/shared/asset-upload-limits';
 import { editFileModal } from '#layers/thei/app/modals/upload-settings/modal';
 import { pickFileModal } from '#layers/thei/app/modals/pick-file/modal';
 import type { PickedFile } from '#layers/thei/app/modals/pick-file/picked-file';
@@ -19,6 +23,7 @@ export interface AssetWizardOptions {
   accept?: AssetWizardAccept;
   maxSize?: number;
   acceptedExtensions?: string[] | '*';
+  sizeLimitPolicy?: AssetUploadLimitPolicy;
   uploadProfile?: AssetUploadProfile;
 }
 
@@ -26,6 +31,11 @@ export async function launchAssetWizard(
   options: AssetWizardOptions = {},
 ): Promise<AssetVariantInfo | undefined> {
   const accept = options.accept ?? anyFileExtensionProfile;
+  const maxSize =
+    options.maxSize ??
+    (options.sizeLimitPolicy
+      ? ASSET_UPLOAD_LIMITS[options.sizeLimitPolicy]
+      : undefined);
   const acceptedExtensions =
     options.acceptedExtensions ?? acceptedExtensionsFromAccept(accept);
 
@@ -46,7 +56,7 @@ export async function launchAssetWizard(
 
         const pickResult = await openModal(pickFileModal, {
           accept,
-          maxSize: options.maxSize,
+          maxSize,
         });
 
         if (pickResult.type === 'error') {
@@ -64,8 +74,9 @@ export async function launchAssetWizard(
 
       const editResult = await openModal(editFileModal, {
         file: pickedFile!,
-        maxSize: options.maxSize,
+        maxSize,
         acceptedExtensions,
+        sizeLimitPolicy: options.sizeLimitPolicy,
         uploadProfile: options.uploadProfile,
       });
 

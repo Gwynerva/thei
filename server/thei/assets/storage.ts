@@ -288,8 +288,8 @@ export async function deleteStoredAsset(assetUuid: string): Promise<boolean> {
       ? (await findVideoPreviewAsset(asset))?.assetUuid
       : undefined;
 
-  await rm(filePath, { force: true }).catch(() => {});
   await THEI_SERVER.assets.delete(asset.assetUuid);
+  await rm(filePath, { force: true }).catch(() => {});
 
   if (previewUuid) {
     await THEI_SERVER.assets.usages.detach(

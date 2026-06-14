@@ -9,8 +9,14 @@ import type {
   ProjectSaveResponse,
   ShowcaseAssetGetItem,
 } from '#layers/thei/shared/api/project';
-import { AssetType, type AssetMeta } from '#layers/thei/shared/asset';
+import {
+  AssetType,
+  type AssetMeta,
+  type AssetRole,
+} from '#layers/thei/shared/asset';
+import { and, eq } from 'drizzle-orm';
 import { findVideoPreviewAsset } from '../../../thei/assets/storage';
+import { validateProjectAssets } from '../../../thei/projects/validate-assets';
 
 export default defineEventHandler(async (event) => {
   const identifier = getRouterParam(event, 'projectUuid')!;
@@ -131,14 +137,12 @@ export default defineEventHandler(async (event) => {
           message: 'Slug is already taken',
         } satisfies ProjectSaveResponse;
 
-      await THEI_SERVER.projects.update(projectUuid, {
-        title: result.title,
-        summary: result.summary,
-        slug: result.slug,
-        access: result.access,
-        important: result.important,
-        cv: result.cv,
-      });
+      const assetError = await validateProjectAssets(result);
+      if (assetError)
+        return {
+          type: 'error',
+          message: assetError,
+        } satisfies ProjectSaveResponse;
 
       const usages = await THEI_SERVER.assets.usages.findByContainer(
         'project',
@@ -146,49 +150,9 @@ export default defineEventHandler(async (event) => {
       );
       const currentIcon = usages.find((u) => u.role === 'icon');
       const newIconUuid = result.iconAssetUuid;
-
-      if (currentIcon?.asset.assetUuid !== newIconUuid) {
-        if (currentIcon) {
-          await THEI_SERVER.assets.usages.detach(
-            currentIcon.asset.assetUuid,
-            'project',
-            projectUuid,
-            'icon',
-          );
-        }
-        if (newIconUuid) {
-          await THEI_SERVER.assets.usages.attach(
-            newIconUuid,
-            'project',
-            projectUuid,
-            'icon',
-          );
-        }
-      }
-
       const currentBanner = usages.find((u) => u.role === 'banner');
       const newBannerUuid = result.bannerAssetUuid;
 
-      if (currentBanner?.asset.assetUuid !== newBannerUuid) {
-        if (currentBanner) {
-          await THEI_SERVER.assets.usages.detach(
-            currentBanner.asset.assetUuid,
-            'project',
-            projectUuid,
-            'banner',
-          );
-        }
-        if (newBannerUuid) {
-          await THEI_SERVER.assets.usages.attach(
-            newBannerUuid,
-            'project',
-            projectUuid,
-            'banner',
-          );
-        }
-      }
-
-      // Reconcile showcase assets
       const currentShowcase =
         await THEI_SERVER.assets.usages.findShowcase(projectUuid);
       const currentShowcaseUuids = new Set(
@@ -197,47 +161,6 @@ export default defineEventHandler(async (event) => {
       const newShowcase = result.showcaseAssets ?? [];
       const newShowcaseUuids = new Set(newShowcase.map((s) => s.assetUuid));
 
-      // Detach removed showcase assets
-      for (const { asset } of currentShowcase) {
-        if (!newShowcaseUuids.has(asset.assetUuid)) {
-          await THEI_SERVER.assets.usages.detach(
-            asset.assetUuid,
-            'project',
-            projectUuid,
-            'showcase-asset',
-          );
-        }
-      }
-
-      // Attach new showcase assets, update meta for all
-      for (let i = 0; i < newShowcase.length; i++) {
-        const item = newShowcase[i]!;
-        const usageMeta = {
-          role: 'showcase-asset' as const,
-          order: i,
-          caption: item.caption,
-          access: item.access,
-        };
-
-        if (!currentShowcaseUuids.has(item.assetUuid)) {
-          await THEI_SERVER.assets.usages.attach(
-            item.assetUuid,
-            'project',
-            projectUuid,
-            'showcase-asset',
-          );
-        }
-
-        await THEI_SERVER.assets.usages.update(
-          item.assetUuid,
-          'project',
-          projectUuid,
-          'showcase-asset',
-          { meta: usageMeta },
-        );
-      }
-
-      // Reconcile other assets
       const currentOther =
         await THEI_SERVER.assets.usages.findOther(projectUuid);
       const currentOtherUuids = new Set(
@@ -246,46 +169,122 @@ export default defineEventHandler(async (event) => {
       const newOther = result.otherAssets ?? [];
       const newOtherUuids = new Set(newOther.map((o) => o.assetUuid));
 
-      // Detach removed other assets
-      for (const { asset } of currentOther) {
-        if (!newOtherUuids.has(asset.assetUuid)) {
-          await THEI_SERVER.assets.usages.detach(
-            asset.assetUuid,
-            'project',
-            projectUuid,
-            'other-asset',
-          );
+      const { db, schema } = THEI_SERVER.useDb();
+      db.transaction((tx) => {
+        tx.update(schema.projects)
+          .set({
+            title: result.title,
+            summary: result.summary,
+            slug: result.slug,
+            access: result.access,
+            important: result.important,
+            cv: result.cv,
+            updatedAt: Date.now(),
+          })
+          .where(eq(schema.projects.projectUuid, projectUuid))
+          .run();
+
+        if (currentIcon?.asset.assetUuid !== newIconUuid) {
+          if (currentIcon) {
+            detachUsage(
+              tx,
+              schema,
+              currentIcon.asset.assetUuid,
+              projectUuid,
+              'icon',
+            );
+          }
+          if (newIconUuid) {
+            attachUsage(tx, schema, newIconUuid, projectUuid, 'icon');
+          }
         }
-      }
 
-      // Attach new other assets, update meta for all
-      for (let i = 0; i < newOther.length; i++) {
-        const item = newOther[i]!;
-        const usageMeta = {
-          role: 'other-asset' as const,
-          order: i,
-          title: item.title,
-          caption: item.caption,
-          access: item.access,
-        };
+        if (currentBanner?.asset.assetUuid !== newBannerUuid) {
+          if (currentBanner) {
+            detachUsage(
+              tx,
+              schema,
+              currentBanner.asset.assetUuid,
+              projectUuid,
+              'banner',
+            );
+          }
+          if (newBannerUuid) {
+            attachUsage(tx, schema, newBannerUuid, projectUuid, 'banner');
+          }
+        }
 
-        if (!currentOtherUuids.has(item.assetUuid)) {
-          await THEI_SERVER.assets.usages.attach(
+        for (const { asset } of currentShowcase) {
+          if (!newShowcaseUuids.has(asset.assetUuid)) {
+            detachUsage(
+              tx,
+              schema,
+              asset.assetUuid,
+              projectUuid,
+              'showcase-asset',
+            );
+          }
+        }
+
+        for (let i = 0; i < newShowcase.length; i++) {
+          const item = newShowcase[i]!;
+          if (!currentShowcaseUuids.has(item.assetUuid)) {
+            attachUsage(
+              tx,
+              schema,
+              item.assetUuid,
+              projectUuid,
+              'showcase-asset',
+            );
+          }
+          updateUsageMeta(
+            tx,
+            schema,
             item.assetUuid,
-            'project',
             projectUuid,
-            'other-asset',
+            'showcase-asset',
+            {
+              role: 'showcase-asset',
+              order: i,
+              caption: item.caption,
+              access: item.access,
+            },
           );
         }
 
-        await THEI_SERVER.assets.usages.update(
-          item.assetUuid,
-          'project',
-          projectUuid,
-          'other-asset',
-          { meta: usageMeta },
-        );
-      }
+        for (const { asset } of currentOther) {
+          if (!newOtherUuids.has(asset.assetUuid)) {
+            detachUsage(
+              tx,
+              schema,
+              asset.assetUuid,
+              projectUuid,
+              'other-asset',
+            );
+          }
+        }
+
+        for (let i = 0; i < newOther.length; i++) {
+          const item = newOther[i]!;
+          if (!currentOtherUuids.has(item.assetUuid)) {
+            attachUsage(tx, schema, item.assetUuid, projectUuid, 'other-asset');
+          }
+          updateUsageMeta(
+            tx,
+            schema,
+            item.assetUuid,
+            projectUuid,
+            'other-asset',
+            {
+              role: 'other-asset',
+              order: i,
+              title: item.title,
+              caption: item.caption,
+              access: item.access,
+            },
+          );
+        }
+      });
 
       return { type: 'success', projectUuid } satisfies ProjectSaveResponse;
     }
@@ -295,19 +294,83 @@ export default defineEventHandler(async (event) => {
         'project',
         projectUuid,
       );
-      for (const usage of usages) {
-        await THEI_SERVER.assets.usages.detach(
-          usage.asset.assetUuid,
-          'project',
-          projectUuid,
-          usage.role,
-        );
-      }
-      await THEI_SERVER.projects.delete(projectUuid);
+      const { db, schema } = THEI_SERVER.useDb();
+      db.transaction((tx) => {
+        for (const usage of usages) {
+          detachUsage(
+            tx,
+            schema,
+            usage.asset.assetUuid,
+            projectUuid,
+            usage.role,
+          );
+        }
+        tx.delete(schema.projects)
+          .where(eq(schema.projects.projectUuid, projectUuid))
+          .run();
+      });
       return;
     }
   }
 });
+
+function attachUsage(
+  tx: any,
+  schema: any,
+  assetUuid: string,
+  projectUuid: string,
+  role: AssetRole,
+) {
+  tx.insert(schema.assetUsages)
+    .values({
+      assetUuid,
+      containerType: 'project',
+      containerId: projectUuid,
+      role,
+    })
+    .onConflictDoNothing()
+    .run();
+}
+
+function detachUsage(
+  tx: any,
+  schema: any,
+  assetUuid: string,
+  projectUuid: string,
+  role: AssetRole,
+) {
+  tx.delete(schema.assetUsages)
+    .where(
+      and(
+        eq(schema.assetUsages.assetUuid, assetUuid),
+        eq(schema.assetUsages.containerType, 'project'),
+        eq(schema.assetUsages.containerId, projectUuid),
+        eq(schema.assetUsages.role, role),
+      ),
+    )
+    .run();
+}
+
+function updateUsageMeta(
+  tx: any,
+  schema: any,
+  assetUuid: string,
+  projectUuid: string,
+  role: 'showcase-asset' | 'other-asset',
+  meta: any,
+) {
+  tx.update(schema.assetUsages)
+    .set({ meta })
+    .where(
+      and(
+        eq(schema.assetUsages.assetUuid, assetUuid),
+        eq(schema.assetUsages.containerType, 'project'),
+        eq(schema.assetUsages.containerId, projectUuid),
+        eq(schema.assetUsages.role, role),
+      ),
+    )
+    .run();
+}
 
 async function buildProjectAssetUrls(
   asset: Parameters<typeof findVideoPreviewAsset>[0],

@@ -238,8 +238,10 @@ export default defineI18nModule({
     project_banner: 'Баннер проекта',
     project_banner_hint: 'Широкое изображение для страницы проекта.',
     delete_project: 'Удалить проект',
-    delete_project_confirm:
-      'Это действие необратимо. Введите название проекта, чтобы подтвердить удаление:',
+    delete_project_confirm: 'Чтобы подтвердить, введите его название:',
+    delete_project_permanent_prefix: 'Проект ',
+    delete_project_permanent_suffix:
+      ' будет удалён без возможности восстановления.',
     size: 'Размер',
     just_now: 'Сейчас',
     showcase: 'Витрина',

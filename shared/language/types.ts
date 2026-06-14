@@ -164,6 +164,8 @@ export type LanguagePhrases = {
   project_banner_hint: string;
   delete_project: string;
   delete_project_confirm: string;
+  delete_project_permanent_prefix: string;
+  delete_project_permanent_suffix: string;
   size: string;
   just_now: string;
   showcase: string;

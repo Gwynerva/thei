@@ -103,4 +103,30 @@ describe('validateProjectData asset metadata', () => {
       },
     ]);
   });
+
+  it('rejects duplicate showcase assets', () => {
+    const result = validateProjectData(
+      baseProject({
+        showcaseAssets: [
+          { assetUuid: 'asset-1', access: 'project' },
+          { assetUuid: 'asset-1', access: 'private' },
+        ],
+      }),
+    );
+
+    expect(result).toBe('Duplicate showcase asset');
+  });
+
+  it('rejects duplicate other files', () => {
+    const result = validateProjectData(
+      baseProject({
+        otherAssets: [
+          { assetUuid: 'asset-1', title: 'One', access: 'project' },
+          { assetUuid: 'asset-1', title: 'Two', access: 'private' },
+        ],
+      }),
+    );
+
+    expect(result).toBe('Duplicate other file');
+  });
 });

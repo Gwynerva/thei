@@ -153,11 +153,58 @@
   }
 }
 
+@utility scrollbar-mini {
+  @media (hover: hover) and (pointer: fine) {
+    @supports not selector(::-webkit-scrollbar) {
+      scrollbar-width: thin;
+    }
+
+    @supports selector(::-webkit-scrollbar) {
+      &::-webkit-scrollbar {
+        width: var(--scrollbar-size-mini);
+        height: var(--scrollbar-size-mini);
+      }
+
+      &::-webkit-scrollbar-thumb {
+        border-width: 2px;
+      }
+    }
+  }
+}
+
 @layer base {
   :root {
     --width-narrow: min(700px, 100%);
     --width-wide: min(1100px, 100%);
     --height-admin-bar: calc(var(--spacing) * 12);
+
+    --scrollbar-size: 12px;
+    --scrollbar-size-mini: 8px;
+    --scrollbar-thumb-color: color-mix(
+      in oklch,
+      var(--color-accent) 20%,
+      var(--color-border-1)
+    );
+    --scrollbar-thumb-color-hover: color-mix(
+      in oklch,
+      var(--color-accent) 50%,
+      var(--color-border-1)
+    );
+    --scrollbar-thumb-color-active: color-mix(
+      in oklch,
+      var(--color-accent) 80%,
+      var(--color-border-1)
+    );
+    --scrollbar-track-color: color-mix(
+      in oklch,
+      var(--color-bg-3) 44%,
+      transparent
+    );
+    --scrollbar-track-border-color: color-mix(
+      in oklch,
+      var(--color-border-1) 28%,
+      transparent
+    );
 
     @variant sm {
       --spacing-window: var(--spacing-md);
@@ -184,6 +231,50 @@
     color-scheme: dark;
     --lightness-accent: 64%;
     --chroma-accent: 0.16;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    @supports not selector(::-webkit-scrollbar) {
+      * {
+        scrollbar-color: var(--scrollbar-thumb-color)
+          var(--scrollbar-track-color);
+        scrollbar-width: auto;
+      }
+    }
+
+    @supports selector(::-webkit-scrollbar) {
+      *::-webkit-scrollbar {
+        width: var(--scrollbar-size);
+        height: var(--scrollbar-size);
+      }
+
+      *::-webkit-scrollbar-button {
+        display: none;
+        width: 0;
+        height: 0;
+        background: transparent;
+      }
+
+      *::-webkit-scrollbar-track {
+        background-color: var(--scrollbar-track-color);
+        border: 1px solid var(--scrollbar-track-border-color);
+      }
+
+      *::-webkit-scrollbar-thumb {
+        background-color: var(--scrollbar-thumb-color);
+        background-clip: content-box;
+        border: 3px solid transparent;
+        border-radius: var(--radius-normal);
+      }
+
+      *::-webkit-scrollbar-thumb:hover {
+        background-color: var(--scrollbar-thumb-color-hover);
+      }
+
+      *::-webkit-scrollbar-thumb:active {
+        background-color: var(--scrollbar-thumb-color-active);
+      }
+    }
   }
 
   ::selection {

@@ -60,40 +60,46 @@ export function validateProjectData(
     const showcaseAssets: ShowcaseAssetEditItem[] | undefined =
       data.showcaseAssets === undefined
         ? undefined
-        : data.showcaseAssets.map((item) => {
-            const access = validateProjectAssetAccess(item.access);
-            if (!access)
-              throw new ProjectValidationError('Invalid asset access');
+        : validateUniqueAssetList(
+            data.showcaseAssets.map((item) => {
+              const access = validateProjectAssetAccess(item.access);
+              if (!access)
+                throw new ProjectValidationError('Invalid asset access');
 
-            return {
-              assetUuid: item.assetUuid,
-              caption: normalizeOptionalText(item.caption),
-              access,
-            };
-          });
+              return {
+                assetUuid: item.assetUuid,
+                caption: normalizeOptionalText(item.caption),
+                access,
+              };
+            }),
+            'Duplicate showcase asset',
+          );
 
     const otherAssets: OtherAssetSaveItem[] | undefined =
       data.otherAssets === undefined
         ? undefined
-        : data.otherAssets.map((item) => {
-            const access = validateProjectAssetAccess(item.access);
-            if (!access)
-              throw new ProjectValidationError('Invalid asset access');
+        : validateUniqueAssetList(
+            data.otherAssets.map((item) => {
+              const access = validateProjectAssetAccess(item.access);
+              if (!access)
+                throw new ProjectValidationError('Invalid asset access');
 
-            const itemTitle = normalizeOptionalText(item.title);
-            if (!itemTitle) {
-              throw new ProjectValidationError(
-                'Other file title cannot be empty',
-              );
-            }
+              const itemTitle = normalizeOptionalText(item.title);
+              if (!itemTitle) {
+                throw new ProjectValidationError(
+                  'Other file title cannot be empty',
+                );
+              }
 
-            return {
-              assetUuid: item.assetUuid,
-              title: itemTitle,
-              caption: normalizeOptionalText(item.caption),
-              access,
-            };
-          });
+              return {
+                assetUuid: item.assetUuid,
+                title: itemTitle,
+                caption: normalizeOptionalText(item.caption),
+                access,
+              };
+            }),
+            'Duplicate other file',
+          );
 
     return {
       ...data,
@@ -121,6 +127,20 @@ function validateProjectAssetAccess(
   return PROJECT_ASSET_ACCESS_LEVELS.includes(value as ProjectAssetAccessLevel)
     ? (value as ProjectAssetAccessLevel)
     : undefined;
+}
+
+function validateUniqueAssetList<T extends AssetListSaveItem>(
+  items: T[],
+  message: string,
+): T[] {
+  const seen = new Set<string>();
+  for (const item of items) {
+    if (seen.has(item.assetUuid)) {
+      throw new ProjectValidationError(message);
+    }
+    seen.add(item.assetUuid);
+  }
+  return items;
 }
 
 class ProjectValidationError extends Error {}

@@ -14,6 +14,7 @@ import {
   videoExtensionProfile,
 } from '#layers/thei/shared/assets/extensions';
 import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
+import { ASSET_UPLOAD_LIMITS } from '#layers/thei/shared/asset-upload-limits';
 import AssetAddEdit from '#layers/thei/app/components/AssetAddEdit.vue';
 import type {
   OtherAssetGetItem,
@@ -43,14 +44,21 @@ const bannerSize = inject(bannerSizeKey)!;
 const showcaseItems = inject(showcaseItemsKey)!;
 const otherItems = inject(otherItemsKey)!;
 
-const PROJECT_ASSET_MAX_SIZE = 100 * 1024 * 1024;
-
 type PickedAsset = {
   asset: AssetVariantInfo;
   result: AssetReplaceResult;
 };
 
 type AccessLevel = 'project' | 'private';
+type ProjectMediaSlot = {
+  uploadProfile: AssetUploadProfile;
+  asideTitle: () => string;
+  getAssetUuid: () => string | undefined;
+  setAssetUuid: (assetUuid: string | undefined) => void;
+  previewUrl: Ref<string | undefined>;
+  videoUrl: Ref<string | undefined>;
+  size: Ref<number | undefined>;
+};
 
 function archivedOriginalFromMeta(meta: AssetMeta | null | undefined) {
   return meta && 'archivedOriginal' in meta ? meta.archivedOriginal : undefined;
@@ -69,7 +77,8 @@ async function pickProjectMediaAsset(
 ): Promise<PickedAsset | undefined> {
   const asset = await launchProjectAssetWizard({
     accept: [imageExtensionProfile, videoExtensionProfile],
-    maxSize: PROJECT_ASSET_MAX_SIZE,
+    maxSize: ASSET_UPLOAD_LIMITS['project-media'],
+    sizeLimitPolicy: 'project-media',
     uploadProfile,
   });
   if (
@@ -86,7 +95,8 @@ async function pickProjectMediaAsset(
 async function pickAnyProjectAsset(): Promise<PickedAsset | undefined> {
   const asset = await launchProjectAssetWizard({
     accept: anyFileExtensionProfile,
-    maxSize: PROJECT_ASSET_MAX_SIZE,
+    maxSize: ASSET_UPLOAD_LIMITS['project-other'],
+    sizeLimitPolicy: 'project-other',
   });
   return asset
     ? { asset, result: mapAssetVariantToReplaceResult(asset) }
@@ -104,20 +114,64 @@ async function launchProjectAssetWizard(
   }
 }
 
-function applyIconAsset(result: AssetReplaceResult) {
+const iconSlot: ProjectMediaSlot = {
+  uploadProfile: 'project-icon',
+  asideTitle: () => phrase.value.project_icon,
+  getAssetUuid: () => projectData.value.iconAssetUuid,
+  setAssetUuid: (assetUuid) => {
+    projectData.value.iconAssetUuid = assetUuid;
+  },
+  previewUrl: iconPreviewUrl,
+  videoUrl: iconVideoUrl,
+  size: iconSize,
+};
+
+const bannerSlot: ProjectMediaSlot = {
+  uploadProfile: 'project-banner',
+  asideTitle: () => phrase.value.project_banner,
+  getAssetUuid: () => projectData.value.bannerAssetUuid,
+  setAssetUuid: (assetUuid) => {
+    projectData.value.bannerAssetUuid = assetUuid;
+  },
+  previewUrl: bannerPreviewUrl,
+  videoUrl: bannerVideoUrl,
+  size: bannerSize,
+};
+
+function applySingleMediaAsset(
+  slot: ProjectMediaSlot,
+  result: AssetReplaceResult,
+) {
   if (!result.previewUrl) return;
-  projectData.value.iconAssetUuid = result.assetUuid;
-  iconPreviewUrl.value = result.previewUrl;
-  iconVideoUrl.value = result.videoUrl;
-  iconSize.value = result.size;
+  slot.setAssetUuid(result.assetUuid);
+  slot.previewUrl.value = result.previewUrl;
+  slot.videoUrl.value = result.videoUrl;
+  slot.size.value = result.size;
 }
 
-function applyBannerAsset(result: AssetReplaceResult) {
-  if (!result.previewUrl) return;
-  projectData.value.bannerAssetUuid = result.assetUuid;
-  bannerPreviewUrl.value = result.previewUrl;
-  bannerVideoUrl.value = result.videoUrl;
-  bannerSize.value = result.size;
+function detachSingleMediaAsset(slot: ProjectMediaSlot) {
+  slot.setAssetUuid(undefined);
+  slot.previewUrl.value = undefined;
+  slot.videoUrl.value = undefined;
+  slot.size.value = undefined;
+}
+
+function singleMediaAssetSnapshot(
+  slot: ProjectMediaSlot,
+): AssetReplaceResult | undefined {
+  const assetUuid = slot.getAssetUuid();
+  const previewUrl = slot.previewUrl.value;
+  if (!assetUuid || !previewUrl) return undefined;
+
+  return {
+    assetUuid,
+    slug: assetUuid,
+    extension: extensionFromUrl(slot.videoUrl.value ?? previewUrl, 'webp'),
+    size: slot.size.value ?? 0,
+    previewUrl,
+    videoUrl: slot.videoUrl.value,
+    assetUrl: slot.videoUrl.value ?? previewUrl,
+  };
 }
 
 function pickedToShowcaseItem(
@@ -180,100 +234,33 @@ const {
   }));
 });
 
-// Icon handlers
-
-async function openIconUpload() {
-  const picked = await pickProjectMediaAsset('project-icon');
+async function openSingleMediaUpload(slot: ProjectMediaSlot) {
+  const picked = await pickProjectMediaAsset(slot.uploadProfile);
   if (!picked) return;
-  applyIconAsset(picked.result);
-  await openIconModal();
+  applySingleMediaAsset(slot, picked.result);
+  await openSingleMediaModal(slot);
 }
 
-async function openIconModal() {
-  if (!projectData.value.iconAssetUuid || !iconPreviewUrl.value) return;
-
-  let current: AssetReplaceResult = {
-    assetUuid: projectData.value.iconAssetUuid,
-    slug: projectData.value.iconAssetUuid,
-    extension: extensionFromUrl(
-      iconVideoUrl.value ?? iconPreviewUrl.value,
-      'webp',
-    ),
-    size: iconSize.value ?? 0,
-    previewUrl: iconPreviewUrl.value,
-    videoUrl: iconVideoUrl.value,
-    assetUrl: iconVideoUrl.value ?? iconPreviewUrl.value,
-  };
+async function openSingleMediaModal(slot: ProjectMediaSlot) {
+  let current = singleMediaAssetSnapshot(slot);
+  if (!current) return;
 
   while (true) {
     const result = await openModal(projectAssetDetailsModal, {
-      asideTitle: phrase.value.project_icon,
+      asideTitle: slot.asideTitle(),
       asset: current,
     });
 
     if (result.type === 'replace') {
-      const picked = await pickProjectMediaAsset('project-icon');
+      const picked = await pickProjectMediaAsset(slot.uploadProfile);
       if (!picked) continue;
       current = picked.result;
-      applyIconAsset(picked.result);
+      applySingleMediaAsset(slot, picked.result);
       continue;
     }
 
     if (result.type === 'detach') {
-      projectData.value.iconAssetUuid = undefined;
-      iconPreviewUrl.value = undefined;
-      iconVideoUrl.value = undefined;
-      iconSize.value = undefined;
-    }
-
-    return;
-  }
-}
-
-// Banner handlers
-
-async function openBannerUpload() {
-  const picked = await pickProjectMediaAsset('project-banner');
-  if (!picked) return;
-  applyBannerAsset(picked.result);
-  await openBannerModal();
-}
-
-async function openBannerModal() {
-  if (!projectData.value.bannerAssetUuid || !bannerPreviewUrl.value) return;
-
-  let current: AssetReplaceResult = {
-    assetUuid: projectData.value.bannerAssetUuid,
-    slug: projectData.value.bannerAssetUuid,
-    extension: extensionFromUrl(
-      bannerVideoUrl.value ?? bannerPreviewUrl.value,
-      'webp',
-    ),
-    size: bannerSize.value ?? 0,
-    previewUrl: bannerPreviewUrl.value,
-    videoUrl: bannerVideoUrl.value,
-    assetUrl: bannerVideoUrl.value ?? bannerPreviewUrl.value,
-  };
-
-  while (true) {
-    const result = await openModal(projectAssetDetailsModal, {
-      asideTitle: phrase.value.project_banner,
-      asset: current,
-    });
-
-    if (result.type === 'replace') {
-      const picked = await pickProjectMediaAsset('project-banner');
-      if (!picked) continue;
-      current = picked.result;
-      applyBannerAsset(picked.result);
-      continue;
-    }
-
-    if (result.type === 'detach') {
-      projectData.value.bannerAssetUuid = undefined;
-      bannerPreviewUrl.value = undefined;
-      bannerVideoUrl.value = undefined;
-      bannerSize.value = undefined;
+      detachSingleMediaAsset(slot);
     }
 
     return;
@@ -516,7 +503,11 @@ async function openOtherAsset(index: number) {
             :video-url="iconVideoUrl"
             :size="iconSize"
             class="size-18 cursor-pointer"
-            @click="iconPreviewUrl ? openIconModal() : openIconUpload()"
+            @click="
+              iconPreviewUrl
+                ? openSingleMediaModal(iconSlot)
+                : openSingleMediaUpload(iconSlot)
+            "
           />
           <div class="tracking-tight">
             <div class="font-semibold">{{ phrase.project_icon }}</div>
@@ -531,7 +522,11 @@ async function openOtherAsset(index: number) {
             :video-url="bannerVideoUrl"
             :size="bannerSize"
             class="aspect-video h-18 cursor-pointer"
-            @click="bannerPreviewUrl ? openBannerModal() : openBannerUpload()"
+            @click="
+              bannerPreviewUrl
+                ? openSingleMediaModal(bannerSlot)
+                : openSingleMediaUpload(bannerSlot)
+            "
           />
           <div class="tracking-tight">
             <div class="font-semibold">{{ phrase.project_banner }}</div>

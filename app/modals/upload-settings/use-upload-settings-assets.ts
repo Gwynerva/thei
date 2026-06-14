@@ -5,6 +5,7 @@ import type {
 } from '#layers/thei/shared/api/asset';
 import type { AssetUploadSettings } from '#layers/thei/shared/asset-upload-settings';
 import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
+import type { AssetUploadLimitPolicy } from '#layers/thei/shared/asset-upload-limits';
 import type { PickedFile } from '../pick-file/picked-file';
 
 export type UploadSettingsBusyAction = 'variants' | 'upload-original' | 'apply';
@@ -16,6 +17,7 @@ export interface UploadSettingsModalData {
   file: PickedFile;
   maxSize?: number;
   acceptedExtensions?: string[] | '*';
+  sizeLimitPolicy?: AssetUploadLimitPolicy;
   uploadProfile?: AssetUploadProfile;
 }
 
@@ -31,6 +33,10 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
     activeXhr.value?.abort();
     stopProgressPolling();
     activeXhr.value = null;
+    if (temporaryAssetUuid.value) {
+      void discardTemporaryAsset(temporaryAssetUuid.value);
+      temporaryAssetUuid.value = null;
+    }
   });
 
   async function loadVariants(): Promise<AssetVariantInfo[]> {
@@ -63,6 +69,10 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
 
     if (modalData.maxSize !== undefined) {
       formData.append('maxSizeBytes', String(modalData.maxSize));
+    }
+
+    if (modalData.sizeLimitPolicy) {
+      formData.append('sizeLimitPolicy', modalData.sizeLimitPolicy);
     }
 
     if (modalData.acceptedExtensions) {
@@ -135,6 +145,12 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
     const assetUuid = temporaryAssetUuid.value;
     if (!assetUuid || assetUuid === assetUuidToKeep) return undefined;
 
+    await discardTemporaryAsset(assetUuid);
+    temporaryAssetUuid.value = null;
+    return assetUuid;
+  }
+
+  async function discardTemporaryAsset(assetUuid: string) {
     await $fetch('/api/admin/assets/discard', {
       method: 'POST',
       body: { assetUuid },
@@ -142,8 +158,6 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
     variants.value = variants.value.filter(
       (variant) => variant.assetUuid !== assetUuid,
     );
-    temporaryAssetUuid.value = null;
-    return assetUuid;
   }
 
   function startProgressPolling(uploadId: string) {

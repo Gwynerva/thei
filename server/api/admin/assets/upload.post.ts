@@ -7,13 +7,8 @@ import type {
   VideoAssetMeta,
 } from '#layers/thei/shared/asset';
 import {
-  ASSET_UPLOAD_SETTINGS_VERSION,
   buildAssetSettingsKey,
-  type AssetFileZipSettings,
-  type AssetImageTransformSettings,
-  type AssetOriginalSettings,
   type AssetUploadSettings,
-  type AssetVideoTransformSettings,
 } from '#layers/thei/shared/asset-upload-settings';
 import { getPathExtension } from '#layers/thei/shared/assets/extensions';
 import { canZipAssetExtension } from '#layers/thei/shared/asset-upload-zip';
@@ -36,11 +31,22 @@ import {
   clearAssetUploadProgress,
   setAssetUploadProgress,
 } from '../../../thei/assets/progress';
+import {
+  parseAcceptedExtensions,
+  parseAssetUploadSettings,
+  parseOptionalPositiveInt,
+  parseSizeLimitPolicy,
+  resolveMaxSizeBytes,
+  validateFileInput,
+  validateSizeLimitPolicy,
+  validateUploadContentLength,
+} from '../../../thei/assets/upload-request';
 
 export default defineEventHandler(
   async (event): Promise<AssetUploadResponse> => {
     let uploadId: string | undefined;
     try {
+      validateUploadContentLength(getHeader(event, 'content-length'));
       const parts = await readMultipartFormData(event);
       if (!parts) {
         throw createError({ statusCode: 400, message: 'No multipart data' });
@@ -48,15 +54,24 @@ export default defineEventHandler(
 
       const filePart = parts.find((part) => part.name === 'file');
       const rawHash = readPartString(parts, 'rawHash');
-      const settings = parseSettings(readPartString(parts, 'settings'));
+      const settings = parseAssetUploadSettings(
+        readPartString(parts, 'settings'),
+      );
       const previousAssetUuid = readPartString(
         parts,
         'previousAssetUuid',
         false,
       );
       uploadId = readPartString(parts, 'uploadId', false);
-      const maxSizeBytes = parseOptionalInt(
+      const requestedMaxSizeBytes = parseOptionalPositiveInt(
         readPartString(parts, 'maxSizeBytes', false),
+      );
+      const sizeLimitPolicy = parseSizeLimitPolicy(
+        readPartString(parts, 'sizeLimitPolicy', false),
+      );
+      const maxSizeBytes = resolveMaxSizeBytes(
+        sizeLimitPolicy,
+        requestedMaxSizeBytes,
       );
       const acceptedExtensions = parseAcceptedExtensions(
         readPartString(parts, 'acceptedExtensions', false),
@@ -84,6 +99,7 @@ export default defineEventHandler(
         acceptedExtensions,
       });
       const originalType = inferAssetType(originalExtension);
+      validateSizeLimitPolicy(sizeLimitPolicy, originalType);
 
       if (
         settings.type === 'image-transform' &&
@@ -234,168 +250,6 @@ async function processAsset(
   }
 
   return await processMediaTransformAsset(buffer, settings, options);
-}
-
-function parseSettings(value: string): AssetUploadSettings {
-  let settings: unknown;
-  try {
-    settings = JSON.parse(value);
-  } catch {
-    throw createError({ statusCode: 400, message: 'Invalid settings JSON' });
-  }
-
-  if (!isRecord(settings)) {
-    throw createError({ statusCode: 400, message: 'Invalid upload settings' });
-  }
-
-  if (settings.version !== ASSET_UPLOAD_SETTINGS_VERSION) {
-    throw createError({
-      statusCode: 400,
-      message: `Unsupported upload settings version: ${settings.version}`,
-    });
-  }
-
-  if (isOriginalSettings(settings)) {
-    return settings;
-  }
-
-  if (isImageTransformSettings(settings)) {
-    return settings;
-  }
-
-  if (isVideoTransformSettings(settings)) {
-    return settings;
-  }
-
-  if (isFileZipSettings(settings)) {
-    return settings;
-  }
-
-  throw createError({ statusCode: 400, message: 'Invalid upload settings' });
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object';
-}
-
-function isQuality(value: unknown): value is number {
-  return typeof value === 'number' && value >= 10 && value <= 100;
-}
-
-function isDimensions(
-  value: unknown,
-): value is { width?: number; height?: number } {
-  if (!isRecord(value)) return false;
-  return (
-    (value.width === undefined ||
-      (typeof value.width === 'number' && value.width > 0)) &&
-    (value.height === undefined ||
-      (typeof value.height === 'number' && value.height > 0))
-  );
-}
-
-function isResizeMode(value: unknown): value is 'inside' | 'cover' {
-  return value === 'inside' || value === 'cover';
-}
-
-function hasResizeSettings(settings: Record<string, unknown>): boolean {
-  return (
-    isDimensions(settings.dimensions) &&
-    isResizeMode(settings.resizeMode) &&
-    typeof settings.allowUpscale === 'boolean'
-  );
-}
-
-function isOriginalSettings(
-  settings: Record<string, unknown>,
-): settings is AssetOriginalSettings {
-  return settings.type === 'original';
-}
-
-function isImageTransformSettings(
-  settings: Record<string, unknown>,
-): settings is AssetImageTransformSettings {
-  return (
-    settings.type === 'image-transform' &&
-    isQuality(settings.quality) &&
-    hasResizeSettings(settings)
-  );
-}
-
-function isVideoTransformSettings(
-  settings: Record<string, unknown>,
-): settings is AssetVideoTransformSettings {
-  return (
-    settings.type === 'video-transform' &&
-    isQuality(settings.quality) &&
-    hasResizeSettings(settings) &&
-    typeof settings.stripAudio === 'boolean' &&
-    typeof settings.fastConversion === 'boolean'
-  );
-}
-
-function isFileZipSettings(
-  settings: Record<string, unknown>,
-): settings is AssetFileZipSettings {
-  return settings.type === 'file-zip';
-}
-
-function parseOptionalInt(value: string): number | undefined {
-  if (!value) return undefined;
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function parseAcceptedExtensions(value: string): string[] | '*' | undefined {
-  const normalizedValue = value.trim();
-  if (!normalizedValue) return undefined;
-  if (normalizedValue === '*') return '*';
-  try {
-    const parsed = JSON.parse(normalizedValue);
-    if (
-      Array.isArray(parsed) &&
-      parsed.every((extension) => typeof extension === 'string')
-    ) {
-      const normalized = parsed.map(normalizeExtension).filter(Boolean);
-      if (normalized.includes('*')) return '*';
-      return normalized;
-    }
-  } catch {
-    // handled below
-  }
-  throw createError({
-    statusCode: 400,
-    message: 'Invalid acceptedExtensions field',
-  });
-}
-
-function validateFileInput(input: {
-  extension: string;
-  size: number;
-  maxSizeBytes?: number;
-  acceptedExtensions?: string[] | '*';
-}) {
-  if (
-    input.acceptedExtensions &&
-    input.acceptedExtensions !== '*' &&
-    !input.acceptedExtensions.includes(normalizeExtension(input.extension))
-  ) {
-    throw createError({
-      statusCode: 400,
-      message: `File type .${input.extension || '?'} is not allowed`,
-    });
-  }
-
-  if (input.maxSizeBytes !== undefined && input.size > input.maxSizeBytes) {
-    throw createError({
-      statusCode: 400,
-      message: 'File exceeds the maximum allowed size',
-    });
-  }
-}
-
-function normalizeExtension(extension: string): string {
-  return extension.trim().replace(/^\./, '').toLowerCase();
 }
 
 async function buildProcessedAssetMeta(

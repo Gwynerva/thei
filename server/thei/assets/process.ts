@@ -4,20 +4,21 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
+import { createError } from 'h3';
 import sharp from 'sharp';
+import { AssetType } from '../../../shared/asset';
 import {
   AUDIO_EXTENSIONS,
-  AssetType,
   IMAGE_EXTENSIONS,
   VIDEO_EXTENSIONS,
-} from '#layers/thei/shared/asset';
+} from '../../../shared/assets/formats';
 import type {
   AssetFileZipSettings,
   AssetImageTransformSettings,
   AssetTransformSettings,
   AssetVideoTransformSettings,
-} from '#layers/thei/shared/asset-upload-settings';
-import { videoQualityToVp9Crf } from '#layers/thei/shared/asset-upload-quality';
+} from '../../../shared/asset-upload-settings';
+import { videoQualityToVp9Crf } from '../../../shared/asset-upload-quality';
 import { zipSingleFile } from './zip';
 
 const IMAGE_EXTS = new Set<string>(IMAGE_EXTENSIONS);
@@ -114,17 +115,36 @@ export async function processOriginalAsset(
   const type = inferAssetType(extension);
   if (type === AssetType.Video) {
     const inspected = await inspectVideo(inputBuffer).catch(() => undefined);
+    if (!inspected?.width || !inspected.height) {
+      throw createError({
+        statusCode: 400,
+        message: 'Invalid video file',
+      });
+    }
     return {
       buffer: inputBuffer,
       extension,
       type,
-      dimensions: inspected
-        ? {
-            ...(inspected.width ? { width: inspected.width } : {}),
-            ...(inspected.height ? { height: inspected.height } : {}),
-          }
-        : {},
-      ...(inspected ? { hasAudio: inspected.hasAudio } : {}),
+      dimensions: {
+        width: inspected.width,
+        height: inspected.height,
+      },
+      hasAudio: inspected.hasAudio,
+    };
+  }
+
+  if (type === AssetType.Image) {
+    const dimensions = await getImageDimensions(inputBuffer).catch(() => {
+      throw createError({
+        statusCode: 400,
+        message: 'Invalid image file',
+      });
+    });
+    return {
+      buffer: inputBuffer,
+      extension,
+      type,
+      dimensions,
     };
   }
 

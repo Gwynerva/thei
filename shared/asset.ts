@@ -5,17 +5,11 @@ export enum AssetType {
   Other = 'other',
 }
 
-export const IMAGE_EXTENSIONS = [
-  'jpg',
-  'jpeg',
-  'png',
-  'gif',
-  'webp',
-  'avif',
-  'svg',
-] as const;
-export const VIDEO_EXTENSIONS = ['mp4', 'webm', 'mov', 'avi'] as const;
-export const AUDIO_EXTENSIONS = ['mp3', 'wav', 'ogg', 'flac'] as const;
+export {
+  AUDIO_EXTENSIONS,
+  IMAGE_EXTENSIONS,
+  VIDEO_EXTENSIONS,
+} from './assets/formats';
 
 export const ASSET_CONTAINER_TYPES = ['project', 'event', 'asset'] as const;
 export type AssetContainerType = (typeof ASSET_CONTAINER_TYPES)[number];
