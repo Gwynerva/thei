@@ -179,6 +179,7 @@ export type LanguagePhrases = {
   showcase_quality_as_uploaded: string;
   showcase_caption: string;
   showcase_caption_hint: string;
+  asset_access: string;
   showcase_access_same_as_project: string;
   showcase_access_private: string;
   showcase_confirm_add: string;

@@ -547,24 +547,36 @@ async function openOtherAsset(index: number) {
       <!-- Showcase grid -->
       <div class="flex flex-wrap gap-sm p-sm sm:p-md">
         <!-- Existing showcase items -->
-        <AssetAddEdit
+        <div
           v-for="(item, index) in showcaseItems"
           :key="item.assetUuid"
-          :data-drag-index="index"
-          :preview-url="item.previewUrl"
-          :video-url="item.videoUrl"
-          :size="item.size"
-          :is-private="item.access === 'private'"
-          class="size-18 cursor-pointer touch-none"
-          :class="{
-            'opacity-50': dragSort.draggingIndex.value === index,
-            'ring-2 ring-accent ring-offset-2 ring-offset-bg-1':
-              dragSort.dragOverIndex.value === index &&
-              dragSort.draggingIndex.value !== index,
-          }"
-          @click="dragSort.guardClick(() => openShowcaseAsset(index))"
-          @pointerdown="dragSort.onPointerDown(index, $event)"
-        />
+          class="flex w-18 flex-col items-center gap-xs"
+        >
+          <AssetAddEdit
+            :data-drag-index="index"
+            :preview-url="item.previewUrl"
+            :video-url="item.videoUrl"
+            :size="item.size"
+            :is-private="item.access === 'private'"
+            class="size-18 cursor-pointer touch-none"
+            :class="{
+              'opacity-50': dragSort.draggingIndex.value === index,
+              'ring-2 ring-accent ring-offset-2 ring-offset-bg-1':
+                dragSort.dragOverIndex.value === index &&
+                dragSort.draggingIndex.value !== index,
+            }"
+            @click="dragSort.guardClick(() => openShowcaseAsset(index))"
+            @pointerdown="dragSort.onPointerDown(index, $event)"
+          />
+          <div
+            v-if="item.caption"
+            class="line-clamp-2 w-full cursor-help text-center text-xs
+              wrap-break-word text-text-2"
+            :data-title-popup="item.caption"
+          >
+            {{ item.caption }}
+          </div>
+        </div>
 
         <!-- Add button (always last) -->
         <AssetAddEdit class="size-18 cursor-pointer" @click="openShowcaseAdd" />
@@ -583,7 +595,7 @@ async function openOtherAsset(index: number) {
       <div class="flex flex-wrap gap-sm p-sm sm:p-md">
         <div
           v-for="(item, index) in otherItems"
-          class="flex flex-col items-center gap-xs"
+          class="flex w-18 flex-col items-center gap-xs"
         >
           <AssetAddEdit
             :key="item.assetUuid"
@@ -604,7 +616,7 @@ async function openOtherAsset(index: number) {
             @pointerdown="otherDragSort.onPointerDown(index, $event)"
           />
           <div
-            class="line-clamp-2 max-w-24 cursor-help text-center text-xs
+            class="line-clamp-2 w-full cursor-help text-center text-xs
               wrap-break-word text-text-2"
             :data-title-popup="item.title"
           >

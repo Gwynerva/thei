@@ -143,7 +143,11 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
     assetUuidToKeep: string,
   ): Promise<string | undefined> {
     const assetUuid = temporaryAssetUuid.value;
-    if (!assetUuid || assetUuid === assetUuidToKeep) return undefined;
+    if (!assetUuid) return undefined;
+    if (assetUuid === assetUuidToKeep) {
+      temporaryAssetUuid.value = null;
+      return undefined;
+    }
 
     await discardTemporaryAsset(assetUuid);
     temporaryAssetUuid.value = null;

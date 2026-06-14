@@ -34,6 +34,13 @@ function onBlur() {
 }
 
 const textarea = useTemplateRef('textarea');
+let resizeObserver: ResizeObserver | undefined;
+let resizeFrame: number | undefined;
+let observedWidth = 0;
+
+const placeholder = computed(() =>
+  typeof attrs.placeholder === 'string' ? attrs.placeholder : '',
+);
 
 function resize() {
   const el = textarea.value;
@@ -41,12 +48,55 @@ function resize() {
     return;
   }
 
+  const measurePlaceholder = !model.value && placeholder.value;
+  const value = el.value;
+  if (measurePlaceholder) {
+    el.value = placeholder.value;
+  }
+
   el.style.height = 'auto';
   el.style.height = `${el.scrollHeight}px`;
+
+  if (measurePlaceholder) {
+    el.value = value;
+  }
 }
 
-watch(model, resize);
-onMounted(resize);
+function scheduleResize() {
+  if (resizeFrame !== undefined) {
+    cancelAnimationFrame(resizeFrame);
+  }
+
+  void nextTick(() => {
+    resizeFrame = requestAnimationFrame(() => {
+      resizeFrame = undefined;
+      resize();
+    });
+  });
+}
+
+watch(model, scheduleResize, { flush: 'post' });
+watch(placeholder, scheduleResize, { flush: 'post' });
+onMounted(() => {
+  scheduleResize();
+
+  const el = textarea.value;
+  if (!el || typeof ResizeObserver === 'undefined') return;
+
+  resizeObserver = new ResizeObserver((entries) => {
+    const width = entries[0]?.contentRect.width ?? 0;
+    if (width === observedWidth) return;
+    observedWidth = width;
+    scheduleResize();
+  });
+  resizeObserver.observe(el);
+});
+onUnmounted(() => {
+  resizeObserver?.disconnect();
+  if (resizeFrame !== undefined) {
+    cancelAnimationFrame(resizeFrame);
+  }
+});
 </script>
 
 <template>

@@ -6,7 +6,6 @@ import AssetModalButton from '#layers/thei/app/modals/asset-modal/AssetModalButt
 import AssetModalFileInfo from '#layers/thei/app/modals/asset-modal/AssetModalFileInfo.vue';
 import AssetModalPreviewFile from '#layers/thei/app/modals/asset-modal/AssetModalPreviewFile.vue';
 import AssetModalPreviewMedia from '#layers/thei/app/modals/asset-modal/AssetModalPreviewMedia.vue';
-import UploadSettingsSection from '#layers/thei/app/modals/upload-settings/UploadSettingsSection.vue';
 
 type AccessLevel = 'project' | 'private';
 
@@ -174,10 +173,7 @@ function replace() {
             modalData.showTitle || modalData.showCaption || modalData.showAccess
           "
         >
-          <UploadSettingsSection
-            :active="true"
-            :title="phrase.showcase_details"
-          >
+          <div class="flex flex-col gap-sm border-t border-border-1 p-sm">
             <Field v-if="modalData.showTitle">
               <FieldLabel :required="modalData.requireTitle">
                 {{ phrase.other_title }}
@@ -207,18 +203,22 @@ function replace() {
             </Field>
 
             <Field v-if="modalData.showAccess">
+              <FieldLabel>{{ phrase.asset_access }}</FieldLabel>
               <FieldOptions
                 v-model="access"
                 :options="{
                   project: { title: phrase.showcase_access_same_as_project },
-                  private: { title: phrase.showcase_access_private },
+                  private: {
+                    icon: 'lock-close',
+                    title: phrase.showcase_access_private,
+                  },
                 }"
               />
             </Field>
-          </UploadSettingsSection>
+          </div>
         </template>
 
-        <div class="flex flex-col gap-sm p-sm">
+        <div class="flex flex-col gap-sm border-t border-border-1 p-sm">
           <Button
             v-if="modalData.primaryLabel"
             variant="primary"
@@ -230,7 +230,7 @@ function replace() {
           </Button>
 
           <div
-            class="grid gap-sm"
+            class="flex flex-col gap-sm"
             :class="
               (modalData.showDetach ?? true) ? 'grid-cols-2' : 'grid-cols-1'
             "

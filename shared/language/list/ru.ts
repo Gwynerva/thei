@@ -255,8 +255,9 @@ export default defineI18nModule({
     showcase_quality_as_uploaded: 'Исходный размер',
     showcase_caption: 'Подпись',
     showcase_caption_hint: 'Необязательное описание файла.',
+    asset_access: 'Доступ к файлу',
     showcase_access_same_as_project: 'Как у проекта',
-    showcase_access_private: 'Приватное (только вы)',
+    showcase_access_private: 'Только у вас',
     showcase_confirm_add: 'Добавить',
     showcase_details: 'Детали',
     showcase_drop_hint:
