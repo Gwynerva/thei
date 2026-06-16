@@ -1,4 +1,9 @@
 import { ProjectEventAccessLevel } from '../access-level';
+import {
+  ContentValidationError,
+  normalizeContentData,
+  type ContentFieldModelValue,
+} from '../content';
 import { isOneOf } from '../utils/isOneOf';
 
 /** Base save item for any project asset list (showcase, other-assets, …). */
@@ -24,6 +29,7 @@ export type ProjectEditData = {
   cv: boolean;
   iconAssetUuid?: string;
   bannerAssetUuid?: string;
+  descriptionContent?: ContentFieldModelValue | null;
   /** Showcase assets in display order. Array index = sort order. */
   showcaseAssets?: ShowcaseAssetEditItem[];
   /** Other files in display order. Array index = sort order. */
@@ -98,17 +104,21 @@ export function validateProjectData(
             'Duplicate other file',
           );
 
+    const descriptionContent = validateContentField(data.descriptionContent);
+
     return {
       ...data,
       title,
       summary,
       slug,
       access: data.access,
+      descriptionContent,
       showcaseAssets,
       otherAssets,
     };
   } catch (error) {
     if (error instanceof ProjectValidationError) return error.message;
+    if (error instanceof ContentValidationError) return error.message;
     throw error;
   }
 }
@@ -120,6 +130,17 @@ function normalizeOptionalText(value: string | undefined): string | undefined {
 
 function validateProjectAssetIsPrivate(value: unknown): boolean | undefined {
   return typeof value === 'boolean' ? value : undefined;
+}
+
+function validateContentField(
+  value: ContentFieldModelValue | null | undefined,
+): ContentFieldModelValue | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  return {
+    contentUuid: normalizeOptionalText(value.contentUuid),
+    data: normalizeContentData(value.data),
+  };
 }
 
 function validateUniqueAssetList<T extends AssetListSaveItem>(

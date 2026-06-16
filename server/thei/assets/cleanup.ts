@@ -97,22 +97,28 @@ async function cleanupDanglingUsages() {
       await deleteUsage(usage);
     }
 
-    const [assetRows, projectRows, usages] = await Promise.all([
+    const [assetRows, projectRows, contentRows, usages] = await Promise.all([
       db.select({ assetUuid: schema.assets.assetUuid }).from(schema.assets),
       db
         .select({ projectUuid: schema.projects.projectUuid })
         .from(schema.projects),
+      db
+        .select({ contentUuid: schema.content.contentUuid })
+        .from(schema.content),
       db.select().from(schema.assetUsages),
     ]);
     const assetUuids = new Set(assetRows.map((row) => row.assetUuid));
     const projectUuids = new Set(projectRows.map((row) => row.projectUuid));
+    const contentUuids = new Set(contentRows.map((row) => row.contentUuid));
 
     for (const usage of usages) {
       if (
         (usage.containerType === 'asset' &&
           !assetUuids.has(usage.containerId)) ||
         (usage.containerType === 'project' &&
-          !projectUuids.has(usage.containerId))
+          !projectUuids.has(usage.containerId)) ||
+        (usage.containerType === 'content' &&
+          !contentUuids.has(usage.containerId))
       ) {
         await deleteUsage(usage);
       }

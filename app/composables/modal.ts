@@ -1,4 +1,4 @@
-import { type Component, markRaw, shallowRef } from 'vue';
+import { type Component, computed, markRaw, shallowRef } from 'vue';
 import type {
   ActiveModal,
   BaseModalResult,
@@ -9,7 +9,12 @@ import type {
 export { defineModal, type ModalData } from '#layers/thei/app/modals/types';
 
 // Module-level singleton — one modal active at a time across the whole app.
-export const activeModal = shallowRef<ActiveModal | null>(null);
+let modalId = 0;
+
+export const modalStack = shallowRef<ActiveModal[]>([]);
+export const activeModal = computed(
+  () => modalStack.value[modalStack.value.length - 1] ?? null,
+);
 
 /**
  * Programmatically close the active modal with an `empty` result.
@@ -18,7 +23,7 @@ export const activeModal = shallowRef<ActiveModal | null>(null);
 export function closeModal() {
   const modal = activeModal.value;
   if (!modal) return;
-  activeModal.value = null;
+  removeModal(modal);
   modal.close({ type: 'empty' });
 }
 
@@ -29,7 +34,7 @@ export function closeModal() {
 export function errorModal(message: string) {
   const modal = activeModal.value;
   if (!modal) return;
-  activeModal.value = null;
+  removeModal(modal);
   modal.close({ type: 'error', message });
 }
 
@@ -50,23 +55,38 @@ export async function openModal<
     ? []
     : [modalData: ExtractModalData<TComponent>]
 ): Promise<TResult> {
-  if (activeModal.value) {
-    throw new Error(
-      `Cannot open modal "${descriptor.name}" while "${activeModal.value.name}" is already active!`,
-    );
-  }
-
   const module = await descriptor.component();
   const component = markRaw(module.default);
   const props = args.length > 0 ? { modalData: args[0] } : {};
 
   return new Promise<TResult>((resolve) => {
-    activeModal.value = {
-      name: descriptor.name,
-      component,
-      props,
-      resolve: resolve as (result: { type: string }) => void,
-      close: (result: BaseModalResult) => resolve(result as TResult),
-    };
+    modalStack.value = [
+      ...modalStack.value,
+      {
+        id: ++modalId,
+        name: descriptor.name,
+        component,
+        props,
+        resolve: resolve as (result: { type: string }) => void,
+        close: (result: BaseModalResult) => resolve(result as TResult),
+      },
+    ];
   });
+}
+
+export function settleModal(modal: ActiveModal, result: { type: string }) {
+  removeModal(modal);
+  modal.resolve(result);
+}
+
+export function closeModalWithBase(
+  modal: ActiveModal,
+  result: BaseModalResult,
+) {
+  removeModal(modal);
+  modal.close(result);
+}
+
+function removeModal(modal: ActiveModal) {
+  modalStack.value = modalStack.value.filter((item) => item.id !== modal.id);
 }

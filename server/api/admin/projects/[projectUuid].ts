@@ -2,20 +2,25 @@ import {
   validateProjectData,
   type ProjectEditData,
 } from '#layers/thei/shared/admin/project';
-import { buildAssetPreviewUrl } from '#layers/thei/shared/api/asset';
 import type {
   OtherAssetGetItem,
   ProjectGetResponse,
   ProjectSaveResponse,
   ShowcaseAssetGetItem,
 } from '#layers/thei/shared/api/project';
-import {
-  AssetType,
-  type AssetMeta,
-  type AssetRole,
-} from '#layers/thei/shared/asset';
+import { AssetType, type AssetRole } from '#layers/thei/shared/asset';
+import { ContentValidationError } from '#layers/thei/shared/content';
 import { and, eq } from 'drizzle-orm';
-import { findVideoPreviewAsset } from '../../../thei/assets/storage';
+import {
+  archivedOriginalFromMeta,
+  buildAdminAssetUrls,
+  dominantHueFromMeta,
+} from '../../../thei/assets/urls';
+import {
+  applyPreparedContentSave,
+  deleteContentForOwner,
+  prepareContentForSave,
+} from '../../../thei/content/repository';
 import { validateProjectAssets } from '../../../thei/projects/validate-assets';
 
 export default defineEventHandler(async (event) => {
@@ -42,7 +47,7 @@ export default defineEventHandler(async (event) => {
       let iconPreviewUrl: string | undefined;
       let iconVideoUrl: string | undefined;
       if (iconUsage) {
-        const urls = await buildProjectAssetUrls(iconUsage.asset);
+        const urls = await buildAdminAssetUrls(iconUsage.asset);
         iconPreviewUrl = urls.previewUrl;
         iconVideoUrl = urls.videoUrl;
       }
@@ -50,7 +55,7 @@ export default defineEventHandler(async (event) => {
       let bannerPreviewUrl: string | undefined;
       let bannerVideoUrl: string | undefined;
       if (bannerUsage) {
-        const urls = await buildProjectAssetUrls(bannerUsage.asset);
+        const urls = await buildAdminAssetUrls(bannerUsage.asset);
         bannerPreviewUrl = urls.previewUrl;
         bannerVideoUrl = urls.videoUrl;
       }
@@ -61,7 +66,7 @@ export default defineEventHandler(async (event) => {
       const showcaseAssets: ShowcaseAssetGetItem[] = await Promise.all(
         rawShowcase.map(async ({ asset, meta }) => {
           const isVideo = asset.type === AssetType.Video;
-          const urls = await buildProjectAssetUrls(asset);
+          const urls = await buildAdminAssetUrls(asset);
 
           return {
             assetUuid: asset.assetUuid,
@@ -79,7 +84,7 @@ export default defineEventHandler(async (event) => {
 
       const otherAssets: OtherAssetGetItem[] = await Promise.all(
         rawOther.map(async ({ asset, meta }) => {
-          const urls = await buildProjectAssetUrls(asset);
+          const urls = await buildAdminAssetUrls(asset);
 
           return {
             assetUuid: asset.assetUuid,
@@ -116,6 +121,11 @@ export default defineEventHandler(async (event) => {
         bannerPreviewUrl,
         bannerVideoUrl,
         bannerAssetSize: bannerUsage?.asset.size,
+        descriptionContent: await THEI_SERVER.content.buildFieldValue(
+          'project',
+          projectUuid,
+          'project-description',
+        ),
         showcaseAssets,
         otherAssets,
       } satisfies ProjectGetResponse;
@@ -143,6 +153,28 @@ export default defineEventHandler(async (event) => {
           type: 'error',
           message: assetError,
         } satisfies ProjectSaveResponse;
+
+      let preparedDescription:
+        | Awaited<ReturnType<typeof prepareContentForSave>>
+        | undefined;
+      if (result.descriptionContent !== undefined) {
+        try {
+          preparedDescription = await prepareContentForSave(
+            'project',
+            projectUuid,
+            'project-description',
+            result.descriptionContent,
+          );
+        } catch (error) {
+          if (error instanceof ContentValidationError) {
+            return {
+              type: 'error',
+              message: error.message,
+            } satisfies ProjectSaveResponse;
+          }
+          throw error;
+        }
+      }
 
       const usages = await THEI_SERVER.assets.usages.findByContainer(
         'project',
@@ -183,6 +215,17 @@ export default defineEventHandler(async (event) => {
           })
           .where(eq(schema.projects.projectUuid, projectUuid))
           .run();
+
+        if (preparedDescription) {
+          applyPreparedContentSave(
+            tx,
+            schema,
+            'project',
+            projectUuid,
+            'project-description',
+            preparedDescription,
+          );
+        }
 
         if (currentIcon?.asset.assetUuid !== newIconUuid) {
           if (currentIcon) {
@@ -296,6 +339,8 @@ export default defineEventHandler(async (event) => {
       );
       const { db, schema } = THEI_SERVER.useDb();
       db.transaction((tx) => {
+        deleteContentForOwner(tx, schema, 'project', projectUuid);
+
         for (const usage of usages) {
           detachUsage(
             tx,
@@ -370,35 +415,4 @@ function updateUsageMeta(
       ),
     )
     .run();
-}
-
-async function buildProjectAssetUrls(
-  asset: Parameters<typeof findVideoPreviewAsset>[0],
-) {
-  const assetUrl = buildAssetPreviewUrl(asset.slug, asset.extension);
-
-  if (asset.type === AssetType.Video) {
-    const preview = await findVideoPreviewAsset(asset);
-    return {
-      assetUrl,
-      previewUrl: preview
-        ? buildAssetPreviewUrl(preview.slug, preview.extension)
-        : undefined,
-      videoUrl: assetUrl,
-    };
-  }
-
-  return {
-    assetUrl,
-    previewUrl: asset.type === AssetType.Image ? assetUrl : undefined,
-    videoUrl: undefined,
-  };
-}
-
-function archivedOriginalFromMeta(meta: AssetMeta | null | undefined) {
-  return meta && 'archivedOriginal' in meta ? meta.archivedOriginal : undefined;
-}
-
-function dominantHueFromMeta(meta: AssetMeta | null | undefined) {
-  return meta && 'dominantHue' in meta ? meta.dominantHue : undefined;
 }

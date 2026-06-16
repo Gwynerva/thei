@@ -275,7 +275,7 @@ async function openShowcaseAdd() {
 
   while (true) {
     const result = await openModal(projectAssetDetailsModal, {
-      asideTitle: phrase.value.showcase_details,
+      asideTitle: phrase.value.showcase_file,
       asset: picked.result,
       primaryLabel: phrase.value.showcase_confirm_add,
       showCaption: true,
@@ -324,7 +324,7 @@ async function openShowcaseAsset(index: number) {
 
   while (true) {
     const result = await openModal(projectAssetDetailsModal, {
-      asideTitle: phrase.value.showcase,
+      asideTitle: phrase.value.showcase_file,
       asset: current,
       primaryLabel: phrase.value.save,
       showCaption: true,
@@ -374,7 +374,7 @@ async function openOtherAdd() {
 
   while (true) {
     const result = await openModal(projectAssetDetailsModal, {
-      asideTitle: phrase.value.other_details,
+      asideTitle: phrase.value.project_file,
       asset: picked.result,
       archivedOriginal: archivedOriginalFromMeta(picked.result.meta),
       primaryLabel: phrase.value.other_add,
@@ -432,7 +432,7 @@ async function openOtherAsset(index: number) {
 
   while (true) {
     const result = await openModal(projectAssetDetailsModal, {
-      asideTitle: phrase.value.other_files,
+      asideTitle: phrase.value.project_file,
       asset: current,
       archivedOriginal: currentArchivedOriginal,
       primaryLabel: phrase.value.save,

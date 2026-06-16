@@ -35,6 +35,7 @@ const projectData = ref<ProjectEditData>({
   access: '',
   important: false,
   cv: false,
+  descriptionContent: null,
 });
 provide(projectDataInjectionKey, projectData);
 
@@ -103,6 +104,7 @@ if (isEdit.value) {
     access: data.access,
     important: data.important,
     cv: data.cv,
+    descriptionContent: data.descriptionContent ?? null,
     iconAssetUuid: data.iconAssetUuid,
     bannerAssetUuid: data.bannerAssetUuid,
     showcaseAssets: (data.showcaseAssets ?? []).map((item) => ({

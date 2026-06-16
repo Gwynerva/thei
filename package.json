@@ -11,6 +11,10 @@
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
+    "@editorjs/editorjs": "^2.31.6",
+    "@editorjs/header": "^2.8.9",
+    "@editorjs/list": "^2.0.9",
+    "@editorjs/quote": "^2.7.6",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@floating-ui/vue": "^1.1.11",
     "@tailwindcss/vite": "^4.3.1",

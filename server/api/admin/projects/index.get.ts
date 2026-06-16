@@ -1,4 +1,4 @@
-import { eq, sum } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { ProjectListItem } from '#layers/thei/shared/api/project';
 
 const LIMIT = 50;
@@ -11,40 +11,59 @@ export default defineEventHandler(async (event): Promise<ProjectListItem[]> => {
 
   const { db, schema } = THEI_SERVER.useDb();
 
-  // Subquery: deduplicate assets per project (same asset may appear with different roles)
-  const distinctAssets = db
-    .selectDistinct({
-      containerId: schema.assetUsages.containerId,
-      assetUuid: schema.assets.assetUuid,
-      size: schema.assets.size,
-    })
-    .from(schema.assets)
-    .innerJoin(
-      schema.assetUsages,
-      eq(schema.assets.assetUuid, schema.assetUsages.assetUuid),
-    )
-    .where(eq(schema.assetUsages.containerType, 'project'))
-    .as('distinct_assets');
-
-  const [iconUsages, sizeRows] = await Promise.all([
+  const [iconUsages, directAssetRows, contentAssetRows] = await Promise.all([
     THEI_SERVER.assets.usages.findByContainerTypeAndRole('project', 'icon'),
     db
       .select({
-        containerId: distinctAssets.containerId,
-        totalSize: sum(distinctAssets.size),
+        projectUuid: schema.assetUsages.containerId,
+        assetUuid: schema.assets.assetUuid,
+        size: schema.assets.size,
       })
-      .from(distinctAssets)
-      .groupBy(distinctAssets.containerId),
+      .from(schema.assets)
+      .innerJoin(
+        schema.assetUsages,
+        eq(schema.assets.assetUuid, schema.assetUsages.assetUuid),
+      )
+      .where(eq(schema.assetUsages.containerType, 'project')),
+    db
+      .select({
+        projectUuid: schema.content.ownerId,
+        assetUuid: schema.assets.assetUuid,
+        size: schema.assets.size,
+      })
+      .from(schema.assets)
+      .innerJoin(
+        schema.assetUsages,
+        eq(schema.assets.assetUuid, schema.assetUsages.assetUuid),
+      )
+      .innerJoin(
+        schema.content,
+        eq(schema.assetUsages.containerId, schema.content.contentUuid),
+      )
+      .where(
+        and(
+          eq(schema.assetUsages.containerType, 'content'),
+          eq(schema.content.ownerType, 'project'),
+        ),
+      ),
   ]);
 
   const iconUrlByProjectUuid = new Map(
     iconUsages.map(({ containerId, asset }) => [containerId, asset]),
   );
 
+  const assetsByProjectUuid = new Map<string, Map<string, number>>();
+  for (const row of [...directAssetRows, ...contentAssetRows]) {
+    const assets =
+      assetsByProjectUuid.get(row.projectUuid) ?? new Map<string, number>();
+    assets.set(row.assetUuid, row.size);
+    assetsByProjectUuid.set(row.projectUuid, assets);
+  }
+
   const sizeByProjectUuid = new Map(
-    sizeRows.map(({ containerId, totalSize }) => [
-      containerId,
-      Number(totalSize ?? 0),
+    Array.from(assetsByProjectUuid.entries()).map(([projectUuid, assets]) => [
+      projectUuid,
+      Array.from(assets.values()).reduce((sum, size) => sum + size, 0),
     ]),
   );
 

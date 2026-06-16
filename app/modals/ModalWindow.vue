@@ -5,14 +5,18 @@ const props = withDefaults(
   defineProps<{
     title: string;
     width?: string;
+    maxHeight?: string;
   }>(),
   {
     width: '30rem',
+    maxHeight:
+      'min(720px, calc(100dvh - var(--spacing-window) - var(--spacing-window)))',
   },
 );
 
 const windowStyle = computed<Record<string, string>>(() => ({
   '--modal-window-width': props.width,
+  '--modal-window-max-height': props.maxHeight,
 }));
 </script>
 
@@ -25,8 +29,7 @@ const windowStyle = computed<Record<string, string>>(() => ({
     <div
       v-bind="$attrs"
       class="pointer-events-auto flex h-dvh w-dvw flex-col overflow-hidden
-        bg-bg-2 text-text-1 sm:h-auto
-        sm:max-h-[min(720px,calc(100dvh_-_var(--spacing-window)_-_var(--spacing-window)))]
+        bg-bg-2 text-text-1 sm:h-auto sm:max-h-[var(--modal-window-max-height)]
         sm:w-[min(var(--modal-window-width),calc(100dvw_-_var(--spacing-window)_-_var(--spacing-window)))]
         sm:rounded-normal sm:border sm:border-border-1
         sm:shadow-[0_0_28px_8px_var(--color-shadow-2)]"

@@ -91,6 +91,7 @@ export function defineModal<TComponent extends Component>(
 }
 
 export interface ActiveModal {
+  id: number;
   name: string;
   component: Component;
   props: Record<string, unknown>;

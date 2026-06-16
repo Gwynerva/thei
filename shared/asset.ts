@@ -11,7 +11,12 @@ export {
   VIDEO_EXTENSIONS,
 } from './assets/formats';
 
-export const ASSET_CONTAINER_TYPES = ['project', 'event', 'asset'] as const;
+export const ASSET_CONTAINER_TYPES = [
+  'project',
+  'event',
+  'asset',
+  'content',
+] as const;
 export type AssetContainerType = (typeof ASSET_CONTAINER_TYPES)[number];
 
 export const ASSET_ROLES = [
@@ -98,8 +103,20 @@ export interface PreviewAssetUsageMeta {
   role: 'preview';
 }
 
+export interface ContentAssetUsageMeta {
+  role: 'content';
+  refs: {
+    blockId?: string;
+    blockType: string;
+    isPrivate: boolean;
+  }[];
+  /** Conservative aggregate: true when any reference is private. */
+  isPrivate: boolean;
+}
+
 /** Discriminated union of per-role usage metadata stored in asset_usages.meta. */
 export type AssetUsageMeta =
   | ShowcaseAssetUsageMeta
   | OtherAssetUsageMeta
-  | PreviewAssetUsageMeta;
+  | PreviewAssetUsageMeta
+  | ContentAssetUsageMeta;

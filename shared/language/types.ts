@@ -120,6 +120,22 @@ export type LanguagePhrases = {
   project_title_hint: string;
   project_summary: string;
   project_summary_hint: string;
+  project_description: string;
+  project_description_hint: string;
+  content_empty: string;
+  content_block_count: (count: number) => string;
+  content_file_count: (count: number) => string;
+  content_editor_placeholder: string;
+  content_editor_save_error: string;
+  content_asset_pick_error: string;
+  content_choose_media: string;
+  content_add_media: string;
+  content_choose_file: string;
+  content_caption: string;
+  content_gallery_caption: string;
+  content_title: string;
+  content_description: string;
+  content_remove: string;
   edit_event: string;
   edit: string;
   drafts: string;
@@ -169,6 +185,7 @@ export type LanguagePhrases = {
   size: string;
   just_now: string;
   showcase: string;
+  showcase_file: string;
   showcase_description: string;
   showcase_add: string;
   showcase_details: string;
@@ -189,6 +206,7 @@ export type LanguagePhrases = {
   showcase_upload_image: string;
   showcase_upload_video: string;
   other_files: string;
+  project_file: string;
   other_files_description: string;
   other_add: string;
   other_details: string;

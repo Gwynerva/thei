@@ -1,9 +1,15 @@
 <script lang="ts" setup>
-import { activeModal } from '#layers/thei/app/composables/modal';
+import {
+  activeModal,
+  closeModalWithBase,
+  modalStack,
+  settleModal,
+} from '#layers/thei/app/composables/modal';
 import type { BaseModalResult } from '#layers/thei/app/modals/types';
 
 const dialogElement = useTemplateRef('dialog');
 
+let ignoreNextDialogClose = false;
 let scrollLock:
   | {
       x: number;
@@ -59,8 +65,8 @@ function restorePageScroll() {
 }
 
 watch(
-  activeModal,
-  async (modal) => {
+  () => modalStack.value.length,
+  async (count) => {
     if (!import.meta.client) {
       return;
     }
@@ -71,7 +77,7 @@ watch(
       return;
     }
 
-    if (modal) {
+    if (count > 0) {
       lockPageScroll();
 
       await nextTick();
@@ -82,6 +88,7 @@ watch(
       }
     } else {
       if (dialog.open) {
+        ignoreNextDialogClose = true;
         dialog.close();
       }
       unlockPageScroll();
@@ -96,22 +103,12 @@ onBeforeUnmount(() => {
   }
 
   if (dialogElement.value?.open) {
+    ignoreNextDialogClose = true;
     dialogElement.value.close();
   }
 
   unlockPageScroll();
 });
-
-function settle(result: { type: string }) {
-  const modal = activeModal.value;
-
-  if (!modal) {
-    return;
-  }
-
-  activeModal.value = null;
-  modal.resolve(result);
-}
 
 function closeWithBase(result: BaseModalResult) {
   const modal = activeModal.value;
@@ -120,8 +117,7 @@ function closeWithBase(result: BaseModalResult) {
     return;
   }
 
-  activeModal.value = null;
-  modal.close(result);
+  closeModalWithBase(modal, result);
 }
 
 onErrorCaptured((err) => {
@@ -132,6 +128,11 @@ onErrorCaptured((err) => {
 
 function onNativeClose() {
   restorePageScroll();
+
+  if (ignoreNextDialogClose) {
+    ignoreNextDialogClose = false;
+    return;
+  }
 
   if (activeModal.value) {
     closeWithBase({ type: 'empty' });
@@ -162,10 +163,12 @@ function onBackdropClick(e: MouseEvent) {
     @click="onBackdropClick"
   >
     <component
-      v-if="activeModal"
-      :is="activeModal.component"
-      v-bind="activeModal.props"
-      @modalResult="settle"
+      v-for="(modal, index) in modalStack"
+      v-show="index === modalStack.length - 1"
+      :key="modal.id"
+      :is="modal.component"
+      v-bind="modal.props"
+      @modalResult="(result: { type: string }) => settleModal(modal, result)"
     />
   </dialog>
 </template>

@@ -4,8 +4,13 @@ import {
 } from '#layers/thei/shared/admin/project';
 import { and, eq } from 'drizzle-orm';
 import type { ProjectSaveResponse } from '#layers/thei/shared/api/project';
+import { ContentValidationError } from '#layers/thei/shared/content';
 import { EntityPrefix, generateUniqueId } from '../../../thei/entity-id';
 import { validateProjectAssets } from '../../../thei/projects/validate-assets';
+import {
+  applyPreparedContentSave,
+  prepareContentForSave,
+} from '../../../thei/content/repository';
 
 export default defineEventHandler(
   async (event): Promise<ProjectSaveResponse> => {
@@ -24,6 +29,25 @@ export default defineEventHandler(
       async (id) => !(await THEI_SERVER.projects.findByUuid(id)),
     );
 
+    let preparedDescription:
+      | Awaited<ReturnType<typeof prepareContentForSave>>
+      | undefined;
+    if (result.descriptionContent !== undefined) {
+      try {
+        preparedDescription = await prepareContentForSave(
+          'project',
+          projectUuid,
+          'project-description',
+          result.descriptionContent,
+        );
+      } catch (error) {
+        if (error instanceof ContentValidationError) {
+          return { type: 'error', message: error.message };
+        }
+        throw error;
+      }
+    }
+
     const { db, schema } = THEI_SERVER.useDb();
     const now = Date.now();
     db.transaction((tx) => {
@@ -40,6 +64,17 @@ export default defineEventHandler(
           updatedAt: now,
         })
         .run();
+
+      if (preparedDescription) {
+        applyPreparedContentSave(
+          tx,
+          schema,
+          'project',
+          projectUuid,
+          'project-description',
+          preparedDescription,
+        );
+      }
 
       if (result.iconAssetUuid) {
         attachUsage(tx, schema, result.iconAssetUuid, projectUuid, 'icon');

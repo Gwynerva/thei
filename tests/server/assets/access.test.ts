@@ -18,6 +18,13 @@ describe('asset access guard', () => {
       }),
     ).toBe(false);
     expect(assetUsageIsPrivate({ role: 'preview' })).toBe(false);
+    expect(
+      assetUsageIsPrivate({
+        role: 'content',
+        refs: [{ blockType: 'contentImage', isPrivate: true }],
+        isPrivate: true,
+      }),
+    ).toBe(true);
     expect(assetUsageIsPrivate(null)).toBe(false);
   });
 });

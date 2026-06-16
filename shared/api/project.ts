@@ -1,5 +1,6 @@
 import type { ProjectEventAccessLevel } from '../access-level';
 import type { ArchivedOriginalFileMeta, AssetType } from '../asset';
+import type { ContentFieldValue } from '../content';
 
 export type ProjectSlugCheckResponse = {
   taken: boolean;
@@ -60,6 +61,7 @@ export type ProjectGetResponse = {
   bannerVideoUrl?: string;
   /** Stored file size in bytes. */
   bannerAssetSize?: number;
+  descriptionContent?: ContentFieldValue;
   showcaseAssets?: ShowcaseAssetGetItem[];
   otherAssets?: OtherAssetGetItem[];
 };

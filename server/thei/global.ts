@@ -35,6 +35,11 @@ import { findOtherAssets } from './assets/repository/usages/find-other';
 import { updateAssetUsage } from './assets/repository/usages/update';
 import { deleteAsset } from './assets/repository/delete';
 import { assetFilePath } from './assets/file-path';
+import {
+  buildContentFieldValue,
+  findContentByOwner,
+  prepareContentForSave,
+} from './content/repository';
 
 export const THEI_SERVER = {
   version,
@@ -84,6 +89,11 @@ export const THEI_SERVER = {
   },
   adminSessions: {
     getPublic: getPublicAdminSessions,
+  },
+  content: {
+    findByOwner: findContentByOwner,
+    buildFieldValue: buildContentFieldValue,
+    prepareForSave: prepareContentForSave,
   },
   assets: {
     filePath: assetFilePath,

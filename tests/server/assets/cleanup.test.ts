@@ -58,6 +58,18 @@ describe('asset cleanup', () => {
           createdAt integer NOT NULL,
           updatedAt integer NOT NULL
         );
+        CREATE TABLE content (
+          contentUuid text PRIMARY KEY,
+          ownerType text NOT NULL,
+          ownerId text NOT NULL,
+          slot text NOT NULL,
+          data text NOT NULL,
+          blockCount integer NOT NULL DEFAULT 0,
+          assetCount integer NOT NULL DEFAULT 0,
+          assetTotalSize integer NOT NULL DEFAULT 0,
+          createdAt integer NOT NULL,
+          updatedAt integer NOT NULL
+        );
       `);
 
       const filePath = (assetUuid: string, extension: string) =>
@@ -105,13 +117,28 @@ describe('asset cleanup', () => {
       });
 
       await insertAsset(db, 'a-live', 'webp', now);
+      await insertAsset(db, 'a-content', 'webp', old);
       await insertAsset(db, 'a-missing', 'webp', now);
       await insertAsset(db, 'a-orphan', 'webp', old);
 
       const liveFile = await writeAssetFile('a-live', 'webp');
+      const contentFile = await writeAssetFile('a-content', 'webp');
       const orphanFile = await writeAssetFile('a-orphan', 'webp');
       const strayFile = await writeAssetFile('a-stray', 'webp');
       await utimes(strayFile, new Date(old), new Date(old));
+
+      await db.insert(schema.content).values({
+        contentUuid: 'c-live',
+        ownerType: 'project',
+        ownerId: 'p-live',
+        slot: 'project-description',
+        data: { blocks: [] },
+        blockCount: 0,
+        assetCount: 0,
+        assetTotalSize: 0,
+        createdAt: now,
+        updatedAt: now,
+      });
 
       await db.insert(schema.assetUsages).values([
         {
@@ -132,29 +159,53 @@ describe('asset cleanup', () => {
           containerId: 'p-live',
           role: 'showcase-asset',
         },
+        {
+          assetUuid: 'a-content',
+          containerType: 'content',
+          containerId: 'c-live',
+          role: 'content',
+        },
+        {
+          assetUuid: 'a-live',
+          containerType: 'content',
+          containerId: 'c-gone',
+          role: 'content',
+        },
       ]);
 
       await runAssetCleanup();
 
       expect(await fileExists(liveFile)).toBe(true);
+      expect(await fileExists(contentFile)).toBe(true);
       expect(await fileExists(orphanFile)).toBe(false);
       expect(await fileExists(strayFile)).toBe(false);
 
       const remainingAssets = await db
         .select({ assetUuid: schema.assets.assetUuid })
         .from(schema.assets);
-      expect(remainingAssets.map((asset) => asset.assetUuid)).toEqual([
+      expect(remainingAssets.map((asset) => asset.assetUuid).sort()).toEqual([
+        'a-content',
         'a-live',
       ]);
 
       const remainingUsages = await db.select().from(schema.assetUsages);
-      expect(remainingUsages).toHaveLength(1);
-      expect(remainingUsages[0]).toMatchObject({
-        assetUuid: 'a-live',
-        containerType: 'project',
-        containerId: 'p-live',
-        role: 'icon',
-      });
+      expect(remainingUsages).toHaveLength(2);
+      expect(remainingUsages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            assetUuid: 'a-live',
+            containerType: 'project',
+            containerId: 'p-live',
+            role: 'icon',
+          }),
+          expect.objectContaining({
+            assetUuid: 'a-content',
+            containerType: 'content',
+            containerId: 'c-live',
+            role: 'content',
+          }),
+        ]),
+      );
 
       expect(
         await db.query.assets.findFirst({

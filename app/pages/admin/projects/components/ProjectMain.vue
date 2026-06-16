@@ -10,6 +10,7 @@ import {
   projectValidationKey,
   currentProjectUuidKey,
 } from '../composables';
+import FieldContent from '#layers/thei/app/components/content/FieldContent.vue';
 
 const projectData = inject(projectDataInjectionKey)!;
 const projectValidation = inject(projectValidationKey)!;
@@ -165,5 +166,11 @@ watch(
         <FieldHint>{{ phrase.cv_project_hint }}</FieldHint>
       </Field>
     </div>
+
+    <FieldContent
+      v-model="projectData.descriptionContent"
+      :label="phrase.project_description"
+      :hint="phrase.project_description_hint"
+    />
   </Box>
 </template>
