@@ -19,7 +19,7 @@ export type AssetListItem = {
 export type ShowcaseAssetGetItem = AssetListItem & {
   type: AssetType;
   caption?: string;
-  access: 'project' | 'private';
+  isPrivate: boolean;
 };
 
 /** Display item for the "Other files" list. previewUrl is absent for non-image/video files. */
@@ -36,7 +36,7 @@ export type OtherAssetGetItem = {
   archivedOriginal?: ArchivedOriginalFileMeta;
   title: string;
   caption?: string;
-  access: 'project' | 'private';
+  isPrivate: boolean;
 };
 
 export type ProjectGetResponse = {

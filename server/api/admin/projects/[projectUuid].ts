@@ -69,7 +69,7 @@ export default defineEventHandler(async (event) => {
             previewUrl: urls.previewUrl ?? urls.assetUrl,
             videoUrl: isVideo ? urls.videoUrl : undefined,
             caption: meta?.role === 'showcase-asset' ? meta.caption : undefined,
-            access: meta?.role === 'showcase-asset' ? meta.access : 'project',
+            isPrivate: meta?.role === 'showcase-asset' ? meta.isPrivate : false,
             size: asset.size,
           };
         }),
@@ -94,7 +94,7 @@ export default defineEventHandler(async (event) => {
                 : undefined,
             title: meta?.role === 'other-asset' ? (meta.title ?? '') : '',
             caption: meta?.role === 'other-asset' ? meta.caption : undefined,
-            access: meta?.role === 'other-asset' ? meta.access : 'project',
+            isPrivate: meta?.role === 'other-asset' ? meta.isPrivate : false,
           };
         }),
       );
@@ -247,7 +247,7 @@ export default defineEventHandler(async (event) => {
               role: 'showcase-asset',
               order: i,
               caption: item.caption,
-              access: item.access,
+              isPrivate: item.isPrivate,
             },
           );
         }
@@ -280,7 +280,7 @@ export default defineEventHandler(async (event) => {
               order: i,
               title: item.title,
               caption: item.caption,
-              access: item.access,
+              isPrivate: item.isPrivate,
             },
           );
         }

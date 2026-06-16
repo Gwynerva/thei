@@ -62,7 +62,7 @@ export default defineEventHandler(
             role: 'showcase-asset',
             order: i,
             caption: item.caption,
-            access: item.access,
+            isPrivate: item.isPrivate,
           },
         );
       }
@@ -81,7 +81,7 @@ export default defineEventHandler(
             order: i,
             title: item.title,
             caption: item.caption,
-            access: item.access,
+            isPrivate: item.isPrivate,
           },
         );
       }

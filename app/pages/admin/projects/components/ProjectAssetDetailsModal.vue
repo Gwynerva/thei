@@ -7,21 +7,19 @@ import AssetModalFileInfo from '#layers/thei/app/modals/asset-modal/AssetModalFi
 import AssetModalPreviewFile from '#layers/thei/app/modals/asset-modal/AssetModalPreviewFile.vue';
 import AssetModalPreviewMedia from '#layers/thei/app/modals/asset-modal/AssetModalPreviewMedia.vue';
 
-type AccessLevel = 'project' | 'private';
-
 type ProjectAssetDetailsResult =
   | {
       type: 'confirm';
       asset: AssetReplaceResult;
       title?: string;
       caption?: string;
-      access?: AccessLevel;
+      isPrivate?: boolean;
     }
   | {
       type: 'replace';
       title?: string;
       caption?: string;
-      access?: AccessLevel;
+      isPrivate?: boolean;
     }
   | { type: 'detach' };
 
@@ -43,7 +41,7 @@ const props = defineProps<{
     captionLabel?: string;
     captionAsTextarea?: boolean;
     showAccess?: boolean;
-    initialAccess?: AccessLevel;
+    initialIsPrivate?: boolean;
     showDetach?: boolean;
   };
 }>();
@@ -53,7 +51,7 @@ const mediaPreview =
 
 const title = ref(props.modalData.initialTitle ?? '');
 const caption = ref(props.modalData.initialCaption ?? '');
-const access = ref<AccessLevel>(props.modalData.initialAccess ?? 'project');
+const isPrivate = ref(props.modalData.initialIsPrivate ?? false);
 const titleSubmitAttempted = ref(false);
 
 const titleError = computed(() => {
@@ -96,7 +94,7 @@ function currentPatch() {
     caption: props.modalData.showCaption
       ? caption.value.trim() || undefined
       : undefined,
-    access: props.modalData.showAccess ? access.value : undefined,
+    isPrivate: props.modalData.showAccess ? isPrivate.value : undefined,
   };
 }
 
@@ -173,23 +171,21 @@ function replace() {
             modalData.showTitle || modalData.showCaption || modalData.showAccess
           "
         >
-          <div class="flex flex-col gap-sm border-t border-border-1 p-sm">
+          <div
+            class="flex flex-col gap-sm border-t border-border-1 p-sm text-sm
+              text-text-2"
+          >
             <Field v-if="modalData.showTitle">
-              <FieldLabel :required="modalData.requireTitle">
-                {{ phrase.other_title }}
-              </FieldLabel>
               <FieldInput
                 v-model="title"
                 :required="modalData.requireTitle"
                 :error="titleError"
+                :placeholder="phrase.other_title"
                 @submit="confirm"
               />
             </Field>
 
             <Field v-if="modalData.showCaption">
-              <FieldLabel>
-                {{ modalData.captionLabel ?? phrase.showcase_caption }}
-              </FieldLabel>
               <FieldTextarea
                 v-if="modalData.captionAsTextarea"
                 v-model="caption"
@@ -198,23 +194,20 @@ function replace() {
               <FieldInput
                 v-else
                 v-model="caption"
-                :placeholder="phrase.showcase_caption_hint"
+                :placeholder="modalData.captionLabel ?? phrase.showcase_caption"
               />
             </Field>
 
-            <Field v-if="modalData.showAccess">
-              <FieldLabel>{{ phrase.asset_access }}</FieldLabel>
-              <FieldOptions
-                v-model="access"
-                :options="{
-                  project: { title: phrase.showcase_access_same_as_project },
-                  private: {
-                    icon: 'lock-close',
-                    title: phrase.showcase_access_private,
-                  },
-                }"
-              />
-            </Field>
+            <FieldToggle v-if="modalData.showAccess" v-model="isPrivate">
+              <div
+                @click="isPrivate = !isPrivate"
+                :data-title-popup="phrase.asset_private_access_hint"
+                class="flex-1 cursor-help"
+              >
+                <Icon name="lock-close" class="mr-xs" />
+                <span>{{ phrase.asset_private_access }}</span>
+              </div>
+            </FieldToggle>
           </div>
         </template>
 

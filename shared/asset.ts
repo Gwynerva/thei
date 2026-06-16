@@ -82,7 +82,7 @@ export interface ShowcaseAssetUsageMeta {
   /** Sort order within the project showcase (lower = earlier). */
   order: number;
   caption?: string;
-  access: 'project' | 'private';
+  isPrivate: boolean;
 }
 
 export interface OtherAssetUsageMeta {
@@ -91,7 +91,7 @@ export interface OtherAssetUsageMeta {
   order: number;
   title?: string;
   caption?: string;
-  access: 'project' | 'private';
+  isPrivate: boolean;
 }
 
 export interface PreviewAssetUsageMeta {

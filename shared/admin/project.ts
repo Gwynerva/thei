@@ -1,21 +1,18 @@
 import { ProjectEventAccessLevel } from '../access-level';
 import { isOneOf } from '../utils/isOneOf';
 
-const PROJECT_ASSET_ACCESS_LEVELS = ['project', 'private'] as const;
-type ProjectAssetAccessLevel = (typeof PROJECT_ASSET_ACCESS_LEVELS)[number];
-
 /** Base save item for any project asset list (showcase, other-assets, …). */
 export type AssetListSaveItem = { assetUuid: string };
 
 export type ShowcaseAssetEditItem = AssetListSaveItem & {
   caption?: string;
-  access: ProjectAssetAccessLevel;
+  isPrivate: boolean;
 };
 
 export type OtherAssetSaveItem = AssetListSaveItem & {
   title: string;
   caption?: string;
-  access: ProjectAssetAccessLevel;
+  isPrivate: boolean;
 };
 
 export type ProjectEditData = {
@@ -62,14 +59,14 @@ export function validateProjectData(
         ? undefined
         : validateUniqueAssetList(
             data.showcaseAssets.map((item) => {
-              const access = validateProjectAssetAccess(item.access);
-              if (!access)
-                throw new ProjectValidationError('Invalid asset access');
+              const isPrivate = validateProjectAssetIsPrivate(item.isPrivate);
+              if (isPrivate === undefined)
+                throw new ProjectValidationError('Invalid asset privacy');
 
               return {
                 assetUuid: item.assetUuid,
                 caption: normalizeOptionalText(item.caption),
-                access,
+                isPrivate,
               };
             }),
             'Duplicate showcase asset',
@@ -80,9 +77,9 @@ export function validateProjectData(
         ? undefined
         : validateUniqueAssetList(
             data.otherAssets.map((item) => {
-              const access = validateProjectAssetAccess(item.access);
-              if (!access)
-                throw new ProjectValidationError('Invalid asset access');
+              const isPrivate = validateProjectAssetIsPrivate(item.isPrivate);
+              if (isPrivate === undefined)
+                throw new ProjectValidationError('Invalid asset privacy');
 
               const itemTitle = normalizeOptionalText(item.title);
               if (!itemTitle) {
@@ -95,7 +92,7 @@ export function validateProjectData(
                 assetUuid: item.assetUuid,
                 title: itemTitle,
                 caption: normalizeOptionalText(item.caption),
-                access,
+                isPrivate,
               };
             }),
             'Duplicate other file',
@@ -121,12 +118,8 @@ function normalizeOptionalText(value: string | undefined): string | undefined {
   return trimmed || undefined;
 }
 
-function validateProjectAssetAccess(
-  value: unknown,
-): ProjectAssetAccessLevel | undefined {
-  return PROJECT_ASSET_ACCESS_LEVELS.includes(value as ProjectAssetAccessLevel)
-    ? (value as ProjectAssetAccessLevel)
-    : undefined;
+function validateProjectAssetIsPrivate(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined;
 }
 
 function validateUniqueAssetList<T extends AssetListSaveItem>(

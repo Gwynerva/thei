@@ -180,6 +180,8 @@ export type LanguagePhrases = {
   showcase_caption: string;
   showcase_caption_hint: string;
   asset_access: string;
+  asset_private_access: string;
+  asset_private_access_hint: string;
   showcase_access_same_as_project: string;
   showcase_access_private: string;
   showcase_confirm_add: string;

@@ -27,7 +27,7 @@ describe('validateProjectData asset metadata', () => {
           {
             assetUuid: 'asset-1',
             title: '   ',
-            access: 'project',
+            isPrivate: false,
           },
         ],
       }),
@@ -36,36 +36,36 @@ describe('validateProjectData asset metadata', () => {
     expect(result).toBe('Other file title cannot be empty');
   });
 
-  it('rejects invalid showcase asset access', () => {
+  it('rejects invalid showcase asset privacy', () => {
     const result = validateProjectData(
       baseProject({
         showcaseAssets: [
           {
             assetUuid: 'asset-1',
             caption: 'Preview',
-            access: 'public' as 'project',
+            isPrivate: 'public' as unknown as boolean,
           },
         ],
       }),
     );
 
-    expect(result).toBe('Invalid asset access');
+    expect(result).toBe('Invalid asset privacy');
   });
 
-  it('rejects invalid other asset access', () => {
+  it('rejects invalid other asset privacy', () => {
     const result = validateProjectData(
       baseProject({
         otherAssets: [
           {
             assetUuid: 'asset-1',
             title: 'Download',
-            access: 'public' as 'project',
+            isPrivate: 'public' as unknown as boolean,
           },
         ],
       }),
     );
 
-    expect(result).toBe('Invalid asset access');
+    expect(result).toBe('Invalid asset privacy');
   });
 
   it('trims asset metadata and drops empty captions', () => {
@@ -75,7 +75,7 @@ describe('validateProjectData asset metadata', () => {
           {
             assetUuid: 'asset-1',
             caption: '  ',
-            access: 'private',
+            isPrivate: true,
           },
         ],
         otherAssets: [
@@ -83,7 +83,7 @@ describe('validateProjectData asset metadata', () => {
             assetUuid: 'asset-2',
             title: '  Download  ',
             caption: '  Read me  ',
-            access: 'project',
+            isPrivate: false,
           },
         ],
       }),
@@ -92,14 +92,14 @@ describe('validateProjectData asset metadata', () => {
     expect(typeof result).not.toBe('string');
     if (typeof result === 'string') return;
     expect(result.showcaseAssets).toEqual([
-      { assetUuid: 'asset-1', caption: undefined, access: 'private' },
+      { assetUuid: 'asset-1', caption: undefined, isPrivate: true },
     ]);
     expect(result.otherAssets).toEqual([
       {
         assetUuid: 'asset-2',
         title: 'Download',
         caption: 'Read me',
-        access: 'project',
+        isPrivate: false,
       },
     ]);
   });
@@ -108,8 +108,8 @@ describe('validateProjectData asset metadata', () => {
     const result = validateProjectData(
       baseProject({
         showcaseAssets: [
-          { assetUuid: 'asset-1', access: 'project' },
-          { assetUuid: 'asset-1', access: 'private' },
+          { assetUuid: 'asset-1', isPrivate: false },
+          { assetUuid: 'asset-1', isPrivate: true },
         ],
       }),
     );
@@ -121,8 +121,8 @@ describe('validateProjectData asset metadata', () => {
     const result = validateProjectData(
       baseProject({
         otherAssets: [
-          { assetUuid: 'asset-1', title: 'One', access: 'project' },
-          { assetUuid: 'asset-1', title: 'Two', access: 'private' },
+          { assetUuid: 'asset-1', title: 'One', isPrivate: false },
+          { assetUuid: 'asset-1', title: 'Two', isPrivate: true },
         ],
       }),
     );

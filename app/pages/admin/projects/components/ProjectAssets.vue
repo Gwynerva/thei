@@ -49,7 +49,6 @@ type PickedAsset = {
   result: AssetReplaceResult;
 };
 
-type AccessLevel = 'project' | 'private';
 type ProjectMediaSlot = {
   uploadProfile: AssetUploadProfile;
   asideTitle: () => string;
@@ -176,7 +175,7 @@ function singleMediaAssetSnapshot(
 
 function pickedToShowcaseItem(
   picked: PickedAsset,
-  patch: { caption?: string; access?: AccessLevel },
+  patch: { caption?: string; isPrivate?: boolean },
 ): ShowcaseAssetGetItem {
   return {
     assetUuid: picked.result.assetUuid,
@@ -184,14 +183,14 @@ function pickedToShowcaseItem(
     previewUrl: picked.result.previewUrl!,
     videoUrl: picked.result.videoUrl,
     caption: patch.caption,
-    access: patch.access ?? 'project',
+    isPrivate: patch.isPrivate ?? false,
     size: picked.result.size,
   };
 }
 
 function pickedToOtherItem(
   picked: PickedAsset,
-  patch: { title?: string; caption?: string; access?: AccessLevel },
+  patch: { title?: string; caption?: string; isPrivate?: boolean },
 ): OtherAssetGetItem {
   return {
     assetUuid: picked.result.assetUuid,
@@ -203,7 +202,7 @@ function pickedToOtherItem(
     size: picked.result.size,
     title: patch.title!,
     caption: patch.caption,
-    access: patch.access ?? 'project',
+    isPrivate: patch.isPrivate ?? false,
   };
 }
 
@@ -215,7 +214,7 @@ const { addItem, updateItem, removeItem, dragSort } = useProjectAssetList(
     projectData.value.showcaseAssets = items.map((item) => ({
       assetUuid: item.assetUuid,
       caption: item.caption,
-      access: item.access,
+      isPrivate: item.isPrivate,
     }));
   },
 );
@@ -230,7 +229,7 @@ const {
     assetUuid: item.assetUuid,
     title: item.title,
     caption: item.caption,
-    access: item.access,
+    isPrivate: item.isPrivate,
   }));
 });
 
@@ -272,7 +271,7 @@ async function openSingleMediaModal(slot: ProjectMediaSlot) {
 async function openShowcaseAdd() {
   let picked = await pickProjectMediaAsset();
   if (!picked || !picked.result.previewUrl) return;
-  let patch: { caption?: string; access?: AccessLevel } = {};
+  let patch: { caption?: string; isPrivate?: boolean } = {};
 
   while (true) {
     const result = await openModal(projectAssetDetailsModal, {
@@ -282,12 +281,12 @@ async function openShowcaseAdd() {
       showCaption: true,
       initialCaption: patch.caption,
       showAccess: true,
-      initialAccess: patch.access,
+      initialIsPrivate: patch.isPrivate,
       showDetach: false,
     });
 
     if (result.type === 'replace') {
-      patch = { caption: result.caption, access: result.access };
+      patch = { caption: result.caption, isPrivate: result.isPrivate };
       const replacement = await pickProjectMediaAsset();
       if (!replacement || !replacement.result.previewUrl) continue;
       picked = replacement;
@@ -320,8 +319,8 @@ async function openShowcaseAsset(index: number) {
   };
   let patch = {
     caption: snapshot.caption,
-    access: snapshot.access,
-  } satisfies { caption?: string; access?: AccessLevel };
+    isPrivate: snapshot.isPrivate,
+  } satisfies { caption?: string; isPrivate?: boolean };
 
   while (true) {
     const result = await openModal(projectAssetDetailsModal, {
@@ -331,13 +330,13 @@ async function openShowcaseAsset(index: number) {
       showCaption: true,
       initialCaption: patch.caption,
       showAccess: true,
-      initialAccess: patch.access,
+      initialIsPrivate: patch.isPrivate,
     });
 
     if (result.type === 'replace') {
       patch = {
         caption: result.caption,
-        access: result.access ?? patch.access,
+        isPrivate: result.isPrivate ?? patch.isPrivate,
       };
       const picked = await pickProjectMediaAsset();
       if (!picked || !picked.result.previewUrl) continue;
@@ -356,7 +355,7 @@ async function openShowcaseAsset(index: number) {
     if (result.type === 'confirm') {
       updateItem(currentAssetUuid, {
         caption: result.caption,
-        access: result.access ?? 'project',
+        isPrivate: result.isPrivate ?? false,
       } as Partial<ShowcaseAssetGetItem>);
     } else if (result.type === 'detach') {
       removeItem(currentAssetUuid);
@@ -371,7 +370,7 @@ async function openShowcaseAsset(index: number) {
 async function openOtherAdd() {
   let picked = await pickAnyProjectAsset();
   if (!picked) return;
-  let patch: { title?: string; caption?: string; access?: AccessLevel } = {};
+  let patch: { title?: string; caption?: string; isPrivate?: boolean } = {};
 
   while (true) {
     const result = await openModal(projectAssetDetailsModal, {
@@ -387,7 +386,7 @@ async function openOtherAdd() {
       captionAsTextarea: true,
       captionLabel: phrase.value.other_description,
       showAccess: true,
-      initialAccess: patch.access,
+      initialIsPrivate: patch.isPrivate,
       showDetach: false,
     });
 
@@ -395,7 +394,7 @@ async function openOtherAdd() {
       patch = {
         title: result.title,
         caption: result.caption,
-        access: result.access,
+        isPrivate: result.isPrivate,
       };
       const replacement = await pickAnyProjectAsset();
       if (!replacement) continue;
@@ -428,8 +427,8 @@ async function openOtherAsset(index: number) {
   let patch = {
     title: snapshot.title,
     caption: snapshot.caption,
-    access: snapshot.access,
-  } satisfies { title?: string; caption?: string; access?: AccessLevel };
+    isPrivate: snapshot.isPrivate,
+  } satisfies { title?: string; caption?: string; isPrivate?: boolean };
 
   while (true) {
     const result = await openModal(projectAssetDetailsModal, {
@@ -445,14 +444,14 @@ async function openOtherAsset(index: number) {
       captionAsTextarea: true,
       captionLabel: phrase.value.other_description,
       showAccess: true,
-      initialAccess: patch.access,
+      initialIsPrivate: patch.isPrivate,
     });
 
     if (result.type === 'replace') {
       patch = {
         title: result.title ?? patch.title,
         caption: result.caption,
-        access: result.access ?? patch.access,
+        isPrivate: result.isPrivate ?? patch.isPrivate,
       };
       const picked = await pickAnyProjectAsset();
       if (!picked) continue;
@@ -475,7 +474,7 @@ async function openOtherAsset(index: number) {
       updateOtherItem(currentAssetUuid, {
         title: result.title!,
         caption: result.caption,
-        access: result.access ?? 'project',
+        isPrivate: result.isPrivate ?? false,
       } as Partial<OtherAssetGetItem>);
     } else if (result.type === 'detach') {
       removeOtherItem(currentAssetUuid);
@@ -557,7 +556,7 @@ async function openOtherAsset(index: number) {
             :preview-url="item.previewUrl"
             :video-url="item.videoUrl"
             :size="item.size"
-            :is-private="item.access === 'private'"
+            :is-private="item.isPrivate"
             class="size-18 cursor-pointer touch-none"
             :class="{
               'opacity-50': dragSort.draggingIndex.value === index,
@@ -604,7 +603,7 @@ async function openOtherAsset(index: number) {
             :video-url="item.videoUrl"
             :extension="item.extension"
             :size="item.size"
-            :is-private="item.access === 'private'"
+            :is-private="item.isPrivate"
             class="size-18 cursor-pointer touch-none"
             :class="{
               'opacity-50': otherDragSort.draggingIndex.value === index,

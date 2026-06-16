@@ -108,13 +108,13 @@ if (isEdit.value) {
     showcaseAssets: (data.showcaseAssets ?? []).map((item) => ({
       assetUuid: item.assetUuid,
       caption: item.caption,
-      access: item.access,
+      isPrivate: item.isPrivate,
     })),
     otherAssets: (data.otherAssets ?? []).map((item) => ({
       assetUuid: item.assetUuid,
       title: item.title,
       caption: item.caption,
-      access: item.access,
+      isPrivate: item.isPrivate,
     })),
   };
   showcaseItems.value = data.showcaseAssets ?? [];
