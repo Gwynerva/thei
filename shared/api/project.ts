@@ -2,10 +2,6 @@ import type { ProjectEventAccessLevel } from '../access-level';
 import type { ArchivedOriginalFileMeta, AssetType } from '../asset';
 import type { ContentFieldValue } from '../content';
 
-export type ProjectSlugCheckResponse = {
-  taken: boolean;
-};
-
 /** Base display item for any project asset list (showcase, other-assets, …). */
 export type AssetListItem = {
   assetUuid: string;
@@ -44,7 +40,8 @@ export type ProjectGetResponse = {
   projectUuid: string;
   title: string;
   summary: string;
-  slug: string;
+  humanReadableSlug: string;
+  publicId: string;
   access: ProjectEventAccessLevel;
   important: boolean;
   cv: boolean;
@@ -68,13 +65,18 @@ export type ProjectGetResponse = {
 
 export type ProjectSaveResponse =
   | { type: 'success'; projectUuid: string }
-  | { type: 'error'; message: string };
+  | {
+      type: 'error';
+      message: string;
+      code?: 'public-id-taken';
+    };
 
 export type ProjectListItem = {
   projectUuid: string;
   title: string;
   summary: string;
-  slug: string;
+  humanReadableSlug: string;
+  publicId: string;
   access: ProjectEventAccessLevel;
   important: boolean;
   cv: boolean;

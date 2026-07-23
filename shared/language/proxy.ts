@@ -22,6 +22,7 @@ export function createPhraseProxy(
       if (typeof key === 'symbol') return undefined;
 
       const k = key as string;
+      if (k === 'toJSON' || k === 'inspect') return undefined;
       const primaryValue = (primary as Record<string, unknown>)[k];
 
       if (primaryValue !== undefined) {

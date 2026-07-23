@@ -197,9 +197,7 @@ export async function buildAssetVariantInfo(
       type: AssetType.Image,
       meta: asset.meta as ImageAssetMeta | null,
       settings: asset.settings as
-        | AssetOriginalSettings
-        | AssetImageTransformSettings
-        | null,
+        AssetOriginalSettings | AssetImageTransformSettings | null,
       previewUrl: assetUrl,
     };
   }
@@ -217,9 +215,7 @@ export async function buildAssetVariantInfo(
       type: AssetType.Video,
       meta,
       settings: asset.settings as
-        | AssetOriginalSettings
-        | AssetVideoTransformSettings
-        | null,
+        AssetOriginalSettings | AssetVideoTransformSettings | null,
       previewUrl,
       videoUrl: assetUrl,
     };
@@ -239,9 +235,7 @@ export async function buildAssetVariantInfo(
     type: AssetType.Other,
     meta: asset.meta as OtherAssetMeta | null,
     settings: asset.settings as
-      | AssetOriginalSettings
-      | AssetFileZipSettings
-      | null,
+      AssetOriginalSettings | AssetFileZipSettings | null,
   };
 }
 

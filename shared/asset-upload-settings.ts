@@ -41,13 +41,10 @@ export interface AssetFileZipSettings {
 }
 
 export type AssetTransformSettings =
-  | AssetImageTransformSettings
-  | AssetVideoTransformSettings;
+  AssetImageTransformSettings | AssetVideoTransformSettings;
 
 export type AssetUploadSettings =
-  | AssetOriginalSettings
-  | AssetTransformSettings
-  | AssetFileZipSettings;
+  AssetOriginalSettings | AssetTransformSettings | AssetFileZipSettings;
 
 export type AssetSettingsForType<TType extends AssetType> =
   TType extends AssetType.Image

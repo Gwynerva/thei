@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { AdminBarButtonProps } from './AdminBarButton.vue';
 import userSvg from '~/assets/fallback/user.svg?raw';
+import { publicIdFromProjectUrlPart } from '#layers/thei/shared/project-url';
 
 const isAdmin = useIsAdmin();
 const { data: adminBarData } = await useFetch('/api/admin/bar', {
@@ -30,7 +31,9 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
   }
 
   if (route.path.startsWith('/projects/')) {
-    const projectUuid = route.path.split('/')[2];
+    const projectUuid = publicIdFromProjectUrlPart(
+      route.path.split('/')[2] ?? '',
+    );
     return {
       to: `/admin/projects/edit/${projectUuid}/`,
       icon: 'edit',

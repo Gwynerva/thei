@@ -8,10 +8,12 @@ export function createI18nController(
 ): I18nController {
   const primaryNormalize = primary.normalize ?? generalNormalize;
   const baseNormalize = base.normalize ?? generalNormalize;
+  const primarySlugify = primary.slugify ?? base.slugify;
 
   return {
     code: primary.code,
     normalize: primaryNormalize,
+    slugify: primarySlugify,
     sampleDisplayNames:
       primary.sampleDisplayNames ?? base.sampleDisplayNames ?? [],
     sampleSecretPhrases:

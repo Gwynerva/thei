@@ -18,8 +18,13 @@ export default defineEventHandler(
     const result = validateProjectData(body);
     if (typeof result === 'string') return { type: 'error', message: result };
 
-    const existing = await THEI_SERVER.projects.findBySlug(result.slug);
-    if (existing) return { type: 'error', message: 'Slug is already taken' };
+    const existing = await THEI_SERVER.projects.findByPublicId(result.publicId);
+    if (existing)
+      return {
+        type: 'error',
+        code: 'public-id-taken',
+        message: THEI_SERVER.phrase.public_id_already_taken,
+      };
 
     const assetError = await validateProjectAssets(result);
     if (assetError) return { type: 'error', message: assetError };
@@ -30,8 +35,7 @@ export default defineEventHandler(
     );
 
     let preparedDescription:
-      | Awaited<ReturnType<typeof prepareContentForSave>>
-      | undefined;
+      Awaited<ReturnType<typeof prepareContentForSave>> | undefined;
     if (result.descriptionContent !== undefined) {
       try {
         preparedDescription = await prepareContentForSave(
@@ -56,7 +60,8 @@ export default defineEventHandler(
           projectUuid,
           title: result.title,
           summary: result.summary,
-          slug: result.slug,
+          humanReadableSlug: result.humanReadableSlug,
+          publicId: result.publicId,
           access: result.access,
           important: result.important,
           cv: result.cv,

@@ -27,10 +27,7 @@ export interface BootResultReady extends BootResultBase {
 }
 
 export type BootResult =
-  | BootResultError
-  | BootResultInstall
-  | BootResultUpdate
-  | BootResultReady;
+  BootResultError | BootResultInstall | BootResultUpdate | BootResultReady;
 
 export let bootResult: BootResult = new Proxy({} as BootResult, {
   get() {

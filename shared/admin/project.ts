@@ -23,7 +23,8 @@ export type OtherAssetSaveItem = AssetListSaveItem & {
 export type ProjectEditData = {
   title: string;
   summary: string;
-  slug: string;
+  humanReadableSlug: string;
+  publicId: string;
   access: ProjectEventAccessLevel | '';
   important: boolean;
   cv: boolean;
@@ -34,10 +35,6 @@ export type ProjectEditData = {
   showcaseAssets?: ShowcaseAssetEditItem[];
   /** Other files in display order. Array index = sort order. */
   otherAssets?: OtherAssetSaveItem[];
-};
-
-export type ProjectEditClientValidation = {
-  isSlugUnique: boolean;
 };
 
 export type ValidatedProjectEditData = Omit<ProjectEditData, 'access'> & {
@@ -53,8 +50,10 @@ export function validateProjectData(
   const summary = data.summary?.trim();
   if (!summary) return 'Summary cannot be empty';
 
-  const slug = data.slug?.trim();
-  if (!slug) return 'Slug cannot be empty';
+  const humanReadableSlug = data.humanReadableSlug?.trim() ?? '';
+  const publicId = data.publicId?.trim();
+  if (!publicId) return 'Public ID cannot be empty';
+  if (!/^[A-Za-z0-9]{1,64}$/.test(publicId)) return 'Invalid public ID';
 
   if (!isOneOf(data.access, ProjectEventAccessLevel))
     return 'Invalid access level';
@@ -110,7 +109,8 @@ export function validateProjectData(
       ...data,
       title,
       summary,
-      slug,
+      humanReadableSlug,
+      publicId,
       access: data.access,
       descriptionContent,
       showcaseAssets,

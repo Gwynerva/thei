@@ -11,7 +11,8 @@ function baseProject(
   return {
     title: 'Project',
     summary: 'Summary',
-    slug: 'project',
+    humanReadableSlug: 'project',
+    publicId: 'projectId',
     access: ProjectEventAccessLevel.Public,
     important: false,
     cv: false,
@@ -20,6 +21,15 @@ function baseProject(
 }
 
 describe('validateProjectData asset metadata', () => {
+  it('requires a valid public ID', () => {
+    expect(validateProjectData(baseProject({ publicId: '' }))).toBe(
+      'Public ID cannot be empty',
+    );
+    expect(validateProjectData(baseProject({ publicId: 'not-valid!' }))).toBe(
+      'Invalid public ID',
+    );
+  });
+
   it('requires a title for other files', () => {
     const result = validateProjectData(
       baseProject({

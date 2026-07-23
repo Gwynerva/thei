@@ -127,8 +127,7 @@ async function launchWizard() {
             <pre
               class="overflow-auto rounded-normal bg-bg-2 p-sm text-xs
                 text-text-2"
-              >{{ JSON.stringify(resultAsset, null, 2) }}</pre
-            >
+              >{{ JSON.stringify(resultAsset, null, 2) }}</pre>
           </div>
         </template>
         <template v-else>

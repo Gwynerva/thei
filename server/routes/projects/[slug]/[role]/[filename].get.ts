@@ -3,11 +3,12 @@ import { ASSET_ROLES, type AssetRole } from '#layers/thei/shared/asset';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import { assetUsageIsPrivate } from '../../../../thei/assets/access';
 import { sendAssetFile } from '../../../../thei/assets/send-file';
+import { publicIdFromProjectUrlPart } from '#layers/thei/shared/project-url';
 
 const KNOWN_ROLES = new Set<string>(ASSET_ROLES);
 
 export default defineEventHandler(async (event) => {
-  const slug = getRouterParam(event, 'slug') ?? '';
+  const urlPart = getRouterParam(event, 'slug') ?? '';
   const role = getRouterParam(event, 'role') ?? '';
   const filename = getRouterParam(event, 'filename') ?? '';
 
@@ -26,7 +27,7 @@ export default defineEventHandler(async (event) => {
       access: schema.projects.access,
     })
     .from(schema.projects)
-    .where(eq(schema.projects.slug, slug))
+    .where(eq(schema.projects.publicId, publicIdFromProjectUrlPart(urlPart)))
     .limit(1);
   if (!project) throw createError({ statusCode: 404 });
 

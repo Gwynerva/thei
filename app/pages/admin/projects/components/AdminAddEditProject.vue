@@ -1,8 +1,5 @@
 <script lang="ts" setup>
-import type {
-  ProjectEditClientValidation,
-  ProjectEditData,
-} from '#layers/thei/shared/admin/project';
+import type { ProjectEditData } from '#layers/thei/shared/admin/project';
 import type {
   OtherAssetGetItem,
   ProjectGetResponse,
@@ -11,7 +8,7 @@ import type {
 } from '#layers/thei/shared/api/project';
 import {
   projectDataInjectionKey,
-  projectValidationKey,
+  publicIdErrorKey,
   iconPreviewUrlKey,
   bannerPreviewUrlKey,
   iconVideoUrlKey,
@@ -28,10 +25,16 @@ import { projectDeleteModal } from './project-delete-modal';
 
 const { projectUuid } = defineProps<{ projectUuid?: string }>();
 
+const formId = useId();
+const initialPublicId = useState(`new-project-public-id-${formId}`, () =>
+  randomId(14),
+);
+
 const projectData = ref<ProjectEditData>({
   title: '',
   summary: '',
-  slug: '',
+  humanReadableSlug: '',
+  publicId: initialPublicId.value,
   access: '',
   important: false,
   cv: false,
@@ -39,10 +42,8 @@ const projectData = ref<ProjectEditData>({
 });
 provide(projectDataInjectionKey, projectData);
 
-const projectValidation = ref<ProjectEditClientValidation>({
-  isSlugUnique: true,
-});
-provide(projectValidationKey, projectValidation);
+const publicIdError = ref<string | undefined>();
+provide(publicIdErrorKey, publicIdError);
 
 const iconPreviewUrl = ref<string | undefined>();
 provide(iconPreviewUrlKey, iconPreviewUrl);
@@ -84,14 +85,20 @@ const isFormValid = computed(
   () =>
     projectData.value.title.trim() !== '' &&
     projectData.value.summary.trim() !== '' &&
-    projectData.value.slug.trim() !== '' &&
-    !!projectData.value.access &&
-    projectValidation.value.isSlugUnique,
+    projectData.value.publicId.trim() !== '' &&
+    !!projectData.value.access,
 );
 
 const canSave = computed(() => isDirty.value && isFormValid.value);
 
 const requestFetch = useRequestFetch();
+
+watch(
+  () => projectData.value.publicId,
+  () => {
+    publicIdError.value = undefined;
+  },
+);
 
 if (isEdit.value) {
   const data = await requestFetch<ProjectGetResponse>(
@@ -100,7 +107,8 @@ if (isEdit.value) {
   projectData.value = {
     title: data.title,
     summary: data.summary,
-    slug: data.slug,
+    humanReadableSlug: data.humanReadableSlug,
+    publicId: data.publicId,
     access: data.access,
     important: data.important,
     cv: data.cv,
@@ -147,6 +155,10 @@ async function handleSave() {
         { method: 'PUT', body: projectData.value },
       );
       if (result.type === 'error') {
+        if (result.code === 'public-id-taken') {
+          publicIdError.value = result.message;
+          return;
+        }
         headerError.value = result.message;
         return;
       }
@@ -157,6 +169,10 @@ async function handleSave() {
         body: projectData.value,
       });
       if (result.type === 'error') {
+        if (result.code === 'public-id-taken') {
+          publicIdError.value = result.message;
+          return;
+        }
         headerError.value = result.message;
         return;
       }

@@ -1,5 +1,6 @@
 import { generalNormalize } from '../general-normalize';
 import { defineI18nBase } from '../define';
+import { slugify } from '../slugify';
 
 function normalize(text: string): string {
   return (
@@ -24,6 +25,7 @@ export function plural(
 export default defineI18nBase({
   code: 'en',
   normalize,
+  slugify,
   sizeUnits: { b: 'bytes', kb: 'Kb', mb: 'Mb', gb: 'Gb' },
   sampleDisplayNames: [
     'Peter',
@@ -223,10 +225,17 @@ export default defineI18nBase({
     file_formats_videos: 'Videos',
     file_formats_images_videos: 'Images + Videos',
     file_formats_any: 'Any file',
-    project_slug: 'Project Slug',
-    project_slug_hint: 'Unique ID for the project in the URL.',
+    public_link: (entityName) => `${entityName} Link`,
+    human_readable_url: 'Readable URL',
+    public_id: 'Public ID',
+    project_link_example: (slug, publicId) =>
+      `Final link: /projects/${slug ? `${slug}-` : ''}${publicId}/`,
+    event_link_example: (slug, publicId) =>
+      `Final link: /events/${slug ? `${slug}-` : ''}${publicId}/`,
+    public_id_already_taken: 'This public ID already exists.',
+    disable_url_synchronization: 'Edit manually',
+    enable_url_synchronization: 'Sync with title',
     generate_random: 'Generate random',
-    duplicate_slug: 'This slug is already taken! Choose another one.',
     project_access: 'Project Access',
     public: 'Public',
     link_only: 'Link-only',

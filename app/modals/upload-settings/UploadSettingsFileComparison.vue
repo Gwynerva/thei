@@ -71,7 +71,10 @@ function sizeTone(previous: number | undefined, current: number | undefined) {
   return current < previous ? 'good' : 'bad';
 }
 
-function extensionTone(previous: string | undefined, current: string | undefined) {
+function extensionTone(
+  previous: string | undefined,
+  current: string | undefined,
+) {
   if (previous?.toLowerCase() === 'svg' && current?.toLowerCase() !== 'svg') {
     return 'bad';
   }

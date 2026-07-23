@@ -15,9 +15,7 @@ import { pickFileModal } from '#layers/thei/app/modals/pick-file/modal';
 import type { PickedFile } from '#layers/thei/app/modals/pick-file/picked-file';
 
 export type AssetWizardAccept =
-  | string
-  | ExtensionProfile
-  | (string | ExtensionProfile)[];
+  string | ExtensionProfile | (string | ExtensionProfile)[];
 
 export interface AssetWizardOptions {
   accept?: AssetWizardAccept;

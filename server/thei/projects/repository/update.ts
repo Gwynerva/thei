@@ -4,7 +4,8 @@ import type { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 export interface UpdateProjectData {
   title: string;
   summary: string;
-  slug: string;
+  humanReadableSlug: string;
+  publicId: string;
   access: ProjectEventAccessLevel;
   important: boolean;
   cv: boolean;

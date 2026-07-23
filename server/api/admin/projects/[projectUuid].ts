@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
   const identifier = getRouterParam(event, 'projectUuid')!;
   const project =
     (await THEI_SERVER.projects.findByUuid(identifier)) ??
-    (await THEI_SERVER.projects.findBySlug(identifier));
+    (await THEI_SERVER.projects.findByPublicId(identifier));
 
   if (!project) {
     throw createError({ statusCode: 404, message: 'Project not found' });
@@ -108,7 +108,8 @@ export default defineEventHandler(async (event) => {
         projectUuid: project.projectUuid,
         title: project.title,
         summary: project.summary,
-        slug: project.slug,
+        humanReadableSlug: project.humanReadableSlug,
+        publicId: project.publicId,
         access: project.access,
         important: project.important,
         cv: project.cv,
@@ -137,14 +138,15 @@ export default defineEventHandler(async (event) => {
       if (typeof result === 'string')
         return { type: 'error', message: result } satisfies ProjectSaveResponse;
 
-      const existing = await THEI_SERVER.projects.findBySlug(
-        result.slug,
+      const existing = await THEI_SERVER.projects.findByPublicId(
+        result.publicId,
         projectUuid,
       );
       if (existing)
         return {
           type: 'error',
-          message: 'Slug is already taken',
+          code: 'public-id-taken',
+          message: THEI_SERVER.phrase.public_id_already_taken,
         } satisfies ProjectSaveResponse;
 
       const assetError = await validateProjectAssets(result);
@@ -155,8 +157,7 @@ export default defineEventHandler(async (event) => {
         } satisfies ProjectSaveResponse;
 
       let preparedDescription:
-        | Awaited<ReturnType<typeof prepareContentForSave>>
-        | undefined;
+        Awaited<ReturnType<typeof prepareContentForSave>> | undefined;
       if (result.descriptionContent !== undefined) {
         try {
           preparedDescription = await prepareContentForSave(
@@ -207,7 +208,8 @@ export default defineEventHandler(async (event) => {
           .set({
             title: result.title,
             summary: result.summary,
-            slug: result.slug,
+            humanReadableSlug: result.humanReadableSlug,
+            publicId: result.publicId,
             access: result.access,
             important: result.important,
             cv: result.cv,

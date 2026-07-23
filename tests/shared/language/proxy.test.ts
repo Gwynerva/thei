@@ -12,6 +12,19 @@ const identity = (s: string) => s;
 const upper = (s: string) => s.toUpperCase();
 
 describe('createPhraseProxy', () => {
+  it('does not treat JSON serialization helpers as missing phrases', () => {
+    const proxy = createPhraseProxy(
+      {},
+      basePhrases,
+      (value) => value,
+      (value) => value,
+      'ru',
+      'en',
+    );
+
+    expect(JSON.stringify(proxy)).toBe('{}');
+  });
+
   it('returns phrase from primary when present', () => {
     const proxy = createPhraseProxy(
       { theme: 'Тема' },

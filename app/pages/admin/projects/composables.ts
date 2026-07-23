@@ -1,7 +1,4 @@
-import type {
-  ProjectEditClientValidation,
-  ProjectEditData,
-} from '#layers/thei/shared/admin/project';
+import type { ProjectEditData } from '#layers/thei/shared/admin/project';
 import { AssetType } from '#layers/thei/shared/asset';
 import type {
   OtherAssetGetItem,
@@ -15,8 +12,8 @@ export const projectDataInjectionKey = Symbol('projectData') as InjectionKey<
   Ref<ProjectEditData>
 >;
 
-export const projectValidationKey = Symbol('projectValidation') as InjectionKey<
-  Ref<ProjectEditClientValidation>
+export const publicIdErrorKey = Symbol('publicIdError') as InjectionKey<
+  Ref<string | undefined>
 >;
 
 export const iconPreviewUrlKey = Symbol('iconPreviewUrl') as InjectionKey<

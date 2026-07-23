@@ -85,16 +85,12 @@ export async function setupTheiIcons(nuxt: Nuxt, theiPath: string) {
     async getContents() {
       const iconsData = await getIconsData();
 
-      const urlHash = nuxt.options.dev
-        ? Math.floor(Math.random() * 10000000000000)
-        : iconsData.iconsHash;
-
       return `export const iconNames = ${JSON.stringify(iconsData.iconNames)} as const;
 export type IconName = (typeof iconNames)[number];
 
 export const iconsHash = '${iconsData.iconsHash}';
 
-export const iconsHref = '/icons.svg?' + '${urlHash}';
+export const iconsHref = '/icons.svg?' + '${iconsData.iconsHash}';
 `;
     },
   });

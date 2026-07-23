@@ -4,7 +4,8 @@ export interface CreateProjectData {
   projectUuid: string;
   title: string;
   summary: string;
-  slug: string;
+  humanReadableSlug: string;
+  publicId: string;
   access: ProjectEventAccessLevel;
   important: boolean;
   cv: boolean;

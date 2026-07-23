@@ -11,8 +11,8 @@ const maxWidthClass = computed(() =>
 <template>
   <div class="flex min-h-screen items-center justify-center sm:p-4">
     <div
-      class="flex min-h-screen w-full items-center justify-center bg-white p-8
-        sm:min-h-auto sm:rounded-2xl sm:shadow-lg dark:bg-gray-900"
+      class="dark:bg-gray-900 flex min-h-screen w-full items-center
+        justify-center bg-white p-8 sm:min-h-auto sm:rounded-2xl sm:shadow-lg"
       :class="maxWidthClass"
     >
       <slot />

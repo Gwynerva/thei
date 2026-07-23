@@ -23,6 +23,7 @@ export interface I18nProjectSample {
 export type I18nModuleSpec = {
   code: LanguageCode;
   normalize?: (text: string) => string;
+  slugify?: (text: string) => string;
   sampleDisplayNames?: string[];
   sampleSecretPhrases?: string[];
   sampleProjects?: I18nProjectSample[];
@@ -31,6 +32,7 @@ export type I18nModuleSpec = {
 };
 
 export type I18nBaseModule = I18nModuleSpec & {
+  slugify: (text: string) => string;
   phrases: LanguagePhrases;
   sizeUnits: LanguageSizeUnits;
 };
@@ -38,6 +40,7 @@ export type I18nBaseModule = I18nModuleSpec & {
 export type I18nController = {
   code: LanguageCode;
   normalize: (text: string) => string;
+  slugify: (text: string) => string;
   sampleDisplayNames: string[];
   sampleSecretPhrases: string[];
   sampleProjects: I18nProjectSample[];
@@ -152,10 +155,15 @@ export type LanguagePhrases = {
   file_formats_any: string;
   asset_quality_optimized: string;
   asset_pick_upload: string;
-  project_slug: string;
-  project_slug_hint: string;
+  public_link: (entityName: string) => string;
+  human_readable_url: string;
+  public_id: string;
+  project_link_example: (slug: string, publicId: string) => string;
+  event_link_example: (slug: string, publicId: string) => string;
+  public_id_already_taken: string;
+  disable_url_synchronization: string;
+  enable_url_synchronization: string;
   generate_random: string;
-  duplicate_slug: string;
   project_access: string;
   public: string;
   public_hint: string;

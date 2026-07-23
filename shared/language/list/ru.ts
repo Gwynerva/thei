@@ -1,5 +1,6 @@
 ﻿import { generalNormalize } from '../general-normalize';
 import { defineI18nModule } from '../define';
+import { slugify, transliterateCyrillic } from '../slugify';
 
 function normalize(text: string): string {
   return (
@@ -7,6 +8,10 @@ function normalize(text: string): string {
       // "text" → «text» (guillemets)
       .replace(/"([^"]*)"/g, '\u00AB$1\u00BB')
   );
+}
+
+function slugifyRussian(text: string): string {
+  return slugify(transliterateCyrillic(text));
 }
 
 export function plural(
@@ -25,6 +30,7 @@ export function plural(
 export default defineI18nModule({
   code: 'ru',
   normalize,
+  slugify: slugifyRussian,
   sizeUnits: { b: 'байт', kb: 'Кб', mb: 'Мб', gb: 'Гб' },
   sampleDisplayNames: [
     'Петр',
@@ -225,10 +231,17 @@ export default defineI18nModule({
     file_formats_videos: 'Видео',
     file_formats_images_videos: 'Изображения + Видео',
     file_formats_any: 'Любые файлы',
-    project_slug: 'Часть ссылки проекта',
-    project_slug_hint: 'Уникальный ID проекта в составе ссылки на него.',
+    public_link: (entityName) => `Ссылка на ${entityName.toLowerCase()}`,
+    human_readable_url: 'Читаемая часть URL',
+    public_id: 'Публичный ID',
+    project_link_example: (slug, publicId) =>
+      `Итоговая ссылка: /projects/${slug ? `${slug}-` : ''}${publicId}/`,
+    event_link_example: (slug, publicId) =>
+      `Итоговая ссылка: /events/${slug ? `${slug}-` : ''}${publicId}/`,
+    public_id_already_taken: 'Такой публичный ID уже существует.',
+    disable_url_synchronization: 'Редактировать вручную',
+    enable_url_synchronization: 'Синхронизировать с названием',
     generate_random: 'Сгенерировать случайный',
-    duplicate_slug: 'Этот ID уже занят! Выберите другой.',
     project_access: 'Доступ к проекту',
     public: 'Публичный',
     public_hint: 'Просматривать может кто угодно.',

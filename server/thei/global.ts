@@ -8,7 +8,7 @@ import { currentLanguage, getCurrentLanguagePhrases } from './language';
 import { theiConfig } from './config/index';
 import { getTheiDbContext } from './db/global';
 import { countProjects } from './projects/repository/count';
-import { findProjectBySlug } from './projects/repository/find-by-slug';
+import { findProjectByPublicId } from './projects/repository/find-by-public-id';
 import { findProjectByUuid } from './projects/repository/find-by-id';
 import { createProject } from './projects/repository/create';
 import { updateProject } from './projects/repository/update';
@@ -77,7 +77,7 @@ export const THEI_SERVER = {
   },
   projects: {
     count: countProjects,
-    findBySlug: findProjectBySlug,
+    findByPublicId: findProjectByPublicId,
     findByUuid: findProjectByUuid,
     create: createProject,
     update: updateProject,

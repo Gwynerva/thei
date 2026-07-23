@@ -7,9 +7,7 @@ type InfoBlockComparisonValue = {
   tone?: InfoBlockTone;
 };
 type InfoBlockRowValue =
-  | InfoBlockValue
-  | [InfoBlockValue, InfoBlockValue]
-  | InfoBlockComparisonValue;
+  InfoBlockValue | [InfoBlockValue, InfoBlockValue] | InfoBlockComparisonValue;
 
 interface InfoBlockRow {
   label: string;
@@ -88,10 +86,7 @@ function isComparisonValue(
           </span>
           <Icon name="chevron-right" class="shrink-0 text-xs text-text-3" />
         </template>
-        <span
-          class="min-w-0 truncate"
-          :class="currentValueClass(row)"
-        >
+        <span class="min-w-0 truncate" :class="currentValueClass(row)">
           <template v-if="hasValue(currentValue(row))">
             {{ currentValue(row) }}
           </template>

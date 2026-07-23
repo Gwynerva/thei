@@ -68,10 +68,7 @@ export interface OtherAssetMeta extends AssetMetaBase {
 }
 
 export type AssetMeta =
-  | ImageAssetMeta
-  | VideoAssetMeta
-  | AudioAssetMeta
-  | OtherAssetMeta;
+  ImageAssetMeta | VideoAssetMeta | AudioAssetMeta | OtherAssetMeta;
 
 export type AssetMetaForType<TType extends AssetType> =
   TType extends AssetType.Image

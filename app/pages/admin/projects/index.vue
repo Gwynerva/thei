@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { ProjectListItem } from '#layers/thei/shared/api/project';
 import projectSvg from '~/assets/fallback/project.svg?raw';
+import { buildProjectUrl } from '#layers/thei/shared/project-url';
 
 definePageMeta({ layout: 'admin' });
 
@@ -199,7 +200,9 @@ onUnmounted(() => {
               </td>
               <td class="p-td pr-sm text-center">
                 <TheiLink
-                  :to="`/projects/${project.slug}/`"
+                  :to="
+                    buildProjectUrl(project.humanReadableSlug, project.publicId)
+                  "
                   external
                   :data-title-popup="phrase.view_project"
                   class="cursor-pointer text-text-2/50 transition
