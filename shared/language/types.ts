@@ -174,9 +174,9 @@ export type LanguagePhrases = {
   site_access_close_priority: string;
   view_event: string;
   saved: string;
-  important_project: string;
-  important_project_hint: string;
-  important_project_label: string;
+  showcase_project: string;
+  showcase_project_hint: string;
+  showcase_project_label: string;
   cv_project: string;
   cv_project_hint: string;
   cv_project_label: string;

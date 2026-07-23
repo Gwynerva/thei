@@ -76,7 +76,7 @@ export default defineEventHandler(async (event): Promise<ProjectListItem[]> => {
       humanReadableSlug: project.humanReadableSlug,
       publicId: project.publicId,
       access: project.access,
-      important: project.important,
+      showcase: project.showcase,
       cv: project.cv,
       iconPreviewUrl: iconAsset
         ? `/api/admin/assets/preview/${iconAsset.slug}.${iconAsset.extension}/`

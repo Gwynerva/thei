@@ -253,10 +253,10 @@ export default defineI18nModule({
       'Сайт закрытый! Доступ все равно будет только у вас!',
     view_event: 'Смотреть на сайте',
     saved: 'Сохранено!',
-    important_project: 'Важный проект?',
-    important_project_hint:
-      'Проект запомнился надолго и/или сильно повлиял на вашу жизнь.',
-    important_project_label: 'Важный проект',
+    showcase_project: 'Витринный проект?',
+    showcase_project_hint:
+      'Включить отображение в витрине проектов на главной странице и сверху поиска.',
+    showcase_project_label: 'Витринный проект',
     cv_project: 'Часть резюме?',
     cv_project_hint:
       'Потенциальному работодателю будет интересно увидеть этот проект.',

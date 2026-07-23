@@ -14,7 +14,7 @@ function baseProject(
     humanReadableSlug: 'project',
     publicId: 'projectId',
     access: ProjectEventAccessLevel.Public,
-    important: false,
+    showcase: false,
     cv: false,
     ...overrides,
   };

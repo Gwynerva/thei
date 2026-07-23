@@ -7,7 +7,7 @@ export interface CreateProjectData {
   humanReadableSlug: string;
   publicId: string;
   access: ProjectEventAccessLevel;
-  important: boolean;
+  showcase: boolean;
   cv: boolean;
 }
 

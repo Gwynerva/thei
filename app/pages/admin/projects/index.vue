@@ -147,9 +147,9 @@ onUnmounted(() => {
                     class="flex shrink-0 items-center gap-xs pr-sm text-base"
                   >
                     <Icon
-                      v-if="project.important"
+                      v-if="project.showcase"
                       name="star"
-                      :data-title-popup="phrase.important_project_label"
+                      :data-title-popup="phrase.showcase_project_label"
                       class="cursor-help text-text-3 transition
                         hocus:text-text-1"
                     />

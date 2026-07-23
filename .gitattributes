@@ -1,0 +1,2 @@
+# Keep every text file in the repository and working tree in LF format.
+* text=auto eol=lf

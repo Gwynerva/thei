@@ -63,7 +63,7 @@ export default defineEventHandler(
           humanReadableSlug: result.humanReadableSlug,
           publicId: result.publicId,
           access: result.access,
-          important: result.important,
+          showcase: result.showcase,
           cv: result.cv,
           createdAt: now,
           updatedAt: now,

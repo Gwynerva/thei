@@ -246,10 +246,10 @@ export default defineI18nBase({
     site_access_close_priority: 'Site closed! Only you will have access!',
     view_event: 'View on Site',
     saved: 'Saved!',
-    important_project: 'Important Project?',
-    important_project_hint:
-      'This project stayed with you for a long time and/or strongly influenced your life.',
-    important_project_label: 'Important project',
+    showcase_project: 'Showcase project?',
+    showcase_project_hint:
+      'Show this project in the project showcase on the home page and at the top of search results.',
+    showcase_project_label: 'Showcase project',
     cv_project: 'In Your CV?',
     cv_project_hint:
       'A potential employer would be interested to see this project.',

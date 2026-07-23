@@ -111,7 +111,7 @@ export default defineEventHandler(async (event) => {
         humanReadableSlug: project.humanReadableSlug,
         publicId: project.publicId,
         access: project.access,
-        important: project.important,
+        showcase: project.showcase,
         cv: project.cv,
         iconAssetUuid: iconUsage?.asset.assetUuid,
         iconPreviewUrl,
@@ -211,7 +211,7 @@ export default defineEventHandler(async (event) => {
             humanReadableSlug: result.humanReadableSlug,
             publicId: result.publicId,
             access: result.access,
-            important: result.important,
+            showcase: result.showcase,
             cv: result.cv,
             updatedAt: Date.now(),
           })

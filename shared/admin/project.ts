@@ -26,7 +26,7 @@ export type ProjectEditData = {
   humanReadableSlug: string;
   publicId: string;
   access: ProjectEventAccessLevel | '';
-  important: boolean;
+  showcase: boolean;
   cv: boolean;
   iconAssetUuid?: string;
   bannerAssetUuid?: string;

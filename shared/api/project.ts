@@ -43,7 +43,7 @@ export type ProjectGetResponse = {
   humanReadableSlug: string;
   publicId: string;
   access: ProjectEventAccessLevel;
-  important: boolean;
+  showcase: boolean;
   cv: boolean;
   iconAssetUuid?: string;
   iconPreviewUrl?: string;
@@ -78,7 +78,7 @@ export type ProjectListItem = {
   humanReadableSlug: string;
   publicId: string;
   access: ProjectEventAccessLevel;
-  important: boolean;
+  showcase: boolean;
   cv: boolean;
   iconPreviewUrl?: string;
   iconDominantHue?: number;

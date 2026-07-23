@@ -91,10 +91,10 @@ const accessHint = computed(() => {
 
     <div class="flex flex-wrap gap-md">
       <Field class="flex-1">
-        <FieldToggle v-model="projectData.important">
-          {{ phrase.important_project }}
+        <FieldToggle v-model="projectData.showcase">
+          {{ phrase.showcase_project }}
         </FieldToggle>
-        <FieldHint>{{ phrase.important_project_hint }}</FieldHint>
+        <FieldHint>{{ phrase.showcase_project_hint }}</FieldHint>
       </Field>
       <Field class="flex-1">
         <FieldToggle v-model="projectData.cv">

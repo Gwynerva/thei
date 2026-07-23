@@ -36,7 +36,7 @@ const projectData = ref<ProjectEditData>({
   humanReadableSlug: '',
   publicId: initialPublicId.value,
   access: '',
-  important: false,
+  showcase: false,
   cv: false,
   descriptionContent: null,
 });
@@ -110,7 +110,7 @@ if (isEdit.value) {
     humanReadableSlug: data.humanReadableSlug,
     publicId: data.publicId,
     access: data.access,
-    important: data.important,
+    showcase: data.showcase,
     cv: data.cv,
     descriptionContent: data.descriptionContent ?? null,
     iconAssetUuid: data.iconAssetUuid,
