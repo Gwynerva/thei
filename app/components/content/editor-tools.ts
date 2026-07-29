@@ -2,36 +2,58 @@ import type {
   BlockTool,
   BlockToolConstructorOptions,
   BlockTune,
-  MenuConfig,
   BlockAPI,
 } from '@editorjs/editorjs';
+import { h, render as renderVue } from 'vue';
 import { AssetType } from '#layers/thei/shared/asset';
-import type { ContentAssetData } from '#layers/thei/shared/content';
+import type {
+  ContentAssetData,
+  ContentGalleryItem,
+} from '#layers/thei/shared/content';
+import { createPointerDragSort } from '#layers/thei/app/composables/drag-sort';
+import AssetTile from '#layers/thei/app/components/AssetTile.vue';
 
 export type ContentEditorAssetKind = 'media' | 'any';
 export type ContentEditorPickAsset = (
   kind: ContentEditorAssetKind,
 ) => Promise<ContentAssetData | undefined>;
+export type ContentEditorPickAssets = (
+  kind: ContentEditorAssetKind,
+) => Promise<ContentAssetData[]>;
+export type ContentEditorEditAsset = (
+  asset: ContentAssetData,
+  kind: ContentEditorAssetKind,
+) => Promise<ContentAssetData | null | undefined>;
+export type ContentEditorEditGalleryItem = (
+  item: ContentGalleryItem,
+) => Promise<ContentGalleryItem | null | undefined>;
 
-interface ContentToolConfig {
-  pickAsset: ContentEditorPickAsset;
-  labels: {
-    chooseMedia: string;
-    addMedia: string;
-    chooseFile: string;
-    caption: string;
-    galleryCaption: string;
-    title: string;
-    description: string;
-    remove: string;
-    privateAccess: string;
-  };
+interface ContentToolLabels {
+  chooseMedia: string;
+  addMedia: string;
+  chooseFile: string;
+  caption: string;
+  title: string;
+  description: string;
+  privateAccess: string;
 }
 
-type ContentToolOptions<TData extends object> = BlockToolConstructorOptions<
-  TData,
-  ContentToolConfig
->;
+interface ContentMediaToolConfig {
+  pickAsset: ContentEditorPickAsset;
+  editAsset: ContentEditorEditAsset;
+  labels: ContentToolLabels;
+}
+
+interface ContentGalleryToolConfig {
+  pickAssets: ContentEditorPickAssets;
+  editGalleryItem: ContentEditorEditGalleryItem;
+  labels: ContentToolLabels;
+}
+
+type ContentToolOptions<
+  TData extends object,
+  TConfig extends object,
+> = BlockToolConstructorOptions<TData, TConfig>;
 
 const icons = {
   image:
@@ -42,21 +64,25 @@ const icons = {
   lock: '<svg width="15" height="17" viewBox="0 0 15 17"><path d="M12 7V5A4.5 4.5 0 0 0 3 5v2H1v10h13V7h-2ZM5 5a2.5 2.5 0 0 1 5 0v2H5V5Zm7 10H3V9h9v6Z"/></svg>',
 };
 
-export class ContentImageTool implements BlockTool {
+export class ContentMediaTool implements BlockTool {
   static toolbox = {
-    title: 'Image',
+    title: 'Media',
     icon: icons.image,
   };
 
   private asset: ContentAssetData | null;
   private caption = '';
   private wrapper?: HTMLElement;
+  private unmountTiles: Array<() => void> = [];
 
   constructor(
-    private options: ContentToolOptions<{
-      asset?: ContentAssetData;
-      caption?: string;
-    }>,
+    private options: ContentToolOptions<
+      {
+        asset?: ContentAssetData;
+        caption?: string;
+      },
+      ContentMediaToolConfig
+    >,
   ) {
     this.asset = options.data.asset ?? null;
     this.caption = options.data.caption ?? '';
@@ -81,16 +107,19 @@ export class ContentImageTool implements BlockTool {
 
   private renderContent() {
     if (!this.wrapper) return;
+    this.clearTiles();
     this.wrapper.replaceChildren();
-    this.wrapper.append(
-      renderAssetCard(this.asset, {
-        emptyLabel: this.labels.chooseMedia,
-        onPick: () => this.pick(),
-        onRemove: this.asset ? () => this.remove() : undefined,
-        removeLabel: this.labels.remove,
-        readOnly: this.options.readOnly,
-      }),
-    );
+    const tile = renderAssetTile(this.asset, {
+      className: this.asset
+        ? 'aspect-video min-h-34 w-full'
+        : 'size-18 self-start',
+      ariaLabel: this.labels.chooseMedia,
+      onPick: this.options.readOnly
+        ? undefined
+        : () => (this.asset ? this.edit() : this.pick()),
+    });
+    this.unmountTiles.push(tile.unmount);
+    this.wrapper.append(tile.element);
 
     if (this.asset) {
       const caption = createTextInput(
@@ -98,10 +127,20 @@ export class ContentImageTool implements BlockTool {
         this.caption,
         (value) => {
           this.caption = value;
+          this.options.block.dispatchChange();
         },
       );
       this.wrapper.append(caption);
     }
+  }
+
+  destroy() {
+    this.clearTiles();
+  }
+
+  private clearTiles() {
+    this.unmountTiles.forEach((unmount) => unmount());
+    this.unmountTiles = [];
   }
 
   private async pick() {
@@ -109,12 +148,27 @@ export class ContentImageTool implements BlockTool {
     if (!asset) return;
     this.asset = asset;
     this.renderContent();
+    this.options.block.dispatchChange();
+  }
+
+  private async edit() {
+    if (!this.asset) return;
+    const asset = await this.options.config?.editAsset(this.asset, 'media');
+    if (asset === undefined) return;
+    if (asset === null) {
+      this.remove();
+      return;
+    }
+    this.asset = asset;
+    this.renderContent();
+    this.options.block.dispatchChange();
   }
 
   private remove() {
     this.asset = null;
     this.caption = '';
     this.renderContent();
+    this.options.block.dispatchChange();
   }
 
   private get labels() {
@@ -128,18 +182,52 @@ export class ContentGalleryTool implements BlockTool {
     icon: icons.gallery,
   };
 
-  private assets: ContentAssetData[];
+  private items: ContentGalleryItem[];
   private caption = '';
   private wrapper?: HTMLElement;
+  private unmountTiles: Array<() => void> = [];
+  private dragSort = createPointerDragSort(
+    (from, to) => {
+      const next = [...this.items];
+      const [moved] = next.splice(from, 1);
+      if (!moved) return;
+      next.splice(to, 0, moved);
+      this.items = next;
+      this.options.block.dispatchChange();
+      this.renderContent();
+    },
+    ({ draggingIndex, dragOverIndex }) => {
+      this.wrapper
+        ?.querySelectorAll<HTMLElement>('[data-drag-index]')
+        .forEach((tile, index) => {
+          tile.classList.toggle('opacity-35', index === draggingIndex);
+          tile.classList.toggle(
+            'ring-2',
+            index === dragOverIndex && index !== draggingIndex,
+          );
+          tile.classList.toggle(
+            'ring-accent',
+            index === dragOverIndex && index !== draggingIndex,
+          );
+          tile.classList.toggle(
+            'ring-offset-2',
+            index === dragOverIndex && index !== draggingIndex,
+          );
+          tile.classList.toggle(
+            'ring-offset-bg-1',
+            index === dragOverIndex && index !== draggingIndex,
+          );
+        });
+    },
+  );
 
   constructor(
-    private options: ContentToolOptions<{
-      assets?: ContentAssetData[];
-      caption?: string;
-    }>,
+    private options: ContentToolOptions<
+      { items?: ContentGalleryItem[] },
+      ContentGalleryToolConfig
+    >,
   ) {
-    this.assets = options.data.assets ?? [];
-    this.caption = options.data.caption ?? '';
+    this.items = options.data.items ?? [];
   }
 
   render(): HTMLElement {
@@ -149,78 +237,98 @@ export class ContentGalleryTool implements BlockTool {
   }
 
   save(): Record<string, unknown> {
-    return {
-      assets: this.assets,
-      caption: this.caption.trim() || undefined,
-    };
+    return { items: this.items };
   }
 
-  validate(data: { assets?: ContentAssetData[] }): boolean {
-    return Boolean(data.assets?.length);
+  validate(data: { items?: ContentGalleryItem[] }): boolean {
+    return Boolean(data.items?.length);
+  }
+
+  destroy() {
+    this.dragSort.cleanup();
+    this.clearTiles();
   }
 
   private renderContent() {
     if (!this.wrapper) return;
+    this.dragSort.cleanup();
+    this.clearTiles();
     this.wrapper.replaceChildren();
 
     const grid = document.createElement('div');
-    grid.className = 'grid grid-cols-2 gap-xs sm:grid-cols-3';
+    grid.className = 'flex flex-wrap items-start gap-sm';
 
-    for (const asset of this.assets) {
-      grid.append(
-        renderAssetCard(asset, {
-          emptyLabel: '',
-          onPick: () => this.replace(asset.assetUuid),
-          onRemove: this.options.readOnly
-            ? undefined
-            : () => this.remove(asset.assetUuid),
-          removeLabel: this.labels.remove,
-          readOnly: this.options.readOnly,
-        }),
-      );
-    }
+    this.items.forEach((item, index) => {
+      const tile = renderAssetTile(item.asset, {
+        className:
+          'size-18 shrink-0 cursor-grab touch-none select-none active:cursor-grabbing',
+        ariaLabel: this.labels.chooseMedia,
+        onPick: this.options.readOnly
+          ? undefined
+          : () =>
+              this.dragSort.guardClick(() => {
+                void this.edit(item.id);
+              }),
+      });
+      tile.element.dataset.dragIndex = String(index);
+      tile.element.addEventListener('pointerdown', (event) => {
+        this.dragSort.onPointerDown(index, event, grid);
+      });
+      this.unmountTiles.push(tile.unmount);
+      grid.append(tile.element);
+    });
 
     if (!this.options.readOnly) {
-      grid.append(
-        renderAssetCard(null, {
-          emptyLabel: this.labels.addMedia,
-          onPick: () => this.add(),
-          readOnly: false,
-        }),
-      );
+      const addTile = renderAssetTile(null, {
+        className: 'size-18 shrink-0 cursor-pointer',
+        ariaLabel: this.labels.addMedia,
+        onPick: () => this.add(),
+      });
+      this.unmountTiles.push(addTile.unmount);
+      grid.append(addTile.element);
     }
 
     this.wrapper.append(grid);
+  }
 
-    if (this.assets.length) {
-      this.wrapper.append(
-        createTextInput(this.labels.galleryCaption, this.caption, (value) => {
-          this.caption = value;
-        }),
-      );
-    }
+  private clearTiles() {
+    this.unmountTiles.forEach((unmount) => unmount());
+    this.unmountTiles = [];
   }
 
   private async add() {
-    const asset = await this.options.config?.pickAsset('media');
-    if (!asset) return;
-    this.assets = [...this.assets, asset];
+    const assets = await this.options.config?.pickAssets('media');
+    if (!assets?.length) return;
+    this.items = [
+      ...this.items,
+      ...assets.map((asset) => ({
+        id: crypto.randomUUID(),
+        asset,
+      })),
+    ];
     this.renderContent();
+    this.options.block.dispatchChange();
   }
 
-  private async replace(assetUuid: string) {
+  private async edit(id: string) {
     if (this.options.readOnly) return;
-    const asset = await this.options.config?.pickAsset('media');
-    if (!asset) return;
-    this.assets = this.assets.map((item) =>
-      item.assetUuid === assetUuid ? asset : item,
-    );
+    const current = this.items.find((item) => item.id === id);
+    if (!current) return;
+    const result = await this.options.config?.editGalleryItem(current);
+    if (result === undefined) return;
+    if (result === null) {
+      this.remove(id);
+      return;
+    }
+    this.items = this.items.map((item) => (item.id === id ? result : item));
     this.renderContent();
+    this.options.block.dispatchChange();
   }
 
-  private remove(assetUuid: string) {
-    this.assets = this.assets.filter((item) => item.assetUuid !== assetUuid);
+  private remove(id: string) {
+    this.items = this.items.filter((item) => item.id !== id);
     this.renderContent();
+    this.options.block.dispatchChange();
   }
 
   private get labels() {
@@ -238,13 +346,17 @@ export class ContentAttachmentTool implements BlockTool {
   private title = '';
   private caption = '';
   private wrapper?: HTMLElement;
+  private unmountTiles: Array<() => void> = [];
 
   constructor(
-    private options: ContentToolOptions<{
-      asset?: ContentAssetData;
-      title?: string;
-      caption?: string;
-    }>,
+    private options: ContentToolOptions<
+      {
+        asset?: ContentAssetData;
+        title?: string;
+        caption?: string;
+      },
+      ContentMediaToolConfig
+    >,
   ) {
     this.asset = options.data.asset ?? null;
     this.title = options.data.title ?? '';
@@ -271,27 +383,40 @@ export class ContentAttachmentTool implements BlockTool {
 
   private renderContent() {
     if (!this.wrapper) return;
+    this.clearTiles();
     this.wrapper.replaceChildren();
-    this.wrapper.append(
-      renderAssetCard(this.asset, {
-        emptyLabel: this.labels.chooseFile,
-        onPick: () => this.pick(),
-        onRemove: this.asset ? () => this.remove() : undefined,
-        removeLabel: this.labels.remove,
-        readOnly: this.options.readOnly,
-      }),
-    );
+    const tile = renderAssetTile(this.asset, {
+      className: this.asset ? 'h-34 w-full' : 'size-18 self-start',
+      ariaLabel: this.labels.chooseFile,
+      onPick: this.options.readOnly
+        ? undefined
+        : () => (this.asset ? this.edit() : this.pick()),
+      showExtension: true,
+    });
+    this.unmountTiles.push(tile.unmount);
+    this.wrapper.append(tile.element);
 
     if (this.asset) {
       this.wrapper.append(
         createTextInput(this.labels.title, this.title, (value) => {
           this.title = value;
+          this.options.block.dispatchChange();
         }),
         createTextInput(this.labels.description, this.caption, (value) => {
           this.caption = value;
+          this.options.block.dispatchChange();
         }),
       );
     }
+  }
+
+  destroy() {
+    this.clearTiles();
+  }
+
+  private clearTiles() {
+    this.unmountTiles.forEach((unmount) => unmount());
+    this.unmountTiles = [];
   }
 
   private async pick() {
@@ -300,6 +425,20 @@ export class ContentAttachmentTool implements BlockTool {
     this.asset = asset;
     if (!this.title) this.title = assetTitle(asset);
     this.renderContent();
+    this.options.block.dispatchChange();
+  }
+
+  private async edit() {
+    if (!this.asset) return;
+    const asset = await this.options.config?.editAsset(this.asset, 'any');
+    if (asset === undefined) return;
+    if (asset === null) {
+      this.remove();
+      return;
+    }
+    this.asset = asset;
+    this.renderContent();
+    this.options.block.dispatchChange();
   }
 
   private remove() {
@@ -307,6 +446,7 @@ export class ContentAttachmentTool implements BlockTool {
     this.title = '';
     this.caption = '';
     this.renderContent();
+    this.options.block.dispatchChange();
   }
 
   private get labels() {
@@ -318,21 +458,21 @@ export class PrivateAccessTune implements BlockTune {
   static isTune = true;
 
   private isPrivate: boolean;
-  private labels: ContentToolConfig['labels'];
+  private labels: ContentToolLabels;
   private block?: BlockAPI;
   private wrapper?: HTMLElement;
 
   constructor(options: {
     data?: { isPrivate?: boolean };
-    config?: Partial<ContentToolConfig>;
+    config?: { labels?: ContentToolLabels };
     block?: BlockAPI;
   }) {
     this.isPrivate = options.data?.isPrivate === true;
-    this.labels = getLabels(options.config as ContentToolConfig | undefined);
+    this.labels = getLabels(options.config);
     this.block = options.block;
   }
 
-  render(): MenuConfig {
+  render() {
     return {
       icon: icons.lock,
       title: this.labels.privateAccess,
@@ -368,18 +508,16 @@ export class PrivateAccessTune implements BlockTune {
 }
 
 function getLabels(
-  config: ContentToolConfig | undefined,
-): ContentToolConfig['labels'] {
+  config: { labels?: ContentToolLabels } | undefined,
+): ContentToolLabels {
   return (
     config?.labels ?? {
       chooseMedia: 'Choose image or video',
       addMedia: 'Add image or video',
       chooseFile: 'Choose file',
       caption: 'Caption',
-      galleryCaption: 'Gallery caption',
       title: 'Title',
       description: 'Description',
-      remove: 'Remove',
       privateAccess: 'Private access',
     }
   );
@@ -391,77 +529,35 @@ function createToolWrapper() {
   return element;
 }
 
-function renderAssetCard(
+function renderAssetTile(
   asset: ContentAssetData | null,
   options: {
-    emptyLabel: string;
-    onPick: () => void;
-    onRemove?: () => void;
-    removeLabel?: string;
-    readOnly: boolean;
+    className: string;
+    ariaLabel: string;
+    onPick?: () => void;
+    showExtension?: boolean;
   },
 ) {
-  const card = document.createElement('div');
-  card.className =
-    'group relative flex min-h-34 cursor-pointer items-center justify-center overflow-hidden rounded-normal border border-border-1 bg-bg-3 text-sm text-text-2 transition hocus:border-border-3 hocus:text-text-1';
-  card.tabIndex = options.readOnly ? -1 : 0;
+  const element = document.createElement('div');
+  element.className = options.className;
 
-  if (!options.readOnly) {
-    card.addEventListener('click', options.onPick);
-    card.addEventListener('keydown', (event) => {
-      if (event.key !== 'Enter' && event.key !== ' ') return;
-      event.preventDefault();
-      options.onPick();
-    });
-  }
+  renderVue(
+    h(AssetTile, {
+      media: asset?.media,
+      size: asset?.size,
+      extension: asset?.extension,
+      showExtension: options.showExtension,
+      class: 'size-full',
+      'aria-label': options.ariaLabel,
+      onClick: options.onPick,
+    }),
+    element,
+  );
 
-  if (!asset) {
-    card.textContent = options.emptyLabel;
-    return card;
-  }
-
-  if (asset.videoUrl || asset.type === AssetType.Video) {
-    const video = document.createElement('video');
-    video.src = asset.videoUrl ?? asset.assetUrl ?? '';
-    video.poster = asset.previewUrl;
-    video.muted = true;
-    video.loop = true;
-    video.playsInline = true;
-    video.className = 'size-full object-cover';
-    card.append(video);
-  } else if (asset.previewUrl || asset.type === AssetType.Image) {
-    const img = document.createElement('img');
-    img.src = asset.previewUrl ?? asset.assetUrl ?? '';
-    img.alt = '';
-    img.className = 'size-full object-cover';
-    card.append(img);
-  } else {
-    const ext = document.createElement('div');
-    ext.className = 'font-mono text-xl font-bold uppercase';
-    ext.textContent = asset.extension ?? 'file';
-    card.append(ext);
-  }
-
-  const meta = document.createElement('div');
-  meta.className =
-    'absolute right-xs bottom-xs rounded bg-black/40 px-xs py-0.5 text-xs text-white backdrop-blur-sm';
-  meta.textContent = asset.extension ?? 'file';
-  card.append(meta);
-
-  if (options.onRemove) {
-    const remove = document.createElement('button');
-    remove.type = 'button';
-    remove.className =
-      'absolute top-xs right-xs rounded bg-black/40 px-xs py-0.5 text-xs text-white opacity-0 backdrop-blur-sm transition group-hover:opacity-100';
-    remove.textContent = options.removeLabel ?? getLabels(undefined).remove;
-    remove.addEventListener('click', (event) => {
-      event.stopPropagation();
-      options.onRemove?.();
-    });
-    card.append(remove);
-  }
-
-  return card;
+  return {
+    element,
+    unmount: () => renderVue(null, element),
+  };
 }
 
 function createTextInput(
@@ -479,5 +575,9 @@ function createTextInput(
 }
 
 function assetTitle(asset: ContentAssetData): string {
-  return asset.extension ? `${asset.extension.toUpperCase()} file` : 'File';
+  return (
+    asset.name?.replace(/\.[^.]+$/, '') ||
+    asset.extension?.toUpperCase() ||
+    asset.assetUuid
+  );
 }

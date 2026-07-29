@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import type { AdminBarButtonProps } from './AdminBarButton.vue';
-import userSvg from '~/assets/fallback/user.svg?raw';
 import { publicIdFromProjectUrlPart } from '#layers/thei/shared/project-url';
 
 const isAdmin = useIsAdmin();
@@ -121,17 +120,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
       >
         <template #icon>
           <div class="size-6 overflow-clip rounded-full border border-border-3">
-            <Media
-              v-if="publicAdmin.avatarUrl"
-              :src="publicAdmin.avatarUrl"
-              class="size-full"
-            />
-            <TintedIcon
-              v-else
-              :svg="userSvg"
-              :seed="publicAdmin.displayName"
-              class="size-full"
-            />
+            <Media v-bind="publicAdmin.avatarMedia" class="size-full" />
           </div>
         </template>
       </AdminBarButton>

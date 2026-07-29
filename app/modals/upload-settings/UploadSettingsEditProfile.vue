@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import UploadSettingsFileComparison from './UploadSettingsFileComparison.vue';
 
-type BusyAction = 'variants' | 'upload-original' | 'apply';
+type BusyAction = 'variants' | 'save-unchanged' | 'apply';
 
 interface FileDimensions {
   width: number;
@@ -65,6 +65,7 @@ const emit = defineEmits<{
   <div class="flex items-center justify-between">
     <div class="text-sm text-text-2">{{ phrase.upload_dimensions }}</div>
     <button
+      type="button"
       v-if="showResetDimensions"
       class="cursor-pointer rounded-normal bg-bg-3 px-2 py-1 text-xs text-text-2
         transition hocus:bg-accent/50 hocus:text-text-1"
@@ -84,6 +85,7 @@ const emit = defineEmits<{
       @submit="emit('syncHeightFromWidth')"
     />
     <button
+      type="button"
       class="flex size-9 shrink-0 cursor-pointer items-center justify-center
         rounded-full bg-transparent transition hocus:bg-bg-3"
       :data-title-popup="phrase.upload_keep_aspect"
@@ -113,6 +115,7 @@ const emit = defineEmits<{
     <button
       v-for="size of availableSizePresets"
       :key="size"
+      type="button"
       class="cursor-pointer bg-bg-3 px-2 py-1 text-text-2 transition
         first:rounded-l-normal last:rounded-r-normal hocus:bg-accent/50
         hocus:text-text-1"

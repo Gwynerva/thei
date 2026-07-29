@@ -1,23 +1,16 @@
 import { readdir, rm, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { and, eq, isNull } from 'drizzle-orm';
-import { AssetType } from '../../../shared/asset';
 import { findOrphanedAssets } from './repository/find-orphaned';
 import { deleteAsset } from './repository/delete';
+import { deleteStoredAsset } from './storage';
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const GENERATED_MEDIA_MAX_AGE_MS = 30 * ONE_DAY_MS;
 
-async function deleteOrphanedAsset(assetUuid: string, extension: string) {
-  const filePath = THEI_SERVER.assets.filePath(assetUuid, extension);
-  await rm(filePath, { force: true }).catch(() => {});
-  try {
-    await deleteAssetRecordAndUsages(assetUuid);
-  } catch {
-    THEI_SERVER.console
-      .tag('Assets')
-      .error(`Failed to delete DB record for orphaned asset ${assetUuid}`);
-    return;
-  }
+async function deleteOrphanedAsset(assetUuid: string) {
+  const deleted = await deleteStoredAsset(assetUuid);
+  if (!deleted) return;
   THEI_SERVER.console
     .tag('Assets')
     .log(`Cleaned up orphaned asset ${assetUuid}`);
@@ -36,36 +29,9 @@ export async function runAssetCleanup() {
     return;
   }
 
-  const orphanUuidSet = new Set(orphans.map((a) => a.assetUuid));
-
   for (const asset of orphans) {
     try {
-      const preview =
-        asset.type === AssetType.Video
-          ? (
-              await THEI_SERVER.assets.usages.findByContainer(
-                'asset',
-                asset.assetUuid,
-              )
-            ).find((usage) => usage.role === 'preview')?.asset
-          : undefined;
-
-      await deleteOrphanedAsset(asset.assetUuid, asset.extension);
-
-      if (!preview) continue;
-
-      await THEI_SERVER.assets.usages.detach(
-        preview.assetUuid,
-        'asset',
-        asset.assetUuid,
-        'preview',
-      );
-      if (
-        !orphanUuidSet.has(preview.assetUuid) &&
-        !(await hasAssetUsage(preview.assetUuid))
-      ) {
-        await deleteOrphanedAsset(preview.assetUuid, preview.extension);
-      }
+      await deleteOrphanedAsset(asset.assetUuid);
     } catch {
       THEI_SERVER.console
         .tag('Assets')
@@ -74,6 +40,16 @@ export async function runAssetCleanup() {
   }
 
   await cleanupStrayAssetFiles(cutoffMs);
+  await cleanupGeneratedMedia(Date.now() - GENERATED_MEDIA_MAX_AGE_MS);
+}
+
+async function cleanupGeneratedMedia(cutoffMs: number) {
+  const files = await listFiles(THEI_SERVER.contentPath('generated-media'));
+  for (const file of files) {
+    const fileStat = await stat(file).catch(() => null);
+    if (!fileStat || fileStat.mtimeMs >= cutoffMs) continue;
+    await rm(file, { force: true }).catch(() => {});
+  }
 }
 
 async function cleanupDanglingUsages() {
@@ -97,18 +73,21 @@ async function cleanupDanglingUsages() {
       await deleteUsage(usage);
     }
 
-    const [assetRows, projectRows, contentRows, usages] = await Promise.all([
-      db.select({ assetUuid: schema.assets.assetUuid }).from(schema.assets),
-      db
-        .select({ projectUuid: schema.projects.projectUuid })
-        .from(schema.projects),
-      db
-        .select({ contentUuid: schema.content.contentUuid })
-        .from(schema.content),
-      db.select().from(schema.assetUsages),
-    ]);
+    const [assetRows, projectRows, eventRows, contentRows, usages] =
+      await Promise.all([
+        db.select({ assetUuid: schema.assets.assetUuid }).from(schema.assets),
+        db
+          .select({ projectUuid: schema.projects.projectUuid })
+          .from(schema.projects),
+        db.select({ eventId: schema.events.eventId }).from(schema.events),
+        db
+          .select({ contentUuid: schema.content.contentUuid })
+          .from(schema.content),
+        db.select().from(schema.assetUsages),
+      ]);
     const assetUuids = new Set(assetRows.map((row) => row.assetUuid));
     const projectUuids = new Set(projectRows.map((row) => row.projectUuid));
+    const eventIds = new Set(eventRows.map((row) => row.eventId));
     const contentUuids = new Set(contentRows.map((row) => row.contentUuid));
 
     for (const usage of usages) {
@@ -117,6 +96,7 @@ async function cleanupDanglingUsages() {
           !assetUuids.has(usage.containerId)) ||
         (usage.containerType === 'project' &&
           !projectUuids.has(usage.containerId)) ||
+        (usage.containerType === 'event' && !eventIds.has(usage.containerId)) ||
         (usage.containerType === 'content' &&
           !contentUuids.has(usage.containerId))
       ) {
@@ -217,16 +197,6 @@ async function deleteAssetRecordAndUsages(assetUuid: string) {
       ),
     );
   await deleteAsset(assetUuid);
-}
-
-async function hasAssetUsage(assetUuid: string): Promise<boolean> {
-  const { db, schema } = THEI_SERVER.useDb();
-  const rows = await db
-    .select({ assetUuid: schema.assetUsages.assetUuid })
-    .from(schema.assetUsages)
-    .where(eq(schema.assetUsages.assetUuid, assetUuid))
-    .limit(1);
-  return rows.length > 0;
 }
 
 async function deleteUsage(usage: {

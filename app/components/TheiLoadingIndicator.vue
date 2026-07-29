@@ -12,10 +12,9 @@ const { progress, isLoading, error } = useLoadingIndicator();
       <div
         v-if="isLoading"
         :style="`--_progress: ${progress}%; --_color: ${error ? 'var(--color-text-error)' : 'var(--color-accent)'};`"
-        class="absolute top-0 left-0 z-9999 h-[3px] w-(--_progress)
-          bg-linear-to-r from-(--_color)/50 to-(--_color)
-          shadow-[0_0_10px_1px_var(--_color)]
-          transition-[width,background-color,box-shadow,opacity]"
+        class="absolute top-0 left-0 z-9999 h-1 w-(--_progress) bg-linear-to-r
+          from-(--_color)/50 to-(--_color) shadow-lg shadow-(color:--_color)
+          transition-all"
       ></div>
     </TransitionFade>
   </div>

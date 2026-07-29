@@ -50,9 +50,9 @@ const fontStyleOptions: ComputedRef<
                   ? 'ring-bw-reverse'
                   : 'ring-transparent hocus:ring-bw-reverse/50',
               ]"
-              class="size-[20px] shrink-0 cursor-pointer rounded-full
+              class="size-5 shrink-0 cursor-pointer rounded-full
                 bg-(--_accent-variant) ring-2 ring-offset-2 ring-offset-bg-2
-                transition sm:size-[26px]"
+                transition sm:size-6"
             ></button>
           </div>
         </Field>

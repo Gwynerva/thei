@@ -1,12 +1,11 @@
 export const ASSET_UPLOAD_LIMITS = {
-  'project-media': 100 * 1024 * 1024,
-  'project-other': 500 * 1024 * 1024,
+  media: 100 * 1024 * 1024,
+  file: 500 * 1024 * 1024,
 } as const;
 
 export type AssetUploadLimitPolicy = keyof typeof ASSET_UPLOAD_LIMITS;
 
-export const ASSET_UPLOAD_DEFAULT_MAX_SIZE =
-  ASSET_UPLOAD_LIMITS['project-other'];
+export const ASSET_UPLOAD_DEFAULT_MAX_SIZE = ASSET_UPLOAD_LIMITS.file;
 
 export function isAssetUploadLimitPolicy(
   value: unknown,

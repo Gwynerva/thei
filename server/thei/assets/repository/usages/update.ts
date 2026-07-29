@@ -33,5 +33,6 @@ export async function updateAssetUsage(
     });
   }
 
+  await THEI_SERVER.assets.touch(assetUuid);
   return updated[0]!;
 }

@@ -33,7 +33,7 @@ const alwaysTitlePopup = computed(() => {
     class="flex h-full min-w-0 cursor-pointer items-center gap-3 bg-transparent
       px-3 opacity-80 transition hocus:bg-accent/25 hocus:opacity-100"
   >
-    <Icon v-if="icon" :name="icon" class="shrink-0 text-[1.2em]" />
+    <Icon v-if="icon" :name="icon" class="shrink-0 text-xl" />
     <slot v-else name="icon" />
     <span
       v-if="label"

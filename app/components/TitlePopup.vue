@@ -25,8 +25,8 @@ const { floatingStyles } = useFloating(anchor, floatingEl, {
         data-title-popup-el
         :style="floatingStyles"
         :class="popupClass || undefined"
-        class="pointer-events-none fixed z-9999 max-w-[300px] rounded
-          bg-bw-reverse px-2 py-1 text-xs font-normal text-bw shadow-md"
+        class="pointer-events-none fixed z-9999 max-w-75 rounded bg-bw-reverse
+          px-2 py-1 text-xs font-normal text-bw shadow-md"
       >
         {{ label }}
       </div>

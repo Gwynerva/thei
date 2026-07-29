@@ -11,4 +11,5 @@ export async function attachAssetUsage(
     .insert(schema.assetUsages)
     .values({ assetUuid, containerType, containerId, role })
     .onConflictDoNothing();
+  await THEI_SERVER.assets.touch(assetUuid);
 }

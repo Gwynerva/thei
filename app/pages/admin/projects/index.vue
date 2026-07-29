@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import type { ProjectListItem } from '#layers/thei/shared/api/project';
-import projectSvg from '~/assets/fallback/project.svg?raw';
 import { buildProjectUrl } from '#layers/thei/shared/project-url';
 
 definePageMeta({ layout: 'admin' });
@@ -116,16 +115,8 @@ onUnmounted(() => {
                     class="group flex min-w-0 flex-1 items-center gap-sm py-sm
                       pl-sm transition"
                   >
-                    <img
-                      v-if="project.iconPreviewUrl"
-                      :src="project.iconPreviewUrl"
-                      class="size-8 shrink-0 rounded-sm object-cover"
-                      alt=""
-                    />
-                    <TintedIcon
-                      v-else
-                      :svg="projectSvg"
-                      :seed="project.projectUuid"
+                    <Media
+                      v-bind="project.iconMedia"
                       class="size-8 shrink-0 rounded-sm"
                     />
                     <div class="min-w-0">

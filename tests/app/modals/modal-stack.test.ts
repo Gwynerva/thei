@@ -1,7 +1,10 @@
 import { beforeEach, expect, test } from 'vitest';
 import { defineComponent, type Component } from 'vue';
 import {
+  backModal,
   closeModal,
+  createModalFlow,
+  modalDismissVersion,
   modalStack,
   openModal,
   settleModal,
@@ -17,8 +20,20 @@ const testModal: ModalDescriptor<TestModalResult, Component> = {
   component: () => Promise.resolve({ default: TestComponent }),
 };
 
+type TestDataComponent = Component &
+  (abstract new (...args: any[]) => {
+    $props: { modalData: { value: string } };
+  });
+
+const testDataModal: ModalDescriptor<TestModalResult, TestDataComponent> = {
+  name: 'test-data',
+  component: () =>
+    Promise.resolve({ default: TestComponent as TestDataComponent }),
+};
+
 beforeEach(() => {
   modalStack.value = [];
+  modalDismissVersion.value = 0;
 });
 
 test('openModal keeps lower modals alive when the top modal is settled', async () => {
@@ -41,7 +56,24 @@ test('openModal keeps lower modals alive when the top modal is settled', async (
   expect(modalStack.value).toEqual([]);
 });
 
-test('closeModal only closes the active top modal', async () => {
+test('openModal stores navigation labels', async () => {
+  const result = openModal(
+    testDataModal,
+    { value: 'data' },
+    { label: 'Current', backLabel: 'Previous' },
+  );
+  await flushMicrotasks();
+
+  expect(modalStack.value[0]).toMatchObject({
+    label: 'Current',
+    backLabel: 'Previous',
+  });
+
+  closeModal();
+  await result;
+});
+
+test('backModal only closes the active top modal', async () => {
   const firstResult = openModal(testModal);
   await flushMicrotasks();
   const firstModal = modalStack.value[0]!;
@@ -49,7 +81,7 @@ test('closeModal only closes the active top modal', async () => {
   const secondResult = openModal(testModal);
   await flushMicrotasks();
 
-  closeModal();
+  backModal();
 
   await expect(secondResult).resolves.toEqual({ type: 'empty' });
   expect(modalStack.value).toEqual([firstModal]);
@@ -57,6 +89,41 @@ test('closeModal only closes the active top modal', async () => {
   settleModal(firstModal, { type: 'done', value: 1 });
 
   await expect(firstResult).resolves.toEqual({ type: 'done', value: 1 });
+  expect(modalStack.value).toEqual([]);
+});
+
+test('closeModal closes only the active flow and keeps its parent modal', async () => {
+  const firstResult = openModal(testModal);
+  await flushMicrotasks();
+  const firstModal = modalStack.value[0]!;
+  const secondResult = openModal(testModal);
+  await flushMicrotasks();
+
+  closeModal();
+
+  await expect(secondResult).resolves.toEqual({ type: 'empty' });
+  expect(modalStack.value).toEqual([firstModal]);
+  expect(modalDismissVersion.value).toBe(1);
+
+  settleModal(firstModal, { type: 'done', value: 1 });
+  await expect(firstResult).resolves.toEqual({ type: 'done', value: 1 });
+});
+
+test('closeModal closes every related screen in the active flow', async () => {
+  const flowId = createModalFlow();
+  const firstResult = openModal(testDataModal, { value: 'first' }, { flowId });
+  await flushMicrotasks();
+  const secondResult = openModal(
+    testDataModal,
+    { value: 'second' },
+    { flowId },
+  );
+  await flushMicrotasks();
+
+  closeModal();
+
+  await expect(secondResult).resolves.toEqual({ type: 'empty' });
+  await expect(firstResult).resolves.toEqual({ type: 'empty' });
   expect(modalStack.value).toEqual([]);
 });
 

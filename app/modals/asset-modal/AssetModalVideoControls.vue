@@ -45,15 +45,15 @@ function emitVolume(e: Event): void {
   <div
     class="absolute right-md bottom-md left-md z-10 flex min-w-80 cursor-default
       items-center rounded-full border-2 border-border-3/30 bg-bg-2/60 px-xs
-      shadow-[0_0_10px_2px_var(--color-shadow-3)] backdrop-blur transition
-      sm:right-0 sm:left-1/2 sm:w-5/8 sm:-translate-x-1/2
-      hocus:border-border-3/50 hocus:bg-bg-2/80"
+      shadow-lg shadow-shadow-3 backdrop-blur transition sm:right-0 sm:left-1/2
+      sm:w-5/8 sm:-translate-x-1/2 hocus:border-border-3/50 hocus:bg-bg-2/80"
     @pointerdown.stop
     @pointermove.stop
     @pointerup.stop
     @pointercancel.stop
   >
     <button
+      type="button"
       class="flex cursor-pointer items-center justify-center rounded-full p-xs
         text-text-1/70 transition hocus:text-text-1"
       @click="emit('togglePlay')"
@@ -81,6 +81,7 @@ function emitVolume(e: Event): void {
     </span>
 
     <button
+      type="button"
       v-if="hasAudio"
       class="flex shrink-0 cursor-pointer items-center justify-center
         rounded-full p-xs text-text-1/70 transition hocus:text-text-1"
@@ -106,10 +107,11 @@ function emitVolume(e: Event): void {
 <style scoped>
 .seek-bar,
 .volume-bar {
+  /* Native media ranges require browser-specific track and thumb selectors. */
   appearance: none;
   -webkit-appearance: none;
-  height: 4px;
-  border-radius: 2px;
+  height: var(--spacing);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   outline: none;
   background: linear-gradient(
@@ -127,7 +129,7 @@ function emitVolume(e: Event): void {
 }
 
 .volume-bar {
-  width: 2.5rem;
+  width: calc(var(--spacing) * 10);
   flex-shrink: 0;
 }
 
@@ -135,8 +137,8 @@ function emitVolume(e: Event): void {
 .volume-bar::-webkit-slider-thumb {
   appearance: none;
   -webkit-appearance: none;
-  width: 12px;
-  height: 12px;
+  width: calc(var(--spacing) * 3);
+  height: calc(var(--spacing) * 3);
   border-radius: 50%;
   background: var(--color-text-1);
   cursor: pointer;
@@ -150,8 +152,8 @@ function emitVolume(e: Event): void {
 
 .seek-bar::-moz-range-thumb,
 .volume-bar::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
+  width: calc(var(--spacing) * 3);
+  height: calc(var(--spacing) * 3);
   border-radius: 50%;
   border: none;
   background: var(--color-text-1);
@@ -160,8 +162,8 @@ function emitVolume(e: Event): void {
 
 .seek-bar::-moz-range-track,
 .volume-bar::-moz-range-track {
-  height: 4px;
-  border-radius: 2px;
+  height: var(--spacing);
+  border-radius: var(--radius-sm);
   background: transparent;
 }
 </style>

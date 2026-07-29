@@ -4,23 +4,44 @@ import type {
   BaseModalResult,
   ExtractModalData,
   ModalDescriptor,
+  ModalOpenOptions,
 } from '#layers/thei/app/modals/types';
 
 export { defineModal, type ModalData } from '#layers/thei/app/modals/types';
 
 // Module-level singleton — one modal active at a time across the whole app.
 let modalId = 0;
+let modalFlowId = 0;
 
 export const modalStack = shallowRef<ActiveModal[]>([]);
 export const activeModal = computed(
   () => modalStack.value[modalStack.value.length - 1] ?? null,
 );
+export const modalBackLabel = computed(() => {
+  const active = activeModal.value;
+  if (!active) return undefined;
+  return (
+    active.backLabel ?? modalStack.value[modalStack.value.length - 2]?.label
+  );
+});
+export const modalDismissVersion = shallowRef(0);
+
+export function createModalFlow() {
+  return ++modalFlowId;
+}
 
 /**
- * Programmatically close the active modal with an `empty` result.
- * Useful in modal components that don't use a `modalResult` emit.
+ * Close the complete modal flow. A close affordance must never behave like
+ * implicit backward navigation.
  */
 export function closeModal() {
+  closeActiveModalFlowWithBase({ type: 'empty' });
+}
+
+/**
+ * Return from the active step while keeping its parent flow alive.
+ */
+export function backModal() {
   const modal = activeModal.value;
   if (!modal) return;
   removeModal(modal);
@@ -28,14 +49,10 @@ export function closeModal() {
 }
 
 /**
- * Programmatically close the active modal with an `error` result.
- * Useful in modal components that don't use a `modalResult` emit.
+ * Close the complete modal flow with an error.
  */
 export function errorModal(message: string) {
-  const modal = activeModal.value;
-  if (!modal) return;
-  removeModal(modal);
-  modal.close({ type: 'error', message });
+  closeActiveModalFlowWithBase({ type: 'error', message });
 }
 
 /**
@@ -53,11 +70,12 @@ export async function openModal<
   descriptor: ModalDescriptor<TResult, TComponent>,
   ...args: ExtractModalData<TComponent> extends never
     ? []
-    : [modalData: ExtractModalData<TComponent>]
+    : [modalData: ExtractModalData<TComponent>, options?: ModalOpenOptions]
 ): Promise<TResult> {
   const module = await descriptor.component();
   const component = markRaw(module.default);
   const props = args.length > 0 ? { modalData: args[0] } : {};
+  const options = args[1] as ModalOpenOptions | undefined;
 
   return new Promise<TResult>((resolve) => {
     modalStack.value = [
@@ -67,6 +85,9 @@ export async function openModal<
         name: descriptor.name,
         component,
         props,
+        label: options?.label,
+        backLabel: options?.backLabel,
+        flowId: options?.flowId ?? createModalFlow(),
         resolve: resolve as (result: { type: string }) => void,
         close: (result: BaseModalResult) => resolve(result as TResult),
       },
@@ -79,12 +100,19 @@ export function settleModal(modal: ActiveModal, result: { type: string }) {
   modal.resolve(result);
 }
 
-export function closeModalWithBase(
-  modal: ActiveModal,
-  result: BaseModalResult,
-) {
-  removeModal(modal);
-  modal.close(result);
+export function closeActiveModalFlowWithBase(result: BaseModalResult) {
+  const flowId = activeModal.value?.flowId;
+  if (flowId === undefined) return;
+
+  const modals = modalStack.value.filter((modal) => modal.flowId === flowId);
+  modalStack.value = modalStack.value.filter(
+    (modal) => modal.flowId !== flowId,
+  );
+  modalDismissVersion.value += 1;
+
+  for (const modal of modals.toReversed()) {
+    modal.close(result);
+  }
 }
 
 function removeModal(modal: ActiveModal) {

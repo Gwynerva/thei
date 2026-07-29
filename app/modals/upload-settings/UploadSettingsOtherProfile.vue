@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import UploadSettingsFileComparison from './UploadSettingsFileComparison.vue';
 
-type BusyAction = 'variants' | 'upload-original' | 'apply';
+type BusyAction = 'variants' | 'save-unchanged' | 'apply';
 
 defineProps<{
   busyAction?: BusyAction;

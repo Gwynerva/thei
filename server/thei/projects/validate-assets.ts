@@ -18,7 +18,7 @@ export async function validateProjectAssets(
     checks.push({
       assetUuid: data.iconAssetUuid,
       label: 'Project icon',
-      maxSize: ASSET_UPLOAD_LIMITS['project-media'],
+      maxSize: ASSET_UPLOAD_LIMITS.media,
       mediaOnly: true,
     });
   }
@@ -27,7 +27,7 @@ export async function validateProjectAssets(
     checks.push({
       assetUuid: data.bannerAssetUuid,
       label: 'Project banner',
-      maxSize: ASSET_UPLOAD_LIMITS['project-media'],
+      maxSize: ASSET_UPLOAD_LIMITS.media,
       mediaOnly: true,
     });
   }
@@ -36,7 +36,7 @@ export async function validateProjectAssets(
     checks.push({
       assetUuid: item.assetUuid,
       label: 'Showcase asset',
-      maxSize: ASSET_UPLOAD_LIMITS['project-media'],
+      maxSize: ASSET_UPLOAD_LIMITS.media,
       mediaOnly: true,
     });
   }
@@ -45,7 +45,7 @@ export async function validateProjectAssets(
     checks.push({
       assetUuid: item.assetUuid,
       label: 'Other file',
-      maxSize: ASSET_UPLOAD_LIMITS['project-other'],
+      maxSize: ASSET_UPLOAD_LIMITS.file,
     });
   }
 

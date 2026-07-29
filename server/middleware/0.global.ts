@@ -23,8 +23,11 @@ export default defineEventHandler(async (event) => {
     return;
   }
 
-  const alwaysAvailable = ['/api/public-admin/'];
-  if (alwaysAvailable.includes(path)) {
+  const alwaysAvailable = ['/api/public-admin/', '/api/media/generated-icon'];
+  if (
+    alwaysAvailable.includes(path) ||
+    path.startsWith('/media/generated-icons/')
+  ) {
     return;
   }
 

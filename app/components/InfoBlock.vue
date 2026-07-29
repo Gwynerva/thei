@@ -1,19 +1,10 @@
 <script lang="ts" setup>
-type InfoBlockValue = string | number | null | undefined;
-type InfoBlockTone = 'neutral' | 'good' | 'bad';
-type InfoBlockComparisonValue = {
-  previous: InfoBlockValue;
-  current: InfoBlockValue;
-  tone?: InfoBlockTone;
-};
-type InfoBlockRowValue =
-  InfoBlockValue | [InfoBlockValue, InfoBlockValue] | InfoBlockComparisonValue;
-
-interface InfoBlockRow {
-  label: string;
-  value?: InfoBlockRowValue;
-  uppercase?: boolean;
-}
+import type {
+  InfoBlockComparisonValue,
+  InfoBlockRow,
+  InfoBlockRowValue,
+  InfoBlockValue,
+} from '../types/info-block';
 
 const props = defineProps<{
   rows: InfoBlockRow[];

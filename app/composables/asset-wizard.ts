@@ -13,6 +13,9 @@ import {
 import { editFileModal } from '#layers/thei/app/modals/upload-settings/modal';
 import { pickFileModal } from '#layers/thei/app/modals/pick-file/modal';
 import type { PickedFile } from '#layers/thei/app/modals/pick-file/picked-file';
+import type { PickedFiles } from '#layers/thei/app/modals/pick-file/picked-file';
+import { createOriginalAssetSettings } from '#layers/thei/shared/asset-upload-settings';
+import { runAssetBatch } from '#layers/thei/shared/asset-batch';
 
 export type AssetWizardAccept =
   string | ExtensionProfile | (string | ExtensionProfile)[];
@@ -23,6 +26,19 @@ export interface AssetWizardOptions {
   acceptedExtensions?: string[] | '*';
   sizeLimitPolicy?: AssetUploadLimitPolicy;
   uploadProfile?: AssetUploadProfile;
+  usageDelta?: Record<string, number>;
+  backLabel?: string;
+  modalFlowId?: number;
+}
+
+export interface AssetBatchError {
+  fileName: string;
+  message: string;
+}
+
+export interface AssetBatchResult {
+  assets: AssetVariantInfo[];
+  errors: AssetBatchError[];
 }
 
 export async function launchAssetWizard(
@@ -36,9 +52,11 @@ export async function launchAssetWizard(
       : undefined);
   const acceptedExtensions =
     options.acceptedExtensions ?? acceptedExtensionsFromAccept(accept);
+  const assetFlowId = options.modalFlowId ?? createModalFlow();
 
   let step: 'pick' | 'edit' = 'pick';
   let pickedFile: PickedFile | undefined;
+  const flowVersion = modalDismissVersion.value;
 
   function cleanupPickedFile() {
     if (!pickedFile) return;
@@ -52,11 +70,23 @@ export async function launchAssetWizard(
         cleanupPickedFile();
         editFileModal.component();
 
-        const pickResult = await openModal(pickFileModal, {
-          accept,
-          maxSize,
-        });
+        const pickResult = await openModal(
+          pickFileModal,
+          {
+            accept,
+            maxSize,
+            backLabel: options.backLabel,
+          },
+          {
+            label: phrase.value.asset_pick_upload,
+            backLabel: options.backLabel,
+            flowId: assetFlowId,
+          },
+        );
 
+        if (modalDismissVersion.value !== flowVersion) {
+          return undefined;
+        }
         if (pickResult.type === 'error') {
           throw new Error(pickResult.message);
         }
@@ -70,19 +100,35 @@ export async function launchAssetWizard(
         continue;
       }
 
-      const editResult = await openModal(editFileModal, {
-        file: pickedFile!,
-        maxSize,
-        acceptedExtensions,
-        sizeLimitPolicy: options.sizeLimitPolicy,
-        uploadProfile: options.uploadProfile,
-      });
+      const editResult = await openModal(
+        editFileModal,
+        {
+          source: {
+            kind: 'file',
+            file: pickedFile!,
+            familyUuid: `af-${crypto.randomUUID()}`,
+          },
+          maxSize,
+          acceptedExtensions,
+          sizeLimitPolicy: options.sizeLimitPolicy,
+          uploadProfile: options.uploadProfile,
+          backLabel: phrase.value.pick_another_file,
+        },
+        {
+          label: phrase.value.upload_variants,
+          backLabel: phrase.value.pick_another_file,
+          flowId: assetFlowId,
+        },
+      );
 
+      if (modalDismissVersion.value !== flowVersion) {
+        return undefined;
+      }
       if (editResult.type === 'error') {
         throw new Error(editResult.message);
       }
 
-      if (editResult.type === 'upload-new') {
+      if (editResult.type === 'upload-new' || editResult.type === 'empty') {
         step = 'pick';
         continue;
       }
@@ -98,6 +144,150 @@ export async function launchAssetWizard(
   }
 }
 
+export async function launchAssetBatchWizard(
+  options: AssetWizardOptions = {},
+): Promise<AssetBatchResult | undefined> {
+  const accept = options.accept ?? anyFileExtensionProfile;
+  const maxSize =
+    options.maxSize ??
+    (options.sizeLimitPolicy
+      ? ASSET_UPLOAD_LIMITS[options.sizeLimitPolicy]
+      : undefined);
+  const acceptedExtensions =
+    options.acceptedExtensions ?? acceptedExtensionsFromAccept(accept);
+  const assetFlowId = options.modalFlowId ?? createModalFlow();
+  const result = await openModal(
+    pickFileModal,
+    {
+      accept,
+      maxSize,
+      multiple: true,
+      backLabel: options.backLabel,
+    },
+    {
+      label: phrase.value.asset_pick_upload,
+      backLabel: options.backLabel,
+      flowId: assetFlowId,
+    },
+  );
+  if (result.type !== 'picked-files') return undefined;
+
+  const picked = result as PickedFiles;
+  const errors: AssetBatchError[] = [...picked.errors];
+  const settled = await runAssetBatch(
+    picked.files,
+    async (file) => {
+      try {
+        return await uploadOriginalFile(file, {
+          ...options,
+          acceptedExtensions,
+          maxSize,
+        });
+      } finally {
+        URL.revokeObjectURL(file.objectUrl);
+      }
+    },
+    3,
+  );
+  settled.forEach((result, index) => {
+    if (result.status === 'fulfilled') return;
+    const error = result.reason;
+    errors.push({
+      fileName: picked.files[index]!.name,
+      message:
+        error instanceof Error
+          ? error.message
+          : phrase.value.upload_error_apply,
+    });
+  });
+  return {
+    assets: settled.flatMap((result) =>
+      result.status === 'fulfilled' ? [result.value] : [],
+    ),
+    errors,
+  };
+}
+
+async function uploadOriginalFile(
+  file: PickedFile,
+  options: AssetWizardOptions & {
+    acceptedExtensions: string[] | '*';
+    maxSize?: number;
+  },
+) {
+  const formData = new FormData();
+  formData.append('file', file.file, file.name);
+  formData.append('familyUuid', `af-${crypto.randomUUID()}`);
+  formData.append('settings', JSON.stringify(createOriginalAssetSettings()));
+  if (options.maxSize !== undefined) {
+    formData.append('maxSizeBytes', String(options.maxSize));
+  }
+  if (options.sizeLimitPolicy) {
+    formData.append('sizeLimitPolicy', options.sizeLimitPolicy);
+  }
+  formData.append(
+    'acceptedExtensions',
+    options.acceptedExtensions === '*'
+      ? '*'
+      : JSON.stringify(options.acceptedExtensions),
+  );
+  return await $fetch<AssetVariantInfo>('/api/admin/assets/upload', {
+    method: 'POST',
+    body: formData,
+  });
+}
+
+export async function launchAssetEditor(
+  asset: AssetVariantInfo,
+  options: AssetWizardOptions = {},
+): Promise<AssetVariantInfo | undefined> {
+  const flowVersion = modalDismissVersion.value;
+  const assetFlowId = options.modalFlowId ?? createModalFlow();
+
+  while (true) {
+    const editResult = await openModal(
+      editFileModal,
+      {
+        source: { kind: 'asset', asset },
+        maxSize: options.maxSize,
+        acceptedExtensions:
+          options.acceptedExtensions ??
+          acceptedExtensionsFromAccept(
+            options.accept ?? anyFileExtensionProfile,
+          ),
+        sizeLimitPolicy: options.sizeLimitPolicy,
+        uploadProfile: options.uploadProfile,
+        usageDelta: options.usageDelta,
+        backLabel: options.backLabel,
+      },
+      {
+        label: phrase.value.upload_variants,
+        backLabel: options.backLabel,
+        flowId: assetFlowId,
+      },
+    );
+
+    if (modalDismissVersion.value !== flowVersion) {
+      return undefined;
+    }
+    if (editResult.type === 'error') {
+      throw new Error(editResult.message);
+    }
+    if (editResult.type === 'upload-new') {
+      const replacement = await launchAssetWizard({
+        ...options,
+        backLabel: phrase.value.upload_variants,
+        modalFlowId: assetFlowId,
+      });
+      if (replacement || modalDismissVersion.value !== flowVersion) {
+        return replacement;
+      }
+      continue;
+    }
+    return editResult.type === 'asset-ready' ? editResult.asset : undefined;
+  }
+}
+
 export function mapAssetVariantToReplaceResult(
   asset: AssetVariantInfo,
 ): AssetReplaceResult {
@@ -106,11 +296,10 @@ export function mapAssetVariantToReplaceResult(
     slug: asset.slug,
     extension: asset.extension,
     size: asset.size,
-    previewUrl:
+    media:
       asset.type === AssetType.Image || asset.type === AssetType.Video
-        ? asset.previewUrl
+        ? asset.media
         : undefined,
-    videoUrl: asset.type === AssetType.Video ? asset.videoUrl : undefined,
     assetUrl: asset.assetUrl,
     meta: asset.meta,
   };

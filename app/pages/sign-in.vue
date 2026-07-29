@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-import userSvg from '~/assets/fallback/user.svg?raw';
 if (useIsAdmin().value) {
   await navigateTo('/admin/');
 }
@@ -86,26 +85,16 @@ watch(cooldown, (newCooldown) => {
   <AdminGridWrapper>
     <div class="flex min-h-screen min-w-screen items-center justify-center">
       <section
-        class="intems-center flex min-h-screen w-[min(380px,100%)] min-w-screen
+        class="intems-center flex min-h-screen w-full max-w-95 min-w-screen
           flex-col justify-center gap-md rounded-normal border border-border-1
           bg-bg-2 p-md shadow-lg shadow-shadow-1 sm:min-h-auto sm:min-w-auto"
       >
         <div class="flex items-center justify-around">
           <div
-            class="size-[64px] overflow-clip rounded-full ring-2 ring-border-3
+            class="size-16 overflow-clip rounded-full ring-2 ring-border-3
               ring-offset-2 ring-offset-bg-2"
           >
-            <Media
-              v-if="publicAdmin.avatarUrl"
-              :src="publicAdmin.avatarUrl"
-              class="size-full"
-            />
-            <TintedIcon
-              v-else
-              :svg="userSvg"
-              :seed="publicAdmin.displayName"
-              class="size-full"
-            />
+            <Media v-bind="publicAdmin.avatarMedia" class="size-full" />
           </div>
         </div>
         <div class="text-center">

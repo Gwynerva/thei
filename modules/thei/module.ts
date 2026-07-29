@@ -37,6 +37,7 @@ export default defineNuxtModule({
         export const projectPath = '${projectPath}';
       `,
     });
+    nuxt.options.alias['#thei/static'] = staticTemplate.dst;
 
     nuxt.hook('nitro:config', (nitroConfig) => {
       nitroConfig.alias ??= {};

@@ -21,6 +21,7 @@ export interface AssetByteRange {
 export interface SendAssetFileOptions {
   cacheControl: string;
   filename?: string;
+  etag?: string;
 }
 
 export function parseAssetRange(
@@ -90,6 +91,13 @@ export async function sendAssetFile(
   setHeader(event, 'X-Content-Type-Options', 'nosniff');
   setHeader(event, 'Cache-Control', options.cacheControl);
   setHeader(event, 'Accept-Ranges', 'bytes');
+  if (options.etag) {
+    setHeader(event, 'ETag', options.etag);
+    if (!range && getHeader(event, 'if-none-match') === options.etag) {
+      setResponseStatus(event, 304);
+      return null;
+    }
+  }
   if (contentDisposition) {
     setHeader(event, 'Content-Disposition', contentDisposition);
   }

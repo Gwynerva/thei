@@ -4,6 +4,7 @@ export const EntityPrefix = {
   Project: 'p',
   Asset: 'a',
   Content: 'c',
+  ProjectContentSection: 'pcs',
   Session: 's',
 } as const;
 

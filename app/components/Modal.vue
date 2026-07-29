@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import {
   activeModal,
-  closeModalWithBase,
+  closeActiveModalFlowWithBase,
   modalStack,
   settleModal,
 } from '#layers/thei/app/composables/modal';
@@ -110,19 +110,9 @@ onBeforeUnmount(() => {
   unlockPageScroll();
 });
 
-function closeWithBase(result: BaseModalResult) {
-  const modal = activeModal.value;
-
-  if (!modal) {
-    return;
-  }
-
-  closeModalWithBase(modal, result);
-}
-
 onErrorCaptured((err) => {
   const message = err instanceof Error ? err.message : String(err);
-  closeWithBase({ type: 'error', message });
+  closeActiveModalFlowWithBase({ type: 'error', message });
   return false;
 });
 
@@ -135,7 +125,7 @@ function onNativeClose() {
   }
 
   if (activeModal.value) {
-    closeWithBase({ type: 'empty' });
+    closeActiveModalFlowWithBase({ type: 'empty' });
   }
 }
 
@@ -147,7 +137,7 @@ function onBackdropMousedown(e: MouseEvent) {
 
 function onBackdropClick(e: MouseEvent) {
   if (mousedownOnBackdrop && e.target === dialogElement.value) {
-    closeWithBase({ type: 'empty' });
+    closeActiveModalFlowWithBase({ type: 'empty' });
   }
 }
 </script>
@@ -159,6 +149,8 @@ function onBackdropClick(e: MouseEvent) {
     class="m-0 h-dvh max-h-none w-dvw max-w-none overflow-hidden border-0
       bg-transparent p-0 outline-none backdrop:bg-transparent"
     @close="onNativeClose"
+    @cancel.prevent="closeActiveModalFlowWithBase({ type: 'empty' })"
+    @keydown.esc.stop.prevent="closeActiveModalFlowWithBase({ type: 'empty' })"
     @mousedown="onBackdropMousedown"
     @click="onBackdropClick"
   >

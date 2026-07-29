@@ -21,6 +21,28 @@ describe('normalize', () => {
   });
 });
 
+describe('Editor.js phrases', () => {
+  it('provides English block names and controls', () => {
+    expect(enModule.phrases.content_editor_i18n).toMatchObject({
+      text: 'Text',
+      media: 'Media',
+      gallery: 'Gallery',
+      file: 'File',
+      add: 'Add',
+      filter: 'Filter',
+    });
+  });
+});
+
+describe('modal navigation phrases', () => {
+  it('builds one reusable contextual back label', () => {
+    expect(enModule.phrases.back).toBe('Back');
+    expect(enModule.phrases.back_to('File variants')).toBe(
+      'Back to File variants',
+    );
+  });
+});
+
 describe('plural', () => {
   it('1 → one form', () =>
     expect(plural(1, 'project', 'projects')).toBe('1 project'));

@@ -4,7 +4,7 @@ const props = withDefaults(defineProps<{ maxWidth?: 'sm' | 'md' }>(), {
 });
 
 const maxWidthClass = computed(() =>
-  props.maxWidth === 'md' ? 'sm:max-w-md' : 'sm:max-w-sm',
+  props.maxWidth === 'md' ? 'sm:max-w-112' : 'sm:max-w-96',
 );
 </script>
 

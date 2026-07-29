@@ -14,6 +14,7 @@ import type {
   AssetUploadSettings,
   AssetVideoTransformSettings,
 } from '../asset-upload-settings';
+import type { MediaDescriptor } from '../media';
 
 export function buildAssetPreviewUrl(slug: string, extension: string) {
   return `/api/admin/assets/preview/${slug}.${extension}`;
@@ -25,6 +26,8 @@ export interface BaseAssetVariantInfo<
   TSettings extends AssetUploadSettings | null,
 > {
   assetUuid: string;
+  familyUuid: string;
+  contentHash: string;
   slug: string;
   extension: string;
   type: TType;
@@ -34,7 +37,7 @@ export interface BaseAssetVariantInfo<
   settingsVersion: number;
   settings: TSettings;
   assetUrl: string;
-  isOriginal: boolean;
+  isUnprocessed: boolean;
 }
 
 export interface ImageAssetVariantInfo extends BaseAssetVariantInfo<
@@ -42,8 +45,7 @@ export interface ImageAssetVariantInfo extends BaseAssetVariantInfo<
   ImageAssetMeta,
   AssetOriginalSettings | AssetImageTransformSettings | null
 > {
-  previewUrl: string;
-  videoUrl?: never;
+  media: MediaDescriptor;
 }
 
 export interface VideoAssetVariantInfo extends BaseAssetVariantInfo<
@@ -51,8 +53,7 @@ export interface VideoAssetVariantInfo extends BaseAssetVariantInfo<
   VideoAssetMeta,
   AssetOriginalSettings | AssetVideoTransformSettings | null
 > {
-  previewUrl: string;
-  videoUrl: string;
+  media: MediaDescriptor;
 }
 
 export interface AudioAssetVariantInfo extends BaseAssetVariantInfo<
@@ -60,8 +61,7 @@ export interface AudioAssetVariantInfo extends BaseAssetVariantInfo<
   AudioAssetMeta,
   AssetOriginalSettings | null
 > {
-  previewUrl?: never;
-  videoUrl?: never;
+  media?: never;
 }
 
 export interface OtherAssetVariantInfo extends BaseAssetVariantInfo<
@@ -69,8 +69,7 @@ export interface OtherAssetVariantInfo extends BaseAssetVariantInfo<
   OtherAssetMeta,
   AssetOriginalSettings | AssetFileZipSettings | null
 > {
-  previewUrl?: never;
-  videoUrl?: never;
+  media?: never;
 }
 
 export type AssetVariantInfo =
@@ -91,9 +90,10 @@ export type AssetUploadResponse = AssetVariantInfo & {
 
 export interface StoredAssetShape<TType extends AssetType = AssetType> {
   assetUuid: string;
+  familyUuid: string;
+  contentHash: string;
   slug: string;
   extension: string;
-  rawHash: string;
   settingsKey: string;
   settingsVersion: number;
   settings: AssetUploadSettings | null;
@@ -104,28 +104,31 @@ export interface StoredAssetShape<TType extends AssetType = AssetType> {
 
 /**
  * Wider replace-result used when replacing any asset, including unknown file types
- * where previewUrl may not exist.
+ * where media may not exist.
  */
 export type AssetReplaceResult = {
   assetUuid: string;
   slug: string;
   extension: string;
   size: number;
-  /** Thumbnail / image URL. Absent for unknown file types. */
-  previewUrl?: string;
-  /** Stored video URL. Only present for video assets. */
-  videoUrl?: string;
+  /** Display descriptor. Absent for unknown file types. */
+  media?: MediaDescriptor;
   /** Canonical download URL. Always present for View on unknown files. */
   assetUrl: string;
   meta?: AssetMeta | null;
 };
 
 export interface AssetVariantsRequest {
-  rawHash: string;
+  assetUuid: string;
 }
 
+export type AssetVariantWithUsage = AssetVariantInfo & {
+  usageCount: number;
+};
+
 export interface AssetVariantsResponse {
-  variants: AssetVariantInfo[];
+  currentAssetUuid: string;
+  variants: AssetVariantWithUsage[];
 }
 
 export interface AssetWizardResult {

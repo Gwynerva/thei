@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+import type {
+  InfoBlockRow,
+  InfoBlockTone,
+} from '#layers/thei/app/types/info-block';
+
 interface FileDimensions {
   width: number;
   height: number;
@@ -20,8 +25,8 @@ const props = defineProps<{
 
 const humanSize = useHumanSize();
 
-const rows = computed(() => {
-  const items = [
+const rows = computed<InfoBlockRow[]>(() => {
+  const items: InfoBlockRow[] = [
     {
       label: phrase.value.file_info_extension,
       value: {
@@ -64,7 +69,10 @@ function formatDimensions(dimensions: FileDimensions | undefined) {
   return dimensions ? `${dimensions.width}x${dimensions.height}` : undefined;
 }
 
-function sizeTone(previous: number | undefined, current: number | undefined) {
+function sizeTone(
+  previous: number | undefined,
+  current: number | undefined,
+): InfoBlockTone {
   if (previous === undefined || current === undefined || previous === current) {
     return 'neutral';
   }
@@ -74,7 +82,7 @@ function sizeTone(previous: number | undefined, current: number | undefined) {
 function extensionTone(
   previous: string | undefined,
   current: string | undefined,
-) {
+): InfoBlockTone {
   if (previous?.toLowerCase() === 'svg' && current?.toLowerCase() !== 'svg') {
     return 'bad';
   }

@@ -112,7 +112,8 @@ onUnmounted(() => window.removeEventListener('resize', debouncedUpdate));
 
 <style scoped>
 .slider {
-  height: 0.5rem;
+  /* Native range tracks and thumbs require browser-specific pseudo-elements. */
+  height: calc(var(--spacing) * 2);
   background: linear-gradient(
     to right,
     var(--color-accent) var(--progress),
@@ -122,20 +123,20 @@ onUnmounted(() => window.removeEventListener('resize', debouncedUpdate));
 
 .slider::-webkit-slider-thumb {
   appearance: none;
-  width: 1.375rem;
-  height: 1.375rem;
+  width: var(--spacing-md);
+  height: var(--spacing-md);
+  border: var(--spacing) solid var(--color-accent);
   border-radius: 9999px;
-  background: white;
-  border: 4px solid var(--color-accent);
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.2);
+  background: var(--color-white);
+  box-shadow: var(--shadow-md);
 }
 
 .slider::-moz-range-thumb {
-  width: 1.375rem;
-  height: 1.375rem;
-  border-radius: 9999px;
-  background: white;
+  width: var(--spacing-md);
+  height: var(--spacing-md);
   border: 3px solid var(--color-accent);
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.2);
+  border-radius: 9999px;
+  background: var(--color-white);
+  box-shadow: var(--shadow-md);
 }
 </style>

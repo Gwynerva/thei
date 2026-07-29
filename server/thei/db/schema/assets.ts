@@ -17,9 +17,11 @@ export const assets = sqliteTable(
     /** Random URL token embedded in container-scoped serving URLs for cache busting. */
     slug: text().notNull().unique(),
     extension: text().notNull(),
-    /** SHA-256 of the original file before any processing. */
-    rawHash: text().notNull(),
-    /** Stable key derived from upload settings. Used for deduplication together with rawHash. */
+    /** Stable identifier shared by independently stored variants of one asset. */
+    familyUuid: text().notNull(),
+    /** SHA-256 of the bytes actually stored on disk. */
+    contentHash: text().notNull(),
+    /** Stable key derived from the settings that produced this exact file. */
     settingsKey: text().notNull(),
     /** Version of the settings schema used to build settingsKey/settings. */
     settingsVersion: integer().notNull(),
@@ -33,7 +35,11 @@ export const assets = sqliteTable(
     meta: text({ mode: 'json' }).$type<AssetMeta | null>(),
   },
   (t) => [
-    uniqueIndex('assets_rawHash_settingsKey_idx').on(t.rawHash, t.settingsKey),
-    index('assets_rawHash_idx').on(t.rawHash),
+    uniqueIndex('assets_family_content_settings_idx').on(
+      t.familyUuid,
+      t.contentHash,
+      t.settingsKey,
+    ),
+    index('assets_family_idx').on(t.familyUuid),
   ],
 );

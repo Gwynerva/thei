@@ -30,7 +30,8 @@ describe('asset cleanup', () => {
           assetUuid text PRIMARY KEY,
           slug text NOT NULL UNIQUE,
           extension text NOT NULL,
-          rawHash text NOT NULL,
+          familyUuid text NOT NULL,
+          contentHash text NOT NULL,
           settingsKey text NOT NULL,
           settingsVersion integer NOT NULL,
           settings text,
@@ -58,6 +59,13 @@ describe('asset cleanup', () => {
           cv integer NOT NULL DEFAULT false,
           createdAt integer NOT NULL,
           updatedAt integer NOT NULL
+        );
+        CREATE TABLE events (
+          eventId text PRIMARY KEY,
+          title text NOT NULL,
+          emotion text,
+          access text NOT NULL,
+          url text NOT NULL UNIQUE
         );
         CREATE TABLE content (
           contentUuid text PRIMARY KEY,
@@ -92,6 +100,15 @@ describe('asset cleanup', () => {
         contentPath: (...parts: string[]) => join(root, ...parts),
         assets: {
           filePath,
+          findByUuid: async (assetUuid: string) =>
+            await db.query.assets.findFirst({
+              where: eq(schema.assets.assetUuid, assetUuid),
+            }),
+          delete: async (assetUuid: string) => {
+            await db
+              .delete(schema.assets)
+              .where(eq(schema.assets.assetUuid, assetUuid));
+          },
           usages: {
             findByContainer: async () => [],
             detach: async () => {},
@@ -116,6 +133,12 @@ describe('asset cleanup', () => {
         cv: false,
         createdAt: now,
         updatedAt: now,
+      });
+      await db.insert(schema.events).values({
+        eventId: 'e-live',
+        title: 'Event',
+        access: 'public' as any,
+        url: 'event',
       });
 
       await insertAsset(db, 'a-live', 'webp', now);
@@ -169,6 +192,18 @@ describe('asset cleanup', () => {
         },
         {
           assetUuid: 'a-live',
+          containerType: 'event',
+          containerId: 'e-live',
+          role: 'banner',
+        },
+        {
+          assetUuid: 'a-live',
+          containerType: 'event',
+          containerId: 'e-gone',
+          role: 'icon',
+        },
+        {
+          assetUuid: 'a-live',
           containerType: 'content',
           containerId: 'c-gone',
           role: 'content',
@@ -191,7 +226,7 @@ describe('asset cleanup', () => {
       ]);
 
       const remainingUsages = await db.select().from(schema.assetUsages);
-      expect(remainingUsages).toHaveLength(2);
+      expect(remainingUsages).toHaveLength(3);
       expect(remainingUsages).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -205,6 +240,12 @@ describe('asset cleanup', () => {
             containerType: 'content',
             containerId: 'c-live',
             role: 'content',
+          }),
+          expect.objectContaining({
+            assetUuid: 'a-live',
+            containerType: 'event',
+            containerId: 'e-live',
+            role: 'banner',
           }),
         ]),
       );
@@ -232,7 +273,8 @@ async function insertAsset(
     assetUuid,
     slug: assetUuid,
     extension,
-    rawHash: `raw-${assetUuid}`,
+    familyUuid: `family-${assetUuid}`,
+    contentHash: `content-${assetUuid}`,
     settingsKey: 'v5:original',
     settingsVersion: 5,
     settings: { version: 5, type: 'original' },

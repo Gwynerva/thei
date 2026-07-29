@@ -1,6 +1,7 @@
 import type {
   AssetUploadResponse,
   AssetVariantInfo,
+  AssetVariantWithUsage,
   AssetVariantsResponse,
 } from '#layers/thei/shared/api/asset';
 import type { AssetUploadSettings } from '#layers/thei/shared/asset-upload-settings';
@@ -8,49 +9,55 @@ import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profil
 import type { AssetUploadLimitPolicy } from '#layers/thei/shared/asset-upload-limits';
 import type { PickedFile } from '../pick-file/picked-file';
 
-export type UploadSettingsBusyAction = 'variants' | 'upload-original' | 'apply';
+export type UploadSettingsBusyAction = 'variants' | 'save-unchanged' | 'apply';
 export type UploadSettingsStatus =
   | { phase: 'uploading'; progress?: number }
   | { phase: 'processing'; progress?: number };
 
 export interface UploadSettingsModalData {
-  file: PickedFile;
+  source:
+    | { kind: 'file'; file: PickedFile; familyUuid: string }
+    | { kind: 'asset'; asset: AssetVariantInfo };
   maxSize?: number;
   acceptedExtensions?: string[] | '*';
   sizeLimitPolicy?: AssetUploadLimitPolicy;
   uploadProfile?: AssetUploadProfile;
+  usageDelta?: Record<string, number>;
+  backLabel?: string;
 }
 
 export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
   const busyAction = ref<UploadSettingsBusyAction>();
   const uploadStatus = ref<UploadSettingsStatus | null>(null);
   const activeXhr = shallowRef<XMLHttpRequest | null>(null);
-  const variants = ref<AssetVariantInfo[]>([]);
-  const temporaryAssetUuid = ref<string | null>(null);
+  const variants = ref<AssetVariantWithUsage[]>([]);
   let progressPollTimer: ReturnType<typeof setInterval> | undefined;
 
   onBeforeUnmount(() => {
     activeXhr.value?.abort();
     stopProgressPolling();
     activeXhr.value = null;
-    if (temporaryAssetUuid.value) {
-      void discardTemporaryAsset(temporaryAssetUuid.value);
-      temporaryAssetUuid.value = null;
-    }
   });
 
-  async function loadVariants(): Promise<AssetVariantInfo[]> {
+  async function loadVariants(): Promise<AssetVariantWithUsage[]> {
+    if (modalData.source.kind === 'file') return variants.value;
     busyAction.value = 'variants';
     try {
       const response = await $fetch<AssetVariantsResponse>(
         '/api/admin/assets/variants',
         {
           method: 'POST',
-          body: { rawHash: modalData.file.rawHash },
+          body: { assetUuid: modalData.source.asset.assetUuid },
         },
       );
-      variants.value = response.variants;
-      return response.variants;
+      variants.value = response.variants.map((variant) => ({
+        ...variant,
+        usageCount: Math.max(
+          0,
+          variant.usageCount + (modalData.usageDelta?.[variant.assetUuid] ?? 0),
+        ),
+      }));
+      return variants.value;
     } finally {
       busyAction.value = undefined;
     }
@@ -58,11 +65,19 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
 
   async function uploadWithSettings(
     settings: AssetUploadSettings,
-    options: { previousAssetUuid?: string | null } = {},
+    sourceAssetUuid?: string,
   ): Promise<AssetUploadResponse> {
+    if (sourceAssetUuid || modalData.source.kind === 'asset') {
+      return await transformStoredAsset(settings, sourceAssetUuid);
+    }
+
     const formData = new FormData();
-    formData.append('file', modalData.file.file, modalData.file.name);
-    formData.append('rawHash', modalData.file.rawHash);
+    formData.append(
+      'file',
+      modalData.source.file.file,
+      modalData.source.file.name,
+    );
+    formData.append('familyUuid', modalData.source.familyUuid);
     formData.append('settings', JSON.stringify(settings));
     const uploadId = crypto.randomUUID();
     formData.append('uploadId', uploadId);
@@ -84,11 +99,7 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
       );
     }
 
-    if (options.previousAssetUuid) {
-      formData.append('previousAssetUuid', options.previousAssetUuid);
-    }
-
-    return await new Promise<AssetUploadResponse>((resolve, reject) => {
+    const result = await new Promise<AssetUploadResponse>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       activeXhr.value = xhr;
       uploadStatus.value = { phase: 'uploading' };
@@ -137,31 +148,61 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
 
       xhr.send(formData);
     });
+    rememberVariant(result);
+    return result;
   }
 
-  async function discardTemporaryExcept(
-    assetUuidToKeep: string,
-  ): Promise<string | undefined> {
-    const assetUuid = temporaryAssetUuid.value;
-    if (!assetUuid) return undefined;
-    if (assetUuid === assetUuidToKeep) {
-      temporaryAssetUuid.value = null;
-      return undefined;
+  async function transformStoredAsset(
+    settings: AssetUploadSettings,
+    sourceAssetUuid?: string,
+  ): Promise<AssetUploadResponse> {
+    const uploadId = crypto.randomUUID();
+    uploadStatus.value = { phase: 'processing' };
+    startProgressPolling(uploadId);
+    try {
+      const result = await $fetch<AssetUploadResponse>(
+        '/api/admin/assets/transform',
+        {
+          method: 'POST',
+          body: {
+            assetUuid:
+              sourceAssetUuid ??
+              (modalData.source.kind === 'asset'
+                ? modalData.source.asset.assetUuid
+                : ''),
+            settings,
+            uploadId,
+          },
+        },
+      );
+      rememberVariant(result);
+      return result;
+    } finally {
+      stopProgressPolling();
     }
-
-    await discardTemporaryAsset(assetUuid);
-    temporaryAssetUuid.value = null;
-    return assetUuid;
   }
 
-  async function discardTemporaryAsset(assetUuid: string) {
-    await $fetch('/api/admin/assets/discard', {
+  function rememberVariant(asset: AssetVariantInfo) {
+    const existingIndex = variants.value.findIndex(
+      (variant) => variant.assetUuid === asset.assetUuid,
+    );
+    const item: AssetVariantWithUsage = {
+      ...asset,
+      usageCount:
+        existingIndex >= 0 ? variants.value[existingIndex]!.usageCount : 0,
+    };
+    if (existingIndex >= 0) {
+      variants.value.splice(existingIndex, 1, item);
+    } else {
+      variants.value.unshift(item);
+    }
+  }
+
+  async function touchVariant(assetUuid: string) {
+    await $fetch('/api/admin/assets/touch', {
       method: 'POST',
       body: { assetUuid },
-    }).catch(() => {});
-    variants.value = variants.value.filter(
-      (variant) => variant.assetUuid !== assetUuid,
-    );
+    });
   }
 
   function startProgressPolling(uploadId: string) {
@@ -199,9 +240,8 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
     busyAction,
     uploadStatus,
     variants,
-    temporaryAssetUuid,
     loadVariants,
     uploadWithSettings,
-    discardTemporaryExcept,
+    touchVariant,
   };
 }

@@ -23,16 +23,25 @@ import {
 import { randomId } from '#layers/thei/shared/utils/random-id';
 import { EntityPrefix, generateUnique, generateUniqueId } from '../entity-id';
 import { extractDominantHue } from './image-color';
-import { extractVideoThumbnail } from './video-thumbnail';
-import { getImageDimensions, inspectVideo } from './process';
+import { inspectVideo } from './process';
+import {
+  createMediaPreview,
+  MEDIA_PREVIEW_VERSION,
+  MEDIA_PREVIEW_WEBP_QUALITY,
+  MEDIA_PREVIEW_MAX_LONG_SIDE,
+} from './media-preview';
+import type { MediaDescriptor } from '#layers/thei/shared/media';
 
-const VIDEO_PREVIEW_SETTINGS_KEY = `v${ASSET_UPLOAD_SETTINGS_VERSION}:internal:video-preview`;
+const MEDIA_PREVIEW_SETTINGS_KEY =
+  `v${ASSET_UPLOAD_SETTINGS_VERSION}:internal:media-preview-v${MEDIA_PREVIEW_VERSION}` +
+  `:q${MEDIA_PREVIEW_WEBP_QUALITY}:max${MEDIA_PREVIEW_MAX_LONG_SIDE}`;
 
 export interface StoredAssetRecord {
   assetUuid: string;
+  familyUuid: string;
+  contentHash: string;
   slug: string;
   extension: string;
-  rawHash: string;
   settingsKey: string;
   settingsVersion: number;
   settings: AssetUploadSettings | null;
@@ -44,7 +53,7 @@ export interface StoredAssetRecord {
 export interface StoreAssetInput {
   buffer: Buffer;
   extension: string;
-  rawHash: string;
+  familyUuid: string;
   settingsKey: string;
   settingsVersion: number;
   settings: AssetUploadSettings | null;
@@ -56,15 +65,21 @@ export function sha256(buffer: Buffer): string {
   return createHash('sha256').update(buffer).digest('hex');
 }
 
-export async function createVideoPreviewAsset(videoBuffer: Buffer): Promise<{
+export async function createMediaPreviewAsset(
+  sourceBuffer: Buffer,
+  sourceType: AssetType.Image | AssetType.Video,
+): Promise<{
   previewAssetUuid: string;
   dominantHue?: number;
 }> {
-  const previewBuffer = await extractVideoThumbnail(videoBuffer);
+  const preview = await createMediaPreview(sourceBuffer, sourceType);
+  const previewBuffer = preview.buffer;
   const previewHash = sha256(previewBuffer);
-  const existing = await THEI_SERVER.assets.findBySettingsKey(
+  const previewFamilyUuid = `preview-${previewHash}`;
+  const existing = await THEI_SERVER.assets.findByIdentity(
+    previewFamilyUuid,
     previewHash,
-    VIDEO_PREVIEW_SETTINGS_KEY,
+    MEDIA_PREVIEW_SETTINGS_KEY,
   );
 
   if (existing) {
@@ -76,18 +91,18 @@ export async function createVideoPreviewAsset(videoBuffer: Buffer): Promise<{
     };
   }
 
-  const dimensions = await getImageDimensions(previewBuffer).catch(() => ({}));
   const dominantHue = await extractDominantHue(previewBuffer, 'webp');
   const meta: ImageAssetMeta = {
-    ...dimensions,
+    width: preview.width,
+    height: preview.height,
     ...(dominantHue !== undefined ? { dominantHue } : {}),
   };
 
   const { asset } = await storeAsset({
     buffer: previewBuffer,
     extension: 'webp',
-    rawHash: previewHash,
-    settingsKey: VIDEO_PREVIEW_SETTINGS_KEY,
+    familyUuid: previewFamilyUuid,
+    settingsKey: MEDIA_PREVIEW_SETTINGS_KEY,
     settingsVersion: ASSET_UPLOAD_SETTINGS_VERSION,
     settings: null,
     type: AssetType.Image,
@@ -100,19 +115,19 @@ export async function createVideoPreviewAsset(videoBuffer: Buffer): Promise<{
   };
 }
 
-export async function attachVideoPreviewUsage(
-  videoAssetUuid: string,
+export async function attachMediaPreviewUsage(
+  mediaAssetUuid: string,
   previewAssetUuid: string,
 ) {
   await THEI_SERVER.assets.usages.attach(
     previewAssetUuid,
     'asset',
-    videoAssetUuid,
+    mediaAssetUuid,
     'preview',
   );
 }
 
-export async function findVideoPreviewAsset(asset: StoredAssetRecord) {
+export async function findMediaPreviewAsset(asset: StoredAssetRecord) {
   return (
     await THEI_SERVER.assets.usages.findByContainer('asset', asset.assetUuid)
   ).find((usage) => usage.role === 'preview')?.asset;
@@ -122,8 +137,10 @@ export async function storeAsset(input: StoreAssetInput): Promise<{
   asset: StoredAssetRecord;
   created: boolean;
 }> {
-  const existing = await THEI_SERVER.assets.findBySettingsKey(
-    input.rawHash,
+  const contentHash = sha256(input.buffer);
+  const existing = await THEI_SERVER.assets.findByIdentity(
+    input.familyUuid,
+    contentHash,
     input.settingsKey,
   );
 
@@ -147,9 +164,10 @@ export async function storeAsset(input: StoreAssetInput): Promise<{
 
   const asset: StoredAssetRecord = {
     assetUuid,
+    familyUuid: input.familyUuid,
+    contentHash,
     slug,
     extension: input.extension,
-    rawHash: input.rawHash,
     settingsKey: input.settingsKey,
     settingsVersion: input.settingsVersion,
     settings: input.settings,
@@ -163,8 +181,9 @@ export async function storeAsset(input: StoreAssetInput): Promise<{
     return { asset, created: true };
   } catch {
     await rm(filePath, { force: true }).catch(() => {});
-    const recovered = await THEI_SERVER.assets.findBySettingsKey(
-      input.rawHash,
+    const recovered = await THEI_SERVER.assets.findByIdentity(
+      input.familyUuid,
+      contentHash,
       input.settingsKey,
     );
     if (recovered) {
@@ -182,33 +201,32 @@ export async function buildAssetVariantInfo(
 
   const base = {
     assetUuid: asset.assetUuid,
+    familyUuid: asset.familyUuid,
+    contentHash: asset.contentHash,
     slug: asset.slug,
     extension: asset.extension,
     size: asset.size,
     settingsKey: asset.settingsKey,
     settingsVersion: asset.settingsVersion,
     assetUrl,
-    isOriginal: asset.settings?.type === 'original',
+    isUnprocessed: asset.settings?.type === 'original',
   };
 
   if (asset.type === AssetType.Image) {
+    const media = await buildStoredMediaDescriptor(asset);
     return {
       ...base,
       type: AssetType.Image,
       meta: asset.meta as ImageAssetMeta | null,
       settings: asset.settings as
         AssetOriginalSettings | AssetImageTransformSettings | null,
-      previewUrl: assetUrl,
+      media,
     };
   }
 
   if (asset.type === AssetType.Video) {
     const meta = await resolveVideoMeta(asset);
-    let previewUrl = assetUrl;
-    const preview = await findVideoPreviewAsset(asset);
-    if (preview) {
-      previewUrl = buildAssetPreviewUrl(preview.slug, preview.extension);
-    }
+    const media = await buildStoredMediaDescriptor(asset, meta);
 
     return {
       ...base,
@@ -216,8 +234,7 @@ export async function buildAssetVariantInfo(
       meta,
       settings: asset.settings as
         AssetOriginalSettings | AssetVideoTransformSettings | null,
-      previewUrl,
-      videoUrl: assetUrl,
+      media,
     };
   }
 
@@ -236,6 +253,30 @@ export async function buildAssetVariantInfo(
     meta: asset.meta as OtherAssetMeta | null,
     settings: asset.settings as
       AssetOriginalSettings | AssetFileZipSettings | null,
+  };
+}
+
+export async function buildStoredMediaDescriptor(
+  asset: StoredAssetRecord,
+  resolvedMeta: AssetMeta | null = asset.meta,
+): Promise<MediaDescriptor> {
+  if (asset.type !== AssetType.Image && asset.type !== AssetType.Video) {
+    throw new Error('Cannot build media descriptor for a non-media asset');
+  }
+  const preview = await findMediaPreviewAsset(asset);
+  const previewSrc = preview
+    ? buildAssetPreviewUrl(preview.slug, preview.extension)
+    : buildAssetPreviewUrl(asset.slug, asset.extension);
+  const meta = resolvedMeta as ImageAssetMeta | VideoAssetMeta | null;
+  return {
+    src: buildAssetPreviewUrl(asset.slug, asset.extension),
+    kind: asset.type,
+    previewSrc,
+    ...(meta?.dominantHue !== undefined
+      ? { accentHue: meta.dominantHue }
+      : {}),
+    ...(meta?.width ? { width: meta.width } : {}),
+    ...(meta?.height ? { height: meta.height } : {}),
   };
 }
 
@@ -278,8 +319,8 @@ export async function deleteStoredAsset(assetUuid: string): Promise<boolean> {
     asset.extension,
   );
   const previewUuid =
-    asset.type === AssetType.Video
-      ? (await findVideoPreviewAsset(asset))?.assetUuid
+    asset.type === AssetType.Video || asset.type === AssetType.Image
+      ? (await findMediaPreviewAsset(asset))?.assetUuid
       : undefined;
 
   await THEI_SERVER.assets.delete(asset.assetUuid);
@@ -303,9 +344,10 @@ export async function deleteStoredAsset(assetUuid: string): Promise<boolean> {
 function normalizeAssetRecord(asset: StoredAssetRecord): StoredAssetRecord {
   return {
     assetUuid: asset.assetUuid,
+    familyUuid: asset.familyUuid,
+    contentHash: asset.contentHash,
     slug: asset.slug,
     extension: asset.extension,
-    rawHash: asset.rawHash,
     settingsKey: asset.settingsKey,
     settingsVersion: asset.settingsVersion,
     settings: asset.settings,

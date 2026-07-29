@@ -4,10 +4,17 @@ import type {
   AssetVariantInfo,
 } from '#layers/thei/shared/api/asset';
 import {
+  launchAssetBatchWizard,
+  launchAssetEditor,
   launchAssetWizard,
   mapAssetVariantToReplaceResult,
 } from '#layers/thei/app/composables/asset-wizard';
-import { AssetType, type AssetMeta } from '#layers/thei/shared/asset';
+import type { AssetVariantsResponse } from '#layers/thei/shared/api/asset';
+import {
+  AssetType,
+  assetSourceName,
+  type AssetMeta,
+} from '#layers/thei/shared/asset';
 import {
   anyFileExtensionProfile,
   imageExtensionProfile,
@@ -15,34 +22,37 @@ import {
 } from '#layers/thei/shared/assets/extensions';
 import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
 import { ASSET_UPLOAD_LIMITS } from '#layers/thei/shared/asset-upload-limits';
-import AssetAddEdit from '#layers/thei/app/components/AssetAddEdit.vue';
+import AssetTile from '#layers/thei/app/components/AssetTile.vue';
 import type {
   OtherAssetGetItem,
   ShowcaseAssetGetItem,
 } from '#layers/thei/shared/api/project';
+import { projectAssetUsageDelta } from '#layers/thei/shared/admin/project';
 import {
   projectDataInjectionKey,
-  iconPreviewUrlKey,
-  bannerPreviewUrlKey,
-  iconVideoUrlKey,
-  bannerVideoUrlKey,
+  savedProjectDataInjectionKey,
+  iconMediaKey,
+  bannerMediaKey,
   iconSizeKey,
   bannerSizeKey,
   otherItemsKey,
   showcaseItemsKey,
+  currentProjectUuidKey,
 } from '../composables';
-import { useProjectAssetList } from '../composables/use-project-asset-list';
-import { projectAssetDetailsModal } from './project-asset-details-modal';
+import type { MediaDescriptor } from '#layers/thei/shared/media';
+import { assetDetailsModal } from '#layers/thei/app/modals/asset-details/modal';
+import { useOrderedAssetList } from '#layers/thei/app/composables/ordered-asset-list';
 
 const projectData = inject(projectDataInjectionKey)!;
-const iconPreviewUrl = inject(iconPreviewUrlKey)!;
-const bannerPreviewUrl = inject(bannerPreviewUrlKey)!;
-const iconVideoUrl = inject(iconVideoUrlKey)!;
-const bannerVideoUrl = inject(bannerVideoUrlKey)!;
+const savedProjectData = inject(savedProjectDataInjectionKey)!;
+const iconMedia = inject(iconMediaKey)!;
+const bannerMedia = inject(bannerMediaKey)!;
 const iconSize = inject(iconSizeKey)!;
 const bannerSize = inject(bannerSizeKey)!;
 const showcaseItems = inject(showcaseItemsKey)!;
 const otherItems = inject(otherItemsKey)!;
+const currentProjectUuid = inject(currentProjectUuidKey)!;
+const batchErrorMessage = ref('');
 
 type PickedAsset = {
   asset: AssetVariantInfo;
@@ -54,13 +64,16 @@ type ProjectMediaSlot = {
   asideTitle: () => string;
   getAssetUuid: () => string | undefined;
   setAssetUuid: (assetUuid: string | undefined) => void;
-  previewUrl: Ref<string | undefined>;
-  videoUrl: Ref<string | undefined>;
+  media: Ref<MediaDescriptor | undefined>;
   size: Ref<number | undefined>;
 };
 
 function archivedOriginalFromMeta(meta: AssetMeta | null | undefined) {
   return meta && 'archivedOriginal' in meta ? meta.archivedOriginal : undefined;
+}
+
+function assetTitleFromMeta(meta: AssetMeta | null | undefined) {
+  return assetSourceName(meta)?.replace(/\.[^.]+$/, '');
 }
 
 function extensionFromUrl(url: string | undefined, fallback: string) {
@@ -76,8 +89,8 @@ async function pickProjectMediaAsset(
 ): Promise<PickedAsset | undefined> {
   const asset = await launchProjectAssetWizard({
     accept: [imageExtensionProfile, videoExtensionProfile],
-    maxSize: ASSET_UPLOAD_LIMITS['project-media'],
-    sizeLimitPolicy: 'project-media',
+    maxSize: ASSET_UPLOAD_LIMITS.media,
+    sizeLimitPolicy: 'media',
     uploadProfile,
   });
   if (
@@ -88,18 +101,7 @@ async function pickProjectMediaAsset(
   }
 
   const result = mapAssetVariantToReplaceResult(asset);
-  return result.previewUrl ? { asset, result } : undefined;
-}
-
-async function pickAnyProjectAsset(): Promise<PickedAsset | undefined> {
-  const asset = await launchProjectAssetWizard({
-    accept: anyFileExtensionProfile,
-    maxSize: ASSET_UPLOAD_LIMITS['project-other'],
-    sizeLimitPolicy: 'project-other',
-  });
-  return asset
-    ? { asset, result: mapAssetVariantToReplaceResult(asset) }
-    : undefined;
+  return result.media ? { asset, result } : undefined;
 }
 
 async function launchProjectAssetWizard(
@@ -113,6 +115,38 @@ async function launchProjectAssetWizard(
   }
 }
 
+async function editProjectAsset(
+  assetUuid: string,
+  options: Parameters<typeof launchAssetEditor>[1],
+): Promise<PickedAsset | undefined> {
+  try {
+    const family = await $fetch<AssetVariantsResponse>(
+      '/api/admin/assets/variants',
+      {
+        method: 'POST',
+        body: { assetUuid },
+      },
+    );
+    const current = family.variants.find(
+      (variant) => variant.assetUuid === assetUuid,
+    );
+    if (!current) return undefined;
+    const asset = await launchAssetEditor(current, {
+      ...options,
+      usageDelta: projectAssetUsageDelta(
+        projectData.value,
+        savedProjectData.value,
+      ),
+    });
+    return asset
+      ? { asset, result: mapAssetVariantToReplaceResult(asset) }
+      : undefined;
+  } catch (error) {
+    console.error(error);
+    return undefined;
+  }
+}
+
 const iconSlot: ProjectMediaSlot = {
   uploadProfile: 'project-icon',
   asideTitle: () => phrase.value.project_icon,
@@ -120,8 +154,7 @@ const iconSlot: ProjectMediaSlot = {
   setAssetUuid: (assetUuid) => {
     projectData.value.iconAssetUuid = assetUuid;
   },
-  previewUrl: iconPreviewUrl,
-  videoUrl: iconVideoUrl,
+  media: iconMedia,
   size: iconSize,
 };
 
@@ -132,8 +165,7 @@ const bannerSlot: ProjectMediaSlot = {
   setAssetUuid: (assetUuid) => {
     projectData.value.bannerAssetUuid = assetUuid;
   },
-  previewUrl: bannerPreviewUrl,
-  videoUrl: bannerVideoUrl,
+  media: bannerMedia,
   size: bannerSize,
 };
 
@@ -141,35 +173,40 @@ function applySingleMediaAsset(
   slot: ProjectMediaSlot,
   result: AssetReplaceResult,
 ) {
-  if (!result.previewUrl) return;
+  if (!result.media) return;
   slot.setAssetUuid(result.assetUuid);
-  slot.previewUrl.value = result.previewUrl;
-  slot.videoUrl.value = result.videoUrl;
+  slot.media.value = result.media;
   slot.size.value = result.size;
 }
 
-function detachSingleMediaAsset(slot: ProjectMediaSlot) {
+async function detachSingleMediaAsset(slot: ProjectMediaSlot) {
   slot.setAssetUuid(undefined);
-  slot.previewUrl.value = undefined;
-  slot.videoUrl.value = undefined;
+  slot.media.value = undefined;
   slot.size.value = undefined;
+  if (slot === iconSlot && currentProjectUuid.value) {
+    slot.media.value = await $fetch<MediaDescriptor>(
+      '/api/media/generated-icon',
+      {
+        query: { kind: 'project', seed: currentProjectUuid.value },
+      },
+    );
+  }
 }
 
 function singleMediaAssetSnapshot(
   slot: ProjectMediaSlot,
 ): AssetReplaceResult | undefined {
   const assetUuid = slot.getAssetUuid();
-  const previewUrl = slot.previewUrl.value;
-  if (!assetUuid || !previewUrl) return undefined;
+  const media = slot.media.value;
+  if (!assetUuid || !media) return undefined;
 
   return {
     assetUuid,
     slug: assetUuid,
-    extension: extensionFromUrl(slot.videoUrl.value ?? previewUrl, 'webp'),
+    extension: extensionFromUrl(media.src, 'webp'),
     size: slot.size.value ?? 0,
-    previewUrl,
-    videoUrl: slot.videoUrl.value,
-    assetUrl: slot.videoUrl.value ?? previewUrl,
+    media,
+    assetUrl: media.src,
   };
 }
 
@@ -180,8 +217,7 @@ function pickedToShowcaseItem(
   return {
     assetUuid: picked.result.assetUuid,
     type: picked.asset.type,
-    previewUrl: picked.result.previewUrl!,
-    videoUrl: picked.result.videoUrl,
+    media: picked.result.media!,
     caption: patch.caption,
     isPrivate: patch.isPrivate ?? false,
     size: picked.result.size,
@@ -194,8 +230,7 @@ function pickedToOtherItem(
 ): OtherAssetGetItem {
   return {
     assetUuid: picked.result.assetUuid,
-    previewUrl: picked.result.previewUrl,
-    videoUrl: picked.result.videoUrl,
+    media: picked.result.media,
     assetUrl: picked.result.assetUrl,
     extension: picked.result.extension,
     archivedOriginal: archivedOriginalFromMeta(picked.result.meta),
@@ -208,7 +243,7 @@ function pickedToOtherItem(
 
 // Showcase asset list
 
-const { addItem, updateItem, removeItem, dragSort } = useProjectAssetList(
+const { addItem, updateItem, removeItem, dragSort } = useOrderedAssetList(
   showcaseItems,
   (items) => {
     projectData.value.showcaseAssets = items.map((item) => ({
@@ -224,7 +259,7 @@ const {
   updateItem: updateOtherItem,
   removeItem: removeOtherItem,
   dragSort: otherDragSort,
-} = useProjectAssetList(otherItems, (items) => {
+} = useOrderedAssetList(otherItems, (items) => {
   projectData.value.otherAssets = items.map((item) => ({
     assetUuid: item.assetUuid,
     title: item.title,
@@ -243,15 +278,28 @@ async function openSingleMediaUpload(slot: ProjectMediaSlot) {
 async function openSingleMediaModal(slot: ProjectMediaSlot) {
   let current = singleMediaAssetSnapshot(slot);
   if (!current) return;
+  const flowVersion = modalDismissVersion.value;
 
   while (true) {
-    const result = await openModal(projectAssetDetailsModal, {
-      asideTitle: slot.asideTitle(),
-      asset: current,
-    });
+    const asideTitle = slot.asideTitle();
+    const result = await openModal(
+      assetDetailsModal,
+      {
+        asideTitle,
+        asset: current,
+      },
+      { label: asideTitle },
+    );
 
     if (result.type === 'replace') {
-      const picked = await pickProjectMediaAsset(slot.uploadProfile);
+      const picked = await editProjectAsset(current.assetUuid, {
+        accept: [imageExtensionProfile, videoExtensionProfile],
+        maxSize: ASSET_UPLOAD_LIMITS.media,
+        sizeLimitPolicy: 'media',
+        uploadProfile: slot.uploadProfile,
+        backLabel: asideTitle,
+      });
+      if (modalDismissVersion.value !== flowVersion) return;
       if (!picked) continue;
       current = picked.result;
       applySingleMediaAsset(slot, picked.result);
@@ -259,7 +307,7 @@ async function openSingleMediaModal(slot: ProjectMediaSlot) {
     }
 
     if (result.type === 'detach') {
-      detachSingleMediaAsset(slot);
+      await detachSingleMediaAsset(slot);
     }
 
     return;
@@ -269,36 +317,30 @@ async function openSingleMediaModal(slot: ProjectMediaSlot) {
 // Showcase handlers
 
 async function openShowcaseAdd() {
-  let picked = await pickProjectMediaAsset();
-  if (!picked || !picked.result.previewUrl) return;
-  let patch: { caption?: string; isPrivate?: boolean } = {};
-
-  while (true) {
-    const result = await openModal(projectAssetDetailsModal, {
-      asideTitle: phrase.value.showcase_file,
-      asset: picked.result,
-      primaryLabel: phrase.value.showcase_confirm_add,
-      showCaption: true,
-      initialCaption: patch.caption,
-      showAccess: true,
-      initialIsPrivate: patch.isPrivate,
-      showDetach: false,
-    });
-
-    if (result.type === 'replace') {
-      patch = { caption: result.caption, isPrivate: result.isPrivate };
-      const replacement = await pickProjectMediaAsset();
-      if (!replacement || !replacement.result.previewUrl) continue;
-      picked = replacement;
+  batchErrorMessage.value = '';
+  const result = await launchAssetBatchWizard({
+    accept: [imageExtensionProfile, videoExtensionProfile],
+    maxSize: ASSET_UPLOAD_LIMITS.media,
+    sizeLimitPolicy: 'media',
+  });
+  if (!result) return;
+  for (const asset of result.assets) {
+    if (
+      (asset.type !== AssetType.Image && asset.type !== AssetType.Video) ||
+      !asset.media
+    ) {
       continue;
     }
-
-    if (result.type === 'confirm') {
-      addItem(pickedToShowcaseItem(picked, result));
-    }
-
-    return;
+    addItem(
+      pickedToShowcaseItem(
+        { asset, result: mapAssetVariantToReplaceResult(asset) },
+        {},
+      ),
+    );
   }
+  batchErrorMessage.value = result.errors
+    .map((error) => `${error.fileName}: ${error.message}`)
+    .join(' · ');
 }
 
 async function openShowcaseAsset(index: number) {
@@ -309,42 +351,51 @@ async function openShowcaseAsset(index: number) {
     assetUuid: snapshot.assetUuid,
     slug: snapshot.assetUuid,
     extension: extensionFromUrl(
-      snapshot.videoUrl ?? snapshot.previewUrl,
+      snapshot.media.src,
       'webp',
     ),
     size: snapshot.size,
-    previewUrl: snapshot.previewUrl,
-    videoUrl: snapshot.videoUrl,
-    assetUrl: snapshot.videoUrl ?? snapshot.previewUrl,
+    media: snapshot.media,
+    assetUrl: snapshot.media.src,
   };
   let patch = {
     caption: snapshot.caption,
     isPrivate: snapshot.isPrivate,
   } satisfies { caption?: string; isPrivate?: boolean };
+  const flowVersion = modalDismissVersion.value;
 
   while (true) {
-    const result = await openModal(projectAssetDetailsModal, {
-      asideTitle: phrase.value.showcase_file,
-      asset: current,
-      primaryLabel: phrase.value.save,
-      showCaption: true,
-      initialCaption: patch.caption,
-      showAccess: true,
-      initialIsPrivate: patch.isPrivate,
-    });
+    const result = await openModal(
+      assetDetailsModal,
+      {
+        asideTitle: phrase.value.showcase_file,
+        asset: current,
+        primaryLabel: phrase.value.save,
+        showCaption: true,
+        initialCaption: patch.caption,
+        showAccess: true,
+        initialIsPrivate: patch.isPrivate,
+      },
+      { label: phrase.value.showcase_file },
+    );
 
     if (result.type === 'replace') {
       patch = {
         caption: result.caption,
         isPrivate: result.isPrivate ?? patch.isPrivate,
       };
-      const picked = await pickProjectMediaAsset();
-      if (!picked || !picked.result.previewUrl) continue;
+      const picked = await editProjectAsset(currentAssetUuid, {
+        accept: [imageExtensionProfile, videoExtensionProfile],
+        maxSize: ASSET_UPLOAD_LIMITS.media,
+        sizeLimitPolicy: 'media',
+        backLabel: phrase.value.showcase_file,
+      });
+      if (modalDismissVersion.value !== flowVersion) return;
+      if (!picked || !picked.result.media) continue;
       updateItem(currentAssetUuid, {
         assetUuid: picked.result.assetUuid,
         type: picked.asset.type,
-        previewUrl: picked.result.previewUrl,
-        videoUrl: picked.result.videoUrl,
+        media: picked.result.media,
         size: picked.result.size,
       } as Partial<ShowcaseAssetGetItem>);
       currentAssetUuid = picked.result.assetUuid;
@@ -368,46 +419,29 @@ async function openShowcaseAsset(index: number) {
 // Other-files handlers
 
 async function openOtherAdd() {
-  let picked = await pickAnyProjectAsset();
-  if (!picked) return;
-  let patch: { title?: string; caption?: string; isPrivate?: boolean } = {};
-
-  while (true) {
-    const result = await openModal(projectAssetDetailsModal, {
-      asideTitle: phrase.value.project_file,
-      asset: picked.result,
-      archivedOriginal: archivedOriginalFromMeta(picked.result.meta),
-      primaryLabel: phrase.value.other_add,
-      showTitle: true,
-      requireTitle: true,
-      initialTitle: patch.title,
-      showCaption: true,
-      initialCaption: patch.caption,
-      captionAsTextarea: true,
-      captionLabel: phrase.value.other_description,
-      showAccess: true,
-      initialIsPrivate: patch.isPrivate,
-      showDetach: false,
-    });
-
-    if (result.type === 'replace') {
-      patch = {
-        title: result.title,
-        caption: result.caption,
-        isPrivate: result.isPrivate,
-      };
-      const replacement = await pickAnyProjectAsset();
-      if (!replacement) continue;
-      picked = replacement;
-      continue;
-    }
-
-    if (result.type === 'confirm') {
-      addOtherItem(pickedToOtherItem(picked, result));
-    }
-
-    return;
+  batchErrorMessage.value = '';
+  const result = await launchAssetBatchWizard({
+    accept: anyFileExtensionProfile,
+    maxSize: ASSET_UPLOAD_LIMITS.file,
+    sizeLimitPolicy: 'file',
+  });
+  if (!result) return;
+  for (const asset of result.assets) {
+    const picked = {
+      asset,
+      result: mapAssetVariantToReplaceResult(asset),
+    };
+    addOtherItem(
+      pickedToOtherItem(picked, {
+        title:
+          assetTitleFromMeta(asset.meta) ??
+          `${asset.assetUuid}.${asset.extension}`,
+      }),
+    );
   }
+  batchErrorMessage.value = result.errors
+    .map((error) => `${error.fileName}: ${error.message}`)
+    .join(' · ');
 }
 
 async function openOtherAsset(index: number) {
@@ -419,8 +453,7 @@ async function openOtherAsset(index: number) {
     slug: snapshot.assetUuid,
     extension: snapshot.extension,
     size: snapshot.size,
-    previewUrl: snapshot.previewUrl,
-    videoUrl: snapshot.videoUrl,
+    media: snapshot.media,
     assetUrl: snapshot.assetUrl,
   };
   let currentArchivedOriginal = snapshot.archivedOriginal;
@@ -429,23 +462,28 @@ async function openOtherAsset(index: number) {
     caption: snapshot.caption,
     isPrivate: snapshot.isPrivate,
   } satisfies { title?: string; caption?: string; isPrivate?: boolean };
+  const flowVersion = modalDismissVersion.value;
 
   while (true) {
-    const result = await openModal(projectAssetDetailsModal, {
-      asideTitle: phrase.value.project_file,
-      asset: current,
-      archivedOriginal: currentArchivedOriginal,
-      primaryLabel: phrase.value.save,
-      showTitle: true,
-      requireTitle: true,
-      initialTitle: patch.title,
-      showCaption: true,
-      initialCaption: patch.caption,
-      captionAsTextarea: true,
-      captionLabel: phrase.value.other_description,
-      showAccess: true,
-      initialIsPrivate: patch.isPrivate,
-    });
+    const result = await openModal(
+      assetDetailsModal,
+      {
+        asideTitle: phrase.value.project_file,
+        asset: current,
+        archivedOriginal: currentArchivedOriginal,
+        primaryLabel: phrase.value.save,
+        showTitle: true,
+        requireTitle: true,
+        initialTitle: patch.title,
+        showCaption: true,
+        initialCaption: patch.caption,
+        captionAsTextarea: true,
+        captionPlaceholder: phrase.value.other_description,
+        showAccess: true,
+        initialIsPrivate: patch.isPrivate,
+      },
+      { label: phrase.value.project_file },
+    );
 
     if (result.type === 'replace') {
       patch = {
@@ -453,13 +491,18 @@ async function openOtherAsset(index: number) {
         caption: result.caption,
         isPrivate: result.isPrivate ?? patch.isPrivate,
       };
-      const picked = await pickAnyProjectAsset();
+      const picked = await editProjectAsset(currentAssetUuid, {
+        accept: anyFileExtensionProfile,
+        maxSize: ASSET_UPLOAD_LIMITS.file,
+        sizeLimitPolicy: 'file',
+        backLabel: phrase.value.project_file,
+      });
+      if (modalDismissVersion.value !== flowVersion) return;
       if (!picked) continue;
       currentArchivedOriginal = archivedOriginalFromMeta(picked.result.meta);
       updateOtherItem(currentAssetUuid, {
         assetUuid: picked.result.assetUuid,
-        previewUrl: picked.result.previewUrl,
-        videoUrl: picked.result.videoUrl,
+        media: picked.result.media,
         assetUrl: picked.result.assetUrl,
         extension: picked.result.extension,
         archivedOriginal: currentArchivedOriginal,
@@ -494,16 +537,24 @@ async function openOtherAsset(index: number) {
       class="mb-md"
     />
     <Box class="flex flex-col">
+      <div
+        v-if="batchErrorMessage"
+        class="border-b border-border-error bg-bg-error px-md py-sm text-sm
+          text-text-error"
+      >
+        <Icon name="warning" class="mr-xs" />
+        {{ batchErrorMessage }}
+      </div>
       <div class="flex flex-wrap gap-md p-sm sm:p-md">
         <!-- Project Icon -->
         <div class="flex flex-1 items-center gap-sm">
-          <AssetAddEdit
-            :preview-url="iconPreviewUrl"
-            :video-url="iconVideoUrl"
+          <AssetTile
+            :media="iconMedia"
             :size="iconSize"
+            :aria-label="phrase.project_icon"
             class="size-18 cursor-pointer"
             @click="
-              iconPreviewUrl
+              projectData.iconAssetUuid
                 ? openSingleMediaModal(iconSlot)
                 : openSingleMediaUpload(iconSlot)
             "
@@ -516,13 +567,13 @@ async function openOtherAsset(index: number) {
 
         <!-- Project Banner -->
         <div class="flex flex-1 items-center gap-sm">
-          <AssetAddEdit
-            :preview-url="bannerPreviewUrl"
-            :video-url="bannerVideoUrl"
+          <AssetTile
+            :media="bannerMedia"
             :size="bannerSize"
+            :aria-label="phrase.project_banner"
             class="aspect-video h-18 cursor-pointer"
             @click="
-              bannerPreviewUrl
+              bannerMedia
                 ? openSingleMediaModal(bannerSlot)
                 : openSingleMediaUpload(bannerSlot)
             "
@@ -551,12 +602,12 @@ async function openOtherAsset(index: number) {
           :key="item.assetUuid"
           class="flex w-18 flex-col items-center gap-xs"
         >
-          <AssetAddEdit
+          <AssetTile
             :data-drag-index="index"
-            :preview-url="item.previewUrl"
-            :video-url="item.videoUrl"
+            :media="item.media"
             :size="item.size"
             :is-private="item.isPrivate"
+            :aria-label="phrase.showcase_details"
             class="size-18 cursor-pointer touch-none"
             :class="{
               'opacity-50': dragSort.draggingIndex.value === index,
@@ -578,7 +629,11 @@ async function openOtherAsset(index: number) {
         </div>
 
         <!-- Add button (always last) -->
-        <AssetAddEdit class="size-18 cursor-pointer" @click="openShowcaseAdd" />
+        <AssetTile
+          :aria-label="phrase.showcase_add"
+          class="size-18 cursor-pointer"
+          @click="openShowcaseAdd"
+        />
       </div>
 
       <!-- Other-files header -->
@@ -594,16 +649,16 @@ async function openOtherAsset(index: number) {
       <div class="flex flex-wrap gap-sm p-sm sm:p-md">
         <div
           v-for="(item, index) in otherItems"
+          :key="item.assetUuid"
           class="flex w-18 flex-col items-center gap-xs"
         >
-          <AssetAddEdit
-            :key="item.assetUuid"
+          <AssetTile
             :data-drag-index="index"
-            :preview-url="item.previewUrl"
-            :video-url="item.videoUrl"
+            :media="item.media"
             :extension="item.extension"
             :size="item.size"
             :is-private="item.isPrivate"
+            :aria-label="phrase.other_details"
             class="size-18 cursor-pointer touch-none"
             :class="{
               'opacity-50': otherDragSort.draggingIndex.value === index,
@@ -623,7 +678,11 @@ async function openOtherAsset(index: number) {
           </div>
         </div>
 
-        <AssetAddEdit class="size-18 cursor-pointer" @click="openOtherAdd" />
+        <AssetTile
+          :aria-label="phrase.other_add"
+          class="size-18 cursor-pointer"
+          @click="openOtherAdd"
+        />
       </div>
     </Box>
   </div>

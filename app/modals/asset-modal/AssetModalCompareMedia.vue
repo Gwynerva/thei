@@ -566,7 +566,7 @@ function onTimeUpdate(e: Event): void {
         class="pointer-events-none absolute inset-0 flex items-center
           justify-center"
       >
-        <Icon name="loading" class="text-[5em] text-text-2" />
+        <Icon name="loading" class="text-7xl text-text-2" />
       </div>
     </TransitionFade>
 
@@ -575,40 +575,37 @@ function onTimeUpdate(e: Event): void {
       :style="dividerStyle"
     >
       <button
+        type="button"
         class="pointer-events-auto absolute top-1/2 right-sm flex w-22
           -translate-y-1/2 cursor-pointer flex-col items-center rounded-md
           border border-border-3/30 bg-bg-2/60 px-1.5 py-0.5 text-center
-          text-text-1/75 shadow-[0_0_10px_2px_var(--color-shadow-3)]
-          backdrop-blur transition hocus:border-border-3/50 hocus:bg-bg-2/80
-          hocus:text-text-1"
+          text-text-1/75 shadow-lg shadow-shadow-3 backdrop-blur transition
+          hocus:border-border-3/50 hocus:bg-bg-2/80 hocus:text-text-1"
         @pointerdown.stop
         @click="toggleSideZoom('original')"
       >
-        <span
-          class="text-[0.625rem] leading-tight font-semibold whitespace-nowrap"
-        >
+        <span class="text-xs leading-tight font-semibold whitespace-nowrap">
           {{ originalLabel }}
         </span>
-        <span class="text-[0.6875rem] leading-tight font-bold tabular-nums">
+        <span class="text-xs leading-tight font-bold tabular-nums">
           {{ originalPercent }}%
         </span>
       </button>
 
       <button
+        type="button"
         class="pointer-events-auto absolute top-1/2 left-sm flex w-22
           -translate-y-1/2 cursor-pointer flex-col items-center rounded-md
           border border-accent/60 bg-bg-accent/80 px-1.5 py-0.5 text-center
-          text-accent shadow-[0_0_10px_2px_var(--color-shadow-3)] backdrop-blur
-          transition hocus:border-accent hocus:bg-bg-accent hocus:text-accent"
+          text-accent shadow-lg shadow-shadow-3 backdrop-blur transition
+          hocus:border-accent hocus:bg-bg-accent hocus:text-accent"
         @pointerdown.stop
         @click="toggleSideZoom('modified')"
       >
-        <span
-          class="text-[0.625rem] leading-tight font-semibold whitespace-nowrap"
-        >
+        <span class="text-xs leading-tight font-semibold whitespace-nowrap">
           {{ modifiedLabel }}
         </span>
-        <span class="text-[0.6875rem] leading-tight font-bold tabular-nums">
+        <span class="text-xs leading-tight font-bold tabular-nums">
           {{ modifiedPercent }}%
         </span>
       </button>
@@ -619,7 +616,7 @@ function onTimeUpdate(e: Event): void {
       class="absolute top-0 bottom-0 z-30 w-8 -translate-x-1/2
         cursor-col-resize"
       :style="dividerStyle"
-      aria-label="Compare preview divider"
+      :aria-label="phrase.upload_compare_divider"
       role="separator"
       @pointerdown.stop="onDividerPointerDown"
       @pointermove.stop="onDividerPointerMove"
@@ -628,10 +625,10 @@ function onTimeUpdate(e: Event): void {
     >
       <button
         type="button"
-        class="pointer-events-auto absolute top-[calc(50%-3.75rem)] left-1/2
-          z-10 flex size-7 -translate-x-1/2 items-center justify-center
-          rounded-full border-2 shadow-[0_0_10px_2px_var(--color-shadow-3)]
-          backdrop-blur transition"
+        class="pointer-events-auto absolute top-[calc(50%-var(--spacing)*15)]
+          left-1/2 z-10 flex size-7 -translate-x-1/2 items-center justify-center
+          rounded-full border-2 shadow-lg shadow-shadow-3 backdrop-blur
+          transition"
         :class="
           isSeamlessMode
             ? 'border-accent/70 bg-bg-accent/80 text-accent hocus:border-accent'
@@ -639,7 +636,7 @@ function onTimeUpdate(e: Event): void {
               hocus:border-border-3/60 hocus:bg-bg-2/80 hocus:text-text-1`
         "
         :aria-pressed="isSeamlessMode"
-        aria-label="Toggle seamless compare mode"
+        :aria-label="phrase.upload_compare_toggle_mode"
         @pointerdown.stop
         @pointerup.stop
         @click.stop="toggleCompareMode"
@@ -648,13 +645,12 @@ function onTimeUpdate(e: Event): void {
       </button>
       <span
         class="absolute top-0 bottom-0 left-1/2 w-px -translate-x-1/2
-          bg-text-1/60 shadow-[0_0_10px_2px_var(--color-shadow-3)]"
+          bg-text-1/60 shadow-lg shadow-shadow-3"
       />
       <span
         class="absolute top-1/2 left-1/2 flex h-14 w-5 -translate-x-1/2
           -translate-y-1/2 items-center justify-center rounded-full border-2
-          border-border-3/40 bg-bg-2/70
-          shadow-[0_0_10px_2px_var(--color-shadow-3)] backdrop-blur"
+          border-border-3/40 bg-bg-2/70 shadow-lg shadow-shadow-3 backdrop-blur"
       >
         <span class="h-8 w-px rounded-full bg-text-1/60" />
       </span>

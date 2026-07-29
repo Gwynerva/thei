@@ -35,7 +35,7 @@ const isActive = computed({
     </div>
 
     <div
-      class="grid overflow-hidden transition-[grid-template-rows,opacity]"
+      class="grid overflow-hidden transition-all"
       :aria-hidden="!active"
       :inert="!active"
       :class="

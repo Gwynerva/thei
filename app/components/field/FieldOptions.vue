@@ -32,7 +32,7 @@ const model = defineModel<string>();
         :data-title-popup="direction === 'row' ? option.description : undefined"
         class="cursor-pointer rounded-normal border-2 p-xs transition"
         :class="[
-          direction === 'column' ? 'flex-1' : 'flex-[1_1_max-content]',
+          direction === 'column' ? 'flex-1' : 'flex-auto',
           option.classes,
           model === key
             ? 'border-accent bg-bg-accent text-accent'

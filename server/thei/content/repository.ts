@@ -15,6 +15,7 @@ import {
 } from '#layers/thei/shared/content';
 import {
   AssetType,
+  assetSourceName,
   type ContentAssetUsageMeta,
 } from '#layers/thei/shared/asset';
 import { buildAdminAssetUrls, archivedOriginalFromMeta } from '../assets/urls';
@@ -180,6 +181,10 @@ export function applyPreparedContentSave(
         meta: usage.meta,
       })
       .run();
+    tx.update(schema.assets)
+      .set({ touchedAt: now })
+      .where(eq(schema.assets.assetUuid, usage.assetUuid))
+      .run();
   }
 }
 
@@ -228,12 +233,12 @@ async function validateContentAssets(data: ContentOutputData) {
       const asset = assetByUuid.get(ref.assetUuid);
       if (!asset) continue;
       if (
-        (block.type === 'contentImage' || block.type === 'contentGallery') &&
+        (block.type === 'contentMedia' || block.type === 'contentGallery') &&
         asset.type !== AssetType.Image &&
         asset.type !== AssetType.Video
       ) {
         throw new ContentValidationError(
-          'Content image and gallery blocks can only use images or videos',
+          'Content media and gallery blocks can only use images or videos',
         );
       }
     }
@@ -255,11 +260,11 @@ async function hydrateContentData(
     const urls = await buildAdminAssetUrls(asset);
     const hydrated = {
       assetUuid: asset.assetUuid,
+      name: assetSourceName(asset.meta),
       type: asset.type,
       extension: asset.extension,
       size: asset.size,
-      previewUrl: urls.previewUrl,
-      videoUrl: urls.videoUrl,
+      media: urls.media,
       assetUrl: urls.assetUrl,
       archivedOriginal:
         asset.type === AssetType.Other
@@ -273,18 +278,21 @@ async function hydrateContentData(
   const blocks: ContentOutputBlock[] = [];
   for (const block of normalized.blocks) {
     const data = { ...block.data };
-    if (block.type === 'contentImage' || block.type === 'contentAttachment') {
+    if (block.type === 'contentMedia' || block.type === 'contentAttachment') {
       const assetUuid = (block.data as any).asset?.assetUuid;
       data.asset = assetUuid ? await hydrateAsset(assetUuid) : null;
     } else if (block.type === 'contentGallery') {
-      const assets = Array.isArray((block.data as any).assets)
-        ? (block.data as any).assets
+      const items = Array.isArray((block.data as any).items)
+        ? (block.data as any).items
         : [];
-      data.assets = (
+      data.items = (
         await Promise.all(
-          assets.map((asset: any) =>
-            asset?.assetUuid ? hydrateAsset(asset.assetUuid) : undefined,
-          ),
+          items.map(async (item: any) => {
+            const asset = item?.asset?.assetUuid
+              ? await hydrateAsset(item.asset.assetUuid)
+              : undefined;
+            return asset ? { ...item, asset } : undefined;
+          }),
         )
       ).filter(Boolean);
     }
@@ -300,7 +308,7 @@ function stripHydratedContentAssetData(
   return {
     ...data,
     blocks: data.blocks.map((block) => {
-      if (block.type === 'contentImage' || block.type === 'contentAttachment') {
+      if (block.type === 'contentMedia' || block.type === 'contentAttachment') {
         return {
           ...block,
           data: {
@@ -315,8 +323,13 @@ function stripHydratedContentAssetData(
           ...block,
           data: {
             ...block.data,
-            assets: Array.isArray((block.data as any).assets)
-              ? (block.data as any).assets.map(stripAsset).filter(Boolean)
+            items: Array.isArray((block.data as any).items)
+              ? (block.data as any).items
+                  .map((item: any) => {
+                    const asset = stripAsset(item?.asset);
+                    return asset ? { ...item, asset } : null;
+                  })
+                  .filter(Boolean)
               : [],
           },
         };

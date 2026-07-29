@@ -5,5 +5,10 @@ export interface PickedFile {
   extension: string;
   size: number;
   name: string;
-  rawHash: string;
+}
+
+export interface PickedFiles {
+  type: 'picked-files';
+  files: PickedFile[];
+  errors: { fileName: string; message: string }[];
 }

@@ -1,27 +1,22 @@
 import { buildAssetPreviewUrl } from '#layers/thei/shared/api/asset';
 import { AssetType, type AssetMeta } from '#layers/thei/shared/asset';
-import { findVideoPreviewAsset } from './storage';
+import { buildStoredMediaDescriptor } from './storage';
 
-type StoredAsset = Parameters<typeof findVideoPreviewAsset>[0];
+type StoredAsset = Parameters<typeof buildStoredMediaDescriptor>[0];
 
 export async function buildAdminAssetUrls(asset: StoredAsset) {
   const assetUrl = buildAssetPreviewUrl(asset.slug, asset.extension);
 
-  if (asset.type === AssetType.Video) {
-    const preview = await findVideoPreviewAsset(asset);
+  if (asset.type === AssetType.Video || asset.type === AssetType.Image) {
     return {
       assetUrl,
-      previewUrl: preview
-        ? buildAssetPreviewUrl(preview.slug, preview.extension)
-        : undefined,
-      videoUrl: assetUrl,
+      media: await buildStoredMediaDescriptor(asset),
     };
   }
 
   return {
     assetUrl,
-    previewUrl: asset.type === AssetType.Image ? assetUrl : undefined,
-    videoUrl: undefined,
+    media: undefined,
   };
 }
 

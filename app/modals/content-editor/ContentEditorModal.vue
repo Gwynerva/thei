@@ -1,19 +1,29 @@
 <script lang="ts" setup>
 import type EditorJS from '@editorjs/editorjs';
 import type { OutputData } from '@editorjs/editorjs';
-import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
-import { AssetType } from '#layers/thei/shared/asset';
+import type {
+  AssetReplaceResult,
+  AssetVariantInfo,
+  AssetVariantsResponse,
+} from '#layers/thei/shared/api/asset';
+import { AssetType, assetSourceName } from '#layers/thei/shared/asset';
 import {
   ContentValidationError,
   collectContentAssetSizeMap,
+  contentDataIsSemanticallyEqual,
+  extractContentAssetRefs,
   normalizeContentData,
   summarizeContentData,
+  type ContentAssetData,
   type ContentFieldModelValue,
   type ContentOutputData,
 } from '#layers/thei/shared/content';
 import {
   launchAssetWizard,
+  launchAssetBatchWizard,
+  launchAssetEditor,
   mapAssetVariantToReplaceResult,
+  type AssetWizardOptions,
 } from '#layers/thei/app/composables/asset-wizard';
 import {
   anyFileExtensionProfile,
@@ -25,15 +35,21 @@ import ModalWindow from '#layers/thei/app/modals/ModalWindow.vue';
 import {
   ContentAttachmentTool,
   ContentGalleryTool,
-  ContentImageTool,
+  ContentMediaTool,
   PrivateAccessTune,
   type ContentEditorAssetKind,
+  type ContentEditorEditGalleryItem,
 } from '#layers/thei/app/components/content/editor-tools';
+import { assetDetailsModal } from '#layers/thei/app/modals/asset-details/modal';
 
-type ContentEditorResult = {
-  type: 'save';
-  value: ContentFieldModelValue;
-};
+type ContentEditorResult =
+  | {
+      type: 'save';
+      value: ContentFieldModelValue;
+    }
+  | {
+      type: 'unchanged';
+    };
 
 const emit = defineEmits<{
   modalResult: [result: ContentEditorResult];
@@ -72,6 +88,9 @@ onMounted(async () => {
     data: toEditorData(props.modalData.value?.data),
     autofocus: true,
     placeholder: phrase.value.content_editor_placeholder,
+    i18n: {
+      messages: editorJsI18nMessages(),
+    },
     minHeight: 240,
     inlineToolbar: ['bold', 'italic', 'link'],
     sanitizer: {
@@ -108,17 +127,19 @@ onMounted(async () => {
         class: Quote,
         inlineToolbar: true,
       },
-      contentImage: {
-        class: ContentImageTool,
+      contentMedia: {
+        class: ContentMediaTool,
         config: {
           pickAsset,
+          editAsset,
           labels: contentToolLabels(),
         },
       },
       contentGallery: {
         class: ContentGalleryTool,
         config: {
-          pickAsset,
+          pickAssets,
+          editGalleryItem,
           labels: contentToolLabels(),
         },
       },
@@ -126,6 +147,7 @@ onMounted(async () => {
         class: ContentAttachmentTool,
         config: {
           pickAsset,
+          editAsset,
           labels: contentToolLabels(),
         },
       },
@@ -160,6 +182,10 @@ async function save() {
   try {
     const raw = (await editor.save()) as OutputData;
     const data = normalizeContentData(raw) as ContentOutputData;
+    if (contentDataIsSemanticallyEqual(data, props.modalData.value?.data)) {
+      emit('modalResult', { type: 'unchanged' });
+      return;
+    }
     const summary = summarizeContentData(
       data,
       collectContentAssetSizeMap(data),
@@ -183,20 +209,159 @@ async function save() {
 }
 
 async function pickAsset(kind: ContentEditorAssetKind) {
-  const asset =
-    kind === 'media'
-      ? await launchContentAssetWizard({
-          accept: [imageExtensionProfile, videoExtensionProfile],
-          maxSize: ASSET_UPLOAD_LIMITS['project-media'],
-          sizeLimitPolicy: 'project-media',
-        })
-      : await launchContentAssetWizard({
-          accept: anyFileExtensionProfile,
-          maxSize: ASSET_UPLOAD_LIMITS['project-other'],
-          sizeLimitPolicy: 'project-other',
-        });
+  const asset = await launchContentAssetWizard(contentAssetOptions(kind));
 
   return asset ? mapAsset(asset) : undefined;
+}
+
+async function pickAssets(kind: ContentEditorAssetKind) {
+  try {
+    const result = await launchAssetBatchWizard(contentAssetOptions(kind));
+    if (result?.errors.length) {
+      errorMessage.value = result.errors
+        .map((error) => `${error.fileName}: ${error.message}`)
+        .join(' · ');
+    }
+    return result?.assets.map(mapAsset) ?? [];
+  } catch (error) {
+    console.error(error);
+    errorMessage.value = phrase.value.content_asset_pick_error;
+    return [];
+  }
+}
+
+async function editAsset(
+  current: ContentAssetData,
+  kind: ContentEditorAssetKind,
+) {
+  const flowVersion = modalDismissVersion.value;
+
+  while (true) {
+    const result = await openModal(
+      assetDetailsModal,
+      {
+        asideTitle: phrase.value.asset,
+        asset: contentAssetReplaceResult(current),
+      },
+      { label: phrase.value.asset },
+    );
+
+    if (result.type === 'replace') {
+      const edited = await replaceAsset(current, kind);
+      if (modalDismissVersion.value !== flowVersion) return undefined;
+      if (!edited) continue;
+      return edited;
+    }
+
+    if (result.type === 'detach') return null;
+    return undefined;
+  }
+}
+
+async function replaceAsset(
+  current: ContentAssetData,
+  kind: ContentEditorAssetKind,
+) {
+  try {
+    const response = await $fetch<AssetVariantsResponse>(
+      '/api/admin/assets/variants',
+      {
+        method: 'POST',
+        body: { assetUuid: current.assetUuid },
+      },
+    );
+    const stored = response.variants.find(
+      (variant) => variant.assetUuid === current.assetUuid,
+    );
+    if (!stored) return undefined;
+    const edited = await launchAssetEditor(stored, {
+      ...contentAssetOptions(kind),
+      backLabel: phrase.value.asset,
+      usageDelta: await buildDraftUsageDelta(),
+    });
+    return edited ? mapAsset(edited) : undefined;
+  } catch (error) {
+    console.error(error);
+    errorMessage.value = phrase.value.content_asset_pick_error;
+    return undefined;
+  }
+}
+
+function contentAssetOptions(kind: ContentEditorAssetKind): AssetWizardOptions {
+  return kind === 'media'
+    ? {
+        accept: [imageExtensionProfile, videoExtensionProfile],
+        maxSize: ASSET_UPLOAD_LIMITS.media,
+        sizeLimitPolicy: 'media',
+      }
+    : {
+        accept: anyFileExtensionProfile,
+        maxSize: ASSET_UPLOAD_LIMITS.file,
+        sizeLimitPolicy: 'file',
+      };
+}
+
+const editGalleryItem: ContentEditorEditGalleryItem = async (item) => {
+  let asset = item.asset;
+  let caption = item.caption;
+  const flowVersion = modalDismissVersion.value;
+
+  while (true) {
+    const result = await openModal(
+      assetDetailsModal,
+      {
+        asideTitle: phrase.value.asset,
+        asset: contentAssetReplaceResult(asset),
+        primaryLabel: phrase.value.save,
+        showCaption: true,
+        initialCaption: caption,
+        captionPlaceholder: phrase.value.content_caption,
+      },
+      { label: phrase.value.asset },
+    );
+
+    if (result.type === 'replace') {
+      caption = result.caption;
+      const edited = await replaceAsset(asset, 'media');
+      if (modalDismissVersion.value !== flowVersion) return undefined;
+      if (!edited) continue;
+      asset = edited;
+      continue;
+    }
+
+    if (result.type === 'detach') return null;
+    if (result.type === 'confirm') {
+      return {
+        ...item,
+        asset,
+        caption: result.caption,
+      };
+    }
+    return undefined;
+  }
+};
+
+async function buildDraftUsageDelta() {
+  if (!editor) return {};
+  const draft = normalizeContentData((await editor.save()) as OutputData);
+  const saved = normalizeContentData(props.modalData.value?.data);
+  const draftCounts = countRefsByAsset(draft);
+  const savedCounts = countRefsByAsset(saved);
+  const keys = new Set([...draftCounts.keys(), ...savedCounts.keys()]);
+  return Object.fromEntries(
+    Array.from(keys, (assetUuid) => [
+      assetUuid,
+      (draftCounts.get(assetUuid) ?? 0) - (savedCounts.get(assetUuid) ?? 0),
+    ]),
+  );
+}
+
+function countRefsByAsset(data: ContentOutputData) {
+  const result = new Map<string, number>();
+  for (const ref of extractContentAssetRefs(data)) {
+    result.set(ref.assetUuid, (result.get(ref.assetUuid) ?? 0) + 1);
+  }
+  return result;
 }
 
 async function launchContentAssetWizard(
@@ -215,11 +380,11 @@ function mapAsset(asset: AssetVariantInfo) {
   const result = mapAssetVariantToReplaceResult(asset);
   return {
     assetUuid: asset.assetUuid,
+    name: assetSourceName(asset.meta),
     type: asset.type,
     extension: asset.extension,
     size: asset.size,
-    previewUrl: result.previewUrl,
-    videoUrl: result.videoUrl,
+    media: result.media,
     assetUrl: result.assetUrl,
     archivedOriginal:
       asset.type === AssetType.Other &&
@@ -227,6 +392,19 @@ function mapAsset(asset: AssetVariantInfo) {
       'archivedOriginal' in asset.meta
         ? asset.meta.archivedOriginal
         : undefined,
+  };
+}
+
+function contentAssetReplaceResult(
+  asset: ContentAssetData,
+): AssetReplaceResult {
+  return {
+    assetUuid: asset.assetUuid,
+    slug: asset.assetUuid,
+    extension: asset.extension ?? '',
+    size: asset.size ?? 0,
+    media: asset.media,
+    assetUrl: asset.assetUrl ?? asset.media?.src ?? '',
   };
 }
 
@@ -240,11 +418,82 @@ function contentToolLabels() {
     addMedia: phrase.value.content_add_media,
     chooseFile: phrase.value.content_choose_file,
     caption: phrase.value.content_caption,
-    galleryCaption: phrase.value.content_gallery_caption,
     title: phrase.value.content_title,
     description: phrase.value.content_description,
-    remove: phrase.value.content_remove,
     privateAccess: phrase.value.asset_private_access,
+  };
+}
+
+function editorJsI18nMessages() {
+  const text = phrase.value.content_editor_i18n;
+  return {
+    ui: {
+      blockTunes: {
+        toggler: {
+          'Click to tune': text.tune,
+          'or drag to move': text.drag_to_move,
+        },
+      },
+      inlineToolbar: {
+        converter: { 'Convert to': text.convert_to },
+      },
+      toolbar: {
+        toolbox: { Add: text.add },
+      },
+      popover: {
+        Filter: text.filter,
+        'Nothing found': text.nothing_found,
+        'Convert to': text.convert_to,
+      },
+    },
+    toolNames: {
+      Text: text.text,
+      Link: text.link,
+      Bold: text.bold,
+      Italic: text.italic,
+      Heading: text.heading,
+      'Unordered List': text.unordered_list,
+      'Ordered List': text.ordered_list,
+      Checklist: text.checklist,
+      Quote: text.quote,
+      Media: text.media,
+      Gallery: text.gallery,
+      File: text.file,
+    },
+    tools: {
+      link: { 'Add a link': text.add_link },
+      header: {
+        'Heading 2': text.heading_2,
+        'Heading 3': text.heading_3,
+        'Heading 4': text.heading_4,
+      },
+      quote: {
+        'Enter a quote': text.enter_quote,
+        'Enter a caption': text.enter_caption,
+        'Align Left': text.align_left,
+        'Align Center': text.align_center,
+      },
+      list: {
+        Unordered: text.unordered,
+        Ordered: text.ordered,
+        Checklist: text.checklist,
+        'Start with': text.start_with,
+        'Counter type': text.counter_type,
+        Numeric: text.numeric,
+        'Lower Roman': text.lower_roman,
+        'Upper Roman': text.upper_roman,
+        'Lower Alpha': text.lower_alpha,
+        'Upper Alpha': text.upper_alpha,
+      },
+    },
+    blockTunes: {
+      delete: {
+        Delete: text.delete,
+        'Click to delete': text.click_to_delete,
+      },
+      moveUp: { 'Move up': text.move_up },
+      moveDown: { 'Move down': text.move_down },
+    },
   };
 }
 
@@ -527,12 +776,6 @@ function updateDraggedBlockClasses(
       </Button>
     </template>
 
-    <div class="mx-auto w-full max-w-190">
-      <div
-        ref="holder"
-        class="content-editor rounded-normal border border-border-1 bg-bg-1
-          px-sm py-md"
-      ></div>
-    </div>
+    <div ref="holder" class="content-editor w-full px-sm py-md"></div>
   </ModalWindow>
 </template>

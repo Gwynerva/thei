@@ -136,7 +136,7 @@ export function validateSizeLimitPolicy(
   type: AssetType,
 ) {
   if (
-    policy === 'project-media' &&
+    policy === 'media' &&
     type !== AssetType.Image &&
     type !== AssetType.Video
   ) {
@@ -207,14 +207,16 @@ function hasResizeSettings(settings: Record<string, unknown>): boolean {
 }
 
 function isOriginalSettings(
-  settings: Record<string, unknown>,
+  settings: unknown,
 ): settings is AssetOriginalSettings {
+  if (!isRecord(settings)) return false;
   return settings.type === 'original';
 }
 
 function isImageTransformSettings(
-  settings: Record<string, unknown>,
+  settings: unknown,
 ): settings is AssetImageTransformSettings {
+  if (!isRecord(settings)) return false;
   return (
     settings.type === 'image-transform' &&
     isQuality(settings.quality) &&
@@ -223,8 +225,9 @@ function isImageTransformSettings(
 }
 
 function isVideoTransformSettings(
-  settings: Record<string, unknown>,
+  settings: unknown,
 ): settings is AssetVideoTransformSettings {
+  if (!isRecord(settings)) return false;
   return (
     settings.type === 'video-transform' &&
     isQuality(settings.quality) &&
@@ -235,8 +238,9 @@ function isVideoTransformSettings(
 }
 
 function isFileZipSettings(
-  settings: Record<string, unknown>,
+  settings: unknown,
 ): settings is AssetFileZipSettings {
+  if (!isRecord(settings)) return false;
   return settings.type === 'file-zip';
 }
 

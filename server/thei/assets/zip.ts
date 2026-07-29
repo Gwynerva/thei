@@ -27,7 +27,11 @@ export async function zipSingleFile(
       }
     });
 
-    const file = new AsyncZipDeflate(entryName, { level: 9 });
+    const file = new AsyncZipDeflate(entryName, {
+      level: 9,
+    }) as AsyncZipDeflate & {
+      ondrain?: (processedBytes: number) => void;
+    };
     file.ondrain = (processedBytes) => {
       if (source.length === 0) return;
       options.onProgress?.(Math.min(processedBytes / source.length, 0.99));

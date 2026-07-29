@@ -21,7 +21,7 @@ describe('asset access guard', () => {
     expect(
       assetUsageIsPrivate({
         role: 'content',
-        refs: [{ blockType: 'contentImage', isPrivate: true }],
+        refs: [{ blockType: 'contentMedia', isPrivate: true }],
         isPrivate: true,
       }),
     ).toBe(true);

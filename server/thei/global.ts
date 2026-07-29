@@ -20,8 +20,9 @@ import { getCurrentAdminSession } from './admin-session';
 import { createAsset } from './assets/repository/create';
 import { updateAsset } from './assets/repository/update';
 import { touchAsset } from './assets/repository/touch';
-import { findAssetBySettingsKey } from './assets/repository/find-by-hash';
-import { findAssetsByRawHash } from './assets/repository/find-by-raw-hash';
+import { findAssetByIdentity } from './assets/repository/find-by-identity';
+import { findAssetsByFamilyUuid } from './assets/repository/find-by-family';
+import { countAssetPlacements } from './assets/repository/usage-count';
 import { findAssetBySlug } from './assets/repository/find-by-slug';
 import { findAssetByUuid } from './assets/repository/find-by-uuid';
 import { findOrphanedAssets } from './assets/repository/find-orphaned';
@@ -100,8 +101,9 @@ export const THEI_SERVER = {
     create: createAsset,
     update: updateAsset,
     findByUuid: findAssetByUuid,
-    findBySettingsKey: findAssetBySettingsKey,
-    findByRawHash: findAssetsByRawHash,
+    findByIdentity: findAssetByIdentity,
+    findByFamilyUuid: findAssetsByFamilyUuid,
+    countPlacements: countAssetPlacements,
     findBySlug: findAssetBySlug,
     touch: touchAsset,
     findOrphaned: findOrphanedAssets,

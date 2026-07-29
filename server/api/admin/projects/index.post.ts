@@ -11,6 +11,14 @@ import {
   applyPreparedContentSave,
   prepareContentForSave,
 } from '../../../thei/content/repository';
+import {
+  applyProjectContentSections,
+  prepareProjectContentSections,
+} from '../../../thei/projects/content-sections';
+import {
+  applyProjectRelations,
+  prepareProjectRelations,
+} from '../../../thei/projects/relations';
 
 export default defineEventHandler(
   async (event): Promise<ProjectSaveResponse> => {
@@ -52,6 +60,32 @@ export default defineEventHandler(
       }
     }
 
+    let preparedSections;
+    try {
+      preparedSections = await prepareProjectContentSections(
+        projectUuid,
+        result.contentSections,
+      );
+    } catch (error) {
+      if (error instanceof ContentValidationError || error instanceof Error) {
+        return { type: 'error', message: error.message };
+      }
+      throw error;
+    }
+
+    let preparedRelations;
+    try {
+      preparedRelations = await prepareProjectRelations(
+        projectUuid,
+        result.relations,
+      );
+    } catch (error) {
+      return {
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Invalid relations',
+      };
+    }
+
     const { db, schema } = THEI_SERVER.useDb();
     const now = Date.now();
     db.transaction((tx) => {
@@ -80,6 +114,8 @@ export default defineEventHandler(
           preparedDescription,
         );
       }
+      applyProjectContentSections(tx, schema, projectUuid, preparedSections);
+      applyProjectRelations(tx, schema, projectUuid, preparedRelations);
 
       if (result.iconAssetUuid) {
         attachUsage(tx, schema, result.iconAssetUuid, projectUuid, 'icon');

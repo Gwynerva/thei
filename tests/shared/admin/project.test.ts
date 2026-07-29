@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  countProjectAssetPlacements,
+  projectAssetUsageDelta,
   validateProjectData,
   type ProjectEditData,
 } from '../../../shared/admin/project';
@@ -21,6 +23,41 @@ function baseProject(
 }
 
 describe('validateProjectData asset metadata', () => {
+  it('counts project roles and calculates the open-draft usage delta', () => {
+    const saved = baseProject({
+      iconAssetUuid: 'asset-old',
+      showcaseAssets: [{ assetUuid: 'asset-shared', isPrivate: false }],
+      otherAssets: [
+        {
+          assetUuid: 'asset-shared',
+          title: 'Shared',
+          isPrivate: false,
+        },
+      ],
+    });
+    const current = baseProject({
+      iconAssetUuid: 'asset-new',
+      showcaseAssets: [{ assetUuid: 'asset-shared', isPrivate: false }],
+      otherAssets: [
+        {
+          assetUuid: 'asset-new',
+          title: 'New',
+          isPrivate: false,
+        },
+      ],
+    });
+
+    expect(countProjectAssetPlacements(saved)).toEqual({
+      'asset-old': 1,
+      'asset-shared': 2,
+    });
+    expect(projectAssetUsageDelta(current, saved)).toEqual({
+      'asset-new': 2,
+      'asset-old': -1,
+      'asset-shared': -1,
+    });
+  });
+
   it('requires a valid public ID', () => {
     expect(validateProjectData(baseProject({ publicId: '' }))).toBe(
       'Public ID cannot be empty',
@@ -138,5 +175,40 @@ describe('validateProjectData asset metadata', () => {
     );
 
     expect(result).toBe('Duplicate other file');
+  });
+
+  it('normalizes relations and rejects duplicate projects', () => {
+    const valid = validateProjectData(
+      baseProject({
+        relations: [
+          {
+            projectUuid: ' project-2 ',
+            type: 'related',
+            note: { type: 'shared', text: '  Shared history  ' },
+          },
+        ],
+      }),
+    );
+    expect(typeof valid).not.toBe('string');
+    if (typeof valid !== 'string') {
+      expect(valid.relations).toEqual([
+        {
+          projectUuid: 'project-2',
+          type: 'related',
+          note: { type: 'shared', text: 'Shared history' },
+        },
+      ]);
+    }
+
+    expect(
+      validateProjectData(
+        baseProject({
+          relations: [
+            { projectUuid: 'project-2', type: 'related' },
+            { projectUuid: 'project-2', type: 'dependent' },
+          ],
+        }),
+      ),
+    ).toBe('Duplicate related project');
   });
 });

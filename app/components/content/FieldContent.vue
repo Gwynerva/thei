@@ -11,6 +11,7 @@ const props = defineProps<{
   modelValue?: ContentFieldModelValue | null;
   label: string;
   hint?: string;
+  showLabel?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -58,10 +59,16 @@ const summaryText = computed(() => {
 });
 
 async function openEditor() {
-  const result = await openModal(contentEditorModal, {
-    title: props.label,
-    value: props.modelValue,
-  });
+  const result = await openModal(
+    contentEditorModal,
+    {
+      title: props.label,
+      value: props.modelValue,
+    },
+    {
+      label: props.label,
+    },
+  );
 
   if (result.type !== 'save') return;
   const data = normalizeContentData(result.value.data);
@@ -89,27 +96,30 @@ async function openEditor() {
 </script>
 
 <template>
-  <Field>
-    <FieldLabel>{{ label }}</FieldLabel>
-    <button
-      type="button"
-      class="flex w-full cursor-pointer items-center justify-between gap-sm
-        rounded-normal border border-border-1 bg-bg-1 px-sm py-xs text-left
-        transition hocus:border-border-3 hocus:bg-bg-3"
-      @click="openEditor"
-    >
-      <span class="min-w-0">
-        <span class="block truncate font-semibold text-text-1">
-          {{ summaryText }}
-        </span>
-        <span v-if="hint" class="mt-0.5 block text-sm text-text-3">
-          {{ hint }}
-        </span>
+  <button
+    type="button"
+    class="flex w-full cursor-pointer items-center justify-between gap-sm
+      rounded-normal border border-border-1 bg-bg-1 px-sm py-sm text-left
+      transition hocus:border-border-3 hocus:bg-bg-3"
+    @click="openEditor"
+  >
+    <span class="min-w-0">
+      <span
+        v-if="showLabel !== false"
+        class="block truncate font-semibold text-text-1"
+        >{{ label }}</span
+      >
+      <span
+        class="block truncate text-sm text-text-2"
+        :class="showLabel === false ? '' : 'mt-0.5'"
+      >
+        {{ summaryText }}
       </span>
-      <span class="flex shrink-0 items-center gap-xs text-sm text-accent">
-        <Icon name="edit" />
-        <span>{{ phrase.edit }}</span>
-      </span>
-    </button>
-  </Field>
+      <span v-if="hint" class="mt-1 block text-sm text-text-3">{{ hint }}</span>
+    </span>
+    <span class="flex shrink-0 items-center gap-xs text-sm text-accent">
+      <Icon name="edit" />
+      <span>{{ phrase.edit }}</span>
+    </span>
+  </button>
 </template>

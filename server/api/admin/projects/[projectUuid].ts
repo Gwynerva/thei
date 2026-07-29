@@ -14,14 +14,25 @@ import { and, eq } from 'drizzle-orm';
 import {
   archivedOriginalFromMeta,
   buildAdminAssetUrls,
-  dominantHueFromMeta,
 } from '../../../thei/assets/urls';
+import { resolveGeneratedIcon } from '../../../thei/media/generated-icon';
 import {
   applyPreparedContentSave,
   deleteContentForOwner,
   prepareContentForSave,
 } from '../../../thei/content/repository';
 import { validateProjectAssets } from '../../../thei/projects/validate-assets';
+import {
+  applyProjectContentSections,
+  deleteProjectContentSections,
+  prepareProjectContentSections,
+} from '../../../thei/projects/content-sections';
+import {
+  applyProjectRelations,
+  deleteProjectRelations,
+  getProjectRelations,
+  prepareProjectRelations,
+} from '../../../thei/projects/relations';
 
 export default defineEventHandler(async (event) => {
   const identifier = getRouterParam(event, 'projectUuid')!;
@@ -44,35 +55,24 @@ export default defineEventHandler(async (event) => {
       const iconUsage = usages.find((u) => u.role === 'icon');
       const bannerUsage = usages.find((u) => u.role === 'banner');
 
-      let iconPreviewUrl: string | undefined;
-      let iconVideoUrl: string | undefined;
-      if (iconUsage) {
-        const urls = await buildAdminAssetUrls(iconUsage.asset);
-        iconPreviewUrl = urls.previewUrl;
-        iconVideoUrl = urls.videoUrl;
-      }
-
-      let bannerPreviewUrl: string | undefined;
-      let bannerVideoUrl: string | undefined;
-      if (bannerUsage) {
-        const urls = await buildAdminAssetUrls(bannerUsage.asset);
-        bannerPreviewUrl = urls.previewUrl;
-        bannerVideoUrl = urls.videoUrl;
-      }
+      const iconMedia = iconUsage
+        ? (await buildAdminAssetUrls(iconUsage.asset)).media!
+        : resolveGeneratedIcon('project', projectUuid);
+      const bannerMedia = bannerUsage
+        ? (await buildAdminAssetUrls(bannerUsage.asset)).media
+        : undefined;
 
       const rawShowcase =
         await THEI_SERVER.assets.usages.findShowcase(projectUuid);
 
       const showcaseAssets: ShowcaseAssetGetItem[] = await Promise.all(
         rawShowcase.map(async ({ asset, meta }) => {
-          const isVideo = asset.type === AssetType.Video;
           const urls = await buildAdminAssetUrls(asset);
 
           return {
             assetUuid: asset.assetUuid,
             type: asset.type as AssetType,
-            previewUrl: urls.previewUrl ?? urls.assetUrl,
-            videoUrl: isVideo ? urls.videoUrl : undefined,
+            media: urls.media!,
             caption: meta?.role === 'showcase-asset' ? meta.caption : undefined,
             isPrivate: meta?.role === 'showcase-asset' ? meta.isPrivate : false,
             size: asset.size,
@@ -82,14 +82,61 @@ export default defineEventHandler(async (event) => {
 
       const rawOther = await THEI_SERVER.assets.usages.findOther(projectUuid);
 
+      const rawSections = THEI_SERVER.useDb()
+        .db.select()
+        .from(THEI_SERVER.useDb().schema.projectContentSections)
+        .where(
+          eq(
+            THEI_SERVER.useDb().schema.projectContentSections.projectUuid,
+            projectUuid,
+          ),
+        )
+        .orderBy(THEI_SERVER.useDb().schema.projectContentSections.sortOrder)
+        .all();
+      const contentSections = await Promise.all(
+        rawSections.map(async (section) => {
+          const periods = THEI_SERVER.useDb()
+            .db.select({
+              startDate:
+                THEI_SERVER.useDb().schema.projectContentSectionPeriods
+                  .startDate,
+              endDate:
+                THEI_SERVER.useDb().schema.projectContentSectionPeriods.endDate,
+            })
+            .from(THEI_SERVER.useDb().schema.projectContentSectionPeriods)
+            .where(
+              eq(
+                THEI_SERVER.useDb().schema.projectContentSectionPeriods
+                  .sectionUuid,
+                section.sectionUuid,
+              ),
+            )
+            .orderBy(
+              THEI_SERVER.useDb().schema.projectContentSectionPeriods.sortOrder,
+            )
+            .all();
+          return {
+            sectionUuid: section.sectionUuid,
+            title: section.title,
+            summary: section.summary,
+            isPrivate: section.isPrivate,
+            periods,
+            content: await THEI_SERVER.content.buildFieldValue(
+              'project-section',
+              section.sectionUuid,
+              'project-section-body',
+            ),
+          };
+        }),
+      );
+
       const otherAssets: OtherAssetGetItem[] = await Promise.all(
         rawOther.map(async ({ asset, meta }) => {
           const urls = await buildAdminAssetUrls(asset);
 
           return {
             assetUuid: asset.assetUuid,
-            previewUrl: urls.previewUrl,
-            videoUrl: urls.videoUrl,
+            media: urls.media,
             assetUrl: urls.assetUrl,
             size: asset.size,
             extension: asset.extension,
@@ -114,21 +161,20 @@ export default defineEventHandler(async (event) => {
         showcase: project.showcase,
         cv: project.cv,
         iconAssetUuid: iconUsage?.asset.assetUuid,
-        iconPreviewUrl,
-        iconVideoUrl,
-        iconDominantHue: dominantHueFromMeta(iconUsage?.asset.meta),
+        iconMedia,
         iconAssetSize: iconUsage?.asset.size,
         bannerAssetUuid: bannerUsage?.asset.assetUuid,
-        bannerPreviewUrl,
-        bannerVideoUrl,
+        bannerMedia,
         bannerAssetSize: bannerUsage?.asset.size,
         descriptionContent: await THEI_SERVER.content.buildFieldValue(
           'project',
           projectUuid,
           'project-description',
         ),
+        contentSections,
         showcaseAssets,
         otherAssets,
+        relations: await getProjectRelations(projectUuid),
       } satisfies ProjectGetResponse;
     }
 
@@ -175,6 +221,35 @@ export default defineEventHandler(async (event) => {
           }
           throw error;
         }
+      }
+
+      let preparedSections;
+      try {
+        preparedSections = await prepareProjectContentSections(
+          projectUuid,
+          result.contentSections,
+        );
+      } catch (error) {
+        if (error instanceof ContentValidationError || error instanceof Error) {
+          return {
+            type: 'error',
+            message: error.message,
+          } satisfies ProjectSaveResponse;
+        }
+        throw error;
+      }
+
+      let preparedRelations;
+      try {
+        preparedRelations = await prepareProjectRelations(
+          projectUuid,
+          result.relations,
+        );
+      } catch (error) {
+        return {
+          type: 'error',
+          message: error instanceof Error ? error.message : 'Invalid relations',
+        } satisfies ProjectSaveResponse;
       }
 
       const usages = await THEI_SERVER.assets.usages.findByContainer(
@@ -228,6 +303,8 @@ export default defineEventHandler(async (event) => {
             preparedDescription,
           );
         }
+        applyProjectContentSections(tx, schema, projectUuid, preparedSections);
+        applyProjectRelations(tx, schema, projectUuid, preparedRelations);
 
         if (currentIcon?.asset.assetUuid !== newIconUuid) {
           if (currentIcon) {
@@ -341,6 +418,8 @@ export default defineEventHandler(async (event) => {
       );
       const { db, schema } = THEI_SERVER.useDb();
       db.transaction((tx) => {
+        deleteProjectContentSections(tx, schema, projectUuid);
+        deleteProjectRelations(tx, schema, projectUuid);
         deleteContentForOwner(tx, schema, 'project', projectUuid);
 
         for (const usage of usages) {

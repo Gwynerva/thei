@@ -4,12 +4,11 @@ import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
-import sharp from 'sharp';
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
 /**
- * Extracts the first frame of a video buffer and returns it as a WebP buffer.
+ * Extracts the first frame of a video buffer and returns it as a PNG buffer.
  * Uses temp files because ffmpeg needs seekable input for frame extraction.
  */
 export async function extractVideoThumbnail(
@@ -31,8 +30,7 @@ export async function extractVideoThumbnail(
         .run();
     });
 
-    const pngBuffer = await readFile(outputPath);
-    return await sharp(pngBuffer).webp({ quality: 85 }).toBuffer();
+    return await readFile(outputPath);
   } finally {
     await rm(inputPath, { force: true }).catch(() => {});
     await rm(outputPath, { force: true }).catch(() => {});

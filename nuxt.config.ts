@@ -11,7 +11,10 @@ export default defineNuxtConfig({
     name: 'thei',
   },
   ignore: ['content', 'content/**', '.thei', '.thei/**'],
-  css: ['#layers/thei/app/styles/main.css'],
+  css: [
+    '#layers/thei/app/styles/main.css',
+    '#layers/thei/app/styles/editor.css',
+  ],
   pages: {
     pattern: ['**/*.vue', '!**/components/**'],
   },
@@ -38,7 +41,13 @@ export default defineNuxtConfig({
   vite: {
     plugins: [tailwindcss()],
     optimizeDeps: {
-      include: ['@vue/devtools-core', '@vue/devtools-kit', '@floating-ui/vue'],
+      include: [
+        '@vue/devtools-core',
+        '@vue/devtools-kit',
+        '@floating-ui/vue',
+        '@vuepic/vue-datepicker',
+        'date-fns/locale',
+      ],
     },
   },
 });

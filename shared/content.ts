@@ -1,9 +1,20 @@
 import { AssetType, type ArchivedOriginalFileMeta } from './asset';
+import type { MediaDescriptor } from './media';
 
-export const CONTENT_OWNER_TYPES = ['project', 'news'] as const;
+export const CONTENT_OWNER_TYPES = [
+  'project',
+  'project-section',
+  'event',
+  'news',
+] as const;
 export type ContentOwnerType = (typeof CONTENT_OWNER_TYPES)[number];
 
-export const CONTENT_SLOTS = ['project-description', 'news-body'] as const;
+export const CONTENT_SLOTS = [
+  'project-description',
+  'project-section-body',
+  'event-body',
+  'news-body',
+] as const;
 export type ContentSlot = (typeof CONTENT_SLOTS)[number];
 
 export const CONTENT_BLOCK_TYPES = [
@@ -11,7 +22,7 @@ export const CONTENT_BLOCK_TYPES = [
   'header',
   'list',
   'quote',
-  'contentImage',
+  'contentMedia',
   'contentGallery',
   'contentAttachment',
 ] as const;
@@ -55,11 +66,11 @@ export type ContentFieldValue = ContentEditValue & ContentSummary;
 
 export interface ContentAssetData {
   assetUuid: string;
+  name?: string;
   type?: AssetType;
   extension?: string;
   size?: number;
-  previewUrl?: string;
-  videoUrl?: string;
+  media?: MediaDescriptor;
   assetUrl?: string;
   archivedOriginal?: ArchivedOriginalFileMeta;
 }
@@ -69,6 +80,12 @@ export interface ContentAssetRef {
   blockId?: string;
   blockType: ContentBlockType;
   isPrivate: boolean;
+}
+
+export interface ContentGalleryItem {
+  id: string;
+  asset: ContentAssetData;
+  caption?: string;
 }
 
 export class ContentValidationError extends Error {}
@@ -97,6 +114,29 @@ export function normalizeContentData(value: unknown): ContentOutputData {
     time: optionalNumber(value.time),
     blocks,
   };
+}
+
+/**
+ * Editor.js refreshes service metadata such as `time`, `version`, and block
+ * ids while serializing. Those fields are not user content and must not make
+ * an unchanged editor dirty.
+ */
+export function contentDataIsSemanticallyEqual(
+  left: ContentOutputData | null | undefined,
+  right: ContentOutputData | null | undefined,
+): boolean {
+  return jsonValuesEqual(
+    semanticContentBlocks(left),
+    semanticContentBlocks(right),
+  );
+}
+
+function semanticContentBlocks(
+  data: ContentOutputData | null | undefined,
+): Omit<ContentOutputBlock, 'id'>[] {
+  return normalizeContentData(data).blocks.map(
+    ({ id: _id, ...block }) => block,
+  );
 }
 
 export function isContentEmpty(data: ContentOutputData | null | undefined) {
@@ -132,16 +172,16 @@ export function collectContentAssetSizeMap(
   const normalized = normalizeContentData(data);
 
   for (const block of normalized.blocks) {
-    if (block.type === 'contentImage' || block.type === 'contentAttachment') {
+    if (block.type === 'contentMedia' || block.type === 'contentAttachment') {
       addAssetSize(sizes, (block.data as any).asset);
       continue;
     }
 
     if (block.type === 'contentGallery') {
-      const assets = Array.isArray((block.data as any).assets)
-        ? (block.data as any).assets
+      const items = Array.isArray((block.data as any).items)
+        ? (block.data as any).items
         : [];
-      for (const asset of assets) addAssetSize(sizes, asset);
+      for (const item of items) addAssetSize(sizes, item?.asset);
     }
   }
 
@@ -156,7 +196,7 @@ export function extractContentAssetRefs(
     const isPrivate = contentBlockIsPrivate(block);
     const blockId = block.id;
 
-    if (block.type === 'contentImage' || block.type === 'contentAttachment') {
+    if (block.type === 'contentMedia' || block.type === 'contentAttachment') {
       const asset = normalizeContentAsset((block.data as any).asset);
       if (asset) {
         refs.push({
@@ -170,11 +210,11 @@ export function extractContentAssetRefs(
     }
 
     if (block.type === 'contentGallery') {
-      const assets = Array.isArray((block.data as any).assets)
-        ? (block.data as any).assets
+      const items = Array.isArray((block.data as any).items)
+        ? (block.data as any).items
         : [];
-      for (const item of assets) {
-        const asset = normalizeContentAsset(item);
+      for (const item of items) {
+        const asset = normalizeContentAsset(item?.asset);
         if (!asset) continue;
         refs.push({
           assetUuid: asset.assetUuid,
@@ -200,7 +240,7 @@ export function contentBlockIsPrivate(block: ContentOutputBlock): boolean {
 
 export function isContentAssetBlockType(type: ContentBlockType): boolean {
   return (
-    type === 'contentImage' ||
+    type === 'contentMedia' ||
     type === 'contentGallery' ||
     type === 'contentAttachment'
   );
@@ -257,7 +297,7 @@ function normalizeBlockData(
         items: normalizeListItems(data.items),
       };
 
-    case 'contentImage':
+    case 'contentMedia':
       return {
         asset: normalizeContentAsset(data.asset),
         caption: optionalTrimmedString(data.caption),
@@ -265,10 +305,9 @@ function normalizeBlockData(
 
     case 'contentGallery':
       return {
-        assets: Array.isArray(data.assets)
-          ? data.assets.map(normalizeContentAsset).filter(Boolean)
+        items: Array.isArray(data.items)
+          ? data.items.map(normalizeGalleryItem).filter(Boolean)
           : [],
-        caption: optionalTrimmedString(data.caption),
       };
 
     case 'contentAttachment':
@@ -295,15 +334,15 @@ function isContentBlockEmpty(block: ContentOutputBlock): boolean {
     case 'list':
       return !listItemsHaveContent((block.data as any).items);
 
-    case 'contentImage':
+    case 'contentMedia':
     case 'contentAttachment':
       return !normalizeContentAsset((block.data as any).asset);
 
     case 'contentGallery':
       return !(
-        Array.isArray((block.data as any).assets) &&
-        (block.data as any).assets.some((item: unknown) =>
-          normalizeContentAsset(item),
+        Array.isArray((block.data as any).items) &&
+        (block.data as any).items.some((item: any) =>
+          normalizeContentAsset(item?.asset),
         )
       );
   }
@@ -326,13 +365,43 @@ function normalizeContentAsset(value: unknown): ContentAssetData | null {
 
   return {
     assetUuid,
+    name: optionalString(value.name),
     type: isAssetType(value.type) ? value.type : undefined,
     extension: optionalString(value.extension),
     size: optionalNumber(value.size),
-    previewUrl: optionalString(value.previewUrl),
-    videoUrl: optionalString(value.videoUrl),
+    media: normalizeMediaDescriptor(value.media),
     assetUrl: optionalString(value.assetUrl),
     ...(archivedOriginal ? { archivedOriginal } : {}),
+  };
+}
+
+function normalizeMediaDescriptor(value: unknown): MediaDescriptor | undefined {
+  if (!isRecord(value)) return undefined;
+  const src = optionalString(value.src);
+  const previewSrc = optionalString(value.previewSrc);
+  const kind = value.kind;
+  if (!src || !previewSrc || (kind !== 'image' && kind !== 'video')) {
+    return undefined;
+  }
+  return {
+    src,
+    previewSrc,
+    kind,
+    accentHue: optionalNumber(value.accentHue),
+    width: optionalNumber(value.width),
+    height: optionalNumber(value.height),
+  };
+}
+
+function normalizeGalleryItem(value: unknown): ContentGalleryItem | null {
+  if (!isRecord(value)) return null;
+  const id = optionalTrimmedString(value.id);
+  const asset = normalizeContentAsset(value.asset);
+  if (!id || !asset) return null;
+  return {
+    id,
+    asset,
+    caption: optionalTrimmedString(value.caption),
   };
 }
 
@@ -436,6 +505,32 @@ function optionalNumber(value: unknown): number | undefined {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function jsonValuesEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((value, index) => jsonValuesEqual(value, right[index]))
+    );
+  }
+
+  if (!isRecord(left) || !isRecord(right)) return false;
+  const leftKeys = Object.keys(left).filter((key) => left[key] !== undefined);
+  const rightKeys = Object.keys(right).filter(
+    (key) => right[key] !== undefined,
+  );
+  if (leftKeys.length !== rightKeys.length) return false;
+
+  return leftKeys.every(
+    (key) =>
+      Object.prototype.hasOwnProperty.call(right, key) &&
+      jsonValuesEqual(left[key], right[key]),
+  );
 }
 
 function isContentBlockType(value: unknown): value is ContentBlockType {

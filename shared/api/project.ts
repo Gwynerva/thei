@@ -1,14 +1,17 @@
 import type { ProjectEventAccessLevel } from '../access-level';
 import type { ArchivedOriginalFileMeta, AssetType } from '../asset';
 import type { ContentFieldValue } from '../content';
+import type { ProjectContentSectionValue } from '../project-content-section';
+import type {
+  ProjectRelationEditItem,
+  ProjectRelationType,
+} from '../admin/project';
+import type { MediaDescriptor } from '../media';
 
 /** Base display item for any project asset list (showcase, other-assets, …). */
 export type AssetListItem = {
   assetUuid: string;
-  /** Thumbnail image URL (webp). For images this is the asset itself; for videos it is the first-frame preview. */
-  previewUrl: string;
-  /** MP4 URL. Present only for video assets. */
-  videoUrl?: string;
+  media: MediaDescriptor;
   /** Stored (processed) file size in bytes. */
   size: number;
 };
@@ -19,13 +22,10 @@ export type ShowcaseAssetGetItem = AssetListItem & {
   isPrivate: boolean;
 };
 
-/** Display item for the "Other files" list. previewUrl is absent for non-image/video files. */
+/** Display item for the "Other files" list. media is absent for non-image/video files. */
 export type OtherAssetGetItem = {
   assetUuid: string;
-  /** Thumbnail / image URL. Absent for unknown file types. */
-  previewUrl?: string;
-  /** MP4 URL. Present only for video assets. */
-  videoUrl?: string;
+  media?: MediaDescriptor;
   /** Canonical download URL. Always set — used for the View button. */
   assetUrl: string;
   size: number;
@@ -46,22 +46,36 @@ export type ProjectGetResponse = {
   showcase: boolean;
   cv: boolean;
   iconAssetUuid?: string;
-  iconPreviewUrl?: string;
-  /** MP4 URL. Present only when the icon asset is a video. */
-  iconVideoUrl?: string;
-  iconDominantHue?: number;
+  iconMedia: MediaDescriptor;
   /** Stored file size in bytes. */
   iconAssetSize?: number;
   bannerAssetUuid?: string;
-  bannerPreviewUrl?: string;
-  /** MP4 URL. Present only when the banner asset is a video. */
-  bannerVideoUrl?: string;
+  bannerMedia?: MediaDescriptor;
   /** Stored file size in bytes. */
   bannerAssetSize?: number;
   descriptionContent?: ContentFieldValue;
+  contentSections?: ProjectContentSectionValue[];
   showcaseAssets?: ShowcaseAssetGetItem[];
   otherAssets?: OtherAssetGetItem[];
+  relations?: ProjectRelationGetItem[];
 };
+
+export type ProjectRelationGetItem = ProjectRelationEditItem & {
+  title: string;
+  humanReadableSlug: string;
+  publicId: string;
+  iconMedia: MediaDescriptor;
+};
+
+export type ProjectSearchItem = {
+  projectUuid: string;
+  title: string;
+  humanReadableSlug: string;
+  publicId: string;
+  iconMedia: MediaDescriptor;
+};
+
+export type { ProjectRelationType };
 
 export type ProjectSaveResponse =
   | { type: 'success'; projectUuid: string }
@@ -80,8 +94,7 @@ export type ProjectListItem = {
   access: ProjectEventAccessLevel;
   showcase: boolean;
   cv: boolean;
-  iconPreviewUrl?: string;
-  iconDominantHue?: number;
+  iconMedia: MediaDescriptor;
   createdAt: number;
   updatedAt: number;
   totalSize: number;

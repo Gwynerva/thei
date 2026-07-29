@@ -4,9 +4,10 @@ import type { AssetUploadSettings } from '#layers/thei/shared/asset-upload-setti
 
 export interface CreateAssetData {
   assetUuid: string;
+  familyUuid: string;
+  contentHash: string;
   slug: string;
   extension: string;
-  rawHash: string;
   settingsKey: string;
   settingsVersion: number;
   settings?: AssetUploadSettings | null;

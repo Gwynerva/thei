@@ -1,5 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import type { ProjectListItem } from '#layers/thei/shared/api/project';
+import { buildAdminAssetUrls } from '../../../thei/assets/urls';
+import { resolveGeneratedIcon } from '../../../thei/media/generated-icon';
 
 const LIMIT = 50;
 
@@ -67,7 +69,7 @@ export default defineEventHandler(async (event): Promise<ProjectListItem[]> => {
     ]),
   );
 
-  return projects.map((project) => {
+  return await Promise.all(projects.map(async (project) => {
     const iconAsset = iconUrlByProjectUuid.get(project.projectUuid);
     return {
       projectUuid: project.projectUuid,
@@ -78,13 +80,12 @@ export default defineEventHandler(async (event): Promise<ProjectListItem[]> => {
       access: project.access,
       showcase: project.showcase,
       cv: project.cv,
-      iconPreviewUrl: iconAsset
-        ? `/api/admin/assets/preview/${iconAsset.slug}.${iconAsset.extension}/`
-        : undefined,
-      iconDominantHue: iconAsset?.meta?.dominantHue,
+      iconMedia: iconAsset
+        ? (await buildAdminAssetUrls(iconAsset)).media!
+        : resolveGeneratedIcon('project', project.projectUuid),
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
       totalSize: sizeByProjectUuid.get(project.projectUuid) ?? 0,
     };
-  });
+  }));
 });

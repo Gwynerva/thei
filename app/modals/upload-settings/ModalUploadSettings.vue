@@ -3,7 +3,7 @@ import type {
   AssetVariantInfo,
   AssetWizardResult,
 } from '#layers/thei/shared/api/asset';
-import { AssetType } from '#layers/thei/shared/asset';
+import { AssetType, assetSourceName } from '#layers/thei/shared/asset';
 import {
   buildAssetSettingsKey,
   createFileZipSettings,
@@ -50,8 +50,8 @@ import {
 } from './use-upload-settings-assets';
 
 type UploadSettingsResult = { type: 'upload-new' } | AssetWizardResult;
-type UseCandidate = 'original' | 'transformed' | 'selected' | null;
-type ActiveProfile = 'original' | 'uploaded' | 'edit';
+type UseCandidate = 'source' | 'transformed' | 'selected' | null;
+type ActiveProfile = 'source' | 'family' | 'create';
 type EditableSettings = AssetTransformSettings | AssetFileZipSettings;
 interface PreviewSource {
   key: string;
@@ -78,18 +78,19 @@ const {
   busyAction,
   uploadStatus,
   variants,
-  temporaryAssetUuid,
   loadVariants,
   uploadWithSettings,
-  discardTemporaryExcept,
+  touchVariant,
 } = useUploadSettingsAssets(props.modalData);
 
 const errorMessage = ref('');
 const selectedVariantUuid = ref('');
-const currentOriginalAsset = shallowRef<AssetVariantInfo | null>(null);
+const processingSourceAssetUuid = ref('');
+const currentUnprocessedAsset = shallowRef<AssetVariantInfo | null>(null);
 const currentTransformedAsset = shallowRef<AssetVariantInfo | null>(null);
+const currentTransformedSourceKey = ref('');
 const activeUseCandidate = ref<UseCandidate>(null);
-const activeProfile = ref<ActiveProfile>('original');
+const activeProfile = ref<ActiveProfile>('source');
 const profileSelectedByUser = ref(false);
 
 const quality = ref(70);
@@ -101,17 +102,61 @@ const fastConversion = ref(false);
 const resizeMode = ref<'inside' | 'cover'>('inside');
 const allowUpscale = ref(false);
 let syncingDimensions = false;
-let originalDimensionsAppliedAsDefault = false;
+let sourceDimensionsAppliedAsDefault = false;
 
-const originalAssetType = computed(() => {
-  if (
-    isExtensionAllowed(props.modalData.file.extension, imageExtensionProfile)
-  ) {
+const sourceAsset = computed(() =>
+  props.modalData.source.kind === 'asset' ? props.modalData.source.asset : null,
+);
+const processingSourceAsset = computed(() => {
+  return (
+    variants.value.find(
+      (variant) => variant.assetUuid === processingSourceAssetUuid.value,
+    ) ??
+    sourceAsset.value ??
+    null
+  );
+});
+const sourceFile = computed(() => {
+  const asset = processingSourceAsset.value;
+  if (!asset && props.modalData.source.kind === 'file') {
+    return props.modalData.source.file;
+  }
+  const storedAsset =
+    asset ??
+    (props.modalData.source.kind === 'asset'
+      ? props.modalData.source.asset
+      : null);
+  if (!storedAsset) {
+    if (props.modalData.source.kind === 'file') {
+      return props.modalData.source.file;
+    }
+    throw new Error('Asset source is unavailable');
+  }
+  const storedName = assetSourceName(storedAsset.meta);
+  return {
+    name:
+      (storedName && !isSyntheticAssetFilename(storedName)
+        ? storedName
+        : undefined) ??
+      `${phrase.value.upload_variant_saved}.${storedAsset.extension}`,
+    extension: storedAsset.extension,
+    size: storedAsset.size,
+    objectUrl:
+      storedAsset.media?.src ?? storedAsset.assetUrl,
+  };
+});
+const sourceSectionTitle = computed(() =>
+  processingSourceAsset.value
+    ? phrase.value.upload_section_source
+    : phrase.value.upload_section_selected_file,
+);
+
+const sourceAssetType = computed(() => {
+  if (processingSourceAsset.value) return processingSourceAsset.value.type;
+  if (isExtensionAllowed(sourceFile.value.extension, imageExtensionProfile)) {
     return AssetType.Image;
   }
-  if (
-    isExtensionAllowed(props.modalData.file.extension, videoExtensionProfile)
-  ) {
+  if (isExtensionAllowed(sourceFile.value.extension, videoExtensionProfile)) {
     return AssetType.Video;
   }
   return AssetType.Other;
@@ -121,31 +166,43 @@ const profileConfig = computed(() =>
   getAssetUploadProfileConfig(props.modalData.uploadProfile),
 );
 
-const isOriginalMedia = computed(
+const isSourceMedia = computed(
   () =>
-    originalAssetType.value === AssetType.Image ||
-    originalAssetType.value === AssetType.Video,
+    sourceAssetType.value === AssetType.Image ||
+    sourceAssetType.value === AssetType.Video,
 );
-const canTransform = computed(() => isOriginalMedia.value);
-const canZipOriginalFile = computed(
+const canTransform = computed(() => isSourceMedia.value);
+const canZipSourceFile = computed(
   () =>
-    originalAssetType.value === AssetType.Other &&
-    canZipAssetExtension(props.modalData.file.extension),
+    sourceAssetType.value === AssetType.Other &&
+    canZipAssetExtension(sourceFile.value.extension),
 );
 const canEditFile = computed(
-  () => canTransform.value || canZipOriginalFile.value,
+  () => canTransform.value || canZipSourceFile.value,
 );
 
-const { dimensions: originalDimensions } = useFileInfo(
-  props.modalData.file.objectUrl,
-  props.modalData.file.extension,
+const pickedFile =
+  props.modalData.source.kind === 'file' ? props.modalData.source.file : null;
+const { dimensions: pickedFileDimensions } = useFileInfo(
+  pickedFile?.objectUrl ?? '',
+  pickedFile?.extension ?? '',
+);
+const sourceDimensions = computed(
+  () =>
+    (processingSourceAsset.value
+      ? variantDimensions(processingSourceAsset.value)
+      : pickedFileDimensions.value) ?? undefined,
 );
 
-const originalVariant = computed(() =>
-  variants.value.find((variant) => variant.isOriginal),
+const unprocessedVariant = computed(() =>
+  variants.value.find((variant) => variant.isUnprocessed),
 );
-const reusableOriginalAsset = computed(
-  () => currentOriginalAsset.value ?? originalVariant.value ?? null,
+const reusableSourceAsset = computed(
+  () =>
+    processingSourceAsset.value ??
+    currentUnprocessedAsset.value ??
+    unprocessedVariant.value ??
+    null,
 );
 const selectedVariant = computed(() =>
   variants.value.find(
@@ -163,7 +220,7 @@ const modifiedVariantNames = computed(() => {
     .forEach((variant, index) => {
       names.set(
         variant.assetUuid,
-        phrase.value.upload_variant_modified(index + 1),
+        phrase.value.upload_variant_transformed(index + 1),
       );
     });
   return names;
@@ -175,48 +232,48 @@ const parsedDimensions = computed<AssetUploadDimensions>(() =>
     height: parseAssetDimensionInput(heightInput.value),
   }),
 );
-const originalDimensionsForComparison = computed(() =>
-  originalDimensions.value
-    ? normalizeDimensionsForCurrentType(originalDimensions.value)
+const sourceDimensionsForComparison = computed(() =>
+  sourceDimensions.value
+    ? normalizeDimensionsForCurrentType(sourceDimensions.value)
     : undefined,
 );
 const previewDimensions = computed(() =>
-  calculatePreviewDimensions(originalDimensions.value, parsedDimensions.value),
+  calculatePreviewDimensions(sourceDimensions.value, parsedDimensions.value),
 );
 const availableSizePresets = computed(() =>
-  getAvailableAssetSizePresets(originalDimensions.value),
+  getAvailableAssetSizePresets(sourceDimensions.value),
 );
 const showResetDimensions = computed(
   () =>
-    Boolean(originalDimensionsForComparison.value) &&
+    Boolean(sourceDimensionsForComparison.value) &&
     !dimensionsEqual(
       parsedDimensions.value,
-      originalDimensionsForComparison.value,
+      sourceDimensionsForComparison.value,
     ),
 );
 
 const recommendedEditSettings = computed<EditableSettings | null>(() => {
-  if (canZipOriginalFile.value) {
+  if (canZipSourceFile.value) {
     return createFileZipSettings();
   }
 
   if (!canTransform.value) return null;
 
   const configured = profileConfig.value;
-  const dimensions = configured?.dimensions ?? originalDimensions.value;
+  const dimensions = configured?.dimensions ?? sourceDimensions.value;
 
   if (!dimensions) return null;
 
-  const isVideo = originalAssetType.value === AssetType.Video;
+  const isVideo = sourceAssetType.value === AssetType.Video;
   const settingsDimensions = isVideo ? evenDimensions(dimensions) : dimensions;
-  const imageQuality = configured?.imageQuality ?? 70;
-  const videoQuality = configured?.videoQuality ?? 70;
+  const imageQuality = configured?.imageQuality ?? 90;
+  const videoQuality = configured?.videoQuality ?? 85;
   const common = {
     resizeMode: configured?.resizeMode ?? 'inside',
     allowUpscale: configured?.allowUpscale ?? false,
   } as const;
 
-  if (originalAssetType.value === AssetType.Image) {
+  if (sourceAssetType.value === AssetType.Image) {
     return createImageTransformSettings(
       imageQuality,
       settingsDimensions,
@@ -232,13 +289,13 @@ const recommendedEditSettings = computed<EditableSettings | null>(() => {
 });
 
 const currentEditSettings = computed<EditableSettings | null>(() => {
-  if (canZipOriginalFile.value) {
+  if (canZipSourceFile.value) {
     return createFileZipSettings();
   }
 
   if (!canTransform.value) return null;
 
-  if (originalAssetType.value === AssetType.Image) {
+  if (sourceAssetType.value === AssetType.Image) {
     return createImageTransformSettings(quality.value, parsedDimensions.value, {
       resizeMode: resizeMode.value,
       allowUpscale: allowUpscale.value,
@@ -277,12 +334,14 @@ const currentTransformedAssetMatchesSettings = computed(
   () =>
     transformedAssetIsEdit.value &&
     Boolean(currentEditSettingsKey.value) &&
-    currentTransformedAsset.value?.settingsKey === currentEditSettingsKey.value,
+    currentTransformedAsset.value?.settingsKey ===
+      currentEditSettingsKey.value &&
+    currentTransformedSourceKey.value === processingSourceKey(),
 );
-const canUseOriginal = computed(
+const canUseSource = computed(
   () =>
-    activeUseCandidate.value === 'original' &&
-    Boolean(currentOriginalAsset.value) &&
+    activeUseCandidate.value === 'source' &&
+    Boolean(reusableSourceAsset.value) &&
     !busyAction.value,
 );
 const canUseSelected = computed(
@@ -300,7 +359,7 @@ const canUseTransformed = computed(
 const editApplyButtonText = computed(() =>
   busyAction.value === 'apply'
     ? busyText(phrase.value.upload_uploading, phrase.value.upload_processing)
-    : canZipOriginalFile.value
+    : canZipSourceFile.value
       ? phrase.value.upload_compress_to_zip
       : phrase.value.upload_apply_settings,
 );
@@ -310,10 +369,10 @@ const transformedAssetDimensions = computed(() =>
     ? variantDimensions(currentTransformedAsset.value)
     : undefined,
 );
-const originalFileComparison = computed(() => ({
-  extension: props.modalData.file.extension,
-  size: props.modalData.file.size,
-  dimensions: originalDimensions.value,
+const sourceFileComparison = computed(() => ({
+  extension: sourceFile.value.extension,
+  size: sourceFile.value.size,
+  dimensions: sourceDimensions.value,
 }));
 const transformedFileComparison = computed(() => ({
   extension:
@@ -331,43 +390,42 @@ const transformedFileComparison = computed(() => ({
       : previewDimensions.value,
 }));
 const expectedEditExtension = computed(() => {
-  if (canZipOriginalFile.value) return 'zip';
-  if (originalAssetType.value === AssetType.Image) return 'webp';
-  if (originalAssetType.value === AssetType.Video) return 'webm';
-  return props.modalData.file.extension;
+  if (canZipSourceFile.value) return 'zip';
+  if (sourceAssetType.value === AssetType.Image) return 'webp';
+  if (sourceAssetType.value === AssetType.Video) return 'webm';
+  return sourceFile.value.extension;
 });
 const uploadedVariantItems = computed(() =>
   sortedVariants.value.map((variant) => ({
     assetUuid: variant.assetUuid,
     title: variantTitle(variant),
+    description: variantSettingsSummary(variant),
     extension: variant.extension,
     size: variant.size,
     dimensions: variantDimensions(variant),
     type: variant.type,
     hasAudio: variantHasAudio(variant),
+    usageCount: variant.usageCount,
+    isCurrent: variant.assetUuid === sourceAsset.value?.assetUuid,
   })),
 );
+const processingSourceLabel = computed(() =>
+  processingSourceAsset.value
+    ? variantTitle(processingSourceAsset.value)
+    : sourceFile.value.name,
+);
 
-const originalPreviewSource = computed<PreviewSource>(() => ({
-  key: `original:${props.modalData.file.objectUrl}:native`,
-  extension: props.modalData.file.extension,
-  src: props.modalData.file.objectUrl,
-  href: props.modalData.file.objectUrl,
-  isMedia: isOriginalMedia.value,
-  hasAudio: originalAssetType.value === AssetType.Video ? undefined : false,
-  displayDimensions: originalDimensions.value,
+const sourcePreviewSource = computed<PreviewSource>(() => ({
+  key: `source:${sourceFile.value.objectUrl}:native`,
+  extension: sourceFile.value.extension,
+  src: sourceFile.value.objectUrl,
+  href: sourceFile.value.objectUrl,
+  isMedia: isSourceMedia.value,
+  hasAudio: sourceAssetType.value === AssetType.Video ? undefined : false,
+  displayDimensions: sourceDimensions.value,
 }));
 const modifiedPreviewSource = computed<PreviewSource | null>(() => {
-  if (activeProfile.value === 'original') return null;
-
-  if (activeProfile.value === 'uploaded') {
-    if (selectedVariant.value?.isOriginal) return null;
-    return selectedVariant.value
-      ? variantPreviewSource(selectedVariant.value)
-      : null;
-  }
-
-  if (activeProfile.value !== 'edit') return null;
+  if (activeProfile.value !== 'create') return null;
 
   if (
     currentTransformedAssetMatchesSettings.value &&
@@ -376,42 +434,42 @@ const modifiedPreviewSource = computed<PreviewSource | null>(() => {
     return variantPreviewSource(currentTransformedAsset.value);
   }
 
-  if (!isOriginalMedia.value || !showResetDimensions.value) return null;
+  if (!isSourceMedia.value || !showResetDimensions.value) return null;
 
   const display = previewDimensions.value;
   const displayKey = display ? `${display.width}x${display.height}` : 'native';
   return {
-    key: `edit-preview:${props.modalData.file.objectUrl}:${displayKey}`,
-    extension: props.modalData.file.extension,
-    src: props.modalData.file.objectUrl,
-    href: props.modalData.file.objectUrl,
+    key: `edit-preview:${sourceFile.value.objectUrl}:${displayKey}`,
+    extension: sourceFile.value.extension,
+    src: sourceFile.value.objectUrl,
+    href: sourceFile.value.objectUrl,
     isMedia: true,
-    hasAudio: originalAssetType.value === AssetType.Video ? undefined : false,
+    hasAudio: sourceAssetType.value === AssetType.Video ? undefined : false,
     displayDimensions: display,
   };
 });
 const comparePreview = computed(() => {
   const modified = modifiedPreviewSource.value;
-  if (!originalPreviewSource.value.isMedia || !modified?.isMedia) return null;
+  if (!sourcePreviewSource.value.isMedia || !modified?.isMedia) return null;
 
   return {
-    key: `${originalPreviewSource.value.key}|${modified.key}`,
-    original: originalPreviewSource.value,
+    key: `${sourcePreviewSource.value.key}|${modified.key}`,
+    original: sourcePreviewSource.value,
     modified,
   };
 });
 const disableSeamlessCompare = computed(
   () =>
-    activeProfile.value === 'edit' &&
+    activeProfile.value === 'create' &&
     showResetDimensions.value &&
     !currentTransformedAssetMatchesSettings.value,
 );
 const singlePreview = computed(() =>
-  activeProfile.value === 'original' && reusableOriginalAsset.value
-    ? variantPreviewSource(reusableOriginalAsset.value)
-    : activeProfile.value === 'uploaded' && selectedVariant.value?.isOriginal
+  activeProfile.value === 'source' && reusableSourceAsset.value
+    ? variantPreviewSource(reusableSourceAsset.value)
+    : activeProfile.value === 'family' && selectedVariant.value
       ? variantPreviewSource(selectedVariant.value)
-      : (modifiedPreviewSource.value ?? originalPreviewSource.value),
+      : (modifiedPreviewSource.value ?? sourcePreviewSource.value),
 );
 const directPreviewHref = computed(
   () => comparePreview.value?.modified.href ?? singlePreview.value.href,
@@ -430,19 +488,29 @@ watch(
 );
 
 watch(
-  originalDimensionsForComparison,
+  sourceDimensionsForComparison,
   (dimensions) => {
     if (
       !dimensions ||
       profileConfig.value ||
-      originalDimensionsAppliedAsDefault
+      sourceDimensionsAppliedAsDefault
     ) {
       return;
     }
-    originalDimensionsAppliedAsDefault = true;
+    sourceDimensionsAppliedAsDefault = true;
     setDimensionInputs(dimensions);
   },
   { immediate: true },
+);
+watch(
+  () => processingSourceAsset.value?.assetUuid,
+  () => {
+    sourceDimensionsAppliedAsDefault = false;
+    currentTransformedAsset.value = null;
+    currentTransformedSourceKey.value = '';
+    const dimensions = sourceDimensionsForComparison.value;
+    if (dimensions) setDimensionInputs(dimensions);
+  },
 );
 
 watch(widthInput, () => {
@@ -456,13 +524,16 @@ watch(heightInput, () => {
 onMounted(async () => {
   try {
     const loadedVariants = await loadVariants();
-    if (loadedVariants.length > 0 && !profileSelectedByUser.value) {
-      const preferredVariant = [...loadedVariants].sort(
-        (a, b) => a.size - b.size,
-      )[0]!;
+    const preferredVariant = sourceAsset.value
+      ? loadedVariants.find(
+          (variant) => variant.assetUuid === sourceAsset.value?.assetUuid,
+        )
+      : [...loadedVariants].sort((a, b) => a.size - b.size)[0];
+    if (preferredVariant && !profileSelectedByUser.value) {
       selectedVariantUuid.value = preferredVariant.assetUuid;
+      processingSourceAssetUuid.value = preferredVariant.assetUuid;
       activeUseCandidate.value = 'selected';
-      activeProfile.value = 'uploaded';
+      activeProfile.value = 'family';
     }
   } catch (error) {
     errorMessage.value = errorToMessage(
@@ -472,32 +543,32 @@ onMounted(async () => {
   }
 });
 
-async function uploadOriginal() {
+async function saveWithoutProcessing() {
   const settings = createOriginalAssetSettings();
   errorMessage.value = '';
 
-  const reusableAsset = reusableOriginalAsset.value;
+  const reusableAsset = reusableSourceAsset.value;
   if (reusableAsset) {
-    currentOriginalAsset.value = reusableAsset;
+    currentUnprocessedAsset.value = reusableAsset;
     selectedVariantUuid.value = '';
-    activeUseCandidate.value = 'original';
+    activeUseCandidate.value = 'source';
     profileSelectedByUser.value = true;
-    activeProfile.value = 'original';
+    activeProfile.value = 'source';
     return;
   }
 
-  busyAction.value = 'upload-original';
+  busyAction.value = 'save-unchanged';
   try {
     const response = await uploadWithSettings(settings);
-    currentOriginalAsset.value = response;
+    currentUnprocessedAsset.value = response;
     selectedVariantUuid.value = '';
-    activeUseCandidate.value = 'original';
+    activeUseCandidate.value = 'source';
     profileSelectedByUser.value = true;
-    activeProfile.value = 'original';
+    activeProfile.value = 'source';
   } catch (error) {
     errorMessage.value = errorToMessage(
       error,
-      phrase.value.upload_error_original,
+      phrase.value.upload_error_unchanged,
     );
   } finally {
     busyAction.value = undefined;
@@ -510,37 +581,36 @@ async function applySettings() {
   if (!settings) return;
 
   const currentSettingsKey = currentEditSettingsKey.value;
+  const sourceKey = processingSourceKey();
   const cachedAsset =
-    currentTransformedAsset.value?.settingsKey === currentSettingsKey
+    currentTransformedAsset.value?.settingsKey === currentSettingsKey &&
+    currentTransformedSourceKey.value === sourceKey
       ? currentTransformedAsset.value
       : undefined;
-  const matchingVariant = variants.value.find(
-    (variant) => variant.settingsKey === currentSettingsKey,
-  );
-  const reusableAsset = cachedAsset ?? matchingVariant;
 
   errorMessage.value = '';
 
   try {
-    if (reusableAsset) {
-      currentTransformedAsset.value = reusableAsset;
+    if (cachedAsset) {
+      currentTransformedAsset.value = cachedAsset;
       selectedVariantUuid.value = '';
       activeUseCandidate.value = 'transformed';
       profileSelectedByUser.value = true;
-      activeProfile.value = 'edit';
+      activeProfile.value = 'create';
       return;
     }
 
     busyAction.value = 'apply';
-    const response = await uploadWithSettings(settings, {
-      previousAssetUuid: temporaryAssetUuid.value,
-    });
+    const response = await uploadWithSettings(
+      settings,
+      processingSourceAsset.value?.assetUuid,
+    );
     currentTransformedAsset.value = response;
+    currentTransformedSourceKey.value = sourceKey;
     selectedVariantUuid.value = '';
     activeUseCandidate.value = 'transformed';
     profileSelectedByUser.value = true;
-    activeProfile.value = 'edit';
-    temporaryAssetUuid.value = response.created ? response.assetUuid : null;
+    activeProfile.value = 'create';
   } catch (error) {
     errorMessage.value = errorToMessage(error, phrase.value.upload_error_apply);
   } finally {
@@ -551,9 +621,10 @@ async function applySettings() {
 
 function selectVariant(variant: AssetVariantInfo) {
   selectedVariantUuid.value = variant.assetUuid;
+  processingSourceAssetUuid.value = variant.assetUuid;
   activeUseCandidate.value = 'selected';
   profileSelectedByUser.value = true;
-  activeProfile.value = 'uploaded';
+  activeProfile.value = 'family';
 }
 
 function selectVariantByUuid(assetUuid: string) {
@@ -573,15 +644,14 @@ async function finishWithTransformed() {
   }
 }
 
-async function finishWithOriginal() {
-  if (canUseOriginal.value && currentOriginalAsset.value) {
-    await finishWithAsset(currentOriginalAsset.value);
+async function finishWithSource() {
+  if (canUseSource.value && reusableSourceAsset.value) {
+    await finishWithAsset(reusableSourceAsset.value);
   }
 }
 
 async function finishWithAsset(asset: AssetVariantInfo) {
-  const discardedUuid = await discardTemporaryExcept(asset.assetUuid);
-  if (discardedUuid) cleanupDiscardedTemporary(discardedUuid);
+  await touchVariant(asset.assetUuid);
   emit('modalResult', {
     type: 'asset-ready',
     asset,
@@ -591,24 +661,12 @@ async function finishWithAsset(asset: AssetVariantInfo) {
 function setActiveProfile(profile: ActiveProfile) {
   profileSelectedByUser.value = true;
   activeProfile.value = profile;
-  if (profile === 'original') {
-    if (reusableOriginalAsset.value) {
-      currentOriginalAsset.value = reusableOriginalAsset.value;
+  if (profile === 'source') {
+    if (reusableSourceAsset.value) {
+      currentUnprocessedAsset.value = reusableSourceAsset.value;
       selectedVariantUuid.value = '';
-      activeUseCandidate.value = 'original';
+      activeUseCandidate.value = 'source';
     }
-  }
-}
-
-function cleanupDiscardedTemporary(assetUuid: string) {
-  if (currentTransformedAsset.value?.assetUuid === assetUuid) {
-    currentTransformedAsset.value = null;
-  }
-  if (
-    activeUseCandidate.value === 'transformed' &&
-    !currentTransformedAsset.value
-  ) {
-    activeUseCandidate.value = null;
   }
 }
 
@@ -632,41 +690,37 @@ function applyEditSettings(settings: EditableSettings) {
 }
 
 function applySizePreset(size: number) {
-  const dimensions = originalDimensions.value;
+  const dimensions = sourceDimensions.value;
   if (!dimensions) return;
   setDimensionInputs(resizeDimensionsByLongSide(dimensions, size));
 }
 
 function resetDimensions() {
-  if (!originalDimensions.value) return;
-  setDimensionInputs(
-    normalizeDimensionsForCurrentType(originalDimensions.value),
-  );
+  if (!sourceDimensions.value) return;
+  setDimensionInputs(normalizeDimensionsForCurrentType(sourceDimensions.value));
 }
 
 function syncHeightFromWidth() {
-  if (!keepAspect.value || !originalDimensions.value) return;
+  if (!keepAspect.value || !sourceDimensions.value) return;
   const width = parseAssetDimensionInput(widthInput.value);
   if (!width) return;
   const height = Math.max(
     1,
     Math.round(
-      (width * originalDimensions.value.height) /
-        originalDimensions.value.width,
+      (width * sourceDimensions.value.height) / sourceDimensions.value.width,
     ),
   );
   setDimensionInputs({ width, height });
 }
 
 function syncWidthFromHeight() {
-  if (!keepAspect.value || !originalDimensions.value) return;
+  if (!keepAspect.value || !sourceDimensions.value) return;
   const height = parseAssetDimensionInput(heightInput.value);
   if (!height) return;
   const width = Math.max(
     1,
     Math.round(
-      (height * originalDimensions.value.width) /
-        originalDimensions.value.height,
+      (height * sourceDimensions.value.width) / sourceDimensions.value.height,
     ),
   );
   setDimensionInputs({ width, height });
@@ -684,7 +738,7 @@ function setDimensionInputs(dimensions: AssetUploadDimensions) {
 function normalizeDimensionsForCurrentType(
   dimensions: AssetUploadDimensions,
 ): AssetUploadDimensions {
-  if (originalAssetType.value !== AssetType.Video) return dimensions;
+  if (sourceAssetType.value !== AssetType.Video) return dimensions;
   return {
     ...(dimensions.width
       ? { width: Math.max(2, dimensions.width - (dimensions.width % 2)) }
@@ -701,7 +755,7 @@ function variantPreviewSource(variant: AssetVariantInfo): PreviewSource {
   return {
     key: `asset:${variant.assetUuid}:${variant.assetUrl}`,
     extension: variant.extension,
-    src: variant.type === AssetType.Video ? variant.videoUrl : variant.assetUrl,
+    src: variant.media?.src ?? variant.assetUrl,
     href: variant.assetUrl,
     isMedia,
     hasAudio:
@@ -727,16 +781,62 @@ function variantHasAudio(variant: AssetVariantInfo): boolean | undefined {
 }
 
 function variantTitle(variant: AssetVariantInfo): string {
-  if (variant.isOriginal) {
-    return phrase.value.upload_variant_original;
+  if (variant.isUnprocessed) {
+    return phrase.value.upload_variant_unchanged;
+  }
+  if (variant.settings?.type === 'file-zip') {
+    return phrase.value.upload_variant_archive;
   }
   if (isEditableSettings(variant.settings)) {
     return (
       modifiedVariantNames.value.get(variant.assetUuid) ??
-      phrase.value.upload_variant_modified(1)
+      phrase.value.upload_variant_transformed(1)
     );
   }
-  return phrase.value.upload_variant_uploaded_file;
+  return phrase.value.upload_variant_saved;
+}
+
+function variantSettingsSummary(variant: AssetVariantInfo): string {
+  const settings = variant.settings;
+  if (!settings || settings.type === 'original') {
+    return phrase.value.upload_variant_details_unchanged;
+  }
+  if (settings.type === 'file-zip') {
+    return phrase.value.upload_variant_details_zip;
+  }
+
+  const parts = [
+    phrase.value.upload_variant_quality(settings.quality),
+    settings.resizeMode === 'cover'
+      ? phrase.value.upload_variant_resize_cover
+      : phrase.value.upload_variant_resize_inside,
+    settings.allowUpscale
+      ? phrase.value.upload_variant_upscale
+      : phrase.value.upload_variant_no_upscale,
+  ];
+  if (settings.type === 'video-transform') {
+    parts.push(
+      settings.stripAudio
+        ? phrase.value.upload_variant_audio_removed
+        : phrase.value.upload_variant_audio_kept,
+    );
+    if (settings.fastConversion) {
+      parts.push(phrase.value.upload_variant_fast);
+    }
+  }
+  return parts.join(' · ');
+}
+
+function processingSourceKey() {
+  return processingSourceAsset.value?.assetUuid
+    ? `asset:${processingSourceAsset.value.assetUuid}`
+    : props.modalData.source.kind === 'file'
+      ? `file:${props.modalData.source.familyUuid}`
+      : '';
+}
+
+function isSyntheticAssetFilename(filename: string) {
+  return /^a-[0-9a-f-]{36}\.[^.]+$/i.test(filename);
 }
 
 function isEditableSettings(
@@ -777,15 +877,18 @@ function errorToMessage(error: unknown, fallback: string): string {
 </script>
 
 <template>
-  <AssetModal :aside-title="phrase.upload_variants">
+  <AssetModal
+    :aside-title="phrase.upload_variants"
+    :back-label="modalData.backLabel"
+  >
     <template #preview>
       <AssetModalCompareMedia
         v-if="comparePreview"
         :key="`compare:${comparePreview.key}`"
         :original="comparePreview.original"
         :modified="comparePreview.modified"
-        :original-label="phrase.upload_compare_original"
-        :modified-label="phrase.upload_compare_modified"
+        :original-label="phrase.upload_compare_source"
+        :modified-label="phrase.upload_compare_result"
         :disable-seamless="disableSeamlessCompare"
       />
       <AssetModalPreviewMedia
@@ -828,10 +931,21 @@ function errorToMessage(error: unknown, fallback: string): string {
           <Button
             variant="secondary"
             class="w-full"
+            :data-title-popup="
+              processingSourceAsset
+                ? phrase.upload_replace_with_new_file_hint
+                : undefined
+            "
             @click="emit('modalResult', { type: 'upload-new' })"
           >
             <Icon name="file" class="mr-xs" />
-            <span>{{ phrase.pick_another_file }}</span>
+            <span>
+              {{
+                processingSourceAsset
+                  ? phrase.upload_replace_with_new_file
+                  : phrase.pick_another_file
+              }}
+            </span>
           </Button>
         </div>
 
@@ -847,46 +961,51 @@ function errorToMessage(error: unknown, fallback: string): string {
         <UploadSettingsDivider />
 
         <UploadSettingsSection
-          :active="activeProfile === 'original'"
-          :title="phrase.upload_section_original"
-          @activate="setActiveProfile('original')"
+          :active="activeProfile === 'source'"
+          :title="sourceSectionTitle"
+          @activate="setActiveProfile('source')"
         >
+          <div
+            v-if="processingSourceAsset"
+            class="text-sm leading-snug text-text-3"
+          >
+            {{ phrase.upload_source_hint }}
+          </div>
           <AssetModalFileInfo
-            :name="modalData.file.name"
-            :extension="modalData.file.extension"
-            :size="modalData.file.size"
-            :dimensions="originalDimensions"
+            :name="sourceFile.name"
+            :extension="sourceFile.extension"
+            :size="sourceFile.size"
+            :dimensions="sourceDimensions"
           />
 
           <Button
+            v-if="!processingSourceAsset && !reusableSourceAsset"
             variant="secondary"
             :disabled="Boolean(busyAction)"
-            @click="uploadOriginal"
+            @click="saveWithoutProcessing"
           >
             <Icon
-              :name="buttonIcon('upload-original', 'cloud-upload')"
+              :name="buttonIcon('save-unchanged', 'cloud-upload')"
               class="mr-xs"
             />
             <span>
               {{
-                busyAction === 'upload-original'
+                busyAction === 'save-unchanged'
                   ? busyText(
-                      phrase.upload_uploading_original,
+                      phrase.upload_saving_unchanged,
                       phrase.upload_saving,
                     )
-                  : reusableOriginalAsset
-                    ? phrase.upload_show_original
-                    : phrase.upload_upload_original
+                  : phrase.upload_save_unchanged
               }}
             </span>
           </Button>
           <Button
             variant="primary"
-            :disabled="!canUseOriginal"
+            :disabled="!canUseSource"
             class="font-semibold"
-            @click="finishWithOriginal"
+            @click="finishWithSource"
           >
-            <span>{{ phrase.upload_use }}</span>
+            <span>{{ phrase.upload_use_variant }}</span>
             <Icon name="chevron-right" class="ml-xs" />
           </Button>
         </UploadSettingsSection>
@@ -895,9 +1014,9 @@ function errorToMessage(error: unknown, fallback: string): string {
 
         <UploadSettingsSection
           v-if="hasUploadedVariants"
-          :active="activeProfile === 'uploaded'"
-          :title="phrase.upload_section_existing"
-          @activate="setActiveProfile('uploaded')"
+          :active="activeProfile === 'family'"
+          :title="phrase.upload_section_family"
+          @activate="setActiveProfile('family')"
         >
           <template #header-extra>
             <Icon
@@ -907,12 +1026,16 @@ function errorToMessage(error: unknown, fallback: string): string {
             />
           </template>
 
-          <UploadSettingsVariantList
-            v-if="uploadedVariantItems.length"
-            :items="uploadedVariantItems"
-            :selected-uuid="selectedVariantUuid"
-            @select="selectVariantByUuid"
-          />
+          <template v-if="uploadedVariantItems.length">
+            <UploadSettingsVariantList
+              :items="uploadedVariantItems"
+              :selected-uuid="selectedVariantUuid"
+              @select="selectVariantByUuid"
+            />
+            <div class="text-sm leading-snug text-text-3">
+              {{ phrase.upload_family_hint }}
+            </div>
+          </template>
           <div v-else class="text-sm text-text-3">
             {{
               busyAction === 'variants'
@@ -927,7 +1050,7 @@ function errorToMessage(error: unknown, fallback: string): string {
             class="font-semibold"
             @click="finishSelectedVariant"
           >
-            <span>{{ phrase.upload_use }}</span>
+            <span>{{ phrase.upload_use_variant }}</span>
             <Icon name="chevron-right" class="ml-xs" />
           </Button>
         </UploadSettingsSection>
@@ -936,14 +1059,17 @@ function errorToMessage(error: unknown, fallback: string): string {
           <UploadSettingsDivider />
 
           <UploadSettingsSection
-            :active="activeProfile === 'edit'"
+            :active="activeProfile === 'create'"
             :title="
-              canZipOriginalFile
+              canZipSourceFile
                 ? phrase.upload_section_zip
-                : phrase.upload_section_edit
+                : phrase.upload_section_create
             "
-            @activate="setActiveProfile('edit')"
+            @activate="setActiveProfile('create')"
           >
+            <div class="text-sm leading-snug text-text-3">
+              {{ phrase.upload_create_from(processingSourceLabel) }}
+            </div>
             <UploadSettingsEditProfile
               v-if="canTransform"
               v-model:quality="quality"
@@ -952,7 +1078,7 @@ function errorToMessage(error: unknown, fallback: string): string {
               v-model:keep-aspect="keepAspect"
               v-model:mute-audio="muteAudio"
               v-model:fast-conversion="fastConversion"
-              :is-video="originalAssetType === AssetType.Video"
+              :is-video="sourceAssetType === AssetType.Video"
               :quality-values="qualityValues"
               :available-size-presets="availableSizePresets"
               :show-reset-dimensions="showResetDimensions"
@@ -961,7 +1087,7 @@ function errorToMessage(error: unknown, fallback: string): string {
               :apply-button-text="editApplyButtonText"
               :can-use-transformed="canUseTransformed"
               :show-result="currentTransformedAssetMatchesSettings"
-              :previous-file="originalFileComparison"
+              :previous-file="sourceFileComparison"
               :current-file="transformedFileComparison"
               @apply-recommended-settings="applyRecommendedSettings"
               @reset-dimensions="resetDimensions"
@@ -977,7 +1103,7 @@ function errorToMessage(error: unknown, fallback: string): string {
               :apply-button-text="editApplyButtonText"
               :can-use-transformed="canUseTransformed"
               :show-result="currentTransformedAssetMatchesSettings"
-              :previous-file="originalFileComparison"
+              :previous-file="sourceFileComparison"
               :current-file="transformedFileComparison"
               @apply-settings="applySettings"
               @finish="finishWithTransformed"

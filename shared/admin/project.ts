@@ -5,6 +5,12 @@ import {
   type ContentFieldModelValue,
 } from '../content';
 import { isOneOf } from '../utils/isOneOf';
+import {
+  normalizeProjectContentSections,
+  ProjectContentSectionError,
+  type ProjectContentSectionEditItem,
+} from '../project-content-section';
+import type { MediaDescriptor } from '../media';
 
 /** Base save item for any project asset list (showcase, other-assets, …). */
 export type AssetListSaveItem = { assetUuid: string };
@@ -20,6 +26,27 @@ export type OtherAssetSaveItem = AssetListSaveItem & {
   isPrivate: boolean;
 };
 
+export type ProjectRelationType = 'related' | 'influencing' | 'dependent';
+
+export type ProjectRelationNote =
+  | { type: 'shared'; text?: string }
+  | {
+      type: 'split';
+      currentProjectText?: string;
+      relatedProjectText?: string;
+    };
+
+export type ProjectRelationEditItem = {
+  projectUuid: string;
+  type: ProjectRelationType;
+  note?: ProjectRelationNote;
+  /** Display fields returned by the admin edit API and ignored when saving. */
+  title?: string;
+  humanReadableSlug?: string;
+  publicId?: string;
+  iconMedia?: MediaDescriptor;
+};
+
 export type ProjectEditData = {
   title: string;
   summary: string;
@@ -31,15 +58,57 @@ export type ProjectEditData = {
   iconAssetUuid?: string;
   bannerAssetUuid?: string;
   descriptionContent?: ContentFieldModelValue | null;
+  contentSections?: ProjectContentSectionEditItem[];
   /** Showcase assets in display order. Array index = sort order. */
   showcaseAssets?: ShowcaseAssetEditItem[];
   /** Other files in display order. Array index = sort order. */
   otherAssets?: OtherAssetSaveItem[];
+  /** Relations in this project's display order. */
+  relations?: ProjectRelationEditItem[];
 };
 
 export type ValidatedProjectEditData = Omit<ProjectEditData, 'access'> & {
   access: ProjectEventAccessLevel;
 };
+
+export function projectAssetUsageDelta(
+  current: ProjectEditData,
+  saved: ProjectEditData,
+): Record<string, number> {
+  const currentCounts = countProjectAssetPlacements(current);
+  const savedCounts = countProjectAssetPlacements(saved);
+  const assetUuids = new Set([
+    ...Object.keys(currentCounts),
+    ...Object.keys(savedCounts),
+  ]);
+
+  return Object.fromEntries(
+    Array.from(assetUuids, (assetUuid) => [
+      assetUuid,
+      (currentCounts[assetUuid] ?? 0) - (savedCounts[assetUuid] ?? 0),
+    ]).filter(([, delta]) => delta !== 0),
+  );
+}
+
+export function countProjectAssetPlacements(
+  project: ProjectEditData,
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  const add = (assetUuid: string | undefined) => {
+    if (!assetUuid) return;
+    counts[assetUuid] = (counts[assetUuid] ?? 0) + 1;
+  };
+
+  add(project.iconAssetUuid);
+  add(project.bannerAssetUuid);
+  new Set(project.showcaseAssets?.map((item) => item.assetUuid) ?? []).forEach(
+    add,
+  );
+  new Set(project.otherAssets?.map((item) => item.assetUuid) ?? []).forEach(
+    add,
+  );
+  return counts;
+}
 
 export function validateProjectData(
   data: ProjectEditData,
@@ -104,6 +173,10 @@ export function validateProjectData(
           );
 
     const descriptionContent = validateContentField(data.descriptionContent);
+    const contentSections = normalizeProjectContentSections(
+      data.contentSections,
+    );
+    const relations = validateProjectRelations(data.relations);
 
     return {
       ...data,
@@ -113,14 +186,61 @@ export function validateProjectData(
       publicId,
       access: data.access,
       descriptionContent,
+      contentSections,
       showcaseAssets,
       otherAssets,
+      relations,
     };
   } catch (error) {
     if (error instanceof ProjectValidationError) return error.message;
     if (error instanceof ContentValidationError) return error.message;
+    if (error instanceof ProjectContentSectionError) return error.message;
     throw error;
   }
+}
+
+function validateProjectRelations(
+  relations: ProjectRelationEditItem[] | undefined,
+): ProjectRelationEditItem[] | undefined {
+  if (relations === undefined) return undefined;
+  const seen = new Set<string>();
+  return relations.map((relation) => {
+    const projectUuid = relation.projectUuid?.trim();
+    if (!projectUuid)
+      throw new ProjectValidationError('Invalid related project');
+    if (seen.has(projectUuid))
+      throw new ProjectValidationError('Duplicate related project');
+    seen.add(projectUuid);
+    if (
+      relation.type !== 'related' &&
+      relation.type !== 'influencing' &&
+      relation.type !== 'dependent'
+    ) {
+      throw new ProjectValidationError('Invalid project relation type');
+    }
+    return {
+      projectUuid,
+      type: relation.type,
+      note: validateProjectRelationNote(relation.note),
+    };
+  });
+}
+
+function validateProjectRelationNote(
+  note: ProjectRelationNote | undefined,
+): ProjectRelationNote | undefined {
+  if (note === undefined) return undefined;
+  if (note.type === 'shared') {
+    return { type: 'shared', text: normalizeOptionalText(note.text) };
+  }
+  if (note.type === 'split') {
+    return {
+      type: 'split',
+      currentProjectText: normalizeOptionalText(note.currentProjectText),
+      relatedProjectText: normalizeOptionalText(note.relatedProjectText),
+    };
+  }
+  throw new ProjectValidationError('Invalid project relation note');
 }
 
 function normalizeOptionalText(value: string | undefined): string | undefined {

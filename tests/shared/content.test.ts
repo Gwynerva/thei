@@ -1,12 +1,54 @@
 import { describe, expect, it } from 'vitest';
 import {
   ContentValidationError,
+  contentDataIsSemanticallyEqual,
   extractContentAssetRefs,
   normalizeContentData,
   summarizeContentData,
 } from '../../shared/content';
 
 describe('content normalization', () => {
+  it('ignores Editor.js service metadata when content is unchanged', () => {
+    const blocks = [
+      {
+        id: 'block-1',
+        type: 'paragraph',
+        data: { text: 'Same content' },
+      },
+    ];
+
+    expect(
+      contentDataIsSemanticallyEqual(
+        { time: 1, version: '2.28.0', blocks },
+        {
+          time: 2,
+          version: '2.31.0',
+          blocks: [
+            {
+              data: { text: 'Same content' },
+              type: 'paragraph',
+              id: 'editor-regenerated-id',
+            },
+          ],
+        },
+      ),
+    ).toBe(true);
+    expect(
+      contentDataIsSemanticallyEqual(
+        { time: 1, blocks },
+        {
+          time: 2,
+          blocks: [
+            {
+              ...blocks[0]!,
+              data: { text: 'Changed content' },
+            },
+          ],
+        },
+      ),
+    ).toBe(false);
+  });
+
   it('drops empty text blocks and keeps meaningful blocks', () => {
     const data = normalizeContentData({
       blocks: [
@@ -48,7 +90,7 @@ describe('content normalization', () => {
       blocks: [
         {
           id: 'block-1',
-          type: 'contentImage',
+          type: 'contentMedia',
           data: { asset: { assetUuid: 'a-1', size: 10 } },
           tunes: { privateAccess: { isPrivate: true } },
         },
@@ -56,9 +98,16 @@ describe('content normalization', () => {
           id: 'block-2',
           type: 'contentGallery',
           data: {
-            assets: [
-              { assetUuid: 'a-1', size: 10 },
-              { assetUuid: 'a-2', size: 20 },
+            items: [
+              {
+                id: 'item-1',
+                asset: { assetUuid: 'a-1', size: 10 },
+                caption: 'First',
+              },
+              {
+                id: 'item-2',
+                asset: { assetUuid: 'a-2', size: 20 },
+              },
             ],
           },
         },
@@ -69,7 +118,7 @@ describe('content normalization', () => {
       {
         assetUuid: 'a-1',
         blockId: 'block-1',
-        blockType: 'contentImage',
+        blockType: 'contentMedia',
         isPrivate: true,
       },
       {
@@ -87,6 +136,36 @@ describe('content normalization', () => {
     ]);
   });
 
+  it('keeps only per-item captions in galleries', () => {
+    const data = normalizeContentData({
+      blocks: [
+        {
+          type: 'contentGallery',
+          data: {
+            caption: 'This field is not part of the gallery format',
+            items: [
+              {
+                id: 'item-1',
+                asset: { assetUuid: 'a-1' },
+                caption: 'Item caption',
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(data.blocks[0]?.data).toEqual({
+      items: [
+        {
+          id: 'item-1',
+          asset: { assetUuid: 'a-1' },
+          caption: 'Item caption',
+        },
+      ],
+    });
+  });
+
   it('deduplicates asset sizes in summary', () => {
     const data = normalizeContentData({
       blocks: [
@@ -95,7 +174,7 @@ describe('content normalization', () => {
           data: { asset: { assetUuid: 'a-1' } },
         },
         {
-          type: 'contentImage',
+          type: 'contentMedia',
           data: { asset: { assetUuid: 'a-1' } },
         },
       ],

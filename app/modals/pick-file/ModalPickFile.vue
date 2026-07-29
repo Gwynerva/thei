@@ -5,24 +5,26 @@ import {
   getPathExtension,
   isExtensionAllowed,
 } from '#layers/thei/shared/assets/extensions';
-import type { PickedFile } from './picked-file';
+import ModalBackButton from '../ModalBackButton.vue';
+import type { PickedFile, PickedFiles } from './picked-file';
 
 const props = defineProps<{
   modalData: {
     accept: string | ExtensionProfile | (string | ExtensionProfile)[];
     maxSize?: number;
+    multiple?: boolean;
+    backLabel?: string;
   };
 }>();
 
 const emit = defineEmits<{
-  modalResult: [result: PickedFile];
+  modalResult: [result: PickedFile | PickedFiles];
 }>();
 
 const humanSize = useHumanSize();
 
 const errorMessage = ref('');
 const dragging = ref(false);
-const isHashing = ref(false);
 const stopDragging = debounce(() => {
   dragging.value = false;
 }, 50);
@@ -53,50 +55,71 @@ const acceptAttr = computed(() => {
   return acceptAll ? '' : exts.join(',');
 });
 
-async function hashFile(file: File): Promise<string> {
-  const buffer = await file.arrayBuffer();
-  const digest = await crypto.subtle.digest('SHA-256', buffer);
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-async function validateAndEmit(file: File) {
-  if (isHashing.value) return;
-
+function validateFile(
+  file: File,
+): { file: PickedFile } | { error: { fileName: string; message: string } } {
   const ext = getPathExtension(file.name);
 
   if (!isExtensionAllowed(ext, props.modalData.accept)) {
-    errorMessage.value = phrase.value.file_wrong_type(ext || '?');
-    return;
+    return {
+      error: {
+        fileName: file.name,
+        message: phrase.value.file_wrong_type(ext || '?'),
+      },
+    };
   }
 
   if (
     props.modalData.maxSize !== undefined &&
     file.size > props.modalData.maxSize
   ) {
-    errorMessage.value = phrase.value.file_too_large(humanSize(file.size));
-    return;
+    return {
+      error: {
+        fileName: file.name,
+        message: phrase.value.file_too_large(humanSize(file.size)),
+      },
+    };
   }
 
-  errorMessage.value = '';
-  isHashing.value = true;
-  try {
-    const rawHash = await hashFile(file);
-    const objectUrl = URL.createObjectURL(file);
-    emit('modalResult', {
+  return {
+    file: {
       type: 'picked-file',
-      objectUrl,
+      objectUrl: URL.createObjectURL(file),
       file,
       extension: ext,
       size: file.size,
       name: file.name,
-      rawHash,
-    });
-  } catch {
-    errorMessage.value = phrase.value.file_hash_failed;
-    isHashing.value = false;
+    },
+  };
+}
+
+function validateAndEmit(files: File[]) {
+  if (!files.length) return;
+  const results = files.map(validateFile);
+  const accepted = results.flatMap((result) =>
+    'file' in result ? [result.file] : [],
+  );
+  const errors = results.flatMap((result) =>
+    'error' in result ? [result.error] : [],
+  );
+
+  if (!props.modalData.multiple) {
+    const result = results[0]!;
+    if ('error' in result) {
+      errorMessage.value = result.error.message;
+      return;
+    }
+    errorMessage.value = '';
+    emit('modalResult', result.file);
+    return;
   }
+
+  if (!accepted.length) {
+    errorMessage.value = errors.map((error) => error.message).join(' · ');
+    return;
+  }
+  errorMessage.value = '';
+  emit('modalResult', { type: 'picked-files', files: accepted, errors });
 }
 
 function browse() {
@@ -104,11 +127,8 @@ function browse() {
 }
 
 function onFileInput(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0];
-
-  if (file) {
-    validateAndEmit(file);
-  }
+  const files = Array.from((e.target as HTMLInputElement).files ?? []);
+  validateAndEmit(files);
 
   if (fileInput.value) {
     fileInput.value.value = '';
@@ -118,13 +138,11 @@ function onFileInput(e: Event) {
 function handleDrop(e: DragEvent) {
   stopDragging.cancel();
   dragging.value = false;
-  const file = e.dataTransfer?.files[0];
-  if (file) validateAndEmit(file);
+  validateAndEmit(Array.from(e.dataTransfer?.files ?? []));
 }
 
 function handlePaste(e: ClipboardEvent) {
-  const file = e.clipboardData?.files[0];
-  if (file) validateAndEmit(file);
+  validateAndEmit(Array.from(e.clipboardData?.files ?? []));
 }
 
 onMounted(() => document.addEventListener('paste', handlePaste));
@@ -133,7 +151,7 @@ onUnmounted(() => document.removeEventListener('paste', handlePaste));
 
 <template>
   <section
-    @click="!isHashing && browse()"
+    @click="browse()"
     @dragover.prevent="
       dragging = true;
       stopDragging.cancel();
@@ -155,8 +173,18 @@ onUnmounted(() => document.removeEventListener('paste', handlePaste));
         p-md text-center transition group-data-dragging:border-accent!
         group-hocus:border-border-2 sm:gap-lg sm:border-8 sm:p-lg"
     >
+      <ModalBackButton
+        v-if="modalData.backLabel || modalBackLabel"
+        :target="modalData.backLabel || modalBackLabel!"
+        class="absolute top-sm left-sm"
+        floating
+        @click.stop
+      />
+
       <button
+        type="button"
         @click.stop="closeModal"
+        :aria-label="phrase.close_modal"
         class="absolute top-sm right-sm cursor-pointer rounded-full
           bg-transparent p-xs text-3xl text-text-3 transition sm:p-sm
           hocus:bg-bg-3 hocus:text-text-1"
@@ -168,10 +196,6 @@ onUnmounted(() => document.removeEventListener('paste', handlePaste));
         <Icon name="warning" class="mr-xs" />
         <span>{{ errorMessage }}</span>
       </div>
-      <div v-if="isHashing" class="text-xl font-semibold text-accent">
-        <Icon name="loading" class="mr-xs" />
-        <span>{{ phrase.file_hash_calculating }}</span>
-      </div>
       <div
         class="group/icon rounded-full border-2 border-border-1/50 bg-bg-2 p-md
           shadow-lg shadow-black/20 transition
@@ -180,9 +204,9 @@ onUnmounted(() => document.removeEventListener('paste', handlePaste));
       >
         <Icon
           name="upload"
-          class="text-[3em] text-text-2 transition
+          class="text-5xl text-text-2 transition
             group-data-dragging:text-accent! group-hocus/icon:text-text-1
-            sm:text-[8em]"
+            sm:text-9xl"
         />
       </div>
       <div
@@ -230,6 +254,7 @@ onUnmounted(() => document.removeEventListener('paste', handlePaste));
     <input
       ref="file"
       type="file"
+      :multiple="modalData.multiple"
       class="hidden"
       :accept="acceptAttr"
       @click.stop

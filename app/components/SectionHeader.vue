@@ -22,6 +22,5 @@ defineProps<{
         {{ description }}
       </p>
     </div>
-    <slot name="actions"></slot>
   </div>
 </template>

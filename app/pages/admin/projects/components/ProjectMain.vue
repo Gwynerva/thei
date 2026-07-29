@@ -4,8 +4,8 @@ import {
   SiteAccessLevel,
 } from '#layers/thei/shared/access-level';
 import { projectDataInjectionKey, publicIdErrorKey } from '../composables';
-import FieldContent from '#layers/thei/app/components/content/FieldContent.vue';
 import LinkField from '../../components/LinkField.vue';
+import FieldContent from '#layers/thei/app/components/content/FieldContent.vue';
 
 const projectData = inject(projectDataInjectionKey)!;
 const publicIdError = inject(publicIdErrorKey)!;
@@ -104,10 +104,13 @@ const accessHint = computed(() => {
       </Field>
     </div>
 
-    <FieldContent
-      v-model="projectData.descriptionContent"
-      :label="phrase.project_description"
-      :hint="phrase.project_description_hint"
-    />
+    <Field>
+      <FieldLabel>{{ phrase.project_description }}</FieldLabel>
+      <FieldContent
+        v-model="projectData.descriptionContent"
+        :label="phrase.project_description"
+        :hint="phrase.project_description_hint"
+      />
+    </Field>
   </Box>
 </template>

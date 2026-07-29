@@ -8,11 +8,10 @@ import type {
 } from '#layers/thei/shared/api/project';
 import {
   projectDataInjectionKey,
+  savedProjectDataInjectionKey,
   publicIdErrorKey,
-  iconPreviewUrlKey,
-  bannerPreviewUrlKey,
-  iconVideoUrlKey,
-  bannerVideoUrlKey,
+  iconMediaKey,
+  bannerMediaKey,
   iconSizeKey,
   bannerSizeKey,
   currentProjectUuidKey,
@@ -21,7 +20,12 @@ import {
 } from '../composables';
 import ProjectMain from './ProjectMain.vue';
 import ProjectAssets from './ProjectAssets.vue';
+import ProjectContentSections from './ProjectContentSections.vue';
+import ProjectRelations from './ProjectRelations.vue';
 import { projectDeleteModal } from './project-delete-modal';
+import ProjectStages from './ProjectStages.vue';
+import ProjectTags from './ProjectTags.vue';
+import type { MediaDescriptor } from '#layers/thei/shared/media';
 
 const { projectUuid } = defineProps<{ projectUuid?: string }>();
 
@@ -39,23 +43,23 @@ const projectData = ref<ProjectEditData>({
   showcase: false,
   cv: false,
   descriptionContent: null,
+  contentSections: [],
+  relations: [],
 });
 provide(projectDataInjectionKey, projectData);
+const savedProjectData = ref<ProjectEditData>(
+  cloneProjectData(projectData.value),
+);
+provide(savedProjectDataInjectionKey, savedProjectData);
 
 const publicIdError = ref<string | undefined>();
 provide(publicIdErrorKey, publicIdError);
 
-const iconPreviewUrl = ref<string | undefined>();
-provide(iconPreviewUrlKey, iconPreviewUrl);
+const iconMedia = ref<MediaDescriptor | undefined>();
+provide(iconMediaKey, iconMedia);
 
-const bannerPreviewUrl = ref<string | undefined>();
-provide(bannerPreviewUrlKey, bannerPreviewUrl);
-
-const iconVideoUrl = ref<string | undefined>();
-provide(iconVideoUrlKey, iconVideoUrl);
-
-const bannerVideoUrl = ref<string | undefined>();
-provide(bannerVideoUrlKey, bannerVideoUrl);
+const bannerMedia = ref<MediaDescriptor | undefined>();
+provide(bannerMediaKey, bannerMedia);
 
 const iconSize = ref<number | undefined>();
 provide(iconSizeKey, iconSize);
@@ -113,6 +117,7 @@ if (isEdit.value) {
     showcase: data.showcase,
     cv: data.cv,
     descriptionContent: data.descriptionContent ?? null,
+    contentSections: data.contentSections ?? [],
     iconAssetUuid: data.iconAssetUuid,
     bannerAssetUuid: data.bannerAssetUuid,
     showcaseAssets: (data.showcaseAssets ?? []).map((item) => ({
@@ -126,16 +131,15 @@ if (isEdit.value) {
       caption: item.caption,
       isPrivate: item.isPrivate,
     })),
+    relations: data.relations ?? [],
   };
   showcaseItems.value = data.showcaseAssets ?? [];
   otherItems.value = data.otherAssets ?? [];
-  iconPreviewUrl.value = data.iconPreviewUrl;
-  iconVideoUrl.value = data.iconVideoUrl;
+  iconMedia.value = data.iconMedia;
   iconSize.value = data.iconAssetSize;
-  bannerPreviewUrl.value = data.bannerPreviewUrl;
-  bannerVideoUrl.value = data.bannerVideoUrl;
+  bannerMedia.value = data.bannerMedia;
   bannerSize.value = data.bannerAssetSize;
-  savedSnapshot.value = JSON.stringify(projectData.value);
+  markProjectSaved();
   resolvedProjectUuid.value = data.projectUuid;
   if (projectUuid !== data.projectUuid) {
     await navigateTo(`/admin/projects/edit/${data.projectUuid}/`, {
@@ -162,7 +166,7 @@ async function handleSave() {
         headerError.value = result.message;
         return;
       }
-      savedSnapshot.value = JSON.stringify(projectData.value);
+      markProjectSaved();
     } else {
       const result = await $fetch<ProjectSaveResponse>('/api/admin/projects/', {
         method: 'POST',
@@ -176,7 +180,7 @@ async function handleSave() {
         headerError.value = result.message;
         return;
       }
-      savedSnapshot.value = JSON.stringify(projectData.value);
+      markProjectSaved();
       await refreshNuxtData('admin-bar');
       await navigateTo(`/admin/projects/edit/${result.projectUuid}/`, {
         external: true,
@@ -202,6 +206,15 @@ onUnmounted(() => {
 function handleBeforeUnload(e: BeforeUnloadEvent) {
   if (isDirty.value) e.preventDefault();
 }
+
+function markProjectSaved() {
+  savedSnapshot.value = JSON.stringify(projectData.value);
+  savedProjectData.value = cloneProjectData(projectData.value);
+}
+
+function cloneProjectData(data: ProjectEditData): ProjectEditData {
+  return JSON.parse(JSON.stringify(data)) as ProjectEditData;
+}
 onBeforeRouteLeave(() => {
   if (isDirty.value) {
     return window.confirm(phrase.value.unsaved_changes_confirm);
@@ -217,7 +230,7 @@ async function openDeleteProjectModal() {
   });
 
   if (result.type !== 'deleted') return;
-  savedSnapshot.value = JSON.stringify(projectData.value);
+  markProjectSaved();
   await refreshNuxtData('admin-bar');
   await navigateTo('/admin/projects/');
 }
@@ -227,7 +240,7 @@ async function openDeleteProjectModal() {
   <StickyGlassHeader width="var(--width-wide)" :error="headerError">
     <div class="flex items-center justify-between gap-xs py-xs">
       <div class="flex min-w-0 items-center gap-xs text-xl font-bold">
-        <Icon :name="isEdit ? 'edit' : 'plus-circle'" class="shrink-0" />
+        <Icon name="project" class="shrink-0" />
         <span class="truncate">
           {{ isEdit ? phrase.edit_project : phrase.new_project }}
         </span>
@@ -260,5 +273,9 @@ async function openDeleteProjectModal() {
   <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
     <ProjectMain />
     <ProjectAssets />
+    <ProjectStages />
+    <ProjectContentSections />
+    <ProjectRelations />
+    <ProjectTags />
   </div>
 </template>

@@ -4,6 +4,7 @@ import type {
   OtherAssetGetItem,
   ShowcaseAssetGetItem,
 } from '#layers/thei/shared/api/project';
+import type { MediaDescriptor } from '#layers/thei/shared/media';
 
 export { AssetType };
 export type { OtherAssetGetItem, ShowcaseAssetGetItem };
@@ -12,24 +13,20 @@ export const projectDataInjectionKey = Symbol('projectData') as InjectionKey<
   Ref<ProjectEditData>
 >;
 
+export const savedProjectDataInjectionKey = Symbol(
+  'savedProjectData',
+) as InjectionKey<Ref<ProjectEditData>>;
+
 export const publicIdErrorKey = Symbol('publicIdError') as InjectionKey<
   Ref<string | undefined>
 >;
 
-export const iconPreviewUrlKey = Symbol('iconPreviewUrl') as InjectionKey<
-  Ref<string | undefined>
+export const iconMediaKey = Symbol('iconMedia') as InjectionKey<
+  Ref<MediaDescriptor | undefined>
 >;
 
-export const bannerPreviewUrlKey = Symbol('bannerPreviewUrl') as InjectionKey<
-  Ref<string | undefined>
->;
-
-export const iconVideoUrlKey = Symbol('iconVideoUrl') as InjectionKey<
-  Ref<string | undefined>
->;
-
-export const bannerVideoUrlKey = Symbol('bannerVideoUrl') as InjectionKey<
-  Ref<string | undefined>
+export const bannerMediaKey = Symbol('bannerMedia') as InjectionKey<
+  Ref<MediaDescriptor | undefined>
 >;
 
 export const iconSizeKey = Symbol('iconSize') as InjectionKey<
@@ -44,7 +41,7 @@ export const currentProjectUuidKey = Symbol(
   'currentProjectUuid',
 ) as InjectionKey<Ref<string | undefined>>;
 
-/** Full showcase items (with previewUrl, videoUrl, type) for display. Kept in sync with projectData.showcaseAssets. */
+/** Full showcase items with display media. Kept in sync with projectData.showcaseAssets. */
 export const showcaseItemsKey = Symbol('showcaseItems') as InjectionKey<
   Ref<ShowcaseAssetGetItem[]>
 >;

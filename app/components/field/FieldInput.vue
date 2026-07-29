@@ -84,7 +84,7 @@ function onBlur() {
       ref="input"
       v-model="model"
       data-label-focus
-      class="w-full min-w-[160px] border-2 bg-bg-1 p-xs text-text-1 transition
+      class="w-full min-w-40 border-2 bg-bg-1 p-xs text-text-1 transition
         placeholder:text-text-3 focus:border-border-3 hocus:border-border-3"
       :class="[
         shownError

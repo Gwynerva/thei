@@ -4,6 +4,11 @@ import { content } from './content';
 import { events } from './events';
 import { projects } from './projects';
 import { adminSessions } from './admin-sessions';
+import {
+  projectContentSections,
+  projectContentSectionPeriods,
+} from './project-content-sections';
+import { projectRelations } from './project-relations';
 
 export const schema = {
   assets,
@@ -12,4 +17,7 @@ export const schema = {
   events,
   projects,
   adminSessions,
+  projectContentSections,
+  projectContentSectionPeriods,
+  projectRelations,
 };

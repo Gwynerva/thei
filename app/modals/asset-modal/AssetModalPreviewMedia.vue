@@ -223,7 +223,7 @@ defineExpose({
         class="pointer-events-none absolute inset-0 flex items-center
           justify-center"
       >
-        <Icon name="loading" class="text-[5em] text-text-2" />
+        <Icon name="loading" class="text-7xl text-text-2" />
       </div>
     </TransitionFade>
 

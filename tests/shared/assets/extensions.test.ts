@@ -129,6 +129,14 @@ describe('isExtensionAllowed with ExtensionProfile', () => {
     expect(isExtensionAllowed('jpg', videoExtensionProfile)).toBe(false);
   });
 
+  it('keeps audio and arbitrary files out of Media/Gallery profiles', () => {
+    const mediaProfiles = [imageExtensionProfile, videoExtensionProfile];
+    expect(isExtensionAllowed('mp3', mediaProfiles)).toBe(false);
+    expect(isExtensionAllowed('pdf', mediaProfiles)).toBe(false);
+    expect(isExtensionAllowed('webp', mediaProfiles)).toBe(true);
+    expect(isExtensionAllowed('mp4', mediaProfiles)).toBe(true);
+  });
+
   it('allows an audio extension via audioExtensionProfile', () => {
     for (const ext of AUDIO_EXTENSIONS) {
       expect(isExtensionAllowed(ext, audioExtensionProfile)).toBe(true);

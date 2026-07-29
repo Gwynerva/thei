@@ -7,7 +7,7 @@ import AssetModalFileInfo from '#layers/thei/app/modals/asset-modal/AssetModalFi
 import AssetModalPreviewFile from '#layers/thei/app/modals/asset-modal/AssetModalPreviewFile.vue';
 import AssetModalPreviewMedia from '#layers/thei/app/modals/asset-modal/AssetModalPreviewMedia.vue';
 
-type ProjectAssetDetailsResult =
+type AssetDetailsResult =
   | {
       type: 'confirm';
       asset: AssetReplaceResult;
@@ -24,7 +24,7 @@ type ProjectAssetDetailsResult =
   | { type: 'detach' };
 
 const emit = defineEmits<{
-  modalResult: [result: ProjectAssetDetailsResult];
+  modalResult: [result: AssetDetailsResult];
 }>();
 
 const props = defineProps<{
@@ -38,7 +38,7 @@ const props = defineProps<{
     initialTitle?: string;
     showCaption?: boolean;
     initialCaption?: string;
-    captionLabel?: string;
+    captionPlaceholder?: string;
     captionAsTextarea?: boolean;
     showAccess?: boolean;
     initialIsPrivate?: boolean;
@@ -68,24 +68,16 @@ const titleError = computed(() => {
 const directHref = computed(
   () =>
     props.modalData.asset.assetUrl ??
-    props.modalData.asset.videoUrl ??
-    props.modalData.asset.previewUrl,
+    props.modalData.asset.media?.src,
 );
 const isMedia = computed(() =>
-  Boolean(props.modalData.asset.previewUrl || props.modalData.asset.videoUrl),
+  Boolean(props.modalData.asset.media),
 );
 const previewSrc = computed(
   () =>
-    props.modalData.asset.videoUrl ??
-    props.modalData.asset.previewUrl ??
+    props.modalData.asset.media?.src ??
     props.modalData.asset.assetUrl,
 );
-const previewExtension = computed(() =>
-  props.modalData.asset.videoUrl
-    ? props.modalData.asset.extension
-    : props.modalData.asset.extension,
-);
-
 function currentPatch() {
   return {
     title: props.modalData.showTitle
@@ -127,7 +119,7 @@ function replace() {
         v-if="isMedia && previewSrc"
         :key="`media:${modalData.asset.assetUuid}:${previewSrc}`"
         ref="mediaPreview"
-        :extension="previewExtension"
+        :extension="modalData.asset.extension"
         :src="previewSrc"
       />
       <AssetModalPreviewFile
@@ -180,7 +172,7 @@ function replace() {
                 v-model="title"
                 :required="modalData.requireTitle"
                 :error="titleError"
-                :placeholder="phrase.other_title"
+                :placeholder="phrase.content_title"
                 @submit="confirm"
               />
             </Field>
@@ -189,12 +181,16 @@ function replace() {
               <FieldTextarea
                 v-if="modalData.captionAsTextarea"
                 v-model="caption"
-                :placeholder="phrase.showcase_caption_hint"
+                :placeholder="
+                  modalData.captionPlaceholder ?? phrase.content_description
+                "
               />
               <FieldInput
                 v-else
                 v-model="caption"
-                :placeholder="modalData.captionLabel ?? phrase.showcase_caption"
+                :placeholder="
+                  modalData.captionPlaceholder ?? phrase.content_caption
+                "
               />
             </Field>
 
@@ -223,7 +219,7 @@ function replace() {
           </Button>
 
           <div
-            class="flex flex-col gap-sm"
+            class="grid gap-sm"
             :class="
               (modalData.showDetach ?? true) ? 'grid-cols-2' : 'grid-cols-1'
             "

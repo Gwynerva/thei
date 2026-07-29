@@ -11,6 +11,15 @@ interface ModalResultError {
 
 export type BaseModalResult = ModalResultEmpty | ModalResultError;
 
+export interface ModalOpenOptions {
+  /** Short title used when a child modal offers navigation back here. */
+  label?: string;
+  /** Explicit logical return target when the previous screen is not stacked. */
+  backLabel?: string;
+  /** Related modal screens that must close as one self-contained flow. */
+  flowId?: number;
+}
+
 /**
  * Expands a custom result type into the full modal result union by adding
  * the base results (empty, error) that every modal can produce.
@@ -95,6 +104,9 @@ export interface ActiveModal {
   name: string;
   component: Component;
   props: Record<string, unknown>;
+  label?: string;
+  backLabel?: string;
+  flowId: number;
   /** Called by the modal component itself via @modalResult — accepts the full result type. */
   resolve: (result: { type: string }) => void;
   /** Called externally to force-close the modal — restricted to base results only. */

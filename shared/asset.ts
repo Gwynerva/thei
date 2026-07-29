@@ -22,7 +22,6 @@ export type AssetContainerType = (typeof ASSET_CONTAINER_TYPES)[number];
 export const ASSET_ROLES = [
   'icon',
   'banner',
-  'gallery',
   'content',
   'showcase-asset',
   'other-asset',
@@ -31,6 +30,8 @@ export const ASSET_ROLES = [
 export type AssetRole = (typeof ASSET_ROLES)[number];
 
 export interface AssetMetaBase {
+  /** Name of the file selected by the user for this family. */
+  originalName?: string;
   /** Extension point for future computed asset properties. */
   properties?: Record<string, unknown>;
 }
@@ -69,6 +70,14 @@ export interface OtherAssetMeta extends AssetMetaBase {
 
 export type AssetMeta =
   ImageAssetMeta | VideoAssetMeta | AudioAssetMeta | OtherAssetMeta;
+
+export function assetSourceName(
+  meta: AssetMeta | null | undefined,
+): string | undefined {
+  if (!meta) return undefined;
+  if (meta.originalName) return meta.originalName;
+  return 'archivedOriginal' in meta ? meta.archivedOriginal?.name : undefined;
+}
 
 export type AssetMetaForType<TType extends AssetType> =
   TType extends AssetType.Image

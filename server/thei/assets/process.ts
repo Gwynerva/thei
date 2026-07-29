@@ -158,12 +158,12 @@ export async function processOriginalAsset(
 
 export async function processFileZipAsset(
   inputBuffer: Buffer,
-  originalFilename: string,
+  sourceFilename: string,
   _settings: AssetFileZipSettings,
   options: AssetProcessOptions = {},
 ): Promise<ProcessedAsset> {
   return {
-    buffer: await zipSingleFile(inputBuffer, originalFilename, {
+    buffer: await zipSingleFile(inputBuffer, sourceFilename, {
       onProgress: options.onProgress,
     }),
     extension: 'zip',
@@ -372,15 +372,16 @@ async function runFfmpegWithProgress(
       options.onProgress?.(nextProgress);
     };
 
+    const totalDuration = duration;
     const probeTimer =
-      duration &&
+      totalDuration &&
       setInterval(() => {
         if (isProbingOutput) return;
         isProbingOutput = true;
         inspectVideoFile(outputPath)
           .then((inspection) => {
             if (inspection.duration) {
-              emitProgress(inspection.duration / duration);
+              emitProgress(inspection.duration / totalDuration);
             }
           })
           .catch(() => {})

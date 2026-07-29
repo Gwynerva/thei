@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import ModalBackButton from './ModalBackButton.vue';
+
 defineOptions({ inheritAttrs: false });
 
 const props = withDefaults(
@@ -31,13 +33,19 @@ const windowStyle = computed<Record<string, string>>(() => ({
       class="pointer-events-auto flex h-dvh w-dvw flex-col overflow-hidden
         bg-bg-2 text-text-1 sm:h-auto sm:max-h-[var(--modal-window-max-height)]
         sm:w-[min(var(--modal-window-width),calc(100dvw_-_var(--spacing-window)_-_var(--spacing-window)))]
-        sm:rounded-normal sm:border sm:border-border-1
-        sm:shadow-[0_0_28px_8px_var(--color-shadow-2)]"
+        sm:rounded-normal sm:border sm:border-border-1 sm:shadow-2xl
+        sm:shadow-shadow-2"
     >
       <header
         class="flex shrink-0 items-center gap-sm border-b border-border-1
           bg-bg-2 px-sm py-xs sm:px-md"
       >
+        <ModalBackButton
+          v-if="modalBackLabel"
+          :target="modalBackLabel"
+          class="-ml-xs"
+        />
+
         <div class="min-w-0 flex-1 truncate font-bold tracking-tight">
           <slot name="title">{{ title }}</slot>
         </div>
@@ -46,7 +54,7 @@ const windowStyle = computed<Record<string, string>>(() => ({
 
         <button
           type="button"
-          aria-label="Close modal"
+          :aria-label="phrase.close_modal"
           class="flex size-10 shrink-0 cursor-pointer items-center
             justify-center rounded-full text-text-3 transition hocus:bg-bg-3
             hocus:text-text-1"

@@ -94,7 +94,7 @@ watchEffect(() => {
         </Field>
 
         <div class="flex flex-wrap gap-md">
-          <Field class="min-w-[200px] flex-1">
+          <Field class="min-w-50 flex-1">
             <FieldLabel required>
               {{ phrase.password }}
             </FieldLabel>
