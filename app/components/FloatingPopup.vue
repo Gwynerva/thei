@@ -15,6 +15,7 @@ const props = withDefaults(
   defineProps<{
     anchor: HTMLElement | null;
     placement?: Placement;
+    fallbackPlacements?: Placement[];
     offset?: number;
     viewportPadding?: number;
     maxWidth?: string;
@@ -42,7 +43,10 @@ const referenceElement = computed(() => props.anchor);
 
 const middleware = computed(() => [
   floatingOffset(props.offset),
-  flip({ padding: props.viewportPadding }),
+  flip({
+    padding: props.viewportPadding,
+    fallbackPlacements: props.fallbackPlacements,
+  }),
   shift({ padding: props.viewportPadding }),
   size({
     padding: props.viewportPadding,

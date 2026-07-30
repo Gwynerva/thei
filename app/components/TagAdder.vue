@@ -25,6 +25,7 @@ const suggestions = ref<TagItem[]>([]);
 const activeIndex = ref(-1);
 let searchVersion = 0;
 const listboxId = useId();
+const visibleSuggestions = computed(() => suggestions.value.slice(0, 5));
 
 const visibleRecommendations = computed(() => {
   const selected = new Set(
@@ -46,7 +47,7 @@ const createOptionVisible = computed(() => {
   );
 });
 const optionCount = computed(
-  () => suggestions.value.length + (createOptionVisible.value ? 1 : 0),
+  () => visibleSuggestions.value.length + (createOptionVisible.value ? 1 : 0),
 );
 const activeOptionId = computed(() =>
   activeIndex.value >= 0
@@ -87,11 +88,15 @@ const search = debounce(async (version: number) => {
 
 watch(query, () => {
   searchVersion += 1;
-  activeIndex.value = -1;
+  suggestions.value = [];
   searchFailed.value = false;
   popupOpen.value = Boolean(query.value.trim());
   searching.value = popupOpen.value;
   void search(searchVersion);
+});
+
+watch([popupOpen, optionCount, createOptionVisible], ([isOpen, count]) => {
+  activeIndex.value = isOpen && count ? 0 : -1;
 });
 
 function addTag(tag: TagEditItem) {
@@ -111,19 +116,19 @@ function chooseActive() {
     return;
   }
   const offset = createOptionVisible.value ? 1 : 0;
-  const tag = suggestions.value[activeIndex.value - offset];
+  const tag = visibleSuggestions.value[activeIndex.value - offset];
   if (tag) addTag(tag);
 }
 
 function onInputKeydown(event: KeyboardEvent) {
-  if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+  if (event.key === 'ArrowDown') {
     event.preventDefault();
     popupOpen.value = true;
     if (optionCount.value) {
       activeIndex.value =
         activeIndex.value >= optionCount.value - 1 ? 0 : activeIndex.value + 1;
     }
-  } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+  } else if (event.key === 'ArrowUp') {
     event.preventDefault();
     if (optionCount.value)
       activeIndex.value =
@@ -161,7 +166,7 @@ const { draggingIndex, dragOverIndex, onPointerDown } = useDragSort(reorder);
       ref="tagContainer"
       class="flex min-h-12 cursor-text flex-wrap items-center gap-2
         rounded-normal border-2 border-dashed border-border-2 bg-bg-1/50 p-sm
-        transition hover:border-border-3 focus-within:border-accent
+        transition focus-within:border-accent hover:border-border-3
         focus-within:hover:border-accent"
       @click.self="focusInput"
     >
@@ -198,7 +203,8 @@ const { draggingIndex, dragOverIndex, onPointerDown } = useDragSort(reorder);
         autocomplete="off"
         :aria-label="phrase.tag_search_placeholder"
         :placeholder="phrase.tag_search_placeholder"
-        class="min-w-28 flex-1 self-stretch bg-transparent text-sm outline-none"
+        class="field-sizing-content max-w-full min-w-28 self-stretch
+          bg-transparent text-sm outline-none sm:min-w-0"
         role="combobox"
         :aria-expanded="popupOpen"
         :aria-controls="listboxId"
@@ -212,8 +218,9 @@ const { draggingIndex, dragOverIndex, onPointerDown } = useDragSort(reorder);
     <FloatingPopup
       v-model:open="popupOpen"
       :anchor="inputElement"
-      placement="bottom-start"
-      max-width="18rem"
+      placement="right"
+      :fallback-placements="['top-start', 'bottom-start']"
+      max-width="14rem"
     >
       <div
         :id="listboxId"
@@ -223,8 +230,8 @@ const { draggingIndex, dragOverIndex, onPointerDown } = useDragSort(reorder);
           border border-border-1 bg-bg-2 p-1.5"
       >
         <div
-          v-if="createOptionVisible || suggestions.length"
-          class="flex flex-wrap gap-1.5"
+          v-if="createOptionVisible || visibleSuggestions.length"
+          class="flex flex-col gap-1.5"
         >
           <button
             v-if="createOptionVisible"
@@ -233,10 +240,10 @@ const { draggingIndex, dragOverIndex, onPointerDown } = useDragSort(reorder);
             role="option"
             :aria-selected="activeIndex === 0"
             :aria-label="phrase.create_tag_named(query.trim())"
-            class="inline-flex h-8 w-fit max-w-64 cursor-pointer items-center
-              gap-1 rounded-sm border-2 border-dashed border-accent/45
-              bg-accent/10 p-1 text-left text-xs leading-none font-semibold
-              text-accent transition hocus:border-accent/70 hocus:bg-accent/18"
+            class="inline-flex h-8 w-full cursor-pointer items-center gap-1
+              rounded-sm border-2 border-dashed border-accent/45 bg-accent/10
+              p-1 text-left text-xs leading-none font-semibold text-accent
+              transition hocus:border-accent/70 hocus:bg-accent/18"
             :class="{
               'ring-2 ring-accent ring-offset-2 ring-offset-bg-2':
                 activeIndex === 0,
@@ -248,11 +255,12 @@ const { draggingIndex, dragOverIndex, onPointerDown } = useDragSort(reorder);
             <span class="truncate">{{ query.trim() }}</span>
           </button>
           <TagChip
-            v-for="(tag, index) in suggestions"
+            v-for="(tag, index) in visibleSuggestions"
             :key="tag.tagUuid"
             :id="`${listboxId}-option-${index + (createOptionVisible ? 1 : 0)}`"
             :tag="tag"
             interactive
+            class="w-full"
             role="option"
             :aria-selected="
               activeIndex === index + (createOptionVisible ? 1 : 0)
