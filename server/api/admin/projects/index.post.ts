@@ -19,6 +19,7 @@ import {
   applyProjectRelations,
   prepareProjectRelations,
 } from '../../../thei/projects/relations';
+import { applyTagUsages, prepareTagUsages } from '../../../thei/tags';
 
 export default defineEventHandler(
   async (event): Promise<ProjectSaveResponse> => {
@@ -85,6 +86,15 @@ export default defineEventHandler(
         message: error instanceof Error ? error.message : 'Invalid relations',
       };
     }
+    let preparedTags;
+    try {
+      preparedTags = await prepareTagUsages(result.tags);
+    } catch (error) {
+      return {
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Invalid tags',
+      };
+    }
 
     const { db, schema } = THEI_SERVER.useDb();
     const now = Date.now();
@@ -116,6 +126,7 @@ export default defineEventHandler(
       }
       applyProjectContentSections(tx, schema, projectUuid, preparedSections);
       applyProjectRelations(tx, schema, projectUuid, preparedRelations);
+      applyTagUsages(tx, schema, 'project', projectUuid, preparedTags);
 
       if (result.iconAssetUuid) {
         attachUsage(tx, schema, result.iconAssetUuid, projectUuid, 'icon');

@@ -2,6 +2,7 @@ import type { ProjectSearchItem } from '#layers/thei/shared/api/project';
 import { rankProjectSearch } from '#layers/thei/shared/admin/project-search';
 import { buildAdminAssetUrls } from '../../../thei/assets/urls';
 import { resolveGeneratedIcon } from '../../../thei/media/generated-icon';
+import { listTagsForContainer } from '../../../thei/tags';
 
 export default defineEventHandler(
   async (event): Promise<ProjectSearchItem[]> => {
@@ -37,6 +38,7 @@ export default defineEventHandler(
           iconMedia: iconUsage
             ? (await buildAdminAssetUrls(iconUsage.asset)).media!
             : resolveGeneratedIcon('project', project.projectUuid),
+          tags: (await listTagsForContainer('project', project.projectUuid)).slice(0, 3),
         };
       }),
     );

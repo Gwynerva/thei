@@ -24,7 +24,10 @@ watch(
   >
     <!-- Header Content -->
     <div class="border-b border-border-1 bg-bg-1/40 backdrop-blur-md">
-      <div class="m-auto w-(--_width-sticky-content) px-window" v-bind="attrs">
+      <div
+        class="m-auto w-(--_width-sticky-content) max-w-full px-window"
+        v-bind="attrs"
+      >
         <slot></slot>
       </div>
     </div>
@@ -35,7 +38,9 @@ watch(
       class="border-b border-border-error bg-bg-error py-xs text-sm
         text-text-error"
     >
-      <div class="relative m-auto w-(--_width-sticky-content) px-window">
+      <div
+        class="relative m-auto w-(--_width-sticky-content) max-w-full px-window"
+      >
         <button
           class="float-right cursor-pointer pb-1 pl-1"
           @click="errorClosed = true"

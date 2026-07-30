@@ -42,6 +42,7 @@ import {
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import { assetDetailsModal } from '#layers/thei/app/modals/asset-details/modal';
 import { useOrderedAssetList } from '#layers/thei/app/composables/ordered-asset-list';
+import { useSingleMediaAsset } from '#layers/thei/app/composables/single-media-asset';
 
 const projectData = inject(projectDataInjectionKey)!;
 const savedProjectData = inject(savedProjectDataInjectionKey)!;
@@ -57,15 +58,6 @@ const batchErrorMessage = ref('');
 type PickedAsset = {
   asset: AssetVariantInfo;
   result: AssetReplaceResult;
-};
-
-type ProjectMediaSlot = {
-  uploadProfile: AssetUploadProfile;
-  asideTitle: () => string;
-  getAssetUuid: () => string | undefined;
-  setAssetUuid: (assetUuid: string | undefined) => void;
-  media: Ref<MediaDescriptor | undefined>;
-  size: Ref<number | undefined>;
 };
 
 function archivedOriginalFromMeta(meta: AssetMeta | null | undefined) {
@@ -147,7 +139,7 @@ async function editProjectAsset(
   }
 }
 
-const iconSlot: ProjectMediaSlot = {
+const iconSlot = useSingleMediaAsset({
   uploadProfile: 'project-icon',
   asideTitle: () => phrase.value.project_icon,
   getAssetUuid: () => projectData.value.iconAssetUuid,
@@ -156,9 +148,20 @@ const iconSlot: ProjectMediaSlot = {
   },
   media: iconMedia,
   size: iconSize,
-};
+  usageDelta: () =>
+    projectAssetUsageDelta(projectData.value, savedProjectData.value),
+  afterDetach: async () => {
+    if (!currentProjectUuid.value) return;
+    iconMedia.value = await $fetch<MediaDescriptor>(
+      '/api/media/generated-icon',
+      {
+        query: { kind: 'project', seed: currentProjectUuid.value },
+      },
+    );
+  },
+});
 
-const bannerSlot: ProjectMediaSlot = {
+const bannerSlot = useSingleMediaAsset({
   uploadProfile: 'project-banner',
   asideTitle: () => phrase.value.project_banner,
   getAssetUuid: () => projectData.value.bannerAssetUuid,
@@ -167,48 +170,9 @@ const bannerSlot: ProjectMediaSlot = {
   },
   media: bannerMedia,
   size: bannerSize,
-};
-
-function applySingleMediaAsset(
-  slot: ProjectMediaSlot,
-  result: AssetReplaceResult,
-) {
-  if (!result.media) return;
-  slot.setAssetUuid(result.assetUuid);
-  slot.media.value = result.media;
-  slot.size.value = result.size;
-}
-
-async function detachSingleMediaAsset(slot: ProjectMediaSlot) {
-  slot.setAssetUuid(undefined);
-  slot.media.value = undefined;
-  slot.size.value = undefined;
-  if (slot === iconSlot && currentProjectUuid.value) {
-    slot.media.value = await $fetch<MediaDescriptor>(
-      '/api/media/generated-icon',
-      {
-        query: { kind: 'project', seed: currentProjectUuid.value },
-      },
-    );
-  }
-}
-
-function singleMediaAssetSnapshot(
-  slot: ProjectMediaSlot,
-): AssetReplaceResult | undefined {
-  const assetUuid = slot.getAssetUuid();
-  const media = slot.media.value;
-  if (!assetUuid || !media) return undefined;
-
-  return {
-    assetUuid,
-    slug: assetUuid,
-    extension: extensionFromUrl(media.src, 'webp'),
-    size: slot.size.value ?? 0,
-    media,
-    assetUrl: media.src,
-  };
-}
+  usageDelta: () =>
+    projectAssetUsageDelta(projectData.value, savedProjectData.value),
+});
 
 function pickedToShowcaseItem(
   picked: PickedAsset,
@@ -268,52 +232,6 @@ const {
   }));
 });
 
-async function openSingleMediaUpload(slot: ProjectMediaSlot) {
-  const picked = await pickProjectMediaAsset(slot.uploadProfile);
-  if (!picked) return;
-  applySingleMediaAsset(slot, picked.result);
-  await openSingleMediaModal(slot);
-}
-
-async function openSingleMediaModal(slot: ProjectMediaSlot) {
-  let current = singleMediaAssetSnapshot(slot);
-  if (!current) return;
-  const flowVersion = modalDismissVersion.value;
-
-  while (true) {
-    const asideTitle = slot.asideTitle();
-    const result = await openModal(
-      assetDetailsModal,
-      {
-        asideTitle,
-        asset: current,
-      },
-      { label: asideTitle },
-    );
-
-    if (result.type === 'replace') {
-      const picked = await editProjectAsset(current.assetUuid, {
-        accept: [imageExtensionProfile, videoExtensionProfile],
-        maxSize: ASSET_UPLOAD_LIMITS.media,
-        sizeLimitPolicy: 'media',
-        uploadProfile: slot.uploadProfile,
-        backLabel: asideTitle,
-      });
-      if (modalDismissVersion.value !== flowVersion) return;
-      if (!picked) continue;
-      current = picked.result;
-      applySingleMediaAsset(slot, picked.result);
-      continue;
-    }
-
-    if (result.type === 'detach') {
-      await detachSingleMediaAsset(slot);
-    }
-
-    return;
-  }
-}
-
 // Showcase handlers
 
 async function openShowcaseAdd() {
@@ -350,10 +268,7 @@ async function openShowcaseAsset(index: number) {
   let current: AssetReplaceResult = {
     assetUuid: snapshot.assetUuid,
     slug: snapshot.assetUuid,
-    extension: extensionFromUrl(
-      snapshot.media.src,
-      'webp',
-    ),
+    extension: extensionFromUrl(snapshot.media.src, 'webp'),
     size: snapshot.size,
     media: snapshot.media,
     assetUrl: snapshot.media.src,
@@ -553,11 +468,7 @@ async function openOtherAsset(index: number) {
             :size="iconSize"
             :aria-label="phrase.project_icon"
             class="size-18 cursor-pointer"
-            @click="
-              projectData.iconAssetUuid
-                ? openSingleMediaModal(iconSlot)
-                : openSingleMediaUpload(iconSlot)
-            "
+            @click="iconSlot.open"
           />
           <div class="tracking-tight">
             <div class="font-semibold">{{ phrase.project_icon }}</div>
@@ -572,11 +483,7 @@ async function openOtherAsset(index: number) {
             :size="bannerSize"
             :aria-label="phrase.project_banner"
             class="aspect-video h-18 cursor-pointer"
-            @click="
-              bannerMedia
-                ? openSingleMediaModal(bannerSlot)
-                : openSingleMediaUpload(bannerSlot)
-            "
+            @click="bannerSlot.open"
           />
           <div class="tracking-tight">
             <div class="font-semibold">{{ phrase.project_banner }}</div>

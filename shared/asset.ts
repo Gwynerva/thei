@@ -16,6 +16,7 @@ export const ASSET_CONTAINER_TYPES = [
   'event',
   'asset',
   'content',
+  'tag',
 ] as const;
 export type AssetContainerType = (typeof ASSET_CONTAINER_TYPES)[number];
 

@@ -33,6 +33,12 @@ import {
   getProjectRelations,
   prepareProjectRelations,
 } from '../../../thei/projects/relations';
+import {
+  applyTagUsages,
+  deleteTagUsagesForContainer,
+  listTagsForContainer,
+  prepareTagUsages,
+} from '../../../thei/tags';
 
 export default defineEventHandler(async (event) => {
   const identifier = getRouterParam(event, 'projectUuid')!;
@@ -175,6 +181,7 @@ export default defineEventHandler(async (event) => {
         showcaseAssets,
         otherAssets,
         relations: await getProjectRelations(projectUuid),
+        tags: await listTagsForContainer('project', projectUuid),
       } satisfies ProjectGetResponse;
     }
 
@@ -251,6 +258,15 @@ export default defineEventHandler(async (event) => {
           message: error instanceof Error ? error.message : 'Invalid relations',
         } satisfies ProjectSaveResponse;
       }
+      let preparedTags;
+      try {
+        preparedTags = await prepareTagUsages(result.tags);
+      } catch (error) {
+        return {
+          type: 'error',
+          message: error instanceof Error ? error.message : 'Invalid tags',
+        } satisfies ProjectSaveResponse;
+      }
 
       const usages = await THEI_SERVER.assets.usages.findByContainer(
         'project',
@@ -305,6 +321,7 @@ export default defineEventHandler(async (event) => {
         }
         applyProjectContentSections(tx, schema, projectUuid, preparedSections);
         applyProjectRelations(tx, schema, projectUuid, preparedRelations);
+        applyTagUsages(tx, schema, 'project', projectUuid, preparedTags);
 
         if (currentIcon?.asset.assetUuid !== newIconUuid) {
           if (currentIcon) {
@@ -420,6 +437,7 @@ export default defineEventHandler(async (event) => {
       db.transaction((tx) => {
         deleteProjectContentSections(tx, schema, projectUuid);
         deleteProjectRelations(tx, schema, projectUuid);
+        deleteTagUsagesForContainer(tx, schema, 'project', projectUuid);
         deleteContentForOwner(tx, schema, 'project', projectUuid);
 
         for (const usage of usages) {

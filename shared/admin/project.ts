@@ -11,6 +11,7 @@ import {
   type ProjectContentSectionEditItem,
 } from '../project-content-section';
 import type { MediaDescriptor } from '../media';
+import type { TagEditItem } from '../tag';
 
 /** Base save item for any project asset list (showcase, other-assets, …). */
 export type AssetListSaveItem = { assetUuid: string };
@@ -65,6 +66,7 @@ export type ProjectEditData = {
   otherAssets?: OtherAssetSaveItem[];
   /** Relations in this project's display order. */
   relations?: ProjectRelationEditItem[];
+  tags?: TagEditItem[];
 };
 
 export type ValidatedProjectEditData = Omit<ProjectEditData, 'access'> & {
@@ -177,6 +179,7 @@ export function validateProjectData(
       data.contentSections,
     );
     const relations = validateProjectRelations(data.relations);
+    const tags = validateProjectTags(data.tags);
 
     return {
       ...data,
@@ -190,6 +193,7 @@ export function validateProjectData(
       showcaseAssets,
       otherAssets,
       relations,
+      tags,
     };
   } catch (error) {
     if (error instanceof ProjectValidationError) return error.message;
@@ -197,6 +201,23 @@ export function validateProjectData(
     if (error instanceof ProjectContentSectionError) return error.message;
     throw error;
   }
+}
+
+function validateProjectTags(tags: TagEditItem[] | undefined): TagEditItem[] | undefined {
+  if (tags === undefined) return undefined;
+  if (!Array.isArray(tags)) throw new ProjectValidationError('Invalid tags');
+  const seen = new Set<string>();
+  return tags.map((tag) => {
+    const title = tag.title?.trim();
+    if (!title) throw new ProjectValidationError('Tag title cannot be empty');
+    if (title.length > 100)
+      throw new ProjectValidationError('Tag title is too long');
+    const identity = title.normalize('NFKC').toLocaleLowerCase();
+    if (seen.has(identity)) throw new ProjectValidationError('Duplicate tag');
+    seen.add(identity);
+    if ('tagUuid' in tag && tag.tagUuid) return { ...tag, title };
+    return { title };
+  });
 }
 
 function validateProjectRelations(

@@ -35,7 +35,7 @@ const linkDescription = computed(() =>
 
 <template>
   <Field class="w-full">
-    <FieldLabel required>{{ phrase.public_link(entityName) }}</FieldLabel>
+    <FieldLabel>{{ phrase.public_link(entityName) }}</FieldLabel>
     <div class="flex flex-wrap gap-md">
       <div class="min-w-50 flex-1">
         <FieldLabel class="mb-xs text-sm font-normal text-text-2">

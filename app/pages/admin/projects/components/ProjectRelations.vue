@@ -318,16 +318,19 @@ onUnmounted(cleanupDrag);
     <div ref="relationsRoot">
       <Box class="flex flex-col overflow-hidden">
         <section
-          v-for="group in groups"
+          v-for="(group, groupIndex) in groups"
           :key="group.type"
           :data-relation-type="group.type"
-          class="border-b border-border-1 last:border-b-0"
           :class="{
             'ring-2 ring-accent ring-inset':
               draggingUuid && dragOverType === group.type && !dragOverUuid,
           }"
         >
-          <header class="bg-bg-3 px-sm py-xs text-text-2">
+          <header
+            class="border-y border-border-1 bg-bg-3 px-sm py-xs text-text-2
+              sm:px-md"
+            :class="{ 'border-t-0': groupIndex === 0 }"
+          >
             <Icon :name="group.icon" class="mr-xs" />
             <span class="font-semibold">{{ group.title }}</span>
           </header>
@@ -338,7 +341,7 @@ onUnmounted(cleanupDrag);
               :key="relation.projectUuid"
               :data-relation-uuid="relation.projectUuid"
               :data-relation-type="group.type"
-              class="border-t border-border-1 p-sm first:border-t-0"
+              class="border-t border-border-1 p-sm first:border-t-0 sm:p-md"
               :class="{
                 'opacity-45': draggingUuid === relation.projectUuid,
                 'ring-2 ring-accent ring-inset':
@@ -349,7 +352,7 @@ onUnmounted(cleanupDrag);
               <div class="flex min-w-0 items-center gap-xs">
                 <div
                   class="flex size-10 shrink-0 items-center justify-center
-                    overflow-hidden rounded-normal bg-bg-3 text-text-3"
+                    overflow-hidden rounded-normal text-text-3"
                 >
                   <Media
                     v-if="relation.iconMedia"
@@ -409,8 +412,8 @@ onUnmounted(cleanupDrag);
                   type="button"
                   class="flex size-10 shrink-0 cursor-grab touch-none
                     items-center justify-center rounded-normal bg-bg-3
-                    text-text-2 active:cursor-grabbing hocus:bg-bg-accent
-                    hocus:text-accent"
+                    text-text-2 transition-colors active:cursor-grabbing
+                    hocus:bg-bg-accent hocus:text-accent"
                   :aria-label="`${group.title}: ${relation.title}`"
                   @pointerdown="onPointerDown(relation, $event)"
                 >
@@ -420,7 +423,7 @@ onUnmounted(cleanupDrag);
                   type="button"
                   class="flex size-10 shrink-0 cursor-pointer items-center
                     justify-center rounded-normal bg-bg-3 text-text-2
-                    hocus:bg-bg-error hocus:text-text-error"
+                    transition-colors hocus:bg-bg-error hocus:text-text-error"
                   :aria-label="phrase.delete_project_relation"
                   :data-title-popup="phrase.delete_project_relation"
                   @click="removeRelation(relation.projectUuid)"
@@ -501,7 +504,7 @@ onUnmounted(cleanupDrag);
                   type="button"
                   class="flex size-10 shrink-0 cursor-pointer items-center
                     justify-center rounded-normal bg-bg-3 text-text-2
-                    hocus:bg-bg-accent hocus:text-accent"
+                    transition-colors hocus:bg-bg-accent hocus:text-accent"
                   :aria-label="
                     relation.note?.type === 'split'
                       ? phrase.merge_project_relation_note
@@ -525,8 +528,8 @@ onUnmounted(cleanupDrag);
           </div>
           <div
             v-else
-            class="flex min-h-16 items-center justify-center px-sm py-md text-sm
-              text-text-3 italic"
+            class="flex min-h-16 items-center justify-center p-sm text-sm
+              text-text-3 italic sm:p-md"
           >
             {{ phrase.project_relations_empty }}
           </div>

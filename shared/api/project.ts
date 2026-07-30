@@ -7,6 +7,7 @@ import type {
   ProjectRelationType,
 } from '../admin/project';
 import type { MediaDescriptor } from '../media';
+import type { TagItem } from '../tag';
 
 /** Base display item for any project asset list (showcase, other-assets, …). */
 export type AssetListItem = {
@@ -58,6 +59,7 @@ export type ProjectGetResponse = {
   showcaseAssets?: ShowcaseAssetGetItem[];
   otherAssets?: OtherAssetGetItem[];
   relations?: ProjectRelationGetItem[];
+  tags?: TagItem[];
 };
 
 export type ProjectRelationGetItem = ProjectRelationEditItem & {
@@ -73,6 +75,7 @@ export type ProjectSearchItem = {
   humanReadableSlug: string;
   publicId: string;
   iconMedia: MediaDescriptor;
+  tags?: TagItem[];
 };
 
 export type { ProjectRelationType };

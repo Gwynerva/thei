@@ -182,6 +182,50 @@ export default defineI18nBase({
     x_events: (count: number) => plural(count, 'event', 'events'),
     new_project: 'New Project',
     new_event: 'New Event',
+    admin_tags: 'Tags',
+    tag: 'Tag',
+    tags_description:
+      'Classify and group similar projects by theme, format, mood, and other attributes.',
+    new_tag: 'New Tag',
+    edit_tag: 'Edit Tag',
+    tag_title: 'Tag title',
+    tag_title_hint:
+      'A short recognizable name. Punctuation and special characters are allowed.',
+    tag_slug: 'Slug',
+    tag_description: 'Description',
+    tag_description_hint:
+      'An optional explanation of the tag’s meaning and intended use.',
+    tag_color: 'Accent color',
+    tag_color_hint:
+      'Used for the tag background, text, and other visual accents.',
+    tag_icon: 'Tag icon',
+    tag_icon_hint:
+      'A small, recognizable image for the tag. Images with transparent backgrounds are supported.',
+    tag_link_example: (slug, publicId) =>
+      `Final link: /tags/${slug ? `${slug}-` : ''}${publicId}/`,
+    project_tags: 'Project tags',
+    project_tags_hint:
+      'Classify and group similar projects by theme, format, mood, and other attributes.',
+    recommended_tags: 'Recommended tags',
+    tag_search_placeholder: 'Add tag…',
+    create_tag_named: (title) => `Create new tag “${title}”`,
+    tag_usage: 'Usage',
+    tag_usage_summary: (projects, events) =>
+      `${projects} ${plural(projects, 'project', 'projects', false)} · ${events} ${plural(events, 'event', 'events', false)}`,
+    tag_delete_hint: 'Deleting the tag detaches it from every related entity.',
+    delete_tag: 'Delete Tag',
+    tag_delete_usage_warning:
+      'This tag is used by projects and events. Deleting it will detach it from them.',
+    tag_empty_list: 'No tags yet.',
+    tag_search_results: 'Tag search results',
+    tag_search_loading: 'Searching tags…',
+    tag_search_no_results: 'No matching tags found.',
+    tag_search_error: 'Could not search tags.',
+    tag_recommendations_error: 'Could not update tag recommendations.',
+    tag_title_taken: 'This tag title is already in use.',
+    tag_slug_taken: 'This tag slug is already in use.',
+    tag_public_id_taken: 'This public ID is already in use.',
+    tag_icon_not_found: 'The selected icon no longer exists.',
     create: 'Create',
     edit_project: 'Edit Project',
     view_project: 'View on Site',
@@ -338,10 +382,9 @@ export default defineI18nBase({
     project_banner: 'Project Banner',
     project_banner_hint: 'Wide image for the project page.',
     delete_project: 'Delete Project',
-    delete_project_confirm: 'Enter its title to confirm:',
-    delete_project_permanent_prefix: 'Project ',
-    delete_project_permanent_suffix:
-      ' will be deleted without a way to restore it.',
+    delete_confirmation_description: (entityType, entityName) =>
+      `You are about to delete the ${entityType} "${entityName}". This action cannot be undone.`,
+    delete_confirmation_confirm: 'Enter the title to confirm:',
     size: 'Size',
     just_now: 'Just now',
     showcase: 'Showcase',

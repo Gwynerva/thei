@@ -188,6 +188,51 @@ export default defineI18nModule({
     x_events: (count: number) => plural(count, 'событие', 'события', 'событий'),
     new_project: 'Новый проект',
     new_event: 'Новое событие',
+    admin_tags: 'Теги',
+    tag: 'Тег',
+    tags_description:
+      'Классифицируйте и объединяйте схожие проекты по теме, форме, настроению и другим признакам.',
+    new_tag: 'Новый тег',
+    edit_tag: 'Изменить тег',
+    tag_title: 'Название тега',
+    tag_title_hint:
+      'Короткое узнаваемое название. Можно использовать знаки препинания и специальные символы.',
+    tag_slug: 'Slug',
+    tag_description: 'Описание',
+    tag_description_hint:
+      'Необязательное пояснение о смысле и области применения тега.',
+    tag_color: 'Акцентный цвет',
+    tag_color_hint:
+      'Используется для фона, текста и других визуальных акцентов тега.',
+    tag_icon: 'Иконка тега',
+    tag_icon_hint:
+      'Небольшое узнаваемое изображение для тега. Поддерживаются изображения с прозрачным фоном.',
+    tag_link_example: (slug, publicId) =>
+      `Итоговая ссылка: /tags/${slug ? `${slug}-` : ''}${publicId}/`,
+    project_tags: 'Теги проекта',
+    project_tags_hint:
+      'Классифицируйте и объединяйте схожие проекты по теме, форме, настроению и другим признакам.',
+    recommended_tags: 'Рекомендуемые теги',
+    tag_search_placeholder: 'Добавить тег…',
+    create_tag_named: (title) => `Создать новый тег «${title}»`,
+    tag_usage: 'Использование',
+    tag_usage_summary: (projects, events) =>
+      `${plural(projects, 'проект', 'проекта', 'проектов')} · ${plural(events, 'событие', 'события', 'событий')}`,
+    tag_delete_hint:
+      'При удалении тег будет отвязан от всех связанных сущностей.',
+    delete_tag: 'Удалить тег',
+    tag_delete_usage_warning:
+      'Этот тег используется в проектах и событиях. При удалении он будет отвязан от них.',
+    tag_empty_list: 'Тегов пока нет.',
+    tag_search_results: 'Результаты поиска тегов',
+    tag_search_loading: 'Ищем теги…',
+    tag_search_no_results: 'Подходящих тегов не найдено.',
+    tag_search_error: 'Не удалось найти теги.',
+    tag_recommendations_error: 'Не удалось обновить рекомендации тегов.',
+    tag_title_taken: 'Такое название уже используется.',
+    tag_slug_taken: 'Такой slug уже используется.',
+    tag_public_id_taken: 'Такой публичный идентификатор уже используется.',
+    tag_icon_not_found: 'Выбранная иконка больше не существует.',
     create: 'Создать',
     edit_project: 'Изменить проект',
     view_project: 'Смотреть на сайте',
@@ -345,10 +390,9 @@ export default defineI18nModule({
     project_banner: 'Баннер проекта',
     project_banner_hint: 'Широкое изображение для страницы проекта.',
     delete_project: 'Удалить проект',
-    delete_project_confirm: 'Чтобы подтвердить, введите его название:',
-    delete_project_permanent_prefix: 'Проект ',
-    delete_project_permanent_suffix:
-      ' будет удалён без возможности восстановления.',
+    delete_confirmation_description: (entityType, entityName) =>
+      `Вы собираетесь удалить ${entityType} "${entityName}". Это действие нельзя отменить.`,
+    delete_confirmation_confirm: 'Чтобы подтвердить, введите название:',
     size: 'Размер',
     just_now: 'Сейчас',
     showcase: 'Витрина',

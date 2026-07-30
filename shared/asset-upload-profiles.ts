@@ -1,7 +1,10 @@
 import type { AssetResizeMode } from './asset-upload-settings';
 import type { FileDimensions } from './asset-upload-dimensions';
 
-export type AssetUploadProfile = 'project-icon' | 'project-banner';
+export type AssetUploadProfile =
+  | 'project-icon'
+  | 'project-banner'
+  | 'tag-icon';
 
 export interface AssetUploadProfileConfig {
   dimensions: FileDimensions;
@@ -27,6 +30,14 @@ export const ASSET_UPLOAD_PROFILE_CONFIGS = {
     allowUpscale: true,
     imageQuality: 90,
     videoQuality: 85,
+    stripAudio: true,
+  },
+  'tag-icon': {
+    dimensions: { width: 128, height: 128 },
+    resizeMode: 'cover',
+    allowUpscale: true,
+    imageQuality: 80,
+    videoQuality: 80,
     stripAudio: true,
   },
 } as const satisfies Record<AssetUploadProfile, AssetUploadProfileConfig>;

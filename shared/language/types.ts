@@ -157,6 +157,41 @@ export type LanguagePhrases = {
   x_events: (count: number) => string;
   new_project: string;
   new_event: string;
+  admin_tags: string;
+  tag: string;
+  tags_description: string;
+  new_tag: string;
+  edit_tag: string;
+  tag_title: string;
+  tag_title_hint: string;
+  tag_slug: string;
+  tag_description: string;
+  tag_description_hint: string;
+  tag_color: string;
+  tag_color_hint: string;
+  tag_icon: string;
+  tag_icon_hint: string;
+  tag_link_example: (slug: string, publicId: string) => string;
+  project_tags: string;
+  project_tags_hint: string;
+  recommended_tags: string;
+  tag_search_placeholder: string;
+  create_tag_named: (title: string) => string;
+  tag_usage: string;
+  tag_usage_summary: (projects: number, events: number) => string;
+  tag_delete_hint: string;
+  delete_tag: string;
+  tag_delete_usage_warning: string;
+  tag_empty_list: string;
+  tag_search_results: string;
+  tag_search_loading: string;
+  tag_search_no_results: string;
+  tag_search_error: string;
+  tag_recommendations_error: string;
+  tag_title_taken: string;
+  tag_slug_taken: string;
+  tag_public_id_taken: string;
+  tag_icon_not_found: string;
   create: string;
   edit_project: string;
   view_project: string;
@@ -264,9 +299,11 @@ export type LanguagePhrases = {
   project_banner: string;
   project_banner_hint: string;
   delete_project: string;
-  delete_project_confirm: string;
-  delete_project_permanent_prefix: string;
-  delete_project_permanent_suffix: string;
+  delete_confirmation_description: (
+    entityType: string,
+    entityName: string,
+  ) => string;
+  delete_confirmation_confirm: string;
   size: string;
   just_now: string;
   showcase: string;

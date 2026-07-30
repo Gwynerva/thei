@@ -9,6 +9,8 @@ import {
   projectContentSectionPeriods,
 } from './project-content-sections';
 import { projectRelations } from './project-relations';
+import { tags } from './tags';
+import { tagUsages } from './tag-usages';
 
 export const schema = {
   assets,
@@ -20,4 +22,6 @@ export const schema = {
   projectContentSections,
   projectContentSectionPeriods,
   projectRelations,
+  tags,
+  tagUsages,
 };

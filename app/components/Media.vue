@@ -224,11 +224,18 @@ defineExpose({ play, pause });
     v-bind="attrs"
     class="relative isolate overflow-hidden"
     :class="{ 'media-loading': loading }"
-    :style="{ backgroundColor: accentColor }"
     :data-media-active="active"
     :data-media-preview-state="previewPhase"
     :data-media-final-state="mediaPhase"
   >
+    <span
+      class="absolute inset-0 transition-opacity duration-300
+        motion-reduce:duration-150"
+      :class="{ 'opacity-0': previewPhase === 'visible' }"
+      :style="{ backgroundColor: accentColor }"
+      aria-hidden="true"
+    />
+
     <img
       v-if="active"
       ref="previewEl"

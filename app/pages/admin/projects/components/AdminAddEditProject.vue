@@ -45,6 +45,7 @@ const projectData = ref<ProjectEditData>({
   descriptionContent: null,
   contentSections: [],
   relations: [],
+  tags: [],
 });
 provide(projectDataInjectionKey, projectData);
 const savedProjectData = ref<ProjectEditData>(
@@ -132,6 +133,7 @@ if (isEdit.value) {
       isPrivate: item.isPrivate,
     })),
     relations: data.relations ?? [],
+    tags: data.tags ?? [],
   };
   showcaseItems.value = data.showcaseAssets ?? [];
   otherItems.value = data.otherAssets ?? [];

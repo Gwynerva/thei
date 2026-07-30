@@ -16,6 +16,7 @@ import {
   videoQualityToVp9Crf,
 } from '../../../shared/asset-upload-quality';
 import { canZipAssetExtension } from '../../../shared/asset-upload-zip';
+import { getAssetUploadProfileConfig } from '../../../shared/asset-upload-profiles';
 import type { OtherAssetMeta } from '../../../shared/asset';
 
 describe('asset upload settings v5', () => {
@@ -88,6 +89,19 @@ describe('asset upload dimensions', () => {
     expect(evenDimensions({ width: 1201, height: 675 })).toEqual({
       width: 1200,
       height: 674,
+    });
+  });
+});
+
+describe('asset upload profiles', () => {
+  it('uses the standard tag icon settings', () => {
+    expect(getAssetUploadProfileConfig('tag-icon')).toEqual({
+      dimensions: { width: 128, height: 128 },
+      resizeMode: 'cover',
+      allowUpscale: true,
+      imageQuality: 80,
+      videoQuality: 80,
+      stripAudio: true,
     });
   });
 });
