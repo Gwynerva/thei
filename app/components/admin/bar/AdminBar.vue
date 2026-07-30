@@ -10,14 +10,13 @@ const { data: adminBarData } = await useFetch('/api/admin/bar', {
 const publicAdmin = await usePublicAdmin();
 
 const route = useRoute();
-const isOnAdminPage = computed(() => route.path.startsWith('/admin/'));
 
 const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
   if (route.path === '/projects/') {
     return {
       to: '/admin/projects/add',
       icon: 'plus',
-      label: phrase.value.new_project,
+      title: phrase.value.new_project,
     };
   }
 
@@ -25,7 +24,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
     return {
       to: '/admin/events/add',
       icon: 'plus',
-      label: phrase.value.new_event,
+      title: phrase.value.new_event,
     };
   }
 
@@ -36,7 +35,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
     return {
       to: `/admin/projects/edit/${projectUuid}/`,
       icon: 'edit',
-      label: phrase.value.edit_project,
+      title: phrase.value.edit_project,
     };
   }
 
@@ -45,7 +44,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
     return {
       to: `/admin/events/${eventId}`,
       icon: 'edit',
-      label: phrase.value.edit_event,
+      title: phrase.value.edit_event,
     };
   }
 
@@ -54,7 +53,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
     return {
       to: { href: `/projects/${id}/`, external: true },
       icon: 'eye-open',
-      label: phrase.value.view_project,
+      title: phrase.value.view_project,
     };
   }
 
@@ -63,7 +62,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
     return {
       to: { href: `/events/${id}/`, external: true },
       icon: 'eye-open',
-      label: phrase.value.view_event,
+      title: phrase.value.view_event,
     };
   }
 });
@@ -74,62 +73,64 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
     v-if="isAdmin && adminBarData"
     class="sticky top-0 z-10 h-(--height-admin-bar) bg-bg-1/60 backdrop-blur-md"
   >
-    <div class="flex h-full items-stretch justify-center bg-accent/35">
-      <AdminBarButton
-        :to="isOnAdminPage ? '/' : '/admin/'"
-        :icon="isOnAdminPage ? 'home' : 'thei'"
-        :label="isOnAdminPage ? phrase.to_website : phrase.to_admin_panel"
-      />
-
-      <AdminBarButton
-        v-if="contextAdminButton"
-        :to="contextAdminButton.to"
-        :icon="contextAdminButton.icon"
-        :label="contextAdminButton.label"
-      />
-
-      <AdminBarButton
-        v-if="isOnAdminPage && route.path !== '/admin/'"
-        to="/admin/"
-        icon="thei"
-        :title="phrase.to_admin_panel"
-      />
-
-      <AdminBarButton
-        to="/admin/projects"
-        icon="project"
-        :label="adminBarData.projectCount + ''"
-        :title="phrase.x_projects(adminBarData.projectCount)"
-        label-visibility="always"
-        class="font-semibold"
-      />
-
-      <AdminBarButton
-        to="/admin/events"
-        icon="event"
-        :label="adminBarData.eventCount + ''"
-        :title="phrase.x_events(adminBarData.eventCount)"
-        label-visibility="always"
-        class="font-semibold"
-      />
-
-      <AdminBarButton
-        to="/admin/"
-        :label="publicAdmin.displayName"
-        class="shrink-0 sm:shrink-1"
+    <div class="h-full bg-accent/35">
+      <div
+        class="m-auto flex h-full w-(--width-wide) max-w-full items-stretch
+          justify-between px-window"
       >
-        <template #icon>
-          <div class="size-6 overflow-clip rounded-full border border-border-3">
-            <Media v-bind="publicAdmin.avatarMedia" class="size-full" />
-          </div>
-        </template>
-      </AdminBarButton>
+        <nav class="flex shrink-0 items-stretch" aria-label="Администрирование">
+          <AdminBarButton to="/" icon="home" title="Сайт" />
 
-      <AdminBarButton
-        :to="{ href: '/sign-out/', external: true }"
-        icon="power"
-        :label="phrase.sign_out"
-      />
+          <AdminBarButton to="/admin/" icon="thei" title="Админ-панель" />
+
+          <AdminBarButton
+            to="/admin/projects"
+            icon="project"
+            :label="adminBarData.projectCount + ''"
+            :title="phrase.x_projects(adminBarData.projectCount)"
+            class="font-semibold"
+          />
+
+          <AdminBarButton
+            to="/admin/events"
+            icon="event"
+            :label="adminBarData.eventCount + ''"
+            :title="phrase.x_events(adminBarData.eventCount)"
+            class="font-semibold"
+          />
+
+          <AdminBarButton
+            v-if="contextAdminButton"
+            :to="contextAdminButton.to"
+            :icon="contextAdminButton.icon"
+            :title="contextAdminButton.title"
+          />
+        </nav>
+
+        <div class="flex min-w-0 items-stretch">
+          <AdminBarButton
+            to="/admin/"
+            :label="publicAdmin.displayName"
+            :title="publicAdmin.displayName"
+            shrinkable
+          >
+            <template #icon>
+              <div
+                class="size-6 shrink-0 overflow-clip rounded-full border
+                  border-border-3"
+              >
+                <Media v-bind="publicAdmin.avatarMedia" class="size-full" />
+              </div>
+            </template>
+          </AdminBarButton>
+
+          <AdminBarButton
+            :to="{ href: '/sign-out/', external: true }"
+            icon="power"
+            :title="phrase.sign_out"
+          />
+        </div>
+      </div>
     </div>
   </header>
 </template>
