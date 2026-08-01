@@ -54,6 +54,8 @@ const showcaseItems = inject(showcaseItemsKey)!;
 const otherItems = inject(otherItemsKey)!;
 const currentProjectUuid = inject(currentProjectUuidKey)!;
 const batchErrorMessage = ref('');
+const showcaseRoot = useTemplateRef<HTMLElement>('showcaseRoot');
+const otherRoot = useTemplateRef<HTMLElement>('otherRoot');
 
 type PickedAsset = {
   asset: AssetVariantInfo;
@@ -216,6 +218,7 @@ const { addItem, updateItem, removeItem, dragSort } = useOrderedAssetList(
       isPrivate: item.isPrivate,
     }));
   },
+  showcaseRoot,
 );
 
 const {
@@ -223,14 +226,18 @@ const {
   updateItem: updateOtherItem,
   removeItem: removeOtherItem,
   dragSort: otherDragSort,
-} = useOrderedAssetList(otherItems, (items) => {
-  projectData.value.otherAssets = items.map((item) => ({
-    assetUuid: item.assetUuid,
-    title: item.title,
-    caption: item.caption,
-    isPrivate: item.isPrivate,
-  }));
-});
+} = useOrderedAssetList(
+  otherItems,
+  (items) => {
+    projectData.value.otherAssets = items.map((item) => ({
+      assetUuid: item.assetUuid,
+      title: item.title,
+      caption: item.caption,
+      isPrivate: item.isPrivate,
+    }));
+  },
+  otherRoot,
+);
 
 // Showcase handlers
 
@@ -502,28 +509,21 @@ async function openOtherAsset(index: number) {
       </div>
 
       <!-- Showcase grid -->
-      <div class="flex flex-wrap gap-sm p-sm sm:p-md">
+      <div ref="showcaseRoot" class="flex flex-wrap gap-sm p-sm sm:p-md">
         <!-- Existing showcase items -->
         <div
           v-for="(item, index) in showcaseItems"
           :key="item.assetUuid"
+          :data-drag-id="item.assetUuid"
           class="flex w-18 flex-col items-center gap-xs"
         >
           <AssetTile
-            :data-drag-index="index"
             :media="item.media"
             :size="item.size"
             :is-private="item.isPrivate"
             :aria-label="phrase.showcase_details"
-            class="size-18 cursor-pointer touch-none"
-            :class="{
-              'opacity-50': dragSort.draggingIndex.value === index,
-              'ring-2 ring-accent ring-offset-2 ring-offset-bg-1':
-                dragSort.dragOverIndex.value === index &&
-                dragSort.draggingIndex.value !== index,
-            }"
+            class="size-18 cursor-pointer"
             @click="dragSort.guardClick(() => openShowcaseAsset(index))"
-            @pointerdown="dragSort.onPointerDown(index, $event)"
           />
           <div
             v-if="item.caption"
@@ -553,28 +553,21 @@ async function openOtherAsset(index: number) {
       </div>
 
       <!-- Other-files grid -->
-      <div class="flex flex-wrap gap-sm p-sm sm:p-md">
+      <div ref="otherRoot" class="flex flex-wrap gap-sm p-sm sm:p-md">
         <div
           v-for="(item, index) in otherItems"
           :key="item.assetUuid"
+          :data-drag-id="item.assetUuid"
           class="flex w-18 flex-col items-center gap-xs"
         >
           <AssetTile
-            :data-drag-index="index"
             :media="item.media"
             :extension="item.extension"
             :size="item.size"
             :is-private="item.isPrivate"
             :aria-label="phrase.other_details"
-            class="size-18 cursor-pointer touch-none"
-            :class="{
-              'opacity-50': otherDragSort.draggingIndex.value === index,
-              'ring-2 ring-accent ring-offset-2 ring-offset-bg-1':
-                otherDragSort.dragOverIndex.value === index &&
-                otherDragSort.draggingIndex.value !== index,
-            }"
+            class="size-18 cursor-pointer"
             @click="otherDragSort.guardClick(() => openOtherAsset(index))"
-            @pointerdown="otherDragSort.onPointerDown(index, $event)"
           />
           <div
             class="line-clamp-2 w-full cursor-help text-center text-xs

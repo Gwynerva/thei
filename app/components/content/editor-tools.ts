@@ -10,7 +10,10 @@ import type {
   ContentAssetData,
   ContentGalleryItem,
 } from '#layers/thei/shared/content';
-import { createPointerDragSort } from '#layers/thei/app/composables/drag-sort';
+import {
+  createDragSort,
+  moveItemById,
+} from '#layers/thei/app/composables/drag-sort';
 import AssetTile from '#layers/thei/app/components/AssetTile.vue';
 import ExternalLinkPreviewCard from '#layers/thei/app/components/external-links/ExternalLinkPreviewCard.vue';
 import {
@@ -298,40 +301,7 @@ export class ContentGalleryTool implements BlockTool {
   private caption = '';
   private wrapper?: HTMLElement;
   private unmountTiles: Array<() => void> = [];
-  private dragSort = createPointerDragSort(
-    (from, to) => {
-      const next = [...this.items];
-      const [moved] = next.splice(from, 1);
-      if (!moved) return;
-      next.splice(to, 0, moved);
-      this.items = next;
-      this.options.block.dispatchChange();
-      this.renderContent();
-    },
-    ({ draggingIndex, dragOverIndex }) => {
-      this.wrapper
-        ?.querySelectorAll<HTMLElement>('[data-drag-index]')
-        .forEach((tile, index) => {
-          tile.classList.toggle('opacity-35', index === draggingIndex);
-          tile.classList.toggle(
-            'ring-2',
-            index === dragOverIndex && index !== draggingIndex,
-          );
-          tile.classList.toggle(
-            'ring-accent',
-            index === dragOverIndex && index !== draggingIndex,
-          );
-          tile.classList.toggle(
-            'ring-offset-2',
-            index === dragOverIndex && index !== draggingIndex,
-          );
-          tile.classList.toggle(
-            'ring-offset-bg-1',
-            index === dragOverIndex && index !== draggingIndex,
-          );
-        });
-    },
-  );
+  private dragSort?: ReturnType<typeof createDragSort>;
 
   constructor(
     private options: ContentToolOptions<
@@ -357,35 +327,32 @@ export class ContentGalleryTool implements BlockTool {
   }
 
   destroy() {
-    this.dragSort.cleanup();
+    this.dragSort?.destroy();
     this.clearTiles();
   }
 
   private renderContent() {
     if (!this.wrapper) return;
-    this.dragSort.cleanup();
+    this.dragSort?.destroy();
+    this.dragSort = undefined;
     this.clearTiles();
     this.wrapper.replaceChildren();
 
     const grid = document.createElement('div');
     grid.className = 'flex flex-wrap items-start gap-sm';
 
-    this.items.forEach((item, index) => {
+    this.items.forEach((item) => {
       const tile = renderAssetTile(item.asset, {
-        className:
-          'size-18 shrink-0 cursor-grab touch-none select-none active:cursor-grabbing',
+        className: 'size-18 shrink-0 cursor-grab active:cursor-grabbing',
         ariaLabel: this.labels.chooseMedia,
         onPick: this.options.readOnly
           ? undefined
           : () =>
-              this.dragSort.guardClick(() => {
-                void this.edit(item.id);
-              }),
+              this.dragSort
+                ? this.dragSort.guardClick(() => void this.edit(item.id))
+                : void this.edit(item.id),
       });
-      tile.element.dataset.dragIndex = String(index);
-      tile.element.addEventListener('pointerdown', (event) => {
-        this.dragSort.onPointerDown(index, event, grid);
-      });
+      tile.element.dataset.dragId = item.id;
       this.unmountTiles.push(tile.unmount);
       grid.append(tile.element);
     });
@@ -401,6 +368,20 @@ export class ContentGalleryTool implements BlockTool {
     }
 
     this.wrapper.append(grid);
+    if (!this.options.readOnly) {
+      this.dragSort = createDragSort(grid, {
+        onDrop: ({ id, newIndex }) => {
+          this.items = moveItemById(
+            this.items,
+            id,
+            newIndex,
+            (item) => item.id,
+          );
+          this.options.block.dispatchChange();
+          this.renderContent();
+        },
+      });
+    }
   }
 
   private clearTiles() {

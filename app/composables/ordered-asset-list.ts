@@ -1,13 +1,14 @@
-import { useDragSort } from './drag-sort';
+import { moveItemById, useDragSort } from './drag-sort';
 
 /**
  * Keeps a reactive asset list and its persisted representation in sync.
  * Entity-specific mapping stays in the caller, so projects and events can
- * reuse the same mutation and pointer-sorting behavior.
+ * reuse the same mutation and sorting behavior.
  */
 export function useOrderedAssetList<T extends { assetUuid: string }>(
   items: Ref<T[]>,
   onSync: (items: T[]) => void,
+  root: MaybeRefOrGetter<HTMLElement | null | undefined>,
 ) {
   function commit(next: T[]) {
     items.value = next;
@@ -30,12 +31,10 @@ export function useOrderedAssetList<T extends { assetUuid: string }>(
     commit(items.value.filter((item) => item.assetUuid !== assetUuid));
   }
 
-  const dragSort = useDragSort((from, to) => {
-    const next = [...items.value];
-    const [moved] = next.splice(from, 1);
-    if (!moved) return;
-    next.splice(to, 0, moved);
-    commit(next);
+  const dragSort = useDragSort(root, {
+    onDrop: ({ id, newIndex }) => {
+      commit(moveItemById(items.value, id, newIndex, (item) => item.assetUuid));
+    },
   });
 
   return { addItem, updateItem, removeItem, dragSort };

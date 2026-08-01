@@ -23,16 +23,6 @@
       var(--color-shadow-2) 70%,
       transparent
     );
-    --content-editor-drag-overlay: color-mix(
-      in oklch,
-      var(--color-accent) 16%,
-      transparent
-    );
-    --content-editor-drag-outline: color-mix(
-      in oklch,
-      var(--color-accent) 58%,
-      transparent
-    );
     --content-editor-panel: color-mix(
       in oklch,
       var(--color-bg-2) 92%,
@@ -115,10 +105,8 @@
 
   .content-editor .ce-toolbar__settings-btn {
     cursor: grab;
-    touch-action: none;
   }
 
-  .content-editor.content-editor--settings-pressed .ce-toolbar__settings-btn,
   .content-editor.content-editor--dragging-block .ce-toolbar__settings-btn {
     cursor: grabbing;
   }
@@ -150,59 +138,23 @@
       color-mix(in oklch, var(--color-accent) 24%, transparent);
   }
 
-  .content-editor .content-editor-block-dragging-source .ce-block__content {
-    border-radius: calc(var(--radius-normal) * 0.65);
-    box-shadow:
-      inset 0 0 0 1px var(--content-editor-drag-outline),
-      0 12px 28px -22px var(--color-accent);
-  }
-
-  .content-editor
-    .content-editor-block-dragging-source
-    .ce-block__content::before {
-    position: absolute;
-    inset: -0.2rem -0.35rem;
-    z-index: 3;
-    border-radius: calc(var(--radius-normal) * 0.75);
-    background: var(--content-editor-drag-overlay);
-    content: '';
-    pointer-events: none;
-  }
-
-  .content-editor .content-editor-block-drop-before .ce-block__content::after,
-  .content-editor .content-editor-block-drop-after .ce-block__content::after {
-    position: absolute;
-    right: 0;
-    left: 0;
-    z-index: 4;
-    height: 3px;
-    border-radius: 999px;
-    background: var(--color-accent);
-    box-shadow: 0 0 0 3px var(--color-bg-accent);
-    content: '';
-    pointer-events: none;
-  }
-
-  .content-editor .content-editor-block-drop-before .ce-block__content::after {
-    top: -0.35rem;
-  }
-
-  .content-editor .content-editor-block-drop-after .ce-block__content::after {
-    bottom: -0.35rem;
-  }
-
   .content-editor .ce-block--drop-target .ce-block__content::before {
+    z-index: 2;
     border-color: var(--color-accent);
+    border-width: 2px 2px 0 0;
+    filter: drop-shadow(
+      0 0 0.35rem color-mix(in oklch, var(--color-accent) 72%, transparent)
+    );
   }
 
   .content-editor .ce-block--drop-target .ce-block__content::after {
-    background: repeating-linear-gradient(
-      90deg,
-      var(--color-accent),
-      var(--color-accent) 1px,
-      var(--color-bg-2) 1px,
-      var(--color-bg-2) 6px
-    );
+    z-index: 2;
+    height: 2px;
+    border-radius: 9999px;
+    background: var(--color-accent);
+    box-shadow:
+      0 0 0.4rem color-mix(in oklch, var(--color-accent) 72%, transparent),
+      0 0 1rem color-mix(in oklch, var(--color-accent) 42%, transparent);
   }
 
   /* Editor.js can render popovers outside the holder, so body scope is required. */

@@ -9,6 +9,10 @@ import type { IconName } from '#thei/icons';
 import { buildProjectUrl } from '#layers/thei/shared/project-url';
 import { currentProjectUuidKey, projectDataInjectionKey } from '../composables';
 import ProjectSearchPopup from '#layers/thei/app/components/ProjectSearchPopup.vue';
+import {
+  createDragSort,
+  moveItemToGroup,
+} from '#layers/thei/app/composables/drag-sort';
 
 const projectData = inject(projectDataInjectionKey)!;
 const currentProjectUuid = inject(currentProjectUuidKey)!;
@@ -54,15 +58,7 @@ const groups = computed<
   },
 ]);
 
-const draggingUuid = ref<string>();
-const dragOverUuid = ref<string>();
-const dragOverType = ref<ProjectRelationType>();
-let pointerId: number | undefined;
-let startX = 0;
-let startY = 0;
-let sourceRow: HTMLElement | undefined;
-let ghost: HTMLElement | undefined;
-let moved = false;
+let relationSorters: Array<ReturnType<typeof createDragSort>> = [];
 
 function openProjectSearch() {
   projectSearchOpen.value = true;
@@ -142,139 +138,49 @@ function toggleSplitNote(relation: ProjectRelationEditItem) {
   });
 }
 
-function onPointerDown(relation: ProjectRelationEditItem, event: PointerEvent) {
-  if (event.pointerType === 'mouse' && event.button !== 0) return;
-  if (pointerId !== undefined) return;
-  pointerId = event.pointerId;
-  startX = event.clientX;
-  startY = event.clientY;
-  sourceRow =
-    (event.currentTarget as HTMLElement).closest<HTMLElement>(
-      '[data-relation-uuid]',
-    ) ?? undefined;
-  draggingUuid.value = relation.projectUuid;
-  moved = false;
-  document.addEventListener('pointermove', onPointerMove, { passive: false });
-  document.addEventListener('pointerup', onPointerUp);
-  document.addEventListener('pointercancel', cleanupDrag);
-}
-
-function onPointerMove(event: PointerEvent) {
-  if (event.pointerId !== pointerId) return;
-  if (!moved) {
-    const dx = event.clientX - startX;
-    const dy = event.clientY - startY;
-    if (dx * dx + dy * dy <= 36) return;
-    moved = true;
-    event.preventDefault();
-    document.body.style.userSelect = 'none';
-    if (sourceRow) {
-      const rect = sourceRow.getBoundingClientRect();
-      ghost = sourceRow.cloneNode(true) as HTMLElement;
-      Object.assign(ghost.style, {
-        position: 'fixed',
-        pointerEvents: 'none',
-        zIndex: '9999',
-        left: `${rect.left}px`,
-        top: `${rect.top}px`,
-        width: `${rect.width}px`,
-        opacity: '0.86',
-        boxShadow: 'var(--shadow-xl)',
-      });
-      document.body.append(ghost);
-    }
-  }
-  if (!moved) return;
-  event.preventDefault();
-  if (ghost) {
-    ghost.style.left = `${event.clientX - 24}px`;
-    ghost.style.top = `${event.clientY - 24}px`;
-  }
-  const target = document
-    .elementsFromPoint(event.clientX, event.clientY)
-    .map((element) =>
-      element instanceof HTMLElement
-        ? element.closest<HTMLElement>('[data-relation-type]')
-        : null,
-    )
-    .find((element) => element && relationsRoot.value?.contains(element));
-  dragOverType.value = target?.dataset.relationType as
-    ProjectRelationType | undefined;
-  dragOverUuid.value = target?.closest<HTMLElement>('[data-relation-uuid]')
-    ?.dataset.relationUuid;
-}
-
-function onPointerUp(event: PointerEvent) {
-  if (event.pointerId !== pointerId) return;
-  if (moved && draggingUuid.value && dragOverType.value) {
-    moveRelation(draggingUuid.value, dragOverType.value, dragOverUuid.value);
-  }
-  cleanupDrag();
-}
-
 function moveRelation(
   projectUuid: string,
   type: ProjectRelationType,
-  targetUuid?: string,
-) {
-  const sourceIndex = relations.value.findIndex(
-    (item) => item.projectUuid === projectUuid,
-  );
-  const movedRelation = relations.value[sourceIndex];
-  if (!movedRelation) return;
-  if (movedRelation.type === type && targetUuid === projectUuid) return;
-  const targetIndex = targetUuid
-    ? relations.value.findIndex((item) => item.projectUuid === targetUuid)
-    : -1;
-  const insertAfterTarget =
-    movedRelation.type === type &&
-    targetIndex >= 0 &&
-    sourceIndex < targetIndex;
-  const remaining = relations.value.filter(
-    (item) => item.projectUuid !== projectUuid,
-  );
-  const targetIndices = remaining
-    .map((item, index) => ({ item, index }))
-    .filter(({ item }) => item.type === type);
-  const targetRemainingIndex = targetUuid
-    ? remaining.findIndex((item) => item.projectUuid === targetUuid)
-    : -1;
-  const insertAt =
-    targetRemainingIndex >= 0
-      ? targetRemainingIndex + (insertAfterTarget ? 1 : 0)
-      : targetIndices.length
-        ? targetIndices.at(-1)!.index + 1
-        : insertionIndexForGroup(remaining, type);
-  remaining.splice(insertAt, 0, { ...movedRelation, type });
-  replaceRelations(remaining);
-}
-
-function insertionIndexForGroup(
-  items: ProjectRelationEditItem[],
-  type: ProjectRelationType,
+  newIndex: number,
 ) {
   const order: ProjectRelationType[] = ['related', 'influencing', 'dependent'];
-  const nextTypes = order.slice(order.indexOf(type) + 1);
-  const nextIndex = items.findIndex((item) => nextTypes.includes(item.type));
-  return nextIndex < 0 ? items.length : nextIndex;
+  replaceRelations(
+    moveItemToGroup(
+      relations.value,
+      projectUuid,
+      type,
+      newIndex,
+      order,
+      (item) => item.projectUuid,
+      (item) => item.type,
+      (item, nextType) => ({ ...item, type: nextType }),
+    ),
+  );
 }
 
-function cleanupDrag() {
-  ghost?.remove();
-  ghost = undefined;
-  pointerId = undefined;
-  sourceRow = undefined;
-  moved = false;
-  draggingUuid.value = undefined;
-  dragOverUuid.value = undefined;
-  dragOverType.value = undefined;
-  document.body.style.userSelect = '';
-  document.removeEventListener('pointermove', onPointerMove);
-  document.removeEventListener('pointerup', onPointerUp);
-  document.removeEventListener('pointercancel', cleanupDrag);
+function cleanupSorters() {
+  relationSorters.forEach((sorter) => sorter.destroy());
+  relationSorters = [];
 }
 
-onUnmounted(cleanupDrag);
+onMounted(() => {
+  relationSorters = Array.from(
+    relationsRoot.value?.querySelectorAll<HTMLElement>(
+      '[data-relation-list]',
+    ) ?? [],
+  ).map((root) =>
+    createDragSort(root, {
+      group: 'project-relations',
+      handle: '[data-relation-handle]',
+      onDrop: ({ id, to, newIndex }) => {
+        const type = to.dataset.relationList as ProjectRelationType | undefined;
+        if (type) moveRelation(id, type, newIndex);
+      },
+    }),
+  );
+});
+
+onUnmounted(cleanupSorters);
 </script>
 
 <template>
@@ -317,15 +223,7 @@ onUnmounted(cleanupDrag);
 
     <div ref="relationsRoot">
       <Box class="flex flex-col overflow-hidden">
-        <section
-          v-for="(group, groupIndex) in groups"
-          :key="group.type"
-          :data-relation-type="group.type"
-          :class="{
-            'ring-2 ring-accent ring-inset':
-              draggingUuid && dragOverType === group.type && !dragOverUuid,
-          }"
-        >
+        <section v-for="(group, groupIndex) in groups" :key="group.type">
           <header
             class="border-y border-border-1 bg-bg-3 px-sm py-xs text-text-2
               sm:px-md"
@@ -335,19 +233,12 @@ onUnmounted(cleanupDrag);
             <span class="font-semibold">{{ group.title }}</span>
           </header>
 
-          <div v-if="group.items.length" class="flex flex-col">
+          <div :data-relation-list="group.type" class="flex min-h-16 flex-col">
             <div
               v-for="relation in group.items"
               :key="relation.projectUuid"
-              :data-relation-uuid="relation.projectUuid"
-              :data-relation-type="group.type"
+              :data-drag-id="relation.projectUuid"
               class="border-t border-border-1 p-sm first:border-t-0 sm:p-md"
-              :class="{
-                'opacity-45': draggingUuid === relation.projectUuid,
-                'ring-2 ring-accent ring-inset':
-                  dragOverUuid === relation.projectUuid &&
-                  draggingUuid !== relation.projectUuid,
-              }"
             >
               <div class="flex min-w-0 items-center gap-xs">
                 <div
@@ -410,12 +301,12 @@ onUnmounted(cleanupDrag);
                 </div>
                 <button
                   type="button"
-                  class="flex size-10 shrink-0 cursor-grab touch-none
-                    items-center justify-center rounded-normal bg-bg-3
-                    text-text-2 transition-colors active:cursor-grabbing
-                    hocus:bg-bg-accent hocus:text-accent"
+                  class="flex size-10 shrink-0 cursor-grab items-center
+                    justify-center rounded-normal bg-bg-3 text-text-2
+                    transition-colors active:cursor-grabbing hocus:bg-bg-accent
+                    hocus:text-accent"
                   :aria-label="`${group.title}: ${relation.title}`"
-                  @pointerdown="onPointerDown(relation, $event)"
+                  data-relation-handle
                 >
                   <Icon name="grip" />
                 </button>
@@ -525,13 +416,13 @@ onUnmounted(cleanupDrag);
                 </button>
               </div>
             </div>
-          </div>
-          <div
-            v-else
-            class="flex min-h-16 items-center justify-center p-sm text-sm
-              text-text-3 italic sm:p-md"
-          >
-            {{ phrase.project_relations_empty }}
+            <div
+              v-if="!group.items.length"
+              class="flex min-h-16 items-center justify-center p-sm text-sm
+                text-text-3 italic sm:p-md"
+            >
+              {{ phrase.project_relations_empty }}
+            </div>
           </div>
         </section>
       </Box>

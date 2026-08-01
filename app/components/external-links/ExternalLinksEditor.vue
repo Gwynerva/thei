@@ -6,6 +6,7 @@ import type {
   ProjectExternalLinkEditItem,
 } from '#layers/thei/shared/external-link';
 import { normalizeExternalLinkUrl } from '#layers/thei/shared/external-link';
+import { moveItemById } from '#layers/thei/app/composables/drag-sort';
 
 const props = defineProps<{
   title: string;
@@ -261,18 +262,11 @@ function remove() {
   popupOpen.value = false;
 }
 
-function reorder(from: number, to: number) {
-  const next = [...links.value];
-  const [item] = next.splice(from, 1);
-
-  if (!item) return;
-
-  next.splice(to, 0, item);
-  links.value = next;
-}
-
-const { draggingIndex, dragOverIndex, onPointerDown, guardClick } =
-  useDragSort(reorder);
+const { guardClick } = useDragSort(linksRoot, {
+  onDrop: ({ id, newIndex }) => {
+    links.value = moveItemById(links.value, id, newIndex, (link) => link.url);
+  },
+});
 
 function onPopupClosed() {
   if (!popupOpen.value) resetDraft();
@@ -315,14 +309,8 @@ onUnmounted(() => {
         <div
           v-for="(link, index) in links"
           :key="link.url"
-          :data-drag-index="index"
-          class="touch-none rounded-sm transition select-none"
-          :class="{
-            'opacity-35': draggingIndex === index,
-            'ring-2 ring-accent':
-              dragOverIndex === index && draggingIndex !== index,
-          }"
-          @pointerdown="onPointerDown(index, $event, linksRoot ?? undefined)"
+          :data-drag-id="link.url"
+          class="rounded-sm transition"
         >
           <ExternalLinkChip
             :link="link"

@@ -2,6 +2,7 @@
 import { debounce } from 'perfect-debounce';
 import type { TagEditItem, TagItem } from '#layers/thei/shared/tag';
 import { normalizeTagTitle } from '#layers/thei/shared/tag';
+import { moveItemById } from '#layers/thei/app/composables/drag-sort';
 
 const props = withDefaults(
   defineProps<{
@@ -149,15 +150,15 @@ function removeTag(index: number) {
   tags.value = tags.value.filter((_, itemIndex) => itemIndex !== index);
 }
 
-function reorder(from: number, to: number) {
-  const reordered = [...tags.value];
-  const [item] = reordered.splice(from, 1);
-  if (!item) return;
-  reordered.splice(to, 0, item);
-  tags.value = reordered;
+function tagDragId(tag: TagEditItem) {
+  return tag.tagUuid ?? normalizeTagTitle(tag.title);
 }
 
-const { draggingIndex, dragOverIndex, onPointerDown } = useDragSort(reorder);
+useDragSort(tagContainer, {
+  onDrop: ({ id, newIndex }) => {
+    tags.value = moveItemById(tags.value, id, newIndex, tagDragId);
+  },
+});
 </script>
 
 <template>
@@ -172,15 +173,9 @@ const { draggingIndex, dragOverIndex, onPointerDown } = useDragSort(reorder);
     >
       <div
         v-for="(tag, index) in tags"
-        :key="tag.tagUuid ?? `new-${normalizeTagTitle(tag.title)}`"
-        :data-drag-index="index"
-        class="touch-none transition select-none"
-        :class="{
-          'opacity-35': draggingIndex === index,
-          'ring-2 ring-accent':
-            dragOverIndex === index && draggingIndex !== index,
-        }"
-        @pointerdown="onPointerDown(index, $event, tagContainer ?? undefined)"
+        :key="tagDragId(tag)"
+        :data-drag-id="tagDragId(tag)"
+        class="transition"
       >
         <TagChip :tag="tag" class="cursor-auto">
           <button
@@ -188,7 +183,7 @@ const { draggingIndex, dragOverIndex, onPointerDown } = useDragSort(reorder);
             class="-ml-1 shrink-0 cursor-pointer leading-none transition
               hocus:text-text-error"
             :aria-label="`${phrase.delete}: ${tag.title}`"
-            @pointerdown.stop
+            data-drag-ignore
             @click.stop="removeTag(index)"
           >
             <Icon name="close" />

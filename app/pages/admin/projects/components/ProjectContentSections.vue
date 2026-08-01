@@ -6,21 +6,34 @@ import {
 } from '#layers/thei/shared/content';
 import type { ProjectContentSectionEditItem } from '#layers/thei/shared/project-content-section';
 import { projectDataInjectionKey } from '../composables';
-import { useDragSort } from '#layers/thei/app/composables/drag-sort';
+import {
+  moveItemById,
+  useDragSort,
+} from '#layers/thei/app/composables/drag-sort';
 import { projectContentSectionModal } from './project-content-section-modal';
 
 const projectData = inject(projectDataInjectionKey)!;
 const humanSize = useHumanSize();
 const sections = computed(() => projectData.value.contentSections ?? []);
+const sectionsRoot = useTemplateRef<HTMLElement>('sectionsRoot');
+const unsavedSectionIds = new WeakMap<ProjectContentSectionEditItem, string>();
+function sectionDragId(section: ProjectContentSectionEditItem) {
+  if (section.sectionUuid) return section.sectionUuid;
+  let id = unsavedSectionIds.get(section);
+  if (!id) {
+    id = crypto.randomUUID();
+    unsavedSectionIds.set(section, id);
+  }
+  return id;
+}
 function replaceSections(value: ProjectContentSectionEditItem[]) {
   projectData.value.contentSections = value;
 }
 
-const dragSort = useDragSort((from, to) => {
-  const next = [...sections.value];
-  const [moved] = next.splice(from, 1);
-  next.splice(to, 0, moved!);
-  replaceSections(next);
+const dragSort = useDragSort(sectionsRoot, {
+  onDrop: ({ id, newIndex }) => {
+    replaceSections(moveItemById(sections.value, id, newIndex, sectionDragId));
+  },
 });
 
 async function openSection(index?: number) {
@@ -104,22 +117,15 @@ function formatDate(value: string) {
 
       <div
         v-if="sections.length"
+        ref="sectionsRoot"
         class="overflow-hidden rounded-normal border border-border-1"
       >
         <div
           v-for="(section, index) in sections"
-          :key="section.sectionUuid ?? `${section.title}-${index}`"
-          :data-drag-index="index"
-          class="group flex touch-none items-center gap-sm border-b
-            border-border-1 bg-bg-1 p-sm transition last:border-b-0
-            hocus:bg-bg-3"
-          :class="{
-            'opacity-50': dragSort.draggingIndex.value === index,
-            'ring-2 ring-accent':
-              dragSort.dragOverIndex.value === index &&
-              dragSort.draggingIndex.value !== index,
-          }"
-          @pointerdown="dragSort.onPointerDown(index, $event)"
+          :key="sectionDragId(section)"
+          :data-drag-id="sectionDragId(section)"
+          class="group flex items-center gap-sm border-b border-border-1 bg-bg-1
+            p-sm transition last:border-b-0 hocus:bg-bg-3"
           @click="dragSort.guardClick(() => openSection(index))"
         >
           <Icon name="expand-vertical" class="shrink-0 text-text-3" />
@@ -162,6 +168,7 @@ function formatDate(value: string) {
               justify-center rounded-normal text-text-3 transition
               hocus:bg-bg-error hocus:text-text-error"
             :data-title-popup="phrase.delete_content_section"
+            data-drag-ignore
             @click.stop="removeSection(index)"
           >
             <Icon name="delete" />
