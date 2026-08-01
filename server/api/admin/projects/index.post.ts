@@ -6,6 +6,7 @@ import { and, eq } from 'drizzle-orm';
 import type { ProjectSaveResponse } from '#layers/thei/shared/api/project';
 import { ContentValidationError } from '#layers/thei/shared/content';
 import { EntityPrefix, generateUniqueId } from '../../../thei/entity-id';
+import { cleanupOrphanExternalLinks } from '../../../thei/external-links/repository';
 import { validateProjectAssets } from '../../../thei/projects/validate-assets';
 import {
   applyPreparedContentSave,
@@ -20,6 +21,10 @@ import {
   prepareProjectRelations,
 } from '../../../thei/projects/relations';
 import { applyTagUsages, prepareTagUsages } from '../../../thei/tags';
+import {
+  applyProjectExternalLinks,
+  prepareProjectExternalLinks,
+} from '../../../thei/projects/external-links';
 
 export default defineEventHandler(
   async (event): Promise<ProjectSaveResponse> => {
@@ -95,6 +100,18 @@ export default defineEventHandler(
         message: error instanceof Error ? error.message : 'Invalid tags',
       };
     }
+    let preparedExternalLinks;
+    try {
+      preparedExternalLinks = await prepareProjectExternalLinks(
+        result.externalLinks,
+      );
+    } catch (error) {
+      return {
+        type: 'error',
+        message:
+          error instanceof Error ? error.message : 'Invalid external links',
+      };
+    }
 
     const { db, schema } = THEI_SERVER.useDb();
     const now = Date.now();
@@ -126,6 +143,7 @@ export default defineEventHandler(
       }
       applyProjectContentSections(tx, schema, projectUuid, preparedSections);
       applyProjectRelations(tx, schema, projectUuid, preparedRelations);
+      applyProjectExternalLinks(tx, schema, projectUuid, preparedExternalLinks);
       applyTagUsages(tx, schema, 'project', projectUuid, preparedTags);
 
       if (result.iconAssetUuid) {
@@ -174,6 +192,7 @@ export default defineEventHandler(
       }
     });
 
+    await cleanupOrphanExternalLinks();
     return { type: 'success', projectUuid };
   },
 );

@@ -16,6 +16,7 @@ import {
   buildAdminAssetUrls,
 } from '../../../thei/assets/urls';
 import { resolveGeneratedIcon } from '../../../thei/media/generated-icon';
+import { cleanupOrphanExternalLinks } from '../../../thei/external-links/repository';
 import {
   applyPreparedContentSave,
   deleteContentForOwner,
@@ -33,6 +34,12 @@ import {
   getProjectRelations,
   prepareProjectRelations,
 } from '../../../thei/projects/relations';
+import {
+  applyProjectExternalLinks,
+  deleteProjectExternalLinks,
+  getProjectExternalLinks,
+  prepareProjectExternalLinks,
+} from '../../../thei/projects/external-links';
 import {
   applyTagUsages,
   deleteTagUsagesForContainer,
@@ -181,6 +188,7 @@ export default defineEventHandler(async (event) => {
         showcaseAssets,
         otherAssets,
         relations: await getProjectRelations(projectUuid),
+        externalLinks: await getProjectExternalLinks(projectUuid),
         tags: await listTagsForContainer('project', projectUuid),
       } satisfies ProjectGetResponse;
     }
@@ -267,6 +275,18 @@ export default defineEventHandler(async (event) => {
           message: error instanceof Error ? error.message : 'Invalid tags',
         } satisfies ProjectSaveResponse;
       }
+      let preparedExternalLinks;
+      try {
+        preparedExternalLinks = await prepareProjectExternalLinks(
+          result.externalLinks,
+        );
+      } catch (error) {
+        return {
+          type: 'error',
+          message:
+            error instanceof Error ? error.message : 'Invalid external links',
+        } satisfies ProjectSaveResponse;
+      }
 
       const usages = await THEI_SERVER.assets.usages.findByContainer(
         'project',
@@ -321,6 +341,12 @@ export default defineEventHandler(async (event) => {
         }
         applyProjectContentSections(tx, schema, projectUuid, preparedSections);
         applyProjectRelations(tx, schema, projectUuid, preparedRelations);
+        applyProjectExternalLinks(
+          tx,
+          schema,
+          projectUuid,
+          preparedExternalLinks,
+        );
         applyTagUsages(tx, schema, 'project', projectUuid, preparedTags);
 
         if (currentIcon?.asset.assetUuid !== newIconUuid) {
@@ -425,6 +451,7 @@ export default defineEventHandler(async (event) => {
         }
       });
 
+      await cleanupOrphanExternalLinks();
       return { type: 'success', projectUuid } satisfies ProjectSaveResponse;
     }
 
@@ -437,6 +464,7 @@ export default defineEventHandler(async (event) => {
       db.transaction((tx) => {
         deleteProjectContentSections(tx, schema, projectUuid);
         deleteProjectRelations(tx, schema, projectUuid);
+        deleteProjectExternalLinks(tx, schema, projectUuid);
         deleteTagUsagesForContainer(tx, schema, 'project', projectUuid);
         deleteContentForOwner(tx, schema, 'project', projectUuid);
 
@@ -453,6 +481,7 @@ export default defineEventHandler(async (event) => {
           .where(eq(schema.projects.projectUuid, projectUuid))
           .run();
       });
+      await cleanupOrphanExternalLinks();
       return;
     }
   }

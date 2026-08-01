@@ -8,6 +8,7 @@ import type {
 } from '../admin/project';
 import type { MediaDescriptor } from '../media';
 import type { TagItem } from '../tag';
+import type { ProjectExternalLink } from '../external-link';
 
 /** Base display item for any project asset list (showcase, other-assets, …). */
 export type AssetListItem = {
@@ -59,6 +60,7 @@ export type ProjectGetResponse = {
   showcaseAssets?: ShowcaseAssetGetItem[];
   otherAssets?: OtherAssetGetItem[];
   relations?: ProjectRelationGetItem[];
+  externalLinks?: ProjectExternalLink[];
   tags?: TagItem[];
 };
 

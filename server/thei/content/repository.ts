@@ -19,6 +19,8 @@ import {
   type ContentAssetUsageMeta,
 } from '#layers/thei/shared/asset';
 import { buildAdminAssetUrls, archivedOriginalFromMeta } from '../assets/urls';
+import { findExternalLink } from '../external-links/repository';
+import { persistExternalLink } from '../external-links/preview';
 
 export async function findContentByOwner(
   ownerType: ContentOwnerType,
@@ -89,6 +91,7 @@ export async function prepareContentForSave(
   }
 
   const assetRows = await validateContentAssets(data);
+  await persistMissingContentExternalLinks(data);
   const summary = summarizeContentData(
     data,
     new Map(assetRows.map((asset) => [asset.assetUuid, asset.size])),
@@ -106,6 +109,22 @@ export async function prepareContentForSave(
     ...summary,
     assetUsages: buildPreparedAssetUsages(contentUuid, data),
   };
+}
+
+async function persistMissingContentExternalLinks(data: ContentOutputData) {
+  const urls = Array.from(
+    new Set(
+      data.blocks
+        .filter((block) => block.type === 'externalLink')
+        .map((block) => (block.data as any).url)
+        .filter((url): url is string => typeof url === 'string'),
+    ),
+  );
+  await Promise.all(
+    urls.map(async (url) => {
+      if (!(await findExternalLink(url))) await persistExternalLink(url);
+    }),
+  );
 }
 
 export type PreparedContentSave = Awaited<
@@ -295,6 +314,11 @@ async function hydrateContentData(
           }),
         )
       ).filter(Boolean);
+    } else if (block.type === 'externalLink') {
+      const url = (block.data as any).url;
+      const link = url ? await findExternalLink(url) : undefined;
+      data.url = url;
+      if (link) Object.assign(data, link);
     }
     blocks.push({ ...block, data });
   }
@@ -332,6 +356,13 @@ function stripHydratedContentAssetData(
                   .filter(Boolean)
               : [],
           },
+        };
+      }
+
+      if (block.type === 'externalLink') {
+        return {
+          ...block,
+          data: { url: (block.data as any).url },
         };
       }
 

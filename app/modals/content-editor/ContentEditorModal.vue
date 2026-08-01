@@ -36,6 +36,7 @@ import {
   ContentAttachmentTool,
   ContentGalleryTool,
   ContentMediaTool,
+  ExternalLinkTool,
   PrivateAccessTune,
   type ContentEditorAssetKind,
   type ContentEditorEditGalleryItem,
@@ -150,6 +151,9 @@ onMounted(async () => {
           editAsset,
           labels: contentToolLabels(),
         },
+      },
+      externalLink: {
+        class: ExternalLinkTool,
       },
       privateAccess: {
         class: PrivateAccessTune,

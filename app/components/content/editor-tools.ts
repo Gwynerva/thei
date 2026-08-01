@@ -12,6 +12,11 @@ import type {
 } from '#layers/thei/shared/content';
 import { createPointerDragSort } from '#layers/thei/app/composables/drag-sort';
 import AssetTile from '#layers/thei/app/components/AssetTile.vue';
+import ExternalLinkPreviewCard from '#layers/thei/app/components/external-links/ExternalLinkPreviewCard.vue';
+import {
+  normalizeExternalLinkUrl,
+  type ExternalLink,
+} from '#layers/thei/shared/external-link';
 
 export type ContentEditorAssetKind = 'media' | 'any';
 export type ContentEditorPickAsset = (
@@ -63,6 +68,113 @@ const icons = {
   file: '<svg width="14" height="17" viewBox="0 0 14 17"><path d="M8 0H2C.9 0 0 .9 0 2v13c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V6L8 0Zm0 2.2L11.8 6H8V2.2ZM2 15V2h4v6h6v7H2Z"/></svg>',
   lock: '<svg width="15" height="17" viewBox="0 0 15 17"><path d="M12 7V5A4.5 4.5 0 0 0 3 5v2H1v10h13V7h-2ZM5 5a2.5 2.5 0 0 1 5 0v2H5V5Zm7 10H3V9h9v6Z"/></svg>',
 };
+
+export class ExternalLinkTool implements BlockTool {
+  static pasteConfig = {
+    patterns: { externalLink: /^https?:\/\/[^\s]+$/i },
+  };
+
+  private url = '';
+  private preview?: ExternalLink;
+  private wrapper?: HTMLElement;
+  private loading = false;
+  private error = false;
+  private version = 0;
+  private controller?: AbortController;
+
+  constructor(
+    private options: ContentToolOptions<
+      Partial<ExternalLink>,
+      Record<string, never>
+    >,
+  ) {
+    this.url = options.data.url ?? '';
+    if (options.data.faviconMedia && options.data.touchedAt) {
+      this.preview = options.data as ExternalLink;
+    }
+  }
+
+  render() {
+    this.wrapper = createToolWrapper();
+    this.renderContent();
+    if (this.url && !this.preview && !this.options.readOnly)
+      void this.refresh();
+    return this.wrapper;
+  }
+
+  save() {
+    return { url: this.url };
+  }
+
+  validate(data: { url?: string }) {
+    try {
+      return Boolean(normalizeExternalLinkUrl(data.url));
+    } catch {
+      return false;
+    }
+  }
+
+  destroy() {
+    this.version += 1;
+    this.controller?.abort();
+    if (this.wrapper) renderVue(null, this.wrapper);
+  }
+
+  async onPaste(event: CustomEvent) {
+    this.url = normalizeExternalLinkUrl(event.detail?.data);
+    this.preview = undefined;
+    this.options.block.dispatchChange();
+    await this.refresh();
+  }
+
+  private async refresh() {
+    const version = ++this.version;
+    this.controller?.abort();
+    const controller = new AbortController();
+    this.controller = controller;
+    this.loading = true;
+    this.error = false;
+    this.renderContent();
+    try {
+      const preview = await $fetch<ExternalLink>(
+        '/api/admin/external-links/preview',
+        {
+          method: 'POST',
+          body: { url: this.url },
+          signal: controller.signal,
+        },
+      );
+      if (version !== this.version) return;
+      this.url = preview.url;
+      this.preview = preview;
+      this.options.block.dispatchChange();
+    } catch (cause: any) {
+      if (version !== this.version) return;
+      if (cause?.name === 'AbortError') return;
+      this.error = true;
+    } finally {
+      if (version === this.version) {
+        this.controller = undefined;
+        this.loading = false;
+        this.renderContent();
+      }
+    }
+  }
+
+  private renderContent() {
+    if (!this.wrapper) return;
+    renderVue(
+      h(ExternalLinkPreviewCard, {
+        link: this.preview,
+        url: this.url,
+        loading: this.loading,
+        errorText: this.error ? 'Could not load link preview' : undefined,
+        loadingText: 'Loading link details…',
+      }),
+      this.wrapper,
+    );
+  }
+}
 
 export class ContentMediaTool implements BlockTool {
   static toolbox = {

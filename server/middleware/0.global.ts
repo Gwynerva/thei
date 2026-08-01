@@ -26,7 +26,8 @@ export default defineEventHandler(async (event) => {
   const alwaysAvailable = ['/api/public-admin/', '/api/media/generated-icon'];
   if (
     alwaysAvailable.includes(path) ||
-    path.startsWith('/media/generated-icons/')
+    path.startsWith('/media/generated-icons/') ||
+    path.startsWith('/media/external-link-favicons/')
   ) {
     return;
   }

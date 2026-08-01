@@ -11,6 +11,8 @@ import {
 import { projectRelations } from './project-relations';
 import { tags } from './tags';
 import { tagUsages } from './tag-usages';
+import { externalLinks } from './external-links';
+import { projectExternalLinks } from './project-external-links';
 
 export const schema = {
   assets,
@@ -24,4 +26,6 @@ export const schema = {
   projectRelations,
   tags,
   tagUsages,
+  externalLinks,
+  projectExternalLinks,
 };

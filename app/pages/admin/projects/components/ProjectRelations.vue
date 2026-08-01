@@ -448,7 +448,7 @@ onUnmounted(cleanupDrag);
                       phrase.project_relation_note_for(currentProjectTitle)
                     "
                     wrapper-class="min-w-0 w-full"
-                    class="w-full min-w-0 text-xs"
+                    class="w-full min-w-0 text-sm"
                     @update:model-value="
                       updateSplitNote(
                         relation.projectUuid,
@@ -473,7 +473,7 @@ onUnmounted(cleanupDrag);
                       )
                     "
                     wrapper-class="min-w-0 w-full"
-                    class="w-full min-w-0 text-xs"
+                    class="w-full min-w-0 text-sm"
                     @update:model-value="
                       updateSplitNote(
                         relation.projectUuid,
@@ -495,7 +495,7 @@ onUnmounted(cleanupDrag);
                   spellcheck="false"
                   :placeholder="phrase.project_relation_note_placeholder"
                   wrapper-class="min-w-0 flex-1"
-                  class="w-full min-w-0 text-xs"
+                  class="w-full min-w-0 text-sm"
                   @update:model-value="
                     updateSharedNote(relation.projectUuid, String($event ?? ''))
                   "

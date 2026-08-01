@@ -22,6 +22,7 @@ import ProjectMain from './ProjectMain.vue';
 import ProjectAssets from './ProjectAssets.vue';
 import ProjectContentSections from './ProjectContentSections.vue';
 import ProjectRelations from './ProjectRelations.vue';
+import ProjectExternalLinks from './ProjectExternalLinks.vue';
 import { projectDeleteModal } from './project-delete-modal';
 import ProjectStages from './ProjectStages.vue';
 import ProjectTags from './ProjectTags.vue';
@@ -45,6 +46,7 @@ const projectData = ref<ProjectEditData>({
   descriptionContent: null,
   contentSections: [],
   relations: [],
+  externalLinks: [],
   tags: [],
 });
 provide(projectDataInjectionKey, projectData);
@@ -133,6 +135,7 @@ if (isEdit.value) {
       isPrivate: item.isPrivate,
     })),
     relations: data.relations ?? [],
+    externalLinks: data.externalLinks ?? [],
     tags: data.tags ?? [],
   };
   showcaseItems.value = data.showcaseAssets ?? [];
@@ -275,6 +278,7 @@ async function openDeleteProjectModal() {
   <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
     <ProjectMain />
     <ProjectAssets />
+    <ProjectExternalLinks />
     <ProjectStages />
     <ProjectContentSections />
     <ProjectRelations />

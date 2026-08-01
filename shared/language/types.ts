@@ -216,6 +216,18 @@ export type LanguagePhrases = {
   merge_project_relation_note: string;
   add_project_relation: string;
   delete_project_relation: string;
+  project_external_links: string;
+  project_external_links_hint: string;
+  add_external_link: string;
+  external_link_url: string;
+  external_link_name: string;
+  external_link_loading: string;
+  external_link_error: string;
+  external_link_fallback: string;
+  external_link_duplicate: string;
+  external_link_private: string;
+  project_external_links_empty: string;
+  refresh_external_link: string;
   search_project: string;
   search_project_placeholder: string;
   search_project_loading: string;

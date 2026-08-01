@@ -1,5 +1,6 @@
 import { AssetType, type ArchivedOriginalFileMeta } from './asset';
 import type { MediaDescriptor } from './media';
+import { normalizeExternalLinkUrl, type ExternalLink } from './external-link';
 
 export const CONTENT_OWNER_TYPES = [
   'project',
@@ -25,6 +26,7 @@ export const CONTENT_BLOCK_TYPES = [
   'contentMedia',
   'contentGallery',
   'contentAttachment',
+  'externalLink',
 ] as const;
 export type ContentBlockType = (typeof CONTENT_BLOCK_TYPES)[number];
 
@@ -87,6 +89,9 @@ export interface ContentGalleryItem {
   asset: ContentAssetData;
   caption?: string;
 }
+
+export type ContentExternalLinkData = Pick<ExternalLink, 'url'> &
+  Partial<Omit<ExternalLink, 'url'>>;
 
 export class ContentValidationError extends Error {}
 
@@ -316,6 +321,9 @@ function normalizeBlockData(
         title: optionalTrimmedString(data.title),
         caption: optionalTrimmedString(data.caption),
       };
+
+    case 'externalLink':
+      return { url: normalizeExternalLinkUrl(data.url) };
   }
 }
 
@@ -345,6 +353,13 @@ function isContentBlockEmpty(block: ContentOutputBlock): boolean {
           normalizeContentAsset(item?.asset),
         )
       );
+
+    case 'externalLink':
+      try {
+        return !normalizeExternalLinkUrl((block.data as any).url);
+      } catch {
+        return true;
+      }
   }
 }
 

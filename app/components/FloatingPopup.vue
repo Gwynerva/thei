@@ -21,6 +21,7 @@ const props = withDefaults(
     maxWidth?: string;
     closeOnOutside?: boolean;
     closeOnEscape?: boolean;
+    outsideIgnore?: Array<HTMLElement | null>;
   }>(),
   {
     placement: 'bottom-end',
@@ -109,6 +110,7 @@ function onDocumentPointerDown(event: PointerEvent) {
   if (!(target instanceof Node)) return;
   if (floatingElement.value?.contains(target)) return;
   if (props.anchor?.contains(target)) return;
+  if (props.outsideIgnore?.some((element) => element?.contains(target))) return;
   close();
 }
 
