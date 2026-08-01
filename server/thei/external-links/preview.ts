@@ -104,6 +104,7 @@ async function collectExternalLink(rawUrl: unknown) {
       truncateExternalLinkText(preview?.title) ?? externalLinkHostname(url),
     description: truncateExternalLinkText(preview?.description),
     faviconMedia: externalLinkPreviewMedia(prepared.buffer, prepared.accentHue),
+    hasFavicon: document != null && favicon != null,
     touchedAt,
     previewStatus: document ? 'complete' : 'fallback',
   };

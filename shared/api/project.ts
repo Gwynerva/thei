@@ -9,6 +9,7 @@ import type {
 import type { MediaDescriptor } from '../media';
 import type { TagItem } from '../tag';
 import type { ProjectExternalLink } from '../external-link';
+import type { ProjectActionEditData } from '../project-action';
 
 /** Base display item for any project asset list (showcase, other-assets, …). */
 export type AssetListItem = {
@@ -62,6 +63,16 @@ export type ProjectGetResponse = {
   relations?: ProjectRelationGetItem[];
   externalLinks?: ProjectExternalLink[];
   tags?: TagItem[];
+  action?: ProjectActionEditData;
+  actionIconMedia?: MediaDescriptor;
+  actionIconAssetSize?: number;
+  actionBackgroundMedia?: MediaDescriptor;
+  actionBackgroundAssetSize?: number;
+  actionFileUrl?: string;
+  actionFileMedia?: MediaDescriptor;
+  actionFileExtension?: string;
+  actionFileSize?: number;
+  actionFaviconMedia?: MediaDescriptor;
 };
 
 export type ProjectRelationGetItem = ProjectRelationEditItem & {
@@ -83,7 +94,11 @@ export type ProjectSearchItem = {
 export type { ProjectRelationType };
 
 export type ProjectSaveResponse =
-  | { type: 'success'; projectUuid: string }
+  | {
+      type: 'success';
+      projectUuid: string;
+      action: ProjectActionEditData;
+    }
   | {
       type: 'error';
       message: string;

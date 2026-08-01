@@ -37,6 +37,34 @@ export const bannerSizeKey = Symbol('bannerSize') as InjectionKey<
   Ref<number | undefined>
 >;
 
+export const actionIconMediaKey = Symbol('actionIconMedia') as InjectionKey<
+  Ref<MediaDescriptor | undefined>
+>;
+export const actionIconSizeKey = Symbol('actionIconSize') as InjectionKey<
+  Ref<number | undefined>
+>;
+export const actionBackgroundMediaKey = Symbol(
+  'actionBackgroundMedia',
+) as InjectionKey<Ref<MediaDescriptor | undefined>>;
+export const actionBackgroundSizeKey = Symbol(
+  'actionBackgroundSize',
+) as InjectionKey<Ref<number | undefined>>;
+export const actionFileUrlKey = Symbol('actionFileUrl') as InjectionKey<
+  Ref<string | undefined>
+>;
+export const actionFileMediaKey = Symbol('actionFileMedia') as InjectionKey<
+  Ref<MediaDescriptor | undefined>
+>;
+export const actionFileExtensionKey = Symbol(
+  'actionFileExtension',
+) as InjectionKey<Ref<string | undefined>>;
+export const actionFileSizeKey = Symbol('actionFileSize') as InjectionKey<
+  Ref<number | undefined>
+>;
+export const actionFaviconMediaKey = Symbol(
+  'actionFaviconMedia',
+) as InjectionKey<Ref<MediaDescriptor | undefined>>;
+
 export const currentProjectUuidKey = Symbol(
   'currentProjectUuid',
 ) as InjectionKey<Ref<string | undefined>>;

@@ -8,6 +8,7 @@ import { ContentValidationError } from '#layers/thei/shared/content';
 import { EntityPrefix, generateUniqueId } from '../../../thei/entity-id';
 import { cleanupOrphanExternalLinks } from '../../../thei/external-links/repository';
 import { validateProjectAssets } from '../../../thei/projects/validate-assets';
+import { syncProjectActionUsages } from '../../../thei/projects/action-usages';
 import {
   applyPreparedContentSave,
   prepareContentForSave,
@@ -126,6 +127,7 @@ export default defineEventHandler(
           access: result.access,
           showcase: result.showcase,
           cv: result.cv,
+          action: result.action,
           createdAt: now,
           updatedAt: now,
         })
@@ -153,6 +155,7 @@ export default defineEventHandler(
       if (result.bannerAssetUuid) {
         attachUsage(tx, schema, result.bannerAssetUuid, projectUuid, 'banner');
       }
+      syncProjectActionUsages(tx, schema, [], projectUuid, result.action);
 
       for (let i = 0; i < (result.showcaseAssets ?? []).length; i++) {
         const item = result.showcaseAssets![i]!;
@@ -193,7 +196,7 @@ export default defineEventHandler(
     });
 
     await cleanupOrphanExternalLinks();
-    return { type: 'success', projectUuid };
+    return { type: 'success', projectUuid, action: result.action };
   },
 );
 

@@ -39,6 +39,14 @@ afterEach(async () => {
 });
 
 describe('bundled icons data', () => {
+  it('registers the project action click icon from the application bundle', async () => {
+    const icons = await buildIconsData(
+      join(process.cwd(), 'app', 'assets', 'icons'),
+    );
+    expect(icons.iconNames).toContain('action-click');
+    expect(icons.iconsSvg).toContain('<symbol id="action-click"');
+  });
+
   it('changes the manifest, hash, and sprite when an icon is added', async () => {
     const directory = await createIconsDirectory();
     await writeIcon(directory, 'alpha');

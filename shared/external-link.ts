@@ -12,6 +12,7 @@ export interface ExternalLink {
   title?: string;
   description?: string;
   faviconMedia: MediaDescriptor;
+  hasFavicon?: boolean;
   touchedAt: number;
   previewStatus?: ExternalLinkPreviewStatus;
 }

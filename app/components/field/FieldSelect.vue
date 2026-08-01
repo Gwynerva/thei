@@ -1,6 +1,8 @@
 <script lang="ts" setup>
-defineProps<{
+const { size = 'sm', disabled = false } = defineProps<{
   options: Record<string, string>;
+  size?: 'xs' | 'sm';
+  disabled?: boolean;
 }>();
 
 const model = defineModel<string>();
@@ -29,9 +31,11 @@ watch(selectElement, (newElement) => {
       <select
         ref="select"
         v-model="model"
+        :disabled="disabled"
         data-label-focus
         class="cursor-pointer appearance-none bg-transparent py-2 pr-10 pl-xs
-          text-sm"
+          disabled:cursor-not-allowed disabled:opacity-55"
+        :class="size === 'xs' ? 'text-xs' : 'text-sm'"
       >
         <option
           v-for="(label, value) in options"

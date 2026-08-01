@@ -14,6 +14,7 @@ import {
   launchAssetWizard,
   mapAssetVariantToReplaceResult,
 } from '#layers/thei/app/composables/asset-wizard';
+import type { AssetWizardAccept } from '#layers/thei/app/composables/asset-wizard';
 import {
   applySingleMediaAsset,
   detachSingleMediaAsset,
@@ -26,6 +27,7 @@ export interface SingleMediaAssetOptions extends SingleMediaAssetState {
   getAssetUuid: () => string | undefined;
   usageDelta?: () => Record<string, number>;
   onError?: (error: unknown) => void;
+  accept?: AssetWizardAccept;
 }
 
 export function useSingleMediaAsset(options: SingleMediaAssetOptions) {
@@ -74,7 +76,10 @@ export function useSingleMediaAsset(options: SingleMediaAssetOptions) {
       if (result.type === 'replace') {
         try {
           const replacement = await launchAssetEditor(current, {
-            accept: [imageExtensionProfile, videoExtensionProfile],
+            accept: options.accept ?? [
+              imageExtensionProfile,
+              videoExtensionProfile,
+            ],
             maxSize: ASSET_UPLOAD_LIMITS.media,
             sizeLimitPolicy: 'media',
             uploadProfile: options.uploadProfile,
@@ -112,7 +117,10 @@ export function useSingleMediaAsset(options: SingleMediaAssetOptions) {
     const modalFlowId = createModalFlow();
     try {
       const asset = await launchAssetWizard({
-        accept: [imageExtensionProfile, videoExtensionProfile],
+        accept: options.accept ?? [
+          imageExtensionProfile,
+          videoExtensionProfile,
+        ],
         maxSize: ASSET_UPLOAD_LIMITS.media,
         sizeLimitPolicy: 'media',
         uploadProfile: options.uploadProfile,

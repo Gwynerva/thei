@@ -17,6 +17,15 @@ import {
   currentProjectUuidKey,
   otherItemsKey,
   showcaseItemsKey,
+  actionIconMediaKey,
+  actionIconSizeKey,
+  actionBackgroundMediaKey,
+  actionBackgroundSizeKey,
+  actionFileUrlKey,
+  actionFileMediaKey,
+  actionFileExtensionKey,
+  actionFileSizeKey,
+  actionFaviconMediaKey,
 } from '../composables';
 import ProjectMain from './ProjectMain.vue';
 import ProjectAssets from './ProjectAssets.vue';
@@ -27,6 +36,11 @@ import { projectDeleteModal } from './project-delete-modal';
 import ProjectStages from './ProjectStages.vue';
 import ProjectTags from './ProjectTags.vue';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
+import {
+  DEFAULT_PROJECT_ACTION,
+  projectActionValidationError,
+} from '#layers/thei/shared/project-action';
+import ProjectActionSettings from './ProjectActionSettings.vue';
 
 const { projectUuid } = defineProps<{ projectUuid?: string }>();
 
@@ -48,6 +62,7 @@ const projectData = ref<ProjectEditData>({
   relations: [],
   externalLinks: [],
   tags: [],
+  action: { ...DEFAULT_PROJECT_ACTION },
 });
 provide(projectDataInjectionKey, projectData);
 const savedProjectData = ref<ProjectEditData>(
@@ -70,6 +85,25 @@ provide(iconSizeKey, iconSize);
 const bannerSize = ref<number | undefined>();
 provide(bannerSizeKey, bannerSize);
 
+const actionIconMedia = ref<MediaDescriptor>();
+provide(actionIconMediaKey, actionIconMedia);
+const actionIconSize = ref<number>();
+provide(actionIconSizeKey, actionIconSize);
+const actionBackgroundMedia = ref<MediaDescriptor>();
+provide(actionBackgroundMediaKey, actionBackgroundMedia);
+const actionBackgroundSize = ref<number>();
+provide(actionBackgroundSizeKey, actionBackgroundSize);
+const actionFileUrl = ref<string>();
+provide(actionFileUrlKey, actionFileUrl);
+const actionFileMedia = ref<MediaDescriptor>();
+provide(actionFileMediaKey, actionFileMedia);
+const actionFileExtension = ref<string>();
+provide(actionFileExtensionKey, actionFileExtension);
+const actionFileSize = ref<number>();
+provide(actionFileSizeKey, actionFileSize);
+const actionFaviconMedia = ref<MediaDescriptor>();
+provide(actionFaviconMediaKey, actionFaviconMedia);
+
 const resolvedProjectUuid = ref<string | undefined>(projectUuid);
 provide(currentProjectUuidKey, resolvedProjectUuid);
 
@@ -83,6 +117,9 @@ const isEdit = computed(() => Boolean(projectUuid));
 const saving = ref(false);
 const savedSnapshot = ref(JSON.stringify(projectData.value));
 const headerError = ref<string | undefined>();
+const actionError = computed(() =>
+  projectActionValidationError(projectData.value.action),
+);
 
 const isDirty = computed(
   () => JSON.stringify(projectData.value) !== savedSnapshot.value,
@@ -93,7 +130,8 @@ const isFormValid = computed(
     projectData.value.title.trim() !== '' &&
     projectData.value.summary.trim() !== '' &&
     projectData.value.publicId.trim() !== '' &&
-    !!projectData.value.access,
+    !!projectData.value.access &&
+    !actionError.value,
 );
 
 const canSave = computed(() => isDirty.value && isFormValid.value);
@@ -137,6 +175,7 @@ if (isEdit.value) {
     relations: data.relations ?? [],
     externalLinks: data.externalLinks ?? [],
     tags: data.tags ?? [],
+    action: data.action ?? { ...DEFAULT_PROJECT_ACTION },
   };
   showcaseItems.value = data.showcaseAssets ?? [];
   otherItems.value = data.otherAssets ?? [];
@@ -144,6 +183,15 @@ if (isEdit.value) {
   iconSize.value = data.iconAssetSize;
   bannerMedia.value = data.bannerMedia;
   bannerSize.value = data.bannerAssetSize;
+  actionIconMedia.value = data.actionIconMedia;
+  actionIconSize.value = data.actionIconAssetSize;
+  actionBackgroundMedia.value = data.actionBackgroundMedia;
+  actionBackgroundSize.value = data.actionBackgroundAssetSize;
+  actionFileUrl.value = data.actionFileUrl;
+  actionFileMedia.value = data.actionFileMedia;
+  actionFileExtension.value = data.actionFileExtension;
+  actionFileSize.value = data.actionFileSize;
+  actionFaviconMedia.value = data.actionFaviconMedia;
   markProjectSaved();
   resolvedProjectUuid.value = data.projectUuid;
   if (projectUuid !== data.projectUuid) {
@@ -171,6 +219,7 @@ async function handleSave() {
         headerError.value = result.message;
         return;
       }
+      applySavedAction(result.action);
       markProjectSaved();
     } else {
       const result = await $fetch<ProjectSaveResponse>('/api/admin/projects/', {
@@ -185,6 +234,7 @@ async function handleSave() {
         headerError.value = result.message;
         return;
       }
+      applySavedAction(result.action);
       markProjectSaved();
       await refreshNuxtData('admin-bar');
       await navigateTo(`/admin/projects/edit/${result.projectUuid}/`, {
@@ -215,6 +265,27 @@ function handleBeforeUnload(e: BeforeUnloadEvent) {
 function markProjectSaved() {
   savedSnapshot.value = JSON.stringify(projectData.value);
   savedProjectData.value = cloneProjectData(projectData.value);
+}
+
+function applySavedAction(action: ProjectEditData['action']) {
+  const previous = projectData.value.action;
+  projectData.value.action = action ?? { ...DEFAULT_PROJECT_ACTION };
+  if (action?.iconAssetUuid !== previous?.iconAssetUuid) {
+    actionIconMedia.value = undefined;
+    actionIconSize.value = undefined;
+  }
+  if (action?.backgroundAssetUuid !== previous?.backgroundAssetUuid) {
+    actionBackgroundMedia.value = undefined;
+    actionBackgroundSize.value = undefined;
+  }
+  if (action?.fileAssetUuid !== previous?.fileAssetUuid) {
+    actionFileUrl.value = undefined;
+    actionFileMedia.value = undefined;
+    actionFileExtension.value = undefined;
+    actionFileSize.value = undefined;
+  }
+  if (action?.externalUrl !== previous?.externalUrl)
+    actionFaviconMedia.value = undefined;
 }
 
 function cloneProjectData(data: ProjectEditData): ProjectEditData {
@@ -277,6 +348,7 @@ async function openDeleteProjectModal() {
   </StickyGlassHeader>
   <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
     <ProjectMain />
+    <ProjectActionSettings />
     <ProjectAssets />
     <ProjectExternalLinks />
     <ProjectStages />

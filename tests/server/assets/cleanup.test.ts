@@ -57,6 +57,7 @@ describe('asset cleanup', () => {
           publicId text NOT NULL UNIQUE,
           showcase integer NOT NULL DEFAULT false,
           cv integer NOT NULL DEFAULT false,
+          action text,
           createdAt integer NOT NULL,
           updatedAt integer NOT NULL
         );

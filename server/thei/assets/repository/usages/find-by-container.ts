@@ -7,7 +7,11 @@ export async function findAssetsByContainer(
 ) {
   const { db, schema } = THEI_SERVER.useDb();
   return db
-    .select({ asset: schema.assets, role: schema.assetUsages.role })
+    .select({
+      asset: schema.assets,
+      role: schema.assetUsages.role,
+      meta: schema.assetUsages.meta,
+    })
     .from(schema.assets)
     .innerJoin(
       schema.assetUsages,

@@ -241,7 +241,7 @@ export default defineI18nBase({
       'Text, images, galleries, and files for the project page.',
     project_content_sections: 'Project content sections',
     project_content_sections_hint:
-      'Independent sections with content on a specific topic of the project.',
+      'Independent sections with details about the project.',
     project_relations: 'Related projects',
     project_relations_hint:
       'What influenced this project, what it influenced, and what is simply related.',

@@ -7,12 +7,17 @@ type ProjectAssetCheck = {
   label: string;
   maxSize: number;
   mediaOnly?: boolean;
+  imageOnly?: boolean;
 };
 
 export async function validateProjectAssets(
   data: ValidatedProjectEditData,
 ): Promise<string | undefined> {
   const checks: ProjectAssetCheck[] = [];
+  const assets = new Map<
+    string,
+    Awaited<ReturnType<typeof THEI_SERVER.assets.findByUuid>>
+  >();
 
   if (data.iconAssetUuid) {
     checks.push({
@@ -32,6 +37,27 @@ export async function validateProjectAssets(
     });
   }
 
+  if (data.action?.iconAssetUuid)
+    checks.push({
+      assetUuid: data.action.iconAssetUuid,
+      label: 'Action button icon',
+      maxSize: ASSET_UPLOAD_LIMITS.media,
+      imageOnly: true,
+    });
+  if (data.action?.backgroundAssetUuid)
+    checks.push({
+      assetUuid: data.action.backgroundAssetUuid,
+      label: 'Action button background',
+      maxSize: ASSET_UPLOAD_LIMITS.media,
+      imageOnly: true,
+    });
+  if (data.action?.fileAssetUuid)
+    checks.push({
+      assetUuid: data.action.fileAssetUuid,
+      label: 'Action button file',
+      maxSize: ASSET_UPLOAD_LIMITS.file,
+    });
+
   for (const item of data.showcaseAssets ?? []) {
     checks.push({
       assetUuid: item.assetUuid,
@@ -50,19 +76,28 @@ export async function validateProjectAssets(
   }
 
   for (const check of checks) {
-    const error = await validateProjectAsset(check);
+    if (!check.assetUuid || typeof check.assetUuid !== 'string')
+      return `${check.label} asset is missing`;
+    let asset = assets.get(check.assetUuid);
+    if (!assets.has(check.assetUuid)) {
+      asset = await THEI_SERVER.assets.findByUuid(check.assetUuid);
+      assets.set(check.assetUuid, asset);
+    }
+    const error = validateProjectAsset(check, asset);
     if (error) return error;
   }
 }
 
-async function validateProjectAsset(check: ProjectAssetCheck) {
-  if (!check.assetUuid || typeof check.assetUuid !== 'string') {
-    return `${check.label} asset is missing`;
-  }
-
-  const asset = await THEI_SERVER.assets.findByUuid(check.assetUuid);
+function validateProjectAsset(
+  check: ProjectAssetCheck,
+  asset: Awaited<ReturnType<typeof THEI_SERVER.assets.findByUuid>>,
+) {
   if (!asset) {
     return `${check.label} asset does not exist`;
+  }
+
+  if (check.imageOnly && asset.type !== AssetType.Image) {
+    return `${check.label} must be an image`;
   }
 
   if (

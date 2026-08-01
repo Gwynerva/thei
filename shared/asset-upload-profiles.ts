@@ -4,6 +4,8 @@ import type { FileDimensions } from './asset-upload-dimensions';
 export type AssetUploadProfile =
   | 'project-icon'
   | 'project-banner'
+  | 'project-action-icon'
+  | 'project-action-background'
   | 'tag-icon';
 
 export interface AssetUploadProfileConfig {
@@ -26,6 +28,22 @@ export const ASSET_UPLOAD_PROFILE_CONFIGS = {
   },
   'project-banner': {
     dimensions: { width: 1200, height: 675 },
+    resizeMode: 'cover',
+    allowUpscale: true,
+    imageQuality: 90,
+    videoQuality: 85,
+    stripAudio: true,
+  },
+  'project-action-icon': {
+    dimensions: { width: 48, height: 48 },
+    resizeMode: 'cover',
+    allowUpscale: true,
+    imageQuality: 90,
+    videoQuality: 85,
+    stripAudio: true,
+  },
+  'project-action-background': {
+    dimensions: { width: 128, height: 48 },
     resizeMode: 'cover',
     allowUpscale: true,
     imageQuality: 90,

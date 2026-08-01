@@ -13,6 +13,10 @@ import {
 import type { MediaDescriptor } from '../media';
 import type { TagEditItem } from '../tag';
 import {
+  normalizeProjectAction,
+  type ProjectActionEditData,
+} from '../project-action';
+import {
   normalizeExternalLinkUrl,
   type ProjectExternalLinkEditItem,
 } from '../external-link';
@@ -73,10 +77,15 @@ export type ProjectEditData = {
   /** External links in display order. */
   externalLinks?: ProjectExternalLinkEditItem[];
   tags?: TagEditItem[];
+  action?: ProjectActionEditData;
 };
 
-export type ValidatedProjectEditData = Omit<ProjectEditData, 'access'> & {
+export type ValidatedProjectEditData = Omit<
+  ProjectEditData,
+  'access' | 'action'
+> & {
   access: ProjectEventAccessLevel;
+  action: ProjectActionEditData;
 };
 
 export function projectAssetUsageDelta(
@@ -109,6 +118,9 @@ export function countProjectAssetPlacements(
 
   add(project.iconAssetUuid);
   add(project.bannerAssetUuid);
+  add(project.action?.fileAssetUuid);
+  add(project.action?.iconAssetUuid);
+  add(project.action?.backgroundAssetUuid);
   new Set(project.showcaseAssets?.map((item) => item.assetUuid) ?? []).forEach(
     add,
   );
@@ -187,6 +199,14 @@ export function validateProjectData(
     const relations = validateProjectRelations(data.relations);
     const externalLinks = validateProjectExternalLinks(data.externalLinks);
     const tags = validateProjectTags(data.tags);
+    let action: ProjectActionEditData;
+    try {
+      action = normalizeProjectAction(data.action);
+    } catch (error) {
+      throw new ProjectValidationError(
+        error instanceof Error ? error.message : 'Invalid action button',
+      );
+    }
 
     return {
       ...data,
@@ -202,6 +222,7 @@ export function validateProjectData(
       relations,
       externalLinks,
       tags,
+      action,
     };
   } catch (error) {
     if (error instanceof ProjectValidationError) return error.message;

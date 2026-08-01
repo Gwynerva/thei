@@ -16,13 +16,17 @@ import {
   buildAdminAssetUrls,
 } from '../../../thei/assets/urls';
 import { resolveGeneratedIcon } from '../../../thei/media/generated-icon';
-import { cleanupOrphanExternalLinks } from '../../../thei/external-links/repository';
+import {
+  cleanupOrphanExternalLinks,
+  findExternalLink,
+} from '../../../thei/external-links/repository';
 import {
   applyPreparedContentSave,
   deleteContentForOwner,
   prepareContentForSave,
 } from '../../../thei/content/repository';
 import { validateProjectAssets } from '../../../thei/projects/validate-assets';
+import { syncProjectActionUsages } from '../../../thei/projects/action-usages';
 import {
   applyProjectContentSections,
   deleteProjectContentSections,
@@ -67,13 +71,38 @@ export default defineEventHandler(async (event) => {
       );
       const iconUsage = usages.find((u) => u.role === 'icon');
       const bannerUsage = usages.find((u) => u.role === 'banner');
+      const actionIconUsage = usages.find((u) => u.role === 'action-icon');
+      const actionBackgroundUsage = usages.find(
+        (u) => u.role === 'action-background',
+      );
+      const actionFileUsage = usages.find((u) => u.role === 'action-file');
 
-      const iconMedia = iconUsage
-        ? (await buildAdminAssetUrls(iconUsage.asset)).media!
-        : resolveGeneratedIcon('project', projectUuid);
-      const bannerMedia = bannerUsage
-        ? (await buildAdminAssetUrls(bannerUsage.asset)).media
-        : undefined;
+      const [
+        iconUrls,
+        bannerUrls,
+        actionIconUrls,
+        actionBackgroundUrls,
+        actionFileUrls,
+        actionLink,
+      ] = await Promise.all([
+        iconUsage ? buildAdminAssetUrls(iconUsage.asset) : undefined,
+        bannerUsage ? buildAdminAssetUrls(bannerUsage.asset) : undefined,
+        actionIconUsage
+          ? buildAdminAssetUrls(actionIconUsage.asset)
+          : undefined,
+        actionBackgroundUsage
+          ? buildAdminAssetUrls(actionBackgroundUsage.asset)
+          : undefined,
+        actionFileUsage
+          ? buildAdminAssetUrls(actionFileUsage.asset)
+          : undefined,
+        project.action?.externalUrl
+          ? findExternalLink(project.action.externalUrl)
+          : undefined,
+      ]);
+      const iconMedia =
+        iconUrls?.media ?? resolveGeneratedIcon('project', projectUuid);
+      const bannerMedia = bannerUrls?.media;
 
       const rawShowcase =
         await THEI_SERVER.assets.usages.findShowcase(projectUuid);
@@ -179,6 +208,16 @@ export default defineEventHandler(async (event) => {
         bannerAssetUuid: bannerUsage?.asset.assetUuid,
         bannerMedia,
         bannerAssetSize: bannerUsage?.asset.size,
+        action: project.action ?? undefined,
+        actionIconMedia: actionIconUrls?.media,
+        actionIconAssetSize: actionIconUsage?.asset.size,
+        actionBackgroundMedia: actionBackgroundUrls?.media,
+        actionBackgroundAssetSize: actionBackgroundUsage?.asset.size,
+        actionFileUrl: actionFileUrls?.assetUrl,
+        actionFileMedia: actionFileUrls?.media,
+        actionFileExtension: actionFileUsage?.asset.extension,
+        actionFileSize: actionFileUsage?.asset.size,
+        actionFaviconMedia: actionLink?.faviconMedia,
         descriptionContent: await THEI_SERVER.content.buildFieldValue(
           'project',
           projectUuid,
@@ -324,6 +363,7 @@ export default defineEventHandler(async (event) => {
             access: result.access,
             showcase: result.showcase,
             cv: result.cv,
+            action: result.action,
             updatedAt: Date.now(),
           })
           .where(eq(schema.projects.projectUuid, projectUuid))
@@ -378,6 +418,8 @@ export default defineEventHandler(async (event) => {
             attachUsage(tx, schema, newBannerUuid, projectUuid, 'banner');
           }
         }
+
+        syncProjectActionUsages(tx, schema, usages, projectUuid, result.action);
 
         for (const { asset } of currentShowcase) {
           if (!newShowcaseUuids.has(asset.assetUuid)) {
@@ -452,7 +494,11 @@ export default defineEventHandler(async (event) => {
       });
 
       await cleanupOrphanExternalLinks();
-      return { type: 'success', projectUuid } satisfies ProjectSaveResponse;
+      return {
+        type: 'success',
+        projectUuid,
+        action: result.action,
+      } satisfies ProjectSaveResponse;
     }
 
     case 'DELETE': {

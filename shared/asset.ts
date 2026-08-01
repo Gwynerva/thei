@@ -27,6 +27,9 @@ export const ASSET_ROLES = [
   'showcase-asset',
   'other-asset',
   'preview',
+  'action-icon',
+  'action-background',
+  'action-file',
 ] as const;
 export type AssetRole = (typeof ASSET_ROLES)[number];
 
@@ -110,6 +113,11 @@ export interface PreviewAssetUsageMeta {
   role: 'preview';
 }
 
+export interface ProjectActionAssetUsageMeta {
+  role: 'action-icon' | 'action-background' | 'action-file';
+  isPrivate: boolean;
+}
+
 export interface ContentAssetUsageMeta {
   role: 'content';
   refs: {
@@ -126,4 +134,5 @@ export type AssetUsageMeta =
   | ShowcaseAssetUsageMeta
   | OtherAssetUsageMeta
   | PreviewAssetUsageMeta
+  | ProjectActionAssetUsageMeta
   | ContentAssetUsageMeta;
