@@ -122,7 +122,7 @@ const buttonStyle = computed(() => ({
 
 <style scoped>
 .project-action-button {
-  --action-dark-shadow: color-mix(in oklab, var(--action-highlight) 35%, black);
+  --action-dark-shadow: color-mix(in oklab, var(--action-highlight) 30%, black);
   border-color: color-mix(in oklab, var(--action-highlight) 70%, transparent);
   background-color: var(--action-accent);
 }

@@ -1,5 +1,7 @@
 import { ProjectEventAccessLevel } from '../access-level';
 import {
+  collectContentAssetUuids,
+  contentPlainText,
   ContentValidationError,
   normalizeContentData,
   type ContentFieldModelValue,
@@ -10,6 +12,11 @@ import {
   ProjectContentSectionError,
   type ProjectContentSectionEditItem,
 } from '../project-content-section';
+import {
+  normalizeProjectStages,
+  ProjectStageError,
+  type ProjectStageEditItem,
+} from '../project-stage';
 import type { MediaDescriptor } from '../media';
 import type { TagEditItem } from '../tag';
 import {
@@ -68,6 +75,7 @@ export type ProjectEditData = {
   bannerAssetUuid?: string;
   descriptionContent?: ContentFieldModelValue | null;
   contentSections?: ProjectContentSectionEditItem[];
+  stages?: ProjectStageEditItem[];
   /** Showcase assets in display order. Array index = sort order. */
   showcaseAssets?: ShowcaseAssetEditItem[];
   /** Other files in display order. Array index = sort order. */
@@ -127,7 +135,35 @@ export function countProjectAssetPlacements(
   new Set(project.otherAssets?.map((item) => item.assetUuid) ?? []).forEach(
     add,
   );
+  const addContent = (content: ContentFieldModelValue | null | undefined) => {
+    collectContentAssetUuids(content?.data).forEach(add);
+  };
+  addContent(project.descriptionContent);
+  for (const stage of project.stages ?? []) addContent(stage.content);
+  for (const section of project.contentSections ?? []) {
+    addContent(section.content);
+  }
   return counts;
+}
+
+export function projectTagRecommendationText(project: ProjectEditData) {
+  return [
+    project.title,
+    project.summary,
+    contentPlainText(project.descriptionContent?.data),
+    ...(project.stages ?? []).flatMap((stage) => [
+      stage.title,
+      stage.summary,
+      contentPlainText(stage.content?.data),
+    ]),
+    ...(project.contentSections ?? []).flatMap((section) => [
+      section.title,
+      section.summary,
+      contentPlainText(section.content?.data),
+    ]),
+  ]
+    .filter(Boolean)
+    .join(' ');
 }
 
 export function validateProjectData(
@@ -196,6 +232,7 @@ export function validateProjectData(
     const contentSections = normalizeProjectContentSections(
       data.contentSections,
     );
+    const stages = normalizeProjectStages(data.stages);
     const relations = validateProjectRelations(data.relations);
     const externalLinks = validateProjectExternalLinks(data.externalLinks);
     const tags = validateProjectTags(data.tags);
@@ -217,6 +254,7 @@ export function validateProjectData(
       access: data.access,
       descriptionContent,
       contentSections,
+      stages,
       showcaseAssets,
       otherAssets,
       relations,
@@ -228,6 +266,7 @@ export function validateProjectData(
     if (error instanceof ProjectValidationError) return error.message;
     if (error instanceof ContentValidationError) return error.message;
     if (error instanceof ProjectContentSectionError) return error.message;
+    if (error instanceof ProjectStageError) return error.message;
     throw error;
   }
 }

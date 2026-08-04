@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   countProjectAssetPlacements,
   projectAssetUsageDelta,
+  projectTagRecommendationText,
   validateProjectData,
   type ProjectEditData,
 } from '../../../shared/admin/project';
@@ -513,6 +514,94 @@ describe('validateProjectData asset metadata', () => {
       'asset-old': -1,
       'asset-shared': -1,
     });
+  });
+
+  it('counts one asset usage per content container', () => {
+    const repeatedAssetContent = {
+      data: {
+        blocks: [
+          {
+            type: 'contentMedia',
+            data: { asset: { assetUuid: 'asset-shared' } },
+          },
+          {
+            type: 'contentAttachment',
+            data: { asset: { assetUuid: 'asset-shared' } },
+          },
+        ],
+      },
+    };
+    const project = baseProject({
+      descriptionContent: repeatedAssetContent,
+      stages: [
+        {
+          title: 'Stage',
+          summary: '',
+          isPrivate: false,
+          period: { startDate: '2026-01-01', endDate: '2026-01-02' },
+          content: repeatedAssetContent,
+        },
+      ],
+      contentSections: [
+        {
+          title: 'Section',
+          summary: '',
+          isPrivate: false,
+          content: repeatedAssetContent,
+        },
+      ],
+    });
+
+    expect(countProjectAssetPlacements(project)).toEqual({
+      'asset-shared': 3,
+    });
+  });
+
+  it('builds tag recommendation text from stages and project sections', () => {
+    const project = baseProject({
+      stages: [
+        {
+          title: 'Discovery',
+          summary: 'Interviews',
+          isPrivate: false,
+          period: { startDate: '2026-01-01', endDate: '2026-01-02' },
+          content: {
+            data: {
+              blocks: [
+                { type: 'paragraph', data: { text: 'Research findings' } },
+              ],
+            },
+          },
+        },
+      ],
+      contentSections: [
+        {
+          title: 'Design system',
+          summary: 'Reusable patterns',
+          isPrivate: false,
+          content: {
+            data: {
+              blocks: [
+                {
+                  type: 'contentAttachment',
+                  data: {
+                    asset: { assetUuid: 'a-file' },
+                    title: 'Token reference',
+                  },
+                },
+              ],
+            },
+          },
+        },
+      ],
+    });
+
+    expect(projectTagRecommendationText(project)).toContain(
+      'Discovery Interviews Research findings',
+    );
+    expect(projectTagRecommendationText(project)).toContain(
+      'Design system Reusable patterns Token reference',
+    );
   });
 
   it('requires a valid public ID', () => {

@@ -5,6 +5,7 @@ export const EntityPrefix = {
   Asset: 'a',
   Content: 'c',
   ProjectContentSection: 'pcs',
+  ProjectStage: 'pst',
   Session: 's',
   Tag: 't',
 } as const;

@@ -18,6 +18,11 @@ import {
   prepareProjectContentSections,
 } from '../../../thei/projects/content-sections';
 import {
+  applyProjectStages,
+  prepareProjectStages,
+} from '../../../thei/projects/stages';
+import { ProjectStructuredItemStorageError } from '../../../thei/projects/structured-items';
+import {
   applyProjectRelations,
   prepareProjectRelations,
 } from '../../../thei/projects/relations';
@@ -68,13 +73,18 @@ export default defineEventHandler(
     }
 
     let preparedSections;
+    let preparedStages;
     try {
+      preparedStages = await prepareProjectStages(projectUuid, result.stages);
       preparedSections = await prepareProjectContentSections(
         projectUuid,
         result.contentSections,
       );
     } catch (error) {
-      if (error instanceof ContentValidationError || error instanceof Error) {
+      if (
+        error instanceof ContentValidationError ||
+        error instanceof ProjectStructuredItemStorageError
+      ) {
         return { type: 'error', message: error.message };
       }
       throw error;
@@ -144,6 +154,7 @@ export default defineEventHandler(
         );
       }
       applyProjectContentSections(tx, schema, projectUuid, preparedSections);
+      applyProjectStages(tx, schema, projectUuid, preparedStages);
       applyProjectRelations(tx, schema, projectUuid, preparedRelations);
       applyProjectExternalLinks(tx, schema, projectUuid, preparedExternalLinks);
       applyTagUsages(tx, schema, 'project', projectUuid, preparedTags);

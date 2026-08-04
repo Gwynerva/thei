@@ -20,18 +20,24 @@ export const projectContentSections = sqliteTable(
   ],
 );
 
-export const projectContentSectionPeriods = sqliteTable(
-  'project-content-section-periods',
+export const projectStages = sqliteTable(
+  'project-stages',
   {
-    sectionUuid: text().notNull(),
+    stageUuid: text().primaryKey(),
+    projectUuid: text().notNull(),
+    title: text().notNull(),
+    summary: text().notNull().default(''),
+    isPrivate: integer({ mode: 'boolean' }).notNull().default(false),
     startDate: text().notNull(),
     endDate: text().notNull(),
-    sortOrder: integer().notNull(),
+    createdAt: integer().notNull(),
+    updatedAt: integer().notNull(),
   },
   (t) => [
-    index('project-content-section-periods-section-idx').on(
-      t.sectionUuid,
-      t.sortOrder,
+    index('project-stages-project-date-idx').on(
+      t.projectUuid,
+      t.startDate,
+      t.endDate,
     ),
   ],
 );

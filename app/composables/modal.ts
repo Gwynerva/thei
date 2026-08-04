@@ -1,4 +1,4 @@
-import { type Component, computed, markRaw, shallowRef } from 'vue';
+import { type Component, computed, markRaw, nextTick, shallowRef } from 'vue';
 import type {
   ActiveModal,
   BaseModalResult,
@@ -35,7 +35,7 @@ export function createModalFlow() {
  * implicit backward navigation.
  */
 export function closeModal() {
-  closeActiveModalFlowWithBase({ type: 'empty' });
+  requestCloseActiveModalFlow({ type: 'empty' });
 }
 
 /**
@@ -44,8 +44,10 @@ export function closeModal() {
 export function backModal() {
   const modal = activeModal.value;
   if (!modal) return;
+  if (modal.closeGuard && !modal.closeGuard()) return;
   removeModal(modal);
   modal.close({ type: 'empty' });
+  restoreFocusAfterReturn(modal);
 }
 
 /**
@@ -53,6 +55,17 @@ export function backModal() {
  */
 export function errorModal(message: string) {
   closeActiveModalFlowWithBase({ type: 'error', message });
+}
+
+export function useModalCloseGuard(guard: () => boolean) {
+  const modal = activeModal.value;
+  if (!modal)
+    throw new Error('A modal close guard must be registered inside a modal');
+  modal.closeGuard = guard;
+
+  onBeforeUnmount(() => {
+    if (modal.closeGuard === guard) modal.closeGuard = undefined;
+  });
 }
 
 /**
@@ -72,6 +85,11 @@ export async function openModal<
     ? []
     : [modalData: ExtractModalData<TComponent>, options?: ModalOpenOptions]
 ): Promise<TResult> {
+  const returnFocus =
+    typeof document !== 'undefined' &&
+    document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : undefined;
   const module = await descriptor.component();
   const component = markRaw(module.default);
   const props = args.length > 0 ? { modalData: args[0] } : {};
@@ -88,6 +106,7 @@ export async function openModal<
         label: options?.label,
         backLabel: options?.backLabel,
         flowId: options?.flowId ?? createModalFlow(),
+        returnFocus,
         resolve: resolve as (result: { type: string }) => void,
         close: (result: BaseModalResult) => resolve(result as TResult),
       },
@@ -98,6 +117,7 @@ export async function openModal<
 export function settleModal(modal: ActiveModal, result: { type: string }) {
   removeModal(modal);
   modal.resolve(result);
+  restoreFocusAfterReturn(modal);
 }
 
 export function closeActiveModalFlowWithBase(result: BaseModalResult) {
@@ -113,8 +133,25 @@ export function closeActiveModalFlowWithBase(result: BaseModalResult) {
   for (const modal of modals.toReversed()) {
     modal.close(result);
   }
+  restoreFocusAfterReturn(modals[0]);
+}
+
+export function requestCloseActiveModalFlow(result: BaseModalResult) {
+  const modal = activeModal.value;
+  if (modal?.closeGuard && !modal.closeGuard()) return false;
+  closeActiveModalFlowWithBase(result);
+  return true;
 }
 
 function removeModal(modal: ActiveModal) {
   modalStack.value = modalStack.value.filter((item) => item.id !== modal.id);
+}
+
+function restoreFocusAfterReturn(modal: ActiveModal | undefined) {
+  if (!modal?.returnFocus || modalStack.value.length === 0) return;
+  void nextTick(() => {
+    if (modal.returnFocus?.isConnected) {
+      modal.returnFocus.focus({ preventScroll: true });
+    }
+  });
 }

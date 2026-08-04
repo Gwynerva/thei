@@ -299,8 +299,7 @@
   html,
   body,
   #__nuxt {
-    @apply bg-bg-1;
-    height: 100%;
+    @apply min-h-dvh bg-bg-1;
   }
 
   button,

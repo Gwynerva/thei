@@ -10,7 +10,6 @@ import {
 } from '#layers/thei/shared/date-range';
 
 const model = defineModel<DateRange | undefined>();
-const emit = defineEmits<{ save: [range: DateRange] }>();
 
 const calendarValue = ref<[Date | null, Date | null] | null>(null);
 const includeStartTime = ref(false);
@@ -49,6 +48,21 @@ watch(
     endTime.value = timeFromDateRangeValue(range.endDate);
   },
   { immediate: true },
+);
+
+watch(
+  [calendarValue, includeStartTime, includeEndTime, startTime, endTime],
+  ([value]) => {
+    const range = rangeFromCalendar(value);
+    if (
+      !range ||
+      (range.startDate === model.value?.startDate &&
+        range.endDate === model.value?.endDate)
+    )
+      return;
+    model.value = range;
+  },
+  { deep: true },
 );
 
 function updateBoundaryTime(boundary: 'start' | 'end', value: string) {
@@ -118,13 +132,6 @@ function formatRange(value: unknown) {
     range && `${formatDate(range.startDate)} — ${formatDate(range.endDate)}`
   );
 }
-
-function saveRange(value: unknown) {
-  const range = rangeFromCalendar(value);
-  if (!range) return;
-  model.value = range;
-  emit('save', range);
-}
 </script>
 
 <template>
@@ -138,49 +145,43 @@ function saveRange(value: unknown) {
     :dark="calendarIsDark"
     :teleport="false"
   >
-    <template #action-buttons="{ value, selectDate, selectionDisabled }">
+    <template #action-buttons="{ value }">
       <div
-        class="flex w-full min-w-0 flex-wrap items-end gap-sm whitespace-normal"
+        class="flex w-full min-w-0 flex-col gap-sm whitespace-normal sm:flex-row
+          sm:items-end"
       >
-        <FieldToggle v-model="includeStartTime">{{
-          phrase.date_range_start
-        }}</FieldToggle>
-        <Field v-if="includeStartTime" class="w-28">
-          <FieldInput
-            v-model="startTime"
-            type="time"
-            class="bg-transparent"
-            @update:model-value="updateBoundaryTime('start', $event ?? '')"
-          />
-        </Field>
-        <FieldToggle v-model="includeEndTime">{{
-          phrase.date_range_end
-        }}</FieldToggle>
-        <Field v-if="includeEndTime" class="w-28">
-          <FieldInput
-            v-model="endTime"
-            type="time"
-            class="bg-transparent"
-            @update:model-value="updateBoundaryTime('end', $event ?? '')"
-          />
-        </Field>
-        <div class="flex min-w-0 flex-1 flex-col gap-xs">
-          <span
-            class="truncate rounded-normal bg-bg-3 px-xs py-1 text-xs
-              text-text-1"
-            >{{ formatRange(value) }}</span
-          >
-          <Button
-            class="self-end"
-            :disabled="selectionDisabled || !rangeFromCalendar(value)"
-            @click="
-              selectDate();
-              saveRange(value);
-            "
-          >
-            {{ phrase.save }}
-          </Button>
+        <div class="flex min-w-0 flex-wrap items-end gap-xs">
+          <FieldToggle v-model="includeStartTime">{{
+            phrase.date_range_start
+          }}</FieldToggle>
+          <Field v-if="includeStartTime" class="w-28">
+            <FieldInput
+              v-model="startTime"
+              type="time"
+              class="bg-transparent"
+              @update:model-value="updateBoundaryTime('start', $event ?? '')"
+            />
+          </Field>
         </div>
+        <div class="flex min-w-0 flex-wrap items-end gap-xs">
+          <FieldToggle v-model="includeEndTime">{{
+            phrase.date_range_end
+          }}</FieldToggle>
+          <Field v-if="includeEndTime" class="w-28">
+            <FieldInput
+              v-model="endTime"
+              type="time"
+              class="bg-transparent"
+              @update:model-value="updateBoundaryTime('end', $event ?? '')"
+            />
+          </Field>
+        </div>
+        <span
+          class="min-w-0 flex-1 truncate rounded-normal bg-bg-3 px-xs py-1
+            text-xs text-text-1"
+        >
+          {{ formatRange(value) }}
+        </span>
       </div>
     </template>
   </VueDatePicker>
@@ -204,14 +205,27 @@ function saveRange(value: unknown) {
   --dp-cell-border-radius: var(--radius-normal) !important;
   --dp-border-radius: var(--radius-normal) !important;
 }
-
+/* 
+.field-date-range-picker :deep(.dp--outer-menu-wrap),
 .field-date-range-picker :deep(.dp--menu),
 .field-date-range-picker :deep(.dp--action-row),
 .field-date-range-picker :deep(.dp--action-buttons) {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .field-date-range-picker :deep(.dp--action-buttons) {
+  flex: 1 1 auto;
   margin-inline-start: 0;
 }
+
+.field-date-range-picker :deep(.dp--outer-menu-wrap),
+.field-date-range-picker :deep(.dp--menu) {
+  flex: 1 1 auto;
+}
+
+.field-date-range-picker :deep(.dp--selection-preview) {
+  display: none;
+} */
 </style>

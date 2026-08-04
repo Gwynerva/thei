@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { debounce } from 'perfect-debounce';
+import { projectTagRecommendationText } from '#layers/thei/shared/admin/project';
 import type { TagEditItem, TagItem } from '#layers/thei/shared/tag';
 import { projectDataInjectionKey, currentProjectUuidKey } from '../composables';
 
@@ -16,16 +17,7 @@ const selectedTags = computed<TagEditItem[]>({
 });
 
 const recommendationText = computed(() =>
-  [
-    projectData.value.title,
-    projectData.value.summary,
-    contentText(projectData.value.descriptionContent?.data),
-    ...(projectData.value.contentSections ?? []).flatMap((section) => [
-      section.title,
-      section.summary,
-      contentText(section.content?.data),
-    ]),
-  ].join(' '),
+  projectTagRecommendationText(projectData.value),
 );
 
 async function fetchRecommendations() {
@@ -58,30 +50,9 @@ async function fetchRecommendations() {
 const loadRecommendations = debounce(fetchRecommendations, 250);
 await fetchRecommendations();
 
-watch(
-  [recommendationText, selectedTags],
-  () => void loadRecommendations(),
-  { deep: true },
-);
-
-function contentText(data: unknown): string {
-  if (!data || typeof data !== 'object') return '';
-  const blocks = (data as { blocks?: unknown[] }).blocks;
-  if (!Array.isArray(blocks)) return '';
-  return blocks
-    .flatMap((block) => collectStrings(block))
-    .join(' ')
-    .replace(/<[^>]*>/g, ' ');
-}
-
-function collectStrings(value: unknown): string[] {
-  if (typeof value === 'string') return [value];
-  if (Array.isArray(value)) return value.flatMap(collectStrings);
-  if (!value || typeof value !== 'object') return [];
-  return Object.entries(value as Record<string, unknown>)
-    .filter(([key]) => !['assetUuid', 'src', 'previewSrc'].includes(key))
-    .flatMap(([, item]) => collectStrings(item));
-}
+watch([recommendationText, selectedTags], () => void loadRecommendations(), {
+  deep: true,
+});
 </script>
 
 <template>
@@ -94,10 +65,7 @@ function collectStrings(value: unknown): string[] {
     />
     <Box>
       <div class="p-sm sm:p-md">
-        <TagAdder
-          v-model="selectedTags"
-          :recommendations="recommendations"
-        />
+        <TagAdder v-model="selectedTags" :recommendations="recommendations" />
         <p
           v-if="recommendationsFailed"
           role="status"

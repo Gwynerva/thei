@@ -107,8 +107,15 @@ export interface ActiveModal {
   label?: string;
   backLabel?: string;
   flowId: number;
+  /** Element that opened this modal and should regain focus on return. */
+  returnFocus?: {
+    isConnected: boolean;
+    focus: (options?: FocusOptions) => void;
+  };
   /** Called by the modal component itself via @modalResult — accepts the full result type. */
   resolve: (result: { type: string }) => void;
   /** Called externally to force-close the modal — restricted to base results only. */
   close: (result: BaseModalResult) => void;
+  /** Optional synchronous check run before user-initiated dismissal. */
+  closeGuard?: () => boolean;
 }

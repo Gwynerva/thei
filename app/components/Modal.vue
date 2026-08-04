@@ -3,6 +3,7 @@ import {
   activeModal,
   closeActiveModalFlowWithBase,
   modalStack,
+  requestCloseActiveModalFlow,
   settleModal,
 } from '#layers/thei/app/composables/modal';
 import type { BaseModalResult } from '#layers/thei/app/modals/types';
@@ -125,7 +126,7 @@ function onNativeClose() {
   }
 
   if (activeModal.value) {
-    closeActiveModalFlowWithBase({ type: 'empty' });
+    requestCloseActiveModalFlow({ type: 'empty' });
   }
 }
 
@@ -137,7 +138,7 @@ function onBackdropMousedown(e: MouseEvent) {
 
 function onBackdropClick(e: MouseEvent) {
   if (mousedownOnBackdrop && e.target === dialogElement.value) {
-    closeActiveModalFlowWithBase({ type: 'empty' });
+    requestCloseActiveModalFlow({ type: 'empty' });
   }
 }
 </script>
@@ -149,8 +150,8 @@ function onBackdropClick(e: MouseEvent) {
     class="m-0 h-dvh max-h-none w-dvw max-w-none overflow-hidden border-0
       bg-transparent p-0 outline-none backdrop:bg-transparent"
     @close="onNativeClose"
-    @cancel.prevent="closeActiveModalFlowWithBase({ type: 'empty' })"
-    @keydown.esc.stop.prevent="closeActiveModalFlowWithBase({ type: 'empty' })"
+    @cancel.prevent="requestCloseActiveModalFlow({ type: 'empty' })"
+    @keydown.esc.stop.prevent="requestCloseActiveModalFlow({ type: 'empty' })"
     @mousedown="onBackdropMousedown"
     @click="onBackdropClick"
   >

@@ -29,11 +29,10 @@ import {
 } from '../composables';
 import ProjectMain from './ProjectMain.vue';
 import ProjectAssets from './ProjectAssets.vue';
-import ProjectContentSections from './ProjectContentSections.vue';
 import ProjectRelations from './ProjectRelations.vue';
 import ProjectExternalLinks from './ProjectExternalLinks.vue';
 import { projectDeleteModal } from './project-delete-modal';
-import ProjectStages from './ProjectStages.vue';
+import ProjectStructuredItems from './ProjectStructuredItems.vue';
 import ProjectTags from './ProjectTags.vue';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import {
@@ -59,6 +58,7 @@ const projectData = ref<ProjectEditData>({
   cv: false,
   descriptionContent: null,
   contentSections: [],
+  stages: [],
   relations: [],
   externalLinks: [],
   tags: [],
@@ -159,6 +159,7 @@ if (isEdit.value) {
     cv: data.cv,
     descriptionContent: data.descriptionContent ?? null,
     contentSections: data.contentSections ?? [],
+    stages: data.stages ?? [],
     iconAssetUuid: data.iconAssetUuid,
     bannerAssetUuid: data.bannerAssetUuid,
     showcaseAssets: (data.showcaseAssets ?? []).map((item) => ({
@@ -351,8 +352,8 @@ async function openDeleteProjectModal() {
     <ProjectActionSettings />
     <ProjectAssets />
     <ProjectExternalLinks />
-    <ProjectStages />
-    <ProjectContentSections />
+    <ProjectStructuredItems kind="stage" />
+    <ProjectStructuredItems kind="section" />
     <ProjectRelations />
     <ProjectTags />
   </div>

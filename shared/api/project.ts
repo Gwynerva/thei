@@ -2,6 +2,7 @@ import type { ProjectEventAccessLevel } from '../access-level';
 import type { ArchivedOriginalFileMeta, AssetType } from '../asset';
 import type { ContentFieldValue } from '../content';
 import type { ProjectContentSectionValue } from '../project-content-section';
+import type { ProjectStageValue } from '../project-stage';
 import type {
   ProjectRelationEditItem,
   ProjectRelationType,
@@ -58,6 +59,7 @@ export type ProjectGetResponse = {
   bannerAssetSize?: number;
   descriptionContent?: ContentFieldValue;
   contentSections?: ProjectContentSectionValue[];
+  stages?: ProjectStageValue[];
   showcaseAssets?: ShowcaseAssetGetItem[];
   otherAssets?: OtherAssetGetItem[];
   relations?: ProjectRelationGetItem[];

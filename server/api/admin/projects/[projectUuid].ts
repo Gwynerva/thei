@@ -30,8 +30,16 @@ import { syncProjectActionUsages } from '../../../thei/projects/action-usages';
 import {
   applyProjectContentSections,
   deleteProjectContentSections,
+  getProjectContentSections,
   prepareProjectContentSections,
 } from '../../../thei/projects/content-sections';
+import {
+  applyProjectStages,
+  deleteProjectStages,
+  getProjectStages,
+  prepareProjectStages,
+} from '../../../thei/projects/stages';
+import { ProjectStructuredItemStorageError } from '../../../thei/projects/structured-items';
 import {
   applyProjectRelations,
   deleteProjectRelations,
@@ -124,53 +132,10 @@ export default defineEventHandler(async (event) => {
 
       const rawOther = await THEI_SERVER.assets.usages.findOther(projectUuid);
 
-      const rawSections = THEI_SERVER.useDb()
-        .db.select()
-        .from(THEI_SERVER.useDb().schema.projectContentSections)
-        .where(
-          eq(
-            THEI_SERVER.useDb().schema.projectContentSections.projectUuid,
-            projectUuid,
-          ),
-        )
-        .orderBy(THEI_SERVER.useDb().schema.projectContentSections.sortOrder)
-        .all();
-      const contentSections = await Promise.all(
-        rawSections.map(async (section) => {
-          const periods = THEI_SERVER.useDb()
-            .db.select({
-              startDate:
-                THEI_SERVER.useDb().schema.projectContentSectionPeriods
-                  .startDate,
-              endDate:
-                THEI_SERVER.useDb().schema.projectContentSectionPeriods.endDate,
-            })
-            .from(THEI_SERVER.useDb().schema.projectContentSectionPeriods)
-            .where(
-              eq(
-                THEI_SERVER.useDb().schema.projectContentSectionPeriods
-                  .sectionUuid,
-                section.sectionUuid,
-              ),
-            )
-            .orderBy(
-              THEI_SERVER.useDb().schema.projectContentSectionPeriods.sortOrder,
-            )
-            .all();
-          return {
-            sectionUuid: section.sectionUuid,
-            title: section.title,
-            summary: section.summary,
-            isPrivate: section.isPrivate,
-            periods,
-            content: await THEI_SERVER.content.buildFieldValue(
-              'project-section',
-              section.sectionUuid,
-              'project-section-body',
-            ),
-          };
-        }),
-      );
+      const [contentSections, stages] = await Promise.all([
+        getProjectContentSections(projectUuid),
+        getProjectStages(projectUuid),
+      ]);
 
       const otherAssets: OtherAssetGetItem[] = await Promise.all(
         rawOther.map(async ({ asset, meta }) => {
@@ -224,6 +189,7 @@ export default defineEventHandler(async (event) => {
           'project-description',
         ),
         contentSections,
+        stages,
         showcaseAssets,
         otherAssets,
         relations: await getProjectRelations(projectUuid),
@@ -278,13 +244,18 @@ export default defineEventHandler(async (event) => {
       }
 
       let preparedSections;
+      let preparedStages;
       try {
+        preparedStages = await prepareProjectStages(projectUuid, result.stages);
         preparedSections = await prepareProjectContentSections(
           projectUuid,
           result.contentSections,
         );
       } catch (error) {
-        if (error instanceof ContentValidationError || error instanceof Error) {
+        if (
+          error instanceof ContentValidationError ||
+          error instanceof ProjectStructuredItemStorageError
+        ) {
           return {
             type: 'error',
             message: error.message,
@@ -380,6 +351,7 @@ export default defineEventHandler(async (event) => {
           );
         }
         applyProjectContentSections(tx, schema, projectUuid, preparedSections);
+        applyProjectStages(tx, schema, projectUuid, preparedStages);
         applyProjectRelations(tx, schema, projectUuid, preparedRelations);
         applyProjectExternalLinks(
           tx,
@@ -509,6 +481,7 @@ export default defineEventHandler(async (event) => {
       const { db, schema } = THEI_SERVER.useDb();
       db.transaction((tx) => {
         deleteProjectContentSections(tx, schema, projectUuid);
+        deleteProjectStages(tx, schema, projectUuid);
         deleteProjectRelations(tx, schema, projectUuid);
         deleteProjectExternalLinks(tx, schema, projectUuid);
         deleteTagUsagesForContainer(tx, schema, 'project', projectUuid);

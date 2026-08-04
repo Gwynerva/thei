@@ -1,81 +1,168 @@
 import { describe, expect, it } from 'vitest';
-import {
-  normalizeProjectContentSectionPeriods,
-  normalizeProjectContentSections,
-} from '../../shared/project-content-section';
+import { normalizeProjectContentSections } from '../../shared/project-content-section';
+import { normalizeProjectStages } from '../../shared/project-stage';
 
-describe('project content section periods', () => {
-  it('sorts and merges overlapping or adjacent date-only periods', () => {
+const content = (text = 'Body') => ({
+  data: { blocks: [{ type: 'paragraph', data: { text } }] },
+});
+
+describe('project stages', () => {
+  it('requires one valid period and sorts stages from oldest to newest', () => {
     expect(
-      normalizeProjectContentSectionPeriods([
-        { startDate: '2026-06-06', endDate: '2026-06-07' },
-        { startDate: '2026-06-01', endDate: '2026-06-04' },
-        { startDate: '2026-06-04', endDate: '2026-06-05' },
-      ]),
-    ).toEqual([{ startDate: '2026-06-01', endDate: '2026-06-07' }]);
+      normalizeProjectStages([
+        {
+          title: 'Later',
+          summary: '',
+          isPrivate: false,
+          period: { startDate: '2026-06-01', endDate: '2026-06-30' },
+        },
+        {
+          title: 'Earlier',
+          summary: '',
+          isPrivate: false,
+          period: { startDate: '2025-01-01', endDate: '2025-02-01' },
+        },
+      ])?.map((stage) => stage.title),
+    ).toEqual(['Earlier', 'Later']);
   });
 
-  it('keeps every precise period separate and sorts all periods by start', () => {
+  it('allows no content and rejects missing or inverted periods', () => {
     expect(
-      normalizeProjectContentSectionPeriods([
-        { startDate: '2026-06-06T12:00', endDate: '2026-06-06T14:00' },
-        { startDate: '2026-06-07', endDate: '2026-06-07' },
-        { startDate: '2026-06-06', endDate: '2026-06-06' },
-        { startDate: '2026-06-06T10:00', endDate: '2026-06-06T12:00' },
-        { startDate: '2026-06-08', endDate: '2026-06-09' },
-      ]),
-    ).toEqual([
-      { startDate: '2026-06-06', endDate: '2026-06-09' },
-      { startDate: '2026-06-06T10:00', endDate: '2026-06-06T12:00' },
-      { startDate: '2026-06-06T12:00', endDate: '2026-06-06T14:00' },
-    ]);
-    expect(
-      normalizeProjectContentSectionPeriods([
-        { startDate: '2026-06-01', endDate: '2026-06-05' },
-        { startDate: '2026-06-02T10:00', endDate: '2026-06-02T12:00' },
-      ]),
-    ).toEqual([
-      { startDate: '2026-06-01', endDate: '2026-06-05' },
-      { startDate: '2026-06-02T10:00', endDate: '2026-06-02T12:00' },
-    ]);
-  });
-
-  it('allows independently specified boundary times and rejects invalid values', () => {
-    expect(
-      normalizeProjectContentSectionPeriods([
-        { startDate: '2026-06-06', endDate: '2026-06-06T10:00' },
-      ]),
-    ).toEqual([{ startDate: '2026-06-06', endDate: '2026-06-06T10:00' }]);
+      normalizeProjectStages([
+        {
+          title: 'Stage',
+          summary: '',
+          isPrivate: false,
+          period: { startDate: '2026-01-01', endDate: '2026-01-02' },
+        },
+      ])?.[0]?.content,
+    ).toBeUndefined();
     expect(() =>
-      normalizeProjectContentSectionPeriods([
-        { startDate: '2026-06-06T10:00', endDate: '2026-06-05T10:00' },
+      normalizeProjectStages([
+        { title: 'Stage', summary: '', isPrivate: false },
       ]),
-    ).toThrow('Invalid section period');
+    ).toThrow('Stage period is required');
     expect(() =>
-      normalizeProjectContentSectionPeriods([
-        { startDate: '2026-02-29', endDate: '2026-03-01' },
+      normalizeProjectStages([
+        {
+          title: 'Stage',
+          summary: '',
+          isPrivate: false,
+          period: { startDate: '2026-02-01', endDate: '2026-01-01' },
+        },
       ]),
-    ).toThrow('Invalid section period');
+    ).toThrow('Invalid stage period');
   });
+});
 
-  it('rejects empty section titles', () => {
+describe('project content sections', () => {
+  it.each([
+    ['missing content', undefined],
+    ['null content', null],
+    ['missing data', {}],
+    ['no blocks', { data: { blocks: [] } }],
+    [
+      'blank text blocks',
+      {
+        data: {
+          blocks: [
+            { type: 'paragraph', data: { text: ' <br>&nbsp; ' } },
+            { type: 'header', data: { text: '&#160;' } },
+            { type: 'quote', data: { text: '', caption: ' ' } },
+          ],
+        },
+      },
+    ],
+    [
+      'empty structured blocks',
+      {
+        data: {
+          blocks: [
+            { type: 'list', data: { items: [] } },
+            { type: 'contentMedia', data: { asset: null } },
+            { type: 'contentGallery', data: { items: [] } },
+            { type: 'contentAttachment', data: {} },
+          ],
+        },
+      },
+    ],
+  ])('rejects %s', (_scenario, sectionContent) => {
     expect(() =>
       normalizeProjectContentSections([
-        { title: ' ', summary: '', isPrivate: false, periods: [] },
+        {
+          title: 'Section',
+          summary: '',
+          isPrivate: false,
+          ...(sectionContent === undefined ? {} : { content: sectionContent }),
+        },
       ]),
-    ).toThrow('Content section title cannot be empty');
+    ).toThrow('Content section cannot be empty');
   });
 
-  it('trims the optional section summary', () => {
+  it('rejects an invalid link instead of treating it as content', () => {
+    expect(() =>
+      normalizeProjectContentSections([
+        {
+          title: 'Section',
+          summary: '',
+          isPrivate: false,
+          content: {
+            data: {
+              blocks: [{ type: 'externalLink', data: { url: '' } }],
+            },
+          },
+        },
+      ]),
+    ).toThrow('External link URL cannot be empty');
+  });
+
+  it('accepts text or media as meaningful content', () => {
     expect(
       normalizeProjectContentSections([
         {
-          title: 'Title',
-          summary: '  A short explanation  ',
+          title: 'Text section',
+          summary: '',
           isPrivate: false,
-          periods: [],
+          content: content('Meaningful text'),
+        },
+        {
+          title: 'Media section',
+          summary: '',
+          isPrivate: false,
+          content: {
+            data: {
+              blocks: [
+                {
+                  type: 'contentMedia',
+                  data: { asset: { assetUuid: 'a-existing' } },
+                },
+              ],
+            },
+          },
         },
       ]),
-    ).toMatchObject([{ title: 'Title', summary: 'A short explanation' }]);
+    ).toHaveLength(2);
+  });
+
+  it('trims text and preserves manual order', () => {
+    expect(
+      normalizeProjectContentSections([
+        {
+          title: ' Second ',
+          summary: ' Explanation ',
+          isPrivate: false,
+          content: content('Two'),
+        },
+        {
+          title: 'First',
+          summary: '',
+          isPrivate: true,
+          content: content('One'),
+        },
+      ]),
+    ).toMatchObject([
+      { title: 'Second', summary: 'Explanation' },
+      { title: 'First', isPrivate: true },
+    ]);
   });
 });

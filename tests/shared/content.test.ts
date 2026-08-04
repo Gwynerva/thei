@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   ContentValidationError,
+  analyzeContentData,
+  buildContentPreview,
+  collectContentAssetUuids,
   contentDataIsSemanticallyEqual,
+  contentPlainText,
   extractContentAssetRefs,
   normalizeContentData,
   summarizeContentData,
@@ -134,6 +138,50 @@ describe('content normalization', () => {
         isPrivate: false,
       },
     ]);
+    expect(collectContentAssetUuids(data)).toEqual(['a-1', 'a-2']);
+  });
+
+  it('extracts all user-facing text from structured blocks', () => {
+    const data = normalizeContentData({
+      blocks: [
+        {
+          type: 'quote',
+          data: { text: '<b>Main quote</b>', caption: 'Author&nbsp;name' },
+        },
+        {
+          type: 'contentMedia',
+          data: {
+            asset: { assetUuid: 'a-1' },
+            caption: 'Media caption',
+          },
+        },
+        {
+          type: 'contentGallery',
+          data: {
+            items: [
+              {
+                id: 'item-1',
+                asset: { assetUuid: 'a-2' },
+                caption: 'Gallery caption',
+              },
+            ],
+          },
+        },
+        {
+          type: 'contentAttachment',
+          data: {
+            asset: { assetUuid: 'a-3' },
+            title: 'Research file',
+            caption: 'Attachment caption',
+          },
+        },
+        { type: 'externalLink', data: { url: 'https://example.com' } },
+      ],
+    });
+
+    expect(contentPlainText(data)).toBe(
+      'Main quote Author name Media caption Gallery caption Research file Attachment caption https://example.com/',
+    );
   });
 
   it('keeps only per-item captions in galleries', () => {
@@ -213,5 +261,125 @@ describe('content normalization', () => {
       meta: { start: 2 },
       items: [{ content: 'Done', meta: { checked: true }, items: [] }],
     });
+  });
+});
+
+describe('content preview', () => {
+  const imageMedia = {
+    kind: 'image' as const,
+    src: '/image.webp',
+    previewSrc: '/image-preview.webp',
+  };
+  const videoMedia = {
+    kind: 'video' as const,
+    src: '/video.mp4',
+    previewSrc: '/video-preview.webp',
+  };
+
+  it('collects formatted text and nested list items in block order', () => {
+    const preview = buildContentPreview({
+      blocks: [
+        { type: 'header', data: { text: '<b>Heading</b>' } },
+        { type: 'paragraph', data: { text: 'Text&nbsp; with   spaces' } },
+        {
+          type: 'list',
+          data: {
+            items: [
+              {
+                content: 'Parent',
+                items: [{ content: '<i>Child</i>', items: [] }],
+              },
+            ],
+          },
+        },
+        { type: 'quote', data: { text: 'Quote', caption: 'Ignored' } },
+      ],
+    });
+
+    expect(preview.text).toBe('Heading Text with spaces Parent Child Quote');
+  });
+
+  it('limits normalized text to 200 characters', () => {
+    const preview = buildContentPreview({
+      blocks: [{ type: 'paragraph', data: { text: 'a'.repeat(240) } }],
+    });
+
+    expect(preview.text).toHaveLength(200);
+  });
+
+  it('decodes html entities and keeps grapheme clusters intact', () => {
+    const preview = buildContentPreview(
+      {
+        blocks: [
+          {
+            type: 'paragraph',
+            data: { text: '&quot;A&amp;B&quot; 👩‍💻e\u0301Z' },
+          },
+        ],
+      },
+      10,
+    );
+
+    expect(preview.text).toBe('"A&B" 👩‍💻éZ');
+  });
+
+  it('returns normalized data, preview, and summary from one analysis', () => {
+    const analysis = analyzeContentData({
+      blocks: [
+        { type: 'paragraph', data: { text: '<b>Preview</b>' } },
+        {
+          type: 'contentMedia',
+          data: {
+            asset: { assetUuid: 'a-image', size: 42, media: imageMedia },
+          },
+        },
+      ],
+    });
+
+    expect(analysis.preview).toEqual({ text: 'Preview', media: imageMedia });
+    expect(analysis.summary).toEqual({
+      blockCount: 2,
+      assetCount: 1,
+      assetTotalSize: 42,
+    });
+  });
+
+  it('uses the first media in block and gallery order', () => {
+    const preview = buildContentPreview({
+      blocks: [
+        {
+          type: 'contentGallery',
+          data: {
+            items: [
+              { id: 'missing', asset: { assetUuid: 'a-missing' } },
+              {
+                id: 'video',
+                asset: { assetUuid: 'a-video', media: videoMedia },
+              },
+            ],
+          },
+        },
+        {
+          type: 'contentMedia',
+          data: { asset: { assetUuid: 'a-image', media: imageMedia } },
+        },
+      ],
+    });
+
+    expect(preview.media).toEqual(videoMedia);
+  });
+
+  it('returns no text or media for non-preview content', () => {
+    expect(
+      buildContentPreview({
+        blocks: [
+          {
+            type: 'contentAttachment',
+            data: { asset: { assetUuid: 'a-file' }, caption: 'Ignored' },
+          },
+          { type: 'externalLink', data: { url: 'https://example.com' } },
+        ],
+      }),
+    ).toEqual({ text: '' });
   });
 });

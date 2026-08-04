@@ -1,16 +1,21 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import type { ProjectContentSectionEditItem } from '#layers/thei/shared/project-content-section';
+import { createEmptyContentFieldValue } from '#layers/thei/shared/content';
 import { EntityPrefix, generateUniqueId } from '../entity-id';
 import {
   applyPreparedContentSave,
-  deleteContentForOwner,
   prepareContentForSave,
   type PreparedContentSave,
 } from '../content/repository';
+import {
+  deleteProjectStructuredItemContent,
+  prepareProjectStructuredItems,
+  projectStructuredItemIdsToRemove,
+} from './structured-items';
 
 type PreparedSection = ProjectContentSectionEditItem & {
   sectionUuid: string;
-  contentSave?: PreparedContentSave;
+  contentSave: PreparedContentSave;
 };
 
 export async function prepareProjectContentSections(
@@ -25,41 +30,32 @@ export async function prepareProjectContentSections(
     .where(eq(schema.projectContentSections.projectUuid, projectUuid))
     .all();
   const existingIds = new Set(existing.map((item) => item.sectionUuid));
-  const submittedIds = new Set<string>();
-
-  return await Promise.all(
-    sections.map(async (section) => {
-      const sectionUuid =
-        section.sectionUuid ??
-        (await generateUniqueId(
-          EntityPrefix.ProjectContentSection,
-          async (id) =>
-            !db
-              .select({
-                sectionUuid: schema.projectContentSections.sectionUuid,
-              })
-              .from(schema.projectContentSections)
-              .where(eq(schema.projectContentSections.sectionUuid, id))
-              .get(),
-        ));
-      if (submittedIds.has(sectionUuid))
-        throw new Error('Duplicate content section');
-      submittedIds.add(sectionUuid);
-      if (section.sectionUuid && !existingIds.has(sectionUuid)) {
-        throw new Error('Unknown content section');
-      }
-      const contentSave =
-        section.content === undefined
-          ? undefined
-          : await prepareContentForSave(
-              'project-section',
-              sectionUuid,
-              'project-section-body',
-              section.content,
-            );
+  return prepareProjectStructuredItems(sections, {
+    existingIds,
+    getId: (section) => section.sectionUuid,
+    createId: () =>
+      generateUniqueId(
+        EntityPrefix.ProjectContentSection,
+        async (id) =>
+          !db
+            .select({
+              sectionUuid: schema.projectContentSections.sectionUuid,
+            })
+            .from(schema.projectContentSections)
+            .where(eq(schema.projectContentSections.sectionUuid, id))
+            .get(),
+      ),
+    label: 'content section',
+    prepare: async (section, sectionUuid) => {
+      const contentSave = await prepareContentForSave(
+        'project-section',
+        sectionUuid,
+        'project-section-body',
+        section.content,
+      );
       return { ...section, sectionUuid, contentSave };
-    }),
-  );
+    },
+  });
 }
 
 export function applyProjectContentSections(
@@ -74,17 +70,12 @@ export function applyProjectContentSections(
     .from(schema.projectContentSections)
     .where(eq(schema.projectContentSections.projectUuid, projectUuid))
     .all();
-  const nextIds = new Set(sections.map((section) => section.sectionUuid));
-  const removed = existing
-    .map((item: { sectionUuid: string }) => item.sectionUuid)
-    .filter((sectionUuid: string) => !nextIds.has(sectionUuid));
-  for (const sectionUuid of removed) {
-    deleteContentForOwner(tx, schema, 'project-section', sectionUuid);
-  }
+  const removed = projectStructuredItemIdsToRemove(
+    existing.map((item: { sectionUuid: string }) => item.sectionUuid),
+    sections.map((section) => section.sectionUuid),
+  );
+  deleteProjectStructuredItemContent(tx, schema, 'project-section', removed);
   if (removed.length) {
-    tx.delete(schema.projectContentSectionPeriods)
-      .where(inArray(schema.projectContentSectionPeriods.sectionUuid, removed))
-      .run();
     tx.delete(schema.projectContentSections)
       .where(inArray(schema.projectContentSections.sectionUuid, removed))
       .run();
@@ -115,38 +106,14 @@ export function applyProjectContentSections(
         },
       })
       .run();
-    tx.delete(schema.projectContentSectionPeriods)
-      .where(
-        eq(
-          schema.projectContentSectionPeriods.sectionUuid,
-          section.sectionUuid,
-        ),
-      )
-      .run();
-    for (
-      let periodIndex = 0;
-      periodIndex < section.periods.length;
-      periodIndex++
-    ) {
-      const period = section.periods[periodIndex]!;
-      tx.insert(schema.projectContentSectionPeriods)
-        .values({
-          ...period,
-          sectionUuid: section.sectionUuid,
-          sortOrder: periodIndex,
-        })
-        .run();
-    }
-    if (section.contentSave) {
-      applyPreparedContentSave(
-        tx,
-        schema,
-        'project-section',
-        section.sectionUuid,
-        'project-section-body',
-        section.contentSave,
-      );
-    }
+    applyPreparedContentSave(
+      tx,
+      schema,
+      'project-section',
+      section.sectionUuid,
+      'project-section-body',
+      section.contentSave,
+    );
   }
 }
 
@@ -161,13 +128,34 @@ export function deleteProjectContentSections(
     .where(eq(schema.projectContentSections.projectUuid, projectUuid))
     .all();
   const ids = rows.map((row: { sectionUuid: string }) => row.sectionUuid);
-  for (const sectionUuid of ids)
-    deleteContentForOwner(tx, schema, 'project-section', sectionUuid);
+  deleteProjectStructuredItemContent(tx, schema, 'project-section', ids);
   if (!ids.length) return;
-  tx.delete(schema.projectContentSectionPeriods)
-    .where(inArray(schema.projectContentSectionPeriods.sectionUuid, ids))
-    .run();
   tx.delete(schema.projectContentSections)
     .where(eq(schema.projectContentSections.projectUuid, projectUuid))
     .run();
+}
+
+export async function getProjectContentSections(projectUuid: string) {
+  const { db, schema } = THEI_SERVER.useDb();
+  const rows = db
+    .select()
+    .from(schema.projectContentSections)
+    .where(eq(schema.projectContentSections.projectUuid, projectUuid))
+    .orderBy(schema.projectContentSections.sortOrder)
+    .all();
+
+  return await Promise.all(
+    rows.map(async (section) => ({
+      sectionUuid: section.sectionUuid,
+      title: section.title,
+      summary: section.summary,
+      isPrivate: section.isPrivate,
+      content:
+        (await THEI_SERVER.content.buildFieldValue(
+          'project-section',
+          section.sectionUuid,
+          'project-section-body',
+        )) ?? createEmptyContentFieldValue(),
+    })),
+  );
 }

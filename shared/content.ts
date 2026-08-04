@@ -4,6 +4,7 @@ import { normalizeExternalLinkUrl, type ExternalLink } from './external-link';
 
 export const CONTENT_OWNER_TYPES = [
   'project',
+  'project-stage',
   'project-section',
   'event',
   'news',
@@ -12,6 +13,7 @@ export type ContentOwnerType = (typeof CONTENT_OWNER_TYPES)[number];
 
 export const CONTENT_SLOTS = [
   'project-description',
+  'project-stage-body',
   'project-section-body',
   'event-body',
   'news-body',
@@ -90,6 +92,17 @@ export interface ContentGalleryItem {
   caption?: string;
 }
 
+export interface ContentPreview {
+  text: string;
+  media?: MediaDescriptor;
+}
+
+export interface ContentAnalysis {
+  data: ContentOutputData;
+  preview: ContentPreview;
+  summary: ContentSummary;
+}
+
 export type ContentExternalLinkData = Pick<ExternalLink, 'url'> &
   Partial<Omit<ExternalLink, 'url'>>;
 
@@ -99,12 +112,20 @@ export function createEmptyContentData(): ContentOutputData {
   return { blocks: [] };
 }
 
+export function createEmptyContentFieldValue(): ContentFieldValue {
+  return {
+    data: createEmptyContentData(),
+    blockCount: 0,
+    assetCount: 0,
+    assetTotalSize: 0,
+  };
+}
+
 export function normalizeContentData(value: unknown): ContentOutputData {
   if (!value) return createEmptyContentData();
   if (!isRecord(value)) {
     throw new ContentValidationError('Invalid content data');
   }
-
   const rawBlocks = value.blocks;
   if (!Array.isArray(rawBlocks)) {
     throw new ContentValidationError('Invalid content blocks');
@@ -148,11 +169,123 @@ export function isContentEmpty(data: ContentOutputData | null | undefined) {
   return !data || normalizeContentData(data).blocks.length === 0;
 }
 
+export function buildContentPreview(
+  data: ContentOutputData | null | undefined,
+  textLimit = 200,
+): ContentPreview {
+  const normalized = normalizeContentData(data);
+  return buildNormalizedContentPreview(normalized, textLimit);
+}
+
+export function analyzeContentData(
+  data: ContentOutputData | null | undefined,
+  textLimit = 200,
+): ContentAnalysis {
+  const normalized = normalizeContentData(data);
+  const assetSizes = collectNormalizedContentAssetSizeMap(normalized);
+  return {
+    data: normalized,
+    preview: buildNormalizedContentPreview(normalized, textLimit),
+    summary: summarizeNormalizedContentData(normalized, assetSizes),
+  };
+}
+
+function buildNormalizedContentPreview(
+  normalized: ContentOutputData,
+  textLimit: number,
+): ContentPreview {
+  let media: MediaDescriptor | undefined;
+
+  for (const block of normalized.blocks) {
+    if (!media && block.type === 'contentMedia') {
+      media = contentAssetMedia((block.data as any).asset);
+    } else if (!media && block.type === 'contentGallery') {
+      const items = Array.isArray((block.data as any).items)
+        ? (block.data as any).items
+        : [];
+      media = items
+        .map((item: any) => contentAssetMedia(item?.asset))
+        .find(Boolean);
+    }
+  }
+
+  return {
+    text: truncatePreviewText(
+      contentPreviewTextFromNormalized(normalized),
+      textLimit,
+    ),
+    ...(media ? { media } : {}),
+  };
+}
+
+export function contentPlainText(
+  data: ContentOutputData | null | undefined,
+): string {
+  return contentPlainTextFromNormalized(normalizeContentData(data));
+}
+
+function contentPlainTextFromNormalized(normalized: ContentOutputData) {
+  const textParts: string[] = [];
+  for (const block of normalized.blocks) {
+    switch (block.type) {
+      case 'paragraph':
+      case 'header':
+        appendPreviewText(textParts, (block.data as any).text);
+        break;
+      case 'quote':
+        appendPreviewText(textParts, (block.data as any).text);
+        appendPreviewText(textParts, (block.data as any).caption);
+        break;
+      case 'list':
+        collectListPreviewText(textParts, (block.data as any).items);
+        break;
+      case 'contentMedia':
+        appendPreviewText(textParts, (block.data as any).caption);
+        break;
+      case 'contentGallery':
+        collectGalleryPreviewText(textParts, (block.data as any).items);
+        break;
+      case 'contentAttachment':
+        appendPreviewText(textParts, (block.data as any).title);
+        appendPreviewText(textParts, (block.data as any).caption);
+        break;
+      case 'externalLink':
+        appendPreviewText(textParts, (block.data as any).url);
+        break;
+    }
+  }
+  return textParts.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+function contentPreviewTextFromNormalized(normalized: ContentOutputData) {
+  const textParts: string[] = [];
+  for (const block of normalized.blocks) {
+    switch (block.type) {
+      case 'paragraph':
+      case 'header':
+      case 'quote':
+        appendPreviewText(textParts, (block.data as any).text);
+        break;
+      case 'list':
+        collectListPreviewText(textParts, (block.data as any).items);
+        break;
+    }
+  }
+  return textParts.join(' ').replace(/\s+/g, ' ').trim();
+}
+
 export function summarizeContentData(
   data: ContentOutputData | null | undefined,
   assetSizes: Map<string, number> = new Map(),
 ): ContentSummary {
   const normalized = normalizeContentData(data);
+  return summarizeNormalizedContentData(normalized, assetSizes);
+}
+
+function summarizeNormalizedContentData(
+  normalized: ContentOutputData,
+  assetSizes: Map<string, number>,
+): ContentSummary {
   const assetUuids = new Set<string>();
   for (const ref of extractContentAssetRefs(normalized)) {
     assetUuids.add(ref.assetUuid);
@@ -173,8 +306,14 @@ export function summarizeContentData(
 export function collectContentAssetSizeMap(
   data: ContentOutputData | null | undefined,
 ): Map<string, number> {
-  const sizes = new Map<string, number>();
   const normalized = normalizeContentData(data);
+  return collectNormalizedContentAssetSizeMap(normalized);
+}
+
+function collectNormalizedContentAssetSizeMap(
+  normalized: ContentOutputData,
+): Map<string, number> {
+  const sizes = new Map<string, number>();
 
   for (const block of normalized.blocks) {
     if (block.type === 'contentMedia' || block.type === 'contentAttachment') {
@@ -231,6 +370,18 @@ export function extractContentAssetRefs(
     }
   }
   return refs;
+}
+
+export function collectContentAssetUuids(
+  data: ContentOutputData | null | undefined,
+): string[] {
+  return Array.from(
+    new Set(
+      extractContentAssetRefs(normalizeContentData(data)).map(
+        (ref) => ref.assetUuid,
+      ),
+    ),
+  );
 }
 
 function addAssetSize(sizes: Map<string, number>, value: unknown) {
@@ -492,11 +643,71 @@ function listItemsHaveContent(items: unknown): boolean {
   });
 }
 
+function collectListPreviewText(parts: string[], items: unknown) {
+  if (!Array.isArray(items)) return;
+  for (const item of items) {
+    if (!isRecord(item)) continue;
+    appendPreviewText(parts, item.content);
+    collectListPreviewText(parts, item.items);
+  }
+}
+
+function collectGalleryPreviewText(parts: string[], items: unknown) {
+  if (!Array.isArray(items)) return;
+  for (const item of items) {
+    if (!isRecord(item)) continue;
+    appendPreviewText(parts, item.caption);
+  }
+}
+
+function appendPreviewText(parts: string[], value: unknown) {
+  const text = plainText(value).replace(/\s+/g, ' ').trim();
+  if (text) parts.push(text);
+}
+
+function contentAssetMedia(value: unknown): MediaDescriptor | undefined {
+  if (!isRecord(value)) return undefined;
+  return normalizeMediaDescriptor(value.media);
+}
+
 function plainText(value: unknown): string {
-  return stringValue(value)
-    .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .trim();
+  return decodeHtmlEntities(stringValue(value).replace(/<[^>]*>/g, '')).trim();
+}
+
+function decodeHtmlEntities(value: string): string {
+  const named: Record<string, string> = {
+    amp: '&',
+    apos: "'",
+    gt: '>',
+    lt: '<',
+    nbsp: ' ',
+    quot: '"',
+  };
+  return value.replace(
+    /&(?:#(\d+)|#x([\da-f]+)|([a-z]+));/gi,
+    (entity, decimal: string, hexadecimal: string, name: string) => {
+      if (name) return named[name.toLowerCase()] ?? entity;
+      const codePoint = Number.parseInt(
+        decimal || hexadecimal,
+        decimal ? 10 : 16,
+      );
+      try {
+        return String.fromCodePoint(codePoint);
+      } catch {
+        return entity;
+      }
+    },
+  );
+}
+
+function truncatePreviewText(value: string, limit: number): string {
+  if (limit <= 0) return '';
+  const segments = new Intl.Segmenter(undefined, {
+    granularity: 'grapheme',
+  }).segment(value);
+  return Array.from(segments, ({ segment }) => segment)
+    .slice(0, limit)
+    .join('');
 }
 
 function optionalTrimmedString(value: unknown): string | undefined {

@@ -418,8 +418,8 @@ onUnmounted(cleanupSorters);
             </div>
             <div
               v-if="!group.items.length"
-              class="flex min-h-16 items-center justify-center p-sm text-sm
-                text-text-3 italic sm:p-md"
+              class="flex min-h-16 items-center p-sm text-sm text-text-3 italic
+                sm:p-md"
             >
               {{ phrase.project_relations_empty }}
             </div>

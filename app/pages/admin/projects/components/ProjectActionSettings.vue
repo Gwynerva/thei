@@ -460,45 +460,45 @@ function clearFile() {
         <div class="flex min-w-0 flex-wrap gap-md">
           <Field class="min-w-70 flex-1">
             <FieldLabel>Фон кнопки</FieldLabel>
-            <FieldSelect
-              v-model="action.backgroundMode"
-              :options="{
-                'standard-gradient': 'Стандартный',
-                'accent-gradient': 'Свой цвет',
-                asset: 'Изображение',
-                ...(action.iconMode === 'asset' &&
-                iconMedia?.accentHue !== undefined
-                  ? { 'icon-gradient': 'Цвет иконки' }
-                  : {}),
-                ...(action.target === 'file' &&
-                fileMedia?.accentHue !== undefined
-                  ? { 'file-gradient': 'Цвет файла' }
-                  : {}),
-                ...(hasSiteIcon && faviconMedia?.accentHue !== undefined
-                  ? {
-                      'link-gradient': 'Цвет ссылки',
-                    }
-                  : {}),
-              }"
-            />
-            <div
-              v-if="action.backgroundMode === 'accent-gradient'"
-              class="mt-xs flex items-center gap-xs"
-            >
-              <input
-                v-model="action.accentColor"
-                type="color"
-                aria-label="Акцентный цвет кнопки"
-                class="size-10 cursor-pointer rounded-sm border border-border-1
-                  bg-bg-2 p-1"
+            <div class="flex flex-wrap items-start gap-xs">
+              <FieldSelect
+                v-model="action.backgroundMode"
+                :options="{
+                  'standard-gradient': 'Стандартный',
+                  'accent-gradient': 'Свой цвет',
+                  asset: 'Изображение',
+                  ...(action.iconMode === 'asset' &&
+                  iconMedia?.accentHue !== undefined
+                    ? { 'icon-gradient': 'Цвет иконки' }
+                    : {}),
+                  ...(action.target === 'file' &&
+                  fileMedia?.accentHue !== undefined
+                    ? { 'file-gradient': 'Цвет файла' }
+                    : {}),
+                  ...(hasSiteIcon && faviconMedia?.accentHue !== undefined
+                    ? {
+                        'link-gradient': 'Цвет ссылки',
+                      }
+                    : {}),
+                }"
               />
-              <code class="text-sm text-text-2">{{ action.accentColor }}</code>
-            </div>
-            <div
-              v-if="action.backgroundMode === 'asset'"
-              class="mt-xs flex flex-wrap items-end gap-sm"
-            >
+              <div
+                v-if="action.backgroundMode === 'accent-gradient'"
+                class="flex items-center gap-xs"
+              >
+                <input
+                  v-model="action.accentColor"
+                  type="color"
+                  aria-label="Акцентный цвет кнопки"
+                  class="size-10 cursor-pointer rounded-sm border
+                    border-border-1 bg-bg-2 p-1"
+                />
+                <code class="text-sm text-text-2">{{
+                  action.accentColor
+                }}</code>
+              </div>
               <AssetTile
+                v-if="action.backgroundMode === 'asset'"
                 :media="backgroundMedia"
                 :size="backgroundAssetSize"
                 :is-private="action.isPrivate"
@@ -510,7 +510,12 @@ function clearFile() {
                 class="h-12 w-32 shrink-0 cursor-pointer"
                 @click="backgroundSlot.open"
               />
-              <Field class="min-w-28 flex-1 text-xs">
+            </div>
+            <div
+              v-if="action.backgroundMode === 'asset'"
+              class="flex flex-wrap items-end gap-sm"
+            >
+              <Field class="min-w-28 text-xs">
                 <FieldLabel>Размер</FieldLabel>
                 <FieldSelect
                   v-model="action.backgroundSize"
@@ -523,7 +528,7 @@ function clearFile() {
                   }"
                 />
               </Field>
-              <Field class="min-w-28 flex-1 text-xs">
+              <Field class="min-w-28 text-xs">
                 <FieldLabel>Повтор</FieldLabel>
                 <FieldSelect
                   v-model="action.backgroundRepeat"
@@ -545,27 +550,29 @@ function clearFile() {
 
           <Field class="min-w-70 flex-1">
             <FieldLabel>Иконка кнопки</FieldLabel>
-            <FieldSelect
-              v-model="action.iconMode"
-              :options="{
-                fallback: 'Стандартная',
-                ...(hasSiteIcon ? { favicon: 'Иконка сайта' } : {}),
-                asset: 'Изображение',
-              }"
-            />
-            <AssetTile
-              v-if="action.iconMode === 'asset'"
-              :media="action.iconAssetUuid ? iconMedia : undefined"
-              :size="iconSize"
-              :is-private="action.isPrivate"
-              :aria-label="
-                action.iconAssetUuid
-                  ? 'Изменить иконку кнопки действия'
-                  : 'Выбрать иконку кнопки действия'
-              "
-              class="mt-xs size-24 cursor-pointer"
-              @click="iconSlot.open"
-            />
+            <div class="flex flex-wrap items-start gap-xs">
+              <FieldSelect
+                v-model="action.iconMode"
+                :options="{
+                  fallback: 'Стандартная',
+                  ...(hasSiteIcon ? { favicon: 'Иконка сайта' } : {}),
+                  asset: 'Изображение',
+                }"
+              />
+              <AssetTile
+                v-if="action.iconMode === 'asset'"
+                :media="action.iconAssetUuid ? iconMedia : undefined"
+                :size="iconSize"
+                :is-private="action.isPrivate"
+                :aria-label="
+                  action.iconAssetUuid
+                    ? 'Изменить иконку кнопки действия'
+                    : 'Выбрать иконку кнопки действия'
+                "
+                class="size-24 cursor-pointer"
+                @click="iconSlot.open"
+              />
+            </div>
           </Field>
         </div>
 

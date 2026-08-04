@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type EditorJS from '@editorjs/editorjs';
 import type { OutputData } from '@editorjs/editorjs';
+import { debounce } from 'perfect-debounce';
 import type {
   AssetReplaceResult,
   AssetVariantInfo,
@@ -10,13 +11,14 @@ import { AssetType, assetSourceName } from '#layers/thei/shared/asset';
 import {
   ContentValidationError,
   collectContentAssetSizeMap,
+  collectContentAssetUuids,
   contentDataIsSemanticallyEqual,
-  extractContentAssetRefs,
   normalizeContentData,
   summarizeContentData,
   type ContentAssetData,
   type ContentFieldModelValue,
   type ContentOutputData,
+  type ContentSummary,
 } from '#layers/thei/shared/content';
 import {
   launchAssetWizard,
@@ -67,8 +69,61 @@ const props = defineProps<{
 const holder = useTemplateRef<HTMLElement>('holder');
 const saving = ref(false);
 const errorMessage = ref<string | undefined>();
+const humanSize = useHumanSize();
+const initialData = normalizeContentData(props.modalData.value?.data);
+const serializeContent = (data: ContentOutputData) =>
+  JSON.stringify(
+    normalizeContentData(data).blocks.map(({ id: _id, ...block }) => block),
+  );
+const {
+  value: draftData,
+  isDirty,
+  markSaved,
+} = useSerializableState(initialData, { serialize: serializeContent });
+const editorChangePending = ref(false);
+const computedInitialSummary = summarizeContentData(
+  initialData,
+  collectContentAssetSizeMap(initialData),
+);
+const headerSummary = ref<ContentSummary>({
+  blockCount:
+    props.modalData.value?.blockCount ?? computedInitialSummary.blockCount,
+  assetCount:
+    props.modalData.value?.assetCount ?? computedInitialSummary.assetCount,
+  assetTotalSize:
+    props.modalData.value?.assetTotalSize ??
+    computedInitialSummary.assetTotalSize,
+});
 let editor: EditorJS | undefined;
 let cleanupEditorDrag: (() => void) | undefined;
+let summaryVersion = 0;
+
+const refreshHeaderSummary = debounce(async () => {
+  if (!editor) return;
+  const version = ++summaryVersion;
+  try {
+    const data = normalizeContentData((await editor.save()) as OutputData);
+    const next = summarizeContentData(data, collectContentAssetSizeMap(data));
+    if (version === summaryVersion) {
+      draftData.value = data;
+      headerSummary.value = next;
+      editorChangePending.value = false;
+    }
+  } catch {
+    // Editor.js can briefly be between block states while a tool is updating.
+  }
+}, 150);
+
+useModalCloseGuard(
+  () =>
+    (!editorChangePending.value && !isDirty.value) ||
+    window.confirm(phrase.value.unsaved_modal_confirm),
+);
+
+function handleEditorChange() {
+  editorChangePending.value = true;
+  void refreshHeaderSummary();
+}
 
 onMounted(async () => {
   document.body.classList.add('content-editor-modal-open');
@@ -89,6 +144,7 @@ onMounted(async () => {
     holder: holder.value!,
     data: toEditorData(props.modalData.value?.data),
     autofocus: true,
+    onChange: handleEditorChange,
     placeholder: phrase.value.content_editor_placeholder,
     i18n: {
       messages: editorJsI18nMessages(),
@@ -170,6 +226,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  summaryVersion++;
   cleanupEditorDrag?.();
   cleanupEditorDrag = undefined;
   document.body.classList.remove(
@@ -187,7 +244,9 @@ async function save() {
   try {
     const raw = (await editor.save()) as OutputData;
     const data = normalizeContentData(raw) as ContentOutputData;
+    draftData.value = data;
     if (contentDataIsSemanticallyEqual(data, props.modalData.value?.data)) {
+      markSaved(data);
       emit('modalResult', { type: 'unchanged' });
       return;
     }
@@ -195,6 +254,7 @@ async function save() {
       data,
       collectContentAssetSizeMap(data),
     );
+    markSaved(data);
     emit('modalResult', {
       type: 'save',
       value: {
@@ -350,8 +410,8 @@ async function buildDraftUsageDelta() {
   if (!editor) return {};
   const draft = normalizeContentData((await editor.save()) as OutputData);
   const saved = normalizeContentData(props.modalData.value?.data);
-  const draftCounts = countRefsByAsset(draft);
-  const savedCounts = countRefsByAsset(saved);
+  const draftCounts = countContentUsageByAsset(draft);
+  const savedCounts = countContentUsageByAsset(saved);
   const keys = new Set([...draftCounts.keys(), ...savedCounts.keys()]);
   return Object.fromEntries(
     Array.from(keys, (assetUuid) => [
@@ -361,12 +421,10 @@ async function buildDraftUsageDelta() {
   );
 }
 
-function countRefsByAsset(data: ContentOutputData) {
-  const result = new Map<string, number>();
-  for (const ref of extractContentAssetRefs(data)) {
-    result.set(ref.assetUuid, (result.get(ref.assetUuid) ?? 0) + 1);
-  }
-  return result;
+function countContentUsageByAsset(data: ContentOutputData) {
+  return new Map(
+    collectContentAssetUuids(data).map((assetUuid) => [assetUuid, 1]),
+  );
 }
 
 async function launchContentAssetWizard(
@@ -509,13 +567,46 @@ function editorJsI18nMessages() {
     width="56rem"
     max-height="calc(100dvh - var(--spacing-window) - var(--spacing-window))"
   >
+    <template #title>
+      <div class="truncate">{{ modalData.title }}</div>
+      <div
+        class="mt-0.5 flex items-center gap-md text-xs font-normal
+          tracking-normal text-text-3"
+      >
+        <span
+          class="inline-flex items-center gap-1 whitespace-nowrap"
+          :data-title-popup="
+            phrase.content_block_count(headerSummary.blockCount)
+          "
+        >
+          <Icon name="blocks" />
+          {{ headerSummary.blockCount }}
+        </span>
+        <span
+          class="inline-flex items-center gap-1 whitespace-nowrap"
+          :data-title-popup="
+            phrase.content_file_count(headerSummary.assetCount)
+          "
+        >
+          <Icon name="file" />
+          {{ headerSummary.assetCount }} /
+          {{ humanSize(headerSummary.assetTotalSize) }}
+        </span>
+      </div>
+    </template>
     <template #header-actions>
       <div v-if="errorMessage" class="truncate text-sm text-text-error">
         {{ errorMessage }}
       </div>
-      <Button class="font-semibold" :disabled="saving" @click="save">
+      <Button
+        class="font-semibold"
+        :disabled="saving || (!editorChangePending && !isDirty)"
+        @click="save"
+      >
         <Icon v-if="saving" name="loading" class="mr-xs" />
-        <span>{{ phrase.save }}</span>
+        <span>{{
+          editorChangePending || isDirty ? phrase.save : phrase.saved
+        }}</span>
       </Button>
     </template>
 

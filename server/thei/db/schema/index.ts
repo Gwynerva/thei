@@ -6,7 +6,7 @@ import { projects } from './projects';
 import { adminSessions } from './admin-sessions';
 import {
   projectContentSections,
-  projectContentSectionPeriods,
+  projectStages,
 } from './project-content-sections';
 import { projectRelations } from './project-relations';
 import { tags } from './tags';
@@ -22,7 +22,7 @@ export const schema = {
   projects,
   adminSessions,
   projectContentSections,
-  projectContentSectionPeriods,
+  projectStages,
   projectRelations,
   tags,
   tagUsages,
