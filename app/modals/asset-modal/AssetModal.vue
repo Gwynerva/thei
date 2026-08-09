@@ -1,25 +1,16 @@
 <script lang="ts" setup>
-import ModalBackButton from '../ModalBackButton.vue';
 import AsideModalButton from './AssetModalButton.vue';
 
 const props = defineProps<{
   asideTitle?: string;
-  backLabel?: string;
 }>();
 
 const isAsideOpen = ref(true);
-const effectiveBackLabel = computed(
-  () => props.backLabel ?? modalBackLabel.value,
-);
 </script>
 
 <template>
   <section class="absolute flex h-dvh w-dvw flex-col sm:flex-row">
     <div class="relative flex flex-1 items-center justify-center bg-bg-1">
-      <div v-if="effectiveBackLabel" class="absolute top-0 left-0 z-10 p-sm">
-        <ModalBackButton :target="effectiveBackLabel" floating />
-      </div>
-
       <div
         class="absolute top-0 right-0 z-10 flex flex-row-reverse gap-sm p-sm
           sm:flex-col"

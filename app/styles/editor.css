@@ -40,11 +40,6 @@
   }
 
   /* Core canvas typography, layout, placeholders, and toolbar behavior. */
-  .content-editor .ce-block__content,
-  .content-editor .ce-toolbar__content {
-    max-width: none;
-  }
-
   .content-editor .codex-editor {
     --selectionColor: var(--content-editor-selection);
     --inlineSelectionColor: var(--content-editor-selection);

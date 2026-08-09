@@ -19,9 +19,11 @@ export function createDragSort(
   options: SortableControllerOptions,
 ) {
   let skipClickUntil = 0;
+  const restoreTouchAction = applyDragTouchAction(root, options.handle);
 
   const sortable = Sortable.create(root, {
     animation: 150,
+    forceFallback: true,
     draggable: '[data-drag-id]',
     handle: options.handle,
     group: options.group,
@@ -56,9 +58,70 @@ export function createDragSort(
 
   function destroy() {
     sortable.destroy();
+    restoreTouchAction();
   }
 
   return { guardClick, destroy };
+}
+
+interface TouchActionStyle {
+  getPropertyPriority(property: string): string;
+  getPropertyValue(property: string): string;
+  removeProperty(property: string): string;
+  setProperty(property: string, value: string, priority?: string): void;
+}
+
+interface TouchActionElement {
+  style: TouchActionStyle;
+}
+
+interface TouchActionRoot {
+  querySelectorAll(selector: string): Iterable<TouchActionElement>;
+}
+
+export function applyDragTouchAction(root: TouchActionRoot, handle?: string) {
+  const selector = handle ?? '[data-drag-id]';
+  const original = new Map<
+    TouchActionElement,
+    { value: string; priority: string }
+  >();
+
+  function apply() {
+    for (const element of root.querySelectorAll(selector)) {
+      if (original.has(element)) continue;
+      original.set(element, {
+        value: element.style.getPropertyValue('touch-action'),
+        priority: element.style.getPropertyPriority('touch-action'),
+      });
+      element.style.setProperty('touch-action', 'none');
+    }
+  }
+
+  apply();
+  const observer =
+    typeof MutationObserver === 'undefined'
+      ? undefined
+      : new MutationObserver(() => apply());
+  observer?.observe(root as unknown as Node, {
+    childList: true,
+    subtree: true,
+  });
+
+  return () => {
+    observer?.disconnect();
+    for (const [element, previous] of original) {
+      if (previous.value) {
+        element.style.setProperty(
+          'touch-action',
+          previous.value,
+          previous.priority,
+        );
+      } else {
+        element.style.removeProperty('touch-action');
+      }
+    }
+    original.clear();
+  };
 }
 
 export function useDragSort(

@@ -1,5 +1,5 @@
 import { eq, inArray } from 'drizzle-orm';
-import type { ProjectContentSectionEditItem } from '#layers/thei/shared/project-content-section';
+import type { ProjectSectionContentItem } from '#layers/thei/shared/project-content-item';
 import { createEmptyContentFieldValue } from '#layers/thei/shared/content';
 import { EntityPrefix, generateUniqueId } from '../entity-id';
 import {
@@ -8,19 +8,19 @@ import {
   type PreparedContentSave,
 } from '../content/repository';
 import {
-  deleteProjectStructuredItemContent,
-  prepareProjectStructuredItems,
-  projectStructuredItemIdsToRemove,
-} from './structured-items';
+  deleteProjectContentItemContent,
+  prepareProjectContentItems,
+  projectContentItemIdsToRemove,
+} from './content-items';
 
-type PreparedSection = ProjectContentSectionEditItem & {
+type PreparedSection = ProjectSectionContentItem & {
   sectionUuid: string;
   contentSave: PreparedContentSave;
 };
 
 export async function prepareProjectContentSections(
   projectUuid: string,
-  sections: ProjectContentSectionEditItem[] | undefined,
+  sections: ProjectSectionContentItem[] | undefined,
 ): Promise<PreparedSection[] | undefined> {
   if (sections === undefined) return undefined;
   const { db, schema } = THEI_SERVER.useDb();
@@ -30,7 +30,7 @@ export async function prepareProjectContentSections(
     .where(eq(schema.projectContentSections.projectUuid, projectUuid))
     .all();
   const existingIds = new Set(existing.map((item) => item.sectionUuid));
-  return prepareProjectStructuredItems(sections, {
+  return prepareProjectContentItems(sections, {
     existingIds,
     getId: (section) => section.sectionUuid,
     createId: () =>
@@ -70,11 +70,11 @@ export function applyProjectContentSections(
     .from(schema.projectContentSections)
     .where(eq(schema.projectContentSections.projectUuid, projectUuid))
     .all();
-  const removed = projectStructuredItemIdsToRemove(
+  const removed = projectContentItemIdsToRemove(
     existing.map((item: { sectionUuid: string }) => item.sectionUuid),
     sections.map((section) => section.sectionUuid),
   );
-  deleteProjectStructuredItemContent(tx, schema, 'project-section', removed);
+  deleteProjectContentItemContent(tx, schema, 'project-section', removed);
   if (removed.length) {
     tx.delete(schema.projectContentSections)
       .where(inArray(schema.projectContentSections.sectionUuid, removed))
@@ -128,7 +128,7 @@ export function deleteProjectContentSections(
     .where(eq(schema.projectContentSections.projectUuid, projectUuid))
     .all();
   const ids = rows.map((row: { sectionUuid: string }) => row.sectionUuid);
-  deleteProjectStructuredItemContent(tx, schema, 'project-section', ids);
+  deleteProjectContentItemContent(tx, schema, 'project-section', ids);
   if (!ids.length) return;
   tx.delete(schema.projectContentSections)
     .where(eq(schema.projectContentSections.projectUuid, projectUuid))
@@ -146,6 +146,7 @@ export async function getProjectContentSections(projectUuid: string) {
 
   return await Promise.all(
     rows.map(async (section) => ({
+      isStage: false as const,
       sectionUuid: section.sectionUuid,
       title: section.title,
       summary: section.summary,

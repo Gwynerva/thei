@@ -879,7 +879,6 @@ function errorToMessage(error: unknown, fallback: string): string {
 <template>
   <AssetModal
     :aside-title="phrase.upload_variants"
-    :back-label="modalData.backLabel"
   >
     <template #preview>
       <AssetModalCompareMedia

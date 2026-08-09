@@ -30,15 +30,6 @@ describe('Editor.js phrases', () => {
   });
 });
 
-describe('modal navigation phrases', () => {
-  it('builds one reusable contextual back label', () => {
-    expect(ruModule.phrases.back).toBe('Назад');
-    expect(ruModule.phrases.back_to('Варианты файла')).toBe(
-      'Назад: Варианты файла',
-    );
-  });
-});
-
 describe('plural (славянские правила)', () => {
   it('1 → проект', () =>
     expect(plural(1, 'проект', 'проекта', 'проектов')).toBe('1 проект'));

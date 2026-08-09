@@ -23,7 +23,6 @@ export interface UploadSettingsModalData {
   sizeLimitPolicy?: AssetUploadLimitPolicy;
   uploadProfile?: AssetUploadProfile;
   usageDelta?: Record<string, number>;
-  backLabel?: string;
 }
 
 export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {

@@ -230,6 +230,7 @@ describe('content normalization', () => {
 
     expect(summarizeContentData(data, new Map([['a-1', 100]]))).toEqual({
       blockCount: 2,
+      wordCount: 0,
       assetCount: 1,
       assetTotalSize: 100,
     });
@@ -339,9 +340,60 @@ describe('content preview', () => {
     expect(analysis.preview).toEqual({ text: 'Preview', media: imageMedia });
     expect(analysis.summary).toEqual({
       blockCount: 2,
+      wordCount: 1,
       assetCount: 1,
       assetTotalSize: 42,
     });
+  });
+
+  it('counts all visible text except external URLs', () => {
+    const summary = summarizeContentData({
+      blocks: [
+        { type: 'header', data: { text: '<b>Заголовок&nbsp;один</b>' } },
+        {
+          type: 'list',
+          data: {
+            items: [
+              {
+                content: 'Пункт — два!',
+                items: [{ content: 'nested-item', items: [] }],
+              },
+            ],
+          },
+        },
+        { type: 'quote', data: { text: 'Цитата', caption: 'Автор' } },
+        {
+          type: 'contentMedia',
+          data: { asset: { assetUuid: 'media' }, caption: 'Подпись медиа' },
+        },
+        {
+          type: 'contentGallery',
+          data: {
+            items: [
+              {
+                id: 'gallery-item',
+                asset: { assetUuid: 'gallery' },
+                caption: 'Подпись галереи',
+              },
+            ],
+          },
+        },
+        {
+          type: 'contentAttachment',
+          data: {
+            asset: { assetUuid: 'file' },
+            title: 'Название файла',
+            caption: 'Описание файла',
+          },
+        },
+        {
+          type: 'externalLink',
+          data: { url: 'https://example.com/two-words' },
+        },
+      ],
+    });
+
+    expect(summary.wordCount).toBe(15);
   });
 
   it('uses the first media in block and gallery order', () => {

@@ -284,22 +284,17 @@ async function openShowcaseAsset(index: number) {
     caption: snapshot.caption,
     isPrivate: snapshot.isPrivate,
   } satisfies { caption?: string; isPrivate?: boolean };
-  const flowVersion = modalDismissVersion.value;
 
   while (true) {
-    const result = await openModal(
-      assetDetailsModal,
-      {
-        asideTitle: phrase.value.showcase_file,
-        asset: current,
-        primaryLabel: phrase.value.save,
-        showCaption: true,
-        initialCaption: patch.caption,
-        showAccess: true,
-        initialIsPrivate: patch.isPrivate,
-      },
-      { label: phrase.value.showcase_file },
-    );
+    const result = await openModal(assetDetailsModal, {
+      asideTitle: phrase.value.showcase_file,
+      asset: current,
+      primaryLabel: phrase.value.save,
+      showCaption: true,
+      initialCaption: patch.caption,
+      showAccess: true,
+      initialIsPrivate: patch.isPrivate,
+    });
 
     if (result.type === 'replace') {
       patch = {
@@ -310,9 +305,7 @@ async function openShowcaseAsset(index: number) {
         accept: [imageExtensionProfile, videoExtensionProfile],
         maxSize: ASSET_UPLOAD_LIMITS.media,
         sizeLimitPolicy: 'media',
-        backLabel: phrase.value.showcase_file,
       });
-      if (modalDismissVersion.value !== flowVersion) return;
       if (!picked || !picked.result.media) continue;
       updateItem(currentAssetUuid, {
         assetUuid: picked.result.assetUuid,
@@ -384,28 +377,23 @@ async function openOtherAsset(index: number) {
     caption: snapshot.caption,
     isPrivate: snapshot.isPrivate,
   } satisfies { title?: string; caption?: string; isPrivate?: boolean };
-  const flowVersion = modalDismissVersion.value;
 
   while (true) {
-    const result = await openModal(
-      assetDetailsModal,
-      {
-        asideTitle: phrase.value.project_file,
-        asset: current,
-        archivedOriginal: currentArchivedOriginal,
-        primaryLabel: phrase.value.save,
-        showTitle: true,
-        requireTitle: true,
-        initialTitle: patch.title,
-        showCaption: true,
-        initialCaption: patch.caption,
-        captionAsTextarea: true,
-        captionPlaceholder: phrase.value.other_description,
-        showAccess: true,
-        initialIsPrivate: patch.isPrivate,
-      },
-      { label: phrase.value.project_file },
-    );
+    const result = await openModal(assetDetailsModal, {
+      asideTitle: phrase.value.project_file,
+      asset: current,
+      archivedOriginal: currentArchivedOriginal,
+      primaryLabel: phrase.value.save,
+      showTitle: true,
+      requireTitle: true,
+      initialTitle: patch.title,
+      showCaption: true,
+      initialCaption: patch.caption,
+      captionAsTextarea: true,
+      captionPlaceholder: phrase.value.other_description,
+      showAccess: true,
+      initialIsPrivate: patch.isPrivate,
+    });
 
     if (result.type === 'replace') {
       patch = {
@@ -417,9 +405,7 @@ async function openOtherAsset(index: number) {
         accept: anyFileExtensionProfile,
         maxSize: ASSET_UPLOAD_LIMITS.file,
         sizeLimitPolicy: 'file',
-        backLabel: phrase.value.project_file,
       });
-      if (modalDismissVersion.value !== flowVersion) return;
       if (!picked) continue;
       currentArchivedOriginal = archivedOriginalFromMeta(picked.result.meta);
       updateOtherItem(currentAssetUuid, {

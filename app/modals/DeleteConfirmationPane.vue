@@ -1,11 +1,15 @@
 <script lang="ts" setup>
-import ModalWindow from './ModalWindow.vue';
+import type { IconName } from '#thei/icons';
+import ModalContainer from './ModalContainer.vue';
+import ModalTitle from './ModalTitle.vue';
+import ModalHeaderButton from './ModalHeaderButton.vue';
 
 const emit = defineEmits<{ confirm: [] }>();
 
 const props = defineProps<{
   title: string;
   entityType: string;
+  entityIcon?: IconName;
   confirmationName: string;
   deleting: boolean;
 }>();
@@ -13,16 +17,20 @@ const props = defineProps<{
 const confirmInput = ref('');
 const confirmInputElement = shallowRef<HTMLInputElement>();
 const confirmationNameMarker = '\u0000';
+const entityTypeMarker = '\u0001';
 const normalizedConfirmationName = computed(() =>
   props.confirmationName.trim(),
 );
 const deleteDescriptionParts = computed(() =>
   phrase.value
-    .delete_confirmation_description(props.entityType, confirmationNameMarker)
+    .delete_confirmation_description(entityTypeMarker, confirmationNameMarker)
     .split(confirmationNameMarker),
 );
 const deleteDescriptionBeforeName = computed(
   () => deleteDescriptionParts.value[0] ?? '',
+);
+const deleteDescriptionAroundEntity = computed(() =>
+  deleteDescriptionBeforeName.value.split(entityTypeMarker),
 );
 const deleteDescriptionAfterName = computed(() =>
   deleteDescriptionParts.value.slice(1).join(confirmationNameMarker),
@@ -47,11 +55,26 @@ function confirm() {
 </script>
 
 <template>
-  <ModalWindow :title="title" width="32rem">
-    <div class="flex flex-col gap-md">
+  <ModalContainer class="max-w-128">
+    <template #header>
+      <div class="flex items-center gap-xs p-sm">
+        <ModalTitle icon="delete" :title="title" class="flex-1" />
+        <ModalHeaderButton
+          icon="close"
+          :label="phrase.close_modal"
+          @click="closeModal"
+        />
+      </div>
+    </template>
+    <div class="flex flex-col gap-md p-sm">
       <div class="flex flex-col gap-xs text-sm text-text-2">
         <p>
-          <span>{{ deleteDescriptionBeforeName }}</span>
+          <span>{{ deleteDescriptionAroundEntity[0] }}</span>
+          <span class="whitespace-nowrap">
+            <Icon v-if="entityIcon" :name="entityIcon" class="mr-1" />
+            <span>{{ entityType }}</span>
+          </span>
+          <span>{{ deleteDescriptionAroundEntity.slice(1).join(entityTypeMarker) }}</span>
           <button
             type="button"
             class="cursor-pointer font-semibold text-text-error underline
@@ -90,5 +113,5 @@ function confirm() {
         <span>{{ phrase.delete }}</span>
       </Button>
     </div>
-  </ModalWindow>
+  </ModalContainer>
 </template>

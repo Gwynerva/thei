@@ -4,38 +4,37 @@ import {
   type ContentFieldModelValue,
 } from '#layers/thei/shared/content';
 import { contentEditorModal } from '#layers/thei/app/modals/content-editor/modal';
+import ContentStats from '#layers/thei/app/components/content/ContentStats.vue';
 
 const props = defineProps<{
   modelValue?: ContentFieldModelValue | null;
-  titleLabel: string;
+  titleLabel?: string;
 }>();
 
 const emit = defineEmits<{
   'update:modelValue': [value: ContentFieldModelValue | null];
 }>();
 
-const humanSize = useHumanSize();
-
 const analysis = computed(() => analyzeContentData(props.modelValue?.data));
 const summary = computed(() => ({
   blockCount: props.modelValue?.blockCount ?? analysis.value.summary.blockCount,
+  wordCount: analysis.value.summary.wordCount,
   assetCount: props.modelValue?.assetCount ?? analysis.value.summary.assetCount,
   assetTotalSize:
     props.modelValue?.assetTotalSize ?? analysis.value.summary.assetTotalSize,
 }));
 const preview = computed(() => analysis.value.preview);
+const emptyText = computed(() =>
+  preview.value.media
+    ? phrase.value.content_text_empty
+    : phrase.value.content_empty,
+);
 
 async function openEditor() {
-  const result = await openModal(
-    contentEditorModal,
-    {
-      title: props.titleLabel,
-      value: props.modelValue,
-    },
-    {
-      label: props.titleLabel,
-    },
-  );
+  const result = await openModal(contentEditorModal, {
+    title: props.titleLabel,
+    value: props.modelValue,
+  });
 
   if (result.type !== 'save') return;
   emit('update:modelValue', result.value);
@@ -46,7 +45,7 @@ async function openEditor() {
   <button
     type="button"
     data-field
-    :aria-label="phrase.edit_content(titleLabel)"
+    :aria-label="phrase.edit_content(titleLabel || phrase.content_editor_title)"
     class="group relative flex min-h-20 w-full cursor-pointer items-center
       justify-between gap-sm overflow-hidden rounded-normal border-2
       border-border-1 bg-bg-1 p-xs text-left transition sm:p-sm
@@ -81,32 +80,17 @@ async function openEditor() {
             : 'text-text-3 italic'
         "
       >
-        {{ preview.text || phrase.content_empty }}
+        {{ preview.text || emptyText }}
       </span>
     </span>
 
     <span
-      class="relative flex shrink-0 flex-wrap items-center justify-end gap-md
-        text-sm sm:text-base"
+      class="relative flex shrink-0 flex-col items-end gap-1 text-xs
+        text-text-3"
     >
-      <span
-        class="inline-flex cursor-help items-center gap-1 whitespace-nowrap
-          text-text-3 transition-colors hocus:text-text-1"
-        :data-title-popup="phrase.content_block_count(summary.blockCount)"
-      >
-        <Icon name="blocks" />
-        {{ summary.blockCount }}
-      </span>
-      <span
-        class="inline-flex cursor-help items-center gap-1 whitespace-nowrap
-          text-text-3 transition-colors hocus:text-text-1"
-        :data-title-popup="phrase.content_file_count(summary.assetCount)"
-      >
-        <Icon name="file" />
-        {{ summary.assetCount }}
-        /
-        {{ humanSize(summary.assetTotalSize) }}
-      </span>
+      <ContentStats v-bind="summary" class="justify-end" />
+      <TheiTime v-if="modelValue?.updatedAt" :datetime="modelValue.updatedAt" />
+      <span v-else>{{ phrase.content_never_saved }}</span>
     </span>
   </button>
 </template>

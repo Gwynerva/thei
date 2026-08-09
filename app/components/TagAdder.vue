@@ -175,7 +175,7 @@ useDragSort(tagContainer, {
         v-for="(tag, index) in tags"
         :key="tagDragId(tag)"
         :data-drag-id="tagDragId(tag)"
-        class="transition"
+        class="transition-colors"
       >
         <TagChip :tag="tag" class="cursor-auto">
           <button

@@ -56,6 +56,7 @@ export interface ContentOutputData {
 
 export interface ContentSummary {
   blockCount: number;
+  wordCount: number;
   assetCount: number;
   assetTotalSize: number;
 }
@@ -63,6 +64,7 @@ export interface ContentSummary {
 export interface ContentEditValue {
   contentUuid?: string;
   data: ContentOutputData | null;
+  updatedAt?: number;
 }
 
 export type ContentFieldModelValue = ContentEditValue & Partial<ContentSummary>;
@@ -116,6 +118,7 @@ export function createEmptyContentFieldValue(): ContentFieldValue {
   return {
     data: createEmptyContentData(),
     blockCount: 0,
+    wordCount: 0,
     assetCount: 0,
     assetTotalSize: 0,
   };
@@ -224,7 +227,10 @@ export function contentPlainText(
   return contentPlainTextFromNormalized(normalizeContentData(data));
 }
 
-function contentPlainTextFromNormalized(normalized: ContentOutputData) {
+function contentPlainTextFromNormalized(
+  normalized: ContentOutputData,
+  includeExternalLinks = true,
+) {
   const textParts: string[] = [];
   for (const block of normalized.blocks) {
     switch (block.type) {
@@ -250,7 +256,9 @@ function contentPlainTextFromNormalized(normalized: ContentOutputData) {
         appendPreviewText(textParts, (block.data as any).caption);
         break;
       case 'externalLink':
-        appendPreviewText(textParts, (block.data as any).url);
+        if (includeExternalLinks) {
+          appendPreviewText(textParts, (block.data as any).url);
+        }
         break;
     }
   }
@@ -298,9 +306,15 @@ function summarizeNormalizedContentData(
 
   return {
     blockCount: normalized.blocks.length,
+    wordCount: countContentWords(normalized),
     assetCount: assetUuids.size,
     assetTotalSize,
   };
+}
+
+function countContentWords(normalized: ContentOutputData): number {
+  const text = contentPlainTextFromNormalized(normalized, false);
+  return text.match(/[\p{L}\p{N}]+(?:[\p{Pd}'’][\p{L}\p{N}]+)*/gu)?.length ?? 0;
 }
 
 export function collectContentAssetSizeMap(

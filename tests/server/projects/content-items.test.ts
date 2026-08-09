@@ -13,10 +13,10 @@ import {
   getProjectStages,
 } from '../../../server/thei/projects/stages';
 import {
-  prepareProjectStructuredItems,
-  ProjectStructuredItemStorageError,
-  projectStructuredItemIdsToRemove,
-} from '../../../server/thei/projects/structured-items';
+  prepareProjectContentItems,
+  ProjectContentItemStorageError,
+  projectContentItemIdsToRemove,
+} from '../../../server/thei/projects/content-items';
 
 let rawDb: Database.Database | undefined;
 
@@ -26,7 +26,7 @@ afterEach(() => {
   delete (globalThis as any).THEI_SERVER;
 });
 
-describe('project structured item preparation', () => {
+describe('project content item preparation', () => {
   it('creates missing IDs and rejects duplicate or unknown submitted IDs', async () => {
     const baseOptions = {
       existingIds: new Set(['known']),
@@ -37,42 +37,60 @@ describe('project structured item preparation', () => {
     };
 
     await expect(
-      prepareProjectStructuredItems([{}], baseOptions),
+      prepareProjectContentItems([{}], baseOptions),
     ).resolves.toEqual([{ id: 'created' }]);
     await expect(
-      prepareProjectStructuredItems(
+      prepareProjectContentItems(
         [{ id: 'known' }, { id: 'known' }],
         baseOptions,
       ),
-    ).rejects.toThrow(ProjectStructuredItemStorageError);
+    ).rejects.toThrow(ProjectContentItemStorageError);
     await expect(
-      prepareProjectStructuredItems([{ id: 'foreign' }], baseOptions),
+      prepareProjectContentItems([{ id: 'foreign' }], baseOptions),
     ).rejects.toThrow('Unknown stage');
-    expect(projectStructuredItemIdsToRemove(['a', 'b'], ['b', 'c'])).toEqual([
+    expect(projectContentItemIdsToRemove(['a', 'b'], ['b', 'c'])).toEqual([
       'a',
     ]);
   });
 });
 
-describe('project structured item storage', () => {
+describe('project content item storage', () => {
+  it('rejects unsupported stage owner types', () => {
+    const db = createDb();
+    expect(() =>
+      db
+        .insert(schema.stagePeriods)
+        .values({
+          stageType: 'unsupported-stage' as 'project-stage',
+          stageUuid: 'stage',
+          sortOrder: 0,
+          startDate: '2026-01-01',
+          endDate: '2026-01-02',
+        })
+        .run(),
+    ).toThrow();
+  });
+
   it('sorts stages, preserves section order, and cleans removed content', async () => {
     const db = createDb();
     installServerContext(db);
     const stages: NonNullable<Parameters<typeof applyProjectStages>[3]> = [
       {
         stageUuid: 'stage-late',
+        isStage: true,
         title: 'Late',
         summary: '',
         isPrivate: false,
-        period: { startDate: '2026-06-01', endDate: '2026-06-30' },
+        periods: [{ startDate: '2026-06-01', endDate: '2026-06-30' }],
         contentSave: preparedContent('content-late', 'Late content'),
       },
       {
         stageUuid: 'stage-early',
+        isStage: true,
         title: 'Early',
         summary: '',
         isPrivate: false,
-        period: { startDate: '2025-01-01', endDate: '2025-01-31' },
+        periods: [{ startDate: '2025-01-01', endDate: '2025-01-31' }],
         contentSave: preparedContent('content-early', 'Early content'),
       },
     ];
@@ -81,6 +99,7 @@ describe('project structured item storage', () => {
     > = [
       {
         sectionUuid: 'section-second',
+        isStage: false,
         title: 'Second',
         summary: '',
         isPrivate: false,
@@ -89,6 +108,7 @@ describe('project structured item storage', () => {
       },
       {
         sectionUuid: 'section-first',
+        isStage: false,
         title: 'First',
         summary: '',
         isPrivate: true,
@@ -98,6 +118,15 @@ describe('project structured item storage', () => {
     ];
 
     applyProjectStages(db, schema, 'project', stages);
+    db.insert(schema.stagePeriods)
+      .values({
+        stageType: 'event-stage',
+        stageUuid: 'stage-late',
+        sortOrder: 0,
+        startDate: '2027-01-01',
+        endDate: '2027-01-02',
+      })
+      .run();
     applyProjectContentSections(db, schema, 'project', sections);
     db.insert(schema.assetUsages)
       .values({
@@ -129,12 +158,28 @@ describe('project structured item storage', () => {
     deleteProjectContentSections(db, schema, 'project');
 
     expect(db.select().from(schema.projectStages).all()).toHaveLength(1);
+    expect(
+      db
+        .select()
+        .from(schema.stagePeriods)
+        .all()
+        .filter((period) => period.stageType === 'event-stage'),
+    ).toHaveLength(1);
     expect(db.select().from(schema.projectContentSections).all()).toEqual([]);
     expect(db.select().from(schema.content).all()).toEqual([]);
     expect(db.select().from(schema.assetUsages).all()).toEqual([]);
 
     deleteProjectStages(db, schema, 'project');
     expect(db.select().from(schema.projectStages).all()).toEqual([]);
+    expect(db.select().from(schema.stagePeriods).all()).toEqual([
+      {
+        stageType: 'event-stage',
+        stageUuid: 'stage-late',
+        sortOrder: 0,
+        startDate: '2027-01-01',
+        endDate: '2027-01-02',
+      },
+    ]);
   });
 
   it('returns explicit empty content for a damaged section row', async () => {
@@ -159,6 +204,7 @@ describe('project structured item storage', () => {
         content: {
           data: { blocks: [] },
           blockCount: 0,
+          wordCount: 0,
           assetCount: 0,
           assetTotalSize: 0,
         },
@@ -176,10 +222,18 @@ function createDb() {
       "title" text NOT NULL,
       "summary" text DEFAULT '' NOT NULL,
       "isPrivate" integer DEFAULT false NOT NULL,
-      "startDate" text NOT NULL,
-      "endDate" text NOT NULL,
       "createdAt" integer NOT NULL,
       "updatedAt" integer NOT NULL
+    );
+    CREATE TABLE "stage-periods" (
+      "stageType" text NOT NULL,
+      "stageUuid" text NOT NULL,
+      "sortOrder" integer NOT NULL,
+      "startDate" text NOT NULL,
+      "endDate" text NOT NULL,
+      PRIMARY KEY("stageType", "stageUuid", "sortOrder"),
+      CONSTRAINT "stage-periods-stage-type-check"
+        CHECK("stageType" in ('project-stage', 'event-stage'))
     );
     CREATE TABLE "project-content-sections" (
       "sectionUuid" text PRIMARY KEY NOT NULL,
@@ -241,6 +295,7 @@ function installServerContext(db: ReturnType<typeof createDb>) {
               contentUuid: row.contentUuid,
               data: row.data,
               blockCount: row.blockCount,
+              wordCount: 0,
               assetCount: row.assetCount,
               assetTotalSize: row.assetTotalSize,
             }
@@ -256,6 +311,7 @@ function preparedContent(contentUuid: string, text: string) {
     contentUuid,
     data: { blocks: [{ type: 'paragraph' as const, data: { text } }] },
     blockCount: 1,
+    wordCount: text.trim() ? text.trim().split(/\s+/).length : 0,
     assetCount: 0,
     assetTotalSize: 0,
     assetUsages: [],

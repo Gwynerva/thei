@@ -9,14 +9,11 @@ import {
 import { isOneOf } from '../utils/isOneOf';
 import {
   normalizeProjectContentSections,
-  ProjectContentSectionError,
-  type ProjectContentSectionEditItem,
-} from '../project-content-section';
-import {
   normalizeProjectStages,
-  ProjectStageError,
-  type ProjectStageEditItem,
-} from '../project-stage';
+  ProjectContentItemError,
+  type ProjectSectionContentItem,
+  type ProjectStageContentItem,
+} from '../project-content-item';
 import type { MediaDescriptor } from '../media';
 import type { TagEditItem } from '../tag';
 import {
@@ -74,8 +71,8 @@ export type ProjectEditData = {
   iconAssetUuid?: string;
   bannerAssetUuid?: string;
   descriptionContent?: ContentFieldModelValue | null;
-  contentSections?: ProjectContentSectionEditItem[];
-  stages?: ProjectStageEditItem[];
+  contentSections?: ProjectSectionContentItem[];
+  stages?: ProjectStageContentItem[];
   /** Showcase assets in display order. Array index = sort order. */
   showcaseAssets?: ShowcaseAssetEditItem[];
   /** Other files in display order. Array index = sort order. */
@@ -265,8 +262,7 @@ export function validateProjectData(
   } catch (error) {
     if (error instanceof ProjectValidationError) return error.message;
     if (error instanceof ContentValidationError) return error.message;
-    if (error instanceof ProjectContentSectionError) return error.message;
-    if (error instanceof ProjectStageError) return error.message;
+    if (error instanceof ProjectContentItemError) return error.message;
     throw error;
   }
 }
@@ -383,6 +379,9 @@ function validateContentField(
   return {
     contentUuid: normalizeOptionalText(value.contentUuid),
     data: normalizeContentData(value.data),
+    ...(typeof value.updatedAt === 'number' && Number.isFinite(value.updatedAt)
+      ? { updatedAt: value.updatedAt }
+      : {}),
   };
 }
 

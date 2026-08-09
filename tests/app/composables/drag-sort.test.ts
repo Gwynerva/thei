@@ -1,8 +1,43 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+const { sortableCreate, sortableDestroy } = vi.hoisted(() => ({
+  sortableCreate: vi.fn(),
+  sortableDestroy: vi.fn(),
+}));
+
+vi.mock('sortablejs', () => ({
+  default: {
+    create: sortableCreate.mockReturnValue({ destroy: sortableDestroy }),
+  },
+}));
+
 import {
+  applyDragTouchAction,
+  createDragSort,
   moveItemById,
   moveItemToGroup,
 } from '../../../app/composables/drag-sort';
+
+function touchElement(initial = '', priority = '') {
+  let value = initial;
+  let currentPriority = priority;
+  return {
+    style: {
+      getPropertyValue: () => value,
+      getPropertyPriority: () => currentPriority,
+      setProperty: (_property: string, next: string, nextPriority = '') => {
+        value = next;
+        currentPriority = nextPriority;
+      },
+      removeProperty: () => {
+        const previous = value;
+        value = '';
+        currentPriority = '';
+        return previous;
+      },
+    },
+  };
+}
 
 describe('drag sort helpers', () => {
   const items = [
@@ -10,6 +45,26 @@ describe('drag sort helpers', () => {
     { id: 'b', label: 'same' },
     { id: 'c', label: 'other' },
   ];
+
+  it('uses the shared animated fallback behavior', () => {
+    const root = {
+      querySelectorAll: () => [],
+    } as unknown as HTMLElement;
+    const onDrop = vi.fn();
+
+    const controller = createDragSort(root, { onDrop });
+
+    expect(sortableCreate).toHaveBeenCalledWith(
+      root,
+      expect.objectContaining({
+        animation: 150,
+        forceFallback: true,
+      }),
+    );
+
+    controller.destroy();
+    expect(sortableDestroy).toHaveBeenCalled();
+  });
 
   it('moves forward and backward by stable ID', () => {
     expect(
@@ -44,5 +99,40 @@ describe('drag sort helpers', () => {
       { id: 'a', group: 'first' },
       { id: 'b', group: 'third' },
     ]);
+  });
+
+  it('disables touch panning on draggable items and restores inline styles', () => {
+    const first = touchElement();
+    const second = touchElement('pan-x', 'important');
+    const root = {
+      querySelectorAll: (selector: string) => {
+        expect(selector).toBe('[data-drag-id]');
+        return [first, second];
+      },
+    };
+
+    const restore = applyDragTouchAction(root);
+    expect(first.style.getPropertyValue()).toBe('none');
+    expect(second.style.getPropertyValue()).toBe('none');
+
+    restore();
+    expect(first.style.getPropertyValue()).toBe('');
+    expect(second.style.getPropertyValue()).toBe('pan-x');
+    expect(second.style.getPropertyPriority()).toBe('important');
+  });
+
+  it('targets drag handles when a handle selector is configured', () => {
+    const handle = touchElement('manipulation');
+    const root = {
+      querySelectorAll: (selector: string) => {
+        expect(selector).toBe('[data-handle]');
+        return [handle];
+      },
+    };
+
+    const restore = applyDragTouchAction(root, '[data-handle]');
+    expect(handle.style.getPropertyValue()).toBe('none');
+    restore();
+    expect(handle.style.getPropertyValue()).toBe('manipulation');
   });
 });

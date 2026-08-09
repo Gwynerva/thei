@@ -5,7 +5,6 @@ import {
   getPathExtension,
   isExtensionAllowed,
 } from '#layers/thei/shared/assets/extensions';
-import ModalBackButton from '../ModalBackButton.vue';
 import type { PickedFile, PickedFiles } from './picked-file';
 
 const props = defineProps<{
@@ -13,7 +12,6 @@ const props = defineProps<{
     accept: string | ExtensionProfile | (string | ExtensionProfile)[];
     maxSize?: number;
     multiple?: boolean;
-    backLabel?: string;
   };
 }>();
 
@@ -173,14 +171,6 @@ onUnmounted(() => document.removeEventListener('paste', handlePaste));
         p-md text-center transition group-data-dragging:border-accent!
         group-hocus:border-border-2 sm:gap-lg sm:border-8 sm:p-lg"
     >
-      <ModalBackButton
-        v-if="modalData.backLabel || modalBackLabel"
-        :target="modalData.backLabel || modalBackLabel!"
-        class="absolute top-sm left-sm"
-        floating
-        @click.stop
-      />
-
       <button
         type="button"
         @click.stop="closeModal"

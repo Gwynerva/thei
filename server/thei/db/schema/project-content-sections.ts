@@ -28,16 +28,10 @@ export const projectStages = sqliteTable(
     title: text().notNull(),
     summary: text().notNull().default(''),
     isPrivate: integer({ mode: 'boolean' }).notNull().default(false),
-    startDate: text().notNull(),
-    endDate: text().notNull(),
     createdAt: integer().notNull(),
     updatedAt: integer().notNull(),
   },
   (t) => [
-    index('project-stages-project-date-idx').on(
-      t.projectUuid,
-      t.startDate,
-      t.endDate,
-    ),
+    index('project-stages-project-idx').on(t.projectUuid),
   ],
 );

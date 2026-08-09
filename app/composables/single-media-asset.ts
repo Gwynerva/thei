@@ -55,23 +55,15 @@ export function useSingleMediaAsset(options: SingleMediaAssetOptions) {
     return family.variants.find((variant) => variant.assetUuid === assetUuid);
   }
 
-  async function openDetails(
-    initialAsset: AssetVariantInfo,
-    modalFlowId = createModalFlow(),
-  ) {
+  async function openDetails(initialAsset: AssetVariantInfo) {
     let current = initialAsset;
-    const flowVersion = modalDismissVersion.value;
 
     while (true) {
       const asideTitle = options.asideTitle();
-      const result = await openModal(
-        assetDetailsModal,
-        {
-          asideTitle,
-          asset: mapAssetVariantToReplaceResult(current),
-        },
-        { label: asideTitle, flowId: modalFlowId },
-      );
+      const result = await openModal(assetDetailsModal, {
+        asideTitle,
+        asset: mapAssetVariantToReplaceResult(current),
+      });
 
       if (result.type === 'replace') {
         try {
@@ -84,10 +76,7 @@ export function useSingleMediaAsset(options: SingleMediaAssetOptions) {
             sizeLimitPolicy: 'media',
             uploadProfile: options.uploadProfile,
             usageDelta: options.usageDelta?.(),
-            backLabel: asideTitle,
-            modalFlowId,
           });
-          if (modalDismissVersion.value !== flowVersion) return;
           if (!replacement) continue;
           if (!apply(replacement)) continue;
           current = replacement;
@@ -114,7 +103,6 @@ export function useSingleMediaAsset(options: SingleMediaAssetOptions) {
       return;
     }
 
-    const modalFlowId = createModalFlow();
     try {
       const asset = await launchAssetWizard({
         accept: options.accept ?? [
@@ -124,11 +112,9 @@ export function useSingleMediaAsset(options: SingleMediaAssetOptions) {
         maxSize: ASSET_UPLOAD_LIMITS.media,
         sizeLimitPolicy: 'media',
         uploadProfile: options.uploadProfile,
-        backLabel: options.asideTitle(),
-        modalFlowId,
       });
       if (!asset || !apply(asset)) return;
-      await openDetails(asset, modalFlowId);
+      await openDetails(asset);
     } catch (error) {
       reportError(error);
     }

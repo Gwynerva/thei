@@ -93,7 +93,7 @@ const usageDelta = () =>
 const iconSlot = useSingleMediaAsset({
   uploadProfile: 'project-action-icon',
   accept: [imageExtensionProfile],
-  asideTitle: () => 'Иконка кнопки действия',
+  asideTitle: () => phrase.value.project_action_icon,
   getAssetUuid: () => action.value.iconAssetUuid,
   setAssetUuid: (assetUuid) => {
     action.value.iconAssetUuid = assetUuid;
@@ -110,7 +110,7 @@ const iconSlot = useSingleMediaAsset({
 const backgroundSlot = useSingleMediaAsset({
   uploadProfile: 'project-action-background',
   accept: [imageExtensionProfile],
-  asideTitle: () => 'Фон кнопки действия',
+  asideTitle: () => phrase.value.project_action_background,
   getAssetUuid: () => action.value.backgroundAssetUuid,
   setAssetUuid: (assetUuid) => {
     action.value.backgroundAssetUuid = assetUuid;
@@ -262,34 +262,27 @@ function applyFile(asset: AssetVariantInfo) {
   fileExtension.value = result.extension;
   fileSize.value = result.size;
   action.value.fileTitle ??=
-    assetSourceName(asset.meta)?.replace(/\.[^.]+$/, '') ?? 'Файл проекта';
+    assetSourceName(asset.meta)?.replace(/\.[^.]+$/, '') ??
+    phrase.value.project_file;
 }
 
-async function openFileDetails(
-  initialAsset: AssetVariantInfo,
-  modalFlowId = createModalFlow(),
-) {
+async function openFileDetails(initialAsset: AssetVariantInfo) {
   let current = initialAsset;
-  const flowVersion = modalDismissVersion.value;
   let fileTitle = action.value.fileTitle;
   let fileDescription = action.value.fileDescription;
   while (true) {
-    const result = await openModal(
-      assetDetailsModal,
-      {
-        asideTitle: 'Файл кнопки действия',
-        asset: mapAssetVariantToReplaceResult(current),
-        primaryLabel: 'Сохранить',
-        showTitle: true,
-        requireTitle: true,
-        initialTitle: fileTitle,
-        showCaption: true,
-        initialCaption: fileDescription,
-        captionAsTextarea: true,
-        captionPlaceholder: 'Описание файла',
-      },
-      { label: 'Файл кнопки действия', flowId: modalFlowId },
-    );
+    const result = await openModal(assetDetailsModal, {
+      asideTitle: phrase.value.project_action_file,
+      asset: mapAssetVariantToReplaceResult(current),
+      primaryLabel: phrase.value.save,
+      showTitle: true,
+      requireTitle: true,
+      initialTitle: fileTitle,
+      showCaption: true,
+      initialCaption: fileDescription,
+      captionAsTextarea: true,
+      captionPlaceholder: phrase.value.project_action_file_description,
+    });
     if (result.type === 'replace') {
       fileTitle = result.title ?? fileTitle;
       fileDescription = result.caption;
@@ -298,10 +291,7 @@ async function openFileDetails(
         maxSize: ASSET_UPLOAD_LIMITS.file,
         sizeLimitPolicy: 'file',
         usageDelta: usageDelta(),
-        backLabel: 'Файл кнопки действия',
-        modalFlowId,
       });
-      if (modalDismissVersion.value !== flowVersion) return;
       if (!replacement) continue;
       applyFile(replacement);
       current = replacement;
@@ -332,17 +322,14 @@ async function openFileAsset() {
     if (current) await openFileDetails(current);
     return;
   }
-  const modalFlowId = createModalFlow();
   const picked = await launchAssetWizard({
     accept: anyFileExtensionProfile,
     maxSize: ASSET_UPLOAD_LIMITS.file,
     sizeLimitPolicy: 'file',
-    backLabel: 'Файл кнопки действия',
-    modalFlowId,
   });
   if (!picked) return;
   applyFile(picked);
-  await openFileDetails(picked, modalFlowId);
+  await openFileDetails(picked);
 }
 
 function clearFile() {
@@ -362,28 +349,28 @@ function clearFile() {
   <div>
     <SectionHeader
       icon="action-click"
-      title="Кнопка действия проекта"
-      description="Главное действие, которое можно выполнить из проекта."
+      :title="phrase.project_action"
+      :description="phrase.project_action_hint"
       class="mb-md"
     />
     <Box class="flex flex-col gap-md p-sm sm:p-md">
       <div class="flex flex-wrap items-center gap-md">
         <Field class="min-w-50 flex-1">
-          <FieldLabel>Текст кнопки</FieldLabel>
+          <FieldLabel>{{ phrase.project_action_text }}</FieldLabel>
           <FieldInput v-model="action.text" maxlength="30" autocomplete="off" />
         </Field>
 
         <template v-if="hasActionText">
           <Field class="shrink-0">
-            <FieldLabel required>Действие</FieldLabel>
+            <FieldLabel required>{{ phrase.project_action_type }}</FieldLabel>
             <FieldOptions
               v-model="action.target"
               direction="row"
               :options="{
-                file: { icon: 'file', title: 'Файл' },
+                file: { icon: 'file', title: phrase.project_action_file_type },
                 'external-link': {
                   icon: 'external-link',
-                  title: 'Ссылка',
+                  title: phrase.project_action_link,
                 },
               }"
             />
@@ -393,10 +380,10 @@ function clearFile() {
             <FieldToggle v-model="action.isPrivate">
               <span class="inline-flex items-center gap-xs">
                 <Icon name="lock-close" />
-                <span>Приватная кнопка</span>
+                <span>{{ phrase.project_action_private }}</span>
               </span>
             </FieldToggle>
-            <FieldHint>Кнопка будет видна только вам</FieldHint>
+            <FieldHint>{{ phrase.project_action_private_hint }}</FieldHint>
           </Field>
         </template>
       </div>
@@ -407,7 +394,9 @@ function clearFile() {
           class="flex flex-wrap gap-md"
         >
           <Field class="min-w-50 flex-1">
-            <FieldLabel required>Адрес ссылки</FieldLabel>
+            <FieldLabel required>{{
+              phrase.project_action_link_url
+            }}</FieldLabel>
             <FieldInput
               v-model="action.externalUrl"
               type="url"
@@ -416,18 +405,20 @@ function clearFile() {
             />
           </Field>
           <Field class="min-w-70 flex-1">
-            <FieldLabel>Предпросмотр ссылки</FieldLabel>
+            <FieldLabel>{{ phrase.project_action_link_preview }}</FieldLabel>
             <ExternalLinkPreviewCard
               :link="externalLinkPreview"
               :url="action.externalUrl"
               :loading="loadingFavicon"
-              loading-text="Получаем данные сайта…"
+              :loading-text="phrase.project_action_link_loading"
             />
           </Field>
         </div>
         <div v-else class="flex flex-wrap items-start gap-md">
           <Field class="shrink-0 text-center">
-            <FieldLabel required>Целевой файл</FieldLabel>
+            <FieldLabel required>{{
+              phrase.project_action_target_file
+            }}</FieldLabel>
             <AssetTile
               :media="fileMedia"
               :extension="fileExtension"
@@ -435,8 +426,8 @@ function clearFile() {
               :is-private="action.isPrivate"
               :aria-label="
                 action.fileAssetUuid
-                  ? 'Изменить файл кнопки действия'
-                  : 'Выбрать файл кнопки действия'
+                  ? phrase.project_action_file_edit
+                  : phrase.project_action_file_select
               "
               class="mx-auto size-24 cursor-pointer"
               @click="openFileAsset"
@@ -444,14 +435,20 @@ function clearFile() {
           </Field>
           <div class="flex min-w-50 flex-1 flex-col gap-sm">
             <Field>
-              <FieldLabel required>Название файла</FieldLabel>
+              <FieldLabel required>{{
+                phrase.project_action_file_title
+              }}</FieldLabel>
               <FieldInput v-model="action.fileTitle" autocomplete="off" />
             </Field>
             <Field>
-              <FieldLabel>Описание файла</FieldLabel>
+              <FieldLabel>{{
+                phrase.project_action_file_description
+              }}</FieldLabel>
               <FieldTextarea
                 v-model="action.fileDescription"
-                placeholder="Необязательное описание"
+                :placeholder="
+                  phrase.project_action_file_description_placeholder
+                "
               />
             </Field>
           </div>
@@ -459,25 +456,33 @@ function clearFile() {
 
         <div class="flex min-w-0 flex-wrap gap-md">
           <Field class="min-w-70 flex-1">
-            <FieldLabel>Фон кнопки</FieldLabel>
+            <FieldLabel>{{ phrase.project_action_background }}</FieldLabel>
             <div class="flex flex-wrap items-start gap-xs">
               <FieldSelect
                 v-model="action.backgroundMode"
                 :options="{
-                  'standard-gradient': 'Стандартный',
-                  'accent-gradient': 'Свой цвет',
-                  asset: 'Изображение',
+                  'standard-gradient':
+                    phrase.project_action_background_standard,
+                  'accent-gradient': phrase.project_action_background_accent,
+                  asset: phrase.image,
                   ...(action.iconMode === 'asset' &&
                   iconMedia?.accentHue !== undefined
-                    ? { 'icon-gradient': 'Цвет иконки' }
+                    ? {
+                        'icon-gradient':
+                          phrase.project_action_background_icon_color,
+                      }
                     : {}),
                   ...(action.target === 'file' &&
                   fileMedia?.accentHue !== undefined
-                    ? { 'file-gradient': 'Цвет файла' }
+                    ? {
+                        'file-gradient':
+                          phrase.project_action_background_file_color,
+                      }
                     : {}),
                   ...(hasSiteIcon && faviconMedia?.accentHue !== undefined
                     ? {
-                        'link-gradient': 'Цвет ссылки',
+                        'link-gradient':
+                          phrase.project_action_background_link_color,
                       }
                     : {}),
                 }"
@@ -489,7 +494,7 @@ function clearFile() {
                 <input
                   v-model="action.accentColor"
                   type="color"
-                  aria-label="Акцентный цвет кнопки"
+                  :aria-label="phrase.project_action_accent_color"
                   class="size-10 cursor-pointer rounded-sm border
                     border-border-1 bg-bg-2 p-1"
                 />
@@ -504,8 +509,8 @@ function clearFile() {
                 :is-private="action.isPrivate"
                 :aria-label="
                   action.backgroundAssetUuid
-                    ? 'Изменить фон кнопки действия'
-                    : 'Выбрать фон кнопки действия'
+                    ? phrase.project_action_background_edit
+                    : phrase.project_action_background_select
                 "
                 class="h-12 w-32 shrink-0 cursor-pointer"
                 @click="backgroundSlot.open"
@@ -516,20 +521,24 @@ function clearFile() {
               class="flex flex-wrap items-end gap-sm"
             >
               <Field class="min-w-28 text-xs">
-                <FieldLabel>Размер</FieldLabel>
+                <FieldLabel>{{
+                  phrase.project_action_background_size
+                }}</FieldLabel>
                 <FieldSelect
                   v-model="action.backgroundSize"
                   size="xs"
                   :options="{
-                    natural: 'По размеру',
-                    contain: 'Вписать',
-                    cover: 'Заполнить',
-                    stretch: 'Растянуть',
+                    natural: phrase.project_action_background_size_natural,
+                    contain: phrase.project_action_background_size_contain,
+                    cover: phrase.project_action_background_size_cover,
+                    stretch: phrase.project_action_background_size_stretch,
                   }"
                 />
               </Field>
               <Field class="min-w-28 text-xs">
-                <FieldLabel>Повтор</FieldLabel>
+                <FieldLabel>{{
+                  phrase.project_action_background_repeat
+                }}</FieldLabel>
                 <FieldSelect
                   v-model="action.backgroundRepeat"
                   size="xs"
@@ -538,10 +547,10 @@ function clearFile() {
                     action.backgroundSize === 'stretch'
                   "
                   :options="{
-                    'no-repeat': 'Не повторять',
-                    'repeat-x': 'По горизонтали',
-                    'repeat-y': 'По вертикали',
-                    repeat: 'По обеим',
+                    'no-repeat': phrase.project_action_background_repeat_none,
+                    'repeat-x': phrase.project_action_background_repeat_x,
+                    'repeat-y': phrase.project_action_background_repeat_y,
+                    repeat: phrase.project_action_background_repeat_both,
                   }"
                 />
               </Field>
@@ -549,14 +558,16 @@ function clearFile() {
           </Field>
 
           <Field class="min-w-70 flex-1">
-            <FieldLabel>Иконка кнопки</FieldLabel>
+            <FieldLabel>{{ phrase.project_action_icon }}</FieldLabel>
             <div class="flex flex-wrap items-start gap-xs">
               <FieldSelect
                 v-model="action.iconMode"
                 :options="{
-                  fallback: 'Стандартная',
-                  ...(hasSiteIcon ? { favicon: 'Иконка сайта' } : {}),
-                  asset: 'Изображение',
+                  fallback: phrase.project_action_icon_default,
+                  ...(hasSiteIcon
+                    ? { favicon: phrase.project_action_icon_site }
+                    : {}),
+                  asset: phrase.image,
                 }"
               />
               <AssetTile
@@ -566,8 +577,8 @@ function clearFile() {
                 :is-private="action.isPrivate"
                 :aria-label="
                   action.iconAssetUuid
-                    ? 'Изменить иконку кнопки действия'
-                    : 'Выбрать иконку кнопки действия'
+                    ? phrase.project_action_icon_edit
+                    : phrase.project_action_icon_select
                 "
                 class="size-24 cursor-pointer"
                 @click="iconSlot.open"
@@ -581,7 +592,7 @@ function clearFile() {
             class="mb-sm text-center text-xs font-semibold tracking-wide
               text-text-3 uppercase"
           >
-            Предпросмотр
+            {{ phrase.project_action_preview }}
           </p>
           <div class="flex justify-center">
             <ProjectActionButton

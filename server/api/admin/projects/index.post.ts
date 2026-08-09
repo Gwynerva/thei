@@ -21,7 +21,7 @@ import {
   applyProjectStages,
   prepareProjectStages,
 } from '../../../thei/projects/stages';
-import { ProjectStructuredItemStorageError } from '../../../thei/projects/structured-items';
+import { ProjectContentItemStorageError } from '../../../thei/projects/content-items';
 import {
   applyProjectRelations,
   prepareProjectRelations,
@@ -83,7 +83,7 @@ export default defineEventHandler(
     } catch (error) {
       if (
         error instanceof ContentValidationError ||
-        error instanceof ProjectStructuredItemStorageError
+        error instanceof ProjectContentItemStorageError
       ) {
         return { type: 'error', message: error.message };
       }

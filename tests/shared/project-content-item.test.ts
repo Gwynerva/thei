@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeProjectContentSections } from '../../shared/project-content-section';
-import { normalizeProjectStages } from '../../shared/project-stage';
+import { normalizeProjectContentSections, normalizeProjectStages, normalizeStagePeriods } from '../../shared/project-content-item';
 
 const content = (text = 'Body') => ({
   data: { blocks: [{ type: 'paragraph', data: { text } }] },
@@ -14,13 +13,13 @@ describe('project stages', () => {
           title: 'Later',
           summary: '',
           isPrivate: false,
-          period: { startDate: '2026-06-01', endDate: '2026-06-30' },
+          periods: [{ startDate: '2026-06-01', endDate: '2026-06-30' }],
         },
         {
           title: 'Earlier',
           summary: '',
           isPrivate: false,
-          period: { startDate: '2025-01-01', endDate: '2025-02-01' },
+          periods: [{ startDate: '2025-01-01', endDate: '2025-02-01' }],
         },
       ])?.map((stage) => stage.title),
     ).toEqual(['Earlier', 'Later']);
@@ -33,7 +32,7 @@ describe('project stages', () => {
           title: 'Stage',
           summary: '',
           isPrivate: false,
-          period: { startDate: '2026-01-01', endDate: '2026-01-02' },
+          periods: [{ startDate: '2026-01-01', endDate: '2026-01-02' }],
         },
       ])?.[0]?.content,
     ).toBeUndefined();
@@ -48,10 +47,29 @@ describe('project stages', () => {
           title: 'Stage',
           summary: '',
           isPrivate: false,
-          period: { startDate: '2026-02-01', endDate: '2026-01-01' },
+          periods: [{ startDate: '2026-02-01', endDate: '2026-01-01' }],
         },
       ]),
     ).toThrow('Invalid stage period');
+  });
+});
+
+describe('stage periods', () => {
+  it('sorts and merges overlaps but keeps adjacent days separate', () => {
+    expect(normalizeStagePeriods([
+      { startDate: '2026-01-10', endDate: '2026-01-15' },
+      { startDate: '2026-01-05', endDate: '2026-01-12' },
+      { startDate: '2026-01-16', endDate: '2026-01-20' },
+    ])).toEqual([
+      { startDate: '2026-01-05', endDate: '2026-01-15' },
+      { startDate: '2026-01-16', endDate: '2026-01-20' },
+    ]);
+  });
+
+  it('rejects date-time values', () => {
+    expect(() => normalizeStagePeriods([
+      { startDate: '2026-01-01T12:00', endDate: '2026-01-02' },
+    ])).toThrow('Invalid stage period');
   });
 });
 

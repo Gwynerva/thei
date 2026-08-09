@@ -8,6 +8,7 @@ import {
   projectContentSections,
   projectStages,
 } from './project-content-sections';
+import { stagePeriods } from './stage-periods';
 import { projectRelations } from './project-relations';
 import { tags } from './tags';
 import { tagUsages } from './tag-usages';
@@ -23,6 +24,7 @@ export const schema = {
   adminSessions,
   projectContentSections,
   projectStages,
+  stagePeriods,
   projectRelations,
   tags,
   tagUsages,

@@ -1,5 +1,8 @@
-import { eq, inArray } from 'drizzle-orm';
-import type { ProjectStageEditItem } from '#layers/thei/shared/project-stage';
+import { and, asc, eq, inArray } from 'drizzle-orm';
+import {
+  compareProjectStages,
+  type ProjectStageContentItem,
+} from '#layers/thei/shared/project-content-item';
 import { EntityPrefix, generateUniqueId } from '../entity-id';
 import {
   applyPreparedContentSave,
@@ -7,19 +10,20 @@ import {
   type PreparedContentSave,
 } from '../content/repository';
 import {
-  deleteProjectStructuredItemContent,
-  prepareProjectStructuredItems,
-  projectStructuredItemIdsToRemove,
-} from './structured-items';
+  deleteProjectContentItemContent,
+  prepareProjectContentItems,
+  projectContentItemIdsToRemove,
+} from './content-items';
+import { deleteStagePeriods, replaceStagePeriods } from './stage-periods';
 
-type PreparedStage = ProjectStageEditItem & {
+type PreparedStage = ProjectStageContentItem & {
   stageUuid: string;
   contentSave?: PreparedContentSave;
 };
 
 export async function prepareProjectStages(
   projectUuid: string,
-  stages: ProjectStageEditItem[] | undefined,
+  stages: ProjectStageContentItem[] | undefined,
 ): Promise<PreparedStage[] | undefined> {
   if (stages === undefined) return undefined;
   const { db, schema } = THEI_SERVER.useDb();
@@ -31,7 +35,7 @@ export async function prepareProjectStages(
       .all()
       .map((item) => item.stageUuid),
   );
-  return prepareProjectStructuredItems(stages, {
+  return prepareProjectContentItems(stages, {
     existingIds,
     getId: (stage) => stage.stageUuid,
     createId: () =>
@@ -73,11 +77,12 @@ export function applyProjectStages(
     .where(eq(schema.projectStages.projectUuid, projectUuid))
     .all()
     .map((item: { stageUuid: string }) => item.stageUuid);
-  const removed = projectStructuredItemIdsToRemove(
+  const removed = projectContentItemIdsToRemove(
     existingIds,
     stages.map((stage) => stage.stageUuid),
   );
-  deleteProjectStructuredItemContent(tx, schema, 'project-stage', removed);
+  deleteProjectContentItemContent(tx, schema, 'project-stage', removed);
+  deleteStagePeriods(tx, schema, 'project-stage', removed);
   if (removed.length)
     tx.delete(schema.projectStages)
       .where(inArray(schema.projectStages.stageUuid, removed))
@@ -92,8 +97,6 @@ export function applyProjectStages(
         title: stage.title,
         summary: stage.summary,
         isPrivate: stage.isPrivate,
-        startDate: stage.period.startDate,
-        endDate: stage.period.endDate,
         createdAt: now,
         updatedAt: now,
       })
@@ -103,12 +106,17 @@ export function applyProjectStages(
           title: stage.title,
           summary: stage.summary,
           isPrivate: stage.isPrivate,
-          startDate: stage.period.startDate,
-          endDate: stage.period.endDate,
           updatedAt: now,
         },
       })
       .run();
+    replaceStagePeriods(
+      tx,
+      schema,
+      'project-stage',
+      stage.stageUuid,
+      stage.periods,
+    );
     if (stage.contentSave)
       applyPreparedContentSave(
         tx,
@@ -128,7 +136,8 @@ export function deleteProjectStages(tx: any, schema: any, projectUuid: string) {
     .where(eq(schema.projectStages.projectUuid, projectUuid))
     .all()
     .map((row: { stageUuid: string }) => row.stageUuid);
-  deleteProjectStructuredItemContent(tx, schema, 'project-stage', ids);
+  deleteProjectContentItemContent(tx, schema, 'project-stage', ids);
+  deleteStagePeriods(tx, schema, 'project-stage', ids);
   if (ids.length)
     tx.delete(schema.projectStages)
       .where(eq(schema.projectStages.projectUuid, projectUuid))
@@ -141,21 +150,44 @@ export async function getProjectStages(projectUuid: string) {
     .select()
     .from(schema.projectStages)
     .where(eq(schema.projectStages.projectUuid, projectUuid))
-    .orderBy(schema.projectStages.startDate, schema.projectStages.endDate)
     .all();
 
-  return await Promise.all(
-    rows.map(async (stage) => ({
-      stageUuid: stage.stageUuid,
-      title: stage.title,
-      summary: stage.summary,
-      isPrivate: stage.isPrivate,
-      period: { startDate: stage.startDate, endDate: stage.endDate },
-      content: await THEI_SERVER.content.buildFieldValue(
-        'project-stage',
-        stage.stageUuid,
-        'project-stage-body',
-      ),
-    })),
-  );
+  const stageIds = rows.map((stage) => stage.stageUuid);
+  const periods = stageIds.length
+    ? db
+        .select()
+        .from(schema.stagePeriods)
+        .where(
+          and(
+            eq(schema.stagePeriods.stageType, 'project-stage'),
+            inArray(schema.stagePeriods.stageUuid, stageIds),
+          ),
+        )
+        .orderBy(
+          asc(schema.stagePeriods.startDate),
+          asc(schema.stagePeriods.endDate),
+        )
+        .all()
+    : [];
+  const periodsByStage = Map.groupBy(periods, (period) => period.stageUuid);
+
+  return (
+    await Promise.all(
+      rows.map(async (stage) => ({
+        isStage: true as const,
+        stageUuid: stage.stageUuid,
+        title: stage.title,
+        summary: stage.summary,
+        isPrivate: stage.isPrivate,
+        periods: (periodsByStage.get(stage.stageUuid) ?? []).map(
+          ({ startDate, endDate }) => ({ startDate, endDate }),
+        ),
+        content: await THEI_SERVER.content.buildFieldValue(
+          'project-stage',
+          stage.stageUuid,
+          'project-stage-body',
+        ),
+      })),
+    )
+  ).sort(compareProjectStages);
 }

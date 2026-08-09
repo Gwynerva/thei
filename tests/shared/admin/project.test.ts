@@ -538,7 +538,7 @@ describe('validateProjectData asset metadata', () => {
           title: 'Stage',
           summary: '',
           isPrivate: false,
-          period: { startDate: '2026-01-01', endDate: '2026-01-02' },
+          periods: [{ startDate: '2026-01-01', endDate: '2026-01-02' }],
           content: repeatedAssetContent,
         },
       ],
@@ -564,7 +564,7 @@ describe('validateProjectData asset metadata', () => {
           title: 'Discovery',
           summary: 'Interviews',
           isPrivate: false,
-          period: { startDate: '2026-01-01', endDate: '2026-01-02' },
+          periods: [{ startDate: '2026-01-01', endDate: '2026-01-02' }],
           content: {
             data: {
               blocks: [

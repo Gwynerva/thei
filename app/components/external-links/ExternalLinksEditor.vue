@@ -310,7 +310,7 @@ onUnmounted(() => {
           v-for="(link, index) in links"
           :key="link.url"
           :data-drag-id="link.url"
-          class="rounded-sm transition"
+          class="rounded-sm transition-colors"
         >
           <ExternalLinkChip
             :link="link"

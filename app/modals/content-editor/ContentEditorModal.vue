@@ -33,7 +33,10 @@ import {
   videoExtensionProfile,
 } from '#layers/thei/shared/assets/extensions';
 import { ASSET_UPLOAD_LIMITS } from '#layers/thei/shared/asset-upload-limits';
-import ModalWindow from '#layers/thei/app/modals/ModalWindow.vue';
+import ModalContainer from '#layers/thei/app/modals/ModalContainer.vue';
+import ModalTitle from '#layers/thei/app/modals/ModalTitle.vue';
+import ModalHeaderButton from '#layers/thei/app/modals/ModalHeaderButton.vue';
+import ContentStats from '#layers/thei/app/components/content/ContentStats.vue';
 import {
   ContentAttachmentTool,
   ContentGalleryTool,
@@ -61,7 +64,7 @@ const emit = defineEmits<{
 
 const props = defineProps<{
   modalData: {
-    title: string;
+    title?: string;
     value?: ContentFieldModelValue | null;
   };
 }>();
@@ -69,7 +72,6 @@ const props = defineProps<{
 const holder = useTemplateRef<HTMLElement>('holder');
 const saving = ref(false);
 const errorMessage = ref<string | undefined>();
-const humanSize = useHumanSize();
 const initialData = normalizeContentData(props.modalData.value?.data);
 const serializeContent = (data: ContentOutputData) =>
   JSON.stringify(
@@ -88,6 +90,7 @@ const computedInitialSummary = summarizeContentData(
 const headerSummary = ref<ContentSummary>({
   blockCount:
     props.modalData.value?.blockCount ?? computedInitialSummary.blockCount,
+  wordCount: computedInitialSummary.wordCount,
   assetCount:
     props.modalData.value?.assetCount ?? computedInitialSummary.assetCount,
   assetTotalSize:
@@ -259,6 +262,7 @@ async function save() {
       type: 'save',
       value: {
         contentUuid: props.modalData.value?.contentUuid,
+        updatedAt: props.modalData.value?.updatedAt,
         data,
         ...summary,
       },
@@ -271,6 +275,16 @@ async function save() {
   } finally {
     saving.value = false;
   }
+}
+
+async function clearContent() {
+  if (!editor || headerSummary.value.blockCount === 0) return;
+  if (!window.confirm(phrase.value.content_editor_clear_confirm)) return;
+  await editor.clear();
+  const data = normalizeContentData((await editor.save()) as OutputData);
+  draftData.value = data;
+  headerSummary.value = summarizeContentData(data, new Map());
+  editorChangePending.value = false;
 }
 
 async function pickAsset(kind: ContentEditorAssetKind) {
@@ -299,21 +313,14 @@ async function editAsset(
   current: ContentAssetData,
   kind: ContentEditorAssetKind,
 ) {
-  const flowVersion = modalDismissVersion.value;
-
   while (true) {
-    const result = await openModal(
-      assetDetailsModal,
-      {
-        asideTitle: phrase.value.asset,
-        asset: contentAssetReplaceResult(current),
-      },
-      { label: phrase.value.asset },
-    );
+    const result = await openModal(assetDetailsModal, {
+      asideTitle: phrase.value.asset,
+      asset: contentAssetReplaceResult(current),
+    });
 
     if (result.type === 'replace') {
       const edited = await replaceAsset(current, kind);
-      if (modalDismissVersion.value !== flowVersion) return undefined;
       if (!edited) continue;
       return edited;
     }
@@ -341,7 +348,6 @@ async function replaceAsset(
     if (!stored) return undefined;
     const edited = await launchAssetEditor(stored, {
       ...contentAssetOptions(kind),
-      backLabel: phrase.value.asset,
       usageDelta: await buildDraftUsageDelta(),
     });
     return edited ? mapAsset(edited) : undefined;
@@ -369,26 +375,20 @@ function contentAssetOptions(kind: ContentEditorAssetKind): AssetWizardOptions {
 const editGalleryItem: ContentEditorEditGalleryItem = async (item) => {
   let asset = item.asset;
   let caption = item.caption;
-  const flowVersion = modalDismissVersion.value;
 
   while (true) {
-    const result = await openModal(
-      assetDetailsModal,
-      {
-        asideTitle: phrase.value.asset,
-        asset: contentAssetReplaceResult(asset),
-        primaryLabel: phrase.value.save,
-        showCaption: true,
-        initialCaption: caption,
-        captionPlaceholder: phrase.value.content_caption,
-      },
-      { label: phrase.value.asset },
-    );
+    const result = await openModal(assetDetailsModal, {
+      asideTitle: phrase.value.asset,
+      asset: contentAssetReplaceResult(asset),
+      primaryLabel: phrase.value.save,
+      showCaption: true,
+      initialCaption: caption,
+      captionPlaceholder: phrase.value.content_caption,
+    });
 
     if (result.type === 'replace') {
       caption = result.caption;
       const edited = await replaceAsset(asset, 'media');
-      if (modalDismissVersion.value !== flowVersion) return undefined;
       if (!edited) continue;
       asset = edited;
       continue;
@@ -562,54 +562,56 @@ function editorJsI18nMessages() {
 </script>
 
 <template>
-  <ModalWindow
-    :title="modalData.title"
-    width="56rem"
-    max-height="calc(100dvh - var(--spacing-window) - var(--spacing-window))"
-  >
-    <template #title>
-      <div class="truncate">{{ modalData.title }}</div>
-      <div
-        class="mt-0.5 flex items-center gap-md text-xs font-normal
-          tracking-normal text-text-3"
-      >
-        <span
-          class="inline-flex items-center gap-1 whitespace-nowrap"
-          :data-title-popup="
-            phrase.content_block_count(headerSummary.blockCount)
-          "
-        >
-          <Icon name="blocks" />
-          {{ headerSummary.blockCount }}
-        </span>
-        <span
-          class="inline-flex items-center gap-1 whitespace-nowrap"
-          :data-title-popup="
-            phrase.content_file_count(headerSummary.assetCount)
-          "
-        >
-          <Icon name="file" />
-          {{ headerSummary.assetCount }} /
-          {{ humanSize(headerSummary.assetTotalSize) }}
-        </span>
+  <ModalContainer class="max-w-192">
+    <template #header>
+      <div class="flex flex-col gap-xs p-sm">
+        <div class="flex min-w-0 items-center gap-xs">
+          <ModalTitle
+            icon="edit"
+            :title="modalData.title || phrase.content_editor_title"
+            class="flex-1"
+          />
+          <div
+            v-if="errorMessage"
+            class="min-w-0 truncate text-sm text-text-error"
+          >
+            {{ errorMessage }}
+          </div>
+          <ModalHeaderButton
+            icon="delete"
+            variant="delete"
+            :label="phrase.clear"
+            :disabled="headerSummary.blockCount === 0"
+            @click="clearContent"
+          />
+          <ModalHeaderButton
+            icon="close"
+            :label="phrase.close_modal"
+            @click="closeModal"
+          />
+          <ModalHeaderButton
+            variant="accent"
+            :label="phrase.save"
+            :disabled="saving || (!editorChangePending && !isDirty)"
+            @click="save"
+          >
+            <Icon v-if="saving" name="loading" />
+            {{ editorChangePending || isDirty ? phrase.save : phrase.saved }}
+          </ModalHeaderButton>
+        </div>
+        <div class="flex min-w-0 items-center justify-between gap-sm">
+          <ContentStats v-bind="headerSummary" />
+          <span class="shrink-0 text-xs text-text-3">
+            <TheiTime
+              v-if="modalData.value?.updatedAt"
+              :datetime="modalData.value.updatedAt"
+            />
+            <template v-else>{{ phrase.content_never_saved }}</template>
+          </span>
+        </div>
       </div>
-    </template>
-    <template #header-actions>
-      <div v-if="errorMessage" class="truncate text-sm text-text-error">
-        {{ errorMessage }}
-      </div>
-      <Button
-        class="font-semibold"
-        :disabled="saving || (!editorChangePending && !isDirty)"
-        @click="save"
-      >
-        <Icon v-if="saving" name="loading" class="mr-xs" />
-        <span>{{
-          editorChangePending || isDirty ? phrase.save : phrase.saved
-        }}</span>
-      </Button>
     </template>
 
     <div ref="holder" class="content-editor w-full px-sm py-md"></div>
-  </ModalWindow>
+  </ModalContainer>
 </template>

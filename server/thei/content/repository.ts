@@ -53,13 +53,16 @@ export async function buildContentFieldValue(
 ): Promise<ContentFieldValue | undefined> {
   const row = await findContentByOwner(ownerType, ownerId, slot);
   if (!row) return undefined;
+  const data = await hydrateContentData(row.data);
 
   return {
     contentUuid: row.contentUuid,
-    data: await hydrateContentData(row.data),
+    data,
     blockCount: row.blockCount,
+    wordCount: summarizeContentData(data).wordCount,
     assetCount: row.assetCount,
     assetTotalSize: row.assetTotalSize,
+    updatedAt: row.updatedAt,
   };
 }
 
@@ -78,6 +81,7 @@ export async function prepareContentForSave(
       contentUuid: string;
       data: ContentOutputData;
       blockCount: number;
+      wordCount: number;
       assetCount: number;
       assetTotalSize: number;
       assetUsages: PreparedContentAssetUsage[];

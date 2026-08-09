@@ -1,23 +1,24 @@
 <script lang="ts" setup>
 import { analyzeContentData } from '#layers/thei/shared/content';
-import type { ProjectContentSectionEditItem } from '#layers/thei/shared/project-content-section';
+import type { DateRange } from '#layers/thei/shared/date-range';
 import {
   compareProjectStages,
-  type ProjectStageEditItem,
-} from '#layers/thei/shared/project-stage';
+  type ProjectSectionContentItem,
+  type ProjectStageContentItem,
+} from '#layers/thei/shared/project-content-item';
 import {
   moveItemById,
   useDragSort,
 } from '#layers/thei/app/composables/drag-sort';
 import { projectDataInjectionKey } from '../composables';
-import { projectContentItemModal } from './project-content-section-modal';
-import { projectStructuredItemDeleteModal } from './project-structured-item-delete-modal';
+import { projectContentItemModal } from './project-content-item-modal';
+import { projectContentItemDeleteModal } from './project-content-item-delete-modal';
+import ContentStats from '#layers/thei/app/components/content/ContentStats.vue';
 
-type Item = ProjectContentSectionEditItem | ProjectStageEditItem;
+type Item = ProjectSectionContentItem | ProjectStageContentItem;
 
 const props = defineProps<{ kind: 'stage' | 'section' }>();
 const projectData = inject(projectDataInjectionKey)!;
-const humanSize = useHumanSize();
 const root = useTemplateRef<HTMLElement>('root');
 const unsavedIds = new WeakMap<object, string>();
 const items = computed<Item[]>(() =>
@@ -54,7 +55,7 @@ const emptyText = computed(() =>
 );
 
 function itemId(item: Item) {
-  const id = 'period' in item ? item.stageUuid : item.sectionUuid;
+  const id = 'periods' in item ? item.stageUuid : item.sectionUuid;
   if (id) return id;
   let generated = unsavedIds.get(item);
   if (!generated) {
@@ -64,11 +65,11 @@ function itemId(item: Item) {
   return generated;
 }
 
-function replaceStages(next: ProjectStageEditItem[]) {
+function replaceStages(next: ProjectStageContentItem[]) {
   projectData.value.stages = [...next].sort(compareProjectStages);
 }
 
-function replaceSections(next: ProjectContentSectionEditItem[]) {
+function replaceSections(next: ProjectSectionContentItem[]) {
   projectData.value.contentSections = next;
 }
 
@@ -90,12 +91,16 @@ const dragSort = useDragSort(root, {
 async function openItem(index?: number) {
   if (props.kind === 'stage') {
     const stages = projectData.value.stages ?? [];
-    const result = await openModal(
-      projectContentItemModal,
-      { kind: 'stage', item: index === undefined ? undefined : stages[index] },
-      { label: stages[index ?? -1]?.title ?? addLabel.value },
-    );
-    if (result.type !== 'save' || result.kind !== 'stage') return;
+    const result = await openModal(projectContentItemModal, {
+      isStage: true,
+      item: index === undefined ? undefined : stages[index],
+    });
+    if (result.type === 'deleted') {
+      if (index !== undefined)
+        replaceStages(stages.filter((_, i) => i !== index));
+      return;
+    }
+    if (result.type !== 'save' || !result.item.isStage) return;
     const next = [...stages];
     if (index === undefined) next.push(result.item);
     else next[index] = result.item;
@@ -104,15 +109,16 @@ async function openItem(index?: number) {
   }
 
   const sections = projectData.value.contentSections ?? [];
-  const result = await openModal(
-    projectContentItemModal,
-    {
-      kind: 'section',
-      item: index === undefined ? undefined : sections[index],
-    },
-    { label: sections[index ?? -1]?.title ?? addLabel.value },
-  );
-  if (result.type !== 'save' || result.kind !== 'section') return;
+  const result = await openModal(projectContentItemModal, {
+    isStage: false,
+    item: index === undefined ? undefined : sections[index],
+  });
+  if (result.type === 'deleted') {
+    if (index !== undefined)
+      replaceSections(sections.filter((_, i) => i !== index));
+    return;
+  }
+  if (result.type !== 'save' || result.item.isStage) return;
   const next = [...sections];
   if (index === undefined) next.push(result.item);
   else next[index] = result.item;
@@ -122,16 +128,10 @@ async function openItem(index?: number) {
 async function deleteItem(index: number) {
   const item = items.value[index];
   if (!item) return;
-  const result = await openModal(
-    projectStructuredItemDeleteModal,
-    { kind: props.kind, title: item.title },
-    {
-      label:
-        props.kind === 'stage'
-          ? phrase.value.delete_project_stage
-          : phrase.value.delete_content_section,
-    },
-  );
+  const result = await openModal(projectContentItemDeleteModal, {
+    kind: props.kind,
+    title: item.title,
+  });
   if (result.type !== 'deleted') return;
   if (props.kind === 'stage') {
     replaceStages(
@@ -161,10 +161,26 @@ function formatDate(value: string) {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
-    ...(value.includes('T')
-      ? { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' as const }
-      : {}),
-  }).format(new Date(value.includes('T') ? value : `${value}T00:00`));
+  }).format(new Date(`${value}T00:00`));
+}
+
+function formatPeriods(periods: DateRange[]) {
+  if (!periods.length) return '';
+  const earliestStart = periods.reduce(
+    (earliest, period) =>
+      period.startDate < earliest ? period.startDate : earliest,
+    periods[0]!.startDate,
+  );
+  const latestEnd = periods.reduce(
+    (latest, period) => (period.endDate > latest ? period.endDate : latest),
+    periods[0]!.endDate,
+  );
+  const periodCount = periods.length > 1 ? ` (${periods.length})` : '';
+  const dateRange =
+    earliestStart === latestEnd
+      ? formatDate(earliestStart)
+      : `${formatDate(earliestStart)} — ${formatDate(latestEnd)}`;
+  return `${dateRange}${periodCount}`;
 }
 </script>
 
@@ -194,7 +210,7 @@ function formatDate(value: string) {
         v-for="({ item, id, analysis }, index) in itemViews"
         :key="id"
         :data-drag-id="id"
-        class="group flex items-stretch overflow-hidden p-0 transition
+        class="group flex items-stretch overflow-hidden p-0 transition-colors
           hocus:border-border-3"
       >
         <button
@@ -212,33 +228,12 @@ function formatDate(value: string) {
           </span>
           <span class="flex flex-wrap items-center gap-xs text-sm text-text-3">
             <span
-              v-if="kind === 'stage' && 'period' in item"
+              v-if="kind === 'stage' && 'periods' in item"
               :data-title-popup="phrase.project_stage_period"
             >
-              {{ formatDate(item.period.startDate) }} —
-              {{ formatDate(item.period.endDate) }}
+              {{ formatPeriods(item.periods) }}
             </span>
-            <span
-              class="inline-flex cursor-help items-center gap-1
-                whitespace-nowrap transition-colors hocus:text-text-1"
-              :data-title-popup="
-                phrase.content_block_count(analysis.summary.blockCount)
-              "
-            >
-              <Icon name="blocks" />
-              {{ analysis.summary.blockCount }}
-            </span>
-            <span
-              class="inline-flex cursor-help items-center gap-1
-                whitespace-nowrap transition-colors hocus:text-text-1"
-              :data-title-popup="
-                phrase.content_file_count(analysis.summary.assetCount)
-              "
-            >
-              <Icon name="file" />
-              {{ analysis.summary.assetCount }} /
-              {{ humanSize(analysis.summary.assetTotalSize) }}
-            </span>
+            <ContentStats v-bind="analysis.summary" class="text-sm" />
             <span
               v-if="item.isPrivate"
               class="inline-flex cursor-help items-center gap-1

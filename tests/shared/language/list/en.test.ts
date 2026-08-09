@@ -34,15 +34,6 @@ describe('Editor.js phrases', () => {
   });
 });
 
-describe('modal navigation phrases', () => {
-  it('builds one reusable contextual back label', () => {
-    expect(enModule.phrases.back).toBe('Back');
-    expect(enModule.phrases.back_to('File variants')).toBe(
-      'Back to File variants',
-    );
-  });
-});
-
 describe('plural', () => {
   it('1 → one form', () =>
     expect(plural(1, 'project', 'projects')).toBe('1 project'));

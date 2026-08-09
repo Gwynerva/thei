@@ -1,8 +1,7 @@
 import type { ProjectEventAccessLevel } from '../access-level';
 import type { ArchivedOriginalFileMeta, AssetType } from '../asset';
 import type { ContentFieldValue } from '../content';
-import type { ProjectContentSectionValue } from '../project-content-section';
-import type { ProjectStageValue } from '../project-stage';
+import type { ProjectSectionContentValue, ProjectStageContentValue } from '../project-content-item';
 import type {
   ProjectRelationEditItem,
   ProjectRelationType,
@@ -58,8 +57,8 @@ export type ProjectGetResponse = {
   /** Stored file size in bytes. */
   bannerAssetSize?: number;
   descriptionContent?: ContentFieldValue;
-  contentSections?: ProjectContentSectionValue[];
-  stages?: ProjectStageValue[];
+  contentSections?: ProjectSectionContentValue[];
+  stages?: ProjectStageContentValue[];
   showcaseAssets?: ShowcaseAssetGetItem[];
   otherAssets?: OtherAssetGetItem[];
   relations?: ProjectRelationGetItem[];

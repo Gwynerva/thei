@@ -27,8 +27,6 @@ export interface AssetWizardOptions {
   sizeLimitPolicy?: AssetUploadLimitPolicy;
   uploadProfile?: AssetUploadProfile;
   usageDelta?: Record<string, number>;
-  backLabel?: string;
-  modalFlowId?: number;
 }
 
 export interface AssetBatchError {
@@ -52,11 +50,9 @@ export async function launchAssetWizard(
       : undefined);
   const acceptedExtensions =
     options.acceptedExtensions ?? acceptedExtensionsFromAccept(accept);
-  const assetFlowId = options.modalFlowId ?? createModalFlow();
 
   let step: 'pick' | 'edit' = 'pick';
   let pickedFile: PickedFile | undefined;
-  const flowVersion = modalDismissVersion.value;
 
   function cleanupPickedFile() {
     if (!pickedFile) return;
@@ -70,23 +66,11 @@ export async function launchAssetWizard(
         cleanupPickedFile();
         editFileModal.component();
 
-        const pickResult = await openModal(
-          pickFileModal,
-          {
-            accept,
-            maxSize,
-            backLabel: options.backLabel,
-          },
-          {
-            label: phrase.value.asset_pick_upload,
-            backLabel: options.backLabel,
-            flowId: assetFlowId,
-          },
-        );
+        const pickResult = await openModal(pickFileModal, {
+          accept,
+          maxSize,
+        });
 
-        if (modalDismissVersion.value !== flowVersion) {
-          return undefined;
-        }
         if (pickResult.type === 'error') {
           throw new Error(pickResult.message);
         }
@@ -100,30 +84,18 @@ export async function launchAssetWizard(
         continue;
       }
 
-      const editResult = await openModal(
-        editFileModal,
-        {
-          source: {
-            kind: 'file',
-            file: pickedFile!,
-            familyUuid: `af-${crypto.randomUUID()}`,
-          },
-          maxSize,
-          acceptedExtensions,
-          sizeLimitPolicy: options.sizeLimitPolicy,
-          uploadProfile: options.uploadProfile,
-          backLabel: phrase.value.pick_another_file,
+      const editResult = await openModal(editFileModal, {
+        source: {
+          kind: 'file',
+          file: pickedFile!,
+          familyUuid: `af-${crypto.randomUUID()}`,
         },
-        {
-          label: phrase.value.upload_variants,
-          backLabel: phrase.value.pick_another_file,
-          flowId: assetFlowId,
-        },
-      );
+        maxSize,
+        acceptedExtensions,
+        sizeLimitPolicy: options.sizeLimitPolicy,
+        uploadProfile: options.uploadProfile,
+      });
 
-      if (modalDismissVersion.value !== flowVersion) {
-        return undefined;
-      }
       if (editResult.type === 'error') {
         throw new Error(editResult.message);
       }
@@ -155,21 +127,11 @@ export async function launchAssetBatchWizard(
       : undefined);
   const acceptedExtensions =
     options.acceptedExtensions ?? acceptedExtensionsFromAccept(accept);
-  const assetFlowId = options.modalFlowId ?? createModalFlow();
-  const result = await openModal(
-    pickFileModal,
-    {
-      accept,
-      maxSize,
-      multiple: true,
-      backLabel: options.backLabel,
-    },
-    {
-      label: phrase.value.asset_pick_upload,
-      backLabel: options.backLabel,
-      flowId: assetFlowId,
-    },
-  );
+  const result = await openModal(pickFileModal, {
+    accept,
+    maxSize,
+    multiple: true,
+  });
   if (result.type !== 'picked-files') return undefined;
 
   const picked = result as PickedFiles;
@@ -241,45 +203,26 @@ export async function launchAssetEditor(
   asset: AssetVariantInfo,
   options: AssetWizardOptions = {},
 ): Promise<AssetVariantInfo | undefined> {
-  const flowVersion = modalDismissVersion.value;
-  const assetFlowId = options.modalFlowId ?? createModalFlow();
-
   while (true) {
-    const editResult = await openModal(
-      editFileModal,
-      {
-        source: { kind: 'asset', asset },
-        maxSize: options.maxSize,
-        acceptedExtensions:
-          options.acceptedExtensions ??
-          acceptedExtensionsFromAccept(
-            options.accept ?? anyFileExtensionProfile,
-          ),
-        sizeLimitPolicy: options.sizeLimitPolicy,
-        uploadProfile: options.uploadProfile,
-        usageDelta: options.usageDelta,
-        backLabel: options.backLabel,
-      },
-      {
-        label: phrase.value.upload_variants,
-        backLabel: options.backLabel,
-        flowId: assetFlowId,
-      },
-    );
+    const editResult = await openModal(editFileModal, {
+      source: { kind: 'asset', asset },
+      maxSize: options.maxSize,
+      acceptedExtensions:
+        options.acceptedExtensions ??
+        acceptedExtensionsFromAccept(options.accept ?? anyFileExtensionProfile),
+      sizeLimitPolicy: options.sizeLimitPolicy,
+      uploadProfile: options.uploadProfile,
+      usageDelta: options.usageDelta,
+    });
 
-    if (modalDismissVersion.value !== flowVersion) {
-      return undefined;
-    }
     if (editResult.type === 'error') {
       throw new Error(editResult.message);
     }
     if (editResult.type === 'upload-new') {
       const replacement = await launchAssetWizard({
         ...options,
-        backLabel: phrase.value.upload_variants,
-        modalFlowId: assetFlowId,
       });
-      if (replacement || modalDismissVersion.value !== flowVersion) {
+      if (replacement) {
         return replacement;
       }
       continue;

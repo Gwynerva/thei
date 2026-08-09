@@ -19,6 +19,7 @@ defineProps<{
         ? phrase.project_stage_delete_entity
         : phrase.content_section_delete_entity
     "
+    :entity-icon="modalData.kind === 'stage' ? 'calendar' : 'file-tray-stack'"
     :confirmation-name="modalData.title"
     :deleting="false"
     @confirm="$emit('modalResult', { type: 'deleted' })"

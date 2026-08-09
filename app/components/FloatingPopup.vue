@@ -22,6 +22,8 @@ const props = withDefaults(
     closeOnOutside?: boolean;
     closeOnEscape?: boolean;
     outsideIgnore?: Array<HTMLElement | null>;
+    teleportTo?: string | HTMLElement;
+    fitContent?: boolean;
   }>(),
   {
     placement: 'bottom-end',
@@ -30,6 +32,7 @@ const props = withDefaults(
     maxWidth: '20rem',
     closeOnOutside: true,
     closeOnEscape: true,
+    teleportTo: 'body',
   },
 );
 
@@ -163,7 +166,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <Teleport to="body">
+  <Teleport :to="teleportTo">
     <TransitionFade @after-leave="emit('closed')">
       <div
         v-if="open && anchor"
@@ -171,9 +174,13 @@ onBeforeUnmount(() => {
         v-bind="$attrs"
         :style="popupStyle"
         class="fixed z-9998 max-h-(--floating-popup-available-height)
-          w-[min(var(--floating-popup-max-width),var(--floating-popup-available-width))]
           max-w-[calc(100dvw-var(--spacing-window)-var(--spacing-window))]
           overflow-hidden rounded-normal shadow-xl shadow-shadow-3"
+        :class="
+          fitContent
+            ? 'w-fit'
+            : 'w-[min(var(--floating-popup-max-width),var(--floating-popup-available-width))]'
+        "
       >
         <slot></slot>
       </div>

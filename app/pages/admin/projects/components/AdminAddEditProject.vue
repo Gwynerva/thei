@@ -32,7 +32,7 @@ import ProjectAssets from './ProjectAssets.vue';
 import ProjectRelations from './ProjectRelations.vue';
 import ProjectExternalLinks from './ProjectExternalLinks.vue';
 import { projectDeleteModal } from './project-delete-modal';
-import ProjectStructuredItems from './ProjectStructuredItems.vue';
+import ProjectContentItems from './ProjectContentItems.vue';
 import ProjectTags from './ProjectTags.vue';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import {
@@ -352,8 +352,8 @@ async function openDeleteProjectModal() {
     <ProjectActionSettings />
     <ProjectAssets />
     <ProjectExternalLinks />
-    <ProjectStructuredItems kind="stage" />
-    <ProjectStructuredItems kind="section" />
+    <ProjectContentItems kind="stage" />
+    <ProjectContentItems kind="section" />
     <ProjectRelations />
     <ProjectTags />
   </div>
