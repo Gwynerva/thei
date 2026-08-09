@@ -22,7 +22,7 @@ async function handleDelete() {
   if (deleting.value) return;
   deleting.value = true;
   try {
-    await requestFetch(`/api/admin/projects/${props.modalData.projectUuid}/`, {
+    await requestFetch(`/api/admin/projects/${props.modalData.projectUuid}`, {
       method: 'DELETE',
     });
     emit('modalResult', { type: 'deleted' });

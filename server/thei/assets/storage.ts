@@ -197,7 +197,7 @@ export async function storeAsset(input: StoreAssetInput): Promise<{
 export async function buildAssetVariantInfo(
   asset: StoredAssetRecord,
 ): Promise<AssetVariantInfo> {
-  const assetUrl = buildAssetPreviewUrl(asset.slug, asset.extension);
+  const assetUrl = buildAssetPreviewUrl(asset.assetUuid);
 
   const base = {
     assetUuid: asset.assetUuid,
@@ -265,11 +265,11 @@ export async function buildStoredMediaDescriptor(
   }
   const preview = await findMediaPreviewAsset(asset);
   const previewSrc = preview
-    ? buildAssetPreviewUrl(preview.slug, preview.extension)
-    : buildAssetPreviewUrl(asset.slug, asset.extension);
+    ? buildAssetPreviewUrl(preview.assetUuid)
+    : buildAssetPreviewUrl(asset.assetUuid);
   const meta = resolvedMeta as ImageAssetMeta | VideoAssetMeta | null;
   return {
-    src: buildAssetPreviewUrl(asset.slug, asset.extension),
+    src: buildAssetPreviewUrl(asset.assetUuid),
     kind: asset.type,
     previewSrc,
     ...(meta?.dominantHue !== undefined

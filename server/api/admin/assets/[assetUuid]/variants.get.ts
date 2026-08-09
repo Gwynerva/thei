@@ -1,12 +1,9 @@
-import type {
-  AssetVariantsRequest,
-  AssetVariantsResponse,
-} from '#layers/thei/shared/api/asset';
-import { buildAssetVariantInfo } from '../../../thei/assets/storage';
+import type { AssetVariantsResponse } from '#layers/thei/shared/api/asset';
+import { buildAssetVariantInfo } from '../../../../thei/assets/storage';
 
 export default defineEventHandler(
   async (event): Promise<AssetVariantsResponse> => {
-    const { assetUuid } = await readBody<AssetVariantsRequest>(event);
+    const assetUuid = getRouterParam(event, 'assetUuid');
     if (!assetUuid) {
       throw createError({ statusCode: 400, message: 'Missing assetUuid' });
     }

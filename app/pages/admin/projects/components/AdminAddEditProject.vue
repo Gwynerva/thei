@@ -147,7 +147,7 @@ watch(
 
 if (isEdit.value) {
   const data = await requestFetch<ProjectGetResponse>(
-    `/api/admin/projects/${projectUuid}/`,
+    `/api/admin/projects/${projectUuid}`,
   );
   projectData.value = {
     title: data.title,
@@ -196,7 +196,7 @@ if (isEdit.value) {
   markProjectSaved();
   resolvedProjectUuid.value = data.projectUuid;
   if (projectUuid !== data.projectUuid) {
-    await navigateTo(`/admin/projects/edit/${data.projectUuid}/`, {
+    await navigateTo(`/admin/projects/${data.projectUuid}/edit/`, {
       replace: true,
     });
   }
@@ -209,7 +209,7 @@ async function handleSave() {
   try {
     if (isEdit.value) {
       const result = await $fetch<ProjectSaveResponse>(
-        `/api/admin/projects/${projectUuid}/`,
+        `/api/admin/projects/${projectUuid}`,
         { method: 'PUT', body: projectData.value },
       );
       if (result.type === 'error') {
@@ -223,7 +223,7 @@ async function handleSave() {
       applySavedAction(result.action);
       markProjectSaved();
     } else {
-      const result = await $fetch<ProjectSaveResponse>('/api/admin/projects/', {
+      const result = await $fetch<ProjectSaveResponse>('/api/admin/projects', {
         method: 'POST',
         body: projectData.value,
       });
@@ -238,7 +238,7 @@ async function handleSave() {
       applySavedAction(result.action);
       markProjectSaved();
       await refreshNuxtData('admin-bar');
-      await navigateTo(`/admin/projects/edit/${result.projectUuid}/`, {
+      await navigateTo(`/admin/projects/${result.projectUuid}/edit/`, {
         external: true,
       });
     }

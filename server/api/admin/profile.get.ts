@@ -1,6 +1,6 @@
 import { SiteAccessLevel } from '#layers/thei/shared/access-level';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
-import { resolveGeneratedIcon } from '../thei/media/generated-icon';
+import { resolveGeneratedIcon } from '../../thei/media/generated-icon';
 
 interface PublicAdmin {
   siteAccessLevel: SiteAccessLevel;

@@ -1,5 +1,5 @@
 export const usePublicAdmin = () => {
-  const fetchPromise = useFetch('/api/public-admin/', { key: 'public-admin' });
+  const fetchPromise = useFetch('/api/admin/profile', { key: 'admin-profile' });
   type RawData = Readonly<NonNullable<typeof fetchPromise.data.value>>;
   return new Promise<Readonly<Ref<RawData>>>(async (resolve) => {
     try {

@@ -1,5 +1,5 @@
 import type { ExternalLink } from '#layers/thei/shared/external-link';
-import { refreshExternalLink } from '../../../thei/external-links/preview';
+import { refreshExternalLink } from '../../thei/external-links/preview';
 
 export default defineEventHandler(async (event): Promise<ExternalLink> => {
   const body = await readBody<{ url?: unknown }>(event);

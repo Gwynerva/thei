@@ -40,7 +40,7 @@ async function signIn() {
   signInError.value = '';
   signingIn.value = true;
   try {
-    const signInResponse = await $fetch('/api/sign-in/', {
+    const signInResponse = await $fetch('/api/admin/session', {
       method: 'POST',
       body: signInData.value,
     });

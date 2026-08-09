@@ -206,7 +206,7 @@ async function loadFavicon(requestId = faviconRequestId) {
   loadingFavicon.value = true;
   try {
     const preview = await $fetch<ExternalLink>(
-      '/api/admin/external-links/preview',
+      '/api/admin/external-link-previews',
       {
         method: 'POST',
         body: { url },
@@ -308,8 +308,7 @@ async function openFileDetails(initialAsset: AssetVariantInfo) {
 async function loadActionFileVariant() {
   if (!action.value.fileAssetUuid) return;
   const family = await $fetch<AssetVariantsResponse>(
-    '/api/admin/assets/variants',
-    { method: 'POST', body: { assetUuid: action.value.fileAssetUuid } },
+    `/api/admin/assets/${action.value.fileAssetUuid}/variants`,
   );
   return family.variants.find(
     (variant) => variant.assetUuid === action.value.fileAssetUuid,

@@ -115,11 +115,7 @@ async function editProjectAsset(
 ): Promise<PickedAsset | undefined> {
   try {
     const family = await $fetch<AssetVariantsResponse>(
-      '/api/admin/assets/variants',
-      {
-        method: 'POST',
-        body: { assetUuid },
-      },
+      `/api/admin/assets/${assetUuid}/variants`,
     );
     const current = family.variants.find(
       (variant) => variant.assetUuid === assetUuid,
@@ -155,10 +151,7 @@ const iconSlot = useSingleMediaAsset({
   afterDetach: async () => {
     if (!currentProjectUuid.value) return;
     iconMedia.value = await $fetch<MediaDescriptor>(
-      '/api/media/generated-icon',
-      {
-        query: { kind: 'project', seed: currentProjectUuid.value },
-      },
+      `/api/generated-icons/project/${encodeURIComponent(currentProjectUuid.value)}`,
     );
   },
 });

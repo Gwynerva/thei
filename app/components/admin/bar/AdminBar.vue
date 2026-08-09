@@ -3,7 +3,7 @@ import type { AdminBarButtonProps } from './AdminBarButton.vue';
 import { publicIdFromProjectUrlPart } from '#layers/thei/shared/project-url';
 
 const isAdmin = useIsAdmin();
-const { data: adminBarData } = await useFetch('/api/admin/bar', {
+const { data: adminBarData } = await useFetch('/api/admin/dashboard-summary', {
   key: 'admin-bar',
 });
 
@@ -11,20 +11,17 @@ const publicAdmin = await usePublicAdmin();
 
 const route = useRoute();
 
+async function signOut() {
+  await $fetch('/api/admin/session', { method: 'DELETE' });
+  await navigateTo('/sign-in/', { external: true });
+}
+
 const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
   if (route.path === '/projects/') {
     return {
-      to: '/admin/projects/add',
+      to: '/admin/projects/new/',
       icon: 'plus',
       title: phrase.value.new_project,
-    };
-  }
-
-  if (route.path === '/events/') {
-    return {
-      to: '/admin/events/add',
-      icon: 'plus',
-      title: phrase.value.new_event,
     };
   }
 
@@ -33,23 +30,14 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
       route.path.split('/')[2] ?? '',
     );
     return {
-      to: `/admin/projects/edit/${projectUuid}/`,
+      to: `/admin/projects/${projectUuid}/edit/`,
       icon: 'edit',
       title: phrase.value.edit_project,
     };
   }
 
-  if (route.path.startsWith('/events/')) {
-    const eventId = route.path.split('/')[2];
-    return {
-      to: `/admin/events/${eventId}`,
-      icon: 'edit',
-      title: phrase.value.edit_event,
-    };
-  }
-
-  if (route.path.startsWith('/admin/projects/edit')) {
-    const id = route.path.split('/')[4];
+  if (/^\/admin\/projects\/[^/]+\/edit\/$/.test(route.path)) {
+    const id = route.path.split('/')[3];
     return {
       to: { href: `/projects/${id}/`, external: true },
       icon: 'eye-open',
@@ -57,14 +45,6 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
     };
   }
 
-  if (route.path.startsWith('/admin/events/edit')) {
-    const id = route.path.split('/')[4];
-    return {
-      to: { href: `/events/${id}/`, external: true },
-      icon: 'eye-open',
-      title: phrase.value.view_event,
-    };
-  }
 });
 </script>
 
@@ -124,11 +104,17 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
             </template>
           </AdminBarButton>
 
-          <AdminBarButton
-            :to="{ href: '/sign-out/', external: true }"
-            icon="power"
-            :title="phrase.sign_out"
-          />
+          <button
+            type="button"
+            :data-title-popup="phrase.sign_out"
+            :aria-label="phrase.sign_out"
+            class="flex h-full shrink-0 cursor-pointer items-center bg-transparent
+              px-2 opacity-80 transition sm:px-3 hocus:bg-accent/25
+              hocus:opacity-100"
+            @click="signOut"
+          >
+            <Icon name="power" class="shrink-0 text-xl" />
+          </button>
         </div>
       </div>
     </div>

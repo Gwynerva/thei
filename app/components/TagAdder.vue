@@ -11,7 +11,7 @@ const props = withDefaults(
   }>(),
   {
     recommendations: () => [],
-    searchEndpoint: '/api/admin/tags/search',
+    searchEndpoint: '/api/admin/tags',
   },
 );
 

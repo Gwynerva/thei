@@ -1,8 +1,8 @@
 import type { H3Event } from 'h3';
 import type { SignInData } from '#layers/thei/shared/api/sign-in';
-import { verifyPassword } from '../thei/password';
-import { createAdminSession } from '../thei/admin-session';
-import { getRequestIp } from '../thei/request';
+import { verifyPassword } from '../../thei/password';
+import { createAdminSession } from '../../thei/admin-session';
+import { getRequestIp } from '../../thei/request';
 
 type SignInResponse = { type: 'success' } | { type: 'error'; message: string };
 

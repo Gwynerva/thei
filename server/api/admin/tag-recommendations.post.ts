@@ -1,6 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { rankTagRecommendations, type TagItem } from '#layers/thei/shared/tag';
-import { buildTagItems, isTagUuid } from '../../../thei/tags';
+import { buildTagItems, isTagUuid } from '../../thei/tags';
 
 type RecommendationBody = {
   text?: string;

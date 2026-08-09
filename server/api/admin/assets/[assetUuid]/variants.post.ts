@@ -2,15 +2,14 @@ import { readFile } from 'node:fs/promises';
 import type { AssetUploadResponse } from '#layers/thei/shared/api/asset';
 import { assetSourceName } from '#layers/thei/shared/asset';
 import type { AssetUploadSettings } from '#layers/thei/shared/asset-upload-settings';
-import { createAssetVariant } from '../../../thei/assets/create-variant';
-import { parseAssetUploadSettings } from '../../../thei/assets/upload-request';
+import { createAssetVariant } from '../../../../thei/assets/create-variant';
+import { parseAssetUploadSettings } from '../../../../thei/assets/upload-request';
 import {
   clearAssetUploadProgress,
   setAssetUploadProgress,
-} from '../../../thei/assets/progress';
+} from '../../../../thei/assets/progress';
 
 interface TransformAssetRequest {
-  assetUuid: string;
   settings: AssetUploadSettings;
   uploadId?: string;
 }
@@ -18,8 +17,9 @@ interface TransformAssetRequest {
 export default defineEventHandler(
   async (event): Promise<AssetUploadResponse> => {
     const body = await readBody<TransformAssetRequest>(event);
-    const asset = body.assetUuid
-      ? await THEI_SERVER.assets.findByUuid(body.assetUuid)
+    const assetUuid = getRouterParam(event, 'assetUuid');
+    const asset = assetUuid
+      ? await THEI_SERVER.assets.findByUuid(assetUuid)
       : null;
     if (!asset) {
       throw createError({ statusCode: 404, message: 'Asset not found' });

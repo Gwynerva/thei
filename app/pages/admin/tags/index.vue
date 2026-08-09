@@ -4,7 +4,7 @@ import type { TagListItem } from '#layers/thei/shared/tag';
 definePageMeta({ layout: 'admin' });
 await useAdminTabTitle(computed(() => phrase.value.admin_tags));
 
-const { data: tags, error } = await useFetch<TagListItem[]>('/api/admin/tags/');
+const { data: tags, error } = await useFetch<TagListItem[]>('/api/admin/tags');
 
 function placeholderStyle(tag: TagListItem) {
   if (!tag.accentColor) return;
@@ -23,7 +23,7 @@ function placeholderStyle(tag: TagListItem) {
         <span>{{ phrase.admin_tags }}</span>
       </div>
       <TheiLink
-        to="/admin/tags/add/"
+        to="/admin/tags/new/"
         class="flex shrink-0 items-center gap-xs rounded-normal bg-accent/80
           px-sm py-xs text-sm font-semibold text-white transition
           hocus:bg-accent"
@@ -60,7 +60,7 @@ function placeholderStyle(tag: TagListItem) {
             <tr v-for="tag in tags" :key="tag.tagUuid" class="tr-normal">
               <td>
                 <TheiLink
-                  :to="`/admin/tags/edit/${tag.tagUuid}/`"
+                  :to="`/admin/tags/${tag.tagUuid}/edit/`"
                   class="flex items-center gap-sm p-sm font-semibold transition
                     hocus:text-accent"
                 >
@@ -126,7 +126,7 @@ function placeholderStyle(tag: TagListItem) {
         <TheiLink
           v-for="tag in tags"
           :key="tag.tagUuid"
-          :to="`/admin/tags/edit/${tag.tagUuid}/`"
+          :to="`/admin/tags/${tag.tagUuid}/edit/`"
           class="flex items-center gap-sm p-sm transition hocus:bg-bg-3/50"
         >
           <TagIcon v-if="tag.iconMedia" :tag="tag" class="size-10" />

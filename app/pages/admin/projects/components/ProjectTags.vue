@@ -25,7 +25,7 @@ async function fetchRecommendations() {
   recommendationsFailed.value = false;
   try {
     const result = await useRequestFetch()<TagItem[]>(
-      '/api/admin/tags/recommendations',
+      '/api/admin/tag-recommendations',
       {
         method: 'POST',
         body: {

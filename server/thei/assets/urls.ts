@@ -5,7 +5,7 @@ import { buildStoredMediaDescriptor } from './storage';
 type StoredAsset = Parameters<typeof buildStoredMediaDescriptor>[0];
 
 export async function buildAdminAssetUrls(asset: StoredAsset) {
-  const assetUrl = buildAssetPreviewUrl(asset.slug, asset.extension);
+  const assetUrl = buildAssetPreviewUrl(asset.assetUuid);
 
   if (asset.type === AssetType.Video || asset.type === AssetType.Image) {
     return {

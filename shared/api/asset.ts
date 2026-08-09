@@ -16,8 +16,8 @@ import type {
 } from '../asset-upload-settings';
 import type { MediaDescriptor } from '../media';
 
-export function buildAssetPreviewUrl(slug: string, extension: string) {
-  return `/api/admin/assets/preview/${slug}.${extension}`;
+export function buildAssetPreviewUrl(assetUuid: string) {
+  return `/api/admin/assets/${assetUuid}/content`;
 }
 
 export interface BaseAssetVariantInfo<

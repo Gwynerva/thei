@@ -332,7 +332,7 @@ export default defineI18nBase({
     project_stage_private: 'Private stage',
     project_stage_private_hint: 'Visible only to you in the admin panel.',
     project_stage_period: 'Time period',
-    project_stage_period_required: 'Choose a time period for the stage.',
+    project_stage_period_empty: 'Add at least one time period!',
     project_stage_content: 'Stage content',
     project_stage_content_hint:
       'Text, images, galleries, and files within the project stage.',
@@ -348,7 +348,6 @@ export default defineI18nBase({
     content_section_content_hint:
       'Text, images, galleries, and files within the project section.',
     content_section_add: 'Add section',
-    content_section_content_required: 'Add at least one meaningful block.',
     content_section_sort: 'Reorder project section',
     delete_content_section: 'Delete section',
     content_empty: 'No content yet',

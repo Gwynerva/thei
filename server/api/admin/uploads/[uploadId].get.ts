@@ -1,4 +1,4 @@
-import { getAssetUploadProgress } from '../../../../thei/assets/progress';
+import { getAssetUploadProgress } from '../../../thei/assets/progress';
 
 export default defineEventHandler((event) => {
   const uploadId = getRouterParam(event, 'uploadId');

@@ -336,11 +336,7 @@ async function replaceAsset(
 ) {
   try {
     const response = await $fetch<AssetVariantsResponse>(
-      '/api/admin/assets/variants',
-      {
-        method: 'POST',
-        body: { assetUuid: current.assetUuid },
-      },
+      `/api/admin/assets/${current.assetUuid}/variants`,
     );
     const stored = response.variants.find(
       (variant) => variant.assetUuid === current.assetUuid,

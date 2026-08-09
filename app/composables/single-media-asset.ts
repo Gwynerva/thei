@@ -46,11 +46,7 @@ export function useSingleMediaAsset(options: SingleMediaAssetOptions) {
 
   async function loadAsset(assetUuid: string) {
     const family = await $fetch<AssetVariantsResponse>(
-      '/api/admin/assets/variants',
-      {
-        method: 'POST',
-        body: { assetUuid },
-      },
+      `/api/admin/assets/${assetUuid}/variants`,
     );
     return family.variants.find((variant) => variant.assetUuid === assetUuid);
   }

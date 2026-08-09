@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 const liveNow = useLiveNow();
 
-const { data, error, refresh } = await useFetch('/api/admin/sessions/', {
+const { data, error, refresh } = await useFetch('/api/admin/sessions', {
   key: 'admin-sessions',
 });
 
@@ -67,7 +67,7 @@ async function destroySession(sessionUuid: string) {
   destroyingSessions.add(sessionUuid);
 
   try {
-    await requestFetch(`/api/admin/sessions/${sessionUuid}/`, {
+    await requestFetch(`/api/admin/sessions/${sessionUuid}`, {
       method: 'DELETE',
     });
     await forceRefresh();

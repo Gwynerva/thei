@@ -11,7 +11,7 @@ const humanSize = useHumanSize();
 const LIMIT = 50;
 
 const { data: initial, error } = await useFetch<ProjectListItem[]>(
-  '/api/admin/projects/',
+  '/api/admin/projects',
   { query: { offset: 0 }, key: 'admin-projects' },
 );
 
@@ -26,7 +26,7 @@ async function loadMore() {
   if (loadingMore.value || !hasMore.value) return;
   loadingMore.value = true;
   try {
-    const page = await $fetch<ProjectListItem[]>('/api/admin/projects/', {
+    const page = await $fetch<ProjectListItem[]>('/api/admin/projects', {
       query: { offset: projects.value.length },
     });
     projects.value.push(...page);
@@ -59,7 +59,7 @@ onUnmounted(() => {
         <span class="truncate">{{ phrase.admin_projects }}</span>
       </div>
       <TheiLink
-        to="/admin/projects/add"
+        to="/admin/projects/new/"
         class="flex cursor-pointer items-center gap-xs rounded-normal
           bg-accent/80 px-sm py-xs text-sm text-white transition
           hocus:bg-accent"
@@ -111,7 +111,7 @@ onUnmounted(() => {
               <td class="max-w-0 min-w-70">
                 <div class="flex min-w-0 items-center gap-sm">
                   <TheiLink
-                    :to="`/admin/projects/edit/${project.projectUuid}/`"
+                    :to="`/admin/projects/${project.projectUuid}/edit/`"
                     class="group flex min-w-0 flex-1 items-center gap-sm py-sm
                       pl-sm transition"
                   >

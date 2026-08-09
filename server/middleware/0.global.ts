@@ -23,17 +23,18 @@ export default defineEventHandler(async (event) => {
     return;
   }
 
-  const alwaysAvailable = ['/api/public-admin/', '/api/media/generated-icon'];
+  const alwaysAvailable = ['/api/admin/profile'];
   if (
     alwaysAvailable.includes(path) ||
+    path.startsWith('/api/generated-icons/') ||
     path.startsWith('/media/generated-icons/') ||
     path.startsWith('/media/external-link-favicons/')
   ) {
     return;
   }
 
-  const isInstallPath = path === '/install/' || path === '/api/install/';
-  const isUpdatePath = path === '/update/' || path === '/api/update/';
+  const isInstallPath = path === '/install/' || path === '/api/installation';
+  const isUpdatePath = path === '/update/';
   const isAdminPath =
     path.startsWith('/admin/') || path.startsWith('/api/admin/');
   const isAdmin = await THEI_SERVER.isAdmin(event);
@@ -47,7 +48,9 @@ export default defineEventHandler(async (event) => {
         return sendRedirect(event, '/');
       }
 
-      const isAuthPath = path === '/sign-in/' || path === '/api/sign-in/';
+      const isAuthPath =
+        path === '/sign-in/' ||
+        (path === '/api/admin/session' && event.method === 'POST');
       if (isAuthPath && isAdmin) {
         return sendRedirect(event, '/admin/');
       }

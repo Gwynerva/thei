@@ -291,7 +291,7 @@ export type LanguagePhrases = {
   project_stage_private: string;
   project_stage_private_hint: string;
   project_stage_period: string;
-  project_stage_period_required: string;
+  project_stage_period_empty: string;
   project_stage_content: string;
   project_stage_content_hint: string;
   project_stage_add: string;
@@ -305,7 +305,6 @@ export type LanguagePhrases = {
   content_section_content: string;
   content_section_content_hint: string;
   content_section_add: string;
-  content_section_content_required: string;
   content_section_sort: string;
   delete_content_section: string;
   content_empty: string;

@@ -33,29 +33,18 @@ const isStage = computed(() => props.modalData.isStage);
 const { value: item, isDirty } = useSerializableState(
   createInitialItem(props.modalData),
 );
-const titleError = ref<string>();
-const periodError = ref<string>();
-const contentError = ref<string>();
 const periodPopupOpen = ref(false);
 const periodPopupAnchor = useTemplateRef<HTMLElement>('periodPopupAnchor');
 const pendingPeriod = ref<DateRange>();
+const canSave = computed(() => {
+  if (!isDirty.value || !item.value.title.trim()) return false;
+  return isStage.value
+    ? Boolean(item.value.periods?.length)
+    : !isContentEmpty(item.value.content?.data);
+});
 
 useModalCloseGuard(
   () => !isDirty.value || window.confirm(phrase.value.unsaved_modal_confirm),
-);
-watch(
-  () => item.value.title,
-  () => (titleError.value = undefined),
-);
-watch(
-  () => item.value.periods,
-  () => (periodError.value = undefined),
-  { deep: true },
-);
-watch(
-  () => item.value.content?.data,
-  () => (contentError.value = undefined),
-  { deep: true },
 );
 watch(pendingPeriod, (period) => {
   if (!period) return;
@@ -68,19 +57,7 @@ watch(pendingPeriod, (period) => {
 });
 
 function save() {
-  if (!isDirty.value) return;
-  titleError.value = item.value.title.trim()
-    ? undefined
-    : phrase.value.this_field_must_be_filled;
-  periodError.value =
-    isStage.value && !item.value.periods?.length
-      ? phrase.value.project_stage_period_required
-      : undefined;
-  contentError.value =
-    !isStage.value && isContentEmpty(item.value.content?.data)
-      ? phrase.value.content_section_content_required
-      : undefined;
-  if (titleError.value || periodError.value || contentError.value) return;
+  if (!canSave.value) return;
   const base: ProjectContentItemBase = {
     title: item.value.title.trim(),
     summary: item.value.summary.trim(),
@@ -180,7 +157,7 @@ async function deleteItem() {
           <ModalHeaderButton
             variant="accent"
             :label="phrase.save"
-            :disabled="!isDirty"
+            :disabled="!canSave"
             @click="save"
           >
             {{ isDirty ? phrase.save : phrase.saved }}
@@ -216,11 +193,7 @@ async function deleteItem() {
             </FieldToggle>
           </span>
         </div>
-        <FieldInput
-          v-model="item.title"
-          :error="titleError"
-          autocomplete="off"
-        />
+        <FieldInput v-model="item.title" autocomplete="off" />
       </Field>
       <Field>
         <FieldLabel>{{
@@ -230,7 +203,6 @@ async function deleteItem() {
         }}</FieldLabel>
         <FieldInput v-model="item.summary" autocomplete="off" />
       </Field>
-
       <Field v-if="isStage">
         <div class="flex items-center justify-between gap-sm">
           <FieldLabel required>{{ phrase.project_stage_period }}</FieldLabel>
@@ -253,6 +225,9 @@ async function deleteItem() {
           </div>
         </div>
         <div class="flex flex-wrap gap-xs">
+          <span v-if="!item.periods?.length" class="text-sm text-text-3 italic">
+            {{ phrase.project_stage_period_empty }}
+          </span>
           <span
             v-for="(period, index) in item.periods"
             :key="`${period.startDate}:${period.endDate}`"
@@ -272,9 +247,6 @@ async function deleteItem() {
             </button>
           </span>
         </div>
-        <FieldHint v-if="periodError" class="text-text-error">{{
-          periodError
-        }}</FieldHint>
       </Field>
 
       <Field>
@@ -292,9 +264,6 @@ async function deleteItem() {
               : phrase.content_section_content)
           "
         />
-        <FieldHint v-if="contentError" class="text-text-error">{{
-          contentError
-        }}</FieldHint>
       </Field>
     </div>
   </ModalContainer>

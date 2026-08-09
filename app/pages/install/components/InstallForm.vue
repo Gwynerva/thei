@@ -40,7 +40,7 @@ async function installClick() {
   installing.value = true;
 
   try {
-    const installResponse = await $fetch('/api/install/', {
+    const installResponse = await $fetch('/api/installation', {
       method: 'POST',
       body: installData.value,
     });

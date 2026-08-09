@@ -19,7 +19,7 @@ let requestVersion = 0;
 const search = debounce(async (version: number) => {
   try {
     const response = await $fetch<ProjectSearchItem[]>(
-      '/api/admin/projects/search',
+      '/api/admin/projects',
       {
         query: {
           query: query.value.trim(),

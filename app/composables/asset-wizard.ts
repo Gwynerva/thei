@@ -193,7 +193,7 @@ async function uploadOriginalFile(
       ? '*'
       : JSON.stringify(options.acceptedExtensions),
   );
-  return await $fetch<AssetVariantInfo>('/api/admin/assets/upload', {
+  return await $fetch<AssetVariantInfo>('/api/admin/assets', {
     method: 'POST',
     body: formData,
   });

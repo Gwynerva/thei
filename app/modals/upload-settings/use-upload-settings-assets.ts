@@ -43,11 +43,7 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
     busyAction.value = 'variants';
     try {
       const response = await $fetch<AssetVariantsResponse>(
-        '/api/admin/assets/variants',
-        {
-          method: 'POST',
-          body: { assetUuid: modalData.source.asset.assetUuid },
-        },
+        `/api/admin/assets/${modalData.source.asset.assetUuid}/variants`,
       );
       variants.value = response.variants.map((variant) => ({
         ...variant,
@@ -102,7 +98,7 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
       const xhr = new XMLHttpRequest();
       activeXhr.value = xhr;
       uploadStatus.value = { phase: 'uploading' };
-      xhr.open('POST', '/api/admin/assets/upload');
+      xhr.open('POST', '/api/admin/assets');
 
       xhr.upload.addEventListener('progress', (event) => {
         uploadStatus.value = {
@@ -159,16 +155,16 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
     uploadStatus.value = { phase: 'processing' };
     startProgressPolling(uploadId);
     try {
+      const assetUuid =
+        sourceAssetUuid ??
+        (modalData.source.kind === 'asset'
+          ? modalData.source.asset.assetUuid
+          : '');
       const result = await $fetch<AssetUploadResponse>(
-        '/api/admin/assets/transform',
+        `/api/admin/assets/${assetUuid}/variants`,
         {
           method: 'POST',
           body: {
-            assetUuid:
-              sourceAssetUuid ??
-              (modalData.source.kind === 'asset'
-                ? modalData.source.asset.assetUuid
-                : ''),
             settings,
             uploadId,
           },
@@ -198,9 +194,8 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
   }
 
   async function touchVariant(assetUuid: string) {
-    await $fetch('/api/admin/assets/touch', {
+    await $fetch(`/api/admin/assets/${assetUuid}/touches`, {
       method: 'POST',
-      body: { assetUuid },
     });
   }
 
@@ -209,7 +204,7 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
     progressPollTimer = setInterval(async () => {
       try {
         const progress = await $fetch<UploadSettingsStatus | null>(
-          `/api/admin/assets/upload-progress/${uploadId}`,
+          `/api/admin/uploads/${uploadId}`,
         );
         if (progress) uploadStatus.value = progress;
       } catch {

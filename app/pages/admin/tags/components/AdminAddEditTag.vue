@@ -14,10 +14,14 @@ import { tagDeleteModal } from './tag-delete-modal';
 
 const { tagUuid } = defineProps<{ tagUuid?: string }>();
 const isEdit = computed(() => Boolean(tagUuid));
+const formId = useId();
+const initialPublicId = useState(`new-tag-public-id-${formId}`, () =>
+  randomId(14),
+);
 const data = ref<TagEditData>({
   title: '',
   slug: '',
-  publicId: randomId(14),
+  publicId: initialPublicId.value,
   description: '',
 });
 const iconMedia = ref<MediaDescriptor>();
@@ -32,7 +36,7 @@ const publicIdError = ref<string>();
 if (tagUuid) {
   const response = await useRequestFetch()<
     TagItem & { usageStats: TagUsageStats }
-  >(`/api/admin/tags/${tagUuid}/`);
+  >(`/api/admin/tags/${tagUuid}`);
   data.value = {
     title: response.title,
     slug: response.slug,
@@ -81,7 +85,7 @@ async function save() {
   error.value = undefined;
   try {
     const result = await $fetch<TagSaveResponse>(
-      tagUuid ? `/api/admin/tags/${tagUuid}/` : '/api/admin/tags/',
+      tagUuid ? `/api/admin/tags/${tagUuid}` : '/api/admin/tags',
       { method: tagUuid ? 'PUT' : 'POST', body: data.value },
     );
     if (result.type === 'error') {
@@ -96,7 +100,7 @@ async function save() {
     savedIconAssetUuid.value = data.value.iconAssetUuid;
     await refreshNuxtData('admin-tag-count');
     if (!tagUuid)
-      await navigateTo(`/admin/tags/edit/${result.tagUuid}/`, {
+      await navigateTo(`/admin/tags/${result.tagUuid}/edit/`, {
         external: true,
       });
   } catch (caught) {

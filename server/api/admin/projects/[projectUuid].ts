@@ -504,6 +504,8 @@ export default defineEventHandler(async (event) => {
       return;
     }
   }
+
+  throw createError({ statusCode: 405, message: 'Method not allowed' });
 });
 
 function attachUsage(

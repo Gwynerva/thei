@@ -4,7 +4,7 @@ definePageMeta({
 });
 
 await useAdminTabTitle(computed(() => phrase.value.admin_panel));
-const { data: tagCount } = await useFetch<{ count: number }>('/api/admin/tags/count', {
+const { data: tagCount } = await useFetch<{ count: number }>('/api/admin/tags/stats', {
   key: 'admin-tag-count',
 });
 </script>
