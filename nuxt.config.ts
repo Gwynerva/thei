@@ -10,7 +10,7 @@ export default defineNuxtConfig({
   $meta: {
     name: 'thei',
   },
-  ignore: ['content', 'content/**', '.thei', '.thei/**'],
+  ignore: ['/content', '/content/**', '/.thei', '/.thei/**'],
   css: [
     '#layers/thei/app/styles/main.css',
     '#layers/thei/app/styles/editor.css',
