@@ -619,6 +619,10 @@ function getLabels(
 function createToolWrapper() {
   const element = document.createElement('div');
   element.className = 'my-sm flex flex-col gap-xs';
+  // The custom tools explicitly report every data change via dispatchChange().
+  // Their Vue-rendered previews also update asynchronously while media loads;
+  // exclude those presentation-only DOM mutations from Editor.js change tracking.
+  element.dataset.mutationFree = 'true';
   return element;
 }
 
