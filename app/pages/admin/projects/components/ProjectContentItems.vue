@@ -237,7 +237,7 @@ function formatPeriods(periods: DateRange[]) {
             <span
               v-if="item.isPrivate"
               class="inline-flex cursor-help items-center gap-1
-                whitespace-nowrap transition-colors hocus:text-text-1"
+                whitespace-nowrap transition-colors hocus:text-text-2"
               :data-title-popup="
                 kind === 'stage'
                   ? phrase.project_stage_private
