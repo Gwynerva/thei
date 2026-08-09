@@ -160,7 +160,7 @@ async function deleteItem() {
             :disabled="!canSave"
             @click="save"
           >
-            {{ isDirty ? phrase.save : phrase.saved }}
+            {{ isDirty || !modalData.item ? phrase.save : phrase.saved }}
           </ModalHeaderButton>
         </div>
       </div>
