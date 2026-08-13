@@ -47,6 +47,7 @@ export function createDragSort(
       }
     },
   });
+  let destroyed = false;
 
   function guardClick(handler: () => void) {
     if (Date.now() <= skipClickUntil) {
@@ -57,6 +58,8 @@ export function createDragSort(
   }
 
   function destroy() {
+    if (destroyed) return;
+    destroyed = true;
     sortable.destroy();
     restoreTouchAction();
   }

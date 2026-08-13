@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { eq } from 'drizzle-orm';
 import sharp from 'sharp';
+import { contentInlineLinksFromData } from '#layers/thei/shared/content-link';
 import {
   EXTERNAL_LINK_ICON_PATH,
   normalizeExternalLinkAccentHue,
@@ -94,8 +95,28 @@ export async function cleanupOrphanExternalLinks() {
     .select({ data: schema.content.data })
     .from(schema.content)
     .all();
-  for (const row of contentRows)
+  for (const row of contentRows) {
     collectContentExternalLinkUrls(row.data, usedUrls);
+    if (
+      row.data &&
+      typeof row.data === 'object' &&
+      'blocks' in row.data &&
+      Array.isArray(row.data.blocks)
+    ) {
+      const blocks = row.data.blocks.flatMap((block) =>
+        block &&
+        typeof block === 'object' &&
+        'data' in block &&
+        block.data &&
+        typeof block.data === 'object'
+          ? [{ data: block.data as Record<string, unknown> }]
+          : [],
+      );
+      for (const link of contentInlineLinksFromData({ blocks })) {
+        if (link.kind === 'external') usedUrls.add(link.url);
+      }
+    }
+  }
 
   const cleanupBefore = Date.now() - ORPHAN_CLEANUP_GRACE_MS;
   const orphaned = rows.filter(

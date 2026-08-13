@@ -11,6 +11,7 @@ import { bootTheiLanguage } from '../language';
 import { bootTheiDb } from '../db/boot';
 import { bootAdminSessions } from '../admin-session/boot';
 import { bootTheiAssets } from '../assets/boot';
+import { bootExternalLinkCleanup } from '../external-links/boot';
 
 export async function bootTheiServer() {
   THEI_SERVER.console.tag('Boot').log('Booting...');
@@ -22,6 +23,7 @@ export async function bootTheiServer() {
     await bootTheiLanguage();
     await bootAdminSessions();
     bootTheiAssets();
+    bootExternalLinkCleanup();
     setBootReady();
   } catch (decideOrError) {
     if (decideOrError instanceof BootDecided) {

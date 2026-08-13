@@ -36,6 +36,8 @@ const { value: item, isDirty } = useSerializableState(
 const periodPopupOpen = ref(false);
 const periodPopupAnchor = useTemplateRef<HTMLElement>('periodPopupAnchor');
 const pendingPeriod = ref<DateRange>();
+const modalContainer =
+  useTemplateRef<InstanceType<typeof ModalContainer>>('modalContainer');
 const canSave = computed(() => {
   if (!isDirty.value || !item.value.title.trim()) return false;
   return isStage.value
@@ -87,6 +89,12 @@ function save() {
   }
 }
 
+useSaveShortcut(save, {
+  canSave,
+  root: () => modalContainer.value?.root,
+  exclusive: true,
+});
+
 function createInitialItem(data: ModalData): ItemDraft {
   return {
     stageUuid: data.isStage ? data.item?.stageUuid : undefined,
@@ -129,7 +137,7 @@ async function deleteItem() {
 </script>
 
 <template>
-  <ModalContainer class="max-w-160">
+  <ModalContainer ref="modalContainer" class="max-w-160">
     <template #header>
       <div class="flex items-center gap-sm p-sm">
         <ModalTitle

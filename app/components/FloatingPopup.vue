@@ -7,15 +7,17 @@ import {
   size,
   useFloating,
   type Placement,
+  type ReferenceElement,
 } from '@floating-ui/vue';
 
 defineOptions({ inheritAttrs: false });
 
 const props = withDefaults(
   defineProps<{
-    anchor: HTMLElement | null;
+    anchor: ReferenceElement | null;
     placement?: Placement;
     fallbackPlacements?: Placement[];
+    shiftCrossAxis?: boolean;
     offset?: number;
     viewportPadding?: number;
     maxWidth?: string;
@@ -27,6 +29,7 @@ const props = withDefaults(
   }>(),
   {
     placement: 'bottom-end',
+    shiftCrossAxis: false,
     offset: 8,
     viewportPadding: 8,
     maxWidth: '20rem',
@@ -51,7 +54,10 @@ const middleware = computed(() => [
     padding: props.viewportPadding,
     fallbackPlacements: props.fallbackPlacements,
   }),
-  shift({ padding: props.viewportPadding }),
+  shift({
+    padding: props.viewportPadding,
+    crossAxis: props.shiftCrossAxis,
+  }),
   size({
     padding: props.viewportPadding,
     apply({ availableHeight, availableWidth, elements }) {
@@ -112,7 +118,7 @@ function onDocumentPointerDown(event: PointerEvent) {
   const target = event.target;
   if (!(target instanceof Node)) return;
   if (floatingElement.value?.contains(target)) return;
-  if (props.anchor?.contains(target)) return;
+  if (props.anchor instanceof Node && props.anchor.contains(target)) return;
   if (props.outsideIgnore?.some((element) => element?.contains(target))) return;
   close();
 }

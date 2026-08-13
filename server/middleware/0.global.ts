@@ -55,7 +55,7 @@ export default defineEventHandler(async (event) => {
         return sendRedirect(event, '/admin/');
       }
 
-      if (isAdminPath && !isAdmin) {
+      if (isAdminPath && !isAuthPath && !isAdmin) {
         return blockRequest();
       }
 

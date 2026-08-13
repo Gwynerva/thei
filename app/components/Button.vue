@@ -1,6 +1,7 @@
 <script lang="ts" setup>
-const { variant = 'primary' } = defineProps<{
+const { variant = 'primary', size = 'default' } = defineProps<{
   variant?: 'primary' | 'secondary' | 'delete';
+  size?: 'default' | 'icon';
 }>();
 
 const variantClasses = {
@@ -18,9 +19,14 @@ const variantClasses = {
 
 <template>
   <button
-    class="cursor-pointer rounded-normal px-sm py-xs text-sm transition
+    class="cursor-pointer rounded-normal text-sm transition
       disabled:cursor-not-allowed"
-    :class="variantClasses[variant]"
+    :class="[
+      variantClasses[variant],
+      size === 'icon'
+        ? 'flex size-9 shrink-0 items-center justify-center p-1 text-base'
+        : 'px-sm py-xs',
+    ]"
   >
     <slot></slot>
   </button>

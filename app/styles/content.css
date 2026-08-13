@@ -1,0 +1,206 @@
+@layer components {
+  .content-prose {
+    color: color-mix(in oklab, var(--color-text-1) 80%, transparent);
+  }
+
+  .content-prose :is(h1, h2, h3, h4, h5, h6, b, strong) {
+    color: var(--color-text-1);
+  }
+
+  .content-prose :is(b, strong) {
+    font-weight: 700;
+  }
+
+  .content-prose :is(i, em) {
+    font-style: italic;
+  }
+
+  .content-renderer > * + *,
+  .content-editor.content-prose .ce-block + .ce-block {
+    margin-top: var(--spacing-sm);
+  }
+
+  .content-prose :is(p, .ce-paragraph) {
+    @apply leading-relaxed;
+  }
+
+  /* Editor.js tools inject unlayered spacing; content.css owns content rhythm. */
+  .content-editor.content-prose .ce-paragraph {
+    padding: 0 !important;
+    color: inherit;
+  }
+
+  .content-prose h2 {
+    @apply w-full border-b border-border-1 py-sm text-[1.5rem] leading-tight
+      font-bold tracking-tight;
+    margin: 0 !important;
+  }
+
+  .content-prose h3 {
+    @apply text-[1.2rem] leading-tight font-bold tracking-tight;
+    margin: 0 !important;
+  }
+
+  .content-editor.content-prose :is(h2.ce-header, h3.ce-header) {
+    outline: none;
+  }
+
+  .content-editor.content-prose h2.ce-header {
+    padding: var(--spacing-sm) 0 !important;
+    line-height: 1.25 !important;
+  }
+
+  .content-editor.content-prose h3.ce-header {
+    padding: 0 !important;
+    line-height: 1.25 !important;
+  }
+
+  .content-prose .content-list {
+    @apply grid gap-1 pl-lg;
+    margin: 0;
+  }
+
+  .content-prose .content-list-unordered {
+    list-style-type: disc;
+  }
+
+  .content-prose .content-list-ordered {
+    list-style-type: decimal;
+  }
+
+  .content-prose
+    :is(.content-list-unordered, .content-list-ordered)
+    > li::marker,
+  .content-editor.content-prose
+    :is(.cdx-list-unordered, .cdx-list-ordered)
+    .cdx-list__item::marker {
+    color: var(--color-text-2);
+  }
+
+  .content-prose .content-list-checklist {
+    padding-left: 0;
+    list-style-type: none;
+  }
+
+  .content-prose .content-list .content-list {
+    margin-top: var(--spacing-xs);
+  }
+
+  .content-editor.content-prose .cdx-list {
+    --line-height: 1.625;
+    --spacing-s: var(--spacing-xs);
+    --spacing-xs: 0px;
+    --checkbox-background: var(--color-bg-1) !important;
+    --color-border: var(--color-border-1) !important;
+    --color-bg-checked: var(--color-bg-accent) !important;
+    --color-bg-checked-hover: var(--color-bg-accent) !important;
+    --color-tick: var(--color-accent) !important;
+    padding: 0 !important;
+    color: inherit;
+  }
+
+  .content-editor.content-prose .cdx-list__checkbox-check {
+    background: var(--checkbox-background);
+  }
+
+  .content-editor.content-prose
+    .cdx-list__checkbox--checked
+    .cdx-list__checkbox-check {
+    border: 1px solid var(--color-accent) !important;
+  }
+
+  .content-prose :is(.content-quote, .cdx-quote) {
+    @apply relative grid gap-xs py-xs;
+    box-sizing: border-box;
+    padding-left: var(--spacing-md) !important;
+    margin: 0;
+    border: 0;
+    color: inherit;
+  }
+
+  .content-prose :is(.content-quote, .cdx-quote)::before {
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    width: 3px;
+    border-radius: var(--radius-normal);
+    background: var(--color-accent);
+    content: '';
+  }
+
+  .content-prose :is(.content-quote__text, .cdx-quote__text) {
+    @apply text-lg leading-relaxed text-text-1;
+    margin: 0;
+  }
+
+  .content-prose :is(.content-quote__caption, .cdx-quote__caption) {
+    @apply block text-sm leading-relaxed text-text-2;
+    margin: 0;
+    font-style: normal;
+  }
+
+  @variant max-sm {
+    .content-prose :is(.content-quote, .cdx-quote) {
+      padding-left: var(--spacing-sm) !important;
+    }
+  }
+
+  .content-prose .content-divider {
+    @apply flex h-10 w-full items-center justify-center gap-xs border-0
+      text-text-2;
+  }
+
+  .content-prose .content-divider > svg {
+    @apply size-5 shrink-0;
+  }
+
+  .content-prose a[data-content-link] {
+    display: inline;
+    padding: 0.08em 0.38em;
+    border-radius: var(--radius-sm);
+    background-color: color-mix(in oklab, var(--color-bg-3) 72%, transparent);
+    color: var(--color-text-1);
+    box-decoration-break: clone;
+    text-decoration-line: underline;
+    text-decoration-color: color-mix(
+      in oklab,
+      var(--color-text-1) 28%,
+      transparent
+    ) !important;
+    text-decoration-thickness: 0.08em;
+    text-underline-offset: 0.15em;
+    transition-property: background-color, text-decoration-color;
+    transition-duration: var(--default-transition-duration);
+    transition-timing-function: var(--default-transition-timing-function);
+  }
+
+  .content-prose a[data-content-link]::before {
+    display: inline-block;
+    width: 0.82em;
+    height: 0.82em;
+    margin-right: 0.28em;
+    background-image: var(--content-link-icon, url('/favicon.svg'));
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    content: '';
+    vertical-align: -0.06em;
+  }
+
+  .content-prose a[data-content-link]:is(:hover, :focus-visible) {
+    background-color: var(--color-bg-3);
+    text-decoration-color: currentColor !important;
+  }
+
+  .content-prose a[data-content-link-state='broken'] {
+    border: 1px solid var(--color-border-error);
+    background-color: var(--color-bg-error);
+    color: var(--color-text-error);
+    cursor: help;
+    text-decoration-color: color-mix(
+      in oklab,
+      var(--color-text-error) 36%,
+      transparent
+    ) !important;
+  }
+}

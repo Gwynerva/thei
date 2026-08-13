@@ -135,6 +135,9 @@ const isFormValid = computed(
 );
 
 const canSave = computed(() => isDirty.value && isFormValid.value);
+const canUseSaveShortcut = computed(
+  () => !saving.value && (isEdit.value ? canSave.value : isFormValid.value),
+);
 
 const requestFetch = useRequestFetch();
 
@@ -246,6 +249,8 @@ async function handleSave() {
     saving.value = false;
   }
 }
+
+useSaveShortcut(handleSave, { canSave: canUseSaveShortcut });
 
 await useAdminTabTitle(
   computed(() =>

@@ -18,15 +18,12 @@ let requestVersion = 0;
 
 const search = debounce(async (version: number) => {
   try {
-    const response = await $fetch<ProjectSearchItem[]>(
-      '/api/admin/projects',
-      {
-        query: {
-          query: query.value.trim(),
-          excludeProjectUuids: props.excludeProjectUuids.join(','),
-        },
+    const response = await $fetch<ProjectSearchItem[]>('/api/admin/projects', {
+      query: {
+        query: query.value.trim(),
+        excludeProjectUuids: props.excludeProjectUuids.join(','),
       },
-    );
+    });
     if (version === requestVersion) results.value = response;
   } catch {
     if (version === requestVersion) {
@@ -119,7 +116,7 @@ defineExpose({ focus });
           </div>
 
           <div class="truncate text-xs text-text-3">
-            {{ project.humanReadableSlug || '—' }} · {{ project.publicId }}
+            {{ project.summary }}
           </div>
         </div>
       </button>

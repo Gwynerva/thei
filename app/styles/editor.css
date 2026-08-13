@@ -4,9 +4,10 @@
   /* Theme tokens shared by the editor holder and body-level popovers. */
   .content-editor,
   body.content-editor-modal-open {
-    --content-editor-selection: light-dark(
-      color-mix(in oklch, var(--color-accent) 26%, var(--color-bg-accent)),
-      color-mix(in oklch, var(--color-accent) 34%, var(--color-bg-3))
+    --content-editor-selection: color-mix(
+      in oklab,
+      var(--color-accent) 50%,
+      transparent
     );
     --content-editor-hover: color-mix(
       in oklch,
@@ -49,34 +50,28 @@
     --color-active-icon: var(--color-accent);
     --color-gray-border: var(--color-border-1);
     --color-line-gray: var(--color-border-1);
-    color: var(--color-text-1);
+    color: inherit;
   }
 
   .content-editor .ce-block {
     position: relative;
-    color: var(--color-text-1);
+    color: inherit;
   }
 
   .content-editor .codex-editor ::selection {
-    background: var(--content-editor-selection);
-    color: var(--color-text-1);
+    background-color: var(--content-editor-selection) !important;
+    color: inherit;
   }
 
-  .content-editor .ce-paragraph,
-  .content-editor .ce-header,
-  .content-editor .cdx-list,
-  .content-editor .cdx-quote {
-    color: var(--color-text-1);
-  }
-
-  .content-editor .ce-block b,
-  .content-editor .ce-block strong {
-    font-weight: 700;
-  }
-
-  .content-editor .ce-block i,
-  .content-editor .ce-block em {
-    font-style: italic;
+  /* Editor.js paints its preserved selection with a hardcoded #a8d6ff. */
+  .content-editor
+    .codex-editor
+    :is(
+      [style*='background-color: rgb(168, 214, 255)'],
+      [style*='background-color: #a8d6ff']
+    ) {
+    background-color: var(--content-editor-selection) !important;
+    color: inherit !important;
   }
 
   .content-editor .codex-editor [data-placeholder]:empty::before,
@@ -93,7 +88,20 @@
   }
 
   .content-editor .ce-toolbar__plus,
-  .content-editor .ce-toolbar__settings-btn,
+  .content-editor .ce-toolbar__settings-btn {
+    color: var(--color-text-2) !important;
+    transition-property: color, background-color;
+    transition-duration: var(--default-transition-duration);
+    transition-timing-function: var(--default-transition-timing-function);
+  }
+
+  @variant sm {
+    .content-editor .ce-toolbar__actions {
+      padding-right: 0;
+      transform: translateX(var(--spacing));
+    }
+  }
+
   .content-editor .cdx-settings-button {
     color: var(--color-text-1);
   }
@@ -116,10 +124,14 @@
     cursor: grabbing !important;
   }
 
-  .content-editor .ce-toolbar__plus:hover,
+  .content-editor .ce-toolbar__plus:is(:hover, :focus-visible),
   .content-editor .ce-toolbar__plus--active,
-  .content-editor .ce-toolbar__settings-btn:hover,
-  .content-editor .ce-toolbar__settings-btn--active,
+  .content-editor .ce-toolbar__settings-btn:is(:hover, :focus-visible),
+  .content-editor .ce-toolbar__settings-btn--active {
+    background-color: var(--color-bg-3) !important;
+    color: var(--color-text-1) !important;
+  }
+
   .content-editor .cdx-settings-button:hover,
   .content-editor .cdx-settings-button--focused {
     background: var(--content-editor-hover);
@@ -135,24 +147,28 @@
 
   .content-editor .ce-block--drop-target .ce-block__content::before {
     z-index: 2;
-    border-color: var(--color-accent);
-    border-width: 2px 2px 0 0;
+    border-color: var(--color-accent) !important;
+    border-width: 3px 3px 0 0 !important;
     filter: drop-shadow(
-      0 0 0.35rem color-mix(in oklch, var(--color-accent) 72%, transparent)
+      0 0 0.5rem color-mix(in oklch, var(--color-accent) 90%, transparent)
     );
   }
 
   .content-editor .ce-block--drop-target .ce-block__content::after {
     z-index: 2;
-    height: 2px;
+    height: 4px !important;
     border-radius: 9999px;
-    background: var(--color-accent);
+    background: var(--color-accent) !important;
     box-shadow:
-      0 0 0.4rem color-mix(in oklch, var(--color-accent) 72%, transparent),
-      0 0 1rem color-mix(in oklch, var(--color-accent) 42%, transparent);
+      0 0 0.5rem color-mix(in oklch, var(--color-accent) 90%, transparent),
+      0 0 1.25rem color-mix(in oklch, var(--color-accent) 60%, transparent);
   }
 
-  /* Editor.js can render popovers outside the holder, so body scope is required. */
+  .content-editor .ce-block--drop-target-before .ce-block__content::before,
+  .content-editor .ce-block--drop-target-before .ce-block__content::after {
+    top: 0 !important;
+  }
+
   :is(.content-editor, body.content-editor-modal-open) .ce-popover,
   :is(.content-editor, body.content-editor-modal-open) .ce-inline-toolbar {
     --color-border: var(--color-border-1);
@@ -167,6 +183,12 @@
     --color-background-item-focus: var(--content-editor-active);
     --color-shadow-item-focus: transparent;
     --color-background-item-hover: var(--content-editor-hover);
+    --color-background-item-confirm: var(--color-bg-error);
+    --color-background-item-confirm-hover: color-mix(
+      in oklch,
+      var(--color-border-error) 36%,
+      var(--color-bg-error)
+    );
     color: var(--color-text-1);
   }
 
@@ -219,6 +241,19 @@
     color: var(--color-text-1);
   }
 
+  .content-editor.content-prose
+    .cdx-quote
+    :is(.cdx-quote__text, .cdx-quote__caption) {
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    outline: none;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
   :is(.content-editor, body.content-editor-modal-open) .cdx-button:hover {
     background: var(--content-editor-hover) !important;
     box-shadow: none;
@@ -256,10 +291,7 @@
   :is(.content-editor, body.content-editor-modal-open)
     .ce-inline-toolbar__dropdown-arrow,
   :is(.content-editor, body.content-editor-modal-open) .cdx-settings-button,
-  :is(.content-editor, body.content-editor-modal-open) .ce-settings__button,
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-toolbar__settings-btn,
-  :is(.content-editor, body.content-editor-modal-open) .ce-toolbar__plus {
+  :is(.content-editor, body.content-editor-modal-open) .ce-settings__button {
     color: var(--color-text-1) !important;
   }
 
@@ -277,11 +309,19 @@
     .ce-popover-item__icon
     svg,
   :is(.content-editor, body.content-editor-modal-open) .ce-settings__button svg,
+  :is(.content-editor, body.content-editor-modal-open) .cdx-settings-button svg,
+  :is(.content-editor, body.content-editor-modal-open) .ce-inline-tool svg,
   :is(.content-editor, body.content-editor-modal-open)
-    .ce-conversion-tool__icon {
+    .ce-inline-toolbar__dropdown
+    svg,
+  :is(.content-editor, body.content-editor-modal-open)
+    .ce-conversion-tool__icon,
+  :is(.content-editor, body.content-editor-modal-open)
+    .ce-conversion-tool__icon
+    svg {
     border-color: var(--color-border-1) !important;
-    background: color-mix(in oklch, var(--color-bg-1) 74%, transparent);
-    color: var(--color-text-1) !important;
+    background: transparent !important;
+    color: var(--color-text-2) !important;
   }
 
   :is(.content-editor, body.content-editor-modal-open)
@@ -310,18 +350,23 @@
 
   :is(.content-editor, body.content-editor-modal-open)
     .ce-popover-item--active
-    .ce-popover-item__title,
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-popover-item--active
-    .ce-popover-item__icon,
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-popover-item--active
-    .ce-popover-item__icon
-    svg,
-  :is(.content-editor, body.content-editor-modal-open)
-    .cdx-settings-button--active
-    svg {
+    .ce-popover-item__title {
     color: var(--color-accent) !important;
+  }
+
+  :is(.content-editor, body.content-editor-modal-open)
+    .ce-popover-item--confirmation {
+    background: var(--color-bg-error) !important;
+    box-shadow: inset 0 0 0 1px var(--color-border-error);
+  }
+
+  :is(.content-editor, body.content-editor-modal-open)
+    .ce-popover-item--confirmation:is(:hover, .ce-popover-item--focused) {
+    background: color-mix(
+      in oklch,
+      var(--color-border-error) 36%,
+      var(--color-bg-error)
+    ) !important;
   }
 
   :is(.content-editor, body.content-editor-modal-open)
@@ -334,7 +379,8 @@
     .ce-popover-item--confirmation
     .ce-popover-item__icon
     svg {
-    color: var(--color-white) !important;
+    border-color: var(--color-border-error) !important;
+    color: var(--color-text-error) !important;
   }
 
   /* Match the project sm breakpoint without introducing an inline media query. */
@@ -346,23 +392,64 @@
       background-color: var(--content-editor-panel) !important;
       box-shadow: 0 10px 26px -18px var(--content-editor-shadow) !important;
     }
-  }
 
-  /* Tool-specific surfaces inherit the project theme tokens. */
-  .content-editor .cdx-list {
-    --checkbox-background: var(--color-bg-2);
-    --color-border: var(--color-border-2);
-    --color-bg-checked: var(--color-accent);
-    --color-bg-checked-hover: color-mix(
-      in oklch,
-      var(--color-accent) 72%,
-      var(--color-text-1)
-    );
-    --color-tick: var(--color-bw);
-  }
+    :is(.content-editor, body.content-editor-modal-open)
+      .ce-popover-item__title,
+    :is(.content-editor, body.content-editor-modal-open)
+      .ce-popover-header__text {
+      font-size: var(--text-base) !important;
+    }
 
-  .content-editor .cdx-list__checkbox-check {
-    background: var(--checkbox-background);
+    :is(.content-editor, body.content-editor-modal-open) .ce-popover-item__icon,
+    :is(.content-editor, body.content-editor-modal-open)
+      .ce-popover-header__back-button,
+    :is(.content-editor, body.content-editor-modal-open) .ce-inline-tool,
+    :is(.content-editor, body.content-editor-modal-open) .cdx-settings-button,
+    :is(.content-editor, body.content-editor-modal-open) .ce-settings__button,
+    :is(.content-editor, body.content-editor-modal-open)
+      .ce-conversion-tool__icon {
+      width: 2rem !important;
+      height: 2rem !important;
+    }
+
+    :is(.content-editor, body.content-editor-modal-open)
+      .ce-popover-item__icon
+      svg,
+    :is(.content-editor, body.content-editor-modal-open)
+      .ce-popover-header__back-button
+      svg,
+    :is(.content-editor, body.content-editor-modal-open) .ce-inline-tool svg,
+    :is(.content-editor, body.content-editor-modal-open)
+      .ce-inline-toolbar__dropdown
+      svg,
+    :is(.content-editor, body.content-editor-modal-open)
+      .cdx-settings-button
+      svg,
+    :is(.content-editor, body.content-editor-modal-open)
+      .ce-settings__button
+      svg,
+    :is(.content-editor, body.content-editor-modal-open)
+      .ce-conversion-tool__icon
+      svg {
+      width: 1.5rem !important;
+      height: 1.5rem !important;
+    }
+
+    :is(.content-editor, body.content-editor-modal-open)
+      .ce-popover--inline
+      .ce-popover__items
+      > .ce-popover-item {
+      box-sizing: border-box;
+      width: 2.5rem !important;
+      height: 2.5rem !important;
+      flex: 0 0 2.5rem;
+      padding: var(--spacing) !important;
+    }
+
+    .content-editor .ce-block__content {
+      box-sizing: border-box;
+      padding-right: calc(1rem + var(--spacing-xs));
+    }
   }
 
   .content-editor .ce-stub {
@@ -371,33 +458,51 @@
     color: var(--color-text-2);
   }
 
-  /* The private-content marker is a custom Editor.js tune with an SVG mask. */
-  .content-editor .content-editor-private-wrap {
-    position: relative;
+  /* Desktop uses Editor.js' gutter; mobile uses the shared block rail above. */
+  .content-editor .content-editor-private-marker {
+    display: none;
+    position: absolute;
+    top: 0;
+    right: calc(-1 * (var(--spacing-xs) + var(--spacing) / 2));
+    bottom: 0;
+    z-index: 1;
+    width: calc(var(--spacing) / 2);
+    border-radius: 30px;
+    background: var(--color-accent);
+    opacity: 0.56;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
   }
 
   .content-editor
-    .content-editor-private-wrap[data-content-private='true']::before {
+    .content-editor-private-wrap[data-content-private='true']
+    > .ce-block__content
+    > .content-editor-private-marker {
+    display: block;
+  }
+
+  .content-editor .content-editor-private-marker::before {
     position: absolute;
-    top: 0.7em;
-    left: -1.25rem;
-    z-index: 0;
+    top: 50%;
+    left: calc(100% + var(--spacing-xs) / 2);
     width: 1rem;
     height: 1rem;
-    background: var(--color-text-2);
+    background: var(--color-accent);
     content: '';
-    opacity: 0.34;
-    pointer-events: none;
+    transform: translateY(-50%);
     mask: url("data:image/svg+xml,%3Csvg width='15' height='17' viewBox='0 0 15 17' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 7V5A4.5 4.5 0 0 0 3 5v2H1v10h13V7h-2ZM5 5a2.5 2.5 0 0 1 5 0v2H5V5Zm7 10H3V9h9v6Z' fill='black'/%3E%3C/svg%3E")
       center / contain no-repeat;
-    transition:
-      opacity 0.15s ease,
-      transform 0.15s ease;
   }
 
   .content-editor
-    .content-editor-private-wrap[data-content-private='true']:hover::before {
-    opacity: 0.22;
-    transform: scale(0.96);
+    .content-editor-private-wrap[data-content-private='true']:hover
+    .content-editor-private-marker {
+    opacity: 0.72;
+  }
+
+  @variant max-sm {
+    .content-editor .content-editor-private-marker {
+      right: var(--spacing-xs);
+    }
   }
 }

@@ -5,6 +5,11 @@ import {
 } from '#layers/thei/shared/content';
 import { contentEditorModal } from '#layers/thei/app/modals/content-editor/modal';
 import ContentStats from '#layers/thei/app/components/content/ContentStats.vue';
+import {
+  editorSnapshotStorageKey,
+  migrateEditorSnapshots,
+  persistentEditorSnapshotKey,
+} from '#layers/thei/app/composables/editor-snapshots';
 
 const props = defineProps<{
   modelValue?: ContentFieldModelValue | null;
@@ -14,6 +19,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [value: ContentFieldModelValue | null];
 }>();
+const temporarySnapshotKey = `draft:${crypto.randomUUID()}`;
 
 const analysis = computed(() => analyzeContentData(props.modelValue?.data));
 const summary = computed(() => ({
@@ -30,14 +36,41 @@ const emptyText = computed(() =>
     : phrase.value.content_empty,
 );
 
-async function openEditor() {
-  const result = await openModal(contentEditorModal, {
+watch(
+  () => props.modelValue?.contentUuid,
+  (contentUuid) => {
+    if (!contentUuid) return;
+    migrateEditorSnapshots(
+      temporarySnapshotKey,
+      persistentEditorSnapshotKey(contentUuid),
+    );
+  },
+);
+
+onBeforeUnmount(() => {
+  if (!props.modelValue?.contentUuid) {
+    localStorage.removeItem(editorSnapshotStorageKey(temporarySnapshotKey));
+  }
+});
+
+function openEditor() {
+  const snapshotKey = props.modelValue?.contentUuid
+    ? persistentEditorSnapshotKey(props.modelValue.contentUuid)
+    : temporarySnapshotKey;
+  void openModal(contentEditorModal, {
     title: props.titleLabel,
     value: props.modelValue,
+    snapshotKey,
+    onSave: (value) => {
+      if (value.contentUuid) {
+        migrateEditorSnapshots(
+          snapshotKey,
+          persistentEditorSnapshotKey(value.contentUuid),
+        );
+      }
+      emit('update:modelValue', value);
+    },
   });
-
-  if (result.type !== 'save') return;
-  emit('update:modelValue', result.value);
 }
 </script>
 

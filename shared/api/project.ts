@@ -1,7 +1,10 @@
 import type { ProjectEventAccessLevel } from '../access-level';
 import type { ArchivedOriginalFileMeta, AssetType } from '../asset';
 import type { ContentFieldValue } from '../content';
-import type { ProjectSectionContentValue, ProjectStageContentValue } from '../project-content-item';
+import type {
+  ProjectSectionContentValue,
+  ProjectStageContentValue,
+} from '../project-content-item';
 import type {
   ProjectRelationEditItem,
   ProjectRelationType,
@@ -86,6 +89,7 @@ export type ProjectRelationGetItem = ProjectRelationEditItem & {
 export type ProjectSearchItem = {
   projectUuid: string;
   title: string;
+  summary: string;
   humanReadableSlug: string;
   publicId: string;
   iconMedia: MediaDescriptor;

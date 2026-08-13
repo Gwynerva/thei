@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeProjectContentSections, normalizeProjectStages, normalizeStagePeriods } from '../../shared/project-content-item';
+import {
+  normalizeProjectContentSections,
+  normalizeProjectStages,
+  normalizeStagePeriods,
+} from '../../shared/project-content-item';
 
 const content = (text = 'Body') => ({
   data: { blocks: [{ type: 'paragraph', data: { text } }] },
@@ -56,20 +60,24 @@ describe('project stages', () => {
 
 describe('stage periods', () => {
   it('sorts and merges overlaps but keeps adjacent days separate', () => {
-    expect(normalizeStagePeriods([
-      { startDate: '2026-01-10', endDate: '2026-01-15' },
-      { startDate: '2026-01-05', endDate: '2026-01-12' },
-      { startDate: '2026-01-16', endDate: '2026-01-20' },
-    ])).toEqual([
+    expect(
+      normalizeStagePeriods([
+        { startDate: '2026-01-10', endDate: '2026-01-15' },
+        { startDate: '2026-01-05', endDate: '2026-01-12' },
+        { startDate: '2026-01-16', endDate: '2026-01-20' },
+      ]),
+    ).toEqual([
       { startDate: '2026-01-05', endDate: '2026-01-15' },
       { startDate: '2026-01-16', endDate: '2026-01-20' },
     ]);
   });
 
   it('rejects date-time values', () => {
-    expect(() => normalizeStagePeriods([
-      { startDate: '2026-01-01T12:00', endDate: '2026-01-02' },
-    ])).toThrow('Invalid stage period');
+    expect(() =>
+      normalizeStagePeriods([
+        { startDate: '2026-01-01T12:00', endDate: '2026-01-02' },
+      ]),
+    ).toThrow('Invalid stage period');
   });
 });
 
@@ -97,7 +105,7 @@ describe('project content sections', () => {
         data: {
           blocks: [
             { type: 'list', data: { items: [] } },
-            { type: 'contentMedia', data: { asset: null } },
+            { type: 'contentMedia', data: { layout: 'centered', asset: null } },
             { type: 'contentGallery', data: { items: [] } },
             { type: 'contentAttachment', data: {} },
           ],
@@ -152,7 +160,10 @@ describe('project content sections', () => {
               blocks: [
                 {
                   type: 'contentMedia',
-                  data: { asset: { assetUuid: 'a-existing' } },
+                  data: {
+                    layout: 'centered',
+                    asset: { assetUuid: 'a-existing' },
+                  },
                 },
               ],
             },

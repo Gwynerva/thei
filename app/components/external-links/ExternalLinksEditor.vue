@@ -384,6 +384,7 @@ onUnmounted(() => {
             v-if="preview"
             :link="preview"
             :url="preview.url"
+            :interactive="true"
           />
 
           <p

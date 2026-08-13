@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import {
   externalLinkHostname,
+  normalizeExternalLinkUrl,
   type ExternalLink,
 } from '#layers/thei/shared/external-link';
 
@@ -10,6 +11,8 @@ const props = defineProps<{
   loading?: boolean;
   errorText?: string;
   loadingText?: string;
+  flush?: boolean;
+  interactive: boolean;
 }>();
 
 const title = computed(
@@ -18,6 +21,15 @@ const title = computed(
     props.errorText ||
     (props.url ? externalLinkHostname(props.url) : ''),
 );
+
+const interactiveHref = computed(() => {
+  if (!props.interactive) return undefined;
+  try {
+    return normalizeExternalLinkUrl(props.link?.url ?? props.url);
+  } catch {
+    return undefined;
+  }
+});
 
 const accentColor = computed(() => {
   const hue = props.link?.faviconMedia.accentHue;
@@ -31,14 +43,14 @@ const accentColor = computed(() => {
 <template>
   <div class="@container w-full min-w-0">
     <component
-      :is="link ? 'a' : 'div'"
-      :href="link?.url"
-      :target="link ? '_blank' : undefined"
-      :rel="link ? 'noopener noreferrer' : undefined"
+      :is="interactiveHref ? 'a' : 'div'"
+      :href="interactiveHref"
+      :target="interactiveHref ? '_blank' : undefined"
+      :rel="interactiveHref ? 'noopener noreferrer' : undefined"
       class="external-link-preview flex min-h-16 w-full min-w-0 items-center
-        gap-xs rounded-normal border border-border-1 bg-bg-2 p-xs text-text-1
+        gap-xs rounded-normal border border-border-1 bg-bg-2 text-text-1
         no-underline transition-colors"
-      :class="{ 'cursor-pointer': link }"
+      :class="[{ 'cursor-pointer': interactiveHref }, flush ? '' : 'p-xs']"
       :style="{ '--external-link-accent': accentColor }"
     >
       <Media
@@ -46,12 +58,13 @@ const accentColor = computed(() => {
         v-bind="link.faviconMedia"
         class="size-12 shrink-0 rounded-sm object-cover opacity-100
           @max-[24rem]:size-10"
+        :class="{ 'm-xs mr-0': flush }"
       />
       <div
         v-else
         class="flex size-12 shrink-0 items-center justify-center rounded-sm
           bg-bg-3 text-xl text-text-3 @max-[24rem]:size-10"
-        :class="{ 'animate-pulse': loading }"
+        :class="{ 'm-xs mr-0': flush, 'animate-pulse': loading }"
         aria-hidden="true"
       >
         <Icon name="external-link" />

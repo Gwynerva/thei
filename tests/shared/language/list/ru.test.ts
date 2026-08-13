@@ -26,7 +26,12 @@ describe('Editor.js phrases', () => {
       file: 'Файл',
       add: 'Добавить',
       filter: 'Фильтр',
+      click_to_delete: 'Точно удалить?',
+      move_down: 'Спустить',
     });
+    expect(ruModule.phrases.content_private_block).toBe('Приватный блок');
+    expect(ruModule.phrases.content_snapshots).toBe('История версий');
+    expect(ruModule.phrases.content_media_stretch).toBe('Растянуть');
   });
 });
 

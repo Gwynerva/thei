@@ -1,7 +1,11 @@
 <script lang="ts" setup>
 import type EditorJS from '@editorjs/editorjs';
-import type { OutputData } from '@editorjs/editorjs';
-import { debounce } from 'perfect-debounce';
+import type {
+  API,
+  BlockMutationEvent,
+  InlineToolConstructable,
+  OutputData,
+} from '@editorjs/editorjs';
 import type {
   AssetReplaceResult,
   AssetVariantInfo,
@@ -36,43 +40,61 @@ import { ASSET_UPLOAD_LIMITS } from '#layers/thei/shared/asset-upload-limits';
 import ModalContainer from '#layers/thei/app/modals/ModalContainer.vue';
 import ModalTitle from '#layers/thei/app/modals/ModalTitle.vue';
 import ModalHeaderButton from '#layers/thei/app/modals/ModalHeaderButton.vue';
+import FloatingPopup from '#layers/thei/app/components/FloatingPopup.vue';
 import ContentStats from '#layers/thei/app/components/content/ContentStats.vue';
+import ContentInlineLinkDecorator from '#layers/thei/app/components/content/ContentInlineLinkDecorator.vue';
+import ContentInlineLinkControls from '#layers/thei/app/components/content/ContentInlineLinkControls.vue';
 import {
   ContentAttachmentTool,
+  ContentBoldTool,
   ContentGalleryTool,
+  ContentItalicTool,
+  ContentEntityLinkTool,
+  ContentExternalInlineLinkTool,
   ContentMediaTool,
   ExternalLinkTool,
   PrivateAccessTune,
   type ContentEditorAssetKind,
   type ContentEditorEditGalleryItem,
 } from '#layers/thei/app/components/content/editor-tools';
+import type {
+  ContentInlineLinkControlsExpose,
+  ContentInlineLinkRequest,
+} from '#layers/thei/app/components/content/editor-inline-links';
+import { editorIcon } from '#layers/thei/app/components/content/editor-icons';
+import { ContentDelimiterTool } from '#layers/thei/app/components/content/editor-delimiter-tool';
 import { assetDetailsModal } from '#layers/thei/app/modals/asset-details/modal';
 import { createEditorBlockDrag } from '#layers/thei/app/composables/editor-block-drag';
-
-type ContentEditorResult =
-  | {
-      type: 'save';
-      value: ContentFieldModelValue;
-    }
-  | {
-      type: 'unchanged';
-    };
-
-const emit = defineEmits<{
-  modalResult: [result: ContentEditorResult];
-}>();
+import { createEditorPopoverLayer } from '#layers/thei/app/composables/editor-popover-layer';
+import { createAdminContentLinkResolver } from '#layers/thei/app/composables/content-link-resolver';
+import {
+  createEditorSnapshotManager,
+  groupEditorSnapshotsByDay,
+  readCleanEditorOutput,
+  type EditorSnapshotReference,
+} from '#layers/thei/app/composables/editor-snapshots';
 
 const props = defineProps<{
   modalData: {
     title?: string;
     value?: ContentFieldModelValue | null;
+    snapshotKey: string;
+    onSave: (value: ContentFieldModelValue) => void;
   };
 }>();
 
 const holder = useTemplateRef<HTMLElement>('holder');
+const modalContainer =
+  useTemplateRef<InstanceType<typeof ModalContainer>>('modalContainer');
+const inlineLinkControls =
+  useTemplateRef<ContentInlineLinkControlsExpose>('inlineLinkControls');
+const contentLinkResolver = createAdminContentLinkResolver();
 const saving = ref(false);
 const errorMessage = ref<string | undefined>();
+const snapshotPopupOpen = ref(false);
+const snapshotButton = useTemplateRef<HTMLElement>('snapshotButton');
 const initialData = normalizeContentData(props.modalData.value?.data);
+let savedValue = props.modalData.value;
 const serializeContent = (data: ContentOutputData) =>
   JSON.stringify(
     normalizeContentData(data).blocks.map(({ id: _id, ...block }) => block),
@@ -82,7 +104,6 @@ const {
   isDirty,
   markSaved,
 } = useSerializableState(initialData, { serialize: serializeContent });
-const editorChangePending = ref(false);
 const computedInitialSummary = summarizeContentData(
   initialData,
   collectContentAssetSizeMap(initialData),
@@ -98,24 +119,88 @@ const headerSummary = ref<ContentSummary>({
     computedInitialSummary.assetTotalSize,
 });
 let editor: EditorJS | undefined;
+let editorAcceptsChanges = false;
 let cleanupEditorDrag: (() => void) | undefined;
-let summaryVersion = 0;
+let cleanupEditorPopoverLayer: (() => void) | undefined;
 
-const refreshHeaderSummary = debounce(async () => {
-  if (!editor) return;
-  const version = ++summaryVersion;
-  try {
-    const data = normalizeContentData((await editor.save()) as OutputData);
-    const next = summarizeContentData(data, collectContentAssetSizeMap(data));
-    if (version === summaryVersion) {
-      draftData.value = data;
-      headerSummary.value = next;
-      editorChangePending.value = false;
-    }
-  } catch {
-    // Editor.js can briefly be between block states while a tool is updating.
+const editorSnapshots = createEditorSnapshotManager({
+  storageKey: props.modalData.snapshotKey,
+  read: async () => {
+    if (!editor) throw new Error('Content editor is not available.');
+    return readCleanEditorOutput(editor);
+  },
+  render: async (data) => {
+    if (!editor) throw new Error('Content editor is not available.');
+    await editor.render(data as OutputData);
+    editor.toolbar.close();
+  },
+  onCurrentChange: applyEditorData,
+  onError: () => {
+    errorMessage.value = phrase.value.content_editor_save_error;
+  },
+});
+const editorChangePending = editorSnapshots.isPending;
+const snapshots = editorSnapshots.snapshots;
+const snapshotGroups = computed(() =>
+  groupEditorSnapshotsByDay(snapshots.value),
+);
+
+async function handleEditorChange(
+  _api: API,
+  _event: BlockMutationEvent | BlockMutationEvent[],
+) {
+  if (!editorAcceptsChanges || editorSnapshots.isApplying.value) return;
+  editorSnapshots.recordChange();
+}
+
+function applyEditorData(data: ContentOutputData) {
+  draftData.value = data;
+  headerSummary.value = summarizeContentData(
+    data,
+    collectContentAssetSizeMap(data),
+  );
+}
+
+async function restoreSnapshot(snapshot: EditorSnapshotReference) {
+  if (await editorSnapshots.restore(snapshot)) snapshotPopupOpen.value = false;
+}
+
+function snapshotTime(createdAt: number) {
+  return new Intl.DateTimeFormat(language.value.code, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(createdAt);
+}
+
+function snapshotLabel(createdAt: number) {
+  return phrase.value.content_snapshot_restore_label(
+    new Intl.DateTimeFormat(language.value.code, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      hourCycle: 'h23',
+    }).format(createdAt),
+  );
+}
+
+function snapshotDayLabel(dayStart: number) {
+  const now = new Date();
+  const todayStart = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  ).getTime();
+  const yesterday = new Date(todayStart);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (dayStart === todayStart || dayStart === yesterday.getTime()) {
+    return new Intl.RelativeTimeFormat(language.value.code, {
+      numeric: 'auto',
+    }).format(dayStart === todayStart ? 0 : -1, 'day');
   }
-}, 150);
+  return new Intl.DateTimeFormat(language.value.code, {
+    dateStyle: 'long',
+  }).format(dayStart);
+}
 
 useModalCloseGuard(
   () =>
@@ -123,9 +208,58 @@ useModalCloseGuard(
     window.confirm(phrase.value.unsaved_modal_confirm),
 );
 
-function handleEditorChange() {
-  editorChangePending.value = true;
-  void refreshHeaderSummary();
+function preventHeaderFormatting(event: InputEvent) {
+  if (
+    event.inputType.startsWith('format') ||
+    event.inputType === 'insertLink'
+  ) {
+    event.preventDefault();
+  }
+}
+
+function normalizeHeaderInput(event: Event) {
+  if (event instanceof InputEvent && event.isComposing) return;
+  normalizeHeaderElement(event);
+}
+
+function normalizeHeaderElement(event: Event) {
+  const element = event.currentTarget;
+  if (!(element instanceof HTMLHeadingElement) || !element.querySelector('*')) {
+    return;
+  }
+
+  const selection = window.getSelection();
+  const selectionIsInside = Boolean(
+    selection?.anchorNode &&
+    selection.focusNode &&
+    element.contains(selection.anchorNode) &&
+    element.contains(selection.focusNode),
+  );
+  const anchorOffset = selectionIsInside
+    ? headerTextOffset(element, selection!.anchorNode!, selection!.anchorOffset)
+    : 0;
+  const focusOffset = selectionIsInside
+    ? headerTextOffset(element, selection!.focusNode!, selection!.focusOffset)
+    : 0;
+  const text = element.textContent ?? '';
+  element.textContent = text;
+
+  if (!selectionIsInside || !selection) return;
+  const textNode =
+    element.firstChild ?? element.appendChild(document.createTextNode(''));
+  selection.setBaseAndExtent(
+    textNode,
+    Math.min(anchorOffset, text.length),
+    textNode,
+    Math.min(focusOffset, text.length),
+  );
+}
+
+function headerTextOffset(root: HTMLElement, node: Node, offset: number) {
+  const range = document.createRange();
+  range.selectNodeContents(root);
+  range.setEnd(node, offset);
+  return range.toString().length;
 }
 
 onMounted(async () => {
@@ -143,17 +277,48 @@ onMounted(async () => {
     import('@editorjs/quote'),
   ]);
 
+  class PlainTextHeader extends Header {
+    override getTag() {
+      const element = super.getTag();
+      element.addEventListener('beforeinput', preventHeaderFormatting);
+      element.addEventListener('input', normalizeHeaderInput);
+      element.addEventListener('compositionend', normalizeHeaderElement);
+      return element;
+    }
+  }
+
+  class TheiList extends List {
+    override renderSettings() {
+      const settings = super.renderSettings();
+      const styleIcons = [
+        editorIcon('list-unordered'),
+        editorIcon('list-ordered'),
+        editorIcon('list-check'),
+      ];
+
+      return settings.map((setting, index) =>
+        index < styleIcons.length
+          ? { ...setting, icon: styleIcons[index] }
+          : setting,
+      );
+    }
+  }
+
   editor = new Editor({
     holder: holder.value!,
     data: toEditorData(props.modalData.value?.data),
-    autofocus: true,
     onChange: handleEditorChange,
     placeholder: phrase.value.content_editor_placeholder,
     i18n: {
       messages: editorJsI18nMessages(),
     },
     minHeight: 240,
-    inlineToolbar: ['bold', 'italic', 'link'],
+    inlineToolbar: [
+      'contentBold',
+      'contentItalic',
+      'contentEntityLink',
+      'contentExternalInlineLink',
+    ],
     sanitizer: {
       p: true,
       b: true,
@@ -164,21 +329,70 @@ onMounted(async () => {
         href: true,
         rel: true,
         target: true,
+        'data-content-link': true,
+        'data-entity-type': true,
+        'data-entity-id': true,
       },
       br: true,
     },
     tunes: ['privateAccess'],
     tools: {
-      header: {
-        class: Header,
-        inlineToolbar: true,
+      contentBold: {
+        class: ContentBoldTool as unknown as InlineToolConstructable,
+      },
+      contentItalic: {
+        // Editor.js 2.x still types constructable render() as HTMLElement even
+        // though its current InlineTool API accepts MenuConfig.
+        class: ContentItalicTool as unknown as InlineToolConstructable,
+      },
+      contentEntityLink: {
+        class: ContentEntityLinkTool as unknown as InlineToolConstructable,
         config: {
-          levels: [2, 3, 4],
+          open: (request: ContentInlineLinkRequest) =>
+            inlineLinkControls.value?.openProject(request),
+        },
+      },
+      contentExternalInlineLink: {
+        class:
+          ContentExternalInlineLinkTool as unknown as InlineToolConstructable,
+        config: {
+          open: (request: ContentInlineLinkRequest) =>
+            inlineLinkControls.value?.openExternal(request),
+        },
+      },
+      paragraph: {
+        toolbox: {
+          title: phrase.value.content_editor_i18n.text,
+          icon: editorIcon('paragraph'),
+        },
+      },
+      header: {
+        class: PlainTextHeader,
+        toolbox: [
+          {
+            title: phrase.value.content_editor_i18n.heading,
+            icon: editorIcon('heading'),
+            data: { level: 2 },
+          },
+          {
+            title: phrase.value.content_editor_i18n.subheading,
+            icon: editorIcon('subheading'),
+            data: { level: 3 },
+          },
+        ],
+        inlineToolbar: false,
+        config: {
+          levels: [2, 3],
           defaultLevel: 2,
         },
       },
       list: {
-        class: List,
+        class: TheiList,
+        toolbox: {
+          title: phrase.value.content_editor_i18n.list,
+          icon: editorIcon('list-unordered'),
+          data: { style: 'unordered' },
+        },
         inlineToolbar: true,
         config: {
           defaultStyle: 'unordered',
@@ -187,9 +401,21 @@ onMounted(async () => {
       quote: {
         class: Quote,
         inlineToolbar: true,
+        toolbox: {
+          title: phrase.value.content_editor_i18n.quote,
+          icon: editorIcon('quote'),
+        },
+      },
+      delimiter: {
+        class: ContentDelimiterTool,
+        toolbox: {
+          title: phrase.value.content_editor_i18n.delimiter,
+          icon: editorIcon('asterisk'),
+        },
       },
       contentMedia: {
         class: ContentMediaTool,
+        inlineToolbar: true,
         config: {
           pickAsset,
           editAsset,
@@ -214,6 +440,9 @@ onMounted(async () => {
       },
       externalLink: {
         class: ExternalLinkTool,
+        config: {
+          labels: contentToolLabels(),
+        },
       },
       privateAccess: {
         class: PrivateAccessTune,
@@ -225,11 +454,17 @@ onMounted(async () => {
   });
 
   await editor.isReady;
+  await editorSnapshots.initialize();
+  editorAcceptsChanges = true;
+  cleanupEditorPopoverLayer = createEditorPopoverLayer(holder.value!);
   cleanupEditorDrag = createEditorBlockDrag(holder.value!, editor);
 });
 
 onBeforeUnmount(() => {
-  summaryVersion++;
+  editorAcceptsChanges = false;
+  editorSnapshots.destroy();
+  cleanupEditorPopoverLayer?.();
+  cleanupEditorPopoverLayer = undefined;
   cleanupEditorDrag?.();
   cleanupEditorDrag = undefined;
   document.body.classList.remove(
@@ -241,16 +476,14 @@ onBeforeUnmount(() => {
 });
 
 async function save() {
-  if (!editor || saving.value) return;
+  if (!editor || saving.value || !isDirty.value) return;
   saving.value = true;
   errorMessage.value = undefined;
   try {
-    const raw = (await editor.save()) as OutputData;
-    const data = normalizeContentData(raw) as ContentOutputData;
+    const data = await editorSnapshots.synchronize();
     draftData.value = data;
-    if (contentDataIsSemanticallyEqual(data, props.modalData.value?.data)) {
+    if (contentDataIsSemanticallyEqual(data, savedValue?.data)) {
       markSaved(data);
-      emit('modalResult', { type: 'unchanged' });
       return;
     }
     const summary = summarizeContentData(
@@ -258,15 +491,14 @@ async function save() {
       collectContentAssetSizeMap(data),
     );
     markSaved(data);
-    emit('modalResult', {
-      type: 'save',
-      value: {
-        contentUuid: props.modalData.value?.contentUuid,
-        updatedAt: props.modalData.value?.updatedAt,
-        data,
-        ...summary,
-      },
-    });
+    savedValue = {
+      contentUuid: savedValue?.contentUuid,
+      updatedAt: savedValue?.updatedAt,
+      data,
+      ...summary,
+    };
+    headerSummary.value = summary;
+    props.modalData.onSave(savedValue);
   } catch (error) {
     errorMessage.value =
       error instanceof ContentValidationError
@@ -277,14 +509,17 @@ async function save() {
   }
 }
 
+useSaveShortcut(save, {
+  canSave: () => Boolean(editor) && !saving.value && isDirty.value,
+  root: () => modalContainer.value?.root,
+  exclusive: true,
+});
+
 async function clearContent() {
   if (!editor || headerSummary.value.blockCount === 0) return;
   if (!window.confirm(phrase.value.content_editor_clear_confirm)) return;
   await editor.clear();
-  const data = normalizeContentData((await editor.save()) as OutputData);
-  draftData.value = data;
-  headerSummary.value = summarizeContentData(data, new Map());
-  editorChangePending.value = false;
+  editorSnapshots.recordChange();
 }
 
 async function pickAsset(kind: ContentEditorAssetKind) {
@@ -404,7 +639,7 @@ const editGalleryItem: ContentEditorEditGalleryItem = async (item) => {
 
 async function buildDraftUsageDelta() {
   if (!editor) return {};
-  const draft = normalizeContentData((await editor.save()) as OutputData);
+  const draft = editorSnapshots.current();
   const saved = normalizeContentData(props.modalData.value?.data);
   const draftCounts = countContentUsageByAsset(draft);
   const savedCounts = countContentUsageByAsset(saved);
@@ -477,9 +712,14 @@ function contentToolLabels() {
     addMedia: phrase.value.content_add_media,
     chooseFile: phrase.value.content_choose_file,
     caption: phrase.value.content_caption,
+    mediaCentered: phrase.value.content_media_centered,
+    mediaNatural: phrase.value.content_media_natural,
+    mediaStretch: phrase.value.content_media_stretch,
     title: phrase.value.content_title,
     description: phrase.value.content_description,
-    privateAccess: phrase.value.asset_private_access,
+    privateAccess: phrase.value.content_private_block,
+    externalLinkLoading: phrase.value.external_link_loading,
+    externalLinkError: phrase.value.external_link_error,
   };
 }
 
@@ -510,11 +750,12 @@ function editorJsI18nMessages() {
       Link: text.link,
       Bold: text.bold,
       Italic: text.italic,
+      'Project link': phrase.value.content_project_link,
+      'External link': phrase.value.content_external_link,
       Heading: text.heading,
-      'Unordered List': text.unordered_list,
-      'Ordered List': text.ordered_list,
-      Checklist: text.checklist,
+      List: text.list,
       Quote: text.quote,
+      Delimiter: text.delimiter,
       Media: text.media,
       Gallery: text.gallery,
       File: text.file,
@@ -522,9 +763,8 @@ function editorJsI18nMessages() {
     tools: {
       link: { 'Add a link': text.add_link },
       header: {
-        'Heading 2': text.heading_2,
-        'Heading 3': text.heading_3,
-        'Heading 4': text.heading_4,
+        'Heading 2': text.heading,
+        'Heading 3': text.subheading,
       },
       quote: {
         'Enter a quote': text.enter_quote,
@@ -558,7 +798,15 @@ function editorJsI18nMessages() {
 </script>
 
 <template>
-  <ModalContainer class="max-w-192">
+  <ModalContainer ref="modalContainer" class="max-w-192">
+    <ContentInlineLinkDecorator
+      :root="holder"
+      :resolver="contentLinkResolver"
+    />
+    <ContentInlineLinkControls
+      ref="inlineLinkControls"
+      :teleport-to="holder?.closest('dialog') ?? undefined"
+    />
     <template #header>
       <div class="flex flex-col gap-xs p-sm">
         <div class="flex min-w-0 items-center gap-xs">
@@ -588,15 +836,71 @@ function editorJsI18nMessages() {
           <ModalHeaderButton
             variant="accent"
             :label="phrase.save"
-            :disabled="saving || (!editorChangePending && !isDirty)"
+            :disabled="saving || !isDirty"
             @click="save"
           >
             <Icon v-if="saving" name="loading" />
-            {{ editorChangePending || isDirty ? phrase.save : phrase.saved }}
+            {{ isDirty ? phrase.save : phrase.saved }}
           </ModalHeaderButton>
         </div>
         <div class="flex min-w-0 items-center justify-between gap-sm">
-          <ContentStats v-bind="headerSummary" />
+          <div class="flex min-w-0 items-center gap-xs">
+            <div ref="snapshotButton" class="flex shrink-0">
+              <ModalHeaderButton
+                icon="history"
+                size="compact"
+                :label="phrase.content_snapshots"
+                :disabled="snapshots.length === 0"
+                :aria-expanded="snapshotPopupOpen"
+                aria-haspopup="dialog"
+                @click="snapshotPopupOpen = !snapshotPopupOpen"
+              />
+              <FloatingPopup
+                v-model:open="snapshotPopupOpen"
+                :anchor="snapshotButton"
+                placement="bottom-start"
+                :teleport-to="holder?.closest('dialog') ?? undefined"
+                fit-content
+              >
+                <div
+                  role="dialog"
+                  :aria-label="phrase.content_snapshots"
+                  class="flex w-50 flex-col gap-sm rounded-normal border
+                    border-border-1 bg-bg-2 p-xs"
+                >
+                  <div
+                    v-for="group in snapshotGroups"
+                    :key="group.dayStart"
+                    class="flex flex-col gap-xs"
+                  >
+                    <div
+                      class="flex items-center gap-xs text-xs text-text-3
+                        first-letter:uppercase"
+                    >
+                      <span class="h-px grow bg-border-1" />
+                      <span>{{ snapshotDayLabel(group.dayStart) }}</span>
+                      <span class="h-px grow bg-border-1" />
+                    </div>
+                    <div class="flex flex-wrap gap-xs">
+                      <button
+                        v-for="(snapshot, index) in group.snapshots"
+                        :key="`${snapshot.createdAt}:${index}`"
+                        type="button"
+                        :aria-label="snapshotLabel(snapshot.createdAt)"
+                        class="cursor-pointer rounded-full bg-bg-3 px-xs py-1
+                          text-xs text-text-2 transition-colors
+                          hocus:bg-bg-accent hocus:text-accent"
+                        @click="restoreSnapshot(snapshot)"
+                      >
+                        {{ snapshotTime(snapshot.createdAt) }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </FloatingPopup>
+            </div>
+            <ContentStats v-bind="headerSummary" />
+          </div>
           <span class="shrink-0 text-xs text-text-3">
             <TheiTime
               v-if="modalData.value?.updatedAt"
@@ -608,6 +912,9 @@ function editorJsI18nMessages() {
       </div>
     </template>
 
-    <div ref="holder" class="content-editor w-full px-sm py-md"></div>
+    <div
+      ref="holder"
+      class="content-editor content-prose w-full px-sm py-md"
+    ></div>
   </ModalContainer>
 </template>

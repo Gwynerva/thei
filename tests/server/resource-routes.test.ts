@@ -39,8 +39,10 @@ const removedRouteFiles = [
 
 describe('resource routes', () => {
   it('exposes only the new route files', () => {
-    for (const file of newRouteFiles) expect(existsSync(resolve(root, file)), file).toBe(true);
-    for (const file of removedRouteFiles) expect(existsSync(resolve(root, file)), file).toBe(false);
+    for (const file of newRouteFiles)
+      expect(existsSync(resolve(root, file)), file).toBe(true);
+    for (const file of removedRouteFiles)
+      expect(existsSync(resolve(root, file)), file).toBe(false);
   });
 
   it('does not retain old URL literals in application source', () => {
@@ -69,5 +71,14 @@ describe('resource routes', () => {
       .map((file) => readFileSync(resolve(root, file), 'utf8'))
       .join('\n');
     for (const url of oldUrls) expect(source, url).not.toContain(url);
+  });
+
+  it('allows unauthenticated sign-in requests through the admin guard', () => {
+    const middleware = readFileSync(
+      resolve(root, 'server/middleware/0.global.ts'),
+      'utf8',
+    );
+
+    expect(middleware).toContain('if (isAdminPath && !isAuthPath && !isAdmin)');
   });
 });

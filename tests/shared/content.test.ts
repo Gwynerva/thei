@@ -12,6 +12,84 @@ import {
 } from '../../shared/content';
 
 describe('content normalization', () => {
+  it('requires the strict media layout and canonicalizes inline captions', () => {
+    expect(() =>
+      normalizeContentData({
+        blocks: [
+          { type: 'contentMedia', data: { asset: { assetUuid: 'legacy' } } },
+        ],
+      }),
+    ).toThrow(ContentValidationError);
+
+    expect(
+      normalizeContentData({
+        blocks: [
+          {
+            type: 'contentMedia',
+            data: {
+              layout: 'natural',
+              asset: { assetUuid: 'media' },
+              caption: '  <b>Bold</b>\n<i>italic</i> <script>bad()</script> ',
+            },
+          },
+        ],
+      }).blocks[0]?.data,
+    ).toEqual({
+      layout: 'natural',
+      asset: { assetUuid: 'media' },
+      caption: '<b>Bold</b> <i>italic</i> bad()',
+    });
+
+    expect(
+      normalizeContentData({
+        blocks: [
+          {
+            type: 'contentMedia',
+            data: {
+              layout: 'stretch',
+              asset: { assetUuid: 'stretched-media' },
+            },
+          },
+        ],
+      }).blocks[0]?.data,
+    ).toEqual({
+      layout: 'stretch',
+      asset: { assetUuid: 'stretched-media' },
+      caption: undefined,
+    });
+
+    expect(() =>
+      normalizeContentData({
+        blocks: [
+          {
+            type: 'contentMedia',
+            data: {
+              layout: 'wide',
+              asset: { assetUuid: 'invalid-media' },
+            },
+          },
+        ],
+      }),
+    ).toThrow(ContentValidationError);
+  });
+
+  it('keeps version and block identity while dropping Editor.js time', () => {
+    expect(
+      normalizeContentData({
+        time: 123,
+        version: '2.31.0',
+        blocks: [
+          { id: 'stable-block', type: 'paragraph', data: { text: 'Text' } },
+        ],
+      }),
+    ).toEqual({
+      version: '2.31.0',
+      blocks: [
+        { id: 'stable-block', type: 'paragraph', data: { text: 'Text' } },
+      ],
+    });
+  });
+
   it('ignores Editor.js service metadata when content is unchanged', () => {
     const blocks = [
       {
@@ -53,6 +131,48 @@ describe('content normalization', () => {
     ).toBe(false);
   });
 
+  it('ignores runtime attributes removed from quote caption links', () => {
+    const hydratedCaption =
+      '<b>Author</b> <a href="https://example.com/" target="_blank" rel="noopener noreferrer" data-content-link="external">Source</a>';
+    const storedCaption =
+      '<b>Author</b> <a href="https://example.com/" data-content-link="external">Source</a>';
+
+    expect(
+      normalizeContentData({
+        blocks: [
+          {
+            type: 'quote',
+            data: { text: 'Quote', caption: hydratedCaption },
+          },
+        ],
+      }).blocks[0]?.data,
+    ).toEqual({
+      text: 'Quote',
+      caption: storedCaption,
+      alignment: 'left',
+    });
+    expect(
+      contentDataIsSemanticallyEqual(
+        {
+          blocks: [
+            {
+              type: 'quote',
+              data: { text: 'Quote', caption: hydratedCaption },
+            },
+          ],
+        },
+        {
+          blocks: [
+            {
+              type: 'quote',
+              data: { text: 'Quote', caption: storedCaption },
+            },
+          ],
+        },
+      ),
+    ).toBe(true);
+  });
+
   it('drops empty text blocks and keeps meaningful blocks', () => {
     const data = normalizeContentData({
       blocks: [
@@ -64,6 +184,40 @@ describe('content normalization', () => {
     expect(data.blocks).toEqual([
       { type: 'header', data: { text: 'Project', level: 3 } },
     ]);
+  });
+
+  it('keeps semantic delimiters with no decorative data', () => {
+    const data = normalizeContentData({
+      blocks: [
+        {
+          id: 'delimiter-1',
+          type: 'delimiter',
+          data: { text: '* * *', presentation: 'legacy' },
+        },
+      ],
+    });
+
+    expect(data.blocks).toEqual([
+      { id: 'delimiter-1', type: 'delimiter', data: {} },
+    ]);
+    expect(contentPlainText(data)).toBe('');
+    expect(summarizeContentData(data)).toEqual({
+      blockCount: 1,
+      wordCount: 0,
+      assetCount: 0,
+      assetTotalSize: 0,
+    });
+  });
+
+  it('allows only canonical heading and subheading levels', () => {
+    const data = normalizeContentData({
+      blocks: [
+        { type: 'header', data: { text: 'Heading', level: 4 } },
+        { type: 'header', data: { text: 'Subheading', level: 3 } },
+      ],
+    });
+
+    expect(data.blocks.map((block) => block.data.level)).toEqual([2, 3]);
   });
 
   it('rejects unsupported block types', () => {
@@ -89,13 +243,32 @@ describe('content normalization', () => {
     });
   });
 
+  it('keeps headers strictly plain text', () => {
+    const data = normalizeContentData({
+      blocks: [
+        {
+          type: 'header',
+          data: {
+            text: '<b>Heading</b><br><a href="https://example.com">A &amp; B</a>',
+            level: 2,
+          },
+        },
+      ],
+    });
+
+    expect(data.blocks[0]?.data).toEqual({
+      text: 'Heading A &amp; B',
+      level: 2,
+    });
+  });
+
   it('extracts asset refs with private block tune', () => {
     const data = normalizeContentData({
       blocks: [
         {
           id: 'block-1',
           type: 'contentMedia',
-          data: { asset: { assetUuid: 'a-1', size: 10 } },
+          data: { layout: 'centered', asset: { assetUuid: 'a-1', size: 10 } },
           tunes: { privateAccess: { isPrivate: true } },
         },
         {
@@ -151,6 +324,7 @@ describe('content normalization', () => {
         {
           type: 'contentMedia',
           data: {
+            layout: 'centered',
             asset: { assetUuid: 'a-1' },
             caption: 'Media caption',
           },
@@ -223,7 +397,7 @@ describe('content normalization', () => {
         },
         {
           type: 'contentMedia',
-          data: { asset: { assetUuid: 'a-1' } },
+          data: { layout: 'centered', asset: { assetUuid: 'a-1' } },
         },
       ],
     });
@@ -331,6 +505,7 @@ describe('content preview', () => {
         {
           type: 'contentMedia',
           data: {
+            layout: 'centered',
             asset: { assetUuid: 'a-image', size: 42, media: imageMedia },
           },
         },
@@ -349,7 +524,10 @@ describe('content preview', () => {
   it('counts all visible text except external URLs', () => {
     const summary = summarizeContentData({
       blocks: [
-        { type: 'header', data: { text: '<b>Заголовок&nbsp;один</b>' } },
+        {
+          type: 'header',
+          data: { text: '<b>Заголовок&nbsp;один</b>' },
+        },
         {
           type: 'list',
           data: {
@@ -361,10 +539,17 @@ describe('content preview', () => {
             ],
           },
         },
-        { type: 'quote', data: { text: 'Цитата', caption: 'Автор' } },
+        {
+          type: 'quote',
+          data: { text: 'Цитата', caption: 'Автор' },
+        },
         {
           type: 'contentMedia',
-          data: { asset: { assetUuid: 'media' }, caption: 'Подпись медиа' },
+          data: {
+            layout: 'centered',
+            asset: { assetUuid: 'media' },
+            caption: 'Подпись медиа',
+          },
         },
         {
           type: 'contentGallery',
@@ -413,7 +598,10 @@ describe('content preview', () => {
         },
         {
           type: 'contentMedia',
-          data: { asset: { assetUuid: 'a-image', media: imageMedia } },
+          data: {
+            layout: 'centered',
+            asset: { assetUuid: 'a-image', media: imageMedia },
+          },
         },
       ],
     });

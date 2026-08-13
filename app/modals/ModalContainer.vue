@@ -1,6 +1,9 @@
 <script lang="ts" setup>
 defineOptions({ inheritAttrs: false });
 
+const root = useTemplateRef<HTMLElement>('root');
+defineExpose({ root });
+
 function overlayClick() {
   closeModal();
 }
@@ -8,6 +11,7 @@ function overlayClick() {
 
 <template>
   <section
+    ref="root"
     class="absolute inset-0 sm:flex sm:items-center sm:justify-center sm:py-10"
   >
     <!-- Overlay -->

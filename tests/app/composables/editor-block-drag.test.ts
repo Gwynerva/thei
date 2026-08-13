@@ -24,12 +24,33 @@ describe('Editor.js block drag helpers', () => {
     ).toEqual({ sourceIndex: 2, targetIndex: 1 });
   });
 
+  it('places the source before the block marked by the upper drop indicator', () => {
+    const ids = ['first', 'middle', 'last'];
+    const getIndex = (id: string) => ids.indexOf(id);
+
+    expect(resolveEditorBlockMove('last', 'first', getIndex, 'before')).toEqual(
+      {
+        sourceIndex: 2,
+        targetIndex: 0,
+      },
+    );
+    expect(resolveEditorBlockMove('first', 'last', getIndex, 'before')).toEqual(
+      {
+        sourceIndex: 0,
+        targetIndex: 1,
+      },
+    );
+  });
+
   it('ignores adjacent, same, and missing blocks when the order is unchanged', () => {
     const ids = ['first', 'middle', 'last'];
     const getIndex = (id: string) => ids.indexOf(id);
 
     expect(resolveEditorBlockMove('middle', 'first', getIndex)).toBeUndefined();
     expect(resolveEditorBlockMove('last', 'middle', getIndex)).toBeUndefined();
+    expect(
+      resolveEditorBlockMove('first', 'middle', getIndex, 'before'),
+    ).toBeUndefined();
     expect(
       resolveEditorBlockMove('middle', 'middle', getIndex),
     ).toBeUndefined();

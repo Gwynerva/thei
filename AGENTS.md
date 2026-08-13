@@ -1,5 +1,9 @@
 # Instructions for AI Agents
 
+## Package Manager
+
+- This project uses Bun. Use `bun install`, `bun run`, and `bunx` for dependencies, scripts, and package executables; do not use npm, pnpm, or Yarn.
+
 ## Development Server Management
 
 - Before starting work, open or probe `http://localhost:3000` and identify the process listening on port `3000`, including IPv4 and IPv6 listeners.
@@ -14,6 +18,11 @@
   - a final check confirms that the process still belongs to this repository.
 - If the server on port `3000` existed before the work began, do not stop it.
 - If the process ownership or whether it was started by the current agent cannot be verified, do not stop the process.
+
+## Editor.js
+
+- Check every change related to Editor.js for compatibility with content snapshots history system, including tools, block mutations, rendering, normalization, asynchronous hydration, assets, and editor event handling.
+- Verify that Editor.js changes do not emit transient or no-op content mutations that briefly change the dirty state. The save control must never flash from “Saved” to “Save” and immediately back to “Saved” without a real persistent content change.
 
 ## Styling
 

@@ -52,6 +52,16 @@ if (tagUuid) {
 }
 saved.value = JSON.stringify(data.value);
 const dirty = computed(() => JSON.stringify(data.value) !== saved.value);
+const canSave = computed(
+  () =>
+    !saving.value &&
+    Boolean(
+      data.value.title.trim() &&
+      data.value.slug.trim() &&
+      data.value.publicId.trim(),
+    ) &&
+    (!isEdit.value || dirty.value),
+);
 watch(
   () => data.value.publicId,
   () => {
@@ -113,6 +123,8 @@ async function save() {
   }
 }
 
+useSaveShortcut(save, { canSave });
+
 async function remove() {
   if (!tagUuid) return;
 
@@ -159,17 +171,7 @@ await useAdminTabTitle(
         >
           <Icon name="delete" />
         </Button>
-        <Button
-          class="font-semibold"
-          :disabled="
-            saving ||
-            !data.title.trim() ||
-            !data.slug.trim() ||
-            !data.publicId.trim() ||
-            (isEdit && !dirty)
-          "
-          @click="save"
-        >
+        <Button class="font-semibold" :disabled="!canSave" @click="save">
           <Icon v-if="saving" name="loading" class="mr-xs" />
           {{ isEdit ? (dirty ? phrase.save : phrase.saved) : phrase.create }}
         </Button>

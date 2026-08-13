@@ -9,17 +9,27 @@ import { AssetType } from '#layers/thei/shared/asset';
 import type {
   ContentAssetData,
   ContentGalleryItem,
+  ContentMediaLayout,
 } from '#layers/thei/shared/content';
+import { normalizeContentMediaCaption } from '#layers/thei/shared/content';
 import {
   createDragSort,
   moveItemById,
 } from '#layers/thei/app/composables/drag-sort';
 import AssetTile from '#layers/thei/app/components/AssetTile.vue';
+import ContentMediaEditorPreview from '#layers/thei/app/components/content/ContentMediaEditorPreview.vue';
 import ExternalLinkPreviewCard from '#layers/thei/app/components/external-links/ExternalLinkPreviewCard.vue';
 import {
   normalizeExternalLinkUrl,
   type ExternalLink,
 } from '#layers/thei/shared/external-link';
+import { editorIcon } from './editor-icons';
+export {
+  ContentBoldTool,
+  ContentEntityLinkTool,
+  ContentExternalInlineLinkTool,
+  ContentItalicTool,
+} from './editor-inline-tools';
 
 export type ContentEditorAssetKind = 'media' | 'any';
 export type ContentEditorPickAsset = (
@@ -41,9 +51,14 @@ interface ContentToolLabels {
   addMedia: string;
   chooseFile: string;
   caption: string;
+  mediaCentered: string;
+  mediaNatural: string;
+  mediaStretch: string;
   title: string;
   description: string;
   privateAccess: string;
+  externalLinkLoading: string;
+  externalLinkError: string;
 }
 
 interface ContentMediaToolConfig {
@@ -63,15 +78,6 @@ type ContentToolOptions<
   TConfig extends object,
 > = BlockToolConstructorOptions<TData, TConfig>;
 
-const icons = {
-  image:
-    '<svg width="17" height="15" viewBox="0 0 17 15"><path d="M15 0H2C.9 0 0 .9 0 2v11c0 1.1.9 2 2 2h13c1.1 0 2-.9 2-2V2c0-1.1-.9-2-2-2ZM2 2h13v7.2l-2.8-2.8a1 1 0 0 0-1.4 0L8 9.2 6.2 7.4a1 1 0 0 0-1.4 0L2 10.2V2Zm0 11v-.8l3.5-3.5L10 13H2Zm13 0h-2.2L9.4 9.6l2.1-2.1L15 11v2Z"/></svg>',
-  gallery:
-    '<svg width="17" height="15" viewBox="0 0 17 15"><path d="M2 2h10v8H2V2Zm1 1v6h8V3H3Zm2 10h10V5h-1v7H5v1Zm2 2h10V7h-1v7H7v1Z"/></svg>',
-  file: '<svg width="14" height="17" viewBox="0 0 14 17"><path d="M8 0H2C.9 0 0 .9 0 2v13c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V6L8 0Zm0 2.2L11.8 6H8V2.2ZM2 15V2h4v6h6v7H2Z"/></svg>',
-  lock: '<svg width="15" height="17" viewBox="0 0 15 17"><path d="M12 7V5A4.5 4.5 0 0 0 3 5v2H1v10h13V7h-2ZM5 5a2.5 2.5 0 0 1 5 0v2H5V5Zm7 10H3V9h9v6Z"/></svg>',
-};
-
 export class ExternalLinkTool implements BlockTool {
   static pasteConfig = {
     patterns: { externalLink: /^https?:\/\/[^\s]+$/i },
@@ -88,7 +94,7 @@ export class ExternalLinkTool implements BlockTool {
   constructor(
     private options: ContentToolOptions<
       Partial<ExternalLink>,
-      Record<string, never>
+      { labels: ContentToolLabels }
     >,
   ) {
     this.url = options.data.url ?? '';
@@ -127,7 +133,7 @@ export class ExternalLinkTool implements BlockTool {
     this.url = normalizeExternalLinkUrl(event.detail?.data);
     this.preview = undefined;
     this.options.block.dispatchChange();
-    await this.refresh();
+    void this.refresh();
   }
 
   private async refresh() {
@@ -148,9 +154,7 @@ export class ExternalLinkTool implements BlockTool {
         },
       );
       if (version !== this.version) return;
-      this.url = preview.url;
       this.preview = preview;
-      this.options.block.dispatchChange();
     } catch (cause: any) {
       if (version !== this.version) return;
       if (cause?.name === 'AbortError') return;
@@ -170,9 +174,13 @@ export class ExternalLinkTool implements BlockTool {
       h(ExternalLinkPreviewCard, {
         link: this.preview,
         url: this.url,
+        interactive: true,
         loading: this.loading,
-        errorText: this.error ? 'Could not load link preview' : undefined,
-        loadingText: 'Loading link details…',
+        errorText: this.error
+          ? contentToolConfig(this.options.config).labels.externalLinkError
+          : undefined,
+        loadingText: contentToolConfig(this.options.config).labels
+          .externalLinkLoading,
       }),
       this.wrapper,
     );
@@ -182,99 +190,194 @@ export class ExternalLinkTool implements BlockTool {
 export class ContentMediaTool implements BlockTool {
   static toolbox = {
     title: 'Media',
-    icon: icons.image,
+    icon: editorIcon('media'),
+    data: { layout: 'centered', autoOpen: true },
+  };
+
+  static sanitize = {
+    caption: {
+      b: true,
+      strong: true,
+      i: true,
+      em: true,
+      a: {
+        href: true,
+        target: true,
+        rel: true,
+        'data-content-link': true,
+        'data-entity-type': true,
+        'data-entity-id': true,
+      },
+    },
   };
 
   private asset: ContentAssetData | null;
   private caption = '';
+  private layout: ContentMediaLayout;
+  private autoOpen: boolean;
   private wrapper?: HTMLElement;
-  private unmountTiles: Array<() => void> = [];
+  private previewRoot?: HTMLElement;
+  private captionEl?: HTMLElement;
 
   constructor(
     private options: ContentToolOptions<
       {
         asset?: ContentAssetData;
         caption?: string;
+        layout?: ContentMediaLayout;
+        autoOpen?: boolean;
       },
       ContentMediaToolConfig
     >,
   ) {
     this.asset = options.data.asset ?? null;
-    this.caption = options.data.caption ?? '';
+    this.caption = normalizeContentMediaCaption(options.data.caption);
+    const layout = options.data.layout;
+    const isEditorServiceInstance =
+      layout === undefined && !options.data.asset && !options.data.caption;
+    if (
+      !isEditorServiceInstance &&
+      layout !== 'centered' &&
+      layout !== 'natural' &&
+      layout !== 'stretch'
+    ) {
+      throw new Error('Content media layout is required.');
+    }
+    // Editor.js probes every tool once with empty data while configuring paste
+    // handling. This instance never represents stored content. Real media data
+    // without an explicit layout still fails above and in shared normalization.
+    this.layout = isEditorServiceInstance ? 'centered' : layout!;
+    this.autoOpen = options.data.autoOpen === true;
   }
 
   render(): HTMLElement {
     this.wrapper = createToolWrapper();
     this.renderContent();
+    if (this.autoOpen && !this.options.readOnly) {
+      this.autoOpen = false;
+      queueMicrotask(() => void this.pick());
+    }
     return this.wrapper;
   }
 
   save(): Record<string, unknown> {
     return {
       asset: this.asset,
-      caption: this.caption.trim() || undefined,
+      layout: this.layout,
+      caption:
+        normalizeContentMediaCaption(
+          this.captionEl?.innerHTML ?? this.caption,
+        ) || undefined,
     };
   }
 
-  validate(data: { asset?: ContentAssetData | null }): boolean {
-    return Boolean(data.asset?.assetUuid);
+  validate(data: {
+    asset?: ContentAssetData | null;
+    layout?: ContentMediaLayout;
+  }): boolean {
+    return Boolean(
+      data.asset?.assetUuid &&
+      (data.layout === 'centered' ||
+        data.layout === 'natural' ||
+        data.layout === 'stretch'),
+    );
+  }
+
+  renderSettings() {
+    return [
+      {
+        icon: editorIcon('media-as-is'),
+        title: this.labels.mediaNatural,
+        toggle: 'content-media-layout',
+        isActive: () => this.layout === 'natural',
+        onActivate: () => this.setLayout('natural'),
+      },
+      {
+        icon: editorIcon('media-centered'),
+        title: this.labels.mediaCentered,
+        toggle: 'content-media-layout',
+        isActive: () => this.layout === 'centered',
+        onActivate: () => this.setLayout('centered'),
+      },
+      {
+        icon: editorIcon('media-stretch'),
+        title: this.labels.mediaStretch,
+        toggle: 'content-media-layout',
+        isActive: () => this.layout === 'stretch',
+        onActivate: () => this.setLayout('stretch'),
+      },
+    ];
   }
 
   private renderContent() {
     if (!this.wrapper) return;
-    this.clearTiles();
+    this.unmountPreview();
     this.wrapper.replaceChildren();
-    const tile = renderAssetTile(this.asset, {
-      className: this.asset
-        ? 'aspect-video min-h-34 w-full'
-        : 'size-18 self-start',
-      ariaLabel: this.labels.chooseMedia,
-      onPick: this.options.readOnly
-        ? undefined
-        : () => (this.asset ? this.edit() : this.pick()),
-    });
-    this.unmountTiles.push(tile.unmount);
-    this.wrapper.append(tile.element);
+    const preview = document.createElement('div');
+    this.previewRoot = preview;
+    renderVue(
+      h(ContentMediaEditorPreview, {
+        asset: this.asset,
+        layout: this.layout,
+        label: this.labels.chooseMedia,
+        readOnly: this.options.readOnly,
+        onPick: () => void this.pick(),
+        onEdit: () => void this.edit(),
+      }),
+      preview,
+    );
+    this.wrapper.append(preview);
 
     if (this.asset) {
-      const caption = createTextInput(
+      const caption = createInlineCaption(
         this.labels.caption,
         this.caption,
+        this.options.readOnly,
         (value) => {
+          if (value === this.caption) return;
           this.caption = value;
           this.options.block.dispatchChange();
         },
       );
+      this.captionEl = caption;
       this.wrapper.append(caption);
+    } else {
+      this.captionEl = undefined;
     }
   }
 
   destroy() {
-    this.clearTiles();
+    this.unmountPreview();
   }
 
-  private clearTiles() {
-    this.unmountTiles.forEach((unmount) => unmount());
-    this.unmountTiles = [];
+  private unmountPreview() {
+    if (this.previewRoot) renderVue(null, this.previewRoot);
+    this.previewRoot = undefined;
   }
 
   private async pick() {
-    const asset = await this.options.config?.pickAsset('media');
+    const config = contentToolConfig(this.options.config);
+    const asset = await config.pickAsset('media');
     if (!asset) return;
     this.asset = asset;
     this.renderContent();
     this.options.block.dispatchChange();
   }
 
+  private setLayout(layout: ContentMediaLayout) {
+    if (layout === this.layout) return;
+    this.layout = layout;
+    this.renderContent();
+    this.options.block.dispatchChange();
+  }
+
   private async edit() {
     if (!this.asset) return;
-    const asset = await this.options.config?.editAsset(this.asset, 'media');
+    const config = contentToolConfig(this.options.config);
+    const asset = await config.editAsset(this.asset, 'media');
     if (asset === undefined) return;
-    if (asset === null) {
-      this.remove();
-      return;
-    }
     this.asset = asset;
+    if (asset === null) this.caption = '';
     this.renderContent();
     this.options.block.dispatchChange();
   }
@@ -287,14 +390,14 @@ export class ContentMediaTool implements BlockTool {
   }
 
   private get labels() {
-    return getLabels(this.options.config);
+    return getLabels(contentToolConfig(this.options.config));
   }
 }
 
 export class ContentGalleryTool implements BlockTool {
   static toolbox = {
     title: 'Gallery',
-    icon: icons.gallery,
+    icon: editorIcon('gallery'),
   };
 
   private items: ContentGalleryItem[];
@@ -390,8 +493,9 @@ export class ContentGalleryTool implements BlockTool {
   }
 
   private async add() {
-    const assets = await this.options.config?.pickAssets('media');
-    if (!assets?.length) return;
+    const config = contentToolConfig(this.options.config);
+    const assets = await config.pickAssets('media');
+    if (!assets.length) return;
     this.items = [
       ...this.items,
       ...assets.map((asset) => ({
@@ -407,13 +511,13 @@ export class ContentGalleryTool implements BlockTool {
     if (this.options.readOnly) return;
     const current = this.items.find((item) => item.id === id);
     if (!current) return;
-    const result = await this.options.config?.editGalleryItem(current);
+    const config = contentToolConfig(this.options.config);
+    const result = await config.editGalleryItem(current);
     if (result === undefined) return;
-    if (result === null) {
-      this.remove(id);
-      return;
-    }
-    this.items = this.items.map((item) => (item.id === id ? result : item));
+    this.items =
+      result === null
+        ? this.items.filter((item) => item.id !== id)
+        : this.items.map((item) => (item.id === id ? result : item));
     this.renderContent();
     this.options.block.dispatchChange();
   }
@@ -425,14 +529,14 @@ export class ContentGalleryTool implements BlockTool {
   }
 
   private get labels() {
-    return getLabels(this.options.config);
+    return getLabels(contentToolConfig(this.options.config));
   }
 }
 
 export class ContentAttachmentTool implements BlockTool {
   static toolbox = {
     title: 'File',
-    icon: icons.file,
+    icon: editorIcon('file'),
   };
 
   private asset: ContentAssetData | null;
@@ -491,14 +595,24 @@ export class ContentAttachmentTool implements BlockTool {
 
     if (this.asset) {
       this.wrapper.append(
-        createTextInput(this.labels.title, this.title, (value) => {
-          this.title = value;
-          this.options.block.dispatchChange();
-        }),
-        createTextInput(this.labels.description, this.caption, (value) => {
-          this.caption = value;
-          this.options.block.dispatchChange();
-        }),
+        createTextInput(
+          this.labels.title,
+          this.title,
+          'attachment-title',
+          (value) => {
+            this.title = value;
+            this.options.block.dispatchChange();
+          },
+        ),
+        createTextInput(
+          this.labels.description,
+          this.caption,
+          'attachment-caption',
+          (value) => {
+            this.caption = value;
+            this.options.block.dispatchChange();
+          },
+        ),
       );
     }
   }
@@ -513,7 +627,8 @@ export class ContentAttachmentTool implements BlockTool {
   }
 
   private async pick() {
-    const asset = await this.options.config?.pickAsset('any');
+    const config = contentToolConfig(this.options.config);
+    const asset = await config.pickAsset('any');
     if (!asset) return;
     this.asset = asset;
     if (!this.title) this.title = assetTitle(asset);
@@ -523,13 +638,14 @@ export class ContentAttachmentTool implements BlockTool {
 
   private async edit() {
     if (!this.asset) return;
-    const asset = await this.options.config?.editAsset(this.asset, 'any');
+    const config = contentToolConfig(this.options.config);
+    const asset = await config.editAsset(this.asset, 'any');
     if (asset === undefined) return;
-    if (asset === null) {
-      this.remove();
-      return;
-    }
     this.asset = asset;
+    if (asset === null) {
+      this.title = '';
+      this.caption = '';
+    }
     this.renderContent();
     this.options.block.dispatchChange();
   }
@@ -543,7 +659,7 @@ export class ContentAttachmentTool implements BlockTool {
   }
 
   private get labels() {
-    return getLabels(this.options.config);
+    return getLabels(contentToolConfig(this.options.config));
   }
 }
 
@@ -557,7 +673,9 @@ export class PrivateAccessTune implements BlockTune {
 
   constructor(options: {
     data?: { isPrivate?: boolean };
-    config?: { labels?: ContentToolLabels };
+    config?: {
+      labels?: ContentToolLabels;
+    };
     block?: BlockAPI;
   }) {
     this.isPrivate = options.data?.isPrivate === true;
@@ -567,7 +685,7 @@ export class PrivateAccessTune implements BlockTune {
 
   render() {
     return {
-      icon: icons.lock,
+      icon: editorIcon('lock-close'),
       title: this.labels.privateAccess,
       toggle: true,
       isActive: () => this.isPrivate,
@@ -582,6 +700,10 @@ export class PrivateAccessTune implements BlockTune {
   wrap(content: HTMLElement): HTMLElement {
     this.wrapper = document.createElement('div');
     this.wrapper.className = 'content-editor-private-wrap';
+    const marker = document.createElement('span');
+    marker.className = 'content-editor-private-marker';
+    marker.setAttribute('aria-hidden', 'true');
+    content.append(marker);
     this.wrapper.append(content);
     this.syncBlockState();
     return this.wrapper;
@@ -609,11 +731,21 @@ function getLabels(
       addMedia: 'Add image or video',
       chooseFile: 'Choose file',
       caption: 'Caption',
+      mediaCentered: 'Centered',
+      mediaNatural: 'As is',
+      mediaStretch: 'Stretch',
       title: 'Title',
       description: 'Description',
       privateAccess: 'Private access',
+      externalLinkLoading: 'Loading link details…',
+      externalLinkError: 'Could not load link preview',
     }
   );
+}
+
+function contentToolConfig<T extends object>(config: T | undefined): T {
+  if (!config) throw new Error('Content editor tool config is required.');
+  return config;
 }
 
 function createToolWrapper() {
@@ -660,6 +792,7 @@ function renderAssetTile(
 function createTextInput(
   placeholder: string,
   value: string,
+  _field: string,
   onInput: (value: string) => void,
 ) {
   const input = document.createElement('input');
@@ -669,6 +802,54 @@ function createTextInput(
   input.value = value;
   input.addEventListener('input', () => onInput(input.value));
   return input;
+}
+
+function createInlineCaption(
+  placeholder: string,
+  value: string,
+  readOnly: boolean,
+  onInput: (value: string) => void,
+) {
+  const caption = document.createElement('div');
+  caption.className =
+    'mt-xs min-h-6 w-full text-sm text-text-2 outline-none empty:before:pointer-events-none empty:before:text-text-3 empty:before:content-[attr(data-placeholder)] focus:before:hidden';
+  caption.contentEditable = readOnly ? 'false' : 'true';
+  caption.spellcheck = true;
+  caption.setAttribute('role', 'textbox');
+  caption.setAttribute('aria-label', placeholder);
+  caption.setAttribute('aria-multiline', 'false');
+  caption.dataset.placeholder = placeholder;
+  caption.innerHTML = value;
+
+  const sync = () => onInput(normalizeContentMediaCaption(caption.innerHTML));
+  caption.addEventListener('input', sync);
+  caption.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+  });
+  caption.addEventListener('beforeinput', (event) => {
+    if (
+      event.inputType !== 'insertParagraph' &&
+      event.inputType !== 'insertLineBreak'
+    ) {
+      return;
+    }
+    event.preventDefault();
+  });
+  caption.addEventListener('paste', (event) => {
+    event.preventDefault();
+    const text = event.clipboardData
+      ?.getData('text/plain')
+      .replace(/[\r\n]+/g, ' ')
+      .replace(/\s+/g, ' ');
+    if (text) document.execCommand('insertText', false, text);
+  });
+  caption.addEventListener('blur', () => {
+    const normalized = normalizeContentMediaCaption(caption.innerHTML);
+    if (caption.innerHTML !== normalized) caption.innerHTML = normalized;
+    onInput(normalized);
+  });
+  return caption;
 }
 
 function assetTitle(asset: ContentAssetData): string {

@@ -522,7 +522,7 @@ describe('validateProjectData asset metadata', () => {
         blocks: [
           {
             type: 'contentMedia',
-            data: { asset: { assetUuid: 'asset-shared' } },
+            data: { layout: 'centered', asset: { assetUuid: 'asset-shared' } },
           },
           {
             type: 'contentAttachment',

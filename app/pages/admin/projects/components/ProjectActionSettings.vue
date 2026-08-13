@@ -408,6 +408,7 @@ function clearFile() {
             <ExternalLinkPreviewCard
               :link="externalLinkPreview"
               :url="action.externalUrl"
+              :interactive="true"
               :loading="loadingFavicon"
               :loading-text="phrase.project_action_link_loading"
             />

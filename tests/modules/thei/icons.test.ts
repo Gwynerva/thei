@@ -45,6 +45,24 @@ describe('bundled icons data', () => {
     );
     expect(icons.iconNames).toContain('action-click');
     expect(icons.iconsSvg).toContain('<symbol id="action-click"');
+    expect(icons.iconNames).toEqual(
+      expect.arrayContaining([
+        'asterisk',
+        'bold',
+        'italic',
+        'heading',
+        'subheading',
+        'quote',
+        'media',
+        'gallery',
+        'media-as-is',
+        'media-centered',
+        'media-stretch',
+        'list-unordered',
+        'link-broken',
+        'history',
+      ]),
+    );
   });
 
   it('changes the manifest, hash, and sprite when an icon is added', async () => {

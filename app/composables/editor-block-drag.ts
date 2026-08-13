@@ -3,13 +3,16 @@ import type EditorJS from '@editorjs/editorjs';
 const SETTINGS_BUTTON_SELECTOR = '.ce-toolbar__settings-btn';
 const BLOCK_SELECTOR = '.ce-block';
 const DROP_TARGET_CLASS = 'ce-block--drop-target';
+const DROP_TARGET_BEFORE_CLASS = 'ce-block--drop-target-before';
 const BLOCK_DRAG_MIME = 'application/x-thei-editor-block';
 const CLICK_GUARD_MS = 250;
+type DropPlacement = 'before' | 'after';
 
 export function resolveEditorBlockMove(
   sourceId: string,
   targetId: string,
   getIndex: (id: string) => number,
+  placement: DropPlacement = 'after',
 ) {
   const sourceIndex = getIndex(sourceId);
   const targetIndex = getIndex(targetId);
@@ -17,11 +20,9 @@ export function resolveEditorBlockMove(
     return undefined;
   }
 
-  // The Editor.js drop indicator is rendered after the target block. When the
-  // source comes from below, its removal does not shift the target, so the
-  // insertion index needs to advance by one to stay below the indicator.
+  const insertionBoundary = targetIndex + (placement === 'after' ? 1 : 0);
   const insertionIndex =
-    sourceIndex < targetIndex ? targetIndex : targetIndex + 1;
+    insertionBoundary - (sourceIndex < insertionBoundary ? 1 : 0);
   if (insertionIndex === sourceIndex) return undefined;
 
   return { sourceIndex, targetIndex: insertionIndex };
@@ -36,8 +37,10 @@ export function createEditorBlockDrag(root: HTMLElement, editor: EditorJS) {
   let sourceId: string | undefined;
   let targetId: string | undefined;
   let targetElement: HTMLElement | undefined;
+  let targetPlacement: DropPlacement = 'after';
   let hoveredBlockId: string | undefined;
   let pendingSourceId: string | undefined;
+  let focusResetFrame: number | undefined;
   let skipClickUntil = 0;
   settingsButton.draggable = true;
 
@@ -104,7 +107,10 @@ export function createEditorBlockDrag(root: HTMLElement, editor: EditorJS) {
     event.preventDefault();
     event.stopPropagation();
     event.dataTransfer.dropEffect = 'move';
-    setDropTarget(targetBlock, targetBlockId);
+    const rect = targetBlock.getBoundingClientRect();
+    const placement =
+      event.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+    setDropTarget(targetBlock, targetBlockId, placement);
   }
 
   function onDrop(event: DragEvent) {
@@ -115,8 +121,11 @@ export function createEditorBlockDrag(root: HTMLElement, editor: EditorJS) {
     event.preventDefault();
     event.stopPropagation();
     if (targetId) {
-      const move = resolveEditorBlockMove(sourceId, targetId, (id) =>
-        editor.blocks.getBlockIndex(id),
+      const move = resolveEditorBlockMove(
+        sourceId,
+        targetId,
+        (id) => editor.blocks.getBlockIndex(id),
+        targetPlacement,
       );
       if (move) editor.blocks.move(move.targetIndex, move.sourceIndex);
     }
@@ -127,17 +136,33 @@ export function createEditorBlockDrag(root: HTMLElement, editor: EditorJS) {
     if (sourceId) event.stopPropagation();
   }
 
-  function setDropTarget(block?: HTMLElement, blockId?: string) {
+  function setDropTarget(
+    block?: HTMLElement,
+    blockId?: string,
+    placement: DropPlacement = 'after',
+  ) {
     if (targetElement !== block) {
-      targetElement?.classList.remove(DROP_TARGET_CLASS);
+      targetElement?.classList.remove(
+        DROP_TARGET_CLASS,
+        DROP_TARGET_BEFORE_CLASS,
+      );
       targetElement = block;
       targetElement?.classList.add(DROP_TARGET_CLASS);
     }
+    targetElement?.classList.toggle(
+      DROP_TARGET_BEFORE_CLASS,
+      placement === 'before',
+    );
     targetId = blockId;
+    targetPlacement = placement;
   }
 
   function finishDrag() {
-    if (sourceId) skipClickUntil = Date.now() + CLICK_GUARD_MS;
+    const wasDragging = Boolean(sourceId);
+    if (wasDragging) {
+      skipClickUntil = Date.now() + CLICK_GUARD_MS;
+      focusResetFrame = requestAnimationFrame(resetEditorFocus);
+    }
     sourceId = undefined;
     setDropTarget();
     pendingSourceId = undefined;
@@ -145,7 +170,28 @@ export function createEditorBlockDrag(root: HTMLElement, editor: EditorJS) {
     document.body.classList.remove('content-editor-block-dragging');
     root
       .querySelectorAll(`.${DROP_TARGET_CLASS}`)
-      .forEach((block) => block.classList.remove(DROP_TARGET_CLASS));
+      .forEach((block) =>
+        block.classList.remove(DROP_TARGET_CLASS, DROP_TARGET_BEFORE_CLASS),
+      );
+  }
+
+  function resetEditorFocus() {
+    focusResetFrame = undefined;
+    if (!root.isConnected) return;
+
+    for (let index = 0; index < editor.blocks.getBlocksCount(); index++) {
+      const block = editor.blocks.getBlockByIndex(index);
+      if (!block?.focusable) continue;
+      editor.caret.setToBlock(block);
+      break;
+    }
+
+    window.getSelection()?.removeAllRanges();
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement && root.contains(activeElement)) {
+      activeElement.blur();
+    }
+    editor.toolbar.close();
   }
 
   settingsButton.addEventListener('dragstart', onDragStart);
@@ -160,6 +206,7 @@ export function createEditorBlockDrag(root: HTMLElement, editor: EditorJS) {
 
   return () => {
     finishDrag();
+    if (focusResetFrame !== undefined) cancelAnimationFrame(focusResetFrame);
     settingsButton.removeAttribute('draggable');
     settingsButton.removeEventListener('dragstart', onDragStart);
     settingsButton.removeEventListener('dragend', finishDrag);

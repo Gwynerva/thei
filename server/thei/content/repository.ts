@@ -21,6 +21,12 @@ import {
 import { buildAdminAssetUrls, archivedOriginalFromMeta } from '../assets/urls';
 import { findExternalLink } from '../external-links/repository';
 import { persistExternalLink } from '../external-links/preview';
+import {
+  contentInlineLinksFromData,
+  extractContentInlineLinks,
+  stripHydratedContentInlineLinks,
+} from '#layers/thei/shared/content-link';
+import { buildProjectUrl } from '#layers/thei/shared/project-url';
 
 export async function findContentByOwner(
   ownerType: ContentOwnerType,
@@ -117,12 +123,15 @@ export async function prepareContentForSave(
 
 async function persistMissingContentExternalLinks(data: ContentOutputData) {
   const urls = Array.from(
-    new Set(
-      data.blocks
+    new Set([
+      ...data.blocks
         .filter((block) => block.type === 'externalLink')
         .map((block) => (block.data as any).url)
         .filter((url): url is string => typeof url === 'string'),
-    ),
+      ...contentInlineLinksFromData(data)
+        .filter((link) => link.kind === 'external')
+        .map((link) => link.url),
+    ]),
   );
   await Promise.all(
     urls.map(async (url) => {
@@ -275,6 +284,14 @@ async function hydrateContentData(
 ): Promise<ContentOutputData> {
   const normalized = normalizeContentData(data);
   const assetCache = new Map<string, any>();
+  const projectCache = new Map<
+    string,
+    Awaited<ReturnType<typeof THEI_SERVER.projects.findByUuid>>
+  >();
+  const externalLinkCache = new Map<
+    string,
+    Awaited<ReturnType<typeof findExternalLink>>
+  >();
 
   async function hydrateAsset(assetUuid: string) {
     if (assetCache.has(assetUuid)) return assetCache.get(assetUuid);
@@ -300,7 +317,10 @@ async function hydrateContentData(
 
   const blocks: ContentOutputBlock[] = [];
   for (const block of normalized.blocks) {
-    const data = { ...block.data };
+    const data = (await hydrateInlineLinks(block.data, projectCache)) as Record<
+      string,
+      unknown
+    >;
     if (block.type === 'contentMedia' || block.type === 'contentAttachment') {
       const assetUuid = (block.data as any).asset?.assetUuid;
       data.asset = assetUuid ? await hydrateAsset(assetUuid) : null;
@@ -320,7 +340,11 @@ async function hydrateContentData(
       ).filter(Boolean);
     } else if (block.type === 'externalLink') {
       const url = (block.data as any).url;
-      const link = url ? await findExternalLink(url) : undefined;
+      let link = url ? externalLinkCache.get(url) : undefined;
+      if (url && !externalLinkCache.has(url)) {
+        link = await findExternalLink(url);
+        externalLinkCache.set(url, link);
+      }
       data.url = url;
       if (link) Object.assign(data, link);
     }
@@ -328,6 +352,88 @@ async function hydrateContentData(
   }
 
   return { ...normalized, blocks };
+}
+
+async function hydrateInlineLinks(
+  value: unknown,
+  projectCache: Map<
+    string,
+    Awaited<ReturnType<typeof THEI_SERVER.projects.findByUuid>>
+  >,
+): Promise<unknown> {
+  if (typeof value === 'string') {
+    let html = value;
+    for (const match of value.matchAll(/<a\b[^>]*>[\s\S]*?<\/a>/gi)) {
+      const source = match[0];
+      const link = extractContentInlineLinks(source)[0];
+      if (!link) continue;
+      let hydrated = source;
+      if (link.kind === 'entity' && link.entityType === 'project') {
+        let project = projectCache.get(link.entityId);
+        if (!projectCache.has(link.entityId)) {
+          project = await THEI_SERVER.projects.findByUuid(link.entityId);
+          projectCache.set(link.entityId, project);
+        }
+        if (project) {
+          hydrated = setInlineAttribute(
+            hydrated,
+            'href',
+            buildProjectUrl(project.humanReadableSlug, project.publicId),
+          );
+          hydrated = setInlineAttribute(
+            hydrated,
+            'data-content-link-state',
+            'resolved',
+          );
+        } else {
+          hydrated = removeInlineAttribute(hydrated, 'href');
+          hydrated = setInlineAttribute(
+            hydrated,
+            'data-content-link-state',
+            'broken',
+          );
+          hydrated = setInlineAttribute(hydrated, 'aria-invalid', 'true');
+        }
+      }
+      if (link.kind === 'external' || hydrated.includes(' href=')) {
+        hydrated = setInlineAttribute(hydrated, 'target', '_blank');
+        hydrated = setInlineAttribute(hydrated, 'rel', 'noopener noreferrer');
+      }
+      html = html.replace(source, hydrated);
+    }
+    return html;
+  }
+  if (Array.isArray(value))
+    return await Promise.all(
+      value.map((item) => hydrateInlineLinks(item, projectCache)),
+    );
+  if (value && typeof value === 'object') {
+    const entries = await Promise.all(
+      Object.entries(value).map(async ([key, item]) => [
+        key,
+        await hydrateInlineLinks(item, projectCache),
+      ]),
+    );
+    return Object.fromEntries(entries);
+  }
+  return value;
+}
+
+function removeInlineAttribute(source: string, name: string) {
+  return source.replace(
+    new RegExp(`\\s${name}\\s*=\\s*(?:"[^"]*"|'[^']*'|[^\\s>]+)`, 'gi'),
+    '',
+  );
+}
+
+function setInlineAttribute(source: string, name: string, value: string) {
+  const pattern = new RegExp(
+    `\\s${name}\\s*=\\s*(?:"[^"]*"|'[^']*'|[^\\s>]+)`,
+    'i',
+  );
+  return pattern.test(source)
+    ? source.replace(pattern, ` ${name}="${value}"`)
+    : source.replace(/^<a\b/i, `<a ${name}="${value}"`);
 }
 
 function stripHydratedContentAssetData(
@@ -370,7 +476,13 @@ function stripHydratedContentAssetData(
         };
       }
 
-      return block;
+      return {
+        ...block,
+        data: stripHydratedContentInlineLinks(block.data) as Record<
+          string,
+          unknown
+        >,
+      };
     }),
   };
 }

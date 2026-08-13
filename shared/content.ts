@@ -1,6 +1,10 @@
 import { AssetType, type ArchivedOriginalFileMeta } from './asset';
 import type { MediaDescriptor } from './media';
 import { normalizeExternalLinkUrl, type ExternalLink } from './external-link';
+import {
+  normalizeContentInlineHtml,
+  normalizeContentText,
+} from './content-link';
 
 export const CONTENT_OWNER_TYPES = [
   'project',
@@ -25,6 +29,7 @@ export const CONTENT_BLOCK_TYPES = [
   'header',
   'list',
   'quote',
+  'delimiter',
   'contentMedia',
   'contentGallery',
   'contentAttachment',
@@ -94,6 +99,13 @@ export interface ContentGalleryItem {
   caption?: string;
 }
 
+export const CONTENT_MEDIA_LAYOUTS = [
+  'centered',
+  'natural',
+  'stretch',
+] as const;
+export type ContentMediaLayout = (typeof CONTENT_MEDIA_LAYOUTS)[number];
+
 export interface ContentPreview {
   text: string;
   media?: MediaDescriptor;
@@ -140,7 +152,6 @@ export function normalizeContentData(value: unknown): ContentOutputData {
 
   return {
     version: optionalString(value.version),
-    time: optionalNumber(value.time),
     blocks,
   };
 }
@@ -245,6 +256,8 @@ function contentPlainTextFromNormalized(
       case 'list':
         collectListPreviewText(textParts, (block.data as any).items);
         break;
+      case 'delimiter':
+        break;
       case 'contentMedia':
         appendPreviewText(textParts, (block.data as any).caption);
         break;
@@ -276,6 +289,8 @@ function contentPreviewTextFromNormalized(normalized: ContentOutputData) {
         break;
       case 'list':
         collectListPreviewText(textParts, (block.data as any).items);
+        break;
+      case 'delimiter':
         break;
     }
   }
@@ -445,18 +460,18 @@ function normalizeBlockData(
 
   switch (type) {
     case 'paragraph':
-      return { text: stringValue(data.text) };
+      return { text: normalizeContentInlineHtml(data.text) };
 
     case 'header':
       return {
-        text: stringValue(data.text),
+        text: normalizeHeaderText(data.text),
         level: normalizeHeaderLevel(data.level),
       };
 
     case 'quote':
       return {
-        text: stringValue(data.text),
-        caption: stringValue(data.caption),
+        text: normalizeContentInlineHtml(data.text),
+        caption: normalizeContentInlineHtml(data.caption),
         alignment: data.alignment === 'center' ? 'center' : 'left',
       };
 
@@ -467,10 +482,14 @@ function normalizeBlockData(
         items: normalizeListItems(data.items),
       };
 
+    case 'delimiter':
+      return {};
+
     case 'contentMedia':
       return {
         asset: normalizeContentAsset(data.asset),
-        caption: optionalTrimmedString(data.caption),
+        layout: normalizeContentMediaLayout(data.layout),
+        caption: optionalContentMediaCaption(data.caption),
       };
 
     case 'contentGallery':
@@ -483,8 +502,8 @@ function normalizeBlockData(
     case 'contentAttachment':
       return {
         asset: normalizeContentAsset(data.asset),
-        title: optionalTrimmedString(data.title),
-        caption: optionalTrimmedString(data.caption),
+        title: optionalNormalizedText(data.title),
+        caption: optionalNormalizedText(data.caption),
       };
 
     case 'externalLink':
@@ -506,6 +525,9 @@ function isContentBlockEmpty(block: ContentOutputBlock): boolean {
 
     case 'list':
       return !listItemsHaveContent((block.data as any).items);
+
+    case 'delimiter':
+      return false;
 
     case 'contentMedia':
     case 'contentAttachment':
@@ -581,7 +603,7 @@ function normalizeGalleryItem(value: unknown): ContentGalleryItem | null {
   return {
     id,
     asset,
-    caption: optionalTrimmedString(value.caption),
+    caption: optionalNormalizedText(value.caption),
   };
 }
 
@@ -601,7 +623,35 @@ function normalizeArchivedOriginal(
 }
 
 function normalizeHeaderLevel(value: unknown): number {
-  return typeof value === 'number' && [2, 3, 4].includes(value) ? value : 2;
+  return value === 3 ? 3 : 2;
+}
+
+function normalizeContentMediaLayout(value: unknown): ContentMediaLayout {
+  if (value === 'centered' || value === 'natural' || value === 'stretch') {
+    return value;
+  }
+  throw new ContentValidationError('Invalid content media layout');
+}
+
+export function normalizeContentMediaCaption(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return normalizeContentInlineHtml(
+    value.replace(/<br\s*\/?>/gi, ' ').replace(/[\r\n]+/g, ' '),
+  );
+}
+
+function optionalContentMediaCaption(value: unknown): string | undefined {
+  return normalizeContentMediaCaption(value) || undefined;
+}
+
+function normalizeHeaderText(value: unknown): string {
+  const text = normalizeContentText(
+    plainText(stringValue(value).replace(/<br\s*\/?>/gi, ' ')),
+  );
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 function normalizeListStyle(value: unknown): string {
@@ -613,7 +663,7 @@ function normalizeListItems(value: unknown): unknown[] {
   return value.map((item) => {
     const source = isRecord(item) ? item : {};
     return {
-      content: stringValue(source.content),
+      content: normalizeContentInlineHtml(source.content),
       meta: normalizePlainRecord(source.meta),
       items: normalizeListItems(source.items),
     };
@@ -726,6 +776,16 @@ function truncatePreviewText(value: string, limit: number): string {
 
 function optionalTrimmedString(value: unknown): string | undefined {
   const text = optionalString(value)?.trim();
+  return text || undefined;
+}
+
+function optionalNormalizedText(value: unknown): string | undefined {
+  const text = normalizeContentText(value);
+  return text || undefined;
+}
+
+function optionalNormalizedInlineHtml(value: unknown): string | undefined {
+  const text = normalizeContentInlineHtml(value);
   return text || undefined;
 }
 

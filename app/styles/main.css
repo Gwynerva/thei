@@ -2,6 +2,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100..900;1,100..900&family=Noto+Serif:ital,wght@0,100..900;1,100..900&display=swap');
 
 @import 'tailwindcss' source('..');
+@import './content.css';
 
 @theme {
   --font-sans: 'Noto Sans', sans-serif;

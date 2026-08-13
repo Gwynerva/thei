@@ -62,8 +62,10 @@ describe('drag sort helpers', () => {
       }),
     );
 
+    sortableDestroy.mockClear();
     controller.destroy();
-    expect(sortableDestroy).toHaveBeenCalled();
+    controller.destroy();
+    expect(sortableDestroy).toHaveBeenCalledTimes(1);
   });
 
   it('moves forward and backward by stable ID', () => {

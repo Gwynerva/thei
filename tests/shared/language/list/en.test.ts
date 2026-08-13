@@ -30,7 +30,12 @@ describe('Editor.js phrases', () => {
       file: 'File',
       add: 'Add',
       filter: 'Filter',
+      click_to_delete: 'Really delete?',
+      move_down: 'Move down',
     });
+    expect(enModule.phrases.content_private_block).toBe('Private block');
+    expect(enModule.phrases.content_snapshots).toBe('Version history');
+    expect(enModule.phrases.content_media_stretch).toBe('Stretch');
   });
 });
 
