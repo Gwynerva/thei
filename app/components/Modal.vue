@@ -3,14 +3,17 @@ import {
   activeModal,
   closeActiveModal,
   closeModal,
+  installModalNavigationInterceptor,
   modalStack,
   settleModal,
 } from '#layers/thei/app/composables/modal';
 import type { BaseModalResult } from '#layers/thei/app/modals/types';
 
 const dialogElement = useTemplateRef('dialog');
+const router = useRouter();
 
 let ignoreNextDialogClose = false;
+let removeNavigationInterceptor: (() => void) | undefined;
 let scrollLock:
   | {
       x: number;
@@ -98,7 +101,13 @@ watch(
   { flush: 'post' },
 );
 
+onMounted(() => {
+  removeNavigationInterceptor = installModalNavigationInterceptor(router);
+});
+
 onBeforeUnmount(() => {
+  removeNavigationInterceptor?.();
+
   if (!import.meta.client) {
     return;
   }

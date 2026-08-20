@@ -22,7 +22,8 @@ export function createDragSort(
   const restoreTouchAction = applyDragTouchAction(root, options.handle);
 
   const sortable = Sortable.create(root, {
-    animation: 150,
+    animation: 180,
+    easing: 'cubic-bezier(0.2, 0, 0, 1)',
     forceFallback: true,
     draggable: '[data-drag-id]',
     handle: options.handle,
@@ -146,7 +147,8 @@ export function useDragSort(
 
   return {
     guardClick(handler: () => void) {
-      controller?.guardClick(handler);
+      if (controller) controller.guardClick(handler);
+      else handler();
     },
   };
 }

@@ -179,7 +179,7 @@ export type LanguagePhrases = {
   tag_usage_summary: (projects: number, events: number) => string;
   tag_delete_hint: string;
   delete_tag: string;
-  tag_delete_usage_warning: string;
+  tag_delete_usage_warning: (projects: number, events: number) => string;
   tag_empty_list: string;
   tag_search_results: string;
   tag_search_loading: string;
@@ -312,6 +312,7 @@ export type LanguagePhrases = {
   content_word_count: (count: number) => string;
   content_file_count: (count: number) => string;
   content_file_total_size: string;
+  content_file_with_extension: (extension?: string) => string;
   content_editor_placeholder: string;
   content_editor_save_error: string;
   content_editor_title: string;

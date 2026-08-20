@@ -3,8 +3,11 @@ import {
   ContentValidationError,
   analyzeContentData,
   buildContentPreview,
+  canonicalizeContentData,
   collectContentAssetUuids,
+  collectContentExternalLinkUrls,
   contentDataIsSemanticallyEqual,
+  contentSemanticKey,
   contentPlainText,
   extractContentAssetRefs,
   normalizeContentData,
@@ -90,6 +93,28 @@ describe('content normalization', () => {
     });
   });
 
+  it('keeps attachment description in the canonical caption field', () => {
+    expect(
+      normalizeContentData({
+        blocks: [
+          {
+            type: 'contentAttachment',
+            data: {
+              asset: { assetUuid: 'attachment' },
+              title: '  Research file  ',
+              caption: '  Plain description  ',
+              description: 'Legacy renderer-only field',
+            },
+          },
+        ],
+      }).blocks[0]?.data,
+    ).toEqual({
+      asset: { assetUuid: 'attachment' },
+      title: 'Research file',
+      caption: 'Plain description',
+    });
+  });
+
   it('ignores Editor.js service metadata when content is unchanged', () => {
     const blocks = [
       {
@@ -171,6 +196,90 @@ describe('content normalization', () => {
         },
       ),
     ).toBe(true);
+  });
+
+  it('canonicalizes hydrated assets and presentation-only link fields', () => {
+    const hydrated = {
+      blocks: [
+        {
+          id: 'media-block',
+          type: 'contentMedia',
+          data: {
+            layout: 'centered',
+            asset: {
+              assetUuid: 'asset-1',
+              assetUrl: '/admin/asset-1',
+              size: 42,
+              media: { kind: 'image', src: '/image.webp', width: 120 },
+            },
+          },
+        },
+        {
+          id: 'external-block',
+          type: 'externalLink',
+          data: {
+            url: 'https://example.com/path',
+            title: 'Hydrated title',
+            faviconMedia: { kind: 'image', src: '/favicon.webp' },
+          },
+        },
+      ],
+    };
+    const canonical = canonicalizeContentData(hydrated);
+
+    expect(canonical.blocks).toEqual([
+      {
+        id: 'media-block',
+        type: 'contentMedia',
+        data: {
+          asset: { assetUuid: 'asset-1' },
+          layout: 'centered',
+          caption: undefined,
+        },
+      },
+      {
+        id: 'external-block',
+        type: 'externalLink',
+        data: { url: 'https://example.com/path' },
+      },
+    ]);
+    expect(contentSemanticKey(hydrated)).toBe(
+      contentSemanticKey({
+        blocks: [
+          {
+            id: 'different-block-id',
+            type: 'contentMedia',
+            data: {
+              layout: 'centered',
+              asset: { assetUuid: 'asset-1' },
+            },
+          },
+          {
+            type: 'externalLink',
+            data: { url: 'https://example.com/path' },
+          },
+        ],
+      }),
+    );
+  });
+
+  it('collects and deduplicates block and inline external URLs', () => {
+    expect(
+      collectContentExternalLinkUrls({
+        blocks: [
+          {
+            type: 'externalLink',
+            data: { url: 'https://example.com/path' },
+          },
+          {
+            type: 'paragraph',
+            data: {
+              text: 'One <a href="https://example.com/path" data-content-link="external">same</a> and <a href="https://other.example/" data-content-link="external">other</a>',
+            },
+          },
+        ],
+      }),
+    ).toEqual(['https://example.com/path', 'https://other.example/']);
   });
 
   it('drops empty text blocks and keeps meaningful blocks', () => {
@@ -386,6 +495,56 @@ describe('content normalization', () => {
         },
       ],
     });
+  });
+
+  it('normalizes gallery captions as safe single-line inline HTML', () => {
+    const source = {
+      blocks: [
+        {
+          id: 'gallery-block',
+          type: 'contentGallery',
+          data: {
+            items: [
+              {
+                id: 'gallery-item',
+                asset: { assetUuid: 'a-1' },
+                caption:
+                  '  <strong>Bold</strong>\n<em>italic</em><br><a href="https://EXAMPLE.com/source" onclick="bad()">source</a><script>bad()</script> ',
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const normalized = normalizeContentData(source);
+
+    expect(normalized.blocks[0]?.data).toEqual({
+      items: [
+        {
+          id: 'gallery-item',
+          asset: { assetUuid: 'a-1' },
+          caption:
+            '<strong>Bold</strong> <em>italic</em> <a href="https://example.com/source" data-content-link="external">source</a>bad()',
+        },
+      ],
+    });
+    expect(contentPlainText(normalized)).toBe('Bold italic sourcebad()');
+    expect(summarizeContentData(normalized)).toMatchObject({
+      blockCount: 1,
+      wordCount: 3,
+      assetCount: 1,
+    });
+    expect(contentDataIsSemanticallyEqual(source, normalized)).toBe(true);
+  });
+
+  it('drops an empty gallery block during normalization', () => {
+    expect(
+      normalizeContentData({
+        blocks: [
+          { id: 'empty-gallery', type: 'contentGallery', data: { items: [] } },
+        ],
+      }).blocks,
+    ).toEqual([]);
   });
 
   it('deduplicates asset sizes in summary', () => {

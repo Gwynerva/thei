@@ -49,3 +49,16 @@ describe('plural', () => {
   it('includeNumber=false omits count', () =>
     expect(plural(1, 'project', 'projects', false)).toBe('project'));
 });
+
+describe('tag deletion usage', () => {
+  it.each([
+    [0, 0, 'not in use'],
+    [1, 0, '1 project'],
+    [0, 1, '1 event'],
+    [2, 5, '2 projects and 5 events'],
+  ])('describes %s projects and %s events', (projects, events, expected) => {
+    expect(
+      enModule.phrases.tag_delete_usage_warning(projects, events),
+    ).toContain(expected);
+  });
+});

@@ -35,6 +35,7 @@ async function handleDelete() {
 <template>
   <DeleteConfirmationPane
     :title="phrase.delete_project"
+    entity-icon="project"
     :entity-type="phrase.project.toLocaleLowerCase()"
     :confirmation-name="projectTitle"
     :deleting="deleting"

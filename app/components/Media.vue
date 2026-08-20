@@ -9,6 +9,17 @@ defineOptions({ inheritAttrs: false });
 
 type Phase = 'idle' | 'loading' | 'armed' | 'visible' | 'error';
 
+const LOADED_MEDIA_SOURCE_LIMIT = 256;
+const loadedMediaSources = new Set<string>();
+
+function rememberLoadedMediaSource(source: string) {
+  loadedMediaSources.delete(source);
+  loadedMediaSources.add(source);
+  if (loadedMediaSources.size <= LOADED_MEDIA_SOURCE_LIMIT) return;
+  const oldest = loadedMediaSources.values().next().value;
+  if (oldest) loadedMediaSources.delete(oldest);
+}
+
 const props = withDefaults(
   defineProps<{
     src: string;
@@ -18,6 +29,7 @@ const props = withDefaults(
     width?: number;
     height?: number;
     autoplay?: boolean;
+    muted?: boolean;
     loop?: boolean;
     controls?: boolean;
     fit?: 'cover' | 'contain';
@@ -28,6 +40,7 @@ const props = withDefaults(
   {
     kind: 'image',
     autoplay: false,
+    muted: false,
     loop: false,
     controls: false,
     fit: 'cover',
@@ -49,6 +62,8 @@ const active = ref(false);
 const previewPhase = ref<Phase>('idle');
 const mediaPhase = ref<Phase>('idle');
 const finalRequested = ref(false);
+const fastPreview = ref(false);
+const fastMedia = ref(false);
 const wantsPlayback = ref(props.autoplay);
 let observer: IntersectionObserver | undefined;
 let generation = 0;
@@ -102,6 +117,8 @@ function reset() {
   pauseForLifecycle();
   active.value = false;
   finalRequested.value = false;
+  fastPreview.value = false;
+  fastMedia.value = false;
   previewPhase.value = 'idle';
   mediaPhase.value = 'idle';
 }
@@ -114,6 +131,8 @@ function enterViewport() {
   previewPhase.value = 'loading';
   mediaPhase.value = 'idle';
   finalRequested.value = false;
+  fastPreview.value = loadedMediaSources.has(resolvedPreviewSrc.value);
+  fastMedia.value = false;
   internalPause = false;
   if (!userOverrodePlayback) wantsPlayback.value = props.autoplay;
 }
@@ -144,10 +163,13 @@ function arm(layer: 'preview' | 'media') {
       if (!active.value || generation !== currentGeneration) return;
       phase.value = 'visible';
       if (layer === 'preview') {
-        previewTimer = setTimeout(() => {
-          if (!active.value || generation !== currentGeneration) return;
-          requestFinal();
-        }, 240);
+        previewTimer = setTimeout(
+          () => {
+            if (!active.value || generation !== currentGeneration) return;
+            requestFinal();
+          },
+          fastPreview.value ? 120 : 240,
+        );
       } else if (props.kind === 'video' && wantsPlayback.value) {
         void videoEl.value?.play().catch(() => {});
       }
@@ -166,12 +188,18 @@ async function armImage(
   const width = image.naturalWidth;
   const height = image.naturalHeight;
   if (width > 0 && height > 0) emit('dimensions', width, height);
+  const source = layer === 'preview' ? resolvedPreviewSrc.value : props.src;
+  const wasLoaded = loadedMediaSources.has(source);
+  if (layer === 'preview') fastPreview.value ||= wasLoaded;
+  else fastMedia.value ||= wasLoaded;
   arm(layer);
+  rememberLoadedMediaSource(source);
 }
 
 function requestFinal() {
   if (!active.value || finalRequested.value) return;
   finalRequested.value = true;
+  fastMedia.value = loadedMediaSources.has(props.src);
   mediaPhase.value = 'loading';
 }
 
@@ -228,6 +256,7 @@ function onVideoLoaded() {
     emit('dimensions', video.videoWidth, video.videoHeight);
   }
   arm('media');
+  rememberLoadedMediaSource(props.src);
 }
 
 watch(
@@ -309,9 +338,11 @@ defineExpose({ play, pause });
     :style="rootStyle"
   >
     <span
-      class="absolute inset-0 z-0 transition-opacity duration-300
-        motion-reduce:duration-150"
-      :class="{ 'opacity-0': previewPhase === 'visible' }"
+      class="absolute inset-0 z-0 transition-opacity motion-reduce:duration-150"
+      :class="[
+        fastPreview ? 'duration-150' : 'duration-300',
+        { 'opacity-0': previewPhase === 'visible' },
+      ]"
       :style="{ backgroundColor: accentColor }"
       aria-hidden="true"
     />
@@ -323,8 +354,11 @@ defineExpose({ play, pause });
       alt=""
       draggable="false"
       class="media-backdrop absolute inset-0 z-10 size-full object-cover
-        opacity-0 transition-opacity duration-300 motion-reduce:duration-150"
-      :class="{ 'opacity-100': previewPhase === 'visible' }"
+        opacity-0 transition-opacity motion-reduce:duration-150"
+      :class="[
+        fastPreview ? 'duration-150' : 'duration-300',
+        { 'opacity-100': previewPhase === 'visible' },
+      ]"
       aria-hidden="true"
     />
 
@@ -335,9 +369,13 @@ defineExpose({ play, pause });
       :src="resolvedPreviewSrc"
       alt=""
       draggable="false"
-      class="absolute z-20 opacity-0 transition-opacity duration-300
+      class="absolute z-20 opacity-0 transition-opacity
         motion-reduce:duration-150"
-      :class="[mediaClass, { 'opacity-100': previewPhase === 'visible' }]"
+      :class="[
+        mediaClass,
+        fastPreview ? 'duration-150' : 'duration-300',
+        { 'opacity-100': previewPhase === 'visible' },
+      ]"
       :style="naturalStyle"
       @load="armImage('preview', previewEl)"
       @error="onError('preview')"
@@ -352,9 +390,13 @@ defineExpose({ play, pause });
       draggable="false"
       :width
       :height
-      class="absolute z-30 opacity-0 transition-opacity duration-300
+      class="absolute z-30 opacity-0 transition-opacity
         motion-reduce:duration-150"
-      :class="[mediaClass, { 'opacity-100': mediaPhase === 'visible' }]"
+      :class="[
+        mediaClass,
+        fastMedia ? 'duration-150' : 'duration-300',
+        { 'opacity-100': mediaPhase === 'visible' },
+      ]"
       :style="naturalStyle"
       @load="armImage('media', imageEl)"
       @error="onError('media')"
@@ -365,14 +407,18 @@ defineExpose({ play, pause });
       ref="videoEl"
       :key="`video:${src}`"
       :src
-      :muted="autoplay"
+      :muted="muted || autoplay"
       :loop
       :controls
       playsinline
       preload="metadata"
-      class="absolute z-30 opacity-0 transition-opacity duration-300
+      class="absolute z-30 opacity-0 transition-opacity
         motion-reduce:duration-150"
-      :class="[mediaClass, { 'opacity-100': mediaPhase === 'visible' }]"
+      :class="[
+        mediaClass,
+        fastMedia ? 'duration-150' : 'duration-300',
+        { 'opacity-100': mediaPhase === 'visible' },
+      ]"
       :style="naturalStyle"
       @loadeddata="onVideoLoaded"
       @play="onVideoPlay"

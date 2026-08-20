@@ -35,6 +35,7 @@ async function handleDelete() {
 <template>
   <DeleteConfirmationPane
     :title="phrase.delete_tag"
+    entity-icon="tag"
     :entity-type="phrase.tag.toLocaleLowerCase()"
     :confirmation-name="tagTitle"
     :deleting="deleting"
@@ -54,21 +55,14 @@ async function handleDelete() {
       "
     >
       <p>
-        <Icon name="warning" class="mr-xs inline-block align-text-bottom" />{{
-          phrase.tag_delete_usage_warning
+        <Icon name="warning" class="mr-xs inline-block align-text-bottom" />
+        {{
+          phrase.tag_delete_usage_warning(
+            modalData.usageStats.projects,
+            modalData.usageStats.events,
+          )
         }}
       </p>
-      <div class="mt-xs flex flex-wrap items-center gap-xs font-semibold">
-        <span class="flex items-center gap-xs">
-          <Icon name="project" />
-          <span>{{ phrase.x_projects(modalData.usageStats.projects) }}</span>
-        </span>
-        <span aria-hidden="true">·</span>
-        <span class="flex items-center gap-xs">
-          <Icon name="event" />
-          <span>{{ phrase.x_events(modalData.usageStats.events) }}</span>
-        </span>
-      </div>
     </div>
   </DeleteConfirmationPane>
 </template>

@@ -187,6 +187,17 @@
     vertical-align: -0.06em;
   }
 
+  .content-prose a[data-content-link='external']::after {
+    display: inline-block;
+    width: 0.68em;
+    height: 0.68em;
+    margin-left: 0.22em;
+    background-color: var(--color-text-3);
+    content: '';
+    mask: url('../assets/icons/external-link.svg') center / contain no-repeat;
+    vertical-align: 0.01em;
+  }
+
   .content-prose a[data-content-link]:is(:hover, :focus-visible) {
     background-color: var(--color-bg-3);
     text-decoration-color: currentColor !important;

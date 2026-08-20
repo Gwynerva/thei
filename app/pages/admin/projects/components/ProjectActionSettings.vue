@@ -68,6 +68,27 @@ const hasSiteIcon = computed(
     externalLinkPreview.value?.hasFavicon === true &&
     faviconMedia.value != null,
 );
+const previewUsesFavicon = computed(
+  () => action.value.iconMode === 'favicon' && hasSiteIcon.value,
+);
+const previewBackgroundMode = computed(() => {
+  const mode = action.value.backgroundMode;
+  if (
+    (mode === 'icon-gradient' &&
+      (action.value.iconMode !== 'asset' ||
+        iconMedia.value?.accentHue === undefined)) ||
+    (mode === 'file-gradient' &&
+      (action.value.target !== 'file' ||
+        fileMedia.value?.accentHue === undefined)) ||
+    (mode === 'link-gradient' &&
+      (action.value.target !== 'external-link' ||
+        !hasSiteIcon.value ||
+        faviconMedia.value?.accentHue === undefined))
+  ) {
+    return 'standard-gradient';
+  }
+  return mode;
+});
 
 watch(
   hasActionText,
@@ -176,8 +197,6 @@ watch(
     clearTimeout(faviconTimer);
     if (!action.value.externalUrl) {
       faviconResolved.value = true;
-      ensureFaviconIconAvailable();
-      ensureContextualBackgroundAvailable();
       return;
     }
     faviconTimer = setTimeout(() => loadFavicon(requestId), 450);
@@ -193,11 +212,6 @@ watch([() => action.value.iconMode, () => action.value.backgroundMode], () => {
   )
     loadFavicon(faviconRequestId);
 });
-watch(
-  [() => iconMedia.value?.accentHue, () => fileMedia.value?.accentHue],
-  ensureContextualBackgroundAvailable,
-  { immediate: true },
-);
 onUnmounted(() => clearTimeout(faviconTimer));
 
 async function loadFavicon(requestId = faviconRequestId) {
@@ -223,35 +237,7 @@ async function loadFavicon(requestId = faviconRequestId) {
     if (requestId !== faviconRequestId) return;
     loadingFavicon.value = false;
     faviconResolved.value = true;
-    ensureFaviconIconAvailable();
-    ensureContextualBackgroundAvailable();
   }
-}
-
-function ensureFaviconIconAvailable() {
-  if (
-    action.value.iconMode === 'favicon' &&
-    (action.value.target !== 'external-link' ||
-      (faviconResolved.value && !hasSiteIcon.value))
-  )
-    action.value.iconMode = 'fallback';
-}
-
-function ensureContextualBackgroundAvailable() {
-  const mode = action.value.backgroundMode;
-  const unavailable =
-    (mode === 'icon-gradient' &&
-      (action.value.iconMode !== 'asset' ||
-        iconMedia.value?.accentHue === undefined)) ||
-    (mode === 'file-gradient' &&
-      (action.value.target !== 'file' ||
-        fileMedia.value?.accentHue === undefined)) ||
-    (mode === 'link-gradient' &&
-      (action.value.target !== 'external-link' ||
-        (faviconResolved.value &&
-          (!hasSiteIcon.value ||
-            faviconMedia.value?.accentHue === undefined))));
-  if (unavailable) action.value.backgroundMode = 'standard-gradient';
 }
 
 function applyFile(asset: AssetVariantInfo) {
@@ -422,8 +408,12 @@ function clearFile() {
             <AssetTile
               :media="fileMedia"
               :extension="fileExtension"
-              :size="fileSize"
-              :is-private="action.isPrivate"
+              :overlay="{
+                size: fileSize,
+                showSize: fileSize != null,
+                isPrivate: action.isPrivate,
+                editable: true,
+              }"
               :aria-label="
                 action.fileAssetUuid
                   ? phrase.project_action_file_edit
@@ -465,21 +455,24 @@ function clearFile() {
                     phrase.project_action_background_standard,
                   'accent-gradient': phrase.project_action_background_accent,
                   asset: phrase.image,
-                  ...(action.iconMode === 'asset' &&
-                  iconMedia?.accentHue !== undefined
+                  ...((action.iconMode === 'asset' &&
+                    iconMedia?.accentHue !== undefined) ||
+                  action.backgroundMode === 'icon-gradient'
                     ? {
                         'icon-gradient':
                           phrase.project_action_background_icon_color,
                       }
                     : {}),
-                  ...(action.target === 'file' &&
-                  fileMedia?.accentHue !== undefined
+                  ...((action.target === 'file' &&
+                    fileMedia?.accentHue !== undefined) ||
+                  action.backgroundMode === 'file-gradient'
                     ? {
                         'file-gradient':
                           phrase.project_action_background_file_color,
                       }
                     : {}),
-                  ...(hasSiteIcon && faviconMedia?.accentHue !== undefined
+                  ...((hasSiteIcon && faviconMedia?.accentHue !== undefined) ||
+                  action.backgroundMode === 'link-gradient'
                     ? {
                         'link-gradient':
                           phrase.project_action_background_link_color,
@@ -505,8 +498,12 @@ function clearFile() {
               <AssetTile
                 v-if="action.backgroundMode === 'asset'"
                 :media="backgroundMedia"
-                :size="backgroundAssetSize"
-                :is-private="action.isPrivate"
+                :overlay="{
+                  size: backgroundAssetSize,
+                  showSize: backgroundAssetSize != null,
+                  isPrivate: action.isPrivate,
+                  editable: true,
+                }"
                 :aria-label="
                   action.backgroundAssetUuid
                     ? phrase.project_action_background_edit
@@ -564,7 +561,7 @@ function clearFile() {
                 v-model="action.iconMode"
                 :options="{
                   fallback: phrase.project_action_icon_default,
-                  ...(hasSiteIcon
+                  ...(hasSiteIcon || action.iconMode === 'favicon'
                     ? { favicon: phrase.project_action_icon_site }
                     : {}),
                   asset: phrase.image,
@@ -573,8 +570,12 @@ function clearFile() {
               <AssetTile
                 v-if="action.iconMode === 'asset'"
                 :media="action.iconAssetUuid ? iconMedia : undefined"
-                :size="iconSize"
-                :is-private="action.isPrivate"
+                :overlay="{
+                  size: iconSize,
+                  showSize: iconSize != null,
+                  isPrivate: action.isPrivate,
+                  editable: true,
+                }"
                 :aria-label="
                   action.iconAssetUuid
                     ? phrase.project_action_icon_edit
@@ -607,11 +608,11 @@ function clearFile() {
               :icon-media="action.iconAssetUuid ? iconMedia : undefined"
               :file-media="fileMedia"
               :favicon-media="faviconMedia"
-              :use-favicon="action.iconMode === 'favicon'"
+              :use-favicon="previewUsesFavicon"
               :background-media="
                 action.backgroundMode === 'asset' ? backgroundMedia : undefined
               "
-              :background-mode="action.backgroundMode"
+              :background-mode="previewBackgroundMode"
               :background-size="action.backgroundSize"
               :background-repeat="action.backgroundRepeat"
               class="w-full sm:w-auto"

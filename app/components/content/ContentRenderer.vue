@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-import { AssetType } from '#layers/thei/shared/asset';
 import {
   contentBlockIsPrivate,
   type ContentAssetData,
@@ -10,6 +9,7 @@ import {
 import type { ContentLinkResolver } from '#layers/thei/shared/content-link';
 import type { ExternalLink } from '#layers/thei/shared/external-link';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
+import { useContentLinkResolver } from '#layers/thei/app/composables/content-link-resolver';
 import ExternalLinkPreviewCard from '#layers/thei/app/components/external-links/ExternalLinkPreviewCard.vue';
 import ContentInlineLinkDecorator from './ContentInlineLinkDecorator.vue';
 import ContentRendererList from './ContentRendererList.vue';
@@ -24,6 +24,8 @@ const props = withDefaults(
 );
 
 const root = useTemplateRef<HTMLElement>('root');
+const defaultLinkResolver = useContentLinkResolver();
+const linkResolver = computed(() => props.linkResolver ?? defaultLinkResolver);
 const blocks = computed(() =>
   props.data.blocks.filter(
     (block) => props.includePrivate || !contentBlockIsPrivate(block),
@@ -47,14 +49,6 @@ function externalLink(value: Record<string, unknown>) {
   return data.faviconMedia
     ? ({ ...data, touchedAt: data.touchedAt ?? 0 } as ExternalLink)
     : undefined;
-}
-
-function assetTitle(value: ContentAssetData) {
-  return (
-    value.name?.replace(/\.[^.]+$/, '') ||
-    value.extension?.toUpperCase() ||
-    value.assetUuid
-  );
 }
 </script>
 
@@ -94,60 +88,29 @@ function assetTitle(value: ContentAssetData) {
           aria-hidden="true"
         />
       </div>
-      <figure v-else-if="block.type === 'contentMedia'" class="min-w-0">
-        <ContentMedia
-          v-if="assetMedia(block.data.asset)"
-          :asset="asset(block.data.asset)"
-          :layout="block.data.layout as ContentMediaLayout"
-        />
-        <figcaption v-if="block.data.caption" class="mt-xs text-sm text-text-2">
-          <span v-html="block.data.caption"></span>
-        </figcaption>
-      </figure>
-      <div
+      <ContentMediaCard
+        v-else-if="
+          block.type === 'contentMedia' && assetMedia(block.data.asset)
+        "
+        :asset="asset(block.data.asset)"
+        :layout="block.data.layout as ContentMediaLayout"
+        :caption="block.data.caption as string | undefined"
+      />
+      <ContentGallery
         v-else-if="block.type === 'contentGallery'"
-        class="grid min-w-0 grid-cols-1 gap-xs sm:grid-cols-2"
-      >
-        <figure
-          v-for="item in block.data.items as any[]"
-          :key="item.id"
-          class="min-w-0"
-        >
-          <Media
-            v-if="assetMedia(item.asset)"
-            v-bind="assetMedia(item.asset)"
-            class="aspect-video w-full rounded-normal object-cover opacity-100"
-          />
-          <figcaption v-if="item.caption" class="mt-1 text-xs text-text-2">
-            {{ item.caption }}
-          </figcaption>
-        </figure>
-      </div>
-      <a
+        :items="block.data.items as any[]"
+        :choose-label="phrase.content_choose_media"
+      />
+      <ContentAttachmentCard
         v-else-if="block.type === 'contentAttachment'"
+        :asset="asset(block.data.asset)"
+        :title="block.data.title as string | undefined"
+        :description="block.data.caption as string | undefined"
+        :fallback-title="
+          phrase.content_file_with_extension(asset(block.data.asset).extension)
+        "
         :href="asset(block.data.asset).assetUrl"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="flex min-w-0 items-center gap-xs rounded-normal border
-          border-border-1 bg-bg-2 p-xs text-text-1 no-underline
-          hocus:border-border-3 hocus:bg-bg-3"
-      >
-        <Icon name="file" class="size-6 shrink-0" />
-        <span class="min-w-0 flex-1">
-          <strong class="block truncate">
-            {{ block.data.title || assetTitle(asset(block.data.asset)) }}
-          </strong>
-          <span v-if="block.data.description" class="block text-sm text-text-2">
-            {{ block.data.description }}
-          </span>
-        </span>
-        <span
-          v-if="asset(block.data.asset).type === AssetType.Other"
-          class="shrink-0 text-xs text-text-3"
-        >
-          {{ asset(block.data.asset).extension?.toUpperCase() }}
-        </span>
-      </a>
+      />
       <ExternalLinkPreviewCard
         v-else-if="block.type === 'externalLink'"
         :link="externalLink(block.data)"
@@ -155,10 +118,6 @@ function assetTitle(value: ContentAssetData) {
         :interactive="true"
       />
     </template>
-    <ContentInlineLinkDecorator
-      v-if="linkResolver"
-      :root="root"
-      :resolver="linkResolver"
-    />
+    <ContentInlineLinkDecorator :root="root" :resolver="linkResolver" />
   </div>
 </template>

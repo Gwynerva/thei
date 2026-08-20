@@ -167,6 +167,64 @@ describe('editor snapshots', () => {
     manager.destroy();
   });
 
+  it('keeps hydrated snapshots but deduplicates them by canonical content', async () => {
+    vi.useFakeTimers();
+    const storage = createStorage();
+    let current: ContentOutputData = {
+      blocks: [
+        {
+          id: 'media-block',
+          type: 'contentMedia',
+          data: {
+            layout: 'centered',
+            asset: {
+              assetUuid: 'asset-1',
+              assetUrl: '/first',
+              media: { kind: 'image', src: '/first.webp' },
+            },
+          },
+        },
+      ],
+    };
+    const manager = createEditorSnapshotManager({
+      storageKey: 'hydrated-assets',
+      storage,
+      read: async () => structuredClone(current),
+      render: async () => undefined,
+    });
+    await manager.initialize();
+    manager.recordChange();
+    await vi.advanceTimersByTimeAsync(EDITOR_SNAPSHOT_INTERVAL);
+    expect(
+      manager.snapshots.value[0]?.data.blocks[0]?.data.asset,
+    ).toMatchObject({
+      assetUuid: 'asset-1',
+      assetUrl: '/first',
+    });
+
+    current = {
+      blocks: [
+        {
+          id: 'regenerated-id',
+          type: 'contentMedia',
+          data: {
+            layout: 'centered',
+            asset: {
+              assetUuid: 'asset-1',
+              assetUrl: '/second',
+              size: 999,
+              media: { kind: 'image', src: '/second.webp' },
+            },
+          },
+        },
+      ],
+    };
+    manager.recordChange();
+    await vi.advanceTimersByTimeAsync(EDITOR_SNAPSHOT_INTERVAL);
+    expect(manager.snapshots.value).toHaveLength(1);
+    manager.destroy();
+  });
+
   it('captures only every three minutes, retains the newest 30 entries, and stops after destroy', async () => {
     vi.useFakeTimers();
     const storage = createStorage();

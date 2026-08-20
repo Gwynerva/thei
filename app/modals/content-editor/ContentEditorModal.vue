@@ -17,6 +17,7 @@ import {
   collectContentAssetSizeMap,
   collectContentAssetUuids,
   contentDataIsSemanticallyEqual,
+  contentSemanticKey,
   normalizeContentData,
   summarizeContentData,
   type ContentAssetData,
@@ -55,7 +56,6 @@ import {
   ExternalLinkTool,
   PrivateAccessTune,
   type ContentEditorAssetKind,
-  type ContentEditorEditGalleryItem,
 } from '#layers/thei/app/components/content/editor-tools';
 import type {
   ContentInlineLinkControlsExpose,
@@ -66,7 +66,7 @@ import { ContentDelimiterTool } from '#layers/thei/app/components/content/editor
 import { assetDetailsModal } from '#layers/thei/app/modals/asset-details/modal';
 import { createEditorBlockDrag } from '#layers/thei/app/composables/editor-block-drag';
 import { createEditorPopoverLayer } from '#layers/thei/app/composables/editor-popover-layer';
-import { createAdminContentLinkResolver } from '#layers/thei/app/composables/content-link-resolver';
+import { useContentLinkResolver } from '#layers/thei/app/composables/content-link-resolver';
 import {
   createEditorSnapshotManager,
   groupEditorSnapshotsByDay,
@@ -88,22 +88,18 @@ const modalContainer =
   useTemplateRef<InstanceType<typeof ModalContainer>>('modalContainer');
 const inlineLinkControls =
   useTemplateRef<ContentInlineLinkControlsExpose>('inlineLinkControls');
-const contentLinkResolver = createAdminContentLinkResolver();
+const contentLinkResolver = useContentLinkResolver();
 const saving = ref(false);
 const errorMessage = ref<string | undefined>();
 const snapshotPopupOpen = ref(false);
 const snapshotButton = useTemplateRef<HTMLElement>('snapshotButton');
 const initialData = normalizeContentData(props.modalData.value?.data);
 let savedValue = props.modalData.value;
-const serializeContent = (data: ContentOutputData) =>
-  JSON.stringify(
-    normalizeContentData(data).blocks.map(({ id: _id, ...block }) => block),
-  );
 const {
   value: draftData,
   isDirty,
   markSaved,
-} = useSerializableState(initialData, { serialize: serializeContent });
+} = useSerializableState(initialData, { serialize: contentSemanticKey });
 const computedInitialSummary = summarizeContentData(
   initialData,
   collectContentAssetSizeMap(initialData),
@@ -424,14 +420,16 @@ onMounted(async () => {
       },
       contentGallery: {
         class: ContentGalleryTool,
+        inlineToolbar: true,
         config: {
           pickAssets,
-          editGalleryItem,
+          editAsset,
           labels: contentToolLabels(),
         },
       },
       contentAttachment: {
         class: ContentAttachmentTool,
+        inlineToolbar: false,
         config: {
           pickAsset,
           editAsset,
@@ -603,40 +601,6 @@ function contentAssetOptions(kind: ContentEditorAssetKind): AssetWizardOptions {
       };
 }
 
-const editGalleryItem: ContentEditorEditGalleryItem = async (item) => {
-  let asset = item.asset;
-  let caption = item.caption;
-
-  while (true) {
-    const result = await openModal(assetDetailsModal, {
-      asideTitle: phrase.value.asset,
-      asset: contentAssetReplaceResult(asset),
-      primaryLabel: phrase.value.save,
-      showCaption: true,
-      initialCaption: caption,
-      captionPlaceholder: phrase.value.content_caption,
-    });
-
-    if (result.type === 'replace') {
-      caption = result.caption;
-      const edited = await replaceAsset(asset, 'media');
-      if (!edited) continue;
-      asset = edited;
-      continue;
-    }
-
-    if (result.type === 'detach') return null;
-    if (result.type === 'confirm') {
-      return {
-        ...item,
-        asset,
-        caption: result.caption,
-      };
-    }
-    return undefined;
-  }
-};
-
 async function buildDraftUsageDelta() {
   if (!editor) return {};
   const draft = editorSnapshots.current();
@@ -710,6 +674,7 @@ function contentToolLabels() {
   return {
     chooseMedia: phrase.value.content_choose_media,
     addMedia: phrase.value.content_add_media,
+    removeMedia: phrase.value.delete,
     chooseFile: phrase.value.content_choose_file,
     caption: phrase.value.content_caption,
     mediaCentered: phrase.value.content_media_centered,
@@ -717,6 +682,7 @@ function contentToolLabels() {
     mediaStretch: phrase.value.content_media_stretch,
     title: phrase.value.content_title,
     description: phrase.value.content_description,
+    fileWithExtension: phrase.value.content_file_with_extension,
     privateAccess: phrase.value.content_private_block,
     externalLinkLoading: phrase.value.external_link_loading,
     externalLinkError: phrase.value.external_link_error,
@@ -865,7 +831,9 @@ function editorJsI18nMessages() {
                 <div
                   role="dialog"
                   :aria-label="phrase.content_snapshots"
-                  class="flex w-50 flex-col gap-sm rounded-normal border
+                  class="flex scrollbar-mini
+                    max-h-[min(17.5rem,var(--floating-popup-available-height))]
+                    w-52 flex-col gap-sm overflow-y-auto rounded-normal border
                     border-border-1 bg-bg-2 p-xs"
                 >
                   <div

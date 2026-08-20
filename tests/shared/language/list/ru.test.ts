@@ -55,3 +55,16 @@ describe('plural (славянские правила)', () => {
   it('includeNumber=false опускает число', () =>
     expect(plural(1, 'проект', 'проекта', 'проектов', false)).toBe('проект'));
 });
+
+describe('tag deletion usage', () => {
+  it.each([
+    [0, 0, 'нигде не используется'],
+    [1, 0, '1 проекте'],
+    [0, 1, '1 событии'],
+    [2, 5, '2 проектах и 5 событиях'],
+  ])('describes %s projects and %s events', (projects, events, expected) => {
+    expect(
+      ruModule.phrases.tag_delete_usage_warning(projects, events),
+    ).toContain(expected);
+  });
+});

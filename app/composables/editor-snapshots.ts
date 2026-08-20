@@ -2,6 +2,7 @@ import type EditorJS from '@editorjs/editorjs';
 import type { OutputBlockData } from '@editorjs/editorjs';
 import { computed, readonly, ref } from 'vue';
 import {
+  contentSemanticKey,
   normalizeContentData,
   type ContentOutputData,
 } from '#layers/thei/shared/content';
@@ -350,7 +351,7 @@ function deduplicateEntries(entries: EditorSnapshotEntry[]) {
 }
 
 function snapshotKey(data: ContentOutputData) {
-  return JSON.stringify(data.blocks.map(({ id: _id, ...block }) => block));
+  return contentSemanticKey(data);
 }
 
 function cloneSnapshot(data: ContentOutputData): ContentOutputData {

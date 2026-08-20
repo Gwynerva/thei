@@ -298,6 +298,7 @@ function cloneProjectData(data: ProjectEditData): ProjectEditData {
   return JSON.parse(JSON.stringify(data)) as ProjectEditData;
 }
 onBeforeRouteLeave(() => {
+  if (interceptModalNavigation()) return false;
   if (isDirty.value) {
     return window.confirm(phrase.value.unsaved_changes_confirm);
   }

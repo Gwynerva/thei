@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { eq } from 'drizzle-orm';
 import sharp from 'sharp';
-import { contentInlineLinksFromData } from '#layers/thei/shared/content-link';
+import { collectContentExternalLinkUrls } from '#layers/thei/shared/content';
 import {
   EXTERNAL_LINK_ICON_PATH,
   normalizeExternalLinkAccentHue,
@@ -96,25 +96,14 @@ export async function cleanupOrphanExternalLinks() {
     .from(schema.content)
     .all();
   for (const row of contentRows) {
-    collectContentExternalLinkUrls(row.data, usedUrls);
-    if (
-      row.data &&
-      typeof row.data === 'object' &&
-      'blocks' in row.data &&
-      Array.isArray(row.data.blocks)
-    ) {
-      const blocks = row.data.blocks.flatMap((block) =>
-        block &&
-        typeof block === 'object' &&
-        'data' in block &&
-        block.data &&
-        typeof block.data === 'object'
-          ? [{ data: block.data as Record<string, unknown> }]
-          : [],
-      );
-      for (const link of contentInlineLinksFromData({ blocks })) {
-        if (link.kind === 'external') usedUrls.add(link.url);
+    try {
+      for (const url of collectContentExternalLinkUrls(row.data)) {
+        usedUrls.add(url);
       }
+    } catch (error) {
+      THEI_SERVER.console
+        .tag('External links')
+        .warn('Skipped malformed content during preview cleanup', error);
     }
   }
 
@@ -138,24 +127,6 @@ export async function cleanupOrphanExternalLinks() {
       ),
     ),
   );
-}
-
-function collectContentExternalLinkUrls(value: unknown, urls: Set<string>) {
-  if (!value || typeof value !== 'object') return;
-  if (
-    'type' in value &&
-    value.type === 'externalLink' &&
-    'data' in value &&
-    value.data &&
-    typeof value.data === 'object' &&
-    'url' in value.data &&
-    typeof value.data.url === 'string'
-  ) {
-    urls.add(value.data.url);
-  }
-  for (const nested of Object.values(value)) {
-    collectContentExternalLinkUrls(nested, urls);
-  }
 }
 
 export function toExternalLink(row: {

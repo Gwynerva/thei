@@ -12,12 +12,17 @@ import type {
   ContentMediaLayout,
 } from '#layers/thei/shared/content';
 import { normalizeContentMediaCaption } from '#layers/thei/shared/content';
+import ContentMediaCard from '#layers/thei/app/components/content/ContentMediaCard.vue';
+import ContentGallery from '#layers/thei/app/components/content/ContentGallery.vue';
+import ContentAssetSkeleton from '#layers/thei/app/components/content/ContentAssetSkeleton.vue';
+import ContentAttachmentCard from '#layers/thei/app/components/content/ContentAttachmentCard.vue';
+import { CONTENT_CAPTION_SANITIZE } from '#layers/thei/app/components/content/content-caption-config';
+import { gallerySelectedIdAfterRemoval } from '#layers/thei/app/components/content/gallery-state';
 import {
-  createDragSort,
-  moveItemById,
-} from '#layers/thei/app/composables/drag-sort';
-import AssetTile from '#layers/thei/app/components/AssetTile.vue';
-import ContentMediaEditorPreview from '#layers/thei/app/components/content/ContentMediaEditorPreview.vue';
+  contentAssetSelectionChanged,
+  contentAttachmentAssetChanged,
+  contentAttachmentSuggestedTitle,
+} from '#layers/thei/app/components/content/content-attachment';
 import ExternalLinkPreviewCard from '#layers/thei/app/components/external-links/ExternalLinkPreviewCard.vue';
 import {
   normalizeExternalLinkUrl,
@@ -42,13 +47,11 @@ export type ContentEditorEditAsset = (
   asset: ContentAssetData,
   kind: ContentEditorAssetKind,
 ) => Promise<ContentAssetData | null | undefined>;
-export type ContentEditorEditGalleryItem = (
-  item: ContentGalleryItem,
-) => Promise<ContentGalleryItem | null | undefined>;
 
 interface ContentToolLabels {
   chooseMedia: string;
   addMedia: string;
+  removeMedia: string;
   chooseFile: string;
   caption: string;
   mediaCentered: string;
@@ -56,6 +59,7 @@ interface ContentToolLabels {
   mediaStretch: string;
   title: string;
   description: string;
+  fileWithExtension: (extension?: string) => string;
   privateAccess: string;
   externalLinkLoading: string;
   externalLinkError: string;
@@ -69,7 +73,7 @@ interface ContentMediaToolConfig {
 
 interface ContentGalleryToolConfig {
   pickAssets: ContentEditorPickAssets;
-  editGalleryItem: ContentEditorEditGalleryItem;
+  editAsset: ContentEditorEditAsset;
   labels: ContentToolLabels;
 }
 
@@ -195,20 +199,7 @@ export class ContentMediaTool implements BlockTool {
   };
 
   static sanitize = {
-    caption: {
-      b: true,
-      strong: true,
-      i: true,
-      em: true,
-      a: {
-        href: true,
-        target: true,
-        rel: true,
-        'data-content-link': true,
-        'data-entity-type': true,
-        'data-entity-id': true,
-      },
-    },
+    caption: CONTENT_CAPTION_SANITIZE,
   };
 
   private asset: ContentAssetData | null;
@@ -216,8 +207,6 @@ export class ContentMediaTool implements BlockTool {
   private layout: ContentMediaLayout;
   private autoOpen: boolean;
   private wrapper?: HTMLElement;
-  private previewRoot?: HTMLElement;
-  private captionEl?: HTMLElement;
 
   constructor(
     private options: ContentToolOptions<
@@ -264,10 +253,7 @@ export class ContentMediaTool implements BlockTool {
     return {
       asset: this.asset,
       layout: this.layout,
-      caption:
-        normalizeContentMediaCaption(
-          this.captionEl?.innerHTML ?? this.caption,
-        ) || undefined,
+      caption: normalizeContentMediaCaption(this.caption) || undefined,
     };
   }
 
@@ -311,48 +297,32 @@ export class ContentMediaTool implements BlockTool {
 
   private renderContent() {
     if (!this.wrapper) return;
-    this.unmountPreview();
-    this.wrapper.replaceChildren();
-    const preview = document.createElement('div');
-    this.previewRoot = preview;
-    renderVue(
-      h(ContentMediaEditorPreview, {
-        asset: this.asset,
-        layout: this.layout,
-        label: this.labels.chooseMedia,
-        readOnly: this.options.readOnly,
-        onPick: () => void this.pick(),
-        onEdit: () => void this.edit(),
-      }),
-      preview,
-    );
-    this.wrapper.append(preview);
-
-    if (this.asset) {
-      const caption = createInlineCaption(
-        this.labels.caption,
-        this.caption,
-        this.options.readOnly,
-        (value) => {
-          if (value === this.caption) return;
-          this.caption = value;
-          this.options.block.dispatchChange();
-        },
-      );
-      this.captionEl = caption;
-      this.wrapper.append(caption);
-    } else {
-      this.captionEl = undefined;
-    }
+    const content = this.asset
+      ? h(ContentMediaCard, {
+          asset: this.asset,
+          layout: this.layout,
+          caption: this.caption,
+          editable: !this.options.readOnly,
+          editLabel: this.labels.chooseMedia,
+          captionPlaceholder: this.labels.caption,
+          onEdit: () => void this.edit(),
+          onCaption: (value: string) => {
+            if (value === this.caption) return;
+            this.caption = value;
+            this.options.block.dispatchChange();
+          },
+        })
+      : h(ContentAssetSkeleton, {
+          icon: 'media',
+          label: this.labels.chooseMedia,
+          readOnly: this.options.readOnly,
+          onPick: () => void this.pick(),
+        });
+    renderVue(content, this.wrapper);
   }
 
   destroy() {
-    this.unmountPreview();
-  }
-
-  private unmountPreview() {
-    if (this.previewRoot) renderVue(null, this.previewRoot);
-    this.previewRoot = undefined;
+    if (this.wrapper) renderVue(null, this.wrapper);
   }
 
   private async pick() {
@@ -376,17 +346,11 @@ export class ContentMediaTool implements BlockTool {
     const config = contentToolConfig(this.options.config);
     const asset = await config.editAsset(this.asset, 'media');
     if (asset === undefined) return;
+    const changed = contentAssetSelectionChanged(this.asset, asset);
     this.asset = asset;
     if (asset === null) this.caption = '';
     this.renderContent();
-    this.options.block.dispatchChange();
-  }
-
-  private remove() {
-    this.asset = null;
-    this.caption = '';
-    this.renderContent();
-    this.options.block.dispatchChange();
+    if (changed) this.options.block.dispatchChange();
   }
 
   private get labels() {
@@ -398,26 +362,34 @@ export class ContentGalleryTool implements BlockTool {
   static toolbox = {
     title: 'Gallery',
     icon: editorIcon('gallery'),
+    data: { items: [], autoOpen: true },
   };
 
+  static sanitize = { items: true };
+
   private items: ContentGalleryItem[];
-  private caption = '';
+  private selectedId?: string;
+  private autoOpen: boolean;
   private wrapper?: HTMLElement;
-  private unmountTiles: Array<() => void> = [];
-  private dragSort?: ReturnType<typeof createDragSort>;
 
   constructor(
     private options: ContentToolOptions<
-      { items?: ContentGalleryItem[] },
+      { items?: ContentGalleryItem[]; autoOpen?: boolean },
       ContentGalleryToolConfig
     >,
   ) {
     this.items = options.data.items ?? [];
+    this.selectedId = this.items[0]?.id;
+    this.autoOpen = options.data.autoOpen === true;
   }
 
   render(): HTMLElement {
     this.wrapper = createToolWrapper();
     this.renderContent();
+    if (this.autoOpen && !this.options.readOnly) {
+      this.autoOpen = false;
+      queueMicrotask(() => void this.add());
+    }
     return this.wrapper;
   }
 
@@ -430,79 +402,55 @@ export class ContentGalleryTool implements BlockTool {
   }
 
   destroy() {
-    this.dragSort?.destroy();
-    this.clearTiles();
+    if (this.wrapper) renderVue(null, this.wrapper);
   }
 
   private renderContent() {
     if (!this.wrapper) return;
-    this.dragSort?.destroy();
-    this.dragSort = undefined;
-    this.clearTiles();
-    this.wrapper.replaceChildren();
-
-    const grid = document.createElement('div');
-    grid.className = 'flex flex-wrap items-start gap-sm';
-
-    this.items.forEach((item) => {
-      const tile = renderAssetTile(item.asset, {
-        className: 'size-18 shrink-0 cursor-grab active:cursor-grabbing',
-        ariaLabel: this.labels.chooseMedia,
-        onPick: this.options.readOnly
-          ? undefined
-          : () =>
-              this.dragSort
-                ? this.dragSort.guardClick(() => void this.edit(item.id))
-                : void this.edit(item.id),
-      });
-      tile.element.dataset.dragId = item.id;
-      this.unmountTiles.push(tile.unmount);
-      grid.append(tile.element);
-    });
-
-    if (!this.options.readOnly) {
-      const addTile = renderAssetTile(null, {
-        className: 'size-18 shrink-0 cursor-pointer',
-        ariaLabel: this.labels.addMedia,
-        onPick: () => this.add(),
-      });
-      this.unmountTiles.push(addTile.unmount);
-      grid.append(addTile.element);
-    }
-
-    this.wrapper.append(grid);
-    if (!this.options.readOnly) {
-      this.dragSort = createDragSort(grid, {
-        onDrop: ({ id, newIndex }) => {
-          this.items = moveItemById(
-            this.items,
-            id,
-            newIndex,
-            (item) => item.id,
+    renderVue(
+      h(ContentGallery, {
+        items: this.items,
+        editable: !this.options.readOnly,
+        selectedId: this.selectedId,
+        chooseLabel: this.labels.chooseMedia,
+        addLabel: this.labels.addMedia,
+        removeLabel: this.labels.removeMedia,
+        captionPlaceholder: this.labels.caption,
+        'onUpdate:selectedId': (id: string | undefined) => {
+          this.selectedId = id;
+        },
+        onAdd: () => void this.add(),
+        onEdit: (id: string) => void this.edit(id),
+        onRemove: (id: string) => this.remove(id),
+        onReorder: (items: ContentGalleryItem[]) => {
+          this.items = items;
+          this.options.block.dispatchChange();
+        },
+        onCaption: (id: string, value: string) => {
+          const normalized = normalizeContentMediaCaption(value) || undefined;
+          const current = this.items.find((item) => item.id === id);
+          if (!current || current.caption === normalized) return;
+          this.items = this.items.map((item) =>
+            item.id === id ? { ...item, caption: normalized } : item,
           );
           this.options.block.dispatchChange();
-          this.renderContent();
         },
-      });
-    }
-  }
-
-  private clearTiles() {
-    this.unmountTiles.forEach((unmount) => unmount());
-    this.unmountTiles = [];
+      }),
+      this.wrapper,
+    );
   }
 
   private async add() {
     const config = contentToolConfig(this.options.config);
     const assets = await config.pickAssets('media');
     if (!assets.length) return;
-    this.items = [
-      ...this.items,
-      ...assets.map((asset) => ({
-        id: crypto.randomUUID(),
-        asset,
-      })),
-    ];
+    const added = assets.map((asset) => ({
+      id: crypto.randomUUID(),
+      asset,
+    }));
+    const wasEmpty = this.items.length === 0;
+    this.items = [...this.items, ...added];
+    if (wasEmpty) this.selectedId = added[0]?.id;
     this.renderContent();
     this.options.block.dispatchChange();
   }
@@ -512,18 +460,29 @@ export class ContentGalleryTool implements BlockTool {
     const current = this.items.find((item) => item.id === id);
     if (!current) return;
     const config = contentToolConfig(this.options.config);
-    const result = await config.editGalleryItem(current);
+    const result = await config.editAsset(current.asset, 'media');
     if (result === undefined) return;
-    this.items =
-      result === null
-        ? this.items.filter((item) => item.id !== id)
-        : this.items.map((item) => (item.id === id ? result : item));
+    if (result === null) {
+      this.remove(id);
+      return;
+    }
+    const changed = contentAssetSelectionChanged(current.asset, result);
+    this.items = this.items.map((item) =>
+      item.id === id ? { ...item, asset: result } : item,
+    );
     this.renderContent();
-    this.options.block.dispatchChange();
+    if (changed) this.options.block.dispatchChange();
   }
 
   private remove(id: string) {
-    this.items = this.items.filter((item) => item.id !== id);
+    if (!this.items.some((item) => item.id === id)) return;
+    const next = this.items.filter((item) => item.id !== id);
+    this.selectedId = gallerySelectedIdAfterRemoval(
+      this.items,
+      id,
+      this.selectedId,
+    );
+    this.items = next;
     this.renderContent();
     this.options.block.dispatchChange();
   }
@@ -537,13 +496,14 @@ export class ContentAttachmentTool implements BlockTool {
   static toolbox = {
     title: 'File',
     icon: editorIcon('file'),
+    data: { autoOpen: true },
   };
 
   private asset: ContentAssetData | null;
   private title = '';
   private caption = '';
+  private autoOpen: boolean;
   private wrapper?: HTMLElement;
-  private unmountTiles: Array<() => void> = [];
 
   constructor(
     private options: ContentToolOptions<
@@ -551,6 +511,7 @@ export class ContentAttachmentTool implements BlockTool {
         asset?: ContentAssetData;
         title?: string;
         caption?: string;
+        autoOpen?: boolean;
       },
       ContentMediaToolConfig
     >,
@@ -558,11 +519,16 @@ export class ContentAttachmentTool implements BlockTool {
     this.asset = options.data.asset ?? null;
     this.title = options.data.title ?? '';
     this.caption = options.data.caption ?? '';
+    this.autoOpen = options.data.autoOpen === true;
   }
 
   render(): HTMLElement {
     this.wrapper = createToolWrapper();
     this.renderContent();
+    if (this.autoOpen && !this.options.readOnly) {
+      this.autoOpen = false;
+      queueMicrotask(() => void this.pick());
+    }
     return this.wrapper;
   }
 
@@ -580,50 +546,39 @@ export class ContentAttachmentTool implements BlockTool {
 
   private renderContent() {
     if (!this.wrapper) return;
-    this.clearTiles();
-    this.wrapper.replaceChildren();
-    const tile = renderAssetTile(this.asset, {
-      className: this.asset ? 'h-34 w-full' : 'size-18 self-start',
-      ariaLabel: this.labels.chooseFile,
-      onPick: this.options.readOnly
-        ? undefined
-        : () => (this.asset ? this.edit() : this.pick()),
-      showExtension: true,
-    });
-    this.unmountTiles.push(tile.unmount);
-    this.wrapper.append(tile.element);
-
-    if (this.asset) {
-      this.wrapper.append(
-        createTextInput(
-          this.labels.title,
-          this.title,
-          'attachment-title',
-          (value) => {
+    const content = this.asset
+      ? h(ContentAttachmentCard, {
+          asset: this.asset,
+          title: this.title,
+          description: this.caption,
+          fallbackTitle: this.labels.fileWithExtension(this.asset.extension),
+          editable: !this.options.readOnly,
+          editLabel: this.labels.chooseFile,
+          titlePlaceholder: this.labels.title,
+          descriptionPlaceholder: this.labels.description,
+          onEdit: () => void this.edit(),
+          onTitle: (value: string) => {
+            if (value === this.title) return;
             this.title = value;
             this.options.block.dispatchChange();
           },
-        ),
-        createTextInput(
-          this.labels.description,
-          this.caption,
-          'attachment-caption',
-          (value) => {
+          onDescription: (value: string) => {
+            if (value === this.caption) return;
             this.caption = value;
             this.options.block.dispatchChange();
           },
-        ),
-      );
-    }
+        })
+      : h(ContentAssetSkeleton, {
+          icon: 'file',
+          label: this.labels.chooseFile,
+          readOnly: this.options.readOnly,
+          onPick: () => void this.pick(),
+        });
+    renderVue(content, this.wrapper);
   }
 
   destroy() {
-    this.clearTiles();
-  }
-
-  private clearTiles() {
-    this.unmountTiles.forEach((unmount) => unmount());
-    this.unmountTiles = [];
+    if (this.wrapper) renderVue(null, this.wrapper);
   }
 
   private async pick() {
@@ -631,7 +586,7 @@ export class ContentAttachmentTool implements BlockTool {
     const asset = await config.pickAsset('any');
     if (!asset) return;
     this.asset = asset;
-    if (!this.title) this.title = assetTitle(asset);
+    if (!this.title) this.title = contentAttachmentSuggestedTitle(asset) ?? '';
     this.renderContent();
     this.options.block.dispatchChange();
   }
@@ -641,21 +596,21 @@ export class ContentAttachmentTool implements BlockTool {
     const config = contentToolConfig(this.options.config);
     const asset = await config.editAsset(this.asset, 'any');
     if (asset === undefined) return;
-    this.asset = asset;
     if (asset === null) {
+      this.asset = null;
       this.title = '';
       this.caption = '';
+      this.renderContent();
+      this.options.block.dispatchChange();
+      return;
     }
+    const previousTitle = this.title;
+    const changed = contentAttachmentAssetChanged(this.asset, asset);
+    this.asset = asset;
+    if (!this.title) this.title = contentAttachmentSuggestedTitle(asset) ?? '';
     this.renderContent();
-    this.options.block.dispatchChange();
-  }
-
-  private remove() {
-    this.asset = null;
-    this.title = '';
-    this.caption = '';
-    this.renderContent();
-    this.options.block.dispatchChange();
+    if (changed || this.title !== previousTitle)
+      this.options.block.dispatchChange();
   }
 
   private get labels() {
@@ -729,6 +684,7 @@ function getLabels(
     config?.labels ?? {
       chooseMedia: 'Choose image or video',
       addMedia: 'Add image or video',
+      removeMedia: 'Remove image or video',
       chooseFile: 'Choose file',
       caption: 'Caption',
       mediaCentered: 'Centered',
@@ -736,6 +692,8 @@ function getLabels(
       mediaStretch: 'Stretch',
       title: 'Title',
       description: 'Description',
+      fileWithExtension: (extension) =>
+        extension ? `File with extension ${extension.toUpperCase()}` : 'File',
       privateAccess: 'Private access',
       externalLinkLoading: 'Loading link details…',
       externalLinkError: 'Could not load link preview',
@@ -756,106 +714,4 @@ function createToolWrapper() {
   // exclude those presentation-only DOM mutations from Editor.js change tracking.
   element.dataset.mutationFree = 'true';
   return element;
-}
-
-function renderAssetTile(
-  asset: ContentAssetData | null,
-  options: {
-    className: string;
-    ariaLabel: string;
-    onPick?: () => void;
-    showExtension?: boolean;
-  },
-) {
-  const element = document.createElement('div');
-  element.className = options.className;
-
-  renderVue(
-    h(AssetTile, {
-      media: asset?.media,
-      size: asset?.size,
-      extension: asset?.extension,
-      showExtension: options.showExtension,
-      class: 'size-full',
-      'aria-label': options.ariaLabel,
-      onClick: options.onPick,
-    }),
-    element,
-  );
-
-  return {
-    element,
-    unmount: () => renderVue(null, element),
-  };
-}
-
-function createTextInput(
-  placeholder: string,
-  value: string,
-  _field: string,
-  onInput: (value: string) => void,
-) {
-  const input = document.createElement('input');
-  input.className =
-    'w-full rounded-normal border border-border-1 bg-bg-1 px-sm py-xs text-sm outline-none transition hocus:border-border-3';
-  input.placeholder = placeholder;
-  input.value = value;
-  input.addEventListener('input', () => onInput(input.value));
-  return input;
-}
-
-function createInlineCaption(
-  placeholder: string,
-  value: string,
-  readOnly: boolean,
-  onInput: (value: string) => void,
-) {
-  const caption = document.createElement('div');
-  caption.className =
-    'mt-xs min-h-6 w-full text-sm text-text-2 outline-none empty:before:pointer-events-none empty:before:text-text-3 empty:before:content-[attr(data-placeholder)] focus:before:hidden';
-  caption.contentEditable = readOnly ? 'false' : 'true';
-  caption.spellcheck = true;
-  caption.setAttribute('role', 'textbox');
-  caption.setAttribute('aria-label', placeholder);
-  caption.setAttribute('aria-multiline', 'false');
-  caption.dataset.placeholder = placeholder;
-  caption.innerHTML = value;
-
-  const sync = () => onInput(normalizeContentMediaCaption(caption.innerHTML));
-  caption.addEventListener('input', sync);
-  caption.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter') return;
-    event.preventDefault();
-  });
-  caption.addEventListener('beforeinput', (event) => {
-    if (
-      event.inputType !== 'insertParagraph' &&
-      event.inputType !== 'insertLineBreak'
-    ) {
-      return;
-    }
-    event.preventDefault();
-  });
-  caption.addEventListener('paste', (event) => {
-    event.preventDefault();
-    const text = event.clipboardData
-      ?.getData('text/plain')
-      .replace(/[\r\n]+/g, ' ')
-      .replace(/\s+/g, ' ');
-    if (text) document.execCommand('insertText', false, text);
-  });
-  caption.addEventListener('blur', () => {
-    const normalized = normalizeContentMediaCaption(caption.innerHTML);
-    if (caption.innerHTML !== normalized) caption.innerHTML = normalized;
-    onInput(normalized);
-  });
-  return caption;
-}
-
-function assetTitle(asset: ContentAssetData): string {
-  return (
-    asset.name?.replace(/\.[^.]+$/, '') ||
-    asset.extension?.toUpperCase() ||
-    asset.assetUuid
-  );
 }

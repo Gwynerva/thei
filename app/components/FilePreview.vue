@@ -7,9 +7,7 @@ const { extension } = defineProps<{
 }>();
 
 const extensionData = computed(() => {
-  if (!extension) {
-    return;
-  }
+  if (!extension) return;
 
   let fontSize: string;
   switch (extension.length) {
@@ -30,23 +28,21 @@ const extensionData = computed(() => {
       break;
   }
 
-  return {
-    extension,
-    fontSize,
-  };
+  return { extension, fontSize };
 });
 </script>
 
 <template>
-  <div class="@container relative aspect-square w-1/2 max-w-132 text-text-2">
-    <Icon name="file" class="size-full" />
+  <div class="@container relative aspect-square">
+    <Icon name="file" class="size-full" aria-hidden="true" />
     <Icon
       v-if="icon"
       :name="icon"
       class="absolute top-1/2 left-1/2 size-[32cqw] -translate-x-1/2
         -translate-y-1/6"
+      aria-hidden="true"
     />
-    <div
+    <span
       v-if="extensionData"
       class="absolute top-1/2 left-1/2 max-w-[43cqw] -translate-x-1/2
         -translate-y-1/8 truncate font-mono text-(length:--extension-size)
@@ -54,6 +50,6 @@ const extensionData = computed(() => {
       :style="{ '--extension-size': extensionData.fontSize }"
     >
       {{ extensionData.extension }}
-    </div>
+    </span>
   </div>
 </template>

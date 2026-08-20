@@ -1,12 +1,15 @@
 <script setup lang="ts">
+import FilePreview from '../../components/FilePreview.vue';
 import AssetModal from './AssetModal.vue';
-import AssetModalPreviewFile from './AssetModalPreviewFile.vue';
 </script>
 
 <template>
   <AssetModal>
     <template #preview>
-      <AssetModalPreviewFile icon="lock-close" class="text-text-warning" />
+      <FilePreview
+        icon="lock-close"
+        class="w-1/2 max-w-132 text-text-warning"
+      />
     </template>
     <template #aside>
       <div

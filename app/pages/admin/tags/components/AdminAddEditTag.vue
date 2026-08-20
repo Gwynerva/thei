@@ -199,7 +199,11 @@ await useAdminTabTitle(
           <div class="flex items-center gap-sm">
             <AssetTile
               :media="iconMedia"
-              :size="iconSize"
+              :overlay="{
+                size: iconSize,
+                showSize: iconSize != null,
+                editable: true,
+              }"
               :aria-label="phrase.tag_icon"
               class="size-20 shrink-0 cursor-pointer"
               @click="iconAsset.open"

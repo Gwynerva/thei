@@ -1,4 +1,12 @@
-import { type Component, computed, markRaw, nextTick, shallowRef } from 'vue';
+import {
+  type Component,
+  computed,
+  markRaw,
+  nextTick,
+  shallowRef,
+  watch,
+} from 'vue';
+import type { Router } from 'vue-router';
 import type {
   ActiveModal,
   BaseModalResult,
@@ -15,6 +23,74 @@ export const modalStack = shallowRef<ActiveModal[]>([]);
 export const activeModal = computed(
   () => modalStack.value[modalStack.value.length - 1] ?? null,
 );
+
+/** Close the top modal and atomically consume the attempted route navigation. */
+export function interceptModalNavigation() {
+  if (!activeModal.value) return false;
+  queueMicrotask(() => closeModal());
+  return true;
+}
+
+const MODAL_HISTORY_STATE = '__theiModal';
+
+/** Install one route and browser-history interceptor for the complete stack. */
+export function installModalNavigationInterceptor(router: Router) {
+  let sentinelActive = false;
+  let discardingSentinel = false;
+
+  function pushSentinel() {
+    if (sentinelActive || !activeModal.value) return;
+    window.history.pushState(
+      { ...window.history.state, [MODAL_HISTORY_STATE]: true },
+      '',
+      window.location.href,
+    );
+    sentinelActive = true;
+  }
+
+  function handlePopState() {
+    if (discardingSentinel) {
+      discardingSentinel = false;
+      sentinelActive = false;
+      return;
+    }
+    if (!sentinelActive || !activeModal.value) return;
+
+    sentinelActive = false;
+    closeModal();
+    queueMicrotask(pushSentinel);
+  }
+
+  const stopStackWatch = watch(
+    () => modalStack.value.length,
+    (count) => {
+      if (count > 0) {
+        pushSentinel();
+        return;
+      }
+      if (
+        sentinelActive &&
+        window.history.state?.[MODAL_HISTORY_STATE] === true
+      ) {
+        sentinelActive = false;
+        discardingSentinel = true;
+        window.history.back();
+      }
+    },
+    { immediate: true, flush: 'sync' },
+  );
+  const removeRouteGuard = router.beforeEach(() => {
+    if (interceptModalNavigation()) return false;
+  });
+  window.addEventListener('popstate', handlePopState);
+
+  return () => {
+    stopStackWatch();
+    removeRouteGuard();
+    window.removeEventListener('popstate', handlePopState);
+  };
+}
+
 export function closeModal() {
   const modal = activeModal.value;
   if (!modal || (modal.closeGuard && !modal.closeGuard())) return false;

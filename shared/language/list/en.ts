@@ -214,8 +214,13 @@ export default defineI18nBase({
       `${projects} ${plural(projects, 'project', 'projects', false)} · ${events} ${plural(events, 'event', 'events', false)}`,
     tag_delete_hint: 'Deleting the tag detaches it from every related entity.',
     delete_tag: 'Delete Tag',
-    tag_delete_usage_warning:
-      'This tag is used by projects and events. Deleting it will detach it from them.',
+    tag_delete_usage_warning: (projects, events) => {
+      const hasProjects = projects > 0;
+      const hasEvents = events > 0;
+      if (!hasProjects && !hasEvents)
+        return 'This tag is not in use. Deleting it will not detach any related data.';
+      return `This tag is used by ${hasProjects ? plural(projects, 'project', 'projects') : ''}${hasProjects && hasEvents ? ' and ' : ''}${hasEvents ? plural(events, 'event', 'events') : ''}! Deleting it will detach it from them.`;
+    },
     tag_empty_list: 'No tags yet.',
     tag_search_results: 'Tag search results',
     tag_search_loading: 'Searching tags…',
@@ -357,6 +362,8 @@ export default defineI18nBase({
     content_word_count: (count) => plural(count, 'word', 'words'),
     content_file_count: (count) => plural(count, 'file', 'files'),
     content_file_total_size: 'Total file size',
+    content_file_with_extension: (extension) =>
+      extension ? `File with extension ${extension.toUpperCase()}` : 'File',
     content_editor_placeholder: 'Start writing...',
     content_editor_save_error: 'Failed to save content.',
     content_editor_title: 'Content editor',

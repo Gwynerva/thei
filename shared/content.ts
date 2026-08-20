@@ -2,6 +2,7 @@ import { AssetType, type ArchivedOriginalFileMeta } from './asset';
 import type { MediaDescriptor } from './media';
 import { normalizeExternalLinkUrl, type ExternalLink } from './external-link';
 import {
+  contentInlineLinksFromData,
   normalizeContentInlineHtml,
   normalizeContentText,
 } from './content-link';
@@ -165,18 +166,81 @@ export function contentDataIsSemanticallyEqual(
   left: ContentOutputData | null | undefined,
   right: ContentOutputData | null | undefined,
 ): boolean {
-  return jsonValuesEqual(
-    semanticContentBlocks(left),
-    semanticContentBlocks(right),
+  return contentSemanticKey(left) === contentSemanticKey(right);
+}
+
+/**
+ * Returns the exact content shape that can be persisted. Hydrated asset and
+ * external-link presentation data are deliberately excluded.
+ */
+export function canonicalizeContentData(
+  value: ContentOutputData | null | undefined,
+): ContentOutputData {
+  const normalized = normalizeContentData(value);
+  return {
+    ...normalized,
+    blocks: normalized.blocks.map((block) => {
+      if (block.type === 'contentMedia') {
+        return {
+          ...block,
+          data: {
+            asset: contentAssetIdentity((block.data as any).asset),
+            layout: (block.data as any).layout,
+            caption: (block.data as any).caption,
+          },
+        };
+      }
+      if (block.type === 'contentGallery') {
+        const items = Array.isArray((block.data as any).items)
+          ? (block.data as any).items
+          : [];
+        return {
+          ...block,
+          data: {
+            items: items.map((item: ContentGalleryItem) => ({
+              id: item.id,
+              asset: contentAssetIdentity(item.asset),
+              caption: item.caption,
+            })),
+          },
+        };
+      }
+      if (block.type === 'contentAttachment') {
+        return {
+          ...block,
+          data: {
+            asset: contentAssetIdentity((block.data as any).asset),
+            title: (block.data as any).title,
+            caption: (block.data as any).caption,
+          },
+        };
+      }
+      return block;
+    }),
+  };
+}
+
+/** A stable key for dirty-state and snapshot deduplication. */
+export function contentSemanticKey(
+  data: ContentOutputData | null | undefined,
+): string {
+  return JSON.stringify(
+    canonicalizeContentData(data).blocks.map(({ id: _id, ...block }) => block),
   );
 }
 
-function semanticContentBlocks(
+export function collectContentExternalLinkUrls(
   data: ContentOutputData | null | undefined,
-): Omit<ContentOutputBlock, 'id'>[] {
-  return normalizeContentData(data).blocks.map(
-    ({ id: _id, ...block }) => block,
-  );
+): string[] {
+  const normalized = normalizeContentData(data);
+  const urls = new Set<string>();
+  for (const block of normalized.blocks) {
+    if (block.type === 'externalLink') urls.add((block.data as any).url);
+  }
+  for (const link of contentInlineLinksFromData(normalized)) {
+    if (link.kind === 'external') urls.add(link.url);
+  }
+  return [...urls];
 }
 
 export function isContentEmpty(data: ContentOutputData | null | undefined) {
@@ -577,6 +641,11 @@ function normalizeContentAsset(value: unknown): ContentAssetData | null {
   };
 }
 
+function contentAssetIdentity(value: unknown) {
+  const asset = normalizeContentAsset(value);
+  return asset ? { assetUuid: asset.assetUuid } : null;
+}
+
 function normalizeMediaDescriptor(value: unknown): MediaDescriptor | undefined {
   if (!isRecord(value)) return undefined;
   const src = optionalString(value.src);
@@ -603,7 +672,7 @@ function normalizeGalleryItem(value: unknown): ContentGalleryItem | null {
   return {
     id,
     asset,
-    caption: optionalNormalizedText(value.caption),
+    caption: optionalContentMediaCaption(value.caption),
   };
 }
 
@@ -805,32 +874,6 @@ function optionalNumber(value: unknown): number | undefined {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
-}
-
-function jsonValuesEqual(left: unknown, right: unknown): boolean {
-  if (Object.is(left, right)) return true;
-
-  if (Array.isArray(left) || Array.isArray(right)) {
-    return (
-      Array.isArray(left) &&
-      Array.isArray(right) &&
-      left.length === right.length &&
-      left.every((value, index) => jsonValuesEqual(value, right[index]))
-    );
-  }
-
-  if (!isRecord(left) || !isRecord(right)) return false;
-  const leftKeys = Object.keys(left).filter((key) => left[key] !== undefined);
-  const rightKeys = Object.keys(right).filter(
-    (key) => right[key] !== undefined,
-  );
-  if (leftKeys.length !== rightKeys.length) return false;
-
-  return leftKeys.every(
-    (key) =>
-      Object.prototype.hasOwnProperty.call(right, key) &&
-      jsonValuesEqual(left[key], right[key]),
-  );
 }
 
 function isContentBlockType(value: unknown): value is ContentBlockType {

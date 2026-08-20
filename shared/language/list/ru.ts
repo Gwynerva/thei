@@ -221,8 +221,13 @@ export default defineI18nModule({
     tag_delete_hint:
       'При удалении тег будет отвязан от всех связанных сущностей.',
     delete_tag: 'Удалить тег',
-    tag_delete_usage_warning:
-      'Этот тег используется в проектах и событиях. При удалении он будет отвязан от них.',
+    tag_delete_usage_warning: (projects, events) => {
+      const hasProjects = projects > 0;
+      const hasEvents = events > 0;
+      if (!hasProjects && !hasEvents)
+        return 'Этот тег нигде не используется. При удалении связанные данные не изменятся.';
+      return `Этот тег используется в ${hasProjects ? plural(projects, 'проекте', 'проектах', 'проектах') : ''}${hasProjects && hasEvents ? ' и ' : ''}${hasEvents ? plural(events, 'событии', 'событиях', 'событиях') : ''}! При удалении он будет отвязан от них.`;
+    },
     tag_empty_list: 'Тегов пока нет.',
     tag_search_results: 'Результаты поиска тегов',
     tag_search_loading: 'Ищем теги…',
@@ -367,6 +372,8 @@ export default defineI18nModule({
     content_word_count: (count) => plural(count, 'слово', 'слова', 'слов'),
     content_file_count: (count) => plural(count, 'файл', 'файла', 'файлов'),
     content_file_total_size: 'Общий размер файлов',
+    content_file_with_extension: (extension) =>
+      extension ? `Файл с расширением ${extension.toUpperCase()}` : 'Файл',
     content_editor_placeholder: 'Начните писать...',
     content_editor_save_error: 'Не удалось сохранить контент.',
     content_editor_title: 'Редактор контента',

@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+provideStickyHeaderContext();
+
 useHead({
   link: [
     {

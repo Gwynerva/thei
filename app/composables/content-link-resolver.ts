@@ -1,27 +1,43 @@
-import type { ProjectSearchItem } from '#layers/thei/shared/api/project';
 import type {
   ContentLinkReference,
   ContentLinkResolver,
   ResolvedContentLink,
 } from '#layers/thei/shared/content-link';
-import {
-  normalizeExternalLinkUrl,
-  type ExternalLink,
-} from '#layers/thei/shared/external-link';
-import { buildProjectUrl } from '#layers/thei/shared/project-url';
+import { contentLinkReferenceKey } from '#layers/thei/shared/content-link';
+import { normalizeExternalLinkUrl } from '#layers/thei/shared/external-link';
 
-export function createAdminContentLinkResolver(): ContentLinkResolver {
+export type ContentLinkFetcher = (
+  url: string,
+  options: { query: Record<string, string> },
+) => Promise<ResolvedContentLink>;
+
+const appResolvers = new WeakMap<object, ContentLinkResolver>();
+
+export function useContentLinkResolver(): ContentLinkResolver {
+  const nuxtApp = useNuxtApp();
+  const cached = appResolvers.get(nuxtApp);
+  if (cached) return cached;
+  const resolver = createContentLinkResolver(
+    useRequestFetch() as ContentLinkFetcher,
+  );
+  appResolvers.set(nuxtApp, resolver);
+  return resolver;
+}
+
+export function createContentLinkResolver(
+  fetcher: ContentLinkFetcher,
+): ContentLinkResolver {
   const resolved = new Map<string, ResolvedContentLink>();
   const pending = new Map<string, Promise<ResolvedContentLink>>();
 
   return async (reference) => {
-    const key = referenceKey(reference);
+    const key = contentLinkReferenceKey(reference);
     const cached = resolved.get(key);
     if (cached) return cached;
 
     let request = pending.get(key);
     if (!request) {
-      request = resolveReference(reference).then((result) => {
+      request = resolveReference(fetcher, reference).then((result) => {
         pending.delete(key);
         if (result.state === 'resolved') resolved.set(key, result);
         return result;
@@ -33,67 +49,39 @@ export function createAdminContentLinkResolver(): ContentLinkResolver {
 }
 
 async function resolveReference(
+  fetcher: ContentLinkFetcher,
   reference: ContentLinkReference,
 ): Promise<ResolvedContentLink> {
-  if (reference.kind === 'project') {
+  let normalizedReference = reference;
+  if (reference.kind === 'external') {
     try {
-      const projects = await $fetch<ProjectSearchItem[]>(
-        '/api/admin/projects',
-        {
-          query: { projectUuid: reference.projectUuid },
-        },
-      );
-      const project = projects[0];
-      if (!project) {
-        return { ...reference, state: 'broken', reason: 'not-found' };
-      }
-      return {
-        ...reference,
-        state: 'resolved',
-        href: buildProjectUrl(project.humanReadableSlug, project.publicId),
-        title: project.title,
-        summary: project.summary,
-        iconMedia: project.iconMedia,
+      normalizedReference = {
+        kind: 'external',
+        url: normalizeExternalLinkUrl(reference.url),
       };
     } catch {
-      return { ...reference, state: 'broken', reason: 'unavailable' };
+      return { ...reference, state: 'broken', reason: 'invalid' };
     }
   }
 
-  let url: string;
   try {
-    url = normalizeExternalLinkUrl(reference.url);
-  } catch {
-    return { ...reference, state: 'broken', reason: 'invalid' };
-  }
-
-  try {
-    const link = await $fetch<ExternalLink>(
-      '/api/admin/external-link-previews',
-      { query: { url } },
-    );
-    return {
-      kind: 'external',
-      state: 'resolved',
-      url,
-      href: url,
-      title: link.title,
-      description: link.description,
-      iconMedia: link.faviconMedia,
-    };
+    return await fetcher('/api/content-links', {
+      query:
+        normalizedReference.kind === 'project'
+          ? {
+              kind: 'project',
+              projectUuid: normalizedReference.projectUuid,
+            }
+          : { kind: 'external', url: normalizedReference.url },
+    });
   } catch {
     return {
-      kind: 'external',
+      ...normalizedReference,
       state: 'broken',
-      url,
-      href: url,
       reason: 'unavailable',
+      ...(normalizedReference.kind === 'external'
+        ? { href: normalizedReference.url }
+        : {}),
     };
   }
-}
-
-function referenceKey(reference: ContentLinkReference) {
-  return reference.kind === 'project'
-    ? `project:${reference.projectUuid}`
-    : `external:${reference.url}`;
 }

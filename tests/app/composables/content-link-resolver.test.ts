@@ -1,29 +1,22 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createAdminContentLinkResolver } from '../../../app/composables/content-link-resolver';
+import { describe, expect, it, vi } from 'vitest';
+import { createContentLinkResolver } from '../../../app/composables/content-link-resolver';
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
-describe('admin content link resolver', () => {
+describe('content link resolver', () => {
   it('deduplicates concurrent and resolved project lookups', async () => {
-    const fetch = vi.fn(async () => [
-      {
-        projectUuid: 'project-uuid',
-        title: 'Current project title',
-        summary: 'Current project summary',
-        humanReadableSlug: 'current-slug',
-        publicId: 'CURRENT',
-        iconMedia: {
-          kind: 'image',
-          src: '/project.svg',
-          previewSrc: '/project.svg',
-        },
-        tags: [],
+    const fetch = vi.fn(async () => ({
+      kind: 'project',
+      state: 'resolved',
+      projectUuid: 'project-uuid',
+      title: 'Current project title',
+      summary: 'Current project summary',
+      href: '/projects/current-slug-CURRENT/',
+      iconMedia: {
+        kind: 'image',
+        src: '/project.svg',
+        previewSrc: '/project.svg',
       },
-    ]);
-    vi.stubGlobal('$fetch', fetch);
-    const resolver = createAdminContentLinkResolver();
+    }));
+    const resolver = createContentLinkResolver(fetch);
     const reference = { kind: 'project', projectUuid: 'project-uuid' } as const;
 
     const [first, second] = await Promise.all([
@@ -48,25 +41,71 @@ describe('admin content link resolver', () => {
       .fn()
       .mockRejectedValueOnce(new Error('temporary'))
       .mockResolvedValueOnce({
+        kind: 'external',
+        state: 'resolved',
         url: 'https://example.com/',
+        href: 'https://example.com/',
         title: 'Recovered',
-        faviconMedia: {
+        iconMedia: {
           kind: 'image',
           src: '/favicon.svg',
           previewSrc: '/favicon.svg',
         },
-        touchedAt: 1,
       });
-    vi.stubGlobal('$fetch', fetch);
-    const resolver = createAdminContentLinkResolver();
+    const resolver = createContentLinkResolver(fetch);
     const reference = { kind: 'external', url: 'https://example.com' } as const;
 
-    expect(await resolver(reference)).toMatchObject({ state: 'broken' });
+    expect(await resolver(reference)).toMatchObject({
+      state: 'broken',
+      href: 'https://example.com/',
+    });
     expect(await resolver(reference)).toMatchObject({
       state: 'resolved',
       href: 'https://example.com/',
       title: 'Recovered',
     });
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('never exposes an unsafe fallback href', async () => {
+    const fetch = vi.fn();
+    const resolver = createContentLinkResolver(fetch);
+
+    expect(
+      await resolver({ kind: 'external', url: 'javascript:alert(1)' }),
+    ).toEqual({
+      kind: 'external',
+      url: 'javascript:alert(1)',
+      state: 'broken',
+      reason: 'invalid',
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps request-scoped caches isolated', async () => {
+    const firstFetch = vi.fn(async () => ({
+      kind: 'project' as const,
+      projectUuid: 'project-uuid',
+      state: 'resolved' as const,
+      href: '/first/',
+      title: 'First request',
+    }));
+    const secondFetch = vi.fn(async () => ({
+      kind: 'project' as const,
+      projectUuid: 'project-uuid',
+      state: 'resolved' as const,
+      href: '/second/',
+      title: 'Second request',
+    }));
+    const reference = { kind: 'project', projectUuid: 'project-uuid' } as const;
+
+    expect(
+      await createContentLinkResolver(firstFetch)(reference),
+    ).toMatchObject({ href: '/first/', title: 'First request' });
+    expect(
+      await createContentLinkResolver(secondFetch)(reference),
+    ).toMatchObject({ href: '/second/', title: 'Second request' });
+    expect(firstFetch).toHaveBeenCalledTimes(1);
+    expect(secondFetch).toHaveBeenCalledTimes(1);
   });
 });

@@ -451,7 +451,11 @@ async function openOtherAsset(index: number) {
         <div class="flex flex-1 items-center gap-sm">
           <AssetTile
             :media="iconMedia"
-            :size="iconSize"
+            :overlay="{
+              size: iconSize,
+              showSize: iconSize != null,
+              editable: true,
+            }"
             :aria-label="phrase.project_icon"
             class="size-18 cursor-pointer"
             @click="iconSlot.open"
@@ -466,7 +470,11 @@ async function openOtherAsset(index: number) {
         <div class="flex flex-1 items-center gap-sm">
           <AssetTile
             :media="bannerMedia"
-            :size="bannerSize"
+            :overlay="{
+              size: bannerSize,
+              showSize: bannerSize != null,
+              editable: true,
+            }"
             :aria-label="phrase.project_banner"
             class="aspect-video h-18 cursor-pointer"
             @click="bannerSlot.open"
@@ -498,8 +506,12 @@ async function openOtherAsset(index: number) {
         >
           <AssetTile
             :media="item.media"
-            :size="item.size"
-            :is-private="item.isPrivate"
+            :overlay="{
+              size: item.size,
+              showSize: true,
+              isPrivate: item.isPrivate,
+              editable: true,
+            }"
             :aria-label="phrase.showcase_details"
             class="size-18 cursor-pointer"
             @click="dragSort.guardClick(() => openShowcaseAsset(index))"
@@ -542,8 +554,12 @@ async function openOtherAsset(index: number) {
           <AssetTile
             :media="item.media"
             :extension="item.extension"
-            :size="item.size"
-            :is-private="item.isPrivate"
+            :overlay="{
+              size: item.size,
+              showSize: true,
+              isPrivate: item.isPrivate,
+              editable: true,
+            }"
             :aria-label="phrase.other_details"
             class="size-18 cursor-pointer"
             @click="otherDragSort.guardClick(() => openOtherAsset(index))"

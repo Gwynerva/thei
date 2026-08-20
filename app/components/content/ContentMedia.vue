@@ -5,11 +5,16 @@ import type {
 } from '#layers/thei/shared/content';
 import { contentMediaAutoplays } from '#layers/thei/shared/content-media';
 
-const props = defineProps<{
-  asset: ContentAssetData;
-  layout: ContentMediaLayout;
-  alt?: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    asset: ContentAssetData;
+    layout: ContentMediaLayout;
+    alt?: string;
+    rounded?: boolean;
+    naturalSize?: boolean;
+  }>(),
+  { rounded: true },
+);
 
 const measuredWidth = ref<number>();
 const measuredHeight = ref<number>();
@@ -51,10 +56,13 @@ function rememberDimensions(nextWidth: number, nextHeight: number) {
 <template>
   <div
     v-if="media"
-    class="overflow-hidden rounded-normal"
+    class="overflow-hidden"
     :class="[
       layout === 'natural' ? 'mr-auto max-w-full' : 'w-full',
-      { 'max-h-144': layout !== 'stretch' },
+      {
+        'max-h-144': layout !== 'stretch',
+        'rounded-normal': rounded,
+      },
     ]"
     :style="frameStyle"
     :data-content-media-layout="layout"
@@ -65,12 +73,12 @@ function rememberDimensions(nextWidth: number, nextHeight: number) {
       :loop="autoplay"
       :controls="media.kind === 'video'"
       fit="contain"
-      :natural-size="layout !== 'stretch'"
+      :natural-size="naturalSize ?? layout !== 'stretch'"
       :backdrop="layout === 'centered'"
       :width
       :height
       :alt
-      class="size-full"
+      class="size-full bg-bg-1"
       @dimensions="rememberDimensions"
     />
   </div>

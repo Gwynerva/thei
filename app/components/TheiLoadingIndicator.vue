@@ -1,12 +1,18 @@
 <script lang="ts" setup>
 const isAdmin = useIsAdmin();
 const { progress, isLoading, error } = useLoadingIndicator();
+const stickyHeaderContext = useStickyHeaderContext();
+const top = computed(() => {
+  const base = isAdmin.value ? 'var(--height-admin-bar)' : '0px';
+  const headerHeight = stickyHeaderContext?.height.value ?? 0;
+  return `calc(${base} + ${headerHeight}px)`;
+});
 </script>
 
 <template>
   <div
-    class="sticky h-0 w-full"
-    :class="[isAdmin ? 'top-(--height-admin-bar)' : 'top-0']"
+    class="pointer-events-none fixed left-0 z-20 h-0 w-full"
+    :style="{ top }"
   >
     <TransitionFade>
       <div

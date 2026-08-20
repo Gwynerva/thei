@@ -35,8 +35,8 @@ import AssetModal from '../asset-modal/AssetModal.vue';
 import AssetModalButton from '../asset-modal/AssetModalButton.vue';
 import AssetModalCompareMedia from '../asset-modal/AssetModalCompareMedia.vue';
 import AssetModalFileInfo from '../asset-modal/AssetModalFileInfo.vue';
-import AssetModalPreviewFile from '../asset-modal/AssetModalPreviewFile.vue';
 import AssetModalPreviewMedia from '../asset-modal/AssetModalPreviewMedia.vue';
+import FilePreview from '../../components/FilePreview.vue';
 import { useFileInfo } from '../asset-modal/use-file-info';
 import UploadSettingsDivider from './UploadSettingsDivider.vue';
 import UploadSettingsEditProfile from './UploadSettingsEditProfile.vue';
@@ -141,8 +141,7 @@ const sourceFile = computed(() => {
       `${phrase.value.upload_variant_saved}.${storedAsset.extension}`,
     extension: storedAsset.extension,
     size: storedAsset.size,
-    objectUrl:
-      storedAsset.media?.src ?? storedAsset.assetUrl,
+    objectUrl: storedAsset.media?.src ?? storedAsset.assetUrl,
   };
 });
 const sourceSectionTitle = computed(() =>
@@ -877,9 +876,7 @@ function errorToMessage(error: unknown, fallback: string): string {
 </script>
 
 <template>
-  <AssetModal
-    :aside-title="phrase.upload_variants"
-  >
+  <AssetModal :aside-title="phrase.upload_variants">
     <template #preview>
       <AssetModalCompareMedia
         v-if="comparePreview"
@@ -899,10 +896,11 @@ function errorToMessage(error: unknown, fallback: string): string {
         :has-audio="singlePreview.hasAudio"
         :display-dimensions="singlePreview.displayDimensions"
       />
-      <AssetModalPreviewFile
+      <FilePreview
         v-else
         :key="`file:${singlePreview.key}`"
         :extension="singlePreview.extension"
+        class="w-1/2 max-w-132 text-text-2"
       />
     </template>
 

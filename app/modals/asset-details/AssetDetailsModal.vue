@@ -4,8 +4,8 @@ import type { ArchivedOriginalFileMeta } from '#layers/thei/shared/asset';
 import AssetModal from '#layers/thei/app/modals/asset-modal/AssetModal.vue';
 import AssetModalButton from '#layers/thei/app/modals/asset-modal/AssetModalButton.vue';
 import AssetModalFileInfo from '#layers/thei/app/modals/asset-modal/AssetModalFileInfo.vue';
-import AssetModalPreviewFile from '#layers/thei/app/modals/asset-modal/AssetModalPreviewFile.vue';
 import AssetModalPreviewMedia from '#layers/thei/app/modals/asset-modal/AssetModalPreviewMedia.vue';
+import FilePreview from '#layers/thei/app/components/FilePreview.vue';
 
 type AssetDetailsResult =
   | {
@@ -66,17 +66,11 @@ const titleError = computed(() => {
 });
 
 const directHref = computed(
-  () =>
-    props.modalData.asset.assetUrl ??
-    props.modalData.asset.media?.src,
+  () => props.modalData.asset.assetUrl ?? props.modalData.asset.media?.src,
 );
-const isMedia = computed(() =>
-  Boolean(props.modalData.asset.media),
-);
+const isMedia = computed(() => Boolean(props.modalData.asset.media));
 const previewSrc = computed(
-  () =>
-    props.modalData.asset.media?.src ??
-    props.modalData.asset.assetUrl,
+  () => props.modalData.asset.media?.src ?? props.modalData.asset.assetUrl,
 );
 function currentPatch() {
   return {
@@ -122,10 +116,11 @@ function replace() {
         :extension="modalData.asset.extension"
         :src="previewSrc"
       />
-      <AssetModalPreviewFile
+      <FilePreview
         v-else
         :key="`file:${modalData.asset.assetUuid}:${modalData.asset.extension}`"
         :extension="modalData.asset.extension"
+        class="w-1/2 max-w-132 text-text-2"
       />
     </template>
 
@@ -218,13 +213,8 @@ function replace() {
             <Icon name="chevron-right" class="ml-xs" />
           </Button>
 
-          <div
-            class="grid gap-sm"
-            :class="
-              (modalData.showDetach ?? true) ? 'grid-cols-2' : 'grid-cols-1'
-            "
-          >
-            <Button variant="secondary" @click="replace">
+          <div class="flex flex-col gap-sm">
+            <Button variant="secondary" class="w-full" @click="replace">
               <Icon name="edit" class="mr-xs" />
               <span>{{ phrase.asset_replace }}</span>
             </Button>
@@ -232,6 +222,7 @@ function replace() {
             <Button
               v-if="modalData.showDetach ?? true"
               variant="delete"
+              class="w-full"
               @click="emit('modalResult', { type: 'detach' })"
             >
               <Icon name="delete" class="mr-xs" />

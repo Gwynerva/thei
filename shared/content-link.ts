@@ -96,7 +96,7 @@ export function normalizeContentInlineHtml(value: unknown): string {
           const url = normalizeExternalLinkUrl(href);
           return `<a href="${escapeAttribute(url)}" data-content-link="external">`;
         } catch {
-          if (href.startsWith('/'))
+          if (href.startsWith('/') && !href.startsWith('//'))
             return `<a href="${escapeAttribute(href)}">`;
         }
       }

@@ -67,6 +67,12 @@ describe('content inline links', () => {
         '<a href="javascript:alert(1)" onclick="alert(2)">Bad</a>',
       ),
     ).toBe('<a>Bad</a>');
+    expect(
+      normalizeContentInlineHtml('<a href="//evil.example/path">Bad</a>'),
+    ).toBe('<a>Bad</a>');
+    expect(
+      normalizeContentInlineHtml('<a href="/projects/local-P1/">Local</a>'),
+    ).toBe('<a href="/projects/local-P1/">Local</a>');
   });
 
   it('ignores unknown entity types and extracts nested list links once', () => {
