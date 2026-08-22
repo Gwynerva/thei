@@ -7,6 +7,7 @@ import type { OtherAssetGetItem } from './project';
 import type { ProjectExternalLink } from '../external-link';
 import type { TagItem } from '../tag';
 import type { MediaDescriptor } from '../media';
+import type { AdminPaginatedResponse } from '../admin/entity-list';
 
 export type EventGetResponse = {
   eventUuid: string;
@@ -49,6 +50,8 @@ export type EventListItem = {
   updatedAt: number;
   totalSize: number;
 };
+
+export type EventListResponse = AdminPaginatedResponse<EventListItem>;
 
 export type PublicEventResponse = Pick<
   EventGetResponse,

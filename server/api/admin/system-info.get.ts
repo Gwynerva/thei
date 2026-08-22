@@ -12,6 +12,7 @@ export default defineEventHandler(() => {
 
   return {
     theiVersion: THEI_SERVER.version,
+    siteAccessLevel: THEI_SERVER.config.siteAccessLevel,
     runtime,
     os: `${osName} ${osRelease()}`,
   };

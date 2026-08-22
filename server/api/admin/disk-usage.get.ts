@@ -1,11 +1,13 @@
-import { stat, readdir, statfs } from 'node:fs/promises';
+import { lstat, readdir, statfs } from 'node:fs/promises';
 import { join } from 'node:path';
 import { projectPath } from '#thei/static';
+import { normalizeAdminDiskUsage } from '#layers/thei/shared/admin/disk-usage';
 
-async function getDirSize(
-  dirPath: string,
-  skipNodeModules = false,
-): Promise<number> {
+const THEI_SIZE_CACHE_MS = 30_000;
+let cachedTheiSize: { value: number; expiresAt: number } | undefined;
+let pendingTheiSize: Promise<number> | undefined;
+
+async function getDirSize(dirPath: string): Promise<number> {
   let total = 0;
   let entries;
   try {
@@ -14,13 +16,12 @@ async function getDirSize(
     return 0;
   }
   for (const entry of entries) {
-    if (skipNodeModules && entry.name === 'node_modules') continue;
     const full = join(dirPath, entry.name);
     if (entry.isDirectory()) {
-      total += await getDirSize(full, skipNodeModules);
+      total += await getDirSize(full);
     } else if (entry.isFile() || entry.isSymbolicLink()) {
       try {
-        const s = await stat(full);
+        const s = await lstat(full);
         total += s.size;
       } catch {
         // skip unreadable files
@@ -30,33 +31,37 @@ async function getDirSize(
   return total;
 }
 
-async function getFileSize(filePath: string): Promise<number> {
-  try {
-    const s = await stat(filePath);
-    return s.size;
-  } catch {
-    return 0;
+function getTheiSize(): Promise<number> {
+  const now = Date.now();
+  if (cachedTheiSize && cachedTheiSize.expiresAt > now) {
+    return Promise.resolve(cachedTheiSize.value);
   }
-}
+  if (pendingTheiSize) return pendingTheiSize;
 
-async function getAvailableBytes(path: string): Promise<number> {
-  try {
-    const s = await statfs(path);
-    return s.bavail * s.bsize;
-  } catch {
-    return 0;
-  }
+  pendingTheiSize = getDirSize(THEI_SERVER.contentPath())
+    .then((value) => {
+      cachedTheiSize = {
+        value,
+        expiresAt: Date.now() + THEI_SIZE_CACHE_MS,
+      };
+      return value;
+    })
+    .finally(() => {
+      pendingTheiSize = undefined;
+    });
+
+  return pendingTheiSize;
 }
 
 export default defineEventHandler(async () => {
-  const [available, installSize, theiTempSize, databaseSize, assetsSize] =
-    await Promise.all([
-      getAvailableBytes(projectPath),
-      getDirSize(projectPath, true),
-      getDirSize(join(projectPath, '.thei')),
-      getFileSize(THEI_SERVER.contentPath('thei.db')),
-      getDirSize(THEI_SERVER.contentPath('assets')),
-    ]);
+  const [fileSystem, theiSize] = await Promise.all([
+    statfs(projectPath),
+    getTheiSize(),
+  ]);
 
-  return { available, installSize, theiTempSize, databaseSize, assetsSize };
+  return normalizeAdminDiskUsage(
+    fileSystem.blocks * fileSystem.bsize,
+    fileSystem.bavail * fileSystem.bsize,
+    theiSize,
+  );
 });

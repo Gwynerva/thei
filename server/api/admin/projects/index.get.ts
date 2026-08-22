@@ -1,17 +1,22 @@
-import { and, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { contentPlainText } from '#layers/thei/shared/content';
 import type {
-  ProjectListItem,
+  ProjectListResponse,
   ProjectSearchItem,
 } from '#layers/thei/shared/api/project';
 import { rankProjectSearch } from '#layers/thei/shared/admin/project-search';
+import {
+  normalizeAdminSearchText,
+  paginateAdminEntities,
+  resolveAdminPagination,
+  type AdminEntityListOrder,
+} from '#layers/thei/shared/admin/entity-list';
 import { buildAdminAssetUrls } from '../../../thei/assets/urls';
 import { resolveGeneratedIcon } from '../../../thei/media/generated-icon';
 import { listTagsForContainer } from '../../../thei/tags';
 
-const LIMIT = 50;
-
 export default defineEventHandler(
-  async (event): Promise<ProjectListItem[] | ProjectSearchItem[]> => {
+  async (event): Promise<ProjectListResponse | ProjectSearchItem[]> => {
     const query = getQuery(event);
     if (typeof query.projectUuid === 'string') {
       const project = await THEI_SERVER.projects.findByUuid(query.projectUuid);
@@ -78,14 +83,117 @@ export default defineEventHandler(
         }),
       );
     }
-    const offset = Number(query.offset ?? 0);
-
-    const projects = await THEI_SERVER.projects.list(offset, LIMIT);
-
     const { db, schema } = THEI_SERVER.useDb();
+    const q = typeof query.q === 'string' ? query.q : '';
+    const order: AdminEntityListOrder =
+      query.order === 'oldest' ? 'oldest' : 'newest';
+    const paginationQuery = {
+      page: Number(query.page),
+      pageSize: Number(query.pageSize),
+    };
+
+    async function searchProjects(
+      searchQuery: string,
+      searchOrder: AdminEntityListOrder,
+      pagination: { page: number; pageSize: number },
+    ) {
+      const [projects, descriptions] = await Promise.all([
+        db.select().from(schema.projects).all(),
+        db
+          .select({
+            ownerId: schema.content.ownerId,
+            data: schema.content.data,
+          })
+          .from(schema.content)
+          .where(
+            and(
+              eq(schema.content.ownerType, 'project'),
+              eq(schema.content.slot, 'project-description'),
+            ),
+          )
+          .all(),
+      ]);
+      const descriptionByProjectUuid = new Map(
+        descriptions.map((description) => [
+          description.ownerId,
+          contentPlainText(description.data),
+        ]),
+      );
+
+      return paginateAdminEntities(
+        projects.map((project) => ({
+          ...project,
+          entityId: project.projectUuid,
+          contentText: descriptionByProjectUuid.get(project.projectUuid),
+        })),
+        { q: searchQuery, order: searchOrder, ...pagination },
+      );
+    }
+
+    async function listProjects(
+      listOrder: AdminEntityListOrder,
+      paginationQuery: { page: number; pageSize: number },
+    ) {
+      const pagination = resolveAdminPagination(
+        await THEI_SERVER.projects.count(),
+        paginationQuery,
+      );
+      const offset = (pagination.page - 1) * pagination.pageSize;
+      const baseQuery = db.select().from(schema.projects);
+      const projects =
+        listOrder === 'oldest'
+          ? await baseQuery
+              .orderBy(
+                asc(schema.projects.createdAt),
+                asc(schema.projects.projectUuid),
+              )
+              .limit(pagination.pageSize)
+              .offset(offset)
+          : await baseQuery
+              .orderBy(
+                desc(schema.projects.updatedAt),
+                desc(schema.projects.createdAt),
+                asc(schema.projects.projectUuid),
+              )
+              .limit(pagination.pageSize)
+              .offset(offset);
+
+      return {
+        items: projects.map((project) => ({
+          ...project,
+          entityId: project.projectUuid,
+        })),
+        ...pagination,
+      };
+    }
+
+    const result = normalizeAdminSearchText(q)
+      ? await searchProjects(q, order, paginationQuery)
+      : await listProjects(order, paginationQuery);
+    const projectUuids = result.items.map((project) => project.projectUuid);
+
+    if (!projectUuids.length) {
+      return { ...result, items: [] };
+    }
 
     const [iconUsages, directAssetRows, contentAssetRows] = await Promise.all([
-      THEI_SERVER.assets.usages.findByContainerTypeAndRole('project', 'icon'),
+      db
+        .select({
+          asset: schema.assets,
+          containerId: schema.assetUsages.containerId,
+        })
+        .from(schema.assets)
+        .innerJoin(
+          schema.assetUsages,
+          eq(schema.assets.assetUuid, schema.assetUsages.assetUuid),
+        )
+        .where(
+          and(
+            eq(schema.assetUsages.containerType, 'project'),
+            eq(schema.assetUsages.role, 'icon'),
+            inArray(schema.assetUsages.containerId, projectUuids),
+          ),
+        ),
       db
         .select({
           projectUuid: schema.assetUsages.containerId,
@@ -97,7 +205,12 @@ export default defineEventHandler(
           schema.assetUsages,
           eq(schema.assets.assetUuid, schema.assetUsages.assetUuid),
         )
-        .where(eq(schema.assetUsages.containerType, 'project')),
+        .where(
+          and(
+            eq(schema.assetUsages.containerType, 'project'),
+            inArray(schema.assetUsages.containerId, projectUuids),
+          ),
+        ),
       db
         .select({
           projectUuid: schema.content.ownerId,
@@ -117,6 +230,7 @@ export default defineEventHandler(
           and(
             eq(schema.assetUsages.containerType, 'content'),
             eq(schema.content.ownerType, 'project'),
+            inArray(schema.content.ownerId, projectUuids),
           ),
         ),
     ]);
@@ -140,26 +254,29 @@ export default defineEventHandler(
       ]),
     );
 
-    return await Promise.all(
-      projects.map(async (project) => {
-        const iconAsset = iconUrlByProjectUuid.get(project.projectUuid);
-        return {
-          projectUuid: project.projectUuid,
-          title: project.title,
-          summary: project.summary,
-          humanReadableSlug: project.humanReadableSlug,
-          publicId: project.publicId,
-          access: project.access,
-          showcase: project.showcase,
-          cv: project.cv,
-          iconMedia: iconAsset
-            ? (await buildAdminAssetUrls(iconAsset)).media!
-            : resolveGeneratedIcon('project', project.projectUuid),
-          createdAt: project.createdAt,
-          updatedAt: project.updatedAt,
-          totalSize: sizeByProjectUuid.get(project.projectUuid) ?? 0,
-        };
-      }),
-    );
+    return {
+      ...result,
+      items: await Promise.all(
+        result.items.map(async (project) => {
+          const iconAsset = iconUrlByProjectUuid.get(project.projectUuid);
+          return {
+            projectUuid: project.projectUuid,
+            title: project.title,
+            summary: project.summary,
+            humanReadableSlug: project.humanReadableSlug,
+            publicId: project.publicId,
+            access: project.access,
+            showcase: project.showcase,
+            cv: project.cv,
+            iconMedia: iconAsset
+              ? (await buildAdminAssetUrls(iconAsset)).media!
+              : resolveGeneratedIcon('project', project.projectUuid),
+            createdAt: project.createdAt,
+            updatedAt: project.updatedAt,
+            totalSize: sizeByProjectUuid.get(project.projectUuid) ?? 0,
+          };
+        }),
+      ),
+    };
   },
 );

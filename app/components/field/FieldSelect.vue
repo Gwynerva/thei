@@ -1,8 +1,13 @@
 <script lang="ts" setup>
+defineOptions({ inheritAttrs: false });
+
+const attrs = useAttrs();
+
 const { size = 'sm', disabled = false } = defineProps<{
   options: Record<string, string>;
   size?: 'xs' | 'sm';
   disabled?: boolean;
+  wrapperClass?: string;
 }>();
 
 const model = defineModel<string>();
@@ -23,18 +28,20 @@ watch(selectElement, (newElement) => {
 </script>
 
 <template>
-  <div>
+  <div :class="wrapperClass">
     <div
-      class="group relative inline-block rounded-normal border-2 border-border-1
-        bg-bg-1 transition has-focus:border-border-3 has-hocus:border-border-3"
+      class="group relative inline-flex h-full rounded-normal border-2
+        border-border-1 bg-bg-1 transition has-focus:border-border-3
+        has-hocus:border-border-3"
     >
       <select
+        v-bind="attrs"
         ref="select"
         v-model="model"
         :disabled="disabled"
         data-label-focus
-        class="cursor-pointer appearance-none bg-transparent py-2 pr-10 pl-xs
-          disabled:cursor-not-allowed disabled:opacity-55"
+        class="h-full cursor-pointer appearance-none bg-transparent py-2 pr-10
+          pl-xs disabled:cursor-not-allowed disabled:opacity-55"
         :class="size === 'xs' ? 'text-xs' : 'text-sm'"
       >
         <option
