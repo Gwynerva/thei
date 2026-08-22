@@ -86,6 +86,10 @@ const buttonStyle = computed(() => ({
   '--action-size': backgroundSize.value,
   '--action-repeat': props.backgroundRepeat,
 }));
+
+function activate() {
+  if (!props.href) props.activate?.();
+}
 </script>
 
 <template>
@@ -104,7 +108,7 @@ const buttonStyle = computed(() => ({
       'has-gradient': backgroundMode !== 'asset' || !backgroundMedia,
     }"
     :style="buttonStyle"
-    @click="activate?.()"
+    @click="activate"
   >
     <Media
       v-if="displayedIcon"

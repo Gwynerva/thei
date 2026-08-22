@@ -63,17 +63,17 @@ function applyRuntimeState(
   link.dataset.contentLinkState = resolved.state;
   link.style.removeProperty('--content-link-icon');
 
-  if (resolved.state === 'broken') {
+  if (resolved.state === 'broken' || resolved.state === 'restricted') {
     link.style.setProperty(
       '--content-link-icon',
-      `url("${cssUrl(`${iconsHref}#link-broken`)}")`,
+      `url("${cssUrl(`${iconsHref}#${resolved.state === 'restricted' ? 'lock-partial' : 'link-broken'}`)}")`,
     );
     link.setAttribute('aria-invalid', 'true');
-    if (reference.kind === 'project') {
+    if (reference.kind === 'project' || reference.kind === 'event') {
       link.removeAttribute('href');
       link.removeAttribute('target');
       link.removeAttribute('rel');
-    } else if (resolved.href) {
+    } else if ('href' in resolved && resolved.href) {
       setNavigation(link, resolved.href);
     }
     return;
@@ -81,7 +81,10 @@ function applyRuntimeState(
 
   link.removeAttribute('aria-invalid');
   setNavigation(link, resolved.href);
-  const iconUrl = resolved.iconMedia?.previewSrc || resolved.iconMedia?.src;
+  const iconUrl =
+    resolved.kind === 'event'
+      ? `${iconsHref}#event`
+      : resolved.iconMedia?.previewSrc || resolved.iconMedia?.src;
   if (iconUrl)
     link.style.setProperty('--content-link-icon', `url("${cssUrl(iconUrl)}")`);
 }

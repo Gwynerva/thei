@@ -2,6 +2,7 @@ import { buildAssetPreviewUrl } from '#layers/thei/shared/api/asset';
 import type { AssetRole } from '#layers/thei/shared/asset';
 import { AssetType, type AssetMeta } from '#layers/thei/shared/asset';
 import { buildProjectUrl } from '#layers/thei/shared/project-url';
+import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { buildStoredMediaDescriptor, type StoredAssetRecord } from './storage';
 
 type StoredAsset = Parameters<typeof buildStoredMediaDescriptor>[0];
@@ -13,6 +14,15 @@ export async function buildPublicProjectMedia(
 ) {
   const media = await buildStoredMediaDescriptor(asset);
   const src = `${buildProjectUrl(project.humanReadableSlug, project.publicId)}${role}/${asset.slug}.${asset.extension}`;
+  return { ...media, src, previewSrc: src };
+}
+
+export async function buildPublicEventContentMedia(
+  event: { humanReadableSlug: string; publicId: string },
+  asset: StoredAssetRecord,
+) {
+  const media = await buildStoredMediaDescriptor(asset);
+  const src = `${buildEventUrl(event.humanReadableSlug, event.publicId)}content/${asset.slug}.${asset.extension}`;
   return { ...media, src, previewSrc: src };
 }
 

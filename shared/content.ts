@@ -35,6 +35,7 @@ export const CONTENT_BLOCK_TYPES = [
   'contentGallery',
   'contentAttachment',
   'externalLink',
+  'entityLink',
 ] as const;
 export type ContentBlockType = (typeof CONTENT_BLOCK_TYPES)[number];
 
@@ -337,6 +338,8 @@ function contentPlainTextFromNormalized(
           appendPreviewText(textParts, (block.data as any).url);
         }
         break;
+      case 'entityLink':
+        break;
     }
   }
   return textParts.join(' ').replace(/\s+/g, ' ').trim();
@@ -572,6 +575,15 @@ function normalizeBlockData(
 
     case 'externalLink':
       return { url: normalizeExternalLinkUrl(data.url) };
+
+    case 'entityLink': {
+      const entityType =
+        data.entityType === 'project' || data.entityType === 'event'
+          ? data.entityType
+          : undefined;
+      const entityId = optionalString(data.entityId)?.trim();
+      return { entityType, entityId };
+    }
   }
 }
 
@@ -611,6 +623,13 @@ function isContentBlockEmpty(block: ContentOutputBlock): boolean {
       } catch {
         return true;
       }
+
+    case 'entityLink':
+      return !(
+        ((block.data as any).entityType === 'project' ||
+          (block.data as any).entityType === 'event') &&
+        optionalString((block.data as any).entityId)?.trim()
+      );
   }
 }
 

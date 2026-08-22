@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { AdminBarButtonProps } from './AdminBarButton.vue';
 import { publicIdFromProjectUrlPart } from '#layers/thei/shared/project-url';
+import { publicIdFromEventUrlPart } from '#layers/thei/shared/event-url';
 
 const isAdmin = useIsAdmin();
 const { data: adminBarData } = await useFetch('/api/admin/dashboard-summary', {
@@ -45,6 +46,31 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
     };
   }
 
+  if (route.path === '/events/') {
+    return {
+      to: '/admin/events/new/',
+      icon: 'plus',
+      title: phrase.value.new_event,
+    };
+  }
+
+  if (route.path.startsWith('/events/')) {
+    const eventId = publicIdFromEventUrlPart(route.path.split('/')[2] ?? '');
+    return {
+      to: `/admin/events/${eventId}/edit/`,
+      icon: 'edit',
+      title: phrase.value.edit_event,
+    };
+  }
+
+  if (/^\/admin\/events\/[^/]+\/edit\/$/.test(route.path)) {
+    const id = route.path.split('/')[3];
+    return {
+      to: { href: `/events/${id}/`, external: true },
+      icon: 'eye-open',
+      title: phrase.value.view_event,
+    };
+  }
 });
 </script>
 
@@ -108,9 +134,9 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
             type="button"
             :data-title-popup="phrase.sign_out"
             :aria-label="phrase.sign_out"
-            class="flex h-full shrink-0 cursor-pointer items-center bg-transparent
-              px-2 opacity-80 transition sm:px-3 hocus:bg-accent/25
-              hocus:opacity-100"
+            class="flex h-full shrink-0 cursor-pointer items-center
+              bg-transparent px-2 opacity-80 transition sm:px-3
+              hocus:bg-accent/25 hocus:opacity-100"
             @click="signOut"
           >
             <Icon name="power" class="shrink-0 text-xl" />

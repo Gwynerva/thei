@@ -88,12 +88,11 @@ function openEditor() {
     <span
       v-if="preview.media"
       class="content-preview-media absolute inset-y-0 left-0 w-32 bg-bg-accent
-        [--preview-mask-end:70%] [--preview-mask-soft-alpha:5%]
-        [--preview-mask-soft:45%] [--preview-mask-start-alpha:35%]
-        [--preview-mask-strong-alpha:25%] [--preview-mask-strong:10%]
-        sm:[--preview-mask-end:100%] sm:[--preview-mask-soft-alpha:10%]
-        sm:[--preview-mask-soft:80%] sm:[--preview-mask-start-alpha:100%]
-        sm:[--preview-mask-strong-alpha:70%] sm:[--preview-mask-strong:35%]"
+        [--preview-mask-end:70%] [--preview-mask-soft-alpha:10%]
+        [--preview-mask-soft:45%] [--preview-mask-start-alpha:100%]
+        [--preview-mask-strong-alpha:70%] [--preview-mask-strong:10%]
+        sm:[--preview-mask-end:100%] sm:[--preview-mask-soft:80%]
+        sm:[--preview-mask-strong:35%]"
     >
       <Media
         v-bind="preview.media"
@@ -103,7 +102,7 @@ function openEditor() {
 
     <span
       class="relative flex min-w-0 flex-1 items-center gap-xs"
-      :class="preview.media ? 'ml-0 sm:ml-12' : undefined"
+      :class="preview.media ? 'ml-md sm:ml-12' : undefined"
     >
       <span
         class="-ml-xs max-w-100 min-w-0 pl-xs text-sm sm:text-base"

@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import { analyzeContentData } from '#layers/thei/shared/content';
-import type { DateRange } from '#layers/thei/shared/date-range';
 import {
   compareProjectStages,
   type ProjectSectionContentItem,
@@ -14,6 +13,7 @@ import { projectDataInjectionKey } from '../composables';
 import { projectContentItemModal } from './project-content-item-modal';
 import { projectContentItemDeleteModal } from './project-content-item-delete-modal';
 import ContentStats from '#layers/thei/app/components/content/ContentStats.vue';
+import DateRangeChip from '#layers/thei/app/components/DateRangeChip.vue';
 
 type Item = ProjectSectionContentItem | ProjectStageContentItem;
 
@@ -155,33 +155,6 @@ function moveSectionWithKeyboard(index: number, direction: -1 | 1) {
   if (!item || newIndex < 0 || newIndex >= sections.length) return;
   replaceSections(moveItemById(sections, itemId(item), newIndex, itemId));
 }
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat(language.value.code, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  }).format(new Date(`${value}T00:00`));
-}
-
-function formatPeriods(periods: DateRange[]) {
-  if (!periods.length) return '';
-  const earliestStart = periods.reduce(
-    (earliest, period) =>
-      period.startDate < earliest ? period.startDate : earliest,
-    periods[0]!.startDate,
-  );
-  const latestEnd = periods.reduce(
-    (latest, period) => (period.endDate > latest ? period.endDate : latest),
-    periods[0]!.endDate,
-  );
-  const periodCount = periods.length > 1 ? ` (${periods.length})` : '';
-  const dateRange =
-    earliestStart === latestEnd
-      ? formatDate(earliestStart)
-      : `${formatDate(earliestStart)} — ${formatDate(latestEnd)}`;
-  return `${dateRange}${periodCount}`;
-}
 </script>
 
 <template>
@@ -227,12 +200,13 @@ function formatPeriods(periods: DateRange[]) {
             {{ item.summary }}
           </span>
           <span class="flex flex-wrap items-center gap-xs text-sm text-text-3">
-            <span
-              v-if="kind === 'stage' && 'periods' in item"
-              :data-title-popup="phrase.project_stage_period"
-            >
-              {{ formatPeriods(item.periods) }}
-            </span>
+            <template v-if="kind === 'stage' && 'periods' in item">
+              <DateRangeChip
+                v-for="period in item.periods"
+                :key="`${period.startDate}:${period.endDate}`"
+                :period="period"
+              />
+            </template>
             <ContentStats v-bind="analysis.summary" class="text-sm" />
             <span
               v-if="item.isPrivate"

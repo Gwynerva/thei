@@ -15,6 +15,9 @@ import { updateProject } from './projects/repository/update';
 import { deleteProject } from './projects/repository/delete';
 import { listProjects } from './projects/repository/list';
 import { countEvents } from './events/repository/count';
+import { findEventByUuid } from './events/repository/find-by-id';
+import { findEventByPublicId } from './events/repository/find-by-public-id';
+import { listEvents } from './events/repository/list';
 import { getPublicAdminSessions } from './admin-session/repository/public';
 import { getCurrentAdminSession } from './admin-session';
 import { createAsset } from './assets/repository/create';
@@ -33,6 +36,7 @@ import { findAssetUsage } from './assets/repository/usages/find-one';
 import { findAssetsByContainerTypeAndRole } from './assets/repository/usages/find-by-container-type-and-role';
 import { findShowcaseAssets } from './assets/repository/usages/find-showcase';
 import { findOtherAssets } from './assets/repository/usages/find-other';
+import { findOtherAssetsForContainer } from './assets/repository/usages/find-other';
 import { updateAssetUsage } from './assets/repository/usages/update';
 import { deleteAsset } from './assets/repository/delete';
 import { assetFilePath } from './assets/file-path';
@@ -87,6 +91,9 @@ export const THEI_SERVER = {
   },
   events: {
     count: countEvents,
+    findByUuid: findEventByUuid,
+    findByPublicId: findEventByPublicId,
+    list: listEvents,
   },
   adminSessions: {
     getPublic: getPublicAdminSessions,
@@ -116,6 +123,7 @@ export const THEI_SERVER = {
       findByContainerTypeAndRole: findAssetsByContainerTypeAndRole,
       findShowcase: findShowcaseAssets,
       findOther: findOtherAssets,
+      findOtherForContainer: findOtherAssetsForContainer,
       update: updateAssetUsage,
     },
   },

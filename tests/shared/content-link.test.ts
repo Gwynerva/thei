@@ -75,7 +75,7 @@ describe('content inline links', () => {
     ).toBe('<a href="/projects/local-P1/">Local</a>');
   });
 
-  it('ignores unknown entity types and extracts nested list links once', () => {
+  it('extracts event entities and nested list links once', () => {
     const data = {
       blocks: [
         {
@@ -96,6 +96,13 @@ describe('content inline links', () => {
         kind: 'external',
         url: 'https://example.com/',
         label: 'chosen label',
+      },
+      {
+        kind: 'entity',
+        entityType: 'event',
+        entityId: 'e-1',
+        href: undefined,
+        label: 'event',
       },
     ]);
   });

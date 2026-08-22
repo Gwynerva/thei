@@ -295,6 +295,32 @@ describe('content normalization', () => {
     ]);
   });
 
+  it('drops incomplete entity links and canonicalizes selected targets', () => {
+    const data = normalizeContentData({
+      blocks: [
+        { id: 'empty-link', type: 'entityLink', data: {} },
+        {
+          id: 'partial-link',
+          type: 'entityLink',
+          data: { entityType: 'project' },
+        },
+        {
+          id: 'selected-link',
+          type: 'entityLink',
+          data: { entityType: 'event', entityId: '  event-1  ' },
+        },
+      ],
+    });
+
+    expect(data.blocks).toEqual([
+      {
+        id: 'selected-link',
+        type: 'entityLink',
+        data: { entityType: 'event', entityId: 'event-1' },
+      },
+    ]);
+  });
+
   it('keeps semantic delimiters with no decorative data', () => {
     const data = normalizeContentData({
       blocks: [

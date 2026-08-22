@@ -74,12 +74,12 @@ const accentColor = computed(() => {
           class="flex min-w-0 items-center gap-1 text-sm font-semibold
             @max-[24rem]:text-xs"
         >
+          <span class="min-w-0 truncate">{{ title }}</span>
           <Icon
             name="external-link"
             class="size-3 shrink-0 text-text-3"
             aria-hidden="true"
           />
-          <span class="truncate">{{ title }}</span>
         </p>
         <p v-if="link?.description" class="line-clamp-2 text-xs text-text-3">
           {{ link.description }}

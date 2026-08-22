@@ -28,14 +28,32 @@ const externalLink = computed<ExternalLink | undefined>(() => {
 
 <template>
   <ProjectLinkPreviewCard
-    v-if="result?.state === 'resolved' && result.kind === 'project'"
+    v-if="
+      result?.state === 'resolved' &&
+      (result.kind === 'project' || result.kind === 'event')
+    "
+    :entity-type="result.kind"
     :title="result.title"
     :summary="result.summary"
-    :icon-media="result.iconMedia"
+    :icon-media="
+      result.kind === 'project' ? result.iconMedia : result.previewMedia
+    "
     :href="result.href"
     :interactive="interactive"
     :flush="flush"
   />
+  <div
+    v-else-if="result?.state === 'restricted'"
+    class="flex min-h-16 w-full min-w-0 items-center gap-xs rounded-normal
+      border border-border-1 bg-bg-3 p-xs text-text-3"
+  >
+    <span class="flex size-12 items-center justify-center rounded-sm bg-bg-2"
+      ><Icon name="lock-partial"
+    /></span>
+    <span class="text-sm font-semibold">{{
+      phrase.content_link_broken_title
+    }}</span>
+  </div>
   <ExternalLinkPreviewCard
     v-else-if="result?.state === 'resolved' && result.kind === 'external'"
     :link="externalLink"

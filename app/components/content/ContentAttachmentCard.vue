@@ -46,7 +46,7 @@ const resolvedTitle = computed(
     :href="!editable && href ? href : undefined"
     :target="!editable && href ? '_blank' : undefined"
     :rel="!editable && href ? 'noopener noreferrer' : undefined"
-    class="group flex min-w-0 items-center gap-sm rounded-normal border-2
+    class="group flex min-w-0 items-center gap-xs rounded-normal border-2
       border-border-1 bg-bg-2 p-xs text-text-1 no-underline transition-colors
       outline-none focus-within:border-accent focus-within:bg-bg-accent
       hocus:border-accent hocus:bg-bg-accent"

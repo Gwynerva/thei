@@ -21,6 +21,24 @@ export function syncProjectActionUsages(
   projectUuid: string,
   action: ProjectActionEditData,
 ) {
+  syncEntityActionUsages(
+    tx,
+    schema,
+    currentUsages,
+    'project',
+    projectUuid,
+    action,
+  );
+}
+
+export function syncEntityActionUsages(
+  tx: any,
+  schema: any,
+  currentUsages: CurrentUsage[],
+  containerType: 'project' | 'event',
+  containerId: string,
+  action: ProjectActionEditData,
+) {
   for (const [role, field] of ACTION_ROLES) {
     const currentForRole = currentUsages.filter((usage) => usage.role === role);
     const nextAssetUuid = action[field];
@@ -31,7 +49,14 @@ export function syncProjectActionUsages(
 
     for (const stale of currentForRole) {
       if (stale.asset.assetUuid !== nextAssetUuid)
-        deleteUsage(tx, schema, stale.asset.assetUuid, projectUuid, role);
+        deleteUsage(
+          tx,
+          schema,
+          stale.asset.assetUuid,
+          containerType,
+          containerId,
+          role,
+        );
     }
 
     if (!current) {
@@ -39,8 +64,8 @@ export function syncProjectActionUsages(
         tx.insert(schema.assetUsages)
           .values({
             assetUuid: nextAssetUuid,
-            containerType: 'project',
-            containerId: projectUuid,
+            containerType,
+            containerId,
             role,
             meta: nextMeta,
           })
@@ -58,7 +83,9 @@ export function syncProjectActionUsages(
     ) {
       tx.update(schema.assetUsages)
         .set({ meta: nextMeta })
-        .where(usageWhere(schema, nextAssetUuid, projectUuid, role))
+        .where(
+          usageWhere(schema, nextAssetUuid, containerType, containerId, role),
+        )
         .run();
     }
   }
@@ -68,24 +95,26 @@ function deleteUsage(
   tx: any,
   schema: any,
   assetUuid: string,
-  projectUuid: string,
+  containerType: 'project' | 'event',
+  containerId: string,
   role: AssetRole,
 ) {
   tx.delete(schema.assetUsages)
-    .where(usageWhere(schema, assetUuid, projectUuid, role))
+    .where(usageWhere(schema, assetUuid, containerType, containerId, role))
     .run();
 }
 
 function usageWhere(
   schema: any,
   assetUuid: string,
-  projectUuid: string,
+  containerType: 'project' | 'event',
+  containerId: string,
   role: AssetRole,
 ) {
   return and(
     eq(schema.assetUsages.assetUuid, assetUuid),
-    eq(schema.assetUsages.containerType, 'project'),
-    eq(schema.assetUsages.containerId, projectUuid),
+    eq(schema.assetUsages.containerType, containerType),
+    eq(schema.assetUsages.containerId, containerId),
     eq(schema.assetUsages.role, role),
   );
 }

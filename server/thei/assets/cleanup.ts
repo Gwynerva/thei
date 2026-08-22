@@ -79,7 +79,7 @@ async function cleanupDanglingUsages() {
         db
           .select({ projectUuid: schema.projects.projectUuid })
           .from(schema.projects),
-        db.select({ eventId: schema.events.eventId }).from(schema.events),
+        db.select({ eventUuid: schema.events.eventUuid }).from(schema.events),
         db
           .select({ contentUuid: schema.content.contentUuid })
           .from(schema.content),
@@ -87,7 +87,7 @@ async function cleanupDanglingUsages() {
       ]);
     const assetUuids = new Set(assetRows.map((row) => row.assetUuid));
     const projectUuids = new Set(projectRows.map((row) => row.projectUuid));
-    const eventIds = new Set(eventRows.map((row) => row.eventId));
+    const eventIds = new Set(eventRows.map((row) => row.eventUuid));
     const contentUuids = new Set(contentRows.map((row) => row.contentUuid));
 
     for (const usage of usages) {

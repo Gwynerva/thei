@@ -14,6 +14,8 @@ import { tags } from './tags';
 import { tagUsages } from './tag-usages';
 import { externalLinks } from './external-links';
 import { projectExternalLinks } from './project-external-links';
+import { eventExternalLinks } from './event-external-links';
+import { eventProjectRelations } from './event-project-relations';
 
 export const schema = {
   assets,
@@ -30,4 +32,6 @@ export const schema = {
   tagUsages,
   externalLinks,
   projectExternalLinks,
+  eventExternalLinks,
+  eventProjectRelations,
 };

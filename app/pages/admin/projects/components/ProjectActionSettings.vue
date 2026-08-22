@@ -38,6 +38,11 @@ import {
   actionFaviconMediaKey,
 } from '../composables';
 
+const props = defineProps<{
+  sectionTitle?: string;
+  sectionDescription?: string;
+}>();
+
 const projectData = inject(projectDataInjectionKey)!;
 const savedProjectData = inject(savedProjectDataInjectionKey)!;
 const iconMedia = inject(actionIconMediaKey)!;
@@ -334,8 +339,8 @@ function clearFile() {
   <div>
     <SectionHeader
       icon="action-click"
-      :title="phrase.project_action"
-      :description="phrase.project_action_hint"
+      :title="props.sectionTitle ?? phrase.project_action"
+      :description="props.sectionDescription ?? phrase.project_action_hint"
       class="mb-md"
     />
     <Box class="flex flex-col gap-md p-sm sm:p-md">

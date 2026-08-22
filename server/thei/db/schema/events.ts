@@ -1,11 +1,15 @@
-import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import type { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
-import type { EventEmotion } from '#layers/thei/shared/event';
+import type { ProjectActionEditData } from '#layers/thei/shared/project-action';
 
 export const events = sqliteTable('events', {
-  eventId: text().primaryKey(),
+  eventUuid: text().primaryKey(),
   title: text().notNull(),
-  emotion: text().$type<EventEmotion>(),
+  summary: text().notNull(),
   access: text().notNull().$type<ProjectEventAccessLevel>(),
-  url: text().notNull().unique(),
+  humanReadableSlug: text().notNull(),
+  publicId: text().notNull().unique(),
+  action: text({ mode: 'json' }).$type<ProjectActionEditData>(),
+  createdAt: integer().notNull(),
+  updatedAt: integer().notNull(),
 });

@@ -117,6 +117,12 @@ function externalLink(value: Record<string, unknown>) {
         :url="block.data.url as string"
         :interactive="true"
       />
+      <ContentEntityLinkBlock
+        v-else-if="block.type === 'entityLink'"
+        :entity-type="block.data.entityType as 'project' | 'event'"
+        :entity-id="block.data.entityId as string"
+        :resolver="linkResolver"
+      />
     </template>
     <ContentInlineLinkDecorator :root="root" :resolver="linkResolver" />
   </div>

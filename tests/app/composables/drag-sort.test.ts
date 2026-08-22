@@ -60,6 +60,9 @@ describe('drag sort helpers', () => {
         animation: 180,
         easing: 'cubic-bezier(0.2, 0, 0, 1)',
         forceFallback: true,
+        draggable: '[data-drag-id]',
+        handle: undefined,
+        filter: '[data-drag-ignore]',
       }),
     );
 

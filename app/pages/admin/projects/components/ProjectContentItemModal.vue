@@ -8,8 +8,8 @@ import {
 import type { DateRange } from '#layers/thei/shared/date-range';
 import { isContentEmpty } from '#layers/thei/shared/content';
 import FieldContentEditor from '#layers/thei/app/components/field/FieldContentEditor.vue';
-import FieldDateRangePicker from '#layers/thei/app/components/field/FieldDateRangePicker.vue';
-import FloatingPopup from '#layers/thei/app/components/FloatingPopup.vue';
+import FieldDateRangePopup from '#layers/thei/app/components/field/FieldDateRangePopup.vue';
+import DateRangeChip from '#layers/thei/app/components/DateRangeChip.vue';
 import ModalContainer from '#layers/thei/app/modals/ModalContainer.vue';
 import ModalTitle from '#layers/thei/app/modals/ModalTitle.vue';
 import ModalHeaderButton from '#layers/thei/app/modals/ModalHeaderButton.vue';
@@ -111,21 +111,6 @@ function removePeriod(index: number) {
   item.value.periods = (item.value.periods ?? []).filter((_, i) => i !== index);
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat(language.value.code, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  }).format(new Date(`${value}T00:00`));
-}
-
-function formatPeriod(period: DateRange) {
-  const startDate = formatDate(period.startDate);
-  return period.startDate === period.endDate
-    ? startDate
-    : `${startDate} — ${formatDate(period.endDate)}`;
-}
-
 async function deleteItem() {
   if (!props.modalData.item) return;
   const result = await openModal(projectContentItemDeleteModal, {
@@ -222,38 +207,25 @@ async function deleteItem() {
             >
               {{ phrase.add }}
             </ModalHeaderButton>
-            <FloatingPopup
+            <FieldDateRangePopup
+              v-model="pendingPeriod"
               v-model:open="periodPopupOpen"
               :anchor="periodPopupAnchor"
               teleport-to="dialog"
-              fit-content
-            >
-              <FieldDateRangePicker v-model="pendingPeriod" />
-            </FloatingPopup>
+            />
           </div>
         </div>
         <div class="flex flex-wrap gap-xs">
           <span v-if="!item.periods?.length" class="text-sm text-text-3 italic">
             {{ phrase.project_stage_period_empty }}
           </span>
-          <span
+          <DateRangeChip
             v-for="(period, index) in item.periods"
             :key="`${period.startDate}:${period.endDate}`"
-            class="inline-flex max-w-full items-center rounded-full bg-bg-3 py-1
-              pr-1 pl-xs text-xs text-text-2"
-          >
-            <span class="truncate">{{ formatPeriod(period) }}</span>
-            <button
-              type="button"
-              class="flex size-6 shrink-0 cursor-pointer items-center
-                justify-center rounded-full text-text-2 transition-colors
-                hocus:bg-bg-error hocus:text-text-error"
-              :aria-label="`${phrase.delete}: ${formatPeriod(period)}`"
-              @click="removePeriod(index)"
-            >
-              <Icon name="close" />
-            </button>
-          </span>
+            :period="period"
+            removable
+            @remove="removePeriod(index)"
+          />
         </div>
       </Field>
 

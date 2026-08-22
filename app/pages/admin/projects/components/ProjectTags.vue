@@ -5,6 +5,7 @@ import type { TagEditItem, TagItem } from '#layers/thei/shared/tag';
 import { projectDataInjectionKey, currentProjectUuidKey } from '../composables';
 
 const projectData = inject(projectDataInjectionKey)!;
+const props = defineProps<{ title?: string; description?: string }>();
 const currentProjectUuid = inject(currentProjectUuidKey)!;
 const recommendations = ref<TagItem[]>([]);
 const recommendationsFailed = ref(false);
@@ -59,8 +60,8 @@ watch([recommendationText, selectedTags], () => void loadRecommendations(), {
   <div>
     <SectionHeader
       icon="tag"
-      :title="phrase.project_tags"
-      :description="phrase.project_tags_hint"
+      :title="props.title ?? phrase.project_tags"
+      :description="props.description ?? phrase.project_tags_hint"
       class="mb-md"
     />
     <Box>

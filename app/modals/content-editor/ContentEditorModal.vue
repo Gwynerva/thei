@@ -45,6 +45,8 @@ import FloatingPopup from '#layers/thei/app/components/FloatingPopup.vue';
 import ContentStats from '#layers/thei/app/components/content/ContentStats.vue';
 import ContentInlineLinkDecorator from '#layers/thei/app/components/content/ContentInlineLinkDecorator.vue';
 import ContentInlineLinkControls from '#layers/thei/app/components/content/ContentInlineLinkControls.vue';
+import ContentEntitySearchPopup from '#layers/thei/app/components/content/ContentEntitySearchPopup.vue';
+import type { ContentEntitySearchItem } from '#layers/thei/shared/admin/content-entity-search';
 import {
   ContentAttachmentTool,
   ContentBoldTool,
@@ -54,6 +56,7 @@ import {
   ContentExternalInlineLinkTool,
   ContentMediaTool,
   ExternalLinkTool,
+  EntityLinkTool,
   PrivateAccessTune,
   type ContentEditorAssetKind,
 } from '#layers/thei/app/components/content/editor-tools';
@@ -89,6 +92,10 @@ const modalContainer =
 const inlineLinkControls =
   useTemplateRef<ContentInlineLinkControlsExpose>('inlineLinkControls');
 const contentLinkResolver = useContentLinkResolver();
+const entityPickerOpen = ref(false);
+const entityPickerAnchor = ref<HTMLElement>();
+const entityPicker = useTemplateRef<{ focus: () => void }>('entityPicker');
+let entityPickerResolve: ((item?: ContentEntitySearchItem) => void) | undefined;
 const saving = ref(false);
 const errorMessage = ref<string | undefined>();
 const snapshotPopupOpen = ref(false);
@@ -116,8 +123,32 @@ const headerSummary = ref<ContentSummary>({
 });
 let editor: EditorJS | undefined;
 let editorAcceptsChanges = false;
+let transientEntitySelections = 0;
 let cleanupEditorDrag: (() => void) | undefined;
 let cleanupEditorPopoverLayer: (() => void) | undefined;
+
+function pickEntity(anchor: HTMLElement) {
+  entityPickerResolve?.();
+  entityPickerAnchor.value = anchor;
+  entityPickerOpen.value = true;
+  return new Promise<ContentEntitySearchItem | undefined>((resolve) => {
+    entityPickerResolve = resolve;
+  });
+}
+
+function selectEntity(item: ContentEntitySearchItem) {
+  const resolve = entityPickerResolve;
+  entityPickerResolve = undefined;
+  entityPickerOpen.value = false;
+  resolve?.(item);
+}
+
+function closeEntityPicker() {
+  const resolve = entityPickerResolve;
+  entityPickerResolve = undefined;
+  entityPickerAnchor.value = undefined;
+  resolve?.();
+}
 
 const editorSnapshots = createEditorSnapshotManager({
   storageKey: props.modalData.snapshotKey,
@@ -145,8 +176,29 @@ async function handleEditorChange(
   _api: API,
   _event: BlockMutationEvent | BlockMutationEvent[],
 ) {
-  if (!editorAcceptsChanges || editorSnapshots.isApplying.value) return;
+  if (
+    !editorAcceptsChanges ||
+    editorSnapshots.isApplying.value ||
+    transientEntitySelections > 0
+  )
+    return;
   editorSnapshots.recordChange();
+}
+
+function beginTransientEntitySelection() {
+  transientEntitySelections += 1;
+}
+
+function endTransientEntitySelection(persisted: boolean) {
+  if (persisted) {
+    transientEntitySelections = Math.max(0, transientEntitySelections - 1);
+    return;
+  }
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      transientEntitySelections = Math.max(0, transientEntitySelections - 1);
+    }),
+  );
 }
 
 function applyEditorData(data: ContentOutputData) {
@@ -203,6 +255,14 @@ useModalCloseGuard(
     (!editorChangePending.value && !isDirty.value) ||
     window.confirm(phrase.value.unsaved_modal_confirm),
 );
+
+function preventEditorLinkNavigation(event: MouseEvent) {
+  if (event.type === 'auxclick' && event.button !== 1) return;
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const link = target.closest('a[href]');
+  if (link && holder.value?.contains(link)) event.preventDefault();
+}
 
 function preventHeaderFormatting(event: InputEvent) {
   if (
@@ -440,6 +500,15 @@ onMounted(async () => {
         class: ExternalLinkTool,
         config: {
           labels: contentToolLabels(),
+        },
+      },
+      entityLink: {
+        class: EntityLinkTool,
+        config: {
+          pickEntity,
+          resolver: contentLinkResolver,
+          beginTransientSelection: beginTransientEntitySelection,
+          endTransientSelection: endTransientEntitySelection,
         },
       },
       privateAccess: {
@@ -716,8 +785,9 @@ function editorJsI18nMessages() {
       Link: text.link,
       Bold: text.bold,
       Italic: text.italic,
-      'Project link': phrase.value.content_project_link,
+      'Project link': phrase.value.content_internal_link,
       'External link': phrase.value.content_external_link,
+      'Internal link': phrase.value.content_internal_link,
       Heading: text.heading,
       List: text.list,
       Quote: text.quote,
@@ -773,6 +843,16 @@ function editorJsI18nMessages() {
       ref="inlineLinkControls"
       :teleport-to="holder?.closest('dialog') ?? undefined"
     />
+    <FloatingPopup
+      v-model:open="entityPickerOpen"
+      :anchor="entityPickerAnchor ?? null"
+      placement="bottom-start"
+      :teleport-to="holder?.closest('dialog') ?? undefined"
+      @opened="entityPicker?.focus()"
+      @closed="closeEntityPicker"
+    >
+      <ContentEntitySearchPopup ref="entityPicker" @select="selectEntity" />
+    </FloatingPopup>
     <template #header>
       <div class="flex flex-col gap-xs p-sm">
         <div class="flex min-w-0 items-center gap-xs">
@@ -883,6 +963,8 @@ function editorJsI18nMessages() {
     <div
       ref="holder"
       class="content-editor content-prose w-full px-sm py-md"
+      @click.capture="preventEditorLinkNavigation"
+      @auxclick.capture="preventEditorLinkNavigation"
     ></div>
   </ModalContainer>
 </template>

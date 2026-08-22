@@ -1,6 +1,13 @@
 import { and, eq, sql } from 'drizzle-orm';
 
 export async function findOtherAssets(projectUuid: string) {
+  return findOtherAssetsForContainer('project', projectUuid);
+}
+
+export async function findOtherAssetsForContainer(
+  containerType: 'project' | 'event',
+  containerId: string,
+) {
   const { db, schema } = THEI_SERVER.useDb();
   return db
     .select({ asset: schema.assets, meta: schema.assetUsages.meta })
@@ -11,8 +18,8 @@ export async function findOtherAssets(projectUuid: string) {
     )
     .where(
       and(
-        eq(schema.assetUsages.containerType, 'project'),
-        eq(schema.assetUsages.containerId, projectUuid),
+        eq(schema.assetUsages.containerType, containerType),
+        eq(schema.assetUsages.containerId, containerId),
         eq(schema.assetUsages.role, 'other-asset'),
       ),
     )

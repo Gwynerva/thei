@@ -177,7 +177,7 @@ useDragSort(tagContainer, {
         :data-drag-id="tagDragId(tag)"
         class="transition-colors"
       >
-        <TagChip :tag="tag" class="cursor-auto">
+        <TagChip :tag="tag" class="cursor-grab active:cursor-grabbing">
           <button
             type="button"
             class="-ml-1 shrink-0 cursor-pointer leading-none transition

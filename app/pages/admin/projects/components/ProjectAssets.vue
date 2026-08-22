@@ -44,6 +44,8 @@ import { assetDetailsModal } from '#layers/thei/app/modals/asset-details/modal';
 import { useOrderedAssetList } from '#layers/thei/app/composables/ordered-asset-list';
 import { useSingleMediaAsset } from '#layers/thei/app/composables/single-media-asset';
 
+const { filesOnly = false } = defineProps<{ filesOnly?: boolean }>();
+
 const projectData = inject(projectDataInjectionKey)!;
 const savedProjectData = inject(savedProjectDataInjectionKey)!;
 const iconMedia = inject(iconMediaKey)!;
@@ -433,8 +435,12 @@ async function openOtherAsset(index: number) {
   <div>
     <SectionHeader
       icon="files"
-      :title="phrase.project_files"
-      :description="phrase.project_files_description"
+      :title="filesOnly ? phrase.event_files : phrase.project_files"
+      :description="
+        filesOnly
+          ? phrase.event_files_description
+          : phrase.project_files_description
+      "
       class="mb-md"
     />
     <Box class="flex flex-col">
@@ -446,7 +452,7 @@ async function openOtherAsset(index: number) {
         <Icon name="warning" class="mr-xs" />
         {{ batchErrorMessage }}
       </div>
-      <div class="flex flex-wrap gap-md p-sm sm:p-md">
+      <div v-if="!filesOnly" class="flex flex-wrap gap-md p-sm sm:p-md">
         <!-- Project Icon -->
         <div class="flex flex-1 items-center gap-sm">
           <AssetTile
@@ -488,6 +494,7 @@ async function openOtherAsset(index: number) {
 
       <!-- Showcase header -->
       <div
+        v-if="!filesOnly"
         class="border-y border-border-1 bg-bg-3 px-md py-xs text-sm
           tracking-tight"
       >
@@ -496,7 +503,11 @@ async function openOtherAsset(index: number) {
       </div>
 
       <!-- Showcase grid -->
-      <div ref="showcaseRoot" class="flex flex-wrap gap-sm p-sm sm:p-md">
+      <div
+        v-if="!filesOnly"
+        ref="showcaseRoot"
+        class="flex flex-wrap gap-sm p-sm sm:p-md"
+      >
         <!-- Existing showcase items -->
         <div
           v-for="(item, index) in showcaseItems"
@@ -513,7 +524,7 @@ async function openOtherAsset(index: number) {
               editable: true,
             }"
             :aria-label="phrase.showcase_details"
-            class="size-18 cursor-pointer"
+            class="size-18 cursor-grab active:cursor-grabbing"
             @click="dragSort.guardClick(() => openShowcaseAsset(index))"
           />
           <div
@@ -536,6 +547,7 @@ async function openOtherAsset(index: number) {
 
       <!-- Other-files header -->
       <div
+        v-if="!filesOnly"
         class="border-y border-border-1 bg-bg-3 px-md py-xs text-sm
           tracking-tight"
       >
@@ -561,7 +573,7 @@ async function openOtherAsset(index: number) {
               editable: true,
             }"
             :aria-label="phrase.other_details"
-            class="size-18 cursor-pointer"
+            class="size-18 cursor-grab active:cursor-grabbing"
             @click="otherDragSort.guardClick(() => openOtherAsset(index))"
           />
           <div

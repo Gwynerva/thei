@@ -1,8 +1,12 @@
 import type { H3Event } from 'h3';
-import type { ResolvedContentLink } from '#layers/thei/shared/content-link';
+import type {
+  ContentLinkApiResponse,
+  ResolvedContentLink,
+} from '#layers/thei/shared/content-link';
 import { normalizeExternalLinkUrl } from '#layers/thei/shared/external-link';
 import {
   buildAdminAssetUrls,
+  buildPublicEventContentMedia,
   buildPublicProjectMedia,
 } from '../thei/assets/urls';
 import { findExternalLink } from '../thei/external-links/repository';
@@ -10,12 +14,21 @@ import { persistExternalLink } from '../thei/external-links/preview';
 import { resolveGeneratedIcon } from '../thei/media/generated-icon';
 import { buildProjectUrl } from '#layers/thei/shared/project-url';
 import { canResolveProjectContentLink } from '../thei/content-links/access';
+import {
+  buildContentPreview,
+  contentBlockIsPrivate,
+  normalizeContentData,
+} from '#layers/thei/shared/content';
+import { buildEventUrl } from '#layers/thei/shared/event-url';
 
 export default defineEventHandler(
-  async (event): Promise<ResolvedContentLink> => {
+  async (event): Promise<ContentLinkApiResponse> => {
     const query = getQuery(event);
     if (query.kind === 'project') {
       return await resolveProjectLink(event, query.projectUuid);
+    }
+    if (query.kind === 'event') {
+      return await resolveEventLink(event, query.eventUuid);
     }
     if (query.kind === 'external') {
       return await resolveExternalLink(event, query.url);
@@ -32,7 +45,7 @@ export default defineEventHandler(
 async function resolveProjectLink(
   event: H3Event,
   value: unknown,
-): Promise<ResolvedContentLink> {
+): Promise<ContentLinkApiResponse> {
   const projectUuid = typeof value === 'string' ? value.trim() : '';
   const reference = { kind: 'project' as const, projectUuid };
   const project = projectUuid
@@ -40,6 +53,7 @@ async function resolveProjectLink(
     : undefined;
   const isAdmin = Boolean(event.context.isAdmin);
   if (!project || !canResolveProjectContentLink(project.access, isAdmin)) {
+    if (project) return { state: 'restricted' };
     return { ...reference, state: 'broken', reason: 'not-found' };
   }
 
@@ -63,6 +77,66 @@ async function resolveProjectLink(
     summary: project.summary,
     iconMedia,
   };
+}
+
+async function resolveEventLink(
+  event: H3Event,
+  value: unknown,
+): Promise<ContentLinkApiResponse> {
+  const eventUuid = typeof value === 'string' ? value.trim() : '';
+  const reference = { kind: 'event' as const, eventUuid };
+  const stored = eventUuid
+    ? await THEI_SERVER.events.findByUuid(eventUuid)
+    : undefined;
+  if (!stored) return { ...reference, state: 'broken', reason: 'not-found' };
+  const isAdmin = Boolean(event.context.isAdmin);
+  if (!canResolveProjectContentLink(stored.access, isAdmin))
+    return { state: 'restricted' };
+  const previewMedia = isAdmin
+    ? buildContentPreview(
+        (
+          await THEI_SERVER.content.buildFieldValue(
+            'event',
+            stored.eventUuid,
+            'event-body',
+          )
+        )?.data,
+      ).media
+    : await publicEventPreviewMedia(stored);
+  return {
+    ...reference,
+    state: 'resolved',
+    href: buildEventUrl(stored.humanReadableSlug, stored.publicId),
+    title: stored.title,
+    summary: stored.summary,
+    previewMedia,
+  };
+}
+
+async function publicEventPreviewMedia(stored: {
+  eventUuid: string;
+  humanReadableSlug: string;
+  publicId: string;
+}) {
+  const content = await THEI_SERVER.content.findByOwner(
+    'event',
+    stored.eventUuid,
+    'event-body',
+  );
+  if (!content) return undefined;
+  for (const block of normalizeContentData(content.data).blocks) {
+    if (contentBlockIsPrivate(block)) continue;
+    const assetUuid =
+      block.type === 'contentMedia'
+        ? (block.data as any).asset?.assetUuid
+        : block.type === 'contentGallery'
+          ? (block.data as any).items?.[0]?.asset?.assetUuid
+          : undefined;
+    if (!assetUuid) continue;
+    const asset = await THEI_SERVER.assets.findByUuid(assetUuid);
+    if (asset) return buildPublicEventContentMedia(stored, asset);
+  }
+  return undefined;
 }
 
 async function resolveExternalLink(

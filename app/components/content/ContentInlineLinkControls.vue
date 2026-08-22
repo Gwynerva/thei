@@ -1,9 +1,8 @@
 <script lang="ts" setup>
 import { debounce } from 'perfect-debounce';
-import type { ProjectSearchItem } from '#layers/thei/shared/api/project';
+import type { ContentEntitySearchItem } from '#layers/thei/shared/admin/content-entity-search';
 import type { ExternalLink } from '#layers/thei/shared/external-link';
 import { normalizeExternalLinkUrl } from '#layers/thei/shared/external-link';
-import { buildProjectUrl } from '#layers/thei/shared/project-url';
 import ExternalLinkPreviewCard from '#layers/thei/app/components/external-links/ExternalLinkPreviewCard.vue';
 import type {
   ContentInlineLinkControlsExpose,
@@ -78,12 +77,12 @@ function openExternal(next: ContentInlineLinkRequest) {
   queueExternalPreview();
 }
 
-function selectProject(project: ProjectSearchItem) {
+function selectProject(project: ContentEntitySearchItem) {
   request.value?.apply(project.title, {
-    href: buildProjectUrl(project.humanReadableSlug, project.publicId),
+    href: project.url,
     'data-content-link': 'entity',
-    'data-entity-type': 'project',
-    'data-entity-id': project.projectUuid,
+    'data-entity-type': project.entityType,
+    'data-entity-id': project.entityId,
   });
   open.value = false;
 }
@@ -175,7 +174,7 @@ defineExpose<ContentInlineLinkControlsExpose>({ openProject, openExternal });
     @closed="popupClosed"
   >
     <div class="flex max-h-(--floating-popup-available-height) flex-col">
-      <ProjectSearchPopup
+      <ContentEntitySearchPopup
         v-if="mode === 'project'"
         ref="projectPopup"
         :exclude-project-uuids="[]"

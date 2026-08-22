@@ -2,6 +2,11 @@
 import { projectDataInjectionKey } from '../composables';
 
 const projectData = inject(projectDataInjectionKey)!;
+const props = defineProps<{
+  title?: string;
+  description?: string;
+  emptyText?: string;
+}>();
 const links = computed({
   get: () => projectData.value.externalLinks ?? [],
   set: (value) => {
@@ -13,8 +18,8 @@ const links = computed({
 <template>
   <ExternalLinksEditor
     v-model="links"
-    :title="phrase.project_external_links"
-    :description="phrase.project_external_links_hint"
-    :empty-text="phrase.project_external_links_empty"
+    :title="props.title ?? phrase.project_external_links"
+    :description="props.description ?? phrase.project_external_links_hint"
+    :empty-text="props.emptyText ?? phrase.project_external_links_empty"
   />
 </template>

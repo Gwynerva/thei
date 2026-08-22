@@ -1,7 +1,7 @@
 import type { MediaDescriptor } from './media';
 import { normalizeExternalLinkUrl } from './external-link';
 
-export const CONTENT_ENTITY_TYPES = ['project'] as const;
+export const CONTENT_ENTITY_TYPES = ['project', 'event'] as const;
 export type ContentEntityType = (typeof CONTENT_ENTITY_TYPES)[number];
 
 export interface ContentEntityLink {
@@ -26,6 +26,10 @@ export type ContentLinkReference =
       projectUuid: string;
     }
   | {
+      kind: 'event';
+      eventUuid: string;
+    }
+  | {
       kind: 'external';
       url: string;
     };
@@ -38,6 +42,13 @@ export type ResolvedContentLink =
       summary: string;
       iconMedia: MediaDescriptor;
     })
+  | (Extract<ContentLinkReference, { kind: 'event' }> & {
+      state: 'resolved';
+      href: string;
+      title: string;
+      summary: string;
+      previewMedia?: MediaDescriptor;
+    })
   | (Extract<ContentLinkReference, { kind: 'external' }> & {
       state: 'resolved';
       href: string;
@@ -49,7 +60,12 @@ export type ResolvedContentLink =
       state: 'broken';
       href?: string;
       reason: 'not-found' | 'invalid' | 'unavailable';
-    });
+    })
+  | (ContentLinkReference & { state: 'restricted' });
+
+export type RestrictedContentLinkResponse = { state: 'restricted' };
+export type ContentLinkApiResponse =
+  ResolvedContentLink | RestrictedContentLinkResponse;
 
 export type ContentLinkResolver = (
   reference: ContentLinkReference,
@@ -283,12 +299,11 @@ export function extractContentInlineLinks(html: string): ContentInlineLink[] {
 export function contentLinkReferenceFromAnchor(
   link: HTMLAnchorElement,
 ): ContentLinkReference | undefined {
-  if (
-    link.dataset.contentLink === 'entity' &&
-    link.dataset.entityType === 'project' &&
-    link.dataset.entityId
-  ) {
-    return { kind: 'project', projectUuid: link.dataset.entityId };
+  if (link.dataset.contentLink === 'entity' && link.dataset.entityId) {
+    if (link.dataset.entityType === 'project')
+      return { kind: 'project', projectUuid: link.dataset.entityId };
+    if (link.dataset.entityType === 'event')
+      return { kind: 'event', eventUuid: link.dataset.entityId };
   }
   if (link.dataset.contentLink === 'external' || link.href) {
     try {
@@ -300,9 +315,9 @@ export function contentLinkReferenceFromAnchor(
 }
 
 export function contentLinkReferenceKey(reference: ContentLinkReference) {
-  return reference.kind === 'project'
-    ? `project:${reference.projectUuid}`
-    : `external:${reference.url}`;
+  if (reference.kind === 'project') return `project:${reference.projectUuid}`;
+  if (reference.kind === 'event') return `event:${reference.eventUuid}`;
+  return `external:${reference.url}`;
 }
 
 export function contentInlineLinksFromData(data: {

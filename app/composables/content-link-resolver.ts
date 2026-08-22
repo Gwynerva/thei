@@ -1,6 +1,7 @@
 import type {
   ContentLinkReference,
   ContentLinkResolver,
+  ContentLinkApiResponse,
   ResolvedContentLink,
 } from '#layers/thei/shared/content-link';
 import { contentLinkReferenceKey } from '#layers/thei/shared/content-link';
@@ -9,7 +10,7 @@ import { normalizeExternalLinkUrl } from '#layers/thei/shared/external-link';
 export type ContentLinkFetcher = (
   url: string,
   options: { query: Record<string, string> },
-) => Promise<ResolvedContentLink>;
+) => Promise<ContentLinkApiResponse>;
 
 const appResolvers = new WeakMap<object, ContentLinkResolver>();
 
@@ -65,15 +66,20 @@ async function resolveReference(
   }
 
   try {
-    return await fetcher('/api/content-links', {
+    const response = await fetcher('/api/content-links', {
       query:
         normalizedReference.kind === 'project'
           ? {
               kind: 'project',
               projectUuid: normalizedReference.projectUuid,
             }
-          : { kind: 'external', url: normalizedReference.url },
+          : normalizedReference.kind === 'event'
+            ? { kind: 'event', eventUuid: normalizedReference.eventUuid }
+            : { kind: 'external', url: normalizedReference.url },
     });
+    return response.state === 'restricted'
+      ? { ...normalizedReference, state: 'restricted' }
+      : response;
   } catch {
     return {
       ...normalizedReference,

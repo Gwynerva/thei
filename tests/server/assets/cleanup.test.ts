@@ -62,11 +62,15 @@ describe('asset cleanup', () => {
           updatedAt integer NOT NULL
         );
         CREATE TABLE events (
-          eventId text PRIMARY KEY,
+          eventUuid text PRIMARY KEY,
           title text NOT NULL,
-          emotion text,
+          summary text NOT NULL,
           access text NOT NULL,
-          url text NOT NULL UNIQUE
+          humanReadableSlug text NOT NULL,
+          publicId text NOT NULL UNIQUE,
+          action text,
+          createdAt integer NOT NULL,
+          updatedAt integer NOT NULL
         );
         CREATE TABLE content (
           contentUuid text PRIMARY KEY,
@@ -136,10 +140,14 @@ describe('asset cleanup', () => {
         updatedAt: now,
       });
       await db.insert(schema.events).values({
-        eventId: 'e-live',
+        eventUuid: 'e-live',
         title: 'Event',
+        summary: 'Summary',
         access: 'public' as any,
-        url: 'event',
+        humanReadableSlug: 'event',
+        publicId: 'event',
+        createdAt: now,
+        updatedAt: now,
       });
 
       await insertAsset(db, 'a-live', 'webp', now);

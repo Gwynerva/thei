@@ -29,6 +29,12 @@ import {
   type ExternalLink,
 } from '#layers/thei/shared/external-link';
 import { editorIcon } from './editor-icons';
+import type { ContentEntitySearchItem } from '#layers/thei/shared/admin/content-entity-search';
+import type {
+  ContentEntityType,
+  ContentLinkResolver,
+} from '#layers/thei/shared/content-link';
+import ContentEntityLinkBlock from './ContentEntityLinkBlock.vue';
 export {
   ContentBoldTool,
   ContentEntityLinkTool,
@@ -75,6 +81,15 @@ interface ContentGalleryToolConfig {
   pickAssets: ContentEditorPickAssets;
   editAsset: ContentEditorEditAsset;
   labels: ContentToolLabels;
+}
+
+interface EntityLinkToolConfig {
+  pickEntity: (
+    anchor: HTMLElement,
+  ) => Promise<ContentEntitySearchItem | undefined>;
+  resolver: ContentLinkResolver;
+  beginTransientSelection?: () => void;
+  endTransientSelection?: (persisted: boolean) => void;
 }
 
 type ContentToolOptions<
@@ -186,6 +201,108 @@ export class ExternalLinkTool implements BlockTool {
         loadingText: contentToolConfig(this.options.config).labels
           .externalLinkLoading,
       }),
+      this.wrapper,
+    );
+  }
+}
+
+export class EntityLinkTool implements BlockTool {
+  static toolbox = {
+    title: 'Internal link',
+    icon: editorIcon('link'),
+    data: { autoOpen: true },
+  };
+
+  private entityType?: ContentEntityType;
+  private entityId?: string;
+  private autoOpen = false;
+  private transientSelection = false;
+  private wrapper?: HTMLElement;
+
+  constructor(
+    private options: ContentToolOptions<
+      { entityType?: ContentEntityType; entityId?: string; autoOpen?: boolean },
+      EntityLinkToolConfig
+    >,
+  ) {
+    this.entityType = options.data.entityType;
+    this.entityId = options.data.entityId;
+    this.autoOpen = options.data.autoOpen === true;
+    this.transientSelection =
+      this.autoOpen && !this.entityType && !this.entityId && !options.readOnly;
+    if (this.transientSelection)
+      contentToolConfig(options.config).beginTransientSelection?.();
+  }
+
+  render() {
+    this.wrapper = createToolWrapper();
+    this.renderContent();
+    if (this.autoOpen && !this.options.readOnly) {
+      this.autoOpen = false;
+      queueMicrotask(() => void this.pick());
+    }
+    return this.wrapper;
+  }
+
+  save() {
+    return { entityType: this.entityType, entityId: this.entityId };
+  }
+
+  validate(data: { entityType?: string; entityId?: string }) {
+    return Boolean(
+      (data.entityType === 'project' || data.entityType === 'event') &&
+      data.entityId?.trim(),
+    );
+  }
+
+  destroy() {
+    if (this.wrapper) renderVue(null, this.wrapper);
+  }
+
+  private async pick() {
+    if (!this.wrapper) return;
+    const selected = await contentToolConfig(this.options.config).pickEntity(
+      this.wrapper,
+    );
+    if (!selected) {
+      // Keep the skeleton available in this editor session. Validation and
+      // content normalization omit it from persisted data until it is chosen.
+      this.finishTransientSelection(false);
+      return;
+    }
+    const changed =
+      this.entityType !== selected.entityType ||
+      this.entityId !== selected.entityId;
+    this.entityType = selected.entityType;
+    this.entityId = selected.entityId;
+    this.renderContent();
+    this.finishTransientSelection(true);
+    if (changed) this.options.block.dispatchChange();
+  }
+
+  private finishTransientSelection(persisted: boolean) {
+    if (!this.transientSelection) return;
+    this.transientSelection = false;
+    contentToolConfig(this.options.config).endTransientSelection?.(persisted);
+  }
+
+  private renderContent() {
+    if (!this.wrapper) return;
+    const config = contentToolConfig(this.options.config);
+    renderVue(
+      this.entityType && this.entityId
+        ? h(ContentEntityLinkBlock, {
+            entityType: this.entityType,
+            entityId: this.entityId,
+            resolver: config.resolver,
+            interactive: true,
+          })
+        : h(ContentAssetSkeleton, {
+            icon: 'link',
+            label: 'Choose a project or event',
+            readOnly: this.options.readOnly,
+            onPick: () => void this.pick(),
+          }),
       this.wrapper,
     );
   }
