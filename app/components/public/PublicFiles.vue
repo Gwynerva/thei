@@ -16,7 +16,7 @@ withDefaults(defineProps<{ files: PublicFile[]; compact?: boolean }>(), {
     <PublicCompactResourceItem
       v-for="file in files"
       :key="file.key"
-      :title="file.title"
+      :title="file.title || phrase.asset"
       :description="file.description"
       :icon-media="file.media"
       :extension="file.media ? undefined : file.extension"

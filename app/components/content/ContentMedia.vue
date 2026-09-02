@@ -56,7 +56,7 @@ function rememberDimensions(nextWidth: number, nextHeight: number) {
 <template>
   <div
     v-if="media"
-    class="overflow-hidden"
+    class="relative isolate overflow-hidden"
     :class="[
       layout === 'natural' ? 'mr-auto max-w-full' : 'w-full',
       {
@@ -81,5 +81,6 @@ function rememberDimensions(nextWidth: number, nextHeight: number) {
       class="size-full bg-bg-1"
       @dimensions="rememberDimensions"
     />
+    <slot />
   </div>
 </template>

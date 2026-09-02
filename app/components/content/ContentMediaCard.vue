@@ -3,6 +3,7 @@ import type {
   ContentAssetData,
   ContentMediaLayout,
 } from '#layers/thei/shared/content';
+import { richTextToPlainText } from '#layers/thei/shared/rich-text';
 
 withDefaults(
   defineProps<{
@@ -29,33 +30,34 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <figure class="relative min-w-0">
+  <figure class="min-w-0">
     <ContentMedia
       :asset
       :layout
       :rounded="mediaRounded"
       :natural-size="mediaNaturalSize"
-    />
-    <button
-      v-if="openable && !editable"
-      type="button"
-      class="absolute inset-0 z-30 cursor-zoom-in rounded-normal
-        focus-visible:ring-2 focus-visible:ring-accent"
-      :aria-label="caption || phrase.asset"
-      @click="$emit('open')"
-    ></button>
-    <button
-      v-if="editable"
-      type="button"
-      data-drag-ignore
-      class="absolute top-xs right-xs z-40 flex size-9 cursor-pointer
-        items-center justify-center rounded-full bg-bg-1/80 text-text-2 shadow
-        backdrop-blur-sm transition hocus:bg-bg-1 hocus:text-text-1"
-      :aria-label="editLabel"
-      @click.stop="emit('edit')"
     >
-      <Icon name="edit" />
-    </button>
+      <button
+        v-if="openable && !editable && asset.media?.kind === 'image'"
+        type="button"
+        class="absolute inset-0 z-10 cursor-zoom-in focus-visible:ring-2
+          focus-visible:ring-accent focus-visible:ring-inset"
+        :aria-label="richTextToPlainText(caption ?? '') || phrase.asset"
+        @click="$emit('open')"
+      ></button>
+      <button
+        v-if="editable"
+        type="button"
+        data-drag-ignore
+        class="absolute top-xs right-xs z-20 flex size-9 cursor-pointer
+          items-center justify-center rounded-full bg-bg-1/80 text-text-2 shadow
+          backdrop-blur-sm transition hocus:bg-bg-1 hocus:text-text-1"
+        :aria-label="editLabel"
+        @click.stop="emit('edit')"
+      >
+        <Icon name="edit" />
+      </button>
+    </ContentMedia>
     <ContentCaption
       :model-value="caption"
       :editable

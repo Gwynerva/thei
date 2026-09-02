@@ -311,8 +311,7 @@ export async function buildPublicProject(
           asset,
           href,
           await buildPublicProjectMedia(project, asset, 'showcase-asset'),
-          assetSourceName(asset.meta) || asset.slug,
-          item?.role === 'showcase-asset' ? item.caption : undefined,
+          item?.role === 'showcase-asset' ? (item.caption ?? '') : '',
         );
       }),
   );
@@ -559,8 +558,9 @@ export async function buildPublicEvent(
           key: asset.slug,
           title:
             item?.role === 'other-asset'
-              ? richTextToPlainText(item.title || asset.slug)
-              : asset.slug,
+              ? richTextToPlainText(item.title ?? '')
+              : '',
+          fileName: assetSourceName(asset.meta),
           description:
             item?.role === 'other-asset' && item.caption
               ? richTextToPlainText(item.caption)
@@ -740,7 +740,8 @@ export async function buildPublicContentReferenceGroup(
         if (!asset.assetUrl || !asset.extension) return undefined;
         return {
           key: asset.assetUuid,
-          title: richTextToPlainText(title || asset.name || asset.assetUuid),
+          title: richTextToPlainText(title ?? ''),
+          fileName: asset.name,
           description: caption ? richTextToPlainText(caption) : undefined,
           href: asset.assetUrl,
           extension: asset.extension,
@@ -816,9 +817,8 @@ function buildPublicDirectFile(
   return {
     key: asset.slug,
     title:
-      meta?.role === 'other-asset'
-        ? richTextToPlainText(meta.title || asset.slug)
-        : asset.slug,
+      meta?.role === 'other-asset' ? richTextToPlainText(meta.title ?? '') : '',
+    fileName: assetSourceName(asset.meta),
     description:
       meta?.role === 'other-asset' && meta.caption
         ? richTextToPlainText(meta.caption)
@@ -840,6 +840,7 @@ function buildPublicAssetDescriptor(
   return {
     key: asset.slug,
     title: richTextToPlainText(title),
+    fileName: assetSourceName(asset.meta),
     description: description ? richTextToPlainText(description) : undefined,
     href,
     extension: asset.extension,
@@ -849,7 +850,7 @@ function buildPublicAssetDescriptor(
   };
 }
 
-async function buildPublicAction(
+export async function buildPublicAction(
   entity: ProjectRow | EventRow,
   usages: Awaited<ReturnType<typeof THEI_SERVER.assets.usages.findByContainer>>,
   isAdmin: boolean,
@@ -864,7 +865,12 @@ async function buildPublicAction(
   const background = usages.find((usage) => usage.role === 'action-background');
   const file = usages.find((usage) => usage.role === 'action-file');
   const media = (usage: typeof icon) => {
-    if (!usage) return undefined;
+    if (
+      !usage ||
+      (usage.asset.type !== AssetType.Image &&
+        usage.asset.type !== AssetType.Video)
+    )
+      return undefined;
     return isProject
       ? buildPublicProjectMedia(entity, usage.asset, usage.role)
       : buildPublicEventMedia(entity, usage.asset, usage.role);
@@ -876,12 +882,19 @@ async function buildPublicAction(
         ? `${url}${isProject ? 'media/' : ''}action-file/${file.asset.slug}.${file.asset.extension}`
         : undefined;
   if (!href) return;
+  const actionLink =
+    action.target === 'external-link' && action.externalUrl
+      ? await findExternalLink(action.externalUrl)
+      : undefined;
   return {
     text: action.text,
     accentColor: action.accentColor,
     target: action.target,
     href,
-    iconMedia: await media(icon),
+    iconMedia: action.iconMode === 'asset' ? await media(icon) : undefined,
+    fileMedia: action.target === 'file' ? await media(file) : undefined,
+    faviconMedia: actionLink?.faviconMedia,
+    useFavicon: action.iconMode === 'favicon',
     backgroundMedia: await media(background),
     backgroundMode: action.backgroundMode,
     backgroundSize: action.backgroundSize,

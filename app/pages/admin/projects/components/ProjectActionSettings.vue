@@ -76,24 +76,12 @@ const hasSiteIcon = computed(
 const previewUsesFavicon = computed(
   () => action.value.iconMode === 'favicon' && hasSiteIcon.value,
 );
-const previewBackgroundMode = computed(() => {
-  const mode = action.value.backgroundMode;
-  if (
-    (mode === 'icon-gradient' &&
-      (action.value.iconMode !== 'asset' ||
-        iconMedia.value?.accentHue === undefined)) ||
-    (mode === 'file-gradient' &&
-      (action.value.target !== 'file' ||
-        fileMedia.value?.accentHue === undefined)) ||
-    (mode === 'link-gradient' &&
-      (action.value.target !== 'external-link' ||
-        !hasSiteIcon.value ||
-        faviconMedia.value?.accentHue === undefined))
-  ) {
-    return 'standard-gradient';
-  }
-  return mode;
-});
+const hasFileColor = computed(
+  () =>
+    action.value.target === 'file' &&
+    (fileMedia.value?.kind === 'image' || fileMedia.value?.kind === 'video') &&
+    fileMedia.value.accentHue !== undefined,
+);
 
 watch(
   hasActionText,
@@ -252,6 +240,8 @@ function applyFile(asset: AssetVariantInfo) {
   fileMedia.value = result.media;
   fileExtension.value = result.extension;
   fileSize.value = result.size;
+  if (action.value.backgroundMode === 'file-gradient' && !hasFileColor.value)
+    action.value.backgroundMode = 'standard-gradient';
   action.value.fileTitle ??=
     assetSourceName(asset.meta)?.replace(/\.[^.]+$/, '') ??
     phrase.value.project_file;
@@ -468,9 +458,7 @@ function clearFile() {
                           phrase.project_action_background_icon_color,
                       }
                     : {}),
-                  ...((action.target === 'file' &&
-                    fileMedia?.accentHue !== undefined) ||
-                  action.backgroundMode === 'file-gradient'
+                  ...(hasFileColor
                     ? {
                         'file-gradient':
                           phrase.project_action_background_file_color,
@@ -617,7 +605,7 @@ function clearFile() {
               :background-media="
                 action.backgroundMode === 'asset' ? backgroundMedia : undefined
               "
-              :background-mode="previewBackgroundMode"
+              :background-mode="action.backgroundMode"
               :background-size="action.backgroundSize"
               :background-repeat="action.backgroundRepeat"
               class="w-full sm:w-auto"

@@ -7,6 +7,7 @@ export async function validateEventAssets(data: ValidatedEventEditData) {
     assetUuid: string;
     maxSize: number;
     imageOnly?: boolean;
+    mediaOnly?: boolean;
   }> = [];
   for (const file of data.otherAssets ?? [])
     checks.push({
@@ -29,6 +30,7 @@ export async function validateEventAssets(data: ValidatedEventEditData) {
     checks.push({
       assetUuid: data.action.fileAssetUuid,
       maxSize: ASSET_UPLOAD_LIMITS.file,
+      mediaOnly: data.action.backgroundMode === 'file-gradient',
     });
 
   for (const check of checks) {
@@ -37,5 +39,11 @@ export async function validateEventAssets(data: ValidatedEventEditData) {
     if (asset.size > check.maxSize) return 'Event asset exceeds size limit';
     if (check.imageOnly && asset.type !== AssetType.Image)
       return 'Action image must be an image';
+    if (
+      check.mediaOnly &&
+      asset.type !== AssetType.Image &&
+      asset.type !== AssetType.Video
+    )
+      return 'Action button file color requires an image or video';
   }
 }

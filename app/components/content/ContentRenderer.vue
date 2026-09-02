@@ -77,7 +77,8 @@ function openAsset(value: unknown, title?: string, description?: string) {
   if (!item.assetUrl || !item.extension) return;
   void openModal(publicAssetModal, {
     key: item.assetUuid,
-    title: richTextToPlainText(title || item.name || item.assetUuid),
+    title: richTextToPlainText(title ?? ''),
+    fileName: item.name,
     description: description ? richTextToPlainText(description) : undefined,
     href: item.assetUrl,
     extension: item.extension,
@@ -88,7 +89,7 @@ function openAsset(value: unknown, title?: string, description?: string) {
 }
 
 function openGalleryItem(item: ContentGalleryItem) {
-  openAsset(item.asset, item.asset.name, item.caption);
+  openAsset(item.asset, item.caption);
 }
 </script>
 
@@ -139,11 +140,7 @@ function openGalleryItem(item: ContentGalleryItem) {
         :caption="block.data.caption as string | undefined"
         :openable="assetViewer"
         @open="
-          openAsset(
-            block.data.asset,
-            asset(block.data.asset).name,
-            block.data.caption as string | undefined,
-          )
+          openAsset(block.data.asset, block.data.caption as string | undefined)
         "
       />
       <ContentGallery

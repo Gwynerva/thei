@@ -3,6 +3,7 @@ import type EditorJS from '@editorjs/editorjs';
 import {
   PrivateSectionBoundaryTool,
   ContentMediaTool,
+  ContentGalleryTool,
 } from '#layers/thei/app/components/content/editor-tools';
 import { createEditorPrivateSections } from '#layers/thei/app/composables/editor-private-sections';
 import {
@@ -69,6 +70,25 @@ const initial: ContentOutputData = {
         layout: 'centered',
       },
     },
+    {
+      id: 'gallery',
+      type: 'contentGallery',
+      data: {
+        items: ['first', 'second'].map((id) => ({
+          id,
+          caption: id,
+          asset: {
+            assetUuid: id,
+            extension: 'svg',
+            media: {
+              kind: 'image',
+              src: '/slow-image.svg',
+              previewSrc: '/slow-image.svg',
+            },
+          },
+        })),
+      },
+    },
   ],
 };
 onMounted(async () => {
@@ -79,6 +99,7 @@ onMounted(async () => {
     tools: {
       privateSectionBoundary: PrivateSectionBoundaryTool as any,
       contentMedia: ContentMediaTool as any,
+      contentGallery: ContentGalleryTool as any,
     },
     onChange: (_api, event) => {
       events.value++;

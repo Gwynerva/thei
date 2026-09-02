@@ -33,8 +33,8 @@ function openItem(item: PublicAssetDescriptor) {
         rounded-normal bg-black/16 shadow-md ring-1 ring-white/15 transition
         sm:size-30 hocus:-translate-y-0.5 hocus:bg-black/24 hocus:shadow-xl
         hocus:ring-white/35"
-      :aria-label="item.title"
-      :data-title-popup="item.title"
+      :aria-label="item.title || phrase.asset"
+      :data-title-popup="item.title || phrase.asset"
       @click="openItem(item)"
     >
       <Media v-if="item.media" v-bind="item.media" class="size-full" />
@@ -60,7 +60,7 @@ function openItem(item: PublicAssetDescriptor) {
           item.key === active.key ? 'border-accent' : 'border-transparent'
         "
         :aria-pressed="item.key === active.key"
-        :aria-label="item.title"
+        :aria-label="item.title || phrase.asset"
         @click="selectedKey = item.key"
       >
         <Media v-if="item.media" v-bind="item.media" class="size-full" />
@@ -72,15 +72,18 @@ function openItem(item: PublicAssetDescriptor) {
       </button>
     </div>
     <figure class="min-w-0 overflow-hidden rounded-normal bg-bg-3">
-      <button
-        type="button"
-        class="group relative block w-full cursor-zoom-in"
-        :aria-label="active.title"
-        @click="openActive"
+      <component
+        :is="active.media?.kind === 'video' ? 'div' : 'button'"
+        :type="active.media?.kind === 'video' ? undefined : 'button'"
+        class="group relative isolate block w-full"
+        :class="{ 'cursor-zoom-in': active.media?.kind !== 'video' }"
+        :aria-label="active.title || phrase.asset"
+        @click="active.media?.kind !== 'video' && openActive()"
       >
         <Media
           v-if="active.media"
           v-bind="active.media"
+          :controls="active.media.kind === 'video'"
           class="max-h-144 min-h-48 w-full"
         />
         <FilePreview
@@ -89,18 +92,16 @@ function openItem(item: PublicAssetDescriptor) {
           class="m-auto size-32 p-md"
         />
         <span
+          v-if="active.media?.kind !== 'video'"
           class="absolute right-xs bottom-xs flex size-9 items-center
             justify-center rounded-full bg-bg-1/80 text-text-2 shadow
             backdrop-blur-sm transition group-hocus:bg-bg-1
             group-hocus:text-text-1"
           ><Icon name="visibility"
         /></span>
-      </button>
-      <figcaption
-        v-if="active.description"
-        class="px-xs py-2 text-sm text-text-2"
-      >
-        {{ active.description }}
+      </component>
+      <figcaption v-if="active.title" class="px-xs py-2 text-sm text-text-2">
+        {{ active.title }}
       </figcaption>
     </figure>
   </section>

@@ -55,7 +55,7 @@ const dimensions = computed(() => {
           {{ modalData.description }}
         </p>
         <AssetModalFileInfo
-          :name="modalData.title"
+          :name="modalData.fileName"
           :extension="modalData.extension"
           :size="modalData.size"
           :dimensions="dimensions"

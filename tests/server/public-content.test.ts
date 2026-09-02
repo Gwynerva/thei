@@ -763,6 +763,7 @@ describe('public content reference groups', () => {
           data: {
             asset: {
               assetUuid: 'guide',
+              name: 'source-name.pdf',
               assetUrl: '/projects/project/content/guide.pdf',
               extension: 'pdf',
               size: 120,
@@ -795,6 +796,7 @@ describe('public content reference groups', () => {
       {
         key: 'guide',
         title: 'Guide',
+        fileName: 'source-name.pdf',
         description: undefined,
         href: '/projects/project/content/guide.pdf',
         extension: 'pdf',
@@ -810,6 +812,7 @@ describe('public content reference groups', () => {
       'Private project',
     ]);
     expect(administrator.files).toHaveLength(2);
+    expect(administrator.files[1]?.title).toBe('');
   });
 
   it('keeps manual event links separate and respects their privacy', () => {

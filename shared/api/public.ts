@@ -52,6 +52,7 @@ export type PublicPaginatedResponse<T> = {
 export type PublicAssetDescriptor = {
   key: string;
   title: string;
+  fileName?: string;
   description?: string;
   href: string;
   extension: string;
@@ -87,6 +88,9 @@ export type PublicAction = {
   target: ProjectActionTarget;
   href: string;
   iconMedia?: MediaDescriptor;
+  fileMedia?: MediaDescriptor;
+  faviconMedia?: MediaDescriptor;
+  useFavicon: boolean;
   backgroundMedia?: MediaDescriptor;
   backgroundMode: ProjectActionBackgroundMode;
   backgroundSize: ProjectActionBackgroundSize;
