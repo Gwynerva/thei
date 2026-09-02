@@ -56,7 +56,7 @@ usePublicSeo({
 
     <section class="flex flex-col gap-sm">
       <PublicSectionHeader
-        icon="history"
+        icon="heart"
         :title="phrase.latest_life"
         :action="{
           href: '/life/',
@@ -77,7 +77,7 @@ usePublicSeo({
           class="first:sm:col-span-2"
         />
       </div>
-      <PublicEmptyState v-else icon="history" :title="phrase.life_empty" />
+      <PublicEmptyState v-else icon="heart" :title="phrase.life_empty" />
     </section>
 
     <section v-if="pages.length" class="flex flex-col gap-sm">
