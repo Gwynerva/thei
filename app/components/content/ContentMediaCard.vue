@@ -16,6 +16,7 @@ withDefaults(
     mediaRounded?: boolean;
     mediaNaturalSize?: boolean;
     captionClass?: string;
+    openable?: boolean;
   }>(),
   { mediaRounded: true },
 );
@@ -23,6 +24,7 @@ withDefaults(
 const emit = defineEmits<{
   edit: [];
   caption: [value: string];
+  open: [];
 }>();
 </script>
 
@@ -34,6 +36,14 @@ const emit = defineEmits<{
       :rounded="mediaRounded"
       :natural-size="mediaNaturalSize"
     />
+    <button
+      v-if="openable && !editable"
+      type="button"
+      class="absolute inset-0 z-30 cursor-zoom-in rounded-normal
+        focus-visible:ring-2 focus-visible:ring-accent"
+      :aria-label="caption || phrase.asset"
+      @click="$emit('open')"
+    ></button>
     <button
       v-if="editable"
       type="button"

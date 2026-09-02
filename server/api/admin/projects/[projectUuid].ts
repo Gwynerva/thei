@@ -15,7 +15,6 @@ import {
   archivedOriginalFromMeta,
   buildAdminAssetUrls,
 } from '../../../thei/assets/urls';
-import { resolveGeneratedIcon } from '../../../thei/media/generated-icon';
 import {
   cleanupOrphanExternalLinks,
   findExternalLink,
@@ -108,8 +107,7 @@ export default defineEventHandler(async (event) => {
           ? findExternalLink(project.action.externalUrl)
           : undefined,
       ]);
-      const iconMedia =
-        iconUrls?.media ?? resolveGeneratedIcon('project', projectUuid);
+      const iconMedia = iconUrls?.media;
       const bannerMedia = bannerUrls?.media;
 
       const rawShowcase =

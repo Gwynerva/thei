@@ -3,6 +3,18 @@ export type DateRange = {
   endDate: string;
 };
 
+export function coverDateRanges(periods: readonly DateRange[]): DateRange {
+  if (!periods.length) throw new Error('At least one date range is required');
+  return periods.reduce<DateRange>(
+    (range, period) => ({
+      startDate:
+        period.startDate < range.startDate ? period.startDate : range.startDate,
+      endDate: period.endDate > range.endDate ? period.endDate : range.endDate,
+    }),
+    { ...periods[0]! },
+  );
+}
+
 const DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 export function isDateRangeValue(value: unknown): value is string {
   return isDate(value);

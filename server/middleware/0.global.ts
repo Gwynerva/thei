@@ -1,4 +1,9 @@
 import { SiteAccessLevel } from '#layers/thei/shared/access-level';
+import {
+  isAdminRequestPath,
+  publicViewCookieName,
+  resolveRequestAdminRole,
+} from '#layers/thei/shared/public-view';
 import { bootPromise } from '../thei/boot/promise';
 import { bootResult } from '../thei/boot/result';
 
@@ -35,13 +40,18 @@ export default defineEventHandler(async (event) => {
 
   const isInstallPath = path === '/install/' || path === '/api/installation';
   const isUpdatePath = path === '/update/';
-  const isAdminPath =
-    path.startsWith('/admin/') || path.startsWith('/api/admin/');
-  const isAdmin = await THEI_SERVER.isAdmin(event);
+  const isAdminPath = isAdminRequestPath(path);
+  const isAuthenticatedAdmin = await THEI_SERVER.isAuthenticatedAdmin(event);
+  const isAdmin = resolveRequestAdminRole({
+    isAuthenticatedAdmin,
+    path,
+    publicViewCookie: getCookie(event, publicViewCookieName),
+  });
 
   switch (bootResult.type) {
     case 'ready':
       event.context.languageCode = THEI_SERVER.language.code;
+      event.context.isAuthenticatedAdmin = isAuthenticatedAdmin;
       event.context.isAdmin = isAdmin;
 
       if (isInstallPath || isUpdatePath) {
@@ -51,19 +61,15 @@ export default defineEventHandler(async (event) => {
       const isAuthPath =
         path === '/sign-in/' ||
         (path === '/api/admin/session' && event.method === 'POST');
-      if (isAuthPath && isAdmin) {
+      if (isAuthPath && isAuthenticatedAdmin) {
         return sendRedirect(event, '/admin/');
       }
 
-      if (isAdminPath && !isAuthPath && !isAdmin) {
+      if (isAdminPath && !isAuthPath && !isAuthenticatedAdmin) {
         return blockRequest();
       }
 
       if (THEI_SERVER.config.siteAccessLevel === SiteAccessLevel.Private) {
-        if (path === '/') {
-          return sendRedirect(event, '/sign-in/');
-        }
-
         if (!isAdmin && !isAuthPath) {
           return blockRequest();
         }

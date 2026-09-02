@@ -108,4 +108,52 @@ describe('content link resolver', () => {
     expect(firstFetch).toHaveBeenCalledTimes(1);
     expect(secondFetch).toHaveBeenCalledTimes(1);
   });
+
+  it('uses a separate endpoint for administrative resolution', async () => {
+    const fetch = vi.fn(async () => ({
+      kind: 'project' as const,
+      projectUuid: 'private-project',
+      state: 'resolved' as const,
+      href: '/projects/private/',
+      title: 'Private project',
+    }));
+    const resolver = createContentLinkResolver(
+      fetch,
+      '/api/admin/content-links',
+    );
+
+    await resolver({ kind: 'project', projectUuid: 'private-project' });
+
+    expect(fetch).toHaveBeenCalledWith('/api/admin/content-links', {
+      query: { kind: 'project', projectUuid: 'private-project' },
+    });
+  });
+
+  it('resolves pages through the same cache and endpoint contract', async () => {
+    const fetch = vi.fn(async () => ({
+      kind: 'page' as const,
+      pageUuid: 'pg-about',
+      state: 'resolved' as const,
+      href: '/pages/about/',
+      title: 'About',
+      summary: 'About this site',
+      iconMedia: {
+        kind: 'image' as const,
+        src: '/page.webp',
+        previewSrc: '/page.webp',
+      },
+    }));
+    const resolver = createContentLinkResolver(fetch);
+    const reference = { kind: 'page', pageUuid: 'pg-about' } as const;
+
+    expect(await resolver(reference)).toMatchObject({
+      kind: 'page',
+      href: '/pages/about/',
+    });
+    expect(await resolver(reference)).toMatchObject({ title: 'About' });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith('/api/content-links', {
+      query: { kind: 'page', pageUuid: 'pg-about' },
+    });
+  });
 });

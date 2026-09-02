@@ -4,6 +4,8 @@ import {
   normalizeExternalLinkUrl,
   type ExternalLink,
 } from '#layers/thei/shared/external-link';
+import { accentHueCssColor } from '#layers/thei/shared/accent-color';
+import type { MediaDescriptor } from '#layers/thei/shared/media';
 
 const props = defineProps<{
   link?: ExternalLink;
@@ -13,13 +15,23 @@ const props = defineProps<{
   loadingText?: string;
   flush?: boolean;
   interactive: boolean;
+  displayTitle?: string;
+  displayDescription?: string;
+  displayIconMedia?: MediaDescriptor;
 }>();
 
 const title = computed(
   () =>
     props.link?.title ||
+    props.displayTitle ||
     props.errorText ||
     (props.url ? externalLinkHostname(props.url) : ''),
+);
+const description = computed(
+  () => props.displayDescription ?? props.link?.description,
+);
+const iconMedia = computed(
+  () => props.displayIconMedia ?? props.link?.faviconMedia,
 );
 
 const interactiveHref = computed(() => {
@@ -32,11 +44,8 @@ const interactiveHref = computed(() => {
 });
 
 const accentColor = computed(() => {
-  const hue = props.link?.faviconMedia.accentHue;
-
-  return hue === undefined
-    ? 'var(--color-text-3)'
-    : `oklch(var(--lightness-accent) var(--chroma-accent) ${hue})`;
+  const hue = iconMedia.value?.accentHue;
+  return accentHueCssColor(hue, 'var(--color-text-3)');
 });
 </script>
 
@@ -54,8 +63,8 @@ const accentColor = computed(() => {
       :style="{ '--external-link-accent': accentColor }"
     >
       <Media
-        v-if="link?.faviconMedia"
-        v-bind="link.faviconMedia"
+        v-if="iconMedia"
+        v-bind="iconMedia"
         class="size-12 shrink-0 rounded-sm object-cover opacity-100
           @max-[24rem]:size-10"
         :class="{ 'm-xs mr-0': flush }"
@@ -81,8 +90,8 @@ const accentColor = computed(() => {
             aria-hidden="true"
           />
         </p>
-        <p v-if="link?.description" class="line-clamp-2 text-xs text-text-3">
-          {{ link.description }}
+        <p v-if="description" class="line-clamp-2 text-xs text-text-3">
+          {{ description }}
         </p>
         <p v-else-if="loading && loadingText" class="text-xs text-text-3">
           {{ loadingText }}

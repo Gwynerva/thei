@@ -58,6 +58,7 @@ import {
   ExternalLinkTool,
   EntityLinkTool,
   PrivateAccessTune,
+  PrivateSectionBoundaryTool,
   type ContentEditorAssetKind,
 } from '#layers/thei/app/components/content/editor-tools';
 import type {
@@ -68,6 +69,7 @@ import { editorIcon } from '#layers/thei/app/components/content/editor-icons';
 import { ContentDelimiterTool } from '#layers/thei/app/components/content/editor-delimiter-tool';
 import { assetDetailsModal } from '#layers/thei/app/modals/asset-details/modal';
 import { createEditorBlockDrag } from '#layers/thei/app/composables/editor-block-drag';
+import { createEditorPrivateSections } from '#layers/thei/app/composables/editor-private-sections';
 import { createEditorPopoverLayer } from '#layers/thei/app/composables/editor-popover-layer';
 import { useContentLinkResolver } from '#layers/thei/app/composables/content-link-resolver';
 import {
@@ -91,7 +93,7 @@ const modalContainer =
   useTemplateRef<InstanceType<typeof ModalContainer>>('modalContainer');
 const inlineLinkControls =
   useTemplateRef<ContentInlineLinkControlsExpose>('inlineLinkControls');
-const contentLinkResolver = useContentLinkResolver();
+const contentLinkResolver = useContentLinkResolver('admin');
 const entityPickerOpen = ref(false);
 const entityPickerAnchor = ref<HTMLElement>();
 const entityPicker = useTemplateRef<{ focus: () => void }>('entityPicker');
@@ -126,6 +128,8 @@ let editorAcceptsChanges = false;
 let transientEntitySelections = 0;
 let cleanupEditorDrag: (() => void) | undefined;
 let cleanupEditorPopoverLayer: (() => void) | undefined;
+let editorPrivateSections:
+  ReturnType<typeof createEditorPrivateSections> | undefined;
 
 function pickEntity(anchor: HTMLElement) {
   entityPickerResolve?.();
@@ -158,7 +162,13 @@ const editorSnapshots = createEditorSnapshotManager({
   },
   render: async (data) => {
     if (!editor) throw new Error('Content editor is not available.');
-    await editor.render(data as OutputData);
+    editorPrivateSections?.resetSuppression();
+    try {
+      await editor.render(data as OutputData);
+    } finally {
+      editorPrivateSections?.resetSuppression();
+    }
+    editorPrivateSections?.refresh();
     editor.toolbar.close();
   },
   onCurrentChange: applyEditorData,
@@ -174,13 +184,15 @@ const snapshotGroups = computed(() =>
 
 async function handleEditorChange(
   _api: API,
-  _event: BlockMutationEvent | BlockMutationEvent[],
+  event: BlockMutationEvent | BlockMutationEvent[],
 ) {
   if (
     !editorAcceptsChanges ||
     editorSnapshots.isApplying.value ||
     transientEntitySelections > 0
   )
+    return;
+  if (editorPrivateSections && !editorPrivateSections.handleChange(event))
     return;
   editorSnapshots.recordChange();
 }
@@ -511,20 +523,38 @@ onMounted(async () => {
           endTransientSelection: endTransientEntitySelection,
         },
       },
+      privateSectionBoundary: {
+        class: PrivateSectionBoundaryTool,
+        inlineToolbar: false,
+        tunes: [],
+        toolbox: {
+          title: phrase.value.content_private_section,
+          icon: editorIcon('lock-close'),
+          data: { edge: 'start', createPair: true },
+        },
+        config: {
+          labels: contentToolLabels(),
+        },
+      },
       privateAccess: {
         class: PrivateAccessTune,
         config: {
           labels: contentToolLabels(),
+          isDisabled: (blockId: string) =>
+            editorPrivateSections?.isPrivateAccessDisabled(blockId) ?? false,
         },
       },
     },
   });
 
   await editor.isReady;
+  editorPrivateSections = createEditorPrivateSections(editor);
   await editorSnapshots.initialize();
   editorAcceptsChanges = true;
   cleanupEditorPopoverLayer = createEditorPopoverLayer(holder.value!);
-  cleanupEditorDrag = createEditorBlockDrag(holder.value!, editor);
+  cleanupEditorDrag = createEditorBlockDrag(holder.value!, editor, {
+    canMove: editorPrivateSections.canMove,
+  });
 });
 
 onBeforeUnmount(() => {
@@ -534,6 +564,8 @@ onBeforeUnmount(() => {
   cleanupEditorPopoverLayer = undefined;
   cleanupEditorDrag?.();
   cleanupEditorDrag = undefined;
+  editorPrivateSections?.destroy();
+  editorPrivateSections = undefined;
   document.body.classList.remove(
     'content-editor-block-dragging',
     'content-editor-modal-open',
@@ -753,6 +785,9 @@ function contentToolLabels() {
     description: phrase.value.content_description,
     fileWithExtension: phrase.value.content_file_with_extension,
     privateAccess: phrase.value.content_private_block,
+    privateSection: phrase.value.content_private_section,
+    privateSectionStart: phrase.value.content_private_section_start,
+    privateSectionEnd: phrase.value.content_private_section_end,
     externalLinkLoading: phrase.value.external_link_loading,
     externalLinkError: phrase.value.external_link_error,
   };

@@ -73,13 +73,14 @@ async function cleanupDanglingUsages() {
       await deleteUsage(usage);
     }
 
-    const [assetRows, projectRows, eventRows, contentRows, usages] =
+    const [assetRows, projectRows, eventRows, pageRows, contentRows, usages] =
       await Promise.all([
         db.select({ assetUuid: schema.assets.assetUuid }).from(schema.assets),
         db
           .select({ projectUuid: schema.projects.projectUuid })
           .from(schema.projects),
         db.select({ eventUuid: schema.events.eventUuid }).from(schema.events),
+        db.select({ pageUuid: schema.pages.pageUuid }).from(schema.pages),
         db
           .select({ contentUuid: schema.content.contentUuid })
           .from(schema.content),
@@ -88,6 +89,7 @@ async function cleanupDanglingUsages() {
     const assetUuids = new Set(assetRows.map((row) => row.assetUuid));
     const projectUuids = new Set(projectRows.map((row) => row.projectUuid));
     const eventIds = new Set(eventRows.map((row) => row.eventUuid));
+    const pageUuids = new Set(pageRows.map((row) => row.pageUuid));
     const contentUuids = new Set(contentRows.map((row) => row.contentUuid));
 
     for (const usage of usages) {
@@ -97,6 +99,7 @@ async function cleanupDanglingUsages() {
         (usage.containerType === 'project' &&
           !projectUuids.has(usage.containerId)) ||
         (usage.containerType === 'event' && !eventIds.has(usage.containerId)) ||
+        (usage.containerType === 'page' && !pageUuids.has(usage.containerId)) ||
         (usage.containerType === 'content' &&
           !contentUuids.has(usage.containerId))
       ) {

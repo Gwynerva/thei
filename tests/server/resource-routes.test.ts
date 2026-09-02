@@ -9,11 +9,18 @@ const newRouteFiles = [
   'app/pages/admin/projects/[projectUuid]/edit.vue',
   'app/pages/admin/tags/new/index.vue',
   'app/pages/admin/tags/[tagUuid]/edit.vue',
+  'app/pages/admin/pages/new/index.vue',
+  'app/pages/admin/pages/[pageUuid]/edit.vue',
   'server/api/admin/assets/index.post.ts',
   'server/api/admin/assets/[assetUuid]/content.get.ts',
   'server/api/admin/assets/[assetUuid]/variants.get.ts',
   'server/api/admin/assets/[assetUuid]/variants.post.ts',
   'server/api/admin/assets/[assetUuid]/touches.post.ts',
+  'server/api/admin/content-links.get.ts',
+  'server/api/admin/pages/slugs.get.ts',
+  'server/api/pages/[slug].get.ts',
+  'server/routes/pages/[slug]/icon/[filename].get.ts',
+  'server/routes/pages/[slug]/content/[filename].get.ts',
   'server/api/admin/uploads/[uploadId].get.ts',
   'server/api/admin/session.post.ts',
   'server/api/admin/session.delete.ts',
@@ -79,6 +86,8 @@ describe('resource routes', () => {
       'utf8',
     );
 
-    expect(middleware).toContain('if (isAdminPath && !isAuthPath && !isAdmin)');
+    expect(middleware).toContain(
+      'if (isAdminPath && !isAuthPath && !isAuthenticatedAdmin)',
+    );
   });
 });

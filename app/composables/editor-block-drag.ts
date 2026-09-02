@@ -28,7 +28,13 @@ export function resolveEditorBlockMove(
   return { sourceIndex, targetIndex: insertionIndex };
 }
 
-export function createEditorBlockDrag(root: HTMLElement, editor: EditorJS) {
+export function createEditorBlockDrag(
+  root: HTMLElement,
+  editor: EditorJS,
+  options: {
+    canMove?: (sourceIndex: number, targetIndex: number) => boolean;
+  } = {},
+) {
   const settingsButton = root.querySelector<HTMLElement>(
     SETTINGS_BUTTON_SELECTOR,
   );
@@ -127,7 +133,12 @@ export function createEditorBlockDrag(root: HTMLElement, editor: EditorJS) {
         (id) => editor.blocks.getBlockIndex(id),
         targetPlacement,
       );
-      if (move) editor.blocks.move(move.targetIndex, move.sourceIndex);
+      if (
+        move &&
+        (options.canMove?.(move.sourceIndex, move.targetIndex) ?? true)
+      ) {
+        editor.blocks.move(move.targetIndex, move.sourceIndex);
+      }
     }
     finishDrag();
   }

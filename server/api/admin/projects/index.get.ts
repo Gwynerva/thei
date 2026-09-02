@@ -12,7 +12,7 @@ import {
   type AdminEntityListOrder,
 } from '#layers/thei/shared/admin/entity-list';
 import { buildAdminAssetUrls } from '../../../thei/assets/urls';
-import { resolveGeneratedIcon } from '../../../thei/media/generated-icon';
+import { resolveEntityIconMedia } from '../../../thei/media/generated-icon';
 import { listTagsForContainer } from '../../../thei/tags';
 
 export default defineEventHandler(
@@ -34,9 +34,13 @@ export default defineEventHandler(
           summary: project.summary,
           humanReadableSlug: project.humanReadableSlug,
           publicId: project.publicId,
-          iconMedia: iconUsage
-            ? (await buildAdminAssetUrls(iconUsage.asset)).media!
-            : resolveGeneratedIcon('project', project.projectUuid),
+          iconMedia: resolveEntityIconMedia(
+            'project',
+            project.projectUuid,
+            iconUsage
+              ? (await buildAdminAssetUrls(iconUsage.asset)).media!
+              : undefined,
+          ),
           tags: (
             await listTagsForContainer('project', project.projectUuid)
           ).slice(0, 3),
@@ -73,9 +77,13 @@ export default defineEventHandler(
             summary: project.summary,
             humanReadableSlug: project.humanReadableSlug,
             publicId: project.publicId,
-            iconMedia: iconUsage
-              ? (await buildAdminAssetUrls(iconUsage.asset)).media!
-              : resolveGeneratedIcon('project', project.projectUuid),
+            iconMedia: resolveEntityIconMedia(
+              'project',
+              project.projectUuid,
+              iconUsage
+                ? (await buildAdminAssetUrls(iconUsage.asset)).media!
+                : undefined,
+            ),
             tags: (
               await listTagsForContainer('project', project.projectUuid)
             ).slice(0, 3),
@@ -268,9 +276,13 @@ export default defineEventHandler(
             access: project.access,
             showcase: project.showcase,
             cv: project.cv,
-            iconMedia: iconAsset
-              ? (await buildAdminAssetUrls(iconAsset)).media!
-              : resolveGeneratedIcon('project', project.projectUuid),
+            iconMedia: resolveEntityIconMedia(
+              'project',
+              project.projectUuid,
+              iconAsset
+                ? (await buildAdminAssetUrls(iconAsset)).media!
+                : undefined,
+            ),
             createdAt: project.createdAt,
             updatedAt: project.updatedAt,
             totalSize: sizeByProjectUuid.get(project.projectUuid) ?? 0,

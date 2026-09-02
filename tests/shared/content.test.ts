@@ -15,6 +15,105 @@ import {
 } from '../../shared/content';
 
 describe('content normalization', () => {
+  it('normalizes private section roles and clears private tunes inside', () => {
+    const data = normalizeContentData({
+      blocks: [
+        {
+          id: 'end-moved-first',
+          type: 'privateSectionBoundary',
+          data: { sectionId: 'section-1', edge: 'end' },
+          tunes: { privateAccess: { isPrivate: true } },
+        },
+        {
+          id: 'inside',
+          type: 'paragraph',
+          data: { text: 'Secret words' },
+          tunes: { privateAccess: { isPrivate: true } },
+        },
+        {
+          id: 'start-moved-last',
+          type: 'privateSectionBoundary',
+          data: { sectionId: 'section-1', edge: 'start' },
+        },
+      ],
+    });
+
+    expect(data.blocks).toEqual([
+      {
+        id: 'end-moved-first',
+        type: 'privateSectionBoundary',
+        data: { sectionId: 'section-1', edge: 'start' },
+        tunes: undefined,
+      },
+      { id: 'inside', type: 'paragraph', data: { text: 'Secret words' } },
+      {
+        id: 'start-moved-last',
+        type: 'privateSectionBoundary',
+        data: { sectionId: 'section-1', edge: 'end' },
+        tunes: undefined,
+      },
+    ]);
+    expect(summarizeContentData(data)).toMatchObject({
+      blockCount: 1,
+      wordCount: 2,
+    });
+  });
+
+  it('drops empty private sections after empty content blocks', () => {
+    expect(
+      normalizeContentData({
+        blocks: [
+          {
+            type: 'privateSectionBoundary',
+            data: { sectionId: 'empty', edge: 'start' },
+          },
+          { type: 'paragraph', data: { text: '   ' } },
+          {
+            type: 'contentGallery',
+            data: { items: [] },
+          },
+          {
+            type: 'privateSectionBoundary',
+            data: { sectionId: 'empty', edge: 'end' },
+          },
+        ],
+      }).blocks,
+    ).toEqual([]);
+  });
+
+  it('rejects malformed, nested and crossing private sections', () => {
+    const boundary = (sectionId: string, edge: 'start' | 'end') => ({
+      type: 'privateSectionBoundary',
+      data: { sectionId, edge },
+    });
+
+    expect(() =>
+      normalizeContentData({ blocks: [boundary('orphan', 'start')] }),
+    ).toThrow(ContentValidationError);
+    expect(() =>
+      normalizeContentData({
+        blocks: [
+          boundary('a', 'start'),
+          boundary('b', 'start'),
+          { type: 'paragraph', data: { text: 'Nested' } },
+          boundary('b', 'end'),
+          boundary('a', 'end'),
+        ],
+      }),
+    ).toThrow('Private sections cannot overlap');
+    expect(() =>
+      normalizeContentData({
+        blocks: [
+          boundary('a', 'start'),
+          boundary('b', 'start'),
+          { type: 'paragraph', data: { text: 'Crossing' } },
+          boundary('a', 'end'),
+          boundary('b', 'end'),
+        ],
+      }),
+    ).toThrow('Private sections cannot overlap');
+  });
+
   it('requires the strict media layout and canonicalizes inline captions', () => {
     expect(() =>
       normalizeContentData({
@@ -309,6 +408,11 @@ describe('content normalization', () => {
           type: 'entityLink',
           data: { entityType: 'event', entityId: '  event-1  ' },
         },
+        {
+          id: 'selected-page-link',
+          type: 'entityLink',
+          data: { entityType: 'page', entityId: '  page-1  ' },
+        },
       ],
     });
 
@@ -317,6 +421,11 @@ describe('content normalization', () => {
         id: 'selected-link',
         type: 'entityLink',
         data: { entityType: 'event', entityId: 'event-1' },
+      },
+      {
+        id: 'selected-page-link',
+        type: 'entityLink',
+        data: { entityType: 'page', entityId: 'page-1' },
       },
     ]);
   });
@@ -447,6 +556,46 @@ describe('content normalization', () => {
       },
     ]);
     expect(collectContentAssetUuids(data)).toEqual(['a-1', 'a-2']);
+  });
+
+  it('marks asset refs inside private sections as private', () => {
+    const refs = extractContentAssetRefs({
+      blocks: [
+        {
+          type: 'privateSectionBoundary',
+          data: { sectionId: 'assets', edge: 'start' },
+        },
+        {
+          id: 'inside-file',
+          type: 'contentAttachment',
+          data: { asset: { assetUuid: 'secret-file' } },
+        },
+        {
+          type: 'privateSectionBoundary',
+          data: { sectionId: 'assets', edge: 'end' },
+        },
+        {
+          id: 'outside-file',
+          type: 'contentAttachment',
+          data: { asset: { assetUuid: 'public-file' } },
+        },
+      ],
+    });
+
+    expect(refs).toEqual([
+      {
+        assetUuid: 'secret-file',
+        blockId: 'inside-file',
+        blockType: 'contentAttachment',
+        isPrivate: true,
+      },
+      {
+        assetUuid: 'public-file',
+        blockId: 'outside-file',
+        blockType: 'contentAttachment',
+        isPrivate: false,
+      },
+    ]);
   });
 
   it('extracts all user-facing text from structured blocks', () => {

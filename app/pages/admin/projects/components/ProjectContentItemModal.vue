@@ -13,6 +13,9 @@ import DateRangeChip from '#layers/thei/app/components/DateRangeChip.vue';
 import ModalContainer from '#layers/thei/app/modals/ModalContainer.vue';
 import ModalTitle from '#layers/thei/app/modals/ModalTitle.vue';
 import ModalHeaderButton from '#layers/thei/app/modals/ModalHeaderButton.vue';
+import { buildProjectChildUrl } from '#layers/thei/shared/project-url';
+import LinkField from '../../components/LinkField.vue';
+import { projectDataInjectionKey } from '../composables';
 import { projectContentItemDeleteModal } from './project-content-item-delete-modal';
 
 type ModalData =
@@ -30,6 +33,7 @@ type ItemDraft = ProjectContentItemBase & {
 const emit = defineEmits<{ modalResult: [result: Result] }>();
 const props = defineProps<{ modalData: ModalData }>();
 const isStage = computed(() => props.modalData.isStage);
+const projectData = inject(projectDataInjectionKey)!;
 const { value: item, isDirty } = useSerializableState(
   createInitialItem(props.modalData),
 );
@@ -63,6 +67,8 @@ function save() {
   const base: ProjectContentItemBase = {
     title: item.value.title.trim(),
     summary: item.value.summary.trim(),
+    humanReadableSlug: item.value.humanReadableSlug,
+    publicId: item.value.publicId,
     isPrivate: item.value.isPrivate,
     content: item.value.content,
   };
@@ -101,10 +107,23 @@ function createInitialItem(data: ModalData): ItemDraft {
     sectionUuid: !data.isStage ? data.item?.sectionUuid : undefined,
     title: data.item?.title ?? '',
     summary: data.item?.summary ?? '',
+    humanReadableSlug: data.item?.humanReadableSlug ?? '',
+    publicId: data.item?.publicId ?? randomId(14),
     isPrivate: data.item?.isPrivate ?? false,
     content: data.item?.content ?? null,
     periods: data.isStage ? (data.item?.periods ?? []) : undefined,
   };
+}
+
+function childLinkDescription(slug: string, publicId: string) {
+  const project = projectData.value;
+  return buildProjectChildUrl(
+    project.humanReadableSlug,
+    project.publicId,
+    isStage.value ? 'stages' : 'sections',
+    slug,
+    publicId,
+  );
 }
 
 function removePeriod(index: number) {
@@ -188,6 +207,15 @@ async function deleteItem() {
         </div>
         <FieldInput v-model="item.title" autocomplete="off" />
       </Field>
+      <LinkField
+        v-model:title="item.title"
+        v-model:human-readable-slug="item.humanReadableSlug"
+        v-model:public-id="item.publicId"
+        :entity-name="
+          isStage ? phrase.project_stage : phrase.content_section
+        "
+        :link-description="childLinkDescription"
+      />
       <Field>
         <FieldLabel>{{
           isStage

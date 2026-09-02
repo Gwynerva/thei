@@ -1,15 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildProjectUrl,
-  publicIdFromProjectUrlPart,
+  buildProjectChildUrl,
+  publicIdFromProjectChildUrlPart,
 } from '../../shared/project-url';
 
-describe('project public URL', () => {
-  it('uses only the final segment as the public ID', () => {
-    expect(buildProjectUrl('hello-world', 'Ab12')).toBe(
-      '/projects/hello-world-Ab12/',
+describe('project child URLs', () => {
+  it('builds semantic canonical detail URLs', () => {
+    expect(
+      buildProjectChildUrl(
+        'thei',
+        'Project1',
+        'sections',
+        'architecture',
+        'Section1',
+      ),
+    ).toBe('/projects/thei-Project1/sections/architecture-Section1/');
+  });
+
+  it('extracts the opaque suffix independently of the readable slug', () => {
+    expect(publicIdFromProjectChildUrlPart('renamed-stage-Stage1')).toBe(
+      'Stage1',
     );
-    expect(buildProjectUrl('', 'Ab12')).toBe('/projects/Ab12/');
-    expect(publicIdFromProjectUrlPart('anything-goes-Ab12')).toBe('Ab12');
   });
 });

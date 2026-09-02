@@ -13,6 +13,7 @@ const props = withDefaults(
     editLabel?: string;
     titlePlaceholder?: string;
     descriptionPlaceholder?: string;
+    openable?: boolean;
   }>(),
   {
     title: '',
@@ -30,6 +31,7 @@ const emit = defineEmits<{
   edit: [];
   title: [value: string];
   description: [value: string];
+  open: [];
 }>();
 
 const resolvedTitle = computed(
@@ -42,14 +44,16 @@ const resolvedTitle = computed(
 
 <template>
   <component
-    :is="!editable && href ? 'a' : 'div'"
-    :href="!editable && href ? href : undefined"
-    :target="!editable && href ? '_blank' : undefined"
-    :rel="!editable && href ? 'noopener noreferrer' : undefined"
+    :is="!editable && openable ? 'button' : !editable && href ? 'a' : 'div'"
+    :type="!editable && openable ? 'button' : undefined"
+    :href="!editable && !openable && href ? href : undefined"
+    :target="!editable && !openable && href ? '_blank' : undefined"
+    :rel="!editable && !openable && href ? 'noopener noreferrer' : undefined"
     class="group flex min-w-0 items-center gap-xs rounded-normal border-2
-      border-border-1 bg-bg-2 p-xs text-text-1 no-underline transition-colors
-      outline-none focus-within:border-accent focus-within:bg-bg-accent
-      hocus:border-accent hocus:bg-bg-accent"
+      border-border-1 bg-bg-2 p-xs text-left text-text-1 no-underline
+      transition-colors outline-none focus-within:border-accent
+      focus-within:bg-bg-accent hocus:border-accent hocus:bg-bg-accent"
+    @click="!editable && openable ? emit('open') : undefined"
   >
     <button
       v-if="editable"

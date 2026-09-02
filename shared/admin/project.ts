@@ -24,6 +24,11 @@ import {
   normalizeExternalLinkUrl,
   type ProjectExternalLinkEditItem,
 } from '../external-link';
+import {
+  normalizeHumanReadableSlug,
+  normalizePublicId,
+  publicIdIsValid,
+} from '../public-link';
 
 /** Base save item for any project asset list (showcase, other-assets, …). */
 export type AssetListSaveItem = { assetUuid: string };
@@ -172,10 +177,10 @@ export function validateProjectData(
   const summary = data.summary?.trim();
   if (!summary) return 'Summary cannot be empty';
 
-  const humanReadableSlug = data.humanReadableSlug?.trim() ?? '';
-  const publicId = data.publicId?.trim();
+  const humanReadableSlug = normalizeHumanReadableSlug(data.humanReadableSlug);
+  const publicId = normalizePublicId(data.publicId);
   if (!publicId) return 'Public ID cannot be empty';
-  if (!/^[A-Za-z0-9]{1,64}$/.test(publicId)) return 'Invalid public ID';
+  if (!publicIdIsValid(publicId)) return 'Invalid public ID';
 
   if (!isOneOf(data.access, ProjectEventAccessLevel))
     return 'Invalid access level';

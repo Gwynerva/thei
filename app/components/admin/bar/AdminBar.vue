@@ -4,13 +4,14 @@ import { publicIdFromProjectUrlPart } from '#layers/thei/shared/project-url';
 import { publicIdFromEventUrlPart } from '#layers/thei/shared/event-url';
 
 const isAdmin = useIsAdmin();
-const { data: adminBarData } = await useFetch('/api/admin/dashboard-summary', {
-  key: 'admin-bar',
-});
+const adminBarData = isAdmin.value
+  ? (await useFetch('/api/admin/dashboard-summary', { key: 'admin-bar' })).data
+  : shallowRef();
 
 const publicAdmin = await usePublicAdmin();
 
 const route = useRoute();
+const registeredContextButton = useAdminBarContextButton();
 
 async function signOut() {
   await $fetch('/api/admin/session', { method: 'DELETE' });
@@ -18,6 +19,9 @@ async function signOut() {
 }
 
 const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
+  if (registeredContextButton.value?.routePath === route.path)
+    return registeredContextButton.value.props;
+
   if (route.path === '/projects/') {
     return {
       to: '/admin/projects/new/',
@@ -41,7 +45,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
     const id = route.path.split('/')[3];
     return {
       to: { href: `/projects/${id}/`, external: true },
-      icon: 'eye-open',
+      icon: 'visibility',
       title: phrase.value.view_project,
     };
   }
@@ -67,8 +71,25 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
     const id = route.path.split('/')[3];
     return {
       to: { href: `/events/${id}/`, external: true },
-      icon: 'eye-open',
+      icon: 'visibility',
       title: phrase.value.view_event,
+    };
+  }
+
+  if (route.path === '/pages/') {
+    return {
+      to: '/admin/pages/new/',
+      icon: 'plus',
+      title: phrase.value.new_page,
+    };
+  }
+
+  if (/^\/pages\/[^/]+\/$/.test(route.path)) {
+    const slug = route.path.split('/')[2];
+    return {
+      to: `/admin/pages/${encodeURIComponent(slug ?? '')}/edit/`,
+      icon: 'edit',
+      title: phrase.value.edit_page,
     };
   }
 });

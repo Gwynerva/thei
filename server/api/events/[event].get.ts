@@ -1,10 +1,10 @@
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
-import type { PublicEventResponse } from '#layers/thei/shared/api/event';
+import type { PublicEventResponseFull } from '#layers/thei/shared/api/public';
 import { publicIdFromEventUrlPart } from '#layers/thei/shared/event-url';
-import { getEventPeriods } from '../../thei/events/periods';
+import { buildPublicEvent } from '../../thei/public/entities';
 
 export default defineEventHandler(
-  async (event): Promise<PublicEventResponse> => {
+  async (event): Promise<PublicEventResponseFull> => {
     const part = getRouterParam(event, 'event') ?? '';
     const stored =
       (await THEI_SERVER.events.findByUuid(part)) ??
@@ -15,13 +15,6 @@ export default defineEventHandler(
       throw createError({ statusCode: 404 });
     if (stored.access === ProjectEventAccessLevel.LinkOnly)
       setHeader(event, 'X-Robots-Tag', 'noindex, nofollow');
-    return {
-      title: stored.title,
-      summary: stored.summary,
-      access: stored.access,
-      humanReadableSlug: stored.humanReadableSlug,
-      publicId: stored.publicId,
-      periods: getEventPeriods(stored.eventUuid),
-    };
+    return buildPublicEvent(stored, isAdmin);
   },
 );

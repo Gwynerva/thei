@@ -8,6 +8,12 @@ export default defineConfig({
     },
   },
   test: {
+    exclude: [
+      '**/node_modules/**',
+      '**/.nuxt/**',
+      '**/.output/**',
+      'tests/e2e/**',
+    ],
     environment: 'node',
     typecheck: {
       enabled: true,

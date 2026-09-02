@@ -30,13 +30,15 @@ const externalLink = computed<ExternalLink | undefined>(() => {
   <ProjectLinkPreviewCard
     v-if="
       result?.state === 'resolved' &&
-      (result.kind === 'project' || result.kind === 'event')
+      (result.kind === 'project' ||
+        result.kind === 'event' ||
+        result.kind === 'page')
     "
     :entity-type="result.kind"
     :title="result.title"
     :summary="result.summary"
     :icon-media="
-      result.kind === 'project' ? result.iconMedia : result.previewMedia
+      result.kind === 'event' ? result.previewMedia : result.iconMedia
     "
     :href="result.href"
     :interactive="interactive"

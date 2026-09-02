@@ -6,12 +6,15 @@ import type {
 } from '#layers/thei/shared/content-link';
 import ContentLinkPreviewCard from './ContentLinkPreviewCard.vue';
 
-const props = defineProps<{
-  entityType: ContentEntityType;
-  entityId: string;
-  resolver: ContentLinkResolver;
-  interactive?: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    entityType: ContentEntityType;
+    entityId: string;
+    resolver: ContentLinkResolver;
+    interactive?: boolean;
+  }>(),
+  { interactive: true },
+);
 const result = ref<ResolvedContentLink>();
 let version = 0;
 watch(
@@ -21,7 +24,9 @@ watch(
     const resolved = await props.resolver(
       entityType === 'project'
         ? { kind: 'project', projectUuid: entityId }
-        : { kind: 'event', eventUuid: entityId },
+        : entityType === 'event'
+          ? { kind: 'event', eventUuid: entityId }
+          : { kind: 'page', pageUuid: entityId },
     );
     if (current === version) result.value = resolved;
   },
@@ -36,6 +41,6 @@ onUnmounted(() => {
   <ContentLinkPreviewCard
     :result="result"
     :label="phrase.content_link_loading"
-    :interactive="interactive ?? true"
+    :interactive="interactive"
   />
 </template>

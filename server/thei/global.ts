@@ -1,4 +1,4 @@
-import { H3Event } from 'h3';
+import { getCookie, type H3Event } from 'h3';
 import { sn } from 'unslash';
 import { version } from '#thei/static-public';
 import { projectPath, theiPath } from '#thei/static';
@@ -18,6 +18,10 @@ import { countEvents } from './events/repository/count';
 import { findEventByUuid } from './events/repository/find-by-id';
 import { findEventByPublicId } from './events/repository/find-by-public-id';
 import { listEvents } from './events/repository/list';
+import { countPages } from './pages/repository/count';
+import { findPageByUuid } from './pages/repository/find-by-id';
+import { findPageBySlug } from './pages/repository/find-by-slug';
+import { listPages } from './pages/repository/list';
 import { getPublicAdminSessions } from './admin-session/repository/public';
 import { getCurrentAdminSession } from './admin-session';
 import { createAsset } from './assets/repository/create';
@@ -45,6 +49,10 @@ import {
   findContentByOwner,
   prepareContentForSave,
 } from './content/repository';
+import {
+  publicViewCookieName,
+  resolveRequestAdminRole,
+} from '../../shared/public-view';
 
 export const THEI_SERVER = {
   version,
@@ -72,9 +80,24 @@ export const THEI_SERVER = {
   async getAdmin(event: H3Event) {
     return await getCurrentAdminSession(event);
   },
-  async isAdmin(event: H3Event) {
+  async isAuthenticatedAdmin(event: H3Event) {
+    if (typeof event.context.isAuthenticatedAdmin === 'boolean') {
+      return event.context.isAuthenticatedAdmin;
+    }
     const session = await getCurrentAdminSession(event);
     return Boolean(session);
+  },
+  async isAdmin(event: H3Event) {
+    if (typeof event.context.isAdmin === 'boolean') {
+      return event.context.isAdmin;
+    }
+    const isAuthenticatedAdmin = await this.isAuthenticatedAdmin(event);
+    const path = (event.node.req.url || '/').split('?')[0] || '/';
+    return resolveRequestAdminRole({
+      isAuthenticatedAdmin,
+      path,
+      publicViewCookie: getCookie(event, publicViewCookieName),
+    });
   },
   console: {
     ...makeLogger(),
@@ -94,6 +117,12 @@ export const THEI_SERVER = {
     findByUuid: findEventByUuid,
     findByPublicId: findEventByPublicId,
     list: listEvents,
+  },
+  pages: {
+    count: countPages,
+    findByUuid: findPageByUuid,
+    findBySlug: findPageBySlug,
+    list: listPages,
   },
   adminSessions: {
     getPublic: getPublicAdminSessions,

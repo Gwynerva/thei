@@ -35,7 +35,7 @@ const emit = defineEmits<{
     @click="emit('applySettings')"
   >
     <Icon
-      :name="busyAction === 'apply' ? 'loading' : 'eye-open'"
+      :name="busyAction === 'apply' ? 'loading' : 'visibility'"
       class="mr-xs"
     />
     <span>{{ applyButtonText }}</span>

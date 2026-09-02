@@ -10,7 +10,7 @@ import type {
   StoredProjectRelationType,
 } from '../db/schema/project-relations';
 import { buildAdminAssetUrls } from '../assets/urls';
-import { resolveGeneratedIcon } from '../media/generated-icon';
+import { resolveEntityIconMedia } from '../media/generated-icon';
 
 type PreparedProjectRelation = ProjectRelationEditItem & {
   firstProjectUuid: string;
@@ -181,9 +181,13 @@ export async function getProjectRelations(
           relatedProjectUuid,
         )
       ).find((usage) => usage.role === 'icon');
-      const iconMedia = iconUsage
-        ? (await buildAdminAssetUrls(iconUsage.asset)).media!
-        : resolveGeneratedIcon('project', relatedProjectUuid);
+      const iconMedia = resolveEntityIconMedia(
+        'project',
+        relatedProjectUuid,
+        iconUsage
+          ? (await buildAdminAssetUrls(iconUsage.asset)).media!
+          : undefined,
+      );
 
       return {
         projectUuid: relatedProjectUuid,

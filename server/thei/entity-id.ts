@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 export const EntityPrefix = {
   Project: 'p',
   Event: 'e',
+  Page: 'pg',
   Asset: 'a',
   Content: 'c',
   ProjectContentSection: 'pcs',

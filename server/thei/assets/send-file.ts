@@ -29,7 +29,7 @@ export function parseAssetRange(
   size: number,
 ): AssetByteRange | null {
   const match = range.match(/^bytes=(\d*)-(\d*)$/);
-  if (!match || size <= 0) return null;
+  if (!match || (!match[1] && !match[2]) || size <= 0) return null;
 
   const [, startText, endText] = match;
   let start = startText ? Number(startText) : 0;
@@ -42,8 +42,8 @@ export function parseAssetRange(
   }
 
   if (
-    !Number.isInteger(start) ||
-    !Number.isInteger(end) ||
+    !Number.isSafeInteger(start) ||
+    !Number.isSafeInteger(end) ||
     start < 0 ||
     end < start ||
     start >= size
@@ -85,7 +85,10 @@ export async function sendAssetFile(
     extension,
     options.filename,
   );
-  const range = getHeader(event, 'range');
+  const requestedRange = getHeader(event, 'range');
+  const ifRange = getHeader(event, 'if-range');
+  const range =
+    ifRange && ifRange !== options.etag ? undefined : requestedRange;
 
   setHeader(event, 'Content-Type', getAssetMimeType(extension));
   setHeader(event, 'X-Content-Type-Options', 'nosniff');
@@ -93,7 +96,10 @@ export async function sendAssetFile(
   setHeader(event, 'Accept-Ranges', 'bytes');
   if (options.etag) {
     setHeader(event, 'ETag', options.etag);
-    if (!range && getHeader(event, 'if-none-match') === options.etag) {
+    const validators = getHeader(event, 'if-none-match')
+      ?.split(',')
+      .map((value) => value.trim().replace(/^W\//, ''));
+    if (validators?.some((value) => value === '*' || value === options.etag)) {
       setResponseStatus(event, 304);
       return null;
     }

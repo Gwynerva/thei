@@ -1,7 +1,6 @@
 import sharp from 'sharp';
-import { IMAGE_EXTENSIONS } from '#layers/thei/shared/assets/formats';
 
-const IMAGE_EXTS = new Set<string>(IMAGE_EXTENSIONS);
+const HUE_BIN_COUNT = 24;
 
 /** sRGB channel value (0–255) → linear light */
 function linearize(c: number): number {
@@ -14,7 +13,7 @@ function rgbToOklab(
   r: number,
   g: number,
   b: number,
-): { a: number; b: number; chroma: number } {
+): { lightness: number; a: number; b: number; chroma: number } {
   // Linear sRGB → XYZ D65
   const x = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
   const y = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
@@ -26,38 +25,30 @@ function rgbToOklab(
   const s = z;
 
   // LMS → OKLab
+  const lightness = 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s;
   const a = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s;
   const bVal = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s;
 
   // Reject near-achromatic colors (chroma too low to have a meaningful hue)
   const chroma = Math.sqrt(a * a + bVal * bVal);
-  return { a, b: bVal, chroma };
-}
-
-function rgbToOklchHue(r: number, g: number, b: number): number | undefined {
-  const { a, b: bVal, chroma } = rgbToOklab(r, g, b);
-  if (chroma < 0.02) return undefined;
-
-  const hue = (Math.atan2(bVal, a) * (180 / Math.PI) + 360) % 360;
-  return Math.round(hue);
+  return { lightness, a, b: bVal, chroma };
 }
 
 /**
- * Extracts an accent hue while ignoring transparent and nearly-achromatic
- * pixels. Weighting by chroma prevents transparent padding or a neutral
- * background from winning over a logo's actual brand color.
+ * Extracts an accent hue from the strongest perceptual OKLCH color cluster.
+ * Transparent and nearly-achromatic pixels are ignored, while clustering
+ * prevents opposing colors from cancelling each other out.
  */
 export async function extractImageAccentHue(
   buffer: Buffer,
 ): Promise<number | undefined> {
   const { data, info } = await sharp(buffer)
-    .resize(48, 48, { fit: 'contain' })
+    .resize(64, 64, { fit: 'contain' })
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
-  let totalA = 0;
-  let totalB = 0;
-  let totalWeight = 0;
+  const bins = Array.from({ length: HUE_BIN_COUNT }, () => 0);
+  const samples: Array<{ hue: number; weight: number }> = [];
 
   for (let offset = 0; offset < data.length; offset += info.channels) {
     const alpha = data[offset + 3]! / 255;
@@ -67,36 +58,44 @@ export async function extractImageAccentHue(
       linearize(data[offset + 1]!),
       linearize(data[offset + 2]!),
     );
-    if (color.chroma < 0.025) continue;
-    const weight = alpha * color.chroma ** 1.5;
-    totalA += color.a * weight;
-    totalB += color.b * weight;
-    totalWeight += weight;
+    if (color.chroma < 0.018) continue;
+    const hue = (Math.atan2(color.b, color.a) * (180 / Math.PI) + 360) % 360;
+    const visibleLightness =
+      0.45 + 0.55 * Math.sin(Math.PI * color.lightness) ** 0.7;
+    const weight = alpha * color.chroma ** 1.45 * visibleLightness;
+    const bin = Math.floor((hue / 360) * HUE_BIN_COUNT) % HUE_BIN_COUNT;
+    bins[bin]! += weight;
+    samples.push({ hue, weight });
+  }
+
+  if (!samples.length) return undefined;
+  const smoothed = bins.map(
+    (weight, index) =>
+      weight +
+      bins[(index + HUE_BIN_COUNT - 1) % HUE_BIN_COUNT]! * 0.55 +
+      bins[(index + 1) % HUE_BIN_COUNT]! * 0.55,
+  );
+  const winningBin = smoothed.reduce(
+    (best, weight, index) => (weight > best.weight ? { index, weight } : best),
+    { index: 0, weight: -1 },
+  ).index;
+  const binSize = 360 / HUE_BIN_COUNT;
+  const winningCenter = (winningBin + 0.5) * binSize;
+  let totalSin = 0;
+  let totalCos = 0;
+  let totalWeight = 0;
+
+  for (const sample of samples) {
+    const distance = Math.abs(((sample.hue - winningCenter + 540) % 360) - 180);
+    if (distance > binSize * 1.5) continue;
+    const radians = sample.hue * (Math.PI / 180);
+    totalSin += Math.sin(radians) * sample.weight;
+    totalCos += Math.cos(radians) * sample.weight;
+    totalWeight += sample.weight;
   }
 
   if (!totalWeight) return undefined;
   return Math.round(
-    (Math.atan2(totalB / totalWeight, totalA / totalWeight) * (180 / Math.PI) +
-      360) %
-      360,
+    (Math.atan2(totalSin, totalCos) * (180 / Math.PI) + 360) % 360,
   );
-}
-
-/**
- * Extracts the dominant hue (0–359) from an image buffer using sharp's color
- * histogram. Returns undefined for non-raster images (e.g. SVG) or achromatic images.
- */
-export async function extractDominantHue(
-  buffer: Buffer,
-  extension: string,
-): Promise<number | undefined> {
-  if (!IMAGE_EXTS.has(extension) || extension === 'svg') return undefined;
-
-  const { dominant } = await sharp(buffer).stats();
-
-  const r = linearize(dominant.r);
-  const g = linearize(dominant.g);
-  const b = linearize(dominant.b);
-
-  return rgbToOklchHue(r, g, b);
 }

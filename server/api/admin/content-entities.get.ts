@@ -4,10 +4,11 @@ import {
   type ContentEntitySearchItem,
 } from '#layers/thei/shared/admin/content-entity-search';
 import { buildAdminAssetUrls } from '../../thei/assets/urls';
-import { resolveGeneratedIcon } from '../../thei/media/generated-icon';
+import { resolveEntityIconMedia } from '../../thei/media/generated-icon';
 import { listTagsForContainer } from '../../thei/tags';
 import { buildProjectUrl } from '#layers/thei/shared/project-url';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
+import { buildPageUrl } from '#layers/thei/shared/page-url';
 
 export default defineEventHandler(
   async (event): Promise<ContentEntitySearchItem[]> => {
@@ -15,8 +16,10 @@ export default defineEventHandler(
     const allowed = new Set(
       (typeof query.entityTypes === 'string'
         ? query.entityTypes.split(',')
-        : ['project', 'event']
-      ).filter((value) => value === 'project' || value === 'event'),
+        : ['project', 'event', 'page']
+      ).filter(
+        (value) => value === 'project' || value === 'event' || value === 'page',
+      ),
     );
     const excluded = new Set(
       typeof query.exclude === 'string' ? query.exclude.split(',') : [],
@@ -41,9 +44,11 @@ export default defineEventHandler(
           humanReadableSlug: project.humanReadableSlug,
           publicId: project.publicId,
           updatedAt: project.updatedAt,
-          previewMedia: icon
-            ? (await buildAdminAssetUrls(icon.asset)).media!
-            : resolveGeneratedIcon('project', project.projectUuid),
+          previewMedia: resolveEntityIconMedia(
+            'project',
+            project.projectUuid,
+            icon ? (await buildAdminAssetUrls(icon.asset)).media! : undefined,
+          ),
           tags: (
             await listTagsForContainer('project', project.projectUuid)
           ).slice(0, 3),
@@ -71,6 +76,28 @@ export default defineEventHandler(
           tags: (await listTagsForContainer('event', item.eventUuid)).slice(
             0,
             3,
+          ),
+        });
+      }
+    }
+    if (allowed.has('page')) {
+      for (const page of db.select().from(schema.pages).all()) {
+        if (excluded.has(`page:${page.pageUuid}`)) continue;
+        const icon = (
+          await THEI_SERVER.assets.usages.findByContainer('page', page.pageUuid)
+        ).find((usage) => usage.role === 'icon');
+        items.push({
+          entityType: 'page',
+          entityId: page.pageUuid,
+          title: page.title,
+          summary: page.summary,
+          url: buildPageUrl(page.slug),
+          humanReadableSlug: page.slug,
+          updatedAt: page.updatedAt,
+          previewMedia: resolveEntityIconMedia(
+            'page',
+            page.pageUuid,
+            icon ? (await buildAdminAssetUrls(icon.asset)).media! : undefined,
           ),
         });
       }

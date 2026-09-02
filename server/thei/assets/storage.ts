@@ -22,7 +22,7 @@ import {
 } from '#layers/thei/shared/asset-upload-settings';
 import { randomId } from '#layers/thei/shared/utils/random-id';
 import { EntityPrefix, generateUnique, generateUniqueId } from '../entity-id';
-import { extractDominantHue } from './image-color';
+import { extractImageAccentHue } from './image-color';
 import { inspectVideo } from './process';
 import {
   createMediaPreview,
@@ -70,7 +70,7 @@ export async function createMediaPreviewAsset(
   sourceType: AssetType.Image | AssetType.Video,
 ): Promise<{
   previewAssetUuid: string;
-  dominantHue?: number;
+  accentHue?: number;
 }> {
   const preview = await createMediaPreview(sourceBuffer, sourceType);
   const previewBuffer = preview.buffer;
@@ -87,15 +87,15 @@ export async function createMediaPreviewAsset(
     await THEI_SERVER.assets.touch(existing.assetUuid);
     return {
       previewAssetUuid: existing.assetUuid,
-      dominantHue: meta?.dominantHue,
+      accentHue: meta?.accentHue,
     };
   }
 
-  const dominantHue = await extractDominantHue(previewBuffer, 'webp');
+  const accentHue = await extractImageAccentHue(previewBuffer);
   const meta: ImageAssetMeta = {
     width: preview.width,
     height: preview.height,
-    ...(dominantHue !== undefined ? { dominantHue } : {}),
+    ...(accentHue !== undefined ? { accentHue } : {}),
   };
 
   const { asset } = await storeAsset({
@@ -111,7 +111,7 @@ export async function createMediaPreviewAsset(
 
   return {
     previewAssetUuid: asset.assetUuid,
-    dominantHue,
+    accentHue,
   };
 }
 
@@ -272,9 +272,7 @@ export async function buildStoredMediaDescriptor(
     src: buildAssetPreviewUrl(asset.assetUuid),
     kind: asset.type,
     previewSrc,
-    ...(meta?.dominantHue !== undefined
-      ? { accentHue: meta.dominantHue }
-      : {}),
+    ...(meta?.accentHue !== undefined ? { accentHue: meta.accentHue } : {}),
     ...(meta?.width ? { width: meta.width } : {}),
     ...(meta?.height ? { height: meta.height } : {}),
   };

@@ -5,10 +5,17 @@ import {
   isDateRangeValue,
   type DateRange,
 } from './date-range';
+import {
+  normalizeHumanReadableSlug,
+  normalizePublicId,
+  publicIdIsValid,
+} from './public-link';
 
 export interface ProjectContentItemBase {
   title: string;
   summary: string;
+  humanReadableSlug: string;
+  publicId: string;
   isPrivate: boolean;
   content?: ContentFieldModelValue | null;
 }
@@ -86,6 +93,8 @@ export function normalizeProjectContentSections(value: unknown): ProjectSectionC
       sectionUuid: normalizeProjectContentItemId(source.sectionUuid),
       title,
       summary: typeof source.summary === 'string' ? source.summary.trim() : '',
+      humanReadableSlug: normalizeHumanReadableSlug(source.humanReadableSlug),
+      publicId: normalizeProjectContentItemPublicId(source.publicId),
       isPrivate: source.isPrivate,
       content: {
         contentUuid: normalizeProjectContentItemId(contentSource.contentUuid),
@@ -110,6 +119,8 @@ function normalizeProjectStage(value: unknown): ProjectStageContentItem {
     stageUuid: normalizeProjectContentItemId(source.stageUuid),
     title,
     summary: typeof source.summary === 'string' ? source.summary.trim() : '',
+    humanReadableSlug: normalizeHumanReadableSlug(source.humanReadableSlug),
+    publicId: normalizeProjectContentItemPublicId(source.publicId),
     isPrivate: source.isPrivate,
     periods: normalizeStagePeriods(source.periods),
     content: contentSource ? {
@@ -118,4 +129,11 @@ function normalizeProjectStage(value: unknown): ProjectStageContentItem {
       ...(typeof contentSource.updatedAt === 'number' ? { updatedAt: contentSource.updatedAt } : {}),
     } : source.content === null ? null : undefined,
   };
+}
+
+function normalizeProjectContentItemPublicId(value: unknown) {
+  const publicId = normalizePublicId(value);
+  if (!publicIdIsValid(publicId))
+    throw new ProjectContentItemError('Invalid public ID');
+  return publicId;
 }

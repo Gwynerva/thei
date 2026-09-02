@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { MediaKind } from '#layers/thei/shared/media';
+import { accentHueCssColor } from '#layers/thei/shared/accent-color';
 import {
   preserveContentMediaPlayback,
   restoredContentMediaTime,
@@ -75,9 +76,7 @@ let userOverrodePlayback = false;
 
 const resolvedPreviewSrc = computed(() => props.previewSrc || props.src);
 const accentColor = computed(() =>
-  props.accentHue === undefined
-    ? 'var(--color-bg-3)'
-    : `oklch(var(--lightness-accent) var(--chroma-accent) ${props.accentHue})`,
+  accentHueCssColor(props.accentHue, 'var(--color-bg-3)'),
 );
 const loading = computed(
   () =>

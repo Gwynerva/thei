@@ -6,7 +6,7 @@ import type { ContentEntitySearchItem } from '#layers/thei/shared/admin/content-
 const props = withDefaults(
   defineProps<{ entityTypes?: ContentEntityType[]; exclude?: string[] }>(),
   {
-    entityTypes: () => ['project', 'event'],
+    entityTypes: () => ['project', 'event', 'page'],
     exclude: () => [],
   },
 );
@@ -85,18 +85,21 @@ defineExpose({ focus: () => input.value?.focus({ preventScroll: true }) });
         @click="emit('select', item)"
       >
         <span
-          class="entity-preview absolute inset-y-0 left-0 w-16 bg-bg-accent"
+          class="entity-preview absolute inset-y-0 right-0 w-24 bg-bg-accent"
+          aria-hidden="true"
         >
           <Media
             v-if="item.previewMedia"
             v-bind="item.previewMedia"
             class="size-full opacity-75 group-hocus:opacity-100"
           />
-          <span v-else class="flex size-full items-center pl-xs text-text-3"
+          <span
+            v-else
+            class="flex size-full items-center justify-end pr-xs text-text-3"
             ><Icon :name="item.entityType"
           /></span>
         </span>
-        <span class="relative ml-10 block min-w-0 px-xs py-1">
+        <span class="relative block min-w-0 py-1 pr-16 pl-xs">
           <span class="flex items-center gap-1 truncate text-sm font-semibold"
             ><Icon
               :name="item.entityType"
@@ -120,10 +123,10 @@ defineExpose({ focus: () => input.value?.focus({ preventScroll: true }) });
 <style scoped>
 .entity-preview {
   mask-image: linear-gradient(
-    to right,
+    to left,
     #000 0%,
-    rgb(0 0 0 / 70%) 20%,
-    rgb(0 0 0 / 10%) 75%,
+    rgb(0 0 0 / 90%) 45%,
+    rgb(0 0 0 / 25%) 78%,
     transparent 100%
   );
 }

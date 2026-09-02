@@ -2,6 +2,21 @@ import { generalNormalize } from '../general-normalize';
 import { defineI18nBase } from '../define';
 import { slugify } from '../slugify';
 
+function joinDuration(parts: string[]) {
+  if (parts.length < 3) return parts.join(' and ');
+  return `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
+}
+
+function formatDuration(years: number, months: number, days: number) {
+  return joinDuration(
+    [
+      years ? `${years} ${years === 1 ? 'year' : 'years'}` : '',
+      months ? `${months} ${months === 1 ? 'month' : 'months'}` : '',
+      days ? `${days} ${days === 1 ? 'day' : 'days'}` : '',
+    ].filter(Boolean),
+  );
+}
+
 function normalize(text: string): string {
   return (
     generalNormalize(text)
@@ -106,6 +121,95 @@ export default defineI18nBase({
   ],
   phrases: {
     language_name: 'English',
+    life: 'Life',
+    projects: 'Projects',
+    events: 'Events',
+    pages: 'Pages',
+    tags: 'Tags',
+    settings: 'Settings',
+    public_view_mode: 'Viewing mode',
+    public_view_admin: 'Admin',
+    public_view_admin_hint: 'Private content will be visible.',
+    public_view_guest: 'Guest',
+    public_view_guest_hint: 'Private content will be hidden.',
+    public_navigation: 'Site navigation',
+    latest_life: 'Latest from Life',
+    latest_pages: 'Recently updated pages',
+    view_all_life: 'View all of Life',
+    view_all_pages: 'View all pages',
+    life_empty: 'Life has no public moments yet.',
+    event_started: 'An event started',
+    event_ended: 'An event ended',
+    event_occurred: 'An event took place',
+    project_created: 'A project was created',
+    page_created: 'A page was created',
+    stage_started: 'A project stage started',
+    stage_ended: 'A project stage ended',
+    stage_occurred: 'A project stage took place',
+    section_created: 'A project section was created',
+    secret_event: 'Secret event',
+    secret_project: 'Secret project',
+    secret_page: 'Secret page',
+    secret_stage: 'Secret project stage',
+    secret_section: 'Secret project section',
+    life_gap: (years, months, days) =>
+      `in ${formatDuration(years, months, days)}`,
+    life_day: (value) => `Day ${value}`,
+    life_month: (value) => `Month ${value}`,
+    life_year: (value) => `Year ${value}`,
+    life_day_label: 'Day',
+    life_month_label: 'Month',
+    life_year_label: 'Year',
+    public_timeline_from: (date) => `From ${date}`,
+    public_timeline_until: (date) => `To ${date}`,
+    public_timeline_duration: formatDuration,
+    show_fully: 'Show fully',
+    show_all: 'Show all',
+    projects_count: (count) =>
+      `${count} ${count === 1 ? 'project' : 'projects'}`,
+    events_count: (count) => `${count} ${count === 1 ? 'event' : 'events'}`,
+    public_life_description:
+      'A continuous timeline of events, projects, and important stages.',
+    public_life_period_description: (period, siteName) =>
+      `Events, projects, and important stages for ${period} — ${siteName}.`,
+    public_projects_description:
+      'Projects, experiments, and things brought to life.',
+    public_pages_description:
+      'Standalone articles, notes, and other site pages.',
+    public_tags_description: 'Topics connecting projects and moments of life.',
+    related_projects: 'Related projects',
+    related_events: 'Related events',
+    forbidden_title: 'This place is private',
+    forbidden_description: 'The owner has closed public access to this site.',
+    not_found_title: 'Nothing lives here',
+    not_found_description:
+      'The page may have moved, disappeared, or never existed.',
+    error_title: 'Something went wrong',
+    error_description: 'The page could not be opened right now.',
+    back_home: 'Back home',
+    open_life: 'Open Life',
+    pagination: 'Pagination',
+    previous: 'Previous page',
+    next: 'Next page',
+    public_details: 'Information',
+    public_details_expand: 'Expand panel',
+    public_details_collapse: 'Collapse panel',
+    public_details_summary: 'Summary',
+    public_details_when: 'When',
+    public_details_references: 'References',
+    public_details_manual: 'Manual',
+    public_details_from_content: 'From content',
+    public_details_links: 'Links',
+    public_details_files: 'Files',
+    public_details_links_content: 'Content links',
+    public_details_files_content: 'Content files',
+    public_details_overview: 'Summary',
+    public_details_contents: 'Contents',
+    public_details_chronology: 'Chronology',
+    project_chronology_page: 'Project page',
+    project_chronology_first_stage: 'First project stage',
+    project_chronology_last_stage: 'Last project stage',
+    project_chronology_updated: 'Project update',
     install_thei: 'Install Thei',
     visuals: 'Visuals',
     visuals_description:
@@ -128,7 +232,7 @@ export default defineI18nBase({
     site_access_open: 'Open',
     site_access_closed: 'Closed',
     site_access_open_description:
-      'Anyone can visit the site. You can restrict access to individual projects, events, and files. Suitable for most people.',
+      'Anyone can visit the site. You can restrict access to individual projects, events, pages, and files. Suitable for most people.',
     site_access_closed_description:
       'Only you and no one else will be able to view any content on the site. Suitable for secret agents who keep all aspects of their lives in strict secrecy.',
     admin_data: 'Admin Data',
@@ -176,14 +280,19 @@ export default defineI18nBase({
     admin_projects_description: 'All projects managed on this site.',
     admin_events: 'Events',
     admin_events_description: 'All events managed on this site.',
+    admin_pages: 'Pages',
+    admin_pages_description: 'All standalone pages on this site.',
     to_admin_panel: 'To Admin Panel',
     to_website: 'To Website',
     project: 'Project',
     x_projects: (count: number) => plural(count, 'project', 'projects'),
     event: 'Event',
     x_events: (count: number) => plural(count, 'event', 'events'),
+    page: 'Page',
+    x_pages: (count: number) => plural(count, 'page', 'pages'),
     new_project: 'New Project',
     new_event: 'New Event',
+    new_page: 'New Page',
     site_status: 'Site status',
     site_version: 'Thei version',
     disk_usage: 'Disk space',
@@ -196,6 +305,7 @@ export default defineI18nBase({
     sort_oldest: 'Oldest first',
     no_projects: 'No projects yet.',
     no_events: 'No events yet.',
+    no_pages: 'No pages yet.',
     admin_search_no_results: 'Nothing matches your search.',
     page_of: (page, pageCount) => `Page ${page} of ${pageCount}`,
     admin_tags: 'Tags',
@@ -315,6 +425,9 @@ export default defineI18nBase({
     project_relations_related: 'Related',
     project_relations_influencing: 'Influencing',
     project_relations_dependent: 'Dependent',
+    project_relation_related: 'Related',
+    project_relation_influencing: 'Influencing',
+    project_relation_dependent: 'Dependent',
     project_relations_empty: 'No relations of this type.',
     project_stages_empty: 'No stages yet.',
     project_content_sections_empty: 'No sections yet.',
@@ -397,6 +510,9 @@ export default defineI18nBase({
       'The linked entity could not be found or its details are unavailable.',
     content_link_remove: 'Remove link',
     content_private_block: 'Private block',
+    content_private_section: 'Private section',
+    content_private_section_start: 'Start of private section',
+    content_private_section_end: 'End of private section',
     content_editor_i18n: {
       add: 'Add',
       filter: 'Filter',
@@ -447,6 +563,7 @@ export default defineI18nBase({
     content_title: 'Title',
     content_description: 'Description',
     edit_event: 'Edit Event',
+    edit_page: 'Edit Page',
     edit: 'Edit',
     drafts: 'Drafts',
     save: 'Save',
@@ -485,6 +602,7 @@ export default defineI18nBase({
     private_hint: 'Only you can view.',
     site_access_close_priority: 'Site closed! Only you will have access!',
     view_event: 'View on Site',
+    view_page: 'View on Site',
     saved: 'Saved',
     showcase_project: 'Showcase project?',
     showcase_project_hint:
@@ -494,6 +612,12 @@ export default defineI18nBase({
     cv_project_hint:
       'A potential employer would be interested to see this project.',
     cv_project_label: 'CV',
+    project_showcase_badge: 'Showcase',
+    project_showcase_badge_hint:
+      'This project is featured on the home page and higher in the catalog.',
+    project_portfolio_badge: 'Portfolio',
+    project_portfolio_badge_hint:
+      'This project is included in the professional portfolio.',
     project_files: 'Project Files',
     project_files_description: 'Icon, banner, showcase, and other files.',
     event_title: 'Event title',
@@ -506,6 +630,23 @@ export default defineI18nBase({
     event_periods_empty: 'Add at least one date or time period.',
     event_content: 'Event content',
     event_content_hint: 'Detailed materials and event content.',
+    page_title: 'Page title',
+    page_title_hint: 'A short, recognizable page title.',
+    page_summary: 'Page description',
+    page_summary_hint: 'Briefly explain what this page contains.',
+    page_access: 'Page access',
+    page_content: 'Page content',
+    page_content_hint: 'The main content of the page.',
+    page_icon: 'Page icon',
+    page_icon_hint:
+      'Optional. A generated page icon is used when no file is set.',
+    page_slug: 'Page slug',
+    page_slug_hint:
+      'A unique URL-safe path using lowercase Latin letters, numbers, and hyphens.',
+    page_link_example: (slug) => `Final link: /pages/${slug}/`,
+    page_slug_invalid: 'Use lowercase Latin letters, numbers, and hyphens.',
+    page_slug_already_taken: 'A page with this slug already exists.',
+    delete_page: 'Delete Page',
     event_files: 'Event files',
     event_files_description: 'Arbitrary event files in any format.',
     event_action: 'Event action button',

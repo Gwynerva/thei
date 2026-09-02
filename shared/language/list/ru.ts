@@ -27,6 +27,21 @@ export function plural(
   return includeNumber ? `${count} ${text}` : text;
 }
 
+function joinDuration(parts: string[]) {
+  if (parts.length < 3) return parts.join(' и ');
+  return `${parts.slice(0, -1).join(', ')} и ${parts.at(-1)}`;
+}
+
+function formatDuration(years: number, months: number, days: number) {
+  return joinDuration(
+    [
+      years ? plural(years, 'год', 'года', 'лет') : '',
+      months ? plural(months, 'месяц', 'месяца', 'месяцев') : '',
+      days ? plural(days, 'день', 'дня', 'дней') : '',
+    ].filter(Boolean),
+  );
+}
+
 export default defineI18nModule({
   code: 'ru',
   normalize,
@@ -112,6 +127,94 @@ export default defineI18nModule({
   ],
   phrases: {
     language_name: 'Русский',
+    life: 'Жизнь',
+    projects: 'Проекты',
+    events: 'События',
+    pages: 'Страницы',
+    tags: 'Теги',
+    settings: 'Настройки',
+    public_view_mode: 'Режим просмотра',
+    public_view_admin: 'Админ',
+    public_view_admin_hint: 'Приватный контент будет виден.',
+    public_view_guest: 'Гость',
+    public_view_guest_hint: 'Приватный контент будет скрыт.',
+    public_navigation: 'Навигация по сайту',
+    latest_life: 'Последнее из Жизни',
+    latest_pages: 'Обновленные страницы',
+    view_all_life: 'Смотреть всю Жизнь',
+    view_all_pages: 'Смотреть все страницы',
+    life_empty: 'В Жизни пока нет публичных моментов.',
+    event_started: 'Началось событие',
+    event_ended: 'Завершилось событие',
+    event_occurred: 'Состоялось событие',
+    project_created: 'Создан проект',
+    page_created: 'Создана страница',
+    stage_started: 'Начался этап проекта',
+    stage_ended: 'Завершился этап проекта',
+    stage_occurred: 'Состоялся этап проекта',
+    section_created: 'Создан раздел проекта',
+    secret_event: 'Секретное событие',
+    secret_project: 'Секретный проект',
+    secret_page: 'Секретная страница',
+    secret_stage: 'Секретный этап проекта',
+    secret_section: 'Секретный раздел проекта',
+    life_gap: (years, months, days) =>
+      `через ${formatDuration(years, months, days)}`,
+    life_day: (value) => `День ${value}`,
+    life_month: (value) => `Месяц ${value}`,
+    life_year: (value) => `Год ${value}`,
+    life_day_label: 'День',
+    life_month_label: 'Месяц',
+    life_year_label: 'Год',
+    public_timeline_from: (date) => `С ${date}`,
+    public_timeline_until: (date) => `По ${date}`,
+    public_timeline_duration: formatDuration,
+    show_fully: 'Показать полностью',
+    show_all: 'Показать все',
+    projects_count: (count) => plural(count, 'проект', 'проекта', 'проектов'),
+    events_count: (count) => plural(count, 'событие', 'события', 'событий'),
+    public_life_description:
+      'Непрерывная лента событий, проектов и важных этапов.',
+    public_life_period_description: (period, siteName) =>
+      `События, проекты и важные этапы за ${period.toLocaleLowerCase('ru-RU')} — ${siteName}.`,
+    public_projects_description:
+      'Проекты, эксперименты и вещи, воплощённые в жизнь.',
+    public_pages_description:
+      'Отдельные материалы, заметки и другие страницы сайта.',
+    public_tags_description: 'Темы, связывающие проекты и моменты жизни.',
+    related_projects: 'Связанные проекты',
+    related_events: 'Связанные события',
+    forbidden_title: 'Это личное пространство',
+    forbidden_description: 'Владелец закрыл публичный доступ к сайту.',
+    not_found_title: 'Здесь ничего нет',
+    not_found_description:
+      'Страница могла переехать, исчезнуть или никогда не существовала.',
+    error_title: 'Что-то пошло не так',
+    error_description: 'Сейчас эту страницу не получается открыть.',
+    back_home: 'На главную',
+    open_life: 'Открыть Жизнь',
+    pagination: 'Навигация по страницам',
+    previous: 'Предыдущая страница',
+    next: 'Следующая страница',
+    public_details: 'Информация',
+    public_details_expand: 'Развернуть панель',
+    public_details_collapse: 'Свернуть панель',
+    public_details_summary: 'Суть',
+    public_details_when: 'Когда',
+    public_details_references: 'Референсы',
+    public_details_manual: 'Вручную',
+    public_details_from_content: 'Из контента',
+    public_details_links: 'Ссылки',
+    public_details_files: 'Файлы',
+    public_details_links_content: 'Ссылки контента',
+    public_details_files_content: 'Файлы контента',
+    public_details_overview: 'Сводка',
+    public_details_contents: 'Содержание',
+    public_details_chronology: 'Хронология',
+    project_chronology_page: 'Страница проекта',
+    project_chronology_first_stage: 'Первый этап проекта',
+    project_chronology_last_stage: 'Последний этап проекта',
+    project_chronology_updated: 'Обновление проекта',
     install_thei: 'Установка Thei',
     visuals: 'Внешний вид',
     visuals_description:
@@ -133,7 +236,7 @@ export default defineI18nModule({
     site_access_open: 'Открытый',
     site_access_closed: 'Закрытый',
     site_access_open_description:
-      'Посетить сайт может любой. Можно точечно ограничивать доступ к отдельным проектам, событиям и файлам. Подойдет большинству.',
+      'Посетить сайт может любой. Можно точечно ограничивать доступ к отдельным проектам, событиям, страницам и файлам. Подойдет большинству.',
     site_access_closed_description:
       'Любой контент сайта сможете просматривать только вы. Подойдет секретным агентам, которые держат все аспекты своей жизни в строжайшем секрете.',
     admin_data: 'Данные администратора',
@@ -181,6 +284,8 @@ export default defineI18nModule({
     admin_projects_description: 'Все проекты, управляемые на этом сайте.',
     admin_events: 'События',
     admin_events_description: 'Все события, управляемые на этом сайте.',
+    admin_pages: 'Страницы',
+    admin_pages_description: 'Все отдельные страницы этого сайта.',
     to_admin_panel: 'В админ-панель',
     to_website: 'На сайт',
     project: 'Проект',
@@ -188,8 +293,12 @@ export default defineI18nModule({
       plural(count, 'проект', 'проекта', 'проектов'),
     event: 'Событие',
     x_events: (count: number) => plural(count, 'событие', 'события', 'событий'),
+    page: 'Страница',
+    x_pages: (count: number) =>
+      plural(count, 'страница', 'страницы', 'страниц'),
     new_project: 'Новый проект',
     new_event: 'Новое событие',
+    new_page: 'Новая страница',
     site_status: 'Состояние сайта',
     site_version: 'Версия Thei',
     disk_usage: 'Дисковое пространство',
@@ -202,6 +311,7 @@ export default defineI18nModule({
     sort_oldest: 'Сначала старые',
     no_projects: 'Проектов пока нет.',
     no_events: 'Событий пока нет.',
+    no_pages: 'Страниц пока нет.',
     admin_search_no_results: 'По вашему запросу ничего не найдено.',
     page_of: (page, pageCount) => `Страница ${page} из ${pageCount}`,
     admin_tags: 'Теги',
@@ -325,6 +435,9 @@ export default defineI18nModule({
     project_relations_related: 'Связанные',
     project_relations_influencing: 'Влияющие',
     project_relations_dependent: 'Зависимые',
+    project_relation_related: 'Связанный',
+    project_relation_influencing: 'Влияющий',
+    project_relation_dependent: 'Зависимый',
     project_relations_empty: 'Нет связей такого типа.',
     project_stages_empty: 'Этапов пока нет.',
     project_content_sections_empty: 'Разделов пока нет.',
@@ -407,6 +520,9 @@ export default defineI18nModule({
       'Не удалось найти связанную сущность или получить данные ссылки.',
     content_link_remove: 'Убрать ссылку',
     content_private_block: 'Приватный блок',
+    content_private_section: 'Приватная секция',
+    content_private_section_start: 'Начало приватной секции',
+    content_private_section_end: 'Конец приватной секции',
     content_editor_i18n: {
       add: 'Добавить',
       filter: 'Фильтр',
@@ -457,6 +573,7 @@ export default defineI18nModule({
     content_title: 'Название',
     content_description: 'Описание',
     edit_event: 'Изменить событие',
+    edit_page: 'Изменить страницу',
     edit: 'Изменить',
     drafts: 'Черновики',
     save: 'Сохранить',
@@ -496,6 +613,7 @@ export default defineI18nModule({
     site_access_close_priority:
       'Сайт закрытый! Доступ все равно будет только у вас!',
     view_event: 'Смотреть на сайте',
+    view_page: 'Смотреть на сайте',
     saved: 'Сохранено',
     showcase_project: 'Витринный проект?',
     showcase_project_hint:
@@ -505,6 +623,12 @@ export default defineI18nModule({
     cv_project_hint:
       'Потенциальному работодателю будет интересно увидеть этот проект.',
     cv_project_label: 'Резюме',
+    project_showcase_badge: 'Витринный',
+    project_showcase_badge_hint:
+      'Проект показывается в витрине на главной странице и выше в каталоге.',
+    project_portfolio_badge: 'Портфолио',
+    project_portfolio_badge_hint:
+      'Проект включён в профессиональное портфолио.',
     project_files: 'Файлы проекта',
     project_files_description: 'Иконка, баннер, витрина и остальные файлы.',
     event_title: 'Название события',
@@ -517,6 +641,23 @@ export default defineI18nModule({
     event_periods_empty: 'Добавьте хотя бы одну дату или временной промежуток.',
     event_content: 'Контент события',
     event_content_hint: 'Подробные материалы и содержание события.',
+    page_title: 'Название страницы',
+    page_title_hint: 'Короткое и узнаваемое название страницы.',
+    page_summary: 'Описание страницы',
+    page_summary_hint: 'Кратко объясните содержание страницы.',
+    page_access: 'Доступ к странице',
+    page_content: 'Контент страницы',
+    page_content_hint: 'Основное содержание страницы.',
+    page_icon: 'Иконка страницы',
+    page_icon_hint:
+      'Необязательно. Без файла используется автоиконка страницы.',
+    page_slug: 'Slug страницы',
+    page_slug_hint:
+      'Уникальная URL-безопасная часть адреса: строчные латинские буквы, цифры и дефисы.',
+    page_link_example: (slug) => `Итоговая ссылка: /pages/${slug}/`,
+    page_slug_invalid: 'Используйте строчные латинские буквы, цифры и дефисы.',
+    page_slug_already_taken: 'Страница с таким slug уже существует.',
+    delete_page: 'Удалить страницу',
     event_files: 'Файлы события',
     event_files_description: 'Произвольные файлы события любого формата.',
     event_action: 'Кнопка действия события',

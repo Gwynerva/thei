@@ -14,6 +14,7 @@ export {
 export const ASSET_CONTAINER_TYPES = [
   'project',
   'event',
+  'page',
   'asset',
   'content',
   'tag',
@@ -45,8 +46,8 @@ export interface ImageAssetMeta extends AssetMetaBase {
   width?: number;
   /** Pixel height after upload/transformation when the file has intrinsic dimensions. */
   height?: number;
-  /** OKLCH hue (0-359) of the dominant color. */
-  dominantHue?: number;
+  /** Perceptual OKLCH accent hue (0-359). */
+  accentHue?: number;
 }
 
 export interface VideoAssetMeta extends AssetMetaBase {
@@ -54,8 +55,8 @@ export interface VideoAssetMeta extends AssetMetaBase {
   width?: number;
   /** Pixel height after upload/transformation when available. */
   height?: number;
-  /** OKLCH hue (0-359) of the generated first-frame preview. */
-  dominantHue?: number;
+  /** Perceptual OKLCH accent hue (0-359) of the first-frame preview. */
+  accentHue?: number;
   /** Whether the stored video keeps or strips audio. */
   audio?: 'keep' | 'strip' | 'none' | 'unknown';
 }

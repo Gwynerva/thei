@@ -150,12 +150,6 @@ const iconSlot = useSingleMediaAsset({
   size: iconSize,
   usageDelta: () =>
     projectAssetUsageDelta(projectData.value, savedProjectData.value),
-  afterDetach: async () => {
-    if (!currentProjectUuid.value) return;
-    iconMedia.value = await $fetch<MediaDescriptor>(
-      `/api/generated-icons/project/${encodeURIComponent(currentProjectUuid.value)}`,
-    );
-  },
 });
 
 const bannerSlot = useSingleMediaAsset({

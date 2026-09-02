@@ -3,6 +3,7 @@ import { assetUsages } from './asset-usages';
 import { content } from './content';
 import { events } from './events';
 import { projects } from './projects';
+import { pages } from './pages';
 import { adminSessions } from './admin-sessions';
 import {
   projectContentSections,
@@ -23,6 +24,7 @@ export const schema = {
   content,
   events,
   projects,
+  pages,
   adminSessions,
   projectContentSections,
   projectStages,

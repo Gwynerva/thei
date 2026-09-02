@@ -7,6 +7,7 @@ import type {
   ProjectActionTarget,
 } from '#layers/thei/shared/project-action';
 import { projectActionContextAccentHue } from '#layers/thei/shared/project-action';
+import { accentHueCssColor } from '#layers/thei/shared/accent-color';
 
 const props = defineProps<{
   text: string;
@@ -30,9 +31,7 @@ const displayedIcon = computed(
 );
 const neutralColor = 'var(--color-text-3)';
 const hueColor = (hue: number | undefined) =>
-  hue === undefined
-    ? neutralColor
-    : `oklch(var(--lightness-accent) var(--chroma-accent) ${hue})`;
+  accentHueCssColor(hue, neutralColor);
 const manualAccent = computed(() =>
   /^#[0-9a-fA-F]{6}$/.test(props.accentColor)
     ? props.accentColor

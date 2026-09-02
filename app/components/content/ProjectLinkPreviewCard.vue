@@ -2,7 +2,7 @@
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 
 const props = defineProps<{
-  entityType?: 'project' | 'event';
+  entityType?: 'project' | 'event' | 'page';
   title: string;
   summary: string;
   iconMedia?: MediaDescriptor;
@@ -30,12 +30,10 @@ const props = defineProps<{
     ]"
   >
     <span
-      class="entity-preview absolute inset-y-0 left-0 w-32 bg-bg-accent
-        [--preview-mask-end:60%] [--preview-mask-soft-alpha:10%]
-        [--preview-mask-soft:40%] [--preview-mask-start-alpha:100%]
-        [--preview-mask-strong-alpha:70%] [--preview-mask-strong:10%]
-        sm:[--preview-mask-end:80%] sm:[--preview-mask-soft:60%]
-        sm:[--preview-mask-strong:25%]"
+      class="entity-preview absolute inset-y-0 right-0 w-40 bg-bg-accent
+        [--preview-mask-end:100%] [--preview-mask-soft-alpha:25%]
+        [--preview-mask-soft:78%] [--preview-mask-start-alpha:100%]
+        [--preview-mask-strong-alpha:90%] [--preview-mask-strong:45%] sm:w-48"
       aria-hidden="true"
     >
       <Media
@@ -45,14 +43,14 @@ const props = defineProps<{
       />
       <span
         v-else
-        class="flex size-full items-center justify-start pl-xs text-text-3"
+        class="flex size-full items-center justify-end pr-xs text-text-3"
       >
         <Icon :name="entityType ?? 'project'" class="entity-type-icon" />
       </span>
     </span>
     <span
-      class="entity-preview-text relative ml-md min-w-0 flex-1 sm:ml-8"
-      :class="flush ? 'my-xs mr-xs' : undefined"
+      class="entity-preview-text relative z-1 min-w-0 flex-1 pr-24 sm:pr-36"
+      :class="flush ? 'm-xs' : undefined"
     >
       <span
         class="flex items-center gap-1 truncate text-sm font-semibold
@@ -74,7 +72,7 @@ const props = defineProps<{
 
 .entity-preview {
   mask-image: linear-gradient(
-    to right,
+    to left,
     rgb(0 0 0 / var(--preview-mask-start-alpha)) 0%,
     rgb(0 0 0 / var(--preview-mask-strong-alpha)) var(--preview-mask-strong),
     rgb(0 0 0 / var(--preview-mask-soft-alpha)) var(--preview-mask-soft),

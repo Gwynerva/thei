@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { resolveEditorBlockMove } from '../../../app/composables/editor-block-drag';
+import {
+  editorPrivateSectionLayoutIsValid,
+  editorPrivateSectionMoveIsValid,
+} from '../../../app/composables/editor-private-sections';
 
 describe('Editor.js block drag helpers', () => {
   it('places the source after the block marked by the drop indicator', () => {
@@ -58,5 +62,43 @@ describe('Editor.js block drag helpers', () => {
     expect(
       resolveEditorBlockMove('first', 'removed', getIndex),
     ).toBeUndefined();
+  });
+});
+
+describe('private section drag constraints', () => {
+  const boundary = (id: string, sectionId: string) => ({ id, sectionId });
+
+  it('allows the two boundaries of one pair to swap roles', () => {
+    const blocks = [
+      boundary('a-start', 'a'),
+      { id: 'content' },
+      boundary('a-end', 'a'),
+    ];
+    expect(editorPrivateSectionMoveIsValid(blocks, 2, 0)).toBe(true);
+  });
+
+  it('rejects moves that cross or nest stable pairs', () => {
+    const blocks = [
+      boundary('a-start', 'a'),
+      { id: 'a-content' },
+      boundary('a-end', 'a'),
+      boundary('b-start', 'b'),
+      { id: 'b-content' },
+      boundary('b-end', 'b'),
+    ];
+    expect(editorPrivateSectionLayoutIsValid(blocks)).toBe(true);
+    expect(editorPrivateSectionMoveIsValid(blocks, 2, 4)).toBe(false);
+    expect(editorPrivateSectionMoveIsValid(blocks, 2, 5)).toBe(false);
+  });
+
+  it('allows ordinary content to move into and out of sections', () => {
+    const blocks = [
+      { id: 'outside' },
+      boundary('start', 'section'),
+      { id: 'inside' },
+      boundary('end', 'section'),
+    ];
+    expect(editorPrivateSectionMoveIsValid(blocks, 0, 2)).toBe(true);
+    expect(editorPrivateSectionMoveIsValid(blocks, 2, 0)).toBe(true);
   });
 });

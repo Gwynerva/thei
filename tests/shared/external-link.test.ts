@@ -42,6 +42,9 @@ describe('external links', () => {
     expect(truncateExternalLinkText('  A   short\n title ')).toBe(
       'A short title',
     );
+    expect(truncateExternalLinkText('🙂'.repeat(121), 120)).toBe(
+      `${'🙂'.repeat(119)}…`,
+    );
   });
 
   it('normalizes an Editor.js external link block', async () => {

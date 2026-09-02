@@ -45,6 +45,7 @@ describe('bundled icons data', () => {
     );
     expect(icons.iconNames).toContain('action-click');
     expect(icons.iconsSvg).toContain('<symbol id="action-click"');
+    expect(icons.iconNames).not.toContain('eye-open');
     expect(icons.iconNames).toEqual(
       expect.arrayContaining([
         'asterisk',
@@ -61,6 +62,9 @@ describe('bundled icons data', () => {
         'list-unordered',
         'link-broken',
         'history',
+        'page',
+        'visibility',
+        'visibility-off',
       ]),
     );
   });

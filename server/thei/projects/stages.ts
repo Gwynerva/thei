@@ -13,6 +13,7 @@ import {
   deleteProjectContentItemContent,
   prepareProjectContentItems,
   projectContentItemIdsToRemove,
+  ProjectContentItemStorageError,
 } from './content-items';
 import { deleteStagePeriods, replaceStagePeriods } from './stage-periods';
 
@@ -35,6 +36,24 @@ export async function prepareProjectStages(
       .all()
       .map((item) => item.stageUuid),
   );
+  const publicIds = stages.map((stage) => stage.publicId);
+  if (new Set(publicIds).size !== publicIds.length)
+    throw new ProjectContentItemStorageError('Duplicate stage public ID');
+  if (publicIds.length) {
+    const submittedIds = new Set(
+      stages.map((stage) => stage.stageUuid).filter(Boolean),
+    );
+    const collision = db
+      .select({ stageUuid: schema.projectStages.stageUuid })
+      .from(schema.projectStages)
+      .where(inArray(schema.projectStages.publicId, publicIds))
+      .all()
+      .find((stage) => !submittedIds.has(stage.stageUuid));
+    if (collision)
+      throw new ProjectContentItemStorageError(
+        'Stage public ID is already taken',
+      );
+  }
   return prepareProjectContentItems(stages, {
     existingIds,
     getId: (stage) => stage.stageUuid,
@@ -96,6 +115,8 @@ export function applyProjectStages(
         projectUuid,
         title: stage.title,
         summary: stage.summary,
+        humanReadableSlug: stage.humanReadableSlug,
+        publicId: stage.publicId,
         isPrivate: stage.isPrivate,
         createdAt: now,
         updatedAt: now,
@@ -105,6 +126,8 @@ export function applyProjectStages(
         set: {
           title: stage.title,
           summary: stage.summary,
+          humanReadableSlug: stage.humanReadableSlug,
+          publicId: stage.publicId,
           isPrivate: stage.isPrivate,
           updatedAt: now,
         },
@@ -178,6 +201,8 @@ export async function getProjectStages(projectUuid: string) {
         stageUuid: stage.stageUuid,
         title: stage.title,
         summary: stage.summary,
+        humanReadableSlug: stage.humanReadableSlug,
+        publicId: stage.publicId,
         isPrivate: stage.isPrivate,
         periods: (periodsByStage.get(stage.stageUuid) ?? []).map(
           ({ startDate, endDate }) => ({ startDate, endDate }),

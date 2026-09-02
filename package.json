@@ -19,6 +19,7 @@
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@floating-ui/vue": "^1.1.11",
     "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/vue-virtual": "^3.13.36",
     "@vuepic/vue-datepicker": "^14.0.0",
     "better-sqlite3": "^12.11.1",
     "cheerio": "1.0.0-rc.11",
@@ -38,6 +39,7 @@
   },
   "devDependencies": {
     "@golar/vue": "^0.1.10",
+    "@playwright/test": "^1.62.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/fluent-ffmpeg": "^2.1.28",
     "@types/node": "^25.9.5",

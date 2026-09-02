@@ -53,7 +53,7 @@ export type ProjectGetResponse = {
   showcase: boolean;
   cv: boolean;
   iconAssetUuid?: string;
-  iconMedia: MediaDescriptor;
+  iconMedia?: MediaDescriptor;
   /** Stored file size in bytes. */
   iconAssetSize?: number;
   bannerAssetUuid?: string;

@@ -10,6 +10,8 @@ import type {
   ContentAssetData,
   ContentGalleryItem,
   ContentMediaLayout,
+  ContentPrivateSectionBoundaryData,
+  ContentPrivateSectionEdge,
 } from '#layers/thei/shared/content';
 import { normalizeContentMediaCaption } from '#layers/thei/shared/content';
 import ContentMediaCard from '#layers/thei/app/components/content/ContentMediaCard.vue';
@@ -67,6 +69,9 @@ interface ContentToolLabels {
   description: string;
   fileWithExtension: (extension?: string) => string;
   privateAccess: string;
+  privateSection: string;
+  privateSectionStart: string;
+  privateSectionEnd: string;
   externalLinkLoading: string;
   externalLinkError: string;
 }
@@ -90,6 +95,10 @@ interface EntityLinkToolConfig {
   resolver: ContentLinkResolver;
   beginTransientSelection?: () => void;
   endTransientSelection?: (persisted: boolean) => void;
+}
+
+interface PrivateSectionBoundaryToolConfig {
+  labels: ContentToolLabels;
 }
 
 type ContentToolOptions<
@@ -250,7 +259,9 @@ export class EntityLinkTool implements BlockTool {
 
   validate(data: { entityType?: string; entityId?: string }) {
     return Boolean(
-      (data.entityType === 'project' || data.entityType === 'event') &&
+      (data.entityType === 'project' ||
+        data.entityType === 'event' ||
+        data.entityType === 'page') &&
       data.entityId?.trim(),
     );
   }
@@ -299,7 +310,7 @@ export class EntityLinkTool implements BlockTool {
           })
         : h(ContentAssetSkeleton, {
             icon: 'link',
-            label: 'Choose a project or event',
+            label: 'Choose a project, event, or page',
             readOnly: this.options.readOnly,
             onPick: () => void this.pick(),
           }),
@@ -742,17 +753,21 @@ export class PrivateAccessTune implements BlockTune {
   private labels: ContentToolLabels;
   private block?: BlockAPI;
   private wrapper?: HTMLElement;
+  private isDisabled: () => boolean;
 
   constructor(options: {
     data?: { isPrivate?: boolean };
     config?: {
       labels?: ContentToolLabels;
+      isDisabled?: (blockId: string) => boolean;
     };
     block?: BlockAPI;
   }) {
     this.isPrivate = options.data?.isPrivate === true;
     this.labels = getLabels(options.config);
     this.block = options.block;
+    this.isDisabled = () =>
+      Boolean(options.block && options.config?.isDisabled?.(options.block.id));
   }
 
   render() {
@@ -761,7 +776,9 @@ export class PrivateAccessTune implements BlockTune {
       title: this.labels.privateAccess,
       toggle: true,
       isActive: () => this.isPrivate,
+      isDisabled: this.isDisabled(),
       onActivate: () => {
+        if (this.isDisabled()) return;
         this.isPrivate = !this.isPrivate;
         this.syncBlockState();
         this.block?.dispatchChange();
@@ -782,7 +799,7 @@ export class PrivateAccessTune implements BlockTune {
   }
 
   save() {
-    return this.isPrivate ? { isPrivate: true } : {};
+    return !this.isDisabled() && this.isPrivate ? { isPrivate: true } : {};
   }
 
   private syncBlockState() {
@@ -791,6 +808,68 @@ export class PrivateAccessTune implements BlockTune {
     } else {
       this.wrapper?.removeAttribute('data-content-private');
     }
+  }
+}
+
+export class PrivateSectionBoundaryTool implements BlockTool {
+  static toolbox = {
+    title: 'Private section',
+    icon: editorIcon('lock-close'),
+    data: {
+      edge: 'start',
+      createPair: true,
+    },
+  };
+
+  static get isReadOnlySupported() {
+    return true;
+  }
+
+  private sectionId: string;
+  private edge: ContentPrivateSectionEdge;
+  private createPair: boolean;
+
+  constructor(
+    private options: ContentToolOptions<
+      Partial<ContentPrivateSectionBoundaryData> & { createPair?: boolean },
+      PrivateSectionBoundaryToolConfig
+    >,
+  ) {
+    this.sectionId =
+      typeof options.data.sectionId === 'string' && options.data.sectionId
+        ? options.data.sectionId
+        : `private-section-${crypto.randomUUID()}`;
+    this.edge = options.data.edge === 'end' ? 'end' : 'start';
+    this.createPair = options.data.createPair === true;
+  }
+
+  render() {
+    const element = document.createElement('div');
+    element.className = 'content-editor-private-section-boundary';
+    element.dataset.mutationFree = 'true';
+    element.dataset.privateSectionId = this.sectionId;
+    element.dataset.privateSectionEdge = this.edge;
+    element.dataset.privateSectionStartLabel = this.labels.privateSectionStart;
+    element.dataset.privateSectionEndLabel = this.labels.privateSectionEnd;
+    if (this.createPair) element.dataset.privateSectionCreatePair = 'true';
+
+    const label = document.createElement('span');
+    label.className = 'content-editor-private-section-boundary__label';
+    label.innerHTML = `${editorIcon('lock-close')}<span>${
+      this.edge === 'start'
+        ? this.labels.privateSectionStart
+        : this.labels.privateSectionEnd
+    }</span>`;
+    element.append(label);
+    return element;
+  }
+
+  save(): ContentPrivateSectionBoundaryData {
+    return { sectionId: this.sectionId, edge: this.edge };
+  }
+
+  private get labels() {
+    return getLabels(contentToolConfig(this.options.config));
   }
 }
 
@@ -812,6 +891,9 @@ function getLabels(
       fileWithExtension: (extension) =>
         extension ? `File with extension ${extension.toUpperCase()}` : 'File',
       privateAccess: 'Private access',
+      privateSection: 'Private section',
+      privateSectionStart: 'Start of private section',
+      privateSectionEnd: 'End of private section',
       externalLinkLoading: 'Loading link details…',
       externalLinkError: 'Could not load link preview',
     }

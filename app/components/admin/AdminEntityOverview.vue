@@ -2,7 +2,7 @@
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 
 defineProps<{
-  entityType: 'project' | 'event';
+  entityType: 'project' | 'event' | 'page';
   title: string;
   count: number;
   listTo: string;

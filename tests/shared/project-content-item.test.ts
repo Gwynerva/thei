@@ -8,18 +8,22 @@ import {
 const content = (text = 'Body') => ({
   data: { blocks: [{ type: 'paragraph', data: { text } }] },
 });
+const link = { humanReadableSlug: 'item', publicId: 'ItemPublicId' };
 
 describe('project stages', () => {
   it('requires one valid period and sorts stages from oldest to newest', () => {
     expect(
       normalizeProjectStages([
         {
+          ...link,
           title: 'Later',
           summary: '',
           isPrivate: false,
           periods: [{ startDate: '2026-06-01', endDate: '2026-06-30' }],
         },
         {
+          ...link,
+          publicId: 'EarlierPublicId',
           title: 'Earlier',
           summary: '',
           isPrivate: false,
@@ -33,6 +37,7 @@ describe('project stages', () => {
     expect(
       normalizeProjectStages([
         {
+          ...link,
           title: 'Stage',
           summary: '',
           isPrivate: false,
@@ -42,12 +47,13 @@ describe('project stages', () => {
     ).toBeUndefined();
     expect(() =>
       normalizeProjectStages([
-        { title: 'Stage', summary: '', isPrivate: false },
+        { ...link, title: 'Stage', summary: '', isPrivate: false },
       ]),
     ).toThrow('Stage period is required');
     expect(() =>
       normalizeProjectStages([
         {
+          ...link,
           title: 'Stage',
           summary: '',
           isPrivate: false,
@@ -116,6 +122,7 @@ describe('project content sections', () => {
     expect(() =>
       normalizeProjectContentSections([
         {
+          ...link,
           title: 'Section',
           summary: '',
           isPrivate: false,
@@ -129,6 +136,7 @@ describe('project content sections', () => {
     expect(() =>
       normalizeProjectContentSections([
         {
+          ...link,
           title: 'Section',
           summary: '',
           isPrivate: false,
@@ -146,12 +154,15 @@ describe('project content sections', () => {
     expect(
       normalizeProjectContentSections([
         {
+          ...link,
           title: 'Text section',
           summary: '',
           isPrivate: false,
           content: content('Meaningful text'),
         },
         {
+          ...link,
+          publicId: 'MediaPublicId',
           title: 'Media section',
           summary: '',
           isPrivate: false,
@@ -177,12 +188,15 @@ describe('project content sections', () => {
     expect(
       normalizeProjectContentSections([
         {
+          ...link,
           title: ' Second ',
           summary: ' Explanation ',
           isPrivate: false,
           content: content('Two'),
         },
         {
+          ...link,
+          publicId: 'FirstPublicId',
           title: 'First',
           summary: '',
           isPrivate: true,

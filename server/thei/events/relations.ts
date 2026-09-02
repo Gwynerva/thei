@@ -2,7 +2,7 @@ import { and, asc, eq } from 'drizzle-orm';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import type { EventProjectRelationEditItem } from '#layers/thei/shared/event';
 import { buildAdminAssetUrls } from '../assets/urls';
-import { resolveGeneratedIcon } from '../media/generated-icon';
+import { resolveEntityIconMedia } from '../media/generated-icon';
 
 export async function prepareEventRelations(
   relations: EventProjectRelationEditItem[] | undefined,
@@ -67,9 +67,11 @@ export async function getEventRelations(eventUuid: string) {
         humanReadableSlug: project.humanReadableSlug,
         publicId: project.publicId,
         note: note || undefined,
-        iconMedia: icon
-          ? (await buildAdminAssetUrls(icon.asset)).media!
-          : resolveGeneratedIcon('project', project.projectUuid),
+        iconMedia: resolveEntityIconMedia(
+          'project',
+          project.projectUuid,
+          icon ? (await buildAdminAssetUrls(icon.asset)).media! : undefined,
+        ),
       };
     }),
   );

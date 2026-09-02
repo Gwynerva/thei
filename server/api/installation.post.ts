@@ -26,6 +26,8 @@ export default defineEventHandler(async (event): Promise<InstallResponse> => {
   const configPath = THEI_SERVER.contentPath('thei.config.json');
   await rm(THEI_SERVER.projectPath('.thei'), { force: true, recursive: true });
   await mkdir(dirname(configPath), { recursive: true });
+  const fresh = await createFreshDbContext();
+  fresh.rawDb.close();
   await writeFile(
     configPath,
     JSON.stringify(
@@ -46,7 +48,6 @@ export default defineEventHandler(async (event): Promise<InstallResponse> => {
     ),
     'utf-8',
   );
-  await createFreshDbContext();
   await bootTheiServer();
 
   return { type: 'success' };

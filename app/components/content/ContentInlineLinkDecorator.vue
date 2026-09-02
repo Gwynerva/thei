@@ -69,7 +69,11 @@ function applyRuntimeState(
       `url("${cssUrl(`${iconsHref}#${resolved.state === 'restricted' ? 'lock-partial' : 'link-broken'}`)}")`,
     );
     link.setAttribute('aria-invalid', 'true');
-    if (reference.kind === 'project' || reference.kind === 'event') {
+    if (
+      reference.kind === 'project' ||
+      reference.kind === 'event' ||
+      reference.kind === 'page'
+    ) {
       link.removeAttribute('href');
       link.removeAttribute('target');
       link.removeAttribute('rel');

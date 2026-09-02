@@ -139,8 +139,8 @@ async function buildProcessedAssetMeta(
     const meta: ImageAssetMeta = {
       ...dimensions,
       ...(sourceFile?.name ? { originalName: sourceFile.name } : {}),
-      ...(preview.dominantHue !== undefined
-        ? { dominantHue: preview.dominantHue }
+      ...(preview.accentHue !== undefined
+        ? { accentHue: preview.accentHue }
         : {}),
     };
     return { meta, previewAssetUuid: preview.previewAssetUuid };
@@ -152,8 +152,8 @@ async function buildProcessedAssetMeta(
       ...dimensions,
       ...(sourceFile?.name ? { originalName: sourceFile.name } : {}),
       audio: hasAudio === true ? 'keep' : 'none',
-      ...(preview.dominantHue !== undefined
-        ? { dominantHue: preview.dominantHue }
+      ...(preview.accentHue !== undefined
+        ? { accentHue: preview.accentHue }
         : {}),
     };
     return { meta, previewAssetUuid: preview.previewAssetUuid };

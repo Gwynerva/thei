@@ -38,14 +38,14 @@ onBeforeUnmount(() => unregisterHeader?.());
   >
     <div ref="headerContent">
       <!-- Header Content -->
-      <div class="border-b border-border-1 bg-bg-1/40 backdrop-blur-md">
+      <GlassSurface>
         <div
           class="m-auto w-(--_width-sticky-content) max-w-full px-window"
           v-bind="attrs"
         >
           <slot></slot>
         </div>
-      </div>
+      </GlassSurface>
 
       <!-- Header Error -->
       <div

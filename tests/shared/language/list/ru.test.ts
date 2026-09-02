@@ -30,6 +30,12 @@ describe('Editor.js phrases', () => {
       move_down: 'Спустить',
     });
     expect(ruModule.phrases.content_private_block).toBe('Приватный блок');
+    expect(ruModule.phrases.content_private_section_start).toBe(
+      'Начало приватной секции',
+    );
+    expect(ruModule.phrases.content_private_section_end).toBe(
+      'Конец приватной секции',
+    );
     expect(ruModule.phrases.content_snapshots).toBe('История версий');
     expect(ruModule.phrases.content_media_stretch).toBe('Растянуть');
   });

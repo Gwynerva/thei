@@ -5,6 +5,7 @@ const props = withDefaults(
   defineProps<{
     period: DateRange;
     removable?: boolean;
+    href?: string;
   }>(),
   { removable: false },
 );
@@ -29,9 +30,13 @@ const label = computed(() => {
 </script>
 
 <template>
-  <span
+  <component
+    :is="href && !removable ? 'a' : 'span'"
+    :href="href && !removable ? href : undefined"
     class="inline-flex max-w-full items-center rounded-full bg-bg-3 py-1 text-xs
-      text-text-2"
+      text-text-2 no-underline transition focus-visible:ring-2
+      focus-visible:ring-accent focus-visible:outline-none hocus:bg-bg-4
+      hocus:text-text-1"
     :class="removable ? 'pr-1 pl-xs' : 'px-xs'"
   >
     <span class="truncate">{{ label }}</span>
@@ -46,5 +51,5 @@ const label = computed(() => {
     >
       <Icon name="close" />
     </button>
-  </span>
+  </component>
 </template>

@@ -126,7 +126,7 @@ const list = computed<ProjectListResponse | undefined>(() => data.value);
             :aria-label="phrase.view_project"
             class="cursor-pointer text-text-2/50 transition hocus:text-text-1"
           >
-            <Icon name="eye-open" class="text-lg" />
+            <Icon name="visibility" class="text-lg" />
           </TheiLink>
         </template>
       </AdminEntityListItem>

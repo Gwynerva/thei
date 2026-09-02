@@ -11,6 +11,7 @@ import {
   deleteProjectContentItemContent,
   prepareProjectContentItems,
   projectContentItemIdsToRemove,
+  ProjectContentItemStorageError,
 } from './content-items';
 
 type PreparedSection = ProjectSectionContentItem & {
@@ -30,6 +31,24 @@ export async function prepareProjectContentSections(
     .where(eq(schema.projectContentSections.projectUuid, projectUuid))
     .all();
   const existingIds = new Set(existing.map((item) => item.sectionUuid));
+  const publicIds = sections.map((section) => section.publicId);
+  if (new Set(publicIds).size !== publicIds.length)
+    throw new ProjectContentItemStorageError('Duplicate section public ID');
+  if (publicIds.length) {
+    const submittedIds = new Set(
+      sections.map((section) => section.sectionUuid).filter(Boolean),
+    );
+    const collision = db
+      .select({ sectionUuid: schema.projectContentSections.sectionUuid })
+      .from(schema.projectContentSections)
+      .where(inArray(schema.projectContentSections.publicId, publicIds))
+      .all()
+      .find((section) => !submittedIds.has(section.sectionUuid));
+    if (collision)
+      throw new ProjectContentItemStorageError(
+        'Section public ID is already taken',
+      );
+  }
   return prepareProjectContentItems(sections, {
     existingIds,
     getId: (section) => section.sectionUuid,
@@ -90,6 +109,8 @@ export function applyProjectContentSections(
         projectUuid,
         title: section.title,
         summary: section.summary,
+        humanReadableSlug: section.humanReadableSlug,
+        publicId: section.publicId,
         isPrivate: section.isPrivate,
         sortOrder: index,
         createdAt: now,
@@ -100,6 +121,8 @@ export function applyProjectContentSections(
         set: {
           title: section.title,
           summary: section.summary,
+          humanReadableSlug: section.humanReadableSlug,
+          publicId: section.publicId,
           isPrivate: section.isPrivate,
           sortOrder: index,
           updatedAt: now,
@@ -150,7 +173,10 @@ export async function getProjectContentSections(projectUuid: string) {
       sectionUuid: section.sectionUuid,
       title: section.title,
       summary: section.summary,
+      humanReadableSlug: section.humanReadableSlug,
+      publicId: section.publicId,
       isPrivate: section.isPrivate,
+      createdAt: section.createdAt,
       content:
         (await THEI_SERVER.content.buildFieldValue(
           'project-section',

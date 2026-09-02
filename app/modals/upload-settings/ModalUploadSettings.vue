@@ -861,7 +861,7 @@ function busyText(uploading: string, processing: string): string {
 
 function buttonIcon(
   action: UploadSettingsBusyAction,
-  fallback: 'cloud-upload' | 'eye-open',
+  fallback: 'cloud-upload' | 'visibility',
 ) {
   return busyAction.value === action ? 'loading' : fallback;
 }

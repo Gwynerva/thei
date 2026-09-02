@@ -12,6 +12,7 @@ export const CONTENT_OWNER_TYPES = [
   'project-stage',
   'project-section',
   'event',
+  'page',
   'news',
 ] as const;
 export type ContentOwnerType = (typeof CONTENT_OWNER_TYPES)[number];
@@ -21,6 +22,7 @@ export const CONTENT_SLOTS = [
   'project-stage-body',
   'project-section-body',
   'event-body',
+  'page-body',
   'news-body',
 ] as const;
 export type ContentSlot = (typeof CONTENT_SLOTS)[number];
@@ -36,11 +38,19 @@ export const CONTENT_BLOCK_TYPES = [
   'contentAttachment',
   'externalLink',
   'entityLink',
+  'privateSectionBoundary',
 ] as const;
 export type ContentBlockType = (typeof CONTENT_BLOCK_TYPES)[number];
 
 export interface ContentPrivateAccessTune {
   isPrivate: boolean;
+}
+
+export type ContentPrivateSectionEdge = 'start' | 'end';
+
+export interface ContentPrivateSectionBoundaryData {
+  sectionId: string;
+  edge: ContentPrivateSectionEdge;
 }
 
 export interface ContentOutputBlock<
@@ -59,6 +69,35 @@ export interface ContentOutputData {
   version?: string;
   time?: number;
   blocks: ContentOutputBlock[];
+}
+
+export interface ContentPrivateSectionRange {
+  sectionId: string;
+  startIndex: number;
+  endIndex: number;
+}
+
+export interface PublicPrivateSectionPlaceholderBlock {
+  type: 'privateSectionPlaceholder';
+  data: ContentSummary;
+}
+
+export interface PublicPrivateSectionExpandedBlock {
+  type: 'privateSectionExpanded';
+  data: {
+    summary: ContentSummary;
+    blocks: ContentOutputBlock[];
+  };
+}
+
+export type PublicContentOutputBlock =
+  | ContentOutputBlock
+  | PublicPrivateSectionPlaceholderBlock
+  | PublicPrivateSectionExpandedBlock;
+
+export interface PublicContentOutputData {
+  version?: string;
+  blocks: PublicContentOutputBlock[];
 }
 
 export interface ContentSummary {
@@ -154,8 +193,40 @@ export function normalizeContentData(value: unknown): ContentOutputData {
 
   return {
     version: optionalString(value.version),
-    blocks,
+    blocks: normalizePrivateSections(blocks),
   };
+}
+
+export function contentPrivateSectionRanges(
+  value: ContentOutputData | null | undefined,
+): ContentPrivateSectionRange[] {
+  const blocks = normalizeContentData(value).blocks;
+  const boundaries = new Map<string, number[]>();
+
+  blocks.forEach((block, index) => {
+    if (block.type !== 'privateSectionBoundary') return;
+    const sectionId = (
+      block.data as unknown as ContentPrivateSectionBoundaryData
+    ).sectionId;
+    const indices = boundaries.get(sectionId) ?? [];
+    indices.push(index);
+    boundaries.set(sectionId, indices);
+  });
+
+  return Array.from(boundaries, ([sectionId, indices]) => ({
+    sectionId,
+    startIndex: indices[0]!,
+    endIndex: indices[1]!,
+  })).sort((left, right) => left.startIndex - right.startIndex);
+}
+
+export function contentBlockIsInPrivateSection(
+  ranges: readonly ContentPrivateSectionRange[],
+  index: number,
+): boolean {
+  return ranges.some(
+    (range) => range.startIndex < index && index < range.endIndex,
+  );
 }
 
 /**
@@ -236,6 +307,7 @@ export function collectContentExternalLinkUrls(
   const normalized = normalizeContentData(data);
   const urls = new Set<string>();
   for (const block of normalized.blocks) {
+    if (block.type === 'privateSectionBoundary') continue;
     if (block.type === 'externalLink') urls.add((block.data as any).url);
   }
   for (const link of contentInlineLinksFromData(normalized)) {
@@ -339,6 +411,7 @@ function contentPlainTextFromNormalized(
         }
         break;
       case 'entityLink':
+      case 'privateSectionBoundary':
         break;
     }
   }
@@ -358,6 +431,7 @@ function contentPreviewTextFromNormalized(normalized: ContentOutputData) {
         collectListPreviewText(textParts, (block.data as any).items);
         break;
       case 'delimiter':
+      case 'privateSectionBoundary':
         break;
     }
   }
@@ -387,7 +461,9 @@ function summarizeNormalizedContentData(
   }
 
   return {
-    blockCount: normalized.blocks.length,
+    blockCount: normalized.blocks.filter(
+      (block) => block.type !== 'privateSectionBoundary',
+    ).length,
     wordCount: countContentWords(normalized),
     assetCount: assetUuids.size,
     assetTotalSize,
@@ -431,9 +507,13 @@ function collectNormalizedContentAssetSizeMap(
 export function extractContentAssetRefs(
   data: ContentOutputData,
 ): ContentAssetRef[] {
+  const normalized = normalizeContentData(data);
+  const ranges = contentPrivateSectionRanges(normalized);
   const refs: ContentAssetRef[] = [];
-  for (const block of data.blocks) {
-    const isPrivate = contentBlockIsPrivate(block);
+  for (const [index, block] of normalized.blocks.entries()) {
+    const isPrivate =
+      contentBlockIsPrivate(block) ||
+      contentBlockIsInPrivateSection(ranges, index);
     const blockId = block.id;
 
     if (block.type === 'contentMedia' || block.type === 'contentAttachment') {
@@ -509,7 +589,10 @@ function normalizeContentBlock(value: unknown): ContentOutputBlock {
   }
 
   const data = normalizeBlockData(type, value.data);
-  const tune = normalizePrivateAccessTune(value.tunes);
+  const tune =
+    type === 'privateSectionBoundary'
+      ? undefined
+      : normalizePrivateAccessTune(value.tunes);
 
   return {
     id: optionalString(value.id),
@@ -578,11 +661,24 @@ function normalizeBlockData(
 
     case 'entityLink': {
       const entityType =
-        data.entityType === 'project' || data.entityType === 'event'
+        data.entityType === 'project' ||
+        data.entityType === 'event' ||
+        data.entityType === 'page'
           ? data.entityType
           : undefined;
       const entityId = optionalString(data.entityId)?.trim();
       return { entityType, entityId };
+    }
+
+    case 'privateSectionBoundary': {
+      const sectionId = optionalString(data.sectionId)?.trim();
+      if (!sectionId) {
+        throw new ContentValidationError('Invalid private section boundary');
+      }
+      return {
+        sectionId,
+        edge: data.edge === 'end' ? 'end' : 'start',
+      } satisfies ContentPrivateSectionBoundaryData;
     }
   }
 }
@@ -627,10 +723,83 @@ function isContentBlockEmpty(block: ContentOutputBlock): boolean {
     case 'entityLink':
       return !(
         ((block.data as any).entityType === 'project' ||
-          (block.data as any).entityType === 'event') &&
+          (block.data as any).entityType === 'event' ||
+          (block.data as any).entityType === 'page') &&
         optionalString((block.data as any).entityId)?.trim()
       );
+
+    case 'privateSectionBoundary':
+      return false;
   }
+}
+
+function normalizePrivateSections(
+  blocks: ContentOutputBlock[],
+): ContentOutputBlock[] {
+  const boundaries = new Map<string, number[]>();
+  blocks.forEach((block, index) => {
+    if (block.type !== 'privateSectionBoundary') return;
+    const sectionId = (
+      block.data as unknown as ContentPrivateSectionBoundaryData
+    ).sectionId;
+    const indices = boundaries.get(sectionId) ?? [];
+    indices.push(index);
+    boundaries.set(sectionId, indices);
+  });
+
+  const ranges = Array.from(boundaries, ([sectionId, indices]) => {
+    if (indices.length !== 2) {
+      throw new ContentValidationError('Invalid private section boundaries');
+    }
+    return {
+      sectionId,
+      startIndex: indices[0]!,
+      endIndex: indices[1]!,
+    };
+  }).sort((left, right) => left.startIndex - right.startIndex);
+
+  let previousEnd = -1;
+  for (const range of ranges) {
+    if (range.startIndex <= previousEnd) {
+      throw new ContentValidationError('Private sections cannot overlap');
+    }
+    previousEnd = range.endIndex;
+  }
+
+  const emptyBoundaryIndices = new Set<number>();
+  const innerIndices = new Set<number>();
+  for (const range of ranges) {
+    let hasContent = false;
+    for (let index = range.startIndex + 1; index < range.endIndex; index++) {
+      if (blocks[index]?.type !== 'privateSectionBoundary') hasContent = true;
+      innerIndices.add(index);
+    }
+    if (!hasContent) {
+      emptyBoundaryIndices.add(range.startIndex);
+      emptyBoundaryIndices.add(range.endIndex);
+    }
+  }
+
+  return blocks.flatMap((block, index): ContentOutputBlock[] => {
+    if (emptyBoundaryIndices.has(index)) return [];
+    if (block.type === 'privateSectionBoundary') {
+      const data = block.data as unknown as ContentPrivateSectionBoundaryData;
+      const range = ranges.find((item) => item.sectionId === data.sectionId)!;
+      return [
+        {
+          ...block,
+          data: {
+            sectionId: data.sectionId,
+            edge: index === range.startIndex ? 'start' : 'end',
+          },
+          tunes: undefined,
+        },
+      ];
+    }
+    if (!innerIndices.has(index) || !block.tunes?.privateAccess) return [block];
+    const { tunes: _tunes, ...withoutTunes } = block;
+    return [withoutTunes];
+  });
 }
 
 function normalizePrivateAccessTune(

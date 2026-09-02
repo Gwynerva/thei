@@ -1,24 +1,30 @@
 <script lang="ts" setup>
 import type { ProjectListResponse } from '#layers/thei/shared/api/project';
 import type { EventListResponse } from '#layers/thei/shared/api/event';
+import type { PageListResponse } from '#layers/thei/shared/api/page';
 
 definePageMeta({ layout: 'admin' });
 
 await useAdminTabTitle(computed(() => phrase.value.admin_panel));
 
-const [projectsResult, eventsResult, tagsResult] = await Promise.all([
-  useFetch<ProjectListResponse>('/api/admin/projects', {
-    query: { order: 'newest', page: 1, pageSize: 5 },
-    key: 'admin-dashboard-projects',
-  }),
-  useFetch<EventListResponse>('/api/admin/events', {
-    query: { order: 'newest', page: 1, pageSize: 5 },
-    key: 'admin-dashboard-events',
-  }),
-  useFetch<{ count: number }>('/api/admin/tags/stats', {
-    key: 'admin-tag-count',
-  }),
-]);
+const [projectsResult, eventsResult, pagesResult, tagsResult] =
+  await Promise.all([
+    useFetch<ProjectListResponse>('/api/admin/projects', {
+      query: { order: 'newest', page: 1, pageSize: 5 },
+      key: 'admin-dashboard-projects',
+    }),
+    useFetch<EventListResponse>('/api/admin/events', {
+      query: { order: 'newest', page: 1, pageSize: 5 },
+      key: 'admin-dashboard-events',
+    }),
+    useFetch<PageListResponse>('/api/admin/pages', {
+      query: { order: 'newest', page: 1, pageSize: 1 },
+      key: 'admin-dashboard-pages',
+    }),
+    useFetch<{ count: number }>('/api/admin/tags/stats', {
+      key: 'admin-tag-count',
+    }),
+  ]);
 
 const projectItems = computed(() =>
   (projectsResult.data.value?.items ?? []).map((project) => ({
@@ -71,30 +77,59 @@ const eventItems = computed(() =>
       />
     </div>
 
-    <TheiLink to="/admin/tags/" class="group mb-lg">
-      <Box>
-        <div class="flex items-center justify-between gap-md p-md">
-          <div class="flex min-w-0 items-center gap-sm">
-            <div
-              class="flex size-12 shrink-0 items-center justify-center
-                rounded-normal bg-accent/20 text-xl text-accent transition
-                group-hocus:bg-accent/30"
-            >
-              <Icon name="tag" />
+    <div class="mb-lg grid gap-md sm:grid-cols-2">
+      <TheiLink to="/admin/pages/" class="group">
+        <Box class="h-full">
+          <div class="flex items-center justify-between gap-md p-md">
+            <div class="flex min-w-0 items-center gap-sm">
+              <div
+                class="flex size-12 shrink-0 items-center justify-center
+                  rounded-normal bg-accent/20 text-xl text-accent transition
+                  group-hocus:bg-accent/30"
+              >
+                <Icon name="page" />
+              </div>
+              <div class="min-w-0">
+                <p class="font-semibold transition group-hocus:text-accent">
+                  {{ phrase.admin_pages }}
+                </p>
+                <p class="text-sm text-text-3">
+                  {{ phrase.admin_pages_description }}
+                </p>
+              </div>
             </div>
-            <div class="min-w-0">
-              <p class="font-semibold transition group-hocus:text-accent">
-                {{ phrase.admin_tags }}
-              </p>
-              <p class="text-sm text-text-3">{{ phrase.tags_description }}</p>
-            </div>
+            <span class="shrink-0 text-2xl font-bold text-text-2">
+              {{ pagesResult.data.value?.total ?? 0 }}
+            </span>
           </div>
-          <span class="shrink-0 text-2xl font-bold text-text-2">
-            {{ tagsResult.data.value?.count ?? 0 }}
-          </span>
-        </div>
-      </Box>
-    </TheiLink>
+        </Box>
+      </TheiLink>
+
+      <TheiLink to="/admin/tags/" class="group">
+        <Box class="h-full">
+          <div class="flex items-center justify-between gap-md p-md">
+            <div class="flex min-w-0 items-center gap-sm">
+              <div
+                class="flex size-12 shrink-0 items-center justify-center
+                  rounded-normal bg-accent/20 text-xl text-accent transition
+                  group-hocus:bg-accent/30"
+              >
+                <Icon name="tag" />
+              </div>
+              <div class="min-w-0">
+                <p class="font-semibold transition group-hocus:text-accent">
+                  {{ phrase.admin_tags }}
+                </p>
+                <p class="text-sm text-text-3">{{ phrase.tags_description }}</p>
+              </div>
+            </div>
+            <span class="shrink-0 text-2xl font-bold text-text-2">
+              {{ tagsResult.data.value?.count ?? 0 }}
+            </span>
+          </div>
+        </Box>
+      </TheiLink>
+    </div>
 
     <AdminSessions />
   </div>

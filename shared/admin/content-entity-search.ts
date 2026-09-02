@@ -9,7 +9,7 @@ export type ContentEntitySearchItem = {
   summary: string;
   url: string;
   humanReadableSlug: string;
-  publicId: string;
+  publicId?: string;
   updatedAt: number;
   previewMedia?: MediaDescriptor;
   tags?: TagItem[];
@@ -36,9 +36,9 @@ export function rankContentEntities(
 }
 
 function bestRank(item: ContentEntitySearchItem, query: string) {
-  const fields = [item.title, item.publicId, item.humanReadableSlug].map(
-    (value) => value.toLocaleLowerCase(),
-  );
+  const fields = [item.title, item.publicId, item.humanReadableSlug]
+    .filter((value): value is string => Boolean(value))
+    .map((value) => value.toLocaleLowerCase());
   let best = Number.POSITIVE_INFINITY;
   fields.forEach((value, index) => {
     const rank =

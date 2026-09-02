@@ -2,7 +2,7 @@
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 
 const props = defineProps<{
-  entityType: 'project' | 'event';
+  entityType: 'project' | 'event' | 'page';
   title: string;
   summary: string;
   previewMedia?: MediaDescriptor;

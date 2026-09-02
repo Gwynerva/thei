@@ -15,9 +15,9 @@
     font-style: italic;
   }
 
-  .content-renderer > * + *,
+  .content-renderer.content-prose > * + *,
   .content-editor.content-prose .ce-block + .ce-block {
-    margin-top: var(--spacing-sm);
+    margin-top: var(--spacing-sm) !important;
   }
 
   .content-prose :is(p, .ce-paragraph) {
@@ -31,28 +31,22 @@
   }
 
   .content-prose h2 {
-    @apply w-full border-b border-border-1 py-sm text-[1.5rem] leading-tight
-      font-bold tracking-tight;
+    @apply w-full border-b border-border-1 text-[1.5rem] font-bold
+      tracking-tight;
+    padding: var(--spacing-sm) 0 !important;
     margin: 0 !important;
+    line-height: 1.25 !important;
   }
 
   .content-prose h3 {
-    @apply text-[1.2rem] leading-tight font-bold tracking-tight;
+    @apply text-[1.2rem] font-bold tracking-tight;
+    padding: 0 !important;
     margin: 0 !important;
+    line-height: 1.25 !important;
   }
 
   .content-editor.content-prose :is(h2.ce-header, h3.ce-header) {
     outline: none;
-  }
-
-  .content-editor.content-prose h2.ce-header {
-    padding: var(--spacing-sm) 0 !important;
-    line-height: 1.25 !important;
-  }
-
-  .content-editor.content-prose h3.ce-header {
-    padding: 0 !important;
-    line-height: 1.25 !important;
   }
 
   .content-prose .content-list {

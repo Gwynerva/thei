@@ -15,6 +15,7 @@ const props = withDefaults(
     addLabel?: string;
     removeLabel?: string;
     captionPlaceholder?: string;
+    openable?: boolean;
   }>(),
   { editable: false },
 );
@@ -26,6 +27,7 @@ const emit = defineEmits<{
   remove: [id: string];
   reorder: [items: ContentGalleryItem[]];
   caption: [id: string, value: string];
+  open: [item: ContentGalleryItem];
 }>();
 
 const tileRoot = useTemplateRef<HTMLElement>('tileRoot');
@@ -143,10 +145,12 @@ const dragSort = useDragSort(
       :caption-placeholder
       :media-rounded="false"
       :media-natural-size="false"
+      :openable
       caption-class="px-xs pb-xs"
       class="border-t border-border-1"
       @edit="emit('edit', activeItem.id)"
       @caption="emit('caption', activeItem.id, $event)"
+      @open="emit('open', activeItem)"
     />
   </section>
 </template>

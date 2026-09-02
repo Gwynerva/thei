@@ -71,11 +71,14 @@ export function normalizeExternalLinkUrl(value: unknown): string {
   return url.href;
 }
 
-export function truncateExternalLinkText(value: unknown): string | undefined {
+export function truncateExternalLinkText(
+  value: unknown,
+  limit = EXTERNAL_LINK_TEXT_LIMIT,
+): string | undefined {
   if (typeof value !== 'string') return undefined;
   const normalized = value.replace(/\s+/g, ' ').trim();
   if (!normalized) return undefined;
   const characters = Array.from(normalized);
-  if (characters.length <= EXTERNAL_LINK_TEXT_LIMIT) return normalized;
-  return `${characters.slice(0, EXTERNAL_LINK_TEXT_LIMIT - 1).join('')}…`;
+  if (characters.length <= limit) return normalized;
+  return `${characters.slice(0, Math.max(0, limit - 1)).join('')}…`;
 }

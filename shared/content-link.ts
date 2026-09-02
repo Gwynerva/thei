@@ -1,7 +1,7 @@
 import type { MediaDescriptor } from './media';
 import { normalizeExternalLinkUrl } from './external-link';
 
-export const CONTENT_ENTITY_TYPES = ['project', 'event'] as const;
+export const CONTENT_ENTITY_TYPES = ['project', 'event', 'page'] as const;
 export type ContentEntityType = (typeof CONTENT_ENTITY_TYPES)[number];
 
 export interface ContentEntityLink {
@@ -30,6 +30,10 @@ export type ContentLinkReference =
       eventUuid: string;
     }
   | {
+      kind: 'page';
+      pageUuid: string;
+    }
+  | {
       kind: 'external';
       url: string;
     };
@@ -48,6 +52,13 @@ export type ResolvedContentLink =
       title: string;
       summary: string;
       previewMedia?: MediaDescriptor;
+    })
+  | (Extract<ContentLinkReference, { kind: 'page' }> & {
+      state: 'resolved';
+      href: string;
+      title: string;
+      summary: string;
+      iconMedia: MediaDescriptor;
     })
   | (Extract<ContentLinkReference, { kind: 'external' }> & {
       state: 'resolved';
@@ -296,14 +307,17 @@ export function extractContentInlineLinks(html: string): ContentInlineLink[] {
   return links;
 }
 
-export function contentLinkReferenceFromAnchor(
-  link: HTMLAnchorElement,
-): ContentLinkReference | undefined {
+export function contentLinkReferenceFromAnchor(link: {
+  dataset: Record<string, string | undefined>;
+  href: string;
+}): ContentLinkReference | undefined {
   if (link.dataset.contentLink === 'entity' && link.dataset.entityId) {
     if (link.dataset.entityType === 'project')
       return { kind: 'project', projectUuid: link.dataset.entityId };
     if (link.dataset.entityType === 'event')
       return { kind: 'event', eventUuid: link.dataset.entityId };
+    if (link.dataset.entityType === 'page')
+      return { kind: 'page', pageUuid: link.dataset.entityId };
   }
   if (link.dataset.contentLink === 'external' || link.href) {
     try {
@@ -317,6 +331,7 @@ export function contentLinkReferenceFromAnchor(
 export function contentLinkReferenceKey(reference: ContentLinkReference) {
   if (reference.kind === 'project') return `project:${reference.projectUuid}`;
   if (reference.kind === 'event') return `event:${reference.eventUuid}`;
+  if (reference.kind === 'page') return `page:${reference.pageUuid}`;
   return `external:${reference.url}`;
 }
 

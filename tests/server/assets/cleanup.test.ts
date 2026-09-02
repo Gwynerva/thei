@@ -72,6 +72,15 @@ describe('asset cleanup', () => {
           createdAt integer NOT NULL,
           updatedAt integer NOT NULL
         );
+        CREATE TABLE pages (
+          pageUuid text PRIMARY KEY,
+          slug text NOT NULL UNIQUE,
+          title text NOT NULL,
+          summary text NOT NULL,
+          access text NOT NULL,
+          createdAt integer NOT NULL,
+          updatedAt integer NOT NULL
+        );
         CREATE TABLE content (
           contentUuid text PRIMARY KEY,
           ownerType text NOT NULL,
@@ -149,6 +158,15 @@ describe('asset cleanup', () => {
         createdAt: now,
         updatedAt: now,
       });
+      await db.insert(schema.pages).values({
+        pageUuid: 'pg-live',
+        slug: 'page',
+        title: 'Page',
+        summary: 'Summary',
+        access: 'public' as any,
+        createdAt: now,
+        updatedAt: now,
+      });
 
       await insertAsset(db, 'a-live', 'webp', now);
       await insertAsset(db, 'a-content', 'webp', old);
@@ -207,6 +225,12 @@ describe('asset cleanup', () => {
         },
         {
           assetUuid: 'a-live',
+          containerType: 'page',
+          containerId: 'pg-live',
+          role: 'icon',
+        },
+        {
+          assetUuid: 'a-live',
           containerType: 'event',
           containerId: 'e-gone',
           role: 'icon',
@@ -235,7 +259,7 @@ describe('asset cleanup', () => {
       ]);
 
       const remainingUsages = await db.select().from(schema.assetUsages);
-      expect(remainingUsages).toHaveLength(3);
+      expect(remainingUsages).toHaveLength(4);
       expect(remainingUsages).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -255,6 +279,12 @@ describe('asset cleanup', () => {
             containerType: 'event',
             containerId: 'e-live',
             role: 'banner',
+          }),
+          expect.objectContaining({
+            assetUuid: 'a-live',
+            containerType: 'page',
+            containerId: 'pg-live',
+            role: 'icon',
           }),
         ]),
       );

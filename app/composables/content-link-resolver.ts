@@ -12,21 +12,35 @@ export type ContentLinkFetcher = (
   options: { query: Record<string, string> },
 ) => Promise<ContentLinkApiResponse>;
 
-const appResolvers = new WeakMap<object, ContentLinkResolver>();
+export type ContentLinkAudience = 'public' | 'admin';
 
-export function useContentLinkResolver(): ContentLinkResolver {
+const appResolvers = new WeakMap<
+  object,
+  Map<ContentLinkAudience, ContentLinkResolver>
+>();
+
+export function useContentLinkResolver(
+  audience: ContentLinkAudience = 'public',
+): ContentLinkResolver {
   const nuxtApp = useNuxtApp();
-  const cached = appResolvers.get(nuxtApp);
+  let resolvers = appResolvers.get(nuxtApp);
+  if (!resolvers) {
+    resolvers = new Map();
+    appResolvers.set(nuxtApp, resolvers);
+  }
+  const cached = resolvers.get(audience);
   if (cached) return cached;
   const resolver = createContentLinkResolver(
     useRequestFetch() as ContentLinkFetcher,
+    audience === 'admin' ? '/api/admin/content-links' : '/api/content-links',
   );
-  appResolvers.set(nuxtApp, resolver);
+  resolvers.set(audience, resolver);
   return resolver;
 }
 
 export function createContentLinkResolver(
   fetcher: ContentLinkFetcher,
+  endpoint = '/api/content-links',
 ): ContentLinkResolver {
   const resolved = new Map<string, ResolvedContentLink>();
   const pending = new Map<string, Promise<ResolvedContentLink>>();
@@ -38,11 +52,13 @@ export function createContentLinkResolver(
 
     let request = pending.get(key);
     if (!request) {
-      request = resolveReference(fetcher, reference).then((result) => {
-        pending.delete(key);
-        if (result.state === 'resolved') resolved.set(key, result);
-        return result;
-      });
+      request = resolveReference(fetcher, endpoint, reference).then(
+        (result) => {
+          pending.delete(key);
+          if (result.state === 'resolved') resolved.set(key, result);
+          return result;
+        },
+      );
       pending.set(key, request);
     }
     return await request;
@@ -51,6 +67,7 @@ export function createContentLinkResolver(
 
 async function resolveReference(
   fetcher: ContentLinkFetcher,
+  endpoint: string,
   reference: ContentLinkReference,
 ): Promise<ResolvedContentLink> {
   let normalizedReference = reference;
@@ -66,7 +83,7 @@ async function resolveReference(
   }
 
   try {
-    const response = await fetcher('/api/content-links', {
+    const response = await fetcher(endpoint, {
       query:
         normalizedReference.kind === 'project'
           ? {
@@ -75,7 +92,9 @@ async function resolveReference(
             }
           : normalizedReference.kind === 'event'
             ? { kind: 'event', eventUuid: normalizedReference.eventUuid }
-            : { kind: 'external', url: normalizedReference.url },
+            : normalizedReference.kind === 'page'
+              ? { kind: 'page', pageUuid: normalizedReference.pageUuid }
+              : { kind: 'external', url: normalizedReference.url },
     });
     return response.state === 'restricted'
       ? { ...normalizedReference, state: 'restricted' }

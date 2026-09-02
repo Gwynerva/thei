@@ -1,3 +1,5 @@
+import { publicIdIsValid } from './public-link';
+
 export function buildProjectUrl(
   humanReadable: string,
   publicId: string,
@@ -12,5 +14,24 @@ export function publicIdFromProjectUrlPart(value: string): string {
 }
 
 export function isPublicId(value: string): boolean {
-  return /^[A-Za-z0-9]{1,64}$/.test(value);
+  return publicIdIsValid(value);
+}
+
+export type ProjectChildKind = 'stages' | 'sections';
+
+export function buildProjectChildUrl(
+  projectHumanReadable: string,
+  projectPublicId: string,
+  kind: ProjectChildKind,
+  childHumanReadable: string,
+  childPublicId: string,
+) {
+  const childPart = childHumanReadable
+    ? `${childHumanReadable}-${childPublicId}`
+    : childPublicId;
+  return `${buildProjectUrl(projectHumanReadable, projectPublicId)}${kind}/${childPart}/`;
+}
+
+export function publicIdFromProjectChildUrlPart(value: string): string {
+  return value.slice(value.lastIndexOf('-') + 1);
 }

@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { ProjectExternalLinkEditItem } from '#layers/thei/shared/external-link';
+import { accentHueCssColor } from '#layers/thei/shared/accent-color';
 
 const props = defineProps<{
   link: ProjectExternalLinkEditItem;
@@ -14,10 +15,7 @@ const component = computed(() =>
 
 const accentColor = computed(() => {
   const hue = props.link.faviconMedia?.accentHue;
-
-  return hue === undefined
-    ? 'var(--color-text-3)'
-    : `oklch(var(--lightness-accent) var(--chroma-accent) ${hue})`;
+  return accentHueCssColor(hue, 'var(--color-text-3)');
 });
 </script>
 
