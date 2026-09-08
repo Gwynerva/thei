@@ -80,7 +80,7 @@ const hasFileColor = computed(
   () =>
     action.value.target === 'file' &&
     (fileMedia.value?.kind === 'image' || fileMedia.value?.kind === 'video') &&
-    fileMedia.value.accentHue !== undefined,
+    fileMedia.value.accent !== undefined,
 );
 
 watch(
@@ -451,7 +451,7 @@ function clearFile() {
                   'accent-gradient': phrase.project_action_background_accent,
                   asset: phrase.image,
                   ...((action.iconMode === 'asset' &&
-                    iconMedia?.accentHue !== undefined) ||
+                    iconMedia?.accent !== undefined) ||
                   action.backgroundMode === 'icon-gradient'
                     ? {
                         'icon-gradient':
@@ -464,7 +464,7 @@ function clearFile() {
                           phrase.project_action_background_file_color,
                       }
                     : {}),
-                  ...((hasSiteIcon && faviconMedia?.accentHue !== undefined) ||
+                  ...((hasSiteIcon && faviconMedia?.accent !== undefined) ||
                   action.backgroundMode === 'link-gradient'
                     ? {
                         'link-gradient':

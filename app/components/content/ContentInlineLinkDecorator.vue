@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { MediaPlayback } from '#layers/thei/shared/media';
 import {
   contentLinkReferenceFromAnchor,
   contentLinkReferenceKey,
@@ -11,6 +12,7 @@ import ContentLinkPreviewCard from './ContentLinkPreviewCard.vue';
 
 const props = defineProps<{
   root: HTMLElement | null;
+  playback?: MediaPlayback;
   resolver?: ContentLinkResolver;
 }>();
 
@@ -179,6 +181,7 @@ onBeforeUnmount(() => {
       :label="anchor?.textContent || ''"
       :loading="!result"
       :interactive="false"
+      :playback
       flush
     />
   </FloatingPopup>

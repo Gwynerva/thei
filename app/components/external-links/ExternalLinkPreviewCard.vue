@@ -4,8 +4,8 @@ import {
   normalizeExternalLinkUrl,
   type ExternalLink,
 } from '#layers/thei/shared/external-link';
-import { accentHueCssColor } from '#layers/thei/shared/accent-color';
-import type { MediaDescriptor } from '#layers/thei/shared/media';
+import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
+import type { MediaDescriptor, MediaPlayback } from '#layers/thei/shared/media';
 
 const props = defineProps<{
   link?: ExternalLink;
@@ -15,6 +15,7 @@ const props = defineProps<{
   loadingText?: string;
   flush?: boolean;
   interactive: boolean;
+  playback?: MediaPlayback;
   displayTitle?: string;
   displayDescription?: string;
   displayIconMedia?: MediaDescriptor;
@@ -44,14 +45,16 @@ const interactiveHref = computed(() => {
 });
 
 const accentColor = computed(() => {
-  const hue = iconMedia.value?.accentHue;
-  return accentHueCssColor(hue, 'var(--color-text-3)');
+  const hue = iconMedia.value?.accent;
+  return imageAccentCssColor(hue, 'var(--color-text-3)');
 });
+const { engaged, events: mediaEvents } = useMediaInteraction();
 </script>
 
 <template>
   <div class="@container w-full min-w-0">
     <component
+    v-on="mediaEvents"
       :is="interactiveHref ? 'a' : 'div'"
       :href="interactiveHref"
       :target="interactiveHref ? '_blank' : undefined"
@@ -65,6 +68,8 @@ const accentColor = computed(() => {
       <Media
         v-if="iconMedia"
         v-bind="iconMedia"
+        :engaged
+        :playback="playback ?? 'manual'"
         class="size-12 shrink-0 rounded-sm object-cover opacity-100
           @max-[24rem]:size-10"
         :class="{ 'm-xs mr-0': flush }"

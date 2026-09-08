@@ -11,6 +11,7 @@ test.beforeEach(async ({ page }) => {
     await new Promise((resolve) => setTimeout(resolve, 700));
     await route.fulfill({
       contentType: 'image/svg+xml',
+      headers: { 'cache-control': 'no-store' },
       body: '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="320" height="180" fill="gray"/></svg>',
     });
   });
@@ -88,11 +89,12 @@ for (const viewport of [
 
 test('content video controls work inline; showcase videos still open a modal', async ({
   page,
+  browserName,
 }) => {
   const root = page.locator('[data-renderer]');
   const frame = root.locator('figure').filter({ hasText: 'Video caption' });
   await frame.scrollIntoViewIfNeeded();
-  const video = frame.locator('video');
+  const video = frame.locator('video[data-media-main]');
   await expect(video).toHaveAttribute('controls', '');
   await expect
     .poll(() =>
@@ -100,8 +102,18 @@ test('content video controls work inline; showcase videos still open a modal', a
     )
     .toBeGreaterThan(1);
   expect(await frame.locator('button').count()).toBe(0);
+  await expect(video).toHaveCSS('opacity', '1');
+  // The fixture qualifies for autoplay; start paused before testing its play control.
+  await video.evaluate((element: HTMLVideoElement) => element.pause());
+  await video.hover();
   const box = await video.boundingBox();
-  await page.mouse.click(box!.x + 22, box!.y + box!.height - 20);
+  // Chromium puts play above its seek bar; Firefox keeps both on the bottom row.
+  await video.click({
+    position: {
+      x: 22,
+      y: box!.height - (browserName === 'chromium' ? 48 : 20),
+    },
+  });
   await expect
     .poll(() => video.evaluate((element: HTMLVideoElement) => element.paused))
     .toBe(false);
@@ -119,6 +131,7 @@ test('content video controls work inline; showcase videos still open a modal', a
   const gallery = root.locator('[data-content-gallery]');
   await gallery.locator('[role="button"]').nth(1).click();
   await expect(gallery.locator('video[controls]')).toBeVisible();
+  await expect(gallery.locator('[data-gallery-incoming]')).toHaveCount(0);
   expect(await gallery.locator('figure button').count()).toBe(0);
   await gallery.getByText('Gallery video', { exact: true }).click();
   await expect(page.locator('dialog')).not.toBeVisible();
@@ -218,6 +231,14 @@ test('media hydration, gallery selection and snapshot restore do not flash dirty
   await expect(state).toHaveAttribute('data-transitions', '');
   await editor.locator('[data-content-gallery] [role="button"]').nth(1).click();
   await expect(
+    editor.locator(
+      '[data-content-gallery] [data-gallery-incoming] [contenteditable="true"]',
+    ),
+  ).toContainText('second');
+  await expect(
+    editor.locator('[data-content-gallery] [data-gallery-incoming]'),
+  ).toHaveCount(0);
+  await expect(
     editor.locator('[data-content-gallery] [contenteditable="true"]'),
   ).toContainText('second');
   await page.waitForTimeout(1200);
@@ -227,4 +248,48 @@ test('media hydration, gallery selection and snapshot restore do not flash dirty
   await page.waitForTimeout(1200);
   await expect(editor.locator('[data-save]')).toHaveText('Saved');
   await expect(state).toHaveAttribute('data-transitions', '');
+});
+
+test('gallery keeps the previous visual until a slow replacement can crossfade', async ({
+  page,
+}) => {
+  const gallery = page.locator('[data-renderer] [data-content-gallery]');
+  const outgoing = gallery.locator('[data-gallery-outgoing]');
+  await expect(outgoing).toContainText('Gallery caption');
+
+  await gallery.locator('[role="button"]').nth(2).click();
+  await expect(outgoing).toContainText('Gallery caption');
+  await expect(outgoing).toHaveCSS('opacity', '1');
+  await expect(gallery.locator('[data-gallery-incoming]')).toContainText(
+    'Slow gallery',
+  );
+  await gallery.locator('[data-gallery-incoming]').evaluate((element) => {
+    element.setAttribute('data-crossfade-instance', 'preserved');
+  });
+
+  await expect.poll(() => outgoing.textContent()).toContain('Slow gallery');
+  await expect(gallery.locator('[data-gallery-incoming]')).toHaveCount(0);
+  await expect(outgoing).toHaveAttribute(
+    'data-crossfade-instance',
+    'preserved',
+  );
+
+  const publicGallery = page.locator('[data-default-gallery]');
+  const publicOutgoing = publicGallery.locator('[data-gallery-outgoing]');
+  await publicGallery
+    .getByRole('button', { name: 'Showcase slow-image' })
+    .click();
+  const publicIncoming = publicGallery.locator('[data-gallery-incoming]');
+  await expect(publicIncoming).toContainText('Showcase slow-image');
+  await publicIncoming.evaluate((element) => {
+    element.setAttribute('data-crossfade-instance', 'preserved');
+  });
+  await expect
+    .poll(() => publicOutgoing.textContent())
+    .toContain('Showcase slow-image');
+  await expect(publicIncoming).toHaveCount(0);
+  await expect(publicOutgoing).toHaveAttribute(
+    'data-crossfade-instance',
+    'preserved',
+  );
 });

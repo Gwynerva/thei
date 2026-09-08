@@ -91,9 +91,8 @@ defineExpose({ focus });
       v-else-if="results.length && !error"
       class="flex scrollbar-mini min-h-0 flex-col overflow-y-auto"
     >
-      <button
-        v-for="project in results"
-        :key="project.projectUuid"
+      <MediaInteraction v-for="project in results" :key="project.projectUuid" v-slot="{ engaged, events }">
+      <button v-on="events"
         type="button"
         class="group relative min-h-12 shrink-0 cursor-pointer overflow-hidden
           border-b border-border-1 bg-bg-1 text-left transition last:border-b-0
@@ -102,10 +101,14 @@ defineExpose({ focus });
       >
         <div
           class="project-search-icon absolute inset-y-0 left-0 w-12
-            bg-bg-accent"
+            "
         >
           <Media
             v-bind="project.iconMedia"
+            variant="ambient"
+            playback="interaction"
+            :engaged
+            align="left"
             class="size-full opacity-75 transition group-hocus:opacity-100"
           />
         </div>
@@ -120,6 +123,7 @@ defineExpose({ focus });
           </div>
         </div>
       </button>
+      </MediaInteraction>
     </div>
     <div v-else-if="!error" class="p-sm text-center text-xs text-text-3">
       {{ phrase.search_project_no_results }}

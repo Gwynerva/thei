@@ -7,7 +7,10 @@ import { findPageBySlug } from '../../server/thei/pages/repository/find-by-slug'
 import { findPageByUuid } from '../../server/thei/pages/repository/find-by-id';
 import { listPages } from '../../server/thei/pages/repository/list';
 import { deletePage } from '../../server/thei/pages/delete';
-import { buildPublicPageListItem } from '../../server/thei/public/entities';
+import {
+  buildPublicEntityChronology,
+  buildPublicPageListItem,
+} from '../../server/thei/public/entities';
 
 let rawDb: Database.Database | undefined;
 afterEach(() => rawDb?.close());
@@ -48,6 +51,25 @@ describe('pages repository', () => {
     expect(await buildPublicPageListItem(page!)).toMatchObject({
       updatedAt: '2026-08-23',
     });
+  });
+
+  it('merges chronology updates that happened on the creation day', () => {
+    const createdAt = Date.UTC(2026, 7, 23, 8);
+    expect(
+      buildPublicEntityChronology({ createdAt, updatedAt: createdAt }),
+    ).toEqual({ createdAt: '2026-08-23' });
+    expect(
+      buildPublicEntityChronology({
+        createdAt,
+        updatedAt: Date.UTC(2026, 7, 23, 18),
+      }),
+    ).toEqual({ createdAt: '2026-08-23' });
+    expect(
+      buildPublicEntityChronology({
+        createdAt,
+        updatedAt: Date.UTC(2026, 7, 24, 1),
+      }),
+    ).toEqual({ createdAt: '2026-08-23', updatedAt: '2026-08-24' });
   });
 
   it('deletes the page body, content usages, and icon usages', () => {

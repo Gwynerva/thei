@@ -35,7 +35,11 @@ describe.each([
     async (type) => {
       (globalThis as any).THEI_SERVER = {
         assets: {
-          findByUuid: async () => ({ type, size: 20, meta: { accentHue: 0 } }),
+          findByUuid: async () => ({
+            type,
+            size: 20,
+            meta: { accent: { hue: 0, chroma: 0.15 } },
+          }),
         },
       };
       expect(

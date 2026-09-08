@@ -145,3 +145,65 @@ test('browser Back closes nested modals one at a time without changing URL', asy
   uninstall();
   expect(removeGuard).toHaveBeenCalledOnce();
 });
+
+test('waits for the leave transition and deduplicates repeated closes', async () => {
+  const result = openModal(testModal);
+  await Promise.resolve();
+  const modal = modalStack.value[0]!;
+  let finish!: () => void;
+  const transition = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  modal.leaveTransition = transition;
+  expect(closeModal()).toBe(true);
+  expect(closeModal()).toBe(true);
+  expect(transition).toHaveBeenCalledOnce();
+  expect(modalStack.value).toEqual([modal]);
+  finish();
+  await expect(result).resolves.toEqual({ type: 'empty' });
+  expect(modalStack.value).toEqual([]);
+});
+
+test('browser Back waits for an animated modal without pushing another sentinel', async () => {
+  let popState: (() => void) | undefined;
+  const history = {
+    state: {} as object,
+    pushState: vi.fn((state: object) => {
+      history.state = state;
+    }),
+    back: vi.fn(),
+  };
+  vi.stubGlobal('window', {
+    history,
+    location: { href: 'http://localhost/projects/example/' },
+    addEventListener: (type: string, listener: () => void) => {
+      if (type === 'popstate') popState = listener;
+    },
+    removeEventListener: vi.fn(),
+  });
+  const uninstall = installModalNavigationInterceptor({
+    beforeEach: () => vi.fn(),
+  } as any);
+  const result = openModal(testModal);
+  await Promise.resolve();
+  const modal = modalStack.value[0]!;
+  let finish!: () => void;
+  modal.leaveTransition = () =>
+    new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+  history.state = {};
+  popState?.();
+  await Promise.resolve();
+  expect(modalStack.value).toEqual([modal]);
+  expect(history.pushState).toHaveBeenCalledOnce();
+  finish();
+  await result;
+  expect(modalStack.value).toEqual([]);
+  expect(history.pushState).toHaveBeenCalledOnce();
+  expect(history.back).not.toHaveBeenCalled();
+  uninstall();
+});

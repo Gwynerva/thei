@@ -1,3 +1,4 @@
+import type { ImageAccent } from '#layers/thei/shared/accent-color';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
@@ -22,7 +23,7 @@ import {
 } from '#layers/thei/shared/asset-upload-settings';
 import { randomId } from '#layers/thei/shared/utils/random-id';
 import { EntityPrefix, generateUnique, generateUniqueId } from '../entity-id';
-import { extractImageAccentHue } from './image-color';
+import { extractImageAccent } from './image-color';
 import { inspectVideo } from './process';
 import {
   createMediaPreview,
@@ -70,7 +71,7 @@ export async function createMediaPreviewAsset(
   sourceType: AssetType.Image | AssetType.Video,
 ): Promise<{
   previewAssetUuid: string;
-  accentHue?: number;
+  accent?: ImageAccent;
 }> {
   const preview = await createMediaPreview(sourceBuffer, sourceType);
   const previewBuffer = preview.buffer;
@@ -87,15 +88,15 @@ export async function createMediaPreviewAsset(
     await THEI_SERVER.assets.touch(existing.assetUuid);
     return {
       previewAssetUuid: existing.assetUuid,
-      accentHue: meta?.accentHue,
+      accent: meta?.accent,
     };
   }
 
-  const accentHue = await extractImageAccentHue(previewBuffer);
+  const accent = await extractImageAccent(previewBuffer);
   const meta: ImageAssetMeta = {
     width: preview.width,
     height: preview.height,
-    ...(accentHue !== undefined ? { accentHue } : {}),
+    ...(accent !== undefined ? { accent } : {}),
   };
 
   const { asset } = await storeAsset({
@@ -111,7 +112,7 @@ export async function createMediaPreviewAsset(
 
   return {
     previewAssetUuid: asset.assetUuid,
-    accentHue,
+    accent,
   };
 }
 
@@ -272,7 +273,7 @@ export async function buildStoredMediaDescriptor(
     src: buildAssetPreviewUrl(asset.assetUuid),
     kind: asset.type,
     previewSrc,
-    ...(meta?.accentHue !== undefined ? { accentHue: meta.accentHue } : {}),
+    ...(meta?.accent !== undefined ? { accent: meta.accent } : {}),
     ...(meta?.width ? { width: meta.width } : {}),
     ...(meta?.height ? { height: meta.height } : {}),
   };

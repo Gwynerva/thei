@@ -57,7 +57,7 @@ describe('generated fallback icons', () => {
     const uploaded = {
       kind: 'image' as const,
       src: '/pages/example/icon/custom.webp',
-      accentHue: 42,
+      accent: { hue: 42, chroma: 0.15 },
     };
 
     expect(resolveEntityIconMedia('page', 'pg-example', uploaded)).toBe(

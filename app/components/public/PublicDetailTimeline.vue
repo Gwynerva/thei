@@ -3,10 +3,21 @@ import {
   sortPublicDetailTimelineItems,
   type PublicDetailTimelineItem,
 } from './public-detail';
-import { formatAbsolutePublicDate } from '#layers/thei/app/composables/public-date';
+import { getPublicDatePresentation } from '#layers/thei/app/composables/public-date';
 
 const props = defineProps<{ items: PublicDetailTimelineItem[] }>();
-const orderedItems = computed(() => sortPublicDetailTimelineItems(props.items));
+const liveNow = useLiveNow();
+const orderedItems = computed(() =>
+  sortPublicDetailTimelineItems(props.items).map((item) => ({
+    ...item,
+    presentation: getPublicDatePresentation(
+      item.date,
+      language.value.code,
+      new Date(liveNow.value),
+      { relativeMonths: 3 },
+    ),
+  })),
+);
 </script>
 
 <template>
@@ -36,9 +47,10 @@ const orderedItems = computed(() => sortPublicDetailTimelineItems(props.items));
         </span>
         <time
           :datetime="item.date"
-          class="mt-1 block text-xs leading-none text-text-1"
+          :data-title-popup="item.presentation.title"
+          class="mt-1 block text-xs leading-none text-text-3"
         >
-          {{ formatAbsolutePublicDate(item.date, language.code) }}
+          {{ item.presentation.label }}
         </time>
       </span>
     </li>

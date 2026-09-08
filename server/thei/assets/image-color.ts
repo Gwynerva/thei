@@ -1,4 +1,5 @@
 import sharp from 'sharp';
+import type { ImageAccent } from '#layers/thei/shared/accent-color';
 
 const HUE_BIN_COUNT = 24;
 
@@ -8,51 +9,48 @@ function linearize(c: number): number {
   return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
 }
 
-/** Linear sRGB { r, g, b } (0–1 range) → OKLCH hue in degrees (0–359), or undefined if achromatic */
+/** Linear sRGB (0–1) → perceptual chromatic components in OKLab. */
 function rgbToOklab(
   r: number,
   g: number,
   b: number,
-): { lightness: number; a: number; b: number; chroma: number } {
-  // Linear sRGB → XYZ D65
-  const x = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
-  const y = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
-  const z = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
-
-  // XYZ → LMS (cube root)
-  const l = x;
-  const m = y;
-  const s = z;
+): { a: number; b: number; chroma: number } {
+  // Linear sRGB → cube-root LMS.
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
 
   // LMS → OKLab
-  const lightness = 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s;
   const a = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s;
   const bVal = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s;
 
-  // Reject near-achromatic colors (chroma too low to have a meaningful hue)
   const chroma = Math.sqrt(a * a + bVal * bVal);
-  return { lightness, a, b: bVal, chroma };
+  return { a, b: bVal, chroma };
 }
 
 /**
- * Extracts an accent hue from the strongest perceptual OKLCH color cluster.
- * Transparent and nearly-achromatic pixels are ignored, while clustering
- * prevents opposing colors from cancelling each other out.
+ * Select a representative hue by visible area, retaining its actual chroma.
+ * Neutral pixels contribute to coverage so a small colorful detail cannot
+ * tint a predominantly neutral image. Transparent padding contributes nothing.
  */
-export async function extractImageAccentHue(
+export async function extractImageAccent(
   buffer: Buffer,
-): Promise<number | undefined> {
+): Promise<ImageAccent | undefined> {
   const { data, info } = await sharp(buffer)
-    .resize(64, 64, { fit: 'contain' })
+    .resize(128, 128, { fit: 'inside', withoutEnlargement: true })
+    .toColourspace('srgb')
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
   const bins = Array.from({ length: HUE_BIN_COUNT }, () => 0);
-  const samples: Array<{ hue: number; weight: number }> = [];
+  const samples: Array<{ hue: number; weight: number; chroma: number }> = [];
+  let visibleArea = 0;
+  let chromaticArea = 0;
 
   for (let offset = 0; offset < data.length; offset += info.channels) {
     const alpha = data[offset + 3]! / 255;
     if (alpha < 0.12) continue;
+    visibleArea += alpha;
     const color = rgbToOklab(
       linearize(data[offset]!),
       linearize(data[offset + 1]!),
@@ -60,15 +58,16 @@ export async function extractImageAccentHue(
     );
     if (color.chroma < 0.018) continue;
     const hue = (Math.atan2(color.b, color.a) * (180 / Math.PI) + 360) % 360;
-    const visibleLightness =
-      0.45 + 0.55 * Math.sin(Math.PI * color.lightness) ** 0.7;
-    const weight = alpha * color.chroma ** 1.45 * visibleLightness;
+    const weight = alpha;
+    chromaticArea += weight;
     const bin = Math.floor((hue / 360) * HUE_BIN_COUNT) % HUE_BIN_COUNT;
     bins[bin]! += weight;
-    samples.push({ hue, weight });
+    samples.push({ hue, weight, chroma: color.chroma });
   }
 
-  if (!samples.length) return undefined;
+  if (!visibleArea) return undefined;
+  const coverage = chromaticArea / visibleArea;
+  if (coverage <= 0.2) return { hue: 0, chroma: 0 };
   const smoothed = bins.map(
     (weight, index) =>
       weight +
@@ -84,6 +83,7 @@ export async function extractImageAccentHue(
   let totalSin = 0;
   let totalCos = 0;
   let totalWeight = 0;
+  let totalChroma = 0;
 
   for (const sample of samples) {
     const distance = Math.abs(((sample.hue - winningCenter + 540) % 360) - 180);
@@ -92,10 +92,17 @@ export async function extractImageAccentHue(
     totalSin += Math.sin(radians) * sample.weight;
     totalCos += Math.cos(radians) * sample.weight;
     totalWeight += sample.weight;
+    totalChroma += sample.chroma * sample.weight;
   }
 
-  if (!totalWeight) return undefined;
-  return Math.round(
-    (Math.atan2(totalSin, totalCos) * (180 / Math.PI) + 360) % 360,
+  if (!totalWeight) return { hue: 0, chroma: 0 };
+  // Smoothstep avoids a saturation jump near the neutral coverage threshold.
+  const t = Math.min(1, (coverage - 0.2) / 0.2);
+  const chroma = Number(
+    ((totalChroma / totalWeight) * t * t * (3 - 2 * t)).toFixed(5),
   );
+  const hue =
+    Math.round((Math.atan2(totalSin, totalCos) * (180 / Math.PI) + 360) % 360) %
+    360;
+  return { hue: chroma === 0 ? 0 : hue, chroma };
 }

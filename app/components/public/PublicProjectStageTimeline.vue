@@ -16,7 +16,7 @@ function gapDuration(index: number) {
 </script>
 
 <template>
-  <ol v-if="items.length" class="relative">
+  <ol v-if="items.length" class="relative -ml-window sm:ml-0">
     <template v-for="(item, index) in items" :key="item.href">
       <li v-if="index && publicTimelineHasGap(gapDuration(index))">
         <PublicTimelineGap :duration="gapDuration(index)" />

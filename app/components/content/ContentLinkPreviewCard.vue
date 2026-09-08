@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { MediaPlayback } from '#layers/thei/shared/media';
 import type { ResolvedContentLink } from '#layers/thei/shared/content-link';
 import type { ExternalLink } from '#layers/thei/shared/external-link';
 import ExternalLinkPreviewCard from '#layers/thei/app/components/external-links/ExternalLinkPreviewCard.vue';
@@ -9,6 +10,7 @@ const props = defineProps<{
   label?: string;
   loading?: boolean;
   interactive: boolean;
+  playback?: MediaPlayback;
   flush?: boolean;
 }>();
 
@@ -42,6 +44,7 @@ const externalLink = computed<ExternalLink | undefined>(() => {
     "
     :href="result.href"
     :interactive="interactive"
+    :playback
     :flush="flush"
   />
   <div
@@ -61,6 +64,7 @@ const externalLink = computed<ExternalLink | undefined>(() => {
     :link="externalLink"
     :url="result.href"
     :interactive="interactive"
+    :playback
     :flush="flush"
   />
   <div

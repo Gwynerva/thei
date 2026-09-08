@@ -39,6 +39,29 @@ const activeItem = computed(
   () =>
     props.items.find((item) => item.id === activeId.value) ?? props.items[0],
 );
+const crossfade = useGalleryCrossfade(activeItem, (item) => item.id);
+const galleryLayers = computed(() =>
+  crossfade.layers.value.filter((layer) => layer.item.asset.media),
+);
+watch(
+  () => crossfade.incoming.value,
+  async (item) => {
+    if (!item) return;
+    const incomingMedia = item.asset.media;
+    const displayedMedia = crossfade.displayed.value?.asset.media;
+    if (
+      incomingMedia &&
+      (!displayedMedia ||
+        incomingMedia.kind !== displayedMedia.kind ||
+        incomingMedia.src !== displayedMedia.src ||
+        incomingMedia.previewSrc !== displayedMedia.previewSrc)
+    ) {
+      return;
+    }
+    await nextTick();
+    crossfade.settleIncoming(item.id);
+  },
+);
 
 function select(id: string) {
   if (id === activeId.value) return;
@@ -134,23 +157,56 @@ const dragSort = useDragSort(
       />
     </div>
 
-    <ContentMediaCard
-      v-if="activeItem?.asset.media"
-      :key="activeItem.id"
-      :asset="activeItem.asset"
-      layout="centered"
-      :caption="activeItem.caption"
-      :editable
-      :edit-label="chooseLabel"
-      :caption-placeholder
-      :media-rounded="false"
-      :media-natural-size="false"
-      :openable
-      caption-class="px-xs pb-xs"
-      class="border-t border-border-1"
-      @edit="emit('edit', activeItem.id)"
-      @caption="emit('caption', activeItem.id, $event)"
-      @open="emit('open', activeItem)"
-    />
+    <div
+      v-if="crossfade.displayed.value?.asset.media"
+      class="grid border-t border-border-1"
+      data-gallery-crossfade
+    >
+      <ContentMediaCard
+        v-for="layer in galleryLayers"
+        :key="layer.item.id"
+        :asset="layer.item.asset"
+        layout="centered"
+        :caption="layer.item.caption"
+        :editable
+        :edit-label="chooseLabel"
+        :caption-placeholder
+        :media-rounded="false"
+        :media-natural-size="false"
+        :openable
+        :suspended="
+          layer.role === 'displayed'
+            ? Boolean(crossfade.incoming.value)
+            : !crossfade.revealing.value
+        "
+        :inert="
+          layer.role === 'displayed'
+            ? Boolean(crossfade.incoming.value)
+            : !crossfade.revealing.value
+        "
+        caption-class="px-xs pb-xs"
+        class="col-start-1 row-start-1 transition-opacity duration-300
+          motion-reduce:duration-0"
+        :class="{
+          'pointer-events-none opacity-0':
+            layer.role === 'displayed'
+              ? crossfade.revealing.value
+              : !crossfade.revealing.value,
+          'pointer-events-auto opacity-100':
+            layer.role === 'incoming' && crossfade.revealing.value,
+        }"
+        :data-gallery-outgoing="layer.role === 'displayed' ? '' : undefined"
+        :data-gallery-incoming="layer.role === 'incoming' ? '' : undefined"
+        @ready="
+          layer.role === 'incoming' && crossfade.settleIncoming(layer.item.id)
+        "
+        @error="
+          layer.role === 'incoming' && crossfade.settleIncoming(layer.item.id)
+        "
+        @edit="emit('edit', layer.item.id)"
+        @caption="emit('caption', layer.item.id, $event)"
+        @open="emit('open', layer.item)"
+      />
+    </div>
   </section>
 </template>

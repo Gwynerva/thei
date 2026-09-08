@@ -76,21 +76,24 @@ defineExpose({ focus: () => input.value?.focus({ preventScroll: true }) });
       v-else-if="results.length && !error"
       class="flex scrollbar-mini min-h-0 flex-col overflow-y-auto"
     >
-      <button
-        v-for="item in results"
-        :key="`${item.entityType}:${item.entityId}`"
+      <MediaInteraction v-for="item in results" :key="`${item.entityType}:${item.entityId}`" v-slot="{ engaged, events }">
+      <button v-on="events"
         type="button"
         class="group relative min-h-14 cursor-pointer overflow-hidden border-t
           border-border-1 bg-bg-1 text-left first:border-t-0 hocus:bg-bg-3"
         @click="emit('select', item)"
       >
         <span
-          class="entity-preview absolute inset-y-0 right-0 w-24 bg-bg-accent"
+          class="entity-preview absolute inset-y-0 right-0 w-24 "
           aria-hidden="true"
         >
           <Media
             v-if="item.previewMedia"
             v-bind="item.previewMedia"
+            variant="ambient"
+            playback="interaction"
+            :engaged
+            align="right"
             class="size-full opacity-75 group-hocus:opacity-100"
           />
           <span
@@ -111,6 +114,7 @@ defineExpose({ focus: () => input.value?.focus({ preventScroll: true }) });
           }}</span>
         </span>
       </button>
+      </MediaInteraction>
     </div>
     <div v-else class="p-sm text-center text-xs text-text-3">
       {{

@@ -141,8 +141,7 @@ export default defineI18nModule({
     public_navigation: 'Навигация по сайту',
     latest_life: 'Последнее из Жизни',
     latest_pages: 'Обновленные страницы',
-    view_all_life: 'Смотреть всю Жизнь',
-    view_all_pages: 'Смотреть все страницы',
+    view_all: 'Смотреть все',
     life_empty: 'В Жизни пока нет публичных моментов.',
     event_started: 'Началось событие',
     event_ended: 'Завершилось событие',
@@ -215,6 +214,8 @@ export default defineI18nModule({
     project_chronology_first_stage: 'Первый этап проекта',
     project_chronology_last_stage: 'Последний этап проекта',
     project_chronology_updated: 'Обновление проекта',
+    page_chronology_created: 'Страница создана',
+    page_chronology_updated: 'Страница обновлена',
     install_thei: 'Установка Thei',
     visuals: 'Внешний вид',
     visuals_description:
@@ -615,15 +616,15 @@ export default defineI18nModule({
     view_event: 'Смотреть на сайте',
     view_page: 'Смотреть на сайте',
     saved: 'Сохранено',
-    showcase_project: 'Витринный проект?',
+    showcase_project: 'Витрина',
     showcase_project_hint:
       'Включить отображение в витрине проектов на главной странице и сверху поиска.',
-    showcase_project_label: 'Витринный проект',
+    showcase_project_label: 'Витрина',
     cv_project: 'Часть резюме?',
     cv_project_hint:
       'Потенциальному работодателю будет интересно увидеть этот проект.',
     cv_project_label: 'Резюме',
-    project_showcase_badge: 'Витринный',
+    project_showcase_badge: 'Витрина',
     project_showcase_badge_hint:
       'Проект показывается в витрине на главной странице и выше в каталоге.',
     project_portfolio_badge: 'Портфолио',

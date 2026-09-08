@@ -61,7 +61,7 @@ export default defineEventHandler(async (event) => {
       settingsVersion: 1,
       settings: null,
       type: AssetType.Image,
-      meta: { width: 320, height, accentHue: 230 },
+      meta: { width: 320, height, accent: { hue: 230, chroma: 0.15 } },
     });
     const preview = await createMediaPreviewAsset(buffer, AssetType.Image);
     await attachMediaPreviewUsage(asset.assetUuid, preview.previewAssetUuid);

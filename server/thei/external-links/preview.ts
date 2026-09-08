@@ -47,20 +47,20 @@ export async function persistExternalLink(
   rawUrl: unknown,
 ): Promise<ExternalLink> {
   const { result, favicon } = await collectExternalLink(rawUrl);
-  const { faviconKey, accentHue } = await writeExternalLinkFavicon(
+  const { faviconKey, accent } = await writeExternalLinkFavicon(
     result.url,
     favicon,
   );
   const persisted = {
     ...result,
-    faviconMedia: externalLinkMedia(faviconKey, accentHue, result.touchedAt),
+    faviconMedia: externalLinkMedia(faviconKey, accent, result.touchedAt),
   };
   upsertExternalLink({
     url: persisted.url,
     title: persisted.title,
     description: persisted.description,
     faviconKey,
-    accentHue,
+    accent,
     touchedAt: persisted.touchedAt,
   });
   return persisted;
@@ -103,7 +103,7 @@ async function collectExternalLink(rawUrl: unknown) {
     title:
       truncateExternalLinkText(preview?.title) ?? externalLinkHostname(url),
     description: truncateExternalLinkText(preview?.description),
-    faviconMedia: externalLinkPreviewMedia(prepared.buffer, prepared.accentHue),
+    faviconMedia: externalLinkPreviewMedia(prepared.buffer, prepared.accent),
     hasFavicon: document != null && favicon != null,
     touchedAt,
     previewStatus: document ? 'complete' : 'fallback',

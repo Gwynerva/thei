@@ -1,7 +1,7 @@
 import type { H3Event } from 'h3';
-import { inArray, not } from 'drizzle-orm';
 import {
   cloneSession,
+  expireAdminSessions,
   memorySessions,
   type AdminSessionData,
   type AdminSessionState,
@@ -36,33 +36,24 @@ export function toPublicAdminSession(
 export async function getPublicAdminSessions(
   event?: H3Event,
 ): Promise<PublicAdminSession[]> {
-  const clonedMemorySessions = [...memorySessions.values()].map(cloneSession);
-
   const currentSessionUuid = event
     ? (await THEI_SERVER.getAdmin(event))?.sessionUuid
     : undefined;
 
   const { db, schema } = THEI_SERVER.useDb();
-  const restDbSessions = await db
-    .select()
-    .from(schema.adminSessions)
-    .where(
-      not(
-        inArray(
-          schema.adminSessions.sessionUuid,
-          clonedMemorySessions.map(
-            (memorySession) => memorySession.sessionUuid,
-          ),
-        ),
-      ),
-    );
+  const dbSessions = await db.select().from(schema.adminSessions);
+  const sessionsByUuid = new Map(
+    dbSessions.map((row) => [row.sessionUuid, row.data]),
+  );
+  for (const session of memorySessions.values()) {
+    sessionsByUuid.set(session.sessionUuid, session);
+  }
 
-  const sessions = [
-    ...clonedMemorySessions,
-    ...restDbSessions.map((dbSession) => dbSession.data),
-  ].map((session) => {
-    return toPublicAdminSession(session, currentSessionUuid);
-  });
+  await expireAdminSessions(sessionsByUuid.values());
+
+  const sessions = [...sessionsByUuid.values()].map((session) =>
+    toPublicAdminSession(cloneSession(session), currentSessionUuid),
+  );
 
   return sessions.sort((a, b) => b.lastUsedAt - a.lastUsedAt);
 }

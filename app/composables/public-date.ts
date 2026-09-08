@@ -7,6 +7,10 @@ export type PublicDatePresentation = {
   title?: string;
 };
 
+export type PublicDatePresentationOptions = {
+  relativeMonths?: number;
+};
+
 export function formatPublicDate(
   value: PublicDateValue,
   locale: string,
@@ -19,13 +23,19 @@ export function getPublicDatePresentation(
   value: PublicDateValue,
   locale: string,
   now = new Date(),
+  options: PublicDatePresentationOptions = {},
 ): PublicDatePresentation {
   if (typeof value !== 'string') {
     return { label: formatPublicDateRange(value, locale) };
   }
 
   const absolute = formatAbsolutePublicDate(value, locale);
-  const relative = formatRecentPublicDate(value, locale, now);
+  const relative = formatRecentPublicDate(
+    value,
+    locale,
+    now,
+    options.relativeMonths ?? 1,
+  );
   return relative ? { label: relative, title: absolute } : { label: absolute };
 }
 
@@ -59,6 +69,7 @@ function formatRecentPublicDate(
   date: string,
   locale: string,
   now: Date,
+  relativeMonths: number,
 ): string | undefined {
   const today = Date.UTC(
     now.getUTCFullYear(),
@@ -68,12 +79,13 @@ function formatRecentPublicDate(
   const target = toUtcDate(date).getTime();
   if (target > today) return undefined;
 
-  const previousMonth = clampedUtcDate(
+  if (relativeMonths <= 0) return undefined;
+  const relativeBoundary = clampedUtcDate(
     now.getUTCFullYear(),
-    now.getUTCMonth() - 1,
+    now.getUTCMonth() - relativeMonths,
     now.getUTCDate(),
   ).getTime();
-  if (target < previousMonth) return undefined;
+  if (target < relativeBoundary) return undefined;
 
   const days = Math.round((today - target) / 86_400_000);
   if (days < 7) {
@@ -87,8 +99,12 @@ function formatRecentPublicDate(
       'week',
     );
   }
+  const months = Math.max(
+    1,
+    Math.min(relativeMonths, Math.round(days / 30.4375)),
+  );
   return new Intl.RelativeTimeFormat(locale, { numeric: 'always' })
-    .format(-1, 'month')
+    .format(-months, 'month')
     .replace(/^1\s+/u, '');
 }
 

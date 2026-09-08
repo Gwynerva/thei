@@ -15,12 +15,17 @@ import ModalTitle from '#layers/thei/app/modals/ModalTitle.vue';
 import ModalHeaderButton from '#layers/thei/app/modals/ModalHeaderButton.vue';
 import { buildProjectChildUrl } from '#layers/thei/shared/project-url';
 import LinkField from '../../components/LinkField.vue';
-import { projectDataInjectionKey } from '../composables';
 import { projectContentItemDeleteModal } from './project-content-item-delete-modal';
 
-type ModalData =
-  | { isStage: true; item?: ProjectStageContentItem }
-  | { isStage: false; item?: ProjectSectionContentItem };
+type ProjectLinkIdentity = {
+  projectHumanReadableSlug: string;
+  projectPublicId: string;
+};
+type ModalData = ProjectLinkIdentity &
+  (
+    | { isStage: true; item?: ProjectStageContentItem }
+    | { isStage: false; item?: ProjectSectionContentItem }
+  );
 type Result =
   | { type: 'save'; item: ProjectStageContentItem | ProjectSectionContentItem }
   | { type: 'deleted' };
@@ -33,7 +38,6 @@ type ItemDraft = ProjectContentItemBase & {
 const emit = defineEmits<{ modalResult: [result: Result] }>();
 const props = defineProps<{ modalData: ModalData }>();
 const isStage = computed(() => props.modalData.isStage);
-const projectData = inject(projectDataInjectionKey)!;
 const { value: item, isDirty } = useSerializableState(
   createInitialItem(props.modalData),
 );
@@ -116,10 +120,9 @@ function createInitialItem(data: ModalData): ItemDraft {
 }
 
 function childLinkDescription(slug: string, publicId: string) {
-  const project = projectData.value;
   return buildProjectChildUrl(
-    project.humanReadableSlug,
-    project.publicId,
+    props.modalData.projectHumanReadableSlug,
+    props.modalData.projectPublicId,
     isStage.value ? 'stages' : 'sections',
     slug,
     publicId,
@@ -211,9 +214,7 @@ async function deleteItem() {
         v-model:title="item.title"
         v-model:human-readable-slug="item.humanReadableSlug"
         v-model:public-id="item.publicId"
-        :entity-name="
-          isStage ? phrase.project_stage : phrase.content_section
-        "
+        :entity-name="isStage ? phrase.project_stage : phrase.content_section"
         :link-description="childLinkDescription"
       />
       <Field>

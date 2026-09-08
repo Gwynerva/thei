@@ -1,9 +1,18 @@
-import { memorySessions, loopAdminSessionSnapshotJob } from '.';
+import {
+  expireAdminSessions,
+  memorySessions,
+  loopAdminSessionSnapshotJob,
+} from '.';
 
 export async function bootAdminSessions() {
   const { db, schema } = THEI_SERVER.useDb();
   const sessions = await db.select().from(schema.adminSessions);
   const now = Date.now();
+
+  await expireAdminSessions(
+    sessions.map((row) => row.data),
+    now,
+  );
 
   for (const row of sessions) {
     const session = row.data;
@@ -12,14 +21,10 @@ export async function bootAdminSessions() {
       continue;
     }
 
-    if (now >= session.expiresAt) {
-      continue;
-    }
-
     memorySessions.set(session.token, session);
   }
 
-  loopAdminSessionSnapshotJob();
+  void loopAdminSessionSnapshotJob();
 
   if (memorySessions.size > 0) {
     THEI_SERVER.console.log(

@@ -1,7 +1,7 @@
+import { normalizeImageAccent } from '../../shared/accent-color';
 import { describe, expect, it } from 'vitest';
 import {
   normalizeExternalLinkUrl,
-  normalizeExternalLinkAccentHue,
   truncateExternalLinkText,
 } from '../../shared/external-link';
 
@@ -29,10 +29,18 @@ describe('external links', () => {
   });
 
   it('accepts the full hue range including red at zero', () => {
-    expect(normalizeExternalLinkAccentHue(0)).toBe(0);
-    expect(normalizeExternalLinkAccentHue(359)).toBe(359);
-    expect(normalizeExternalLinkAccentHue(360)).toBeUndefined();
-    expect(normalizeExternalLinkAccentHue(Number.NaN)).toBeUndefined();
+    expect(normalizeImageAccent({ hue: 0, chroma: 0.15 })).toEqual({
+      hue: 0,
+      chroma: 0.15,
+    });
+    expect(normalizeImageAccent({ hue: 359, chroma: 0.15 })).toEqual({
+      hue: 359,
+      chroma: 0.15,
+    });
+    expect(normalizeImageAccent({ hue: 360, chroma: 0.15 })).toBeUndefined();
+    expect(
+      normalizeImageAccent({ hue: Number.NaN, chroma: 0.15 }),
+    ).toBeUndefined();
   });
 
   it('truncates unicode text with an ellipsis', () => {

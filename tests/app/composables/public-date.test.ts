@@ -45,6 +45,22 @@ describe('formatPublicDate', () => {
     );
   });
 
+  it('supports a three-month relative window for chronology dates', () => {
+    expect(
+      getPublicDatePresentation('2026-05-23', 'ru', now, {
+        relativeMonths: 3,
+      }),
+    ).toEqual({
+      label: '3 месяца назад',
+      title: '23 мая 2026',
+    });
+    expect(
+      getPublicDatePresentation('2026-05-22', 'ru', now, {
+        relativeMonths: 3,
+      }).label,
+    ).toBe('22 мая 2026');
+  });
+
   it('keeps old and future single dates absolute', () => {
     expect(formatPublicDate('2026-07-22', 'ru', now)).toBe('22 июля 2026');
     expect(formatPublicDate('2026-08-24', 'ru', now)).toBe('24 августа 2026');

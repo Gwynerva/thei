@@ -104,8 +104,7 @@ export type LanguagePhrases = {
   public_navigation: string;
   latest_life: string;
   latest_pages: string;
-  view_all_life: string;
-  view_all_pages: string;
+  view_all: string;
   life_empty: string;
   event_started: string;
   event_ended: string;
@@ -176,6 +175,8 @@ export type LanguagePhrases = {
   project_chronology_first_stage: string;
   project_chronology_last_stage: string;
   project_chronology_updated: string;
+  page_chronology_created: string;
+  page_chronology_updated: string;
   install_thei: string;
   visuals: string;
   visuals_description: string;

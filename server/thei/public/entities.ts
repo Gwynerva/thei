@@ -77,6 +77,18 @@ type PageRow = NonNullable<
   Awaited<ReturnType<typeof THEI_SERVER.pages.findByUuid>>
 >;
 
+export function buildPublicEntityChronology(entity: {
+  createdAt: number;
+  updatedAt: number;
+}) {
+  const createdAt = new Date(entity.createdAt).toISOString().slice(0, 10);
+  const updatedAt = new Date(entity.updatedAt).toISOString().slice(0, 10);
+  return {
+    createdAt,
+    ...(updatedAt !== createdAt ? { updatedAt } : {}),
+  };
+}
+
 export function canListPublicEntity(
   access: ProjectEventAccessLevel,
   isAdmin: boolean,
@@ -225,6 +237,7 @@ export async function buildPublicPage(
     summary: page.summary,
     slug: page.slug,
     access: page.access,
+    chronology: buildPublicEntityChronology(page),
     iconMedia: await buildPublicPageIcon(page),
     content,
     references: {
@@ -369,10 +382,9 @@ export async function buildPublicProject(
     humanReadableSlug: project.humanReadableSlug,
     publicId: project.publicId,
     chronology: {
-      createdAt: new Date(project.createdAt).toISOString().slice(0, 10),
+      ...buildPublicEntityChronology(project),
       firstStageAt,
       lastStageAt,
-      updatedAt: new Date(project.updatedAt).toISOString().slice(0, 10),
     },
     isShowcase: project.showcase,
     isPortfolio: project.cv,

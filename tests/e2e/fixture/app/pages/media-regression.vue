@@ -24,7 +24,7 @@ const image: ContentAssetData = {
     previewSrc: '/regression-image.svg',
     width: 320,
     height: 180,
-    accentHue: 0,
+    accent: { hue: 0, chroma: 0.15 },
   },
 };
 const video: ContentAssetData = {
@@ -39,7 +39,18 @@ const video: ContentAssetData = {
     previewSrc: '/regression-image.svg',
     width: 320,
     height: 180,
-    accentHue: 140,
+    accent: { hue: 140, chroma: 0.15 },
+  },
+};
+const slowImage: ContentAssetData = {
+  ...image,
+  assetUuid: 'slow-image',
+  name: 'slow-image.svg',
+  assetUrl: '/slow-image.svg',
+  media: {
+    ...image.media!,
+    src: '/slow-image.svg',
+    previewSrc: '/slow-image.svg',
   },
 };
 const content: PublicContentOutputData = {
@@ -62,6 +73,7 @@ const content: PublicContentOutputData = {
         items: [
           { id: 'image', asset: image, caption: '<i>Gallery caption</i>' },
           { id: 'video', asset: video, caption: 'Gallery video' },
+          { id: 'slow', asset: slowImage, caption: 'Slow gallery' },
         ],
       },
     },
@@ -97,15 +109,17 @@ const content: PublicContentOutputData = {
     },
   ],
 };
-const showcase: PublicAssetDescriptor[] = [image, video].map((asset) => ({
-  key: asset.assetUuid,
-  title: `Showcase ${asset.assetUuid}`,
-  fileName: asset.name,
-  href: asset.assetUrl!,
-  extension: asset.extension!,
-  size: asset.size!,
-  media: asset.media,
-}));
+const showcase: PublicAssetDescriptor[] = [image, video, slowImage].map(
+  (asset) => ({
+    key: asset.assetUuid,
+    title: `Showcase ${asset.assetUuid}`,
+    fileName: asset.name,
+    href: asset.assetUrl!,
+    extension: asset.extension!,
+    size: asset.size!,
+    media: asset.media,
+  }),
+);
 const actions: PublicAction[] = [
   'standard-gradient',
   'accent-gradient',

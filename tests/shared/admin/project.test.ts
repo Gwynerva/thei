@@ -10,7 +10,7 @@ import { ProjectEventAccessLevel } from '../../../shared/access-level';
 import {
   DEFAULT_PROJECT_ACTION,
   normalizeProjectActionBackgroundRepeat,
-  projectActionContextAccentHue,
+  projectActionContextAccent,
   type ProjectActionBackgroundRepeat,
   type ProjectActionBackgroundSize,
 } from '../../../shared/project-action';
@@ -375,17 +375,30 @@ describe('validateProjectData asset metadata', () => {
   });
 
   it('uses only the matching contextual accent source', () => {
-    const sources = { icon: 20, file: 140, link: 260 };
-    expect(projectActionContextAccentHue('icon-gradient', sources)).toBe(20);
-    expect(projectActionContextAccentHue('file-gradient', sources)).toBe(140);
-    expect(projectActionContextAccentHue('link-gradient', sources)).toBe(260);
-    expect(projectActionContextAccentHue('standard-gradient', sources)).toBe(
+    const sources = {
+      icon: { hue: 20, chroma: 0.15 },
+      file: { hue: 140, chroma: 0.15 },
+      link: { hue: 260, chroma: 0.15 },
+    };
+    expect(projectActionContextAccent('icon-gradient', sources)).toEqual({
+      hue: 20,
+      chroma: 0.15,
+    });
+    expect(projectActionContextAccent('file-gradient', sources)).toEqual({
+      hue: 140,
+      chroma: 0.15,
+    });
+    expect(projectActionContextAccent('link-gradient', sources)).toEqual({
+      hue: 260,
+      chroma: 0.15,
+    });
+    expect(projectActionContextAccent('standard-gradient', sources)).toBe(
       undefined,
     );
     expect(
-      projectActionContextAccentHue('link-gradient', {
-        icon: 20,
-        file: 140,
+      projectActionContextAccent('link-gradient', {
+        icon: { hue: 20, chroma: 0.15 },
+        file: { hue: 140, chroma: 0.15 },
       }),
     ).toBeUndefined();
   });

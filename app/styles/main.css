@@ -173,6 +173,74 @@
   }
 }
 
+@property --scrollbar-hover-opacity {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@utility scrollbar-hover {
+  @apply scrollbar-mini;
+
+  @media (hover: hover) and (pointer: fine) {
+    --scrollbar-hover-opacity: 0;
+    transition: --scrollbar-hover-opacity 0.25s ease-out;
+
+    &:hover {
+      --scrollbar-hover-opacity: 1;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+
+    @supports not selector(::-webkit-scrollbar) {
+      scrollbar-color: color-mix(
+          in oklab,
+          var(--scrollbar-thumb-color)
+            calc(var(--scrollbar-hover-opacity) * 100%),
+          transparent
+        )
+        transparent;
+    }
+
+    @supports selector(::-webkit-scrollbar) {
+      &::-webkit-scrollbar-track,
+      &::-webkit-scrollbar-corner {
+        background: transparent;
+        border: 0;
+      }
+
+      &::-webkit-scrollbar-thumb {
+        background-color: color-mix(
+          in oklab,
+          var(--scrollbar-thumb-color)
+            calc(var(--scrollbar-hover-opacity) * 100%),
+          transparent
+        );
+      }
+
+      &:hover::-webkit-scrollbar-thumb:hover {
+        background-color: color-mix(
+          in oklab,
+          var(--scrollbar-thumb-color-hover)
+            calc(var(--scrollbar-hover-opacity) * 100%),
+          transparent
+        );
+      }
+
+      &:hover::-webkit-scrollbar-thumb:active {
+        background-color: color-mix(
+          in oklab,
+          var(--scrollbar-thumb-color-active)
+            calc(var(--scrollbar-hover-opacity) * 100%),
+          transparent
+        );
+      }
+    }
+  }
+}
+
 @keyframes indeterminate {
   0% {
     transform: translateX(-100%);

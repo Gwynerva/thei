@@ -13,7 +13,7 @@ import {
   externalLinkPreviewMedia,
   prepareExternalLinkFavicon,
 } from '../../server/thei/external-links/repository';
-import { extractImageAccentHue } from '../../server/thei/assets/image-color';
+import { extractImageAccent } from '../../server/thei/assets/image-color';
 
 describe('external link SSRF protection', () => {
   it.each([
@@ -125,27 +125,27 @@ describe('external link favicon discovery and conversion', () => {
       </svg>`,
     );
     const converted = await convertExternalLinkFavicon(source);
-    const hue = await extractImageAccentHue(converted);
+    const hue = (await extractImageAccent(converted))?.hue;
     expect(hue).toBeGreaterThan(220);
     expect(hue).toBeLessThan(280);
   });
 
   it('cache-busts a refreshed favicon URL', () => {
-    expect(externalLinkMedia('key', 240, 123).src).toBe(
+    expect(externalLinkMedia('key', { hue: 240, chroma: 0.15 }, 123).src).toBe(
       '/media/external-link-favicons/key.webp?v=123',
     );
   });
 
-  it('omits accent hue for a neutral favicon', async () => {
+  it('preserves a neutral favicon accent', async () => {
     const prepared = await prepareExternalLinkFavicon(
       Buffer.from(
         '<svg xmlns="http://www.w3.org/2000/svg"><rect width="48" height="48" fill="#777"/></svg>',
       ),
     );
-    expect(prepared.accentHue).toBeUndefined();
+    expect(prepared.accent).toEqual({ hue: 0, chroma: 0 });
     expect(
-      externalLinkPreviewMedia(prepared.buffer, prepared.accentHue),
-    ).not.toHaveProperty('accentHue');
+      externalLinkPreviewMedia(prepared.buffer, prepared.accent),
+    ).toHaveProperty('accent', { hue: 0, chroma: 0 });
   });
 
   it('uses an inline preview favicon without writing a permanent file', async () => {
@@ -154,10 +154,10 @@ describe('external link favicon discovery and conversion', () => {
         '<svg xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" fill="red"/></svg>',
       ),
     );
-    const media = externalLinkPreviewMedia(prepared.buffer, prepared.accentHue);
+    const media = externalLinkPreviewMedia(prepared.buffer, prepared.accent);
     expect(media.src).toMatch(/^data:image\/webp;base64,/);
-    expect(media.accentHue).toBeGreaterThanOrEqual(0);
-    expect(media.accentHue).toBeLessThan(360);
+    expect(media.accent?.hue).toBeGreaterThanOrEqual(0);
+    expect(media.accent?.hue).toBeLessThan(360);
   });
 
   it('creates the shared external-link fallback for a broken favicon', async () => {
@@ -170,6 +170,6 @@ describe('external link favicon discovery and conversion', () => {
       width: EXTERNAL_LINK_FAVICON_SIZE,
       height: EXTERNAL_LINK_FAVICON_SIZE,
     });
-    expect(prepared.accentHue).toBeUndefined();
+    expect(prepared.accent).toBeUndefined();
   });
 });

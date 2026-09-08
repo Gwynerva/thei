@@ -32,6 +32,22 @@ const fileCount = computed(
 const details = computed(
   () =>
     ({
+      chronology: [
+        {
+          icon: 'plus',
+          label: phrase.value.page_chronology_created,
+          date: data.value.chronology.createdAt,
+        },
+        ...(data.value.chronology.updatedAt
+          ? [
+              {
+                icon: 'history' as const,
+                label: phrase.value.page_chronology_updated,
+                date: data.value.chronology.updatedAt,
+              },
+            ]
+          : []),
+      ],
       references: data.value.references,
       metrics: [
         {

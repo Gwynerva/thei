@@ -46,6 +46,46 @@ export function markSessionForSnapshot(session: AdminSessionData) {
   toSnapshotSessions.set(session.sessionUuid, cloneSession(session));
 }
 
+function removeSessionFromMemory(session: AdminSessionData) {
+  const tokens = new Set([session.token]);
+  for (const [token, memorySession] of memorySessions) {
+    if (memorySession.sessionUuid !== session.sessionUuid) continue;
+    tokens.add(token);
+    memorySessions.delete(token);
+  }
+  for (const [oldToken, alias] of tokenAliases) {
+    if (tokens.has(oldToken) || tokens.has(alias.token)) {
+      tokenAliases.delete(oldToken);
+    }
+  }
+}
+
+export function expireAdminSession(
+  session: AdminSessionData,
+  now = Date.now(),
+) {
+  if (session.state !== 'active' || now < session.expiresAt) return false;
+  session.state = 'destroyed';
+  removeSessionFromMemory(session);
+  markSessionForSnapshot(session);
+  return true;
+}
+
+export async function expireAdminSessions(
+  sessions: Iterable<AdminSessionData>,
+  now = Date.now(),
+) {
+  let changed = false;
+  const seen = new Set<string>();
+  for (const session of sessions) {
+    if (seen.has(session.sessionUuid)) continue;
+    seen.add(session.sessionUuid);
+    changed = expireAdminSession(session, now) || changed;
+  }
+  if (changed) await flushSessionsToDb();
+  return changed;
+}
+
 export async function createAdminSession(event: H3Event) {
   const now = Date.now();
   const token = createToken();
@@ -95,13 +135,7 @@ export async function destroyAdminSession(token: string) {
   session.lastUsedAt = Date.now();
 
   markSessionForSnapshot(session);
-  memorySessions.delete(token);
-
-  for (const [oldToken, alias] of tokenAliases) {
-    if (alias.token === token) {
-      tokenAliases.delete(oldToken);
-    }
-  }
+  removeSessionFromMemory(session);
 
   await flushSessionsToDb();
 }
@@ -176,7 +210,9 @@ export async function getCurrentAdminSession(event: H3Event) {
   const now = Date.now();
 
   if (now >= session.expiresAt) {
-    await destroyCurrentAdminSession(event);
+    expireAdminSession(session, now);
+    await flushSessionsToDb();
+    clearTokenCookie(event);
     return;
   }
 

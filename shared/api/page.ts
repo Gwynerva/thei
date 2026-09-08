@@ -48,6 +48,10 @@ export type PublicPageResponse = {
   summary: string;
   slug: string;
   access: ProjectEventAccessLevel;
+  chronology: {
+    createdAt: string;
+    updatedAt?: string;
+  };
   iconMedia: MediaDescriptor;
   content: PublicContentOutputData;
   references: PublicReferenceGroups;

@@ -1,20 +1,13 @@
 <script lang="ts" setup>
 import type { LifeLatestResponse } from '#layers/thei/shared/life';
-import type { PublicPageListItem } from '#layers/thei/shared/api/page';
 
 definePageMeta({ layout: 'public' });
 
 const publicAdmin = await usePublicAdmin();
-const [latestResource, pagesResource] = await Promise.all([
-  useFetch<LifeLatestResponse>('/api/life/latest', {
-    query: { limit: 5 },
-  }),
-  useFetch<PublicPageListItem[]>('/api/pages', {
-    query: { limit: 5 },
-  }),
-]);
+const latestResource = await useFetch<LifeLatestResponse>('/api/life/latest', {
+  query: { limit: 3 },
+});
 const latest = useRequiredResource(latestResource);
-const pages = useRequiredResource(pagesResource);
 
 usePublicSeo({
   title: publicAdmin.value.displayName,
@@ -60,7 +53,7 @@ usePublicSeo({
         :title="phrase.latest_life"
         :action="{
           href: '/life/',
-          label: phrase.view_all_life,
+          label: phrase.view_all,
           icon: 'arrow-outward',
         }"
       />
@@ -78,33 +71,6 @@ usePublicSeo({
         />
       </div>
       <PublicEmptyState v-else icon="heart" :title="phrase.life_empty" />
-    </section>
-
-    <section v-if="pages.length" class="flex flex-col gap-sm">
-      <PublicSectionHeader
-        icon="page"
-        :title="phrase.latest_pages"
-        :action="{
-          href: '/pages/',
-          label: phrase.view_all_pages,
-          icon: 'arrow-outward',
-        }"
-      />
-      <div class="grid gap-sm sm:grid-cols-2">
-        <PublicContentCard
-          v-for="page in pages"
-          :key="page.href"
-          :href="page.href"
-          :title="page.title"
-          :summary="page.summary"
-          :label="phrase.page"
-          icon="page"
-          :date="page.updatedAt"
-          :media="page.iconMedia"
-          compact
-          class="first:sm:col-span-2"
-        />
-      </div>
     </section>
   </main>
 </template>

@@ -78,6 +78,33 @@ const eventItems = computed(() =>
     </div>
 
     <div class="mb-lg grid gap-md sm:grid-cols-2">
+      <TheiLink to="/admin/tags/" class="group">
+        <Box class="h-full">
+          <div class="flex items-center justify-between gap-md p-md">
+            <div class="flex min-w-0 items-center gap-sm">
+              <div
+                class="flex size-12 shrink-0 items-center justify-center
+                  rounded-normal bg-accent/20 text-xl text-accent transition
+                  group-hocus:bg-accent/30"
+              >
+                <Icon name="tag" />
+              </div>
+              <div class="min-w-0">
+                <p class="font-semibold transition group-hocus:text-accent">
+                  {{ phrase.admin_tags }}
+                </p>
+                <p class="text-sm text-text-3">
+                  {{ phrase.tags_description }}
+                </p>
+              </div>
+            </div>
+            <span class="shrink-0 text-2xl font-bold text-text-2">
+              {{ tagsResult.data.value?.count ?? 0 }}
+            </span>
+          </div>
+        </Box>
+      </TheiLink>
+
       <TheiLink to="/admin/pages/" class="group">
         <Box class="h-full">
           <div class="flex items-center justify-between gap-md p-md">
@@ -100,31 +127,6 @@ const eventItems = computed(() =>
             </div>
             <span class="shrink-0 text-2xl font-bold text-text-2">
               {{ pagesResult.data.value?.total ?? 0 }}
-            </span>
-          </div>
-        </Box>
-      </TheiLink>
-
-      <TheiLink to="/admin/tags/" class="group">
-        <Box class="h-full">
-          <div class="flex items-center justify-between gap-md p-md">
-            <div class="flex min-w-0 items-center gap-sm">
-              <div
-                class="flex size-12 shrink-0 items-center justify-center
-                  rounded-normal bg-accent/20 text-xl text-accent transition
-                  group-hocus:bg-accent/30"
-              >
-                <Icon name="tag" />
-              </div>
-              <div class="min-w-0">
-                <p class="font-semibold transition group-hocus:text-accent">
-                  {{ phrase.admin_tags }}
-                </p>
-                <p class="text-sm text-text-3">{{ phrase.tags_description }}</p>
-              </div>
-            </div>
-            <span class="shrink-0 text-2xl font-bold text-text-2">
-              {{ tagsResult.data.value?.count ?? 0 }}
             </span>
           </div>
         </Box>

@@ -2,9 +2,10 @@
 import type {
   PublicAction,
   PublicAssetDescriptor,
+  PublicTagSummary,
 } from '#layers/thei/shared/api/public';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
-import { accentHueCssColor } from '#layers/thei/shared/accent-color';
+import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
 
 const props = defineProps<{
   title: string;
@@ -13,93 +14,41 @@ const props = defineProps<{
   bannerMedia?: MediaDescriptor;
   action?: PublicAction;
   showcase: PublicAssetDescriptor[];
+  tags: PublicTagSummary[];
   isShowcase: boolean;
   isPortfolio: boolean;
 }>();
-const reducedMotion = ref(true);
-onMounted(() => {
-  reducedMotion.value = window.matchMedia(
-    '(prefers-reduced-motion: reduce)',
-  ).matches;
-});
 const accent = computed(() =>
-  accentHueCssColor(
-    props.bannerMedia?.accentHue ?? props.iconMedia.accentHue,
-    'var(--color-accent)',
+  imageAccentCssColor(
+    props.bannerMedia ? props.bannerMedia.accent : props.iconMedia.accent,
   ),
 );
-const heroStyle = computed(() => ({ '--project-hero-accent': accent.value }));
+const visibleTags = computed(() => props.tags.slice(0, 3));
 </script>
 
 <template>
   <header
     class="project-hero relative isolate w-full overflow-hidden text-white"
-    :class="{ 'has-banner': bannerMedia }"
-    :style="heroStyle"
+    :class="{ 'project-hero-with-banner': bannerMedia }"
+    :style="{
+      '--project-hero-accent': accent,
+    }"
   >
+    <PublicProjectBanner v-if="bannerMedia" :media="bannerMedia" />
+    <div
+      class="pointer-events-none absolute inset-0 bg-black/70"
+      :class="{ 'hero-shade hidden sm:block': bannerMedia }"
+      data-hero-shade
+      aria-hidden="true"
+    />
     <div
       class="relative m-auto flex w-(--width-wide) flex-col gap-md px-window
         py-lg sm:py-xl"
     >
       <div
-        class="relative flex min-w-0 flex-col justify-center"
-        :class="bannerMedia ? 'sm:min-h-80' : ''"
+        class="relative z-2 flex min-w-0 flex-col items-start gap-md"
+        :class="bannerMedia ? 'sm:max-w-2/3' : 'sm:max-w-4/5'"
       >
-        <div
-          v-if="bannerMedia"
-          class="hero-banner relative -mx-window -mt-lg mb-md h-44 min-w-0
-            sm:absolute sm:-inset-y-md
-            sm:right-[calc((var(--width-wide)-100vw)/2)] sm:left-[30%] sm:m-0
-            sm:h-auto sm:w-auto"
-          aria-hidden="true"
-        >
-          <Media
-            v-bind="bannerMedia"
-            :autoplay="bannerMedia.kind === 'video' && !reducedMotion"
-            muted
-            loop
-            class="size-full"
-          />
-        </div>
-
-        <div
-          class="relative z-2 flex min-w-0 flex-col items-start gap-sm"
-          :class="bannerMedia ? 'sm:max-w-2/3' : 'sm:max-w-4/5'"
-        >
-          <div class="flex min-w-0 items-center gap-md">
-            <span
-              class="flex size-16 shrink-0 items-center justify-center
-                overflow-hidden rounded-normal bg-white/10 shadow-xl ring-1
-                ring-white/15 sm:size-24"
-            >
-              <Media v-bind="iconMedia" class="size-full" />
-            </span>
-            <h1
-              class="hero-title min-w-0 text-3xl leading-tight font-bold
-                tracking-tight text-balance sm:text-5xl"
-            >
-              {{ title }}
-            </h1>
-          </div>
-          <p
-            class="hero-summary max-w-180 text-base leading-relaxed
-              font-semibold text-white/72 sm:text-xl"
-          >
-            {{ summary }}
-          </p>
-          <PublicAction v-if="action" :action class="mt-xs" />
-        </div>
-      </div>
-
-      <div
-        v-if="showcase.length || isShowcase || isPortfolio"
-        class="relative z-2 flex min-w-0 flex-col gap-sm"
-      >
-        <PublicAssetGallery
-          v-if="showcase.length"
-          :items="showcase"
-          variant="hero"
-        />
         <div
           v-if="isShowcase || isPortfolio"
           class="flex flex-wrap items-center gap-xs"
@@ -125,7 +74,38 @@ const heroStyle = computed(() => ({ '--project-hero-accent': accent.value }));
             <span>{{ phrase.project_portfolio_badge }}</span>
           </span>
         </div>
+        <div class="flex min-w-0 items-center gap-md">
+          <Media
+            v-bind="iconMedia"
+            fit="contain"
+            class="size-16 shrink-0 sm:size-24"
+            data-hero-icon
+          />
+          <h1
+            class="hero-title min-w-0 text-3xl leading-tight font-bold
+              tracking-tight text-balance sm:text-5xl"
+          >
+            {{ title }}
+          </h1>
+        </div>
+        <p
+          v-if="summary"
+          class="hero-summary max-w-180 text-base leading-relaxed font-semibold
+            text-white/72 sm:text-xl"
+        >
+          {{ summary }}
+        </p>
+        <PublicAction v-if="action" :action />
       </div>
+      <div v-if="showcase.length" class="relative z-2 min-w-0">
+        <PublicAssetGallery :items="showcase" variant="hero" />
+      </div>
+      <PublicTagLinks
+        v-if="visibleTags.length"
+        :tags="visibleTags"
+        class="relative z-2"
+        data-hero-tags
+      />
     </div>
   </header>
 </template>
@@ -133,15 +113,10 @@ const heroStyle = computed(() => ({ '--project-hero-accent': accent.value }));
 <style scoped>
 @reference "../../styles/main.css";
 .project-hero {
-  background: color-mix(in oklab, var(--project-hero-accent) 42%, black);
+  background: var(--project-hero-accent);
 }
-.hero-banner {
-  opacity: 0.94;
-  mask-image: linear-gradient(to bottom, black 0%, black 90%, transparent 100%);
-}
-.hero-banner :deep(img),
-.hero-banner :deep(video) {
-  object-position: center center;
+.project-hero-with-banner {
+  background: var(--color-black);
 }
 .hero-title {
   text-shadow:
@@ -155,13 +130,11 @@ const heroStyle = computed(() => ({ '--project-hero-accent': accent.value }));
 }
 
 @variant sm {
-  .hero-banner {
-    mask-image: radial-gradient(
-      ellipse 66% 64% at 62% 50%,
-      black 28%,
-      rgb(0 0 0 / 92%) 50%,
-      rgb(0 0 0 / 46%) 78%,
-      transparent 100%
+.hero-shade {
+    mask-image: linear-gradient(
+      to right,
+      black calc((100% - var(--width-wide)) / 2 + var(--width-wide) / 3),
+      transparent calc((100% + var(--width-wide)) / 2 - var(--width-wide) / 6)
     );
   }
 }

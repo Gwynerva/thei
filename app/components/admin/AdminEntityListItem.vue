@@ -9,10 +9,12 @@ const props = defineProps<{
   editTo: string;
   compact?: boolean;
 }>();
+const { engaged, events: mediaEvents } = useMediaInteraction();
 </script>
 
 <template>
   <div
+    v-on="mediaEvents"
     class="flex min-w-0 items-stretch border-b border-border-1/60 transition
       last:border-b-0 hocus:bg-accent/8"
   >
@@ -23,12 +25,16 @@ const props = defineProps<{
       :class="props.compact ? 'min-h-14' : 'min-h-16'"
     >
       <span
-        class="entity-preview absolute inset-y-0 left-0 w-24 bg-bg-accent"
+        class="entity-preview absolute inset-y-0 left-0 w-24"
         aria-hidden="true"
       >
         <Media
           v-if="previewMedia"
           v-bind="previewMedia"
+          variant="ambient"
+          playback="interaction"
+          :engaged
+          align="left"
           class="size-full opacity-75 transition group-hocus:opacity-100"
         />
         <span

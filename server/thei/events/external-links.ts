@@ -58,7 +58,7 @@ export async function getEventExternalLinks(eventUuid: string) {
       title: schema.externalLinks.title,
       description: schema.externalLinks.description,
       faviconKey: schema.externalLinks.faviconKey,
-      accentHue: schema.externalLinks.accentHue,
+      accent: schema.externalLinks.accent,
       touchedAt: schema.externalLinks.touchedAt,
     })
     .from(schema.eventExternalLinks)

@@ -89,11 +89,16 @@ const dragSort = useDragSort(root, {
 });
 
 async function openItem(index?: number) {
+  const projectLinkIdentity = {
+    projectHumanReadableSlug: projectData.value.humanReadableSlug,
+    projectPublicId: projectData.value.publicId,
+  };
   if (props.kind === 'stage') {
     const stages = projectData.value.stages ?? [];
     const result = await openModal(projectContentItemModal, {
       isStage: true,
       item: index === undefined ? undefined : stages[index],
+      ...projectLinkIdentity,
     });
     if (result.type === 'deleted') {
       if (index !== undefined)
@@ -112,6 +117,7 @@ async function openItem(index?: number) {
   const result = await openModal(projectContentItemModal, {
     isStage: false,
     item: index === undefined ? undefined : sections[index],
+    ...projectLinkIdentity,
   });
   if (result.type === 'deleted') {
     if (index !== undefined)

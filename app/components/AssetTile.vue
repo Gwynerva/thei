@@ -25,21 +25,7 @@ const props = withDefaults(
   {},
 );
 
-const mediaEl = useTemplateRef<InstanceType<typeof Media>>('mediaEl');
-const canHoverPlay = computed(
-  () =>
-    props.media?.kind === 'video' &&
-    (props.overlay?.size == null || props.overlay.size < 10 * 1024 * 1024),
-);
-
-function onPointerEnter(event: PointerEvent) {
-  if (event.pointerType !== 'mouse') return;
-  if (canHoverPlay.value) void mediaEl.value?.play();
-}
-
-function onPointerLeave() {
-  mediaEl.value?.pause();
-}
+const { engaged, events: mediaEvents } = useMediaInteraction();
 
 function activateFromKeyboard(event: KeyboardEvent) {
   if (!isInteractive.value) return;
@@ -63,14 +49,14 @@ function activateFromKeyboard(event: KeyboardEvent) {
           ring-offset-bg-3`
         : '',
     ]"
-    @pointerenter="onPointerEnter"
-    @pointerleave="onPointerLeave"
+    v-on="mediaEvents"
     @keydown.enter="activateFromKeyboard"
     @keydown.space="activateFromKeyboard"
   >
     <Media
       v-if="media"
-      ref="mediaEl"
+      playback="interaction"
+      :engaged
       v-bind="media"
       fit="contain"
       backdrop

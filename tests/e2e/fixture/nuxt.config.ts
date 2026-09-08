@@ -5,13 +5,19 @@ export default defineNuxtConfig({
   srcDir: '.',
   hooks: {
     'pages:extend'(pages) {
-      pages.push({
-        name: 'editor-regression',
-        path: '/editor-regression',
-        file: fileURLToPath(
-          new URL('./app/pages/editor-regression.vue', import.meta.url),
-        ),
-      });
+      for (const name of [
+        'editor-regression',
+        'media-regression',
+        'ambient-regression',
+      ]) {
+        pages.push({
+          name,
+          path: `/${name}`,
+          file: fileURLToPath(
+            new URL(`./app/pages/${name}.vue`, import.meta.url),
+          ),
+        });
+      }
     },
   },
   devtools: { enabled: false },

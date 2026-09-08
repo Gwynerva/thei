@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { MediaPlayback } from '#layers/thei/shared/media';
 import type {
   ContentEntityType,
   ContentLinkResolver,
@@ -12,6 +13,7 @@ const props = withDefaults(
     entityId: string;
     resolver: ContentLinkResolver;
     interactive?: boolean;
+    playback?: MediaPlayback;
   }>(),
   { interactive: true },
 );
@@ -42,5 +44,6 @@ onUnmounted(() => {
     :result="result"
     :label="phrase.content_link_loading"
     :interactive="interactive"
+    :playback
   />
 </template>

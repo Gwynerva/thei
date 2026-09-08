@@ -43,7 +43,7 @@ export function resolveGeneratedIcon(
     src,
     previewSrc: src,
     kind: 'image',
-    accentHue,
+    accent: { hue: accentHue, chroma: 0.15 },
     width: GENERATED_ICON_SIZE,
     height: GENERATED_ICON_SIZE,
   };

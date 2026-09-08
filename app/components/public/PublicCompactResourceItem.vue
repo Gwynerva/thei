@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { IconName } from '#thei/icons';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
+import { truncateExternalLinkText } from '#layers/thei/shared/external-link';
 
 const props = withDefaults(
   defineProps<{
@@ -18,6 +19,9 @@ const props = withDefaults(
   { icon: 'link' },
 );
 defineEmits<{ activate: [] }>();
+const compactDescription = computed(() =>
+  truncateExternalLinkText(props.description, 70),
+);
 
 const extensionFontSize = computed(() => {
   const length = props.extension?.length ?? 0;
@@ -70,9 +74,11 @@ const extensionFontSize = computed(() => {
     </span>
     <span class="min-w-0 flex-1">
       <strong class="block truncate text-sm font-normal">{{ title }}</strong>
-      <span v-if="description" class="line-clamp-1 block text-xs text-text-3">{{
-        description
-      }}</span>
+      <span
+        v-if="compactDescription"
+        class="line-clamp-1 block text-xs text-text-3"
+        >{{ compactDescription }}</span
+      >
     </span>
   </component>
 </template>

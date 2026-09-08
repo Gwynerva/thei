@@ -180,13 +180,20 @@ describe('editor snapshots', () => {
             asset: {
               assetUuid: 'asset-1',
               assetUrl: '/first',
-              media: { kind: 'image', src: '/first.webp' },
+              media: {
+                kind: 'image',
+                src: '/first.webp',
+                previewSrc: '/preview.webp',
+                accent: { hue: 42, chroma: 0.15 },
+              },
             },
           },
         },
       ],
     };
+    const onCurrentChange = vi.fn();
     const manager = createEditorSnapshotManager({
+      onCurrentChange,
       storageKey: 'hydrated-assets',
       storage,
       read: async () => structuredClone(current),
@@ -213,14 +220,21 @@ describe('editor snapshots', () => {
               assetUuid: 'asset-1',
               assetUrl: '/second',
               size: 999,
-              media: { kind: 'image', src: '/second.webp' },
+              media: {
+                kind: 'image',
+                src: '/second.webp',
+                previewSrc: '/preview.webp',
+                accent: { hue: 0, chroma: 0 },
+              },
             },
           },
         },
       ],
     };
+    onCurrentChange.mockClear();
     manager.recordChange();
     await vi.advanceTimersByTimeAsync(EDITOR_SNAPSHOT_INTERVAL);
+    expect(onCurrentChange).not.toHaveBeenCalled();
     expect(manager.snapshots.value).toHaveLength(1);
     manager.destroy();
   });

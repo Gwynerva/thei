@@ -35,33 +35,16 @@ function openDetails() {
 </script>
 
 <template>
-  <button
-    type="button"
-    class="fixed right-window bottom-sm left-window z-40 flex cursor-pointer
-      items-center gap-sm rounded-normal border border-border-1 bg-bg-1/70 px-sm
-      py-xs text-left shadow-lg backdrop-blur-md transition focus-visible:ring-2
-      focus-visible:ring-accent focus-visible:outline-none sm:hidden
-      hocus:bg-bg-1/85"
-    @click="openDetails"
-  >
-    <span class="flex min-w-0 flex-1 items-center gap-1 font-semibold">
-      <span>{{ phrase.public_details_overview }}</span>
-      <Icon name="expand-diagonal" class="text-text-3" />
-    </span>
-    <span class="flex flex-wrap justify-end gap-xs text-xs text-text-3">
-      <span
-        v-for="metric in panelData.metrics"
-        :key="`${metric.icon}:${metric.label}`"
-        class="inline-flex items-center gap-1 whitespace-nowrap"
-        :data-title-popup="metric.label"
-      >
-        <Icon :name="metric.icon" />
-        <span class="tabular-nums">{{ metric.value }}</span>
-      </span>
-    </span>
-  </button>
   <div
-    class="grid min-w-0 items-start gap-md pb-14
+    class="fixed inset-x-0 bottom-0 z-40 rounded-t-normal border border-b-0
+      border-border-1 bg-bg-1/85 pb-[env(safe-area-inset-bottom)] shadow-lg
+      backdrop-blur-md sm:hidden"
+  >
+    <PublicDetailSheetHeader :data="panelData" @toggle="openDetails" />
+  </div>
+  <div
+    class="grid min-w-0 items-start gap-md
+      pb-[calc(4.5rem+env(safe-area-inset-bottom))]
       sm:grid-cols-[minmax(0,50rem)_minmax(16rem,17rem)] sm:justify-between
       sm:gap-lg sm:pb-0"
   >
@@ -73,7 +56,7 @@ function openDetails() {
       :style="stickyAsideStyle"
     >
       <div
-        class="scrollbar-mini w-full min-w-0 overflow-x-clip overflow-y-auto
+        class="scrollbar-hover w-full min-w-0 overflow-x-clip overflow-y-auto
           overscroll-contain"
         :style="stickyContentStyle"
       >

@@ -3,6 +3,7 @@ import {
   computed,
   markRaw,
   nextTick,
+  onBeforeUnmount,
   shallowRef,
   watch,
 } from 'vue';
@@ -39,7 +40,8 @@ export function installModalNavigationInterceptor(router: Router) {
   let discardingSentinel = false;
 
   function pushSentinel() {
-    if (sentinelActive || !activeModal.value) return;
+    if (sentinelActive || !activeModal.value || activeModal.value.leaving)
+      return;
     window.history.pushState(
       { ...window.history.state, [MODAL_HISTORY_STATE]: true },
       '',
@@ -94,10 +96,39 @@ export function installModalNavigationInterceptor(router: Router) {
 export function closeModal() {
   const modal = activeModal.value;
   if (!modal || (modal.closeGuard && !modal.closeGuard())) return false;
-  removeModal(modal);
-  modal.close({ type: 'empty' });
-  restoreFocusAfterReturn(modal);
+  finishModal(modal, () => modal.close({ type: 'empty' }));
   return true;
+}
+
+export async function closeModalAndWait() {
+  const modal = activeModal.value;
+  if (!closeModal()) return false;
+  await modal?.leaving;
+  await nextTick();
+  return true;
+}
+
+export function useModalLeaveTransition(transition: () => Promise<void>) {
+  const modal = activeModal.value;
+  if (!modal) throw new Error('A leave transition requires an active modal');
+  modal.leaveTransition = transition;
+  onBeforeUnmount(() => {
+    if (modal.leaveTransition === transition) modal.leaveTransition = undefined;
+  });
+}
+
+function finishModal(modal: ActiveModal, settle: () => void) {
+  if (modal.leaving) return;
+  const finish = () => {
+    removeModal(modal);
+    settle();
+    restoreFocusAfterReturn(modal);
+  };
+  if (modal.leaveTransition) {
+    modal.leaving = modal.leaveTransition().then(finish, finish);
+  } else {
+    finish();
+  }
 }
 
 /**
@@ -161,17 +192,13 @@ export async function openModal<
 }
 
 export function settleModal(modal: ActiveModal, result: { type: string }) {
-  removeModal(modal);
-  modal.resolve(result);
-  restoreFocusAfterReturn(modal);
+  finishModal(modal, () => modal.resolve(result));
 }
 
 export function closeActiveModal(result: BaseModalResult) {
   const modal = activeModal.value;
   if (!modal || (modal.closeGuard && !modal.closeGuard())) return false;
-  removeModal(modal);
-  modal.close(result);
-  restoreFocusAfterReturn(modal);
+  finishModal(modal, () => modal.close(result));
   return true;
 }
 

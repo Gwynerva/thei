@@ -39,7 +39,7 @@ function relationTitle(type?: ProjectRelationType): string | undefined {
       <PublicCompactResourceItem
         v-else
         :title="compactExternalLinkText(link.title) ?? link.title"
-        :description="compactExternalLinkText(link.description)"
+        :description="link.description"
         :icon-media="link.iconMedia"
         :href="link.href"
         icon="external-link"

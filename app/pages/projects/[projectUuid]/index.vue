@@ -57,11 +57,15 @@ const details = computed(
               },
             ]
           : []),
-        {
-          icon: 'history',
-          label: phrase.value.project_chronology_updated,
-          date: data.value.chronology.updatedAt,
-        },
+        ...(data.value.chronology.updatedAt
+          ? [
+              {
+                icon: 'history' as const,
+                label: phrase.value.project_chronology_updated,
+                date: data.value.chronology.updatedAt,
+              },
+            ]
+          : []),
       ],
       tags: data.value.tags,
       relatedProjects: data.value.relatedProjects,
@@ -103,6 +107,7 @@ const details = computed(
       :banner-media="data.bannerMedia"
       :action="data.action"
       :showcase="data.showcase"
+      :tags="data.tags"
       :is-showcase="data.isShowcase"
       :is-portfolio="data.isPortfolio"
     />

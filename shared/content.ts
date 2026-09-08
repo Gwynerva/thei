@@ -1,3 +1,4 @@
+import { normalizeImageAccent } from './accent-color';
 import { AssetType, type ArchivedOriginalFileMeta } from './asset';
 import type { MediaDescriptor } from './media';
 import { normalizeExternalLinkUrl, type ExternalLink } from './external-link';
@@ -846,7 +847,7 @@ function normalizeMediaDescriptor(value: unknown): MediaDescriptor | undefined {
     src,
     previewSrc,
     kind,
-    accentHue: optionalNumber(value.accentHue),
+    accent: normalizeImageAccent(value.accent),
     width: optionalNumber(value.width),
     height: optionalNumber(value.height),
   };

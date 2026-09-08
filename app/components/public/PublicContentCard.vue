@@ -6,7 +6,7 @@ import type {
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import type { DateRange } from '#layers/thei/shared/date-range';
 import type { IconName } from '#thei/icons';
-import { accentHueCssColor } from '#layers/thei/shared/accent-color';
+import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
 
 const props = defineProps<{
   href: string;
@@ -27,17 +27,13 @@ const datePresentation = computed(() =>
   getPublicDatePresentation(props.period ?? props.date, language.value.code),
 );
 const cardStyle = computed<Record<string, string>>(() => {
-  const accentColor =
-    props.media?.accentHue === undefined
-      ? 'var(--color-accent)'
-      : accentHueCssColor(props.media.accentHue, 'var(--color-accent)');
+  const accentColor = props.media
+    ? imageAccentCssColor(props.media.accent)
+    : 'var(--color-accent)';
 
   return {
     '--public-card-accent-color': accentColor,
-    '--public-card-shadow-color':
-      props.media?.accentHue === undefined
-        ? 'color-mix(in oklab, var(--color-accent) 32%, transparent)'
-        : accentHueCssColor(props.media.accentHue, 'var(--color-accent)', 0.32),
+    '--public-card-shadow-color': `color-mix(in oklab, ${accentColor} 32%, transparent)`,
   };
 });
 const visibleTags = computed(() => props.tags?.slice(0, 3) ?? []);
@@ -67,11 +63,14 @@ const hasFooter = computed(
     <div
       v-if="media"
       class="public-card-media pointer-events-none absolute inset-y-0 right-0
-        w-3/5 bg-bg-accent sm:w-1/2"
+        w-3/5 sm:w-1/2"
       aria-hidden="true"
     >
       <Media
         v-bind="media"
+        variant="ambient"
+        playback="autoplay"
+        align="right"
         class="size-full opacity-70 transition duration-300
           group-hocus:opacity-95 motion-reduce:duration-150"
       />

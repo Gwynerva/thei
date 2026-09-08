@@ -203,6 +203,7 @@ export class ExternalLinkTool implements BlockTool {
         link: this.preview,
         url: this.url,
         interactive: true,
+        playback: 'interaction',
         loading: this.loading,
         errorText: this.error
           ? contentToolConfig(this.options.config).labels.externalLinkError
@@ -307,6 +308,7 @@ export class EntityLinkTool implements BlockTool {
             entityId: this.entityId,
             resolver: config.resolver,
             interactive: true,
+        playback: 'interaction',
           })
         : h(ContentAssetSkeleton, {
             icon: 'link',

@@ -18,6 +18,7 @@ withDefaults(
     mediaNaturalSize?: boolean;
     captionClass?: string;
     openable?: boolean;
+    suspended?: boolean;
   }>(),
   { mediaRounded: true },
 );
@@ -26,6 +27,8 @@ const emit = defineEmits<{
   edit: [];
   caption: [value: string];
   open: [];
+  ready: [];
+  error: [];
 }>();
 </script>
 
@@ -36,6 +39,9 @@ const emit = defineEmits<{
       :layout
       :rounded="mediaRounded"
       :natural-size="mediaNaturalSize"
+      :suspended
+      @ready="emit('ready')"
+      @error="emit('error')"
     >
       <button
         v-if="openable && !editable && asset.media?.kind === 'image'"

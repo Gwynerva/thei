@@ -72,6 +72,7 @@ function openEditor() {
     },
   });
 }
+const { engaged, events: mediaEvents } = useMediaInteraction();
 </script>
 
 <template>
@@ -83,11 +84,12 @@ function openEditor() {
       justify-between gap-sm overflow-hidden rounded-normal border-2
       border-border-1 bg-bg-1 p-xs text-left transition sm:p-sm
       hocus:border-border-3 hocus:bg-bg-3"
+    v-on="mediaEvents"
     @click="openEditor"
   >
     <span
       v-if="preview.media"
-      class="content-preview-media absolute inset-y-0 left-0 w-32 bg-bg-accent
+      class="content-preview-media absolute inset-y-0 left-0 w-32
         [--preview-mask-end:70%] [--preview-mask-soft-alpha:10%]
         [--preview-mask-soft:45%] [--preview-mask-start-alpha:100%]
         [--preview-mask-strong-alpha:70%] [--preview-mask-strong:10%]
@@ -96,6 +98,11 @@ function openEditor() {
     >
       <Media
         v-bind="preview.media"
+        variant="ambient"
+          playback="interaction"
+          :engaged
+        align="left"
+        fit="height"
         class="size-full opacity-75 transition group-hocus:opacity-100"
       />
     </span>

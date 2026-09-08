@@ -147,7 +147,7 @@ export type PublicProjectResponse = {
     createdAt: string;
     firstStageAt?: string;
     lastStageAt?: string;
-    updatedAt: string;
+    updatedAt?: string;
   };
   isShowcase: boolean;
   isPortfolio: boolean;

@@ -40,17 +40,6 @@ export function externalLinkHostname(url: string): string {
   }
 }
 
-export function normalizeExternalLinkAccentHue(
-  value: unknown,
-): number | undefined {
-  return typeof value === 'number' &&
-    Number.isInteger(value) &&
-    value >= 0 &&
-    value < 360
-    ? value
-    : undefined;
-}
-
 export function normalizeExternalLinkUrl(value: unknown): string {
   if (typeof value !== 'string') throw new Error('Invalid external link URL');
   const trimmed = value.trim();

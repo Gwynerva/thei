@@ -77,7 +77,7 @@ function active(to: string) {
             hocus:bg-accent/10 hocus:text-text-1"
           @click="settingsOpen = !settingsOpen"
         >
-          <Icon name="palette" class="shrink-0 text-xl" />
+          <Icon name="cog" class="shrink-0 text-xl" />
         </button>
       </nav>
     </div>

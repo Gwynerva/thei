@@ -1,3 +1,4 @@
+import type { ImageAccent } from '#layers/thei/shared/accent-color';
 export enum AssetType {
   Image = 'image',
   Video = 'video',
@@ -46,8 +47,8 @@ export interface ImageAssetMeta extends AssetMetaBase {
   width?: number;
   /** Pixel height after upload/transformation when the file has intrinsic dimensions. */
   height?: number;
-  /** Perceptual OKLCH accent hue (0-359). */
-  accentHue?: number;
+  /** Representative OKLCH hue and chroma, including neutral images. */
+  accent?: ImageAccent;
 }
 
 export interface VideoAssetMeta extends AssetMetaBase {
@@ -55,8 +56,8 @@ export interface VideoAssetMeta extends AssetMetaBase {
   width?: number;
   /** Pixel height after upload/transformation when available. */
   height?: number;
-  /** Perceptual OKLCH accent hue (0-359) of the first-frame preview. */
-  accentHue?: number;
+  /** Representative OKLCH color of the first-frame preview. */
+  accent?: ImageAccent;
   /** Whether the stored video keeps or strips audio. */
   audio?: 'keep' | 'strip' | 'none' | 'unknown';
 }

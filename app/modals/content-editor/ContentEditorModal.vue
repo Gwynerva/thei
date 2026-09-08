@@ -871,6 +871,7 @@ function editorJsI18nMessages() {
 <template>
   <ModalContainer ref="modalContainer" class="max-w-192">
     <ContentInlineLinkDecorator
+      playback="interaction"
       :root="holder"
       :resolver="contentLinkResolver"
     />

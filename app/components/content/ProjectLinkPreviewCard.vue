@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { MediaDescriptor } from '#layers/thei/shared/media';
+import type { MediaDescriptor, MediaPlayback } from '#layers/thei/shared/media';
 
 const props = defineProps<{
   entityType?: 'project' | 'event' | 'page';
@@ -8,14 +8,18 @@ const props = defineProps<{
   iconMedia?: MediaDescriptor;
   href?: string;
   interactive: boolean;
+  playback?: MediaPlayback;
   flush?: boolean;
 }>();
+const { engaged, events: mediaEvents } = useMediaInteraction();
 </script>
 
 <template>
   <component
+    v-on="mediaEvents"
     :is="href && interactive ? 'a' : 'div'"
     :href="href && interactive ? href : undefined"
+    :tabindex="playback === 'interaction' && !(href && interactive) ? 0 : undefined"
     :target="href && interactive ? '_blank' : undefined"
     :rel="href && interactive ? 'noopener noreferrer' : undefined"
     class="entity-link-preview group relative flex min-h-16 w-full min-w-0
@@ -30,8 +34,7 @@ const props = defineProps<{
     ]"
   >
     <span
-      class="entity-preview absolute inset-y-0 right-0 w-40 bg-bg-accent
-        [--preview-mask-end:100%] [--preview-mask-soft-alpha:25%]
+      class="entity-preview absolute inset-y-0 right-0 w-40 [--preview-mask-end:100%] [--preview-mask-soft-alpha:25%]
         [--preview-mask-soft:78%] [--preview-mask-start-alpha:100%]
         [--preview-mask-strong-alpha:90%] [--preview-mask-strong:45%] sm:w-48"
       aria-hidden="true"
@@ -39,6 +42,10 @@ const props = defineProps<{
       <Media
         v-if="iconMedia"
         v-bind="iconMedia"
+        :engaged
+        :playback="playback ?? 'autoplay'"
+        variant="ambient"
+        align="right"
         class="size-full opacity-75 transition group-hocus:opacity-100"
       />
       <span

@@ -1,3 +1,5 @@
+import { normalizeImageAccent } from '#layers/thei/shared/accent-color';
+import type { ImageAccent } from '#layers/thei/shared/accent-color';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
@@ -6,10 +8,9 @@ import sharp from 'sharp';
 import { collectContentExternalLinkUrls } from '#layers/thei/shared/content';
 import {
   EXTERNAL_LINK_ICON_PATH,
-  normalizeExternalLinkAccentHue,
   type ExternalLink,
 } from '#layers/thei/shared/external-link';
-import { extractImageAccentHue } from '../assets/image-color';
+import { extractImageAccent } from '../assets/image-color';
 
 export const EXTERNAL_LINK_FAVICON_SIZE = 48;
 export const EXTERNAL_LINK_FAVICON_QUALITY = 80;
@@ -25,7 +26,7 @@ export function externalLinkFaviconPath(key: string) {
 
 export function externalLinkMedia(
   faviconKey: string,
-  accentHue: number | undefined,
+  accent: ImageAccent | undefined,
   touchedAt?: number,
 ): ExternalLink['faviconMedia'] {
   const version = touchedAt ? `?v=${touchedAt}` : '';
@@ -34,7 +35,7 @@ export function externalLinkMedia(
     src,
     previewSrc: src,
     kind: 'image',
-    ...(accentHue === undefined ? {} : { accentHue }),
+    ...(accent === undefined ? {} : { accent }),
     width: EXTERNAL_LINK_FAVICON_SIZE,
     height: EXTERNAL_LINK_FAVICON_SIZE,
   };
@@ -42,14 +43,14 @@ export function externalLinkMedia(
 
 export function externalLinkPreviewMedia(
   buffer: Buffer,
-  accentHue: number | undefined,
+  accent: ImageAccent | undefined,
 ): ExternalLink['faviconMedia'] {
   const src = `data:image/webp;base64,${buffer.toString('base64')}`;
   return {
     src,
     previewSrc: src,
     kind: 'image',
-    ...(accentHue === undefined ? {} : { accentHue }),
+    ...(accent === undefined ? {} : { accent }),
     width: EXTERNAL_LINK_FAVICON_SIZE,
     height: EXTERNAL_LINK_FAVICON_SIZE,
   };
@@ -134,7 +135,7 @@ export function toExternalLink(row: {
   title: string | null;
   description: string | null;
   faviconKey: string;
-  accentHue: number | null;
+  accent: ImageAccent | null;
   touchedAt: number;
 }): ExternalLink {
   return {
@@ -143,7 +144,7 @@ export function toExternalLink(row: {
     description: row.description ?? undefined,
     faviconMedia: externalLinkMedia(
       row.faviconKey,
-      normalizeExternalLinkAccentHue(row.accentHue),
+      normalizeImageAccent(row.accent),
       row.touchedAt,
     ),
     touchedAt: row.touchedAt,
@@ -153,7 +154,7 @@ export function toExternalLink(row: {
 export function upsertExternalLink(
   data: Omit<ExternalLink, 'faviconMedia'> & {
     faviconKey: string;
-    accentHue?: number;
+    accent?: ImageAccent;
   },
 ) {
   const { db, schema } = THEI_SERVER.useDb();
@@ -165,7 +166,7 @@ export function upsertExternalLink(
         title: data.title,
         description: data.description,
         faviconKey: data.faviconKey,
-        accentHue: data.accentHue,
+        accent: data.accent ?? null,
         touchedAt: data.touchedAt,
       },
     })
@@ -174,27 +175,27 @@ export function upsertExternalLink(
 
 export async function writeExternalLinkFavicon(url: string, source?: Buffer) {
   const faviconKey = externalLinkKey(url);
-  const { buffer, accentHue } = await prepareExternalLinkFavicon(source);
+  const { buffer, accent } = await prepareExternalLinkFavicon(source);
   await writeExternalLinkFaviconFile(faviconKey, buffer);
-  return { faviconKey, accentHue };
+  return { faviconKey, accent };
 }
 
 export async function prepareExternalLinkFavicon(source?: Buffer) {
-  let accentHue: number | undefined;
+  let accent: ImageAccent | undefined;
   let buffer: Buffer;
   try {
     if (!source) throw new Error('Missing favicon');
     buffer = await convertExternalLinkFavicon(source);
-    accentHue = await extractImageAccentHue(buffer);
+    accent = await extractImageAccent(buffer);
   } catch {
-    accentHue = undefined;
+    accent = undefined;
     buffer = await sharp(Buffer.from(fallbackSvg()))
       .resize(EXTERNAL_LINK_FAVICON_SIZE, EXTERNAL_LINK_FAVICON_SIZE)
       .webp({ quality: EXTERNAL_LINK_FAVICON_QUALITY, effort: 6 })
       .toBuffer();
   }
-  accentHue = normalizeExternalLinkAccentHue(accentHue);
-  return { buffer, accentHue };
+  accent = normalizeImageAccent(accent);
+  return { buffer, accent };
 }
 
 async function writeExternalLinkFaviconFile(

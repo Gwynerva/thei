@@ -6,8 +6,11 @@ import type {
   ProjectActionBackgroundMode,
   ProjectActionTarget,
 } from '#layers/thei/shared/project-action';
-import { projectActionContextAccentHue } from '#layers/thei/shared/project-action';
-import { accentHueCssColor } from '#layers/thei/shared/accent-color';
+import { projectActionContextAccent } from '#layers/thei/shared/project-action';
+import {
+  imageAccentCssColor,
+  type ImageAccent,
+} from '#layers/thei/shared/accent-color';
 
 const props = defineProps<{
   text: string;
@@ -30,18 +33,18 @@ const displayedIcon = computed(
   () => props.iconMedia ?? (props.useFavicon ? props.faviconMedia : undefined),
 );
 const neutralColor = 'var(--color-text-3)';
-const hueColor = (hue: number | undefined) =>
-  accentHueCssColor(hue, neutralColor);
+const mediaColor = (accent: ImageAccent | undefined) =>
+  imageAccentCssColor(accent);
 const manualAccent = computed(() =>
   /^#[0-9a-fA-F]{6}$/.test(props.accentColor)
     ? props.accentColor
     : 'var(--color-accent)',
 );
-const contextualAccentHue = computed(() =>
-  projectActionContextAccentHue(props.backgroundMode, {
-    icon: props.iconMedia?.accentHue,
-    file: props.fileMedia?.accentHue,
-    link: props.faviconMedia?.accentHue,
+const contextualAccent = computed(() =>
+  projectActionContextAccent(props.backgroundMode, {
+    icon: props.iconMedia?.accent,
+    file: props.fileMedia?.accent,
+    link: props.faviconMedia?.accent,
   }),
 );
 const gradientColor = computed(() => {
@@ -50,7 +53,7 @@ const gradientColor = computed(() => {
     props.backgroundMode === 'icon-gradient' ||
     props.backgroundMode === 'file-gradient'
   )
-    return accentHueCssColor(contextualAccentHue.value, 'var(--color-accent)');
+    return imageAccentCssColor(contextualAccent.value);
   if (props.backgroundMode === 'standard-gradient')
     return 'var(--color-accent)';
   if (props.backgroundMode === 'asset' && !props.backgroundMedia)
@@ -59,13 +62,13 @@ const gradientColor = computed(() => {
 });
 const highlightColor = computed(() => {
   if (props.backgroundMode === 'asset')
-    return hueColor(props.backgroundMedia?.accentHue);
+    return mediaColor(props.backgroundMedia?.accent);
   if (
     props.backgroundMode === 'link-gradient' ||
     props.backgroundMode === 'icon-gradient' ||
     props.backgroundMode === 'file-gradient'
   )
-    return accentHueCssColor(contextualAccentHue.value, 'var(--color-accent)');
+    return imageAccentCssColor(contextualAccent.value);
   if (props.backgroundMode === 'standard-gradient')
     return 'var(--color-accent)';
   return manualAccent.value;

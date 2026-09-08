@@ -32,7 +32,10 @@ const usage = (
           ? 'txt'
           : 'webp',
     type,
-    meta: { accentHue },
+    meta: {
+      accent:
+        accentHue === undefined ? undefined : { hue: accentHue, chroma: 0.15 },
+    },
   },
 });
 
@@ -60,7 +63,10 @@ describe.each(['event', 'project'])('public %s action', (kind) => {
         [usage('action-file', type)] as any,
         false,
       );
-      expect(result?.fileMedia).toMatchObject({ kind: type, accentHue: 0 });
+      expect(result?.fileMedia).toMatchObject({
+        kind: type,
+        accent: { hue: 0, chroma: 0.15 },
+      });
       expect(result?.fileMedia?.src).toBe(result?.href);
       expect(result?.fileMedia?.src).not.toContain('/api/admin/');
     },
@@ -83,7 +89,7 @@ describe.each(['event', 'project'])('public %s action', (kind) => {
         kind: 'image' as const,
         src: '/media/favicon.webp',
         previewSrc: '/media/favicon.webp',
-        accentHue: 210,
+        accent: { hue: 210, chroma: 0.15 },
       };
       vi.mocked(findExternalLink).mockResolvedValue({
         url: 'https://example.com/',
@@ -108,8 +114,8 @@ describe.each(['event', 'project'])('public %s action', (kind) => {
       [usage('action-icon'), usage('action-background')] as any,
       false,
     );
-    expect(result?.iconMedia?.accentHue).toBe(0);
-    expect(result?.backgroundMedia?.accentHue).toBe(0);
+    expect(result?.iconMedia?.accent).toEqual({ hue: 0, chroma: 0.15 });
+    expect(result?.backgroundMedia?.accent).toEqual({ hue: 0, chroma: 0.15 });
   });
 
   it('does not expose private actions or query their sources for visitors', async () => {

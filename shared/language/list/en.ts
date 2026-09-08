@@ -135,8 +135,7 @@ export default defineI18nBase({
     public_navigation: 'Site navigation',
     latest_life: 'Latest from Life',
     latest_pages: 'Recently updated pages',
-    view_all_life: 'View all of Life',
-    view_all_pages: 'View all pages',
+    view_all: 'View all',
     life_empty: 'Life has no public moments yet.',
     event_started: 'An event started',
     event_ended: 'An event ended',
@@ -210,6 +209,8 @@ export default defineI18nBase({
     project_chronology_first_stage: 'First project stage',
     project_chronology_last_stage: 'Last project stage',
     project_chronology_updated: 'Project update',
+    page_chronology_created: 'Page created',
+    page_chronology_updated: 'Page updated',
     install_thei: 'Install Thei',
     visuals: 'Visuals',
     visuals_description:

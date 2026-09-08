@@ -1,3 +1,4 @@
+import type { ImageAccent } from '#layers/thei/shared/accent-color';
 import { normalizeExternalLinkUrl } from './external-link';
 
 export const PROJECT_ACTION_TARGETS = ['file', 'external-link'] as const;
@@ -208,12 +209,12 @@ export function normalizeProjectActionBackgroundRepeat(
   return size === 'cover' || size === 'stretch' ? 'no-repeat' : repeat;
 }
 
-export function projectActionContextAccentHue(
+export function projectActionContextAccent(
   mode: ProjectActionBackgroundMode,
   sources: {
-    icon?: number;
-    file?: number;
-    link?: number;
+    icon?: ImageAccent;
+    file?: ImageAccent;
+    link?: ImageAccent;
   },
 ) {
   if (mode === 'icon-gradient') return sources.icon;

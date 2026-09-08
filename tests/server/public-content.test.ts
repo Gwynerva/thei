@@ -93,7 +93,7 @@ describe('public content media previews', () => {
       settings: null,
       type: AssetType.Image,
       size: 1,
-      meta: { width: 1200, height: 800, accentHue: 42 },
+      meta: { width: 1200, height: 800, accent: { hue: 42, chroma: 0.15 } },
     };
     (globalThis as any).THEI_SERVER = {
       content: {
@@ -131,7 +131,7 @@ describe('public content media previews', () => {
       }),
     ).resolves.toMatchObject({
       kind: AssetType.Image,
-      accentHue: 42,
+      accent: { hue: 42, chroma: 0.15 },
       src: '/events/event-public-id/content/content-image.webp',
     });
   });
@@ -171,7 +171,7 @@ describe('public content media previews', () => {
             width: 1920,
             height: 1080,
             audio: 'keep',
-            accentHue: 214,
+            accent: { hue: 214, chroma: 0.15 },
           },
         },
       ],
@@ -188,7 +188,7 @@ describe('public content media previews', () => {
           settings: null,
           type: AssetType.Image,
           size: 1,
-          meta: { width: 1000, height: 700, accentHue: 32 },
+          meta: { width: 1000, height: 700, accent: { hue: 32, chroma: 0.15 } },
         },
       ],
     ]);
@@ -252,7 +252,7 @@ describe('public content media previews', () => {
       }),
     ).resolves.toMatchObject({
       kind: AssetType.Video,
-      accentHue: 214,
+      accent: { hue: 214, chroma: 0.15 },
       src: '/events/event-public-id/content/gallery-video.mp4',
     });
   });
@@ -311,7 +311,7 @@ describe('public content media previews', () => {
           settings: null,
           type: AssetType.Image,
           size: 1,
-          meta: { width: 1200, height: 800, accentHue: 42 },
+          meta: { width: 1200, height: 800, accent: { hue: 42, chroma: 0.15 } },
         },
       ],
       [
@@ -327,7 +327,12 @@ describe('public content media previews', () => {
           settings: null,
           type: AssetType.Video,
           size: 1,
-          meta: { width: 1920, height: 1080, audio: 'keep', accentHue: 214 },
+          meta: {
+            width: 1920,
+            height: 1080,
+            audio: 'keep',
+            accent: { hue: 214, chroma: 0.15 },
+          },
         },
       ],
     ]);
@@ -586,7 +591,7 @@ describe('public content media previews', () => {
       settings: null,
       type: AssetType.Image,
       size: 1,
-      meta: { width: 1200, height: 800, accentHue: 28 },
+      meta: { width: 1200, height: 800, accent: { hue: 28, chroma: 0.15 } },
     };
     (globalThis as any).THEI_SERVER = {
       content: {
@@ -635,7 +640,7 @@ describe('public content media previews', () => {
       date: '2027-03-14',
       period: { startDate: '2026-11-02', endDate: '2027-03-14' },
       media: {
-        accentHue: 28,
+        accent: { hue: 28, chroma: 0.15 },
         src: '/projects/project-Project/content/stage-image.webp',
       },
     });
@@ -654,7 +659,7 @@ describe('public content media previews', () => {
       settings: null,
       type: AssetType.Image,
       size: 1,
-      meta: { width: 900, height: 600, accentHue: 310 },
+      meta: { width: 900, height: 600, accent: { hue: 310, chroma: 0.15 } },
     };
     (globalThis as any).THEI_SERVER = {
       content: {
@@ -705,7 +710,7 @@ describe('public content media previews', () => {
     ).resolves.toMatchObject({
       date: '2027-04-06',
       media: {
-        accentHue: 310,
+        accent: { hue: 310, chroma: 0.15 },
         src: '/projects/project-Project/content/section-image.webp',
       },
     });

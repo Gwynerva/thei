@@ -106,4 +106,7 @@ export interface ActiveModal {
   close: (result: BaseModalResult) => void;
   /** Optional synchronous check run before user-initiated dismissal. */
   closeGuard?: () => boolean;
+  /** Keep the modal, focus and scroll lock alive until its exit animation ends. */
+  leaveTransition?: () => Promise<void>;
+  leaving?: Promise<void>;
 }
