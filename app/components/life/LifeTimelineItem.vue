@@ -12,6 +12,17 @@ const props = withDefaults(
   { tone: 'accent', active: false, activeStart: false, activeEnd: false },
 );
 const isNew = computed(() => props.tone === 'warning');
+const pointIcon = computed(() => {
+  const point = props.point;
+  if (point.visibility === 'secret') return 'lock-close';
+  if (point.entityKind === 'event') return 'event';
+  if (point.entityKind === 'page') return 'page';
+  if (point.entityKind === 'project-stage') return 'calendar';
+  if (point.entityKind === 'project-section') return 'file-tray-stack';
+  if (point.entityKind === 'profile-avatar') return 'person';
+  if (point.entityKind === 'profile-status') return 'quote';
+  return 'project';
+});
 </script>
 
 <template>
@@ -48,19 +59,7 @@ const isNew = computed(() => props.tone === 'warning');
             shadow-shadow-2 sm:size-10 sm:border-4 sm:text-lg"
           :class="{ 'life-point-marker--warning': isNew }"
         >
-          <Icon
-            :name="
-              point.visibility === 'secret'
-                ? 'lock-close'
-                : point.entityKind === 'event'
-                  ? 'event'
-                  : point.entityKind === 'project-stage'
-                    ? 'calendar'
-                    : point.entityKind === 'project-section'
-                      ? 'file-tray-stack'
-                      : 'project'
-            "
-          />
+          <Icon :name="pointIcon" />
         </span>
         <span
           v-if="isNew"

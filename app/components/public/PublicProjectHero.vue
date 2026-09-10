@@ -23,6 +23,7 @@ const accent = computed(() =>
     props.bannerMedia ? props.bannerMedia.accent : props.iconMedia.accent,
   ),
 );
+const iconAccent = computed(() => imageAccentCssColor(props.iconMedia.accent));
 const visibleTags = computed(() => props.tags.slice(0, 3));
 </script>
 
@@ -32,12 +33,13 @@ const visibleTags = computed(() => props.tags.slice(0, 3));
     :class="{ 'project-hero-with-banner': bannerMedia }"
     :style="{
       '--project-hero-accent': accent,
+      '--project-hero-icon-accent': iconAccent,
     }"
   >
     <PublicProjectBanner v-if="bannerMedia" :media="bannerMedia" />
     <div
-      class="pointer-events-none absolute inset-0 bg-black/70"
-      :class="{ 'hero-shade hidden sm:block': bannerMedia }"
+      class="pointer-events-none absolute inset-0"
+      :class="bannerMedia ? 'hero-shade' : 'bg-black/70'"
       data-hero-shade
       aria-hidden="true"
     />
@@ -78,6 +80,10 @@ const visibleTags = computed(() => props.tags.slice(0, 3));
           <Media
             v-bind="iconMedia"
             fit="contain"
+            playback="autoplay"
+            autoplay-reduced-motion
+            loop
+            muted
             class="size-16 shrink-0 sm:size-24"
             data-hero-icon
           />
@@ -116,7 +122,16 @@ const visibleTags = computed(() => props.tags.slice(0, 3));
   background: var(--project-hero-accent);
 }
 .project-hero-with-banner {
-  background: var(--color-black);
+  background: var(--project-hero-icon-accent);
+}
+.hero-shade {
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    color-mix(in oklab, var(--project-hero-icon-accent) 76%, transparent) 30%,
+    color-mix(in oklab, var(--project-hero-icon-accent) 72%, black) 68%,
+    color-mix(in oklab, var(--project-hero-icon-accent) 58%, black) 100%
+  );
 }
 .hero-title {
   text-shadow:
@@ -130,7 +145,11 @@ const visibleTags = computed(() => props.tags.slice(0, 3));
 }
 
 @variant sm {
-.hero-shade {
+  .project-hero-with-banner {
+    background: var(--color-black);
+  }
+  .hero-shade {
+    background: rgb(0 0 0 / 70%);
     mask-image: linear-gradient(
       to right,
       black calc((100% - var(--width-wide)) / 2 + var(--width-wide) / 3),

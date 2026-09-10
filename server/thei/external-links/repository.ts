@@ -84,10 +84,15 @@ export async function cleanupOrphanExternalLinks() {
       .map((row) => row.url),
   );
   const actionRows = db
+    .select({ url: schema.profileExternalLinks.url })
+    .from(schema.profileExternalLinks)
+    .all();
+  for (const row of actionRows) usedUrls.add(row.url);
+  const projectActionRows = db
     .select({ action: schema.projects.action })
     .from(schema.projects)
     .all();
-  for (const row of actionRows) {
+  for (const row of projectActionRows) {
     const action = row.action as { externalUrl?: unknown } | null;
     if (typeof action?.externalUrl === 'string')
       usedUrls.add(action.externalUrl);

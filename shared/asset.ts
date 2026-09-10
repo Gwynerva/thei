@@ -13,6 +13,9 @@ export {
 } from './assets/formats';
 
 export const ASSET_CONTAINER_TYPES = [
+  'profile',
+  'profile-avatar',
+  'profile-status',
   'project',
   'event',
   'page',
@@ -23,6 +26,7 @@ export const ASSET_CONTAINER_TYPES = [
 export type AssetContainerType = (typeof ASSET_CONTAINER_TYPES)[number];
 
 export const ASSET_ROLES = [
+  'favicon',
   'icon',
   'banner',
   'content',

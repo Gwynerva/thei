@@ -1,29 +1,6 @@
-import { asc, eq, inArray } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import type { ProjectExternalLinkSaveItem } from '#layers/thei/shared/external-link';
 import { toExternalLink } from '../external-links/repository';
-import { persistExternalLink } from '../external-links/preview';
-
-export async function prepareEventExternalLinks(
-  links: ProjectExternalLinkSaveItem[] | undefined,
-) {
-  if (links === undefined) return undefined;
-  const { db, schema } = THEI_SERVER.useDb();
-  const urls = links.map((link) => link.url);
-  const existing = urls.length
-    ? db
-        .select({ url: schema.externalLinks.url })
-        .from(schema.externalLinks)
-        .where(inArray(schema.externalLinks.url, urls))
-        .all()
-    : [];
-  const known = new Set(existing.map((row) => row.url));
-  await Promise.all(
-    links
-      .filter((link) => !known.has(link.url))
-      .map((link) => persistExternalLink(link.url)),
-  );
-  return links;
-}
 
 export function applyEventExternalLinks(
   tx: any,

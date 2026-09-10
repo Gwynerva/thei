@@ -89,9 +89,12 @@ export function useMediaPair(
   const allowedPlayback = computed(
     () =>
       !props.suspended &&
+      (!reducedMotion.value ||
+        (props.playback === 'autoplay' &&
+          Boolean(props.autoplayReducedMotion))) &&
       (props.playback === 'interaction'
-        ? Boolean(props.engaged) && !reducedMotion.value
-        : props.playback === 'autoplay' && !reducedMotion.value),
+        ? Boolean(props.engaged)
+        : props.playback === 'autoplay'),
   );
   let savedTime = 0;
   let observer: IntersectionObserver | undefined;

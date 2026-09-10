@@ -140,6 +140,28 @@ export async function destroyAdminSession(token: string) {
   await flushSessionsToDb();
 }
 
+/** Destroy every other in-memory session while keeping the request session alive. */
+export async function destroyOtherAdminSessions(currentSessionUuid: string) {
+  const now = Date.now();
+  const seen = new Set<string>();
+  let changed = false;
+  for (const session of [...memorySessions.values()]) {
+    if (
+      session.sessionUuid === currentSessionUuid ||
+      seen.has(session.sessionUuid)
+    )
+      continue;
+    seen.add(session.sessionUuid);
+    session.state = 'destroyed';
+    session.lastUsedAt = now;
+    markSessionForSnapshot(session);
+    removeSessionFromMemory(session);
+    changed = true;
+  }
+  if (changed) await flushSessionsToDb();
+  return changed;
+}
+
 export async function destroyCurrentAdminSession(event: H3Event) {
   const token = getTokenCookie(event);
 

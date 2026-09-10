@@ -27,10 +27,12 @@ import {
   buildPublicEventContentMedia,
   buildPublicProjectContentMedia,
   buildPublicPageContentMedia,
+  buildPublicProfileMedia,
 } from '../assets/urls';
 import { findExternalLink } from '../external-links/repository';
 
 type PublicContentEntity =
+  | { type: 'profile'; title?: string }
   | {
       type: 'event';
       title?: string;
@@ -99,11 +101,13 @@ export async function buildPublicContentPreviewMedia(
       (asset.type !== AssetType.Image && asset.type !== AssetType.Video)
     )
       continue;
-    return entity.type === 'event'
-      ? buildPublicEventContentMedia(entity, asset)
-      : entity.type === 'page'
-        ? buildPublicPageContentMedia(entity, asset)
-        : buildPublicProjectContentMedia(entity, asset);
+    return entity.type === 'profile'
+      ? buildPublicProfileMedia(asset, 'profile', 'profile', 'content')
+      : entity.type === 'event'
+        ? buildPublicEventContentMedia(entity, asset)
+        : entity.type === 'page'
+          ? buildPublicPageContentMedia(entity, asset)
+          : buildPublicProjectContentMedia(entity, asset);
   }
   return undefined;
 }
@@ -172,18 +176,27 @@ async function hydratePublicContentData(
     const asset = await THEI_SERVER.assets.findByUuid(assetUuid);
     if (!asset) return undefined;
     const baseUrl =
-      entity.type === 'event'
-        ? `${buildEventUrl(entity.humanReadableSlug, entity.publicId)}content/${asset.slug}.${asset.extension}`
-        : entity.type === 'page'
-          ? `${buildPageUrl(entity.slug)}content/${asset.slug}.${asset.extension}`
-          : `${buildProjectUrl(entity.humanReadableSlug, entity.publicId)}content/${asset.slug}.${asset.extension}`;
+      entity.type === 'profile'
+        ? `/profile/media/profile/profile/content/${asset.slug}.${asset.extension}`
+        : entity.type === 'event'
+          ? `${buildEventUrl(entity.humanReadableSlug, entity.publicId)}content/${asset.slug}.${asset.extension}`
+          : entity.type === 'page'
+            ? `${buildPageUrl(entity.slug)}content/${asset.slug}.${asset.extension}`
+            : `${buildProjectUrl(entity.humanReadableSlug, entity.publicId)}content/${asset.slug}.${asset.extension}`;
     const media =
       asset.type === AssetType.Image || asset.type === AssetType.Video
-        ? entity.type === 'event'
-          ? await buildPublicEventContentMedia(entity, asset)
-          : entity.type === 'page'
-            ? await buildPublicPageContentMedia(entity, asset)
-            : await buildPublicProjectContentMedia(entity, asset)
+        ? entity.type === 'profile'
+          ? await buildPublicProfileMedia(
+              asset,
+              'profile',
+              'profile',
+              'content',
+            )
+          : entity.type === 'event'
+            ? await buildPublicEventContentMedia(entity, asset)
+            : entity.type === 'page'
+              ? await buildPublicPageContentMedia(entity, asset)
+              : await buildPublicProjectContentMedia(entity, asset)
         : undefined;
     const hydrated = {
       // Public renderers only need a stable local key. Never expose the

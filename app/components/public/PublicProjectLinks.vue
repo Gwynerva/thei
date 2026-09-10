@@ -21,7 +21,14 @@ defineProps<{ projects: PublicProjectReference[] }>();
       <span
         class="size-5 shrink-0 overflow-hidden rounded-sm bg-bg-4 sm:size-7"
       >
-        <Media v-bind="project.iconMedia" class="size-full" />
+        <Media
+          v-bind="project.iconMedia"
+          playback="autoplay"
+          autoplay-reduced-motion
+          loop
+          muted
+          class="size-full"
+        />
       </span>
       <span class="min-w-0 leading-snug break-words">{{ project.title }}</span>
     </TheiLink>

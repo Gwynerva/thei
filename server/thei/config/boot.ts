@@ -10,7 +10,6 @@ export async function bootTheiConfig() {
     version: config.version,
     languageCode: config.languageCode,
     siteAccessLevel: config.siteAccessLevel,
-    displayName: config.displayName,
     secretPhrase: config.secretPhrase,
     password: config.password,
   });

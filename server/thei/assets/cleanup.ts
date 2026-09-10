@@ -91,9 +91,36 @@ async function cleanupDanglingUsages() {
     const eventIds = new Set(eventRows.map((row) => row.eventUuid));
     const pageUuids = new Set(pageRows.map((row) => row.pageUuid));
     const contentUuids = new Set(contentRows.map((row) => row.contentUuid));
+    const profileIds = new Set(
+      db
+        .select({ id: schema.profiles.profileId })
+        .from(schema.profiles)
+        .all()
+        .map((row) => row.id),
+    );
+    const avatarIds = new Set(
+      db
+        .select({ id: schema.profileAvatars.id })
+        .from(schema.profileAvatars)
+        .all()
+        .map((row) => row.id),
+    );
+    const statusIds = new Set(
+      db
+        .select({ id: schema.profileStatuses.id })
+        .from(schema.profileStatuses)
+        .all()
+        .map((row) => row.id),
+    );
 
     for (const usage of usages) {
       if (
+        (usage.containerType === 'profile' &&
+          !profileIds.has(usage.containerId)) ||
+        (usage.containerType === 'profile-avatar' &&
+          !avatarIds.has(usage.containerId)) ||
+        (usage.containerType === 'profile-status' &&
+          !statusIds.has(usage.containerId)) ||
         (usage.containerType === 'asset' &&
           !assetUuids.has(usage.containerId)) ||
         (usage.containerType === 'project' &&

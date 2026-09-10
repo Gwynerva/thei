@@ -232,24 +232,23 @@ function moveSectionWithKeyboard(index: number, direction: -1 | 1) {
           class="flex shrink-0 items-center gap-xs py-xs pr-xs text-xs
             sm:text-sm"
         >
-          <button
+          <Button
             v-if="kind === 'section'"
             type="button"
-            class="flex shrink-0 cursor-grab items-center justify-center
-              rounded-normal bg-bg-3 p-2 text-text-2 transition-colors
-              active:cursor-grabbing hocus:bg-bg-accent hocus:text-accent"
+            size="icon-sm"
+            variant="secondary"
+            drag-handle
             :aria-label="`${phrase.content_section_sort}: ${item.title}`"
             data-content-section-handle
             @keydown.up.prevent.stop="moveSectionWithKeyboard(index, -1)"
             @keydown.down.prevent.stop="moveSectionWithKeyboard(index, 1)"
           >
             <Icon name="grip" />
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            class="flex shrink-0 cursor-pointer items-center justify-center
-              rounded-normal bg-bg-3 p-2 text-text-2 transition-colors
-              hocus:bg-bg-error hocus:text-text-error"
+            size="icon-sm"
+            variant="delete"
             :aria-label="`${kind === 'stage' ? phrase.delete_project_stage : phrase.delete_content_section}: ${item.title}`"
             :data-title-popup="
               kind === 'stage'
@@ -260,7 +259,7 @@ function moveSectionWithKeyboard(index: number, direction: -1 | 1) {
             @click="deleteItem(index)"
           >
             <Icon name="delete" />
-          </button>
+          </Button>
         </div>
       </Box>
     </div>

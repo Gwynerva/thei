@@ -1,4 +1,11 @@
 import { assets } from './assets';
+import {
+  profiles,
+  profileAvatars,
+  profileStatuses,
+  profilePinnedPages,
+  profileExternalLinks,
+} from './profile';
 import { assetUsages } from './asset-usages';
 import { content } from './content';
 import { events } from './events';
@@ -19,6 +26,11 @@ import { eventExternalLinks } from './event-external-links';
 import { eventProjectRelations } from './event-project-relations';
 
 export const schema = {
+  profiles,
+  profileAvatars,
+  profileStatuses,
+  profilePinnedPages,
+  profileExternalLinks,
   assets,
   assetUsages,
   content,

@@ -24,10 +24,10 @@ import {
   getEventRelations,
 } from '../../../thei/events/relations';
 import {
-  prepareEventExternalLinks,
   applyEventExternalLinks,
   getEventExternalLinks,
 } from '../../../thei/events/external-links';
+import { prepareExternalLinks } from '../../../thei/external-links/prepare';
 import {
   prepareTagUsages,
   applyTagUsages,
@@ -81,7 +81,7 @@ export default defineEventHandler(async (event) => {
       ] = await Promise.all([
         prepareContentForSave('event', eventUuid, 'event-body', result.content),
         prepareEventRelations(result.relations),
-        prepareEventExternalLinks(result.externalLinks),
+        prepareExternalLinks(result.externalLinks),
         prepareTagUsages(result.tags),
         THEI_SERVER.assets.usages.findByContainer('event', eventUuid),
         THEI_SERVER.assets.usages.findOtherForContainer('event', eventUuid),

@@ -6,8 +6,9 @@ import type { DateRange } from '#layers/thei/shared/date-range';
 import { toDateString, toPickerDate } from '#layers/thei/shared/date-range';
 
 const model = defineModel<DateRange | undefined>();
+const props = defineProps<{ single?: boolean; maxDate?: Date }>();
 
-const calendarValue = ref<[Date | null, Date | null] | null>(null);
+const calendarValue = ref<Date | [Date | null, Date | null] | null>(null);
 const visuals = useVisuals();
 const calendarLocale = computed(() =>
   language.value.code === 'ru' ? ru : enUS,
@@ -26,10 +27,9 @@ watch(
       calendarValue.value = null;
       return;
     }
-    calendarValue.value = [
-      toPickerDate(range.startDate),
-      toPickerDate(range.endDate),
-    ];
+    calendarValue.value = props.single
+      ? toPickerDate(range.startDate)
+      : [toPickerDate(range.startDate), toPickerDate(range.endDate)];
   },
   { immediate: true },
 );
@@ -50,6 +50,8 @@ watch(
 );
 
 function rangeFromCalendar(value: unknown): DateRange | undefined {
+  if (props.single && value instanceof Date)
+    return { startDate: toDateString(value), endDate: toDateString(value) };
   if (
     !Array.isArray(value) ||
     !(value[0] instanceof Date) ||
@@ -67,12 +69,13 @@ function rangeFromCalendar(value: unknown): DateRange | undefined {
   <VueDatePicker
     v-model="calendarValue"
     class="field-date-range-picker block w-full"
-    range
+    :range="!single"
     inline
     auto-apply
     :time-config="{ enableTimePicker: false }"
     :locale="calendarLocale"
     :dark="calendarIsDark"
+    :max-date="maxDate"
     :teleport="false"
   />
 </template>
@@ -95,27 +98,4 @@ function rangeFromCalendar(value: unknown): DateRange | undefined {
   --dp-cell-border-radius: var(--radius-normal) !important;
   --dp-border-radius: var(--radius-normal) !important;
 }
-/* 
-.field-date-range-picker :deep(.dp--outer-menu-wrap),
-.field-date-range-picker :deep(.dp--menu),
-.field-date-range-picker :deep(.dp--action-row),
-.field-date-range-picker :deep(.dp--action-buttons) {
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
-}
-
-.field-date-range-picker :deep(.dp--action-buttons) {
-  flex: 1 1 auto;
-  margin-inline-start: 0;
-}
-
-.field-date-range-picker :deep(.dp--outer-menu-wrap),
-.field-date-range-picker :deep(.dp--menu) {
-  flex: 1 1 auto;
-}
-
-.field-date-range-picker :deep(.dp--selection-preview) {
-  display: none;
-} */
 </style>

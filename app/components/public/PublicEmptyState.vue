@@ -19,5 +19,6 @@ defineProps<{ icon: IconName; title: string; description?: string }>();
     <p v-if="description" class="max-w-128 text-sm text-text-2">
       {{ description }}
     </p>
+    <slot />
   </div>
 </template>

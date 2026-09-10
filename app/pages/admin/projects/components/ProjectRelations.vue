@@ -299,28 +299,26 @@ onUnmounted(cleanupSorters);
                     }}</span>
                   </div>
                 </div>
-                <button
+                <Button
                   type="button"
-                  class="flex size-10 shrink-0 cursor-grab items-center
-                    justify-center rounded-normal bg-bg-3 text-text-2
-                    transition-colors active:cursor-grabbing hocus:bg-bg-accent
-                    hocus:text-accent"
+                  size="icon-lg"
+                  variant="secondary"
+                  drag-handle
                   :aria-label="`${group.title}: ${relation.title}`"
                   data-relation-handle
                 >
                   <Icon name="grip" />
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  class="flex size-10 shrink-0 cursor-pointer items-center
-                    justify-center rounded-normal bg-bg-3 text-text-2
-                    transition-colors hocus:bg-bg-error hocus:text-text-error"
+                  size="icon-lg"
+                  variant="delete"
                   :aria-label="phrase.delete_project_relation"
                   :data-title-popup="phrase.delete_project_relation"
                   @click="removeRelation(relation.projectUuid)"
                 >
                   <Icon name="delete" />
-                </button>
+                </Button>
               </div>
               <div class="mt-xs flex items-start gap-xs">
                 <div

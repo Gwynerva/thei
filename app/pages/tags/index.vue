@@ -1,14 +1,24 @@
 <script lang="ts" setup>
-import type { PublicTagListItem } from '#layers/thei/shared/api/public';
+import type {
+  PublicTagListItem,
+  PublicPaginatedResponse,
+} from '#layers/thei/shared/api/public';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
 
 definePageMeta({ layout: 'public' });
-const resource = await useFetch<PublicTagListItem[]>('/api/tags');
+const route = useRoute();
+const page = computed(() => String(route.query.page ?? '1'));
+const resource = await useFetch<PublicPaginatedResponse<PublicTagListItem>>(
+  '/api/tags',
+  { query: { page } },
+);
 const tags = useRequiredResource(resource);
 usePublicSeo({
   title: computed(() => phrase.value.tags),
   description: computed(() => phrase.value.public_tags_description),
-  canonical: '/tags/',
+  canonical: computed(() =>
+    buildPublicCanonical('/tags/', { page: tags.value.page }),
+  ),
 });
 </script>
 
@@ -19,9 +29,9 @@ usePublicSeo({
       :title="phrase.tags"
       :description="phrase.public_tags_description"
     />
-    <div v-if="tags.length" class="grid gap-sm sm:grid-cols-2">
+    <div v-if="tags.items.length" class="grid gap-sm sm:grid-cols-2">
       <TheiLink
-        v-for="tag in tags"
+        v-for="tag in tags.items"
         :key="tag.publicId"
         :to="buildTagUrl(tag.slug, tag.publicId)"
         class="group flex items-center gap-sm rounded-normal border
@@ -48,5 +58,6 @@ usePublicSeo({
       </TheiLink>
     </div>
     <PublicEmptyState v-else icon="tag" :title="phrase.tags" />
+    <PublicPagination :page="tags.page" :page-count="tags.pageCount" />
   </main>
 </template>

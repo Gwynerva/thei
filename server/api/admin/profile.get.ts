@@ -2,12 +2,14 @@ import { SiteAccessLevel } from '#layers/thei/shared/access-level';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import type { LanguageCode } from '#layers/thei/shared/language';
 import { resolveGeneratedIcon } from '../../thei/media/generated-icon';
+import { getProfileIdentity } from '../../thei/profile';
 
 interface PublicAdmin {
   languageCode: LanguageCode;
   siteAccessLevel: SiteAccessLevel;
   displayName: string;
   avatarMedia: MediaDescriptor;
+  faviconMedia?: MediaDescriptor;
 }
 
 export default defineEventHandler(async (event): Promise<PublicAdmin> => {
@@ -28,10 +30,12 @@ export default defineEventHandler(async (event): Promise<PublicAdmin> => {
     };
   }
 
+  const identity = await getProfileIdentity();
   return {
     languageCode: THEI_SERVER.language.code,
     siteAccessLevel: THEI_SERVER.config.siteAccessLevel,
-    displayName: THEI_SERVER.config.displayName,
-    avatarMedia: resolveGeneratedIcon('author', THEI_SERVER.config.displayName),
+    displayName: identity.profile.displayName,
+    avatarMedia: identity.avatarMedia,
+    faviconMedia: identity.faviconMedia,
   };
 });

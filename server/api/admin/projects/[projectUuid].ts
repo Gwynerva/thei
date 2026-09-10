@@ -19,6 +19,7 @@ import {
   cleanupOrphanExternalLinks,
   findExternalLink,
 } from '../../../thei/external-links/repository';
+import { prepareExternalLinks } from '../../../thei/external-links/prepare';
 import {
   applyPreparedContentSave,
   deleteContentForOwner,
@@ -49,7 +50,6 @@ import {
   applyProjectExternalLinks,
   deleteProjectExternalLinks,
   getProjectExternalLinks,
-  prepareProjectExternalLinks,
 } from '../../../thei/projects/external-links';
 import {
   applyTagUsages,
@@ -285,7 +285,7 @@ export default defineEventHandler(async (event) => {
       }
       let preparedExternalLinks;
       try {
-        preparedExternalLinks = await prepareProjectExternalLinks(
+        preparedExternalLinks = await prepareExternalLinks(
           result.externalLinks,
         );
       } catch (error) {

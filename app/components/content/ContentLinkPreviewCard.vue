@@ -12,6 +12,7 @@ const props = defineProps<{
   interactive: boolean;
   playback?: MediaPlayback;
   flush?: boolean;
+  continuousProjectMedia?: boolean;
 }>();
 
 const externalLink = computed<ExternalLink | undefined>(() => {
@@ -45,6 +46,10 @@ const externalLink = computed<ExternalLink | undefined>(() => {
     :href="result.href"
     :interactive="interactive"
     :playback
+    :loop="continuousProjectMedia && result.kind === 'project'"
+    :autoplay-reduced-motion="
+      continuousProjectMedia && result.kind === 'project'
+    "
     :flush="flush"
   />
   <div

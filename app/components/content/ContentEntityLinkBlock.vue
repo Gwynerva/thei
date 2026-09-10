@@ -45,5 +45,6 @@ onUnmounted(() => {
     :label="phrase.content_link_loading"
     :interactive="interactive"
     :playback
+    :continuous-project-media="entityType === 'project'"
   />
 </template>

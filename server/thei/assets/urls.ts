@@ -9,6 +9,17 @@ import { buildStoredMediaDescriptor, type StoredAssetRecord } from './storage';
 
 type StoredAsset = Parameters<typeof buildStoredMediaDescriptor>[0];
 
+export async function buildPublicProfileMedia(
+  asset: StoredAssetRecord,
+  container: 'profile' | 'profile-avatar' | 'profile-status',
+  id: string,
+  role: AssetRole,
+) {
+  const media = await buildStoredMediaDescriptor(asset);
+  const src = `/profile/media/${container}/${id}/${role}/${asset.slug}.${asset.extension}`;
+  return { ...media, src, previewSrc: `${src}?preview=1` };
+}
+
 export async function buildPublicProjectMedia(
   project: { humanReadableSlug: string; publicId: string },
   asset: StoredAssetRecord,

@@ -27,6 +27,13 @@ export default defineEventHandler(async (event): Promise<InstallResponse> => {
   await rm(THEI_SERVER.projectPath('.thei'), { force: true, recursive: true });
   await mkdir(dirname(configPath), { recursive: true });
   const fresh = await createFreshDbContext();
+  fresh.db
+    .insert(fresh.schema.profiles)
+    .values({
+      profileId: 'profile',
+      displayName: installDataOrError.displayName,
+    })
+    .run();
   fresh.rawDb.close();
   await writeFile(
     configPath,
@@ -35,7 +42,6 @@ export default defineEventHandler(async (event): Promise<InstallResponse> => {
         version: THEI_SERVER.version,
         languageCode: installDataOrError.languageCode,
         siteAccessLevel: installDataOrError.siteAccessLevel,
-        displayName: installDataOrError.displayName,
         secretPhrase: installDataOrError.secretPhrase,
         password: {
           hash: passwordData.hash,

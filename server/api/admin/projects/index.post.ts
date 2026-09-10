@@ -7,6 +7,7 @@ import type { ProjectSaveResponse } from '#layers/thei/shared/api/project';
 import { ContentValidationError } from '#layers/thei/shared/content';
 import { EntityPrefix, generateUniqueId } from '../../../thei/entity-id';
 import { cleanupOrphanExternalLinks } from '../../../thei/external-links/repository';
+import { prepareExternalLinks } from '../../../thei/external-links/prepare';
 import { validateProjectAssets } from '../../../thei/projects/validate-assets';
 import { syncProjectActionUsages } from '../../../thei/projects/action-usages';
 import {
@@ -27,10 +28,7 @@ import {
   prepareProjectRelations,
 } from '../../../thei/projects/relations';
 import { applyTagUsages, prepareTagUsages } from '../../../thei/tags';
-import {
-  applyProjectExternalLinks,
-  prepareProjectExternalLinks,
-} from '../../../thei/projects/external-links';
+import { applyProjectExternalLinks } from '../../../thei/projects/external-links';
 
 export default defineEventHandler(
   async (event): Promise<ProjectSaveResponse> => {
@@ -113,9 +111,7 @@ export default defineEventHandler(
     }
     let preparedExternalLinks;
     try {
-      preparedExternalLinks = await prepareProjectExternalLinks(
-        result.externalLinks,
-      );
+      preparedExternalLinks = await prepareExternalLinks(result.externalLinks);
     } catch (error) {
       return {
         type: 'error',

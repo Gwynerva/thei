@@ -94,7 +94,14 @@ watch(cooldown, (newCooldown) => {
             class="size-16 overflow-clip rounded-full ring-2 ring-border-3
               ring-offset-2 ring-offset-bg-2"
           >
-            <Media v-bind="publicAdmin.avatarMedia" class="size-full" />
+            <Media
+              v-bind="publicAdmin.avatarMedia"
+              playback="autoplay"
+              autoplay-reduced-motion
+              loop
+              muted
+              class="size-full"
+            />
           </div>
         </div>
         <div class="text-center">

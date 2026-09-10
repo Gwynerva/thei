@@ -82,6 +82,7 @@ export default defineEventHandler(
     }
     if (allowed.has('page')) {
       for (const page of db.select().from(schema.pages).all()) {
+        if (query.publicOnly === 'true' && page.access !== 'public') continue;
         if (excluded.has(`page:${page.pageUuid}`)) continue;
         const icon = (
           await THEI_SERVER.assets.usages.findByContainer('page', page.pageUuid)

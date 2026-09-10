@@ -13,10 +13,8 @@ import {
   prepareEventRelations,
   applyEventRelations,
 } from '../../../thei/events/relations';
-import {
-  prepareEventExternalLinks,
-  applyEventExternalLinks,
-} from '../../../thei/events/external-links';
+import { applyEventExternalLinks } from '../../../thei/events/external-links';
+import { prepareExternalLinks } from '../../../thei/external-links/prepare';
 import { prepareTagUsages, applyTagUsages } from '../../../thei/tags';
 import { syncEntityActionUsages } from '../../../thei/projects/action-usages';
 import { cleanupOrphanExternalLinks } from '../../../thei/external-links/repository';
@@ -42,7 +40,7 @@ export default defineEventHandler(async (event): Promise<EventSaveResponse> => {
     const [contentSave, relations, externalLinks, tags] = await Promise.all([
       prepareContentForSave('event', eventUuid, 'event-body', result.content),
       prepareEventRelations(result.relations),
-      prepareEventExternalLinks(result.externalLinks),
+      prepareExternalLinks(result.externalLinks),
       prepareTagUsages(result.tags),
     ]);
     if (contentSave.type !== 'save')

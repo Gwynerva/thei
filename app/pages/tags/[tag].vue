@@ -13,14 +13,20 @@ const resource = await useFetch<PublicTagResponse>(
   { query: { tab: requestedTab, page } },
 );
 const tag = useRequiredResource(resource);
-const canonical = computed(() =>
+const baseCanonical = computed(() =>
   buildTagUrl(tag.value.slug, tag.value.publicId),
 );
-if (route.path !== canonical.value)
+if (route.path !== baseCanonical.value)
   await navigateTo(
-    { path: canonical.value, query: route.query },
+    { path: baseCanonical.value, query: route.query },
     { redirectCode: 301 },
   );
+const canonical = computed(() =>
+  buildPublicCanonical(baseCanonical.value, {
+    tab: tag.value.activeTab,
+    page: tag.value.items.page,
+  }),
+);
 usePublicSeo({
   title: computed(() => tag.value.title),
   description: computed(
@@ -31,7 +37,7 @@ usePublicSeo({
 
 function tabTo(tab: 'projects' | 'events') {
   return {
-    path: canonical.value,
+    path: baseCanonical.value,
     query: tab === 'events' ? { tab: 'events' } : {},
   };
 }
@@ -41,11 +47,10 @@ function tabTo(tab: 'projects' | 'events') {
   <main class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
     <PublicPageHeader
       icon="tag"
+      :icon-media="tag.iconMedia"
       :title="tag.title"
       :description="tag.description"
-    >
-      <TagIcon :tag="tag" class="mt-sm size-12 rounded-normal" />
-    </PublicPageHeader>
+    />
 
     <div
       role="tablist"

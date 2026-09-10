@@ -32,6 +32,10 @@ defineProps<{
         <Media
           v-if="backLink.iconMedia"
           v-bind="backLink.iconMedia"
+          playback="autoplay"
+          autoplay-reduced-motion
+          loop
+          muted
           class="size-full"
         />
         <Icon v-else name="project" />

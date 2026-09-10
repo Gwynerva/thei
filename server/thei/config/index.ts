@@ -5,7 +5,6 @@ export interface TheiConfig {
   version: string;
   languageCode: LanguageCode;
   siteAccessLevel: SiteAccessLevel;
-  displayName: string;
   secretPhrase: string;
   password: {
     hash: string;

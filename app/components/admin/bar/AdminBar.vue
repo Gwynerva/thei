@@ -136,7 +136,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
 
         <div class="flex min-w-0 items-stretch">
           <AdminBarButton
-            to="/admin/"
+            to="/admin/about/"
             :label="publicAdmin.displayName"
             :title="publicAdmin.displayName"
             shrinkable

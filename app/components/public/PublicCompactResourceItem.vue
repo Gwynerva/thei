@@ -15,6 +15,7 @@ const props = withDefaults(
     extension?: string;
     external?: boolean;
     button?: boolean;
+    continuousMedia?: boolean;
   }>(),
   { icon: 'link' },
 );
@@ -51,7 +52,15 @@ const extensionFontSize = computed(() => {
         justify-center overflow-hidden rounded-sm text-text-3"
       :class="extension && !iconMedia ? 'bg-bg-3/70' : 'bg-bg-3'"
     >
-      <Media v-if="iconMedia" v-bind="iconMedia" class="size-full" />
+      <Media
+        v-if="iconMedia"
+        v-bind="iconMedia"
+        :playback="continuousMedia ? 'autoplay' : undefined"
+        :autoplay-reduced-motion="continuousMedia"
+        :loop="continuousMedia"
+        :muted="continuousMedia"
+        class="size-full"
+      />
       <span
         v-else-if="extension"
         class="max-w-full truncate font-mono text-(length:--extension-size)

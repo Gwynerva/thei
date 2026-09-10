@@ -35,6 +35,7 @@ function relationTitle(type?: ProjectRelationType): string | undefined {
         :corner-title="relationTitle(link.relationType)"
         :href="link.href"
         :icon="link.kind"
+        :continuous-media="link.kind === 'project'"
       />
       <PublicCompactResourceItem
         v-else

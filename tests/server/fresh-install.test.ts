@@ -32,6 +32,8 @@ describe('fresh database installation', () => {
           'project-content-sections',
           'assets',
           'content',
+          'profiles',
+          'profile-statuses',
         ]),
       );
       const indexes = context.rawDb
@@ -56,6 +58,18 @@ describe('fresh database installation', () => {
           .prepare('INSERT INTO "stage-periods" VALUES (?, ?, ?, ?, ?)')
           .run('invalid', 'id', 0, '2026', '2026'),
       ).toThrow(/CHECK/);
+      const profileStatusColumns = context.rawDb
+        .pragma("table_info('profile-statuses')")
+        .map((column: any) => column.name);
+      expect(profileStatusColumns).toEqual(
+        expect.arrayContaining([
+          'id',
+          'kind',
+          'assetUuid',
+          'text',
+          'createdAt',
+        ]),
+      );
       expect(context.rawDb.pragma('quick_check', { simple: true })).toBe('ok');
     } finally {
       await context.close();

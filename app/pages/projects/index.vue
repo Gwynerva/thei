@@ -15,7 +15,9 @@ const projects = useRequiredResource(resource);
 usePublicSeo({
   title: computed(() => phrase.value.projects),
   description: computed(() => phrase.value.public_projects_description),
-  canonical: '/projects/',
+  canonical: computed(() =>
+    buildPublicCanonical('/projects/', { page: projects.value.page }),
+  ),
 });
 </script>
 

@@ -19,7 +19,14 @@ import {
 import { resolveRequestAdminRole } from '../../../shared/public-view';
 
 let context: Awaited<ReturnType<typeof freshTestDb>>;
-let contextType: 'project' | 'event' | 'page' = 'project';
+let contextType:
+  | 'project'
+  | 'event'
+  | 'page'
+  | 'profile'
+  | 'profile-avatar'
+  | 'profile-status' = 'project';
+let contextRole: 'content' | 'icon' | 'banner' | 'favicon' = 'content';
 let parentAccess = ProjectEventAccessLevel.Public;
 let siteAccess = SiteAccessLevel.Public;
 const app = createApp().use(
@@ -28,7 +35,7 @@ const app = createApp().use(
       ownerType: contextType,
       ownerId: 'parent',
       access: parentAccess,
-      role: 'content',
+      role: contextRole,
       filename: 'file.webp',
     }),
   ),
@@ -111,6 +118,24 @@ beforeAll(async () => {
             role: 'preview',
           },
         ],
+        findOne: async (
+          assetUuid: string,
+          ownerType: string,
+          ownerId: string,
+          role: string,
+        ) =>
+          db
+            .select()
+            .from(schema.assetUsages)
+            .where(
+              and(
+                eq(schema.assetUsages.assetUuid, assetUuid),
+                eq(schema.assetUsages.containerType, ownerType as any),
+                eq(schema.assetUsages.containerId, ownerId),
+                eq(schema.assetUsages.role, role as any),
+              ),
+            )
+            .get(),
       },
     },
   });
@@ -121,6 +146,7 @@ afterAll(async () => {
 });
 beforeEach(() => {
   contextType = 'project';
+  contextRole = 'content';
   parentAccess = ProjectEventAccessLevel.Public;
   siteAccess = SiteAccessLevel.Public;
   const { db, schema } = context;
@@ -170,6 +196,30 @@ function use(
 }
 
 describe('contextual attachment authorization before HTTP caching', () => {
+  it.each([
+    ['profile', 'banner'],
+    ['profile-avatar', 'icon'],
+    ['profile-status', 'icon'],
+  ] as const)(
+    '%s media requires an attached usage',
+    async (container, role) => {
+      contextType = container;
+      contextRole = role;
+      const { db, schema } = context;
+      db.insert(schema.assetUsages)
+        .values({
+          assetUuid: 'asset',
+          containerType: container,
+          containerId: 'parent',
+          role,
+        })
+        .run();
+      expect((await request()).status).toBe(200);
+      db.delete(schema.assetUsages).run();
+      expect((await request()).status).toBe(404);
+    },
+  );
+
   it.each(['project', 'event', 'page'] as const)(
     '%s private block denies guests and guest mode, including preview/Range/304',
     async (type) => {

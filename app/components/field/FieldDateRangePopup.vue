@@ -9,6 +9,8 @@ withDefaults(
     anchor: ReferenceElement | null;
     placement?: Placement;
     teleportTo?: string | HTMLElement;
+    single?: boolean;
+    maxDate?: Date;
   }>(),
   {
     placement: 'bottom-end',
@@ -28,6 +30,6 @@ const model = defineModel<DateRange | undefined>();
     :teleport-to="teleportTo"
     fit-content
   >
-    <FieldDateRangePicker v-model="model" />
+    <FieldDateRangePicker v-model="model" :single :max-date />
   </FloatingPopup>
 </template>

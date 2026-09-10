@@ -82,6 +82,10 @@ export default defineEventHandler(async (event) => {
     const now = Date.now();
     try {
       db.transaction((tx) => {
+        if (result.access !== 'public')
+          tx.delete(schema.profilePinnedPages)
+            .where(eq(schema.profilePinnedPages.pageUuid, pageUuid))
+            .run();
         tx.update(schema.pages)
           .set({
             title: result.title,

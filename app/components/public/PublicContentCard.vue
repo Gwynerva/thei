@@ -7,6 +7,7 @@ import type { MediaDescriptor } from '#layers/thei/shared/media';
 import type { DateRange } from '#layers/thei/shared/date-range';
 import type { IconName } from '#thei/icons';
 import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
+import type { PublicDatePresentation } from '#layers/thei/app/composables/public-date';
 
 const props = defineProps<{
   href: string;
@@ -17,14 +18,23 @@ const props = defineProps<{
   date: string;
   period?: DateRange;
   dateHref?: string;
+  datePresentation?: PublicDatePresentation;
   media?: MediaDescriptor;
   projects?: PublicProjectReference[];
   tags?: PublicTagSummary[];
   compact?: boolean;
+  continuousMedia?: boolean;
 }>();
 
-const datePresentation = computed(() =>
-  getPublicDatePresentation(props.period ?? props.date, language.value.code),
+const datePresentation = computed(
+  () =>
+    props.datePresentation ??
+    getPublicDatePresentation(
+      props.period ?? props.date,
+      language.value.code,
+      new Date(),
+      { style: props.compact ? 'short' : 'long' },
+    ),
 );
 const cardStyle = computed<Record<string, string>>(() => {
   const accentColor = props.media
@@ -70,6 +80,9 @@ const hasFooter = computed(
         v-bind="media"
         variant="ambient"
         playback="autoplay"
+        :autoplay-reduced-motion="continuousMedia"
+        :loop="continuousMedia"
+        :muted="continuousMedia"
         align="right"
         class="size-full opacity-70 transition duration-300
           group-hocus:opacity-95 motion-reduce:duration-150"

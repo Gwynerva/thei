@@ -1,16 +1,35 @@
 <script lang="ts" setup>
 import type { LifeLatestResponse } from '#layers/thei/shared/life';
+import type { LifeRewindResponse } from '#layers/thei/shared/life-rewind';
+import type { PublicProfileResponse } from '#layers/thei/shared/profile';
+import PublicProfile from '#layers/thei/app/components/profile/PublicProfile.vue';
+import PublicShowcaseProjects from '#layers/thei/app/components/profile/PublicShowcaseProjects.vue';
 
 definePageMeta({ layout: 'public' });
 
-const publicAdmin = await usePublicAdmin();
+const profileResource = await useFetch<PublicProfileResponse>('/api/profile', {
+  key: 'public-profile',
+});
+const profile = useRequiredResource(profileResource);
 const latestResource = await useFetch<LifeLatestResponse>('/api/life/latest', {
+  key: 'public-latest-life',
   query: { limit: 3 },
 });
 const latest = useRequiredResource(latestResource);
+const rewindResource = await useFetch<LifeRewindResponse>('/api/life/rewind', {
+  key: 'public-rewind-preview',
+  query: { preview: true },
+});
+const rewind = useRequiredResource(rewindResource);
 
+useHead({ titleTemplate: null });
 usePublicSeo({
-  title: publicAdmin.value.displayName,
+  title: computed(() => {
+    const nickname = profile.value.nickname.trim();
+    return nickname
+      ? `${profile.value.displayName} | ${nickname}`
+      : profile.value.displayName;
+  }),
   description: computed(() => phrase.value.public_life_description),
   canonical: '/',
 });
@@ -18,34 +37,11 @@ usePublicSeo({
 
 <template>
   <main class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
-    <section
-      class="relative isolate overflow-hidden rounded-normal border
-        border-border-1 bg-bg-2 p-md shadow-lg shadow-shadow-1 sm:p-lg"
-    >
-      <GridPattern
-        class="pointer-events-none absolute inset-0 -z-1 opacity-35"
-      />
-      <div class="flex flex-col items-start gap-md sm:flex-row sm:items-center">
-        <div
-          class="size-28 shrink-0 overflow-hidden rounded-full border-2
-            border-border-2 bg-bg-3 shadow-lg shadow-shadow-2 sm:size-36"
-        >
-          <Media v-bind="publicAdmin.avatarMedia" class="size-full" />
-        </div>
-        <div class="min-w-0">
-          <p
-            class="mb-1 flex items-center gap-2 text-sm font-semibold
-              text-accent"
-          >
-            <Icon name="thei" />
-            {{ phrase.latest_life }}
-          </p>
-          <h1 class="text-4xl font-bold tracking-tight sm:text-5xl">
-            {{ publicAdmin.displayName }}
-          </h1>
-        </div>
-      </div>
-    </section>
+    <PublicProfile :profile="profile" />
+    <PublicShowcaseProjects
+      v-if="profile.showcaseProjects.length"
+      :projects="profile.showcaseProjects"
+    />
 
     <section class="flex flex-col gap-sm">
       <PublicSectionHeader
@@ -66,11 +62,42 @@ usePublicSeo({
               : `${point.date}:${point.entityKind}:${point.transition}:${pointIndex}`
           "
           :point="point"
+          date-style="long"
           compact
           class="first:sm:col-span-2"
         />
       </div>
       <PublicEmptyState v-else icon="heart" :title="phrase.life_empty" />
+    </section>
+    <section v-if="rewind.items.length" class="flex flex-col gap-sm">
+      <PublicSectionHeader
+        icon="history"
+        :title="
+          phrase.life_rewind(
+            formatPublicMonthDay(rewind.referenceDate, language.code),
+          )
+        "
+        :action="{
+          href: '/rewind/',
+          label: phrase.view_all,
+          icon: 'arrow-outward',
+        }"
+      />
+      <div class="grid gap-sm sm:grid-cols-2">
+        <LifePointCard
+          v-for="(item, index) in rewind.items"
+          :key="
+            item.point.visibility === 'visible'
+              ? item.point.key
+              : `${item.point.date}:${item.point.entityKind}:${index}`
+          "
+          :point="item.point"
+          :rewind-match="item.match"
+          date-style="long"
+          compact
+          class="first:sm:col-span-2"
+        />
+      </div>
     </section>
   </main>
 </template>

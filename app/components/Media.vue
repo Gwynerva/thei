@@ -63,6 +63,7 @@ defineExpose({
     :engaged
     :suspended
     :playback
+    :autoplay-reduced-motion
     :muted="muted || ambient"
     :loop="loop || ambient"
     :backdrop="backdrop || ambient"

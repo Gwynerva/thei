@@ -1,9 +1,16 @@
 import type { PublicProjectReference, PublicTagSummary } from './api/public';
 import type { DateRange } from './date-range';
 import type { MediaDescriptor } from './media';
+import type { ProfileStatusKind } from './profile';
 
 export type LifeEntityKind =
-  'event' | 'project' | 'page' | 'project-stage' | 'project-section';
+  | 'event'
+  | 'project'
+  | 'page'
+  | 'project-stage'
+  | 'project-section'
+  | 'profile-avatar'
+  | 'profile-status';
 export type LifeTransition = 'started' | 'ended' | 'occurred' | 'created';
 export type LifeRailTone = 'accent' | 'warning' | 'warning-to-accent';
 
@@ -24,6 +31,7 @@ export type VisibleLifePoint = LifePointBase & {
   tags?: PublicTagSummary[];
   project?: PublicProjectReference;
   relatedProjects?: PublicProjectReference[];
+  profileStatusKind?: ProfileStatusKind;
 };
 
 export type SecretLifePoint = LifePointBase & {

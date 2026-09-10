@@ -7,12 +7,13 @@ import {
 import type { FieldOptionValue } from '#layers/thei/app/components/field/FieldOptions.vue';
 import { accentHueCssColor } from '#layers/thei/shared/accent-color';
 
-const { showPublicViewMode = false } = defineProps<{
+const { showPublicViewMode = false, reloadOnViewChange = true } = defineProps<{
   showPublicViewMode?: boolean;
+  reloadOnViewChange?: boolean;
 }>();
 
 const visuals = useVisuals();
-const publicViewAsGuest = usePublicViewAsGuest();
+const publicViewAsGuest = usePublicViewAsGuest({ reload: reloadOnViewChange });
 const publicViewMode = computed({
   get: () => (publicViewAsGuest.value ? 'guest' : 'admin'),
   set: (mode: string) => {

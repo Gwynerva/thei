@@ -4,6 +4,7 @@ provideStickyHeaderContext();
 useHead({
   link: [
     {
+      key: 'site-favicon',
       rel: 'icon',
       href: '/favicon.svg',
       type: 'image/svg+xml',

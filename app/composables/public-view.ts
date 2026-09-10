@@ -5,7 +5,7 @@ import {
 
 const publicViewCookieMaxAge = 60 * 60 * 24 * 365;
 
-export function usePublicViewAsGuest() {
+export function usePublicViewAsGuest(options: { reload?: boolean } = {}) {
   const viewCookie = useCookie<string | null>(publicViewCookieName, {
     path: '/',
     maxAge: publicViewCookieMaxAge,
@@ -17,7 +17,8 @@ export function usePublicViewAsGuest() {
     get: () => viewCookie.value === publicViewGuestValue,
     set: (asGuest: boolean) => {
       viewCookie.value = asGuest ? publicViewGuestValue : null;
-      if (import.meta.client) window.location.reload();
+      if (import.meta.client && options.reload !== false)
+        window.location.reload();
     },
   });
 }

@@ -2,6 +2,10 @@ import type { AssetResizeMode } from './asset-upload-settings';
 import type { FileDimensions } from './asset-upload-dimensions';
 
 export type AssetUploadProfile =
+  | 'profile-avatar'
+  | 'profile-banner'
+  | 'profile-favicon'
+  | 'profile-status'
   | 'project-icon'
   | 'project-banner'
   | 'project-action-icon'
@@ -18,6 +22,38 @@ export interface AssetUploadProfileConfig {
 }
 
 export const ASSET_UPLOAD_PROFILE_CONFIGS = {
+  'profile-avatar': {
+    dimensions: { width: 256, height: 256 },
+    resizeMode: 'cover',
+    allowUpscale: true,
+    imageQuality: 90,
+    videoQuality: 85,
+    stripAudio: true,
+  },
+  'profile-banner': {
+    dimensions: { width: 1200, height: 400 },
+    resizeMode: 'cover',
+    allowUpscale: true,
+    imageQuality: 90,
+    videoQuality: 85,
+    stripAudio: true,
+  },
+  'profile-favicon': {
+    dimensions: { width: 128, height: 128 },
+    resizeMode: 'cover',
+    allowUpscale: true,
+    imageQuality: 90,
+    videoQuality: 85,
+    stripAudio: true,
+  },
+  'profile-status': {
+    dimensions: { width: 128, height: 128 },
+    resizeMode: 'cover',
+    allowUpscale: true,
+    imageQuality: 90,
+    videoQuality: 85,
+    stripAudio: true,
+  },
   'project-icon': {
     dimensions: { width: 256, height: 256 },
     resizeMode: 'cover',

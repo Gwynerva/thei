@@ -6,6 +6,7 @@ const props = defineProps<{
   link: ProjectExternalLinkEditItem;
   interactive?: boolean;
   loading?: boolean;
+  size?: 'default' | 'compact';
 }>();
 
 const emit = defineEmits<{ click: [event: MouseEvent] }>();
@@ -26,24 +27,28 @@ const accentColor = computed(() => {
     :href="!interactive ? link.url : undefined"
     :target="!interactive ? '_blank' : undefined"
     :rel="!interactive ? 'noopener noreferrer' : undefined"
-    class="external-link-chip inline-flex h-9 max-w-[256px] items-center gap-2
-      rounded-sm border border-border-1 px-xs text-xs font-semibold text-text-1
-      transition"
+    class="external-link-chip inline-flex max-w-64 items-center gap-2 rounded-sm
+      border border-border-1 font-semibold text-text-1 transition"
     :style="{ '--external-link-accent': accentColor }"
-    :class="{
-      'cursor-pointer': interactive,
-      'animate-pulse': loading,
-    }"
+    :class="[
+      size === 'compact' ? 'h-8 px-xs text-xs' : 'h-9 px-xs text-xs',
+      {
+        'cursor-pointer': interactive,
+        'animate-pulse': loading,
+      },
+    ]"
     @click="emit('click', $event)"
   >
     <Media
       v-if="link.faviconMedia"
       v-bind="link.faviconMedia"
-      class="size-5 shrink-0 rounded-xs"
+      :class="size === 'compact' ? 'size-4' : 'size-5'"
+      class="shrink-0 rounded-xs"
     />
     <span
       v-else
-      class="flex size-5 shrink-0 items-center justify-center rounded-xs bg-bg-3
+      :class="size === 'compact' ? 'size-4' : 'size-5'"
+      class="flex shrink-0 items-center justify-center rounded-xs bg-bg-3
         text-text-2"
       aria-hidden="true"
     >

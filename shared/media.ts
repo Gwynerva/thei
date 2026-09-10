@@ -10,6 +10,7 @@ export interface MediaSurfaceProps {
   width?: number;
   height?: number;
   playback?: MediaPlayback;
+  autoplayReducedMotion?: boolean;
   engaged?: boolean;
   suspended?: boolean;
   muted?: boolean;

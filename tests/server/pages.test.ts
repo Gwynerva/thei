@@ -126,6 +126,7 @@ function createDb() {
       createdAt integer NOT NULL,
       updatedAt integer NOT NULL
     );
+    CREATE TABLE "profile-pinned-pages" (pageUuid text PRIMARY KEY, sortOrder integer NOT NULL);
     CREATE TABLE content (
       contentUuid text PRIMARY KEY NOT NULL,
       ownerType text NOT NULL,

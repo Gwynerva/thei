@@ -182,6 +182,7 @@ onBeforeUnmount(() => {
       :loading="!result"
       :interactive="false"
       :playback
+      :continuous-project-media="result?.kind === 'project'"
       flush
     />
   </FloatingPopup>

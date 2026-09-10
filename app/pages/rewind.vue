@@ -1,0 +1,63 @@
+<script lang="ts" setup>
+import type { LifeRewindResponse } from '#layers/thei/shared/life-rewind';
+
+definePageMeta({ layout: 'public' });
+const route = useRoute();
+const page = computed(() => String(route.query.page ?? '1'));
+const resource = await useFetch<LifeRewindResponse>('/api/life/rewind', {
+  query: { page },
+});
+const rewind = useRequiredResource(resource);
+const title = computed(() =>
+  phrase.value.life_rewind(
+    formatPublicMonthDay(rewind.value.referenceDate, language.value.code),
+  ),
+);
+usePublicSeo({
+  title: computed(() => phrase.value.life_rewind_seo_title),
+  description: computed(() => phrase.value.life_rewind_description),
+  canonical: computed(() =>
+    rewind.value.page > 1 ? `/rewind/?page=${rewind.value.page}` : '/rewind/',
+  ),
+});
+</script>
+
+<template>
+  <main class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
+    <PublicPageHeader
+      icon="history"
+      :title="title"
+      :description="phrase.life_rewind_description"
+    />
+    <div v-if="rewind.items.length" class="grid gap-sm sm:grid-cols-2">
+      <LifePointCard
+        v-for="(item, index) in rewind.items"
+        :key="
+          item.point.visibility === 'visible'
+            ? item.point.key
+            : `${item.point.date}:${item.point.entityKind}:${index}`
+        "
+        :point="item.point"
+        :rewind-match="item.match"
+        date-style="long"
+      />
+    </div>
+    <PublicEmptyState
+      v-else
+      icon="history"
+      :title="phrase.life_rewind_empty"
+      :description="phrase.life_rewind_empty_description"
+    >
+      <TheiLink
+        to="/life/"
+        class="mt-sm inline-flex items-center gap-xs font-semibold text-accent
+          transition hocus:underline"
+      >
+        <Icon name="heart" />
+        {{ phrase.life_rewind_explore_life }}
+        <Icon name="arrow-outward" />
+      </TheiLink>
+    </PublicEmptyState>
+    <PublicPagination :page="rewind.page" :page-count="rewind.pageCount" />
+  </main>
+</template>

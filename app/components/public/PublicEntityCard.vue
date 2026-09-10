@@ -13,6 +13,7 @@ defineProps<{ entity: PublicEntitySummary }>();
     :icon="entity.type === 'event' ? 'event' : 'project'"
     :date="entity.date"
     :media="entity.media"
+    :continuous-media="entity.type === 'project'"
     :projects="entity.relatedProjects"
     :tags="entity.tags"
   />

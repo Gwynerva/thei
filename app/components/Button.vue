@@ -1,7 +1,12 @@
 <script lang="ts" setup>
-const { variant = 'primary', size = 'default' } = defineProps<{
+const {
+  variant = 'primary',
+  size = 'default',
+  dragHandle = false,
+} = defineProps<{
   variant?: 'primary' | 'secondary' | 'delete';
-  size?: 'default' | 'icon';
+  size?: 'default' | 'icon-overlay' | 'icon-sm' | 'icon' | 'icon-lg';
+  dragHandle?: boolean;
 }>();
 
 const variantClasses = {
@@ -15,17 +20,27 @@ const variantClasses = {
     disabled:bg-bg-3/40 disabled:text-text-3/80
     hocus:not-disabled:bg-bg-error`,
 };
+
+const sizeClasses = {
+  default: 'rounded-normal px-sm py-xs',
+  'icon-overlay':
+    'flex size-6 shrink-0 items-center justify-center rounded-full p-0 text-sm',
+  'icon-sm':
+    'flex size-8 shrink-0 items-center justify-center rounded-normal p-1 text-base',
+  icon: `flex size-9 shrink-0 items-center justify-center rounded-normal p-1
+    text-base`,
+  'icon-lg':
+    'flex size-10 shrink-0 items-center justify-center rounded-normal p-1 text-base',
+};
 </script>
 
 <template>
   <button
-    class="cursor-pointer rounded-normal text-sm transition
-      disabled:cursor-not-allowed"
+    class="text-sm transition-colors disabled:cursor-not-allowed"
     :class="[
       variantClasses[variant],
-      size === 'icon'
-        ? 'flex size-9 shrink-0 items-center justify-center p-1 text-base'
-        : 'px-sm py-xs',
+      sizeClasses[size],
+      dragHandle ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
     ]"
   >
     <slot></slot>

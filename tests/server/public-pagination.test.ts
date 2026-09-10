@@ -21,9 +21,12 @@ import { ProjectEventAccessLevel } from '../../shared/access-level';
 import {
   buildPublicProjectSummary,
   buildPublicEventSummary,
+  buildPublicTagListItems,
 } from '../../server/thei/public/entities';
 
 vi.mock('../../server/thei/public/entities', () => ({
+  canListPublicEntity: (access: string, isAdmin: boolean) =>
+    isAdmin || access === 'public',
   buildPublicProjectSummary: vi.fn(async (row) => ({ href: row.projectUuid })),
   buildPublicEventSummary: vi.fn(async (row) => ({ href: row.eventUuid })),
   buildPublicTagListItems: vi.fn(async (rows) =>
@@ -86,8 +89,10 @@ beforeAll(async () => {
   const projects = (await import('../../server/api/projects/index.get'))
     .default;
   const tags = (await import('../../server/api/tags/[tag].get')).default;
+  const tagList = (await import('../../server/api/tags/index.get')).default;
   const router = createRouter()
     .get('/projects', projects)
+    .get('/tags', tagList)
     .get('/tags/:tag', tags);
   handle = toWebHandler(createApp().use(router));
 });
@@ -132,6 +137,100 @@ describe('SQL pagination', () => {
     expect(
       (await handle(new Request('http://localhost/tags/unknown'))).status,
     ).toBe(404);
+    expect(buildPublicProjectSummary).not.toHaveBeenCalled();
+  });
+
+  it.each(['-5', 'nonsense', '1.5'])(
+    'normalizes invalid project page %s',
+    async (page) => {
+      const response = await (
+        await handle(new Request(`http://localhost/projects?page=${page}`))
+      ).json();
+      expect(response.page).toBe(1);
+    },
+  );
+
+  it('paginates only used visible tags and hydrates just the selected page', async () => {
+    const { db, schema } = context;
+    for (let index = 0; index < 50; index++) {
+      const id = `list-${String(index).padStart(2, '0')}`;
+      db.insert(schema.tags)
+        .values({
+          tagUuid: id,
+          publicId: id,
+          title: 'Same title',
+          normalizedTitle: id,
+          slug: id,
+          description: '',
+        })
+        .run();
+      db.insert(schema.tagUsages)
+        .values({
+          tagUuid: id,
+          containerType: 'project',
+          containerId: index < 49 ? '0000' : '0999',
+          sortOrder: index,
+        })
+        .run();
+    }
+    const response = await (
+      await handle(new Request('http://localhost/tags?page=2'))
+    ).json();
+    expect(response).toMatchObject({
+      page: 2,
+      pageCount: 3,
+      pageSize: 24,
+      total: 50,
+    });
+    expect(response.items.map((item: any) => item.publicId)).toEqual(
+      Array.from(
+        { length: 24 },
+        (_, i) => `list-${String(i + 24).padStart(2, '0')}`,
+      ),
+    );
+    expect(buildPublicTagListItems).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(buildPublicTagListItems).mock.calls[0]![0]).toHaveLength(
+      24,
+    );
+  });
+
+  it('paginates both project and event tabs independently', async () => {
+    const { db, schema } = context;
+    for (let index = 0; index < 30; index++) {
+      const id = `event-${String(index).padStart(2, '0')}`;
+      db.insert(schema.events)
+        .values({
+          eventUuid: id,
+          publicId: id,
+          humanReadableSlug: id,
+          title: id,
+          summary: '',
+          access: ProjectEventAccessLevel.Public,
+          createdAt: 1,
+          updatedAt: 1,
+        })
+        .run();
+      db.insert(schema.tagUsages)
+        .values({
+          tagUuid: 'tag',
+          containerType: 'event',
+          containerId: id,
+          sortOrder: index,
+        })
+        .run();
+    }
+    const response = await (
+      await handle(
+        new Request('http://localhost/tags/tag-tagid?tab=events&page=2'),
+      )
+    ).json();
+    expect(response).toMatchObject({
+      activeTab: 'events',
+      eventCount: 30,
+      items: { total: 30, page: 2, pageCount: 2 },
+    });
+    expect(response.items.items).toHaveLength(6);
+    expect(buildPublicEventSummary).toHaveBeenCalledTimes(6);
     expect(buildPublicProjectSummary).not.toHaveBeenCalled();
   });
 });

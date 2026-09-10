@@ -324,6 +324,25 @@ describe('media pairs', () => {
     expect(main.paused).toBe(true);
   });
 
+  it('can autoplay through reduced motion while still pausing outside the viewport', async () => {
+    reduced = true;
+    const { pair } = setup({
+      kind: 'video',
+      playback: 'autoplay',
+      autoplayReducedMotion: true,
+      backdrop: false,
+    });
+    const main = new TestVideo();
+    main.readyState = 4;
+    pair.register('main', main as unknown as Element);
+    await settle();
+    expect(main.paused).toBe(false);
+
+    intersect([{ isIntersecting: false }]);
+    await settle();
+    expect(main.paused).toBe(true);
+  });
+
   it('pauses manually started video while its gallery layer is suspended', async () => {
     const { pair, props } = setup({
       kind: 'video',

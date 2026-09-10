@@ -50,9 +50,9 @@ const eventItems = computed(() =>
   <div class="m-auto flex w-(--width-wide) flex-col px-window py-lg">
     <AdminSiteStatus />
 
-    <div class="mb-lg flex flex-wrap items-stretch gap-md">
+    <div class="mb-lg grid gap-md sm:grid-cols-2">
       <AdminEntityOverview
-        class="min-w-0 flex-1 basis-96"
+        class="min-w-0"
         entity-type="project"
         :title="phrase.admin_projects"
         :count="projectsResult.data.value?.total ?? 0"
@@ -64,7 +64,7 @@ const eventItems = computed(() =>
         :error="Boolean(projectsResult.error.value)"
       />
       <AdminEntityOverview
-        class="min-w-0 flex-1 basis-96"
+        class="min-w-0"
         entity-type="event"
         :title="phrase.admin_events"
         :count="eventsResult.data.value?.total ?? 0"
@@ -75,9 +75,6 @@ const eventItems = computed(() =>
         :items="eventItems"
         :error="Boolean(eventsResult.error.value)"
       />
-    </div>
-
-    <div class="mb-lg grid gap-md sm:grid-cols-2">
       <TheiLink to="/admin/tags/" class="group">
         <Box class="h-full">
           <div class="flex items-center justify-between gap-md p-md">
@@ -131,8 +128,42 @@ const eventItems = computed(() =>
           </div>
         </Box>
       </TheiLink>
+      <TheiLink
+        v-for="item in [
+          {
+            href: '/admin/about/',
+            icon: 'person',
+            title: phrase.about_me,
+            description: phrase.profile_about_description,
+          },
+          {
+            href: '/admin/settings/',
+            icon: 'cog',
+            title: phrase.site_settings,
+            description: phrase.profile_settings_description,
+          },
+        ]"
+        :key="item.href"
+        :to="item.href"
+        class="group"
+        ><Box class="h-full"
+          ><div class="flex items-center gap-sm p-md">
+            <span
+              class="flex size-12 shrink-0 items-center justify-center
+                rounded-normal bg-accent/20 text-xl text-accent transition
+                group-hocus:bg-accent/30"
+              ><Icon :name="item.icon"
+            /></span>
+            <div class="min-w-0">
+              <p class="font-semibold transition group-hocus:text-accent">
+                {{ item.title }}
+              </p>
+              <p class="text-sm text-text-3">{{ item.description }}</p>
+            </div>
+          </div></Box
+        ></TheiLink
+      >
     </div>
-
     <AdminSessions />
   </div>
 </template>

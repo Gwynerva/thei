@@ -3,6 +3,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { adminSessions } from '../../server/thei/db/schema/admin-sessions';
 import {
+  destroyOtherAdminSessions,
   memorySessions,
   toSnapshotSessions,
   type AdminSessionData,
@@ -100,5 +101,35 @@ describe('admin session expiration', () => {
         .all()
         .find((row) => row.sessionUuid === 'expired-db')?.data,
     ).toMatchObject({ state: 'destroyed', lastUsedAt: 200 });
+  });
+
+  it('revokes other sessions and token aliases while preserving the current one', async () => {
+    const db = createDb();
+    const current = session('current', 'active', Date.now() + 60_000);
+    const other = session('other', 'active', Date.now() + 60_000);
+    db.insert(adminSessions)
+      .values([
+        { sessionUuid: current.sessionUuid, data: current },
+        { sessionUuid: other.sessionUuid, data: other },
+      ])
+      .run();
+    memorySessions.set(current.token, current);
+    memorySessions.set(other.token, other);
+    tokenAliases.set('old-other-token', {
+      token: other.token,
+      expiresAt: Date.now() + 60_000,
+    });
+
+    expect(await destroyOtherAdminSessions(current.sessionUuid)).toBe(true);
+    expect(memorySessions.get(current.token)).toBe(current);
+    expect(memorySessions.has(other.token)).toBe(false);
+    expect(tokenAliases.has('old-other-token')).toBe(false);
+    expect(
+      db
+        .select()
+        .from(adminSessions)
+        .all()
+        .find((row) => row.sessionUuid === other.sessionUuid)?.data,
+    ).toMatchObject({ state: 'destroyed' });
   });
 });

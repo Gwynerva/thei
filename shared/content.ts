@@ -9,6 +9,7 @@ import {
 } from './content-link';
 
 export const CONTENT_OWNER_TYPES = [
+  'profile',
   'project',
   'project-stage',
   'project-section',
@@ -19,6 +20,7 @@ export const CONTENT_OWNER_TYPES = [
 export type ContentOwnerType = (typeof CONTENT_OWNER_TYPES)[number];
 
 export const CONTENT_SLOTS = [
+  'profile-about',
   'project-description',
   'project-stage-body',
   'project-section-body',

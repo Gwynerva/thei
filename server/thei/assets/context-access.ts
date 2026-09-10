@@ -13,7 +13,14 @@ import {
 import { sendAssetFile } from './send-file';
 
 interface AttachmentContext {
-  ownerType: 'project' | 'event' | 'page' | 'tag';
+  ownerType:
+    | 'project'
+    | 'event'
+    | 'page'
+    | 'tag'
+    | 'profile'
+    | 'profile-avatar'
+    | 'profile-status';
   ownerId: string;
   access?: ProjectEventAccessLevel;
   role: AssetRole;
@@ -22,7 +29,7 @@ interface AttachmentContext {
 
 /** A public use must belong to this URL's entity and an accessible owner. */
 export async function contentAttachmentAccess(
-  ownerType: 'project' | 'event' | 'page',
+  ownerType: 'project' | 'event' | 'page' | 'profile',
   ownerId: string,
   assetUuid: string,
 ) {
@@ -127,7 +134,13 @@ export async function sendContextAsset(
   )
     throw createError({ statusCode: 404 });
   let access: { exists: boolean; public: boolean };
-  if (context.role === 'content' && context.ownerType !== 'tag') {
+  if (
+    context.role === 'content' &&
+    (context.ownerType === 'project' ||
+      context.ownerType === 'event' ||
+      context.ownerType === 'page' ||
+      context.ownerType === 'profile')
+  ) {
     access = await contentAttachmentAccess(
       context.ownerType,
       context.ownerId,

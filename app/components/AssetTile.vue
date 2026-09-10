@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import Icon from './Icon.vue';
 import Media from './Media.vue';
-import type { MediaDescriptor } from '#layers/thei/shared/media';
+import type { MediaDescriptor, MediaPlayback } from '#layers/thei/shared/media';
 
 defineOptions({ inheritAttrs: false });
 
@@ -13,6 +13,11 @@ const props = withDefaults(
     media?: MediaDescriptor;
     extension?: string;
     selected?: boolean;
+    shape?: 'normal' | 'circle';
+    hoverAccentBorder?: boolean;
+    playback?: MediaPlayback;
+    loop?: boolean;
+    autoplayReducedMotion?: boolean;
     overlay?: {
       showVideo?: boolean;
       showSize?: boolean;
@@ -22,7 +27,7 @@ const props = withDefaults(
       editable?: boolean;
     };
   }>(),
-  {},
+  { shape: 'normal' },
 );
 
 const { engaged, events: mediaEvents } = useMediaInteraction();
@@ -40,10 +45,14 @@ function activateFromKeyboard(event: KeyboardEvent) {
     v-bind="attrs"
     :role="isInteractive ? 'button' : undefined"
     :tabindex="isInteractive ? 0 : undefined"
-    class="group relative isolate overflow-clip rounded-normal border-2
-      border-border-1 bg-bg-1 transition-colors hocus:border-border-3"
+    class="group relative isolate overflow-clip border-2 bg-bg-1
+      transition-colors"
     :class="[
       { 'flex items-center justify-center': !media },
+      shape === 'circle' ? 'rounded-full' : 'rounded-normal',
+      hoverAccentBorder
+        ? 'border-transparent hocus:border-accent'
+        : 'border-border-1 hocus:border-border-3',
       selected
         ? `shadow-lg ring-2 shadow-accent/30 ring-accent ring-offset-2
           ring-offset-bg-3`
@@ -55,8 +64,10 @@ function activateFromKeyboard(event: KeyboardEvent) {
   >
     <Media
       v-if="media"
-      playback="interaction"
+      :playback="playback ?? 'interaction'"
       :engaged
+      :loop
+      :autoplay-reduced-motion
       v-bind="media"
       fit="contain"
       backdrop
@@ -81,9 +92,14 @@ function activateFromKeyboard(event: KeyboardEvent) {
     v-bind="attrs"
     :role="isInteractive ? 'button' : undefined"
     :tabindex="isInteractive ? 0 : undefined"
-    class="flex items-center justify-center overflow-clip rounded-normal
-      border-2 border-border-1 bg-bg-1 transition-colors hocus:border-border-3
-      hocus:bg-bg-3"
+    class="flex items-center justify-center overflow-clip border-2 bg-bg-1
+      transition-colors hocus:bg-bg-3"
+    :class="[
+      shape === 'circle' ? 'rounded-full' : 'rounded-normal',
+      hoverAccentBorder
+        ? 'border-transparent hocus:border-accent'
+        : 'border-border-1 hocus:border-border-3',
+    ]"
     @keydown.enter="activateFromKeyboard"
     @keydown.space="activateFromKeyboard"
   >

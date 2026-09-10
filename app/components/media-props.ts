@@ -11,6 +11,7 @@ export const mediaSurfaceProps = {
   width: Number,
   height: Number,
   playback: String as PropType<MediaPlayback>,
+  autoplayReducedMotion: Boolean,
   engaged: Boolean,
   suspended: Boolean,
   muted: Boolean,

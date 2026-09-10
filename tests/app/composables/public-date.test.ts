@@ -2,11 +2,25 @@ import { describe, expect, it } from 'vitest';
 import {
   formatPublicDate,
   getPublicDatePresentation,
+  formatPublicMonthDay,
+  formatPublicRewindDate,
 } from '../../../app/composables/public-date';
 
 const now = new Date('2026-08-23T18:30:00Z');
 
 describe('formatPublicDate', () => {
+  it('formats rewind headings without a year and cards without repeating the matching day', () => {
+    expect(formatPublicMonthDay('2026-09-10', 'ru')).toBe('10 сентября');
+    expect(formatPublicMonthDay('2026-09-10', 'en')).toBe('September 10');
+    expect(formatPublicRewindDate('2024-09-10', undefined, 'ru')).toBe('2024');
+    expect(
+      formatPublicRewindDate(
+        '2024-09-10',
+        { startDate: '2024-08-21', endDate: '2024-09-15' },
+        'ru',
+      ),
+    ).toBe('21 августа — 15 сентября 2024');
+  });
   it('includes the year without the Russian year suffix', () => {
     expect(formatPublicDate('2026-08-23', 'ru', new Date('2027-01-01'))).toBe(
       '23 августа 2026',
@@ -59,6 +73,29 @@ describe('formatPublicDate', () => {
         relativeMonths: 3,
       }).label,
     ).toBe('22 мая 2026');
+  });
+
+  it('supports compact relative and absolute dates', () => {
+    expect(
+      getPublicDatePresentation('2026-08-21', 'ru', now, {
+        style: 'short',
+      }),
+    ).toEqual({
+      label: '2 дн. назад',
+      title: '21 августа 2026',
+    });
+    expect(
+      getPublicDatePresentation('2026-05-23', 'ru', now, {
+        relativeMonths: 3,
+        style: 'short',
+      }).label,
+    ).toBe('3 мес. назад');
+    expect(
+      getPublicDatePresentation('2026-05-22', 'ru', now, {
+        relativeMonths: 3,
+        style: 'short',
+      }).label,
+    ).toBe('22.05.2026');
   });
 
   it('keeps old and future single dates absolute', () => {

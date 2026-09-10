@@ -31,7 +31,14 @@ function active(to: string) {
           class="size-8 shrink-0 overflow-hidden rounded-full border
             border-border-2 bg-bg-3"
         >
-          <Media v-bind="publicAdmin.avatarMedia" class="size-full" />
+          <Media
+            v-bind="publicAdmin.avatarMedia"
+            playback="autoplay"
+            autoplay-reduced-motion
+            loop
+            muted
+            class="size-full"
+          />
         </span>
         <span class="truncate font-semibold tracking-tight">
           {{ publicAdmin.displayName }}

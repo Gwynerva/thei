@@ -15,6 +15,12 @@ import {
   buildProjectUrl,
 } from '#layers/thei/shared/project-url';
 import { hash } from '#layers/thei/shared/utils/hash';
+import { getProfile, historyItem } from '../profile';
+import {
+  selectLifeRewindPoints,
+  type LifeRewindResponse,
+} from '#layers/thei/shared/life-rewind';
+import { publicPagination } from './pagination';
 import {
   lifePointIsVisible,
   mergeLifeBoundaryPoints,
@@ -43,6 +49,13 @@ type RawPoint = {
   project?: any;
   stage?: any;
   section?: any;
+  profileRecord?: {
+    id: string;
+    assetUuid: string | null;
+    createdAt: number;
+    text?: string;
+    kind?: 'regular' | 'empty';
+  };
 };
 
 type LifeIndex = {
@@ -113,11 +126,52 @@ export async function getLifeWindow(options: {
 
 export async function getLatestLifePoints(limit: number, isAdmin: boolean) {
   const index = buildLifeIndex();
-  const selected = index.points.slice(0, Math.min(20, Math.max(1, limit)));
+  const selected = selectLatestContentLifePoints(index.points, limit);
   return Promise.all(selected.map((point) => hydrateLifePoint(point, isAdmin)));
 }
 
-function buildLifeIndex(): LifeIndex {
+export function selectLatestContentLifePoints<
+  T extends { entityKind: LifeEntityKind },
+>(points: readonly T[], limit: number): T[] {
+  const normalizedLimit = Math.min(20, Math.max(1, limit));
+  return points
+    .filter(
+      (point) =>
+        point.entityKind !== 'profile-avatar' &&
+        point.entityKind !== 'profile-status',
+    )
+    .slice(0, normalizedLimit);
+}
+
+export async function getLifeRewind(options: {
+  isAdmin: boolean;
+  page?: unknown;
+  pageSize?: number;
+  now?: Date;
+}): Promise<LifeRewindResponse> {
+  const referenceDate = (options.now ?? new Date()).toISOString().slice(0, 10);
+  const selected = selectLifeRewindPoints(buildRawLifePoints(), referenceDate);
+  const pagination = publicPagination(
+    selected.length,
+    options.page,
+    options.pageSize ?? 24,
+  );
+  const offset = (pagination.page - 1) * pagination.pageSize;
+  return {
+    referenceDate,
+    ...pagination,
+    items: await Promise.all(
+      selected
+        .slice(offset, offset + pagination.pageSize)
+        .map(async ({ point, match }) => ({
+          point: await hydrateLifePoint(point, options.isAdmin),
+          match,
+        })),
+    ),
+  };
+}
+
+function buildRawLifePoints(): RawPoint[] {
   const { db, schema } = THEI_SERVER.useDb();
   const [events, projects, pages, stages, sections, periods] = [
     db.select().from(schema.events).all(),
@@ -227,7 +281,26 @@ function buildLifeIndex(): LifeIndex {
     });
   }
 
-  const points = sortLifePoints(mergeLifeBoundaryPoints(raw));
+  for (const [entityKind, records] of [
+    ['profile-avatar', db.select().from(schema.profileAvatars).all()],
+    ['profile-status', db.select().from(schema.profileStatuses).all()],
+  ] as const) {
+    for (const record of records)
+      raw.push({
+        identity: `${entityKind}:${record.id}`,
+        entityKind,
+        transition: 'created',
+        date: new Date(record.createdAt).toISOString().slice(0, 10),
+        sortTime: record.createdAt,
+        access: ProjectEventAccessLevel.Public,
+        profileRecord: record,
+      });
+  }
+  return raw;
+}
+
+function buildLifeIndex(): LifeIndex {
+  const points = sortLifePoints(mergeLifeBoundaryPoints(buildRawLifePoints()));
   const pointsByDate = new Map<string, RawPoint[]>();
   for (const point of points) {
     const list = pointsByDate.get(point.date) ?? [];
@@ -293,6 +366,45 @@ async function hydrateLifePoint(
     };
   }
   const key = hash(`${point.identity}:${point.date}:${point.transition}`, 14);
+  if (
+    point.entityKind === 'profile-avatar' ||
+    point.entityKind === 'profile-status'
+  ) {
+    if (point.entityKind === 'profile-avatar') {
+      const record = await historyItem(point.profileRecord!, 'avatars');
+      return {
+        key,
+        date: point.date,
+        entityKind: point.entityKind,
+        transition: point.transition,
+        visibility: 'visible',
+        title: getProfile().displayName,
+        summary: '',
+        href: '/#avatars',
+        media: record.media,
+      };
+    }
+    const statusRecord = point.profileRecord! as {
+      id: string;
+      assetUuid: string | null;
+      createdAt: number;
+      text: string;
+      kind: 'regular' | 'empty';
+    };
+    const record = await historyItem(statusRecord, 'statuses');
+    return {
+      key,
+      date: point.date,
+      entityKind: point.entityKind,
+      transition: point.transition,
+      visibility: 'visible',
+      title: getProfile().displayName,
+      summary: record.text,
+      href: '/#statuses',
+      media: record.media,
+      profileStatusKind: record.kind,
+    };
+  }
   if (point.entityKind === 'event') {
     const event = point.event!;
     const summary = await buildPublicEventSummary(event, isAdmin);

@@ -1,12 +1,21 @@
 <script lang="ts" setup>
 const publicAdmin = await usePublicAdmin();
 const requestUrl = useRequestURL();
-const siteName = publicAdmin.value.displayName;
+const siteName = computed(() => publicAdmin.value.displayName);
 
 useHead({
-  htmlAttrs: { lang: publicAdmin.value.languageCode },
+  htmlAttrs: { lang: computed(() => publicAdmin.value.languageCode) },
+  link: computed(() => [
+    {
+      key: 'site-favicon',
+      rel: 'icon',
+      href: publicAdmin.value.faviconMedia?.src ?? '/favicon.svg',
+    },
+  ]),
   titleTemplate: (title) =>
-    !title || title === siteName ? siteName : `${title} — ${siteName}`,
+    !title || title === siteName.value
+      ? siteName.value
+      : `${title} — ${siteName.value}`,
   script: [
     {
       key: 'public-website-jsonld',
@@ -15,7 +24,7 @@ useHead({
         '@context': 'https://schema.org',
         '@type': 'WebSite',
         '@id': `${new URL('/', requestUrl.origin).toString()}#website`,
-        name: siteName,
+        name: siteName.value,
         url: new URL('/', requestUrl.origin).toString(),
         inLanguage: publicAdmin.value.languageCode,
       }),

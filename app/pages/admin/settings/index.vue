@@ -1,0 +1,148 @@
+<script setup lang="ts">
+import type { SiteSettingsData } from '#layers/thei/shared/profile';
+import { SiteAccessLevel } from '#layers/thei/shared/access-level';
+import { languagesInfo, loadLanguage } from '#layers/thei/shared/language';
+definePageMeta({ layout: 'admin' });
+await useAdminTabTitle(computed(() => phrase.value.site_settings));
+const initial = await useRequestFetch()<SiteSettingsData>(
+  '/api/admin/settings',
+);
+const {
+  value: data,
+  isDirty: dataDirty,
+  markSaved,
+} = useSerializableState(initial);
+const confirmPassword = ref('');
+const saving = ref(false);
+const error = ref<string>();
+const isDirty = computed(
+  () => dataDirty.value || Boolean(confirmPassword.value),
+);
+const canSave = computed(
+  () =>
+    isDirty.value &&
+    !saving.value &&
+    Boolean(data.value.secretPhrase.trim()) &&
+    data.value.password === confirmPassword.value,
+);
+async function save() {
+  if (!canSave.value) return;
+  saving.value = true;
+  error.value = undefined;
+  try {
+    data.value = await $fetch<SiteSettingsData>('/api/admin/settings', {
+      method: 'PUT',
+      body: data.value,
+    });
+    confirmPassword.value = '';
+    markSaved();
+    _language.value = await loadLanguage(data.value.languageCode);
+    await refreshNuxtData('admin-profile');
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    saving.value = false;
+  }
+}
+useSavedForm(isDirty, save, canSave);
+</script>
+<template>
+  <div>
+    <AdminSaveHeader
+      :title="phrase.site_settings"
+      icon="cog"
+      :dirty="isDirty"
+      :saving="saving"
+      :can-save="canSave"
+      :error="error"
+      @save="save"
+    />
+    <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
+      <fieldset :disabled="saving" class="flex min-w-0 flex-col gap-lg">
+        <div>
+          <SectionHeader
+            icon="globe"
+            :title="phrase.global_settings"
+            class="mb-md"
+          /><Box class="flex flex-col gap-md p-sm sm:p-md">
+            <Field
+              ><FieldLabel>{{ phrase.ui_language }}</FieldLabel
+              ><FieldSelect
+                v-model="data.languageCode"
+                :options="languagesInfo"
+            /></Field>
+            <Field
+              ><FieldLabel required>{{ phrase.site_access }}</FieldLabel
+              ><FieldOptions
+                v-model="data.siteAccessLevel"
+                direction="column"
+                :options="{
+                  [SiteAccessLevel.Public]: {
+                    icon: 'lock-open',
+                    title: phrase.site_access_open,
+                    description: phrase.site_access_open_description,
+                  },
+                  [SiteAccessLevel.Private]: {
+                    icon: 'lock-close',
+                    title: phrase.site_access_closed,
+                    description: phrase.site_access_closed_description,
+                  },
+                }"
+            /></Field>
+          </Box>
+        </div>
+        <div>
+          <SectionHeader
+            icon="person-key"
+            :title="phrase.admin_data"
+            class="mb-md"
+          /><Box class="flex flex-col gap-md p-sm sm:p-md">
+            <Field
+              ><FieldLabel required>{{ phrase.secret_phrase }}</FieldLabel
+              ><FieldInput
+                v-model="data.secretPhrase"
+                autocomplete="off"
+              /><FieldHint>{{ phrase.secret_phrase_hint }}</FieldHint></Field
+            >
+            <div class="grid gap-md sm:grid-cols-2">
+              <Field
+                ><FieldLabel>{{ phrase.password }}</FieldLabel
+                ><FieldInput
+                  v-model="data.password"
+                  type="password"
+                  autocomplete="new-password"
+                /><FieldHint>{{
+                  phrase.profile_password_hint
+                }}</FieldHint></Field
+              >
+              <Field
+                ><FieldLabel>{{ phrase.repeat_password }}</FieldLabel
+                ><FieldInput
+                  v-model="confirmPassword"
+                  type="password"
+                  autocomplete="new-password"
+                  :error="
+                    confirmPassword && confirmPassword !== data.password
+                      ? phrase.profile_password_mismatch
+                      : undefined
+                  "
+              /></Field>
+            </div>
+          </Box>
+        </div>
+      </fieldset>
+      <div>
+        <SectionHeader
+          icon="palette"
+          :title="phrase.visuals"
+          :description="phrase.profile_personal_hint"
+          class="mb-md"
+        /><ClientOnly
+          ><SettingsVisualsBox
+            show-public-view-mode
+            :reload-on-view-change="false"
+        /></ClientOnly>
+      </div>
+    </div>
+  </div>
+</template>
