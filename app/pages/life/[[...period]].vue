@@ -176,7 +176,10 @@ function gapTone(row: LifeFeedRow): LifeRailTone {
 </script>
 
 <template>
-  <main>
+  <main
+    :data-life-period="period || ''"
+    :data-life-newest-date="newestDate"
+  >
     <div class="m-auto w-(--width-wide) max-w-full px-window pt-lg pb-md">
       <PublicPageHeader
         icon="heart"

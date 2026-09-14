@@ -18,6 +18,7 @@ const props = withDefaults(
     playback?: MediaPlayback;
     loop?: boolean;
     autoplayReducedMotion?: boolean;
+    engaged?: boolean;
     overlay?: {
       showVideo?: boolean;
       showSize?: boolean;
@@ -30,8 +31,11 @@ const props = withDefaults(
   { shape: 'normal' },
 );
 
-const { engaged, events: mediaEvents } = useMediaInteraction();
-
+const { engaged: interactionEngaged, events: mediaEvents } =
+  useMediaInteraction();
+const mediaEngaged = computed(
+  () => interactionEngaged.value || Boolean(props.engaged),
+);
 function activateFromKeyboard(event: KeyboardEvent) {
   if (!isInteractive.value) return;
   event.preventDefault();
@@ -65,7 +69,7 @@ function activateFromKeyboard(event: KeyboardEvent) {
     <Media
       v-if="media"
       :playback="playback ?? 'interaction'"
-      :engaged
+      :engaged="mediaEngaged"
       :loop
       :autoplay-reduced-motion
       v-bind="media"
@@ -75,7 +79,7 @@ function activateFromKeyboard(event: KeyboardEvent) {
       class="size-full"
     />
     <span v-else class="truncate p-1 text-center text-lg font-bold text-text-2">
-      {{ extension!.toUpperCase() }}
+      {{ extension?.toUpperCase() ?? '?' }}
     </span>
 
     <AssetTileOverlay

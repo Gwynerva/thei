@@ -53,7 +53,11 @@ usePublicSeo({
           icon: 'arrow-outward',
         }"
       />
-      <div v-if="latest.points.length" class="grid gap-sm sm:grid-cols-2">
+      <div
+        v-if="latest.points.length"
+        data-home-card-grid="latest"
+        class="grid gap-sm sm:grid-cols-2"
+      >
         <LifePointCard
           v-for="(point, pointIndex) in latest.points"
           :key="
@@ -62,9 +66,14 @@ usePublicSeo({
               : `${point.date}:${point.entityKind}:${point.transition}:${pointIndex}`
           "
           :point="point"
+          data-home-card
           date-style="long"
           compact
-          class="first:sm:col-span-2"
+          :class="{
+            'first:sm:col-span-2': publicCardGridFirstItemIsWide(
+              latest.points.length,
+            ),
+          }"
         />
       </div>
       <PublicEmptyState v-else icon="heart" :title="phrase.life_empty" />
@@ -83,7 +92,7 @@ usePublicSeo({
           icon: 'arrow-outward',
         }"
       />
-      <div class="grid gap-sm sm:grid-cols-2">
+      <div data-home-card-grid="rewind" class="grid gap-sm sm:grid-cols-2">
         <LifePointCard
           v-for="(item, index) in rewind.items"
           :key="
@@ -92,10 +101,15 @@ usePublicSeo({
               : `${item.point.date}:${item.point.entityKind}:${index}`
           "
           :point="item.point"
+          data-home-card
           :rewind-match="item.match"
           date-style="long"
           compact
-          class="first:sm:col-span-2"
+          :class="{
+            'first:sm:col-span-2': publicCardGridFirstItemIsWide(
+              rewind.items.length,
+            ),
+          }"
         />
       </div>
     </section>

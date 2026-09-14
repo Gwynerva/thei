@@ -7,6 +7,16 @@ export type AssetUploadLimitPolicy = keyof typeof ASSET_UPLOAD_LIMITS;
 
 export const ASSET_UPLOAD_DEFAULT_MAX_SIZE = ASSET_UPLOAD_LIMITS.file;
 
+export function resolveAssetMaxSize(
+  policy: AssetUploadLimitPolicy | undefined,
+  requestedMaxSize: number | undefined,
+): number {
+  if (policy)
+    return Math.min(ASSET_UPLOAD_LIMITS[policy], requestedMaxSize ?? Infinity);
+  if (requestedMaxSize === undefined) return ASSET_UPLOAD_DEFAULT_MAX_SIZE;
+  return Math.min(requestedMaxSize, ASSET_UPLOAD_DEFAULT_MAX_SIZE);
+}
+
 export function isAssetUploadLimitPolicy(
   value: unknown,
 ): value is AssetUploadLimitPolicy {

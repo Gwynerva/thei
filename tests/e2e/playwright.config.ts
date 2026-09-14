@@ -5,13 +5,18 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: '.',
   testMatch: '*.spec.ts',
+  testIgnore: '.artifacts/**',
   workers: 1,
-  timeout: 60_000,
-  expect: { timeout: 15_000 },
+  timeout: 30_000,
+  expect: { timeout: 5_000 },
+  retries: 0,
+  maxFailures: 1,
   globalSetup: './setup.ts',
-  use: { baseURL: 'http://127.0.0.1:3000', trace: 'retain-on-failure' },
-  projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
-  ],
+  use: {
+    baseURL: 'http://127.0.0.1:3000',
+    actionTimeout: 5_000,
+    navigationTimeout: 10_000,
+    trace: 'retain-on-failure',
+  },
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
 });

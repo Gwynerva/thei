@@ -4,12 +4,15 @@ import { assetSourceName } from '#layers/thei/shared/asset';
 import type { AssetUploadSettings } from '#layers/thei/shared/asset-upload-settings';
 import { createAssetVariant } from '../../../../thei/assets/create-variant';
 import { parseAssetUploadSettings } from '../../../../thei/assets/upload-request';
+import { parseSelectionConstraints } from '../../../../thei/assets/library-query';
+import { assertAssetSelection, confirmAssetSelection } from '../../../../thei/assets/selection';
+import type { AssetSelectionConstraints } from '#layers/thei/shared/asset-library';
 import {
   clearAssetUploadProgress,
   setAssetUploadProgress,
 } from '../../../../thei/assets/progress';
 
-interface TransformAssetRequest {
+interface TransformAssetRequest extends AssetSelectionConstraints {
   settings: AssetUploadSettings;
   uploadId?: string;
 }
@@ -21,11 +24,13 @@ export default defineEventHandler(
     const asset = assetUuid
       ? await THEI_SERVER.assets.findByUuid(assetUuid)
       : null;
-    if (!asset) {
+    if (!asset?.settings) {
       throw createError({ statusCode: 404, message: 'Asset not found' });
     }
 
-    const settings = parseAssetUploadSettings(JSON.stringify(body.settings));
+    const settings = parseAssetUploadSettings(JSON.stringify(body?.settings));
+    const constraints = parseSelectionConstraints({ ...body });
+    await confirmAssetSelection(asset.assetUuid, {});
     const filePath = THEI_SERVER.assets.filePath(
       asset.assetUuid,
       asset.extension,
@@ -36,7 +41,7 @@ export default defineEventHandler(
     }
 
     try {
-      return await createAssetVariant({
+      const result = await createAssetVariant({
         buffer,
         filename:
           assetSourceName(asset.meta) ?? `${asset.slug}.${asset.extension}`,
@@ -50,6 +55,8 @@ export default defineEventHandler(
             progress,
           }),
       });
+      assertAssetSelection(result, constraints);
+      return result;
     } finally {
       clearAssetUploadProgress(body.uploadId);
     }

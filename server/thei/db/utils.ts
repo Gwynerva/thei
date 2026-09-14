@@ -6,6 +6,7 @@ import {
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { schema } from './schema';
 import type { TheiDbContext } from './global';
+import { ensureAssetIntegrity } from '../assets/schema-integrity';
 
 export async function createFreshDbContext(): Promise<TheiDbContext> {
   const migration = await generateSQLiteMigration(
@@ -18,6 +19,7 @@ export async function createFreshDbContext(): Promise<TheiDbContext> {
       for (const query of migration) rawDb.prepare(query).run();
     })();
     const db = drizzle(rawDb, { schema });
+    ensureAssetIntegrity(rawDb);
     return { rawDb, db, schema };
   } catch (error) {
     rawDb.close();
@@ -27,6 +29,7 @@ export async function createFreshDbContext(): Promise<TheiDbContext> {
 
 export async function loadDbContext(): Promise<TheiDbContext> {
   const rawDb = new Database(THEI_SERVER.contentPath('thei.db'));
+  ensureAssetIntegrity(rawDb);
   const db = drizzle(rawDb, { schema });
   return { rawDb, db, schema };
 }

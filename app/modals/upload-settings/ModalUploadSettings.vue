@@ -4,6 +4,7 @@ import type {
   AssetWizardResult,
 } from '#layers/thei/shared/api/asset';
 import { AssetType, assetSourceName } from '#layers/thei/shared/asset';
+import { assetSelectionError } from '#layers/thei/shared/asset-library';
 import {
   buildAssetSettingsKey,
   createFileZipSettings,
@@ -49,7 +50,8 @@ import {
   type UploadSettingsModalData,
 } from './use-upload-settings-assets';
 
-type UploadSettingsResult = { type: 'upload-new' } | AssetWizardResult;
+type UploadSettingsResult =
+  { type: 'upload-new' } | { type: 'asset-missing' } | AssetWizardResult;
 type UseCandidate = 'source' | 'transformed' | 'selected' | null;
 type ActiveProfile = 'source' | 'family' | 'create';
 type EditableSettings = AssetTransformSettings | AssetFileZipSettings;
@@ -90,7 +92,9 @@ const currentUnprocessedAsset = shallowRef<AssetVariantInfo | null>(null);
 const currentTransformedAsset = shallowRef<AssetVariantInfo | null>(null);
 const currentTransformedSourceKey = ref('');
 const activeUseCandidate = ref<UseCandidate>(null);
-const activeProfile = ref<ActiveProfile>('source');
+const activeProfile = ref<ActiveProfile>(
+  props.modalData.librarySelection ? 'family' : 'source',
+);
 const profileSelectedByUser = ref(false);
 
 const quality = ref(70);
@@ -212,6 +216,9 @@ const sortedVariants = computed(() =>
   [...variants.value].sort((a, b) => a.size - b.size),
 );
 const hasUploadedVariants = computed(() => sortedVariants.value.length > 0);
+const showFamilySection = computed(
+  () => Boolean(props.modalData.librarySelection) || hasUploadedVariants.value,
+);
 const modifiedVariantNames = computed(() => {
   const names = new Map<string, string>();
   sortedVariants.value
@@ -341,18 +348,21 @@ const canUseSource = computed(
   () =>
     activeUseCandidate.value === 'source' &&
     Boolean(reusableSourceAsset.value) &&
+    !selectionError(reusableSourceAsset.value) &&
     !busyAction.value,
 );
 const canUseSelected = computed(
   () =>
     activeUseCandidate.value === 'selected' &&
     Boolean(selectedVariant.value) &&
+    !selectionError(selectedVariant.value) &&
     !busyAction.value,
 );
 const canUseTransformed = computed(
   () =>
     activeUseCandidate.value === 'transformed' &&
     currentTransformedAssetMatchesSettings.value &&
+    !selectionError(currentTransformedAsset.value) &&
     !busyAction.value,
 );
 const editApplyButtonText = computed(() =>
@@ -535,10 +545,11 @@ onMounted(async () => {
       activeProfile.value = 'family';
     }
   } catch (error) {
-    errorMessage.value = errorToMessage(
-      error,
-      phrase.value.upload_error_load_variants,
-    );
+    if (!handleAssetMissing(error))
+      errorMessage.value = errorToMessage(
+        error,
+        phrase.value.upload_error_load_variants,
+      );
   }
 });
 
@@ -611,7 +622,11 @@ async function applySettings() {
     profileSelectedByUser.value = true;
     activeProfile.value = 'create';
   } catch (error) {
-    errorMessage.value = errorToMessage(error, phrase.value.upload_error_apply);
+    if (!handleAssetMissing(error))
+      errorMessage.value = errorToMessage(
+        error,
+        phrase.value.upload_error_apply,
+      );
   } finally {
     busyAction.value = undefined;
     uploadStatus.value = null;
@@ -650,12 +665,34 @@ async function finishWithSource() {
 }
 
 async function finishWithAsset(asset: AssetVariantInfo) {
-  await touchVariant(asset.assetUuid);
-  emit('modalResult', {
-    type: 'asset-ready',
-    asset,
-  });
+  if (selectionError(asset)) return;
+  busyAction.value = 'save-unchanged';
+  try {
+    await touchVariant(asset.assetUuid);
+    emit('modalResult', { type: 'asset-ready', asset });
+  } catch (error) {
+    if (!handleAssetMissing(error))
+      errorMessage.value = errorToMessage(
+        error,
+        phrase.value.upload_error_apply,
+      );
+  } finally {
+    busyAction.value = undefined;
+  }
 }
+
+function selectionError(asset: AssetVariantInfo | null | undefined) {
+  return asset ? assetSelectionError(asset, props.modalData) : undefined;
+}
+const activeSelectionError = computed(() =>
+  selectionError(
+    activeUseCandidate.value === 'selected'
+      ? selectedVariant.value
+      : activeUseCandidate.value === 'transformed'
+        ? currentTransformedAsset.value
+        : reusableSourceAsset.value,
+  ),
+);
 
 function setActiveProfile(profile: ActiveProfile) {
   profileSelectedByUser.value = true;
@@ -830,7 +867,7 @@ function processingSourceKey() {
   return processingSourceAsset.value?.assetUuid
     ? `asset:${processingSourceAsset.value.assetUuid}`
     : props.modalData.source.kind === 'file'
-      ? `file:${props.modalData.source.familyUuid}`
+      ? `file:${props.modalData.source.file.name}:${props.modalData.source.file.size}`
       : '';
 }
 
@@ -872,6 +909,18 @@ function errorToMessage(error: unknown, fallback: string): string {
     return data?.message ?? fallback;
   }
   return error instanceof Error ? error.message : fallback;
+}
+
+function handleAssetMissing(error: unknown) {
+  const data =
+    error && typeof error === 'object' && 'data' in error
+      ? (error as { data?: { statusCode?: number } }).data
+      : undefined;
+  if (props.modalData.source.kind === 'asset' && data?.statusCode === 404) {
+    emit('modalResult', { type: 'asset-missing' });
+    return true;
+  }
+  return false;
 }
 </script>
 
@@ -924,8 +973,28 @@ function errorToMessage(error: unknown, fallback: string): string {
 
     <template #aside>
       <div class="flex flex-col">
-        <div class="p-sm">
+        <p
+          v-if="modalData.duplicateNotice"
+          role="status"
+          class="m-sm rounded-normal bg-bg-accent p-sm text-sm text-accent"
+        >
+          <Icon name="media" class="mr-xs" />{{ phrase.asset_hash_match }}
+        </p>
+        <p
+          v-if="activeSelectionError"
+          role="status"
+          class="m-sm rounded-normal bg-bg-warning p-sm text-sm
+            text-text-warning"
+        >
+          {{
+            activeSelectionError === 'size'
+              ? phrase.asset_selection_size
+              : phrase.asset_selection_type
+          }}
+        </p>
+        <div v-if="!modalData.librarySelection" class="p-sm">
           <Button
+            v-if="!modalData.librarySelection"
             variant="secondary"
             class="w-full"
             :data-title-popup="
@@ -955,9 +1024,10 @@ function errorToMessage(error: unknown, fallback: string): string {
           <span>{{ errorMessage }}</span>
         </div>
 
-        <UploadSettingsDivider />
+        <UploadSettingsDivider v-if="!modalData.librarySelection" />
 
         <UploadSettingsSection
+          v-if="!modalData.librarySelection"
           :active="activeProfile === 'source'"
           :title="sourceSectionTitle"
           @activate="setActiveProfile('source')"
@@ -1007,10 +1077,12 @@ function errorToMessage(error: unknown, fallback: string): string {
           </Button>
         </UploadSettingsSection>
 
-        <UploadSettingsDivider v-if="hasUploadedVariants" />
+        <UploadSettingsDivider
+          v-if="!modalData.librarySelection && hasUploadedVariants"
+        />
 
         <UploadSettingsSection
-          v-if="hasUploadedVariants"
+          v-if="showFamilySection"
           :active="activeProfile === 'family'"
           :title="phrase.upload_section_family"
           @activate="setActiveProfile('family')"
@@ -1029,9 +1101,6 @@ function errorToMessage(error: unknown, fallback: string): string {
               :selected-uuid="selectedVariantUuid"
               @select="selectVariantByUuid"
             />
-            <div class="text-sm leading-snug text-text-3">
-              {{ phrase.upload_family_hint }}
-            </div>
           </template>
           <div v-else class="text-sm text-text-3">
             {{

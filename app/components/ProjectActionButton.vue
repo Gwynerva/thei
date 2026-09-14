@@ -53,7 +53,7 @@ const gradientColor = computed(() => {
     props.backgroundMode === 'icon-gradient' ||
     props.backgroundMode === 'file-gradient'
   )
-    return imageAccentCssColor(contextualAccent.value);
+    return imageAccentCssColor(contextualAccent.value, 'var(--color-accent)');
   if (props.backgroundMode === 'standard-gradient')
     return 'var(--color-accent)';
   if (props.backgroundMode === 'asset' && !props.backgroundMedia)
@@ -68,7 +68,7 @@ const highlightColor = computed(() => {
     props.backgroundMode === 'icon-gradient' ||
     props.backgroundMode === 'file-gradient'
   )
-    return imageAccentCssColor(contextualAccent.value);
+    return imageAccentCssColor(contextualAccent.value, 'var(--color-accent)');
   if (props.backgroundMode === 'standard-gradient')
     return 'var(--color-accent)';
   return manualAccent.value;

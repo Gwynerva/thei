@@ -103,6 +103,7 @@ export function useMediaPair(
   let secondFrame = 0;
   let starting = false;
   let command = 0;
+  let playbackIntentInitialized = false;
   const expectedPauses = new WeakSet<HTMLVideoElement>();
 
   function video(role: Role) {
@@ -335,8 +336,9 @@ export function useMediaPair(
       props.playback !== 'interaction' ||
       !previewSrc.value ||
       allowedPlayback.value;
-    if (props.playback !== 'manual')
+    if (!playbackIntentInitialized && props.playback !== 'manual')
       wantsPlayback.value = allowedPlayback.value;
+    playbackIntentInitialized = true;
   }
   function leave() {
     const main = video('main');
@@ -376,7 +378,8 @@ export function useMediaPair(
       const wasActive = active.value;
       clear();
       savedTime = 0;
-      wantsPlayback.value = allowedPlayback.value;
+      playbackIntentInitialized = false;
+      wantsPlayback.value = false;
       ratio.value =
         props.width && props.height ? props.width / props.height : 1;
       if (wasActive) enter();

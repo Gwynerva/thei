@@ -1,3 +1,4 @@
+import { assetSelectionError } from '../../shared/asset-library';
 import {
   and,
   asc,
@@ -548,6 +549,11 @@ export async function saveProfile(input: ProfileEditData) {
         (imageOnly || asset.type !== AssetType.Video))
     )
       invalid('Invalid media type');
+    if (
+      asset &&
+      assetSelectionError(asset, { sizeLimitPolicy: 'media', imageOnly })
+    )
+      invalid('Invalid media size or type');
   }
   let prepared: Awaited<ReturnType<typeof prepareContentForSave>>;
   try {

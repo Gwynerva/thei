@@ -28,6 +28,7 @@ watch(dirty, (value) => transitions.value.push(value ? 'Save' : 'Saved'), {
 let editor: EditorJS;
 let sections: ReturnType<typeof createEditorPrivateSections>;
 let snapshots: ReturnType<typeof createEditorSnapshotManager>;
+const snapshotPending = computed(() => snapshots?.isPending.value ?? false);
 const initial: ContentOutputData = {
   blocks: [
     { id: 'p0', type: 'paragraph', data: { text: 'Before' } },
@@ -108,7 +109,7 @@ onMounted(async () => {
     },
   });
   await editor.isReady;
-  sections = createEditorPrivateSections(editor);
+  sections = createEditorPrivateSections(editor, { suppressionDuration: 20 });
   snapshots = createEditorSnapshotManager({
     storageKey: 'fixture',
     storage: sessionStorage,
@@ -172,6 +173,7 @@ onBeforeUnmount(() => {
       :data-ready="ready"
       :data-events="events"
       :data-transitions="transitions.join(',')"
+      :data-snapshot-pending="snapshotPending"
     >
       <button data-save @click="save">{{ dirty ? 'Save' : 'Saved' }}</button>
       <button @click="insert">Insert section</button>

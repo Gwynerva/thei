@@ -18,6 +18,8 @@ defineProps<{
   }>;
   error?: boolean;
 }>();
+
+const compactNumber = useCompactNumber();
 </script>
 
 <template>
@@ -36,7 +38,12 @@ defineProps<{
         </h2>
       </TheiLink>
       <div class="flex shrink-0 items-center gap-sm">
-        <span class="text-xl font-bold text-text-2">{{ count }}</span>
+        <span
+          class="text-xl font-bold text-text-2"
+          :title="count.toLocaleString()"
+          :aria-label="count.toLocaleString()"
+          >{{ compactNumber(count) }}</span
+        >
         <TheiLink
           :to="newTo"
           :aria-label="newLabel"

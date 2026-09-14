@@ -1,6 +1,7 @@
 import type { ValidatedEventEditData } from '#layers/thei/shared/event';
 import { AssetType } from '#layers/thei/shared/asset';
 import { ASSET_UPLOAD_LIMITS } from '#layers/thei/shared/asset-upload-limits';
+import { assetSizeForLimit } from '#layers/thei/shared/asset-library';
 
 export async function validateEventAssets(data: ValidatedEventEditData) {
   const checks: Array<{
@@ -36,7 +37,8 @@ export async function validateEventAssets(data: ValidatedEventEditData) {
   for (const check of checks) {
     const asset = await THEI_SERVER.assets.findByUuid(check.assetUuid);
     if (!asset) return 'Event asset does not exist';
-    if (asset.size > check.maxSize) return 'Event asset exceeds size limit';
+    if (assetSizeForLimit(asset) > check.maxSize)
+      return 'Event asset exceeds size limit';
     if (check.imageOnly && asset.type !== AssetType.Image)
       return 'Action image must be an image';
     if (

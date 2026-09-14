@@ -1,15 +1,15 @@
 import { readdir, rm, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
+import { statSync } from 'node:fs';
 import { findOrphanedAssets } from './repository/find-orphaned';
-import { deleteAsset } from './repository/delete';
 import { deleteStoredAsset } from './storage';
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const GENERATED_MEDIA_MAX_AGE_MS = 30 * ONE_DAY_MS;
 
-async function deleteOrphanedAsset(assetUuid: string) {
-  const deleted = await deleteStoredAsset(assetUuid);
+async function deleteOrphanedAsset(assetUuid: string, cutoffMs: number) {
+  const deleted = await deleteStoredAsset(assetUuid, cutoffMs);
   if (!deleted) return;
   THEI_SERVER.console
     .tag('Assets')
@@ -31,7 +31,7 @@ export async function runAssetCleanup() {
 
   for (const asset of orphans) {
     try {
-      await deleteOrphanedAsset(asset.assetUuid);
+      await deleteOrphanedAsset(asset.assetUuid, cutoffMs);
     } catch {
       THEI_SERVER.console
         .tag('Assets')
@@ -54,85 +54,28 @@ async function cleanupGeneratedMedia(cutoffMs: number) {
 
 async function cleanupDanglingUsages() {
   const { db, schema } = THEI_SERVER.useDb();
+  // Test ownership in the DELETE itself, never against an earlier snapshot.
+  const owners = [
+    ['asset', 'assets', 'assetUuid'],
+    ['project', 'projects', 'projectUuid'],
+    ['event', 'events', 'eventUuid'],
+    ['page', 'pages', 'pageUuid'],
+    ['tag', 'tags', 'tagUuid'],
+    ['content', 'content', 'contentUuid'],
+    ['profile', 'profiles', 'profileId'],
+    ['profile-avatar', 'profile-avatars', 'id'],
+    ['profile-status', 'profile-statuses', 'id'],
+  ] as const;
   try {
-    const danglingAssetRefs = await db
-      .select({
-        assetUuid: schema.assetUsages.assetUuid,
-        containerType: schema.assetUsages.containerType,
-        containerId: schema.assetUsages.containerId,
-        role: schema.assetUsages.role,
-      })
-      .from(schema.assetUsages)
-      .leftJoin(
-        schema.assets,
-        eq(schema.assetUsages.assetUuid, schema.assets.assetUuid),
-      )
-      .where(isNull(schema.assets.assetUuid));
-
-    for (const usage of danglingAssetRefs) {
-      await deleteUsage(usage);
-    }
-
-    const [assetRows, projectRows, eventRows, pageRows, contentRows, usages] =
-      await Promise.all([
-        db.select({ assetUuid: schema.assets.assetUuid }).from(schema.assets),
-        db
-          .select({ projectUuid: schema.projects.projectUuid })
-          .from(schema.projects),
-        db.select({ eventUuid: schema.events.eventUuid }).from(schema.events),
-        db.select({ pageUuid: schema.pages.pageUuid }).from(schema.pages),
-        db
-          .select({ contentUuid: schema.content.contentUuid })
-          .from(schema.content),
-        db.select().from(schema.assetUsages),
-      ]);
-    const assetUuids = new Set(assetRows.map((row) => row.assetUuid));
-    const projectUuids = new Set(projectRows.map((row) => row.projectUuid));
-    const eventIds = new Set(eventRows.map((row) => row.eventUuid));
-    const pageUuids = new Set(pageRows.map((row) => row.pageUuid));
-    const contentUuids = new Set(contentRows.map((row) => row.contentUuid));
-    const profileIds = new Set(
-      db
-        .select({ id: schema.profiles.profileId })
-        .from(schema.profiles)
-        .all()
-        .map((row) => row.id),
-    );
-    const avatarIds = new Set(
-      db
-        .select({ id: schema.profileAvatars.id })
-        .from(schema.profileAvatars)
-        .all()
-        .map((row) => row.id),
-    );
-    const statusIds = new Set(
-      db
-        .select({ id: schema.profileStatuses.id })
-        .from(schema.profileStatuses)
-        .all()
-        .map((row) => row.id),
-    );
-
-    for (const usage of usages) {
-      if (
-        (usage.containerType === 'profile' &&
-          !profileIds.has(usage.containerId)) ||
-        (usage.containerType === 'profile-avatar' &&
-          !avatarIds.has(usage.containerId)) ||
-        (usage.containerType === 'profile-status' &&
-          !statusIds.has(usage.containerId)) ||
-        (usage.containerType === 'asset' &&
-          !assetUuids.has(usage.containerId)) ||
-        (usage.containerType === 'project' &&
-          !projectUuids.has(usage.containerId)) ||
-        (usage.containerType === 'event' && !eventIds.has(usage.containerId)) ||
-        (usage.containerType === 'page' && !pageUuids.has(usage.containerId)) ||
-        (usage.containerType === 'content' &&
-          !contentUuids.has(usage.containerId))
-      ) {
-        await deleteUsage(usage);
+    db.transaction(tx => {
+      tx.delete(schema.assetUsages).where(sql`NOT EXISTS (SELECT 1 FROM assets WHERE assets.assetUuid="asset-usages".assetUuid)`).run();
+      for (const [type, table, id] of owners) {
+        tx.delete(schema.assetUsages).where(and(
+          eq(schema.assetUsages.containerType, type),
+          sql.raw('NOT EXISTS (SELECT 1 FROM "' + table + '" WHERE "' + table + '"."' + id + '"="asset-usages".containerId)'),
+        )).run();
       }
-    }
+    });
   } catch {
     THEI_SERVER.console.tag('Assets').error('Failed to clean dangling usages');
   }
@@ -161,11 +104,11 @@ async function cleanupMissingAssetFiles() {
       asset.assetUuid,
       asset.extension,
     );
-    const fileStat = await stat(filePath).catch(() => null);
-    if (fileStat) continue;
+    const missing = await stat(filePath).then(() => false, (error: NodeJS.ErrnoException) => error.code === 'ENOENT');
+    if (!missing) continue;
 
     try {
-      await deleteAssetRecordAndUsages(asset.assetUuid);
+      if (!deleteAssetRecordAndUsages(asset.assetUuid, filePath)) continue;
       THEI_SERVER.console
         .tag('Assets')
         .error(`Removed asset record with missing file ${asset.assetUuid}`);
@@ -213,39 +156,20 @@ async function cleanupStrayAssetFiles(cutoffMs: number) {
   }
 }
 
-async function deleteAssetRecordAndUsages(assetUuid: string) {
+function deleteAssetRecordAndUsages(assetUuid: string, filePath: string) {
   const { db, schema } = THEI_SERVER.useDb();
-  await db
-    .delete(schema.assetUsages)
-    .where(eq(schema.assetUsages.assetUuid, assetUuid));
-  await db
-    .delete(schema.assetUsages)
-    .where(
-      and(
-        eq(schema.assetUsages.containerType, 'asset'),
-        eq(schema.assetUsages.containerId, assetUuid),
-      ),
-    );
-  await deleteAsset(assetUuid);
-}
-
-async function deleteUsage(usage: {
-  assetUuid: string;
-  containerType: string;
-  containerId: string;
-  role: string;
-}) {
-  const { db, schema } = THEI_SERVER.useDb();
-  await db
-    .delete(schema.assetUsages)
-    .where(
-      and(
-        eq(schema.assetUsages.assetUuid, usage.assetUuid),
-        eq(schema.assetUsages.containerType, usage.containerType as any),
-        eq(schema.assetUsages.containerId, usage.containerId),
-        eq(schema.assetUsages.role, usage.role as any),
-      ),
-    );
+  return db.transaction(tx => {
+    // Only a confirmed missing file permits removal; access errors must preserve data.
+    try { statSync(filePath); return false; }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return false; }
+    tx.delete(schema.assetUsages).where(eq(schema.assetUsages.assetUuid, assetUuid)).run();
+    tx.delete(schema.assetUsages).where(and(
+      eq(schema.assetUsages.containerType, 'asset'),
+      eq(schema.assetUsages.containerId, assetUuid),
+    )).run();
+    tx.delete(schema.assets).where(eq(schema.assets.assetUuid, assetUuid)).run();
+    return true;
+  });
 }
 
 async function listFiles(dirPath: string): Promise<string[]> {

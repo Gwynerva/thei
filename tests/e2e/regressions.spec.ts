@@ -1,15 +1,53 @@
 import { expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 
 const adminState = fileURLToPath(
   new URL('./.artifacts/admin.json', import.meta.url),
 );
 
+async function settleFrames(page: Page) {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+}
+
+async function waitForNuxtHydration(page: Page) {
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-nuxt-hydrated',
+    'true',
+  );
+}
+
+test('home lays out three latest cards as one wide card and a pair', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/');
+  const grid = page.locator('[data-home-card-grid="latest"]');
+  const cards = grid.locator('[data-home-card]');
+  await expect(cards).toHaveCount(3);
+  const [gridBox, first, second, third] = await Promise.all([
+    grid.boundingBox(),
+    cards.nth(0).boundingBox(),
+    cards.nth(1).boundingBox(),
+    cards.nth(2).boundingBox(),
+  ]);
+  expect(first!.width).toBeCloseTo(gridBox!.width, 0);
+  expect(second!.width).toBeCloseTo(third!.width, 0);
+  expect(second!.y).toBeCloseTo(third!.y, 0);
+});
+
 test('life confirms reading and preserves date navigation through browser history', async ({
   page,
 }) => {
   await page.goto('/life/2026/07/01/');
   await page.bringToFront();
+  await settleFrames(page);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expect(page).toHaveURL(/\/life\/2026\/07\/01\/$/);
   await expect
     .poll(
@@ -24,31 +62,45 @@ test('life confirms reading and preserves date navigation through browser histor
     .locator('[data-life-period-tracker]')
     .getByRole('link', { name: 'Month July' })
     .click();
-  await expect(page.locator('[data-life-key]').first()).toBeAttached();
-  await page.waitForTimeout(300);
+  await expect(page.locator('main[data-life-period="2026-07"]')).toBeVisible();
   await page.goBack();
+  await expect(
+    page.locator('main[data-life-period="2026-07-01"]'),
+  ).toBeVisible();
   await expect(page).toHaveURL(/\/life\/2026\/07\/01\/$/);
   await page.goForward();
+  await expect(page).not.toHaveURL(/\/life\/2026\/07\/01\/$/);
+  await expect(page.locator('main[data-life-period]')).toBeVisible();
   await expect(page.locator('[data-life-period-tracker]')).toContainText(
     'July',
   );
   await page.goto('/life/');
+  await settleFrames(page);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  const newestDate = await page
+    .locator('main[data-life-newest-date]')
+    .getAttribute('data-life-newest-date');
+  expect(newestDate).toBeTruthy();
   await expect
     .poll(
       () =>
         page.evaluate(() =>
           localStorage.getItem('thei:life:last-viewed-date:v1'),
-        ),
+      ),
       { timeout: 7000 },
     )
-    .toBe('2026-09-02');
+    .toBe(newestDate);
 });
 
 test('Editor.js settles after structural operations and preserves semantic dirty state', async ({
   page,
 }) => {
+  let releaseSlowImage!: () => void;
+  const slowImageGate = new Promise<void>((resolve) => {
+    releaseSlowImage = resolve;
+  });
   await page.route('**/slow-image.svg', async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 900));
+    await slowImageGate;
     await route.fulfill({
       contentType: 'image/svg+xml',
       body: '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="320" height="180" fill="gray"/></svg>',
@@ -58,15 +110,22 @@ test('Editor.js settles after structural operations and preserves semantic dirty
   const state = page.locator('[data-ready]');
   await expect(state).toHaveAttribute('data-ready', 'true');
   const save = page.locator('[data-save]');
-  await page.waitForTimeout(1600);
+  releaseSlowImage();
+  await expect(
+    page.locator('[data-media-final-state="visible"]').first(),
+  ).toBeVisible();
+  await expect(state).toHaveAttribute('data-snapshot-pending', 'false');
   await expect(save).toHaveText('Saved');
   await expect(state).toHaveAttribute('data-transitions', '');
   const before = await state.getAttribute('data-events');
   await page.getByRole('button', { name: 'Refresh decoration' }).click();
-  await page.waitForTimeout(700);
+  await settleFrames(page);
   await expect(state).toHaveAttribute('data-events', before!);
   await page.getByRole('button', { name: 'Invalid move', exact: true }).click();
-  await page.waitForTimeout(1200);
+  await expect
+    .poll(async () => Number(await state.getAttribute('data-events')))
+    .toBeGreaterThan(Number(before));
+  await settleFrames(page);
   await expect(save).toHaveText('Saved');
   await expect(state).toHaveAttribute('data-transitions', '');
   await page.getByRole('button', { name: 'Insert section' }).click();
@@ -76,13 +135,13 @@ test('Editor.js settles after structural operations and preserves semantic dirty
   await page.keyboard.insertText('New private content');
   await expect(save).toHaveText('Save');
   await save.click();
-  await page.waitForTimeout(1200);
+  await expect(state).toHaveAttribute('data-snapshot-pending', 'false');
   await expect(state).toHaveAttribute('data-transitions', '');
   await page.getByRole('button', { name: 'Delete section' }).click();
   await expect(page.locator('[data-private-section-id="new"]')).toHaveCount(0);
   await expect(save).toHaveText('Save');
   await page.getByRole('button', { name: 'Restore', exact: true }).click();
-  await page.waitForTimeout(600);
+  await expect(state).toHaveAttribute('data-snapshot-pending', 'false');
   await save.click();
   await page.getByRole('button', { name: 'Valid move', exact: true }).click();
   await expect(save).toHaveText('Save');
@@ -96,7 +155,7 @@ test('Editor.js settles after structural operations and preserves semantic dirty
 test('life cache evicts distant windows, preserves focus and reloads both directions', async ({
   page,
 }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(45_000);
   await page.addInitScript(() => {
     const targets = new Set<Set<Element>>();
     const Observer = window.ResizeObserver;
@@ -180,7 +239,7 @@ test('life cache evicts distant windows, preserves focus and reloads both direct
     .toBe(true);
   for (let index = 0; index < 6; index++) {
     await page.evaluate(() => window.scrollBy(0, -window.innerHeight * 12));
-    await page.waitForTimeout(300);
+    await settleFrames(page);
     expect(
       Number(await cache.getAttribute('data-life-cached-windows')),
     ).toBeLessThanOrEqual(10);
@@ -196,8 +255,7 @@ test('a failed life window offers retry and keeps the cursor', async ({
   page,
 }) => {
   await page.goto('/life/2026/07/01/');
-  await expect(page.locator('[data-life-key]').first()).toBeAttached();
-  await page.waitForTimeout(300);
+  await expect(page.locator('[data-life-cached-windows]')).toBeVisible();
   const attempts: string[] = [];
   await page.route('**/api/life?**', async (route) => {
     if (!route.request().url().includes('cursor=')) return route.continue();
@@ -243,7 +301,7 @@ test('SSR hydrates once, keeps missing resources as 404 and filters private cont
   await expect(
     page.locator('h3').filter({ hasText: 'Section heading' }),
   ).toHaveCount(0);
-  await page.waitForTimeout(700);
+  await waitForNuxtHydration(page);
   expect(repeated).toEqual([]);
   expect(warnings).toEqual([]);
   expect((await page.goto('/tags/not-found/'))!.status()).toBe(404);
@@ -265,7 +323,7 @@ test('public lists reuse SSR data and a client API failure remains an API error'
   });
   for (const path of ['/', '/pages/', '/projects/', '/tags/']) {
     await page.goto(path);
-    await page.waitForTimeout(250);
+    await waitForNuxtHydration(page);
   }
   expect(requests).toEqual([]);
   await page.route('**/api/projects*', (route) =>
@@ -403,6 +461,14 @@ test.describe('administrator content and keyboard panels', () => {
     await summary.focus();
     await page.keyboard.press('Enter');
     await expect(details).not.toHaveAttribute('open');
+    await expect
+      .poll(() =>
+        details.evaluate(
+          (element) =>
+            getComputedStyle(element, '::details-content').contentVisibility,
+        ),
+      )
+      .toBe('hidden');
     await page.keyboard.press('Tab');
     expect(
       await details
@@ -426,19 +492,19 @@ test('dense life day remains virtualized and restores date navigation', async ({
   });
   await page.goto('/life/');
   await expect(page.locator('[data-life-key]').first()).toBeVisible();
-  await page.waitForTimeout(700);
+  await waitForNuxtHydration(page);
   expect(await page.locator('[data-life-key]').count()).toBeLessThan(60);
   for (let index = 0; index < 12; index++) {
     await page.evaluate(() => window.scrollBy(0, 1800));
-    await page.waitForTimeout(70);
+    await settleFrames(page);
   }
   expect(await page.locator('[data-life-key]').count()).toBeLessThan(60);
   await page.setViewportSize({ width: 580, height: 850 });
-  await page.waitForTimeout(200);
+  await settleFrames(page);
   expect(await page.locator('[data-life-key]').count()).toBeLessThan(60);
   await page.goto('/life/2026/05/01/');
   await expect(page.locator('[data-life-period-tracker]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await waitForNuxtHydration(page);
   expect(await page.locator('[data-life-key]').count()).toBeLessThan(60);
   expect(
     Number(

@@ -8,3 +8,4 @@ tests/e2e/fixture/content
 tests/e2e/.artifacts
 test-results
 playwright-report
+debug.log

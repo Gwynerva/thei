@@ -2,7 +2,7 @@ import type { ImageAccent } from '#layers/thei/shared/accent-color';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { buildAssetPreviewUrl } from '#layers/thei/shared/api/asset';
 import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
 import { AssetType } from '#layers/thei/shared/asset';
@@ -198,6 +198,16 @@ export async function storeAsset(input: StoreAssetInput): Promise<{
 export async function buildAssetVariantInfo(
   asset: StoredAssetRecord,
 ): Promise<AssetVariantInfo> {
+  if (asset.type === AssetType.Video) await resolveVideoMeta(asset);
+  const preview = await findMediaPreviewAsset(asset);
+  return describeStoredAsset(asset, preview?.assetUuid);
+}
+
+/** Pure descriptor construction for paginated lists with preloaded previews. */
+export function describeStoredAsset(
+  asset: StoredAssetRecord,
+  previewAssetUuid?: string,
+): AssetVariantInfo {
   const assetUrl = buildAssetPreviewUrl(asset.assetUuid);
 
   const base = {
@@ -214,7 +224,7 @@ export async function buildAssetVariantInfo(
   };
 
   if (asset.type === AssetType.Image) {
-    const media = await buildStoredMediaDescriptor(asset);
+    const media = describeMedia(asset, previewAssetUuid);
     return {
       ...base,
       type: AssetType.Image,
@@ -226,8 +236,8 @@ export async function buildAssetVariantInfo(
   }
 
   if (asset.type === AssetType.Video) {
-    const meta = await resolveVideoMeta(asset);
-    const media = await buildStoredMediaDescriptor(asset, meta);
+    const meta = asset.meta as VideoAssetMeta | null;
+    const media = describeMedia(asset, previewAssetUuid);
 
     return {
       ...base,
@@ -265,10 +275,16 @@ export async function buildStoredMediaDescriptor(
     throw new Error('Cannot build media descriptor for a non-media asset');
   }
   const preview = await findMediaPreviewAsset(asset);
-  const previewSrc = preview
-    ? buildAssetPreviewUrl(preview.assetUuid)
+  return describeMedia({ ...asset, meta: resolvedMeta }, preview?.assetUuid);
+}
+
+function describeMedia(asset: StoredAssetRecord, previewAssetUuid?: string): MediaDescriptor {
+  if (asset.type !== AssetType.Image && asset.type !== AssetType.Video)
+    throw new Error('Cannot describe non-media asset');
+  const previewSrc = previewAssetUuid
+    ? buildAssetPreviewUrl(previewAssetUuid)
     : buildAssetPreviewUrl(asset.assetUuid);
-  const meta = resolvedMeta as ImageAssetMeta | VideoAssetMeta | null;
+  const meta = asset.meta as ImageAssetMeta | VideoAssetMeta | null;
   return {
     src: buildAssetPreviewUrl(asset.assetUuid),
     kind: asset.type,
@@ -308,7 +324,10 @@ async function resolveVideoMeta(
   return resolvedMeta;
 }
 
-export async function deleteStoredAsset(assetUuid: string): Promise<boolean> {
+export async function deleteStoredAsset(
+  assetUuid: string,
+  cutoffMs?: number,
+): Promise<boolean> {
   const asset = await THEI_SERVER.assets.findByUuid(assetUuid);
   if (!asset) return false;
   if (await hasAssetUsage(assetUuid)) return false;
@@ -322,19 +341,38 @@ export async function deleteStoredAsset(assetUuid: string): Promise<boolean> {
       ? (await findMediaPreviewAsset(asset))?.assetUuid
       : undefined;
 
-  await THEI_SERVER.assets.delete(asset.assetUuid);
+  // Check again inside the same transaction as deletion: selection/saving may
+  // have refreshed the asset after the cleanup candidate list was collected.
+  const { db, schema } = THEI_SERVER.useDb();
+  const deleted = db.transaction((tx) => {
+    const current = tx
+      .select()
+      .from(schema.assets)
+      .where(eq(schema.assets.assetUuid, assetUuid))
+      .get();
+    if (!current || (cutoffMs !== undefined && current.touchedAt >= cutoffMs))
+      return false;
+    const usage = tx
+      .select({ id: schema.assetUsages.assetUuid })
+      .from(schema.assetUsages)
+      .where(eq(schema.assetUsages.assetUuid, assetUuid))
+      .get();
+      if (usage) return false;
+      tx.delete(schema.assetUsages).where(and(
+        eq(schema.assetUsages.containerType, 'asset'),
+        eq(schema.assetUsages.containerId, assetUuid),
+      )).run();
+    tx.delete(schema.assets)
+      .where(eq(schema.assets.assetUuid, assetUuid))
+      .run();
+    return true;
+  });
+  if (!deleted) return false;
   await rm(filePath, { force: true }).catch(() => {});
 
-  if (previewUuid) {
-    await THEI_SERVER.assets.usages.detach(
-      previewUuid,
-      'asset',
-      asset.assetUuid,
-      'preview',
-    );
-  }
-  if (previewUuid && !(await hasPreviewReference(previewUuid))) {
-    await deleteStoredAsset(previewUuid);
+    if (previewUuid && !(await hasPreviewReference(previewUuid))) {
+      // A concurrent transform may have just reused this preview before attaching it.
+      await deleteStoredAsset(previewUuid, cutoffMs ?? Date.now() - 24 * 60 * 60 * 1000);
   }
 
   return true;

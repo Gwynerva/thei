@@ -1,8 +1,11 @@
+import { parseSelectionConstraints } from '../../../../thei/assets/library-query';
+import { confirmAssetSelection } from '../../../../thei/assets/selection';
 export default defineEventHandler(async (event) => {
   const assetUuid = getRouterParam(event, 'assetUuid');
-  if (!assetUuid || !(await THEI_SERVER.assets.findByUuid(assetUuid))) {
+  if (!assetUuid) {
     throw createError({ statusCode: 404, message: 'Asset not found' });
   }
-  await THEI_SERVER.assets.touch(assetUuid);
+  const body = (await readBody(event)) ?? {};
+  await confirmAssetSelection(assetUuid, parseSelectionConstraints(body));
   return { ok: true };
 });

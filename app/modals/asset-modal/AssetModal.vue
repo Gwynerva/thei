@@ -10,7 +10,10 @@ const isAsideOpen = ref(true);
 
 <template>
   <section class="absolute flex h-dvh w-dvw flex-col sm:flex-row">
-    <div class="relative flex flex-1 items-center justify-center bg-bg-1">
+    <div
+      class="relative flex min-h-0 min-w-0 flex-1 items-center justify-center
+        bg-bg-1"
+    >
       <div
         class="absolute top-0 right-0 z-10 flex flex-row-reverse gap-sm p-sm
           sm:flex-col"
@@ -26,8 +29,9 @@ const isAsideOpen = ref(true);
       <slot name="preview"></slot>
     </div>
     <div
-      class="relative flex w-full flex-col border-t-2 border-border-1 bg-bg-2
-        shadow-xl shadow-shadow-3 sm:max-w-75 sm:border-t-0 sm:border-l"
+      class="relative flex max-h-3/5 w-full shrink-0 flex-col border-t-2
+        border-border-1 bg-bg-2 shadow-xl shadow-shadow-3 sm:max-h-none
+        sm:max-w-75 sm:border-t-0 sm:border-l"
     >
       <div
         class="flex shrink-0 items-center justify-between border-b
@@ -49,10 +53,10 @@ const isAsideOpen = ref(true);
         </button>
       </div>
       <div
-        class="aside-content-panel"
+        class="aside-content-panel min-h-0"
         :style="{ '--aside-h': isAsideOpen ? 'auto' : '0px' }"
       >
-        <div class="max-h-3/5 overflow-y-auto sm:h-full sm:max-h-none">
+        <div class="h-full overflow-y-auto">
           <slot name="aside"></slot>
         </div>
       </div>

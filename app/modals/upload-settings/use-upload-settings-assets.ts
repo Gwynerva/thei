@@ -15,8 +15,10 @@ export type UploadSettingsStatus =
   | { phase: 'processing'; progress?: number };
 
 export interface UploadSettingsModalData {
+  duplicateNotice?: boolean;
+  librarySelection?: boolean;
   source:
-    | { kind: 'file'; file: PickedFile; familyUuid: string }
+    | { kind: 'file'; file: PickedFile }
     | { kind: 'asset'; asset: AssetVariantInfo };
   maxSize?: number;
   acceptedExtensions?: string[] | '*';
@@ -72,7 +74,6 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
       modalData.source.file.file,
       modalData.source.file.name,
     );
-    formData.append('familyUuid', modalData.source.familyUuid);
     formData.append('settings', JSON.stringify(settings));
     const uploadId = crypto.randomUUID();
     formData.append('uploadId', uploadId);
@@ -167,6 +168,9 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
           body: {
             settings,
             uploadId,
+            maxSize: modalData.maxSize,
+            acceptedExtensions: modalData.acceptedExtensions,
+            sizeLimitPolicy: modalData.sizeLimitPolicy,
           },
         },
       );
@@ -196,6 +200,11 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
   async function touchVariant(assetUuid: string) {
     await $fetch(`/api/admin/assets/${assetUuid}/touches`, {
       method: 'POST',
+      body: {
+        acceptedExtensions: modalData.acceptedExtensions,
+        maxSize: modalData.maxSize,
+        sizeLimitPolicy: modalData.sizeLimitPolicy,
+      },
     });
   }
 

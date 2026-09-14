@@ -1,4 +1,5 @@
 export interface PickedFile {
+  existingAsset?: import('#layers/thei/shared/api/asset').AssetVariantInfo;
   type: 'picked-file';
   objectUrl: string;
   file: File;

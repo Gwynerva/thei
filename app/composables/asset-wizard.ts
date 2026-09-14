@@ -7,15 +7,16 @@ import type { ExtensionProfile } from '#layers/thei/shared/assets/extensions';
 import { anyFileExtensionProfile } from '#layers/thei/shared/assets/extensions';
 import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
 import {
-  ASSET_UPLOAD_LIMITS,
+  resolveAssetMaxSize,
   type AssetUploadLimitPolicy,
 } from '#layers/thei/shared/asset-upload-limits';
 import { editFileModal } from '#layers/thei/app/modals/upload-settings/modal';
-import { pickFileModal } from '#layers/thei/app/modals/pick-file/modal';
+import { pickReuseFileModal } from '#layers/thei/app/modals/pick-file/modal';
 import type { PickedFile } from '#layers/thei/app/modals/pick-file/picked-file';
 import type { PickedFiles } from '#layers/thei/app/modals/pick-file/picked-file';
 import { createOriginalAssetSettings } from '#layers/thei/shared/asset-upload-settings';
 import { runAssetBatch } from '#layers/thei/shared/asset-batch';
+import { assetLibraryModal } from '../modals/asset-library/modal';
 
 export type AssetWizardAccept =
   string | ExtensionProfile | (string | ExtensionProfile)[];
@@ -43,16 +44,13 @@ export async function launchAssetWizard(
   options: AssetWizardOptions = {},
 ): Promise<AssetVariantInfo | undefined> {
   const accept = options.accept ?? anyFileExtensionProfile;
-  const maxSize =
-    options.maxSize ??
-    (options.sizeLimitPolicy
-      ? ASSET_UPLOAD_LIMITS[options.sizeLimitPolicy]
-      : undefined);
+  const maxSize = resolveAssetMaxSize(options.sizeLimitPolicy, options.maxSize);
   const acceptedExtensions =
     options.acceptedExtensions ?? acceptedExtensionsFromAccept(accept);
 
   let step: 'pick' | 'edit' = 'pick';
   let pickedFile: PickedFile | undefined;
+  let notice: string | undefined;
 
   function cleanupPickedFile() {
     if (!pickedFile) return;
@@ -66,13 +64,27 @@ export async function launchAssetWizard(
         cleanupPickedFile();
         editFileModal.component();
 
-        const pickResult = await openModal(pickFileModal, {
+        const pickResult = await openModal(pickReuseFileModal, {
           accept,
           maxSize,
+          notice,
+          acceptedExtensions,
+          sizeLimitPolicy: options.sizeLimitPolicy,
         });
+        notice = undefined;
 
         if (pickResult.type === 'error') {
           throw new Error(pickResult.message);
+        }
+
+        if (pickResult.type === 'library') {
+          const result = await openModal(assetLibraryModal, {
+            ...options,
+            maxSize,
+            acceptedExtensions,
+          });
+          if (result.type === 'assets-ready') return result.assets[0];
+          continue;
         }
 
         if (pickResult.type !== 'picked-file') {
@@ -85,22 +97,31 @@ export async function launchAssetWizard(
       }
 
       const editResult = await openModal(editFileModal, {
-        source: {
-          kind: 'file',
-          file: pickedFile!,
-          familyUuid: `af-${crypto.randomUUID()}`,
-        },
+        source: pickedFile!.existingAsset
+          ? { kind: 'asset', asset: pickedFile!.existingAsset }
+          : {
+              kind: 'file',
+              file: pickedFile!,
+            },
         maxSize,
         acceptedExtensions,
         sizeLimitPolicy: options.sizeLimitPolicy,
         uploadProfile: options.uploadProfile,
+        usageDelta: options.usageDelta,
+        duplicateNotice: Boolean(pickedFile!.existingAsset),
       });
 
       if (editResult.type === 'error') {
         throw new Error(editResult.message);
       }
 
-      if (editResult.type === 'upload-new' || editResult.type === 'empty') {
+      if (editResult.type === 'asset-missing')
+        notice = phrase.value.asset_library_missing;
+      if (
+        editResult.type === 'upload-new' ||
+        editResult.type === 'empty' ||
+        editResult.type === 'asset-missing'
+      ) {
         step = 'pick';
         continue;
       }
@@ -120,24 +141,64 @@ export async function launchAssetBatchWizard(
   options: AssetWizardOptions = {},
 ): Promise<AssetBatchResult | undefined> {
   const accept = options.accept ?? anyFileExtensionProfile;
-  const maxSize =
-    options.maxSize ??
-    (options.sizeLimitPolicy
-      ? ASSET_UPLOAD_LIMITS[options.sizeLimitPolicy]
-      : undefined);
+  const maxSize = resolveAssetMaxSize(options.sizeLimitPolicy, options.maxSize);
   const acceptedExtensions =
     options.acceptedExtensions ?? acceptedExtensionsFromAccept(accept);
-  const result = await openModal(pickFileModal, {
+  const result = await openModal(pickReuseFileModal, {
     accept,
     maxSize,
     multiple: true,
+    acceptedExtensions,
+    sizeLimitPolicy: options.sizeLimitPolicy,
   });
+  if (result.type === 'library') {
+    const selected = await openModal(assetLibraryModal, {
+      ...options,
+      maxSize,
+      acceptedExtensions,
+      multiple: true,
+    });
+    return selected.type === 'assets-ready'
+      ? { assets: selected.assets, errors: [] }
+      : undefined;
+  }
   if (result.type !== 'picked-files') return undefined;
 
   const picked = result as PickedFiles;
   const errors: AssetBatchError[] = [...picked.errors];
+  const resolved = new Map<PickedFile, AssetVariantInfo | undefined>();
+  for (const file of picked.files.filter((file) => file.existingAsset)) {
+    try {
+      const selected = await openModal(editFileModal, {
+        source: { kind: 'asset', asset: file.existingAsset! },
+        maxSize,
+        acceptedExtensions,
+        sizeLimitPolicy: options.sizeLimitPolicy,
+        uploadProfile: options.uploadProfile,
+        usageDelta: options.usageDelta,
+        duplicateNotice: true,
+        librarySelection: true,
+      });
+      resolved.set(
+        file,
+        selected.type === 'asset-ready' ? selected.asset : undefined,
+      );
+    } catch (error) {
+      errors.push({
+        fileName: file.name,
+        message:
+          error instanceof Error
+            ? error.message
+            : phrase.value.upload_error_apply,
+      });
+      resolved.set(file, undefined);
+    } finally {
+      URL.revokeObjectURL(file.objectUrl);
+    }
+  }
+  const newFiles = picked.files.filter((file) => !file.existingAsset);
   const settled = await runAssetBatch(
-    picked.files,
+    newFiles,
     async (file) => {
       try {
         return await uploadOriginalFile(file, {
@@ -152,10 +213,13 @@ export async function launchAssetBatchWizard(
     3,
   );
   settled.forEach((result, index) => {
-    if (result.status === 'fulfilled') return;
+    if (result.status === 'fulfilled') {
+      resolved.set(newFiles[index]!, result.value);
+      return;
+    }
     const error = result.reason;
     errors.push({
-      fileName: picked.files[index]!.name,
+      fileName: newFiles[index]!.name,
       message:
         error instanceof Error
           ? error.message
@@ -163,9 +227,14 @@ export async function launchAssetBatchWizard(
     });
   });
   return {
-    assets: settled.flatMap((result) =>
-      result.status === 'fulfilled' ? [result.value] : [],
-    ),
+    assets: [
+      ...new Map(
+        picked.files.flatMap((file) => {
+          const asset = resolved.get(file);
+          return asset ? [[asset.assetUuid, asset] as const] : [];
+        }),
+      ).values(),
+    ],
     errors,
   };
 }
@@ -179,7 +248,6 @@ async function uploadOriginalFile(
 ) {
   const formData = new FormData();
   formData.append('file', file.file, file.name);
-  formData.append('familyUuid', `af-${crypto.randomUUID()}`);
   formData.append('settings', JSON.stringify(createOriginalAssetSettings()));
   if (options.maxSize !== undefined) {
     formData.append('maxSizeBytes', String(options.maxSize));
@@ -218,7 +286,10 @@ export async function launchAssetEditor(
     if (editResult.type === 'error') {
       throw new Error(editResult.message);
     }
-    if (editResult.type === 'upload-new') {
+    if (
+      editResult.type === 'upload-new' ||
+      editResult.type === 'asset-missing'
+    ) {
       const replacement = await launchAssetWizard({
         ...options,
       });

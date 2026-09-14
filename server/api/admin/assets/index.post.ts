@@ -2,6 +2,9 @@ import type { AssetUploadResponse } from '#layers/thei/shared/api/asset';
 import { getPathExtension } from '#layers/thei/shared/assets/extensions';
 import { inferAssetType } from '../../../thei/assets/process';
 import { createAssetVariant } from '../../../thei/assets/create-variant';
+import { findStoredAssetByHash } from '../../../thei/assets/lookup';
+import { sha256, buildAssetVariantInfo } from '../../../thei/assets/storage';
+import { assertAssetSelection, confirmAssetSelection } from '../../../thei/assets/selection';
 import {
   clearAssetUploadProgress,
   setAssetUploadProgress,
@@ -28,7 +31,6 @@ export default defineEventHandler(
       }
 
       const filePart = parts.find((part) => part.name === 'file');
-      const familyUuid = readPartString(parts, 'familyUuid');
       const settings = parseAssetUploadSettings(
         readPartString(parts, 'settings'),
       );
@@ -47,19 +49,13 @@ export default defineEventHandler(
         readPartString(parts, 'acceptedExtensions', false),
       );
 
-      if (!filePart?.data || !filePart.filename || !familyUuid) {
+      if (!filePart?.data || !filePart.filename) {
         throw createError({
           statusCode: 400,
-          message: 'Missing required fields: file, familyUuid, settings',
+          message: 'Missing required fields: file, settings',
         });
       }
 
-      if (familyUuid.length > 100) {
-        throw createError({
-          statusCode: 400,
-          message: 'Invalid familyUuid',
-        });
-      }
 
       const sourceExtension = getPathExtension(filePart.filename);
       validateFileInput({
@@ -71,11 +67,20 @@ export default defineEventHandler(
       const sourceType = inferAssetType(sourceExtension);
       validateSizeLimitPolicy(sizeLimitPolicy, sourceType);
 
+      const contentHash = sha256(filePart.data);
+      const match = await findStoredAssetByHash(contentHash, filePart.data.length);
+      const constraints = { acceptedExtensions, maxSize: maxSizeBytes, sizeLimitPolicy };
+      if (match && settings.type === 'original') {
+        assertAssetSelection(match, constraints);
+        await confirmAssetSelection(match.assetUuid, constraints);
+        return { ...(await buildAssetVariantInfo(match)), created: false };
+      }
       const result = await createAssetVariant({
         buffer: filePart.data,
         filename: filePart.filename,
         extension: sourceExtension,
-        familyUuid,
+        // Concurrent first uploads use the same family even across processes.
+        familyUuid: match?.familyUuid ?? `af-${contentHash}`,
         sourceType,
         settings,
         onProgress: (progress) =>
@@ -85,6 +90,7 @@ export default defineEventHandler(
           }),
       });
 
+      assertAssetSelection(result, constraints);
       clearAssetUploadProgress(uploadId);
       return result;
     } catch (error) {

@@ -1,6 +1,7 @@
 import type { ValidatedProjectEditData } from '#layers/thei/shared/admin/project';
 import { AssetType, type AssetMeta } from '#layers/thei/shared/asset';
 import { ASSET_UPLOAD_LIMITS } from '#layers/thei/shared/asset-upload-limits';
+import { assetSizeForLimit as sharedAssetSizeForLimit } from '#layers/thei/shared/asset-library';
 
 type ProjectAssetCheck = {
   assetUuid: unknown;
@@ -115,10 +116,5 @@ function validateProjectAsset(
 }
 
 function assetSizeForLimit(size: number, meta: AssetMeta | null): number {
-  const archivedOriginalSize =
-    meta && 'archivedOriginal' in meta
-      ? meta.archivedOriginal?.size
-      : undefined;
-
-  return Math.max(size, archivedOriginalSize ?? 0);
+  return sharedAssetSizeForLimit({ size, meta });
 }

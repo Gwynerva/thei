@@ -27,6 +27,7 @@ describe('asset cleanup', () => {
     try {
       rawDb.exec(`
         CREATE TABLE profiles (profileId text PRIMARY KEY);
+        CREATE TABLE tags (tagUuid text PRIMARY KEY);
         CREATE TABLE "profile-avatars" (id text PRIMARY KEY);
         CREATE TABLE "profile-statuses" (id text PRIMARY KEY);
         CREATE TABLE assets (

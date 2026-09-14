@@ -41,5 +41,6 @@ export const assets = sqliteTable(
       t.settingsKey,
     ),
     index('assets_family_idx').on(t.familyUuid),
+    index('assets_content_hash_idx').on(t.contentHash),
   ],
 );

@@ -13,8 +13,8 @@ import {
 } from '../../../shared/asset-upload-settings';
 import {
   ASSET_UPLOAD_DEFAULT_MAX_SIZE,
-  ASSET_UPLOAD_LIMITS,
   isAssetUploadLimitPolicy,
+  resolveAssetMaxSize,
   type AssetUploadLimitPolicy,
 } from '../../../shared/asset-upload-limits';
 import { normalizeAssetExtension } from '../../../shared/assets/formats';
@@ -73,7 +73,7 @@ export function parseOptionalPositiveInt(value: string): number | undefined {
     throwUploadRequestError('Invalid maxSizeBytes field');
   }
   const parsed = Number.parseInt(value, 10);
-  if (parsed <= 0) {
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     throwUploadRequestError('Invalid maxSizeBytes field');
   }
   return parsed;
@@ -91,9 +91,7 @@ export function resolveMaxSizeBytes(
   policy: AssetUploadLimitPolicy | undefined,
   requestedMaxSizeBytes: number | undefined,
 ): number {
-  if (policy) return ASSET_UPLOAD_LIMITS[policy];
-  if (requestedMaxSizeBytes === undefined) return ASSET_UPLOAD_DEFAULT_MAX_SIZE;
-  return Math.min(requestedMaxSizeBytes, ASSET_UPLOAD_DEFAULT_MAX_SIZE);
+  return resolveAssetMaxSize(policy, requestedMaxSizeBytes);
 }
 
 export function parseAcceptedExtensions(

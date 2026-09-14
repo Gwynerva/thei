@@ -22,6 +22,7 @@ import {
 } from '#layers/thei/shared/asset';
 import { buildAdminAssetUrls, archivedOriginalFromMeta } from '../assets/urls';
 import { findExternalLink } from '../external-links/repository';
+import { assetSelectionError } from '#layers/thei/shared/asset-library';
 import { persistExternalLink } from '../external-links/preview';
 
 export async function findContentByOwner(
@@ -256,6 +257,13 @@ async function validateContentAssets(data: ContentOutputData) {
     for (const ref of refs) {
       const asset = assetByUuid.get(ref.assetUuid);
       if (!asset) continue;
+      const selectionError = assetSelectionError(asset, {
+        sizeLimitPolicy: block.type === 'contentAttachment' ? 'file' : 'media',
+      });
+      if (selectionError === 'size')
+        throw new ContentValidationError(
+          'Content asset exceeds the maximum allowed size',
+        );
       if (
         (block.type === 'contentMedia' || block.type === 'contentGallery') &&
         asset.type !== AssetType.Image &&

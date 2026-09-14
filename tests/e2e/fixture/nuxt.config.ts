@@ -9,6 +9,7 @@ export default defineNuxtConfig({
         'editor-regression',
         'media-regression',
         'ambient-regression',
+        'asset-regression',
       ]) {
         pages.push({
           name,

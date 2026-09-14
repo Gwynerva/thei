@@ -2,12 +2,13 @@
 import type { ProjectListResponse } from '#layers/thei/shared/api/project';
 import type { EventListResponse } from '#layers/thei/shared/api/event';
 import type { PageListResponse } from '#layers/thei/shared/api/page';
+import type { AssetLibraryAvailability } from '#layers/thei/shared/asset-library';
 
 definePageMeta({ layout: 'admin' });
 
 await useAdminTabTitle(computed(() => phrase.value.admin_panel));
 
-const [projectsResult, eventsResult, pagesResult, tagsResult] =
+const [projectsResult, eventsResult, pagesResult, tagsResult, assetsResult] =
   await Promise.all([
     useFetch<ProjectListResponse>('/api/admin/projects', {
       query: { order: 'newest', page: 1, pageSize: 5 },
@@ -23,6 +24,9 @@ const [projectsResult, eventsResult, pagesResult, tagsResult] =
     }),
     useFetch<{ count: number }>('/api/admin/tags/stats', {
       key: 'admin-tag-count',
+    }),
+    useFetch<AssetLibraryAvailability>('/api/admin/assets/availability', {
+      key: 'admin-asset-count',
     }),
   ]);
 
@@ -75,60 +79,28 @@ const eventItems = computed(() =>
         :items="eventItems"
         :error="Boolean(eventsResult.error.value)"
       />
-      <TheiLink to="/admin/tags/" class="group">
-        <Box class="h-full">
-          <div class="flex items-center justify-between gap-md p-md">
-            <div class="flex min-w-0 items-center gap-sm">
-              <div
-                class="flex size-12 shrink-0 items-center justify-center
-                  rounded-normal bg-accent/20 text-xl text-accent transition
-                  group-hocus:bg-accent/30"
-              >
-                <Icon name="tag" />
-              </div>
-              <div class="min-w-0">
-                <p class="font-semibold transition group-hocus:text-accent">
-                  {{ phrase.admin_tags }}
-                </p>
-                <p class="text-sm text-text-3">
-                  {{ phrase.tags_description }}
-                </p>
-              </div>
-            </div>
-            <span class="shrink-0 text-2xl font-bold text-text-2">
-              {{ tagsResult.data.value?.count ?? 0 }}
-            </span>
-          </div>
-        </Box>
-      </TheiLink>
-
-      <TheiLink to="/admin/pages/" class="group">
-        <Box class="h-full">
-          <div class="flex items-center justify-between gap-md p-md">
-            <div class="flex min-w-0 items-center gap-sm">
-              <div
-                class="flex size-12 shrink-0 items-center justify-center
-                  rounded-normal bg-accent/20 text-xl text-accent transition
-                  group-hocus:bg-accent/30"
-              >
-                <Icon name="page" />
-              </div>
-              <div class="min-w-0">
-                <p class="font-semibold transition group-hocus:text-accent">
-                  {{ phrase.admin_pages }}
-                </p>
-                <p class="text-sm text-text-3">
-                  {{ phrase.admin_pages_description }}
-                </p>
-              </div>
-            </div>
-            <span class="shrink-0 text-2xl font-bold text-text-2">
-              {{ pagesResult.data.value?.total ?? 0 }}
-            </span>
-          </div>
-        </Box>
-      </TheiLink>
-      <TheiLink
+      <AdminDashboardLink
+        to="/admin/tags/"
+        icon="tag"
+        :title="phrase.admin_tags"
+        :description="phrase.tags_description"
+        :count="tagsResult.data.value?.count ?? 0"
+      />
+      <AdminDashboardLink
+        to="/admin/pages/"
+        icon="page"
+        :title="phrase.admin_pages"
+        :description="phrase.admin_pages_description"
+        :count="pagesResult.data.value?.total ?? 0"
+      />
+      <AdminDashboardLink
+        to="/admin/assets/"
+        icon="gallery"
+        :title="phrase.asset_library"
+        :description="phrase.asset_library_description"
+        :count="assetsResult.data.value?.total ?? 0"
+      />
+      <AdminDashboardLink
         v-for="item in [
           {
             href: '/admin/about/',
@@ -145,24 +117,10 @@ const eventItems = computed(() =>
         ]"
         :key="item.href"
         :to="item.href"
-        class="group"
-        ><Box class="h-full"
-          ><div class="flex items-center gap-sm p-md">
-            <span
-              class="flex size-12 shrink-0 items-center justify-center
-                rounded-normal bg-accent/20 text-xl text-accent transition
-                group-hocus:bg-accent/30"
-              ><Icon :name="item.icon"
-            /></span>
-            <div class="min-w-0">
-              <p class="font-semibold transition group-hocus:text-accent">
-                {{ item.title }}
-              </p>
-              <p class="text-sm text-text-3">{{ item.description }}</p>
-            </div>
-          </div></Box
-        ></TheiLink
-      >
+        :icon="item.icon"
+        :title="item.title"
+        :description="item.description"
+      />
     </div>
     <AdminSessions />
   </div>

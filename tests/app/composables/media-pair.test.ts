@@ -343,6 +343,37 @@ describe('media pairs', () => {
     expect(main.paused).toBe(true);
   });
 
+  it('preserves an explicit autoplay pause across viewport re-entry', async () => {
+    const { pair, fire } = setup({ kind: 'video', playback: 'autoplay' });
+    let main = new TestVideo();
+    let backdrop = new TestVideo();
+    main.readyState = backdrop.readyState = 4;
+    pair.register('main', main as unknown as Element);
+    pair.register('backdrop', backdrop as unknown as Element);
+    await settle();
+    expect(main.paused || backdrop.paused).toBe(false);
+
+    main.pause();
+    fire('main', 'pause', main);
+    main.currentTime = backdrop.currentTime = 2;
+    intersect([{ isIntersecting: false }]);
+    pair.register('main', null);
+    pair.register('backdrop', null);
+    intersect([{ isIntersecting: true }]);
+
+    main = new TestVideo();
+    backdrop = new TestVideo();
+    main.readyState = backdrop.readyState = 4;
+    pair.register('main', main as unknown as Element);
+    pair.register('backdrop', backdrop as unknown as Element);
+    fire('main', 'seeked', main);
+    fire('backdrop', 'seeked', backdrop);
+    await settle();
+
+    expect(main.currentTime).toBe(2);
+    expect(main.paused && backdrop.paused).toBe(true);
+  });
+
   it('pauses manually started video while its gallery layer is suspended', async () => {
     const { pair, props } = setup({
       kind: 'video',

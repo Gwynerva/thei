@@ -53,7 +53,11 @@ export function editorPrivateSectionMoveIsValid(
   return editorPrivateSectionLayoutIsValid(moved);
 }
 
-export function createEditorPrivateSections(editor: EditorJS) {
+export function createEditorPrivateSections(
+  editor: EditorJS,
+  options: { suppressionDuration?: number } = {},
+) {
+  const suppressionDuration = options.suppressionDuration ?? 1000;
   const ignoredAddedIds = new Set<string>();
   const ignoredRemovedIds = new Set<string>();
   const ignoredMovedIds = new Set<string>();
@@ -70,7 +74,7 @@ export function createEditorPrivateSections(editor: EditorJS) {
     clearTimeout(suppressionTimer);
     // Editor.js batches mutations for 400ms. Never retain a guard indefinitely
     // when an operation produces no observable follow-up event.
-    suppressionTimer = setTimeout(resetSuppression, 1000);
+    suppressionTimer = setTimeout(resetSuppression, suppressionDuration);
   }
   let insideIds = new Set<string>();
   let boundaryByBlockId = new Map<

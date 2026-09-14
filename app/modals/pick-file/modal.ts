@@ -1,4 +1,4 @@
-export const pickFileModal = defineModal(
-  'pick-file',
-  () => import('./ModalPickFile.vue'),
+export const pickReuseFileModal = defineModal(
+  'pick-reuse-file',
+  () => import('./ModalPickReuseFile.vue'),
 );

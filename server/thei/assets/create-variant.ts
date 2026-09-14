@@ -174,5 +174,10 @@ async function buildProcessedAssetMeta(
     };
   }
 
-  return { meta: Object.keys(dimensions).length > 0 ? dimensions : null };
+  return {
+    meta: {
+      ...dimensions,
+      ...(sourceFile?.name ? { originalName: sourceFile.name } : {}),
+    },
+  };
 }

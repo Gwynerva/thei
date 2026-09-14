@@ -24,6 +24,10 @@
 - Check every change related to Editor.js for compatibility with content snapshots history system, including tools, block mutations, rendering, normalization, asynchronous hydration, assets, and editor event handling.
 - Verify that Editor.js changes do not emit transient or no-op content mutations that briefly change the dirty state. The save control must never flash from “Saved” to “Save” and immediately back to “Saved” without a real persistent content change.
 
+## File Storage
+
+- Check every change or addition to the file storage system for consistency with reuse counting and reuse presentation, including repeated placements of one file and independently stored file variants.
+
 ## Styling
 
 - Use Tailwind CSS 4 utilities as the default styling approach in Vue templates.

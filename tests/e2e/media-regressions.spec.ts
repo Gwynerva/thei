@@ -1,6 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
 
+let releaseSlowImages: () => void;
+
 test.beforeEach(async ({ page }) => {
+  const slowImageGate = new Promise<void>((resolve) => {
+    releaseSlowImages = resolve;
+  });
   await page.route('**/*regression-image.svg', (route) =>
     route.fulfill({
       contentType: 'image/svg+xml',
@@ -8,7 +13,7 @@ test.beforeEach(async ({ page }) => {
     }),
   );
   await page.route('**/slow-image.svg', async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 700));
+    await slowImageGate;
     await route.fulfill({
       contentType: 'image/svg+xml',
       headers: { 'cache-control': 'no-store' },
@@ -224,6 +229,7 @@ test('media hydration, gallery selection and snapshot restore do not flash dirty
 }) => {
   const editor = page.locator('[data-editor]');
   const state = editor.locator('[data-ready]');
+  releaseSlowImages();
   await editor.locator('[data-content-gallery]').scrollIntoViewIfNeeded();
   await expect(
     editor.locator('[data-media-final-state="visible"]').first(),
@@ -241,11 +247,11 @@ test('media hydration, gallery selection and snapshot restore do not flash dirty
   await expect(
     editor.locator('[data-content-gallery] [contenteditable="true"]'),
   ).toContainText('second');
-  await page.waitForTimeout(1200);
+  await expect(state).toHaveAttribute('data-snapshot-pending', 'false');
   await expect(editor.locator('[data-save]')).toHaveText('Saved');
   await expect(state).toHaveAttribute('data-transitions', '');
   await editor.getByRole('button', { name: 'Restore', exact: true }).click();
-  await page.waitForTimeout(1200);
+  await expect(state).toHaveAttribute('data-snapshot-pending', 'false');
   await expect(editor.locator('[data-save]')).toHaveText('Saved');
   await expect(state).toHaveAttribute('data-transitions', '');
 });
@@ -267,6 +273,7 @@ test('gallery keeps the previous visual until a slow replacement can crossfade',
     element.setAttribute('data-crossfade-instance', 'preserved');
   });
 
+  releaseSlowImages();
   await expect.poll(() => outgoing.textContent()).toContain('Slow gallery');
   await expect(gallery.locator('[data-gallery-incoming]')).toHaveCount(0);
   await expect(outgoing).toHaveAttribute(
