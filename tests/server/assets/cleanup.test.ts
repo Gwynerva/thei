@@ -8,6 +8,7 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { describe, expect, it } from 'vitest';
@@ -37,7 +38,6 @@ describe('asset cleanup', () => {
           familyUuid text NOT NULL,
           contentHash text NOT NULL,
           settingsKey text NOT NULL,
-          settingsVersion integer NOT NULL,
           settings text,
           type text NOT NULL,
           size integer NOT NULL,
@@ -99,15 +99,17 @@ describe('asset cleanup', () => {
         );
       `);
 
-      const filePath = (assetUuid: string, extension: string) =>
+      // Mirrors production: files are addressed by content hash, sharded by
+      // the first two characters of the digest.
+      const filePath = (contentHash: string, extension: string) =>
         join(
           root,
           'assets',
-          assetUuid.slice(2, 4),
-          `${assetUuid}.${extension}`,
+          contentHash.slice(0, 2),
+          `${contentHash}.${extension}`,
         );
       const writeAssetFile = async (assetUuid: string, extension: string) => {
-        const path = filePath(assetUuid, extension);
+        const path = filePath(contentHashOf(assetUuid), extension);
         await mkdir(join(path, '..'), { recursive: true });
         await writeFile(path, 'asset');
         return path;
@@ -306,6 +308,11 @@ describe('asset cleanup', () => {
   });
 });
 
+/** Deterministic stand-in for a real digest, one per fixture asset. */
+function contentHashOf(assetUuid: string): string {
+  return createHash('sha256').update(assetUuid).digest('hex');
+}
+
 async function insertAsset(
   db: ReturnType<typeof drizzle<typeof schema>>,
   assetUuid: string,
@@ -317,10 +324,9 @@ async function insertAsset(
     slug: assetUuid,
     extension,
     familyUuid: `family-${assetUuid}`,
-    contentHash: `content-${assetUuid}`,
-    settingsKey: 'v5:original',
-    settingsVersion: 5,
-    settings: { version: 5, type: 'original' },
+    contentHash: contentHashOf(assetUuid),
+    settingsKey: 'original',
+    settings: { type: 'original' },
     type: AssetType.Image,
     size: 5,
     touchedAt,

@@ -66,7 +66,6 @@ beforeAll(async () => {
     familyUuid: 'family',
     contentHash: 'original-hash',
     settingsKey: 'source',
-    settingsVersion: 1,
     type: AssetType.Image,
     size: 8,
     touchedAt: 0,
@@ -83,8 +82,9 @@ beforeAll(async () => {
       },
     ])
     .run();
-  await writeFile(join(context.directory, 'asset.webp'), 'original');
-  await writeFile(join(context.directory, 'preview.webp'), 'preview!');
+  // Files are addressed by content hash, so the fixture names them that way.
+  await writeFile(join(context.directory, 'original-hash.webp'), 'original');
+  await writeFile(join(context.directory, 'preview-hash.webp'), 'preview!');
   Object.assign(context.server, {
     useDb: () => context,
     config: {
@@ -105,8 +105,8 @@ beforeAll(async () => {
           .from(schema.assets)
           .where(eq(schema.assets.slug, slug))
           .get(),
-      filePath: (id: string, ext: string) =>
-        join(context.directory, `${id}.${ext}`),
+      filePath: (contentHash: string, ext: string) =>
+        join(context.directory, `${contentHash}.${ext}`),
       usages: {
         findByContainer: async () => [
           {

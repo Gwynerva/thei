@@ -15,7 +15,10 @@ import {
   processFileZipAsset,
   processMediaTransformAsset,
   processOriginalAsset,
+  type AssetSourceFile,
 } from './process';
+import { isProcessingQueued, withProcessingSlot } from './queue';
+import type { AssetBytes } from './bytes';
 import {
   attachMediaPreviewUsage,
   buildAssetVariantInfo,
@@ -24,13 +27,13 @@ import {
 } from './storage';
 
 export interface CreateAssetVariantInput {
-  buffer: Buffer;
-  filename: string;
-  extension: string;
+  /** The upload staged on disk. Never read into memory as a whole. */
+  source: AssetSourceFile;
   familyUuid: string;
   sourceType: AssetType;
   settings: AssetUploadSettings;
   onProgress?: (progress: number) => void;
+  onQueued?: () => void;
 }
 
 export function validateAssetVariantSettings(
@@ -66,31 +69,35 @@ export async function createAssetVariant(
 ): Promise<AssetUploadResponse> {
   validateAssetVariantSettings(
     input.sourceType,
-    input.extension,
+    input.source.extension,
     input.settings,
   );
 
-  const processed = await processAsset(input);
+  if (isProcessingQueued(input.sourceType)) input.onQueued?.();
+  const processed = await withProcessingSlot(
+    input.sourceType,
+    async () => await processAsset(input),
+  );
+
   const { meta, previewAssetUuid } = await buildProcessedAssetMeta(
-    processed.buffer,
+    processed.bytes,
     processed.extension,
     processed.type,
     processed.dimensions,
     input.settings,
     processed.hasAudio,
     {
-      extension: input.extension,
-      size: input.buffer.length,
-      name: input.filename,
+      extension: input.source.extension,
+      size: input.source.size,
+      name: input.source.filename,
     },
   );
 
   const stored = await storeAsset({
-    buffer: processed.buffer,
+    bytes: processed.bytes,
     extension: processed.extension,
     familyUuid: input.familyUuid,
     settingsKey: buildAssetSettingsKey(input.settings),
-    settingsVersion: input.settings.version,
     settings: input.settings,
     type: processed.type,
     meta,
@@ -108,25 +115,22 @@ export async function createAssetVariant(
 
 async function processAsset(input: CreateAssetVariantInput) {
   if (input.settings.type === 'original') {
-    return await processOriginalAsset(input.buffer, input.extension);
+    return await processOriginalAsset(input.source);
   }
 
   if (input.settings.type === 'file-zip') {
-    return await processFileZipAsset(
-      input.buffer,
-      input.filename,
-      input.settings,
-      { onProgress: input.onProgress },
-    );
+    return await processFileZipAsset(input.source, input.settings, {
+      onProgress: input.onProgress,
+    });
   }
 
-  return await processMediaTransformAsset(input.buffer, input.settings, {
+  return await processMediaTransformAsset(input.source, input.settings, {
     onProgress: input.onProgress,
   });
 }
 
 async function buildProcessedAssetMeta(
-  buffer: Buffer,
+  bytes: AssetBytes,
   extension: string,
   type: AssetType,
   dimensions: { width?: number; height?: number },
@@ -135,7 +139,7 @@ async function buildProcessedAssetMeta(
   sourceFile?: { extension: string; size: number; name?: string },
 ): Promise<{ meta: AssetMeta | null; previewAssetUuid?: string }> {
   if (type === AssetType.Image) {
-    const preview = await createMediaPreviewAsset(buffer, AssetType.Image);
+    const preview = await createMediaPreviewAsset(bytes, AssetType.Image);
     const meta: ImageAssetMeta = {
       ...dimensions,
       ...(sourceFile?.name ? { originalName: sourceFile.name } : {}),
@@ -145,7 +149,7 @@ async function buildProcessedAssetMeta(
   }
 
   if (type === AssetType.Video) {
-    const preview = await createMediaPreviewAsset(buffer, AssetType.Video);
+    const preview = await createMediaPreviewAsset(bytes, AssetType.Video);
     const meta: VideoAssetMeta = {
       ...dimensions,
       ...(sourceFile?.name ? { originalName: sourceFile.name } : {}),

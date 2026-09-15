@@ -7,11 +7,14 @@ import type {
 import type { AssetUploadSettings } from '#layers/thei/shared/asset-upload-settings';
 import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
 import type { AssetUploadLimitPolicy } from '#layers/thei/shared/asset-upload-limits';
+import { buildUploadHeaders } from '#layers/thei/shared/api/asset-upload-headers';
 import type { PickedFile } from '../pick-file/picked-file';
 
 export type UploadSettingsBusyAction = 'variants' | 'save-unchanged' | 'apply';
 export type UploadSettingsStatus =
   | { phase: 'uploading'; progress?: number }
+  /** Waiting for a processing slot, so the user is not left staring at 0%. */
+  | { phase: 'queued'; progress?: number }
   | { phase: 'processing'; progress?: number };
 
 export interface UploadSettingsModalData {
@@ -68,38 +71,33 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
       return await transformStoredAsset(settings, sourceAssetUuid);
     }
 
-    const formData = new FormData();
-    formData.append(
-      'file',
-      modalData.source.file.file,
-      modalData.source.file.name,
-    );
-    formData.append('settings', JSON.stringify(settings));
+    const sourceFile = modalData.source.file.file;
     const uploadId = crypto.randomUUID();
-    formData.append('uploadId', uploadId);
-
-    if (modalData.maxSize !== undefined) {
-      formData.append('maxSizeBytes', String(modalData.maxSize));
-    }
-
-    if (modalData.sizeLimitPolicy) {
-      formData.append('sizeLimitPolicy', modalData.sizeLimitPolicy);
-    }
-
-    if (modalData.acceptedExtensions) {
-      formData.append(
-        'acceptedExtensions',
-        modalData.acceptedExtensions === '*'
-          ? '*'
-          : JSON.stringify(modalData.acceptedExtensions),
-      );
-    }
+    // The file is the raw request body; its metadata travels in headers so the
+    // server can stream it to disk rather than buffering the whole request.
+    const headers = buildUploadHeaders({
+      settings,
+      filename: modalData.source.file.name,
+      uploadId,
+      ...(modalData.maxSize !== undefined
+        ? { maxSize: modalData.maxSize }
+        : {}),
+      ...(modalData.sizeLimitPolicy
+        ? { sizeLimitPolicy: modalData.sizeLimitPolicy }
+        : {}),
+      ...(modalData.acceptedExtensions
+        ? { acceptedExtensions: modalData.acceptedExtensions }
+        : {}),
+    });
 
     const result = await new Promise<AssetUploadResponse>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       activeXhr.value = xhr;
       uploadStatus.value = { phase: 'uploading' };
       xhr.open('POST', '/api/admin/assets');
+      for (const [name, value] of Object.entries(headers)) {
+        xhr.setRequestHeader(name, value);
+      }
 
       xhr.upload.addEventListener('progress', (event) => {
         uploadStatus.value = {
@@ -142,7 +140,7 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
         reject(new Error(phrase.value.upload_error_cancelled));
       });
 
-      xhr.send(formData);
+      xhr.send(sourceFile);
     });
     rememberVariant(result);
     return result;
@@ -152,6 +150,7 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
     settings: AssetUploadSettings,
     sourceAssetUuid?: string,
   ): Promise<AssetUploadResponse> {
+    const sourceFile = modalData.source.file.file;
     const uploadId = crypto.randomUUID();
     uploadStatus.value = { phase: 'processing' };
     startProgressPolling(uploadId);

@@ -758,6 +758,7 @@ export type LanguagePhrases = {
   upload_apply_settings: string;
   upload_uploading: string;
   upload_processing: string;
+  upload_queued: string;
   upload_quality: string;
   upload_dimensions: string;
   upload_reset_dimensions: string;

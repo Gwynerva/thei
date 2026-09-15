@@ -162,11 +162,25 @@ Rules that matter:
   instance's ledger. To change something, add a new migration.
 - **File operations should be repeatable.** Each migration's SQL and its ledger
   row commit in one transaction, so SQL either fully applies or does not — but
-  a write to `content/` cannot be rolled back with it.
+  a write to `content/` cannot be rolled back with it. Keep `up` synchronous
+  and use the synchronous `node:fs` calls: the transaction commits when `up`
+  returns, so file work done inside it is covered by the same rollback, while
+  anything deferred to a promise escapes the transaction and can leave the
+  database and the disk disagreeing. Write the file half so that re-running it
+  over a half-finished state is a no-op.
 - **Update the baseline too.** `0.0.1-baseline.ts` is what a brand-new install
   starts from, and it must end up identical to an upgraded database. Run
   `bun run db:baseline` after changing the Drizzle schema.
   `tests/server/migrations-baseline.test.ts` fails if the two drift apart.
+- **Never re-encode media in a migration.** A migration runs inside boot, in one
+  transaction, with the site down and a supervisor that restarts the process if
+  it fails. Reprocessing thousands of files there turns an update into an
+  outage of unknown length. Stored files describe themselves through their own
+  `extension`, `size`, and `meta`, so a library holding output from several
+  releases is a normal library, not one that needs repairing. Moving or renaming
+  files is fine; decoding and re-encoding them is not. If bulk re-encoding is
+  ever genuinely wanted, build it as an opt-in, resumable background job in the
+  admin panel.
 
 ## Cutting a release
 

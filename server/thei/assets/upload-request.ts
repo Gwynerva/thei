@@ -1,11 +1,11 @@
 import { AssetType } from '../../../shared/asset';
 import {
-  ASSET_UPLOAD_SETTINGS_VERSION,
   createFileZipSettings,
   createImageTransformSettings,
   createOriginalAssetSettings,
   createVideoTransformSettings,
   type AssetFileZipSettings,
+  type AssetImageFormat,
   type AssetImageTransformSettings,
   type AssetOriginalSettings,
   type AssetUploadSettings,
@@ -34,12 +34,6 @@ export function parseAssetUploadSettings(value: string): AssetUploadSettings {
     throwUploadRequestError('Invalid upload settings');
   }
 
-  if (settings.version !== ASSET_UPLOAD_SETTINGS_VERSION) {
-    throwUploadRequestError(
-      `Unsupported upload settings version: ${settings.version}`,
-    );
-  }
-
   if (isOriginalSettings(settings)) {
     return createOriginalAssetSettings();
   }
@@ -48,6 +42,7 @@ export function parseAssetUploadSettings(value: string): AssetUploadSettings {
     return createImageTransformSettings(settings.quality, settings.dimensions, {
       resizeMode: settings.resizeMode,
       allowUpscale: settings.allowUpscale,
+      format: settings.format,
     });
   }
 
@@ -211,6 +206,10 @@ function isOriginalSettings(
   return settings.type === 'original';
 }
 
+function isImageFormat(value: unknown): value is AssetImageFormat | undefined {
+  return value === undefined || value === 'avif' || value === 'webp';
+}
+
 function isImageTransformSettings(
   settings: unknown,
 ): settings is AssetImageTransformSettings {
@@ -218,6 +217,7 @@ function isImageTransformSettings(
   return (
     settings.type === 'image-transform' &&
     isQuality(settings.quality) &&
+    isImageFormat(settings.format) &&
     hasResizeSettings(settings)
   );
 }

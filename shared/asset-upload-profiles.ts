@@ -1,4 +1,7 @@
-import type { AssetResizeMode } from './asset-upload-settings';
+import type {
+  AssetImageFormat,
+  AssetResizeMode,
+} from './asset-upload-settings';
 import type { FileDimensions } from './asset-upload-dimensions';
 
 export type AssetUploadProfile =
@@ -19,6 +22,8 @@ export interface AssetUploadProfileConfig {
   imageQuality: number;
   videoQuality: number;
   stripAudio: boolean;
+  /** Defaults to AVIF. Set only where AVIF is not reliably consumed. */
+  imageFormat?: AssetImageFormat;
 }
 
 export const ASSET_UPLOAD_PROFILE_CONFIGS = {
@@ -45,6 +50,10 @@ export const ASSET_UPLOAD_PROFILE_CONFIGS = {
     imageQuality: 90,
     videoQuality: 85,
     stripAudio: true,
+    // This asset ends up in `<link rel="icon">`. Browser support for AVIF in a
+    // tab icon is uneven, and failing there shows an empty tab rather than a
+    // slightly larger file, so the favicon stays on WebP deliberately.
+    imageFormat: 'webp',
   },
   'profile-status': {
     dimensions: { width: 128, height: 128 },

@@ -164,7 +164,7 @@ export async function sendContextAsset(
   const selected = await resolvePublicAssetVariant(event, asset);
   return sendAssetFile(
     event,
-    THEI_SERVER.assets.filePath(selected.assetUuid, selected.extension),
+    THEI_SERVER.assets.filePath(selected.contentHash, selected.extension),
     selected.extension,
     {
       cacheControl: publicAccess

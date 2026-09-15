@@ -10,6 +10,7 @@ import {
   resolveAssetMaxSize,
   type AssetUploadLimitPolicy,
 } from '#layers/thei/shared/asset-upload-limits';
+import { buildUploadHeaders } from '#layers/thei/shared/api/asset-upload-headers';
 import { editFileModal } from '#layers/thei/app/modals/upload-settings/modal';
 import { pickReuseFileModal } from '#layers/thei/app/modals/pick-file/modal';
 import type { PickedFile } from '#layers/thei/app/modals/pick-file/picked-file';
@@ -246,24 +247,18 @@ async function uploadOriginalFile(
     maxSize?: number;
   },
 ) {
-  const formData = new FormData();
-  formData.append('file', file.file, file.name);
-  formData.append('settings', JSON.stringify(createOriginalAssetSettings()));
-  if (options.maxSize !== undefined) {
-    formData.append('maxSizeBytes', String(options.maxSize));
-  }
-  if (options.sizeLimitPolicy) {
-    formData.append('sizeLimitPolicy', options.sizeLimitPolicy);
-  }
-  formData.append(
-    'acceptedExtensions',
-    options.acceptedExtensions === '*'
-      ? '*'
-      : JSON.stringify(options.acceptedExtensions),
-  );
+  // The file is the raw body and its metadata rides in headers, so the server
+  // can stream it to disk instead of holding the whole request in memory.
   return await $fetch<AssetVariantInfo>('/api/admin/assets', {
     method: 'POST',
-    body: formData,
+    headers: buildUploadHeaders({
+      settings: createOriginalAssetSettings(),
+      filename: file.name,
+      maxSize: options.maxSize,
+      sizeLimitPolicy: options.sizeLimitPolicy,
+      acceptedExtensions: options.acceptedExtensions,
+    }),
+    body: file.file,
   });
 }
 

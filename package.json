@@ -4,7 +4,6 @@
   "main": "./nuxt.config.ts",
   "scripts": {
     "assets:audit": "node scripts/audit-assets.mts",
-    "assets:migrate": "node scripts/migrate-asset-library.mts",
     "dev": "nuxt dev .playground",
     "build": "nuxt build .playground",
     "start": "nuxt start .playground",
@@ -13,7 +12,6 @@
     "typecheck": "nuxt typecheck .playground --checker golar",
     "format": "prettier --write .",
     "db:push": "drizzle-kit push",
-    "db:generate": "drizzle-kit generate",
     "db:baseline": "bun update/scripts/generate-baseline.mts"
   },
   "dependencies": {

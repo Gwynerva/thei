@@ -1,9 +1,48 @@
 import { AssetType } from './asset';
 
-export const ASSET_UPLOAD_SETTINGS_VERSION = 5 as const;
-
-export type AssetUploadSettingsVersion = typeof ASSET_UPLOAD_SETTINGS_VERSION;
 export type AssetResizeMode = 'inside' | 'cover';
+
+/**
+ * Output format for an image transform.
+ *
+ * A requested parameter, not an engine setting: it belongs in the settings key
+ * because two formats are genuinely two different derivations. AVIF is the
+ * default; WebP stays available for the handful of places where AVIF is not
+ * reliably consumed, such as a browser tab icon.
+ */
+export type AssetImageFormat = 'avif' | 'webp';
+
+export const DEFAULT_ASSET_IMAGE_FORMAT: AssetImageFormat = 'avif';
+
+/**
+ * Long side below which WebP still beats AVIF.
+ *
+ * AVIF's container overhead does not amortize on a small icon. Measured on
+ * this project's own media, AVIF is 1.0-1.3x the size of WebP at 48px and only
+ * pulls ahead from roughly 128px, where it reaches 0.6x and then 0.24-0.33x at
+ * banner sizes. Choosing by size keeps every asset on whichever encoder is
+ * actually smaller for it.
+ */
+export const ASSET_IMAGE_AVIF_MIN_LONG_SIDE = 128;
+
+/**
+ * Picks the output format for an image transform.
+ *
+ * An explicit request always wins; otherwise the longest requested side
+ * decides. An unbounded transform is treated as large, because the source is
+ * kept at its own size and those are the cases AVIF was adopted for.
+ */
+export function resolveAssetImageFormat(
+  dimensions: AssetUploadDimensions,
+  requested?: AssetImageFormat,
+): AssetImageFormat {
+  if (requested) return normalizeAssetImageFormat(requested);
+  const longSide = Math.max(dimensions.width ?? 0, dimensions.height ?? 0);
+  if (!longSide) return DEFAULT_ASSET_IMAGE_FORMAT;
+  return longSide < ASSET_IMAGE_AVIF_MIN_LONG_SIDE
+    ? 'webp'
+    : DEFAULT_ASSET_IMAGE_FORMAT;
+}
 
 export interface AssetUploadDimensions {
   width?: number;
@@ -17,18 +56,16 @@ export interface AssetResizeSettings {
 }
 
 export interface AssetOriginalSettings {
-  version: AssetUploadSettingsVersion;
   type: 'original';
 }
 
 export interface AssetImageTransformSettings extends AssetResizeSettings {
-  version: AssetUploadSettingsVersion;
   type: 'image-transform';
   quality: number;
+  format: AssetImageFormat;
 }
 
 export interface AssetVideoTransformSettings extends AssetResizeSettings {
-  version: AssetUploadSettingsVersion;
   type: 'video-transform';
   quality: number;
   stripAudio: boolean;
@@ -36,7 +73,6 @@ export interface AssetVideoTransformSettings extends AssetResizeSettings {
 }
 
 export interface AssetFileZipSettings {
-  version: AssetUploadSettingsVersion;
   type: 'file-zip';
 }
 
@@ -70,6 +106,12 @@ export function normalizeAssetUploadQuality(quality: number): number {
   return Math.max(10, Math.min(100, Math.round(quality)));
 }
 
+export function normalizeAssetImageFormat(
+  format: AssetImageFormat | undefined,
+): AssetImageFormat {
+  return format === 'webp' ? 'webp' : DEFAULT_ASSET_IMAGE_FORMAT;
+}
+
 export function normalizeAssetResizeMode(
   resizeMode: AssetResizeMode | undefined,
 ): AssetResizeMode {
@@ -78,7 +120,6 @@ export function normalizeAssetResizeMode(
 
 export function createOriginalAssetSettings(): AssetOriginalSettings {
   return {
-    version: ASSET_UPLOAD_SETTINGS_VERSION,
     type: 'original',
   };
 }
@@ -89,15 +130,19 @@ export function createImageTransformSettings(
   options: {
     resizeMode?: AssetResizeMode;
     allowUpscale?: boolean;
+    format?: AssetImageFormat;
   } = {},
 ): AssetImageTransformSettings {
   return {
-    version: ASSET_UPLOAD_SETTINGS_VERSION,
     type: 'image-transform',
     quality: normalizeAssetUploadQuality(quality),
     dimensions: normalizeAssetUploadDimensions(dimensions),
     resizeMode: normalizeAssetResizeMode(options.resizeMode),
     allowUpscale: Boolean(options.allowUpscale),
+    format: resolveAssetImageFormat(
+      normalizeAssetUploadDimensions(dimensions),
+      options.format,
+    ),
   };
 }
 
@@ -112,7 +157,6 @@ export function createVideoTransformSettings(
   },
 ): AssetVideoTransformSettings {
   return {
-    version: ASSET_UPLOAD_SETTINGS_VERSION,
     type: 'video-transform',
     quality: normalizeAssetUploadQuality(quality),
     dimensions: normalizeAssetUploadDimensions(dimensions),
@@ -125,24 +169,31 @@ export function createVideoTransformSettings(
 
 export function createFileZipSettings(): AssetFileZipSettings {
   return {
-    version: ASSET_UPLOAD_SETTINGS_VERSION,
     type: 'file-zip',
   };
 }
 
+/**
+ * Stable description of the parameters that produced a stored file.
+ *
+ * It carries only what the caller asked for. Anything describing the engine's
+ * own generation — an encoder version, a settings schema version — belongs in
+ * `contentHash`, which already changes whenever the output bytes change. A
+ * generation counter here would split byte-identical outputs into duplicate
+ * rows that nothing ever reconciles.
+ */
 export function buildAssetSettingsKey(settings: AssetUploadSettings): string {
   if (settings.type === 'original') {
-    return `v${settings.version}:original`;
+    return 'original';
   }
 
   if (settings.type === 'file-zip') {
-    return `v${settings.version}:file-zip`;
+    return 'file-zip';
   }
 
   const width = settings.dimensions.width ?? 0;
   const height = settings.dimensions.height ?? 0;
   const baseParts = [
-    `v${settings.version}`,
     settings.type,
     `q${settings.quality}`,
     `w${width}`,
@@ -159,5 +210,5 @@ export function buildAssetSettingsKey(settings: AssetUploadSettings): string {
     ].join(':');
   }
 
-  return baseParts.join(':');
+  return [...baseParts, `fmt:${settings.format}`].join(':');
 }

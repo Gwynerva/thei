@@ -1,6 +1,15 @@
 import type { ImageAccent } from '#layers/thei/shared/accent-color';
-import { createHash } from 'node:crypto';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  copyFile,
+  mkdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
+import { createReadStream, createWriteStream } from 'node:fs';
+import { pipeline } from 'node:stream/promises';
 import { dirname } from 'node:path';
 import { and, eq } from 'drizzle-orm';
 import { buildAssetPreviewUrl } from '#layers/thei/shared/api/asset';
@@ -14,7 +23,6 @@ import type {
   VideoAssetMeta,
 } from '#layers/thei/shared/asset';
 import {
-  ASSET_UPLOAD_SETTINGS_VERSION,
   type AssetFileZipSettings,
   type AssetImageTransformSettings,
   type AssetOriginalSettings,
@@ -25,17 +33,25 @@ import { randomId } from '#layers/thei/shared/utils/random-id';
 import { EntityPrefix, generateUnique, generateUniqueId } from '../entity-id';
 import { extractImageAccent } from './image-color';
 import { inspectVideo } from './process';
-import {
-  createMediaPreview,
-  MEDIA_PREVIEW_VERSION,
-  MEDIA_PREVIEW_WEBP_QUALITY,
-  MEDIA_PREVIEW_MAX_LONG_SIDE,
-} from './media-preview';
+import { createMediaPreview, MEDIA_PREVIEW_EXTENSION } from './media-preview';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
+import {
+  assetBytesHash,
+  assetBytesSize,
+  sha256,
+  type AssetBytes,
+} from './bytes';
 
-const MEDIA_PREVIEW_SETTINGS_KEY =
-  `v${ASSET_UPLOAD_SETTINGS_VERSION}:internal:media-preview-v${MEDIA_PREVIEW_VERSION}` +
-  `:q${MEDIA_PREVIEW_WEBP_QUALITY}:max${MEDIA_PREVIEW_MAX_LONG_SIDE}`;
+export { sha256, type AssetBytes };
+
+/**
+ * Previews are content-addressed twice over: `familyUuid` is `preview-<hash>`
+ * and `contentHash` is that same hash, so the key carries no identity of its
+ * own and stays constant on purpose. Encoding the preview parameters here
+ * would mean that raising the size cap writes a second, byte-identical copy of
+ * every preview whose source was already smaller than the old cap.
+ */
+const MEDIA_PREVIEW_SETTINGS_KEY = 'internal:media-preview';
 
 export interface StoredAssetRecord {
   assetUuid: string;
@@ -44,7 +60,6 @@ export interface StoredAssetRecord {
   slug: string;
   extension: string;
   settingsKey: string;
-  settingsVersion: number;
   settings: AssetUploadSettings | null;
   type: AssetType;
   size: number;
@@ -52,28 +67,23 @@ export interface StoredAssetRecord {
 }
 
 export interface StoreAssetInput {
-  buffer: Buffer;
+  bytes: AssetBytes;
   extension: string;
   familyUuid: string;
   settingsKey: string;
-  settingsVersion: number;
   settings: AssetUploadSettings | null;
   type: AssetType;
   meta: AssetMeta | null;
 }
 
-export function sha256(buffer: Buffer): string {
-  return createHash('sha256').update(buffer).digest('hex');
-}
-
 export async function createMediaPreviewAsset(
-  sourceBuffer: Buffer,
+  source: AssetBytes,
   sourceType: AssetType.Image | AssetType.Video,
 ): Promise<{
   previewAssetUuid: string;
   accent?: ImageAccent;
 }> {
-  const preview = await createMediaPreview(sourceBuffer, sourceType);
+  const preview = await createMediaPreview(source, sourceType);
   const previewBuffer = preview.buffer;
   const previewHash = sha256(previewBuffer);
   const previewFamilyUuid = `preview-${previewHash}`;
@@ -100,11 +110,10 @@ export async function createMediaPreviewAsset(
   };
 
   const { asset } = await storeAsset({
-    buffer: previewBuffer,
-    extension: 'webp',
+    bytes: { buffer: previewBuffer },
+    extension: MEDIA_PREVIEW_EXTENSION,
     familyUuid: previewFamilyUuid,
     settingsKey: MEDIA_PREVIEW_SETTINGS_KEY,
-    settingsVersion: ASSET_UPLOAD_SETTINGS_VERSION,
     settings: null,
     type: AssetType.Image,
     meta,
@@ -138,7 +147,8 @@ export async function storeAsset(input: StoreAssetInput): Promise<{
   asset: StoredAssetRecord;
   created: boolean;
 }> {
-  const contentHash = sha256(input.buffer);
+  const contentHash = assetBytesHash(input.bytes);
+  const size = assetBytesSize(input.bytes);
   const existing = await THEI_SERVER.assets.findByIdentity(
     input.familyUuid,
     contentHash,
@@ -147,6 +157,7 @@ export async function storeAsset(input: StoreAssetInput): Promise<{
 
   if (existing) {
     await THEI_SERVER.assets.touch(existing.assetUuid);
+    await discardScratch(input.bytes);
     return { asset: normalizeAssetRecord(existing), created: false };
   }
 
@@ -158,10 +169,31 @@ export async function storeAsset(input: StoreAssetInput): Promise<{
     () => randomId(32),
     async (candidate) => !(await THEI_SERVER.assets.findBySlug(candidate)),
   );
-  const filePath = THEI_SERVER.assets.filePath(assetUuid, input.extension);
+  const filePath = THEI_SERVER.assets.filePath(contentHash, input.extension);
 
-  await mkdir(dirname(filePath), { recursive: true });
-  await writeFile(filePath, input.buffer);
+  // These exact bytes may already be on disk under a different family or a
+  // different settings key. Writing them again would be a byte-identical
+  // duplicate, so the row is created against the file that is already there.
+  const present = await stat(filePath).catch(() => null);
+  const wroteFile = !present?.isFile() || present.size !== size;
+
+  if (wroteFile) {
+    await mkdir(dirname(filePath), { recursive: true });
+    if (input.bytes.buffer) {
+      await writeFile(filePath, input.bytes.buffer);
+    } else if (input.bytes.owned) {
+      // Move rather than copy: the scratch file already holds the exact bytes,
+      // and a copy would read and write the whole file a second time.
+      await adoptStagedFile(input.bytes.path, filePath);
+    } else {
+      await copyFile(input.bytes.path, filePath);
+    }
+  } else {
+    // Nothing to store: the bytes are already on disk. Scratch that will never
+    // be adopted has to go now, or an ffmpeg output that happened to dedup
+    // would sit in the temp directory forever.
+    await discardScratch(input.bytes);
+  }
 
   const asset: StoredAssetRecord = {
     assetUuid,
@@ -170,10 +202,9 @@ export async function storeAsset(input: StoreAssetInput): Promise<{
     slug,
     extension: input.extension,
     settingsKey: input.settingsKey,
-    settingsVersion: input.settingsVersion,
     settings: input.settings,
     type: input.type,
-    size: input.buffer.length,
+    size,
     meta: input.meta,
   };
 
@@ -181,7 +212,11 @@ export async function storeAsset(input: StoreAssetInput): Promise<{
     await THEI_SERVER.assets.create(asset);
     return { asset, created: true };
   } catch {
-    await rm(filePath, { force: true }).catch(() => {});
+    // Only reclaim a file this call put there. A file that was already on disk
+    // belongs to whichever rows reference it.
+    if (wroteFile && !(await hasBlobReference(contentHash, input.extension))) {
+      await rm(filePath, { force: true }).catch(() => {});
+    }
     const recovered = await THEI_SERVER.assets.findByIdentity(
       input.familyUuid,
       contentHash,
@@ -192,6 +227,25 @@ export async function storeAsset(input: StoreAssetInput): Promise<{
       return { asset: normalizeAssetRecord(recovered), created: false };
     }
     throw createError({ statusCode: 500, message: 'Failed to save asset' });
+  }
+}
+
+/** Removes a scratch file storage decided not to adopt. */
+async function discardScratch(bytes: AssetBytes) {
+  if (!bytes.path || !bytes.owned) return;
+  await rm(bytes.path, { force: true }).catch(() => {});
+}
+
+/** Renames a staged file into the library, falling back to a copy across devices. */
+async function adoptStagedFile(source: string, target: string) {
+  try {
+    await rename(source, target);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error;
+    // The scratch directory and the library are on different filesystems, so
+    // the bytes have to be streamed across. Still never buffered whole.
+    await pipeline(createReadStream(source), createWriteStream(target));
+    await rm(source, { force: true }).catch(() => {});
   }
 }
 
@@ -218,7 +272,6 @@ export function describeStoredAsset(
     extension: asset.extension,
     size: asset.size,
     settingsKey: asset.settingsKey,
-    settingsVersion: asset.settingsVersion,
     assetUrl,
     isUnprocessed: asset.settings?.type === 'original',
   };
@@ -278,7 +331,10 @@ export async function buildStoredMediaDescriptor(
   return describeMedia({ ...asset, meta: resolvedMeta }, preview?.assetUuid);
 }
 
-function describeMedia(asset: StoredAssetRecord, previewAssetUuid?: string): MediaDescriptor {
+function describeMedia(
+  asset: StoredAssetRecord,
+  previewAssetUuid?: string,
+): MediaDescriptor {
   if (asset.type !== AssetType.Image && asset.type !== AssetType.Video)
     throw new Error('Cannot describe non-media asset');
   const previewSrc = previewAssetUuid
@@ -333,7 +389,7 @@ export async function deleteStoredAsset(
   if (await hasAssetUsage(assetUuid)) return false;
 
   const filePath = THEI_SERVER.assets.filePath(
-    asset.assetUuid,
+    asset.contentHash,
     asset.extension,
   );
   const previewUuid =
@@ -344,35 +400,62 @@ export async function deleteStoredAsset(
   // Check again inside the same transaction as deletion: selection/saving may
   // have refreshed the asset after the cleanup candidate list was collected.
   const { db, schema } = THEI_SERVER.useDb();
-  const deleted = db.transaction((tx) => {
+  const result = db.transaction((tx) => {
     const current = tx
       .select()
       .from(schema.assets)
       .where(eq(schema.assets.assetUuid, assetUuid))
       .get();
-    if (!current || (cutoffMs !== undefined && current.touchedAt >= cutoffMs))
-      return false;
+    if (!current || (cutoffMs !== undefined && current.touchedAt >= cutoffMs)) {
+      return { deleted: false, blobOrphaned: false };
+    }
     const usage = tx
       .select({ id: schema.assetUsages.assetUuid })
       .from(schema.assetUsages)
       .where(eq(schema.assetUsages.assetUuid, assetUuid))
       .get();
-      if (usage) return false;
-      tx.delete(schema.assetUsages).where(and(
-        eq(schema.assetUsages.containerType, 'asset'),
-        eq(schema.assetUsages.containerId, assetUuid),
-      )).run();
+    if (usage) return { deleted: false, blobOrphaned: false };
+
+    tx.delete(schema.assetUsages)
+      .where(
+        and(
+          eq(schema.assetUsages.containerType, 'asset'),
+          eq(schema.assetUsages.containerId, assetUuid),
+        ),
+      )
+      .run();
     tx.delete(schema.assets)
       .where(eq(schema.assets.assetUuid, assetUuid))
       .run();
-    return true;
-  });
-  if (!deleted) return false;
-  await rm(filePath, { force: true }).catch(() => {});
 
-    if (previewUuid && !(await hasPreviewReference(previewUuid))) {
-      // A concurrent transform may have just reused this preview before attaching it.
-      await deleteStoredAsset(previewUuid, cutoffMs ?? Date.now() - 24 * 60 * 60 * 1000);
+    // The file is shared: several rows can point at one blob when the same
+    // bytes were derived from different sources. It only goes when the last
+    // row referencing it does, and the count has to be taken inside this
+    // transaction so a concurrent insert cannot slip in behind it.
+    const sharer = tx
+      .select({ assetUuid: schema.assets.assetUuid })
+      .from(schema.assets)
+      .where(
+        and(
+          eq(schema.assets.contentHash, current.contentHash),
+          eq(schema.assets.extension, current.extension),
+        ),
+      )
+      .get();
+
+    return { deleted: true, blobOrphaned: !sharer };
+  });
+
+  if (!result.deleted) return false;
+  if (result.blobOrphaned) await rm(filePath, { force: true }).catch(() => {});
+
+  if (previewUuid && !(await hasPreviewReference(previewUuid))) {
+    // A concurrent transform may have just reused this preview before
+    // attaching it, so the preview keeps the same grace period as the sweep.
+    await deleteStoredAsset(
+      previewUuid,
+      cutoffMs ?? Date.now() - 24 * 60 * 60 * 1000,
+    );
   }
 
   return true;
@@ -386,7 +469,6 @@ function normalizeAssetRecord(asset: StoredAssetRecord): StoredAssetRecord {
     slug: asset.slug,
     extension: asset.extension,
     settingsKey: asset.settingsKey,
-    settingsVersion: asset.settingsVersion,
     settings: asset.settings,
     type: asset.type,
     size: asset.size,
@@ -400,6 +482,25 @@ async function hasAssetUsage(assetUuid: string): Promise<boolean> {
     .select({ assetUuid: schema.assetUsages.assetUuid })
     .from(schema.assetUsages)
     .where(eq(schema.assetUsages.assetUuid, assetUuid))
+    .limit(1);
+  return rows.length > 0;
+}
+
+/** True when any row still points at the file for these bytes. */
+async function hasBlobReference(
+  contentHash: string,
+  extension: string,
+): Promise<boolean> {
+  const { db, schema } = THEI_SERVER.useDb();
+  const rows = await db
+    .select({ assetUuid: schema.assets.assetUuid })
+    .from(schema.assets)
+    .where(
+      and(
+        eq(schema.assets.contentHash, contentHash),
+        eq(schema.assets.extension, extension),
+      ),
+    )
     .limit(1);
   return rows.length > 0;
 }

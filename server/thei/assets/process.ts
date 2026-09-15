@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import { createError } from 'h3';
 import sharp from 'sharp';
+import { theiTempPath } from './temp';
+import { fileBytes, type AssetBytes } from './bytes';
 import { AssetType } from '../../../shared/asset';
 import {
   AUDIO_EXTENSIONS,
@@ -18,8 +19,11 @@ import type {
   AssetTransformSettings,
   AssetVideoTransformSettings,
 } from '../../../shared/asset-upload-settings';
-import { videoQualityToVp9Crf } from '../../../shared/asset-upload-quality';
-import { zipSingleFile } from './zip';
+import {
+  imageDisplayQualityToAvifQuality,
+  videoQualityToVp9Crf,
+} from '../../../shared/asset-upload-quality';
+import { zipFileToPath } from './zip';
 
 const IMAGE_EXTS = new Set<string>(IMAGE_EXTENSIONS);
 const VIDEO_EXTS = new Set<string>(VIDEO_EXTENSIONS);
@@ -36,11 +40,27 @@ export interface VideoInspection extends AssetDimensions {
 }
 
 export interface ProcessedAsset {
-  buffer: Buffer;
+  bytes: AssetBytes;
   extension: string;
   type: AssetType;
   dimensions: AssetDimensions;
   hasAudio?: boolean;
+}
+
+/** An upload staged on disk, the input to every processing path. */
+export interface AssetSourceFile {
+  path: string;
+  size: number;
+  hash: string;
+  filename: string;
+  extension: string;
+  /**
+   * Whether this file is scratch that storage may move into the library.
+   *
+   * False when re-deriving from an asset that is already stored, because the
+   * path is then the live library file.
+   */
+  owned: boolean;
 }
 
 export interface AssetProcessOptions {
@@ -55,9 +75,9 @@ export function inferAssetType(extension: string): AssetType {
 }
 
 export async function getImageDimensions(
-  buffer: Buffer,
+  input: Buffer | string,
 ): Promise<AssetDimensions> {
-  const metadata = await sharp(buffer).metadata();
+  const metadata = await sharp(input).metadata();
   return {
     ...(metadata.width ? { width: metadata.width } : {}),
     ...(metadata.height ? { height: metadata.height } : {}),
@@ -66,7 +86,7 @@ export async function getImageDimensions(
 
 export async function inspectVideo(buffer: Buffer): Promise<VideoInspection> {
   const id = randomUUID();
-  const inputPath = join(tmpdir(), `thei-probe-in-${id}`);
+  const inputPath = theiTempPath(`thei-probe-in-${id}`);
 
   try {
     await writeFile(inputPath, buffer);
@@ -84,9 +104,12 @@ export async function inspectVideoFile(
 }
 
 export async function getVideoDimensions(
-  buffer: Buffer,
+  input: Buffer | string,
 ): Promise<AssetDimensions> {
-  const { width, height } = await inspectVideo(buffer);
+  const { width, height } =
+    typeof input === 'string'
+      ? await inspectVideoFile(input)
+      : await inspectVideo(input);
   return {
     ...(width ? { width } : {}),
     ...(height ? { height } : {}),
@@ -94,27 +117,37 @@ export async function getVideoDimensions(
 }
 
 export async function inspectAssetDimensions(
-  buffer: Buffer,
+  input: Buffer | string,
   extension: string,
   type: AssetType,
 ): Promise<AssetDimensions> {
   if (type === AssetType.Image) {
-    return await getImageDimensions(buffer).catch(() => ({}));
+    return await getImageDimensions(input).catch(() => ({}));
   }
   if (type === AssetType.Video) {
-    return await getVideoDimensions(buffer).catch(() => ({}));
+    return await getVideoDimensions(input).catch(() => ({}));
   }
   return {};
 }
 
 export async function processOriginalAsset(
-  inputBuffer: Buffer,
-  originalExtension: string,
+  source: AssetSourceFile,
 ): Promise<ProcessedAsset> {
-  const extension = originalExtension.toLowerCase();
+  const extension = source.extension.toLowerCase();
   const type = inferAssetType(extension);
+  // The staged file already holds exactly the bytes to store, so it is handed
+  // straight through: an untransformed upload is never read into memory.
+  const bytes: AssetBytes = {
+    path: source.path,
+    size: source.size,
+    hash: source.hash,
+    owned: source.owned,
+  };
+
   if (type === AssetType.Video) {
-    const inspected = await inspectVideo(inputBuffer).catch(() => undefined);
+    const inspected = await inspectVideoFile(source.path).catch(
+      () => undefined,
+    );
     if (!inspected?.width || !inspected.height) {
       throw createError({
         statusCode: 400,
@@ -122,7 +155,7 @@ export async function processOriginalAsset(
       });
     }
     return {
-      buffer: inputBuffer,
+      bytes,
       extension,
       type,
       dimensions: {
@@ -134,38 +167,34 @@ export async function processOriginalAsset(
   }
 
   if (type === AssetType.Image) {
-    const dimensions = await getImageDimensions(inputBuffer).catch(() => {
+    const dimensions = await getImageDimensions(source.path).catch(() => {
       throw createError({
         statusCode: 400,
         message: 'Invalid image file',
       });
     });
-    return {
-      buffer: inputBuffer,
-      extension,
-      type,
-      dimensions,
-    };
+    return { bytes, extension, type, dimensions };
   }
 
   return {
-    buffer: inputBuffer,
+    bytes,
     extension,
     type,
-    dimensions: await inspectAssetDimensions(inputBuffer, extension, type),
+    dimensions: await inspectAssetDimensions(source.path, extension, type),
   };
 }
 
 export async function processFileZipAsset(
-  inputBuffer: Buffer,
-  sourceFilename: string,
+  source: AssetSourceFile,
   _settings: AssetFileZipSettings,
   options: AssetProcessOptions = {},
 ): Promise<ProcessedAsset> {
+  const outputPath = theiTempPath(`thei-zip-out-${randomUUID()}.zip`);
+  await zipFileToPath(source.path, source.size, source.filename, outputPath, {
+    onProgress: options.onProgress,
+  });
   return {
-    buffer: await zipSingleFile(inputBuffer, sourceFilename, {
-      onProgress: options.onProgress,
-    }),
+    bytes: await fileBytes(outputPath),
     extension: 'zip',
     type: AssetType.Other,
     dimensions: {},
@@ -173,21 +202,23 @@ export async function processFileZipAsset(
 }
 
 export async function processMediaTransformAsset(
-  inputBuffer: Buffer,
+  source: AssetSourceFile,
   settings: AssetTransformSettings,
   options: AssetProcessOptions = {},
 ): Promise<ProcessedAsset> {
   if (settings.type === 'image-transform') {
-    return await processImageToWebp(inputBuffer, settings);
+    return await processImage(source, settings);
   }
-  return await processVideoToWebm(inputBuffer, settings, options);
+  return await processVideoToWebm(source, settings, options);
 }
 
-async function processImageToWebp(
-  inputBuffer: Buffer,
+async function processImage(
+  source: AssetSourceFile,
   settings: AssetImageTransformSettings,
 ): Promise<ProcessedAsset> {
-  let pipeline = sharp(inputBuffer, { animated: false });
+  // sharp reads the staged file itself; the source never enters this process's
+  // heap, and the encoded result is small enough to stay a buffer.
+  let pipeline = sharp(source.path, { animated: false });
   const width = settings.dimensions.width;
   const height = settings.dimensions.height;
 
@@ -198,29 +229,40 @@ async function processImageToWebp(
     });
   }
 
-  const { data, info } = await pipeline
-    .webp({ quality: settings.quality, effort: 6 })
-    .toBuffer({ resolveWithObject: true });
+  // `effort` is not comparable between the two encoders: WebP 6 is quick,
+  // while AVIF climbs steeply past 4 for very little size. 4 is sharp's own
+  // default and keeps a large upload from occupying a worker for minutes.
+  const encoded =
+    settings.format === 'webp'
+      ? pipeline.webp({ quality: settings.quality, effort: 6 })
+      : pipeline.avif({
+          quality: imageDisplayQualityToAvifQuality(settings.quality),
+          effort: 4,
+        });
+
+  const { data, info } = await encoded.toBuffer({ resolveWithObject: true });
 
   return {
-    buffer: data,
-    extension: 'webp',
+    bytes: { buffer: data },
+    extension: settings.format,
     type: AssetType.Image,
     dimensions: { width: info.width, height: info.height },
   };
 }
 
 async function processVideoToWebm(
-  inputBuffer: Buffer,
+  source: AssetSourceFile,
   settings: AssetVideoTransformSettings,
   options: AssetProcessOptions,
 ): Promise<ProcessedAsset> {
   const id = randomUUID();
-  const inputPath = join(tmpdir(), `thei-webm-in-${id}`);
-  const outputPath = join(tmpdir(), `thei-webm-out-${id}.webm`);
+  // ffmpeg reads the staged upload directly. It used to be written to a second
+  // temp file from a buffer that held the whole video.
+  const inputPath = source.path;
+  const outputPath = theiTempPath(`thei-webm-out-${id}.webm`);
 
+  let succeeded = false;
   try {
-    await writeFile(inputPath, inputBuffer);
     const inputInspection = await inspectVideoFile(inputPath).catch(
       () => undefined,
     );
@@ -261,10 +303,9 @@ async function processVideoToWebm(
       options,
     );
 
-    const buffer = await readFile(outputPath);
-    const inspected = await inspectVideo(buffer).catch(() => undefined);
-    return {
-      buffer,
+    const inspected = await inspectVideoFile(outputPath).catch(() => undefined);
+    const result: ProcessedAsset = {
+      bytes: await fileBytes(outputPath),
       extension: 'webm',
       type: AssetType.Video,
       dimensions: inspected
@@ -275,9 +316,12 @@ async function processVideoToWebm(
         : {},
       ...(inspected ? { hasAudio: inspected.hasAudio } : {}),
     };
+    succeeded = true;
+    return result;
   } finally {
-    await rm(inputPath, { force: true }).catch(() => {});
-    await rm(outputPath, { force: true }).catch(() => {});
+    // On success the output is handed to the caller, which moves it into the
+    // library; the staged input belongs to the request and is cleaned up there.
+    if (!succeeded) await rm(outputPath, { force: true }).catch(() => {});
   }
 }
 

@@ -1,10 +1,12 @@
 import sharp from 'sharp';
 import { AssetType } from '#layers/thei/shared/asset';
 import { extractVideoThumbnail } from './video-thumbnail';
+import type { AssetBytes } from './bytes';
 
 export const MEDIA_PREVIEW_MAX_LONG_SIDE = 720;
-export const MEDIA_PREVIEW_WEBP_QUALITY = 60;
-export const MEDIA_PREVIEW_VERSION = 1;
+/** On AVIF's own scale, not the displayed 10-100 upload scale. */
+export const MEDIA_PREVIEW_QUALITY = 40;
+export const MEDIA_PREVIEW_EXTENSION = 'avif';
 
 export interface MediaPreview {
   buffer: Buffer;
@@ -13,22 +15,27 @@ export interface MediaPreview {
 }
 
 export async function createMediaPreview(
-  sourceBuffer: Buffer,
+  source: AssetBytes | Buffer,
   sourceType: AssetType.Image | AssetType.Video,
 ): Promise<MediaPreview> {
-  const rasterBuffer =
+  const bytes: AssetBytes = Buffer.isBuffer(source)
+    ? { buffer: source }
+    : source;
+  // sharp accepts a path, so an image preview never reads the source into
+  // memory. Only the video path has to go through ffmpeg first.
+  const raster: Buffer | string =
     sourceType === AssetType.Video
-      ? await extractVideoThumbnail(sourceBuffer)
-      : sourceBuffer;
+      ? await extractVideoThumbnail(bytes)
+      : (bytes.buffer ?? bytes.path);
 
-  const { data, info } = await sharp(rasterBuffer, { animated: false })
+  const { data, info } = await sharp(raster, { animated: false })
     .resize({
       width: MEDIA_PREVIEW_MAX_LONG_SIDE,
       height: MEDIA_PREVIEW_MAX_LONG_SIDE,
       fit: 'inside',
       withoutEnlargement: true,
     })
-    .webp({ quality: MEDIA_PREVIEW_WEBP_QUALITY, effort: 6 })
+    .avif({ quality: MEDIA_PREVIEW_QUALITY, effort: 4 })
     .toBuffer({ resolveWithObject: true });
 
   return {

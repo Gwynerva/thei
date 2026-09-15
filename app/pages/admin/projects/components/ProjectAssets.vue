@@ -22,6 +22,7 @@ import {
 } from '#layers/thei/shared/assets/extensions';
 import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
 import { ASSET_UPLOAD_LIMITS } from '#layers/thei/shared/asset-upload-limits';
+import { DEFAULT_ASSET_IMAGE_FORMAT } from '#layers/thei/shared/asset-upload-settings';
 import AssetTile from '#layers/thei/app/components/AssetTile.vue';
 import type {
   OtherAssetGetItem,
@@ -264,7 +265,7 @@ async function openShowcaseAsset(index: number) {
   let current: AssetReplaceResult = {
     assetUuid: snapshot.assetUuid,
     slug: snapshot.assetUuid,
-    extension: extensionFromUrl(snapshot.media.src, 'webp'),
+    extension: extensionFromUrl(snapshot.media.src, DEFAULT_ASSET_IMAGE_FORMAT),
     size: snapshot.size,
     media: snapshot.media,
     assetUrl: snapshot.media.src,

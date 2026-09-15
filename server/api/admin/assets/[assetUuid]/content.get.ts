@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   if (!asset) throw createError({ statusCode: 404 });
 
   const filePath = THEI_SERVER.assets.filePath(
-    asset.assetUuid,
+    asset.contentHash,
     asset.extension,
   );
   const filename = `${asset.slug}.${asset.extension}`;

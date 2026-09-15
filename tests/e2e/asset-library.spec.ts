@@ -9,6 +9,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import sharp from 'sharp';
 import { createOriginalAssetSettings } from '../../shared/asset-upload-settings';
+import { buildUploadHeaders } from '../../shared/api/asset-upload-headers';
 
 test.use({
   storageState: fileURLToPath(
@@ -21,12 +22,14 @@ async function upload(api: APIRequestContext, name: string, color = '#4368a2') {
   })
     .png()
     .toBuffer();
+  // The file is the raw body; its metadata rides in headers so the server can
+  // stream it to disk instead of buffering the whole request.
   const response = await api.post('/api/admin/assets', {
-    multipart: {
-      file: { name, mimeType: 'image/png', buffer },
-      familyUuid: `test-${randomUUID()}`,
-      settings: JSON.stringify(createOriginalAssetSettings()),
-    },
+    headers: buildUploadHeaders({
+      settings: createOriginalAssetSettings(),
+      filename: name,
+    }),
+    data: buffer,
   });
   expect(response.ok(), await response.text()).toBe(true);
   return { asset: await response.json(), buffer };
@@ -39,15 +42,11 @@ async function uploadVideo(api: APIRequestContext) {
     ),
   );
   const response = await api.post('/api/admin/assets', {
-    multipart: {
-      file: {
-        name: 'library-hover-preview.mp4',
-        mimeType: 'video/mp4',
-        buffer,
-      },
-      familyUuid: `test-${randomUUID()}`,
-      settings: JSON.stringify(createOriginalAssetSettings()),
-    },
+    headers: buildUploadHeaders({
+      settings: createOriginalAssetSettings(),
+      filename: 'library-hover-preview.mp4',
+    }),
+    data: buffer,
   });
   expect(response.ok(), await response.text()).toBe(true);
   return response.json();

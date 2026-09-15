@@ -3,12 +3,19 @@ import { getPathExtension } from '#layers/thei/shared/assets/extensions';
 import { inferAssetType } from '../../../thei/assets/process';
 import { createAssetVariant } from '../../../thei/assets/create-variant';
 import { findStoredAssetByHash } from '../../../thei/assets/lookup';
-import { sha256, buildAssetVariantInfo } from '../../../thei/assets/storage';
-import { assertAssetSelection, confirmAssetSelection } from '../../../thei/assets/selection';
+import { buildAssetVariantInfo } from '../../../thei/assets/storage';
+import {
+  assertAssetSelection,
+  confirmAssetSelection,
+} from '../../../thei/assets/selection';
 import {
   clearAssetUploadProgress,
   setAssetUploadProgress,
 } from '../../../thei/assets/progress';
+import {
+  readUploadHeader,
+  stageUploadBody,
+} from '../../../thei/assets/upload-stream';
 import {
   parseAcceptedExtensions,
   parseAssetUploadSettings,
@@ -20,69 +27,89 @@ import {
   validateUploadContentLength,
 } from '../../../thei/assets/upload-request';
 
+/**
+ * Accepts one uploaded file.
+ *
+ * The file is the raw request body and its metadata travels in headers, so the
+ * bytes can be streamed straight to disk. Multipart was the previous shape,
+ * but parsing it meant holding the whole request in memory, which a 500 MB
+ * limit on a 2 GB instance could not survive.
+ */
 export default defineEventHandler(
   async (event): Promise<AssetUploadResponse> => {
-    let uploadId: string | undefined;
+    validateUploadContentLength(getHeader(event, 'content-length'));
+
+    const settings = parseAssetUploadSettings(
+      readUploadHeader(event, 'x-upload-settings'),
+    );
+    const filename = readUploadHeader(event, 'x-upload-filename');
+    const uploadId = readUploadHeader(event, 'x-upload-id', false) || undefined;
+    const requestedMaxSizeBytes = parseOptionalPositiveInt(
+      readUploadHeader(event, 'x-upload-max-size', false),
+    );
+    const sizeLimitPolicy = parseSizeLimitPolicy(
+      readUploadHeader(event, 'x-upload-size-limit-policy', false),
+    );
+    const maxSizeBytes = resolveMaxSizeBytes(
+      sizeLimitPolicy,
+      requestedMaxSizeBytes,
+    );
+    const acceptedExtensions = parseAcceptedExtensions(
+      readUploadHeader(event, 'x-upload-accepted-extensions', false),
+    );
+
+    if (!filename) {
+      throw createError({
+        statusCode: 400,
+        message: 'Missing required field: x-upload-filename',
+      });
+    }
+
+    const extension = getPathExtension(filename);
+    const sourceType = inferAssetType(extension);
+    // Everything that can be judged from the headers is judged before a single
+    // byte of the body is read.
+    validateFileInput({ extension, size: 0, acceptedExtensions });
+    validateSizeLimitPolicy(sizeLimitPolicy, sourceType);
+
+    const staged = await stageUploadBody(event, { maxSizeBytes });
+
     try {
-      validateUploadContentLength(getHeader(event, 'content-length'));
-      const parts = await readMultipartFormData(event);
-      if (!parts) {
-        throw createError({ statusCode: 400, message: 'No multipart data' });
-      }
-
-      const filePart = parts.find((part) => part.name === 'file');
-      const settings = parseAssetUploadSettings(
-        readPartString(parts, 'settings'),
-      );
-      uploadId = readPartString(parts, 'uploadId', false);
-      const requestedMaxSizeBytes = parseOptionalPositiveInt(
-        readPartString(parts, 'maxSizeBytes', false),
-      );
-      const sizeLimitPolicy = parseSizeLimitPolicy(
-        readPartString(parts, 'sizeLimitPolicy', false),
-      );
-      const maxSizeBytes = resolveMaxSizeBytes(
-        sizeLimitPolicy,
-        requestedMaxSizeBytes,
-      );
-      const acceptedExtensions = parseAcceptedExtensions(
-        readPartString(parts, 'acceptedExtensions', false),
-      );
-
-      if (!filePart?.data || !filePart.filename) {
-        throw createError({
-          statusCode: 400,
-          message: 'Missing required fields: file, settings',
-        });
-      }
-
-
-      const sourceExtension = getPathExtension(filePart.filename);
       validateFileInput({
-        extension: sourceExtension,
-        size: filePart.data.length,
+        extension,
+        size: staged.size,
         maxSizeBytes,
         acceptedExtensions,
       });
-      const sourceType = inferAssetType(sourceExtension);
-      validateSizeLimitPolicy(sizeLimitPolicy, sourceType);
 
-      const contentHash = sha256(filePart.data);
-      const match = await findStoredAssetByHash(contentHash, filePart.data.length);
-      const constraints = { acceptedExtensions, maxSize: maxSizeBytes, sizeLimitPolicy };
+      const match = await findStoredAssetByHash(staged.hash, staged.size);
+      const constraints = {
+        acceptedExtensions,
+        maxSize: maxSizeBytes,
+        sizeLimitPolicy,
+      };
       if (match && settings.type === 'original') {
         assertAssetSelection(match, constraints);
         await confirmAssetSelection(match.assetUuid, constraints);
         return { ...(await buildAssetVariantInfo(match)), created: false };
       }
+
       const result = await createAssetVariant({
-        buffer: filePart.data,
-        filename: filePart.filename,
-        extension: sourceExtension,
+        source: {
+          path: staged.path,
+          size: staged.size,
+          hash: staged.hash,
+          filename,
+          extension,
+          // Scratch: storage moves it into the library, and whatever is left
+          // is removed by the discard below.
+          owned: true,
+        },
         // Concurrent first uploads use the same family even across processes.
-        familyUuid: match?.familyUuid ?? `af-${contentHash}`,
+        familyUuid: match?.familyUuid ?? `af-${staged.hash}`,
         sourceType,
         settings,
+        onQueued: () => setAssetUploadProgress(uploadId, { phase: 'queued' }),
         onProgress: (progress) =>
           setAssetUploadProgress(uploadId, {
             phase: 'processing',
@@ -96,21 +123,9 @@ export default defineEventHandler(
     } catch (error) {
       clearAssetUploadProgress(uploadId);
       throw error;
+    } finally {
+      // Harmless when the file was moved into the library: it is already gone.
+      await staged.discard();
     }
   },
 );
-
-function readPartString(
-  parts: NonNullable<Awaited<ReturnType<typeof readMultipartFormData>>>,
-  name: string,
-  required = true,
-): string {
-  const value = parts.find((part) => part.name === name)?.data.toString();
-  if (required && !value) {
-    throw createError({
-      statusCode: 400,
-      message: `Missing required field: ${name}`,
-    });
-  }
-  return value ?? '';
-}

@@ -901,6 +901,7 @@ export default defineI18nBase({
     upload_apply_settings: 'Create variant',
     upload_uploading: 'Uploading...',
     upload_processing: 'Processing...',
+    upload_queued: 'Waiting in queue...',
     upload_quality: 'Quality',
     upload_dimensions: 'Resolution',
     upload_reset_dimensions: 'Reset',

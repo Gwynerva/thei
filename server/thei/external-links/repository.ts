@@ -11,9 +11,16 @@ import {
   type ExternalLink,
 } from '#layers/thei/shared/external-link';
 import { extractImageAccent } from '../assets/image-color';
+import { THEI_CONTENT_DIRS } from '../content-layout';
 
 export const EXTERNAL_LINK_FAVICON_SIZE = 48;
 export const EXTERNAL_LINK_FAVICON_QUALITY = 80;
+/**
+ * WebP, not AVIF, and deliberately so. At 48px AVIF's container overhead makes
+ * the file larger rather than smaller, and its lossy alpha plane leaves a faint
+ * haze across what should be fully transparent padding around an icon.
+ */
+export const EXTERNAL_LINK_FAVICON_EXTENSION = 'webp';
 const ORPHAN_CLEANUP_GRACE_MS = 60_000;
 
 export function externalLinkKey(url: string) {
@@ -21,7 +28,10 @@ export function externalLinkKey(url: string) {
 }
 
 export function externalLinkFaviconPath(key: string) {
-  return THEI_SERVER.contentPath('external-link-favicons', `${key}.webp`);
+  return THEI_SERVER.contentPath(
+    THEI_CONTENT_DIRS.externalLinkFavicons,
+    `${key}.${EXTERNAL_LINK_FAVICON_EXTENSION}`,
+  );
 }
 
 export function externalLinkMedia(
@@ -30,7 +40,7 @@ export function externalLinkMedia(
   touchedAt?: number,
 ): ExternalLink['faviconMedia'] {
   const version = touchedAt ? `?v=${touchedAt}` : '';
-  const src = `/media/external-link-favicons/${faviconKey}.webp${version}`;
+  const src = `/media/external-link-favicons/${faviconKey}.${EXTERNAL_LINK_FAVICON_EXTENSION}${version}`;
   return {
     src,
     previewSrc: src,
@@ -45,7 +55,7 @@ export function externalLinkPreviewMedia(
   buffer: Buffer,
   accent: ImageAccent | undefined,
 ): ExternalLink['faviconMedia'] {
-  const src = `data:image/webp;base64,${buffer.toString('base64')}`;
+  const src = `data:image/${EXTERNAL_LINK_FAVICON_EXTENSION};base64,${buffer.toString('base64')}`;
   return {
     src,
     previewSrc: src,

@@ -108,7 +108,6 @@ describe('asset library', () => {
           familyUuid: id,
           contentHash: id.repeat(64),
           settingsKey: id,
-          settingsVersion: 1,
           settings: internal ? null : createOriginalAssetSettings(),
           type: AssetType.Image,
           size: 100,

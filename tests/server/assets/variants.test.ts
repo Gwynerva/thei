@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
@@ -9,7 +9,11 @@ import {
   createFileZipSettings,
   createOriginalAssetSettings,
 } from '../../../shared/asset-upload-settings';
-import { storeAsset, sha256 } from '../../../server/thei/assets/storage';
+import {
+  deleteStoredAsset,
+  storeAsset,
+  sha256,
+} from '../../../server/thei/assets/storage';
 import { createAsset } from '../../../server/thei/assets/repository/create';
 import { findAssetByIdentity } from '../../../server/thei/assets/repository/find-by-identity';
 import { findAssetBySlug } from '../../../server/thei/assets/repository/find-by-slug';
@@ -35,7 +39,6 @@ describe('asset variants', () => {
         familyUuid text NOT NULL,
         contentHash text NOT NULL,
         settingsKey text NOT NULL,
-        settingsVersion integer NOT NULL,
         settings text,
         type text NOT NULL,
         size integer NOT NULL,
@@ -54,8 +57,8 @@ describe('asset variants', () => {
       );
     `);
 
-    const filePath = (assetUuid: string, extension: string) =>
-      join(root, assetUuid.slice(2, 4), `${assetUuid}.${extension}`);
+    const filePath = (contentHash: string, extension: string) =>
+      join(root, contentHash.slice(0, 2), `${contentHash}.${extension}`);
     (globalThis as any).THEI_SERVER = {
       useDb: () => ({ db, schema }),
       assets: {
@@ -80,41 +83,37 @@ describe('asset variants', () => {
     const original = createOriginalAssetSettings();
     const zipped = createFileZipSettings();
     const first = await storeAsset({
-      buffer,
+      bytes: { buffer },
       extension: 'bin',
       familyUuid: 'family-1',
-      settingsKey: 'v5:original',
-      settingsVersion: 5,
+      settingsKey: 'original',
       settings: original,
       type: AssetType.Other,
       meta: null,
     });
     const reused = await storeAsset({
-      buffer,
+      bytes: { buffer },
       extension: 'bin',
       familyUuid: 'family-1',
-      settingsKey: 'v5:original',
-      settingsVersion: 5,
+      settingsKey: 'original',
       settings: original,
       type: AssetType.Other,
       meta: null,
     });
     const otherPreset = await storeAsset({
-      buffer,
+      bytes: { buffer },
       extension: 'zip',
       familyUuid: 'family-1',
-      settingsKey: 'v5:file-zip',
-      settingsVersion: 5,
+      settingsKey: 'file-zip',
       settings: zipped,
       type: AssetType.Other,
       meta: null,
     });
     const otherFamily = await storeAsset({
-      buffer,
+      bytes: { buffer },
       extension: 'bin',
       familyUuid: 'family-2',
-      settingsKey: 'v5:original',
-      settingsVersion: 5,
+      settingsKey: 'original',
       settings: original,
       type: AssetType.Other,
       meta: null,
@@ -128,9 +127,53 @@ describe('asset variants', () => {
     });
     expect(otherPreset.asset.assetUuid).not.toBe(first.asset.assetUuid);
     expect(otherFamily.asset.assetUuid).not.toBe(first.asset.assetUuid);
+    expect(await db.select().from(schema.assets)).toHaveLength(3);
+
+    // Same bytes, same extension, different family: two logical rows sharing
+    // one file. Writing the bytes twice is what used to leak 11% of the
+    // library to byte-identical duplicates.
+    expect(otherFamily.asset.contentHash).toBe(first.asset.contentHash);
+    // One file per (bytes, extension): the .zip variant is genuinely a
+    // different extension, so it is a second file, not a duplicate.
+    const stored = await readdir(join(root, sha256(buffer).slice(0, 2)));
+    expect(stored.sort()).toEqual([
+      `${sha256(buffer)}.bin`,
+      `${sha256(buffer)}.zip`,
+    ]);
+  });
+
+  it('keeps a shared file until the last row referencing it is gone', async () => {
+    const buffer = Buffer.from('shared bytes');
+    const settings = createOriginalAssetSettings();
+    const store = (familyUuid: string) =>
+      storeAsset({
+        bytes: { buffer },
+        extension: 'bin',
+        familyUuid,
+        settingsKey: 'original',
+        settings,
+        type: AssetType.Other,
+        meta: null,
+      });
+
+    const first = await store('family-a');
+    const second = await store('family-b');
+    const blobPath = join(
+      root,
+      sha256(buffer).slice(0, 2),
+      `${sha256(buffer)}.bin`,
+    );
+
+    expect(await deleteStoredAsset(first.asset.assetUuid)).toBe(true);
+    expect(await stat(blobPath).then(() => true)).toBe(true);
+
+    expect(await deleteStoredAsset(second.asset.assetUuid)).toBe(true);
     expect(
-      await db.select().from(schema.assets),
-    ).toHaveLength(3);
+      await stat(blobPath).then(
+        () => true,
+        () => false,
+      ),
+    ).toBe(false);
   });
 
   it('counts placements, not service preview links', async () => {

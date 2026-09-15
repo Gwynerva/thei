@@ -41,6 +41,12 @@
 ## File Storage
 
 - Check every change or addition to the file storage system for consistency with reuse counting and reuse presentation, including repeated placements of one file and independently stored file variants.
+- No constant describing the engine's own generation — a settings schema version, an encoder version, a preview template version — may appear in `assets.settingsKey`, `assets.familyUuid`, or a path on disk. A derivation change is expressed through `contentHash`, which already changes whenever the output bytes do. A generation counter in the identity splits byte-identical outputs into duplicate rows and duplicate files that nothing ever reconciles.
+- A settings key describes only the parameters the caller asked for. An output format is such a parameter and belongs there; the build that produced the file does not.
+- Files are addressed by content: `content/assets/<contentHash[0:2]>/<contentHash>.<extension>`. An `assets` row is a logical handle, and several rows legitimately share one file, so a file may only be deleted once no other row references those bytes. Never derive a storage path from `assetUuid`.
+- "Part of the library is old and part is new" is not a broken state. Every row describes itself through `extension`, `size`, and `meta`, and nothing expects uniformity. Never re-encode existing media in a migration: migrations run inside boot, in one transaction, with the site down and a supervisor restarting the process on failure. If bulk re-encoding is ever wanted, it belongs in an opt-in, resumable background job in the admin panel.
+- Uploads are streamed to `.thei/tmp/` and handed to sharp and ffmpeg as a path. Never read an uploaded file, a stored asset, or an ffmpeg output into a `Buffer` as a whole: the file limit is 500 MB and the installer asks for 2 GB of RAM. Media processing runs through the concurrency limiter in `server/thei/assets/queue.ts`.
+- Every directory the engine owns inside `content/` is declared in `server/thei/content-layout.ts`. Cleanup only sweeps directories it knows about, so a layout that moves without updating that list leaves files behind that nothing will ever reclaim.
 
 ## Styling
 

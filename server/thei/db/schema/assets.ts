@@ -21,10 +21,12 @@ export const assets = sqliteTable(
     familyUuid: text().notNull(),
     /** SHA-256 of the bytes actually stored on disk. */
     contentHash: text().notNull(),
-    /** Stable key derived from the settings that produced this exact file. */
+    /**
+     * Description of the derivation parameters that produced this exact file.
+     * Parameters only: nothing describing the engine's own generation belongs
+     * here, because `contentHash` already changes when the output bytes do.
+     */
     settingsKey: text().notNull(),
-    /** Version of the settings schema used to build settingsKey/settings. */
-    settingsVersion: integer().notNull(),
     /** JSON settings that produced this asset. Null only for internal helper assets. */
     settings: text({ mode: 'json' }).$type<AssetUploadSettings | null>(),
     type: text().notNull().$type<AssetType>(),

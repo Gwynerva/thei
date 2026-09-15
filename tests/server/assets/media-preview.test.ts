@@ -3,12 +3,12 @@ import sharp from 'sharp';
 import { AssetType } from '../../../shared/asset';
 import {
   createMediaPreview,
+  MEDIA_PREVIEW_EXTENSION,
   MEDIA_PREVIEW_MAX_LONG_SIDE,
-  MEDIA_PREVIEW_WEBP_QUALITY,
 } from '../../../server/thei/assets/media-preview';
 
 describe('media previews', () => {
-  it('keeps small image dimensions and produces WebP', async () => {
+  it('keeps small image dimensions and produces AVIF', async () => {
     const source = await sharp({
       create: {
         width: 320,
@@ -23,9 +23,9 @@ describe('media previews', () => {
     const preview = await createMediaPreview(source, AssetType.Image);
     const meta = await sharp(preview.buffer).metadata();
 
-    expect(MEDIA_PREVIEW_WEBP_QUALITY).toBe(60);
     expect(preview).toMatchObject({ width: 320, height: 180 });
-    expect(meta.format).toBe('webp');
+    expect(meta.format).toBe('heif');
+    expect(MEDIA_PREVIEW_EXTENSION).toBe('avif');
   });
 
   it('limits the long side to 720 and preserves aspect ratio', async () => {
@@ -54,6 +54,6 @@ describe('media previews', () => {
     const preview = await createMediaPreview(source, AssetType.Image);
 
     expect(preview).toMatchObject({ width: 240, height: 480 });
-    expect((await sharp(preview.buffer).metadata()).format).toBe('webp');
+    expect((await sharp(preview.buffer).metadata()).format).toBe('heif');
   });
 });

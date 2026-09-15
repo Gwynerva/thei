@@ -15,7 +15,6 @@ export const CONTENT_OWNER_TYPES = [
   'project-section',
   'event',
   'page',
-  'news',
 ] as const;
 export type ContentOwnerType = (typeof CONTENT_OWNER_TYPES)[number];
 
@@ -26,7 +25,6 @@ export const CONTENT_SLOTS = [
   'project-section-body',
   'event-body',
   'page-body',
-  'news-body',
 ] as const;
 export type ContentSlot = (typeof CONTENT_SLOTS)[number];
 

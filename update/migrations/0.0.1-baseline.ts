@@ -50,7 +50,6 @@ export const baselineSql: string[] = [
 	\`familyUuid\` text NOT NULL,
 	\`contentHash\` text NOT NULL,
 	\`settingsKey\` text NOT NULL,
-	\`settingsVersion\` integer NOT NULL,
 	\`settings\` text,
 	\`type\` text NOT NULL,
 	\`size\` integer NOT NULL,

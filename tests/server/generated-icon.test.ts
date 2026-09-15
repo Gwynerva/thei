@@ -24,7 +24,7 @@ describe('generated fallback icons', () => {
 
     expect(first).toEqual(second);
     expect(first.src).toMatch(
-      /^\/media\/generated-icons\/project\/[a-f0-9]{64}\.webp$/,
+      /^\/media\/generated-icons\/project\/[a-f0-9]{64}\.avif$/,
     );
     expect(first.src).not.toContain('/v1/');
     expect(first.previewSrc).toBe(first.src);
@@ -48,7 +48,7 @@ describe('generated fallback icons', () => {
 
     expect(first).toEqual(second);
     expect(first.src).toMatch(
-      /^\/media\/generated-icons\/page\/[a-f0-9]{64}\.webp$/,
+      /^\/media\/generated-icons\/page\/[a-f0-9]{64}\.avif$/,
     );
     expect(first.src).not.toBe(resolveGeneratedIcon('page', 'pg-other').src);
   });

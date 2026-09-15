@@ -9,7 +9,6 @@ export interface CreateAssetData {
   slug: string;
   extension: string;
   settingsKey: string;
-  settingsVersion: number;
   settings?: AssetUploadSettings | null;
   type: AssetType;
   size: number;

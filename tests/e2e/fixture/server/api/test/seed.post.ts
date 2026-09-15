@@ -54,16 +54,15 @@ export default defineEventHandler(async (event) => {
       .webp()
       .toBuffer();
     const { asset } = await storeAsset({
-      buffer,
+      bytes: { buffer },
       extension: 'webp',
       familyUuid: `fixture-image-${height}`,
       settingsKey: 'fixture',
-      settingsVersion: 1,
       settings: null,
       type: AssetType.Image,
       meta: { width: 320, height, accent: { hue: 230, chroma: 0.15 } },
     });
-    const preview = await createMediaPreviewAsset(buffer, AssetType.Image);
+    const preview = await createMediaPreviewAsset({ buffer }, AssetType.Image);
     await attachMediaPreviewUsage(asset.assetUuid, preview.previewAssetUuid);
     media.push(asset);
   }

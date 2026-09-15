@@ -1,6 +1,5 @@
 import type {
   AssetMeta,
-  AssetMetaForType,
   AudioAssetMeta,
   ImageAssetMeta,
   OtherAssetMeta,
@@ -34,7 +33,6 @@ export interface BaseAssetVariantInfo<
   meta: TMeta | null;
   size: number;
   settingsKey: string;
-  settingsVersion: number;
   settings: TSettings;
   assetUrl: string;
   isUnprocessed: boolean;
@@ -87,20 +85,6 @@ export type AssetUploadResponse = AssetVariantInfo & {
   /** True when this request created a new stored file instead of reusing a match. */
   created: boolean;
 };
-
-export interface StoredAssetShape<TType extends AssetType = AssetType> {
-  assetUuid: string;
-  familyUuid: string;
-  contentHash: string;
-  slug: string;
-  extension: string;
-  settingsKey: string;
-  settingsVersion: number;
-  settings: AssetUploadSettings | null;
-  type: TType;
-  size: number;
-  meta: AssetMetaForType<TType> | null;
-}
 
 /**
  * Wider replace-result used when replacing any asset, including unknown file types

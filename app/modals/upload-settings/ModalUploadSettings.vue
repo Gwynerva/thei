@@ -9,6 +9,7 @@ import {
   buildAssetSettingsKey,
   createFileZipSettings,
   createImageTransformSettings,
+  normalizeAssetImageFormat,
   createOriginalAssetSettings,
   createVideoTransformSettings,
   type AssetFileZipSettings,
@@ -278,13 +279,13 @@ const recommendedEditSettings = computed<EditableSettings | null>(() => {
     resizeMode: configured?.resizeMode ?? 'inside',
     allowUpscale: configured?.allowUpscale ?? false,
   } as const;
+  const imageFormat = normalizeAssetImageFormat(configured?.imageFormat);
 
   if (sourceAssetType.value === AssetType.Image) {
-    return createImageTransformSettings(
-      imageQuality,
-      settingsDimensions,
-      common,
-    );
+    return createImageTransformSettings(imageQuality, settingsDimensions, {
+      ...common,
+      format: imageFormat,
+    });
   }
 
   return createVideoTransformSettings(videoQuality, settingsDimensions, {
@@ -305,6 +306,7 @@ const currentEditSettings = computed<EditableSettings | null>(() => {
     return createImageTransformSettings(quality.value, parsedDimensions.value, {
       resizeMode: resizeMode.value,
       allowUpscale: allowUpscale.value,
+      format: normalizeAssetImageFormat(profileConfig.value?.imageFormat),
     });
   }
 
@@ -400,7 +402,8 @@ const transformedFileComparison = computed(() => ({
 }));
 const expectedEditExtension = computed(() => {
   if (canZipSourceFile.value) return 'zip';
-  if (sourceAssetType.value === AssetType.Image) return 'webp';
+  if (sourceAssetType.value === AssetType.Image)
+    return normalizeAssetImageFormat(profileConfig.value?.imageFormat);
   if (sourceAssetType.value === AssetType.Video) return 'webm';
   return sourceFile.value.extension;
 });
@@ -887,6 +890,9 @@ function isEditableSettings(
 
 function busyText(uploading: string, processing: string): string {
   if (!uploadStatus.value) return uploading;
+  // A queued upload is not stalled, it is waiting for a processing slot, and
+  // saying so is the difference between patience and a reload.
+  if (uploadStatus.value.phase === 'queued') return phrase.value.upload_queued;
   if (uploadStatus.value.phase === 'processing') {
     return uploadStatus.value.progress !== undefined
       ? `${processing} ${Math.round(uploadStatus.value.progress * 100)}%`

@@ -2,9 +2,12 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import sharp from 'sharp';
+import { THEI_CONTENT_DIRS } from '../content-layout';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import { oklchToHex } from '#layers/thei/shared/accent-color';
 import { stringColorHue } from '#layers/thei/shared/utils/string-color';
+
+export const GENERATED_ICON_EXTENSION = 'avif';
 
 export const GENERATED_ICON_KINDS = ['project', 'page', 'author'] as const;
 
@@ -38,7 +41,7 @@ export function resolveGeneratedIcon(
 ): MediaDescriptor {
   const key = generatedIconKey(kind, seed);
   const accentHue = stringColorHue(key);
-  const src = `/media/generated-icons/${kind}/${key}.webp`;
+  const src = `/media/generated-icons/${kind}/${key}.${GENERATED_ICON_EXTENSION}`;
   return {
     src,
     previewSrc: src,
@@ -58,7 +61,11 @@ export function resolveEntityIconMedia(
 }
 
 export function generatedIconFilePath(kind: GeneratedIconKind, key: string) {
-  return THEI_SERVER.contentPath('generated-media', kind, `${key}.webp`);
+  return THEI_SERVER.contentPath(
+    THEI_CONTENT_DIRS.generatedMedia,
+    kind,
+    `${key}.${GENERATED_ICON_EXTENSION}`,
+  );
 }
 
 export async function ensureGeneratedIcon(
@@ -88,7 +95,7 @@ export async function ensureGeneratedIcon(
   const svg = buildIconSvg(kind, accentHue);
   const buffer = await sharp(Buffer.from(svg))
     .resize(GENERATED_ICON_SIZE, GENERATED_ICON_SIZE)
-    .webp({ quality: 82, effort: 6 })
+    .avif({ quality: 50, effort: 4 })
     .toBuffer();
   const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
   await mkdir(dirname(filePath), { recursive: true });
@@ -110,7 +117,7 @@ export async function ensureGeneratedIcon(
 function generatedIconTemplateSignature() {
   return createHash('sha256')
     .update(
-      `${GENERATED_ICON_SIZE}:webp82:${buildIconSvg.toString()}:${oklchToHex.toString()}`,
+      `${GENERATED_ICON_SIZE}:${GENERATED_ICON_EXTENSION}50:${buildIconSvg.toString()}:${oklchToHex.toString()}`,
     )
     .digest('hex');
 }

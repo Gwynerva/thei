@@ -1,5 +1,9 @@
 export interface AssetUploadProgress {
-  phase: 'processing';
+  /**
+   * `queued` means the upload is waiting for a processing slot. Without it a
+   * queued upload is indistinguishable from a stalled one.
+   */
+  phase: 'queued' | 'processing';
   progress?: number;
 }
 
@@ -19,5 +23,5 @@ export function getAssetUploadProgress(uploadId: string) {
 
 export function clearAssetUploadProgress(uploadId: string | undefined) {
   if (!uploadId) return;
-  setTimeout(() => uploadProgress.delete(uploadId), 60_000);
+  setTimeout(() => uploadProgress.delete(uploadId), 60_000).unref();
 }

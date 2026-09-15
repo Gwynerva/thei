@@ -10,7 +10,6 @@ describe('asset upload request parsing', () => {
   it('canonicalizes image transform settings', () => {
     const settings = parseAssetUploadSettings(
       JSON.stringify({
-        version: 5,
         type: 'image-transform',
         quality: 70.4,
         dimensions: { width: 1200, height: 675 },
@@ -21,12 +20,37 @@ describe('asset upload request parsing', () => {
     );
 
     expect(settings).toEqual({
-      version: 5,
       type: 'image-transform',
       quality: 70,
       dimensions: { width: 1200, height: 675 },
       resizeMode: 'cover',
       allowUpscale: true,
+      format: 'avif',
+    });
+  });
+
+  it('accepts and canonicalizes settings carrying a stale version field', () => {
+    // The version check used to reject these outright, which meant a browser
+    // tab opened before an update started failing every upload. The per-field
+    // validation below is the real guard, so a stray field is just dropped.
+    expect(
+      parseAssetUploadSettings(
+        JSON.stringify({
+          version: 4,
+          type: 'image-transform',
+          quality: 70,
+          dimensions: { width: 1200, height: 675 },
+          resizeMode: 'cover',
+          allowUpscale: true,
+        }),
+      ),
+    ).toEqual({
+      type: 'image-transform',
+      quality: 70,
+      dimensions: { width: 1200, height: 675 },
+      resizeMode: 'cover',
+      allowUpscale: true,
+      format: 'avif',
     });
   });
 
@@ -34,7 +58,6 @@ describe('asset upload request parsing', () => {
     expect(() =>
       parseAssetUploadSettings(
         JSON.stringify({
-          version: 5,
           type: 'image-transform',
           quality: 70,
           dimensions: { width: 1200.5 },
@@ -47,7 +70,6 @@ describe('asset upload request parsing', () => {
     expect(() =>
       parseAssetUploadSettings(
         JSON.stringify({
-          version: 5,
           type: 'video-transform',
           quality: 70,
           dimensions: { width: ASSET_UPLOAD_MAX_DIMENSION + 1 },

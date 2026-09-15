@@ -913,6 +913,7 @@ export default defineI18nModule({
     upload_apply_settings: 'Создать вариант',
     upload_uploading: 'Загрузка...',
     upload_processing: 'Обработка...',
+    upload_queued: 'Ожидание в очереди...',
     upload_quality: 'Качество',
     upload_dimensions: 'Разрешение',
     upload_reset_dimensions: 'Сброс',
