@@ -62,13 +62,8 @@ for TLS. The example file has the exact commands.
 Open **Updates** in the admin panel. It shows the installed version, checks for
 a newer release tag, and updates on one click.
 
-There is no backup step. If you want one, copy `content/` before you start:
-
-```bash
-systemctl stop thei
-cp -a /opt/thei/content /opt/thei/content.backup
-systemctl start thei
-```
+Set up backups before you start — see below. The update itself never touches
+`content/`, but a restore point costs nothing to have.
 
 What happens when you press the button:
 
@@ -122,6 +117,94 @@ migration runs again from where it stopped.
 Rollback does **not** undo migrations. If an update applied one, the older
 engine will refuse to open the content and say so. Reinstall the newer version
 instead.
+
+## Backups
+
+`content/` is the only directory that is yours, and it lives on one machine.
+The engine does not push copies anywhere; instead it hands them out, and a
+machine you control pulls them.
+
+### Setting it up
+
+1. Open **Settings → Backups** in the admin panel, generate a token, and copy
+   it. It is shown once.
+2. Download `thei-backup.mjs` from the same place onto the machine that will
+   keep the copies. It needs Node 20 or newer and nothing else — no install
+   step, no dependencies.
+3. Run `node thei-backup.mjs`, enter the site address, the token and a
+   destination folder, then install the weekly schedule.
+
+The schedule fires daily and backs up only when a week has passed. That is what
+lets a machine that was switched off at the appointed hour catch up on its own,
+and what lets a manual backup restart the week without touching the scheduler.
+
+Copies are named by when they finished:
+
+```
+auto-20260915T030000Z/     the three newest scheduled copies
+manual-20260910T142233Z/   manual copies, kept until you delete them
+```
+
+Scheduled copies rotate three deep; a new one is renamed into place before the
+oldest is removed, so the destination is never without a complete copy. Manual
+copies do not take a slot and are never rotated out.
+
+### What is in a copy, and what is not
+
+|                                               |                                                              |
+| --------------------------------------------- | ------------------------------------------------------------ |
+| `thei.db`                                     | a consistent snapshot, taken through SQLite's own backup API |
+| `thei.config.json`                            | version, language, access level, password hash               |
+| `assets/`                                     | uploaded originals and every derived variant                 |
+| `generated-media/`, `external-link-favicons/` | **not copied** — caches the site rebuilds on demand          |
+
+A copy therefore contains your site's credentials. Keep the destination folder
+somewhere you would be willing to keep a password file.
+
+Anything else found in `content/` is listed as skipped and left alone. Nothing
+the engine creates falls into that category, so if you see a name there, it is
+worth knowing why it exists.
+
+### Restoring
+
+Stop the service, swap the directory, start it again:
+
+```bash
+systemctl stop thei
+mv /opt/thei/content /opt/thei/content.broken
+cp -a /path/to/backup/auto-20260915T030000Z /opt/thei/content
+chown -R thei:thei /opt/thei/content
+systemctl start thei
+```
+
+Three things that are easy to get wrong:
+
+1. **Ownership.** The service runs as the `thei` user. A copy unpacked as root
+   is not writable by it.
+2. **Version.** Restore onto the same engine version or a newer one. A newer
+   engine migrates the content on boot; an older one refuses to open it and
+   says so.
+3. **No journal files.** The snapshot is one whole database file. This is also
+   why a copy made with a plain `cp` of a running instance is not safe to
+   restore: it can capture the database mid-write.
+
+A minute after startup the engine reconciles the database against the files on
+disk, and the caches refill as pages are visited. Both are part of a restore,
+not a fault.
+
+### While a backup is running
+
+Nothing needs to be stopped. The database snapshot is taken first and the file
+list is walked after it, so the two halves agree: a file that appears later is
+absent from the snapshot too, and a file reclaimed during the transfer is
+garbage the snapshot either does not reference or references through a row the
+restored instance clears itself. Files that were live when the snapshot was
+taken are protected by cleanup's own 24 hour grace period, which is far longer
+than a transfer. The weekly file sweep steps aside while a session is open so
+the two are not walking the same tree at once.
+
+Only one backup may run at a time. A session left open by a client that died,
+or by a server restart, is reclaimed automatically.
 
 ## Migrations
 
@@ -210,3 +293,5 @@ Only `major.minor.patch` tags are offered as updates; prerelease tags such as
 | `output.ts`   | Swaps a staged build into place and repoints Nitro's links.    |
 | `semver.ts`   | Version comparison.                                            |
 | `scripts/`    | `generate-baseline.mts`, run by `bun run db:baseline`.         |
+
+The backup client itself lives outside this folder, in `backup/`.

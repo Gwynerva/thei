@@ -41,8 +41,23 @@ export interface AssetBatchResult {
   errors: AssetBatchError[];
 }
 
-export async function launchAssetWizard(
+/**
+ * Every wizard runs inside `runModalFlow`.
+ *
+ * A wizard settles one modal before it opens the next, so the stack drops by
+ * one between steps — to zero when the wizard was launched from a page rather
+ * than from another modal. The flow marker tells the history interceptor that
+ * the layer is still occupied, so it does not hand the sentinel entry back and
+ * race the next step.
+ */
+export function launchAssetWizard(
   options: AssetWizardOptions = {},
+): Promise<AssetVariantInfo | undefined> {
+  return runModalFlow(() => runAssetWizard(options));
+}
+
+async function runAssetWizard(
+  options: AssetWizardOptions,
 ): Promise<AssetVariantInfo | undefined> {
   const accept = options.accept ?? anyFileExtensionProfile;
   const maxSize = resolveAssetMaxSize(options.sizeLimitPolicy, options.maxSize);
@@ -63,7 +78,10 @@ export async function launchAssetWizard(
     while (true) {
       if (step === 'pick') {
         cleanupPickedFile();
+        // Both possible next steps are preloaded, so replacing this modal costs
+        // a microtask instead of a chunk fetch.
         editFileModal.component();
+        assetLibraryModal.component();
 
         const pickResult = await openModal(pickReuseFileModal, {
           accept,
@@ -138,8 +156,14 @@ export async function launchAssetWizard(
   }
 }
 
-export async function launchAssetBatchWizard(
+export function launchAssetBatchWizard(
   options: AssetWizardOptions = {},
+): Promise<AssetBatchResult | undefined> {
+  return runModalFlow(() => runAssetBatchWizard(options));
+}
+
+async function runAssetBatchWizard(
+  options: AssetWizardOptions,
 ): Promise<AssetBatchResult | undefined> {
   const accept = options.accept ?? anyFileExtensionProfile;
   const maxSize = resolveAssetMaxSize(options.sizeLimitPolicy, options.maxSize);
@@ -262,9 +286,16 @@ async function uploadOriginalFile(
   });
 }
 
-export async function launchAssetEditor(
+export function launchAssetEditor(
   asset: AssetVariantInfo,
   options: AssetWizardOptions = {},
+): Promise<AssetVariantInfo | undefined> {
+  return runModalFlow(() => runAssetEditor(asset, options));
+}
+
+async function runAssetEditor(
+  asset: AssetVariantInfo,
+  options: AssetWizardOptions,
 ): Promise<AssetVariantInfo | undefined> {
   while (true) {
     const editResult = await openModal(editFileModal, {

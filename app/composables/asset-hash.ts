@@ -36,10 +36,17 @@ export function hashLocalAsset(
       // cancelable UX with a WebCrypto fallback instead of sending file bytes.
       cleanup();
       try {
-        const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+        const digest = await crypto.subtle.digest(
+          'SHA-256',
+          await file.arrayBuffer(),
+        );
         if (signal.aborted) return;
         onProgress(1);
-        resolve(Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join(''));
+        resolve(
+          Array.from(new Uint8Array(digest), (byte) =>
+            byte.toString(16).padStart(2, '0'),
+          ).join(''),
+        );
       } catch {
         reject(new Error(event.message || 'Hash failed'));
       }

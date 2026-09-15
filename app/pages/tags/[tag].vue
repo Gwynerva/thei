@@ -33,6 +33,23 @@ usePublicSeo({
     () => tag.value.description ?? phrase.value.public_tags_description,
   ),
   canonical,
+  pageType: 'CollectionPage',
+  breadcrumbs: () => [{ name: phrase.value.tags, path: '/tags/' }],
+  image: () => tag.value.iconMedia?.src,
+  entities: () => [
+    {
+      '@type': 'ItemList',
+      '@id': '#list',
+      numberOfItems: tag.value.items.total,
+      itemListElement: tag.value.items.items.map((item, index) => ({
+        '@type': 'ListItem',
+        position:
+          (tag.value.items.page - 1) * tag.value.items.pageSize + index + 1,
+        url: item.href,
+        name: item.title,
+      })),
+    },
+  ],
 });
 
 function tabTo(tab: 'projects' | 'events') {

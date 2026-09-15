@@ -61,9 +61,17 @@ const showcase = [
   },
 ];
 const fieldValue = computed<ContentFieldModelValue>(() => ({
-  data: { blocks: [{ type: 'contentMedia', data: {
-    asset: { assetUuid: 'ambient-preview', media: banner.value }, layout: 'centered',
-  } }] },
+  data: {
+    blocks: [
+      {
+        type: 'contentMedia',
+        data: {
+          asset: { assetUuid: 'ambient-preview', media: banner.value },
+          layout: 'centered',
+        },
+      },
+    ],
+  },
 }));
 </script>
 
@@ -114,12 +122,23 @@ const fieldValue = computed<ContentFieldModelValue>(() => ({
     </div>
     <div class="mx-auto grid max-w-180 gap-sm p-sm" data-admin-previews>
       <FieldContentEditor :model-value="fieldValue" data-test-field />
-      <AssetTile :media="banner" class="size-24" @click="() => undefined" data-test-tile>
-        <template #overlay><button type="button" data-test-nested>Details</button></template>
+      <AssetTile
+        :media="banner"
+        class="size-24"
+        @click="() => undefined"
+        data-test-tile
+      >
+        <template #overlay
+          ><button type="button" data-test-nested>Details</button></template
+        >
       </AssetTile>
       <ContentProjectLinkPreviewCard
-        title="Editor link" summary="Hover or focus to play" :icon-media="banner"
-        playback="interaction" :interactive="false" data-test-editor-link
+        title="Editor link"
+        summary="Hover or focus to play"
+        :icon-media="banner"
+        playback="interaction"
+        :interactive="false"
+        data-test-editor-link
       />
     </div>
     <button type="button" data-clear-focus>Leave previews</button>

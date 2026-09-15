@@ -86,7 +86,7 @@ test('life confirms reading and preserves date navigation through browser histor
       () =>
         page.evaluate(() =>
           localStorage.getItem('thei:life:last-viewed-date:v1'),
-      ),
+        ),
       { timeout: 7000 },
     )
     .toBe(newestDate);

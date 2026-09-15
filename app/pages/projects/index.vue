@@ -18,6 +18,21 @@ usePublicSeo({
   canonical: computed(() =>
     buildPublicCanonical('/projects/', { page: projects.value.page }),
   ),
+  pageType: 'CollectionPage',
+  entities: () => [
+    {
+      '@type': 'ItemList',
+      '@id': '#list',
+      numberOfItems: projects.value.total,
+      itemListElement: projects.value.items.map((item, index) => ({
+        '@type': 'ListItem',
+        position:
+          (projects.value.page - 1) * projects.value.pageSize + index + 1,
+        url: item.href,
+        name: item.title,
+      })),
+    },
+  ],
 });
 </script>
 

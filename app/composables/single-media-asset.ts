@@ -87,7 +87,14 @@ export function useSingleMediaAsset(options: SingleMediaAssetOptions) {
     }
   }
 
-  async function open() {
+  // One flow: the details modal, the editor it hands off to, and the details
+  // modal it comes back to replace one another, so the stack is momentarily
+  // empty between them whenever this is opened from a page.
+  function open() {
+    return runModalFlow(runOpen);
+  }
+
+  async function runOpen() {
     const assetUuid = options.getAssetUuid();
     if (assetUuid) {
       try {

@@ -411,6 +411,36 @@ export default defineI18nBase({
     disk_thei_files: 'Thei files',
     disk_other_files: 'Other files',
     disk_free_space: 'Free',
+    backups: 'Backups',
+    backups_description:
+      'A copy of `content/` pulled onto a machine you control. Generate a ' +
+      'token, download the script, and run it there.',
+    backup_last: 'Last backup',
+    backup_never: 'No backup yet',
+    backup_stale_warning:
+      'No backup has completed in over a week. Everything in `content/` is ' +
+      'only on this server.',
+    backup_kind_auto: 'Scheduled',
+    backup_kind_manual: 'Manual',
+    backup_token: 'Backup token',
+    backup_token_hint:
+      'The backup script authenticates with this. Anyone holding it can ' +
+      'download all of your content, so treat it like a password.',
+    backup_token_generate: 'Generate a token',
+    backup_token_regenerate: 'Replace the token',
+    backup_token_revoke: 'Revoke',
+    backup_token_missing: 'No token — backups cannot run',
+    backup_token_active: 'A token is active',
+    backup_token_shown_once:
+      'Copy it now. It is shown once and cannot be read back; a lost token is ' +
+      'replaced, not recovered.',
+    backup_script_download: 'Download the script',
+    backup_setup_hint:
+      'On the machine that will keep the copies, run `node thei-backup.mjs`, ' +
+      'enter this address and the token, then install the weekly schedule.',
+    backup_history: 'Recent runs',
+    backup_run_summary: (files: number, size: string) =>
+      `${files} files, ${size}`,
     admin_updates: 'Updates',
     updates_description:
       'Keep Thei up to date. Updating replaces the engine and restarts the ' +

@@ -55,7 +55,6 @@ const {
   cancel,
 } = useLifeFeed(resource.data.value, period.value, root);
 const publicAdmin = await usePublicAdmin();
-const requestUrl = useRequestURL();
 const seoPeriod = ref(period.value);
 const seoPeriodLabel = computed(() =>
   formatLifeSeoPeriod(seoPeriod.value, publicAdmin.value.languageCode),
@@ -79,60 +78,26 @@ usePublicSeo({
   title: seoTitle,
   description: seoDescription,
   canonical: seoCanonical,
-});
-useHead(() => {
-  const pageUrl = new URL(seoCanonical.value, requestUrl.origin).toString();
-  const breadcrumbId = `${pageUrl}#breadcrumb`;
-  const periods = seoPeriod.value
-    ? seoPeriod.value
-        .split('-')
-        .map((_, index, values) => values.slice(0, index + 1).join('-'))
-    : [];
-  const items = [
-    {
-      '@type': 'ListItem',
-      position: 1,
-      name: phrase.value.life,
-      item: new URL('/life/', requestUrl.origin).toString(),
-    },
-    ...periods.map((period, index) => ({
-      '@type': 'ListItem',
-      position: index + 2,
-      name:
-        formatLifeSeoPeriod(period, publicAdmin.value.languageCode) ?? period,
-      item: new URL(buildLifeUrl(period), requestUrl.origin).toString(),
-    })),
-  ];
-  return {
-    script: [
-      {
-        key: 'life-page-jsonld',
-        type: 'application/ld+json',
-        textContent: serializeJsonLd({
-          '@context': 'https://schema.org',
-          '@graph': [
-            {
-              '@type': 'WebPage',
-              '@id': `${pageUrl}#webpage`,
-              url: pageUrl,
-              name: `${seoTitle.value} — ${publicAdmin.value.displayName}`,
-              description: seoDescription.value,
-              inLanguage: publicAdmin.value.languageCode,
-              isPartOf: {
-                '@id': `${new URL('/', requestUrl.origin).toString()}#website`,
-              },
-              breadcrumb: { '@id': breadcrumbId },
-            },
-            {
-              '@type': 'BreadcrumbList',
-              '@id': breadcrumbId,
-              itemListElement: items,
-            },
-          ],
-        }),
-      },
-    ],
-  };
+  pageType: 'CollectionPage',
+  // The tab title reads "6 April 2027 · Life"; a trail ending in the period
+  // alone reads better and does not repeat the crumb above it.
+  breadcrumbName: () => seoPeriodLabel.value,
+  breadcrumbs: () => {
+    if (!seoPeriod.value) return [];
+    const parts = seoPeriod.value.split('-');
+    return [
+      { name: phrase.value.life, path: '/life/' },
+      // Every period above this one; the page itself is appended by the
+      // composable, so the deepest is left out here.
+      ...parts.slice(0, -1).map((_, index) => {
+        const period = parts.slice(0, index + 1).join('-');
+        return {
+          name: formatLifeSeoPeriod(period, language.value.code) ?? period,
+          path: buildLifeUrl(period),
+        };
+      }),
+    ];
+  },
 });
 const lifeLastVisit = useLifeLastVisit({ activeDate, newestDate });
 watch([activeDate, mounted, positioned], ([date]) => {
@@ -176,10 +141,7 @@ function gapTone(row: LifeFeedRow): LifeRailTone {
 </script>
 
 <template>
-  <main
-    :data-life-period="period || ''"
-    :data-life-newest-date="newestDate"
-  >
+  <main :data-life-period="period || ''" :data-life-newest-date="newestDate">
     <div class="m-auto w-(--width-wide) max-w-full px-window pt-lg pb-md">
       <PublicPageHeader
         icon="heart"

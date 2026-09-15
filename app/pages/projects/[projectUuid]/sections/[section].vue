@@ -26,6 +26,26 @@ usePublicSeo({
   description: () => data.value.summary,
   canonical,
   noIndex: () => data.value.project.access === 'link-only',
+  breadcrumbs: () => [
+    { name: phrase.value.projects, path: '/projects/' },
+    { name: data.value.project.title, path: data.value.project.href },
+  ],
+  image: () => data.value.media?.src,
+  entities: () => [
+    {
+      '@type': 'CreativeWork',
+      '@id': '#section',
+      name: data.value.title,
+      description: data.value.summary,
+      dateCreated: data.value.date,
+      ...(data.value.media ? { image: data.value.media.src } : {}),
+      isPartOf: {
+        '@type': 'CreativeWork',
+        name: data.value.project.title,
+        url: data.value.project.href,
+      },
+    },
+  ],
 });
 const details = computed(
   () =>

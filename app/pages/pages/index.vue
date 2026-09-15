@@ -8,6 +8,23 @@ usePublicSeo({
   title: computed(() => phrase.value.pages),
   description: computed(() => phrase.value.public_pages_description),
   canonical: '/pages/',
+  pageType: 'CollectionPage',
+  entities: () => [
+    {
+      '@type': 'ItemList',
+      '@id': '#list',
+      numberOfItems: pages.value.length,
+      // This listing is not paginated, so the list can be arbitrarily long.
+      // `numberOfItems` still reports the whole set; the elements are a
+      // sample, which is all a crawler needs and keeps the markup bounded.
+      itemListElement: pages.value.slice(0, 100).map((item, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        url: item.href,
+        name: item.title,
+      })),
+    },
+  ],
 });
 </script>
 

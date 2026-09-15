@@ -20,9 +20,7 @@ export default defineEventHandler(
       variants: await Promise.all(
         assets.map(async (asset) => ({
           ...(await buildAssetVariantInfo(asset)),
-          usageCount: await THEI_SERVER.assets.countPlacements(
-            asset.assetUuid,
-          ),
+          usageCount: await THEI_SERVER.assets.countPlacements(asset.assetUuid),
         })),
       ),
     };

@@ -1,4 +1,8 @@
-import { isContentEmpty, normalizeContentData, type ContentFieldModelValue } from './content';
+import {
+  isContentEmpty,
+  normalizeContentData,
+  type ContentFieldModelValue,
+} from './content';
 import {
   dateRangeEndTime,
   dateRangeStartTime,
@@ -26,15 +30,23 @@ export type ProjectStageContentItem = ProjectContentItemBase & {
   periods: DateRange[];
 };
 
-export type ProjectSectionContentItem = Omit<ProjectContentItemBase, 'content'> & {
+export type ProjectSectionContentItem = Omit<
+  ProjectContentItemBase,
+  'content'
+> & {
   isStage: false;
   sectionUuid?: string;
   content: ContentFieldModelValue;
 };
 
-export type ProjectContentItemEditItem = ProjectStageContentItem | ProjectSectionContentItem;
-export type ProjectStageContentValue = ProjectStageContentItem & { stageUuid: string };
-export type ProjectSectionContentValue = ProjectSectionContentItem & { sectionUuid: string };
+export type ProjectContentItemEditItem =
+  ProjectStageContentItem | ProjectSectionContentItem;
+export type ProjectStageContentValue = ProjectStageContentItem & {
+  stageUuid: string;
+};
+export type ProjectSectionContentValue = ProjectSectionContentItem & {
+  sectionUuid: string;
+};
 
 export function normalizeProjectContentItemId(value: unknown) {
   if (typeof value !== 'string') return undefined;
@@ -42,29 +54,48 @@ export function normalizeProjectContentItemId(value: unknown) {
   return id || undefined;
 }
 
-export function normalizeProjectStages(value: unknown): ProjectStageContentItem[] | undefined {
+export function normalizeProjectStages(
+  value: unknown,
+): ProjectStageContentItem[] | undefined {
   if (value === undefined) return undefined;
-  if (!Array.isArray(value)) throw new ProjectContentItemError('Invalid stages');
+  if (!Array.isArray(value))
+    throw new ProjectContentItemError('Invalid stages');
   return value.map(normalizeProjectStage).sort(compareProjectStages);
 }
 
-export function compareProjectStages(left: ProjectStageContentItem, right: ProjectStageContentItem) {
-  return dateRangeStartTime(left.periods[0]!.startDate) - dateRangeStartTime(right.periods[0]!.startDate) ||
-    dateRangeEndTime(left.periods[0]!.endDate) - dateRangeEndTime(right.periods[0]!.endDate);
+export function compareProjectStages(
+  left: ProjectStageContentItem,
+  right: ProjectStageContentItem,
+) {
+  return (
+    dateRangeStartTime(left.periods[0]!.startDate) -
+      dateRangeStartTime(right.periods[0]!.startDate) ||
+    dateRangeEndTime(left.periods[0]!.endDate) -
+      dateRangeEndTime(right.periods[0]!.endDate)
+  );
 }
 
 export function normalizeStagePeriods(value: unknown): DateRange[] {
   if (!Array.isArray(value) || value.length === 0)
     throw new ProjectContentItemError('Stage period is required');
-  const sorted = value.map((period) => {
-    if (!period || typeof period !== 'object') throw new ProjectContentItemError('Invalid stage period');
-    const source = period as Record<string, unknown>;
-    if (!isDateRangeValue(source.startDate) || !isDateRangeValue(source.endDate) ||
-      dateRangeStartTime(source.startDate) > dateRangeEndTime(source.endDate))
-      throw new ProjectContentItemError('Invalid stage period');
-    return { startDate: source.startDate, endDate: source.endDate };
-  }).sort((a, b) => dateRangeStartTime(a.startDate) - dateRangeStartTime(b.startDate) ||
-    dateRangeEndTime(a.endDate) - dateRangeEndTime(b.endDate));
+  const sorted = value
+    .map((period) => {
+      if (!period || typeof period !== 'object')
+        throw new ProjectContentItemError('Invalid stage period');
+      const source = period as Record<string, unknown>;
+      if (
+        !isDateRangeValue(source.startDate) ||
+        !isDateRangeValue(source.endDate) ||
+        dateRangeStartTime(source.startDate) > dateRangeEndTime(source.endDate)
+      )
+        throw new ProjectContentItemError('Invalid stage period');
+      return { startDate: source.startDate, endDate: source.endDate };
+    })
+    .sort(
+      (a, b) =>
+        dateRangeStartTime(a.startDate) - dateRangeStartTime(b.startDate) ||
+        dateRangeEndTime(a.endDate) - dateRangeEndTime(b.endDate),
+    );
   const merged: DateRange[] = [];
   for (const period of sorted) {
     const previous = merged.at(-1);
@@ -75,19 +106,29 @@ export function normalizeStagePeriods(value: unknown): DateRange[] {
   return merged;
 }
 
-export function normalizeProjectContentSections(value: unknown): ProjectSectionContentItem[] | undefined {
+export function normalizeProjectContentSections(
+  value: unknown,
+): ProjectSectionContentItem[] | undefined {
   if (value === undefined) return undefined;
-  if (!Array.isArray(value)) throw new ProjectContentItemError('Invalid content sections');
+  if (!Array.isArray(value))
+    throw new ProjectContentItemError('Invalid content sections');
   return value.map((item) => {
-    if (!item || typeof item !== 'object') throw new ProjectContentItemError('Invalid content section');
+    if (!item || typeof item !== 'object')
+      throw new ProjectContentItemError('Invalid content section');
     const source = item as Record<string, unknown>;
     const title = typeof source.title === 'string' ? source.title.trim() : '';
-    if (!title) throw new ProjectContentItemError('Content section title cannot be empty');
-    if (typeof source.isPrivate !== 'boolean') throw new ProjectContentItemError('Invalid content section privacy');
-    if (!source.content || typeof source.content !== 'object') throw new ProjectContentItemError('Content section cannot be empty');
+    if (!title)
+      throw new ProjectContentItemError(
+        'Content section title cannot be empty',
+      );
+    if (typeof source.isPrivate !== 'boolean')
+      throw new ProjectContentItemError('Invalid content section privacy');
+    if (!source.content || typeof source.content !== 'object')
+      throw new ProjectContentItemError('Content section cannot be empty');
     const contentSource = source.content as Record<string, unknown>;
     const data = normalizeContentData(contentSource.data);
-    if (isContentEmpty(data)) throw new ProjectContentItemError('Content section cannot be empty');
+    if (isContentEmpty(data))
+      throw new ProjectContentItemError('Content section cannot be empty');
     return {
       isStage: false as const,
       sectionUuid: normalizeProjectContentItemId(source.sectionUuid),
@@ -99,7 +140,9 @@ export function normalizeProjectContentSections(value: unknown): ProjectSectionC
       content: {
         contentUuid: normalizeProjectContentItemId(contentSource.contentUuid),
         data,
-        ...(typeof contentSource.updatedAt === 'number' ? { updatedAt: contentSource.updatedAt } : {}),
+        ...(typeof contentSource.updatedAt === 'number'
+          ? { updatedAt: contentSource.updatedAt }
+          : {}),
       },
     };
   });
@@ -108,11 +151,13 @@ export function normalizeProjectContentSections(value: unknown): ProjectSectionC
 export class ProjectContentItemError extends Error {}
 
 function normalizeProjectStage(value: unknown): ProjectStageContentItem {
-  if (!value || typeof value !== 'object') throw new ProjectContentItemError('Invalid stage');
+  if (!value || typeof value !== 'object')
+    throw new ProjectContentItemError('Invalid stage');
   const source = value as Record<string, unknown>;
   const title = typeof source.title === 'string' ? source.title.trim() : '';
   if (!title) throw new ProjectContentItemError('Stage title cannot be empty');
-  if (typeof source.isPrivate !== 'boolean') throw new ProjectContentItemError('Invalid stage privacy');
+  if (typeof source.isPrivate !== 'boolean')
+    throw new ProjectContentItemError('Invalid stage privacy');
   const contentSource = source.content as Record<string, unknown> | null;
   return {
     isStage: true,
@@ -123,11 +168,17 @@ function normalizeProjectStage(value: unknown): ProjectStageContentItem {
     publicId: normalizeProjectContentItemPublicId(source.publicId),
     isPrivate: source.isPrivate,
     periods: normalizeStagePeriods(source.periods),
-    content: contentSource ? {
-      contentUuid: normalizeProjectContentItemId(contentSource.contentUuid),
-      data: normalizeContentData(contentSource.data),
-      ...(typeof contentSource.updatedAt === 'number' ? { updatedAt: contentSource.updatedAt } : {}),
-    } : source.content === null ? null : undefined,
+    content: contentSource
+      ? {
+          contentUuid: normalizeProjectContentItemId(contentSource.contentUuid),
+          data: normalizeContentData(contentSource.data),
+          ...(typeof contentSource.updatedAt === 'number'
+            ? { updatedAt: contentSource.updatedAt }
+            : {}),
+        }
+      : source.content === null
+        ? null
+        : undefined,
   };
 }
 

@@ -12,6 +12,7 @@ export async function bootTheiConfig() {
     siteAccessLevel: config.siteAccessLevel,
     secretPhrase: config.secretPhrase,
     password: config.password,
+    backup: config.backup,
   });
 
   THEI_SERVER.console.tag('Boot').log('Config checked and loaded!');

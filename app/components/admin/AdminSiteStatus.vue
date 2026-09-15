@@ -2,6 +2,7 @@
 import type { SiteAccessLevel } from '#layers/thei/shared/access-level';
 import type { AdminDiskUsage } from '#layers/thei/shared/admin/disk-usage';
 import type { UpdateStatus } from '#layers/thei/update/types';
+import { isBackupStale, type BackupStatus } from '#layers/thei/shared/backup';
 
 type AdminSystemInfo = {
   theiVersion: string;
@@ -15,6 +16,7 @@ const [
   { data: systemInfo, error: systemError },
   { data: disk, error: diskError },
   { data: updates },
+  { data: backup },
 ] = await Promise.all([
   useFetch<AdminSystemInfo>('/api/admin/system-info', {
     key: 'admin-system-info',
@@ -24,7 +26,11 @@ const [
   }),
   // Uses whatever the last check found; it never reaches out on its own.
   useFetch<UpdateStatus>('/api/admin/updates', { key: 'admin-updates' }),
+  useFetch<BackupStatus>('/api/admin/backup', { key: 'admin-backup' }),
 ]);
+
+const lastBackupAt = computed(() => backup.value?.lastBackup?.completedAt);
+const backupStale = computed(() => isBackupStale(lastBackupAt.value));
 
 const segments = computed(() => {
   const total = disk.value?.total ?? 0;
@@ -140,6 +146,24 @@ const segments = computed(() => {
           </template>
         </div>
       </div>
+    </div>
+
+    <div
+      class="flex flex-wrap items-center gap-x-xs border-t border-border-1 px-xs
+        py-1 text-xs"
+      :class="backupStale ? 'bg-bg-error text-text-error' : 'text-text-3'"
+    >
+      <Icon :name="backupStale ? 'warning' : 'files'" class="shrink-0" />
+      <span>{{ phrase.backup_last }}:</span>
+      <TheiTime v-if="lastBackupAt" :datetime="lastBackupAt" />
+      <span v-else>{{ phrase.backup_never }}</span>
+      <TheiLink
+        v-if="backupStale"
+        to="/admin/settings/"
+        class="font-semibold underline-offset-2 hocus:underline"
+      >
+        {{ phrase.backup_stale_warning }}
+      </TheiLink>
     </div>
 
     <div

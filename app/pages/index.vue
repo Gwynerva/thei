@@ -22,6 +22,12 @@ const rewindResource = await useFetch<LifeRewindResponse>('/api/life/rewind', {
 });
 const rewind = useRequiredResource(rewindResource);
 
+const publicLinks = computed(() =>
+  profile.value.externalLinks
+    .filter((link) => !link.isPrivate)
+    .map((link) => link.url),
+);
+
 useHead({ titleTemplate: null });
 usePublicSeo({
   title: computed(() => {
@@ -32,6 +38,26 @@ usePublicSeo({
   }),
   description: computed(() => phrase.value.public_life_description),
   canonical: '/',
+  pageType: 'ProfilePage',
+  image: () => profile.value.avatarMedia.src,
+  entities: () => [
+    {
+      '@type': 'Person',
+      '@id': '#person',
+      name: profile.value.displayName,
+      ...(profile.value.nickname.trim()
+        ? { alternateName: profile.value.nickname.trim() }
+        : {}),
+      ...(profile.value.slogan.trim()
+        ? { description: profile.value.slogan.trim() }
+        : {}),
+      image: profile.value.avatarMedia.src,
+      url: '/',
+      // `getProfileLinks` hands an admin their private links too, and those
+      // describe the person to nobody but the admin.
+      ...(publicLinks.value.length ? { sameAs: publicLinks.value } : {}),
+    },
+  ],
 });
 </script>
 

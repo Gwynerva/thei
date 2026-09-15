@@ -91,38 +91,40 @@ defineExpose({ focus });
       v-else-if="results.length && !error"
       class="flex scrollbar-mini min-h-0 flex-col overflow-y-auto"
     >
-      <MediaInteraction v-for="project in results" :key="project.projectUuid" v-slot="{ engaged, events }">
-      <button v-on="events"
-        type="button"
-        class="group relative min-h-12 shrink-0 cursor-pointer overflow-hidden
-          border-b border-border-1 bg-bg-1 text-left transition last:border-b-0
-          hocus:bg-bg-3"
-        @click="emit('select', project)"
+      <MediaInteraction
+        v-for="project in results"
+        :key="project.projectUuid"
+        v-slot="{ engaged, events }"
       >
-        <div
-          class="project-search-icon absolute inset-y-0 left-0 w-12
-            "
+        <button
+          v-on="events"
+          type="button"
+          class="group relative min-h-12 shrink-0 cursor-pointer overflow-hidden
+            border-b border-border-1 bg-bg-1 text-left transition
+            last:border-b-0 hocus:bg-bg-3"
+          @click="emit('select', project)"
         >
-          <Media
-            v-bind="project.iconMedia"
-            variant="ambient"
-            playback="interaction"
-            :engaged
-            align="left"
-            class="size-full opacity-75 transition group-hocus:opacity-100"
-          />
-        </div>
-
-        <div class="relative ml-8 min-w-0 px-xs py-1">
-          <div class="truncate text-sm font-semibold">
-            {{ project.title }}
+          <div class="project-search-icon absolute inset-y-0 left-0 w-12">
+            <Media
+              v-bind="project.iconMedia"
+              variant="ambient"
+              playback="interaction"
+              :engaged
+              align="left"
+              class="size-full opacity-75 transition group-hocus:opacity-100"
+            />
           </div>
 
-          <div class="truncate text-xs text-text-3">
-            {{ project.summary }}
+          <div class="relative ml-8 min-w-0 px-xs py-1">
+            <div class="truncate text-sm font-semibold">
+              {{ project.title }}
+            </div>
+
+            <div class="truncate text-xs text-text-3">
+              {{ project.summary }}
+            </div>
           </div>
-        </div>
-      </button>
+        </button>
       </MediaInteraction>
     </div>
     <div v-else-if="!error" class="p-sm text-center text-xs text-text-3">

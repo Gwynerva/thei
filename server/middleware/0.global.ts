@@ -58,6 +58,13 @@ export default defineEventHandler(async (event) => {
         return sendRedirect(event, '/');
       }
 
+      // The backup client has no session cookie and cannot get one. Its routes
+      // authenticate themselves against the instance token, which also has to
+      // work while the site is private — a closed site still needs backups.
+      if (path.startsWith('/api/backup/')) {
+        return;
+      }
+
       const isAuthPath =
         path === '/sign-in/' ||
         (path === '/api/admin/session' && event.method === 'POST');
@@ -70,6 +77,10 @@ export default defineEventHandler(async (event) => {
       }
 
       if (THEI_SERVER.config.siteAccessLevel === SiteAccessLevel.Private) {
+        // Belongs on every response, not only the blocked ones: the admin
+        // browsing their own private site is served real pages, and a cached
+        // copy of one can outlive the switch back to public.
+        setHeader(event, 'X-Robots-Tag', 'noindex, nofollow');
         if (!isAdmin && !isAuthPath) {
           return blockRequest();
         }

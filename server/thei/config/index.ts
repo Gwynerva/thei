@@ -12,6 +12,16 @@ export interface TheiConfig {
     iterations: number;
     fallback?: string;
   };
+  /**
+   * Credential the backup client authenticates with.
+   *
+   * Optional and written lazily on first generation, so an instance installed
+   * before backups existed keeps a valid config without a migration.
+   */
+  backup?: {
+    token: string;
+    createdAt: string;
+  };
 }
 
 export let theiConfig: TheiConfig | undefined;

@@ -308,7 +308,7 @@ export class EntityLinkTool implements BlockTool {
             entityId: this.entityId,
             resolver: config.resolver,
             interactive: true,
-        playback: 'interaction',
+            playback: 'interaction',
           })
         : h(ContentAssetSkeleton, {
             icon: 'link',

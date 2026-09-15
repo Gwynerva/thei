@@ -13,9 +13,15 @@ export default defineEventHandler(async (event): Promise<TagItem[]> => {
   if (!body || typeof body !== 'object' || Array.isArray(body))
     throw createError({ statusCode: 400, message: 'Invalid request body' });
   if (typeof body.text !== 'undefined' && typeof body.text !== 'string')
-    throw createError({ statusCode: 400, message: 'Invalid recommendation text' });
+    throw createError({
+      statusCode: 400,
+      message: 'Invalid recommendation text',
+    });
   if ((body.text?.length ?? 0) > 20_000)
-    throw createError({ statusCode: 400, message: 'Recommendation text is too long' });
+    throw createError({
+      statusCode: 400,
+      message: 'Recommendation text is too long',
+    });
   const selectedItems = body.selectedTagUuids ?? [];
   if (
     !Array.isArray(selectedItems) ||
@@ -30,7 +36,11 @@ export default defineEventHandler(async (event): Promise<TagItem[]> => {
     throw createError({ statusCode: 400, message: 'Invalid project ID' });
   const selected = new Set(selectedItems);
   const { db, schema } = THEI_SERVER.useDb();
-  const tags = db.select().from(schema.tags).all().filter((tag) => !selected.has(tag.tagUuid));
+  const tags = db
+    .select()
+    .from(schema.tags)
+    .all()
+    .filter((tag) => !selected.has(tag.tagUuid));
 
   const coUsage = new Map<string, number>();
   if (selected.size) {

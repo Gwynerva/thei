@@ -19,6 +19,31 @@ usePublicSeo({
   description: () => data.value.summary,
   canonical,
   noIndex: () => data.value.access === 'link-only',
+  breadcrumbs: () => [{ name: phrase.value.projects, path: '/projects/' }],
+  image: () => (data.value.bannerMedia ?? data.value.iconMedia).src,
+  entities: () => [
+    {
+      '@type': 'CreativeWork',
+      '@id': '#project',
+      name: data.value.title,
+      description: data.value.summary,
+      dateCreated: data.value.chronology.createdAt,
+      ...(data.value.chronology.updatedAt
+        ? { dateModified: data.value.chronology.updatedAt }
+        : {}),
+      image: (data.value.bannerMedia ?? data.value.iconMedia).src,
+      ...(data.value.tags.length
+        ? { keywords: data.value.tags.map((tag) => tag.title).join(', ') }
+        : {}),
+      ...(data.value.stages.length + data.value.sections.length
+        ? {
+            hasPart: [...data.value.sections, ...data.value.stages].map(
+              (part) => ({ '@type': 'CreativeWork', url: part.href }),
+            ),
+          }
+        : {}),
+    },
+  ],
 });
 const linkCount = computed(
   () =>

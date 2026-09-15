@@ -54,7 +54,7 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
 <template>
   <div class="@container w-full min-w-0">
     <component
-    v-on="mediaEvents"
+      v-on="mediaEvents"
       :is="interactiveHref ? 'a' : 'div'"
       :href="interactiveHref"
       :target="interactiveHref ? '_blank' : undefined"

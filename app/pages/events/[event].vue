@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { PublicEventResponseFull } from '#layers/thei/shared/api/public';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
+import { coverDateRanges } from '#layers/thei/shared/date-range';
 import type { PublicDetailPanelData } from '#layers/thei/app/components/public/public-detail';
 
 definePageMeta({ layout: 'public', key: (route) => route.path });
@@ -14,11 +15,35 @@ const canonical = computed(() =>
 );
 if (route.path !== canonical.value)
   await navigateTo(canonical.value, { redirectCode: 301 });
+const eventCover = computed(() =>
+  data.value.periods.length ? coverDateRanges(data.value.periods) : undefined,
+);
 usePublicSeo({
   title: () => data.value.title,
   description: () => data.value.summary,
   canonical,
   noIndex: () => data.value.access === 'link-only',
+  breadcrumbs: () => [{ name: phrase.value.life, path: '/life/' }],
+  entities: () => [
+    {
+      // An Event without a date is not an Event to a crawler, so a dateless
+      // record stays a plain CreativeWork rather than an invalid node.
+      '@type': eventCover.value ? 'Event' : 'CreativeWork',
+      '@id': '#event',
+      name: data.value.title,
+      description: data.value.summary,
+      ...(eventCover.value
+        ? {
+            startDate: eventCover.value.startDate,
+            endDate: eventCover.value.endDate,
+            eventStatus: 'https://schema.org/EventScheduled',
+          }
+        : {}),
+      ...(data.value.tags.length
+        ? { keywords: data.value.tags.map((tag) => tag.title).join(', ') }
+        : {}),
+    },
+  ],
 });
 const details = computed(
   () =>

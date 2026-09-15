@@ -1,10 +1,12 @@
 import { eq } from 'drizzle-orm';
 import { EntityPrefix, generateUniqueId } from '../../../thei/entity-id';
-import { normalizeTagTitle, validateTagData, type TagEditData, type TagSaveResponse } from '#layers/thei/shared/tag';
 import {
-  findTagConflict,
-  tagConflictMessage,
-} from '../../../thei/tags';
+  normalizeTagTitle,
+  validateTagData,
+  type TagEditData,
+  type TagSaveResponse,
+} from '#layers/thei/shared/tag';
+import { findTagConflict, tagConflictMessage } from '../../../thei/tags';
 
 export default defineEventHandler(async (event): Promise<TagSaveResponse> => {
   const result = validateTagData(await readBody<TagEditData>(event));
@@ -16,7 +18,11 @@ export default defineEventHandler(async (event): Promise<TagSaveResponse> => {
     publicId: result.publicId,
   });
   if (conflict)
-    return { type: 'error', code: conflict, message: tagConflictMessage(conflict) };
+    return {
+      type: 'error',
+      code: conflict,
+      message: tagConflictMessage(conflict),
+    };
   if (
     result.iconAssetUuid &&
     !(await db.query.assets.findFirst({
@@ -26,26 +32,31 @@ export default defineEventHandler(async (event): Promise<TagSaveResponse> => {
     return { type: 'error', message: THEI_SERVER.phrase.tag_icon_not_found };
   const tagUuid = await generateUniqueId(
     EntityPrefix.Tag,
-    async (id) => !(await db.query.tags.findFirst({ where: eq(schema.tags.tagUuid, id) })),
+    async (id) =>
+      !(await db.query.tags.findFirst({ where: eq(schema.tags.tagUuid, id) })),
   );
   try {
     db.transaction((tx) => {
-      tx.insert(schema.tags).values({
-        tagUuid,
-        title: result.title,
-        normalizedTitle: normalizeTagTitle(result.title),
-        slug: result.slug,
-        publicId: result.publicId,
-        description: result.description,
-        accentColor: result.accentColor,
-      }).run();
+      tx.insert(schema.tags)
+        .values({
+          tagUuid,
+          title: result.title,
+          normalizedTitle: normalizeTagTitle(result.title),
+          slug: result.slug,
+          publicId: result.publicId,
+          description: result.description,
+          accentColor: result.accentColor,
+        })
+        .run();
       if (result.iconAssetUuid) {
-        tx.insert(schema.assetUsages).values({
-          assetUuid: result.iconAssetUuid,
-          containerType: 'tag',
-          containerId: tagUuid,
-          role: 'icon',
-        }).run();
+        tx.insert(schema.assetUsages)
+          .values({
+            assetUuid: result.iconAssetUuid,
+            containerType: 'tag',
+            containerId: tagUuid,
+            role: 'icon',
+          })
+          .run();
       }
     });
   } catch (error) {

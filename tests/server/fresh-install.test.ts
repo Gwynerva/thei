@@ -9,8 +9,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('#layers/thei/update/migrations', async (original) => {
-  const actual =
-    await original<typeof import('../../update/migrations')>();
+  const actual = await original<typeof import('../../update/migrations')>();
   return {
     ...actual,
     get baselineSql() {

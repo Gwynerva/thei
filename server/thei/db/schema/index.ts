@@ -1,4 +1,5 @@
 import { assets } from './assets';
+import { backups } from './backups';
 import {
   profiles,
   profileAvatars,
@@ -33,6 +34,7 @@ export const schema = {
   profileExternalLinks,
   assets,
   assetUsages,
+  backups,
   content,
   events,
   projects,

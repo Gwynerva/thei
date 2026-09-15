@@ -6,6 +6,7 @@ import {
   ASSET_CONTAINER_TYPES,
   type AssetContainerType,
 } from '#layers/thei/shared/asset';
+import { backupSessionOpen } from '../backup/session';
 import { findOrphanedAssets } from './repository/find-orphaned';
 import { deleteStoredAsset } from './storage';
 import { sweepTheiTempDir } from './temp';
@@ -41,7 +42,29 @@ export interface AssetCleanupOptions {
   sweepFiles?: boolean;
 }
 
+/**
+ * A sweep already in flight.
+ *
+ * The daily and weekly timers are independent, and a full sweep can outlast
+ * the gap between them on a large library. Two of them walking `content/assets`
+ * at once would double the IO for no extra reclaim.
+ */
+let running = false;
+
 export async function runAssetCleanup(options: AssetCleanupOptions = {}) {
+  if (running) {
+    THEI_SERVER.console.tag('Assets').log('Cleanup already running; skipped');
+    return;
+  }
+  running = true;
+  try {
+    await runAssetCleanupOnce(options);
+  } finally {
+    running = false;
+  }
+}
+
+async function runAssetCleanupOnce(options: AssetCleanupOptions) {
   const cutoffMs = Date.now() - ONE_DAY_MS;
   await cleanupDanglingUsages();
   await cleanupMissingAssetFiles();
@@ -67,6 +90,16 @@ export async function runAssetCleanup(options: AssetCleanupOptions = {}) {
   await sweepTemp();
 
   if (options.sweepFiles !== false) {
+    // The file sweep is the half whose cost scales with the library, and a
+    // backup is already reading every one of those files. Deferring it costs
+    // nothing: everything it would reclaim has waited 24 hours already and can
+    // wait for the next run.
+    if (backupSessionOpen()) {
+      THEI_SERVER.console
+        .tag('Assets')
+        .log('Backup in progress; deferred the file sweep');
+      return;
+    }
     await cleanupStrayAssetFiles(cutoffMs);
     await cleanupGeneratedMedia(Date.now() - GENERATED_MEDIA_MAX_AGE_MS);
   }

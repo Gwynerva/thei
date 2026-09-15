@@ -150,7 +150,6 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
     settings: AssetUploadSettings,
     sourceAssetUuid?: string,
   ): Promise<AssetUploadResponse> {
-    const sourceFile = modalData.source.file.file;
     const uploadId = crypto.randomUUID();
     uploadStatus.value = { phase: 'processing' };
     startProgressPolling(uploadId);

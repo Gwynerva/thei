@@ -17,8 +17,32 @@ usePublicSeo({
   title: computed(() => phrase.value.life_rewind_seo_title),
   description: computed(() => phrase.value.life_rewind_description),
   canonical: computed(() =>
-    rewind.value.page > 1 ? `/rewind/?page=${rewind.value.page}` : '/rewind/',
+    buildPublicCanonical('/rewind/', { page: rewind.value.page }),
   ),
+  pageType: 'CollectionPage',
+  breadcrumbs: () => [{ name: phrase.value.life, path: '/life/' }],
+  entities: () => [
+    {
+      '@type': 'ItemList',
+      '@id': '#list',
+      numberOfItems: rewind.value.total,
+      // Secret points carry no title or href on purpose; they are records that
+      // something happened, and listing them would be the leak they prevent.
+      itemListElement: rewind.value.items.flatMap(({ point }, index) =>
+        point.visibility === 'visible'
+          ? [
+              {
+                '@type': 'ListItem',
+                position:
+                  (rewind.value.page - 1) * rewind.value.pageSize + index + 1,
+                url: point.href,
+                name: point.title,
+              },
+            ]
+          : [],
+      ),
+    },
+  ],
 });
 </script>
 

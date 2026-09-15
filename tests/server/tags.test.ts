@@ -16,21 +16,39 @@ describe('tag usages', () => {
     const db = createDb();
     insertTag(db, 't-1', 'One');
     insertTag(db, 't-2', 'Two');
-    const prepared = [
-      { tagUuid: 't-2' },
-      { tagUuid: 't-1' },
-    ];
+    const prepared = [{ tagUuid: 't-2' }, { tagUuid: 't-1' }];
     applyTagUsages(db, schema, 'project', 'p-1', prepared);
     applyTagUsages(db, schema, 'event', 'e-1', [{ tagUuid: 't-1' }]);
 
     expect(db.select().from(schema.tagUsages).all()).toEqual([
-      { tagUuid: 't-2', containerType: 'project', containerId: 'p-1', sortOrder: 0 },
-      { tagUuid: 't-1', containerType: 'project', containerId: 'p-1', sortOrder: 1 },
-      { tagUuid: 't-1', containerType: 'event', containerId: 'e-1', sortOrder: 0 },
+      {
+        tagUuid: 't-2',
+        containerType: 'project',
+        containerId: 'p-1',
+        sortOrder: 0,
+      },
+      {
+        tagUuid: 't-1',
+        containerType: 'project',
+        containerId: 'p-1',
+        sortOrder: 1,
+      },
+      {
+        tagUuid: 't-1',
+        containerType: 'event',
+        containerId: 'e-1',
+        sortOrder: 0,
+      },
     ]);
 
     deleteTagUsagesForContainer(db, schema, 'project', 'p-1');
-    expect(db.select().from(schema.tags).all().map((tag) => tag.tagUuid)).toEqual(['t-1']);
+    expect(
+      db
+        .select()
+        .from(schema.tags)
+        .all()
+        .map((tag) => tag.tagUuid),
+    ).toEqual(['t-1']);
   });
 
   it('keeps an orphan tag when it has authored metadata', () => {
@@ -40,25 +58,37 @@ describe('tag usages', () => {
 
     deleteTagUsagesForContainer(db, schema, 'project', 'p-1');
 
-    expect(db.select().from(schema.tags).all().map((tag) => tag.tagUuid))
-      .toEqual(['t-1']);
+    expect(
+      db
+        .select()
+        .from(schema.tags)
+        .all()
+        .map((tag) => tag.tagUuid),
+    ).toEqual(['t-1']);
   });
 
   it('keeps an orphan tag when it owns an icon usage', () => {
     const db = createDb();
     insertTag(db, 't-1', 'One');
-    db.insert(schema.assetUsages).values({
-      assetUuid: 'a-1',
-      containerType: 'tag',
-      containerId: 't-1',
-      role: 'icon',
-    }).run();
+    db.insert(schema.assetUsages)
+      .values({
+        assetUuid: 'a-1',
+        containerType: 'tag',
+        containerId: 't-1',
+        role: 'icon',
+      })
+      .run();
     applyTagUsages(db, schema, 'project', 'p-1', [{ tagUuid: 't-1' }]);
 
     deleteTagUsagesForContainer(db, schema, 'project', 'p-1');
 
-    expect(db.select().from(schema.tags).all().map((tag) => tag.tagUuid))
-      .toEqual(['t-1']);
+    expect(
+      db
+        .select()
+        .from(schema.tags)
+        .all()
+        .map((tag) => tag.tagUuid),
+    ).toEqual(['t-1']);
   });
 
   it('recovers slug and public ID conflicts prepared by another request', () => {

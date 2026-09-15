@@ -123,23 +123,22 @@ function onDocumentPointerDown(event: PointerEvent) {
   close();
 }
 
-function onDocumentKeydown(event: KeyboardEvent) {
-  if (props.closeOnEscape && event.key === 'Escape') {
-    event.preventDefault();
-    close();
-  }
-}
+// Escape is not handled here. An open popup registers itself as a dismissible
+// layer instead, so that Escape and browser Back undo the same one step and
+// agree on which step that is — the popup first, the modal underneath after.
+let removeDismissLayer: (() => void) | undefined;
 
 function addOpenListeners() {
   document.addEventListener('pointerdown', onDocumentPointerDown, true);
-  document.addEventListener('keydown', onDocumentKeydown);
+  if (props.closeOnEscape) removeDismissLayer = registerDismissLayer(close);
   window.visualViewport?.addEventListener('resize', scheduleViewportUpdate);
   window.visualViewport?.addEventListener('scroll', scheduleViewportUpdate);
 }
 
 function removeOpenListeners() {
   document.removeEventListener('pointerdown', onDocumentPointerDown, true);
-  document.removeEventListener('keydown', onDocumentKeydown);
+  removeDismissLayer?.();
+  removeDismissLayer = undefined;
   window.visualViewport?.removeEventListener('resize', scheduleViewportUpdate);
   window.visualViewport?.removeEventListener('scroll', scheduleViewportUpdate);
   cancelViewportUpdate();

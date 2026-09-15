@@ -99,8 +99,8 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
       <Media
         v-bind="preview.media"
         variant="ambient"
-          playback="interaction"
-          :engaged
+        playback="interaction"
+        :engaged
         align="left"
         fit="height"
         class="size-full opacity-75 transition group-hocus:opacity-100"

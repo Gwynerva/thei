@@ -7,6 +7,13 @@ definePageMeta({
   layout: 'public',
 });
 
+// A scratch page for trying the asset wizard by hand. It renders in the public
+// layout, so it has to say out loud that it is not part of the site.
+usePublicSeo({
+  title: 'Asset wizard',
+  noIndex: true,
+});
+
 const maxSizeMb = ref('10');
 const extensionsInput = ref('jpg, jpeg, png, webp, mp4, webm');
 const resultAsset = ref<AssetVariantInfo | null>(null);

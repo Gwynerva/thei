@@ -4,6 +4,7 @@ if (useIsAdmin().value) {
 }
 
 await useAdminTabTitle(computed(() => phrase.value.sign_in));
+useHead({ meta: [{ name: 'robots', content: 'noindex,nofollow' }] });
 const publicAdmin = await usePublicAdmin();
 
 const signInError = ref('');

@@ -643,7 +643,11 @@ async function pickAssets(kind: ContentEditorAssetKind) {
   }
 }
 
-async function editAsset(
+function editAsset(current: ContentAssetData, kind: ContentEditorAssetKind) {
+  return runModalFlow(() => runEditAsset(current, kind));
+}
+
+async function runEditAsset(
   current: ContentAssetData,
   kind: ContentEditorAssetKind,
 ) {

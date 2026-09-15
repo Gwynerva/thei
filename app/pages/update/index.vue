@@ -6,7 +6,10 @@ import {
   loadLanguage,
 } from '#layers/thei/shared/language';
 
-useHead({ title: 'Thei' });
+useHead({
+  title: 'Thei',
+  meta: [{ name: 'robots', content: 'noindex,nofollow' }],
+});
 
 // The boot stopped before the configured language was loaded, so this page
 // picks one from the browser the same way the install wizard does.

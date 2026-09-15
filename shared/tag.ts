@@ -42,10 +42,7 @@ export type TagUsageStats = {
   events: number;
 };
 
-export type TagSaveErrorCode =
-  | 'title-taken'
-  | 'slug-taken'
-  | 'public-id-taken';
+export type TagSaveErrorCode = 'title-taken' | 'slug-taken' | 'public-id-taken';
 
 export type TagSaveResponse =
   | { type: 'success'; tagUuid: string }
@@ -71,8 +68,7 @@ export function validateTagData(data: unknown): string | TagEditData {
   if (slug.length > 100) return 'Tag slug is too long';
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) return 'Invalid tag slug';
   const publicId = normalizePublicId(item.publicId);
-  if (!publicIdIsValid(publicId))
-    return 'Invalid public ID';
+  if (!publicIdIsValid(publicId)) return 'Invalid public ID';
   const description =
     typeof item.description === 'string' ? item.description.trim() : '';
   if (description.length > 2_000) return 'Tag description is too long';
@@ -103,11 +99,9 @@ export function validateTagData(data: unknown): string | TagEditData {
   };
 }
 
-export function rankTagSearch<T extends Pick<TagItem, 'title' | 'publicId' | 'slug'>>(
-  tags: T[],
-  query: string,
-  limit = 8,
-): T[] {
+export function rankTagSearch<
+  T extends Pick<TagItem, 'title' | 'publicId' | 'slug'>,
+>(tags: T[], query: string, limit = 8): T[] {
   const needle = normalizeTagTitle(query);
   if (!needle) return tags.slice(0, limit);
   return tags

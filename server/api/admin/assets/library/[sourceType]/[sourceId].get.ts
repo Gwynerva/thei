@@ -1,4 +1,7 @@
-import { ASSET_SOURCE_TYPES, type AssetSourceType } from '#layers/thei/shared/asset-library';
+import {
+  ASSET_SOURCE_TYPES,
+  type AssetSourceType,
+} from '#layers/thei/shared/asset-library';
 import { listSourceAssets } from '../../../../../thei/assets/library';
 import { parseLibraryQuery } from '../../../../../thei/assets/library-query';
 export default defineEventHandler((event) => {

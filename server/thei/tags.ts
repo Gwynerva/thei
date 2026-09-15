@@ -50,7 +50,13 @@ export function findTagConflict(
     const condition = excludeTagUuid
       ? and(eq(column, value), ne(schema.tags.tagUuid, excludeTagUuid))
       : eq(column, value);
-    if (db.select({ tagUuid: schema.tags.tagUuid }).from(schema.tags).where(condition).get())
+    if (
+      db
+        .select({ tagUuid: schema.tags.tagUuid })
+        .from(schema.tags)
+        .where(condition)
+        .get()
+    )
       return code;
   }
 }
@@ -110,7 +116,13 @@ export async function buildTagItem(tag: TagRow): Promise<TagItem> {
 export async function prepareTagUsages(items: TagEditItem[] | undefined) {
   if (items === undefined) return undefined;
   const { db, schema } = THEI_SERVER.useDb();
-  const prepared: Array<{ tagUuid: string; title?: string; normalizedTitle?: string; slug?: string; publicId?: string }> = [];
+  const prepared: Array<{
+    tagUuid: string;
+    title?: string;
+    normalizedTitle?: string;
+    slug?: string;
+    publicId?: string;
+  }> = [];
   const reservedSlugs = new Set<string>();
   const reservedPublicIds = new Set<string>();
   for (const item of items) {
@@ -134,7 +146,10 @@ export async function prepareTagUsages(items: TagEditItem[] | undefined) {
     }
     const tagUuid = await generateUniqueId(
       EntityPrefix.Tag,
-      async (id) => !(await db.query.tags.findFirst({ where: eq(schema.tags.tagUuid, id) })),
+      async (id) =>
+        !(await db.query.tags.findFirst({
+          where: eq(schema.tags.tagUuid, id),
+        })),
     );
     const language = THEI_SERVER.language;
     let slug = language.slugify(title) || 'tag';
@@ -150,7 +165,9 @@ export async function prepareTagUsages(items: TagEditItem[] | undefined) {
     let publicId = randomTagPublicId();
     while (
       reservedPublicIds.has(publicId) ||
-      (await db.query.tags.findFirst({ where: eq(schema.tags.publicId, publicId) }))
+      (await db.query.tags.findFirst({
+        where: eq(schema.tags.publicId, publicId),
+      }))
     ) {
       publicId = randomTagPublicId();
     }
@@ -295,7 +312,8 @@ function cleanupSimpleOrphanTags(tx: any, schema: any, tagUuids: string[]) {
         ),
       )
       .get();
-    if (!icon) tx.delete(schema.tags).where(eq(schema.tags.tagUuid, tagUuid)).run();
+    if (!icon)
+      tx.delete(schema.tags).where(eq(schema.tags.tagUuid, tagUuid)).run();
   }
 }
 

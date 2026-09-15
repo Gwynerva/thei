@@ -17,6 +17,21 @@ usePublicSeo({
   description: () => data.value.summary,
   canonical,
   noIndex: () => data.value.access === 'link-only',
+  breadcrumbs: () => [{ name: phrase.value.pages, path: '/pages/' }],
+  image: () => data.value.iconMedia.src,
+  entities: () => [
+    {
+      '@type': 'Article',
+      '@id': '#page',
+      headline: data.value.title,
+      description: data.value.summary,
+      datePublished: data.value.chronology.createdAt,
+      ...(data.value.chronology.updatedAt
+        ? { dateModified: data.value.chronology.updatedAt }
+        : {}),
+      image: data.value.iconMedia.src,
+    },
+  ],
 });
 
 const linkCount = computed(

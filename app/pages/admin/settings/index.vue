@@ -143,6 +143,14 @@ useSavedForm(isDirty, save, canSave);
             :reload-on-view-change="false"
         /></ClientOnly>
       </div>
+      <div>
+        <SectionHeader
+          icon="files"
+          :title="phrase.backups"
+          :description="phrase.backups_description"
+          class="mb-md"
+        /><SettingsBackupBox />
+      </div>
     </div>
   </div>
 </template>

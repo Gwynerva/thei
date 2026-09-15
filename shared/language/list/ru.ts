@@ -418,6 +418,36 @@ export default defineI18nModule({
     disk_thei_files: 'Файлы Thei',
     disk_other_files: 'Прочие файлы',
     disk_free_space: 'Свободно',
+    backups: 'Резервные копии',
+    backups_description:
+      'Копия `content/` на машине, которой вы управляете. Сгенерируйте токен, ' +
+      'скачайте скрипт и запустите его там.',
+    backup_last: 'Последняя копия',
+    backup_never: 'Копий ещё не было',
+    backup_stale_warning:
+      'Резервная копия не создавалась больше недели. Всё содержимое ' +
+      '`content/` существует только на этом сервере.',
+    backup_kind_auto: 'По расписанию',
+    backup_kind_manual: 'Вручную',
+    backup_token: 'Токен резервного копирования',
+    backup_token_hint:
+      'С ним работает скрипт копирования. Тот, у кого он есть, может ' +
+      'выгрузить всё содержимое, поэтому относитесь к нему как к паролю.',
+    backup_token_generate: 'Сгенерировать токен',
+    backup_token_regenerate: 'Заменить токен',
+    backup_token_revoke: 'Отозвать',
+    backup_token_missing: 'Токена нет — копирование невозможно',
+    backup_token_active: 'Токен активен',
+    backup_token_shown_once:
+      'Скопируйте сейчас. Он показывается один раз и не читается обратно: ' +
+      'потерянный токен заменяют, а не восстанавливают.',
+    backup_script_download: 'Скачать скрипт',
+    backup_setup_hint:
+      'На машине, где будут храниться копии, запустите `node thei-backup.mjs`, ' +
+      'введите этот адрес и токен, затем включите еженедельное расписание.',
+    backup_history: 'Последние запуски',
+    backup_run_summary: (files: number, size: string) =>
+      `${files} файл(ов), ${size}`,
     admin_updates: 'Обновления',
     updates_description:
       'Поддерживайте Thei в актуальном состоянии. Обновление заменяет движок ' +

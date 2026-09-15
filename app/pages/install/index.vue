@@ -8,7 +8,10 @@ import {
 import InstallLoading from './components/InstallLoading.vue';
 import InstallForm from './components/InstallForm.vue';
 
-useHead({ title: 'Thei' });
+useHead({
+  title: 'Thei',
+  meta: [{ name: 'robots', content: 'noindex,nofollow' }],
+});
 
 const ready = ref(false);
 

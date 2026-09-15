@@ -72,6 +72,17 @@ export const baselineSql: string[] = [
 `,
   `CREATE INDEX \`asset-usages-container-idx\` ON \`asset-usages\` (\`containerType\`,\`containerId\`);`,
   `CREATE INDEX \`asset-usages-asset-idx\` ON \`asset-usages\` (\`assetUuid\`);`,
+  `CREATE TABLE \`backups\` (
+	\`backupUuid\` text PRIMARY KEY NOT NULL,
+	\`kind\` text NOT NULL,
+	\`startedAt\` integer NOT NULL,
+	\`completedAt\` integer NOT NULL,
+	\`fileCount\` integer NOT NULL,
+	\`byteCount\` integer NOT NULL,
+	\`clientLabel\` text
+);
+`,
+  `CREATE INDEX \`backups-completed-idx\` ON \`backups\` (\`completedAt\`);`,
   `CREATE TABLE \`content\` (
 	\`contentUuid\` text PRIMARY KEY NOT NULL,
 	\`ownerType\` text NOT NULL,

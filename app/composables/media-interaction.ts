@@ -10,11 +10,18 @@ export function useMediaInteraction() {
       pointerenter: (event: PointerEvent) => {
         if (event.pointerType === 'mouse') hovered.value = true;
       },
-      pointerleave: () => { hovered.value = false; },
-      pointercancel: () => { hovered.value = false; },
-      focusin: () => { focused.value = true; },
+      pointerleave: () => {
+        hovered.value = false;
+      },
+      pointercancel: () => {
+        hovered.value = false;
+      },
+      focusin: () => {
+        focused.value = true;
+      },
       focusout: (event: FocusEvent) => {
-        focused.value = event.relatedTarget instanceof Node &&
+        focused.value =
+          event.relatedTarget instanceof Node &&
           (event.currentTarget as HTMLElement).contains(event.relatedTarget);
       },
     },

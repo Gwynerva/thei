@@ -10,9 +10,6 @@ export default defineEventHandler(async (event) => {
       (!Number.isSafeInteger(body.size) || body.size < 0))
   )
     throw createError({ statusCode: 400, message: 'Invalid file identity' });
-  const asset = await findStoredAssetByHash(
-    body.hash.toLowerCase(),
-    body.size,
-  );
+  const asset = await findStoredAssetByHash(body.hash.toLowerCase(), body.size);
   return { asset: asset ? await buildAssetVariantInfo(asset) : null };
 });

@@ -74,7 +74,9 @@ function confirm() {
             <Icon v-if="entityIcon" :name="entityIcon" class="mr-1" />
             <span>{{ entityType }}</span>
           </span>
-          <span>{{ deleteDescriptionAroundEntity.slice(1).join(entityTypeMarker) }}</span>
+          <span>{{
+            deleteDescriptionAroundEntity.slice(1).join(entityTypeMarker)
+          }}</span>
           <button
             type="button"
             class="cursor-pointer font-semibold text-text-error underline

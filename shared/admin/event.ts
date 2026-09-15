@@ -31,7 +31,9 @@ export function validateEventData(
     if (!title) return 'Title cannot be empty';
     const summary = data.summary?.trim();
     if (!summary) return 'Summary cannot be empty';
-    const humanReadableSlug = normalizeHumanReadableSlug(data.humanReadableSlug);
+    const humanReadableSlug = normalizeHumanReadableSlug(
+      data.humanReadableSlug,
+    );
     const publicId = normalizePublicId(data.publicId);
     if (!publicId) return 'Public ID cannot be empty';
     if (!publicIdIsValid(publicId)) return 'Invalid public ID';

@@ -3,6 +3,8 @@ import {
   activeModal,
   closeActiveModal,
   closeModal,
+  dismissOneStep,
+  hasDismissLayer,
   installModalNavigationInterceptor,
   modalStack,
   settleModal,
@@ -101,8 +103,26 @@ watch(
   { flush: 'post' },
 );
 
+/**
+ * Escape undoes exactly one step, the same step browser Back undoes.
+ *
+ * The listener sits on `document`, not on the dialog, because a dismissible
+ * layer can be open with no modal at all — a popover on a plain page. Matching
+ * on both `key` and `code` keeps it working under any keyboard layout and any
+ * remapping, and `defaultPrevented` leaves the key to whatever already claimed
+ * it, such as an Editor.js popover closing itself.
+ */
+function onDocumentKeydown(event: KeyboardEvent) {
+  if (event.defaultPrevented) return;
+  if (event.key !== 'Escape' && event.code !== 'Escape') return;
+  if (!hasDismissLayer() && !activeModal.value) return;
+  event.preventDefault();
+  dismissOneStep();
+}
+
 onMounted(() => {
   removeNavigationInterceptor = installModalNavigationInterceptor(router);
+  document.addEventListener('keydown', onDocumentKeydown);
 });
 
 onBeforeUnmount(() => {
@@ -111,6 +131,8 @@ onBeforeUnmount(() => {
   if (!import.meta.client) {
     return;
   }
+
+  document.removeEventListener('keydown', onDocumentKeydown);
 
   if (dialogElement.value?.open) {
     ignoreNextDialogClose = true;
@@ -151,8 +173,7 @@ function onBackdropClick(e: MouseEvent) {
     class="m-0 h-dvh max-h-none w-dvw max-w-none overflow-hidden border-0
       bg-transparent p-0 outline-none backdrop:bg-transparent"
     @close="onNativeClose"
-    @cancel.prevent="closeModal"
-    @keydown.esc.stop.prevent="closeModal"
+    @cancel.prevent="dismissOneStep"
     @click="onBackdropClick"
   >
     <component

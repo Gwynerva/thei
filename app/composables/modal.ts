@@ -25,6 +25,62 @@ export const activeModal = computed(
   () => modalStack.value[modalStack.value.length - 1] ?? null,
 );
 
+/**
+ * Depth of the modal flows currently running.
+ *
+ * A flow is a sequence of modals that replace one another — a wizard. Each
+ * step settles before the next one is pushed, so the stack drops to the depth
+ * below in between, and for a flow started from a page that depth is zero.
+ * Without this counter the history interceptor reads the gap as "the last
+ * modal closed", hands the sentinel entry back, and races the next step's
+ * pushState — after which Back stops closing modals at all.
+ */
+const modalFlowDepth = shallowRef(0);
+
+/** Run a sequence of modals as one logical layer. See `modalFlowDepth`. */
+export async function runModalFlow<T>(run: () => Promise<T>): Promise<T> {
+  modalFlowDepth.value++;
+  try {
+    return await run();
+  } finally {
+    modalFlowDepth.value--;
+  }
+}
+
+/**
+ * Dismissible layers open inside a modal — popovers, menus, inline controls.
+ *
+ * They are not modals of their own, but one Back press or one Escape has to
+ * undo exactly one step, and while such a layer is open that step is the
+ * layer, not the modal behind it.
+ */
+const dismissLayers: (() => void)[] = [];
+
+export function registerDismissLayer(close: () => void) {
+  dismissLayers.push(close);
+  let removed = false;
+  return () => {
+    if (removed) return;
+    removed = true;
+    const index = dismissLayers.lastIndexOf(close);
+    if (index > -1) dismissLayers.splice(index, 1);
+  };
+}
+
+export function hasDismissLayer() {
+  return dismissLayers.length > 0;
+}
+
+/** Undo one step: the innermost dismissible layer, else the top modal. */
+export function dismissOneStep(): boolean {
+  const layer = dismissLayers.pop();
+  if (layer) {
+    layer();
+    return true;
+  }
+  return closeModal();
+}
+
 /** Close the top modal and atomically consume the attempted route navigation. */
 export function interceptModalNavigation() {
   if (!activeModal.value) return false;
@@ -37,7 +93,8 @@ const MODAL_HISTORY_STATE = '__theiModal';
 /** Install one route and browser-history interceptor for the complete stack. */
 export function installModalNavigationInterceptor(router: Router) {
   let sentinelActive = false;
-  let discardingSentinel = false;
+  /** `history.back()` calls we issued ourselves, not user Back presses. */
+  let pendingDiscards = 0;
 
   function pushSentinel() {
     if (sentinelActive || !activeModal.value || activeModal.value.leaving)
@@ -50,38 +107,54 @@ export function installModalNavigationInterceptor(router: Router) {
     sentinelActive = true;
   }
 
+  function releaseSentinel() {
+    if (!sentinelActive) return;
+    sentinelActive = false;
+    if (window.history.state?.[MODAL_HISTORY_STATE] !== true) return;
+    pendingDiscards++;
+    window.history.back();
+  }
+
   function handlePopState() {
-    if (discardingSentinel) {
-      discardingSentinel = false;
-      sentinelActive = false;
+    // One of our own discards. The entry it consumed is indistinguishable from
+    // any sentinel pushed since — same URL, same marker — so `sentinelActive`
+    // is left alone here: clearing it would disarm a sentinel that a modal
+    // opened in the meantime has just pushed, and Back would stop working.
+    if (pendingDiscards > 0) {
+      pendingDiscards--;
       return;
     }
     if (!sentinelActive || !activeModal.value) return;
 
+    // The browser consumed the sentinel entry whatever happens next, including
+    // when a close guard refuses the dismissal.
     sentinelActive = false;
-    closeModal();
+    dismissOneStep();
     queueMicrotask(pushSentinel);
   }
 
   const stopStackWatch = watch(
-    () => modalStack.value.length,
-    (count) => {
-      if (count > 0) {
+    () => [modalStack.value.length, modalFlowDepth.value] as const,
+    ([stackSize, flowDepth]) => {
+      if (stackSize > 0) {
         pushSentinel();
         return;
       }
-      if (
-        sentinelActive &&
-        window.history.state?.[MODAL_HISTORY_STATE] === true
-      ) {
-        sentinelActive = false;
-        discardingSentinel = true;
-        window.history.back();
-      }
+      // A flow between two steps still owns the layer, empty stack or not.
+      if (flowDepth > 0) return;
+      releaseSentinel();
     },
     { immediate: true, flush: 'sync' },
   );
-  const removeRouteGuard = router.beforeEach(() => {
+  const removeRouteGuard = router.beforeEach((to, from) => {
+    // A sentinel pop leaves the URL untouched, so vue-router computes a delta
+    // of zero for it — and then runs a full navigation anyway. Aborting that
+    // navigation here would close a second modal, and the aborted pop makes
+    // vue-router issue its own `history.go(-1)` on top, closing a third. The
+    // two paths are equal by construction, because the sentinel is pushed with
+    // the current href, so this test catches every sentinel pop and nothing
+    // else. Let it through: there is nothing to navigate to.
+    if (to.fullPath === from.fullPath) return;
     if (interceptModalNavigation()) return false;
   });
   window.addEventListener('popstate', handlePopState);

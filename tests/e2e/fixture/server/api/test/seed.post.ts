@@ -28,6 +28,7 @@ export default defineEventHandler(async (event) => {
       schema.events,
       schema.tagUsages,
       schema.tags,
+      schema.backups,
     ])
       tx.delete(table).run();
     for (let index = 0; index < 2000; index++) {

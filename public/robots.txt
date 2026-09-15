@@ -1,7 +1,0 @@
-User-agent: *
-Disallow: /sign-in/
-Disallow: /sign-out/
-Disallow: /admin/
-Disallow: /install/
-Disallow: /update/
-Disallow: /api/
