@@ -4,6 +4,17 @@ import { fileURLToPath } from 'node:url';
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 
+// Matches any file inside this layer, but not inside a nested `node_modules`.
+// Nuxt disables auto-imports for modules resolved from `node_modules`, which is
+// exactly where this layer lives once it is consumed as a dependency, so the
+// layer has to opt its own sources back in.
+const layerSourcePattern = new RegExp(
+  `^${currentDir
+    .replace(/\\/g, '/')
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/\//g, '[\\\\/]')}[\\\\/](?!node_modules[\\\\/])`,
+);
+
 export default defineNuxtConfig({
   compatibilityDate: '2026-04-28',
   devtools: { enabled: true },
@@ -18,11 +29,19 @@ export default defineNuxtConfig({
   pages: {
     pattern: ['**/*.vue', '!**/components/**'],
   },
+  imports: {
+    transform: {
+      include: [layerSourcePattern],
+    },
+  },
   modules: ['#layers/thei/modules/thei/module.ts'],
   typescript: {
     nodeTsConfig: {
       include: [`${currentDir}/**/*`],
-      exclude: [`${currentDir}/**/runtime/**/*`],
+      exclude: [
+        `${currentDir}/**/runtime/**/*`,
+        `${currentDir}/**/node_modules/**/*`,
+      ],
     },
   },
   nitro: {

@@ -114,6 +114,12 @@ const eventItems = computed(() =>
             title: phrase.site_settings,
             description: phrase.profile_settings_description,
           },
+          {
+            href: '/admin/updates/',
+            icon: 'refresh',
+            title: phrase.admin_updates,
+            description: phrase.updates_description,
+          },
         ]"
         :key="item.href"
         :to="item.href"

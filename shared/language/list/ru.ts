@@ -418,6 +418,51 @@ export default defineI18nModule({
     disk_thei_files: 'Файлы Thei',
     disk_other_files: 'Прочие файлы',
     disk_free_space: 'Свободно',
+    admin_updates: 'Обновления',
+    updates_description:
+      'Поддерживайте Thei в актуальном состоянии. Обновление заменяет движок ' +
+      'и перезапускает сайт; содержимое при этом не затрагивается.',
+    update_current_version: 'Установленная версия',
+    update_latest_version: 'Последняя версия',
+    update_check: 'Проверить обновления',
+    update_checking: 'Проверяем…',
+    update_check_failed: 'Не удалось связаться с сервером обновлений.',
+    update_up_to_date: 'Установлена актуальная версия Thei.',
+    update_available_x: (version) => `Доступна версия Thei ${version}.`,
+    update_start: 'Обновить',
+    update_confirm: (version) =>
+      `Обновить Thei до версии ${version}? По завершении сайт перезапустится.`,
+    update_backup_notice:
+      'Обновление не создаёт резервную копию. Если она нужна, скопируйте ' +
+      'папку content перед началом.',
+    update_in_progress: 'Обновляем…',
+    update_phase_preparing: 'Подготовка',
+    update_phase_dependencies: 'Установка',
+    update_phase_building: 'Сборка',
+    update_phase_swapping: 'Завершение',
+    update_phase_restarting: 'Перезапуск',
+    update_phase_done: 'Готово',
+    update_phase_failed: 'Ошибка',
+    update_done_x: (version) => `Обновлено до Thei ${version}.`,
+    update_log: 'Журнал',
+    update_failed_hint:
+      'Сайт продолжает работать на прежней версии. Можно попробовать ещё раз ' +
+      'или посмотреть подробности в журнале сервера.',
+    update_restart: 'Перезапустить',
+    update_restart_confirm: 'Перезапустить сайт сейчас?',
+    update_restart_pending: 'Перезапускаем, страница переподключится сама…',
+    update_unmanaged: 'Обновления здесь недоступны',
+    update_unmanaged_hint:
+      'Этот экземпляр запущен не как управляемая служба и не может ' +
+      'перезапустить себя. Обновите его из командной строки.',
+    update_never_checked: 'Проверка ещё не выполнялась.',
+    boot_update_title: 'Thei требует внимания',
+    boot_update_migration_failed:
+      'Не удалось обновить содержимое, поэтому сайт не запустился.',
+    boot_update_downgrade: 'Это содержимое создано более новой версией Thei.',
+    boot_update_hint:
+      'Ничего не изменено. Как восстановить работу, описано в README; после ' +
+      'этого перезапустите службу.',
     admin_entity_search_placeholder: 'Поиск по содержимому…',
     sort_order: 'Порядок сортировки',
     sort_newest: 'Сначала новые',

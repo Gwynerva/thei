@@ -1,19 +1,27 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import Database from 'better-sqlite3';
-import { generateSQLiteMigration } from 'drizzle-kit/api';
 import { join } from 'node:path';
 import { freshTestDb } from '../helpers/fresh-db';
 import { createFreshDbContext } from '../../server/thei/db/utils';
 
-vi.mock('drizzle-kit/api', async (original) => {
-  const api = await original<typeof import('drizzle-kit/api')>();
+const mocks = vi.hoisted(() => ({
+  baselineSql: undefined as string[] | undefined,
+}));
+
+vi.mock('#layers/thei/update/migrations', async (original) => {
+  const actual =
+    await original<typeof import('../../update/migrations')>();
   return {
-    ...api,
-    generateSQLiteMigration: vi.fn(api.generateSQLiteMigration),
+    ...actual,
+    get baselineSql() {
+      return mocks.baselineSql ?? actual.baselineSql;
+    },
   };
 });
+
 afterEach(() => {
   vi.restoreAllMocks();
+  mocks.baselineSql = undefined;
   delete (globalThis as any).THEI_SERVER;
 });
 
@@ -79,10 +87,7 @@ describe('fresh database installation', () => {
     const context = await freshTestDb();
     const failedPath = join(context.directory, 'failed.db');
     Object.assign(context.server, { contentPath: () => failedPath });
-    vi.mocked(generateSQLiteMigration).mockResolvedValueOnce([
-      'CREATE TABLE first (id TEXT)',
-      'INVALID SQL',
-    ]);
+    mocks.baselineSql = ['CREATE TABLE first (id TEXT)', 'INVALID SQL'];
     const close = vi.spyOn(Database.prototype, 'close');
     try {
       await expect(createFreshDbContext()).rejects.toThrow();

@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { SiteAccessLevel } from '#layers/thei/shared/access-level';
 import type { AdminDiskUsage } from '#layers/thei/shared/admin/disk-usage';
+import type { UpdateStatus } from '#layers/thei/update/types';
 
 type AdminSystemInfo = {
   theiVersion: string;
@@ -13,6 +14,7 @@ const humanSize = useHumanSize();
 const [
   { data: systemInfo, error: systemError },
   { data: disk, error: diskError },
+  { data: updates },
 ] = await Promise.all([
   useFetch<AdminSystemInfo>('/api/admin/system-info', {
     key: 'admin-system-info',
@@ -20,6 +22,8 @@ const [
   useFetch<AdminDiskUsage>('/api/admin/disk-usage', {
     key: 'admin-disk-usage',
   }),
+  // Uses whatever the last check found; it never reaches out on its own.
+  useFetch<UpdateStatus>('/api/admin/updates', { key: 'admin-updates' }),
 ]);
 
 const segments = computed(() => {
@@ -67,6 +71,17 @@ const segments = computed(() => {
           Thei v{{ systemInfo?.theiVersion ?? '—' }}
         </span>
       </div>
+
+      <TheiLink
+        v-if="updates?.updateAvailable"
+        to="/admin/updates/"
+        class="flex shrink-0 items-center gap-1 rounded-normal bg-accent/20
+          px-xs py-0.5 text-sm font-semibold text-accent transition
+          hocus:bg-accent/30"
+      >
+        <Icon name="arrow-cycle" />
+        <span>{{ updates.latestVersion }}</span>
+      </TheiLink>
 
       <div
         class="flex shrink-0 items-center gap-xs text-sm"

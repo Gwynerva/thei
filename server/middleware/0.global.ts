@@ -84,6 +84,16 @@ export default defineEventHandler(async (event) => {
       return;
 
     case 'update':
+      // Handed to the page through a plugin rather than an API route: the boot
+      // stopped before the database was ready, so there is nothing to query.
+      event.context.bootUpdate = {
+        reason: bootResult.reason,
+        migrationId: bootResult.migrationId,
+        fromVersion: bootResult.fromVersion,
+        toVersion: bootResult.toVersion,
+        message: bootResult.message,
+      };
+
       if (!isUpdatePath) {
         return sendRedirect(event, '/update/');
       }

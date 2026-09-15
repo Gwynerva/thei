@@ -1,0 +1,19 @@
+{
+  "name": "thei-instance",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nuxt build",
+    "start": "node .output/server/index.mjs"
+  },
+  "dependencies": {
+    "nuxt": "^4.5.2",
+    "thei": "__THEI_SOURCE__"
+  },
+  "trustedDependencies": [
+    "@ffmpeg-installer/ffmpeg",
+    "better-sqlite3",
+    "esbuild",
+    "sharp"
+  ]
+}

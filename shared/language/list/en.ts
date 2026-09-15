@@ -411,6 +411,52 @@ export default defineI18nBase({
     disk_thei_files: 'Thei files',
     disk_other_files: 'Other files',
     disk_free_space: 'Free',
+    admin_updates: 'Updates',
+    updates_description:
+      'Keep Thei up to date. Updating replaces the engine and restarts the ' +
+      'site; your content is never touched.',
+    update_current_version: 'Installed version',
+    update_latest_version: 'Latest version',
+    update_check: 'Check for updates',
+    update_checking: 'Checking…',
+    update_check_failed: 'Could not reach the update server.',
+    update_up_to_date: 'Thei is up to date.',
+    update_available_x: (version) => `Thei ${version} is available.`,
+    update_start: 'Update now',
+    update_confirm: (version) =>
+      `Update Thei to ${version}? The site will restart when it is done.`,
+    update_backup_notice:
+      'Updates do not create a backup. If you want one, copy the content ' +
+      'folder before you start.',
+    update_in_progress: 'Updating…',
+    update_phase_preparing: 'Preparing',
+    update_phase_dependencies: 'Installing',
+    update_phase_building: 'Building',
+    update_phase_swapping: 'Finishing',
+    update_phase_restarting: 'Restarting',
+    update_phase_done: 'Done',
+    update_phase_failed: 'Failed',
+    update_done_x: (version) => `Updated to Thei ${version}.`,
+    update_log: 'Log',
+    update_failed_hint:
+      'The site is still running the previous version. You can try again, or ' +
+      'check the server logs for details.',
+    update_restart: 'Restart',
+    update_restart_confirm: 'Restart the site now?',
+    update_restart_pending: 'Restarting, this page will reconnect by itself…',
+    update_unmanaged: 'Updates are not available here',
+    update_unmanaged_hint:
+      'This instance is not running as a managed service, so it cannot ' +
+      'restart itself. Update it from the command line instead.',
+    update_never_checked: 'Not checked yet.',
+    boot_update_title: 'Thei needs attention',
+    boot_update_migration_failed:
+      'The content could not be brought up to date, so the site did not start.',
+    boot_update_downgrade:
+      'This content was created by a newer version of Thei.',
+    boot_update_hint:
+      'Nothing was changed. See the README for how to recover, then restart ' +
+      'the service.',
     admin_entity_search_placeholder: 'Search content…',
     sort_order: 'Sort order',
     sort_newest: 'Newest first',

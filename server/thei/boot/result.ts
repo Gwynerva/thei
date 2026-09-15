@@ -17,9 +17,18 @@ export interface BootResultInstall extends BootResultBase {
   type: 'install';
 }
 
-export interface BootResultUpdate extends BootResultBase {
+export interface BootUpdateDetails {
+  reason: 'migration-failed' | 'downgrade';
+  migrationId?: string;
+  /** Version the content directory was last known to be on. */
+  fromVersion: string;
+  /** Version of the engine that tried to open it. */
+  toVersion: string;
+  message: string;
+}
+
+export interface BootResultUpdate extends BootResultBase, BootUpdateDetails {
   type: 'update';
-  targetVersion: string;
 }
 
 export interface BootResultReady extends BootResultBase {
@@ -46,10 +55,10 @@ export function setBootError(message: string): never {
   throw new BootDecided();
 }
 
-export function setBootUpdate(targetVersion: string): never {
+export function setBootUpdate(details: BootUpdateDetails): never {
   bootResult = {
     type: 'update',
-    targetVersion,
+    ...details,
   };
   bootResolve();
   throw new BootDecided();

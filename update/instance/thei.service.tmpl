@@ -1,0 +1,44 @@
+[Unit]
+Description=Thei
+Documentation=https://github.com/Gwynerva/thei
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+Group=__USER__
+WorkingDirectory=__INSTALL_DIR__
+# Node runs the site, Bun installs and builds it. better-sqlite3 is a native
+# Node addon and does not load under Bun.
+ExecStart=__NODE__ __INSTALL_DIR__/.output/server/index.mjs
+
+# HOME must be writable: an in-panel update runs `bun install`, which needs a
+# package cache.
+Environment=HOME=__INSTALL_DIR__
+Environment=NODE_ENV=production
+Environment=HOST=__HOST__
+Environment=PORT=__PORT__
+
+# Tells Thei it is supervised, so the panel may offer update and restart.
+# Without it the panel disables both.
+Environment=THEI_MANAGED=systemd
+
+# An in-panel update shells out to Bun, which is not on systemd's PATH.
+Environment=THEI_BUN=__BUN__
+
+# Restarting is how Thei applies an update: it exits cleanly and systemd brings
+# it back. Nothing needs sudo for that.
+Restart=always
+RestartSec=3
+
+# Never give up on restarting. The default rate limit would leave the site down
+# permanently after a short crash loop, recoverable only over SSH.
+StartLimitIntervalSec=0
+
+# A build is memory hungry. If the kernel kills a child process, that must not
+# take the service down with it.
+OOMPolicy=continue
+
+[Install]
+WantedBy=multi-user.target

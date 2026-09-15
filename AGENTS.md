@@ -19,6 +19,20 @@
 - If the server on port `3000` existed before the work began, do not stop it.
 - If the process ownership or whether it was started by the current agent cannot be verified, do not stop the process.
 
+## Updates and Migrations
+
+- Check every change for compatibility with the update system in `update/`. Thei is installed as a versioned engine and updated in place over existing installations, so assume every change will land on a site that already holds real content created by an older version.
+- Read `update/README.md` before changing anything in `update/`, the boot sequence, the database schema, the shape of `content/`, or the requirements an instance is installed with.
+- Any change to the Drizzle schema in `server/thei/db/schema/` requires a migration. Add `update/migrations/<version>-<slug>.ts` with `defineMigration`, register it in `update/migrations/index.ts`, and regenerate the baseline with `bun run db:baseline`. A schema change without a migration upgrades new installations only and breaks every existing one.
+- Write migrations with raw SQL through `rawDb`. Never import the Drizzle schema into a migration: that schema always describes the current release, while a migration must keep describing the database as it was when the migration was written.
+- Treat a released migration as immutable. Its `id` is recorded in every instance's ledger. Never edit, reorder, or remove one that has shipped; correct it with a new migration instead.
+- Migrations must also cover changes outside the database when they affect existing installations, including the layout of `content/`, file naming on disk, and the shape of `thei.config.json`. File operations in a migration must be safe to repeat, because only the SQL and the ledger row share a transaction.
+- Run `bun vitest run tests/server/migrations-baseline.test.ts` after any schema change. It fails when a fresh installation and an upgraded one would not end up with the same schema.
+- Keep the layer consumable from `node_modules`. Do not assume this repository is the project root, do not import a `devDependency` from runtime code, and declare every runtime import in `dependencies`. The published instance runs the layer from `node_modules/thei`, where an undeclared or dev-only dependency is simply absent.
+- Declare new requirements of an installed instance in `update/instance/package.tmpl.json` rather than in installation steps. The engine owns the instance manifest, and an update re-renders it from the newly installed version.
+- Keep the boot sequence non-fatal. Report a failure through `setBootError` or `setBootUpdate` in `server/thei/boot/result.ts`. An exception escaping boot kills a process that a service supervisor will restart forever, which takes the site down permanently.
+- Verify that a change does not break the in-place update itself when it touches the build output, the server entry point, or anything read from disk at runtime. An update installs dependencies and builds while the previous version is still serving from `.output`.
+
 ## Editor.js
 
 - Check every change related to Editor.js for compatibility with content snapshots history system, including tools, block mutations, rendering, normalization, asynchronous hydration, assets, and editor event handling.

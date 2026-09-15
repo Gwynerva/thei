@@ -4,6 +4,7 @@ import { bootTheiConfig } from '../config/boot';
 import {
   BootDecided,
   bootResult,
+  setBootError,
   setBootInstall,
   setBootReady,
 } from './result';
@@ -35,11 +36,23 @@ export async function bootTheiServer() {
       return;
     }
 
-    // This is a real error, not a boot decision so throw it.
+    // A real error, not a boot decision. It must never escape: this runs inside
+    // a Nitro plugin, so throwing would kill the process, and a process manager
+    // set to restart it would loop forever. Failing into the error state keeps
+    // the server up and lets it explain itself.
     THEI_SERVER.console
       .tag('Boot')
-      .error('Error was thrown during boot process!');
-    throw decideOrError;
+      .error('Error was thrown during boot process!', decideOrError);
+
+    try {
+      setBootError(
+        decideOrError instanceof Error
+          ? decideOrError.message
+          : String(decideOrError),
+      );
+    } catch {
+      // setBootError signals the decision by throwing BootDecided.
+    }
   }
 }
 
