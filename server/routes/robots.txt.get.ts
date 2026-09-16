@@ -1,4 +1,5 @@
 import { SiteAccessLevel } from '#layers/thei/shared/access-level';
+import { siteUrl } from '../thei/site-url';
 
 const DISALLOWED = [
   '/sign-in/',
@@ -19,6 +20,6 @@ export default defineEventHandler((event) => {
     return 'User-agent: *\nDisallow: /\n';
   }
 
-  const sitemap = new URL('/sitemap.xml', getRequestURL(event).origin);
+  const sitemap = siteUrl(event, '/sitemap.xml');
   return `User-agent: *\n${DISALLOWED.map((path) => `Disallow: ${path}`).join('\n')}\n\nSitemap: ${sitemap}\n`;
 });

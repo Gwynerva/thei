@@ -100,6 +100,8 @@ export interface PublicProfileResponse {
 export interface SiteSettingsData {
   languageCode: LanguageCode;
   siteAccessLevel: SiteAccessLevel;
+  /** Empty means "derive the address from the request". */
+  siteUrl: string;
   secretPhrase: string;
   password: string;
 }

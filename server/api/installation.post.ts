@@ -3,6 +3,7 @@ import { dirname } from 'path';
 import { SiteAccessLevel } from '#layers/thei/shared/access-level';
 import type { InstallData } from '#layers/thei/shared/api/install';
 import { languageCodes } from '#layers/thei/shared/language';
+import { normalizeSiteUrl } from '#layers/thei/shared/site-url';
 import { generatePasswordData } from '../thei/password';
 import { createFreshDbContext } from '../thei/db/utils';
 import { bootTheiServer } from '../thei/boot/process';
@@ -42,6 +43,7 @@ export default defineEventHandler(async (event): Promise<InstallResponse> => {
         version: THEI_SERVER.version,
         languageCode: installDataOrError.languageCode,
         siteAccessLevel: installDataOrError.siteAccessLevel,
+        siteUrl: installDataOrError.siteUrl,
         secretPhrase: installDataOrError.secretPhrase,
         password: {
           hash: passwordData.hash,
@@ -70,6 +72,11 @@ function validateInstallData(data: InstallData): string | InstallData {
     return `Unknown site access level "${siteAccessLevel}"!`;
   }
 
+  const siteUrl = normalizeSiteUrl(data.siteUrl ?? '');
+  if (siteUrl === undefined) {
+    return `Unusable site address "${data.siteUrl}"!`;
+  }
+
   const displayName = data.displayName?.trim();
   if (!displayName) {
     return 'Display name can not be empty!';
@@ -88,6 +95,7 @@ function validateInstallData(data: InstallData): string | InstallData {
   return {
     languageCode,
     siteAccessLevel,
+    siteUrl,
     displayName,
     secretPhrase,
     password,

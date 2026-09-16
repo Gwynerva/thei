@@ -347,6 +347,11 @@ export default defineI18nBase({
       'Anyone can visit the site. You can restrict access to individual projects, events, pages, and files. Suitable for most people.',
     site_access_closed_description:
       'Only you and no one else will be able to view any content on the site. Suitable for secret agents who keep all aspects of their lives in strict secrecy.',
+    site_url: 'Site Address',
+    site_url_hint:
+      'Leave empty and the address is taken from each request, which is right for a single domain behind a normal proxy. Set it when the site answers on several hostnames, so that search engines are told one canonical address. Example: https://example.com',
+    site_url_invalid:
+      'Enter a full address with a scheme and a host, without a path, query or anchor. Example: https://example.com',
     admin_data: 'Admin Data',
     admin_data_description:
       'Basic information about you and how to log in to the admin panel.',

@@ -177,7 +177,8 @@ function openGalleryItem(item: ContentGalleryItem) {
       <ContentEntityLinkBlock
         v-else-if="block.type === 'entityLink'"
         :entity-type="block.data.entityType as 'project' | 'event' | 'page'"
-        :entity-id="block.data.entityId as string"
+        :entity-id="block.data.entityId as string | undefined"
+        :restricted="block.data.restricted as boolean | undefined"
         :resolver="linkResolver"
       />
       <section

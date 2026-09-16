@@ -5,6 +5,7 @@ import {
   languagesInfo,
   loadLanguage,
 } from '#layers/thei/shared/language';
+import { normalizeSiteUrl } from '#layers/thei/shared/site-url';
 
 const languageCode = ref<LanguageCode>(language.value.code);
 watch(languageCode, async (newCode) => {
@@ -12,6 +13,12 @@ watch(languageCode, async (newCode) => {
 });
 
 const accessModel = defineModel<SiteAccessLevel>('access');
+const siteUrlModel = defineModel<string>('siteUrl', { default: '' });
+const siteUrlError = computed(() =>
+  normalizeSiteUrl(siteUrlModel.value) === undefined
+    ? phrase.value.site_url_invalid
+    : undefined,
+);
 </script>
 
 <template>
@@ -58,6 +65,18 @@ const accessModel = defineModel<SiteAccessLevel>('access');
             }"
             v-model="accessModel"
           />
+        </Field>
+
+        <Field>
+          <FieldLabel>{{ phrase.site_url }}</FieldLabel>
+          <FieldInput
+            v-model="siteUrlModel"
+            autocomplete="off"
+            inputmode="url"
+            placeholder="https://example.com"
+            :error="siteUrlError"
+          />
+          <FieldHint>{{ phrase.site_url_hint }}</FieldHint>
         </Field>
       </div>
     </Box>

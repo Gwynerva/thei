@@ -300,6 +300,9 @@ export type LanguagePhrases = {
   site_access_closed: string;
   site_access_open_description: string;
   site_access_closed_description: string;
+  site_url: string;
+  site_url_hint: string;
+  site_url_invalid: string;
   admin_data: string;
   admin_data_description: string;
   how_to_address_you: string;

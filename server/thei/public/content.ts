@@ -30,6 +30,20 @@ import {
   buildPublicProfileMedia,
 } from '../assets/urls';
 import { findExternalLink } from '../external-links/repository';
+import { canResolveContentEntityLink } from '../content-links/access';
+import {
+  isContentEntityType,
+  type ContentEntityType,
+} from '#layers/thei/shared/content-link';
+
+/**
+ * Canonical shape `normalizeContentInlineHtml` writes entity anchors in, so
+ * rewriting them is an exact match rather than HTML parsing.
+ */
+const INLINE_ENTITY_ANCHOR =
+  /<a data-content-link="entity" data-entity-type="(project|event|page)" data-entity-id="([^"]*)">/g;
+
+type EntityLinkAccess = 'resolvable' | 'restricted' | 'missing';
 
 type PublicContentEntity =
   | { type: 'profile'; title?: string }
@@ -162,6 +176,73 @@ async function hydratePublicContentData(
     string,
     Awaited<ReturnType<typeof findExternalLink>>
   >();
+  const entityLinkCache = new Map<string, EntityLinkAccess>();
+
+  /**
+   * A link to an entity the reader may not open carries that entity's uuid,
+   * which would otherwise travel in the payload of a page anyone can read and
+   * make `/api/content-links` answer for it. `missing` is left alone: a uuid
+   * that resolves to nothing discloses nothing, and collapsing it into
+   * `restricted` would show a lock where the author left a dead link.
+   */
+  async function entityLinkAccess(
+    entityType: ContentEntityType,
+    entityId: string,
+  ): Promise<EntityLinkAccess> {
+    const key = `${entityType}:${entityId}`;
+    const cached = entityLinkCache.get(key);
+    if (cached) return cached;
+    const entity =
+      entityType === 'project'
+        ? await THEI_SERVER.projects.findByUuid(entityId)
+        : entityType === 'event'
+          ? await THEI_SERVER.events.findByUuid(entityId)
+          : await THEI_SERVER.pages.findByUuid(entityId);
+    const access: EntityLinkAccess = !entity
+      ? 'missing'
+      : canResolveContentEntityLink(entity.access, includePrivate)
+        ? 'resolvable'
+        : 'restricted';
+    entityLinkCache.set(key, access);
+    return access;
+  }
+
+  /** Same redaction for entity links written inline inside rich text. */
+  async function redactInlineEntityLinks(html: string): Promise<string> {
+    const restricted = new Set<string>();
+    for (const [, entityType, entityId] of html.matchAll(
+      INLINE_ENTITY_ANCHOR,
+    )) {
+      if (!isContentEntityType(entityType)) continue;
+      if ((await entityLinkAccess(entityType, entityId!)) === 'restricted')
+        restricted.add(`${entityType}:${entityId}`);
+    }
+    if (!restricted.size) return html;
+    return html.replace(INLINE_ENTITY_ANCHOR, (source, type, id) =>
+      restricted.has(`${type}:${id}`)
+        ? `<a data-content-link="entity" data-entity-type="${type}" data-entity-restricted="true">`
+        : source,
+    );
+  }
+
+  async function redactBlockData(value: unknown): Promise<unknown> {
+    if (typeof value === 'string')
+      return value.includes('<a data-content-link="entity"')
+        ? await redactInlineEntityLinks(value)
+        : value;
+    if (Array.isArray(value))
+      return await Promise.all(value.map(redactBlockData));
+    if (value && typeof value === 'object')
+      return Object.fromEntries(
+        await Promise.all(
+          Object.entries(value).map(async ([key, item]) => [
+            key,
+            await redactBlockData(item),
+          ]),
+        ),
+      );
+    return value;
+  }
 
   async function hydrateAsset(assetUuid: string) {
     if (assetCache.has(assetUuid)) return assetCache.get(assetUuid);
@@ -221,7 +302,20 @@ async function hydratePublicContentData(
     block: ContentOutputBlock,
   ): Promise<ContentOutputBlock> {
     const data = { ...block.data };
-    if (block.type === 'contentMedia' || block.type === 'contentAttachment') {
+    if (block.type === 'entityLink') {
+      const entityType = data.entityType;
+      const entityId = data.entityId;
+      if (
+        isContentEntityType(entityType) &&
+        typeof entityId === 'string' &&
+        entityId &&
+        (await entityLinkAccess(entityType, entityId)) === 'restricted'
+      )
+        return { ...block, data: { entityType, restricted: true } };
+    } else if (
+      block.type === 'contentMedia' ||
+      block.type === 'contentAttachment'
+    ) {
       const assetUuid = (block.data as any).asset?.assetUuid;
       data.asset = assetUuid ? await hydrateAsset(assetUuid) : null;
     } else if (block.type === 'contentGallery') {
@@ -247,7 +341,12 @@ async function hydratePublicContentData(
       }
       if (link) Object.assign(data, link);
     }
-    return { ...block, data };
+    return {
+      ...block,
+      data: includePrivate
+        ? data
+        : ((await redactBlockData(data)) as typeof data),
+    };
   }
 
   async function privateSectionSummary(blocks: ContentOutputBlock[]) {

@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { SiteAccessLevel } from '#layers/thei/shared/access-level';
+import { normalizeSiteUrl } from '#layers/thei/shared/site-url';
 
 useHead({
   title: computed(() => phrase.value.install_thei),
@@ -10,6 +11,7 @@ const installing = ref(false);
 
 const languageCode = computed(() => language.value.code);
 const siteAccessLevel = ref<SiteAccessLevel>();
+const siteUrl = ref('');
 const displayName = ref('');
 const secretPhrase = ref('');
 const password = ref('');
@@ -18,6 +20,7 @@ const installData = computed(() => {
   return {
     languageCode: languageCode.value,
     siteAccessLevel: siteAccessLevel.value,
+    siteUrl: siteUrl.value,
     displayName: displayName.value.trim(),
     secretPhrase: secretPhrase.value.trim(),
     password: password.value.trim(),
@@ -29,6 +32,7 @@ const canInstall = computed(() => {
     !installing.value &&
     installData.value.languageCode &&
     installData.value.siteAccessLevel &&
+    normalizeSiteUrl(installData.value.siteUrl) !== undefined &&
     installData.value.displayName &&
     installData.value.secretPhrase &&
     installData.value.password
@@ -82,7 +86,10 @@ async function installClick() {
     </StickyGlassHeader>
 
     <div class="m-auto flex w-(--width-narrow) flex-col gap-lg px-window py-lg">
-      <SettingsGlobals v-model:access="siteAccessLevel" />
+      <SettingsGlobals
+        v-model:access="siteAccessLevel"
+        v-model:site-url="siteUrl"
+      />
       <SettingsVisuals />
       <SettingsAdmin
         v-model:display-name="displayName"

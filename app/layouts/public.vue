@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 const publicAdmin = await usePublicAdmin();
-const requestUrl = useRequestURL();
+const site = useSiteUrl();
 const siteName = computed(() => publicAdmin.value.displayName);
 
 useHead({
@@ -23,9 +23,9 @@ useHead({
       textContent: serializeJsonLd({
         '@context': 'https://schema.org',
         '@type': 'WebSite',
-        '@id': `${new URL('/', requestUrl.origin).toString()}#website`,
+        '@id': `${site.resolve('/')}#website`,
         name: siteName.value,
-        url: new URL('/', requestUrl.origin).toString(),
+        url: site.resolve('/'),
         inLanguage: publicAdmin.value.languageCode,
       }),
     },

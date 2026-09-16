@@ -865,3 +865,114 @@ describe('public content reference groups', () => {
     ).toHaveLength(2);
   });
 });
+
+describe('entity links in public content', () => {
+  const privateProject = {
+    projectUuid: 'private-project-uuid',
+    access: ProjectEventAccessLevel.Private,
+  };
+  const publicProject = {
+    projectUuid: 'public-project-uuid',
+    access: ProjectEventAccessLevel.Public,
+  };
+
+  function stubEntityLinkContent() {
+    (globalThis as any).THEI_SERVER = {
+      content: {
+        findByOwner: async () => ({
+          contentUuid: 'page-content',
+          data: {
+            blocks: [
+              {
+                type: 'paragraph',
+                data: {
+                  text:
+                    'See <a data-content-link="entity" data-entity-type="project" ' +
+                    `data-entity-id="${privateProject.projectUuid}">the secret</a> and ` +
+                    '<a data-content-link="entity" data-entity-type="project" ' +
+                    `data-entity-id="${publicProject.projectUuid}">the open one</a>.`,
+                },
+              },
+              {
+                type: 'entityLink',
+                data: {
+                  entityType: 'project',
+                  entityId: privateProject.projectUuid,
+                },
+              },
+              {
+                type: 'entityLink',
+                data: {
+                  entityType: 'project',
+                  entityId: publicProject.projectUuid,
+                },
+              },
+              {
+                type: 'entityLink',
+                data: { entityType: 'project', entityId: 'deleted-uuid' },
+              },
+            ],
+          },
+        }),
+      },
+      projects: {
+        findByUuid: async (uuid: string) =>
+          uuid === privateProject.projectUuid
+            ? privateProject
+            : uuid === publicProject.projectUuid
+              ? publicProject
+              : undefined,
+      },
+      assets: { usages: { findOne: async () => undefined } },
+    };
+  }
+
+  it('never ships the uuid of an entity the reader may not open', async () => {
+    stubEntityLinkContent();
+    const content = await buildPublicContentData(
+      'page',
+      'page-uuid',
+      'page-body',
+      {
+        type: 'page',
+        slug: 'page',
+      },
+    );
+
+    expect(JSON.stringify(content)).not.toContain(privateProject.projectUuid);
+    expect(content!.blocks[1]).toEqual({
+      type: 'entityLink',
+      data: { entityType: 'project', restricted: true },
+    });
+    // A public target is untouched, and a uuid that resolves to nothing is
+    // left alone so a dead link does not masquerade as a private one.
+    expect(content!.blocks[2]).toMatchObject({
+      data: { entityType: 'project', entityId: publicProject.projectUuid },
+    });
+    expect(content!.blocks[3]).toMatchObject({
+      data: { entityType: 'project', entityId: 'deleted-uuid' },
+    });
+    expect(content!.blocks[0]!.data.text).toBe(
+      'See <a data-content-link="entity" data-entity-type="project" ' +
+        'data-entity-restricted="true">the secret</a> and ' +
+        '<a data-content-link="entity" data-entity-type="project" ' +
+        `data-entity-id="${publicProject.projectUuid}">the open one</a>.`,
+    );
+  });
+
+  it('leaves every link intact for an administrator', async () => {
+    stubEntityLinkContent();
+    const content = await buildPublicContentData(
+      'page',
+      'page-uuid',
+      'page-body',
+      { type: 'page', slug: 'page' },
+      true,
+    );
+
+    expect(JSON.stringify(content)).toContain(privateProject.projectUuid);
+    expect(content!.blocks[1]).toMatchObject({
+      data: { entityId: privateProject.projectUuid },
+    });
+  });
+});

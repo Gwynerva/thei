@@ -10,6 +10,9 @@ export async function bootTheiConfig() {
     version: config.version,
     languageCode: config.languageCode,
     siteAccessLevel: config.siteAccessLevel,
+    // Absent in the file means the same as empty: derive the address from the
+    // request. The loader is where the on-disk shape becomes the typed config.
+    siteUrl: config.siteUrl ?? '',
     secretPhrase: config.secretPhrase,
     password: config.password,
     backup: config.backup,

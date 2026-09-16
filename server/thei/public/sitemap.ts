@@ -1,3 +1,4 @@
+import { resolveSiteUrl } from '#layers/thei/shared/site-url';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { buildLifeUrl } from '#layers/thei/shared/life';
@@ -205,7 +206,7 @@ export function escapeXml(value: string): string {
 }
 
 export function sitemapEntryXml(entry: SitemapEntry, origin: string): string {
-  const location = escapeXml(new URL(entry.path, origin).toString());
+  const location = escapeXml(resolveSiteUrl(origin, entry.path));
   return entry.lastmod
     ? `<url><loc>${location}</loc><lastmod>${entry.lastmod}</lastmod></url>`
     : `<url><loc>${location}</loc></url>`;

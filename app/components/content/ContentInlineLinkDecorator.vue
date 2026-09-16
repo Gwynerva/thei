@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { MediaPlayback } from '#layers/thei/shared/media';
 import {
+  contentLinkIsRestricted,
   contentLinkReferenceFromAnchor,
   contentLinkReferenceKey,
   type ContentLinkReference,
@@ -35,7 +36,15 @@ function links() {
 
 async function resolveLink(link: HTMLAnchorElement) {
   const reference = contentLinkReferenceFromAnchor(link);
-  if (!reference || !props.resolver) return;
+  if (!reference) return;
+  if (contentLinkIsRestricted(link)) {
+    // The server already decided this reader may not open the target and left
+    // no uuid to ask about, so there is nothing to resolve.
+    const resolved: ResolvedContentLink = { ...reference, state: 'restricted' };
+    applyRuntimeState(link, reference, resolved);
+    return resolved;
+  }
+  if (!props.resolver) return;
   const key = contentLinkReferenceKey(reference);
   const cached = results.get(key);
   const resolved = cached ?? (await props.resolver(reference));

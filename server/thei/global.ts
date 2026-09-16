@@ -53,6 +53,7 @@ import {
   publicViewCookieName,
   resolveRequestAdminRole,
 } from '../../shared/public-view';
+import { getRequestPath } from './request';
 
 export const THEI_SERVER = {
   version,
@@ -92,7 +93,7 @@ export const THEI_SERVER = {
       return event.context.isAdmin;
     }
     const isAuthenticatedAdmin = await this.isAuthenticatedAdmin(event);
-    const path = (event.node.req.url || '/').split('?')[0] || '/';
+    const path = getRequestPath(event);
     return resolveRequestAdminRole({
       isAuthenticatedAdmin,
       path,

@@ -6,12 +6,13 @@ import {
 } from '#layers/thei/shared/public-view';
 import { bootPromise } from '../thei/boot/promise';
 import { bootResult } from '../thei/boot/result';
+import { getRequestPath } from '../thei/request';
+import { siteOrigin } from '../thei/site-url';
 
 export default defineEventHandler(async (event) => {
   await bootPromise;
 
-  const url = event.node.req.url || '/';
-  const path = url.split('?')[0] || '/';
+  const path = getRequestPath(event);
 
   const isInternalPath =
     path.startsWith('/_nuxt') || path.startsWith('/__nuxt');
@@ -53,6 +54,9 @@ export default defineEventHandler(async (event) => {
       event.context.languageCode = THEI_SERVER.language.code;
       event.context.isAuthenticatedAdmin = isAuthenticatedAdmin;
       event.context.isAdmin = isAdmin;
+      // Resolved here rather than in the pages so that a rendered page and the
+      // sitemap it is listed in always agree on the site's own address.
+      event.context.siteOrigin = siteOrigin(event);
 
       if (isInstallPath || isUpdatePath) {
         return sendRedirect(event, '/');

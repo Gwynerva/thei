@@ -67,7 +67,7 @@ function resolveUrls<T>(value: T, resolve: (path: string) => string): T {
 }
 
 export function usePublicSeo(options: PublicSeoOptions) {
-  const requestUrl = useRequestURL();
+  const site = useSiteUrl();
 
   useHead(() => {
     const description = options.description
@@ -87,7 +87,7 @@ export function usePublicSeo(options: PublicSeoOptions) {
         ? [
             {
               rel: 'canonical',
-              href: new URL(canonical, requestUrl.origin).toString(),
+              href: site.resolve(canonical),
             },
           ]
         : [],
@@ -105,8 +105,8 @@ export function usePublicSeo(options: PublicSeoOptions) {
 
     const absolute = (path: string) =>
       path.startsWith('#')
-        ? `${new URL(canonical, requestUrl.origin).toString()}${path}`
-        : new URL(path, requestUrl.origin).toString();
+        ? `${site.resolve(canonical)}${path}`
+        : site.resolve(path);
     const pageUrl = absolute(canonical);
     const title = toValue(options.title);
     const description = options.description

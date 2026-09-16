@@ -308,6 +308,25 @@ test('SSR hydrates once, keeps missing resources as 404 and filters private cont
   expect((await page.goto('/pages/not-found/'))!.status()).toBe(404);
 });
 
+test('the admin gate holds against an encoded request path', async ({
+  request,
+}) => {
+  // h3 routes on the decoded path while `node.req.url` stays raw, so an
+  // access check written against the raw target would miss these.
+  for (const path of [
+    '/api/admin/settings',
+    '/api/%61dmin/settings',
+    '/%61pi/admin/settings',
+    '/api/admin/%73ettings',
+    '/%61dmin/',
+  ]) {
+    const response = await request.get(path, { maxRedirects: 0 });
+    expect(response.status(), path).toBe(403);
+  }
+  // The encoded path really does reach a handler — a public one answers it.
+  expect((await request.get('/%61pi/projects')).status()).toBe(200);
+});
+
 test('public lists reuse SSR data and a client API failure remains an API error', async ({
   page,
 }) => {

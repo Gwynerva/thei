@@ -1,6 +1,7 @@
 import type { H3Event } from 'h3';
 import type {
   ContentLinkApiResponse,
+  ContentLinkReference,
   ResolvedContentLink,
 } from '#layers/thei/shared/content-link';
 import { normalizeExternalLinkUrl } from '#layers/thei/shared/external-link';
@@ -24,6 +25,21 @@ import {
 } from '#layers/thei/shared/content';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
+
+/**
+ * A reader who may not open an entity is told the same thing whether it is
+ * private or was never there. Public content no longer carries the uuid of
+ * such an entity at all, so only an admin previewing their own site as a guest
+ * has a legitimate reason to see the two told apart.
+ */
+function restrictedState(
+  event: H3Event,
+  reference: ContentLinkReference,
+): ContentLinkApiResponse {
+  return event.context.isAuthenticatedAdmin
+    ? { state: 'restricted' }
+    : { ...reference, state: 'broken', reason: 'not-found' };
+}
 
 export default defineEventHandler(
   async (event): Promise<ContentLinkApiResponse> => {
@@ -60,7 +76,7 @@ async function resolveProjectLink(
     : undefined;
   const isAdmin = Boolean(event.context.isAdmin);
   if (!project || !canResolveContentEntityLink(project.access, isAdmin)) {
-    if (project) return { state: 'restricted' };
+    if (project) return restrictedState(event, reference);
     return { ...reference, state: 'broken', reason: 'not-found' };
   }
 
@@ -102,7 +118,7 @@ async function resolveEventLink(
   if (!stored) return { ...reference, state: 'broken', reason: 'not-found' };
   const isAdmin = Boolean(event.context.isAdmin);
   if (!canResolveContentEntityLink(stored.access, isAdmin))
-    return { state: 'restricted' };
+    return restrictedState(event, reference);
   const previewMedia = isAdmin
     ? buildContentPreview(
         (
@@ -136,7 +152,7 @@ async function resolvePageLink(
   if (!page) return { ...reference, state: 'broken', reason: 'not-found' };
   const isAdmin = Boolean(event.context.isAdmin);
   if (!canResolveContentEntityLink(page.access, isAdmin))
-    return { state: 'restricted' };
+    return restrictedState(event, reference);
   const icon = (
     await THEI_SERVER.assets.usages.findByContainer('page', page.pageUuid)
   ).find((usage) => usage.role === 'icon');

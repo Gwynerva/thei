@@ -2,6 +2,7 @@
 import type { SiteSettingsData } from '#layers/thei/shared/profile';
 import { SiteAccessLevel } from '#layers/thei/shared/access-level';
 import { languagesInfo, loadLanguage } from '#layers/thei/shared/language';
+import { normalizeSiteUrl } from '#layers/thei/shared/site-url';
 definePageMeta({ layout: 'admin' });
 await useAdminTabTitle(computed(() => phrase.value.site_settings));
 const initial = await useRequestFetch()<SiteSettingsData>(
@@ -18,11 +19,17 @@ const error = ref<string>();
 const isDirty = computed(
   () => dataDirty.value || Boolean(confirmPassword.value),
 );
+const siteUrlError = computed(() =>
+  normalizeSiteUrl(data.value.siteUrl) === undefined
+    ? phrase.value.site_url_invalid
+    : undefined,
+);
 const canSave = computed(
   () =>
     isDirty.value &&
     !saving.value &&
     Boolean(data.value.secretPhrase.trim()) &&
+    !siteUrlError.value &&
     data.value.password === confirmPassword.value,
 );
 async function save() {
@@ -89,6 +96,16 @@ useSavedForm(isDirty, save, canSave);
                   },
                 }"
             /></Field>
+            <Field
+              ><FieldLabel>{{ phrase.site_url }}</FieldLabel
+              ><FieldInput
+                v-model="data.siteUrl"
+                autocomplete="off"
+                inputmode="url"
+                placeholder="https://example.com"
+                :error="siteUrlError"
+              /><FieldHint>{{ phrase.site_url_hint }}</FieldHint></Field
+            >
           </Box>
         </div>
         <div>

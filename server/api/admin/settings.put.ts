@@ -1,10 +1,9 @@
-import { rename, writeFile, rm } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
 import { languageCodes, loadLanguage } from '#layers/thei/shared/language';
 import { SiteAccessLevel } from '#layers/thei/shared/access-level';
 import type { SiteSettingsData } from '#layers/thei/shared/profile';
+import { normalizeSiteUrl } from '#layers/thei/shared/site-url';
 import { generatePasswordData } from '../../thei/password';
-import { setTheiConfig } from '../../thei/config';
+import { writeTheiConfig } from '../../thei/config/write';
 import { setCurrentLanguage } from '../../thei/language';
 import { destroyOtherAdminSessions } from '../../thei/admin-session';
 
@@ -15,6 +14,8 @@ export default defineEventHandler(async (event) => {
     !input ||
     !languageCodes.includes(input.languageCode) ||
     !Object.values(SiteAccessLevel).includes(input.siteAccessLevel) ||
+    typeof input.siteUrl !== 'string' ||
+    input.siteUrl.length > 1000 ||
     typeof input.secretPhrase !== 'string' ||
     !input.secretPhrase.trim() ||
     input.secretPhrase.length > 1000 ||
@@ -22,6 +23,12 @@ export default defineEventHandler(async (event) => {
     input.password.length > 1000
   )
     throw createError({ statusCode: 400, message: 'Invalid settings' });
+  const siteUrl = normalizeSiteUrl(input.siteUrl);
+  if (siteUrl === undefined)
+    throw createError({
+      statusCode: 400,
+      message: THEI_SERVER.phrase.site_url_invalid,
+    });
   await loadLanguage(input.languageCode);
   const currentSession =
     input.password ||
@@ -34,20 +41,13 @@ export default defineEventHandler(async (event) => {
       ...previous,
       languageCode: input.languageCode,
       siteAccessLevel: input.siteAccessLevel,
+      siteUrl,
       secretPhrase: input.secretPhrase.trim(),
       password: input.password
         ? generatePasswordData(input.password)
         : THEI_SERVER.config.password,
     };
-    const path = THEI_SERVER.contentPath('thei.config.json');
-    const temp = `${path}.${randomUUID()}.tmp`;
-    try {
-      await writeFile(temp, JSON.stringify(config, null, 2), 'utf8');
-      await rename(temp, path);
-    } finally {
-      await rm(temp, { force: true });
-    }
-    setTheiConfig(config);
+    await writeTheiConfig(config);
     await setCurrentLanguage(config.languageCode);
     if (
       currentSession &&
@@ -58,5 +58,10 @@ export default defineEventHandler(async (event) => {
   });
   queue = save.catch(() => {});
   await save;
-  return { ...input, secretPhrase: input.secretPhrase.trim(), password: '' };
+  return {
+    ...input,
+    siteUrl,
+    secretPhrase: input.secretPhrase.trim(),
+    password: '',
+  };
 });

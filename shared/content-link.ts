@@ -307,17 +307,32 @@ export function extractContentInlineLinks(html: string): ContentInlineLink[] {
   return links;
 }
 
+/**
+ * Marks an inline entity link whose target the reader may not open. Public
+ * content carries this instead of the target's uuid, so the anchor renders as
+ * restricted without anything to ask the server about.
+ */
+export function contentLinkIsRestricted(link: {
+  dataset: Record<string, string | undefined>;
+}): boolean {
+  return link.dataset.entityRestricted === 'true';
+}
+
 export function contentLinkReferenceFromAnchor(link: {
   dataset: Record<string, string | undefined>;
   href: string;
 }): ContentLinkReference | undefined {
-  if (link.dataset.contentLink === 'entity' && link.dataset.entityId) {
+  if (
+    link.dataset.contentLink === 'entity' &&
+    (link.dataset.entityId || contentLinkIsRestricted(link))
+  ) {
+    const entityId = link.dataset.entityId ?? '';
     if (link.dataset.entityType === 'project')
-      return { kind: 'project', projectUuid: link.dataset.entityId };
+      return { kind: 'project', projectUuid: entityId };
     if (link.dataset.entityType === 'event')
-      return { kind: 'event', eventUuid: link.dataset.entityId };
+      return { kind: 'event', eventUuid: entityId };
     if (link.dataset.entityType === 'page')
-      return { kind: 'page', pageUuid: link.dataset.entityId };
+      return { kind: 'page', pageUuid: entityId };
   }
   if (link.dataset.contentLink === 'external' || link.href) {
     try {

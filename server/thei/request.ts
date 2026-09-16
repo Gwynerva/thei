@@ -65,3 +65,15 @@ export async function getRequestMeta(args: {
 
   return meta;
 }
+
+/**
+ * The request path every access check must be made against.
+ *
+ * `event.node.req.url` is the raw request target, while the router dispatches
+ * on the decoded `event.path`. h3 keeps the two apart whenever they differ, so
+ * a check written against the raw URL sees `/api/%61dmin/settings` while the
+ * handler that runs is the one registered at `/api/admin/settings`.
+ */
+export function getRequestPath(event: H3Event): string {
+  return (event.path || '/').split('?')[0] || '/';
+}

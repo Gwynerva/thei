@@ -4,6 +4,7 @@ import {
   sitemapEntryXml,
   type SitemapInput,
 } from '../thei/public/sitemap';
+import { siteOrigin } from '../thei/site-url';
 
 /**
  * Chunk size for streaming the document out.
@@ -104,7 +105,7 @@ export default defineEventHandler(async (event) => {
   // or a proxy caching what they got, must not turn it into a list of every
   // private address on the site.
   const entries = buildSitemapEntries(input);
-  const origin = getRequestURL(event).origin;
+  const origin = siteOrigin(event);
 
   setHeader(event, 'Content-Type', 'application/xml; charset=utf-8');
   return new ReadableStream<Uint8Array>({
