@@ -9,49 +9,48 @@ afterEach(() => delete (globalThis as any).THEI_SERVER);
 describe.each([
   ['project', validateProjectAssets],
   ['event', validateEventAssets],
-] as const)('%s action file color validation', (_kind, validate) => {
-  it.each([AssetType.Other, AssetType.Audio])(
-    'rejects color from %s files',
+] as const)('%s action file validation', (_kind, validate) => {
+  it.each([AssetType.Other, AssetType.Audio, AssetType.Image, AssetType.Video])(
+    'accepts %s files with the auto color',
     async (type) => {
       (globalThis as any).THEI_SERVER = {
         assets: { findByUuid: async () => ({ type, size: 20, meta: null }) },
-      };
-      const data = {
-        action: {
-          ...DEFAULT_PROJECT_ACTION,
-          target: 'file',
-          fileAssetUuid: 'file',
-          backgroundMode: 'file-gradient',
-        },
-      } as any;
-      expect(await validate(data)).toMatch(/image or video/);
-      data.action.backgroundMode = 'standard-gradient';
-      expect(await validate(data)).toBeUndefined();
-    },
-  );
-
-  it.each([AssetType.Image, AssetType.Video])(
-    'accepts color from %s files',
-    async (type) => {
-      (globalThis as any).THEI_SERVER = {
-        assets: {
-          findByUuid: async () => ({
-            type,
-            size: 20,
-            meta: { accent: { hue: 0, chroma: 0.15 } },
-          }),
-        },
       };
       expect(
         await validate({
           action: {
             ...DEFAULT_PROJECT_ACTION,
+            enabled: true,
+            text: 'Download',
             target: 'file',
             fileAssetUuid: 'file',
-            backgroundMode: 'file-gradient',
+            backgroundMode: 'auto-gradient',
           },
         } as any),
       ).toBeUndefined();
     },
   );
+
+  it('rejects files over the size limit', async () => {
+    (globalThis as any).THEI_SERVER = {
+      assets: {
+        findByUuid: async () => ({
+          type: AssetType.Other,
+          size: Number.MAX_SAFE_INTEGER,
+          meta: null,
+        }),
+      },
+    };
+    expect(
+      await validate({
+        action: {
+          ...DEFAULT_PROJECT_ACTION,
+          enabled: true,
+          text: 'Download',
+          target: 'file',
+          fileAssetUuid: 'file',
+        },
+      } as any),
+    ).toMatch(/size limit|maximum allowed size/);
+  });
 });

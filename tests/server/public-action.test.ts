@@ -59,7 +59,7 @@ describe.each(['event', 'project'])('public %s action', (kind) => {
     'preserves the %s file color with public URLs',
     async (type) => {
       const result = await buildPublicAction(
-        entity({ target: 'file', backgroundMode: 'file-gradient' }),
+        entity({ target: 'file', backgroundMode: 'auto-gradient' }),
         [usage('action-file', type)] as any,
         false,
       );
@@ -97,7 +97,7 @@ describe.each(['event', 'project'])('public %s action', (kind) => {
         touchedAt: 0,
       });
       const result = await buildPublicAction(
-        entity({ iconMode, backgroundMode: 'link-gradient' }),
+        entity({ iconMode, backgroundMode: 'auto-gradient' }),
         [],
         false,
       );
@@ -110,7 +110,7 @@ describe.each(['event', 'project'])('public %s action', (kind) => {
 
   it('preserves icon color and background media', async () => {
     const result = await buildPublicAction(
-      entity({ iconMode: 'asset', backgroundMode: 'icon-gradient' }),
+      entity({ iconMode: 'asset', backgroundMode: 'auto-gradient' }),
       [usage('action-icon'), usage('action-background')] as any,
       false,
     );

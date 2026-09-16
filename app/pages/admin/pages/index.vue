@@ -115,13 +115,17 @@ const list = computed<PageListResponse | undefined>(() => data.value);
       </AdminEntityListItem>
     </Box>
 
-    <div
+    <AdminEmptyList
       v-else-if="status !== 'pending' && !error"
-      class="mt-md rounded-normal border border-border-1 bg-bg-2 p-md
-        text-center text-sm text-text-3 italic"
-    >
-      {{ search.trim() ? phrase.admin_search_no_results : phrase.no_pages }}
-    </div>
+      icon="page"
+      :title="phrase.no_pages"
+      :description="phrase.admin_pages_empty_description"
+      :searching="!!search.trim()"
+      create-to="/admin/pages/new/"
+      :create-label="phrase.new_page"
+      class="mt-md"
+      @reset-search="search = ''"
+    />
 
     <div v-if="status === 'pending'" class="flex justify-center p-md">
       <Icon name="loading" class="text-lg text-text-2" />

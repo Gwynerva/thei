@@ -34,7 +34,11 @@ const iconMedia = computed(() =>
     :style="{ '--tag-accent': accentColor }"
     @click="emit('click')"
   >
-    <TagIcon v-if="iconMedia" :tag="tag" class="aspect-square h-4/6" />
+    <TagIcon
+      v-if="iconMedia"
+      :tag="tag"
+      class="aspect-square h-4/6 rounded-xs"
+    />
     <span class="truncate">{{ tag.title }}</span>
     <slot />
   </component>

@@ -126,10 +126,8 @@ const secret: PublicSecretReference = {
 const withSecret = [secret, ...showcase];
 const actions: PublicAction[] = [
   'standard-gradient',
+  'auto-gradient',
   'accent-gradient',
-  'icon-gradient',
-  'file-gradient',
-  'link-gradient',
   'asset',
 ].map((backgroundMode) => ({
   ...DEFAULT_PROJECT_ACTION,
@@ -147,7 +145,8 @@ const actions: PublicAction[] = [
 actions.push({
   ...actions[0]!,
   text: 'missing-color',
-  backgroundMode: 'file-gradient',
+  backgroundMode: 'auto-gradient',
+  iconMedia: undefined,
   fileMedia: undefined,
 });
 </script>
@@ -181,7 +180,7 @@ actions.push({
       :data-action="action.text"
       class="flex flex-col gap-xs"
     >
-      <ProjectActionButton v-bind="action" interactive />
+      <ProjectActionButton v-bind="action" preview />
       <PublicAction :action />
     </div>
     <div data-editor><EditorRegression /></div>

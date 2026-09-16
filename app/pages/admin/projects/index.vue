@@ -132,13 +132,17 @@ const list = computed<ProjectListResponse | undefined>(() => data.value);
       </AdminEntityListItem>
     </Box>
 
-    <div
+    <AdminEmptyList
       v-else-if="status !== 'pending' && !error"
-      class="mt-md rounded-normal border border-border-1 bg-bg-2 p-md
-        text-center text-sm text-text-3 italic"
-    >
-      {{ search.trim() ? phrase.admin_search_no_results : phrase.no_projects }}
-    </div>
+      icon="project"
+      :title="phrase.no_projects"
+      :description="phrase.admin_projects_empty_description"
+      :searching="!!search.trim()"
+      create-to="/admin/projects/new/"
+      :create-label="phrase.new_project"
+      class="mt-md"
+      @reset-search="search = ''"
+    />
 
     <div v-if="status === 'pending'" class="flex justify-center p-md">
       <Icon name="loading" class="text-lg text-text-2" />

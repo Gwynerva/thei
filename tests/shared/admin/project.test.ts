@@ -10,7 +10,9 @@ import { ProjectEventAccessLevel } from '../../../shared/access-level';
 import {
   DEFAULT_PROJECT_ACTION,
   normalizeProjectActionBackgroundRepeat,
-  projectActionContextAccent,
+  projectActionAssetUuids,
+  projectActionAutoAccent,
+  projectActionIssues,
   type ProjectActionBackgroundRepeat,
   type ProjectActionBackgroundSize,
 } from '../../../shared/project-action';
@@ -48,7 +50,7 @@ describe('validateProjectData asset metadata', () => {
     const result = validateProjectData(
       baseProject({
         action: {
-          enabled: false,
+          enabled: true,
           text: '  Open project  ',
           accentColor: '#AABBCC',
           isPrivate: false,
@@ -132,7 +134,7 @@ describe('validateProjectData asset metadata', () => {
     ).toBe('Invalid action button color');
   });
 
-  it('returns the exact canonical action when the text is empty', () => {
+  it('returns the exact canonical action when the button is disabled', () => {
     const result = validateProjectData(
       baseProject({
         action: {
@@ -167,7 +169,22 @@ describe('validateProjectData asset metadata', () => {
     ).toBeUndefined();
   });
 
-  it('rejects legacy and unknown action modes', () => {
+  it('requires text for an enabled button', () => {
+    expect(
+      validateProjectData(
+        baseProject({
+          action: {
+            ...DEFAULT_PROJECT_ACTION,
+            enabled: true,
+            text: '   ',
+            externalUrl: 'https://example.com',
+          },
+        }),
+      ),
+    ).toBe('Action button text cannot be empty');
+  });
+
+  it('rejects unknown action modes', () => {
     const result = validateProjectData(
       baseProject({
         action: {
@@ -185,30 +202,6 @@ describe('validateProjectData asset metadata', () => {
       }),
     );
     expect(result).toBe('Invalid action button background mode');
-  });
-
-  it('rejects legacy axis settings even alongside the new contract', () => {
-    const result = validateProjectData(
-      baseProject({
-        action: {
-          enabled: true,
-          text: 'Open',
-          accentColor: '#123456',
-          isPrivate: false,
-          target: 'external-link',
-          externalUrl: 'https://example.com',
-          iconMode: 'fallback',
-          backgroundMode: 'asset',
-          backgroundAssetUuid: 'background',
-          backgroundSize: 'natural',
-          backgroundRepeat: 'no-repeat',
-          backgroundX: 'natural',
-        } as unknown as ProjectEditData['action'],
-      }),
-    );
-    expect(result).toBe(
-      'Legacy action button background settings are not allowed',
-    );
   });
 
   it.each([
@@ -279,11 +272,6 @@ describe('validateProjectData asset metadata', () => {
       { backgroundMode: 'asset' },
       'Action button background is missing',
     ],
-    [
-      'icon gradient without a custom icon',
-      { backgroundMode: 'icon-gradient' },
-      'Icon gradient requires an action icon',
-    ],
   ])('requires a resource for %s', (_label, patch, message) => {
     expect(
       validateProjectData(
@@ -306,16 +294,29 @@ describe('validateProjectData asset metadata', () => {
     ).toBe(message);
   });
 
+  it('shows the default icon instead of a favicon on a file button', () => {
+    const result = validateProjectData(
+      baseProject({
+        action: {
+          ...DEFAULT_PROJECT_ACTION,
+          enabled: true,
+          text: 'Download',
+          target: 'file',
+          fileAssetUuid: 'file',
+          iconMode: 'favicon',
+        },
+      }),
+    );
+    expect(typeof result === 'string' ? result : result.action?.iconMode).toBe(
+      'fallback',
+    );
+  });
+
   it.each([
     [
-      'favicon on a file',
-      { iconMode: 'favicon' },
-      'Favicon is only available for external links',
-    ],
-    [
-      'link gradient on a file',
-      { backgroundMode: 'link-gradient' },
-      'Link gradient is only available for external links',
+      'a file button without a file',
+      { fileAssetUuid: undefined },
+      'Action button file is missing',
     ],
   ])('rejects %s', (_label, patch, message) => {
     expect(
@@ -328,7 +329,6 @@ describe('validateProjectData asset metadata', () => {
             isPrivate: false,
             target: 'file',
             fileAssetUuid: 'file',
-            fileTitle: 'File',
             iconMode: 'fallback',
             backgroundMode: 'standard-gradient',
             backgroundSize: 'natural',
@@ -374,124 +374,85 @@ describe('validateProjectData asset metadata', () => {
     );
   });
 
-  it('uses only the matching contextual accent source', () => {
-    const sources = {
-      icon: { hue: 20, chroma: 0.15 },
-      file: { hue: 140, chroma: 0.15 },
-      link: { hue: 260, chroma: 0.15 },
+  it('takes the auto color from the displayed icon, then the target', () => {
+    const icon = { hue: 20, chroma: 0.15 };
+    const file = { hue: 140, chroma: 0.15 };
+    const favicon = { hue: 260, chroma: 0.15 };
+    expect(
+      projectActionAutoAccent('external-link', { icon, file, favicon }),
+    ).toBe(icon);
+    expect(projectActionAutoAccent('file', { icon, file, favicon })).toBe(icon);
+    expect(projectActionAutoAccent('file', { file, favicon })).toBe(file);
+    expect(projectActionAutoAccent('external-link', { file, favicon })).toBe(
+      favicon,
+    );
+    expect(projectActionAutoAccent('external-link', { file })).toBeUndefined();
+  });
+
+  it('keeps inactive settings out of the saved action and usage counts', () => {
+    const action = {
+      ...DEFAULT_PROJECT_ACTION,
+      enabled: true,
+      text: 'Open',
+      target: 'external-link' as const,
+      externalUrl: 'https://example.com',
+      fileAssetUuid: 'file',
+      iconMode: 'fallback' as const,
+      iconAssetUuid: 'icon',
+      backgroundMode: 'auto-gradient' as const,
+      backgroundAssetUuid: 'background',
+      accentColor: '#abcdef',
     };
-    expect(projectActionContextAccent('icon-gradient', sources)).toEqual({
-      hue: 20,
-      chroma: 0.15,
-    });
-    expect(projectActionContextAccent('file-gradient', sources)).toEqual({
-      hue: 140,
-      chroma: 0.15,
-    });
-    expect(projectActionContextAccent('link-gradient', sources)).toEqual({
-      hue: 260,
-      chroma: 0.15,
-    });
-    expect(projectActionContextAccent('standard-gradient', sources)).toBe(
-      undefined,
-    );
+    expect(projectActionAssetUuids(action)).toEqual([]);
+    expect(projectActionAssetUuids({ ...action, enabled: false })).toEqual([]);
     expect(
-      projectActionContextAccent('link-gradient', {
-        icon: { hue: 20, chroma: 0.15 },
-        file: { hue: 140, chroma: 0.15 },
+      projectActionAssetUuids({
+        ...action,
+        target: 'file',
+        iconMode: 'asset',
+        backgroundMode: 'asset',
       }),
-    ).toBeUndefined();
+    ).toEqual(['file', 'icon', 'background']);
+
+    const result = validateProjectData(baseProject({ action }));
+    expect(typeof result === 'string' ? result : result.action).toEqual({
+      enabled: true,
+      text: 'Open',
+      accentColor: DEFAULT_PROJECT_ACTION.accentColor,
+      isPrivate: false,
+      target: 'external-link',
+      externalUrl: 'https://example.com/',
+      fileAssetUuid: undefined,
+      iconMode: 'fallback',
+      iconAssetUuid: undefined,
+      backgroundMode: 'auto-gradient',
+      backgroundAssetUuid: undefined,
+      backgroundSize: 'natural',
+      backgroundRepeat: 'no-repeat',
+    });
   });
 
-  it('accepts contextual icon and file gradient sources', () => {
-    const iconResult = validateProjectData(
-      baseProject({
-        action: {
-          enabled: true,
-          text: 'Open',
-          accentColor: '#123456',
-          isPrivate: false,
-          target: 'external-link',
-          externalUrl: 'https://example.com',
-          iconMode: 'asset',
-          iconAssetUuid: 'icon',
-          backgroundMode: 'icon-gradient',
-          backgroundSize: 'natural',
-          backgroundRepeat: 'no-repeat',
-        },
-      }),
-    );
+  it('lists every unfilled setting of an enabled button', () => {
     expect(
-      typeof iconResult === 'string'
-        ? iconResult
-        : iconResult.action?.backgroundMode,
-    ).toBe('icon-gradient');
-
-    const fileResult = validateProjectData(
-      baseProject({
-        action: {
-          enabled: true,
-          text: 'Download',
-          accentColor: '#123456',
-          isPrivate: false,
-          target: 'file',
-          fileAssetUuid: 'file',
-          fileTitle: 'File',
-          iconMode: 'fallback',
-          backgroundMode: 'file-gradient',
-          backgroundSize: 'natural',
-          backgroundRepeat: 'no-repeat',
-        },
+      projectActionIssues({
+        ...DEFAULT_PROJECT_ACTION,
+        enabled: true,
+        target: 'file',
+        iconMode: 'asset',
+        backgroundMode: 'accent-gradient',
+        accentColor: '#12',
       }),
-    );
+    ).toEqual(['text', 'file', 'icon', 'color']);
     expect(
-      typeof fileResult === 'string'
-        ? fileResult
-        : fileResult.action?.backgroundMode,
-    ).toBe('file-gradient');
-  });
-
-  it('requires and normalizes file action metadata', () => {
-    const missingTitle = validateProjectData(
-      baseProject({
-        action: {
-          enabled: true,
-          text: 'Download',
-          accentColor: '#123456',
-          isPrivate: false,
-          target: 'file',
-          fileAssetUuid: 'file',
-          iconMode: 'fallback',
-          backgroundMode: 'accent-gradient',
-          backgroundSize: 'natural',
-          backgroundRepeat: 'no-repeat',
-        },
+      projectActionIssues({
+        ...DEFAULT_PROJECT_ACTION,
+        enabled: true,
+        text: 'Open',
+        externalUrl: 'ftp://example.com',
+        backgroundMode: 'asset',
       }),
-    );
-    expect(missingTitle).toBe('Action button file title cannot be empty');
-
-    const result = validateProjectData(
-      baseProject({
-        action: {
-          enabled: true,
-          text: 'Download',
-          accentColor: '#123456',
-          isPrivate: false,
-          target: 'file',
-          fileAssetUuid: 'file',
-          fileTitle: '  Guide  ',
-          fileDescription: '  Project guide  ',
-          iconMode: 'fallback',
-          backgroundMode: 'accent-gradient',
-          backgroundSize: 'natural',
-          backgroundRepeat: 'no-repeat',
-        },
-      }),
-    );
-    expect(typeof result === 'string' ? result : result.action).toMatchObject({
-      fileTitle: 'Guide',
-      fileDescription: 'Project guide',
-    });
+    ).toEqual(['url', 'background']);
+    expect(projectActionIssues(DEFAULT_PROJECT_ACTION)).toEqual([]);
   });
 
   it('counts project roles and calculates the open-draft usage delta', () => {

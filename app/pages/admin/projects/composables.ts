@@ -2,9 +2,11 @@ import type { ProjectEditData } from '#layers/thei/shared/admin/project';
 import { AssetType } from '#layers/thei/shared/asset';
 import type {
   OtherAssetGetItem,
+  ProjectGetResponse,
   ShowcaseAssetGetItem,
 } from '#layers/thei/shared/api/project';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
+import type { ProjectActionEditData } from '#layers/thei/shared/project-action';
 
 export { AssetType };
 export type { OtherAssetGetItem, ShowcaseAssetGetItem };
@@ -37,33 +39,85 @@ export const bannerSizeKey = Symbol('bannerSize') as InjectionKey<
   Ref<number | undefined>
 >;
 
-export const actionIconMediaKey = Symbol('actionIconMedia') as InjectionKey<
-  Ref<MediaDescriptor | undefined>
+export interface ProjectActionMediaState {
+  iconMedia: Ref<MediaDescriptor | undefined>;
+  iconSize: Ref<number | undefined>;
+  backgroundMedia: Ref<MediaDescriptor | undefined>;
+  backgroundSize: Ref<number | undefined>;
+  fileMedia: Ref<MediaDescriptor | undefined>;
+  fileExtension: Ref<string | undefined>;
+  fileSize: Ref<number | undefined>;
+  faviconMedia: Ref<MediaDescriptor | undefined>;
+}
+
+export const projectActionMediaKey = Symbol(
+  'projectActionMedia',
+) as InjectionKey<ProjectActionMediaState>;
+
+type ProjectActionMediaSource = Pick<
+  ProjectGetResponse,
+  | 'actionIconMedia'
+  | 'actionIconAssetSize'
+  | 'actionBackgroundMedia'
+  | 'actionBackgroundAssetSize'
+  | 'actionFileMedia'
+  | 'actionFileExtension'
+  | 'actionFileSize'
+  | 'actionFaviconMedia'
 >;
-export const actionIconSizeKey = Symbol('actionIconSize') as InjectionKey<
-  Ref<number | undefined>
->;
-export const actionBackgroundMediaKey = Symbol(
-  'actionBackgroundMedia',
-) as InjectionKey<Ref<MediaDescriptor | undefined>>;
-export const actionBackgroundSizeKey = Symbol(
-  'actionBackgroundSize',
-) as InjectionKey<Ref<number | undefined>>;
-export const actionFileUrlKey = Symbol('actionFileUrl') as InjectionKey<
-  Ref<string | undefined>
->;
-export const actionFileMediaKey = Symbol('actionFileMedia') as InjectionKey<
-  Ref<MediaDescriptor | undefined>
->;
-export const actionFileExtensionKey = Symbol(
-  'actionFileExtension',
-) as InjectionKey<Ref<string | undefined>>;
-export const actionFileSizeKey = Symbol('actionFileSize') as InjectionKey<
-  Ref<number | undefined>
->;
-export const actionFaviconMediaKey = Symbol(
-  'actionFaviconMedia',
-) as InjectionKey<Ref<MediaDescriptor | undefined>>;
+
+/**
+ * Display media of the action button, shared by the project and event forms.
+ * The action itself only stores asset identifiers.
+ */
+export function provideProjectActionMedia() {
+  const state: ProjectActionMediaState = {
+    iconMedia: ref(),
+    iconSize: ref(),
+    backgroundMedia: ref(),
+    backgroundSize: ref(),
+    fileMedia: ref(),
+    fileExtension: ref(),
+    fileSize: ref(),
+    faviconMedia: ref(),
+  };
+  provide(projectActionMediaKey, state);
+
+  function applyLoaded(data: ProjectActionMediaSource) {
+    state.iconMedia.value = data.actionIconMedia;
+    state.iconSize.value = data.actionIconAssetSize;
+    state.backgroundMedia.value = data.actionBackgroundMedia;
+    state.backgroundSize.value = data.actionBackgroundAssetSize;
+    state.fileMedia.value = data.actionFileMedia;
+    state.fileExtension.value = data.actionFileExtension;
+    state.fileSize.value = data.actionFileSize;
+    state.faviconMedia.value = data.actionFaviconMedia;
+  }
+
+  /** Forgets media of assets that normalization removed from the saved action. */
+  function applySaved(
+    previous: ProjectActionEditData | undefined,
+    saved: ProjectActionEditData | undefined,
+  ) {
+    if (saved?.iconAssetUuid !== previous?.iconAssetUuid) {
+      state.iconMedia.value = undefined;
+      state.iconSize.value = undefined;
+    }
+    if (saved?.backgroundAssetUuid !== previous?.backgroundAssetUuid) {
+      state.backgroundMedia.value = undefined;
+      state.backgroundSize.value = undefined;
+    }
+    if (saved?.fileAssetUuid !== previous?.fileAssetUuid) {
+      state.fileMedia.value = undefined;
+      state.fileExtension.value = undefined;
+      state.fileSize.value = undefined;
+    }
+    if (saved?.externalUrl !== previous?.externalUrl)
+      state.faviconMedia.value = undefined;
+  }
+
+  return { applyLoaded, applySaved };
+}
 
 export const currentProjectUuidKey = Symbol(
   'currentProjectUuid',

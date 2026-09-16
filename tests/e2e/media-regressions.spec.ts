@@ -224,7 +224,7 @@ test('admin and public CTA share all color modes and the standard fallback', asy
             css.backgroundImage,
             css.backgroundColor,
             css.borderColor,
-            css.getPropertyValue('--action-highlight'),
+            css.getPropertyValue('--action-color'),
           ];
         }),
       );

@@ -73,7 +73,6 @@ export type ProjectGetResponse = {
   actionIconAssetSize?: number;
   actionBackgroundMedia?: MediaDescriptor;
   actionBackgroundAssetSize?: number;
-  actionFileUrl?: string;
   actionFileMedia?: MediaDescriptor;
   actionFileExtension?: string;
   actionFileSize?: number;

@@ -6,11 +6,8 @@ import type {
   ProjectActionBackgroundMode,
   ProjectActionTarget,
 } from '#layers/thei/shared/project-action';
-import { projectActionContextAccent } from '#layers/thei/shared/project-action';
-import {
-  imageAccentCssColor,
-  type ImageAccent,
-} from '#layers/thei/shared/accent-color';
+import { projectActionAutoAccent } from '#layers/thei/shared/project-action';
+import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
 
 const props = defineProps<{
   text: string;
@@ -25,53 +22,40 @@ const props = defineProps<{
   backgroundMode: ProjectActionBackgroundMode;
   backgroundSize: ProjectActionBackgroundSize;
   backgroundRepeat: ProjectActionBackgroundRepeat;
-  interactive?: boolean;
-  activate?: () => void;
+  /** Renders an inert copy of the button, as in the editor preview. */
+  preview?: boolean;
 }>();
 
 const displayedIcon = computed(
   () => props.iconMedia ?? (props.useFavicon ? props.faviconMedia : undefined),
 );
-const neutralColor = 'var(--color-text-3)';
-const mediaColor = (accent: ImageAccent | undefined) =>
-  imageAccentCssColor(accent);
+const siteAccent = 'var(--color-accent)';
 const manualAccent = computed(() =>
-  /^#[0-9a-fA-F]{6}$/.test(props.accentColor)
-    ? props.accentColor
-    : 'var(--color-accent)',
+  /^#[0-9a-fA-F]{6}$/.test(props.accentColor) ? props.accentColor : siteAccent,
 );
-const contextualAccent = computed(() =>
-  projectActionContextAccent(props.backgroundMode, {
-    icon: props.iconMedia?.accent,
-    file: props.fileMedia?.accent,
-    link: props.faviconMedia?.accent,
-  }),
+const hasImage = computed(
+  () => props.backgroundMode === 'asset' && !!props.backgroundMedia,
 );
 const gradientColor = computed(() => {
-  if (
-    props.backgroundMode === 'link-gradient' ||
-    props.backgroundMode === 'icon-gradient' ||
-    props.backgroundMode === 'file-gradient'
-  )
-    return imageAccentCssColor(contextualAccent.value, 'var(--color-accent)');
-  if (props.backgroundMode === 'standard-gradient')
-    return 'var(--color-accent)';
-  if (props.backgroundMode === 'asset' && !props.backgroundMedia)
-    return neutralColor;
-  return manualAccent.value;
-});
-const highlightColor = computed(() => {
-  if (props.backgroundMode === 'asset')
-    return mediaColor(props.backgroundMedia?.accent);
-  if (
-    props.backgroundMode === 'link-gradient' ||
-    props.backgroundMode === 'icon-gradient' ||
-    props.backgroundMode === 'file-gradient'
-  )
-    return imageAccentCssColor(contextualAccent.value, 'var(--color-accent)');
-  if (props.backgroundMode === 'standard-gradient')
-    return 'var(--color-accent)';
-  return manualAccent.value;
+  switch (props.backgroundMode) {
+    case 'accent-gradient':
+      return manualAccent.value;
+    case 'auto-gradient':
+      return imageAccentCssColor(
+        projectActionAutoAccent(props.target, {
+          icon: displayedIcon.value?.accent,
+          file: props.fileMedia?.accent,
+          favicon: props.faviconMedia?.accent,
+        }),
+        siteAccent,
+      );
+    case 'asset':
+      return props.backgroundMedia
+        ? imageAccentCssColor(props.backgroundMedia.accent)
+        : 'var(--color-text-3)';
+    default:
+      return siteAccent;
+  }
 });
 const backgroundSize = computed(() => {
   if (props.backgroundSize === 'natural') return 'auto';
@@ -79,38 +63,29 @@ const backgroundSize = computed(() => {
   return props.backgroundSize;
 });
 const buttonStyle = computed(() => ({
-  '--action-accent': manualAccent.value,
-  '--action-gradient': gradientColor.value,
-  '--action-highlight': highlightColor.value,
+  '--action-color': gradientColor.value,
   '--action-image': props.backgroundMedia
     ? `url("${props.backgroundMedia.src.replaceAll('"', '\\"')}")`
     : 'none',
   '--action-size': backgroundSize.value,
   '--action-repeat': props.backgroundRepeat,
 }));
-
-function activate() {
-  if (!props.href) props.activate?.();
-}
 </script>
 
 <template>
   <component
-    :is="href ? 'a' : 'button'"
-    :href="href"
-    :disabled="href || interactive ? undefined : true"
-    :target="href ? '_blank' : undefined"
-    :rel="href ? 'noopener noreferrer' : undefined"
+    :is="preview ? 'span' : 'a'"
+    :href="preview ? undefined : href"
+    :target="preview ? undefined : '_blank'"
+    :rel="preview ? undefined : 'noopener noreferrer'"
     class="project-action-button inline-flex min-h-12 max-w-full items-center
       justify-center gap-xs overflow-hidden rounded-normal border px-md py-xs
-      font-semibold text-white shadow-md transition enabled:cursor-pointer
-      disabled:cursor-not-allowed disabled:opacity-55 sm:max-w-75"
-    :class="{
-      'has-image': backgroundMode === 'asset' && backgroundMedia,
-      'has-gradient': backgroundMode !== 'asset' || !backgroundMedia,
-    }"
+      font-semibold text-white shadow-md transition sm:max-w-75"
+    :class="[
+      hasImage ? 'has-image' : 'has-gradient',
+      preview ? 'cursor-default' : 'cursor-pointer',
+    ]"
     :style="buttonStyle"
-    @click="activate"
   >
     <Media
       v-if="displayedIcon"
@@ -122,28 +97,30 @@ function activate() {
       :name="target === 'file' ? 'file' : 'external-link'"
       class="action-icon shrink-0 text-xl"
     />
-    <span class="action-label truncate">{{ text || 'Кнопка действия' }}</span>
+    <span class="action-label truncate">{{
+      text || phrase.project_action_placeholder
+    }}</span>
   </component>
 </template>
 
 <style scoped>
 .project-action-button {
-  --action-dark-shadow: color-mix(in oklab, var(--action-highlight) 30%, black);
-  border-color: color-mix(in oklab, var(--action-highlight) 70%, transparent);
-  background-color: var(--action-accent);
+  --action-dark-shadow: color-mix(in oklab, var(--action-color) 30%, black);
+  border-color: color-mix(in oklab, var(--action-color) 70%, transparent);
+  background-color: var(--action-color);
 }
 .project-action-button.has-gradient {
   background-image: linear-gradient(
     to top right,
-    color-mix(in oklab, var(--action-gradient) 72%, black),
-    color-mix(in oklab, var(--action-gradient) 72%, white)
+    color-mix(in oklab, var(--action-color) 72%, black),
+    color-mix(in oklab, var(--action-color) 72%, white)
   );
 }
 .project-action-button:is(:hover, :focus-visible) {
-  border-color: var(--action-highlight);
+  border-color: var(--action-color);
   box-shadow:
-    0 0 0.35rem color-mix(in oklab, var(--action-highlight) 55%, transparent),
-    0 0 1.1rem color-mix(in oklab, var(--action-highlight) 35%, transparent);
+    0 0 0.35rem color-mix(in oklab, var(--action-color) 55%, transparent),
+    0 0 1.1rem color-mix(in oklab, var(--action-color) 35%, transparent);
 }
 .project-action-button.has-image {
   border-color: transparent;

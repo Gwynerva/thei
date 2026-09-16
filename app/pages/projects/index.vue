@@ -50,7 +50,12 @@ usePublicSeo({
         :entity="project"
       />
     </div>
-    <PublicEmptyState v-else icon="project" :title="phrase.projects" />
+    <EmptyState
+      v-else
+      icon="project"
+      :title="phrase.public_projects_empty"
+      :description="phrase.public_projects_empty_description"
+    />
     <PublicPagination :page="projects.page" :page-count="projects.pageCount" />
   </main>
 </template>

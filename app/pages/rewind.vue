@@ -62,7 +62,7 @@ usePublicSeo({
         date-style="long"
       />
     </div>
-    <PublicEmptyState
+    <EmptyState
       v-else
       icon="history"
       :title="phrase.life_rewind_empty"
@@ -70,14 +70,14 @@ usePublicSeo({
     >
       <TheiLink
         to="/life/"
-        class="mt-sm inline-flex items-center gap-xs font-semibold text-accent
+        class="inline-flex items-center gap-xs font-semibold text-accent
           transition hocus:underline"
       >
         <Icon name="heart" />
         {{ phrase.life_rewind_explore_life }}
         <Icon name="arrow-outward" />
       </TheiLink>
-    </PublicEmptyState>
+    </EmptyState>
     <PublicPagination :page="rewind.page" :page-count="rewind.pageCount" />
   </main>
 </template>

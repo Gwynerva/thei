@@ -85,7 +85,7 @@ const visibleTags = computed(() => props.tags.slice(0, 3));
             autoplay-reduced-motion
             loop
             muted
-            class="size-16 shrink-0 sm:size-24"
+            class="size-16 shrink-0 rounded-normal sm:size-24"
             data-hero-icon
           />
           <h1

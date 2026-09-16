@@ -98,7 +98,12 @@ usePublicSeo({
           }"
         />
       </div>
-      <PublicEmptyState v-else icon="heart" :title="phrase.life_empty" />
+      <EmptyState
+        v-else
+        icon="heart"
+        :title="phrase.life_empty"
+        :description="phrase.life_empty_description"
+      />
     </section>
     <section v-if="rewind.items.length" class="flex flex-col gap-sm">
       <PublicSectionHeader

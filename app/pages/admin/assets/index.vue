@@ -42,6 +42,11 @@ const usage = computed({
   get: () => query.value.usage ?? '',
   set: (value: string) => update({ usage: value || undefined }),
 });
+function resetFilters() {
+  clearTimeout(timer);
+  search.value = '';
+  update({ q: undefined, type: undefined, usage: undefined });
+}
 function update(values: Record<string, string | undefined>) {
   void router.replace({
     query: { ...route.query, page: undefined, ...values },
@@ -132,12 +137,33 @@ onMounted(() => {
         @click="openModal(libraryAssetDetailsModal, { asset: item.asset })"
       />
     </div>
-    <p
-      v-else-if="status !== 'pending' && !error"
-      class="p-lg text-center text-text-3"
-    >
-      {{ phrase.asset_library_empty }}
-    </p>
+    <template v-else-if="status !== 'pending' && !error">
+      <EmptyState
+        v-if="query.q || query.type || query.usage"
+        icon="gallery"
+        :title="phrase.asset_library_empty"
+        :description="phrase.admin_search_no_results_description"
+        class="mt-md"
+      >
+        <button
+          type="button"
+          class="flex cursor-pointer items-center gap-xs rounded-normal border
+            border-border-1 bg-bg-1 px-sm py-xs text-sm font-semibold
+            text-text-2 transition hocus:border-border-3 hocus:text-text-1"
+          @click="resetFilters"
+        >
+          <Icon name="close" />
+          <span>{{ phrase.reset_search }}</span>
+        </button>
+      </EmptyState>
+      <EmptyState
+        v-else
+        icon="gallery"
+        :title="phrase.admin_assets_empty"
+        :description="phrase.admin_assets_empty_description"
+        class="mt-md"
+      />
+    </template>
     <div v-if="status === 'pending'" role="status" class="p-md text-center">
       <Icon name="loading" />
     </div>

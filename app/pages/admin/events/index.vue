@@ -116,13 +116,17 @@ const list = computed<EventListResponse | undefined>(() => data.value);
       </AdminEntityListItem>
     </Box>
 
-    <div
+    <AdminEmptyList
       v-else-if="status !== 'pending' && !error"
-      class="mt-md rounded-normal border border-border-1 bg-bg-2 p-md
-        text-center text-sm text-text-3 italic"
-    >
-      {{ search.trim() ? phrase.admin_search_no_results : phrase.no_events }}
-    </div>
+      icon="event"
+      :title="phrase.no_events"
+      :description="phrase.admin_events_empty_description"
+      :searching="!!search.trim()"
+      create-to="/admin/events/new/"
+      :create-label="phrase.new_event"
+      class="mt-md"
+      @reset-search="search = ''"
+    />
 
     <div v-if="status === 'pending'" class="flex justify-center p-md">
       <Icon name="loading" class="text-lg text-text-2" />

@@ -292,7 +292,6 @@ async function getEvent(
     actionIconAssetSize: actionIcon?.asset.size,
     actionBackgroundMedia: backgroundUrls?.media,
     actionBackgroundAssetSize: actionBackground?.asset.size,
-    actionFileUrl: fileUrls?.assetUrl,
     actionFileMedia: fileUrls?.media,
     actionFileExtension: actionFile?.asset.extension,
     actionFileSize: actionFile?.asset.size,

@@ -71,7 +71,12 @@ usePublicSeo({
         </span>
       </TheiLink>
     </div>
-    <PublicEmptyState v-else icon="tag" :title="phrase.tags" />
+    <EmptyState
+      v-else
+      icon="tag"
+      :title="phrase.public_tags_empty"
+      :description="phrase.public_tags_empty_description"
+    />
     <PublicPagination :page="tags.page" :page-count="tags.pageCount" />
   </main>
 </template>

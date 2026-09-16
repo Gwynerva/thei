@@ -57,7 +57,6 @@ export async function validateProjectAssets(
       assetUuid: data.action.fileAssetUuid,
       label: 'Action button file',
       maxSize: ASSET_UPLOAD_LIMITS.file,
-      mediaOnly: data.action.backgroundMode === 'file-gradient',
     });
 
   for (const item of data.showcaseAssets ?? []) {

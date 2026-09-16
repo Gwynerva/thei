@@ -24,15 +24,7 @@ import {
   currentProjectUuidKey,
   otherItemsKey,
   showcaseItemsKey,
-  actionIconMediaKey,
-  actionIconSizeKey,
-  actionBackgroundMediaKey,
-  actionBackgroundSizeKey,
-  actionFileUrlKey,
-  actionFileMediaKey,
-  actionFileExtensionKey,
-  actionFileSizeKey,
-  actionFaviconMediaKey,
+  provideProjectActionMedia,
 } from '../../projects/composables';
 import LinkField from '../../components/LinkField.vue';
 import ProjectAssets from '../../projects/components/ProjectAssets.vue';
@@ -72,24 +64,7 @@ provide(currentProjectUuidKey, ref<string>());
 provide(showcaseItemsKey, ref([]));
 const otherItems = ref<EventGetResponse['otherAssets']>([]);
 provide(otherItemsKey, otherItems);
-const actionIconMedia = ref<MediaDescriptor>();
-const actionIconSize = ref<number>();
-const actionBackgroundMedia = ref<MediaDescriptor>();
-const actionBackgroundSize = ref<number>();
-const actionFileUrl = ref<string>();
-const actionFileMedia = ref<MediaDescriptor>();
-const actionFileExtension = ref<string>();
-const actionFileSize = ref<number>();
-const actionFaviconMedia = ref<MediaDescriptor>();
-provide(actionIconMediaKey, actionIconMedia);
-provide(actionIconSizeKey, actionIconSize);
-provide(actionBackgroundMediaKey, actionBackgroundMedia);
-provide(actionBackgroundSizeKey, actionBackgroundSize);
-provide(actionFileUrlKey, actionFileUrl);
-provide(actionFileMediaKey, actionFileMedia);
-provide(actionFileExtensionKey, actionFileExtension);
-provide(actionFileSizeKey, actionFileSize);
-provide(actionFaviconMediaKey, actionFaviconMedia);
+const actionMedia = provideProjectActionMedia();
 
 const isEdit = computed(() => Boolean(eventUuid));
 const saving = ref(false);
@@ -137,15 +112,7 @@ if (isEdit.value) {
     action: data.action,
   };
   otherItems.value = data.otherAssets;
-  actionIconMedia.value = data.actionIconMedia;
-  actionIconSize.value = data.actionIconAssetSize;
-  actionBackgroundMedia.value = data.actionBackgroundMedia;
-  actionBackgroundSize.value = data.actionBackgroundAssetSize;
-  actionFileUrl.value = data.actionFileUrl;
-  actionFileMedia.value = data.actionFileMedia;
-  actionFileExtension.value = data.actionFileExtension;
-  actionFileSize.value = data.actionFileSize;
-  actionFaviconMedia.value = data.actionFaviconMedia;
+  actionMedia.applyLoaded(data);
   markSaved();
   if (eventUuid !== data.eventUuid)
     await navigateTo(`/admin/events/${data.eventUuid}/edit/`, {
@@ -188,7 +155,9 @@ async function save() {
       else headerError.value = result.message;
       return;
     }
+    const previousAction = eventData.value.action;
     eventData.value.action = result.action;
+    actionMedia.applySaved(previousAction, result.action);
     markSaved();
     await refreshNuxtData('admin-bar');
     if (!isEdit.value)

@@ -17,15 +17,7 @@ import {
   currentProjectUuidKey,
   otherItemsKey,
   showcaseItemsKey,
-  actionIconMediaKey,
-  actionIconSizeKey,
-  actionBackgroundMediaKey,
-  actionBackgroundSizeKey,
-  actionFileUrlKey,
-  actionFileMediaKey,
-  actionFileExtensionKey,
-  actionFileSizeKey,
-  actionFaviconMediaKey,
+  provideProjectActionMedia,
 } from '../composables';
 import ProjectMain from './ProjectMain.vue';
 import ProjectAssets from './ProjectAssets.vue';
@@ -85,24 +77,7 @@ provide(iconSizeKey, iconSize);
 const bannerSize = ref<number | undefined>();
 provide(bannerSizeKey, bannerSize);
 
-const actionIconMedia = ref<MediaDescriptor>();
-provide(actionIconMediaKey, actionIconMedia);
-const actionIconSize = ref<number>();
-provide(actionIconSizeKey, actionIconSize);
-const actionBackgroundMedia = ref<MediaDescriptor>();
-provide(actionBackgroundMediaKey, actionBackgroundMedia);
-const actionBackgroundSize = ref<number>();
-provide(actionBackgroundSizeKey, actionBackgroundSize);
-const actionFileUrl = ref<string>();
-provide(actionFileUrlKey, actionFileUrl);
-const actionFileMedia = ref<MediaDescriptor>();
-provide(actionFileMediaKey, actionFileMedia);
-const actionFileExtension = ref<string>();
-provide(actionFileExtensionKey, actionFileExtension);
-const actionFileSize = ref<number>();
-provide(actionFileSizeKey, actionFileSize);
-const actionFaviconMedia = ref<MediaDescriptor>();
-provide(actionFaviconMediaKey, actionFaviconMedia);
+const actionMedia = provideProjectActionMedia();
 
 const resolvedProjectUuid = ref<string | undefined>(projectUuid);
 provide(currentProjectUuidKey, resolvedProjectUuid);
@@ -187,15 +162,7 @@ if (isEdit.value) {
   iconSize.value = data.iconAssetSize;
   bannerMedia.value = data.bannerMedia;
   bannerSize.value = data.bannerAssetSize;
-  actionIconMedia.value = data.actionIconMedia;
-  actionIconSize.value = data.actionIconAssetSize;
-  actionBackgroundMedia.value = data.actionBackgroundMedia;
-  actionBackgroundSize.value = data.actionBackgroundAssetSize;
-  actionFileUrl.value = data.actionFileUrl;
-  actionFileMedia.value = data.actionFileMedia;
-  actionFileExtension.value = data.actionFileExtension;
-  actionFileSize.value = data.actionFileSize;
-  actionFaviconMedia.value = data.actionFaviconMedia;
+  actionMedia.applyLoaded(data);
   markProjectSaved();
   resolvedProjectUuid.value = data.projectUuid;
   if (projectUuid !== data.projectUuid) {
@@ -276,22 +243,7 @@ function markProjectSaved() {
 function applySavedAction(action: ProjectEditData['action']) {
   const previous = projectData.value.action;
   projectData.value.action = action ?? { ...DEFAULT_PROJECT_ACTION };
-  if (action?.iconAssetUuid !== previous?.iconAssetUuid) {
-    actionIconMedia.value = undefined;
-    actionIconSize.value = undefined;
-  }
-  if (action?.backgroundAssetUuid !== previous?.backgroundAssetUuid) {
-    actionBackgroundMedia.value = undefined;
-    actionBackgroundSize.value = undefined;
-  }
-  if (action?.fileAssetUuid !== previous?.fileAssetUuid) {
-    actionFileUrl.value = undefined;
-    actionFileMedia.value = undefined;
-    actionFileExtension.value = undefined;
-    actionFileSize.value = undefined;
-  }
-  if (action?.externalUrl !== previous?.externalUrl)
-    actionFaviconMedia.value = undefined;
+  actionMedia.applySaved(previous, action);
 }
 
 function cloneProjectData(data: ProjectEditData): ProjectEditData {

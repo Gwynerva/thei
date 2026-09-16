@@ -13,10 +13,9 @@ const iconMedia = computed(() =>
 <template>
   <span
     v-bind="$attrs"
-    class="relative inline-flex shrink-0 items-center justify-center"
-    :class="{
-      'rounded-sm bg-bg-3 text-text-3': !iconMedia,
-    }"
+    class="relative inline-flex shrink-0 items-center justify-center
+      overflow-hidden"
+    :class="{ 'bg-bg-3 text-text-3': !iconMedia }"
   >
     <Media v-if="iconMedia" v-bind="iconMedia" class="size-full" />
     <Icon v-else name="tag" />

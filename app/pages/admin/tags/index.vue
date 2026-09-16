@@ -64,7 +64,11 @@ function placeholderStyle(tag: TagListItem) {
                   class="flex items-center gap-sm p-sm font-semibold transition
                     hocus:text-accent"
                 >
-                  <TagIcon v-if="tag.iconMedia" :tag="tag" class="size-8" />
+                  <TagIcon
+                    v-if="tag.iconMedia"
+                    :tag="tag"
+                    class="size-8 rounded-sm"
+                  />
                   <span
                     v-else
                     class="flex size-8 shrink-0 items-center justify-center
@@ -129,7 +133,7 @@ function placeholderStyle(tag: TagListItem) {
           :to="`/admin/tags/${tag.tagUuid}/edit/`"
           class="flex items-center gap-sm p-sm transition hocus:bg-bg-3/50"
         >
-          <TagIcon v-if="tag.iconMedia" :tag="tag" class="size-10" />
+          <TagIcon v-if="tag.iconMedia" :tag="tag" class="size-10 rounded-sm" />
           <span
             v-else
             class="flex size-10 shrink-0 items-center justify-center rounded-sm
@@ -179,8 +183,13 @@ function placeholderStyle(tag: TagListItem) {
       </div>
     </Box>
 
-    <Box v-else-if="!error">
-      <p class="p-md text-center text-text-3">{{ phrase.tag_empty_list }}</p>
-    </Box>
+    <AdminEmptyList
+      v-else-if="!error"
+      icon="tag"
+      :title="phrase.tag_empty_list"
+      :description="phrase.admin_tags_empty_description"
+      create-to="/admin/tags/new/"
+      :create-label="phrase.new_tag"
+    />
   </div>
 </template>

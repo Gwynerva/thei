@@ -18,6 +18,7 @@ import type { MediaDescriptor } from '../media';
 import type { TagEditItem } from '../tag';
 import {
   normalizeProjectAction,
+  projectActionAssetUuids,
   type ProjectActionEditData,
 } from '../project-action';
 import {
@@ -128,9 +129,7 @@ export function countProjectAssetPlacements(
 
   add(project.iconAssetUuid);
   add(project.bannerAssetUuid);
-  add(project.action?.fileAssetUuid);
-  add(project.action?.iconAssetUuid);
-  add(project.action?.backgroundAssetUuid);
+  projectActionAssetUuids(project.action).forEach(add);
   new Set(project.showcaseAssets?.map((item) => item.assetUuid) ?? []).forEach(
     add,
   );

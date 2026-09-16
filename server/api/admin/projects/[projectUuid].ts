@@ -176,7 +176,6 @@ export default defineEventHandler(async (event) => {
         actionIconAssetSize: actionIconUsage?.asset.size,
         actionBackgroundMedia: actionBackgroundUrls?.media,
         actionBackgroundAssetSize: actionBackgroundUsage?.asset.size,
-        actionFileUrl: actionFileUrls?.assetUrl,
         actionFileMedia: actionFileUrls?.media,
         actionFileExtension: actionFileUsage?.asset.extension,
         actionFileSize: actionFileUsage?.asset.size,

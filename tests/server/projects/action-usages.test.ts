@@ -29,7 +29,6 @@ describe('project action usages', () => {
       text: 'Download',
       target: 'file' as const,
       fileAssetUuid: 'file',
-      fileTitle: 'Guide',
       iconMode: 'asset' as const,
       iconAssetUuid: 'icon',
       backgroundMode: 'asset' as const,
