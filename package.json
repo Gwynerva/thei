@@ -1,6 +1,13 @@
 {
   "name": "thei",
   "version": "0.0.1",
+  "description": "🗃️ Digital archive of your life! Projects, pages and a timeline of a life.",
+  "license": "MIT",
+  "author": "Gwynerva",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Gwynerva/thei.git"
+  },
   "main": "./nuxt.config.ts",
   "scripts": {
     "assets:audit": "node scripts/audit-assets.mts",
