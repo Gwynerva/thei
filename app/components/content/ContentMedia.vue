@@ -14,7 +14,7 @@ const props = withDefaults(
     naturalSize?: boolean;
     suspended?: boolean;
   }>(),
-  { rounded: true },
+  { rounded: true, naturalSize: true },
 );
 
 const emit = defineEmits<{ ready: []; error: [] }>();
@@ -77,7 +77,7 @@ function rememberDimensions(nextWidth: number, nextHeight: number) {
       :loop="autoplay"
       :controls="media.kind === 'video'"
       fit="contain"
-      :natural-size="naturalSize ?? layout !== 'stretch'"
+      :natural-size="naturalSize && layout !== 'stretch'"
       :backdrop="layout === 'centered'"
       :width
       :height

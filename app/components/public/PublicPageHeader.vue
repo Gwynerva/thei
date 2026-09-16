@@ -59,7 +59,7 @@ defineProps<{
     </div>
     <p
       v-if="description"
-      class="mt-xs text-base leading-relaxed text-text-2 sm:text-lg"
+      class="mt-sm text-lg leading-relaxed font-semibold text-text-2 sm:text-xl"
     >
       {{ description }}
     </p>

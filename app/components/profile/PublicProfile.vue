@@ -66,7 +66,7 @@ const facts = computed(() => {
       <ProfileInfoBlock
         v-if="profile.externalLinks.length"
         :title="phrase.profile_links"
-        ><div class="flex flex-wrap gap-sm">
+        ><div class="flex flex-wrap gap-xs">
           <ExternalLinkChip
             v-for="link in profile.externalLinks"
             :key="link.url"

@@ -186,7 +186,13 @@ defineExpose({
       class="absolute inset-0 flex items-center justify-center"
       :style="{ transform: transformStyle, willChange: 'transform' }"
     >
-      <TransitionFade>
+      <Transition
+        enter-from-class="opacity-0"
+        enter-active-class="transition-opacity duration-300
+          motion-reduce:duration-0"
+        leave-to-class="opacity-0"
+        leave-active-class="transition-opacity motion-reduce:duration-0"
+      >
         <video
           v-if="isVideo"
           v-show="isReady"
@@ -201,8 +207,14 @@ defineExpose({
           @pause="isPaused = true"
           @volumechange="onVideoVolumeChange"
         />
-      </TransitionFade>
-      <TransitionFade>
+      </Transition>
+      <Transition
+        enter-from-class="opacity-0"
+        enter-active-class="transition-opacity duration-300
+          motion-reduce:duration-0"
+        leave-to-class="opacity-0"
+        leave-active-class="transition-opacity motion-reduce:duration-0"
+      >
         <img
           v-if="!isVideo"
           v-show="isReady"
@@ -214,7 +226,7 @@ defineExpose({
           :style="mediaStyle"
           @load="onImgLoad"
         />
-      </TransitionFade>
+      </Transition>
     </div>
 
     <TransitionFade>

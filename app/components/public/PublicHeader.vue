@@ -100,6 +100,36 @@ function active(to: string) {
     <SettingsVisualsBox
       :show-public-view-mode="isAdmin"
       class="scrollbar-mini max-h-full overflow-y-auto"
-    />
+    >
+      <a
+        v-if="!isAdmin"
+        href="/sign-in/"
+        class="group flex items-center gap-sm rounded-b-normal border-t
+          border-border-1 p-sm transition focus-visible:ring-2
+          focus-visible:ring-accent focus-visible:ring-inset sm:px-md
+          hocus:bg-accent/10"
+      >
+        <span
+          class="flex size-9 shrink-0 items-center justify-center rounded-full
+            bg-bg-3 text-text-2 transition group-hocus:bg-accent/15
+            group-hocus:text-accent"
+        >
+          <Icon name="person-key" class="text-lg" />
+        </span>
+        <span class="flex min-w-0 flex-1 flex-col">
+          <span class="font-semibold text-text-1">
+            {{ phrase.public_sign_in }}
+          </span>
+          <span class="text-xs text-text-3">
+            {{ phrase.public_sign_in_hint }}
+          </span>
+        </span>
+        <Icon
+          name="chevron-right"
+          class="shrink-0 text-lg text-text-3 transition
+            group-hocus:translate-x-0.5 group-hocus:text-accent"
+        />
+      </a>
+    </SettingsVisualsBox>
   </FloatingPopup>
 </template>

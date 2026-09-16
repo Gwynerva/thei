@@ -170,6 +170,9 @@ export default defineI18nBase({
     asset_library: 'File storage',
     asset_library_choose: 'Choose uploaded file',
     asset_library_search: 'Search captions and titles…',
+    asset_aspect_ratio: 'Proportions',
+    asset_aspect_hint: (ratio, size) =>
+      `Works best with an image or video in ${ratio}, for example ${size} pixels`,
     asset_library_pending_deletion: (date) =>
       `Unused: will be deleted after ${date}`,
     asset_library_empty: 'No matching files',
@@ -283,6 +286,8 @@ export default defineI18nBase({
     public_view_guest: 'Guest',
     public_view_guest_hint: 'Private content will be hidden.',
     public_navigation: 'Site navigation',
+    public_sign_in: 'Admin panel sign in',
+    public_sign_in_hint: 'For the site owner',
     latest_life: 'Latest from Life',
     life_rewind: (day) => `${day} in the past`,
     life_rewind_seo_title: 'Rewind',

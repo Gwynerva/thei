@@ -20,7 +20,7 @@ withDefaults(
     openable?: boolean;
     suspended?: boolean;
   }>(),
-  { mediaRounded: true },
+  { mediaRounded: true, mediaNaturalSize: true },
 );
 
 const emit = defineEmits<{

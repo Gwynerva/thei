@@ -39,8 +39,12 @@ const slot = useSingleMediaAsset({
         detailsAside ? 'flex min-w-0 flex-wrap items-center gap-sm' : 'contents'
       "
     >
-      <div v-if="!hideLabel && !detailsAside">
+      <div
+        v-if="!hideLabel && !detailsAside"
+        class="flex flex-wrap items-center gap-xs"
+      >
         <FieldLabel>{{ title }}</FieldLabel>
+        <AssetAspectHint :profile />
       </div>
       <AssetTile
         :media="media"
@@ -56,6 +60,7 @@ const slot = useSingleMediaAsset({
         <p v-if="description" class="text-sm text-text-2">
           {{ description }}
         </p>
+        <AssetAspectHint :profile class="mt-1" />
       </div>
     </div>
     <p v-if="error" class="text-sm text-text-error">{{ error }}</p>

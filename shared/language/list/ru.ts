@@ -176,6 +176,9 @@ export default defineI18nModule({
     asset_library: 'Хранилище файлов',
     asset_library_choose: 'Выбрать уже загруженное',
     asset_library_search: 'Поиск по подписям и названиям…',
+    asset_aspect_ratio: 'Пропорции',
+    asset_aspect_hint: (ratio, size) =>
+      `Лучше всего подойдёт изображение или видео с пропорциями ${ratio}, например ${size} пикселей`,
     asset_library_pending_deletion: (date) =>
       `Не используется: будет удалён после ${date}`,
     asset_library_empty: 'Подходящих файлов нет',
@@ -290,6 +293,8 @@ export default defineI18nModule({
     public_view_guest: 'Гость',
     public_view_guest_hint: 'Приватный контент будет скрыт.',
     public_navigation: 'Навигация по сайту',
+    public_sign_in: 'Вход в админ-панель',
+    public_sign_in_hint: 'Для владельца сайта',
     latest_life: 'Последнее из Жизни',
     life_rewind: (day) => `${day} в прошлом`,
     life_rewind_seo_title: 'Взгляд в прошлом',

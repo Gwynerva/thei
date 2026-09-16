@@ -1,9 +1,10 @@
 <script lang="ts" setup>
-defineProps<{
+const { size = 'xs' } = defineProps<{
   blockCount: number;
   wordCount: number;
   assetCount: number;
   assetTotalSize: number;
+  size?: 'xs' | 'sm';
 }>();
 
 const humanSize = useHumanSize();
@@ -11,7 +12,10 @@ const compactNumber = useCompactNumber();
 </script>
 
 <template>
-  <span class="flex flex-wrap items-center gap-xs text-xs">
+  <span
+    class="flex flex-wrap items-center gap-xs"
+    :class="size === 'sm' ? 'text-sm' : 'text-xs'"
+  >
     <span
       class="inline-flex cursor-help items-center gap-1 whitespace-nowrap
         text-text-3 transition-colors hocus:text-text-2"

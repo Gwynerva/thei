@@ -162,7 +162,7 @@ export function createEditorPrivateSections(
         if (element.dataset.privateSectionEdge !== edge)
           element.dataset.privateSectionEdge = edge;
         const label = element.querySelector<HTMLElement>(
-          '.content-editor-private-section-boundary__label span',
+          '.content-private-bracket__label span',
         );
         if (label) {
           const text =

@@ -213,7 +213,7 @@ function moveSectionWithKeyboard(index: number, direction: -1 | 1) {
                 :period="period"
               />
             </template>
-            <ContentStats v-bind="analysis.summary" class="text-sm" />
+            <ContentStats v-bind="analysis.summary" size="sm" />
             <span
               v-if="item.isPrivate"
               class="inline-flex cursor-help items-center gap-1

@@ -279,9 +279,12 @@ onBeforeUnmount(() => {
     <header class="shrink-0 border-b border-border-1 bg-bg-2 p-sm sm:p-md">
       <div class="mx-auto flex w-full max-w-280 flex-col gap-sm">
         <div class="flex items-center justify-between gap-sm">
-          <h2 class="flex items-center gap-xs text-xl font-bold">
-            <Icon name="gallery" />{{ phrase.asset_library }}
-          </h2>
+          <div class="flex min-w-0 flex-wrap items-center gap-x-sm gap-y-xs">
+            <h2 class="flex items-center gap-xs text-xl font-bold">
+              <Icon name="gallery" />{{ phrase.asset_library }}
+            </h2>
+            <AssetAspectHint :profile="modalData.uploadProfile" />
+          </div>
           <button
             type="button"
             :aria-label="phrase.close_modal"

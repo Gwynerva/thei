@@ -502,6 +502,11 @@ function clearFile() {
                 class="h-12 w-32 shrink-0 cursor-pointer"
                 @click="backgroundSlot.open"
               />
+              <AssetAspectHint
+                v-if="action.backgroundMode === 'asset'"
+                profile="project-action-background"
+                class="self-center"
+              />
             </div>
             <div
               v-if="action.backgroundMode === 'asset'"

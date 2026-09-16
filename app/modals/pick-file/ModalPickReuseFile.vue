@@ -10,6 +10,7 @@ import { hashLocalAsset } from '../../composables/asset-hash';
 import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
 import type { AssetLibraryAvailability } from '#layers/thei/shared/asset-library';
 import type { AssetUploadLimitPolicy } from '#layers/thei/shared/asset-upload-limits';
+import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
 
 const props = defineProps<{
   modalData: {
@@ -20,6 +21,7 @@ const props = defineProps<{
     acceptedExtensions?: string[] | '*';
     sizeLimitPolicy?: AssetUploadLimitPolicy;
     imageOnly?: boolean;
+    uploadProfile?: AssetUploadProfile;
   };
 }>();
 
@@ -246,6 +248,7 @@ onUnmounted(() => document.removeEventListener('paste', handlePaste));
           <span class="text-text-3">{{ phrase.max_size }}</span>
           <span class="text-text-2">{{ humanSize(modalData.maxSize) }}</span>
         </div>
+        <AssetAspectHint :profile="modalData.uploadProfile" />
       </div>
       <button
         type="button"

@@ -259,6 +259,12 @@ export function useMediaControls(options: MediaControlsOptions = {}) {
   }
 
   function syncFitAfterResize(): void {
+    if (!isReady.value) {
+      // The first real container size settles the initial view without motion.
+      if (contentW.value > 0 && contentH.value > 0) onDimensionsKnown();
+      return;
+    }
+
     const nextFit = computeFitZoom();
     fitZoom.value = nextFit;
     uncappedFitZoom.value = computeEffectiveUncappedFitZoom();
@@ -282,6 +288,10 @@ export function useMediaControls(options: MediaControlsOptions = {}) {
   }
 
   function onDimensionsKnown(): void {
+    // A modal mounts before its dialog is shown. Fitting into a zero-sized
+    // container would reveal the media at natural size and animate it down.
+    if (containerW === 0 || containerH === 0) return;
+
     fitZoom.value = computeFitZoom();
     uncappedFitZoom.value = computeEffectiveUncappedFitZoom();
     isReady.value = true;

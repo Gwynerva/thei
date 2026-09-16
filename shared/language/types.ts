@@ -100,6 +100,8 @@ export type LanguagePhrases = {
   asset_library: string;
   asset_library_choose: string;
   asset_library_search: string;
+  asset_aspect_ratio: string;
+  asset_aspect_hint: (ratio: string, size: string) => string;
   asset_library_pending_deletion: (date: string) => string;
   asset_library_empty: string;
   asset_library_unused: string;
@@ -206,6 +208,8 @@ export type LanguagePhrases = {
   public_view_guest: string;
   public_view_guest_hint: string;
   public_navigation: string;
+  public_sign_in: string;
+  public_sign_in_hint: string;
   latest_life: string;
   life_rewind: (day: string) => string;
   life_rewind_seo_title: string;

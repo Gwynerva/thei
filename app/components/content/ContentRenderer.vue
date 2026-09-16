@@ -150,7 +150,10 @@ function openGalleryItem(item: ContentGalleryItem) {
         @open="openGalleryItem"
       />
       <ContentAttachmentCard
-        v-else-if="block.type === 'contentAttachment'"
+        v-else-if="
+          block.type === 'contentAttachment' &&
+          asset(block.data.asset).assetUuid
+        "
         :asset="asset(block.data.asset)"
         :title="block.data.title as string | undefined"
         :description="block.data.caption as string | undefined"
@@ -182,29 +185,31 @@ function openGalleryItem(item: ContentGalleryItem) {
       />
       <section
         v-else-if="block.type === 'privateSectionPlaceholder'"
-        class="content-private-section content-private-section--placeholder
-          relative isolate flex flex-col gap-xs overflow-hidden rounded-normal
-          border border-accent/20 bg-bg-accent/30 px-sm py-sm"
-      >
-        <span class="inline-flex items-center gap-xs font-medium text-accent">
-          <Icon name="lock-close" aria-hidden="true" />
-          {{ phrase.content_private_section }}
-        </span>
-        <ContentStats v-bind="block.data" />
-      </section>
-      <section
-        v-else-if="block.type === 'privateSectionExpanded'"
-        class="content-private-section relative isolate flex flex-col gap-sm
-          overflow-hidden rounded-normal border border-accent/20 bg-bg-accent/20
-          px-sm py-sm"
+        class="content-private-pattern content-private-placeholder relative
+          isolate flex flex-col items-center gap-xs overflow-hidden
+          rounded-normal border border-accent/20 bg-bg-accent/30 px-sm py-lg
+          text-center"
       >
         <span
-          class="inline-flex items-center gap-xs text-xs font-medium
+          class="inline-flex items-center gap-xs text-lg font-semibold
             text-accent"
         >
           <Icon name="lock-close" aria-hidden="true" />
           {{ phrase.content_private_section }}
         </span>
+        <ContentStats v-bind="block.data" size="sm" class="justify-center" />
+      </section>
+      <section
+        v-else-if="block.type === 'privateSectionExpanded'"
+        class="content-private-pattern content-private-section relative isolate
+          flex flex-col gap-sm"
+      >
+        <div class="content-private-bracket" data-private-section-edge="start">
+          <span class="content-private-bracket__label">
+            <Icon name="lock-close" aria-hidden="true" />
+            <span>{{ phrase.content_private_section_start }}</span>
+          </span>
+        </div>
         <ContentRenderer
           :data="{ blocks: block.data.blocks }"
           :link-resolver="linkResolver"
@@ -212,6 +217,12 @@ function openGalleryItem(item: ContentGalleryItem) {
           :content-headings="allHeadings"
           :path-prefix="path"
         />
+        <div class="content-private-bracket" data-private-section-edge="end">
+          <span class="content-private-bracket__label">
+            <Icon name="lock-close" aria-hidden="true" />
+            <span>{{ phrase.content_private_section_end }}</span>
+          </span>
+        </div>
       </section>
     </template>
     <ContentInlineLinkDecorator :root="root" :resolver="linkResolver" />
@@ -219,43 +230,12 @@ function openGalleryItem(item: ContentGalleryItem) {
 </template>
 
 <style scoped>
+/* The pattern spans the content between the bracket lines, not the labels. */
 .content-private-section::before {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: var(--color-accent);
-  content: '';
-  opacity: 0.055;
-  pointer-events: none;
-  mask-image:
-    url("data:image/svg+xml,%3Csvg width='18' height='20' viewBox='0 0 18 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M14 8V6A5 5 0 0 0 4 6v2H2v10h14V8h-2ZM6 6a3 3 0 0 1 6 0v2H6V6Zm8 10H4v-6h10v6Z' fill='black'/%3E%3C/svg%3E"),
-    linear-gradient(
-      to right,
-      transparent,
-      black var(--spacing-md),
-      black calc(100% - var(--spacing-md)),
-      transparent
-    ),
-    linear-gradient(
-      to bottom,
-      transparent,
-      black var(--spacing-md),
-      black calc(100% - var(--spacing-md)),
-      transparent
-    );
-  mask-position:
-    0 0,
-    0 0,
-    0 0;
-  mask-size:
-    2rem 2rem,
-    100% 100%,
-    100% 100%;
-  mask-repeat: repeat, no-repeat, no-repeat;
-  mask-composite: intersect, intersect;
+  inset: 1rem 0;
 }
 
-.content-private-section--placeholder::before {
-  opacity: 0.035;
+.content-private-placeholder {
+  --content-private-pattern-opacity: 0.035;
 }
 </style>

@@ -92,6 +92,7 @@ async function runAssetWizard(
           notice,
           acceptedExtensions,
           sizeLimitPolicy: options.sizeLimitPolicy,
+          uploadProfile: options.uploadProfile,
         });
         notice = undefined;
 
@@ -178,6 +179,7 @@ async function runAssetBatchWizard(
     multiple: true,
     acceptedExtensions,
     sizeLimitPolicy: options.sizeLimitPolicy,
+    uploadProfile: options.uploadProfile,
   });
   if (result.type === 'library') {
     const selected = await openModal(assetLibraryModal, {

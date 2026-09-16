@@ -844,7 +844,7 @@ export class PrivateSectionBoundaryTool implements BlockTool {
 
   render() {
     const element = document.createElement('div');
-    element.className = 'content-editor-private-section-boundary';
+    element.className = 'content-private-bracket';
     element.dataset.mutationFree = 'true';
     element.dataset.privateSectionId = this.sectionId;
     element.dataset.privateSectionEdge = this.edge;
@@ -853,7 +853,7 @@ export class PrivateSectionBoundaryTool implements BlockTool {
     if (this.createPair) element.dataset.privateSectionCreatePair = 'true';
 
     const label = document.createElement('span');
-    label.className = 'content-editor-private-section-boundary__label';
+    label.className = 'content-private-bracket__label';
     label.innerHTML = `${editorIcon('lock-close')}<span>${
       this.edge === 'start'
         ? this.labels.privateSectionStart

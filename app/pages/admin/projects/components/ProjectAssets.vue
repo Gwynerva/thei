@@ -471,6 +471,7 @@ async function openOtherAsset(index: number) {
           <div class="tracking-tight">
             <div class="font-semibold">{{ phrase.project_banner }}</div>
             <p class="text-sm text-text-2">{{ phrase.project_banner_hint }}</p>
+            <AssetAspectHint profile="project-banner" class="mt-1" />
           </div>
         </div>
       </div>

@@ -87,5 +87,6 @@ const publicViewOptions = computed<Record<string, FieldOptionValue>>(() => ({
         </FieldHint>
       </Field>
     </div>
+    <slot></slot>
   </Box>
 </template>

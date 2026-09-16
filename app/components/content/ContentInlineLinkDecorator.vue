@@ -8,7 +8,7 @@ import {
   type ContentLinkResolver,
   type ResolvedContentLink,
 } from '#layers/thei/shared/content-link';
-import { iconsHref } from '#thei/icons';
+import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
 import ContentLinkPreviewCard from './ContentLinkPreviewCard.vue';
 
 const props = defineProps<{
@@ -73,12 +73,9 @@ function applyRuntimeState(
 ) {
   link.dataset.contentLinkState = resolved.state;
   link.style.removeProperty('--content-link-icon');
+  link.style.removeProperty('--content-link-accent');
 
   if (resolved.state === 'broken' || resolved.state === 'restricted') {
-    link.style.setProperty(
-      '--content-link-icon',
-      `url("${cssUrl(`${iconsHref}#${resolved.state === 'restricted' ? 'lock-partial' : 'link-broken'}`)}")`,
-    );
     link.setAttribute('aria-invalid', 'true');
     if (
       reference.kind === 'project' ||
@@ -96,12 +93,15 @@ function applyRuntimeState(
 
   link.removeAttribute('aria-invalid');
   setNavigation(link, resolved.href);
-  const iconUrl =
-    resolved.kind === 'event'
-      ? `${iconsHref}#event`
-      : resolved.iconMedia?.previewSrc || resolved.iconMedia?.src;
+  // Events have no icon of their own; content.css draws the event glyph.
+  if (resolved.kind === 'event') return;
+  const iconUrl = resolved.iconMedia?.previewSrc || resolved.iconMedia?.src;
   if (iconUrl)
     link.style.setProperty('--content-link-icon', `url("${cssUrl(iconUrl)}")`);
+  link.style.setProperty(
+    '--content-link-accent',
+    imageAccentCssColor(resolved.iconMedia?.accent),
+  );
 }
 
 function setNavigation(link: HTMLAnchorElement, href: string) {
