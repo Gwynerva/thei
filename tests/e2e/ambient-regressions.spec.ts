@@ -26,6 +26,21 @@ async function images(page: Page) {
   });
 }
 
+/** Edge media spans the whole strip height and is pinned to its edge. */
+async function expectEdgeMedia(
+  surface: ReturnType<Page['locator']>,
+  side: 'left' | 'right',
+) {
+  const main = surface.locator('[data-media-main]');
+  await expect(main).toHaveCSS('object-fit', 'cover');
+  const box = (await surface.boundingBox())!;
+  const mainBox = (await main.boundingBox())!;
+  expect(mainBox.height).toBeCloseTo(box.height, 0);
+  expect(mainBox.y).toBeCloseTo(box.y, 0);
+  if (side === 'left') expect(mainBox.x).toBeCloseTo(box.x, 0);
+  else expect(mainBox.x + mainBox.width).toBeCloseTo(box.x + box.width, 0);
+}
+
 test.beforeEach(async ({ page }) => {
   await images(page);
 });
@@ -117,10 +132,7 @@ for (const width of [390, 1280]) {
       ).entries()) {
         await card.scrollIntoViewIfNeeded();
         await expect(card).toHaveAttribute('data-media-final-state', 'visible');
-        await expect(card.locator('[data-media-main]')).toHaveCSS(
-          'object-fit',
-          'contain',
-        );
+        await expectEdgeMedia(card, index === 1 ? 'left' : 'right');
         for (const layer of await card
           .locator('[data-media-foreground] > img')
           .all()) {
@@ -142,6 +154,12 @@ for (const width of [390, 1280]) {
           card.locator('[data-media-original-pair] img.media-backdrop'),
         ).toHaveCSS('object-fit', 'cover');
       }
+      const tall = page.locator(
+        '[data-tall-card] [data-media-variant="ambient"]',
+      );
+      await tall.scrollIntoViewIfNeeded();
+      await expect(tall).toHaveAttribute('data-media-final-state', 'visible');
+      await expectEdgeMedia(tall, 'right');
       if (shape === 'portrait') {
         await hero.scrollIntoViewIfNeeded();
         await expect(banner).toHaveAttribute(
@@ -478,7 +496,7 @@ for (const width of [390, 1280]) {
       'visible',
     );
     const box = await media.boundingBox();
-    const frame = await field.locator('.content-preview-media').boundingBox();
+    const frame = await field.locator('.media-edge-strip').boundingBox();
     expect(box!.height).toBeCloseTo(frame!.height, 1);
     expect(box!.width / box!.height).toBeCloseTo(640 / 180, 2);
     expect(box!.x).toBeCloseTo(frame!.x, 1);

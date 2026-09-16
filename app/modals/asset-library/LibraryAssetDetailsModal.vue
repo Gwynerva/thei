@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
-import { assetSourceName } from '#layers/thei/shared/asset';
 import {
   assetSourceKey,
   type AssetPlacement,
   type AssetUsagesResponse,
 } from '#layers/thei/shared/asset-library';
 import {
+  assetFileLabel,
   assetPlacementLabel,
   assetPlacementScopeLabel,
   assetSourceIcon,
@@ -71,7 +71,7 @@ const usageGroups = computed(() => {
     <template #aside>
       <div class="flex flex-col gap-sm p-sm text-sm">
         <h2 class="text-base font-semibold wrap-anywhere">
-          {{ assetSourceName(asset.meta) ?? asset.assetUuid }}
+          {{ assetFileLabel(asset) }}
         </h2>
         <AssetModalFileInfo
           :extension="asset.extension"

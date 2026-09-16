@@ -1,4 +1,8 @@
-import type { PublicProjectReference, PublicTagSummary } from './api/public';
+import type {
+  PublicProjectLink,
+  PublicProjectReference,
+  PublicTagSummary,
+} from './api/public';
 import type { DateRange } from './date-range';
 import type { MediaDescriptor } from './media';
 import type { ProfileStatusKind } from './profile';
@@ -30,12 +34,17 @@ export type VisibleLifePoint = LifePointBase & {
   media?: MediaDescriptor;
   tags?: PublicTagSummary[];
   project?: PublicProjectReference;
-  relatedProjects?: PublicProjectReference[];
+  relatedProjects?: PublicProjectLink[];
   profileStatusKind?: ProfileStatusKind;
 };
 
+/** A point a visitor may not see, presented under a codename. */
 export type SecretLifePoint = LifePointBase & {
+  key: string;
   visibility: 'secret';
+  title: string;
+  summary: string;
+  media: MediaDescriptor;
 };
 
 export type LifePoint = VisibleLifePoint | SecretLifePoint;

@@ -7,7 +7,7 @@ const props = defineProps({
   ...mediaSurfaceProps,
   autoplay: Boolean,
   fit: {
-    type: String as PropType<'cover' | 'contain' | 'height'>,
+    type: String as PropType<'cover' | 'contain'>,
     default: 'cover',
   },
   align: {
@@ -33,8 +33,7 @@ const playback = computed(
 const edgeFade = computed(() => ambient.value && props.align !== 'center');
 const style = computed(() => ({
   '--media-align': props.align,
-  '--media-fit':
-    ambient.value || props.fit === 'height' ? 'contain' : props.fit,
+  '--media-fit': ambient.value ? 'contain' : props.fit,
   '--media-edge-mask': `linear-gradient(to ${props.align === 'left' ? 'right' : 'left'}, black 50%, transparent)`,
   ...(props.naturalSize && props.width && props.height
     ? {
@@ -70,7 +69,8 @@ defineExpose({
     :style
     :class="{
       'media-edge': edgeFade,
-      'media-height': fit === 'height',
+      'media-edge-left': edgeFade && align === 'left',
+      'media-edge-right': edgeFade && align === 'right',
       'media-natural': naturalSize && width && height,
     }"
     :data-media-variant="variant"
@@ -88,19 +88,28 @@ defineExpose({
 .media-edge :deep(.media-foreground) {
   container-type: size;
 }
+/*
+ * Edge media always spans the full height of its strip and is pinned to its
+ * edge. The width follows the intrinsic ratio, so a strip stretched by a taller
+ * neighbour scales the media up and clips it on the inner side instead of
+ * letterboxing it. The fade ends at whichever is narrower: the media or the
+ * strip.
+ */
 .media-edge :deep(.media-main) {
+  width: calc(100cqh * var(--media-ratio));
+  max-width: none;
+  height: 100%;
+  object-fit: cover;
   mask-image: var(--media-edge-mask);
-  mask-size: min(100%, calc(100cqh * var(--media-ratio))) 100%;
+  mask-size: min(100%, 100cqw) 100%;
   mask-position: var(--media-align);
   mask-repeat: no-repeat;
 }
-.media-height :deep(.media-main) {
-  width: auto;
-  max-width: none;
-  height: 100%;
-  aspect-ratio: var(--media-ratio);
-  inset-inline-end: auto;
-  mask-size: 100% 100%;
+.media-edge-left :deep(.media-main) {
+  inset-inline: 0 auto;
+}
+.media-edge-right :deep(.media-main) {
+  inset-inline: auto 0;
 }
 .media-natural :deep(.media-main) {
   inset: auto;

@@ -89,7 +89,6 @@ export async function createAssetVariant(
     {
       extension: input.source.extension,
       size: input.source.size,
-      name: input.source.filename,
     },
   );
 
@@ -136,13 +135,12 @@ async function buildProcessedAssetMeta(
   dimensions: { width?: number; height?: number },
   settings: AssetUploadSettings,
   hasAudio?: boolean,
-  sourceFile?: { extension: string; size: number; name?: string },
+  sourceFile?: { extension: string; size: number },
 ): Promise<{ meta: AssetMeta | null; previewAssetUuid?: string }> {
   if (type === AssetType.Image) {
     const preview = await createMediaPreviewAsset(bytes, AssetType.Image);
     const meta: ImageAssetMeta = {
       ...dimensions,
-      ...(sourceFile?.name ? { originalName: sourceFile.name } : {}),
       ...(preview.accent !== undefined ? { accent: preview.accent } : {}),
     };
     return { meta, previewAssetUuid: preview.previewAssetUuid };
@@ -152,7 +150,6 @@ async function buildProcessedAssetMeta(
     const preview = await createMediaPreviewAsset(bytes, AssetType.Video);
     const meta: VideoAssetMeta = {
       ...dimensions,
-      ...(sourceFile?.name ? { originalName: sourceFile.name } : {}),
       audio: hasAudio === true ? 'keep' : 'none',
       ...(preview.accent !== undefined ? { accent: preview.accent } : {}),
     };
@@ -164,24 +161,10 @@ async function buildProcessedAssetMeta(
       archivedOriginal: {
         extension: sourceFile.extension,
         size: sourceFile.size,
-        ...(sourceFile.name ? { name: sourceFile.name } : {}),
       },
     };
     return { meta };
   }
 
-  if (type === AssetType.Other && sourceFile) {
-    return {
-      meta: {
-        ...(sourceFile.name ? { originalName: sourceFile.name } : {}),
-      } satisfies OtherAssetMeta,
-    };
-  }
-
-  return {
-    meta: {
-      ...dimensions,
-      ...(sourceFile?.name ? { originalName: sourceFile.name } : {}),
-    },
-  };
+  return { meta: { ...dimensions } };
 }

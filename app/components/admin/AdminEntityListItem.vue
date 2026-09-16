@@ -24,26 +24,16 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
         py-xs pl-sm"
       :class="props.compact ? 'min-h-14' : 'min-h-16'"
     >
-      <span
-        class="entity-preview absolute inset-y-0 left-0 w-24"
-        aria-hidden="true"
+      <MediaEdge
+        :media="previewMedia"
+        playback="interaction"
+        :engaged
+        class="w-24"
       >
-        <Media
-          v-if="previewMedia"
-          v-bind="previewMedia"
-          variant="ambient"
-          playback="interaction"
-          :engaged
-          align="left"
-          class="size-full opacity-75 transition group-hocus:opacity-100"
-        />
-        <span
-          v-else
-          class="flex size-full items-center pl-sm text-2xl text-text-3"
-        >
+        <span class="flex size-full items-center pl-sm text-2xl text-text-3">
           <Icon :name="entityType" />
         </span>
-      </span>
+      </MediaEdge>
       <span class="relative ml-10 min-w-0 flex-1 py-1">
         <span
           class="block font-semibold transition group-hocus:text-accent"
@@ -94,15 +84,3 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
     </div>
   </div>
 </template>
-
-<style scoped>
-.entity-preview {
-  mask-image: linear-gradient(
-    to right,
-    #000 0%,
-    rgb(0 0 0 / 70%) 20%,
-    rgb(0 0 0 / 10%) 75%,
-    transparent 100%
-  );
-}
-</style>

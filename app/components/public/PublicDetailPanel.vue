@@ -4,6 +4,7 @@ import {
   type PublicDetailPanelData,
 } from './public-detail';
 import { buildLifeUrl } from '#layers/thei/shared/life';
+import { isPublicSecret } from '#layers/thei/shared/api/public';
 
 const { data } = defineProps<{ data: PublicDetailPanelData }>();
 const emit = defineEmits<{
@@ -15,14 +16,17 @@ function navigate(id: string, event: MouseEvent) {
 }
 const relatedProjectLinks = computed(() =>
   sortPublicProjectReferencesByRelationType(data.relatedProjects ?? []).map(
-    (project) => ({
-      kind: 'project' as const,
-      title: project.title,
-      href: project.href,
-      description: project.summary,
-      iconMedia: project.iconMedia,
-      relationType: project.relationType,
-    }),
+    (project) =>
+      isPublicSecret(project)
+        ? project
+        : {
+            kind: 'project' as const,
+            title: project.title,
+            href: project.href,
+            description: project.summary,
+            iconMedia: project.iconMedia,
+            relationType: project.relationType,
+          },
   ),
 );
 </script>

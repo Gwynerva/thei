@@ -3,7 +3,6 @@ import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import { and, eq } from 'drizzle-orm';
 import {
   AssetType,
-  assetSourceName,
   type OtherAssetUsageMeta,
   type ShowcaseAssetUsageMeta,
 } from '#layers/thei/shared/asset';
@@ -62,6 +61,7 @@ import { getEventRelations } from '../events/relations';
 import { getEventExternalLinks } from '../events/external-links';
 import { findExternalLink } from '../external-links/repository';
 import { listTagsForContainer } from '../tags';
+import { buildSecretReference } from './secret';
 import {
   buildPublicContentData,
   buildPublicContentPreviewMedia,
@@ -256,8 +256,12 @@ async function buildRelatedProjectReferences(
       const project = await THEI_SERVER.projects.findByUuid(
         relation.projectUuid,
       );
-      if (!project || !canListPublicEntity(project.access, isAdmin))
-        return undefined;
+      if (!project) return undefined;
+      if (!canListPublicEntity(project.access, isAdmin))
+        return {
+          ...buildSecretReference('project', project.projectUuid),
+          relationType: 'related' as const,
+        };
       return {
         ...(await buildPublicProjectReference(project)),
         relationType: 'related' as const,
@@ -310,14 +314,16 @@ export async function buildPublicProject(
   );
   const showcase = await Promise.all(
     rawShowcase
-      .filter(({ meta }) =>
-        isAdmin || meta?.role !== 'showcase-asset' ? true : !meta.isPrivate,
-      )
       .filter(
         ({ asset }) =>
           asset.type === AssetType.Image || asset.type === AssetType.Video,
       )
       .map(async ({ asset, meta }) => {
+        if (!isAdmin && usageIsPrivate(meta))
+          return buildSecretReference(
+            'media',
+            `${project.projectUuid}:${asset.assetUuid}`,
+          );
         const item = meta as ShowcaseAssetUsageMeta | null;
         const href = `${buildProjectUrl(project.humanReadableSlug, project.publicId)}media/showcase-asset/${asset.slug}.${asset.extension}`;
         return buildPublicAssetDescriptor(
@@ -329,17 +335,18 @@ export async function buildPublicProject(
       }),
   );
   const files = await Promise.all(
-    rawFiles
-      .filter(({ meta }) =>
-        isAdmin || meta?.role !== 'other-asset' ? true : !meta.isPrivate,
-      )
-      .map(({ asset, meta }) =>
-        buildPublicDirectFile(
-          project,
-          asset,
-          meta as OtherAssetUsageMeta | null,
-        ),
-      ),
+    rawFiles.map(({ asset, meta }) =>
+      !isAdmin && usageIsPrivate(meta)
+        ? buildSecretReference(
+            'file',
+            `${project.projectUuid}:${asset.assetUuid}`,
+          )
+        : buildPublicDirectFile(
+            project,
+            asset,
+            meta as OtherAssetUsageMeta | null,
+          ),
+    ),
   );
   const [unsortedStageItems, sectionItems] = await Promise.all([
     Promise.all(
@@ -559,30 +566,30 @@ export async function buildPublicEvent(
       THEI_SERVER.assets.usages.findByContainer('event', stored.eventUuid),
     ]);
   const files = await Promise.all(
-    rawFiles
-      .filter(({ meta }) =>
-        isAdmin || meta?.role !== 'other-asset' ? true : !meta.isPrivate,
-      )
-      .map(({ asset, meta }) => {
-        const item = meta as OtherAssetUsageMeta | null;
-        const href = `${buildEventUrl(stored.humanReadableSlug, stored.publicId)}other-asset/${asset.slug}.${asset.extension}`;
-        return {
-          key: asset.slug,
-          title:
-            item?.role === 'other-asset'
-              ? richTextToPlainText(item.title ?? '')
-              : '',
-          fileName: assetSourceName(asset.meta),
-          description:
-            item?.role === 'other-asset' && item.caption
-              ? richTextToPlainText(item.caption)
-              : undefined,
-          href,
-          extension: asset.extension,
-          size: asset.size,
-          archivedOriginal: archivedOriginalFromMeta(asset.meta),
-        } satisfies PublicFile;
-      }),
+    rawFiles.map(({ asset, meta }) => {
+      if (!isAdmin && usageIsPrivate(meta))
+        return buildSecretReference(
+          'file',
+          `${stored.eventUuid}:${asset.assetUuid}`,
+        );
+      const item = meta as OtherAssetUsageMeta | null;
+      const href = `${buildEventUrl(stored.humanReadableSlug, stored.publicId)}other-asset/${asset.slug}.${asset.extension}`;
+      return {
+        key: asset.slug,
+        title:
+          item?.role === 'other-asset'
+            ? richTextToPlainText(item.title ?? '')
+            : '',
+        description:
+          item?.role === 'other-asset' && item.caption
+            ? richTextToPlainText(item.caption)
+            : undefined,
+        href,
+        extension: asset.extension,
+        size: asset.size,
+        archivedOriginal: archivedOriginalFromMeta(asset.meta),
+      } satisfies PublicFile;
+    }),
   );
   const relatedProjects = await buildRelatedProjectReferences(
     relations,
@@ -607,13 +614,20 @@ export async function buildPublicEvent(
   };
 }
 
+/** Whether a placement is hidden from visitors by its own privacy flag. */
+function usageIsPrivate(meta: unknown): boolean {
+  return Boolean(
+    meta && typeof meta === 'object' && 'isPrivate' in meta && meta.isPrivate,
+  );
+}
+
 function emptyPublicReferenceGroup(): PublicReferenceGroup {
   return { links: [], files: [] };
 }
 
 export function buildPublicManualEventReferenceGroup(
   links: Awaited<ReturnType<typeof getEventExternalLinks>>,
-  files: PublicFile[],
+  files: PublicReferenceGroup['files'],
   includePrivate: boolean,
 ): PublicReferenceGroup {
   return {
@@ -632,7 +646,7 @@ export function buildPublicManualEventReferenceGroup(
 
 function buildPublicManualReferenceGroup(
   links: Awaited<ReturnType<typeof getProjectExternalLinks>>,
-  files: PublicFile[],
+  files: PublicReferenceGroup['files'],
   includePrivate: boolean,
 ): PublicReferenceGroup {
   return {
@@ -656,8 +670,12 @@ async function buildProjectRelationReferences(
   const references = await Promise.all(
     relations.map(async ({ projectUuid, type }) => {
       const project = await THEI_SERVER.projects.findByUuid(projectUuid);
-      if (!project || !canListPublicEntity(project.access, isAdmin))
-        return undefined;
+      if (!project) return undefined;
+      if (!canListPublicEntity(project.access, isAdmin))
+        return {
+          ...buildSecretReference('project', project.projectUuid),
+          relationType: type,
+        };
       return {
         ...(await buildPublicProjectReference(project)),
         relationType: type,
@@ -753,7 +771,6 @@ export async function buildPublicContentReferenceGroup(
         return {
           key: asset.assetUuid,
           title: richTextToPlainText(title ?? ''),
-          fileName: asset.name,
           description: caption ? richTextToPlainText(caption) : undefined,
           href: asset.assetUrl,
           extension: asset.extension,
@@ -830,7 +847,6 @@ function buildPublicDirectFile(
     key: asset.slug,
     title:
       meta?.role === 'other-asset' ? richTextToPlainText(meta.title ?? '') : '',
-    fileName: assetSourceName(asset.meta),
     description:
       meta?.role === 'other-asset' && meta.caption
         ? richTextToPlainText(meta.caption)
@@ -852,7 +868,6 @@ function buildPublicAssetDescriptor(
   return {
     key: asset.slug,
     title: richTextToPlainText(title),
-    fileName: assetSourceName(asset.meta),
     description: description ? richTextToPlainText(description) : undefined,
     href,
     extension: asset.extension,

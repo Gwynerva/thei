@@ -55,12 +55,8 @@ usePublicSeo({
     />
     <div v-if="rewind.items.length" class="grid gap-sm sm:grid-cols-2">
       <LifePointCard
-        v-for="(item, index) in rewind.items"
-        :key="
-          item.point.visibility === 'visible'
-            ? item.point.key
-            : `${item.point.date}:${item.point.entityKind}:${index}`
-        "
+        v-for="item in rewind.items"
+        :key="item.point.key"
         :point="item.point"
         :rewind-match="item.match"
         date-style="long"

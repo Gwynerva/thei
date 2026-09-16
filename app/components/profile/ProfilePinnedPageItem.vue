@@ -24,26 +24,11 @@ const { engaged, events } = useMediaInteraction();
         : undefined
     "
   >
-    <span
-      class="page-preview absolute inset-y-0 left-0 w-24"
-      aria-hidden="true"
-    >
-      <Media
-        v-if="page.media"
-        v-bind="page.media"
-        variant="ambient"
-        playback="interaction"
-        :engaged
-        align="left"
-        class="size-full opacity-75 transition group-hocus:opacity-100"
-      />
-      <span
-        v-else
-        class="flex size-full items-center pl-sm text-2xl text-text-3"
-      >
+    <MediaEdge :media="page.media" playback="interaction" :engaged class="w-24">
+      <span class="flex size-full items-center pl-sm text-2xl text-text-3">
         <Icon name="page" />
       </span>
-    </span>
+    </MediaEdge>
     <span
       class="relative ml-10 min-w-0 flex-1 py-xs pr-sm font-semibold
         transition-colors group-hocus:text-accent"
@@ -58,15 +43,3 @@ const { engaged, events } = useMediaInteraction();
     />
   </component>
 </template>
-
-<style scoped>
-.page-preview {
-  mask-image: linear-gradient(
-    to right,
-    #000 0%,
-    rgb(0 0 0 / 70%) 20%,
-    rgb(0 0 0 / 10%) 75%,
-    transparent 100%
-  );
-}
-</style>

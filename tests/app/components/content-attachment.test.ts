@@ -2,27 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   contentAssetSelectionChanged,
   contentAttachmentAssetChanged,
-  contentAttachmentSuggestedTitle,
   normalizeContentAttachmentPaste,
 } from '../../../app/components/content/content-attachment';
 
 describe('content attachment state', () => {
-  it('suggests a readable title only when the source name is available', () => {
-    expect(
-      contentAttachmentSuggestedTitle({
-        assetUuid: 'asset-document',
-        name: 'research.notes.pdf',
-        extension: 'pdf',
-      }),
-    ).toBe('research.notes');
-    expect(
-      contentAttachmentSuggestedTitle({
-        assetUuid: 'asset-pdf',
-        extension: 'pdf',
-      }),
-    ).toBeUndefined();
-  });
-
   it('treats replacement with the same asset as a presentation-only refresh', () => {
     expect(
       contentAttachmentAssetChanged(

@@ -1,11 +1,5 @@
 import type { ContentAssetData } from '#layers/thei/shared/content';
 
-export function contentAttachmentSuggestedTitle(
-  asset: ContentAssetData,
-): string | undefined {
-  return asset.name?.replace(/\.[^.]+$/, '') || undefined;
-}
-
 export function contentAttachmentAssetChanged(
   current: ContentAssetData,
   next: ContentAssetData,

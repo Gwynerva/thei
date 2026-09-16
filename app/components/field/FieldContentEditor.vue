@@ -87,25 +87,17 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
     v-on="mediaEvents"
     @click="openEditor"
   >
-    <span
+    <MediaEdge
       v-if="preview.media"
-      class="content-preview-media absolute inset-y-0 left-0 w-32
-        [--preview-mask-end:70%] [--preview-mask-soft-alpha:10%]
-        [--preview-mask-soft:45%] [--preview-mask-start-alpha:100%]
-        [--preview-mask-strong-alpha:70%] [--preview-mask-strong:10%]
-        sm:[--preview-mask-end:100%] sm:[--preview-mask-soft:80%]
-        sm:[--preview-mask-strong:35%]"
-    >
-      <Media
-        v-bind="preview.media"
-        variant="ambient"
-        playback="interaction"
-        :engaged
-        align="left"
-        fit="height"
-        class="size-full opacity-75 transition group-hocus:opacity-100"
-      />
-    </span>
+      :media="preview.media"
+      fade="preview"
+      playback="interaction"
+      :engaged
+      class="w-32 [--media-edge-end:70%] [--media-edge-soft-alpha:10%]
+        [--media-edge-soft:45%] [--media-edge-strong-alpha:70%]
+        [--media-edge-strong:10%] sm:[--media-edge-end:100%]
+        sm:[--media-edge-soft:80%] sm:[--media-edge-strong:35%]"
+    />
 
     <span
       class="relative flex min-w-0 flex-1 items-center gap-xs"
@@ -135,17 +127,6 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
 </template>
 
 <style scoped>
-.content-preview-media {
-  /* The media should dissolve into the field background, as in project search. */
-  mask-image: linear-gradient(
-    to right,
-    rgb(0 0 0 / var(--preview-mask-start-alpha)) 0%,
-    rgb(0 0 0 / var(--preview-mask-strong-alpha)) var(--preview-mask-strong),
-    rgb(0 0 0 / var(--preview-mask-soft-alpha)) var(--preview-mask-soft),
-    transparent var(--preview-mask-end)
-  );
-}
-
 .content-preview-text {
   text-shadow:
     0 0 0.5em var(--color-bg-1),

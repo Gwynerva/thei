@@ -37,31 +37,20 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
       flush ? '' : 'p-xs',
     ]"
   >
-    <span
-      class="entity-preview absolute inset-y-0 right-0 w-40
-        [--preview-mask-end:100%] [--preview-mask-soft-alpha:25%]
-        [--preview-mask-soft:78%] [--preview-mask-start-alpha:100%]
-        [--preview-mask-strong-alpha:90%] [--preview-mask-strong:45%] sm:w-48"
-      aria-hidden="true"
+    <MediaEdge
+      :media="iconMedia"
+      side="right"
+      fade="preview"
+      :engaged
+      :playback="playback ?? 'autoplay'"
+      :loop
+      :autoplay-reduced-motion
+      class="w-40 sm:w-48"
     >
-      <Media
-        v-if="iconMedia"
-        v-bind="iconMedia"
-        :engaged
-        :playback="playback ?? 'autoplay'"
-        :loop
-        :autoplay-reduced-motion
-        variant="ambient"
-        align="right"
-        class="size-full opacity-75 transition group-hocus:opacity-100"
-      />
-      <span
-        v-else
-        class="flex size-full items-center justify-end pr-xs text-text-3"
-      >
+      <span class="flex size-full items-center justify-end pr-xs text-text-3">
         <Icon :name="entityType ?? 'project'" class="entity-type-icon" />
       </span>
-    </span>
+    </MediaEdge>
     <span
       class="entity-preview-text relative z-1 min-w-0 flex-1 pr-24 sm:pr-36"
       :class="flush ? 'm-xs' : undefined"
@@ -82,16 +71,6 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
 <style scoped>
 .entity-link-preview:is(a) {
   text-decoration: none;
-}
-
-.entity-preview {
-  mask-image: linear-gradient(
-    to left,
-    rgb(0 0 0 / var(--preview-mask-start-alpha)) 0%,
-    rgb(0 0 0 / var(--preview-mask-strong-alpha)) var(--preview-mask-strong),
-    rgb(0 0 0 / var(--preview-mask-soft-alpha)) var(--preview-mask-soft),
-    transparent var(--preview-mask-end)
-  );
 }
 
 .entity-preview-text {

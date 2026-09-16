@@ -4,7 +4,10 @@ import type {
 } from '#layers/thei/shared/api/asset';
 import { AssetType } from '#layers/thei/shared/asset';
 import type { ExtensionProfile } from '#layers/thei/shared/assets/extensions';
-import { anyFileExtensionProfile } from '#layers/thei/shared/assets/extensions';
+import {
+  anyFileExtensionProfile,
+  getPathExtension,
+} from '#layers/thei/shared/assets/extensions';
 import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
 import {
   resolveAssetMaxSize,
@@ -277,7 +280,7 @@ async function uploadOriginalFile(
     method: 'POST',
     headers: buildUploadHeaders({
       settings: createOriginalAssetSettings(),
-      filename: file.name,
+      extension: getPathExtension(file.name),
       maxSize: options.maxSize,
       sizeLimitPolicy: options.sizeLimitPolicy,
       acceptedExtensions: options.acceptedExtensions,

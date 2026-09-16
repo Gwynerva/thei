@@ -85,12 +85,8 @@ usePublicSeo({
         class="grid gap-sm sm:grid-cols-2"
       >
         <LifePointCard
-          v-for="(point, pointIndex) in latest.points"
-          :key="
-            point.visibility === 'visible'
-              ? point.key
-              : `${point.date}:${point.entityKind}:${point.transition}:${pointIndex}`
-          "
+          v-for="point in latest.points"
+          :key="point.key"
           :point="point"
           data-home-card
           date-style="long"
@@ -120,12 +116,8 @@ usePublicSeo({
       />
       <div data-home-card-grid="rewind" class="grid gap-sm sm:grid-cols-2">
         <LifePointCard
-          v-for="(item, index) in rewind.items"
-          :key="
-            item.point.visibility === 'visible'
-              ? item.point.key
-              : `${item.point.date}:${item.point.entityKind}:${index}`
-          "
+          v-for="item in rewind.items"
+          :key="item.point.key"
           :point="item.point"
           data-home-card
           :rewind-match="item.match"

@@ -3,7 +3,8 @@ import type { AssetUploadSettings } from '../asset-upload-settings';
 
 export interface AssetUploadHeaderInput {
   settings: AssetUploadSettings;
-  filename: string;
+  /** Only the extension travels: the file name never reaches the server. */
+  extension: string;
   uploadId?: string;
   maxSize?: number;
   sizeLimitPolicy?: AssetUploadLimitPolicy;
@@ -15,8 +16,7 @@ export interface AssetUploadHeaderInput {
  *
  * Uploads post the file as the raw request body so the server can stream it
  * straight to disk; everything that used to be a multipart field travels here
- * instead. Values are percent-encoded because headers are latin-1 and a
- * filename is not.
+ * instead. Values are percent-encoded because headers are latin-1.
  */
 export function buildUploadHeaders(
   input: AssetUploadHeaderInput,
@@ -24,7 +24,7 @@ export function buildUploadHeaders(
   const headers: Record<string, string> = {
     'content-type': 'application/octet-stream',
     'x-upload-settings': encodeURIComponent(JSON.stringify(input.settings)),
-    'x-upload-filename': encodeURIComponent(input.filename),
+    'x-upload-extension': encodeURIComponent(input.extension),
   };
 
   if (input.uploadId)

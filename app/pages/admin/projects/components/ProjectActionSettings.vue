@@ -20,7 +20,6 @@ import {
 } from '#layers/thei/shared/project-action';
 import type { ExternalLink } from '#layers/thei/shared/external-link';
 import { projectAssetUsageDelta } from '#layers/thei/shared/admin/project';
-import { assetSourceName } from '#layers/thei/shared/asset';
 import { assetDetailsModal } from '#layers/thei/app/modals/asset-details/modal';
 import { useSingleMediaAsset } from '#layers/thei/app/composables/single-media-asset';
 import ExternalLinkPreviewCard from '#layers/thei/app/components/external-links/ExternalLinkPreviewCard.vue';
@@ -242,9 +241,7 @@ function applyFile(asset: AssetVariantInfo) {
   fileSize.value = result.size;
   if (action.value.backgroundMode === 'file-gradient' && !hasFileColor.value)
     action.value.backgroundMode = 'standard-gradient';
-  action.value.fileTitle ??=
-    assetSourceName(asset.meta)?.replace(/\.[^.]+$/, '') ??
-    phrase.value.project_file;
+  action.value.fileTitle ??= phrase.value.project_file;
 }
 
 async function openFileDetails(initialAsset: AssetVariantInfo) {

@@ -84,13 +84,13 @@ describe('stageUploadBody', () => {
     ).rejects.toThrow('Empty upload');
   });
 
-  it('percent-decodes header values so filenames survive', () => {
+  it('percent-decodes header values', () => {
     const event = requestEvent(Buffer.from('x'), {
-      'x-upload-filename': encodeURIComponent('фото отпуска.png'),
+      'x-upload-settings': encodeURIComponent('{"подпись":"фото"}'),
     });
 
-    expect(readUploadHeader(event as any, 'x-upload-filename')).toBe(
-      'фото отпуска.png',
+    expect(readUploadHeader(event as any, 'x-upload-settings')).toBe(
+      '{"подпись":"фото"}',
     );
   });
 

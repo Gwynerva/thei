@@ -2,6 +2,7 @@
 import type {
   PublicAction,
   PublicAssetDescriptor,
+  PublicSecretReference,
   PublicTagSummary,
 } from '#layers/thei/shared/api/public';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
@@ -13,7 +14,7 @@ const props = defineProps<{
   iconMedia: MediaDescriptor;
   bannerMedia?: MediaDescriptor;
   action?: PublicAction;
-  showcase: PublicAssetDescriptor[];
+  showcase: (PublicAssetDescriptor | PublicSecretReference)[];
   tags: PublicTagSummary[];
   isShowcase: boolean;
   isPortfolio: boolean;

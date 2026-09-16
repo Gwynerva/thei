@@ -19,6 +19,8 @@ export function createI18nController(
     sampleSecretPhrases:
       primary.sampleSecretPhrases ?? base.sampleSecretPhrases ?? [],
     sampleProjects: primary.sampleProjects ?? base.sampleProjects ?? [],
+    secretCodenames: primary.secretCodenames ?? base.secretCodenames,
+    secretSummaries: primary.secretSummaries ?? base.secretSummaries,
     sizeUnits: { ...base.sizeUnits, ...primary.sizeUnits },
     phrase: createPhraseProxy(
       primary.phrases,

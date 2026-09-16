@@ -69,7 +69,6 @@ async function stage(bytes: Buffer, extension: string) {
     path,
     size: bytes.length,
     hash: createHash('sha256').update(bytes).digest('hex'),
-    filename: `staged.${extension}`,
     extension,
     owned: true,
   };

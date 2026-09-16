@@ -1,4 +1,4 @@
-import type { AssetRole } from '#layers/thei/shared/asset';
+import { AssetType, type AssetRole } from '#layers/thei/shared/asset';
 import type {
   AssetSource,
   AssetSourceType,
@@ -23,6 +23,35 @@ export function assetSourceLabel(source: AssetSource) {
     unused: phrase.value.asset_library_unused,
   }[source.type];
 }
+/**
+ * Describes a stored file for tooltips and screen readers.
+ *
+ * Only what the site knows about the bytes: the uploaded file's name is never
+ * kept.
+ */
+export function assetFileLabel(asset: {
+  type: AssetType;
+  extension: string;
+  size: number;
+}) {
+  const type = {
+    [AssetType.Image]: phrase.value.image,
+    [AssetType.Video]: phrase.value.video,
+    [AssetType.Audio]: phrase.value.audio,
+    [AssetType.Other]: phrase.value.asset,
+  }[asset.type];
+  return `${type} · ${asset.extension.toUpperCase()} · ${useHumanSize()(asset.size)}`;
+}
+
+export function assetDeletionLabel(deleteAfter: number) {
+  return phrase.value.asset_library_pending_deletion(
+    new Date(deleteAfter).toLocaleString(language.value.code, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }),
+  );
+}
+
 export function assetRoleLabel(
   role: AssetRole,
   detail?: AssetPlacement['detail'],

@@ -10,7 +10,12 @@ import {
 
 describe('generated fallback icons', () => {
   it('uses one registry for every supported generated icon kind', () => {
-    expect(GENERATED_ICON_KINDS).toEqual(['project', 'page', 'author']);
+    expect(GENERATED_ICON_KINDS).toEqual([
+      'project',
+      'page',
+      'author',
+      'secret',
+    ]);
     expect(isGeneratedIconKind('project')).toBe(true);
     expect(isGeneratedIconKind('page')).toBe(true);
     expect(isGeneratedIconKind('author')).toBe(true);

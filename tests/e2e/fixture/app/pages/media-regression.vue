@@ -2,6 +2,7 @@
 import type {
   PublicAction,
   PublicAssetDescriptor,
+  PublicSecretReference,
 } from '#layers/thei/shared/api/public';
 import type {
   ContentAssetData,
@@ -14,7 +15,6 @@ definePageMeta({ layout: 'public' });
 
 const image: ContentAssetData = {
   assetUuid: 'image',
-  name: 'original-image.svg',
   extension: 'svg',
   size: 50,
   assetUrl: '/regression-image.svg',
@@ -29,7 +29,6 @@ const image: ContentAssetData = {
 };
 const video: ContentAssetData = {
   assetUuid: 'video',
-  name: 'original-video.mp4',
   extension: 'mp4',
   size: 20 * 1024 * 1024,
   assetUrl: '/regression-video.mp4',
@@ -45,7 +44,6 @@ const video: ContentAssetData = {
 const slowImage: ContentAssetData = {
   ...image,
   assetUuid: 'slow-image',
-  name: 'slow-image.svg',
   assetUrl: '/slow-image.svg',
   media: {
     ...image.media!,
@@ -113,13 +111,19 @@ const showcase: PublicAssetDescriptor[] = [image, video, slowImage].map(
   (asset) => ({
     key: asset.assetUuid,
     title: `Showcase ${asset.assetUuid}`,
-    fileName: asset.name,
     href: asset.assetUrl!,
     extension: asset.extension!,
     size: asset.size!,
     media: asset.media,
   }),
 );
+const secret: PublicSecretReference = {
+  secret: true,
+  key: 'secret-media',
+  title: 'Secret media Gamma',
+  iconMedia: image.media!,
+};
+const withSecret = [secret, ...showcase];
 const actions: PublicAction[] = [
   'standard-gradient',
   'accent-gradient',
@@ -165,6 +169,11 @@ actions.push({
           },
         ]"
       />
+    </div>
+    <div data-secrets class="flex flex-col gap-sm">
+      <PublicAssetGallery :items="withSecret" variant="hero" />
+      <PublicAssetGallery :items="withSecret" />
+      <PublicFiles :files="[{ ...secret, title: 'Secret file Delta' }]" />
     </div>
     <div
       v-for="action in actions"

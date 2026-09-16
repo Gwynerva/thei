@@ -23,18 +23,16 @@ function png(color: string) {
     .toBuffer();
 }
 
-async function storeAsset(api: APIRequestContext, name: string, color: string) {
+async function storeAsset(api: APIRequestContext, color: string) {
   const response = await api.post('/api/admin/assets', {
     headers: buildUploadHeaders({
       settings: createOriginalAssetSettings(),
-      filename: name,
+      extension: 'png',
     }),
     data: await png(color),
   });
   expect(response.ok(), await response.text()).toBe(true);
-  // The stored name is a property of the asset, not of the request, so read
-  // back the canonical one the library will actually match on.
-  return (await response.json()).meta.originalName as string;
+  return (await response.json()).assetUuid as string;
 }
 
 async function openWizard(page: Page) {
@@ -57,19 +55,14 @@ async function pressBack(page: Page) {
   await page.evaluate(() => window.history.back());
 }
 
-async function chooseFromLibrary(page: Page, name: string) {
-  const searched = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    return (
-      url.pathname === '/api/admin/assets/library' &&
-      url.searchParams.get('q') === name
-    );
-  });
-  await page.getByRole('searchbox').fill(name);
-  await searched;
-  const asset = page.getByRole('button', { name, exact: true }).first();
-  // A freshly stored asset has no placements yet, so it sits under "Unused".
-  await page.getByText('Unused', { exact: true }).click();
+async function chooseFromLibrary(page: Page, assetUuid: string) {
+  const asset = page.locator(`[data-asset-uuid="${assetUuid}"]`).first();
+  // A freshly stored asset has no placements yet, so it sits under "Unused",
+  // where the newest come first.
+  await page
+    .locator('[data-asset-library-section]')
+    .filter({ hasText: 'Unused' })
+    .click();
   await expect(asset).toBeVisible();
   await asset.click();
 }
@@ -86,7 +79,7 @@ test('browser Back closes one nested modal per press and never leaves the page',
   page,
   request,
 }) => {
-  const stored = await storeAsset(request, 'back-step-one.png', '#4368a2');
+  const stored = await storeAsset(request, '#4368a2');
   await openWizard(page);
 
   await pickScreen(page).click();
@@ -116,7 +109,7 @@ test('Escape undoes the same single step as Back', async ({
   page,
   request,
 }) => {
-  const stored = await storeAsset(request, 'escape-step.png', '#7a4368');
+  const stored = await storeAsset(request, '#7a4368');
   await openWizard(page);
 
   await pickScreen(page).click();

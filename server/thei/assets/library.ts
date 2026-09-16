@@ -7,6 +7,7 @@ import {
   resolveAdminPagination,
 } from '../../../shared/admin/entity-list';
 import {
+  ASSET_ORPHAN_GRACE_MS,
   assetSelectionError,
   assetSourceKey,
   summarizeAssetUsages,
@@ -17,6 +18,7 @@ import {
   type AssetLibraryAvailability,
 } from '../../../shared/asset-library';
 import { normalizeAssetExtension } from '../../../shared/assets/formats';
+import { richTextToPlainText } from '../../../shared/rich-text';
 import {
   buildProjectChildUrl,
   buildProjectUrl,
@@ -59,7 +61,7 @@ contexts AS (
     coalesce(ch.childSlug,''),coalesce(ch.childPublicId,''),'',coalesce(ch.isPrivate,0),coalesce(ch.summary,'')
     FROM content c LEFT JOIN children ch ON ch.ownerType=c.ownerType AND ch.ownerId=c.ownerId
   UNION ALL SELECT 'profile-avatar',a.id,'profile',p.profileId,'','entity','','','avatar',0,'' FROM "profile-avatars" a CROSS JOIN profiles p
-  UNION ALL SELECT 'profile-status',a.id,'profile',p.profileId,'','entity','','','status',0,'' FROM "profile-statuses" a CROSS JOIN profiles p
+  UNION ALL SELECT 'profile-status',a.id,'profile',p.profileId,'','entity','','','status',0,coalesce(a.text,'') FROM "profile-statuses" a CROSS JOIN profiles p
 ),
 placements AS (
   SELECT u.assetUuid,u.role,u.meta,u.containerType,u.containerId,s.*,c.scopeTitle,c.scopeKind,
@@ -73,8 +75,31 @@ members AS (
     WHERE a.settings IS NOT NULL AND NOT EXISTS (SELECT 1 FROM placements p WHERE p.assetUuid=a.assetUuid)
 )
 `;
-const filenameSql =
-  "coalesce(json_extract(a.meta,'$.originalName'),json_extract(a.meta,'$.archivedOriginal.name'),a.assetUuid)";
+/**
+ * Matches an asset by the text the site itself gives it: captions and titles
+ * of its placements, captions inside editor blocks, and the titles of whatever
+ * holds it. What the uploaded file was called is never kept, so it is never
+ * searchable. `scoped` restricts the match to the member row's own source.
+ */
+function siteTextMatchSql(scoped: boolean) {
+  const scope = scoped
+    ? ' AND p.sourceType=m.sourceType AND p.sourceId=m.sourceId'
+    : '';
+  return `(EXISTS (
+      SELECT 1 FROM placements p WHERE p.assetUuid=a.assetUuid${scope}
+      AND instr(asset_search_text(coalesce(p.title,'') || ' ' || coalesce(p.summary,'') || ' ' || p.scopeTitle || ' ' || p.description || ' ' || coalesce(json_extract(p.meta,'$.caption'),'') || ' ' || coalesce(json_extract(p.meta,'$.title'),'')),?)>0)
+    OR EXISTS (
+      SELECT 1 FROM placements p JOIN content c ON p.containerType='content' AND c.contentUuid=p.containerId,
+        json_each(c.data,'$.blocks') b
+      WHERE p.assetUuid=a.assetUuid${scope} AND (
+        (json_extract(b.value,'$.data.asset.assetUuid')=a.assetUuid AND
+          instr(asset_search_text(coalesce(json_extract(b.value,'$.data.caption'),'') || ' ' || coalesce(json_extract(b.value,'$.data.title'),'')),?)>0)
+        OR EXISTS (SELECT 1 FROM json_each(b.value,'$.data.items') i
+          WHERE json_extract(i.value,'$.asset.assetUuid')=a.assetUuid
+            AND instr(asset_search_text(json_extract(i.value,'$.caption')),?)>0)
+      )
+    ))`;
+}
 const registered = new WeakSet<Database.Database>();
 function connection() {
   const context = THEI_SERVER.useDb();
@@ -82,8 +107,11 @@ function connection() {
     context.rawDb.function(
       'asset_search_text',
       { deterministic: true },
+      // Captions are rich text: their markup is not what anyone searches for.
       (value: unknown) =>
-        normalizeAdminSearchText(typeof value === 'string' ? value : ''),
+        normalizeAdminSearchText(
+          typeof value === 'string' ? richTextToPlainText(value) : '',
+        ),
     );
     registered.add(context.rawDb);
   }
@@ -119,31 +147,8 @@ function matchSql(query: LibraryQuery, source = false) {
   }
   const q = normalizeAdminSearchText(query.q ?? '');
   if (q) {
-    const text = source
-      ? `${filenameSql} || ' ' || coalesce(s.title,'') || ' ' || coalesce(s.summary,'')`
-      : filenameSql;
-    parts.push(
-      `(instr(asset_search_text(${text}),?)>0 ${
-        source
-          ? `OR EXISTS (
-      SELECT 1 FROM placements p WHERE p.assetUuid=a.assetUuid AND p.sourceType=m.sourceType AND p.sourceId=m.sourceId
-      AND instr(asset_search_text(p.scopeTitle || ' ' || p.description || ' ' || coalesce(json_extract(p.meta,'$.caption'),'') || ' ' || coalesce(json_extract(p.meta,'$.title'),'')),?)>0)
-      OR EXISTS (
-        SELECT 1 FROM placements p JOIN content c ON p.containerType='content' AND c.contentUuid=p.containerId,
-          json_each(c.data,'$.blocks') b
-        WHERE p.assetUuid=a.assetUuid AND p.sourceType=m.sourceType AND p.sourceId=m.sourceId AND (
-          (json_extract(b.value,'$.data.asset.assetUuid')=a.assetUuid AND
-            instr(asset_search_text(coalesce(json_extract(b.value,'$.data.caption'),'') || ' ' || coalesce(json_extract(b.value,'$.data.title'),'')),?)>0)
-          OR EXISTS (SELECT 1 FROM json_each(b.value,'$.data.items') i
-            WHERE json_extract(i.value,'$.asset.assetUuid')=a.assetUuid
-              AND instr(asset_search_text(json_extract(i.value,'$.caption')),?)>0)
-        )
-      )`
-          : ''
-      })`,
-    );
-    args.push(q);
-    if (source) args.push(q, q, q);
+    parts.push(siteTextMatchSql(source));
+    args.push(q, q, q);
   }
   if (query.usage === 'used')
     parts.push(
@@ -277,6 +282,15 @@ function readItems(
     .where(inArray(schema.assetUsages.containerId, ids))
     .all()
     .filter((u) => u.containerType === 'asset' && u.role === 'preview');
+  // Cleanup deletes an asset with no usage rows at all, whatever holds them.
+  const referenced = new Set(
+    db
+      .select({ assetUuid: schema.assetUsages.assetUuid })
+      .from(schema.assetUsages)
+      .where(inArray(schema.assetUsages.assetUuid, ids))
+      .all()
+      .map((u) => u.assetUuid),
+  );
   const items = new Map<string, AssetLibraryItem>();
   for (const row of rows) {
     const uses = placements.get(row.assetUuid) ?? [];
@@ -286,6 +300,9 @@ function readItems(
         previews.find((p) => p.containerId === row.assetUuid)?.assetUuid,
       ),
       touchedAt: row.touchedAt,
+      ...(referenced.has(row.assetUuid)
+        ? {}
+        : { deleteAfter: row.touchedAt + ASSET_ORPHAN_GRACE_MS }),
       ...summarizeAssetUsages(uses),
       roles: [
         ...new Set(

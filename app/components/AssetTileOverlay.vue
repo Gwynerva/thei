@@ -12,6 +12,10 @@ withDefaults(
     showSize?: boolean;
     showExtension?: boolean;
     editable?: boolean;
+    /** Unused asset that cleanup is going to delete. */
+    pendingDeletion?: boolean;
+    /** Why the asset cannot be chosen here, shown as a warning badge. */
+    warning?: string;
   }>(),
   {
     showVideo: true,
@@ -22,40 +26,63 @@ withDefaults(
 );
 
 const formatSize = useHumanSize();
+const chip = 'bg-black/30 text-xs leading-none text-white backdrop-blur-sm';
 </script>
 
 <template>
   <div class="pointer-events-none absolute inset-0 z-40 select-none">
     <div
-      v-if="isPrivate"
-      class="absolute top-1 left-1 rounded-full bg-black/30 p-1 text-xs
-        text-white backdrop-blur-sm"
+      class="absolute inset-x-1 top-1 flex items-start justify-between gap-1"
     >
-      <Icon name="lock-close" />
+      <span class="flex min-w-0 gap-1">
+        <span v-if="isPrivate" :class="chip" class="rounded-full p-1">
+          <Icon name="lock-close" />
+        </span>
+        <span
+          v-if="pendingDeletion"
+          :class="chip"
+          class="rounded-full p-1 text-text-error"
+          data-asset-pending-deletion
+        >
+          <Icon name="delete" />
+        </span>
+        <span
+          v-if="warning"
+          :class="chip"
+          class="rounded-full p-1 text-text-warning"
+          :aria-label="warning"
+          role="img"
+        >
+          <Icon name="warning" />
+        </span>
+      </span>
+      <span
+        v-if="showVideo && mediaKind === 'video'"
+        :class="chip"
+        class="shrink-0 rounded-full p-1"
+      >
+        <Icon name="play-circle" />
+      </span>
     </div>
 
     <div
-      v-if="showVideo && mediaKind === 'video'"
-      class="absolute top-1 right-1 rounded-full bg-black/30 p-1 text-xs
-        leading-none text-white backdrop-blur-sm"
+      v-if="(showExtension && extension) || (showSize && size != null)"
+      class="absolute inset-x-1 bottom-1 flex items-end justify-between gap-1"
     >
-      <Icon name="play-circle" />
-    </div>
-
-    <div
-      v-if="showSize && size != null"
-      class="absolute bottom-1 left-1/2 -translate-x-1/2 rounded bg-black/30 p-1
-        text-xs leading-none whitespace-nowrap text-white backdrop-blur-sm"
-    >
-      {{ formatSize(size) }}
-    </div>
-
-    <div
-      v-else-if="showExtension && extension"
-      class="absolute right-1 bottom-1 rounded bg-black/30 px-1 py-0.5 text-xs
-        leading-none text-white uppercase backdrop-blur-sm"
-    >
-      {{ extension }}
+      <span
+        v-if="showExtension && extension"
+        :class="chip"
+        class="min-w-0 truncate rounded px-1 py-0.5 uppercase"
+      >
+        {{ extension }}
+      </span>
+      <span
+        v-if="showSize && size != null"
+        :class="[chip, showExtension && extension ? 'ml-auto' : 'mx-auto']"
+        class="min-w-0 truncate rounded px-1 py-0.5 whitespace-nowrap"
+      >
+        {{ formatSize(size) }}
+      </span>
     </div>
 
     <div

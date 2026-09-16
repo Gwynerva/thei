@@ -1,10 +1,16 @@
 <script setup lang="ts">
-import type { PublicEntitySummary } from '#layers/thei/shared/api/public';
+import {
+  isPublicSecret,
+  type PublicEntitySummary,
+  type PublicSecretReference,
+} from '#layers/thei/shared/api/public';
 defineProps<{
   kind: 'project' | 'event';
   count: number;
-  items: PublicEntitySummary[];
+  items: (PublicEntitySummary | PublicSecretReference)[];
 }>();
+const tileClass = `relative block size-9 shrink-0 overflow-hidden rounded-normal
+  border-2 border-bg-2 bg-bg-accent transition hocus:z-1 hocus:-translate-y-1`;
 </script>
 <template>
   <div
@@ -15,27 +21,30 @@ defineProps<{
       v-if="items.length"
       class="flex -space-x-2 sm:self-center sm:justify-self-end"
     >
-      <TheiLink
+      <template
         v-for="item in items"
-        :key="item.href"
-        :to="item.href"
-        :aria-label="item.title"
-        :data-title-popup="item.title"
-        class="relative block size-9 shrink-0 overflow-hidden rounded-normal
-          border-2 border-bg-2 bg-bg-accent transition hocus:z-1
-          hocus:-translate-y-1"
-        ><Media
-          v-if="item.media"
-          v-bind="item.media"
-          :playback="kind === 'project' ? 'autoplay' : undefined"
-          :autoplay-reduced-motion="kind === 'project'"
-          :loop="kind === 'project'"
-          :muted="kind === 'project'"
-          class="size-full" /><span
+        :key="isPublicSecret(item) ? item.key : item.href"
+        ><PublicSecretIcon
+          v-if="isPublicSecret(item)"
+          :secret="item"
+          :class="tileClass" /><TheiLink
           v-else
-          class="flex size-full items-center justify-center text-accent"
-          ><Icon :name="kind" /></span
-      ></TheiLink>
+          :to="item.href"
+          :aria-label="item.title"
+          :data-title-popup="item.title"
+          :class="tileClass"
+          ><Media
+            v-if="item.media"
+            v-bind="item.media"
+            :playback="kind === 'project' ? 'autoplay' : undefined"
+            :autoplay-reduced-motion="kind === 'project'"
+            :loop="kind === 'project'"
+            :muted="kind === 'project'"
+            class="size-full" /><span
+            v-else
+            class="flex size-full items-center justify-center text-accent"
+            ><Icon :name="kind" /></span></TheiLink
+      ></template>
     </div>
     <TheiLink
       :to="kind === 'project' ? '/projects/' : '/life/'"

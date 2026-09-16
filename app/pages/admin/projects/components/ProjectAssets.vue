@@ -10,11 +10,7 @@ import {
   mapAssetVariantToReplaceResult,
 } from '#layers/thei/app/composables/asset-wizard';
 import type { AssetVariantsResponse } from '#layers/thei/shared/api/asset';
-import {
-  AssetType,
-  assetSourceName,
-  type AssetMeta,
-} from '#layers/thei/shared/asset';
+import { AssetType, type AssetMeta } from '#layers/thei/shared/asset';
 import {
   anyFileExtensionProfile,
   imageExtensionProfile,
@@ -67,10 +63,6 @@ type PickedAsset = {
 
 function archivedOriginalFromMeta(meta: AssetMeta | null | undefined) {
   return meta && 'archivedOriginal' in meta ? meta.archivedOriginal : undefined;
-}
-
-function assetTitleFromMeta(meta: AssetMeta | null | undefined) {
-  return assetSourceName(meta)?.replace(/\.[^.]+$/, '');
 }
 
 function extensionFromUrl(url: string | undefined, fallback: string) {
@@ -337,11 +329,7 @@ async function openOtherAdd() {
       result: mapAssetVariantToReplaceResult(asset),
     };
     addOtherItem(
-      pickedToOtherItem(picked, {
-        title:
-          assetTitleFromMeta(asset.meta) ??
-          `${asset.assetUuid}.${asset.extension}`,
-      }),
+      pickedToOtherItem(picked, { title: phrase.value.project_file }),
     );
   }
   batchErrorMessage.value = result.errors

@@ -11,7 +11,7 @@ import type {
   AssetVariantInfo,
   AssetVariantsResponse,
 } from '#layers/thei/shared/api/asset';
-import { AssetType, assetSourceName } from '#layers/thei/shared/asset';
+import { AssetType } from '#layers/thei/shared/asset';
 import {
   ContentValidationError,
   collectContentAssetSizeMap,
@@ -743,7 +743,6 @@ function mapAsset(asset: AssetVariantInfo) {
   const result = mapAssetVariantToReplaceResult(asset);
   return {
     assetUuid: asset.assetUuid,
-    name: assetSourceName(asset.meta),
     type: asset.type,
     extension: asset.extension,
     size: asset.size,

@@ -34,6 +34,7 @@ import {
   buildPublicProjectReference,
   buildPublicProjectSummary,
 } from './entities';
+import { buildSecretReference, type SecretEntityKind } from './secret';
 
 type RawPoint = {
   identity: string;
@@ -355,17 +356,25 @@ async function hydrateLifePoint(
   point: RawPoint,
   isAdmin: boolean,
 ): Promise<LifePoint> {
+  const key = hash(`${point.identity}:${point.date}:${point.transition}`, 14);
   const visible = lifePointIsVisible(point.access, point.isPrivate, isAdmin);
   if (!visible) {
+    const secret = buildSecretReference(
+      point.entityKind as SecretEntityKind,
+      secretPointUuid(point),
+    );
     return {
+      key,
       date: point.date,
       entityKind: point.entityKind,
       transition: point.transition,
       ...(point.period ? { period: point.period } : {}),
       visibility: 'secret',
+      title: secret.title,
+      summary: secret.summary,
+      media: secret.iconMedia,
     };
   }
-  const key = hash(`${point.identity}:${point.date}:${point.transition}`, 14);
   if (
     point.entityKind === 'profile-avatar' ||
     point.entityKind === 'profile-status'
@@ -516,6 +525,14 @@ async function hydrateLifePoint(
     media,
     project: projectReference,
   };
+}
+
+function secretPointUuid(point: RawPoint): string {
+  if (point.entityKind === 'event') return point.event!.eventUuid;
+  if (point.entityKind === 'page') return point.page!.pageUuid;
+  if (point.entityKind === 'project-stage') return point.stage!.stageUuid;
+  if (point.entityKind === 'project-section') return point.section!.sectionUuid;
+  return point.project!.projectUuid;
 }
 
 export function encodeLifeCursor(date: string) {

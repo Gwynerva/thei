@@ -40,9 +40,19 @@ export interface AssetPlacement {
 export type AssetUsageCounts = Partial<
   Record<Exclude<AssetSourceType, 'unused'>, number>
 >;
+/**
+ * How long an asset nothing uses survives before cleanup deletes it.
+ *
+ * Every upload, reuse and touch resets the clock, so a file that is still being
+ * placed is never swept away mid-edit.
+ */
+export const ASSET_ORPHAN_GRACE_MS = 24 * 60 * 60 * 1000;
+
 export interface AssetLibraryItem {
   asset: AssetVariantInfo;
   touchedAt: number;
+  /** Unix ms after which cleanup deletes the asset; set only when unused. */
+  deleteAfter?: number;
   counts: AssetUsageCounts;
   entityCount: number;
   roles: AssetRole[];

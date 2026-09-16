@@ -6,6 +6,7 @@ import {
   ASSET_CONTAINER_TYPES,
   type AssetContainerType,
 } from '#layers/thei/shared/asset';
+import { ASSET_ORPHAN_GRACE_MS } from '#layers/thei/shared/asset-library';
 import { backupSessionOpen } from '../backup/session';
 import { findOrphanedAssets } from './repository/find-orphaned';
 import { deleteStoredAsset } from './storage';
@@ -65,7 +66,7 @@ export async function runAssetCleanup(options: AssetCleanupOptions = {}) {
 }
 
 async function runAssetCleanupOnce(options: AssetCleanupOptions) {
-  const cutoffMs = Date.now() - ONE_DAY_MS;
+  const cutoffMs = Date.now() - ASSET_ORPHAN_GRACE_MS;
   await cleanupDanglingUsages();
   await cleanupMissingAssetFiles();
 

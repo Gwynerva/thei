@@ -75,10 +75,7 @@ export function lifeFeedRows(windows: LifeCachedWindow[]): LifeFeedRow[] {
       day.points.forEach((point, index) =>
         rows.push({
           kind: 'point',
-          key:
-            point.visibility === 'visible'
-              ? point.key
-              : `${day.date}:${point.entityKind}:${point.transition}:${index}`,
+          key: point.key,
           windowId: window.id,
           date: day.date,
           point,

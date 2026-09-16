@@ -16,6 +16,7 @@ import {
   listLibraryAssets,
 } from '../../../server/thei/assets/library';
 import {
+  ASSET_ORPHAN_GRACE_MS,
   assetSelectionError,
   summarizeAssetUsages,
 } from '../../../shared/asset-library';
@@ -90,15 +91,23 @@ describe('asset library', () => {
         ownerType: 'project-section',
         ownerId: 'section',
         slot: 'project-section-body',
-        data: { blocks: [] },
+        data: {
+          blocks: [
+            {
+              id: '1',
+              type: 'contentMedia',
+              data: { asset: { assetUuid: 'a' }, caption: 'Фото <b>Луны</b>' },
+            },
+          ],
+        },
         createdAt: 1,
         updatedAt: 1,
       })
       .run();
-    for (const [id, name, internal] of [
-      ['a', 'Фото Луны.webp', false],
-      ['b', 'Other.webp', false],
-      ['preview', '', true],
+    for (const [id, internal] of [
+      ['a', false],
+      ['b', false],
+      ['preview', true],
     ] as const) {
       db.insert(schema.assets)
         .values({
@@ -112,7 +121,7 @@ describe('asset library', () => {
           type: AssetType.Image,
           size: 100,
           touchedAt: 10,
-          meta: { originalName: name },
+          meta: {},
         })
         .run();
     }
@@ -266,14 +275,31 @@ describe('asset library', () => {
       },
     ]);
   });
-  it('searches Cyrillic entity summaries and file names without exposing internal previews', () => {
+  it('searches site-defined text without exposing internal previews', () => {
     expect(
       listLibrarySections({ q: 'КОСМОСА' }).items.map((g) => g.id),
     ).toEqual(['p']);
-    expect(listLibrarySections({ q: 'фОТО луны' }).items).toHaveLength(4);
+    // An editor caption belongs to the project that holds the content.
+    expect(
+      listLibrarySections({ q: 'фОТО луны' }).items.map((g) => g.id),
+    ).toEqual(['p']);
+    expect(
+      listLibraryAssets({ q: 'фОТО луны' }).items.map((i) => i.asset.assetUuid),
+    ).toEqual(['a']);
+    expect(
+      listLibraryAssets({ q: 'status' }).items.map((i) => i.asset.assetUuid),
+    ).toEqual(['a']);
+    // Nothing about the uploaded file itself is searchable.
+    expect(listLibraryAssets({ q: 'webp' }).items).toEqual([]);
     expect(listLibraryAssets().items.map((i) => i.asset.assetUuid)).toEqual([
       'a',
       'b',
+    ]);
+    expect(
+      listLibraryAssets().items.map((i) => [i.asset.assetUuid, i.deleteAfter]),
+    ).toEqual([
+      ['a', undefined],
+      ['b', 10 + ASSET_ORPHAN_GRACE_MS],
     ]);
     expect(
       listLibraryAssets({ usage: 'unused' }).items.map(
@@ -352,7 +378,7 @@ describe('asset library', () => {
         extension: 'pdf',
         type: AssetType.Other,
         size: 2_000,
-        meta: { originalName: 'Document.pdf' },
+        meta: {},
       })
       .run();
 

@@ -27,12 +27,18 @@ export type I18nModuleSpec = {
   sampleDisplayNames?: string[];
   sampleSecretPhrases?: string[];
   sampleProjects?: I18nProjectSample[];
+  /** Codenames given to secret entities: "Secret project Gamma". */
+  secretCodenames?: string[];
+  /** One-line summaries shown on secrets in place of their real one. */
+  secretSummaries?: string[];
   sizeUnits?: Partial<LanguageSizeUnits>;
   phrases: Partial<LanguagePhrases>;
 };
 
 export type I18nBaseModule = I18nModuleSpec & {
   slugify: (text: string) => string;
+  secretCodenames: string[];
+  secretSummaries: string[];
   phrases: LanguagePhrases;
   sizeUnits: LanguageSizeUnits;
 };
@@ -44,6 +50,8 @@ export type I18nController = {
   sampleDisplayNames: string[];
   sampleSecretPhrases: string[];
   sampleProjects: I18nProjectSample[];
+  secretCodenames: string[];
+  secretSummaries: string[];
   sizeUnits: LanguageSizeUnits;
   phrase: LanguagePhrases;
 };
@@ -92,6 +100,7 @@ export type LanguagePhrases = {
   asset_library: string;
   asset_library_choose: string;
   asset_library_search: string;
+  asset_library_pending_deletion: (date: string) => string;
   asset_library_empty: string;
   asset_library_unused: string;
   asset_library_unused_hint: string;
@@ -218,11 +227,14 @@ export type LanguagePhrases = {
   stage_ended: string;
   stage_occurred: string;
   section_created: string;
-  secret_event: string;
-  secret_project: string;
-  secret_page: string;
-  secret_stage: string;
-  secret_section: string;
+  secret_event: (codename: string) => string;
+  secret_project: (codename: string) => string;
+  secret_page: (codename: string) => string;
+  secret_stage: (codename: string) => string;
+  secret_section: (codename: string) => string;
+  secret_media: (codename: string) => string;
+  secret_file: (codename: string) => string;
+  secret_hint: string;
   life_gap: (years: number, months: number, days: number) => string;
   life_day: (value: string) => string;
   life_month: (value: string) => string;
@@ -818,7 +830,6 @@ export type LanguagePhrases = {
   upload_error_network: string;
   upload_error_cancelled: string;
   upload_error_request_failed: (status: number) => string;
-  file_info_name: string;
   file_info_extension: string;
   file_info_size: string;
   file_info_dimensions: string;

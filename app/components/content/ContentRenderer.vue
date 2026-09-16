@@ -78,7 +78,6 @@ function openAsset(value: unknown, title?: string, description?: string) {
   void openModal(publicAssetModal, {
     key: item.assetUuid,
     title: richTextToPlainText(title ?? ''),
-    fileName: item.name,
     description: description ? richTextToPlainText(description) : undefined,
     href: item.assetUrl,
     extension: item.extension,

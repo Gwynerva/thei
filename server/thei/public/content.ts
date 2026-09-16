@@ -1,6 +1,5 @@
 import {
   AssetType,
-  assetSourceName,
   type ContentAssetUsageMeta,
 } from '#layers/thei/shared/asset';
 import {
@@ -283,7 +282,6 @@ async function hydratePublicContentData(
       // Public renderers only need a stable local key. Never expose the
       // storage UUID through public content responses.
       assetUuid: asset.slug,
-      name: assetSourceName(asset.meta),
       type: asset.type,
       extension: asset.extension,
       size: asset.size,

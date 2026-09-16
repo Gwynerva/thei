@@ -104,16 +104,12 @@ defineExpose({ focus });
             last:border-b-0 hocus:bg-bg-3"
           @click="emit('select', project)"
         >
-          <div class="project-search-icon absolute inset-y-0 left-0 w-12">
-            <Media
-              v-bind="project.iconMedia"
-              variant="ambient"
-              playback="interaction"
-              :engaged
-              align="left"
-              class="size-full opacity-75 transition group-hocus:opacity-100"
-            />
-          </div>
+          <MediaEdge
+            :media="project.iconMedia"
+            playback="interaction"
+            :engaged
+            class="w-12"
+          />
 
           <div class="relative ml-8 min-w-0 px-xs py-1">
             <div class="truncate text-sm font-semibold">
@@ -139,16 +135,3 @@ defineExpose({ focus });
     </div>
   </section>
 </template>
-
-<style scoped>
-.project-search-icon {
-  /* A directional reveal mask cannot be represented by a semantic utility. */
-  mask-image: linear-gradient(
-    to right,
-    #000 0%,
-    rgb(0 0 0 / 70%) 15%,
-    rgb(0 0 0 / 10%) 80%,
-    transparent 100%
-  );
-}
-</style>

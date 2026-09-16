@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import type { ContentAssetData } from '#layers/thei/shared/content';
-import { contentAttachmentSuggestedTitle } from './content-attachment';
 
 const props = withDefaults(
   defineProps<{
@@ -34,12 +33,7 @@ const emit = defineEmits<{
   open: [];
 }>();
 
-const resolvedTitle = computed(
-  () =>
-    props.title ||
-    contentAttachmentSuggestedTitle(props.asset) ||
-    props.fallbackTitle,
-);
+const resolvedTitle = computed(() => props.title || props.fallbackTitle);
 </script>
 
 <template>

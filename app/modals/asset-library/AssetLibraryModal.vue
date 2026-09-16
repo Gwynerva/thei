@@ -1,17 +1,20 @@
 <script setup lang="ts">
 import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
-import { assetSourceName, AssetType } from '#layers/thei/shared/asset';
+import { AssetType } from '#layers/thei/shared/asset';
 import {
   assetSourceKey,
   type AssetLibrarySection,
   type AssetLibraryResponse,
   type AssetLibraryFilesResponse,
   type AssetLibraryAvailability,
+  type AssetLibraryItem,
   type AssetSelectionConstraints,
 } from '#layers/thei/shared/asset-library';
 import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
 import { editFileModal } from '../upload-settings/modal';
 import {
+  assetDeletionLabel,
+  assetFileLabel,
   assetRoleLabel,
   assetSourceIcon,
 } from '../../composables/asset-library-labels';
@@ -81,6 +84,19 @@ const filters = computed<Record<string, string>>(() => {
     result[AssetType.Other] = phrase.value.other_files;
   return result;
 });
+function selectionErrorLabel(error: AssetLibraryItem['selectionError']) {
+  if (error === 'size') return phrase.value.asset_selection_size;
+  if (error === 'type') return phrase.value.asset_selection_type;
+}
+function tileTitle(item: AssetLibraryItem) {
+  return [
+    item.roles.map((role) => assetRoleLabel(role)).join(' · '),
+    selectionErrorLabel(item.selectionError),
+    item.deleteAfter ? assetDeletionLabel(item.deleteAfter) : undefined,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
 function title(section: AssetLibrarySection) {
   return section.type === 'unused'
     ? phrase.value.asset_library_unused
@@ -344,18 +360,21 @@ onBeforeUnmount(() => {
               >
                 {{ phrase.asset_library_unused_hint }}
               </p>
-              <div class="flex flex-wrap gap-sm">
+              <div
+                class="grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))]
+                  gap-sm"
+              >
                 <button
                   v-for="item in files[assetSourceKey(section)]?.items ?? []"
                   :key="item.asset.assetUuid"
+                  :data-asset-uuid="item.asset.assetUuid"
                   type="button"
                   :disabled="selecting"
-                  :aria-label="
-                    assetSourceName(item.asset.meta) ?? item.asset.extension
-                  "
-                  class="flex w-28 cursor-pointer flex-col gap-xs rounded-normal
-                    text-left transition-colors duration-250
-                    motion-reduce:transition-none sm:w-36 hocus:bg-bg-3"
+                  :aria-label="assetFileLabel(item.asset)"
+                  :data-title-popup="tileTitle(item)"
+                  class="w-full cursor-pointer rounded-normal transition-opacity
+                    duration-250 motion-reduce:transition-none"
+                  :class="{ 'opacity-60': item.selectionError }"
                   @focus="focusedAssetUuid = item.asset.assetUuid"
                   @blur="focusedAssetUuid = undefined"
                   @click="choose(item.asset)"
@@ -364,6 +383,7 @@ onBeforeUnmount(() => {
                     :media="item.asset.media"
                     :extension="item.asset.extension || '?'"
                     :engaged="focusedAssetUuid === item.asset.assetUuid"
+                    :tone="item.deleteAfter ? 'danger' : 'default'"
                     loop
                     :selected="
                       selected.some((a) => a.assetUuid === item.asset.assetUuid)
@@ -373,28 +393,11 @@ onBeforeUnmount(() => {
                       showExtension: true,
                       showSize: true,
                       size: item.asset.size,
+                      pendingDeletion: Boolean(item.deleteAfter),
+                      warning: selectionErrorLabel(item.selectionError),
                     }"
                     class="aspect-square w-full"
                   />
-                  <span
-                    class="w-full truncate text-sm font-medium"
-                    :title="assetSourceName(item.asset.meta)"
-                    >{{
-                      assetSourceName(item.asset.meta) ?? item.asset.extension
-                    }}</span
-                  >
-                  <span class="line-clamp-2 text-xs text-text-3">{{
-                    item.roles.map((role) => assetRoleLabel(role)).join(' · ')
-                  }}</span>
-                  <span
-                    v-if="item.selectionError"
-                    class="text-xs text-text-warning"
-                    >{{
-                      item.selectionError === 'size'
-                        ? phrase.asset_selection_size
-                        : phrase.asset_selection_type
-                    }}</span
-                  >
                 </button>
               </div>
               <div
@@ -470,16 +473,26 @@ onBeforeUnmount(() => {
             :key="asset.assetUuid"
             type="button"
             :disabled="selecting"
-            class="flex max-w-48 cursor-pointer items-center gap-xs
-              rounded-normal bg-bg-3 px-xs py-1 text-sm"
+            :aria-label="assetFileLabel(asset)"
+            class="size-12 shrink-0 cursor-pointer"
             @click="
               selected = selected.filter((a) => a.assetUuid !== asset.assetUuid)
             "
           >
-            <span class="truncate">{{
-              assetSourceName(asset.meta) ?? asset.extension
-            }}</span
-            ><Icon name="close" class="shrink-0" />
+            <AssetTile
+              :media="asset.media"
+              :extension="asset.extension || '?'"
+              class="size-full"
+            >
+              <template #overlay>
+                <span
+                  class="absolute inset-0 z-40 flex items-center justify-center
+                    bg-bg-1/60 opacity-0 transition hocus:opacity-100"
+                >
+                  <Icon name="close" />
+                </span>
+              </template>
+            </AssetTile>
           </button>
         </div>
         <Button

@@ -1,5 +1,5 @@
 import type {
-  PublicProjectReference,
+  PublicProjectLink,
   PublicReferenceGroups,
   PublicTagSummary,
 } from '#layers/thei/shared/api/public';
@@ -38,9 +38,9 @@ const PROJECT_RELATION_TYPE_ORDER = {
   dependent: 2,
 } as const;
 
-export function sortPublicProjectReferencesByRelationType(
-  projects: PublicProjectReference[],
-): PublicProjectReference[] {
+export function sortPublicProjectReferencesByRelationType<
+  T extends Pick<PublicProjectLink, 'relationType'>,
+>(projects: T[]): T[] {
   return projects
     .map((project, index) => ({ project, index }))
     .sort(
@@ -59,7 +59,7 @@ export type PublicDetailPanelData = {
   periods?: DateRange[];
   createdAt?: string;
   tags?: PublicTagSummary[];
-  relatedProjects?: PublicProjectReference[];
+  relatedProjects?: PublicProjectLink[];
   references: PublicReferenceGroups;
   metrics?: PublicDetailMetric[];
 };

@@ -1,5 +1,5 @@
 import type { AssetUploadResponse } from '#layers/thei/shared/api/asset';
-import { getPathExtension } from '#layers/thei/shared/assets/extensions';
+import { normalizeAssetExtension } from '#layers/thei/shared/assets/formats';
 import { inferAssetType } from '../../../thei/assets/process';
 import { createAssetVariant } from '../../../thei/assets/create-variant';
 import { findStoredAssetByHash } from '../../../thei/assets/lookup';
@@ -42,7 +42,9 @@ export default defineEventHandler(
     const settings = parseAssetUploadSettings(
       readUploadHeader(event, 'x-upload-settings'),
     );
-    const filename = readUploadHeader(event, 'x-upload-filename');
+    const extension = normalizeAssetExtension(
+      readUploadHeader(event, 'x-upload-extension'),
+    );
     const uploadId = readUploadHeader(event, 'x-upload-id', false) || undefined;
     const requestedMaxSizeBytes = parseOptionalPositiveInt(
       readUploadHeader(event, 'x-upload-max-size', false),
@@ -58,14 +60,13 @@ export default defineEventHandler(
       readUploadHeader(event, 'x-upload-accepted-extensions', false),
     );
 
-    if (!filename) {
+    if (!extension) {
       throw createError({
         statusCode: 400,
-        message: 'Missing required field: x-upload-filename',
+        message: 'Missing required field: x-upload-extension',
       });
     }
 
-    const extension = getPathExtension(filename);
     const sourceType = inferAssetType(extension);
     // Everything that can be judged from the headers is judged before a single
     // byte of the body is read.
@@ -99,7 +100,6 @@ export default defineEventHandler(
           path: staged.path,
           size: staged.size,
           hash: staged.hash,
-          filename,
           extension,
           // Scratch: storage moves it into the library, and whatever is left
           // is removed by the discard below.

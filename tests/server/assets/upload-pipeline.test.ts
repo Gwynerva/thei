@@ -118,7 +118,6 @@ async function stagePng(width: number, height: number) {
     path,
     size: bytes.length,
     hash: createHash('sha256').update(bytes).digest('hex'),
-    filename: 'photo.png',
     extension: 'png',
     owned: true,
   };

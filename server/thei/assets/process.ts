@@ -24,6 +24,7 @@ import {
   videoQualityToVp9Crf,
 } from '../../../shared/asset-upload-quality';
 import { zipFileToPath } from './zip';
+import { stripAssetMetadata } from './strip-metadata';
 
 const IMAGE_EXTS = new Set<string>(IMAGE_EXTENSIONS);
 const VIDEO_EXTS = new Set<string>(VIDEO_EXTENSIONS);
@@ -52,7 +53,6 @@ export interface AssetSourceFile {
   path: string;
   size: number;
   hash: string;
-  filename: string;
   extension: string;
   /**
    * Whether this file is scratch that storage may move into the library.
@@ -77,10 +77,11 @@ export function inferAssetType(extension: string): AssetType {
 export async function getImageDimensions(
   input: Buffer | string,
 ): Promise<AssetDimensions> {
-  const metadata = await sharp(input).metadata();
+  // Dimensions as displayed: an EXIF-rotated photo is taller than it is wide.
+  const { width, height } = (await sharp(input).metadata()).autoOrient;
   return {
-    ...(metadata.width ? { width: metadata.width } : {}),
-    ...(metadata.height ? { height: metadata.height } : {}),
+    ...(width ? { width } : {}),
+    ...(height ? { height } : {}),
   };
 }
 
@@ -135,13 +136,17 @@ export async function processOriginalAsset(
 ): Promise<ProcessedAsset> {
   const extension = source.extension.toLowerCase();
   const type = inferAssetType(extension);
-  // The staged file already holds exactly the bytes to store, so it is handed
-  // straight through: an untransformed upload is never read into memory.
-  const bytes: AssetBytes = {
+  // The staged file is handed straight through when it carries no metadata;
+  // otherwise a cleaned copy is. Neither is ever read into memory.
+  const original: AssetBytes = {
     path: source.path,
     size: source.size,
     hash: source.hash,
     owned: source.owned,
+  };
+  const cleanBytes = async () => {
+    const cleaned = await stripAssetMetadata(source.path, extension, type);
+    return cleaned ? await fileBytes(cleaned) : original;
   };
 
   if (type === AssetType.Video) {
@@ -155,7 +160,7 @@ export async function processOriginalAsset(
       });
     }
     return {
-      bytes,
+      bytes: await cleanBytes(),
       extension,
       type,
       dimensions: {
@@ -173,11 +178,11 @@ export async function processOriginalAsset(
         message: 'Invalid image file',
       });
     });
-    return { bytes, extension, type, dimensions };
+    return { bytes: await cleanBytes(), extension, type, dimensions };
   }
 
   return {
-    bytes,
+    bytes: await cleanBytes(),
     extension,
     type,
     dimensions: await inspectAssetDimensions(source.path, extension, type),
@@ -190,7 +195,7 @@ export async function processFileZipAsset(
   options: AssetProcessOptions = {},
 ): Promise<ProcessedAsset> {
   const outputPath = theiTempPath(`thei-zip-out-${randomUUID()}.zip`);
-  await zipFileToPath(source.path, source.size, source.filename, outputPath, {
+  await zipFileToPath(source.path, source.size, source.extension, outputPath, {
     onProgress: options.onProgress,
   });
   return {
@@ -218,7 +223,9 @@ async function processImage(
 ): Promise<ProcessedAsset> {
   // sharp reads the staged file itself; the source never enters this process's
   // heap, and the encoded result is small enough to stay a buffer.
-  let pipeline = sharp(source.path, { animated: false });
+  // Encoding drops every embedded tag, so orientation is baked into the pixels
+  // first or a rotated photo would come out sideways.
+  let pipeline = sharp(source.path, { animated: false }).autoOrient();
   const width = settings.dimensions.width;
   const height = settings.dimensions.height;
 
@@ -271,6 +278,8 @@ async function processVideoToWebm(
 
     const outputOptions = [
       '-map 0:v:0',
+      '-map_metadata -1',
+      '-map_chapters -1',
       ...(shouldStripAudio
         ? ['-an']
         : ['-map 0:a?', '-c:a libopus', '-b:a 128k']),

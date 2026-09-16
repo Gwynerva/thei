@@ -23,7 +23,6 @@ import { gallerySelectedIdAfterRemoval } from '#layers/thei/app/components/conte
 import {
   contentAssetSelectionChanged,
   contentAttachmentAssetChanged,
-  contentAttachmentSuggestedTitle,
 } from '#layers/thei/app/components/content/content-attachment';
 import ExternalLinkPreviewCard from '#layers/thei/app/components/external-links/ExternalLinkPreviewCard.vue';
 import {
@@ -716,7 +715,6 @@ export class ContentAttachmentTool implements BlockTool {
     const asset = await config.pickAsset('any');
     if (!asset) return;
     this.asset = asset;
-    if (!this.title) this.title = contentAttachmentSuggestedTitle(asset) ?? '';
     this.renderContent();
     this.options.block.dispatchChange();
   }
@@ -737,7 +735,6 @@ export class ContentAttachmentTool implements BlockTool {
     const previousTitle = this.title;
     const changed = contentAttachmentAssetChanged(this.asset, asset);
     this.asset = asset;
-    if (!this.title) this.title = contentAttachmentSuggestedTitle(asset) ?? '';
     this.renderContent();
     if (changed || this.title !== previousTitle)
       this.options.block.dispatchChange();

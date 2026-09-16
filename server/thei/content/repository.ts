@@ -17,7 +17,6 @@ import {
 } from '#layers/thei/shared/content';
 import {
   AssetType,
-  assetSourceName,
   type ContentAssetUsageMeta,
 } from '#layers/thei/shared/asset';
 import { buildAdminAssetUrls, archivedOriginalFromMeta } from '../assets/urls';
@@ -296,7 +295,6 @@ async function hydrateContentData(
     const urls = await buildAdminAssetUrls(asset);
     const hydrated = {
       assetUuid: asset.assetUuid,
-      name: assetSourceName(asset.meta),
       type: asset.type,
       extension: asset.extension,
       size: asset.size,

@@ -122,7 +122,18 @@ describe('public profile showcase projects', () => {
     expect(secondIds).toHaveLength(12);
     expect(secondIds).not.toEqual(firstIds);
     expect(buildPublicProjectReference).toHaveBeenCalledTimes(24);
-    expect(buildPublicProjectSummary).toHaveBeenCalledTimes(6);
+    // The three most recently updated projects are private: they are listed
+    // as secrets, counted, and never hydrated.
+    expect(buildPublicProjectSummary).not.toHaveBeenCalled();
+    expect(first.projects.count).toBe(23);
+    expect(first.projects.items).toHaveLength(3);
+    for (const item of first.projects.items) {
+      expect(Object.keys(item).sort()).toEqual(
+        ['iconMedia', 'key', 'secret', 'summary', 'title'].sort(),
+      );
+      expect(item.title).toMatch(/^Secret project /);
+      expect(JSON.stringify(item)).not.toContain('showcase-');
+    }
   });
 
   it('returns every available showcase project when fewer than twelve exist', async () => {

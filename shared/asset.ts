@@ -39,9 +39,11 @@ export const ASSET_ROLES = [
 ] as const;
 export type AssetRole = (typeof ASSET_ROLES)[number];
 
+/**
+ * Nothing describing the uploaded file itself belongs here: neither its name
+ * nor any of its embedded metadata is kept.
+ */
 export interface AssetMetaBase {
-  /** Name of the file selected by the user for this family. */
-  originalName?: string;
   /** Extension point for future computed asset properties. */
   properties?: Record<string, unknown>;
 }
@@ -71,7 +73,6 @@ export interface AudioAssetMeta extends AssetMetaBase {}
 export interface ArchivedOriginalFileMeta {
   extension: string;
   size: number;
-  name?: string;
 }
 
 export interface OtherAssetMeta extends AssetMetaBase {
@@ -80,14 +81,6 @@ export interface OtherAssetMeta extends AssetMetaBase {
 
 export type AssetMeta =
   ImageAssetMeta | VideoAssetMeta | AudioAssetMeta | OtherAssetMeta;
-
-export function assetSourceName(
-  meta: AssetMeta | null | undefined,
-): string | undefined {
-  if (!meta) return undefined;
-  if (meta.originalName) return meta.originalName;
-  return 'archivedOriginal' in meta ? meta.archivedOriginal?.name : undefined;
-}
 
 export type AssetMetaForType<TType extends AssetType> =
   TType extends AssetType.Image

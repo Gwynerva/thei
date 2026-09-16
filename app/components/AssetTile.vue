@@ -15,6 +15,8 @@ const props = withDefaults(
     selected?: boolean;
     shape?: 'normal' | 'circle';
     hoverAccentBorder?: boolean;
+    /** `danger` marks an asset that is about to be deleted. */
+    tone?: 'default' | 'danger';
     playback?: MediaPlayback;
     loop?: boolean;
     autoplayReducedMotion?: boolean;
@@ -26,9 +28,11 @@ const props = withDefaults(
       size?: number;
       isPrivate?: boolean;
       editable?: boolean;
+      pendingDeletion?: boolean;
+      warning?: string;
     };
   }>(),
-  { shape: 'normal' },
+  { shape: 'normal', tone: 'default' },
 );
 
 const { engaged: interactionEngaged, events: mediaEvents } =
@@ -54,9 +58,11 @@ function activateFromKeyboard(event: KeyboardEvent) {
     :class="[
       { 'flex items-center justify-center': !media },
       shape === 'circle' ? 'rounded-full' : 'rounded-normal',
-      hoverAccentBorder
-        ? 'border-transparent hocus:border-accent'
-        : 'border-border-1 hocus:border-border-3',
+      tone === 'danger'
+        ? 'border-border-error hocus:border-text-error'
+        : hoverAccentBorder
+          ? 'border-transparent hocus:border-accent'
+          : 'border-border-1 hocus:border-border-3',
       selected
         ? `shadow-lg ring-2 shadow-accent/30 ring-accent ring-offset-2
           ring-offset-bg-3`

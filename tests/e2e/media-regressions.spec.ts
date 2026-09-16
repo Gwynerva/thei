@@ -61,7 +61,6 @@ for (const viewport of [
     await expect(
       page.locator('dialog').getByText('Image caption', { exact: true }),
     ).toHaveCount(1);
-    await expect(page.locator('dialog')).toContainText('original-image');
     await close(page);
 
     for (const media of [
@@ -159,7 +158,7 @@ test('content video controls work inline; showcase videos still open a modal', a
   ).toBeVisible();
 });
 
-test('modal labels use captions, preserve file descriptions and never substitute filenames', async ({
+test('modal labels use captions and preserve file descriptions', async ({
   page,
 }) => {
   const root = page.locator('[data-renderer]');
@@ -172,7 +171,6 @@ test('modal labels use captions, preserve file descriptions and never substitute
   }
   await root.locator('[data-content-media-layout="stretch"] button').click();
   const header = page.locator('dialog .tracking-tight').first();
-  await expect(header).not.toContainText('original-image');
   await expect(header).not.toHaveText('');
   await close(page);
   for (const [locator, title, description] of [
@@ -190,9 +188,27 @@ test('modal labels use captions, preserve file descriptions and never substitute
     await locator.click();
     await expect(page.locator('dialog')).toContainText(title);
     await expect(page.locator('dialog')).toContainText(description);
-    await expect(page.locator('dialog')).toContainText('original-image');
     await close(page);
   }
+});
+
+test('secret media and files keep their place but cannot be opened', async ({
+  page,
+}) => {
+  const secrets = page.locator('[data-secrets]');
+  const items = secrets.locator('[data-public-secret]');
+  await expect(items).toHaveCount(3);
+  for (const item of await items.all()) {
+    await expect(item).not.toHaveAttribute('role', /button|link/);
+    expect(await item.locator('a, button').count()).toBe(0);
+    await item.click();
+    await expect(page.locator('dialog')).not.toBeVisible();
+  }
+  await expect(secrets.getByText('Secret file Delta')).toHaveClass(/italic/);
+  // The default gallery shows the first item that can actually be viewed.
+  await expect(
+    secrets.getByRole('button', { pressed: true }).first(),
+  ).toHaveAttribute('aria-label', /Showcase/);
 });
 
 test('admin and public CTA share all color modes and the standard fallback', async ({

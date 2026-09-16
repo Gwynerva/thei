@@ -16,6 +16,8 @@ const props = withDefaults(
     external?: boolean;
     button?: boolean;
     continuousMedia?: boolean;
+    /** A codename for something hidden from visitors; never a link. */
+    secret?: boolean;
   }>(),
   { icon: 'link' },
 );
@@ -43,8 +45,9 @@ const extensionFontSize = computed(() => {
     :type="button ? 'button' : undefined"
     class="group flex w-full min-w-0 items-center gap-xs rounded-sm px-1 py-1.5
       text-left text-text-1 no-underline transition focus-visible:ring-2
-      focus-visible:ring-accent focus-visible:outline-none hocus:bg-bg-3/70"
-    :class="{ 'cursor-pointer': button || href }"
+      focus-visible:ring-accent focus-visible:outline-none"
+    :class="{ 'cursor-pointer hocus:bg-bg-3/70': button || href }"
+    :data-public-secret="secret || undefined"
     @click="button ? $emit('activate') : undefined"
   >
     <span
@@ -82,7 +85,11 @@ const extensionFontSize = computed(() => {
       </span>
     </span>
     <span class="min-w-0 flex-1">
-      <strong class="block truncate text-sm font-normal">{{ title }}</strong>
+      <strong
+        class="block truncate text-sm font-normal"
+        :class="{ 'text-text-2 italic': secret }"
+        >{{ title }}</strong
+      >
       <span
         v-if="compactDescription"
         class="line-clamp-1 block text-xs text-text-3"

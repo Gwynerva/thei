@@ -7,6 +7,7 @@ import type { MediaDescriptor } from './media';
 import type {
   PublicEntitySummary,
   PublicProjectReference,
+  PublicSecretReference,
   PublicTagListItem,
 } from './api/public';
 import type { SiteAccessLevel } from './access-level';
@@ -93,8 +94,14 @@ export interface PublicProfileResponse {
   pinnedPages: ProfilePageLink[];
   externalLinks: ProjectExternalLinkEditItem[];
   showcaseProjects: PublicProjectReference[];
-  projects: { count: number; items: PublicEntitySummary[] };
-  events: { count: number; items: PublicEntitySummary[] };
+  projects: {
+    count: number;
+    items: (PublicEntitySummary | PublicSecretReference)[];
+  };
+  events: {
+    count: number;
+    items: (PublicEntitySummary | PublicSecretReference)[];
+  };
   tags: PublicTagListItem[];
 }
 export interface SiteSettingsData {

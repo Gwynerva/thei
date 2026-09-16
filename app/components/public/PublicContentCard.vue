@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type {
-  PublicProjectReference,
+  PublicProjectLink,
   PublicTagSummary,
 } from '#layers/thei/shared/api/public';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
@@ -10,7 +10,8 @@ import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
 import type { PublicDatePresentation } from '#layers/thei/app/composables/public-date';
 
 const props = defineProps<{
-  href: string;
+  /** Absent for a secret, which a visitor cannot open. */
+  href?: string;
   title: string;
   summary: string;
   label?: string;
@@ -20,10 +21,12 @@ const props = defineProps<{
   dateHref?: string;
   datePresentation?: PublicDatePresentation;
   media?: MediaDescriptor;
-  projects?: PublicProjectReference[];
+  projects?: PublicProjectLink[];
   tags?: PublicTagSummary[];
   compact?: boolean;
   continuousMedia?: boolean;
+  /** Presents a codename for something hidden from visitors. */
+  secret?: boolean;
 }>();
 
 const datePresentation = computed(
@@ -57,37 +60,38 @@ const hasFooter = computed(
   <article
     class="public-content-card group relative isolate flex min-w-0 flex-col
       overflow-hidden rounded-normal border border-border-1 bg-bg-2 shadow-md
-      shadow-shadow-1 transition focus-within:-translate-y-0.5
-      focus-within:border-border-2 focus-within:shadow-xl hocus:-translate-y-0.5
-      hocus:border-border-2 hocus:shadow-xl"
-    :class="compact ? 'min-h-28' : 'min-h-36'"
+      shadow-shadow-1 transition"
+    :class="[
+      compact ? 'min-h-28' : 'min-h-36',
+      href &&
+        `public-content-card-interactive focus-within:-translate-y-0.5
+        focus-within:border-border-2 focus-within:shadow-xl
+        hocus:-translate-y-0.5 hocus:border-border-2 hocus:shadow-xl`,
+    ]"
     :style="cardStyle"
+    :data-secret="secret || undefined"
   >
     <TheiLink
+      v-if="href"
       :to="href"
       :aria-label="title"
       class="absolute inset-0 z-1 rounded-normal focus-visible:ring-2
         focus-visible:ring-accent focus-visible:ring-inset"
     />
 
-    <div
+    <MediaEdge
       v-if="media"
-      class="public-card-media pointer-events-none absolute inset-y-0 right-0
-        w-3/5 sm:w-1/2"
-      aria-hidden="true"
-    >
-      <Media
-        v-bind="media"
-        variant="ambient"
-        playback="autoplay"
-        :autoplay-reduced-motion="continuousMedia"
-        :loop="continuousMedia"
-        :muted="continuousMedia"
-        align="right"
-        class="size-full opacity-70 transition duration-300
-          group-hocus:opacity-95 motion-reduce:duration-150"
-      />
-    </div>
+      :media
+      side="right"
+      fade="card"
+      playback="autoplay"
+      :autoplay-reduced-motion="continuousMedia"
+      :loop="continuousMedia"
+      :muted="continuousMedia"
+      media-class="opacity-70 transition duration-300 group-hocus:opacity-95
+        motion-reduce:duration-150"
+      class="w-3/5 sm:w-1/2"
+    />
 
     <div
       class="pointer-events-none relative z-2 flex min-h-full flex-1 flex-col
@@ -119,6 +123,15 @@ const hasFooter = computed(
         >
           {{ datePresentation.label }}
         </time>
+        <Icon
+          v-if="secret"
+          name="lock-close"
+          :data-title-popup="phrase.secret_hint"
+          :aria-label="phrase.secret_hint"
+          role="img"
+          class="pointer-events-auto relative z-3 shrink-0 text-text-3
+            opacity-60"
+        />
       </div>
 
       <div
@@ -128,6 +141,7 @@ const hasFooter = computed(
         <h3
           class="public-card-title text-xl font-bold tracking-tight transition
             sm:text-2xl"
+          :class="{ italic: secret }"
         >
           {{ title }}
         </h3>
@@ -152,16 +166,6 @@ const hasFooter = computed(
 </template>
 
 <style scoped>
-.public-card-media {
-  mask-image: linear-gradient(
-    to right,
-    transparent 0%,
-    rgb(0 0 0 / 12%) 24%,
-    rgb(0 0 0 / 72%) 62%,
-    black 100%
-  );
-}
-
 .public-card-copy-over-media {
   text-shadow:
     0 0 0.55em var(--color-bg-2),
@@ -169,13 +173,13 @@ const hasFooter = computed(
     0 0.1em 0.45em var(--color-bg-2);
 }
 
-.public-content-card:hover,
-.public-content-card:focus-within {
+.public-content-card-interactive:hover,
+.public-content-card-interactive:focus-within {
   --tw-shadow-color: var(--public-card-shadow-color);
 }
 
-.public-content-card:hover .public-card-title,
-.public-content-card:focus-within .public-card-title {
+.public-content-card-interactive:hover .public-card-title,
+.public-content-card-interactive:focus-within .public-card-title {
   color: var(--public-card-accent-color);
 }
 </style>

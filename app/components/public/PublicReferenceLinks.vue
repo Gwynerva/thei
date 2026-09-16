@@ -1,9 +1,13 @@
 <script lang="ts" setup>
-import type { PublicReferenceLink } from '#layers/thei/shared/api/public';
+import {
+  isPublicSecret,
+  type PublicReferenceLink,
+  type PublicSecretReference,
+} from '#layers/thei/shared/api/public';
 import type { ProjectRelationType } from '#layers/thei/shared/admin/project';
 import type { IconName } from '#thei/icons';
 import { truncateExternalLinkText } from '#layers/thei/shared/external-link';
-defineProps<{ links: PublicReferenceLink[] }>();
+defineProps<{ links: (PublicReferenceLink | PublicSecretReference)[] }>();
 
 const SIDEBAR_EXTERNAL_LINK_TEXT_LIMIT = 120;
 function compactExternalLinkText(value?: string): string | undefined {
@@ -25,9 +29,22 @@ function relationTitle(type?: ProjectRelationType): string | undefined {
 
 <template>
   <div v-if="links.length" class="flex min-w-0 flex-col gap-xs">
-    <template v-for="link in links" :key="`${link.kind}:${link.href}`">
+    <template
+      v-for="link in links"
+      :key="isPublicSecret(link) ? link.key : `${link.kind}:${link.href}`"
+    >
       <PublicCompactResourceItem
-        v-if="link.kind !== 'external'"
+        v-if="isPublicSecret(link)"
+        :title="link.title"
+        :description="link.summary"
+        :icon-media="link.iconMedia"
+        :corner-icon="relationIcon(link.relationType)"
+        :corner-title="relationTitle(link.relationType)"
+        icon="project"
+        secret
+      />
+      <PublicCompactResourceItem
+        v-else-if="link.kind !== 'external'"
         :title="link.title"
         :description="link.description"
         :icon-media="link.iconMedia"

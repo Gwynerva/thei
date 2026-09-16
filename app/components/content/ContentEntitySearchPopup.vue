@@ -93,25 +93,19 @@ defineExpose({ focus: () => input.value?.focus({ preventScroll: true }) });
             border-border-1 bg-bg-1 text-left first:border-t-0 hocus:bg-bg-3"
           @click="emit('select', item)"
         >
-          <span
-            class="entity-preview absolute inset-y-0 right-0 w-24"
-            aria-hidden="true"
+          <MediaEdge
+            :media="item.previewMedia"
+            side="right"
+            fade="preview"
+            playback="interaction"
+            :engaged
+            class="w-24"
           >
-            <Media
-              v-if="item.previewMedia"
-              v-bind="item.previewMedia"
-              variant="ambient"
-              playback="interaction"
-              :engaged
-              align="right"
-              class="size-full opacity-75 group-hocus:opacity-100"
-            />
             <span
-              v-else
               class="flex size-full items-center justify-end pr-xs text-text-3"
               ><Icon :name="item.entityType"
             /></span>
-          </span>
+          </MediaEdge>
           <span class="relative block min-w-0 py-1 pr-16 pl-xs">
             <span class="flex items-center gap-1 truncate text-sm font-semibold"
               ><Icon
@@ -133,15 +127,3 @@ defineExpose({ focus: () => input.value?.focus({ preventScroll: true }) });
     </div>
   </section>
 </template>
-
-<style scoped>
-.entity-preview {
-  mask-image: linear-gradient(
-    to left,
-    #000 0%,
-    rgb(0 0 0 / 90%) 45%,
-    rgb(0 0 0 / 25%) 78%,
-    transparent 100%
-  );
-}
-</style>

@@ -9,6 +9,10 @@ export interface ZipSingleFileOptions {
 /**
  * Compresses one file into a zip archive on disk.
  *
+ * The entry is named `file.<extension>` with a fixed timestamp: the archive
+ * says nothing about the uploaded file beyond its bytes, and the same bytes
+ * always produce the same archive.
+ *
  * Both sides stream. The source can be up to the 500 MB file limit, and the
  * previous implementation held the input buffer, a `Uint8Array` view of it,
  * every output chunk, and the concatenated result in memory at once.
@@ -16,11 +20,11 @@ export interface ZipSingleFileOptions {
 export async function zipFileToPath(
   sourcePath: string,
   sourceSize: number,
-  filename: string,
+  extension: string,
   targetPath: string,
   options: ZipSingleFileOptions = {},
 ): Promise<void> {
-  const entryName = sanitizeZipEntryName(filename);
+  const entryName = zipEntryName(extension);
   const output = createWriteStream(targetPath);
 
   try {
@@ -49,6 +53,7 @@ export async function zipFileToPath(
       }) as AsyncZipDeflate & {
         ondrain?: (processedBytes: number) => void;
       };
+      entry.mtime = ZIP_ENTRY_MTIME;
       entry.ondrain = (processedBytes) => {
         if (sourceSize === 0) return;
         options.onProgress?.(Math.min(processedBytes / sourceSize, 0.99));
@@ -88,7 +93,10 @@ function nextTick(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
-function sanitizeZipEntryName(filename: string): string {
-  const basename = filename.split(/[\\/]/).pop()?.trim() || 'file';
-  return basename.replace(/[<>:"|?*\x00-\x1f]/g, '_') || 'file';
+/** The earliest time a zip entry can record. */
+const ZIP_ENTRY_MTIME = new Date(1980, 0, 1);
+
+function zipEntryName(extension: string): string {
+  const safe = extension.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return safe ? `file.${safe}` : 'file';
 }

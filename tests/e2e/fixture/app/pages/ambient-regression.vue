@@ -120,6 +120,16 @@ const fieldValue = computed<ContentFieldModelValue>(() => ({
         :interactive="false"
       />
     </div>
+    <div class="mx-auto grid w-full max-w-180 gap-sm p-sm" data-tall-card>
+      <PublicContentCard
+        href="#"
+        title="Stretched card"
+        summary="A taller neighbour stretches this card"
+        date="2026-09-02"
+        :media="banner"
+        class="h-120"
+      />
+    </div>
     <div class="mx-auto grid max-w-180 gap-sm p-sm" data-admin-previews>
       <FieldContentEditor :model-value="fieldValue" data-test-field />
       <AssetTile

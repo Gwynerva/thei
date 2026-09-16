@@ -16,7 +16,7 @@ test.use({
     new URL('./.artifacts/admin.json', import.meta.url),
   ),
 });
-async function upload(api: APIRequestContext, name: string, color = '#4368a2') {
+async function upload(api: APIRequestContext, color = '#4368a2') {
   const buffer = await sharp({
     create: { width: 80, height: 60, channels: 3, background: color },
   })
@@ -27,7 +27,7 @@ async function upload(api: APIRequestContext, name: string, color = '#4368a2') {
   const response = await api.post('/api/admin/assets', {
     headers: buildUploadHeaders({
       settings: createOriginalAssetSettings(),
-      filename: name,
+      extension: 'png',
     }),
     data: buffer,
   });
@@ -44,7 +44,7 @@ async function uploadVideo(api: APIRequestContext) {
   const response = await api.post('/api/admin/assets', {
     headers: buildUploadHeaders({
       settings: createOriginalAssetSettings(),
-      filename: 'library-hover-preview.mp4',
+      extension: 'mp4',
     }),
     data: buffer,
   });
@@ -60,18 +60,16 @@ async function library(page: Page, batch = false) {
   await page.locator(batch ? '[data-batch]' : '[data-pick]').click();
   await page.getByRole('button', { name: 'Reuse', exact: true }).click();
 }
-async function choose(page: Page, name: string) {
-  const sectionsLoaded = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    return (
-      url.pathname === '/api/admin/assets/library' &&
-      url.searchParams.get('q') === name
-    );
-  });
-  await page.getByRole('searchbox').fill(name);
-  await sectionsLoaded;
-  const assetButton = page.getByRole('button', { name, exact: true }).first();
-  await page.getByText('Unused', { exact: true }).click();
+/**
+ * Picks a freshly uploaded asset. Nothing a file was called is kept, so an
+ * unused upload is found in the unused section, where the newest come first.
+ */
+async function choose(page: Page, assetUuid: string) {
+  const assetButton = page.locator(`[data-asset-uuid="${assetUuid}"]`).first();
+  const unused = page
+    .locator('[data-asset-library-section]')
+    .filter({ hasText: 'Unused' });
+  if (!(await assetButton.isVisible())) await unused.click();
   await expect(assetButton).toBeVisible();
   await assetButton.click();
   await expect(
@@ -102,7 +100,7 @@ test('hash lookup reuses stored bytes without multipart upload, including rename
   page,
   request,
 }) => {
-  const { asset, buffer } = await upload(request, 'hash-reuse.png');
+  const { asset, buffer } = await upload(request, '#5a3d21');
   const lookup = await request.post('/api/admin/assets/lookup', {
     data: {
       hash: createHash('sha256').update(buffer).digest('hex'),
@@ -153,19 +151,12 @@ for (const width of [1280, 390]) {
     request,
   }) => {
     await page.setViewportSize({ width, height: 900 });
-    const first = await upload(
-      request,
-      `library-first-${width}.png`,
-      width === 1280 ? '#763a55' : '#7d405b',
-    );
+    const first = await upload(request, width === 1280 ? '#763a55' : '#7d405b');
     const second = await upload(
       request,
-      `library-second-${width}.png`,
       width === 1280 ? '#1c5362' : '#245b69',
     );
-    // Names are properties of the reused asset, so read back the canonical name.
-    const firstName = first.asset.meta.originalName;
-    const secondName = second.asset.meta.originalName;
+    expect(JSON.stringify([first.asset, second.asset])).not.toContain('.png"');
     await page.goto('/asset-regression');
     await expect(page.locator('[data-ready]')).toHaveAttribute(
       'data-ready',
@@ -180,14 +171,13 @@ for (const width of [1280, 390]) {
     ).toHaveCount(0);
     await page.keyboard.press('Escape');
     await library(page);
-    await choose(page, firstName);
+    await choose(page, first.asset.assetUuid);
     await expect(page.locator('[data-result]')).toContainText(
       first.asset.assetUuid,
     );
     await library(page, true);
-    await choose(page, firstName);
-    await expect(page.getByRole('searchbox')).toHaveValue(firstName);
-    await choose(page, secondName);
+    await choose(page, first.asset.assetUuid);
+    await choose(page, second.asset.assetUuid);
     await page.getByRole('button', { name: 'Insert selected · 2' }).click();
     await expect(page.locator('[data-result]')).toContainText(
       second.asset.assetUuid,
@@ -239,7 +229,8 @@ for (const width of [1280, 390]) {
       'data-admin-assets-ready',
       'true',
     );
-    await page.getByRole('searchbox').fill(firstName);
+    // Found by where it is used: the page that holds it.
+    await page.getByRole('searchbox').fill('Library usage test');
     const assetRow = page.locator(
       `[data-asset-uuid="${first.asset.assetUuid}"]`,
     );
@@ -271,7 +262,7 @@ for (const width of [1280, 390]) {
       page.getByText('Library usage test', { exact: true }).first(),
     ).toBeVisible();
     await expect(
-      page.getByRole('button', { name: firstName, exact: true }).first(),
+      page.locator(`[data-asset-uuid="${first.asset.assetUuid}"]`).first(),
     ).toBeVisible();
     await page.screenshot({
       path: `tests/e2e/.artifacts/library-${width}.png`,
@@ -311,7 +302,6 @@ test('video previews play on hover and keyboard focus in both library views', as
   request,
 }) => {
   const asset = await uploadVideo(request);
-  const name = asset.meta.originalName;
 
   async function expectInteractionPlayback(
     tile: ReturnType<Page['locator']>,
@@ -347,25 +337,12 @@ test('video previews play on hover and keyboard focus in both library views', as
   }
 
   await page.goto('/admin/assets/');
-  await page.getByRole('searchbox').fill(name);
+  await page.getByRole('combobox', { name: 'Used in' }).selectOption('unused');
   const storageRow = page.locator(`[data-asset-uuid="${asset.assetUuid}"]`);
   await expect(storageRow).toBeVisible();
-  await expectInteractionPlayback(
-    storageRow.locator('.group').first(),
-    storageRow,
-  );
+  await expectInteractionPlayback(storageRow);
 
   await library(page);
-  const filteredSections = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    return (
-      url.pathname === '/api/admin/assets/library' &&
-      url.searchParams.get('q') === name
-    );
-  });
-  await page.getByRole('searchbox').fill(name);
-  await filteredSections;
-  await page.getByText('Unused', { exact: true }).click();
   const sectionHeader = page
     .locator('[data-asset-library-section]')
     .filter({ hasText: 'Unused' });
@@ -380,17 +357,19 @@ test('video previews play on hover and keyboard focus in both library views', as
       ),
     )
     .not.toBe(restingHeaderBackground);
-  const reuseTile = page.getByRole('button', { name, exact: true }).first();
+  await sectionHeader.click();
+  const reuseTile = page
+    .locator(`[data-asset-uuid="${asset.assetUuid}"]`)
+    .first();
   await expect(reuseTile).toBeVisible();
-  const restingBackground = await reuseTile.evaluate(
-    (element) => getComputedStyle(element).backgroundColor,
+  const tile = reuseTile.locator('.group').first();
+  const restingBorder = await tile.evaluate(
+    (element) => getComputedStyle(element).borderColor,
   );
   await expectInteractionPlayback(reuseTile);
   await expect
     .poll(() =>
-      reuseTile.evaluate(
-        (element) => getComputedStyle(element).backgroundColor,
-      ),
+      tile.evaluate((element) => getComputedStyle(element).borderColor),
     )
-    .not.toBe(restingBackground);
+    .not.toBe(restingBorder);
 });

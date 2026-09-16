@@ -119,7 +119,6 @@ export type ContentFieldValue = ContentEditValue & ContentSummary;
 
 export interface ContentAssetData {
   assetUuid: string;
-  name?: string;
   type?: AssetType;
   extension?: string;
   size?: number;
@@ -820,7 +819,6 @@ function normalizeContentAsset(value: unknown): ContentAssetData | null {
 
   return {
     assetUuid,
-    name: optionalString(value.name),
     type: isAssetType(value.type) ? value.type : undefined,
     extension: optionalString(value.extension),
     size: optionalNumber(value.size),
@@ -876,7 +874,6 @@ function normalizeArchivedOriginal(
   return {
     extension,
     size,
-    name: optionalString(value.name),
   };
 }
 

@@ -67,11 +67,8 @@ describe('Life rewind service', () => {
     expect(last.items).toHaveLength(6);
     expect(buildPublicEventSummary).toHaveBeenCalledTimes(6);
     expect(
-      new Set(
-        [...first.items, ...last.items].map(
-          (item) => item.point.visibility === 'visible' && item.point.key,
-        ),
-      ).size,
+      new Set([...first.items, ...last.items].map((item) => item.point.key))
+        .size,
     ).toBe(30);
   });
 
@@ -82,11 +79,17 @@ describe('Life rewind service', () => {
       {
         match: 'ongoing',
         point: {
+          key: expect.any(String),
           visibility: 'secret',
           entityKind: 'event',
           transition: 'occurred',
           date: '2025-09-10',
           period: { startDate: '2025-09-01', endDate: '2025-09-20' },
+          title: expect.stringMatching(/^Secret event \S+$/),
+          summary: expect.any(String),
+          media: expect.objectContaining({
+            src: expect.stringMatching(/^\/media\/generated-icons\/secret\//),
+          }),
         },
       },
     ]);

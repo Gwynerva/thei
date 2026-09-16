@@ -18,6 +18,7 @@ import {
   buildPublicTagListItems,
   canListPublicEntity,
 } from '../../thei/public/entities';
+import { buildSecretReference } from '../../thei/public/secret';
 
 export default defineEventHandler(
   async (event): Promise<PublicProfileResponse> => {
@@ -25,12 +26,16 @@ export default defineEventHandler(
     const { db, schema } = THEI_SERVER.useDb();
     const identity = await getProfileIdentity();
     const p = identity.profile;
-    const projects = db
+    // Recent items include those a visitor may not see: they are presented as
+    // secrets, and the counters report the real totals.
+    const allProjects = db
       .select()
       .from(schema.projects)
       .all()
-      .filter((p) => canListPublicEntity(p.access, isAdmin))
       .sort((a, b) => b.updatedAt - a.updatedAt);
+    const projects = allProjects.filter((p) =>
+      canListPublicEntity(p.access, isAdmin),
+    );
     const showcaseProjects = db
       .select()
       .from(schema.projects)
@@ -45,12 +50,14 @@ export default defineEventHandler(
       .orderBy(sql`random()`)
       .limit(12)
       .all();
-    const events = db
+    const allEvents = db
       .select()
       .from(schema.events)
       .all()
-      .filter((p) => canListPublicEntity(p.access, isAdmin))
       .sort((a, b) => b.updatedAt - a.updatedAt);
+    const events = allEvents.filter((p) =>
+      canListPublicEntity(p.access, isAdmin),
+    );
     const projectIds = new Set(projects.map((p) => p.projectUuid));
     const eventIds = new Set(events.map((p) => p.eventUuid));
     const usages = db.select().from(schema.tagUsages).all();
@@ -113,10 +120,24 @@ export default defineEventHandler(
       getProfileLinks(isAdmin),
       getProfileHistory('avatars', undefined, false, 1),
       getProfileHistory('statuses', undefined, false, 1),
-      Promise.all(projects.slice(0, 3).map(buildPublicProjectSummary)),
+      Promise.all(
+        allProjects
+          .slice(0, 3)
+          .map((project) =>
+            canListPublicEntity(project.access, isAdmin)
+              ? buildPublicProjectSummary(project)
+              : buildSecretReference('project', project.projectUuid),
+          ),
+      ),
       Promise.all(showcaseProjects.map(buildPublicProjectReference)),
       Promise.all(
-        events.slice(0, 3).map((e) => buildPublicEventSummary(e, isAdmin)),
+        allEvents
+          .slice(0, 3)
+          .map((event) =>
+            canListPublicEntity(event.access, isAdmin)
+              ? buildPublicEventSummary(event, isAdmin)
+              : buildSecretReference('event', event.eventUuid),
+          ),
       ),
       buildPublicTagListItems(tags),
     ]);
@@ -136,8 +157,8 @@ export default defineEventHandler(
       pinnedPages,
       externalLinks,
       showcaseProjects: showcaseItems,
-      projects: { count: projects.length, items: projectItems },
-      events: { count: events.length, items: eventItems },
+      projects: { count: allProjects.length, items: projectItems },
+      events: { count: allEvents.length, items: eventItems },
       tags: tagItems,
     };
   },

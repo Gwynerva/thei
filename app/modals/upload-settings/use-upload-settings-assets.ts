@@ -8,6 +8,7 @@ import type { AssetUploadSettings } from '#layers/thei/shared/asset-upload-setti
 import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
 import type { AssetUploadLimitPolicy } from '#layers/thei/shared/asset-upload-limits';
 import { buildUploadHeaders } from '#layers/thei/shared/api/asset-upload-headers';
+import { getPathExtension } from '#layers/thei/shared/assets/extensions';
 import type { PickedFile } from '../pick-file/picked-file';
 
 export type UploadSettingsBusyAction = 'variants' | 'save-unchanged' | 'apply';
@@ -77,7 +78,7 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
     // server can stream it to disk rather than buffering the whole request.
     const headers = buildUploadHeaders({
       settings,
-      filename: modalData.source.file.name,
+      extension: getPathExtension(modalData.source.file.name),
       uploadId,
       ...(modalData.maxSize !== undefined
         ? { maxSize: modalData.maxSize }

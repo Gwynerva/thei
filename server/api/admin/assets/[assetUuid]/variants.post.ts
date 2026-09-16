@@ -1,6 +1,5 @@
 import { stat } from 'node:fs/promises';
 import type { AssetUploadResponse } from '#layers/thei/shared/api/asset';
-import { assetSourceName } from '#layers/thei/shared/asset';
 import type { AssetUploadSettings } from '#layers/thei/shared/asset-upload-settings';
 import { createAssetVariant } from '../../../../thei/assets/create-variant';
 import { parseAssetUploadSettings } from '../../../../thei/assets/upload-request';
@@ -51,8 +50,6 @@ export default defineEventHandler(
           path: filePath,
           size: asset.size,
           hash: asset.contentHash,
-          filename:
-            assetSourceName(asset.meta) ?? `${asset.slug}.${asset.extension}`,
           extension: asset.extension,
           // The live library file, not scratch: storage must never move or
           // delete it while re-deriving a variant from it.

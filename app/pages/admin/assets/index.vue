@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import type { AssetLibraryFilesResponse } from '#layers/thei/shared/asset-library';
-import { assetSourceName } from '#layers/thei/shared/asset';
 import { libraryAssetDetailsModal } from '../../../modals/asset-library/details-modal';
+import {
+  assetDeletionLabel,
+  assetFileLabel,
+} from '../../../composables/asset-library-labels';
 definePageMeta({ layout: 'admin' });
 await useAdminTabTitle(computed(() => phrase.value.asset_library));
 const route = useRoute(),
@@ -19,7 +22,26 @@ const query = computed(() => ({
 }));
 const { data, status, error, refresh } =
   await useFetch<AssetLibraryFilesResponse>('/api/admin/assets', { query });
-const humanSize = useHumanSize();
+const typeOptions = computed(() => ({
+  '': phrase.value.asset_library_all,
+  image: phrase.value.image,
+  video: phrase.value.video,
+  audio: phrase.value.audio,
+  other: phrase.value.other_files,
+}));
+const usageOptions = computed(() => ({
+  '': phrase.value.asset_library_all,
+  used: phrase.value.asset_library_used,
+  unused: phrase.value.asset_library_unused,
+}));
+const type = computed({
+  get: () => query.value.type ?? '',
+  set: (value: string) => update({ type: value || undefined }),
+});
+const usage = computed({
+  get: () => query.value.usage ?? '',
+  set: (value: string) => update({ usage: value || undefined }),
+});
 function update(values: Record<string, string | undefined>) {
   void router.replace({
     query: { ...route.query, page: undefined, ...values },
@@ -50,45 +72,27 @@ onMounted(() => {
     class="m-auto w-(--width-wide) max-w-full px-window py-lg"
     :data-admin-assets-ready="ready ? 'true' : undefined"
   >
-    <div class="flex flex-col gap-sm sm:flex-row">
-      <input
+    <div class="flex flex-wrap items-stretch gap-xs">
+      <FieldInput
         v-model="search"
         type="search"
         :placeholder="phrase.asset_library_search"
         :aria-label="phrase.asset_library_search"
-        class="min-w-0 flex-1 rounded-normal border border-border-1 bg-bg-2 p-xs
-          outline-none focus:border-accent"
+        class="h-10 text-sm"
+        wrapper-class="min-w-52 flex-1 basis-72"
       />
-      <select
-        :value="query.type ?? ''"
+      <FieldSelect
+        v-model="type"
+        :options="typeOptions"
         :aria-label="phrase.format"
-        class="rounded-normal border border-border-1 bg-bg-2 p-xs"
-        @change="
-          update({
-            type: ($event.target as HTMLSelectElement).value || undefined,
-          })
-        "
-      >
-        <option value="">{{ phrase.asset_library_all }}</option>
-        <option value="image">{{ phrase.image }}</option>
-        <option value="video">{{ phrase.video }}</option>
-        <option value="audio">{{ phrase.audio }}</option>
-        <option value="other">{{ phrase.other_files }}</option>
-      </select>
-      <select
-        :value="query.usage ?? ''"
+        wrapper-class="h-10"
+      />
+      <FieldSelect
+        v-model="usage"
+        :options="usageOptions"
         :aria-label="phrase.asset_library_usage"
-        class="rounded-normal border border-border-1 bg-bg-2 p-xs"
-        @change="
-          update({
-            usage: ($event.target as HTMLSelectElement).value || undefined,
-          })
-        "
-      >
-        <option value="">{{ phrase.asset_library_all }}</option>
-        <option value="used">{{ phrase.asset_library_used }}</option>
-        <option value="unused">{{ phrase.asset_library_unused }}</option>
-      </select>
+        wrapper-class="h-10"
+      />
     </div>
     <div v-if="error" class="mt-md text-text-error">
       {{ phrase.failed_to_fetch_data }}
@@ -96,45 +100,38 @@ onMounted(() => {
         {{ phrase.asset_library_retry }}
       </button>
     </div>
-    <Box v-if="data?.items.length" class="mt-md overflow-hidden">
-      <button
+    <div
+      v-if="data?.items.length"
+      class="mt-md grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-sm"
+    >
+      <AssetTile
         v-for="item in data.items"
         :key="item.asset.assetUuid"
         :data-asset-uuid="item.asset.assetUuid"
-        type="button"
-        class="flex w-full cursor-pointer items-center gap-sm border-b
-          border-border-1 p-sm text-left last:border-b-0 hocus:bg-bg-3"
+        :media="item.asset.media"
+        :extension="item.asset.extension || '?'"
+        :engaged="focusedAssetUuid === item.asset.assetUuid"
+        :tone="item.deleteAfter ? 'danger' : 'default'"
+        loop
+        :overlay="{
+          showVideo: true,
+          showExtension: true,
+          showSize: true,
+          size: item.asset.size,
+          pendingDeletion: Boolean(item.deleteAfter),
+        }"
+        :aria-label="assetFileLabel(item.asset)"
+        :data-title-popup="
+          item.deleteAfter
+            ? assetDeletionLabel(item.deleteAfter)
+            : assetFileLabel(item.asset)
+        "
+        class="aspect-square w-full cursor-pointer"
         @focus="focusedAssetUuid = item.asset.assetUuid"
         @blur="focusedAssetUuid = undefined"
         @click="openModal(libraryAssetDetailsModal, { asset: item.asset })"
-      >
-        <AssetTile
-          :media="item.asset.media"
-          :extension="item.asset.extension || '?'"
-          :engaged="focusedAssetUuid === item.asset.assetUuid"
-          loop
-          :overlay="{ showVideo: true }"
-          class="size-14 shrink-0 sm:size-18"
-        />
-        <span class="min-w-0 flex-1"
-          ><span class="block truncate font-semibold">{{
-            assetSourceName(item.asset.meta) ?? item.asset.assetUuid
-          }}</span
-          ><span class="mt-1 block text-xs text-text-3"
-            >{{ item.asset.extension.toUpperCase() }} ·
-            {{ humanSize(item.asset.size) }}</span
-          ></span
-        >
-        <AssetUsageBadges
-          :counts="item.counts"
-          class="max-w-28 shrink-0 sm:max-w-56"
-        />
-        <Icon
-          name="chevron-right"
-          class="hidden shrink-0 text-text-3 sm:block"
-        />
-      </button>
-    </Box>
+      />
+    </div>
     <p
       v-else-if="status !== 'pending' && !error"
       class="p-lg text-center text-text-3"

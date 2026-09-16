@@ -7,8 +7,7 @@ interface InfoBlockRow {
   uppercase?: boolean;
 }
 
-const { size, name, extension, dimensions, archivedOriginal } = defineProps<{
-  name?: string;
+const { size, extension, dimensions, archivedOriginal } = defineProps<{
   extension?: string;
   size?: number;
   dimensions?: { width: number; height: number };
@@ -23,17 +22,7 @@ const formattedDimensions = computed(() =>
   dimensions ? `${dimensions.width} x ${dimensions.height}` : undefined,
 );
 
-const baseName = computed(() => {
-  if (!name || !extension) return name;
-  const suffix = '.' + extension;
-  return name.endsWith(suffix) ? name.slice(0, -suffix.length) : name;
-});
-
 const rows = computed<InfoBlockRow[]>(() => [
-  {
-    label: phrase.value.file_info_name,
-    value: baseName.value,
-  },
   {
     label: phrase.value.file_info_extension,
     value: extension,

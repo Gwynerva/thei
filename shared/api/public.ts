@@ -28,6 +28,28 @@ export type PublicProjectReference = {
   relationType?: ProjectRelationType;
 };
 
+/**
+ * Stand-in for an entity, a file or a media item a visitor may not see.
+ *
+ * It carries a codename and a generated icon and nothing else: no href, no
+ * summary, no tags, no bytes or properties of the hidden thing itself.
+ */
+export type PublicSecretReference = {
+  secret: true;
+  key: string;
+  title: string;
+  /** A stock line about secrecy, never the hidden thing's own summary. */
+  summary: string;
+  iconMedia: MediaDescriptor;
+  relationType?: ProjectRelationType;
+};
+
+export type PublicProjectLink = PublicProjectReference | PublicSecretReference;
+
+export function isPublicSecret(value: object): value is PublicSecretReference {
+  return 'secret' in value && value.secret === true;
+}
+
 export type PublicEntitySummary = {
   type: 'project' | 'event';
   title: string;
@@ -38,7 +60,7 @@ export type PublicEntitySummary = {
   tags: PublicTagSummary[];
   date: string;
   showcase?: boolean;
-  relatedProjects?: PublicProjectReference[];
+  relatedProjects?: PublicProjectLink[];
 };
 
 export type PublicPaginatedResponse<T> = {
@@ -52,7 +74,6 @@ export type PublicPaginatedResponse<T> = {
 export type PublicAssetDescriptor = {
   key: string;
   title: string;
-  fileName?: string;
   description?: string;
   href: string;
   extension: string;
@@ -74,7 +95,7 @@ export type PublicReferenceLink = {
 
 export type PublicReferenceGroup = {
   links: PublicReferenceLink[];
-  files: PublicFile[];
+  files: (PublicFile | PublicSecretReference)[];
 };
 
 export type PublicReferenceGroups = {
@@ -156,10 +177,10 @@ export type PublicProjectResponse = {
   description?: PublicContentOutputData;
   stages: PublicProjectStage[];
   sections: PublicProjectSection[];
-  showcase: PublicAssetDescriptor[];
-  files: PublicFile[];
+  showcase: (PublicAssetDescriptor | PublicSecretReference)[];
+  files: (PublicFile | PublicSecretReference)[];
   tags: PublicTagSummary[];
-  relatedProjects: PublicProjectReference[];
+  relatedProjects: PublicProjectLink[];
   references: PublicReferenceGroups;
   action?: PublicAction;
 };
@@ -174,7 +195,7 @@ export type PublicEventResponseFull = {
   content: PublicContentOutputData;
   references: PublicReferenceGroups;
   tags: PublicTagSummary[];
-  relatedProjects: PublicProjectReference[];
+  relatedProjects: PublicProjectLink[];
   action?: PublicAction;
 };
 

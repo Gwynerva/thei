@@ -3,7 +3,7 @@ import type {
   AssetVariantInfo,
   AssetWizardResult,
 } from '#layers/thei/shared/api/asset';
-import { AssetType, assetSourceName } from '#layers/thei/shared/asset';
+import { AssetType } from '#layers/thei/shared/asset';
 import { assetSelectionError } from '#layers/thei/shared/asset-library';
 import {
   buildAssetSettingsKey,
@@ -137,13 +137,8 @@ const sourceFile = computed(() => {
     }
     throw new Error('Asset source is unavailable');
   }
-  const storedName = assetSourceName(storedAsset.meta);
   return {
-    name:
-      (storedName && !isSyntheticAssetFilename(storedName)
-        ? storedName
-        : undefined) ??
-      `${phrase.value.upload_variant_saved}.${storedAsset.extension}`,
+    name: `${phrase.value.upload_variant_saved}.${storedAsset.extension}`,
     extension: storedAsset.extension,
     size: storedAsset.size,
     objectUrl: storedAsset.media?.src ?? storedAsset.assetUrl,
@@ -874,10 +869,6 @@ function processingSourceKey() {
       : '';
 }
 
-function isSyntheticAssetFilename(filename: string) {
-  return /^a-[0-9a-f-]{36}\.[^.]+$/i.test(filename);
-}
-
 function isEditableSettings(
   settings: AssetUploadSettings | null | undefined,
 ): settings is EditableSettings {
@@ -1045,7 +1036,6 @@ function handleAssetMissing(error: unknown) {
             {{ phrase.upload_source_hint }}
           </div>
           <AssetModalFileInfo
-            :name="sourceFile.name"
             :extension="sourceFile.extension"
             :size="sourceFile.size"
             :dimensions="sourceDimensions"
