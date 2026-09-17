@@ -18,6 +18,8 @@ export interface MediaSurfaceProps {
   controls?: boolean;
   backdrop?: boolean;
   alt?: string;
+  /** Descriptor data only: whether a video has an audio track. */
+  hasAudio?: boolean;
 }
 
 export interface MediaDescriptor {
@@ -27,4 +29,6 @@ export interface MediaDescriptor {
   accent?: ImageAccent;
   width?: number;
   height?: number;
+  /** Known for stored videos: whether an audio track exists. */
+  hasAudio?: boolean;
 }

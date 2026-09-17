@@ -56,8 +56,8 @@ import {
   ContentExternalInlineLinkTool,
   ContentMediaTool,
   ExternalLinkTool,
+  IntegrationTool,
   EntityLinkTool,
-  PrivateAccessTune,
   PrivateSectionBoundaryTool,
   type ContentEditorAssetKind,
 } from '#layers/thei/app/components/content/editor-tools';
@@ -403,7 +403,6 @@ onMounted(async () => {
       },
       br: true,
     },
-    tunes: ['privateAccess'],
     tools: {
       contentBold: {
         class: ContentBoldTool as unknown as InlineToolConstructable,
@@ -508,6 +507,11 @@ onMounted(async () => {
           labels: contentToolLabels(),
         },
       },
+      // Before externalLink: Editor.js hands a paste to the first tool whose
+      // pattern matches, so a playable address never becomes a plain link.
+      integration: {
+        class: IntegrationTool,
+      },
       externalLink: {
         class: ExternalLinkTool,
         config: {
@@ -526,7 +530,6 @@ onMounted(async () => {
       privateSectionBoundary: {
         class: PrivateSectionBoundaryTool,
         inlineToolbar: false,
-        tunes: [],
         toolbox: {
           title: phrase.value.content_private_section,
           icon: editorIcon('lock-close'),
@@ -534,14 +537,6 @@ onMounted(async () => {
         },
         config: {
           labels: contentToolLabels(),
-        },
-      },
-      privateAccess: {
-        class: PrivateAccessTune,
-        config: {
-          labels: contentToolLabels(),
-          isDisabled: (blockId: string) =>
-            editorPrivateSections?.isPrivateAccessDisabled(blockId) ?? false,
         },
       },
     },
@@ -787,7 +782,6 @@ function contentToolLabels() {
     title: phrase.value.content_title,
     description: phrase.value.content_description,
     fileWithExtension: phrase.value.content_file_with_extension,
-    privateAccess: phrase.value.content_private_block,
     privateSection: phrase.value.content_private_section,
     privateSectionStart: phrase.value.content_private_section_start,
     privateSectionEnd: phrase.value.content_private_section_end,

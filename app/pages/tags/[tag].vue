@@ -78,7 +78,9 @@ function tabTo(tab: 'projects' | 'events') {
   <main class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
     <PublicPageHeader
       icon="tag"
+      icon-kind="custom"
       :icon-media="tag.iconMedia"
+      :accent-color="tag.accentColor"
       :title="tag.title"
       :description="tag.description"
     />

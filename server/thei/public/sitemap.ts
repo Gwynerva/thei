@@ -138,7 +138,6 @@ export function buildSitemapEntries(input: SitemapInput): SitemapEntry[] {
     { path: '/' },
     { path: '/life/' },
     { path: '/rewind/' },
-    { path: '/projects/' },
     { path: '/pages/' },
     { path: '/tags/' },
     ...lifeYearEntries(input, projects, events),

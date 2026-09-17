@@ -345,13 +345,44 @@ export default defineI18nModule({
       'Непрерывная лента событий, проектов и важных этапов.',
     public_life_period_description: (period, siteName) =>
       `События, проекты и важные этапы за ${period.toLocaleLowerCase('ru-RU')} — ${siteName}.`,
-    public_projects_description:
-      'Проекты, эксперименты и вещи, воплощённые в жизнь.',
     public_pages_description:
       'Отдельные материалы, заметки и другие страницы сайта.',
     public_tags_description: 'Темы, связывающие проекты и моменты жизни.',
     related_projects: 'Связанные проекты',
     related_events: 'Связанные события',
+    related_events_description: (projectTitle) =>
+      `Памятные моменты, так или иначе связанные с проектом «${projectTitle}», от новых к старым.`,
+    related_events_empty: 'Связанных событий пока нет',
+    search: 'Поиск',
+    public_search_description: 'Поиск по проектам и событиям.',
+    search_placeholder: 'Найти проект или событие…',
+    search_clear: 'Очистить поиск',
+    search_filters: 'Фильтры',
+    search_filter_type: 'Что искать',
+    search_type_all: 'Всё',
+    search_filter_projects: 'Проекты',
+    search_tags_filter_placeholder: 'Найти тег…',
+    search_tags_active: 'Выбранные теги',
+    search_tags_none: 'Подходящих тегов нет',
+    search_tag_include: (tag) => `Искать с тегом «${tag}»`,
+    search_tag_exclude: (tag) => `Искать без тега «${tag}»`,
+    search_tag_remove: (tag) => `Убрать тег «${tag}» из фильтра`,
+    search_reset_filters: 'Сбросить фильтры',
+    search_results_count: (projects, events) => {
+      const parts = [
+        projects ? plural(projects, 'проект', 'проекта', 'проектов') : '',
+        events ? plural(events, 'событие', 'события', 'событий') : '',
+      ].filter(Boolean);
+      if (!parts.length) return 'Ничего не найдено';
+      // «Событие» is neuter, so only a leading project count changes the verb.
+      const verb = projects
+        ? plural(projects, 'Найден', 'Найдено', 'Найдено', false)
+        : 'Найдено';
+      return `${verb} ${parts.join(' и ')}`;
+    },
+    search_empty: 'Ничего не нашлось',
+    search_empty_description:
+      'Попробуйте изменить запрос или ослабить фильтры.',
     forbidden_title: 'Это личное пространство',
     forbidden_description: 'Владелец закрыл публичный доступ к сайту.',
     not_found_title: 'Здесь ничего нет',
@@ -370,12 +401,11 @@ export default defineI18nModule({
     public_details_summary: 'Суть',
     public_details_when: 'Когда',
     public_details_references: 'Референсы',
-    public_details_manual: 'Вручную',
-    public_details_from_content: 'Из контента',
+    content_integration_youtube: 'Видео YouTube',
     public_details_links: 'Ссылки',
     public_details_files: 'Файлы',
-    public_details_links_content: 'Ссылки контента',
-    public_details_files_content: 'Файлы контента',
+    public_details_manual: 'Вручную',
+    public_details_from_content: 'Из содержимого',
     public_details_overview: 'Сводка',
     public_details_contents: 'Содержание',
     public_details_chronology: 'Хронология',
@@ -503,10 +533,14 @@ export default defineI18nModule({
     backup_token_shown_once:
       'Скопируйте сейчас. Он показывается один раз и не читается обратно: ' +
       'потерянный токен заменяют, а не восстанавливают.',
-    backup_script_download: 'Скачать скрипт',
+    backup_script_windows: 'Скрипт для Windows',
+    backup_script_unix: 'Скрипт для Linux и macOS',
     backup_setup_hint:
-      'На машине, где будут храниться копии, запустите `node thei-backup.mjs`, ' +
-      'введите этот адрес и токен, затем включите еженедельное расписание.',
+      'Скачайте скрипт на машину, где будут храниться копии, — ничего ' +
+      'устанавливать не нужно — и запустите: `thei-backup.cmd` в Windows, ' +
+      '`bash thei-backup.sh` в остальных системах. Адрес сайта уже внутри, ' +
+      'а если скачать сразу после генерации токена — то и токен. Останется ' +
+      'выбрать папку и включить еженедельное расписание.',
     backup_history: 'Последние запуски',
     backup_run_summary: (files: number, size: string) =>
       `${files} файл(ов), ${size}`,
@@ -528,13 +562,13 @@ export default defineI18nModule({
       'Обновление не создаёт резервную копию. Если она нужна, скопируйте ' +
       'папку content перед началом.',
     update_in_progress: 'Обновляем…',
-    update_phase_preparing: 'Подготовка',
-    update_phase_dependencies: 'Установка',
-    update_phase_building: 'Сборка',
-    update_phase_swapping: 'Завершение',
-    update_phase_restarting: 'Перезапуск',
-    update_phase_done: 'Готово',
-    update_phase_failed: 'Ошибка',
+    update_status_running: 'Обновление',
+    update_status_restarting: 'Перезапуск',
+    update_status_done: 'Готово',
+    update_status_failed: 'Ошибка',
+    update_steps: 'Ход обновления',
+    update_step_phase: 'Действие обновления',
+    update_step_migration: 'Миграция данных',
     update_done_x: (version) => `Обновлено до Thei ${version}.`,
     update_log: 'Журнал',
     update_failed_hint:
@@ -577,9 +611,6 @@ export default defineI18nModule({
     admin_assets_empty: 'Библиотека файлов пуста',
     admin_assets_empty_description:
       'Файлы появятся здесь, когда вы загрузите их в проекты, события или страницы.',
-    public_projects_empty: 'Проектов пока нет',
-    public_projects_empty_description:
-      'Здесь пока ничего не опубликовано. Загляните позже — новые проекты появятся в этом списке.',
     public_tags_empty: 'Тегов пока нет',
     public_tags_empty_description:
       'Темы появятся здесь, как только ими будут отмечены проекты или моменты жизни.',
@@ -813,7 +844,6 @@ export default defineI18nModule({
     content_link_broken_description:
       'Не удалось найти связанную сущность или получить данные ссылки.',
     content_link_remove: 'Убрать ссылку',
-    content_private_block: 'Приватный блок',
     content_private_section: 'Приватная секция',
     content_private_section_start: 'Начало приватной секции',
     content_private_section_end: 'Конец приватной секции',
@@ -920,9 +950,8 @@ export default defineI18nModule({
     project_showcase_badge: 'Витрина',
     project_showcase_badge_hint:
       'Проект показывается в витрине на главной странице и выше в каталоге.',
-    project_portfolio_badge: 'Портфолио',
-    project_portfolio_badge_hint:
-      'Проект включён в профессиональное портфолио.',
+    project_cv_badge: 'Резюме',
+    project_cv_badge_hint: 'Проект входит в резюме автора.',
     project_files: 'Файлы проекта',
     project_files_description: 'Иконка, баннер, витрина и остальные файлы.',
     event_title: 'Название события',
@@ -1077,8 +1106,18 @@ export default defineI18nModule({
     upload_variant_resize_cover: 'Заполнить',
     upload_variant_upscale: 'Увеличение разрешено',
     upload_variant_no_upscale: 'Без увеличения',
-    upload_variant_audio_removed: 'Без аудио',
-    upload_variant_audio_kept: 'С аудио',
+    upload_variant_audio_removed: 'Звук удалён',
+    upload_variant_audio_kept: 'Со звуком',
+    upload_variant_audio_none: 'Без звука',
+    upload_source_no_audio: 'В исходнике нет звуковой дорожки',
+    video_play: 'Воспроизвести',
+    video_pause: 'Пауза',
+    video_seek: 'Позиция воспроизведения',
+    video_mute: 'Выключить звук',
+    video_unmute: 'Включить звук',
+    video_volume: 'Громкость',
+    video_no_audio: 'В этом видео нет звуковой дорожки',
+    video_no_audio_short: 'Без звука',
     upload_variant_fast: 'Быстрая конвертация',
     asset_variant_current: 'Используется сейчас',
     asset_variant_usage_count: (count) => `Использований: ${count}`,

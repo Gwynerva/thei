@@ -3,7 +3,8 @@ defineProps<{ title: string }>();
 </script>
 <template>
   <section
-    class="min-w-0 rounded-normal border border-border-1 bg-bg-2 p-md shadow-md
+    class="profile-info-block relative isolate min-w-0 overflow-hidden
+      rounded-normal border border-border-1 bg-bg-2 p-md shadow-md
       shadow-shadow-1"
   >
     <h2
@@ -14,3 +15,19 @@ defineProps<{ title: string }>();
     <slot />
   </section>
 </template>
+
+<style scoped>
+/* A soft accent light leaking in from the top-left corner. */
+.profile-info-block::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(
+    circle at 0% 0%,
+    color-mix(in oklab, var(--color-accent) 11%, transparent),
+    transparent min(18rem, 70%)
+  );
+  content: '';
+  pointer-events: none;
+}
+</style>

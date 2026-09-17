@@ -306,7 +306,6 @@ export async function readCleanEditorOutput(
           id: string;
           tool: string;
           data: OutputBlockData['data'];
-          tunes?: OutputBlockData['tunes'];
         }
       | undefined;
     if (!saved) continue;
@@ -316,9 +315,6 @@ export async function readCleanEditorOutput(
       data: stripHydratedContentInlineLinks(
         saved.data,
       ) as OutputBlockData['data'],
-      ...(saved.tunes && Object.keys(saved.tunes).length > 0
-        ? { tunes: saved.tunes }
-        : {}),
     });
   }
   return cleanEditorSnapshot({ blocks });

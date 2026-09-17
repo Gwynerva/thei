@@ -3,6 +3,8 @@ import {
   type PublicProfileResponse,
 } from '#layers/thei/shared/profile';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
+import { publicContentPlainText } from '#layers/thei/shared/content';
+import { buildSeoDescription } from '#layers/thei/shared/seo-description';
 import { and, eq, sql } from 'drizzle-orm';
 import {
   getPinnedPages,
@@ -108,6 +110,7 @@ export default defineEventHandler(
       showcaseItems,
       eventItems,
       tagItems,
+      aboutRow,
     ] = await Promise.all([
       buildPublicContentData(
         'profile',
@@ -140,10 +143,16 @@ export default defineEventHandler(
           ),
       ),
       buildPublicTagListItems(tags),
+      THEI_SERVER.content.findByOwner('profile', PROFILE_ID, 'profile-about'),
     ]);
     return {
       displayName: p.displayName,
       slogan: p.slogan,
+      // Always the visitor's text, even when an admin is looking.
+      seoDescription: buildSeoDescription([
+        p.slogan,
+        aboutRow ? publicContentPlainText(aboutRow.data, 'prose') : '',
+      ]),
       nickname: p.nickname,
       birthDate: p.birthDate,
       facts: p.facts,

@@ -15,6 +15,7 @@ import {
 } from './compare-media';
 import AssetModalVideoControls from './AssetModalVideoControls.vue';
 import { useMediaControls } from './media-controls';
+import { useVideoPlayback } from './use-video-playback';
 
 export interface CompareMediaSource {
   key: string;
@@ -60,10 +61,13 @@ const modifiedIsVideo = computed(() =>
   isExtensionAllowed(props.modified.extension, videoExtensionProfile),
 );
 const hasVideo = computed(() => originalIsVideo.value || modifiedIsVideo.value);
-const hasAudio = computed(
-  () =>
-    (originalIsVideo.value && props.original.hasAudio !== false) ||
-    (modifiedIsVideo.value && props.modified.hasAudio !== false),
+// Only the master side is audible, so the controls follow its audio track.
+const hasAudio = computed(() =>
+  modifiedIsVideo.value
+    ? props.modified.hasAudio
+    : originalIsVideo.value
+      ? props.original.hasAudio
+      : false,
 );
 
 const compareLayout = computed(() => {
@@ -135,18 +139,34 @@ const modifiedMediaStyle = computed(() =>
   buildMediaStyle('modified', modifiedDimensions.value),
 );
 
-const isPaused = ref(true);
-const currentTime = ref(0);
-const duration = ref(0);
-const isMuted = ref(false);
-const volume = ref(1);
+const { state: playback, controller: playbackController } = useVideoPlayback();
+
+// The result is the master clock; the source follows it muted.
+watch(
+  [originalMediaRef, modifiedMediaRef],
+  ([original, modified]) => {
+    const originalVideo =
+      original instanceof HTMLVideoElement ? original : null;
+    const modifiedVideo =
+      modified instanceof HTMLVideoElement ? modified : null;
+    playbackController.attach(modifiedVideo ?? originalVideo, [
+      modifiedVideo ? originalVideo : null,
+    ]);
+  },
+  { flush: 'post', immediate: true },
+);
+
+useSpacePlaybackToggle(
+  () => containerRef.value,
+  () => playbackController.togglePlay(),
+  () => hasVideo.value && isReady.value,
+);
 
 watch(
   () => props.original.key,
   () => {
     originalDimensions.value = props.original.displayDimensions ?? null;
     activeFitSide.value = 'original';
-    resetVideoState();
   },
   { immediate: true },
 );
@@ -156,7 +176,6 @@ watch(
   () => {
     modifiedDimensions.value = props.modified.displayDimensions ?? null;
     activeFitSide.value = 'original';
-    resetVideoState();
   },
   { immediate: true },
 );
@@ -307,9 +326,6 @@ function onVideoMeta(side: CompareMediaSide, e: Event): void {
     width: source.displayDimensions?.width ?? video.videoWidth,
     height: source.displayDimensions?.height ?? video.videoHeight,
   });
-
-  applyVideoVolume(video);
-  updateDuration();
 }
 
 function setDimensions(
@@ -369,102 +385,6 @@ function scheduleDividerResize(): void {
     dividerPercent.value = dividerRatio * 100;
   }, 120);
 }
-
-function videoElements(): HTMLVideoElement[] {
-  return [originalMediaRef.value, modifiedMediaRef.value].filter(
-    (el): el is HTMLVideoElement => el instanceof HTMLVideoElement,
-  );
-}
-
-function primaryVideo(): HTMLVideoElement | undefined {
-  if (modifiedMediaRef.value instanceof HTMLVideoElement) {
-    return modifiedMediaRef.value;
-  }
-  if (originalMediaRef.value instanceof HTMLVideoElement) {
-    return originalMediaRef.value;
-  }
-}
-
-function resetVideoState(): void {
-  isPaused.value = true;
-  currentTime.value = 0;
-  duration.value = 0;
-}
-
-function togglePlay(): void {
-  const videos = videoElements();
-  if (isPaused.value) {
-    for (const video of videos) {
-      video.currentTime = Math.min(currentTime.value, video.duration || 0);
-      applyVideoVolume(video);
-      void video.play();
-    }
-    return;
-  }
-
-  for (const video of videos) {
-    video.pause();
-  }
-}
-
-function seek(value: number): void {
-  currentTime.value = value;
-  for (const video of videoElements()) {
-    video.currentTime = Math.min(value, video.duration || value);
-  }
-}
-
-function toggleMute(): void {
-  isMuted.value = !isMuted.value;
-  for (const video of videoElements()) {
-    video.muted = isMuted.value;
-  }
-}
-
-function onVolumeSlider(value: number): void {
-  volume.value = value;
-  if (value > 0 && isMuted.value) isMuted.value = false;
-  else if (value === 0 && !isMuted.value) isMuted.value = true;
-
-  for (const video of videoElements()) {
-    applyVideoVolume(video);
-  }
-}
-
-function applyVideoVolume(video: HTMLVideoElement): void {
-  video.volume = volume.value;
-  video.muted = isMuted.value;
-}
-
-function onVideoVolumeChange(e: Event): void {
-  const video = e.target as HTMLVideoElement;
-  if (video !== primaryVideo()) return;
-  isMuted.value = video.muted;
-  volume.value = video.volume;
-}
-
-function onVideoPlay(e: Event): void {
-  if (e.target === primaryVideo()) isPaused.value = false;
-}
-
-function onVideoPause(e: Event): void {
-  if (e.target === primaryVideo()) isPaused.value = true;
-}
-
-function onDurationChange(): void {
-  updateDuration();
-}
-
-function updateDuration(): void {
-  const primary = primaryVideo();
-  duration.value = primary?.duration || 0;
-}
-
-function onTimeUpdate(e: Event): void {
-  if (e.target === primaryVideo()) {
-    currentTime.value = (e.target as HTMLVideoElement).currentTime;
-  }
-}
 </script>
 
 <template>
@@ -500,11 +420,6 @@ function onTimeUpdate(e: Event): void {
             class="pointer-events-none block max-h-none max-w-none"
             :style="originalMediaStyle"
             @loadedmetadata="onVideoMeta('original', $event)"
-            @durationchange="onDurationChange"
-            @timeupdate="onTimeUpdate"
-            @play="onVideoPlay"
-            @pause="onVideoPause"
-            @volumechange="onVideoVolumeChange"
           />
         </TransitionFade>
         <TransitionFade>
@@ -537,11 +452,6 @@ function onTimeUpdate(e: Event): void {
             class="pointer-events-none block max-h-none max-w-none"
             :style="modifiedMediaStyle"
             @loadedmetadata="onVideoMeta('modified', $event)"
-            @durationchange="onDurationChange"
-            @timeupdate="onTimeUpdate"
-            @play="onVideoPlay"
-            @pause="onVideoPause"
-            @volumechange="onVideoVolumeChange"
           />
         </TransitionFade>
         <TransitionFade>
@@ -658,16 +568,16 @@ function onTimeUpdate(e: Event): void {
 
     <AssetModalVideoControls
       v-if="hasVideo && isReady"
-      :is-paused="isPaused"
-      :current-time="currentTime"
-      :duration="duration"
-      :is-muted="isMuted"
-      :volume="volume"
+      :is-paused="playback.paused"
+      :current-time="playback.currentTime"
+      :duration="playback.duration"
+      :is-muted="playback.muted"
+      :volume="playback.volume"
       :has-audio="hasAudio"
-      @toggle-play="togglePlay"
-      @seek="seek"
-      @toggle-mute="toggleMute"
-      @volume="onVolumeSlider"
+      @toggle-play="playbackController.togglePlay()"
+      @seek="playbackController.seek($event)"
+      @toggle-mute="playbackController.toggleMute()"
+      @volume="playbackController.setVolume($event)"
     />
   </div>
 </template>

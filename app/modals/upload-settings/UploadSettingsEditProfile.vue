@@ -17,6 +17,8 @@ const fastConversion = defineModel<boolean>('fastConversion');
 
 defineProps<{
   isVideo: boolean;
+  /** `false` only when the source is known to be silent. */
+  sourceHasAudio?: boolean;
   qualityValues: number[];
   availableSizePresets: number[];
   showResetDimensions: boolean;
@@ -125,7 +127,7 @@ const emit = defineEmits<{
     </button>
   </div>
 
-  <FieldToggle v-if="isVideo" v-model="muteAudio">
+  <FieldToggle v-if="isVideo && sourceHasAudio !== false" v-model="muteAudio">
     <div
       @click="muteAudio = !muteAudio"
       class="w-full cursor-pointer text-sm text-text-2"
@@ -133,6 +135,10 @@ const emit = defineEmits<{
       {{ phrase.upload_strip_audio }}
     </div>
   </FieldToggle>
+  <div v-else-if="isVideo" class="flex items-center gap-xs text-sm text-text-3">
+    <Icon name="volume-off" class="shrink-0 text-base" />
+    {{ phrase.upload_source_no_audio }}
+  </div>
 
   <FieldToggle v-if="isVideo" v-model="fastConversion">
     <div

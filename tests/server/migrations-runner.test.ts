@@ -1,20 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import Database from 'better-sqlite3';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   MigrationError,
   runPendingMigrations,
   seedLedger,
+  type MigrationProgressEvent,
 } from '../../update/migrations/run';
 import { hasLedger, readLedger } from '../../update/migrations/ledger';
-import { defineMigration } from '../../update/migrations/types';
+import {
+  defineMigration,
+  type MigrationContext,
+} from '../../update/migrations/types';
 
 const baseline = defineMigration({
   id: '0.0.1/001-baseline',
   version: '0.0.1',
-  description: 'baseline',
+  title: 'baseline',
   up({ rawDb }) {
     rawDb.prepare('CREATE TABLE notes (id TEXT PRIMARY KEY)').run();
   },
@@ -23,7 +28,7 @@ const baseline = defineMigration({
 const addColor = defineMigration({
   id: '0.2.0/001-add-color',
   version: '0.2.0',
-  description: 'add color',
+  title: { en: 'add color', ru: 'добавить цвет' },
   up({ rawDb }) {
     rawDb.prepare('ALTER TABLE notes ADD COLUMN color TEXT').run();
   },
@@ -32,7 +37,7 @@ const addColor = defineMigration({
 const broken = defineMigration({
   id: '0.3.0/001-broken',
   version: '0.3.0',
-  description: 'broken',
+  title: 'broken',
   up({ rawDb }) {
     rawDb.prepare('ALTER TABLE notes ADD COLUMN size TEXT').run();
     rawDb.prepare('THIS IS NOT SQL').run();
@@ -51,6 +56,14 @@ const options = (
   registry,
 });
 
+const context = (): MigrationContext => ({
+  rawDb,
+  contentPath: () => '',
+  readConfig: async () => ({}),
+  writeConfig: async () => {},
+  log: () => {},
+});
+
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'thei-migrations-'));
   rawDb = new Database(join(directory, 'test.db'));
@@ -62,8 +75,8 @@ afterEach(async () => {
 });
 
 describe('migration runner', () => {
-  it('applies pending migrations in order and records them', () => {
-    const result = runPendingMigrations(rawDb, options('0.0.0'));
+  it('applies pending migrations in order and records them', async () => {
+    const result = await runPendingMigrations(rawDb, options('0.0.0'));
 
     expect(result.applied.map((migration) => migration.id)).toEqual([
       '0.0.1/001-baseline',
@@ -76,20 +89,20 @@ describe('migration runner', () => {
     ).toEqual(['0.0.1/001-baseline', '0.2.0/001-add-color']);
   });
 
-  it('is a no-op on the second run', () => {
-    runPendingMigrations(rawDb, options('0.0.0'));
-    const second = runPendingMigrations(rawDb, options('0.0.0'));
+  it('is a no-op on the second run', async () => {
+    await runPendingMigrations(rawDb, options('0.0.0'));
+    const second = await runPendingMigrations(rawDb, options('0.0.0'));
 
     expect(second.applied).toEqual([]);
   });
 
-  it('adopts a ledger-less database at its recorded version', () => {
+  it('adopts a ledger-less database at its recorded version', async () => {
     // A database created by an older Thei: the baseline schema is already
     // there, but nothing has ever been recorded.
-    baseline.up({ rawDb, contentPath: () => '', log: () => {} });
+    baseline.up(context());
     expect(hasLedger(rawDb)).toBe(false);
 
-    const result = runPendingMigrations(rawDb, options('0.0.1'));
+    const result = await runPendingMigrations(rawDb, options('0.0.1'));
 
     expect(result.adopted).toBe(1);
     expect(result.applied.map((migration) => migration.id)).toEqual([
@@ -97,16 +110,16 @@ describe('migration runner', () => {
     ]);
   });
 
-  it('rolls back a failing migration and records nothing for it', () => {
-    const result = runPendingMigrations(rawDb, options('0.0.0'));
+  it('rolls back a failing migration and records nothing for it', async () => {
+    const result = await runPendingMigrations(rawDb, options('0.0.0'));
     expect(result.applied).toHaveLength(2);
 
-    expect(() =>
+    await expect(
       runPendingMigrations(
         rawDb,
         options('0.0.0', [baseline, addColor, broken]),
       ),
-    ).toThrow(MigrationError);
+    ).rejects.toThrow(MigrationError);
 
     const columns = rawDb
       .pragma("table_info('notes')")
@@ -117,33 +130,31 @@ describe('migration runner', () => {
     );
   });
 
-  it('reports the failing migration id', () => {
-    try {
-      runPendingMigrations(rawDb, options('0.0.0', [baseline, broken]));
-      expect.unreachable('should have thrown');
-    } catch (error) {
-      expect(error).toBeInstanceOf(MigrationError);
-      expect((error as MigrationError).reason).toBe('migration-failed');
-      expect((error as MigrationError).migrationId).toBe('0.3.0/001-broken');
-    }
+  it('reports the failing migration id', async () => {
+    const error = await runPendingMigrations(
+      rawDb,
+      options('0.0.0', [baseline, broken]),
+    ).catch((thrown: unknown) => thrown);
+    expect(error).toBeInstanceOf(MigrationError);
+    expect((error as MigrationError).reason).toBe('migration-failed');
+    expect((error as MigrationError).migrationId).toBe('0.3.0/001-broken');
   });
 
-  it('refuses to open content written by a newer Thei', () => {
-    runPendingMigrations(rawDb, options('0.0.0', [baseline, addColor]));
+  it('refuses to open content written by a newer Thei', async () => {
+    await runPendingMigrations(rawDb, options('0.0.0', [baseline, addColor]));
 
-    try {
-      // The engine was downgraded: it no longer knows about 0.2.0.
-      runPendingMigrations(rawDb, options('0.0.0', [baseline]));
-      expect.unreachable('should have thrown');
-    } catch (error) {
-      expect(error).toBeInstanceOf(MigrationError);
-      expect((error as MigrationError).reason).toBe('downgrade');
-      expect((error as MigrationError).message).toContain('0.2.0');
-    }
+    // The engine was downgraded: it no longer knows about 0.2.0.
+    const error = await runPendingMigrations(
+      rawDb,
+      options('0.0.0', [baseline]),
+    ).catch((thrown: unknown) => thrown);
+    expect(error).toBeInstanceOf(MigrationError);
+    expect((error as MigrationError).reason).toBe('downgrade');
+    expect((error as MigrationError).message).toContain('0.2.0');
   });
 
-  it('replaces a ledger table left in an older, incompatible shape', () => {
-    baseline.up({ rawDb, contentPath: () => '', log: () => {} });
+  it('replaces a ledger table left in an older, incompatible shape', async () => {
+    baseline.up(context());
     // The shape an earlier, abandoned migration system used.
     rawDb
       .prepare(
@@ -159,7 +170,7 @@ describe('migration runner', () => {
       .prepare('INSERT INTO _thei_migrations VALUES (?, ?, ?, ?)')
       .run('0.0.1/000-baseline', 'abc', '0.0.1', Date.now());
 
-    const result = runPendingMigrations(rawDb, options('0.0.1'));
+    const result = await runPendingMigrations(rawDb, options('0.0.1'));
 
     expect(result.adopted).toBe(1);
     expect(result.applied.map((migration) => migration.id)).toEqual([
@@ -172,11 +183,112 @@ describe('migration runner', () => {
     ).toEqual(['0.0.1/001-baseline', '0.2.0/001-add-color']);
   });
 
-  it('seeds every migration for a database built from the baseline', () => {
+  it('seeds every migration for a database built from the baseline', async () => {
     seedLedger(rawDb, [baseline, addColor]);
 
-    const result = runPendingMigrations(rawDb, options('0.2.0'));
+    const result = await runPendingMigrations(rawDb, options('0.2.0'));
     expect(result.applied).toEqual([]);
     expect(result.adopted).toBe(0);
+  });
+
+  it('reports progress for every pending migration', async () => {
+    const events: string[] = [];
+    await runPendingMigrations(rawDb, {
+      ...options('0.0.0', [baseline, addColor, broken]),
+      onProgress: (event: MigrationProgressEvent) => {
+        events.push(
+          event.type === 'plan'
+            ? `plan:${event.migrations.length}`
+            : `${event.type}:${event.migration.id}`,
+        );
+      },
+    }).catch(() => {});
+
+    expect(events).toEqual([
+      'plan:3',
+      'start:0.0.1/001-baseline',
+      'done:0.0.1/001-baseline',
+      'start:0.2.0/001-add-color',
+      'done:0.2.0/001-add-color',
+      'start:0.3.0/001-broken',
+      'fail:0.3.0/001-broken',
+    ]);
+  });
+});
+
+describe('scripted migrations', () => {
+  it('runs asynchronous work on files and the config', async () => {
+    await writeFile(
+      join(directory, 'thei.config.json'),
+      JSON.stringify({ version: '0.1.0', legacy: true }),
+    );
+    await writeFile(join(directory, 'old-name.txt'), 'kept');
+
+    const reorganize = defineMigration({
+      id: '0.2.0/002-reorganize',
+      version: '0.2.0',
+      title: 'Reorganize files',
+      async run({ contentPath, readConfig, writeConfig, log }) {
+        const { rename } = await import('node:fs/promises');
+        if (existsSync(contentPath('old-name.txt')))
+          await rename(
+            contentPath('old-name.txt'),
+            contentPath('new-name.txt'),
+          );
+        await writeFile(contentPath('created.txt'), 'hello');
+        const { legacy: _legacy, ...config } = await readConfig();
+        await writeConfig({ ...config, reorganized: true });
+        log('reorganized');
+      },
+    });
+
+    const result = await runPendingMigrations(
+      rawDb,
+      options('0.0.0', [baseline, reorganize]),
+    );
+
+    expect(result.applied.map((migration) => migration.id)).toContain(
+      '0.2.0/002-reorganize',
+    );
+    expect(existsSync(join(directory, 'old-name.txt'))).toBe(false);
+    expect(await readFile(join(directory, 'new-name.txt'), 'utf8')).toBe(
+      'kept',
+    );
+    expect(await readFile(join(directory, 'created.txt'), 'utf8')).toBe(
+      'hello',
+    );
+    expect(
+      JSON.parse(await readFile(join(directory, 'thei.config.json'), 'utf8')),
+    ).toEqual({ version: '0.1.0', reorganized: true });
+  });
+
+  it('records nothing for a failed script, so the next boot retries it', async () => {
+    let attempts = 0;
+    const flaky = defineMigration({
+      id: '0.2.0/001-flaky',
+      version: '0.2.0',
+      title: 'Flaky',
+      async run({ contentPath }) {
+        attempts += 1;
+        await writeFile(contentPath('attempt.txt'), String(attempts));
+        if (attempts === 1) throw new Error('network is down');
+      },
+    });
+
+    await expect(
+      runPendingMigrations(rawDb, options('0.0.0', [baseline, flaky])),
+    ).rejects.toThrow('network is down');
+    expect(readLedger(rawDb).map((entry) => entry.id)).not.toContain(
+      '0.2.0/001-flaky',
+    );
+
+    const retry = await runPendingMigrations(
+      rawDb,
+      options('0.0.0', [baseline, flaky]),
+    );
+    expect(retry.applied.map((migration) => migration.id)).toEqual([
+      '0.2.0/001-flaky',
+    ]);
+    expect(attempts).toBe(2);
   });
 });

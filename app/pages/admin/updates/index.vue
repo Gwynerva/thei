@@ -1,5 +1,10 @@
 <script lang="ts" setup>
-import type { UpdatePhase, UpdateStatus } from '#layers/thei/update/types';
+import type {
+  UpdateRunStatus,
+  UpdateStep,
+  UpdateStatus,
+} from '#layers/thei/update/types';
+import type { IconName } from '#thei/icons';
 
 type ActionResponse =
   { type: 'success' } | { type: 'error'; code?: string; message: string };
@@ -23,19 +28,29 @@ const state = computed(() => status.value?.state);
 const running = computed(() => Boolean(status.value?.running));
 const managed = computed(() => Boolean(status.value?.managed));
 
-const phaseLabels: Record<UpdatePhase, () => string> = {
-  preparing: () => phrase.value.update_phase_preparing,
-  dependencies: () => phrase.value.update_phase_dependencies,
-  building: () => phrase.value.update_phase_building,
-  swapping: () => phrase.value.update_phase_swapping,
-  restarting: () => phrase.value.update_phase_restarting,
-  done: () => phrase.value.update_phase_done,
-  failed: () => phrase.value.update_phase_failed,
+const statusLabels: Record<UpdateRunStatus, () => string> = {
+  running: () => phrase.value.update_status_running,
+  restarting: () => phrase.value.update_status_restarting,
+  done: () => phrase.value.update_status_done,
+  failed: () => phrase.value.update_status_failed,
 };
 
-const phaseLabel = computed(() =>
-  state.value ? phaseLabels[state.value.phase]() : '',
+const statusLabel = computed(() =>
+  state.value ? statusLabels[state.value.status]() : '',
 );
+
+const stepIcons: Record<UpdateStep['status'], IconName> = {
+  pending: 'minus',
+  running: 'loading',
+  done: 'check',
+  failed: 'close',
+  skipped: 'minus',
+};
+
+function stepKind(step: UpdateStep): string | undefined {
+  if (step.kind === 'phase') return phrase.value.update_step_phase;
+  if (step.kind === 'migration') return phrase.value.update_step_migration;
+}
 
 const availability = computed(() => {
   const value = status.value;
@@ -52,7 +67,7 @@ const availability = computed(() => {
 const { forceRefresh } = useAutoRefresh(async () => {
   await refresh();
 
-  if (state.value?.phase === 'restarting') awaitingRestart.value = true;
+  if (state.value?.status === 'restarting') awaitingRestart.value = true;
 
   if (awaitingRestart.value && state.value && !running.value) {
     // The new build ships new client assets, so a full reload is the only
@@ -199,10 +214,10 @@ async function restart() {
               class="shrink-0 text-accent"
               aria-hidden="true"
             />
-            <span class="font-semibold">{{ phaseLabel }}</span>
+            <span class="font-semibold">{{ statusLabel }}</span>
             <span class="text-sm text-text-3">
               {{
-                state.phase === 'done'
+                state.status === 'done'
                   ? phrase.update_done_x(state.toVersion)
                   : `${state.fromVersion} → ${state.toVersion}`
               }}
@@ -216,8 +231,61 @@ async function restart() {
             </span>
           </div>
 
+          <ol
+            v-if="state.steps.length"
+            class="flex flex-col border-t border-border-1 px-md py-sm"
+            :aria-label="phrase.update_steps"
+          >
+            <li
+              v-for="step in state.steps"
+              :key="step.id"
+              class="flex gap-sm py-xs"
+              :class="{ 'opacity-60': step.status === 'skipped' }"
+              :data-update-step="step.status"
+            >
+              <span
+                class="mt-0.5 flex size-6 shrink-0 items-center justify-center
+                  rounded-full text-sm"
+                :class="{
+                  'bg-bg-3 text-text-3':
+                    step.status === 'pending' || step.status === 'skipped',
+                  'bg-accent/15 text-accent': step.status === 'running',
+                  'bg-accent text-white': step.status === 'done',
+                  'bg-bg-error text-text-error': step.status === 'failed',
+                }"
+                aria-hidden="true"
+              >
+                <Icon :name="stepIcons[step.status]" />
+              </span>
+              <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span class="flex flex-wrap items-baseline gap-x-xs">
+                  <span
+                    class="font-semibold"
+                    :class="
+                      step.status === 'pending' ? 'text-text-2' : 'text-text-1'
+                    "
+                  >
+                    {{ step.title }}
+                  </span>
+                  <span v-if="stepKind(step)" class="text-xs text-text-3">
+                    {{ stepKind(step) }}
+                  </span>
+                </span>
+                <span v-if="step.description" class="text-sm text-text-3">
+                  {{ step.description }}
+                </span>
+                <span
+                  v-if="step.error"
+                  class="text-sm break-words text-text-error"
+                >
+                  {{ step.error }}
+                </span>
+              </span>
+            </li>
+          </ol>
+
           <div
-            v-if="state.phase === 'failed'"
+            v-if="state.status === 'failed'"
             class="border-t border-border-error bg-bg-error px-md py-sm text-sm
               text-text-error"
           >

@@ -32,6 +32,7 @@ vi.mock('../../server/thei/public/entities', () => ({
   buildPublicTagListItems: vi.fn(async (rows) =>
     rows.map(({ tag, ...counts }: any) => ({ ...tag, ...counts })),
   ),
+  buildPublicTags: vi.fn(async (tags) => tags),
 }));
 let context: Awaited<ReturnType<typeof freshTestDb>>;
 let handle: ReturnType<typeof toWebHandler>;
@@ -86,12 +87,11 @@ beforeAll(async () => {
         .run();
     }
   });
-  const projects = (await import('../../server/api/projects/index.get'))
-    .default;
+  const search = (await import('../../server/api/search.get')).default;
   const tags = (await import('../../server/api/tags/[tag].get')).default;
   const tagList = (await import('../../server/api/tags/index.get')).default;
   const router = createRouter()
-    .get('/projects', projects)
+    .get('/search', search)
     .get('/tags', tagList)
     .get('/tags/:tag', tags);
   handle = toWebHandler(createApp().use(router));
@@ -102,20 +102,26 @@ afterAll(async () => {
 });
 beforeEach(() => vi.clearAllMocks());
 describe('SQL pagination', () => {
-  it('counts visible projects and prepares only the selected stable page', async () => {
+  it('counts visible search results and prepares only the selected stable page', async () => {
     const result = await (
-      await handle(new Request('http://localhost/projects?page=2'))
+      await handle(new Request('http://localhost/search?type=project&page=2'))
     ).json();
     expect(result).toMatchObject({
       total: 900,
       page: 2,
-      pageCount: 38,
-      pageSize: 24,
+      pageCount: 45,
+      pageSize: 20,
     });
     expect(result.items.map((row: any) => row.href)).toEqual(
-      Array.from({ length: 24 }, (_, i) => String(i + 24).padStart(4, '0')),
+      Array.from({ length: 20 }, (_, i) => String(i + 20).padStart(4, '0')),
     );
-    expect(buildPublicProjectSummary).toHaveBeenCalledTimes(24);
+    expect(result.tags).toEqual([
+      expect.objectContaining({
+        count: 900,
+        tag: expect.objectContaining({ slug: 'tag' }),
+      }),
+    ]);
+    expect(buildPublicProjectSummary).toHaveBeenCalledTimes(20);
   });
   it('normalizes bounds before hydration and selects a nonempty tag tab', async () => {
     const result = await (
@@ -141,10 +147,10 @@ describe('SQL pagination', () => {
   });
 
   it.each(['-5', 'nonsense', '1.5'])(
-    'normalizes invalid project page %s',
+    'normalizes invalid search page %s',
     async (page) => {
       const response = await (
-        await handle(new Request(`http://localhost/projects?page=${page}`))
+        await handle(new Request(`http://localhost/search?page=${page}`))
       ).json();
       expect(response.page).toBe(1);
     },

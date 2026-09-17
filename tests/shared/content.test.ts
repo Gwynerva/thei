@@ -15,14 +15,13 @@ import {
 } from '../../shared/content';
 
 describe('content normalization', () => {
-  it('normalizes private section roles and clears private tunes inside', () => {
+  it('normalizes private section roles and ignores unknown block tunes', () => {
     const data = normalizeContentData({
       blocks: [
         {
           id: 'end-moved-first',
           type: 'privateSectionBoundary',
           data: { sectionId: 'section-1', edge: 'end' },
-          tunes: { privateAccess: { isPrivate: true } },
         },
         {
           id: 'inside',
@@ -43,14 +42,12 @@ describe('content normalization', () => {
         id: 'end-moved-first',
         type: 'privateSectionBoundary',
         data: { sectionId: 'section-1', edge: 'start' },
-        tunes: undefined,
       },
       { id: 'inside', type: 'paragraph', data: { text: 'Secret words' } },
       {
         id: 'start-moved-last',
         type: 'privateSectionBoundary',
         data: { sectionId: 'section-1', edge: 'end' },
-        tunes: undefined,
       },
     ]);
     expect(summarizeContentData(data)).toMatchObject({
@@ -506,14 +503,13 @@ describe('content normalization', () => {
     });
   });
 
-  it('extracts asset refs with private block tune', () => {
+  it('extracts asset refs per placement', () => {
     const data = normalizeContentData({
       blocks: [
         {
           id: 'block-1',
           type: 'contentMedia',
           data: { layout: 'centered', asset: { assetUuid: 'a-1', size: 10 } },
-          tunes: { privateAccess: { isPrivate: true } },
         },
         {
           id: 'block-2',
@@ -540,7 +536,7 @@ describe('content normalization', () => {
         assetUuid: 'a-1',
         blockId: 'block-1',
         blockType: 'contentMedia',
-        isPrivate: true,
+        isPrivate: false,
       },
       {
         assetUuid: 'a-1',

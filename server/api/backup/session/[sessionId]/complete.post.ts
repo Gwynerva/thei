@@ -5,34 +5,42 @@ import {
   requireBackupSession,
 } from '../../../../thei/backup/session';
 import { requireBackupToken } from '../../../../thei/backup/token';
+import {
+  sendBackupText,
+  wantsBackupText,
+} from '../../../../thei/backup/text-format';
 
-export default defineEventHandler(async (event): Promise<BackupRun> => {
-  requireBackupToken(event);
-  const sessionId = getRouterParam(event, 'sessionId') ?? '';
-  const session = await requireBackupSession(sessionId);
-  const body = await readBody<{ fileCount?: number; byteCount?: number }>(
-    event,
-  );
+export default defineEventHandler(
+  async (event): Promise<BackupRun | string> => {
+    requireBackupToken(event);
+    const sessionId = getRouterParam(event, 'sessionId') ?? '';
+    const session = await requireBackupSession(sessionId);
+    const body = await readBody<{ fileCount?: number; byteCount?: number }>(
+      event,
+    );
 
-  // The client reports what it actually stored, which is what the panel should
-  // show: a run that skipped files reclaimed mid-transfer copied fewer than the
-  // manifest listed, and claiming otherwise would hide that.
-  const count = (value: unknown, fallback: number) =>
-    Number.isSafeInteger(value) && (value as number) >= 0
-      ? (value as number)
-      : fallback;
+    // The client reports what it actually stored, which is what the panel should
+    // show: a run that skipped files reclaimed mid-transfer copied fewer than the
+    // manifest listed, and claiming otherwise would hide that.
+    const count = (value: unknown, fallback: number) =>
+      Number.isSafeInteger(value) && (value as number) >= 0
+        ? (value as number)
+        : fallback;
 
-  const run = recordBackupRun({
-    kind: session.kind,
-    startedAt: session.startedAt,
-    fileCount: count(body?.fileCount, session.totalFiles),
-    byteCount: count(body?.byteCount, session.totalBytes),
-    clientLabel: session.clientLabel,
-  });
-  await endBackupSession(sessionId);
+    const run = recordBackupRun({
+      kind: session.kind,
+      startedAt: session.startedAt,
+      fileCount: count(body?.fileCount, session.totalFiles),
+      byteCount: count(body?.byteCount, session.totalBytes),
+      clientLabel: session.clientLabel,
+    });
+    await endBackupSession(sessionId);
 
-  THEI_SERVER.console
-    .tag('Backup')
-    .log(`Session ${sessionId} completed: ${run.fileCount} file(s)`);
-  return run;
-});
+    THEI_SERVER.console
+      .tag('Backup')
+      .log(`Session ${sessionId} completed: ${run.fileCount} file(s)`);
+    if (wantsBackupText(event))
+      return sendBackupText(event, [['completedAt', run.completedAt]]);
+    return run;
+  },
+);

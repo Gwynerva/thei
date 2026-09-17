@@ -6,6 +6,8 @@ import PublicProfile from '#layers/thei/app/components/profile/PublicProfile.vue
 import PublicShowcaseProjects from '#layers/thei/app/components/profile/PublicShowcaseProjects.vue';
 
 definePageMeta({ layout: 'public' });
+// The profile banner already paints the page top.
+usePublicPageGlow({ enabled: false });
 
 const profileResource = await useFetch<PublicProfileResponse>('/api/profile', {
   key: 'public-profile',
@@ -36,7 +38,9 @@ usePublicSeo({
       ? `${profile.value.displayName} | ${nickname}`
       : profile.value.displayName;
   }),
-  description: computed(() => phrase.value.public_life_description),
+  description: computed(
+    () => profile.value.seoDescription || phrase.value.public_life_description,
+  ),
   canonical: '/',
   pageType: 'ProfilePage',
   image: () => profile.value.avatarMedia.src,
@@ -98,9 +102,8 @@ usePublicSeo({
           }"
         />
       </div>
-      <EmptyState
+      <PublicEmptyState
         v-else
-        icon="heart"
         :title="phrase.life_empty"
         :description="phrase.life_empty_description"
       />

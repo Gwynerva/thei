@@ -154,9 +154,8 @@ function gapTone(row: LifeFeedRow): LifeRailTone {
       class="m-auto w-(--width-wide) max-w-full pt-lg pr-window pb-xl pl-0
         sm:px-window"
     >
-      <EmptyState
+      <PublicEmptyState
         v-if="!days.length"
-        icon="heart"
         :title="phrase.life_empty"
         :description="phrase.life_empty_description"
         class="ml-window sm:ml-0"

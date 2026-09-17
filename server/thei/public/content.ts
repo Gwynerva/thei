@@ -6,7 +6,6 @@ import {
   ContentValidationError,
   collectContentAssetUuids,
   contentBlockIsInPrivateSection,
-  contentBlockIsPrivate,
   contentPrivateSectionRanges,
   normalizeContentData,
   summarizeContentData,
@@ -144,8 +143,7 @@ export function selectPublicContentMediaAssetUuids(
     if (block.type === 'privateSectionBoundary') continue;
     if (
       !includePrivate &&
-      (contentBlockIsPrivate(block) ||
-        contentBlockIsInPrivateSection(privateSectionRanges, index))
+      contentBlockIsInPrivateSection(privateSectionRanges, index)
     )
       continue;
     if (block.type === 'contentMedia') append((block.data as any).asset);
@@ -389,7 +387,6 @@ async function hydratePublicContentData(
 
     const block = normalized.blocks[index]!;
     if (block.type === 'privateSectionBoundary') continue;
-    if (!includePrivate && contentBlockIsPrivate(block)) continue;
     blocks.push(await hydrateBlock(block));
   }
   return { ...normalized, blocks };

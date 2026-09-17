@@ -71,11 +71,16 @@ What happens when you press the button:
    installed.
 2. The new engine supplies its own instance manifest, which is applied and
    installed again — so a release can change its own requirements.
-3. The site is rebuilt into `.output.next`. **The old build keeps serving the
+3. The new version's update phases run — scripted actions a release needs
+   before it can start (see below).
+4. The site is rebuilt into `.output.next`. **The old build keeps serving the
    whole time**, so visitors see nothing unusual.
-4. The new build is swapped in — the old one is kept as `.output.prev` — and the
+5. The new build is swapped in — the old one is kept as `.output.prev` — and the
    process exits. systemd starts it again within seconds.
-5. On the way up, the new engine applies any pending database migrations.
+6. On the way up, the new engine applies any pending migrations.
+
+The panel lists every step as it runs, including each phase and migration the
+release brings.
 
 The panel polls through the restart and reloads itself when the new version is
 up. Losing connection for a few seconds is expected.
@@ -126,17 +131,25 @@ machine you control pulls them.
 
 ### Setting it up
 
-1. Open **Settings → Backups** in the admin panel, generate a token, and copy
-   it. It is shown once.
-2. Download `thei-backup.mjs` from the same place onto the machine that will
-   keep the copies. It needs Node 20 or newer and nothing else — no install
-   step, no dependencies.
-3. Run `node thei-backup.mjs`, enter the site address, the token and a
-   destination folder, then install the weekly schedule.
+1. Open **Settings → Backups** in the admin panel and generate a token. It is
+   shown once.
+2. Right away, download the client for the machine that will keep the copies:
+   `thei-backup.cmd` for Windows, `thei-backup.sh` for Linux and macOS. Neither
+   needs anything installed — PowerShell, `bash` and `curl` come with the
+   system — and both arrive with the site address and the token filled in.
+3. Run it, pick a destination folder, and install the weekly schedule.
 
 The schedule fires daily and backs up only when a week has passed. That is what
 lets a machine that was switched off at the appointed hour catch up on its own,
 and what lets a manual backup restart the week without touching the scheduler.
+It survives reboots: Task Scheduler starts a missed run when the machine is
+back, systemd timers are persistent (and lingering is enabled for a user
+timer), cron gets an `@reboot` entry, and launchd runs at login.
+
+Before it downloads anything, a run compares the site with the last backup. If
+it lost more than 30% of its files or size, the run stops without copying or
+rotating anything and raises an alarm — the kind of drop an intrusion or a
+broken update leaves behind. `backup/README.md` has the details.
 
 Copies are named by when they finished:
 
@@ -206,20 +219,87 @@ the two are not walking the same tree at once.
 Only one backup may run at a time. A session left open by a client that died,
 or by a server restart, is reclaimed automatically.
 
-## Migrations
+## Phases and migrations
 
-`migrations/` holds every schema change Thei has ever shipped, in order.
-`migrations/index.ts` is the registry — the upgrade path. An instance records
-what it has applied in a `_thei_migrations` table, and on every boot the engine
-applies whatever is missing.
+A release changes existing installations in two places, and each has its own
+folder:
+
+|                    | `phases/`                                 | `migrations/`                        |
+| ------------------ | ----------------------------------------- | ------------------------------------ |
+| Runs               | during the update, before the rebuild     | on boot of the new version           |
+| Code comes from    | the version being installed               | the version being installed          |
+| The site meanwhile | still served by the previous build        | down until migrations finish         |
+| Recorded           | nowhere; runs on every update crossing it | in the `_thei_migrations` ledger     |
+| Typical use        | files, config, tools, anything outside DB | schema and data changes that need it |
+
+Both show up in **Updates** as steps with their own title and description,
+between the pipeline's own steps (install, build, switch, restart).
+
+### Texts
+
+`title` and `description` are an `UpdateText`: a plain string — English is
+fine — or translations keyed by language code:
+
+```ts
+title: 'Move covers into assets/',
+title: { en: 'Move covers into assets/', ru: 'Перенос обложек в assets/' },
+```
+
+The panel shows the site's language, then English, then whatever translation
+exists. Texts are resolved when a step is recorded, because the panel reading
+the record belongs to the version being replaced.
+
+### Update phases
+
+Create `phases/<version>-<slug>.ts` and append it to `updatePhaseRegistry` in
+`phases/index.ts`:
+
+```ts
+import { defineUpdatePhase } from './types';
+
+export default defineUpdatePhase({
+  id: '0.2.0/001-move-covers',
+  version: '0.2.0',
+  title: 'Move covers into assets/',
+  description: 'Covers used to live in their own folder.',
+  async run({ contentPath, readConfig, writeConfig, exec, log }) {
+    // Anything: node:fs, the config, child processes, the network.
+  },
+});
+```
+
+An update from `A` to `B` runs, in registry order, every phase whose version
+is newer than `A` and not newer than `B`. The pipeline starts them with
+`bun node_modules/thei/update/phases/cli.ts`, that is with the code of the
+version being installed, so a release can bring actions the previous version
+has never heard of. The runner reports on stdout through a small line protocol
+(`phases/run.ts`); the pipeline that reads it belongs to the older release, so
+the protocol only ever gains optional fields.
+
+Rules that matter:
+
+- **The previous build is still serving.** Do not remove or rewrite anything it
+  reads. Work that needs the new schema belongs in a migration.
+- **A phase must be safe to repeat.** Nothing records that it ran: a failed or
+  retried update runs it again over whatever the last attempt left behind.
+- A failing phase stops the update before the build. Nothing is swapped in.
+
+### Migrations
+
+`migrations/` holds every database and content change Thei has ever shipped, in
+order. `migrations/index.ts` is the registry — the upgrade path. An instance
+records what it has applied in a `_thei_migrations` table, and on every boot the
+engine applies whatever is missing.
 
 A database created before any of this existed is adopted on first boot: the
 version in `content/thei.config.json` decides which migrations it already
 contains.
 
-### Writing one
+Create `migrations/<version>-<slug>.ts` and append it to `migrationRegistry` in
+`migrations/index.ts`. A migration is one of two kinds.
 
-Create `migrations/<version>-<slug>.ts`:
+**Transactional** — `up` is synchronous and runs inside a transaction together
+with its ledger row:
 
 ```ts
 import { defineMigration } from './types';
@@ -227,14 +307,26 @@ import { defineMigration } from './types';
 export default defineMigration({
   id: '0.2.0/001-add-project-color',
   version: '0.2.0',
-  description: 'Add a color column to projects.',
+  title: 'Add a color to projects',
   up({ rawDb }) {
     rawDb.prepare('ALTER TABLE `projects` ADD COLUMN `color` text').run();
   },
 });
 ```
 
-Then append it to `migrationRegistry` in `migrations/index.ts`.
+**Scripted** — `run` is asynchronous, has no transaction around it, and is
+recorded only once it resolves:
+
+```ts
+export default defineMigration({
+  id: '0.2.0/002-split-avatars',
+  version: '0.2.0',
+  title: { en: 'Split avatars', ru: 'Разделение аватаров' },
+  async run({ rawDb, contentPath, readConfig, writeConfig, log }) {
+    // Files, the config, child processes — then SQL through rawDb.
+  },
+});
+```
 
 Rules that matter:
 
@@ -243,22 +335,20 @@ Rules that matter:
   when the migration was written, forever.
 - **A migration is immutable once released.** Its `id` is recorded in every
   instance's ledger. To change something, add a new migration.
-- **File operations should be repeatable.** Each migration's SQL and its ledger
-  row commit in one transaction, so SQL either fully applies or does not — but
-  a write to `content/` cannot be rolled back with it. Keep `up` synchronous
-  and use the synchronous `node:fs` calls: the transaction commits when `up`
-  returns, so file work done inside it is covered by the same rollback, while
-  anything deferred to a promise escapes the transaction and can leave the
-  database and the disk disagreeing. Write the file half so that re-running it
-  over a half-finished state is a no-op.
+- **File operations must be repeatable.** A transactional migration rolls its
+  SQL back on failure, but a write to `content/` is not rolled back with it:
+  keep `up` synchronous and use the synchronous `node:fs` calls, because
+  anything deferred to a promise escapes the transaction. A scripted migration
+  is retried from the start on the next boot after a failure. Either way, write
+  the file half so that running it over a half-finished state is a no-op.
 - **Update the baseline too.** `0.0.1-baseline.ts` is what a brand-new install
   starts from, and it must end up identical to an upgraded database. Run
   `bun run db:baseline` after changing the Drizzle schema.
   `tests/server/migrations-baseline.test.ts` fails if the two drift apart.
-- **Never re-encode media in a migration.** A migration runs inside boot, in one
-  transaction, with the site down and a supervisor that restarts the process if
-  it fails. Reprocessing thousands of files there turns an update into an
-  outage of unknown length. Stored files describe themselves through their own
+- **Never re-encode media in a migration.** A migration runs inside boot, with
+  the site down and a supervisor that restarts the process if it fails.
+  Reprocessing thousands of files there turns an update into an outage of
+  unknown length. Stored files describe themselves through their own
   `extension`, `size`, and `meta`, so a library holding output from several
   releases is a normal library, not one that needs repairing. Moving or renaming
   files is fine; decoding and re-encoding them is not. If bulk re-encoding is
@@ -268,7 +358,8 @@ Rules that matter:
 ## Cutting a release
 
 1. Update the Drizzle schema, then `bun run db:baseline`.
-2. Add a migration for the change and register it.
+2. Add a migration for the change, and an update phase for anything that has
+   to happen outside boot. Register both.
 3. `bun vitest run` — the baseline drift test must pass.
 4. Bump `version` in the engine's `package.json`. It must match the tag.
 5. `git tag v0.2.0 && git push --tags`.
@@ -286,10 +377,12 @@ Only `major.minor.patch` tags are offered as updates; prerelease tags such as
 | `install.sh`  | The one-line installer.                                        |
 | `rollback.sh` | Restores the previous build and manifest.                      |
 | `instance/`   | Templates for the files the installer writes into an instance. |
-| `migrations/` | Every schema change, plus the runner and the ledger.           |
-| `process.ts`  | The update procedure: install, build, swap, restart.           |
+| `migrations/` | Every schema and data change, plus the runner and the ledger.  |
+| `phases/`     | Scripted update phases, their runner and its line protocol.    |
+| `process.ts`  | The update procedure: install, phases, build, swap, restart.   |
 | `remote.ts`   | Finds the newest release tag.                                  |
 | `state.ts`    | The progress file the panel polls, which survives the restart. |
+| `text.ts`     | Step titles: a plain string or translations by language.       |
 | `output.ts`   | Swaps a staged build into place and repoints Nitro's links.    |
 | `semver.ts`   | Version comparison.                                            |
 | `scripts/`    | `generate-baseline.mts`, run by `bun run db:baseline`.         |

@@ -3,6 +3,10 @@ import { AssetType, type ArchivedOriginalFileMeta } from './asset';
 import type { MediaDescriptor } from './media';
 import { normalizeExternalLinkUrl, type ExternalLink } from './external-link';
 import {
+  contentIntegrationUrl,
+  normalizeContentIntegration,
+} from './content-integrations';
+import {
   contentInlineLinksFromData,
   normalizeContentInlineHtml,
   normalizeContentText,
@@ -38,14 +42,11 @@ export const CONTENT_BLOCK_TYPES = [
   'contentGallery',
   'contentAttachment',
   'externalLink',
+  'integration',
   'entityLink',
   'privateSectionBoundary',
 ] as const;
 export type ContentBlockType = (typeof CONTENT_BLOCK_TYPES)[number];
-
-export interface ContentPrivateAccessTune {
-  isPrivate: boolean;
-}
 
 export type ContentPrivateSectionEdge = 'start' | 'end';
 
@@ -61,9 +62,6 @@ export interface ContentOutputBlock<
   id?: string;
   type: TType;
   data: TData;
-  tunes?: {
-    privateAccess?: ContentPrivateAccessTune;
-  };
 }
 
 export interface ContentOutputData {
@@ -309,6 +307,10 @@ export function collectContentExternalLinkUrls(
   for (const block of normalized.blocks) {
     if (block.type === 'privateSectionBoundary') continue;
     if (block.type === 'externalLink') urls.add((block.data as any).url);
+    if (block.type === 'integration') {
+      const url = contentIntegrationUrl(block.data);
+      if (url) urls.add(url);
+    }
   }
   for (const link of contentInlineLinksFromData(normalized)) {
     if (link.kind === 'external') urls.add(link.url);
@@ -375,6 +377,27 @@ export function contentPlainText(
   return contentPlainTextFromNormalized(normalizeContentData(data));
 }
 
+/**
+ * Text a visitor can read: blocks inside private sections are left out.
+ * `prose` keeps only paragraphs, headings, quotes and lists.
+ */
+export function publicContentPlainText(
+  data: ContentOutputData | null | undefined,
+  mode: 'all' | 'prose' = 'all',
+): string {
+  const normalized = normalizeContentData(data);
+  const ranges = contentPrivateSectionRanges(normalized);
+  const visible = {
+    ...normalized,
+    blocks: normalized.blocks.filter(
+      (_, index) => !contentBlockIsInPrivateSection(ranges, index),
+    ),
+  };
+  return mode === 'prose'
+    ? contentPreviewTextFromNormalized(visible)
+    : contentPlainTextFromNormalized(visible);
+}
+
 function contentPlainTextFromNormalized(
   normalized: ContentOutputData,
   includeExternalLinks = true,
@@ -408,6 +431,11 @@ function contentPlainTextFromNormalized(
       case 'externalLink':
         if (includeExternalLinks) {
           appendPreviewText(textParts, (block.data as any).url);
+        }
+        break;
+      case 'integration':
+        if (includeExternalLinks) {
+          appendPreviewText(textParts, contentIntegrationUrl(block.data));
         }
         break;
       case 'entityLink':
@@ -511,9 +539,7 @@ export function extractContentAssetRefs(
   const ranges = contentPrivateSectionRanges(normalized);
   const refs: ContentAssetRef[] = [];
   for (const [index, block] of normalized.blocks.entries()) {
-    const isPrivate =
-      contentBlockIsPrivate(block) ||
-      contentBlockIsInPrivateSection(ranges, index);
+    const isPrivate = contentBlockIsInPrivateSection(ranges, index);
     const blockId = block.id;
 
     if (block.type === 'contentMedia' || block.type === 'contentAttachment') {
@@ -566,10 +592,6 @@ function addAssetSize(sizes: Map<string, number>, value: unknown) {
   sizes.set(asset.assetUuid, asset.size);
 }
 
-export function contentBlockIsPrivate(block: ContentOutputBlock): boolean {
-  return block.tunes?.privateAccess?.isPrivate === true;
-}
-
 export function isContentAssetBlockType(type: ContentBlockType): boolean {
   return (
     type === 'contentMedia' ||
@@ -589,16 +611,11 @@ function normalizeContentBlock(value: unknown): ContentOutputBlock {
   }
 
   const data = normalizeBlockData(type, value.data);
-  const tune =
-    type === 'privateSectionBoundary'
-      ? undefined
-      : normalizePrivateAccessTune(value.tunes);
 
   return {
     id: optionalString(value.id),
     type,
     data,
-    ...(tune ? { tunes: { privateAccess: tune } } : {}),
   };
 }
 
@@ -658,6 +675,15 @@ function normalizeBlockData(
 
     case 'externalLink':
       return { url: normalizeExternalLinkUrl(data.url) };
+
+    case 'integration':
+      try {
+        return normalizeContentIntegration(data);
+      } catch (error) {
+        throw new ContentValidationError(
+          error instanceof Error ? error.message : 'Invalid integration',
+        );
+      }
 
     case 'entityLink': {
       const entityType =
@@ -720,6 +746,9 @@ function isContentBlockEmpty(block: ContentOutputBlock): boolean {
         return true;
       }
 
+    case 'integration':
+      return !contentIntegrationUrl(block.data);
+
     case 'entityLink':
       return !(
         ((block.data as any).entityType === 'project' ||
@@ -767,12 +796,10 @@ function normalizePrivateSections(
   }
 
   const emptyBoundaryIndices = new Set<number>();
-  const innerIndices = new Set<number>();
   for (const range of ranges) {
     let hasContent = false;
     for (let index = range.startIndex + 1; index < range.endIndex; index++) {
       if (blocks[index]?.type !== 'privateSectionBoundary') hasContent = true;
-      innerIndices.add(index);
     }
     if (!hasContent) {
       emptyBoundaryIndices.add(range.startIndex);
@@ -792,23 +819,11 @@ function normalizePrivateSections(
             sectionId: data.sectionId,
             edge: index === range.startIndex ? 'start' : 'end',
           },
-          tunes: undefined,
         },
       ];
     }
-    if (!innerIndices.has(index) || !block.tunes?.privateAccess) return [block];
-    const { tunes: _tunes, ...withoutTunes } = block;
-    return [withoutTunes];
+    return [block];
   });
-}
-
-function normalizePrivateAccessTune(
-  value: unknown,
-): ContentPrivateAccessTune | undefined {
-  if (!isRecord(value)) return undefined;
-  const privateAccess = value.privateAccess;
-  if (!isRecord(privateAccess)) return undefined;
-  return privateAccess.isPrivate === true ? { isPrivate: true } : undefined;
 }
 
 function normalizeContentAsset(value: unknown): ContentAssetData | null {

@@ -22,14 +22,6 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
   if (registeredContextButton.value?.routePath === route.path)
     return registeredContextButton.value.props;
 
-  if (route.path === '/projects/') {
-    return {
-      to: '/admin/projects/new/',
-      icon: 'plus',
-      title: phrase.value.new_project,
-    };
-  }
-
   if (route.path.startsWith('/projects/')) {
     const projectUuid = publicIdFromProjectUrlPart(
       route.path.split('/')[2] ?? '',

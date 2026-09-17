@@ -100,7 +100,7 @@ function openGalleryItem(item: ContentGalleryItem) {
         :is="headerTag(block.data.level)"
         v-else-if="block.type === 'header'"
         :id="headingIdByPath.get(path)"
-        class="scroll-mt-32"
+        class="scroll-mt-[var(--public-anchor-offset,8rem)]"
         v-html="block.data.text"
       ></component>
       <ContentRendererList
@@ -161,20 +161,16 @@ function openGalleryItem(item: ContentGalleryItem) {
           phrase.content_file_with_extension(asset(block.data.asset).extension)
         "
         :href="asset(block.data.asset).assetUrl"
-        :openable="assetViewer"
-        @open="
-          openAsset(
-            block.data.asset,
-            block.data.title as string | undefined,
-            block.data.caption as string | undefined,
-          )
-        "
       />
       <ExternalLinkPreviewCard
         v-else-if="block.type === 'externalLink'"
         :link="externalLink(block.data)"
         :url="block.data.url as string"
         :interactive="true"
+      />
+      <ContentIntegration
+        v-else-if="block.type === 'integration'"
+        :data="block.data"
       />
       <ContentEntityLinkBlock
         v-else-if="block.type === 'entityLink'"
@@ -183,22 +179,10 @@ function openGalleryItem(item: ContentGalleryItem) {
         :restricted="block.data.restricted as boolean | undefined"
         :resolver="linkResolver"
       />
-      <section
+      <ContentPrivatePlaceholder
         v-else-if="block.type === 'privateSectionPlaceholder'"
-        class="content-private-pattern content-private-placeholder relative
-          isolate flex flex-col items-center gap-xs overflow-hidden
-          rounded-normal border border-accent/20 bg-bg-accent/30 px-sm py-lg
-          text-center"
-      >
-        <span
-          class="inline-flex items-center gap-xs text-lg font-semibold
-            text-accent"
-        >
-          <Icon name="lock-close" aria-hidden="true" />
-          {{ phrase.content_private_section }}
-        </span>
-        <ContentStats v-bind="block.data" size="sm" class="justify-center" />
-      </section>
+        :summary="block.data"
+      />
       <section
         v-else-if="block.type === 'privateSectionExpanded'"
         class="content-private-pattern content-private-section relative isolate
@@ -211,6 +195,7 @@ function openGalleryItem(item: ContentGalleryItem) {
           </span>
         </div>
         <ContentRenderer
+          class="px-sm"
           :data="{ blocks: block.data.blocks }"
           :link-resolver="linkResolver"
           :asset-viewer="assetViewer"
@@ -233,9 +218,5 @@ function openGalleryItem(item: ContentGalleryItem) {
 /* The pattern spans the content between the bracket lines, not the labels. */
 .content-private-section::before {
   inset: 1rem 0;
-}
-
-.content-private-placeholder {
-  --content-private-pattern-opacity: 0.035;
 }
 </style>

@@ -6,6 +6,11 @@ export interface ExecOptions {
   /** Milliseconds before the command is killed. */
   timeout?: number;
   onLine?: (line: string) => void;
+  /**
+   * Hand lines to `onLine` exactly as printed, without stripping colour codes
+   * or shortening them — for output that is a protocol rather than a log.
+   */
+  rawLines?: boolean;
 }
 
 export interface ExecResult {
@@ -53,6 +58,11 @@ export function exec(
 
     let output = '';
     let pending = '';
+
+    function emit(line: string) {
+      const text = options.rawLines ? line.trimEnd() : cleanLine(line);
+      if (text.trim()) options.onLine?.(text);
+    }
     let timer: NodeJS.Timeout | undefined;
     let timedOut = false;
 
@@ -63,10 +73,7 @@ export function exec(
       const lines = pending.split(/\r?\n/);
       pending = lines.pop() ?? '';
 
-      for (const line of lines) {
-        const clean = cleanLine(line);
-        if (clean.trim()) options.onLine?.(clean);
-      }
+      for (const line of lines) emit(line);
     }
 
     child.stdout?.setEncoding('utf8');
@@ -83,8 +90,8 @@ export function exec(
 
     function finish() {
       if (timer) clearTimeout(timer);
-      const clean = cleanLine(pending);
-      if (clean.trim()) options.onLine?.(clean);
+      emit(pending);
+      pending = '';
     }
 
     child.on('error', (error) => {

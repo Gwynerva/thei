@@ -1,5 +1,6 @@
 import { MigrationError } from '#layers/thei/update/migrations/run';
 import { writeInstalledVersion } from '#layers/thei/update/version-file';
+import { readConfigFile } from '#layers/thei/update/config-file';
 import { setBootUpdate } from '../boot/result';
 import { setTheiConfig, type TheiConfig } from '../config';
 import { setTheiDbContext } from './global';
@@ -28,10 +29,12 @@ export async function bootTheiDb() {
   }
 
   if (installedVersion !== THEI_SERVER.version) {
+    // Read back from disk: a migration may have rewritten the config.
+    const configPath = THEI_SERVER.contentPath('thei.config.json');
     const config = (await writeInstalledVersion(
-      THEI_SERVER.contentPath('thei.config.json'),
+      configPath,
       THEI_SERVER.version,
-      THEI_SERVER.config as unknown as Record<string, unknown>,
+      await readConfigFile(configPath),
     )) as unknown as TheiConfig;
 
     setTheiConfig(config);

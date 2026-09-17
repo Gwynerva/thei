@@ -9,6 +9,7 @@ import {
 } from 'drizzle-kit/api';
 import { schema } from '../../server/thei/db/schema';
 import { baselineSql, migrationRegistry } from '../../update/migrations';
+import { runPendingMigrations, seedLedger } from '../../update/migrations/run';
 
 interface SchemaObject {
   type: string;
@@ -33,11 +34,13 @@ function dumpSchema(rawDb: Database.Database): SchemaObject[] {
   }));
 }
 
-async function withTempDb<T>(run: (rawDb: Database.Database) => T): Promise<T> {
+async function withTempDb<T>(
+  run: (rawDb: Database.Database) => T | Promise<T>,
+): Promise<T> {
   const directory = await mkdtemp(join(tmpdir(), 'thei-baseline-'));
   const rawDb = new Database(join(directory, 'test.db'));
   try {
-    return run(rawDb);
+    return await run(rawDb);
   } finally {
     rawDb.close();
     await rm(directory, { recursive: true, force: true });
@@ -56,15 +59,13 @@ describe('migration baseline', () => {
       return dumpSchema(rawDb);
     });
 
-    const fromBaseline = await withTempDb((rawDb) => {
+    const fromBaseline = await withTempDb(async (rawDb) => {
       for (const statement of baselineSql) rawDb.prepare(statement).run();
-      for (const migration of migrationRegistry.slice(1)) {
-        migration.up({
-          rawDb,
-          contentPath: (...parts: string[]) => join(...parts),
-          log: () => {},
-        });
-      }
+      seedLedger(rawDb, migrationRegistry.slice(0, 1));
+      await runPendingMigrations(rawDb, {
+        installedVersion: '0.0.0',
+        contentPath: (...parts: string[]) => join(...parts),
+      });
       return dumpSchema(rawDb);
     });
 

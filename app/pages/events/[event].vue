@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { publicReferenceSplitSize } from '#layers/thei/shared/public-references';
 import type { PublicEventResponseFull } from '#layers/thei/shared/api/public';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { coverDateRanges } from '#layers/thei/shared/date-range';
@@ -67,16 +68,12 @@ const details = computed(
           {
             icon: 'link',
             label: phrase.value.public_details_links,
-            value:
-              data.value.references.manual.links.length +
-              data.value.references.content.links.length,
+            value: publicReferenceSplitSize(data.value.references.links),
           },
           {
             icon: 'files',
             label: phrase.value.public_details_files,
-            value:
-              data.value.references.manual.files.length +
-              data.value.references.content.files.length,
+            value: publicReferenceSplitSize(data.value.references.files),
           },
         ] satisfies PublicDetailPanelData['metrics']
       ).filter((metric) => metric.value > 0),
@@ -91,7 +88,7 @@ const details = computed(
       :title="data.title"
       :description="data.summary"
     >
-      <PublicAction v-if="data.action" :action="data.action" class="mt-xs" />
+      <PublicAction v-if="data.action" :action="data.action" />
     </PublicPageHeader>
     <PublicDetailLayout :details="details" :content="data.content">
       <ContentRenderer

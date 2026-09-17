@@ -1,8 +1,10 @@
 <script lang="ts" setup>
 import type { PublicContentOutputData } from '#layers/thei/shared/content';
 import { buildContentHeadings } from '#layers/thei/app/components/content/content-headings';
-import type { PublicDetailPanelData } from './public-detail';
-import { publicDetailSheetModal } from '#layers/thei/app/modals/public-detail-sheet/modal';
+import {
+  useSheetContentNavigation,
+  type PublicDetailPanelData,
+} from './public-detail';
 
 const props = defineProps<{
   details: PublicDetailPanelData;
@@ -14,6 +16,7 @@ const panelData = computed<PublicDetailPanelData>(() => ({
     ? buildContentHeadings(props.content, language.value.slugify)
     : props.details.contents,
 }));
+const navigateFromSheet = useSheetContentNavigation();
 const publicHeader = useStickyHeaderContext();
 const isAdmin = useIsAdmin();
 const adminOffset = computed(() =>
@@ -28,20 +31,18 @@ const stickyAsideStyle = computed(() => ({
 const stickyContentStyle = computed(() => ({
   maxHeight: `calc(100dvh - ${adminOffset.value} - ${publicHeaderOffset.value} - var(--spacing-md))`,
 }));
-
-function openDetails() {
-  void openModal(publicDetailSheetModal, panelData.value);
-}
 </script>
 
 <template>
-  <div
-    class="fixed inset-x-0 bottom-0 z-40 rounded-t-normal border border-b-0
-      border-border-1 bg-bg-1/85 pb-[env(safe-area-inset-bottom)] shadow-lg
-      backdrop-blur-md sm:hidden"
-  >
-    <PublicDetailSheetHeader :data="panelData" @toggle="openDetails" />
-  </div>
+  <PublicSheet :title="phrase.public_details_overview">
+    <template #summary><PublicDetailMetrics :data="panelData" /></template>
+    <template #default="{ close }">
+      <PublicDetailPanel
+        :data="panelData"
+        @navigate="(id, event) => navigateFromSheet(id, event, close)"
+      />
+    </template>
+  </PublicSheet>
   <div
     class="grid min-w-0 items-start gap-md
       pb-[calc(4.5rem+env(safe-area-inset-bottom))]

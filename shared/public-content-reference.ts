@@ -1,12 +1,12 @@
 import {
   contentBlockIsInPrivateSection,
-  contentBlockIsPrivate,
   contentPrivateSectionRanges,
   normalizeContentData,
   type ContentAssetData,
   type ContentOutputData,
 } from './content';
 import { contentInlineLinksFromData } from './content-link';
+import { contentIntegrationUrl } from './content-integrations';
 
 export type ContentReferenceLinkCandidate =
   | { kind: 'external'; url: string }
@@ -65,13 +65,15 @@ export function extractContentReferenceCandidates(
     if (block.type === 'privateSectionBoundary') continue;
     if (
       !includePrivate &&
-      (contentBlockIsPrivate(block) ||
-        contentBlockIsInPrivateSection(privateSectionRanges, index))
+      contentBlockIsInPrivateSection(privateSectionRanges, index)
     )
       continue;
 
     if (block.type === 'externalLink') {
       appendExternal(block.data.url as string);
+    } else if (block.type === 'integration') {
+      const url = contentIntegrationUrl(block.data);
+      if (url) appendExternal(url);
     } else if (
       block.type === 'entityLink' &&
       (block.data.entityType === 'project' ||

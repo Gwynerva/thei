@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { publicReferenceSplitSize } from '#layers/thei/shared/public-references';
 import type { PublicProjectStageResponse } from '#layers/thei/shared/api/public';
 import { buildProjectChildUrl } from '#layers/thei/shared/project-url';
 import type { PublicDetailPanelData } from '#layers/thei/app/components/public/public-detail';
@@ -27,7 +28,7 @@ usePublicSeo({
   canonical,
   noIndex: () => data.value.project.access === 'link-only',
   breadcrumbs: () => [
-    { name: phrase.value.projects, path: '/projects/' },
+    { name: phrase.value.search, path: '/search/?type=project' },
     { name: data.value.project.title, path: data.value.project.href },
   ],
   image: () => data.value.media?.src,
@@ -63,12 +64,12 @@ const details = computed(
           {
             icon: 'link',
             label: phrase.value.public_details_links,
-            value: data.value.references.content.links.length,
+            value: publicReferenceSplitSize(data.value.references.links),
           },
           {
             icon: 'files',
             label: phrase.value.public_details_files,
-            value: data.value.references.content.files.length,
+            value: publicReferenceSplitSize(data.value.references.files),
           },
         ] satisfies PublicDetailPanelData['metrics']
       ).filter((metric) => metric.value > 0),

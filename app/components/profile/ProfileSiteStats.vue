@@ -47,7 +47,7 @@ const tileClass = `relative block size-9 shrink-0 overflow-hidden rounded-normal
       ></template>
     </div>
     <TheiLink
-      :to="kind === 'project' ? '/projects/' : '/life/'"
+      :to="kind === 'project' ? '/search/?type=project' : '/life/'"
       class="justify-self-start text-sm font-bold text-text-2 tabular-nums
         transition-colors sm:self-center hocus:text-accent"
       ><span>{{

@@ -3,6 +3,7 @@ import {
   type PublicContentOutputData,
 } from '#layers/thei/shared/content';
 import { richTextToPlainText } from '#layers/thei/shared/rich-text';
+import type { IconName } from '#thei/icons';
 
 export type ContentHeadingLevel = 2 | 3;
 
@@ -12,6 +13,8 @@ export interface ContentHeading {
   id: string;
   href: string;
   path: string;
+  /** Marks a heading of the page itself rather than of authored content. */
+  icon?: IconName;
 }
 
 export interface VisibleContentBlock {

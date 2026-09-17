@@ -12,6 +12,7 @@ import {
 } from '#layers/thei/shared/asset-upload-settings';
 import { canZipAssetExtension } from '#layers/thei/shared/asset-upload-zip';
 import {
+  inspectVideoFile,
   processFileZipAsset,
   processMediaTransformAsset,
   processOriginalAsset,
@@ -65,13 +66,17 @@ export function validateAssetVariantSettings(
 }
 
 export async function createAssetVariant(
-  input: CreateAssetVariantInput,
+  requested: CreateAssetVariantInput,
 ): Promise<AssetUploadResponse> {
   validateAssetVariantSettings(
-    input.sourceType,
-    input.source.extension,
-    input.settings,
+    requested.sourceType,
+    requested.source.extension,
+    requested.settings,
   );
+  const input = {
+    ...requested,
+    settings: await normalizeAudioSettings(requested),
+  };
 
   if (isProcessingQueued(input.sourceType)) input.onQueued?.();
   const processed = await withProcessingSlot(
@@ -112,6 +117,25 @@ export async function createAssetVariant(
   };
 }
 
+/**
+ * Removing audio from a silent source changes nothing, so the request is
+ * described as keeping it: both spellings must map to one settings key.
+ */
+async function normalizeAudioSettings(
+  input: CreateAssetVariantInput,
+): Promise<AssetUploadSettings> {
+  const settings = input.settings;
+  if (settings.type !== 'video-transform' || !settings.stripAudio) {
+    return settings;
+  }
+  const inspected = await inspectVideoFile(input.source.path).catch(
+    () => undefined,
+  );
+  return inspected && !inspected.hasAudio
+    ? { ...settings, stripAudio: false }
+    : settings;
+}
+
 async function processAsset(input: CreateAssetVariantInput) {
   if (input.settings.type === 'original') {
     return await processOriginalAsset(input.source);
@@ -150,7 +174,7 @@ async function buildProcessedAssetMeta(
     const preview = await createMediaPreviewAsset(bytes, AssetType.Video);
     const meta: VideoAssetMeta = {
       ...dimensions,
-      audio: hasAudio === true ? 'keep' : 'none',
+      ...(hasAudio !== undefined ? { hasAudio } : {}),
       ...(preview.accent !== undefined ? { accent: preview.accent } : {}),
     };
     return { meta, previewAssetUuid: preview.previewAssetUuid };

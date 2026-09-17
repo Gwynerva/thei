@@ -285,14 +285,16 @@ export function useMediaPair(
         if (revealed.value) pauseVideos();
       },
       seeking: () => {
-        if (!revealed.value) return;
+        // Backdrop seeks are drift corrections and must not stall the video.
+        if (!revealed.value || role !== 'main') return;
         pauseVideos();
-        if (role === 'main') synchronize(true);
+        synchronize(true);
       },
       seeked: (event: Event) => {
         if (status[role] === 'loading')
           void loaded(role, event.currentTarget as MediaElement);
         if (role === 'main') synchronize();
+        // Resumes a pair whose other half finished seeking first.
         void startVideos();
       },
       ratechange: () => {

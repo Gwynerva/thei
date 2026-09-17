@@ -18,7 +18,6 @@ const query = computed(() => ({
   type: typeof route.query.type === 'string' ? route.query.type : undefined,
   usage: typeof route.query.usage === 'string' ? route.query.usage : undefined,
   page: Number(route.query.page ?? 1),
-  pageSize: 20,
 }));
 const { data, status, error, refresh } =
   await useFetch<AssetLibraryFilesResponse>('/api/admin/assets', { query });

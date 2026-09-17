@@ -19,4 +19,6 @@ export const mediaSurfaceProps = {
   controls: Boolean,
   backdrop: Boolean,
   alt: { type: String, default: '' },
+  /** Part of the media descriptor; accepted so it never falls through. */
+  hasAudio: { type: Boolean, default: undefined },
 } as const;

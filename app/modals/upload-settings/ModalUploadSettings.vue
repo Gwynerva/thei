@@ -40,6 +40,7 @@ import AssetModalFileInfo from '../asset-modal/AssetModalFileInfo.vue';
 import AssetModalPreviewMedia from '../asset-modal/AssetModalPreviewMedia.vue';
 import FilePreview from '../../components/FilePreview.vue';
 import { useFileInfo } from '../asset-modal/use-file-info';
+import { detectVideoAudio } from '../asset-modal/video-audio';
 import UploadSettingsDivider from './UploadSettingsDivider.vue';
 import UploadSettingsEditProfile from './UploadSettingsEditProfile.vue';
 import UploadSettingsOtherProfile from './UploadSettingsOtherProfile.vue';
@@ -186,6 +187,25 @@ const { dimensions: pickedFileDimensions } = useFileInfo(
   pickedFile?.objectUrl ?? '',
   pickedFile?.extension ?? '',
 );
+const pickedFileHasAudio = ref<boolean | undefined>();
+if (
+  pickedFile &&
+  isExtensionAllowed(pickedFile.extension, videoExtensionProfile)
+) {
+  onMounted(async () => {
+    pickedFileHasAudio.value = await detectVideoAudio(
+      pickedFile.file,
+      pickedFile.extension,
+    );
+  });
+}
+/** `undefined` while unknown; removing audio is offered in that case. */
+const sourceHasAudio = computed<boolean | undefined>(() => {
+  if (sourceAssetType.value !== AssetType.Video) return false;
+  return processingSourceAsset.value
+    ? variantHasAudio(processingSourceAsset.value)
+    : pickedFileHasAudio.value;
+});
 const sourceDimensions = computed(
   () =>
     (processingSourceAsset.value
@@ -285,7 +305,8 @@ const recommendedEditSettings = computed<EditableSettings | null>(() => {
 
   return createVideoTransformSettings(videoQuality, settingsDimensions, {
     ...common,
-    stripAudio: configured?.stripAudio ?? false,
+    stripAudio:
+      (configured?.stripAudio ?? false) && sourceHasAudio.value !== false,
     fastConversion: false,
   });
 });
@@ -308,7 +329,7 @@ const currentEditSettings = computed<EditableSettings | null>(() => {
   return createVideoTransformSettings(quality.value, parsedDimensions.value, {
     resizeMode: resizeMode.value,
     allowUpscale: allowUpscale.value,
-    stripAudio: muteAudio.value,
+    stripAudio: muteAudio.value && sourceHasAudio.value !== false,
     fastConversion: fastConversion.value,
   });
 });
@@ -428,7 +449,7 @@ const sourcePreviewSource = computed<PreviewSource>(() => ({
   src: sourceFile.value.objectUrl,
   href: sourceFile.value.objectUrl,
   isMedia: isSourceMedia.value,
-  hasAudio: sourceAssetType.value === AssetType.Video ? undefined : false,
+  hasAudio: sourceHasAudio.value,
   displayDimensions: sourceDimensions.value,
 }));
 const modifiedPreviewSource = computed<PreviewSource | null>(() => {
@@ -451,7 +472,7 @@ const modifiedPreviewSource = computed<PreviewSource | null>(() => {
     src: sourceFile.value.objectUrl,
     href: sourceFile.value.objectUrl,
     isMedia: true,
-    hasAudio: sourceAssetType.value === AssetType.Video ? undefined : false,
+    hasAudio: sourceHasAudio.value,
     displayDimensions: display,
   };
 });
@@ -808,10 +829,8 @@ function variantDimensions(variant: AssetVariantInfo) {
 
 function variantHasAudio(variant: AssetVariantInfo): boolean | undefined {
   if (variant.type !== AssetType.Video) return undefined;
-  if (!variant.meta?.audio || variant.meta.audio === 'unknown') {
-    return undefined;
-  }
-  return variant.meta.audio !== 'none' && variant.meta.audio !== 'strip';
+  const hasAudio = variant.meta?.hasAudio ?? variant.media?.hasAudio;
+  return typeof hasAudio === 'boolean' ? hasAudio : undefined;
 }
 
 function variantTitle(variant: AssetVariantInfo): string {
@@ -849,10 +868,13 @@ function variantSettingsSummary(variant: AssetVariantInfo): string {
       : phrase.value.upload_variant_no_upscale,
   ];
   if (settings.type === 'video-transform') {
+    const hasAudio = variantHasAudio(variant);
     parts.push(
-      settings.stripAudio
-        ? phrase.value.upload_variant_audio_removed
-        : phrase.value.upload_variant_audio_kept,
+      hasAudio !== false
+        ? phrase.value.upload_variant_audio_kept
+        : settings.stripAudio
+          ? phrase.value.upload_variant_audio_removed
+          : phrase.value.upload_variant_audio_none,
     );
     if (settings.fastConversion) {
       parts.push(phrase.value.upload_variant_fast);
@@ -1141,6 +1163,7 @@ function handleAssetMissing(error: unknown) {
               v-model:mute-audio="muteAudio"
               v-model:fast-conversion="fastConversion"
               :is-video="sourceAssetType === AssetType.Video"
+              :source-has-audio="sourceHasAudio"
               :quality-values="qualityValues"
               :available-size-presets="availableSizePresets"
               :show-reset-dimensions="showResetDimensions"

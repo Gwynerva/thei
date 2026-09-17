@@ -1,5 +1,15 @@
 # Instructions for AI Agents
 
+## What Thei Is About
+
+Thei is a personal digital archive of a life — a résumé and a diary at once. Keep the meaning of its entities straight in code, copy, SEO and UI:
+
+- **Projects** are self-contained, structured, substantial episodes of a life. A project is made of its own parts: **stages** (dated periods of work) and **sections** (topical write-ups), plus media, a showcase, files, links and relations to other projects.
+- **Events** are small memorable moments worth not forgetting — too small or too loose to be a project. An event may relate to projects and carry tags, but it is never a part of a project. Call events shown on a project page "related events", never "project events" or anything that implies ownership.
+- **Pages** are standalone writing that belongs to no timeline entity.
+- **Tags** are threads across projects and events.
+- **Life** is the one timeline everything dated lands on.
+
 ## Package Manager
 
 - This project uses Bun. Use `bun install`, `bun run`, and `bunx` for dependencies, scripts, and package executables; do not use npm, pnpm, or Yarn.
@@ -25,6 +35,7 @@
 - Read `update/README.md` before changing anything in `update/`, the boot sequence, the database schema, the shape of `content/`, or the requirements an instance is installed with.
 - Any change to the Drizzle schema in `server/thei/db/schema/` requires a migration. Add `update/migrations/<version>-<slug>.ts` with `defineMigration`, register it in `update/migrations/index.ts`, and regenerate the baseline with `bun run db:baseline`. A schema change without a migration upgrades new installations only and breaks every existing one.
 - Write migrations with raw SQL through `rawDb`. Never import the Drizzle schema into a migration: that schema always describes the current release, while a migration must keep describing the database as it was when the migration was written.
+- Changes that are not about the database schema — moving files, rewriting `thei.config.json`, calling a tool — are either a scripted migration (`run` instead of `up`, runs on boot) or an update phase in `update/phases/` (runs during the update, before the rebuild, while the previous build still serves). Give each a clear `title`, and a `description` where the step is not self-explanatory: both are shown to the site owner in **Updates**. Phases must be safe to repeat.
 - Treat a released migration as immutable. Its `id` is recorded in every instance's ledger. Never edit, reorder, or remove one that has shipped; correct it with a new migration instead.
 - Migrations must also cover changes outside the database when they affect existing installations, including the layout of `content/`, file naming on disk, and the shape of `thei.config.json`. File operations in a migration must be safe to repeat, because only the SQL and the ledger row share a transaction.
 - Run `bun vitest run tests/server/migrations-baseline.test.ts` after any schema change. It fails when a fresh installation and an upgraded one would not end up with the same schema.

@@ -84,6 +84,7 @@ beforeAll(async () => {
   Object.assign(context.server, {
     useDb: () => context,
     isAdmin: async () => false,
+    content: { findByOwner: async () => undefined },
   });
   const profile = (await import('../../server/api/profile/index.get')).default;
   handle = toWebHandler(

@@ -1,5 +1,6 @@
 <script lang="ts" setup>
-import { iconsHref, iconNames, type IconName } from '#thei/icons';
+import { iconNames, type IconName } from '#thei/icons';
+import { iconSpriteHref } from '../composables/icon-sprite';
 
 const { name } = defineProps<{ name: IconName }>();
 
@@ -10,7 +11,7 @@ const href = computed(() => {
     console.warn(`[thei] Icon "${name}" not found in bundled icons!`);
   }
 
-  return `${iconsHref}#${isKnownIcon ? name : 'missing'}`;
+  return iconSpriteHref(isKnownIcon ? name : 'missing');
 });
 </script>
 

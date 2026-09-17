@@ -19,7 +19,6 @@ import { canResolveContentEntityLink } from '../thei/content-links/access';
 import {
   buildContentPreview,
   contentBlockIsInPrivateSection,
-  contentBlockIsPrivate,
   contentPrivateSectionRanges,
   normalizeContentData,
 } from '#layers/thei/shared/content';
@@ -190,7 +189,6 @@ async function publicEventPreviewMedia(stored: {
   for (const [index, block] of data.blocks.entries()) {
     if (
       block.type === 'privateSectionBoundary' ||
-      contentBlockIsPrivate(block) ||
       contentBlockIsInPrivateSection(privateSectionRanges, index)
     )
       continue;

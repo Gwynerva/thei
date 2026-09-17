@@ -20,7 +20,7 @@ function accentStyle(project: PublicProjectReference) {
       icon="project"
       :title="phrase.profile_best_projects"
       :action="{
-        href: '/projects/',
+        href: '/search/?type=project&showcase=1',
         label: phrase.view_all,
         icon: 'arrow-outward',
       }"

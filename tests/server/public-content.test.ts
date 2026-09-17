@@ -9,6 +9,8 @@ import {
 import {
   buildPublicContentReferenceGroup,
   buildPublicManualEventReferenceGroup,
+  buildPublicReferences,
+  resolveSiteEntityCandidate,
   buildPublicProjectSectionSummary,
   buildPublicProjectStageSummary,
 } from '../../server/thei/public/entities';
@@ -18,15 +20,22 @@ afterEach(() => {
 });
 
 describe('public content media previews', () => {
-  it('skips private blocks and preserves the first public media order', () => {
+  it('skips private sections and preserves the first public media order', () => {
     expect(
       selectPublicContentMediaAssetUuids({
         blocks: [
           { type: 'paragraph', data: { text: 'Rich text is irrelevant' } },
           {
+            type: 'privateSectionBoundary',
+            data: { sectionId: 'private-section-1', edge: 'start' },
+          },
+          {
             type: 'contentMedia',
             data: { asset: { assetUuid: 'private-media' }, layout: 'stretch' },
-            tunes: { privateAccess: { isPrivate: true } },
+          },
+          {
+            type: 'privateSectionBoundary',
+            data: { sectionId: 'private-section-1', edge: 'end' },
           },
           {
             type: 'contentGallery',
@@ -52,9 +61,16 @@ describe('public content media previews', () => {
         {
           blocks: [
             {
+              type: 'privateSectionBoundary',
+              data: { sectionId: 'private-section-2', edge: 'start' },
+            },
+            {
               type: 'contentMedia',
               data: { asset: { assetUuid: 'same' }, layout: 'stretch' },
-              tunes: { privateAccess: { isPrivate: true } },
+            },
+            {
+              type: 'privateSectionBoundary',
+              data: { sectionId: 'private-section-2', edge: 'end' },
             },
             {
               type: 'contentGallery',
@@ -167,7 +183,7 @@ describe('public content media previews', () => {
           meta: {
             width: 1920,
             height: 1080,
-            audio: 'keep',
+            hasAudio: true,
             accent: { hue: 214, chroma: 0.15 },
           },
         },
@@ -195,12 +211,19 @@ describe('public content media previews', () => {
           data: {
             blocks: [
               {
+                type: 'privateSectionBoundary',
+                data: { sectionId: 'private-section-3', edge: 'start' },
+              },
+              {
                 type: 'contentMedia',
                 data: {
                   asset: { assetUuid: 'private-image' },
                   layout: 'stretch',
                 },
-                tunes: { privateAccess: { isPrivate: true } },
+              },
+              {
+                type: 'privateSectionBoundary',
+                data: { sectionId: 'private-section-3', edge: 'end' },
               },
               {
                 type: 'contentMedia',
@@ -324,7 +347,7 @@ describe('public content media previews', () => {
           meta: {
             width: 1920,
             height: 1080,
-            audio: 'keep',
+            hasAudio: true,
             accent: { hue: 214, chroma: 0.15 },
           },
         },
@@ -659,12 +682,19 @@ describe('public content media previews', () => {
           data: {
             blocks: [
               {
+                type: 'privateSectionBoundary',
+                data: { sectionId: 'private-section-4', edge: 'start' },
+              },
+              {
                 type: 'contentMedia',
                 data: {
                   asset: { assetUuid: image.assetUuid },
                   layout: 'stretch',
                 },
-                tunes: { privateAccess: { isPrivate: true } },
+              },
+              {
+                type: 'privateSectionBoundary',
+                data: { sectionId: 'private-section-4', edge: 'end' },
               },
             ],
           },
@@ -767,6 +797,10 @@ describe('public content reference groups', () => {
           },
         },
         {
+          type: 'privateSectionBoundary',
+          data: { sectionId: 'private-section-5', edge: 'start' },
+        },
+        {
           type: 'contentAttachment',
           data: {
             asset: {
@@ -775,7 +809,10 @@ describe('public content reference groups', () => {
               extension: 'pdf',
             },
           },
-          tunes: { privateAccess: { isPrivate: true } },
+        },
+        {
+          type: 'privateSectionBoundary',
+          data: { sectionId: 'private-section-5', edge: 'end' },
         },
       ],
     } as any;
@@ -861,6 +898,109 @@ describe('public content reference groups', () => {
     expect(
       buildPublicManualEventReferenceGroup(links, files, true).links,
     ).toHaveLength(2);
+  });
+});
+
+describe('merged public references', () => {
+  const project = {
+    projectUuid: 'project-uuid',
+    title: 'Linked project',
+    summary: 'Summary',
+    access: ProjectEventAccessLevel.Public,
+    humanReadableSlug: 'linked',
+    publicId: 'LinkedProject',
+  };
+
+  function mockServer() {
+    (globalThis as any).THEI_SERVER = {
+      config: { siteUrl: 'https://me.example' },
+      projects: {
+        findByUuid: async (uuid: string) =>
+          uuid === project.projectUuid ? project : undefined,
+        findByPublicId: async (publicId: string) =>
+          publicId === project.publicId ? project : undefined,
+      },
+      events: { findByPublicId: async () => undefined },
+      pages: { findBySlug: async () => undefined },
+      assets: {
+        findBySlug: async (slug: string) =>
+          ({
+            'manual-slug': { contentHash: 'same-bytes' },
+            'content-slug': { contentHash: 'same-bytes' },
+          })[slug],
+        usages: { findByContainer: async () => [] },
+      },
+    };
+  }
+
+  it('maps addresses of this site back to entities', async () => {
+    mockServer();
+    await expect(
+      resolveSiteEntityCandidate(
+        'https://me.example/projects/linked-LinkedProject/',
+      ),
+    ).resolves.toEqual({ kind: 'project', projectUuid: 'project-uuid' });
+    for (const url of [
+      'https://other.example/projects/linked-LinkedProject/',
+      'https://me.example/projects/linked-Unknown/',
+      'https://me.example/projects/linked-LinkedProject/stages/x-Y/',
+    ])
+      await expect(resolveSiteEntityCandidate(url)).resolves.toEqual({
+        kind: 'external',
+        url,
+      });
+  });
+
+  it('merges a manual site address with an entity link from the content', async () => {
+    mockServer();
+    const references = await buildPublicReferences(
+      {
+        links: [
+          {
+            kind: 'external',
+            title: 'By hand',
+            href: 'https://me.example/projects/linked-LinkedProject/',
+          },
+        ],
+        files: [
+          {
+            key: 'manual-slug',
+            title: 'Manual copy',
+            href: '/a.pdf',
+            extension: 'pdf',
+            size: 1,
+          },
+        ],
+      },
+      {
+        links: [
+          {
+            kind: 'project',
+            title: 'Linked project',
+            href: '/projects/linked-LinkedProject/',
+          },
+        ],
+        files: [
+          {
+            key: 'content-slug',
+            title: 'Content copy',
+            href: '/b.pdf',
+            extension: 'pdf',
+            size: 1,
+          },
+        ],
+      },
+      false,
+    );
+    expect(references.links.shared).toMatchObject([
+      { kind: 'project', href: '/projects/linked-LinkedProject/' },
+    ]);
+    expect(references.links.manual).toEqual([]);
+    expect(references.links.content).toEqual([]);
+    expect(references.files.shared.map((file) => file.title)).toEqual([
+      'Manual copy',
+    ]);
+    expect(references.files.content).toEqual([]);
   });
 });
 

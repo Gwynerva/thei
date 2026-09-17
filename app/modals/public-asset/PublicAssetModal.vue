@@ -22,6 +22,7 @@ const dimensions = computed(() => {
         ref="mediaPreview"
         :extension="modalData.extension"
         :src="modalData.media.src"
+        :has-audio="modalData.media.hasAudio"
         :display-dimensions="dimensions"
       />
       <FilePreview

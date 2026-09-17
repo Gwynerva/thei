@@ -23,8 +23,7 @@ function rememberDimensions(width: number, height: number) {
     muted
     loop
     :style="{ '--media-ratio': ratio }"
-    class="hero-banner pointer-events-none aspect-video w-full sm:absolute
-      sm:inset-0 sm:aspect-auto sm:size-full"
+    class="hero-banner pointer-events-none absolute! inset-0 size-full"
     aria-hidden="true"
     @dimensions="rememberDimensions"
   />
@@ -32,20 +31,40 @@ function rememberDimensions(width: number, height: number) {
 
 <style scoped>
 @reference "../../styles/main.css";
-.hero-banner {
-  opacity: 0.94;
-  mask-image: linear-gradient(to bottom, black 65%, transparent);
-}
 :deep(.media-main) {
   object-fit: contain;
+}
+/*
+ * Mobile: the sharp banner is a 16:9 band at the top that dissolves downward
+ * into its own heavily blurred copy, which spans the whole hero behind the
+ * text. Both halves are one MediaSurface pair, so a video stays in sync.
+ */
+:deep(.media-foreground) {
+  bottom: auto;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  mask-image: linear-gradient(
+    to bottom,
+    black 0%,
+    black 52%,
+    rgb(0 0 0 / 82%) 66%,
+    rgb(0 0 0 / 50%) 80%,
+    rgb(0 0 0 / 18%) 92%,
+    transparent 100%
+  );
+}
+:deep(.media-backdrop) {
+  --tw-blur: blur(calc(2 * var(--blur-3xl)));
+  inset: calc(-6 * var(--blur-3xl));
+  width: calc(100% + 12 * var(--blur-3xl));
+  height: calc(100% + 12 * var(--blur-3xl));
+  opacity: 1;
 }
 @variant sm {
   .hero-banner {
     --banner-center: calc(
       (100% - var(--width-wide)) / 2 + var(--width-wide) * 0.65
     );
-    opacity: 1;
-    mask-image: none;
   }
   :deep(.media-pair) {
     container-type: size;
@@ -75,6 +94,8 @@ function rememberDimensions(width: number, height: number) {
   }
   :deep(.media-backdrop) {
     /* Same centre as the foreground; enlarge uniformly to reach every edge. */
+    --tw-blur: blur(var(--blur-3xl));
+    opacity: 0.7;
     inset: auto;
     top: 50%;
     left: var(--banner-center);

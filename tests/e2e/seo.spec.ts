@@ -95,7 +95,7 @@ test('sitemap.xml lists public pages and nothing behind the admin', async ({
 
   expect(body.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
   expect(body.endsWith('</urlset>')).toBe(true);
-  for (const path of ['/', '/life/', '/projects/', '/pages/page-0/']) {
+  for (const path of ['/', '/life/', '/tags/', '/pages/page-0/']) {
     expect(body).toContain(`<loc>${new URL(path, 'http://127.0.0.1:3000')}<`);
   }
   for (const path of ['/admin', '/api/', '/sign-in', '/install', '/update']) {

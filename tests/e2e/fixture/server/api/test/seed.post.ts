@@ -87,10 +87,17 @@ export default defineEventHandler(async (event) => {
           data: { text: 'Public heading', level: 2 },
         },
         {
+          type: 'privateSectionBoundary',
+          data: { sectionId: 'private-section-1', edge: 'start' },
+        },
+        {
           id: 'private-heading',
           type: 'header',
           data: { text: 'Private heading', level: 2 },
-          tunes: { privateAccess: { isPrivate: true } },
+        },
+        {
+          type: 'privateSectionBoundary',
+          data: { sectionId: 'private-section-1', edge: 'end' },
         },
         {
           id: 'start',

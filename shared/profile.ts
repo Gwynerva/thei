@@ -81,6 +81,8 @@ export interface AdminProfileResponse {
 export interface PublicProfileResponse {
   displayName: string;
   slogan: string;
+  /** The slogan and the visitor-visible "About me" text, snippet-sized. */
+  seoDescription: string;
   nickname: string;
   birthDate: string;
   facts: ProfileFact[];

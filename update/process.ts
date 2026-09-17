@@ -2,7 +2,7 @@ import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { swapOutput } from './output';
 import { bunPath, isDryRun, isManaged } from './environment';
-import { exec, ExecError } from './exec';
+import { cleanLine, exec, ExecError } from './exec';
 import {
   backupInstanceManifest,
   renderInstanceManifest,
@@ -11,15 +11,27 @@ import {
 } from './instance';
 import { checkForUpdate, getCachedCheck, isNewer } from './remote';
 import { normalizeVersion } from './semver';
+import { parseUpdatePhaseEvent } from './phases/run';
 import {
   appendLog,
   createUpdateState,
+  finishStep,
   isStaleRun,
+  pendingStep,
+  planSteps,
   readUpdateState,
-  setPhase,
+  setStatus,
+  settleSteps,
+  startStep,
   writeUpdateState,
 } from './state';
-import { isRunningPhase, type UpdateState, type UpdateStatus } from './types';
+import { resolveUpdateText, type UpdateText } from './text';
+import {
+  isRunningStatus,
+  type UpdateState,
+  type UpdateStatus,
+  type UpdateStep,
+} from './types';
 
 const installTimeout = 15 * 60 * 1000;
 const buildTimeout = 30 * 60 * 1000;
@@ -32,6 +44,8 @@ export interface UpdateRuntime {
   /** The installed engine directory, inside the instance's node_modules. */
   theiPath: string;
   currentVersion: string;
+  /** Site language, which step titles are recorded in. */
+  languageCode?: string;
   log: (message: string) => void;
 }
 
@@ -46,6 +60,55 @@ export class UpdateRefused extends Error {
     this.name = 'UpdateRefused';
     this.code = code;
   }
+}
+
+/** The pipeline's own steps, in the order they run. */
+const builtinSteps = {
+  prepare: {
+    en: 'Preparing',
+    ru: 'Подготовка',
+  },
+  dependencies: {
+    en: 'Installing the new version',
+    ru: 'Установка новой версии',
+  },
+  build: {
+    en: 'Building the site',
+    ru: 'Сборка сайта',
+  },
+  swap: {
+    en: 'Switching to the new build',
+    ru: 'Переключение на новую сборку',
+  },
+  restart: {
+    en: 'Restarting',
+    ru: 'Перезапуск',
+  },
+} satisfies Record<string, UpdateText>;
+
+const builtinDescriptions: Partial<
+  Record<keyof typeof builtinSteps, UpdateText>
+> = {
+  build: {
+    en: 'The current version keeps serving the site meanwhile.',
+    ru: 'Текущая версия всё это время продолжает работать.',
+  },
+  restart: {
+    en: 'The site is unavailable for a few seconds.',
+    ru: 'Сайт недоступен несколько секунд.',
+  },
+};
+
+export function createBuiltinSteps(languageCode?: string): UpdateStep[] {
+  return (Object.keys(builtinSteps) as (keyof typeof builtinSteps)[]).map(
+    (id) =>
+      pendingStep(
+        id,
+        'builtin',
+        resolveUpdateText(builtinSteps[id], languageCode),
+        resolveUpdateText(builtinDescriptions[id], languageCode),
+      ),
+  );
 }
 
 export async function getUpdateStatus(
@@ -68,7 +131,7 @@ export async function getUpdateStatus(
     checkedAt: check?.checkedAt,
     checkError: check?.error,
     managed: isManaged(),
-    running: Boolean(state && isRunningPhase(state.phase)),
+    running: Boolean(state && isRunningStatus(state.status)),
     state,
   };
 }
@@ -82,9 +145,9 @@ async function resolveState(
   runtime: UpdateRuntime,
 ): Promise<UpdateState | undefined> {
   const state = await readUpdateState(runtime.projectPath);
-  if (!state || !isRunningPhase(state.phase)) return state;
+  if (!state || !isRunningStatus(state.status)) return state;
 
-  if (state.phase === 'restarting' && state.pid !== process.pid) {
+  if (state.status === 'restarting' && state.pid !== process.pid) {
     const reached =
       normalizeVersion(runtime.currentVersion) ===
       normalizeVersion(state.toVersion);
@@ -96,11 +159,15 @@ async function resolveState(
         : `Restarted, but still running Thei ${runtime.currentVersion}.`,
     );
 
-    if (!reached) {
+    if (reached) {
+      finishStep(state, 'restart', 'done');
+    } else {
       state.error = `The update did not take effect: expected ${state.toVersion}.`;
+      finishStep(state, 'restart', 'failed', state.error);
     }
 
-    setPhase(state, reached ? 'done' : 'failed');
+    setStatus(state, reached ? 'done' : 'failed');
+    settleSteps(state);
     await writeUpdateState(runtime.projectPath, state);
     return state;
   }
@@ -108,7 +175,8 @@ async function resolveState(
   if (isStaleRun(state)) {
     state.error = 'The server stopped while updating.';
     appendLog(state, state.error);
-    setPhase(state, 'failed');
+    setStatus(state, 'failed');
+    settleSteps(state);
     await writeUpdateState(runtime.projectPath, state);
   }
 
@@ -134,13 +202,14 @@ export async function startUpdate(
   }
 
   const existing = await resolveState(runtime);
-  if (existing && isRunningPhase(existing.phase)) {
+  if (existing && isRunningStatus(existing.status)) {
     throw new UpdateRefused('An update is already running.', 'already-running');
   }
 
   const state = createUpdateState(
     runtime.currentVersion,
     normalizeVersion(tag),
+    createBuiltinSteps(runtime.languageCode),
   );
   appendLog(state, `Updating from ${runtime.currentVersion} to ${tag}.`);
   await writeUpdateState(runtime.projectPath, state);
@@ -148,6 +217,59 @@ export async function startUpdate(
   void run(runtime, tag, state);
 
   return state;
+}
+
+/** Where the engine being installed keeps its phase runner. */
+export function phaseRunnerPath(projectPath: string): string {
+  return join(
+    projectPath,
+    'node_modules',
+    'thei',
+    'update',
+    'phases',
+    'cli.ts',
+  );
+}
+
+/**
+ * Applies one line of the phase runner's output to the run. Protocol lines
+ * plan and progress the phase steps; everything else is plain log output.
+ */
+export function applyPhaseRunnerLine(state: UpdateState, line: string): void {
+  const event = parseUpdatePhaseEvent(line);
+  if (!event) {
+    appendLog(state, cleanLine(line));
+    return;
+  }
+  switch (event.type) {
+    case 'plan':
+      planSteps(
+        state,
+        event.steps.map((step) =>
+          pendingStep(
+            `phase:${step.id}`,
+            'phase',
+            step.title,
+            step.description,
+          ),
+        ),
+        'dependencies',
+      );
+      break;
+    case 'start':
+      startStep(state, `phase:${event.id}`);
+      break;
+    case 'log':
+      appendLog(state, cleanLine(event.message));
+      break;
+    case 'done':
+      finishStep(state, `phase:${event.id}`, 'done');
+      break;
+    case 'fail':
+      finishStep(state, `phase:${event.id}`, 'failed', event.error);
+      appendLog(state, event.error);
+      break;
+  }
 }
 
 async function run(
@@ -163,8 +285,10 @@ async function run(
     await writeUpdateState(projectPath, state);
   }
 
-  async function phase(next: UpdateState['phase']) {
-    setPhase(state, next);
+  async function step(id: string) {
+    const current = state.steps.find((item) => item.status === 'running');
+    if (current) finishStep(state, current.id, 'done');
+    startStep(state, id);
     await writeUpdateState(projectPath, state);
   }
 
@@ -179,6 +303,7 @@ async function run(
   }
 
   try {
+    startStep(state, 'prepare');
     await backupInstanceManifest(projectPath);
     await report('Saved the current manifest as package.json.prev.');
 
@@ -188,7 +313,7 @@ async function run(
       renderInstanceManifest(template, tag),
     );
 
-    await phase('dependencies');
+    await step('dependencies');
     await install(`Installing Thei ${tag}...`);
 
     // The new engine ships its own manifest template. Re-render from it so a
@@ -207,7 +332,35 @@ async function run(
       await install('Reinstalling with the updated manifest...');
     }
 
-    await phase('building');
+    finishStep(state, 'dependencies', 'done');
+    await writeUpdateState(projectPath, state);
+
+    // Phases come from the engine being installed, so a release can bring
+    // actions this version has never heard of.
+    await exec(
+      bunPath(),
+      [
+        phaseRunnerPath(projectPath),
+        '--project',
+        projectPath,
+        '--from',
+        runtime.currentVersion,
+        '--to',
+        state.toVersion,
+        ...(runtime.languageCode ? ['--lang', runtime.languageCode] : []),
+      ],
+      {
+        cwd: projectPath,
+        timeout: buildTimeout,
+        rawLines: true,
+        onLine: (line) => {
+          applyPhaseRunnerLine(state, line);
+          void writeUpdateState(projectPath, state);
+        },
+      },
+    );
+
+    await step('build');
     await report('Building the site...');
 
     const stagingDir = join(projectPath, '.output.next');
@@ -223,11 +376,14 @@ async function run(
     if (isDryRun()) {
       await rm(stagingDir, { recursive: true, force: true });
       await report('Dry run: stopping before the build is swapped in.');
-      await phase('done');
+      finishStep(state, 'build', 'done');
+      setStatus(state, 'done');
+      settleSteps(state);
+      await writeUpdateState(projectPath, state);
       return;
     }
 
-    await phase('swapping');
+    await step('swap');
     const { retargeted } = await swapOutput(projectPath, stagingDir);
     await report(
       retargeted
@@ -235,7 +391,8 @@ async function run(
         : 'New build is in place.',
     );
 
-    await phase('restarting');
+    await step('restart');
+    setStatus(state, 'restarting');
     await report('Restarting...');
 
     setTimeout(() => process.exit(0), exitDelay).unref();
@@ -249,7 +406,10 @@ async function run(
 
     state.error = message;
     appendLog(state, message);
-    setPhase(state, 'failed');
+    const current = state.steps.find((item) => item.status === 'running');
+    if (current) finishStep(state, current.id, 'failed');
+    setStatus(state, 'failed');
+    settleSteps(state);
     await writeUpdateState(projectPath, state);
     runtime.log(`Update failed: ${message}`);
   }

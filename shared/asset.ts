@@ -64,8 +64,8 @@ export interface VideoAssetMeta extends AssetMetaBase {
   height?: number;
   /** Representative OKLCH color of the first-frame preview. */
   accent?: ImageAccent;
-  /** Whether the stored video keeps or strips audio. */
-  audio?: 'keep' | 'strip' | 'none' | 'unknown';
+  /** Whether the stored file has an audio track; absent while unknown. */
+  hasAudio?: boolean;
 }
 
 export interface AudioAssetMeta extends AssetMetaBase {}

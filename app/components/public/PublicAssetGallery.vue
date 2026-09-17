@@ -32,7 +32,10 @@ function openItem(item: PublicAssetDescriptor) {
 </script>
 
 <template>
-  <div v-if="variant === 'hero'" class="flex min-w-0 flex-wrap gap-md">
+  <div
+    v-if="variant === 'hero'"
+    class="flex min-w-0 flex-wrap justify-center gap-md sm:justify-start"
+  >
     <template v-for="item in items" :key="item.key">
       <PublicSecretIcon
         v-if="isPublicSecret(item)"

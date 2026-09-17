@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { publicReferenceSplitSize } from '#layers/thei/shared/public-references';
 import type { PublicPageResponse } from '#layers/thei/shared/api/page';
 import type { PublicDetailPanelData } from '#layers/thei/app/components/public/public-detail';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
@@ -34,15 +35,11 @@ usePublicSeo({
   ],
 });
 
-const linkCount = computed(
-  () =>
-    data.value.references.manual.links.length +
-    data.value.references.content.links.length,
+const linkCount = computed(() =>
+  publicReferenceSplitSize(data.value.references.links),
 );
-const fileCount = computed(
-  () =>
-    data.value.references.manual.files.length +
-    data.value.references.content.files.length,
+const fileCount = computed(() =>
+  publicReferenceSplitSize(data.value.references.files),
 );
 const details = computed(
   () =>

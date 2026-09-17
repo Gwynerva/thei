@@ -14,6 +14,7 @@ import type {
   PublicPaginatedResponse,
   PublicReferenceGroup,
   PublicReferenceLink,
+  PublicReferences,
   PublicProjectSection,
   PublicProjectSectionResponse,
   PublicProjectResponse,
@@ -30,7 +31,16 @@ import type {
 import { coverDateRanges } from '#layers/thei/shared/date-range';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { externalLinkHostname } from '#layers/thei/shared/external-link';
-import { extractContentReferenceCandidates } from '#layers/thei/shared/public-content-reference';
+import {
+  extractContentReferenceCandidates,
+  type ContentReferenceLinkCandidate,
+} from '#layers/thei/shared/public-content-reference';
+import {
+  splitPublicReferenceFiles,
+  splitPublicReferenceLinks,
+} from '#layers/thei/shared/public-references';
+import { isPublicSecret } from '#layers/thei/shared/api/public';
+import { publicIdFromEventUrlPart } from '#layers/thei/shared/event-url';
 import { richTextToPlainText } from '#layers/thei/shared/rich-text';
 import type {
   ContentOutputData,
@@ -39,6 +49,7 @@ import type {
 import {
   buildProjectChildUrl,
   buildProjectUrl,
+  publicIdFromProjectUrlPart,
 } from '#layers/thei/shared/project-url';
 import { sortPublicTimelineItemsNewestFirst } from '#layers/thei/shared/public-timeline';
 import type { TagItem } from '#layers/thei/shared/tag';
@@ -138,6 +149,7 @@ export async function buildPublicProjectSummary(
     ),
     date: new Date(project.createdAt).toISOString().slice(0, 10),
     showcase: project.showcase,
+    cv: project.cv,
   };
 }
 
@@ -240,10 +252,11 @@ export async function buildPublicPage(
     chronology: buildPublicEntityChronology(page),
     iconMedia: await buildPublicPageIcon(page),
     content,
-    references: {
-      manual: { links: [], files: [] },
-      content: await buildPublicContentReferenceGroup(content, isAdmin),
-    },
+    references: await buildPublicReferences(
+      emptyPublicReferenceGroup(),
+      await buildPublicContentReferenceGroup(content, isAdmin),
+      isAdmin,
+    ),
   };
 }
 
@@ -257,15 +270,10 @@ async function buildRelatedProjectReferences(
         relation.projectUuid,
       );
       if (!project) return undefined;
+      // Event relations carry no type, so none is invented for display.
       if (!canListPublicEntity(project.access, isAdmin))
-        return {
-          ...buildSecretReference('project', project.projectUuid),
-          relationType: 'related' as const,
-        };
-      return {
-        ...(await buildPublicProjectReference(project)),
-        relationType: 'related' as const,
-      };
+        return buildSecretReference('project', project.projectUuid);
+      return buildPublicProjectReference(project);
     }),
   );
   return references.filter((item) => item !== undefined);
@@ -274,7 +282,7 @@ async function buildRelatedProjectReferences(
 export async function buildPublicProject(
   project: ProjectRow,
   isAdmin: boolean,
-): Promise<PublicProjectResponse> {
+): Promise<Omit<PublicProjectResponse, 'relatedEvents'>> {
   const usages = await THEI_SERVER.assets.usages.findByContainer(
     'project',
     project.projectUuid,
@@ -394,7 +402,7 @@ export async function buildPublicProject(
       lastStageAt,
     },
     isShowcase: project.showcase,
-    isPortfolio: project.cv,
+    isCv: project.cv,
     iconMedia: resolveEntityIconMedia(
       'project',
       project.projectUuid,
@@ -412,10 +420,11 @@ export async function buildPublicProject(
     files,
     tags: await buildPublicTags(tags),
     relatedProjects,
-    references: {
-      manual: manualReferences,
-      content: await buildPublicContentReferenceGroup(description, isAdmin),
-    },
+    references: await buildPublicReferences(
+      manualReferences,
+      await buildPublicContentReferenceGroup(description, isAdmin),
+      isAdmin,
+    ),
     action: await buildPublicAction(project, usages, isAdmin),
   };
 }
@@ -506,10 +515,11 @@ export async function buildPublicProjectStage(
     publicId: stage.publicId,
     content,
     project: parent,
-    references: {
-      manual: emptyPublicReferenceGroup(),
-      content: await buildPublicContentReferenceGroup(content, isAdmin),
-    },
+    references: await buildPublicReferences(
+      emptyPublicReferenceGroup(),
+      await buildPublicContentReferenceGroup(content, isAdmin),
+      isAdmin,
+    ),
   };
 }
 
@@ -535,10 +545,11 @@ export async function buildPublicProjectSection(
     publicId: section.publicId,
     content: content ?? { blocks: [] },
     project: parent,
-    references: {
-      manual: emptyPublicReferenceGroup(),
-      content: await buildPublicContentReferenceGroup(content, isAdmin),
-    },
+    references: await buildPublicReferences(
+      emptyPublicReferenceGroup(),
+      await buildPublicContentReferenceGroup(content, isAdmin),
+      isAdmin,
+    ),
   };
 }
 
@@ -604,10 +615,11 @@ export async function buildPublicEvent(
     publicId: stored.publicId,
     periods,
     content: content ?? { blocks: [] },
-    references: {
+    references: await buildPublicReferences(
       manual,
-      content: await buildPublicContentReferenceGroup(content, isAdmin),
-    },
+      await buildPublicContentReferenceGroup(content, isAdmin),
+      isAdmin,
+    ),
     tags: await buildPublicTags(tags),
     relatedProjects,
     action: await buildPublicAction(stored, usages, isAdmin),
@@ -703,64 +715,8 @@ export async function buildPublicContentReferenceGroup(
     includePrivate,
   );
   const links = await Promise.all(
-    candidates.links.map(
-      async (candidate): Promise<PublicReferenceLink | undefined> => {
-        if (candidate.kind === 'external') {
-          const link = await findExternalLink(candidate.url);
-          return {
-            kind: 'external',
-            title: link?.title || externalLinkHostname(candidate.url),
-            href: candidate.url,
-            description: link?.description,
-            iconMedia: link?.faviconMedia,
-          };
-        }
-        if (candidate.kind === 'project') {
-          const project = await THEI_SERVER.projects.findByUuid(
-            candidate.projectUuid,
-          );
-          if (!project || !canOpenPublicEntity(project.access, includePrivate))
-            return undefined;
-          const reference = await buildPublicProjectReference(project);
-          return {
-            kind: 'project',
-            title: reference.title,
-            href: reference.href,
-            description: reference.summary,
-            iconMedia: reference.iconMedia,
-          };
-        }
-        if (candidate.kind === 'event') {
-          const event = await THEI_SERVER.events.findByUuid(
-            candidate.eventUuid,
-          );
-          if (!event || !canOpenPublicEntity(event.access, includePrivate))
-            return undefined;
-          return {
-            kind: 'event',
-            title: event.title,
-            href: buildEventUrl(event.humanReadableSlug, event.publicId),
-            description: event.summary,
-            iconMedia: await buildPublicContentPreviewMedia(
-              'event',
-              event.eventUuid,
-              'event-body',
-              { type: 'event', ...event },
-              includePrivate,
-            ),
-          };
-        }
-        const page = await THEI_SERVER.pages.findByUuid(candidate.pageUuid);
-        if (!page || !canOpenPublicEntity(page.access, includePrivate))
-          return undefined;
-        return {
-          kind: 'page',
-          title: page.title,
-          href: buildPageUrl(page.slug),
-          description: page.summary,
-          iconMedia: await buildPublicPageIcon(page),
-        };
-      },
+    candidates.links.map((candidate) =>
+      buildPublicReferenceLink(candidate, includePrivate),
     ),
   );
   return {
@@ -781,6 +737,173 @@ export async function buildPublicContentReferenceGroup(
       })
       .filter((file): file is PublicFile => Boolean(file)),
   };
+}
+
+/**
+ * Resolves a link candidate into what the sidebar shows. An external address
+ * that opens an entity of this very site is shown as that entity, so it looks
+ * like — and merges with — a link made through the entity picker.
+ */
+async function buildPublicReferenceLink(
+  candidate: ContentReferenceLinkCandidate,
+  includePrivate: boolean,
+): Promise<PublicReferenceLink | undefined> {
+  const resolved =
+    candidate.kind === 'external'
+      ? await resolveSiteEntityCandidate(candidate.url)
+      : candidate;
+  if (resolved.kind === 'external') {
+    const link = await findExternalLink(resolved.url);
+    return {
+      kind: 'external',
+      title: link?.title || externalLinkHostname(resolved.url),
+      href: resolved.url,
+      description: link?.description,
+      iconMedia: link?.faviconMedia,
+    };
+  }
+  if (resolved.kind === 'project') {
+    const project = await THEI_SERVER.projects.findByUuid(resolved.projectUuid);
+    if (!project || !canOpenPublicEntity(project.access, includePrivate))
+      return undefined;
+    const reference = await buildPublicProjectReference(project);
+    return {
+      kind: 'project',
+      title: reference.title,
+      href: reference.href,
+      description: reference.summary,
+      iconMedia: reference.iconMedia,
+    };
+  }
+  if (resolved.kind === 'event') {
+    const event = await THEI_SERVER.events.findByUuid(resolved.eventUuid);
+    if (!event || !canOpenPublicEntity(event.access, includePrivate))
+      return undefined;
+    return {
+      kind: 'event',
+      title: event.title,
+      href: buildEventUrl(event.humanReadableSlug, event.publicId),
+      description: event.summary,
+      iconMedia: await buildPublicContentPreviewMedia(
+        'event',
+        event.eventUuid,
+        'event-body',
+        { type: 'event', ...event },
+        includePrivate,
+      ),
+    };
+  }
+  const page = await THEI_SERVER.pages.findByUuid(resolved.pageUuid);
+  if (!page || !canOpenPublicEntity(page.access, includePrivate))
+    return undefined;
+  return {
+    kind: 'page',
+    title: page.title,
+    href: buildPageUrl(page.slug),
+    description: page.summary,
+    iconMedia: await buildPublicPageIcon(page),
+  };
+}
+
+/**
+ * Maps an absolute address on this site's own origin back to the project,
+ * event or page it opens. Anything else — another origin, a stage, a file, an
+ * unknown entity — stays an external link.
+ */
+export async function resolveSiteEntityCandidate(
+  url: string,
+): Promise<ContentReferenceLinkCandidate> {
+  const external = { kind: 'external' as const, url };
+  const siteUrl = THEI_SERVER.config.siteUrl;
+  if (!siteUrl) return external;
+  let parsed: URL;
+  let site: URL;
+  try {
+    parsed = new URL(url);
+    site = new URL(siteUrl);
+  } catch {
+    return external;
+  }
+  if (parsed.origin !== site.origin) return external;
+  const [section, part, ...rest] = parsed.pathname
+    .split('/')
+    .filter(Boolean)
+    .map((segment) => {
+      try {
+        return decodeURIComponent(segment);
+      } catch {
+        return segment;
+      }
+    });
+  if (!section || !part || rest.length) return external;
+  if (section === 'projects') {
+    const project = await THEI_SERVER.projects.findByPublicId(
+      publicIdFromProjectUrlPart(part),
+    );
+    return project
+      ? { kind: 'project', projectUuid: project.projectUuid }
+      : external;
+  }
+  if (section === 'events') {
+    const event = await THEI_SERVER.events.findByPublicId(
+      publicIdFromEventUrlPart(part),
+    );
+    return event ? { kind: 'event', eventUuid: event.eventUuid } : external;
+  }
+  if (section === 'pages') {
+    const page = await THEI_SERVER.pages.findBySlug(part);
+    return page ? { kind: 'page', pageUuid: page.pageUuid } : external;
+  }
+  return external;
+}
+
+/**
+ * Builds the sidebar's "Links" and "Files": manual and content references,
+ * with everything that appears in both lifted into `shared`.
+ */
+export async function buildPublicReferences(
+  manual: PublicReferenceGroup,
+  content: PublicReferenceGroup,
+  includePrivate: boolean,
+): Promise<PublicReferences> {
+  const manualLinks = await Promise.all(
+    manual.links.map((link) =>
+      link.kind === 'external'
+        ? buildManualSiteLink(link, includePrivate)
+        : link,
+    ),
+  );
+  // One file is the same file wherever its bytes are: two placements may hold
+  // separate rows over one stored file.
+  const hashes = new Map<string, string>();
+  await Promise.all(
+    [...manual.files, ...content.files].map(async (file) => {
+      if (isPublicSecret(file) || hashes.has(file.key)) return;
+      const asset = await THEI_SERVER.assets.findBySlug(file.key);
+      if (asset) hashes.set(file.key, asset.contentHash);
+    }),
+  );
+  return {
+    links: splitPublicReferenceLinks(
+      manualLinks.filter((link): link is PublicReferenceLink => Boolean(link)),
+      content.links,
+    ),
+    files: splitPublicReferenceFiles(
+      manual.files,
+      content.files,
+      (file) => hashes.get(file.key) ?? file.key,
+    ),
+  };
+}
+
+/** A hand-added address of this site becomes the entity it opens. */
+async function buildManualSiteLink(
+  link: PublicReferenceLink,
+  includePrivate: boolean,
+): Promise<PublicReferenceLink | undefined> {
+  const candidate = await resolveSiteEntityCandidate(link.href);
+  if (candidate.kind === 'external') return link;
+  return buildPublicReferenceLink(candidate, includePrivate);
 }
 
 export async function buildPublicTags(

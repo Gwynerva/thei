@@ -90,6 +90,19 @@ export function interceptModalNavigation() {
 
 const MODAL_HISTORY_STATE = '__theiModal';
 
+/** Released sentinel entries whose router navigation has not finished yet. */
+let historyRelease: Promise<void> | undefined;
+
+/**
+ * Resolves once the history entry of a just-closed modal has been released
+ * and the router has finished the navigation that release triggers. A route
+ * change made earlier cancels that navigation, and the router then restores
+ * the previous URL on top of it.
+ */
+export function modalHistorySettled(): Promise<void> {
+  return historyRelease ?? Promise.resolve();
+}
+
 /** Install one route and browser-history interceptor for the complete stack. */
 export function installModalNavigationInterceptor(router: Router) {
   let sentinelActive = false;
@@ -112,7 +125,23 @@ export function installModalNavigationInterceptor(router: Router) {
     sentinelActive = false;
     if (window.history.state?.[MODAL_HISTORY_STATE] !== true) return;
     pendingDiscards++;
+    historyRelease ??= new Promise((resolve) => {
+      finishRelease = resolve;
+      // A traversal the browser never reports must not block callers.
+      releaseFallback = setTimeout(settleRelease, 1000);
+    });
     window.history.back();
+  }
+
+  let finishRelease: (() => void) | undefined;
+  let releaseFallback: ReturnType<typeof setTimeout> | undefined;
+  function settleRelease() {
+    if (!finishRelease) return;
+    clearTimeout(releaseFallback);
+    const finish = finishRelease;
+    finishRelease = undefined;
+    historyRelease = undefined;
+    finish();
   }
 
   function handlePopState() {
@@ -157,11 +186,15 @@ export function installModalNavigationInterceptor(router: Router) {
     if (to.fullPath === from.fullPath) return;
     if (interceptModalNavigation()) return false;
   });
+  // The router navigates for every popstate, our own discards included.
+  const removeAfterHook = router.afterEach(settleRelease);
   window.addEventListener('popstate', handlePopState);
 
   return () => {
     stopStackWatch();
     removeRouteGuard();
+    removeAfterHook();
+    settleRelease();
     window.removeEventListener('popstate', handlePopState);
   };
 }

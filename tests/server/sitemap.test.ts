@@ -222,7 +222,6 @@ describe('sitemap privacy', () => {
       '/',
       '/life/',
       '/rewind/',
-      '/projects/',
       '/pages/',
       '/tags/',
     ]);

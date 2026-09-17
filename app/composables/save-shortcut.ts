@@ -120,7 +120,7 @@ function resolveOwner(
 ) {
   const eligible = registrations.filter((registration) => {
     const root = registration.root();
-    if (root && !isVisible(root)) return false;
+    if (root && !isElementDisplayed(root)) return false;
     if (!activeBoundary) return !root || !root.closest('dialog');
     return Boolean(root && activeBoundary.contains(root));
   });
@@ -169,7 +169,7 @@ function containsEventTarget(root: HTMLElement, target: EventTarget | null) {
   }
 }
 
-function isVisible(element: HTMLElement) {
+export function isElementDisplayed(element: HTMLElement) {
   if (!element.isConnected) return false;
   for (
     let current: HTMLElement | null = element;
@@ -181,17 +181,17 @@ function isVisible(element: HTMLElement) {
   return true;
 }
 
-function activeDialog() {
+export function activeOpenDialog() {
   const dialogs = document.querySelectorAll<HTMLElement>('dialog[open]');
   for (let index = dialogs.length - 1; index >= 0; index--) {
     const dialog = dialogs.item(index);
-    if (dialog && isVisible(dialog)) return dialog;
+    if (dialog && isElementDisplayed(dialog)) return dialog;
   }
   return undefined;
 }
 
 const globalSaveShortcutRegistry = createSaveShortcutRegistry({
-  getActiveBoundary: () => activeDialog(),
+  getActiveBoundary: () => activeOpenDialog(),
 });
 let globalListenerActive = false;
 

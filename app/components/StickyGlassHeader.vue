@@ -1,7 +1,12 @@
 <script lang="ts" setup>
 defineOptions({ inheritAttrs: false });
 
-const { error } = defineProps<{ width?: string; error?: string }>();
+const { error, flushMobile } = defineProps<{
+  width?: string;
+  error?: string;
+  /** Drops the side window padding on mobile for edge-to-edge controls. */
+  flushMobile?: boolean;
+}>();
 const attrs = useAttrs();
 
 const isAdmin = useIsAdmin();
@@ -40,7 +45,8 @@ onBeforeUnmount(() => unregisterHeader?.());
       <!-- Header Content -->
       <GlassSurface>
         <div
-          class="m-auto w-(--_width-sticky-content) max-w-full px-window"
+          class="m-auto w-(--_width-sticky-content) max-w-full"
+          :class="flushMobile ? 'sm:px-window' : 'px-window'"
           v-bind="attrs"
         >
           <slot></slot>

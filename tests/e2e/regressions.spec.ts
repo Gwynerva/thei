@@ -324,7 +324,7 @@ test('the admin gate holds against an encoded request path', async ({
     expect(response.status(), path).toBe(403);
   }
   // The encoded path really does reach a handler — a public one answers it.
-  expect((await request.get('/%61pi/projects')).status()).toBe(200);
+  expect((await request.get('/%61pi/search')).status()).toBe(200);
 });
 
 test('public lists reuse SSR data and a client API failure remains an API error', async ({
@@ -334,18 +334,18 @@ test('public lists reuse SSR data and a client API failure remains an API error'
   page.on('request', (request) => {
     const path = new URL(request.url()).pathname;
     if (
-      ['/api/life/latest', '/api/pages', '/api/projects', '/api/tags'].includes(
+      ['/api/life/latest', '/api/pages', '/api/search', '/api/tags'].includes(
         path,
       )
     )
       requests.push(path);
   });
-  for (const path of ['/', '/pages/', '/projects/', '/tags/']) {
+  for (const path of ['/', '/pages/', '/search/', '/tags/']) {
     await page.goto(path);
     await waitForNuxtHydration(page);
   }
   expect(requests).toEqual([]);
-  await page.route('**/api/projects*', (route) =>
+  await page.route('**/api/pages*', (route) =>
     route.fulfill({
       status: 503,
       contentType: 'application/json',
@@ -354,7 +354,7 @@ test('public lists reuse SSR data and a client API failure remains an API error'
   );
   await page
     .getByRole('navigation', { name: 'Site navigation' })
-    .getByRole('link', { name: 'Projects', exact: true })
+    .getByRole('link', { name: 'Pages', exact: true })
     .click();
   await expect(page.getByText('503', { exact: true })).toBeVisible();
 });

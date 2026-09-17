@@ -33,7 +33,6 @@ describe('Editor.js phrases', () => {
       click_to_delete: 'Really delete?',
       move_down: 'Move down',
     });
-    expect(enModule.phrases.content_private_block).toBe('Private block');
     expect(enModule.phrases.content_private_section_start).toBe(
       'Start of private section',
     );

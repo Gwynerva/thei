@@ -7,6 +7,9 @@ export const usePublicAdmin = () => {
       resolve(data as any);
     } catch (error) {
       console.error('[thei] Failed to fetch public admin data:', error);
+      // Still settle: a caller such as the error page must render with the
+      // data it already has rather than hang forever.
+      resolve(fetchPromise.data as any);
     }
   });
 };

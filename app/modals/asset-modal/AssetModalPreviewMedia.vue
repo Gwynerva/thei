@@ -5,6 +5,7 @@ import {
 } from '#layers/thei/shared/assets/extensions';
 import AssetModalVideoControls from './AssetModalVideoControls.vue';
 import { useMediaControls } from './media-controls';
+import { useVideoPlayback } from './use-video-playback';
 
 const props = defineProps<{
   extension: string;
@@ -40,18 +41,22 @@ const displayDimensionsKey = computed(() =>
     : '',
 );
 
-const isPaused = ref(true);
-const currentTime = ref(0);
-const duration = ref(0);
-const isMuted = ref(false);
-const volume = ref(1);
-const hasAudio = ref(props.hasAudio ?? true);
+const { state: playback, controller: playbackController } = useVideoPlayback();
 
 watch(
-  () => props.hasAudio,
-  (value) => {
-    if (value !== undefined) hasAudio.value = value;
+  mediaRef,
+  (media) => {
+    playbackController.attach(
+      isVideo && media instanceof HTMLVideoElement ? media : null,
+    );
   },
+  { flush: 'post', immediate: true },
+);
+
+useSpacePlaybackToggle(
+  () => containerRef.value,
+  () => playbackController.togglePlay(),
+  () => isVideo && isReady.value,
 );
 
 watch(
@@ -66,38 +71,6 @@ watch(
   },
   { flush: 'post' },
 );
-
-function togglePlay(): void {
-  const video = mediaRef.value as HTMLVideoElement;
-  if (isPaused.value) {
-    void video.play();
-  } else {
-    video.pause();
-  }
-}
-
-function seek(value: number): void {
-  currentTime.value = value;
-  (mediaRef.value as HTMLVideoElement).currentTime = value;
-}
-
-function toggleMute(): void {
-  const video = mediaRef.value as HTMLVideoElement;
-  video.muted = !video.muted;
-}
-
-function onVolumeSlider(value: number): void {
-  const video = mediaRef.value as HTMLVideoElement;
-  video.volume = value;
-  if (value > 0 && video.muted) video.muted = false;
-  else if (value === 0 && !video.muted) video.muted = true;
-}
-
-function onVideoVolumeChange(e: Event): void {
-  const video = e.target as HTMLVideoElement;
-  isMuted.value = video.muted;
-  volume.value = video.volume;
-}
 
 onMounted(() => {
   const container = containerRef.value;
@@ -150,16 +123,6 @@ function onVideoMeta(e: Event): void {
     props.displayDimensions?.width ?? video.videoWidth,
     props.displayDimensions?.height ?? video.videoHeight,
   );
-  duration.value = video.duration;
-  hasAudio.value = props.hasAudio ?? true;
-}
-
-function onDurationChange(e: Event): void {
-  duration.value = (e.target as HTMLVideoElement).duration;
-}
-
-function onTimeUpdate(e: Event): void {
-  currentTime.value = (e.target as HTMLVideoElement).currentTime;
 }
 
 defineExpose({
@@ -201,11 +164,6 @@ defineExpose({
           class="pointer-events-none block max-h-none max-w-none"
           :style="mediaStyle"
           @loadedmetadata="onVideoMeta"
-          @durationchange="onDurationChange"
-          @timeupdate="onTimeUpdate"
-          @play="isPaused = false"
-          @pause="isPaused = true"
-          @volumechange="onVideoVolumeChange"
         />
       </Transition>
       <Transition
@@ -241,16 +199,16 @@ defineExpose({
 
     <AssetModalVideoControls
       v-if="isVideo && isReady"
-      :is-paused="isPaused"
-      :current-time="currentTime"
-      :duration="duration"
-      :is-muted="isMuted"
-      :volume="volume"
+      :is-paused="playback.paused"
+      :current-time="playback.currentTime"
+      :duration="playback.duration"
+      :is-muted="playback.muted"
+      :volume="playback.volume"
       :has-audio="hasAudio"
-      @toggle-play="togglePlay"
-      @seek="seek"
-      @toggle-mute="toggleMute"
-      @volume="onVolumeSlider"
+      @toggle-play="playbackController.togglePlay()"
+      @seek="playbackController.seek($event)"
+      @toggle-mute="playbackController.toggleMute()"
+      @volume="playbackController.setVolume($event)"
     />
   </div>
 </template>

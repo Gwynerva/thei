@@ -24,6 +24,7 @@ beforeEach(async () => {
           .find((project) => project.projectUuid === projectUuid),
     },
     assets: {
+      findBySlug: async () => undefined,
       usages: {
         findByContainer: async () => [],
         findOtherForContainer: async () => otherFiles,
@@ -116,7 +117,8 @@ describe('secret references', () => {
       const serialized = JSON.stringify(project);
       expect(serialized).not.toMatch(/hidden (title|summary)|hidden-|unlisted/);
       expect(project).not.toHaveProperty('href');
-      expect(project).toMatchObject({ relationType: 'related' });
+      // Event relations have no type, so none is shown.
+      expect(project).not.toHaveProperty('relationType');
     }
 
     const admin = await buildPublicEventSummary(event, true);
@@ -156,14 +158,14 @@ describe('secret references', () => {
       .run();
     const event = context.db.select().from(context.schema.events).get()!;
 
-    const visitor = (await buildPublicEvent(event, false)).references.manual
-      .files;
+    const visitor = (await buildPublicEvent(event, false)).references.files
+      .manual;
     expect(visitor.map(isPublicSecret)).toEqual([false, true]);
     expect(visitor[1]!.title).toMatch(/^Secret file \S+$/);
     expect(JSON.stringify(visitor[1])).not.toMatch(/hidden-file|pdf|1234/);
     expect(visitor[1]).not.toHaveProperty('href');
 
-    const admin = (await buildPublicEvent(event, true)).references.manual.files;
+    const admin = (await buildPublicEvent(event, true)).references.files.manual;
     expect(admin.some(isPublicSecret)).toBe(false);
   });
 });

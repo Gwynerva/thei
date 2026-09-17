@@ -7,9 +7,13 @@ import {
   requireBackupSession,
 } from '../../../../thei/backup/session';
 import { requireBackupToken } from '../../../../thei/backup/token';
+import {
+  sendBackupText,
+  wantsBackupText,
+} from '../../../../thei/backup/text-format';
 
 export default defineEventHandler(
-  async (event): Promise<BackupManifestResponse> => {
+  async (event): Promise<BackupManifestResponse | string> => {
     requireBackupToken(event);
     const sessionId = getRouterParam(event, 'sessionId') ?? '';
     await requireBackupSession(sessionId);
@@ -25,6 +29,13 @@ export default defineEventHandler(
 
     const entries = manifest.entries.slice(offset, offset + limit);
     const next = offset + entries.length;
+    if (wantsBackupText(event)) {
+      // `file <size> <path>` rows, then `next <cursor>` while more remain.
+      return sendBackupText(event, [
+        ...entries.map((entry) => ['file', entry.size, entry.path]),
+        ...(next < manifest.entries.length ? [['next', next]] : []),
+      ]);
+    }
     return {
       entries,
       // Paged rather than sent whole: a library of thousands of files makes a

@@ -326,14 +326,16 @@ describe('asset library', () => {
         })
         .run();
     expect(listLibraryAssets({ page: 999 })).toMatchObject({
-      page: 3,
-      pageSize: 20,
+      page: 2,
+      pageSize: 40,
       total: 47,
     });
-    expect(listLibraryAssets({ page: 3 }).items).toHaveLength(7);
-    expect(listSourceAssets('unused', 'all', { page: 2 }).items).toHaveLength(
-      22,
-    );
+    expect(listLibraryAssets({ page: 2 }).items).toHaveLength(7);
+    expect(listSourceAssets('unused', 'all', { page: 2 })).toMatchObject({
+      page: 1,
+      pageSize: 48,
+    });
+    expect(listSourceAssets('unused', 'all').items).toHaveLength(46);
     expect(
       db
         .select()

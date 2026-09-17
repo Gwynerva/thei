@@ -11,6 +11,7 @@ export function updateRuntime(): UpdateRuntime {
     projectPath: THEI_SERVER.projectPath(),
     theiPath: THEI_SERVER.theiPath(),
     currentVersion: THEI_SERVER.version,
+    languageCode: THEI_SERVER.config.languageCode,
     log: (message) => THEI_SERVER.console.tag('Update').log(message),
   };
 }

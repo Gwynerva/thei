@@ -1,12 +1,24 @@
 <script lang="ts" setup>
-import type { PublicDetailPanelData } from '#layers/thei/app/components/public/public-detail';
+import type { VNodeChild } from 'vue';
+import type { IconName } from '#thei/icons';
 
-defineProps<{ modalData: PublicDetailPanelData }>();
+export interface PublicMobileSheetData {
+  title: () => string;
+  icon: () => IconName | undefined;
+  /** Slot renderers of the page that opened the sheet, so content stays live. */
+  summary: () => unknown;
+  content: (close: () => Promise<boolean>) => unknown;
+}
+
+const props = defineProps<{ modalData: PublicMobileSheetData }>();
 const root = useTemplateRef<HTMLElement>('root');
 const sheetModal = activeModal.value;
 const shown = ref(true);
 const reducedMotion = ref(false);
 let finishLeave: (() => void) | undefined;
+
+const Summary = () => props.modalData.summary() as VNodeChild;
+const Content = () => props.modalData.content(closeModalAndWait) as VNodeChild;
 
 useModalLeaveTransition(
   () =>
@@ -34,26 +46,6 @@ function closeIfDesktop() {
 // Check again when returning from a nested file viewer after a resize.
 watch(activeModal, closeIfDesktop, { flush: 'post' });
 
-async function navigateToContent(id: string, event: MouseEvent) {
-  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-  event.preventDefault();
-  const historySettled = history.state?.__theiModal
-    ? new Promise<void>((resolve) =>
-        window.addEventListener('popstate', () => resolve(), { once: true }),
-      )
-    : Promise.resolve();
-  await closeModalAndWait();
-  await historySettled;
-  const target = document.getElementById(id);
-  if (!target) return;
-  history.replaceState(
-    history.state,
-    '',
-    `${location.pathname}${location.search}#${id}`,
-  );
-  target.scrollIntoView();
-}
-
 onMounted(() => {
   reducedMotion.value = window.matchMedia(
     '(prefers-reduced-motion: reduce)',
@@ -69,7 +61,7 @@ onBeforeUnmount(() => {
 <template>
   <Transition
     appear
-    name="detail-sheet"
+    name="mobile-sheet"
     :duration="reducedMotion ? 0 : 250"
     @after-leave="afterLeave"
   >
@@ -85,30 +77,25 @@ onBeforeUnmount(() => {
         :aria-label="phrase.close_modal"
         @click="closeModal"
       ></button>
-      <div
-        class="relative flex max-h-[90dvh] w-full min-w-0 flex-col
-          overflow-hidden rounded-t-normal border border-b-0 border-border-1
-          bg-bg-1/85 pb-[env(safe-area-inset-bottom)] shadow-lg
-          backdrop-blur-md"
-      >
-        <PublicDetailSheetHeader
-          :data="modalData"
+      <PublicSheetFrame expanded class="relative max-h-[90dvh] w-full">
+        <PublicSheetHeader
+          :title="modalData.title()"
+          :icon="modalData.icon()"
           expanded
           class="shrink-0"
           @toggle="closeModal"
-        />
+        >
+          <template #summary><Summary /></template>
+        </PublicSheetHeader>
         <div class="sheet-body min-h-0">
           <div
             class="scrollbar-hover min-h-0 overflow-x-clip overflow-y-auto
               overscroll-contain"
           >
-            <PublicDetailPanel
-              :data="modalData"
-              @navigate="navigateToContent"
-            />
+            <Content />
           </div>
         </div>
-      </div>
+      </PublicSheetFrame>
     </section>
   </Transition>
 </template>
@@ -122,16 +109,18 @@ onBeforeUnmount(() => {
 .sheet-backdrop {
   transition: opacity 0.25s ease-out;
 }
-.detail-sheet-enter-from .sheet-backdrop,
-.detail-sheet-leave-to .sheet-backdrop {
+.mobile-sheet-enter-from .sheet-backdrop,
+.mobile-sheet-leave-to .sheet-backdrop,
+.mobile-sheet-enter-from :deep(.public-sheet-glow),
+.mobile-sheet-leave-to :deep(.public-sheet-glow) {
   opacity: 0;
 }
 @supports not (interpolate-size: allow-keywords) {
   .sheet-body {
     transition: grid-template-rows 0.25s ease-out;
   }
-  .detail-sheet-enter-from .sheet-body,
-  .detail-sheet-leave-to .sheet-body {
+  .mobile-sheet-enter-from .sheet-body,
+  .mobile-sheet-leave-to .sheet-body {
     grid-template-rows: 0fr;
   }
 }
@@ -141,8 +130,8 @@ onBeforeUnmount(() => {
     height: auto;
     transition: height 0.25s ease-out;
   }
-  .detail-sheet-enter-from .sheet-body,
-  .detail-sheet-leave-to .sheet-body {
+  .mobile-sheet-enter-from .sheet-body,
+  .mobile-sheet-leave-to .sheet-body {
     height: 0;
   }
 }

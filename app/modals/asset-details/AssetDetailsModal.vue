@@ -115,6 +115,7 @@ function replace() {
         ref="mediaPreview"
         :extension="modalData.asset.extension"
         :src="previewSrc"
+        :has-audio="modalData.asset.media?.hasAudio"
       />
       <FilePreview
         v-else

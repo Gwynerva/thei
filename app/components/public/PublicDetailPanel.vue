@@ -5,6 +5,7 @@ import {
 } from './public-detail';
 import { buildLifeUrl } from '#layers/thei/shared/life';
 import { isPublicSecret } from '#layers/thei/shared/api/public';
+import { publicReferenceSplitSize } from '#layers/thei/shared/public-references';
 
 const { data } = defineProps<{ data: PublicDetailPanelData }>();
 const emit = defineEmits<{
@@ -72,28 +73,26 @@ const relatedProjectLinks = computed(() =>
       <PublicTagLinks :tags="data.tags" />
     </PublicCollapsibleSection>
     <PublicCollapsibleSection
-      v-if="data.references.manual.links.length"
+      v-if="publicReferenceSplitSize(data.references.links)"
       :title="phrase.public_details_links"
     >
-      <PublicReferenceLinks :links="data.references.manual.links" />
+      <PublicReferenceSplitList
+        v-slot="{ items }"
+        :split="data.references.links"
+      >
+        <PublicReferenceLinks :links="items" />
+      </PublicReferenceSplitList>
     </PublicCollapsibleSection>
     <PublicCollapsibleSection
-      v-if="data.references.content.links.length"
-      :title="phrase.public_details_links_content"
-    >
-      <PublicReferenceLinks :links="data.references.content.links" />
-    </PublicCollapsibleSection>
-    <PublicCollapsibleSection
-      v-if="data.references.manual.files.length"
+      v-if="publicReferenceSplitSize(data.references.files)"
       :title="phrase.public_details_files"
     >
-      <PublicFiles :files="data.references.manual.files" compact />
-    </PublicCollapsibleSection>
-    <PublicCollapsibleSection
-      v-if="data.references.content.files.length"
-      :title="phrase.public_details_files_content"
-    >
-      <PublicFiles :files="data.references.content.files" compact />
+      <PublicReferenceSplitList
+        v-slot="{ items }"
+        :split="data.references.files"
+      >
+        <PublicFiles :files="items" compact />
+      </PublicReferenceSplitList>
     </PublicCollapsibleSection>
   </div>
 </template>

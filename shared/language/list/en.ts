@@ -339,13 +339,40 @@ export default defineI18nBase({
       'A continuous timeline of events, projects, and important stages.',
     public_life_period_description: (period, siteName) =>
       `Events, projects, and important stages for ${period} — ${siteName}.`,
-    public_projects_description:
-      'Projects, experiments, and things brought to life.',
     public_pages_description:
       'Standalone articles, notes, and other site pages.',
     public_tags_description: 'Topics connecting projects and moments of life.',
     related_projects: 'Related projects',
     related_events: 'Related events',
+    related_events_description: (projectTitle) =>
+      `Memorable moments connected with “${projectTitle}” in one way or another, newest first.`,
+    related_events_empty: 'No related events yet',
+    search: 'Search',
+    public_search_description: 'Search projects and events.',
+    search_placeholder: 'Find a project or an event…',
+    search_clear: 'Clear search',
+    search_filters: 'Filters',
+    search_filter_type: 'Looking for',
+    search_type_all: 'Everything',
+    search_filter_projects: 'Projects',
+    search_tags_filter_placeholder: 'Find a tag…',
+    search_tags_active: 'Selected tags',
+    search_tags_none: 'No matching tags',
+    search_tag_include: (tag) => `Only with “${tag}”`,
+    search_tag_exclude: (tag) => `Without “${tag}”`,
+    search_tag_remove: (tag) => `Remove “${tag}” from the filter`,
+    search_reset_filters: 'Reset filters',
+    search_results_count: (projects, events) => {
+      const parts = [
+        projects
+          ? `${projects} ${projects === 1 ? 'project' : 'projects'}`
+          : '',
+        events ? `${events} ${events === 1 ? 'event' : 'events'}` : '',
+      ].filter(Boolean);
+      return parts.length ? `Found ${parts.join(' and ')}` : 'Nothing found';
+    },
+    search_empty: 'Nothing found',
+    search_empty_description: 'Try a different query or loosen the filters.',
     forbidden_title: 'This place is private',
     forbidden_description: 'The owner has closed public access to this site.',
     not_found_title: 'Nothing lives here',
@@ -364,12 +391,11 @@ export default defineI18nBase({
     public_details_summary: 'Summary',
     public_details_when: 'When',
     public_details_references: 'References',
-    public_details_manual: 'Manual',
-    public_details_from_content: 'From content',
     public_details_links: 'Links',
     public_details_files: 'Files',
-    public_details_links_content: 'Content links',
-    public_details_files_content: 'Content files',
+    content_integration_youtube: 'YouTube video',
+    public_details_manual: 'Added manually',
+    public_details_from_content: 'From the content',
     public_details_overview: 'Summary',
     public_details_contents: 'Contents',
     public_details_chronology: 'Chronology',
@@ -496,10 +522,14 @@ export default defineI18nBase({
     backup_token_shown_once:
       'Copy it now. It is shown once and cannot be read back; a lost token is ' +
       'replaced, not recovered.',
-    backup_script_download: 'Download the script',
+    backup_script_windows: 'Script for Windows',
+    backup_script_unix: 'Script for Linux and macOS',
     backup_setup_hint:
-      'On the machine that will keep the copies, run `node thei-backup.mjs`, ' +
-      'enter this address and the token, then install the weekly schedule.',
+      'Download the script onto the machine that will keep the copies — it needs ' +
+      'nothing installed — and run it: `thei-backup.cmd` on Windows, ' +
+      '`bash thei-backup.sh` elsewhere. The site address is already inside; ' +
+      'downloaded right after generating a token, so is the token. Then pick ' +
+      'a folder and install the weekly schedule.',
     backup_history: 'Recent runs',
     backup_run_summary: (files: number, size: string) =>
       `${files} files, ${size}`,
@@ -521,13 +551,13 @@ export default defineI18nBase({
       'Updates do not create a backup. If you want one, copy the content ' +
       'folder before you start.',
     update_in_progress: 'Updating…',
-    update_phase_preparing: 'Preparing',
-    update_phase_dependencies: 'Installing',
-    update_phase_building: 'Building',
-    update_phase_swapping: 'Finishing',
-    update_phase_restarting: 'Restarting',
-    update_phase_done: 'Done',
-    update_phase_failed: 'Failed',
+    update_status_running: 'Updating',
+    update_status_restarting: 'Restarting',
+    update_status_done: 'Done',
+    update_status_failed: 'Failed',
+    update_steps: 'Progress',
+    update_step_phase: 'Update action',
+    update_step_migration: 'Data migration',
     update_done_x: (version) => `Updated to Thei ${version}.`,
     update_log: 'Log',
     update_failed_hint:
@@ -571,9 +601,6 @@ export default defineI18nBase({
     admin_assets_empty: 'The file library is empty',
     admin_assets_empty_description:
       'Files will appear here once you upload them to projects, events or pages.',
-    public_projects_empty: 'No projects yet',
-    public_projects_empty_description:
-      'Nothing has been published here yet. Check back later — new projects will appear in this list.',
     public_tags_empty: 'No tags yet',
     public_tags_empty_description:
       'Topics will appear here once projects or moments of life are tagged.',
@@ -805,7 +832,6 @@ export default defineI18nBase({
     content_link_broken_description:
       'The linked entity could not be found or its details are unavailable.',
     content_link_remove: 'Remove link',
-    content_private_block: 'Private block',
     content_private_section: 'Private section',
     content_private_section_start: 'Start of private section',
     content_private_section_end: 'End of private section',
@@ -911,9 +937,8 @@ export default defineI18nBase({
     project_showcase_badge: 'Showcase',
     project_showcase_badge_hint:
       'This project is featured on the home page and higher in the catalog.',
-    project_portfolio_badge: 'Portfolio',
-    project_portfolio_badge_hint:
-      'This project is included in the professional portfolio.',
+    project_cv_badge: 'CV',
+    project_cv_badge_hint: "This project is part of the author's CV.",
     project_files: 'Project Files',
     project_files_description: 'Icon, banner, showcase, and other files.',
     event_title: 'Event title',
@@ -1068,7 +1093,17 @@ export default defineI18nBase({
     upload_variant_upscale: 'Upscaling allowed',
     upload_variant_no_upscale: 'No upscaling',
     upload_variant_audio_removed: 'Audio removed',
-    upload_variant_audio_kept: 'Audio kept',
+    upload_variant_audio_kept: 'With audio',
+    upload_variant_audio_none: 'No audio',
+    upload_source_no_audio: 'The source has no audio track',
+    video_play: 'Play',
+    video_pause: 'Pause',
+    video_seek: 'Playback position',
+    video_mute: 'Mute',
+    video_unmute: 'Unmute',
+    video_volume: 'Volume',
+    video_no_audio: 'This video has no audio track',
+    video_no_audio_short: 'No audio',
     upload_variant_fast: 'Fast conversion',
     asset_variant_current: 'Used now',
     asset_variant_usage_count: (count) => `Usages: ${count}`,

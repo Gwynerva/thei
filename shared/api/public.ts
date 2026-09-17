@@ -10,6 +10,7 @@ import type {
 import type { MediaDescriptor } from '../media';
 import type { ArchivedOriginalFileMeta } from '../asset';
 import type { ProjectRelationType } from '../admin/project';
+import type { PublicSearchFilters } from '../public-search';
 
 export type PublicTagSummary = {
   title: string;
@@ -60,8 +61,24 @@ export type PublicEntitySummary = {
   tags: PublicTagSummary[];
   date: string;
   showcase?: boolean;
+  cv?: boolean;
   relatedProjects?: PublicProjectLink[];
 };
+
+export type PublicSearchTagFacet = {
+  tag: PublicTagSummary;
+  /** Results in the current search that carry the tag. */
+  count: number;
+  state?: 'include' | 'exclude';
+};
+
+export type PublicSearchResponse =
+  PublicPaginatedResponse<PublicEntitySummary> & {
+    filters: PublicSearchFilters;
+    tags: PublicSearchTagFacet[];
+    /** Matches by type across every page. */
+    totals: { project: number; event: number };
+  };
 
 export type PublicPaginatedResponse<T> = {
   items: T[];
@@ -98,9 +115,19 @@ export type PublicReferenceGroup = {
   files: (PublicFile | PublicSecretReference)[];
 };
 
-export type PublicReferenceGroups = {
-  manual: PublicReferenceGroup;
-  content: PublicReferenceGroup;
+/**
+ * One kind of reference, split by where it was added. `shared` holds what was
+ * both attached by hand and mentioned in the content.
+ */
+export type PublicReferenceSplit<T> = {
+  shared: T[];
+  manual: T[];
+  content: T[];
+};
+
+export type PublicReferences = {
+  links: PublicReferenceSplit<PublicReferenceLink>;
+  files: PublicReferenceSplit<PublicFile | PublicSecretReference>;
 };
 
 export type PublicAction = {
@@ -147,7 +174,7 @@ export type PublicProjectStageResponse = PublicProjectStage & {
   publicId: string;
   content?: PublicContentOutputData;
   project: PublicProjectChildParent;
-  references: PublicReferenceGroups;
+  references: PublicReferences;
 };
 
 export type PublicProjectSectionResponse = PublicProjectSection & {
@@ -155,7 +182,7 @@ export type PublicProjectSectionResponse = PublicProjectSection & {
   publicId: string;
   content: PublicContentOutputData;
   project: PublicProjectChildParent;
-  references: PublicReferenceGroups;
+  references: PublicReferences;
 };
 
 export type PublicProjectResponse = {
@@ -171,7 +198,7 @@ export type PublicProjectResponse = {
     updatedAt?: string;
   };
   isShowcase: boolean;
-  isPortfolio: boolean;
+  isCv: boolean;
   iconMedia: MediaDescriptor;
   bannerMedia?: MediaDescriptor;
   description?: PublicContentOutputData;
@@ -181,9 +208,16 @@ export type PublicProjectResponse = {
   files: (PublicFile | PublicSecretReference)[];
   tags: PublicTagSummary[];
   relatedProjects: PublicProjectLink[];
-  references: PublicReferenceGroups;
+  /** The latest related events; `total` counts all of them. */
+  relatedEvents: { items: PublicEntitySummary[]; total: number };
+  references: PublicReferences;
   action?: PublicAction;
 };
+
+export type PublicProjectEventsResponse =
+  PublicPaginatedResponse<PublicEntitySummary> & {
+    project: PublicProjectChildParent;
+  };
 
 export type PublicEventResponseFull = {
   title: string;
@@ -193,7 +227,7 @@ export type PublicEventResponseFull = {
   publicId: string;
   periods: DateRange[];
   content: PublicContentOutputData;
-  references: PublicReferenceGroups;
+  references: PublicReferences;
   tags: PublicTagSummary[];
   relatedProjects: PublicProjectLink[];
   action?: PublicAction;

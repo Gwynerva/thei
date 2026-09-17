@@ -5,6 +5,7 @@ import {
   dismissOneStep,
   installModalNavigationInterceptor,
   interceptModalNavigation,
+  modalHistorySettled,
   modalStack,
   openModal,
   registerDismissLayer,
@@ -76,10 +77,15 @@ function stubWindow(href = 'http://localhost/admin/projects/project/edit/') {
 function stubRouter() {
   const removeGuard = vi.fn();
   let guard: ((to: unknown, from: unknown) => unknown) | undefined;
+  let afterHook: (() => void) | undefined;
   const router = {
     beforeEach: vi.fn((fn: (to: unknown, from: unknown) => unknown) => {
       guard = fn;
       return removeGuard;
+    }),
+    afterEach: vi.fn((fn: () => void) => {
+      afterHook = fn;
+      return vi.fn();
     }),
   };
   return {
@@ -87,6 +93,8 @@ function stubRouter() {
     removeGuard,
     navigate: (toPath: string, fromPath: string) =>
       guard!({ fullPath: toPath }, { fullPath: fromPath }),
+    /** Finish the navigation the router runs after a popstate. */
+    afterNavigation: () => afterHook?.(),
   };
 }
 
@@ -183,7 +191,10 @@ test('browser Back closes nested modals one at a time without changing URL', asy
     removeEventListener: vi.fn(),
   });
   const removeGuard = vi.fn();
-  const router = { beforeEach: vi.fn(() => removeGuard) };
+  const router = {
+    beforeEach: vi.fn(() => removeGuard),
+    afterEach: vi.fn(() => vi.fn()),
+  };
   const uninstall = installInterceptor(router);
 
   const parentResult = openModal(testModal);
@@ -251,7 +262,10 @@ test('browser Back waits for an animated modal without pushing another sentinel'
     },
     removeEventListener: vi.fn(),
   });
-  const uninstall = installInterceptor({ beforeEach: () => vi.fn() });
+  const uninstall = installInterceptor({
+    beforeEach: () => vi.fn(),
+    afterEach: () => vi.fn(),
+  });
   const result = openModal(testModal);
   await Promise.resolve();
   const modal = modalStack.value[0]!;
@@ -385,4 +399,31 @@ test('dismissOneStep removes the innermost layer before the modal', async () => 
   expect(dismissOneStep()).toBe(true);
   await expect(result).resolves.toEqual({ type: 'empty' });
   removeLayer();
+});
+
+test('the released history entry settles once the router has navigated', async () => {
+  const { history, pop } = stubWindow();
+  const { router, afterNavigation } = stubRouter();
+  const uninstall = installInterceptor(router);
+
+  const result = openModal(testModal);
+  await Promise.resolve();
+  expect(history.pushState).toHaveBeenCalledOnce();
+  await expect(modalHistorySettled()).resolves.toBeUndefined();
+
+  closeModal();
+  await result;
+  expect(history.back).toHaveBeenCalledOnce();
+
+  let settled = false;
+  void modalHistorySettled().then(() => (settled = true));
+  pop();
+  await Promise.resolve();
+  // The popstate alone is not enough: the router is still navigating.
+  expect(settled).toBe(false);
+
+  afterNavigation();
+  await Promise.resolve();
+  expect(settled).toBe(true);
+  uninstall();
 });

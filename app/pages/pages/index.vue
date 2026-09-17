@@ -48,9 +48,8 @@ usePublicSeo({
         :media="page.iconMedia"
       />
     </div>
-    <EmptyState
+    <PublicEmptyState
       v-else
-      icon="page"
       :title="phrase.no_pages"
       :description="phrase.public_pages_empty_description"
     />

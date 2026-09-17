@@ -39,7 +39,7 @@ ${body}
 export default defineMigration({
   id: '0.0.1/001-baseline',
   version: '0.0.1',
-  description: 'Create the initial Thei schema.',
+  title: 'Create the initial Thei schema',
   up({ rawDb }) {
     for (const statement of baselineSql) rawDb.prepare(statement).run();
   },

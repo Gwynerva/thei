@@ -1,13 +1,5 @@
 import type { ImageAccent } from '#layers/thei/shared/accent-color';
-import {
-  copyFile,
-  mkdir,
-  readFile,
-  rename,
-  rm,
-  stat,
-  writeFile,
-} from 'node:fs/promises';
+import { copyFile, mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { dirname } from 'node:path';
@@ -32,7 +24,7 @@ import {
 import { randomId } from '#layers/thei/shared/utils/random-id';
 import { EntityPrefix, generateUnique, generateUniqueId } from '../entity-id';
 import { extractImageAccent } from './image-color';
-import { inspectVideo } from './process';
+import { inspectVideoFile } from './process';
 import { createMediaPreview, MEDIA_PREVIEW_EXTENSION } from './media-preview';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import {
@@ -348,6 +340,10 @@ function describeMedia(
     ...(meta?.accent !== undefined ? { accent: meta.accent } : {}),
     ...(meta?.width ? { width: meta.width } : {}),
     ...(meta?.height ? { height: meta.height } : {}),
+    ...(asset.type === AssetType.Video &&
+    typeof (meta as VideoAssetMeta | null)?.hasAudio === 'boolean'
+      ? { hasAudio: (meta as VideoAssetMeta).hasAudio }
+      : {}),
   };
 }
 
@@ -355,17 +351,15 @@ async function resolveVideoMeta(
   asset: StoredAssetRecord,
 ): Promise<VideoAssetMeta | null> {
   const meta = asset.meta as VideoAssetMeta | null;
-  if (meta?.width && meta.height && meta.audio && meta.audio !== 'unknown') {
+  if (meta?.width && meta.height && typeof meta.hasAudio === 'boolean') {
     return meta;
   }
 
   const filePath = THEI_SERVER.assets.filePath(
-    asset.assetUuid,
+    asset.contentHash,
     asset.extension,
   );
-  const inspected = await readFile(filePath)
-    .then((buffer) => inspectVideo(buffer))
-    .catch(() => null);
+  const inspected = await inspectVideoFile(filePath).catch(() => null);
 
   if (!inspected) return meta;
 
@@ -373,7 +367,7 @@ async function resolveVideoMeta(
     ...(meta ?? {}),
     ...(inspected.width ? { width: inspected.width } : {}),
     ...(inspected.height ? { height: inspected.height } : {}),
-    audio: inspected.hasAudio ? 'keep' : 'none',
+    hasAudio: inspected.hasAudio,
   };
   await THEI_SERVER.assets.update(asset.assetUuid, { meta: resolvedMeta });
   asset.meta = resolvedMeta;

@@ -76,7 +76,6 @@ export function createEditorPrivateSections(
     // when an operation produces no observable follow-up event.
     suppressionTimer = setTimeout(resetSuppression, suppressionDuration);
   }
-  let insideIds = new Set<string>();
   let boundaryByBlockId = new Map<
     string,
     { sectionId: string; edge: 'start' | 'end' }
@@ -133,7 +132,6 @@ export function createEditorPrivateSections(
       string,
       Array<{ index: number; block: (typeof currentBlocks)[number] }>
     >();
-    insideIds = new Set();
     boundaryByBlockId = new Map();
 
     const desired = new Map(
@@ -176,7 +174,6 @@ export function createEditorPrivateSections(
       for (let index = group[0]!.index + 1; index < group[1]!.index; index++) {
         const block = currentBlocks[index];
         if (!block) continue;
-        insideIds.add(block.id);
         desired.get(block.id)!.privateSectionMember = 'true';
         if (index === group[0]!.index + 1) {
           desired.get(block.id)!.privateSectionMemberStart = 'true';
@@ -184,11 +181,6 @@ export function createEditorPrivateSections(
         if (index === group[1]!.index - 1) {
           desired.get(block.id)!.privateSectionMemberEnd = 'true';
         }
-        const wrapper = block.holder.querySelector<HTMLElement>(
-          '.content-editor-private-wrap',
-        );
-        if (wrapper?.hasAttribute('data-content-private'))
-          wrapper.removeAttribute('data-content-private');
       }
     }
     for (const block of currentBlocks) {
@@ -204,10 +196,6 @@ export function createEditorPrivateSections(
         else block.holder.dataset[key] = value;
       }
     }
-  }
-
-  function isPrivateAccessDisabled(blockId: string) {
-    return insideIds.has(blockId) || boundaryByBlockId.has(blockId);
   }
 
   function handleChange(
@@ -308,7 +296,6 @@ export function createEditorPrivateSections(
       block.holder.removeAttribute('data-private-section-member-start');
       block.holder.removeAttribute('data-private-section-member-end');
     }
-    insideIds.clear();
     boundaryByBlockId.clear();
   }
 
@@ -317,7 +304,6 @@ export function createEditorPrivateSections(
     canMove,
     refresh,
     handleChange,
-    isPrivateAccessDisabled,
     resetSuppression,
     destroy,
   };

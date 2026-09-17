@@ -71,9 +71,8 @@ usePublicSeo({
         </span>
       </TheiLink>
     </div>
-    <EmptyState
+    <PublicEmptyState
       v-else
-      icon="tag"
       :title="phrase.public_tags_empty"
       :description="phrase.public_tags_empty_description"
     />

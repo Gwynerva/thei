@@ -4,28 +4,47 @@
 
 # Thei
 
-**🗃️ Digital archive of your life — projects, pages and a timeline of a life.**
+**🗃️ Digital archive of your life — a résumé and a diary in one place.**
 
 </div>
 
-**Thei** is a Nuxt layer you install on your own server. It gives one person a
-place to keep everything they make and everything that happens: projects with
-their stages, standalone pages, dated events, files. All of it lands on a single
-continuous timeline, and all of it stays on a machine you control.
+You bring the data of your life. Thei keeps it, puts it in order and shows it in
+the best light it can.
 
-## What is inside
+**Thei** is a self-hosted site for one person. It holds the big things you have
+built and lived through, and the small moments you would hate to forget — side
+by side, on one timeline, on a machine you control. Show a potential employer
+the projects that matter, and keep the evening that mattered only to you.
+
+## Two kinds of memories
+
+- **Projects** are the big episodes: self-contained, structured and substantial.
+  A project is told through its own **stages** — dated periods of work — and
+  **sections** — topical write-ups — with media, a showcase, files, links and
+  relations to other projects. Mark the ones that belong in your CV or in the
+  showcase on the home page.
+- **Events** are the small moments: a meetup, a trip, a first release, a strange
+  day. Too small or too loose to be a project, too good to lose. An event can
+  relate to projects and carry tags, but it stands on its own.
+
+Around them:
 
 - **Life** — one timeline of everything dated: events, project stages, pages,
   avatar and status changes. **Rewind** shows this same day in previous years.
-- **Projects** — stages, sections, media, external links, related entities, tags.
-- **Pages, events and tags** — standalone writing and the threads between it.
-- **Block editor** — Editor.js with content snapshots, so nothing is lost.
+- **Pages** — standalone writing that belongs to no timeline.
+- **Tags** — the threads running through projects and events.
+
+## What is inside
+
+- **Block editor** — Editor.js with content snapshots, so nothing is lost;
+  private sections inside public text; pasted YouTube links become players.
 - **Media library** — content-addressed storage with deduplication and reuse
   tracking, image and video derivatives via sharp and ffmpeg, uploads streamed
   to disk up to 500 MB.
 - **Access levels** — the whole site open or closed, and every project, event,
   page and file public, link-only or private on its own.
-- **Admin panel** — settings, visuals (theme, accent colour, font), multilanguage interface, one-click updates.
+- **Admin panel** — settings, visuals (theme, accent colour, font), multilanguage
+  interface, one-click updates, backups.
 
 ## Install
 
@@ -47,14 +66,17 @@ Requirements: systemd, 2 GB of RAM, a few GB of disk.
 ## Updating
 
 **Updates** in the admin panel checks for a newer release and installs it on one
-click. The old build keeps serving while the new one compiles, database
-migrations run on the way back up, and the previous build is kept for rollback.
+click. The old build keeps serving while the new one compiles, a release's own
+update phases and migrations run as listed steps, and the previous build is kept
+for rollback.
 
 ## Backups
 
 `content/` is the only directory that is yours. The engine hands copies out and
 a machine you control pulls them: generate a token in **Settings → Backups**,
-then run the single-file [backup client](backup/README.md) there on a schedule.
+download the [backup client](backup/README.md) for Windows or Linux/macOS —
+nothing to install — and let it run weekly. It stops and raises the alarm
+instead of rotating out a good copy when the site suddenly shrinks.
 
 ## Development
 

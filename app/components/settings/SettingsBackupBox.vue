@@ -50,6 +50,49 @@ async function act(work: () => Promise<void>) {
   }
 }
 
+const scripts = computed(() => [
+  {
+    platform: 'windows',
+    file: 'thei-backup.cmd',
+    label: phrase.value.backup_script_windows,
+  },
+  {
+    platform: 'unix',
+    file: 'thei-backup.sh',
+    label: phrase.value.backup_script_unix,
+  },
+]);
+
+/**
+ * Right after generating a token the script can carry it too. It is filled in
+ * here rather than on the server, which never gets the token back.
+ */
+async function downloadScript(
+  event: MouseEvent,
+  script: { platform: string; file: string },
+) {
+  const token = freshToken.value;
+  if (!token) return;
+  event.preventDefault();
+  try {
+    const source = await $fetch<string>('/api/admin/backup/script', {
+      query: { platform: script.platform },
+      responseType: 'text',
+    });
+    const blob = new Blob([source.replace('__THEI_BACKUP_TOKEN__', token)], {
+      type: 'application/octet-stream',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = script.file;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : String(cause);
+  }
+}
+
 function kindLabel(kind: 'auto' | 'manual') {
   return kind === 'auto'
     ? phrase.value.backup_kind_auto
@@ -115,17 +158,21 @@ function kindLabel(kind: 'auto' | 'manual') {
         <Button v-if="status?.configured" :disabled="busy" @click="revoke">
           {{ phrase.backup_token_revoke }}
         </Button>
-        <!-- A plain anchor: TheiLink appends a trailing slash, which this
+        <!-- Plain anchors: TheiLink appends a trailing slash, which this
              API path does not have, and a download is not a route anyway. -->
-        <a
-          v-if="status?.configured"
-          href="/api/admin/backup/script"
-          download="thei-backup.mjs"
-          class="text-sm text-accent underline-offset-2 hocus:underline"
-        >
-          <Icon name="upload" class="mr-1 rotate-180" />
-          {{ phrase.backup_script_download }}
-        </a>
+        <template v-if="status?.configured">
+          <a
+            v-for="script in scripts"
+            :key="script.platform"
+            :href="`/api/admin/backup/script?platform=${script.platform}`"
+            :download="script.file"
+            class="text-sm text-accent underline-offset-2 hocus:underline"
+            @click="downloadScript($event, script)"
+          >
+            <Icon name="download" class="mr-1" />
+            {{ script.label }}
+          </a>
+        </template>
       </div>
       <FieldHint>{{ phrase.backup_token_hint }}</FieldHint>
     </Field>

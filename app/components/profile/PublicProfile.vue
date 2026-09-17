@@ -105,7 +105,7 @@ const facts = computed(() => {
       <ProfileInfoBlock
         v-if="profile.tags.length"
         :title="phrase.profile_popular_tags"
-        ><div class="flex flex-wrap gap-sm">
+        ><div class="flex flex-wrap gap-xs">
           <TheiLink
             v-for="tag in profile.tags"
             :key="tag.publicId"

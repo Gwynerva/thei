@@ -1,6 +1,7 @@
 import { BACKUP_KINDS, type BackupKind } from '#layers/thei/shared/backup';
 import { BackupBusyError, startBackupSession } from '../../thei/backup/session';
 import { requireBackupToken } from '../../thei/backup/token';
+import { sendBackupText, wantsBackupText } from '../../thei/backup/text-format';
 
 export default defineEventHandler(async (event) => {
   requireBackupToken(event);
@@ -18,7 +19,17 @@ export default defineEventHandler(async (event) => {
       : undefined;
 
   try {
-    return await startBackupSession({ kind: kind as BackupKind, clientLabel });
+    const session = await startBackupSession({
+      kind: kind as BackupKind,
+      clientLabel,
+    });
+    if (!wantsBackupText(event)) return session;
+    return sendBackupText(event, [
+      ['sessionId', session.sessionId],
+      ['totalFiles', session.totalFiles],
+      ['totalBytes', session.totalBytes],
+      ...session.skipped.map((name) => ['skipped', name]),
+    ]);
   } catch (error) {
     if (error instanceof BackupBusyError) {
       throw createError({ statusCode: 409, statusMessage: error.message });

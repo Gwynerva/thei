@@ -72,7 +72,6 @@ describe('buildContentHeadings', () => {
         {
           type: 'header',
           data: { text: 'Hidden', level: 2 },
-          tunes: { privateAccess: { isPrivate: true } },
         },
         {
           type: 'privateSectionPlaceholder',

@@ -1,7 +1,6 @@
 import type {
   BlockTool,
   BlockToolConstructorOptions,
-  BlockTune,
   BlockAPI,
 } from '@editorjs/editorjs';
 import { h, render as renderVue } from 'vue';
@@ -25,6 +24,13 @@ import {
   contentAttachmentAssetChanged,
 } from '#layers/thei/app/components/content/content-attachment';
 import ExternalLinkPreviewCard from '#layers/thei/app/components/external-links/ExternalLinkPreviewCard.vue';
+import ContentIntegration from '#layers/thei/app/components/content/ContentIntegration.vue';
+import {
+  contentIntegrationPastePatterns,
+  matchContentIntegration,
+  normalizeContentIntegration,
+  type ContentIntegrationData,
+} from '#layers/thei/shared/content-integrations';
 import {
   normalizeExternalLinkUrl,
   type ExternalLink,
@@ -67,7 +73,6 @@ interface ContentToolLabels {
   title: string;
   description: string;
   fileWithExtension: (extension?: string) => string;
-  privateAccess: string;
   privateSection: string;
   privateSectionStart: string;
   privateSectionEnd: string;
@@ -210,6 +215,76 @@ export class ExternalLinkTool implements BlockTool {
         loadingText: contentToolConfig(this.options.config).labels
           .externalLinkLoading,
       }),
+      this.wrapper,
+    );
+  }
+}
+
+/**
+ * A pasted address with an interactive form, such as a YouTube video.
+ *
+ * Never offered in the toolbox: it only appears when a paste matches one of
+ * the providers' patterns, and must be registered before `externalLink` so it
+ * gets the first chance at the address.
+ */
+export class IntegrationTool implements BlockTool {
+  static pasteConfig = {
+    patterns: contentIntegrationPastePatterns(),
+  };
+
+  static get isReadOnlySupported() {
+    return true;
+  }
+
+  private data?: ContentIntegrationData;
+  private wrapper?: HTMLElement;
+
+  constructor(options: ContentToolOptions<Record<string, unknown>, object>) {
+    try {
+      this.data = normalizeContentIntegration(options.data);
+    } catch {
+      this.data = undefined;
+    }
+    this.block = options.block;
+  }
+
+  private block: BlockAPI;
+
+  render() {
+    this.wrapper = createToolWrapper();
+    this.renderContent();
+    return this.wrapper;
+  }
+
+  save() {
+    return this.data ?? {};
+  }
+
+  validate(data: Record<string, unknown>) {
+    try {
+      normalizeContentIntegration(data);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  destroy() {
+    if (this.wrapper) renderVue(null, this.wrapper);
+  }
+
+  onPaste(event: CustomEvent) {
+    const data = matchContentIntegration(event.detail?.data);
+    if (!data) return;
+    this.data = data;
+    this.block.dispatchChange();
+    this.renderContent();
+  }
+
+  private renderContent() {
+    if (!this.wrapper) return;
+    renderVue(
+      h(ContentIntegration, { data: this.data, showSource: true }),
       this.wrapper,
     );
   }
@@ -745,71 +820,6 @@ export class ContentAttachmentTool implements BlockTool {
   }
 }
 
-export class PrivateAccessTune implements BlockTune {
-  static isTune = true;
-
-  private isPrivate: boolean;
-  private labels: ContentToolLabels;
-  private block?: BlockAPI;
-  private wrapper?: HTMLElement;
-  private isDisabled: () => boolean;
-
-  constructor(options: {
-    data?: { isPrivate?: boolean };
-    config?: {
-      labels?: ContentToolLabels;
-      isDisabled?: (blockId: string) => boolean;
-    };
-    block?: BlockAPI;
-  }) {
-    this.isPrivate = options.data?.isPrivate === true;
-    this.labels = getLabels(options.config);
-    this.block = options.block;
-    this.isDisabled = () =>
-      Boolean(options.block && options.config?.isDisabled?.(options.block.id));
-  }
-
-  render() {
-    return {
-      icon: editorIcon('lock-close'),
-      title: this.labels.privateAccess,
-      toggle: true,
-      isActive: () => this.isPrivate,
-      isDisabled: this.isDisabled(),
-      onActivate: () => {
-        if (this.isDisabled()) return;
-        this.isPrivate = !this.isPrivate;
-        this.syncBlockState();
-        this.block?.dispatchChange();
-      },
-    };
-  }
-
-  wrap(content: HTMLElement): HTMLElement {
-    this.wrapper = document.createElement('div');
-    this.wrapper.className = 'content-editor-private-wrap';
-    const marker = document.createElement('span');
-    marker.className = 'content-editor-private-marker';
-    marker.setAttribute('aria-hidden', 'true');
-    content.append(marker);
-    this.wrapper.append(content);
-    this.syncBlockState();
-    return this.wrapper;
-  }
-
-  save() {
-    return !this.isDisabled() && this.isPrivate ? { isPrivate: true } : {};
-  }
-
-  private syncBlockState() {
-    if (this.isPrivate) {
-      this.wrapper?.setAttribute('data-content-private', 'true');
-    } else {
-      this.wrapper?.removeAttribute('data-content-private');
-    }
-  }
-}
-
 export class PrivateSectionBoundaryTool implements BlockTool {
   static toolbox = {
     title: 'Private section',
@@ -889,7 +899,6 @@ function getLabels(
       description: 'Description',
       fileWithExtension: (extension) =>
         extension ? `File with extension ${extension.toUpperCase()}` : 'File',
-      privateAccess: 'Private access',
       privateSection: 'Private section',
       privateSectionStart: 'Start of private section',
       privateSectionEnd: 'End of private section',

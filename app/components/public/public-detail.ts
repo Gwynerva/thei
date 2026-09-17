@@ -1,11 +1,12 @@
 import type {
   PublicProjectLink,
-  PublicReferenceGroups,
+  PublicReferences,
   PublicTagSummary,
 } from '#layers/thei/shared/api/public';
 import type { DateRange } from '#layers/thei/shared/date-range';
 import type { IconName } from '#thei/icons';
 import type { ContentHeading } from '#layers/thei/app/components/content/content-headings';
+import { modalHistorySettled } from '#layers/thei/app/composables/modal';
 
 export type PublicDetailMetric = {
   icon: IconName;
@@ -60,6 +61,33 @@ export type PublicDetailPanelData = {
   createdAt?: string;
   tags?: PublicTagSummary[];
   relatedProjects?: PublicProjectLink[];
-  references: PublicReferenceGroups;
+  references: PublicReferences;
   metrics?: PublicDetailMetric[];
 };
+
+/**
+ * Follows contents links from the mobile sheet: the sheet closes first and its
+ * history entry is released, then the router takes the hash, so its own scroll
+ * handling lands the heading below the sticky bars instead of racing it.
+ */
+export function useSheetContentNavigation() {
+  const router = useRouter();
+  return async (
+    id: string,
+    event: MouseEvent,
+    close: () => Promise<boolean>,
+  ) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+      return;
+    event.preventDefault();
+    await close();
+    await modalHistorySettled();
+    const hash = `#${id}`;
+    if (router.currentRoute.value.hash === hash)
+      document.getElementById(id)?.scrollIntoView();
+    else {
+      const { path, query } = router.currentRoute.value;
+      await router.replace({ path, query, hash });
+    }
+  };
+}

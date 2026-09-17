@@ -85,7 +85,7 @@ const fieldValue = computed<ContentFieldModelValue>(() => ({
       :showcase="showcase"
       :tags="tags"
       :is-showcase="true"
-      :is-portfolio="true"
+      :is-cv="true"
       data-test-hero
     />
     <button class="m-sm p-sm" data-switch-source @click="scenario = 'portrait'">

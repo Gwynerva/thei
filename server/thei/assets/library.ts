@@ -349,7 +349,7 @@ export function listLibraryAssets(query: LibraryQuery = {}) {
     `SELECT a.assetUuid,a.touchedAt FROM assets a WHERE ${where}`,
     args,
     query,
-    20,
+    40,
   );
   return { ...page, items: readItems(ids, query) };
 }
@@ -396,7 +396,7 @@ export function listSourceAssets(
   const from = `SELECT a.assetUuid,a.touchedAt FROM members m JOIN assets a ON a.assetUuid=m.assetUuid
     LEFT JOIN sources s ON s.sourceType=m.sourceType AND s.sourceId=m.sourceId
     WHERE m.sourceType=? AND m.sourceId=? AND ${where}`;
-  const { ids, ...page } = pageIds(from, [type, id, ...args], query, 24);
+  const { ids, ...page } = pageIds(from, [type, id, ...args], query, 48);
   return { ...page, items: readItems(ids, query, `${type}:${id}`) };
 }
 export function getAssetUsages(id: string) {

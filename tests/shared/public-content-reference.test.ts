@@ -80,10 +80,17 @@ describe('public content reference extraction', () => {
         data: { items: [{ id: 'image', asset: { assetUuid: 'gallery' } }] },
       },
       {
+        type: 'privateSectionBoundary',
+        data: { sectionId: 'private-links', edge: 'start' },
+      },
+      {
         id: 'private',
         type: 'externalLink',
         data: { url: 'https://private.example/' },
-        tunes: { privateAccess: { isPrivate: true } },
+      },
+      {
+        type: 'privateSectionBoundary',
+        data: { sectionId: 'private-links', edge: 'end' },
       },
     ],
   } as any;
@@ -114,7 +121,7 @@ describe('public content reference extraction', () => {
     expect(content).toEqual(before);
   });
 
-  it('can include references from private blocks for an administrator', () => {
+  it('can include references from private sections for an administrator', () => {
     expect(
       extractContentReferenceCandidates(content, true).links,
     ).toContainEqual({ kind: 'external', url: 'https://private.example/' });

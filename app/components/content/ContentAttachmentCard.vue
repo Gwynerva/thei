@@ -157,7 +157,7 @@ const details = computed(() =>
         group-hocus:text-white"
       aria-hidden="true"
     >
-      <Icon :name="mode === 'open' ? 'expand-diagonal' : 'arrow-outward'" />
+      <Icon :name="mode === 'open' ? 'expand-diagonal' : 'download'" />
     </span>
   </component>
 </template>

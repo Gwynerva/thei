@@ -8,8 +8,8 @@ const settingsButton = useTemplateRef<HTMLElement>('settingsButton');
 const settingsOpen = ref(false);
 
 const items = computed<{ to: string; icon: IconName; label: string }[]>(() => [
+  { to: '/search/', icon: 'search', label: phrase.value.search },
   { to: '/life/', icon: 'heart', label: phrase.value.life },
-  { to: '/projects/', icon: 'project', label: phrase.value.projects },
   { to: '/tags/', icon: 'tag', label: phrase.value.tags },
   { to: '/pages/', icon: 'page', label: phrase.value.pages },
 ]);
@@ -20,11 +20,11 @@ function active(to: string) {
 </script>
 
 <template>
-  <StickyGlassHeader width="var(--width-wide)" class="z-20">
+  <StickyGlassHeader width="var(--width-wide)" flush-mobile class="z-20">
     <div class="flex h-14 items-stretch justify-between gap-xs">
       <TheiLink
         to="/"
-        class="flex min-w-0 items-center gap-xs rounded-sm px-xs transition
+        class="flex min-w-0 items-center gap-xs px-xs transition
           focus-visible:ring-2 focus-visible:ring-accent hocus:bg-accent/10"
       >
         <span

@@ -2,7 +2,7 @@ import type { ProjectEventAccessLevel } from '../access-level';
 import type { AdminPaginatedResponse } from '../admin/entity-list';
 import type { ContentFieldValue, PublicContentOutputData } from '../content';
 import type { MediaDescriptor } from '../media';
-import type { PublicReferenceGroups } from './public';
+import type { PublicReferences } from './public';
 
 export type PageGetResponse = {
   pageUuid: string;
@@ -54,5 +54,5 @@ export type PublicPageResponse = {
   };
   iconMedia: MediaDescriptor;
   content: PublicContentOutputData;
-  references: PublicReferenceGroups;
+  references: PublicReferences;
 };

@@ -8,6 +8,7 @@ import {
   runPendingMigrations,
   seedLedger,
 } from '#layers/thei/update/migrations/run';
+import { migrationProgressRecorder } from '#layers/thei/update/migration-progress';
 
 export async function createFreshDbContext(): Promise<TheiDbContext> {
   const rawDb = new Database(THEI_SERVER.contentPath('thei.db'));
@@ -32,10 +33,14 @@ export async function loadDbContext(): Promise<TheiDbContext> {
   try {
     // Migrations run before anything reads or repairs the schema: the rest of
     // the boot path assumes the database already matches this release.
-    runPendingMigrations(rawDb, {
+    await runPendingMigrations(rawDb, {
       installedVersion: THEI_SERVER.config.version,
       contentPath: (...parts) => THEI_SERVER.contentPath(...parts),
       log: (message) => THEI_SERVER.console.tag('Migrations').log(message),
+      onProgress: await migrationProgressRecorder(
+        THEI_SERVER.projectPath(),
+        THEI_SERVER.config.languageCode,
+      ),
     });
     ensureAssetIntegrity(rawDb);
     const db = drizzle(rawDb, { schema });
