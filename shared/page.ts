@@ -8,6 +8,8 @@ export type PageEditData = {
   access: ProjectEventAccessLevel | '';
   iconAssetUuid?: string;
   content: ContentFieldModelValue | null;
+  reminder?: string;
+  notes?: ContentFieldModelValue | null;
 };
 
 export type ValidatedPageEditData = Omit<PageEditData, 'access'> & {

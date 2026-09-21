@@ -181,7 +181,7 @@ function reset() {
               <span
                 class="truncate"
                 :class="{ 'line-through': facet.state === 'exclude' }"
-                >{{ facet.tag.title }}</span
+                >{{ publicText(facet.tag.title) }}</span
               >
               <Icon name="close" class="shrink-0 text-text-3" />
             </button>

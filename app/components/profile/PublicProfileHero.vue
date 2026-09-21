@@ -74,10 +74,10 @@ useHashDisclosure('#avatars', open, history.load);
       </button>
       <div class="min-w-0 flex-1 text-center sm:pt-md sm:text-left">
         <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">
-          {{ profile.displayName }}
+          {{ publicText(profile.displayName) }}
         </h1>
         <p v-if="profile.slogan" class="mt-xs font-bold text-text-2">
-          {{ profile.slogan }}
+          {{ publicText(profile.slogan) }}
         </p>
       </div>
       <div

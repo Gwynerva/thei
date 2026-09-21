@@ -10,6 +10,8 @@ export const events = sqliteTable('events', {
   humanReadableSlug: text().notNull(),
   publicId: text().notNull().unique(),
   action: text({ mode: 'json' }).$type<ProjectActionEditData>(),
+  /** Owner-only note to self; flags the entity wherever it is listed. */
+  reminder: text().notNull().default(''),
   createdAt: integer().notNull(),
   updatedAt: integer().notNull(),
 });

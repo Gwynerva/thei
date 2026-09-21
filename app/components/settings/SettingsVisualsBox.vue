@@ -7,9 +7,18 @@ import {
 import type { FieldOptionValue } from '#layers/thei/app/components/field/FieldOptions.vue';
 import { accentHueCssColor } from '#layers/thei/shared/accent-color';
 
-const { showPublicViewMode = false, reloadOnViewChange = true } = defineProps<{
+const {
+  showPublicViewMode = false,
+  reloadOnViewChange = true,
+  compact = false,
+} = defineProps<{
   showPublicViewMode?: boolean;
   reloadOnViewChange?: boolean;
+  /**
+   * The version shown in the header popup, where the box is a passing panel
+   * rather than a page: smaller text, tighter rows, same controls.
+   */
+  compact?: boolean;
 }>();
 
 const visuals = useVisuals();
@@ -40,14 +49,17 @@ const publicViewOptions = computed<Record<string, FieldOptionValue>>(() => ({
 
 <template>
   <Box>
-    <div class="flex flex-col gap-md p-sm sm:p-md">
+    <div
+      class="flex flex-col"
+      :class="compact ? 'gap-sm p-xs text-xs' : 'gap-md p-sm sm:p-md'"
+    >
       <Field>
         <FieldLabel>{{ phrase.theme }}</FieldLabel>
         <FieldOptions :options="themeOptions" v-model="visuals.theme" />
       </Field>
       <Field>
         <FieldLabel>{{ phrase.accent_color }}</FieldLabel>
-        <div class="flex flex-wrap gap-md">
+        <div class="flex flex-wrap" :class="compact ? 'gap-sm' : 'gap-md'">
           <button
             v-for="accentHue of visualsAccentHues"
             :key="accentHue"
@@ -64,10 +76,10 @@ const publicViewOptions = computed<Record<string, FieldOptionValue>>(() => ({
               visuals.accentHue === accentHue
                 ? 'ring-bw-reverse'
                 : 'ring-transparent hocus:ring-bw-reverse/50',
+              compact ? 'size-4' : 'size-5 sm:size-6',
             ]"
-            class="size-5 shrink-0 cursor-pointer rounded-full
-              bg-(--_accent-variant) ring-2 ring-offset-2 ring-offset-bg-2
-              transition sm:size-6"
+            class="shrink-0 cursor-pointer rounded-full bg-(--_accent-variant)
+              ring-2 ring-offset-2 ring-offset-bg-2 transition"
           ></button>
         </div>
       </Field>

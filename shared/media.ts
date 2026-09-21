@@ -31,4 +31,10 @@ export interface MediaDescriptor {
   height?: number;
   /** Known for stored videos: whether an audio track exists. */
   hasAudio?: boolean;
+  /**
+   * The engine drew this icon from the entity's own name because none was
+   * uploaded. It is shown on a tinted tile, the way a missing icon always was;
+   * an icon someone chose is shown on its own.
+   */
+  generated?: true;
 }

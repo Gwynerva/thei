@@ -20,7 +20,8 @@ export const signInLinks = sqliteTable(
 );
 
 /**
- * Temporary links that open one private project or event, and nothing else.
+ * Temporary links that open one private project, event or page, and nothing
+ * else.
  *
  * The token grants the private view of exactly the entity named here, for as
  * long as the row lives. Revoking is deleting the row, so a link that leaked
@@ -31,8 +32,11 @@ export const shareLinks = sqliteTable(
   {
     shareUuid: text().primaryKey(),
     tokenHash: text().notNull().unique(),
-    /** `project` or `event`; a stage or a section is shared with its project. */
-    entityType: text().notNull().$type<'project' | 'event'>(),
+    /**
+     * `project`, `event` or `page`; a stage or a section is shared with its
+     * project.
+     */
+    entityType: text().notNull().$type<'project' | 'event' | 'page'>(),
     entityUuid: text().notNull(),
     createdAt: integer().notNull(),
     expiresAt: integer().notNull(),

@@ -106,6 +106,7 @@ export const baselineSql: string[] = [
 	\`humanReadableSlug\` text NOT NULL,
 	\`publicId\` text NOT NULL,
 	\`action\` text,
+	\`reminder\` text DEFAULT '' NOT NULL,
 	\`createdAt\` integer NOT NULL,
 	\`updatedAt\` integer NOT NULL
 );
@@ -121,6 +122,7 @@ export const baselineSql: string[] = [
 	\`showcase\` integer DEFAULT false NOT NULL,
 	\`cv\` integer DEFAULT false NOT NULL,
 	\`action\` text,
+	\`reminder\` text DEFAULT '' NOT NULL,
 	\`createdAt\` integer NOT NULL,
 	\`updatedAt\` integer NOT NULL
 );
@@ -132,6 +134,7 @@ export const baselineSql: string[] = [
 	\`title\` text NOT NULL,
 	\`summary\` text NOT NULL,
 	\`access\` text NOT NULL,
+	\`reminder\` text DEFAULT '' NOT NULL,
 	\`createdAt\` integer NOT NULL,
 	\`updatedAt\` integer NOT NULL
 );
@@ -197,6 +200,8 @@ export const baselineSql: string[] = [
 	\`sortOrder\` integer NOT NULL,
 	\`startDate\` text NOT NULL,
 	\`endDate\` text NOT NULL,
+	\`precision\` text DEFAULT 'exact' NOT NULL,
+	\`precisionNote\` text DEFAULT '' NOT NULL,
 	PRIMARY KEY(\`stageType\`, \`stageUuid\`, \`sortOrder\`),
 	CONSTRAINT "stage-periods-stage-type-check" CHECK("stage-periods"."stageType" in ('project-stage', 'event-stage'))
 );

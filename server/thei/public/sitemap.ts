@@ -1,3 +1,7 @@
+import {
+  PUBLIC_SEARCH_PRESETS,
+  publicSearchPresetHref,
+} from '#layers/thei/shared/public-search';
 import { resolveSiteUrl } from '#layers/thei/shared/site-url';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
@@ -140,6 +144,12 @@ export function buildSitemapEntries(input: SitemapInput): SitemapEntry[] {
     { path: '/rewind/' },
     { path: '/pages/' },
     { path: '/tags/' },
+    // The named search configurations are pages of the site: "Projects",
+    // "Events", the showcase, the résumé. Their canonical address is the
+    // configuration itself, which is what goes in here.
+    ...PUBLIC_SEARCH_PRESETS.map((preset) => ({
+      path: publicSearchPresetHref(preset),
+    })),
     ...lifeYearEntries(input, projects, events),
     ...projects.map((project) => ({
       path: buildProjectUrl(project.humanReadableSlug, project.publicId),

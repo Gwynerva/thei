@@ -1,5 +1,5 @@
 import type { ContentFieldModelValue } from './content';
-import type { DateRange } from './date-range';
+import type { DatedPeriod } from './date-precision';
 import type { ProjectEventAccessLevel } from './access-level';
 import type { ProjectActionEditData } from './project-action';
 import type { OtherAssetSaveItem } from './admin/project';
@@ -23,13 +23,15 @@ export type EventEditData = {
   access: ProjectEventAccessLevel | '';
   humanReadableSlug: string;
   publicId: string;
-  periods: DateRange[];
+  periods: DatedPeriod[];
   content: ContentFieldModelValue | null;
   otherAssets?: OtherAssetSaveItem[];
   externalLinks?: ProjectExternalLinkEditItem[];
   relations?: EventProjectRelationEditItem[];
   tags?: TagEditItem[];
   action?: ProjectActionEditData;
+  reminder?: string;
+  notes?: ContentFieldModelValue | null;
 };
 
 export type ValidatedEventEditData = Omit<

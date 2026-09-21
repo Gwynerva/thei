@@ -6,7 +6,10 @@ import type {
 import type { MenuConfig } from '@editorjs/editorjs/types/tools/menu-config';
 import type { VirtualElement } from '@floating-ui/vue';
 import { contentInlineLinkSanitizeConfig } from '#layers/thei/shared/content-link';
-import type { ContentInlineLinkRequest } from './editor-inline-links';
+import type {
+  ContentHintRequest,
+  ContentInlineLinkRequest,
+} from './editor-inline-links';
 import { editorIcon } from './editor-icons';
 import {
   copyInlineLinkRect,
@@ -54,6 +57,142 @@ export class ContentItalicTool implements InlineTool {
       onActivate: () => runInlineCommand(this.options, 'italic'),
       isActive: () => document.queryCommandState('italic'),
     };
+  }
+}
+
+export class ContentStrikeTool implements InlineTool {
+  static isInline = true as const;
+  static title = 'Strikethrough';
+  // `execCommand` still emits the ancient `strike`; normalization rewrites it
+  // to `s`, so both are accepted on the way in.
+  static sanitize = { s: {}, strike: {} };
+
+  constructor(private options: InlineToolConstructorOptions) {}
+
+  get shortcut() {
+    return 'CMD+SHIFT+X';
+  }
+
+  render(): MenuConfig {
+    return {
+      name: 'contentStrike',
+      icon: editorIcon('strikethrough'),
+      onActivate: () => runInlineCommand(this.options, 'strikeThrough'),
+      isActive: () => document.queryCommandState('strikeThrough'),
+    };
+  }
+}
+
+/**
+ * A note attached to a span of text: dotted underline, explanation on hover.
+ *
+ * It is the same shape as the link tool — select, open a popup, write, apply —
+ * so it reuses that popup layer rather than inventing a second one.
+ */
+export class ContentHintTool implements InlineTool {
+  static isInline = true as const;
+  static title = 'Hint';
+  static sanitize = { abbr: { 'data-content-hint': true } };
+
+  private existing?: HTMLElement;
+
+  constructor(
+    private options: {
+      api: API;
+      config: { open: (request: ContentHintRequest) => void };
+    },
+  ) {}
+
+  render(): MenuConfig {
+    this.existing = this.findExisting();
+    return {
+      name: 'contentHint',
+      icon: editorIcon('hint'),
+      isActive: Boolean(this.existing),
+      onActivate: (_item, event) => this.openControls(event),
+    };
+  }
+
+  private findExisting() {
+    const found = this.options.api.selection.findParentTag('ABBR');
+    return found instanceof HTMLElement &&
+      found.dataset.contentHint !== undefined
+      ? found
+      : undefined;
+  }
+
+  private openControls(event?: PointerEvent) {
+    const eventElement =
+      event?.currentTarget instanceof HTMLElement
+        ? event.currentTarget
+        : event?.target instanceof HTMLElement
+          ? event.target
+          : undefined;
+    const trigger =
+      eventElement?.closest<HTMLElement>('button, [role="button"]') ??
+      (document.activeElement instanceof HTMLElement
+        ? document.activeElement.closest<HTMLElement>('button, [role="button"]')
+        : null);
+    if (!trigger) return;
+    if (!this.existing && !trimCurrentInlineSelection()) return;
+
+    const anchor = createInlineLinkAnchor(trigger);
+    this.options.api.selection.setFakeBackground();
+    this.options.api.selection.save();
+    let highlighted = true;
+    const restore = () => {
+      if (!highlighted) return;
+      this.options.api.selection.restore();
+      this.options.api.selection.removeFakeBackground();
+      highlighted = false;
+    };
+
+    const request: ContentHintRequest = {
+      anchor,
+      existing: Boolean(this.existing),
+      initialText: this.existing?.dataset.contentHint ?? '',
+      apply: (text) => {
+        restore();
+        this.applyHint(text);
+      },
+      remove: () => {
+        restore();
+        this.removeHint();
+      },
+      restore,
+    };
+    queueMicrotask(() => this.options.config.open(request));
+  }
+
+  private applyHint(text: string) {
+    const value = text.trim();
+    if (!value) {
+      this.removeHint();
+      return;
+    }
+    const selection = window.getSelection();
+    const range = selection?.rangeCount ? selection.getRangeAt(0) : undefined;
+    if (!range) return;
+    const element = this.existing ?? document.createElement('abbr');
+    if (!this.existing) {
+      if (range.collapsed) return;
+      element.append(range.extractContents());
+      range.insertNode(element);
+    }
+    element.dataset.contentHint = value;
+    selection?.removeAllRanges();
+    const after = document.createRange();
+    after.setStartAfter(element);
+    after.collapse(true);
+    selection?.addRange(after);
+    this.options.api.inlineToolbar.close();
+  }
+
+  private removeHint() {
+    const element = this.existing;
+    if (!element) return;
+    element.replaceWith(...Array.from(element.childNodes));
+    this.options.api.inlineToolbar.close();
   }
 }
 
@@ -110,6 +249,8 @@ abstract class ContentInlineLinkTool implements InlineTool {
       anchor,
       existing: Boolean(this.existingLink),
       initialUrl: this.existingLink?.getAttribute('href') ?? undefined,
+      initialNote:
+        this.existingLink?.getAttribute('data-content-note') ?? undefined,
       apply: (label, attributes) => this.applyLink(label, attributes),
       remove: () => this.removeLink(),
       restore: () => this.restoreSelection(),

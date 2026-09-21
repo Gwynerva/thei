@@ -13,6 +13,7 @@ import { useContentLinkResolver } from '#layers/thei/app/composables/content-lin
 import ExternalLinkPreviewCard from '#layers/thei/app/components/external-links/ExternalLinkPreviewCard.vue';
 import ContentInlineLinkDecorator from './ContentInlineLinkDecorator.vue';
 import ContentRendererList from './ContentRendererList.vue';
+import ContentSpoiler from './ContentSpoiler.vue';
 import { publicAssetModal } from '#layers/thei/app/modals/public-asset/modal';
 import type { ContentGalleryItem } from '#layers/thei/shared/content';
 import { richTextToPlainText } from '#layers/thei/shared/rich-text';
@@ -47,6 +48,11 @@ const allHeadings = computed(
 const headingIdByPath = computed(
   () => new Map(allHeadings.value.map((heading) => [heading.path, heading.id])),
 );
+
+/** Only an ordinary block can be a spoiler; a private section never is. */
+function blockIsSpoiler(block: PublicContentOutputBlock) {
+  return 'tunes' in block && block.tunes?.spoiler === true;
+}
 
 function blockKey(block: PublicContentOutputBlock, path: string) {
   return 'id' in block && block.id ? block.id : `${block.type}-${path}`;
@@ -95,120 +101,136 @@ function openGalleryItem(item: ContentGalleryItem) {
 <template>
   <div ref="root" class="content-renderer content-prose min-w-0">
     <template v-for="{ block, path } in blocks" :key="blockKey(block, path)">
-      <p v-if="block.type === 'paragraph'" v-html="block.data.text"></p>
-      <component
-        :is="headerTag(block.data.level)"
-        v-else-if="block.type === 'header'"
-        :id="headingIdByPath.get(path)"
-        class="scroll-mt-[var(--public-anchor-offset,8rem)]"
-        v-html="block.data.text"
-      ></component>
-      <ContentRendererList
-        v-else-if="block.type === 'list'"
-        :items="block.data.items as any[]"
-        :style="block.data.style as any"
-      />
-      <blockquote
-        v-else-if="block.type === 'quote'"
-        class="content-quote"
-        :class="{ 'text-center': block.data.alignment === 'center' }"
-      >
-        <p class="content-quote__text" v-html="block.data.text"></p>
-        <cite v-if="block.data.caption" class="content-quote__caption">
-          {{ block.data.caption }}
-        </cite>
-      </blockquote>
-      <div
-        v-else-if="block.type === 'delimiter'"
-        class="content-divider"
-        role="separator"
-      >
-        <Icon
-          v-for="index in 3"
-          :key="index"
-          name="asterisk"
-          aria-hidden="true"
+      <ContentSpoiler :spoiler="blockIsSpoiler(block)">
+        <p
+          v-if="block.type === 'paragraph'"
+          v-html="publicRichText(block.data.text as string)"
+        ></p>
+        <component
+          :is="headerTag(block.data.level)"
+          v-else-if="block.type === 'header'"
+          :id="headingIdByPath.get(path)"
+          class="scroll-mt-[var(--public-anchor-offset,8rem)]"
+          v-html="publicRichText(block.data.text as string)"
+        ></component>
+        <ContentRendererList
+          v-else-if="block.type === 'list'"
+          :items="block.data.items as any[]"
+          :style="block.data.style as any"
         />
-      </div>
-      <ContentMediaCard
-        v-else-if="
-          block.type === 'contentMedia' && assetMedia(block.data.asset)
-        "
-        :asset="asset(block.data.asset)"
-        :layout="block.data.layout as ContentMediaLayout"
-        :caption="block.data.caption as string | undefined"
-        :openable="assetViewer"
-        @open="
-          openAsset(block.data.asset, block.data.caption as string | undefined)
-        "
-      />
-      <ContentGallery
-        v-else-if="block.type === 'contentGallery'"
-        :items="block.data.items as any[]"
-        :choose-label="phrase.content_choose_media"
-        :openable="assetViewer"
-        @open="openGalleryItem"
-      />
-      <ContentAttachmentCard
-        v-else-if="
-          block.type === 'contentAttachment' &&
-          asset(block.data.asset).assetUuid
-        "
-        :asset="asset(block.data.asset)"
-        :title="block.data.title as string | undefined"
-        :description="block.data.caption as string | undefined"
-        :fallback-title="
-          phrase.content_file_with_extension(asset(block.data.asset).extension)
-        "
-        :href="asset(block.data.asset).assetUrl"
-      />
-      <ExternalLinkPreviewCard
-        v-else-if="block.type === 'externalLink'"
-        :link="externalLink(block.data)"
-        :url="block.data.url as string"
-        :interactive="true"
-      />
-      <ContentIntegration
-        v-else-if="block.type === 'integration'"
-        :data="block.data"
-      />
-      <ContentEntityLinkBlock
-        v-else-if="block.type === 'entityLink'"
-        :entity-type="block.data.entityType as 'project' | 'event' | 'page'"
-        :entity-id="block.data.entityId as string | undefined"
-        :restricted="block.data.restricted as boolean | undefined"
-        :resolver="linkResolver"
-      />
-      <ContentPrivatePlaceholder
-        v-else-if="block.type === 'privateSectionPlaceholder'"
-        :summary="block.data"
-      />
-      <section
-        v-else-if="block.type === 'privateSectionExpanded'"
-        class="content-private-pattern content-private-section relative isolate
-          flex flex-col gap-sm"
-      >
-        <div class="content-private-bracket" data-private-section-edge="start">
-          <span class="content-private-bracket__label">
-            <Icon name="lock-close" aria-hidden="true" />
-            <span>{{ phrase.content_private_section_start }}</span>
-          </span>
+        <blockquote
+          v-else-if="block.type === 'quote'"
+          class="content-quote"
+          :class="{ 'text-center': block.data.alignment === 'center' }"
+        >
+          <p
+            class="content-quote__text"
+            v-html="publicRichText(block.data.text as string)"
+          ></p>
+          <cite v-if="block.data.caption" class="content-quote__caption">
+            {{ publicText(block.data.caption as string) }}
+          </cite>
+        </blockquote>
+        <div
+          v-else-if="block.type === 'delimiter'"
+          class="content-divider"
+          role="separator"
+        >
+          <Icon
+            v-for="index in 3"
+            :key="index"
+            name="asterisk"
+            aria-hidden="true"
+          />
         </div>
-        <ContentRenderer
-          class="px-sm"
-          :data="{ blocks: block.data.blocks }"
-          :link-resolver="linkResolver"
-          :asset-viewer="assetViewer"
-          :content-headings="allHeadings"
-          :path-prefix="path"
+        <ContentMediaCard
+          v-else-if="
+            block.type === 'contentMedia' && assetMedia(block.data.asset)
+          "
+          :asset="asset(block.data.asset)"
+          :layout="block.data.layout as ContentMediaLayout"
+          :caption="block.data.caption as string | undefined"
+          :openable="assetViewer"
+          @open="
+            openAsset(
+              block.data.asset,
+              block.data.caption as string | undefined,
+            )
+          "
         />
-        <div class="content-private-bracket" data-private-section-edge="end">
-          <span class="content-private-bracket__label">
-            <Icon name="lock-close" aria-hidden="true" />
-            <span>{{ phrase.content_private_section_end }}</span>
-          </span>
-        </div>
-      </section>
+        <ContentGallery
+          v-else-if="block.type === 'contentGallery'"
+          :items="block.data.items as any[]"
+          :choose-label="phrase.content_choose_media"
+          :openable="assetViewer"
+          @open="openGalleryItem"
+        />
+        <ContentAttachmentCard
+          v-else-if="
+            block.type === 'contentAttachment' &&
+            asset(block.data.asset).assetUuid
+          "
+          :asset="asset(block.data.asset)"
+          :title="block.data.title as string | undefined"
+          :description="block.data.caption as string | undefined"
+          :fallback-title="
+            phrase.content_file_with_extension(
+              asset(block.data.asset).extension,
+            )
+          "
+          :href="asset(block.data.asset).assetUrl"
+        />
+        <ExternalLinkPreviewCard
+          v-else-if="block.type === 'externalLink'"
+          :link="externalLink(block.data)"
+          :url="block.data.url as string"
+          :interactive="true"
+        />
+        <ContentIntegration
+          v-else-if="block.type === 'integration'"
+          :data="block.data"
+        />
+        <ContentEntityLinkBlock
+          v-else-if="block.type === 'entityLink'"
+          :entity-type="block.data.entityType as 'project' | 'event' | 'page'"
+          :entity-id="block.data.entityId as string | undefined"
+          :restricted="block.data.restricted as boolean | undefined"
+          :resolver="linkResolver"
+        />
+        <ContentPrivatePlaceholder
+          v-else-if="block.type === 'privateSectionPlaceholder'"
+          :summary="block.data"
+        />
+        <section
+          v-else-if="block.type === 'privateSectionExpanded'"
+          class="content-private-pattern content-private-section relative
+            isolate flex flex-col gap-sm"
+        >
+          <div
+            class="content-private-bracket"
+            data-private-section-edge="start"
+          >
+            <span class="content-private-bracket__label">
+              <Icon name="lock-close" aria-hidden="true" />
+              <span>{{ phrase.content_private_section_start }}</span>
+            </span>
+          </div>
+          <ContentRenderer
+            class="px-sm"
+            :data="{ blocks: block.data.blocks }"
+            :link-resolver="linkResolver"
+            :asset-viewer="assetViewer"
+            :content-headings="allHeadings"
+            :path-prefix="path"
+          />
+          <div class="content-private-bracket" data-private-section-edge="end">
+            <span class="content-private-bracket__label">
+              <Icon name="lock-close" aria-hidden="true" />
+              <span>{{ phrase.content_private_section_end }}</span>
+            </span>
+          </div>
+        </section>
+      </ContentSpoiler>
     </template>
     <ContentInlineLinkDecorator :root="root" :resolver="linkResolver" />
   </div>

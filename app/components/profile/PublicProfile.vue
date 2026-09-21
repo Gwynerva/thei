@@ -33,7 +33,7 @@ const facts = computed(() => {
     rows.push({
       id: 'birth',
       name: phrase.value.profile_birth_date,
-      value: `${formatAbsolutePublicDate(props.profile.birthDate, language.value.code, 'short')} · ${phrase.value.profile_age(age)}`,
+      value: `${formatAbsolutePublicDate(props.profile.birthDate, language.value.code)} · ${phrase.value.profile_age(age)}`,
     });
   return rows.concat(props.profile.facts);
 });

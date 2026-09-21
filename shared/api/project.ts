@@ -77,6 +77,8 @@ export type ProjectGetResponse = {
   actionFileExtension?: string;
   actionFileSize?: number;
   actionFaviconMedia?: MediaDescriptor;
+  reminder: string;
+  notes?: ContentFieldValue;
 };
 
 export type ProjectRelationGetItem = ProjectRelationEditItem & {
@@ -123,6 +125,8 @@ export type ProjectListItem = {
   createdAt: number;
   updatedAt: number;
   totalSize: number;
+  /** The owner-only reminder, when one is set. */
+  reminder?: string;
 };
 
 export type ProjectListResponse = AdminPaginatedResponse<ProjectListItem>;

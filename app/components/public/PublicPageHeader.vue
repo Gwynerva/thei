@@ -58,9 +58,10 @@ usePublicPageGlow({ color: accent });
         <span
           v-if="isCustom"
           class="flex size-20 shrink-0 items-center justify-center
-            overflow-hidden rounded-normal bg-bg-accent text-4xl
+            overflow-hidden rounded-normal text-4xl
             text-[var(--page-header-accent,var(--color-accent))] sm:size-14
             sm:text-3xl"
+          :class="iconMedia && !iconMedia.generated ? '' : 'bg-bg-accent'"
         >
           <Media v-if="iconMedia" v-bind="iconMedia" class="size-full" />
           <Icon v-else :name="icon" />
@@ -83,7 +84,7 @@ usePublicPageGlow({ color: accent });
           class="max-w-full text-3xl font-bold tracking-tight text-balance
             wrap-break-word sm:text-4xl"
         >
-          {{ title }}
+          {{ publicText(title) }}
         </h1>
       </div>
       <TheiLink
@@ -109,14 +110,14 @@ usePublicPageGlow({ color: accent });
           class="-z-1 w-20"
         />
         <Icon name="chevron-left" class="shrink-0 text-lg text-text-3" />
-        <span class="truncate">{{ backLink.title }}</span>
+        <span class="truncate">{{ publicText(backLink.title) }}</span>
       </TheiLink>
       <p
         v-if="description"
         class="text-lg leading-relaxed font-semibold text-balance text-text-2
           sm:text-xl sm:text-pretty"
       >
-        {{ description }}
+        {{ publicText(description) }}
       </p>
     </div>
     <slot></slot>

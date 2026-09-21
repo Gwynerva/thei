@@ -8,11 +8,17 @@ import {
 import { contentInlineLinksFromData } from './content-link';
 import { contentIntegrationUrl } from './content-integrations';
 
-export type ContentReferenceLinkCandidate =
+/**
+ * A link found in content, together with the owner's note about it if there is
+ * one. The first mention wins: a note written once should not be overruled by
+ * a bare second mention of the same address.
+ */
+export type ContentReferenceLinkCandidate = { note?: string } & (
   | { kind: 'external'; url: string }
   | { kind: 'project'; projectUuid: string }
   | { kind: 'event'; eventUuid: string }
-  | { kind: 'page'; pageUuid: string };
+  | { kind: 'page'; pageUuid: string }
+);
 
 export type ContentReferenceFileCandidate = {
   asset: ContentAssetData;
@@ -36,29 +42,29 @@ export function extractContentReferenceCandidates(
   const linkKeys = new Set<string>();
   const fileKeys = new Set<string>();
 
-  const appendExternal = (url: string) => {
+  const appendExternal = (url: string, note?: string) => {
     const key = `external:${url}`;
     if (linkKeys.has(key)) return;
     linkKeys.add(key);
-    links.push({ kind: 'external', url });
+    links.push({ kind: 'external', url, ...(note ? { note } : {}) });
   };
-  const appendProject = (projectUuid: string) => {
+  const appendProject = (projectUuid: string, note?: string) => {
     const key = `project:${projectUuid}`;
     if (linkKeys.has(key)) return;
     linkKeys.add(key);
-    links.push({ kind: 'project', projectUuid });
+    links.push({ kind: 'project', projectUuid, ...(note ? { note } : {}) });
   };
-  const appendEvent = (eventUuid: string) => {
+  const appendEvent = (eventUuid: string, note?: string) => {
     const key = `event:${eventUuid}`;
     if (linkKeys.has(key)) return;
     linkKeys.add(key);
-    links.push({ kind: 'event', eventUuid });
+    links.push({ kind: 'event', eventUuid, ...(note ? { note } : {}) });
   };
-  const appendPage = (pageUuid: string) => {
+  const appendPage = (pageUuid: string, note?: string) => {
     const key = `page:${pageUuid}`;
     if (linkKeys.has(key)) return;
     linkKeys.add(key);
-    links.push({ kind: 'page', pageUuid });
+    links.push({ kind: 'page', pageUuid, ...(note ? { note } : {}) });
   };
 
   for (const [index, block] of data.blocks.entries()) {
@@ -108,10 +114,12 @@ export function extractContentReferenceCandidates(
     }
 
     for (const link of contentInlineLinksFromData({ blocks: [block] })) {
-      if (link.kind === 'external') appendExternal(link.url);
-      else if (link.entityType === 'project') appendProject(link.entityId);
-      else if (link.entityType === 'event') appendEvent(link.entityId);
-      else appendPage(link.entityId);
+      if (link.kind === 'external') appendExternal(link.url, link.note);
+      else if (link.entityType === 'project')
+        appendProject(link.entityId, link.note);
+      else if (link.entityType === 'event')
+        appendEvent(link.entityId, link.note);
+      else appendPage(link.entityId, link.note);
     }
   }
 

@@ -132,3 +132,12 @@ export const showcaseItemsKey = Symbol('showcaseItems') as InjectionKey<
 export const otherItemsKey = Symbol('otherItems') as InjectionKey<
   Ref<OtherAssetGetItem[]>
 >;
+
+/**
+ * Lets a nested editor ask the project form to save itself once the content
+ * it just wrote back is the only difference from the last save. The form does
+ * the comparing: everything outside its content fields has to be untouched.
+ */
+export const saveAfterContentEditKey = Symbol(
+  'saveAfterContentEdit',
+) as InjectionKey<() => void>;

@@ -1,4 +1,5 @@
 import { ProjectEventAccessLevel } from '../access-level';
+import { normalizeEntityNotes, normalizeEntityReminder } from '../entity-notes';
 import {
   collectContentAssetUuids,
   contentPlainText,
@@ -89,6 +90,8 @@ export type ProjectEditData = {
   externalLinks?: ProjectExternalLinkEditItem[];
   tags?: TagEditItem[];
   action?: ProjectActionEditData;
+  reminder?: string;
+  notes?: ContentFieldModelValue | null;
 };
 
 export type ValidatedProjectEditData = Omit<
@@ -262,6 +265,8 @@ export function validateProjectData(
       externalLinks,
       tags,
       action,
+      reminder: normalizeEntityReminder(data.reminder),
+      notes: normalizeEntityNotes(data.notes),
     };
   } catch (error) {
     if (error instanceof ProjectValidationError) return error.message;

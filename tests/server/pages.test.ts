@@ -123,6 +123,7 @@ function createDb() {
       title text NOT NULL,
       summary text NOT NULL,
       access text NOT NULL,
+      reminder text NOT NULL DEFAULT '',
       createdAt integer NOT NULL,
       updatedAt integer NOT NULL
     );

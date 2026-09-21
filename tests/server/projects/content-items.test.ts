@@ -186,6 +186,8 @@ describe('project content item storage', () => {
         sortOrder: 0,
         startDate: '2027-01-01',
         endDate: '2027-01-02',
+        precision: 'exact',
+        precisionNote: '',
       },
     ]);
   });
@@ -243,6 +245,8 @@ function createDb() {
       "sortOrder" integer NOT NULL,
       "startDate" text NOT NULL,
       "endDate" text NOT NULL,
+      "precision" text DEFAULT 'exact' NOT NULL,
+      "precisionNote" text DEFAULT '' NOT NULL,
       PRIMARY KEY("stageType", "stageUuid", "sortOrder"),
       CONSTRAINT "stage-periods-stage-type-check"
         CHECK("stageType" in ('project-stage', 'event-stage'))

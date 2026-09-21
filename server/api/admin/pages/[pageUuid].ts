@@ -50,6 +50,12 @@ export default defineEventHandler(async (event) => {
         : undefined,
       iconAssetSize: icon?.asset.size,
       content,
+      reminder: stored.reminder,
+      notes: await THEI_SERVER.content.buildFieldValue(
+        'page',
+        pageUuid,
+        'page-notes',
+      ),
     } satisfies PageGetResponse;
   }
 
@@ -73,6 +79,12 @@ export default defineEventHandler(async (event) => {
         type: 'error',
         message: 'Page content is required',
       } satisfies PageSaveResponse;
+    const preparedNotes = await prepareContentForSave(
+      'page',
+      pageUuid,
+      'page-notes',
+      result.notes,
+    );
     const usages = await THEI_SERVER.assets.usages.findByContainer(
       'page',
       pageUuid,
@@ -92,6 +104,7 @@ export default defineEventHandler(async (event) => {
             summary: result.summary,
             slug: result.slug,
             access: result.access,
+            reminder: result.reminder,
             updatedAt: now,
           })
           .where(eq(schema.pages.pageUuid, pageUuid))
@@ -103,6 +116,14 @@ export default defineEventHandler(async (event) => {
           pageUuid,
           'page-body',
           prepared,
+        );
+        applyPreparedContentSave(
+          tx,
+          schema,
+          'page',
+          pageUuid,
+          'page-notes',
+          preparedNotes,
         );
         if (currentIcon?.asset.assetUuid !== result.iconAssetUuid) {
           if (currentIcon) {

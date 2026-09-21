@@ -1,11 +1,11 @@
 /**
- * Temporary links that open one private project or event.
+ * Temporary links that open one private project, event or page.
  *
  * The durations are deliberately short and few: a share link exists to let
  * someone look at something now, not to become a second, quieter way of
  * publishing it.
  */
-export type ShareLinkEntityType = 'project' | 'event';
+export type ShareLinkEntityType = 'project' | 'event' | 'page';
 
 export const SHARE_LINK_DURATIONS = {
   '30m': 30 * 60 * 1000,
@@ -22,6 +22,12 @@ export const SHARE_LINK_DURATION_ORDER: ShareLinkDuration[] = [
   '6h',
   '24h',
 ];
+
+export function isShareLinkEntityType(
+  value: unknown,
+): value is ShareLinkEntityType {
+  return value === 'project' || value === 'event' || value === 'page';
+}
 
 export function isShareLinkDuration(
   value: unknown,

@@ -9,7 +9,11 @@ describe('normalize', () => {
   });
 
   it('replaces -- with em dash', () => {
-    expect(normalize!('один -- два')).toBe('один \u2014 два');
+    expect(normalize!('один -- два')).toBe('один\u00a0\u2014 два');
+  });
+
+  it('keeps a short preposition with the word it introduces', () => {
+    expect(normalize!('работа в поле')).toBe('работа в\u00a0поле');
   });
 
   it('converts straight double quotes to guillemets', () => {

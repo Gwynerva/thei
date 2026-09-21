@@ -3,7 +3,11 @@ import {
   sortPublicDetailTimelineItems,
   type PublicDetailTimelineItem,
 } from './public-detail';
-import { getPublicDatePresentation } from '#layers/thei/app/composables/public-date';
+import {
+  datePresentationToneClass,
+  getPublicDatePresentation,
+  publicDatePrecisionLabels,
+} from '#layers/thei/app/composables/public-date';
 
 const props = defineProps<{ items: PublicDetailTimelineItem[] }>();
 const liveNow = useLiveNow();
@@ -14,7 +18,7 @@ const orderedItems = computed(() =>
       item.date,
       language.value.code,
       new Date(liveNow.value),
-      { relativeMonths: 3 },
+      { relativeMonths: 3, precisionLabels: publicDatePrecisionLabels() },
     ),
   })),
 );
@@ -48,8 +52,10 @@ const orderedItems = computed(() =>
         <time
           :datetime="item.date"
           :data-title-popup="item.presentation.title"
-          class="mt-1 block text-xs leading-none text-text-3"
+          class="mt-1 flex items-center gap-1 text-xs leading-none text-text-3"
+          :class="datePresentationToneClass(item.presentation)"
         >
+          <Icon v-if="item.presentation.approximate" name="approximate" />
           {{ item.presentation.label }}
         </time>
       </span>

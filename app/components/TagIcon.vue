@@ -15,7 +15,7 @@ const iconMedia = computed(() =>
     v-bind="$attrs"
     class="relative inline-flex shrink-0 items-center justify-center
       overflow-hidden"
-    :class="{ 'bg-bg-3 text-text-3': !iconMedia }"
+    :class="{ 'bg-bg-3 text-text-3': !iconMedia || iconMedia.generated }"
   >
     <Media v-if="iconMedia" v-bind="iconMedia" class="size-full" />
     <Icon v-else name="tag" />

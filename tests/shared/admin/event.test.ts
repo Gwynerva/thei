@@ -46,8 +46,18 @@ describe('validateEventData', () => {
     ];
     const result = validateEventData(eventData({ periods }));
     expect(typeof result === 'string' ? result : result.periods).toEqual([
-      { startDate: '2026-08-20', endDate: '2026-08-26' },
-      { startDate: '2026-09-01', endDate: '2026-09-01' },
+      {
+        startDate: '2026-08-20',
+        endDate: '2026-08-26',
+        precision: 'exact',
+        precisionNote: '',
+      },
+      {
+        startDate: '2026-09-01',
+        endDate: '2026-09-01',
+        precision: 'exact',
+        precisionNote: '',
+      },
     ]);
     expect(periods).toHaveLength(4);
   });

@@ -7,8 +7,12 @@ import {
   dateRangeEndTime,
   dateRangeStartTime,
   isDateRangeValue,
-  type DateRange,
 } from './date-range';
+import {
+  mergeDatePrecision,
+  normalizeDatePrecisionInfo,
+  type DatedPeriod,
+} from './date-precision';
 import {
   normalizeHumanReadableSlug,
   normalizePublicId,
@@ -27,7 +31,7 @@ export interface ProjectContentItemBase {
 export type ProjectStageContentItem = ProjectContentItemBase & {
   isStage: true;
   stageUuid?: string;
-  periods: DateRange[];
+  periods: DatedPeriod[];
 };
 
 export type ProjectSectionContentItem = Omit<
@@ -75,7 +79,7 @@ export function compareProjectStages(
   );
 }
 
-export function normalizeStagePeriods(value: unknown): DateRange[] {
+export function normalizeStagePeriods(value: unknown): DatedPeriod[] {
   if (!Array.isArray(value) || value.length === 0)
     throw new ProjectContentItemError('Stage period is required');
   const sorted = value
@@ -89,18 +93,26 @@ export function normalizeStagePeriods(value: unknown): DateRange[] {
         dateRangeStartTime(source.startDate) > dateRangeEndTime(source.endDate)
       )
         throw new ProjectContentItemError('Invalid stage period');
-      return { startDate: source.startDate, endDate: source.endDate };
+      return {
+        startDate: source.startDate,
+        endDate: source.endDate,
+        ...normalizeDatePrecisionInfo({
+          precision: source.precision as never,
+          precisionNote: source.precisionNote as never,
+        }),
+      };
     })
     .sort(
       (a, b) =>
         dateRangeStartTime(a.startDate) - dateRangeStartTime(b.startDate) ||
         dateRangeEndTime(a.endDate) - dateRangeEndTime(b.endDate),
     );
-  const merged: DateRange[] = [];
+  const merged: DatedPeriod[] = [];
   for (const period of sorted) {
     const previous = merged.at(-1);
     if (previous && period.startDate <= previous.endDate) {
       if (period.endDate > previous.endDate) previous.endDate = period.endDate;
+      Object.assign(previous, mergeDatePrecision(previous, period));
     } else merged.push({ ...period });
   }
   return merged;

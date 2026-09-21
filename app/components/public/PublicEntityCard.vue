@@ -16,5 +16,6 @@ defineProps<{ entity: PublicEntitySummary }>();
     :continuous-media="entity.type === 'project'"
     :projects="entity.relatedProjects"
     :tags="entity.tags"
+    :reminder="entity.reminder"
   />
 </template>

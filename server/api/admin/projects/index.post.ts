@@ -70,6 +70,13 @@ export default defineEventHandler(
       }
     }
 
+    const preparedNotes = await prepareContentForSave(
+      'project',
+      projectUuid,
+      'project-notes',
+      result.notes,
+    );
+
     let preparedSections;
     let preparedStages;
     try {
@@ -134,6 +141,7 @@ export default defineEventHandler(
           showcase: result.showcase,
           cv: result.cv,
           action: result.action,
+          reminder: result.reminder,
           createdAt: now,
           updatedAt: now,
         })
@@ -149,6 +157,14 @@ export default defineEventHandler(
           preparedDescription,
         );
       }
+      applyPreparedContentSave(
+        tx,
+        schema,
+        'project',
+        projectUuid,
+        'project-notes',
+        preparedNotes,
+      );
       applyProjectContentSections(tx, schema, projectUuid, preparedSections);
       applyProjectStages(tx, schema, projectUuid, preparedStages);
       applyProjectRelations(tx, schema, projectUuid, preparedRelations);

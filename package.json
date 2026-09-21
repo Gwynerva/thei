@@ -10,11 +10,11 @@
   },
   "main": "./nuxt.config.ts",
   "scripts": {
-    "assets:audit": "node scripts/audit-assets.mts",
     "dev": "nuxt dev .playground",
     "build": "nuxt build .playground",
     "start": "nuxt start .playground",
     "test": "bun vitest",
+    "test:types": "bun vitest --typecheck.enabled --typecheck.only",
     "test:e2e": "bunx playwright test --config=tests/e2e/playwright.config.ts",
     "typecheck": "nuxt typecheck .playground --checker golar",
     "format": "prettier --write .",

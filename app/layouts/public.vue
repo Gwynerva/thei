@@ -23,7 +23,7 @@ useHead({
   titleTemplate: (title) =>
     !title || title === siteName.value
       ? siteName.value
-      : `${title} — ${siteName.value}`,
+      : `${title} - ${siteName.value}`,
   script: [
     {
       key: 'public-website-jsonld',

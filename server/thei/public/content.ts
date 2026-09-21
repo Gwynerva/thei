@@ -43,7 +43,7 @@ const INLINE_ENTITY_ANCHOR =
 
 type EntityLinkAccess = 'resolvable' | 'restricted' | 'missing';
 
-type PublicContentEntity =
+export type PublicContentEntity =
   | { type: 'profile'; title?: string }
   | {
       type: 'event';

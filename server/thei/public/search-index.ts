@@ -342,7 +342,9 @@ export async function runPublicSearch(
             .from(schema.projects)
             .where(eq(schema.projects.projectUuid, document.uuid))
             .get();
-          return project ? await buildPublicProjectSummary(project) : undefined;
+          return project
+            ? await buildPublicProjectSummary(project, isAdmin)
+            : undefined;
         }
         const event = db
           .select()

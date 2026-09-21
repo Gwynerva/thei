@@ -17,6 +17,7 @@ import {
   currentProjectUuidKey,
   otherItemsKey,
   showcaseItemsKey,
+  saveAfterContentEditKey,
   provideProjectActionMedia,
 } from '../composables';
 import ProjectMain from './ProjectMain.vue';
@@ -56,6 +57,8 @@ const projectData = ref<ProjectEditData>({
   externalLinks: [],
   tags: [],
   action: { ...DEFAULT_PROJECT_ACTION },
+  reminder: '',
+  notes: null,
 });
 provide(projectDataInjectionKey, projectData);
 const savedProjectData = ref<ProjectEditData>(
@@ -156,6 +159,8 @@ if (isEdit.value) {
     externalLinks: data.externalLinks ?? [],
     tags: data.tags ?? [],
     action: data.action ?? { ...DEFAULT_PROJECT_ACTION },
+    reminder: data.reminder,
+    notes: data.notes ?? null,
   };
   showcaseItems.value = data.showcaseAssets ?? [];
   otherItems.value = data.otherAssets ?? [];
@@ -235,6 +240,36 @@ onUnmounted(() => {
 function handleBeforeUnload(e: BeforeUnloadEvent) {
   if (isDirty.value) e.preventDefault();
 }
+
+/**
+ * Saving inside the content editor saves the whole entity too, but only when
+ * the content was the single thing that changed since the last save. Anything
+ * else waiting to be saved stays the person's own decision, made with the
+ * editor closed and the whole form in front of them.
+ */
+/** Every place this form keeps authored content, at any depth. */
+const CONTENT_FIELDS = ['content', 'descriptionContent', 'notes'];
+
+function saveAfterContentEdit() {
+  if (saving.value || !canSave.value || !isEdit.value) return;
+  if (!changedOnlyIn(projectData.value, savedSnapshot.value, CONTENT_FIELDS))
+    return;
+  void handleSave();
+}
+provide(saveAfterContentEditKey, saveAfterContentEdit);
+
+const reminderModel = computed({
+  get: () => projectData.value.reminder ?? '',
+  set: (value: string) => {
+    projectData.value.reminder = value;
+  },
+});
+const notesModel = computed({
+  get: () => projectData.value.notes ?? null,
+  set: (value) => {
+    projectData.value.notes = value;
+  },
+});
 
 function markProjectSaved() {
   savedSnapshot.value = JSON.stringify(projectData.value);
@@ -319,6 +354,11 @@ async function openDeleteProjectModal() {
       v-if="resolvedProjectUuid"
       entity-type="project"
       :entity-uuid="resolvedProjectUuid"
+    />
+    <AdminNotesBlock
+      v-model:reminder="reminderModel"
+      v-model:notes="notesModel"
+      @notes-saved="saveAfterContentEdit()"
     />
   </div>
 </template>

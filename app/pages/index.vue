@@ -47,7 +47,7 @@ usePublicSeo({
   title: computed(() => {
     const nickname = profile.value.nickname.trim();
     return nickname
-      ? `${profile.value.displayName} | ${nickname}`
+      ? `${profile.value.displayName} - ${nickname}`
       : profile.value.displayName;
   }),
   description: computed(

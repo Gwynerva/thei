@@ -1,9 +1,10 @@
 <script lang="ts" setup>
-import { publicReferenceSplitSize } from '#layers/thei/shared/public-references';
 import type { PublicEventResponseFull } from '#layers/thei/shared/api/public';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
-import { coverDateRanges } from '#layers/thei/shared/date-range';
+import { coverDatedPeriods } from '#layers/thei/shared/date-precision';
 import type { PublicDetailPanelData } from '#layers/thei/app/components/public/public-detail';
+
+import { publicOwnerNotesHeading } from '#layers/thei/app/components/public/PublicOwnerNotes.vue';
 
 definePageMeta({ layout: 'public', key: (route) => route.path });
 const route = useRoute();
@@ -17,7 +18,7 @@ const canonical = computed(() =>
 if (route.path !== canonical.value)
   await navigateTo(canonical.value, { redirectCode: 301 });
 const eventCover = computed(() =>
-  data.value.periods.length ? coverDateRanges(data.value.periods) : undefined,
+  data.value.periods.length ? coverDatedPeriods(data.value.periods) : undefined,
 );
 const ogImage = useOgImage(
   'event',
@@ -54,6 +55,16 @@ usePublicSeo({
     },
   ],
 });
+/**
+ * Files the content itself carries — what a reader will actually run into
+ * while reading, rather than everything attached to the entity.
+ */
+const contentFileCount = computed(
+  () =>
+    data.value.references.files.shared.length +
+    data.value.references.files.content.length,
+);
+
 const details = computed(
   () =>
     ({
@@ -64,28 +75,19 @@ const details = computed(
       metrics: (
         [
           {
-            icon: 'calendar',
-            label: phrase.value.public_details_chronology,
-            value: data.value.periods.length,
-          },
-          {
-            icon: 'project',
-            label: phrase.value.related_projects,
-            value: data.value.relatedProjects.length,
-          },
-          {
-            icon: 'link',
-            label: phrase.value.public_details_links,
-            value: publicReferenceSplitSize(data.value.references.links),
-          },
-          {
             icon: 'files',
             label: phrase.value.public_details_files,
-            value: publicReferenceSplitSize(data.value.references.files),
+            value: contentFileCount.value,
           },
         ] satisfies PublicDetailPanelData['metrics']
       ).filter((metric) => metric.value > 0),
     }) satisfies PublicDetailPanelData,
+);
+
+const ownerNotesContents = computed(() =>
+  data.value.notes?.blocks.length
+    ? [publicOwnerNotesHeading(phrase.value.entity_notes)]
+    : [],
 );
 </script>
 
@@ -99,12 +101,18 @@ const details = computed(
     >
       <PublicAction v-if="data.action" :action="data.action" />
     </PublicPageHeader>
-    <PublicDetailLayout :details="details" :content="data.content">
+    <PublicReminderNotice :reminder="data.reminder" />
+    <PublicDetailLayout
+      :details="details"
+      :content="data.content"
+      :extra-contents="ownerNotesContents"
+    >
       <ContentRenderer
         v-if="data.content.blocks.length"
         :data="data.content"
         asset-viewer
       />
+      <PublicOwnerNotes :notes="data.notes" />
     </PublicDetailLayout>
   </main>
 </template>

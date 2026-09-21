@@ -31,7 +31,7 @@ defineProps<{ tags: PublicTagSummary[] }>();
         />
         <Icon v-else name="tag" class="size-full" />
       </span>
-      <span class="min-w-0 break-words">{{ tag.title }}</span>
+      <span class="min-w-0 break-words">{{ publicText(tag.title) }}</span>
     </TheiLink>
   </div>
 </template>

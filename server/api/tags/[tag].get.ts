@@ -80,7 +80,7 @@ export default defineEventHandler(async (event): Promise<PublicTagResponse> => {
             .limit(pagination.pageSize)
             .offset(offset)
             .all()
-            .map(buildPublicProjectSummary),
+            .map((item) => buildPublicProjectSummary(item, isAdmin)),
         )
       : await Promise.all(
           db

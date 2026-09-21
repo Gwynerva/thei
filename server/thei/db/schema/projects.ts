@@ -12,6 +12,8 @@ export const projects = sqliteTable('projects', {
   showcase: integer({ mode: 'boolean' }).notNull().default(false),
   cv: integer({ mode: 'boolean' }).notNull().default(false),
   action: text({ mode: 'json' }).$type<ProjectActionEditData>(),
+  /** Owner-only note to self; flags the entity wherever it is listed. */
+  reminder: text().notNull().default(''),
   createdAt: integer().notNull(),
   updatedAt: integer().notNull(),
 });

@@ -7,6 +7,8 @@ export const pages = sqliteTable('pages', {
   title: text().notNull(),
   summary: text().notNull(),
   access: text().notNull().$type<ProjectEventAccessLevel>(),
+  /** Owner-only note to self; flags the entity wherever it is listed. */
+  reminder: text().notNull().default(''),
   createdAt: integer().notNull(),
   updatedAt: integer().notNull(),
 });

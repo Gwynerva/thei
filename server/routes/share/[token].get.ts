@@ -1,8 +1,7 @@
-import { buildEventUrl } from '#layers/thei/shared/event-url';
-import { buildProjectUrl } from '#layers/thei/shared/project-url';
 import {
   rememberShareToken,
   resolveShareToken,
+  shareGrantPath,
 } from '../../thei/access-links/share-links';
 import { sitePath } from '../../thei/site-url';
 
@@ -26,16 +25,7 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  let target: string | undefined;
-  if (link.entityType === 'project') {
-    const project = await THEI_SERVER.projects.findByUuid(link.entityUuid);
-    if (project)
-      target = buildProjectUrl(project.humanReadableSlug, project.publicId);
-  } else {
-    const stored = await THEI_SERVER.events.findByUuid(link.entityUuid);
-    if (stored)
-      target = buildEventUrl(stored.humanReadableSlug, stored.publicId);
-  }
+  const target = await shareGrantPath(link.entityType, link.entityUuid);
   if (!target) throw createError({ statusCode: 404 });
 
   rememberShareToken(event, token);

@@ -1,15 +1,21 @@
 <script lang="ts" setup>
 import type { DateRange } from '#layers/thei/shared/date-range';
+import {
+  datePrecisionTone,
+  type DatedPeriod,
+} from '#layers/thei/shared/date-precision';
 
 const props = withDefaults(
   defineProps<{
-    period: DateRange;
+    period: DateRange | DatedPeriod;
     removable?: boolean;
+    /** Turns the label into a button that asks to reopen the picker. */
+    editable?: boolean;
     href?: string;
   }>(),
-  { removable: false },
+  { removable: false, editable: false },
 );
-const emit = defineEmits<{ remove: [] }>();
+const emit = defineEmits<{ remove: []; edit: [] }>();
 
 const formatter = computed(
   () =>
@@ -27,6 +33,37 @@ const label = computed(() => {
     ? startDate
     : `${startDate} — ${formatDate(props.period.endDate)}`;
 });
+
+const precision = computed(() =>
+  'precision' in props.period ? props.period.precision : 'exact',
+);
+const note = computed(() =>
+  'precisionNote' in props.period ? props.period.precisionNote : '',
+);
+const approximate = computed(() => precision.value !== 'exact');
+
+/** The doubt, spelled out: its level, then the owner's own words for it. */
+const approximateTitle = computed(() => {
+  if (!approximate.value) return undefined;
+  const level = {
+    exact: '',
+    day: phrase.value.date_precision_day,
+    month: phrase.value.date_precision_month,
+    year: phrase.value.date_precision_year,
+  }[precision.value];
+  return note.value ? `${level} · ${note.value}` : level;
+});
+
+const toneClass = computed(() => {
+  switch (datePrecisionTone(precision.value)) {
+    case 'neutral':
+      return approximate.value ? 'text-text-2' : '';
+    case 'warning':
+      return 'text-text-warning';
+    case 'alert':
+      return 'text-text-error';
+  }
+});
 </script>
 
 <template>
@@ -39,7 +76,23 @@ const label = computed(() => {
       hocus:text-text-1"
     :class="removable ? 'pr-1 pl-xs' : 'px-xs'"
   >
-    <span class="truncate">{{ label }}</span>
+    <component
+      :is="editable ? 'button' : 'span'"
+      :type="editable ? 'button' : undefined"
+      class="inline-flex min-w-0 items-center gap-1"
+      :class="editable ? 'cursor-pointer' : ''"
+      :aria-label="editable ? `${phrase.edit}: ${label}` : undefined"
+      @click="editable ? emit('edit') : undefined"
+    >
+      <Icon
+        v-if="approximate"
+        name="approximate"
+        class="shrink-0"
+        :class="toneClass"
+        :data-title-popup="approximateTitle"
+      />
+      <span class="truncate" :class="toneClass">{{ label }}</span>
+    </component>
     <button
       v-if="removable"
       type="button"

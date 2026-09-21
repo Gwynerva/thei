@@ -3,6 +3,7 @@ import { publicReferenceSplitSize } from '#layers/thei/shared/public-references'
 import type { PublicPageResponse } from '#layers/thei/shared/api/page';
 import type { PublicDetailPanelData } from '#layers/thei/app/components/public/public-detail';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
+import { publicOwnerNotesHeading } from '#layers/thei/app/components/public/PublicOwnerNotes.vue';
 
 definePageMeta({ layout: 'public', key: (route) => route.path });
 const route = useRoute();
@@ -49,6 +50,16 @@ const linkCount = computed(() =>
 const fileCount = computed(() =>
   publicReferenceSplitSize(data.value.references.files),
 );
+/**
+ * Files the content itself carries — what a reader will actually run into
+ * while reading, rather than everything attached to the entity.
+ */
+const contentFileCount = computed(
+  () =>
+    data.value.references.files.shared.length +
+    data.value.references.files.content.length,
+);
+
 const details = computed(
   () =>
     ({
@@ -71,12 +82,18 @@ const details = computed(
       references: data.value.references,
       metrics: [
         {
-          icon: 'link' as const,
-          label: phrase.value.public_details_references,
-          value: linkCount.value + fileCount.value,
+          icon: 'files' as const,
+          label: phrase.value.public_details_files,
+          value: contentFileCount.value,
         },
       ].filter((metric) => metric.value > 0),
     }) satisfies PublicDetailPanelData,
+);
+
+const ownerNotesContents = computed(() =>
+  data.value.notes?.blocks.length
+    ? [publicOwnerNotesHeading(phrase.value.entity_notes)]
+    : [],
 );
 </script>
 
@@ -88,8 +105,14 @@ const details = computed(
       :title="data.title"
       :description="data.summary"
     />
-    <PublicDetailLayout :details="details" :content="data.content">
+    <PublicReminderNotice :reminder="data.reminder" />
+    <PublicDetailLayout
+      :details="details"
+      :content="data.content"
+      :extra-contents="ownerNotesContents"
+    >
       <ContentRenderer :data="data.content" asset-viewer />
+      <PublicOwnerNotes :notes="data.notes" />
     </PublicDetailLayout>
   </main>
 </template>

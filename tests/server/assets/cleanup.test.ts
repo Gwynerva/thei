@@ -62,6 +62,7 @@ describe('asset cleanup', () => {
           showcase integer NOT NULL DEFAULT false,
           cv integer NOT NULL DEFAULT false,
           action text,
+          reminder text NOT NULL DEFAULT '',
           createdAt integer NOT NULL,
           updatedAt integer NOT NULL
         );
@@ -73,6 +74,7 @@ describe('asset cleanup', () => {
           humanReadableSlug text NOT NULL,
           publicId text NOT NULL UNIQUE,
           action text,
+          reminder text NOT NULL DEFAULT '',
           createdAt integer NOT NULL,
           updatedAt integer NOT NULL
         );
@@ -82,6 +84,7 @@ describe('asset cleanup', () => {
           title text NOT NULL,
           summary text NOT NULL,
           access text NOT NULL,
+          reminder text NOT NULL DEFAULT '',
           createdAt integer NOT NULL,
           updatedAt integer NOT NULL
         );

@@ -85,3 +85,81 @@ export function normalizePublicSearchText(value: string): string {
 export function publicSearchTokens(q: string): string[] {
   return normalizePublicSearchText(q).split(/\s+/u).filter(Boolean);
 }
+
+/**
+ * A handful of filter combinations that are pages in their own right.
+ *
+ * With no text query and no tags, "only projects" is simply the site's list of
+ * projects, and "only the CV" is a résumé. Naming them turns one search page
+ * into several addressable ones: each gets a title, a description, a place in
+ * the sitemap and a short address of its own, without a second page having to
+ * exist for it.
+ */
+export type PublicSearchPresetId =
+  'all' | 'projects' | 'events' | 'showcase' | 'cv';
+
+export interface PublicSearchPreset {
+  id: PublicSearchPresetId;
+  /**
+   * A short address that redirects to this configuration. The configuration
+   * itself stays canonical, so the short address is a door, not a second page.
+   */
+  path?: string;
+  filters: Pick<PublicSearchFilters, 'type' | 'showcase' | 'cv'>;
+}
+
+export const PUBLIC_SEARCH_PRESETS: PublicSearchPreset[] = [
+  { id: 'all', filters: { showcase: false, cv: false } },
+  {
+    id: 'projects',
+    path: '/projects/',
+    filters: { type: 'project', showcase: false, cv: false },
+  },
+  {
+    id: 'events',
+    path: '/events/',
+    filters: { type: 'event', showcase: false, cv: false },
+  },
+  {
+    id: 'showcase',
+    path: '/showcase/',
+    filters: { type: 'project', showcase: true, cv: false },
+  },
+  {
+    id: 'cv',
+    path: '/cv/',
+    filters: { type: 'project', showcase: false, cv: true },
+  },
+];
+
+/**
+ * Which preset a set of filters is, if any. A text query, a tag or a page
+ * beyond the first makes it an ordinary search again: those results change
+ * with the library and have no business in an index.
+ */
+export function publicSearchPreset(
+  filters: PublicSearchFilters,
+  page = 1,
+): PublicSearchPreset | undefined {
+  if (filters.q.trim() || filters.tags.length || filters.exclude.length)
+    return undefined;
+  if (page > 1) return undefined;
+  return PUBLIC_SEARCH_PRESETS.find(
+    (preset) =>
+      preset.filters.type === filters.type &&
+      preset.filters.showcase === filters.showcase &&
+      preset.filters.cv === filters.cv,
+  );
+}
+
+/** The canonical address of a preset: the search page with its filters. */
+export function publicSearchPresetHref(preset: PublicSearchPreset): string {
+  const query = publicSearchQuery({
+    q: '',
+    tags: [],
+    exclude: [],
+    ...preset.filters,
+  });
+  const search = new URLSearchParams(query).toString();
+  return search ? `/search/?${search}` : '/search/';
+}

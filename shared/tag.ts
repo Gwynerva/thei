@@ -1,5 +1,6 @@
 import type { MediaDescriptor } from './media';
 import { normalizePublicId, publicIdIsValid } from './public-link';
+import { normalizeUrlSegment } from './language/slugify';
 
 export const TAG_CONTAINER_TYPES = ['project', 'event'] as const;
 export type TagContainerType = (typeof TAG_CONTAINER_TYPES)[number];
@@ -63,10 +64,9 @@ export function validateTagData(data: unknown): string | TagEditData {
   const title = typeof item.title === 'string' ? item.title.trim() : '';
   if (!title) return 'Tag title cannot be empty';
   if (title.length > 100) return 'Tag title is too long';
-  const slug = typeof item.slug === 'string' ? item.slug.trim() : '';
+  const slug = normalizeUrlSegment(item.slug);
   if (!slug) return 'Tag slug cannot be empty';
   if (slug.length > 100) return 'Tag slug is too long';
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) return 'Invalid tag slug';
   const publicId = normalizePublicId(item.publicId);
   if (!publicIdIsValid(publicId)) return 'Invalid public ID';
   const description =

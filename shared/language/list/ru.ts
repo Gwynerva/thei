@@ -1,12 +1,55 @@
-﻿import { generalNormalize } from '../general-normalize';
+﻿import { bindShortWords, generalNormalize } from '../general-normalize';
 import { defineI18nModule } from '../define';
 import { slugify, transliterateCyrillic } from '../slugify';
 
+/**
+ * Предлоги, союзы и частицы, которые не должны оставаться в конце строки.
+ */
+const BOUND_WORDS = [
+  'а',
+  'б',
+  'в',
+  'ж',
+  'и',
+  'к',
+  'о',
+  'с',
+  'у',
+  'я',
+  'без',
+  'бы',
+  'во',
+  'для',
+  'до',
+  'же',
+  'за',
+  'из',
+  'или',
+  'как',
+  'ко',
+  'ли',
+  'на',
+  'над',
+  'не',
+  'ни',
+  'но',
+  'об',
+  'от',
+  'по',
+  'под',
+  'при',
+  'про',
+  'со',
+  'то',
+  'что',
+];
+
 function normalize(text: string): string {
-  return (
+  return bindShortWords(
     generalNormalize(text)
       // "text" → «text» (guillemets)
-      .replace(/"([^"]*)"/g, '\u00AB$1\u00BB')
+      .replace(/"([^"]*)"/g, '\u00AB$1\u00BB'),
+    BOUND_WORDS,
   );
 }
 
@@ -274,7 +317,7 @@ export default defineI18nModule({
     profile_load_error: 'Не удалось загрузить. Попробовать снова',
     profile_new_avatar: 'Новый аватар',
     profile_avatar_history: 'История аватарок',
-    profile_best_projects: 'Лучшие проекты',
+    profile_best_projects: 'Витринные проекты',
     profile_new_status: 'Новый статус',
     profile_edit_status: 'Изменение статуса',
     profile_status_placeholder: 'Сегодня я чувствую себя…',
@@ -1067,10 +1110,9 @@ export default defineI18nModule({
     view_event: 'Смотреть на сайте',
     view_page: 'Смотреть на сайте',
     saved: 'Сохранено',
-    showcase_project: 'Витрина',
-    showcase_project_hint:
-      'Включить отображение в витрине проектов на главной странице и сверху поиска.',
-    showcase_project_label: 'Витрина',
+    showcase_project: 'Витринный проект?',
+    showcase_project_hint: 'Показывать на главной странице и сверху поиска.',
+    showcase_project_label: 'Витринный проект',
     cv_project: 'Часть резюме?',
     cv_project_hint:
       'Потенциальному работодателю будет интересно увидеть этот проект.',
@@ -1167,7 +1209,7 @@ export default defineI18nModule({
     asset_pick_upload: 'Загрузить',
     asset_pick_reuse: 'Переиспользовать',
     asset_pick_reuse_hint: 'Выбрать ранее загруженное',
-    asset_replace: 'Заменить',
+    asset_replace: 'Изменить',
     asset_upload_drop_hint: 'Перетащите или выберите файл…',
     asset_upload_uploading: (percent: number) => `Загрузка… ${percent}%`,
     asset_upload_processing: 'Обработка…',
@@ -1188,9 +1230,9 @@ export default defineI18nModule({
     asset: 'Файл',
     upload_variants: 'Варианты файла',
     pick_another_file: 'Выбрать другой файл',
-    upload_replace_with_new_file: 'Заменить новым файлом',
+    upload_replace_with_new_file: 'Другой файл',
     upload_replace_with_new_file_hint:
-      'Новый файл начнет отдельный набор вариантов.',
+      'Можно загрузить новый файл или взять уже загруженный.',
     upload_section_selected_file: 'Выбранный файл',
     upload_section_source: 'Основа обработки',
     upload_section_family: 'Сохраненные варианты',
@@ -1230,16 +1272,6 @@ export default defineI18nModule({
     upload_variant_transformed: (index) => `Настроенный ${index}`,
     upload_variant_archive: 'ZIP-архив',
     upload_variant_saved: 'Сохраненный файл',
-    upload_variant_details_unchanged: 'Сохранен без преобразований',
-    upload_variant_details_zip: 'Содержимое упаковано в ZIP',
-    upload_variant_quality: (quality) => `Качество ${quality}%`,
-    upload_variant_resize_inside: 'Вписать',
-    upload_variant_resize_cover: 'Заполнить',
-    upload_variant_upscale: 'Увеличение разрешено',
-    upload_variant_no_upscale: 'Без увеличения',
-    upload_variant_audio_removed: 'Звук удалён',
-    upload_variant_audio_kept: 'Со звуком',
-    upload_variant_audio_none: 'Без звука',
     upload_source_no_audio: 'В исходнике нет звуковой дорожки',
     video_play: 'Воспроизвести',
     video_pause: 'Пауза',
@@ -1249,7 +1281,6 @@ export default defineI18nModule({
     video_volume: 'Громкость',
     video_no_audio: 'В этом видео нет звуковой дорожки',
     video_no_audio_short: 'Без звука',
-    upload_variant_fast: 'Быстрая конвертация',
     asset_variant_current: 'Используется сейчас',
     asset_variant_usage_count: (count) => `Использований: ${count}`,
     upload_error_load_variants: 'Не удалось загрузить варианты файла.',
@@ -1265,5 +1296,54 @@ export default defineI18nModule({
     file_info_empty: 'пусто',
     file_info_archived_extension: 'Расширение до ZIP',
     file_info_archived_size: 'Размер до ZIP',
+    date_precision: 'Точность даты',
+    date_precision_hint:
+      'Укажите, насколько вы уверены в этой дате. Неуверенность видна рядом с датой.',
+    date_precision_exact: 'Точная',
+    date_precision_day: 'День под вопросом',
+    date_precision_month: 'День и месяц под вопросом',
+    date_precision_year: 'День, месяц и год под вопросом',
+    date_precision_note: 'В чём неуверенность',
+    date_precision_note_placeholder: 'Где-то в это время, судя по фотографиям',
+    date_approximate: 'Приблизительная дата',
+    entity_notes_section: 'Примечания',
+    entity_notes_section_description:
+      'Напоминание и личные заметки. Их видите только вы — ни в поиск, ни в Markdown-копию они не попадают.',
+    entity_reminder: 'Напоминание',
+    entity_reminder_hint:
+      'Что здесь ещё надо сделать. Пока оно заполнено, сущность помечена жёлтым во всех списках.',
+    entity_reminder_placeholder: 'Найти фотографии за ту неделю',
+    entity_notes: 'Заметки',
+    entity_notes_hint:
+      'Всё, что стоит держать рядом с этой сущностью, но не публиковать.',
+    entity_notes_show_all: 'Показать всё',
+    entity_reminder_badge: 'У этой сущности есть напоминание',
+    content_strikethrough: 'Зачёркнутый',
+    content_hint: 'Подсказка',
+    content_hint_placeholder: 'Что здесь имеется в виду',
+    content_hint_remove: 'Убрать подсказку',
+    content_spoiler: 'Спойлер',
+    content_spoiler_hint: 'Этот блок скрыт, пока читатель его не откроет',
+    content_spoiler_reveal: 'Скрыто, нажмите, чтобы показать',
+    content_link_note: 'Пояснение к ссылке',
+    content_link_note_placeholder: 'Пояснение вместо заголовка',
+    public_details_show_all: (count) => `Показать все ${count}`,
+    view_all_short: 'Все',
+    powered_by_thei: 'Работает на Thei',
+    search_preset_all_title: 'Проекты и События',
+    search_preset_all_description:
+      'Всё, что стоит помнить: проекты и события вокруг них, новое сверху.',
+    search_preset_projects_title: 'Проекты',
+    search_preset_projects_description:
+      'Все проекты — и большие, и совсем маленькие — с тем, что из них вышло.',
+    search_preset_events_title: 'События',
+    search_preset_events_description:
+      'Моменты, которые оказались малы для проекта и слишком хороши, чтобы забыться.',
+    search_preset_showcase_title: 'Витринные проекты',
+    search_preset_showcase_description:
+      'То, что стоит увидеть первым — проекты, выбранные для витрины.',
+    search_preset_cv_title: 'Резюме',
+    search_preset_cv_description:
+      'Профессиональная часть архива: проекты, из которых складывается рабочая история.',
   },
 });

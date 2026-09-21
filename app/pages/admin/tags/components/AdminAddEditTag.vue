@@ -187,7 +187,7 @@ await useAdminTabTitle(
             v-model="data.title"
             type="text"
             autocomplete="off"
-            spellcheck="false"
+            spellcheck="true"
             maxlength="100"
             required
           />
@@ -218,7 +218,7 @@ await useAdminTabTitle(
         <FieldTextarea
           v-model="data.description"
           autocomplete="off"
-          spellcheck="false"
+          spellcheck="true"
           maxlength="2000"
         />
         <FieldHint>{{ phrase.tag_description_hint }}</FieldHint>

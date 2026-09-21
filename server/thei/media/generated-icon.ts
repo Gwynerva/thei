@@ -54,6 +54,7 @@ export function resolveGeneratedIcon(
     accent: { hue: accentHue, chroma: 0.15 },
     width: GENERATED_ICON_SIZE,
     height: GENERATED_ICON_SIZE,
+    generated: true,
   };
 }
 

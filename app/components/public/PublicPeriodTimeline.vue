@@ -1,5 +1,10 @@
 <script lang="ts" setup>
 import type { DateRange } from '#layers/thei/shared/date-range';
+import {
+  datePrecisionTone,
+  isApproximateDate,
+  type DatedPeriod,
+} from '#layers/thei/shared/date-precision';
 import { buildLifeUrl } from '#layers/thei/shared/life';
 import {
   publicTimelineGapDuration,
@@ -10,7 +15,7 @@ import {
 } from '#layers/thei/shared/public-timeline';
 import { formatAbsolutePublicDate } from '#layers/thei/app/composables/public-date';
 
-const props = defineProps<{ periods: DateRange[] }>();
+const props = defineProps<{ periods: (DateRange | DatedPeriod)[] }>();
 const orderedPeriods = computed(() =>
   sortPublicTimelineItemsNewestFirst(props.periods, (period) => period),
 );
@@ -24,6 +29,36 @@ function gapDuration(index: number) {
 
 function formatDate(value: string) {
   return formatAbsolutePublicDate(value, language.value.code);
+}
+
+/**
+ * A period the owner is unsure of carries the doubt on both of its ends, since
+ * the whole stretch is a guess rather than one of its edges.
+ */
+function approximate(period: DateRange | DatedPeriod) {
+  return 'precision' in period && isApproximateDate(period.precision);
+}
+
+function approximateClass(period: DateRange | DatedPeriod) {
+  if (!approximate(period)) return '';
+  const tone = datePrecisionTone((period as DatedPeriod).precision);
+  return tone === 'alert'
+    ? 'text-text-error'
+    : tone === 'warning'
+      ? 'text-text-warning'
+      : '';
+}
+
+function approximateTitle(period: DateRange | DatedPeriod) {
+  if (!approximate(period)) return undefined;
+  const { precision, precisionNote } = period as DatedPeriod;
+  const level = {
+    exact: '',
+    day: phrase.value.date_precision_day,
+    month: phrase.value.date_precision_month,
+    year: phrase.value.date_precision_year,
+  }[precision];
+  return precisionNote ? `${level} \u00b7 ${precisionNote}` : level;
 }
 
 function periodDurationLabel(period: DateRange) {
@@ -83,7 +118,13 @@ function periodDurationLabel(period: DateRange) {
             focus-visible:ring-2 focus-visible:ring-accent
             focus-visible:outline-none hocus:text-accent"
         >
-          <time :datetime="period.endDate" class="block text-sm">
+          <time
+            :datetime="period.endDate"
+            class="flex items-center gap-1 text-sm"
+            :class="approximateClass(period)"
+            :data-title-popup="approximateTitle(period)"
+          >
+            <Icon v-if="approximate(period)" name="approximate" />
             <template v-if="publicTimelineIsDay(period)">
               {{ formatDate(period.endDate) }}
             </template>
@@ -125,7 +166,13 @@ function periodDurationLabel(period: DateRange) {
             focus-visible:ring-2 focus-visible:ring-accent
             focus-visible:outline-none hocus:text-accent"
         >
-          <time :datetime="period.startDate" class="block text-sm">
+          <time
+            :datetime="period.startDate"
+            class="flex items-center gap-1 text-sm"
+            :class="approximateClass(period)"
+            :data-title-popup="approximateTitle(period)"
+          >
+            <Icon v-if="approximate(period)" name="approximate" />
             {{ phrase.public_timeline_from(formatDate(period.startDate)) }}
           </time>
         </TheiLink>

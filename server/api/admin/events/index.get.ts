@@ -168,6 +168,7 @@ export default defineEventHandler(async (event): Promise<EventListResponse> => {
           totalSize: Array.from(
             sizes.get(item.eventUuid)?.values() ?? [],
           ).reduce((sum, size) => sum + size, 0),
+          ...(item.reminder ? { reminder: item.reminder } : {}),
         };
       }),
     ),

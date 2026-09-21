@@ -111,6 +111,8 @@ if (isEdit.value) {
     relations: data.relations,
     tags: data.tags,
     action: data.action,
+    reminder: data.reminder,
+    notes: data.notes ?? null,
   };
   otherItems.value = data.otherAssets;
   actionMedia.applyLoaded(data);
@@ -212,6 +214,8 @@ function emptyData(): EventFormData {
     relations: [],
     tags: [],
     action: { ...DEFAULT_PROJECT_ACTION },
+    reminder: '',
+    notes: null,
     showcase: false,
     cv: false,
     showcaseAssets: [],
@@ -235,8 +239,39 @@ function eventPayload(): EventEditData {
     relations: value.relations,
     tags: value.tags,
     action: value.action,
+    reminder: value.reminder,
+    notes: value.notes,
   };
 }
+
+/**
+ * Saving inside the content editor saves the whole entity too, but only when
+ * the content was the single thing that changed since the last save. Anything
+ * else waiting to be saved stays the person's own decision, made with the
+ * editor closed and the whole form in front of them.
+ */
+/** Every place this form keeps authored content, at any depth. */
+const CONTENT_FIELDS = ['content', 'descriptionContent', 'notes'];
+
+function saveAfterContentEdit() {
+  if (saving.value || !isValid.value || !isEdit.value || !isDirty.value) return;
+  if (!changedOnlyIn(eventPayload(), savedSnapshot.value, CONTENT_FIELDS))
+    return;
+  void save();
+}
+
+const reminderModel = computed({
+  get: () => eventData.value.reminder ?? '',
+  set: (value: string) => {
+    eventData.value.reminder = value;
+  },
+});
+const notesModel = computed({
+  get: () => eventData.value.notes ?? null,
+  set: (value) => {
+    eventData.value.notes = value;
+  },
+});
 
 function markSaved() {
   savedSnapshot.value = JSON.stringify(eventPayload());
@@ -286,7 +321,7 @@ function clone<T>(value: T): T {
             v-model="eventData.title"
             type="text"
             autocomplete="off"
-            spellcheck="false"
+            spellcheck="true"
             required
           />
           <FieldHint>{{ phrase.event_title_hint }}</FieldHint>
@@ -330,6 +365,7 @@ function clone<T>(value: T): T {
         <FieldLabel required>{{ phrase.event_content }}</FieldLabel>
         <FieldContentEditor
           v-model="eventData.content"
+          @saved="saveAfterContentEdit()"
           :title-label="phrase.event_content"
         />
         <FieldHint>{{ phrase.event_content_hint }}</FieldHint>
@@ -363,6 +399,11 @@ function clone<T>(value: T): T {
       v-if="eventUuid"
       entity-type="event"
       :entity-uuid="eventUuid"
+    />
+    <AdminNotesBlock
+      v-model:reminder="reminderModel"
+      v-model:notes="notesModel"
+      @notes-saved="saveAfterContentEdit()"
     />
   </div>
 </template>

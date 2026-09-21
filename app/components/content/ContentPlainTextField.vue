@@ -22,6 +22,9 @@ const emit = defineEmits<{
 
 const root = useTemplateRef<HTMLElement>('root');
 
+// Captions are prose too, so they get the same typing shorthands as a field.
+useSmartTypography(() => (props.editable ? root.value : undefined));
+
 function sync() {
   if (!root.value) return;
   const value = root.value.textContent ?? '';

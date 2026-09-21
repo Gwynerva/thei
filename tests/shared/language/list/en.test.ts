@@ -9,7 +9,13 @@ describe('normalize', () => {
   });
 
   it('replaces -- with em dash', () => {
-    expect(normalize!('one -- two')).toBe('one \u2014 two');
+    expect(normalize!('one -- two')).toBe('one\u00a0\u2014 two');
+  });
+
+  it('keeps an article with the word it introduces', () => {
+    expect(normalize!('a walk in the park')).toBe(
+      'a\u00a0walk in\u00a0the\u00a0park',
+    );
   });
 
   it('converts straight double quotes to curly', () => {

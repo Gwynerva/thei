@@ -46,7 +46,9 @@ export {
   ContentBoldTool,
   ContentEntityLinkTool,
   ContentExternalInlineLinkTool,
+  ContentHintTool,
   ContentItalicTool,
+  ContentStrikeTool,
 } from './editor-inline-tools';
 
 export type ContentEditorAssetKind = 'media' | 'any';
@@ -138,8 +140,11 @@ export class ExternalLinkTool implements BlockTool {
   render() {
     this.wrapper = createToolWrapper();
     this.renderContent();
-    if (this.url && !this.preview && !this.options.readOnly)
-      void this.refresh();
+    // Opening an editor is not a reason to go out to the network. A link the
+    // site already knows about is served from its own record; one it has never
+    // seen is looked up once and kept. Only a link the person has just put in
+    // is fetched fresh, and that happens in `onPaste`.
+    if (this.url && !this.preview && !this.options.readOnly) void this.load();
     return this.wrapper;
   }
 
@@ -168,7 +173,28 @@ export class ExternalLinkTool implements BlockTool {
     void this.refresh();
   }
 
-  private async refresh() {
+  /** The stored record, fetched from the remote page only if there is none. */
+  private load() {
+    return this.request((signal) =>
+      $fetch<ExternalLink>('/api/admin/external-link-previews', {
+        query: { url: this.url },
+        signal,
+      }),
+    );
+  }
+
+  /** A deliberate re-read of the remote page, for a link just put in. */
+  private refresh() {
+    return this.request((signal) =>
+      $fetch<ExternalLink>('/api/admin/external-link-previews', {
+        method: 'POST',
+        body: { url: this.url },
+        signal,
+      }),
+    );
+  }
+
+  private async request(send: (signal: AbortSignal) => Promise<ExternalLink>) {
     const version = ++this.version;
     this.controller?.abort();
     const controller = new AbortController();
@@ -177,14 +203,7 @@ export class ExternalLinkTool implements BlockTool {
     this.error = false;
     this.renderContent();
     try {
-      const preview = await $fetch<ExternalLink>(
-        '/api/admin/external-link-previews',
-        {
-          method: 'POST',
-          body: { url: this.url },
-          signal: controller.signal,
-        },
-      );
+      const preview = await send(controller.signal);
       if (version !== this.version) return;
       this.preview = preview;
     } catch (cause: any) {

@@ -62,8 +62,8 @@ describe('fresh database installation', () => {
       ).toThrow(/NOT NULL/);
       expect(() =>
         context.rawDb
-          .prepare('INSERT INTO "stage-periods" VALUES (?, ?, ?, ?, ?)')
-          .run('invalid', 'id', 0, '2026', '2026'),
+          .prepare('INSERT INTO "stage-periods" VALUES (?, ?, ?, ?, ?, ?, ?)')
+          .run('invalid', 'id', 0, '2026', '2026', 'exact', ''),
       ).toThrow(/CHECK/);
       const profileStatusColumns = context.rawDb
         .pragma("table_info('profile-statuses')")

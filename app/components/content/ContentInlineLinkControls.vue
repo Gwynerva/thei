@@ -14,6 +14,7 @@ const open = ref(false);
 const mode = ref<'project' | 'external'>('project');
 const request = shallowRef<ContentInlineLinkRequest>();
 const externalUrl = ref('');
+const note = ref('');
 const externalPreview = ref<ExternalLink>();
 const externalPreviewUrl = ref<string>();
 const externalError = ref<string>();
@@ -63,12 +64,14 @@ const loadExternalPreviewDebounced = debounce(loadExternalPreview, 350);
 function openProject(next: ContentInlineLinkRequest) {
   mode.value = 'project';
   request.value = next;
+  note.value = next.initialNote ?? '';
   open.value = true;
 }
 
 function openExternal(next: ContentInlineLinkRequest) {
   mode.value = 'external';
   request.value = next;
+  note.value = next.initialNote ?? '';
   externalUrl.value = next.initialUrl ?? '';
   externalPreview.value = undefined;
   externalPreviewUrl.value = undefined;
@@ -83,7 +86,22 @@ function selectProject(project: ContentEntitySearchItem) {
     'data-content-link': 'entity',
     'data-entity-type': project.entityType,
     'data-entity-id': project.entityId,
+    'data-content-note': noteAttribute(),
   });
+  open.value = false;
+}
+
+/** An empty note is an absent attribute, never an empty one. */
+function noteAttribute() {
+  return note.value.trim() || undefined;
+}
+
+/**
+ * Editing only the note of a link that already exists: the target is
+ * untouched, so nothing but the note is written back.
+ */
+function submitNoteOnly() {
+  request.value?.apply('', { 'data-content-note': noteAttribute() });
   open.value = false;
 }
 
@@ -111,6 +129,7 @@ async function submitExternal() {
     'data-content-link': 'external',
     'data-entity-type': undefined,
     'data-entity-id': undefined,
+    'data-content-note': noteAttribute(),
   });
   open.value = false;
 }
@@ -145,6 +164,7 @@ function focusPopup() {
 }
 
 function popupClosed() {
+  note.value = '';
   loadExternalPreviewDebounced.cancel();
   externalRequestVersion++;
   externalLoading.value = false;
@@ -227,17 +247,41 @@ defineExpose<ContentInlineLinkControlsExpose>({ openProject, openExternal });
           :interactive="true"
         />
       </form>
-      <Button
-        v-if="mode === 'project' && request?.existing"
-        type="button"
-        variant="delete"
-        size="icon"
-        :aria-label="phrase.content_link_remove"
-        class="m-xs mt-0 self-end"
-        @click="removeLink"
+      <div
+        class="flex items-start gap-1 p-xs"
+        :class="mode === 'project' ? 'pt-0' : 'pt-0'"
       >
-        <Icon name="delete" />
-      </Button>
+        <FieldInput
+          v-model="note"
+          type="text"
+          autocomplete="off"
+          spellcheck="true"
+          wrapper-class="min-w-0 flex-1"
+          class="h-9 py-1 text-sm"
+          :aria-label="phrase.content_link_note"
+          :placeholder="phrase.content_link_note_placeholder"
+          @submit="mode === 'project' ? submitNoteOnly() : submitExternal()"
+        />
+        <Button
+          v-if="mode === 'project' && request?.existing"
+          type="button"
+          size="icon"
+          :aria-label="phrase.save"
+          @click="submitNoteOnly"
+        >
+          <Icon name="check" />
+        </Button>
+        <Button
+          v-if="mode === 'project' && request?.existing"
+          type="button"
+          variant="delete"
+          size="icon"
+          :aria-label="phrase.content_link_remove"
+          @click="removeLink"
+        >
+          <Icon name="delete" />
+        </Button>
+      </div>
     </div>
   </FloatingPopup>
 </template>

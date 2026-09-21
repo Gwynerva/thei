@@ -48,7 +48,7 @@ onMounted(() => {
       /></span>
     </component>
     <figcaption v-if="item.title" class="px-xs py-2 text-sm text-text-2">
-      {{ item.title }}
+      {{ publicText(item.title) }}
     </figcaption>
   </figure>
 </template>

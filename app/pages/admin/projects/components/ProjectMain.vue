@@ -6,6 +6,7 @@ import {
 import { projectDataInjectionKey, publicIdErrorKey } from '../composables';
 import LinkField from '../../components/LinkField.vue';
 import FieldContentEditor from '#layers/thei/app/components/field/FieldContentEditor.vue';
+import { saveAfterContentEditKey } from '../composables';
 
 const projectData = inject(projectDataInjectionKey)!;
 const publicIdError = inject(publicIdErrorKey)!;
@@ -22,6 +23,9 @@ const accessHint = computed(() => {
       return phrase.value.private_hint;
   }
 });
+
+/** Provided by the project form; absent when this block is reused elsewhere. */
+const saveAfterContentEdit = inject(saveAfterContentEditKey, undefined);
 </script>
 
 <template>
@@ -33,7 +37,7 @@ const accessHint = computed(() => {
           v-model="projectData.title"
           type="text"
           autocomplete="off"
-          spellcheck="false"
+          spellcheck="true"
           required
         />
         <FieldHint>{{ phrase.project_title_hint }}</FieldHint>
@@ -75,7 +79,7 @@ const accessHint = computed(() => {
       <FieldTextarea
         v-model="projectData.summary"
         autocomplete="off"
-        spellcheck="false"
+        spellcheck="true"
         required
       />
       <FieldHint>{{ phrase.project_summary_hint }}</FieldHint>
@@ -109,6 +113,7 @@ const accessHint = computed(() => {
       <FieldContentEditor
         v-model="projectData.descriptionContent"
         :title-label="phrase.project_description"
+        @saved="saveAfterContentEdit?.()"
       />
     </Field>
   </Box>

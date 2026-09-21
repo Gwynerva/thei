@@ -27,6 +27,12 @@ export default defineEventHandler(async (event): Promise<PageSaveResponse> => {
   );
   if (prepared.type !== 'save')
     return { type: 'error', message: 'Page content is required' };
+  const preparedNotes = await prepareContentForSave(
+    'page',
+    pageUuid,
+    'page-notes',
+    result.notes,
+  );
   const { db, schema } = THEI_SERVER.useDb();
   const now = Date.now();
   try {
@@ -38,6 +44,7 @@ export default defineEventHandler(async (event): Promise<PageSaveResponse> => {
           summary: result.summary,
           slug: result.slug,
           access: result.access,
+          reminder: result.reminder,
           createdAt: now,
           updatedAt: now,
         })
@@ -49,6 +56,14 @@ export default defineEventHandler(async (event): Promise<PageSaveResponse> => {
         pageUuid,
         'page-body',
         prepared,
+      );
+      applyPreparedContentSave(
+        tx,
+        schema,
+        'page',
+        pageUuid,
+        'page-notes',
+        preparedNotes,
       );
       if (result.iconAssetUuid) {
         tx.insert(schema.assetUsages)

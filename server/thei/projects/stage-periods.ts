@@ -1,5 +1,5 @@
 import { and, eq, inArray } from 'drizzle-orm';
-import type { DateRange } from '#layers/thei/shared/date-range';
+import type { DatedPeriod } from '#layers/thei/shared/date-precision';
 import type { StageType } from '#layers/thei/shared/stage-period';
 
 export function replaceStagePeriods(
@@ -7,7 +7,7 @@ export function replaceStagePeriods(
   schema: any,
   stageType: StageType,
   stageUuid: string,
-  periods: DateRange[],
+  periods: DatedPeriod[],
 ) {
   deleteStagePeriods(tx, schema, stageType, [stageUuid]);
   if (!periods.length) return;
@@ -19,6 +19,8 @@ export function replaceStagePeriods(
         sortOrder,
         startDate: period.startDate,
         endDate: period.endDate,
+        precision: period.precision,
+        precisionNote: period.precisionNote,
       })),
     )
     .run();

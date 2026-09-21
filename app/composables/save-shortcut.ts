@@ -80,11 +80,15 @@ export function createSaveShortcutRegistry(
       event.target,
       options.getActiveBoundary?.(),
     );
-    if (!owner || owner.running || !owner.canSave()) return;
+    if (!owner) return;
 
+    // Somewhere that can save at all, the shortcut belongs to the page even
+    // when saving is not possible right now — a half-filled form, a save
+    // already running, nothing changed. Letting the browser through would open
+    // its own "save page" dialog, which is the one thing the user never meant.
     event.preventDefault();
     event.stopPropagation();
-    if (event.repeat) return;
+    if (event.repeat || owner.running || !owner.canSave()) return;
 
     owner.running = true;
     try {

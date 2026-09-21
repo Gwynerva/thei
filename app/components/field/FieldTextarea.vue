@@ -3,11 +3,14 @@ defineOptions({ inheritAttrs: false });
 
 const attrs = useAttrs();
 
-const { required } = defineProps<{
+const { required, noTypography } = defineProps<{
   required?: boolean;
+  noTypography?: boolean;
 }>();
 
 const model = defineModel<string>();
+
+const emit = defineEmits<{ element: [HTMLTextAreaElement] }>();
 
 const touched = ref(false);
 const focused = ref(false);
@@ -34,6 +37,28 @@ function onBlur() {
 }
 
 const textarea = useTemplateRef('textarea');
+watch(textarea, (element) => {
+  if (element) emit('element', element);
+});
+
+/**
+ * Smart typography follows the spellcheck flag: a field marked as prose gets
+ * dashes and ellipses as it is typed, a field marked technical — a slug, a
+ * URL, a colour, a token — is left exactly as typed. `noTypography` turns it
+ * off for a prose field that is an exception.
+ *
+ * The opt-out is a flag rather than a three-state override on purpose: Vue
+ * gives an absent boolean prop the value `false`, never `undefined`, so an
+ * override could not tell "not set" from "set to off".
+ */
+const typographyEnabled = computed(
+  () =>
+    !noTypography && attrs.spellcheck !== 'false' && attrs.spellcheck !== false,
+);
+useSmartTypography(() =>
+  typographyEnabled.value ? textarea.value : undefined,
+);
+
 let resizeObserver: ResizeObserver | undefined;
 let resizeFrame: number | undefined;
 let observedWidth = 0;

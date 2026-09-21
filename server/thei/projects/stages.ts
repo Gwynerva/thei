@@ -205,7 +205,12 @@ export async function getProjectStages(projectUuid: string) {
         publicId: stage.publicId,
         isPrivate: stage.isPrivate,
         periods: (periodsByStage.get(stage.stageUuid) ?? []).map(
-          ({ startDate, endDate }) => ({ startDate, endDate }),
+          ({ startDate, endDate, precision, precisionNote }) => ({
+            startDate,
+            endDate,
+            precision,
+            precisionNote,
+          }),
         ),
         content: await THEI_SERVER.content.buildFieldValue(
           'project-stage',

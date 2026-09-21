@@ -7,7 +7,11 @@ import type { MediaDescriptor } from '#layers/thei/shared/media';
 import type { DateRange } from '#layers/thei/shared/date-range';
 import type { IconName } from '#thei/icons';
 import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
-import type { PublicDatePresentation } from '#layers/thei/app/composables/public-date';
+import {
+  datePresentationToneClass,
+  publicDatePrecisionLabels,
+  type PublicDatePresentation,
+} from '#layers/thei/app/composables/public-date';
 
 const props = defineProps<{
   /** Absent for a secret, which a visitor cannot open. */
@@ -25,6 +29,8 @@ const props = defineProps<{
   tags?: PublicTagSummary[];
   compact?: boolean;
   continuousMedia?: boolean;
+  /** Owner-only reminder; a visitor never receives one. */
+  reminder?: string;
   /** Presents a codename for something hidden from visitors. */
   secret?: boolean;
 }>();
@@ -36,7 +42,10 @@ const datePresentation = computed(
       props.period ?? props.date,
       language.value.code,
       new Date(),
-      { style: props.compact ? 'short' : 'long' },
+      {
+        style: props.compact ? 'short' : 'long',
+        precisionLabels: publicDatePrecisionLabels(),
+      },
     ),
 );
 const cardStyle = computed<Record<string, string>>(() => {
@@ -110,19 +119,32 @@ const hasFooter = computed(
           v-if="dateHref"
           :to="dateHref"
           :data-title-popup="datePresentation.title"
-          class="pointer-events-auto relative z-3 text-text-3 transition
-            focus-visible:ring-2 focus-visible:ring-accent hocus:text-accent"
+          class="pointer-events-auto relative z-3 inline-flex items-center gap-1
+            text-text-3 transition focus-visible:ring-2
+            focus-visible:ring-accent hocus:text-accent"
+          :class="datePresentationToneClass(datePresentation)"
         >
+          <Icon v-if="datePresentation.approximate" name="approximate" />
           {{ datePresentation.label }}
         </TheiLink>
         <time
           v-else
           :datetime="date"
           :data-title-popup="datePresentation.title"
-          class="text-text-3"
+          class="inline-flex items-center gap-1 text-text-3"
+          :class="datePresentationToneClass(datePresentation)"
         >
+          <Icon v-if="datePresentation.approximate" name="approximate" />
           {{ datePresentation.label }}
         </time>
+        <Icon
+          v-if="reminder"
+          name="warning"
+          :data-title-popup="`${phrase.entity_reminder_badge}: ${reminder}`"
+          :aria-label="phrase.entity_reminder_badge"
+          role="img"
+          class="pointer-events-auto relative z-3 shrink-0 text-text-warning"
+        />
         <Icon
           v-if="secret"
           name="lock-close"
@@ -143,14 +165,14 @@ const hasFooter = computed(
             sm:text-2xl"
           :class="{ italic: secret }"
         >
-          {{ title }}
+          {{ publicText(title) }}
         </h3>
         <p
           v-if="summary"
           class="mt-2 line-clamp-3 text-base leading-relaxed font-semibold
             text-text-2"
         >
-          {{ summary }}
+          {{ publicText(summary) }}
         </p>
       </div>
 

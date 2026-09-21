@@ -286,6 +286,7 @@ export default defineEventHandler(
             createdAt: project.createdAt,
             updatedAt: project.updatedAt,
             totalSize: sizeByProjectUuid.get(project.projectUuid) ?? 0,
+            ...(project.reminder ? { reminder: project.reminder } : {}),
           };
         }),
       ),

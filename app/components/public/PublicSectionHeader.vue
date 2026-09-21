@@ -30,19 +30,28 @@ defineProps<{
         {{ description }}
       </p>
     </div>
+    <!--
+      On a narrow screen the label gives way to an arrow: the count and the
+      direction are the whole message, and the words were taking the room the
+      heading needed. Every one of these buttons now looks the same, with or
+      without a count.
+    -->
     <TheiLink
       v-if="action"
       :to="action.href"
+      :aria-label="action.label"
+      :data-title-popup="action.label"
       class="inline-flex shrink-0 items-center gap-2 rounded-normal bg-bg-3
-        px-sm py-xs text-sm font-semibold text-text-2 transition
-        focus-visible:ring-2 focus-visible:ring-accent hocus:bg-accent/20
-        hocus:text-accent"
+        px-xs py-xs text-sm font-semibold text-text-2 transition
+        focus-visible:ring-2 focus-visible:ring-accent sm:px-sm
+        hocus:bg-accent/20 hocus:text-accent"
     >
-      <span>{{ action.label }}</span>
+      <span class="hidden sm:inline">{{ action.label }}</span>
+      <span class="sm:hidden">{{ phrase.view_all_short }}</span>
       <span v-if="action.count !== undefined" class="text-text-3 tabular-nums">
         {{ action.count }}
       </span>
-      <Icon v-if="action.icon" :name="action.icon" />
+      <Icon :name="action.icon ?? 'chevron-right'" class="shrink-0" />
     </TheiLink>
   </header>
 </template>

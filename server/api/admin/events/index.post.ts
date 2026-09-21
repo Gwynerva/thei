@@ -37,12 +37,14 @@ export default defineEventHandler(async (event): Promise<EventSaveResponse> => {
     async (id) => !(await THEI_SERVER.events.findByUuid(id)),
   );
   try {
-    const [contentSave, relations, externalLinks, tags] = await Promise.all([
-      prepareContentForSave('event', eventUuid, 'event-body', result.content),
-      prepareEventRelations(result.relations),
-      prepareExternalLinks(result.externalLinks),
-      prepareTagUsages(result.tags),
-    ]);
+    const [contentSave, notesSave, relations, externalLinks, tags] =
+      await Promise.all([
+        prepareContentForSave('event', eventUuid, 'event-body', result.content),
+        prepareContentForSave('event', eventUuid, 'event-notes', result.notes),
+        prepareEventRelations(result.relations),
+        prepareExternalLinks(result.externalLinks),
+        prepareTagUsages(result.tags),
+      ]);
     if (contentSave.type !== 'save')
       return { type: 'error', message: 'Event content is required' };
 
@@ -58,6 +60,7 @@ export default defineEventHandler(async (event): Promise<EventSaveResponse> => {
           humanReadableSlug: result.humanReadableSlug,
           publicId: result.publicId,
           action: result.action,
+          reminder: result.reminder,
           createdAt: now,
           updatedAt: now,
         })
@@ -70,6 +73,14 @@ export default defineEventHandler(async (event): Promise<EventSaveResponse> => {
         eventUuid,
         'event-body',
         contentSave,
+      );
+      applyPreparedContentSave(
+        tx,
+        schema,
+        'event',
+        eventUuid,
+        'event-notes',
+        notesSave,
       );
       applyEventRelations(tx, schema, eventUuid, relations);
       applyEventExternalLinks(tx, schema, eventUuid, externalLinks);

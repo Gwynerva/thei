@@ -1,16 +1,46 @@
 import type { DateRange } from '#layers/thei/shared/date-range';
+import {
+  datePrecisionTone,
+  isApproximateDate,
+  type DatedPeriod,
+  type DatePrecision,
+  type DatePrecisionTone,
+} from '#layers/thei/shared/date-precision';
 
-export type PublicDateValue = string | DateRange;
+export type PublicDateValue = string | DateRange | DatedPeriod;
 
 export type PublicDatePresentation = {
   label: string;
+  /** The hover explanation: the exact date, the doubt, or both. */
   title?: string;
+  /** True when the owner said the date is a guess. */
+  approximate?: boolean;
+  tone?: DatePrecisionTone;
 };
 
 export type PublicDatePresentationOptions = {
   relativeMonths?: number;
   style?: 'long' | 'short';
+  /**
+   * How the doubt should be worded. The composable knows the precision but not
+   * the language, so the caller hands it the phrases.
+   */
+  precisionLabels?: Partial<Record<DatePrecision, string>>;
 };
+
+/**
+ * The wording of each level of doubt. The formatter knows the precision but
+ * not the language, so every caller passes these in from the phrase table.
+ */
+export function publicDatePrecisionLabels(): Partial<
+  Record<DatePrecision, string>
+> {
+  return {
+    day: phrase.value.date_precision_day,
+    month: phrase.value.date_precision_month,
+    year: phrase.value.date_precision_year,
+  };
+}
 
 export function formatPublicMonthDay(date: string, locale: string): string {
   return new Intl.DateTimeFormat(locale, {
@@ -45,7 +75,11 @@ export function getPublicDatePresentation(
 ): PublicDatePresentation {
   const style = options.style ?? 'long';
   if (typeof value !== 'string') {
-    return { label: formatPublicDateRange(value, locale, style) };
+    return withPrecision(
+      { label: formatPublicDateRange(value, locale, style) },
+      value,
+      options,
+    );
   }
 
   const absolute = formatAbsolutePublicDate(value, locale, style);
@@ -62,6 +96,30 @@ export function getPublicDatePresentation(
         title: formatAbsolutePublicDate(value, locale),
       }
     : { label: absolute };
+}
+
+/**
+ * Adds the owner's doubt to a presentation, stacking it under whatever the
+ * hover text already said rather than replacing it.
+ */
+function withPrecision(
+  presentation: PublicDatePresentation,
+  value: DateRange | DatedPeriod,
+  options: PublicDatePresentationOptions,
+): PublicDatePresentation {
+  if (!('precision' in value) || !isApproximateDate(value.precision))
+    return presentation;
+  const parts = [
+    presentation.title,
+    options.precisionLabels?.[value.precision],
+    value.precisionNote || undefined,
+  ].filter(Boolean);
+  return {
+    ...presentation,
+    approximate: true,
+    tone: datePrecisionTone(value.precision),
+    title: parts.length ? parts.join(' \u00b7 ') : undefined,
+  };
 }
 
 export function formatAbsolutePublicDate(
@@ -161,4 +219,18 @@ function clampedUtcDate(year: number, month: number, day: number) {
       Math.min(day, lastDay),
     ),
   );
+}
+
+/** The colour a presentation's doubt is shown in, as a Tailwind class. */
+export function datePresentationToneClass(
+  presentation: PublicDatePresentation,
+): string {
+  switch (presentation.tone) {
+    case 'warning':
+      return 'text-text-warning';
+    case 'alert':
+      return 'text-text-error';
+    default:
+      return '';
+  }
 }

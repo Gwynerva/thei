@@ -145,8 +145,19 @@ const sourceFile = computed(() => {
     objectUrl: storedAsset.media?.src ?? storedAsset.assetUrl,
   };
 });
+/**
+ * "Processing source" only means something while a new file is being put on
+ * top of an existing one: then there really are two files, and it matters
+ * which one the settings are applied to. When an already-stored file is being
+ * edited there is one file, and the section is simply that file.
+ */
+const isProcessingSource = computed(
+  () =>
+    Boolean(processingSourceAsset.value) &&
+    props.modalData.source.kind === 'file',
+);
 const sourceSectionTitle = computed(() =>
-  processingSourceAsset.value
+  isProcessingSource.value
     ? phrase.value.upload_section_source
     : phrase.value.upload_section_selected_file,
 );
@@ -426,8 +437,6 @@ const expectedEditExtension = computed(() => {
 const uploadedVariantItems = computed(() =>
   sortedVariants.value.map((variant) => ({
     assetUuid: variant.assetUuid,
-    title: variantTitle(variant),
-    description: variantSettingsSummary(variant),
     extension: variant.extension,
     size: variant.size,
     dimensions: variantDimensions(variant),
@@ -849,40 +858,6 @@ function variantTitle(variant: AssetVariantInfo): string {
   return phrase.value.upload_variant_saved;
 }
 
-function variantSettingsSummary(variant: AssetVariantInfo): string {
-  const settings = variant.settings;
-  if (!settings || settings.type === 'original') {
-    return phrase.value.upload_variant_details_unchanged;
-  }
-  if (settings.type === 'file-zip') {
-    return phrase.value.upload_variant_details_zip;
-  }
-
-  const parts = [
-    phrase.value.upload_variant_quality(settings.quality),
-    settings.resizeMode === 'cover'
-      ? phrase.value.upload_variant_resize_cover
-      : phrase.value.upload_variant_resize_inside,
-    settings.allowUpscale
-      ? phrase.value.upload_variant_upscale
-      : phrase.value.upload_variant_no_upscale,
-  ];
-  if (settings.type === 'video-transform') {
-    const hasAudio = variantHasAudio(variant);
-    parts.push(
-      hasAudio !== false
-        ? phrase.value.upload_variant_audio_kept
-        : settings.stripAudio
-          ? phrase.value.upload_variant_audio_removed
-          : phrase.value.upload_variant_audio_none,
-    );
-    if (settings.fastConversion) {
-      parts.push(phrase.value.upload_variant_fast);
-    }
-  }
-  return parts.join(' · ');
-}
-
 function processingSourceKey() {
   return processingSourceAsset.value?.assetUuid
     ? `asset:${processingSourceAsset.value.assetUuid}`
@@ -1052,7 +1027,7 @@ function handleAssetMissing(error: unknown) {
           @activate="setActiveProfile('source')"
         >
           <div
-            v-if="processingSourceAsset"
+            v-if="isProcessingSource"
             class="text-sm leading-snug text-text-3"
           >
             {{ phrase.upload_source_hint }}

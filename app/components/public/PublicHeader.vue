@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { IconName } from '#thei/icons';
+import { version as theiVersion } from '#thei/static-public';
 
 const publicAdmin = await usePublicAdmin();
 const isAdmin = useIsAdmin();
@@ -99,6 +100,7 @@ function active(to: string) {
   >
     <SettingsVisualsBox
       :show-public-view-mode="isAdmin"
+      compact
       class="scrollbar-mini max-h-full overflow-y-auto"
     >
       <a
@@ -129,6 +131,23 @@ function active(to: string) {
           class="shrink-0 text-lg text-text-3 transition
             group-hocus:translate-x-0.5 group-hocus:text-accent"
         />
+      </a>
+      <!--
+        Whose engine this is, at the bottom where a colophon belongs: one line,
+        the mark, the name and the version, linking to the project.
+      -->
+      <a
+        href="https://github.com/Gwynerva/thei"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="flex items-center justify-center gap-1.5 border-t border-border-1
+          px-sm py-1.5 text-xs text-text-3 no-underline transition
+          focus-visible:ring-2 focus-visible:ring-accent
+          focus-visible:ring-inset hocus:text-accent"
+      >
+        <Icon name="thei" class="shrink-0" aria-hidden="true" />
+        <span>{{ phrase.powered_by_thei }}</span>
+        <span class="tabular-nums opacity-70">{{ theiVersion }}</span>
       </a>
     </SettingsVisualsBox>
   </FloatingPopup>

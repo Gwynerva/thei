@@ -1,4 +1,5 @@
 import { ProjectEventAccessLevel } from '../access-level';
+import { normalizeEntityNotes, normalizeEntityReminder } from '../entity-notes';
 import {
   ContentValidationError,
   isContentEmpty,
@@ -54,6 +55,8 @@ export function validateEventData(
       relations: validateRelations(data.relations),
       tags: validateTags(data.tags),
       action: normalizeProjectAction(data.action),
+      reminder: normalizeEntityReminder(data.reminder),
+      notes: normalizeEntityNotes(data.notes),
     };
   } catch (error) {
     if (

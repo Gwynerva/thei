@@ -2,18 +2,13 @@
 import type { PublicDetailPanelData } from './public-detail';
 
 const props = defineProps<{ data: PublicDetailPanelData }>();
-const metrics = computed(() => [
-  ...(props.data.contents?.length
-    ? [
-        {
-          icon: 'heading' as const,
-          label: phrase.value.public_details_contents,
-          value: props.data.contents.length,
-        },
-      ]
-    : []),
-  ...(props.data.metrics ?? []).filter((metric) => Number(metric.value) > 0),
-]);
+/**
+ * Only what the page actually holds. A count of headings measured the writing
+ * rather than the entity, and said the same thing about every page.
+ */
+const metrics = computed(() =>
+  (props.data.metrics ?? []).filter((metric) => Number(metric.value) > 0),
+);
 </script>
 
 <template>

@@ -185,6 +185,12 @@ export default defineEventHandler(async (event) => {
           projectUuid,
           'project-description',
         ),
+        reminder: project.reminder,
+        notes: await THEI_SERVER.content.buildFieldValue(
+          'project',
+          projectUuid,
+          'project-notes',
+        ),
         contentSections,
         stages,
         showcaseAssets,
@@ -239,6 +245,13 @@ export default defineEventHandler(async (event) => {
           throw error;
         }
       }
+
+      const preparedNotes = await prepareContentForSave(
+        'project',
+        projectUuid,
+        'project-notes',
+        result.notes,
+      );
 
       let preparedSections;
       let preparedStages;
@@ -332,6 +345,7 @@ export default defineEventHandler(async (event) => {
             showcase: result.showcase,
             cv: result.cv,
             action: result.action,
+            reminder: result.reminder,
             updatedAt: Date.now(),
           })
           .where(eq(schema.projects.projectUuid, projectUuid))
@@ -347,6 +361,14 @@ export default defineEventHandler(async (event) => {
             preparedDescription,
           );
         }
+        applyPreparedContentSave(
+          tx,
+          schema,
+          'project',
+          projectUuid,
+          'project-notes',
+          preparedNotes,
+        );
         applyProjectContentSections(tx, schema, projectUuid, preparedSections);
         applyProjectStages(tx, schema, projectUuid, preparedStages);
         applyProjectRelations(tx, schema, projectUuid, preparedRelations);

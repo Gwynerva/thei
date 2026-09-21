@@ -70,6 +70,14 @@ export type PublicDetailPanelData = {
  * history entry is released, then the router takes the hash, so its own scroll
  * handling lands the heading below the sticky bars instead of racing it.
  */
+/**
+ * Jumping to a heading from the mobile summary.
+ *
+ * The page is scrolled straight away and the sheet is closed underneath it, in
+ * that order: waiting for the closing animation and for history to settle only
+ * meant staring at a panel sliding away over a page that had not moved yet. By
+ * the time the sheet is gone the page is already where it should be.
+ */
 export function useSheetContentNavigation() {
   const router = useRouter();
   return async (
@@ -80,14 +88,16 @@ export function useSheetContentNavigation() {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
       return;
     event.preventDefault();
-    await close();
-    await modalHistorySettled();
+    document.getElementById(id)?.scrollIntoView();
+    const closed = close();
     const hash = `#${id}`;
-    if (router.currentRoute.value.hash === hash)
-      document.getElementById(id)?.scrollIntoView();
-    else {
+    if (router.currentRoute.value.hash !== hash) {
+      // The address catches up once the modal has let go of history, which it
+      // holds for as long as it is open.
+      await closed;
+      await modalHistorySettled();
       const { path, query } = router.currentRoute.value;
       await router.replace({ path, query, hash });
-    }
+    } else await closed;
   };
 }

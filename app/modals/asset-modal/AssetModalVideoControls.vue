@@ -101,43 +101,40 @@ function emitVolume(e: Event): void {
       @blur="scrubTime = null"
     />
 
-    <span class="shrink-0 text-xs text-text-1/70 tabular-nums select-none">
+    <span
+      class="shrink-0 text-xs text-text-1/70 tabular-nums select-none"
+      :class="hasAudio === false ? 'pr-xs' : ''"
+    >
       {{ formatTime(duration) }}
     </span>
 
-    <div class="flex shrink-0 items-center">
-      <template v-if="hasAudio !== false">
-        <button
-          type="button"
-          class="flex shrink-0 cursor-pointer items-center justify-center
-            rounded-full p-xs text-text-1/70 transition hocus:text-text-1"
-          :aria-label="isMuted ? phrase.video_unmute : phrase.video_mute"
-          @click="emit('toggleMute')"
-        >
-          <Icon :name="isMuted || volume === 0 ? 'volume-off' : 'volume-on'" />
-        </button>
-
-        <input
-          type="range"
-          class="volume-bar mr-xs"
-          min="0"
-          max="1"
-          :value="isMuted ? 0 : volume"
-          step="0.01"
-          :aria-label="phrase.video_volume"
-          :style="{ '--pct': volumePct }"
-          @input="emitVolume"
-        />
-      </template>
-      <span
-        v-else
-        class="flex cursor-help items-center gap-1 rounded-full p-xs text-xs
-          text-text-1/45 select-none"
-        :data-title-popup="phrase.video_no_audio"
+    <!--
+      A video with no sound says nothing about sound: no button, no slider, not
+      even a note that there is none. What is left is the bar, which keeps its
+      own margin from the edge instead of running into it.
+    -->
+    <div v-if="hasAudio !== false" class="flex shrink-0 items-center">
+      <button
+        type="button"
+        class="flex shrink-0 cursor-pointer items-center justify-center
+          rounded-full p-xs text-text-1/70 transition hocus:text-text-1"
+        :aria-label="isMuted ? phrase.video_unmute : phrase.video_mute"
+        @click="emit('toggleMute')"
       >
-        <Icon name="volume-off" class="text-base" />
-        <span class="pr-1">{{ phrase.video_no_audio_short }}</span>
-      </span>
+        <Icon :name="isMuted || volume === 0 ? 'volume-off' : 'volume-on'" />
+      </button>
+
+      <input
+        type="range"
+        class="volume-bar mr-xs"
+        min="0"
+        max="1"
+        :value="isMuted ? 0 : volume"
+        step="0.01"
+        :aria-label="phrase.video_volume"
+        :style="{ '--pct': volumePct }"
+        @input="emitVolume"
+      />
     </div>
   </div>
 </template>

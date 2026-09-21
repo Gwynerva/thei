@@ -15,10 +15,14 @@ const accent = computed(() =>
 <template>
   <article
     v-on="mediaEvents"
-    class="group relative isolate flex min-h-24 min-w-0 overflow-hidden
-      rounded-normal border border-border-1 bg-bg-2 shadow-md shadow-shadow-1
-      transition focus-within:border-border-2 hocus:border-border-2"
-    :style="{ '--search-result-accent': accent }"
+    class="search-result group relative isolate flex min-h-24 min-w-0
+      overflow-hidden rounded-normal border border-border-1 bg-bg-2 shadow-md
+      shadow-shadow-1 transition focus-within:-translate-y-px
+      focus-within:shadow-lg hocus:-translate-y-px hocus:shadow-lg"
+    :style="{
+      '--search-result-accent': accent,
+      '--search-result-shadow': `color-mix(in oklab, ${accent} 26%, transparent)`,
+    }"
   >
     <TheiLink
       :to="entity.href"
@@ -63,6 +67,15 @@ const accent = computed(() =>
           :data-title-popup="phrase.showcase"
         />
         <Icon
+          v-if="entity.reminder"
+          name="warning"
+          :aria-label="phrase.entity_reminder_badge"
+          role="img"
+          class="pointer-events-auto relative z-3 shrink-0 cursor-help
+            text-text-warning"
+          :data-title-popup="`${phrase.entity_reminder_badge}: ${entity.reminder}`"
+        />
+        <Icon
           v-if="entity.cv"
           name="case-important"
           :aria-label="phrase.cv_project_label"
@@ -75,19 +88,29 @@ const accent = computed(() =>
         class="search-result-title text-lg leading-snug font-bold tracking-tight
           wrap-break-word transition"
       >
-        {{ entity.title }}
+        {{ publicText(entity.title) }}
       </h2>
       <p
         v-if="entity.summary"
         class="line-clamp-2 text-sm leading-relaxed font-semibold text-text-2"
       >
-        {{ entity.summary }}
+        {{ publicText(entity.summary) }}
       </p>
     </div>
   </article>
 </template>
 
 <style scoped>
+/*
+ * The same treatment the cards on "Life" get, in smaller measure: results sit
+ * closer together here, so the lift is a single pixel and the glow is fainter.
+ */
+.search-result:hover,
+.search-result:focus-within {
+  border-color: var(--search-result-accent);
+  --tw-shadow-color: var(--search-result-shadow);
+}
+
 .group:hover .search-result-title,
 .group:focus-within .search-result-title {
   color: var(--search-result-accent);

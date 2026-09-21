@@ -5,7 +5,7 @@ import {
   type ProjectSectionContentItem,
   type ProjectStageContentItem,
 } from '#layers/thei/shared/project-content-item';
-import type { DateRange } from '#layers/thei/shared/date-range';
+import type { DatedPeriod } from '#layers/thei/shared/date-precision';
 import { isContentEmpty } from '#layers/thei/shared/content';
 import FieldContentEditor from '#layers/thei/app/components/field/FieldContentEditor.vue';
 import FieldDateRangePopup from '#layers/thei/app/components/field/FieldDateRangePopup.vue';
@@ -21,8 +21,15 @@ type ProjectLinkIdentity = {
   projectHumanReadableSlug: string;
   projectPublicId: string;
 };
-type ModalData = ProjectLinkIdentity &
-  (
+type ModalData = ProjectLinkIdentity & {
+  /**
+   * Called when the content editor saves and this item already exists. The
+   * project form takes the item from here without the modal closing.
+   */
+  onContentSaved?: (
+    item: ProjectStageContentItem | ProjectSectionContentItem,
+  ) => void;
+} & (
     | { isStage: true; item?: ProjectStageContentItem }
     | { isStage: false; item?: ProjectSectionContentItem }
   );
@@ -32,18 +39,21 @@ type Result =
 type ItemDraft = ProjectContentItemBase & {
   stageUuid?: string;
   sectionUuid?: string;
-  periods?: DateRange[];
+  periods?: DatedPeriod[];
 };
 
 const emit = defineEmits<{ modalResult: [result: Result] }>();
 const props = defineProps<{ modalData: ModalData }>();
 const isStage = computed(() => props.modalData.isStage);
-const { value: item, isDirty } = useSerializableState(
-  createInitialItem(props.modalData),
-);
+const {
+  value: item,
+  isDirty,
+  markSaved,
+} = useSerializableState(createInitialItem(props.modalData));
 const periodPopupOpen = ref(false);
 const periodPopupAnchor = useTemplateRef<HTMLElement>('periodPopupAnchor');
-const pendingPeriod = ref<DateRange>();
+const pendingPeriod = ref<DatedPeriod>();
+const editedPeriodIndex = ref<number>();
 const modalContainer =
   useTemplateRef<InstanceType<typeof ModalContainer>>('modalContainer');
 const canSave = computed(() => {
@@ -56,15 +66,73 @@ const canSave = computed(() => {
 useModalCloseGuard(
   () => !isDirty.value || window.confirm(phrase.value.unsaved_modal_confirm),
 );
-watch(pendingPeriod, (period) => {
+/**
+ * A period is committed on a click, not the moment its dates are picked: the
+ * certainty bar below the calendar is chosen afterwards, and closing the popup
+ * on the first click would never let anyone reach it.
+ */
+function confirmPeriod() {
+  const period = pendingPeriod.value;
   if (!period) return;
-  item.value.periods = normalizeStagePeriods([
-    ...(item.value.periods ?? []),
-    period,
-  ]);
+  const rest = (item.value.periods ?? []).filter(
+    (_, index) => index !== editedPeriodIndex.value,
+  );
+  item.value.periods = normalizeStagePeriods([...rest, period]);
   pendingPeriod.value = undefined;
+  editedPeriodIndex.value = undefined;
   periodPopupOpen.value = false;
+}
+
+function openPeriod(index?: number) {
+  editedPeriodIndex.value = index;
+  pendingPeriod.value =
+    index === undefined ? undefined : { ...item.value.periods![index]! };
+  periodPopupOpen.value = true;
+}
+
+watch(periodPopupOpen, (isOpen) => {
+  if (isOpen) return;
+  pendingPeriod.value = undefined;
+  editedPeriodIndex.value = undefined;
 });
+
+/**
+ * Saving inside the content editor hands the stage or section over without
+ * closing anything: the editor stays open, the project form takes the item and
+ * decides for itself whether the content was the only thing that changed.
+ *
+ * A brand-new stage is left out. It is a decision of its own, and it is made
+ * with the Save button.
+ */
+function saveAfterContentEdit() {
+  if (!props.modalData.item) return;
+  props.modalData.onContentSaved?.(buildItem());
+  markSaved();
+}
+
+function buildItem(): ProjectStageContentItem | ProjectSectionContentItem {
+  const base: ProjectContentItemBase = {
+    title: item.value.title.trim(),
+    summary: item.value.summary.trim(),
+    humanReadableSlug: item.value.humanReadableSlug,
+    publicId: item.value.publicId,
+    isPrivate: item.value.isPrivate,
+    content: item.value.content,
+  };
+  return props.modalData.isStage
+    ? {
+        ...base,
+        isStage: true,
+        stageUuid: item.value.stageUuid,
+        periods: normalizeStagePeriods(item.value.periods),
+      }
+    : {
+        ...base,
+        isStage: false,
+        sectionUuid: item.value.sectionUuid,
+        content: item.value.content!,
+      };
+}
 
 function save() {
   if (!canSave.value) return;
@@ -232,7 +300,9 @@ async function deleteItem() {
             <ModalHeaderButton
               icon="plus"
               :label="phrase.add"
-              @click="periodPopupOpen = !periodPopupOpen"
+              @click="
+                periodPopupOpen ? (periodPopupOpen = false) : openPeriod()
+              "
             >
               {{ phrase.add }}
             </ModalHeaderButton>
@@ -241,6 +311,10 @@ async function deleteItem() {
               v-model:open="periodPopupOpen"
               :anchor="periodPopupAnchor"
               teleport-to="dialog"
+              :confirm-label="
+                editedPeriodIndex === undefined ? phrase.add : phrase.save
+              "
+              @confirm="confirmPeriod"
             />
           </div>
         </div>
@@ -253,6 +327,8 @@ async function deleteItem() {
             :key="`${period.startDate}:${period.endDate}`"
             :period="period"
             removable
+            editable
+            @edit="openPeriod(index)"
             @remove="removePeriod(index)"
           />
         </div>
@@ -272,6 +348,7 @@ async function deleteItem() {
               ? phrase.project_stage_content
               : phrase.content_section_content)
           "
+          @saved="saveAfterContentEdit"
         />
       </Field>
     </div>

@@ -109,7 +109,7 @@ const visibleTags = computed(() => props.tags.slice(0, 3));
                 font-bold tracking-tight text-balance wrap-break-word
                 sm:text-5xl"
             >
-              {{ title }}
+              {{ publicText(title) }}
             </h1>
           </div>
           <p
@@ -117,7 +117,7 @@ const visibleTags = computed(() => props.tags.slice(0, 3));
             class="hero-summary max-w-180 text-base leading-relaxed
               font-semibold text-white/72 sm:text-xl"
           >
-            {{ summary }}
+            {{ publicText(summary) }}
           </p>
         </div>
         <PublicAction v-if="action" :action />

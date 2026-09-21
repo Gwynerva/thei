@@ -52,7 +52,7 @@ function accentStyle(project: PublicProjectReference) {
           />
         </div>
         <div class="mt-xs line-clamp-2 text-center text-xs font-medium">
-          {{ project.title }}
+          {{ publicText(project.title) }}
         </div>
       </TheiLink>
     </div>

@@ -73,8 +73,59 @@ describe('stage periods', () => {
         { startDate: '2026-01-16', endDate: '2026-01-20' },
       ]),
     ).toEqual([
-      { startDate: '2026-01-05', endDate: '2026-01-15' },
-      { startDate: '2026-01-16', endDate: '2026-01-20' },
+      {
+        startDate: '2026-01-05',
+        endDate: '2026-01-15',
+        precision: 'exact',
+        precisionNote: '',
+      },
+      {
+        startDate: '2026-01-16',
+        endDate: '2026-01-20',
+        precision: 'exact',
+        precisionNote: '',
+      },
+    ]);
+  });
+
+  it('keeps the wider doubt and the first explanation when merging', () => {
+    expect(
+      normalizeStagePeriods([
+        {
+          startDate: '2026-01-10',
+          endDate: '2026-01-15',
+          precision: 'month',
+          precisionNote: 'somewhere that winter',
+        },
+        { startDate: '2026-01-05', endDate: '2026-01-12' },
+      ]),
+    ).toEqual([
+      {
+        startDate: '2026-01-05',
+        endDate: '2026-01-15',
+        precision: 'month',
+        precisionNote: 'somewhere that winter',
+      },
+    ]);
+  });
+
+  it('drops an explanation left behind by an exact date', () => {
+    expect(
+      normalizeStagePeriods([
+        {
+          startDate: '2026-01-05',
+          endDate: '2026-01-12',
+          precision: 'exact',
+          precisionNote: 'stale note',
+        },
+      ]),
+    ).toEqual([
+      {
+        startDate: '2026-01-05',
+        endDate: '2026-01-12',
+        precision: 'exact',
+        precisionNote: '',
+      },
     ]);
   });
 

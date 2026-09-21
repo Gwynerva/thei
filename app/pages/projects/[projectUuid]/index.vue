@@ -9,6 +9,8 @@ import {
 } from '#layers/thei/app/components/content/content-headings';
 import type { IconName } from '#thei/icons';
 
+import { publicOwnerNotesHeading } from '#layers/thei/app/components/public/PublicOwnerNotes.vue';
+
 definePageMeta({ layout: 'public', key: (route) => route.path });
 const route = useRoute();
 const resource = await useFetch<PublicProjectResponse>(
@@ -161,11 +163,6 @@ const details = computed(
       metrics: (
         [
           {
-            icon: 'star',
-            label: phrase.value.showcase,
-            value: data.value.showcase.length,
-          },
-          {
             icon: 'calendar',
             label: phrase.value.project_stages,
             value: data.value.stages.length,
@@ -176,18 +173,24 @@ const details = computed(
             value: data.value.sections.length,
           },
           {
-            icon: 'event',
-            label: phrase.value.related_events,
-            value: data.value.relatedEvents.total,
+            icon: 'files',
+            label: phrase.value.public_details_files,
+            value: fileCount.value,
           },
           {
             icon: 'link',
-            label: phrase.value.public_details_references,
-            value: linkCount.value + fileCount.value,
+            label: phrase.value.public_details_links,
+            value: linkCount.value,
           },
         ] satisfies PublicDetailPanelData['metrics']
       ).filter((metric) => metric.value > 0),
     }) satisfies PublicDetailPanelData,
+);
+
+const ownerNotesContents = computed(() =>
+  data.value.notes?.blocks.length
+    ? [publicOwnerNotesHeading(phrase.value.entity_notes)]
+    : [],
 );
 </script>
 
@@ -207,7 +210,11 @@ const details = computed(
 
     <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
       <PublicShareNotice />
-      <PublicDetailLayout :details="details">
+      <PublicReminderNotice :reminder="data.reminder" />
+      <PublicDetailLayout
+        :details="details"
+        :extra-contents="ownerNotesContents"
+      >
         <div class="flex min-w-0 flex-col gap-lg">
           <ContentRenderer
             v-if="data.description?.blocks.length"
@@ -279,6 +286,7 @@ const details = computed(
               />
             </div>
           </section>
+          <PublicOwnerNotes :notes="data.notes" />
         </div>
       </PublicDetailLayout>
     </div>

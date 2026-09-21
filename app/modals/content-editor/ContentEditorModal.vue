@@ -5,6 +5,7 @@ import type {
   BlockMutationEvent,
   InlineToolConstructable,
   OutputData,
+  ToolConstructable,
 } from '@editorjs/editorjs';
 import type {
   AssetReplaceResult,
@@ -45,11 +46,14 @@ import FloatingPopup from '#layers/thei/app/components/FloatingPopup.vue';
 import ContentStats from '#layers/thei/app/components/content/ContentStats.vue';
 import ContentInlineLinkDecorator from '#layers/thei/app/components/content/ContentInlineLinkDecorator.vue';
 import ContentInlineLinkControls from '#layers/thei/app/components/content/ContentInlineLinkControls.vue';
+import ContentHintControls from '#layers/thei/app/components/content/ContentHintControls.vue';
 import ContentEntitySearchPopup from '#layers/thei/app/components/content/ContentEntitySearchPopup.vue';
 import type { ContentEntitySearchItem } from '#layers/thei/shared/admin/content-entity-search';
 import {
   ContentAttachmentTool,
   ContentBoldTool,
+  ContentHintTool,
+  ContentStrikeTool,
   ContentGalleryTool,
   ContentItalicTool,
   ContentEntityLinkTool,
@@ -62,11 +66,17 @@ import {
   type ContentEditorAssetKind,
 } from '#layers/thei/app/components/content/editor-tools';
 import type {
+  ContentHintControlsExpose,
+  ContentHintRequest,
   ContentInlineLinkControlsExpose,
   ContentInlineLinkRequest,
 } from '#layers/thei/app/components/content/editor-inline-links';
 import { editorIcon } from '#layers/thei/app/components/content/editor-icons';
 import { ContentDelimiterTool } from '#layers/thei/app/components/content/editor-delimiter-tool';
+import {
+  ContentSpoilerTune,
+  type ContentSpoilerTuneConfig,
+} from '#layers/thei/app/components/content/editor-spoiler-tune';
 import { assetDetailsModal } from '#layers/thei/app/modals/asset-details/modal';
 import { createEditorBlockDrag } from '#layers/thei/app/composables/editor-block-drag';
 import { createEditorPrivateSections } from '#layers/thei/app/composables/editor-private-sections';
@@ -85,14 +95,22 @@ const props = defineProps<{
     value?: ContentFieldModelValue | null;
     snapshotKey: string;
     onSave: (value: ContentFieldModelValue) => void;
+    /**
+     * Called once the content has been written back into the form behind the
+     * editor. The form decides for itself whether that was the only change
+     * and whether it can therefore save the whole entity.
+     */
+    onSaved?: () => void | Promise<void>;
   };
 }>();
 
 const holder = useTemplateRef<HTMLElement>('holder');
+let cleanupSmartTypography: (() => void) | undefined;
 const modalContainer =
   useTemplateRef<InstanceType<typeof ModalContainer>>('modalContainer');
 const inlineLinkControls =
   useTemplateRef<ContentInlineLinkControlsExpose>('inlineLinkControls');
+const hintControls = useTemplateRef<ContentHintControlsExpose>('hintControls');
 const contentLinkResolver = useContentLinkResolver('admin');
 const entityPickerOpen = ref(false);
 const entityPickerAnchor = ref<HTMLElement>();
@@ -381,9 +399,14 @@ onMounted(async () => {
       messages: editorJsI18nMessages(),
     },
     minHeight: 240,
+    // Every block can be a spoiler, so the tune is registered globally rather
+    // than listed on each tool.
+    tunes: ['spoiler'],
     inlineToolbar: [
       'contentBold',
       'contentItalic',
+      'contentStrike',
+      'contentHint',
       'contentEntityLink',
       'contentExternalInlineLink',
     ],
@@ -393,6 +416,9 @@ onMounted(async () => {
       strong: true,
       i: true,
       em: true,
+      s: true,
+      strike: true,
+      abbr: { 'data-content-hint': true },
       a: {
         href: true,
         rel: true,
@@ -404,6 +430,13 @@ onMounted(async () => {
       br: true,
     },
     tools: {
+      spoiler: {
+        class: ContentSpoilerTune as unknown as ToolConstructable,
+        config: {
+          title: phrase.value.content_spoiler,
+          markerTitle: phrase.value.content_spoiler_hint,
+        } satisfies ContentSpoilerTuneConfig,
+      },
       contentBold: {
         class: ContentBoldTool as unknown as InlineToolConstructable,
       },
@@ -411,6 +444,16 @@ onMounted(async () => {
         // Editor.js 2.x still types constructable render() as HTMLElement even
         // though its current InlineTool API accepts MenuConfig.
         class: ContentItalicTool as unknown as InlineToolConstructable,
+      },
+      contentStrike: {
+        class: ContentStrikeTool as unknown as InlineToolConstructable,
+      },
+      contentHint: {
+        class: ContentHintTool as unknown as InlineToolConstructable,
+        config: {
+          open: (request: ContentHintRequest) =>
+            hintControls.value?.open(request),
+        },
       },
       contentEntityLink: {
         class: ContentEntityLinkTool as unknown as InlineToolConstructable,
@@ -550,6 +593,9 @@ onMounted(async () => {
   cleanupEditorDrag = createEditorBlockDrag(holder.value!, editor, {
     canMove: editorPrivateSections.canMove,
   });
+  // One binding for the whole editor: the events bubble up from whichever
+  // block is being typed in, and the rules read the caret, not the target.
+  cleanupSmartTypography = bindSmartTypography(holder.value!);
 });
 
 onBeforeUnmount(() => {
@@ -557,6 +603,8 @@ onBeforeUnmount(() => {
   editorSnapshots.destroy();
   cleanupEditorPopoverLayer?.();
   cleanupEditorPopoverLayer = undefined;
+  cleanupSmartTypography?.();
+  cleanupSmartTypography = undefined;
   cleanupEditorDrag?.();
   cleanupEditorDrag = undefined;
   editorPrivateSections?.destroy();
@@ -593,6 +641,7 @@ async function save() {
     };
     headerSummary.value = summary;
     props.modalData.onSave(savedValue);
+    await props.modalData.onSaved?.();
   } catch (error) {
     errorMessage.value =
       error instanceof ContentValidationError
@@ -817,6 +866,8 @@ function editorJsI18nMessages() {
       Link: text.link,
       Bold: text.bold,
       Italic: text.italic,
+      Strikethrough: phrase.value.content_strikethrough,
+      Hint: phrase.value.content_hint,
       'Project link': phrase.value.content_internal_link,
       'External link': phrase.value.content_external_link,
       'Internal link': phrase.value.content_internal_link,
@@ -874,6 +925,10 @@ function editorJsI18nMessages() {
     />
     <ContentInlineLinkControls
       ref="inlineLinkControls"
+      :teleport-to="holder?.closest('dialog') ?? undefined"
+    />
+    <ContentHintControls
+      ref="hintControls"
       :teleport-to="holder?.closest('dialog') ?? undefined"
     />
     <FloatingPopup

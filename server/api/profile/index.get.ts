@@ -128,7 +128,7 @@ export default defineEventHandler(
           .slice(0, 3)
           .map((project) =>
             canListPublicEntity(project.access, isAdmin)
-              ? buildPublicProjectSummary(project)
+              ? buildPublicProjectSummary(project, isAdmin)
               : buildSecretReference('project', project.projectUuid),
           ),
       ),

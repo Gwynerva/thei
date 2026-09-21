@@ -10,12 +10,15 @@ export interface ContentEntityLink {
   entityId: string;
   href?: string;
   label: string;
+  /** Why this link is here, in the owner's words. */
+  note?: string;
 }
 
 export interface ContentExternalInlineLink {
   kind: 'external';
   url: string;
   label: string;
+  note?: string;
 }
 
 export type ContentInlineLink = ContentEntityLink | ContentExternalInlineLink;
@@ -82,7 +85,20 @@ export type ContentLinkResolver = (
   reference: ContentLinkReference,
 ) => Promise<ResolvedContentLink>;
 
-const INLINE_TAGS = new Set(['a', 'b', 'strong', 'i', 'em', 'br']);
+const INLINE_TAGS = new Set([
+  'a',
+  'b',
+  'strong',
+  'i',
+  'em',
+  's',
+  'strike',
+  'abbr',
+  'br',
+]);
+
+/** `execCommand` still writes the ancient `strike`; storage keeps only `s`. */
+const INLINE_TAG_ALIASES: Record<string, string> = { strike: 's' };
 
 export function contentInlineLinkSanitizeConfig() {
   return {
@@ -92,6 +108,7 @@ export function contentInlineLinkSanitizeConfig() {
     'data-content-link': true,
     'data-entity-type': true,
     'data-entity-id': true,
+    'data-content-note': true,
   };
 }
 
@@ -106,22 +123,35 @@ export function normalizeContentInlineHtml(value: unknown): string {
     .replace(/<\/?([a-z][\w-]*)\b([^>]*)>/gi, (source, rawName, rawAttrs) => {
       const name = String(rawName).toLowerCase();
       if (!INLINE_TAGS.has(name)) return '';
-      if (source.startsWith('</')) return name === 'br' ? '' : `</${name}>`;
-      if (name !== 'a') return name === 'br' ? '<br>' : `<${name}>`;
+      const tag = INLINE_TAG_ALIASES[name] ?? name;
+      if (source.startsWith('</')) return tag === 'br' ? '' : `</${tag}>`;
+      if (tag === 'abbr') {
+        const hint = parseAttributes(String(rawAttrs))['data-content-hint'];
+        // A hint with nothing to say is not a hint; the text survives, the
+        // markup does not.
+        return hint?.trim()
+          ? `<abbr data-content-hint="${escapeAttribute(hint.trim())}">`
+          : '';
+      }
+      if (tag !== 'a') return tag === 'br' ? '<br>' : `<${tag}>`;
 
       const attributes = parseAttributes(String(rawAttrs));
       const kind = attributes['data-content-link'];
       const entityType = attributes['data-entity-type'];
       const entityId = attributes['data-entity-id']?.trim();
+      const note = attributes['data-content-note']?.trim();
+      const noteAttribute = note
+        ? ` data-content-note="${escapeAttribute(note)}"`
+        : '';
       if (kind === 'entity' && isContentEntityType(entityType) && entityId) {
-        return `<a data-content-link="entity" data-entity-type="${entityType}" data-entity-id="${escapeAttribute(entityId)}">`;
+        return `<a data-content-link="entity" data-entity-type="${entityType}" data-entity-id="${escapeAttribute(entityId)}"${noteAttribute}>`;
       }
 
       const href = attributes.href;
       if (href) {
         try {
           const url = normalizeExternalLinkUrl(href);
-          return `<a href="${escapeAttribute(url)}" data-content-link="external">`;
+          return `<a href="${escapeAttribute(url)}" data-content-link="external"${noteAttribute}>`;
         } catch {
           if (href.startsWith('/') && !href.startsWith('//'))
             return `<a href="${escapeAttribute(href)}">`;
@@ -134,7 +164,7 @@ export function normalizeContentInlineHtml(value: unknown): string {
 
 const HORIZONTAL_SPACE_SOURCE = String.raw`(?:[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]|&(?:nbsp|#0*160|#x0*a0);)`;
 const HORIZONTAL_SPACE_RUN = new RegExp(`${HORIZONTAL_SPACE_SOURCE}+`, 'gi');
-const INLINE_TOKEN = /<br>|<\/?(?:a|b|strong|i|em)(?:\s[^>]*)?>/gi;
+const INLINE_TOKEN = /<br>|<\/?(?:a|b|strong|i|em|s|abbr)(?:\s[^>]*)?>/gi;
 
 export function normalizeContentText(value: unknown): string {
   if (typeof value !== 'string') return '';
@@ -280,12 +310,16 @@ export function extractContentInlineLinks(html: string): ContentInlineLink[] {
     const attributes = parseAttributes(match[1] ?? '');
     const label = plainInlineText(match[2] ?? '');
     const href = attributes.href;
+    // The owner's own words about why the link is there; the sidebar shows
+    // them in place of the target's title.
+    const note = attributes['data-content-note']?.trim() || undefined;
     if (attributes['data-content-link'] === 'external' || href) {
       try {
         links.push({
           kind: 'external',
           url: normalizeExternalLinkUrl(href),
           label,
+          ...(note ? { note } : {}),
         });
         continue;
       } catch {
@@ -302,6 +336,7 @@ export function extractContentInlineLinks(html: string): ContentInlineLink[] {
       entityId,
       href,
       label,
+      ...(note ? { note } : {}),
     });
   }
   return links;

@@ -306,6 +306,7 @@ export async function readCleanEditorOutput(
           id: string;
           tool: string;
           data: OutputBlockData['data'];
+          tunes?: Record<string, unknown>;
         }
       | undefined;
     if (!saved) continue;
@@ -315,6 +316,10 @@ export async function readCleanEditorOutput(
       data: stripHydratedContentInlineLinks(
         saved.data,
       ) as OutputBlockData['data'],
+      // Block attributes travel beside the data, and a block that lost them on
+      // the way out would look unchanged to the dirty check and be saved
+      // without them.
+      ...(saved.tunes ? { tunes: saved.tunes } : {}),
     });
   }
   return cleanEditorSnapshot({ blocks });

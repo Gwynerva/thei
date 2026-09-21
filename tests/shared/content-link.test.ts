@@ -115,7 +115,23 @@ describe('content inline links', () => {
       'data-content-link': true,
       'data-entity-type': true,
       'data-entity-id': true,
+      'data-content-note': true,
     });
+  });
+
+  it('keeps a note on a link and drops an empty one', () => {
+    expect(
+      normalizeContentInlineHtml(
+        '<a href="https://example.com/" data-content-link="external" data-content-note=" why ">x</a>',
+      ),
+    ).toBe(
+      '<a href="https://example.com/" data-content-link="external" data-content-note="why">x</a>',
+    );
+    expect(
+      normalizeContentInlineHtml(
+        '<a href="https://example.com/" data-content-link="external" data-content-note="  ">x</a>',
+      ),
+    ).toBe('<a href="https://example.com/" data-content-link="external">x</a>');
   });
 
   it('stores only identity, URL, and replacement text', () => {
@@ -125,5 +141,35 @@ describe('content inline links', () => {
     expect(stripHydratedContentInlineLinks(value)).toEqual({
       text: '<a data-content-link="entity" data-entity-type="project" data-entity-id="p-1">Project label</a> <a href="https://example.com/" data-content-link="external">External label</a>',
     });
+  });
+});
+
+describe('inline markup: strikethrough and hints', () => {
+  it('keeps strikethrough and folds the legacy tag into it', () => {
+    expect(normalizeContentInlineHtml('<s>gone</s>')).toBe('<s>gone</s>');
+    expect(normalizeContentInlineHtml('<strike>gone</strike>')).toBe(
+      '<s>gone</s>',
+    );
+  });
+
+  it('keeps a hint together with its note', () => {
+    expect(
+      normalizeContentInlineHtml('<abbr data-content-hint="a bay">Kara</abbr>'),
+    ).toBe('<abbr data-content-hint="a bay">Kara</abbr>');
+  });
+
+  it('drops a hint that explains nothing, keeping its text', () => {
+    expect(
+      normalizeContentInlineHtml('<abbr data-content-hint="  ">Kara</abbr>'),
+    ).toBe('Kara');
+    expect(normalizeContentInlineHtml('<abbr>Kara</abbr>')).toBe('Kara');
+  });
+
+  it('drops any other attribute a hint arrives with', () => {
+    expect(
+      normalizeContentInlineHtml(
+        '<abbr title="x" onclick="y" data-content-hint="note">t</abbr>',
+      ),
+    ).toBe('<abbr data-content-hint="note">t</abbr>');
   });
 });

@@ -1,7 +1,21 @@
 <script lang="ts" setup>
+import { normalizeUrlSegment } from '#layers/thei/shared/language/slugify';
+
 const title = defineModel<string>('title', { required: true });
-const readableSlug = defineModel<string>('humanReadableSlug', {
+const storedSlug = defineModel<string>('humanReadableSlug', {
   required: true,
+});
+
+/**
+ * What a URL cannot carry never makes it into the field. Typing a slash or a
+ * question mark simply does nothing, instead of being accepted here and
+ * quietly rewritten on save.
+ */
+const readableSlug = computed({
+  get: () => storedSlug.value,
+  set: (value: string) => {
+    storedSlug.value = normalizeUrlSegment(value);
+  },
 });
 const publicId = defineModel<string>('publicId', { required: true });
 

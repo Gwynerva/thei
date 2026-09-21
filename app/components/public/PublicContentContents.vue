@@ -26,7 +26,7 @@ const emit = defineEmits<{
       <span v-if="item.icon" class="flex h-lh shrink-0 items-center">
         <Icon :name="item.icon" class="text-text-3" aria-hidden="true" />
       </span>
-      <span class="min-w-0">{{ item.title }}</span>
+      <span class="min-w-0">{{ publicText(item.title) }}</span>
     </a>
   </nav>
 </template>

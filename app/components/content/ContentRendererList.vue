@@ -26,7 +26,7 @@ withDefaults(
       <span v-if="style === 'checklist'" class="mr-xs text-text-2">
         <Icon :name="item.meta?.checked ? 'check' : 'missing'" />
       </span>
-      <span v-html="item.content"></span>
+      <span v-html="publicRichText(item.content)"></span>
       <ContentRendererList
         v-if="item.items?.length"
         :items="item.items"

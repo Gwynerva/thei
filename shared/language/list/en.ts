@@ -1,4 +1,4 @@
-import { generalNormalize } from '../general-normalize';
+import { bindShortWords, generalNormalize } from '../general-normalize';
 import { defineI18nBase } from '../define';
 import { slugify } from '../slugify';
 
@@ -17,13 +17,21 @@ function formatDuration(years: number, months: number, days: number) {
   );
 }
 
+/**
+ * Articles and short prepositions that should never be the last thing on a
+ * line. Kept deliberately short: English tolerates a line ending on a longer
+ * preposition, and binding everything would make the ragged edge worse.
+ */
+const BOUND_WORDS = ['a', 'an', 'the', 'in', 'on', 'at', 'to', 'of', 'as'];
+
 function normalize(text: string): string {
-  return (
+  return bindShortWords(
     generalNormalize(text)
       // "text" → "text" (curly double quotes)
       .replace(/"([^"]*)"/g, '\u201C$1\u201D')
       // Smart apostrophe in contractions: don't → don't
-      .replace(/(\w)'(\w)/g, '$1\u2019$2')
+      .replace(/(\w)'(\w)/g, '$1\u2019$2'),
+    BOUND_WORDS,
   );
 }
 
@@ -269,7 +277,7 @@ export default defineI18nBase({
     profile_load_error: 'Could not load. Try again',
     profile_new_avatar: 'New avatar',
     profile_avatar_history: 'Avatar history',
-    profile_best_projects: 'Best projects',
+    profile_best_projects: 'Showcase projects',
     profile_new_status: 'New status',
     profile_edit_status: 'Edit status',
     profile_status_placeholder: 'Today I feel…',
@@ -1045,8 +1053,7 @@ export default defineI18nBase({
     view_page: 'View on Site',
     saved: 'Saved',
     showcase_project: 'Showcase project?',
-    showcase_project_hint:
-      'Show this project in the project showcase on the home page and at the top of search results.',
+    showcase_project_hint: 'Show on the home page and at the top of search.',
     showcase_project_label: 'Showcase project',
     cv_project: 'In Your CV?',
     cv_project_hint:
@@ -1143,7 +1150,7 @@ export default defineI18nBase({
     asset_pick_upload: 'Upload',
     asset_pick_reuse: 'Reuse',
     asset_pick_reuse_hint: 'Choose a previously uploaded file',
-    asset_replace: 'Replace',
+    asset_replace: 'Change',
     asset_upload_drop_hint: 'Drop or Browse file…',
     asset_upload_uploading: (percent: number) => `Uploading… ${percent}%`,
     asset_upload_processing: 'Processing…',
@@ -1164,9 +1171,9 @@ export default defineI18nBase({
     asset: 'Asset',
     upload_variants: 'File Variants',
     pick_another_file: 'Pick another file',
-    upload_replace_with_new_file: 'Replace with a new file',
+    upload_replace_with_new_file: 'Another file',
     upload_replace_with_new_file_hint:
-      'A new file starts a separate set of variants.',
+      'Upload a new file, or pick one that is already here.',
     upload_section_selected_file: 'Selected file',
     upload_section_source: 'Processing source',
     upload_section_family: 'Saved variants',
@@ -1206,16 +1213,6 @@ export default defineI18nBase({
     upload_variant_transformed: (index) => `Processed ${index}`,
     upload_variant_archive: 'ZIP archive',
     upload_variant_saved: 'Saved file',
-    upload_variant_details_unchanged: 'Saved without processing',
-    upload_variant_details_zip: 'Contents packaged as ZIP',
-    upload_variant_quality: (quality) => `Quality ${quality}%`,
-    upload_variant_resize_inside: 'Fit inside',
-    upload_variant_resize_cover: 'Cover',
-    upload_variant_upscale: 'Upscaling allowed',
-    upload_variant_no_upscale: 'No upscaling',
-    upload_variant_audio_removed: 'Audio removed',
-    upload_variant_audio_kept: 'With audio',
-    upload_variant_audio_none: 'No audio',
     upload_source_no_audio: 'The source has no audio track',
     video_play: 'Play',
     video_pause: 'Pause',
@@ -1225,7 +1222,6 @@ export default defineI18nBase({
     video_volume: 'Volume',
     video_no_audio: 'This video has no audio track',
     video_no_audio_short: 'No audio',
-    upload_variant_fast: 'Fast conversion',
     asset_variant_current: 'Used now',
     asset_variant_usage_count: (count) => `Usages: ${count}`,
     upload_error_load_variants: 'Failed to load file variants.',
@@ -1241,5 +1237,55 @@ export default defineI18nBase({
     file_info_empty: 'empty',
     file_info_archived_extension: 'Extension before ZIP',
     file_info_archived_size: 'Size before ZIP',
+    date_precision: 'Date certainty',
+    date_precision_hint:
+      'Say how much of this date you actually stand behind. Visitors see the doubt next to the date.',
+    date_precision_exact: 'Exact',
+    date_precision_day: 'Day is a guess',
+    date_precision_month: 'Day and month are a guess',
+    date_precision_year: 'Day, month and year are a guess',
+    date_precision_note: 'Why it is uncertain',
+    date_precision_note_placeholder:
+      'Somewhere around then, going by the photos',
+    date_approximate: 'Approximate date',
+    entity_notes_section: 'Notes',
+    entity_notes_section_description:
+      'A reminder and private notes. Only you ever see them — they stay out of the page, the search and the Markdown copy.',
+    entity_reminder: 'Reminder',
+    entity_reminder_hint:
+      'Something still to do here. While it is set, a yellow mark follows this entity through every list.',
+    entity_reminder_placeholder: 'Find the photos from that week',
+    entity_notes: 'Notes',
+    entity_notes_hint:
+      'Anything worth keeping next to this entity without publishing it.',
+    entity_notes_show_all: 'Show all',
+    entity_reminder_badge: 'There is a reminder on this one',
+    content_strikethrough: 'Strikethrough',
+    content_hint: 'Hint',
+    content_hint_placeholder: 'What this refers to',
+    content_hint_remove: 'Remove the hint',
+    content_spoiler: 'Spoiler',
+    content_spoiler_hint: 'This block is hidden until the reader opens it',
+    content_spoiler_reveal: 'Hidden; click to reveal',
+    content_link_note: 'Why this link is here',
+    content_link_note_placeholder: 'A note instead of the title',
+    public_details_show_all: (count) => `Show all ${count}`,
+    view_all_short: 'All',
+    powered_by_thei: 'Runs on Thei',
+    search_preset_all_title: 'Projects and Events',
+    search_preset_all_description:
+      'Everything worth keeping: the projects of a life and the moments around them, newest first.',
+    search_preset_projects_title: 'Projects',
+    search_preset_projects_description:
+      'Every project here, from the substantial ones to the small ones, with what came of each.',
+    search_preset_events_title: 'Events',
+    search_preset_events_description:
+      'The moments that were too small for a project and too good to forget.',
+    search_preset_showcase_title: 'Featured projects',
+    search_preset_showcase_description:
+      'The work worth seeing first — the projects chosen to stand at the front.',
+    search_preset_cv_title: 'Résumé',
+    search_preset_cv_description:
+      'The professional part of the archive: the projects that make up a working history.',
   },
 });

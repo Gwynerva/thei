@@ -1,8 +1,16 @@
 <script lang="ts" setup generic="T">
 import type { IconName } from '#thei/icons';
 import type { PublicReferenceSplit } from '#layers/thei/shared/api/public';
+import { publicReferenceSplitSize } from '#layers/thei/shared/public-references';
 
-const props = defineProps<{ split: PublicReferenceSplit<T> }>();
+const props = withDefaults(
+  defineProps<{
+    split: PublicReferenceSplit<T>;
+    /** How many items a sidebar section shows before it asks to be expanded. */
+    limit?: number;
+  }>(),
+  { limit: 7 },
+);
 defineSlots<{ default(props: { items: T[] }): unknown }>();
 
 const groups = computed(() =>
@@ -25,13 +33,39 @@ const groups = computed(() =>
 );
 // A lone subgroup needs no name: it simply continues the shared list.
 const titled = computed(() => groups.value.length > 1);
+
+/**
+ * A long list is cut short until it is asked for in full. The cut runs across
+ * the subgroups in the order they are shown, so what is visible is always the
+ * beginning of the same list rather than a few items out of each group.
+ */
+const total = computed(() => publicReferenceSplitSize(props.split));
+const expanded = ref(false);
+const collapsed = computed(() => !expanded.value && total.value > props.limit);
+
+function cut(before: number, items: T[]): T[] {
+  if (!collapsed.value) return items;
+  return items.slice(0, Math.max(0, props.limit - before));
+}
+
+const sharedItems = computed(() => cut(0, props.split.shared));
+const groupsShown = computed(() => {
+  let used = props.split.shared.length;
+  return groups.value
+    .map((group) => {
+      const items = cut(used, group.items);
+      used += group.items.length;
+      return { ...group, items };
+    })
+    .filter((group) => group.items.length);
+});
 </script>
 
 <template>
   <div class="flex min-w-0 flex-col gap-sm">
-    <slot v-if="split.shared.length" :items="split.shared" />
+    <slot v-if="sharedItems.length" :items="sharedItems" />
     <div
-      v-for="group in groups"
+      v-for="group in groupsShown"
       :key="group.key"
       class="flex min-w-0 flex-col gap-xs"
     >
@@ -45,5 +79,14 @@ const titled = computed(() => groups.value.length > 1);
       </div>
       <slot :items="group.items" />
     </div>
+    <button
+      v-if="collapsed"
+      type="button"
+      class="cursor-pointer self-start px-1 text-xs font-semibold text-accent
+        transition hocus:underline"
+      @click="expanded = true"
+    >
+      {{ phrase.public_details_show_all(total) }}
+    </button>
   </div>
 </template>

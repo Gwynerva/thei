@@ -1,20 +1,25 @@
 import { ProjectEventAccessLevel } from '../access-level';
+import { normalizeEntityNotes, normalizeEntityReminder } from '../entity-notes';
 import {
   ContentValidationError,
   isContentEmpty,
   normalizeContentData,
 } from '../content';
 import type { PageEditData, ValidatedPageEditData } from '../page';
-import { slugify } from '../language/slugify';
+import { normalizeUrlSegment } from '../language/slugify';
 import { isOneOf } from '../utils/isOneOf';
 
 export function normalizePageSlug(value: unknown) {
-  return typeof value === 'string' ? value.trim().toLocaleLowerCase() : '';
+  return normalizeUrlSegment(value);
 }
 
+/**
+ * A slug is acceptable when something survives normalization. What the admin
+ * typed is cleaned rather than refused, because the field shows the cleaned
+ * value as it is typed — refusing it twice would only be pedantry.
+ */
 export function pageSlugIsValid(value: unknown): value is string {
-  const slug = normalizePageSlug(value);
-  return Boolean(slug) && slugify(slug) === slug;
+  return Boolean(normalizePageSlug(value));
 }
 
 export function pageSlugIsTaken(
@@ -62,6 +67,8 @@ export function validatePageData(
           ? { updatedAt: data.content.updatedAt }
           : {}),
       },
+      reminder: normalizeEntityReminder(data.reminder),
+      notes: normalizeEntityNotes(data.notes),
     };
   } catch (error) {
     if (error instanceof ContentValidationError || error instanceof Error)

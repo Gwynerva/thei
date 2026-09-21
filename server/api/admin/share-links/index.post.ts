@@ -1,6 +1,7 @@
 import { SiteAccessLevel } from '#layers/thei/shared/access-level';
 import {
   isShareLinkDuration,
+  isShareLinkEntityType,
   type ShareLinkItem,
 } from '#layers/thei/shared/share-link';
 import {
@@ -22,14 +23,18 @@ export default defineEventHandler(async (event): Promise<ShareLinkItem> => {
     entityUuid?: string;
     duration?: string;
   }>(event);
-  const entityType = body?.entityType === 'event' ? 'event' : 'project';
+  const entityType = isShareLinkEntityType(body?.entityType)
+    ? body.entityType
+    : 'project';
   const entityUuid = String(body?.entityUuid ?? '');
   if (!entityUuid || !isShareLinkDuration(body?.duration))
     throw createError({ statusCode: 400, message: 'Invalid share link' });
   const exists =
     entityType === 'project'
       ? await THEI_SERVER.projects.findByUuid(entityUuid)
-      : await THEI_SERVER.events.findByUuid(entityUuid);
+      : entityType === 'event'
+        ? await THEI_SERVER.events.findByUuid(entityUuid)
+        : await THEI_SERVER.pages.findByUuid(entityUuid);
   if (!exists) throw createError({ statusCode: 404 });
   const link = await createShareLink(entityType, entityUuid, body.duration);
   return { ...link, url: siteUrl(event, shareLinkPath(link.token!)) };

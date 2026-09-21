@@ -224,6 +224,12 @@ describe('sitemap privacy', () => {
       '/rewind/',
       '/pages/',
       '/tags/',
+      // The named search configurations, by their canonical address.
+      '/search/',
+      '/search/?type=project',
+      '/search/?type=event',
+      '/search/?type=project&showcase=1',
+      '/search/?type=project&cv=1',
     ]);
   });
 });

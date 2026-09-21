@@ -91,3 +91,32 @@ describe('contentToMarkdown', () => {
     expect(markdown).not.toContain('4');
   });
 });
+
+describe('inline markdown for the newer markup', () => {
+  it('writes strikethrough as a Markdown strike', () => {
+    expect(
+      contentToMarkdown(
+        { blocks: [{ type: 'paragraph', data: { text: 'a <s>b</s> c' } }] },
+        { absolute: (value) => value },
+      ),
+    ).toBe('a ~~b~~ c');
+  });
+
+  it('spells a hint out, since Markdown has nothing to hover', () => {
+    expect(
+      contentToMarkdown(
+        {
+          blocks: [
+            {
+              type: 'paragraph',
+              data: {
+                text: 'the <abbr data-content-hint="a bay">Kara</abbr> sea',
+              },
+            },
+          ],
+        },
+        { absolute: (value) => value },
+      ),
+    ).toBe('the Kara (a bay) sea');
+  });
+});

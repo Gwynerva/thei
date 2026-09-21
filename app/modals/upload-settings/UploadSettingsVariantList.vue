@@ -1,10 +1,14 @@
 <script lang="ts" setup>
 import { AssetType } from '#layers/thei/shared/asset';
 
+/**
+ * One stored file, described by what it is rather than by what was once done
+ * to it. Which encoder ran, whether it was cropped or allowed to grow — none
+ * of that is visible a week later, and none of it helps in choosing between
+ * two files. Format, size, dimensions and where it is used do.
+ */
 export interface UploadSettingsVariantListItem {
   assetUuid: string;
-  title: string;
-  description?: string;
   extension: string;
   size: number;
   dimensions?: { width: number; height: number };
@@ -42,30 +46,21 @@ const humanSize = useHumanSize();
       @click="emit('select', item.assetUuid)"
     >
       <div class="min-w-0">
-        <div class="flex justify-between gap-sm font-semibold">
-          <span class="min-w-0 truncate">{{ item.title }}</span>
-          <span class="shrink-0 font-mono uppercase">
+        <div class="flex flex-wrap items-center gap-x-sm gap-y-1">
+          <span
+            class="shrink-0 font-mono font-semibold uppercase"
+            :data-title-popup="phrase.file_info_extension"
+          >
             {{ item.extension }}
           </span>
-        </div>
-        <div
-          v-if="item.description"
-          class="mt-1 text-xs leading-snug text-text-2"
-        >
-          {{ item.description }}
-        </div>
-        <div
-          class="mt-1 flex flex-wrap items-center gap-x-sm gap-y-1 text-text-3"
-        >
           <span
-            v-if="item.isCurrent"
-            class="rounded-full bg-accent/15 px-xs text-xs text-accent"
+            v-if="item.dimensions"
+            :data-title-popup="phrase.file_info_dimensions"
           >
-            {{ phrase.asset_variant_current }}
-          </span>
-          <span>{{ humanSize(item.size) }}</span>
-          <span v-if="item.dimensions">
             {{ item.dimensions.width }}x{{ item.dimensions.height }}
+          </span>
+          <span :data-title-popup="phrase.file_info_size">
+            {{ humanSize(item.size) }}
           </span>
           <span
             class="inline-flex items-center gap-1"
@@ -79,8 +74,21 @@ const humanSize = useHumanSize();
           <Icon
             v-if="item.type === AssetType.Video"
             :name="item.hasAudio === false ? 'volume-off' : 'volume-on'"
+            :data-title-popup="
+              item.hasAudio === false
+                ? phrase.video_no_audio
+                : phrase.video_volume
+            "
             :class="item.hasAudio === undefined ? 'text-text-3' : 'text-text-2'"
           />
+        </div>
+        <div v-if="item.isCurrent" class="mt-1">
+          <span
+            class="inline-block rounded-full bg-accent/15 px-xs text-xs
+              text-accent"
+          >
+            {{ phrase.asset_variant_current }}
+          </span>
         </div>
       </div>
     </button>

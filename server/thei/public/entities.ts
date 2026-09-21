@@ -28,7 +28,7 @@ import type {
   PublicPageListItem,
   PublicPageResponse,
 } from '#layers/thei/shared/api/page';
-import { coverDateRanges } from '#layers/thei/shared/date-range';
+import { coverDatedPeriods } from '#layers/thei/shared/date-precision';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { externalLinkHostname } from '#layers/thei/shared/external-link';
 import {
@@ -77,7 +77,38 @@ import { buildSecretReference } from './secret';
 import {
   buildPublicContentData,
   buildPublicContentPreviewMedia,
+  type PublicContentEntity,
 } from './content';
+import {
+  entityNotesSlot,
+  type EntityNotesOwner,
+} from '#layers/thei/shared/entity-notes';
+
+/**
+ * The two fields only the owner sees: the reminder that flags the entity, and
+ * the notes kept at the bottom of its page. A visitor gets neither key at all,
+ * so nothing downstream has to remember to strip them.
+ */
+async function buildOwnerOnlyNotes(
+  owner: EntityNotesOwner,
+  ownerId: string,
+  entity: PublicContentEntity,
+  reminder: string,
+  isAdmin: boolean,
+): Promise<{ reminder?: string; notes?: PublicContentOutputData }> {
+  if (!isAdmin) return {};
+  const notes = await buildPublicContentData(
+    owner,
+    ownerId,
+    entityNotesSlot(owner),
+    entity,
+    true,
+  );
+  return {
+    ...(reminder ? { reminder } : {}),
+    ...(notes?.blocks.length ? { notes } : {}),
+  };
+}
 
 type ProjectRow = NonNullable<
   Awaited<ReturnType<typeof THEI_SERVER.projects.findByUuid>>
@@ -136,6 +167,7 @@ export function paginatePublic<T>(
 
 export async function buildPublicProjectSummary(
   project: ProjectRow,
+  isAdmin = false,
 ): Promise<PublicEntitySummary> {
   const reference = await buildPublicProjectReference(project);
   return {
@@ -151,6 +183,7 @@ export async function buildPublicProjectSummary(
     date: new Date(project.createdAt).toISOString().slice(0, 10),
     showcase: project.showcase,
     cv: project.cv,
+    ...(isAdmin && project.reminder ? { reminder: project.reminder } : {}),
   };
 }
 
@@ -207,6 +240,7 @@ export async function buildPublicEventSummary(
         .sort()
         .at(-1) ?? new Date(event.createdAt).toISOString().slice(0, 10),
     relatedProjects: await buildRelatedProjectReferences(relations, isAdmin),
+    ...(isAdmin && event.reminder ? { reminder: event.reminder } : {}),
   };
 }
 
@@ -237,13 +271,19 @@ export async function buildPublicPageListItem(
 export async function buildPublicPage(
   page: PageRow,
   isAdmin: boolean,
+  /**
+   * The private view of this page in particular, which a share link grants
+   * without making its holder the owner of anything else. The owner's notes
+   * and reminder follow `isAdmin` rather than this.
+   */
+  asOwner = isAdmin,
 ): Promise<PublicPageResponse> {
   const content = (await buildPublicContentData(
     'page',
     page.pageUuid,
     'page-body',
     { type: 'page', ...page },
-    isAdmin,
+    asOwner,
   )) ?? { blocks: [] };
   return {
     title: page.title,
@@ -255,9 +295,16 @@ export async function buildPublicPage(
     content,
     references: await buildPublicReferences(
       emptyPublicReferenceGroup(),
-      await buildPublicContentReferenceGroup(content, isAdmin),
-      isAdmin,
+      await buildPublicContentReferenceGroup(content, asOwner),
+      asOwner,
     ),
+    ...(await buildOwnerOnlyNotes(
+      'page',
+      page.pageUuid,
+      { type: 'page', ...page },
+      page.reminder,
+      isAdmin,
+    )),
   };
 }
 
@@ -430,6 +477,13 @@ export async function buildPublicProject(
       isAdmin,
     ),
     action: await buildPublicAction(project, usages, isAdmin),
+    ...(await buildOwnerOnlyNotes(
+      'project',
+      project.projectUuid,
+      { type: 'project', ...project },
+      project.reminder,
+      isAdmin,
+    )),
   };
 }
 
@@ -438,7 +492,7 @@ export async function buildPublicProjectStageSummary(
   stage: Awaited<ReturnType<typeof getProjectStages>>[number],
   isAdmin = false,
 ): Promise<PublicProjectStage> {
-  const period = coverDateRanges(stage.periods);
+  const period = coverDatedPeriods(stage.periods);
   return {
     title: stage.title,
     summary: stage.summary,
@@ -627,6 +681,13 @@ export async function buildPublicEvent(
     tags: await buildPublicTags(tags),
     relatedProjects,
     action: await buildPublicAction(stored, usages, isAdmin),
+    ...(await buildOwnerOnlyNotes(
+      'event',
+      stored.eventUuid,
+      { type: 'event', ...stored },
+      stored.reminder,
+      isAdmin,
+    )),
   };
 }
 
@@ -757,13 +818,19 @@ async function buildPublicReferenceLink(
 ): Promise<PublicReferenceLink | undefined> {
   const resolved =
     candidate.kind === 'external'
-      ? await resolveSiteEntityCandidate(candidate.url)
+      ? {
+          ...(await resolveSiteEntityCandidate(candidate.url)),
+          note: candidate.note,
+        }
       : candidate;
+  // A note is why the link was worth making, which says more in a list than
+  // the name of whatever it points at.
+  const titled = (title: string) => resolved.note || title;
   if (resolved.kind === 'external') {
     const link = await findExternalLink(resolved.url);
     return {
       kind: 'external',
-      title: link?.title || externalLinkHostname(resolved.url),
+      title: titled(link?.title || externalLinkHostname(resolved.url)),
       href: resolved.url,
       description: link?.description,
       iconMedia: link?.faviconMedia,
@@ -776,7 +843,7 @@ async function buildPublicReferenceLink(
     const reference = await buildPublicProjectReference(project);
     return {
       kind: 'project',
-      title: reference.title,
+      title: titled(reference.title),
       href: reference.href,
       description: reference.summary,
       iconMedia: reference.iconMedia,
@@ -788,7 +855,7 @@ async function buildPublicReferenceLink(
       return undefined;
     return {
       kind: 'event',
-      title: event.title,
+      title: titled(event.title),
       href: buildEventUrl(event.humanReadableSlug, event.publicId),
       description: event.summary,
       iconMedia: await buildPublicContentPreviewMedia(
@@ -805,7 +872,7 @@ async function buildPublicReferenceLink(
     return undefined;
   return {
     kind: 'page',
-    title: page.title,
+    title: titled(page.title),
     href: buildPageUrl(page.slug),
     description: page.summary,
     iconMedia: await buildPublicPageIcon(page),

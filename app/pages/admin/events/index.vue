@@ -68,6 +68,14 @@ const list = computed<EventListResponse | undefined>(() => data.value);
       >
         <template #badges>
           <Icon
+            v-if="item.reminder"
+            name="warning"
+            :data-title-popup="`${phrase.entity_reminder_badge}: ${item.reminder}`"
+            :aria-label="phrase.entity_reminder_badge"
+            role="img"
+            class="cursor-help text-text-warning"
+          />
+          <Icon
             :name="
               item.access === 'public'
                 ? 'lock-open'

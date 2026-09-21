@@ -63,7 +63,23 @@ async function show(link: HTMLAnchorElement) {
 }
 
 async function hydrateLinks() {
+  syncHints();
   await Promise.all(links().map((link) => resolveLink(link)));
+}
+
+/**
+ * Stored content names the hint in its own terms; the tooltip plugin reads
+ * `data-title-popup`. Copying it here keeps the presentation mechanism out of
+ * what is written to the database, and costs one pass over the same DOM the
+ * links are hydrated from.
+ */
+function syncHints() {
+  for (const hint of props.root?.querySelectorAll<HTMLElement>(
+    'abbr[data-content-hint]',
+  ) ?? []) {
+    const text = hint.dataset.contentHint ?? '';
+    if (hint.dataset.titlePopup !== text) hint.dataset.titlePopup = text;
+  }
 }
 
 function applyRuntimeState(

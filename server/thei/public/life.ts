@@ -454,7 +454,7 @@ async function hydrateLifePoint(
   }
   const project = point.project!;
   if (point.entityKind === 'project') {
-    const summary = await buildPublicProjectSummary(project);
+    const summary = await buildPublicProjectSummary(project, isAdmin);
     return {
       key,
       date: point.date,

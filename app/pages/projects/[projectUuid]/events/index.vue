@@ -22,7 +22,7 @@ if (route.path !== baseCanonical.value)
   );
 const title = computed(() => phrase.value.related_events);
 usePublicSeo({
-  title: () => `${title.value} — ${data.value.project.title}`,
+  title: () => `${title.value} - ${data.value.project.title}`,
   description: () =>
     phrase.value.related_events_description(data.value.project.title),
   canonical: computed(() =>

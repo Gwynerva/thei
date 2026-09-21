@@ -130,6 +130,7 @@ export default defineEventHandler(async (event): Promise<PageListResponse> => {
           totalSize: Array.from(
             sizes.get(item.pageUuid)?.values() ?? [],
           ).reduce((sum, size) => sum + size, 0),
+          ...(item.reminder ? { reminder: item.reminder } : {}),
         };
       }),
     ),

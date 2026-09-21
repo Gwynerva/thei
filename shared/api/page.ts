@@ -14,6 +14,8 @@ export type PageGetResponse = {
   iconMedia?: MediaDescriptor;
   iconAssetSize?: number;
   content: ContentFieldValue;
+  reminder: string;
+  notes?: ContentFieldValue;
 };
 
 export type PageSaveResponse =
@@ -30,6 +32,8 @@ export type PageListItem = {
   createdAt: number;
   updatedAt: number;
   totalSize: number;
+  /** The owner-only reminder, when one is set. */
+  reminder?: string;
 };
 
 export type PageListResponse = AdminPaginatedResponse<PageListItem>;
@@ -55,4 +59,10 @@ export type PublicPageResponse = {
   iconMedia: MediaDescriptor;
   content: PublicContentOutputData;
   references: PublicReferences;
+  /**
+   * Owner only. A visitor never receives either field — not here, not in the
+   * Markdown representation, not in search.
+   */
+  reminder?: string;
+  notes?: PublicContentOutputData;
 };

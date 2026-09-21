@@ -19,23 +19,53 @@ belongs in this file in the same commit.
 {
   "version": "2.31.6",
   "time": 1750000000000,
-  "blocks": [{ "id": "abc", "type": "paragraph", "data": {} }]
+  "blocks": [
+    {
+      "id": "abc",
+      "type": "paragraph",
+      "data": {},
+      "tunes": { "spoiler": true }
+    }
+  ]
 }
 ```
 
 `id` is optional. Unknown block types are rejected, not ignored.
+
+## Block attributes
+
+`tunes` holds what is true of a block rather than what is in it. Only
+attributes this release knows about survive, and only when they are set — an
+absent `tunes` is the ordinary case.
+
+| attribute | meaning                                                            |
+| --------- | ------------------------------------------------------------------ |
+| `spoiler` | `true` — the block is blurred over until the reader asks to see it |
+
+A spoiler is presentation, not access control: the text is in the document and
+in the Markdown copy, and anyone can reveal it. Something a visitor must not
+read belongs in a private section.
 
 ## Inline markup
 
 Text fields hold a deliberately small HTML subset, enforced by
 `normalizeContentInlineHtml` in `shared/content-link.ts`:
 
-- `<b>` / `<strong>`, `<i>` / `<em>`, `<br>`
+- `<b>` / `<strong>`, `<i>` / `<em>`, `<s>`, `<br>`
 - `<a href="…">` for an external address
 - `<a data-content-link="entity" data-entity-type="project|event|page" data-entity-id="…">`
   for a link to something on this site
+- `<abbr data-content-hint="…">` — a note attached to a span of text, shown on
+  hover; a hint with an empty note is dropped and its text kept
 
-Everything else is stripped. A heading holds plain text only.
+Either kind of `<a>` may carry `data-content-note="…"`: the owner's words about
+why the link is there. The sidebar shows that note in place of the target's own
+title, unless the same link was also attached by hand — a title written on
+purpose wins.
+
+`<strike>` is accepted on the way in and stored as `<s>`, because that is what
+the browser's own editing command still produces. Everything else is stripped,
+and a heading holds plain text only.
 
 ## Blocks
 

@@ -1,6 +1,6 @@
 import type { ProjectEventAccessLevel } from '../access-level';
 import type { ContentFieldValue } from '../content';
-import type { DateRange } from '../date-range';
+import type { DatedPeriod } from '../date-precision';
 import type { EventProjectRelationEditItem } from '../event';
 import type { ProjectActionEditData } from '../project-action';
 import type { OtherAssetGetItem } from './project';
@@ -16,8 +16,10 @@ export type EventGetResponse = {
   access: ProjectEventAccessLevel;
   humanReadableSlug: string;
   publicId: string;
-  periods: DateRange[];
+  periods: DatedPeriod[];
   content: ContentFieldValue;
+  reminder: string;
+  notes?: ContentFieldValue;
   otherAssets: OtherAssetGetItem[];
   externalLinks: ProjectExternalLink[];
   relations: EventProjectRelationEditItem[];
@@ -48,6 +50,8 @@ export type EventListItem = {
   createdAt: number;
   updatedAt: number;
   totalSize: number;
+  /** The owner-only reminder, when one is set. */
+  reminder?: string;
 };
 
 export type EventListResponse = AdminPaginatedResponse<EventListItem>;

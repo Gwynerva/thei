@@ -87,6 +87,27 @@
     z-index: 5;
   }
 
+  /*
+   * Editor.js lays the toolbar over the top of the hovered block: `.ce-toolbar`
+   * spans the full row and `.ce-toolbar__content` spans the text column, both
+   * of them as ordinary boxes. The result is a dead strip across the first line
+   * of every block, which is why the caret could not be put in front of the
+   * first letter of a paragraph — the click landed on the toolbar.
+   *
+   * The toolbar keeps its layout and gives the clicks back; only the controls
+   * that are actually meant to be pressed take them.
+   */
+  .content-editor .ce-toolbar,
+  .content-editor .ce-toolbar__content {
+    pointer-events: none;
+  }
+
+  .content-editor .ce-toolbar__actions,
+  .content-editor .ce-toolbar__plus,
+  .content-editor .ce-toolbar__settings-btn {
+    pointer-events: auto;
+  }
+
   .content-editor .ce-toolbar__plus,
   .content-editor .ce-toolbar__settings-btn {
     color: var(--color-text-2) !important;
@@ -518,5 +539,42 @@
     > .ce-block__content {
     position: relative;
     z-index: 1;
+  }
+
+  /*
+   * Every block is wrapped, spoiler or not, so the width of a block never
+   * depends on whether it carries the marker. The marker itself is taken out
+   * of the flow: in the margin where there is room for it, over the block's
+   * own corner where there is not.
+   */
+  .content-editor .content-spoiler-wrap {
+    position: relative;
+  }
+
+  .content-editor .content-spoiler-marker {
+    position: absolute;
+    top: 0;
+    right: -1.9rem;
+    display: none;
+    color: var(--color-accent);
+    opacity: 0.75;
+  }
+
+  .content-editor .content-spoiler-wrap[data-spoiler='true'] {
+    background: color-mix(in oklab, var(--color-accent) 6%, transparent);
+    border-radius: var(--radius-normal);
+  }
+
+  .content-editor
+    .content-spoiler-wrap[data-spoiler='true']
+    .content-spoiler-marker {
+    display: block;
+  }
+
+  @variant max-sm {
+    .content-editor .content-spoiler-marker {
+      top: 0.1rem;
+      right: 0.1rem;
+    }
   }
 }

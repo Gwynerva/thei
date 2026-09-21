@@ -8,6 +8,7 @@ import {
 } from '#layers/thei/shared/share-link';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { buildProjectUrl } from '#layers/thei/shared/project-url';
+import { buildPageUrl } from '#layers/thei/shared/page-url';
 import { EntityPrefix, generateUniqueId } from '../entity-id';
 import { sitePath } from '../site-url';
 import {
@@ -17,7 +18,8 @@ import {
 } from './token';
 
 /**
- * Temporary links that let someone else look at one private project or event.
+ * Temporary links that let someone else look at one private project, event or
+ * page.
  *
  * The point is that the link stops working by itself. Sharing something
  * private with a person who then forgets about the link is normally how it
@@ -49,6 +51,27 @@ export interface ShareLinkRecord {
 
 export function shareLinkPath(token: string): string {
   return `/share/${token}/`;
+}
+
+/** Where a grant leads: the public address of the entity it was made for. */
+export async function shareGrantPath(
+  entityType: ShareLinkEntityType,
+  entityUuid: string,
+): Promise<string | undefined> {
+  if (entityType === 'project') {
+    const project = await THEI_SERVER.projects.findByUuid(entityUuid);
+    return project
+      ? buildProjectUrl(project.humanReadableSlug, project.publicId)
+      : undefined;
+  }
+  if (entityType === 'event') {
+    const stored = await THEI_SERVER.events.findByUuid(entityUuid);
+    return stored
+      ? buildEventUrl(stored.humanReadableSlug, stored.publicId)
+      : undefined;
+  }
+  const page = await THEI_SERVER.pages.findByUuid(entityUuid);
+  return page ? buildPageUrl(page.slug) : undefined;
 }
 
 export async function createShareLink(
@@ -225,21 +248,11 @@ export async function resolveShareGrantPaths(
   const paths: ShareGrantPath[] = [];
   for (const [key, expiresAt] of grants) {
     const [entityType, entityUuid] = key.split(':') as [string, string];
-    if (entityType === 'project') {
-      const project = await THEI_SERVER.projects.findByUuid(entityUuid);
-      if (project)
-        paths.push({
-          path: buildProjectUrl(project.humanReadableSlug, project.publicId),
-          expiresAt,
-        });
-    } else {
-      const stored = await THEI_SERVER.events.findByUuid(entityUuid);
-      if (stored)
-        paths.push({
-          path: buildEventUrl(stored.humanReadableSlug, stored.publicId),
-          expiresAt,
-        });
-    }
+    const path = await shareGrantPath(
+      entityType as ShareLinkEntityType,
+      entityUuid,
+    );
+    if (path) paths.push({ path, expiresAt });
   }
   return paths;
 }

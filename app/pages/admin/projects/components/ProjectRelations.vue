@@ -329,7 +329,7 @@ onUnmounted(cleanupSorters);
                     :model-value="relation.note.currentProjectText ?? ''"
                     type="text"
                     autocomplete="off"
-                    spellcheck="false"
+                    spellcheck="true"
                     :placeholder="
                       phrase.project_relation_note_for(currentProjectTitle)
                     "
@@ -350,7 +350,7 @@ onUnmounted(cleanupSorters);
                     :model-value="relation.note.relatedProjectText ?? ''"
                     type="text"
                     autocomplete="off"
-                    spellcheck="false"
+                    spellcheck="true"
                     :placeholder="
                       phrase.project_relation_note_for(
                         relation.title || relation.projectUuid,
@@ -381,7 +381,7 @@ onUnmounted(cleanupSorters);
                   "
                   type="text"
                   autocomplete="off"
-                  spellcheck="false"
+                  spellcheck="true"
                   :placeholder="phrase.project_relation_note_placeholder"
                   wrapper-class="min-w-0 flex-1"
                   class="w-full min-w-0 text-sm"

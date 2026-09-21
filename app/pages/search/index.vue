@@ -5,8 +5,11 @@ import {
   parsePublicSearchFilters,
   PUBLIC_SEARCH_DEBOUNCE_MS,
   PUBLIC_SEARCH_QUERY_MAX_LENGTH,
+  publicSearchPreset,
+  publicSearchPresetHref,
   publicSearchQuery,
   type PublicSearchFilters,
+  type PublicSearchPresetId,
 } from '#layers/thei/shared/public-search';
 
 definePageMeta({ layout: 'public' });
@@ -43,6 +46,29 @@ const hasCriteria = computed(
 // results as thin content. The query only makes the tab and a shared link
 // readable.
 const seoQuery = computed(() => filters.value.q.trim());
+
+/**
+ * A few filter combinations are pages of the site rather than searches — the
+ * list of projects, the résumé — and those are worth indexing, with a name of
+ * their own and no mention of searching anywhere.
+ */
+const preset = computed(() =>
+  publicSearchPreset(filters.value, parsed.value.page),
+);
+const presetTitles: Record<PublicSearchPresetId, () => string> = {
+  all: () => phrase.value.search_preset_all_title,
+  projects: () => phrase.value.search_preset_projects_title,
+  events: () => phrase.value.search_preset_events_title,
+  showcase: () => phrase.value.search_preset_showcase_title,
+  cv: () => phrase.value.search_preset_cv_title,
+};
+const presetDescriptions: Record<PublicSearchPresetId, () => string> = {
+  all: () => phrase.value.search_preset_all_description,
+  projects: () => phrase.value.search_preset_projects_description,
+  events: () => phrase.value.search_preset_events_description,
+  showcase: () => phrase.value.search_preset_showcase_description,
+  cv: () => phrase.value.search_preset_cv_description,
+};
 const ogImage = useOgImage(
   'service',
   () => 'search',
@@ -50,16 +76,21 @@ const ogImage = useOgImage(
 );
 usePublicSeo({
   ogImage,
-  title: () =>
-    seoQuery.value
-      ? `${phrase.value.public_search_query_title(seoQuery.value)} — ${phrase.value.search}`
-      : phrase.value.search,
-  description: () =>
-    seoQuery.value
+  title: () => {
+    if (preset.value) return presetTitles[preset.value.id]();
+    return seoQuery.value
+      ? `${phrase.value.public_search_query_title(seoQuery.value)} - ${phrase.value.search}`
+      : phrase.value.search;
+  },
+  description: () => {
+    if (preset.value) return presetDescriptions[preset.value.id]();
+    return seoQuery.value
       ? phrase.value.public_search_query_description(seoQuery.value)
-      : phrase.value.public_search_description,
-  canonical: '/search/',
-  noIndex: hasCriteria,
+      : phrase.value.public_search_description;
+  },
+  canonical: () =>
+    preset.value ? publicSearchPresetHref(preset.value) : '/search/',
+  noIndex: () => hasCriteria.value && !preset.value,
 });
 
 function sameQuery(next: Record<string, string>) {

@@ -1,6 +1,7 @@
 import type { ResolvableLink, ResolvableMeta } from '@unhead/vue/types';
 import type { MaybeRefOrGetter } from 'vue';
 import { toValue } from 'vue';
+import { version as theiVersion } from '#thei/static-public';
 
 /** One step of the trail leading to the current page. */
 export type PublicBreadcrumb = {
@@ -99,6 +100,9 @@ export function usePublicSeo(options: PublicSeoOptions) {
     const ogImage = options.ogImage ? toValue(options.ogImage) : undefined;
     const meta: ResolvableMeta[] = [
       ...(description ? [{ name: 'description', content: description }] : []),
+      // The convention every site generator follows: name and version, so a
+      // crawler or an archive can tell what built the page.
+      { name: 'generator', content: `Thei ${theiVersion}` },
       ...(noIndex ? [{ name: 'robots', content: 'noindex,nofollow' }] : []),
       // Open Graph is what messengers and social sites read; Twitter's own
       // card tag is the one extra line that makes the image large there.

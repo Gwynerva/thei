@@ -15,6 +15,12 @@ const props = withDefaults(
     extension?: string;
     external?: boolean;
     button?: boolean;
+    /**
+     * A link stands for an address, not for a file: it gets the icon without
+     * the tile behind it, so a list of links reads lighter than a list of
+     * files sitting next to it.
+     */
+    plainIcon?: boolean;
     continuousMedia?: boolean;
     /** A codename for something hidden from visitors; never a link. */
     secret?: boolean;
@@ -43,7 +49,7 @@ const extensionFontSize = computed(() => {
     :target="!button && external ? '_blank' : undefined"
     :rel="!button && external ? 'noopener noreferrer' : undefined"
     :type="button ? 'button' : undefined"
-    class="group flex w-full min-w-0 items-center gap-xs rounded-sm px-1 py-1.5
+    class="group flex w-full min-w-0 items-start gap-xs rounded-sm px-1 py-1.5
       text-left text-text-1 no-underline transition focus-visible:ring-2
       focus-visible:ring-accent focus-visible:outline-none"
     :class="{ 'cursor-pointer hocus:bg-bg-3/70': button || href }"
@@ -53,7 +59,13 @@ const extensionFontSize = computed(() => {
     <span
       class="@container relative flex size-8 shrink-0 items-center
         justify-center overflow-hidden rounded-sm text-text-3"
-      :class="extension && !iconMedia ? 'bg-bg-3/70' : 'bg-bg-3'"
+      :class="
+        plainIcon && !iconMedia
+          ? 'text-text-2'
+          : extension && !iconMedia
+            ? 'bg-bg-3/70'
+            : 'bg-bg-3'
+      "
     >
       <Media
         v-if="iconMedia"
@@ -88,7 +100,7 @@ const extensionFontSize = computed(() => {
       <strong
         class="block truncate text-sm font-normal"
         :class="{ 'text-text-2 italic': secret }"
-        >{{ title }}</strong
+        >{{ publicText(title) }}</strong
       >
       <span
         v-if="compactDescription"

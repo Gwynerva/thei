@@ -1,6 +1,6 @@
 import type { ProjectEventAccessLevel } from '../access-level';
 import type { PublicContentOutputData } from '../content';
-import type { DateRange } from '../date-range';
+import type { DatedPeriod } from '../date-precision';
 import type {
   ProjectActionBackgroundMode,
   ProjectActionBackgroundRepeat,
@@ -65,6 +65,8 @@ export type PublicEntitySummary = {
   showcase?: boolean;
   cv?: boolean;
   relatedProjects?: PublicProjectLink[];
+  /** Owner only: the reminder that marks this entity wherever it is listed. */
+  reminder?: string;
 };
 
 export type PublicSearchTagFacet = {
@@ -152,8 +154,8 @@ export type PublicProjectStage = {
   summary: string;
   href: string;
   date: string;
-  period: DateRange;
-  periods: DateRange[];
+  period: DatedPeriod;
+  periods: DatedPeriod[];
   media?: MediaDescriptor;
 };
 
@@ -214,6 +216,12 @@ export type PublicProjectResponse = {
   relatedEvents: { items: PublicEntitySummary[]; total: number };
   references: PublicReferences;
   action?: PublicAction;
+  /**
+   * Owner only. A visitor never receives either field — not here, not in the
+   * Markdown representation, not in search.
+   */
+  reminder?: string;
+  notes?: PublicContentOutputData;
 };
 
 export type PublicProjectEventsResponse =
@@ -227,12 +235,18 @@ export type PublicEventResponseFull = {
   access: ProjectEventAccessLevel;
   humanReadableSlug: string;
   publicId: string;
-  periods: DateRange[];
+  periods: DatedPeriod[];
   content: PublicContentOutputData;
   references: PublicReferences;
   tags: PublicTagSummary[];
   relatedProjects: PublicProjectLink[];
   action?: PublicAction;
+  /**
+   * Owner only. A visitor never receives either field — not here, not in the
+   * Markdown representation, not in search.
+   */
+  reminder?: string;
+  notes?: PublicContentOutputData;
 };
 
 export type PublicTagListItem = PublicTagSummary & {

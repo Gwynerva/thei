@@ -29,6 +29,9 @@ export const CONTENT_SLOTS = [
   'project-section-body',
   'event-body',
   'page-body',
+  'project-notes',
+  'event-notes',
+  'page-notes',
 ] as const;
 export type ContentSlot = (typeof CONTENT_SLOTS)[number];
 
@@ -55,6 +58,15 @@ export interface ContentPrivateSectionBoundaryData {
   edge: ContentPrivateSectionEdge;
 }
 
+/**
+ * Block-level attributes that sit beside the data rather than inside it, in
+ * the shape Editor.js reads and writes them.
+ */
+export interface ContentBlockTunes {
+  /** The block is a spoiler: hidden behind a blur until the reader asks. */
+  spoiler?: true;
+}
+
 export interface ContentOutputBlock<
   TType extends ContentBlockType = ContentBlockType,
   TData extends Record<string, unknown> = Record<string, unknown>,
@@ -62,6 +74,7 @@ export interface ContentOutputBlock<
   id?: string;
   type: TType;
   data: TData;
+  tunes?: ContentBlockTunes;
 }
 
 export interface ContentOutputData {
@@ -611,12 +624,24 @@ function normalizeContentBlock(value: unknown): ContentOutputBlock {
   }
 
   const data = normalizeBlockData(type, value.data);
+  const tunes = normalizeBlockTunes(value.tunes);
 
   return {
     id: optionalString(value.id),
     type,
     data,
+    ...(tunes ? { tunes } : {}),
   };
+}
+
+/**
+ * Only the attributes this release knows about survive, and only when they are
+ * actually set: an absent `tunes` is the ordinary case, and writing `false`
+ * into every block would make a no-op look like a change.
+ */
+function normalizeBlockTunes(value: unknown): ContentBlockTunes | undefined {
+  if (!isRecord(value)) return undefined;
+  return value.spoiler === true ? { spoiler: true } : undefined;
 }
 
 function normalizeBlockData(

@@ -153,6 +153,14 @@ export function inlineToMarkdown(
       .replace(/<br\s*\/?>/gi, '\n')
       .replace(/<\/?(?:b|strong)>/gi, '**')
       .replace(/<\/?(?:i|em)>/gi, '_')
+      .replace(/<\/?s>/gi, '~~')
+      // A hint reads as the text plus its note in brackets: a reader of the
+      // Markdown copy has no hover to reveal it with.
+      .replace(
+        /<abbr\b[^>]*data-content-hint="([^"]*)"[^>]*>([\s\S]*?)<\/abbr>/gi,
+        (_match, hint: string, text: string) =>
+          `${text.replace(/<[^>]+>/g, '')} (${hint})`,
+      )
       .replace(
         /<a\b[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi,
         (_match, href: string, text: string) =>

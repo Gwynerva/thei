@@ -14,6 +14,7 @@ import {
 } from '#layers/thei/shared/admin/page';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
 import AssetTile from '#layers/thei/app/components/AssetTile.vue';
+import ProjectShareLinks from '../../projects/components/ProjectShareLinks.vue';
 import { useSingleMediaAsset } from '#layers/thei/app/composables/single-media-asset';
 import { singleAssetUsageDelta } from '#layers/thei/app/composables/single-media-asset-state';
 import { pageDeleteModal } from './page-delete-modal';
@@ -53,6 +54,8 @@ if (pageUuid) {
         access: response.access,
         iconAssetUuid: response.iconAssetUuid,
         content: response.content,
+        reminder: response.reminder,
+        notes: response.notes ?? null,
       };
       iconMedia.value = response.iconMedia;
       iconSize.value = response.iconAssetSize;
@@ -68,6 +71,34 @@ if (pageUuid) {
       replace: true,
     });
 }
+
+/**
+ * Saving inside the content editor saves the whole entity too, but only when
+ * the content was the single thing that changed since the last save. Anything
+ * else waiting to be saved stays the person's own decision, made with the
+ * editor closed and the whole form in front of them.
+ */
+/** Every place this form keeps authored content, at any depth. */
+const CONTENT_FIELDS = ['content', 'descriptionContent', 'notes'];
+
+function saveAfterContentEdit() {
+  if (!canSave.value) return;
+  if (!changedOnlyIn(payload(), savedSnapshot.value, CONTENT_FIELDS)) return;
+  void save();
+}
+
+const reminderModel = computed({
+  get: () => data.value.reminder ?? '',
+  set: (value: string) => {
+    data.value.reminder = value;
+  },
+});
+const notesModel = computed({
+  get: () => data.value.notes ?? null,
+  set: (value) => {
+    data.value.notes = value;
+  },
+});
 
 const dirty = computed(() => JSON.stringify(payload()) !== savedSnapshot.value);
 const slugInvalid = computed(
@@ -210,6 +241,8 @@ function payload(): PageEditData {
     access: data.value.access,
     iconAssetUuid: data.value.iconAssetUuid,
     content: data.value.content,
+    reminder: data.value.reminder,
+    notes: data.value.notes,
   };
 }
 
@@ -224,6 +257,8 @@ function emptyData(): PageEditData {
     slug: '',
     access: '',
     content: null,
+    reminder: '',
+    notes: null,
   };
 }
 
@@ -275,7 +310,7 @@ onBeforeRouteLeave(() => {
             v-model="data.title"
             type="text"
             autocomplete="off"
-            spellcheck="false"
+            spellcheck="true"
             required
           />
           <FieldHint>{{ phrase.page_title_hint }}</FieldHint>
@@ -309,7 +344,7 @@ onBeforeRouteLeave(() => {
         <FieldTextarea
           v-model="data.summary"
           autocomplete="off"
-          spellcheck="false"
+          spellcheck="true"
           required
         />
         <FieldHint>{{ phrase.page_summary_hint }}</FieldHint>
@@ -375,9 +410,21 @@ onBeforeRouteLeave(() => {
         <FieldContentEditor
           v-model="data.content"
           :title-label="phrase.page_content"
+          @saved="saveAfterContentEdit()"
         />
         <FieldHint>{{ phrase.page_content_hint }}</FieldHint>
       </Field>
     </Box>
+
+    <ProjectShareLinks
+      v-if="pageUuid"
+      entity-type="page"
+      :entity-uuid="pageUuid"
+    />
+    <AdminNotesBlock
+      v-model:reminder="reminderModel"
+      v-model:notes="notesModel"
+      @notes-saved="saveAfterContentEdit()"
+    />
   </div>
 </template>

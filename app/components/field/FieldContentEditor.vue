@@ -18,6 +18,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:modelValue': [value: ContentFieldModelValue | null];
+  /** The editor wrote its content back; the form may now save itself. */
+  saved: [];
 }>();
 const temporarySnapshotKey = `draft:${crypto.randomUUID()}`;
 
@@ -70,6 +72,7 @@ function openEditor() {
       }
       emit('update:modelValue', value);
     },
+    onSaved: () => emit('saved'),
   });
 }
 const { engaged, events: mediaEvents } = useMediaInteraction();

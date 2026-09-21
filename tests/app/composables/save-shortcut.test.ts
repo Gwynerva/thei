@@ -140,7 +140,7 @@ describe('save shortcut ownership', () => {
     expect(parentSave).toHaveBeenCalledOnce();
   });
 
-  it('does not fall through an unavailable modal or suppress the browser', () => {
+  it('does not fall through an unavailable modal, and still suppresses the browser', () => {
     const dialog = element() as HTMLElement & { dialog: boolean };
     dialog.dialog = true;
     const modal = element(dialog as unknown as TestElement);
@@ -160,7 +160,9 @@ describe('save shortcut ownership', () => {
     registry.handle(event);
     expect(modalSave).not.toHaveBeenCalled();
     expect(pageSave).not.toHaveBeenCalled();
-    expect(event.preventDefault).not.toHaveBeenCalled();
+    // The modal owns the shortcut even while it cannot save, so the browser
+    // never gets to open its own "save page" dialog over the form.
+    expect(event.preventDefault).toHaveBeenCalledOnce();
   });
 
   it('blocks the background page when the top modal has no handler', () => {

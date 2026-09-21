@@ -53,6 +53,7 @@ function relationTitle(type?: ProjectRelationType): string | undefined {
         :href="link.href"
         :icon="link.kind"
         :continuous-media="link.kind === 'project'"
+        plain-icon
       />
       <PublicCompactResourceItem
         v-else
@@ -62,6 +63,7 @@ function relationTitle(type?: ProjectRelationType): string | undefined {
         :href="link.href"
         icon="external-link"
         external
+        plain-icon
       />
     </template>
   </div>

@@ -15,6 +15,29 @@
     font-style: italic;
   }
 
+  .content-prose s {
+    text-decoration-line: line-through;
+    text-decoration-thickness: 0.08em;
+  }
+
+  /*
+   * A hint is text with something behind it: dotted underline, explanation on
+   * hover. The cursor says "help" rather than "link", because nothing happens
+   * on a click.
+   */
+  .content-prose abbr[data-content-hint] {
+    cursor: help;
+    text-decoration-line: underline;
+    text-decoration-style: dotted;
+    text-decoration-color: color-mix(
+      in oklab,
+      var(--color-accent) 70%,
+      transparent
+    );
+    text-decoration-thickness: 0.08em;
+    text-underline-offset: 0.2em;
+  }
+
   .content-renderer.content-prose > * + *,
   .content-editor.content-prose .ce-block + .ce-block {
     margin-top: var(--spacing-sm) !important;
@@ -22,6 +45,16 @@
 
   .content-prose :is(p, .ce-paragraph) {
     @apply leading-relaxed;
+  }
+
+  /*
+   * A pasted URL or a wall of one long word has no break opportunity of its
+   * own. Without this it reaches past the column and drags the whole layout
+   * with it; `anywhere` breaks it only when nothing else can be done.
+   */
+  .content-prose
+    :is(p, li, blockquote, h2, h3, .ce-paragraph, .ce-header, .cdx-quote) {
+    overflow-wrap: anywhere;
   }
 
   /* Editor.js tools inject unlayered spacing; content.css owns content rhythm. */
@@ -49,9 +82,25 @@
     outline: none;
   }
 
+  /*
+   * Markers hang into the left margin so the text of a list lines up with the
+   * paragraphs around it. The editor gets the same treatment below, so a list
+   * looks the same while it is being written and after it is published.
+   */
   .content-prose .content-list {
-    @apply grid gap-1 pl-lg;
+    @apply grid gap-1;
+    padding-left: 1.1em;
     margin: 0;
+    list-style-position: outside;
+  }
+
+  .content-prose .content-list > li {
+    padding-left: 0.1em;
+  }
+
+  .content-editor.content-prose .cdx-list {
+    padding-left: 1.1em !important;
+    list-style-position: outside;
   }
 
   .content-prose .content-list-unordered {
@@ -370,5 +419,93 @@
   .content-prose .content-private-bracket__label svg {
     width: 1rem;
     height: 1rem;
+  }
+
+  /*
+   * A spoiler: the block stays where it is and keeps its size, but is blurred
+   * over and dusted with drifting specks until the reader asks for it.
+   *
+   * The dust is two `radial-gradient` layers moved with `transform`, which the
+   * compositor handles on its own — no per-frame JavaScript, no canvas, and
+   * nothing at all once the block is revealed, because both layers stop
+   * existing then.
+   */
+  .content-prose .content-spoiler {
+    position: relative;
+    border-radius: var(--radius-normal);
+  }
+
+  .content-prose .content-spoiler[data-revealed='false'] {
+    overflow: hidden;
+    cursor: pointer;
+    isolation: isolate;
+  }
+
+  .content-prose .content-spoiler[data-revealed='false'] > * {
+    filter: blur(0.3em);
+    opacity: 0.85;
+    user-select: none;
+    pointer-events: none;
+  }
+
+  .content-prose .content-spoiler[data-revealed='false']::before,
+  .content-prose .content-spoiler[data-revealed='false']::after {
+    position: absolute;
+    z-index: 1;
+    inset: -50%;
+    background-repeat: repeat;
+    content: '';
+    will-change: transform;
+  }
+
+  .content-prose .content-spoiler[data-revealed='false']::before {
+    background-image: radial-gradient(
+      circle at center,
+      color-mix(in oklab, var(--color-text-1) 55%, transparent) 0 22%,
+      transparent 60%
+    );
+    background-size: 11px 11px;
+    animation: content-spoiler-drift-near 7s linear infinite;
+  }
+
+  .content-prose .content-spoiler[data-revealed='false']::after {
+    background-image: radial-gradient(
+      circle at center,
+      color-mix(in oklab, var(--color-text-1) 32%, transparent) 0 18%,
+      transparent 55%
+    );
+    background-size: 19px 19px;
+    animation: content-spoiler-drift-far 13s linear infinite reverse;
+  }
+
+  .content-prose
+    .content-spoiler[data-revealed='false']:is(:hover, :focus-visible) {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  @keyframes content-spoiler-drift-near {
+    from {
+      transform: translate3d(0, 0, 0);
+    }
+    to {
+      transform: translate3d(22px, 11px, 0);
+    }
+  }
+
+  @keyframes content-spoiler-drift-far {
+    from {
+      transform: translate3d(0, 0, 0);
+    }
+    to {
+      transform: translate3d(-19px, 19px, 0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .content-prose .content-spoiler[data-revealed='false']::before,
+    .content-prose .content-spoiler[data-revealed='false']::after {
+      animation: none;
+    }
   }
 }

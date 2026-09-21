@@ -73,6 +73,7 @@ export default defineEventHandler(async (event) => {
     try {
       const [
         contentSave,
+        notesSave,
         relations,
         externalLinks,
         tags,
@@ -80,6 +81,7 @@ export default defineEventHandler(async (event) => {
         currentFiles,
       ] = await Promise.all([
         prepareContentForSave('event', eventUuid, 'event-body', result.content),
+        prepareContentForSave('event', eventUuid, 'event-notes', result.notes),
         prepareEventRelations(result.relations),
         prepareExternalLinks(result.externalLinks),
         prepareTagUsages(result.tags),
@@ -107,6 +109,7 @@ export default defineEventHandler(async (event) => {
             humanReadableSlug: result.humanReadableSlug,
             publicId: result.publicId,
             action: result.action,
+            reminder: result.reminder,
             updatedAt: now,
           })
           .where(eq(schema.events.eventUuid, eventUuid))
@@ -119,6 +122,14 @@ export default defineEventHandler(async (event) => {
           eventUuid,
           'event-body',
           contentSave,
+        );
+        applyPreparedContentSave(
+          tx,
+          schema,
+          'event',
+          eventUuid,
+          'event-notes',
+          notesSave,
         );
         applyEventRelations(tx, schema, eventUuid, relations);
         applyEventExternalLinks(tx, schema, eventUuid, externalLinks);
@@ -235,6 +246,7 @@ async function getEvent(
     actionLink,
     rawFiles,
     content,
+    notes,
     periods,
     relations,
     externalLinks,
@@ -248,6 +260,7 @@ async function getEvent(
       : undefined,
     THEI_SERVER.assets.usages.findOtherForContainer('event', eventUuid),
     THEI_SERVER.content.buildFieldValue('event', eventUuid, 'event-body'),
+    THEI_SERVER.content.buildFieldValue('event', eventUuid, 'event-notes'),
     getEventPeriods(eventUuid),
     getEventRelations(eventUuid),
     getEventExternalLinks(eventUuid),
@@ -283,6 +296,8 @@ async function getEvent(
     publicId: stored.publicId,
     periods,
     content,
+    reminder: stored.reminder,
+    notes,
     otherAssets,
     externalLinks,
     relations,

@@ -11,6 +11,7 @@ import {
 } from '#layers/thei/app/composables/drag-sort';
 import { projectDataInjectionKey } from '../composables';
 import { projectContentItemModal } from './project-content-item-modal';
+import { saveAfterContentEditKey } from '../composables';
 import { projectContentItemDeleteModal } from './project-content-item-delete-modal';
 import ContentStats from '#layers/thei/app/components/content/ContentStats.vue';
 import DateRangeChip from '#layers/thei/app/components/DateRangeChip.vue';
@@ -19,6 +20,7 @@ type Item = ProjectSectionContentItem | ProjectStageContentItem;
 
 const props = defineProps<{ kind: 'stage' | 'section' }>();
 const projectData = inject(projectDataInjectionKey)!;
+const saveAfterContentEdit = inject(saveAfterContentEditKey, undefined);
 const root = useTemplateRef<HTMLElement>('root');
 const unsavedIds = new WeakMap<object, string>();
 const items = computed<Item[]>(() =>
@@ -99,6 +101,13 @@ async function openItem(index?: number) {
       isStage: true,
       item: index === undefined ? undefined : stages[index],
       ...projectLinkIdentity,
+      onContentSaved: (item) => {
+        if (index === undefined || !item.isStage) return;
+        const applied = [...(projectData.value.stages ?? [])];
+        applied[index] = item;
+        replaceStages(applied);
+        saveAfterContentEdit?.();
+      },
     });
     if (result.type === 'deleted') {
       if (index !== undefined)
@@ -118,6 +127,13 @@ async function openItem(index?: number) {
     isStage: false,
     item: index === undefined ? undefined : sections[index],
     ...projectLinkIdentity,
+    onContentSaved: (item) => {
+      if (index === undefined || item.isStage) return;
+      const applied = [...(projectData.value.contentSections ?? [])];
+      applied[index] = item;
+      replaceSections(applied);
+      saveAfterContentEdit?.();
+    },
   });
   if (result.type === 'deleted') {
     if (index !== undefined)

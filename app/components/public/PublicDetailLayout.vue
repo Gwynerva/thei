@@ -1,6 +1,9 @@
 <script lang="ts" setup>
 import type { PublicContentOutputData } from '#layers/thei/shared/content';
-import { buildContentHeadings } from '#layers/thei/app/components/content/content-headings';
+import {
+  buildContentHeadings,
+  type ContentHeading,
+} from '#layers/thei/app/components/content/content-headings';
 import {
   useSheetContentNavigation,
   type PublicDetailPanelData,
@@ -9,12 +12,17 @@ import {
 const props = defineProps<{
   details: PublicDetailPanelData;
   content?: PublicContentOutputData;
+  /** Sections of the page that are not part of the authored content. */
+  extraContents?: ContentHeading[];
 }>();
 const panelData = computed<PublicDetailPanelData>(() => ({
   ...props.details,
-  contents: props.content
-    ? buildContentHeadings(props.content, language.value.slugify)
-    : props.details.contents,
+  contents: [
+    ...(props.content
+      ? buildContentHeadings(props.content, language.value.slugify)
+      : (props.details.contents ?? [])),
+    ...(props.extraContents ?? []),
+  ],
 }));
 const navigateFromSheet = useSheetContentNavigation();
 const publicHeader = useStickyHeaderContext();

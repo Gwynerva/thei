@@ -57,12 +57,13 @@ describe('page validation', () => {
     });
   });
 
-  it('allows only canonical URL-safe slugs', () => {
+  it('cleans a slug instead of refusing it, and keeps any alphabet', () => {
     expect(pageSlugIsValid('about-page-2')).toBe(true);
-    expect(pageSlugIsValid('About')).toBe(true);
-    expect(pageSlugIsValid('about--page')).toBe(false);
-    expect(pageSlugIsValid('страница')).toBe(false);
+    expect(pageSlugIsValid('страница')).toBe(true);
+    expect(pageSlugIsValid('???')).toBe(false);
     expect(normalizePageSlug('  ABOUT  ')).toBe('about');
+    expect(normalizePageSlug('about--page')).toBe('about-page');
+    expect(normalizePageSlug('О себе')).toBe('о-себе');
   });
 
   it('checks the preloaded slug set while excluding the edited page slug', () => {
