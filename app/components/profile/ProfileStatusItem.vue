@@ -3,10 +3,11 @@ import type { ProfileStatusHistoryItem } from '#layers/thei/shared/profile';
 defineProps<{
   item: ProfileStatusHistoryItem;
   removable?: boolean;
+  editable?: boolean;
   standalone?: boolean;
   shortDate?: boolean;
 }>();
-defineEmits<{ remove: [id: string] }>();
+defineEmits<{ remove: [id: string]; edit: [item: ProfileStatusHistoryItem] }>();
 </script>
 <template>
   <article
@@ -37,6 +38,16 @@ defineEmits<{ remove: [id: string] }>();
     </p>
     <div class="flex shrink-0 items-center gap-xs">
       <ProfileDate :timestamp="item.createdAt" :short="shortDate" /><Button
+        v-if="editable && item.kind === 'regular'"
+        variant="secondary"
+        type="button"
+        size="icon-sm"
+        :aria-label="phrase.edit"
+        :data-title-popup="phrase.edit"
+        @click="$emit('edit', item)"
+      >
+        <Icon name="edit" /></Button
+      ><Button
         v-if="removable"
         type="button"
         size="icon-sm"

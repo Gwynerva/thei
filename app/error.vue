@@ -30,11 +30,7 @@ function leaveError(path: string) {
         items-center justify-center overflow-hidden px-window py-lg text-center"
       :data-error-status="view.status"
     >
-      <ErrorSingularity
-        :icon="view.icon"
-        :debris="view.debris"
-        class="mb-sm"
-      />
+      <ErrorSingularity :icon="view.icon" :debris="view.debris" class="mb-sm" />
 
       <p class="text-sm font-bold tracking-widest text-accent">
         {{ view.status }}

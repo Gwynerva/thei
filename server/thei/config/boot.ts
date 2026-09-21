@@ -1,5 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import { setTheiConfig } from './index';
+import {
+  emptySiteAnalytics,
+  normalizeSiteAnalytics,
+} from '#layers/thei/shared/analytics';
 
 export async function bootTheiConfig() {
   const configPath = THEI_SERVER.contentPath('thei.config.json');
@@ -13,6 +17,7 @@ export async function bootTheiConfig() {
     // Absent in the file means the same as empty: derive the address from the
     // request. The loader is where the on-disk shape becomes the typed config.
     siteUrl: config.siteUrl ?? '',
+    analytics: normalizeSiteAnalytics(config.analytics) ?? emptySiteAnalytics,
     secretPhrase: config.secretPhrase,
     password: config.password,
     backup: config.backup,

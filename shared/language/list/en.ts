@@ -191,7 +191,8 @@ export default defineI18nBase({
     asset_library_dimensions: 'Dimensions',
     asset_library_settings: 'Variant settings',
     asset_library_no_usage: 'This file is not used yet.',
-    asset_library_description: 'Uploaded files and their places of use',
+    asset_library_description:
+      'Every uploaded file: where it is used, how much it weighs and which variants it has.',
     asset_hash_check: 'Checking file',
     asset_hash_error: 'Could not check this file. Select it again to retry.',
     asset_hash_match: 'This file has already been uploaded',
@@ -234,20 +235,31 @@ export default defineI18nBase({
     profile_banner: 'Banner',
     profile_banner_hint: 'A wide image for the profile header.',
     profile_favicon: 'Site favicon',
-    profile_favicon_hint: 'The site icon shown in browser tabs.',
+    profile_favicon_hint:
+      'Shown in browser tabs, bookmarks, on phone home screens and in search results.',
+    profile_favicon_section: 'Site icon',
+    profile_favicon_section_hint:
+      'One square image. Thei derives the ico, png and touch versions from it for tabs, phone home screens and search results.',
+    favicon_preview_tab_light: 'Light tab',
+    favicon_preview_tab_dark: 'Dark tab',
+    favicon_preview_home_screen: 'Home screen',
     profile_status: 'Status',
-    profile_status_hint: 'Share what is happening with you right now',
+    profile_status_hint:
+      'A short thought or mood. The latest is shown in the profile, older ones stay on the Life timeline.',
     profile_facts: 'Facts',
-    profile_facts_hint: 'Add a few brief facts about yourself',
+    profile_facts_hint:
+      'Short “name — value” pairs: city, occupation, languages and so on.',
     profile_custom_facts: 'Custom facts',
     profile_nickname: 'Nickname',
     profile_birth_date: 'Date of birth',
     profile_field: 'Field',
     profile_value: 'Value',
     profile_pinned_pages: 'Pinned pages',
-    profile_pinned_pages_hint: 'Choose pages worth featuring in your profile',
+    profile_pinned_pages_hint:
+      'Pages linked right from your profile on the home page.',
     profile_links: 'Links',
-    profile_links_hint: 'Add websites and profiles connected to you',
+    profile_links_hint:
+      'Your profiles and sites elsewhere. Private ones are visible only to you.',
     profile_popular_tags: 'Popular tags',
     profile_show_all: 'Show all',
     profile_show_previous: 'Show previous',
@@ -259,14 +271,17 @@ export default defineI18nBase({
     profile_avatar_history: 'Avatar history',
     profile_best_projects: 'Best projects',
     profile_new_status: 'New status',
+    profile_edit_status: 'Edit status',
     profile_status_placeholder: 'Today I feel…',
     profile_empty_status: 'no active status',
     profile_set_empty_status: 'Set an empty status',
     profile_empty_status_unavailable: 'Set a regular active status first',
     profile_password_hint: 'Leave blank to keep the current password',
     profile_password_mismatch: 'Passwords do not match',
-    profile_settings_description: 'Language, access and sign-in settings',
-    profile_about_description: 'Your profile, stories and links',
+    profile_settings_description:
+      'Language, address and access, analytics, admin sign-in and backups.',
+    profile_about_description:
+      'Name, avatar, statuses, facts and links: everything visitors see on the home page.',
     profile_personal_hint:
       'Personal preferences apply immediately in this browser',
     profile_avatar_count: (count: number) => `1 of ${count}`,
@@ -275,6 +290,25 @@ export default defineI18nBase({
     profile_more: 'Load more',
     language_name: 'English',
     life: 'Life',
+    life_activity: 'Activity',
+    life_activity_less: 'Less',
+    life_activity_more: 'More',
+    life_activity_empty: 'Nothing happened',
+    life_activity_loading: 'Loading…',
+    life_activity_close: 'Close the day',
+    life_activity_year_projects: 'Projects this year',
+    life_activity_events: (count) => plural(count, 'event', 'events'),
+    life_activity_projects: (count) => plural(count, 'project', 'projects'),
+    life_activity_pages: (count) => plural(count, 'page', 'pages'),
+    life_activity_stages: (count) =>
+      plural(count, 'project stage', 'project stages'),
+    life_activity_sections: (count) =>
+      plural(count, 'project section', 'project sections'),
+    life_activity_profile: (count) =>
+      plural(count, 'profile change', 'profile changes'),
+    life_activity_statuses: (count) => plural(count, 'status', 'statuses'),
+    life_activity_secret: (count) =>
+      plural(count, 'hidden entry', 'hidden entries'),
     projects: 'Projects',
     events: 'Events',
     pages: 'Pages',
@@ -337,6 +371,19 @@ export default defineI18nBase({
     events_count: (count) => `${count} ${count === 1 ? 'event' : 'events'}`,
     public_life_description:
       'A continuous timeline of events, projects, and important stages.',
+    home: 'Home',
+    llms_txt_intro:
+      'A personal archive of one life: projects are substantial episodes with their own stages and sections, events are small moments worth keeping, pages are standalone writing, tags are threads across all of them, and Life is the single timeline they land on.',
+    llms_txt_sections: 'Sections',
+    llms_txt_home:
+      'who this is, current status, best projects and the latest moments',
+    llms_txt_life: 'every dated thing in one timeline, newest first',
+    llms_txt_tags: 'themes that group projects and events',
+    llms_txt_pages: 'standalone writing outside the timeline',
+    llms_txt_sitemap: 'every public address on this site',
+    llms_txt_markdown_title: 'Markdown',
+    llms_txt_markdown:
+      'Any public project, event or page is also served as Markdown: add index.md to its address, for example /projects/name-id/index.md. Private parts are absent there, exactly as they are for any other visitor.',
     public_life_period_description: (period, siteName) =>
       `Events, projects, and important stages for ${period} — ${siteName}.`,
     public_pages_description:
@@ -349,6 +396,9 @@ export default defineI18nBase({
     related_events_empty: 'No related events yet',
     search: 'Search',
     public_search_description: 'Search projects and events.',
+    public_search_query_title: (query) => `“${query}”`,
+    public_search_query_description: (query) =>
+      `All projects and events related to “${query}”.`,
     search_placeholder: 'Find a project or an event…',
     search_clear: 'Clear search',
     search_filters: 'Filters',
@@ -419,25 +469,50 @@ export default defineI18nBase({
     font_serif: 'Serif',
     global_settings: 'Global Settings',
     global_settings_description:
-      'These settings apply for everyone. Choose wisely.',
+      'Site-wide options: they affect every visitor and how search engines see the site.',
     ui_language: 'UI Language',
     ui_language_hint:
       'Choose the same language you will use for writing content.',
     site_access: 'Site Access',
     site_access_open: 'Open',
     site_access_closed: 'Closed',
+    site_access_open_hint: 'Anyone can visit the public part of the site.',
+    site_access_closed_hint:
+      'Only you can see the site after signing in; visitors get an error.',
     site_access_open_description:
       'Anyone can visit the site. You can restrict access to individual projects, events, pages, and files. Suitable for most people.',
     site_access_closed_description:
       'Only you and no one else will be able to view any content on the site. Suitable for secret agents who keep all aspects of their lives in strict secrecy.',
     site_url: 'Site Address',
     site_url_hint:
-      'Leave empty and the address is taken from each request, which is right for a single domain behind a normal proxy. Set it when the site answers on several hostnames, so that search engines are told one canonical address. Example: https://example.com',
+      'Leave empty and the address is taken from each request, which is right for a single domain behind a normal proxy. Set it when the site answers on several hostnames, or when it lives in a subfolder. Example: https://example.com/diary',
     site_url_invalid:
-      'Enter a full address with a scheme and a host, without a path, query or anchor. Example: https://example.com',
+      'Enter a full address with a scheme and a host, optionally with a folder path, but without a query or an anchor. Example: https://example.com/diary',
+    site_url_rebuild_pending: (base) =>
+      `The site is still served from ${base}. A folder change applies after the next rebuild of the site.`,
+    site_url_robots_title: 'robots.txt for the domain root',
+    site_url_robots_hint:
+      'Crawlers only read robots.txt at the domain root, which this site does not own. Paste these rules into the root file yourself.',
+    analytics: 'Analytics and search engines',
+    analytics_description:
+      'Counters and ownership codes are pasted straight from the provider and go into the page head. Your own visits as a signed-in owner are never counted.',
+    analytics_invalid:
+      'Check the identifiers: paste the value or the whole snippet from the provider.',
+    analytics_google_tag: 'Google Analytics (Measurement ID)',
+    analytics_google_tag_hint:
+      'Looks like G-XXXXXXXXXX. Page changes inside the site are counted by enhanced measurement.',
+    analytics_google_verification: 'Google Search Console code',
+    analytics_google_verification_hint:
+      'The value of the google-site-verification meta tag.',
+    analytics_yandex_metrika: 'Yandex Metrica (counter number)',
+    analytics_yandex_metrika_hint:
+      'Digits only. Page changes inside the site are reported by Thei itself.',
+    analytics_yandex_verification: 'Yandex Webmaster code',
+    analytics_yandex_verification_hint:
+      'The value of the yandex-verification meta tag.',
     admin_data: 'Admin Data',
     admin_data_description:
-      'Basic information about you and how to log in to the admin panel.',
+      'The phrase and password for the admin panel. Changing them signs out other devices.',
     how_to_address_you: 'How to address you?',
     display_name_hint: (name: string) =>
       `Can be a name or nickname: "Hello, ${name}!"`,
@@ -455,16 +530,51 @@ export default defineI18nBase({
     sign_out: 'Sign Out',
     signing_in: 'Signing in',
     invalid_secret_phrase_or_password: 'Invalid secret phrase or password!',
+    sign_in_too_many_attempts:
+      'Too many sign-in attempts! Try again in a moment.',
+    sign_in_link: 'Sign-in link',
+    sign_in_link_description:
+      'A one-time link that signs you in on another device. Scan the code with the phone camera or send yourself the address.',
+    sign_in_link_create: 'Sign in on another device',
+    sign_in_link_invalid:
+      'This link no longer works: it has already been used or has expired.',
+    sign_in_link_too_many:
+      'Too many active links. Revoke one before creating another.',
+    sign_in_link_expires: (time) => `Expires ${time}`,
+    sign_in_link_confirm: 'Sign in on this device?',
+    sign_in_link_confirm_hint:
+      'The link works once. After signing in it stops working for everyone else who has it.',
+    sign_in_link_copied: 'Link copied',
+    copy: 'Copy',
+    share_links: 'Temporary access',
+    share_links_description:
+      'Links that open this entry with everything private inside, and stop working on their own.',
+    share_link_create: 'Create a link',
+    share_link_extend: 'Extend',
+    share_link_empty: 'No links yet',
+    share_link_expires: 'Expires',
+    share_link_created_hint:
+      'The address is copied to the clipboard. It is shown once: the server keeps only its hash.',
+    share_link_expired: 'This access link has expired.',
+    share_link_too_many: 'Too many links for this entry. Revoke one first.',
+    share_link_private_site:
+      'The whole site is closed, so a link would open nothing. Open the site first.',
+    share_link_notice: 'Temporary access. This page is open until',
+    share_link_duration_30m: '30 minutes',
+    share_link_duration_1h: '1 hour',
+    share_link_duration_6h: '6 hours',
+    share_link_duration_24h: '24 hours',
     unknown: 'Unknown',
     system: 'System',
     admin_sessions: 'Admin Sessions',
     admin_sessions_description:
-      'Recent sessions that have accessed admin privileges.',
+      'Where the admin panel is open. You can also sign in on another device with a QR code.',
     active_admin_sessions: 'Active Sessions',
-    active_admin_sessions_description: 'These sessions have admin access.',
+    active_admin_sessions_description:
+      'Devices currently signed in. End any session you don’t recognise.',
     destroyed_admin_sessions: 'Terminated Sessions',
     destroyed_admin_sessions_description:
-      'These sessions no longer have admin access.',
+      'Ended and expired sign-ins, kept for history. They grant no access.',
     destroy_session: 'Terminate session',
     show_x_destroyed_sessions: (count: number) =>
       `Show ${plural(count, 'terminated session', 'terminated sessions')}`,
@@ -477,11 +587,14 @@ export default defineI18nBase({
     failed_to_fetch_data: 'Failed to fetch data!',
     admin_panel: 'Admin Panel',
     admin_projects: 'Projects',
-    admin_projects_description: 'All projects managed on this site.',
+    admin_projects_description:
+      'Substantial episodes of your life with stages, sections, files and links to other projects.',
     admin_events: 'Events',
-    admin_events_description: 'All events managed on this site.',
+    admin_events_description:
+      'Small memorable moments: each has dates, a place on the Life timeline and links to projects.',
     admin_pages: 'Pages',
-    admin_pages_description: 'All standalone pages on this site.',
+    admin_pages_description:
+      'Standalone writing outside the timeline, such as a bio or contacts, each at its own address.',
     to_admin_panel: 'To Admin Panel',
     to_website: 'To Website',
     project: 'Project',
@@ -495,16 +608,21 @@ export default defineI18nBase({
     new_page: 'New Page',
     site_status: 'Site status',
     site_version: 'Thei version',
+    update_available: (version) => `Update to ${version}`,
+    update_available_hint:
+      'A newer Thei version is available. Updating keeps all content intact.',
     disk_usage: 'Disk space',
     disk_thei_files: 'Thei files',
     disk_other_files: 'Other files',
     disk_free_space: 'Free',
+    disk_free_short: (size) => `${size} free`,
     backups: 'Backups',
     backups_description:
       'A copy of `content/` pulled onto a machine you control. Generate a ' +
       'token, download the script, and run it there.',
     backup_last: 'Last backup',
     backup_never: 'No backup yet',
+    backup_stale_short: 'Backup is overdue',
     backup_stale_warning:
       'No backup has completed in over a week. Everything in `content/` is ' +
       'only on this server.',
@@ -612,7 +730,7 @@ export default defineI18nBase({
     admin_tags: 'Tags',
     tag: 'Tag',
     tags_description:
-      'Classify and group similar projects by theme, format, mood, and other attributes.',
+      'Threads across projects and events that gather them into topical collections.',
     new_tag: 'New Tag',
     edit_tag: 'Edit Tag',
     tag_title: 'Tag title',
@@ -632,7 +750,7 @@ export default defineI18nBase({
       `Final link: /tags/${slug ? `${slug}-` : ''}${publicId}/`,
     project_tags: 'Project tags',
     project_tags_hint:
-      'Classify and group similar projects by theme, format, mood, and other attributes.',
+      'Themes that put this project next to similar projects and events.',
     recommended_tags: 'Recommended tags',
     tag_search_placeholder: 'Add tag…',
     create_tag_named: (title) => `Create new tag “${title}”`,
@@ -947,7 +1065,8 @@ export default defineI18nBase({
     event_summary_hint: 'Briefly explain what this event is about.',
     event_access: 'Event access',
     event_periods: 'Time periods',
-    event_periods_hint: 'When did this event happen?',
+    event_periods_hint:
+      'Dates or periods of the event. They place it on the Life timeline.',
     event_periods_empty: 'Add at least one date or time period.',
     event_content: 'Event content',
     event_content_hint: 'Detailed materials and event content.',
@@ -978,13 +1097,15 @@ export default defineI18nBase({
     event_external_links_empty: 'This event has no external links yet.',
     event_tags: 'Event tags',
     event_tags_hint:
-      'Classify events by topic, format, mood, and other characteristics.',
+      'Themes that put this event next to similar projects and events.',
     reorder: 'Reorder',
     event_relations: 'Related projects',
-    event_relations_hint: 'Projects related to this event.',
+    event_relations_hint:
+      'Projects this event belongs with. The note appears next to the project link on the event page.',
     delete_event: 'Delete event',
     project_icon: 'Project Icon',
-    project_icon_hint: 'Bright and memorable.',
+    project_icon_hint:
+      'Square image for cards, links and previews. Without one, a generated icon is used.',
     project_banner: 'Project Banner',
     project_banner_hint: 'Wide image for the project page.',
     delete_project: 'Delete Project',

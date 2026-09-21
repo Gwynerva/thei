@@ -75,7 +75,7 @@ const buttonStyle = computed(() => ({
 <template>
   <component
     :is="preview ? 'span' : 'a'"
-    :href="preview ? undefined : href"
+    :href="preview ? undefined : sitePath(href)"
     :target="preview ? undefined : '_blank'"
     :rel="preview ? undefined : 'noopener noreferrer'"
     class="project-action-button inline-flex min-h-12 max-w-full items-center

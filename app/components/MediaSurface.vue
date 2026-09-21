@@ -5,6 +5,8 @@ import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
 import { useMediaPair } from '#layers/thei/app/composables/media-pair';
 
 const props = defineProps(mediaSurfaceProps);
+// Media URLs travel through the API without the base path; the DOM needs it.
+const mediaSrc = computed(() => sitePath(props.src));
 const emit = defineEmits<{
   dimensions: [width: number, height: number];
   ready: [];
@@ -13,6 +15,7 @@ const emit = defineEmits<{
 const root = useTemplateRef<HTMLElement>('root');
 const {
   active,
+  inView,
   generation,
   requested,
   revealed,
@@ -81,6 +84,7 @@ defineExpose({ play, pause });
     class="media-surface relative isolate overflow-hidden"
     :style
     :data-media-active="active"
+    :data-media-in-view="inView"
     :data-media-final-state="phase"
     :data-media-preview-state="previewPhase"
     data-mutation-free="true"
@@ -102,7 +106,7 @@ defineExpose({ play, pause });
           (el: Element | ComponentPublicInstance | null) =>
             register('previewBackdrop', el)
         "
-        :src="previewSrc"
+        :src="sitePath(previewSrc)"
         class="media-backdrop pointer-events-none absolute max-w-none
           object-cover opacity-70 blur-3xl"
         alt=""
@@ -119,7 +123,7 @@ defineExpose({ play, pause });
             (el: Element | ComponentPublicInstance | null) =>
               register('preview', el)
           "
-          :src="previewSrc"
+          :src="sitePath(previewSrc)"
           class="media-main absolute inset-0 size-full"
           alt=""
           draggable="false"
@@ -143,7 +147,7 @@ defineExpose({ play, pause });
           (el: Element | ComponentPublicInstance | null) =>
             register('backdrop', el)
         "
-        :src
+        :src="mediaSrc"
         :muted="kind === 'video' ? true : undefined"
         :loop="kind === 'video' ? loop : undefined"
         :playsinline="kind === 'video' ? true : undefined"
@@ -164,7 +168,7 @@ defineExpose({ play, pause });
             (el: Element | ComponentPublicInstance | null) =>
               register('main', el)
           "
-          :src
+          :src="mediaSrc"
           :width
           :height
           :alt

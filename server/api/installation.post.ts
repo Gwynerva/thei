@@ -4,6 +4,7 @@ import { SiteAccessLevel } from '#layers/thei/shared/access-level';
 import type { InstallData } from '#layers/thei/shared/api/install';
 import { languageCodes } from '#layers/thei/shared/language';
 import { normalizeSiteUrl } from '#layers/thei/shared/site-url';
+import { emptySiteAnalytics } from '#layers/thei/shared/analytics';
 import { generatePasswordData } from '../thei/password';
 import { createFreshDbContext } from '../thei/db/utils';
 import { bootTheiServer } from '../thei/boot/process';
@@ -44,6 +45,7 @@ export default defineEventHandler(async (event): Promise<InstallResponse> => {
         languageCode: installDataOrError.languageCode,
         siteAccessLevel: installDataOrError.siteAccessLevel,
         siteUrl: installDataOrError.siteUrl,
+        analytics: emptySiteAnalytics,
         secretPhrase: installDataOrError.secretPhrase,
         password: {
           hash: passwordData.hash,

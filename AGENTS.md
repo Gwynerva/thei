@@ -48,6 +48,20 @@ Thei is a personal digital archive of a life — a résumé and a diary at once.
 
 - Check every change related to Editor.js for compatibility with content snapshots history system, including tools, block mutations, rendering, normalization, asynchronous hydration, assets, and editor event handling.
 - Verify that Editor.js changes do not emit transient or no-op content mutations that briefly change the dirty state. The save control must never flash from “Saved” to “Save” and immediately back to “Saved” without a real persistent content change.
+- `docs/content-blocks.md` is the written contract for stored content: the block types, their `data`, the inline markup subset, and how private sections travel. Update it in the same commit as any change to a block type, its data, the inline markup, or the Markdown output. Keep it to what is actually stored — it is read by people and models that never see the editor, and padding it with UI description makes it wrong sooner.
+
+## Addresses
+
+- A site may be served from a subfolder, which becomes the build's `app.baseURL`. One rule keeps that manageable: a path stored or passed around in data — API responses, `shared/*-url.ts`, `MediaDescriptor.src`, canonical paths — never includes the base path.
+- The base is added only on the way out: by the router for `TheiLink` and `navigateTo`, by `sitePath()` for DOM attributes the router does not own (`src`, a plain `href`, `fetch`/XHR, `location`, a cookie path, a redirect), and by `siteUrl()` / `useSiteUrl().resolve()` for absolute URLs.
+- `$fetch` and `useFetch` already carry the base on both the client and the server, so an API call written as `/api/…` is correct as it stands.
+- h3 strips the base before middleware and routes, so `getRequestPath(event)` is already base-relative and path comparisons need no prefix.
+
+## Public Text and Machine Readers
+
+- Every public project, event, stage, section and page is also served as Markdown at `<url>index.md`, built from the same `buildPublic*` functions with the visibility of a stranger. A representation must never be more permissive than the page it mirrors: pass `false` for `isAdmin`, never the request's own role.
+- `/llms.txt` describes the site and what its entities mean. Keep it short and factual; it is a map, not a marketing page.
+- Open Graph cards are rendered on the server from the same public data. Only publicly openable entities get one, so a preview never shows what a visitor is about to be refused.
 
 ## File Storage
 

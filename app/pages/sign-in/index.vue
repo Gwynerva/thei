@@ -50,7 +50,7 @@ async function signIn() {
       throw signInResponse.message;
     }
 
-    window.location.href = '/admin/';
+    window.location.href = sitePath('/admin/');
   } catch (error) {
     signInError.value = error instanceof Error ? error.message : String(error);
     signingIn.value = false;

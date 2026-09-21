@@ -24,8 +24,8 @@ defineProps<{ title: string }>();
   z-index: -1;
   background: radial-gradient(
     circle at 0% 0%,
-    color-mix(in oklab, var(--color-accent) 11%, transparent),
-    transparent min(18rem, 70%)
+    color-mix(in oklab, var(--color-accent) 7%, transparent),
+    transparent min(12rem, 50%)
   );
   content: '';
   pointer-events: none;

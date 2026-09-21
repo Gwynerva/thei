@@ -122,7 +122,8 @@ export function useLifeLastVisit(options: {
   const tracker = createLifeVisitTracker({
     getActiveDate: () => options.activeDate.value,
     getNewestDate: () => options.newestDate.value,
-    getPath: () => window.location.pathname,
+    // Compared against paths built by `buildLifeUrl`, which carry no base.
+    getPath: () => useSiteUrl().strip(window.location.pathname),
     isVisible: () => document.visibilityState === 'visible',
     isFocused: () => document.hasFocus(),
     read: readStoredDate,

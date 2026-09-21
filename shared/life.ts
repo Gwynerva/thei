@@ -108,3 +108,48 @@ export function isLifeDayNew(
 export function laterLifeDate(left: string | undefined, right: string): string {
   return left && left > right ? left : right;
 }
+
+/**
+ * A year of the timeline, counted per day.
+ *
+ * The grid needs nothing but counts, so the whole year travels as a few
+ * hundred small numbers instead of hydrated points; a day's contents are
+ * fetched only when someone picks that day.
+ */
+export type LifeActivityKind = LifeEntityKind | 'secret';
+
+export type LifeActivityResponse = {
+  year: number;
+  /** Every year that holds something, newest first. */
+  years: number[];
+  /** `YYYY-MM-DD` → how many points of each kind happened that day. */
+  days: Record<string, Partial<Record<LifeActivityKind, number>>>;
+  /** Projects whose stages ran during the year, newest first. */
+  projects: PublicProjectLink[];
+  /** The busiest day of the year, so shades can be scaled against it. */
+  max: number;
+};
+
+export function lifeActivityDayTotal(
+  counts: Partial<Record<LifeActivityKind, number>> | undefined,
+): number {
+  if (!counts) return 0;
+  return Object.values(counts).reduce(
+    (total, value) => total + (value ?? 0),
+    0,
+  );
+}
+
+/** Four shades plus "nothing", as a share of the busiest day of the year. */
+export function lifeActivityLevel(
+  total: number,
+  max: number,
+): 0 | 1 | 2 | 3 | 4 {
+  if (total <= 0) return 0;
+  if (max <= 1) return 4;
+  const share = total / max;
+  if (share <= 0.25) return 1;
+  if (share <= 0.5) return 2;
+  if (share <= 0.75) return 3;
+  return 4;
+}

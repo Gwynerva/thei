@@ -36,10 +36,14 @@ test('a site that has never been backed up says so on the dashboard', async ({
   // in — and the one the warning exists for.
   await open(page, '/admin/');
   const status = page.getByLabel('Site status');
-  await expect(status.getByText('No backup yet')).toBeVisible();
-  await expect(
-    status.getByRole('link', { name: /No backup has completed/ }),
-  ).toBeVisible();
+  // The bar is compact: the link says how things stand and carries the whole
+  // warning in its popup.
+  const warning = status.getByRole('link', { name: 'No backup yet' });
+  await expect(warning).toBeVisible();
+  await expect(warning).toHaveAttribute(
+    'data-title-popup',
+    /No backup has completed/,
+  );
 });
 
 test('the settings page issues a token once and reflects it', async ({

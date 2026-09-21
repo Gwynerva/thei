@@ -4,7 +4,13 @@ import type { PublicPageListItem } from '#layers/thei/shared/api/page';
 definePageMeta({ layout: 'public' });
 const resource = await useFetch<PublicPageListItem[]>('/api/pages');
 const pages = useRequiredResource(resource);
+const ogImage = useOgImage(
+  'service',
+  () => 'pages',
+  () => ['pages'],
+);
 usePublicSeo({
+  ogImage,
   title: computed(() => phrase.value.pages),
   description: computed(() => phrase.value.public_pages_description),
   canonical: '/pages/',

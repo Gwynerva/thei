@@ -4,7 +4,22 @@
     {
       "name": "thei-dev",
       "runtimeExecutable": "bun",
-      "runtimeArgs": ["run", "dev", "--port", "3000"],
+      "runtimeArgs": ["run", "dev", "--port", "3000", "--host", "127.0.0.1"],
+      "port": 3000
+    },
+    {
+      "name": "thei-e2e-fixture",
+      "runtimeExecutable": "bunx",
+      "runtimeArgs": [
+        "nuxt",
+        "dev",
+        "tests/e2e/fixture",
+        "--port",
+        "3000",
+        "--host",
+        "127.0.0.1",
+        "--no-fork"
+      ],
       "port": 3000
     }
   ]

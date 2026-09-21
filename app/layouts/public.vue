@@ -3,20 +3,22 @@ const publicAdmin = await usePublicAdmin();
 const site = useSiteUrl();
 const siteName = computed(() => publicAdmin.value.displayName);
 const isAdmin = useIsAdmin();
+useSiteAnalytics({
+  analytics: computed(() => publicAdmin.value.analytics),
+  enabled: computed(() => !isAdmin.value),
+});
 const stickyHeader = useStickyHeaderContext();
 // Anchors land below the sticky bars; the header row is the SSR fallback.
 const rootStyle = computed(() => ({
   '--public-anchor-offset': `calc(${isAdmin.value ? 'var(--height-admin-bar)' : '0px'} + max(${stickyHeader?.height.value ?? 0}px, calc(var(--spacing) * 14)) + var(--spacing-sm))`,
 }));
 
+useFaviconLinks(() => publicAdmin.value.favicon);
 useHead({
   htmlAttrs: { lang: computed(() => publicAdmin.value.languageCode) },
-  link: computed(() => [
-    {
-      key: 'site-favicon',
-      rel: 'icon',
-      href: publicAdmin.value.faviconMedia?.src ?? '/favicon.svg',
-    },
+  meta: computed(() => [
+    { property: 'og:site_name', content: siteName.value },
+    { property: 'og:locale', content: publicAdmin.value.languageCode },
   ]),
   titleTemplate: (title) =>
     !title || title === siteName.value

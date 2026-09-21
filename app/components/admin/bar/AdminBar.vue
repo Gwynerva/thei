@@ -15,7 +15,7 @@ const registeredContextButton = useAdminBarContextButton();
 
 async function signOut() {
   await $fetch('/api/admin/session', { method: 'DELETE' });
-  await navigateTo('/sign-in/', { external: true });
+  await navigateTo(sitePath('/sign-in/'), { external: true });
 }
 
 const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {

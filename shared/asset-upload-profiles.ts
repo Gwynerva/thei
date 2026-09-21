@@ -44,15 +44,18 @@ export const ASSET_UPLOAD_PROFILE_CONFIGS = {
     stripAudio: true,
   },
   'profile-favicon': {
-    dimensions: { width: 128, height: 128 },
+    // The engine derives the whole icon set from this one file, down to 16 px
+    // and up to a 180 px touch icon, so it is stored large enough to scale
+    // down cleanly rather than at any one display size.
+    dimensions: { width: 512, height: 512 },
     resizeMode: 'cover',
     allowUpscale: true,
     imageQuality: 90,
     videoQuality: 85,
     stripAudio: true,
-    // This asset ends up in `<link rel="icon">`. Browser support for AVIF in a
-    // tab icon is uneven, and failing there shows an empty tab rather than a
-    // slightly larger file, so the favicon stays on WebP deliberately.
+    // Browser support for AVIF in a tab icon is uneven, and failing there
+    // shows an empty tab rather than a slightly larger file, so the favicon
+    // stays on WebP deliberately.
     imageFormat: 'webp',
   },
   'profile-status': {

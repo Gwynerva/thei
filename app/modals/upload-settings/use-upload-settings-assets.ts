@@ -95,7 +95,7 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
       const xhr = new XMLHttpRequest();
       activeXhr.value = xhr;
       uploadStatus.value = { phase: 'uploading' };
-      xhr.open('POST', '/api/admin/assets');
+      xhr.open('POST', sitePath('/api/admin/assets'));
       for (const [name, value] of Object.entries(headers)) {
         xhr.setRequestHeader(name, value);
       }

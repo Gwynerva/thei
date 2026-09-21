@@ -7,7 +7,12 @@ import {
 import { bootPromise } from '../thei/boot/promise';
 import { bootResult } from '../thei/boot/result';
 import { getRequestPath } from '../thei/request';
-import { siteOrigin } from '../thei/site-url';
+import { siteOrigin, sitePath } from '../thei/site-url';
+import {
+  readShareGrants,
+  resolveShareGrantPaths,
+  SHARE_COOKIE_NAME,
+} from '../thei/access-links/share-links';
 
 export default defineEventHandler(async (event) => {
   await bootPromise;
@@ -57,9 +62,24 @@ export default defineEventHandler(async (event) => {
       // Resolved here rather than in the pages so that a rendered page and the
       // sitemap it is listed in always agree on the site's own address.
       event.context.siteOrigin = siteOrigin(event);
+      // Resolved once per request: a page, the API calls it makes and the
+      // media it references all have to agree on what the visitor may see.
+      if (getCookie(event, SHARE_COOKIE_NAME)) {
+        const grants = readShareGrants(event);
+        event.context.shareGrants = grants;
+        if (grants.size) {
+          // A share link is a private view, and a crawler that follows the
+          // address out of a chat would be holding the same cookie as anyone
+          // else. Nothing seen through one belongs in an index.
+          setHeader(event, 'X-Robots-Tag', 'noindex, nofollow');
+          if (!path.startsWith('/api/'))
+            event.context.shareGrantPaths =
+              await resolveShareGrantPaths(grants);
+        }
+      }
 
       if (isInstallPath || isUpdatePath) {
-        return sendRedirect(event, '/');
+        return sendRedirect(event, sitePath('/'));
       }
 
       // The backup client has no session cookie and cannot get one. Its routes
@@ -71,9 +91,12 @@ export default defineEventHandler(async (event) => {
 
       const isAuthPath =
         path === '/sign-in/' ||
-        (path === '/api/admin/session' && event.method === 'POST');
+        path.startsWith('/sign-in/link/') ||
+        ((path === '/api/admin/session' ||
+          path === '/api/admin/session/link') &&
+          event.method === 'POST');
       if (isAuthPath && isAuthenticatedAdmin) {
-        return sendRedirect(event, '/admin/');
+        return sendRedirect(event, sitePath('/admin/'));
       }
 
       if (isAdminPath && !isAuthPath && !isAuthenticatedAdmin) {
@@ -94,7 +117,7 @@ export default defineEventHandler(async (event) => {
 
     case 'install':
       if (!isInstallPath) {
-        return sendRedirect(event, '/install/');
+        return sendRedirect(event, sitePath('/install/'));
       }
       return;
 
@@ -110,7 +133,7 @@ export default defineEventHandler(async (event) => {
       };
 
       if (!isUpdatePath) {
-        return sendRedirect(event, '/update/');
+        return sendRedirect(event, sitePath('/update/'));
       }
       return;
 

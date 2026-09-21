@@ -10,19 +10,27 @@ import {
   type Ref,
 } from 'vue';
 import type { MediaSurfaceProps } from '#layers/thei/shared/media';
-import { restoredContentMediaTime } from '#layers/thei/shared/content-media-playback';
+import { observeViewport } from './viewport-observer';
 
 type Role = 'main' | 'backdrop' | 'preview' | 'previewBackdrop';
 type Status = 'loading' | 'ready' | 'error';
 type MediaElement = HTMLImageElement | HTMLVideoElement;
 
-/** Owns readiness and playback only; the two presentations own their geometry. */
+/**
+ * Owns readiness and playback only; the two presentations own their geometry.
+ *
+ * Media starts loading the first time it scrolls into view and then stays
+ * mounted: the browser already keeps offscreen images cheap, while unmounting
+ * would decode, seek and fade the same bytes in again on every return. Only
+ * videos keep watching the viewport, to pause while nobody can see them.
+ */
 export function useMediaPair(
   props: MediaSurfaceProps,
   root: Readonly<Ref<HTMLElement | null>>,
   dimensions: (width: number, height: number) => void,
 ) {
   const active = ref(false);
+  const inView = ref(false);
   const generation = ref(0);
   const requested = ref(false);
   const revealed = ref(false);
@@ -96,8 +104,7 @@ export function useMediaPair(
         ? Boolean(props.engaged)
         : props.playback === 'autoplay'),
   );
-  let savedTime = 0;
-  let observer: IntersectionObserver | undefined;
+  let stopObserving: (() => void) | undefined;
   let motion: MediaQueryList | undefined;
   let firstFrame = 0;
   let secondFrame = 0;
@@ -138,6 +145,7 @@ export function useMediaPair(
     if (
       props.suspended ||
       !active.value ||
+      !inView.value ||
       document.hidden ||
       !revealed.value ||
       !wantsPlayback.value ||
@@ -211,17 +219,6 @@ export function useMediaPair(
     if (!width || !height) {
       fail(role, element);
       return;
-    }
-    if (
-      element instanceof HTMLVideoElement &&
-      savedTime > 0 &&
-      element.readyState >= 2
-    ) {
-      const time = restoredContentMediaTime(savedTime, element.duration);
-      if (Math.abs(element.currentTime - time) > 0.01) {
-        element.currentTime = time;
-        return; // The restored frame must be available before revealing the pair.
-      }
     }
     status[role] = 'ready';
     if (role === 'main' || (role === 'preview' && previewWanted.value)) {
@@ -331,7 +328,11 @@ export function useMediaPair(
     for (const role of Object.keys(status) as Role[]) status[role] = 'loading';
   }
   function enter() {
-    if (active.value) return;
+    inView.value = true;
+    if (active.value) {
+      void startVideos();
+      return;
+    }
     active.value = true;
     requested.value =
       props.kind !== 'video' ||
@@ -343,9 +344,22 @@ export function useMediaPair(
     playbackIntentInitialized = true;
   }
   function leave() {
-    const main = video('main');
-    if (main && Number.isFinite(main.currentTime)) savedTime = main.currentTime;
-    clear();
+    inView.value = false;
+    pauseVideos();
+  }
+  function watchViewport() {
+    stopObserving?.();
+    stopObserving = undefined;
+    if (!root.value) return;
+    stopObserving = observeViewport(root.value, (visible) => {
+      if (visible) enter();
+      else leave();
+      // Once shown, an image has nothing left to do with the viewport.
+      if (visible && props.kind !== 'video') {
+        stopObserving?.();
+        stopObserving = undefined;
+      }
+    });
   }
   async function play() {
     if (
@@ -379,12 +393,14 @@ export function useMediaPair(
     () => {
       const wasActive = active.value;
       clear();
-      savedTime = 0;
       playbackIntentInitialized = false;
       wantsPlayback.value = false;
       ratio.value =
         props.width && props.height ? props.width / props.height : 1;
-      if (wasActive) enter();
+      if (wasActive && inView.value) enter();
+      // New media reports its own first appearance, and a video keeps
+      // reporting so it can pause offscreen.
+      watchViewport();
     },
   );
   function updateMotion() {
@@ -399,27 +415,17 @@ export function useMediaPair(
     updateMotion();
     motion.addEventListener('change', updateMotion);
     document.addEventListener('visibilitychange', updateVisibility);
-    if (!('IntersectionObserver' in window)) {
-      enter();
-      return;
-    }
-    observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting) enter();
-        else leave();
-      },
-      { threshold: 0.01 },
-    );
-    if (root.value) observer.observe(root.value);
+    watchViewport();
   });
   onBeforeUnmount(() => {
-    observer?.disconnect();
+    stopObserving?.();
     motion?.removeEventListener('change', updateMotion);
     document.removeEventListener('visibilitychange', updateVisibility);
     clear();
   });
   return {
     active,
+    inView,
     generation,
     requested,
     revealed,

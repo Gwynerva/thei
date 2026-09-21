@@ -2,6 +2,8 @@ import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import type { PublicEventResponseFull } from '#layers/thei/shared/api/public';
 import { publicIdFromEventUrlPart } from '#layers/thei/shared/event-url';
 import { buildPublicEvent } from '../../thei/public/entities';
+import { resolveEntityViewer } from '../../thei/access-links/viewer';
+import { markSharedResponse } from '../../thei/access-links/response';
 
 export default defineEventHandler(
   async (event): Promise<PublicEventResponseFull> => {
@@ -10,11 +12,12 @@ export default defineEventHandler(
       (await THEI_SERVER.events.findByUuid(part)) ??
       (await THEI_SERVER.events.findByPublicId(publicIdFromEventUrlPart(part)));
     if (!stored) throw createError({ statusCode: 404 });
-    const isAdmin = await THEI_SERVER.isAdmin(event);
-    if (stored.access === ProjectEventAccessLevel.Private && !isAdmin)
+    const viewer = await resolveEntityViewer(event, 'event', stored.eventUuid);
+    if (stored.access === ProjectEventAccessLevel.Private && !viewer.asOwner)
       throw createError({ statusCode: 404 });
-    if (stored.access === ProjectEventAccessLevel.LinkOnly)
+    if (stored.access === ProjectEventAccessLevel.LinkOnly || viewer.viaShare)
       setHeader(event, 'X-Robots-Tag', 'noindex, nofollow');
-    return buildPublicEvent(stored, isAdmin);
+    if (viewer.viaShare) markSharedResponse(event);
+    return buildPublicEvent(stored, viewer.asOwner);
   },
 );

@@ -8,6 +8,8 @@ import {
   listPublicProjectEvents,
   PROJECT_EVENTS_PREVIEW_SIZE,
 } from '../../thei/public/project-events';
+import { resolveEntityViewer } from '../../thei/access-links/viewer';
+import { markSharedResponse } from '../../thei/access-links/response';
 
 export default defineEventHandler(
   async (event): Promise<PublicProjectResponse> => {
@@ -19,14 +21,26 @@ export default defineEventHandler(
       ));
     if (!project)
       throw createError({ statusCode: 404, statusText: 'Project not found' });
-    const isAdmin = await THEI_SERVER.isAdmin(event);
-    if (!canOpenPublicEntity(project.access, isAdmin))
+    // The share link widens the view of this project only: related events
+    // and projects are still built for the visitor the reader really is.
+    const viewer = await resolveEntityViewer(
+      event,
+      'project',
+      project.projectUuid,
+    );
+    if (!canOpenPublicEntity(project.access, viewer.asOwner))
       throw createError({ statusCode: 404, statusText: 'Project not found' });
-    if (project.access === 'link-only')
+    if (project.access === 'link-only' || viewer.viaShare)
       setHeader(event, 'X-Robots-Tag', 'noindex, nofollow');
+    if (viewer.viaShare) markSharedResponse(event);
     const [response, events] = await Promise.all([
-      buildPublicProject(project, isAdmin),
-      listPublicProjectEvents(project, isAdmin, 1, PROJECT_EVENTS_PREVIEW_SIZE),
+      buildPublicProject(project, viewer.asOwner),
+      listPublicProjectEvents(
+        project,
+        viewer.isAdmin,
+        1,
+        PROJECT_EVENTS_PREVIEW_SIZE,
+      ),
     ]);
     return {
       ...response,

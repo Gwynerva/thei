@@ -239,7 +239,7 @@ describe('contextual attachment authorization before HTTP caching', () => {
         }
       const admin = await request('admin');
       expect(admin.status).toBe(200);
-      expect(admin.headers.get('cache-control')).toBe('private, no-store');
+      expect(admin.headers.get('cache-control')).toBe('private, no-cache');
     },
   );
   it.each(['project-stage', 'project-section'] as const)(
@@ -266,12 +266,12 @@ describe('contextual attachment authorization before HTTP caching', () => {
       use(type, false, 'child');
       expect((await request()).status).toBe(404);
       expect((await request('admin')).headers.get('cache-control')).toBe(
-        'private, no-store',
+        'private, no-cache',
       );
       use('project', false);
       expect((await request()).status).toBe(200);
       expect((await request()).headers.get('cache-control')).toBe(
-        'public, max-age=0, must-revalidate',
+        'public, max-age=86400, s-maxage=300',
       );
     },
   );
@@ -321,7 +321,7 @@ describe('contextual attachment authorization before HTTP caching', () => {
       else parentAccess = ProjectEventAccessLevel.Private;
       expect((await request('as-guest')).status).toBe(404);
       expect((await request('admin')).headers.get('cache-control')).toBe(
-        'private, no-store',
+        'private, no-cache',
       );
     }
   });

@@ -11,6 +11,12 @@ import {
   resolvePublicAssetVariant,
 } from './public-preview';
 import { sendAssetFile } from './send-file';
+import {
+  OWNER_ASSET_CACHE_CONTROL,
+  PUBLIC_ASSET_CACHE_CONTROL,
+  SHARED_ASSET_CACHE_CONTROL,
+} from './cache-control';
+import { hasShareGrant } from '../access-links/viewer';
 
 interface AttachmentContext {
   ownerType:
@@ -117,12 +123,19 @@ export async function sendContextAsset(
   event: H3Event,
   context: AttachmentContext,
 ) {
-  setHeader(event, 'Cache-Control', 'private, no-store');
+  setHeader(event, 'Cache-Control', SHARED_ASSET_CACHE_CONTROL);
   const isAdmin = await THEI_SERVER.isAdmin(event);
+  // A share link reaches the media of the entity it was made for, including
+  // files inside its private stages and sections, and nothing else.
+  const viaShare =
+    !isAdmin &&
+    (context.ownerType === 'project' || context.ownerType === 'event') &&
+    hasShareGrant(event, context.ownerType, context.ownerId);
+  const asOwner = isAdmin || viaShare;
   const publicParent =
     THEI_SERVER.config.siteAccessLevel !== SiteAccessLevel.Private &&
     context.access !== ProjectEventAccessLevel.Private;
-  if (!publicParent && !isAdmin) throw createError({ statusCode: 404 });
+  if (!publicParent && !asOwner) throw createError({ statusCode: 404 });
   const dot = context.filename.lastIndexOf('.');
   if (dot <= 0) throw createError({ statusCode: 404 });
   const asset = await THEI_SERVER.assets.findBySlug(
@@ -159,7 +172,7 @@ export async function sendContextAsset(
     };
   }
   const publicAccess = publicParent && access.public;
-  if (!access.exists || (!publicAccess && !isAdmin))
+  if (!access.exists || (!publicAccess && !asOwner))
     throw createError({ statusCode: 404 });
   const selected = await resolvePublicAssetVariant(event, asset);
   return sendAssetFile(
@@ -168,8 +181,10 @@ export async function sendContextAsset(
     selected.extension,
     {
       cacheControl: publicAccess
-        ? 'public, max-age=0, must-revalidate'
-        : 'private, no-store',
+        ? PUBLIC_ASSET_CACHE_CONTROL
+        : viaShare
+          ? SHARED_ASSET_CACHE_CONTROL
+          : OWNER_ASSET_CACHE_CONTROL,
       etag: `"${selected.contentHash}"`,
       filename: publicAssetFilename(context.filename, asset, selected),
     },

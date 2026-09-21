@@ -114,7 +114,7 @@ function replace() {
         :key="`media:${modalData.asset.assetUuid}:${previewSrc}`"
         ref="mediaPreview"
         :extension="modalData.asset.extension"
-        :src="previewSrc"
+        :src="sitePath(previewSrc)"
         :has-audio="modalData.asset.media?.hasAudio"
       />
       <FilePreview
@@ -131,7 +131,7 @@ function replace() {
         :key="`direct:${directHref}`"
         icon="arrow-outward"
         target="_blank"
-        :href="directHref"
+        :href="sitePath(directHref)"
         :data-title-popup="phrase.direct_link_to_asset"
       />
       <AssetModalButton

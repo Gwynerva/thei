@@ -1,12 +1,13 @@
 import { iconsHref } from '#thei/icons';
 import { inlineIconSprite } from '../composables/icon-sprite';
+import { sitePath } from '../composables/site-url';
 
 export default defineNuxtPlugin((nuxtApp) => {
   useHead({
     link: [
       {
         rel: 'prefetch',
-        href: iconsHref,
+        href: sitePath(iconsHref),
         type: 'image/svg+xml',
       },
     ],

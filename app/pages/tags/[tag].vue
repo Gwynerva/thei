@@ -28,7 +28,13 @@ const canonical = computed(() =>
     page: tag.value.items.page,
   }),
 );
+const ogImage = useOgImage(
+  'tag',
+  () => tag.value.publicId,
+  () => [tag.value.title, tag.value.iconMedia?.src],
+);
 usePublicSeo({
+  ogImage,
   title: computed(() => tag.value.title),
   description: computed(
     () => tag.value.description ?? phrase.value.public_tags_description,

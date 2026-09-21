@@ -103,7 +103,7 @@ function active(to: string) {
     >
       <a
         v-if="!isAdmin"
-        href="/sign-in/"
+        :href="sitePath('/sign-in/')"
         class="group flex items-center gap-sm rounded-b-normal border-t
           border-border-1 p-sm transition focus-visible:ring-2
           focus-visible:ring-accent focus-visible:ring-inset sm:px-md

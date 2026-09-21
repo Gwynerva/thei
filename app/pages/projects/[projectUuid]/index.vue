@@ -22,7 +22,19 @@ const canonical = computed(() =>
 );
 if (route.path !== canonical.value)
   await navigateTo(canonical.value, { redirectCode: 301 });
+const ogImage = useOgImage(
+  'project',
+  () => data.value.publicId,
+  () => [
+    data.value.title,
+    data.value.bannerMedia?.src,
+    data.value.iconMedia.src,
+  ],
+);
 usePublicSeo({
+  ogImage,
+  markdown: true,
+  ogType: 'article',
   title: () => data.value.title,
   description: () => data.value.summary,
   canonical,
@@ -194,6 +206,7 @@ const details = computed(
     />
 
     <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
+      <PublicShareNotice />
       <PublicDetailLayout :details="details">
         <div class="flex min-w-0 flex-col gap-lg">
           <ContentRenderer

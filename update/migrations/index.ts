@@ -1,5 +1,6 @@
 import type { TheiMigration } from './types';
 import baseline from './0.0.1-baseline';
+import accessLinks from './0.0.2-access-links';
 
 /**
  * Every migration Thei has ever shipped, oldest first.
@@ -11,6 +12,6 @@ import baseline from './0.0.1-baseline';
  * `defineMigration({ id: '<version>/<order>-<slug>', ... })` and append it here.
  * Never reorder, never edit, and never remove an entry that has shipped.
  */
-export const migrationRegistry: TheiMigration[] = [baseline];
+export const migrationRegistry: TheiMigration[] = [baseline, accessLinks];
 
 export { baselineSql } from './0.0.1-baseline';

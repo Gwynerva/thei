@@ -32,6 +32,7 @@ import ProjectExternalLinks from '../../projects/components/ProjectExternalLinks
 import ProjectTags from '../../projects/components/ProjectTags.vue';
 import ProjectActionSettings from '../../projects/components/ProjectActionSettings.vue';
 import EventRelations from './EventRelations.vue';
+import ProjectShareLinks from '../../projects/components/ProjectShareLinks.vue';
 import { eventDeleteModal } from './event-delete-modal';
 
 const { eventUuid } = defineProps<{ eventUuid?: string }>();
@@ -357,6 +358,11 @@ function clone<T>(value: T): T {
     <ProjectTags
       :title="phrase.event_tags"
       :description="phrase.event_tags_hint"
+    />
+    <ProjectShareLinks
+      v-if="eventUuid"
+      entity-type="event"
+      :entity-uuid="eventUuid"
     />
   </div>
 </template>

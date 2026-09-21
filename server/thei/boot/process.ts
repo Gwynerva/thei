@@ -13,6 +13,8 @@ import { bootTheiDb } from '../db/boot';
 import { bootAdminSessions } from '../admin-session/boot';
 import { bootTheiAssets } from '../assets/boot';
 import { bootExternalLinkCleanup } from '../external-links/boot';
+import { bootUpdateChecks } from '../updates/boot';
+import { bootOgCleanup } from '../og/boot';
 
 export async function bootTheiServer() {
   THEI_SERVER.console.tag('Boot').log('Booting...');
@@ -25,6 +27,8 @@ export async function bootTheiServer() {
     await bootAdminSessions();
     bootTheiAssets();
     bootExternalLinkCleanup();
+    bootUpdateChecks();
+    bootOgCleanup();
     setBootReady();
   } catch (decideOrError) {
     if (decideOrError instanceof BootDecided) {

@@ -59,7 +59,7 @@ const details = computed(() =>
   <component
     :is="mode === 'open' ? 'button' : mode === 'link' ? 'a' : 'div'"
     :type="mode === 'open' ? 'button' : undefined"
-    :href="mode === 'link' ? href : undefined"
+    :href="mode === 'link' ? sitePath(href) : undefined"
     :target="mode === 'link' ? '_blank' : undefined"
     :rel="mode === 'link' ? 'noopener noreferrer' : undefined"
     class="group relative flex w-full min-w-0 items-center gap-sm rounded-normal

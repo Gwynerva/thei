@@ -13,7 +13,15 @@ const data = useRequiredResource(resource);
 const canonical = computed(() => buildPageUrl(data.value.slug));
 if (route.path !== canonical.value)
   await navigateTo(canonical.value, { redirectCode: 301 });
+const ogImage = useOgImage(
+  'page',
+  () => data.value.slug,
+  () => [data.value.title, data.value.iconMedia.src],
+);
 usePublicSeo({
+  ogImage,
+  markdown: true,
+  ogType: 'article',
   title: () => data.value.title,
   description: () => data.value.summary,
   canonical,

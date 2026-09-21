@@ -24,7 +24,7 @@ const relatedProjectLinks = computed(() =>
             kind: 'project' as const,
             title: project.title,
             href: project.href,
-            description: project.summary,
+            description: project.note || project.summary,
             iconMedia: project.iconMedia,
             relationType: project.relationType,
           },

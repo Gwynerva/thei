@@ -14,7 +14,7 @@ type AdminSystemInfo = {
 const humanSize = useHumanSize();
 const [
   { data: systemInfo, error: systemError },
-  { data: disk, error: diskError },
+  { data: disk },
   { data: updates },
   { data: backup },
 ] = await Promise.all([
@@ -24,155 +24,164 @@ const [
   useFetch<AdminDiskUsage>('/api/admin/disk-usage', {
     key: 'admin-disk-usage',
   }),
-  // Uses whatever the last check found; it never reaches out on its own.
+  // Uses whatever the last check found, manual or the periodic one.
   useFetch<UpdateStatus>('/api/admin/updates', { key: 'admin-updates' }),
   useFetch<BackupStatus>('/api/admin/backup', { key: 'admin-backup' }),
 ]);
 
+const isPrivate = computed(
+  () => systemInfo.value?.siteAccessLevel === 'private',
+);
 const lastBackupAt = computed(() => backup.value?.lastBackup?.completedAt);
 const backupStale = computed(() => isBackupStale(lastBackupAt.value));
 
-const segments = computed(() => {
+// The disk is a small donut: a circle of circumference 100, so each segment's
+// dash length is simply its share of the disk in percent.
+const diskSegments = computed(() => {
   const total = disk.value?.total ?? 0;
   if (!total || !disk.value) return [];
+  let offset = 0;
   return [
-    {
-      key: 'thei',
-      label: phrase.value.disk_thei_files,
-      size: disk.value.theiUsed,
-      class: 'bg-accent',
-      textClass: 'text-accent',
-    },
-    {
-      key: 'other',
-      label: phrase.value.disk_other_files,
-      size: disk.value.otherUsed,
-      class: 'bg-bg-4',
-      textClass: 'text-text-2',
-    },
-    {
-      key: 'free',
-      label: phrase.value.disk_free_space,
-      size: disk.value.free,
-      class: 'bg-bg-3',
-      textClass: 'text-text-3',
-    },
-  ].map((segment) => ({
-    ...segment,
-    width: `${(segment.size / total) * 100}%`,
-    popup: `${segment.label}: ${humanSize(segment.size)}`,
-  }));
+    { key: 'thei', size: disk.value.theiUsed, class: 'stroke-accent' },
+    { key: 'other', size: disk.value.otherUsed, class: 'stroke-text-3' },
+  ].map((segment) => {
+    const share = (segment.size / total) * 100;
+    const result = { ...segment, share, offset };
+    offset += share;
+    return result;
+  });
+});
+const diskPopup = computed(() => {
+  if (!disk.value) return phrase.value.failed_to_fetch_data;
+  const { total, theiUsed, otherUsed, free } = disk.value;
+  return [
+    `${phrase.value.disk_usage}: ${humanSize(total)}`,
+    `${phrase.value.disk_thei_files}: ${humanSize(theiUsed)}`,
+    `${phrase.value.disk_other_files}: ${humanSize(otherUsed)}`,
+    `${phrase.value.disk_free_space}: ${humanSize(free)}`,
+  ].join('\n');
 });
 </script>
 
 <template>
-  <Box class="mb-lg" :aria-label="phrase.site_status">
-    <div class="flex flex-wrap items-center gap-x-md gap-y-xs p-xs">
+  <Box class="mb-md" :aria-label="phrase.site_status">
+    <div
+      class="flex flex-wrap items-center gap-x-md gap-y-xs px-sm py-xs text-sm"
+    >
       <div
         class="flex shrink-0 items-center gap-xs"
         :data-title-popup="phrase.site_version"
+        tabindex="0"
       >
         <Icon name="thei" class="text-text-3" />
-        <span class="text-sm font-semibold">
-          Thei v{{ systemInfo?.theiVersion ?? '—' }}
+        <span class="font-semibold">
+          v{{ systemInfo?.theiVersion ?? '—' }}
         </span>
       </div>
 
       <TheiLink
         v-if="updates?.updateAvailable"
         to="/admin/updates/"
-        class="flex shrink-0 items-center gap-1 rounded-normal bg-accent/20
-          px-xs py-0.5 text-sm font-semibold text-accent transition
-          hocus:bg-accent/30"
+        class="flex shrink-0 items-center gap-1 rounded-normal border
+          border-border-warning bg-bg-warning px-xs py-0.5 font-semibold
+          text-text-warning transition-colors hocus:border-text-warning"
+        :data-title-popup="phrase.update_available_hint"
       >
         <Icon name="arrow-cycle" />
-        <span>{{ updates.latestVersion }}</span>
+        <span>{{ phrase.update_available(updates.latestVersion ?? '') }}</span>
       </TheiLink>
 
       <div
-        class="flex shrink-0 items-center gap-xs text-sm"
-        :data-title-popup="phrase.site_access"
+        class="flex shrink-0 items-center gap-xs"
+        :data-title-popup="
+          isPrivate
+            ? phrase.site_access_closed_hint
+            : phrase.site_access_open_hint
+        "
+        tabindex="0"
       >
         <Icon
-          :name="
-            systemInfo?.siteAccessLevel === 'private'
-              ? 'lock-close'
-              : 'lock-open'
-          "
+          :name="isPrivate ? 'lock-close' : 'lock-open'"
           class="text-text-3"
         />
         <span>
+          {{ isPrivate ? phrase.site_access_closed : phrase.site_access_open }}
+        </span>
+      </div>
+
+      <div
+        class="flex shrink-0 items-center gap-xs"
+        :class="disk ? undefined : 'text-text-error'"
+        :data-title-popup="diskPopup"
+        tabindex="0"
+      >
+        <svg
+          v-if="disk"
+          viewBox="0 0 36 36"
+          class="size-5 -rotate-90"
+          role="img"
+          :aria-label="phrase.disk_usage"
+        >
+          <circle
+            cx="18"
+            cy="18"
+            r="15.9155"
+            fill="none"
+            class="stroke-bg-4"
+            stroke-width="6"
+          />
+          <circle
+            v-for="segment in diskSegments"
+            :key="segment.key"
+            cx="18"
+            cy="18"
+            r="15.9155"
+            fill="none"
+            :class="segment.class"
+            stroke-width="6"
+            :stroke-dasharray="`${segment.share} ${100 - segment.share}`"
+            :stroke-dashoffset="-segment.offset"
+          />
+        </svg>
+        <Icon v-else name="warning" />
+        <span>
           {{
-            systemInfo?.siteAccessLevel === 'private'
-              ? phrase.site_access_closed
-              : phrase.site_access_open
+            disk
+              ? phrase.disk_free_short(humanSize(disk.free))
+              : phrase.failed_to_fetch_data
           }}
         </span>
       </div>
 
       <div
-        class="flex min-w-52 flex-1 flex-wrap items-center gap-x-sm gap-y-xs"
+        class="flex shrink-0 items-center gap-xs"
+        :class="backupStale ? 'text-text-warning' : undefined"
       >
-        <div
-          v-if="disk"
-          class="flex h-2 min-w-40 flex-1 overflow-hidden rounded-full bg-bg-3
-            ring-1 ring-border-1"
-          role="img"
-          :aria-label="phrase.disk_usage"
+        <Icon
+          :name="backupStale ? 'warning' : 'files'"
+          :class="backupStale ? undefined : 'text-text-3'"
+        />
+        <TheiLink
+          v-if="backupStale"
+          to="/admin/settings/"
+          class="underline-offset-2 hocus:underline"
+          :data-title-popup="phrase.backup_stale_warning"
         >
-          <span
-            v-for="segment in segments"
-            :key="segment.key"
-            :style="{ width: segment.width }"
-            :class="segment.class"
-            :data-title-popup="segment.popup"
-            tabindex="0"
-          ></span>
-        </div>
-        <span v-else class="text-sm text-text-3">
-          {{ phrase.failed_to_fetch_data }}
-        </span>
-
-        <div v-if="disk" class="flex flex-wrap items-center gap-x-xs text-xs">
-          <template v-for="(segment, index) in segments" :key="segment.key">
-            <span v-if="index" aria-hidden="true" class="text-border-3">/</span>
-            <span
-              :class="segment.textClass"
-              :data-title-popup="segment.popup"
-              tabindex="0"
-            >
-              {{ humanSize(segment.size) }}
-            </span>
-          </template>
-        </div>
+          {{ lastBackupAt ? phrase.backup_stale_short : phrase.backup_never }}
+        </TheiLink>
+        <span
+          v-if="lastBackupAt"
+          class="flex items-center gap-1"
+          :class="backupStale ? 'text-text-3' : undefined"
+          ><span>{{ phrase.backup_last }}</span
+          ><TheiTime :datetime="lastBackupAt"
+        /></span>
       </div>
-    </div>
 
-    <div
-      class="flex flex-wrap items-center gap-x-xs border-t border-border-1 px-xs
-        py-1 text-xs"
-      :class="backupStale ? 'bg-bg-error text-text-error' : 'text-text-3'"
-    >
-      <Icon :name="backupStale ? 'warning' : 'files'" class="shrink-0" />
-      <span>{{ phrase.backup_last }}:</span>
-      <TheiTime v-if="lastBackupAt" :datetime="lastBackupAt" />
-      <span v-else>{{ phrase.backup_never }}</span>
-      <TheiLink
-        v-if="backupStale"
-        to="/admin/settings/"
-        class="font-semibold underline-offset-2 hocus:underline"
-      >
-        {{ phrase.backup_stale_warning }}
-      </TheiLink>
-    </div>
-
-    <div
-      v-if="systemError || diskError"
-      class="border-t border-border-error bg-bg-error px-xs py-1 text-xs
-        text-text-error"
-    >
-      <Icon name="warning" class="mr-1" />
-      {{ phrase.failed_to_fetch_data }}
+      <span v-if="systemError" class="flex items-center gap-1 text-text-error">
+        <Icon name="warning" />
+        {{ phrase.failed_to_fetch_data }}
+      </span>
     </div>
   </Box>
 </template>

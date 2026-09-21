@@ -39,12 +39,25 @@ const hasCriteria = computed(
   () => Boolean(filters.value.q.trim()) || activeFilterCount.value > 0,
 );
 
+// Result pages stay out of the index: search engines treat internal search
+// results as thin content. The query only makes the tab and a shared link
+// readable.
+const seoQuery = computed(() => filters.value.q.trim());
+const ogImage = useOgImage(
+  'service',
+  () => 'search',
+  () => ['search'],
+);
 usePublicSeo({
+  ogImage,
   title: () =>
-    filters.value.q.trim()
-      ? `${filters.value.q.trim()} — ${phrase.value.search}`
+    seoQuery.value
+      ? `${phrase.value.public_search_query_title(seoQuery.value)} — ${phrase.value.search}`
       : phrase.value.search,
-  description: () => phrase.value.public_search_description,
+  description: () =>
+    seoQuery.value
+      ? phrase.value.public_search_query_description(seoQuery.value)
+      : phrase.value.public_search_description,
   canonical: '/search/',
   noIndex: hasCriteria,
 });

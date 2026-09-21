@@ -27,6 +27,8 @@ export type PublicProjectReference = {
   href: string;
   iconMedia: MediaDescriptor;
   relationType?: ProjectRelationType;
+  /** Why this project is related, as written for the page it is shown on. */
+  note?: string;
 };
 
 /**

@@ -49,7 +49,7 @@ const usageGroups = computed(() => {
       <AssetModalPreviewMedia
         v-if="asset.media"
         :extension="asset.extension"
-        :src="asset.media.src"
+        :src="sitePath(asset.media.src)"
         :has-audio="asset.media.hasAudio"
       />
       <FilePreview
@@ -64,7 +64,7 @@ const usageGroups = computed(() => {
         icon="arrow-outward"
         target="_blank"
         rel="noopener"
-        :href="asset.assetUrl"
+        :href="sitePath(asset.assetUrl)"
         :data-title-popup="phrase.direct_link_to_asset"
         :aria-label="phrase.direct_link_to_asset"
       />
@@ -144,7 +144,7 @@ const usageGroups = computed(() => {
               <span class="flex shrink-0 items-center gap-xs">
                 <a
                   v-if="group.source.url"
-                  :href="group.source.url"
+                  :href="sitePath(group.source.url)"
                   target="_blank"
                   rel="noopener"
                   :aria-label="phrase.asset_library_view"
@@ -156,7 +156,7 @@ const usageGroups = computed(() => {
                 </a>
                 <a
                   v-if="group.source.editUrl"
-                  :href="group.source.editUrl"
+                  :href="sitePath(group.source.editUrl)"
                   target="_blank"
                   rel="noopener"
                   :aria-label="phrase.asset_library_edit"
@@ -209,7 +209,7 @@ const usageGroups = computed(() => {
                   class="mt-1 text-xs wrap-anywhere"
                 >
                   <a
-                    :href="placement.scope.url"
+                    :href="sitePath(placement.scope.url)"
                     target="_blank"
                     rel="noopener"
                     class="text-accent"

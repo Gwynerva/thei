@@ -2,15 +2,15 @@ import type { H3Event } from 'h3';
 import type { SignInData } from '#layers/thei/shared/api/sign-in';
 import { secretsMatch, verifyPassword } from '../../thei/password';
 import { createAdminSession } from '../../thei/admin-session';
-import { getRequestIp } from '../../thei/request';
+import { isSignInRateLimited } from '../../thei/access-links/rate-limit';
 
 type SignInResponse = { type: 'success' } | { type: 'error'; message: string };
 
 export default defineEventHandler(async (event): Promise<SignInResponse> => {
-  if (isRateLimited(event)) {
+  if (isSignInRateLimited(event)) {
     return {
       type: 'error',
-      message: 'Too many sign-in attempts! Try again later.',
+      message: THEI_SERVER.phrase.sign_in_too_many_attempts,
     };
   }
 
@@ -48,28 +48,4 @@ function validateSignInData(signInData: SignInData): string | SignInData {
     secretPhrase,
     password,
   };
-}
-
-const rateLimits = new Map<string, number>();
-const rateLimitCooldown = 3000;
-function isRateLimited(event: H3Event): boolean {
-  const ip = getRequestIp(event) ?? 'unknown';
-  const now = Date.now();
-  const blockedUntil = rateLimits.get(ip) ?? 0;
-
-  if (now < blockedUntil) {
-    return true;
-  }
-
-  rateLimits.set(ip, now + rateLimitCooldown);
-
-  if (Math.random() < 0.01) {
-    for (const [ip, expires] of rateLimits) {
-      if (now >= expires) {
-        rateLimits.delete(ip);
-      }
-    }
-  }
-
-  return false;
 }

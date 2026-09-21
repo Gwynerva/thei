@@ -2,7 +2,15 @@
 import type { SiteSettingsData } from '#layers/thei/shared/profile';
 import { SiteAccessLevel } from '#layers/thei/shared/access-level';
 import { languagesInfo, loadLanguage } from '#layers/thei/shared/language';
-import { normalizeSiteUrl } from '#layers/thei/shared/site-url';
+import {
+  normalizeSiteUrl,
+  siteUrlBasePath,
+} from '#layers/thei/shared/site-url';
+import { robotsTxtBody } from '#layers/thei/shared/robots';
+import {
+  normalizeAnalyticsValue,
+  type SiteAnalyticsSettings,
+} from '#layers/thei/shared/analytics';
 definePageMeta({ layout: 'admin' });
 await useAdminTabTitle(computed(() => phrase.value.site_settings));
 const initial = await useRequestFetch()<SiteSettingsData>(
@@ -19,6 +27,62 @@ const error = ref<string>();
 const isDirty = computed(
   () => dataDirty.value || Boolean(confirmPassword.value),
 );
+const site = useSiteUrl();
+const savedSiteUrl = ref(initial.siteUrl);
+// The build decides the folder, so a saved change waits for the next rebuild.
+const pendingBasePath = computed(() =>
+  siteUrlBasePath(savedSiteUrl.value) === site.base ? undefined : site.base,
+);
+const rootRobotsTxt = computed(() =>
+  site.base === '/'
+    ? undefined
+    : robotsTxtBody(site.base, site.resolve('/sitemap.xml')),
+);
+const analyticsFields: {
+  key: keyof SiteAnalyticsSettings;
+  label: () => string;
+  hint: () => string;
+  placeholder: string;
+}[] = [
+  {
+    key: 'googleTagId',
+    label: () => phrase.value.analytics_google_tag,
+    hint: () => phrase.value.analytics_google_tag_hint,
+    placeholder: 'G-XXXXXXXXXX',
+  },
+  {
+    key: 'yandexMetrikaId',
+    label: () => phrase.value.analytics_yandex_metrika,
+    hint: () => phrase.value.analytics_yandex_metrika_hint,
+    placeholder: '12345678',
+  },
+  {
+    key: 'googleSiteVerification',
+    label: () => phrase.value.analytics_google_verification,
+    hint: () => phrase.value.analytics_google_verification_hint,
+    placeholder: 'abc123…',
+  },
+  {
+    key: 'yandexVerification',
+    label: () => phrase.value.analytics_yandex_verification,
+    hint: () => phrase.value.analytics_yandex_verification_hint,
+    placeholder: 'abc123…',
+  },
+];
+const analyticsErrors = computed(() =>
+  Object.fromEntries(
+    analyticsFields.map((field) => [
+      field.key,
+      normalizeAnalyticsValue(field.key, data.value.analytics[field.key]) ===
+      undefined
+        ? phrase.value.analytics_invalid
+        : undefined,
+    ]),
+  ),
+);
+const analyticsValid = computed(() =>
+  Object.values(analyticsErrors.value).every((error) => !error),
+);
 const siteUrlError = computed(() =>
   normalizeSiteUrl(data.value.siteUrl) === undefined
     ? phrase.value.site_url_invalid
@@ -30,6 +94,7 @@ const canSave = computed(
     !saving.value &&
     Boolean(data.value.secretPhrase.trim()) &&
     !siteUrlError.value &&
+    analyticsValid.value &&
     data.value.password === confirmPassword.value,
 );
 async function save() {
@@ -42,6 +107,7 @@ async function save() {
       body: data.value,
     });
     confirmPassword.value = '';
+    savedSiteUrl.value = data.value.siteUrl;
     markSaved();
     _language.value = await loadLanguage(data.value.languageCode);
     await refreshNuxtData('admin-profile');
@@ -105,6 +171,41 @@ useSavedForm(isDirty, save, canSave);
                 placeholder="https://example.com"
                 :error="siteUrlError"
               /><FieldHint>{{ phrase.site_url_hint }}</FieldHint></Field
+            >
+            <p
+              v-if="pendingBasePath"
+              class="flex items-start gap-xs rounded-normal bg-bg-warning p-sm
+                text-sm text-text-warning"
+            >
+              <Icon name="warning" class="mt-0.5 shrink-0" />
+              {{ phrase.site_url_rebuild_pending(pendingBasePath) }}
+            </p>
+            <Field v-if="rootRobotsTxt"
+              ><FieldLabel>{{ phrase.site_url_robots_title }}</FieldLabel>
+              <pre
+                class="scrollbar-mini overflow-x-auto rounded-normal bg-bg-3
+                  p-sm text-xs"
+                >{{ rootRobotsTxt }}</pre>
+              <FieldHint>{{ phrase.site_url_robots_hint }}</FieldHint></Field
+            >
+          </Box>
+        </div>
+        <div>
+          <SectionHeader
+            icon="visibility"
+            :title="phrase.analytics"
+            :description="phrase.analytics_description"
+            class="mb-md"
+          /><Box class="grid gap-md p-sm sm:grid-cols-2 sm:p-md">
+            <Field v-for="field in analyticsFields" :key="field.key"
+              ><FieldLabel>{{ field.label() }}</FieldLabel
+              ><FieldInput
+                v-model="data.analytics[field.key]"
+                autocomplete="off"
+                spellcheck="false"
+                :placeholder="field.placeholder"
+                :error="analyticsErrors[field.key]"
+              /><FieldHint>{{ field.hint() }}</FieldHint></Field
             >
           </Box>
         </div>

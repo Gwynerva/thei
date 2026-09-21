@@ -13,6 +13,7 @@ import { events } from './events';
 import { projects } from './projects';
 import { pages } from './pages';
 import { adminSessions } from './admin-sessions';
+import { shareLinks, signInLinks } from './access-links';
 import {
   projectContentSections,
   projectStages,
@@ -40,6 +41,8 @@ export const schema = {
   projects,
   pages,
   adminSessions,
+  signInLinks,
+  shareLinks,
   projectContentSections,
   projectStages,
   stagePeriods,

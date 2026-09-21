@@ -1,4 +1,5 @@
 import { iconsHref } from '#thei/icons';
+import { sitePath } from './site-url';
 
 /**
  * Icons start as references into `/icons.svg`, which the browser fetches like
@@ -14,13 +15,13 @@ const INLINE_ICON_PREFIX = 'thei-icon-';
 export function iconSpriteHref(name: string): string {
   return iconSpriteInlined.value
     ? `#${INLINE_ICON_PREFIX}${name}`
-    : `${iconsHref}#${name}`;
+    : `${sitePath(iconsHref)}#${name}`;
 }
 
 export async function inlineIconSprite(): Promise<void> {
   if (import.meta.server || iconSpriteInlined.value) return;
   try {
-    const response = await fetch(iconsHref);
+    const response = await fetch(sitePath(iconsHref));
     if (!response.ok) return;
     const template = document.createElement('template');
     template.innerHTML = (await response.text()).replace(

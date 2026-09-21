@@ -45,6 +45,10 @@ const statuses = useProfileHistory(
 const pendingStatusPreviews = reactive(
   new Map<string, { createdAt: number; media?: MediaDescriptor }>(),
 );
+// Media previews of saved statuses edited since the last save.
+const editedStatusMedia = reactive(
+  new Map<string, MediaDescriptor | undefined>(),
+);
 const pageDetails = ref<ProfilePageLink[]>(initial.pinnedPages);
 const saving = ref(false);
 const error = ref<string>();
@@ -78,7 +82,22 @@ const visibleStatuses = computed<ProfileStatusHistoryItem[]>(() =>
       };
     })
     .reverse()
-    .concat(statuses.items.value)
+    .concat(
+      statuses.items.value.map((status) => {
+        const update = data.value.updatedStatuses.find(
+          (s) => s.id === status.id,
+        );
+        if (!update) return status;
+        const { assetUuid: _assetUuid, media: _media, ...rest } = status;
+        const media = editedStatusMedia.get(status.id);
+        return {
+          ...rest,
+          text: update.text,
+          ...(update.assetUuid ? { assetUuid: update.assetUuid } : {}),
+          ...(media ? { media } : {}),
+        };
+      }),
+    )
     .filter((status) => !data.value.deletedStatusIds.includes(status.id)),
 );
 const canAddEmptyStatus = computed(
@@ -113,6 +132,10 @@ const usageDelta = computed(() => {
     add(avatars.items.value.find((a) => a.id === id)?.assetUuid, -1);
   for (const id of data.value.deletedStatusIds)
     add(statuses.items.value.find((s) => s.id === id)?.assetUuid, -1);
+  for (const status of data.value.updatedStatuses) {
+    add(statuses.items.value.find((s) => s.id === status.id)?.assetUuid, -1);
+    add(status.assetUuid, 1);
+  }
   return delta;
 });
 async function save() {
@@ -134,6 +157,7 @@ async function save() {
     avatars.reset(result.avatars);
     statuses.reset(result.statuses);
     pendingStatusPreviews.clear();
+    editedStatusMedia.clear();
     pageDetails.value = result.pinnedPages;
     await refreshNuxtData([
       'admin-profile',
@@ -166,11 +190,51 @@ async function addStatus() {
     media: result.kind === 'regular' ? result.media : undefined,
   });
 }
+async function editStatus(item: ProfileStatusHistoryItem) {
+  if (item.kind !== 'regular') return;
+  const result = await openModal(profileStatusModal, {
+    usageDelta: usageDelta.value,
+    canAddEmptyStatus: false,
+    initial: {
+      id: item.id,
+      text: item.text,
+      assetUuid: item.assetUuid,
+      media: item.media,
+    },
+  });
+  if (result.type !== 'save' || result.kind !== 'regular') return;
+  const pending = data.value.newStatuses.find((s) => s.id === item.id);
+  if (pending) {
+    Object.assign(pending, { text: result.text, assetUuid: result.assetUuid });
+    const preview = pendingStatusPreviews.get(item.id);
+    if (preview) preview.media = result.media;
+    return;
+  }
+  const saved = statuses.items.value.find((s) => s.id === item.id);
+  const updates = data.value.updatedStatuses.filter((s) => s.id !== item.id);
+  // Editing a status back to what is stored leaves nothing to save.
+  if (
+    saved?.text !== result.text ||
+    (saved?.assetUuid ?? undefined) !== result.assetUuid
+  )
+    updates.push({
+      id: item.id,
+      text: result.text,
+      ...(result.assetUuid ? { assetUuid: result.assetUuid } : {}),
+    });
+  data.value.updatedStatuses = updates;
+  editedStatusMedia.set(item.id, result.media);
+}
 function removeStatus(id: string) {
   if (data.value.newStatuses.some((s) => s.id === id)) {
     data.value.newStatuses = data.value.newStatuses.filter((s) => s.id !== id);
     pendingStatusPreviews.delete(id);
-  } else data.value.deletedStatusIds.push(id);
+  } else {
+    data.value.updatedStatuses = data.value.updatedStatuses.filter(
+      (s) => s.id !== id,
+    );
+    data.value.deletedStatusIds.push(id);
+  }
 }
 const factAnchor = useTemplateRef<HTMLElement>('factAnchor');
 const factOpen = ref(false);
@@ -200,6 +264,14 @@ function addPage(item: ContentEntitySearchItem) {
   pageOpen.value = false;
 }
 const birthDateMax = new Date();
+// Shown in the search-result preview: the address people would actually see.
+const siteHost = computed(() => {
+  try {
+    return new URL(useSiteUrl().resolve('/')).host;
+  } catch {
+    return '';
+  }
+});
 </script>
 <template>
   <div>
@@ -246,16 +318,6 @@ const birthDateMax = new Date();
             class="max-w-full grow basis-24"
           />
           <ProfileMediaField
-            v-model="data.faviconAssetUuid"
-            v-model:media="faviconMedia"
-            :title="phrase.profile_favicon"
-            :description="phrase.profile_favicon_hint"
-            profile="profile-favicon"
-            image-only
-            :usage-delta="usageDelta"
-            details-aside
-            class="max-w-full grow basis-24"
-          /><ProfileMediaField
             v-model="data.bannerAssetUuid"
             v-model:media="bannerMedia"
             :title="phrase.profile_banner"
@@ -283,6 +345,33 @@ const birthDateMax = new Date();
           />
         </section>
       </Box>
+      <!-- The site icon is its own block: it is not part of how the profile
+           looks on the page, but of how the site looks everywhere else. -->
+      <section>
+        <SectionHeader
+          icon="star"
+          :title="phrase.profile_favicon_section"
+          :description="phrase.profile_favicon_section_hint"
+          class="mb-md"
+        />
+        <Box class="flex min-w-0 flex-wrap items-start gap-md p-sm sm:p-md">
+          <ProfileMediaField
+            v-model="data.faviconAssetUuid"
+            v-model:media="faviconMedia"
+            :title="phrase.profile_favicon"
+            :description="phrase.profile_favicon_hint"
+            profile="profile-favicon"
+            image-only
+            :usage-delta="usageDelta"
+            class="shrink-0"
+          />
+          <ProfileFaviconPreview
+            :media="faviconMedia"
+            :site-name="data.displayName"
+            :site-host="siteHost"
+          />
+        </Box>
+      </section>
       <section>
         <div class="mb-md flex items-center justify-between gap-md">
           <SectionHeader
@@ -309,8 +398,10 @@ const birthDateMax = new Date();
               :key="status.id"
               :item="status"
               removable
+              editable
               short-date
               @remove="removeStatus"
+              @edit="editStatus"
             />
           </div>
           <p

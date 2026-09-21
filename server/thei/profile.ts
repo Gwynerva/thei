@@ -350,6 +350,7 @@ export async function getAdminProfile(): Promise<AdminProfileResponse> {
       externalLinks,
       aboutContent: aboutContent ?? null,
       newStatuses: [],
+      updatedStatuses: [],
       deletedAvatarIds: [],
       deletedStatusIds: [],
     },
@@ -434,6 +435,24 @@ export async function saveProfile(input: ProfileEditData) {
     };
   });
   if (new Set(statuses.map((s) => s.id)).size !== statuses.length)
+    invalid('Invalid status');
+  const rawUpdatedStatuses = input.updatedStatuses ?? [];
+  if (!Array.isArray(rawUpdatedStatuses) || rawUpdatedStatuses.length > 100)
+    invalid('Invalid statuses');
+  const updatedStatuses = rawUpdatedStatuses
+    .map((status) => {
+      const value = record(status, 'Invalid status');
+      return {
+        id: ids([value.id])[0]!,
+        text: text(value.text, 10000, true),
+        assetUuid: optionalId(value.assetUuid, 'Invalid status media'),
+      };
+    })
+    .filter((status) => !deletedStatuses.includes(status.id));
+  if (
+    new Set(updatedStatuses.map((s) => s.id)).size !== updatedStatuses.length ||
+    updatedStatuses.some((s) => statuses.some((n) => n.id === s.id))
+  )
     invalid('Invalid status');
   if (!Array.isArray(input.externalLinks) || input.externalLinks.length > 100)
     invalid('Invalid links');
@@ -539,6 +558,7 @@ export async function saveProfile(input: ProfileEditData) {
     ...statuses
       .filter((status) => status.kind === 'regular')
       .map((status) => [status.assetUuid, false]),
+    ...updatedStatuses.map((status) => [status.assetUuid, false]),
   ] as [string | null, boolean][]) {
     if (!assetUuid) continue;
     if (typeof assetUuid !== 'string') invalid('Invalid media');
@@ -649,6 +669,20 @@ export async function saveProfile(input: ProfileEditData) {
         .values({ ...status, createdAt: now + index })
         .onConflictDoNothing()
         .run();
+      attach(status.assetUuid, 'profile-status', status.id, 'icon');
+    }
+    for (const status of updatedStatuses) {
+      const existing = tx
+        .select()
+        .from(schema.profileStatuses)
+        .where(eq(schema.profileStatuses.id, status.id))
+        .get();
+      if (!existing || existing.kind !== 'regular') invalid('Invalid status');
+      tx.update(schema.profileStatuses)
+        .set({ text: status.text, assetUuid: status.assetUuid })
+        .where(eq(schema.profileStatuses.id, status.id))
+        .run();
+      detach('profile-status', status.id);
       attach(status.assetUuid, 'profile-status', status.id, 'icon');
     }
     tx.update(schema.profiles)

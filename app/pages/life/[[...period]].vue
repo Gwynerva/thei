@@ -74,7 +74,13 @@ const seoDescription = computed(() =>
 );
 const seoCanonical = computed(() => buildLifeUrl(seoPeriod.value));
 
+const ogImage = useOgImage(
+  'service',
+  () => 'life',
+  () => ['life'],
+);
 usePublicSeo({
+  ogImage,
   title: seoTitle,
   description: seoDescription,
   canonical: seoCanonical,
@@ -104,11 +110,12 @@ watch([activeDate, mounted, positioned], ([date]) => {
   if (!mounted.value || !positioned.value) return;
   seoPeriod.value = date;
   const path = buildLifeUrl(date);
-  if (window.location.pathname !== path)
+  const href = sitePath(path);
+  if (window.location.pathname !== href)
     window.history.replaceState(
       { ...(window.history.state ?? {}), current: path },
       '',
-      path,
+      href,
     );
   lifeLastVisit.considerActiveDay();
 });

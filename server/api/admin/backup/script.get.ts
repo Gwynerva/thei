@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { siteOrigin } from '../../../thei/site-url';
+import { siteRoot } from '../../../thei/site-url';
 
 const SCRIPTS = {
   windows: { file: 'thei-backup.cmd', type: 'application/x-bat' },
@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
   const script = SCRIPTS[platform];
   let source = (
     await readFile(THEI_SERVER.theiPath('backup', script.file), 'utf8')
-  ).replace('__THEI_SITE_URL__', siteOrigin(event).replace(/'/g, ''));
+  ).replace('__THEI_SITE_URL__', siteRoot(event).replace(/'/g, ''));
   // cmd.exe misreads a batch file with bare LF line endings.
   if (platform === 'windows') source = source.replace(/\r?\n/g, '\r\n');
 

@@ -62,11 +62,13 @@ for (const width of [390, 1280]) {
       const banner = hero.locator('.hero-banner');
       await expect(banner).toHaveAttribute('data-media-final-state', 'visible');
       const box = await banner.boundingBox();
-      if (width === 390)
-        expect(box!.width / box!.height).toBeCloseTo(16 / 9, 2);
       const foreground = banner.locator('[data-media-main]');
       await expect(foreground).toHaveCSS('object-fit', 'contain');
       const mainBox = await foreground.boundingBox();
+      // On mobile the banner covers the whole hero and the sharp band at its
+      // top is what has to stay 16:9, whatever shape the picture itself is.
+      if (width === 390)
+        expect(mainBox!.width / mainBox!.height).toBeCloseTo(16 / 9, 2);
       expect(mainBox!.y).toBeGreaterThanOrEqual(box!.y);
       expect(mainBox!.y + mainBox!.height).toBeLessThanOrEqual(
         box!.y + box!.height + 1,
@@ -120,8 +122,9 @@ for (const width of [390, 1280]) {
           .getByRole('button', { name: 'Showcase image' })
           .boundingBox())!.y,
       );
+      // The icon sits on the hero itself: rounded, but with nothing drawn
+      // behind it — no plate, no shadow, no fill of its own.
       const icon = hero.locator('[data-hero-icon]');
-      await expect(icon).toHaveCSS('border-radius', '0px');
       await expect(icon).toHaveCSS('box-shadow', 'none');
       await expect(icon).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
       await expect(
@@ -281,8 +284,12 @@ test('slow video keeps the color pulse until ready, then both layers play and fo
     .poll(() => backdrop.evaluate((v: HTMLVideoElement) => v.paused))
     .toBe(false);
   await page.locator('[data-below]').scrollIntoViewIfNeeded();
-  await expect(banner).toHaveAttribute('data-media-active', 'false');
-  await expect(banner.locator('video')).toHaveCount(0);
+  // Offscreen media stays mounted and only pauses.
+  await expect(banner).toHaveAttribute('data-media-in-view', 'false');
+  await expect(banner).toHaveAttribute('data-media-active', 'true');
+  await expect
+    .poll(() => main.evaluate((v: HTMLVideoElement) => v.paused))
+    .toBe(true);
   await banner.scrollIntoViewIfNeeded();
   await expect
     .poll(() => main.evaluate((v: HTMLVideoElement) => v.paused))
@@ -306,7 +313,7 @@ test('slow video keeps the color pulse until ready, then both layers play and fo
     .poll(() => backdrop.evaluate((v: HTMLVideoElement) => v.currentTime))
     .toBeCloseTo(0.5, 1);
   await page.locator('[data-below]').scrollIntoViewIfNeeded();
-  await expect(banner).toHaveAttribute('data-media-active', 'false');
+  await expect(banner).toHaveAttribute('data-media-in-view', 'false');
   await banner.scrollIntoViewIfNeeded();
   await expect(banner).toHaveAttribute('data-media-final-state', 'visible');
   expect(await main.evaluate((v: HTMLVideoElement) => v.paused)).toBe(true);

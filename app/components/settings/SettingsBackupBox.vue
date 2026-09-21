@@ -164,7 +164,9 @@ function kindLabel(kind: 'auto' | 'manual') {
           <a
             v-for="script in scripts"
             :key="script.platform"
-            :href="`/api/admin/backup/script?platform=${script.platform}`"
+            :href="
+              sitePath(`/api/admin/backup/script?platform=${script.platform}`)
+            "
             :download="script.file"
             class="text-sm text-accent underline-offset-2 hocus:underline"
             @click="downloadScript($event, script)"

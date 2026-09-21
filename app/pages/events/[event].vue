@@ -19,7 +19,15 @@ if (route.path !== canonical.value)
 const eventCover = computed(() =>
   data.value.periods.length ? coverDateRanges(data.value.periods) : undefined,
 );
+const ogImage = useOgImage(
+  'event',
+  () => data.value.publicId,
+  () => [data.value.title, data.value.summary],
+);
 usePublicSeo({
+  ogImage,
+  markdown: true,
+  ogType: 'article',
   title: () => data.value.title,
   description: () => data.value.summary,
   canonical,
@@ -83,6 +91,7 @@ const details = computed(
 
 <template>
   <main class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
+    <PublicShareNotice />
     <PublicPageHeader
       icon="event"
       :title="data.title"

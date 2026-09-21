@@ -2,6 +2,7 @@ import type {
   ContentFieldModelValue,
   PublicContentOutputData,
 } from './content';
+import type { SiteAnalyticsSettings } from './analytics';
 import type { ProjectExternalLinkEditItem } from './external-link';
 import type { MediaDescriptor } from './media';
 import type {
@@ -45,6 +46,12 @@ export interface ProfileHistoryPage<T extends ProfileHistoryItemBase> {
 export type NewProfileStatus =
   | { id: string; kind: 'regular'; text: string; assetUuid?: string }
   | { id: string; kind: 'empty' };
+/** A saved regular status rewritten in place; it keeps its date. */
+export interface UpdatedProfileStatus {
+  id: string;
+  text: string;
+  assetUuid?: string;
+}
 export interface ProfileEditData {
   displayName: string;
   slogan: string;
@@ -59,6 +66,7 @@ export interface ProfileEditData {
   pinnedPageUuids: string[];
   externalLinks: ProjectExternalLinkEditItem[];
   newStatuses: NewProfileStatus[];
+  updatedStatuses: UpdatedProfileStatus[];
   deletedStatusIds: string[];
   deletedAvatarIds: string[];
 }
@@ -106,11 +114,19 @@ export interface PublicProfileResponse {
   };
   tags: PublicTagListItem[];
 }
+/** What the head needs to link the site icon. */
+export interface SiteFaviconInfo {
+  /** Changes with the icon's bytes, so caches pick up a replacement. */
+  version: string;
+  iconExtension: 'svg' | 'png';
+}
+
 export interface SiteSettingsData {
   languageCode: LanguageCode;
   siteAccessLevel: SiteAccessLevel;
   /** Empty means "derive the address from the request". */
   siteUrl: string;
+  analytics: SiteAnalyticsSettings;
   secretPhrase: string;
   password: string;
 }

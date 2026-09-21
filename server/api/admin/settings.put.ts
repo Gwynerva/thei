@@ -2,6 +2,7 @@ import { languageCodes, loadLanguage } from '#layers/thei/shared/language';
 import { SiteAccessLevel } from '#layers/thei/shared/access-level';
 import type { SiteSettingsData } from '#layers/thei/shared/profile';
 import { normalizeSiteUrl } from '#layers/thei/shared/site-url';
+import { normalizeSiteAnalytics } from '#layers/thei/shared/analytics';
 import { generatePasswordData } from '../../thei/password';
 import { writeTheiConfig } from '../../thei/config/write';
 import { setCurrentLanguage } from '../../thei/language';
@@ -29,6 +30,14 @@ export default defineEventHandler(async (event) => {
       statusCode: 400,
       message: THEI_SERVER.phrase.site_url_invalid,
     });
+  // Pasted from a provider's dashboard, so a whole snippet is normal input;
+  // what cannot be read as an identifier is refused rather than stored.
+  const analytics = normalizeSiteAnalytics(input.analytics);
+  if (analytics === undefined)
+    throw createError({
+      statusCode: 400,
+      message: THEI_SERVER.phrase.analytics_invalid,
+    });
   await loadLanguage(input.languageCode);
   const currentSession =
     input.password ||
@@ -42,6 +51,7 @@ export default defineEventHandler(async (event) => {
       languageCode: input.languageCode,
       siteAccessLevel: input.siteAccessLevel,
       siteUrl,
+      analytics,
       secretPhrase: input.secretPhrase.trim(),
       password: input.password
         ? generatePasswordData(input.password)
@@ -61,6 +71,7 @@ export default defineEventHandler(async (event) => {
   return {
     ...input,
     siteUrl,
+    analytics,
     secretPhrase: input.secretPhrase.trim(),
     password: '',
   };

@@ -1,9 +1,13 @@
+import { eq } from 'drizzle-orm';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
 import {
   buildLifeUrl,
   isLifePeriod,
+  lifeActivityDayTotal,
+  type LifeActivityKind,
+  type LifeActivityResponse,
   type LifeDay,
   type LifeEntityKind,
   type LifePoint,
@@ -33,7 +37,9 @@ import {
   buildPublicPageIcon,
   buildPublicProjectReference,
   buildPublicProjectSummary,
+  canListPublicEntity,
 } from './entities';
+import type { PublicProjectLink } from '#layers/thei/shared/api/public';
 import { buildSecretReference, type SecretEntityKind } from './secret';
 
 type RawPoint = {
@@ -549,3 +555,121 @@ export function decodeLifeCursor(cursor: string) {
 }
 
 export { buildLifeUrl };
+
+/**
+ * One year of the timeline as per-day counts, for the activity grid.
+ *
+ * Counts are of timeline points, the same things the feed shows, so a day with
+ * two events and a stage that ended counts three. What the visitor may not see
+ * is counted as `secret` — the feed already admits that something happened on
+ * that day without saying what.
+ */
+export async function getLifeActivity(options: {
+  year?: number;
+  isAdmin: boolean;
+}): Promise<LifeActivityResponse> {
+  const index = buildLifeIndex();
+  const years = [
+    ...new Set(index.dates.map((date) => Number(date.slice(0, 4)))),
+  ].sort((a, b) => b - a);
+  const requested = options.year;
+  // Without a year asked for, the grid opens on the year being lived: a site
+  // holding an event already scheduled for next year should still open on
+  // this one. Only a year with nothing in it falls back to the latest one.
+  const current = new Date().getUTCFullYear();
+  const year =
+    requested && years.includes(requested)
+      ? requested
+      : (requested ??
+        (years.includes(current) ? current : (years[0] ?? current)));
+
+  const days: LifeActivityResponse['days'] = {};
+  let max = 0;
+  const prefix = `${year}-`;
+  for (const [date, points] of index.pointsByDate) {
+    if (!date.startsWith(prefix)) continue;
+    const counts: Partial<Record<LifeActivityKind, number>> = {};
+    for (const point of points) {
+      const kind: LifeActivityKind = lifePointIsVisible(
+        point.access,
+        point.isPrivate,
+        options.isAdmin,
+      )
+        ? point.entityKind
+        : 'secret';
+      counts[kind] = (counts[kind] ?? 0) + 1;
+    }
+    days[date] = counts;
+    max = Math.max(max, lifeActivityDayTotal(counts));
+  }
+
+  return {
+    year,
+    years,
+    days,
+    max,
+    projects: await buildLifeActivityProjects(year, options.isAdmin),
+  };
+}
+
+/**
+ * Projects the year was spent on.
+ *
+ * Measured by stage periods rather than by when the project page happened to
+ * be written: a project started years ago and worked on all year belongs to
+ * this year, and one merely created in January does not.
+ */
+async function buildLifeActivityProjects(
+  year: number,
+  isAdmin: boolean,
+): Promise<PublicProjectLink[]> {
+  const { db, schema } = THEI_SERVER.useDb();
+  const start = `${year}-01-01`;
+  const end = `${year}-12-31`;
+  const periods = db
+    .select()
+    .from(schema.stagePeriods)
+    .where(eq(schema.stagePeriods.stageType, 'project-stage'))
+    .all();
+  const stages = db.select().from(schema.projectStages).all();
+  const stageById = new Map(stages.map((stage) => [stage.stageUuid, stage]));
+
+  const ordered: { projectUuid: string; latest: string }[] = [];
+  const seen = new Map<string, number>();
+  for (const period of periods) {
+    const from = period.startDate;
+    const to = period.endDate ?? period.startDate;
+    if (!from || from > end || to < start) continue;
+    const stage = stageById.get(period.stageUuid);
+    if (!stage) continue;
+    const existing = seen.get(stage.projectUuid);
+    if (existing === undefined) {
+      seen.set(stage.projectUuid, ordered.length);
+      ordered.push({ projectUuid: stage.projectUuid, latest: to });
+    } else {
+      const entry = ordered[existing]!;
+      if (to > entry.latest) entry.latest = to;
+    }
+  }
+
+  ordered.sort((a, b) => b.latest.localeCompare(a.latest));
+  const links = await Promise.all(
+    ordered.map(async ({ projectUuid }) => {
+      const project = await THEI_SERVER.projects.findByUuid(projectUuid);
+      if (!project) return undefined;
+      return canListPublicEntity(project.access, isAdmin)
+        ? await buildPublicProjectReference(project)
+        : buildSecretReference('project', project.projectUuid);
+    }),
+  );
+  return links.filter((link) => link !== undefined);
+}
+
+/** One day, hydrated, for the panel under the activity grid. */
+export async function getLifeDay(
+  date: string,
+  isAdmin: boolean,
+): Promise<LifeDay> {
+  const index = buildLifeIndex();
+  return hydrateLifeDay(index, date, isAdmin);
+}

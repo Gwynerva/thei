@@ -197,7 +197,8 @@ export default defineI18nModule({
     asset_library_dimensions: 'Размеры',
     asset_library_settings: 'Настройки варианта',
     asset_library_no_usage: 'Этот файл пока не используется.',
-    asset_library_description: 'Загруженные файлы и места использования',
+    asset_library_description:
+      'Все загруженные файлы: где используется каждый, сколько весит и какие у него варианты.',
     asset_hash_check: 'Проверка файла',
     asset_hash_error: 'Не удалось проверить файл. Выберите его ещё раз.',
     asset_hash_match: 'Этот файл уже загружен',
@@ -239,11 +240,20 @@ export default defineI18nModule({
     profile_banner: 'Баннер',
     profile_banner_hint: 'Широкое изображение в шапке профиля.',
     profile_favicon: 'Favicon сайта',
-    profile_favicon_hint: 'Иконка сайта для вкладок браузера.',
+    profile_favicon_hint:
+      'Показывается во вкладках браузера, закладках, на домашнем экране телефона и в поиске.',
+    profile_favicon_section: 'Иконка сайта',
+    profile_favicon_section_hint:
+      'Одно квадратное изображение. Thei сам соберёт из него ico, png и touch-версии для вкладок, домашнего экрана и поисковой выдачи.',
+    favicon_preview_tab_light: 'Светлая вкладка',
+    favicon_preview_tab_dark: 'Тёмная вкладка',
+    favicon_preview_home_screen: 'Домашний экран',
     profile_status: 'Статус',
-    profile_status_hint: 'Расскажите о своём текущем состоянии',
+    profile_status_hint:
+      'Короткая мысль или настроение. Последний статус виден в профиле, прошлые — на шкале Жизни.',
     profile_facts: 'Факты',
-    profile_facts_hint: 'Добавьте краткие сведения о себе',
+    profile_facts_hint:
+      'Короткие пары «название — значение»: город, профессия, языки и тому подобное.',
     profile_custom_facts: 'Кастомные факты',
     profile_nickname: 'Псевдоним',
     profile_birth_date: 'Дата рождения',
@@ -251,9 +261,10 @@ export default defineI18nModule({
     profile_value: 'Значение',
     profile_pinned_pages: 'Закреплённые страницы',
     profile_pinned_pages_hint:
-      'Выберите страницы, которые стоит показать в профиле',
+      'Страницы, ссылки на которые появятся прямо в профиле на главной.',
     profile_links: 'Ссылки',
-    profile_links_hint: 'Добавьте связанные с вами сайты и профили',
+    profile_links_hint:
+      'Ваши профили и сайты в сети. Приватные видны только вам.',
     profile_popular_tags: 'Популярные теги',
     profile_show_all: 'Смотреть всё',
     profile_show_previous: 'Показать предыдущие',
@@ -265,6 +276,7 @@ export default defineI18nModule({
     profile_avatar_history: 'История аватарок',
     profile_best_projects: 'Лучшие проекты',
     profile_new_status: 'Новый статус',
+    profile_edit_status: 'Изменение статуса',
     profile_status_placeholder: 'Сегодня я чувствую себя…',
     profile_empty_status: 'нет активного статуса',
     profile_set_empty_status: 'Установить пустой статус',
@@ -272,8 +284,10 @@ export default defineI18nModule({
       'Сначала установите обычный активный статус',
     profile_password_hint: 'Оставьте пустым, чтобы сохранить текущий пароль',
     profile_password_mismatch: 'Пароли не совпадают',
-    profile_settings_description: 'Язык, доступ к сайту и настройки входа',
-    profile_about_description: 'Ваш профиль, истории и ссылки',
+    profile_settings_description:
+      'Язык, адрес и доступ к сайту, аналитика, вход в админ-панель и резервные копии.',
+    profile_about_description:
+      'Имя, аватар, статусы, факты и ссылки — всё, что посетители видят на главной.',
     profile_personal_hint:
       'Персональные настройки применяются сразу в этом браузере',
     profile_avatar_count: (count: number) => `1 из ${count}`,
@@ -282,6 +296,34 @@ export default defineI18nModule({
     profile_more: 'Загрузить ещё',
     language_name: 'Русский',
     life: 'Жизнь',
+    life_activity: 'Активность',
+    life_activity_less: 'Меньше',
+    life_activity_more: 'Больше',
+    life_activity_empty: 'Ничего не происходило',
+    life_activity_loading: 'Загрузка…',
+    life_activity_close: 'Закрыть день',
+    life_activity_year_projects: 'Проекты в этот год',
+    life_activity_events: (count) =>
+      plural(count, 'событие', 'события', 'событий'),
+    life_activity_projects: (count) =>
+      plural(count, 'проект', 'проекта', 'проектов'),
+    life_activity_pages: (count) =>
+      plural(count, 'страница', 'страницы', 'страниц'),
+    life_activity_stages: (count) =>
+      plural(count, 'этап проекта', 'этапа проекта', 'этапов проектов'),
+    life_activity_sections: (count) =>
+      plural(count, 'раздел проекта', 'раздела проекта', 'разделов проектов'),
+    life_activity_profile: (count) =>
+      plural(
+        count,
+        'изменение профиля',
+        'изменения профиля',
+        'изменений профиля',
+      ),
+    life_activity_statuses: (count) =>
+      plural(count, 'статус', 'статуса', 'статусов'),
+    life_activity_secret: (count) =>
+      plural(count, 'скрытая запись', 'скрытые записи', 'скрытых записей'),
     projects: 'Проекты',
     events: 'События',
     pages: 'Страницы',
@@ -343,6 +385,19 @@ export default defineI18nModule({
     events_count: (count) => plural(count, 'событие', 'события', 'событий'),
     public_life_description:
       'Непрерывная лента событий, проектов и важных этапов.',
+    home: 'Главная',
+    llms_txt_intro:
+      'Личный архив одной жизни: проекты — крупные эпизоды со своими этапами и разделами, события — небольшие моменты, которые стоит сохранить, страницы — самостоятельные тексты, теги — сквозные темы, а Жизнь — единая хронология, на которую всё это ложится.',
+    llms_txt_sections: 'Разделы',
+    llms_txt_home:
+      'кто это, текущий статус, лучшие проекты и последние моменты',
+    llms_txt_life: 'всё датированное в одной хронологии, от новых к старым',
+    llms_txt_tags: 'темы, которые объединяют проекты и события',
+    llms_txt_pages: 'самостоятельные тексты вне хронологии',
+    llms_txt_sitemap: 'все публичные адреса этого сайта',
+    llms_txt_markdown_title: 'Markdown',
+    llms_txt_markdown:
+      'Любой публичный проект, событие или страница отдаются и в Markdown: добавьте index.md к адресу, например /projects/name-id/index.md. Приватных частей там нет — ровно как и для любого другого посетителя.',
     public_life_period_description: (period, siteName) =>
       `События, проекты и важные этапы за ${period.toLocaleLowerCase('ru-RU')} — ${siteName}.`,
     public_pages_description:
@@ -355,6 +410,9 @@ export default defineI18nModule({
     related_events_empty: 'Связанных событий пока нет',
     search: 'Поиск',
     public_search_description: 'Поиск по проектам и событиям.',
+    public_search_query_title: (query) => `«${query}»`,
+    public_search_query_description: (query) =>
+      `Все проекты и события, связанные с «${query}».`,
     search_placeholder: 'Найти проект или событие…',
     search_clear: 'Очистить поиск',
     search_filters: 'Фильтры',
@@ -429,24 +487,50 @@ export default defineI18nModule({
     font_serif: 'С засечками',
     global_settings: 'Глобальные настройки',
     global_settings_description:
-      'Эти настройки применяются для всех. Выбирайте с умом.',
+      'Общие параметры: влияют на всех посетителей и на то, как сайт видят поисковики.',
     ui_language: 'Язык интерфейса',
     ui_language_hint: 'Выберите тот же язык, на котором будете писать контент.',
     site_access: 'Доступ к сайту',
     site_access_open: 'Открытый',
     site_access_closed: 'Закрытый',
+    site_access_open_hint:
+      'Публичную часть сайта может открыть любой посетитель.',
+    site_access_closed_hint:
+      'Сайт виден только вам после входа, посетители получают ошибку.',
     site_access_open_description:
       'Посетить сайт может любой. Можно точечно ограничивать доступ к отдельным проектам, событиям, страницам и файлам. Подойдет большинству.',
     site_access_closed_description:
       'Любой контент сайта сможете просматривать только вы. Подойдет секретным агентам, которые держат все аспекты своей жизни в строжайшем секрете.',
     site_url: 'Адрес сайта',
     site_url_hint:
-      'Если оставить пустым, адрес берётся из каждого запроса — этого достаточно для одного домена за обычным прокси. Заполните, если сайт отвечает на нескольких адресах, чтобы поисковики видели один канонический. Пример: https://example.com',
+      'Если оставить пустым, адрес берётся из каждого запроса — этого достаточно для одного домена за обычным прокси. Заполните, если сайт отвечает на нескольких адресах или живёт в подпапке. Пример: https://example.com/diary',
     site_url_invalid:
-      'Введите полный адрес со схемой и хостом, без пути, параметров и якоря. Пример: https://example.com',
+      'Введите полный адрес со схемой и хостом, при желании с путём до папки, но без параметров и якоря. Пример: https://example.com/diary',
+    site_url_rebuild_pending: (base) =>
+      `Сайт пока отдаётся по адресу ${base}. Смена папки применится после следующей пересборки сайта.`,
+    site_url_robots_title: 'robots.txt для корня домена',
+    site_url_robots_hint:
+      'Поисковики читают robots.txt только в корне домена, а он не принадлежит этому сайту. Добавьте эти правила в корневой файл сами.',
+    analytics: 'Аналитика и поисковые системы',
+    analytics_description:
+      'Счётчики и коды подтверждения вставляются как есть и попадают в head страницы. Ваши собственные визиты под админом не учитываются.',
+    analytics_invalid:
+      'Проверьте идентификаторы: вставьте значение или целиком фрагмент от сервиса.',
+    analytics_google_tag: 'Google Analytics (Measurement ID)',
+    analytics_google_tag_hint:
+      'Выглядит как G-XXXXXXXXXX. Переходы внутри сайта считает расширенная статистика Google.',
+    analytics_google_verification: 'Код подтверждения Google',
+    analytics_google_verification_hint:
+      'Значение мета-тега google-site-verification.',
+    analytics_yandex_metrika: 'Яндекс Метрика (номер счётчика)',
+    analytics_yandex_metrika_hint:
+      'Только цифры. О переходах внутри сайта Thei сообщает счётчику сам.',
+    analytics_yandex_verification: 'Код подтверждения Яндекса',
+    analytics_yandex_verification_hint:
+      'Значение мета-тега yandex-verification.',
     admin_data: 'Данные администратора',
     admin_data_description:
-      'Базовая информация о вас и способ войти в админ-панель.',
+      'Фраза и пароль для входа в админ-панель. Их смена завершит сессии на других устройствах.',
     how_to_address_you: 'Как к вам обращаться?',
     display_name_hint: (name: string) =>
       `Можно имя или ник: "Привет, ${name}!"`,
@@ -464,16 +548,52 @@ export default defineI18nModule({
     sign_out: 'Выйти',
     signing_in: 'Вход',
     invalid_secret_phrase_or_password: 'Неверная секретная фраза или пароль!',
+    sign_in_too_many_attempts:
+      'Слишком много попыток входа! Попробуйте через несколько секунд.',
+    sign_in_link: 'Ссылка для входа',
+    sign_in_link_description:
+      'Одноразовая ссылка, которая входит в админку на другом устройстве. Отсканируйте код камерой телефона или отправьте себе адрес.',
+    sign_in_link_create: 'Войти на другом устройстве',
+    sign_in_link_invalid:
+      'Эта ссылка больше не работает: её уже использовали или срок истёк.',
+    sign_in_link_too_many:
+      'Слишком много активных ссылок. Отзовите одну, прежде чем создавать новую.',
+    sign_in_link_expires: (time) => `Истекает ${time}`,
+    sign_in_link_confirm: 'Войти в админку на этом устройстве?',
+    sign_in_link_confirm_hint:
+      'Ссылка сработает один раз. После входа она перестанет работать у всех, у кого она есть.',
+    sign_in_link_copied: 'Ссылка скопирована',
+    copy: 'Копировать',
+    share_links: 'Временный доступ',
+    share_links_description:
+      'Ссылки, которые открывают эту запись со всем приватным внутри и перестают работать сами.',
+    share_link_create: 'Создать ссылку',
+    share_link_extend: 'Продлить',
+    share_link_empty: 'Ссылок пока нет',
+    share_link_expires: 'Истекает',
+    share_link_created_hint:
+      'Адрес скопирован в буфер обмена. Он показывается один раз: сервер хранит только его хеш.',
+    share_link_expired: 'Эта ссылка доступа больше не действует.',
+    share_link_too_many:
+      'Слишком много ссылок для этой записи. Сначала отзовите одну.',
+    share_link_private_site:
+      'Сайт полностью закрыт, поэтому ссылка ничего не откроет. Сначала откройте сайт.',
+    share_link_notice: 'Временный доступ. Страница открыта до',
+    share_link_duration_30m: '30 минут',
+    share_link_duration_1h: '1 час',
+    share_link_duration_6h: '6 часов',
+    share_link_duration_24h: 'Сутки',
     unknown: 'Неизвестно',
     system: 'Система',
     admin_sessions: 'Сессии администратора',
     admin_sessions_description:
-      'Последние сессии, которые задействовали админ-доступ.',
+      'Где открыта админ-панель. Здесь же можно войти на другом устройстве по QR-коду.',
     active_admin_sessions: 'Активные сессии',
-    active_admin_sessions_description: 'Эти сессии имеют админ-доступ.',
+    active_admin_sessions_description:
+      'Устройства, где сейчас выполнен вход. Завершите сессию, если не узнаёте её.',
     destroyed_admin_sessions: 'Отключенные сессии',
     destroyed_admin_sessions_description:
-      'Эти сессии больше не имеют админ-доступа.',
+      'Завершённые и истёкшие входы. Хранятся для истории и доступа не дают.',
     destroy_session: 'Отключить сессию',
     show_x_destroyed_sessions: (count: number) =>
       `Показать ${plural(count, 'отключенную сессию', 'отключенные сессии', 'отключенных сессий')}`,
@@ -486,11 +606,14 @@ export default defineI18nModule({
     failed_to_fetch_data: 'Не удалось загрузить данные!',
     admin_panel: 'Админ-панель',
     admin_projects: 'Проекты',
-    admin_projects_description: 'Все проекты, управляемые на этом сайте.',
+    admin_projects_description:
+      'Крупные эпизоды жизни с этапами, разделами, файлами и связями с другими проектами.',
     admin_events: 'События',
-    admin_events_description: 'Все события, управляемые на этом сайте.',
+    admin_events_description:
+      'Небольшие памятные моменты: у каждого есть даты, место на шкале Жизни и связи с проектами.',
     admin_pages: 'Страницы',
-    admin_pages_description: 'Все отдельные страницы этого сайта.',
+    admin_pages_description:
+      'Самостоятельные тексты вне хронологии, например биография или контакты, со своим адресом.',
     to_admin_panel: 'В админ-панель',
     to_website: 'На сайт',
     project: 'Проект',
@@ -506,16 +629,21 @@ export default defineI18nModule({
     new_page: 'Новая страница',
     site_status: 'Состояние сайта',
     site_version: 'Версия Thei',
+    update_available: (version) => `Обновить до ${version}`,
+    update_available_hint:
+      'Доступна новая версия Thei. Обновление не затрагивает содержимое сайта.',
     disk_usage: 'Дисковое пространство',
     disk_thei_files: 'Файлы Thei',
     disk_other_files: 'Прочие файлы',
     disk_free_space: 'Свободно',
+    disk_free_short: (size) => `${size} свободно`,
     backups: 'Резервные копии',
     backups_description:
       'Копия `content/` на машине, которой вы управляете. Сгенерируйте токен, ' +
       'скачайте скрипт и запустите его там.',
     backup_last: 'Последняя копия',
     backup_never: 'Копий ещё не было',
+    backup_stale_short: 'Пора сделать копию',
     backup_stale_warning:
       'Резервная копия не создавалась больше недели. Всё содержимое ' +
       '`content/` существует только на этом сервере.',
@@ -622,7 +750,7 @@ export default defineI18nModule({
     admin_tags: 'Теги',
     tag: 'Тег',
     tags_description:
-      'Классифицируйте и объединяйте схожие проекты по теме, форме, настроению и другим признакам.',
+      'Сквозные темы, которые собирают проекты и события в тематические подборки.',
     new_tag: 'Новый тег',
     edit_tag: 'Изменить тег',
     tag_title: 'Название тега',
@@ -642,7 +770,7 @@ export default defineI18nModule({
       `Итоговая ссылка: /tags/${slug ? `${slug}-` : ''}${publicId}/`,
     project_tags: 'Теги проекта',
     project_tags_hint:
-      'Классифицируйте и объединяйте схожие проекты по теме, форме, настроению и другим признакам.',
+      'Темы, по которым проект окажется рядом с похожими проектами и событиями.',
     recommended_tags: 'Рекомендуемые теги',
     tag_search_placeholder: 'Добавить тег…',
     create_tag_named: (title) => `Создать новый тег «${title}»`,
@@ -960,7 +1088,8 @@ export default defineI18nModule({
     event_summary_hint: 'Кратко объясните, что это за событие.',
     event_access: 'Доступ к событию',
     event_periods: 'Временные промежутки',
-    event_periods_hint: 'Когда происходило это событие?',
+    event_periods_hint:
+      'Даты или периоды события — по ним оно встаёт на шкалу Жизни.',
     event_periods_empty: 'Добавьте хотя бы одну дату или временной промежуток.',
     event_content: 'Контент события',
     event_content_hint: 'Подробные материалы и содержание события.',
@@ -991,13 +1120,15 @@ export default defineI18nModule({
     event_external_links_empty: 'У события пока нет внешних ссылок.',
     event_tags: 'Теги события',
     event_tags_hint:
-      'Классифицируйте события по теме, формату, настроению и другим признакам.',
+      'Темы, по которым событие окажется рядом с похожими проектами и событиями.',
     reorder: 'Изменить порядок',
     event_relations: 'Связанные проекты',
-    event_relations_hint: 'Проекты, связанные с этим событием.',
+    event_relations_hint:
+      'Проекты, к которым относится событие. Пояснение появится рядом со ссылкой на проект.',
     delete_event: 'Удалить событие',
     project_icon: 'Иконка проекта',
-    project_icon_hint: 'Яркая и запоминающаяся.',
+    project_icon_hint:
+      'Квадратная картинка для карточек, ссылок и превью. Без неё будет автоиконка.',
     project_banner: 'Баннер проекта',
     project_banner_hint: 'Широкое изображение для страницы проекта.',
     delete_project: 'Удалить проект',

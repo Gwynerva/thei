@@ -31,7 +31,19 @@ const publicLinks = computed(() =>
 );
 
 useHead({ titleTemplate: null });
+// The card a link to the home page previews as.
+const ogImage = useOgImage(
+  'site',
+  () => 'site',
+  () => [
+    profile.value.displayName,
+    profile.value.slogan,
+    profile.value.avatarMedia.src,
+  ],
+);
 usePublicSeo({
+  ogImage,
+  ogType: 'profile',
   title: computed(() => {
     const nickname = profile.value.nickname.trim();
     return nickname
@@ -139,5 +151,6 @@ usePublicSeo({
         />
       </div>
     </section>
+    <LifeActivityHeatmap />
   </main>
 </template>

@@ -1,3 +1,4 @@
+import type { ResolvableLink, ResolvableMeta } from '@unhead/vue/types';
 import type { MaybeRefOrGetter } from 'vue';
 import { toValue } from 'vue';
 
@@ -38,6 +39,23 @@ type PublicSeoOptions = {
   entities?: MaybeRefOrGetter<PublicSeoEntity[] | undefined>;
   /** Representative image of the page, for `primaryImageOfPage`. */
   image?: MaybeRefOrGetter<string | undefined>;
+  /**
+   * The card a link to this page previews as, from `useOgImage`.
+   *
+   * Left out where there is nothing to preview — a private entity, or a page
+   * kept out of the index — so a link shows plain text rather than a picture
+   * of something the visitor may not open.
+   */
+  ogImage?: MaybeRefOrGetter<string | undefined>;
+  /** `article` for a piece of content, `profile` for the home page. */
+  ogType?: MaybeRefOrGetter<string | undefined>;
+  /**
+   * Whether this page is also served as Markdown at `<canonical>index.md`.
+   *
+   * Announced as an alternate representation, which is how a reader that wants
+   * the text rather than the application finds it.
+   */
+  markdown?: MaybeRefOrGetter<boolean | undefined>;
 };
 
 /** Keys whose string values name a resource rather than describe one. */
@@ -77,21 +95,54 @@ export function usePublicSeo(options: PublicSeoOptions) {
       ? toValue(options.canonical)
       : undefined;
     const noIndex = options.noIndex ? toValue(options.noIndex) : false;
-    return {
-      title: toValue(options.title),
-      meta: [
-        ...(description ? [{ name: 'description', content: description }] : []),
-        ...(noIndex ? [{ name: 'robots', content: 'noindex,nofollow' }] : []),
-      ],
-      link: canonical
+    const title = toValue(options.title);
+    const ogImage = options.ogImage ? toValue(options.ogImage) : undefined;
+    const meta: ResolvableMeta[] = [
+      ...(description ? [{ name: 'description', content: description }] : []),
+      ...(noIndex ? [{ name: 'robots', content: 'noindex,nofollow' }] : []),
+      // Open Graph is what messengers and social sites read; Twitter's own
+      // card tag is the one extra line that makes the image large there.
+      { property: 'og:title', content: title },
+      ...(description
+        ? [{ property: 'og:description', content: description }]
+        : []),
+      {
+        property: 'og:type',
+        content:
+          (options.ogType ? toValue(options.ogType) : undefined) ?? 'website',
+      },
+      ...(canonical
+        ? [{ property: 'og:url', content: site.resolve(canonical) }]
+        : []),
+      ...(ogImage
         ? [
-            {
-              rel: 'canonical',
-              href: site.resolve(canonical),
-            },
+            { property: 'og:image', content: site.resolve(ogImage) },
+            { property: 'og:image:type', content: 'image/png' },
+            { property: 'og:image:width', content: '1200' },
+            { property: 'og:image:height', content: '630' },
+            { property: 'og:image:alt', content: title },
+            { name: 'twitter:card', content: 'summary_large_image' },
           ]
-        : [],
-    };
+        : []),
+    ];
+    const link: ResolvableLink[] = canonical
+      ? [
+          {
+            rel: 'canonical',
+            href: site.resolve(canonical),
+          },
+          ...((options.markdown ? toValue(options.markdown) : false)
+            ? [
+                {
+                  rel: 'alternate' as const,
+                  type: 'text/markdown',
+                  href: site.resolve(`${canonical}index.md`),
+                },
+              ]
+            : []),
+        ]
+      : [];
+    return { title, meta, link };
   });
 
   useHead(() => {

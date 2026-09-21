@@ -53,7 +53,7 @@ async function installClick() {
       throw installResponse.message;
     }
 
-    window.location.href = '/sign-in/';
+    window.location.href = sitePath('/sign-in/');
   } catch (error) {
     installError.value = error instanceof Error ? error.message : String(error);
     installing.value = false;

@@ -9,6 +9,7 @@ import {
 } from 'vue';
 import type { MediaSurfaceProps } from '../../../shared/media';
 import { useMediaPair } from '../../../app/composables/media-pair';
+import { resetViewportObserver } from '../../../app/composables/viewport-observer';
 import { useMediaInteraction } from '../../../app/composables/media-interaction';
 
 class TestImage {
@@ -124,13 +125,31 @@ beforeEach(() => {
     },
     removeEventListener: vi.fn(),
   };
+  // One observer is shared by every media on a page, so entries name their
+  // target and the harness has to do the same.
   class Observer {
-    constructor(callback: typeof intersect) {
-      intersect = callback;
+    targets = new Set<Element>();
+    constructor(
+      private callback: (
+        entries: { target: Element; isIntersecting: boolean }[],
+      ) => void,
+    ) {
+      intersect = (entries) => {
+        for (const target of this.targets)
+          this.callback(entries.map((entry) => ({ ...entry, target })));
+      };
     }
-    observe() {}
-    disconnect() {}
+    observe(target: Element) {
+      this.targets.add(target);
+    }
+    unobserve(target: Element) {
+      this.targets.delete(target);
+    }
+    disconnect() {
+      this.targets.clear();
+    }
   }
+  resetViewportObserver();
   vi.stubGlobal('IntersectionObserver', Observer);
   vi.stubGlobal('window', {
     matchMedia: () => query,
@@ -291,31 +310,29 @@ describe('media pairs', () => {
     expect(main.paused || backdrop.paused).toBe(false);
   });
 
-  it('preserves manual playback intent across viewport re-entry, and respects reduced motion', async () => {
+  it('keeps a manually started video where it was across viewport re-entry, and respects reduced motion', async () => {
     const { pair, fire } = setup({ kind: 'video', playback: 'manual' });
-    let main = new TestVideo();
-    let backdrop = new TestVideo();
+    const main = new TestVideo();
+    const backdrop = new TestVideo();
     main.readyState = backdrop.readyState = 4;
     pair.register('main', main as unknown as Element);
     pair.register('backdrop', backdrop as unknown as Element);
     await settle();
     await pair.play();
     main.currentTime = backdrop.currentTime = 2;
+
+    // Leaving the viewport pauses the pair; the elements stay, so nothing is
+    // loaded, decoded or seeked again when it comes back.
     intersect([{ isIntersecting: false }]);
     fire('main', 'pause', main);
-    pair.register('main', null);
-    pair.register('backdrop', null);
+    await settle();
+    expect(main.paused && backdrop.paused).toBe(true);
+
     intersect([{ isIntersecting: true }]);
-    main = new TestVideo();
-    backdrop = new TestVideo();
-    main.readyState = backdrop.readyState = 4;
-    pair.register('main', main as unknown as Element);
-    pair.register('backdrop', backdrop as unknown as Element);
-    fire('main', 'seeked', main);
-    fire('backdrop', 'seeked', backdrop);
     await settle();
     expect(main.currentTime).toBe(2);
     expect(main.paused || backdrop.paused).toBe(false);
+
     await pair.pause();
     expect(main.paused && backdrop.paused).toBe(true);
     reduced = true;
@@ -345,8 +362,8 @@ describe('media pairs', () => {
 
   it('preserves an explicit autoplay pause across viewport re-entry', async () => {
     const { pair, fire } = setup({ kind: 'video', playback: 'autoplay' });
-    let main = new TestVideo();
-    let backdrop = new TestVideo();
+    const main = new TestVideo();
+    const backdrop = new TestVideo();
     main.readyState = backdrop.readyState = 4;
     pair.register('main', main as unknown as Element);
     pair.register('backdrop', backdrop as unknown as Element);
@@ -357,17 +374,8 @@ describe('media pairs', () => {
     fire('main', 'pause', main);
     main.currentTime = backdrop.currentTime = 2;
     intersect([{ isIntersecting: false }]);
-    pair.register('main', null);
-    pair.register('backdrop', null);
+    await settle();
     intersect([{ isIntersecting: true }]);
-
-    main = new TestVideo();
-    backdrop = new TestVideo();
-    main.readyState = backdrop.readyState = 4;
-    pair.register('main', main as unknown as Element);
-    pair.register('backdrop', backdrop as unknown as Element);
-    fire('main', 'seeked', main);
-    fire('backdrop', 'seeked', backdrop);
     await settle();
 
     expect(main.currentTime).toBe(2);

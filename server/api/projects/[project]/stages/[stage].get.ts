@@ -8,6 +8,8 @@ import {
   buildPublicProjectStage,
   canOpenPublicEntity,
 } from '../../../../thei/public/entities';
+import { resolveEntityViewer } from '../../../../thei/access-links/viewer';
+import { markSharedResponse } from '../../../../thei/access-links/response';
 
 export default defineEventHandler(
   async (event): Promise<PublicProjectStageResponse> => {
@@ -16,8 +18,13 @@ export default defineEventHandler(
     );
     if (!project)
       throw createError({ statusCode: 404, statusText: 'Project not found' });
-    const isAdmin = await THEI_SERVER.isAdmin(event);
-    if (!canOpenPublicEntity(project.access, isAdmin))
+    // A share link on the project covers its stages and sections too.
+    const viewer = await resolveEntityViewer(
+      event,
+      'project',
+      project.projectUuid,
+    );
+    if (!canOpenPublicEntity(project.access, viewer.asOwner))
       throw createError({ statusCode: 404, statusText: 'Stage not found' });
     const publicId = publicIdFromProjectChildUrlPart(
       getRouterParam(event, 'stage') ?? '',
@@ -25,10 +32,11 @@ export default defineEventHandler(
     const stage = (await getProjectStages(project.projectUuid)).find(
       (item) => item.publicId === publicId,
     );
-    if (!stage || (stage.isPrivate && !isAdmin))
+    if (!stage || (stage.isPrivate && !viewer.asOwner))
       throw createError({ statusCode: 404, statusText: 'Stage not found' });
-    if (project.access === 'link-only')
+    if (project.access === 'link-only' || viewer.viaShare)
       setHeader(event, 'X-Robots-Tag', 'noindex, nofollow');
-    return buildPublicProjectStage(project, stage, isAdmin);
+    if (viewer.viaShare) markSharedResponse(event);
+    return buildPublicProjectStage(project, stage, viewer.asOwner);
   },
 );

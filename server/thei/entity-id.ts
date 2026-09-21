@@ -10,6 +10,7 @@ export const EntityPrefix = {
   ProjectStage: 'pst',
   Session: 's',
   Tag: 't',
+  Share: 'sh',
 } as const;
 
 export type EntityPrefixValue =

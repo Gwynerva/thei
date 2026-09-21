@@ -72,6 +72,7 @@ import { getEventRelations } from '../events/relations';
 import { getEventExternalLinks } from '../events/external-links';
 import { findExternalLink } from '../external-links/repository';
 import { listTagsForContainer } from '../tags';
+import { siteUrlBasePath, withoutSiteBase } from '#layers/thei/shared/site-url';
 import { buildSecretReference } from './secret';
 import {
   buildPublicContentData,
@@ -273,7 +274,10 @@ async function buildRelatedProjectReferences(
       // Event relations carry no type, so none is invented for display.
       if (!canListPublicEntity(project.access, isAdmin))
         return buildSecretReference('project', project.projectUuid);
-      return buildPublicProjectReference(project);
+      return {
+        ...(await buildPublicProjectReference(project)),
+        ...(relation.note ? { note: relation.note } : {}),
+      };
     }),
   );
   return references.filter((item) => item !== undefined);
@@ -680,7 +684,7 @@ async function buildProjectRelationReferences(
   isAdmin: boolean,
 ) {
   const references = await Promise.all(
-    relations.map(async ({ projectUuid, type }) => {
+    relations.map(async ({ projectUuid, type, note }) => {
       const project = await THEI_SERVER.projects.findByUuid(projectUuid);
       if (!project) return undefined;
       if (!canListPublicEntity(project.access, isAdmin))
@@ -688,9 +692,12 @@ async function buildProjectRelationReferences(
           ...buildSecretReference('project', project.projectUuid),
           relationType: type,
         };
+      const text =
+        note?.type === 'split' ? note.currentProjectText : note?.text;
       return {
         ...(await buildPublicProjectReference(project)),
         relationType: type,
+        ...(text ? { note: text } : {}),
       };
     }),
   );
@@ -825,7 +832,10 @@ export async function resolveSiteEntityCandidate(
     return external;
   }
   if (parsed.origin !== site.origin) return external;
-  const [section, part, ...rest] = parsed.pathname
+  // A site in a subfolder writes its own links with the base path; entity
+  // paths themselves are always base-free.
+  const pathname = withoutSiteBase(parsed.pathname, siteUrlBasePath(siteUrl));
+  const [section, part, ...rest] = pathname
     .split('/')
     .filter(Boolean)
     .map((segment) => {

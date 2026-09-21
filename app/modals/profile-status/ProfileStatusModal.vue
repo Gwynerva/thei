@@ -6,6 +6,13 @@ const { modalData } = defineProps<{
   modalData: {
     usageDelta: Record<string, number>;
     canAddEmptyStatus: boolean;
+    /** A regular status to edit instead of adding a new one. */
+    initial?: {
+      id: string;
+      text: string;
+      assetUuid?: string;
+      media?: MediaDescriptor;
+    };
   };
 }>();
 const emit = defineEmits<{
@@ -21,15 +28,22 @@ const emit = defineEmits<{
     | { type: 'save'; id: string; kind: 'empty' },
   ];
 }>();
-const text = ref('');
-const assetUuid = ref<string | null>(null);
-const media = ref<MediaDescriptor>();
+const initial = modalData.initial;
+const text = ref(initial?.text ?? '');
+const assetUuid = ref<string | null>(initial?.assetUuid ?? null);
+const media = ref<MediaDescriptor | undefined>(initial?.media);
+// An edited status stays a regular one: an empty status has nothing to edit.
 const valid = computed(
   () =>
     Boolean(text.value.trim()) ||
-    (!assetUuid.value && modalData.canAddEmptyStatus),
+    (!initial && !assetUuid.value && modalData.canAddEmptyStatus),
 );
-const dirty = computed(() => Boolean(text.value || assetUuid.value));
+const dirty = computed(() =>
+  initial
+    ? text.value !== initial.text ||
+      assetUuid.value !== (initial.assetUuid ?? null)
+    : Boolean(text.value || assetUuid.value),
+);
 function save() {
   if (!valid.value) return;
   const value = text.value.trim();
@@ -38,7 +52,7 @@ function save() {
     value
       ? {
           type: 'save',
-          id: crypto.randomUUID(),
+          id: initial?.id ?? crypto.randomUUID(),
           kind: 'regular',
           text: value,
           assetUuid: assetUuid.value ?? undefined,
@@ -55,11 +69,13 @@ useModalCloseGuard(
   <ModalContainer class="max-w-120">
     <template #header
       ><div class="flex items-center justify-between gap-sm p-sm">
-        <ModalTitle :title="phrase.profile_new_status" /><Button
-          :disabled="!valid"
-          @click="save"
-          >{{ phrase.profile_add }}</Button
-        >
+        <ModalTitle
+          :title="
+            initial ? phrase.profile_edit_status : phrase.profile_new_status
+          "
+        /><Button :disabled="!valid || (initial && !dirty)" @click="save">{{
+          initial ? phrase.save : phrase.profile_add
+        }}</Button>
       </div></template
     >
     <div class="flex min-w-0 items-start gap-sm p-md">
