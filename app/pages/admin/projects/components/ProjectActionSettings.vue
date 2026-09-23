@@ -21,6 +21,7 @@ import {
   projectActionIssues,
   type ProjectActionEditData,
   type ProjectActionIssue,
+  type ProjectActionTarget,
 } from '#layers/thei/shared/project-action';
 import {
   normalizeExternalLinkUrl,
@@ -169,27 +170,36 @@ function validUrl(value: string | undefined) {
   }
 }
 
+function syncLinkPreview(
+  url: string | undefined,
+  target: ProjectActionTarget,
+  edited: { urlChanged: boolean } | undefined,
+) {
+  if (edited?.urlChanged) {
+    faviconMedia.value = undefined;
+    externalLinkPreview.value = undefined;
+    previewedUrl = undefined;
+  }
+  clearTimeout(linkTimer);
+  const requestId = ++linkRequestId;
+  loadingLink.value = false;
+  if (target !== 'external-link' || !validUrl(url) || previewedUrl === url)
+    return;
+  loadingLink.value = true;
+  linkTimer = setTimeout(
+    () => loadLinkPreview(url!, requestId),
+    edited ? 450 : 0,
+  );
+}
 watch(
   [() => action.value.externalUrl, () => action.value.target],
-  ([url, target], previous) => {
-    if (import.meta.server) return;
-    if (previous && url !== previous[0]) {
-      faviconMedia.value = undefined;
-      externalLinkPreview.value = undefined;
-      previewedUrl = undefined;
-    }
-    clearTimeout(linkTimer);
-    const requestId = ++linkRequestId;
-    loadingLink.value = false;
-    if (target !== 'external-link' || !validUrl(url) || previewedUrl === url)
-      return;
-    loadingLink.value = true;
-    linkTimer = setTimeout(
-      () => loadLinkPreview(url!, requestId),
-      previous ? 450 : 0,
-    );
-  },
-  { immediate: true },
+  ([url, target], [previousUrl]) =>
+    syncLinkPreview(url, target, { urlChanged: url !== previousUrl }),
+);
+// The first preview is fetched after hydration: the server renders none, and
+// starting it during setup would make the client's first render disagree.
+onMounted(() =>
+  syncLinkPreview(action.value.externalUrl, action.value.target, undefined),
 );
 onUnmounted(() => clearTimeout(linkTimer));
 
