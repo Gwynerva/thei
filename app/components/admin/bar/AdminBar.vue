@@ -7,6 +7,7 @@ import {
 import { publicIdFromTagUrlPart } from '#layers/thei/shared/tag-url';
 import { publicIdFromEventUrlPart } from '#layers/thei/shared/event-url';
 import { dateFromDiaryUrlPart } from '#layers/thei/shared/diary-url';
+import { parsePublicSearchFilters } from '#layers/thei/shared/public-search';
 
 const isAdmin = useIsAdmin();
 const adminBarData = isAdmin.value
@@ -66,12 +67,23 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
     };
   }
 
-  if (route.path === '/events/') {
-    return {
-      to: '/admin/events/new/',
-      icon: 'plus',
-      title: phrase.value.new_event,
-    };
+  // `/projects/` and `/events/` are short addresses of the search narrowed to
+  // one kind, so that is where a new one is offered. Showcase and CV hold
+  // projects only, whatever the type says.
+  if (route.path === '/search/') {
+    const filters = parsePublicSearchFilters(route.query);
+    if (filters.type === 'project' || filters.showcase || filters.cv)
+      return {
+        to: '/admin/projects/new/',
+        icon: 'plus',
+        title: phrase.value.new_project,
+      };
+    if (filters.type === 'event')
+      return {
+        to: '/admin/events/new/',
+        icon: 'plus',
+        title: phrase.value.new_event,
+      };
   }
 
   const event = /^\/events\/([^/]+)\//.exec(route.path);
