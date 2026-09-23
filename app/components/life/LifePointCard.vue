@@ -3,12 +3,18 @@ import type { LifePoint } from '#layers/thei/shared/life';
 import { buildLifeUrl } from '#layers/thei/shared/life';
 import type { LifeRewindMatch } from '#layers/thei/shared/life-rewind';
 import { lifeEntityKindIcon } from './life-entity-icon';
+import { publicDatePrecisionLabels } from '#layers/thei/app/composables/public-date';
 
 const props = defineProps<{
   point: LifePoint;
   compact?: boolean;
   dateStyle?: 'long' | 'short';
   rewindMatch?: LifeRewindMatch;
+  /**
+   * Leaves the date to the rail the card hangs on. The chronology passes it
+   * for every card whose date says nothing the day's header does not.
+   */
+  hideDate?: boolean;
 }>();
 
 const description = computed(() => {
@@ -42,11 +48,17 @@ const datePresentation = computed(() => {
       ),
     };
   }
+  const { date, period, precision } = props.point;
   return getPublicDatePresentation(
-    props.point.period ?? props.point.date,
+    precision
+      ? { ...(period ?? { startDate: date, endDate: date }), ...precision }
+      : (period ?? date),
     language.value.code,
     new Date(),
-    { style: props.dateStyle ?? (props.compact ? 'short' : 'long') },
+    {
+      style: props.dateStyle ?? (props.compact ? 'short' : 'long'),
+      precisionLabels: publicDatePrecisionLabels(),
+    },
   );
 });
 const pointIcon = computed(() => lifeEntityKindIcon(props.point.entityKind));
@@ -76,6 +88,7 @@ const projects = computed(() =>
     :compact="compact"
     :date-style="dateStyle"
     :rewind="Boolean(rewindMatch)"
+    :hide-date="hideDate"
   />
   <PublicContentCard
     v-else-if="point.visibility === 'visible'"
@@ -91,14 +104,17 @@ const projects = computed(() =>
     :media="point.media"
     :continuous-media="point.entityKind === 'project'"
     :titleless="point.entityKind === 'diary-entry'"
+    :cloud="point.entityKind === 'diary-entry'"
     :projects="projects"
     :parent="parent"
     :tags="point.tags"
     :compact="compact"
+    :hide-date="hideDate"
   />
   <PublicContentCard
     v-else
     secret
+    :cloud="point.entityKind === 'diary-entry'"
     :title="point.title"
     :summary="point.summary"
     :label="description"
@@ -109,5 +125,6 @@ const projects = computed(() =>
     :date-presentation="datePresentation"
     :media="point.media"
     :compact="compact"
+    :hide-date="hideDate"
   />
 </template>

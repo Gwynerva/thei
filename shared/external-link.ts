@@ -2,8 +2,6 @@ import type { MediaDescriptor } from './media';
 
 export const EXTERNAL_LINK_TEXT_LIMIT = 300;
 export const EXTERNAL_LINK_PREVIEW_TIMEOUT = 10_000;
-export const EXTERNAL_LINK_ICON_PATH =
-  'M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h560v-280h80v280q0 33-23.5 56.5T760-120H200Zm188-212-56-56 371-372H560v-80h280v280h-80v-143L388-332Z';
 
 export type ExternalLinkPreviewStatus = 'complete' | 'fallback';
 

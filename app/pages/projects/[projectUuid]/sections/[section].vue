@@ -31,7 +31,9 @@ usePublicSeo({
   ogImage,
   markdown: true,
   ogType: 'article',
-  title: () => data.value.title,
+  // The project is the context a stage or a section is read in, so the tab
+  // and a shared link name it: "Stage - Project - Owner".
+  title: () => `${data.value.title} - ${data.value.project.title}`,
   description: () => data.value.summary,
   canonical,
   noIndex: () => data.value.project.access === 'link-only',

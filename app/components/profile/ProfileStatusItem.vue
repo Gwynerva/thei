@@ -11,7 +11,7 @@ defineEmits<{ remove: [id: string]; edit: [item: StatusHistoryItem] }>();
 </script>
 <template>
   <article
-    class="flex items-start gap-sm"
+    class="flex items-center gap-sm"
     :class="standalone ? undefined : 'py-sm'"
   >
     <Media

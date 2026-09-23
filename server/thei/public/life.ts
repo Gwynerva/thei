@@ -8,6 +8,7 @@ import {
   buildLifeUrl,
   isLifeDay,
   lifeFilterIncludes,
+  LIFE_ACTIVITY_TOTAL_KINDS,
   LIFE_SCOPE_LIFE,
   lifeActivityDayTotal,
   type LifeActivityKind,
@@ -34,6 +35,11 @@ import {
 } from '#layers/thei/shared/life-rewind';
 import { publicPagination } from './pagination';
 import {
+  isApproximateDate,
+  normalizeDatePrecisionInfo,
+  type DatePrecisionInfo,
+} from '#layers/thei/shared/date-precision';
+import {
   lifePointIsVisible,
   mergeLifeBoundaryPoints,
   projectCreatedUtcDate,
@@ -45,13 +51,13 @@ import {
   buildPublicPageIcon,
   buildPublicEntityReference,
   buildPublicProjectSummary,
-  canListPublicEntity,
 } from './entities';
-import {
-  isPublicSecret,
-  type PublicEntityLink,
-} from '#layers/thei/shared/api/public';
+import { isPublicSecret } from '#layers/thei/shared/api/public';
 import { buildSecretReference, type SecretEntityKind } from './secret';
+import {
+  countLifeActivityEntities,
+  type LifeActivityEntityPoint,
+} from './life-activity';
 
 type RawPoint = {
   identity: string;
@@ -60,6 +66,7 @@ type RawPoint = {
   transition: LifeTransition;
   sortTime: number;
   period?: import('#layers/thei/shared/date-range').DateRange;
+  precision?: DatePrecisionInfo;
   access: ProjectEventAccessLevel;
   isPrivate?: boolean;
   event?: any;
@@ -300,7 +307,11 @@ function buildRawLifePoints(): RawPoint[] {
           'started',
           event.access,
           period.sortOrder,
-          { event, projectUuids: projectsByEvent.get(event.eventUuid) ?? [] },
+          {
+            event,
+            projectUuids: projectsByEvent.get(event.eventUuid) ?? [],
+            ...periodPrecision(period),
+          },
         ),
         boundaryPoint(
           'event',
@@ -309,7 +320,11 @@ function buildRawLifePoints(): RawPoint[] {
           'ended',
           event.access,
           period.sortOrder,
-          { event, projectUuids: projectsByEvent.get(event.eventUuid) ?? [] },
+          {
+            event,
+            projectUuids: projectsByEvent.get(event.eventUuid) ?? [],
+            ...periodPrecision(period),
+          },
         ),
       );
     } else {
@@ -329,6 +344,7 @@ function buildRawLifePoints(): RawPoint[] {
             project,
             isPrivate: stage.isPrivate,
             projectUuids: [project.projectUuid],
+            ...periodPrecision(period),
           },
         ),
         boundaryPoint(
@@ -343,6 +359,7 @@ function buildRawLifePoints(): RawPoint[] {
             project,
             isPrivate: stage.isPrivate,
             projectUuids: [project.projectUuid],
+            ...periodPrecision(period),
           },
         ),
       );
@@ -503,6 +520,14 @@ function withoutOwnProject(point: LifePoint, ownHref?: string): LifePoint {
   };
 }
 
+/** A period's doubt, carried on its points only when there is any. */
+function periodPrecision(period: Partial<DatePrecisionInfo>): {
+  precision?: DatePrecisionInfo;
+} {
+  const precision = normalizeDatePrecisionInfo(period);
+  return isApproximateDate(precision.precision) ? { precision } : {};
+}
+
 function boundaryPoint(
   entityKind: LifeEntityKind,
   id: string,
@@ -560,6 +585,11 @@ async function hydrateLifePoint(
       entityKind: point.entityKind,
       transition: point.transition,
       ...(point.period ? { period: point.period } : {}),
+      // The level of doubt is about the date the card already shows; the
+      // owner's note about it is content, and a secret keeps its content.
+      ...(point.precision
+        ? { precision: { ...point.precision, precisionNote: '' } }
+        : {}),
       visibility: 'secret',
       title: secret.title,
       summary: secret.summary,
@@ -624,6 +654,7 @@ async function hydrateLifePoint(
       key,
       date: point.date,
       ...(point.period ? { period: point.period } : {}),
+      ...(point.precision ? { precision: point.precision } : {}),
       entityKind: point.entityKind,
       transition: point.transition,
       visibility: 'visible',
@@ -686,6 +717,7 @@ async function hydrateLifePoint(
       key,
       date: point.date,
       ...(point.period ? { period: point.period } : {}),
+      ...(point.precision ? { precision: point.precision } : {}),
       entityKind: point.entityKind,
       transition: point.transition,
       visibility: 'visible',
@@ -712,6 +744,7 @@ async function hydrateLifePoint(
       key,
       date: point.date,
       ...(point.period ? { period: point.period } : {}),
+      ...(point.precision ? { precision: point.precision } : {}),
       entityKind: point.entityKind,
       transition: point.transition,
       visibility: 'visible',
@@ -813,18 +846,24 @@ export async function getLifeActivity(
   const days: LifeActivityResponse['days'] = {};
   let max = 0;
   const prefix = `${year}-`;
+  const entityPoints: LifeActivityEntityPoint[] = [];
   for (const [date, points] of index.pointsByDate) {
     if (!date.startsWith(prefix)) continue;
     const counts: Partial<Record<LifeActivityKind, number>> = {};
     for (const point of points) {
-      const kind: LifeActivityKind = lifePointIsVisible(
+      const visible = lifePointIsVisible(
         point.access,
         point.isPrivate,
         options.isAdmin,
-      )
-        ? point.entityKind
-        : 'secret';
+      );
+      const kind: LifeActivityKind = visible ? point.entityKind : 'secret';
       counts[kind] = (counts[kind] ?? 0) + 1;
+      if ((LIFE_ACTIVITY_TOTAL_KINDS as readonly string[]).includes(kind))
+        entityPoints.push({
+          entityKind: point.entityKind,
+          entityUuid: secretPointUuid(point),
+          visible,
+        });
     }
     days[date] = counts;
     max = Math.max(max, lifeActivityDayTotal(counts));
@@ -835,61 +874,8 @@ export async function getLifeActivity(
     years,
     days,
     max,
-    projects: await buildLifeActivityProjects(year, options.isAdmin),
+    totals: countLifeActivityEntities(entityPoints),
   };
-}
-
-/**
- * Projects the year was spent on.
- *
- * Measured by stage periods rather than by when the project page happened to
- * be written: a project started years ago and worked on all year belongs to
- * this year, and one merely created in January does not.
- */
-async function buildLifeActivityProjects(
-  year: number,
-  isAdmin: boolean,
-): Promise<PublicEntityLink[]> {
-  const { db, schema } = THEI_SERVER.useDb();
-  const start = `${year}-01-01`;
-  const end = `${year}-12-31`;
-  const periods = db
-    .select()
-    .from(schema.stagePeriods)
-    .where(eq(schema.stagePeriods.stageType, 'project-stage'))
-    .all();
-  const stages = db.select().from(schema.projectStages).all();
-  const stageById = new Map(stages.map((stage) => [stage.stageUuid, stage]));
-
-  const ordered: { projectUuid: string; latest: string }[] = [];
-  const seen = new Map<string, number>();
-  for (const period of periods) {
-    const from = period.startDate;
-    const to = period.endDate ?? period.startDate;
-    if (!from || from > end || to < start) continue;
-    const stage = stageById.get(period.stageUuid);
-    if (!stage) continue;
-    const existing = seen.get(stage.projectUuid);
-    if (existing === undefined) {
-      seen.set(stage.projectUuid, ordered.length);
-      ordered.push({ projectUuid: stage.projectUuid, latest: to });
-    } else {
-      const entry = ordered[existing]!;
-      if (to > entry.latest) entry.latest = to;
-    }
-  }
-
-  ordered.sort((a, b) => b.latest.localeCompare(a.latest));
-  const links = await Promise.all(
-    ordered.map(async ({ projectUuid }) => {
-      const project = await THEI_SERVER.projects.findByUuid(projectUuid);
-      if (!project) return undefined;
-      return canListPublicEntity(project.access, isAdmin)
-        ? await buildPublicEntityReference(project)
-        : buildSecretReference('project', project.projectUuid);
-    }),
-  );
-  return links.filter((link) => link !== undefined);
 }
 
 /** One day, hydrated, for the panel under the activity grid. */

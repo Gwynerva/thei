@@ -41,6 +41,13 @@ const props = defineProps<{
    * signed by its date in the line above, so a heading would only repeat it.
    */
   titleless?: boolean;
+  /**
+   * Draws the card as a thought bubble instead of a box — for a diary entry,
+   * which is a thought rather than a thing that happened.
+   */
+  cloud?: boolean;
+  /** Leaves the date out, for a card whose place already dates it. */
+  hideDate?: boolean;
   /** Owner-only reminder; a visitor never receives one. */
   reminder?: string;
   /** Presents a codename for something hidden from visitors. */
@@ -70,6 +77,11 @@ const cardStyle = computed<Record<string, string>>(() => {
     '--public-card-shadow-color': `color-mix(in oklab, ${accentColor} 32%, transparent)`,
   };
 });
+const card = useTemplateRef<HTMLElement>('card');
+const cloudPath = useCloudOutline(
+  computed(() => (props.cloud ? card.value : null)),
+  () => props.date,
+);
 const visibleTags = computed(() => props.tags?.slice(0, 3) ?? []);
 const visibleProjects = computed(() => props.projects ?? []);
 const hasFooter = computed(
@@ -79,19 +91,44 @@ const hasFooter = computed(
 
 <template>
   <article
+    ref="card"
     class="public-content-card group relative isolate flex min-w-0 flex-col
-      overflow-hidden rounded-normal border border-border-1 bg-bg-2 shadow-md
-      shadow-shadow-1 transition"
+      transition"
     :class="[
       compact ? 'min-h-28' : 'min-h-36',
+      !cloud &&
+        `overflow-hidden rounded-normal border border-border-1 bg-bg-2 shadow-md
+        shadow-shadow-1`,
       href &&
         `public-content-card-interactive focus-within:-translate-y-0.5
-        focus-within:border-border-2 focus-within:shadow-xl
-        hocus:-translate-y-0.5 hocus:border-border-2 hocus:shadow-xl`,
+        hocus:-translate-y-0.5`,
+      href &&
+        !cloud &&
+        `focus-within:border-border-2 focus-within:shadow-xl
+        hocus:border-border-2 hocus:shadow-xl`,
     ]"
     :style="cardStyle"
     :data-secret="secret || undefined"
   >
+    <!--
+      The cloud is drawn rather than bordered: its outline depends on the
+      card's size, so it stays hidden until the card has been measured.
+    -->
+    <svg
+      v-if="cloud"
+      class="public-cloud pointer-events-none absolute inset-0 -z-1 size-full
+        overflow-visible transition"
+      :class="cloudPath ? 'opacity-100' : 'opacity-0'"
+      aria-hidden="true"
+    >
+      <path
+        :d="cloudPath"
+        class="fill-bg-2 stroke-border-1 transition-colors
+          group-focus-within:stroke-border-2 group-hover:stroke-border-2"
+        stroke-width="1"
+        stroke-linejoin="round"
+      />
+    </svg>
     <TheiLink
       v-if="href"
       :to="href"
@@ -100,19 +137,26 @@ const hasFooter = computed(
         focus-visible:ring-accent focus-visible:ring-inset"
     />
 
-    <MediaEdge
+    <div
       v-if="media"
-      :media
-      side="right"
-      fade="card"
-      playback="autoplay"
-      :autoplay-reduced-motion="continuousMedia"
-      :loop="continuousMedia"
-      :muted="continuousMedia"
-      media-class="opacity-70 transition duration-300 group-hocus:opacity-95
-        motion-reduce:duration-150"
-      class="w-3/5 sm:w-1/2"
-    />
+      :class="
+        cloud ? ['absolute inset-0', { invisible: !cloudPath }] : 'contents'
+      "
+      :style="cloud && cloudPath ? { clipPath: `path('${cloudPath}')` } : {}"
+    >
+      <MediaEdge
+        :media
+        side="right"
+        fade="card"
+        playback="autoplay"
+        :autoplay-reduced-motion="continuousMedia"
+        :loop="continuousMedia"
+        :muted="continuousMedia"
+        media-class="opacity-70 transition duration-300 group-hocus:opacity-95
+          motion-reduce:duration-150"
+        class="w-3/5 sm:w-1/2"
+      />
+    </div>
 
     <div
       class="pointer-events-none relative z-2 flex min-h-full flex-1 flex-col
@@ -127,28 +171,30 @@ const hasFooter = computed(
           <Icon v-if="icon" :name="icon" class="shrink-0" />
           <span>{{ label }}</span>
         </span>
-        <TheiLink
-          v-if="dateHref"
-          :to="dateHref"
-          :data-title-popup="datePresentation.title"
-          class="pointer-events-auto relative z-3 inline-flex items-center gap-1
-            text-text-3 transition focus-visible:ring-2
-            focus-visible:ring-accent hocus:text-accent"
-          :class="datePresentationToneClass(datePresentation)"
-        >
-          <Icon v-if="datePresentation.approximate" name="approximate" />
-          {{ datePresentation.label }}
-        </TheiLink>
-        <time
-          v-else
-          :datetime="date"
-          :data-title-popup="datePresentation.title"
-          class="inline-flex items-center gap-1 text-text-3"
-          :class="datePresentationToneClass(datePresentation)"
-        >
-          <Icon v-if="datePresentation.approximate" name="approximate" />
-          {{ datePresentation.label }}
-        </time>
+        <template v-if="!hideDate">
+          <TheiLink
+            v-if="dateHref"
+            :to="dateHref"
+            :data-title-popup="datePresentation.title"
+            class="pointer-events-auto relative z-3 inline-flex items-center
+              gap-1 text-text-3 transition focus-visible:ring-2
+              focus-visible:ring-accent hocus:text-accent"
+            :class="datePresentationToneClass(datePresentation)"
+          >
+            <Icon v-if="datePresentation.approximate" name="approximate" />
+            {{ datePresentation.label }}
+          </TheiLink>
+          <time
+            v-else
+            :datetime="date"
+            :data-title-popup="datePresentation.title"
+            class="inline-flex items-center gap-1 text-text-3"
+            :class="datePresentationToneClass(datePresentation)"
+          >
+            <Icon v-if="datePresentation.approximate" name="approximate" />
+            {{ datePresentation.label }}
+          </time>
+        </template>
         <Icon
           v-if="reminder"
           name="warning"
@@ -168,14 +214,17 @@ const hasFooter = computed(
         />
       </div>
 
+      <!--
+        One step of `gap-sm` between every piece of data — parent, copy,
+        related entities, tags — so none of them reads as glued to its
+        neighbour. Only a title and its summary sit closer: they are one unit.
+      -->
       <div
-        class="public-card-copy max-w-4/5 min-w-0 sm:max-w-3/4"
+        class="public-card-copy flex max-w-4/5 min-w-0 flex-col gap-sm
+          sm:max-w-3/4"
         :class="{ 'public-card-copy-over-media': media }"
       >
-        <div
-          v-if="parent"
-          class="mb-1 flex min-w-0 items-center gap-xs text-sm"
-        >
+        <div v-if="parent" class="flex min-w-0 items-center gap-xs text-sm">
           <TheiLink
             :to="parent.href"
             :data-title-popup="parent.summary"
@@ -197,14 +246,6 @@ const hasFooter = computed(
             aria-hidden="true"
           />
         </div>
-        <h3
-          v-if="!titleless"
-          class="public-card-title text-xl font-bold tracking-tight transition
-            sm:text-2xl"
-          :class="{ italic: secret }"
-        >
-          {{ publicText(title) }}
-        </h3>
         <p
           v-if="titleless"
           class="public-card-title line-clamp-4 text-base leading-relaxed
@@ -212,13 +253,22 @@ const hasFooter = computed(
         >
           {{ publicText(summary) }}
         </p>
-        <p
-          v-else-if="summary"
-          class="mt-2 line-clamp-3 text-base leading-relaxed font-semibold
-            text-text-2"
-        >
-          {{ publicText(summary) }}
-        </p>
+        <div v-else class="min-w-0">
+          <h3
+            class="public-card-title text-xl font-bold tracking-tight transition
+              sm:text-2xl"
+            :class="{ italic: secret }"
+          >
+            {{ publicText(title) }}
+          </h3>
+          <p
+            v-if="summary"
+            class="mt-xs line-clamp-3 text-base leading-relaxed font-semibold
+              text-text-2"
+          >
+            {{ publicText(summary) }}
+          </p>
+        </div>
       </div>
 
       <div
@@ -243,6 +293,15 @@ const hasFooter = computed(
 .public-content-card-interactive:hover,
 .public-content-card-interactive:focus-within {
   --tw-shadow-color: var(--public-card-shadow-color);
+}
+
+/* The box's shadow, redrawn around the cloud's own outline. */
+.public-cloud {
+  filter: drop-shadow(0 0.2rem 0.3rem var(--color-shadow-1));
+}
+
+.public-content-card-interactive:is(:hover, :focus-within) .public-cloud {
+  filter: drop-shadow(0 0.6rem 0.9rem var(--public-card-shadow-color));
 }
 
 .public-content-card-interactive:hover .public-card-title,

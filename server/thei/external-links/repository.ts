@@ -6,10 +6,8 @@ import { dirname } from 'node:path';
 import { eq } from 'drizzle-orm';
 import sharp from 'sharp';
 import { collectContentExternalLinkUrls } from '#layers/thei/shared/content';
-import {
-  EXTERNAL_LINK_ICON_PATH,
-  type ExternalLink,
-} from '#layers/thei/shared/external-link';
+import type { ExternalLink } from '#layers/thei/shared/external-link';
+import { iconSymbols } from '#thei/icon-symbols';
 import { extractImageAccent } from '../assets/image-color';
 import { THEI_CONTENT_DIRS } from '../content-layout';
 
@@ -254,9 +252,13 @@ export async function convertExternalLinkFavicon(source: Buffer) {
     .toBuffer();
 }
 
+/** The interface's own external-link icon on a neutral tile. */
 function fallbackSvg() {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960">
-    <rect x="0" y="-960" width="960" height="960" rx="200" fill="#52525b"/>
-    <path d="${EXTERNAL_LINK_ICON_PATH}" fill="#e4e4e7"/>
+  const icon = iconSymbols['external-link'];
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 960">
+    <rect width="960" height="960" rx="200" fill="#52525b"/>
+    <svg width="960" height="960" viewBox="${icon?.viewBox ?? '0 0 24 24'}">
+      <g fill="#e4e4e7">${(icon?.body ?? '').replaceAll('currentColor', '#e4e4e7')}</g>
+    </svg>
   </svg>`;
 }

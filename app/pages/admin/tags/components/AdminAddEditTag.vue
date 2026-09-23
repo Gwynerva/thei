@@ -11,6 +11,7 @@ import LinkField from '../../components/LinkField.vue';
 import { useSingleMediaAsset } from '#layers/thei/app/composables/single-media-asset';
 import { singleAssetUsageDelta } from '#layers/thei/app/composables/single-media-asset-state';
 import { tagDeleteModal } from './tag-delete-modal';
+import { buildTagUrl } from '#layers/thei/shared/tag-url';
 
 const { tagUuid } = defineProps<{ tagUuid?: string }>();
 const isEdit = computed(() => Boolean(tagUuid));
@@ -48,9 +49,28 @@ if (tagUuid) {
   iconSize.value = response.iconAssetSize;
   savedIconAssetUuid.value = response.iconAssetUuid;
   usageStats.value = response.usageStats;
+  // Reached by public ID from the admin bar on the public tag page: settle on
+  // the UUID address, which saving and deleting use.
+  if (tagUuid !== response.tagUuid)
+    await navigateTo(`/admin/tags/${response.tagUuid}/edit/`, {
+      replace: true,
+    });
 }
 saved.value = JSON.stringify(data.value);
 const dirty = computed(() => JSON.stringify(data.value) !== saved.value);
+
+// The public page lives at the saved address, not at whatever is being typed.
+useRegisterAdminBarContextButton(
+  computed(() => {
+    if (!isEdit.value) return undefined;
+    const { slug, publicId } = JSON.parse(saved.value) as TagEditData;
+    return {
+      to: { href: buildTagUrl(slug, publicId), external: true },
+      icon: 'visibility',
+      title: phrase.value.view_tag,
+    };
+  }),
+);
 const canSave = computed(
   () =>
     !saving.value &&

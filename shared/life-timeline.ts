@@ -211,15 +211,15 @@ function createClampedUtcDate(year: number, month: number, day: number) {
 /**
  * How a break between two days is drawn.
  *
- * A gap inside one month is a pause; a few months is a silence; longer than a
- * season is a break in the thread. The rail says which of the three it is
- * before the label underneath is read.
+ * Under a week is no break at all: the rail runs on. Beyond that the rail is
+ * cut by two slashes, and what lies between them says how long the pause was —
+ * a faded line up to a month, a dashed one up to a season, nothing after that.
  */
-export type LifeGapStyle = 'dash' | 'dotted' | 'severed';
+export type LifeGapStyle = 'none' | 'faded' | 'dashed' | 'empty';
 
 export function lifeGapStyle(duration: LifeGapDuration): LifeGapStyle {
-  if (duration.years > 0) return 'severed';
-  if (duration.months > 3) return 'severed';
-  if (duration.months >= 1) return 'dotted';
-  return 'dash';
+  if (duration.years > 0 || duration.months >= 3) return 'empty';
+  if (duration.months >= 1) return 'dashed';
+  if (duration.days >= 7) return 'faded';
+  return 'none';
 }

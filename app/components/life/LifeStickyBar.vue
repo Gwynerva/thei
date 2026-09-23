@@ -35,13 +35,47 @@ const top = computed(
 );
 
 // Day, month, year — the order the date is spoken in, not the order it is
-// stored in.
+// stored in. The month is formatted together with the day so languages that
+// inflect it get the form a date uses ("сентября", not "сентябрь").
+const formatter = computed(
+  () =>
+    new Intl.DateTimeFormat(language.value.code, {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }),
+);
+
+function partOf(date: string, type: Intl.DateTimeFormatPartTypes) {
+  return (
+    formatter.value
+      .formatToParts(new Date(`${date}T00:00:00Z`))
+      .find((item) => item.type === type)?.value ?? ''
+  );
+}
+
+/**
+ * The widest values a cell can hold, laid invisibly under the current one:
+ * the cell then always takes their width, so the bar does not shift sideways
+ * when the reader scrolls into another day or month. Months are formatted
+ * with a day so languages that inflect them measure the form a date uses.
+ */
+const spacers = computed<Record<string, string[]>>(() => ({
+  day: [partOf('2000-01-28', 'day')],
+  month: Array.from({ length: 12 }, (_, index) =>
+    partOf(`2000-${String(index + 1).padStart(2, '0')}-15`, 'month'),
+  ),
+}));
+
 const parts = computed(() => {
-  const [year = '', month = '', date = ''] = day.split('-');
+  const formatted = formatter.value.formatToParts(new Date(`${day}T00:00:00Z`));
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    formatted.find((item) => item.type === type)?.value ?? '';
   return [
-    { key: 'day', value: date },
-    { key: 'month', value: month },
-    { key: 'year', value: year },
+    { key: 'day', value: part('day') },
+    { key: 'month', value: part('month') },
+    { key: 'year', value: part('year') },
   ];
 });
 
@@ -117,32 +151,49 @@ onBeforeUnmount(() => publicHeader?.setSecondaryStuck(false));
           sticky-stuck:border-border-1 sticky-stuck:bg-bg-1/70
           sticky-stuck:backdrop-blur-md"
       >
+        <!--
+          The side padding matches the feed's, and the icon sits in a slot as
+          wide as the rail column, so its centre lands on the rail on both
+          layouts. The icon only appears once the bar is stuck: above the feed
+          it would sit over the page glow without the plate that frames it.
+        -->
         <nav
-          class="m-auto flex w-(--width-wide) max-w-full items-center gap-sm
-            px-window py-xs"
+          class="m-auto grid w-(--width-wide) max-w-full
+            grid-cols-[1fr_auto_1fr] items-center gap-sm py-xs pr-window pl-0
+            sm:px-window"
           :aria-label="scopeLabel"
         >
-          <span
-            class="flex size-8 shrink-0 items-center justify-center rounded-sm
-              bg-accent/10 text-accent"
-            :data-title-popup="scopeLabel"
-          >
-            <Icon :name="scopeIcon" />
+          <span class="flex w-8 justify-center justify-self-start sm:w-16">
+            <span
+              class="flex size-8 shrink-0 items-center justify-center rounded-sm
+                bg-accent/10 text-accent opacity-0 transition-opacity
+                motion-reduce:transition-none sticky-stuck:opacity-100"
+              :data-title-popup="scopeLabel"
+            >
+              <Icon :name="scopeIcon" />
+            </span>
           </span>
 
           <TheiLink
             :to="href"
-            class="group flex min-w-0 items-center divide-x divide-border-1
-              rounded-sm bg-bg-3 font-semibold text-text-2 transition
-              hocus:bg-accent/15 hocus:text-accent"
+            class="group flex min-w-0 items-center gap-px font-semibold
+              text-text-2"
             @click="emit('pick')"
           >
             <span
               v-for="part in parts"
               :key="part.key"
-              class="px-xs py-1 text-center tabular-nums"
-              :class="part.key === 'year' ? 'w-14' : 'w-9'"
+              class="grid bg-bg-3 px-xs py-1 text-center tabular-nums transition
+                group-hocus:bg-accent/15 group-hocus:text-accent
+                first:rounded-l-sm last:rounded-r-sm"
             >
+              <span
+                v-for="spacer in spacers[part.key]"
+                :key="`spacer-${spacer}`"
+                class="invisible col-start-1 row-start-1 block"
+                aria-hidden="true"
+                >{{ spacer }}</span
+              >
               <Transition
                 enter-from-class="translate-y-1 opacity-0"
                 enter-active-class="transition duration-200
@@ -158,7 +209,7 @@ onBeforeUnmount(() => publicHeader?.setSecondaryStuck(false));
             </span>
           </TheiLink>
 
-          <div class="ml-auto shrink-0">
+          <div class="shrink-0 justify-self-end">
             <button
               ref="filterAnchor"
               type="button"

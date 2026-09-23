@@ -5,11 +5,14 @@ import chokidar from 'chokidar';
 import { debounce } from 'perfect-debounce';
 import { normalizePath, type ViteDevServer } from 'vite';
 import { hash } from '../../shared/utils/hash';
+import { parseIconSvg, type IconSymbol } from '../../shared/icon-svg';
 
 export interface IconsData {
   iconNames: string[];
   iconsHash: string;
   iconsSvg: string;
+  /** Every icon as data, for the server to draw pictures with. */
+  iconSymbols: Record<string, IconSymbol>;
 }
 
 export async function buildIconsData(
@@ -24,6 +27,7 @@ export async function buildIconsData(
     .sort();
 
   let versionSource = '';
+  const iconSymbols: Record<string, IconSymbol> = {};
 
   for (const iconName of iconNames) {
     const iconContent = await readFile(
@@ -33,14 +37,10 @@ export async function buildIconsData(
 
     versionSource += `${iconName}\0${hash(iconContent, 24)}\n`;
 
-    const viewBox = iconContent.match(/viewBox="([^"]*)"/)?.[1] ?? '0 0 24 24';
+    const symbol = parseIconSvg(iconContent);
+    iconSymbols[iconName] = symbol;
 
-    iconsSvg += iconContent
-      .replace(/<\?xml[^>]*>/g, '')
-      .replace(
-        /<svg[^>]*>([\s\S]*?)<\/svg>/,
-        `<symbol id="${iconName}" viewBox="${viewBox}">$1</symbol>`,
-      );
+    iconsSvg += `<symbol id="${iconName}" viewBox="${symbol.viewBox}">${symbol.body}</symbol>`;
   }
 
   const iconsHash = hash(versionSource, 24);
@@ -52,6 +52,7 @@ export async function buildIconsData(
     iconNames,
     iconsHash,
     iconsSvg,
+    iconSymbols,
   };
 }
 
@@ -172,8 +173,26 @@ export const iconsHref = '/icons.svg?${iconsData.iconsHash}';
     },
   });
 
+  // The server draws fallback pictures with the same icons the interface
+  // shows, so a changed icon changes those pictures too.
+  const iconSymbolsTemplate = addTemplate({
+    write: true,
+    filename: 'thei/icon-symbols.ts',
+
+    async getContents() {
+      const iconsData = await getIconsData();
+      return `export const iconSymbols: Record<string, { viewBox: string; body: string }> = ${JSON.stringify(iconsData.iconSymbols)};
+`;
+    },
+  });
+
   nuxt.options.alias ??= {};
   nuxt.options.alias['#thei/icons'] = iconsTsTemplate.dst;
+  nuxt.options.alias['#thei/icon-symbols'] = iconSymbolsTemplate.dst;
+  nuxt.hook('nitro:config', (nitroConfig) => {
+    nitroConfig.alias ??= {};
+    nitroConfig.alias['#thei/icon-symbols'] = iconSymbolsTemplate.dst;
+  });
 
   if (nuxt.options.dev) {
     const viteServers = new Map<
@@ -194,7 +213,8 @@ export const iconsHref = '/icons.svg?${iconsData.iconsHash}';
             await updateTemplates({
               filter: (template) =>
                 template.dst === iconsTsTemplate.dst ||
-                template.dst === iconsSvgTemplate.dst,
+                template.dst === iconsSvgTemplate.dst ||
+                template.dst === iconSymbolsTemplate.dst,
             });
           },
           [...viteServers].map(([viteServer, environment]) => ({

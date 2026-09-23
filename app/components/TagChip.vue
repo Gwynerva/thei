@@ -38,6 +38,7 @@ const accentColor = computed(() =>
       :tag="tag"
       class="aspect-square h-4/6 shrink-0 rounded-xs"
     />
+    <Icon v-else name="tag" class="tag-chip-fallback-icon shrink-0" />
     <span class="min-w-0 truncate">{{ tag.title }}</span>
     <slot />
   </component>
@@ -77,6 +78,15 @@ const accentColor = computed(() =>
 .tag-chip > * {
   position: relative;
   z-index: 1;
+}
+
+/*
+ * Without an icon the chip still shows a tag glyph in its own accent, pulled
+ * toward the text colour so it reads against the tinted ground in both
+ * themes: darker on light, lighter on dark.
+ */
+.tag-chip-fallback-icon {
+  color: color-mix(in oklab, var(--tag-accent) 75%, var(--color-text-1));
 }
 
 .tag-chip:is(:hover, :focus-visible) {

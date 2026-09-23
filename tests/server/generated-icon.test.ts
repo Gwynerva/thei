@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { iconSymbols } from '#thei/icon-symbols';
+import { entityTypeIcon } from '../../shared/entity-icon';
 import {
+  buildIconSvg,
   GENERATED_ICON_KINDS,
   generatedIconKey,
   isGeneratedIconKind,
@@ -76,6 +79,19 @@ describe('generated fallback icons', () => {
     );
     expect(resolveEntityIconMedia('page', 'pg-example')).toEqual(
       resolveGeneratedIcon('page', 'pg-example'),
+    );
+  });
+
+  it('draws each kind with the icon the interface names it by', () => {
+    for (const kind of ['project', 'diary-entry', 'project-stage'] as const) {
+      const body = iconSymbols[entityTypeIcon(kind)]!.body;
+      expect(body).not.toBe('');
+      expect(buildIconSvg(kind, 120)).toContain(
+        body.slice(body.indexOf('d="'), body.indexOf('d="') + 60),
+      );
+    }
+    expect(buildIconSvg('secret', 120)).toContain(
+      iconSymbols['lock-close']!.body.slice(0, 60),
     );
   });
 });

@@ -11,7 +11,7 @@ import {
 } from '#layers/thei/app/composables/drag-sort';
 import { projectDataInjectionKey } from '../composables';
 import { projectContentItemModal } from './project-content-item-modal';
-import { saveAfterContentEditKey } from '../composables';
+import { currentProjectUuidKey, saveAfterContentEditKey } from '../composables';
 import { projectContentItemDeleteModal } from './project-content-item-delete-modal';
 import ContentStats from '#layers/thei/app/components/content/ContentStats.vue';
 import DateRangeChip from '#layers/thei/app/components/DateRangeChip.vue';
@@ -21,6 +21,8 @@ type Item = ProjectSectionContentItem | ProjectStageContentItem;
 const props = defineProps<{ kind: 'stage' | 'section' }>();
 const projectData = inject(projectDataInjectionKey)!;
 const saveAfterContentEdit = inject(saveAfterContentEditKey, undefined);
+const currentProjectUuid = inject(currentProjectUuidKey)!;
+const route = useRoute();
 const root = useTemplateRef<HTMLElement>('root');
 const unsavedIds = new WeakMap<object, string>();
 const items = computed<Item[]>(() =>
@@ -146,6 +148,26 @@ async function openItem(index?: number) {
   else next[index] = result.item;
   replaceSections(next);
 }
+
+/**
+ * `?stage=<publicId>` or `?section=<publicId>` opens that part straight away:
+ * it is how the admin bar on a public stage or section page lands here.
+ *
+ * Only on the UUID address — reached by public ID, the editor first moves
+ * there, and the page mounted at the old address must not open it too. The
+ * query is dropped before the modal opens, so going back or reloading does
+ * not open it again.
+ */
+onMounted(async () => {
+  const wanted = route.query[props.kind];
+  if (typeof wanted !== 'string') return;
+  if (route.params.projectUuid !== currentProjectUuid.value) return;
+  const index = items.value.findIndex((item) => item.publicId === wanted);
+  const query = { ...route.query };
+  delete query[props.kind];
+  await navigateTo({ query }, { replace: true });
+  if (index >= 0) await openItem(index);
+});
 
 async function deleteItem(index: number) {
   const item = items.value[index];

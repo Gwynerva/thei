@@ -123,7 +123,16 @@ const pointIcon = computed(() =>
           </span>
         </div>
       </TheiLink>
-      <LifePointCard :point="point" class="my-xs" />
+      <!--
+        The day's header already dates every card under it. A card keeps its
+        own date only when it says more: the span of a merged start and end,
+        or a date the owner is not sure of.
+      -->
+      <LifePointCard
+        :point="point"
+        :hide-date="!point.period && !point.precision"
+        class="my-xs"
+      />
     </LifeTimelineGrid>
   </div>
 </template>

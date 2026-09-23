@@ -9,6 +9,9 @@ export default defineConfig({
       '#thei/static-public': fileURLToPath(
         new URL('./tests/helpers/static-public.ts', import.meta.url),
       ),
+      '#thei/icon-symbols': fileURLToPath(
+        new URL('./tests/helpers/icon-symbols.ts', import.meta.url),
+      ),
     },
   },
   test: {

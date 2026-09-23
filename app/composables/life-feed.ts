@@ -62,7 +62,7 @@ export function useLifeFeed(
   const olderCursor = computed(() => windows.value.at(-1)?.olderCursor);
   const estimate = (row: LifeFeedRow) =>
     sizes.get(row.key) ??
-    (row.kind === 'window' ? row.height : row.kind === 'gap' ? 48 : 300);
+    (row.kind === 'window' ? row.height : row.kind === 'gap' ? 72 : 300);
   const virtualizer = useWindowVirtualizer<HTMLElement>(
     computed(() => ({
       enabled: mounted.value,

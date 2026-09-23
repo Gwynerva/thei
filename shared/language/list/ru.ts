@@ -351,12 +351,11 @@ export default defineI18nModule({
     language_name: 'Русский',
     life: 'Жизнь',
     life_activity: 'Активность',
-    life_activity_less: 'Меньше',
-    life_activity_more: 'Больше',
+    life_activity_actions: (count) =>
+      plural(count, 'действие', 'действия', 'действий'),
     life_activity_empty: 'Ничего не происходило',
     life_activity_loading: 'Загрузка…',
     life_activity_close: 'Закрыть день',
-    life_activity_year_projects: 'Проекты в этот год',
     life_activity_events: (count) =>
       plural(count, 'событие', 'события', 'событий'),
     life_activity_projects: (count) =>
@@ -1119,6 +1118,8 @@ export default defineI18nModule({
     edit_event: 'Изменить событие',
     edit_page: 'Изменить страницу',
     edit_diary_entry: 'Изменить запись',
+    edit_project_stage: 'Изменить этап',
+    edit_content_section: 'Изменить раздел',
     diary_access: 'Доступ к записи',
     diary_date: 'Дата записи',
     diary_date_hint: 'На один день приходится одна запись.',
@@ -1172,6 +1173,9 @@ export default defineI18nModule({
       'Сайт закрытый! Доступ все равно будет только у вас!',
     view_event: 'Смотреть на сайте',
     view_page: 'Смотреть на сайте',
+    view_project_stage: 'Смотреть на сайте',
+    view_content_section: 'Смотреть на сайте',
+    view_tag: 'Смотреть на сайте',
     saved: 'Сохранено',
     showcase_project: 'Витринный проект?',
     showcase_project_hint: 'Показывать на главной странице и сверху поиска.',

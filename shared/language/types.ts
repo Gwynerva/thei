@@ -213,12 +213,10 @@ export type LanguagePhrases = {
   language_name: string;
   life: string;
   life_activity: string;
-  life_activity_less: string;
-  life_activity_more: string;
+  life_activity_actions: (count: number) => string;
   life_activity_empty: string;
   life_activity_loading: string;
   life_activity_close: string;
-  life_activity_year_projects: string;
   life_activity_events: (count: number) => string;
   life_activity_projects: (count: number) => string;
   life_activity_pages: (count: number) => string;
@@ -788,6 +786,8 @@ export type LanguagePhrases = {
   content_description: string;
   edit_event: string;
   edit_diary_entry: string;
+  edit_project_stage: string;
+  edit_content_section: string;
   diary_access: string;
   diary_date: string;
   diary_date_hint: string;
@@ -839,6 +839,9 @@ export type LanguagePhrases = {
   site_access_close_priority: string;
   view_event: string;
   view_page: string;
+  view_project_stage: string;
+  view_content_section: string;
+  view_tag: string;
   saved: string;
   showcase_project: string;
   showcase_project_hint: string;

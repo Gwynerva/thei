@@ -4,6 +4,7 @@ import type {
   PublicTagSummary,
 } from './api/public';
 import type { DateRange } from './date-range';
+import type { DatePrecisionInfo } from './date-precision';
 import type { MediaDescriptor } from './media';
 import type { StatusKind } from './status';
 
@@ -24,6 +25,12 @@ export type LifeRailTone = 'accent' | 'warning' | 'warning-to-accent';
 type LifePointBase = {
   date: string;
   period?: DateRange;
+  /**
+   * How sure the owner is of the date, present only when they doubt it. A
+   * card that would otherwise leave its date to the rail still prints it then,
+   * so the reader knows not to take the day at its word.
+   */
+  precision?: DatePrecisionInfo;
   entityKind: LifeEntityKind;
   transition: LifeTransition;
 };
@@ -215,14 +222,28 @@ export function laterLifeDate(left: string | undefined, right: string): string {
  */
 export type LifeActivityKind = LifeEntityKind | 'secret';
 
+/** The kinds a year is summed up by, in the order the summary lists them. */
+export const LIFE_ACTIVITY_TOTAL_KINDS = [
+  'project',
+  'event',
+  'diary-entry',
+  'project-stage',
+  'project-section',
+] as const satisfies readonly LifeEntityKind[];
+export type LifeActivityTotalKind = (typeof LIFE_ACTIVITY_TOTAL_KINDS)[number];
+
 export type LifeActivityResponse = {
   year: number;
   /** Every year that holds something, newest first. */
   years: number[];
   /** `YYYY-MM-DD` → how many points of each kind happened that day. */
   days: Record<string, Partial<Record<LifeActivityKind, number>>>;
-  /** Projects whose stages ran during the year, newest first. */
-  projects: PublicEntityLink[];
+  /**
+   * How many distinct entities of each kind appeared on the timeline during
+   * the year — a stage that both started and ended in it counts once. Only
+   * what the visitor may see is counted by kind.
+   */
+  totals: Partial<Record<LifeActivityTotalKind, number>>;
   /** The busiest day of the year, so shades can be scaled against it. */
   max: number;
 };

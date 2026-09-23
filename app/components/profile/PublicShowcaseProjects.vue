@@ -4,6 +4,15 @@ import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
 
 defineProps<{ projects: PublicEntityReference[] }>();
 
+/** A still picture of the icon: a video's preview frame, or the image itself. */
+function shadowSrc(project: PublicEntityReference) {
+  const media = project.iconMedia;
+  if (!media) return undefined;
+  return media.kind === 'video'
+    ? media.previewSrc
+    : (media.previewSrc ?? media.src);
+}
+
 function accentStyle(project: PublicEntityReference) {
   return {
     '--showcase-project-accent': imageAccentCssColor(
@@ -37,20 +46,43 @@ function accentStyle(project: PublicEntityReference) {
       >
         <div
           :style="accentStyle(project)"
-          class="showcase-project-tile size-24 overflow-clip rounded-normal
-            border-2 transition group-hocus:-translate-y-0.5
-            group-hocus:shadow-lg"
+          class="relative size-24 transition group-hocus:-translate-y-0.5"
         >
-          <Media
-            v-if="project.iconMedia"
-            v-bind="project.iconMedia"
-            fit="contain"
-            playback="autoplay"
-            autoplay-reduced-motion
-            loop
-            muted
-            class="size-full"
-          />
+          <!--
+            The shadow is cast by a still copy of the icon lying under it, so
+            it follows the icon's outline. It is drawn once and only faded in
+            and out: animating the filter itself redraws it every frame, which
+            is what made it lag behind the hover.
+          -->
+          <div
+            v-if="shadowSrc(project)"
+            class="showcase-project-shadow pointer-events-none absolute inset-0
+              opacity-0 transition-opacity duration-300 group-hocus:opacity-100
+              motion-reduce:duration-150"
+            aria-hidden="true"
+          >
+            <div class="size-full overflow-clip rounded-normal">
+              <img
+                :src="sitePath(shadowSrc(project)!)"
+                class="size-full object-contain"
+                alt=""
+                loading="lazy"
+                draggable="false"
+              />
+            </div>
+          </div>
+          <div class="relative size-full overflow-clip rounded-normal">
+            <Media
+              v-if="project.iconMedia"
+              v-bind="project.iconMedia"
+              fit="contain"
+              playback="autoplay"
+              autoplay-reduced-motion
+              loop
+              muted
+              class="size-full"
+            />
+          </div>
         </div>
         <div class="mt-xs line-clamp-2 text-center text-xs font-medium">
           {{ publicText(project.title) }}
@@ -61,30 +93,11 @@ function accentStyle(project: PublicEntityReference) {
 </template>
 
 <style scoped>
-.showcase-project-tile {
-  border-color: color-mix(
-    in oklab,
-    var(--showcase-project-accent) 32%,
-    var(--color-border-1)
+.showcase-project-shadow {
+  filter: drop-shadow(
+    0 0.45rem 0.7rem
+      color-mix(in oklab, var(--showcase-project-accent) 45%, transparent)
   );
-  background: color-mix(
-    in oklab,
-    var(--showcase-project-accent) 12%,
-    var(--color-bg-3)
-  );
-}
-.group:where(:hover, :focus-visible) .showcase-project-tile {
-  border-color: color-mix(
-    in oklab,
-    var(--showcase-project-accent) 56%,
-    var(--color-border-2)
-  );
-  background: color-mix(
-    in oklab,
-    var(--showcase-project-accent) 20%,
-    var(--color-bg-3)
-  );
-  box-shadow: 0 0.5rem 1.25rem
-    color-mix(in oklab, var(--showcase-project-accent) 22%, transparent);
+  will-change: opacity;
 }
 </style>

@@ -197,6 +197,31 @@ function childLinkDescription(slug: string, publicId: string) {
   );
 }
 
+/**
+ * While a stage or section that already exists on the site is open, the admin
+ * bar's eye leads to its own public page rather than to the project's. It
+ * uses the address the item was opened with: an unsaved edit of the slug has
+ * no page yet.
+ */
+useRegisterAdminBarContextButton(
+  computed(() => {
+    const data = props.modalData;
+    const opened = data.item;
+    const saved = data.isStage ? data.item?.stageUuid : data.item?.sectionUuid;
+    if (!opened || !saved || !props.modalData.projectPublicId) return undefined;
+    return {
+      to: {
+        href: childLinkDescription(opened.humanReadableSlug, opened.publicId),
+        external: true,
+      },
+      icon: 'visibility',
+      title: isStage.value
+        ? phrase.value.view_project_stage
+        : phrase.value.view_content_section,
+    };
+  }),
+);
+
 function removePeriod(index: number) {
   item.value.periods = (item.value.periods ?? []).filter((_, i) => i !== index);
 }

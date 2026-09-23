@@ -41,6 +41,7 @@ import StatusHistoryField from '#layers/thei/app/components/settings/StatusHisto
 import ProjectActionSettings from './ProjectActionSettings.vue';
 
 const { projectUuid } = defineProps<{ projectUuid?: string }>();
+const route = useRoute();
 
 const formId = useId();
 const initialPublicId = useState(`new-project-public-id-${formId}`, () =>
@@ -206,9 +207,15 @@ if (isEdit.value) {
   markProjectSaved();
   resolvedProjectUuid.value = data.projectUuid;
   if (projectUuid !== data.projectUuid) {
-    await navigateTo(`/admin/projects/${data.projectUuid}/edit/`, {
-      replace: true,
-    });
+    // The query may ask for a stage or a section to be opened; it has to
+    // survive the move to the UUID address.
+    await navigateTo(
+      {
+        path: `/admin/projects/${data.projectUuid}/edit/`,
+        query: route.query,
+      },
+      { replace: true },
+    );
   }
 }
 

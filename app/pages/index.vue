@@ -84,6 +84,7 @@ usePublicSeo({
       v-if="profile.showcaseProjects.length"
       :projects="profile.showcaseProjects"
     />
+    <LifeActivityHeatmap />
 
     <section class="flex flex-col gap-sm">
       <PublicSectionHeader
@@ -151,6 +152,5 @@ usePublicSeo({
         />
       </div>
     </section>
-    <LifeActivityHeatmap />
   </main>
 </template>

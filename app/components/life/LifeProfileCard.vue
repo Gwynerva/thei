@@ -5,6 +5,7 @@ const props = defineProps<{
   compact?: boolean;
   dateStyle?: 'long' | 'short';
   rewind?: boolean;
+  hideDate?: boolean;
 }>();
 
 const isAvatar = computed(() => props.point.entityKind === 'profile-avatar');
@@ -60,13 +61,13 @@ const isAvatar = computed(() => props.point.entityKind === 'profile-avatar');
         }}
       </p>
       <ProfileDate
-        v-if="!rewind"
+        v-if="!rewind && !hideDate"
         :timestamp="new Date(`${point.date}T00:00:00Z`).getTime()"
         :short="dateStyle ? dateStyle === 'short' : compact"
         class="mt-1 inline-block"
       />
       <time
-        v-else
+        v-else-if="rewind"
         :datetime="point.date"
         class="mt-1 inline-block text-xs text-text-3"
         >{{

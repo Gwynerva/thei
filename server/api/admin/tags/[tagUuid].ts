@@ -14,14 +14,17 @@ import {
 } from '#layers/thei/shared/tag';
 
 export default defineEventHandler(async (event) => {
-  const tagUuid = getRouterParam(event, 'tagUuid')!;
-  if (!isTagUuid(tagUuid))
-    throw createError({ statusCode: 400, message: 'Invalid tag ID' });
+  // A UUID from the admin list, or the public ID a visitor's address carries —
+  // the admin bar on a public tag page only knows the latter.
+  const identifier = getRouterParam(event, 'tagUuid')!;
   const { db, schema } = THEI_SERVER.useDb();
   const tag = await db.query.tags.findFirst({
-    where: eq(schema.tags.tagUuid, tagUuid),
+    where: isTagUuid(identifier)
+      ? eq(schema.tags.tagUuid, identifier)
+      : eq(schema.tags.publicId, identifier),
   });
   if (!tag) throw createError({ statusCode: 404, message: 'Tag not found' });
+  const tagUuid = tag.tagUuid;
   if (event.method === 'GET') {
     const counts = db
       .select({

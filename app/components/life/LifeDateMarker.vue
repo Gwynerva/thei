@@ -38,7 +38,7 @@ const monthName = computed(
 </script>
 
 <template>
-  <div class="flex justify-end select-none">
+  <div class="flex justify-end pb-xs select-none sm:pb-sm">
     <TheiLink
       :to="href"
       class="flex flex-col items-end leading-none font-bold transition-colors"
@@ -52,7 +52,7 @@ const monthName = computed(
       >
         {{ year }}
       </span>
-      <span class="text-xl tabular-nums sm:text-3xl">
+      <span class="text-xl tracking-tight tabular-nums sm:text-3xl">
         {{ dayNumber }} <span class="lowercase">{{ monthName }}</span>
       </span>
     </TheiLink>

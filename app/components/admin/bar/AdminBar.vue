@@ -1,6 +1,10 @@
 <script lang="ts" setup>
 import type { AdminBarButtonProps } from './AdminBarButton.vue';
-import { publicIdFromProjectUrlPart } from '#layers/thei/shared/project-url';
+import {
+  publicIdFromProjectChildUrlPart,
+  publicIdFromProjectUrlPart,
+} from '#layers/thei/shared/project-url';
+import { publicIdFromTagUrlPart } from '#layers/thei/shared/tag-url';
 import { publicIdFromEventUrlPart } from '#layers/thei/shared/event-url';
 import { dateFromDiaryUrlPart } from '#layers/thei/shared/diary-url';
 
@@ -22,6 +26,24 @@ async function signOut() {
 const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
   if (registeredContextButton.value?.routePath === route.path)
     return registeredContextButton.value.props;
+
+  // A stage or a section has no editor of its own: the button opens the
+  // project's editor with that part's modal already open.
+  const child = /^\/projects\/([^/]+)\/(stages|sections)\/([^/]+)\/$/.exec(
+    route.path,
+  );
+  if (child) {
+    const projectId = publicIdFromProjectUrlPart(child[1]!);
+    const childId = publicIdFromProjectChildUrlPart(child[3]!);
+    const isStage = child[2] === 'stages';
+    return {
+      to: `/admin/projects/${projectId}/edit/?${isStage ? 'stage' : 'section'}=${encodeURIComponent(childId)}`,
+      icon: 'edit',
+      title: isStage
+        ? phrase.value.edit_project_stage
+        : phrase.value.edit_content_section,
+    };
+  }
 
   if (route.path.startsWith('/projects/')) {
     const projectUuid = publicIdFromProjectUrlPart(
@@ -77,6 +99,25 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
         icon: 'edit',
         title: phrase.value.edit_diary_entry,
       };
+  }
+
+  if (route.path === '/tags/') {
+    return {
+      to: '/admin/tags/new/',
+      icon: 'plus',
+      title: phrase.value.new_tag,
+    };
+  }
+
+  // The admin tag API accepts a public ID as well as a UUID, so the address a
+  // visitor sees is enough to reach the editor.
+  if (/^\/tags\/[^/]+\/$/.test(route.path)) {
+    const publicId = publicIdFromTagUrlPart(route.path.split('/')[2] ?? '');
+    return {
+      to: `/admin/tags/${encodeURIComponent(publicId)}/edit/`,
+      icon: 'edit',
+      title: phrase.value.edit_tag,
+    };
   }
 
   if (route.path === '/pages/') {

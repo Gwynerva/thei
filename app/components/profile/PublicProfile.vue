@@ -80,6 +80,7 @@ const facts = computed(() => {
         :count="profile.statusCount"
         history-url="/api/profile/statuses"
         :title="phrase.profile_status"
+        compact
       />
       <ProfileInfoBlock v-if="facts.length" :title="phrase.profile_facts"
         ><dl class="divide-y divide-border-1">

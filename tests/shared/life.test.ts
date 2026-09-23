@@ -120,6 +120,15 @@ describe('Life point construction', () => {
     expect(merged).toHaveLength(3);
   });
 
+  it('keeps the doubt of a period on the merged point', () => {
+    const precision = { precision: 'month' as const, precisionNote: 'roughly' };
+    const [merged] = mergeLifeBoundaryPoints([
+      { ...point('event:a:period:0', '2026-08-21', 'started'), precision },
+      { ...point('event:a:period:0', '2026-08-22', 'ended'), precision },
+    ]);
+    expect(merged).toMatchObject({ transition: 'occurred', precision });
+  });
+
   it('does not merge boundaries with another date block between them', () => {
     const merged = mergeLifeBoundaryPoints([
       point('event:a:period:0', '2026-08-20', 'started'),
@@ -330,15 +339,16 @@ describe('Life active day selection', () => {
 });
 
 describe('Life gap styles', () => {
-  it('reads a gap as a pause, a silence, or a break in the thread', () => {
+  it('keeps the rail under a week and breaks it by how long the pause was', () => {
     const style = (years: number, months: number, days: number) =>
       lifeGapStyle({ years, months, days });
-    expect(style(0, 0, 1)).toBe('dash');
-    expect(style(0, 0, 29)).toBe('dash');
-    expect(style(0, 1, 0)).toBe('dotted');
-    expect(style(0, 3, 0)).toBe('dotted');
-    expect(style(0, 3, 29)).toBe('dotted');
-    expect(style(0, 4, 0)).toBe('severed');
-    expect(style(1, 0, 0)).toBe('severed');
+    expect(style(0, 0, 1)).toBe('none');
+    expect(style(0, 0, 6)).toBe('none');
+    expect(style(0, 0, 7)).toBe('faded');
+    expect(style(0, 0, 30)).toBe('faded');
+    expect(style(0, 1, 0)).toBe('dashed');
+    expect(style(0, 2, 29)).toBe('dashed');
+    expect(style(0, 3, 0)).toBe('empty');
+    expect(style(1, 0, 0)).toBe('empty');
   });
 });
