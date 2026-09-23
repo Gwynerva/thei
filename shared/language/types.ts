@@ -307,6 +307,7 @@ export type LanguagePhrases = {
   public_life_period_description: (period: string, siteName: string) => string;
   public_pages_description: string;
   public_tags_description: string;
+  public_tag_description: (title: string) => string;
   search: string;
   public_search_description: string;
   public_search_query_title: (query: string) => string;
@@ -612,6 +613,7 @@ export type LanguagePhrases = {
   tag_usage: string;
   tag_usage_summary: (projects: number, events: number) => string;
   tag_delete_hint: string;
+  tag_usage_sentence: (projects: number, events: number) => string;
   delete_tag: string;
   tag_delete_usage_warning: (projects: number, events: number) => string;
   tag_empty_list: string;

@@ -252,28 +252,15 @@ await useAdminTabTitle(
         :public-id-error="publicIdError"
       />
 
-      <div class="flex flex-col gap-md sm:flex-row">
-        <Field v-if="isEdit" class="min-w-0 flex-1">
-          <FieldLabel>{{ phrase.tag_usage }}</FieldLabel>
-          <div
-            class="flex min-h-10 flex-wrap items-center gap-xs text-text-2"
-            :aria-label="
-              phrase.tag_usage_summary(usageStats.projects, usageStats.events)
-            "
-          >
-            <span class="flex items-center gap-xs">
-              <Icon name="project" />
-              <span>{{ phrase.x_projects(usageStats.projects) }}</span>
-            </span>
-            <span aria-hidden="true" class="text-text-3">·</span>
-            <span class="flex items-center gap-xs">
-              <Icon name="event" />
-              <span>{{ phrase.x_events(usageStats.events) }}</span>
-            </span>
-          </div>
-          <FieldHint>{{ phrase.tag_delete_hint }}</FieldHint>
-        </Field>
-      </div>
+      <footer
+        v-if="isEdit"
+        class="flex flex-col gap-1 border-t border-border-1 pt-sm text-sm"
+      >
+        <span class="font-semibold">{{
+          phrase.tag_usage_sentence(usageStats.projects, usageStats.events)
+        }}</span>
+        <FieldHint>{{ phrase.tag_delete_hint }}</FieldHint>
+      </footer>
     </Box>
   </div>
 </template>

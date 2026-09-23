@@ -2,7 +2,10 @@ import type {
   PublicTagListItem,
   PublicPaginatedResponse,
 } from '#layers/thei/shared/api/public';
-import { publicPagination } from '../../thei/public/pagination';
+import {
+  PUBLIC_DIRECTORY_PAGE_SIZE,
+  publicPagination,
+} from '../../thei/public/pagination';
 import {
   buildPublicTagListItems,
   canListPublicEntity,
@@ -50,7 +53,11 @@ export default defineEventHandler(
           left.tag.title.localeCompare(right.tag.title) ||
           left.tag.publicId.localeCompare(right.tag.publicId),
       );
-    const pagination = publicPagination(rows.length, getQuery(event).page);
+    const pagination = publicPagination(
+      rows.length,
+      getQuery(event).page,
+      PUBLIC_DIRECTORY_PAGE_SIZE,
+    );
     const offset = (pagination.page - 1) * pagination.pageSize;
     return {
       ...pagination,

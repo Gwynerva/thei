@@ -423,8 +423,10 @@ export default defineI18nBase({
     public_life_period_description: (period, siteName) =>
       `Events, projects, and important stages for ${period} — ${siteName}.`,
     public_pages_description:
-      'Standalone articles, notes, and other site pages.',
-    public_tags_description: 'Topics connecting projects and moments of life.',
+      'Standalone static content: each piece stands on its own, unconnected to projects, events or anything else on the site.',
+    public_tags_description:
+      'A cross-cutting classification of projects and events: a tag gathers everything that shares a topic or a trait.',
+    public_tag_description: (title) => `Projects and events tagged “${title}”.`,
     search: 'Search',
     public_search_description: 'Search projects and events.',
     public_search_query_title: (query) => `“${query}”`,
@@ -791,7 +793,7 @@ export default defineI18nBase({
       'Files will appear here once you upload them to projects, events or pages.',
     public_tags_empty: 'No tags yet',
     public_tags_empty_description:
-      'Topics will appear here once projects or moments of life are tagged.',
+      'Tags will appear here once projects or events are tagged.',
     public_pages_empty_description:
       'Nothing has been published here yet. Check back later.',
     life_empty_description:
@@ -831,6 +833,15 @@ export default defineI18nBase({
     tag_usage_summary: (projects, events) =>
       `${projects} ${plural(projects, 'project', 'projects', false)} · ${events} ${plural(events, 'event', 'events', false)}`,
     tag_delete_hint: 'Deleting the tag detaches it from every related entity.',
+    tag_usage_sentence: (projects, events) => {
+      const parts = [
+        projects ? plural(projects, 'project', 'projects') : '',
+        events ? plural(events, 'event', 'events') : '',
+      ].filter(Boolean);
+      return parts.length
+        ? `The tag is used in ${parts.join(' and ')}.`
+        : 'The tag is not used anywhere yet.';
+    },
     delete_tag: 'Delete Tag',
     tag_delete_usage_warning: (projects, events) => {
       const hasProjects = projects > 0;

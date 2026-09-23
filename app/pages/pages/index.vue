@@ -1,8 +1,14 @@
 <script lang="ts" setup>
 import type { PublicPageListItem } from '#layers/thei/shared/api/page';
+import type { PublicPaginatedResponse } from '#layers/thei/shared/api/public';
 
 definePageMeta({ layout: 'public' });
-const resource = await useFetch<PublicPageListItem[]>('/api/pages');
+const route = useRoute();
+const page = computed(() => String(route.query.page ?? '1'));
+const resource = await useFetch<PublicPaginatedResponse<PublicPageListItem>>(
+  '/api/pages',
+  { query: { page } },
+);
 const pages = useRequiredResource(resource);
 const ogImage = useOgImage(
   'service',
@@ -13,19 +19,18 @@ usePublicSeo({
   ogImage,
   title: computed(() => phrase.value.pages),
   description: computed(() => phrase.value.public_pages_description),
-  canonical: '/pages/',
+  canonical: computed(() =>
+    buildPublicCanonical('/pages/', { page: pages.value.page }),
+  ),
   pageType: 'CollectionPage',
   entities: () => [
     {
       '@type': 'ItemList',
       '@id': '#list',
-      numberOfItems: pages.value.length,
-      // This listing is not paginated, so the list can be arbitrarily long.
-      // `numberOfItems` still reports the whole set; the elements are a
-      // sample, which is all a crawler needs and keeps the markup bounded.
-      itemListElement: pages.value.slice(0, 100).map((item, index) => ({
+      numberOfItems: pages.value.total,
+      itemListElement: pages.value.items.map((item, index) => ({
         '@type': 'ListItem',
-        position: index + 1,
+        position: (pages.value.page - 1) * pages.value.pageSize + index + 1,
         url: item.href,
         name: item.title,
       })),
@@ -41,17 +46,17 @@ usePublicSeo({
       :title="phrase.pages"
       :description="phrase.public_pages_description"
     />
-    <div v-if="pages.length" class="grid gap-sm sm:grid-cols-2">
+    <div v-if="pages.items.length" class="grid gap-sm sm:grid-cols-2">
       <PublicContentCard
-        v-for="page in pages"
-        :key="page.href"
-        :href="page.href"
-        :title="page.title"
-        :summary="page.summary"
+        v-for="item in pages.items"
+        :key="item.href"
+        :href="item.href"
+        :title="item.title"
+        :summary="item.summary"
         :label="phrase.page"
         icon="page"
-        :date="page.updatedAt"
-        :media="page.iconMedia"
+        :date="item.updatedAt"
+        :media="item.iconMedia"
       />
     </div>
     <PublicEmptyState
@@ -59,5 +64,6 @@ usePublicSeo({
       :title="phrase.no_pages"
       :description="phrase.public_pages_empty_description"
     />
+    <PublicPagination :page="pages.page" :page-count="pages.pageCount" />
   </main>
 </template>

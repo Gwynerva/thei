@@ -184,19 +184,21 @@ describe('SQL pagination', () => {
     ).json();
     expect(response).toMatchObject({
       page: 2,
-      pageCount: 3,
-      pageSize: 24,
+      pageCount: 2,
+      pageSize: 30,
       total: 50,
     });
-    expect(response.items.map((item: any) => item.publicId)).toEqual(
-      Array.from(
-        { length: 24 },
-        (_, i) => `list-${String(i + 24).padStart(2, '0')}`,
+    // `Tag`, used by the shared fixture, sorts after every `Same title`.
+    expect(response.items.map((item: any) => item.publicId)).toEqual([
+      ...Array.from(
+        { length: 19 },
+        (_, i) => `list-${String(i + 30).padStart(2, '0')}`,
       ),
-    );
+      'tagid',
+    ]);
     expect(buildPublicTagListItems).toHaveBeenCalledTimes(1);
     expect(vi.mocked(buildPublicTagListItems).mock.calls[0]![0]).toHaveLength(
-      24,
+      20,
     );
   });
 

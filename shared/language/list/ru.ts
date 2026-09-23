@@ -473,8 +473,10 @@ export default defineI18nModule({
     public_life_period_description: (period, siteName) =>
       `События, проекты и важные этапы за ${period.toLocaleLowerCase('ru-RU')} — ${siteName}.`,
     public_pages_description:
-      'Отдельные материалы, заметки и другие страницы сайта.',
-    public_tags_description: 'Темы, связывающие проекты и моменты жизни.',
+      'Самостоятельные статичные материалы сайта: каждый существует сам по себе и не связан ни с проектами, ни с событиями, ни с другими записями.',
+    public_tags_description:
+      'Сквозная классификация проектов и событий: тег объединяет всё, что связано общей темой или признаком.',
+    public_tag_description: (title) => `Проекты и события с тегом «${title}».`,
     search: 'Поиск',
     public_search_description: 'Поиск по проектам и событиям.',
     public_search_query_title: (query) => `«${query}»`,
@@ -848,7 +850,7 @@ export default defineI18nModule({
       'Файлы появятся здесь, когда вы загрузите их в проекты, события или страницы.',
     public_tags_empty: 'Тегов пока нет',
     public_tags_empty_description:
-      'Темы появятся здесь, как только ими будут отмечены проекты или моменты жизни.',
+      'Теги появятся здесь, как только ими будут отмечены проекты или события.',
     public_pages_empty_description:
       'Здесь пока ничего не опубликовано. Загляните позже.',
     life_empty_description:
@@ -889,6 +891,15 @@ export default defineI18nModule({
       `${plural(projects, 'проект', 'проекта', 'проектов')} · ${plural(events, 'событие', 'события', 'событий')}`,
     tag_delete_hint:
       'При удалении тег будет отвязан от всех связанных сущностей.',
+    tag_usage_sentence: (projects, events) => {
+      const parts = [
+        projects ? plural(projects, 'проекте', 'проектах', 'проектах') : '',
+        events ? plural(events, 'событии', 'событиях', 'событиях') : '',
+      ].filter(Boolean);
+      return parts.length
+        ? `Тег используется в ${parts.join(' и ')}.`
+        : 'Тег пока нигде не используется.';
+    },
     delete_tag: 'Удалить тег',
     tag_delete_usage_warning: (projects, events) => {
       const hasProjects = projects > 0;

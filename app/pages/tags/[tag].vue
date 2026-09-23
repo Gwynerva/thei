@@ -38,7 +38,9 @@ usePublicSeo({
   ogImage,
   title: computed(() => tag.value.title),
   description: computed(
-    () => tag.value.description ?? phrase.value.public_tags_description,
+    () =>
+      tag.value.description ??
+      phrase.value.public_tag_description(tag.value.title),
   ),
   canonical,
   pageType: 'CollectionPage',
@@ -106,7 +108,8 @@ function tabTo(tab: 'projects' | 'events') {
         :aria-selected="tag.activeTab === tab.name"
         :aria-disabled="tab.count ? undefined : 'true'"
         aria-controls="tag-entities"
-        class="rounded-sm px-xs py-xs text-center transition"
+        class="flex items-center justify-center gap-xs rounded-sm px-xs py-xs
+          transition"
         :class="
           tag.activeTab === tab.name
             ? 'bg-bg-1 text-text-1 shadow-sm'
@@ -115,6 +118,7 @@ function tabTo(tab: 'projects' | 'events') {
               : 'cursor-not-allowed text-text-3'
         "
       >
+        <Icon :name="tab.name === 'projects' ? 'project' : 'event'" />
         {{ tab.label }}
       </component>
     </div>

@@ -1,3 +1,6 @@
+/** Page size of the plain directories — tags and pages — whose rows are small. */
+export const PUBLIC_DIRECTORY_PAGE_SIZE = 30;
+
 export function publicPagination(
   total: number,
   pageValue: unknown,
