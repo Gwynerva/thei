@@ -16,6 +16,8 @@
 
   --radius-normal: var(--radius-lg);
 
+  --breakpoint-xs: 24rem;
+
   /** Space between element and window edge */
   --spacing-window: var(--spacing-sm);
 

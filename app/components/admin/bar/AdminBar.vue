@@ -147,7 +147,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
     <div class="h-full bg-accent/35">
       <div
         class="m-auto flex h-full w-(--width-wide) max-w-full items-stretch
-          justify-between px-window"
+          justify-between sm:px-window"
       >
         <nav class="flex shrink-0 items-stretch" aria-label="Администрирование">
           <AdminBarButton to="/" icon="home" title="Сайт" />
@@ -159,6 +159,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
             icon="project"
             :label="adminBarData.projectCount + ''"
             :title="phrase.x_projects(adminBarData.projectCount)"
+            compact-label
             class="font-semibold"
           />
 
@@ -167,6 +168,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
             icon="event"
             :label="adminBarData.eventCount + ''"
             :title="phrase.x_events(adminBarData.eventCount)"
+            compact-label
             class="font-semibold"
           />
 
@@ -175,6 +177,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
             icon="thought"
             :label="adminBarData.diaryCount + ''"
             :title="phrase.x_diary_entries(adminBarData.diaryCount)"
+            compact-label
             class="font-semibold"
           />
 
@@ -196,7 +199,7 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
             <template #icon>
               <div
                 class="size-6 shrink-0 overflow-clip rounded-full border
-                  border-border-3"
+                  border-border-3 max-xs:size-5"
               >
                 <Media v-bind="publicAdmin.avatarMedia" class="size-full" />
               </div>
@@ -208,11 +211,11 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
             :data-title-popup="phrase.sign_out"
             :aria-label="phrase.sign_out"
             class="flex h-full shrink-0 cursor-pointer items-center
-              bg-transparent px-2 opacity-80 transition sm:px-3
+              bg-transparent px-2 opacity-80 transition max-xs:px-1.5 sm:px-3
               hocus:bg-accent/25 hocus:opacity-100"
             @click="signOut"
           >
-            <Icon name="power" class="shrink-0 text-xl" />
+            <Icon name="power" class="shrink-0 text-xl max-xs:text-lg" />
           </button>
         </div>
       </div>

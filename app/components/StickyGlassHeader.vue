@@ -50,7 +50,7 @@ onBeforeUnmount(() => unregisterHeader?.());
       <GlassSurface>
         <div
           class="m-auto w-(--_width-sticky-content) max-w-full"
-          :class="flushMobile ? 'sm:px-window' : 'px-window'"
+          :class="flushMobile ? 'sm:px-window' : 'px-xs sm:px-window'"
           v-bind="attrs"
         >
           <slot></slot>
@@ -64,8 +64,8 @@ onBeforeUnmount(() => unregisterHeader?.());
           text-text-error"
       >
         <div
-          class="relative m-auto w-(--_width-sticky-content) max-w-full
-            px-window"
+          class="relative m-auto w-(--_width-sticky-content) max-w-full px-xs
+            sm:px-window"
         >
           <button
             class="float-right cursor-pointer pb-1 pl-1"
