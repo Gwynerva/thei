@@ -8,6 +8,7 @@ import {
   buildLifeUrl,
   isLifeDay,
   lifeFilterIncludes,
+  lifeFilterKinds,
   LIFE_ACTIVITY_TOTAL_KINDS,
   LIFE_SCOPE_LIFE,
   lifeActivityDayTotal,
@@ -96,6 +97,8 @@ type LifeIndex = {
   points: RawPoint[];
   dates: string[];
   pointsByDate: Map<string, RawPoint[]>;
+  /** The kinds the scope holds at all, whatever the filter hides. */
+  kinds: LifeEntityKind[];
   /**
    * The address of the project a scoped chronology belongs to. Its own cards
    * do not name it again — on the project's page, "part of this project" and
@@ -119,7 +122,7 @@ export async function getLifeWindow(
 ): Promise<LifeWindowResponse> {
   const index = buildLifeIndex(options.scope, options.filter);
   if (!index.dates.length && !options.date && !options.cursor)
-    return { days: [], anchorDate: '', newestDate: '' };
+    return { days: [], anchorDate: '', newestDate: '', kinds: index.kinds };
   if (!index.dates.length)
     throw createError({ statusCode: 404, statusText: 'Life is empty' });
   const direction = options.direction ?? 'around';
@@ -163,6 +166,7 @@ export async function getLifeWindow(
     days,
     anchorDate,
     newestDate: index.dates[0]!,
+    kinds: index.kinds,
     ...(firstIndex > 0
       ? { newerCursor: encodeLifeCursor(selectedDates[0]!) }
       : {}),
@@ -461,11 +465,13 @@ function buildLifeIndex(
   scope: LifeScope = LIFE_SCOPE_LIFE,
   filter?: LifeFilter,
 ): LifeIndex {
-  const raw = buildRawLifePoints().filter(
+  const scoped = buildRawLifePoints().filter(
     (point) =>
-      lifeFilterIncludes(filter, point.entityKind) &&
-      (scope.kind !== 'project' ||
-        (point.projectUuids?.includes(scope.projectUuid) ?? false)),
+      scope.kind !== 'project' ||
+      (point.projectUuids?.includes(scope.projectUuid) ?? false),
+  );
+  const raw = scoped.filter((point) =>
+    lifeFilterIncludes(filter, point.entityKind),
   );
   const points = sortLifePoints(mergeLifeBoundaryPoints(raw));
   const pointsByDate = new Map<string, RawPoint[]>();
@@ -478,6 +484,9 @@ function buildLifeIndex(
     points,
     dates: Array.from(pointsByDate.keys()).sort().reverse(),
     pointsByDate,
+    kinds: lifeFilterKinds(scope).filter((kind) =>
+      scoped.some((point) => point.entityKind === kind),
+    ),
     ownHref: scopeProjectHref(scope),
   };
 }

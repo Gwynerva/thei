@@ -14,10 +14,12 @@ import { lifeEntityKindIcon } from './life-entity-icon';
  * project's tabs — and the sticky bar carries a second one once it is stuck.
  * Both edit the same filter, so they never disagree.
  */
-const { scope, variant } = defineProps<{
+const { scope, variant, available } = defineProps<{
   scope: LifeScopeRef;
   /** A plain icon in the bar, a labelled chip in a header, a tab in tabs. */
   variant: 'bar' | 'header' | 'tabs';
+  /** The kinds the chronology holds at all; the rest could only empty it. */
+  available?: readonly LifeEntityKind[];
 }>();
 
 const filter = defineModel<LifeFilter>('filter');
@@ -36,6 +38,15 @@ function isChosen(kind: LifeEntityKind) {
   return filter.value?.includes(kind) ?? false;
 }
 
+/**
+ * A kind the chronology does not hold could add nothing, so it is offered
+ * faded and cannot be picked. One already picked — from a shared link — can
+ * still be taken off, or the reader would be stuck with it.
+ */
+function isOffered(kind: LifeEntityKind) {
+  return !available || available.includes(kind) || isChosen(kind);
+}
+
 function toggle(kind: LifeEntityKind) {
   const current = filter.value ?? [];
   const next = current.includes(kind)
@@ -43,9 +54,13 @@ function toggle(kind: LifeEntityKind) {
     : [...current, kind];
   // Nothing selected reads as "show everything" rather than an empty feed,
   // which is the only reading that leaves a way back. Every kind selected is
-  // everything too, which is also how the address reads it back.
+  // everything too, which is also how the address reads it back — and so is
+  // every kind the chronology holds, since the rest would add nothing.
+  const coversAll = kinds.value.every(
+    (item) => next.includes(item) || (available && !available.includes(item)),
+  );
   filter.value =
-    next.length === 0 || next.length === kinds.value.length
+    next.length === 0 || coversAll
       ? undefined
       : kinds.value.filter((item) => next.includes(item));
 }
@@ -58,12 +73,7 @@ const triggerClass = computed(() => {
   if (variant === 'bar')
     return 'size-9 justify-center rounded-sm text-text-2 hocus:bg-bg-3 hocus:text-text-1';
   if (variant === 'header')
-    return [
-      'gap-xs rounded-sm border px-sm py-1 text-sm font-semibold',
-      isCustom.value
-        ? 'border-accent/40 bg-accent/10 text-accent hocus:bg-accent/15'
-        : 'border-border-1 bg-bg-2/60 text-text-2 hocus:bg-bg-3 hocus:text-text-1',
-    ];
+    return 'gap-xs rounded-sm border border-border-1 bg-bg-2/60 px-sm py-2 text-sm font-semibold text-text-2 hocus:bg-bg-3 hocus:text-text-1';
   return [
     'gap-xs px-xs py-sm text-sm sm:px-sm font-semibold hocus:bg-white/6',
     'focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-inset',
@@ -84,15 +94,23 @@ const triggerClass = computed(() => {
       :data-title-popup="variant === 'header' ? undefined : phrase.life_filter"
       @click="open = !open"
     >
-      <Icon name="filter" class="shrink-0" />
+      <!-- A narrowed filter is marked by a dot on the icon's corner; the bar's
+           button is only the icon, so its dot sits on the button's corner. -->
+      <span class="relative flex shrink-0">
+        <Icon name="filter" />
+        <span
+          v-if="isCustom && variant !== 'bar'"
+          class="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-accent"
+          aria-hidden="true"
+        ></span>
+      </span>
       <span
         v-if="variant !== 'bar'"
         :class="{ 'hidden sm:inline': variant === 'tabs' }"
         >{{ phrase.life_filter }}</span
       >
-      <!-- A chip says it in its colours; the others need the dot. -->
       <span
-        v-if="isCustom && variant !== 'header'"
+        v-if="isCustom && variant === 'bar'"
         class="absolute top-1 right-1 size-2 rounded-full bg-accent"
         aria-hidden="true"
       ></span>
@@ -129,13 +147,20 @@ const triggerClass = computed(() => {
         <label
           v-for="kind in kinds"
           :key="kind"
-          class="flex cursor-pointer items-center gap-sm rounded-sm px-xs py-1
-            text-sm transition hocus:bg-bg-3"
+          class="flex items-center gap-sm rounded-sm px-xs py-1 text-sm
+            transition"
+          :class="
+            isOffered(kind)
+              ? 'cursor-pointer hocus:bg-bg-3'
+              : 'cursor-not-allowed opacity-40'
+          "
         >
           <input
             type="checkbox"
             class="accent-accent"
+            :class="{ 'cursor-not-allowed': !isOffered(kind) }"
             :checked="isChosen(kind)"
+            :disabled="!isOffered(kind)"
             @change="toggle(kind)"
           />
           <Icon :name="lifeEntityKindIcon(kind)" class="shrink-0 text-text-3" />

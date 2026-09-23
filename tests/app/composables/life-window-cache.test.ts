@@ -9,6 +9,7 @@ import type { LifeWindowResponse } from '../../../shared/life';
 const windowData = (date: string, count = 1): LifeWindowResponse => ({
   anchorDate: date,
   newestDate: '2026-12-31',
+  kinds: ['event'],
   newerCursor: `${date}:newer`,
   olderCursor: `${date}:older`,
   days: [

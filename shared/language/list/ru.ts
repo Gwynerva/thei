@@ -392,7 +392,7 @@ export default defineI18nModule({
     public_navigation: 'Навигация по сайту',
     public_sign_in: 'Вход в админ-панель',
     public_sign_in_hint: 'Для владельца сайта',
-    latest_life: 'Последнее из Жизни',
+    activity_summary: 'Сводка активности',
     life_rewind: (day) => `${day} в прошлом`,
     life_rewind_seo_title: 'Взгляд в прошлом',
     life_rewind_description:
@@ -853,6 +853,12 @@ export default defineI18nModule({
       'Здесь пока ничего не опубликовано. Загляните позже.',
     life_empty_description:
       'Моменты жизни появятся здесь, как только будут опубликованы первые события и проекты.',
+    feed_empty: 'Здесь пока пусто',
+    feed_empty_description:
+      'Всё, что будет опубликовано, появится здесь само.',
+    feed_empty_filtered: 'Ничего не найдено',
+    feed_empty_filtered_description:
+      'Под выбранный фильтр ничего не подходит. Выберите другие типы или покажите всё.',
     page_of: (page, pageCount) => `Страница ${page} из ${pageCount}`,
     admin_tags: 'Теги',
     tag: 'Тег',

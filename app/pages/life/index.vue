@@ -108,6 +108,7 @@ watch(filter, (value) => {
         <LifeFilterButton
           v-model:filter="filter"
           :scope="LIFE_SCOPE_LIFE"
+          :available="resource.data.value?.kinds"
           variant="header"
         />
       </PublicPageHeader>

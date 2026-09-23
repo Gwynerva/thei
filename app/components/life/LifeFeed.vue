@@ -195,6 +195,7 @@ defineExpose({ reset, cancel, activeDate });
       v-model:filter="filter"
       :day="activeDay.date"
       :scope="scope"
+      :available="initial.kinds"
       :scope-icon="scopeIcon"
       :scope-media="scopeMedia"
       :scope-label="scopeLabel"
@@ -206,10 +207,22 @@ defineExpose({ reset, cancel, activeDate });
       class="m-auto w-(--width-wide) max-w-full pt-lg pr-window pb-xl pl-xs
         sm:px-window"
     >
+      <!-- Worded for any feed, not just Life's: a narrowed one points back to
+           everything, which is the only way out of an empty filter. -->
       <PublicEmptyState
-        v-if="!days.length"
-        :title="phrase.life_empty"
-        :description="phrase.life_empty_description"
+        v-if="!days.length && filter?.length"
+        :title="phrase.feed_empty_filtered"
+        :description="phrase.feed_empty_filtered_description"
+        class="ml-window sm:ml-0"
+      >
+        <Button variant="secondary" @click="filter = undefined">
+          {{ phrase.life_filter_all }}
+        </Button>
+      </PublicEmptyState>
+      <PublicEmptyState
+        v-else-if="!days.length"
+        :title="phrase.feed_empty"
+        :description="phrase.feed_empty_description"
         class="ml-window sm:ml-0"
       />
       <div v-if="days.length" class="relative">

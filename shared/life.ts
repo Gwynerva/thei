@@ -72,6 +72,11 @@ export type LifeWindowResponse = {
   days: LifeDay[];
   anchorDate: string;
   newestDate: string;
+  /**
+   * The kinds this chronology holds at all, whatever the filter hides. A
+   * filter offering a kind that is not here could only ever empty the feed.
+   */
+  kinds: LifeEntityKind[];
   newerCursor?: string;
   olderCursor?: string;
 };

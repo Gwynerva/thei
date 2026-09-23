@@ -239,7 +239,7 @@ export type LanguagePhrases = {
   public_navigation: string;
   public_sign_in: string;
   public_sign_in_hint: string;
-  latest_life: string;
+  activity_summary: string;
   life_rewind: (day: string) => string;
   life_rewind_seo_title: string;
   life_rewind_description: string;
@@ -586,6 +586,10 @@ export type LanguagePhrases = {
   public_tags_empty_description: string;
   public_pages_empty_description: string;
   life_empty_description: string;
+  feed_empty: string;
+  feed_empty_description: string;
+  feed_empty_filtered: string;
+  feed_empty_filtered_description: string;
   page_of: (page: number, pageCount: number) => string;
   admin_tags: string;
   tag: string;

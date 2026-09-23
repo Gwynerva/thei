@@ -1,5 +1,9 @@
 <script lang="ts" setup>
-import type { LifeFilter, LifeScopeRef } from '#layers/thei/shared/life';
+import type {
+  LifeEntityKind,
+  LifeFilter,
+  LifeScopeRef,
+} from '#layers/thei/shared/life';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import type { IconName } from '#thei/icons';
 
@@ -20,6 +24,8 @@ const { day, scope, scopeIcon } = defineProps<{
   scopeMedia?: MediaDescriptor;
   scopeLabel: string;
   href: string;
+  /** The kinds the chronology holds, so the filter can fade the rest. */
+  available?: readonly LifeEntityKind[];
 }>();
 
 const emit = defineEmits<{ pick: []; stuck: [boolean] }>();
@@ -206,6 +212,7 @@ onBeforeUnmount(() => publicHeader?.setSecondaryStuck(false));
             v-model:filter="filter"
             v-model:open="filterOpen"
             :scope="scope"
+            :available="available"
             variant="bar"
             class="justify-self-end"
           />

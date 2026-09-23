@@ -341,7 +341,7 @@ export default defineI18nBase({
     public_navigation: 'Site navigation',
     public_sign_in: 'Admin panel sign in',
     public_sign_in_hint: 'For the site owner',
-    latest_life: 'Latest from Life',
+    activity_summary: 'Activity summary',
     life_rewind: (day) => `${day} in the past`,
     life_rewind_seo_title: 'Rewind',
     life_rewind_description:
@@ -796,6 +796,12 @@ export default defineI18nBase({
       'Nothing has been published here yet. Check back later.',
     life_empty_description:
       'Moments of life will appear here once the first events and projects are published.',
+    feed_empty: 'Nothing here yet',
+    feed_empty_description:
+      'Anything published will show up here on its own.',
+    feed_empty_filtered: 'Nothing found',
+    feed_empty_filtered_description:
+      'Nothing matches the chosen filter. Pick other kinds or show everything.',
     page_of: (page, pageCount) => `Page ${page} of ${pageCount}`,
     admin_tags: 'Tags',
     tag: 'Tag',

@@ -149,6 +149,7 @@ watch(filter, (value) => {
             <LifeFilterButton
               v-model:filter="filter"
               :scope="scope"
+              :available="resource.data.value?.kinds"
               variant="tabs"
             />
           </template>

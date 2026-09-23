@@ -84,18 +84,17 @@ usePublicSeo({
       v-if="profile.showcaseProjects.length"
       :projects="profile.showcaseProjects"
     />
-    <LifeActivityHeatmap />
-
     <section class="flex flex-col gap-sm">
       <PublicSectionHeader
         icon="heart"
-        :title="phrase.latest_life"
+        :title="phrase.activity_summary"
         :action="{
           href: '/life/',
           label: phrase.view_all,
           icon: 'arrow-outward',
         }"
       />
+      <LifeActivityHeatmap />
       <div
         v-if="latest.points.length"
         data-home-card-grid="latest"
