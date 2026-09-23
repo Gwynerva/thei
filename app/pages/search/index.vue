@@ -229,17 +229,13 @@ onMounted(() => input.value?.focus({ preventScroll: true }));
         <PublicPagination :page="search.page" :page-count="search.pageCount" />
       </section>
 
-      <aside
-        class="sticky top-(--public-anchor-offset) hidden min-w-0 self-start
-          sm:block"
-        :aria-label="phrase.search_filters"
-      >
+      <PublicStickyAside :aria-label="phrase.search_filters">
         <PublicSearchFilters
           :filters="filters"
           :tags="search.tags"
           @change="applyFilters"
         />
-      </aside>
+      </PublicStickyAside>
     </div>
 
     <PublicSheet
