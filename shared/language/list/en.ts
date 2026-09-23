@@ -242,15 +242,8 @@ export default defineI18nBase({
     profile_avatar_hint: 'The main image for your profile.',
     profile_banner: 'Banner',
     profile_banner_hint: 'A wide image for the profile header.',
-    profile_favicon: 'Site favicon',
-    profile_favicon_hint:
-      'Shown in browser tabs, bookmarks, on phone home screens and in search results.',
-    profile_favicon_section: 'Site icon',
-    profile_favicon_section_hint:
-      'One square image. Thei derives the ico, png and touch versions from it for tabs, phone home screens and search results.',
-    favicon_preview_tab_light: 'Light tab',
-    favicon_preview_tab_dark: 'Dark tab',
-    favicon_preview_home_screen: 'Home screen',
+    profile_favicon: 'Site icon',
+    profile_favicon_hint: 'Shown in browser tabs and search results.',
     profile_status: 'Status',
     profile_status_hint:
       'A short thought or mood. The latest is shown in the profile, older ones stay on the Life timeline.',

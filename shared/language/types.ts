@@ -158,11 +158,6 @@ export type LanguagePhrases = {
   profile_banner_hint: string;
   profile_favicon: string;
   profile_favicon_hint: string;
-  profile_favicon_section: string;
-  profile_favicon_section_hint: string;
-  favicon_preview_tab_light: string;
-  favicon_preview_tab_dark: string;
-  favicon_preview_home_screen: string;
   profile_status: string;
   profile_status_hint: string;
   project_status: string;

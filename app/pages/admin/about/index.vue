@@ -154,14 +154,6 @@ function addPage(item: ContentEntitySearchItem) {
   pageOpen.value = false;
 }
 const birthDateMax = new Date();
-// Shown in the search-result preview: the address people would actually see.
-const siteHost = computed(() => {
-  try {
-    return new URL(useSiteUrl().resolve('/')).host;
-  } catch {
-    return '';
-  }
-});
 </script>
 <template>
   <div>
@@ -234,17 +226,10 @@ const siteHost = computed(() => {
             @load="avatars.load"
           />
         </section>
-      </Box>
-      <!-- The site icon is its own block: it is not part of how the profile
-           looks on the page, but of how the site looks everywhere else. -->
-      <section>
-        <SectionHeader
-          icon="star"
-          :title="phrase.profile_favicon_section"
-          :description="phrase.profile_favicon_section_hint"
-          class="mb-md"
-        />
-        <Box class="flex min-w-0 flex-wrap items-start gap-md p-sm sm:p-md">
+        <div
+          class="flex min-w-0 flex-wrap items-center gap-md border-t
+            border-border-1 pt-md"
+        >
           <ProfileMediaField
             v-model="data.faviconAssetUuid"
             v-model:media="faviconMedia"
@@ -252,16 +237,16 @@ const siteHost = computed(() => {
             :description="phrase.profile_favicon_hint"
             profile="profile-favicon"
             image-only
+            details-aside
             :usage-delta="usageDelta"
-            class="shrink-0"
+            class="max-w-full grow basis-72 sm:grow-0"
           />
           <ProfileFaviconPreview
             :media="faviconMedia"
             :site-name="data.displayName"
-            :site-host="siteHost"
           />
-        </Box>
-      </section>
+        </div>
+      </Box>
       <StatusHistoryField
         ref="statusField"
         v-model:new-statuses="data.newStatuses"

@@ -282,15 +282,8 @@ export default defineI18nModule({
     profile_avatar_hint: 'Основное изображение вашего профиля.',
     profile_banner: 'Баннер',
     profile_banner_hint: 'Широкое изображение в шапке профиля.',
-    profile_favicon: 'Favicon сайта',
-    profile_favicon_hint:
-      'Показывается во вкладках браузера, закладках, на домашнем экране телефона и в поиске.',
-    profile_favicon_section: 'Иконка сайта',
-    profile_favicon_section_hint:
-      'Одно квадратное изображение. Thei сам соберёт из него ico, png и touch-версии для вкладок, домашнего экрана и поисковой выдачи.',
-    favicon_preview_tab_light: 'Светлая вкладка',
-    favicon_preview_tab_dark: 'Тёмная вкладка',
-    favicon_preview_home_screen: 'Домашний экран',
+    profile_favicon: 'Иконка сайта',
+    profile_favicon_hint: 'Показывается во вкладках браузера и в поиске.',
     profile_status: 'Статус',
     profile_status_hint:
       'Короткая мысль или настроение. Последний статус виден в профиле, прошлые — на шкале Жизни.',
