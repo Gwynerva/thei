@@ -221,6 +221,66 @@ describe('Life point construction', () => {
     ]);
   });
 
+  it('opens a day with its diary entry', () => {
+    const ordered = sortLifePoints([
+      point('event:a', '2026-08-22', 'ended'),
+      point('project:a', '2026-08-22', 'created', 1, 'project'),
+      point('diary-entry:a', '2026-08-22', 'created', 0, 'diary-entry'),
+    ]);
+    expect(ordered.map((item) => item.identity)).toEqual([
+      'diary-entry:a',
+      'event:a',
+      'project:a',
+    ]);
+  });
+
+  it('puts a project under its own parts from the day it was created', () => {
+    const ordered = sortLifePoints([
+      {
+        ...point('project:a', '2026-08-22', 'created', 3, 'project'),
+        projectUuids: ['a'],
+      },
+      {
+        ...point(
+          'project-stage:s',
+          '2026-08-22',
+          'started',
+          0,
+          'project-stage',
+        ),
+        projectUuids: ['a'],
+      },
+      {
+        ...point('project-section:x', '2026-08-22', 'created', 1),
+        entityKind: 'project-section',
+        projectUuids: ['a'],
+      },
+      {
+        ...point(
+          'project-stage:o',
+          '2026-08-22',
+          'started',
+          0,
+          'project-stage',
+        ),
+        projectUuids: ['b'],
+      },
+      point('event:z', '2026-08-22', 'started'),
+      {
+        ...point('project-stage:y', '2026-08-21', 'ended', 0, 'project-stage'),
+        projectUuids: ['a'],
+      },
+    ]);
+    expect(ordered.map((item) => item.identity)).toEqual([
+      'project-section:x',
+      'event:z',
+      'project-stage:o',
+      'project-stage:s',
+      'project:a',
+      'project-stage:y',
+    ]);
+  });
+
   it('groups project timestamps by their UTC day', () => {
     expect(projectCreatedUtcDate('2026-08-21T23:30:00-03:00')).toBe(
       '2026-08-22',

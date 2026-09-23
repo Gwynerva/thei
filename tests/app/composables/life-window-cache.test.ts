@@ -32,11 +32,18 @@ describe('bounded life windows', () => {
   it('virtualizes individual cards in a dense day and the intervening gaps', () => {
     const rows = lifeFeedRows([
       cacheLifeWindow(windowData('2026-09-02', 5000), {}),
-      cacheLifeWindow(windowData('2026-09-01'), {}),
+      cacheLifeWindow(windowData('2026-08-01'), {}),
     ]);
     expect(rows).toHaveLength(5002);
     expect(rows.filter((row) => row.kind === 'gap')).toHaveLength(1);
     expect(new Set(rows.map((row) => row.key)).size).toBe(rows.length);
+  });
+  it('lets days under a week apart follow each other without a gap', () => {
+    const rows = lifeFeedRows([
+      cacheLifeWindow(windowData('2026-09-08'), {}),
+      cacheLifeWindow(windowData('2026-09-02'), {}),
+    ]);
+    expect(rows.map((row) => row.kind)).toEqual(['point', 'point']);
   });
   it('evicts distant payloads, retaining focus, the active window and reload cursors', () => {
     const windows = Array.from({ length: 30 }, (_, index) => {

@@ -9,9 +9,6 @@ const props = withDefaults(
   defineProps<{ duration: LifeGapDuration; tone?: LifeRailTone }>(),
   { tone: 'accent' },
 );
-const hasGap = computed(
-  () => props.duration.years + props.duration.months + props.duration.days > 0,
-);
 const style = computed(() => lifeGapStyle(props.duration));
 const label = computed(() =>
   phrase.value.life_gap(
@@ -23,54 +20,61 @@ const label = computed(() =>
 </script>
 
 <template>
-  <LifeTimelineGrid v-if="hasGap">
+  <LifeTimelineGrid>
+    <!--
+      The label keeps its distance from the cards above, and the cut in the
+      rail keeps the same distance, so the two slashes stay centred on the
+      label. Below it the next day's date is gap enough.
+    -->
     <div
-      class="life-gap relative flex justify-center [--life-gap-cut-bottom:1rem]
-        [--life-gap-cut-top:1rem] [--life-gap-slash:1rem]
-        sm:[--life-gap-cut-bottom:1.4rem] sm:[--life-gap-cut-top:1.6rem]
+      class="life-gap relative flex justify-center [--life-gap-cut:0.3rem]
+        [--life-gap-pad:var(--spacing-md)] [--life-gap-slash:1rem]
+        sm:[--life-gap-cut:0.4rem] sm:[--life-gap-pad:var(--spacing-lg)]
         sm:[--life-gap-slash:1.35rem]"
       :class="[`life-gap--${style}`, `life-gap--${tone}`]"
       aria-hidden="true"
     >
       <!--
-        Under a week the rail simply runs on. Past that it is cut by two
-        parallel slashes, and what runs between them says how long the pause
-        was: a faded line, a dashed one, or nothing at all.
+        Under a week there is no gap at all: the feed does not emit one. Past
+        that the rail is cut by two parallel slashes, and what runs between
+        them says how long the pause was: a faded line, a dashed one, or
+        nothing at all.
       -->
       <span
-        v-if="style === 'none'"
-        class="life-gap-rail absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2
+        class="life-gap-stub life-gap-stub--top absolute top-0 left-1/2 w-0.5
+          -translate-x-1/2 sm:w-1"
+      ></span>
+      <span
+        v-if="style !== 'empty'"
+        class="life-gap-middle absolute left-1/2 w-0.5 -translate-x-1/2 sm:w-1"
+      ></span>
+      <span
+        class="life-gap-stub life-gap-stub--bottom absolute bottom-0 left-1/2
+          w-0.5 -translate-x-1/2 sm:w-1"
+      ></span>
+      <span
+        class="life-gap-slash life-gap-slash--top absolute left-1/2 w-0.5
           sm:w-1"
       ></span>
-      <template v-else>
-        <span
-          class="life-gap-stub life-gap-stub--top absolute top-0 left-1/2 w-0.5
-            -translate-x-1/2 sm:w-1"
-        ></span>
-        <span
-          v-if="style !== 'empty'"
-          class="life-gap-middle absolute left-1/2 w-0.5 -translate-x-1/2
-            sm:w-1"
-        ></span>
-        <span
-          class="life-gap-stub life-gap-stub--bottom absolute bottom-0 left-1/2
-            w-0.5 -translate-x-1/2 sm:w-1"
-        ></span>
-        <span
-          class="life-gap-slash life-gap-slash--top absolute left-1/2 w-0.5
-            sm:w-1"
-        ></span>
-        <span
-          class="life-gap-slash life-gap-slash--bottom absolute left-1/2 w-0.5
-            sm:w-1"
-        ></span>
-      </template>
+      <span
+        class="life-gap-slash life-gap-slash--bottom absolute left-1/2 w-0.5
+          sm:w-1"
+      ></span>
     </div>
-    <p
-      class="pt-md pb-sm text-sm text-text-3 italic sm:pt-lg sm:pb-md
-        sm:text-base"
-    >
-      {{ label }}
+    <!--
+      Only the words themselves sharpen on hover, not the empty row. The label
+      reads as lowercase, whose letters sit below the middle of the line box,
+      so it is lifted by that much to look centred between the slashes rather
+      than only measure so.
+    -->
+    <p class="pt-md text-sm text-text-3 italic sm:pt-lg">
+      <span class="flex min-h-12 items-center sm:min-h-16">
+        <span
+          class="-translate-y-[0.1em] opacity-60 transition-opacity
+            hocus:opacity-100"
+          >{{ label }}</span
+        >
+      </span>
     </p>
   </LifeTimelineGrid>
 </template>
@@ -97,7 +101,6 @@ const label = computed(() =>
   --life-gap-top: var(--color-text-warning);
 }
 
-.life-gap-rail,
 .life-gap-middle {
   background: linear-gradient(
     to bottom,
@@ -106,7 +109,6 @@ const label = computed(() =>
   );
 }
 
-.life-gap-rail,
 .life-gap-stub,
 .life-gap-slash {
   opacity: var(--life-gap-opacity);
@@ -120,6 +122,11 @@ const label = computed(() =>
 .life-gap-stub--bottom,
 .life-gap-slash--bottom {
   background: var(--life-gap-bottom);
+}
+
+.life-gap {
+  --life-gap-cut-top: calc(var(--life-gap-pad) + var(--life-gap-cut));
+  --life-gap-cut-bottom: var(--life-gap-cut);
 }
 
 .life-gap-stub--top {

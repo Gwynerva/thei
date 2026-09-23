@@ -15,6 +15,11 @@ const props = defineProps<{
    * for every card whose date says nothing the day's header does not.
    */
   hideDate?: boolean;
+  /**
+   * The card hangs on the chronology rail, whose marker already shows its
+   * kind, so a card without an image of its own draws no stand-in icon.
+   */
+  onRail?: boolean;
 }>();
 
 const description = computed(() => {
@@ -89,6 +94,7 @@ const projects = computed(() =>
     :date-style="dateStyle"
     :rewind="Boolean(rewindMatch)"
     :hide-date="hideDate"
+    :hide-fallback-icon="onRail"
   />
   <PublicContentCard
     v-else-if="point.visibility === 'visible'"

@@ -9,6 +9,8 @@ export type LifeBoundaryLike = {
   sortTime: number;
   entityKind: string;
   period?: DateRange;
+  /** The projects a point belongs to, used to keep a project below its parts. */
+  projectUuids?: readonly string[];
 };
 
 export type LifeDayViewportRect = {
@@ -103,10 +105,18 @@ export function lifePointSortRank(point: Pick<LifeBoundaryLike, 'transition'>) {
   return 1;
 }
 
+/** A day's diary entry opens its segment, whatever else happened that day. */
+function lifePointTier(point: Pick<LifeBoundaryLike, 'entityKind'>) {
+  return point.entityKind === 'diary-entry' ? 0 : 1;
+}
+
+const PROJECT_PART_KINDS = new Set(['project-stage', 'project-section']);
+
 export function sortLifePoints<T extends LifeBoundaryLike>(points: T[]) {
-  return [...points].sort(
+  const sorted = [...points].sort(
     (left, right) =>
       right.date.localeCompare(left.date) ||
+      lifePointTier(left) - lifePointTier(right) ||
       lifePointSortRank(right) - lifePointSortRank(left) ||
       (left.transition === 'created' && right.transition === 'created'
         ? right.sortTime - left.sortTime
@@ -114,6 +124,44 @@ export function sortLifePoints<T extends LifeBoundaryLike>(points: T[]) {
       left.entityKind.localeCompare(right.entityKind) ||
       left.identity.localeCompare(right.identity),
   );
+  return withProjectsBelowTheirParts(sorted);
+}
+
+/**
+ * A project created on the same day as some of its stages or sections is
+ * placed under them: the project came first, so read newest first its parts
+ * are above it. Done as a pass over the sorted list, because a pairwise "a part
+ * before its project" rule next to the rank rule would not be a consistent
+ * order.
+ */
+function withProjectsBelowTheirParts<T extends LifeBoundaryLike>(
+  points: T[],
+): T[] {
+  const result = [...points];
+  for (let index = result.length - 1; index >= 0; index--) {
+    const project = result[index]!;
+    if (project.entityKind !== 'project' || project.transition !== 'created')
+      continue;
+    const projectUuid = project.projectUuids?.[0];
+    if (!projectUuid) continue;
+    let lastPart = -1;
+    for (
+      let cursor = index + 1;
+      cursor < result.length && result[cursor]!.date === project.date;
+      cursor++
+    ) {
+      const point = result[cursor]!;
+      if (
+        PROJECT_PART_KINDS.has(point.entityKind) &&
+        point.projectUuids?.includes(projectUuid)
+      )
+        lastPart = cursor;
+    }
+    if (lastPart < 0) continue;
+    result.splice(index, 1);
+    result.splice(lastPart, 0, project);
+  }
+  return result;
 }
 
 export function lifePointIsVisible(

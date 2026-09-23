@@ -6,6 +6,8 @@ const props = defineProps<{
   dateStyle?: 'long' | 'short';
   rewind?: boolean;
   hideDate?: boolean;
+  /** Leaves out the generic status icon a status without media stands in. */
+  hideFallbackIcon?: boolean;
 }>();
 
 const isAvatar = computed(() => props.point.entityKind === 'profile-avatar');
@@ -26,7 +28,7 @@ const isAvatar = computed(() => props.point.entityKind === 'profile-avatar');
           : 'size-8 rounded-normal'
       "
     /><span
-      v-else-if="point.entityKind === 'profile-status'"
+      v-else-if="point.entityKind === 'profile-status' && !hideFallbackIcon"
       class="flex size-8 shrink-0 items-center justify-center rounded-normal
         text-xl"
       :class="

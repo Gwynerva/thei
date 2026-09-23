@@ -111,12 +111,19 @@ export function useLifeFeed(
     mounted.value ? virtualizer.value.getTotalSize() : undefined,
   );
 
-  function trackerBottom() {
-    return (
-      document
-        .querySelector<HTMLElement>('[data-life-sticky-bar]')
-        ?.getBoundingClientRect().bottom ?? 0
-    );
+  /**
+   * Where the visible feed begins. The bar covers the feed only once it is
+   * stuck; before then it is hidden, and the feed is read from where the bar
+   * would start. Scrolling to a day always leaves room for it, because the
+   * scroll is what sticks it, and the stuck state is only observed later.
+   */
+  function trackerBottom(assumeStuck = false) {
+    const bar = document.querySelector<HTMLElement>('[data-life-sticky-bar]');
+    if (!bar) return 0;
+    const rect = bar.getBoundingClientRect();
+    return assumeStuck || bar.closest('[data-sticky-stuck]')
+      ? rect.bottom
+      : rect.top;
   }
   function viewportItems() {
     const top = window.scrollY + trackerBottom();
@@ -317,23 +324,30 @@ export function useLifeFeed(
     pending.clear();
     for (const key of Object.keys(errors)) delete errors[key];
   }
-  async function positionAt(date: string) {
+  /**
+   * Brings the day into view. Without `scroll` the page stays where it is:
+   * a reader still above the feed, looking at the page's own header, keeps
+   * looking at it while the feed under it changes.
+   */
+  async function positionAt(date: string, scroll = true) {
     const positionGeneration = generation;
     positioned.value = false;
     activeDate.value = date;
     await nextTick();
     if (disposed || generation !== positionGeneration) return;
     syncGeometry();
-    const index = rows.value.findIndex(
-      (row) => row.date === date && row.kind === 'point',
-    );
+    const index = !scroll
+      ? -1
+      : rows.value.findIndex(
+          (row) => row.date === date && row.kind === 'point',
+        );
     if (index >= 0) {
       virtualizer.value.scrollToIndex(index, { align: 'start' });
       await new Promise<void>((resolve) =>
         requestAnimationFrame(() => resolve()),
       );
       if (disposed || generation !== positionGeneration) return;
-      scrollPaddingStart.value = trackerBottom();
+      scrollPaddingStart.value = trackerBottom(true);
       await nextTick();
       if (disposed || generation !== positionGeneration) return;
       virtualizer.value.scrollToIndex(index, { align: 'start' });
@@ -341,7 +355,7 @@ export function useLifeFeed(
     positioned.value = true;
     schedule();
   }
-  async function reset(data: LifeWindowResponse, date?: string) {
+  async function reset(data: LifeWindowResponse, date?: string, scroll = true) {
     cancel();
     focusedKey.value = undefined;
     positioned.value = false;
@@ -349,7 +363,7 @@ export function useLifeFeed(
     windows.value = [cacheLifeWindow(data, { d: date })];
     newestDate.value = data.newestDate;
     virtualizer.value.measure();
-    await positionAt(data.anchorDate);
+    await positionAt(data.anchorDate, scroll);
   }
   onMounted(async () => {
     syncGeometry();

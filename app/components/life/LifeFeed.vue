@@ -8,6 +8,7 @@ import {
   type LifeWindowResponse,
 } from '#layers/thei/shared/life';
 import type { LifeFeedRow } from '#layers/thei/app/composables/life-window-cache';
+import type { MediaDescriptor } from '#layers/thei/shared/media';
 import type { IconName } from '#thei/icons';
 
 /**
@@ -23,6 +24,8 @@ const { initial, scope, basePath, initialDate, trackLastVisit } = defineProps<{
   /** Where this feed lives, e.g. `/life/` or a project's timeline tab. */
   basePath: string;
   scopeIcon: IconName;
+  /** The scope's own picture, such as a project's icon, shown over the glyph. */
+  scopeMedia?: MediaDescriptor;
   scopeLabel: string;
   initialDate?: string;
   /** Only the Life page marks days as new since the last visit. */
@@ -85,6 +88,58 @@ function gapTone(row: LifeFeedRow): LifeRailTone {
     : 'accent';
 }
 
+/**
+ * The day under the reader's pointer or focus. A day is several rows of the
+ * feed, so each row reports it here and all of them light up together.
+ */
+const hoveredDate = ref<string>();
+function hoverDay(date: string, hovered: boolean) {
+  if (hovered) hoveredDate.value = date;
+  else if (hoveredDate.value === date) hoveredDate.value = undefined;
+}
+
+/**
+ * Where each rendered day lies in the feed, for its glow. Only rows that
+ * follow each other count as one run, so a row kept rendered far away because
+ * it holds focus does not stretch a day over everything in between.
+ */
+const dayRuns = computed(() => {
+  const runs: {
+    key: string;
+    date: string;
+    top: number;
+    bottom: number;
+    first: boolean;
+    last: boolean;
+    index: number;
+  }[] = [];
+  for (const { row, item } of visibleRows.value) {
+    if (row.kind !== 'point') continue;
+    const top = item.start - scrollMargin.value;
+    const bottom = top + item.size;
+    const run = runs.at(-1);
+    if (run && run.date === row.date && run.index === item.index - 1) {
+      run.bottom = bottom;
+      run.last = row.last;
+      run.index = item.index;
+      continue;
+    }
+    // Keyed by the day, so the glow is not remounted — and does not fade in
+    // again — when another of its rows scrolls into view.
+    const repeated = runs.some((other) => other.date === row.date);
+    runs.push({
+      key: repeated ? `${row.date}:${item.index}` : row.date,
+      date: row.date,
+      top,
+      bottom,
+      first: row.first,
+      last: row.last,
+      index: item.index,
+    });
+  }
+  return runs;
+});
+
 /** The first day of a year gets the year drawn above its date. */
 const yearOpeners = computed(() => {
   const openers = new Set<string>();
@@ -114,14 +169,20 @@ watch([activeDate, mounted, positioned], ([date]) => {
   if (trackLastVisit) lifeLastVisit.considerActiveDay();
 });
 
+/** Whether the reader is inside the feed, which is when the bar is stuck. */
+const barStuck = ref(false);
+
 // A changed filter is a different feed: the cached windows describe the old
-// one, so the whole thing is refetched from the day the reader was on.
+// one, so the whole thing is refetched. Inside the feed it reopens on the day
+// the reader was on. Above it — the filter was changed from the page's own
+// header — it starts from the newest day and the page does not move.
 watch(filter, async () => {
   cancel();
+  const inside = barStuck.value;
   const result = await $fetch<LifeWindowResponse>('/api/life', {
-    query: { ...scopeQuery(), d: activeDate.value },
+    query: { ...scopeQuery(), ...(inside ? { d: activeDate.value } : {}) },
   });
-  await reset(result, result.anchorDate);
+  await reset(result, inside ? result.anchorDate : undefined, inside);
 });
 
 defineExpose({ reset, cancel, activeDate });
@@ -135,12 +196,14 @@ defineExpose({ reset, cancel, activeDate });
       :day="activeDay.date"
       :scope="scope"
       :scope-icon="scopeIcon"
+      :scope-media="scopeMedia"
       :scope-label="scopeLabel"
       :href="anchor.hrefFor(activeDay.date)"
       @pick="anchor.pick(activeDay.date)"
+      @stuck="barStuck = $event"
     />
     <div
-      class="m-auto w-(--width-wide) max-w-full pt-lg pr-window pb-xl pl-0
+      class="m-auto w-(--width-wide) max-w-full pt-lg pr-window pb-xl pl-xs
         sm:px-window"
     >
       <PublicEmptyState
@@ -174,6 +237,22 @@ defineExpose({ reset, cancel, activeDate });
                 : undefined
             "
           >
+            <template v-if="mounted">
+              <LifeDayGlow
+                v-for="run in dayRuns"
+                :key="run.key"
+                class="absolute left-0"
+                :style="{
+                  top: run.top + 'px',
+                  height: run.bottom - run.top + 'px',
+                }"
+                :warning="dayTone(run.date) === 'warning'"
+                :active="run.date === activeDate"
+                :highlighted="run.date === hoveredDate"
+                :fade-top="run.first"
+                :fade-bottom="run.last"
+              />
+            </template>
             <div
               v-for="{ row, item } in visibleRows"
               :key="row.key"
@@ -204,11 +283,12 @@ defineExpose({ reset, cancel, activeDate });
                 :point="row.point"
                 :tone="dayTone(row.date)"
                 :active="row.date === activeDate"
+                :highlighted="row.date === hoveredDate"
                 :first="row.first"
-                :last="row.last"
                 :show-year="row.first && yearOpeners.has(row.date)"
                 :date-href="anchor.hrefFor(row.date)"
                 @pick="anchor.pick(row.date)"
+                @hover="hoverDay(row.date, $event)"
               />
               <div
                 v-else

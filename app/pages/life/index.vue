@@ -104,7 +104,13 @@ watch(filter, (value) => {
         :description="
           preset ? phrase.diary_seo_description : phrase.public_life_description
         "
-      />
+      >
+        <LifeFilterButton
+          v-model:filter="filter"
+          :scope="LIFE_SCOPE_LIFE"
+          variant="header"
+        />
+      </PublicPageHeader>
     </div>
     <LifeFeed
       v-if="resource.data.value"

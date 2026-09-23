@@ -1,6 +1,7 @@
 import type { LifeDay, LifePoint, LifeWindowResponse } from '../../shared/life';
 import {
   lifeGapDuration,
+  lifeGapStyle,
   type LifeGapDuration,
 } from '../../shared/life-timeline';
 
@@ -64,14 +65,20 @@ export function lifeFeedRows(windows: LifeCachedWindow[]): LifeFeedRow[] {
       continue;
     }
     for (const day of window.data.days) {
-      if (previousDate && previousDate !== day.date)
+      // A pause under a week is not a break: the next day simply follows,
+      // without a cut in the rail or a line saying how long it was.
+      const duration =
+        previousDate && previousDate !== day.date
+          ? lifeGapDuration(previousDate, day.date)
+          : undefined;
+      if (previousDate && duration && lifeGapStyle(duration) !== 'none')
         rows.push({
           kind: 'gap',
           key: `gap:${day.date}`,
           windowId: window.id,
           date: day.date,
           newerDate: previousDate,
-          duration: lifeGapDuration(previousDate, day.date),
+          duration,
         });
       day.points.forEach((point, index) =>
         rows.push({

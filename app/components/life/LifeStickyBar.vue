@@ -1,30 +1,28 @@
 <script lang="ts" setup>
-import {
-  lifeFilterKinds,
-  type LifeEntityKind,
-  type LifeFilter,
-  type LifeScopeRef,
-} from '#layers/thei/shared/life';
+import type { LifeFilter, LifeScopeRef } from '#layers/thei/shared/life';
+import type { MediaDescriptor } from '#layers/thei/shared/media';
 import type { IconName } from '#thei/icons';
-import { lifeEntityKindIcon } from './life-entity-icon';
 
 /**
  * The second sticky bar: which day the reader is on, and what the feed shows.
  *
- * It only paints itself once it is actually stuck. Unstuck it would sit over
- * the page's top glow with an opaque plate, which is the one thing the glow is
- * there for.
+ * It only appears once it is actually stuck, and takes no room before then:
+ * above the feed the page already says all of it — the first day's header
+ * gives the date, and the page carries its own filter — so an unstuck bar
+ * would only hang between the two.
  */
 const { day, scope, scopeIcon } = defineProps<{
   day: string;
   scope: LifeScopeRef;
   /** Heart for a life, the project's own icon for a project. */
   scopeIcon: IconName;
+  /** A project's own icon; the glyph stands in only where there is none. */
+  scopeMedia?: MediaDescriptor;
   scopeLabel: string;
   href: string;
 }>();
 
-const emit = defineEmits<{ pick: [] }>();
+const emit = defineEmits<{ pick: []; stuck: [boolean] }>();
 const filter = defineModel<LifeFilter>('filter');
 
 const isAdmin = useIsAdmin();
@@ -79,32 +77,6 @@ const parts = computed(() => {
   ];
 });
 
-const kinds = computed(() => lifeFilterKinds(scope));
-const isCustom = computed(() => Boolean(filter.value?.length));
-const filterOpen = ref(false);
-const filterAnchor = useTemplateRef<HTMLElement>('filterAnchor');
-
-function isShown(kind: LifeEntityKind) {
-  return !filter.value || filter.value.includes(kind);
-}
-
-function toggle(kind: LifeEntityKind) {
-  const current = filter.value ?? kinds.value;
-  const next = current.includes(kind)
-    ? current.filter((item) => item !== kind)
-    : [...current, kind];
-  // Nothing selected reads as "show everything" rather than an empty feed,
-  // which is the only reading that leaves a way back.
-  filter.value =
-    next.length === 0 || next.length === kinds.value.length
-      ? undefined
-      : kinds.value.filter((item) => next.includes(item));
-}
-
-function showAll() {
-  filter.value = undefined;
-}
-
 /**
  * The bar reports its own stuck state so the site header can drop its shadow:
  * two stacked shadows read as a seam, and only the lower bar should cast one.
@@ -129,7 +101,13 @@ onMounted(() => {
   });
 });
 onBeforeUnmount(() => stuckObserver?.disconnect());
-watch(stuck, (value) => publicHeader?.setSecondaryStuck(value));
+const filterOpen = ref(false);
+watch(stuck, (value) => {
+  emit('stuck', value);
+  publicHeader?.setSecondaryStuck(value);
+  // Its popup would be left pointing at a bar that is no longer there.
+  if (!value) filterOpen.value = false;
+});
 onBeforeUnmount(() => publicHeader?.setSecondaryStuck(false));
 </script>
 
@@ -140,34 +118,49 @@ onBeforeUnmount(() => publicHeader?.setSecondaryStuck(false));
     It exists only to give the stuck-state observer something to watch.
   -->
   <div ref="barRoot" class="contents">
-    <Sticky
-      data-life-sticky-bar
-      :top="top"
-      class="z-10 shadow-lg shadow-transparent transition-shadow
-        sticky-stuck:shadow-shadow-1"
-    >
+    <!--
+      The sticky box is zero-high, so the bar overlays the feed instead of
+      pushing it down, and is only shown once stuck.
+    -->
+    <Sticky :top="top" class="z-10 h-0">
       <div
-        class="border-b border-transparent transition-colors
-          sticky-stuck:border-border-1 sticky-stuck:bg-bg-1/70
-          sticky-stuck:backdrop-blur-md"
+        data-life-sticky-bar
+        class="border-b border-border-1 bg-bg-1/70 shadow-lg shadow-shadow-1
+          backdrop-blur-md transition-[opacity,translate,visibility]
+          duration-200 motion-reduce:duration-0"
+        :class="
+          stuck
+            ? 'visible translate-y-0 opacity-100'
+            : 'invisible -translate-y-1 opacity-0'
+        "
       >
         <!--
           The side padding matches the feed's, and the icon sits in a slot as
           wide as the rail column, so its centre lands on the rail on both
-          layouts. The icon only appears once the bar is stuck: above the feed
-          it would sit over the page glow without the plate that frames it.
+          layouts.
         -->
         <nav
           class="m-auto grid w-(--width-wide) max-w-full
-            grid-cols-[1fr_auto_1fr] items-center gap-sm py-xs pr-window pl-0
+            grid-cols-[1fr_auto_1fr] items-center gap-sm py-xs pr-window pl-xs
             sm:px-window"
           :aria-label="scopeLabel"
         >
           <span class="flex w-8 justify-center justify-self-start sm:w-16">
+            <Media
+              v-if="scopeMedia"
+              v-bind="scopeMedia"
+              fit="contain"
+              playback="autoplay"
+              autoplay-reduced-motion
+              loop
+              muted
+              class="size-8 shrink-0 rounded-sm"
+              :data-title-popup="scopeLabel"
+            />
             <span
+              v-else
               class="flex size-8 shrink-0 items-center justify-center rounded-sm
-                bg-accent/10 text-accent opacity-0 transition-opacity
-                motion-reduce:transition-none sticky-stuck:opacity-100"
+                bg-accent/10 text-accent"
               :data-title-popup="scopeLabel"
             >
               <Icon :name="scopeIcon" />
@@ -209,69 +202,13 @@ onBeforeUnmount(() => publicHeader?.setSecondaryStuck(false));
             </span>
           </TheiLink>
 
-          <div class="shrink-0 justify-self-end">
-            <button
-              ref="filterAnchor"
-              type="button"
-              class="relative flex size-9 cursor-pointer items-center
-                justify-center rounded-sm text-text-2 transition hocus:bg-bg-3
-                hocus:text-text-1"
-              :aria-label="phrase.life_filter"
-              :aria-expanded="filterOpen"
-              :data-title-popup="phrase.life_filter"
-              @click="filterOpen = !filterOpen"
-            >
-              <Icon name="filter" />
-              <span
-                v-if="isCustom"
-                class="absolute top-1 right-1 size-2 rounded-full bg-accent"
-                aria-hidden="true"
-              ></span>
-            </button>
-            <FloatingPopup
-              v-model:open="filterOpen"
-              :anchor="filterAnchor"
-              placement="bottom-end"
-              max-width="16rem"
-            >
-              <section
-                class="flex flex-col gap-1 rounded-normal border border-border-1
-                  bg-bg-2 p-xs text-text-1"
-                role="dialog"
-                :aria-label="phrase.life_filter"
-              >
-                <label
-                  v-for="kind in kinds"
-                  :key="kind"
-                  class="flex cursor-pointer items-center gap-sm rounded-sm
-                    px-xs py-1 text-sm transition hocus:bg-bg-3"
-                >
-                  <input
-                    type="checkbox"
-                    class="accent-accent"
-                    :checked="isShown(kind)"
-                    @change="toggle(kind)"
-                  />
-                  <Icon
-                    :name="lifeEntityKindIcon(kind)"
-                    class="shrink-0 text-text-3"
-                  />
-                  <span class="min-w-0 flex-1 truncate">{{
-                    phrase.life_filter_kind(kind)
-                  }}</span>
-                </label>
-                <button
-                  v-if="isCustom"
-                  type="button"
-                  class="mt-1 cursor-pointer rounded-sm px-xs py-1 text-left
-                    text-sm font-semibold text-accent transition hocus:bg-bg-3"
-                  @click="showAll"
-                >
-                  {{ phrase.life_filter_all }}
-                </button>
-              </section>
-            </FloatingPopup>
-          </div>
+          <LifeFilterButton
+            v-model:filter="filter"
+            v-model:open="filterOpen"
+            :scope="scope"
+            variant="bar"
+            class="justify-self-end"
+          />
         </nav>
       </div>
     </Sticky>

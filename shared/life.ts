@@ -8,15 +8,19 @@ import type { DatePrecisionInfo } from './date-precision';
 import type { MediaDescriptor } from './media';
 import type { StatusKind } from './status';
 
+/**
+ * Every kind of point, in the order a reader is offered them: the three main
+ * entities first, then the parts of a project, then everything around them.
+ */
 export const LIFE_ENTITY_KINDS = [
-  'event',
   'project',
-  'page',
+  'event',
+  'diary-entry',
   'project-stage',
   'project-section',
-  'profile-avatar',
+  'page',
   'profile-status',
-  'diary-entry',
+  'profile-avatar',
 ] as const;
 export type LifeEntityKind = (typeof LIFE_ENTITY_KINDS)[number];
 export type LifeTransition = 'started' | 'ended' | 'occurred' | 'created';
@@ -107,10 +111,10 @@ export type LifeScopeRef =
  */
 export const PROJECT_LIFE_ENTITY_KINDS = [
   'event',
+  'diary-entry',
   'project-stage',
   'project-section',
   'profile-status',
-  'diary-entry',
 ] as const satisfies readonly LifeEntityKind[];
 
 export function lifeFilterKinds(

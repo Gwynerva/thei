@@ -50,9 +50,9 @@ const tabs = computed(() => [
         :key="tab.key"
         :to="tab.href"
         :aria-current="tab.key === active ? 'page' : undefined"
-        class="relative flex items-center gap-xs px-sm py-sm text-sm
+        class="relative flex items-center gap-xs px-xs py-sm text-sm
           font-semibold transition focus-visible:ring-2 focus-visible:ring-white
-          focus-visible:ring-inset"
+          focus-visible:ring-inset sm:px-sm"
         :class="
           tab.key === active
             ? 'text-white'
@@ -70,10 +70,19 @@ const tabs = computed(() => [
         </span>
         <span
           v-if="tab.key === active"
-          class="absolute inset-x-sm bottom-0 h-0.5 rounded-full bg-white"
+          class="absolute inset-x-xs bottom-0 h-0.5 rounded-full bg-white
+            sm:inset-x-sm"
           aria-hidden="true"
         />
       </TheiLink>
+      <!--
+        Controls for the open tab, such as the chronology's filter. On a phone
+        they join the centred tabs rather than float over them; from sm up
+        they keep to the right edge.
+      -->
+      <div v-if="$slots.end" class="flex items-center sm:ml-auto">
+        <slot name="end" />
+      </div>
     </div>
   </nav>
 </template>

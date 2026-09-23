@@ -10,10 +10,12 @@ const { date, showYear } = defineProps<{
   date: string;
   showYear: boolean;
   active?: boolean;
+  /** The reader is pointing at the day, here or on its rail. */
+  highlighted?: boolean;
   href: string;
 }>();
 
-const emit = defineEmits<{ pick: [] }>();
+const emit = defineEmits<{ pick: []; hover: [boolean] }>();
 
 const parsed = computed(() => new Date(`${date}T00:00:00Z`));
 const year = computed(() => date.slice(0, 4));
@@ -42,9 +44,18 @@ const monthName = computed(
     <TheiLink
       :to="href"
       class="flex flex-col items-end leading-none font-bold transition-colors"
-      :class="active ? 'text-accent' : 'text-text-3/45 hocus:text-accent/80'"
-      :data-title-popup="phrase.life_copy_link"
+      :class="
+        active
+          ? 'text-accent'
+          : highlighted
+            ? 'text-accent/80'
+            : 'text-text-3/45'
+      "
       @click="emit('pick')"
+      @pointerenter="emit('hover', true)"
+      @pointerleave="emit('hover', false)"
+      @focus="emit('hover', true)"
+      @blur="emit('hover', false)"
     >
       <span
         v-if="showYear"

@@ -144,7 +144,15 @@ watch(filter, (value) => {
           :public-id="project.publicId"
           :timeline-count="project.timeline.total"
           active="timeline"
-        />
+        >
+          <template #end>
+            <LifeFilterButton
+              v-model:filter="filter"
+              :scope="scope"
+              variant="tabs"
+            />
+          </template>
+        </PublicProjectTabs>
       </template>
     </PublicProjectHero>
 
@@ -159,6 +167,7 @@ watch(filter, (value) => {
       :scope="scope"
       :base-path="base"
       scope-icon="project"
+      :scope-media="project.iconMedia"
       :scope-label="project.title"
       :initial-date="requestedDate"
     />
