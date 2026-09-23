@@ -78,7 +78,9 @@ function dayOf(item: DiaryListItem) {
           <Icon
             v-if="item.reminder"
             name="warning"
-            :data-title-popup="`${phrase.entity_reminder_badge}: ${item.reminder}`"
+            v-bind="
+              reminderTitlePopup(phrase.entity_reminder_badge, item.reminder)
+            "
             :aria-label="phrase.entity_reminder_badge"
             role="img"
             class="cursor-help text-text-warning"

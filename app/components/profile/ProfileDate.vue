@@ -16,7 +16,7 @@ const presentation = computed(() =>
 <template>
   <time
     :datetime="new Date(timestamp).toISOString()"
-    :data-title-popup="presentation.title"
+    v-bind="titlePopup(...(presentation.title ?? []))"
     class="text-xs text-text-3"
     >{{ presentation.label }}</time
   >

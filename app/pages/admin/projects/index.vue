@@ -74,7 +74,9 @@ const list = computed<ProjectListResponse | undefined>(() => data.value);
           <Icon
             v-if="project.reminder"
             name="warning"
-            :data-title-popup="`${phrase.entity_reminder_badge}: ${project.reminder}`"
+            v-bind="
+              reminderTitlePopup(phrase.entity_reminder_badge, project.reminder)
+            "
             :aria-label="phrase.entity_reminder_badge"
             role="img"
             class="cursor-help text-text-warning"

@@ -36,7 +36,7 @@ describe('formatPublicDate', () => {
   it('formats recent dates relatively and provides the absolute popup title', () => {
     expect(getPublicDatePresentation('2026-08-23', 'ru', now)).toEqual({
       label: 'сегодня',
-      title: '23 августа 2026',
+      title: ['23 августа 2026'],
     });
     expect(getPublicDatePresentation('2026-08-22', 'ru', now).label).toBe(
       'вчера',
@@ -66,7 +66,7 @@ describe('formatPublicDate', () => {
       }),
     ).toEqual({
       label: '3 месяца назад',
-      title: '23 мая 2026',
+      title: ['23 мая 2026'],
     });
     expect(
       getPublicDatePresentation('2026-05-22', 'ru', now, {
@@ -82,7 +82,7 @@ describe('formatPublicDate', () => {
       }),
     ).toEqual({
       label: '2 дн. назад',
-      title: '21 августа 2026',
+      title: ['21 августа 2026'],
     });
     expect(
       getPublicDatePresentation('2026-05-23', 'ru', now, {
@@ -96,6 +96,26 @@ describe('formatPublicDate', () => {
         style: 'short',
       }).label,
     ).toBe('22.05.2026');
+  });
+
+  it('puts the owner note on its own italic line under the doubt', () => {
+    expect(
+      getPublicDatePresentation(
+        {
+          startDate: '2020-01-01',
+          endDate: '2020-01-01',
+          precision: 'month',
+          precisionNote: 'somewhere that winter',
+        },
+        'en',
+        now,
+        { precisionLabels: { month: 'Day and month are a guess' } },
+      ).title,
+    ).toEqual([
+      'Day and month are a guess',
+      { gap: true },
+      { text: 'somewhere that winter', italic: true },
+    ]);
   });
 
   it('keeps old and future single dates absolute', () => {

@@ -175,7 +175,7 @@ const hasFooter = computed(
           <TheiLink
             v-if="dateHref"
             :to="dateHref"
-            :data-title-popup="datePresentation.title"
+            v-bind="titlePopup(...(datePresentation.title ?? []))"
             class="pointer-events-auto relative z-3 inline-flex items-center
               gap-1 text-text-3 transition focus-visible:ring-2
               focus-visible:ring-accent hocus:text-accent"
@@ -187,7 +187,7 @@ const hasFooter = computed(
           <time
             v-else
             :datetime="date"
-            :data-title-popup="datePresentation.title"
+            v-bind="titlePopup(...(datePresentation.title ?? []))"
             class="inline-flex items-center gap-1 text-text-3"
             :class="datePresentationToneClass(datePresentation)"
           >
@@ -198,7 +198,7 @@ const hasFooter = computed(
         <Icon
           v-if="reminder"
           name="warning"
-          :data-title-popup="`${phrase.entity_reminder_badge}: ${reminder}`"
+          v-bind="reminderTitlePopup(phrase.entity_reminder_badge, reminder)"
           :aria-label="phrase.entity_reminder_badge"
           role="img"
           class="pointer-events-auto relative z-3 shrink-0 text-text-warning"

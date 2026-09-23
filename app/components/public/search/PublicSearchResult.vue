@@ -73,7 +73,9 @@ const accent = computed(() =>
           role="img"
           class="pointer-events-auto relative z-3 shrink-0 cursor-help
             text-text-warning"
-          :data-title-popup="`${phrase.entity_reminder_badge}: ${entity.reminder}`"
+          v-bind="
+            reminderTitlePopup(phrase.entity_reminder_badge, entity.reminder)
+          "
         />
         <Icon
           v-if="entity.cv"

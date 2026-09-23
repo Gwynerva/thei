@@ -13,7 +13,12 @@ import {
   publicTimelinePeriodDuration,
   sortPublicTimelineItemsNewestFirst,
 } from '#layers/thei/shared/public-timeline';
-import { formatAbsolutePublicDate } from '#layers/thei/app/composables/public-date';
+import {
+  approximateDateTitle,
+  formatAbsolutePublicDate,
+  publicDatePrecisionLabels,
+} from '#layers/thei/app/composables/public-date';
+import { titlePopup } from '#layers/thei/app/composables/title-popup-content';
 
 const props = defineProps<{ periods: (DateRange | DatedPeriod)[] }>();
 const orderedPeriods = computed(() =>
@@ -52,13 +57,13 @@ function approximateClass(period: DateRange | DatedPeriod) {
 function approximateTitle(period: DateRange | DatedPeriod) {
   if (!approximate(period)) return undefined;
   const { precision, precisionNote } = period as DatedPeriod;
-  const level = {
-    exact: '',
-    day: phrase.value.date_precision_day,
-    month: phrase.value.date_precision_month,
-    year: phrase.value.date_precision_year,
-  }[precision];
-  return precisionNote ? `${level} \u00b7 ${precisionNote}` : level;
+  return titlePopup(
+    ...approximateDateTitle(
+      precision,
+      precisionNote,
+      publicDatePrecisionLabels(),
+    ),
+  );
 }
 
 function periodDurationLabel(period: DateRange) {
@@ -122,7 +127,7 @@ function periodDurationLabel(period: DateRange) {
             :datetime="period.endDate"
             class="flex items-center gap-1 text-sm"
             :class="approximateClass(period)"
-            :data-title-popup="approximateTitle(period)"
+            v-bind="approximateTitle(period)"
           >
             <Icon v-if="approximate(period)" name="approximate" />
             <template v-if="publicTimelineIsDay(period)">
@@ -170,7 +175,7 @@ function periodDurationLabel(period: DateRange) {
             :datetime="period.startDate"
             class="flex items-center gap-1 text-sm"
             :class="approximateClass(period)"
-            :data-title-popup="approximateTitle(period)"
+            v-bind="approximateTitle(period)"
           >
             <Icon v-if="approximate(period)" name="approximate" />
             {{ phrase.public_timeline_from(formatDate(period.startDate)) }}

@@ -1,10 +1,18 @@
+import {
+  readTitlePopup,
+  type TitlePopupContentLine,
+} from '#layers/thei/app/composables/title-popup-content';
+
 function getTitlePopup(
   el: HTMLElement,
-): { text: string; popupClass: string } | null {
-  const text = el.dataset.titlePopup;
-  if (text === undefined) return null;
+): { lines: TitlePopupContentLine[]; popupClass: string } | null {
+  const lines = readTitlePopup(
+    el.dataset.titlePopup,
+    el.dataset.titlePopupRich,
+  );
+  if (!lines) return null;
   const popupClass = el.dataset.titlePopupClass ?? '';
-  return { text, popupClass };
+  return { lines, popupClass };
 }
 
 export default defineNuxtPlugin(() => {
@@ -76,7 +84,7 @@ export default defineNuxtPlugin(() => {
 
     if (anchor) {
       const data = getTitlePopup(anchor);
-      if (data) show(anchor, data.text, data.popupClass);
+      if (data) show(anchor, data.lines, data.popupClass);
       else hide();
     } else {
       hide();
@@ -113,7 +121,7 @@ export default defineNuxtPlugin(() => {
       currentAnchor = anchor;
       enableTouchScrollBreaker();
       enableTouchOutsideCloser(anchor);
-      show(anchor, data.text, data.popupClass);
+      show(anchor, data.lines, data.popupClass);
     },
     { passive: true },
   );

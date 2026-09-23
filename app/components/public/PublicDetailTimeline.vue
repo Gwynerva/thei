@@ -59,7 +59,7 @@ const orderedItems = computed(() =>
         </span>
         <time
           :datetime="item.date"
-          :data-title-popup="item.presentation.title"
+          v-bind="titlePopup(...(item.presentation.title ?? []))"
           class="mt-1 flex items-center gap-1 text-xs leading-none text-text-3"
           :class="datePresentationToneClass(item.presentation)"
         >

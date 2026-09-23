@@ -6,13 +6,17 @@ import {
   type DatePrecision,
   type DatePrecisionTone,
 } from '#layers/thei/shared/date-precision';
+import {
+  TITLE_POPUP_GAP,
+  type TitlePopupLine,
+} from '#layers/thei/app/composables/title-popup-content';
 
 export type PublicDateValue = string | DateRange | DatedPeriod;
 
 export type PublicDatePresentation = {
   label: string;
   /** The hover explanation: the exact date, the doubt, or both. */
-  title?: string;
+  title?: TitlePopupLine[];
   /** True when the owner said the date is a guess. */
   approximate?: boolean;
   tone?: DatePrecisionTone;
@@ -93,9 +97,25 @@ export function getPublicDatePresentation(
   return relative
     ? {
         label: relative,
-        title: formatAbsolutePublicDate(value, locale),
+        title: [formatAbsolutePublicDate(value, locale)],
       }
     : { label: absolute };
+}
+
+/**
+ * The doubt, spelled out for a popup: its level, then, after a blank line, the
+ * owner's own words for it.
+ */
+export function approximateDateTitle(
+  precision: DatePrecision,
+  note: string,
+  precisionLabels: Partial<Record<DatePrecision, string>>,
+): TitlePopupLine[] {
+  const lines: TitlePopupLine[] = [];
+  const level = precisionLabels[precision];
+  if (level) lines.push(level);
+  if (note) lines.push(TITLE_POPUP_GAP, { text: note, italic: true });
+  return lines;
 }
 
 /**
@@ -109,16 +129,19 @@ function withPrecision(
 ): PublicDatePresentation {
   if (!('precision' in value) || !isApproximateDate(value.precision))
     return presentation;
-  const parts = [
-    presentation.title,
-    options.precisionLabels?.[value.precision],
-    value.precisionNote || undefined,
-  ].filter(Boolean);
+  const title = [
+    ...(presentation.title ?? []),
+    ...approximateDateTitle(
+      value.precision,
+      value.precisionNote,
+      options.precisionLabels ?? {},
+    ),
+  ];
   return {
     ...presentation,
     approximate: true,
     tone: datePrecisionTone(value.precision),
-    title: parts.length ? parts.join(' \u00b7 ') : undefined,
+    title: title.length ? title : undefined,
   };
 }
 

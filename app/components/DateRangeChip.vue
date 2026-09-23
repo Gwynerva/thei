@@ -4,6 +4,11 @@ import {
   datePrecisionTone,
   type DatedPeriod,
 } from '#layers/thei/shared/date-precision';
+import {
+  approximateDateTitle,
+  publicDatePrecisionLabels,
+} from '#layers/thei/app/composables/public-date';
+import { titlePopup } from '#layers/thei/app/composables/title-popup-content';
 
 const props = withDefaults(
   defineProps<{
@@ -43,16 +48,17 @@ const note = computed(() =>
 const approximate = computed(() => precision.value !== 'exact');
 
 /** The doubt, spelled out: its level, then the owner's own words for it. */
-const approximateTitle = computed(() => {
-  if (!approximate.value) return undefined;
-  const level = {
-    exact: '',
-    day: phrase.value.date_precision_day,
-    month: phrase.value.date_precision_month,
-    year: phrase.value.date_precision_year,
-  }[precision.value];
-  return note.value ? `${level} · ${note.value}` : level;
-});
+const approximateTitle = computed(() =>
+  approximate.value
+    ? titlePopup(
+        ...approximateDateTitle(
+          precision.value,
+          note.value,
+          publicDatePrecisionLabels(),
+        ),
+      )
+    : undefined,
+);
 
 const toneClass = computed(() => {
   switch (datePrecisionTone(precision.value)) {
@@ -89,7 +95,7 @@ const toneClass = computed(() => {
         name="approximate"
         class="shrink-0"
         :class="toneClass"
-        :data-title-popup="approximateTitle"
+        v-bind="approximateTitle"
       />
       <span class="truncate" :class="toneClass">{{ label }}</span>
     </component>
