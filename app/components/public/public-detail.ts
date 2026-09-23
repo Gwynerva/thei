@@ -1,5 +1,6 @@
 import type {
-  PublicProjectLink,
+  PublicDiaryLink,
+  PublicEntityLink,
   PublicReferences,
   PublicTagSummary,
 } from '#layers/thei/shared/api/public';
@@ -18,7 +19,39 @@ export type PublicDetailTimelineItem = {
   icon: IconName;
   label: string;
   date: string;
+  /** Where the date comes from, when that is a page of its own. */
+  href?: string;
 };
+
+/**
+ * The first and the last of something, as key dates.
+ *
+ * When there is only one — one stage, one status — or when both land on the
+ * same day and the same page, "first" and "last" would name the same thing
+ * twice, so it collapses into a single line under the plain name instead.
+ */
+export function firstAndLastTimelineItems<T>(
+  items: readonly T[],
+  pick: (item: T) => { date: string; href?: string } | undefined,
+  labels: { icon: IconName; first: string; last: string; only: string },
+): PublicDetailTimelineItem[] {
+  const marks = items
+    .map(pick)
+    .filter((mark): mark is { date: string; href?: string } => Boolean(mark))
+    .sort((left, right) => left.date.localeCompare(right.date));
+  const first = marks.at(0);
+  const last = marks.at(-1);
+  if (!first || !last) return [];
+  if (
+    marks.length === 1 ||
+    (first.date === last.date && first.href === last.href)
+  )
+    return [{ icon: labels.icon, label: labels.only, ...last }];
+  return [
+    { icon: labels.icon, label: labels.first, ...first },
+    { icon: labels.icon, label: labels.last, ...last },
+  ];
+}
 
 export function sortPublicDetailTimelineItems(
   items: PublicDetailTimelineItem[],
@@ -39,8 +72,8 @@ const PROJECT_RELATION_TYPE_ORDER = {
   dependent: 2,
 } as const;
 
-export function sortPublicProjectReferencesByRelationType<
-  T extends Pick<PublicProjectLink, 'relationType'>,
+export function sortPublicEntityReferencesByRelationType<
+  T extends Pick<PublicEntityLink, 'relationType'>,
 >(projects: T[]): T[] {
   return projects
     .map((project, index) => ({ project, index }))
@@ -60,7 +93,12 @@ export type PublicDetailPanelData = {
   periods?: DateRange[];
   createdAt?: string;
   tags?: PublicTagSummary[];
-  relatedProjects?: PublicProjectLink[];
+  relatedEntities?: PublicEntityLink[];
+  /**
+   * Diary entries tied to this entity. Kept apart from `relatedEntities`
+   * because a day and an opening line read nothing like a titled tile.
+   */
+  diaryEntries?: PublicDiaryLink[];
   references: PublicReferences;
   metrics?: PublicDetailMetric[];
 };

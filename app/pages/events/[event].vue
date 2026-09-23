@@ -5,6 +5,7 @@ import { coverDatedPeriods } from '#layers/thei/shared/date-precision';
 import type { PublicDetailPanelData } from '#layers/thei/app/components/public/public-detail';
 
 import { publicOwnerNotesHeading } from '#layers/thei/app/components/public/PublicOwnerNotes.vue';
+import { publicDiarySectionHeading } from '#layers/thei/app/components/public/PublicDiarySection.vue';
 
 definePageMeta({ layout: 'public', key: (route) => route.path });
 const route = useRoute();
@@ -70,7 +71,7 @@ const details = computed(
     ({
       periods: data.value.periods,
       tags: data.value.tags,
-      relatedProjects: data.value.relatedProjects,
+      relatedEntities: data.value.relatedEntities,
       references: data.value.references,
       metrics: (
         [
@@ -84,11 +85,20 @@ const details = computed(
     }) satisfies PublicDetailPanelData,
 );
 
-const ownerNotesContents = computed(() =>
-  data.value.notes?.blocks.length
+/**
+ * The sections that live below the content but belong in its table.
+ *
+ * The diary block comes first because a visitor sees it; the owner's notes,
+ * which nobody else gets at all, stay last.
+ */
+const extraContents = computed(() => [
+  ...(data.value.diaryEntries.length
+    ? [publicDiarySectionHeading(phrase.value.diary_entries)]
+    : []),
+  ...(data.value.notes?.blocks.length
     ? [publicOwnerNotesHeading(phrase.value.entity_notes)]
-    : [],
-);
+    : []),
+]);
 </script>
 
 <template>
@@ -105,13 +115,14 @@ const ownerNotesContents = computed(() =>
     <PublicDetailLayout
       :details="details"
       :content="data.content"
-      :extra-contents="ownerNotesContents"
+      :extra-contents="extraContents"
     >
       <ContentRenderer
         v-if="data.content.blocks.length"
         :data="data.content"
         asset-viewer
       />
+      <PublicDiarySection :entries="data.diaryEntries" />
       <PublicOwnerNotes :notes="data.notes" />
     </PublicDetailLayout>
   </main>

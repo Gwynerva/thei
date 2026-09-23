@@ -39,6 +39,39 @@ const stickyAsideStyle = computed(() => ({
 const stickyContentStyle = computed(() => ({
   maxHeight: `calc(100dvh - ${adminOffset.value} - ${publicHeaderOffset.value} - var(--spacing-md))`,
 }));
+
+/**
+ * Whether the panel has anything of its own to scroll.
+ *
+ * `overscroll-contain` is right while the panel is longer than its box, but a
+ * browser honours it even when there is nothing to scroll — so a short panel
+ * would swallow the wheel and the page would stop dead under the cursor.
+ */
+const stickyContent = useTemplateRef<HTMLElement>('stickyContent');
+const panelScrolls = ref(false);
+let panelObserver: ResizeObserver | undefined;
+
+function measurePanel() {
+  const element = stickyContent.value;
+  panelScrolls.value = element
+    ? element.scrollHeight - element.clientHeight > 1
+    : false;
+}
+
+onMounted(() => {
+  measurePanel();
+  if (typeof ResizeObserver === 'undefined' || !stickyContent.value) return;
+  panelObserver = new ResizeObserver(measurePanel);
+  panelObserver.observe(stickyContent.value);
+  // The height cap moves with the sticky header, and sections expand and
+  // collapse inside, so the first child is watched too.
+  const inner = stickyContent.value.firstElementChild;
+  if (inner) panelObserver.observe(inner);
+});
+
+watch(stickyContentStyle, () => nextTick(measurePanel));
+
+onBeforeUnmount(() => panelObserver?.disconnect());
 </script>
 
 <template>
@@ -65,8 +98,9 @@ const stickyContentStyle = computed(() => ({
       :style="stickyAsideStyle"
     >
       <div
-        class="scrollbar-hover w-full min-w-0 overflow-x-clip overflow-y-auto
-          overscroll-contain"
+        ref="stickyContent"
+        class="scrollbar-hover w-full min-w-0 overflow-x-clip overflow-y-auto"
+        :class="panelScrolls ? 'overscroll-contain' : 'overscroll-auto'"
         :style="stickyContentStyle"
       >
         <PublicDetailPanel :data="panelData" />

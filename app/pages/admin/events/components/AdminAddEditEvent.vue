@@ -31,7 +31,7 @@ import ProjectAssets from '../../projects/components/ProjectAssets.vue';
 import ProjectExternalLinks from '../../projects/components/ProjectExternalLinks.vue';
 import ProjectTags from '../../projects/components/ProjectTags.vue';
 import ProjectActionSettings from '../../projects/components/ProjectActionSettings.vue';
-import EventRelations from './EventRelations.vue';
+import EntityRelations from '#layers/thei/app/components/settings/EntityRelations.vue';
 import ProjectShareLinks from '../../projects/components/ProjectShareLinks.vue';
 import { eventDeleteModal } from './event-delete-modal';
 
@@ -68,6 +68,12 @@ provide(otherItemsKey, otherItems);
 const actionMedia = provideProjectActionMedia();
 
 const isEdit = computed(() => Boolean(eventUuid));
+const relationsModel = computed({
+  get: () => eventData.value.relations ?? [],
+  set: (value) => {
+    eventData.value.relations = value;
+  },
+});
 const saving = ref(false);
 const savedSnapshot = ref(JSON.stringify(eventPayload()));
 const headerError = ref<string>();
@@ -161,6 +167,7 @@ async function save() {
     const previousAction = eventData.value.action;
     eventData.value.action = result.action;
     actionMedia.applySaved(previousAction, result.action);
+    stampSavedContent(eventData.value, savedSnapshot.value, CONTENT_FIELDS);
     markSaved();
     await refreshNuxtData('admin-bar');
     if (!isEdit.value)
@@ -390,7 +397,12 @@ function clone<T>(value: T): T {
       :description="phrase.event_external_links_hint"
       :empty-text="phrase.event_external_links_empty"
     />
-    <EventRelations v-model="eventData.relations" />
+    <EntityRelations
+      v-model="relationsModel"
+      owner-type="event"
+      :owner-id="eventUuid"
+      :owner-title="eventData.title.trim() || phrase.new_event"
+    />
     <ProjectTags
       :title="phrase.event_tags"
       :description="phrase.event_tags_hint"

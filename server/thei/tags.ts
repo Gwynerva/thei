@@ -100,7 +100,6 @@ export async function buildTagItems(tags: TagRow[]): Promise<TagItem[]> {
         slug: tag.slug,
         publicId: tag.publicId,
         description: tag.description || undefined,
-        accentColor: tag.accentColor || undefined,
         iconAssetUuid: icon?.asset.assetUuid,
         iconMedia: urls?.media,
         iconAssetSize: icon?.asset.size,

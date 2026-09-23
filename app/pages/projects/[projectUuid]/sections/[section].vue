@@ -86,7 +86,7 @@ const details = computed(
       icon="file-tray-stack"
       :title="data.title"
       :description="data.summary"
-      :back-link="data.project"
+      :parent="{ ...data.project, label: phrase.content_section }"
     />
     <PublicDetailLayout :details="details" :content="data.content">
       <ContentRenderer :data="data.content" asset-viewer />

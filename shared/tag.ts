@@ -1,6 +1,9 @@
 import type { MediaDescriptor } from './media';
 import { normalizePublicId, publicIdIsValid } from './public-link';
 import { normalizeUrlSegment } from './language/slugify';
+import type { ImageAccent } from './accent-color';
+import { imageAccentCssColor } from './accent-color';
+import { stringColorHue } from './utils/string-color';
 
 export const TAG_CONTAINER_TYPES = ['project', 'event'] as const;
 export type TagContainerType = (typeof TAG_CONTAINER_TYPES)[number];
@@ -11,7 +14,6 @@ export type TagItem = {
   slug: string;
   publicId: string;
   description?: string;
-  accentColor?: string;
   iconAssetUuid?: string;
   iconMedia?: MediaDescriptor;
   iconAssetSize?: number;
@@ -33,7 +35,6 @@ export type TagEditData = {
   slug: string;
   publicId: string;
   description: string;
-  accentColor?: string;
   iconAssetUuid?: string;
 };
 
@@ -72,12 +73,6 @@ export function validateTagData(data: unknown): string | TagEditData {
   const description =
     typeof item.description === 'string' ? item.description.trim() : '';
   if (description.length > 2_000) return 'Tag description is too long';
-  const accentColor =
-    typeof item.accentColor === 'string'
-      ? item.accentColor.trim() || undefined
-      : undefined;
-  if (accentColor && !/^#[0-9a-fA-F]{6}$/.test(accentColor))
-    return 'Invalid accent color';
   const iconAssetUuid =
     typeof item.iconAssetUuid === 'string'
       ? item.iconAssetUuid.trim() || undefined
@@ -94,7 +89,6 @@ export function validateTagData(data: unknown): string | TagEditData {
     slug,
     publicId,
     description,
-    accentColor,
     iconAssetUuid,
   };
 }
@@ -172,4 +166,27 @@ function tagSearchScore(
 
 function escapeTagRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * A tag's accent, derived the way every other entity derives one.
+ *
+ * Its icon supplies the colour when there is an icon; otherwise the title does,
+ * through the same hash the generated icons use. Nothing is stored, so a tag
+ * can never drift out of step with the projects and events carrying it.
+ */
+export function tagAccent(tag: {
+  title: string;
+  iconMedia?: { accent?: ImageAccent };
+}): ImageAccent {
+  return (
+    tag.iconMedia?.accent ?? { hue: stringColorHue(tag.title), chroma: 0.15 }
+  );
+}
+
+export function tagAccentCssColor(
+  tag: { title: string; iconMedia?: { accent?: ImageAccent } },
+  alpha?: number,
+) {
+  return imageAccentCssColor(tagAccent(tag), 'var(--color-text-3)', alpha);
 }

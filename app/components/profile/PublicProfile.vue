@@ -5,7 +5,7 @@ import {
 } from '#layers/thei/shared/profile';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
 import PublicProfileHero from './PublicProfileHero.vue';
-import PublicProfileStatus from './PublicProfileStatus.vue';
+import PublicStatusBlock from '#layers/thei/app/components/public/PublicStatusBlock.vue';
 const props = defineProps<{ profile: PublicProfileResponse }>();
 const allAbout = ref(false);
 const allFacts = ref(false);
@@ -74,10 +74,12 @@ const facts = computed(() => {
             size="compact"
           /></div
       ></ProfileInfoBlock>
-      <PublicProfileStatus
+      <PublicStatusBlock
         v-if="profile.currentStatus"
         :current="profile.currentStatus"
         :count="profile.statusCount"
+        history-url="/api/profile/statuses"
+        :title="phrase.profile_status"
       />
       <ProfileInfoBlock v-if="facts.length" :title="phrase.profile_facts"
         ><dl class="divide-y divide-border-1">

@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import type { ProfileStatusHistoryItem } from '#layers/thei/shared/profile';
+import type { StatusHistoryItem } from '#layers/thei/shared/status';
 defineProps<{
-  item: ProfileStatusHistoryItem;
+  item: StatusHistoryItem;
   removable?: boolean;
   editable?: boolean;
   standalone?: boolean;
   shortDate?: boolean;
 }>();
-defineEmits<{ remove: [id: string]; edit: [item: ProfileStatusHistoryItem] }>();
+defineEmits<{ remove: [id: string]; edit: [item: StatusHistoryItem] }>();
 </script>
 <template>
   <article
@@ -28,7 +28,7 @@ defineEmits<{ remove: [id: string]; edit: [item: ProfileStatusHistoryItem] }>();
           ? 'bg-bg-3 text-text-3'
           : 'bg-accent/10 text-accent'
       "
-      ><Icon name="quote"
+      ><Icon name="pulse"
     /></span>
     <p
       class="min-w-0 flex-1 wrap-anywhere whitespace-pre-wrap"

@@ -25,6 +25,7 @@ import {
 } from '../../../shared/project-url';
 import { buildEventUrl } from '../../../shared/event-url';
 import { buildPageUrl } from '../../../shared/page-url';
+import { buildDiaryUrl } from '../../../shared/diary-url';
 import { buildTagUrl } from '../../../shared/tag-url';
 import { describeStoredAsset } from './storage';
 
@@ -43,6 +44,7 @@ WITH sources AS (
     humanReadableSlug AS slug, publicId, updatedAt, access='private' AS sourcePrivate FROM projects
   UNION ALL SELECT 'event',eventUuid,title,summary,humanReadableSlug,publicId,updatedAt,access='private' FROM events
   UNION ALL SELECT 'page',pageUuid,title,summary,slug,'',updatedAt,access='private' FROM pages
+  UNION ALL SELECT 'diary-entry',diaryUuid,date,'',date,'',updatedAt,access='private' FROM "diary-entries"
   UNION ALL SELECT 'tag',tagUuid,title,description,slug,publicId,0,0 FROM tags
   UNION ALL SELECT 'profile',profileId,displayName,slogan,'','',0,0 FROM profiles
 ),
@@ -61,7 +63,8 @@ contexts AS (
     coalesce(ch.childSlug,''),coalesce(ch.childPublicId,''),'',coalesce(ch.isPrivate,0),coalesce(ch.summary,'')
     FROM content c LEFT JOIN children ch ON ch.ownerType=c.ownerType AND ch.ownerId=c.ownerId
   UNION ALL SELECT 'profile-avatar',a.id,'profile',p.profileId,'','entity','','','avatar',0,'' FROM "profile-avatars" a CROSS JOIN profiles p
-  UNION ALL SELECT 'profile-status',a.id,'profile',p.profileId,'','entity','','','status',0,coalesce(a.text,'') FROM "profile-statuses" a CROSS JOIN profiles p
+  UNION ALL SELECT 'profile-status',a.id,'profile',a.ownerId,'','entity','','','status',0,coalesce(a.text,'') FROM statuses a WHERE a.ownerType='profile'
+  UNION ALL SELECT 'project-status',a.id,'project',a.ownerId,'','entity','','','status',0,coalesce(a.text,'') FROM statuses a WHERE a.ownerType='project'
 ),
 placements AS (
   SELECT u.assetUuid,u.role,u.meta,u.containerType,u.containerId,s.*,c.scopeTitle,c.scopeKind,
@@ -190,17 +193,21 @@ function sourceInfo(row: SourceRow): AssetSource {
         ? buildEventUrl(slug, publicId)
         : type === 'page'
           ? buildPageUrl(slug)
-          : type === 'tag'
-            ? buildTagUrl(slug, publicId)
-            : type === 'profile'
-              ? '/'
-              : undefined;
+          : type === 'diary-entry'
+            ? buildDiaryUrl(slug)
+            : type === 'tag'
+              ? buildTagUrl(slug, publicId)
+              : type === 'profile'
+                ? '/'
+                : undefined;
   const editUrl =
     type === 'unused'
       ? undefined
       : type === 'profile'
         ? '/admin/about/'
-        : `/admin/${type === 'page' ? 'pages' : type === 'tag' ? 'tags' : type + 's'}/${id}/edit/`;
+        : type === 'diary-entry'
+          ? `/admin/diary/${id}/edit/`
+          : `/admin/${type === 'page' ? 'pages' : type === 'tag' ? 'tags' : type + 's'}/${id}/edit/`;
   return {
     type,
     id,

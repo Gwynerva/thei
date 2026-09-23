@@ -14,7 +14,9 @@ import ExternalLinkPreviewCard from '#layers/thei/app/components/external-links/
 import ContentInlineLinkDecorator from './ContentInlineLinkDecorator.vue';
 import ContentRendererList from './ContentRendererList.vue';
 import ContentSpoiler from './ContentSpoiler.vue';
-import { publicAssetModal } from '#layers/thei/app/modals/public-asset/modal';
+import { openPublicAssets } from '#layers/thei/app/modals/public-asset/modal';
+import type { PublicAssetDescriptor } from '#layers/thei/shared/api/public';
+import type { ContentEntityType } from '#layers/thei/shared/content-link';
 import type { ContentGalleryItem } from '#layers/thei/shared/content';
 import { richTextToPlainText } from '#layers/thei/shared/rich-text';
 import {
@@ -77,11 +79,14 @@ function externalLink(value: Record<string, unknown>) {
     : undefined;
 }
 
-function openAsset(value: unknown, title?: string, description?: string) {
-  if (!props.assetViewer) return;
+function assetDescriptor(
+  value: unknown,
+  title?: string,
+  description?: string,
+): PublicAssetDescriptor | undefined {
   const item = asset(value);
-  if (!item.assetUrl || !item.extension) return;
-  void openModal(publicAssetModal, {
+  if (!item.assetUrl || !item.extension) return undefined;
+  return {
     key: item.assetUuid,
     title: richTextToPlainText(title ?? ''),
     description: description ? richTextToPlainText(description) : undefined,
@@ -90,11 +95,28 @@ function openAsset(value: unknown, title?: string, description?: string) {
     size: item.size ?? 0,
     media: item.media,
     archivedOriginal: item.archivedOriginal,
-  });
+  };
 }
 
-function openGalleryItem(item: ContentGalleryItem) {
-  openAsset(item.asset, item.caption);
+function openAsset(value: unknown, title?: string) {
+  if (!props.assetViewer) return;
+  const descriptor = assetDescriptor(value, title);
+  if (descriptor) openPublicAssets([descriptor], descriptor);
+}
+
+/** A gallery opens as itself: the viewer steps through its other tiles. */
+function openGalleryItem(
+  items: ContentGalleryItem[],
+  item: ContentGalleryItem,
+) {
+  if (!props.assetViewer) return;
+  const descriptors = items
+    .map((tile) => assetDescriptor(tile.asset, tile.caption))
+    .filter((descriptor) => descriptor !== undefined);
+  openPublicAssets(
+    descriptors,
+    descriptors.find((descriptor) => descriptor.key === item.asset?.assetUuid),
+  );
 }
 </script>
 
@@ -163,7 +185,10 @@ function openGalleryItem(item: ContentGalleryItem) {
           :items="block.data.items as any[]"
           :choose-label="phrase.content_choose_media"
           :openable="assetViewer"
-          @open="openGalleryItem"
+          @open="
+            (item: ContentGalleryItem) =>
+              openGalleryItem(block.data.items as ContentGalleryItem[], item)
+          "
         />
         <ContentAttachmentCard
           v-else-if="
@@ -192,7 +217,7 @@ function openGalleryItem(item: ContentGalleryItem) {
         />
         <ContentEntityLinkBlock
           v-else-if="block.type === 'entityLink'"
-          :entity-type="block.data.entityType as 'project' | 'event' | 'page'"
+          :entity-type="block.data.entityType as ContentEntityType"
           :entity-id="block.data.entityId as string | undefined"
           :restricted="block.data.restricted as boolean | undefined"
           :resolver="linkResolver"

@@ -85,16 +85,13 @@ async function resolveReference(
   try {
     const response = await fetcher(endpoint, {
       query:
-        normalizedReference.kind === 'project'
+        normalizedReference.kind === 'entity'
           ? {
-              kind: 'project',
-              projectUuid: normalizedReference.projectUuid,
+              kind: 'entity',
+              entityType: normalizedReference.entityType,
+              entityId: normalizedReference.entityId,
             }
-          : normalizedReference.kind === 'event'
-            ? { kind: 'event', eventUuid: normalizedReference.eventUuid }
-            : normalizedReference.kind === 'page'
-              ? { kind: 'page', pageUuid: normalizedReference.pageUuid }
-              : { kind: 'external', url: normalizedReference.url },
+          : { kind: 'external', url: normalizedReference.url },
     });
     return response.state === 'restricted'
       ? { ...normalizedReference, state: 'restricted' }

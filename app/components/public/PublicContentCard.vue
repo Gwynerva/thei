@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type {
-  PublicProjectLink,
+  PublicEntityLink,
+  PublicEntityReference,
   PublicTagSummary,
 } from '#layers/thei/shared/api/public';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
@@ -25,10 +26,21 @@ const props = defineProps<{
   dateHref?: string;
   datePresentation?: PublicDatePresentation;
   media?: MediaDescriptor;
-  projects?: PublicProjectLink[];
+  projects?: PublicEntityLink[];
+  /**
+   * The project a stage or a section belongs to. Not a relation — a parent —
+   * so it sits above the title rather than among the related entities.
+   */
+  parent?: PublicEntityReference;
   tags?: PublicTagSummary[];
   compact?: boolean;
   continuousMedia?: boolean;
+  /**
+   * For an entity that has no title: the summary becomes the card's whole
+   * copy, set in italics, and there is no heading above it. A diary entry is
+   * signed by its date in the line above, so a heading would only repeat it.
+   */
+  titleless?: boolean;
   /** Owner-only reminder; a visitor never receives one. */
   reminder?: string;
   /** Presents a codename for something hidden from visitors. */
@@ -160,7 +172,33 @@ const hasFooter = computed(
         class="public-card-copy max-w-4/5 min-w-0 sm:max-w-3/4"
         :class="{ 'public-card-copy-over-media': media }"
       >
+        <div
+          v-if="parent"
+          class="mb-1 flex min-w-0 items-center gap-xs text-sm"
+        >
+          <TheiLink
+            :to="parent.href"
+            :data-title-popup="parent.summary"
+            class="pointer-events-auto relative z-3 inline-flex min-w-0
+              items-center gap-xs font-semibold text-text-2 transition
+              focus-visible:ring-2 focus-visible:ring-accent
+              focus-visible:outline-none hocus:text-accent"
+          >
+            <BeveledIcon
+              :media="parent.iconMedia"
+              icon="project"
+              class="size-5"
+            />
+            <span class="min-w-0 truncate">{{ parent.title }}</span>
+          </TheiLink>
+          <Icon
+            name="corner-down"
+            class="shrink-0 text-text-3"
+            aria-hidden="true"
+          />
+        </div>
         <h3
+          v-if="!titleless"
           class="public-card-title text-xl font-bold tracking-tight transition
             sm:text-2xl"
           :class="{ italic: secret }"
@@ -168,7 +206,14 @@ const hasFooter = computed(
           {{ publicText(title) }}
         </h3>
         <p
-          v-if="summary"
+          v-if="titleless"
+          class="public-card-title line-clamp-4 text-base leading-relaxed
+            font-medium text-balance text-text-2 italic transition sm:text-lg"
+        >
+          {{ publicText(summary) }}
+        </p>
+        <p
+          v-else-if="summary"
           class="mt-2 line-clamp-3 text-base leading-relaxed font-semibold
             text-text-2"
         >
@@ -180,7 +225,7 @@ const hasFooter = computed(
         v-if="hasFooter"
         class="flex max-w-4/5 min-w-0 flex-col items-start gap-sm sm:max-w-3/4"
       >
-        <PublicProjectLinks :projects="visibleProjects" />
+        <PublicEntityLinks :projects="visibleProjects" />
         <PublicTagLinks :tags="visibleTags" />
       </div>
     </div>

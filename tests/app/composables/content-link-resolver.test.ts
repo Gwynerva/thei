@@ -4,20 +4,25 @@ import { createContentLinkResolver } from '../../../app/composables/content-link
 describe('content link resolver', () => {
   it('deduplicates concurrent and resolved project lookups', async () => {
     const fetch = vi.fn(async () => ({
-      kind: 'project',
+      kind: 'entity',
+      entityType: 'project',
+      entityId: 'project-uuid',
       state: 'resolved',
-      projectUuid: 'project-uuid',
       title: 'Current project title',
       summary: 'Current project summary',
       href: '/projects/current-slug-CURRENT/',
-      iconMedia: {
+      media: {
         kind: 'image',
         src: '/project.svg',
         previewSrc: '/project.svg',
       },
     }));
     const resolver = createContentLinkResolver(fetch);
-    const reference = { kind: 'project', projectUuid: 'project-uuid' } as const;
+    const reference = {
+      kind: 'entity',
+      entityType: 'project',
+      entityId: 'project-uuid',
+    } as const;
 
     const [first, second] = await Promise.all([
       resolver(reference),
@@ -29,8 +34,9 @@ describe('content link resolver', () => {
     expect(first).toEqual(second);
     expect(third).toMatchObject({
       state: 'resolved',
-      kind: 'project',
-      projectUuid: 'project-uuid',
+      kind: 'entity',
+      entityType: 'project',
+      entityId: 'project-uuid',
       href: '/projects/current-slug-CURRENT/',
       summary: 'Current project summary',
     });
@@ -84,20 +90,26 @@ describe('content link resolver', () => {
 
   it('keeps request-scoped caches isolated', async () => {
     const firstFetch = vi.fn(async () => ({
-      kind: 'project' as const,
-      projectUuid: 'project-uuid',
+      kind: 'entity' as const,
+      entityType: 'project' as const,
+      entityId: 'project-uuid',
       state: 'resolved' as const,
       href: '/first/',
       title: 'First request',
     }));
     const secondFetch = vi.fn(async () => ({
-      kind: 'project' as const,
-      projectUuid: 'project-uuid',
+      kind: 'entity' as const,
+      entityType: 'project' as const,
+      entityId: 'project-uuid',
       state: 'resolved' as const,
       href: '/second/',
       title: 'Second request',
     }));
-    const reference = { kind: 'project', projectUuid: 'project-uuid' } as const;
+    const reference = {
+      kind: 'entity',
+      entityType: 'project',
+      entityId: 'project-uuid',
+    } as const;
 
     expect(
       await createContentLinkResolver(firstFetch)(reference),
@@ -111,8 +123,9 @@ describe('content link resolver', () => {
 
   it('uses a separate endpoint for administrative resolution', async () => {
     const fetch = vi.fn(async () => ({
-      kind: 'project' as const,
-      projectUuid: 'private-project',
+      kind: 'entity' as const,
+      entityType: 'project' as const,
+      entityId: 'private-project',
       state: 'resolved' as const,
       href: '/projects/private/',
       title: 'Private project',
@@ -122,38 +135,51 @@ describe('content link resolver', () => {
       '/api/admin/content-links',
     );
 
-    await resolver({ kind: 'project', projectUuid: 'private-project' });
+    await resolver({
+      kind: 'entity',
+      entityType: 'project',
+      entityId: 'private-project',
+    });
 
     expect(fetch).toHaveBeenCalledWith('/api/admin/content-links', {
-      query: { kind: 'project', projectUuid: 'private-project' },
+      query: {
+        kind: 'entity',
+        entityType: 'project',
+        entityId: 'private-project',
+      },
     });
   });
 
-  it('resolves pages through the same cache and endpoint contract', async () => {
+  it('resolves every kind of entity through one cache and endpoint contract', async () => {
     const fetch = vi.fn(async () => ({
-      kind: 'page' as const,
-      pageUuid: 'pg-about',
+      kind: 'entity' as const,
+      entityType: 'diary-entry' as const,
+      entityId: 'diary-uuid',
       state: 'resolved' as const,
-      href: '/pages/about/',
-      title: 'About',
-      summary: 'About this site',
-      iconMedia: {
-        kind: 'image' as const,
-        src: '/page.webp',
-        previewSrc: '/page.webp',
-      },
+      href: '/diary/2024-05-12/',
+      title: '2024-05-12',
+      date: '2024-05-12',
+      summary: 'Rain all day',
     }));
     const resolver = createContentLinkResolver(fetch);
-    const reference = { kind: 'page', pageUuid: 'pg-about' } as const;
+    const reference = {
+      kind: 'entity',
+      entityType: 'diary-entry',
+      entityId: 'diary-uuid',
+    } as const;
 
     expect(await resolver(reference)).toMatchObject({
-      kind: 'page',
-      href: '/pages/about/',
+      entityType: 'diary-entry',
+      href: '/diary/2024-05-12/',
     });
-    expect(await resolver(reference)).toMatchObject({ title: 'About' });
+    expect(await resolver(reference)).toMatchObject({ date: '2024-05-12' });
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(fetch).toHaveBeenCalledWith('/api/content-links', {
-      query: { kind: 'page', pageUuid: 'pg-about' },
+      query: {
+        kind: 'entity',
+        entityType: 'diary-entry',
+        entityId: 'diary-uuid',
+      },
     });
   });
 });

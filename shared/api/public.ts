@@ -1,5 +1,6 @@
 import type { ProjectEventAccessLevel } from '../access-level';
 import type { PublicContentOutputData } from '../content';
+import type { ContentEntityType } from '../content-link';
 import type { DatedPeriod } from '../date-precision';
 import type {
   ProjectActionBackgroundMode,
@@ -9,25 +10,28 @@ import type {
 } from '../project-action';
 import type { MediaDescriptor } from '../media';
 import type { ArchivedOriginalFileMeta } from '../asset';
-import type { ProjectRelationType } from '../admin/project';
+import type { RelationEntityType, RelationType } from '../relation';
 import type { PublicSearchFilters } from '../public-search';
+import type { StatusHistoryItem } from '../status';
+import type { LifePoint } from '../life';
 
 export type PublicTagSummary = {
   title: string;
   slug: string;
   publicId: string;
   description?: string;
-  accentColor?: string;
   iconMedia?: MediaDescriptor;
 };
 
-export type PublicProjectReference = {
+export type PublicEntityReference = {
+  /** Which kind of thing this is, for the badge on its tile. */
+  entityType: RelationEntityType;
   title: string;
   summary: string;
   href: string;
-  iconMedia: MediaDescriptor;
-  relationType?: ProjectRelationType;
-  /** Why this project is related, as written for the page it is shown on. */
+  iconMedia?: MediaDescriptor;
+  relationType?: RelationType;
+  /** Why this is related, as written for the page it is shown on. */
   note?: string;
 };
 
@@ -44,10 +48,34 @@ export type PublicSecretReference = {
   /** A stock line about secrecy, never the hidden thing's own summary. */
   summary: string;
   iconMedia: MediaDescriptor;
-  relationType?: ProjectRelationType;
+  relationType?: RelationType;
+  /**
+   * Which kind of thing is hidden.
+   *
+   * Saying "a project you cannot see" rather than "something you cannot see"
+   * gives the reader their bearings without giving the thing itself away.
+   */
+  entityType?: RelationEntityType;
 };
 
-export type PublicProjectLink = PublicProjectReference | PublicSecretReference;
+export type PublicEntityLink = PublicEntityReference | PublicSecretReference;
+
+/**
+ * A diary entry as something else's page lists it.
+ *
+ * There is no title to show, so the day is the label and the opening of the
+ * text is the description. Entries a visitor may not open are left out of
+ * these lists entirely rather than replaced by a codename: a diary is allowed
+ * to keep quiet about how much of it there is.
+ */
+export type PublicDiaryLink = {
+  date: string;
+  href: string;
+  /** The opening of the entry, which stands in for a summary. */
+  excerpt: string;
+  /** Owner only: set when the entry is not public. */
+  access?: ProjectEventAccessLevel;
+};
 
 export function isPublicSecret(value: object): value is PublicSecretReference {
   return 'secret' in value && value.secret === true;
@@ -64,7 +92,7 @@ export type PublicEntitySummary = {
   date: string;
   showcase?: boolean;
   cv?: boolean;
-  relatedProjects?: PublicProjectLink[];
+  relatedEntities?: PublicEntityLink[];
   /** Owner only: the reminder that marks this entity wherever it is listed. */
   reminder?: string;
 };
@@ -106,12 +134,14 @@ export type PublicAssetDescriptor = {
 export type PublicFile = PublicAssetDescriptor;
 
 export type PublicReferenceLink = {
-  kind: 'external' | 'project' | 'event' | 'page';
+  kind: 'external' | ContentEntityType;
   title: string;
+  /** The day of a diary entry, shown in place of the title it lacks. */
+  date?: string;
   href: string;
   description?: string;
   iconMedia?: MediaDescriptor;
-  relationType?: ProjectRelationType;
+  relationType?: RelationType;
 };
 
 export type PublicReferenceGroup = {
@@ -167,7 +197,7 @@ export type PublicProjectSection = {
   media?: MediaDescriptor;
 };
 
-export type PublicProjectChildParent = PublicProjectReference & {
+export type PublicProjectChildParent = PublicEntityReference & {
   access: ProjectEventAccessLevel;
   humanReadableSlug: string;
   publicId: string;
@@ -199,6 +229,8 @@ export type PublicProjectResponse = {
     createdAt: string;
     firstStageAt?: string;
     lastStageAt?: string;
+    /** When the project's oldest status was set. */
+    firstStatusAt?: string;
     updatedAt?: string;
   };
   isShowcase: boolean;
@@ -211,9 +243,17 @@ export type PublicProjectResponse = {
   showcase: (PublicAssetDescriptor | PublicSecretReference)[];
   files: (PublicFile | PublicSecretReference)[];
   tags: PublicTagSummary[];
-  relatedProjects: PublicProjectLink[];
-  /** The latest related events; `total` counts all of them. */
-  relatedEvents: { items: PublicEntitySummary[]; total: number };
+  relatedEntities: PublicEntityLink[];
+  /** The newest status, if the project keeps any; `statusCount` counts them. */
+  currentStatus?: StatusHistoryItem;
+  statusCount: number;
+  /**
+   * The newest points of the project's own chronology, for the overview tab;
+   * `total` is the counter on the "Chronology" tab.
+   */
+  timeline: { latest: LifePoint[]; total: number };
+  /** Diary entries tied to this project, newest first. */
+  diaryEntries: PublicDiaryLink[];
   references: PublicReferences;
   action?: PublicAction;
   /**
@@ -223,11 +263,6 @@ export type PublicProjectResponse = {
   reminder?: string;
   notes?: PublicContentOutputData;
 };
-
-export type PublicProjectEventsResponse =
-  PublicPaginatedResponse<PublicEntitySummary> & {
-    project: PublicProjectChildParent;
-  };
 
 export type PublicEventResponseFull = {
   title: string;
@@ -239,7 +274,9 @@ export type PublicEventResponseFull = {
   content: PublicContentOutputData;
   references: PublicReferences;
   tags: PublicTagSummary[];
-  relatedProjects: PublicProjectLink[];
+  relatedEntities: PublicEntityLink[];
+  /** Diary entries tied to this event, newest first. */
+  diaryEntries: PublicDiaryLink[];
   action?: PublicAction;
   /**
    * Owner only. A visitor never receives either field — not here, not in the
@@ -247,6 +284,17 @@ export type PublicEventResponseFull = {
    */
   reminder?: string;
   notes?: PublicContentOutputData;
+};
+
+/** One diary entry's own page. */
+export type PublicDiaryResponse = {
+  date: string;
+  access: ProjectEventAccessLevel;
+  content: PublicContentOutputData;
+  references: PublicReferences;
+  relatedEntities: PublicEntityLink[];
+  /** Owner only. */
+  reminder?: string;
 };
 
 export type PublicTagListItem = PublicTagSummary & {

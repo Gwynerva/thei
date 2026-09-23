@@ -12,7 +12,8 @@ import { assetFilePath } from '../assets/file-path';
 import type { StoredAssetRecord } from '../assets/storage';
 import { getProfileIdentity } from '../profile';
 import { canOpenPublicEntity } from '../public/entities';
-import { buildPublicContentPreviewMedia } from '../public/content';
+import { buildPublicEntityPreviewMedia } from '../public/content';
+import { resolveGeneratedIcon } from '../media/generated-icon';
 import { resolveFaviconSet } from '../media/favicon';
 import { glyphDataUri, mediaDataUri, resolveMediaFile } from './media';
 import type { OgCard } from './templates';
@@ -33,6 +34,7 @@ export type OgTargetKind =
   | 'section'
   | 'event'
   | 'page'
+  | 'diary'
   | 'tag';
 
 export const OG_TARGET_KINDS: OgTargetKind[] = [
@@ -43,6 +45,7 @@ export const OG_TARGET_KINDS: OgTargetKind[] = [
   'section',
   'event',
   'page',
+  'diary',
   'tag',
 ];
 
@@ -144,6 +147,8 @@ export async function resolveOgCard(
       return eventCard(target.id, base, siteSignature);
     case 'page':
       return pageCard(target.id, base, siteSignature);
+    case 'diary':
+      return diaryCard(target.id, base, siteSignature);
     case 'tag':
       return tagCard(target.id, base, siteSignature);
   }
@@ -205,14 +210,20 @@ async function projectCard(
   const banner = await containerAsset('project', project.projectUuid, 'banner');
   const icon = await containerAsset('project', project.projectUuid, 'icon');
   const poster = banner?.type === AssetType.Image ? banner : (icon ?? banner);
+  // Nothing uploaded: the same drawn icon the site shows for this project.
+  const generated = poster
+    ? undefined
+    : resolveGeneratedIcon('project', project.projectUuid);
   return contentCard({
     base,
     siteSignature,
     title: project.title,
     label: THEI_SERVER.phrase.project,
-    posterFile: await assetFile(poster),
+    media: generated,
+    posterFile: poster
+      ? await assetFile(poster)
+      : await resolveMediaFile(generated),
     posterAccent: assetAccent(poster),
-    fallbackIcon: 'project',
     accentSeed: project.projectUuid,
     signatureId: `project:${project.projectUuid}:${project.updatedAt}`,
   });
@@ -241,6 +252,24 @@ async function projectChildCard(
   const project = await THEI_SERVER.projects.findByUuid(row.projectUuid);
   if (!project || !canOpenPublicEntity(project.access, false)) return undefined;
   const icon = await containerAsset('project', project.projectUuid, 'icon');
+  // The poster is the stage's own picture, as on its card; the project it
+  // belongs to is named, with its icon, in the line above the title.
+  const media =
+    'stageUuid' in row
+      ? await buildPublicEntityPreviewMedia(
+          'project-stage',
+          row.stageUuid,
+          'project-stage-body',
+          { type: 'project', ...project },
+          false,
+        )
+      : await buildPublicEntityPreviewMedia(
+          'project-section',
+          row.sectionUuid,
+          'project-section-body',
+          { type: 'project', ...project },
+          false,
+        );
   return contentCard({
     base,
     siteSignature,
@@ -249,11 +278,20 @@ async function projectChildCard(
       kind === 'stage'
         ? THEI_SERVER.phrase.project_stage
         : THEI_SERVER.phrase.content_section,
-    meta: project.title,
-    posterFile: await assetFile(icon),
-    posterAccent: assetAccent(icon),
-    fallbackIcon: kind === 'stage' ? 'calendar' : 'file-tray-stack',
-    accentSeed: project.projectUuid,
+    parent: {
+      title: project.title,
+      iconDataUri: await mediaDataUri(
+        icon
+          ? await assetFile(icon)
+          : await resolveMediaFile(
+              resolveGeneratedIcon('project', project.projectUuid),
+            ),
+        { width: 88, height: 88 },
+      ),
+    },
+    media,
+    posterFile: await resolveMediaFile(media),
+    accentSeed: 'stageUuid' in row ? row.stageUuid : row.sectionUuid,
     signatureId: `${kind}:${id}:${row.updatedAt}`,
   });
 }
@@ -267,8 +305,9 @@ async function eventCard(
   if (!stored || stored.access === ProjectEventAccessLevel.Private)
     return undefined;
   // An event has no icon of its own: the card borrows the first image or
-  // video frame from its body, exactly as its card on the site does.
-  const media = await buildPublicContentPreviewMedia(
+  // video frame from its body, exactly as its card on the site does, and the
+  // same drawn icon when the body opens with none.
+  const media = await buildPublicEntityPreviewMedia(
     'event',
     stored.eventUuid,
     'event-body',
@@ -282,10 +321,60 @@ async function eventCard(
     label: THEI_SERVER.phrase.event,
     media,
     posterFile: await resolveMediaFile(media),
-    fallbackIcon: 'event',
     accentSeed: stored.eventUuid,
     signatureId: `event:${stored.eventUuid}:${stored.updatedAt}`,
   });
+}
+
+/**
+ * A diary entry's card.
+ *
+ * The day is the title, because there is nothing else to call it by. Whatever
+ * the entry opens with becomes the poster, and an entry of plain text gets
+ * the drawn thought icon the site shows for it — honest about what it is.
+ */
+async function diaryCard(
+  date: string,
+  base: Base,
+  siteSignature: string,
+): Promise<ResolvedOgCard | undefined> {
+  const stored = await THEI_SERVER.diary.findByDate(date);
+  if (!stored || stored.access === ProjectEventAccessLevel.Private)
+    return undefined;
+  const media = await buildPublicEntityPreviewMedia(
+    'diary-entry',
+    stored.diaryUuid,
+    'diary-body',
+    { type: 'diary-entry', date: stored.date },
+    false,
+  );
+  return contentCard({
+    base,
+    siteSignature,
+    title: formatOgDate(stored.date),
+    label: THEI_SERVER.phrase.diary_entry,
+    media,
+    posterFile: await resolveMediaFile(media),
+    accentSeed: stored.diaryUuid,
+    signatureId: `diary:${stored.diaryUuid}:${stored.updatedAt}`,
+  });
+}
+
+/**
+ * The day spelled out, in the site's own language.
+ *
+ * The trailing literal goes: Russian formats a year as "2026 г.", and the
+ * abbreviation is noise on a card where the date is the whole headline.
+ */
+function formatOgDate(date: string): string {
+  const parts = new Intl.DateTimeFormat(THEI_SERVER.language.code, {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).formatToParts(new Date(`${date}T00:00:00Z`));
+  while (parts.at(-1)?.type === 'literal') parts.pop();
+  return parts.map((part) => part.value).join('');
 }
 
 async function pageCard(
@@ -299,14 +388,19 @@ async function pageCard(
   const icon = (
     await THEI_SERVER.assets.usages.findByContainer('page', page.pageUuid)
   ).find((usage) => usage.role === 'icon')?.asset;
+  const generated = icon
+    ? undefined
+    : resolveGeneratedIcon('page', page.pageUuid);
   return contentCard({
     base,
     siteSignature,
     title: page.title,
     label: THEI_SERVER.phrase.page,
-    posterFile: await assetFile(icon),
+    media: generated,
+    posterFile: icon
+      ? await assetFile(icon)
+      : await resolveMediaFile(generated),
     posterAccent: assetAccent(icon),
-    fallbackIcon: 'page',
     accentSeed: page.pageUuid,
     signatureId: `page:${page.pageUuid}:${page.updatedAt}`,
   });
@@ -333,7 +427,7 @@ async function tagCard(
     posterFile: await assetFile(icon),
     posterAccent: assetAccent(icon),
     fallbackIcon: 'tag',
-    accentSeed: tag.accentColor ?? tag.title,
+    accentSeed: tag.title,
     signatureId: `tag:${tag.tagUuid}:${tag.title}`,
   });
 }
@@ -343,12 +437,16 @@ async function contentCard(options: {
   siteSignature: string;
   title: string;
   label: string;
-  meta?: string;
+  parent?: { title: string; iconDataUri?: string };
   media?: MediaDescriptor;
   /** The poster's own colour, when the card is drawn from a stored asset. */
   posterAccent?: ImageAccent;
   posterFile?: string;
-  fallbackIcon: string;
+  /**
+   * Drawn when there is no poster at all. Only a tag needs it: every other
+   * kind always has a picture, its own or its drawn icon.
+   */
+  fallbackIcon?: string;
   accentSeed: string;
   signatureId: string;
 }): Promise<ResolvedOgCard> {
@@ -367,12 +465,12 @@ async function contentCard(options: {
       ...accent,
       title: options.title,
       label: options.label,
-      ...(options.meta ? { meta: options.meta } : {}),
+      ...(options.parent ? { parent: options.parent } : {}),
       ...(poster
         ? { posterDataUri: poster }
         : {
             glyphDataUri: await glyphDataUri(
-              options.fallbackIcon,
+              options.fallbackIcon ?? 'thei',
               oklchToHex(0.96, 0.02, accent.accentHue),
             ),
           }),
@@ -382,8 +480,8 @@ async function contentCard(options: {
       options.siteSignature,
       options.title,
       options.label,
-      options.meta ?? '',
-      options.posterFile ?? options.fallbackIcon,
+      options.parent?.title ?? '',
+      options.posterFile ?? options.fallbackIcon ?? '',
       `${accent.accentHue}:${accent.accentChroma}`,
     ].join('|'),
   };

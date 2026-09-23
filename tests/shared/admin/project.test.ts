@@ -697,12 +697,13 @@ describe('validateProjectData asset metadata', () => {
     expect(result).toBe('Duplicate other file');
   });
 
-  it('normalizes relations and rejects duplicate projects', () => {
+  it('normalizes relations and rejects a repeated entity', () => {
     const valid = validateProjectData(
       baseProject({
         relations: [
           {
-            projectUuid: ' project-2 ',
+            entityType: 'project',
+            entityId: ' project-2 ',
             type: 'related',
             note: { type: 'shared', text: '  Shared history  ' },
           },
@@ -713,7 +714,8 @@ describe('validateProjectData asset metadata', () => {
     if (typeof valid !== 'string') {
       expect(valid.relations).toEqual([
         {
-          projectUuid: 'project-2',
+          entityType: 'project',
+          entityId: 'project-2',
           type: 'related',
           note: { type: 'shared', text: 'Shared history' },
         },
@@ -724,11 +726,23 @@ describe('validateProjectData asset metadata', () => {
       validateProjectData(
         baseProject({
           relations: [
-            { projectUuid: 'project-2', type: 'related' },
-            { projectUuid: 'project-2', type: 'dependent' },
+            { entityType: 'project', entityId: 'project-2', type: 'related' },
+            { entityType: 'project', entityId: 'project-2', type: 'dependent' },
           ],
         }),
       ),
-    ).toBe('Duplicate related project');
+    ).toBe('Duplicate related entity');
+
+    // The same id under a different kind is a different entity.
+    expect(
+      typeof validateProjectData(
+        baseProject({
+          relations: [
+            { entityType: 'project', entityId: 'shared-id', type: 'related' },
+            { entityType: 'event', entityId: 'shared-id', type: 'related' },
+          ],
+        }),
+      ),
+    ).not.toBe('string');
   });
 });

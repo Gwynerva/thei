@@ -1,8 +1,14 @@
 <script lang="ts" setup>
 import { publicReferenceSplitSize } from '#layers/thei/shared/public-references';
 import type { PublicProjectResponse } from '#layers/thei/shared/api/public';
-import type { PublicDetailPanelData } from '#layers/thei/app/components/public/public-detail';
-import { buildProjectUrl } from '#layers/thei/shared/project-url';
+import {
+  firstAndLastTimelineItems,
+  type PublicDetailPanelData,
+} from '#layers/thei/app/components/public/public-detail';
+import {
+  buildProjectTimelineUrl,
+  buildProjectUrl,
+} from '#layers/thei/shared/project-url';
 import {
   buildContentHeadings,
   type ContentHeading,
@@ -75,7 +81,9 @@ const linkCount = computed(() =>
 const fileCount = computed(() =>
   publicReferenceSplitSize(data.value.references.files),
 );
-const eventsHref = computed(() => `${canonical.value}events/`);
+const timelineHref = computed(() =>
+  buildProjectTimelineUrl(data.value.humanReadableSlug, data.value.publicId),
+);
 // Headings of the description, then the page's own sections in page order.
 const contents = computed<ContentHeading[]>(() => {
   const sections: {
@@ -91,16 +99,10 @@ const contents = computed<ContentHeading[]>(() => {
       shown: data.value.sections.length > 0,
     },
     {
-      id: 'project-stages',
-      title: phrase.value.project_stages,
-      icon: 'calendar',
-      shown: data.value.stages.length > 0,
-    },
-    {
-      id: 'project-events',
-      title: phrase.value.related_events,
-      icon: 'event',
-      shown: data.value.relatedEvents.total > 0,
+      id: 'project-timeline',
+      title: phrase.value.project_timeline_latest,
+      icon: 'heart',
+      shown: data.value.timeline.latest.length > 0,
     },
   ];
   return [
@@ -129,24 +131,6 @@ const details = computed(
           label: phrase.value.project_chronology_page,
           date: data.value.chronology.createdAt,
         },
-        ...(data.value.chronology.firstStageAt
-          ? [
-              {
-                icon: 'calendar' as const,
-                label: phrase.value.project_chronology_first_stage,
-                date: data.value.chronology.firstStageAt,
-              },
-            ]
-          : []),
-        ...(data.value.chronology.lastStageAt
-          ? [
-              {
-                icon: 'calendar' as const,
-                label: phrase.value.project_chronology_last_stage,
-                date: data.value.chronology.lastStageAt,
-              },
-            ]
-          : []),
         ...(data.value.chronology.updatedAt
           ? [
               {
@@ -156,9 +140,56 @@ const details = computed(
               },
             ]
           : []),
+        ...firstAndLastTimelineItems(
+          data.value.stages,
+          (stage) => ({ date: stage.period.startDate, href: stage.href }),
+          {
+            icon: 'calendar',
+            first: phrase.value.project_chronology_first_stage,
+            last: phrase.value.project_chronology_last_stage,
+            only: phrase.value.project_chronology_stage,
+          },
+        ),
+        ...firstAndLastTimelineItems(
+          data.value.sections,
+          (section) => ({ date: section.date, href: section.href }),
+          {
+            icon: 'file-tray-stack',
+            first: phrase.value.project_chronology_first_section,
+            last: phrase.value.project_chronology_last_section,
+            only: phrase.value.project_chronology_section,
+          },
+        ),
+        ...firstAndLastTimelineItems(
+          [data.value.chronology.firstStatusAt, data.value.currentStatus],
+          (mark) =>
+            typeof mark === 'string'
+              ? { date: mark, href: '#statuses' }
+              : mark && {
+                  date: new Date(mark.createdAt).toISOString().slice(0, 10),
+                  href: '#statuses',
+                },
+          {
+            icon: 'pulse',
+            first: phrase.value.project_chronology_first_status,
+            last: phrase.value.project_chronology_last_status,
+            only: phrase.value.project_status,
+          },
+        ),
+        ...firstAndLastTimelineItems(
+          data.value.diaryEntries,
+          (entry) => ({ date: entry.date, href: entry.href }),
+          {
+            icon: 'thought',
+            first: phrase.value.project_chronology_first_diary,
+            last: phrase.value.project_chronology_last_diary,
+            only: phrase.value.diary_entry,
+          },
+        ),
       ],
       tags: data.value.tags,
-      relatedProjects: data.value.relatedProjects,
+      relatedEntities: data.value.relatedEntities,
+      diaryEntries: data.value.diaryEntries,
       references: data.value.references,
       metrics: (
         [
@@ -206,7 +237,16 @@ const ownerNotesContents = computed(() =>
       :tags="data.tags"
       :is-showcase="data.isShowcase"
       :is-cv="data.isCv"
-    />
+    >
+      <template #tabs>
+        <PublicProjectTabs
+          :human-readable-slug="data.humanReadableSlug"
+          :public-id="data.publicId"
+          :timeline-count="data.timeline.total"
+          active="overview"
+        />
+      </template>
+    </PublicProjectHero>
 
     <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
       <PublicShareNotice />
@@ -216,6 +256,15 @@ const ownerNotesContents = computed(() =>
         :extra-contents="ownerNotesContents"
       >
         <div class="flex min-w-0 flex-col gap-lg">
+          <PublicStatusBlock
+            v-if="data.currentStatus"
+            :current="data.currentStatus"
+            :count="data.statusCount"
+            :history-url="`/api/projects/${data.publicId}/statuses`"
+            :title="phrase.project_status"
+            compact
+          />
+
           <ContentRenderer
             v-if="data.description?.blocks.length"
             :data="data.description"
@@ -245,44 +294,31 @@ const ownerNotesContents = computed(() =>
           </section>
 
           <section
-            v-if="data.stages.length"
-            id="project-stages"
-            aria-labelledby="stages-heading"
+            v-if="data.timeline.latest.length"
+            id="project-timeline"
+            aria-labelledby="timeline-heading"
             class="flex scroll-mt-[var(--public-anchor-offset,8rem)] flex-col
               gap-sm"
           >
             <PublicSectionHeader
-              heading-id="stages-heading"
-              :title="phrase.project_stages"
-              icon="calendar"
-            />
-            <PublicProjectStageTimeline :items="data.stages" />
-          </section>
-
-          <section
-            v-if="data.relatedEvents.total"
-            id="project-events"
-            aria-labelledby="events-heading"
-            class="flex scroll-mt-[var(--public-anchor-offset,8rem)] flex-col
-              gap-sm"
-          >
-            <PublicSectionHeader
-              heading-id="events-heading"
-              :title="phrase.related_events"
-              icon="event"
+              heading-id="timeline-heading"
+              :title="phrase.project_timeline_latest"
+              icon="heart"
               :action="{
-                href: eventsHref,
+                href: timelineHref,
                 label: phrase.view_all,
-                count: data.relatedEvents.total,
+                count: data.timeline.total,
                 icon: 'arrow-outward',
               }"
             />
             <!-- One card per row: the sidebar already narrows this column. -->
             <div class="flex flex-col gap-sm">
-              <PublicEntityCard
-                v-for="item in data.relatedEvents.items"
-                :key="item.href"
-                :entity="item"
+              <LifePointCard
+                v-for="point in data.timeline.latest"
+                :key="point.key"
+                :point="point"
+                date-style="long"
+                compact
               />
             </div>
           </section>

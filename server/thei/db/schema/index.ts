@@ -3,13 +3,14 @@ import { backups } from './backups';
 import {
   profiles,
   profileAvatars,
-  profileStatuses,
   profilePinnedPages,
   profileExternalLinks,
 } from './profile';
+import { statuses } from './statuses';
 import { assetUsages } from './asset-usages';
 import { content } from './content';
 import { events } from './events';
+import { diaryEntries } from './diary-entries';
 import { projects } from './projects';
 import { pages } from './pages';
 import { adminSessions } from './admin-sessions';
@@ -19,25 +20,25 @@ import {
   projectStages,
 } from './project-content-sections';
 import { stagePeriods } from './stage-periods';
-import { projectRelations } from './project-relations';
+import { entityRelations } from './entity-relations';
 import { tags } from './tags';
 import { tagUsages } from './tag-usages';
 import { externalLinks } from './external-links';
 import { projectExternalLinks } from './project-external-links';
 import { eventExternalLinks } from './event-external-links';
-import { eventProjectRelations } from './event-project-relations';
 
 export const schema = {
   profiles,
   profileAvatars,
-  profileStatuses,
   profilePinnedPages,
   profileExternalLinks,
+  statuses,
   assets,
   assetUsages,
   backups,
   content,
   events,
+  diaryEntries,
   projects,
   pages,
   adminSessions,
@@ -46,11 +47,10 @@ export const schema = {
   projectContentSections,
   projectStages,
   stagePeriods,
-  projectRelations,
+  entityRelations,
   tags,
   tagUsages,
   externalLinks,
   projectExternalLinks,
   eventExternalLinks,
-  eventProjectRelations,
 };

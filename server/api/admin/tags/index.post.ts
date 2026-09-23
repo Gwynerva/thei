@@ -45,7 +45,6 @@ export default defineEventHandler(async (event): Promise<TagSaveResponse> => {
           slug: result.slug,
           publicId: result.publicId,
           description: result.description,
-          accentColor: result.accentColor,
         })
         .run();
       if (result.iconAssetUuid) {

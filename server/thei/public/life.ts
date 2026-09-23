@@ -2,15 +2,21 @@ import { eq } from 'drizzle-orm';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
+import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
+import { diaryContentExcerpt } from '#layers/thei/shared/diary-text';
 import {
   buildLifeUrl,
-  isLifePeriod,
+  isLifeDay,
+  lifeFilterIncludes,
+  LIFE_SCOPE_LIFE,
   lifeActivityDayTotal,
   type LifeActivityKind,
   type LifeActivityResponse,
   type LifeDay,
   type LifeEntityKind,
   type LifePoint,
+  type LifeFilter,
+  type LifeScope,
   type LifeTransition,
   type LifeWindowResponse,
 } from '#layers/thei/shared/life';
@@ -20,6 +26,8 @@ import {
 } from '#layers/thei/shared/project-url';
 import { hash } from '#layers/thei/shared/utils/hash';
 import { getProfile, historyItem } from '../profile';
+import { statusHistoryItem } from '../statuses';
+import { PROFILE_ID } from '#layers/thei/shared/profile';
 import {
   selectLifeRewindPoints,
   type LifeRewindResponse,
@@ -31,15 +39,18 @@ import {
   projectCreatedUtcDate,
   sortLifePoints,
 } from '#layers/thei/shared/life-timeline';
-import { buildPublicContentPreviewMedia } from './content';
+import { buildPublicEntityPreviewMedia } from './content';
 import {
   buildPublicEventSummary,
   buildPublicPageIcon,
-  buildPublicProjectReference,
+  buildPublicEntityReference,
   buildPublicProjectSummary,
   canListPublicEntity,
 } from './entities';
-import type { PublicProjectLink } from '#layers/thei/shared/api/public';
+import {
+  isPublicSecret,
+  type PublicEntityLink,
+} from '#layers/thei/shared/api/public';
 import { buildSecretReference, type SecretEntityKind } from './secret';
 
 type RawPoint = {
@@ -54,8 +65,17 @@ type RawPoint = {
   event?: any;
   page?: any;
   project?: any;
+  /**
+   * Every project this point belongs to, for scoping.
+   *
+   * A stage belongs to one project; an event may relate to several; a status
+   * belongs to whichever project owns it. Kept separate from `project`, which
+   * is the project shown on the card.
+   */
+  projectUuids?: string[];
   stage?: any;
   section?: any;
+  diaryEntry?: any;
   profileRecord?: {
     id: string;
     assetUuid: string | null;
@@ -69,16 +89,29 @@ type LifeIndex = {
   points: RawPoint[];
   dates: string[];
   pointsByDate: Map<string, RawPoint[]>;
+  /**
+   * The address of the project a scoped chronology belongs to. Its own cards
+   * do not name it again — on the project's page, "part of this project" and
+   * "related to this project" are both things the reader already knows.
+   */
+  ownHref?: string;
 };
 
-export async function getLifeWindow(options: {
-  period?: string;
-  cursor?: string;
-  direction?: 'around' | 'newer' | 'older';
+export type LifeQuery = {
+  scope?: LifeScope;
+  filter?: LifeFilter;
   isAdmin: boolean;
-}): Promise<LifeWindowResponse> {
-  const index = buildLifeIndex();
-  if (!index.dates.length && !options.period && !options.cursor)
+};
+
+export async function getLifeWindow(
+  options: LifeQuery & {
+    date?: string;
+    cursor?: string;
+    direction?: 'around' | 'newer' | 'older';
+  },
+): Promise<LifeWindowResponse> {
+  const index = buildLifeIndex(options.scope, options.filter);
+  if (!index.dates.length && !options.date && !options.cursor)
     return { days: [], anchorDate: '', newestDate: '' };
   if (!index.dates.length)
     throw createError({ statusCode: 404, statusText: 'Life is empty' });
@@ -88,13 +121,14 @@ export async function getLifeWindow(options: {
     anchorDate = decodeLifeCursor(options.cursor);
     if (!index.pointsByDate.has(anchorDate))
       throw createError({ statusCode: 400, statusText: 'Invalid cursor' });
-  } else if (options.period) {
-    if (!isLifePeriod(options.period))
-      throw createError({ statusCode: 404, statusText: 'Period not found' });
+  } else if (options.date) {
+    if (!isLifeDay(options.date))
+      throw createError({ statusCode: 404, statusText: 'Day not found' });
+    // A day nothing happened on, or one the filter hides, opens at the
+    // nearest day that does hold something rather than 404ing: a shared link
+    // stays useful after its day is filtered away.
     anchorDate =
-      index.dates.find((date) => date.startsWith(options.period!)) ?? '';
-    if (!anchorDate)
-      throw createError({ statusCode: 404, statusText: 'Period not found' });
+      index.dates.find((date) => date <= options.date!) ?? index.dates.at(-1)!;
   } else {
     anchorDate = index.dates[0]!;
   }
@@ -131,21 +165,54 @@ export async function getLifeWindow(options: {
   };
 }
 
-export async function getLatestLifePoints(limit: number, isAdmin: boolean) {
-  const index = buildLifeIndex();
-  const selected = selectLatestContentLifePoints(index.points, limit);
-  return Promise.all(selected.map((point) => hydrateLifePoint(point, isAdmin)));
+export async function getLatestLifePoints(limit: number, options: LifeQuery) {
+  const index = buildLifeIndex(options.scope, options.filter);
+  const selected = selectLatestContentLifePoints(
+    index.points,
+    limit,
+    options.scope,
+  );
+  return Promise.all(
+    selected.map(async (point) =>
+      withoutOwnProject(
+        await hydrateLifePoint(point, options.isAdmin),
+        index.ownHref,
+      ),
+    ),
+  );
 }
 
+/**
+ * How many points a chronology holds, secrets included.
+ *
+ * Used for the counter on a project's "Chronology" tab. A secret is counted
+ * because the feed behind the tab shows it too — under a codename — and a
+ * number that disagrees with what the tab opens onto reads as a bug.
+ */
+export function countLifePoints(options: Omit<LifeQuery, 'isAdmin'>): number {
+  return buildLifeIndex(options.scope, options.filter).points.length;
+}
+
+/**
+ * The newest points worth putting on a summary block.
+ *
+ * On the home page the person's own avatar and status changes are left out —
+ * they have their own blocks right there. A project's summary keeps its
+ * statuses, because that is the only place they are summarised.
+ */
 export function selectLatestContentLifePoints<
   T extends { entityKind: LifeEntityKind },
->(points: readonly T[], limit: number): T[] {
+>(
+  points: readonly T[],
+  limit: number,
+  scope: LifeScope = LIFE_SCOPE_LIFE,
+): T[] {
   const normalizedLimit = Math.min(20, Math.max(1, limit));
   return points
     .filter(
       (point) =>
         point.entityKind !== 'profile-avatar' &&
-        point.entityKind !== 'profile-status',
+        (scope.kind === 'project' || point.entityKind !== 'profile-status'),
     )
     .slice(0, normalizedLimit);
 }
@@ -193,6 +260,32 @@ function buildRawLifePoints(): RawPoint[] {
   );
   const eventById = new Map(events.map((event) => [event.eventUuid, event]));
   const stageById = new Map(stages.map((stage) => [stage.stageUuid, stage]));
+  // An event belongs to a project's chronology through its relations, which is
+  // the same list the project page already shows as related events.
+  const projectsByEvent = new Map<string, string[]>();
+  // A diary entry reaches a project's chronology the same way an event does:
+  // through the relation the author drew between them.
+  const projectsByDiaryEntry = new Map<string, string[]>();
+  for (const row of db.select().from(schema.entityRelations).all()) {
+    const ends = [
+      { type: row.firstType, id: row.firstId },
+      { type: row.secondType, id: row.secondId },
+    ];
+    const project = ends.find((end) => end.type === 'project');
+    if (!project) continue;
+    const event = ends.find((end) => end.type === 'event');
+    if (event) {
+      const list = projectsByEvent.get(event.id) ?? [];
+      list.push(project.id);
+      projectsByEvent.set(event.id, list);
+      continue;
+    }
+    const entry = ends.find((end) => end.type === 'diary-entry');
+    if (!entry) continue;
+    const list = projectsByDiaryEntry.get(entry.id) ?? [];
+    list.push(project.id);
+    projectsByDiaryEntry.set(entry.id, list);
+  }
   const raw: RawPoint[] = [];
 
   for (const period of periods) {
@@ -207,9 +300,7 @@ function buildRawLifePoints(): RawPoint[] {
           'started',
           event.access,
           period.sortOrder,
-          {
-            event,
-          },
+          { event, projectUuids: projectsByEvent.get(event.eventUuid) ?? [] },
         ),
         boundaryPoint(
           'event',
@@ -218,9 +309,7 @@ function buildRawLifePoints(): RawPoint[] {
           'ended',
           event.access,
           period.sortOrder,
-          {
-            event,
-          },
+          { event, projectUuids: projectsByEvent.get(event.eventUuid) ?? [] },
         ),
       );
     } else {
@@ -235,7 +324,12 @@ function buildRawLifePoints(): RawPoint[] {
           'started',
           project.access,
           period.sortOrder,
-          { stage, project, isPrivate: stage.isPrivate },
+          {
+            stage,
+            project,
+            isPrivate: stage.isPrivate,
+            projectUuids: [project.projectUuid],
+          },
         ),
         boundaryPoint(
           'project-stage',
@@ -244,7 +338,12 @@ function buildRawLifePoints(): RawPoint[] {
           'ended',
           project.access,
           period.sortOrder,
-          { stage, project, isPrivate: stage.isPrivate },
+          {
+            stage,
+            project,
+            isPrivate: stage.isPrivate,
+            projectUuids: [project.projectUuid],
+          },
         ),
       );
     }
@@ -259,6 +358,7 @@ function buildRawLifePoints(): RawPoint[] {
       sortTime: project.createdAt,
       access: project.access,
       project,
+      projectUuids: [project.projectUuid],
     });
   }
   for (const page of pages) {
@@ -285,29 +385,80 @@ function buildRawLifePoints(): RawPoint[] {
       isPrivate: section.isPrivate,
       project,
       section,
+      projectUuids: [project.projectUuid],
     });
   }
 
-  for (const [entityKind, records] of [
-    ['profile-avatar', db.select().from(schema.profileAvatars).all()],
-    ['profile-status', db.select().from(schema.profileStatuses).all()],
-  ] as const) {
-    for (const record of records)
-      raw.push({
-        identity: `${entityKind}:${record.id}`,
-        entityKind,
-        transition: 'created',
-        date: new Date(record.createdAt).toISOString().slice(0, 10),
-        sortTime: record.createdAt,
-        access: ProjectEventAccessLevel.Public,
-        profileRecord: record,
-      });
+  for (const entry of db.select().from(schema.diaryEntries).all()) {
+    raw.push({
+      identity: `diary-entry:${entry.diaryUuid}`,
+      date: entry.date,
+      entityKind: 'diary-entry',
+      transition: 'created',
+      // Two entries never share a day, so the day itself orders them; the
+      // hour they happened to be typed at says nothing worth sorting by.
+      sortTime: Date.parse(`${entry.date}T12:00:00.000Z`),
+      access: entry.access,
+      diaryEntry: entry,
+      projectUuids: projectsByDiaryEntry.get(entry.diaryUuid) ?? [],
+    });
+  }
+
+  for (const record of db.select().from(schema.profileAvatars).all()) {
+    raw.push({
+      identity: `profile-avatar:${record.id}`,
+      entityKind: 'profile-avatar',
+      transition: 'created',
+      date: new Date(record.createdAt).toISOString().slice(0, 10),
+      sortTime: record.createdAt,
+      access: ProjectEventAccessLevel.Public,
+      profileRecord: record,
+    });
+  }
+
+  // Statuses of both kinds share one point kind: the card tells them apart by
+  // whether it has a project to name, and a reader filtering "statuses" on a
+  // project's chronology means the project's own.
+  for (const record of db.select().from(schema.statuses).all()) {
+    const project =
+      record.ownerType === 'project'
+        ? projectById.get(record.ownerId)
+        : undefined;
+    if (record.ownerType === 'project' && !project) continue;
+    raw.push({
+      identity: `profile-status:${record.id}`,
+      entityKind: 'profile-status',
+      transition: 'created',
+      date: new Date(record.createdAt).toISOString().slice(0, 10),
+      sortTime: record.createdAt,
+      access: project?.access ?? ProjectEventAccessLevel.Public,
+      profileRecord: record,
+      ...(project
+        ? { project, projectUuids: [project.projectUuid] }
+        : { projectUuids: [] }),
+    });
   }
   return raw;
 }
 
-function buildLifeIndex(): LifeIndex {
-  const points = sortLifePoints(mergeLifeBoundaryPoints(buildRawLifePoints()));
+/**
+ * Every point a reader may see, narrowed to one scope and one filter.
+ *
+ * Narrowing happens before the index is built, not after: the window walks
+ * `dates`, so a day whose only points were filtered out has to be gone by then
+ * or the feed shows an empty segment.
+ */
+function buildLifeIndex(
+  scope: LifeScope = LIFE_SCOPE_LIFE,
+  filter?: LifeFilter,
+): LifeIndex {
+  const raw = buildRawLifePoints().filter(
+    (point) =>
+      lifeFilterIncludes(filter, point.entityKind) &&
+      (scope.kind !== 'project' ||
+        (point.projectUuids?.includes(scope.projectUuid) ?? false)),
+  );
+  const points = sortLifePoints(mergeLifeBoundaryPoints(raw));
   const pointsByDate = new Map<string, RawPoint[]>();
   for (const point of points) {
     const list = pointsByDate.get(point.date) ?? [];
@@ -318,6 +469,37 @@ function buildLifeIndex(): LifeIndex {
     points,
     dates: Array.from(pointsByDate.keys()).sort().reverse(),
     pointsByDate,
+    ownHref: scopeProjectHref(scope),
+  };
+}
+
+function scopeProjectHref(scope: LifeScope): string | undefined {
+  if (scope.kind !== 'project') return undefined;
+  const { db, schema } = THEI_SERVER.useDb();
+  const project = db
+    .select({
+      humanReadableSlug: schema.projects.humanReadableSlug,
+      publicId: schema.projects.publicId,
+    })
+    .from(schema.projects)
+    .where(eq(schema.projects.projectUuid, scope.projectUuid))
+    .get();
+  return project
+    ? buildProjectUrl(project.humanReadableSlug, project.publicId)
+    : undefined;
+}
+
+/** Drops the scope's own project from a card that would name it again. */
+function withoutOwnProject(point: LifePoint, ownHref?: string): LifePoint {
+  if (!ownHref || point.visibility !== 'visible') return point;
+  const { project, relatedEntities, ...rest } = point;
+  const related = relatedEntities?.filter(
+    (entity) => isPublicSecret(entity) || entity.href !== ownHref,
+  );
+  return {
+    ...rest,
+    ...(project && project.href !== ownHref ? { project } : {}),
+    ...(related?.length ? { relatedEntities: related } : {}),
   };
 }
 
@@ -351,8 +533,11 @@ async function hydrateLifeDay(
   return {
     date,
     points: await Promise.all(
-      (index.pointsByDate.get(date) ?? []).map((point) =>
-        hydrateLifePoint(point, isAdmin),
+      (index.pointsByDate.get(date) ?? []).map(async (point) =>
+        withoutOwnProject(
+          await hydrateLifePoint(point, isAdmin),
+          index.ownHref,
+        ),
       ),
     ),
   };
@@ -406,18 +591,30 @@ async function hydrateLifePoint(
       text: string;
       kind: 'regular' | 'empty';
     };
-    const record = await historyItem(statusRecord, 'statuses');
+    // A project's status is titled and linked by its project; the person's own
+    // keeps the profile's name and the block on the home page.
+    const owner = point.project;
+    const record = await statusHistoryItem(
+      statusRecord,
+      owner
+        ? { type: 'project', id: owner.projectUuid }
+        : { type: 'profile', id: PROFILE_ID },
+      isAdmin,
+    );
     return {
       key,
       date: point.date,
       entityKind: point.entityKind,
       transition: point.transition,
       visibility: 'visible',
-      title: getProfile().displayName,
+      title: owner ? owner.title : getProfile().displayName,
       summary: record.text,
-      href: '/#statuses',
+      href: owner
+        ? `${buildProjectUrl(owner.humanReadableSlug, owner.publicId)}#statuses`
+        : '/#statuses',
       media: record.media,
-      profileStatusKind: record.kind,
+      statusKind: record.kind,
+      ...(owner ? { project: await buildPublicEntityReference(owner) } : {}),
     };
   }
   if (point.entityKind === 'event') {
@@ -435,7 +632,37 @@ async function hydrateLifePoint(
       href: buildEventUrl(event.humanReadableSlug, event.publicId),
       media: summary.media,
       tags: summary.tags,
-      relatedProjects: summary.relatedProjects,
+      relatedEntities: summary.relatedEntities,
+    };
+  }
+  if (point.entityKind === 'diary-entry') {
+    const entry = point.diaryEntry!;
+    const [media, content] = await Promise.all([
+      buildPublicEntityPreviewMedia(
+        'diary-entry',
+        entry.diaryUuid,
+        'diary-body',
+        { type: 'diary-entry', date: entry.date },
+        isAdmin,
+      ),
+      THEI_SERVER.content.findByOwner(
+        'diary-entry',
+        entry.diaryUuid,
+        'diary-body',
+      ),
+    ]);
+    return {
+      key,
+      date: point.date,
+      entityKind: point.entityKind,
+      transition: point.transition,
+      visibility: 'visible',
+      // An entry has no title of its own, and the card knows to print its
+      // opening in place of one rather than a heading and a summary.
+      title: '',
+      summary: diaryContentExcerpt(content?.data, isAdmin),
+      href: buildDiaryUrl(entry.date),
+      ...(media ? { media } : {}),
     };
   }
   if (point.entityKind === 'page') {
@@ -472,14 +699,14 @@ async function hydrateLifePoint(
   if (point.entityKind === 'project-stage') {
     const stage = point.stage!;
     const [media, projectReference] = await Promise.all([
-      buildPublicContentPreviewMedia(
+      buildPublicEntityPreviewMedia(
         'project-stage',
         stage.stageUuid,
         'project-stage-body',
         { type: 'project', ...project },
         isAdmin,
       ),
-      buildPublicProjectReference(project),
+      buildPublicEntityReference(project),
     ]);
     return {
       key,
@@ -503,14 +730,14 @@ async function hydrateLifePoint(
   }
   const section = point.section!;
   const [media, projectReference] = await Promise.all([
-    buildPublicContentPreviewMedia(
+    buildPublicEntityPreviewMedia(
       'project-section',
       section.sectionUuid,
       'project-section-body',
       { type: 'project', ...project },
       isAdmin,
     ),
-    buildPublicProjectReference(project),
+    buildPublicEntityReference(project),
   ]);
   return {
     key,
@@ -535,6 +762,7 @@ async function hydrateLifePoint(
 
 function secretPointUuid(point: RawPoint): string {
   if (point.entityKind === 'event') return point.event!.eventUuid;
+  if (point.entityKind === 'diary-entry') return point.diaryEntry!.diaryUuid;
   if (point.entityKind === 'page') return point.page!.pageUuid;
   if (point.entityKind === 'project-stage') return point.stage!.stageUuid;
   if (point.entityKind === 'project-section') return point.section!.sectionUuid;
@@ -549,7 +777,7 @@ export function decodeLifeCursor(cursor: string) {
   try {
     const value = Buffer.from(cursor, 'base64url').toString();
     const match = /^life:v1:(\d{4}-\d{2}-\d{2})$/.exec(value);
-    if (match && isLifePeriod(match[1]!)) return match[1]!;
+    if (match && isLifeDay(match[1]!)) return match[1]!;
   } catch {}
   throw createError({ statusCode: 400, statusText: 'Invalid cursor' });
 }
@@ -564,11 +792,10 @@ export { buildLifeUrl };
  * is counted as `secret` — the feed already admits that something happened on
  * that day without saying what.
  */
-export async function getLifeActivity(options: {
-  year?: number;
-  isAdmin: boolean;
-}): Promise<LifeActivityResponse> {
-  const index = buildLifeIndex();
+export async function getLifeActivity(
+  options: LifeQuery & { year?: number },
+): Promise<LifeActivityResponse> {
+  const index = buildLifeIndex(options.scope, options.filter);
   const years = [
     ...new Set(index.dates.map((date) => Number(date.slice(0, 4)))),
   ].sort((a, b) => b - a);
@@ -622,7 +849,7 @@ export async function getLifeActivity(options: {
 async function buildLifeActivityProjects(
   year: number,
   isAdmin: boolean,
-): Promise<PublicProjectLink[]> {
+): Promise<PublicEntityLink[]> {
   const { db, schema } = THEI_SERVER.useDb();
   const start = `${year}-01-01`;
   const end = `${year}-12-31`;
@@ -658,7 +885,7 @@ async function buildLifeActivityProjects(
       const project = await THEI_SERVER.projects.findByUuid(projectUuid);
       if (!project) return undefined;
       return canListPublicEntity(project.access, isAdmin)
-        ? await buildPublicProjectReference(project)
+        ? await buildPublicEntityReference(project)
         : buildSecretReference('project', project.projectUuid);
     }),
   );
@@ -668,8 +895,8 @@ async function buildLifeActivityProjects(
 /** One day, hydrated, for the panel under the activity grid. */
 export async function getLifeDay(
   date: string,
-  isAdmin: boolean,
+  options: LifeQuery,
 ): Promise<LifeDay> {
-  const index = buildLifeIndex();
-  return hydrateLifeDay(index, date, isAdmin);
+  const index = buildLifeIndex(options.scope, options.filter);
+  return hydrateLifeDay(index, date, options.isAdmin);
 }

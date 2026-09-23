@@ -19,10 +19,11 @@ import {
   getEventPeriods,
 } from '../../../thei/events/periods';
 import {
-  prepareEventRelations,
-  applyEventRelations,
-  getEventRelations,
-} from '../../../thei/events/relations';
+  applyRelations,
+  deleteRelations,
+  getRelations,
+  prepareRelations,
+} from '../../../thei/relations';
 import {
   applyEventExternalLinks,
   getEventExternalLinks,
@@ -82,7 +83,7 @@ export default defineEventHandler(async (event) => {
       ] = await Promise.all([
         prepareContentForSave('event', eventUuid, 'event-body', result.content),
         prepareContentForSave('event', eventUuid, 'event-notes', result.notes),
-        prepareEventRelations(result.relations),
+        prepareRelations({ type: 'event', id: eventUuid }, result.relations),
         prepareExternalLinks(result.externalLinks),
         prepareTagUsages(result.tags),
         THEI_SERVER.assets.usages.findByContainer('event', eventUuid),
@@ -131,7 +132,7 @@ export default defineEventHandler(async (event) => {
           'event-notes',
           notesSave,
         );
-        applyEventRelations(tx, schema, eventUuid, relations);
+        applyRelations(tx, schema, { type: 'event', id: eventUuid }, relations);
         applyEventExternalLinks(tx, schema, eventUuid, externalLinks);
         applyTagUsages(tx, schema, 'event', eventUuid, tags);
         syncEntityActionUsages(
@@ -202,9 +203,7 @@ export default defineEventHandler(async (event) => {
           ),
         )
         .run();
-      tx.delete(schema.eventProjectRelations)
-        .where(eq(schema.eventProjectRelations.eventUuid, eventUuid))
-        .run();
+      deleteRelations(tx, schema, { type: 'event', id: eventUuid });
       tx.delete(schema.eventExternalLinks)
         .where(eq(schema.eventExternalLinks.eventUuid, eventUuid))
         .run();
@@ -262,7 +261,7 @@ async function getEvent(
     THEI_SERVER.content.buildFieldValue('event', eventUuid, 'event-body'),
     THEI_SERVER.content.buildFieldValue('event', eventUuid, 'event-notes'),
     getEventPeriods(eventUuid),
-    getEventRelations(eventUuid),
+    getRelations({ type: 'event', id: eventUuid }),
     getEventExternalLinks(eventUuid),
     listTagsForContainer('event', eventUuid),
   ]);

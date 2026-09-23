@@ -1,9 +1,12 @@
 <script lang="ts" setup>
 import type { MediaPlayback } from '#layers/thei/shared/media';
-import type { ResolvedContentLink } from '#layers/thei/shared/content-link';
+import {
+  contentEntityHasIcon,
+  type ResolvedContentLink,
+} from '#layers/thei/shared/content-link';
 import type { ExternalLink } from '#layers/thei/shared/external-link';
 import ExternalLinkPreviewCard from '#layers/thei/app/components/external-links/ExternalLinkPreviewCard.vue';
-import ProjectLinkPreviewCard from './ProjectLinkPreviewCard.vue';
+import EntityLinkPreviewCard from './EntityLinkPreviewCard.vue';
 
 const props = defineProps<{
   result?: ResolvedContentLink;
@@ -30,27 +33,23 @@ const externalLink = computed<ExternalLink | undefined>(() => {
 </script>
 
 <template>
-  <ProjectLinkPreviewCard
-    v-if="
-      result?.state === 'resolved' &&
-      (result.kind === 'project' ||
-        result.kind === 'event' ||
-        result.kind === 'page')
-    "
-    :entity-type="result.kind"
+  <EntityLinkPreviewCard
+    v-if="result?.state === 'resolved' && result.kind === 'entity'"
+    :entity-type="result.entityType"
     :title="result.title"
     :summary="result.summary"
-    :icon-media="
-      result.kind === 'event' ? result.previewMedia : result.iconMedia
-    "
+    :date="result.date"
+    :parent="result.parent"
+    :icon-media="result.media"
     :href="result.href"
     :interactive="interactive"
     :playback
-    :loop="continuousProjectMedia && result.kind === 'project'"
+    :loop="continuousProjectMedia && contentEntityHasIcon(result.entityType)"
     :autoplay-reduced-motion="
-      continuousProjectMedia && result.kind === 'project'
+      continuousProjectMedia && contentEntityHasIcon(result.entityType)
     "
     :flush="flush"
+    :compact="flush"
   />
   <div
     v-else-if="result?.state === 'restricted'"

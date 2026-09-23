@@ -113,7 +113,7 @@ function periodDurationLabel(period: DateRange) {
           ></span>
         </span>
         <TheiLink
-          :to="buildLifeUrl(period.endDate)"
+          :to="buildLifeUrl({ date: period.endDate })"
           class="min-w-0 rounded-xs leading-tight text-text-1 transition
             focus-visible:ring-2 focus-visible:ring-accent
             focus-visible:outline-none hocus:text-accent"
@@ -161,7 +161,7 @@ function periodDurationLabel(period: DateRange) {
           ></span>
         </span>
         <TheiLink
-          :to="buildLifeUrl(period.endDate)"
+          :to="buildLifeUrl({ date: period.endDate })"
           class="min-w-0 rounded-xs leading-tight text-text-1 transition
             focus-visible:ring-2 focus-visible:ring-accent
             focus-visible:outline-none hocus:text-accent"

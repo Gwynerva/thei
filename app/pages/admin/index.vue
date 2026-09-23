@@ -2,33 +2,44 @@
 import type { ProjectListResponse } from '#layers/thei/shared/api/project';
 import type { EventListResponse } from '#layers/thei/shared/api/event';
 import type { PageListResponse } from '#layers/thei/shared/api/page';
+import type { DiaryListResponse } from '#layers/thei/shared/api/diary';
 import type { AssetLibraryAvailability } from '#layers/thei/shared/asset-library';
 
 definePageMeta({ layout: 'admin' });
 
 await useAdminTabTitle(computed(() => phrase.value.admin_panel));
 
-const [projectsResult, eventsResult, pagesResult, tagsResult, assetsResult] =
-  await Promise.all([
-    useFetch<ProjectListResponse>('/api/admin/projects', {
-      query: { order: 'newest', page: 1, pageSize: 5 },
-      key: 'admin-dashboard-projects',
-    }),
-    useFetch<EventListResponse>('/api/admin/events', {
-      query: { order: 'newest', page: 1, pageSize: 5 },
-      key: 'admin-dashboard-events',
-    }),
-    useFetch<PageListResponse>('/api/admin/pages', {
-      query: { order: 'newest', page: 1, pageSize: 1 },
-      key: 'admin-dashboard-pages',
-    }),
-    useFetch<{ count: number }>('/api/admin/tags/stats', {
-      key: 'admin-tag-count',
-    }),
-    useFetch<AssetLibraryAvailability>('/api/admin/assets/availability', {
-      key: 'admin-asset-count',
-    }),
-  ]);
+const [
+  projectsResult,
+  eventsResult,
+  diaryResult,
+  pagesResult,
+  tagsResult,
+  assetsResult,
+] = await Promise.all([
+  useFetch<ProjectListResponse>('/api/admin/projects', {
+    query: { order: 'newest', page: 1, pageSize: 5 },
+    key: 'admin-dashboard-projects',
+  }),
+  useFetch<EventListResponse>('/api/admin/events', {
+    query: { order: 'newest', page: 1, pageSize: 5 },
+    key: 'admin-dashboard-events',
+  }),
+  useFetch<DiaryListResponse>('/api/admin/diary', {
+    query: { order: 'newest', page: 1, pageSize: 1 },
+    key: 'admin-dashboard-diary',
+  }),
+  useFetch<PageListResponse>('/api/admin/pages', {
+    query: { order: 'newest', page: 1, pageSize: 1 },
+    key: 'admin-dashboard-pages',
+  }),
+  useFetch<{ count: number }>('/api/admin/tags/stats', {
+    key: 'admin-tag-count',
+  }),
+  useFetch<AssetLibraryAvailability>('/api/admin/assets/availability', {
+    key: 'admin-asset-count',
+  }),
+]);
 
 const projectItems = computed(() =>
   (projectsResult.data.value?.items ?? []).map((project) => ({
@@ -78,6 +89,13 @@ const eventItems = computed(() =>
         :empty-label="phrase.no_events"
         :items="eventItems"
         :error="Boolean(eventsResult.error.value)"
+      />
+      <AdminDashboardLink
+        to="/admin/diary/"
+        icon="thought"
+        :title="phrase.admin_diary"
+        :description="phrase.admin_diary_description"
+        :count="diaryResult.data.value?.total ?? 0"
       />
       <AdminDashboardLink
         to="/admin/tags/"

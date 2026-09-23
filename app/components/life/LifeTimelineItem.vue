@@ -1,79 +1,131 @@
 <script lang="ts" setup>
 import type { LifePoint, LifeRailTone } from '#layers/thei/shared/life';
+import { lifeEntityKindIcon } from './life-entity-icon';
 
 const props = withDefaults(
   defineProps<{
     point: LifePoint;
     tone?: LifeRailTone;
     active?: boolean;
-    activeStart?: boolean;
-    activeEnd?: boolean;
+    /** First and last point of its day, for the rail masks and the date. */
+    first?: boolean;
+    last?: boolean;
+    /** The first day of a year gets the year drawn above its date. */
+    showYear?: boolean;
+    dateHref: string;
   }>(),
-  { tone: 'accent', active: false, activeStart: false, activeEnd: false },
+  { tone: 'accent', active: false, first: false, last: false, showYear: false },
 );
+const emit = defineEmits<{ pick: [] }>();
 const isNew = computed(() => props.tone === 'warning');
-const pointIcon = computed(() => {
-  const point = props.point;
-  if (point.visibility === 'secret') return 'lock-close';
-  if (point.entityKind === 'event') return 'event';
-  if (point.entityKind === 'page') return 'page';
-  if (point.entityKind === 'project-stage') return 'calendar';
-  if (point.entityKind === 'project-section') return 'file-tray-stack';
-  if (point.entityKind === 'profile-avatar') return 'person';
-  if (point.entityKind === 'profile-status') return 'quote';
-  return 'project';
-});
+const pointIcon = computed(() =>
+  props.point.visibility === 'secret'
+    ? 'lock-close'
+    : lifeEntityKindIcon(props.point.entityKind),
+);
 </script>
 
 <template>
-  <LifeTimelineGrid class="life-item min-w-0">
-    <div class="relative flex justify-center">
-      <span
-        class="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 sm:w-1"
-        :class="isNew ? 'bg-text-warning/85' : 'bg-accent/75'"
-      ></span>
-      <span
-        class="life-active-rail absolute inset-y-0 left-1/2 w-10
-          -translate-x-1/2 opacity-0 transition-opacity duration-300
-          motion-reduce:duration-0 sm:w-14"
-        :class="[
-          isNew ? 'text-text-warning' : 'text-accent',
-          {
-            'opacity-100': active,
-            'life-active-rail--start': activeStart && !activeEnd,
-            'life-active-rail--end': activeEnd && !activeStart,
-            'life-active-rail--both': activeStart && activeEnd,
-          },
-        ]"
-        aria-hidden="true"
+  <div class="life-item min-w-0">
+    <!--
+      The day's header is a row of its own rather than something stacked on top
+      of the first card: that way the marker below stays level with the card it
+      belongs to instead of drifting down by the height of the date.
+    -->
+    <LifeTimelineGrid v-if="first">
+      <TheiLink
+        :to="dateHref"
+        class="group relative flex cursor-pointer justify-center"
+        :aria-label="phrase.life_copy_link"
+        @click="emit('pick')"
       >
         <span
-          class="life-active-rail-core absolute inset-y-0 left-1/2 w-0.5
-            -translate-x-1/2 bg-current sm:w-1"
+          class="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 sm:w-1"
+          :class="isNew ? 'bg-text-warning/85' : 'bg-accent/75'"
         ></span>
-      </span>
-      <div class="relative z-1 mt-sm flex flex-col items-center sm:mt-md">
         <span
-          class="life-point-marker flex size-7 items-center justify-center
-            rounded-full border-2 border-bg-1 text-sm text-white shadow-md
-            shadow-shadow-2 sm:size-10 sm:border-4 sm:text-lg"
-          :class="{ 'life-point-marker--warning': isNew }"
-        >
-          <Icon :name="pointIcon" />
-        </span>
-        <span
-          v-if="isNew"
-          class="life-new-marker mt-1 flex size-4 items-center justify-center
-            rounded-full border border-bg-1 text-xs text-white shadow-sm ring-2
-            shadow-shadow-2 ring-bg-1 sm:size-5 sm:ring-4"
+          class="life-active-rail life-active-rail--start absolute inset-y-0
+            left-1/2 w-10 -translate-x-1/2 opacity-0 transition-opacity
+            duration-300 group-hocus:opacity-60 motion-reduce:duration-0
+            sm:w-14"
+          :class="[
+            isNew ? 'text-text-warning' : 'text-accent',
+            { 'opacity-100': active },
+          ]"
           aria-hidden="true"
         >
-          <Icon name="fire" />
+          <span
+            class="life-active-rail-core absolute inset-y-0 left-1/2 w-0.5
+              -translate-x-1/2 bg-current sm:w-1"
+          ></span>
         </span>
-      </div>
-    </div>
-    <LifePointCard :point="point" class="my-xs" />
-  </LifeTimelineGrid>
+      </TheiLink>
+      <LifeDateMarker
+        :date="point.date"
+        :show-year="showYear"
+        :active="active"
+        :href="dateHref"
+        class="pt-sm sm:pt-md"
+        @pick="emit('pick')"
+      />
+    </LifeTimelineGrid>
+
+    <LifeTimelineGrid class="min-w-0">
+      <!--
+        The whole segment of rail is the day's own control: a click anywhere on
+        it selects the day, rather than making the reader aim at a marker.
+      -->
+      <TheiLink
+        :to="dateHref"
+        class="group relative flex cursor-pointer justify-center"
+        :aria-label="phrase.life_copy_link"
+        @click="emit('pick')"
+      >
+        <span
+          class="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 sm:w-1"
+          :class="isNew ? 'bg-text-warning/85' : 'bg-accent/75'"
+        ></span>
+        <span
+          class="life-active-rail absolute inset-y-0 left-1/2 w-10
+            -translate-x-1/2 opacity-0 transition-opacity duration-300
+            group-hocus:opacity-60 motion-reduce:duration-0 sm:w-14"
+          :class="[
+            isNew ? 'text-text-warning' : 'text-accent',
+            {
+              'opacity-100': active,
+              'life-active-rail--end': last,
+            },
+          ]"
+          aria-hidden="true"
+        >
+          <span
+            class="life-active-rail-core absolute inset-y-0 left-1/2 w-0.5
+              -translate-x-1/2 bg-current sm:w-1"
+          ></span>
+        </span>
+        <div class="relative z-1 mt-xs flex flex-col items-center sm:mt-sm">
+          <span
+            class="life-point-marker flex size-7 items-center justify-center
+              rounded-full border-2 border-bg-1 text-sm text-white shadow-md
+              shadow-shadow-2 sm:size-10 sm:border-4 sm:text-lg"
+            :class="{ 'life-point-marker--warning': isNew }"
+          >
+            <Icon :name="pointIcon" />
+          </span>
+          <span
+            v-if="isNew"
+            class="life-new-marker mt-1 flex size-4 items-center justify-center
+              rounded-full border border-bg-1 text-xs text-white shadow-sm
+              ring-2 shadow-shadow-2 ring-bg-1 sm:size-5 sm:ring-4"
+            aria-hidden="true"
+          >
+            <Icon name="fire" />
+          </span>
+        </div>
+      </TheiLink>
+      <LifePointCard :point="point" class="my-xs" />
+    </LifeTimelineGrid>
+  </div>
 </template>
 
 <style scoped>

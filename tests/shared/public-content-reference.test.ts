@@ -102,9 +102,9 @@ describe('public content reference extraction', () => {
     expect(result.links).toEqual([
       { kind: 'external', url: 'https://example.com/reference' },
       { kind: 'external', url: 'https://other.example/' },
-      { kind: 'project', projectUuid: 'project-one' },
-      { kind: 'event', eventUuid: 'event-one' },
-      { kind: 'page', pageUuid: 'page-one' },
+      { kind: 'entity', entityType: 'project', entityId: 'project-one' },
+      { kind: 'entity', entityType: 'event', entityId: 'event-one' },
+      { kind: 'entity', entityType: 'page', entityId: 'page-one' },
     ]);
     expect(result.files).toEqual([
       {

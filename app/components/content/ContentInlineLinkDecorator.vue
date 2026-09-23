@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { MediaPlayback } from '#layers/thei/shared/media';
 import {
+  contentEntityHasIcon,
   contentLinkIsRestricted,
   contentLinkReferenceFromAnchor,
   contentLinkReferenceKey,
@@ -93,11 +94,7 @@ function applyRuntimeState(
 
   if (resolved.state === 'broken' || resolved.state === 'restricted') {
     link.setAttribute('aria-invalid', 'true');
-    if (
-      reference.kind === 'project' ||
-      reference.kind === 'event' ||
-      reference.kind === 'page'
-    ) {
+    if (reference.kind === 'entity') {
       link.removeAttribute('href');
       link.removeAttribute('target');
       link.removeAttribute('rel');
@@ -109,14 +106,17 @@ function applyRuntimeState(
 
   link.removeAttribute('aria-invalid');
   setNavigation(link, resolved.href);
-  // Events have no icon of their own; content.css draws the event glyph.
-  if (resolved.kind === 'event') return;
-  const iconUrl = resolved.iconMedia?.previewSrc || resolved.iconMedia?.src;
+  // Only projects and pages have an icon of their own; content.css draws the
+  // glyph of every other kind.
+  if (resolved.kind === 'entity' && !contentEntityHasIcon(resolved.entityType))
+    return;
+  const icon = resolved.kind === 'entity' ? resolved.media : resolved.iconMedia;
+  const iconUrl = icon?.previewSrc || icon?.src;
   if (iconUrl)
     link.style.setProperty('--content-link-icon', `url("${cssUrl(iconUrl)}")`);
   link.style.setProperty(
     '--content-link-accent',
-    imageAccentCssColor(resolved.iconMedia?.accent),
+    imageAccentCssColor(icon?.accent),
   );
 }
 
@@ -207,7 +207,9 @@ onBeforeUnmount(() => {
       :loading="!result"
       :interactive="false"
       :playback
-      :continuous-project-media="result?.kind === 'project'"
+      :continuous-project-media="
+        result?.kind === 'entity' && contentEntityHasIcon(result.entityType)
+      "
       flush
     />
   </FloatingPopup>

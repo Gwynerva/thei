@@ -3,6 +3,10 @@ import baseline from './0.0.1-baseline';
 import accessLinks from './0.0.2-access-links';
 import datePrecision from './0.0.2-date-precision';
 import entityReminders from './0.0.2-entity-reminders';
+import statusesOwner from './0.0.2-statuses-owner';
+import tagAccent from './0.0.2-tag-accent';
+import entityRelations from './0.0.2-entity-relations';
+import diaryEntries from './0.0.2-diary-entries';
 
 /**
  * Every migration Thei has ever shipped, oldest first.
@@ -19,6 +23,10 @@ export const migrationRegistry: TheiMigration[] = [
   accessLinks,
   datePrecision,
   entityReminders,
+  statusesOwner,
+  tagAccent,
+  entityRelations,
+  diaryEntries,
 ];
 
 export { baselineSql } from './0.0.1-baseline';

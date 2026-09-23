@@ -195,6 +195,37 @@ async function runAssetBatchWizard(
   if (result.type !== 'picked-files') return undefined;
 
   const picked = result as PickedFiles;
+  // One new file is the same decision as a single media block: its editor
+  // opens straight away, so a variant can be made before the tile is placed.
+  // Only a batch skips the editor and takes the originals as they are.
+  const [single] = picked.files;
+  if (
+    picked.files.length === 1 &&
+    single &&
+    !single.existingAsset &&
+    !picked.errors.length
+  ) {
+    try {
+      const edited = await openModal(editFileModal, {
+        source: { kind: 'file', file: single },
+        maxSize,
+        acceptedExtensions,
+        sizeLimitPolicy: options.sizeLimitPolicy,
+        uploadProfile: options.uploadProfile,
+        usageDelta: options.usageDelta,
+      });
+      if (edited.type === 'error')
+        return {
+          assets: [],
+          errors: [{ fileName: single.name, message: edited.message }],
+        };
+      return edited.type === 'asset-ready'
+        ? { assets: [edited.asset], errors: [] }
+        : undefined;
+    } finally {
+      URL.revokeObjectURL(single.objectUrl);
+    }
+  }
   const errors: AssetBatchError[] = [...picked.errors];
   const resolved = new Map<PickedFile, AssetVariantInfo | undefined>();
   for (const file of picked.files.filter((file) => file.existingAsset)) {
@@ -269,8 +300,46 @@ async function runAssetBatchWizard(
   };
 }
 
+/**
+ * Files that arrived without a picker — pasted into the editor — stored as
+ * they are, the way a batch stores its originals. Better versions are made
+ * later through the usual editing of each file.
+ */
+export async function uploadOriginalAssets(
+  files: File[],
+  options: AssetWizardOptions = {},
+): Promise<AssetBatchResult> {
+  const accept = options.accept ?? anyFileExtensionProfile;
+  const maxSize = resolveAssetMaxSize(options.sizeLimitPolicy, options.maxSize);
+  const acceptedExtensions =
+    options.acceptedExtensions ?? acceptedExtensionsFromAccept(accept);
+  const settled = await runAssetBatch(
+    files,
+    (file) =>
+      uploadOriginalFile(
+        { file, name: file.name },
+        { ...options, acceptedExtensions, maxSize },
+      ),
+    3,
+  );
+  const assets: AssetVariantInfo[] = [];
+  const errors: AssetBatchError[] = [];
+  settled.forEach((result, index) => {
+    if (result.status === 'fulfilled') assets.push(result.value);
+    else
+      errors.push({
+        fileName: files[index]!.name,
+        message:
+          result.reason instanceof Error
+            ? result.reason.message
+            : phrase.value.upload_error_apply,
+      });
+  });
+  return { assets, errors };
+}
+
 async function uploadOriginalFile(
-  file: PickedFile,
+  file: Pick<PickedFile, 'file' | 'name'>,
   options: AssetWizardOptions & {
     acceptedExtensions: string[] | '*';
     maxSize?: number;

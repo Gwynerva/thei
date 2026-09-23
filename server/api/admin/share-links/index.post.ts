@@ -34,7 +34,9 @@ export default defineEventHandler(async (event): Promise<ShareLinkItem> => {
       ? await THEI_SERVER.projects.findByUuid(entityUuid)
       : entityType === 'event'
         ? await THEI_SERVER.events.findByUuid(entityUuid)
-        : await THEI_SERVER.pages.findByUuid(entityUuid);
+        : entityType === 'diary-entry'
+          ? await THEI_SERVER.diary.findByUuid(entityUuid)
+          : await THEI_SERVER.pages.findByUuid(entityUuid);
   if (!exists) throw createError({ statusCode: 404 });
   const link = await createShareLink(entityType, entityUuid, body.duration);
   return { ...link, url: siteUrl(event, shareLinkPath(link.token!)) };

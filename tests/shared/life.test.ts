@@ -4,15 +4,17 @@ import en from '../../shared/language/list/en';
 import ru from '../../shared/language/list/ru';
 import {
   buildLifeUrl,
+  isLifeDay,
   isLifeDayNew,
-  isLifePeriod,
   laterLifeDate,
-  lifePeriodFromParts,
   normalizeLifeLastViewedDate,
+  parseLifeFilter,
+  serializeLifeFilter,
 } from '../../shared/life';
 import {
   lifeGapDuration,
   lifeGapDays,
+  lifeGapStyle,
   lifePointIsVisible,
   mergeLifeBoundaryPoints,
   projectCreatedUtcDate,
@@ -29,19 +31,49 @@ const point = (
 ) => ({ identity, date, transition, sortTime, entityKind });
 
 describe('Life periods', () => {
-  it('validates only real year, month, and day periods', () => {
-    expect(isLifePeriod('2026')).toBe(true);
-    expect(isLifePeriod('2026-02')).toBe(true);
-    expect(isLifePeriod('2024-02-29')).toBe(true);
-    expect(isLifePeriod('2026-02-29')).toBe(false);
-    expect(isLifePeriod('2026-13')).toBe(false);
-    expect(isLifePeriod('2026-01-01-extra')).toBe(false);
+  it('validates only real calendar days', () => {
+    expect(isLifeDay('2024-02-29')).toBe(true);
+    expect(isLifeDay('2026-02-29')).toBe(false);
+    expect(isLifeDay('2026-13-01')).toBe(false);
+    expect(isLifeDay('2026-02')).toBe(false);
+    expect(isLifeDay('2026-01-01-extra')).toBe(false);
   });
 
-  it('builds canonical, trailing-slash URLs', () => {
-    expect(lifePeriodFromParts(['2026', '08', '22'])).toBe('2026-08-22');
+  it('carries the day and the filter in the query string', () => {
     expect(buildLifeUrl()).toBe('/life/');
-    expect(buildLifeUrl('2026-08-22')).toBe('/life/2026/08/22/');
+    expect(buildLifeUrl({ date: '2026-08-22' })).toBe('/life/?d=2026-08-22');
+    expect(buildLifeUrl({ date: '2026-08-22', filter: ['event'] })).toBe(
+      '/life/?d=2026-08-22&f=event',
+    );
+    expect(
+      buildLifeUrl({ date: '2026-08-22' }, '/projects/x-Y/timeline/'),
+    ).toBe('/projects/x-Y/timeline/?d=2026-08-22');
+  });
+
+  it('reads a filter back, and treats "all kinds" as no filter', () => {
+    expect(parseLifeFilter('event,page')).toEqual(['event', 'page']);
+    // Unknown kinds are dropped rather than failing the whole address.
+    expect(parseLifeFilter('event,nonsense')).toEqual(['event']);
+    expect(parseLifeFilter('')).toBeUndefined();
+    expect(parseLifeFilter('nonsense')).toBeUndefined();
+    expect(
+      parseLifeFilter(
+        'event,project,page,project-stage,project-section,profile-avatar,profile-status,diary-entry',
+      ),
+    ).toBeUndefined();
+    expect(serializeLifeFilter(undefined)).toBeUndefined();
+    expect(serializeLifeFilter(['event', 'page'])).toBe('event,page');
+  });
+
+  it('offers a project only the kinds a project can hold', () => {
+    const scope = { kind: 'project' as const, projectUuid: 'p' };
+    expect(parseLifeFilter('event,profile-avatar', scope)).toEqual(['event']);
+    expect(
+      parseLifeFilter(
+        'event,project-stage,project-section,profile-status,diary-entry',
+        scope,
+      ),
+    ).toBeUndefined();
   });
 
   it('normalizes and compares last-viewed day markers', () => {
@@ -294,5 +326,19 @@ describe('Life active day selection', () => {
     expect(
       selectActiveLifeDay([rect('2026-08-23', Number.NaN, 400)], 150, 720),
     ).toBeUndefined();
+  });
+});
+
+describe('Life gap styles', () => {
+  it('reads a gap as a pause, a silence, or a break in the thread', () => {
+    const style = (years: number, months: number, days: number) =>
+      lifeGapStyle({ years, months, days });
+    expect(style(0, 0, 1)).toBe('dash');
+    expect(style(0, 0, 29)).toBe('dash');
+    expect(style(0, 1, 0)).toBe('dotted');
+    expect(style(0, 3, 0)).toBe('dotted');
+    expect(style(0, 3, 29)).toBe('dotted');
+    expect(style(0, 4, 0)).toBe('severed');
+    expect(style(1, 0, 0)).toBe('severed');
   });
 });

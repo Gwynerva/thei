@@ -4,6 +4,7 @@ import { AssetType, type AssetMeta } from '#layers/thei/shared/asset';
 import { buildProjectUrl } from '#layers/thei/shared/project-url';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
+import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
 import { buildStoredMediaDescriptor, type StoredAssetRecord } from './storage';
 
@@ -17,6 +18,17 @@ export async function buildPublicProfileMedia(
 ) {
   const media = await buildStoredMediaDescriptor(asset);
   const src = `/profile/media/${container}/${id}/${role}/${asset.slug}.${asset.extension}`;
+  return { ...media, src, previewSrc: `${src}?preview=1` };
+}
+
+/** A project's status icon, served from under the project's own address. */
+export async function buildPublicProjectStatusMedia(
+  project: { humanReadableSlug: string; publicId: string },
+  asset: StoredAssetRecord,
+  statusId: string,
+) {
+  const media = await buildStoredMediaDescriptor(asset);
+  const src = `${buildProjectUrl(project.humanReadableSlug, project.publicId)}status/${statusId}/${asset.slug}.${asset.extension}`;
   return { ...media, src, previewSrc: `${src}?preview=1` };
 }
 
@@ -46,6 +58,15 @@ export async function buildPublicEventMedia(
 ) {
   const media = await buildStoredMediaDescriptor(asset);
   const src = `${buildEventUrl(event.humanReadableSlug, event.publicId)}${role}/${asset.slug}.${asset.extension}`;
+  return { ...media, src, previewSrc: `${src}?preview=1` };
+}
+
+export async function buildPublicDiaryContentMedia(
+  entry: { date: string },
+  asset: StoredAssetRecord,
+) {
+  const media = await buildStoredMediaDescriptor(asset);
+  const src = `${buildDiaryUrl(entry.date)}content/${asset.slug}.${asset.extension}`;
   return { ...media, src, previewSrc: `${src}?preview=1` };
 }
 

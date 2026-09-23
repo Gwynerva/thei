@@ -1,7 +1,11 @@
 <script lang="ts" setup>
 import { debounce } from 'perfect-debounce';
-import type { ContentEntityType } from '#layers/thei/shared/content-link';
+import {
+  CONTENT_ENTITY_TYPES,
+  type ContentEntityType,
+} from '#layers/thei/shared/content-link';
 import type { ContentEntitySearchItem } from '#layers/thei/shared/admin/content-entity-search';
+import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
 
 const props = withDefaults(
   defineProps<{
@@ -10,7 +14,7 @@ const props = withDefaults(
     publicOnly?: boolean;
   }>(),
   {
-    entityTypes: () => ['project', 'event', 'page'],
+    entityTypes: () => [...CONTENT_ENTITY_TYPES],
     exclude: () => [],
   },
 );
@@ -70,7 +74,7 @@ defineExpose({ focus: () => input.value?.focus({ preventScroll: true }) });
       type="search"
       autocomplete="off"
       spellcheck="false"
-      :placeholder="phrase.search_project_placeholder"
+      :placeholder="phrase.search_entity_placeholder"
       class="w-full bg-bg-2 px-sm py-xs text-sm outline-none
         placeholder:text-text-3"
     />
@@ -103,27 +107,34 @@ defineExpose({ focus: () => input.value?.focus({ preventScroll: true }) });
           >
             <span
               class="flex size-full items-center justify-end pr-xs text-text-3"
-              ><Icon :name="item.entityType"
+              ><Icon :name="entityTypeIcon(item.entityType)"
             /></span>
           </MediaEdge>
           <span class="relative block min-w-0 py-1 pr-16 pl-xs">
+            <span
+              v-if="item.parent"
+              class="block truncate text-xs font-semibold text-text-3"
+              >{{ item.parent.title }}</span
+            >
             <span class="flex items-center gap-1 truncate text-sm font-semibold"
               ><Icon
-                :name="item.entityType"
+                :name="entityTypeIcon(item.entityType)"
+                :aria-label="entityTypeLabel(item.entityType)"
+                role="img"
                 class="shrink-0 text-xs text-text-2"
-              />{{ item.title }}</span
+              />{{ entityDisplayTitle(item) }}</span
             >
-            <span class="block truncate text-xs text-text-3">{{
-              item.summary
-            }}</span>
+            <span
+              class="block truncate text-xs text-text-3"
+              :class="{ italic: item.date }"
+              >{{ item.summary }}</span
+            >
           </span>
         </button>
       </MediaInteraction>
     </div>
     <div v-else class="p-sm text-center text-xs text-text-3">
-      {{
-        error ? phrase.search_project_error : phrase.search_project_no_results
-      }}
+      {{ error ? phrase.search_entity_error : phrase.search_entity_no_results }}
     </div>
   </section>
 </template>

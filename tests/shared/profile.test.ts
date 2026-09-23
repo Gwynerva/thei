@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { canAppendEmptyProfileStatus, profileAge } from '../../shared/profile';
+import { profileAge } from '../../shared/profile';
+import { canAppendEmptyStatus } from '../../shared/status';
 
 describe('profile helpers', () => {
   it('only permits an empty status after a regular one', () => {
-    expect(canAppendEmptyProfileStatus()).toBe(false);
-    expect(canAppendEmptyProfileStatus('empty')).toBe(false);
-    expect(canAppendEmptyProfileStatus('regular')).toBe(true);
+    expect(canAppendEmptyStatus()).toBe(false);
+    expect(canAppendEmptyStatus('empty')).toBe(false);
+    expect(canAppendEmptyStatus('regular')).toBe(true);
   });
 
   it('calculates age at the birthday boundary and rejects future dates', () => {

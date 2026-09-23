@@ -2,6 +2,7 @@
 import type { PublicTagResponse } from '#layers/thei/shared/api/public';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
 import TheiLink from '#layers/thei/app/components/TheiLink';
+import { tagAccentCssColor } from '#layers/thei/shared/tag';
 
 definePageMeta({ layout: 'public', key: (route) => String(route.params.tag) });
 const route = useRoute();
@@ -86,7 +87,7 @@ function tabTo(tab: 'projects' | 'events') {
       icon="tag"
       icon-kind="custom"
       :icon-media="tag.iconMedia"
-      :accent-color="tag.accentColor"
+      :accent-color="tagAccentCssColor(tag)"
       :title="tag.title"
       :description="tag.description"
     />

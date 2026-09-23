@@ -44,11 +44,11 @@ test('home lays out three latest cards as one wide card and a pair', async ({
 test('life confirms reading and preserves date navigation through browser history', async ({
   page,
 }) => {
-  await page.goto('/life/2026/07/01/');
+  await page.goto('/life/?d=2026-07-01');
   await page.bringToFront();
   await settleFrames(page);
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await expect(page).toHaveURL(/\/life\/2026\/07\/01\/$/);
+  await expect(page).toHaveURL(/\/life\/\?d=2026-07-01$/);
   await expect
     .poll(
       () =>
@@ -58,22 +58,14 @@ test('life confirms reading and preserves date navigation through browser histor
       { timeout: 7000 },
     )
     .toBe('2026-07-01');
-  await page
-    .locator('[data-life-period-tracker]')
-    .getByRole('link', { name: 'Month July' })
-    .click();
-  await expect(page.locator('main[data-life-period="2026-07"]')).toBeVisible();
-  await page.goBack();
   await expect(
-    page.locator('main[data-life-period="2026-07-01"]'),
+    page.locator('main[data-life-active-date="2026-07-01"]'),
   ).toBeVisible();
-  await expect(page).toHaveURL(/\/life\/2026\/07\/01\/$/);
-  await page.goForward();
-  await expect(page).not.toHaveURL(/\/life\/2026\/07\/01\/$/);
-  await expect(page.locator('main[data-life-period]')).toBeVisible();
-  await expect(page.locator('[data-life-period-tracker]')).toContainText(
-    'July',
-  );
+  // The whole date reads as one control now, so the bar carries every part.
+  const bar = page.locator('[data-life-sticky-bar]');
+  await expect(bar).toContainText('01');
+  await expect(bar).toContainText('07');
+  await expect(bar).toContainText('2026');
   await page.goto('/life/');
   await settleFrames(page);
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
@@ -196,7 +188,7 @@ test('life cache evicts distant windows, preserves focus and reloads both direct
     );
   });
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto('/life/2026/07/01/');
+  await page.goto('/life/?d=2026-07-01');
   const cache = page.locator('[data-life-cached-windows]');
   await expect(cache).toBeVisible();
   const focused = page.locator('[data-life-key] a').first();
@@ -254,7 +246,7 @@ test('life cache evicts distant windows, preserves focus and reloads both direct
 test('a failed life window offers retry and keeps the cursor', async ({
   page,
 }) => {
-  await page.goto('/life/2026/07/01/');
+  await page.goto('/life/?d=2026-07-01');
   await expect(page.locator('[data-life-cached-windows]')).toBeVisible();
   const attempts: string[] = [];
   await page.route('**/api/life?**', async (route) => {
@@ -521,8 +513,8 @@ test('dense life day remains virtualized and restores date navigation', async ({
   await page.setViewportSize({ width: 580, height: 850 });
   await settleFrames(page);
   expect(await page.locator('[data-life-key]').count()).toBeLessThan(60);
-  await page.goto('/life/2026/05/01/');
-  await expect(page.locator('[data-life-period-tracker]')).toBeVisible();
+  await page.goto('/life/?d=2026-05-01');
+  await expect(page.locator('[data-life-sticky-bar]')).toBeVisible();
   await waitForNuxtHydration(page);
   expect(await page.locator('[data-life-key]').count()).toBeLessThan(60);
   expect(

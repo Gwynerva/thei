@@ -1,7 +1,7 @@
 import type { ProjectEventAccessLevel } from '../access-level';
 import type { ContentFieldValue } from '../content';
 import type { DatedPeriod } from '../date-precision';
-import type { EventProjectRelationEditItem } from '../event';
+import type { RelationEditItem } from '../relation';
 import type { ProjectActionEditData } from '../project-action';
 import type { OtherAssetGetItem } from './project';
 import type { ProjectExternalLink } from '../external-link';
@@ -22,7 +22,7 @@ export type EventGetResponse = {
   notes?: ContentFieldValue;
   otherAssets: OtherAssetGetItem[];
   externalLinks: ProjectExternalLink[];
-  relations: EventProjectRelationEditItem[];
+  relations: RelationEditItem[];
   tags: TagItem[];
   action: ProjectActionEditData;
   actionIconMedia?: MediaDescriptor;

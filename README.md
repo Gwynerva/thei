@@ -16,21 +16,28 @@ built and lived through, and the small moments you would hate to forget — side
 by side, on one timeline, on a machine you control. Show a potential employer
 the projects that matter, and keep the evening that mattered only to you.
 
-## Two kinds of memories
+## Three kinds of memories
 
+Simplest first. Each one asks more of you than the last, and gives more back.
+
+- **Diary entries** are single thoughts with a date on them. No title, no
+  summary, no tags — one entry a day, addressed by the day itself
+  (`/diary/2026-04-28/`). Written in passing, in under a minute, and kept
+  public or private as you like.
+- **Events** are the small moments worth writing up: a meetup, a trip, a first
+  release, a strange day. Too small or too loose to be a project, too good to
+  lose. An event has dates, media, tags and relations, but it stands on its own.
 - **Projects** are the big episodes: self-contained, structured and substantial.
   A project is told through its own **stages** — dated periods of work — and
   **sections** — topical write-ups — with media, a showcase, files, links and
-  relations to other projects. Mark the ones that belong in your CV or in the
+  relations to other entities. Mark the ones that belong in your CV or in the
   showcase on the home page.
-- **Events** are the small moments: a meetup, a trip, a first release, a strange
-  day. Too small or too loose to be a project, too good to lose. An event can
-  relate to projects and carry tags, but it stands on its own.
 
 Around them:
 
-- **Life** — one timeline of everything dated: events, project stages, pages,
-  avatar and status changes. **Rewind** shows this same day in previous years.
+- **Life** — one timeline of everything dated: events, diary entries, project
+  stages, pages, avatar and status changes. **Rewind** shows this same day in
+  previous years.
 - **Pages** — standalone writing that belongs to no timeline.
 - **Tags** — the threads running through projects and events.
 
@@ -42,7 +49,7 @@ Around them:
   tracking, image and video derivatives via sharp and ffmpeg, uploads streamed
   to disk up to 500 MB.
 - **Access levels** — the whole site open or closed, and every project, event,
-  page and file public, link-only or private on its own.
+  diary entry, page and file public, link-only or private on its own.
 - **Admin panel** — settings, visuals (theme, accent colour, font), multilanguage
   interface, one-click updates, backups.
 

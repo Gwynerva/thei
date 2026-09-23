@@ -22,13 +22,20 @@ import {
   applyProjectStages,
   prepareProjectStages,
 } from '../../../thei/projects/stages';
-import { ProjectContentItemStorageError } from '../../../thei/projects/content-items';
 import {
-  applyProjectRelations,
-  prepareProjectRelations,
-} from '../../../thei/projects/relations';
+  ProjectContentItemStorageError,
+  projectContentItemIdentities,
+} from '../../../thei/projects/content-items';
+import { applyRelations, prepareRelations } from '../../../thei/relations';
 import { applyTagUsages, prepareTagUsages } from '../../../thei/tags';
 import { applyProjectExternalLinks } from '../../../thei/projects/external-links';
+import {
+  applyStatusEdits,
+  deleteStatusesForOwner,
+  prepareEntityStatusEdits,
+  StatusEditError,
+  statusUsageHooks,
+} from '../../../thei/statuses';
 
 export default defineEventHandler(
   async (event): Promise<ProjectSaveResponse> => {
@@ -97,8 +104,8 @@ export default defineEventHandler(
 
     let preparedRelations;
     try {
-      preparedRelations = await prepareProjectRelations(
-        projectUuid,
+      preparedRelations = await prepareRelations(
+        { type: 'project', id: projectUuid },
         result.relations,
       );
     } catch (error) {
@@ -107,6 +114,18 @@ export default defineEventHandler(
         message: error instanceof Error ? error.message : 'Invalid relations',
       };
     }
+    let preparedStatuses;
+    try {
+      preparedStatuses = prepareEntityStatusEdits(
+        { type: 'project', id: projectUuid },
+        result,
+      );
+    } catch (error) {
+      if (error instanceof StatusEditError)
+        return { type: 'error', message: error.message };
+      throw error;
+    }
+
     let preparedTags;
     try {
       preparedTags = await prepareTagUsages(result.tags);
@@ -167,9 +186,23 @@ export default defineEventHandler(
       );
       applyProjectContentSections(tx, schema, projectUuid, preparedSections);
       applyProjectStages(tx, schema, projectUuid, preparedStages);
-      applyProjectRelations(tx, schema, projectUuid, preparedRelations);
+      applyRelations(
+        tx,
+        schema,
+        { type: 'project', id: projectUuid },
+        preparedRelations,
+      );
       applyProjectExternalLinks(tx, schema, projectUuid, preparedExternalLinks);
       applyTagUsages(tx, schema, 'project', projectUuid, preparedTags);
+      applyStatusEdits(
+        tx,
+        schema,
+        preparedStatuses,
+        now,
+        statusUsageHooks(tx, schema, now, (message) => {
+          throw new StatusEditError(message);
+        }),
+      );
 
       if (result.iconAssetUuid) {
         attachUsage(tx, schema, result.iconAssetUuid, projectUuid, 'icon');
@@ -219,7 +252,21 @@ export default defineEventHandler(
     });
 
     await cleanupOrphanExternalLinks();
-    return { type: 'success', projectUuid, action: result.action };
+    return {
+      type: 'success',
+      projectUuid,
+      action: result.action,
+      stages: projectContentItemIdentities(
+        preparedStages,
+        (stage) => stage.stageUuid,
+        (stage) => stage.publicId,
+      ),
+      sections: projectContentItemIdentities(
+        preparedSections,
+        (section) => section.sectionUuid,
+        (section) => section.publicId,
+      ),
+    };
   },
 );
 

@@ -9,6 +9,7 @@ import {
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { buildProjectUrl } from '#layers/thei/shared/project-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
+import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { EntityPrefix, generateUniqueId } from '../entity-id';
 import { sitePath } from '../site-url';
 import {
@@ -69,6 +70,10 @@ export async function shareGrantPath(
     return stored
       ? buildEventUrl(stored.humanReadableSlug, stored.publicId)
       : undefined;
+  }
+  if (entityType === 'diary-entry') {
+    const entry = await THEI_SERVER.diary.findByUuid(entityUuid);
+    return entry ? buildDiaryUrl(entry.date) : undefined;
   }
   const page = await THEI_SERVER.pages.findByUuid(entityUuid);
   return page ? buildPageUrl(page.slug) : undefined;

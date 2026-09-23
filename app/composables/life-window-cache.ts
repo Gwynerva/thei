@@ -7,7 +7,8 @@ import {
 export const LIFE_WINDOW_LIMIT = 10;
 export const LIFE_SSR_ROWS = 24;
 export type LifeWindowRequest = {
-  period?: string;
+  /** The day the window was opened around, as `YYYY-MM-DD`. */
+  d?: string;
   cursor?: string;
   direction?: 'newer' | 'older';
 };

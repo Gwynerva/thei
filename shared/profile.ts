@@ -7,12 +7,13 @@ import type { ProjectExternalLinkEditItem } from './external-link';
 import type { MediaDescriptor } from './media';
 import type {
   PublicEntitySummary,
-  PublicProjectReference,
+  PublicEntityReference,
   PublicSecretReference,
   PublicTagListItem,
 } from './api/public';
 import type { SiteAccessLevel } from './access-level';
 import type { LanguageCode } from './language';
+import type { StatusEditData, StatusHistoryItem } from './status';
 
 export const PROFILE_ID = 'profile';
 export interface ProfileFact {
@@ -28,31 +29,12 @@ export interface ProfileAvatarHistoryItem extends ProfileHistoryItemBase {
   assetUuid?: string;
   media?: MediaDescriptor;
 }
-export type ProfileStatusKind = 'regular' | 'empty';
-export function canAppendEmptyProfileStatus(kind?: ProfileStatusKind) {
-  return kind === 'regular';
-}
-export interface ProfileStatusHistoryItem extends ProfileHistoryItemBase {
-  kind: ProfileStatusKind;
-  assetUuid?: string;
-  media?: MediaDescriptor;
-  text: string;
-}
 export interface ProfileHistoryPage<T extends ProfileHistoryItemBase> {
   items: T[];
   total: number;
   nextCursor?: string;
 }
-export type NewProfileStatus =
-  | { id: string; kind: 'regular'; text: string; assetUuid?: string }
-  | { id: string; kind: 'empty' };
-/** A saved regular status rewritten in place; it keeps its date. */
-export interface UpdatedProfileStatus {
-  id: string;
-  text: string;
-  assetUuid?: string;
-}
-export interface ProfileEditData {
+export interface ProfileEditData extends StatusEditData {
   displayName: string;
   slogan: string;
   nickname: string;
@@ -65,9 +47,6 @@ export interface ProfileEditData {
   facts: ProfileFact[];
   pinnedPageUuids: string[];
   externalLinks: ProjectExternalLinkEditItem[];
-  newStatuses: NewProfileStatus[];
-  updatedStatuses: UpdatedProfileStatus[];
-  deletedStatusIds: string[];
   deletedAvatarIds: string[];
 }
 export interface ProfilePageLink {
@@ -83,7 +62,7 @@ export interface AdminProfileResponse {
   faviconMedia?: MediaDescriptor;
   currentAvatar?: ProfileAvatarHistoryItem;
   avatars: ProfileHistoryPage<ProfileAvatarHistoryItem>;
-  statuses: ProfileHistoryPage<ProfileStatusHistoryItem>;
+  statuses: ProfileHistoryPage<StatusHistoryItem>;
   pinnedPages: ProfilePageLink[];
 }
 export interface PublicProfileResponse {
@@ -98,12 +77,12 @@ export interface PublicProfileResponse {
   bannerMedia?: MediaDescriptor;
   faviconMedia?: MediaDescriptor;
   avatarCount: number;
-  currentStatus?: ProfileStatusHistoryItem;
+  currentStatus?: StatusHistoryItem;
   statusCount: number;
   aboutContent?: PublicContentOutputData;
   pinnedPages: ProfilePageLink[];
   externalLinks: ProjectExternalLinkEditItem[];
-  showcaseProjects: PublicProjectReference[];
+  showcaseProjects: PublicEntityReference[];
   projects: {
     count: number;
     items: (PublicEntitySummary | PublicSecretReference)[];

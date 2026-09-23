@@ -1,0 +1,494 @@
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  inArray,
+  lt,
+  notInArray,
+  or,
+} from 'drizzle-orm';
+import {
+  canAppendEmptyStatus,
+  statusAssetContainer,
+  type NewStatus,
+  type StatusEditData,
+  type StatusHistoryItem,
+  type StatusOwner,
+  type UpdatedStatus,
+} from '#layers/thei/shared/status';
+import type { ProfileHistoryPage } from '#layers/thei/shared/profile';
+import type { AssetContainerType } from '#layers/thei/shared/asset';
+import {
+  buildAdminAssetUrls,
+  buildPublicProfileMedia,
+  buildPublicProjectStatusMedia,
+} from './assets/urls';
+
+export const STATUS_PAGE_SIZE = 30;
+
+/** Reports a rejected edit the way the calling entity saver already does. */
+export type StatusInvalid = (message: string) => never;
+
+function ownerWhere(schema: any, owner: StatusOwner) {
+  return and(
+    eq(schema.statuses.ownerType, owner.type),
+    eq(schema.statuses.ownerId, owner.id),
+  );
+}
+
+async function statusMedia(
+  assetUuid: string | null | undefined,
+  owner: StatusOwner,
+  statusId: string,
+  admin: boolean,
+) {
+  const asset = assetUuid
+    ? await THEI_SERVER.assets.findByUuid(assetUuid)
+    : undefined;
+  if (!asset) return undefined;
+  if (admin) return (await buildAdminAssetUrls(asset)).media;
+  if (owner.type === 'profile')
+    return buildPublicProfileMedia(asset, 'profile-status', statusId, 'icon');
+  const project = await THEI_SERVER.projects.findByUuid(owner.id);
+  if (!project) return undefined;
+  return buildPublicProjectStatusMedia(project, asset, statusId);
+}
+
+export async function statusHistoryItem(
+  row: {
+    id: string;
+    createdAt: number;
+    assetUuid: string | null;
+    text: string;
+    kind: 'regular' | 'empty';
+  },
+  owner: StatusOwner,
+  admin = false,
+): Promise<StatusHistoryItem> {
+  return {
+    id: row.id,
+    createdAt: row.createdAt,
+    kind: row.kind,
+    text: row.text,
+    ...(admin && row.assetUuid ? { assetUuid: row.assetUuid } : {}),
+    media: await statusMedia(row.assetUuid, owner, row.id, admin),
+  };
+}
+
+/**
+ * One page of an owner's statuses, newest first.
+ *
+ * Keyset pagination on `(createdAt, id)` rather than an offset: statuses are
+ * appended while somebody is reading, and an offset would quietly repeat or
+ * skip a row every time one arrives.
+ */
+export async function getStatusHistory(
+  owner: StatusOwner,
+  cursor?: string,
+  admin = false,
+  limit = STATUS_PAGE_SIZE,
+): Promise<ProfileHistoryPage<StatusHistoryItem>> {
+  const { db, schema } = THEI_SERVER.useDb();
+  let boundary: { createdAt: number; id: string } | undefined;
+  if (cursor) {
+    try {
+      boundary = JSON.parse(Buffer.from(cursor, 'base64url').toString());
+      if (
+        !boundary ||
+        !Number.isSafeInteger(boundary.createdAt) ||
+        typeof boundary.id !== 'string'
+      )
+        throw new Error();
+    } catch {
+      throw createError({ statusCode: 400, message: 'Invalid history cursor' });
+    }
+  }
+  const scope = ownerWhere(schema, owner);
+  const rows = db
+    .select()
+    .from(schema.statuses)
+    .where(
+      boundary
+        ? and(
+            scope,
+            or(
+              lt(schema.statuses.createdAt, boundary.createdAt),
+              and(
+                eq(schema.statuses.createdAt, boundary.createdAt),
+                lt(schema.statuses.id, boundary.id),
+              ),
+            ),
+          )
+        : scope,
+    )
+    .orderBy(desc(schema.statuses.createdAt), desc(schema.statuses.id))
+    .limit(limit + 1)
+    .all();
+  const selected = rows.slice(0, limit);
+  const last = selected.at(-1);
+  return {
+    items: await Promise.all(
+      selected.map((row) => statusHistoryItem(row, owner, admin)),
+    ),
+    total: db
+      .select({ value: count() })
+      .from(schema.statuses)
+      .where(scope)
+      .get()!.value,
+    ...(rows.length > limit && last
+      ? {
+          nextCursor: Buffer.from(
+            JSON.stringify({ createdAt: last.createdAt, id: last.id }),
+          ).toString('base64url'),
+        }
+      : {}),
+  };
+}
+
+export async function getCurrentStatus(owner: StatusOwner, admin = false) {
+  const page = await getStatusHistory(owner, undefined, admin, 1);
+  return {
+    current: page.items[0],
+    total: page.total,
+    firstAt: firstStatusAt(owner),
+  };
+}
+
+/** The day the owner's oldest status was set, for "key dates" summaries. */
+function firstStatusAt(owner: StatusOwner): string | undefined {
+  const { db, schema } = THEI_SERVER.useDb();
+  const row = db
+    .select({ createdAt: schema.statuses.createdAt })
+    .from(schema.statuses)
+    .where(
+      and(
+        eq(schema.statuses.ownerType, owner.type),
+        eq(schema.statuses.ownerId, owner.id),
+      ),
+    )
+    .orderBy(asc(schema.statuses.createdAt))
+    .limit(1)
+    .get();
+  return row ? new Date(row.createdAt).toISOString().slice(0, 10) : undefined;
+}
+
+export type PreparedStatusEdits = {
+  owner: StatusOwner;
+  created: Array<{
+    id: string;
+    kind: 'regular' | 'empty';
+    text: string;
+    assetUuid: string | null;
+  }>;
+  updated: Array<{ id: string; text: string; assetUuid: string | null }>;
+  deleted: string[];
+  /** Every asset the edits reference, for the caller's own media checks. */
+  referencedAssetUuids: string[];
+};
+
+/**
+ * Validates one owner's status edits and checks them against what is stored.
+ *
+ * Kept apart from the entity savers because the rules are the status's own:
+ * ids are client-chosen so a retry is idempotent, a rewritten status keeps its
+ * date, and an empty status may only follow a regular one — which has to be
+ * judged against the history as it will be *after* the deletions in the same
+ * request, not as it stands now.
+ */
+export function prepareStatusEdits(
+  owner: StatusOwner,
+  input: Partial<StatusEditData>,
+  helpers: {
+    invalid: StatusInvalid;
+    ids: (value: unknown) => string[];
+    optionalId: (value: unknown, message: string) => string | null;
+    text: (value: unknown, limit: number, allowEmpty?: boolean) => string;
+  },
+): PreparedStatusEdits {
+  const { invalid, ids, optionalId, text } = helpers;
+  const { db, schema } = THEI_SERVER.useDb();
+
+  const deleted = ids(input.deletedStatusIds);
+  const rawNew = input.newStatuses;
+  if (!Array.isArray(rawNew) || rawNew.length > 100)
+    invalid('Invalid statuses');
+  const created = (rawNew as NewStatus[]).map((status) => {
+    if (!status || typeof status !== 'object') invalid('Invalid status');
+    const value = status as Record<string, unknown>;
+    const id = ids([value.id])[0]!;
+    if (value.kind === 'empty') {
+      if (value.assetUuid != null || (value.text != null && value.text !== ''))
+        invalid('Invalid empty status');
+      return { id, kind: 'empty' as const, text: '', assetUuid: null };
+    }
+    if (value.kind !== 'regular') invalid('Invalid status kind');
+    return {
+      id,
+      kind: 'regular' as const,
+      text: text(value.text, 10000, true),
+      assetUuid: optionalId(value.assetUuid, 'Invalid status media'),
+    };
+  });
+  if (new Set(created.map((s) => s.id)).size !== created.length)
+    invalid('Invalid status');
+
+  const rawUpdated = input.updatedStatuses ?? [];
+  if (!Array.isArray(rawUpdated) || rawUpdated.length > 100)
+    invalid('Invalid statuses');
+  const updated = (rawUpdated as UpdatedStatus[])
+    .map((status) => {
+      if (!status || typeof status !== 'object') invalid('Invalid status');
+      const value = status as unknown as Record<string, unknown>;
+      return {
+        id: ids([value.id])[0]!,
+        text: text(value.text, 10000, true),
+        assetUuid: optionalId(value.assetUuid, 'Invalid status media'),
+      };
+    })
+    .filter((status) => !deleted.includes(status.id));
+  if (
+    new Set(updated.map((s) => s.id)).size !== updated.length ||
+    updated.some((s) => created.some((n) => n.id === s.id))
+  )
+    invalid('Invalid status');
+
+  const scope = ownerWhere(schema, owner);
+  // A repeated request must land on the same rows rather than a conflict, so a
+  // resent new status is accepted only when it matches the stored one exactly.
+  const newIds = new Set(created.map((status) => status.id));
+  const storedNew = newIds.size
+    ? db
+        .select()
+        .from(schema.statuses)
+        .where(and(scope, inArray(schema.statuses.id, [...newIds])))
+        .all()
+    : [];
+  const incomingById = new Map(created.map((status) => [status.id, status]));
+  for (const stored of storedNew) {
+    const incoming = incomingById.get(stored.id)!;
+    if (
+      stored.kind !== incoming.kind ||
+      stored.text !== incoming.text ||
+      stored.assetUuid !== incoming.assetUuid
+    )
+      invalid('Status ID already exists');
+  }
+
+  const excluded = [...new Set([...deleted, ...newIds])];
+  let effectiveKind = db
+    .select({ kind: schema.statuses.kind })
+    .from(schema.statuses)
+    .where(
+      excluded.length
+        ? and(scope, notInArray(schema.statuses.id, excluded))
+        : scope,
+    )
+    .orderBy(desc(schema.statuses.createdAt), desc(schema.statuses.id))
+    .limit(1)
+    .get()?.kind;
+  for (const status of created) {
+    if (deleted.includes(status.id)) continue;
+    if (status.kind === 'empty' && !canAppendEmptyStatus(effectiveKind))
+      invalid('Cannot append an empty status');
+    effectiveKind = status.kind;
+  }
+
+  return {
+    owner,
+    created,
+    updated,
+    deleted,
+    referencedAssetUuids: [
+      ...created
+        .filter((status) => status.kind === 'regular')
+        .map((status) => status.assetUuid),
+      ...updated.map((status) => status.assetUuid),
+    ].filter((uuid): uuid is string => Boolean(uuid)),
+  };
+}
+
+/**
+ * Writes prepared edits inside the caller's transaction.
+ *
+ * `attach` and `detach` belong to the caller because asset reuse counting is
+ * the entity saver's business, not this module's.
+ */
+export function applyStatusEdits(
+  tx: any,
+  schema: any,
+  prepared: PreparedStatusEdits,
+  now: number,
+  hooks: {
+    attach: (
+      assetUuid: string | null,
+      containerType: AssetContainerType,
+      containerId: string,
+      role: 'icon',
+    ) => void;
+    detach: (containerType: AssetContainerType, containerId: string) => void;
+    invalid: StatusInvalid;
+  },
+) {
+  const { owner, created, updated, deleted } = prepared;
+  const container = statusAssetContainer(owner.type);
+  const scope = ownerWhere(schema, owner);
+
+  for (const id of deleted) {
+    hooks.detach(container, id);
+    tx.delete(schema.statuses)
+      .where(and(scope, eq(schema.statuses.id, id)))
+      .run();
+  }
+
+  for (const [index, status] of created.entries()) {
+    if (deleted.includes(status.id)) continue;
+    const existing = tx
+      .select()
+      .from(schema.statuses)
+      .where(eq(schema.statuses.id, status.id))
+      .get();
+    if (
+      existing &&
+      (existing.ownerType !== owner.type ||
+        existing.ownerId !== owner.id ||
+        existing.kind !== status.kind ||
+        existing.assetUuid !== status.assetUuid ||
+        existing.text !== status.text)
+    )
+      hooks.invalid('Status ID already exists');
+    tx.insert(schema.statuses)
+      .values({
+        ...status,
+        ownerType: owner.type,
+        ownerId: owner.id,
+        // A batch added in one save keeps the order it was written in.
+        createdAt: now + index,
+      })
+      .onConflictDoNothing()
+      .run();
+    hooks.attach(status.assetUuid, container, status.id, 'icon');
+  }
+
+  for (const status of updated) {
+    const existing = tx
+      .select()
+      .from(schema.statuses)
+      .where(and(scope, eq(schema.statuses.id, status.id)))
+      .get();
+    if (!existing || existing.kind !== 'regular')
+      hooks.invalid('Invalid status');
+    tx.update(schema.statuses)
+      .set({ text: status.text, assetUuid: status.assetUuid })
+      .where(and(scope, eq(schema.statuses.id, status.id)))
+      .run();
+    hooks.detach(container, status.id);
+    hooks.attach(status.assetUuid, container, status.id, 'icon');
+  }
+}
+
+/** Drops every status of an owner that is being deleted. */
+export function deleteStatusesForOwner(
+  tx: any,
+  schema: any,
+  owner: StatusOwner,
+  detach: (containerType: AssetContainerType, containerId: string) => void,
+) {
+  const rows = tx
+    .select({ id: schema.statuses.id })
+    .from(schema.statuses)
+    .where(ownerWhere(schema, owner))
+    .all() as Array<{ id: string }>;
+  const container = statusAssetContainer(owner.type);
+  for (const row of rows) detach(container, row.id);
+  if (rows.length)
+    tx.delete(schema.statuses).where(ownerWhere(schema, owner)).run();
+}
+
+export class StatusEditError extends Error {}
+
+/**
+ * The same preparation for callers that report failures by returning a message
+ * rather than throwing an HTTP error, which is how the project and event
+ * savers are written.
+ */
+export function prepareEntityStatusEdits(
+  owner: StatusOwner,
+  input: Partial<StatusEditData>,
+): PreparedStatusEdits {
+  // Declared, not assigned to a const: TypeScript only narrows control flow
+  // after a `never`-returning call when it can see the declaration.
+  function invalid(message: string): never {
+    throw new StatusEditError(message);
+  }
+  return prepareStatusEdits(owner, input, {
+    invalid,
+    ids: (value) => {
+      if (value === undefined) return [];
+      if (!Array.isArray(value) || value.length > 200)
+        invalid('Invalid status');
+      return value.map((id) => {
+        if (typeof id !== 'string' || !id || id.length > 200)
+          invalid('Invalid status');
+        return id;
+      });
+    },
+    optionalId: (value, message) => {
+      if (value === undefined || value === null) return null;
+      if (typeof value !== 'string' || !value || value.length > 200)
+        invalid(message);
+      return value;
+    },
+    text: (value, limit, allowEmpty = false) => {
+      if (
+        typeof value !== 'string' ||
+        value.length > limit ||
+        (!allowEmpty && !value.trim())
+      )
+        invalid('Invalid status');
+      return value.trim();
+    },
+  });
+}
+
+/**
+ * The attach/detach pair a status needs, for savers whose own usage helpers are
+ * hard-wired to their entity's container.
+ */
+export function statusUsageHooks(
+  tx: any,
+  schema: any,
+  now: number,
+  invalid: StatusInvalid,
+) {
+  return {
+    invalid,
+    detach(containerType: AssetContainerType, containerId: string) {
+      tx.delete(schema.assetUsages)
+        .where(
+          and(
+            eq(schema.assetUsages.containerType, containerType),
+            eq(schema.assetUsages.containerId, containerId),
+          ),
+        )
+        .run();
+    },
+    attach(
+      assetUuid: string | null,
+      containerType: AssetContainerType,
+      containerId: string,
+      role: 'icon',
+    ) {
+      if (!assetUuid) return;
+      tx.insert(schema.assetUsages)
+        .values({ assetUuid, containerType, containerId, role })
+        .onConflictDoNothing()
+        .run();
+      tx.update(schema.assets)
+        .set({ touchedAt: now })
+        .where(eq(schema.assets.assetUuid, assetUuid))
+        .run();
+    },
+  };
+}

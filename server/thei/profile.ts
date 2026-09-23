@@ -14,14 +14,21 @@ import { createError } from 'h3';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import {
   PROFILE_ID,
-  canAppendEmptyProfileStatus,
   profileAge,
   type AdminProfileResponse,
   type ProfileEditData,
   type ProfileAvatarHistoryItem,
   type ProfileHistoryPage,
-  type ProfileStatusHistoryItem,
 } from '#layers/thei/shared/profile';
+import type {
+  StatusHistoryItem,
+  StatusOwner,
+} from '#layers/thei/shared/status';
+import {
+  applyStatusEdits,
+  getStatusHistory,
+  prepareStatusEdits,
+} from './statuses';
 import {
   AssetType,
   type AssetContainerType,
@@ -58,6 +65,12 @@ export function getProfile() {
     });
   return row;
 }
+
+/** The profile is a singleton, so its status owner is a constant. */
+export const PROFILE_STATUS_OWNER: StatusOwner = {
+  type: 'profile',
+  id: PROFILE_ID,
+};
 
 export async function profileMedia(
   assetUuid: string | null | undefined,
@@ -96,7 +109,7 @@ export function historyItem(
   },
   kind: 'statuses',
   admin?: boolean,
-): Promise<ProfileStatusHistoryItem>;
+): Promise<StatusHistoryItem>;
 export async function historyItem(
   row: {
     id: string;
@@ -107,7 +120,7 @@ export async function historyItem(
   },
   kind: 'avatars' | 'statuses',
   admin = false,
-): Promise<ProfileAvatarHistoryItem | ProfileStatusHistoryItem> {
+): Promise<ProfileAvatarHistoryItem | StatusHistoryItem> {
   const common = {
     id: row.id,
     createdAt: row.createdAt,
@@ -140,26 +153,26 @@ export function getProfileHistory(
   cursor?: string,
   admin?: boolean,
   limit?: number,
-): Promise<ProfileHistoryPage<ProfileStatusHistoryItem>>;
+): Promise<ProfileHistoryPage<StatusHistoryItem>>;
 export function getProfileHistory(
   kind: 'avatars' | 'statuses',
   cursor?: string,
   admin?: boolean,
   limit?: number,
-): Promise<
-  ProfileHistoryPage<ProfileAvatarHistoryItem | ProfileStatusHistoryItem>
->;
+): Promise<ProfileHistoryPage<ProfileAvatarHistoryItem | StatusHistoryItem>>;
 export async function getProfileHistory(
   kind: 'avatars' | 'statuses',
   cursor?: string,
   admin = false,
-  limit = kind === 'avatars' ? 15 : 30,
-): Promise<
-  ProfileHistoryPage<ProfileAvatarHistoryItem | ProfileStatusHistoryItem>
-> {
+  limit?: number,
+): Promise<ProfileHistoryPage<ProfileAvatarHistoryItem | StatusHistoryItem>> {
+  // Statuses live in their own owner-aware table; only avatars are still
+  // read here.
+  if (kind === 'statuses')
+    return getStatusHistory(PROFILE_STATUS_OWNER, cursor, admin, limit ?? 30);
   const { db, schema } = THEI_SERVER.useDb();
-  const table =
-    kind === 'avatars' ? schema.profileAvatars : schema.profileStatuses;
+  const table = schema.profileAvatars;
+  const pageSize = limit ?? 15;
   let boundary: { createdAt: number; id: string } | undefined;
   if (cursor) {
     try {
@@ -189,38 +202,16 @@ export async function getProfileHistory(
         : undefined,
     )
     .orderBy(desc(table.createdAt), desc(table.id))
-    .limit(limit + 1)
+    .limit(pageSize + 1)
     .all();
-  const selected = rows.slice(0, limit);
+  const selected = rows.slice(0, pageSize);
   const last = selected.at(-1);
   return {
     items: await Promise.all(
-      selected.map((row) =>
-        kind === 'avatars'
-          ? historyItem(
-              row as {
-                id: string;
-                assetUuid: string | null;
-                createdAt: number;
-              },
-              'avatars',
-              admin,
-            )
-          : historyItem(
-              row as {
-                id: string;
-                assetUuid: string | null;
-                createdAt: number;
-                text: string;
-                kind: 'regular' | 'empty';
-              },
-              'statuses',
-              admin,
-            ),
-      ),
+      selected.map((row) => historyItem(row, 'avatars', admin)),
     ),
     total: db.select({ value: count() }).from(table).get()!.value,
-    ...(rows.length > limit && last
+    ...(rows.length > pageSize && last
       ? {
           nextCursor: Buffer.from(
             JSON.stringify({ createdAt: last.createdAt, id: last.id }),
@@ -413,47 +404,12 @@ export async function saveProfile(input: ProfileEditData) {
     invalid('Duplicate facts');
   const pinned = ids(input.pinnedPageUuids);
   const deletedAvatars = ids(input.deletedAvatarIds);
-  const deletedStatuses = ids(input.deletedStatusIds);
-  if (!Array.isArray(input.newStatuses) || input.newStatuses.length > 100)
-    invalid('Invalid statuses');
-  const statuses = input.newStatuses.map((status) => {
-    const value = record(status, 'Invalid status');
-    const id = ids([value.id])[0]!;
-    if (value.kind === 'empty') {
-      if (value.assetUuid != null || (value.text != null && value.text !== ''))
-        invalid('Invalid empty status');
-      return { id, kind: 'empty' as const, text: '', assetUuid: null };
-    }
-    if (value.kind !== 'regular') invalid('Invalid status kind');
-    const statusText = text(value.text, 10000, true);
-    const assetUuid = optionalId(value.assetUuid, 'Invalid status media');
-    return {
-      id,
-      kind: 'regular' as const,
-      text: statusText,
-      assetUuid,
-    };
+  const preparedStatuses = prepareStatusEdits(PROFILE_STATUS_OWNER, input, {
+    invalid,
+    ids,
+    optionalId,
+    text,
   });
-  if (new Set(statuses.map((s) => s.id)).size !== statuses.length)
-    invalid('Invalid status');
-  const rawUpdatedStatuses = input.updatedStatuses ?? [];
-  if (!Array.isArray(rawUpdatedStatuses) || rawUpdatedStatuses.length > 100)
-    invalid('Invalid statuses');
-  const updatedStatuses = rawUpdatedStatuses
-    .map((status) => {
-      const value = record(status, 'Invalid status');
-      return {
-        id: ids([value.id])[0]!,
-        text: text(value.text, 10000, true),
-        assetUuid: optionalId(value.assetUuid, 'Invalid status media'),
-      };
-    })
-    .filter((status) => !deletedStatuses.includes(status.id));
-  if (
-    new Set(updatedStatuses.map((s) => s.id)).size !== updatedStatuses.length ||
-    updatedStatuses.some((s) => statuses.some((n) => n.id === s.id))
-  )
-    invalid('Invalid status');
   if (!Array.isArray(input.externalLinks) || input.externalLinks.length > 100)
     invalid('Invalid links');
   const links = input.externalLinks.map((item) => {
@@ -486,53 +442,6 @@ export async function saveProfile(input: ProfileEditData) {
     invalid('Duplicate links');
   const { db, schema } = THEI_SERVER.useDb();
   const current = getProfile();
-  const newStatusIds = new Set(statuses.map((status) => status.id));
-  const storedNewStatuses = newStatusIds.size
-    ? db
-        .select()
-        .from(schema.profileStatuses)
-        .where(inArray(schema.profileStatuses.id, [...newStatusIds]))
-        .all()
-    : [];
-  const incomingStatusById = new Map(
-    statuses.map((status) => [status.id, status]),
-  );
-  for (const stored of storedNewStatuses) {
-    const incoming = incomingStatusById.get(stored.id)!;
-    if (
-      stored.kind !== incoming.kind ||
-      stored.text !== incoming.text ||
-      stored.assetUuid !== incoming.assetUuid
-    )
-      invalid('Status ID already exists');
-  }
-  const excludedStatusIds = [...new Set([...deletedStatuses, ...newStatusIds])];
-  const currentStatusKind = db
-    .select({
-      kind: schema.profileStatuses.kind,
-    })
-    .from(schema.profileStatuses)
-    .where(
-      excludedStatusIds.length
-        ? notInArray(schema.profileStatuses.id, excludedStatusIds)
-        : undefined,
-    )
-    .orderBy(
-      desc(schema.profileStatuses.createdAt),
-      desc(schema.profileStatuses.id),
-    )
-    .limit(1)
-    .get()?.kind;
-  let effectiveStatusKind = currentStatusKind;
-  for (const status of statuses) {
-    if (deletedStatuses.includes(status.id)) continue;
-    if (
-      status.kind === 'empty' &&
-      !canAppendEmptyProfileStatus(effectiveStatusKind)
-    )
-      invalid('Cannot append an empty status');
-    effectiveStatusKind = status.kind;
-  }
   const currentAvatar = current.currentAvatarId
     ? db
         .select()
@@ -555,10 +464,10 @@ export async function saveProfile(input: ProfileEditData) {
     [avatarUuid, false],
     [bannerUuid, false],
     [faviconUuid, true],
-    ...statuses
-      .filter((status) => status.kind === 'regular')
-      .map((status) => [status.assetUuid, false]),
-    ...updatedStatuses.map((status) => [status.assetUuid, false]),
+    ...preparedStatuses.referencedAssetUuids.map((assetUuid) => [
+      assetUuid,
+      false,
+    ]),
   ] as [string | null, boolean][]) {
     if (!assetUuid) continue;
     if (typeof assetUuid !== 'string') invalid('Invalid media');
@@ -631,12 +540,6 @@ export async function saveProfile(input: ProfileEditData) {
         .where(eq(schema.profileAvatars.id, id))
         .run();
     }
-    for (const id of deletedStatuses) {
-      detach('profile-status', id);
-      tx.delete(schema.profileStatuses)
-        .where(eq(schema.profileStatuses.id, id))
-        .run();
-    }
     if (avatarId && avatarUuid) {
       const existing = tx
         .select()
@@ -651,40 +554,11 @@ export async function saveProfile(input: ProfileEditData) {
         .run();
       attach(avatarUuid, 'profile-avatar', avatarId, 'icon');
     }
-    for (const [index, status] of statuses.entries()) {
-      if (deletedStatuses.includes(status.id)) continue;
-      const existing = tx
-        .select()
-        .from(schema.profileStatuses)
-        .where(eq(schema.profileStatuses.id, status.id))
-        .get();
-      if (
-        existing &&
-        (existing.kind !== status.kind ||
-          existing.assetUuid !== status.assetUuid ||
-          existing.text !== status.text)
-      )
-        invalid('Status ID already exists');
-      tx.insert(schema.profileStatuses)
-        .values({ ...status, createdAt: now + index })
-        .onConflictDoNothing()
-        .run();
-      attach(status.assetUuid, 'profile-status', status.id, 'icon');
-    }
-    for (const status of updatedStatuses) {
-      const existing = tx
-        .select()
-        .from(schema.profileStatuses)
-        .where(eq(schema.profileStatuses.id, status.id))
-        .get();
-      if (!existing || existing.kind !== 'regular') invalid('Invalid status');
-      tx.update(schema.profileStatuses)
-        .set({ text: status.text, assetUuid: status.assetUuid })
-        .where(eq(schema.profileStatuses.id, status.id))
-        .run();
-      detach('profile-status', status.id);
-      attach(status.assetUuid, 'profile-status', status.id, 'icon');
-    }
+    applyStatusEdits(tx, schema, preparedStatuses, now, {
+      attach,
+      detach,
+      invalid,
+    });
     tx.update(schema.profiles)
       .set({
         displayName,

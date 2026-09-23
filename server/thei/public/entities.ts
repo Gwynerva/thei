@@ -18,9 +18,12 @@ import type {
   PublicProjectSection,
   PublicProjectSectionResponse,
   PublicProjectResponse,
-  PublicProjectReference,
+  PublicEntityReference,
   PublicProjectStage,
   PublicProjectStageResponse,
+  PublicEntityLink,
+  PublicDiaryLink,
+  PublicDiaryResponse,
   PublicTagListItem,
   PublicTagSummary,
 } from '#layers/thei/shared/api/public';
@@ -55,6 +58,8 @@ import { sortPublicTimelineItemsNewestFirst } from '#layers/thei/shared/public-t
 import type { TagItem } from '#layers/thei/shared/tag';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
+import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
+import { diaryContentExcerpt } from '#layers/thei/shared/diary-text';
 import {
   archivedOriginalFromMeta,
   buildPublicProjectMedia,
@@ -66,23 +71,29 @@ import { resolveEntityIconMedia } from '../media/generated-icon';
 import { getProjectContentSections } from '../projects/content-sections';
 import { getProjectStages } from '../projects/stages';
 import { getProjectExternalLinks } from '../projects/external-links';
-import { getProjectRelations } from '../projects/relations';
 import { getEventPeriods } from '../events/periods';
-import { getEventRelations } from '../events/relations';
+import { getRelations } from '../relations';
+import type { RelationGetItem } from '#layers/thei/shared/relation';
 import { getEventExternalLinks } from '../events/external-links';
 import { findExternalLink } from '../external-links/repository';
 import { listTagsForContainer } from '../tags';
-import { siteUrlBasePath, withoutSiteBase } from '#layers/thei/shared/site-url';
+import { parseInternalUrl } from '#layers/thei/shared/internal-url';
+import { internalUrlSite } from '../site-url';
+import {
+  findContentEntity,
+  findContentEntityByTarget,
+} from '../content-entities';
 import { buildSecretReference } from './secret';
 import {
   buildPublicContentData,
-  buildPublicContentPreviewMedia,
+  buildPublicEntityPreviewMedia,
   type PublicContentEntity,
 } from './content';
 import {
   entityNotesSlot,
   type EntityNotesOwner,
 } from '#layers/thei/shared/entity-notes';
+import { getCurrentStatus } from '../statuses';
 
 /**
  * The two fields only the owner sees: the reminder that flags the entity, and
@@ -169,7 +180,7 @@ export async function buildPublicProjectSummary(
   project: ProjectRow,
   isAdmin = false,
 ): Promise<PublicEntitySummary> {
-  const reference = await buildPublicProjectReference(project);
+  const reference = await buildPublicEntityReference(project);
   return {
     type: 'project',
     title: reference.title,
@@ -187,9 +198,9 @@ export async function buildPublicProjectSummary(
   };
 }
 
-export async function buildPublicProjectReference(
+export async function buildPublicEntityReference(
   project: ProjectRow,
-): Promise<PublicProjectReference> {
+): Promise<PublicEntityReference> {
   const icon = (
     await THEI_SERVER.assets.usages.findByContainer(
       'project',
@@ -197,6 +208,7 @@ export async function buildPublicProjectReference(
     )
   ).find((usage) => usage.role === 'icon');
   return {
+    entityType: 'project',
     title: project.title,
     summary: project.summary,
     href: buildProjectUrl(project.humanReadableSlug, project.publicId),
@@ -215,7 +227,7 @@ export async function buildPublicEventSummary(
   isAdmin = false,
 ): Promise<PublicEntitySummary> {
   const [media, periods, tags, relations] = await Promise.all([
-    buildPublicContentPreviewMedia(
+    buildPublicEntityPreviewMedia(
       'event',
       event.eventUuid,
       'event-body',
@@ -224,7 +236,7 @@ export async function buildPublicEventSummary(
     ),
     getEventPeriods(event.eventUuid),
     listTagsForContainer('event', event.eventUuid),
-    getEventRelations(event.eventUuid),
+    getRelations({ type: 'event', id: event.eventUuid }),
   ]);
   return {
     type: 'event',
@@ -239,7 +251,7 @@ export async function buildPublicEventSummary(
         .map((period) => period.endDate)
         .sort()
         .at(-1) ?? new Date(event.createdAt).toISOString().slice(0, 10),
-    relatedProjects: await buildRelatedProjectReferences(relations, isAdmin),
+    relatedEntities: await buildRelationReferences(relations, isAdmin),
     ...(isAdmin && event.reminder ? { reminder: event.reminder } : {}),
   };
 }
@@ -308,32 +320,10 @@ export async function buildPublicPage(
   };
 }
 
-async function buildRelatedProjectReferences(
-  relations: Awaited<ReturnType<typeof getEventRelations>>,
-  isAdmin: boolean,
-) {
-  const references = await Promise.all(
-    relations.map(async (relation) => {
-      const project = await THEI_SERVER.projects.findByUuid(
-        relation.projectUuid,
-      );
-      if (!project) return undefined;
-      // Event relations carry no type, so none is invented for display.
-      if (!canListPublicEntity(project.access, isAdmin))
-        return buildSecretReference('project', project.projectUuid);
-      return {
-        ...(await buildPublicProjectReference(project)),
-        ...(relation.note ? { note: relation.note } : {}),
-      };
-    }),
-  );
-  return references.filter((item) => item !== undefined);
-}
-
 export async function buildPublicProject(
   project: ProjectRow,
   isAdmin: boolean,
-): Promise<Omit<PublicProjectResponse, 'relatedEvents'>> {
+): Promise<Omit<PublicProjectResponse, 'timeline'>> {
   const usages = await THEI_SERVER.assets.usages.findByContainer(
     'project',
     project.projectUuid,
@@ -363,8 +353,12 @@ export async function buildPublicProject(
       isAdmin,
     ),
     getProjectExternalLinks(project.projectUuid),
-    getProjectRelations(project.projectUuid),
+    getRelations({ type: 'project', id: project.projectUuid }),
   ]);
+  const status = await getCurrentStatus(
+    { type: 'project', id: project.projectUuid },
+    isAdmin,
+  );
   const visibleStages = rawStages.filter(
     (stage) => isAdmin || !stage.isPrivate,
   );
@@ -428,10 +422,8 @@ export async function buildPublicProject(
     files,
     isAdmin,
   );
-  const relatedProjects = await buildProjectRelationReferences(
-    relations,
-    isAdmin,
-  );
+  const relatedEntities = await buildRelationReferences(relations, isAdmin);
+  const diaryEntries = await buildDiaryLinks(relations, isAdmin);
   const visibleStagePeriods = visibleStages.flatMap((stage) => stage.periods);
   const firstStageAt = visibleStagePeriods
     .map((period) => period.startDate)
@@ -451,6 +443,7 @@ export async function buildPublicProject(
       ...buildPublicEntityChronology(project),
       firstStageAt,
       lastStageAt,
+      ...(status.firstAt ? { firstStatusAt: status.firstAt } : {}),
     },
     isShowcase: project.showcase,
     isCv: project.cv,
@@ -470,7 +463,10 @@ export async function buildPublicProject(
     showcase,
     files,
     tags: await buildPublicTags(tags),
-    relatedProjects,
+    relatedEntities,
+    diaryEntries,
+    currentStatus: status.current,
+    statusCount: status.total,
     references: await buildPublicReferences(
       manualReferences,
       await buildPublicContentReferenceGroup(description, isAdmin),
@@ -499,7 +495,7 @@ export async function buildPublicProjectStageSummary(
     date: period.endDate,
     period,
     periods: stage.periods,
-    media: await buildPublicContentPreviewMedia(
+    media: await buildPublicEntityPreviewMedia(
       'project-stage',
       stage.stageUuid,
       'project-stage-body',
@@ -525,7 +521,7 @@ export async function buildPublicProjectSectionSummary(
     title: section.title,
     summary: section.summary,
     date: new Date(section.createdAt).toISOString().slice(0, 10),
-    media: await buildPublicContentPreviewMedia(
+    media: await buildPublicEntityPreviewMedia(
       'project-section',
       section.sectionUuid,
       'project-section-body',
@@ -544,7 +540,7 @@ export async function buildPublicProjectSectionSummary(
 
 export async function buildPublicProjectChildParent(project: ProjectRow) {
   return {
-    ...(await buildPublicProjectReference(project)),
+    ...(await buildPublicEntityReference(project)),
     access: project.access,
     humanReadableSlug: project.humanReadableSlug,
     publicId: project.publicId,
@@ -631,7 +627,7 @@ export async function buildPublicEvent(
       ),
       getEventExternalLinks(stored.eventUuid),
       listTagsForContainer('event', stored.eventUuid),
-      getEventRelations(stored.eventUuid),
+      getRelations({ type: 'event', id: stored.eventUuid }),
       THEI_SERVER.assets.usages.findByContainer('event', stored.eventUuid),
     ]);
   const files = await Promise.all(
@@ -660,10 +656,8 @@ export async function buildPublicEvent(
       } satisfies PublicFile;
     }),
   );
-  const relatedProjects = await buildRelatedProjectReferences(
-    relations,
-    isAdmin,
-  );
+  const relatedEntities = await buildRelationReferences(relations, isAdmin);
+  const diaryEntries = await buildDiaryLinks(relations, isAdmin);
   const manual = buildPublicManualEventReferenceGroup(rawLinks, files, isAdmin);
   return {
     title: stored.title,
@@ -679,7 +673,8 @@ export async function buildPublicEvent(
       isAdmin,
     ),
     tags: await buildPublicTags(tags),
-    relatedProjects,
+    relatedEntities,
+    diaryEntries,
     action: await buildPublicAction(stored, usages, isAdmin),
     ...(await buildOwnerOnlyNotes(
       'event',
@@ -740,29 +735,130 @@ function buildPublicManualReferenceGroup(
   };
 }
 
-async function buildProjectRelationReferences(
-  relations: Awaited<ReturnType<typeof getProjectRelations>>,
+/**
+ * Related entities as the page that shows them sees them.
+ *
+ * One builder for every kind: a relation may point at an event as easily as
+ * at a project, and the reading of its direction is the same either way.
+ * A target the visitor may not list becomes a codename rather than vanishing —
+ * the relation itself is not a secret, only what is on the other end.
+ *
+ * Diary entries are left out here rather than at each call site: they get a
+ * section of their own, where a day and an opening line read better than a
+ * title-shaped tile would.
+ */
+async function buildRelationReferences(
+  relations: RelationGetItem[],
   isAdmin: boolean,
-) {
+): Promise<PublicEntityLink[]> {
   const references = await Promise.all(
-    relations.map(async ({ projectUuid, type, note }) => {
-      const project = await THEI_SERVER.projects.findByUuid(projectUuid);
-      if (!project) return undefined;
-      if (!canListPublicEntity(project.access, isAdmin))
+    relations
+      .filter((relation) => relation.entityType !== 'diary-entry')
+      .map(async ({ entityType, entityId, type, note }) => {
+        const entity = await findContentEntity(
+          { entityType, entityId },
+          isAdmin,
+        );
+        if (!entity) return undefined;
+        if (!canListPublicEntity(entity.access, isAdmin))
+          return {
+            ...buildSecretReference(entityType, entityId),
+            relationType: type,
+            entityType,
+          };
+        const text = note?.type === 'split' ? note.currentText : note?.text;
+        // The picture as this reader may see it, served from public
+        // addresses: the relations editor's own pictures are the admin's.
         return {
-          ...buildSecretReference('project', project.projectUuid),
+          entityType,
+          title: entity.title,
+          summary: entity.summary,
+          href: entity.href,
+          iconMedia: await entity.media('public', isAdmin),
           relationType: type,
+          ...(text ? { note: text } : {}),
         };
-      const text =
-        note?.type === 'split' ? note.currentProjectText : note?.text;
-      return {
-        ...(await buildPublicProjectReference(project)),
-        relationType: type,
-        ...(text ? { note: text } : {}),
-      };
-    }),
+      }),
   );
   return references.filter((item) => item !== undefined);
+}
+
+/**
+ * The diary entries tied to something, as its page lists them.
+ *
+ * An entry a visitor cannot open is simply absent — not a codename. A project
+ * saying "and three more you may not read" would leak how much was written
+ * about it, which is exactly what a private entry is protecting.
+ */
+async function buildDiaryLinks(
+  relations: RelationGetItem[],
+  isAdmin: boolean,
+): Promise<PublicDiaryLink[]> {
+  const entries = await Promise.all(
+    relations
+      .filter((relation) => relation.entityType === 'diary-entry')
+      .map(async ({ entityId }) => {
+        const entry = await THEI_SERVER.diary.findByUuid(entityId);
+        if (!entry || !canListPublicEntity(entry.access, isAdmin))
+          return undefined;
+        const content = await THEI_SERVER.content.findByOwner(
+          'diary-entry',
+          entry.diaryUuid,
+          'diary-body',
+        );
+        return {
+          date: entry.date,
+          href: buildDiaryUrl(entry.date),
+          excerpt: diaryContentExcerpt(content?.data, isAdmin),
+          ...(isAdmin && entry.access !== ProjectEventAccessLevel.Public
+            ? { access: entry.access }
+            : {}),
+        } satisfies PublicDiaryLink;
+      }),
+  );
+  return entries
+    .filter((entry) => entry !== undefined)
+    .sort((left, right) => right.date.localeCompare(left.date));
+}
+
+/**
+ * One diary entry's page.
+ *
+ * The shortest builder in the file, and that is the point: an entry is its
+ * day and what was written on it, plus whatever its own text refers to.
+ */
+export async function buildPublicDiaryEntry(
+  stored: {
+    diaryUuid: string;
+    date: string;
+    access: ProjectEventAccessLevel;
+    reminder: string;
+  },
+  isAdmin: boolean,
+  asOwner = isAdmin,
+): Promise<PublicDiaryResponse> {
+  const [content, relations] = await Promise.all([
+    buildPublicContentData(
+      'diary-entry',
+      stored.diaryUuid,
+      'diary-body',
+      { type: 'diary-entry', date: stored.date },
+      asOwner,
+    ),
+    getRelations({ type: 'diary-entry', id: stored.diaryUuid }),
+  ]);
+  return {
+    date: stored.date,
+    access: stored.access,
+    content: content ?? { blocks: [] },
+    references: await buildPublicReferences(
+      emptyPublicReferenceGroup(),
+      await buildPublicContentReferenceGroup(content, asOwner),
+      asOwner,
+    ),
+    relatedEntities: await buildRelationReferences(relations, isAdmin),
+    ...(isAdmin && stored.reminder ? { reminder: stored.reminder } : {}),
+  };
 }
 
 export async function buildPublicContentReferenceGroup(
@@ -825,113 +921,53 @@ async function buildPublicReferenceLink(
       : candidate;
   // A note is why the link was worth making, which says more in a list than
   // the name of whatever it points at.
-  const titled = (title: string) => resolved.note || title;
   if (resolved.kind === 'external') {
     const link = await findExternalLink(resolved.url);
     return {
       kind: 'external',
-      title: titled(link?.title || externalLinkHostname(resolved.url)),
+      title: resolved.note || link?.title || externalLinkHostname(resolved.url),
       href: resolved.url,
       description: link?.description,
       iconMedia: link?.faviconMedia,
     };
   }
-  if (resolved.kind === 'project') {
-    const project = await THEI_SERVER.projects.findByUuid(resolved.projectUuid);
-    if (!project || !canOpenPublicEntity(project.access, includePrivate))
-      return undefined;
-    const reference = await buildPublicProjectReference(project);
-    return {
-      kind: 'project',
-      title: titled(reference.title),
-      href: reference.href,
-      description: reference.summary,
-      iconMedia: reference.iconMedia,
-    };
-  }
-  if (resolved.kind === 'event') {
-    const event = await THEI_SERVER.events.findByUuid(resolved.eventUuid);
-    if (!event || !canOpenPublicEntity(event.access, includePrivate))
-      return undefined;
-    return {
-      kind: 'event',
-      title: titled(event.title),
-      href: buildEventUrl(event.humanReadableSlug, event.publicId),
-      description: event.summary,
-      iconMedia: await buildPublicContentPreviewMedia(
-        'event',
-        event.eventUuid,
-        'event-body',
-        { type: 'event', ...event },
-        includePrivate,
-      ),
-    };
-  }
-  const page = await THEI_SERVER.pages.findByUuid(resolved.pageUuid);
-  if (!page || !canOpenPublicEntity(page.access, includePrivate))
+  const entity = await findContentEntity(resolved, includePrivate);
+  if (!entity || !canOpenPublicEntity(entity.access, includePrivate))
     return undefined;
+  const iconMedia = await entity.media('public', includePrivate);
   return {
-    kind: 'page',
-    title: titled(page.title),
-    href: buildPageUrl(page.slug),
-    description: page.summary,
-    iconMedia: await buildPublicPageIcon(page),
+    kind: entity.entityType,
+    title: resolved.note || entity.title,
+    href: entity.href,
+    description: entity.summary,
+    // A diary entry is called by its day, which the page writes out; a note
+    // replaces the day just as it replaces any other title.
+    ...(entity.date && !resolved.note ? { date: entity.date } : {}),
+    ...(iconMedia ? { iconMedia } : {}),
   };
 }
 
 /**
- * Maps an absolute address on this site's own origin back to the project,
- * event or page it opens. Anything else — another origin, a stage, a file, an
- * unknown entity — stays an external link.
+ * Maps an address on this site's own origin back to the entity it opens.
+ * Anything else — another origin, a tab, a file, an unknown entity — stays an
+ * external link.
  */
 export async function resolveSiteEntityCandidate(
   url: string,
 ): Promise<ContentReferenceLinkCandidate> {
   const external = { kind: 'external' as const, url };
-  const siteUrl = THEI_SERVER.config.siteUrl;
-  if (!siteUrl) return external;
-  let parsed: URL;
-  let site: URL;
-  try {
-    parsed = new URL(url);
-    site = new URL(siteUrl);
-  } catch {
-    return external;
-  }
-  if (parsed.origin !== site.origin) return external;
-  // A site in a subfolder writes its own links with the base path; entity
-  // paths themselves are always base-free.
-  const pathname = withoutSiteBase(parsed.pathname, siteUrlBasePath(siteUrl));
-  const [section, part, ...rest] = pathname
-    .split('/')
-    .filter(Boolean)
-    .map((segment) => {
-      try {
-        return decodeURIComponent(segment);
-      } catch {
-        return segment;
+  // Only absolute addresses: a manual link is always written as one, and a
+  // bare path would be taken for this site whatever the author meant.
+  if (!/^https?:\/\//i.test(url)) return external;
+  const target = parseInternalUrl(url, internalUrlSite());
+  const entity = target && (await findContentEntityByTarget(target, false));
+  return entity
+    ? {
+        kind: 'entity',
+        entityType: entity.entityType,
+        entityId: entity.entityId,
       }
-    });
-  if (!section || !part || rest.length) return external;
-  if (section === 'projects') {
-    const project = await THEI_SERVER.projects.findByPublicId(
-      publicIdFromProjectUrlPart(part),
-    );
-    return project
-      ? { kind: 'project', projectUuid: project.projectUuid }
-      : external;
-  }
-  if (section === 'events') {
-    const event = await THEI_SERVER.events.findByPublicId(
-      publicIdFromEventUrlPart(part),
-    );
-    return event ? { kind: 'event', eventUuid: event.eventUuid } : external;
-  }
-  if (section === 'pages') {
-    const page = await THEI_SERVER.pages.findBySlug(part);
-    return page ? { kind: 'page', pageUuid: page.pageUuid } : external;
-  }
-  return external;
+    : external;
 }
 
 /**
@@ -1009,7 +1045,6 @@ export async function buildPublicTags(
         slug: tag.slug,
         publicId: tag.publicId,
         description: tag.description,
-        accentColor: tag.accentColor,
         iconMedia: icon
           ? await buildPublicTagMedia(tag, icon.asset)
           : undefined,
@@ -1028,7 +1063,6 @@ export async function buildPublicTagListItems(
       slug: tag.slug,
       publicId: tag.publicId,
       description: tag.description || undefined,
-      accentColor: tag.accentColor || undefined,
     })),
   );
   return tags.map((tag, index) => ({

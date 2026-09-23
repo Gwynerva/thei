@@ -23,10 +23,12 @@ interface AttachmentContext {
     | 'project'
     | 'event'
     | 'page'
+    | 'diary-entry'
     | 'tag'
     | 'profile'
     | 'profile-avatar'
-    | 'profile-status';
+    | 'profile-status'
+    | 'project-status';
   ownerId: string;
   access?: ProjectEventAccessLevel;
   role: AssetRole;
@@ -35,7 +37,7 @@ interface AttachmentContext {
 
 /** A public use must belong to this URL's entity and an accessible owner. */
 export async function contentAttachmentAccess(
-  ownerType: 'project' | 'event' | 'page' | 'profile',
+  ownerType: 'project' | 'event' | 'page' | 'profile' | 'diary-entry',
   ownerId: string,
   assetUuid: string,
 ) {
@@ -129,7 +131,9 @@ export async function sendContextAsset(
   // files inside its private stages and sections, and nothing else.
   const viaShare =
     !isAdmin &&
-    (context.ownerType === 'project' || context.ownerType === 'event') &&
+    (context.ownerType === 'project' ||
+      context.ownerType === 'event' ||
+      context.ownerType === 'diary-entry') &&
     hasShareGrant(event, context.ownerType, context.ownerId);
   const asOwner = isAdmin || viaShare;
   const publicParent =
@@ -152,6 +156,7 @@ export async function sendContextAsset(
     (context.ownerType === 'project' ||
       context.ownerType === 'event' ||
       context.ownerType === 'page' ||
+      context.ownerType === 'diary-entry' ||
       context.ownerType === 'profile')
   ) {
     access = await contentAttachmentAccess(

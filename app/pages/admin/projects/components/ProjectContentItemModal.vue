@@ -291,7 +291,7 @@ async function deleteItem() {
             ? phrase.project_stage_summary
             : phrase.content_section_summary
         }}</FieldLabel>
-        <FieldInput v-model="item.summary" autocomplete="off" />
+        <FieldTextarea v-model="item.summary" />
       </Field>
       <Field v-if="isStage">
         <div class="flex items-center justify-between gap-sm">

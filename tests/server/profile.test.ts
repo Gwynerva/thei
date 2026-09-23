@@ -81,9 +81,7 @@ describe('profile statuses', () => {
     await expect(saveProfile(invalidContentLink)).rejects.toMatchObject({
       statusCode: 400,
     });
-    expect(
-      context.db.select().from(context.schema.profileStatuses).all(),
-    ).toEqual([]);
+    expect(context.db.select().from(context.schema.statuses).all()).toEqual([]);
     expect(
       context.db.select().from(context.schema.profileExternalLinks).all(),
     ).toEqual([]);
@@ -105,7 +103,7 @@ describe('profile statuses', () => {
     await saveProfile(regular);
     await saveProfile(regular);
     expect(
-      context.db.select().from(context.schema.profileStatuses).all(),
+      context.db.select().from(context.schema.statuses).all(),
     ).toHaveLength(1);
 
     await saveProfile(edit([{ id: 'empty-1', kind: 'empty' }]));
@@ -129,7 +127,7 @@ describe('profile statuses', () => {
       ),
     ).rejects.toThrow('Cannot append an empty status');
 
-    const rows = context.db.select().from(context.schema.profileStatuses).all();
+    const rows = context.db.select().from(context.schema.statuses).all();
     expect(rows.map(({ id, kind }) => ({ id, kind }))).toEqual([
       { id: 'regular-1', kind: 'regular' },
       { id: 'empty-1', kind: 'empty' },
@@ -147,7 +145,7 @@ describe('profile statuses', () => {
     expect(
       context.db
         .select()
-        .from(context.schema.profileStatuses)
+        .from(context.schema.statuses)
         .all()
         .some((status) => status.id === 'empty-1'),
     ).toBe(false);
@@ -155,10 +153,12 @@ describe('profile statuses', () => {
 
   it('paginates status history by timestamp and UUID without duplicates', async () => {
     context.db
-      .insert(context.schema.profileStatuses)
+      .insert(context.schema.statuses)
       .values(
         Array.from({ length: 35 }, (_, index) => ({
           id: `status-${String(index).padStart(2, '0')}`,
+          ownerType: 'profile' as const,
+          ownerId: 'profile',
           kind: 'regular' as const,
           text: `Статус ${index}`,
           createdAt: 1_000 + Math.floor(index / 2),
@@ -184,9 +184,11 @@ describe('profile statuses', () => {
 
   it('does not expose a media URL when a referenced asset is missing', async () => {
     context.db
-      .insert(context.schema.profileStatuses)
+      .insert(context.schema.statuses)
       .values({
         id: 'missing-media',
+        ownerType: 'profile',
+        ownerId: 'profile',
         kind: 'regular',
         text: 'Без файла',
         assetUuid: 'missing-asset',

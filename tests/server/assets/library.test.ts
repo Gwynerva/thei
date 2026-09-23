@@ -128,8 +128,17 @@ describe('asset library', () => {
     db.insert(schema.profileAvatars)
       .values({ id: 'avatar', assetUuid: 'a', createdAt: 1 })
       .run();
-    db.insert(schema.profileStatuses)
-      .values({ id: 'status', assetUuid: 'a', text: 'Status', createdAt: 1 })
+    db.insert(schema.statuses)
+      .values({
+        id: 'status',
+        ownerType: 'profile',
+        // The owner is the real profile row, not a fixed literal: the library
+        // now joins the status to its owner instead of cross-joining.
+        ownerId: 'me',
+        assetUuid: 'a',
+        text: 'Status',
+        createdAt: 1,
+      })
       .run();
     db.insert(schema.assetUsages)
       .values([

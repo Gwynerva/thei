@@ -207,3 +207,19 @@ function createClampedUtcDate(year: number, month: number, day: number) {
   const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
   return new Date(Date.UTC(year, month, Math.min(day, lastDay)));
 }
+
+/**
+ * How a break between two days is drawn.
+ *
+ * A gap inside one month is a pause; a few months is a silence; longer than a
+ * season is a break in the thread. The rail says which of the three it is
+ * before the label underneath is read.
+ */
+export type LifeGapStyle = 'dash' | 'dotted' | 'severed';
+
+export function lifeGapStyle(duration: LifeGapDuration): LifeGapStyle {
+  if (duration.years > 0) return 'severed';
+  if (duration.months > 3) return 'severed';
+  if (duration.months >= 1) return 'dotted';
+  return 'dash';
+}

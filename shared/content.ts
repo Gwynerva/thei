@@ -7,7 +7,9 @@ import {
   normalizeContentIntegration,
 } from './content-integrations';
 import {
+  contentEntityReference,
   contentInlineLinksFromData,
+  isContentEntityType,
   normalizeContentInlineHtml,
   normalizeContentText,
 } from './content-link';
@@ -19,6 +21,7 @@ export const CONTENT_OWNER_TYPES = [
   'project-section',
   'event',
   'page',
+  'diary-entry',
 ] as const;
 export type ContentOwnerType = (typeof CONTENT_OWNER_TYPES)[number];
 
@@ -32,6 +35,7 @@ export const CONTENT_SLOTS = [
   'project-notes',
   'event-notes',
   'page-notes',
+  'diary-body',
 ] as const;
 export type ContentSlot = (typeof CONTENT_SLOTS)[number];
 
@@ -711,12 +715,9 @@ function normalizeBlockData(
       }
 
     case 'entityLink': {
-      const entityType =
-        data.entityType === 'project' ||
-        data.entityType === 'event' ||
-        data.entityType === 'page'
-          ? data.entityType
-          : undefined;
+      const entityType = isContentEntityType(data.entityType)
+        ? data.entityType
+        : undefined;
       const entityId = optionalString(data.entityId)?.trim();
       return { entityType, entityId };
     }
@@ -775,11 +776,9 @@ function isContentBlockEmpty(block: ContentOutputBlock): boolean {
       return !contentIntegrationUrl(block.data);
 
     case 'entityLink':
-      return !(
-        ((block.data as any).entityType === 'project' ||
-          (block.data as any).entityType === 'event' ||
-          (block.data as any).entityType === 'page') &&
-        optionalString((block.data as any).entityId)?.trim()
+      return !contentEntityReference(
+        (block.data as any).entityType,
+        (block.data as any).entityId,
       );
 
     case 'privateSectionBoundary':

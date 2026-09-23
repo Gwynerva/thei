@@ -2,7 +2,7 @@
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 
 const props = defineProps<{
-  entityType: 'project' | 'event' | 'page';
+  entityType: 'project' | 'event' | 'page' | 'diary-entry';
   title: string;
   summary: string;
   previewMedia?: MediaDescriptor;
@@ -31,7 +31,7 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
         class="w-24"
       >
         <span class="flex size-full items-center pl-sm text-2xl text-text-3">
-          <Icon :name="entityType" />
+          <Icon :name="entityType === 'diary-entry' ? 'thought' : entityType" />
         </span>
       </MediaEdge>
       <span class="relative ml-10 min-w-0 flex-1 py-1">

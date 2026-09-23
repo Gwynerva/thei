@@ -723,9 +723,14 @@ describe('public content media previews', () => {
       createdAt: Date.UTC(2027, 3, 6),
     } as any;
 
-    await expect(
-      buildPublicProjectSectionSummary(project, section),
-    ).resolves.toMatchObject({ date: '2027-04-06', media: undefined });
+    // A visitor never sees the private picture; the section is drawn instead,
+    // like any entity whose body opens without one it may see.
+    const visitor = await buildPublicProjectSectionSummary(project, section);
+    expect(visitor.date).toBe('2027-04-06');
+    expect(visitor.media).toMatchObject({ generated: true });
+    expect(visitor.media!.src).toMatch(
+      /^\/media\/generated-icons\/project-section\/[a-f0-9]{64}\.avif$/,
+    );
     await expect(
       buildPublicProjectSectionSummary(project, section, true),
     ).resolves.toMatchObject({
@@ -912,6 +917,7 @@ describe('merged public references', () => {
   };
 
   function mockServer() {
+    (globalThis as any).useRuntimeConfig = () => ({ app: { baseURL: '/' } });
     (globalThis as any).THEI_SERVER = {
       config: { siteUrl: 'https://me.example' },
       projects: {
@@ -939,11 +945,16 @@ describe('merged public references', () => {
       resolveSiteEntityCandidate(
         'https://me.example/projects/linked-LinkedProject/',
       ),
-    ).resolves.toEqual({ kind: 'project', projectUuid: 'project-uuid' });
+    ).resolves.toEqual({
+      kind: 'entity',
+      entityType: 'project',
+      entityId: 'project-uuid',
+    });
     for (const url of [
       'https://other.example/projects/linked-LinkedProject/',
       'https://me.example/projects/linked-Unknown/',
-      'https://me.example/projects/linked-LinkedProject/stages/x-Y/',
+      'https://me.example/projects/linked-LinkedProject/timeline/',
+      '/projects/linked-LinkedProject/',
     ])
       await expect(resolveSiteEntityCandidate(url)).resolves.toEqual({
         kind: 'external',
@@ -1032,6 +1043,14 @@ describe('entity links in public content', () => {
                 },
               },
               {
+                type: 'paragraph',
+                data: {
+                  text:
+                    'Also <a data-content-link="entity" data-entity-type="project" ' +
+                    `data-entity-id="${privateProject.projectUuid}" data-content-note="why">noted</a>.`,
+                },
+              },
+              {
                 type: 'entityLink',
                 data: {
                   entityType: 'project',
@@ -1078,16 +1097,21 @@ describe('entity links in public content', () => {
     );
 
     expect(JSON.stringify(content)).not.toContain(privateProject.projectUuid);
-    expect(content!.blocks[1]).toEqual({
+    // A link with the owner's note is redacted just the same.
+    expect(content!.blocks[1]!.data.text).toBe(
+      'Also <a data-content-link="entity" data-entity-type="project" ' +
+        'data-entity-restricted="true">noted</a>.',
+    );
+    expect(content!.blocks[2]).toEqual({
       type: 'entityLink',
       data: { entityType: 'project', restricted: true },
     });
     // A public target is untouched, and a uuid that resolves to nothing is
     // left alone so a dead link does not masquerade as a private one.
-    expect(content!.blocks[2]).toMatchObject({
+    expect(content!.blocks[3]).toMatchObject({
       data: { entityType: 'project', entityId: publicProject.projectUuid },
     });
-    expect(content!.blocks[3]).toMatchObject({
+    expect(content!.blocks[4]).toMatchObject({
       data: { entityType: 'project', entityId: 'deleted-uuid' },
     });
     expect(content!.blocks[0]!.data.text).toBe(
@@ -1109,7 +1133,7 @@ describe('entity links in public content', () => {
     );
 
     expect(JSON.stringify(content)).toContain(privateProject.projectUuid);
-    expect(content!.blocks[1]).toMatchObject({
+    expect(content!.blocks[2]).toMatchObject({
       data: { entityId: privateProject.projectUuid },
     });
   });

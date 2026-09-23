@@ -5,15 +5,14 @@ import type {
   ProjectSectionContentValue,
   ProjectStageContentValue,
 } from '../project-content-item';
-import type {
-  ProjectRelationEditItem,
-  ProjectRelationType,
-} from '../admin/project';
+import type { RelationGetItem } from '../relation';
 import type { MediaDescriptor } from '../media';
 import type { TagItem } from '../tag';
 import type { ProjectExternalLink } from '../external-link';
 import type { ProjectActionEditData } from '../project-action';
 import type { AdminPaginatedResponse } from '../admin/entity-list';
+import type { ProfileHistoryPage } from '../profile';
+import type { StatusHistoryItem } from '../status';
 
 /** Base display item for any project asset list (showcase, other-assets, …). */
 export type AssetListItem = {
@@ -65,7 +64,7 @@ export type ProjectGetResponse = {
   stages?: ProjectStageContentValue[];
   showcaseAssets?: ShowcaseAssetGetItem[];
   otherAssets?: OtherAssetGetItem[];
-  relations?: ProjectRelationGetItem[];
+  relations?: RelationGetItem[];
   externalLinks?: ProjectExternalLink[];
   tags?: TagItem[];
   action?: ProjectActionEditData;
@@ -77,34 +76,34 @@ export type ProjectGetResponse = {
   actionFileExtension?: string;
   actionFileSize?: number;
   actionFaviconMedia?: MediaDescriptor;
+  /** The first page of the project's status history, newest first. */
+  statuses?: ProfileHistoryPage<StatusHistoryItem>;
   reminder: string;
   notes?: ContentFieldValue;
 };
 
-export type ProjectRelationGetItem = ProjectRelationEditItem & {
-  title: string;
-  humanReadableSlug: string;
-  publicId: string;
-  iconMedia: MediaDescriptor;
-};
+export type { RelationType } from '../relation';
 
-export type ProjectSearchItem = {
-  projectUuid: string;
-  title: string;
-  summary: string;
-  humanReadableSlug: string;
+/**
+ * Identities the server assigned to freshly created stages and sections.
+ *
+ * The form knows an item only by its public ID until the first save; without
+ * these pairs the next save would offer the same public ID with no uuid
+ * attached, and the storage layer would rightly read that as a collision with
+ * the row it had just written.
+ */
+export type ProjectContentItemIdentity = {
   publicId: string;
-  iconMedia: MediaDescriptor;
-  tags?: TagItem[];
+  itemUuid: string;
 };
-
-export type { ProjectRelationType };
 
 export type ProjectSaveResponse =
   | {
       type: 'success';
       projectUuid: string;
       action: ProjectActionEditData;
+      stages: ProjectContentItemIdentity[];
+      sections: ProjectContentItemIdentity[];
     }
   | {
       type: 'error';

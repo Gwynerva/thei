@@ -12,6 +12,7 @@ export const ASSET_SOURCE_TYPES = [
   'project',
   'event',
   'page',
+  'diary-entry',
   'tag',
   'profile',
   'unused',

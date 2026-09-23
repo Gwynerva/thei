@@ -77,7 +77,6 @@ export default defineEventHandler(async (event) => {
             slug: result.slug,
             publicId: result.publicId,
             description: result.description,
-            accentColor: result.accentColor ?? null,
           })
           .where(eq(schema.tags.tagUuid, tagUuid))
           .run();

@@ -28,19 +28,6 @@ export const profileAvatars = sqliteTable(
   },
   (t) => [index('profile-avatars-date-idx').on(t.createdAt, t.id)],
 );
-export const profileStatuses = sqliteTable(
-  'profile-statuses',
-  {
-    id: text().primaryKey(),
-    kind: text({ enum: ['regular', 'empty'] })
-      .notNull()
-      .default('regular'),
-    assetUuid: text(),
-    text: text().notNull(),
-    createdAt: integer().notNull(),
-  },
-  (t) => [index('profile-statuses-date-idx').on(t.createdAt, t.id)],
-);
 export const profilePinnedPages = sqliteTable('profile-pinned-pages', {
   pageUuid: text()
     .primaryKey()

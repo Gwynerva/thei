@@ -8,7 +8,7 @@ function harness(stored?: string) {
   const state = {
     activeDate: '2026-08-21',
     newestDate: '2026-08-22',
-    path: '/life/2026/08/21/',
+    path: '/life/',
     visible: true,
     focused: true,
     stored,
@@ -56,7 +56,6 @@ describe('Life last-visit tracker', () => {
     tracker.initialize();
     vi.advanceTimersByTime(2_000);
     state.activeDate = '2026-08-22';
-    state.path = '/life/2026/08/22/';
     tracker.considerActiveDay();
     vi.advanceTimersByTime(1_000);
     expect(writes).toEqual([]);

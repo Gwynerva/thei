@@ -20,26 +20,34 @@ import { buildEventUrl } from '#layers/thei/shared/event-url';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import { buildProjectUrl } from '#layers/thei/shared/project-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
+import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import {
   archivedOriginalFromMeta,
   buildPublicEventContentMedia,
   buildPublicProjectContentMedia,
   buildPublicPageContentMedia,
+  buildPublicDiaryContentMedia,
   buildPublicProfileMedia,
 } from '../assets/urls';
 import { findExternalLink } from '../external-links/repository';
 import { canResolveContentEntityLink } from '../content-links/access';
 import {
+  CONTENT_ENTITY_TYPES,
   isContentEntityType,
   type ContentEntityType,
 } from '#layers/thei/shared/content-link';
+import { findContentEntity } from '../content-entities';
+import { resolveEntityIconMedia } from '../media/generated-icon';
 
 /**
  * Canonical shape `normalizeContentInlineHtml` writes entity anchors in, so
- * rewriting them is an exact match rather than HTML parsing.
+ * rewriting them is an exact match rather than HTML parsing. The owner's note
+ * comes last and is optional.
  */
-const INLINE_ENTITY_ANCHOR =
-  /<a data-content-link="entity" data-entity-type="(project|event|page)" data-entity-id="([^"]*)">/g;
+const INLINE_ENTITY_ANCHOR = new RegExp(
+  `<a data-content-link="entity" data-entity-type="(${CONTENT_ENTITY_TYPES.join('|')})" data-entity-id="([^"]*)"(?: data-content-note="[^"]*")?>`,
+  'g',
+);
 
 type EntityLinkAccess = 'resolvable' | 'restricted' | 'missing';
 
@@ -61,6 +69,11 @@ export type PublicContentEntity =
       type: 'page';
       title?: string;
       slug: string;
+    }
+  | {
+      type: 'diary-entry';
+      title?: string;
+      date: string;
     };
 
 export async function buildPublicContentData(
@@ -119,9 +132,37 @@ export async function buildPublicContentPreviewMedia(
         ? buildPublicEventContentMedia(entity, asset)
         : entity.type === 'page'
           ? buildPublicPageContentMedia(entity, asset)
-          : buildPublicProjectContentMedia(entity, asset);
+          : entity.type === 'diary-entry'
+            ? buildPublicDiaryContentMedia(entity, asset)
+            : buildPublicProjectContentMedia(entity, asset);
   }
   return undefined;
+}
+
+/**
+ * What stands for an event, a stage, a section or a diary entry in a card, a
+ * tile or a link: the first picture of its body, or — when the body opens with
+ * none — its kind's drawn icon in its own accent, exactly as a project without
+ * an icon gets one. Seeded by the uuid, so a rename keeps the colour.
+ */
+export async function buildPublicEntityPreviewMedia(
+  ownerType: 'event' | 'project-stage' | 'project-section' | 'diary-entry',
+  ownerId: string,
+  slot: ContentSlot,
+  entity: PublicContentEntity,
+  includePrivate = false,
+): Promise<MediaDescriptor> {
+  return resolveEntityIconMedia(
+    ownerType,
+    ownerId,
+    await buildPublicContentPreviewMedia(
+      ownerType,
+      ownerId,
+      slot,
+      entity,
+      includePrivate,
+    ),
+  );
 }
 
 export function selectPublicContentMediaAssetUuids(
@@ -189,12 +230,7 @@ async function hydratePublicContentData(
     const key = `${entityType}:${entityId}`;
     const cached = entityLinkCache.get(key);
     if (cached) return cached;
-    const entity =
-      entityType === 'project'
-        ? await THEI_SERVER.projects.findByUuid(entityId)
-        : entityType === 'event'
-          ? await THEI_SERVER.events.findByUuid(entityId)
-          : await THEI_SERVER.pages.findByUuid(entityId);
+    const entity = await findContentEntity({ entityType, entityId }, false);
     const access: EntityLinkAccess = !entity
       ? 'missing'
       : canResolveContentEntityLink(entity.access, includePrivate)
@@ -260,7 +296,9 @@ async function hydratePublicContentData(
           ? `${buildEventUrl(entity.humanReadableSlug, entity.publicId)}content/${asset.slug}.${asset.extension}`
           : entity.type === 'page'
             ? `${buildPageUrl(entity.slug)}content/${asset.slug}.${asset.extension}`
-            : `${buildProjectUrl(entity.humanReadableSlug, entity.publicId)}content/${asset.slug}.${asset.extension}`;
+            : entity.type === 'diary-entry'
+              ? `${buildDiaryUrl(entity.date)}content/${asset.slug}.${asset.extension}`
+              : `${buildProjectUrl(entity.humanReadableSlug, entity.publicId)}content/${asset.slug}.${asset.extension}`;
     const media =
       asset.type === AssetType.Image || asset.type === AssetType.Video
         ? entity.type === 'profile'
@@ -274,7 +312,9 @@ async function hydratePublicContentData(
             ? await buildPublicEventContentMedia(entity, asset)
             : entity.type === 'page'
               ? await buildPublicPageContentMedia(entity, asset)
-              : await buildPublicProjectContentMedia(entity, asset)
+              : entity.type === 'diary-entry'
+                ? await buildPublicDiaryContentMedia(entity, asset)
+                : await buildPublicProjectContentMedia(entity, asset)
         : undefined;
     const hydrated = {
       // Public renderers only need a stable local key. Never expose the

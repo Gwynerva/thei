@@ -25,6 +25,9 @@ const isAsideOpen = ref(true);
         />
         <slot name="buttons"></slot>
       </div>
+      <div v-if="$slots.nav" class="absolute top-0 left-0 z-10 p-sm">
+        <slot name="nav"></slot>
+      </div>
 
       <slot name="preview"></slot>
     </div>

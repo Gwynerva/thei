@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { TagListItem } from '#layers/thei/shared/tag';
+import { tagAccentCssColor } from '#layers/thei/shared/tag';
 
 definePageMeta({ layout: 'admin' });
 await useAdminTabTitle(computed(() => phrase.value.admin_tags));
@@ -7,10 +8,9 @@ await useAdminTabTitle(computed(() => phrase.value.admin_tags));
 const { data: tags, error } = await useFetch<TagListItem[]>('/api/admin/tags');
 
 function placeholderStyle(tag: TagListItem) {
-  if (!tag.accentColor) return;
   return {
     color: 'var(--color-text-1)',
-    backgroundColor: `color-mix(in oklab, ${tag.accentColor} 18%, var(--color-bg-3))`,
+    backgroundColor: `color-mix(in oklab, ${tagAccentCssColor(tag)} 18%, var(--color-bg-3))`,
   };
 }
 </script>

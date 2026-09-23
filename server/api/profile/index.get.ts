@@ -15,7 +15,7 @@ import {
 import { buildPublicContentData } from '../../thei/public/content';
 import {
   buildPublicEventSummary,
-  buildPublicProjectReference,
+  buildPublicEntityReference,
   buildPublicProjectSummary,
   buildPublicTagListItems,
   canListPublicEntity,
@@ -132,7 +132,7 @@ export default defineEventHandler(
               : buildSecretReference('project', project.projectUuid),
           ),
       ),
-      Promise.all(showcaseProjects.map(buildPublicProjectReference)),
+      Promise.all(showcaseProjects.map(buildPublicEntityReference)),
       Promise.all(
         allEvents
           .slice(0, 3)

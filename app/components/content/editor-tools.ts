@@ -37,11 +37,13 @@ import {
 } from '#layers/thei/shared/external-link';
 import { editorIcon } from './editor-icons';
 import type { ContentEntitySearchItem } from '#layers/thei/shared/admin/content-entity-search';
-import type {
-  ContentEntityType,
-  ContentLinkResolver,
+import {
+  contentEntityReference,
+  type ContentEntityType,
+  type ContentLinkResolver,
 } from '#layers/thei/shared/content-link';
 import ContentEntityLinkBlock from './ContentEntityLinkBlock.vue';
+import ContentLinkPreviewCard from './ContentLinkPreviewCard.vue';
 export {
   ContentBoldTool,
   ContentEntityLinkTool,
@@ -80,17 +82,26 @@ interface ContentToolLabels {
   privateSectionEnd: string;
   externalLinkLoading: string;
   externalLinkError: string;
+  chooseEntity: string;
+  makeGallery: string;
 }
+
+/** Stores pasted files as they are and returns them as content assets. */
+export type ContentEditorUploadFiles = (
+  files: File[],
+) => Promise<ContentAssetData[]>;
 
 interface ContentMediaToolConfig {
   pickAsset: ContentEditorPickAsset;
   editAsset: ContentEditorEditAsset;
+  uploadFiles: ContentEditorUploadFiles;
   labels: ContentToolLabels;
 }
 
 interface ContentGalleryToolConfig {
   pickAssets: ContentEditorPickAssets;
   editAsset: ContentEditorEditAsset;
+  uploadFiles: ContentEditorUploadFiles;
   labels: ContentToolLabels;
 }
 
@@ -98,7 +109,12 @@ interface EntityLinkToolConfig {
   pickEntity: (
     anchor: HTMLElement,
   ) => Promise<ContentEntitySearchItem | undefined>;
+  /** The entity an address of this site opens, if it opens one. */
+  findEntityByUrl: (
+    url: string,
+  ) => Promise<ContentEntitySearchItem | undefined>;
   resolver: ContentLinkResolver;
+  labels: ContentToolLabels;
   beginTransientSelection?: () => void;
   endTransientSelection?: (persisted: boolean) => void;
 }
@@ -320,6 +336,8 @@ export class EntityLinkTool implements BlockTool {
   private entityId?: string;
   private autoOpen = false;
   private transientSelection = false;
+  /** An address of this site that was pasted and is being looked up. */
+  private pastedUrl?: string;
   private wrapper?: HTMLElement;
 
   constructor(
@@ -352,16 +370,47 @@ export class EntityLinkTool implements BlockTool {
   }
 
   validate(data: { entityType?: string; entityId?: string }) {
-    return Boolean(
-      (data.entityType === 'project' ||
-        data.entityType === 'event' ||
-        data.entityType === 'page') &&
-      data.entityId?.trim(),
-    );
+    return Boolean(contentEntityReference(data.entityType, data.entityId));
   }
 
   destroy() {
+    this.pastedUrl = undefined;
     if (this.wrapper) renderVue(null, this.wrapper);
+  }
+
+  /**
+   * An address of this very site, pasted into an empty paragraph.
+   *
+   * It is stored as a link to the entity it opens rather than as an address,
+   * so it keeps working when the site moves to another domain. The paste
+   * pattern only knows the address has the shape of an entity page; if the
+   * site has nothing there, the block becomes the external link it would have
+   * been anyway.
+   */
+  async onPaste(event: CustomEvent) {
+    const url = String(event.detail?.data ?? '').trim();
+    this.pastedUrl = url;
+    this.renderContent();
+    const config = contentToolConfig(this.options.config);
+    const entity = await config.findEntityByUrl(url).catch(() => undefined);
+    if (this.pastedUrl !== url) return;
+    this.pastedUrl = undefined;
+    if (!entity) {
+      const api = this.options.api;
+      api.blocks.insert(
+        'externalLink',
+        { url },
+        undefined,
+        api.blocks.getBlockIndex(this.options.block.id),
+        false,
+        true,
+      );
+      return;
+    }
+    this.entityType = entity.entityType;
+    this.entityId = entity.entityId;
+    this.renderContent();
+    this.options.block.dispatchChange();
   }
 
   private async pick() {
@@ -403,15 +452,35 @@ export class EntityLinkTool implements BlockTool {
             interactive: true,
             playback: 'interaction',
           })
-        : h(ContentAssetSkeleton, {
-            icon: 'link',
-            label: 'Choose a project, event, or page',
-            readOnly: this.options.readOnly,
-            onPick: () => void this.pick(),
-          }),
+        : this.pastedUrl
+          ? h(ContentLinkPreviewCard, {
+              label: this.pastedUrl,
+              loading: true,
+              interactive: false,
+            })
+          : h(ContentAssetSkeleton, {
+              icon: 'link',
+              label: config.labels.chooseEntity,
+              readOnly: this.options.readOnly,
+              onPick: () => void this.pick(),
+            }),
       this.wrapper,
     );
   }
+}
+
+/**
+ * The link block, claiming pasted addresses of this very site.
+ *
+ * Editor.js gives a paste to the first tool whose pattern matches, and reads
+ * the patterns from the class — so the site's own origins, which are only
+ * known at runtime, go in through a subclass made for the editor instance.
+ * Register it before `externalLink`, which claims every address.
+ */
+export function entityLinkToolWithPaste(pattern: RegExp) {
+  return class PastingEntityLinkTool extends EntityLinkTool {
+    static pasteConfig = { patterns: { entityLink: pattern } };
+  };
 }
 
 export class ContentMediaTool implements BlockTool {
@@ -429,6 +498,8 @@ export class ContentMediaTool implements BlockTool {
   private caption = '';
   private layout: ContentMediaLayout;
   private autoOpen: boolean;
+  /** A pasted file, stored before the block shows anything. Never saved. */
+  private pendingFiles?: File[];
   private wrapper?: HTMLElement;
 
   constructor(
@@ -438,6 +509,7 @@ export class ContentMediaTool implements BlockTool {
         caption?: string;
         layout?: ContentMediaLayout;
         autoOpen?: boolean;
+        files?: File[];
       },
       ContentMediaToolConfig
     >,
@@ -460,12 +532,15 @@ export class ContentMediaTool implements BlockTool {
     // without an explicit layout still fails above and in shared normalization.
     this.layout = isEditorServiceInstance ? 'centered' : layout!;
     this.autoOpen = options.data.autoOpen === true;
+    if (options.data.files?.length) this.pendingFiles = options.data.files;
   }
 
   render(): HTMLElement {
     this.wrapper = createToolWrapper();
     this.renderContent();
-    if (this.autoOpen && !this.options.readOnly) {
+    if (this.pendingFiles && !this.options.readOnly) {
+      queueMicrotask(() => void this.upload());
+    } else if (this.autoOpen && !this.options.readOnly) {
       this.autoOpen = false;
       queueMicrotask(() => void this.pick());
     }
@@ -515,6 +590,17 @@ export class ContentMediaTool implements BlockTool {
         isActive: () => this.layout === 'stretch',
         onActivate: () => this.setLayout('stretch'),
       },
+      // A picture that turned out to have company: the gallery starts with it.
+      ...(this.asset
+        ? [
+            {
+              icon: editorIcon('gallery'),
+              title: this.labels.makeGallery,
+              closeOnActivate: true,
+              onActivate: () => this.convertToGallery(),
+            },
+          ]
+        : []),
     ];
   }
 
@@ -539,9 +625,48 @@ export class ContentMediaTool implements BlockTool {
           icon: 'media',
           label: this.labels.chooseMedia,
           readOnly: this.options.readOnly,
+          loading: Boolean(this.pendingFiles),
           onPick: () => void this.pick(),
         });
     renderVue(content, this.wrapper);
+  }
+
+  private async upload() {
+    const files = this.pendingFiles;
+    if (!files) return;
+    const config = contentToolConfig(this.options.config);
+    const [asset] = await config.uploadFiles(files).catch(() => []);
+    if (this.pendingFiles !== files) return;
+    this.pendingFiles = undefined;
+    if (asset) this.asset = asset;
+    this.renderContent();
+    if (asset) this.options.block.dispatchChange();
+  }
+
+  /**
+   * A block's type is fixed in Editor.js, so the gallery is a new block put
+   * in this one's place, with this picture and its caption as the first tile.
+   */
+  private convertToGallery() {
+    if (!this.asset) return;
+    const api = this.options.api;
+    const caption = normalizeContentMediaCaption(this.caption) || undefined;
+    api.blocks.insert(
+      'contentGallery',
+      {
+        items: [
+          {
+            id: crypto.randomUUID(),
+            asset: this.asset,
+            ...(caption ? { caption } : {}),
+          },
+        ],
+      },
+      undefined,
+      api.blocks.getBlockIndex(this.options.block.id),
+      true,
+      true,
+    );
   }
 
   destroy() {
@@ -593,27 +718,42 @@ export class ContentGalleryTool implements BlockTool {
   private items: ContentGalleryItem[];
   private selectedId?: string;
   private autoOpen: boolean;
+  /** Pasted files, stored before the tiles appear. Never saved. */
+  private pendingFiles?: File[];
   private wrapper?: HTMLElement;
 
   constructor(
     private options: ContentToolOptions<
-      { items?: ContentGalleryItem[]; autoOpen?: boolean },
+      { items?: ContentGalleryItem[]; autoOpen?: boolean; files?: File[] },
       ContentGalleryToolConfig
     >,
   ) {
     this.items = options.data.items ?? [];
     this.selectedId = this.items[0]?.id;
     this.autoOpen = options.data.autoOpen === true;
+    if (options.data.files?.length) this.pendingFiles = options.data.files;
   }
 
   render(): HTMLElement {
     this.wrapper = createToolWrapper();
     this.renderContent();
-    if (this.autoOpen && !this.options.readOnly) {
+    if (this.pendingFiles && !this.options.readOnly) {
+      queueMicrotask(() => void this.upload());
+    } else if (this.autoOpen && !this.options.readOnly) {
       this.autoOpen = false;
       queueMicrotask(() => void this.add());
     }
     return this.wrapper;
+  }
+
+  private async upload() {
+    const files = this.pendingFiles;
+    if (!files) return;
+    const config = contentToolConfig(this.options.config);
+    const assets = await config.uploadFiles(files).catch(() => []);
+    if (this.pendingFiles !== files) return;
+    this.pendingFiles = undefined;
+    this.append(assets);
   }
 
   save(): Record<string, unknown> {
@@ -630,6 +770,17 @@ export class ContentGalleryTool implements BlockTool {
 
   private renderContent() {
     if (!this.wrapper) return;
+    if (this.pendingFiles) {
+      renderVue(
+        h(ContentAssetSkeleton, {
+          icon: 'gallery',
+          label: this.labels.addMedia,
+          loading: true,
+        }),
+        this.wrapper,
+      );
+      return;
+    }
     renderVue(
       h(ContentGallery, {
         items: this.items,
@@ -665,8 +816,14 @@ export class ContentGalleryTool implements BlockTool {
 
   private async add() {
     const config = contentToolConfig(this.options.config);
-    const assets = await config.pickAssets('media');
-    if (!assets.length) return;
+    this.append(await config.pickAssets('media'));
+  }
+
+  private append(assets: ContentAssetData[]) {
+    if (!assets.length) {
+      this.renderContent();
+      return;
+    }
     const added = assets.map((asset) => ({
       id: crypto.randomUUID(),
       asset,
@@ -923,6 +1080,8 @@ function getLabels(
       privateSectionEnd: 'End of private section',
       externalLinkLoading: 'Loading link details…',
       externalLinkError: 'Could not load link preview',
+      chooseEntity: 'Choose what to link to',
+      makeGallery: 'Turn into a gallery',
     }
   );
 }

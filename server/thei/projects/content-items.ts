@@ -1,4 +1,5 @@
 import type { ContentOwnerType } from '#layers/thei/shared/content';
+import type { ProjectContentItemIdentity } from '#layers/thei/shared/api/project';
 import { deleteContentForOwner } from '../content/repository';
 
 export class ProjectContentItemStorageError extends Error {}
@@ -44,4 +45,22 @@ export function deleteProjectContentItemContent(
   ids: string[],
 ) {
   for (const id of ids) deleteContentForOwner(tx, schema, ownerType, id);
+}
+
+/**
+ * The identities a save assigned, paired with the public ID the form knows.
+ *
+ * A form that never learns the uuid of a stage it has just created keeps
+ * offering it without one, and the next save reads the row it wrote itself as
+ * somebody else's claim on that public ID.
+ */
+export function projectContentItemIdentities<TItem>(
+  items: TItem[] | undefined,
+  getId: (item: TItem) => string,
+  getPublicId: (item: TItem) => string,
+): ProjectContentItemIdentity[] {
+  return (items ?? []).map((item) => ({
+    publicId: getPublicId(item),
+    itemUuid: getId(item),
+  }));
 }

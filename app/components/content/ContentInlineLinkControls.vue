@@ -4,6 +4,8 @@ import type { ContentEntitySearchItem } from '#layers/thei/shared/admin/content-
 import type { ExternalLink } from '#layers/thei/shared/external-link';
 import { normalizeExternalLinkUrl } from '#layers/thei/shared/external-link';
 import ExternalLinkPreviewCard from '#layers/thei/app/components/external-links/ExternalLinkPreviewCard.vue';
+import EntityLinkPreviewCard from './EntityLinkPreviewCard.vue';
+import { parseInternalUrl } from '#layers/thei/shared/internal-url';
 import type {
   ContentInlineLinkControlsExpose,
   ContentInlineLinkRequest,
@@ -19,6 +21,13 @@ const externalPreview = ref<ExternalLink>();
 const externalPreviewUrl = ref<string>();
 const externalError = ref<string>();
 const externalLoading = ref(false);
+/**
+ * The entity an address typed as an external link turned out to open. Such a
+ * link is stored as an internal one, so it outlives a change of domain.
+ */
+const internalEntity = ref<ContentEntitySearchItem>();
+const internalEntityUrl = ref<string>();
+const internalSite = useInternalUrlSite();
 const projectPopup = useTemplateRef<{ focus: () => void }>('projectPopup');
 const externalInput = ref<HTMLInputElement>();
 let externalRequestVersion = 0;
@@ -59,7 +68,32 @@ const loadExternalPreview = async (version: number, url: string) => {
   }
 };
 
-const loadExternalPreviewDebounced = debounce(loadExternalPreview, 350);
+/** An address of this site is looked up as an entity before anything else. */
+const loadPreview = async (version: number, url: string) => {
+  if (parseInternalUrl(url, internalSite)) {
+    const entity = await findEntityByInternalUrl(url, internalSite).catch(
+      () => undefined,
+    );
+    if (version !== externalRequestVersion) return;
+    if (entity) {
+      internalEntity.value = entity;
+      internalEntityUrl.value = url;
+      externalLoading.value = false;
+      return;
+    }
+  }
+  let normalized: string;
+  try {
+    normalized = normalizeExternalLinkUrl(url);
+  } catch {
+    externalError.value = phrase.value.content_link_broken_description;
+    externalLoading.value = false;
+    return;
+  }
+  await loadExternalPreview(version, normalized);
+};
+
+const loadPreviewDebounced = debounce(loadPreview, 350);
 
 function openProject(next: ContentInlineLinkRequest) {
   mode.value = 'project';
@@ -76,6 +110,8 @@ function openExternal(next: ContentInlineLinkRequest) {
   externalPreview.value = undefined;
   externalPreviewUrl.value = undefined;
   externalError.value = undefined;
+  internalEntity.value = undefined;
+  internalEntityUrl.value = undefined;
   open.value = true;
   queueExternalPreview();
 }
@@ -107,6 +143,20 @@ function submitNoteOnly() {
 
 async function submitExternal() {
   externalError.value = undefined;
+  const raw = externalUrl.value.trim();
+  if (parseInternalUrl(raw, internalSite)) {
+    loadPreviewDebounced.cancel();
+    const entity =
+      internalEntityUrl.value === raw
+        ? internalEntity.value
+        : await findEntityByInternalUrl(raw, internalSite).catch(
+            () => undefined,
+          );
+    if (entity) {
+      selectProject(entity);
+      return;
+    }
+  }
   let url: string;
   try {
     url = normalizeExternalLinkUrl(externalUrl.value);
@@ -115,7 +165,7 @@ async function submitExternal() {
     return;
   }
 
-  loadExternalPreviewDebounced.cancel();
+  loadPreviewDebounced.cancel();
   let preview =
     externalPreviewUrl.value === url ? externalPreview.value : undefined;
   if (!preview) {
@@ -135,22 +185,27 @@ async function submitExternal() {
 }
 
 function queueExternalPreview() {
-  loadExternalPreviewDebounced.cancel();
+  loadPreviewDebounced.cancel();
   const version = ++externalRequestVersion;
   externalPreview.value = undefined;
   externalPreviewUrl.value = undefined;
   externalError.value = undefined;
+  internalEntity.value = undefined;
+  internalEntityUrl.value = undefined;
 
-  let url: string;
-  try {
-    url = normalizeExternalLinkUrl(externalUrl.value);
-  } catch {
-    externalLoading.value = false;
-    return;
+  const raw = externalUrl.value.trim();
+  let url = raw;
+  if (!parseInternalUrl(raw, internalSite)) {
+    try {
+      url = normalizeExternalLinkUrl(raw);
+    } catch {
+      externalLoading.value = false;
+      return;
+    }
   }
 
   externalLoading.value = true;
-  void loadExternalPreviewDebounced(version, url);
+  void loadPreviewDebounced(version, url);
 }
 
 function removeLink() {
@@ -165,8 +220,10 @@ function focusPopup() {
 
 function popupClosed() {
   note.value = '';
-  loadExternalPreviewDebounced.cancel();
+  loadPreviewDebounced.cancel();
   externalRequestVersion++;
+  internalEntity.value = undefined;
+  internalEntityUrl.value = undefined;
   externalLoading.value = false;
   request.value?.restore();
   request.value = undefined;
@@ -197,7 +254,6 @@ defineExpose<ContentInlineLinkControlsExpose>({ openProject, openExternal });
       <ContentEntitySearchPopup
         v-if="mode === 'project'"
         ref="projectPopup"
-        :exclude-project-uuids="[]"
         class="min-h-0 border-0"
         @select="selectProject"
       />
@@ -209,7 +265,8 @@ defineExpose<ContentInlineLinkControlsExpose>({ openProject, openExternal });
         <div class="flex items-start gap-1">
           <FieldInput
             v-model="externalUrl"
-            type="url"
+            type="text"
+            inputmode="url"
             autocomplete="url"
             wrapper-class="min-w-0 flex-1"
             class="h-9 py-1 text-sm"
@@ -238,8 +295,24 @@ defineExpose<ContentInlineLinkControlsExpose>({ openProject, openExternal });
             <Icon :name="externalLoading ? 'loading' : 'check'" />
           </Button>
         </div>
+        <template v-if="internalEntity">
+          <EntityLinkPreviewCard
+            :entity-type="internalEntity.entityType"
+            :title="internalEntity.title"
+            :summary="internalEntity.summary"
+            :date="internalEntity.date"
+            :parent="internalEntity.parent"
+            :icon-media="internalEntity.previewMedia"
+            :interactive="false"
+            compact
+          />
+          <p class="flex items-start gap-1 px-1 text-xs text-text-3">
+            <Icon name="link" class="mt-0.5 shrink-0 text-accent" />
+            {{ phrase.content_link_internal_detected }}
+          </p>
+        </template>
         <ExternalLinkPreviewCard
-          v-if="externalPreview || externalLoading"
+          v-else-if="externalPreview || externalLoading"
           :link="externalPreview"
           :url="externalUrl"
           :loading="externalLoading"

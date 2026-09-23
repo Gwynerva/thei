@@ -74,6 +74,14 @@ export default defineEventHandler(async (event) => {
       })
       .from(schema.pages)
       .all(),
+    diaryEntries: db
+      .select({
+        date: schema.diaryEntries.date,
+        access: schema.diaryEntries.access,
+        updatedAt: schema.diaryEntries.updatedAt,
+      })
+      .from(schema.diaryEntries)
+      .all(),
     tags: db
       .select({
         tagUuid: schema.tags.tagUuid,

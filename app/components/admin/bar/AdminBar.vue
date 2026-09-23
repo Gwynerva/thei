@@ -2,6 +2,7 @@
 import type { AdminBarButtonProps } from './AdminBarButton.vue';
 import { publicIdFromProjectUrlPart } from '#layers/thei/shared/project-url';
 import { publicIdFromEventUrlPart } from '#layers/thei/shared/event-url';
+import { dateFromDiaryUrlPart } from '#layers/thei/shared/diary-url';
 
 const isAdmin = useIsAdmin();
 const adminBarData = isAdmin.value
@@ -68,6 +69,16 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
     };
   }
 
+  if (/^\/diary\/[^/]+\/$/.test(route.path)) {
+    const date = dateFromDiaryUrlPart(route.path.split('/')[2] ?? '');
+    if (date)
+      return {
+        to: `/admin/diary/by-date/${date}/`,
+        icon: 'edit',
+        title: phrase.value.edit_diary_entry,
+      };
+  }
+
   if (route.path === '/pages/') {
     return {
       to: '/admin/pages/new/',
@@ -115,6 +126,14 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
             icon="event"
             :label="adminBarData.eventCount + ''"
             :title="phrase.x_events(adminBarData.eventCount)"
+            class="font-semibold"
+          />
+
+          <AdminBarButton
+            to="/admin/diary"
+            icon="thought"
+            :label="adminBarData.diaryCount + ''"
+            :title="phrase.x_diary_entries(adminBarData.diaryCount)"
             class="font-semibold"
           />
 

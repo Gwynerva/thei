@@ -2,6 +2,7 @@
 import type { ProjectEditData } from '#layers/thei/shared/admin/project';
 import type {
   OtherAssetGetItem,
+  ProjectContentItemIdentity,
   ProjectGetResponse,
   ProjectSaveResponse,
   ShowcaseAssetGetItem,
@@ -22,7 +23,7 @@ import {
 } from '../composables';
 import ProjectMain from './ProjectMain.vue';
 import ProjectAssets from './ProjectAssets.vue';
-import ProjectRelations from './ProjectRelations.vue';
+import EntityRelations from '#layers/thei/app/components/settings/EntityRelations.vue';
 import ProjectExternalLinks from './ProjectExternalLinks.vue';
 import { projectDeleteModal } from './project-delete-modal';
 import ProjectContentItems from './ProjectContentItems.vue';
@@ -33,6 +34,10 @@ import {
   DEFAULT_PROJECT_ACTION,
   projectActionValidationError,
 } from '#layers/thei/shared/project-action';
+import { emptyStatusEditData } from '#layers/thei/shared/status';
+import type { ProfileHistoryPage } from '#layers/thei/shared/profile';
+import type { StatusHistoryItem } from '#layers/thei/shared/status';
+import StatusHistoryField from '#layers/thei/app/components/settings/StatusHistoryField.vue';
 import ProjectActionSettings from './ProjectActionSettings.vue';
 
 const { projectUuid } = defineProps<{ projectUuid?: string }>();
@@ -59,6 +64,7 @@ const projectData = ref<ProjectEditData>({
   action: { ...DEFAULT_PROJECT_ACTION },
   reminder: '',
   notes: null,
+  ...emptyStatusEditData(),
 });
 provide(projectDataInjectionKey, projectData);
 const savedProjectData = ref<ProjectEditData>(
@@ -91,6 +97,32 @@ provide(showcaseItemsKey, showcaseItems);
 
 const otherItems = ref<OtherAssetGetItem[]>([]);
 provide(otherItemsKey, otherItems);
+
+const loadedStatuses = ref<ProfileHistoryPage<StatusHistoryItem>>();
+const statusField =
+  useTemplateRef<InstanceType<typeof StatusHistoryField>>('statusField');
+const savedStatuses = computed<StatusHistoryItem[]>(
+  () => statusField.value?.items ?? [],
+);
+/**
+ * Pending status icon changes, so the file picker can count a project's real
+ * usage of an asset while the form is still unsaved.
+ */
+const statusUsageDelta = computed(() => {
+  const delta: Record<string, number> = {};
+  const add = (id: string | null | undefined, amount: number) => {
+    if (id) delta[id] = (delta[id] ?? 0) + amount;
+  };
+  for (const status of projectData.value.newStatuses ?? [])
+    if (status.kind === 'regular') add(status.assetUuid, 1);
+  for (const id of projectData.value.deletedStatusIds ?? [])
+    add(savedStatuses.value.find((s) => s.id === id)?.assetUuid, -1);
+  for (const status of projectData.value.updatedStatuses ?? []) {
+    add(savedStatuses.value.find((s) => s.id === status.id)?.assetUuid, -1);
+    add(status.assetUuid, 1);
+  }
+  return delta;
+});
 
 const isEdit = computed(() => Boolean(projectUuid));
 const saving = ref(false);
@@ -161,7 +193,9 @@ if (isEdit.value) {
     action: data.action ?? { ...DEFAULT_PROJECT_ACTION },
     reminder: data.reminder,
     notes: data.notes ?? null,
+    ...emptyStatusEditData(),
   };
+  loadedStatuses.value = data.statuses;
   showcaseItems.value = data.showcaseAssets ?? [];
   otherItems.value = data.otherAssets ?? [];
   iconMedia.value = data.iconMedia;
@@ -196,7 +230,10 @@ async function handleSave() {
         headerError.value = result.message;
         return;
       }
+      applySavedContentItemIds(result);
       applySavedAction(result.action);
+      await refreshSavedStatuses();
+      stampSavedContent(projectData.value, savedSnapshot.value, CONTENT_FIELDS);
       markProjectSaved();
     } else {
       const result = await $fetch<ProjectSaveResponse>('/api/admin/projects', {
@@ -211,6 +248,7 @@ async function handleSave() {
         headerError.value = result.message;
         return;
       }
+      applySavedContentItemIds(result);
       applySavedAction(result.action);
       markProjectSaved();
       await refreshNuxtData('admin-bar');
@@ -258,6 +296,12 @@ function saveAfterContentEdit() {
 }
 provide(saveAfterContentEditKey, saveAfterContentEdit);
 
+const relationsModel = computed({
+  get: () => projectData.value.relations ?? [],
+  set: (value) => {
+    projectData.value.relations = value;
+  },
+});
 const reminderModel = computed({
   get: () => projectData.value.reminder ?? '',
   set: (value: string) => {
@@ -274,6 +318,53 @@ const notesModel = computed({
 function markProjectSaved() {
   savedSnapshot.value = JSON.stringify(projectData.value);
   savedProjectData.value = cloneProjectData(projectData.value);
+}
+
+/**
+ * Takes the identities the server assigned to stages and sections.
+ *
+ * Until this runs, a stage created in this session has no uuid on the client,
+ * and the next save would offer its public ID as if nobody owned it yet — which
+ * the storage layer reads as a collision with the row it wrote itself.
+ */
+/**
+ * Folds the three status edit lists back into the loaded history.
+ *
+ * Without this a saved status stays in `newStatuses`, and the next save would
+ * offer it again — which the storage layer only tolerates because a resent new
+ * status has to match the stored one byte for byte.
+ */
+async function refreshSavedStatuses() {
+  if (!resolvedProjectUuid.value) return;
+  projectData.value.newStatuses = [];
+  projectData.value.updatedStatuses = [];
+  projectData.value.deletedStatusIds = [];
+  try {
+    const page = await $fetch<ProfileHistoryPage<StatusHistoryItem>>(
+      `/api/admin/projects/${resolvedProjectUuid.value}/statuses`,
+    );
+    statusField.value?.reset(page);
+  } catch {
+    // The statuses are saved either way; the list catches up on reload.
+  }
+}
+
+function applySavedContentItemIds(result: {
+  stages: ProjectContentItemIdentity[];
+  sections: ProjectContentItemIdentity[];
+}) {
+  const stageUuids = new Map(
+    result.stages.map(({ publicId, itemUuid }) => [publicId, itemUuid]),
+  );
+  for (const stage of projectData.value.stages ?? [])
+    stage.stageUuid = stageUuids.get(stage.publicId) ?? stage.stageUuid;
+
+  const sectionUuids = new Map(
+    result.sections.map(({ publicId, itemUuid }) => [publicId, itemUuid]),
+  );
+  for (const section of projectData.value.contentSections ?? [])
+    section.sectionUuid =
+      sectionUuids.get(section.publicId) ?? section.sectionUuid;
 }
 
 function applySavedAction(action: ProjectEditData['action']) {
@@ -346,9 +437,33 @@ async function openDeleteProjectModal() {
     <ProjectActionSettings />
     <ProjectAssets />
     <ProjectExternalLinks />
+    <StatusHistoryField
+      v-if="
+        resolvedProjectUuid &&
+        projectData.newStatuses &&
+        projectData.updatedStatuses &&
+        projectData.deletedStatusIds
+      "
+      ref="statusField"
+      v-model:new-statuses="projectData.newStatuses"
+      v-model:updated-statuses="projectData.updatedStatuses"
+      v-model:deleted-status-ids="projectData.deletedStatusIds"
+      :history-url="`/api/admin/projects/${resolvedProjectUuid}/statuses`"
+      :initial="loadedStatuses"
+      :usage-delta="statusUsageDelta"
+      :title="phrase.project_status"
+      :description="phrase.project_status_hint"
+      :add-label="phrase.project_new_status"
+      :empty-label="phrase.project_status_empty"
+    />
     <ProjectContentItems kind="stage" />
     <ProjectContentItems kind="section" />
-    <ProjectRelations />
+    <EntityRelations
+      v-model="relationsModel"
+      owner-type="project"
+      :owner-id="resolvedProjectUuid"
+      :owner-title="projectData.title.trim() || phrase.new_project"
+    />
     <ProjectTags />
     <ProjectShareLinks
       v-if="resolvedProjectUuid"

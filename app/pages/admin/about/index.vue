@@ -3,12 +3,12 @@ import {
   type AdminProfileResponse,
   type ProfileEditData,
   type ProfilePageLink,
-  type ProfileStatusHistoryItem,
 } from '#layers/thei/shared/profile';
+import type { StatusHistoryItem } from '#layers/thei/shared/status';
+import StatusHistoryField from '#layers/thei/app/components/settings/StatusHistoryField.vue';
 import { canonicalizeContentData } from '#layers/thei/shared/content';
 import type { ContentEntitySearchItem } from '#layers/thei/shared/admin/content-entity-search';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
-import { profileStatusModal } from '#layers/thei/app/modals/profile-status/modal';
 definePageMeta({ layout: 'admin' });
 await useAdminTabTitle(computed(() => phrase.value.about_me));
 const initial =
@@ -38,16 +38,10 @@ const bannerMedia = ref(initial.bannerMedia);
 const faviconMedia = ref(initial.faviconMedia);
 const currentAvatar = ref(initial.currentAvatar);
 const avatars = useProfileHistory('/api/admin/about/avatars', initial.avatars);
-const statuses = useProfileHistory(
-  '/api/admin/about/statuses',
-  initial.statuses,
-);
-const pendingStatusPreviews = reactive(
-  new Map<string, { createdAt: number; media?: MediaDescriptor }>(),
-);
-// Media previews of saved statuses edited since the last save.
-const editedStatusMedia = reactive(
-  new Map<string, MediaDescriptor | undefined>(),
+const statusField =
+  useTemplateRef<InstanceType<typeof StatusHistoryField>>('statusField');
+const savedStatuses = computed<StatusHistoryItem[]>(
+  () => statusField.value?.items ?? [],
 );
 const pageDetails = ref<ProfilePageLink[]>(initial.pinnedPages);
 const saving = ref(false);
@@ -65,43 +59,6 @@ const oldAvatars = computed(() =>
       a.id !== currentAvatar.value?.id &&
       !data.value.deletedAvatarIds.includes(a.id),
   ),
-);
-const visibleStatuses = computed<ProfileStatusHistoryItem[]>(() =>
-  data.value.newStatuses
-    .map((status): ProfileStatusHistoryItem => {
-      const preview = pendingStatusPreviews.get(status.id);
-      return {
-        id: status.id,
-        createdAt: preview?.createdAt ?? 0,
-        kind: status.kind,
-        text: status.kind === 'regular' ? status.text : '',
-        ...(status.kind === 'regular' && status.assetUuid
-          ? { assetUuid: status.assetUuid }
-          : {}),
-        ...(preview?.media ? { media: preview.media } : {}),
-      };
-    })
-    .reverse()
-    .concat(
-      statuses.items.value.map((status) => {
-        const update = data.value.updatedStatuses.find(
-          (s) => s.id === status.id,
-        );
-        if (!update) return status;
-        const { assetUuid: _assetUuid, media: _media, ...rest } = status;
-        const media = editedStatusMedia.get(status.id);
-        return {
-          ...rest,
-          text: update.text,
-          ...(update.assetUuid ? { assetUuid: update.assetUuid } : {}),
-          ...(media ? { media } : {}),
-        };
-      }),
-    )
-    .filter((status) => !data.value.deletedStatusIds.includes(status.id)),
-);
-const canAddEmptyStatus = computed(
-  () => visibleStatuses.value[0]?.kind === 'regular',
 );
 const pages = computed(() =>
   data.value.pinnedPageUuids
@@ -131,9 +88,9 @@ const usageDelta = computed(() => {
   for (const id of data.value.deletedAvatarIds)
     add(avatars.items.value.find((a) => a.id === id)?.assetUuid, -1);
   for (const id of data.value.deletedStatusIds)
-    add(statuses.items.value.find((s) => s.id === id)?.assetUuid, -1);
+    add(savedStatuses.value.find((s) => s.id === id)?.assetUuid, -1);
   for (const status of data.value.updatedStatuses) {
-    add(statuses.items.value.find((s) => s.id === status.id)?.assetUuid, -1);
+    add(savedStatuses.value.find((s) => s.id === status.id)?.assetUuid, -1);
     add(status.assetUuid, 1);
   }
   return delta;
@@ -155,9 +112,7 @@ async function save() {
     faviconMedia.value = result.faviconMedia;
     currentAvatar.value = result.currentAvatar;
     avatars.reset(result.avatars);
-    statuses.reset(result.statuses);
-    pendingStatusPreviews.clear();
-    editedStatusMedia.clear();
+    statusField.value?.reset(result.statuses);
     pageDetails.value = result.pinnedPages;
     await refreshNuxtData([
       'admin-profile',
@@ -171,71 +126,6 @@ async function save() {
   }
 }
 useSavedForm(isDirty, save, canSave);
-async function addStatus() {
-  const result = await openModal(profileStatusModal, {
-    usageDelta: usageDelta.value,
-    canAddEmptyStatus: canAddEmptyStatus.value,
-  });
-  if (result.type !== 'save') return;
-  if (result.kind === 'regular')
-    data.value.newStatuses.push({
-      id: result.id,
-      kind: 'regular',
-      text: result.text,
-      assetUuid: result.assetUuid,
-    });
-  else data.value.newStatuses.push({ id: result.id, kind: 'empty' });
-  pendingStatusPreviews.set(result.id, {
-    createdAt: Date.now(),
-    media: result.kind === 'regular' ? result.media : undefined,
-  });
-}
-async function editStatus(item: ProfileStatusHistoryItem) {
-  if (item.kind !== 'regular') return;
-  const result = await openModal(profileStatusModal, {
-    usageDelta: usageDelta.value,
-    canAddEmptyStatus: false,
-    initial: {
-      id: item.id,
-      text: item.text,
-      assetUuid: item.assetUuid,
-      media: item.media,
-    },
-  });
-  if (result.type !== 'save' || result.kind !== 'regular') return;
-  const pending = data.value.newStatuses.find((s) => s.id === item.id);
-  if (pending) {
-    Object.assign(pending, { text: result.text, assetUuid: result.assetUuid });
-    const preview = pendingStatusPreviews.get(item.id);
-    if (preview) preview.media = result.media;
-    return;
-  }
-  const saved = statuses.items.value.find((s) => s.id === item.id);
-  const updates = data.value.updatedStatuses.filter((s) => s.id !== item.id);
-  // Editing a status back to what is stored leaves nothing to save.
-  if (
-    saved?.text !== result.text ||
-    (saved?.assetUuid ?? undefined) !== result.assetUuid
-  )
-    updates.push({
-      id: item.id,
-      text: result.text,
-      ...(result.assetUuid ? { assetUuid: result.assetUuid } : {}),
-    });
-  data.value.updatedStatuses = updates;
-  editedStatusMedia.set(item.id, result.media);
-}
-function removeStatus(id: string) {
-  if (data.value.newStatuses.some((s) => s.id === id)) {
-    data.value.newStatuses = data.value.newStatuses.filter((s) => s.id !== id);
-    pendingStatusPreviews.delete(id);
-  } else {
-    data.value.updatedStatuses = data.value.updatedStatuses.filter(
-      (s) => s.id !== id,
-    );
-    data.value.deletedStatusIds.push(id);
-  }
-}
 const factAnchor = useTemplateRef<HTMLElement>('factAnchor');
 const factOpen = ref(false);
 const factName = ref('');
@@ -372,51 +262,19 @@ const siteHost = computed(() => {
           />
         </Box>
       </section>
-      <section>
-        <div class="mb-md flex items-center justify-between gap-md">
-          <SectionHeader
-            icon="quote"
-            :title="phrase.profile_status"
-            :description="phrase.profile_status_hint"
-          />
-          <button
-            type="button"
-            class="size-12 shrink-0 cursor-pointer rounded-normal bg-bg-3
-              text-text-2 transition-colors hocus:bg-bg-accent
-              hocus:text-accent"
-            :aria-label="phrase.profile_new_status"
-            :data-title-popup="phrase.profile_new_status"
-            @click="addStatus"
-          >
-            <Icon name="plus" />
-          </button>
-        </div>
-        <Box class="max-h-120 overflow-y-auto px-sm sm:px-md"
-          ><div class="divide-y divide-border-1">
-            <ProfileStatusItem
-              v-for="status in visibleStatuses"
-              :key="status.id"
-              :item="status"
-              removable
-              editable
-              short-date
-              @remove="removeStatus"
-              @edit="editStatus"
-            />
-          </div>
-          <p
-            v-if="!visibleStatuses.length"
-            class="py-md text-sm text-text-3 italic"
-          >
-            {{ phrase.profile_empty }}
-          </p>
-          <ProfileLoadMore
-            :more="Boolean(statuses.cursor.value)"
-            :loading="statuses.loading.value"
-            :error="statuses.error.value"
-            @load="statuses.load"
-        /></Box>
-      </section>
+      <StatusHistoryField
+        ref="statusField"
+        v-model:new-statuses="data.newStatuses"
+        v-model:updated-statuses="data.updatedStatuses"
+        v-model:deleted-status-ids="data.deletedStatusIds"
+        history-url="/api/admin/about/statuses"
+        :initial="initial.statuses"
+        :usage-delta="usageDelta"
+        :title="phrase.profile_status"
+        :description="phrase.profile_status_hint"
+        :add-label="phrase.profile_new_status"
+        :empty-label="phrase.profile_empty"
+      />
       <section>
         <SectionHeader
           icon="list-unordered"

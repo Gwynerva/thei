@@ -18,11 +18,8 @@ import {
   normalizePublicId,
   publicIdIsValid,
 } from '../public-link';
-import type {
-  EventEditData,
-  EventProjectRelationEditItem,
-  ValidatedEventEditData,
-} from '../event';
+import type { EventEditData, ValidatedEventEditData } from '../event';
+import { validateRelations } from '../relation';
 
 export function validateEventData(
   data: EventEditData,
@@ -119,21 +116,6 @@ function validateExternalLinks(links: EventEditData['externalLinks']) {
     if (typeof link.isPrivate !== 'boolean')
       throw new Error('Invalid external link privacy');
     return { ...link, url, name, isPrivate: link.isPrivate };
-  });
-}
-
-function validateRelations(
-  relations: EventProjectRelationEditItem[] | undefined,
-) {
-  if (relations === undefined) return undefined;
-  if (!Array.isArray(relations)) throw new Error('Invalid related projects');
-  const seen = new Set<string>();
-  return relations.map((relation) => {
-    const projectUuid = optionalText(relation.projectUuid);
-    if (!projectUuid) throw new Error('Invalid related project');
-    if (seen.has(projectUuid)) throw new Error('Duplicate related project');
-    seen.add(projectUuid);
-    return { projectUuid, note: optionalText(relation.note) };
   });
 }
 

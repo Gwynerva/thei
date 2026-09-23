@@ -39,13 +39,16 @@ import {
   getProjectStages,
   prepareProjectStages,
 } from '../../../thei/projects/stages';
-import { ProjectContentItemStorageError } from '../../../thei/projects/content-items';
 import {
-  applyProjectRelations,
-  deleteProjectRelations,
-  getProjectRelations,
-  prepareProjectRelations,
-} from '../../../thei/projects/relations';
+  ProjectContentItemStorageError,
+  projectContentItemIdentities,
+} from '../../../thei/projects/content-items';
+import {
+  applyRelations,
+  deleteRelations,
+  getRelations,
+  prepareRelations,
+} from '../../../thei/relations';
 import {
   applyProjectExternalLinks,
   deleteProjectExternalLinks,
@@ -57,6 +60,14 @@ import {
   listTagsForContainer,
   prepareTagUsages,
 } from '../../../thei/tags';
+import {
+  applyStatusEdits,
+  deleteStatusesForOwner,
+  getStatusHistory,
+  prepareEntityStatusEdits,
+  StatusEditError,
+  statusUsageHooks,
+} from '../../../thei/statuses';
 
 export default defineEventHandler(async (event) => {
   const identifier = getRouterParam(event, 'projectUuid')!;
@@ -195,9 +206,14 @@ export default defineEventHandler(async (event) => {
         stages,
         showcaseAssets,
         otherAssets,
-        relations: await getProjectRelations(projectUuid),
+        relations: await getRelations({ type: 'project', id: projectUuid }),
         externalLinks: await getProjectExternalLinks(projectUuid),
         tags: await listTagsForContainer('project', projectUuid),
+        statuses: await getStatusHistory(
+          { type: 'project', id: projectUuid },
+          undefined,
+          true,
+        ),
       } satisfies ProjectGetResponse;
     }
 
@@ -276,8 +292,8 @@ export default defineEventHandler(async (event) => {
 
       let preparedRelations;
       try {
-        preparedRelations = await prepareProjectRelations(
-          projectUuid,
+        preparedRelations = await prepareRelations(
+          { type: 'project', id: projectUuid },
           result.relations,
         );
       } catch (error) {
@@ -306,6 +322,21 @@ export default defineEventHandler(async (event) => {
           message:
             error instanceof Error ? error.message : 'Invalid external links',
         } satisfies ProjectSaveResponse;
+      }
+
+      let preparedStatuses;
+      try {
+        preparedStatuses = prepareEntityStatusEdits(
+          { type: 'project', id: projectUuid },
+          result,
+        );
+      } catch (error) {
+        if (error instanceof StatusEditError)
+          return {
+            type: 'error',
+            message: error.message,
+          } satisfies ProjectSaveResponse;
+        throw error;
       }
 
       const usages = await THEI_SERVER.assets.usages.findByContainer(
@@ -371,7 +402,12 @@ export default defineEventHandler(async (event) => {
         );
         applyProjectContentSections(tx, schema, projectUuid, preparedSections);
         applyProjectStages(tx, schema, projectUuid, preparedStages);
-        applyProjectRelations(tx, schema, projectUuid, preparedRelations);
+        applyRelations(
+          tx,
+          schema,
+          { type: 'project', id: projectUuid },
+          preparedRelations,
+        );
         applyProjectExternalLinks(
           tx,
           schema,
@@ -379,6 +415,18 @@ export default defineEventHandler(async (event) => {
           preparedExternalLinks,
         );
         applyTagUsages(tx, schema, 'project', projectUuid, preparedTags);
+        // One timestamp for the whole save: statuses added together keep the
+        // order they were written in, and a second `Date.now()` could drift.
+        const statusNow = Date.now();
+        applyStatusEdits(
+          tx,
+          schema,
+          preparedStatuses,
+          statusNow,
+          statusUsageHooks(tx, schema, statusNow, (message) => {
+            throw new StatusEditError(message);
+          }),
+        );
 
         if (currentIcon?.asset.assetUuid !== newIconUuid) {
           if (currentIcon) {
@@ -489,6 +537,16 @@ export default defineEventHandler(async (event) => {
         type: 'success',
         projectUuid,
         action: result.action,
+        stages: projectContentItemIdentities(
+          preparedStages,
+          (stage) => stage.stageUuid,
+          (stage) => stage.publicId,
+        ),
+        sections: projectContentItemIdentities(
+          preparedSections,
+          (section) => section.sectionUuid,
+          (section) => section.publicId,
+        ),
       } satisfies ProjectSaveResponse;
     }
 
@@ -501,7 +559,22 @@ export default defineEventHandler(async (event) => {
       db.transaction((tx) => {
         deleteProjectContentSections(tx, schema, projectUuid);
         deleteProjectStages(tx, schema, projectUuid);
-        deleteProjectRelations(tx, schema, projectUuid);
+        deleteStatusesForOwner(
+          tx,
+          schema,
+          { type: 'project', id: projectUuid },
+          (containerType, containerId) =>
+            tx
+              .delete(schema.assetUsages)
+              .where(
+                and(
+                  eq(schema.assetUsages.containerType, containerType),
+                  eq(schema.assetUsages.containerId, containerId),
+                ),
+              )
+              .run(),
+        );
+        deleteRelations(tx, schema, { type: 'project', id: projectUuid });
         deleteProjectExternalLinks(tx, schema, projectUuid);
         deleteTagUsagesForContainer(tx, schema, 'project', projectUuid);
         deleteContentForOwner(tx, schema, 'project', projectUuid);

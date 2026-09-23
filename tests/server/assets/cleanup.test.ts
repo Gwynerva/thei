@@ -30,7 +30,8 @@ describe('asset cleanup', () => {
         CREATE TABLE profiles (profileId text PRIMARY KEY);
         CREATE TABLE tags (tagUuid text PRIMARY KEY);
         CREATE TABLE "profile-avatars" (id text PRIMARY KEY);
-        CREATE TABLE "profile-statuses" (id text PRIMARY KEY);
+        CREATE TABLE statuses (id text PRIMARY KEY);
+        CREATE TABLE "diary-entries" (diaryUuid text PRIMARY KEY);
         CREATE TABLE assets (
           assetUuid text PRIMARY KEY,
           slug text NOT NULL UNIQUE,

@@ -47,11 +47,11 @@ export function useSiteUrl() {
 let cachedBase = '/';
 
 function currentBase(): string {
-  try {
-    cachedBase = normalizeBasePath(useRuntimeConfig().app.baseURL);
-  } catch {
-    // Outside a Nuxt context: keep whatever the last read established.
-  }
+  // `tryUseNuxtApp`, not `useRuntimeConfig` in a try: outside a Nuxt context
+  // the latter still reports a misuse before it throws, once per call.
+  const nuxtApp = tryUseNuxtApp();
+  if (nuxtApp) cachedBase = normalizeBasePath(nuxtApp.$config.app.baseURL);
+  // Otherwise: keep whatever the last read established.
   return cachedBase;
 }
 

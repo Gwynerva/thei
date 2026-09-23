@@ -42,3 +42,52 @@ describe('combined content entity search', () => {
     expect(rankContentEntities(items, 'archive')).toEqual([items[1]]);
   });
 });
+
+describe('diary entries in the entity search', () => {
+  const diary: ContentEntitySearchItem[] = [
+    {
+      entityType: 'diary-entry',
+      entityId: 'd-1',
+      title: '2024-05-12',
+      summary: 'Rain all day',
+      url: '/diary/2024-05-12/',
+      humanReadableSlug: '2024-05-12',
+      date: '2024-05-12',
+      updatedAt: 1,
+    },
+    {
+      entityType: 'diary-entry',
+      entityId: 'd-2',
+      title: '2024-06-03',
+      summary: 'Studio day',
+      url: '/diary/2024-06-03/',
+      humanReadableSlug: '2024-06-03',
+      date: '2024-06-03',
+      updatedAt: 2,
+    },
+  ];
+
+  it('finds an entry by its day, written either way round', () => {
+    for (const query of ['2024.05.12', '12.05.2024', '12/05/2024', '2024-5-12'])
+      expect(
+        rankContentEntities(diary, query).map((item) => item.entityId),
+      ).toEqual(['d-1']);
+  });
+
+  it('finds entries by part of a day', () => {
+    expect(
+      rankContentEntities(diary, '2024.06').map((item) => item.entityId),
+    ).toEqual(['d-2']);
+    expect(
+      rankContentEntities(diary, '05.2024').map((item) => item.entityId),
+    ).toEqual(['d-1']);
+    expect(rankContentEntities(diary, '2024')).toHaveLength(2);
+  });
+
+  it('does not match an entry by words, since it has no title', () => {
+    expect(rankContentEntities([...diary, ...items], 'studio')).toEqual([
+      items[1],
+      items[0],
+    ]);
+  });
+});

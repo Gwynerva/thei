@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { changedOnlyIn } from '../../../app/composables/saved-form';
+import {
+  changedOnlyIn,
+  stampSavedContent,
+} from '../../../app/composables/saved-form';
 
 const saved = JSON.stringify({
   title: 'Project',
@@ -44,5 +47,53 @@ describe('changedOnlyIn', () => {
 
   it('refuses rather than guesses when the snapshot is unreadable', () => {
     expect(changedOnlyIn({}, 'not json', FIELDS)).toBe(false);
+  });
+});
+
+describe('stampSavedContent', () => {
+  const blocks = (text: string) => ({
+    blocks: [{ type: 'paragraph', data: { text } }],
+  });
+
+  it('stamps only the content that differs from the last save', () => {
+    const saved = {
+      title: 'Project',
+      content: { data: blocks('old'), updatedAt: 1 },
+      notes: { data: blocks('same'), updatedAt: 2 },
+    };
+    const current = structuredClone(saved);
+    current.content.data = blocks('new');
+    stampSavedContent(current, JSON.stringify(saved), ['content', 'notes'], 9);
+    expect(current.content.updatedAt).toBe(9);
+    expect(current.notes.updatedAt).toBe(2);
+  });
+
+  it('matches list items by public ID, not by position', () => {
+    const saved = {
+      stages: [
+        { publicId: 'A', content: { data: blocks('a'), updatedAt: 1 } },
+        { publicId: 'B', content: { data: blocks('b'), updatedAt: 1 } },
+      ],
+    };
+    const current = structuredClone(saved);
+    current.stages.reverse();
+    current.stages[1]!.content.data = blocks('a, edited');
+    stampSavedContent(current, JSON.stringify(saved), ['content'], 9);
+    expect(current.stages.map((stage) => stage.content.updatedAt)).toEqual([
+      1, 9,
+    ]);
+  });
+
+  it('stamps content that did not exist at the last save', () => {
+    const current = { content: { data: blocks('first words') } } as {
+      content: { data: unknown; updatedAt?: number };
+    };
+    stampSavedContent(
+      current,
+      JSON.stringify({ content: null }),
+      ['content'],
+      9,
+    );
+    expect(current.content.updatedAt).toBe(9);
   });
 });

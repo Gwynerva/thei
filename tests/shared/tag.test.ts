@@ -3,6 +3,8 @@ import {
   normalizeTagTitle,
   rankTagSearch,
   rankTagRecommendations,
+  tagAccent,
+  tagAccentCssColor,
   validateTagData,
 } from '../../shared/tag';
 
@@ -18,12 +20,10 @@ describe('tags', () => {
         slug: 'cpp-dotnet-apis',
         publicId: 'Tag123',
         description: '  Tools  ',
-        accentColor: '#12aBcD',
       }),
     ).toMatchObject({
       title: 'C++, .NET & APIs',
       description: 'Tools',
-      accentColor: '#12aBcD',
     });
   });
 
@@ -84,5 +84,23 @@ describe('tags', () => {
         ]),
       ).map((tag) => tag.tagUuid),
     ).toEqual(['design', 'vue']);
+  });
+});
+
+describe('tag accent', () => {
+  it('prefers the icon accent and otherwise derives one from the title', () => {
+    const fromIcon = tagAccent({
+      title: 'Design',
+      iconMedia: { accent: { hue: 210, chroma: 0.09 } },
+    });
+    expect(fromIcon).toEqual({ hue: 210, chroma: 0.09 });
+
+    // Deterministic, and the same title always lands on the same hue.
+    const derived = tagAccent({ title: 'Design' });
+    expect(derived).toEqual(tagAccent({ title: 'Design' }));
+    expect(derived.hue).not.toBe(tagAccent({ title: 'Research' }).hue);
+    expect(tagAccentCssColor({ title: 'Design' })).toContain(
+      String(derived.hue),
+    );
   });
 });

@@ -36,7 +36,9 @@ export const shareLinks = sqliteTable(
      * `project`, `event` or `page`; a stage or a section is shared with its
      * project.
      */
-    entityType: text().notNull().$type<'project' | 'event' | 'page'>(),
+    entityType: text()
+      .notNull()
+      .$type<'project' | 'event' | 'page' | 'diary-entry'>(),
     entityUuid: text().notNull(),
     createdAt: integer().notNull(),
     expiresAt: integer().notNull(),

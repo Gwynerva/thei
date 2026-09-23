@@ -226,10 +226,16 @@
     transition-timing-function: var(--default-transition-timing-function);
   }
 
-  /* Glyph icons have no backdrop of their own: they sit inline, tinted. */
+  /*
+   * Glyph icons have no backdrop of their own: they sit inline, tinted. Every
+   * kind without an icon of its own — all but projects and pages — gets one.
+   */
   .content-prose
     a[data-content-link]:is(
       [data-entity-type='event'][data-content-link-state='resolved'],
+      [data-entity-type='project-stage'][data-content-link-state='resolved'],
+      [data-entity-type='project-section'][data-content-link-state='resolved'],
+      [data-entity-type='diary-entry'][data-content-link-state='resolved'],
       [data-content-link-state='broken'],
       [data-content-link-state='restricted']
     ) {
@@ -240,6 +246,9 @@
   .content-prose
     a[data-content-link]:is(
       [data-entity-type='event'][data-content-link-state='resolved'],
+      [data-entity-type='project-stage'][data-content-link-state='resolved'],
+      [data-entity-type='project-section'][data-content-link-state='resolved'],
+      [data-entity-type='diary-entry'][data-content-link-state='resolved'],
       [data-content-link-state='broken'],
       [data-content-link-state='restricted']
     )::before {
@@ -255,10 +264,28 @@
     vertical-align: -0.18em;
   }
 
+  .content-prose a[data-content-link-state='resolved']::before {
+    color: var(--content-link-accent, var(--color-accent));
+  }
+
   .content-prose
     a[data-entity-type='event'][data-content-link-state='resolved']::before {
-    color: var(--content-link-accent, var(--color-accent));
     mask-image: url('../assets/icons/event.svg');
+  }
+
+  .content-prose
+    a[data-entity-type='project-stage'][data-content-link-state='resolved']::before {
+    mask-image: url('../assets/icons/calendar.svg');
+  }
+
+  .content-prose
+    a[data-entity-type='project-section'][data-content-link-state='resolved']::before {
+    mask-image: url('../assets/icons/file-tray-stack.svg');
+  }
+
+  .content-prose
+    a[data-entity-type='diary-entry'][data-content-link-state='resolved']::before {
+    mask-image: url('../assets/icons/thought.svg');
   }
 
   .content-prose a[data-content-link-state='broken']::before {

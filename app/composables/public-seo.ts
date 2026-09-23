@@ -234,22 +234,24 @@ export function serializeJsonLd(value: unknown): string {
   return JSON.stringify(value).replaceAll('<', '\\u003c');
 }
 
-export function formatLifeSeoPeriod(
-  period: string | undefined,
+/** A timeline day as a title reads it: "6 апреля 2027", "6 April 2027". */
+export function formatLifeSeoDate(
+  date: string | undefined,
   locale: string,
 ): string | undefined {
-  if (!period) return undefined;
-  const [year, month, day] = period.split('-').map(Number);
-  if (!year) return undefined;
-  if (!month) return String(year);
-  const date = new Date(Date.UTC(year, month - 1, day || 1));
+  if (!date) return undefined;
+  const [year, month, day] = date.split('-').map(Number);
+  if (!year || !month || !day) return undefined;
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  // Only the month name is taken from `Intl`; the order is fixed so the label
+  // reads the same in every locale the engine ships.
   const monthName = new Intl.DateTimeFormat(locale, {
-    ...(day ? { day: 'numeric' as const } : {}),
+    day: 'numeric',
     month: 'long',
     timeZone: 'UTC',
   })
-    .formatToParts(date)
+    .formatToParts(parsed)
     .find((part) => part.type === 'month')!.value;
-  const label = day ? `${day} ${monthName} ${year}` : `${monthName} ${year}`;
+  const label = `${day} ${monthName} ${year}`;
   return label.charAt(0).toLocaleUpperCase(locale) + label.slice(1);
 }

@@ -31,8 +31,10 @@ import {
   launchAssetBatchWizard,
   launchAssetEditor,
   mapAssetVariantToReplaceResult,
+  uploadOriginalAssets,
   type AssetWizardOptions,
 } from '#layers/thei/app/composables/asset-wizard';
+import { bindEditorMediaPaste } from '#layers/thei/app/composables/editor-media-paste';
 import {
   anyFileExtensionProfile,
   imageExtensionProfile,
@@ -61,7 +63,7 @@ import {
   ContentMediaTool,
   ExternalLinkTool,
   IntegrationTool,
-  EntityLinkTool,
+  entityLinkToolWithPaste,
   PrivateSectionBoundaryTool,
   type ContentEditorAssetKind,
 } from '#layers/thei/app/components/content/editor-tools';
@@ -82,6 +84,7 @@ import { createEditorBlockDrag } from '#layers/thei/app/composables/editor-block
 import { createEditorPrivateSections } from '#layers/thei/app/composables/editor-private-sections';
 import { createEditorPopoverLayer } from '#layers/thei/app/composables/editor-popover-layer';
 import { useContentLinkResolver } from '#layers/thei/app/composables/content-link-resolver';
+import { internalUrlPastePattern } from '#layers/thei/shared/internal-url';
 import {
   createEditorSnapshotManager,
   groupEditorSnapshotsByDay,
@@ -101,17 +104,31 @@ const props = defineProps<{
      * and whether it can therefore save the whole entity.
      */
     onSaved?: () => void | Promise<void>;
+    /**
+     * The field's value as the form holds it now. The form stamps its content
+     * once the entity behind it is saved, which may happen while the editor
+     * is still open; this is how the editor shows that time without reopening.
+     */
+    current?: () => ContentFieldModelValue | null | undefined;
   };
 }>();
 
 const holder = useTemplateRef<HTMLElement>('holder');
+const updatedAt = computed(
+  () =>
+    (props.modalData.current
+      ? props.modalData.current()?.updatedAt
+      : undefined) ?? props.modalData.value?.updatedAt,
+);
 let cleanupSmartTypography: (() => void) | undefined;
+let cleanupMediaPaste: (() => void) | undefined;
 const modalContainer =
   useTemplateRef<InstanceType<typeof ModalContainer>>('modalContainer');
 const inlineLinkControls =
   useTemplateRef<ContentInlineLinkControlsExpose>('inlineLinkControls');
 const hintControls = useTemplateRef<ContentHintControlsExpose>('hintControls');
 const contentLinkResolver = useContentLinkResolver('admin');
+const internalSite = useInternalUrlSite();
 const entityPickerOpen = ref(false);
 const entityPickerAnchor = ref<HTMLElement>();
 const entityPicker = useTemplateRef<{ focus: () => void }>('entityPicker');
@@ -529,6 +546,7 @@ onMounted(async () => {
         config: {
           pickAsset,
           editAsset,
+          uploadFiles,
           labels: contentToolLabels(),
         },
       },
@@ -538,6 +556,7 @@ onMounted(async () => {
         config: {
           pickAssets,
           editAsset,
+          uploadFiles,
           labels: contentToolLabels(),
         },
       },
@@ -551,23 +570,27 @@ onMounted(async () => {
         },
       },
       // Before externalLink: Editor.js hands a paste to the first tool whose
-      // pattern matches, so a playable address never becomes a plain link.
+      // pattern matches, so a playable address never becomes a plain link,
+      // and an address of this site becomes a link to what it opens.
       integration: {
         class: IntegrationTool,
+      },
+      entityLink: {
+        class: entityLinkToolWithPaste(internalUrlPastePattern(internalSite)),
+        config: {
+          pickEntity,
+          findEntityByUrl: (url: string) =>
+            findEntityByInternalUrl(url, internalSite),
+          resolver: contentLinkResolver,
+          labels: contentToolLabels(),
+          beginTransientSelection: beginTransientEntitySelection,
+          endTransientSelection: endTransientEntitySelection,
+        },
       },
       externalLink: {
         class: ExternalLinkTool,
         config: {
           labels: contentToolLabels(),
-        },
-      },
-      entityLink: {
-        class: EntityLinkTool,
-        config: {
-          pickEntity,
-          resolver: contentLinkResolver,
-          beginTransientSelection: beginTransientEntitySelection,
-          endTransientSelection: endTransientEntitySelection,
         },
       },
       privateSectionBoundary: {
@@ -596,6 +619,7 @@ onMounted(async () => {
   // One binding for the whole editor: the events bubble up from whichever
   // block is being typed in, and the rules read the caret, not the target.
   cleanupSmartTypography = bindSmartTypography(holder.value!);
+  cleanupMediaPaste = bindEditorMediaPaste(holder.value!, editor);
 });
 
 onBeforeUnmount(() => {
@@ -605,6 +629,8 @@ onBeforeUnmount(() => {
   cleanupEditorPopoverLayer = undefined;
   cleanupSmartTypography?.();
   cleanupSmartTypography = undefined;
+  cleanupMediaPaste?.();
+  cleanupMediaPaste = undefined;
   cleanupEditorDrag?.();
   cleanupEditorDrag = undefined;
   editorPrivateSections?.destroy();
@@ -680,6 +706,24 @@ async function pickAssets(kind: ContentEditorAssetKind) {
         .join(' · ');
     }
     return result?.assets.map(mapAsset) ?? [];
+  } catch (error) {
+    console.error(error);
+    errorMessage.value = phrase.value.content_asset_pick_error;
+    return [];
+  }
+}
+
+async function uploadFiles(files: File[]) {
+  try {
+    const result = await uploadOriginalAssets(
+      files,
+      contentAssetOptions('media'),
+    );
+    if (result.errors.length)
+      errorMessage.value = result.errors
+        .map((error) => `${error.fileName}: ${error.message}`)
+        .join(' · ');
+    return result.assets.map(mapAsset);
   } catch (error) {
     console.error(error);
     errorMessage.value = phrase.value.content_asset_pick_error;
@@ -836,6 +880,8 @@ function contentToolLabels() {
     privateSectionEnd: phrase.value.content_private_section_end,
     externalLinkLoading: phrase.value.external_link_loading,
     externalLinkError: phrase.value.external_link_error,
+    chooseEntity: phrase.value.content_choose_entity,
+    makeGallery: phrase.value.content_make_gallery,
   };
 }
 
@@ -1038,10 +1084,7 @@ function editorJsI18nMessages() {
             <ContentStats v-bind="headerSummary" />
           </div>
           <span class="shrink-0 text-xs text-text-3">
-            <TheiTime
-              v-if="modalData.value?.updatedAt"
-              :datetime="modalData.value.updatedAt"
-            />
+            <TheiTime v-if="updatedAt" :datetime="updatedAt" />
             <template v-else>{{ phrase.content_never_saved }}</template>
           </span>
         </div>

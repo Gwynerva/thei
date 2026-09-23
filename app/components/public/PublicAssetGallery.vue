@@ -4,7 +4,7 @@ import {
   type PublicAssetDescriptor,
   type PublicSecretReference,
 } from '#layers/thei/shared/api/public';
-import { publicAssetModal } from '#layers/thei/app/modals/public-asset/modal';
+import { openPublicAssets } from '#layers/thei/app/modals/public-asset/modal';
 
 const props = withDefaults(
   defineProps<{
@@ -27,7 +27,7 @@ const active = computed(
 );
 const crossfade = useGalleryCrossfade(active, (item) => item.key);
 function openItem(item: PublicAssetDescriptor) {
-  void openModal(publicAssetModal, item);
+  openPublicAssets(openable.value, item);
 }
 </script>
 

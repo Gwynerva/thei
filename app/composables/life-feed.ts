@@ -19,16 +19,23 @@ import {
 
 export function useLifeFeed(
   initial: LifeWindowResponse,
-  period: string | undefined,
+  date: string | undefined,
   root: Ref<HTMLElement | null>,
+  /**
+   * Scope and filter, sent with every window request.
+   *
+   * A getter rather than a value: the filter changes while the feed is open,
+   * and a window fetched after the change has to carry the new one.
+   */
+  scopeQuery: () => Record<string, string> = () => ({}),
 ) {
-  const windows = shallowRef([cacheLifeWindow(initial, { period })]);
+  const windows = shallowRef([cacheLifeWindow(initial, { d: date })]);
   const rows = computed(() => lifeFeedRows(windows.value));
   const days = computed(() => cachedLifeDays(windows.value));
   const activeDate = ref(initial.anchorDate);
   const newestDate = ref(initial.newestDate);
   const mounted = ref(false);
-  const positioned = ref(!period);
+  const positioned = ref(!date);
   const scrollMargin = ref(0);
   const scrollPaddingStart = ref(0);
   const focusedKey = ref<string>();
@@ -42,7 +49,7 @@ export function useLifeFeed(
   let resizeObserver: ResizeObserver | undefined;
   let disposed = false;
   let commits: Promise<void> = Promise.resolve();
-  let initialPosition = period ? initial.anchorDate : undefined;
+  let initialPosition = date ? initial.anchorDate : undefined;
   const activeDay = computed(
     () =>
       days.value.find((day) => day.date === activeDate.value) ?? days.value[0],
@@ -107,7 +114,7 @@ export function useLifeFeed(
   function trackerBottom() {
     return (
       document
-        .querySelector<HTMLElement>('[data-life-period-tracker]')
+        .querySelector<HTMLElement>('[data-life-sticky-bar]')
         ?.getBoundingClientRect().bottom ?? 0
     );
   }
@@ -256,7 +263,7 @@ export function useLifeFeed(
     delete errors[key];
     try {
       const result = await $fetch<LifeWindowResponse>('/api/life', {
-        query,
+        query: { ...scopeQuery(), ...query },
         signal: controller.signal,
         retry: 0,
       });
@@ -334,12 +341,12 @@ export function useLifeFeed(
     positioned.value = true;
     schedule();
   }
-  async function reset(data: LifeWindowResponse, period?: string) {
+  async function reset(data: LifeWindowResponse, date?: string) {
     cancel();
     focusedKey.value = undefined;
     positioned.value = false;
     sizes.clear();
-    windows.value = [cacheLifeWindow(data, { period })];
+    windows.value = [cacheLifeWindow(data, { d: date })];
     newestDate.value = data.newestDate;
     virtualizer.value.measure();
     await positionAt(data.anchorDate);

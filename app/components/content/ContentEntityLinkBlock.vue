@@ -1,9 +1,10 @@
 <script lang="ts" setup>
 import type { MediaPlayback } from '#layers/thei/shared/media';
-import type {
-  ContentEntityType,
-  ContentLinkResolver,
-  ResolvedContentLink,
+import {
+  contentEntityHasIcon,
+  type ContentEntityType,
+  type ContentLinkResolver,
+  type ResolvedContentLink,
 } from '#layers/thei/shared/content-link';
 import ContentLinkPreviewCard from './ContentLinkPreviewCard.vue';
 
@@ -26,12 +27,11 @@ watch(
   () => [props.entityType, props.entityId, props.restricted] as const,
   async ([entityType, entityId, restricted]) => {
     const current = ++version;
-    const reference =
-      entityType === 'project'
-        ? { kind: 'project' as const, projectUuid: entityId ?? '' }
-        : entityType === 'event'
-          ? { kind: 'event' as const, eventUuid: entityId ?? '' }
-          : { kind: 'page' as const, pageUuid: entityId ?? '' };
+    const reference = {
+      kind: 'entity' as const,
+      entityType,
+      entityId: entityId ?? '',
+    };
     // Nothing to ask about: the server already decided this reader may not
     // open the target, and the uuid it would be asked with is gone.
     const resolved: ResolvedContentLink = restricted
@@ -52,6 +52,6 @@ onUnmounted(() => {
     :label="phrase.content_link_loading"
     :interactive="interactive"
     :playback
-    :continuous-project-media="entityType === 'project'"
+    :continuous-project-media="contentEntityHasIcon(entityType)"
   />
 </template>

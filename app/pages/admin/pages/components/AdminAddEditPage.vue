@@ -205,6 +205,7 @@ async function save() {
     if (!registeredSlugs.value.includes(result.slug))
       registeredSlugs.value.push(result.slug);
     initialSlug.value = result.slug;
+    stampSavedContent(data.value, savedSnapshot.value, CONTENT_FIELDS);
     markSaved();
     await refreshNuxtData('admin-bar');
     if (!isEdit.value)

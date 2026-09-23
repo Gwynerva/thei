@@ -35,8 +35,14 @@ export interface OgContentCard extends OgCardBase {
   title: string;
   /** What this is: "Project", "Event", "Project stage"… */
   label: string;
-  /** A date or period, when the entity has one. */
-  meta?: string;
+  /**
+   * The entity this one belongs to, shown above the title.
+   *
+   * A stage or a section is named as if the project were already on screen
+   * ("Groundwork", "How the renderer works"), so without its parent the big
+   * title on a shared card has nothing to attach itself to.
+   */
+  parent?: { title: string; iconDataUri?: string };
   /** PNG data URI of the poster. Without it the accent plate stands alone. */
   posterDataUri?: string;
   /** SVG data URI drawn in place of a poster, in the entity's accent. */
@@ -244,6 +250,38 @@ async function buildContentCard(card: OgContentCard): Promise<OgNode> {
         },
       },
       header(card),
+      ...(card.parent
+        ? [
+            el(
+              'div',
+              {
+                style: {
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '14px',
+                  fontSize: '28px',
+                  fontWeight: 600,
+                  color: TEXT_MUTED,
+                },
+              },
+              ...(card.parent.iconDataUri
+                ? [
+                    el('img', {
+                      src: card.parent.iconDataUri,
+                      width: 44,
+                      height: 44,
+                      style: { borderRadius: '10px' },
+                    }),
+                  ]
+                : []),
+              el(
+                'div',
+                { style: { display: 'flex', lineClamp: 1 } },
+                ogText(card.parent.title),
+              ),
+            ),
+          ]
+        : []),
       el(
         'div',
         {
@@ -285,9 +323,6 @@ async function buildContentCard(card: OgContentCard): Promise<OgNode> {
           },
           ogText(card.label),
         ),
-        ...(card.meta
-          ? [el('div', { style: { display: 'flex' } }, ogText(card.meta))]
-          : []),
       ),
     ),
   );

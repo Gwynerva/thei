@@ -80,7 +80,14 @@ describe('validateEventData', () => {
             isPrivate: false,
           },
         ],
-        relations: [{ projectUuid: 'p-one', note: '  Partner  ' }],
+        relations: [
+          {
+            entityType: 'project',
+            entityId: 'p-one',
+            type: 'related',
+            note: { type: 'shared', text: '  Partner  ' },
+          },
+        ],
         tags: [{ title: '  Research  ' }, { title: 'Community' }],
         content: {
           data: {
@@ -114,7 +121,12 @@ describe('validateEventData', () => {
       isPrivate: false,
     });
     expect(result.relations).toEqual([
-      { projectUuid: 'p-one', note: 'Partner' },
+      {
+        entityType: 'project',
+        entityId: 'p-one',
+        type: 'related',
+        note: { type: 'shared', text: 'Partner' },
+      },
     ]);
     expect(result.tags).toEqual([
       { title: 'Research' },
@@ -150,10 +162,13 @@ describe('validateEventData', () => {
     expect(
       validateEventData(
         eventData({
-          relations: [{ projectUuid: 'p-1' }, { projectUuid: 'p-1' }],
+          relations: [
+            { entityType: 'project', entityId: 'p-1', type: 'related' },
+            { entityType: 'project', entityId: 'p-1', type: 'related' },
+          ],
         }),
       ),
-    ).toBe('Duplicate related project');
+    ).toBe('Duplicate related entity');
     expect(
       validateEventData(
         eventData({ tags: [{ title: 'Tag' }, { title: ' tag ' }] }),

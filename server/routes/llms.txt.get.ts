@@ -1,5 +1,6 @@
 import { SiteAccessLevel } from '#layers/thei/shared/access-level';
 import { getProfileIdentity } from '../thei/profile';
+import { LIFE_PRESETS, lifePresetHref } from '#layers/thei/shared/life-presets';
 import { siteUrl } from '../thei/site-url';
 
 /**
@@ -31,6 +32,11 @@ export default defineEventHandler(async (event) => {
     '',
     link('/', phrase.home, phrase.llms_txt_home),
     link('/life/', phrase.life, phrase.llms_txt_life),
+    link(
+      lifePresetHref(LIFE_PRESETS[0]!),
+      phrase.diary_seo_title,
+      phrase.llms_txt_diary,
+    ),
     link('/tags/', phrase.tags, phrase.llms_txt_tags),
     link('/pages/', phrase.pages, phrase.llms_txt_pages),
     link('/sitemap.xml', 'sitemap.xml', phrase.llms_txt_sitemap),

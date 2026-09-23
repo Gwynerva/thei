@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import type { PublicProjectReference } from '#layers/thei/shared/api/public';
+import type { PublicEntityReference } from '#layers/thei/shared/api/public';
 import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
 
-defineProps<{ projects: PublicProjectReference[] }>();
+defineProps<{ projects: PublicEntityReference[] }>();
 
-function accentStyle(project: PublicProjectReference) {
+function accentStyle(project: PublicEntityReference) {
   return {
     '--showcase-project-accent': imageAccentCssColor(
-      project.iconMedia.accent,
+      project.iconMedia?.accent,
       'var(--color-accent)',
     ),
   };
@@ -42,6 +42,7 @@ function accentStyle(project: PublicProjectReference) {
             group-hocus:shadow-lg"
         >
           <Media
+            v-if="project.iconMedia"
             v-bind="project.iconMedia"
             fit="contain"
             playback="autoplay"

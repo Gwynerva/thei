@@ -9,9 +9,14 @@ import { ENTITY_REMINDER_MAX_LENGTH } from '#layers/thei/shared/entity-notes';
  * nobody else will ever read, so it comes after everything that will be.
  */
 const reminder = defineModel<string>('reminder', { required: true });
-const notes = defineModel<ContentFieldModelValue | null>('notes', {
-  required: true,
-});
+/**
+ * Left unbound by an entity that keeps no notes of its own.
+ *
+ * A diary entry is already the private half of the site when its author says
+ * so; a second body of text under the first would be one field too many on
+ * the one entity that exists to have almost none.
+ */
+const notes = defineModel<ContentFieldModelValue | null | undefined>('notes');
 
 const emit = defineEmits<{ notesSaved: [] }>();
 </script>
@@ -36,7 +41,7 @@ const emit = defineEmits<{ notesSaved: [] }>();
         <FieldHint>{{ phrase.entity_reminder_hint }}</FieldHint>
       </Field>
 
-      <Field>
+      <Field v-if="notes !== undefined">
         <FieldLabel>{{ phrase.entity_notes }}</FieldLabel>
         <FieldContentEditor
           v-model="notes"

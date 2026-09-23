@@ -1,14 +1,23 @@
 <script setup lang="ts">
-defineProps<{ title: string }>();
+defineProps<{
+  title: string;
+  /**
+   * Tighter padding for a block that runs the full width of a page rather than
+   * sitting in the profile's narrow masonry column, where the same breathing
+   * room reads as empty space.
+   */
+  compact?: boolean;
+}>();
 </script>
 <template>
   <section
     class="profile-info-block relative isolate min-w-0 overflow-hidden
-      rounded-normal border border-border-1 bg-bg-2 p-md shadow-md
-      shadow-shadow-1"
+      rounded-normal border border-border-1 bg-bg-2 shadow-md shadow-shadow-1"
+    :class="compact ? 'p-sm' : 'p-md'"
   >
     <h2
-      class="mb-md text-xs font-semibold tracking-tight text-text-3 uppercase"
+      class="text-xs font-semibold tracking-tight text-text-3 uppercase"
+      :class="compact ? 'mb-xs' : 'mb-md'"
     >
       {{ title }}
     </h2>

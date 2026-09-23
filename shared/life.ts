@@ -1,20 +1,23 @@
 import type {
-  PublicProjectLink,
-  PublicProjectReference,
+  PublicEntityLink,
+  PublicEntityReference,
   PublicTagSummary,
 } from './api/public';
 import type { DateRange } from './date-range';
 import type { MediaDescriptor } from './media';
-import type { ProfileStatusKind } from './profile';
+import type { StatusKind } from './status';
 
-export type LifeEntityKind =
-  | 'event'
-  | 'project'
-  | 'page'
-  | 'project-stage'
-  | 'project-section'
-  | 'profile-avatar'
-  | 'profile-status';
+export const LIFE_ENTITY_KINDS = [
+  'event',
+  'project',
+  'page',
+  'project-stage',
+  'project-section',
+  'profile-avatar',
+  'profile-status',
+  'diary-entry',
+] as const;
+export type LifeEntityKind = (typeof LIFE_ENTITY_KINDS)[number];
 export type LifeTransition = 'started' | 'ended' | 'occurred' | 'created';
 export type LifeRailTone = 'accent' | 'warning' | 'warning-to-accent';
 
@@ -33,9 +36,9 @@ export type VisibleLifePoint = LifePointBase & {
   href: string;
   media?: MediaDescriptor;
   tags?: PublicTagSummary[];
-  project?: PublicProjectReference;
-  relatedProjects?: PublicProjectLink[];
-  profileStatusKind?: ProfileStatusKind;
+  project?: PublicEntityReference;
+  relatedEntities?: PublicEntityLink[];
+  statusKind?: StatusKind;
 };
 
 /** A point a visitor may not see, presented under a codename. */
@@ -66,27 +69,121 @@ export type LifeLatestResponse = {
   points: LifePoint[];
 };
 
-export function buildLifeUrl(period?: string): string {
-  return period ? `/life/${period.replaceAll('-', '/')}/` : '/life/';
+/**
+ * Which chronology is being read.
+ *
+ * The life of the person and the life of one project are the same feed with a
+ * different reach, so the scope travels with every request rather than each
+ * getting its own endpoint.
+ */
+export type LifeScope =
+  { kind: 'life' } | { kind: 'project'; projectUuid: string };
+
+export const LIFE_SCOPE_LIFE = { kind: 'life' } as const satisfies LifeScope;
+
+/**
+ * A scope as a page names it.
+ *
+ * The server narrows by the project's storage id; a page only knows the
+ * public id its own address carries, and `/api/life?project=` accepts that.
+ * Keeping the two apart means no page has to be handed an internal id just to
+ * ask for a feed.
+ */
+export type LifeScopeRef =
+  { kind: 'life' } | { kind: 'project'; publicId: string };
+
+/**
+ * The kinds a project's chronology can hold.
+ *
+ * Avatars and other projects belong to the person, not to a project, so they
+ * are not offered as filters there.
+ */
+export const PROJECT_LIFE_ENTITY_KINDS = [
+  'event',
+  'project-stage',
+  'project-section',
+  'profile-status',
+  'diary-entry',
+] as const satisfies readonly LifeEntityKind[];
+
+export function lifeFilterKinds(
+  scope: Pick<LifeScope, 'kind'>,
+): readonly LifeEntityKind[] {
+  return scope.kind === 'project'
+    ? PROJECT_LIFE_ENTITY_KINDS
+    : LIFE_ENTITY_KINDS;
 }
 
-export function lifePeriodFromParts(parts: string[]): string | undefined {
-  if (!parts.length) return undefined;
-  return parts.join('-');
+/**
+ * A chosen subset of kinds, or `undefined` for "show everything".
+ *
+ * "Everything" is deliberately not the full set spelled out: the set grows
+ * with the engine, and a link shared today should keep meaning "everything"
+ * after a new kind appears.
+ */
+export type LifeFilter = readonly LifeEntityKind[] | undefined;
+
+export function parseLifeFilter(
+  value: unknown,
+  scope: Pick<LifeScope, 'kind'> = LIFE_SCOPE_LIFE,
+): LifeFilter {
+  if (typeof value !== 'string' || !value.trim()) return undefined;
+  const allowed = lifeFilterKinds(scope);
+  const chosen = value
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part): part is LifeEntityKind =>
+      (allowed as readonly string[]).includes(part),
+    );
+  const unique = [...new Set(chosen)];
+  // Nothing recognised, or everything selected, both mean "no filter".
+  if (!unique.length || unique.length === allowed.length) return undefined;
+  return unique;
 }
 
-export function isLifePeriod(value: string): boolean {
-  if (/^\d{4}$/.test(value)) return true;
-  if (/^\d{4}-(0[1-9]|1[0-2])$/.test(value)) return true;
+export function serializeLifeFilter(filter: LifeFilter): string | undefined {
+  return filter?.length ? [...filter].join(',') : undefined;
+}
+
+export function lifeFilterIncludes(
+  filter: LifeFilter,
+  kind: LifeEntityKind,
+): boolean {
+  return !filter || filter.includes(kind);
+}
+
+export type LifeUrlOptions = {
+  /** The day the reader is looking at, as `YYYY-MM-DD`. */
+  date?: string;
+  filter?: LifeFilter;
+};
+
+/**
+ * Builds a chronology address.
+ *
+ * The day is a query parameter rather than a path so that a filter can travel
+ * in the same address: a shared link carries both what is being read and how
+ * it is narrowed.
+ */
+export function buildLifeUrl(
+  options: LifeUrlOptions = {},
+  base = '/life/',
+): string {
+  const query = new URLSearchParams();
+  if (options.date) query.set('d', options.date);
+  const filter = serializeLifeFilter(options.filter);
+  if (filter) query.set('f', filter);
+  const search = query.toString();
+  return search ? `${base}?${search}` : base;
+}
+
+export function isLifeDay(value: string): boolean {
   if (!/^\d{4}-(0[1-9]|1[0-2])-\d{2}$/.test(value)) return false;
+  // Rejects the days a month does not have, such as 2026-02-30.
   const date = new Date(`${value}T00:00:00Z`);
   return (
     !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
   );
-}
-
-export function isLifeDay(value: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value) && isLifePeriod(value);
 }
 
 export function normalizeLifeLastViewedDate(
@@ -125,7 +222,7 @@ export type LifeActivityResponse = {
   /** `YYYY-MM-DD` → how many points of each kind happened that day. */
   days: Record<string, Partial<Record<LifeActivityKind, number>>>;
   /** Projects whose stages ran during the year, newest first. */
-  projects: PublicProjectLink[];
+  projects: PublicEntityLink[];
   /** The busiest day of the year, so shades can be scaled against it. */
   max: number;
 };

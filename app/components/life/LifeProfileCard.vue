@@ -29,11 +29,11 @@ const isAvatar = computed(() => props.point.entityKind === 'profile-avatar');
       class="flex size-8 shrink-0 items-center justify-center rounded-normal
         text-xl"
       :class="
-        point.profileStatusKind === 'empty'
+        point.statusKind === 'empty'
           ? 'bg-bg-3 text-text-3'
           : 'bg-accent/10 text-accent'
       "
-      ><Icon name="quote"
+      ><Icon name="pulse"
     /></span>
     <div class="min-w-0 flex-1">
       <p class="text-xs font-semibold text-accent">
@@ -51,10 +51,10 @@ const isAvatar = computed(() => props.point.entityKind === 'profile-avatar');
       <p
         v-if="!isAvatar"
         class="mt-1 line-clamp-3 whitespace-pre-wrap"
-        :class="{ italic: point.profileStatusKind === 'empty' }"
+        :class="{ italic: point.statusKind === 'empty' }"
       >
         {{
-          point.profileStatusKind === 'empty'
+          point.statusKind === 'empty'
             ? phrase.profile_empty_status
             : point.summary
         }}

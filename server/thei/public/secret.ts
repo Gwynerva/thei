@@ -6,6 +6,7 @@ export type SecretEntityKind =
   | 'project'
   | 'event'
   | 'page'
+  | 'diary-entry'
   | 'project-stage'
   | 'project-section'
   | 'media'
@@ -35,6 +36,7 @@ export function buildSecretReference(
     project: phrase.secret_project,
     event: phrase.secret_event,
     page: phrase.secret_page,
+    'diary-entry': phrase.secret_diary_entry,
     'project-stage': phrase.secret_stage,
     'project-section': phrase.secret_section,
     media: phrase.secret_media,

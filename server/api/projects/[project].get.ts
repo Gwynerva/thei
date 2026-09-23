@@ -4,12 +4,12 @@ import {
   buildPublicProject,
   canOpenPublicEntity,
 } from '../../thei/public/entities';
-import {
-  listPublicProjectEvents,
-  PROJECT_EVENTS_PREVIEW_SIZE,
-} from '../../thei/public/project-events';
+import { countLifePoints, getLatestLifePoints } from '../../thei/public/life';
 import { resolveEntityViewer } from '../../thei/access-links/viewer';
 import { markSharedResponse } from '../../thei/access-links/response';
+
+/** How many of the newest chronology points the overview tab shows. */
+const PROJECT_TIMELINE_PREVIEW_SIZE = 3;
 
 export default defineEventHandler(
   async (event): Promise<PublicProjectResponse> => {
@@ -33,18 +33,22 @@ export default defineEventHandler(
     if (project.access === 'link-only' || viewer.viaShare)
       setHeader(event, 'X-Robots-Tag', 'noindex, nofollow');
     if (viewer.viaShare) markSharedResponse(event);
-    const [response, events] = await Promise.all([
+    // The chronology is built for the visitor the reader really is: a share
+    // link opens this project, not the private points of everything around it.
+    const scope = {
+      kind: 'project' as const,
+      projectUuid: project.projectUuid,
+    };
+    const [response, latest] = await Promise.all([
       buildPublicProject(project, viewer.asOwner),
-      listPublicProjectEvents(
-        project,
-        viewer.isAdmin,
-        1,
-        PROJECT_EVENTS_PREVIEW_SIZE,
-      ),
+      getLatestLifePoints(PROJECT_TIMELINE_PREVIEW_SIZE, {
+        scope,
+        isAdmin: viewer.isAdmin,
+      }),
     ]);
     return {
       ...response,
-      relatedEvents: { items: events.items, total: events.total },
+      timeline: { latest, total: countLifePoints({ scope }) },
     };
   },
 );

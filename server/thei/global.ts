@@ -18,6 +18,10 @@ import { countEvents } from './events/repository/count';
 import { findEventByUuid } from './events/repository/find-by-id';
 import { findEventByPublicId } from './events/repository/find-by-public-id';
 import { listEvents } from './events/repository/list';
+import { countDiaryEntries } from './diary/repository/count';
+import { findDiaryEntryByUuid } from './diary/repository/find-by-uuid';
+import { findDiaryEntryByDate } from './diary/repository/find-by-date';
+import { listDiaryEntries } from './diary/repository/list';
 import { countPages } from './pages/repository/count';
 import { findPageByUuid } from './pages/repository/find-by-id';
 import { findPageBySlug } from './pages/repository/find-by-slug';
@@ -118,6 +122,12 @@ export const THEI_SERVER = {
     findByUuid: findEventByUuid,
     findByPublicId: findEventByPublicId,
     list: listEvents,
+  },
+  diary: {
+    count: countDiaryEntries,
+    findByUuid: findDiaryEntryByUuid,
+    findByDate: findDiaryEntryByDate,
+    list: listDiaryEntries,
   },
   pages: {
     count: countPages,

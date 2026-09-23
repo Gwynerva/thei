@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { ProfileAvatarHistoryItem } from '#layers/thei/shared/profile';
-import { publicAssetModal } from '#layers/thei/app/modals/public-asset/modal';
-defineProps<{
+import type { PublicAssetDescriptor } from '#layers/thei/shared/api/public';
+import { openPublicAssets } from '#layers/thei/app/modals/public-asset/modal';
+const props = defineProps<{
   items: ProfileAvatarHistoryItem[];
   removable?: boolean;
   more?: boolean;
@@ -11,17 +12,29 @@ defineProps<{
   shortDate?: boolean;
 }>();
 defineEmits<{ remove: [id: string]; load: [] }>();
-function view(item: ProfileAvatarHistoryItem) {
-  if (!item.media) return;
-  const extension = item.media.src.split('?')[0]!.split('.').at(-1)!;
-  void openModal(publicAssetModal, {
+function descriptor(
+  item: ProfileAvatarHistoryItem,
+): PublicAssetDescriptor | undefined {
+  if (!item.media) return undefined;
+  return {
     key: item.id,
     title: phrase.value.profile_avatar,
     href: item.media.src,
     media: item.media,
-    extension,
+    extension: item.media.src.split('?')[0]!.split('.').at(-1)!,
     size: 0,
-  });
+  };
+}
+
+/** Every avatar loaded so far travels along, to be stepped through. */
+function view(item: ProfileAvatarHistoryItem) {
+  const all = props.items
+    .map(descriptor)
+    .filter((entry) => entry !== undefined);
+  openPublicAssets(
+    all,
+    all.find((entry) => entry.key === item.id),
+  );
 }
 </script>
 <template>

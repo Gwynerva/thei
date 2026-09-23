@@ -1,7 +1,9 @@
 import { SiteAccessLevel } from '#layers/thei/shared/access-level';
 import { publicIdFromProjectUrlPart } from '#layers/thei/shared/project-url';
 import { getRequestPath } from '../thei/request';
+import { dateFromDiaryUrlPart } from '#layers/thei/shared/diary-url';
 import {
+  renderDiaryMarkdown,
   renderEventMarkdown,
   renderPageMarkdown,
   renderProjectChildMarkdown,
@@ -62,6 +64,10 @@ function resolve(
   }
   if (section === 'events' && part && segments.length === 2)
     return renderEventMarkdown(event, publicIdOf(part));
+  if (section === 'diary' && part && segments.length === 2) {
+    const date = dateFromDiaryUrlPart(part);
+    return date ? renderDiaryMarkdown(event, date) : undefined;
+  }
   if (section === 'pages' && part && segments.length === 2)
     return renderPageMarkdown(event, part);
   return undefined;

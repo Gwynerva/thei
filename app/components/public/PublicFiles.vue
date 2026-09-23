@@ -4,14 +4,18 @@ import {
   type PublicFile,
   type PublicSecretReference,
 } from '#layers/thei/shared/api/public';
-import { publicAssetModal } from '#layers/thei/app/modals/public-asset/modal';
+import { openPublicAssets } from '#layers/thei/app/modals/public-asset/modal';
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     files: (PublicFile | PublicSecretReference)[];
     compact?: boolean;
   }>(),
   { compact: false },
+);
+/** The files of one list open together, so the viewer can step between them. */
+const openable = computed(() =>
+  props.files.filter((file): file is PublicFile => !isPublicSecret(file)),
 );
 </script>
 
@@ -37,7 +41,7 @@ withDefaults(
         :extension="file.media ? undefined : file.extension"
         :icon="file.media ? 'media' : 'file'"
         button
-        @activate="openModal(publicAssetModal, file)"
+        @activate="openPublicAssets(openable, file)"
       />
     </template>
   </div>

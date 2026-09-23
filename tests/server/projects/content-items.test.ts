@@ -6,15 +6,18 @@ import {
   applyProjectContentSections,
   deleteProjectContentSections,
   getProjectContentSections,
+  prepareProjectContentSections,
 } from '../../../server/thei/projects/content-sections';
 import {
   applyProjectStages,
   deleteProjectStages,
   getProjectStages,
+  prepareProjectStages,
 } from '../../../server/thei/projects/stages';
 import {
   prepareProjectContentItems,
   ProjectContentItemStorageError,
+  projectContentItemIdentities,
   projectContentItemIdsToRemove,
 } from '../../../server/thei/projects/content-items';
 
@@ -333,5 +336,85 @@ function preparedContent(contentUuid: string, text: string) {
     assetCount: 0,
     assetTotalSize: 0,
     assetUsages: [],
+  };
+}
+
+describe('project content item identity round trip', () => {
+  it('keeps a saved stage addressable on the next save', async () => {
+    const db = createDb();
+    installServerContext(db);
+
+    // First save: the form has no uuid yet, only the public ID it made up.
+    const created = await prepareProjectStages('project', [newStage()]);
+    applyProjectStages(db, schema, 'project', created);
+    const identities = projectContentItemIdentities(
+      created,
+      (stage) => stage.stageUuid,
+      (stage) => stage.publicId,
+    );
+    expect(identities).toEqual([
+      { publicId: 'StageOne', itemUuid: created![0]!.stageUuid },
+    ]);
+
+    // Second save with the identity applied back: the row is its own, not a
+    // stranger's claim on the public ID.
+    await expect(
+      prepareProjectStages('project', [
+        { ...newStage(), stageUuid: identities[0]!.itemUuid },
+      ]),
+    ).resolves.toMatchObject([{ stageUuid: identities[0]!.itemUuid }]);
+
+    // Without it — the bug this pairing exists to prevent.
+    await expect(prepareProjectStages('project', [newStage()])).rejects.toThrow(
+      'Stage public ID is already taken',
+    );
+  });
+
+  it('keeps a saved section addressable on the next save', async () => {
+    const db = createDb();
+    installServerContext(db);
+
+    const created = await prepareProjectContentSections('project', [
+      newSection(),
+    ]);
+    applyProjectContentSections(db, schema, 'project', created);
+    const [identity] = projectContentItemIdentities(
+      created,
+      (section) => section.sectionUuid,
+      (section) => section.publicId,
+    );
+
+    await expect(
+      prepareProjectContentSections('project', [
+        { ...newSection(), sectionUuid: identity!.itemUuid },
+      ]),
+    ).resolves.toMatchObject([{ sectionUuid: identity!.itemUuid }]);
+    await expect(
+      prepareProjectContentSections('project', [newSection()]),
+    ).rejects.toThrow('Section public ID is already taken');
+  });
+});
+
+function newStage() {
+  return {
+    isStage: true as const,
+    title: 'One',
+    summary: '',
+    humanReadableSlug: 'one',
+    publicId: 'StageOne',
+    isPrivate: false,
+    periods: [{ startDate: '2026-01-01', endDate: '2026-01-31' }],
+  };
+}
+
+function newSection() {
+  return {
+    isStage: false as const,
+    title: 'One',
+    summary: '',
+    humanReadableSlug: 'one',
+    publicId: 'SectionOne',
+    isPrivate: false,
+    content: { data: { blocks: [] } },
   };
 }

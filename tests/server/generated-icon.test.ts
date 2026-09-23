@@ -13,13 +13,19 @@ describe('generated fallback icons', () => {
     expect(GENERATED_ICON_KINDS).toEqual([
       'project',
       'page',
+      'event',
+      'project-stage',
+      'project-section',
+      'diary-entry',
       'author',
       'secret',
     ]);
     expect(isGeneratedIconKind('project')).toBe(true);
     expect(isGeneratedIconKind('page')).toBe(true);
     expect(isGeneratedIconKind('author')).toBe(true);
-    expect(isGeneratedIconKind('event')).toBe(false);
+    expect(isGeneratedIconKind('event')).toBe(true);
+    expect(isGeneratedIconKind('diary-entry')).toBe(true);
+    expect(isGeneratedIconKind('tag')).toBe(false);
     expect(isGeneratedIconKind(undefined)).toBe(false);
   });
 

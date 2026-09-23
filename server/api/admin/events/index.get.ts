@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { resolveEntityIconMedia } from '../../../thei/media/generated-icon';
 import {
   buildContentPreview,
   contentPlainText,
@@ -162,7 +163,11 @@ export default defineEventHandler(async (event): Promise<EventListResponse> => {
           access: item.access,
           humanReadableSlug: item.humanReadableSlug,
           publicId: item.publicId,
-          previewMedia: preview.media,
+          previewMedia: resolveEntityIconMedia(
+            'event',
+            item.eventUuid,
+            preview.media,
+          ),
           createdAt: item.createdAt,
           updatedAt: item.updatedAt,
           totalSize: Array.from(

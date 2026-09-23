@@ -1,29 +1,16 @@
 import type { H3Event } from 'h3';
-import type {
-  ContentLinkApiResponse,
-  ContentLinkReference,
-  ResolvedContentLink,
+import {
+  contentEntityReference,
+  type ContentEntityReference,
+  type ContentLinkApiResponse,
+  type ContentLinkReference,
+  type ResolvedContentLink,
 } from '#layers/thei/shared/content-link';
 import { normalizeExternalLinkUrl } from '#layers/thei/shared/external-link';
-import {
-  buildAdminAssetUrls,
-  buildPublicEventContentMedia,
-  buildPublicPageMedia,
-  buildPublicProjectMedia,
-} from '../thei/assets/urls';
 import { findExternalLink } from '../thei/external-links/repository';
 import { persistExternalLink } from '../thei/external-links/preview';
-import { resolveEntityIconMedia } from '../thei/media/generated-icon';
-import { buildProjectUrl } from '#layers/thei/shared/project-url';
 import { canResolveContentEntityLink } from '../thei/content-links/access';
-import {
-  buildContentPreview,
-  contentBlockIsInPrivateSection,
-  contentPrivateSectionRanges,
-  normalizeContentData,
-} from '#layers/thei/shared/content';
-import { buildEventUrl } from '#layers/thei/shared/event-url';
-import { buildPageUrl } from '#layers/thei/shared/page-url';
+import { findContentEntity } from '../thei/content-entities';
 
 /**
  * A reader who may not open an entity is told the same thing whether it is
@@ -43,18 +30,14 @@ function restrictedState(
 export default defineEventHandler(
   async (event): Promise<ContentLinkApiResponse> => {
     const query = getQuery(event);
-    if (query.kind === 'project') {
-      return await resolveProjectLink(event, query.projectUuid);
-    }
-    if (query.kind === 'event') {
-      return await resolveEventLink(event, query.eventUuid);
-    }
-    if (query.kind === 'page') {
-      return await resolvePageLink(event, query.pageUuid);
-    }
     if (query.kind === 'external') {
       return await resolveExternalLink(event, query.url);
     }
+    const reference =
+      query.kind === 'entity'
+        ? contentEntityReference(query.entityType, query.entityId)
+        : undefined;
+    if (reference) return await resolveEntityLink(event, reference);
     return {
       kind: 'external',
       url: typeof query.url === 'string' ? query.url : '',
@@ -64,145 +47,26 @@ export default defineEventHandler(
   },
 );
 
-async function resolveProjectLink(
+async function resolveEntityLink(
   event: H3Event,
-  value: unknown,
+  reference: ContentEntityReference,
 ): Promise<ContentLinkApiResponse> {
-  const projectUuid = typeof value === 'string' ? value.trim() : '';
-  const reference = { kind: 'project' as const, projectUuid };
-  const project = projectUuid
-    ? await THEI_SERVER.projects.findByUuid(projectUuid)
-    : undefined;
   const isAdmin = Boolean(event.context.isAdmin);
-  if (!project || !canResolveContentEntityLink(project.access, isAdmin)) {
-    if (project) return restrictedState(event, reference);
-    return { ...reference, state: 'broken', reason: 'not-found' };
-  }
-
-  const iconUsage = (
-    await THEI_SERVER.assets.usages.findByContainer(
-      'project',
-      project.projectUuid,
-    )
-  ).find((usage) => usage.role === 'icon');
-  const iconMedia = resolveEntityIconMedia(
-    'project',
-    project.projectUuid,
-    iconUsage
-      ? isAdmin
-        ? (await buildAdminAssetUrls(iconUsage.asset)).media!
-        : await buildPublicProjectMedia(project, iconUsage.asset, 'icon')
-      : undefined,
-  );
-
-  return {
-    ...reference,
-    state: 'resolved',
-    href: buildProjectUrl(project.humanReadableSlug, project.publicId),
-    title: project.title,
-    summary: project.summary,
-    iconMedia,
-  };
-}
-
-async function resolveEventLink(
-  event: H3Event,
-  value: unknown,
-): Promise<ContentLinkApiResponse> {
-  const eventUuid = typeof value === 'string' ? value.trim() : '';
-  const reference = { kind: 'event' as const, eventUuid };
-  const stored = eventUuid
-    ? await THEI_SERVER.events.findByUuid(eventUuid)
-    : undefined;
-  if (!stored) return { ...reference, state: 'broken', reason: 'not-found' };
-  const isAdmin = Boolean(event.context.isAdmin);
-  if (!canResolveContentEntityLink(stored.access, isAdmin))
+  const entity = await findContentEntity(reference, isAdmin);
+  if (!entity) return { ...reference, state: 'broken', reason: 'not-found' };
+  if (!canResolveContentEntityLink(entity.access, isAdmin))
     return restrictedState(event, reference);
-  const previewMedia = isAdmin
-    ? buildContentPreview(
-        (
-          await THEI_SERVER.content.buildFieldValue(
-            'event',
-            stored.eventUuid,
-            'event-body',
-          )
-        )?.data,
-      ).media
-    : await publicEventPreviewMedia(stored);
+  const media = await entity.media(isAdmin ? 'admin' : 'public');
   return {
     ...reference,
     state: 'resolved',
-    href: buildEventUrl(stored.humanReadableSlug, stored.publicId),
-    title: stored.title,
-    summary: stored.summary,
-    previewMedia,
+    href: entity.href,
+    title: entity.title,
+    summary: entity.summary,
+    ...(media ? { media } : {}),
+    ...(entity.date ? { date: entity.date } : {}),
+    ...(entity.parent ? { parent: entity.parent } : {}),
   };
-}
-
-async function resolvePageLink(
-  event: H3Event,
-  value: unknown,
-): Promise<ContentLinkApiResponse> {
-  const pageUuid = typeof value === 'string' ? value.trim() : '';
-  const reference = { kind: 'page' as const, pageUuid };
-  const page = pageUuid
-    ? await THEI_SERVER.pages.findByUuid(pageUuid)
-    : undefined;
-  if (!page) return { ...reference, state: 'broken', reason: 'not-found' };
-  const isAdmin = Boolean(event.context.isAdmin);
-  if (!canResolveContentEntityLink(page.access, isAdmin))
-    return restrictedState(event, reference);
-  const icon = (
-    await THEI_SERVER.assets.usages.findByContainer('page', page.pageUuid)
-  ).find((usage) => usage.role === 'icon');
-  return {
-    ...reference,
-    state: 'resolved',
-    href: buildPageUrl(page.slug),
-    title: page.title,
-    summary: page.summary,
-    iconMedia: resolveEntityIconMedia(
-      'page',
-      page.pageUuid,
-      icon
-        ? isAdmin
-          ? (await buildAdminAssetUrls(icon.asset)).media!
-          : await buildPublicPageMedia(page, icon.asset)
-        : undefined,
-    ),
-  };
-}
-
-async function publicEventPreviewMedia(stored: {
-  eventUuid: string;
-  humanReadableSlug: string;
-  publicId: string;
-}) {
-  const content = await THEI_SERVER.content.findByOwner(
-    'event',
-    stored.eventUuid,
-    'event-body',
-  );
-  if (!content) return undefined;
-  const data = normalizeContentData(content.data);
-  const privateSectionRanges = contentPrivateSectionRanges(data);
-  for (const [index, block] of data.blocks.entries()) {
-    if (
-      block.type === 'privateSectionBoundary' ||
-      contentBlockIsInPrivateSection(privateSectionRanges, index)
-    )
-      continue;
-    const assetUuid =
-      block.type === 'contentMedia'
-        ? (block.data as any).asset?.assetUuid
-        : block.type === 'contentGallery'
-          ? (block.data as any).items?.[0]?.asset?.assetUuid
-          : undefined;
-    if (!assetUuid) continue;
-    const asset = await THEI_SERVER.assets.findByUuid(assetUuid);
-    if (asset) return buildPublicEventContentMedia(stored, asset);
-  }
-  return undefined;
 }
 
 async function resolveExternalLink(

@@ -7,6 +7,7 @@ import {
   type PublicSearchFilters,
   type PublicSearchType,
 } from '#layers/thei/shared/public-search';
+import { tagAccentCssColor } from '#layers/thei/shared/tag';
 
 const props = defineProps<{
   filters: PublicSearchFilters;
@@ -218,7 +219,7 @@ function reset() {
             <span
               class="mr-1 flex size-5 shrink-0 items-center justify-center
                 overflow-hidden rounded-xs"
-              :style="{ color: facet.tag.accentColor || 'var(--color-text-3)' }"
+              :style="{ color: tagAccentCssColor(facet.tag) }"
             >
               <Media
                 v-if="facet.tag.iconMedia"

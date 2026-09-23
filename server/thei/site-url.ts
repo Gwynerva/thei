@@ -5,6 +5,7 @@ import {
   siteUrlOrigin,
   withSiteBase,
 } from '#layers/thei/shared/site-url';
+import type { InternalUrlSite } from '#layers/thei/shared/internal-url';
 
 /**
  * The base path this build serves from (`/` or `/diary/`).
@@ -37,4 +38,19 @@ export function siteUrl(event: H3Event, path: string): string {
 /** A site path as seen from outside: prefixed with the base path. */
 export function sitePath(path: string): string {
   return withSiteBase(path, siteBasePath());
+}
+
+/**
+ * What counts as this site when an address is checked for being one of its
+ * own: the configured origin and, during a request, the origin it came in on —
+ * an admin working through a second hostname pastes addresses from that one.
+ */
+export function internalUrlSite(event?: H3Event): InternalUrlSite {
+  return {
+    origins: [
+      siteUrlOrigin(THEI_SERVER.config.siteUrl),
+      event ? getRequestURL(event).origin : '',
+    ].filter(Boolean),
+    base: siteBasePath(),
+  };
 }

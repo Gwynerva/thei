@@ -1,8 +1,28 @@
 import type { MediaDescriptor } from './media';
 import { normalizeExternalLinkUrl } from './external-link';
 
-export const CONTENT_ENTITY_TYPES = ['project', 'event', 'page'] as const;
+/**
+ * Every kind of entity content may link to, in the order a person would name
+ * them. This list is the one place a new kind is added: storage, the resolver,
+ * the picker and the sidebar all read it rather than spelling kinds out.
+ */
+export const CONTENT_ENTITY_TYPES = [
+  'project',
+  'project-stage',
+  'project-section',
+  'event',
+  'diary-entry',
+  'page',
+] as const;
 export type ContentEntityType = (typeof CONTENT_ENTITY_TYPES)[number];
+
+/**
+ * Kinds that carry an icon of their own. The others are represented by the
+ * first picture of their body, when they have one, and by a glyph otherwise.
+ */
+export function contentEntityHasIcon(type: ContentEntityType) {
+  return type === 'project' || type === 'page';
+}
 
 export interface ContentEntityLink {
   kind: 'entity';
@@ -23,47 +43,36 @@ export interface ContentExternalInlineLink {
 
 export type ContentInlineLink = ContentEntityLink | ContentExternalInlineLink;
 
+export type ContentEntityReference = {
+  kind: 'entity';
+  entityType: ContentEntityType;
+  entityId: string;
+};
+
+export type ContentExternalReference = { kind: 'external'; url: string };
+
 export type ContentLinkReference =
-  | {
-      kind: 'project';
-      projectUuid: string;
-    }
-  | {
-      kind: 'event';
-      eventUuid: string;
-    }
-  | {
-      kind: 'page';
-      pageUuid: string;
-    }
-  | {
-      kind: 'external';
-      url: string;
-    };
+  ContentEntityReference | ContentExternalReference;
+
+export type ResolvedContentEntityLink = ContentEntityReference & {
+  state: 'resolved';
+  href: string;
+  title: string;
+  summary: string;
+  /** The entity's own icon, or the first picture of its body. */
+  media?: MediaDescriptor;
+  /**
+   * The day of a diary entry. An entry has no title, so `title` holds the
+   * same day and a reader formats it as a date.
+   */
+  date?: string;
+  /** The project a stage or a section belongs to. */
+  parent?: { title: string; href: string };
+};
 
 export type ResolvedContentLink =
-  | (Extract<ContentLinkReference, { kind: 'project' }> & {
-      state: 'resolved';
-      href: string;
-      title: string;
-      summary: string;
-      iconMedia: MediaDescriptor;
-    })
-  | (Extract<ContentLinkReference, { kind: 'event' }> & {
-      state: 'resolved';
-      href: string;
-      title: string;
-      summary: string;
-      previewMedia?: MediaDescriptor;
-    })
-  | (Extract<ContentLinkReference, { kind: 'page' }> & {
-      state: 'resolved';
-      href: string;
-      title: string;
-      summary: string;
-      iconMedia: MediaDescriptor;
-    })
-  | (Extract<ContentLinkReference, { kind: 'external' }> & {
+  | ResolvedContentEntityLink
+  | (ContentExternalReference & {
       state: 'resolved';
       href: string;
       title?: string;
@@ -359,16 +368,14 @@ export function contentLinkReferenceFromAnchor(link: {
 }): ContentLinkReference | undefined {
   if (
     link.dataset.contentLink === 'entity' &&
+    isContentEntityType(link.dataset.entityType) &&
     (link.dataset.entityId || contentLinkIsRestricted(link))
-  ) {
-    const entityId = link.dataset.entityId ?? '';
-    if (link.dataset.entityType === 'project')
-      return { kind: 'project', projectUuid: entityId };
-    if (link.dataset.entityType === 'event')
-      return { kind: 'event', eventUuid: entityId };
-    if (link.dataset.entityType === 'page')
-      return { kind: 'page', pageUuid: entityId };
-  }
+  )
+    return {
+      kind: 'entity',
+      entityType: link.dataset.entityType,
+      entityId: link.dataset.entityId ?? '',
+    };
   if (link.dataset.contentLink === 'external' || link.href) {
     try {
       return { kind: 'external', url: normalizeExternalLinkUrl(link.href) };
@@ -379,10 +386,23 @@ export function contentLinkReferenceFromAnchor(link: {
 }
 
 export function contentLinkReferenceKey(reference: ContentLinkReference) {
-  if (reference.kind === 'project') return `project:${reference.projectUuid}`;
-  if (reference.kind === 'event') return `event:${reference.eventUuid}`;
-  if (reference.kind === 'page') return `page:${reference.pageUuid}`;
-  return `external:${reference.url}`;
+  return reference.kind === 'entity'
+    ? `${reference.entityType}:${reference.entityId}`
+    : `external:${reference.url}`;
+}
+
+/**
+ * The stored `entityType`/`entityId` pair of a link block or an inline anchor,
+ * or nothing when either is missing or names a kind content cannot link to.
+ */
+export function contentEntityReference(
+  entityType: unknown,
+  entityId: unknown,
+): ContentEntityReference | undefined {
+  const id = typeof entityId === 'string' ? entityId.trim() : '';
+  return isContentEntityType(entityType) && id
+    ? { kind: 'entity', entityType, entityId: id }
+    : undefined;
 }
 
 export function contentInlineLinksFromData(data: {

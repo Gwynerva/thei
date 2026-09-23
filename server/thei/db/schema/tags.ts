@@ -7,5 +7,4 @@ export const tags = sqliteTable('tags', {
   slug: text().notNull().unique(),
   publicId: text().notNull().unique(),
   description: text().notNull().default(''),
-  accentColor: text(),
 });

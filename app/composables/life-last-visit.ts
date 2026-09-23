@@ -47,7 +47,9 @@ export function createLifeVisitTracker(
       isLifeDay(date) &&
       dependencies.isVisible() &&
       dependencies.isFocused() &&
-      dependencies.getPath() === buildLifeUrl(date) &&
+      // The day now travels in the query string, so the path only tells us
+      // that the reader is on the Life page; `confirm` checks the day itself.
+      dependencies.getPath() === buildLifeUrl() &&
       (!operationalCutoff || date > operationalCutoff)
     );
   }
@@ -122,7 +124,7 @@ export function useLifeLastVisit(options: {
   const tracker = createLifeVisitTracker({
     getActiveDate: () => options.activeDate.value,
     getNewestDate: () => options.newestDate.value,
-    // Compared against paths built by `buildLifeUrl`, which carry no base.
+    // Compared against the path `buildLifeUrl` builds, which carries no base.
     getPath: () => useSiteUrl().strip(window.location.pathname),
     isVisible: () => document.visibilityState === 'visible',
     isFocused: () => document.hasFocus(),

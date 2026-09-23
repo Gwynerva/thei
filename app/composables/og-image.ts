@@ -17,6 +17,7 @@ export function useOgImage(
     | 'section'
     | 'event'
     | 'page'
+    | 'diary'
     | 'tag',
   id: MaybeRefOrGetter<string | undefined>,
   parts: MaybeRefOrGetter<(string | number | undefined)[]>,

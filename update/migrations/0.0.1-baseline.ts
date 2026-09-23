@@ -21,15 +21,6 @@ export const baselineSql: string[] = [
 );
 `,
   `CREATE INDEX \`profile-avatars-date-idx\` ON \`profile-avatars\` (\`createdAt\`,\`id\`);`,
-  `CREATE TABLE \`profile-statuses\` (
-	\`id\` text PRIMARY KEY NOT NULL,
-	\`kind\` text DEFAULT 'regular' NOT NULL,
-	\`assetUuid\` text,
-	\`text\` text NOT NULL,
-	\`createdAt\` integer NOT NULL
-);
-`,
-  `CREATE INDEX \`profile-statuses-date-idx\` ON \`profile-statuses\` (\`createdAt\`,\`id\`);`,
   `CREATE TABLE \`profile-pinned-pages\` (
 	\`pageUuid\` text PRIMARY KEY NOT NULL,
 	\`sortOrder\` integer NOT NULL,
@@ -43,6 +34,17 @@ export const baselineSql: string[] = [
 	\`sortOrder\` integer NOT NULL
 );
 `,
+  `CREATE TABLE \`statuses\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`ownerType\` text NOT NULL,
+	\`ownerId\` text NOT NULL,
+	\`kind\` text DEFAULT 'regular' NOT NULL,
+	\`assetUuid\` text,
+	\`text\` text NOT NULL,
+	\`createdAt\` integer NOT NULL
+);
+`,
+  `CREATE INDEX \`statuses-owner-date-idx\` ON \`statuses\` (\`ownerType\`,\`ownerId\`,\`createdAt\`,\`id\`);`,
   `CREATE TABLE \`assets\` (
 	\`assetUuid\` text PRIMARY KEY NOT NULL,
 	\`slug\` text NOT NULL,
@@ -112,6 +114,16 @@ export const baselineSql: string[] = [
 );
 `,
   `CREATE UNIQUE INDEX \`events_publicId_unique\` ON \`events\` (\`publicId\`);`,
+  `CREATE TABLE \`diary-entries\` (
+	\`diaryUuid\` text PRIMARY KEY NOT NULL,
+	\`date\` text NOT NULL,
+	\`access\` text NOT NULL,
+	\`reminder\` text DEFAULT '' NOT NULL,
+	\`createdAt\` integer NOT NULL,
+	\`updatedAt\` integer NOT NULL
+);
+`,
+  `CREATE UNIQUE INDEX \`diary-entries-date-idx\` ON \`diary-entries\` (\`date\`);`,
   `CREATE TABLE \`projects\` (
 	\`projectUuid\` text PRIMARY KEY NOT NULL,
 	\`title\` text NOT NULL,
@@ -206,28 +218,27 @@ export const baselineSql: string[] = [
 	CONSTRAINT "stage-periods-stage-type-check" CHECK("stage-periods"."stageType" in ('project-stage', 'event-stage'))
 );
 `,
-  `CREATE TABLE \`project-relations\` (
-	\`firstProjectUuid\` text NOT NULL,
-	\`secondProjectUuid\` text NOT NULL,
+  `CREATE TABLE \`entity-relations\` (
+	\`firstType\` text NOT NULL,
+	\`firstId\` text NOT NULL,
+	\`secondType\` text NOT NULL,
+	\`secondId\` text NOT NULL,
 	\`type\` text NOT NULL,
 	\`note\` text,
 	\`firstSortOrder\` integer NOT NULL,
 	\`secondSortOrder\` integer NOT NULL,
-	PRIMARY KEY(\`firstProjectUuid\`, \`secondProjectUuid\`),
-	FOREIGN KEY (\`firstProjectUuid\`) REFERENCES \`projects\`(\`projectUuid\`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (\`secondProjectUuid\`) REFERENCES \`projects\`(\`projectUuid\`) ON UPDATE no action ON DELETE cascade
+	PRIMARY KEY(\`firstType\`, \`firstId\`, \`secondType\`, \`secondId\`)
 );
 `,
-  `CREATE INDEX \`project-relations-first-idx\` ON \`project-relations\` (\`firstProjectUuid\`,\`firstSortOrder\`);`,
-  `CREATE INDEX \`project-relations-second-idx\` ON \`project-relations\` (\`secondProjectUuid\`,\`secondSortOrder\`);`,
+  `CREATE INDEX \`entity-relations-first-idx\` ON \`entity-relations\` (\`firstType\`,\`firstId\`,\`firstSortOrder\`);`,
+  `CREATE INDEX \`entity-relations-second-idx\` ON \`entity-relations\` (\`secondType\`,\`secondId\`,\`secondSortOrder\`);`,
   `CREATE TABLE \`tags\` (
 	\`tagUuid\` text PRIMARY KEY NOT NULL,
 	\`title\` text NOT NULL,
 	\`normalizedTitle\` text NOT NULL,
 	\`slug\` text NOT NULL,
 	\`publicId\` text NOT NULL,
-	\`description\` text DEFAULT '' NOT NULL,
-	\`accentColor\` text
+	\`description\` text DEFAULT '' NOT NULL
 );
 `,
   `CREATE UNIQUE INDEX \`tags_normalizedTitle_unique\` ON \`tags\` (\`normalizedTitle\`);`,
@@ -276,18 +287,6 @@ export const baselineSql: string[] = [
 );
 `,
   `CREATE INDEX \`event-external-links-event-idx\` ON \`event-external-links\` (\`eventUuid\`,\`sortOrder\`);`,
-  `CREATE TABLE \`event-project-relations\` (
-	\`eventUuid\` text NOT NULL,
-	\`projectUuid\` text NOT NULL,
-	\`note\` text,
-	\`sortOrder\` integer NOT NULL,
-	PRIMARY KEY(\`eventUuid\`, \`projectUuid\`),
-	FOREIGN KEY (\`eventUuid\`) REFERENCES \`events\`(\`eventUuid\`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (\`projectUuid\`) REFERENCES \`projects\`(\`projectUuid\`) ON UPDATE no action ON DELETE cascade
-);
-`,
-  `CREATE INDEX \`event-project-relations-event-idx\` ON \`event-project-relations\` (\`eventUuid\`,\`sortOrder\`);`,
-  `CREATE INDEX \`event-project-relations-project-idx\` ON \`event-project-relations\` (\`projectUuid\`);`,
 ];
 
 export default defineMigration({

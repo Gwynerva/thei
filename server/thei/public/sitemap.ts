@@ -6,9 +6,16 @@ import { resolveSiteUrl } from '#layers/thei/shared/site-url';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { buildLifeUrl } from '#layers/thei/shared/life';
+import {
+  LIFE_PRESETS,
+  lifePresetHref,
+  PROJECT_TIMELINE_PRESETS,
+} from '#layers/thei/shared/life-presets';
+import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
 import {
   buildProjectChildUrl,
+  buildProjectTimelineUrl,
   buildProjectUrl,
 } from '#layers/thei/shared/project-url';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
@@ -46,6 +53,11 @@ export type SitemapEvent = AccessLike & {
 
 export type SitemapPage = AccessLike & { slug: string; updatedAt: number };
 
+export type SitemapDiaryEntry = AccessLike & {
+  date: string;
+  updatedAt: number;
+};
+
 export type SitemapTag = { tagUuid: string; slug: string; publicId: string };
 
 export type SitemapTagUsage = {
@@ -67,6 +79,7 @@ export type SitemapInput = {
   stages: readonly SitemapProjectChild[];
   events: readonly SitemapEvent[];
   pages: readonly SitemapPage[];
+  diaryEntries: readonly SitemapDiaryEntry[];
   tags: readonly SitemapTag[];
   tagUsages: readonly SitemapTagUsage[];
   periods: readonly SitemapPeriod[];
@@ -93,6 +106,7 @@ export function buildSitemapEntries(input: SitemapInput): SitemapEntry[] {
   const projects = input.projects.filter(isListable);
   const events = input.events.filter(isListable);
   const pages = input.pages.filter(isListable);
+  const diaryEntries = input.diaryEntries.filter(isListable);
   const projectByUuid = new Map(
     projects.map((project) => [project.projectUuid, project]),
   );
@@ -150,11 +164,29 @@ export function buildSitemapEntries(input: SitemapInput): SitemapEntry[] {
     ...PUBLIC_SEARCH_PRESETS.map((preset) => ({
       path: publicSearchPresetHref(preset),
     })),
-    ...lifeYearEntries(input, projects, events),
-    ...projects.map((project) => ({
-      path: buildProjectUrl(project.humanReadableSlug, project.publicId),
-      lastmod: isoDate(project.updatedAt),
-    })),
+    // The readings of the chronology that are destinations of their own — the
+    // diary, so far — each with their own title and description.
+    ...LIFE_PRESETS.map((preset) => ({ path: lifePresetHref(preset) })),
+    ...projects.flatMap((project) => {
+      const timeline = buildProjectTimelineUrl(
+        project.humanReadableSlug,
+        project.publicId,
+      );
+      return [
+        {
+          path: buildProjectUrl(project.humanReadableSlug, project.publicId),
+          lastmod: isoDate(project.updatedAt),
+        },
+        // Both tabs of the page, and the two filters of its chronology that
+        // used to be lists of their own.
+        { path: timeline },
+        ...PROJECT_TIMELINE_PRESETS.filter((preset) => preset.listed).map(
+          (preset) => ({
+            path: buildLifeUrl({ filter: preset.filter }, timeline),
+          }),
+        ),
+      ];
+    }),
     ...child(input.sections, 'sections'),
     ...child(input.stages, 'stages'),
     ...events.map((event) => ({
@@ -165,41 +197,14 @@ export function buildSitemapEntries(input: SitemapInput): SitemapEntry[] {
       path: buildPageUrl(page.slug),
       lastmod: isoDate(page.updatedAt),
     })),
+    ...diaryEntries.map((entry) => ({
+      path: buildDiaryUrl(entry.date),
+      lastmod: isoDate(entry.updatedAt),
+    })),
     ...input.tags
       .filter((tag) => taggedIds.has(tag.tagUuid))
       .map((tag) => ({ path: buildTagUrl(tag.slug, tag.publicId) })),
   ];
-}
-
-/**
- * Years that the Life feed has something to show.
- *
- * Derived from listable entities only. Taking every year in the database would
- * publish the fact that something exists in a year whose only records are
- * private — the absence of a year is itself information.
- */
-function lifeYearEntries(
-  input: SitemapInput,
-  projects: readonly SitemapProject[],
-  events: readonly SitemapEvent[],
-): SitemapEntry[] {
-  const years = new Set<number>();
-  for (const project of projects) {
-    const date = isoDate(project.createdAt);
-    if (date) years.add(Number(date.slice(0, 4)));
-  }
-  const eventUuids = new Set(events.map((event) => event.eventUuid));
-  for (const period of input.periods) {
-    if (period.stageType !== 'event-stage') continue;
-    if (!eventUuids.has(period.stageUuid)) continue;
-    const from = Number(period.startDate.slice(0, 4));
-    const to = Number(period.endDate.slice(0, 4));
-    if (!Number.isFinite(from) || !Number.isFinite(to)) continue;
-    for (let year = from; year <= to; year += 1) years.add(year);
-  }
-  return [...years]
-    .sort((left, right) => right - left)
-    .map((year) => ({ path: buildLifeUrl(String(year)) }));
 }
 
 const XML_ESCAPES: Record<string, string> = {

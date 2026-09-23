@@ -43,6 +43,7 @@ function input(overrides: Partial<SitemapInput> = {}): SitemapInput {
     stages: [],
     events: [],
     pages: [],
+    diaryEntries: [],
     tags: [],
     tagUsages: [],
     periods: [],
@@ -188,7 +189,7 @@ describe('sitemap privacy', () => {
     expect(listed).not.toContain('/tags/unseen-t2/');
   });
 
-  it('derives Life years from listable entities only', () => {
+  it('publishes the Life feed as one address, not a year per entity', () => {
     const hidden = event('priv', ProjectEventAccessLevel.Private);
     const open = event('pub', ProjectEventAccessLevel.Public);
     const listed = paths(
@@ -210,11 +211,15 @@ describe('sitemap privacy', () => {
         ],
       }),
     );
-    expect(listed).toContain('/life/2024/');
-    expect(listed).toContain('/life/2025/');
-    // A year whose only records are private must not be published: the year
-    // existing is itself the fact being withheld.
-    expect(listed).not.toContain('/life/2019/');
+    // A day now travels in the query string, and a year is no longer an
+    // address of its own — so no year can leak through the sitemap either.
+    // The only filtered address here is the diary, which is a preset: a
+    // reading of the feed the site treats as a page in its own right.
+    expect(listed).toContain('/life/');
+    expect(listed.filter((path) => path.startsWith('/life/'))).toEqual([
+      '/life/',
+      '/life/?f=diary-entry',
+    ]);
   });
 
   it('always lists the public entry points', () => {
@@ -230,7 +235,47 @@ describe('sitemap privacy', () => {
       '/search/?type=event',
       '/search/?type=project&showcase=1',
       '/search/?type=project&cv=1',
+      // The diary: a filter on the chronology with a name of its own.
+      '/life/?f=diary-entry',
     ]);
+  });
+
+  it('lists both tabs of a public project and its stage and section views', () => {
+    const listed = paths(
+      input({ projects: [project('Open', ProjectEventAccessLevel.Public)] }),
+    );
+    expect(listed).toEqual(
+      expect.arrayContaining([
+        '/projects/slug-Open-Open/',
+        '/projects/slug-Open-Open/timeline/',
+        '/projects/slug-Open-Open/timeline/?f=project-stage',
+        '/projects/slug-Open-Open/timeline/?f=project-section',
+      ]),
+    );
+    // Related events redirect into the chronology but are not a page of
+    // their own.
+    expect(listed).not.toContain('/projects/slug-Open-Open/timeline/?f=event');
+  });
+
+  it('lists public diary entries and withholds the private ones', () => {
+    const listed = paths(
+      input({
+        diaryEntries: [
+          {
+            date: '2026-04-28',
+            access: ProjectEventAccessLevel.Public,
+            updatedAt: EPOCH,
+          },
+          {
+            date: '2026-04-29',
+            access: ProjectEventAccessLevel.Private,
+            updatedAt: EPOCH,
+          },
+        ],
+      }),
+    );
+    expect(listed).toContain('/diary/2026-04-28/');
+    expect(listed).not.toContain('/diary/2026-04-29/');
   });
 });
 

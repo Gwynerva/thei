@@ -138,11 +138,13 @@ async function cleanupDanglingUsages() {
     ['project', 'projects', 'projectUuid'],
     ['event', 'events', 'eventUuid'],
     ['page', 'pages', 'pageUuid'],
+    ['diary-entry', 'diary-entries', 'diaryUuid'],
     ['tag', 'tags', 'tagUuid'],
     ['content', 'content', 'contentUuid'],
     ['profile', 'profiles', 'profileId'],
     ['profile-avatar', 'profile-avatars', 'id'],
-    ['profile-status', 'profile-statuses', 'id'],
+    ['profile-status', 'statuses', 'id'],
+    ['project-status', 'statuses', 'id'],
   ];
 
   // Every container type must have an owner table here. Without this, adding a

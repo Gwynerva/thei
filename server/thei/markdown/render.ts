@@ -1,14 +1,26 @@
 import type { H3Event } from 'h3';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
-import { isPublicSecret } from '#layers/thei/shared/api/public';
+import {
+  isPublicSecret,
+  type PublicDiaryLink,
+} from '#layers/thei/shared/api/public';
+import { contentEntityReference } from '#layers/thei/shared/content-link';
+import type { RelationType } from '#layers/thei/shared/relation';
+import {
+  findContentEntity,
+  type ContentEntityRecord,
+} from '../content-entities';
+import { canResolveContentEntityLink } from '../content-links/access';
 import { contentToMarkdown } from '#layers/thei/shared/content-markdown';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
+import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import {
   buildProjectChildUrl,
   buildProjectUrl,
 } from '#layers/thei/shared/project-url';
 import {
+  buildPublicDiaryEntry,
   buildPublicEvent,
   buildPublicPage,
   buildPublicProject,
@@ -16,7 +28,6 @@ import {
   buildPublicProjectStage,
   canOpenPublicEntity,
 } from '../public/entities';
-import { listPublicProjectEvents } from '../public/project-events';
 import { getProjectStages } from '../projects/stages';
 import { getProjectContentSections } from '../projects/content-sections';
 import { siteUrl } from '../site-url';
@@ -53,7 +64,7 @@ export async function renderProjectMarkdown(
   const lines = [
     `# ${data.title}`,
     data.summary,
-    body(event, data.description),
+    await body(event, data.description),
   ];
 
   if (data.stages.length) {
@@ -72,15 +83,9 @@ export async function renderProjectMarkdown(
           (section.summary ? ` — ${section.summary}` : ''),
       );
   }
-  lines.push(...relatedProjects(event, data.relatedProjects));
-  // `buildPublicProject` deliberately leaves related events out: they are
-  // paginated, and the page asks for its own first page of them.
-  const related = await listPublicProjectEvents(project, false, 1, 20);
-  if (related.items.length) {
-    lines.push(`## ${THEI_SERVER.phrase.related_events}`);
-    for (const item of related.items)
-      lines.push(`- [${item.title}](${siteUrl(event, item.href)})`);
-  }
+  // Related events are relations like any other and are listed with them.
+  lines.push(...relatedEntities(event, data.relatedEntities));
+  lines.push(...diaryList(event, data.diaryEntries));
   lines.push(...tagList(event, data.tags));
 
   return { body: join(lines), canonical: siteUrl(event, canonical) };
@@ -118,7 +123,7 @@ export async function renderProjectChildMarkdown(
       event,
       buildProjectUrl(project.humanReadableSlug, project.publicId),
     )})`,
-    body(event, data.content),
+    await body(event, data.content),
   ];
   return { body: join(lines), canonical: siteUrl(event, canonical) };
 }
@@ -145,8 +150,9 @@ export async function renderEventMarkdown(
             .join(', '),
         ]
       : []),
-    body(event, data.content),
-    ...relatedProjects(event, data.relatedProjects),
+    await body(event, data.content),
+    ...relatedEntities(event, data.relatedEntities),
+    ...diaryList(event, data.diaryEntries),
     ...tagList(event, data.tags),
   ];
   return {
@@ -158,6 +164,26 @@ export async function renderEventMarkdown(
   };
 }
 
+export async function renderDiaryMarkdown(
+  event: H3Event,
+  date: string,
+): Promise<MarkdownDocument | undefined> {
+  const stored = await THEI_SERVER.diary.findByDate(date);
+  if (!stored || stored.access === ProjectEventAccessLevel.Private)
+    return undefined;
+  const data = await buildPublicDiaryEntry(stored, false);
+  // The day is the heading, because an entry has nothing else to be called.
+  const lines = [
+    `# ${data.date}`,
+    await body(event, data.content),
+    ...relatedEntities(event, data.relatedEntities),
+  ];
+  return {
+    body: join(lines),
+    canonical: siteUrl(event, buildDiaryUrl(stored.date)),
+  };
+}
+
 export async function renderPageMarkdown(
   event: H3Event,
   slug: string,
@@ -166,37 +192,154 @@ export async function renderPageMarkdown(
   if (!page || page.access === ProjectEventAccessLevel.Private)
     return undefined;
   const data = await buildPublicPage(page, false);
-  const lines = [`# ${data.title}`, data.summary, body(event, data.content)];
+  const lines = [
+    `# ${data.title}`,
+    data.summary,
+    await body(event, data.content),
+  ];
   return {
     body: join(lines),
     canonical: siteUrl(event, buildPageUrl(page.slug)),
   };
 }
 
-function body(
+async function body(
   event: H3Event,
   content: Parameters<typeof contentToMarkdown>[0],
-): string {
-  return contentToMarkdown(content, {
+): Promise<string> {
+  return contentToMarkdown(await withEntityAddresses(content), {
     absolute: (path) => siteUrl(event, path),
     privateSectionLabel: THEI_SERVER.phrase.secret_hint,
   });
 }
 
-function relatedProjects(
+/** An entity anchor in the canonical form stored content writes it in. */
+const ENTITY_ANCHOR =
+  /<a data-content-link="entity" data-entity-type="([a-z-]+)" data-entity-id="([^"]*)"/g;
+
+/**
+ * Gives every link to an entity of this site the address it opens.
+ *
+ * Stored content names its targets by uuid, which is what keeps a link alive
+ * through a change of domain — and says nothing to a reader of plain text. So
+ * before the document becomes Markdown, each link a stranger may follow gets
+ * its address, and a link block its title too; a link to what a stranger may
+ * not open keeps its words and loses the link.
+ */
+async function withEntityAddresses(
+  content: Parameters<typeof contentToMarkdown>[0],
+): Promise<Parameters<typeof contentToMarkdown>[0]> {
+  if (!content) return content;
+  const cache = new Map<string, Promise<ContentEntityRecord | undefined>>();
+  const target = (entityType: unknown, entityId: unknown) => {
+    const reference = contentEntityReference(entityType, entityId);
+    if (!reference) return Promise.resolve(undefined);
+    const key = `${reference.entityType}:${reference.entityId}`;
+    let found = cache.get(key);
+    if (!found) {
+      found = findContentEntity(reference, false).then((entity) =>
+        entity && canResolveContentEntityLink(entity.access, false)
+          ? entity
+          : undefined,
+      );
+      cache.set(key, found);
+    }
+    return found;
+  };
+  const inline = async (value: unknown): Promise<unknown> => {
+    if (typeof value === 'string') {
+      if (!value.includes('data-content-link="entity"')) return value;
+      const hrefs = new Map<string, string>();
+      for (const [, entityType, entityId] of value.matchAll(ENTITY_ANCHOR)) {
+        const entity = await target(entityType, entityId);
+        if (entity) hrefs.set(`${entityType}:${entityId}`, entity.href);
+      }
+      return value.replace(ENTITY_ANCHOR, (anchor, entityType, entityId) => {
+        const href = hrefs.get(`${entityType}:${entityId}`);
+        return href ? `<a href="${href}"${anchor.slice(2)}` : anchor;
+      });
+    }
+    if (Array.isArray(value)) return Promise.all(value.map(inline));
+    if (value && typeof value === 'object')
+      return Object.fromEntries(
+        await Promise.all(
+          Object.entries(value).map(async ([key, item]) => [
+            key,
+            await inline(item),
+          ]),
+        ),
+      );
+    return value;
+  };
+  return {
+    ...content,
+    blocks: await Promise.all(
+      content.blocks.map(async (block) => {
+        if (block.type !== 'entityLink')
+          return { ...block, data: (await inline(block.data)) as never };
+        const entity = await target(block.data.entityType, block.data.entityId);
+        return entity
+          ? {
+              ...block,
+              data: { ...block.data, url: entity.href, title: entity.title },
+            }
+          : block;
+      }),
+    ),
+  };
+}
+
+/**
+ * Relations as the sidebar lists them: plain ones first, then the two
+ * directed kinds, each named from this entity's side.
+ */
+function relatedEntities(
   event: H3Event,
-  projects: { title: string; href?: string; note?: string }[] | undefined,
+  entities:
+    | {
+        title: string;
+        href?: string;
+        note?: string;
+        relationType?: RelationType;
+      }[]
+    | undefined,
 ): string[] {
-  const visible = (projects ?? []).filter(
-    (project) => !isPublicSecret(project as object),
+  const visible = (entities ?? []).filter(
+    (entity) => !isPublicSecret(entity as object),
   );
   if (!visible.length) return [];
+  const phrase = THEI_SERVER.phrase;
+  const line = (entity: (typeof visible)[number]) =>
+    `- [${entity.title}](${siteUrl(event, entity.href!)})` +
+    (entity.note ? ` — ${entity.note}` : '');
+  const lines = [`## ${phrase.related_entities}`];
+  lines.push(
+    ...visible
+      .filter((entity) => (entity.relationType ?? 'related') === 'related')
+      .map(line),
+  );
+  for (const [type, title] of [
+    ['influencing', phrase.relation_group_depends_on],
+    ['dependent', phrase.relation_group_affects],
+  ] as const) {
+    const group = visible.filter((entity) => entity.relationType === type);
+    if (group.length) lines.push(`### ${title}`, ...group.map(line));
+  }
+  return lines;
+}
+
+/** The diary entries tied to a project or an event, newest first. */
+function diaryList(
+  event: H3Event,
+  entries: PublicDiaryLink[] | undefined,
+): string[] {
+  if (!entries?.length) return [];
   return [
-    `## ${THEI_SERVER.phrase.related_projects}`,
-    ...visible.map(
-      (project) =>
-        `- [${project.title}](${siteUrl(event, project.href!)})` +
-        (project.note ? ` — ${project.note}` : ''),
+    `## ${THEI_SERVER.phrase.diary_entries}`,
+    ...entries.map(
+      (entry) =>
+        `- [${entry.date}](${siteUrl(event, entry.href)})` +
+        (entry.excerpt ? ` — ${entry.excerpt}` : ''),
     ),
   ];
 }

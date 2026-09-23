@@ -2,6 +2,12 @@ import {
   PUBLIC_SEARCH_PRESETS,
   publicSearchPresetHref,
 } from '#layers/thei/shared/public-search';
+import {
+  LIFE_PRESETS,
+  lifePresetHref,
+  PROJECT_TIMELINE_PRESETS,
+} from '#layers/thei/shared/life-presets';
+import { buildLifeUrl } from '#layers/thei/shared/life';
 import { getRequestPath } from '../thei/request';
 
 /**
@@ -23,6 +29,23 @@ export default defineEventHandler((event) => {
   const preset = PUBLIC_SEARCH_PRESETS.find(
     (candidate) => candidate.path === normalized,
   );
-  if (!preset) return;
-  return sendRedirect(event, publicSearchPresetHref(preset), 301);
+  if (preset) return sendRedirect(event, publicSearchPresetHref(preset), 301);
+  // The same door, for the readings of the chronology that are destinations:
+  // `/diary/` is the diary, while `/diary/<day>/` is one entry in it.
+  const life = LIFE_PRESETS.find((candidate) => candidate.path === normalized);
+  if (life) return sendRedirect(event, lifePresetHref(life), 301);
+  // A project's stages, sections and related events used to be lists of their
+  // own; each is now its chronology read through the matching filter.
+  const child = /^\/projects\/([^/]+)\/([^/]+)\/$/.exec(normalized);
+  const projectPreset =
+    child && PROJECT_TIMELINE_PRESETS.find((item) => item.segment === child[2]);
+  if (child && projectPreset)
+    return sendRedirect(
+      event,
+      buildLifeUrl(
+        { filter: projectPreset.filter },
+        `/projects/${child[1]}/timeline/`,
+      ),
+      301,
+    );
 });

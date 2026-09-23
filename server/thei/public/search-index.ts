@@ -51,7 +51,6 @@ export interface PublicSearchTag {
   slug: string;
   publicId: string;
   description: string;
-  accentColor: string | null;
 }
 
 export interface PublicSearchIndex {
@@ -165,7 +164,6 @@ export function buildPublicSearchIndex(): PublicSearchIndex {
         slug: tag.slug,
         publicId: tag.publicId,
         description: tag.description,
-        accentColor: tag.accentColor,
       },
     ]),
   );
@@ -293,7 +291,6 @@ async function tagSummaries(index: PublicSearchIndex) {
       slug: tag.slug,
       publicId: tag.publicId,
       description: tag.description || undefined,
-      accentColor: tag.accentColor ?? undefined,
     })),
   ).then(
     (summaries) =>

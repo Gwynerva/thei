@@ -5,7 +5,14 @@ import {
   type ContentAssetData,
   type ContentOutputData,
 } from './content';
-import { contentInlineLinksFromData } from './content-link';
+import {
+  contentEntityReference,
+  contentInlineLinksFromData,
+  contentLinkReferenceKey,
+  type ContentEntityReference,
+  type ContentExternalReference,
+  type ContentLinkReference,
+} from './content-link';
 import { contentIntegrationUrl } from './content-integrations';
 
 /**
@@ -14,10 +21,7 @@ import { contentIntegrationUrl } from './content-integrations';
  * a bare second mention of the same address.
  */
 export type ContentReferenceLinkCandidate = { note?: string } & (
-  | { kind: 'external'; url: string }
-  | { kind: 'project'; projectUuid: string }
-  | { kind: 'event'; eventUuid: string }
-  | { kind: 'page'; pageUuid: string }
+  ContentExternalReference | ContentEntityReference
 );
 
 export type ContentReferenceFileCandidate = {
@@ -42,30 +46,14 @@ export function extractContentReferenceCandidates(
   const linkKeys = new Set<string>();
   const fileKeys = new Set<string>();
 
-  const appendExternal = (url: string, note?: string) => {
-    const key = `external:${url}`;
+  const append = (reference: ContentLinkReference, note?: string) => {
+    const key = contentLinkReferenceKey(reference);
     if (linkKeys.has(key)) return;
     linkKeys.add(key);
-    links.push({ kind: 'external', url, ...(note ? { note } : {}) });
+    links.push({ ...reference, ...(note ? { note } : {}) });
   };
-  const appendProject = (projectUuid: string, note?: string) => {
-    const key = `project:${projectUuid}`;
-    if (linkKeys.has(key)) return;
-    linkKeys.add(key);
-    links.push({ kind: 'project', projectUuid, ...(note ? { note } : {}) });
-  };
-  const appendEvent = (eventUuid: string, note?: string) => {
-    const key = `event:${eventUuid}`;
-    if (linkKeys.has(key)) return;
-    linkKeys.add(key);
-    links.push({ kind: 'event', eventUuid, ...(note ? { note } : {}) });
-  };
-  const appendPage = (pageUuid: string, note?: string) => {
-    const key = `page:${pageUuid}`;
-    if (linkKeys.has(key)) return;
-    linkKeys.add(key);
-    links.push({ kind: 'page', pageUuid, ...(note ? { note } : {}) });
-  };
+  const appendExternal = (url: string, note?: string) =>
+    append({ kind: 'external', url }, note);
 
   for (const [index, block] of data.blocks.entries()) {
     if (block.type === 'privateSectionBoundary') continue;
@@ -80,18 +68,12 @@ export function extractContentReferenceCandidates(
     } else if (block.type === 'integration') {
       const url = contentIntegrationUrl(block.data);
       if (url) appendExternal(url);
-    } else if (
-      block.type === 'entityLink' &&
-      (block.data.entityType === 'project' ||
-        block.data.entityType === 'event' ||
-        block.data.entityType === 'page') &&
-      typeof block.data.entityId === 'string'
-    ) {
-      if (block.data.entityType === 'project')
-        appendProject(block.data.entityId);
-      else if (block.data.entityType === 'event')
-        appendEvent(block.data.entityId);
-      else appendPage(block.data.entityId);
+    } else if (block.type === 'entityLink') {
+      const reference = contentEntityReference(
+        block.data.entityType,
+        block.data.entityId,
+      );
+      if (reference) append(reference);
     } else if (block.type === 'contentAttachment') {
       const asset = block.data.asset as ContentAssetData | null;
       if (asset) {
@@ -115,11 +97,15 @@ export function extractContentReferenceCandidates(
 
     for (const link of contentInlineLinksFromData({ blocks: [block] })) {
       if (link.kind === 'external') appendExternal(link.url, link.note);
-      else if (link.entityType === 'project')
-        appendProject(link.entityId, link.note);
-      else if (link.entityType === 'event')
-        appendEvent(link.entityId, link.note);
-      else appendPage(link.entityId, link.note);
+      else
+        append(
+          {
+            kind: 'entity',
+            entityType: link.entityType,
+            entityId: link.entityId,
+          },
+          link.note,
+        );
     }
   }
 

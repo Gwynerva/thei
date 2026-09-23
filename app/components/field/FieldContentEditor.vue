@@ -73,6 +73,7 @@ function openEditor() {
       emit('update:modelValue', value);
     },
     onSaved: () => emit('saved'),
+    current: () => props.modelValue,
   });
 }
 const { engaged, events: mediaEvents } = useMediaInteraction();

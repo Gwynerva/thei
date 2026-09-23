@@ -92,7 +92,7 @@ const details = computed(
       icon="calendar"
       :title="data.title"
       :description="data.summary"
-      :back-link="data.project"
+      :parent="{ ...data.project, label: phrase.project_stage }"
     />
     <PublicDetailLayout :details="details" :content="data.content">
       <ContentRenderer

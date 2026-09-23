@@ -42,7 +42,6 @@ if (tagUuid) {
     slug: response.slug,
     publicId: response.publicId,
     description: response.description ?? '',
-    accentColor: response.accentColor,
     iconAssetUuid: response.iconAssetUuid,
   };
   iconMedia.value = response.iconMedia;
@@ -234,37 +233,6 @@ await useAdminTabTitle(
       />
 
       <div class="flex flex-col gap-md sm:flex-row">
-        <Field class="min-w-0 flex-1">
-          <FieldLabel>{{ phrase.tag_color }}</FieldLabel>
-          <div class="flex items-center gap-sm">
-            <input
-              type="color"
-              :value="data.accentColor ?? '#777777'"
-              class="size-10 cursor-pointer rounded-normal border
-                border-border-1 bg-bg-1 p-1"
-              @input="
-                data.accentColor = ($event.target as HTMLInputElement).value
-              "
-            />
-            <code v-if="data.accentColor" class="text-sm text-text-2">{{
-              data.accentColor
-            }}</code>
-            <button
-              v-if="data.accentColor"
-              type="button"
-              class="flex size-10 cursor-pointer items-center justify-center
-                rounded-normal bg-bg-3 text-text-2 transition hocus:bg-bg-error
-                hocus:text-text-error"
-              :aria-label="phrase.delete"
-              :data-title-popup="phrase.delete"
-              @click="data.accentColor = undefined"
-            >
-              <Icon name="delete" />
-            </button>
-          </div>
-          <FieldHint>{{ phrase.tag_color_hint }}</FieldHint>
-        </Field>
-
         <Field v-if="isEdit" class="min-w-0 flex-1">
           <FieldLabel>{{ phrase.tag_usage }}</FieldLabel>
           <div

@@ -38,8 +38,12 @@ onBeforeUnmount(() => unregisterHeader?.());
   <Sticky
     :top="stickyTop"
     :style="`--_width-sticky-content: ${width || '100%'}`"
-    class="z-10 shadow-lg shadow-transparent transition-shadow
-      sticky-stuck:shadow-shadow-1"
+    class="z-10 shadow-lg shadow-transparent transition-shadow"
+    :class="
+      stickyHeaderContext?.secondaryStuck.value
+        ? undefined
+        : 'sticky-stuck:shadow-shadow-1'
+    "
   >
     <div ref="headerContent">
       <!-- Header Content -->

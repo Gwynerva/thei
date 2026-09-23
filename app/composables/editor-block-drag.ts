@@ -56,17 +56,41 @@ export function createEditorBlockDrag(
     if (blockId) hoveredBlockId = blockId;
   }
 
+  /**
+   * The block the settings button stands next to.
+   *
+   * Read from where the button is, not from what the pointer last crossed:
+   * a block inserted from the toolbox opens a file picker straight away, and
+   * nothing is hovered while it is up, so the remembered block can be one
+   * that no longer exists or a neighbour.
+   */
+  function blockAtSettingsButton() {
+    const button = settingsButton!.getBoundingClientRect();
+    const y = button.top + button.height / 2;
+    let nearest: { id: string; distance: number } | undefined;
+    for (const block of root.querySelectorAll<HTMLElement>(BLOCK_SELECTOR)) {
+      const id = block.dataset.id;
+      if (!id) continue;
+      const rect = block.getBoundingClientRect();
+      const distance =
+        y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
+      if (!nearest || distance < nearest.distance) nearest = { id, distance };
+      if (distance === 0) break;
+    }
+    return nearest ? editor.blocks.getById(nearest.id) : null;
+  }
+
   function onMouseDown(event: MouseEvent) {
     if (event.button !== 0 || !settingsButtonFromEvent(event)) return;
-    const sourceBlockApi = hoveredBlockId
-      ? editor.blocks.getById(hoveredBlockId)
-      : editor.blocks.getBlockByIndex(editor.blocks.getCurrentBlockIndex());
-    if (!sourceBlockApi) return;
-
-    pendingSourceId = sourceBlockApi.id;
-    // Editor.js opens the settings popover on mousedown. Let the browser keep
-    // the native default so draggable can start, and open the popover on click.
+    // Editor.js opens the settings popover on mousedown, for whichever block
+    // it last considered hovered. Let the browser keep the native default so
+    // draggable can start, and open the popover on click — always ours, so
+    // the two never open for different blocks.
     event.stopPropagation();
+    const sourceBlockApi =
+      blockAtSettingsButton() ??
+      (hoveredBlockId ? editor.blocks.getById(hoveredBlockId) : null);
+    pendingSourceId = sourceBlockApi?.id;
   }
 
   function onClick(event: MouseEvent) {
@@ -76,16 +100,23 @@ export function createEditorBlockDrag(
     const sourceBlock = pendingSourceId
       ? editor.blocks.getById(pendingSourceId)
       : null;
-    if (sourceBlock) editor.caret.setToBlock(sourceBlock);
-    editor.toolbar.toggleBlockSettings();
     pendingSourceId = undefined;
+    if (!sourceBlock) return;
+    // The settings open for Editor.js's current block, and only setting the
+    // caret makes this one current. `start` rather than the default: a block
+    // born without fields — media before a file is chosen — remembers its
+    // current field as index -1, so the default finds no field, returns early
+    // and leaves the neighbour current. `start` takes the first field, which
+    // also mends that index.
+    editor.caret.setToBlock(sourceBlock, 'start');
+    editor.toolbar.toggleBlockSettings();
   }
 
   function onDragStart(event: DragEvent) {
     if (!event.dataTransfer) return;
     const sourceBlock = pendingSourceId
       ? editor.blocks.getById(pendingSourceId)
-      : editor.blocks.getBlockByIndex(editor.blocks.getCurrentBlockIndex());
+      : blockAtSettingsButton();
     if (!sourceBlock) {
       event.preventDefault();
       return;

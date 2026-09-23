@@ -95,19 +95,25 @@ describe('secret references', () => {
       })
       .run();
     context.db
-      .insert(context.schema.eventProjectRelations)
+      .insert(context.schema.entityRelations)
       .values(
         ['open', 'hidden', 'unlisted'].map((projectUuid, sortOrder) => ({
-          eventUuid: 'event',
-          projectUuid,
-          sortOrder,
+          // The pair is stored canonically; 'event' sorts before every project
+          // uuid used here, so the event is always the first end.
+          firstType: 'event' as const,
+          firstId: 'event',
+          secondType: 'project' as const,
+          secondId: projectUuid,
+          type: 'related' as const,
+          firstSortOrder: sortOrder,
+          secondSortOrder: 0,
         })),
       )
       .run();
     const event = context.db.select().from(context.schema.events).get()!;
 
     const visitor = await buildPublicEventSummary(event, false);
-    const related = visitor.relatedProjects!;
+    const related = visitor.relatedEntities!;
     expect(related.map((project) => isPublicSecret(project))).toEqual([
       false,
       true,
@@ -117,12 +123,13 @@ describe('secret references', () => {
       const serialized = JSON.stringify(project);
       expect(serialized).not.toMatch(/hidden (title|summary)|hidden-|unlisted/);
       expect(project).not.toHaveProperty('href');
-      // Event relations have no type, so none is shown.
-      expect(project).not.toHaveProperty('relationType');
+      // An event's relations now carry a direction like a project's; a plain
+      // one reads as "related" rather than as nothing at all.
+      expect(project).toHaveProperty('relationType', 'related');
     }
 
     const admin = await buildPublicEventSummary(event, true);
-    expect(admin.relatedProjects!.some(isPublicSecret)).toBe(false);
+    expect(admin.relatedEntities!.some(isPublicSecret)).toBe(false);
   });
 
   it('shows private files as secrets that cannot be opened', async () => {

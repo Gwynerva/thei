@@ -16,7 +16,13 @@ const props = defineProps<{
   iconMedia?: MediaDescriptor;
   /** Accent for the fallback icon and the page glow, e.g. a tag color. */
   accentColor?: string;
-  backLink?: {
+  /**
+   * What this page is a part of — a stage's or a section's project. Read as a
+   * line of text, not a button: "Project stage" and then the project, with
+   * only the project itself being the link back.
+   */
+  parent?: {
+    label: string;
     href: string;
     title: string;
     iconMedia?: MediaDescriptor;
@@ -32,8 +38,8 @@ const accent = computed(
     props.accentColor ??
     (props.iconMedia?.accent
       ? imageAccentCssColor(props.iconMedia.accent)
-      : props.backLink?.iconMedia?.accent
-        ? imageAccentCssColor(props.backLink.iconMedia.accent)
+      : props.parent?.iconMedia?.accent
+        ? imageAccentCssColor(props.parent.iconMedia.accent)
         : undefined),
 );
 
@@ -52,6 +58,10 @@ usePublicPageGlow({ color: accent });
     :style="accent ? { '--page-header-accent': accent } : undefined"
   >
     <div class="flex max-w-full flex-col items-center gap-sm sm:items-start">
+      <!-- Desktop: above the title. On a phone it sits under the icon instead. -->
+      <div v-if="parent" class="hidden max-w-full min-w-0 sm:block">
+        <PublicPageParent :parent />
+      </div>
       <div
         class="flex max-w-full min-w-0 flex-col items-center gap-sm sm:flex-row"
       >
@@ -80,6 +90,9 @@ usePublicPageGlow({ color: accent });
             class="hidden shrink-0 text-3xl text-text-3 sm:block"
           />
         </template>
+        <div v-if="parent" class="max-w-full min-w-0 sm:hidden">
+          <PublicPageParent :parent />
+        </div>
         <h1
           class="max-w-full text-3xl font-bold tracking-tight text-balance
             wrap-break-word sm:text-4xl"
@@ -87,31 +100,6 @@ usePublicPageGlow({ color: accent });
           {{ publicText(title) }}
         </h1>
       </div>
-      <TheiLink
-        v-if="backLink"
-        :to="backLink.href"
-        class="group relative isolate inline-flex max-w-full items-center gap-xs
-          overflow-hidden rounded-full border border-border-1 bg-bg-2/70 py-2
-          pl-2.5 text-sm font-semibold text-text-2 shadow-sm shadow-shadow-1
-          backdrop-blur-sm transition focus-visible:ring-2
-          focus-visible:ring-accent focus-visible:outline-none
-          hocus:border-border-2 hocus:text-text-1"
-        :class="backLink.iconMedia ? 'pr-18' : 'pr-sm'"
-      >
-        <MediaEdge
-          v-if="backLink.iconMedia"
-          :media="backLink.iconMedia"
-          side="right"
-          fade="preview"
-          playback="autoplay"
-          autoplay-reduced-motion
-          loop
-          muted
-          class="-z-1 w-20"
-        />
-        <Icon name="chevron-left" class="shrink-0 text-lg text-text-3" />
-        <span class="truncate">{{ publicText(backLink.title) }}</span>
-      </TheiLink>
       <p
         v-if="description"
         class="text-lg leading-relaxed font-semibold text-balance text-text-2

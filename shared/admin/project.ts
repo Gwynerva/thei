@@ -1,4 +1,12 @@
 import { ProjectEventAccessLevel } from '../access-level';
+import type { StatusEditData } from '../status';
+import {
+  RelationValidationError,
+  validateRelations,
+  type RelationEditItem,
+  type RelationNote,
+  type RelationType,
+} from '../relation';
 import { normalizeEntityNotes, normalizeEntityReminder } from '../entity-notes';
 import {
   collectContentAssetUuids,
@@ -46,28 +54,10 @@ export type OtherAssetSaveItem = AssetListSaveItem & {
   isPrivate: boolean;
 };
 
-export type ProjectRelationType = 'related' | 'influencing' | 'dependent';
+/** Kept as aliases so callers name relations by one vocabulary. */
+export type { RelationType, RelationNote, RelationEditItem };
 
-export type ProjectRelationNote =
-  | { type: 'shared'; text?: string }
-  | {
-      type: 'split';
-      currentProjectText?: string;
-      relatedProjectText?: string;
-    };
-
-export type ProjectRelationEditItem = {
-  projectUuid: string;
-  type: ProjectRelationType;
-  note?: ProjectRelationNote;
-  /** Display fields returned by the admin edit API and ignored when saving. */
-  title?: string;
-  humanReadableSlug?: string;
-  publicId?: string;
-  iconMedia?: MediaDescriptor;
-};
-
-export type ProjectEditData = {
+export type ProjectEditData = Partial<StatusEditData> & {
   title: string;
   summary: string;
   humanReadableSlug: string;
@@ -85,7 +75,7 @@ export type ProjectEditData = {
   /** Other files in display order. Array index = sort order. */
   otherAssets?: OtherAssetSaveItem[];
   /** Relations in this project's display order. */
-  relations?: ProjectRelationEditItem[];
+  relations?: RelationEditItem[];
   /** External links in display order. */
   externalLinks?: ProjectExternalLinkEditItem[];
   tags?: TagEditItem[];
@@ -237,7 +227,7 @@ export function validateProjectData(
       data.contentSections,
     );
     const stages = normalizeProjectStages(data.stages);
-    const relations = validateProjectRelations(data.relations);
+    const relations = validateRelations(data.relations);
     const externalLinks = validateProjectExternalLinks(data.externalLinks);
     const tags = validateProjectTags(data.tags);
     let action: ProjectActionEditData;
@@ -272,6 +262,7 @@ export function validateProjectData(
     if (error instanceof ProjectValidationError) return error.message;
     if (error instanceof ContentValidationError) return error.message;
     if (error instanceof ProjectContentItemError) return error.message;
+    if (error instanceof RelationValidationError) return error.message;
     throw error;
   }
 }
@@ -325,50 +316,6 @@ function validateProjectTags(
     if ('tagUuid' in tag && tag.tagUuid) return { ...tag, title };
     return { title };
   });
-}
-
-function validateProjectRelations(
-  relations: ProjectRelationEditItem[] | undefined,
-): ProjectRelationEditItem[] | undefined {
-  if (relations === undefined) return undefined;
-  const seen = new Set<string>();
-  return relations.map((relation) => {
-    const projectUuid = relation.projectUuid?.trim();
-    if (!projectUuid)
-      throw new ProjectValidationError('Invalid related project');
-    if (seen.has(projectUuid))
-      throw new ProjectValidationError('Duplicate related project');
-    seen.add(projectUuid);
-    if (
-      relation.type !== 'related' &&
-      relation.type !== 'influencing' &&
-      relation.type !== 'dependent'
-    ) {
-      throw new ProjectValidationError('Invalid project relation type');
-    }
-    return {
-      projectUuid,
-      type: relation.type,
-      note: validateProjectRelationNote(relation.note),
-    };
-  });
-}
-
-function validateProjectRelationNote(
-  note: ProjectRelationNote | undefined,
-): ProjectRelationNote | undefined {
-  if (note === undefined) return undefined;
-  if (note.type === 'shared') {
-    return { type: 'shared', text: normalizeOptionalText(note.text) };
-  }
-  if (note.type === 'split') {
-    return {
-      type: 'split',
-      currentProjectText: normalizeOptionalText(note.currentProjectText),
-      relatedProjectText: normalizeOptionalText(note.relatedProjectText),
-    };
-  }
-  throw new ProjectValidationError('Invalid project relation note');
 }
 
 function normalizeOptionalText(value: string | undefined): string | undefined {

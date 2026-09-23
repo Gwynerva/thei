@@ -104,6 +104,7 @@ const kindLabels: Record<LifeActivityKind, (count: number) => string> = {
   'project-section': (count) => phrase.value.life_activity_sections(count),
   'profile-avatar': (count) => phrase.value.life_activity_profile(count),
   'profile-status': (count) => phrase.value.life_activity_statuses(count),
+  'diary-entry': (count) => phrase.value.life_activity_diary(count),
   secret: (count) => phrase.value.life_activity_secret(count),
 };
 
@@ -268,7 +269,7 @@ onMounted(() => {
     >
       <div class="flex items-center justify-between gap-sm">
         <TheiLink
-          :to="buildLifeUrl(selectedDate)"
+          :to="buildLifeUrl({ date: selectedDate })"
           class="font-semibold underline-offset-2 hocus:underline"
         >
           {{ formatDate(selectedDate) }}
@@ -307,7 +308,7 @@ onMounted(() => {
       <span class="text-sm text-text-3">
         {{ phrase.life_activity_year_projects }}
       </span>
-      <PublicProjectLinks :projects="data.projects" />
+      <PublicEntityChips :projects="data.projects" />
     </div>
   </Box>
 </template>

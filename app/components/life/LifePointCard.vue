@@ -2,6 +2,7 @@
 import type { LifePoint } from '#layers/thei/shared/life';
 import { buildLifeUrl } from '#layers/thei/shared/life';
 import type { LifeRewindMatch } from '#layers/thei/shared/life-rewind';
+import { lifeEntityKindIcon } from './life-entity-icon';
 
 const props = defineProps<{
   point: LifePoint;
@@ -27,6 +28,7 @@ const description = computed(() => {
     'project-stage:ended': phrase.value.stage_ended,
     'project-stage:occurred': phrase.value.stage_occurred,
     'project-section:created': phrase.value.section_created,
+    'diary-entry:created': phrase.value.diary_written,
   };
   return labels[key] ?? phrase.value.life;
 });
@@ -47,19 +49,20 @@ const datePresentation = computed(() => {
     { style: props.dateStyle ?? (props.compact ? 'short' : 'long') },
   );
 });
-const pointIcon = computed(() => {
-  if (props.point.entityKind === 'event') return 'event';
-  if (props.point.entityKind === 'page') return 'page';
-  if (props.point.entityKind === 'project-stage') return 'calendar';
-  if (props.point.entityKind === 'project-section') return 'file-tray-stack';
-  return 'project';
-});
-const projects = computed(() => {
-  if (props.point.visibility !== 'visible') return [];
-  return props.point.project
-    ? [props.point.project]
-    : (props.point.relatedProjects ?? []);
-});
+const pointIcon = computed(() => lifeEntityKindIcon(props.point.entityKind));
+/**
+ * A stage or a section names its project above the title: that project is
+ * its parent, not something it is related to. A status names its project the
+ * same way. Everything else lists what it is related to under the summary.
+ */
+const parent = computed(() =>
+  props.point.visibility === 'visible' ? props.point.project : undefined,
+);
+const projects = computed(() =>
+  props.point.visibility === 'visible'
+    ? (props.point.relatedEntities ?? [])
+    : [],
+);
 </script>
 
 <template>
@@ -83,11 +86,13 @@ const projects = computed(() => {
     :icon="pointIcon"
     :date="point.date"
     :period="point.period"
-    :date-href="rewindMatch ? undefined : buildLifeUrl(point.date)"
+    :date-href="rewindMatch ? undefined : buildLifeUrl({ date: point.date })"
     :date-presentation="datePresentation"
     :media="point.media"
     :continuous-media="point.entityKind === 'project'"
+    :titleless="point.entityKind === 'diary-entry'"
     :projects="projects"
+    :parent="parent"
     :tags="point.tags"
     :compact="compact"
   />
@@ -100,7 +105,7 @@ const projects = computed(() => {
     :icon="pointIcon"
     :date="point.date"
     :period="point.period"
-    :date-href="rewindMatch ? undefined : buildLifeUrl(point.date)"
+    :date-href="rewindMatch ? undefined : buildLifeUrl({ date: point.date })"
     :date-presentation="datePresentation"
     :media="point.media"
     :compact="compact"

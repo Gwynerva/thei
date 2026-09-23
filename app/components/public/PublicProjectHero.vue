@@ -129,10 +129,13 @@ const visibleTags = computed(() => props.tags.slice(0, 3));
       <PublicTagLinks
         v-if="visibleTags.length"
         :tags="visibleTags"
+        size="lg"
         class="relative z-2 justify-center sm:justify-start"
         data-hero-tags
       />
     </div>
+    <!-- The tabs close the hero: part of it, but pinned to its lower edge. -->
+    <slot name="tabs" />
   </header>
 </template>
 

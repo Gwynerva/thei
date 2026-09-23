@@ -11,7 +11,7 @@ import { createApp, createRouter, defineEventHandler, toWebHandler } from 'h3';
 import { ProjectEventAccessLevel } from '../../shared/access-level';
 import { freshTestDb } from '../helpers/fresh-db';
 import {
-  buildPublicProjectReference,
+  buildPublicEntityReference,
   buildPublicProjectSummary,
 } from '../../server/thei/public/entities';
 
@@ -35,7 +35,7 @@ vi.mock('../../server/thei/public/content', () => ({
 }));
 vi.mock('../../server/thei/public/entities', () => ({
   buildPublicEventSummary: vi.fn(),
-  buildPublicProjectReference: vi.fn(async (row) => ({
+  buildPublicEntityReference: vi.fn(async (row) => ({
     title: row.title,
     summary: row.summary,
     href: row.projectUuid,
@@ -122,7 +122,7 @@ describe('public profile showcase projects', () => {
     );
     expect(secondIds).toHaveLength(12);
     expect(secondIds).not.toEqual(firstIds);
-    expect(buildPublicProjectReference).toHaveBeenCalledTimes(24);
+    expect(buildPublicEntityReference).toHaveBeenCalledTimes(24);
     // The three most recently updated projects are private: they are listed
     // as secrets, counted, and never hydrated.
     expect(buildPublicProjectSummary).not.toHaveBeenCalled();
@@ -147,6 +147,6 @@ describe('public profile showcase projects', () => {
     expect(
       new Set(result.showcaseProjects.map((item: any) => item.href)).size,
     ).toBe(5);
-    expect(buildPublicProjectReference).toHaveBeenCalledTimes(5);
+    expect(buildPublicEntityReference).toHaveBeenCalledTimes(5);
   });
 });

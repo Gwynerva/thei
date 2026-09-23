@@ -6,6 +6,7 @@ const labels = computed(() => ({
   project: phrase.value.project,
   event: phrase.value.event,
   page: phrase.value.page,
+  'diary-entry': phrase.value.diary_entry,
   tag: phrase.value.tag,
   profile: phrase.value.asset_source_profile,
 }));
