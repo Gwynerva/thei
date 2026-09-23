@@ -174,16 +174,20 @@ function markSaved() {
 
 // The public page is addressed by the day, which only the form knows, so the
 // admin bar's "view" button is registered from here rather than guessed there.
+// It is the saved day: a day being typed is not this entry's page, and may be
+// another entry's.
 useRegisterAdminBarContextButton(
-  computed(() =>
-    isEdit.value && diaryData.value.date
+  computed(() => {
+    if (!isEdit.value) return undefined;
+    const { date } = JSON.parse(savedSnapshot.value) as DiaryEditData;
+    return date
       ? {
-          to: { href: buildDiaryUrl(diaryData.value.date), external: true },
+          to: { href: buildDiaryUrl(date), external: true },
           icon: 'visibility' as const,
           title: phrase.value.diary_entry,
         }
-      : undefined,
-  ),
+      : undefined;
+  }),
 );
 </script>
 

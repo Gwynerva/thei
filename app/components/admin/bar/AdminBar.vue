@@ -45,10 +45,11 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
     };
   }
 
-  if (route.path.startsWith('/projects/')) {
-    const projectUuid = publicIdFromProjectUrlPart(
-      route.path.split('/')[2] ?? '',
-    );
+  // A project page and anything under it; `/projects/` itself is only a short
+  // address of a search and names no project to edit.
+  const project = /^\/projects\/([^/]+)\//.exec(route.path);
+  if (project) {
+    const projectUuid = publicIdFromProjectUrlPart(project[1]!);
     return {
       to: `/admin/projects/${projectUuid}/edit/`,
       icon: 'edit',
@@ -73,8 +74,9 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
     };
   }
 
-  if (route.path.startsWith('/events/')) {
-    const eventId = publicIdFromEventUrlPart(route.path.split('/')[2] ?? '');
+  const event = /^\/events\/([^/]+)\//.exec(route.path);
+  if (event) {
+    const eventId = publicIdFromEventUrlPart(event[1]!);
     return {
       to: `/admin/events/${eventId}/edit/`,
       icon: 'edit',

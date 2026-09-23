@@ -210,7 +210,10 @@ onMounted(async () => {
   const target = items.value.find((item) => item.publicId === wanted);
   const query = { ...route.query };
   delete query[props.kind];
-  await navigateTo({ query }, { replace: true });
+  // The path goes along: without it the router rebuilds the address from the
+  // route's pattern, which has no trailing slash, and the admin bar no longer
+  // recognizes the editor.
+  await navigateTo({ path: route.path, query }, { replace: true });
   if (target) await openItem(target);
 });
 

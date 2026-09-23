@@ -126,16 +126,17 @@ const canSave = computed(
     (!isEdit.value || dirty.value),
 );
 
+// The public page lives at the saved address, not at whatever is being typed.
 useRegisterAdminBarContextButton(
-  computed(() =>
-    isEdit.value
-      ? {
-          to: { href: buildPageUrl(data.value.slug), external: true },
-          icon: 'visibility',
-          title: phrase.value.view_page,
-        }
-      : undefined,
-  ),
+  computed(() => {
+    if (!isEdit.value) return undefined;
+    const { slug } = JSON.parse(savedSnapshot.value) as PageEditData;
+    return {
+      to: { href: buildPageUrl(slug), external: true },
+      icon: 'visibility',
+      title: phrase.value.view_page,
+    };
+  }),
 );
 
 const iconAsset = useSingleMediaAsset({
