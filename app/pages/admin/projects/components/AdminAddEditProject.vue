@@ -230,7 +230,7 @@ async function handleSave() {
       }
       applySavedContentItemIds(result);
       applySavedAction(result.action);
-      await refreshSavedStatuses();
+      applySavedStatuses(result.statuses);
       stampSavedContent(projectData.value, savedSnapshot.value, CONTENT_FIELDS);
       markProjectSaved();
     } else {
@@ -319,25 +319,17 @@ function markProjectSaved() {
 }
 
 /**
- * Folds the three status edit lists back into the loaded history.
+ * Folds the three status edit lists back into the history the save returned.
  *
  * Without this a saved status stays in `newStatuses`, and the next save would
  * offer it again — which the storage layer only tolerates because a resent new
  * status has to match the stored one byte for byte.
  */
-async function refreshSavedStatuses() {
-  if (!resolvedProjectUuid.value) return;
+function applySavedStatuses(page: ProfileHistoryPage<StatusHistoryItem>) {
   projectData.value.newStatuses = [];
   projectData.value.updatedStatuses = [];
   projectData.value.deletedStatusIds = [];
-  try {
-    const page = await $fetch<ProfileHistoryPage<StatusHistoryItem>>(
-      `/api/admin/projects/${resolvedProjectUuid.value}/statuses`,
-    );
-    statusField.value?.reset(page);
-  } catch {
-    // The statuses are saved either way; the list catches up on reload.
-  }
+  statusField.value?.reset(page);
 }
 
 /**

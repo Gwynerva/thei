@@ -104,6 +104,8 @@ export type ProjectSaveResponse =
       action: ProjectActionEditData;
       stages: ProjectContentItemIdentity[];
       sections: ProjectContentItemIdentity[];
+      /** The first page of statuses as saved, like the profile save returns. */
+      statuses: ProfileHistoryPage<StatusHistoryItem>;
     }
   | {
       type: 'error';

@@ -31,6 +31,7 @@ import { applyTagUsages, prepareTagUsages } from '../../../thei/tags';
 import { applyProjectExternalLinks } from '../../../thei/projects/external-links';
 import {
   applyStatusEdits,
+  getStatusHistory,
   prepareEntityStatusEdits,
   StatusEditError,
   statusUsageHooks,
@@ -264,6 +265,11 @@ export default defineEventHandler(
         preparedSections,
         (section) => section.sectionUuid,
         (section) => section.publicId,
+      ),
+      statuses: await getStatusHistory(
+        { type: 'project', id: projectUuid },
+        undefined,
+        true,
       ),
     };
   },

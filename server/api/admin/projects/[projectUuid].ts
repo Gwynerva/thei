@@ -547,6 +547,11 @@ export default defineEventHandler(async (event) => {
           (section) => section.sectionUuid,
           (section) => section.publicId,
         ),
+        statuses: await getStatusHistory(
+          { type: 'project', id: projectUuid },
+          undefined,
+          true,
+        ),
       } satisfies ProjectSaveResponse;
     }
 
