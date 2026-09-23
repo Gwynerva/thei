@@ -21,6 +21,10 @@ Around them:
 
 - This project uses Bun. Use `bun install`, `bun run`, and `bunx` for dependencies, scripts, and package executables; do not use npm, pnpm, or Yarn.
 
+## Commits
+
+- Keep a commit title on its first line whole. Never carry part of it over into the description, even when it runs past the usual recommended length.
+
 ## Development Server Management
 
 - Before starting work, open or probe `http://localhost:3000` and identify the process listening on port `3000`, including IPv4 and IPv6 listeners.
