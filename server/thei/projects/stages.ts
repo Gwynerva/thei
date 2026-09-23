@@ -13,9 +13,18 @@ import {
   deleteProjectContentItemContent,
   prepareProjectContentItems,
   projectContentItemIdsToRemove,
+  projectContentItemUpdatedAt,
   ProjectContentItemStorageError,
 } from './content-items';
-import { deleteStagePeriods, replaceStagePeriods } from './stage-periods';
+import type { projectStages } from '../db/schema/project-content-sections';
+import {
+  deleteStagePeriods,
+  readStagePeriods,
+  replaceStagePeriods,
+  stagePeriodsEqual,
+} from './stage-periods';
+
+type ProjectStageRow = typeof projectStages.$inferSelect;
 
 type PreparedStage = ProjectStageContentItem & {
   stageUuid: string;
@@ -90,14 +99,14 @@ export function applyProjectStages(
   stages: PreparedStage[] | undefined,
 ) {
   if (stages === undefined) return;
-  const existingIds = tx
-    .select({ stageUuid: schema.projectStages.stageUuid })
+  const existing: ProjectStageRow[] = tx
+    .select()
     .from(schema.projectStages)
     .where(eq(schema.projectStages.projectUuid, projectUuid))
-    .all()
-    .map((item: { stageUuid: string }) => item.stageUuid);
+    .all();
+  const existingById = new Map(existing.map((row) => [row.stageUuid, row]));
   const removed = projectContentItemIdsToRemove(
-    existingIds,
+    existing.map((row) => row.stageUuid),
     stages.map((stage) => stage.stageUuid),
   );
   deleteProjectContentItemContent(tx, schema, 'project-stage', removed);
@@ -109,6 +118,18 @@ export function applyProjectStages(
 
   const now = Date.now();
   for (const stage of stages) {
+    const stored = existingById.get(stage.stageUuid);
+    const updatedAt = projectContentItemUpdatedAt(
+      stored,
+      stage,
+      stage.contentSave,
+      now,
+      Boolean(stored) &&
+        !stagePeriodsEqual(
+          readStagePeriods(tx, schema, 'project-stage', stage.stageUuid),
+          stage.periods,
+        ),
+    );
     tx.insert(schema.projectStages)
       .values({
         stageUuid: stage.stageUuid,
@@ -129,7 +150,7 @@ export function applyProjectStages(
           humanReadableSlug: stage.humanReadableSlug,
           publicId: stage.publicId,
           isPrivate: stage.isPrivate,
-          updatedAt: now,
+          updatedAt,
         },
       })
       .run();

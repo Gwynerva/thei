@@ -68,7 +68,7 @@ const details = computed(
         [
           {
             icon: 'calendar',
-            label: phrase.value.public_details_chronology,
+            label: phrase.value.public_details_timeline,
             value: data.value.periods.length,
           },
           {
@@ -101,6 +101,11 @@ const details = computed(
         v-if="data.content?.blocks.length"
         :data="data.content"
         asset-viewer
+      />
+      <PublicEmptyState
+        v-else
+        :title="phrase.public_stage_content_empty"
+        :description="phrase.public_stage_content_empty_description"
       />
     </PublicDetailLayout>
   </main>

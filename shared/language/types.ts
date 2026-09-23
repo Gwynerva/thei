@@ -350,6 +350,7 @@ export type LanguagePhrases = {
   public_details_overview: string;
   public_details_contents: string;
   public_details_chronology: string;
+  public_details_timeline: string;
   project_chronology_page: string;
   project_chronology_first_stage: string;
   project_chronology_last_stage: string;
@@ -364,6 +365,8 @@ export type LanguagePhrases = {
   project_chronology_last_diary: string;
   page_chronology_created: string;
   page_chronology_updated: string;
+  section_chronology_created: string;
+  section_chronology_updated: string;
   install_thei: string;
   visuals: string;
   visuals_description: string;
@@ -744,6 +747,10 @@ export type LanguagePhrases = {
   project_stage_private_hint: string;
   project_stage_period: string;
   project_stage_period_empty: string;
+  public_stage_content_empty: string;
+  public_stage_content_empty_description: string;
+  public_section_content_empty: string;
+  public_section_content_empty_description: string;
   project_stage_content: string;
   project_stage_content_hint: string;
   project_stage_add: string;

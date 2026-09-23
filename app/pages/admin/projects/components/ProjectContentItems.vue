@@ -9,18 +9,20 @@ import {
   moveItemById,
   useDragSort,
 } from '#layers/thei/app/composables/drag-sort';
-import { projectDataInjectionKey } from '../composables';
+import {
+  currentProjectUuidKey,
+  projectDataInjectionKey,
+  saveAfterItemEditKey,
+} from '../composables';
 import { projectContentItemModal } from './project-content-item-modal';
-import { currentProjectUuidKey, saveAfterContentEditKey } from '../composables';
 import { projectContentItemDeleteModal } from './project-content-item-delete-modal';
-import ContentStats from '#layers/thei/app/components/content/ContentStats.vue';
-import DateRangeChip from '#layers/thei/app/components/DateRangeChip.vue';
+import ProjectContentItemRow from './ProjectContentItemRow.vue';
 
 type Item = ProjectSectionContentItem | ProjectStageContentItem;
 
 const props = defineProps<{ kind: 'stage' | 'section' }>();
 const projectData = inject(projectDataInjectionKey)!;
-const saveAfterContentEdit = inject(saveAfterContentEditKey, undefined);
+const saveAfterItemEdit = inject(saveAfterItemEditKey, undefined);
 const currentProjectUuid = inject(currentProjectUuidKey)!;
 const route = useRoute();
 const root = useTemplateRef<HTMLElement>('root');
@@ -34,28 +36,30 @@ const itemViews = computed(() =>
   items.value.map((item) => ({
     item,
     id: itemId(item),
+    periods: 'periods' in item ? item.periods : [],
     analysis: analyzeContentData(item.content?.data),
   })),
 );
-const title = computed(() =>
+const labels = computed(() =>
   props.kind === 'stage'
-    ? phrase.value.project_stages
-    : phrase.value.project_content_sections,
-);
-const description = computed(() =>
-  props.kind === 'stage'
-    ? phrase.value.project_stages_hint
-    : phrase.value.project_content_sections_hint,
-);
-const addLabel = computed(() =>
-  props.kind === 'stage'
-    ? phrase.value.project_stage_add
-    : phrase.value.content_section_add,
-);
-const emptyText = computed(() =>
-  props.kind === 'stage'
-    ? phrase.value.project_stages_empty
-    : phrase.value.project_content_sections_empty,
+    ? {
+        icon: 'calendar' as const,
+        title: phrase.value.project_stages,
+        description: phrase.value.project_stages_hint,
+        add: phrase.value.project_stage_add,
+        empty: phrase.value.project_stages_empty,
+        private: phrase.value.project_stage_private,
+        delete: phrase.value.delete_project_stage,
+      }
+    : {
+        icon: 'file-tray-stack' as const,
+        title: phrase.value.project_content_sections,
+        description: phrase.value.project_content_sections_hint,
+        add: phrase.value.content_section_add,
+        empty: phrase.value.project_content_sections_empty,
+        private: phrase.value.content_section_private,
+        delete: phrase.value.delete_content_section,
+      },
 );
 
 function itemId(item: Item) {
@@ -69,84 +73,125 @@ function itemId(item: Item) {
   return generated;
 }
 
-function replaceStages(next: ProjectStageContentItem[]) {
-  projectData.value.stages = [...next].sort(compareProjectStages);
+/** Stages keep their chronological order; sections keep the owner's. */
+function setItems(next: Item[]) {
+  if (props.kind === 'stage')
+    projectData.value.stages = (next as ProjectStageContentItem[]).sort(
+      compareProjectStages,
+    );
+  else projectData.value.contentSections = next as ProjectSectionContentItem[];
 }
 
-function replaceSections(next: ProjectSectionContentItem[]) {
-  projectData.value.contentSections = next;
+/**
+ * Items are addressed by the object the project form holds, never by their
+ * position: stages re-sort by their periods, sections are dragged, and a modal
+ * or a confirmation stays open over the list while that happens. The project
+ * form mutates its items in place when a save assigns them identities, so the
+ * object stays a valid handle for as long as the item exists.
+ */
+function replaceItem(previous: Item | undefined, next: Item) {
+  const index = previous ? items.value.indexOf(previous) : -1;
+  const list = [...items.value];
+  if (index < 0) list.push(next);
+  else list[index] = next;
+  setItems(list);
+}
+
+/**
+ * Removing is never saved on its own: it takes the item's content, files and
+ * page with it, so it waits for the project's Save button like any other
+ * decision that cannot be taken back.
+ */
+function removeItem(target: Item) {
+  // The list holds reactive proxies, while an item the modal has just handed
+  // over is the plain object behind one.
+  setItems(items.value.filter((item) => toRaw(item) !== toRaw(target)));
+}
+
+/** Saves the project when this item is all that changed since its last save. */
+function saveProject(item: Item) {
+  saveAfterItemEdit?.(
+    props.kind === 'stage' ? 'stages' : 'contentSections',
+    item,
+    item.isStage ? item.stageUuid : item.sectionUuid,
+  );
+}
+
+/**
+ * The modal keeps its own draft and does not learn what a project save gives
+ * back: the identity the server assigned to a new item, and the time stamped on
+ * its content. Both are carried over from the item the form already holds, so
+ * handing the draft over again neither loses them nor reads as a change.
+ */
+function mergeSaved(previous: Item | undefined, next: Item): Item {
+  if (!previous) return next;
+  const merged = { ...next } as Item;
+  if (merged.isStage && previous.isStage)
+    merged.stageUuid ??= previous.stageUuid;
+  if (!merged.isStage && !previous.isStage)
+    merged.sectionUuid ??= previous.sectionUuid;
+  if (
+    previous.content &&
+    merged.content &&
+    JSON.stringify(previous.content.data) ===
+      JSON.stringify(merged.content.data) &&
+    previous.content.contentUuid === merged.content.contentUuid
+  )
+    merged.content = previous.content;
+  return merged;
 }
 
 const dragSort = useDragSort(root, {
   handle: '[data-content-section-handle]',
   onDrop: ({ id, newIndex }) => {
     if (props.kind !== 'section') return;
-    replaceSections(
-      moveItemById(
-        projectData.value.contentSections ?? [],
-        id,
-        newIndex,
-        itemId,
-      ),
-    );
+    setItems(moveItemById(items.value, id, newIndex, itemId));
   },
 });
 
-async function openItem(index?: number) {
-  const projectLinkIdentity = {
-    projectHumanReadableSlug: projectData.value.humanReadableSlug,
-    projectPublicId: projectData.value.publicId,
-  };
-  if (props.kind === 'stage') {
-    const stages = projectData.value.stages ?? [];
-    const result = await openModal(projectContentItemModal, {
-      isStage: true,
-      item: index === undefined ? undefined : stages[index],
-      ...projectLinkIdentity,
-      onContentSaved: (item) => {
-        if (index === undefined || !item.isStage) return;
-        const applied = [...(projectData.value.stages ?? [])];
-        applied[index] = item;
-        replaceStages(applied);
-        saveAfterContentEdit?.();
-      },
-    });
-    if (result.type === 'deleted') {
-      if (index !== undefined)
-        replaceStages(stages.filter((_, i) => i !== index));
-      return;
-    }
-    if (result.type !== 'save' || !result.item.isStage) return;
-    const next = [...stages];
-    if (index === undefined) next.push(result.item);
-    else next[index] = result.item;
-    replaceStages(next);
-    return;
+/**
+ * One modal at a time from this list. `openModal` loads the component before
+ * the modal enters the stack, so a quick second click would otherwise stack a
+ * duplicate on top of the first.
+ */
+let busy = false;
+async function exclusively(run: () => Promise<void>) {
+  if (busy) return;
+  busy = true;
+  try {
+    await run();
+  } finally {
+    busy = false;
   }
+}
 
-  const sections = projectData.value.contentSections ?? [];
-  const result = await openModal(projectContentItemModal, {
-    isStage: false,
-    item: index === undefined ? undefined : sections[index],
-    ...projectLinkIdentity,
-    onContentSaved: (item) => {
-      if (index === undefined || item.isStage) return;
-      const applied = [...(projectData.value.contentSections ?? [])];
-      applied[index] = item;
-      replaceSections(applied);
-      saveAfterContentEdit?.();
-    },
+function openItem(target?: Item) {
+  return exclusively(async () => {
+    let current = target;
+    const modalData = {
+      projectHumanReadableSlug: projectData.value.humanReadableSlug,
+      projectPublicId: projectData.value.publicId,
+      onSave: (item: Item) => {
+        const merged = mergeSaved(current, item);
+        replaceItem(current, merged);
+        current = merged;
+        saveProject(merged);
+      },
+    };
+    const result =
+      props.kind === 'stage'
+        ? await openModal(projectContentItemModal, {
+            ...modalData,
+            isStage: true,
+            item: target as ProjectStageContentItem | undefined,
+          })
+        : await openModal(projectContentItemModal, {
+            ...modalData,
+            isStage: false,
+            item: target as ProjectSectionContentItem | undefined,
+          });
+    if (result.type === 'deleted' && current) removeItem(current);
   });
-  if (result.type === 'deleted') {
-    if (index !== undefined)
-      replaceSections(sections.filter((_, i) => i !== index));
-    return;
-  }
-  if (result.type !== 'save' || result.item.isStage) return;
-  const next = [...sections];
-  if (index === undefined) next.push(result.item);
-  else next[index] = result.item;
-  replaceSections(next);
 }
 
 /**
@@ -162,42 +207,27 @@ onMounted(async () => {
   const wanted = route.query[props.kind];
   if (typeof wanted !== 'string') return;
   if (route.params.projectUuid !== currentProjectUuid.value) return;
-  const index = items.value.findIndex((item) => item.publicId === wanted);
+  const target = items.value.find((item) => item.publicId === wanted);
   const query = { ...route.query };
   delete query[props.kind];
   await navigateTo({ query }, { replace: true });
-  if (index >= 0) await openItem(index);
+  if (target) await openItem(target);
 });
 
-async function deleteItem(index: number) {
-  const item = items.value[index];
-  if (!item) return;
-  const result = await openModal(projectContentItemDeleteModal, {
-    kind: props.kind,
-    title: item.title,
+function deleteItem(target: Item) {
+  return exclusively(async () => {
+    const result = await openModal(projectContentItemDeleteModal, {
+      kind: props.kind,
+      title: target.title,
+    });
+    if (result.type === 'deleted') removeItem(target);
   });
-  if (result.type !== 'deleted') return;
-  if (props.kind === 'stage') {
-    replaceStages(
-      (projectData.value.stages ?? []).filter(
-        (_, itemIndex) => itemIndex !== index,
-      ),
-    );
-    return;
-  }
-  replaceSections(
-    (projectData.value.contentSections ?? []).filter(
-      (_, itemIndex) => itemIndex !== index,
-    ),
-  );
 }
 
-function moveSectionWithKeyboard(index: number, direction: -1 | 1) {
-  const sections = projectData.value.contentSections ?? [];
-  const item = sections[index];
-  const newIndex = index + direction;
-  if (!item || newIndex < 0 || newIndex >= sections.length) return;
-  replaceSections(moveItemById(sections, itemId(item), newIndex, itemId));
+function moveSectionWithKeyboard(target: Item, direction: -1 | 1) {
+  const newIndex = items.value.indexOf(target) + direction;
+  if (newIndex < 0 || newIndex >= items.value.length) return;
+  setItems(moveItemById(items.value, itemId(target), newIndex, itemId));
 }
 </script>
 
@@ -205,17 +235,17 @@ function moveSectionWithKeyboard(index: number, direction: -1 | 1) {
   <div>
     <div class="mb-md flex items-center gap-md">
       <SectionHeader
-        :icon="kind === 'stage' ? 'calendar' : 'file-tray-stack'"
-        :title="title"
-        :description="description"
+        :icon="labels.icon"
+        :title="labels.title"
+        :description="labels.description"
         class="flex-1"
       />
       <button
         type="button"
         class="size-12 shrink-0 cursor-pointer rounded-normal bg-bg-3
           text-text-2 transition-colors hocus:bg-bg-accent hocus:text-accent"
-        :aria-label="addLabel"
-        :data-title-popup="addLabel"
+        :aria-label="labels.add"
+        :data-title-popup="labels.add"
         @click="openItem()"
       >
         <Icon name="plus" />
@@ -223,53 +253,19 @@ function moveSectionWithKeyboard(index: number, direction: -1 | 1) {
     </div>
 
     <div v-if="itemViews.length" ref="root" class="flex flex-col gap-xs">
-      <Box
-        v-for="({ item, id, analysis }, index) in itemViews"
+      <ProjectContentItemRow
+        v-for="{ item, id, periods, analysis } in itemViews"
         :key="id"
         :data-drag-id="id"
-        class="group flex items-stretch overflow-hidden p-0 transition-colors
-          hocus:border-border-3"
+        :title="item.title"
+        :summary="item.summary"
+        :periods
+        :analysis
+        :is-private="item.isPrivate"
+        :private-label="labels.private"
+        @open="dragSort.guardClick(() => openItem(item))"
       >
-        <button
-          type="button"
-          class="flex min-w-0 flex-1 cursor-pointer flex-col gap-2
-            mask-r-from-50% px-sm py-xs text-left transition sm:px-md
-            hocus:bg-bg-3"
-          @click="dragSort.guardClick(() => openItem(index))"
-        >
-          <span class="min-w-0 leading-snug font-semibold">
-            <span class="wrap-break-word">{{ item.title }}</span>
-          </span>
-          <span class="min-h-5 truncate text-sm text-text-2">
-            {{ item.summary }}
-          </span>
-          <span class="flex flex-wrap items-center gap-xs text-sm text-text-3">
-            <template v-if="kind === 'stage' && 'periods' in item">
-              <DateRangeChip
-                v-for="period in item.periods"
-                :key="`${period.startDate}:${period.endDate}`"
-                :period="period"
-              />
-            </template>
-            <ContentStats v-bind="analysis.summary" size="sm" />
-            <span
-              v-if="item.isPrivate"
-              class="inline-flex cursor-help items-center gap-1
-                whitespace-nowrap transition-colors hocus:text-text-2"
-              :data-title-popup="
-                kind === 'stage'
-                  ? phrase.project_stage_private
-                  : phrase.content_section_private
-              "
-            >
-              <Icon name="lock-close" />
-            </span>
-          </span>
-        </button>
-        <div
-          class="flex shrink-0 items-center gap-xs py-xs pr-xs text-xs
-            sm:text-sm"
-        >
+        <template #actions>
           <Button
             v-if="kind === 'section'"
             type="button"
@@ -278,8 +274,8 @@ function moveSectionWithKeyboard(index: number, direction: -1 | 1) {
             drag-handle
             :aria-label="`${phrase.content_section_sort}: ${item.title}`"
             data-content-section-handle
-            @keydown.up.prevent.stop="moveSectionWithKeyboard(index, -1)"
-            @keydown.down.prevent.stop="moveSectionWithKeyboard(index, 1)"
+            @keydown.up.prevent.stop="moveSectionWithKeyboard(item, -1)"
+            @keydown.down.prevent.stop="moveSectionWithKeyboard(item, 1)"
           >
             <Icon name="grip" />
           </Button>
@@ -287,23 +283,19 @@ function moveSectionWithKeyboard(index: number, direction: -1 | 1) {
             type="button"
             size="icon-sm"
             variant="delete"
-            :aria-label="`${kind === 'stage' ? phrase.delete_project_stage : phrase.delete_content_section}: ${item.title}`"
-            :data-title-popup="
-              kind === 'stage'
-                ? phrase.delete_project_stage
-                : phrase.delete_content_section
-            "
+            :aria-label="`${labels.delete}: ${item.title}`"
+            :data-title-popup="labels.delete"
             data-drag-ignore
-            @click="deleteItem(index)"
+            @click="deleteItem(item)"
           >
             <Icon name="delete" />
           </Button>
-        </div>
-      </Box>
+        </template>
+      </ProjectContentItemRow>
     </div>
     <Box v-else>
       <div class="flex min-h-16 items-center p-sm sm:p-md">
-        <p class="text-sm text-text-3 italic">{{ emptyText }}</p>
+        <p class="text-sm text-text-3 italic">{{ labels.empty }}</p>
       </div>
     </Box>
   </div>

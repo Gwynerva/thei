@@ -1,6 +1,9 @@
 import type { ContentOwnerType } from '#layers/thei/shared/content';
 import type { ProjectContentItemIdentity } from '#layers/thei/shared/api/project';
-import { deleteContentForOwner } from '../content/repository';
+import {
+  deleteContentForOwner,
+  type PreparedContentSave,
+} from '../content/repository';
 
 export class ProjectContentItemStorageError extends Error {}
 
@@ -36,6 +39,46 @@ export function projectContentItemIdsToRemove(
 ) {
   const retained = new Set(nextIds);
   return existingIds.filter((id) => !retained.has(id));
+}
+
+type ContentItemFields = {
+  title: string;
+  summary: string;
+  humanReadableSlug: string;
+  publicId: string;
+  isPrivate: boolean;
+};
+
+/**
+ * When a stage or a section was last edited.
+ *
+ * A project save sends every stage and section it holds, touched or not, so
+ * the time of the save is only the time of an edit for the items that differ
+ * from what is stored: their own fields, their content, or anything else the
+ * caller compares (`otherChanged`, e.g. a stage's periods). The order of
+ * sections is the project's arrangement, not an edit of a section.
+ */
+export function projectContentItemUpdatedAt(
+  existing: (ContentItemFields & { updatedAt: number }) | undefined,
+  next: ContentItemFields,
+  contentSave: PreparedContentSave | undefined,
+  now: number,
+  otherChanged = false,
+): number {
+  if (!existing) return now;
+  const contentChanged =
+    contentSave?.type === 'save'
+      ? contentSave.changed
+      : Boolean(contentSave?.existingContentUuid);
+  const fieldsChanged =
+    existing.title !== next.title ||
+    existing.summary !== next.summary ||
+    existing.humanReadableSlug !== next.humanReadableSlug ||
+    existing.publicId !== next.publicId ||
+    Boolean(existing.isPrivate) !== next.isPrivate;
+  return contentChanged || fieldsChanged || otherChanged
+    ? now
+    : existing.updatedAt;
 }
 
 export function deleteProjectContentItemContent(

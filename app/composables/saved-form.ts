@@ -49,6 +49,11 @@ export function changedOnlyIn(
   );
 }
 
+/**
+ * Keys come out sorted: the comparison is by value, and an object rebuilt
+ * elsewhere — a stage coming back from its modal — lists the same fields in
+ * its own order, which `JSON.stringify` would otherwise read as a change.
+ */
 function withoutFields(value: unknown, fields: readonly string[]): unknown {
   if (Array.isArray(value))
     return value.map((item) => withoutFields(item, fields));
@@ -56,6 +61,7 @@ function withoutFields(value: unknown, fields: readonly string[]): unknown {
   return Object.fromEntries(
     Object.entries(value)
       .filter(([key]) => !fields.includes(key))
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
       .map(([key, item]) => [key, withoutFields(item, fields)]),
   );
 }

@@ -81,6 +81,8 @@ export async function prepareContentForSave(
   | {
       type: 'save';
       contentUuid: string;
+      /** Whether the blocks differ from the ones already stored. */
+      changed: boolean;
       data: ContentOutputData;
       blockCount: number;
       wordCount: number;
@@ -111,6 +113,7 @@ export async function prepareContentForSave(
   return {
     type: 'save',
     contentUuid,
+    changed: JSON.stringify(data) !== JSON.stringify(existing?.data),
     data,
     ...summary,
     assetUsages: buildPreparedAssetUsages(contentUuid, data),
@@ -181,7 +184,9 @@ export function applyPreparedContentSave(
         blockCount: prepared.blockCount,
         assetCount: prepared.assetCount,
         assetTotalSize: prepared.assetTotalSize,
-        updatedAt: now,
+        // Saving a form resends every content field it holds; only the ones
+        // whose blocks actually changed were edited now.
+        ...(prepared.changed ? { updatedAt: now } : {}),
       },
     })
     .run();

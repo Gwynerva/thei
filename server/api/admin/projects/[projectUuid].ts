@@ -141,10 +141,17 @@ export default defineEventHandler(async (event) => {
 
       const rawOther = await THEI_SERVER.assets.usages.findOther(projectUuid);
 
-      const [contentSections, stages] = await Promise.all([
+      const [storedSections, stages] = await Promise.all([
         getProjectContentSections(projectUuid),
         getProjectStages(projectUuid),
       ]);
+      // The times are the server's own record of edits, not fields of the
+      // form: a section edited in its modal comes back without them, and the
+      // form would read that as a change of its own.
+      const contentSections = storedSections.map(
+        ({ createdAt: _createdAt, updatedAt: _updatedAt, ...section }) =>
+          section,
+      );
 
       const otherAssets: OtherAssetGetItem[] = await Promise.all(
         rawOther.map(async ({ asset, meta }) => {

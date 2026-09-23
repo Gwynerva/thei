@@ -475,6 +475,7 @@ export default defineI18nBase({
     public_details_overview: 'Summary',
     public_details_contents: 'Contents',
     public_details_chronology: 'Key dates',
+    public_details_timeline: 'Timeline',
     project_chronology_page: 'Project page',
     project_chronology_first_stage: 'First project stage',
     project_chronology_last_stage: 'Last project stage',
@@ -489,6 +490,8 @@ export default defineI18nBase({
     project_chronology_last_diary: 'Latest diary entry',
     page_chronology_created: 'Page created',
     page_chronology_updated: 'Page updated',
+    section_chronology_created: 'Section created',
+    section_chronology_updated: 'Section updated',
     install_thei: 'Install Thei',
     visuals: 'Visuals',
     visuals_description:
@@ -989,6 +992,12 @@ export default defineI18nBase({
     project_stage_private_hint: 'Visible only to you in the admin panel.',
     project_stage_period: 'Time period',
     project_stage_period_empty: 'Add at least one time period!',
+    public_stage_content_empty: 'This stage has no content',
+    public_stage_content_empty_description:
+      'The details were never written down…',
+    public_section_content_empty: 'Nothing to read here yet',
+    public_section_content_empty_description:
+      'This section has no content open to readers.',
     project_stage_content: 'Stage content',
     project_stage_content_hint:
       'Text, images, galleries, and files within the project stage.',

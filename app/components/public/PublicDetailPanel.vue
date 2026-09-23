@@ -94,7 +94,7 @@ const relatedTotal = computed(
     </PublicCollapsibleSection>
     <PublicCollapsibleSection
       v-if="data.periods?.length"
-      :title="phrase.public_details_chronology"
+      :title="phrase.public_details_timeline"
     >
       <PublicPeriodTimeline :periods="data.periods" />
     </PublicCollapsibleSection>

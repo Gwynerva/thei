@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { schema } from '../../../server/thei/db/schema';
 import {
   applyProjectContentSections,
@@ -24,6 +24,7 @@ import {
 let rawDb: Database.Database | undefined;
 
 afterEach(() => {
+  vi.restoreAllMocks();
   rawDb?.close();
   rawDb = undefined;
   delete (globalThis as any).THEI_SERVER;
@@ -330,6 +331,7 @@ function preparedContent(contentUuid: string, text: string) {
   return {
     type: 'save' as const,
     contentUuid,
+    changed: true,
     data: { blocks: [{ type: 'paragraph' as const, data: { text } }] },
     blockCount: 1,
     wordCount: text.trim() ? text.trim().split(/\s+/).length : 0,
@@ -392,6 +394,78 @@ describe('project content item identity round trip', () => {
     await expect(
       prepareProjectContentSections('project', [newSection()]),
     ).rejects.toThrow('Section public ID is already taken');
+  });
+});
+
+describe('project content item edit times', () => {
+  it('moves the edit time of a stage only when it changed', async () => {
+    const db = createDb();
+    installServerContext(db);
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1000);
+    const created = await prepareProjectStages('project', [newStage()]);
+    applyProjectStages(db, schema, 'project', created);
+    const stageUuid = created![0]!.stageUuid;
+    const updatedAt = () =>
+      db.select().from(schema.projectStages).get()!.updatedAt;
+    const save = async (stage: Partial<ReturnType<typeof newStage>>) =>
+      applyProjectStages(
+        db,
+        schema,
+        'project',
+        await prepareProjectStages('project', [
+          { ...newStage(), ...stage, stageUuid },
+        ]),
+      );
+
+    // The project saved again, this stage untouched.
+    now.mockReturnValue(2000);
+    await save({});
+    expect(updatedAt()).toBe(1000);
+
+    now.mockReturnValue(3000);
+    await save({
+      periods: [{ startDate: '2026-02-01', endDate: '2026-02-28' }],
+    });
+    expect(updatedAt()).toBe(3000);
+
+    now.mockReturnValue(4000);
+    await save({
+      periods: [{ startDate: '2026-02-01', endDate: '2026-02-28' }],
+      title: 'Renamed',
+    });
+    expect(updatedAt()).toBe(4000);
+  });
+
+  it('does not count a new position as an edit of a section', async () => {
+    const db = createDb();
+    installServerContext(db);
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1000);
+    const second = { ...newSection(), publicId: 'SectionTwo', title: 'Two' };
+    const created = await prepareProjectContentSections('project', [
+      newSection(),
+      second,
+    ]);
+    applyProjectContentSections(db, schema, 'project', created);
+    const [first, other] = created!;
+    const updatedAt = (uuid: string) =>
+      db
+        .select()
+        .from(schema.projectContentSections)
+        .all()
+        .find((row) => row.sectionUuid === uuid)!.updatedAt;
+
+    now.mockReturnValue(2000);
+    applyProjectContentSections(
+      db,
+      schema,
+      'project',
+      await prepareProjectContentSections('project', [
+        { ...second, sectionUuid: other!.sectionUuid },
+        { ...newSection(), title: 'Renamed', sectionUuid: first!.sectionUuid },
+      ]),
+    );
+    expect(updatedAt(other!.sectionUuid)).toBe(1000);
+    expect(updatedAt(first!.sectionUuid)).toBe(2000);
   });
 });
 

@@ -215,6 +215,8 @@ export type PublicProjectSectionResponse = PublicProjectSection & {
   humanReadableSlug: string;
   publicId: string;
   content: PublicContentOutputData;
+  /** `updatedAt` only when the section was edited on a later day. */
+  chronology: { createdAt: string; updatedAt?: string };
   project: PublicProjectChildParent;
   references: PublicReferences;
 };

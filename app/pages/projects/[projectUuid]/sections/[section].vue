@@ -48,7 +48,10 @@ usePublicSeo({
       '@id': '#section',
       name: data.value.title,
       description: data.value.summary,
-      dateCreated: data.value.date,
+      dateCreated: data.value.chronology.createdAt,
+      ...(data.value.chronology.updatedAt
+        ? { dateModified: data.value.chronology.updatedAt }
+        : {}),
       ...(data.value.media ? { image: data.value.media.src } : {}),
       isPartOf: {
         '@type': 'CreativeWork',
@@ -61,7 +64,22 @@ usePublicSeo({
 const details = computed(
   () =>
     ({
-      createdAt: data.value.date,
+      chronology: [
+        {
+          icon: 'plus',
+          label: phrase.value.section_chronology_created,
+          date: data.value.chronology.createdAt,
+        },
+        ...(data.value.chronology.updatedAt
+          ? [
+              {
+                icon: 'history' as const,
+                label: phrase.value.section_chronology_updated,
+                date: data.value.chronology.updatedAt,
+              },
+            ]
+          : []),
+      ],
       references: data.value.references,
       metrics: (
         [
@@ -91,7 +109,16 @@ const details = computed(
       :parent="{ ...data.project, label: phrase.content_section }"
     />
     <PublicDetailLayout :details="details" :content="data.content">
-      <ContentRenderer :data="data.content" asset-viewer />
+      <ContentRenderer
+        v-if="data.content.blocks.length"
+        :data="data.content"
+        asset-viewer
+      />
+      <PublicEmptyState
+        v-else
+        :title="phrase.public_section_content_empty"
+        :description="phrase.public_section_content_empty_description"
+      />
     </PublicDetailLayout>
   </main>
 </template>

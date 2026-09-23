@@ -23,19 +23,16 @@ type ProjectLinkIdentity = {
 };
 type ModalData = ProjectLinkIdentity & {
   /**
-   * Called when the content editor saves and this item already exists. The
-   * project form takes the item from here without the modal closing.
+   * Hands the item over to the project form, which saves itself when nothing
+   * else is waiting. The modal stays open: saving is a checkpoint, and closing
+   * is a decision of its own.
    */
-  onContentSaved?: (
-    item: ProjectStageContentItem | ProjectSectionContentItem,
-  ) => void;
+  onSave: (item: ProjectStageContentItem | ProjectSectionContentItem) => void;
 } & (
     | { isStage: true; item?: ProjectStageContentItem }
     | { isStage: false; item?: ProjectSectionContentItem }
   );
-type Result =
-  | { type: 'save'; item: ProjectStageContentItem | ProjectSectionContentItem }
-  | { type: 'deleted' };
+type Result = { type: 'deleted' };
 type ItemDraft = ProjectContentItemBase & {
   stageUuid?: string;
   sectionUuid?: string;
@@ -45,11 +42,26 @@ type ItemDraft = ProjectContentItemBase & {
 const emit = defineEmits<{ modalResult: [result: Result] }>();
 const props = defineProps<{ modalData: ModalData }>();
 const isStage = computed(() => props.modalData.isStage);
+/**
+ * The content object is shared with the project form once handed over, and a
+ * project save stamps it with the time it was stored. The stamp is not an edit
+ * made here, so it must not make the draft dirty.
+ */
 const {
   value: item,
   isDirty,
   markSaved,
-} = useSerializableState(createInitialItem(props.modalData));
+} = useSerializableState(createInitialItem(props.modalData), {
+  serialize: (draft) =>
+    JSON.stringify({
+      ...draft,
+      content: draft.content && { ...draft.content, updatedAt: undefined },
+    }),
+});
+/** Whether the project form holds this item: opened from it, or saved once. */
+const exists = ref(Boolean(props.modalData.item));
+/** The title the item is known by in the project form. */
+const savedTitle = ref(props.modalData.item?.title ?? '');
 const periodPopupOpen = ref(false);
 const periodPopupAnchor = useTemplateRef<HTMLElement>('periodPopupAnchor');
 const pendingPeriod = ref<DatedPeriod>();
@@ -97,16 +109,24 @@ watch(periodPopupOpen, (isOpen) => {
 });
 
 /**
- * Saving inside the content editor hands the stage or section over without
- * closing anything: the editor stays open, the project form takes the item and
- * decides for itself whether the content was the only thing that changed.
+ * Saving inside the content editor hands the stage or section over too, the
+ * same as the Save button: the editor stays open, and the project form decides
+ * for itself whether this item is all that changed.
  *
- * A brand-new stage is left out. It is a decision of its own, and it is made
- * with the Save button.
+ * A brand-new stage is left out until it has been saved once. Adding it is a
+ * decision of its own, and it is made with the Save button. And an item the
+ * Save button would refuse — no title, no period — is not handed over either:
+ * the project could save it straight away.
  */
 function saveAfterContentEdit() {
-  if (!props.modalData.item) return;
-  props.modalData.onContentSaved?.(buildItem());
+  if (exists.value) save();
+}
+
+function handOver() {
+  const built = buildItem();
+  props.modalData.onSave(built);
+  exists.value = true;
+  savedTitle.value = built.title;
   markSaved();
 }
 
@@ -135,36 +155,7 @@ function buildItem(): ProjectStageContentItem | ProjectSectionContentItem {
 }
 
 function save() {
-  if (!canSave.value) return;
-  const base: ProjectContentItemBase = {
-    title: item.value.title.trim(),
-    summary: item.value.summary.trim(),
-    humanReadableSlug: item.value.humanReadableSlug,
-    publicId: item.value.publicId,
-    isPrivate: item.value.isPrivate,
-    content: item.value.content,
-  };
-  if (props.modalData.isStage) {
-    emit('modalResult', {
-      type: 'save',
-      item: {
-        ...base,
-        isStage: true,
-        stageUuid: item.value.stageUuid,
-        periods: normalizeStagePeriods(item.value.periods),
-      },
-    });
-  } else {
-    emit('modalResult', {
-      type: 'save',
-      item: {
-        ...base,
-        isStage: false,
-        sectionUuid: item.value.sectionUuid,
-        content: item.value.content!,
-      },
-    });
-  }
+  if (canSave.value) handOver();
 }
 
 useSaveShortcut(save, {
@@ -227,10 +218,10 @@ function removePeriod(index: number) {
 }
 
 async function deleteItem() {
-  if (!props.modalData.item) return;
+  if (!exists.value) return;
   const result = await openModal(projectContentItemDeleteModal, {
     kind: props.modalData.isStage ? 'stage' : 'section',
-    title: item.value.title,
+    title: savedTitle.value,
   });
   if (result.type === 'deleted') emit('modalResult', result);
 }
@@ -247,7 +238,7 @@ async function deleteItem() {
         />
         <div class="flex items-center gap-xs">
           <ModalHeaderButton
-            v-if="modalData.item"
+            v-if="exists"
             icon="delete"
             variant="delete"
             :label="
@@ -268,7 +259,7 @@ async function deleteItem() {
             :disabled="!canSave"
             @click="save"
           >
-            {{ isDirty || !modalData.item ? phrase.save : phrase.saved }}
+            {{ isDirty || !exists ? phrase.save : phrase.saved }}
           </ModalHeaderButton>
         </div>
       </div>

@@ -530,6 +530,7 @@ export default defineI18nModule({
     public_details_overview: 'Сводка',
     public_details_contents: 'Содержание',
     public_details_chronology: 'Основные даты',
+    public_details_timeline: 'Хронология',
     project_chronology_page: 'Страница проекта',
     project_chronology_first_stage: 'Первый этап проекта',
     project_chronology_last_stage: 'Последний этап проекта',
@@ -544,6 +545,8 @@ export default defineI18nModule({
     project_chronology_last_diary: 'Последняя запись дневника',
     page_chronology_created: 'Страница создана',
     page_chronology_updated: 'Страница обновлена',
+    section_chronology_created: 'Раздел создан',
+    section_chronology_updated: 'Раздел обновлён',
     install_thei: 'Установка Thei',
     visuals: 'Внешний вид',
     visuals_description:
@@ -1049,6 +1052,12 @@ export default defineI18nModule({
     project_stage_private_hint: 'Виден только вам',
     project_stage_period: 'Временные промежутки',
     project_stage_period_empty: 'Добавьте хотя бы один промежуток!',
+    public_stage_content_empty: 'Этап не имеет содержимого',
+    public_stage_content_empty_description:
+      'Подробности так и не были записаны…',
+    public_section_content_empty: 'Здесь пока нечего читать',
+    public_section_content_empty_description:
+      'В этом разделе нет открытого для чтения контента.',
     project_stage_content: 'Контент этапа',
     project_stage_content_hint:
       'Текст, изображения, галереи и файлы внутри этапа проекта.',

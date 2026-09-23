@@ -269,7 +269,7 @@ useRegisterAdminBarContextButton(
     </Box>
 
     <ProjectShareLinks
-      v-if="diaryUuid && diaryData.access !== 'public'"
+      v-if="diaryUuid"
       entity-type="diary-entry"
       :entity-uuid="diaryUuid"
     />

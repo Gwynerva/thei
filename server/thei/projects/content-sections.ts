@@ -11,8 +11,12 @@ import {
   deleteProjectContentItemContent,
   prepareProjectContentItems,
   projectContentItemIdsToRemove,
+  projectContentItemUpdatedAt,
   ProjectContentItemStorageError,
 } from './content-items';
+import type { projectContentSections } from '../db/schema/project-content-sections';
+
+type ProjectContentSectionRow = typeof projectContentSections.$inferSelect;
 
 type PreparedSection = ProjectSectionContentItem & {
   sectionUuid: string;
@@ -84,13 +88,14 @@ export function applyProjectContentSections(
   sections: PreparedSection[] | undefined,
 ) {
   if (sections === undefined) return;
-  const existing = tx
-    .select({ sectionUuid: schema.projectContentSections.sectionUuid })
+  const existing: ProjectContentSectionRow[] = tx
+    .select()
     .from(schema.projectContentSections)
     .where(eq(schema.projectContentSections.projectUuid, projectUuid))
     .all();
+  const existingById = new Map(existing.map((row) => [row.sectionUuid, row]));
   const removed = projectContentItemIdsToRemove(
-    existing.map((item: { sectionUuid: string }) => item.sectionUuid),
+    existing.map((item) => item.sectionUuid),
     sections.map((section) => section.sectionUuid),
   );
   deleteProjectContentItemContent(tx, schema, 'project-section', removed);
@@ -103,6 +108,12 @@ export function applyProjectContentSections(
   const now = Date.now();
   for (let index = 0; index < sections.length; index++) {
     const section = sections[index]!;
+    const updatedAt = projectContentItemUpdatedAt(
+      existingById.get(section.sectionUuid),
+      section,
+      section.contentSave,
+      now,
+    );
     tx.insert(schema.projectContentSections)
       .values({
         sectionUuid: section.sectionUuid,
@@ -125,7 +136,7 @@ export function applyProjectContentSections(
           publicId: section.publicId,
           isPrivate: section.isPrivate,
           sortOrder: index,
-          updatedAt: now,
+          updatedAt,
         },
       })
       .run();
@@ -177,6 +188,7 @@ export async function getProjectContentSections(projectUuid: string) {
       publicId: section.publicId,
       isPrivate: section.isPrivate,
       createdAt: section.createdAt,
+      updatedAt: section.updatedAt,
       content:
         (await THEI_SERVER.content.buildFieldValue(
           'project-section',

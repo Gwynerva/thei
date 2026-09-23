@@ -8,8 +8,8 @@ const saved = JSON.stringify({
   title: 'Project',
   descriptionContent: { data: { blocks: [] } },
   stages: [
-    { title: 'One', content: { data: { blocks: ['a'] } } },
-    { title: 'Two', content: { data: { blocks: ['b'] } } },
+    { title: 'One', isPrivate: false, content: { data: { blocks: ['a'] } } },
+    { title: 'Two', isPrivate: false, content: { data: { blocks: ['b'] } } },
   ],
 });
 
@@ -39,6 +39,17 @@ describe('changedOnlyIn', () => {
     const current = JSON.parse(saved);
     current.stages.push({ title: 'Three', content: null });
     expect(changedOnlyIn(current, saved, FIELDS)).toBe(false);
+  });
+
+  it('ignores the order of keys in an item rebuilt elsewhere', () => {
+    // A stage handed back by its modal lists its fields in another order.
+    const current = JSON.parse(saved);
+    current.stages[1] = {
+      content: { data: { blocks: ['edited'] } },
+      isPrivate: false,
+      title: 'Two',
+    };
+    expect(changedOnlyIn(current, saved, FIELDS)).toBe(true);
   });
 
   it('is true for a form that has not changed at all', () => {

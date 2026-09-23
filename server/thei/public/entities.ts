@@ -595,6 +595,7 @@ export async function buildPublicProjectSection(
     ...summary,
     humanReadableSlug: section.humanReadableSlug,
     publicId: section.publicId,
+    chronology: buildPublicEntityChronology(section),
     content: content ?? { blocks: [] },
     project: parent,
     references: await buildPublicReferences(

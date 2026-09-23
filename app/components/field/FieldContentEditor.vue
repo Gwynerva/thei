@@ -5,6 +5,7 @@ import {
 } from '#layers/thei/shared/content';
 import { contentEditorModal } from '#layers/thei/app/modals/content-editor/modal';
 import ContentStats from '#layers/thei/app/components/content/ContentStats.vue';
+import ContentMediaEdge from '#layers/thei/app/components/content/ContentMediaEdge.vue';
 import {
   editorSnapshotStorageKey,
   migrateEditorSnapshots,
@@ -91,17 +92,7 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
     v-on="mediaEvents"
     @click="openEditor"
   >
-    <MediaEdge
-      v-if="preview.media"
-      :media="preview.media"
-      fade="preview"
-      playback="interaction"
-      :engaged
-      class="w-32 [--media-edge-end:70%] [--media-edge-soft-alpha:10%]
-        [--media-edge-soft:45%] [--media-edge-strong-alpha:70%]
-        [--media-edge-strong:10%] sm:[--media-edge-end:100%]
-        sm:[--media-edge-soft:80%] sm:[--media-edge-strong:35%]"
-    />
+    <ContentMediaEdge v-if="preview.media" :media="preview.media" :engaged />
 
     <span
       class="relative flex min-w-0 flex-1 items-center gap-xs"

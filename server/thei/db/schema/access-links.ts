@@ -20,8 +20,8 @@ export const signInLinks = sqliteTable(
 );
 
 /**
- * Temporary links that open one private project, event or page, and nothing
- * else.
+ * Temporary links that open one private project, event, page or diary entry,
+ * and nothing else.
  *
  * The token grants the private view of exactly the entity named here, for as
  * long as the row lives. Revoking is deleting the row, so a link that leaked
@@ -33,8 +33,8 @@ export const shareLinks = sqliteTable(
     shareUuid: text().primaryKey(),
     tokenHash: text().notNull().unique(),
     /**
-     * `project`, `event` or `page`; a stage or a section is shared with its
-     * project.
+     * `project`, `event`, `page` or `diary-entry`; a stage or a section is
+     * shared with its project.
      */
     entityType: text()
       .notNull()

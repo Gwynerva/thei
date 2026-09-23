@@ -19,6 +19,7 @@ import {
   otherItemsKey,
   showcaseItemsKey,
   saveAfterContentEditKey,
+  saveAfterItemEditKey,
   provideProjectActionMedia,
 } from '../composables';
 import ProjectMain from './ProjectMain.vue';
@@ -293,6 +294,35 @@ function saveAfterContentEdit() {
   void handleSave();
 }
 provide(saveAfterContentEditKey, saveAfterContentEdit);
+
+/**
+ * A stage or a section is edited in a modal of its own, so saving it there is
+ * the same decision as saving the project — as long as nothing else waits.
+ * The item is left out of both sides of the comparison; everything else has
+ * to match the last save, content fields aside.
+ */
+function saveAfterItemEdit(
+  list: 'stages' | 'contentSections',
+  item: object,
+  itemUuid: string | undefined,
+) {
+  if (saving.value || !canSave.value || !isEdit.value) return;
+  const idKey = list === 'stages' ? 'stageUuid' : 'sectionUuid';
+  const edited = toRaw(item);
+  const current = {
+    ...projectData.value,
+    [list]: (projectData.value[list] ?? []).filter(
+      (entry) => toRaw(entry) !== edited,
+    ),
+  };
+  const saved = JSON.parse(savedSnapshot.value) as Record<string, unknown>;
+  saved[list] = ((saved[list] ?? []) as Record<string, unknown>[]).filter(
+    (entry) => !itemUuid || entry[idKey] !== itemUuid,
+  );
+  if (!changedOnlyIn(current, JSON.stringify(saved), CONTENT_FIELDS)) return;
+  void handleSave();
+}
+provide(saveAfterItemEditKey, saveAfterItemEdit);
 
 const relationsModel = computed({
   get: () => projectData.value.relations ?? [],

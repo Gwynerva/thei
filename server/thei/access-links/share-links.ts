@@ -19,8 +19,8 @@ import {
 } from './token';
 
 /**
- * Temporary links that let someone else look at one private project, event or
- * page.
+ * Temporary links that let someone else look at one private project, event,
+ * page or diary entry.
  *
  * The point is that the link stops working by itself. Sharing something
  * private with a person who then forgets about the link is normally how it
