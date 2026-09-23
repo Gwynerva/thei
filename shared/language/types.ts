@@ -159,8 +159,10 @@ export type LanguagePhrases = {
   profile_favicon: string;
   profile_favicon_hint: string;
   profile_status: string;
+  profile_statuses: string;
   profile_status_hint: string;
   project_status: string;
+  project_statuses: string;
   project_tabs: string;
   project_tab_overview: string;
   project_tab_timeline: string;

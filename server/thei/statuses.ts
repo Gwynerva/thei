@@ -377,10 +377,13 @@ export function applyStatusEdits(
       .from(schema.statuses)
       .where(and(scope, eq(schema.statuses.id, status.id)))
       .get();
-    if (!existing || existing.kind !== 'regular')
+    if (!existing) hooks.invalid('Invalid status');
+    // Filling in an empty status turns it into a regular one in place, which
+    // only ever removes an empty status and so cannot break the order rule.
+    if (existing.kind === 'empty' && !status.text && !status.assetUuid)
       hooks.invalid('Invalid status');
     tx.update(schema.statuses)
-      .set({ text: status.text, assetUuid: status.assetUuid })
+      .set({ kind: 'regular', text: status.text, assetUuid: status.assetUuid })
       .where(and(scope, eq(schema.statuses.id, status.id)))
       .run();
     hooks.detach(container, status.id);

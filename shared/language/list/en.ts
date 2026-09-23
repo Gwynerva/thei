@@ -245,17 +245,17 @@ export default defineI18nBase({
     profile_favicon: 'Site icon',
     profile_favicon_hint: 'Shown in browser tabs and search results.',
     profile_status: 'Status',
-    profile_status_hint:
-      'A short thought or mood. The latest is shown in the profile, older ones stay on the Life timeline.',
+    profile_statuses: 'Statuses',
+    profile_status_hint: 'Short descriptions of your state.',
     project_status: 'Project status',
+    project_statuses: 'Project statuses',
     project_tabs: 'Project page tabs',
     project_tab_overview: 'Overview',
     project_tab_timeline: 'Chronology',
     project_timeline_latest: 'Latest from the chronology',
     project_timeline_seo_description: (title) =>
       `The chronology of “${title}”: stages, sections, statuses, related events and diary entries.`,
-    project_status_hint:
-      'How things are going right now. The latest is shown on the project page, older ones stay in its chronology.',
+    project_status_hint: 'Short descriptions of the states the project is in.',
     project_new_status: 'New project status',
     project_status_empty: 'No statuses yet',
     profile_facts: 'Facts',

@@ -37,7 +37,10 @@ export type NewStatus =
   | { id: string; kind: 'regular'; text: string; assetUuid?: string }
   | { id: string; kind: 'empty' };
 
-/** A saved regular status rewritten in place; it keeps its date. */
+/**
+ * A saved status rewritten in place; it keeps its date. A saved empty status
+ * becomes a regular one this way.
+ */
 export interface UpdatedStatus {
   id: string;
   text: string;

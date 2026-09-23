@@ -458,7 +458,7 @@ async function openDeleteProjectModal() {
       :history-url="`/api/admin/projects/${resolvedProjectUuid}/statuses`"
       :initial="loadedStatuses"
       :usage-delta="statusUsageDelta"
-      :title="phrase.project_status"
+      :title="phrase.project_statuses"
       :description="phrase.project_status_hint"
       :add-label="phrase.project_new_status"
       :empty-label="phrase.project_status_empty"

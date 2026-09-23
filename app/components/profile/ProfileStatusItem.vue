@@ -38,7 +38,7 @@ defineEmits<{ remove: [id: string]; edit: [item: StatusHistoryItem] }>();
     </p>
     <div class="flex shrink-0 items-center gap-xs">
       <ProfileDate :timestamp="item.createdAt" :short="shortDate" /><Button
-        v-if="editable && item.kind === 'regular'"
+        v-if="editable"
         variant="secondary"
         type="button"
         size="icon-sm"

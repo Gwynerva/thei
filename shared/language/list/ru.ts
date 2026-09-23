@@ -285,9 +285,10 @@ export default defineI18nModule({
     profile_favicon: 'Иконка сайта',
     profile_favicon_hint: 'Показывается во вкладках браузера и в поиске.',
     profile_status: 'Статус',
-    profile_status_hint:
-      'Короткая мысль или настроение. Последний статус виден в профиле, прошлые — на шкале Жизни.',
+    profile_statuses: 'Статусы',
+    profile_status_hint: 'Краткие описания вашего состояния.',
     project_status: 'Статус проекта',
+    project_statuses: 'Статусы проекта',
     project_tabs: 'Разделы страницы проекта',
     project_tab_overview: 'Обзор',
     project_tab_timeline: 'Хронология',
@@ -295,7 +296,7 @@ export default defineI18nModule({
     project_timeline_seo_description: (title) =>
       `Хронология проекта «${title}»: этапы, разделы, статусы, связанные события и записи дневника.`,
     project_status_hint:
-      'Как сейчас идут дела. Последний статус виден на странице проекта, прошлые — в его хронологии.',
+      'Краткие описания состояний, в которых находится проект.',
     project_new_status: 'Новый статус проекта',
     project_status_empty: 'Статусов пока нет',
     profile_facts: 'Факты',

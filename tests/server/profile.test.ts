@@ -2,6 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PROFILE_ID, type ProfileEditData } from '../../shared/profile';
 import { freshTestDb } from '../helpers/fresh-db';
 import { getProfileHistory, saveProfile } from '../../server/thei/profile';
+import {
+  applyStatusEdits,
+  prepareEntityStatusEdits,
+  statusUsageHooks,
+} from '../../server/thei/statuses';
 
 let context: Awaited<ReturnType<typeof freshTestDb>>;
 
@@ -149,6 +154,56 @@ describe('profile statuses', () => {
         .all()
         .some((status) => status.id === 'empty-1'),
     ).toBe(false);
+  });
+
+  it('fills in a saved empty status in place', async () => {
+    await saveProfile(
+      edit([{ id: 'regular-1', kind: 'regular', text: 'Работаю над сайтом' }]),
+    );
+    await saveProfile(edit([{ id: 'empty-1', kind: 'empty' }]));
+    const stored = () =>
+      context.db
+        .select()
+        .from(context.schema.statuses)
+        .all()
+        .find((status) => status.id === 'empty-1')!;
+    const createdAt = stored().createdAt;
+
+    await expect(
+      saveProfile({
+        ...edit([]),
+        updatedStatuses: [{ id: 'empty-1', text: '   ' }],
+      }),
+    ).rejects.toThrow('Invalid profile text');
+    expect(stored().kind).toBe('empty');
+    // Project statuses allow blank text, so the rule has to hold on its own.
+    const blank = prepareEntityStatusEdits(
+      { type: 'profile', id: PROFILE_ID },
+      { newStatuses: [], updatedStatuses: [{ id: 'empty-1', text: '' }] },
+    );
+    const hooks = statusUsageHooks(context.db, context.schema, 0, (message) => {
+      throw new Error(message);
+    });
+    expect(() =>
+      applyStatusEdits(context.db, context.schema, blank, 0, hooks),
+    ).toThrow('Invalid status');
+    expect(stored().kind).toBe('empty');
+
+    await saveProfile({
+      ...edit([]),
+      updatedStatuses: [{ id: 'empty-1', text: 'Вернулся' }],
+    });
+    expect(stored()).toMatchObject({
+      kind: 'regular',
+      text: 'Вернулся',
+      createdAt,
+    });
+    expect((await getProfileHistory('statuses')).items[0]).toMatchObject({
+      id: 'empty-1',
+      kind: 'regular',
+    });
+    // Once filled in, the status is regular, so an empty one may follow it.
+    await saveProfile(edit([{ id: 'empty-2', kind: 'empty' }]));
   });
 
   it('paginates status history by timestamp and UUID without duplicates', async () => {

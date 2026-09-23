@@ -6,7 +6,10 @@ const { modalData } = defineProps<{
   modalData: {
     usageDelta: Record<string, number>;
     canAddEmptyStatus: boolean;
-    /** A regular status to edit instead of adding a new one. */
+    /**
+     * A status to edit instead of adding a new one. An empty status comes in
+     * with blank text and leaves as a regular one.
+     */
     initial?: {
       id: string;
       text: string;
@@ -32,7 +35,7 @@ const initial = modalData.initial;
 const text = ref(initial?.text ?? '');
 const assetUuid = ref<string | null>(initial?.assetUuid ?? null);
 const media = ref<MediaDescriptor | undefined>(initial?.media);
-// An edited status stays a regular one: an empty status has nothing to edit.
+// An edited status is always a regular one: it can be filled in, not emptied.
 const valid = computed(
   () =>
     Boolean(text.value.trim()) ||

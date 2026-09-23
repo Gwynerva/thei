@@ -68,6 +68,8 @@ const visibleStatuses = computed<StatusHistoryItem[]>(() =>
         const media = editedMedia.get(status.id);
         return {
           ...rest,
+          // Editing is how an empty status is filled in.
+          kind: 'regular' as const,
           text: update.text,
           ...(update.assetUuid ? { assetUuid: update.assetUuid } : {}),
           ...(media ? { media } : {}),
@@ -108,22 +110,32 @@ async function addStatus() {
 }
 
 async function editStatus(item: StatusHistoryItem) {
-  if (item.kind !== 'regular') return;
+  // An empty status opens blank and becomes a regular one once filled in.
   const result = await openModal(statusModal, {
     usageDelta,
     canAddEmptyStatus: false,
-    initial: {
-      id: item.id,
-      text: item.text,
-      assetUuid: item.assetUuid,
-      media: item.media,
-    },
+    initial:
+      item.kind === 'regular'
+        ? {
+            id: item.id,
+            text: item.text,
+            assetUuid: item.assetUuid,
+            media: item.media,
+          }
+        : { id: item.id, text: '' },
   });
   if (result.type !== 'save' || result.kind !== 'regular') return;
-  const pending = newStatuses.value.find((s) => s.id === item.id);
-  if (pending) {
-    Object.assign(pending, { text: result.text, assetUuid: result.assetUuid });
-    newStatuses.value = [...newStatuses.value];
+  if (newStatuses.value.some((s) => s.id === item.id)) {
+    newStatuses.value = newStatuses.value.map((s) =>
+      s.id === item.id
+        ? {
+            id: s.id,
+            kind: 'regular',
+            text: result.text,
+            assetUuid: result.assetUuid,
+          }
+        : s,
+    );
     const preview = pendingPreviews.get(item.id);
     if (preview) preview.media = result.media;
     return;
@@ -132,7 +144,8 @@ async function editStatus(item: StatusHistoryItem) {
   const updates = updatedStatuses.value.filter((s) => s.id !== item.id);
   // Editing a status back to what is stored leaves nothing to save.
   if (
-    saved?.text !== result.text ||
+    saved?.kind !== 'regular' ||
+    saved.text !== result.text ||
     (saved?.assetUuid ?? undefined) !== result.assetUuid
   )
     updates.push({
