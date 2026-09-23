@@ -7,7 +7,6 @@ import type {
   DiarySaveResponse,
 } from '#layers/thei/shared/api/diary';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
-import EntityRelations from '#layers/thei/app/components/settings/EntityRelations.vue';
 import ProjectShareLinks from '../../projects/components/ProjectShareLinks.vue';
 import { diaryDeleteModal } from '../composables';
 
@@ -21,16 +20,16 @@ const { diaryUuid } = defineProps<{ diaryUuid?: string }>();
  * nothing to pretend to be a project for.
  */
 const diaryData = ref<DiaryEditData>(emptyData());
-const relationsModel = computed({
-  get: () => diaryData.value.relations ?? [],
-  set: (value) => {
-    diaryData.value.relations = value;
-  },
-});
 const reminderModel = computed({
   get: () => diaryData.value.reminder ?? '',
   set: (value: string) => {
     diaryData.value.reminder = value;
+  },
+});
+const notesModel = computed({
+  get: () => diaryData.value.notes ?? null,
+  set: (value) => {
+    diaryData.value.notes = value;
   },
 });
 
@@ -74,8 +73,8 @@ if (isEdit.value) {
     date: data.date,
     access: data.access,
     content: data.content,
-    relations: data.relations,
     reminder: data.reminder,
+    notes: data.notes ?? null,
   };
   markSaved();
 }
@@ -94,7 +93,7 @@ async function save() {
       if (result.code === 'date-taken') await refreshTakenDates();
       return;
     }
-    stampSavedContent(diaryData.value, savedSnapshot.value, ['content']);
+    stampSavedContent(diaryData.value, savedSnapshot.value, CONTENT_FIELDS);
     markSaved();
     await Promise.all([refreshNuxtData('admin-bar'), refreshTakenDates()]);
     if (!isEdit.value)
@@ -136,10 +135,13 @@ async function deleteEntry() {
   await navigateTo('/admin/diary/');
 }
 
+const CONTENT_FIELDS = ['content', 'notes'];
+
 /** Saving from inside the editor saves the entry too; see the event form. */
 function saveAfterContentEdit() {
   if (saving.value || !isValid.value || !isEdit.value || !isDirty.value) return;
-  if (!changedOnlyIn(diaryPayload(), savedSnapshot.value, ['content'])) return;
+  if (!changedOnlyIn(diaryPayload(), savedSnapshot.value, CONTENT_FIELDS))
+    return;
   void save();
 }
 
@@ -150,8 +152,8 @@ function emptyData(): DiaryEditData {
     date: new Date().toISOString().slice(0, 10),
     access: ProjectEventAccessLevel.Public,
     content: null,
-    relations: [],
     reminder: '',
+    notes: null,
   };
 }
 
@@ -161,8 +163,8 @@ function diaryPayload(): DiaryEditData {
     date: value.date,
     access: value.access,
     content: value.content,
-    relations: value.relations,
     reminder: value.reminder,
+    notes: value.notes,
   };
 }
 
@@ -224,8 +226,8 @@ useRegisterAdminBarContextButton(
             v-model="diaryData.date"
             :label="phrase.diary_date"
             placement="bottom-start"
+            required
           />
-          <FieldHint>{{ phrase.diary_date_hint }}</FieldHint>
           <TheiLink
             v-if="occupiedBy"
             :to="`/admin/diary/${occupiedBy.diaryUuid}/edit/`"
@@ -264,32 +266,17 @@ useRegisterAdminBarContextButton(
         />
         <FieldHint>{{ phrase.diary_content_hint }}</FieldHint>
       </Field>
-      <div
-        v-if="diaryData.date"
-        class="flex min-w-0 items-center gap-xs text-sm text-text-3"
-      >
-        <Icon name="link" class="shrink-0" />
-        <TheiLink
-          :to="buildDiaryUrl(diaryData.date)"
-          external
-          class="truncate transition hocus:text-accent hocus:underline"
-        >
-          {{ buildDiaryUrl(diaryData.date) }}
-        </TheiLink>
-      </div>
     </Box>
 
-    <EntityRelations
-      v-model="relationsModel"
-      owner-type="diary-entry"
-      :owner-id="diaryUuid"
-      :owner-title="diaryData.date || phrase.new_diary_entry"
-    />
     <ProjectShareLinks
       v-if="diaryUuid && diaryData.access !== 'public'"
       entity-type="diary-entry"
       :entity-uuid="diaryUuid"
     />
-    <AdminNotesBlock v-model:reminder="reminderModel" />
+    <AdminNotesBlock
+      v-model:reminder="reminderModel"
+      v-model:notes="notesModel"
+      @notes-saved="saveAfterContentEdit()"
+    />
   </div>
 </template>

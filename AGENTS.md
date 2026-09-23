@@ -15,7 +15,7 @@ Around them:
 - **Pages** are standalone writing that belongs to no timeline entity.
 - **Tags** are threads across projects and events. Diary entries carry none.
 - **Life** is the one timeline everything dated lands on.
-- **Relations** join projects, events and diary entries to each other, symmetrically: one row per pair, read from either side as "related", "depends on" or "influences".
+- **Relations** are drawn from a project to other projects, events and diary entries, and are edited only on the project. They are symmetric in reading: one row per pair, read from either side as "related", "depends on" or "influences", so an event or a diary entry still lists its related projects without editing them.
 
 ## Package Manager
 
@@ -24,6 +24,7 @@ Around them:
 ## Commits
 
 - Keep a commit title on its first line whole. Never carry part of it over into the description, even when it runs past the usual recommended length.
+- Aim to fit a commit title within the recommended length (about 50 characters, 72 at most). Generalize when a change touches several things, and leave details to the description.
 
 ## Development Server Management
 

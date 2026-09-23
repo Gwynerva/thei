@@ -36,6 +36,7 @@ export const CONTENT_SLOTS = [
   'event-notes',
   'page-notes',
   'diary-body',
+  'diary-notes',
 ] as const;
 export type ContentSlot = (typeof CONTENT_SLOTS)[number];
 
@@ -397,18 +398,40 @@ export function contentPlainText(
 /**
  * Text a visitor can read: blocks inside private sections are left out.
  * `prose` keeps only paragraphs, headings, quotes and lists.
+ *
+ * With `privatePlaceholder`, each private section that holds anything leaves
+ * `[placeholder]` where it stood instead of vanishing without a trace.
  */
 export function publicContentPlainText(
   data: ContentOutputData | null | undefined,
   mode: 'all' | 'prose' = 'all',
+  options: { privatePlaceholder?: string } = {},
 ): string {
   const normalized = normalizeContentData(data);
   const ranges = contentPrivateSectionRanges(normalized);
+  const placeholderAt = new Set(
+    options.privatePlaceholder
+      ? ranges
+          .filter(
+            (range) =>
+              range.endIndex !== undefined &&
+              range.endIndex - range.startIndex > 1,
+          )
+          .map((range) => range.startIndex)
+      : [],
+  );
   const visible = {
     ...normalized,
-    blocks: normalized.blocks.filter(
-      (_, index) => !contentBlockIsInPrivateSection(ranges, index),
-    ),
+    blocks: normalized.blocks.flatMap((block, index): ContentOutputBlock[] => {
+      if (placeholderAt.has(index))
+        return [
+          {
+            type: 'paragraph',
+            data: { text: `[${options.privatePlaceholder}]` },
+          } as ContentOutputBlock,
+        ];
+      return contentBlockIsInPrivateSection(ranges, index) ? [] : [block];
+    }),
   };
   return mode === 'prose'
     ? contentPreviewTextFromNormalized(visible)

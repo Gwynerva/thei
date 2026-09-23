@@ -3,6 +3,7 @@ import type { PublicDiaryResponse } from '#layers/thei/shared/api/public';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { buildLifeUrl } from '#layers/thei/shared/life';
 import type { PublicDetailPanelData } from '#layers/thei/app/components/public/public-detail';
+import { publicOwnerNotesHeading } from '#layers/thei/app/components/public/PublicOwnerNotes.vue';
 
 definePageMeta({ layout: 'public', key: (route) => route.path });
 const route = useRoute();
@@ -62,6 +63,13 @@ const details = computed(
       references: data.value.references,
     }) satisfies PublicDetailPanelData,
 );
+
+/** The owner's notes sit below the entry and belong in its table. */
+const extraContents = computed(() =>
+  data.value.notes?.blocks.length
+    ? [publicOwnerNotesHeading(phrase.value.entity_notes)]
+    : [],
+);
 </script>
 
 <template>
@@ -69,12 +77,17 @@ const details = computed(
     <PublicShareNotice />
     <PublicPageHeader icon="thought" :title="heading" />
     <PublicReminderNotice :reminder="data.reminder" />
-    <PublicDetailLayout :details="details" :content="data.content">
+    <PublicDetailLayout
+      :details="details"
+      :content="data.content"
+      :extra-contents="extraContents"
+    >
       <ContentRenderer
         v-if="data.content.blocks.length"
         :data="data.content"
         asset-viewer
       />
+      <PublicOwnerNotes :notes="data.notes" />
     </PublicDetailLayout>
   </main>
 </template>

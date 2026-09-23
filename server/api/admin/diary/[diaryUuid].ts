@@ -10,12 +10,7 @@ import {
   applyPreparedContentSave,
   deleteContentForOwner,
 } from '../../../thei/content/repository';
-import {
-  applyRelations,
-  deleteRelations,
-  getRelations,
-  prepareRelations,
-} from '../../../thei/relations';
+import { deleteRelations } from '../../../thei/relations';
 
 export default defineEventHandler(async (event) => {
   const diaryUuid = getRouterParam(event, 'diaryUuid')!;
@@ -24,13 +19,17 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: 'Diary entry not found' });
 
   if (event.method === 'GET') {
-    const [content, relations] = await Promise.all([
+    const [content, notes] = await Promise.all([
       THEI_SERVER.content.buildFieldValue(
         'diary-entry',
         diaryUuid,
         'diary-body',
       ),
-      getRelations({ type: 'diary-entry', id: diaryUuid }),
+      THEI_SERVER.content.buildFieldValue(
+        'diary-entry',
+        diaryUuid,
+        'diary-notes',
+      ),
     ]);
     if (!content)
       throw createError({
@@ -42,8 +41,8 @@ export default defineEventHandler(async (event) => {
       date: stored.date,
       access: stored.access,
       content,
-      relations,
       reminder: stored.reminder,
+      notes,
     } satisfies DiaryGetResponse;
   }
 
@@ -61,16 +60,18 @@ export default defineEventHandler(async (event) => {
       } satisfies DiarySaveResponse;
 
     try {
-      const [contentSave, relations] = await Promise.all([
+      const [contentSave, notesSave] = await Promise.all([
         prepareContentForSave(
           'diary-entry',
           diaryUuid,
           'diary-body',
           result.content,
         ),
-        prepareRelations(
-          { type: 'diary-entry', id: diaryUuid },
-          result.relations,
+        prepareContentForSave(
+          'diary-entry',
+          diaryUuid,
+          'diary-notes',
+          result.notes,
         ),
       ]);
       if (contentSave.type !== 'save')
@@ -99,11 +100,13 @@ export default defineEventHandler(async (event) => {
           'diary-body',
           contentSave,
         );
-        applyRelations(
+        applyPreparedContentSave(
           tx,
           schema,
-          { type: 'diary-entry', id: diaryUuid },
-          relations,
+          'diary-entry',
+          diaryUuid,
+          'diary-notes',
+          notesSave,
         );
       });
       return {

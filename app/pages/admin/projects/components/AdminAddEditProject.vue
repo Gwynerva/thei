@@ -23,7 +23,7 @@ import {
 } from '../composables';
 import ProjectMain from './ProjectMain.vue';
 import ProjectAssets from './ProjectAssets.vue';
-import EntityRelations from '#layers/thei/app/components/settings/EntityRelations.vue';
+import ProjectRelations from './ProjectRelations.vue';
 import ProjectExternalLinks from './ProjectExternalLinks.vue';
 import { projectDeleteModal } from './project-delete-modal';
 import ProjectContentItems from './ProjectContentItems.vue';
@@ -465,10 +465,9 @@ async function openDeleteProjectModal() {
     />
     <ProjectContentItems kind="stage" />
     <ProjectContentItems kind="section" />
-    <EntityRelations
+    <ProjectRelations
       v-model="relationsModel"
-      owner-type="project"
-      :owner-id="resolvedProjectUuid"
+      :project-uuid="resolvedProjectUuid"
       :owner-title="projectData.title.trim() || phrase.new_project"
     />
     <ProjectTags />

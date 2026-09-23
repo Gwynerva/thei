@@ -6,7 +6,6 @@ import {
   prepareContentForSave,
   applyPreparedContentSave,
 } from '../../../thei/content/repository';
-import { applyRelations, prepareRelations } from '../../../thei/relations';
 
 export default defineEventHandler(async (event): Promise<DiarySaveResponse> => {
   const body = await readBody<DiaryEditData>(event);
@@ -27,16 +26,18 @@ export default defineEventHandler(async (event): Promise<DiarySaveResponse> => {
     async (id) => !(await THEI_SERVER.diary.findByUuid(id)),
   );
   try {
-    const [contentSave, relations] = await Promise.all([
+    const [contentSave, notesSave] = await Promise.all([
       prepareContentForSave(
         'diary-entry',
         diaryUuid,
         'diary-body',
         result.content,
       ),
-      prepareRelations(
-        { type: 'diary-entry', id: diaryUuid },
-        result.relations,
+      prepareContentForSave(
+        'diary-entry',
+        diaryUuid,
+        'diary-notes',
+        result.notes,
       ),
     ]);
     if (contentSave.type !== 'save')
@@ -63,11 +64,13 @@ export default defineEventHandler(async (event): Promise<DiarySaveResponse> => {
         'diary-body',
         contentSave,
       );
-      applyRelations(
+      applyPreparedContentSave(
         tx,
         schema,
-        { type: 'diary-entry', id: diaryUuid },
-        relations,
+        'diary-entry',
+        diaryUuid,
+        'diary-notes',
+        notesSave,
       );
     });
     return { type: 'success', diaryUuid, date: result.date };

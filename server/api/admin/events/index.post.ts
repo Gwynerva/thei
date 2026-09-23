@@ -9,7 +9,6 @@ import {
   applyPreparedContentSave,
 } from '../../../thei/content/repository';
 import { applyEventPeriods } from '../../../thei/events/periods';
-import { applyRelations, prepareRelations } from '../../../thei/relations';
 import { applyEventExternalLinks } from '../../../thei/events/external-links';
 import { prepareExternalLinks } from '../../../thei/external-links/prepare';
 import { prepareTagUsages, applyTagUsages } from '../../../thei/tags';
@@ -34,14 +33,12 @@ export default defineEventHandler(async (event): Promise<EventSaveResponse> => {
     async (id) => !(await THEI_SERVER.events.findByUuid(id)),
   );
   try {
-    const [contentSave, notesSave, relations, externalLinks, tags] =
-      await Promise.all([
-        prepareContentForSave('event', eventUuid, 'event-body', result.content),
-        prepareContentForSave('event', eventUuid, 'event-notes', result.notes),
-        prepareRelations({ type: 'event', id: eventUuid }, result.relations),
-        prepareExternalLinks(result.externalLinks),
-        prepareTagUsages(result.tags),
-      ]);
+    const [contentSave, notesSave, externalLinks, tags] = await Promise.all([
+      prepareContentForSave('event', eventUuid, 'event-body', result.content),
+      prepareContentForSave('event', eventUuid, 'event-notes', result.notes),
+      prepareExternalLinks(result.externalLinks),
+      prepareTagUsages(result.tags),
+    ]);
     if (contentSave.type !== 'save')
       return { type: 'error', message: 'Event content is required' };
 
@@ -79,7 +76,6 @@ export default defineEventHandler(async (event): Promise<EventSaveResponse> => {
         'event-notes',
         notesSave,
       );
-      applyRelations(tx, schema, { type: 'event', id: eventUuid }, relations);
       applyEventExternalLinks(tx, schema, eventUuid, externalLinks);
       applyTagUsages(tx, schema, 'event', eventUuid, tags);
       syncEntityActionUsages(tx, schema, [], 'event', eventUuid, result.action);

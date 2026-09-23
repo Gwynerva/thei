@@ -3,7 +3,6 @@ import {
   isRelationEntityType,
   relationEndpointKey,
   type RelationEditItem,
-  type RelationEntityType,
   type RelationNote,
   type RelationType,
 } from '#layers/thei/shared/relation';
@@ -23,31 +22,20 @@ import {
 } from '#layers/thei/app/composables/drag-sort';
 
 /**
- * The relations block, shared by projects, events and diary entries.
+ * The relations block of a project.
  *
- * Both sides of a relation are the same kind of thing, so the editor is the
- * same too: one list per direction, drag between them to change what the
- * relation says, and a note that can be written once or once per side.
+ * Only a project draws relations: to other projects, to events and to diary
+ * entries, which then list the project from their side without editing it.
+ * One list per direction, drag between them to change what the relation
+ * says, and a note that can be written once or once per side.
  */
-const { ownerType, ownerId, ownerTitle } = defineProps<{
-  ownerType: RelationEntityType;
-  ownerId?: string;
-  /** The entity being edited, for the "note from its side" placeholder. */
+const { projectUuid, ownerTitle } = defineProps<{
+  projectUuid?: string;
+  /** The project being edited, for the "note from its side" placeholder. */
   ownerTitle: string;
 }>();
 
 const model = defineModel<RelationEditItem[]>({ required: true });
-
-/**
- * A diary entry relates to projects and events, never to another entry: two
- * days are already ordered by the calendar, and a thought about a thought is
- * written in the entry itself.
- */
-const pickableTypes = computed<RelationEntityType[]>(() =>
-  ownerType === 'diary-entry'
-    ? ['project', 'event']
-    : ['project', 'event', 'diary-entry'],
-);
 
 const relationsRoot = useTemplateRef<HTMLElement>('relationsRoot');
 const relations = computed(() => model.value ?? []);
@@ -56,7 +44,9 @@ const entitySearch =
   useTemplateRef<InstanceType<typeof ContentEntitySearchPopup>>('entitySearch');
 const entitySearchOpen = ref(false);
 const excludedKeys = computed(() => [
-  ...(ownerId ? [relationEndpointKey({ type: ownerType, id: ownerId })] : []),
+  ...(projectUuid
+    ? [relationEndpointKey({ type: 'project', id: projectUuid })]
+    : []),
   ...relations.value.map((item) =>
     relationEndpointKey({ type: item.entityType, id: item.entityId }),
   ),
@@ -257,7 +247,7 @@ onUnmounted(cleanupSorters);
     >
       <ContentEntitySearchPopup
         ref="entitySearch"
-        :entity-types="pickableTypes"
+        :entity-types="['project', 'event', 'diary-entry']"
         :exclude="excludedKeys"
         @select="addRelation"
       />

@@ -14,12 +14,13 @@ import {
  */
 export const ENTITY_REMINDER_MAX_LENGTH = 500;
 
-export type EntityNotesOwner = 'project' | 'event' | 'page';
+export type EntityNotesOwner = 'project' | 'event' | 'page' | 'diary-entry';
 
 export const ENTITY_NOTES_SLOTS = {
   project: 'project-notes',
   event: 'event-notes',
   page: 'page-notes',
+  'diary-entry': 'diary-notes',
 } as const satisfies Record<EntityNotesOwner, ContentSlot>;
 
 export function entityNotesSlot(owner: EntityNotesOwner): ContentSlot {

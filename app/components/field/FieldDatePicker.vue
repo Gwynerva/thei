@@ -7,6 +7,11 @@ const props = withDefaults(
     label: string;
     maxDate?: Date;
     placement?: Placement;
+    /**
+     * A date the value cannot be without: no clear button, and a popup
+     * deselection leaves the current day in place.
+     */
+    required?: boolean;
   }>(),
   { placement: 'bottom-end' },
 );
@@ -18,7 +23,8 @@ const range = computed<DateRange | undefined>({
   get: () =>
     model.value ? { startDate: model.value, endDate: model.value } : undefined,
   set: (value) => {
-    model.value = value?.startDate ?? '';
+    if (value?.startDate || !props.required)
+      model.value = value?.startDate ?? '';
     open.value = false;
   },
 });
@@ -44,7 +50,7 @@ const range = computed<DateRange | undefined>({
       </span>
     </button>
     <Button
-      v-if="model"
+      v-if="model && !required"
       type="button"
       size="icon"
       variant="delete"

@@ -19,7 +19,6 @@ import {
   publicIdIsValid,
 } from '../public-link';
 import type { EventEditData, ValidatedEventEditData } from '../event';
-import { validateRelations } from '../relation';
 
 export function validateEventData(
   data: EventEditData,
@@ -49,7 +48,6 @@ export function validateEventData(
       content: validateRequiredContent(data.content),
       otherAssets: validateFiles(data.otherAssets),
       externalLinks: validateExternalLinks(data.externalLinks),
-      relations: validateRelations(data.relations),
       tags: validateTags(data.tags),
       action: normalizeProjectAction(data.action),
       reminder: normalizeEntityReminder(data.reminder),

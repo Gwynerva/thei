@@ -31,7 +31,6 @@ import ProjectAssets from '../../projects/components/ProjectAssets.vue';
 import ProjectExternalLinks from '../../projects/components/ProjectExternalLinks.vue';
 import ProjectTags from '../../projects/components/ProjectTags.vue';
 import ProjectActionSettings from '../../projects/components/ProjectActionSettings.vue';
-import EntityRelations from '#layers/thei/app/components/settings/EntityRelations.vue';
 import ProjectShareLinks from '../../projects/components/ProjectShareLinks.vue';
 import { eventDeleteModal } from './event-delete-modal';
 
@@ -68,12 +67,6 @@ provide(otherItemsKey, otherItems);
 const actionMedia = provideProjectActionMedia();
 
 const isEdit = computed(() => Boolean(eventUuid));
-const relationsModel = computed({
-  get: () => eventData.value.relations ?? [],
-  set: (value) => {
-    eventData.value.relations = value;
-  },
-});
 const saving = ref(false);
 const savedSnapshot = ref(JSON.stringify(eventPayload()));
 const headerError = ref<string>();
@@ -114,7 +107,6 @@ if (isEdit.value) {
       isPrivate: item.isPrivate,
     })),
     externalLinks: data.externalLinks,
-    relations: data.relations,
     tags: data.tags,
     action: data.action,
     reminder: data.reminder,
@@ -218,7 +210,6 @@ function emptyData(): EventFormData {
     descriptionContent: null,
     otherAssets: [],
     externalLinks: [],
-    relations: [],
     tags: [],
     action: { ...DEFAULT_PROJECT_ACTION },
     reminder: '',
@@ -243,7 +234,6 @@ function eventPayload(): EventEditData {
     content: value.content,
     otherAssets: value.otherAssets,
     externalLinks: value.externalLinks,
-    relations: value.relations,
     tags: value.tags,
     action: value.action,
     reminder: value.reminder,
@@ -396,12 +386,6 @@ function clone<T>(value: T): T {
       :title="phrase.event_external_links"
       :description="phrase.event_external_links_hint"
       :empty-text="phrase.event_external_links_empty"
-    />
-    <EntityRelations
-      v-model="relationsModel"
-      owner-type="event"
-      :owner-id="eventUuid"
-      :owner-title="eventData.title.trim() || phrase.new_event"
     />
     <ProjectTags
       :title="phrase.event_tags"

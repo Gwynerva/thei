@@ -273,25 +273,17 @@ function buildRawLifePoints(): RawPoint[] {
   // A diary entry reaches a project's chronology the same way an event does:
   // through the relation the author drew between them.
   const projectsByDiaryEntry = new Map<string, string[]>();
-  for (const row of db.select().from(schema.entityRelations).all()) {
-    const ends = [
-      { type: row.firstType, id: row.firstId },
-      { type: row.secondType, id: row.secondId },
-    ];
-    const project = ends.find((end) => end.type === 'project');
-    if (!project) continue;
-    const event = ends.find((end) => end.type === 'event');
-    if (event) {
-      const list = projectsByEvent.get(event.id) ?? [];
-      list.push(project.id);
-      projectsByEvent.set(event.id, list);
-      continue;
-    }
-    const entry = ends.find((end) => end.type === 'diary-entry');
-    if (!entry) continue;
-    const list = projectsByDiaryEntry.get(entry.id) ?? [];
-    list.push(project.id);
-    projectsByDiaryEntry.set(entry.id, list);
+  for (const row of db.select().from(schema.projectRelations).all()) {
+    const byEntity =
+      row.entityType === 'event'
+        ? projectsByEvent
+        : row.entityType === 'diary-entry'
+          ? projectsByDiaryEntry
+          : undefined;
+    if (!byEntity) continue;
+    const list = byEntity.get(row.entityId) ?? [];
+    list.push(row.projectUuid);
+    byEntity.set(row.entityId, list);
   }
   const raw: RawPoint[] = [];
 
@@ -691,7 +683,11 @@ async function hydrateLifePoint(
       // An entry has no title of its own, and the card knows to print its
       // opening in place of one rather than a heading and a summary.
       title: '',
-      summary: diaryContentExcerpt(content?.data, isAdmin),
+      summary: diaryContentExcerpt(
+        content?.data,
+        isAdmin,
+        THEI_SERVER.phrase.content_private_section,
+      ),
       href: buildDiaryUrl(entry.date),
       ...(media ? { media } : {}),
     };

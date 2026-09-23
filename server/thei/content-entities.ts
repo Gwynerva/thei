@@ -260,7 +260,11 @@ function diaryRecord(
     entityType: 'diary-entry',
     entityId: entry.diaryUuid,
     title: entry.date,
-    summary: diaryContentExcerpt(body, includePrivate),
+    summary: diaryContentExcerpt(
+      body,
+      includePrivate,
+      THEI_SERVER.phrase.content_private_section,
+    ),
     href: buildDiaryUrl(entry.date),
     access: entry.access,
     updatedAt: entry.updatedAt,

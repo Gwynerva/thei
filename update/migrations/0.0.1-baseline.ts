@@ -218,20 +218,19 @@ export const baselineSql: string[] = [
 	CONSTRAINT "stage-periods-stage-type-check" CHECK("stage-periods"."stageType" in ('project-stage', 'event-stage'))
 );
 `,
-  `CREATE TABLE \`entity-relations\` (
-	\`firstType\` text NOT NULL,
-	\`firstId\` text NOT NULL,
-	\`secondType\` text NOT NULL,
-	\`secondId\` text NOT NULL,
+  `CREATE TABLE \`project-relations\` (
+	\`projectUuid\` text NOT NULL,
+	\`entityType\` text NOT NULL,
+	\`entityId\` text NOT NULL,
 	\`type\` text NOT NULL,
 	\`note\` text,
-	\`firstSortOrder\` integer NOT NULL,
-	\`secondSortOrder\` integer NOT NULL,
-	PRIMARY KEY(\`firstType\`, \`firstId\`, \`secondType\`, \`secondId\`)
+	\`projectSortOrder\` integer NOT NULL,
+	\`entitySortOrder\` integer NOT NULL,
+	PRIMARY KEY(\`projectUuid\`, \`entityType\`, \`entityId\`)
 );
 `,
-  `CREATE INDEX \`entity-relations-first-idx\` ON \`entity-relations\` (\`firstType\`,\`firstId\`,\`firstSortOrder\`);`,
-  `CREATE INDEX \`entity-relations-second-idx\` ON \`entity-relations\` (\`secondType\`,\`secondId\`,\`secondSortOrder\`);`,
+  `CREATE INDEX \`project-relations-project-idx\` ON \`project-relations\` (\`projectUuid\`,\`projectSortOrder\`);`,
+  `CREATE INDEX \`project-relations-entity-idx\` ON \`project-relations\` (\`entityType\`,\`entityId\`,\`entitySortOrder\`);`,
   `CREATE TABLE \`tags\` (
 	\`tagUuid\` text PRIMARY KEY NOT NULL,
 	\`title\` text NOT NULL,

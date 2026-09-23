@@ -62,7 +62,7 @@ describe('validateEventData', () => {
     expect(periods).toHaveLength(4);
   });
 
-  it('normalizes ordered files, links, tags, relations and content links', () => {
+  it('normalizes ordered files, links, tags and content links', () => {
     const result = validateEventData(
       eventData({
         otherAssets: [
@@ -78,14 +78,6 @@ describe('validateEventData', () => {
             url: 'https://example.com/path',
             name: '  Details  ',
             isPrivate: false,
-          },
-        ],
-        relations: [
-          {
-            entityType: 'project',
-            entityId: 'p-one',
-            type: 'related',
-            note: { type: 'shared', text: '  Partner  ' },
           },
         ],
         tags: [{ title: '  Research  ' }, { title: 'Community' }],
@@ -120,14 +112,6 @@ describe('validateEventData', () => {
       name: 'Details',
       isPrivate: false,
     });
-    expect(result.relations).toEqual([
-      {
-        entityType: 'project',
-        entityId: 'p-one',
-        type: 'related',
-        note: { type: 'shared', text: 'Partner' },
-      },
-    ]);
     expect(result.tags).toEqual([
       { title: 'Research' },
       { title: 'Community' },
@@ -159,16 +143,6 @@ describe('validateEventData', () => {
         }),
       ),
     ).toBe('Duplicate external link');
-    expect(
-      validateEventData(
-        eventData({
-          relations: [
-            { entityType: 'project', entityId: 'p-1', type: 'related' },
-            { entityType: 'project', entityId: 'p-1', type: 'related' },
-          ],
-        }),
-      ),
-    ).toBe('Duplicate related entity');
     expect(
       validateEventData(
         eventData({ tags: [{ title: 'Tag' }, { title: ' tag ' }] }),

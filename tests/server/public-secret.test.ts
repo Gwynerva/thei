@@ -95,18 +95,15 @@ describe('secret references', () => {
       })
       .run();
     context.db
-      .insert(context.schema.entityRelations)
+      .insert(context.schema.projectRelations)
       .values(
         ['open', 'hidden', 'unlisted'].map((projectUuid, sortOrder) => ({
-          // The pair is stored canonically; 'event' sorts before every project
-          // uuid used here, so the event is always the first end.
-          firstType: 'event' as const,
-          firstId: 'event',
-          secondType: 'project' as const,
-          secondId: projectUuid,
+          projectUuid,
+          entityType: 'event' as const,
+          entityId: 'event',
           type: 'related' as const,
-          firstSortOrder: sortOrder,
-          secondSortOrder: 0,
+          projectSortOrder: 0,
+          entitySortOrder: sortOrder,
         })),
       )
       .run();

@@ -1,5 +1,5 @@
 import { ProjectEventAccessLevel } from '../access-level';
-import { normalizeEntityReminder } from '../entity-notes';
+import { normalizeEntityNotes, normalizeEntityReminder } from '../entity-notes';
 import {
   ContentValidationError,
   isContentEmpty,
@@ -8,7 +8,6 @@ import {
 } from '../content';
 import { isOneOf } from '../utils/isOneOf';
 import { isLifeDay } from '../life';
-import { validateRelations, RelationValidationError } from '../relation';
 import type { DiaryEditData, ValidatedDiaryEditData } from '../diary';
 
 export function validateDiaryData(
@@ -26,15 +25,11 @@ export function validateDiaryData(
       date,
       access: data.access,
       content: validateRequiredContent(data.content),
-      relations: validateRelations(data.relations),
       reminder: normalizeEntityReminder(data.reminder),
+      notes: normalizeEntityNotes(data.notes),
     };
   } catch (error) {
-    if (
-      error instanceof ContentValidationError ||
-      error instanceof RelationValidationError ||
-      error instanceof Error
-    )
+    if (error instanceof ContentValidationError || error instanceof Error)
       return error.message;
     throw error;
   }

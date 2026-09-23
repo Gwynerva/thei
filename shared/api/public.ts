@@ -295,6 +295,8 @@ export type PublicDiaryResponse = {
   relatedEntities: PublicEntityLink[];
   /** Owner only. */
   reminder?: string;
+  /** Owner only. */
+  notes?: PublicContentOutputData;
 };
 
 export type PublicTagListItem = PublicTagSummary & {

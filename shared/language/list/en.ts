@@ -634,6 +634,27 @@ export default defineI18nBase({
     admin_diary: 'Diary',
     admin_diary_description:
       'Short dated thoughts: one entry a day, with no title and nothing else to fill in.',
+    admin_kind_project_title: 'What a project is',
+    admin_kind_project_what:
+      'A project is a self-contained, substantial episode of a life with a structure of its own: stages of work, topical sections, a showcase, files and links.',
+    admin_kind_project_rank:
+      'The weightiest kind. A project gathers events and diary entries around it, and its relations to them are set here. If a title and a couple of paragraphs are enough, it is probably an event.',
+    admin_kind_project_examples:
+      'For example: your own app, university, renovating a flat, training for a marathon.',
+    admin_kind_event_title: 'What an event is',
+    admin_kind_event_what:
+      'An event is a small memorable moment worth not forgetting: it has a title, dates, tags and media.',
+    admin_kind_event_rank:
+      'Weightier than a diary entry, lighter than a project: no stages or sections. An event is never a part of a project; a project can only be related to it.',
+    admin_kind_event_examples:
+      "For example: a favourite band's concert, a meetup talk, getting a driving licence, a weekend trip.",
+    admin_kind_diary_title: 'What a diary entry is',
+    admin_kind_diary_what:
+      'A diary entry is the simplest kind: a day and some text about it. One entry a day, no title and no tags, so writing one costs nothing.',
+    admin_kind_diary_rank:
+      'Lighter than an event: if a moment deserves a name and to be found on its own later, it is an event. An entry is tied to a project from the project itself.',
+    admin_kind_diary_examples:
+      'For example: thoughts after a book, how moving day went, an idea that came on the road.',
     admin_pages: 'Pages',
     admin_pages_description:
       'Standalone writing outside the timeline, such as a bio or contacts, each at its own address.',
@@ -917,7 +938,7 @@ export default defineI18nBase({
     relation_group_affects: 'Affects',
     related_entities: 'Related entities',
     related_entities_hint:
-      'Projects and events this is tied to. A relation is visible from both sides.',
+      'Projects, events and diary entries tied to this project. A relation is visible from both sides.',
     related_entity_add: 'Add a relation',
     project_relation_related: 'Related',
     project_relation_influencing: 'Influencing',
@@ -1062,9 +1083,8 @@ export default defineI18nBase({
     edit_content_section: 'Edit Section',
     diary_access: 'Entry access',
     diary_date: 'Entry date',
-    diary_date_hint: 'One day holds one entry.',
     diary_content: 'What was written',
-    diary_content_hint: 'Everything this day held.',
+    diary_content_hint: 'Tell how your day went.',
     diary_date_already_taken: 'This day already has an entry.',
     diary_date_taken_open: 'Open the entry for this day',
     diary_seo_title: 'Diary',
@@ -1171,9 +1191,6 @@ export default defineI18nBase({
     event_tags_hint:
       'Themes that put this event next to similar projects and events.',
     reorder: 'Reorder',
-    event_relations: 'Related projects',
-    event_relations_hint:
-      'Projects this event belongs with. The note appears next to the project link on the event page.',
     delete_event: 'Delete event',
     project_icon: 'Project Icon',
     project_icon_hint:

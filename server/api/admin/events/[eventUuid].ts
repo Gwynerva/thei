@@ -18,12 +18,7 @@ import {
   applyEventPeriods,
   getEventPeriods,
 } from '../../../thei/events/periods';
-import {
-  applyRelations,
-  deleteRelations,
-  getRelations,
-  prepareRelations,
-} from '../../../thei/relations';
+import { deleteRelations } from '../../../thei/relations';
 import {
   applyEventExternalLinks,
   getEventExternalLinks,
@@ -75,7 +70,6 @@ export default defineEventHandler(async (event) => {
       const [
         contentSave,
         notesSave,
-        relations,
         externalLinks,
         tags,
         usages,
@@ -83,7 +77,6 @@ export default defineEventHandler(async (event) => {
       ] = await Promise.all([
         prepareContentForSave('event', eventUuid, 'event-body', result.content),
         prepareContentForSave('event', eventUuid, 'event-notes', result.notes),
-        prepareRelations({ type: 'event', id: eventUuid }, result.relations),
         prepareExternalLinks(result.externalLinks),
         prepareTagUsages(result.tags),
         THEI_SERVER.assets.usages.findByContainer('event', eventUuid),
@@ -132,7 +125,6 @@ export default defineEventHandler(async (event) => {
           'event-notes',
           notesSave,
         );
-        applyRelations(tx, schema, { type: 'event', id: eventUuid }, relations);
         applyEventExternalLinks(tx, schema, eventUuid, externalLinks);
         applyTagUsages(tx, schema, 'event', eventUuid, tags);
         syncEntityActionUsages(
@@ -247,7 +239,6 @@ async function getEvent(
     content,
     notes,
     periods,
-    relations,
     externalLinks,
     tags,
   ] = await Promise.all([
@@ -261,7 +252,6 @@ async function getEvent(
     THEI_SERVER.content.buildFieldValue('event', eventUuid, 'event-body'),
     THEI_SERVER.content.buildFieldValue('event', eventUuid, 'event-notes'),
     getEventPeriods(eventUuid),
-    getRelations({ type: 'event', id: eventUuid }),
     getEventExternalLinks(eventUuid),
     listTagsForContainer('event', eventUuid),
   ]);
@@ -299,7 +289,6 @@ async function getEvent(
     notes,
     otherAssets,
     externalLinks,
-    relations,
     tags,
     action: stored.action ?? { ...DEFAULT_PROJECT_ACTION },
     actionIconMedia: iconUrls?.media,

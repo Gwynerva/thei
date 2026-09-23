@@ -1,6 +1,5 @@
 import type { ContentFieldModelValue } from './content';
 import type { ProjectEventAccessLevel } from './access-level';
-import type { RelationEditItem } from './relation';
 
 /**
  * A diary entry as its form holds it.
@@ -14,8 +13,8 @@ export type DiaryEditData = {
   date: string;
   access: ProjectEventAccessLevel | '';
   content: ContentFieldModelValue | null;
-  relations?: RelationEditItem[];
   reminder?: string;
+  notes?: ContentFieldModelValue | null;
 };
 
 export type ValidatedDiaryEditData = Omit<DiaryEditData, 'access'> & {

@@ -3,10 +3,9 @@ import type { MediaDescriptor } from './media';
 /**
  * The kinds of entity a relation can join.
  *
- * All three stand on their own, so none of them is the one that "points" at
- * the other. A diary entry is listed here for the same reason it is stored
- * the same way: a relation to it has to survive the other side being saved,
- * which it only does if both sides read and write the same rows.
+ * A relation is drawn from a project, and its other end is any of the three.
+ * Both ends read the same row, so an event or a diary entry still lists the
+ * projects it is related to, it just does not edit them.
  */
 export const RELATION_ENTITY_TYPES = [
   'project',

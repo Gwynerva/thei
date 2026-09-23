@@ -472,6 +472,18 @@ export type LanguagePhrases = {
   admin_events_description: string;
   admin_diary: string;
   admin_diary_description: string;
+  admin_kind_project_title: string;
+  admin_kind_project_what: string;
+  admin_kind_project_rank: string;
+  admin_kind_project_examples: string;
+  admin_kind_event_title: string;
+  admin_kind_event_what: string;
+  admin_kind_event_rank: string;
+  admin_kind_event_examples: string;
+  admin_kind_diary_title: string;
+  admin_kind_diary_what: string;
+  admin_kind_diary_rank: string;
+  admin_kind_diary_examples: string;
   admin_pages: string;
   admin_pages_description: string;
   to_admin_panel: string;
@@ -790,7 +802,6 @@ export type LanguagePhrases = {
   edit_content_section: string;
   diary_access: string;
   diary_date: string;
-  diary_date_hint: string;
   diary_content: string;
   diary_content_hint: string;
   diary_date_already_taken: string;
@@ -890,8 +901,6 @@ export type LanguagePhrases = {
   event_tags: string;
   event_tags_hint: string;
   reorder: string;
-  event_relations: string;
-  event_relations_hint: string;
   delete_event: string;
   project_icon: string;
   project_icon_hint: string;

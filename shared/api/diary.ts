@@ -1,6 +1,5 @@
 import type { ProjectEventAccessLevel } from '../access-level';
 import type { ContentFieldValue } from '../content';
-import type { RelationEditItem } from '../relation';
 import type { MediaDescriptor } from '../media';
 import type { AdminPaginatedResponse } from '../admin/entity-list';
 
@@ -9,8 +8,8 @@ export type DiaryGetResponse = {
   date: string;
   access: ProjectEventAccessLevel;
   content: ContentFieldValue;
-  relations: RelationEditItem[];
   reminder: string;
+  notes?: ContentFieldValue;
 };
 
 export type DiarySaveResponse =

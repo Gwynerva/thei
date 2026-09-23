@@ -809,7 +809,11 @@ async function buildDiaryLinks(
         return {
           date: entry.date,
           href: buildDiaryUrl(entry.date),
-          excerpt: diaryContentExcerpt(content?.data, isAdmin),
+          excerpt: diaryContentExcerpt(
+            content?.data,
+            isAdmin,
+            THEI_SERVER.phrase.content_private_section,
+          ),
           ...(isAdmin && entry.access !== ProjectEventAccessLevel.Public
             ? { access: entry.access }
             : {}),
@@ -857,7 +861,13 @@ export async function buildPublicDiaryEntry(
       asOwner,
     ),
     relatedEntities: await buildRelationReferences(relations, isAdmin),
-    ...(isAdmin && stored.reminder ? { reminder: stored.reminder } : {}),
+    ...(await buildOwnerOnlyNotes(
+      'diary-entry',
+      stored.diaryUuid,
+      { type: 'diary-entry', date: stored.date },
+      stored.reminder,
+      isAdmin,
+    )),
   };
 }
 

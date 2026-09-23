@@ -34,14 +34,21 @@ export function diaryExcerpt(
 /**
  * The excerpt of an entry's body as a given reader may see it.
  *
- * A private section inside a public entry stays private in its excerpt too:
- * a stranger's card is cut from the public text only, never from the whole.
+ * Headings read as ordinary text: a card has no room for structure, only for
+ * the words. A private section inside a public entry stays private in its
+ * excerpt too — a stranger's card shows `[privateLabel]` where it stood, so
+ * the text around it does not read as one run-on thought.
  */
 export function diaryContentExcerpt(
   data: ContentOutputData | null | undefined,
   includePrivate: boolean,
+  privateLabel: string,
 ): string {
   return diaryExcerpt(
-    includePrivate ? contentPlainText(data) : publicContentPlainText(data),
+    includePrivate
+      ? contentPlainText(data)
+      : publicContentPlainText(data, 'all', {
+          privatePlaceholder: privateLabel,
+        }),
   );
 }

@@ -72,6 +72,7 @@ describe('diary validation', () => {
 describe('diary excerpt of a body', () => {
   const body = {
     blocks: [
+      { type: 'header', data: { text: 'Morning', level: 2 } },
       { type: 'paragraph', data: { text: 'Out in the open.' } },
       {
         type: 'privateSectionBoundary',
@@ -82,14 +83,38 @@ describe('diary excerpt of a body', () => {
         type: 'privateSectionBoundary',
         data: { sectionId: 'secret', edge: 'end' },
       },
+      { type: 'paragraph', data: { text: 'Evening.' } },
     ],
   } as any;
 
-  it('never quotes a private section to a visitor', () => {
-    expect(diaryContentExcerpt(body, false)).toBe('Out in the open.');
+  it('marks a private section instead of quoting it to a visitor', () => {
+    expect(diaryContentExcerpt(body, false, 'Private section')).toBe(
+      'Morning Out in the open. [Private section] Evening.',
+    );
   });
 
-  it('quotes the whole entry to its owner', () => {
-    expect(diaryContentExcerpt(body, true)).toContain('Only for me.');
+  it('quotes the whole entry, headings as plain text, to its owner', () => {
+    expect(diaryContentExcerpt(body, true, 'Private section')).toBe(
+      'Morning Out in the open. Only for me. Evening.',
+    );
+  });
+
+  it('leaves no marker for an empty private section', () => {
+    const empty = {
+      blocks: [
+        { type: 'paragraph', data: { text: 'Out in the open.' } },
+        {
+          type: 'privateSectionBoundary',
+          data: { sectionId: 'secret', edge: 'start' },
+        },
+        {
+          type: 'privateSectionBoundary',
+          data: { sectionId: 'secret', edge: 'end' },
+        },
+      ],
+    } as any;
+    expect(diaryContentExcerpt(empty, false, 'Private section')).toBe(
+      'Out in the open.',
+    );
   });
 });

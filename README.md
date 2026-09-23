@@ -26,12 +26,13 @@ Simplest first. Each one asks more of you than the last, and gives more back.
   public or private as you like.
 - **Events** are the small moments worth writing up: a meetup, a trip, a first
   release, a strange day. Too small or too loose to be a project, too good to
-  lose. An event has dates, media, tags and relations, but it stands on its own.
+  lose. An event has dates, media and tags, and projects can relate to it,
+  but it stands on its own.
 - **Projects** are the big episodes: self-contained, structured and substantial.
   A project is told through its own **stages** — dated periods of work — and
   **sections** — topical write-ups — with media, a showcase, files, links and
-  relations to other entities. Mark the ones that belong in your CV or in the
-  showcase on the home page.
+  relations to other projects, events and diary entries. Mark the ones that
+  belong in your CV or in the showcase on the home page.
 
 Around them:
 

@@ -38,6 +38,7 @@ const list = computed<ProjectListResponse | undefined>(() => data.value);
   </StickyGlassHeader>
 
   <div class="m-auto w-(--width-wide) px-window py-lg">
+    <AdminEntityKindNotice kind="project" class="mb-md" />
     <AdminEntityListToolbar v-model:search="search" v-model:order="order" />
 
     <div
