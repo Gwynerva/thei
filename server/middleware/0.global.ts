@@ -37,6 +37,9 @@ export default defineEventHandler(async (event) => {
   const alwaysAvailable = ['/api/admin/profile'];
   if (
     alwaysAvailable.includes(path) ||
+    // Icons, like `/favicon.ico` beside them: the sign-in page of a closed
+    // site needs Thei's, and the site's own is no secret either.
+    path.startsWith('/favicon/') ||
     path.startsWith('/api/generated-icons/') ||
     path.startsWith('/media/generated-icons/') ||
     path.startsWith('/media/external-link-favicons/')

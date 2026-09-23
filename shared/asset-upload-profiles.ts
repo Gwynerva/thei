@@ -53,9 +53,9 @@ export const ASSET_UPLOAD_PROFILE_CONFIGS = {
     imageQuality: 90,
     videoQuality: 85,
     stripAudio: true,
-    // Browser support for AVIF in a tab icon is uneven, and failing there
-    // shows an empty tab rather than a slightly larger file, so the favicon
-    // stays on WebP deliberately.
+    // Browsers never see this file: the whole icon set is redrawn from it on
+    // the server, so it matters only as a source. At 512 px, lossy
+    // compression leaves nothing visible once the icon shrinks to 16–48 px.
     imageFormat: 'webp',
   },
   'profile-status': {

@@ -32,7 +32,7 @@ const PLATE_LUMINANCE = 56;
 export type FaviconVariant = 'ico' | 'icon' | 'apple';
 
 export interface FaviconSource {
-  /** Content hash of the uploaded icon, or `default` for the shipped one. */
+  /** Content hash of the icon the set is drawn from, uploaded or shipped. */
   key: string;
   extension: string;
   filePath: string;
@@ -47,29 +47,65 @@ export interface FaviconSet {
   version: string;
 }
 
-export async function resolveFaviconSource(): Promise<FaviconSource> {
-  const profile = getProfile();
-  const assetUuid = profile.faviconAssetUuid;
-  if (assetUuid) {
-    const asset = await THEI_SERVER.assets.findByUuid(assetUuid);
-    if (asset)
-      return {
-        key: asset.contentHash,
-        extension: asset.extension,
-        filePath: assetFilePath(asset.contentHash, asset.extension),
-        isSvg: asset.extension === 'svg',
-      };
+/**
+ * Whose icon a page wears: the site's own on public pages, Thei's on the
+ * engine's — the admin, the installer, the update screen and sign-in.
+ */
+export type FaviconOwner = 'site' | 'thei';
+
+export async function resolveFaviconSource(
+  owner: FaviconOwner = 'site',
+): Promise<FaviconSource> {
+  if (owner === 'site') {
+    // Before installation there is no profile to read, and the installer's
+    // tab still deserves an icon: the shipped one stands in.
+    let assetUuid: string | null = null;
+    try {
+      assetUuid = getProfile().faviconAssetUuid;
+    } catch {}
+    if (assetUuid) {
+      const asset = await THEI_SERVER.assets.findByUuid(assetUuid);
+      if (asset)
+        return {
+          key: asset.contentHash,
+          extension: asset.extension,
+          filePath: assetFilePath(asset.contentHash, asset.extension),
+          isSvg: asset.extension === 'svg',
+        };
+    }
   }
+  return theiFaviconSource();
+}
+
+let theiSource: Promise<FaviconSource> | undefined;
+
+/**
+ * The icon Thei ships with, keyed by its bytes like an upload is, so a release
+ * that redraws it is fetched anew rather than served from yesterday's cache.
+ */
+function theiFaviconSource() {
+  theiSource ??= loadTheiFaviconSource().catch((error) => {
+    theiSource = undefined;
+    throw error;
+  });
+  return theiSource;
+}
+
+async function loadTheiFaviconSource(): Promise<FaviconSource> {
+  const filePath = THEI_SERVER.theiPath('public', 'favicon.svg');
+  const bytes = await readFile(filePath);
   return {
-    key: 'default',
+    key: createHash('sha256').update(bytes).digest('hex'),
     extension: 'svg',
-    filePath: THEI_SERVER.theiPath('public', 'favicon.svg'),
+    filePath,
     isSvg: true,
   };
 }
 
-export async function resolveFaviconSet(): Promise<FaviconSet> {
-  const source = await resolveFaviconSource();
+export async function resolveFaviconSet(
+  owner: FaviconOwner = 'site',
+): Promise<FaviconSet> {
+  const source = await resolveFaviconSource(owner);
   return {
     source,
     iconExtension: source.isSvg ? 'svg' : 'png',
@@ -238,6 +274,9 @@ function faviconTemplateSignature() {
         JSON.stringify(FAVICON_SIZES),
         String(APPLE_PADDING),
         String(PLATE_LUMINANCE),
+        renderFaviconVariant.toString(),
+        loadSquare.toString(),
+        renderSquarePng.toString(),
         renderAppleTouchIcon.toString(),
         packIco.toString(),
         faviconPlateColor.toString(),
