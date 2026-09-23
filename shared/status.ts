@@ -59,6 +59,30 @@ export function emptyStatusEditData(): StatusEditData {
 }
 
 /**
+ * Adds what pending status edits do to each icon's usage count into `delta`,
+ * so a file picker shows an asset's real reuse before the form is saved.
+ * `saved` is the loaded history the edits refer to.
+ */
+export function addStatusUsageDelta(
+  delta: Record<string, number>,
+  edits: Partial<StatusEditData>,
+  saved: readonly StatusHistoryItem[],
+) {
+  const add = (id: string | null | undefined, amount: number) => {
+    if (id) delta[id] = (delta[id] ?? 0) + amount;
+  };
+  const savedIcon = (id: string) => saved.find((s) => s.id === id)?.assetUuid;
+  for (const status of edits.newStatuses ?? [])
+    if (status.kind === 'regular') add(status.assetUuid, 1);
+  for (const id of edits.deletedStatusIds ?? []) add(savedIcon(id), -1);
+  for (const status of edits.updatedStatuses ?? []) {
+    add(savedIcon(status.id), -1);
+    add(status.assetUuid, 1);
+  }
+  return delta;
+}
+
+/**
  * The asset-usage container a status icon is recorded under.
  *
  * Kept per owner kind rather than collapsed into one `status` container: the

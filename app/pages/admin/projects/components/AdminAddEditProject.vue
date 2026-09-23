@@ -34,7 +34,10 @@ import {
   DEFAULT_PROJECT_ACTION,
   projectActionValidationError,
 } from '#layers/thei/shared/project-action';
-import { emptyStatusEditData } from '#layers/thei/shared/status';
+import {
+  addStatusUsageDelta,
+  emptyStatusEditData,
+} from '#layers/thei/shared/status';
 import type { ProfileHistoryPage } from '#layers/thei/shared/profile';
 import type { StatusHistoryItem } from '#layers/thei/shared/status';
 import StatusHistoryField from '#layers/thei/app/components/settings/StatusHistoryField.vue';
@@ -109,21 +112,9 @@ const savedStatuses = computed<StatusHistoryItem[]>(
  * Pending status icon changes, so the file picker can count a project's real
  * usage of an asset while the form is still unsaved.
  */
-const statusUsageDelta = computed(() => {
-  const delta: Record<string, number> = {};
-  const add = (id: string | null | undefined, amount: number) => {
-    if (id) delta[id] = (delta[id] ?? 0) + amount;
-  };
-  for (const status of projectData.value.newStatuses ?? [])
-    if (status.kind === 'regular') add(status.assetUuid, 1);
-  for (const id of projectData.value.deletedStatusIds ?? [])
-    add(savedStatuses.value.find((s) => s.id === id)?.assetUuid, -1);
-  for (const status of projectData.value.updatedStatuses ?? []) {
-    add(savedStatuses.value.find((s) => s.id === status.id)?.assetUuid, -1);
-    add(status.assetUuid, 1);
-  }
-  return delta;
-});
+const statusUsageDelta = computed(() =>
+  addStatusUsageDelta({}, projectData.value, savedStatuses.value),
+);
 
 const isEdit = computed(() => Boolean(projectUuid));
 const saving = ref(false);
@@ -328,13 +319,6 @@ function markProjectSaved() {
 }
 
 /**
- * Takes the identities the server assigned to stages and sections.
- *
- * Until this runs, a stage created in this session has no uuid on the client,
- * and the next save would offer its public ID as if nobody owned it yet — which
- * the storage layer reads as a collision with the row it wrote itself.
- */
-/**
  * Folds the three status edit lists back into the loaded history.
  *
  * Without this a saved status stays in `newStatuses`, and the next save would
@@ -356,6 +340,13 @@ async function refreshSavedStatuses() {
   }
 }
 
+/**
+ * Takes the identities the server assigned to stages and sections.
+ *
+ * Until this runs, a stage created in this session has no uuid on the client,
+ * and the next save would offer its public ID as if nobody owned it yet — which
+ * the storage layer reads as a collision with the row it wrote itself.
+ */
 function applySavedContentItemIds(result: {
   stages: ProjectContentItemIdentity[];
   sections: ProjectContentItemIdentity[];

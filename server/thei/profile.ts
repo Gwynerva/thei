@@ -1,15 +1,5 @@
 import { assetSelectionError } from '../../shared/asset-library';
-import {
-  and,
-  asc,
-  count,
-  desc,
-  eq,
-  inArray,
-  lt,
-  notInArray,
-  or,
-} from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray } from 'drizzle-orm';
 import { createError } from 'h3';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import {
@@ -38,6 +28,11 @@ import { normalizeExternalLinkUrl } from '#layers/thei/shared/external-link';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
 import { buildAdminAssetUrls, buildPublicProfileMedia } from './assets/urls';
 import { resolveGeneratedIcon } from './media/generated-icon';
+import {
+  buildHistoryPage,
+  decodeHistoryCursor,
+  olderThan,
+} from './history-page';
 import {
   applyPreparedContentSave,
   buildContentFieldValue,
@@ -88,58 +83,22 @@ export async function profileMedia(
     : buildPublicProfileMedia(asset, container, id, role);
 }
 
-export function historyItem(
-  row: {
-    id: string;
-    createdAt: number;
-    assetUuid: string | null;
-    text?: string;
-    kind?: 'regular' | 'empty';
-  },
-  kind: 'avatars',
-  admin?: boolean,
-): Promise<ProfileAvatarHistoryItem>;
-export function historyItem(
-  row: {
-    id: string;
-    createdAt: number;
-    assetUuid: string | null;
-    text: string;
-    kind: 'regular' | 'empty';
-  },
-  kind: 'statuses',
-  admin?: boolean,
-): Promise<StatusHistoryItem>;
 export async function historyItem(
-  row: {
-    id: string;
-    createdAt: number;
-    assetUuid: string | null;
-    text?: string;
-    kind?: 'regular' | 'empty';
-  },
-  kind: 'avatars' | 'statuses',
+  row: { id: string; createdAt: number; assetUuid: string | null },
   admin = false,
-): Promise<ProfileAvatarHistoryItem | StatusHistoryItem> {
-  const common = {
+): Promise<ProfileAvatarHistoryItem> {
+  return {
     id: row.id,
     createdAt: row.createdAt,
     ...(admin && row.assetUuid ? { assetUuid: row.assetUuid } : {}),
     media: await profileMedia(
       row.assetUuid,
-      kind === 'avatars' ? 'profile-avatar' : 'profile-status',
+      'profile-avatar',
       row.id,
       'icon',
       admin,
     ),
   };
-  return kind === 'avatars'
-    ? common
-    : {
-        ...common,
-        kind: row.kind ?? 'regular',
-        text: row.text ?? '',
-      };
 }
 
 export function getProfileHistory(
@@ -169,56 +128,23 @@ export async function getProfileHistory(
   // Statuses live in their own owner-aware table; only avatars are still
   // read here.
   if (kind === 'statuses')
-    return getStatusHistory(PROFILE_STATUS_OWNER, cursor, admin, limit ?? 30);
+    return getStatusHistory(PROFILE_STATUS_OWNER, cursor, admin, limit);
   const { db, schema } = THEI_SERVER.useDb();
   const table = schema.profileAvatars;
   const pageSize = limit ?? 15;
-  let boundary: { createdAt: number; id: string } | undefined;
-  if (cursor) {
-    try {
-      boundary = JSON.parse(Buffer.from(cursor, 'base64url').toString());
-      if (
-        !boundary ||
-        !Number.isSafeInteger(boundary.createdAt) ||
-        typeof boundary.id !== 'string'
-      )
-        throw new Error();
-    } catch {
-      throw createError({ statusCode: 400, message: 'Invalid history cursor' });
-    }
-  }
   const rows = db
     .select()
     .from(table)
-    .where(
-      boundary
-        ? or(
-            lt(table.createdAt, boundary.createdAt),
-            and(
-              eq(table.createdAt, boundary.createdAt),
-              lt(table.id, boundary.id),
-            ),
-          )
-        : undefined,
-    )
+    .where(olderThan(table, decodeHistoryCursor(cursor)))
     .orderBy(desc(table.createdAt), desc(table.id))
     .limit(pageSize + 1)
     .all();
-  const selected = rows.slice(0, pageSize);
-  const last = selected.at(-1);
-  return {
-    items: await Promise.all(
-      selected.map((row) => historyItem(row, 'avatars', admin)),
-    ),
-    total: db.select({ value: count() }).from(table).get()!.value,
-    ...(rows.length > pageSize && last
-      ? {
-          nextCursor: Buffer.from(
-            JSON.stringify({ createdAt: last.createdAt, id: last.id }),
-          ).toString('base64url'),
-        }
-      : {}),
-  };
+  return buildHistoryPage(
+    rows,
+    pageSize,
+    db.select({ value: count() }).from(table).get()!.value,
+    (row) => historyItem(row, admin),
+  );
 }
 
 export async function getProfileIdentity(admin = false) {
@@ -233,9 +159,7 @@ export async function getProfileIdentity(admin = false) {
     : undefined;
   return {
     profile,
-    currentAvatar: avatar
-      ? await historyItem(avatar, 'avatars', admin)
-      : undefined,
+    currentAvatar: avatar ? await historyItem(avatar, admin) : undefined,
     avatarMedia:
       (avatar
         ? await profileMedia(

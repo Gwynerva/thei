@@ -2,11 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PROFILE_ID, type ProfileEditData } from '../../shared/profile';
 import { freshTestDb } from '../helpers/fresh-db';
 import { getProfileHistory, saveProfile } from '../../server/thei/profile';
-import {
-  applyStatusEdits,
-  prepareEntityStatusEdits,
-  statusUsageHooks,
-} from '../../server/thei/statuses';
+import { prepareEntityStatusEdits } from '../../server/thei/statuses';
 
 let context: Awaited<ReturnType<typeof freshTestDb>>;
 
@@ -177,17 +173,12 @@ describe('profile statuses', () => {
     ).rejects.toThrow('Invalid profile text');
     expect(stored().kind).toBe('empty');
     // Project statuses allow blank text, so the rule has to hold on its own.
-    const blank = prepareEntityStatusEdits(
-      { type: 'profile', id: PROFILE_ID },
-      { newStatuses: [], updatedStatuses: [{ id: 'empty-1', text: '' }] },
-    );
-    const hooks = statusUsageHooks(context.db, context.schema, 0, (message) => {
-      throw new Error(message);
-    });
     expect(() =>
-      applyStatusEdits(context.db, context.schema, blank, 0, hooks),
+      prepareEntityStatusEdits(
+        { type: 'profile', id: PROFILE_ID },
+        { newStatuses: [], updatedStatuses: [{ id: 'empty-1', text: '' }] },
+      ),
     ).toThrow('Invalid status');
-    expect(stored().kind).toBe('empty');
 
     await saveProfile({
       ...edit([]),

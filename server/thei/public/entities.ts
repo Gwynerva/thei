@@ -339,6 +339,7 @@ export async function buildPublicProject(
     description,
     rawLinks,
     relations,
+    status,
   ] = await Promise.all([
     getProjectStages(project.projectUuid),
     getProjectContentSections(project.projectUuid),
@@ -354,11 +355,8 @@ export async function buildPublicProject(
     ),
     getProjectExternalLinks(project.projectUuid),
     getRelations({ type: 'project', id: project.projectUuid }),
+    getCurrentStatus({ type: 'project', id: project.projectUuid }, isAdmin),
   ]);
-  const status = await getCurrentStatus(
-    { type: 'project', id: project.projectUuid },
-    isAdmin,
-  );
   const visibleStages = rawStages.filter(
     (stage) => isAdmin || !stage.isPrivate,
   );

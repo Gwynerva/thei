@@ -31,7 +31,6 @@ import { applyTagUsages, prepareTagUsages } from '../../../thei/tags';
 import { applyProjectExternalLinks } from '../../../thei/projects/external-links';
 import {
   applyStatusEdits,
-  deleteStatusesForOwner,
   prepareEntityStatusEdits,
   StatusEditError,
   statusUsageHooks,

@@ -7,8 +7,11 @@ export type StatusOwnerType = (typeof STATUS_OWNER_TYPES)[number];
  * A dated line about how something is going right now.
  *
  * The owner is polymorphic because the life of a project has the same shape as
- * the life of the person: a history nobody edits in place, newest first. The
- * profile keeps the one it always had; a project gets its own.
+ * the life of the person: a dated history, newest first. The profile keeps the
+ * one it always had; a project gets its own.
+ *
+ * `STATUS_OWNER_TYPES` repeats the one in `shared/status.ts` on purpose: the
+ * schema is also loaded by drizzle-kit, which only sees type imports erased.
  */
 export const statuses = sqliteTable(
   'statuses',

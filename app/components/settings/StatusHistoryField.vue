@@ -44,8 +44,11 @@ const pendingPreviews = reactive(
 // Media previews of saved statuses edited since the last save.
 const editedMedia = reactive(new Map<string, MediaDescriptor | undefined>());
 
-const visibleStatuses = computed<StatusHistoryItem[]>(() =>
-  newStatuses.value
+const visibleStatuses = computed<StatusHistoryItem[]>(() => {
+  // Looked up per row of a history that may run to hundreds.
+  const updates = new Map(updatedStatuses.value.map((s) => [s.id, s]));
+  const deleted = new Set(deletedStatusIds.value);
+  return newStatuses.value
     .map((status): StatusHistoryItem => {
       const preview = pendingPreviews.get(status.id);
       return {
@@ -62,7 +65,7 @@ const visibleStatuses = computed<StatusHistoryItem[]>(() =>
     .reverse()
     .concat(
       history.items.value.map((status) => {
-        const update = updatedStatuses.value.find((s) => s.id === status.id);
+        const update = updates.get(status.id);
         if (!update) return status;
         const { assetUuid: _assetUuid, media: _media, ...rest } = status;
         const media = editedMedia.get(status.id);
@@ -76,8 +79,8 @@ const visibleStatuses = computed<StatusHistoryItem[]>(() =>
         };
       }),
     )
-    .filter((status) => !deletedStatusIds.value.includes(status.id)),
-);
+    .filter((status) => !deleted.has(status.id));
+});
 const canAddEmptyStatus = computed(
   () => visibleStatuses.value[0]?.kind === 'regular',
 );

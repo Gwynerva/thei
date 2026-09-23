@@ -602,7 +602,7 @@ async function hydrateLifePoint(
     point.entityKind === 'profile-status'
   ) {
     if (point.entityKind === 'profile-avatar') {
-      const record = await historyItem(point.profileRecord!, 'avatars');
+      const record = await historyItem(point.profileRecord!);
       return {
         key,
         date: point.date,
@@ -631,6 +631,7 @@ async function hydrateLifePoint(
         ? { type: 'project', id: owner.projectUuid }
         : { type: 'profile', id: PROFILE_ID },
       isAdmin,
+      owner,
     );
     return {
       key,

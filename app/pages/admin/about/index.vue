@@ -4,7 +4,10 @@ import {
   type ProfileEditData,
   type ProfilePageLink,
 } from '#layers/thei/shared/profile';
-import type { StatusHistoryItem } from '#layers/thei/shared/status';
+import {
+  addStatusUsageDelta,
+  type StatusHistoryItem,
+} from '#layers/thei/shared/status';
 import StatusHistoryField from '#layers/thei/app/components/settings/StatusHistoryField.vue';
 import { canonicalizeContentData } from '#layers/thei/shared/content';
 import type { ContentEntitySearchItem } from '#layers/thei/shared/admin/content-entity-search';
@@ -83,17 +86,9 @@ const usageDelta = computed(() => {
   }
   if (data.value.avatarAssetUuid !== saved.value.avatarAssetUuid)
     add(data.value.avatarAssetUuid, 1);
-  for (const status of data.value.newStatuses)
-    if (status.kind === 'regular') add(status.assetUuid, 1);
   for (const id of data.value.deletedAvatarIds)
     add(avatars.items.value.find((a) => a.id === id)?.assetUuid, -1);
-  for (const id of data.value.deletedStatusIds)
-    add(savedStatuses.value.find((s) => s.id === id)?.assetUuid, -1);
-  for (const status of data.value.updatedStatuses) {
-    add(savedStatuses.value.find((s) => s.id === status.id)?.assetUuid, -1);
-    add(status.assetUuid, 1);
-  }
-  return delta;
+  return addStatusUsageDelta(delta, data.value, savedStatuses.value);
 });
 async function save() {
   if (!canSave.value) return;

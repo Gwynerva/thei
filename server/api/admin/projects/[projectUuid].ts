@@ -559,21 +559,10 @@ export default defineEventHandler(async (event) => {
       db.transaction((tx) => {
         deleteProjectContentSections(tx, schema, projectUuid);
         deleteProjectStages(tx, schema, projectUuid);
-        deleteStatusesForOwner(
-          tx,
-          schema,
-          { type: 'project', id: projectUuid },
-          (containerType, containerId) =>
-            tx
-              .delete(schema.assetUsages)
-              .where(
-                and(
-                  eq(schema.assetUsages.containerType, containerType),
-                  eq(schema.assetUsages.containerId, containerId),
-                ),
-              )
-              .run(),
-        );
+        deleteStatusesForOwner(tx, schema, {
+          type: 'project',
+          id: projectUuid,
+        });
         deleteRelations(tx, schema, { type: 'project', id: projectUuid });
         deleteProjectExternalLinks(tx, schema, projectUuid);
         deleteTagUsagesForContainer(tx, schema, 'project', projectUuid);

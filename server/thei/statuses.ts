@@ -1,20 +1,11 @@
-import {
-  and,
-  asc,
-  count,
-  desc,
-  eq,
-  inArray,
-  lt,
-  notInArray,
-  or,
-} from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, notInArray } from 'drizzle-orm';
 import {
   canAppendEmptyStatus,
   statusAssetContainer,
   type NewStatus,
   type StatusEditData,
   type StatusHistoryItem,
+  type StatusKind,
   type StatusOwner,
   type UpdatedStatus,
 } from '#layers/thei/shared/status';
@@ -25,11 +16,19 @@ import {
   buildPublicProfileMedia,
   buildPublicProjectStatusMedia,
 } from './assets/urls';
+import {
+  buildHistoryPage,
+  decodeHistoryCursor,
+  olderThan,
+} from './history-page';
 
 export const STATUS_PAGE_SIZE = 30;
 
 /** Reports a rejected edit the way the calling entity saver already does. */
 export type StatusInvalid = (message: string) => never;
+
+/** The part of a project a public status icon address is built from. */
+type StatusProject = { humanReadableSlug: string; publicId: string };
 
 function ownerWhere(schema: any, owner: StatusOwner) {
   return and(
@@ -43,6 +42,7 @@ async function statusMedia(
   owner: StatusOwner,
   statusId: string,
   admin: boolean,
+  project?: StatusProject | null,
 ) {
   const asset = assetUuid
     ? await THEI_SERVER.assets.findByUuid(assetUuid)
@@ -51,21 +51,30 @@ async function statusMedia(
   if (admin) return (await buildAdminAssetUrls(asset)).media;
   if (owner.type === 'profile')
     return buildPublicProfileMedia(asset, 'profile-status', statusId, 'icon');
-  const project = await THEI_SERVER.projects.findByUuid(owner.id);
+  if (project === undefined)
+    project = await THEI_SERVER.projects.findByUuid(owner.id);
   if (!project) return undefined;
   return buildPublicProjectStatusMedia(project, asset, statusId);
 }
 
+/**
+ * One status as readers get it.
+ *
+ * `project` is the owning project when the caller already holds it, so a page
+ * of a project's statuses does not look the same project up once per icon;
+ * `null` means it was looked up and is gone.
+ */
 export async function statusHistoryItem(
   row: {
     id: string;
     createdAt: number;
     assetUuid: string | null;
     text: string;
-    kind: 'regular' | 'empty';
+    kind: StatusKind;
   },
   owner: StatusOwner,
   admin = false,
+  project?: StatusProject | null,
 ): Promise<StatusHistoryItem> {
   return {
     id: row.id,
@@ -73,17 +82,11 @@ export async function statusHistoryItem(
     kind: row.kind,
     text: row.text,
     ...(admin && row.assetUuid ? { assetUuid: row.assetUuid } : {}),
-    media: await statusMedia(row.assetUuid, owner, row.id, admin),
+    media: await statusMedia(row.assetUuid, owner, row.id, admin, project),
   };
 }
 
-/**
- * One page of an owner's statuses, newest first.
- *
- * Keyset pagination on `(createdAt, id)` rather than an offset: statuses are
- * appended while somebody is reading, and an offset would quietly repeat or
- * skip a row every time one arrives.
- */
+/** One page of an owner's statuses, newest first. */
 export async function getStatusHistory(
   owner: StatusOwner,
   cursor?: string,
@@ -91,60 +94,25 @@ export async function getStatusHistory(
   limit = STATUS_PAGE_SIZE,
 ): Promise<ProfileHistoryPage<StatusHistoryItem>> {
   const { db, schema } = THEI_SERVER.useDb();
-  let boundary: { createdAt: number; id: string } | undefined;
-  if (cursor) {
-    try {
-      boundary = JSON.parse(Buffer.from(cursor, 'base64url').toString());
-      if (
-        !boundary ||
-        !Number.isSafeInteger(boundary.createdAt) ||
-        typeof boundary.id !== 'string'
-      )
-        throw new Error();
-    } catch {
-      throw createError({ statusCode: 400, message: 'Invalid history cursor' });
-    }
-  }
   const scope = ownerWhere(schema, owner);
   const rows = db
     .select()
     .from(schema.statuses)
-    .where(
-      boundary
-        ? and(
-            scope,
-            or(
-              lt(schema.statuses.createdAt, boundary.createdAt),
-              and(
-                eq(schema.statuses.createdAt, boundary.createdAt),
-                lt(schema.statuses.id, boundary.id),
-              ),
-            ),
-          )
-        : scope,
-    )
+    .where(and(scope, olderThan(schema.statuses, decodeHistoryCursor(cursor))))
     .orderBy(desc(schema.statuses.createdAt), desc(schema.statuses.id))
     .limit(limit + 1)
     .all();
-  const selected = rows.slice(0, limit);
-  const last = selected.at(-1);
-  return {
-    items: await Promise.all(
-      selected.map((row) => statusHistoryItem(row, owner, admin)),
-    ),
-    total: db
-      .select({ value: count() })
-      .from(schema.statuses)
-      .where(scope)
-      .get()!.value,
-    ...(rows.length > limit && last
-      ? {
-          nextCursor: Buffer.from(
-            JSON.stringify({ createdAt: last.createdAt, id: last.id }),
-          ).toString('base64url'),
-        }
-      : {}),
-  };
+  const project =
+    owner.type === 'project' && !admin && rows.some((row) => row.assetUuid)
+      ? ((await THEI_SERVER.projects.findByUuid(owner.id)) ?? null)
+      : undefined;
+  return buildHistoryPage(
+    rows,
+    limit,
+    db.select({ value: count() }).from(schema.statuses).where(scope).get()!
+      .value,
+    (row) => statusHistoryItem(row, owner, admin, project),
+  );
 }
 
 export async function getCurrentStatus(owner: StatusOwner, admin = false) {
@@ -172,6 +140,41 @@ function firstStatusAt(owner: StatusOwner): string | undefined {
     .limit(1)
     .get();
   return row ? new Date(row.createdAt).toISOString().slice(0, 10) : undefined;
+}
+
+type StoredStatus = {
+  ownerType: string;
+  ownerId: string;
+  kind: StatusKind;
+  text: string;
+  assetUuid: string | null;
+};
+
+/** A resent new status is the stored one only if nothing about it differs. */
+function isSameStatus(
+  stored: StoredStatus,
+  owner: StatusOwner,
+  incoming: { kind: StatusKind; text: string; assetUuid: string | null },
+) {
+  return (
+    stored.ownerType === owner.type &&
+    stored.ownerId === owner.id &&
+    stored.kind === incoming.kind &&
+    stored.text === incoming.text &&
+    stored.assetUuid === incoming.assetUuid
+  );
+}
+
+/**
+ * A rewrite keeps a status's date. Filling in an empty status turns it into a
+ * regular one, which only ever removes an empty status and so cannot break the
+ * order rule — but it has to leave something to say.
+ */
+function canRewriteStatus(
+  kind: StatusKind,
+  update: { text: string; assetUuid: string | null },
+) {
+  return kind === 'regular' || Boolean(update.text || update.assetUuid);
 }
 
 export type PreparedStatusEdits = {
@@ -211,6 +214,7 @@ export function prepareStatusEdits(
   const { db, schema } = THEI_SERVER.useDb();
 
   const deleted = ids(input.deletedStatusIds);
+  const deletedIds = new Set(deleted);
   const rawNew = input.newStatuses;
   if (!Array.isArray(rawNew) || rawNew.length > 100)
     invalid('Invalid statuses');
@@ -247,33 +251,51 @@ export function prepareStatusEdits(
         assetUuid: optionalId(value.assetUuid, 'Invalid status media'),
       };
     })
-    .filter((status) => !deleted.includes(status.id));
+    .filter((status) => !deletedIds.has(status.id));
+  const newIds = new Set(created.map((status) => status.id));
   if (
     new Set(updated.map((s) => s.id)).size !== updated.length ||
-    updated.some((s) => created.some((n) => n.id === s.id))
+    updated.some((s) => newIds.has(s.id))
   )
     invalid('Invalid status');
 
   const scope = ownerWhere(schema, owner);
   // A repeated request must land on the same rows rather than a conflict, so a
   // resent new status is accepted only when it matches the stored one exactly.
-  const newIds = new Set(created.map((status) => status.id));
-  const storedNew = newIds.size
-    ? db
-        .select()
-        .from(schema.statuses)
-        .where(and(scope, inArray(schema.statuses.id, [...newIds])))
-        .all()
-    : [];
+  // Ids are global, so the lookup is too: another owner's id is a conflict.
   const incomingById = new Map(created.map((status) => [status.id, status]));
-  for (const stored of storedNew) {
-    const incoming = incomingById.get(stored.id)!;
-    if (
-      stored.kind !== incoming.kind ||
-      stored.text !== incoming.text ||
-      stored.assetUuid !== incoming.assetUuid
-    )
-      invalid('Status ID already exists');
+  if (newIds.size)
+    for (const stored of db
+      .select()
+      .from(schema.statuses)
+      .where(inArray(schema.statuses.id, [...newIds]))
+      .all())
+      if (!isSameStatus(stored, owner, incomingById.get(stored.id)!))
+        invalid('Status ID already exists');
+
+  // Checked here rather than in the transaction, so the saver can still answer
+  // with its own error instead of failing halfway through the write.
+  const storedKinds = new Map<string, StatusKind>(
+    updated.length
+      ? db
+          .select({ id: schema.statuses.id, kind: schema.statuses.kind })
+          .from(schema.statuses)
+          .where(
+            and(
+              scope,
+              inArray(
+                schema.statuses.id,
+                updated.map((status) => status.id),
+              ),
+            ),
+          )
+          .all()
+          .map((row) => [row.id, row.kind])
+      : [],
+  );
+  for (const status of updated) {
+    const kind = storedKinds.get(status.id);
+    if (!kind || !canRewriteStatus(kind, status)) invalid('Invalid status');
   }
 
   const excluded = [...new Set([...deleted, ...newIds])];
@@ -289,7 +311,7 @@ export function prepareStatusEdits(
     .limit(1)
     .get()?.kind;
   for (const status of created) {
-    if (deleted.includes(status.id)) continue;
+    if (deletedIds.has(status.id)) continue;
     if (status.kind === 'empty' && !canAppendEmptyStatus(effectiveKind))
       invalid('Cannot append an empty status');
     effectiveKind = status.kind;
@@ -334,29 +356,26 @@ export function applyStatusEdits(
   const { owner, created, updated, deleted } = prepared;
   const container = statusAssetContainer(owner.type);
   const scope = ownerWhere(schema, owner);
+  const deletedIds = new Set(deleted);
 
   for (const id of deleted) {
-    hooks.detach(container, id);
-    tx.delete(schema.statuses)
+    // Only a status this owner really had gives up its icon: the id comes from
+    // the request, and another owner's usage row must not be touched.
+    const removed = tx
+      .delete(schema.statuses)
       .where(and(scope, eq(schema.statuses.id, id)))
-      .run();
+      .run().changes;
+    if (removed) hooks.detach(container, id);
   }
 
   for (const [index, status] of created.entries()) {
-    if (deleted.includes(status.id)) continue;
+    if (deletedIds.has(status.id)) continue;
     const existing = tx
       .select()
       .from(schema.statuses)
       .where(eq(schema.statuses.id, status.id))
       .get();
-    if (
-      existing &&
-      (existing.ownerType !== owner.type ||
-        existing.ownerId !== owner.id ||
-        existing.kind !== status.kind ||
-        existing.assetUuid !== status.assetUuid ||
-        existing.text !== status.text)
-    )
+    if (existing && !isSameStatus(existing, owner, status))
       hooks.invalid('Status ID already exists');
     tx.insert(schema.statuses)
       .values({
@@ -377,10 +396,7 @@ export function applyStatusEdits(
       .from(schema.statuses)
       .where(and(scope, eq(schema.statuses.id, status.id)))
       .get();
-    if (!existing) hooks.invalid('Invalid status');
-    // Filling in an empty status turns it into a regular one in place, which
-    // only ever removes an empty status and so cannot break the order rule.
-    if (existing.kind === 'empty' && !status.text && !status.assetUuid)
+    if (!existing || !canRewriteStatus(existing.kind, status))
       hooks.invalid('Invalid status');
     tx.update(schema.statuses)
       .set({ kind: 'regular', text: status.text, assetUuid: status.assetUuid })
@@ -391,30 +407,38 @@ export function applyStatusEdits(
   }
 }
 
-/** Drops every status of an owner that is being deleted. */
+/**
+ * Drops every status of an owner that is being deleted, with their icons'
+ * usages, in two statements however long the history is.
+ */
 export function deleteStatusesForOwner(
   tx: any,
   schema: any,
   owner: StatusOwner,
-  detach: (containerType: AssetContainerType, containerId: string) => void,
 ) {
-  const rows = tx
-    .select({ id: schema.statuses.id })
-    .from(schema.statuses)
-    .where(ownerWhere(schema, owner))
-    .all() as Array<{ id: string }>;
-  const container = statusAssetContainer(owner.type);
-  for (const row of rows) detach(container, row.id);
-  if (rows.length)
-    tx.delete(schema.statuses).where(ownerWhere(schema, owner)).run();
+  tx.delete(schema.assetUsages)
+    .where(
+      and(
+        eq(schema.assetUsages.containerType, statusAssetContainer(owner.type)),
+        inArray(
+          schema.assetUsages.containerId,
+          tx
+            .select({ id: schema.statuses.id })
+            .from(schema.statuses)
+            .where(ownerWhere(schema, owner)),
+        ),
+      ),
+    )
+    .run();
+  tx.delete(schema.statuses).where(ownerWhere(schema, owner)).run();
 }
 
 export class StatusEditError extends Error {}
 
 /**
  * The same preparation for callers that report failures by returning a message
- * rather than throwing an HTTP error, which is how the project and event
- * savers are written.
+ * rather than throwing an HTTP error, which is how the project savers are
+ * written.
  */
 export function prepareEntityStatusEdits(
   owner: StatusOwner,
