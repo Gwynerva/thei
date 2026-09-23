@@ -83,7 +83,10 @@ import { assetDetailsModal } from '#layers/thei/app/modals/asset-details/modal';
 import { createEditorBlockDrag } from '#layers/thei/app/composables/editor-block-drag';
 import { createEditorPrivateSections } from '#layers/thei/app/composables/editor-private-sections';
 import { createEditorPopoverLayer } from '#layers/thei/app/composables/editor-popover-layer';
-import { useContentLinkResolver } from '#layers/thei/app/composables/content-link-resolver';
+import {
+  invalidateContentLinks,
+  useContentLinkResolver,
+} from '#layers/thei/app/composables/content-link-resolver';
 import { internalUrlPastePattern } from '#layers/thei/shared/internal-url';
 import {
   createEditorSnapshotManager,
@@ -127,6 +130,9 @@ const modalContainer =
 const inlineLinkControls =
   useTemplateRef<ContentInlineLinkControlsExpose>('inlineLinkControls');
 const hintControls = useTemplateRef<ContentHintControlsExpose>('hintControls');
+// The editor may open again on the page where its links' targets were just
+// saved or removed; it asks about them afresh.
+invalidateContentLinks();
 const contentLinkResolver = useContentLinkResolver('admin');
 const internalSite = useInternalUrlSite();
 const entityPickerOpen = ref(false);

@@ -42,6 +42,42 @@ describe('content link resolver', () => {
     });
   });
 
+  it('asks again once cleared, so a deleted target shows as broken', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        kind: 'entity',
+        entityType: 'project',
+        entityId: 'project-uuid',
+        state: 'resolved',
+        href: '/projects/gone-GONE/',
+        title: 'Gone',
+        summary: '',
+      })
+      .mockResolvedValueOnce({
+        kind: 'entity',
+        entityType: 'project',
+        entityId: 'project-uuid',
+        state: 'broken',
+        reason: 'not-found',
+      });
+    const resolver = createContentLinkResolver(fetch);
+    const reference = {
+      kind: 'entity',
+      entityType: 'project',
+      entityId: 'project-uuid',
+    } as const;
+
+    expect(await resolver(reference)).toMatchObject({ state: 'resolved' });
+    expect(await resolver(reference)).toMatchObject({ state: 'resolved' });
+    resolver.clear();
+    expect(await resolver(reference)).toMatchObject({
+      state: 'broken',
+      reason: 'not-found',
+    });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
   it('does not cache failures so a broken link can recover', async () => {
     const fetch = vi
       .fn()

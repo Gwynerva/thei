@@ -82,8 +82,10 @@ external link, it is stored as an entity link instead.
 
 A target the reader may not open arrives without its uuid:
 `<a data-content-link="entity" data-entity-type="…" data-entity-restricted="true">`,
-and an `entityLink` block as `{ entityType, restricted: true }`. A stranger is
-told the same thing whether the target is private or gone.
+and an `entityLink` block as `{ entityType, restricted: true }`, and is shown
+as closed. A target that no longer exists keeps its uuid and is shown as a
+broken link: the resolver answers that it was not found — the same answer a
+stranger gets when asking by uuid about a target they may not open.
 
 `<strike>` is accepted on the way in and stored as `<s>`, because that is what
 the browser's own editing command still produces. Everything else is stripped,

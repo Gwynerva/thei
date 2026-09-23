@@ -14,19 +14,35 @@ export type ContentLinkFetcher = (
 
 export type ContentLinkAudience = 'public' | 'admin';
 
+/** A resolver whose remembered answers can be forgotten. */
+export type CachingContentLinkResolver = ContentLinkResolver & {
+  clear: () => void;
+};
+
 const appResolvers = new WeakMap<
   object,
-  Map<ContentLinkAudience, ContentLinkResolver>
+  Map<ContentLinkAudience, CachingContentLinkResolver>
 >();
 
+/**
+ * One resolver per app and audience, so a page asks about each target once.
+ *
+ * What it remembers holds for one page only. A target is found by its uuid,
+ * but its title, address and even existence belong to the target: renamed,
+ * moved to another address, made private or deleted in the meantime, it must
+ * be asked about again, or a link keeps leading to where it no longer is.
+ */
 export function useContentLinkResolver(
   audience: ContentLinkAudience = 'public',
 ): ContentLinkResolver {
   const nuxtApp = useNuxtApp();
   let resolvers = appResolvers.get(nuxtApp);
   if (!resolvers) {
-    resolvers = new Map();
-    appResolvers.set(nuxtApp, resolvers);
+    const created = new Map<ContentLinkAudience, CachingContentLinkResolver>();
+    resolvers = created;
+    appResolvers.set(nuxtApp, created);
+    if (import.meta.client)
+      nuxtApp.hook('page:start', () => clearResolvers(created));
   }
   const cached = resolvers.get(audience);
   if (cached) return cached;
@@ -38,14 +54,30 @@ export function useContentLinkResolver(
   return resolver;
 }
 
+/**
+ * Forgets every resolved link without leaving the page — for a view that may
+ * follow an edit made on that same page, such as an editor opened again after
+ * a save.
+ */
+export function invalidateContentLinks() {
+  const resolvers = appResolvers.get(useNuxtApp());
+  if (resolvers) clearResolvers(resolvers);
+}
+
+function clearResolvers(
+  resolvers: Map<ContentLinkAudience, CachingContentLinkResolver>,
+) {
+  for (const resolver of resolvers.values()) resolver.clear();
+}
+
 export function createContentLinkResolver(
   fetcher: ContentLinkFetcher,
   endpoint = '/api/content-links',
-): ContentLinkResolver {
+): CachingContentLinkResolver {
   const resolved = new Map<string, ResolvedContentLink>();
   const pending = new Map<string, Promise<ResolvedContentLink>>();
 
-  return async (reference) => {
+  const resolve: ContentLinkResolver = async (reference) => {
     const key = contentLinkReferenceKey(reference);
     const cached = resolved.get(key);
     if (cached) return cached;
@@ -63,6 +95,7 @@ export function createContentLinkResolver(
     }
     return await request;
   };
+  return Object.assign(resolve, { clear: () => resolved.clear() });
 }
 
 async function resolveReference(
