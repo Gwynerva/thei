@@ -3,11 +3,8 @@ import type {
   InfoBlockRow,
   InfoBlockTone,
 } from '#layers/thei/app/types/info-block';
-
-interface FileDimensions {
-  width: number;
-  height: number;
-}
+import type { FileDimensions } from '#layers/thei/shared/asset-upload-dimensions';
+import { sizeShare } from './format-labels';
 
 const props = defineProps<{
   includeDimensions?: boolean;
@@ -20,6 +17,8 @@ const props = defineProps<{
     extension?: string;
     size?: number;
     dimensions?: FileDimensions;
+    /** The size is a guess: shown behind an ≈. */
+    approximate?: boolean;
   };
 }>();
 
@@ -38,17 +37,21 @@ const rows = computed<InfoBlockRow[]>(() => {
     },
     {
       label: phrase.value.file_info_size,
-      value: {
-        previous:
-          props.previous.size !== undefined
-            ? humanSize(props.previous.size)
-            : undefined,
-        current:
-          props.current.size !== undefined
-            ? humanSize(props.current.size)
-            : undefined,
-        tone: sizeTone(props.previous.size, props.current.size),
-      },
+      // Unknown until the result exists: say nothing rather than "empty".
+      value:
+        props.current.size === undefined
+          ? undefined
+          : {
+              previous:
+                props.previous.size !== undefined
+                  ? humanSize(props.previous.size)
+                  : undefined,
+              current:
+                props.current.size !== undefined
+                  ? `${props.current.approximate ? '≈ ' : ''}${humanSize(props.current.size)}`
+                  : undefined,
+              tone: sizeTone(props.previous.size, props.current.size),
+            },
     },
   ];
 
@@ -66,17 +69,14 @@ const rows = computed<InfoBlockRow[]>(() => {
 });
 
 function formatDimensions(dimensions: FileDimensions | undefined) {
-  return dimensions ? `${dimensions.width}x${dimensions.height}` : undefined;
+  return dimensions ? `${dimensions.width} × ${dimensions.height}` : undefined;
 }
 
 function sizeTone(
   previous: number | undefined,
   current: number | undefined,
 ): InfoBlockTone {
-  if (previous === undefined || current === undefined || previous === current) {
-    return 'neutral';
-  }
-  return current < previous ? 'good' : 'bad';
+  return sizeShare(current, previous)?.tone ?? 'neutral';
 }
 
 function extensionTone(

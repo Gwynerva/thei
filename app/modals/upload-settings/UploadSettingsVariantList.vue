@@ -16,6 +16,8 @@ export interface UploadSettingsVariantListItem {
   hasAudio?: boolean;
   usageCount: number;
   isCurrent: boolean;
+  /** How the file was made, for a tooltip; the list itself shows what it is. */
+  recipe?: string;
 }
 
 defineProps<{
@@ -43,6 +45,7 @@ const humanSize = useHumanSize();
           ? 'border-accent bg-bg-accent text-accent'
           : 'border-border-1 bg-bg-1 text-text-2 hocus:border-border-3'
       "
+      :data-title-popup="item.recipe"
       @click="emit('select', item.assetUuid)"
     >
       <div class="min-w-0">
@@ -57,7 +60,7 @@ const humanSize = useHumanSize();
             v-if="item.dimensions"
             :data-title-popup="phrase.file_info_dimensions"
           >
-            {{ item.dimensions.width }}x{{ item.dimensions.height }}
+            {{ item.dimensions.width }}×{{ item.dimensions.height }}
           </span>
           <span :data-title-popup="phrase.file_info_size">
             {{ humanSize(item.size) }}

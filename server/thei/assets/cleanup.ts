@@ -10,6 +10,7 @@ import { ASSET_ORPHAN_GRACE_MS } from '#layers/thei/shared/asset-library';
 import { backupSessionOpen } from '../backup/session';
 import { findOrphanedAssets } from './repository/find-orphaned';
 import { deleteStoredAsset } from './storage';
+import { sweepDraftDirectories } from './drafts';
 import { sweepTheiTempDir } from './temp';
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -108,7 +109,8 @@ async function runAssetCleanupOnce(options: AssetCleanupOptions) {
 
 async function sweepTemp() {
   try {
-    const removed = await sweepTheiTempDir();
+    const removed =
+      (await sweepTheiTempDir()) + (await sweepDraftDirectories());
     if (removed) {
       THEI_SERVER.console
         .tag('Assets')

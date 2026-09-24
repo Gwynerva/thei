@@ -98,9 +98,9 @@ function assetDescriptor(
   };
 }
 
-function openAsset(value: unknown, title?: string) {
+function openAsset(value: unknown, title?: string, description?: string) {
   if (!props.assetViewer) return;
-  const descriptor = assetDescriptor(value, title);
+  const descriptor = assetDescriptor(value, title, description);
   if (descriptor) openPublicAssets([descriptor], descriptor);
 }
 
@@ -204,6 +204,14 @@ function openGalleryItem(
             )
           "
           :href="asset(block.data.asset).assetUrl"
+          :openable="assetViewer"
+          @open="
+            openAsset(
+              block.data.asset,
+              block.data.title as string | undefined,
+              block.data.caption as string | undefined,
+            )
+          "
         />
         <ExternalLinkPreviewCard
           v-else-if="block.type === 'externalLink'"

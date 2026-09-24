@@ -11,6 +11,8 @@ export interface FileInfoDimensions {
 
 export function useFileInfo(objectUrl: string, extension: string) {
   const dimensions = ref<FileInfoDimensions | undefined>(undefined);
+  /** Seconds of a video, once the browser has read its header. */
+  const duration = ref<number | undefined>(undefined);
 
   if (import.meta.client) {
     const isImage = isExtensionAllowed(extension, imageExtensionProfile);
@@ -60,6 +62,9 @@ export function useFileInfo(objectUrl: string, extension: string) {
           width: video.videoWidth,
           height: video.videoHeight,
         };
+        if (Number.isFinite(video.duration) && video.duration > 0) {
+          duration.value = video.duration;
+        }
       };
       video.addEventListener('loadedmetadata', onMeta, { once: true });
       video.src = objectUrl;
@@ -74,5 +79,5 @@ export function useFileInfo(objectUrl: string, extension: string) {
     });
   }
 
-  return { dimensions };
+  return { dimensions, duration };
 }

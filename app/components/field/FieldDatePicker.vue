@@ -59,12 +59,15 @@ const range = computed<DateRange | undefined>({
     >
       <Icon name="delete" />
     </Button>
+    <!-- One date has no certainty to choose: this value holds a day alone,
+         and a doubt written into it would only close the popup. -->
     <FieldDateRangePopup
       v-model="range"
       v-model:open="open"
       :anchor
       :placement
       :max-date
+      :precision="false"
       single
     />
   </div>

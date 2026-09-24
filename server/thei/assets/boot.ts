@@ -1,4 +1,5 @@
 import { runAssetCleanup } from './cleanup';
+import { clearDraftDirectories } from './drafts';
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const ONE_WEEK_MS = 7 * ONE_DAY_MS;
@@ -14,6 +15,14 @@ const ONE_WEEK_MS = 7 * ONE_DAY_MS;
 const FIRST_RUN_DELAY_MS = 60 * 1000;
 
 export function bootTheiAssets() {
+  // Drafts are held in memory, so whatever the last process left of them can
+  // no longer be reached. Losing scratch is never a reason to fail a boot.
+  clearDraftDirectories().catch(() =>
+    THEI_SERVER.console
+      .tag('Assets')
+      .error('Failed to clear editor drafts left by the last run'),
+  );
+
   // The full sweep walks `content/assets` and is the expensive half, so it
   // runs weekly while the cheap SQL phases keep their daily cadence.
   setTimeout(

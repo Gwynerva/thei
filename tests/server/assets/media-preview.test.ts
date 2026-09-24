@@ -46,6 +46,20 @@ describe('media previews', () => {
     expect(preview).toMatchObject({ width: 720, height: 405 });
   });
 
+  it('turns an EXIF-rotated photo the way it is displayed', async () => {
+    // Stored landscape pixels with orientation 6: shown as a portrait photo.
+    const source = await sharp({
+      create: { width: 400, height: 200, channels: 3, background: '#e0a030' },
+    })
+      .jpeg()
+      .withMetadata({ orientation: 6 })
+      .toBuffer();
+
+    const preview = await createMediaPreview(source, AssetType.Image);
+
+    expect(preview).toMatchObject({ width: 200, height: 400 });
+  });
+
   it('rasterizes SVG without enlarging its intrinsic size', async () => {
     const source = Buffer.from(
       '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="480"><rect width="240" height="480" fill="#63b33e"/></svg>',

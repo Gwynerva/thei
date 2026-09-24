@@ -13,9 +13,12 @@ describe('upload profile aspect hints', () => {
       width: 1200,
       height: 400,
     });
+  });
+
+  it('leaves the crop free where the place keeps the file its own shape', () => {
     expect(
-      getAssetUploadProfileAspect('project-action-background')?.ratio,
-    ).toBe('8:3');
+      getAssetUploadProfileAspect('project-action-background'),
+    ).toBeUndefined();
   });
 
   it('says nothing about square slots or a missing profile', () => {

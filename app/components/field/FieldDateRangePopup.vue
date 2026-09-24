@@ -2,13 +2,16 @@
 import type { Placement, ReferenceElement } from '@floating-ui/vue';
 import type { DateRange } from '#layers/thei/shared/date-range';
 import {
+  DATE_PRECISIONS,
+  datePrecisionTone,
   normalizeDatePrecisionInfo,
   type DatedPeriod,
   type DatePrecision,
 } from '#layers/thei/shared/date-precision';
 import FloatingPopup from '#layers/thei/app/components/FloatingPopup.vue';
 import FieldDateRangePicker from '#layers/thei/app/components/field/FieldDateRangePicker.vue';
-import FieldPrecisionBar from '#layers/thei/app/components/field/FieldPrecisionBar.vue';
+import FieldDiscreteBar from '#layers/thei/app/components/field/FieldDiscreteBar.vue';
+import type { DiscreteBarStop } from '#layers/thei/app/components/field/discrete-bar';
 
 withDefaults(
   defineProps<{
@@ -52,16 +55,33 @@ const range = computed<DateRange | undefined>({
   },
 });
 
-const precisionModel = computed<DatePrecision>({
+const precisionModel = computed<string>({
   get: () => model.value?.precision ?? 'exact',
   set: (precision) => {
     if (!model.value) return;
     model.value = {
       ...model.value,
-      ...normalizeDatePrecisionInfo({ ...model.value, precision }),
+      ...normalizeDatePrecisionInfo({
+        ...model.value,
+        precision: precision as DatePrecision,
+      }),
     };
   },
 });
+
+/**
+ * How sure the owner is of a date, on a four-stop track. It sits next to
+ * the calendar rather than inside it: the date picker is a third-party
+ * widget whose own layout breaks the moment anything is grafted into it, and
+ * certainty is a separate question anyway.
+ */
+const precisionStops = computed<DiscreteBarStop[]>(() =>
+  DATE_PRECISIONS.map((precision) => ({
+    value: precision,
+    label: phrase.value[`date_precision_${precision}`],
+    tone: datePrecisionTone(precision),
+  })),
+);
 
 const noteModel = computed<string>({
   get: () => model.value?.precisionNote ?? '',
@@ -87,7 +107,12 @@ const noteModel = computed<string>({
         class="flex flex-col gap-xs border-t border-border-1 p-sm"
       >
         <FieldLabel>{{ phrase.date_precision }}</FieldLabel>
-        <FieldPrecisionBar v-model="precisionModel" />
+        <FieldDiscreteBar
+          v-model="precisionModel"
+          :stops="precisionStops"
+          :label="phrase.date_precision"
+          :icon="precisionModel === 'exact' ? undefined : 'approximate'"
+        />
         <FieldInput
           v-if="precisionModel !== 'exact'"
           v-model="noteModel"

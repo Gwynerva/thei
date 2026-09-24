@@ -4,7 +4,20 @@ import { rm } from 'node:fs/promises';
 import { pipeline } from 'node:stream/promises';
 import { randomUUID } from 'node:crypto';
 import type { H3Event } from 'h3';
+import type { AssetType } from '../../../shared/asset';
+import type { AssetUploadLimitPolicy } from '../../../shared/asset-upload-limits';
+import { normalizeAssetExtension } from '../../../shared/assets/formats';
+import { inferAssetType } from './process';
 import { theiTempPath } from './temp';
+import {
+  parseAcceptedExtensions,
+  parseOptionalPositiveInt,
+  parseSizeLimitPolicy,
+  resolveMaxSizeBytes,
+  validateFileInput,
+  validateSizeLimitPolicy,
+  validateUploadContentLength,
+} from './upload-request';
 
 /** An upload staged on disk, never held whole in memory. */
 export interface StagedUpload {
@@ -30,9 +43,13 @@ export interface StagedUpload {
  */
 export async function stageUploadBody(
   event: H3Event,
-  options: { maxSizeBytes: number },
+  options: {
+    maxSizeBytes: number;
+    /** Where to stage the file; a fresh scratch path when absent. */
+    path?: string;
+  },
 ): Promise<StagedUpload> {
-  const path = theiTempPath(`upload-${randomUUID()}`);
+  const path = options.path ?? theiTempPath(`upload-${randomUUID()}`);
   const digest = createHash('sha256');
   let size = 0;
   let tooLarge = false;
@@ -105,4 +122,60 @@ export function readUploadHeader(
   } catch {
     throw createError({ statusCode: 400, message: `Invalid header: ${name}` });
   }
+}
+
+export interface UploadFileHeaders {
+  extension: string;
+  sourceType: AssetType;
+  uploadId?: string;
+  maxSizeBytes: number;
+  sizeLimitPolicy?: AssetUploadLimitPolicy;
+  acceptedExtensions?: string[] | '*';
+}
+
+/**
+ * Reads and checks what an upload says about its file.
+ *
+ * Everything that can be judged from the headers is judged here, before a
+ * single byte of the body is read.
+ */
+export function readUploadFileHeaders(event: H3Event): UploadFileHeaders {
+  validateUploadContentLength(getHeader(event, 'content-length'));
+
+  const extension = normalizeAssetExtension(
+    readUploadHeader(event, 'x-upload-extension'),
+  );
+  const uploadId = readUploadHeader(event, 'x-upload-id', false) || undefined;
+  const sizeLimitPolicy = parseSizeLimitPolicy(
+    readUploadHeader(event, 'x-upload-size-limit-policy', false),
+  );
+  const maxSizeBytes = resolveMaxSizeBytes(
+    sizeLimitPolicy,
+    parseOptionalPositiveInt(
+      readUploadHeader(event, 'x-upload-max-size', false),
+    ),
+  );
+  const acceptedExtensions = parseAcceptedExtensions(
+    readUploadHeader(event, 'x-upload-accepted-extensions', false),
+  );
+
+  if (!extension) {
+    throw createError({
+      statusCode: 400,
+      message: 'Missing required field: x-upload-extension',
+    });
+  }
+
+  const sourceType = inferAssetType(extension);
+  validateFileInput({ extension, size: 0, acceptedExtensions });
+  validateSizeLimitPolicy(sizeLimitPolicy, sourceType);
+
+  return {
+    extension,
+    sourceType,
+    uploadId,
+    maxSizeBytes,
+    sizeLimitPolicy,
+    acceptedExtensions,
+  };
 }

@@ -231,6 +231,9 @@ for (const width of [1280, 390]) {
     );
     // Found by where it is used: the page that holds it.
     await page.getByRole('searchbox').fill('Library usage test');
+    // The search lands in the address after a pause; a modal opened before
+    // that would go with the route change.
+    await expect(page).toHaveURL(/[?&]q=/);
     const assetRow = page.locator(
       `[data-asset-uuid="${first.asset.assetUuid}"]`,
     );

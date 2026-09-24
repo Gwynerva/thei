@@ -7,6 +7,16 @@ import { useMediaPair } from '#layers/thei/app/composables/media-pair';
 const props = defineProps(mediaSurfaceProps);
 // Media URLs travel through the API without the base path; the DOM needs it.
 const mediaSrc = computed(() => sitePath(props.src));
+/**
+ * A video at rest shows its first frame, which for many videos is black or a
+ * title card. The preview is a frame chosen to show the video, so it stands
+ * in until the video plays.
+ */
+const videoPoster = computed(() =>
+  props.kind === 'video' && props.previewSrc
+    ? sitePath(props.previewSrc)
+    : undefined,
+);
 const emit = defineEmits<{
   dimensions: [width: number, height: number];
   ready: [];
@@ -148,6 +158,7 @@ defineExpose({ play, pause });
             register('backdrop', el)
         "
         :src="mediaSrc"
+        :poster="videoPoster"
         :muted="kind === 'video' ? true : undefined"
         :loop="kind === 'video' ? loop : undefined"
         :playsinline="kind === 'video' ? true : undefined"
@@ -169,6 +180,7 @@ defineExpose({ play, pause });
               register('main', el)
           "
           :src="mediaSrc"
+          :poster="videoPoster"
           :width
           :height
           :alt

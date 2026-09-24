@@ -4,14 +4,12 @@ import type {
   AssetVariantWithUsage,
   AssetVariantsResponse,
 } from '#layers/thei/shared/api/asset';
-import type { AssetUploadSettings } from '#layers/thei/shared/asset-upload-settings';
+import type { AssetDraftSource } from '#layers/thei/shared/api/asset-draft';
+import type { AssetUploadRequest } from '#layers/thei/shared/asset-upload-settings';
 import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
 import type { AssetUploadLimitPolicy } from '#layers/thei/shared/asset-upload-limits';
-import { buildUploadHeaders } from '#layers/thei/shared/api/asset-upload-headers';
-import { getPathExtension } from '#layers/thei/shared/assets/extensions';
 import type { PickedFile } from '../pick-file/picked-file';
 
-export type UploadSettingsBusyAction = 'variants' | 'save-unchanged' | 'apply';
 export type UploadSettingsStatus =
   | { phase: 'uploading'; progress?: number }
   /** Waiting for a processing slot, so the user is not left staring at 0%. */
@@ -31,22 +29,25 @@ export interface UploadSettingsModalData {
   usageDelta?: Record<string, number>;
 }
 
+/**
+ * The stored variants of the file being edited, and the requests that add to
+ * them or pick one of them.
+ */
 export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
-  const busyAction = ref<UploadSettingsBusyAction>();
-  const uploadStatus = ref<UploadSettingsStatus | null>(null);
-  const activeXhr = shallowRef<XMLHttpRequest | null>(null);
   const variants = ref<AssetVariantWithUsage[]>([]);
-  let progressPollTimer: ReturnType<typeof setInterval> | undefined;
+  const loadingVariants = ref(false);
+  const status = ref<UploadSettingsStatus | null>(null);
+  let progressTimer: ReturnType<typeof setInterval> | undefined;
+  let commitController: AbortController | null = null;
 
   onBeforeUnmount(() => {
-    activeXhr.value?.abort();
+    commitController?.abort();
     stopProgressPolling();
-    activeXhr.value = null;
   });
 
   async function loadVariants(): Promise<AssetVariantWithUsage[]> {
     if (modalData.source.kind === 'file') return variants.value;
-    busyAction.value = 'variants';
+    loadingVariants.value = true;
     try {
       const response = await $fetch<AssetVariantsResponse>(
         `/api/admin/assets/${modalData.source.asset.assetUuid}/variants`,
@@ -60,110 +61,31 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
       }));
       return variants.value;
     } finally {
-      busyAction.value = undefined;
+      loadingVariants.value = false;
     }
   }
 
-  async function uploadWithSettings(
-    settings: AssetUploadSettings,
-    sourceAssetUuid?: string,
+  /**
+   * Stores a result made from the draft. An image already rendered with
+   * these settings is stored as it was shown; anything else is made now,
+   * with progress for the slow cases.
+   */
+  async function commit(
+    draft: AssetDraftSource,
+    settings: AssetUploadRequest,
   ): Promise<AssetUploadResponse> {
-    if (sourceAssetUuid || modalData.source.kind === 'asset') {
-      return await transformStoredAsset(settings, sourceAssetUuid);
-    }
-
-    const sourceFile = modalData.source.file.file;
+    commitController?.abort();
+    const controller = new AbortController();
+    commitController = controller;
     const uploadId = crypto.randomUUID();
-    // The file is the raw request body; its metadata travels in headers so the
-    // server can stream it to disk rather than buffering the whole request.
-    const headers = buildUploadHeaders({
-      settings,
-      extension: getPathExtension(modalData.source.file.name),
-      uploadId,
-      ...(modalData.maxSize !== undefined
-        ? { maxSize: modalData.maxSize }
-        : {}),
-      ...(modalData.sizeLimitPolicy
-        ? { sizeLimitPolicy: modalData.sizeLimitPolicy }
-        : {}),
-      ...(modalData.acceptedExtensions
-        ? { acceptedExtensions: modalData.acceptedExtensions }
-        : {}),
-    });
-
-    const result = await new Promise<AssetUploadResponse>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      activeXhr.value = xhr;
-      uploadStatus.value = { phase: 'uploading' };
-      xhr.open('POST', sitePath('/api/admin/assets'));
-      for (const [name, value] of Object.entries(headers)) {
-        xhr.setRequestHeader(name, value);
-      }
-
-      xhr.upload.addEventListener('progress', (event) => {
-        uploadStatus.value = {
-          phase: 'uploading',
-          progress: event.lengthComputable
-            ? Math.max(0, Math.min(1, event.loaded / event.total))
-            : undefined,
-        };
-      });
-
-      xhr.upload.addEventListener('load', () => {
-        uploadStatus.value = { phase: 'processing' };
-        startProgressPolling(uploadId);
-      });
-
-      xhr.addEventListener('load', () => {
-        activeXhr.value = null;
-        stopProgressPolling();
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            resolve(JSON.parse(xhr.responseText) as AssetUploadResponse);
-          } catch {
-            reject(new Error(phrase.value.upload_error_invalid_response));
-          }
-          return;
-        }
-
-        reject(new Error(readXhrErrorMessage(xhr)));
-      });
-
-      xhr.addEventListener('error', () => {
-        activeXhr.value = null;
-        stopProgressPolling();
-        reject(new Error(phrase.value.upload_error_network));
-      });
-
-      xhr.addEventListener('abort', () => {
-        activeXhr.value = null;
-        stopProgressPolling();
-        reject(new Error(phrase.value.upload_error_cancelled));
-      });
-
-      xhr.send(sourceFile);
-    });
-    rememberVariant(result);
-    return result;
-  }
-
-  async function transformStoredAsset(
-    settings: AssetUploadSettings,
-    sourceAssetUuid?: string,
-  ): Promise<AssetUploadResponse> {
-    const uploadId = crypto.randomUUID();
-    uploadStatus.value = { phase: 'processing' };
+    status.value = { phase: 'processing' };
     startProgressPolling(uploadId);
     try {
-      const assetUuid =
-        sourceAssetUuid ??
-        (modalData.source.kind === 'asset'
-          ? modalData.source.asset.assetUuid
-          : '');
       const result = await $fetch<AssetUploadResponse>(
-        `/api/admin/assets/${assetUuid}/variants`,
+        `/api/admin/assets/drafts/${draft.draftId}/commit`,
         {
           method: 'POST',
+          signal: controller.signal,
           body: {
             settings,
             uploadId,
@@ -173,30 +95,29 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
           },
         },
       );
-      rememberVariant(result);
+      remember(result);
       return result;
     } finally {
       stopProgressPolling();
+      status.value = null;
+      if (commitController === controller) commitController = null;
     }
   }
 
-  function rememberVariant(asset: AssetVariantInfo) {
-    const existingIndex = variants.value.findIndex(
+  function remember(asset: AssetVariantInfo) {
+    const index = variants.value.findIndex(
       (variant) => variant.assetUuid === asset.assetUuid,
     );
     const item: AssetVariantWithUsage = {
       ...asset,
-      usageCount:
-        existingIndex >= 0 ? variants.value[existingIndex]!.usageCount : 0,
+      usageCount: index >= 0 ? variants.value[index]!.usageCount : 0,
     };
-    if (existingIndex >= 0) {
-      variants.value.splice(existingIndex, 1, item);
-    } else {
-      variants.value.unshift(item);
-    }
+    if (index >= 0) variants.value.splice(index, 1, item);
+    else variants.value.unshift(item);
   }
 
-  async function touchVariant(assetUuid: string) {
+  /** Confirms a stored variant is still there and fits the field. */
+  async function touch(assetUuid: string) {
     await $fetch(`/api/admin/assets/${assetUuid}/touches`, {
       method: 'POST',
       body: {
@@ -209,41 +130,30 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
 
   function startProgressPolling(uploadId: string) {
     stopProgressPolling();
-    progressPollTimer = setInterval(async () => {
+    progressTimer = setInterval(async () => {
       try {
         const progress = await $fetch<UploadSettingsStatus | null>(
           `/api/admin/uploads/${uploadId}`,
         );
-        if (progress) uploadStatus.value = progress;
+        if (progress && status.value) status.value = progress;
       } catch {
-        // Upload errors are handled by the main request.
+        // Errors surface through the request itself.
       }
     }, 500);
   }
 
   function stopProgressPolling() {
-    if (!progressPollTimer) return;
-    clearInterval(progressPollTimer);
-    progressPollTimer = undefined;
-  }
-
-  function readXhrErrorMessage(xhr: XMLHttpRequest): string {
-    try {
-      const response = JSON.parse(xhr.responseText) as { message?: string };
-      return (
-        response.message ?? phrase.value.upload_error_request_failed(xhr.status)
-      );
-    } catch {
-      return phrase.value.upload_error_request_failed(xhr.status);
-    }
+    if (!progressTimer) return;
+    clearInterval(progressTimer);
+    progressTimer = undefined;
   }
 
   return {
-    busyAction,
-    uploadStatus,
     variants,
+    loadingVariants,
+    status,
     loadVariants,
-    uploadWithSettings,
-    touchVariant,
+    commit,
+    touch,
   };
 }

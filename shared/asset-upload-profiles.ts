@@ -1,7 +1,5 @@
-import type {
-  AssetImageFormat,
-  AssetResizeMode,
-} from './asset-upload-settings';
+import { ASSET_QUALITY_LEVEL_QUALITY } from './asset-quality-levels';
+import { fitInside, type AssetImageFormat } from './asset-upload-settings';
 import type { FileDimensions } from './asset-upload-dimensions';
 
 export type AssetUploadProfile =
@@ -15,43 +13,59 @@ export type AssetUploadProfile =
   | 'project-action-background'
   | 'tag-icon';
 
+/**
+ * How a field prepares the files put into it.
+ *
+ * A profile describes the place, not the file: the crop proportions it shows
+ * and the largest size worth storing for it. The editor starts from it; what
+ * ends up stored is whatever the admin settled on.
+ */
 export interface AssetUploadProfileConfig {
-  dimensions: FileDimensions;
-  resizeMode: AssetResizeMode;
-  allowUpscale: boolean;
+  /** The largest output worth storing; the crop is fitted inside it. */
+  box: FileDimensions;
+  /** Crop proportions the place shows. Absent when any shape fits. */
+  aspect?: FileDimensions;
+  /**
+   * How the place frames the file. A circle is only a guide in the editor:
+   * the stored file stays rectangular and the place rounds it.
+   */
+  shape?: 'rect' | 'circle';
   imageQuality: number;
   videoQuality: number;
   stripAudio: boolean;
-  /** Defaults to AVIF. Set only where AVIF is not reliably consumed. */
+  /** A fixed output format, for places that must not get another one. */
   imageFormat?: AssetImageFormat;
 }
 
+const square = { width: 1, height: 1 };
+/** The stored qualities of the levels a place starts from. */
+const high = ASSET_QUALITY_LEVEL_QUALITY.high;
+const medium = ASSET_QUALITY_LEVEL_QUALITY.medium;
+
 export const ASSET_UPLOAD_PROFILE_CONFIGS = {
   'profile-avatar': {
-    dimensions: { width: 256, height: 256 },
-    resizeMode: 'cover',
-    allowUpscale: true,
-    imageQuality: 90,
-    videoQuality: 85,
+    box: { width: 256, height: 256 },
+    aspect: square,
+    shape: 'circle',
+    imageQuality: high,
+    videoQuality: medium,
     stripAudio: true,
   },
   'profile-banner': {
-    dimensions: { width: 1200, height: 400 },
-    resizeMode: 'cover',
-    allowUpscale: true,
-    imageQuality: 90,
-    videoQuality: 85,
+    box: { width: 1200, height: 400 },
+    aspect: { width: 3, height: 1 },
+    imageQuality: high,
+    videoQuality: medium,
     stripAudio: true,
   },
   'profile-favicon': {
     // The engine derives the whole icon set from this one file, down to 16 px
     // and up to a 180 px touch icon, so it is stored large enough to scale
     // down cleanly rather than at any one display size.
-    dimensions: { width: 512, height: 512 },
-    resizeMode: 'cover',
-    allowUpscale: true,
-    imageQuality: 90,
-    videoQuality: 85,
+    box: { width: 512, height: 512 },
+    aspect: square,
+    imageQuality: high,
+    videoQuality: medium,
     stripAudio: true,
     // Browsers never see this file: the whole icon set is redrawn from it on
     // the server, so it matters only as a source. At 512 px, lossy
@@ -59,51 +73,46 @@ export const ASSET_UPLOAD_PROFILE_CONFIGS = {
     imageFormat: 'webp',
   },
   'profile-status': {
-    dimensions: { width: 128, height: 128 },
-    resizeMode: 'cover',
-    allowUpscale: true,
-    imageQuality: 90,
-    videoQuality: 85,
+    box: { width: 128, height: 128 },
+    aspect: square,
+    imageQuality: high,
+    videoQuality: medium,
     stripAudio: true,
   },
   'project-icon': {
-    dimensions: { width: 256, height: 256 },
-    resizeMode: 'cover',
-    allowUpscale: true,
-    imageQuality: 90,
-    videoQuality: 85,
+    box: { width: 256, height: 256 },
+    aspect: square,
+    imageQuality: high,
+    videoQuality: medium,
     stripAudio: true,
   },
   'project-banner': {
-    dimensions: { width: 1200, height: 675 },
-    resizeMode: 'cover',
-    allowUpscale: true,
-    imageQuality: 90,
-    videoQuality: 85,
+    box: { width: 1200, height: 675 },
+    aspect: { width: 16, height: 9 },
+    imageQuality: high,
+    videoQuality: medium,
     stripAudio: true,
   },
   'project-action-icon': {
-    dimensions: { width: 48, height: 48 },
-    resizeMode: 'cover',
-    allowUpscale: true,
-    imageQuality: 90,
-    videoQuality: 85,
+    box: { width: 48, height: 48 },
+    aspect: square,
+    imageQuality: high,
+    videoQuality: medium,
     stripAudio: true,
   },
   'project-action-background': {
-    dimensions: { width: 128, height: 48 },
-    resizeMode: 'cover',
-    allowUpscale: true,
-    imageQuality: 90,
-    videoQuality: 85,
+    // The button shows its background at its own size, fitted, covered or
+    // tiled, so the file keeps the shape it was drawn in.
+    box: { width: 1024, height: 256 },
+    imageQuality: high,
+    videoQuality: medium,
     stripAudio: true,
   },
   'tag-icon': {
-    dimensions: { width: 128, height: 128 },
-    resizeMode: 'cover',
-    allowUpscale: true,
-    imageQuality: 80,
-    videoQuality: 80,
+    box: { width: 128, height: 128 },
+    aspect: square,
+    imageQuality: medium,
+    videoQuality: medium,
     stripAudio: true,
   },
 } as const satisfies Record<AssetUploadProfile, AssetUploadProfileConfig>;
@@ -117,6 +126,7 @@ export function getAssetUploadProfileConfig(
 export interface AssetUploadProfileAspect {
   /** Reduced ratio, such as `16:9`. */
   ratio: string;
+  /** The largest size the place stores, in those proportions. */
   width: number;
   height: number;
 }
@@ -131,11 +141,13 @@ export function getAssetUploadProfileAspect(
   profile: AssetUploadProfile | undefined,
 ): AssetUploadProfileAspect | undefined {
   const config = getAssetUploadProfileConfig(profile);
-  if (!config || config.resizeMode !== 'cover') return undefined;
-  const { width, height } = config.dimensions;
-  if (!width || !height || width === height) return undefined;
-  const divisor = greatestCommonDivisor(width, height);
-  return { ratio: `${width / divisor}:${height / divisor}`, width, height };
+  const aspect = config?.aspect;
+  if (!aspect || aspect.width === aspect.height) return undefined;
+  const divisor = greatestCommonDivisor(aspect.width, aspect.height);
+  return {
+    ratio: `${aspect.width / divisor}:${aspect.height / divisor}`,
+    ...fitInside(aspect, config.box, true),
+  };
 }
 
 function greatestCommonDivisor(left: number, right: number): number {

@@ -40,7 +40,7 @@ describe('Editor.js phrases', () => {
       'Конец приватной секции',
     );
     expect(ruModule.phrases.content_snapshots).toBe('История версий');
-    expect(ruModule.phrases.content_media_stretch).toBe('Растянуть');
+    expect(ruModule.phrases.content_media_stretch).toBe('Во всю ширину');
   });
 });
 

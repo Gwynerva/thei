@@ -23,15 +23,9 @@ export function toDatePrecision(value: unknown): DatePrecision {
   return isDatePrecision(value) ? value : 'exact';
 }
 
-/** The index the uncertainty bar puts its cursor on, and back again. */
+/** Where a precision stands among the others: wider doubt is a higher step. */
 export function datePrecisionStep(precision: DatePrecision): number {
   return DATE_PRECISIONS.indexOf(precision);
-}
-
-export function datePrecisionAtStep(step: number): DatePrecision {
-  return DATE_PRECISIONS[
-    Math.min(Math.max(step, 0), DATE_PRECISIONS.length - 1)
-  ]!;
 }
 
 /**

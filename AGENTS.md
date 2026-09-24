@@ -26,6 +26,10 @@ Around them:
 - Keep a commit title on its first line whole. Never carry part of it over into the description, even when it runs past the usual recommended length.
 - Aim to fit a commit title within the recommended length (about 50 characters, 72 at most). Generalize when a change touches several things, and leave details to the description.
 
+## Playground Data
+
+- `.playground/content` holds throwaway development data. Agents may freely create, edit, crop, upload, replace and delete anything in it — projects, pages, files, settings — to check that a change really works. Nothing there needs preserving.
+
 ## Development Server Management
 
 - Before starting work, open or probe `http://localhost:3000` and identify the process listening on port `3000`, including IPv4 and IPv6 listeners.

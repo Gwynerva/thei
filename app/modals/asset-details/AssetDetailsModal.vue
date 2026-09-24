@@ -114,7 +114,7 @@ function replace() {
         :key="`media:${modalData.asset.assetUuid}:${previewSrc}`"
         ref="mediaPreview"
         :extension="modalData.asset.extension"
-        :src="sitePath(previewSrc)"
+        :src="previewSrc"
         :has-audio="modalData.asset.media?.hasAudio"
       />
       <FilePreview

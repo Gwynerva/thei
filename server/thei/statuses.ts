@@ -215,7 +215,8 @@ export function prepareStatusEdits(
 
   const deleted = ids(input.deletedStatusIds);
   const deletedIds = new Set(deleted);
-  const rawNew = input.newStatuses;
+  // Like the other two lists, a missing one means no edits of that kind.
+  const rawNew = input.newStatuses ?? [];
   if (!Array.isArray(rawNew) || rawNew.length > 100)
     invalid('Invalid statuses');
   const created = (rawNew as NewStatus[]).map((status) => {

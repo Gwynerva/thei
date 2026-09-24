@@ -1,6 +1,8 @@
 <script lang="ts" setup>
 defineProps<{
   label?: string;
+  /** Names the switch when nothing visible next to it does. */
+  switchLabel?: string;
 }>();
 
 const model = defineModel<boolean>();
@@ -34,6 +36,7 @@ const model = defineModel<boolean>();
         type="button"
         role="switch"
         :aria-checked="model"
+        :aria-label="switchLabel"
         @click="model = !model"
         class="relative block h-6 w-11 shrink-0 cursor-pointer rounded-full
           transition-colors"

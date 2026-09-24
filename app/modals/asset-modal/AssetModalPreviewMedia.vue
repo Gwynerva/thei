@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { AssetRotation } from '#layers/thei/shared/asset-crop';
 import {
   isExtensionAllowed,
   videoExtensionProfile,
@@ -11,7 +12,10 @@ const props = defineProps<{
   extension: string;
   src: string;
   hasAudio?: boolean;
+  /** The media's size as shown: already turned when `rotation` is set. */
   displayDimensions?: { width: number; height: number };
+  /** Clockwise quarter turns to show the media at. */
+  rotation?: AssetRotation;
 }>();
 
 const isVideo = isExtensionAllowed(props.extension, videoExtensionProfile);
@@ -42,6 +46,22 @@ const displayDimensionsKey = computed(() =>
 );
 
 const { state: playback, controller: playbackController } = useVideoPlayback();
+
+/**
+ * A turned media element keeps its own proportions and is turned in place,
+ * centred in a box that already has the turned shape; the box's size is read
+ * through container units, so zoom needs nothing extra here either.
+ */
+const turnStyle = computed(() => {
+  const rotation = props.rotation ?? 0;
+  if (!rotation) return undefined;
+  const sideways = rotation !== 180;
+  return {
+    width: sideways ? '100cqh' : '100%',
+    height: sideways ? '100cqw' : '100%',
+    transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+  };
+});
 
 watch(
   mediaRef,
@@ -149,6 +169,9 @@ defineExpose({
       class="absolute inset-0 flex items-center justify-center"
       :style="{ transform: transformStyle, willChange: 'transform' }"
     >
+      <!-- The box is sized by the zoom; anything laid over the media (a crop
+           frame) is positioned in percent of it and so follows every zoom
+           and pan without knowing about them. -->
       <Transition
         enter-from-class="opacity-0"
         enter-active-class="transition-opacity duration-300
@@ -156,34 +179,34 @@ defineExpose({
         leave-to-class="opacity-0"
         leave-active-class="transition-opacity motion-reduce:duration-0"
       >
-        <video
-          v-if="isVideo"
+        <div
           v-show="isReady"
-          ref="media"
-          :src="sitePath(props.src)"
-          class="pointer-events-none block max-h-none max-w-none"
+          class="relative shrink-0"
+          :class="turnStyle ? '[container-type:size]' : ''"
           :style="mediaStyle"
-          @loadedmetadata="onVideoMeta"
-        />
-      </Transition>
-      <Transition
-        enter-from-class="opacity-0"
-        enter-active-class="transition-opacity duration-300
-          motion-reduce:duration-0"
-        leave-to-class="opacity-0"
-        leave-active-class="transition-opacity motion-reduce:duration-0"
-      >
-        <img
-          v-if="!isVideo"
-          v-show="isReady"
-          ref="media"
-          :src="sitePath(props.src)"
-          alt=""
-          draggable="false"
-          class="pointer-events-none block max-h-none max-w-none"
-          :style="mediaStyle"
-          @load="onImgLoad"
-        />
+        >
+          <video
+            v-if="isVideo"
+            ref="media"
+            :src="sitePath(props.src)"
+            class="pointer-events-none block max-h-none max-w-none"
+            :class="turnStyle ? 'absolute top-1/2 left-1/2' : 'size-full'"
+            :style="turnStyle"
+            @loadedmetadata="onVideoMeta"
+          />
+          <img
+            v-else
+            ref="media"
+            :src="sitePath(props.src)"
+            alt=""
+            draggable="false"
+            class="pointer-events-none block max-h-none max-w-none"
+            :class="turnStyle ? 'absolute top-1/2 left-1/2' : 'size-full'"
+            :style="turnStyle"
+            @load="onImgLoad"
+          />
+          <slot name="overlay"></slot>
+        </div>
       </Transition>
     </div>
 

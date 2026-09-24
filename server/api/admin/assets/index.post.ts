@@ -1,7 +1,6 @@
 import type { AssetUploadResponse } from '#layers/thei/shared/api/asset';
-import { normalizeAssetExtension } from '#layers/thei/shared/assets/formats';
-import { inferAssetType } from '../../../thei/assets/process';
 import { createAssetVariant } from '../../../thei/assets/create-variant';
+import { requestAbortSignal } from '../../../thei/assets/request-signal';
 import { findStoredAssetByHash } from '../../../thei/assets/lookup';
 import { buildAssetVariantInfo } from '../../../thei/assets/storage';
 import {
@@ -13,18 +12,13 @@ import {
   setAssetUploadProgress,
 } from '../../../thei/assets/progress';
 import {
+  readUploadFileHeaders,
   readUploadHeader,
   stageUploadBody,
 } from '../../../thei/assets/upload-stream';
 import {
-  parseAcceptedExtensions,
   parseAssetUploadSettings,
-  parseOptionalPositiveInt,
-  parseSizeLimitPolicy,
-  resolveMaxSizeBytes,
   validateFileInput,
-  validateSizeLimitPolicy,
-  validateUploadContentLength,
 } from '../../../thei/assets/upload-request';
 
 /**
@@ -37,41 +31,18 @@ import {
  */
 export default defineEventHandler(
   async (event): Promise<AssetUploadResponse> => {
-    validateUploadContentLength(getHeader(event, 'content-length'));
-
+    const signal = requestAbortSignal(event);
+    const {
+      extension,
+      sourceType,
+      uploadId,
+      maxSizeBytes,
+      sizeLimitPolicy,
+      acceptedExtensions,
+    } = readUploadFileHeaders(event);
     const settings = parseAssetUploadSettings(
       readUploadHeader(event, 'x-upload-settings'),
     );
-    const extension = normalizeAssetExtension(
-      readUploadHeader(event, 'x-upload-extension'),
-    );
-    const uploadId = readUploadHeader(event, 'x-upload-id', false) || undefined;
-    const requestedMaxSizeBytes = parseOptionalPositiveInt(
-      readUploadHeader(event, 'x-upload-max-size', false),
-    );
-    const sizeLimitPolicy = parseSizeLimitPolicy(
-      readUploadHeader(event, 'x-upload-size-limit-policy', false),
-    );
-    const maxSizeBytes = resolveMaxSizeBytes(
-      sizeLimitPolicy,
-      requestedMaxSizeBytes,
-    );
-    const acceptedExtensions = parseAcceptedExtensions(
-      readUploadHeader(event, 'x-upload-accepted-extensions', false),
-    );
-
-    if (!extension) {
-      throw createError({
-        statusCode: 400,
-        message: 'Missing required field: x-upload-extension',
-      });
-    }
-
-    const sourceType = inferAssetType(extension);
-    // Everything that can be judged from the headers is judged before a single
-    // byte of the body is read.
-    validateFileInput({ extension, size: 0, acceptedExtensions });
-    validateSizeLimitPolicy(sizeLimitPolicy, sourceType);
 
     const staged = await stageUploadBody(event, { maxSizeBytes });
 
@@ -109,6 +80,7 @@ export default defineEventHandler(
         familyUuid: match?.familyUuid ?? `af-${staged.hash}`,
         sourceType,
         settings,
+        signal,
         onQueued: () => setAssetUploadProgress(uploadId, { phase: 'queued' }),
         onProgress: (progress) =>
           setAssetUploadProgress(uploadId, {

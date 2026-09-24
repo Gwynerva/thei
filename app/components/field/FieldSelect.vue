@@ -30,8 +30,8 @@ watch(selectElement, (newElement) => {
 <template>
   <div :class="wrapperClass">
     <div
-      class="group relative inline-flex h-full rounded-normal border-2
-        border-border-1 bg-bg-1 transition has-focus:border-border-3
+      class="group relative inline-flex h-full max-w-full rounded-normal
+        border-2 border-border-1 bg-bg-1 transition has-focus:border-border-3
         has-hocus:border-border-3"
     >
       <select
@@ -40,8 +40,9 @@ watch(selectElement, (newElement) => {
         v-model="model"
         :disabled="disabled"
         data-label-focus
-        class="h-full cursor-pointer appearance-none bg-transparent py-2 pr-10
-          pl-xs disabled:cursor-not-allowed disabled:opacity-55"
+        class="h-full min-w-0 cursor-pointer appearance-none truncate
+          bg-transparent py-2 pr-10 pl-xs disabled:cursor-not-allowed
+          disabled:opacity-55"
         :class="size === 'xs' ? 'text-xs' : 'text-sm'"
       >
         <option

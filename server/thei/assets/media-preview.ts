@@ -1,6 +1,9 @@
 import sharp from 'sharp';
 import { AssetType } from '#layers/thei/shared/asset';
-import { extractVideoThumbnail } from './video-thumbnail';
+import {
+  extractVideoThumbnail,
+  type VideoThumbnailOptions,
+} from './video-thumbnail';
 import type { AssetBytes } from './bytes';
 
 export const MEDIA_PREVIEW_MAX_LONG_SIDE = 720;
@@ -17,18 +20,23 @@ export interface MediaPreview {
 export async function createMediaPreview(
   source: AssetBytes | Buffer,
   sourceType: AssetType.Image | AssetType.Video,
+  options: VideoThumbnailOptions = {},
 ): Promise<MediaPreview> {
   const bytes: AssetBytes = Buffer.isBuffer(source)
     ? { buffer: source }
     : source;
   // sharp accepts a path, so an image preview never reads the source into
-  // memory. Only the video path has to go through ffmpeg first.
+  // memory. Only the video path has to go through ffmpeg first, which picks
+  // a frame that stands for the video rather than its opening.
   const raster: Buffer | string =
     sourceType === AssetType.Video
-      ? await extractVideoThumbnail(bytes)
+      ? await extractVideoThumbnail(bytes, options)
       : (bytes.buffer ?? bytes.path);
 
+  // An original JPEG keeps its EXIF orientation, and its recorded dimensions
+  // are already the displayed ones: the preview has to be turned the same way.
   const { data, info } = await sharp(raster, { animated: false })
+    .autoOrient()
     .resize({
       width: MEDIA_PREVIEW_MAX_LONG_SIDE,
       height: MEDIA_PREVIEW_MAX_LONG_SIDE,

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
+import { AssetType, assetMetaDimensions } from '#layers/thei/shared/asset';
+import { describeAssetRecipe } from '#layers/thei/shared/asset-recipe';
 import {
   assetSourceKey,
   type AssetPlacement,
@@ -16,15 +18,53 @@ import AssetModal from '../asset-modal/AssetModal.vue';
 import AssetModalButton from '../asset-modal/AssetModalButton.vue';
 import AssetModalPreviewMedia from '../asset-modal/AssetModalPreviewMedia.vue';
 import AssetModalFileInfo from '../asset-modal/AssetModalFileInfo.vue';
-const props = defineProps<{ modalData: { asset: AssetVariantInfo } }>();
+import { errorMessage } from '../upload-settings/use-draft-renders';
+const props = defineProps<{
+  modalData: {
+    asset: AssetVariantInfo;
+    /** Told when the file's preview was made again, with the file as it is now. */
+    onRefreshed?: (asset: AssetVariantInfo) => void;
+  };
+}>();
 const { data, status, error, refresh } = useFetch<AssetUsagesResponse>(
   `/api/admin/assets/${props.modalData.asset.assetUuid}/usages`,
 );
 const asset = computed(() => data.value?.asset ?? props.modalData.asset);
-const dimensions = computed(() =>
-  asset.value.meta && 'width' in asset.value.meta
+const videoMeta = computed(() =>
+  asset.value.type === AssetType.Video && asset.value.meta
     ? asset.value.meta
     : undefined,
+);
+
+/**
+ * A video's preview, made again from a frame that shows it. Only videos
+ * have one worth remaking: an image's preview is the image, smaller.
+ */
+const refreshing = ref(false);
+const refreshError = ref('');
+async function refreshPreview() {
+  if (refreshing.value) return;
+  refreshing.value = true;
+  refreshError.value = '';
+  try {
+    const updated = await $fetch<AssetVariantInfo>(
+      `/api/admin/assets/${asset.value.assetUuid}/preview`,
+      { method: 'POST' },
+    );
+    await refresh();
+    props.modalData.onRefreshed?.(updated);
+  } catch (reason) {
+    refreshError.value = errorMessage(
+      reason,
+      phrase.value.asset_library_refresh_preview,
+    );
+  } finally {
+    refreshing.value = false;
+  }
+}
+const dimensions = computed(() => assetMetaDimensions(asset.value.meta));
+const recipe = computed(() =>
+  describeAssetRecipe(asset.value.settings, asset.value.meta, phrase.value),
 );
 const usageGroups = computed(() => {
   const groups = new Map<
@@ -49,7 +89,7 @@ const usageGroups = computed(() => {
       <AssetModalPreviewMedia
         v-if="asset.media"
         :extension="asset.extension"
-        :src="sitePath(asset.media.src)"
+        :src="asset.media.src"
         :has-audio="asset.media.hasAudio"
       />
       <FilePreview
@@ -68,6 +108,14 @@ const usageGroups = computed(() => {
         :data-title-popup="phrase.direct_link_to_asset"
         :aria-label="phrase.direct_link_to_asset"
       />
+      <AssetModalButton
+        v-if="asset.type === AssetType.Video"
+        :icon="refreshing ? 'loading' : 'refresh'"
+        :disabled="refreshing"
+        :data-title-popup="phrase.asset_library_refresh_preview_hint"
+        :aria-label="phrase.asset_library_refresh_preview"
+        @click="refreshPreview"
+      />
     </template>
     <template #aside>
       <div class="flex flex-col gap-sm p-sm text-sm">
@@ -77,32 +125,26 @@ const usageGroups = computed(() => {
         <AssetModalFileInfo
           :extension="asset.extension"
           :size="asset.size"
+          :dimensions="dimensions"
+          :duration="
+            videoMeta && 'duration' in videoMeta
+              ? videoMeta.duration
+              : undefined
+          "
           :archived-original="
             asset.meta && 'archivedOriginal' in asset.meta
               ? asset.meta.archivedOriginal
               : undefined
           "
         />
-        <div v-if="dimensions?.width && dimensions.height" class="text-text-2">
-          {{ phrase.asset_library_dimensions }}: {{ dimensions.width }} ×
-          {{ dimensions.height }}
-        </div>
-        <details
-          v-if="asset.settings"
-          class="rounded-normal bg-bg-1 p-xs text-text-2"
-        >
-          <summary class="cursor-pointer">
-            {{ phrase.asset_library_settings }}
-          </summary>
-          <pre class="mt-xs text-xs wrap-anywhere whitespace-pre-wrap">{{
-            JSON.stringify(asset.settings, null, 2)
-          }}</pre>
-        </details>
-        <div class="text-xs text-text-3">
-          SHA-256
-          <span class="mt-1 block font-mono break-all select-all">{{
-            asset.contentHash
-          }}</span>
+        <p v-if="refreshError" class="text-text-error" role="alert">
+          {{ refreshError }}
+        </p>
+        <div v-if="recipe" class="rounded-normal bg-bg-1 p-xs">
+          <p class="text-xs text-text-3">{{ phrase.asset_library_settings }}</p>
+          <p class="mt-1 wrap-anywhere text-text-2 tabular-nums">
+            {{ recipe }}
+          </p>
         </div>
       </div>
       <div class="border-t border-border-1 p-sm">

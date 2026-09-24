@@ -113,7 +113,8 @@ const fieldValue = computed<ContentFieldModelValue>(() => ({
         edit-to="#"
         :preview-media="banner"
       />
-      <ContentProjectLinkPreviewCard
+      <ContentEntityLinkPreviewCard
+        entity-type="project"
         title="Internal link"
         summary="Project, page or event"
         :icon-media="banner"
@@ -142,7 +143,8 @@ const fieldValue = computed<ContentFieldModelValue>(() => ({
           ><button type="button" data-test-nested>Details</button></template
         >
       </AssetTile>
-      <ContentProjectLinkPreviewCard
+      <ContentEntityLinkPreviewCard
+        entity-type="project"
         title="Editor link"
         summary="Hover or focus to play"
         :icon-media="banner"

@@ -374,7 +374,7 @@ async function runAssetEditor(
   while (true) {
     const editResult = await openModal(editFileModal, {
       source: { kind: 'asset', asset },
-      maxSize: options.maxSize,
+      maxSize: resolveAssetMaxSize(options.sizeLimitPolicy, options.maxSize),
       acceptedExtensions:
         options.acceptedExtensions ??
         acceptedExtensionsFromAccept(options.accept ?? anyFileExtensionProfile),

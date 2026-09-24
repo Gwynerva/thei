@@ -57,6 +57,8 @@ export interface ImageAssetMeta extends AssetMetaBase {
   height?: number;
   /** Representative OKLCH hue and chroma, including neutral images. */
   accent?: ImageAccent;
+  /** Displayed size of the source a transform was made from. */
+  sourceDimensions?: { width: number; height: number };
 }
 
 export interface VideoAssetMeta extends AssetMetaBase {
@@ -66,8 +68,15 @@ export interface VideoAssetMeta extends AssetMetaBase {
   height?: number;
   /** Representative OKLCH color of the first-frame preview. */
   accent?: ImageAccent;
+  /** Displayed size of the source a transform was made from. */
+  sourceDimensions?: { width: number; height: number };
   /** Whether the stored file has an audio track; absent while unknown. */
   hasAudio?: boolean;
+  /** Seconds; absent for files stored before it was read. */
+  duration?: number;
+  fps?: number;
+  /** Bits per second of the video stream. */
+  bitrate?: number;
 }
 
 export interface AudioAssetMeta extends AssetMetaBase {}
@@ -137,3 +146,12 @@ export type AssetUsageMeta =
   | PreviewAssetUsageMeta
   | ProjectActionAssetUsageMeta
   | ContentAssetUsageMeta;
+
+/** The pixel size recorded for a stored file, when it has one. */
+export function assetMetaDimensions(
+  meta: AssetMeta | null | undefined,
+): { width: number; height: number } | undefined {
+  if (!meta || !('width' in meta) || !('height' in meta)) return undefined;
+  const { width, height } = meta;
+  return width && height ? { width, height } : undefined;
+}

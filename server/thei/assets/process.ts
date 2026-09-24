@@ -13,16 +13,26 @@ import {
   IMAGE_EXTENSIONS,
   VIDEO_EXTENSIONS,
 } from '../../../shared/assets/formats';
-import type {
-  AssetFileZipSettings,
-  AssetImageTransformSettings,
-  AssetTransformSettings,
-  AssetVideoTransformSettings,
+import {
+  assetImageFormatExtension,
+  type AssetFileZipSettings,
+  type AssetImageTransformSettings,
+  type AssetTransformSettings,
+  type AssetVideoTransformSettings,
 } from '../../../shared/asset-upload-settings';
 import {
   imageDisplayQualityToAvifQuality,
-  videoQualityToVp9Crf,
+  videoAudioBitrate,
+  videoTargetBitrate,
+  type VideoBitrateSource,
 } from '../../../shared/asset-upload-quality';
+import {
+  clampCropRect,
+  rotatedDimensions,
+  type AssetCropRect,
+} from '../../../shared/asset-crop';
+import { cropSvgToFile } from './svg-crop';
+import { SVG_BASE_DENSITY, svgRasterDensity } from './svg-density';
 import { zipFileToPath } from './zip';
 import { stripAssetMetadata } from './strip-metadata';
 
@@ -38,6 +48,23 @@ export interface AssetDimensions {
 export interface VideoInspection extends AssetDimensions {
   hasAudio: boolean;
   duration?: number;
+  fps?: number;
+  /** Bits per second of the video stream, when the container records it. */
+  bitrate?: number;
+  /** Bits per second of the whole file, as ffmpeg reports it. */
+  overallBitrate?: number;
+  audioBitrate?: number;
+  /** The video codec, as ffmpeg names it. */
+  codec?: string;
+}
+
+/** What a transform and its size estimate learn about a video. */
+export interface VideoSourceInfo {
+  duration?: number;
+  fps?: number;
+  /** Bits per second of the video stream. */
+  bitrate?: number;
+  codec?: string;
 }
 
 export interface ProcessedAsset {
@@ -46,6 +73,8 @@ export interface ProcessedAsset {
   type: AssetType;
   dimensions: AssetDimensions;
   hasAudio?: boolean;
+  /** Of a video, read from the file once it exists. */
+  video?: VideoSourceInfo;
 }
 
 /** An upload staged on disk, the input to every processing path. */
@@ -65,6 +94,8 @@ export interface AssetSourceFile {
 
 export interface AssetProcessOptions {
   onProgress?: (progress: number) => void;
+  /** Stops an encode that nobody is waiting for any more. */
+  signal?: AbortSignal;
 }
 
 export function inferAssetType(extension: string): AssetType {
@@ -168,6 +199,7 @@ export async function processOriginalAsset(
         height: inspected.height,
       },
       hasAudio: inspected.hasAudio,
+      video: videoSourceInfo(inspected, source.size),
     };
   }
 
@@ -211,6 +243,7 @@ export async function processMediaTransformAsset(
   settings: AssetTransformSettings,
   options: AssetProcessOptions = {},
 ): Promise<ProcessedAsset> {
+  options.signal?.throwIfAborted();
   if (settings.type === 'image-transform') {
     return await processImage(source, settings);
   }
@@ -225,35 +258,143 @@ async function processImage(
   // heap, and the encoded result is small enough to stay a buffer.
   // Encoding drops every embedded tag, so orientation is baked into the pixels
   // first or a rotated photo would come out sideways.
-  let pipeline = sharp(source.path, { animated: false }).autoOrient();
-  const width = settings.dimensions.width;
-  const height = settings.dimensions.height;
+  const { dimensions } = settings;
+  if (settings.format === 'svg') return await keepVector(source, settings);
+  const raster = await rasterSource(source, settings);
+  let pipeline = sharp(source.path, {
+    animated: false,
+    density: raster.density,
+  }).autoOrient();
+  // The admin's turn comes after the photo's own orientation, and sharp
+  // applies both before an extract called later: the crop names a region of
+  // the turned frame, which is what the editor showed.
+  if (settings.rotation) pipeline = pipeline.rotate(settings.rotation);
 
-  if (width || height) {
-    pipeline = pipeline.resize(width, height, {
-      fit: settings.resizeMode,
-      withoutEnlargement: !settings.allowUpscale,
-    });
-  }
+  // Cropping before resizing, in that call order, makes sharp cut the region
+  // from the oriented source first. The output size already has the crop's
+  // proportions, so filling it distorts nothing.
+  if (raster.crop) pipeline = pipeline.extract(raster.crop);
+  pipeline = pipeline.resize(dimensions.width, dimensions.height, {
+    fit: 'fill',
+  });
 
   // `effort` is not comparable between the two encoders: WebP 6 is quick,
   // while AVIF climbs steeply past 4 for very little size. 4 is sharp's own
   // default and keeps a large upload from occupying a worker for minutes.
+  // Lossy WebP is always 4:2:0; smart subsampling keeps coloured edges, such
+  // as red text on white, from fringing.
   const encoded =
-    settings.format === 'webp'
-      ? pipeline.webp({ quality: settings.quality, effort: 6 })
-      : pipeline.avif({
-          quality: imageDisplayQualityToAvifQuality(settings.quality),
-          effort: 4,
-        });
+    settings.format === 'webp-lossless'
+      ? pipeline.webp({ lossless: true, effort: 6 })
+      : settings.format === 'webp'
+        ? pipeline.webp({
+            quality: settings.quality,
+            effort: 6,
+            smartSubsample: true,
+          })
+        : pipeline.avif({
+            quality: imageDisplayQualityToAvifQuality(settings.quality),
+            effort: 4,
+          });
 
   const { data, info } = await encoded.toBuffer({ resolveWithObject: true });
 
   return {
     bytes: { buffer: data },
-    extension: settings.format,
+    extension: assetImageFormatExtension(settings.format),
     type: AssetType.Image,
     dimensions: { width: info.width, height: info.height },
+  };
+}
+
+/** Crops an SVG as an SVG: the drawing stays a vector at its new size. */
+async function keepVector(
+  source: AssetSourceFile,
+  settings: AssetImageTransformSettings,
+): Promise<ProcessedAsset> {
+  const intrinsic = await sharp(source.path).metadata();
+  const outputPath = theiTempPath(`thei-svg-out-${randomUUID()}.svg`);
+  try {
+    await cropSvgToFile(
+      source.path,
+      outputPath,
+      {
+        width: intrinsic.width ?? settings.dimensions.width,
+        height: intrinsic.height ?? settings.dimensions.height,
+      },
+      settings.dimensions,
+      settings.crop,
+      settings.rotation,
+      settings.stretch,
+    );
+  } catch (error) {
+    await rm(outputPath, { force: true }).catch(() => {});
+    throw error;
+  }
+  return {
+    bytes: await fileBytes(outputPath),
+    extension: 'svg',
+    type: AssetType.Image,
+    dimensions: { ...settings.dimensions },
+  };
+}
+
+/**
+ * How the source is rasterised, and the crop in that raster.
+ *
+ * A bitmap is used as it is. An SVG is drawn at the density the output needs,
+ * so its crop — given in SVG units, which is what the editor measured — is
+ * scaled into the pixels of that drawing.
+ */
+async function rasterSource(
+  source: AssetSourceFile,
+  settings: AssetImageTransformSettings,
+): Promise<{ density?: number; crop?: AssetCropRect }> {
+  const { crop, dimensions } = settings;
+  if (source.extension.toLowerCase() !== 'svg') return { crop };
+
+  const intrinsic = await sharp(source.path).metadata();
+  // The crop and the output are both in the turned frame.
+  const { width, height } = rotatedDimensions(
+    {
+      width: intrinsic.width ?? dimensions.width,
+      height: intrinsic.height ?? dimensions.height,
+    },
+    settings.rotation,
+  );
+  const region = crop ?? { width, height };
+  const density = svgRasterDensity(
+    Math.max(
+      dimensions.width / region.width,
+      dimensions.height / region.height,
+    ),
+    Math.max(width, height),
+  );
+  if (!crop) return { density };
+
+  const factor = density / SVG_BASE_DENSITY;
+  const metadata = await sharp(source.path, { density }).metadata();
+  const drawn =
+    metadata.width && metadata.height
+      ? rotatedDimensions(
+          { width: metadata.width, height: metadata.height },
+          settings.rotation,
+        )
+      : { width: undefined, height: undefined };
+  return {
+    density,
+    crop: clampCropRect(
+      {
+        left: crop.left * factor,
+        top: crop.top * factor,
+        width: crop.width * factor,
+        height: crop.height * factor,
+      },
+      {
+        width: drawn.width ?? Math.round(width * factor),
+        height: drawn.height ?? Math.round(height * factor),
+      },
+    ),
   };
 }
 
@@ -268,53 +409,83 @@ async function processVideoToWebm(
   const inputPath = source.path;
   const outputPath = theiTempPath(`thei-webm-out-${id}.webm`);
 
+  const passlog = theiTempPath(`thei-vp9-${id}`);
+
   let succeeded = false;
   try {
     const inputInspection = await inspectVideoFile(inputPath).catch(
       () => undefined,
     );
     const inputDuration = inputInspection?.duration;
-    const shouldStripAudio = settings.stripAudio || !inputInspection?.hasAudio;
-
-    const outputOptions = [
-      '-map 0:v:0',
-      '-map_metadata -1',
-      '-map_chapters -1',
-      ...(shouldStripAudio
-        ? ['-an']
-        : ['-map 0:a?', '-c:a libopus', '-b:a 128k']),
-      ...buildVideoCodecOptions(settings),
-      '-pix_fmt yuv420p',
+    const passes = buildVideoEncodePasses(
+      settings,
+      {
+        width: inputInspection?.width ?? settings.dimensions.width,
+        height: inputInspection?.height ?? settings.dimensions.height,
+        hasAudio: Boolean(inputInspection?.hasAudio),
+        ...(inputInspection
+          ? videoSourceInfo(inputInspection, source.size)
+          : {}),
+      },
+      passlog,
+    );
+    const inputArgs = [
+      '-y',
+      '-nostdin',
+      '-hide_banner',
+      '-loglevel',
+      'info',
+      '-stats',
     ];
 
-    const videoFilters = buildVideoScaleFilters(settings);
-    if (videoFilters.length > 0) {
-      outputOptions.push(`-vf ${videoFilters.join(',')}`);
+    if (passes.first) {
+      // The first pass only gathers statistics: its output goes to the null
+      // muxer on stdout, which is why the progress pipe stays out of it and
+      // the stderr counter is read instead.
+      await runFfmpegWithProgress(
+        [
+          ...inputArgs,
+          '-i',
+          inputPath,
+          ...splitFfmpegOptions(passes.first),
+          '-',
+        ],
+        inputDuration,
+        {
+          ...options,
+          onProgress: scaleProgress(options.onProgress, 0, FIRST_PASS_SHARE),
+        },
+      );
+      options.signal?.throwIfAborted();
     }
 
     await runFfmpegWithProgress(
       [
-        '-y',
-        '-nostdin',
-        '-hide_banner',
-        '-loglevel',
-        'info',
-        '-stats',
+        ...inputArgs,
         '-progress',
         'pipe:1',
         '-i',
         inputPath,
-        ...splitFfmpegOptions(outputOptions),
+        ...splitFfmpegOptions(passes.second),
         outputPath,
       ],
       inputDuration,
-      outputPath,
-      options,
+      passes.first
+        ? {
+            ...options,
+            onProgress: scaleProgress(
+              options.onProgress,
+              FIRST_PASS_SHARE,
+              1 - FIRST_PASS_SHARE,
+            ),
+          }
+        : options,
     );
 
     const inspected = await inspectVideoFile(outputPath).catch(() => undefined);
+    const bytes = await fileBytes(outputPath);
     const result: ProcessedAsset = {
-      bytes: await fileBytes(outputPath),
+      bytes,
       extension: 'webm',
       type: AssetType.Video,
       dimensions: inspected
@@ -323,7 +494,12 @@ async function processVideoToWebm(
             ...(inspected.height ? { height: inspected.height } : {}),
           }
         : {},
-      ...(inspected ? { hasAudio: inspected.hasAudio } : {}),
+      ...(inspected
+        ? {
+            hasAudio: inspected.hasAudio,
+            video: videoSourceInfo(inspected, bytes.size),
+          }
+        : {}),
     };
     succeeded = true;
     return result;
@@ -331,7 +507,57 @@ async function processVideoToWebm(
     // On success the output is handed to the caller, which moves it into the
     // library; the staged input belongs to the request and is cleaned up there.
     if (!succeeded) await rm(outputPath, { force: true }).catch(() => {});
+    await rm(`${passlog}-0.log`, { force: true }).catch(() => {});
   }
+}
+
+/** How much of a two-pass encode's time the statistics pass takes. */
+const FIRST_PASS_SHARE = 0.2;
+
+/** Maps one pass's 0..1 onto its share of the whole encode's progress. */
+export function scaleProgress(
+  onProgress: ((progress: number) => void) | undefined,
+  base: number,
+  span: number,
+): ((progress: number) => void) | undefined {
+  if (!onProgress) return undefined;
+  return (progress) => onProgress(base + progress * span);
+}
+
+/**
+ * The bits per second of a video stream, from whatever the probe found.
+ *
+ * MP4 records each stream's rate; WebM and MKV record none, so the file's
+ * overall rate less the sound stands in, and failing even that the size over
+ * the duration.
+ */
+export function sourceVideoBitrate(
+  inspection: VideoInspection,
+  fileSize?: number,
+): number | undefined {
+  if (inspection.bitrate) return inspection.bitrate;
+  const sound = inspection.hasAudio ? (inspection.audioBitrate ?? 128_000) : 0;
+  const overall =
+    inspection.overallBitrate ??
+    (fileSize && inspection.duration
+      ? (fileSize * 8) / inspection.duration
+      : undefined);
+  if (!overall) return undefined;
+  const video = Math.round(overall - sound);
+  return video > 0 ? video : undefined;
+}
+
+export function videoSourceInfo(
+  inspection: VideoInspection,
+  fileSize?: number,
+): VideoSourceInfo {
+  const bitrate = sourceVideoBitrate(inspection, fileSize);
+  return {
+    ...(inspection.duration ? { duration: inspection.duration } : {}),
+    ...(inspection.fps ? { fps: inspection.fps } : {}),
+    ...(bitrate ? { bitrate } : {}),
+    ...(inspection.codec ? { codec: inspection.codec } : {}),
+  };
 }
 
 async function readFfmpegInputInfo(filePath: string): Promise<string> {
@@ -358,53 +584,179 @@ async function readFfmpegInputInfo(filePath: string): Promise<string> {
   });
 }
 
-function parseFfmpegInputInfo(text: string): VideoInspection {
-  const videoLine = text
-    .split(/\r?\n/)
-    .find((line) => /Stream #.*Video:/.test(line));
+/**
+ * Reads what ffmpeg prints about an input.
+ *
+ * The stream line carries the coded size. A phone records portrait video as
+ * landscape frames plus a rotation, and every player — ffmpeg's own transcode
+ * included — shows it turned, so a quarter turn swaps the reported sides.
+ */
+export function parseFfmpegInputInfo(text: string): VideoInspection {
+  const lines = text.split(/\r?\n/);
+  const videoIndex = lines.findIndex((line) => /Stream #.*Video:/.test(line));
+  const videoLine = lines[videoIndex];
+  const audioLine = lines.find((line) => /Stream #.*Audio:/.test(line));
   const dimensionsMatch = videoLine?.match(/,\s*(\d{2,5})x(\d{2,5})(?:\s|,)/);
   const duration = parseDuration(text);
+  const quarterTurned =
+    videoIndex >= 0 && isQuarterTurn(videoStreamRotation(lines, videoIndex));
+  const coded = dimensionsMatch
+    ? { width: Number(dimensionsMatch[1]), height: Number(dimensionsMatch[2]) }
+    : undefined;
+  const fps = parseNumber(
+    videoLine?.match(/,\s*(\d+(?:\.\d+)?)\s*fps\b/)?.[1] ??
+      videoLine?.match(/,\s*(\d+(?:\.\d+)?)\s*tbr\b/)?.[1],
+  );
+  const bitrate = parseKilobits(videoLine);
+  const audioBitrate = parseKilobits(audioLine);
+  const overallBitrate = parseKilobits(
+    text.match(/bitrate:\s*(\d+(?:\.\d+)?\s*kb\/s)/)?.[1],
+  );
+  const codec = videoLine?.match(/Video:\s*([A-Za-z0-9_-]+)/)?.[1];
 
   return {
-    ...(dimensionsMatch
-      ? {
-          width: Number(dimensionsMatch[1]),
-          height: Number(dimensionsMatch[2]),
-        }
+    ...(coded
+      ? quarterTurned
+        ? { width: coded.height, height: coded.width }
+        : coded
       : {}),
     ...(duration ? { duration } : {}),
-    hasAudio: /Stream #.*Audio:/.test(text),
+    ...(fps ? { fps } : {}),
+    ...(bitrate ? { bitrate } : {}),
+    ...(overallBitrate ? { overallBitrate } : {}),
+    ...(audioBitrate ? { audioBitrate } : {}),
+    ...(codec ? { codec } : {}),
+    hasAudio: Boolean(audioLine),
   };
 }
 
-function buildVideoCodecOptions(
+/** A stream line's ", 850 kb/s" as bits per second. */
+function parseKilobits(text: string | undefined): number | undefined {
+  const value = parseNumber(text?.match(/(\d+(?:\.\d+)?)\s*kb\/s/)?.[1]);
+  return value ? Math.round(value * 1000) : undefined;
+}
+
+function parseNumber(text: string | undefined): number | undefined {
+  if (text === undefined) return undefined;
+  const value = Number(text);
+  return Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+/**
+ * The rotation recorded for the video stream, in degrees.
+ *
+ * Older ffmpeg prints it as a `rotate` metadata tag, newer ones as display
+ * matrix side data; either sits in the lines under the stream until the next
+ * stream begins.
+ */
+function videoStreamRotation(lines: string[], videoIndex: number): number {
+  for (let index = videoIndex + 1; index < lines.length; index++) {
+    const line = lines[index]!;
+    if (/Stream #/.test(line)) break;
+    const tag = line.match(/^\s*rotate\s*:\s*(-?\d+(?:\.\d+)?)/);
+    if (tag) return Number(tag[1]);
+    const matrix = line.match(
+      /displaymatrix:\s*rotation of\s*(-?\d+(?:\.\d+)?)/,
+    );
+    if (matrix) return Number(matrix[1]);
+  }
+  return 0;
+}
+
+function isQuarterTurn(degrees: number): boolean {
+  return Math.abs(Math.round(degrees)) % 180 === 90;
+}
+
+export interface VideoEncodePasses {
+  /** The statistics pass, absent for a fast conversion. Writes no file. */
+  first?: string[];
+  /** The pass that writes the WebM. */
+  second: string[];
+}
+
+/**
+ * The ffmpeg output options of a video encode, one list per pass.
+ *
+ * The encoder is given a bitrate to hit rather than a quality to keep, so a
+ * file's size is known before it is made: the ladder in
+ * `videoTargetBitrate` picks the rate, and two passes let libvpx spread it
+ * over the file rather than guess as it goes. A fast conversion is one
+ * realtime pass at the same rate, which lands near it rather than on it.
+ */
+export function buildVideoEncodePasses(
   settings: AssetVideoTransformSettings,
-): string[] {
+  source: VideoBitrateSource & { hasAudio?: boolean },
+  passlog: string,
+): VideoEncodePasses {
+  const target = videoTargetBitrate(
+    settings.quality,
+    settings.dimensions,
+    source,
+  );
+  const stream = ['-map 0:v:0', '-map_metadata -1', '-map_chapters -1'];
+  const sound =
+    settings.stripAudio || source.hasAudio === false
+      ? ['-an']
+      : [
+          '-map 0:a?',
+          '-c:a libopus',
+          `-b:a ${videoAudioBitrate(settings.quality)}`,
+        ];
+  const codec = [
+    '-c:v libvpx-vp9',
+    '-row-mt 1',
+    '-tile-columns 2',
+    `-b:v ${target}`,
+    `-maxrate ${Math.round(target * 1.45)}`,
+    `-bufsize ${target * 2}`,
+  ];
+  const filters = buildVideoScaleFilters(settings);
+  const picture = [
+    '-pix_fmt yuv420p',
+    ...(filters.length ? [`-vf ${filters.join(',')}`] : []),
+  ];
+
   if (settings.fastConversion) {
-    return [
-      '-c:v libvpx-vp9',
-      '-deadline realtime',
-      '-cpu-used 8',
-      '-row-mt 1',
-      '-b:v 0',
-      `-crf ${videoQualityToVp9Crf(settings.quality)}`,
-    ];
+    return {
+      second: [
+        ...stream,
+        ...sound,
+        ...codec,
+        '-deadline realtime',
+        '-cpu-used 8',
+        ...picture,
+      ],
+    };
   }
 
-  return [
-    '-c:v libvpx-vp9',
-    '-deadline good',
-    '-cpu-used 2',
-    '-row-mt 1',
-    '-b:v 0',
-    `-crf ${videoQualityToVp9Crf(settings.quality)}`,
-  ];
+  return {
+    first: [
+      ...stream,
+      '-an',
+      ...codec,
+      '-deadline good',
+      '-cpu-used 4',
+      '-pass 1',
+      `-passlogfile ${passlog}`,
+      ...picture,
+      '-f null',
+    ],
+    second: [
+      ...stream,
+      ...sound,
+      ...codec,
+      '-deadline good',
+      '-cpu-used 2',
+      '-pass 2',
+      `-passlogfile ${passlog}`,
+      ...picture,
+    ],
+  };
 }
 
 async function runFfmpegWithProgress(
   args: string[],
   duration: number | undefined,
-  outputPath: string,
   options: AssetProcessOptions,
 ) {
   await new Promise<void>((resolve, reject) => {
@@ -416,7 +768,6 @@ async function runFfmpegWithProgress(
     let progressBuffer = '';
     let errorOutput = '';
     let lastProgress = 0;
-    let isProbingOutput = false;
     if (duration) options.onProgress?.(0.01);
 
     const emitProgress = (progress: number) => {
@@ -424,24 +775,6 @@ async function runFfmpegWithProgress(
       lastProgress = nextProgress;
       options.onProgress?.(nextProgress);
     };
-
-    const totalDuration = duration;
-    const probeTimer =
-      totalDuration &&
-      setInterval(() => {
-        if (isProbingOutput) return;
-        isProbingOutput = true;
-        inspectVideoFile(outputPath)
-          .then((inspection) => {
-            if (inspection.duration) {
-              emitProgress(inspection.duration / totalDuration);
-            }
-          })
-          .catch(() => {})
-          .finally(() => {
-            isProbingOutput = false;
-          });
-      }, 500);
 
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk: string) => {
@@ -467,12 +800,20 @@ async function runFfmpegWithProgress(
       if (progress !== undefined) emitProgress(progress);
     });
 
+    const signal = options.signal;
+    const abort = () => child.kill('SIGKILL');
+    signal?.addEventListener('abort', abort, { once: true });
+
     child.on('error', (error) => {
-      if (probeTimer) clearInterval(probeTimer);
+      signal?.removeEventListener('abort', abort);
       reject(error);
     });
     child.on('close', (code) => {
-      if (probeTimer) clearInterval(probeTimer);
+      signal?.removeEventListener('abort', abort);
+      if (signal?.aborted) {
+        reject(signal.reason);
+        return;
+      }
       if (code === 0) {
         options.onProgress?.(1);
         resolve();
@@ -546,47 +887,29 @@ function parseTimemark(timemark: string | undefined): number {
   return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
 }
 
-function buildVideoScaleFilters(
+/**
+ * The crop, then the scale to the exact output size.
+ *
+ * ffmpeg turns a rotated source upright before the filters run, so the crop is
+ * in the same displayed space the editor showed. Both are already even.
+ */
+const VIDEO_ROTATION_FILTERS = {
+  90: 'transpose=clock',
+  180: 'hflip,vflip',
+  270: 'transpose=cclock',
+} as const;
+
+export function buildVideoScaleFilters(
   settings: AssetVideoTransformSettings,
 ): string[] {
-  const width = settings.dimensions.width;
-  const height = settings.dimensions.height;
+  const { rotation, crop, dimensions } = settings;
   const scaleFlags = settings.fastConversion ? 'fast_bilinear' : 'lanczos';
-
-  if (!width && !height) {
-    return [];
-  }
-
-  if (width && height) {
-    const widthExpression = settings.allowUpscale
-      ? String(width)
-      : `min(${width}\\,iw)`;
-    const heightExpression = settings.allowUpscale
-      ? String(height)
-      : `min(${height}\\,ih)`;
-    if (settings.resizeMode === 'cover') {
-      return [
-        `scale=${width}:${height}:force_original_aspect_ratio=increase:flags=${scaleFlags}`,
-        `crop=${width}:${height}`,
-        'scale=trunc(iw/2)*2:trunc(ih/2)*2',
-      ];
-    }
-
-    return [
-      `scale='${widthExpression}':'${heightExpression}':force_original_aspect_ratio=decrease:flags=${scaleFlags}`,
-      'scale=trunc(iw/2)*2:trunc(ih/2)*2',
-    ];
-  }
-
-  if (width) {
-    return [
-      `scale='${settings.allowUpscale ? width : `min(${width}\\,iw)`}':-2:flags=${scaleFlags}`,
-      'scale=trunc(iw/2)*2:trunc(ih/2)*2',
-    ];
-  }
-
   return [
-    `scale=-2:'${settings.allowUpscale ? height : `min(${height}\\,ih)`}':flags=${scaleFlags}`,
-    'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+    // ffmpeg has already applied the file's own rotation; this is the admin's.
+    ...(rotation ? [VIDEO_ROTATION_FILTERS[rotation]] : []),
+    ...(crop
+      ? [`crop=${crop.width}:${crop.height}:${crop.left}:${crop.top}`]
+      : []),
+    `scale=${dimensions.width}:${dimensions.height}:flags=${scaleFlags}`,
   ];
 }

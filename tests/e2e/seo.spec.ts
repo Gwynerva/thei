@@ -67,10 +67,14 @@ test('a listing page is a CollectionPage carrying a bounded ItemList', async ({
   expect(collection.mainEntity['@id']).toBe(list['@id']);
   // The seed makes 2000; other specs in this run may add their own.
   expect(list.numberOfItems).toBeGreaterThanOrEqual(2000);
-  // The listing is not paginated, so the markup reports the whole count but
-  // samples the rows, rather than shipping every one of them twice.
-  expect(list.itemListElement.length).toBe(100);
+  // The listing is paginated: the markup reports the whole count and lists
+  // only the rows of the page it is on.
+  expect(list.itemListElement.length).toBe(30);
   expect(list.itemListElement[0].position).toBe(1);
+
+  await page.goto('/pages/?page=2');
+  const second = node(await graph(page), 'ItemList')!;
+  expect(second.itemListElement[0].position).toBe(31);
 });
 
 test('robots.txt points at the sitemap and holds back the private areas', async ({

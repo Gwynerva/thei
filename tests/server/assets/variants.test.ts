@@ -19,7 +19,10 @@ import { findAssetByIdentity } from '../../../server/thei/assets/repository/find
 import { findAssetBySlug } from '../../../server/thei/assets/repository/find-by-slug';
 import { findAssetByUuid } from '../../../server/thei/assets/repository/find-by-uuid';
 import { touchAsset } from '../../../server/thei/assets/repository/touch';
-import { countAssetPlacements } from '../../../server/thei/assets/repository/usage-count';
+import {
+  countAssetPlacements,
+  countAssetPlacementsByUuids,
+} from '../../../server/thei/assets/repository/usage-count';
 import { schema } from '../../../server/thei/db/schema';
 
 describe('asset variants', () => {
@@ -208,5 +211,41 @@ describe('asset variants', () => {
     ]);
 
     expect(await countAssetPlacements('a-usage')).toBe(3);
+  });
+
+  it('counts placements of several assets in one pass', async () => {
+    await db.insert(schema.assetUsages).values([
+      {
+        assetUuid: 'a-first',
+        containerType: 'project',
+        containerId: 'p-1',
+        role: 'icon',
+      },
+      {
+        assetUuid: 'a-first',
+        containerType: 'project',
+        containerId: 'p-1',
+        role: 'banner',
+      },
+      {
+        assetUuid: 'a-second',
+        containerType: 'asset',
+        containerId: 'a-first',
+        role: 'preview',
+        meta: { role: 'preview' },
+      },
+    ]);
+
+    const counts = await countAssetPlacementsByUuids([
+      'a-first',
+      'a-second',
+      'a-unused',
+    ]);
+
+    expect(Object.fromEntries(counts)).toEqual({
+      'a-first': 2,
+      'a-second': 0,
+      'a-unused': 0,
+    });
   });
 });

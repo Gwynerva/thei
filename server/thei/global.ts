@@ -33,7 +33,10 @@ import { updateAsset } from './assets/repository/update';
 import { touchAsset } from './assets/repository/touch';
 import { findAssetByIdentity } from './assets/repository/find-by-identity';
 import { findAssetsByFamilyUuid } from './assets/repository/find-by-family';
-import { countAssetPlacements } from './assets/repository/usage-count';
+import {
+  countAssetPlacements,
+  countAssetPlacementsByUuids,
+} from './assets/repository/usage-count';
 import { findAssetBySlug } from './assets/repository/find-by-slug';
 import { findAssetByUuid } from './assets/repository/find-by-uuid';
 import { findOrphanedAssets } from './assets/repository/find-orphaned';
@@ -151,6 +154,7 @@ export const THEI_SERVER = {
     findByIdentity: findAssetByIdentity,
     findByFamilyUuid: findAssetsByFamilyUuid,
     countPlacements: countAssetPlacements,
+    countPlacementsByUuids: countAssetPlacementsByUuids,
     findBySlug: findAssetBySlug,
     touch: touchAsset,
     findOrphaned: findOrphanedAssets,

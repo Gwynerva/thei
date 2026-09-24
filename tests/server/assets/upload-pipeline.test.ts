@@ -15,10 +15,7 @@ import { touchAsset } from '../../../server/thei/assets/repository/touch';
 import { attachAssetUsage } from '../../../server/thei/assets/repository/usages/attach';
 import { schema } from '../../../server/thei/db/schema';
 import { AssetType } from '../../../shared/asset';
-import {
-  createImageTransformSettings,
-  createOriginalAssetSettings,
-} from '../../../shared/asset-upload-settings';
+import { createOriginalAssetSettings } from '../../../shared/asset-upload-settings';
 
 let root = '';
 let rawDb: Database.Database;
@@ -130,18 +127,16 @@ describe('upload pipeline', () => {
       source,
       familyUuid: `af-${source.hash}`,
       sourceType: AssetType.Image,
-      settings: createImageTransformSettings(
-        90,
-        { width: 1200, height: 675 },
-        { resizeMode: 'cover', allowUpscale: true },
-      ),
+      settings: {
+        type: 'image-transform',
+        quality: 90,
+        dimensions: { width: 1200, height: 675 },
+      },
     });
 
     expect(result.created).toBe(true);
     expect(result.extension).toBe('avif');
-    expect(result.settingsKey).toBe(
-      'image-transform:q90:w1200:h675:fit:cover:up:1:fmt:avif',
-    );
+    expect(result.settingsKey).toBe('image-transform:q90:w1200:h675:fmt:avif');
 
     const stored = THEI_SERVER.assets.filePath(result.contentHash, 'avif');
     const bytes = await readFile(stored);
@@ -160,7 +155,11 @@ describe('upload pipeline', () => {
       source,
       familyUuid: `af-${source.hash}`,
       sourceType: AssetType.Image,
-      settings: createImageTransformSettings(90, { width: 1200 }),
+      settings: {
+        type: 'image-transform',
+        quality: 90,
+        dimensions: { width: 1200 },
+      },
     });
 
     const preview = db
@@ -206,10 +205,269 @@ describe('upload pipeline', () => {
       source,
       familyUuid: `af-${source.hash}`,
       sourceType: AssetType.Image,
-      settings: createImageTransformSettings(90, { width: 48, height: 48 }),
+      settings: {
+        type: 'image-transform',
+        quality: 90,
+        dimensions: { width: 48, height: 48 },
+      },
     });
 
     expect(result.extension).toBe('webp');
     expect(result.settingsKey).toContain(':fmt:webp');
+  });
+
+  it('writes the cropped region at the exact requested size', async () => {
+    const source = await stagePng(1600, 900);
+    const result = await createAssetVariant({
+      source,
+      familyUuid: `af-${source.hash}`,
+      sourceType: AssetType.Image,
+      settings: {
+        type: 'image-transform',
+        quality: 90,
+        crop: { left: 350, top: 0, width: 900, height: 900 },
+        dimensions: { width: 256, height: 256 },
+      },
+    });
+
+    expect(result.settingsKey).toBe(
+      'image-transform:q90:w256:h256:crop:350,0,900,900:fmt:avif',
+    );
+    expect(result.meta).toMatchObject({ width: 256, height: 256 });
+  });
+
+  it('keeps every pixel of a lossless WebP', async () => {
+    // A flat graphic with hard edges: exactly what lossy encoders blur.
+    const png = await sharp({
+      create: { width: 64, height: 64, channels: 3, background: '#ffffff' },
+    })
+      .composite([
+        {
+          input: await sharp({
+            create: {
+              width: 16,
+              height: 64,
+              channels: 3,
+              background: '#d01010',
+            },
+          })
+            .png()
+            .toBuffer(),
+          left: 24,
+          top: 0,
+        },
+      ])
+      .png()
+      .toBuffer();
+    const path = join(root, 'logo.png');
+    await writeFile(path, png);
+    const hash = createHash('sha256').update(png).digest('hex');
+
+    const result = await createAssetVariant({
+      source: { path, size: png.length, hash, extension: 'png', owned: true },
+      familyUuid: `af-${hash}`,
+      sourceType: AssetType.Image,
+      settings: {
+        type: 'image-transform',
+        quality: 50,
+        format: 'webp-lossless',
+        dimensions: {},
+      },
+    });
+
+    expect(result.extension).toBe('webp');
+    expect(result.settingsKey).toBe(
+      'image-transform:q100:w64:h64:fmt:webp-lossless',
+    );
+    const stored = await readFile(
+      THEI_SERVER.assets.filePath(result.contentHash, result.extension),
+    );
+    const [expected, actual] = await Promise.all(
+      [png, stored].map((bytes) => sharp(bytes).removeAlpha().raw().toBuffer()),
+    );
+    expect(actual.equals(expected!)).toBe(true);
+  });
+
+  it('draws a small SVG at the size asked for, with crisp edges', async () => {
+    const svg = Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24">' +
+        '<rect width="24" height="24" fill="#fff"/>' +
+        '<rect width="12" height="24" fill="#000"/></svg>',
+    );
+    const path = join(root, 'logo.svg');
+    await writeFile(path, svg);
+    const hash = createHash('sha256').update(svg).digest('hex');
+
+    const result = await createAssetVariant({
+      source: { path, size: svg.length, hash, extension: 'svg', owned: true },
+      familyUuid: `af-${hash}`,
+      sourceType: AssetType.Image,
+      settings: {
+        type: 'image-transform',
+        quality: 90,
+        format: 'webp-lossless',
+        crop: { left: 6, top: 0, width: 12, height: 12 },
+        dimensions: { width: 512, height: 512 },
+      },
+    });
+
+    expect(result.meta).toMatchObject({ width: 512, height: 512 });
+    const { data, info } = await sharp(
+      await readFile(
+        THEI_SERVER.assets.filePath(result.contentHash, result.extension),
+      ),
+    )
+      .greyscale()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const row = data.subarray(
+      256 * info.width * info.channels,
+      257 * info.width * info.channels,
+    );
+    // The crop is centred on the edge: black on the left half, white on the
+    // right. Drawn at 72 dpi and enlarged, the edge would blur over ~20 px.
+    const grey = [...row].filter((value) => value > 30 && value < 225);
+    expect(row[0]).toBeLessThan(30);
+    expect(row[row.length - 1]).toBeGreaterThan(225);
+    expect(grey.length).toBeLessThanOrEqual(4);
+  });
+
+  it('never enlarges a source smaller than the requested size', async () => {
+    const source = await stagePng(100, 100);
+    const result = await createAssetVariant({
+      source,
+      familyUuid: `af-${source.hash}`,
+      sourceType: AssetType.Image,
+      settings: {
+        type: 'image-transform',
+        quality: 90,
+        dimensions: { width: 256, height: 256 },
+      },
+    });
+
+    expect(result.meta).toMatchObject({ width: 100, height: 100 });
+    expect(result.settingsKey).toContain(':w100:h100:');
+  });
+
+  it('turns a photo after its own orientation, then crops the turned frame', async () => {
+    // Displayed as a 200x400 portrait, red on top and blue below; a quarter
+    // turn clockwise lays it down with the red on the right.
+    const stored = await sharp({
+      create: { width: 400, height: 200, channels: 3, background: '#0000ff' },
+    })
+      .composite([
+        {
+          input: await sharp({
+            create: {
+              width: 200,
+              height: 200,
+              channels: 3,
+              background: '#ff0000',
+            },
+          })
+            .png()
+            .toBuffer(),
+          left: 0,
+          top: 0,
+        },
+      ])
+      .jpeg({ quality: 100 })
+      .withMetadata({ orientation: 6 })
+      .toBuffer();
+    const path = join(root, 'turned.jpg');
+    await writeFile(path, stored);
+    const hash = createHash('sha256').update(stored).digest('hex');
+
+    const result = await createAssetVariant({
+      source: {
+        path,
+        size: stored.length,
+        hash,
+        extension: 'jpg',
+        owned: true,
+      },
+      familyUuid: `af-${hash}`,
+      sourceType: AssetType.Image,
+      settings: {
+        type: 'image-transform',
+        quality: 100,
+        format: 'webp',
+        rotation: 90,
+        crop: { left: 0, top: 0, width: 180, height: 200 },
+        dimensions: { width: 180, height: 200 },
+      },
+    });
+
+    expect(result.settingsKey).toBe(
+      'image-transform:q100:w180:h200:rot:90:crop:0,0,180,200:fmt:webp',
+    );
+    expect(result.meta).toMatchObject({
+      width: 180,
+      height: 200,
+      sourceDimensions: { width: 200, height: 400 },
+    });
+    const bytes = await readFile(
+      THEI_SERVER.assets.filePath(result.contentHash, result.extension),
+    );
+    const { dominant } = await sharp(bytes).stats();
+    expect(dominant.b).toBeGreaterThan(200);
+    expect(dominant.r).toBeLessThan(60);
+  });
+
+  it('crops an EXIF-rotated photo where the editor showed it', async () => {
+    // Landscape pixels, orientation 6: displayed as a 200x400 portrait whose
+    // top half is red and bottom half blue.
+    const stored = await sharp({
+      create: { width: 400, height: 200, channels: 3, background: '#0000ff' },
+    })
+      .composite([
+        {
+          input: await sharp({
+            create: {
+              width: 200,
+              height: 200,
+              channels: 3,
+              background: '#ff0000',
+            },
+          })
+            .png()
+            .toBuffer(),
+          left: 0,
+          top: 0,
+        },
+      ])
+      .jpeg({ quality: 100 })
+      .withMetadata({ orientation: 6 })
+      .toBuffer();
+    const path = join(root, 'rotated.jpg');
+    await writeFile(path, stored);
+    const hash = createHash('sha256').update(stored).digest('hex');
+
+    const result = await createAssetVariant({
+      source: {
+        path,
+        size: stored.length,
+        hash,
+        extension: 'jpg',
+        owned: true,
+      },
+      familyUuid: `af-${hash}`,
+      sourceType: AssetType.Image,
+      settings: {
+        type: 'image-transform',
+        quality: 100,
+        format: 'webp',
+        crop: { left: 0, top: 220, width: 200, height: 180 },
+        dimensions: { width: 200, height: 180 },
+      },
+    });
+
+    const bytes = await readFile(
+      THEI_SERVER.assets.filePath(result.contentHash, result.extension),
+    );
+    const { dominant } = await sharp(bytes).stats();
+    expect(result.meta).toMatchObject({ width: 200, height: 180 });
+    expect(dominant.b).toBeGreaterThan(200);
+    expect(dominant.r).toBeLessThan(60);
   });
 });

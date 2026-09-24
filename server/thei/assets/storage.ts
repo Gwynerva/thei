@@ -3,7 +3,7 @@ import { copyFile, mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { dirname } from 'node:path';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { buildAssetPreviewUrl } from '#layers/thei/shared/api/asset';
 import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
 import { AssetType } from '#layers/thei/shared/asset';
@@ -24,8 +24,9 @@ import {
 import { randomId } from '#layers/thei/shared/utils/random-id';
 import { EntityPrefix, generateUnique, generateUniqueId } from '../entity-id';
 import { extractImageAccent } from './image-color';
-import { inspectVideoFile } from './process';
+import { inspectVideoFile, videoSourceInfo } from './process';
 import { createMediaPreview, MEDIA_PREVIEW_EXTENSION } from './media-preview';
+import { withProcessingSlot } from './queue';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import {
   assetBytesHash,
@@ -71,11 +72,12 @@ export interface StoreAssetInput {
 export async function createMediaPreviewAsset(
   source: AssetBytes,
   sourceType: AssetType.Image | AssetType.Video,
+  options: { duration?: number } = {},
 ): Promise<{
   previewAssetUuid: string;
   accent?: ImageAccent;
 }> {
-  const preview = await createMediaPreview(source, sourceType);
+  const preview = await createMediaPreview(source, sourceType, options);
   const previewBuffer = preview.buffer;
   const previewHash = sha256(previewBuffer);
   const previewFamilyUuid = `preview-${previewHash}`;
@@ -135,6 +137,76 @@ export async function findMediaPreviewAsset(asset: StoredAssetRecord) {
   ).find((usage) => usage.role === 'preview')?.asset;
 }
 
+/**
+ * Makes a stored video's preview again, from the file as it is.
+ *
+ * A preview made by an older version shows the first frame, which for many
+ * videos is black. The new one stands in for it, the old one is left with no
+ * usage for the cleanup to take, and the video's accent colour follows the
+ * new frame. Decoding runs in the video's own processing lane, like any
+ * other work on it.
+ */
+export async function refreshMediaPreview(
+  asset: StoredAssetRecord,
+): Promise<AssetVariantInfo> {
+  const meta = asset.meta as VideoAssetMeta | null;
+  const bytes: AssetBytes = {
+    path: THEI_SERVER.assets.filePath(asset.contentHash, asset.extension),
+    size: asset.size,
+    hash: asset.contentHash,
+    owned: false,
+  };
+  const { previewAssetUuid, accent } = await withProcessingSlot(
+    asset.type,
+    () =>
+      createMediaPreviewAsset(bytes, AssetType.Video, {
+        duration: meta?.duration,
+      }),
+  );
+
+  const previous = await findMediaPreviewAsset(asset);
+  if (previous && previous.assetUuid !== previewAssetUuid) {
+    await THEI_SERVER.assets.usages.detach(
+      previous.assetUuid,
+      'asset',
+      asset.assetUuid,
+      'preview',
+    );
+  }
+  await attachMediaPreviewUsage(asset.assetUuid, previewAssetUuid);
+
+  const { accent: _previous, ...rest } = meta ?? {};
+  const resolvedMeta: VideoAssetMeta = {
+    ...rest,
+    ...(accent !== undefined ? { accent } : {}),
+  };
+  await THEI_SERVER.assets.update(asset.assetUuid, { meta: resolvedMeta });
+  asset.meta = resolvedMeta;
+  return await buildAssetVariantInfo(asset);
+}
+
+/** Preview asset of each media asset, for several assets in one query. */
+async function findMediaPreviewUuids(
+  assetUuids: string[],
+): Promise<Map<string, string>> {
+  if (!assetUuids.length) return new Map();
+  const { db, schema } = THEI_SERVER.useDb();
+  const rows = await db
+    .select({
+      assetUuid: schema.assetUsages.assetUuid,
+      containerId: schema.assetUsages.containerId,
+    })
+    .from(schema.assetUsages)
+    .where(
+      and(
+        eq(schema.assetUsages.containerType, 'asset'),
+        eq(schema.assetUsages.role, 'preview'),
+        inArray(schema.assetUsages.containerId, assetUuids),
+      ),
+    );
+  return new Map(rows.map((row) => [row.containerId, row.assetUuid]));
+}
+
 export async function storeAsset(input: StoreAssetInput): Promise<{
   asset: StoredAssetRecord;
   created: boolean;
@@ -149,7 +221,7 @@ export async function storeAsset(input: StoreAssetInput): Promise<{
 
   if (existing) {
     await THEI_SERVER.assets.touch(existing.assetUuid);
-    await discardScratch(input.bytes);
+    await discardAssetScratch(input.bytes);
     return { asset: normalizeAssetRecord(existing), created: false };
   }
 
@@ -184,7 +256,7 @@ export async function storeAsset(input: StoreAssetInput): Promise<{
     // Nothing to store: the bytes are already on disk. Scratch that will never
     // be adopted has to go now, or an ffmpeg output that happened to dedup
     // would sit in the temp directory forever.
-    await discardScratch(input.bytes);
+    await discardAssetScratch(input.bytes);
   }
 
   const asset: StoredAssetRecord = {
@@ -223,19 +295,25 @@ export async function storeAsset(input: StoreAssetInput): Promise<{
 }
 
 /** Removes a scratch file storage decided not to adopt. */
-async function discardScratch(bytes: AssetBytes) {
+export async function discardAssetScratch(bytes: AssetBytes) {
   if (!bytes.path || !bytes.owned) return;
   await rm(bytes.path, { force: true }).catch(() => {});
 }
 
-/** Renames a staged file into the library, falling back to a copy across devices. */
+/**
+ * Codes a rename fails with where a copy still works: another filesystem, or
+ * on Windows a file some other handle — a scanner, an indexer — still holds.
+ */
+const RENAME_FALLBACK_CODES = new Set(['EXDEV', 'EBUSY', 'EPERM', 'EACCES']);
+
+/** Renames a staged file into the library, falling back to a copy. */
 async function adoptStagedFile(source: string, target: string) {
   try {
     await rename(source, target);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error;
-    // The scratch directory and the library are on different filesystems, so
-    // the bytes have to be streamed across. Still never buffered whole.
+    const code = (error as NodeJS.ErrnoException).code;
+    if (!code || !RENAME_FALLBACK_CODES.has(code)) throw error;
+    // The bytes have to be streamed across. Still never buffered whole.
     await pipeline(createReadStream(source), createWriteStream(target));
     await rm(source, { force: true }).catch(() => {});
   }
@@ -247,6 +325,27 @@ export async function buildAssetVariantInfo(
   if (asset.type === AssetType.Video) await resolveVideoMeta(asset);
   const preview = await findMediaPreviewAsset(asset);
   return describeStoredAsset(asset, preview?.assetUuid);
+}
+
+/**
+ * Describes a whole family at once.
+ *
+ * Previews come from one query. A legacy video row missing its dimensions is
+ * probed one at a time, so a large family never starts a burst of ffmpeg
+ * processes together.
+ */
+export async function buildAssetVariantInfos(
+  assets: StoredAssetRecord[],
+): Promise<AssetVariantInfo[]> {
+  for (const asset of assets) {
+    if (asset.type === AssetType.Video) await resolveVideoMeta(asset);
+  }
+  const previews = await findMediaPreviewUuids(
+    assets.map((asset) => asset.assetUuid),
+  );
+  return assets.map((asset) =>
+    describeStoredAsset(asset, previews.get(asset.assetUuid)),
+  );
 }
 
 /** Pure descriptor construction for paginated lists with preloaded previews. */
@@ -351,7 +450,12 @@ async function resolveVideoMeta(
   asset: StoredAssetRecord,
 ): Promise<VideoAssetMeta | null> {
   const meta = asset.meta as VideoAssetMeta | null;
-  if (meta?.width && meta.height && typeof meta.hasAudio === 'boolean') {
+  if (
+    meta?.width &&
+    meta.height &&
+    typeof meta.hasAudio === 'boolean' &&
+    meta.duration !== undefined
+  ) {
     return meta;
   }
 
@@ -363,11 +467,15 @@ async function resolveVideoMeta(
 
   if (!inspected) return meta;
 
+  // A file stored before the duration was read gets it now, once; a file
+  // whose duration cannot be read stays as it is and is probed next time.
+  const { codec: _codec, ...video } = videoSourceInfo(inspected, asset.size);
   const resolvedMeta: VideoAssetMeta = {
     ...(meta ?? {}),
     ...(inspected.width ? { width: inspected.width } : {}),
     ...(inspected.height ? { height: inspected.height } : {}),
     hasAudio: inspected.hasAudio,
+    ...video,
   };
   await THEI_SERVER.assets.update(asset.assetUuid, { meta: resolvedMeta });
   asset.meta = resolvedMeta;
@@ -443,7 +551,7 @@ export async function deleteStoredAsset(
   if (!result.deleted) return false;
   if (result.blobOrphaned) await rm(filePath, { force: true }).catch(() => {});
 
-  if (previewUuid && !(await hasPreviewReference(previewUuid))) {
+  if (previewUuid && !(await hasAssetUsage(previewUuid))) {
     // A concurrent transform may have just reused this preview before
     // attaching it, so the preview keeps the same grace period as the sweep.
     await deleteStoredAsset(
@@ -495,16 +603,6 @@ async function hasBlobReference(
         eq(schema.assets.extension, extension),
       ),
     )
-    .limit(1);
-  return rows.length > 0;
-}
-
-async function hasPreviewReference(previewAssetUuid: string): Promise<boolean> {
-  const { db, schema } = THEI_SERVER.useDb();
-  const rows = await db
-    .select({ assetUuid: schema.assetUsages.assetUuid })
-    .from(schema.assetUsages)
-    .where(eq(schema.assetUsages.assetUuid, previewAssetUuid))
     .limit(1);
   return rows.length > 0;
 }

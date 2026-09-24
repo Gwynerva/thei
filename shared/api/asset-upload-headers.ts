@@ -1,8 +1,8 @@
 import type { AssetUploadLimitPolicy } from '../asset-upload-limits';
-import type { AssetUploadSettings } from '../asset-upload-settings';
+import type { AssetUploadRequest } from '../asset-upload-settings';
 
 export interface AssetUploadHeaderInput {
-  settings: AssetUploadSettings;
+  settings: AssetUploadRequest;
   /** Only the extension travels: the file name never reaches the server. */
   extension: string;
   uploadId?: string;

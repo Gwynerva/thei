@@ -61,11 +61,10 @@ test('life confirms reading and preserves date navigation through browser histor
   await expect(
     page.locator('main[data-life-active-date="2026-07-01"]'),
   ).toBeVisible();
-  // The whole date reads as one control now, so the bar carries every part.
+  // The whole date reads as one control, named by the date it shows; the
+  // widest day and month names sit hidden under it to keep its width fixed.
   const bar = page.locator('[data-life-sticky-bar]');
-  await expect(bar).toContainText('01');
-  await expect(bar).toContainText('07');
-  await expect(bar).toContainText('2026');
+  await expect(bar.getByRole('link')).toHaveAccessibleName('1 July 2026');
   await page.goto('/life/');
   await settleFrames(page);
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));

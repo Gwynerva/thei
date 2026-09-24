@@ -3,7 +3,8 @@ import type {
   BlockToolConstructorOptions,
   BlockAPI,
 } from '@editorjs/editorjs';
-import { h, render as renderVue } from 'vue';
+import { h } from 'vue';
+import { renderEditorBlock as renderVue } from './editor-block-render';
 import { AssetType } from '#layers/thei/shared/asset';
 import type {
   ContentAssetData,

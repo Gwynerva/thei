@@ -1,5 +1,5 @@
 import type { AssetVariantsResponse } from '#layers/thei/shared/api/asset';
-import { buildAssetVariantInfo } from '../../../../thei/assets/storage';
+import { buildAssetVariantInfos } from '../../../../thei/assets/storage';
 
 export default defineEventHandler(
   async (event): Promise<AssetVariantsResponse> => {
@@ -15,14 +15,18 @@ export default defineEventHandler(
     const assets = await THEI_SERVER.assets.findByFamilyUuid(
       current.familyUuid,
     );
+    const [variants, usageCounts] = await Promise.all([
+      buildAssetVariantInfos(assets),
+      THEI_SERVER.assets.countPlacementsByUuids(
+        assets.map((asset) => asset.assetUuid),
+      ),
+    ]);
     return {
       currentAssetUuid: current.assetUuid,
-      variants: await Promise.all(
-        assets.map(async (asset) => ({
-          ...(await buildAssetVariantInfo(asset)),
-          usageCount: await THEI_SERVER.assets.countPlacements(asset.assetUuid),
-        })),
-      ),
+      variants: variants.map((variant) => ({
+        ...variant,
+        usageCount: usageCounts.get(variant.assetUuid) ?? 0,
+      })),
     };
   },
 );

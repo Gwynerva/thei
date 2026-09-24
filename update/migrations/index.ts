@@ -7,6 +7,7 @@ import statusesOwner from './0.0.2-statuses-owner';
 import tagAccent from './0.0.2-tag-accent';
 import projectRelations from './0.0.2-project-relations';
 import diaryEntries from './0.0.2-diary-entries';
+import assetRecipeCrops from './0.0.2-asset-recipes';
 
 /**
  * Every migration Thei has ever shipped, oldest first.
@@ -27,6 +28,7 @@ export const migrationRegistry: TheiMigration[] = [
   tagAccent,
   projectRelations,
   diaryEntries,
+  assetRecipeCrops,
 ];
 
 export { baselineSql } from './0.0.1-baseline';

@@ -13,6 +13,10 @@ import {
   type CompareMediaMode,
   type CompareMediaSide,
 } from './compare-media';
+import type {
+  AssetCropRect,
+  AssetRotation,
+} from '#layers/thei/shared/asset-crop';
 import AssetModalVideoControls from './AssetModalVideoControls.vue';
 import { useMediaControls } from './media-controls';
 import { useVideoPlayback } from './use-video-playback';
@@ -23,6 +27,17 @@ export interface CompareMediaSource {
   src: string;
   hasAudio?: boolean;
   displayDimensions?: CompareMediaDimensions;
+  /**
+   * Show only this region of the media, in its pixels. `displayDimensions`
+   * is then the region's size, so both sides line up at the same scale.
+   * With a `rotation` the media is turned first, and `source` and `rect`
+   * are in the turned frame.
+   */
+  crop?: {
+    rect: AssetCropRect;
+    source: CompareMediaDimensions;
+    rotation?: AssetRotation;
+  };
 }
 
 const props = defineProps<{
@@ -31,6 +46,8 @@ const props = defineProps<{
   originalLabel: string;
   modifiedLabel: string;
   disableSeamless?: boolean;
+  /** The modified side is about to be replaced by a newer one. */
+  modifiedPending?: boolean;
 }>();
 
 const containerRef = useTemplateRef<HTMLElement>('container');
@@ -134,6 +151,9 @@ const modifiedClipStyle = computed(() => ({
 
 const originalMediaStyle = computed(() =>
   buildMediaStyle('original', originalDimensions.value),
+);
+const originalCrop = computed(() =>
+  buildCropStyle(props.original, originalDimensions.value, 'original'),
 );
 const modifiedMediaStyle = computed(() =>
   buildMediaStyle('modified', modifiedDimensions.value),
@@ -243,12 +263,45 @@ function buildMediaStyle(
 
   const metrics = getCompareSideMetrics(layout, side, dimensions);
 
+  // The zoom sizes the box itself rather than scaling it: a scaled layer is
+  // drawn once at its unzoomed size and then stretched, which blurs a vector
+  // and any side laid out smaller than its own pixels.
   return {
-    width: `${metrics.width}px`,
-    height: `${metrics.height}px`,
-    transform: `scale(${zoom.value})`,
-    transformOrigin: 'center',
-    willChange: 'transform',
+    width: `${metrics.width * zoom.value}px`,
+    height: `${metrics.height * zoom.value}px`,
+  };
+}
+
+/**
+ * Places the whole media inside a cropped side's frame so that only the
+ * region shows, at the frame's scale. A turned media is drawn unturned and
+ * turned in place, centred in the turned frame.
+ */
+function buildCropStyle(
+  source: CompareMediaSource,
+  dimensions: CompareMediaDimensions | null,
+  side: CompareMediaSide,
+) {
+  const layout = compareLayout.value;
+  if (!source.crop || !layout || !dimensions) return undefined;
+  const { rect, source: frame, rotation = 0 } = source.crop;
+  const metrics = getCompareSideMetrics(layout, side, dimensions);
+  const scale = (metrics.width * zoom.value) / rect.width;
+  const sideways = rotation === 90 || rotation === 270;
+  return {
+    frame: {
+      width: `${frame.width * scale}px`,
+      height: `${frame.height * scale}px`,
+      left: `${-rect.left * scale}px`,
+      top: `${-rect.top * scale}px`,
+    },
+    media: rotation
+      ? {
+          width: `${(sideways ? frame.height : frame.width) * scale}px`,
+          height: `${(sideways ? frame.width : frame.height) * scale}px`,
+          transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+        }
+      : undefined,
   };
 }
 
@@ -412,25 +465,56 @@ function scheduleDividerResize(): void {
         :style="{ transform: transformStyle, willChange: 'transform' }"
       >
         <TransitionFade>
+          <div
+            v-if="originalCrop"
+            v-show="isReady"
+            class="relative shrink-0 overflow-hidden"
+            :style="originalMediaStyle"
+          >
+            <div class="absolute" :style="originalCrop.frame">
+              <video
+                v-if="originalIsVideo"
+                ref="originalMedia"
+                :src="sitePath(original.src)"
+                class="pointer-events-none block max-h-none max-w-none"
+                :class="
+                  originalCrop.media ? 'absolute top-1/2 left-1/2' : 'size-full'
+                "
+                :style="originalCrop.media"
+                @loadedmetadata="onVideoMeta('original', $event)"
+              />
+              <img
+                v-else
+                ref="originalMedia"
+                :src="sitePath(original.src)"
+                alt=""
+                draggable="false"
+                class="pointer-events-none block max-h-none max-w-none"
+                :class="
+                  originalCrop.media ? 'absolute top-1/2 left-1/2' : 'size-full'
+                "
+                :style="originalCrop.media"
+                @load="onImageLoad('original', $event)"
+              />
+            </div>
+          </div>
           <video
-            v-if="originalIsVideo"
+            v-else-if="originalIsVideo"
             v-show="isReady"
             ref="originalMedia"
             :src="sitePath(original.src)"
-            class="pointer-events-none block max-h-none max-w-none"
+            class="pointer-events-none block max-h-none max-w-none shrink-0"
             :style="originalMediaStyle"
             @loadedmetadata="onVideoMeta('original', $event)"
           />
-        </TransitionFade>
-        <TransitionFade>
           <img
-            v-if="!originalIsVideo"
+            v-else
             v-show="isReady"
             ref="originalMedia"
             :src="sitePath(original.src)"
             alt=""
             draggable="false"
-            class="pointer-events-none block max-h-none max-w-none"
+            class="pointer-events-none block max-h-none max-w-none shrink-0"
             :style="originalMediaStyle"
             @load="onImageLoad('original', $event)"
           />
@@ -449,7 +533,7 @@ function scheduleDividerResize(): void {
             v-show="isReady"
             ref="modifiedMedia"
             :src="sitePath(modified.src)"
-            class="pointer-events-none block max-h-none max-w-none"
+            class="pointer-events-none block max-h-none max-w-none shrink-0"
             :style="modifiedMediaStyle"
             @loadedmetadata="onVideoMeta('modified', $event)"
           />
@@ -462,7 +546,7 @@ function scheduleDividerResize(): void {
             :src="sitePath(modified.src)"
             alt=""
             draggable="false"
-            class="pointer-events-none block max-h-none max-w-none"
+            class="pointer-events-none block max-h-none max-w-none shrink-0"
             :style="modifiedMediaStyle"
             @load="onImageLoad('modified', $event)"
           />
@@ -515,7 +599,11 @@ function scheduleDividerResize(): void {
         <span class="text-xs leading-tight font-semibold whitespace-nowrap">
           {{ modifiedLabel }}
         </span>
-        <span class="text-xs leading-tight font-bold tabular-nums">
+        <span
+          class="flex items-center gap-0.5 text-xs leading-tight font-bold
+            tabular-nums"
+        >
+          <Icon v-if="modifiedPending" name="loading" class="text-xs" />
           {{ modifiedPercent }}%
         </span>
       </button>
