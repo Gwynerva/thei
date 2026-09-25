@@ -12,20 +12,20 @@ import StatusHistoryField from '#layers/thei/app/components/settings/StatusHisto
 import { canonicalizeContentData } from '#layers/thei/shared/content';
 import type { ContentEntitySearchItem } from '#layers/thei/shared/admin/content-entity-search';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
+import { externalLinkListItems } from '#layers/thei/shared/external-link';
+import { useExternalLinks } from '#layers/thei/app/composables/external-links';
 definePageMeta({ layout: 'admin' });
 await useAdminTabTitle(computed(() => phrase.value.about_me));
 const initial =
   await useRequestFetch()<AdminProfileResponse>('/api/admin/about');
+// The links arrive with their records; the form keeps only what it saves.
+useExternalLinks().seed(initial.data.externalLinks);
+initial.data.externalLinks = externalLinkListItems(initial.data.externalLinks);
 function serialize(value: ProfileEditData) {
   return JSON.stringify({
     ...value,
     avatarChangeId: '',
     aboutContent: canonicalizeContentData(value.aboutContent?.data),
-    externalLinks: value.externalLinks.map((l) => ({
-      url: l.url,
-      name: l.name,
-      isPrivate: l.isPrivate,
-    })),
   });
 }
 const {

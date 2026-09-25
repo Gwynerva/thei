@@ -87,6 +87,8 @@ import {
   invalidateContentLinks,
   useContentLinkResolver,
 } from '#layers/thei/app/composables/content-link-resolver';
+import { useExternalLinks } from '#layers/thei/app/composables/external-links';
+import type { ExternalLink } from '#layers/thei/shared/external-link';
 import { internalUrlPastePattern } from '#layers/thei/shared/internal-url';
 import {
   createEditorSnapshotManager,
@@ -134,6 +136,13 @@ const hintControls = useTemplateRef<ContentHintControlsExpose>('hintControls');
 // saved or removed; it asks about them afresh.
 invalidateContentLinks();
 const contentLinkResolver = useContentLinkResolver('admin');
+// The records of the links the content came with, so no block asks again.
+const externalLinks = useExternalLinks();
+externalLinks.seed(
+  (props.modalData.value?.data?.blocks ?? [])
+    .filter((block) => block.type === 'externalLink')
+    .map((block) => block.data as Partial<ExternalLink>),
+);
 const internalSite = useInternalUrlSite();
 const entityPickerOpen = ref(false);
 const entityPickerAnchor = ref<HTMLElement>();
@@ -597,6 +606,7 @@ onMounted(async () => {
         class: ExternalLinkTool,
         config: {
           labels: contentToolLabels(),
+          links: externalLinks,
         },
       },
       privateSectionBoundary: {
@@ -884,8 +894,8 @@ function contentToolLabels() {
     privateSection: phrase.value.content_private_section,
     privateSectionStart: phrase.value.content_private_section_start,
     privateSectionEnd: phrase.value.content_private_section_end,
-    externalLinkLoading: phrase.value.external_link_loading,
     externalLinkError: phrase.value.external_link_error,
+    refreshExternalLink: phrase.value.refresh_external_link,
     chooseEntity: phrase.value.content_choose_entity,
     makeGallery: phrase.value.content_make_gallery,
   };

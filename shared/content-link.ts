@@ -1,5 +1,8 @@
 import type { MediaDescriptor } from './media';
-import { normalizeExternalLinkUrl } from './external-link';
+import {
+  normalizeExternalLinkUrl,
+  type ExternalLinkPreview,
+} from './external-link';
 
 /**
  * Every kind of entity content may link to, in the order a person would name
@@ -85,6 +88,20 @@ export type ResolvedContentLink =
       reason: 'not-found' | 'invalid' | 'unavailable';
     })
   | (ContentLinkReference & { state: 'restricted' });
+
+/** What a card can show of a resolved external link. */
+export function externalLinkFromResolved(
+  result: ResolvedContentLink | undefined,
+): ExternalLinkPreview | undefined {
+  if (!result || result.state !== 'resolved' || result.kind !== 'external')
+    return undefined;
+  return {
+    url: result.href,
+    title: result.title,
+    description: result.description,
+    faviconMedia: result.iconMedia,
+  };
+}
 
 export type RestrictedContentLinkResponse = { state: 'restricted' };
 export type ContentLinkApiResponse =

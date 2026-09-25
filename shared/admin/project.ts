@@ -32,7 +32,7 @@ import {
 } from '../project-action';
 import {
   validateExternalLinkList,
-  type ProjectExternalLinkEditItem,
+  type ExternalLinkListItem,
 } from '../external-link';
 import {
   normalizeHumanReadableSlug,
@@ -77,7 +77,7 @@ export type ProjectEditData = Partial<StatusEditData> & {
   /** Relations in this project's display order. */
   relations?: RelationEditItem[];
   /** External links in display order. */
-  externalLinks?: ProjectExternalLinkEditItem[];
+  externalLinks?: ExternalLinkListItem[];
   tags?: TagEditItem[];
   action?: ProjectActionEditData;
   reminder?: string;
@@ -268,7 +268,7 @@ export function validateProjectData(
 }
 
 function validateProjectExternalLinks(
-  links: ProjectExternalLinkEditItem[] | undefined,
+  links: ExternalLinkListItem[] | undefined,
 ) {
   return validateExternalLinkList(links, (message): never => {
     throw new ProjectValidationError(message);

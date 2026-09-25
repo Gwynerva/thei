@@ -1,9 +1,11 @@
 <script lang="ts" setup>
-import type { ProjectExternalLinkEditItem } from '#layers/thei/shared/external-link';
 import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
+import type { MediaDescriptor } from '#layers/thei/shared/media';
 
 const props = defineProps<{
-  link: ProjectExternalLinkEditItem;
+  link: { url: string; name: string };
+  /** The site's icon, from the link's stored record when there is one. */
+  faviconMedia?: MediaDescriptor;
   interactive?: boolean;
   loading?: boolean;
   size?: 'default' | 'compact';
@@ -14,10 +16,9 @@ const component = computed(() =>
   props.interactive ? 'button' : props.link.url ? 'a' : 'div',
 );
 
-const accentColor = computed(() => {
-  const hue = props.link.faviconMedia?.accent;
-  return imageAccentCssColor(hue, 'var(--color-text-3)');
-});
+const accentColor = computed(() =>
+  imageAccentCssColor(props.faviconMedia?.accent, 'var(--color-text-3)'),
+);
 </script>
 
 <template>
@@ -40,8 +41,8 @@ const accentColor = computed(() => {
     @click="emit('click', $event)"
   >
     <Media
-      v-if="link.faviconMedia"
-      v-bind="link.faviconMedia"
+      v-if="faviconMedia"
+      v-bind="faviconMedia"
       :class="size === 'compact' ? 'size-4' : 'size-5'"
       class="shrink-0 rounded-xs"
     />

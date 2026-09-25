@@ -95,6 +95,7 @@ describe.each(['event', 'project'])('public %s action', (kind) => {
       vi.mocked(findExternalLink).mockResolvedValue({
         url: 'https://example.com/',
         faviconMedia,
+        status: 'complete',
         touchedAt: 0,
       });
       const result = await buildPublicAction(

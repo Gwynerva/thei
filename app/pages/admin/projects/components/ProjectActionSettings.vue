@@ -23,10 +23,11 @@ import {
   type ProjectActionIssue,
   type ProjectActionTarget,
 } from '#layers/thei/shared/project-action';
+import { normalizeExternalLinkUrl } from '#layers/thei/shared/external-link';
 import {
-  normalizeExternalLinkUrl,
-  type ExternalLink,
-} from '#layers/thei/shared/external-link';
+  createExternalLinkDraft,
+  useExternalLinks,
+} from '#layers/thei/app/composables/external-links';
 import { projectAssetUsageDelta } from '#layers/thei/shared/admin/project';
 import { assetDetailsModal } from '#layers/thei/app/modals/asset-details/modal';
 import { useSingleMediaAsset } from '#layers/thei/app/composables/single-media-asset';
@@ -53,7 +54,6 @@ const {
   fileMedia,
   fileExtension,
   fileSize,
-  faviconMedia,
 } = inject(projectActionMediaKey)!;
 const humanSize = useHumanSize();
 
@@ -156,11 +156,14 @@ const backgroundSlot = useSingleMediaAsset({
 });
 
 // Link preview and favicon
-const externalLinkPreview = ref<ExternalLink>();
-const loadingLink = ref(false);
-let previewedUrl: string | undefined;
-let linkTimer: ReturnType<typeof setTimeout> | undefined;
-let linkRequestId = 0;
+const externalLinks = useExternalLinks();
+const linkDraft = createExternalLinkDraft(externalLinks, {
+  errorText: () => phrase.value.external_link_error,
+});
+const linkUrl = computed(() => validUrl(action.value.externalUrl));
+const faviconMedia = computed(() =>
+  linkUrl.value ? externalLinks.get(linkUrl.value)?.faviconMedia : undefined,
+);
 
 function validUrl(value: string | undefined) {
   try {
@@ -170,56 +173,27 @@ function validUrl(value: string | undefined) {
   }
 }
 
-function syncLinkPreview(
-  url: string | undefined,
-  target: ProjectActionTarget,
-  edited: { urlChanged: boolean } | undefined,
-) {
-  if (edited?.urlChanged) {
-    faviconMedia.value = undefined;
-    externalLinkPreview.value = undefined;
-    previewedUrl = undefined;
-  }
-  clearTimeout(linkTimer);
-  const requestId = ++linkRequestId;
-  loadingLink.value = false;
-  if (target !== 'external-link' || !validUrl(url) || previewedUrl === url)
-    return;
-  loadingLink.value = true;
-  linkTimer = setTimeout(
-    () => loadLinkPreview(url!, requestId),
-    edited ? 450 : 0,
-  );
-}
+// The field is the action's own; the draft only follows it. Typing reads
+// nothing: the site is read once the address is done — pasted, left, or
+// confirmed with Enter.
 watch(
-  [() => action.value.externalUrl, () => action.value.target],
-  ([url, target], [previousUrl]) =>
-    syncLinkPreview(url, target, { urlChanged: url !== previousUrl }),
+  () => action.value.externalUrl,
+  (value) => {
+    linkDraft.url = value ?? '';
+  },
+  { immediate: true },
 );
-// The first preview is fetched after hydration: the server renders none, and
-// starting it during setup would make the client's first render disagree.
-onMounted(() =>
-  syncLinkPreview(action.value.externalUrl, action.value.target, undefined),
-);
-onUnmounted(() => clearTimeout(linkTimer));
-
-async function loadLinkPreview(url: string, requestId: number) {
-  try {
-    const preview = await $fetch<ExternalLink>(
-      '/api/admin/external-links',
-      { method: 'POST', body: { url } },
-    );
-    if (requestId !== linkRequestId) return;
-    externalLinkPreview.value = preview;
-    faviconMedia.value = preview.faviconMedia;
-    previewedUrl = url;
-  } catch {
-    if (requestId !== linkRequestId) return;
-    externalLinkPreview.value = undefined;
-  } finally {
-    if (requestId === linkRequestId) loadingLink.value = false;
-  }
+function commitLink() {
+  if (isLink.value) void linkDraft.commit();
 }
+function onLinkPaste() {
+  void nextTick(commitLink);
+}
+// A stored link shows at once; one the site has never seen is looked up
+// once, after hydration so the first render agrees with the server's.
+onMounted(() => {
+  if (isLink.value && linkUrl.value) void linkDraft.open(linkUrl.value);
+});
 
 // Target file
 function applyFile(asset: AssetVariantInfo) {
@@ -396,14 +370,18 @@ function openFileAsset() {
                 type="url"
                 placeholder="https://example.com/"
                 autocomplete="off"
+                @change="commitLink"
+                @paste="onLinkPaste"
+                @submit="commitLink"
               />
               <ExternalLinkPreviewCard
-                v-if="validUrl(action.externalUrl)"
-                :link="externalLinkPreview"
+                v-if="linkUrl"
+                :link="linkDraft.preview"
                 :url="action.externalUrl"
                 :interactive="true"
-                :loading="loadingLink"
-                :loading-text="phrase.project_action_link_loading"
+                :loading="linkDraft.loading"
+                :loading-text="phrase.external_link_loading"
+                :error-text="linkDraft.error"
               />
             </Field>
 

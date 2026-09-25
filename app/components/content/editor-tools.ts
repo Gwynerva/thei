@@ -24,7 +24,8 @@ import {
   contentAssetSelectionChanged,
   contentAttachmentAssetChanged,
 } from '#layers/thei/app/components/content/content-attachment';
-import ExternalLinkPreviewCard from '#layers/thei/app/components/external-links/ExternalLinkPreviewCard.vue';
+import ExternalLinkBlockCard from '#layers/thei/app/components/external-links/ExternalLinkBlockCard.vue';
+import type { ExternalLinkStore } from '#layers/thei/app/composables/external-links';
 import ContentIntegration from '#layers/thei/app/components/content/ContentIntegration.vue';
 import {
   contentIntegrationPastePatterns,
@@ -32,10 +33,7 @@ import {
   normalizeContentIntegration,
   type ContentIntegrationData,
 } from '#layers/thei/shared/content-integrations';
-import {
-  normalizeExternalLinkUrl,
-  type ExternalLink,
-} from '#layers/thei/shared/external-link';
+import { normalizeExternalLinkUrl } from '#layers/thei/shared/external-link';
 import { editorIcon } from './editor-icons';
 import type { ContentEntitySearchItem } from '#layers/thei/shared/admin/content-entity-search';
 import {
@@ -81,8 +79,8 @@ interface ContentToolLabels {
   privateSection: string;
   privateSectionStart: string;
   privateSectionEnd: string;
-  externalLinkLoading: string;
   externalLinkError: string;
+  refreshExternalLink: string;
   chooseEntity: string;
   makeGallery: string;
 }
@@ -124,6 +122,12 @@ interface PrivateSectionBoundaryToolConfig {
   labels: ContentToolLabels;
 }
 
+interface ExternalLinkToolConfig {
+  labels: ContentToolLabels;
+  /** The page's records of external links, shared with every other card on it. */
+  links: ExternalLinkStore;
+}
+
 type ContentToolOptions<
   TData extends object,
   TConfig extends object,
@@ -135,33 +139,33 @@ export class ExternalLinkTool implements BlockTool {
   };
 
   private url = '';
-  private preview?: ExternalLink;
   private wrapper?: HTMLElement;
   private loading = false;
   private error = false;
   private version = 0;
-  private controller?: AbortController;
 
   constructor(
     private options: ContentToolOptions<
-      Partial<ExternalLink>,
-      { labels: ContentToolLabels }
+      { url?: string },
+      ExternalLinkToolConfig
     >,
   ) {
     this.url = options.data.url ?? '';
-    if (options.data.faviconMedia && options.data.touchedAt) {
-      this.preview = options.data as ExternalLink;
-    }
+  }
+
+  private get config() {
+    return contentToolConfig(this.options.config);
   }
 
   render() {
     this.wrapper = createToolWrapper();
     this.renderContent();
-    // Opening an editor is not a reason to go out to the network. A link the
-    // site already knows about is served from its own record; one it has never
-    // seen is looked up once and kept. Only a link the person has just put in
-    // is fetched fresh, and that happens in `onPaste`.
-    if (this.url && !this.preview && !this.options.readOnly) void this.load();
+    // Opening an editor is not a reason to go out to the network: the record
+    // of a link the content came with is already in the store, and one the
+    // site has never seen is looked up once and kept. Only a link just pasted,
+    // or one the person asks to refresh, is read from the site.
+    if (this.url && !this.options.readOnly && !this.config.links.get(this.url))
+      void this.request(() => this.config.links.lookup(this.url));
     return this.wrapper;
   }
 
@@ -179,57 +183,42 @@ export class ExternalLinkTool implements BlockTool {
 
   destroy() {
     this.version += 1;
-    this.controller?.abort();
     if (this.wrapper) renderVue(null, this.wrapper);
   }
 
   async onPaste(event: CustomEvent) {
     this.url = normalizeExternalLinkUrl(event.detail?.data);
-    this.preview = undefined;
     this.options.block.dispatchChange();
     void this.refresh();
   }
 
-  /** The stored record, fetched from the remote page only if there is none. */
-  private load() {
-    return this.request((signal) =>
-      $fetch<ExternalLink>('/api/admin/external-links', {
-        query: { url: this.url },
-        signal,
-      }),
-    );
+  renderSettings() {
+    return [
+      {
+        icon: editorIcon('refresh'),
+        title: this.config.labels.refreshExternalLink,
+        closeOnActivate: true,
+        onActivate: () => void this.refresh(),
+      },
+    ];
   }
 
-  /** A deliberate re-read of the remote page, for a link just put in. */
+  /** A deliberate re-read of the site. Presentation only: the stored block is just the address. */
   private refresh() {
-    return this.request((signal) =>
-      $fetch<ExternalLink>('/api/admin/external-links', {
-        method: 'POST',
-        body: { url: this.url },
-        signal,
-      }),
-    );
+    return this.request(() => this.config.links.refresh(this.url));
   }
 
-  private async request(send: (signal: AbortSignal) => Promise<ExternalLink>) {
+  private async request(send: () => Promise<unknown>) {
     const version = ++this.version;
-    this.controller?.abort();
-    const controller = new AbortController();
-    this.controller = controller;
     this.loading = true;
     this.error = false;
     this.renderContent();
     try {
-      const preview = await send(controller.signal);
-      if (version !== this.version) return;
-      this.preview = preview;
-    } catch (cause: any) {
-      if (version !== this.version) return;
-      if (cause?.name === 'AbortError') return;
-      this.error = true;
+      await send();
+    } catch {
+      if (version === this.version) this.error = true;
     } finally {
       if (version === this.version) {
-        this.controller = undefined;
         this.loading = false;
         this.renderContent();
       }
@@ -239,17 +228,12 @@ export class ExternalLinkTool implements BlockTool {
   private renderContent() {
     if (!this.wrapper) return;
     renderVue(
-      h(ExternalLinkPreviewCard, {
-        link: this.preview,
+      h(ExternalLinkBlockCard, {
         url: this.url,
-        interactive: true,
-        playback: 'interaction',
         loading: this.loading,
         errorText: this.error
-          ? contentToolConfig(this.options.config).labels.externalLinkError
+          ? this.config.labels.externalLinkError
           : undefined,
-        loadingText: contentToolConfig(this.options.config).labels
-          .externalLinkLoading,
       }),
       this.wrapper,
     );
@@ -1079,8 +1063,8 @@ function getLabels(
       privateSection: 'Private section',
       privateSectionStart: 'Start of private section',
       privateSectionEnd: 'End of private section',
-      externalLinkLoading: 'Loading link details…',
       externalLinkError: 'Could not load link preview',
+      refreshExternalLink: 'Refresh link',
       chooseEntity: 'Choose what to link to',
       makeGallery: 'Turn into a gallery',
     }

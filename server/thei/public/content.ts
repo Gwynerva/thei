@@ -368,7 +368,12 @@ async function hydratePublicContentData(
     } else if (block.type === 'externalLink') {
       const url = (block.data as any).url;
       const link = url ? await loadExternalLink(url) : undefined;
-      if (link) Object.assign(data, link);
+      if (link)
+        Object.assign(data, {
+          title: link.title,
+          description: link.description,
+          faviconMedia: link.faviconMedia,
+        });
     }
     return {
       ...block,

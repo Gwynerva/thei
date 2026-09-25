@@ -689,7 +689,6 @@ export type LanguagePhrases = {
   project_action_file_type: string;
   project_action_file: string;
   project_action_link_url: string;
-  project_action_link_loading: string;
   project_action_target_file: string;
   project_action_file_select: string;
   project_action_file_select_hint: string;
@@ -761,6 +760,7 @@ export type LanguagePhrases = {
   external_link_loading: string;
   external_link_error: string;
   external_link_fallback: string;
+  external_link_archived: string;
   external_link_duplicate: string;
   external_link_private: string;
   project_external_links_empty: string;

@@ -7,7 +7,7 @@ import {
   type PublicContentOutputBlock,
 } from '#layers/thei/shared/content';
 import type { ContentLinkResolver } from '#layers/thei/shared/content-link';
-import type { ExternalLink } from '#layers/thei/shared/external-link';
+import type { ExternalLinkPreview } from '#layers/thei/shared/external-link';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import { useContentLinkResolver } from '#layers/thei/app/composables/content-link-resolver';
 import ExternalLinkPreviewCard from '#layers/thei/app/components/external-links/ExternalLinkPreviewCard.vue';
@@ -72,11 +72,17 @@ function assetMedia(value: unknown) {
   return asset(value).media as MediaDescriptor;
 }
 
-function externalLink(value: Record<string, unknown>) {
+function externalLink(
+  value: Record<string, unknown>,
+): ExternalLinkPreview | undefined {
   const data = value as ContentExternalLinkData;
-  return data.faviconMedia
-    ? ({ ...data, touchedAt: data.touchedAt ?? 0 } as ExternalLink)
-    : undefined;
+  if (!data.faviconMedia) return undefined;
+  return {
+    url: data.url,
+    title: data.title,
+    description: data.description,
+    faviconMedia: data.faviconMedia,
+  };
 }
 
 function assetDescriptor(

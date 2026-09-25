@@ -3,7 +3,10 @@ import type {
   PublicContentOutputData,
 } from './content';
 import type { SiteAnalyticsSettings } from './analytics';
-import type { ProjectExternalLinkEditItem } from './external-link';
+import type {
+  ExternalLinkListItem,
+  ProjectExternalLink,
+} from './external-link';
 import type { MediaDescriptor } from './media';
 import type {
   PublicEntitySummary,
@@ -46,7 +49,7 @@ export interface ProfileEditData extends StatusEditData {
   aboutContent: ContentFieldModelValue | null;
   facts: ProfileFact[];
   pinnedPageUuids: string[];
-  externalLinks: ProjectExternalLinkEditItem[];
+  externalLinks: ExternalLinkListItem[];
   deletedAvatarIds: string[];
 }
 export interface ProfilePageLink {
@@ -81,7 +84,7 @@ export interface PublicProfileResponse {
   statusCount: number;
   aboutContent?: PublicContentOutputData;
   pinnedPages: ProfilePageLink[];
-  externalLinks: ProjectExternalLinkEditItem[];
+  externalLinks: ProjectExternalLink[];
   showcaseProjects: PublicEntityReference[];
   projects: {
     count: number;

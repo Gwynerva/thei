@@ -988,7 +988,6 @@ export default defineI18nModule({
     project_action_file_type: 'Файл',
     project_action_file: 'Файл кнопки действия',
     project_action_link_url: 'Адрес ссылки',
-    project_action_link_loading: 'Получаем данные сайта…',
     project_action_target_file: 'Файл для скачивания',
     project_action_file_select: 'Выбрать файл',
     project_action_file_select_hint:
@@ -1071,11 +1070,13 @@ export default defineI18nModule({
     external_link_loading: 'Обработка ссылки…',
     external_link_error: 'Не удалось обработать ссылку.',
     external_link_fallback:
-      'Сайт не отдал метаданные — ссылка сохранится с названием домена.',
+      'Сайт не ответил — ссылка показывает имя домена, пока её не обновить.',
+    external_link_archived:
+      'Сайт не ответил — данные взяты из архивной копии страницы.',
     external_link_duplicate: 'Эта ссылка уже добавлена.',
     external_link_private: 'Приватная ссылка',
     project_external_links_empty: 'Внешних ссылок пока нет.',
-    refresh_external_link: 'Обновить данные ссылки',
+    refresh_external_link: 'Обновить ссылку',
     search_entity_placeholder: 'Название или дата записи дневника…',
     search_entity_no_results: 'Ничего подходящего не найдено.',
     search_entity_error: 'Не удалось выполнить поиск.',

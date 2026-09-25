@@ -33,6 +33,8 @@ import ProjectTags from '../../projects/components/ProjectTags.vue';
 import ProjectActionSettings from '../../projects/components/ProjectActionSettings.vue';
 import ProjectShareLinks from '../../projects/components/ProjectShareLinks.vue';
 import { eventDeleteModal } from './event-delete-modal';
+import { externalLinkListItems } from '#layers/thei/shared/external-link';
+import { useExternalLinks } from '#layers/thei/app/composables/external-links';
 
 const { eventUuid } = defineProps<{ eventUuid?: string }>();
 const initialPublicId = useState(`new-event-public-id-${useId()}`, () =>
@@ -65,6 +67,7 @@ provide(showcaseItemsKey, ref([]));
 const otherItems = ref<EventGetResponse['otherAssets']>([]);
 provide(otherItemsKey, otherItems);
 const actionMedia = provideProjectActionMedia();
+const externalLinks = useExternalLinks();
 
 const isEdit = computed(() => Boolean(eventUuid));
 const saving = ref(false);
@@ -106,7 +109,7 @@ if (isEdit.value) {
       caption: item.caption,
       isPrivate: item.isPrivate,
     })),
-    externalLinks: data.externalLinks,
+    externalLinks: externalLinkListItems(data.externalLinks),
     tags: data.tags,
     relations: data.relations ?? [],
     action: data.action,
@@ -114,6 +117,7 @@ if (isEdit.value) {
     notes: data.notes ?? null,
   };
   otherItems.value = data.otherAssets;
+  externalLinks.seed(data.externalLinks);
   actionMedia.applyLoaded(data);
   markSaved();
   if (eventUuid !== data.eventUuid)

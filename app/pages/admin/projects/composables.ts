@@ -7,6 +7,7 @@ import type {
 } from '#layers/thei/shared/api/project';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import type { ProjectActionEditData } from '#layers/thei/shared/project-action';
+import { useExternalLinks } from '#layers/thei/app/composables/external-links';
 
 export { AssetType };
 export type { OtherAssetGetItem, ShowcaseAssetGetItem };
@@ -47,7 +48,6 @@ export interface ProjectActionMediaState {
   fileMedia: Ref<MediaDescriptor | undefined>;
   fileExtension: Ref<string | undefined>;
   fileSize: Ref<number | undefined>;
-  faviconMedia: Ref<MediaDescriptor | undefined>;
 }
 
 export const projectActionMediaKey = Symbol(
@@ -68,9 +68,11 @@ type ProjectActionMediaSource = Pick<
 
 /**
  * Display media of the action button, shared by the project and event forms.
- * The action itself only stores asset identifiers.
+ * The action itself only stores asset identifiers; the favicon of a linked
+ * site lives in the page's store of link records.
  */
 export function provideProjectActionMedia() {
+  const externalLinks = useExternalLinks();
   const state: ProjectActionMediaState = {
     iconMedia: ref(),
     iconSize: ref(),
@@ -79,7 +81,6 @@ export function provideProjectActionMedia() {
     fileMedia: ref(),
     fileExtension: ref(),
     fileSize: ref(),
-    faviconMedia: ref(),
   };
   provide(projectActionMediaKey, state);
 
@@ -91,7 +92,7 @@ export function provideProjectActionMedia() {
     state.fileMedia.value = data.actionFileMedia;
     state.fileExtension.value = data.actionFileExtension;
     state.fileSize.value = data.actionFileSize;
-    state.faviconMedia.value = data.actionLink?.faviconMedia;
+    externalLinks.seed([data.actionLink]);
   }
 
   /** Forgets media of assets that normalization removed from the saved action. */
@@ -112,8 +113,6 @@ export function provideProjectActionMedia() {
       state.fileExtension.value = undefined;
       state.fileSize.value = undefined;
     }
-    if (saved?.externalUrl !== previous?.externalUrl)
-      state.faviconMedia.value = undefined;
   }
 
   return { applyLoaded, applySaved };

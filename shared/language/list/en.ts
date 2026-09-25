@@ -928,7 +928,6 @@ export default defineI18nBase({
     project_action_file_type: 'File',
     project_action_file: 'Action button file',
     project_action_link_url: 'Link URL',
-    project_action_link_loading: 'Fetching site data…',
     project_action_target_file: 'File to download',
     project_action_file_select: 'Choose a file',
     project_action_file_select_hint:
@@ -1012,11 +1011,13 @@ export default defineI18nBase({
     external_link_loading: 'Processing link…',
     external_link_error: 'Could not process this link.',
     external_link_fallback:
-      'The site did not return metadata; the link will use its domain name.',
+      'The site did not answer; the link shows its domain name until it is refreshed.',
+    external_link_archived:
+      'The site did not answer; these details come from an archived copy of the page.',
     external_link_duplicate: 'This link is already added.',
     external_link_private: 'Private link',
     project_external_links_empty: 'No external links yet.',
-    refresh_external_link: 'Refresh link details',
+    refresh_external_link: 'Refresh link',
     search_entity_placeholder: 'A title, or the date of a diary entry…',
     search_entity_no_results: 'Nothing matches.',
     search_entity_error: 'Could not search.',

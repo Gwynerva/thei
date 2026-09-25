@@ -3,7 +3,7 @@ import type { DatedPeriod } from './date-precision';
 import type { ProjectEventAccessLevel } from './access-level';
 import type { ProjectActionEditData } from './project-action';
 import type { OtherAssetSaveItem } from './admin/project';
-import type { ProjectExternalLinkEditItem } from './external-link';
+import type { ExternalLinkListItem } from './external-link';
 import type { TagEditItem } from './tag';
 import type { MediaDescriptor } from './media';
 import type { RelationEditItem } from './relation';
@@ -17,7 +17,7 @@ export type EventEditData = {
   periods: DatedPeriod[];
   content: ContentFieldModelValue | null;
   otherAssets?: OtherAssetSaveItem[];
-  externalLinks?: ProjectExternalLinkEditItem[];
+  externalLinks?: ExternalLinkListItem[];
   tags?: TagEditItem[];
   relations?: RelationEditItem[];
   action?: ProjectActionEditData;

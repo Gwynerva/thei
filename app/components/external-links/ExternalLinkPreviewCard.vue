@@ -2,13 +2,13 @@
 import {
   externalLinkHostname,
   normalizeExternalLinkUrl,
-  type ExternalLink,
+  type ExternalLinkPreview,
 } from '#layers/thei/shared/external-link';
 import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
-import type { MediaDescriptor, MediaPlayback } from '#layers/thei/shared/media';
+import type { MediaPlayback } from '#layers/thei/shared/media';
 
 const props = defineProps<{
-  link?: ExternalLink;
+  link?: ExternalLinkPreview;
   url?: string;
   loading?: boolean;
   errorText?: string;
@@ -16,24 +16,29 @@ const props = defineProps<{
   flush?: boolean;
   interactive: boolean;
   playback?: MediaPlayback;
-  displayTitle?: string;
-  displayDescription?: string;
-  displayIconMedia?: MediaDescriptor;
 }>();
 
 const title = computed(
   () =>
     props.link?.title ||
-    props.displayTitle ||
     props.errorText ||
-    (props.url ? externalLinkHostname(props.url) : ''),
+    externalLinkHostname(props.url ?? props.link?.url ?? ''),
 );
-const description = computed(
-  () => props.displayDescription ?? props.link?.description,
-);
-const iconMedia = computed(
-  () => props.displayIconMedia ?? props.link?.faviconMedia,
-);
+const description = computed(() => props.link?.description);
+const iconMedia = computed(() => props.link?.faviconMedia);
+
+/**
+ * How the details were obtained, when that is worth knowing: a site that
+ * did not answer can be refreshed later. Public data never carries a
+ * status, so visitors never see this line.
+ */
+const hint = computed(() => {
+  if (props.link?.status === 'fallback')
+    return phrase.value.external_link_fallback;
+  if (props.link?.status === 'archived')
+    return phrase.value.external_link_archived;
+  return undefined;
+});
 
 const interactiveHref = computed(() => {
   if (!props.interactive) return undefined;
@@ -44,10 +49,9 @@ const interactiveHref = computed(() => {
   }
 });
 
-const accentColor = computed(() => {
-  const hue = iconMedia.value?.accent;
-  return imageAccentCssColor(hue, 'var(--color-text-3)');
-});
+const accentColor = computed(() =>
+  imageAccentCssColor(iconMedia.value?.accent, 'var(--color-text-3)'),
+);
 const { engaged, events: mediaEvents } = useMediaInteraction();
 </script>
 
@@ -100,6 +104,9 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
         </p>
         <p v-else-if="loading && loadingText" class="text-xs text-text-3">
           {{ loadingText }}
+        </p>
+        <p v-if="hint && !loading" class="text-xs text-text-3 italic">
+          {{ hint }}
         </p>
       </div>
     </component>

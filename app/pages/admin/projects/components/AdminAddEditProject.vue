@@ -42,9 +42,12 @@ import type { ProfileHistoryPage } from '#layers/thei/shared/profile';
 import type { StatusHistoryItem } from '#layers/thei/shared/status';
 import StatusHistoryField from '#layers/thei/app/components/settings/StatusHistoryField.vue';
 import ProjectActionSettings from './ProjectActionSettings.vue';
+import { externalLinkListItems } from '#layers/thei/shared/external-link';
+import { useExternalLinks } from '#layers/thei/app/composables/external-links';
 
 const { projectUuid } = defineProps<{ projectUuid?: string }>();
 const route = useRoute();
+const externalLinks = useExternalLinks();
 
 const formId = useId();
 const initialPublicId = useState(`new-project-public-id-${formId}`, () =>
@@ -180,13 +183,14 @@ if (isEdit.value) {
       isPrivate: item.isPrivate,
     })),
     relations: data.relations ?? [],
-    externalLinks: data.externalLinks ?? [],
+    externalLinks: externalLinkListItems(data.externalLinks),
     tags: data.tags ?? [],
     action: data.action ?? { ...DEFAULT_PROJECT_ACTION },
     reminder: data.reminder,
     notes: data.notes ?? null,
     ...emptyStatusEditData(),
   };
+  externalLinks.seed(data.externalLinks ?? []);
   loadedStatuses.value = data.statuses;
   showcaseItems.value = data.showcaseAssets ?? [];
   otherItems.value = data.otherAssets ?? [];

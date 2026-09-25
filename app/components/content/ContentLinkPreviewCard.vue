@@ -2,9 +2,9 @@
 import type { MediaPlayback } from '#layers/thei/shared/media';
 import {
   contentEntityHasIcon,
+  externalLinkFromResolved,
   type ResolvedContentLink,
 } from '#layers/thei/shared/content-link';
-import type { ExternalLink } from '#layers/thei/shared/external-link';
 import ExternalLinkPreviewCard from '#layers/thei/app/components/external-links/ExternalLinkPreviewCard.vue';
 import EntityLinkPreviewCard from './EntityLinkPreviewCard.vue';
 
@@ -18,18 +18,7 @@ const props = defineProps<{
   continuousProjectMedia?: boolean;
 }>();
 
-const externalLink = computed<ExternalLink | undefined>(() => {
-  const result = props.result;
-  if (!result || result.state !== 'resolved' || result.kind !== 'external')
-    return undefined;
-  return {
-    url: result.href,
-    title: result.title,
-    description: result.description,
-    faviconMedia: result.iconMedia,
-    touchedAt: 0,
-  };
-});
+const externalLink = computed(() => externalLinkFromResolved(props.result));
 </script>
 
 <template>

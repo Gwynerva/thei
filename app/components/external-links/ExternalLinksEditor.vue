@@ -1,12 +1,15 @@
 <script lang="ts" setup>
-import { debounce } from 'perfect-debounce';
 import ExternalLinkPreviewCard from './ExternalLinkPreviewCard.vue';
-import type {
-  ExternalLink,
-  ProjectExternalLinkEditItem,
+import {
+  normalizeExternalLinkUrl,
+  type ExternalLink,
+  type ExternalLinkListItem,
 } from '#layers/thei/shared/external-link';
-import { normalizeExternalLinkUrl } from '#layers/thei/shared/external-link';
 import { moveItemById } from '#layers/thei/app/composables/drag-sort';
+import {
+  createExternalLinkDraft,
+  useExternalLinks,
+} from '#layers/thei/app/composables/external-links';
 
 const props = defineProps<{
   title: string;
@@ -14,41 +17,34 @@ const props = defineProps<{
   emptyText: string;
 }>();
 
-const links = defineModel<ProjectExternalLinkEditItem[]>({
+const links = defineModel<ExternalLinkListItem[]>({
   required: true,
 });
 
 const addButton = useTemplateRef<HTMLElement>('addButton');
 const linksRoot = useTemplateRef<HTMLElement>('linksRoot');
 
+const externalLinks = useExternalLinks();
+const draft = createExternalLinkDraft(externalLinks, {
+  errorText: () => phrase.value.external_link_error,
+});
+
 const popupOpen = ref(false);
 const popupAnchor = ref<HTMLElement | null>(null);
 const editingIndex = ref<number | null>(null);
 
-const draftUrl = ref('');
 const draftName = ref('');
 const suggestedName = ref('');
 const draftPrivate = ref(false);
 
-const preview = ref<ExternalLink>();
-const loading = ref(false);
-const attempted = ref(false);
-const error = ref<string>();
-
-let requestVersion = 0;
-let suppressNextUrlRefresh = false;
-let previewController: AbortController | undefined;
-
-const initialLoading = computed(() => loading.value && !preview.value);
-
+const initialLoading = computed(() => draft.loading && !draft.preview);
 const refreshingPreview = computed(
-  () => loading.value && Boolean(preview.value),
+  () => draft.loading && Boolean(draft.preview),
 );
 
 const duplicate = computed(() => {
   try {
-    const normalized = normalizeExternalLinkUrl(draftUrl.value);
-
+    const normalized = normalizeExternalLinkUrl(draft.url);
     return links.value.some(
       (link, index) => index !== editingIndex.value && link.url === normalized,
     );
@@ -59,17 +55,15 @@ const duplicate = computed(() => {
 
 const canSave = computed(
   () =>
-    attempted.value &&
-    !loading.value &&
-    !error.value &&
+    !draft.loading &&
+    !draft.error &&
     !duplicate.value &&
     Boolean(draftName.value.trim()) &&
-    Boolean(preview.value),
+    Boolean(draft.preview),
 );
 
 function openAdd(event: MouseEvent) {
   resetDraft();
-
   popupAnchor.value = event.currentTarget as HTMLElement;
   popupOpen.value = true;
 }
@@ -77,188 +71,70 @@ function openAdd(event: MouseEvent) {
 function openEdit(index: number, event: MouseEvent) {
   const link = links.value[index];
   if (!link) return;
-
+  resetDraft();
   editingIndex.value = index;
-  setDraftUrlSilently(link.url);
-
   draftName.value = link.name;
   draftPrivate.value = link.isPrivate;
-
-  preview.value =
-    link.faviconMedia && link.touchedAt
-      ? {
-          url: link.url,
-          title: link.title,
-          description: link.description,
-          faviconMedia: link.faviconMedia,
-          touchedAt: link.touchedAt,
-        }
-      : undefined;
-
-  attempted.value = true;
-  error.value = undefined;
-
+  // An existing link shows its stored record; the site is not read.
+  void draft.open(link.url);
   popupAnchor.value = event.currentTarget as HTMLElement;
   popupOpen.value = true;
 }
 
 function resetDraft() {
-  previewController?.abort();
-  previewController = undefined;
-
   editingIndex.value = null;
-  setDraftUrlSilently('');
-
   draftName.value = '';
   suggestedName.value = '';
   draftPrivate.value = false;
-
-  preview.value = undefined;
-  loading.value = false;
-  attempted.value = false;
-  error.value = undefined;
-
-  requestVersion += 1;
+  draft.reset();
 }
 
-const loadPreview = debounce(async (version: number, rawUrl: string) => {
-  let url: string;
-
-  try {
-    url = normalizeExternalLinkUrl(rawUrl);
-  } catch (cause) {
-    if (version === requestVersion) {
-      attempted.value = true;
-      loading.value = false;
-      error.value =
-        cause instanceof Error
-          ? cause.message
-          : phrase.value.external_link_error;
-    }
-
-    return;
-  }
-
-  try {
-    previewController?.abort();
-
-    const controller = new AbortController();
-    previewController = controller;
-
-    const result = await $fetch<ExternalLink>(
-      '/api/admin/external-links',
-      {
-        method: 'POST',
-        body: { url },
-        signal: controller.signal,
-      },
-    );
-
-    if (version !== requestVersion) return;
-
-    preview.value = result;
-    setDraftUrlSilently(result.url);
-
-    if (
-      editingIndex.value === null &&
-      result.title &&
-      (!draftName.value.trim() || draftName.value === suggestedName.value)
-    ) {
-      draftName.value = result.title;
-    }
-
-    suggestedName.value = result.title ?? '';
-    error.value = undefined;
-  } catch (cause: any) {
-    if (version !== requestVersion) return;
-    if (cause?.name === 'AbortError') return;
-
-    error.value =
-      cause?.data?.statusMessage ?? phrase.value.external_link_error;
-  } finally {
-    if (version === requestVersion) {
-      previewController = undefined;
-      attempted.value = true;
-      loading.value = false;
-    }
-  }
-}, 350);
-
-watch(draftUrl, (value, oldValue) => {
-  if (suppressNextUrlRefresh) {
-    suppressNextUrlRefresh = false;
-    return;
-  }
-
-  if (value === oldValue) return;
-
-  requestVersion += 1;
-
-  previewController?.abort();
-  previewController = undefined;
-
-  attempted.value = false;
-  error.value = undefined;
-
-  if (!value.trim()) {
-    preview.value = undefined;
-    loading.value = false;
-    return;
-  }
-
-  loading.value = true;
-  void loadPreview(requestVersion, value);
-});
-
-function setDraftUrlSilently(value: string) {
-  if (draftUrl.value === value) return;
-
-  suppressNextUrlRefresh = true;
-  draftUrl.value = value;
+/** The title is offered as the name until the person writes one of their own. */
+function suggestName(link: ExternalLink) {
+  if (
+    editingIndex.value === null &&
+    link.title &&
+    (!draftName.value.trim() || draftName.value === suggestedName.value)
+  )
+    draftName.value = link.title;
+  suggestedName.value = link.title ?? '';
 }
 
-function refreshPreview() {
-  const url = draftUrl.value.trim();
-  if (!url) return;
+/** The address is done: pasted, left, or confirmed with Enter. */
+async function commitUrl() {
+  const link = await draft.commit();
+  if (link) suggestName(link);
+}
 
-  requestVersion += 1;
+function onUrlPaste() {
+  void nextTick(commitUrl);
+}
 
-  previewController?.abort();
-  previewController = undefined;
-
-  attempted.value = false;
-  error.value = undefined;
-  loading.value = true;
-
-  void loadPreview(requestVersion, url);
+async function refreshPreview() {
+  const link = await draft.refresh();
+  if (link) suggestName(link);
 }
 
 function save() {
-  if (!canSave.value || !preview.value) return;
-
-  const item: ProjectExternalLinkEditItem = {
-    ...preview.value,
+  if (!canSave.value || !draft.preview) return;
+  const item: ExternalLinkListItem = {
+    url: draft.preview.url,
     name: draftName.value.trim(),
     isPrivate: draftPrivate.value,
   };
-
   const next = [...links.value];
-
   if (editingIndex.value === null) {
     next.push(item);
   } else {
     next.splice(editingIndex.value, 1, item);
   }
-
   links.value = next;
   popupOpen.value = false;
 }
 
 function remove() {
   if (editingIndex.value === null) return;
-
   links.value = links.value.filter((_, index) => index !== editingIndex.value);
-
   popupOpen.value = false;
 }
 
@@ -272,10 +148,7 @@ function onPopupClosed() {
   if (!popupOpen.value) resetDraft();
 }
 
-onUnmounted(() => {
-  requestVersion += 1;
-  previewController?.abort();
-});
+onUnmounted(() => draft.reset());
 </script>
 
 <template>
@@ -314,6 +187,7 @@ onUnmounted(() => {
         >
           <ExternalLinkChip
             :link="link"
+            :favicon-media="externalLinks.get(link.url)?.faviconMedia"
             interactive
             class="cursor-grab active:cursor-grabbing"
             :data-title-popup="link.url"
@@ -351,12 +225,15 @@ onUnmounted(() => {
           </FieldLabel>
 
           <FieldInput
-            v-model="draftUrl"
+            v-model="draft.url"
             type="url"
             required
             autocomplete="url"
             placeholder="https://example.com/"
             class="text-sm"
+            @change="commitUrl"
+            @paste="onUrlPaste"
+            @submit="commitUrl"
           />
         </Field>
 
@@ -373,30 +250,22 @@ onUnmounted(() => {
 
         <template v-else>
           <p
-            v-if="duplicate || error"
+            v-if="duplicate || draft.error"
             role="status"
             class="text-sm text-text-error"
           >
-            {{ duplicate ? phrase.external_link_duplicate : error }}
+            {{ duplicate ? phrase.external_link_duplicate : draft.error }}
           </p>
 
           <ExternalLinkPreviewCard
-            v-if="preview"
-            :link="preview"
-            :url="preview.url"
+            v-if="draft.preview"
+            :link="draft.preview"
+            :url="draft.preview.url"
             :interactive="true"
           />
-
-          <p
-            v-if="preview?.previewStatus === 'fallback'"
-            role="status"
-            class="text-xs text-text-3"
-          >
-            {{ phrase.external_link_fallback }}
-          </p>
         </template>
 
-        <Field v-if="preview">
+        <Field v-if="draft.preview">
           <FieldLabel class="text-sm">
             {{ phrase.external_link_name }}
           </FieldLabel>
@@ -410,7 +279,11 @@ onUnmounted(() => {
           />
         </Field>
 
-        <FieldToggle v-if="preview" v-model="draftPrivate" class="text-sm">
+        <FieldToggle
+          v-if="draft.preview"
+          v-model="draftPrivate"
+          class="text-sm"
+        >
           <div
             class="flex cursor-pointer items-center gap-xs text-text-2"
             @click="draftPrivate = !draftPrivate"
@@ -429,7 +302,7 @@ onUnmounted(() => {
             v-if="editingIndex !== null"
             type="button"
             variant="secondary"
-            :disabled="loading || !draftUrl.trim()"
+            :disabled="draft.loading || !draft.url.trim()"
             :aria-label="phrase.refresh_external_link"
             :data-title-popup="phrase.refresh_external_link"
             @click="refreshPreview"

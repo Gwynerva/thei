@@ -4,8 +4,6 @@ export const EXTERNAL_LINK_TEXT_LIMIT = 300;
 export const EXTERNAL_LINK_LIST_LIMIT = 100;
 export const EXTERNAL_LINK_NAME_LIMIT = 300;
 
-export type ExternalLinkPreviewStatus = 'complete' | 'fallback';
-
 /**
  * How the details of a link were obtained: from the site itself, from an
  * archived copy of the page, or not at all (the hostname stands in).
@@ -27,9 +25,8 @@ export interface ExternalLinkPreview {
 /** A stored record of a site. */
 export interface ExternalLink extends ExternalLinkPreview {
   faviconMedia: MediaDescriptor;
-  hasFavicon?: boolean;
+  status: ExternalLinkStatus;
   touchedAt: number;
-  previewStatus?: ExternalLinkPreviewStatus;
 }
 
 /** One entry of a manual link list, as it is saved. */
@@ -48,12 +45,16 @@ export interface ProjectExternalLink extends ExternalLink {
   isPrivate: boolean;
 }
 
-export type ProjectExternalLinkSaveItem = ExternalLinkListItem & {
-  touchedAt?: number;
-};
-
-export type ProjectExternalLinkEditItem = ProjectExternalLinkSaveItem &
-  Partial<Omit<ExternalLink, 'url'>>;
+/** What a form keeps of a link list it was given with full records. */
+export function externalLinkListItems(
+  links: Iterable<ExternalLinkListItem> | undefined,
+): ExternalLinkListItem[] {
+  return Array.from(links ?? [], ({ url, name, isPrivate }) => ({
+    url,
+    name,
+    isPrivate,
+  }));
+}
 
 export function externalLinkHostname(url: string): string {
   try {
