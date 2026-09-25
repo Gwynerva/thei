@@ -1,7 +1,7 @@
 import {
   compactSize,
   type DiscreteBarStop,
-} from '#layers/thei/app/components/field/discrete-bar';
+} from '#layers/thei/app/components/field/discrete-bar-stops';
 import {
   ASSET_QUALITY_LEVELS,
   ASSET_QUALITY_STOPS,

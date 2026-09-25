@@ -4,7 +4,7 @@ import {
   ASSET_SIZE_PRESETS,
   type FileDimensions,
 } from '#layers/thei/shared/asset-upload-dimensions';
-import type { DiscreteBarStop } from '../../components/field/discrete-bar';
+import type { DiscreteBarStop } from '../../components/field/discrete-bar-stops';
 import type { FieldOptions } from '../../components/field/FieldOptions.vue';
 import UploadSettingsFormatList, {
   type UploadSettingsFormatOption,

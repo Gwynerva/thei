@@ -65,7 +65,7 @@ import {
   stopRenderOrder,
   type StopSize,
 } from './quality-stops';
-import type { DiscreteBarStop } from '../../components/field/discrete-bar';
+import type { DiscreteBarStop } from '../../components/field/discrete-bar-stops';
 import type { UploadSettingsFormatOption } from './UploadSettingsFormatList.vue';
 import {
   errorMessage,

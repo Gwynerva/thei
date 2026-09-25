@@ -11,7 +11,7 @@ import {
 import FloatingPopup from '#layers/thei/app/components/FloatingPopup.vue';
 import FieldDateRangePicker from '#layers/thei/app/components/field/FieldDateRangePicker.vue';
 import FieldDiscreteBar from '#layers/thei/app/components/field/FieldDiscreteBar.vue';
-import type { DiscreteBarStop } from '#layers/thei/app/components/field/discrete-bar';
+import type { DiscreteBarStop } from '#layers/thei/app/components/field/discrete-bar-stops';
 
 withDefaults(
   defineProps<{

@@ -7,7 +7,7 @@ import {
   trackPosition,
   type DiscreteBarStop,
   type DiscreteBarTone,
-} from './discrete-bar';
+} from './discrete-bar-stops';
 
 /**
  * A choice among a few named stops on one track.

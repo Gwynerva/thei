@@ -6,7 +6,7 @@ import {
   stopPosition,
   trackInset,
   trackPosition,
-} from '../../../app/components/field/discrete-bar';
+} from '../../../app/components/field/discrete-bar-stops';
 
 describe('discrete bar geometry', () => {
   it('puts each stop at the centre of its column', () => {
