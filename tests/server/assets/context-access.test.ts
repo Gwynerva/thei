@@ -314,6 +314,31 @@ describe('contextual attachment authorization before HTTP caching', () => {
       (await request('guest', { 'If-None-Match': '"original-hash"' })).status,
     ).toBe(404);
   });
+  it('serves an image as its own preview when it has none, but not a video', async () => {
+    use('project');
+    const usages = context.server.assets.usages as {
+      findByContainer: () => Promise<unknown[]>;
+    };
+    const withPreview = usages.findByContainer;
+    usages.findByContainer = async () => [];
+    try {
+      const image = await request('guest', {}, true);
+      expect(image.status).toBe(200);
+      expect(image.headers.get('etag')).toBe('"original-hash"');
+      const { db, schema } = context;
+      db.update(schema.assets)
+        .set({ type: AssetType.Video })
+        .where(eq(schema.assets.assetUuid, 'asset'))
+        .run();
+      expect((await request('guest', {}, true)).status).toBe(404);
+      db.update(schema.assets)
+        .set({ type: AssetType.Image })
+        .where(eq(schema.assets.assetUuid, 'asset'))
+        .run();
+    } finally {
+      usages.findByContainer = withPreview;
+    }
+  });
   it('uses the effective role for site and parent privacy', async () => {
     use('project');
     for (const scope of ['site', 'parent']) {
