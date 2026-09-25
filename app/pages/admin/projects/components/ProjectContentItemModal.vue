@@ -79,9 +79,9 @@ useModalCloseGuard(
   () => !isDirty.value || window.confirm(phrase.value.unsaved_modal_confirm),
 );
 /**
- * A period is committed on a click, not the moment its dates are picked: the
- * certainty bar below the calendar is chosen afterwards, and closing the popup
- * on the first click would never let anyone reach it.
+ * A period is committed on a click, not the moment its dates are picked: its
+ * certainty is chosen afterwards, on the popup's second step, and closing the
+ * popup on the first click would never let anyone reach it.
  */
 function confirmPeriod() {
   const period = pendingPeriod.value;

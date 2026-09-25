@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { ComponentPublicInstance } from 'vue';
 import type { Placement, ReferenceElement } from '@floating-ui/vue';
 import type { DateRange } from '#layers/thei/shared/date-range';
 import {
@@ -13,7 +14,7 @@ import FieldDateRangePicker from '#layers/thei/app/components/field/FieldDateRan
 import FieldDiscreteBar from '#layers/thei/app/components/field/FieldDiscreteBar.vue';
 import type { DiscreteBarStop } from '#layers/thei/app/components/field/discrete-bar-stops';
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     anchor: ReferenceElement | null;
     placement?: Placement;
@@ -38,11 +39,43 @@ const open = defineModel<boolean>('open', { required: true });
 const model = defineModel<DatedPeriod | undefined>();
 
 /**
- * The calendar keeps owning the dates and nothing else. Certainty lives below
- * it, in this component's own markup, so `@vuepic/vue-datepicker` never has to
- * lay out anything it did not render — which is exactly where it used to fall
- * apart, on mobile above all.
+ * The dates first, then how sure they are, one after the other in the same
+ * popup. `@vuepic/vue-datepicker` never shares its surface with anything it
+ * did not render — that is where it kept falling apart — and certainty is a
+ * separate question anyway. A period that already has dates opens straight
+ * on its certainty; the dates are one click away from there.
  */
+const step = ref<'dates' | 'certainty'>('dates');
+const certaintyShown = computed(
+  () => props.precision && step.value === 'certainty' && !!model.value,
+);
+const calendar =
+  useTemplateRef<InstanceType<typeof FieldDateRangePicker>>('calendar');
+const editButton = useTemplateRef<ComponentPublicInstance>('editButton');
+
+watch(
+  open,
+  (isOpen) => {
+    if (isOpen) step.value = model.value ? 'certainty' : 'dates';
+  },
+  { immediate: true },
+);
+
+async function onPicked() {
+  if (!props.precision) return;
+  step.value = 'certainty';
+  await nextTick();
+  (editButton.value?.$el as HTMLElement | undefined)?.focus({
+    preventScroll: true,
+  });
+}
+
+async function editDates() {
+  step.value = 'dates';
+  await nextTick();
+  calendar.value?.focus();
+}
+
 const range = computed<DateRange | undefined>({
   get: () => model.value,
   set: (value) => {
@@ -53,6 +86,22 @@ const range = computed<DateRange | undefined>({
     // Changing the dates keeps whatever certainty was already chosen.
     model.value = { ...value, ...normalizeDatePrecisionInfo(model.value) };
   },
+});
+
+/** The chosen dates, with the months abbreviated so a period fits a line. */
+const periodLabel = computed(() => {
+  if (!model.value) return '';
+  const utc = (date: string) => new Date(`${date}T00:00:00Z`);
+  return new Intl.DateTimeFormat(language.value.code, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
+    .formatRange(utc(model.value.startDate), utc(model.value.endDate))
+    .replaceAll(/\s+г\./g, '')
+    .replaceAll(/\s+–\s+/g, ' — ')
+    .trim();
 });
 
 const precisionModel = computed<string>({
@@ -70,17 +119,20 @@ const precisionModel = computed<string>({
 });
 
 /**
- * How sure the owner is of a date, on a four-stop track. It sits next to
- * the calendar rather than inside it: the date picker is a third-party
- * widget whose own layout breaks the moment anything is grafted into it, and
- * certainty is a separate question anyway.
+ * How sure the owner is of a date, on a four-stop track. Each stop is named
+ * in a word under the track; the full wording is in the header and on hover.
  */
 const precisionStops = computed<DiscreteBarStop[]>(() =>
-  DATE_PRECISIONS.map((precision) => ({
-    value: precision,
-    label: phrase.value[`date_precision_${precision}`],
-    tone: datePrecisionTone(precision),
-  })),
+  DATE_PRECISIONS.map((precision) => {
+    const label = phrase.value[`date_precision_${precision}`];
+    return {
+      value: precision,
+      label,
+      caption: phrase.value[`date_precision_${precision}_short`],
+      title: label,
+      tone: datePrecisionTone(precision),
+    };
+  }),
 );
 
 const noteModel = computed<string>({
@@ -100,31 +152,61 @@ const noteModel = computed<string>({
     :teleport-to="teleportTo"
     fit-content
   >
-    <div class="flex max-w-80 flex-col">
-      <FieldDateRangePicker v-model="range" :single :max-date />
+    <!-- Both steps share one width, so the popup keeps its place when it
+         turns from one to the other. -->
+    <div
+      class="flex scrollbar-mini max-h-(--floating-popup-available-height) w-76
+        max-w-full flex-col overflow-y-auto overscroll-contain rounded-normal
+        border border-border-1 bg-bg-2"
+    >
+      <template v-if="certaintyShown">
+        <div
+          class="flex items-center gap-xs border-b border-border-1 py-xs pr-xs
+            pl-sm"
+        >
+          <span class="min-w-0 grow text-sm font-semibold">
+            {{ periodLabel }}
+          </span>
+          <Button
+            ref="editButton"
+            type="button"
+            size="icon-sm"
+            variant="secondary"
+            :aria-label="`${phrase.edit}: ${periodLabel}`"
+            :data-title-popup="phrase.edit"
+            @click="editDates"
+          >
+            <Icon name="edit" />
+          </Button>
+        </div>
+        <div class="flex flex-col gap-md p-sm">
+          <FieldDiscreteBar
+            v-model="precisionModel"
+            :stops="precisionStops"
+            :label="phrase.date_precision"
+            :icon="precisionModel === 'exact' ? undefined : 'approximate'"
+          />
+          <FieldTextarea
+            v-if="precisionModel !== 'exact'"
+            v-model="noteModel"
+            class="text-xs"
+            :aria-label="phrase.date_precision_note"
+            :placeholder="phrase.date_precision_note_placeholder"
+          />
+        </div>
+      </template>
+      <FieldDateRangePicker
+        v-else
+        ref="calendar"
+        v-model="range"
+        :single
+        :max-date
+        @picked="onPicked"
+      />
       <div
-        v-if="precision && model"
-        class="flex flex-col gap-xs border-t border-border-1 p-sm"
+        v-if="confirmLabel && (certaintyShown || !precision)"
+        class="border-t border-border-1 p-sm"
       >
-        <FieldLabel>{{ phrase.date_precision }}</FieldLabel>
-        <FieldDiscreteBar
-          v-model="precisionModel"
-          :stops="precisionStops"
-          :label="phrase.date_precision"
-          :icon="precisionModel === 'exact' ? undefined : 'approximate'"
-        />
-        <FieldInput
-          v-if="precisionModel !== 'exact'"
-          v-model="noteModel"
-          type="text"
-          autocomplete="off"
-          class="text-sm"
-          :aria-label="phrase.date_precision_note"
-          :placeholder="phrase.date_precision_note_placeholder"
-        />
-        <FieldHint>{{ phrase.date_precision_hint }}</FieldHint>
-      </div>
-      <div v-if="confirmLabel" class="border-t border-border-1 p-sm">
         <Button
           type="button"
           class="w-full"

@@ -1394,15 +1394,16 @@ export default defineI18nBase({
     file_info_archived_extension: 'Extension before ZIP',
     file_info_archived_size: 'Size before ZIP',
     date_precision: 'Date certainty',
-    date_precision_hint:
-      'Say how much of this date you actually stand behind. Visitors see the doubt next to the date.',
-    date_precision_exact: 'Exact',
+    date_precision_exact: 'Exact date',
     date_precision_day: 'Day is a guess',
-    date_precision_month: 'Day and month are a guess',
-    date_precision_year: 'Day, month and year are a guess',
+    date_precision_month: 'Month is a guess',
+    date_precision_year: 'Year is a guess',
+    date_precision_exact_short: 'Exact',
+    date_precision_day_short: 'Day',
+    date_precision_month_short: 'Month',
+    date_precision_year_short: 'Year',
     date_precision_note: 'Why it is uncertain',
-    date_precision_note_placeholder:
-      'Somewhere around then, going by the photos',
+    date_precision_note_placeholder: 'Comment on the uncertainty',
     date_approximate: 'Approximate date',
     entity_notes_section: 'Notes',
     entity_notes_section_description:

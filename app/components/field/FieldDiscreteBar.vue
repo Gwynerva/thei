@@ -101,6 +101,12 @@ function endDrag(event: PointerEvent) {
   pointerId = undefined;
 }
 
+function pickCaption(at: number) {
+  if (props.disabled) return;
+  row.value?.focus({ preventScroll: true });
+  select(at);
+}
+
 function onKey(event: KeyboardEvent) {
   if (props.disabled) return;
   const next = steppedIndex(index.value, event.key, count.value);
@@ -120,11 +126,15 @@ function captionClass(stop: DiscreteBarStop, at: number) {
     class="flex w-full min-w-0 flex-col"
     :class="disabled ? 'opacity-50' : ''"
   >
-    <div class="flex items-center gap-xs text-sm">
+    <!-- Without a title of its own, the chosen stop is named in the middle. -->
+    <div
+      class="flex items-center gap-xs text-sm"
+      :class="title ? '' : 'justify-center'"
+    >
       <span v-if="title" class="grow text-text-2">{{ title }}</span>
       <span
-        class="ml-auto flex min-w-0 items-center gap-1 font-semibold"
-        :class="HEADING[tone]"
+        class="flex min-w-0 items-center gap-1 font-semibold"
+        :class="[HEADING[tone], title ? 'ml-auto' : '']"
       >
         <Icon v-if="icon" :name="icon" class="shrink-0" />
         <span class="truncate">{{ current?.label }}</span>
@@ -161,19 +171,24 @@ function captionClass(stop: DiscreteBarStop, at: number) {
         class="relative h-2"
         :style="{ marginInline: `${trackInset(count)}%` }"
       >
-        <div class="absolute inset-0 rounded-full bg-border-1"></div>
+        <!-- The track runs past the first and the last stop, so their dots
+             sit inside it rather than on its rounded ends. -->
         <div
-          class="absolute inset-y-0 left-0 rounded-full transition-[width]
+          class="absolute -inset-x-2 inset-y-0 rounded-full bg-border-1"
+        ></div>
+        <div
+          class="absolute inset-y-0 -left-2 rounded-full transition-[width]
             motion-reduce:transition-none"
           :class="FILL[tone]"
-          :style="{ width: `${trackPosition(index, count)}%` }"
+          :style="{
+            width: `calc(${trackPosition(index, count)}% + var(--spacing) * 2)`,
+          }"
         ></div>
         <span
           v-for="(stop, at) in stops"
           :key="stop.value"
           class="absolute top-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2
-            rounded-full"
-          :class="at <= index ? 'bg-bg-1/70' : 'bg-bg-1'"
+            rounded-full bg-white"
           :style="{ left: `${trackPosition(at, count)}%` }"
           aria-hidden="true"
         ></span>
@@ -194,18 +209,20 @@ function captionClass(stop: DiscreteBarStop, at: number) {
       class="grid text-center text-xs leading-tight tabular-nums"
       :style="{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }"
     >
-      <button
+      <!-- A caption is a pointer shortcut the slider already covers, so it
+           is hidden from assistive technology and never takes focus: the
+           slider does, as when the track itself is pressed. -->
+      <span
         v-for="(stop, at) in stops"
         :key="stop.value"
-        type="button"
-        tabindex="-1"
         aria-hidden="true"
-        class="flex h-4 min-w-0 cursor-pointer items-center justify-center
-          whitespace-nowrap disabled:cursor-default"
-        :class="captionClass(stop, at)"
-        :disabled="disabled"
+        class="flex h-4 min-w-0 items-center justify-center whitespace-nowrap"
+        :class="[
+          captionClass(stop, at),
+          disabled ? 'cursor-default' : 'cursor-pointer',
+        ]"
         :data-title-popup="stop.title"
-        @click="select(at)"
+        @click="pickCaption(at)"
       >
         <Icon
           v-if="stop.pending && !stop.caption"
@@ -213,7 +230,7 @@ function captionClass(stop: DiscreteBarStop, at: number) {
           class="text-text-3"
         />
         <template v-else-if="stop.caption">{{ stop.caption }}</template>
-      </button>
+      </span>
     </div>
   </div>
 </template>

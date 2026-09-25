@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { ComponentPublicInstance } from 'vue';
 import { VueDatePicker } from '@vuepic/vue-datepicker';
 import '@vuepic/vue-datepicker/dist/main.css';
 import { enUS, ru } from 'date-fns/locale';
@@ -7,18 +8,19 @@ import { toDateString, toPickerDate } from '#layers/thei/shared/date-range';
 
 const model = defineModel<DateRange | undefined>();
 const props = defineProps<{ single?: boolean; maxDate?: Date }>();
+/**
+ * A date or a whole period has been picked by hand — also when it is the one
+ * already chosen, which leaves the model as it was.
+ */
+const emit = defineEmits<{ picked: [] }>();
 
-const calendarValue = ref<Date | [Date | null, Date | null] | null>(null);
-const visuals = useVisuals();
+type CalendarValue = Date | Date[] | null;
+
+const calendarValue = ref<CalendarValue>(null);
 const calendarLocale = computed(() =>
   language.value.code === 'ru' ? ru : enUS,
 );
-const calendarIsDark = computed(
-  () =>
-    visuals.value.theme === 'dark' ||
-    (visuals.value.theme === 'system' &&
-      window.matchMedia('(prefers-color-scheme: dark)').matches),
-);
+const picker = useTemplateRef<ComponentPublicInstance>('picker');
 
 watch(
   model,
@@ -34,20 +36,29 @@ watch(
   { immediate: true },
 );
 
-watch(
-  calendarValue,
-  (value) => {
-    const range = rangeFromCalendar(value);
-    if (
-      !range ||
-      (range.startDate === model.value?.startDate &&
-        range.endDate === model.value?.endDate)
-    )
-      return;
+/** Only the calendar's own updates land here, never the model's echo. */
+function onCalendarUpdate(value: CalendarValue) {
+  calendarValue.value = value;
+  const range = rangeFromCalendar(value);
+  if (!range) return;
+  if (
+    range.startDate !== model.value?.startDate ||
+    range.endDate !== model.value?.endDate
+  )
     model.value = range;
-  },
-  { deep: true },
-);
+  emit('picked');
+}
+
+/** Hands the keyboard to the calendar, as when it comes back into view. */
+function focus() {
+  const element: unknown = picker.value?.$el;
+  if (!(element instanceof HTMLElement)) return;
+  element
+    .querySelector<HTMLElement>('[tabindex="0"]')
+    ?.focus({ preventScroll: true });
+}
+
+defineExpose({ focus });
 
 function rangeFromCalendar(value: unknown): DateRange | undefined {
   if (props.single && value instanceof Date)
@@ -66,36 +77,71 @@ function rangeFromCalendar(value: unknown): DateRange | undefined {
 </script>
 
 <template>
+  <!-- Every month shows six weeks, so leafing through them never changes
+       the height of the popup around the calendar. -->
   <VueDatePicker
-    v-model="calendarValue"
-    class="field-date-range-picker block w-full"
+    ref="picker"
+    :model-value="calendarValue"
+    class="field-date-range-picker"
     :range="!single"
     inline
     auto-apply
+    six-weeks
     :time-config="{ enableTimePicker: false }"
     :locale="calendarLocale"
-    :dark="calendarIsDark"
     :max-date="maxDate"
     :teleport="false"
+    @update:model-value="onCalendarUpdate"
   />
 </template>
 
 <style scoped>
-.field-date-range-picker {
-  /* Vue DatePicker consumes these theme variables internally. */
-  --dp-background-color: var(--color-bg-2) !important;
-  --dp-text-color: var(--color-text-1) !important;
-  --dp-primary-color: var(--color-accent) !important;
-  --dp-primary-text-color: var(--color-white) !important;
-  --dp-secondary-color: var(--color-text-3) !important;
-  --dp-border-color: var(--color-border-1) !important;
-  --dp-menu-border-color: var(--color-border-1) !important;
-  --dp-hover-color: var(--color-bg-3) !important;
-  --dp-hover-text-color: var(--color-text-1) !important;
-  --dp-icon-color: var(--color-text-2) !important;
-  --dp-range-between-dates-background-color: var(--color-bg-accent) !important;
-  --dp-range-between-dates-text-color: var(--color-text-1) !important;
-  --dp-cell-border-radius: var(--radius-normal) !important;
-  --dp-border-radius: var(--radius-normal) !important;
+/*
+ * Vue DatePicker consumes these theme variables internally. Its theme class
+ * sits on the menu as well as on the root and declares its own palette there,
+ * so the variables are declared on the menu too. The colours and the font
+ * come from the site's own tokens, which follow the visitor's theme by
+ * themselves, so the picker's own dark mode is never switched on.
+ */
+.field-date-range-picker,
+.field-date-range-picker :deep(.dp--menu) {
+  --dp-font-family: var(--font-default);
+  --dp-cell-size: 2.5rem;
+  --dp-border-radius: var(--radius-normal);
+  --dp-cell-border-radius: var(--radius-normal);
+
+  --dp-background-color: var(--color-bg-2);
+  --dp-text-color: var(--color-text-1);
+  --dp-hover-color: var(--color-bg-3);
+  --dp-hover-text-color: var(--color-text-1);
+  --dp-hover-icon-color: var(--color-text-1);
+  --dp-icon-color: var(--color-text-2);
+  --dp-primary-color: var(--color-accent);
+  --dp-primary-disabled-color: var(--color-bg-accent);
+  --dp-primary-text-color: var(--color-white);
+  --dp-secondary-color: var(--color-text-3);
+  --dp-disabled-color: var(--color-bg-3);
+  --dp-disabled-color-text: var(--color-text-3);
+  --dp-highlight-color: var(--color-bg-accent);
+  --dp-range-between-dates-background-color: var(--color-bg-accent);
+  --dp-range-between-dates-text-color: var(--color-text-1);
+  --dp-range-between-border-color: var(--color-bg-accent);
+  --dp-border-color: var(--color-border-1);
+  --dp-border-color-hover: var(--color-border-3);
+  --dp-border-color-focus: var(--color-border-3);
+  /* The popup around the calendar draws the frame. */
+  --dp-menu-border-color: transparent;
+  --dp-success-color: var(--color-accent);
+  --dp-success-color-disabled: var(--color-bg-accent);
+  --dp-danger-color: var(--color-text-error);
+  --dp-marker-color: var(--color-text-error);
+  --dp-tooltip-color: var(--color-bg-2);
+  --dp-scroll-bar-background: var(--color-bg-2);
+  --dp-scroll-bar-color: var(--color-border-2);
+}
+
+/* The calendar fills the width of the popup it sits in. */
+.field-date-range-picker :deep(.dp--outer-menu-wrap) {
+  flex-grow: 1;
 }
 </style>

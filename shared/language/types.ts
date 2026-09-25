@@ -1079,11 +1079,14 @@ export type LanguagePhrases = {
   file_info_archived_size: string;
   // Date certainty
   date_precision: string;
-  date_precision_hint: string;
   date_precision_exact: string;
   date_precision_day: string;
   date_precision_month: string;
   date_precision_year: string;
+  date_precision_exact_short: string;
+  date_precision_day_short: string;
+  date_precision_month_short: string;
+  date_precision_year_short: string;
   date_precision_note: string;
   date_precision_note_placeholder: string;
   date_approximate: string;
