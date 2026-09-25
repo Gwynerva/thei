@@ -6,7 +6,7 @@ import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import { createError } from 'h3';
 import sharp from 'sharp';
 import { theiTempPath } from './temp';
-import { fileBytes, type AssetBytes } from './bytes';
+import { assetBytesSize, fileBytes, type AssetBytes } from './bytes';
 import { AssetType } from '../../../shared/asset';
 import {
   AUDIO_EXTENSIONS,
@@ -497,7 +497,7 @@ async function processVideoToWebm(
       ...(inspected
         ? {
             hasAudio: inspected.hasAudio,
-            video: videoSourceInfo(inspected, bytes.size),
+            video: videoSourceInfo(inspected, assetBytesSize(bytes)),
           }
         : {}),
     };
