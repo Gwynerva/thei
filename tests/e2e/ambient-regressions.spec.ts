@@ -66,9 +66,20 @@ for (const width of [390, 1280]) {
       await expect(foreground).toHaveCSS('object-fit', 'contain');
       const mainBox = await foreground.boundingBox();
       // On mobile the banner covers the whole hero and the sharp band at its
-      // top is what has to stay 16:9, whatever shape the picture itself is.
-      if (width === 390)
-        expect(mainBox!.width / mainBox!.height).toBeCloseTo(16 / 9, 2);
+      // top is what has to stay 16:9. The picture fills the band's height
+      // whatever its shape: a wider one loses its sides, never gets strips.
+      if (width === 390) {
+        const naturalRatio = await foreground.evaluate(
+          (element: HTMLImageElement) =>
+            element.naturalWidth / element.naturalHeight,
+        );
+        expect(mainBox!.height).toBeCloseTo((box!.width * 9) / 16, 0);
+        expect(mainBox!.width / mainBox!.height).toBeCloseTo(naturalRatio, 2);
+        expect(mainBox!.x + mainBox!.width / 2).toBeCloseTo(
+          box!.x + box!.width / 2,
+          0,
+        );
+      }
       expect(mainBox!.y).toBeGreaterThanOrEqual(box!.y);
       expect(mainBox!.y + mainBox!.height).toBeLessThanOrEqual(
         box!.y + box!.height + 1,

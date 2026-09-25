@@ -38,11 +38,17 @@ function rememberDimensions(width: number, height: number) {
  * Mobile: the sharp banner is a 16:9 band at the top that dissolves downward
  * into its own heavily blurred copy, which spans the whole hero behind the
  * text. Both halves are one MediaSurface pair, so a video stays in sync.
+ * The banner always fills the band's height: a wider one loses its sides to
+ * the screen edges rather than leave empty strips above and below.
  */
 :deep(.media-foreground) {
+  right: auto;
   bottom: auto;
-  height: auto;
-  aspect-ratio: 16 / 9;
+  left: 50%;
+  height: 56.25cqw;
+  width: auto;
+  aspect-ratio: var(--media-ratio);
+  transform: translateX(-50%);
   mask-image: linear-gradient(
     to bottom,
     black 0%,
