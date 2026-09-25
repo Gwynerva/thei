@@ -15,6 +15,8 @@ export interface MediaPreview {
   buffer: Buffer;
   width: number;
   height: number;
+  /** Of a video: seconds into it the preview frame was taken from. */
+  frameAt?: number;
 }
 
 export async function createMediaPreview(
@@ -28,10 +30,13 @@ export async function createMediaPreview(
   // sharp accepts a path, so an image preview never reads the source into
   // memory. Only the video path has to go through ffmpeg first, which picks
   // a frame that stands for the video rather than its opening.
-  const raster: Buffer | string =
+  const thumbnail =
     sourceType === AssetType.Video
       ? await extractVideoThumbnail(bytes, options)
-      : (bytes.buffer ?? bytes.path);
+      : undefined;
+  const raster: Buffer | string = thumbnail
+    ? thumbnail.frame
+    : (bytes.buffer ?? bytes.path);
 
   // An original JPEG keeps its EXIF orientation, and its recorded dimensions
   // are already the displayed ones: the preview has to be turned the same way.
@@ -50,5 +55,6 @@ export async function createMediaPreview(
     buffer: data,
     width: info.width,
     height: info.height,
+    ...(thumbnail ? { frameAt: thumbnail.at } : {}),
   };
 }

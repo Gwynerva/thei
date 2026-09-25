@@ -76,6 +76,8 @@ export async function createMediaPreviewAsset(
 ): Promise<{
   previewAssetUuid: string;
   accent?: ImageAccent;
+  /** Of a video: seconds into it the preview frame was taken from. */
+  frameAt?: number;
 }> {
   const preview = await createMediaPreview(source, sourceType, options);
   const previewBuffer = preview.buffer;
@@ -93,6 +95,7 @@ export async function createMediaPreviewAsset(
     return {
       previewAssetUuid: existing.assetUuid,
       accent: meta?.accent,
+      frameAt: preview.frameAt,
     };
   }
 
@@ -116,6 +119,7 @@ export async function createMediaPreviewAsset(
   return {
     previewAssetUuid: asset.assetUuid,
     accent,
+    frameAt: preview.frameAt,
   };
 }
 
@@ -156,7 +160,7 @@ export async function refreshMediaPreview(
     hash: asset.contentHash,
     owned: false,
   };
-  const { previewAssetUuid, accent } = await withProcessingSlot(
+  const { previewAssetUuid, accent, frameAt } = await withProcessingSlot(
     asset.type,
     () =>
       createMediaPreviewAsset(bytes, AssetType.Video, {
@@ -179,6 +183,7 @@ export async function refreshMediaPreview(
   const resolvedMeta: VideoAssetMeta = {
     ...rest,
     ...(accent !== undefined ? { accent } : {}),
+    previewAt: frameAt ?? 0,
   };
   await THEI_SERVER.assets.update(asset.assetUuid, { meta: resolvedMeta });
   asset.meta = resolvedMeta;

@@ -60,3 +60,14 @@ Nothing about the levels: a recipe holds `quality` as a number (and
 `format: 'webp-lossless'` for the lossless stop), exactly as before. A video's
 `meta` additionally records `duration`, `fps` and `bitrate` of the stored
 file; rows stored before that are filled in the first time they are read.
+
+## Video previews
+
+A video's preview is a frame chosen to show it, not its first frame: the
+opening is skipped (10 % in, then 30, 50 and 75 % if the earlier point comes
+out black, white or blank) and ffmpeg's `thumbnail` filter picks the most
+typical frame of the second that follows. The video's `meta.previewAt` records
+the seconds the frame was taken from. A video without it still has a
+first-frame preview from an older version; the update task
+`update/tasks/0.0.2-preview-frames.ts` remakes those while the site is closed
+for the update, and the library's file card can remake one by hand.

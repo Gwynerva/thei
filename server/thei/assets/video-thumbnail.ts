@@ -34,6 +34,13 @@ export interface VideoThumbnailOptions {
   duration?: number;
 }
 
+export interface VideoThumbnail {
+  /** The frame, as PNG. */
+  frame: Buffer;
+  /** Seconds into the video the frame was looked for. */
+  at: number;
+}
+
 /**
  * Extracts a representative frame of a video and returns it as a PNG buffer.
  *
@@ -44,7 +51,7 @@ export interface VideoThumbnailOptions {
 export async function extractVideoThumbnail(
   source: AssetBytes | Buffer,
   options: VideoThumbnailOptions = {},
-): Promise<Buffer> {
+): Promise<VideoThumbnail> {
   const bytes: AssetBytes = Buffer.isBuffer(source)
     ? { buffer: source }
     : source;
@@ -63,24 +70,29 @@ export async function extractVideoThumbnail(
       (await inspectVideoFile(inputPath).catch(() => undefined))?.duration;
     const positions =
       duration && duration > 1
-        ? FRAME_POSITIONS.map((share) => share * duration)
+        ? FRAME_POSITIONS.map((share) => Math.round(share * duration * 10) / 10)
         : [0];
 
-    let best: { frame: Buffer; spread: number } | undefined;
+    let best: { frame: Buffer; spread: number; at: number } | undefined;
     for (const seconds of positions) {
       const frame = await grabFrame(inputPath, outputPath, seconds).catch(
         () => undefined,
       );
       if (!frame) continue;
       const spread = await frameLiveliness(frame);
-      if (!best || spread > best.spread) best = { frame, spread };
+      if (!best || spread > best.spread) best = { frame, spread, at: seconds };
       if (spread >= FLAT_FRAME_SPREAD) break;
     }
     // Nothing usable past the opening — a very short clip, or one the probe
     // misjudged: the first frame is still a frame.
-    if (!best)
-      best = { frame: await grabFrame(inputPath, outputPath, 0), spread: 0 };
-    return best.frame;
+    if (!best) {
+      best = {
+        frame: await grabFrame(inputPath, outputPath, 0),
+        spread: 0,
+        at: 0,
+      };
+    }
+    return { frame: best.frame, at: best.at };
   } finally {
     if (stagedInput) await rm(stagedInput, { force: true }).catch(() => {});
     await rm(outputPath, { force: true }).catch(() => {});

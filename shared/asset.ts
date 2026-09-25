@@ -77,6 +77,12 @@ export interface VideoAssetMeta extends AssetMetaBase {
   fps?: number;
   /** Bits per second of the video stream. */
   bitrate?: number;
+  /**
+   * Seconds into the video its preview frame was taken from. Absent when the
+   * preview is the first frame, as every preview was before frames were
+   * chosen: an update task makes such previews again.
+   */
+  previewAt?: number;
 }
 
 export interface AudioAssetMeta extends AssetMetaBase {}

@@ -66,8 +66,9 @@ describe('video thumbnails', () => {
       ['black', 1],
       ['red', 3],
     ]);
-    const frame = await extractVideoThumbnail(clip);
+    const { frame, at } = await extractVideoThumbnail(clip);
     const [red, green, blue] = await meanColor(frame);
+    expect(at).toBeGreaterThan(0);
     expect(red).toBeGreaterThan(200);
     expect(green).toBeLessThan(40);
     expect(blue).toBeLessThan(40);
@@ -75,7 +76,7 @@ describe('video thumbnails', () => {
 
   it('still yields a frame when the whole clip is one colour', async () => {
     const clip = await makeClip('black.mp4', [['black', 2]]);
-    const frame = await extractVideoThumbnail(clip);
+    const { frame } = await extractVideoThumbnail(clip);
     const meta = await sharp(frame).metadata();
     expect(meta.width).toBe(64);
     expect(meta.height).toBe(64);

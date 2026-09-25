@@ -298,6 +298,7 @@ async function buildProcessedAssetMeta(
       ...(video?.fps ? { fps: video.fps } : {}),
       ...(video?.bitrate ? { bitrate: video.bitrate } : {}),
       ...(preview.accent !== undefined ? { accent: preview.accent } : {}),
+      ...(preview.frameAt !== undefined ? { previewAt: preview.frameAt } : {}),
     };
     return { meta, previewAssetUuid: preview.previewAssetUuid };
   }
