@@ -95,7 +95,13 @@ async function save() {
     }
     stampSavedContent(diaryData.value, savedSnapshot.value, CONTENT_FIELDS);
     markSaved();
-    await Promise.all([refreshNuxtData('admin-bar'), refreshTakenDates()]);
+    // A new entry leaves for its own edit page, which loads the days afresh.
+    // Refreshing them here would count the entry just made as another one
+    // holding its day, and flash the warning until the page is gone.
+    await Promise.all([
+      refreshNuxtData('admin-bar'),
+      isEdit.value && refreshTakenDates(),
+    ]);
     if (!isEdit.value)
       await navigateTo(`/admin/diary/${result.diaryUuid}/edit/`, {
         external: true,
