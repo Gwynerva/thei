@@ -27,7 +27,7 @@ const accent = computed(() => imageAccentCssColor(props.page.media?.accent));
       linked
         ? `rounded-normal border border-border-1 bg-bg-1 focus-visible:ring-2
           focus-visible:ring-accent focus-visible:outline-none`
-        : undefined
+        : 'pinned-page-fading'
     "
     :style="{ '--pinned-page-accent': accent }"
   >
@@ -60,6 +60,35 @@ const accent = computed(() => imageAccentCssColor(props.page.media?.accent));
     transparent
   );
   color: var(--pinned-page-accent);
+}
+
+/*
+ * In an editor row the row's own buttons follow the page, and a solid tint
+ * ended in a hard edge against them. There the tint dissolves toward them
+ * instead, drawn as a layer of its own so that it can still fade in.
+ */
+.pinned-page-fading:hover,
+.pinned-page-fading:focus-within {
+  background-color: transparent;
+}
+
+.pinned-page-fading::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    to right,
+    color-mix(in oklab, var(--pinned-page-accent) 12%, transparent),
+    transparent
+  );
+  opacity: 0;
+  transition: opacity var(--default-transition-duration)
+    var(--default-transition-timing-function);
+}
+
+.pinned-page-fading:hover::before,
+.pinned-page-fading:focus-within::before {
+  opacity: 1;
 }
 
 .pinned-page:hover :deep(svg),

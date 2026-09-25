@@ -335,7 +335,7 @@ const birthDateMax = new Date();
             <Icon name="plus" />
           </button>
         </div>
-        <Box
+        <Box class="overflow-hidden"
           ><SortableList
             :items="pages"
             :item-key="(item) => item.pageUuid"
