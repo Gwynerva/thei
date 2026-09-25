@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-import { publicReferenceSplitSize } from '#layers/thei/shared/public-references';
 import type { PublicPageResponse } from '#layers/thei/shared/api/page';
 import {
   createdAndUpdatedTimelineItems,
@@ -47,22 +46,6 @@ usePublicSeo({
   ],
 });
 
-const linkCount = computed(() =>
-  publicReferenceSplitSize(data.value.references.links),
-);
-const fileCount = computed(() =>
-  publicReferenceSplitSize(data.value.references.files),
-);
-/**
- * Files the content itself carries — what a reader will actually run into
- * while reading, rather than everything attached to the entity.
- */
-const contentFileCount = computed(
-  () =>
-    data.value.references.files.shared.length +
-    data.value.references.files.content.length,
-);
-
 const details = computed(
   () =>
     ({
@@ -71,13 +54,6 @@ const details = computed(
         updated: phrase.value.page_chronology_updated,
       }),
       references: data.value.references,
-      metrics: [
-        {
-          icon: 'files' as const,
-          label: phrase.value.public_details_files,
-          value: contentFileCount.value,
-        },
-      ].filter((metric) => metric.value > 0),
     }) satisfies PublicDetailPanelData,
 );
 

@@ -1,13 +1,17 @@
 <script lang="ts" setup>
-import type { PublicDetailPanelData } from './public-detail';
+import {
+  publicDetailSummary,
+  type PublicDetailPanelData,
+} from './public-detail';
 
 const props = defineProps<{ data: PublicDetailPanelData }>();
-/**
- * Only what the page actually holds. A count of headings measured the writing
- * rather than the entity, and said the same thing about every page.
- */
+/** The collapsed panel's hint at what opening it will show. */
 const metrics = computed(() =>
-  (props.data.metrics ?? []).filter((metric) => Number(metric.value) > 0),
+  publicDetailSummary(props.data, {
+    related: phrase.value.related_entities,
+    links: phrase.value.public_details_links,
+    files: phrase.value.public_details_files,
+  }),
 );
 </script>
 

@@ -1,10 +1,10 @@
 import type {
-  PublicDiaryLink,
   PublicEntityLink,
   PublicReferences,
   PublicTagSummary,
 } from '#layers/thei/shared/api/public';
 import type { DateRange } from '#layers/thei/shared/date-range';
+import { publicReferenceSplitSize } from '#layers/thei/shared/public-references';
 import type { IconName } from '#thei/icons';
 import type { ContentHeading } from '#layers/thei/app/components/content/content-headings';
 import { modalHistorySettled } from '#layers/thei/app/composables/modal';
@@ -157,14 +157,42 @@ export type PublicDetailPanelData = {
   periods?: DateRange[];
   tags?: PublicTagSummary[];
   relatedEntities?: PublicEntityLink[];
-  /**
-   * Diary entries tied to this entity. Kept apart from `relatedEntities`
-   * because a day and an opening line read nothing like a titled tile.
-   */
-  diaryEntries?: PublicDiaryLink[];
   references: PublicReferences;
-  metrics?: PublicDetailMetric[];
 };
+
+/**
+ * What the collapsed panel says about itself: how much each of its lists
+ * holds, in the order the panel shows them.
+ *
+ * Only the lists worth opening the panel for are counted. Headings measure the
+ * writing rather than the entity, key dates and a timeline are dates rather
+ * than amounts, and tags say little by their number alone.
+ */
+export function publicDetailSummary(
+  data: PublicDetailPanelData,
+  labels: { related: string; links: string; files: string },
+): PublicDetailMetric[] {
+  const metrics: PublicDetailMetric[] = [
+    {
+      // The mark related entities carry everywhere else, on cards and in the
+      // admin; the relation markers are chains, which would read as links here.
+      icon: 'arrow-cycle',
+      label: labels.related,
+      value: data.relatedEntities?.length ?? 0,
+    },
+    {
+      icon: 'link',
+      label: labels.links,
+      value: publicReferenceSplitSize(data.references.links),
+    },
+    {
+      icon: 'files',
+      label: labels.files,
+      value: publicReferenceSplitSize(data.references.files),
+    },
+  ];
+  return metrics.filter((metric) => Number(metric.value) > 0);
+}
 
 /**
  * Follows contents links from the mobile sheet: the sheet closes first and its

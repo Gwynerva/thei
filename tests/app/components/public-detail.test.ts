@@ -3,9 +3,57 @@ import {
   createdAndUpdatedTimelineItems,
   diaryTimelineItems,
   firstAndLastTimelineItems,
+  publicDetailSummary,
   sortPublicDetailTimelineItems,
   sortPublicEntityReferencesByRelationType,
 } from '#layers/thei/app/components/public/public-detail';
+import type { PublicEntityLink } from '#layers/thei/shared/api/public';
+import { emptyPublicReferences } from '#layers/thei/shared/public-references';
+
+describe('publicDetailSummary', () => {
+  const labels = { related: 'Related', links: 'Links', files: 'Files' };
+  const summary = (data: Parameters<typeof publicDetailSummary>[0]) =>
+    publicDetailSummary(data, labels).map(({ label, value }) => [label, value]);
+
+  it('counts the lists of the panel in the order the panel shows them', () => {
+    const references = emptyPublicReferences();
+    references.links.manual.push({} as never);
+    references.links.content.push({} as never, {} as never);
+    references.files.shared.push({} as never);
+    expect(
+      summary({
+        relatedEntities: [
+          { title: 'Visible' },
+          { secret: true, title: 'Codename' },
+        ] as PublicEntityLink[],
+        references,
+      }),
+    ).toEqual([
+      ['Related', 2],
+      ['Links', 3],
+      ['Files', 1],
+    ]);
+  });
+
+  it('leaves out empty lists and whatever is not a list worth opening', () => {
+    const references = emptyPublicReferences();
+    references.files.content.push({} as never);
+    expect(
+      summary({
+        contents: [{} as never, {} as never],
+        chronology: [{ icon: 'plus', label: 'Created', date: '2024-05-12' }],
+        periods: [{ startDate: '2024-05-12', endDate: '2024-05-13' }],
+        tags: [{} as never, {} as never, {} as never],
+        relatedEntities: [],
+        references,
+      }),
+    ).toEqual([['Files', 1]]);
+  });
+
+  it('says nothing for a panel without lists', () => {
+    expect(summary({ references: emptyPublicReferences() })).toEqual([]);
+  });
+});
 
 describe('sortPublicDetailTimelineItems', () => {
   it('orders chronology from newest to oldest', () => {

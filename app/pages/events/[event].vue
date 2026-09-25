@@ -59,16 +59,6 @@ usePublicSeo({
     },
   ],
 });
-/**
- * Files the content itself carries — what a reader will actually run into
- * while reading, rather than everything attached to the entity.
- */
-const contentFileCount = computed(
-  () =>
-    data.value.references.files.shared.length +
-    data.value.references.files.content.length,
-);
-
 const details = computed(
   () =>
     ({
@@ -80,15 +70,6 @@ const details = computed(
       tags: data.value.tags,
       relatedEntities: data.value.relatedEntities,
       references: data.value.references,
-      metrics: (
-        [
-          {
-            icon: 'files',
-            label: phrase.value.public_details_files,
-            value: contentFileCount.value,
-          },
-        ] satisfies PublicDetailPanelData['metrics']
-      ).filter((metric) => metric.value > 0),
     }) satisfies PublicDetailPanelData,
 );
 

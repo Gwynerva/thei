@@ -6,10 +6,14 @@ defineEmits<{ toggle: [] }>();
 </script>
 
 <template>
+  <!--
+    Collapsed, the whole bar is the toggle: the summary in its middle invites a
+    tap, so the button's hit area is stretched over the header.
+  -->
   <header
     class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-xs px-sm
       py-xs"
-    :class="{ 'border-b border-border-1': expanded }"
+    :class="expanded ? 'border-b border-border-1' : 'relative'"
   >
     <component
       :is="expanded ? 'h2' : 'span'"
@@ -27,6 +31,7 @@ defineEmits<{ toggle: [] }>();
         rounded-sm bg-bg-3 text-text-2 transition focus-visible:ring-2
         focus-visible:ring-accent focus-visible:outline-none hocus:bg-bg-4
         hocus:text-text-1"
+      :class="{ 'after:absolute after:inset-0': !expanded }"
       :aria-label="expanded ? phrase.close_modal : phrase.public_details_expand"
       :aria-expanded="expanded ?? false"
       @click="$emit('toggle')"

@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-import { publicReferenceSplitSize } from '#layers/thei/shared/public-references';
 import type { PublicProjectSectionResponse } from '#layers/thei/shared/api/public';
 import { buildProjectChildUrl } from '#layers/thei/shared/project-url';
 import {
@@ -72,20 +71,6 @@ const details = computed(
         updated: phrase.value.section_chronology_updated,
       }),
       references: data.value.references,
-      metrics: (
-        [
-          {
-            icon: 'link',
-            label: phrase.value.public_details_links,
-            value: publicReferenceSplitSize(data.value.references.links),
-          },
-          {
-            icon: 'files',
-            label: phrase.value.public_details_files,
-            value: publicReferenceSplitSize(data.value.references.files),
-          },
-        ] satisfies PublicDetailPanelData['metrics']
-      ).filter((metric) => metric.value > 0),
     }) satisfies PublicDetailPanelData,
 );
 </script>

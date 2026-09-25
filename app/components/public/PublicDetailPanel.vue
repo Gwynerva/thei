@@ -109,12 +109,6 @@ const relatedTotal = computed(
         <PublicReferenceLinks :links="items" />
       </PublicReferenceSplitList>
     </PublicCollapsibleSection>
-    <PublicCollapsibleSection
-      v-if="data.diaryEntries?.length"
-      :title="phrase.diary_entries"
-    >
-      <PublicDiaryLinks :entries="data.diaryEntries" />
-    </PublicCollapsibleSection>
     <PublicCollapsibleSection v-if="data.tags?.length" :title="phrase.tags">
       <PublicTagLinks :tags="data.tags" />
     </PublicCollapsibleSection>

@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-import { publicReferenceSplitSize } from '#layers/thei/shared/public-references';
 import type { PublicProjectResponse } from '#layers/thei/shared/api/public';
 import {
   createdAndUpdatedTimelineItems,
@@ -76,12 +75,6 @@ usePublicSeo({
     },
   ],
 });
-const linkCount = computed(() =>
-  publicReferenceSplitSize(data.value.references.links),
-);
-const fileCount = computed(() =>
-  publicReferenceSplitSize(data.value.references.files),
-);
 const timelineHref = computed(() =>
   buildProjectTimelineUrl(data.value.humanReadableSlug, data.value.publicId),
 );
@@ -180,32 +173,7 @@ const details = computed(
       ],
       tags: data.value.tags,
       relatedEntities: data.value.relatedEntities,
-      diaryEntries: data.value.diaryEntries,
       references: data.value.references,
-      metrics: (
-        [
-          {
-            icon: 'calendar',
-            label: phrase.value.project_stages,
-            value: data.value.stages.length,
-          },
-          {
-            icon: 'file-tray-stack',
-            label: phrase.value.project_content_sections,
-            value: data.value.sections.length,
-          },
-          {
-            icon: 'files',
-            label: phrase.value.public_details_files,
-            value: fileCount.value,
-          },
-          {
-            icon: 'link',
-            label: phrase.value.public_details_links,
-            value: linkCount.value,
-          },
-        ] satisfies PublicDetailPanelData['metrics']
-      ).filter((metric) => metric.value > 0),
     }) satisfies PublicDetailPanelData,
 );
 
