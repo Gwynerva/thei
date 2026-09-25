@@ -6,11 +6,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   MigrationError,
+  openLedger,
   runPendingMigrations,
   seedLedger,
   type MigrationProgressEvent,
 } from '../../update/migrations/run';
-import { hasLedger, readLedger } from '../../update/migrations/ledger';
+import {
+  hasLedger,
+  readLedger,
+  recordMigration,
+  taskLedgerId,
+} from '../../update/migrations/ledger';
 import {
   defineMigration,
   type MigrationContext,
@@ -196,16 +202,11 @@ describe('migration runner', () => {
     await runPendingMigrations(rawDb, {
       ...options('0.0.0', [baseline, addColor, broken]),
       onProgress: (event: MigrationProgressEvent) => {
-        events.push(
-          event.type === 'plan'
-            ? `plan:${event.migrations.length}`
-            : `${event.type}:${event.migration.id}`,
-        );
+        events.push(`${event.type}:${event.migration.id}`);
       },
     }).catch(() => {});
 
     expect(events).toEqual([
-      'plan:3',
       'start:0.0.1/001-baseline',
       'done:0.0.1/001-baseline',
       'start:0.2.0/001-add-color',
@@ -213,6 +214,84 @@ describe('migration runner', () => {
       'start:0.3.0/001-broken',
       'fail:0.3.0/001-broken',
     ]);
+  });
+});
+
+describe('update tasks in the ledger', () => {
+  const previews = { id: '0.2.0/001-previews', version: '0.2.0' };
+  const colors = { id: '0.3.0/001-colors', version: '0.3.0' };
+
+  it('lists the tasks the ledger has not recorded, in registry order', async () => {
+    await runPendingMigrations(rawDb, options('0.0.0'));
+
+    const ledger = openLedger(rawDb, {
+      ...options('0.0.0'),
+      tasks: [previews, colors],
+    });
+    expect(ledger.pendingMigrations).toEqual([]);
+    expect(ledger.pendingTasks).toEqual([previews, colors]);
+
+    recordMigration(rawDb, taskLedgerId(previews.id), previews.version);
+    expect(
+      openLedger(rawDb, { ...options('0.0.0'), tasks: [previews, colors] })
+        .pendingTasks,
+    ).toEqual([colors]);
+  });
+
+  it('adopts the tasks a ledger-less database already went through', () => {
+    baseline.up(context());
+
+    const ledger = openLedger(rawDb, {
+      ...options('0.2.0'),
+      tasks: [previews, colors],
+    });
+
+    expect(ledger.adopted).toBe(3);
+    expect(ledger.pendingTasks).toEqual([colors]);
+    expect(readLedger(rawDb).map((entry) => entry.id)).toContain(
+      'task:0.2.0/001-previews',
+    );
+  });
+
+  it('seeds the tasks of a database built from the baseline', () => {
+    seedLedger(rawDb, [baseline, addColor], [previews]);
+
+    const ledger = openLedger(rawDb, {
+      ...options('0.2.0'),
+      tasks: [previews],
+    });
+    expect(ledger.pendingMigrations).toEqual([]);
+    expect(ledger.pendingTasks).toEqual([]);
+  });
+
+  it('counts a recorded task as the content version', () => {
+    seedLedger(rawDb, [baseline, addColor], [previews, colors]);
+
+    // A release that shipped only a task still opens its own content...
+    expect(() =>
+      openLedger(rawDb, { ...options('0.0.0'), tasks: [previews, colors] }),
+    ).not.toThrow();
+
+    // ...and an engine that knows nothing of it refuses it as a downgrade.
+    const error = (() => {
+      try {
+        openLedger(rawDb, { ...options('0.0.0'), tasks: [previews] });
+      } catch (thrown) {
+        return thrown;
+      }
+    })();
+    expect(error).toBeInstanceOf(MigrationError);
+    expect((error as MigrationError).reason).toBe('downgrade');
+  });
+
+  it('accepts content recorded up to the running engine version', () => {
+    seedLedger(rawDb, [baseline, addColor], [colors]);
+
+    // The task was dropped from a later registry once it became moot; the
+    // engine's own version still vouches for the row it left.
+    expect(() =>
+      openLedger(rawDb, { ...options('0.0.0'), engineVersion: '0.4.0' }),
+    ).not.toThrow();
   });
 });
 

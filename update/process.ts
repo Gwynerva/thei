@@ -16,7 +16,6 @@ import {
   appendLog,
   createUpdateState,
   finishStep,
-  isStaleRun,
   pendingStep,
   planSteps,
   readUpdateState,
@@ -94,8 +93,8 @@ const builtinDescriptions: Partial<
     ru: 'Текущая версия всё это время продолжает работать.',
   },
   restart: {
-    en: 'The site is unavailable for a few seconds.',
-    ru: 'Сайт недоступен несколько секунд.',
+    en: 'The site is closed until the new version is ready.',
+    ru: 'Сайт закрыт, пока новая версия не будет готова.',
   },
 };
 
@@ -137,49 +136,23 @@ export async function getUpdateStatus(
 }
 
 /**
- * Settles the state left behind by a previous run. After a restart the process
- * that wrote the state is gone, so the outcome is decided here by comparing the
- * version now running against the version the run was aiming for.
+ * Reads the recorded run. Boot has already picked up whatever the restart
+ * left behind (`boot-run.ts`), so a run still in progress under another
+ * process can only belong to one that stopped without saying so.
  */
-async function resolveState(
-  runtime: UpdateRuntime,
+export async function resolveState(
+  runtime: Pick<UpdateRuntime, 'projectPath'>,
 ): Promise<UpdateState | undefined> {
   const state = await readUpdateState(runtime.projectPath);
-  if (!state || !isRunningStatus(state.status)) return state;
-
-  if (state.status === 'restarting' && state.pid !== process.pid) {
-    const reached =
-      normalizeVersion(runtime.currentVersion) ===
-      normalizeVersion(state.toVersion);
-
-    appendLog(
-      state,
-      reached
-        ? `Now running Thei ${runtime.currentVersion}.`
-        : `Restarted, but still running Thei ${runtime.currentVersion}.`,
-    );
-
-    if (reached) {
-      finishStep(state, 'restart', 'done');
-    } else {
-      state.error = `The update did not take effect: expected ${state.toVersion}.`;
-      finishStep(state, 'restart', 'failed', state.error);
-    }
-
-    setStatus(state, reached ? 'done' : 'failed');
-    settleSteps(state);
-    await writeUpdateState(runtime.projectPath, state);
+  if (!state || !isRunningStatus(state.status) || state.pid === process.pid) {
     return state;
   }
 
-  if (isStaleRun(state)) {
-    state.error = 'The server stopped while updating.';
-    appendLog(state, state.error);
-    setStatus(state, 'failed');
-    settleSteps(state);
-    await writeUpdateState(runtime.projectPath, state);
-  }
-
+  state.error = 'The server stopped while updating.';
+  appendLog(state, state.error);
+  setStatus(state, 'failed');
+  settleSteps(state);
+  await writeUpdateState(runtime.projectPath, state);
   return state;
 }
 

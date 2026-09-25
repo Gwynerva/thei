@@ -169,21 +169,3 @@ export function settleSteps(state: UpdateState): UpdateState {
   }
   return state;
 }
-
-/**
- * A run recorded by a process that is no longer alive never finished — the
- * server was killed mid-update. It must not block a new attempt.
- */
-export function isStaleRun(state: UpdateState): boolean {
-  if (!isRunningStatus(state.status)) return false;
-  // `restarting` is the expected way a run ends: the process exits on purpose.
-  if (state.status === 'restarting') return false;
-  if (state.pid === process.pid) return false;
-
-  try {
-    process.kill(state.pid, 0);
-    return false;
-  } catch {
-    return true;
-  }
-}

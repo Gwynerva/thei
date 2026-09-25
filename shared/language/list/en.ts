@@ -760,6 +760,7 @@ export default defineI18nBase({
     update_steps: 'Progress',
     update_step_phase: 'Update action',
     update_step_migration: 'Data migration',
+    update_step_task: 'Content conversion',
     update_done_x: (version) => `Updated to Thei ${version}.`,
     update_log: 'Log',
     update_failed_hint:
@@ -768,6 +769,19 @@ export default defineI18nBase({
     update_restart: 'Restart',
     update_restart_confirm: 'Restart the site now?',
     update_restart_pending: 'Restarting, this page will reconnect by itself…',
+    update_restarted: 'The site is back.',
+    update_title_x: (version) => `Updating Thei to ${version}`,
+    update_site_closed:
+      'The site is closed until the update is finished; visitors see this ' +
+      'screen meanwhile.',
+    update_waiting: 'Waiting for the site to come back…',
+    update_continue: 'Continue',
+    update_close: 'Close',
+    update_failed_title: 'The update did not finish',
+    update_retry: 'Try again',
+    update_retry_hint:
+      'Finished steps are kept: trying again restarts the site and carries ' +
+      'on from the step that failed.',
     update_unmanaged: 'Updates are not available here',
     update_unmanaged_hint:
       'This instance is not running as a managed service, so it cannot ' +
@@ -778,9 +792,13 @@ export default defineI18nBase({
       'The content could not be brought up to date, so the site did not start.',
     boot_update_downgrade:
       'This content was created by a newer version of Thei.',
+    boot_update_task_failed:
+      'The content could not be converted for this version, so the site ' +
+      'stays closed.',
+    boot_update_error: 'The site could not start.',
     boot_update_hint:
-      'Nothing was changed. See the README for how to recover, then restart ' +
-      'the service.',
+      'Fix the cause — the service log and the README tell how — then ' +
+      'restart the service. Finished steps are kept.',
     admin_entity_search_placeholder: 'Search content…',
     sort_order: 'Sort order',
     sort_newest: 'Newest first',

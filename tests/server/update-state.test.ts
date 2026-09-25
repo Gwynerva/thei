@@ -7,7 +7,6 @@ import {
   clearUpdateState,
   createUpdateState,
   finishStep,
-  isStaleRun,
   pendingStep,
   planSteps,
   readUpdateState,
@@ -77,21 +76,6 @@ describe('update state', () => {
 
     expect(state.log.length).toBeLessThanOrEqual(200);
     expect(state.log.at(-1)).toBe('line 999');
-  });
-
-  it('treats a run owned by a dead process as stale', () => {
-    const state = createUpdateState('0.1.0', '0.2.0');
-
-    // Our own run is never stale, however long it takes.
-    expect(isStaleRun(state)).toBe(false);
-
-    // A pid that cannot exist stands in for a process that is gone.
-    state.pid = 2 ** 30;
-    expect(isStaleRun(state)).toBe(true);
-
-    // Exiting is how an update ends, so this one is waiting, not stale.
-    setStatus(state, 'restarting');
-    expect(isStaleRun(state)).toBe(false);
   });
 
   it('clears the recorded run', async () => {

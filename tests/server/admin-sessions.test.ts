@@ -1,9 +1,13 @@
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { IncomingMessage, ServerResponse } from 'node:http';
+import { Socket } from 'node:net';
+import { createEvent } from 'h3';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { adminSessions } from '../../server/thei/db/schema/admin-sessions';
 import {
   destroyOtherAdminSessions,
+  getCurrentAdminSession,
   memorySessions,
   toSnapshotSessions,
   type AdminSessionData,
@@ -49,6 +53,20 @@ function createDb() {
   vi.stubGlobal('THEI_SERVER', { useDb: () => ({ db, schema }) });
   return db;
 }
+
+describe('admin sessions before they are loaded', () => {
+  it('recognise nobody and leave the session cookie alone', async () => {
+    // While the site is closed for an update the sessions are still in the
+    // database. A cookie seen then is not a stale one.
+    const request = new IncomingMessage(new Socket());
+    request.headers.cookie = 'thei-admin-session-token=some-token';
+    const response = new ServerResponse(request);
+    const event = createEvent(request, response);
+
+    expect(await getCurrentAdminSession(event)).toBeUndefined();
+    expect(response.getHeader('set-cookie')).toBeUndefined();
+  });
+});
 
 describe('admin session expiration', () => {
   it('persists expired database and memory sessions without changing last use', async () => {

@@ -32,6 +32,8 @@ const newRouteFiles = [
   'server/api/admin/session.delete.ts',
   'server/api/generated-icons/[kind]/[seed].get.ts',
   'server/api/installation.post.ts',
+  'server/api/update/progress.get.ts',
+  'server/api/update/retry.post.ts',
 ];
 
 const removedRouteFiles = [
@@ -50,6 +52,8 @@ const removedRouteFiles = [
   'server/api/admin/projects/search.get.ts',
   'server/api/admin/tags/search.get.ts',
   'server/routes/sign-out.ts',
+  // Update progress is polled from `/api/update/`, open site and closed.
+  'server/api/admin/assets/preview-refresh.get.ts',
 ];
 
 describe('resource routes', () => {

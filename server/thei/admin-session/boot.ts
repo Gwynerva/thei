@@ -1,5 +1,6 @@
 import {
   expireAdminSessions,
+  markAdminSessionsLoaded,
   memorySessions,
   loopAdminSessionSnapshotJob,
 } from '.';
@@ -24,6 +25,7 @@ export async function bootAdminSessions() {
     memorySessions.set(session.token, session);
   }
 
+  markAdminSessionsLoaded();
   void loopAdminSessionSnapshotJob();
 
   if (memorySessions.size > 0) {

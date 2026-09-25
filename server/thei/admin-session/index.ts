@@ -38,6 +38,17 @@ export interface AdminSessionData {
 export const memorySessions = new Map<string, AdminSessionData>();
 export const toSnapshotSessions = new Map<string, AdminSessionData>();
 
+/**
+ * Set once the sessions have been read from the database. Before that — while
+ * the site is closed for an update, or after a boot that stopped — nobody can
+ * be recognised, and a session cookie must not be taken for a stale one.
+ */
+let sessionsLoaded = false;
+
+export function markAdminSessionsLoaded() {
+  sessionsLoaded = true;
+}
+
 export function cloneSession(session: AdminSessionData): AdminSessionData {
   return structuredClone(session);
 }
@@ -212,6 +223,10 @@ export async function rotateAdminSessionTokenIfNeeded(
 }
 
 export async function getCurrentAdminSession(event: H3Event) {
+  if (!sessionsLoaded) {
+    return;
+  }
+
   cleanupExpiredTokenAliases();
 
   let token = getTokenCookie(event);

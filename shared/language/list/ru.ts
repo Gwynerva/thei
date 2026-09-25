@@ -819,6 +819,7 @@ export default defineI18nModule({
     update_steps: 'Ход обновления',
     update_step_phase: 'Действие обновления',
     update_step_migration: 'Миграция данных',
+    update_step_task: 'Преобразование данных',
     update_done_x: (version) => `Обновлено до Thei ${version}.`,
     update_log: 'Журнал',
     update_failed_hint:
@@ -827,6 +828,18 @@ export default defineI18nModule({
     update_restart: 'Перезапустить',
     update_restart_confirm: 'Перезапустить сайт сейчас?',
     update_restart_pending: 'Перезапускаем, страница переподключится сама…',
+    update_restarted: 'Сайт снова работает.',
+    update_title_x: (version) => `Обновление Thei до ${version}`,
+    update_site_closed:
+      'Сайт закрыт до конца обновления; посетители пока видят этот экран.',
+    update_waiting: 'Ждём, когда сайт снова ответит…',
+    update_continue: 'Продолжить',
+    update_close: 'Закрыть',
+    update_failed_title: 'Обновление не завершилось',
+    update_retry: 'Повторить',
+    update_retry_hint:
+      'Выполненные шаги сохраняются: повтор перезапустит сайт и продолжит ' +
+      'с шага, на котором произошла ошибка.',
     update_unmanaged: 'Обновления здесь недоступны',
     update_unmanaged_hint:
       'Этот экземпляр запущен не как управляемая служба и не может ' +
@@ -836,9 +849,13 @@ export default defineI18nModule({
     boot_update_migration_failed:
       'Не удалось обновить содержимое, поэтому сайт не запустился.',
     boot_update_downgrade: 'Это содержимое создано более новой версией Thei.',
+    boot_update_task_failed:
+      'Не удалось преобразовать содержимое для этой версии, поэтому сайт ' +
+      'остаётся закрытым.',
+    boot_update_error: 'Сайт не смог запуститься.',
     boot_update_hint:
-      'Ничего не изменено. Как восстановить работу, описано в README; после ' +
-      'этого перезапустите службу.',
+      'Устраните причину — подробности в журнале службы и в README, — затем ' +
+      'перезапустите службу. Выполненные шаги сохраняются.',
     admin_entity_search_placeholder: 'Поиск по содержимому…',
     sort_order: 'Порядок сортировки',
     sort_newest: 'Сначала новые',

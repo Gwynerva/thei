@@ -1,81 +1,65 @@
 <script lang="ts" setup>
-import type { BootUpdateDetails } from '#layers/thei/server/thei/boot/result';
-import {
-  type LanguageCode,
-  languageCodes,
-  loadLanguage,
-} from '#layers/thei/shared/language';
-
 useHead({
   title: 'Thei',
   meta: [{ name: 'robots', content: 'noindex,nofollow' }],
 });
 
-// The boot stopped before the configured language was loaded, so this page
-// picks one from the browser the same way the install wizard does.
+/**
+ * What every page leads to while the site is closed for an update: how it is
+ * going, and why it stopped if it did. Visitors are sent back to the site the
+ * moment it opens; an admin first sees how the update ended.
+ */
+const {
+  progress,
+  screen,
+  refresh,
+  start,
+  retry: askRetry,
+} = useUpdateProgress();
 const ready = ref(false);
-const details = useState<BootUpdateDetails | undefined>('boot-update');
+const busy = ref(false);
+const actionError = ref<string>();
+
+watch(progress, (value) => {
+  if (value?.site === 'open' && !value.admin) {
+    window.location.replace(sitePath('/'));
+  }
+});
 
 onMounted(async () => {
-  let languageCode: LanguageCode = 'en';
-  const browserLanguageCode = navigator.language.toLowerCase().slice(0, 2);
-
-  if (isOneOf(browserLanguageCode, languageCodes)) {
-    languageCode = browserLanguageCode;
-  }
-
-  _language.value = await loadLanguage(languageCode);
+  await refresh();
   ready.value = true;
+  start();
 });
+
+function openSite() {
+  window.location.assign(sitePath('/admin/updates/'));
+}
+
+async function retry() {
+  if (busy.value) return;
+  busy.value = true;
+  actionError.value = await askRetry();
+  busy.value = false;
+}
 </script>
 
 <template>
   <AdminGridWrapper>
-    <div class="m-auto flex w-(--width-narrow) flex-col px-window py-lg">
+    <div
+      class="flex h-dvh sm:items-center sm:justify-center sm:px-window sm:py-lg"
+    >
       <TransitionFade mode="out-in">
-        <Box v-if="ready">
-          <div class="flex flex-col gap-sm p-md">
-            <h1 class="flex items-center gap-xs text-xl font-bold">
-              <Icon name="warning" class="shrink-0 text-text-error" />
-              {{ phrase.boot_update_title }}
-            </h1>
-
-            <p class="text-text-2">
-              {{
-                details?.reason === 'downgrade'
-                  ? phrase.boot_update_downgrade
-                  : phrase.boot_update_migration_failed
-              }}
-            </p>
-
-            <InfoBlock
-              v-if="details"
-              :rows="[
-                {
-                  label: phrase.update_current_version,
-                  value: details.toVersion,
-                },
-                {
-                  label: phrase.update_latest_version,
-                  value: details.fromVersion,
-                },
-              ]"
-            />
-
-            <p class="text-sm text-text-3">{{ phrase.boot_update_hint }}</p>
-          </div>
-
-          <p
-            v-if="details?.message"
-            class="border-t border-border-error bg-bg-error px-md py-sm text-sm
-              text-text-error"
-          >
-            <span v-if="details.migrationId" class="font-semibold">
-              {{ details.migrationId }}:
-            </span>
-            {{ details.message }}
-          </p>
-        </Box>
+        <UpdateScreen
+          v-if="ready"
+          class="w-(--width-narrow)"
+          :progress
+          :screen
+          :busy
+          :error="actionError"
+          @continue="openSite"
+          @retry="retry"
+        />
         <TheiLoadingIndicator v-else />
       </TransitionFade>
     </div>

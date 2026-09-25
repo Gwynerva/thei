@@ -77,13 +77,35 @@ What happens when you press the button:
    whole time**, so visitors see nothing unusual.
 5. The new build is swapped in — the old one is kept as `.output.prev` — and the
    process exits. systemd starts it again within seconds.
-6. On the way up, the new engine applies any pending migrations.
+6. The new version finds what its ledger has left and **closes the site** until
+   it is done: pages lead to an update screen, API calls get `503` with
+   `Retry-After`. It applies the pending migrations, then runs the release's
+   tasks — heavier work over existing content, such as remaking media
+   previews.
+7. The content is recorded as belonging to the new version, the site opens,
+   and the update is done.
 
-The panel lists every step as it runs, including each phase and migration the
-release brings.
+A boot with nothing left for it opens the site straight away, so a plain
+restart never closes anything.
 
-The panel polls through the restart and reloads itself when the new version is
-up. Losing connection for a few seconds is expected.
+### The update screen
+
+Like a router's: the moment the update starts, the admin gets a full-screen
+update screen listing every step as it runs — each phase, migration and task
+the release brings, with a progress line for long tasks. It is already in the
+browser, so it stays while the server installs, builds, restarts and works
+with the site closed; losing the connection during the restart is expected.
+When the site is open again it says how the update ended and waits for
+**Continue**, which reloads into the new version.
+
+It polls `GET /api/update/progress`, which answers in every state the boot can
+end in, without the database. The screen of one release polls the server of
+the next, so that response (`shared/api/update-progress.ts`) is frozen: it may
+only ever gain optional fields.
+
+While the site is closed, anyone who opens it is led to the same screen at
+`/update/` — with the steps, but never the log. Visitors are sent back to the
+site as soon as it opens.
 
 Updating and restarting are only offered when Thei is running as a managed
 service — the panel detects this from `THEI_MANAGED` in the unit file. In a
@@ -113,11 +135,14 @@ or roll back to the previous build:
 bash /opt/thei/node_modules/thei/update/rollback.sh
 ```
 
-**"Thei needs attention" instead of the site.** A migration failed or the
-content belongs to a newer version than the engine. The page names the
-migration and the error. Nothing was changed — the database is still on the
-last migration that succeeded. Fix the cause and restart the service; the
-migration runs again from where it stopped.
+**"Thei needs attention" instead of the site.** A migration or a task failed,
+or the content belongs to a newer version than the engine. The site stays
+closed and the update screen names the step and the error. Everything that
+succeeded is recorded in the ledger — a migration that failed was rolled back
+— so a restart carries on from the step that failed. When a task failed, a
+signed-in admin gets **Try again** on the screen, which does exactly that;
+after a failed migration sessions cannot be trusted yet, so fix the cause and
+restart the service.
 
 Rollback does **not** undo migrations. If an update applied one, the older
 engine will refuse to open the content and say so. Reinstall the newer version
@@ -219,21 +244,23 @@ the two are not walking the same tree at once.
 Only one backup may run at a time. A session left open by a client that died,
 or by a server restart, is reclaimed automatically.
 
-## Phases and migrations
+## Phases, migrations and tasks
 
-A release changes existing installations in two places, and each has its own
-folder:
+A release changes existing installations in three places, and each has its
+own folder:
 
-|                    | `phases/`                                 | `migrations/`                        |
-| ------------------ | ----------------------------------------- | ------------------------------------ |
-| Runs               | during the update, before the rebuild     | on boot of the new version           |
-| Code comes from    | the version being installed               | the version being installed          |
-| The site meanwhile | still served by the previous build        | down until migrations finish         |
-| Recorded           | nowhere; runs on every update crossing it | in the `_thei_migrations` ledger     |
-| Typical use        | files, config, tools, anything outside DB | schema and data changes that need it |
+|                    | `phases/`                                 | `migrations/`                        | `tasks/`                                |
+| ------------------ | ----------------------------------------- | ------------------------------------ | --------------------------------------- |
+| Runs               | during the update, before the rebuild     | on boot of the new version           | on boot, after every migration          |
+| Code comes from    | the version being installed               | the version being installed          | the version being installed             |
+| The site meanwhile | still served by the previous build        | closed                               | closed                                  |
+| The database       | not available                             | as it was when written, raw SQL only | as this release describes it            |
+| Recorded           | nowhere; runs on every update crossing it | in the `_thei_migrations` ledger     | in the same ledger, as `task:<id>`      |
+| Typical use        | files, config, tools, anything outside DB | schema and data changes that need it | heavy work over content: media, records |
 
-Both show up in **Updates** as steps with their own title and description,
-between the pipeline's own steps (install, build, switch, restart).
+All three show up on the update screen as steps with their own title and
+description, between and after the pipeline's own steps (install, build,
+switch, restart).
 
 ### Texts
 
@@ -245,9 +272,9 @@ title: 'Move covers into assets/',
 title: { en: 'Move covers into assets/', ru: 'Перенос обложек в assets/' },
 ```
 
-The panel shows the site's language, then English, then whatever translation
-exists. Texts are resolved when a step is recorded, because the panel reading
-the record belongs to the version being replaced.
+The update screen shows the site's language, then English, then whatever
+translation exists. Texts are resolved when a step is recorded, because the
+screen reading the record belongs to the version being replaced.
 
 ### Update phases
 
@@ -351,15 +378,68 @@ Rules that matter:
   unknown length. Stored files describe themselves through their own
   `extension`, `size`, and `meta`, so a library holding output from several
   releases is a normal library, not one that needs repairing. Moving or renaming
-  files is fine; decoding and re-encoding them is not. If bulk re-encoding is
-  ever genuinely wanted, build it as an opt-in, resumable background job in the
-  admin panel.
+  files is fine; decoding and re-encoding them is not. Bulk reprocessing that a
+  release genuinely needs is a task, below.
+
+### Tasks
+
+Work a release does over existing content with the new engine's own code: the
+heavy kind — reprocessing media, rebuilding derived data, converting old
+records — that a migration should not do in raw SQL and a phase cannot do
+without the database. Converting old content once, as a task, is preferred
+over carrying compatibility code for it in every later release: the site stays
+closed until every task has finished, so nothing ever serves content a task has
+yet to convert.
+
+Create `tasks/<version>-<slug>.ts` and append it to `updateTaskRegistry` in
+`tasks/index.ts`:
+
+```ts
+import { defineUpdateTask } from './types';
+
+export default defineUpdateTask({
+  id: '0.2.0/001-cover-colors',
+  version: '0.2.0',
+  title: 'Read the accent colour of every cover',
+  progress: (done, total) => `${done} of ${total} covers`,
+  async run({ progress, log }) {
+    const { readCoverColors } = await import('#layers/thei/server/...');
+    // One item at a time, reporting how far along it is.
+  },
+});
+```
+
+On every boot, the tasks the ledger has not recorded run in registry order,
+after every migration. A task is recorded once it resolves. A new installation
+records them all, having no old content to convert, and a database from before
+the ledger adopts those up to its recorded version, as it does migrations.
+
+Rules that matter:
+
+- **Tasks run after all migrations, with the newest schema.** An update from
+  `0.1.0` to `0.5.0` runs the `0.2.0` task on the `0.5.0` database, with the
+  `0.5.0` code. So a migration never depends on a task, and a task is engine
+  code that has to keep compiling. Once a later release makes a task moot, it
+  may be removed from the registry.
+- **A task runs once, and its failure keeps the site closed.** Later releases
+  may count on its result. Items that cannot be dealt with one by one — an
+  unreadable file — are skipped and reported, not thrown; throw only when the
+  task as a whole cannot go on. The next boot carries on from the ledger.
+- **One item at a time, and report progress.** A task may take minutes. Media
+  goes through the processing lanes in `server/thei/assets/queue.ts`, and the
+  progress line keeps the update screen from looking stuck.
+- **Import heavy modules inside `run`.** The registry is loaded wherever a
+  database is created, tests included.
+- **A recorded task counts as the content's version.** Content that went
+  through a `0.3.0` task is refused by an engine older than `0.3.0`, like
+  content a `0.3.0` migration touched.
 
 ## Cutting a release
 
 1. Update the Drizzle schema, then `bun run db:baseline`.
-2. Add a migration for the change, and an update phase for anything that has
-   to happen outside boot. Register both.
+2. Add a migration for the change, a task for work over existing content, and
+   an update phase for anything that has to happen before the build. Register
+   each.
 3. `bun vitest run` — the baseline drift test must pass.
 4. Bump `version` in the engine's `package.json`. It must match the tag.
 5. `git tag v0.2.0 && git push --tags`.
@@ -372,19 +452,21 @@ Only `major.minor.patch` tags are offered as updates; prerelease tags such as
 
 ## Files here
 
-| Path          | What it is                                                     |
-| ------------- | -------------------------------------------------------------- |
-| `install.sh`  | The one-line installer.                                        |
-| `rollback.sh` | Restores the previous build and manifest.                      |
-| `instance/`   | Templates for the files the installer writes into an instance. |
-| `migrations/` | Every schema and data change, plus the runner and the ledger.  |
-| `phases/`     | Scripted update phases, their runner and its line protocol.    |
-| `process.ts`  | The update procedure: install, phases, build, swap, restart.   |
-| `remote.ts`   | Finds the newest release tag.                                  |
-| `state.ts`    | The progress file the panel polls, which survives the restart. |
-| `text.ts`     | Step titles: a plain string or translations by language.       |
-| `output.ts`   | Swaps a staged build into place and repoints Nitro's links.    |
-| `semver.ts`   | Version comparison.                                            |
-| `scripts/`    | `generate-baseline.mts`, run by `bun run db:baseline`.         |
+| Path          | What it is                                                         |
+| ------------- | ------------------------------------------------------------------ |
+| `install.sh`  | The one-line installer.                                            |
+| `rollback.sh` | Restores the previous build and manifest.                          |
+| `instance/`   | Templates for the files the installer writes into an instance.     |
+| `migrations/` | Every schema and data change, plus the runner and the ledger.      |
+| `phases/`     | Scripted update phases, their runner and its line protocol.        |
+| `tasks/`      | Work over existing content with the new engine, and its runner.    |
+| `process.ts`  | The update procedure: install, phases, build, swap, restart.       |
+| `boot-run.ts` | Picks the run up on boot and records migrations and tasks into it. |
+| `remote.ts`   | Finds the newest release tag.                                      |
+| `state.ts`    | The progress file the update screen polls; survives the restart.   |
+| `text.ts`     | Step titles: a plain string or translations by language.           |
+| `output.ts`   | Swaps a staged build into place and repoints Nitro's links.        |
+| `semver.ts`   | Version comparison.                                                |
+| `scripts/`    | `generate-baseline.mts`, run by `bun run db:baseline`.             |
 
 The backup client itself lives outside this folder, in `backup/`.

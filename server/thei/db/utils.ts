@@ -4,49 +4,35 @@ import { schema } from './schema';
 import type { TheiDbContext } from './global';
 import { ensureAssetIntegrity } from '../assets/schema-integrity';
 import { baselineSql } from '#layers/thei/update/migrations';
-import {
-  runPendingMigrations,
-  seedLedger,
-} from '#layers/thei/update/migrations/run';
-import { migrationProgressRecorder } from '#layers/thei/update/migration-progress';
+import { seedLedger } from '#layers/thei/update/migrations/run';
+import { updateTaskRegistry } from '#layers/thei/update/tasks';
 
 export async function createFreshDbContext(): Promise<TheiDbContext> {
-  const rawDb = new Database(THEI_SERVER.contentPath('thei.db'));
+  const rawDb = openDb();
   try {
     rawDb.transaction(() => {
       for (const query of baselineSql) rawDb.prepare(query).run();
     })();
-    // The baseline already describes the newest schema, so every known
-    // migration counts as applied.
-    seedLedger(rawDb);
-    const db = drizzle(rawDb, { schema });
-    ensureAssetIntegrity(rawDb);
-    return { rawDb, db, schema };
+    // The baseline already describes the newest schema, and a new site has no
+    // old content, so every known migration and task counts as applied.
+    seedLedger(rawDb, undefined, updateTaskRegistry);
+    return wrapDbContext(rawDb);
   } catch (error) {
     rawDb.close();
     throw error;
   }
 }
 
-export async function loadDbContext(): Promise<TheiDbContext> {
-  const rawDb = new Database(THEI_SERVER.contentPath('thei.db'));
-  try {
-    // Migrations run before anything reads or repairs the schema: the rest of
-    // the boot path assumes the database already matches this release.
-    await runPendingMigrations(rawDb, {
-      installedVersion: THEI_SERVER.config.version,
-      contentPath: (...parts) => THEI_SERVER.contentPath(...parts),
-      log: (message) => THEI_SERVER.console.tag('Migrations').log(message),
-      onProgress: await migrationProgressRecorder(
-        THEI_SERVER.projectPath(),
-        THEI_SERVER.config.languageCode,
-      ),
-    });
-    ensureAssetIntegrity(rawDb);
-    const db = drizzle(rawDb, { schema });
-    return { rawDb, db, schema };
-  } catch (error) {
-    rawDb.close();
-    throw error;
-  }
+export function openDb(): Database.Database {
+  return new Database(THEI_SERVER.contentPath('thei.db'));
+}
+
+/**
+ * The context the rest of the server works with, over a database whose schema
+ * already matches this release.
+ */
+export function wrapDbContext(rawDb: Database.Database): TheiDbContext {
+  ensureAssetIntegrity(rawDb);
+  const db = drizzle(rawDb, { schema });
+  return { rawDb, db, schema };
 }

@@ -6,6 +6,10 @@ import {
 } from '#layers/thei/shared/public-view';
 import { bootPromise } from '../thei/boot/promise';
 import { bootResult } from '../thei/boot/result';
+import {
+  CLOSED_SITE_RETRY_AFTER,
+  closedSiteRoute,
+} from '../thei/boot/closed-site';
 import { getRequestPath } from '../thei/request';
 import { siteOrigin, sitePath } from '../thei/site-url';
 import {
@@ -50,15 +54,17 @@ export default defineEventHandler(async (event) => {
   const isInstallPath = path === '/install/' || path === '/api/installation';
   const isUpdatePath = path === '/update/';
   const isAdminPath = isAdminRequestPath(path);
-  const isAuthenticatedAdmin = await THEI_SERVER.isAuthenticatedAdmin(event);
-  const isAdmin = resolveRequestAdminRole({
-    isAuthenticatedAdmin,
-    path,
-    publicViewCookie: getCookie(event, publicViewCookieName),
-  });
 
   switch (bootResult.type) {
-    case 'ready':
+    case 'ready': {
+      const isAuthenticatedAdmin =
+        await THEI_SERVER.isAuthenticatedAdmin(event);
+      const isAdmin = resolveRequestAdminRole({
+        isAuthenticatedAdmin,
+        path,
+        publicViewCookie: getCookie(event, publicViewCookieName),
+      });
+
       event.context.languageCode = THEI_SERVER.language.code;
       event.context.isAuthenticatedAdmin = isAuthenticatedAdmin;
       event.context.isAdmin = isAdmin;
@@ -92,6 +98,12 @@ export default defineEventHandler(async (event) => {
         return;
       }
 
+      // The update screen polls through the whole update, open site and
+      // closed, and decides for itself what a visitor may see.
+      if (path.startsWith('/api/update/')) {
+        return;
+      }
+
       const isAuthPath =
         path === '/sign-in/' ||
         path.startsWith('/sign-in/link/') ||
@@ -117,6 +129,7 @@ export default defineEventHandler(async (event) => {
       }
 
       return;
+    }
 
     case 'install':
       if (!isInstallPath) {
@@ -124,23 +137,30 @@ export default defineEventHandler(async (event) => {
       }
       return;
 
-    case 'update':
-      // Handed to the page through a plugin rather than an API route: the boot
-      // stopped before the database was ready, so there is nothing to query.
-      event.context.bootUpdate = {
-        reason: bootResult.reason,
-        migrationId: bootResult.migrationId,
-        fromVersion: bootResult.fromVersion,
-        toVersion: bootResult.toVersion,
-        message: bootResult.message,
-      };
+    case 'update': {
+      // Closed for an update, finishing or stopped. The language is loaded
+      // before the database, so the update screen speaks the site's own.
+      event.context.languageCode = THEI_SERVER.language.code;
 
-      if (!isUpdatePath) {
+      const route = closedSiteRoute(path);
+      if (route === 'unavailable') {
+        setHeader(event, 'Retry-After', String(CLOSED_SITE_RETRY_AFTER));
+        throw createError({
+          statusCode: 503,
+          statusMessage: 'Thei is updating',
+        });
+      }
+      if (route === 'redirect') {
         return sendRedirect(event, sitePath('/update/'));
       }
       return;
+    }
 
     case 'error':
+      // An update screen left open learns of the error instead of waiting.
+      if (path.startsWith('/api/update/')) {
+        return;
+      }
       throw createError({
         statusCode: 503,
         statusMessage: 'Thei Boot Error',

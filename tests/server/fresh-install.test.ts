@@ -3,6 +3,9 @@ import Database from 'better-sqlite3';
 import { join } from 'node:path';
 import { freshTestDb } from '../helpers/fresh-db';
 import { createFreshDbContext } from '../../server/thei/db/utils';
+import { readLedger, taskLedgerId } from '../../update/migrations/ledger';
+import { migrationRegistry } from '../../update/migrations';
+import { updateTaskRegistry } from '../../update/tasks';
 
 const mocks = vi.hoisted(() => ({
   baselineSql: undefined as string[] | undefined,
@@ -84,6 +87,22 @@ describe('fresh database installation', () => {
       await context.close();
     }
   });
+  it('records every migration and task as done, having no old content', async () => {
+    const context = await freshTestDb();
+    try {
+      const ids = readLedger(context.rawDb).map((entry) => entry.id);
+      expect(ids).toEqual(
+        expect.arrayContaining([
+          ...migrationRegistry.map((migration) => migration.id),
+          ...updateTaskRegistry.map((task) => taskLedgerId(task.id)),
+        ]),
+      );
+      expect(ids).toContain('task:0.0.2/001-preview-frames');
+    } finally {
+      await context.close();
+    }
+  });
+
   it('rolls back all DDL and closes the failed connection', async () => {
     const context = await freshTestDb();
     const failedPath = join(context.directory, 'failed.db');

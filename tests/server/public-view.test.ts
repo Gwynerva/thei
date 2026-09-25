@@ -47,6 +47,22 @@ describe('public viewing role', () => {
     ).toBe(true);
   });
 
+  it('keeps the admin an admin on the update screen, even in public view', () => {
+    expect(
+      resolveRequestAdminRole({
+        isAuthenticatedAdmin: true,
+        path: '/api/update/progress',
+        publicViewCookie: publicViewGuestValue,
+      }),
+    ).toBe(true);
+    expect(
+      resolveRequestAdminRole({
+        isAuthenticatedAdmin: false,
+        path: '/api/update/progress',
+      }),
+    ).toBe(false);
+  });
+
   it('never grants access to a guest and ignores unknown cookie values', () => {
     expect(
       resolveRequestAdminRole({

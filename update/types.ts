@@ -14,13 +14,14 @@ export type UpdateStepStatus =
  * One line of the update's progress list.
  *
  * `builtin` steps belong to the update pipeline itself, `phase` steps are
- * scripted actions a release ships in `update/phases/`, and `migration` steps
- * are applied on boot. Titles are stored already resolved to a language: the
- * panel that reads them may be older than the release that defined them.
+ * scripted actions a release ships in `update/phases/`, `migration` steps
+ * are applied on boot, and `task` steps run once the new version is up.
+ * Titles are stored already resolved to a language: the panel that reads
+ * them may be older than the release that defined them.
  */
 export interface UpdateStep {
   id: string;
-  kind: 'builtin' | 'phase' | 'migration';
+  kind: 'builtin' | 'phase' | 'migration' | 'task';
   title: string;
   description?: string;
   status: UpdateStepStatus;

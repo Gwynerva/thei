@@ -1,10 +1,5 @@
 <script lang="ts" setup>
-import type {
-  UpdateRunStatus,
-  UpdateStep,
-  UpdateStatus,
-} from '#layers/thei/update/types';
-import type { IconName } from '#thei/icons';
+import type { UpdateRunStatus, UpdateStatus } from '#layers/thei/update/types';
 
 type ActionResponse =
   { type: 'success' } | { type: 'error'; code?: string; message: string };
@@ -20,9 +15,6 @@ const { data: status, refresh } = await useFetch<UpdateStatus>(
 
 const busy = ref(false);
 const error = ref<string>();
-// Set once the server has told us it is going down, so the page knows to
-// reload itself into the new version instead of just reporting success.
-const awaitingRestart = ref(false);
 
 const state = computed(() => status.value?.state);
 const running = computed(() => Boolean(status.value?.running));
@@ -39,19 +31,6 @@ const statusLabel = computed(() =>
   state.value ? statusLabels[state.value.status]() : '',
 );
 
-const stepIcons: Record<UpdateStep['status'], IconName> = {
-  pending: 'minus',
-  running: 'loading',
-  done: 'check',
-  failed: 'close',
-  skipped: 'minus',
-};
-
-function stepKind(step: UpdateStep): string | undefined {
-  if (step.kind === 'phase') return phrase.value.update_step_phase;
-  if (step.kind === 'migration') return phrase.value.update_step_migration;
-}
-
 const availability = computed(() => {
   const value = status.value;
   if (!value) return '';
@@ -61,53 +40,52 @@ const availability = computed(() => {
   return phrase.value.update_available_x(value.latestVersion);
 });
 
-// The old process dies mid-poll, so failed requests are expected here and
-// useAutoRefresh already swallows them: polling simply resumes once the new
-// process is listening.
-const { forceRefresh } = useAutoRefresh(async () => {
-  await refresh();
-
-  if (state.value?.status === 'restarting') awaitingRestart.value = true;
-
-  if (awaitingRestart.value && state.value && !running.value) {
-    // The new build ships new client assets, so a full reload is the only
-    // honest way to show the updated site.
-    awaitingRestart.value = false;
-    window.location.reload();
-  }
-}, 1000);
-
-async function act(url: string, confirmText?: string) {
-  if (busy.value) return;
-  if (confirmText && !window.confirm(confirmText)) return;
+/**
+ * Posts an action. Resolves to whether the server took it; the page follows
+ * a running update through the full-screen overlay, not by polling itself.
+ */
+async function act(url: string, confirmText?: string): Promise<boolean> {
+  if (busy.value) return false;
+  if (confirmText && !window.confirm(confirmText)) return false;
 
   busy.value = true;
   error.value = undefined;
+  let accepted = false;
 
   try {
     const response = await $fetch<ActionResponse>(url, { method: 'POST' });
     if (response.type === 'error') error.value = response.message;
+    else accepted = true;
   } catch (thrown) {
     error.value = thrown instanceof Error ? thrown.message : String(thrown);
   } finally {
     busy.value = false;
-    await forceRefresh();
   }
+
+  await refresh();
+  return accepted;
 }
 
 function check() {
   return act('/api/admin/updates/check');
 }
 
-function update() {
+async function update() {
   const version = status.value?.latestVersion;
   if (!version) return;
-  return act('/api/admin/updates/start', phrase.value.update_confirm(version));
+  if (
+    await act('/api/admin/updates/start', phrase.value.update_confirm(version))
+  ) {
+    openUpdateOverlay('update');
+  }
 }
 
 async function restart() {
-  awaitingRestart.value = true;
-  await act('/api/admin/updates/restart', phrase.value.update_restart_confirm);
+  if (
+    await act('/api/admin/updates/restart', phrase.value.update_restart_confirm)
+  ) {
+    openUpdateOverlay('restart');
+  }
 }
 </script>
 
@@ -222,67 +200,14 @@ async function restart() {
                   : `${state.fromVersion} → ${state.toVersion}`
               }}
             </span>
-            <span
-              v-if="awaitingRestart"
-              class="text-sm text-text-3"
-              role="status"
-            >
-              {{ phrase.update_restart_pending }}
-            </span>
           </div>
 
-          <ol
+          <div
             v-if="state.steps.length"
-            class="flex flex-col border-t border-border-1 px-md py-sm"
-            :aria-label="phrase.update_steps"
+            class="border-t border-border-1 px-md py-sm"
           >
-            <li
-              v-for="step in state.steps"
-              :key="step.id"
-              class="flex gap-sm py-xs"
-              :class="{ 'opacity-60': step.status === 'skipped' }"
-              :data-update-step="step.status"
-            >
-              <span
-                class="mt-0.5 flex size-6 shrink-0 items-center justify-center
-                  rounded-full text-sm"
-                :class="{
-                  'bg-bg-3 text-text-3':
-                    step.status === 'pending' || step.status === 'skipped',
-                  'bg-accent/15 text-accent': step.status === 'running',
-                  'bg-accent text-white': step.status === 'done',
-                  'bg-bg-error text-text-error': step.status === 'failed',
-                }"
-                aria-hidden="true"
-              >
-                <Icon :name="stepIcons[step.status]" />
-              </span>
-              <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span class="flex flex-wrap items-baseline gap-x-xs">
-                  <span
-                    class="font-semibold"
-                    :class="
-                      step.status === 'pending' ? 'text-text-2' : 'text-text-1'
-                    "
-                  >
-                    {{ step.title }}
-                  </span>
-                  <span v-if="stepKind(step)" class="text-xs text-text-3">
-                    {{ stepKind(step) }}
-                  </span>
-                </span>
-                <span v-if="step.description" class="text-sm text-text-3">
-                  {{ step.description }}
-                </span>
-                <span
-                  v-if="step.error"
-                  class="text-sm break-words text-text-error"
-                >
-                  {{ step.error }}
-                </span>
-              </span>
-            </li>
-          </ol>
+            <UpdateSteps :steps="state.steps" />
+          </div>
 
           <div
             v-if="state.status === 'failed'"

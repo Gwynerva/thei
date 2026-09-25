@@ -2,6 +2,14 @@ import type { Database } from 'better-sqlite3';
 
 export const ledgerTable = '_thei_migrations';
 
+/**
+ * The ledger row of an update task. Tasks share the ledger with migrations;
+ * the prefix keeps their ids apart, whatever the two registries are named.
+ */
+export function taskLedgerId(id: string): string {
+  return `task:${id}`;
+}
+
 export interface LedgerEntry {
   id: string;
   version: string;
