@@ -207,6 +207,8 @@ export type PublicProjectStageResponse = PublicProjectStage & {
   humanReadableSlug: string;
   publicId: string;
   content?: PublicContentOutputData;
+  /** `updatedAt` only when the stage was edited on a later day. */
+  chronology: { createdAt: string; updatedAt?: string };
   project: PublicProjectChildParent;
   references: PublicReferences;
 };
@@ -273,6 +275,8 @@ export type PublicEventResponseFull = {
   humanReadableSlug: string;
   publicId: string;
   periods: DatedPeriod[];
+  /** `updatedAt` only when the event was edited on a later day. */
+  chronology: { createdAt: string; updatedAt?: string };
   content: PublicContentOutputData;
   references: PublicReferences;
   tags: PublicTagSummary[];
@@ -292,6 +296,11 @@ export type PublicEventResponseFull = {
 export type PublicDiaryResponse = {
   date: string;
   access: ProjectEventAccessLevel;
+  /**
+   * When the entry was written and last changed, which need not be its day.
+   * `updatedAt` only when it was edited on a later day than it was written.
+   */
+  chronology: { createdAt: string; updatedAt?: string };
   content: PublicContentOutputData;
   references: PublicReferences;
   relatedEntities: PublicEntityLink[];

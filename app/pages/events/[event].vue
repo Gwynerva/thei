@@ -2,7 +2,10 @@
 import type { PublicEventResponseFull } from '#layers/thei/shared/api/public';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { coverDatedPeriods } from '#layers/thei/shared/date-precision';
-import type { PublicDetailPanelData } from '#layers/thei/app/components/public/public-detail';
+import {
+  createdAndUpdatedTimelineItems,
+  type PublicDetailPanelData,
+} from '#layers/thei/app/components/public/public-detail';
 
 import { publicOwnerNotesHeading } from '#layers/thei/app/components/public/PublicOwnerNotes.vue';
 import { publicDiarySectionHeading } from '#layers/thei/app/components/public/PublicDiarySection.vue';
@@ -70,6 +73,10 @@ const details = computed(
   () =>
     ({
       periods: data.value.periods,
+      chronology: createdAndUpdatedTimelineItems(data.value.chronology, {
+        created: phrase.value.event_chronology_created,
+        updated: phrase.value.event_chronology_updated,
+      }),
       tags: data.value.tags,
       relatedEntities: data.value.relatedEntities,
       references: data.value.references,

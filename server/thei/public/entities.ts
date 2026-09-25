@@ -565,6 +565,7 @@ export async function buildPublicProjectStage(
     ...summary,
     humanReadableSlug: stage.humanReadableSlug,
     publicId: stage.publicId,
+    chronology: buildPublicEntityChronology(stage),
     content,
     project: parent,
     references: await buildPublicReferences(
@@ -665,6 +666,7 @@ export async function buildPublicEvent(
     humanReadableSlug: stored.humanReadableSlug,
     publicId: stored.publicId,
     periods,
+    chronology: buildPublicEntityChronology(stored),
     content: content ?? { blocks: [] },
     references: await buildPublicReferences(
       manual,
@@ -836,6 +838,8 @@ export async function buildPublicDiaryEntry(
     date: string;
     access: ProjectEventAccessLevel;
     reminder: string;
+    createdAt: number;
+    updatedAt: number;
   },
   isAdmin: boolean,
   asOwner = isAdmin,
@@ -853,6 +857,7 @@ export async function buildPublicDiaryEntry(
   return {
     date: stored.date,
     access: stored.access,
+    chronology: buildPublicEntityChronology(stored),
     content: content ?? { blocks: [] },
     references: await buildPublicReferences(
       emptyPublicReferenceGroup(),

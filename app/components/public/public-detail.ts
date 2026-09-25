@@ -19,9 +19,33 @@ export type PublicDetailTimelineItem = {
   icon: IconName;
   label: string;
   date: string;
-  /** Where the date comes from, when that is a page of its own. */
+  /** Where the date comes from or leads, when that is a page of its own. */
   href?: string;
 };
+
+/**
+ * When something was made and last changed, as key dates.
+ *
+ * The chronology already leaves `updatedAt` out when the change fell on the
+ * day of creation, so an entity edited only that day has a single line.
+ */
+export function createdAndUpdatedTimelineItems(
+  chronology: { createdAt: string; updatedAt?: string },
+  labels: { created: string; updated: string },
+): PublicDetailTimelineItem[] {
+  return [
+    { icon: 'plus', label: labels.created, date: chronology.createdAt },
+    ...(chronology.updatedAt
+      ? [
+          {
+            icon: 'history' as const,
+            label: labels.updated,
+            date: chronology.updatedAt,
+          },
+        ]
+      : []),
+  ];
+}
 
 /**
  * The first and the last of something, as key dates.
@@ -50,6 +74,46 @@ export function firstAndLastTimelineItems<T>(
   return [
     { icon: labels.icon, label: labels.first, ...first },
     { icon: labels.icon, label: labels.last, ...last },
+  ];
+}
+
+/**
+ * A diary entry's key dates: its day, when it was written, when it last changed.
+ *
+ * Most entries are written on the day they are about, and then "created" on
+ * that very day already says what the entry is about, so the two are one line.
+ * An edit is never folded in the same way: it is incidental, says nothing about
+ * what the entry is about, and would move off the day with the next edit.
+ * Writing and editing on the same day are already one date in the chronology.
+ *
+ * Listed newest first by the timeline, with an edit on the entry's own day
+ * kept above the day, where an edit sits everywhere else.
+ */
+export function diaryTimelineItems(
+  entry: {
+    date: string;
+    chronology: { createdAt: string; updatedAt?: string };
+    /** Where the day leads, such as the day in the life timeline. */
+    href?: string;
+  },
+  labels: { day: string; created: string; updated: string },
+): PublicDetailTimelineItem[] {
+  const { date, href } = entry;
+  const { createdAt, updatedAt } = entry.chronology;
+  const created = { icon: 'plus' as const, label: labels.created };
+  const day = {
+    ...(createdAt === date
+      ? created
+      : { icon: 'thought' as const, label: labels.day }),
+    date,
+    ...(href ? { href } : {}),
+  };
+  return [
+    ...(updatedAt && updatedAt !== createdAt
+      ? [{ icon: 'history' as const, label: labels.updated, date: updatedAt }]
+      : []),
+    day,
+    ...(createdAt !== date ? [{ ...created, date: createdAt }] : []),
   ];
 }
 
@@ -91,7 +155,6 @@ export type PublicDetailPanelData = {
   contents?: ContentHeading[];
   chronology?: PublicDetailTimelineItem[];
   periods?: DateRange[];
-  createdAt?: string;
   tags?: PublicTagSummary[];
   relatedEntities?: PublicEntityLink[];
   /**

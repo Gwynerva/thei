@@ -2,7 +2,10 @@
 import type { PublicDiaryResponse } from '#layers/thei/shared/api/public';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { buildLifeUrl } from '#layers/thei/shared/life';
-import type { PublicDetailPanelData } from '#layers/thei/app/components/public/public-detail';
+import {
+  diaryTimelineItems,
+  type PublicDetailPanelData,
+} from '#layers/thei/app/components/public/public-detail';
 import { publicOwnerNotesHeading } from '#layers/thei/app/components/public/PublicOwnerNotes.vue';
 
 definePageMeta({ layout: 'public', key: (route) => route.path });
@@ -58,7 +61,14 @@ usePublicSeo({
 const details = computed(
   () =>
     ({
-      createdAt: data.value.date,
+      chronology: diaryTimelineItems(
+        { ...data.value, href: buildLifeUrl({ date: data.value.date }) },
+        {
+          day: phrase.value.diary_chronology_day,
+          created: phrase.value.diary_chronology_created,
+          updated: phrase.value.diary_chronology_updated,
+        },
+      ),
       relatedEntities: data.value.relatedEntities,
       references: data.value.references,
     }) satisfies PublicDetailPanelData,

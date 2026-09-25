@@ -2,7 +2,6 @@
 import type { PublicDetailPanelData } from './public-detail';
 import { relationTypeIcon } from '#layers/thei/shared/relation-display';
 import type { PublicEntityLink } from '#layers/thei/shared/api/public';
-import { buildLifeUrl } from '#layers/thei/shared/life';
 import { isPublicSecret } from '#layers/thei/shared/api/public';
 import { publicReferenceSplitSize } from '#layers/thei/shared/public-references';
 
@@ -87,27 +86,16 @@ const relatedTotal = computed(
       <PublicContentContents :items="data.contents" @navigate="navigate" />
     </PublicCollapsibleSection>
     <PublicCollapsibleSection
-      v-if="data.chronology?.length"
-      :title="phrase.public_details_chronology"
-    >
-      <PublicDetailTimeline :items="data.chronology" />
-    </PublicCollapsibleSection>
-    <PublicCollapsibleSection
       v-if="data.periods?.length"
       :title="phrase.public_details_timeline"
     >
       <PublicPeriodTimeline :periods="data.periods" />
     </PublicCollapsibleSection>
     <PublicCollapsibleSection
-      v-else-if="data.createdAt"
-      :title="phrase.public_details_when"
+      v-if="data.chronology?.length"
+      :title="phrase.public_details_chronology"
     >
-      <div class="flex flex-wrap gap-xs">
-        <DateRangeChip
-          :period="{ startDate: data.createdAt, endDate: data.createdAt }"
-          :href="buildLifeUrl({ date: data.createdAt })"
-        />
-      </div>
+      <PublicDetailTimeline :items="data.chronology" />
     </PublicCollapsibleSection>
     <PublicCollapsibleSection
       v-if="relatedTotal"

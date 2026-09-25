@@ -225,6 +225,8 @@ export async function getProjectStages(projectUuid: string) {
         humanReadableSlug: stage.humanReadableSlug,
         publicId: stage.publicId,
         isPrivate: stage.isPrivate,
+        createdAt: stage.createdAt,
+        updatedAt: stage.updatedAt,
         periods: (periodsByStage.get(stage.stageUuid) ?? []).map(
           ({ startDate, endDate, precision, precisionNote }) => ({
             startDate,

@@ -1,7 +1,10 @@
 <script lang="ts" setup>
 import { publicReferenceSplitSize } from '#layers/thei/shared/public-references';
 import type { PublicPageResponse } from '#layers/thei/shared/api/page';
-import type { PublicDetailPanelData } from '#layers/thei/app/components/public/public-detail';
+import {
+  createdAndUpdatedTimelineItems,
+  type PublicDetailPanelData,
+} from '#layers/thei/app/components/public/public-detail';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
 import { publicOwnerNotesHeading } from '#layers/thei/app/components/public/PublicOwnerNotes.vue';
 
@@ -63,22 +66,10 @@ const contentFileCount = computed(
 const details = computed(
   () =>
     ({
-      chronology: [
-        {
-          icon: 'plus',
-          label: phrase.value.page_chronology_created,
-          date: data.value.chronology.createdAt,
-        },
-        ...(data.value.chronology.updatedAt
-          ? [
-              {
-                icon: 'history' as const,
-                label: phrase.value.page_chronology_updated,
-                date: data.value.chronology.updatedAt,
-              },
-            ]
-          : []),
-      ],
+      chronology: createdAndUpdatedTimelineItems(data.value.chronology, {
+        created: phrase.value.page_chronology_created,
+        updated: phrase.value.page_chronology_updated,
+      }),
       references: data.value.references,
       metrics: [
         {

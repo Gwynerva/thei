@@ -359,7 +359,6 @@ export type LanguagePhrases = {
   public_details_expand: string;
   public_details_collapse: string;
   public_details_summary: string;
-  public_details_when: string;
   public_details_references: string;
   content_integration_youtube: string;
   public_details_manual: string;
@@ -386,6 +385,13 @@ export type LanguagePhrases = {
   page_chronology_updated: string;
   section_chronology_created: string;
   section_chronology_updated: string;
+  stage_chronology_created: string;
+  stage_chronology_updated: string;
+  event_chronology_created: string;
+  event_chronology_updated: string;
+  diary_chronology_day: string;
+  diary_chronology_created: string;
+  diary_chronology_updated: string;
   install_thei: string;
   visuals: string;
   visuals_description: string;

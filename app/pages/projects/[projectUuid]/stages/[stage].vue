@@ -2,7 +2,10 @@
 import { publicReferenceSplitSize } from '#layers/thei/shared/public-references';
 import type { PublicProjectStageResponse } from '#layers/thei/shared/api/public';
 import { buildProjectChildUrl } from '#layers/thei/shared/project-url';
-import type { PublicDetailPanelData } from '#layers/thei/app/components/public/public-detail';
+import {
+  createdAndUpdatedTimelineItems,
+  type PublicDetailPanelData,
+} from '#layers/thei/app/components/public/public-detail';
 
 definePageMeta({ layout: 'public', key: (route) => route.path });
 const route = useRoute();
@@ -63,6 +66,10 @@ const details = computed(
   () =>
     ({
       periods: data.value.periods,
+      chronology: createdAndUpdatedTimelineItems(data.value.chronology, {
+        created: phrase.value.stage_chronology_created,
+        updated: phrase.value.stage_chronology_updated,
+      }),
       references: data.value.references,
       metrics: (
         [

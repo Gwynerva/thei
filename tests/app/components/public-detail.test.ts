@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createdAndUpdatedTimelineItems,
+  diaryTimelineItems,
   firstAndLastTimelineItems,
   sortPublicDetailTimelineItems,
   sortPublicEntityReferencesByRelationType,
@@ -117,5 +119,85 @@ describe('firstAndLastTimelineItems', () => {
 
   it('says nothing when there is nothing', () => {
     expect(firstAndLastTimelineItems([], pick, labels)).toEqual([]);
+  });
+});
+
+describe('createdAndUpdatedTimelineItems', () => {
+  const labels = { created: 'Created', updated: 'Updated' };
+
+  it('lists the creation and a later edit', () => {
+    expect(
+      createdAndUpdatedTimelineItems(
+        { createdAt: '2024-05-12', updatedAt: '2024-07-02' },
+        labels,
+      ),
+    ).toEqual([
+      { icon: 'plus', label: 'Created', date: '2024-05-12' },
+      { icon: 'history', label: 'Updated', date: '2024-07-02' },
+    ]);
+  });
+
+  it('is one line when the chronology holds no later edit', () => {
+    expect(
+      createdAndUpdatedTimelineItems({ createdAt: '2024-05-12' }, labels),
+    ).toEqual([{ icon: 'plus', label: 'Created', date: '2024-05-12' }]);
+  });
+});
+
+describe('diaryTimelineItems', () => {
+  const labels = { day: 'Day', created: 'Created', updated: 'Updated' };
+  /** The lines as the timeline shows them, newest first. */
+  const items = (date: string, createdAt: string, updatedAt?: string) =>
+    sortPublicDetailTimelineItems(
+      diaryTimelineItems(
+        { date, chronology: { createdAt, updatedAt }, href: '/life/' },
+        labels,
+      ),
+    ).map(({ label, date, href }) => ({ label, date, href }));
+
+  it('shows the day, the writing and the edit apart when all differ', () => {
+    expect(items('2024-05-12', '2024-06-01', '2024-07-02')).toEqual([
+      { label: 'Updated', date: '2024-07-02', href: undefined },
+      { label: 'Created', date: '2024-06-01', href: undefined },
+      { label: 'Day', date: '2024-05-12', href: '/life/' },
+    ]);
+  });
+
+  it('lets the writing stand for the day it was written on', () => {
+    expect(items('2024-05-12', '2024-05-12', '2024-07-02')).toEqual([
+      { label: 'Updated', date: '2024-07-02', href: undefined },
+      { label: 'Created', date: '2024-05-12', href: '/life/' },
+    ]);
+  });
+
+  it('never lets an edit stand for the day, even one made on it', () => {
+    expect(items('2024-05-12', '2024-05-01', '2024-05-12')).toEqual([
+      { label: 'Updated', date: '2024-05-12', href: undefined },
+      { label: 'Day', date: '2024-05-12', href: '/life/' },
+      { label: 'Created', date: '2024-05-01', href: undefined },
+    ]);
+  });
+
+  it('places the day of an entry written ahead after its edits', () => {
+    expect(items('2024-05-12', '2024-05-01', '2024-05-05')).toEqual([
+      { label: 'Day', date: '2024-05-12', href: '/life/' },
+      { label: 'Updated', date: '2024-05-05', href: undefined },
+      { label: 'Created', date: '2024-05-01', href: undefined },
+    ]);
+  });
+
+  it('collapses into one line when everything happened on the day', () => {
+    expect(items('2024-05-12', '2024-05-12')).toEqual([
+      { label: 'Created', date: '2024-05-12', href: '/life/' },
+    ]);
+    expect(items('2024-05-12', '2024-05-12', '2024-05-12')).toHaveLength(1);
+  });
+
+  it('keeps a backdated entry to two lines when it was never edited later', () => {
+    expect(items('2024-05-12', '2024-06-01')).toEqual([
+      { label: 'Created', date: '2024-06-01', href: undefined },
+      { label: 'Day', date: '2024-05-12', href: '/life/' },
+    ]);
+    expect(items('2024-05-12', '2024-06-01', '2024-06-01')).toHaveLength(2);
   });
 });

@@ -2,6 +2,7 @@
 import { publicReferenceSplitSize } from '#layers/thei/shared/public-references';
 import type { PublicProjectResponse } from '#layers/thei/shared/api/public';
 import {
+  createdAndUpdatedTimelineItems,
   firstAndLastTimelineItems,
   type PublicDetailPanelData,
 } from '#layers/thei/app/components/public/public-detail';
@@ -126,20 +127,10 @@ const details = computed(
     ({
       contents: contents.value,
       chronology: [
-        {
-          icon: 'plus',
-          label: phrase.value.project_chronology_page,
-          date: data.value.chronology.createdAt,
-        },
-        ...(data.value.chronology.updatedAt
-          ? [
-              {
-                icon: 'history' as const,
-                label: phrase.value.project_chronology_updated,
-                date: data.value.chronology.updatedAt,
-              },
-            ]
-          : []),
+        ...createdAndUpdatedTimelineItems(data.value.chronology, {
+          created: phrase.value.project_chronology_page,
+          updated: phrase.value.project_chronology_updated,
+        }),
         ...firstAndLastTimelineItems(
           data.value.stages,
           (stage) => ({ date: stage.period.startDate, href: stage.href }),
