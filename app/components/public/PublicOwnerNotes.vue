@@ -28,7 +28,7 @@ const shown = computed<PublicContentOutputData>(() => ({
     v-if="blocks.length"
     :id="PUBLIC_OWNER_NOTES_ID"
     class="mt-lg flex scroll-mt-[var(--public-anchor-offset,8rem)] flex-col
-      gap-sm border-t border-border-1 pt-lg"
+      gap-sm"
   >
     <h2 class="flex items-center gap-2 text-lg font-semibold text-text-2">
       <Icon name="text" aria-hidden="true" />

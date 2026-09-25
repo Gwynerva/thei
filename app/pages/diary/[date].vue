@@ -112,7 +112,7 @@ const extraContents = computed(() => [
       <PublicRelatedBlock
         :counts="data.related"
         :url="relatedUrl"
-        class="mt-lg border-t border-border-1 pt-lg"
+        class="mt-lg"
       />
       <PublicOwnerNotes :notes="data.notes" />
     </PublicDetailLayout>
