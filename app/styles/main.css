@@ -305,6 +305,12 @@
     }
   }
 
+  /* The dark theme's accent, also for places that stay dark in either theme. */
+  :root {
+    --lightness-accent-dark: 64%;
+    --chroma-accent-dark: 0.16;
+  }
+
   :root[data-theme='light'] {
     color-scheme: light;
     --lightness-accent: 52%;
@@ -313,8 +319,8 @@
 
   :root[data-theme='dark'] {
     color-scheme: dark;
-    --lightness-accent: 64%;
-    --chroma-accent: 0.16;
+    --lightness-accent: var(--lightness-accent-dark);
+    --chroma-accent: var(--chroma-accent-dark);
   }
 
   @media (hover: hover) and (pointer: fine) {

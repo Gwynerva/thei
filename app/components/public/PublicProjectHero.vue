@@ -130,7 +130,7 @@ const visibleTags = computed(() => props.tags.slice(0, 3));
         v-if="visibleTags.length"
         :tags="visibleTags"
         size="lg"
-        class="relative z-2 justify-center sm:justify-start"
+        class="hero-tags relative z-2 justify-center sm:justify-start"
         data-hero-tags
       />
     </div>
@@ -160,15 +160,32 @@ const visibleTags = computed(() => props.tags.slice(0, 3));
     rgb(0 0 0 / 66%) 100%
   );
 }
+/*
+ * The last, widest shadow is for a long title or summary that runs past the
+ * shade onto a light banner: it darkens the banner around the letters.
+ */
 .hero-title {
   text-shadow:
     0 0.08em 0.34em color-mix(in oklab, var(--project-hero-accent) 56%, black),
-    0 0.03em 0.1em rgb(0 0 0 / 72%);
+    0 0.03em 0.1em rgb(0 0 0 / 72%),
+    0 0 0.8em rgb(0 0 0 / 56%);
 }
 .hero-summary {
   text-shadow:
     0 0.08em 0.3em color-mix(in oklab, var(--project-hero-accent) 48%, black),
-    0 0.03em 0.08em rgb(0 0 0 / 64%);
+    0 0.03em 0.08em rgb(0 0 0 / 64%),
+    0 0 0.9em rgb(0 0 0 / 64%);
+}
+/*
+ * Tags wear their own colours, which the light theme makes too dark for the
+ * hero; the hero is dark in either theme, so they take the dark theme's.
+ */
+.hero-tags {
+  --lightness-accent: var(--lightness-accent-dark);
+  --chroma-accent: var(--chroma-accent-dark);
+  text-shadow:
+    0 0.03em 0.08em rgb(0 0 0 / 72%),
+    0 0 0.6em rgb(0 0 0 / 80%);
 }
 
 @variant sm {
