@@ -7,6 +7,7 @@ import type { ProjectExternalLink } from '../external-link';
 import type { TagItem } from '../tag';
 import type { MediaDescriptor } from '../media';
 import type { AdminPaginatedResponse } from '../admin/entity-list';
+import type { RelationGetItem } from '../relation';
 
 export type EventGetResponse = {
   eventUuid: string;
@@ -22,6 +23,7 @@ export type EventGetResponse = {
   otherAssets: OtherAssetGetItem[];
   externalLinks: ProjectExternalLink[];
   tags: TagItem[];
+  relations: RelationGetItem[];
   action: ProjectActionEditData;
   actionIconMedia?: MediaDescriptor;
   actionIconAssetSize?: number;

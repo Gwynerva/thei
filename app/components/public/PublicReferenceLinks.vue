@@ -11,7 +11,11 @@ import {
 import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
 import type { IconName } from '#thei/icons';
 import { truncateExternalLinkText } from '#layers/thei/shared/external-link';
-defineProps<{ links: (PublicReferenceLink | PublicSecretReference)[] }>();
+defineProps<{
+  links: (PublicReferenceLink | PublicSecretReference)[];
+  /** Leave the kind badge off the tiles, where the list already says it. */
+  hideKind?: boolean;
+}>();
 
 const SIDEBAR_EXTERNAL_LINK_TEXT_LIMIT = 120;
 function compactExternalLinkText(value?: string): string | undefined {
@@ -56,8 +60,8 @@ function linkTitle(link: PublicReferenceLink) {
         :title="link.title"
         :description="link.summary"
         :icon-media="link.iconMedia"
-        :corner-icon="entityIcon(link.entityType)"
-        :corner-title="entityTitle(link.entityType)"
+        :corner-icon="hideKind ? undefined : entityIcon(link.entityType)"
+        :corner-title="hideKind ? undefined : entityTitle(link.entityType)"
         icon="project"
         secret
       />
@@ -66,8 +70,10 @@ function linkTitle(link: PublicReferenceLink) {
         :title="linkTitle(link)"
         :description="link.description"
         :icon-media="link.iconMedia"
-        :corner-icon="link.iconMedia ? entityIcon(link.kind) : undefined"
-        :corner-title="entityTitle(link.kind)"
+        :corner-icon="
+          link.iconMedia && !hideKind ? entityIcon(link.kind) : undefined
+        "
+        :corner-title="hideKind ? undefined : entityTitle(link.kind)"
         :href="link.href"
         :icon="entityTypeIcon(link.kind)"
         :continuous-media="contentEntityHasIcon(link.kind)"

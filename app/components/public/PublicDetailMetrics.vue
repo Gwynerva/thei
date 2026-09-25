@@ -8,7 +8,6 @@ const props = defineProps<{ data: PublicDetailPanelData }>();
 /** The collapsed panel's hint at what opening it will show. */
 const metrics = computed(() =>
   publicDetailSummary(props.data, {
-    related: phrase.value.related_entities,
     links: phrase.value.public_details_links,
     files: phrase.value.public_details_files,
   }),

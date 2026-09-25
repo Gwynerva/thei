@@ -24,7 +24,6 @@ import {
 } from '../composables';
 import ProjectMain from './ProjectMain.vue';
 import ProjectAssets from './ProjectAssets.vue';
-import ProjectRelations from './ProjectRelations.vue';
 import ProjectExternalLinks from './ProjectExternalLinks.vue';
 import { projectDeleteModal } from './project-delete-modal';
 import ProjectContentItems from './ProjectContentItems.vue';
@@ -478,9 +477,13 @@ async function openDeleteProjectModal() {
     />
     <ProjectContentItems kind="stage" />
     <ProjectContentItems kind="section" />
-    <ProjectRelations
+    <AdminRelations
       v-model="relationsModel"
-      :project-uuid="resolvedProjectUuid"
+      :owner="
+        resolvedProjectUuid
+          ? { type: 'project', id: resolvedProjectUuid }
+          : undefined
+      "
       :owner-title="projectData.title.trim() || phrase.new_project"
     />
     <ProjectTags />

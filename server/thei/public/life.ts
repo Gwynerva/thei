@@ -277,17 +277,21 @@ function buildRawLifePoints(): RawPoint[] {
   // A diary entry reaches a project's chronology the same way an event does:
   // through the relation the author drew between them.
   const projectsByDiaryEntry = new Map<string, string[]>();
-  for (const row of db.select().from(schema.projectRelations).all()) {
+  for (const row of db.select().from(schema.entityRelations).all()) {
+    // Either end may be the project: a relation is drawn from whichever side
+    // the author was on.
+    const ends = [
+      { type: row.firstType, id: row.firstId },
+      { type: row.secondType, id: row.secondId },
+    ];
+    const project = ends.find((end) => end.type === 'project');
+    const other = ends.find((end) => end.type !== 'project');
+    if (!project || !other) continue;
     const byEntity =
-      row.entityType === 'event'
-        ? projectsByEvent
-        : row.entityType === 'diary-entry'
-          ? projectsByDiaryEntry
-          : undefined;
-    if (!byEntity) continue;
-    const list = byEntity.get(row.entityId) ?? [];
-    list.push(row.projectUuid);
-    byEntity.set(row.entityId, list);
+      other.type === 'event' ? projectsByEvent : projectsByDiaryEntry;
+    const list = byEntity.get(other.id) ?? [];
+    list.push(project.id);
+    byEntity.set(other.id, list);
   }
   const raw: RawPoint[] = [];
 

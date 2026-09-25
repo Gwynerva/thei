@@ -21,8 +21,6 @@ import type {
   PublicEntityReference,
   PublicProjectStage,
   PublicProjectStageResponse,
-  PublicEntityLink,
-  PublicDiaryLink,
   PublicDiaryResponse,
   PublicTagListItem,
   PublicTagSummary,
@@ -58,8 +56,6 @@ import { sortPublicTimelineItemsNewestFirst } from '#layers/thei/shared/public-t
 import type { TagItem } from '#layers/thei/shared/tag';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
-import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
-import { diaryContentExcerpt } from '#layers/thei/shared/diary-text';
 import {
   archivedOriginalFromMeta,
   buildPublicProjectMedia,
@@ -72,8 +68,11 @@ import { getProjectContentSections } from '../projects/content-sections';
 import { getProjectStages } from '../projects/stages';
 import { getProjectExternalLinks } from '../projects/external-links';
 import { getEventPeriods } from '../events/periods';
-import { getRelations } from '../relations';
-import type { RelationGetItem } from '#layers/thei/shared/relation';
+import {
+  buildPublicRelatedLinks,
+  countPublicRelated,
+  resolvePublicRelated,
+} from './related';
 import { getEventExternalLinks } from '../events/external-links';
 import { findExternalLink } from '../external-links/repository';
 import { listTagsForContainer } from '../tags';
@@ -236,7 +235,7 @@ export async function buildPublicEventSummary(
     ),
     getEventPeriods(event.eventUuid),
     listTagsForContainer('event', event.eventUuid),
-    getRelations({ type: 'event', id: event.eventUuid }),
+    resolvePublicRelated({ type: 'event', id: event.eventUuid }, isAdmin),
   ]);
   return {
     type: 'event',
@@ -251,7 +250,12 @@ export async function buildPublicEventSummary(
         .map((period) => period.endDate)
         .sort()
         .at(-1) ?? new Date(event.createdAt).toISOString().slice(0, 10),
-    relatedEntities: await buildRelationReferences(relations, isAdmin),
+    // A card names the projects an event belongs to, not everything around
+    // it: the rest waits on the event's own page.
+    relatedEntities: await buildPublicRelatedLinks(
+      relations.filter((item) => item.endpoint.type === 'project'),
+      isAdmin,
+    ),
     ...(isAdmin && event.reminder ? { reminder: event.reminder } : {}),
   };
 }
@@ -354,7 +358,7 @@ export async function buildPublicProject(
       isAdmin,
     ),
     getProjectExternalLinks(project.projectUuid),
-    getRelations({ type: 'project', id: project.projectUuid }),
+    resolvePublicRelated({ type: 'project', id: project.projectUuid }, isAdmin),
     getCurrentStatus({ type: 'project', id: project.projectUuid }, isAdmin),
   ]);
   const visibleStages = rawStages.filter(
@@ -420,17 +424,6 @@ export async function buildPublicProject(
     files,
     isAdmin,
   );
-  const relatedEntities = await buildRelationReferences(relations, isAdmin);
-  const diaryEntries = await buildDiaryLinks(relations, isAdmin);
-  const visibleStagePeriods = visibleStages.flatMap((stage) => stage.periods);
-  const firstStageAt = visibleStagePeriods
-    .map((period) => period.startDate)
-    .sort()
-    .at(0);
-  const lastStageAt = visibleStagePeriods
-    .map((period) => period.endDate)
-    .sort()
-    .at(-1);
   return {
     title: project.title,
     summary: project.summary,
@@ -439,8 +432,6 @@ export async function buildPublicProject(
     publicId: project.publicId,
     chronology: {
       ...buildPublicEntityChronology(project),
-      firstStageAt,
-      lastStageAt,
       ...(status.firstAt ? { firstStatusAt: status.firstAt } : {}),
     },
     isShowcase: project.showcase,
@@ -461,8 +452,7 @@ export async function buildPublicProject(
     showcase,
     files,
     tags: await buildPublicTags(tags),
-    relatedEntities,
-    diaryEntries,
+    related: countPublicRelated(relations),
     currentStatus: status.current,
     statusCount: status.total,
     references: await buildPublicReferences(
@@ -627,7 +617,7 @@ export async function buildPublicEvent(
       ),
       getEventExternalLinks(stored.eventUuid),
       listTagsForContainer('event', stored.eventUuid),
-      getRelations({ type: 'event', id: stored.eventUuid }),
+      resolvePublicRelated({ type: 'event', id: stored.eventUuid }, isAdmin),
       THEI_SERVER.assets.usages.findByContainer('event', stored.eventUuid),
     ]);
   const files = await Promise.all(
@@ -656,8 +646,6 @@ export async function buildPublicEvent(
       } satisfies PublicFile;
     }),
   );
-  const relatedEntities = await buildRelationReferences(relations, isAdmin);
-  const diaryEntries = await buildDiaryLinks(relations, isAdmin);
   const manual = buildPublicManualEventReferenceGroup(rawLinks, files, isAdmin);
   return {
     title: stored.title,
@@ -674,8 +662,7 @@ export async function buildPublicEvent(
       isAdmin,
     ),
     tags: await buildPublicTags(tags),
-    relatedEntities,
-    diaryEntries,
+    related: countPublicRelated(relations),
     action: await buildPublicAction(stored, usages, isAdmin),
     ...(await buildOwnerOnlyNotes(
       'event',
@@ -737,96 +724,6 @@ function buildPublicManualReferenceGroup(
 }
 
 /**
- * Related entities as the page that shows them sees them.
- *
- * One builder for every kind: a relation may point at an event as easily as
- * at a project, and the reading of its direction is the same either way.
- * A target the visitor may not list becomes a codename rather than vanishing —
- * the relation itself is not a secret, only what is on the other end.
- *
- * Diary entries are left out here rather than at each call site: they get a
- * section of their own, where a day and an opening line read better than a
- * title-shaped tile would.
- */
-async function buildRelationReferences(
-  relations: RelationGetItem[],
-  isAdmin: boolean,
-): Promise<PublicEntityLink[]> {
-  const references = await Promise.all(
-    relations
-      .filter((relation) => relation.entityType !== 'diary-entry')
-      .map(async ({ entityType, entityId, type, note }) => {
-        const entity = await findContentEntity(
-          { entityType, entityId },
-          isAdmin,
-        );
-        if (!entity) return undefined;
-        if (!canListPublicEntity(entity.access, isAdmin))
-          return {
-            ...buildSecretReference(entityType, entityId),
-            relationType: type,
-            entityType,
-          };
-        const text = note?.type === 'split' ? note.currentText : note?.text;
-        // The picture as this reader may see it, served from public
-        // addresses: the relations editor's own pictures are the admin's.
-        return {
-          entityType,
-          title: entity.title,
-          summary: entity.summary,
-          href: entity.href,
-          iconMedia: await entity.media('public', isAdmin),
-          relationType: type,
-          ...(text ? { note: text } : {}),
-        };
-      }),
-  );
-  return references.filter((item) => item !== undefined);
-}
-
-/**
- * The diary entries tied to something, as its page lists them.
- *
- * An entry a visitor cannot open is simply absent — not a codename. A project
- * saying "and three more you may not read" would leak how much was written
- * about it, which is exactly what a private entry is protecting.
- */
-async function buildDiaryLinks(
-  relations: RelationGetItem[],
-  isAdmin: boolean,
-): Promise<PublicDiaryLink[]> {
-  const entries = await Promise.all(
-    relations
-      .filter((relation) => relation.entityType === 'diary-entry')
-      .map(async ({ entityId }) => {
-        const entry = await THEI_SERVER.diary.findByUuid(entityId);
-        if (!entry || !canListPublicEntity(entry.access, isAdmin))
-          return undefined;
-        const content = await THEI_SERVER.content.findByOwner(
-          'diary-entry',
-          entry.diaryUuid,
-          'diary-body',
-        );
-        return {
-          date: entry.date,
-          href: buildDiaryUrl(entry.date),
-          excerpt: diaryContentExcerpt(
-            content?.data,
-            isAdmin,
-            THEI_SERVER.phrase.content_private_section,
-          ),
-          ...(isAdmin && entry.access !== ProjectEventAccessLevel.Public
-            ? { access: entry.access }
-            : {}),
-        } satisfies PublicDiaryLink;
-      }),
-  );
-  return entries
-    .filter((entry) => entry !== undefined)
-    .sort((left, right) => right.date.localeCompare(left.date));
-}
-
-/**
  * One diary entry's page.
  *
  * The shortest builder in the file, and that is the point: an entry is its
@@ -852,7 +749,10 @@ export async function buildPublicDiaryEntry(
       { type: 'diary-entry', date: stored.date },
       asOwner,
     ),
-    getRelations({ type: 'diary-entry', id: stored.diaryUuid }),
+    resolvePublicRelated(
+      { type: 'diary-entry', id: stored.diaryUuid },
+      isAdmin,
+    ),
   ]);
   return {
     date: stored.date,
@@ -864,7 +764,7 @@ export async function buildPublicDiaryEntry(
       await buildPublicContentReferenceGroup(content, asOwner),
       asOwner,
     ),
-    relatedEntities: await buildRelationReferences(relations, isAdmin),
+    related: countPublicRelated(relations),
     ...(await buildOwnerOnlyNotes(
       'diary-entry',
       stored.diaryUuid,

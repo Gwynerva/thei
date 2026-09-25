@@ -6,7 +6,7 @@ Thei is a personal digital archive of a life — a résumé and a diary at once.
 
 There are **three main kinds of entity**, and they form a ladder of complexity. Naming, defaults and effort should follow that order: a diary entry must stay cheap to create, a project may afford structure.
 
-- **Diary entries** are a single dated thought — the simplest kind. No title, no summary, no tags, no action: a date and a body, one entry per day, addressed by the day alone (`/diary/YYYY-MM-DD/`). Never give a diary entry a title field or let one grow fields it does not need; the point of it is that writing one costs nothing.
+- **Diary entries** are a single dated thought — the simplest kind. No title, no summary, no tags, no action: a date and a body, one entry per day, addressed by the day alone (`/diary/YYYY-MM-DD/`). Never give a diary entry a title field or let one grow fields it does not need; the point of it is that writing one costs nothing. Relations are the one optional structure an entry carries: they are how an entry says what it is about, and what puts it on a project's chronology.
 - **Events** are small memorable moments worth not forgetting — too small or too loose to be a project. An event may relate to other entities and carry tags, but it is never a part of a project. Call events shown on a project page "related events", never "project events" or anything that implies ownership.
 - **Projects** are self-contained, structured, substantial episodes of a life. A project is made of its own parts: **stages** (dated periods of work) and **sections** (topical write-ups), plus media, a showcase, files, links and relations to other entities.
 
@@ -15,7 +15,7 @@ Around them:
 - **Pages** are standalone writing that belongs to no timeline entity.
 - **Tags** are threads across projects and events. Diary entries carry none.
 - **Life** is the one timeline everything dated lands on.
-- **Relations** are drawn from a project to other projects, events and diary entries, and are edited only on the project. They are symmetric in reading: one row per pair, read from either side as "related", "depends on" or "influences", so an event or a diary entry still lists its related projects without editing them.
+- **Relations** join any two of projects, events and diary entries, and are edited from either side. One row per pair, read from either side as "related", "depends on" or "affects", with a note written once or once per side. A relation is a deliberate claim; a link inside the content is only a mention. Public pages show them in a block of their own with one tab per kind, loaded a page at a time, because a project may gather hundreds of diary entries; cards name only the projects an event belongs to.
 
 ## Package Manager
 

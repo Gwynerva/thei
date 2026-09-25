@@ -94,16 +94,18 @@ describe('secret references', () => {
         updatedAt: 1,
       })
       .run();
+    // `event:event` sorts before `project:*`, so the event is the first end.
     context.db
-      .insert(context.schema.projectRelations)
+      .insert(context.schema.entityRelations)
       .values(
         ['open', 'hidden', 'unlisted'].map((projectUuid, sortOrder) => ({
-          projectUuid,
-          entityType: 'event' as const,
-          entityId: 'event',
+          firstType: 'event' as const,
+          firstId: 'event',
+          secondType: 'project' as const,
+          secondId: projectUuid,
           type: 'related' as const,
-          projectSortOrder: 0,
-          entitySortOrder: sortOrder,
+          firstSortOrder: sortOrder,
+          secondSortOrder: 0,
         })),
       )
       .run();

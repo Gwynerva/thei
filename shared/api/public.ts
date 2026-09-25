@@ -33,6 +33,8 @@ export type PublicEntityReference = {
   relationType?: RelationType;
   /** Why this is related, as written for the page it is shown on. */
   note?: string;
+  /** The day of a diary entry, which stands in for the title it lacks. */
+  date?: string;
 };
 
 /**
@@ -61,21 +63,17 @@ export type PublicSecretReference = {
 export type PublicEntityLink = PublicEntityReference | PublicSecretReference;
 
 /**
- * A diary entry as something else's page lists it.
+ * How many related entities of each kind a visitor may see.
  *
- * There is no title to show, so the day is the label and the opening of the
- * text is the description. Entries a visitor may not open are left out of
- * these lists entirely rather than replaced by a codename: a diary is allowed
- * to keep quiet about how much of it there is.
+ * A page carries only the counts: the lists themselves come one kind and one
+ * page at a time, because a project may gather hundreds of diary entries. A
+ * diary entry the visitor cannot open is not counted, so the count never
+ * says more than the list would.
  */
-export type PublicDiaryLink = {
-  date: string;
-  href: string;
-  /** The opening of the entry, which stands in for a summary. */
-  excerpt: string;
-  /** Owner only: set when the entry is not public. */
-  access?: ProjectEventAccessLevel;
-};
+export type PublicRelatedCounts = Partial<Record<RelationEntityType, number>>;
+
+/** One page of one kind of related entity, in the order the block shows. */
+export type PublicRelatedPage = PublicPaginatedResponse<PublicEntityLink>;
 
 export function isPublicSecret(value: object): value is PublicSecretReference {
   return 'secret' in value && value.secret === true;
@@ -231,8 +229,6 @@ export type PublicProjectResponse = {
   publicId: string;
   chronology: {
     createdAt: string;
-    firstStageAt?: string;
-    lastStageAt?: string;
     /** When the project's oldest status was set. */
     firstStatusAt?: string;
     updatedAt?: string;
@@ -247,7 +243,7 @@ export type PublicProjectResponse = {
   showcase: (PublicAssetDescriptor | PublicSecretReference)[];
   files: (PublicFile | PublicSecretReference)[];
   tags: PublicTagSummary[];
-  relatedEntities: PublicEntityLink[];
+  related: PublicRelatedCounts;
   /** The newest status, if the project keeps any; `statusCount` counts them. */
   currentStatus?: StatusHistoryItem;
   statusCount: number;
@@ -256,8 +252,6 @@ export type PublicProjectResponse = {
    * `total` is the counter on the "Chronology" tab.
    */
   timeline: { latest: LifePoint[]; total: number };
-  /** Diary entries tied to this project, newest first. */
-  diaryEntries: PublicDiaryLink[];
   references: PublicReferences;
   action?: PublicAction;
   /**
@@ -280,9 +274,7 @@ export type PublicEventResponseFull = {
   content: PublicContentOutputData;
   references: PublicReferences;
   tags: PublicTagSummary[];
-  relatedEntities: PublicEntityLink[];
-  /** Diary entries tied to this event, newest first. */
-  diaryEntries: PublicDiaryLink[];
+  related: PublicRelatedCounts;
   action?: PublicAction;
   /**
    * Owner only. A visitor never receives either field — not here, not in the
@@ -303,7 +295,7 @@ export type PublicDiaryResponse = {
   chronology: { createdAt: string; updatedAt?: string };
   content: PublicContentOutputData;
   references: PublicReferences;
-  relatedEntities: PublicEntityLink[];
+  related: PublicRelatedCounts;
   /** Owner only. */
   reminder?: string;
   /** Owner only. */

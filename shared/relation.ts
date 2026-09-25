@@ -3,9 +3,8 @@ import type { MediaDescriptor } from './media';
 /**
  * The kinds of entity a relation can join.
  *
- * A relation is drawn from a project, and its other end is any of the three.
- * Both ends read the same row, so an event or a diary entry still lists the
- * projects it is related to, it just does not edit them.
+ * A relation joins any two of the three, and either end edits it: both ends
+ * read the same row, each from its own side.
  */
 export const RELATION_ENTITY_TYPES = [
   'project',
@@ -76,27 +75,6 @@ export function relationEndpointsEqual(
   return left.type === right.type && left.id === right.id;
 }
 
-/** The order the three kinds are shown in, everywhere they are shown. */
-export const RELATION_TYPE_ORDER = {
-  related: 0,
-  influencing: 1,
-  dependent: 2,
-} as const;
-
-export function sortByRelationType<T extends { relationType?: RelationType }>(
-  items: T[],
-): T[] {
-  return items
-    .map((item, index) => ({ item, index }))
-    .sort(
-      (left, right) =>
-        RELATION_TYPE_ORDER[left.item.relationType ?? 'related'] -
-          RELATION_TYPE_ORDER[right.item.relationType ?? 'related'] ||
-        left.index - right.index,
-    )
-    .map(({ item }) => item);
-}
-
 export class RelationValidationError extends Error {}
 
 function trimmed(value: string | undefined): string | undefined {
@@ -122,7 +100,7 @@ export function validateRelationNote(
 /**
  * Validates the relation list an entity is saved with.
  *
- * Shared by every entity that carries relations, so a project and an event
+ * Shared by the project, the event and the diary entry forms, so the three
  * cannot drift into accepting different things.
  */
 export function validateRelations(

@@ -23,16 +23,19 @@ Simplest first. Each one asks more of you than the last, and gives more back.
 - **Diary entries** are single thoughts with a date on them. No title, no
   summary, no tags — one entry a day, addressed by the day itself
   (`/diary/2026-04-28/`). Written in passing, in under a minute, and kept
-  public or private as you like.
+  public or private as you like. An entry can say what it is about by
+  relating itself to a project or an event.
 - **Events** are the small moments worth writing up: a meetup, a trip, a first
   release, a strange day. Too small or too loose to be a project, too good to
-  lose. An event has dates, media and tags, and projects can relate to it,
-  but it stands on its own.
+  lose. An event has dates, media and tags, relates to projects, other
+  events and diary entries, but it stands on its own.
 - **Projects** are the big episodes: self-contained, structured and substantial.
   A project is told through its own **stages** — dated periods of work — and
   **sections** — topical write-ups — with media, a showcase, files, links and
   relations to other projects, events and diary entries. Mark the ones that
   belong in your CV or in the showcase on the home page.
+- **Relations** run between any two of these: "related", "depends on" or
+  "affects", with a note on why, drawn from either side and seen from both.
 
 Around them:
 

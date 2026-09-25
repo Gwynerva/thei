@@ -2,10 +2,14 @@ import type { H3Event } from 'h3';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import {
   isPublicSecret,
-  type PublicDiaryLink,
+  type PublicEntityReference,
 } from '#layers/thei/shared/api/public';
 import { contentEntityReference } from '#layers/thei/shared/content-link';
-import type { RelationType } from '#layers/thei/shared/relation';
+import type { RelationEndpoint } from '#layers/thei/shared/relation';
+import {
+  RELATION_GROUP_ORDER,
+  relationGroupPhraseKey,
+} from '#layers/thei/shared/relation-display';
 import {
   findContentEntity,
   type ContentEntityRecord,
@@ -28,6 +32,7 @@ import {
   buildPublicProjectStage,
   canOpenPublicEntity,
 } from '../public/entities';
+import { listPublicRelatedAll } from '../public/related';
 import { getProjectStages } from '../projects/stages';
 import { getProjectContentSections } from '../projects/content-sections';
 import { siteUrl } from '../site-url';
@@ -83,9 +88,12 @@ export async function renderProjectMarkdown(
           (section.summary ? ` — ${section.summary}` : ''),
       );
   }
-  // Related events are relations like any other and are listed with them.
-  lines.push(...relatedEntities(event, data.relatedEntities));
-  lines.push(...diaryList(event, data.diaryEntries));
+  lines.push(
+    ...(await relatedEntities(event, {
+      type: 'project',
+      id: project.projectUuid,
+    })),
+  );
   lines.push(...tagList(event, data.tags));
 
   return { body: join(lines), canonical: siteUrl(event, canonical) };
@@ -151,8 +159,7 @@ export async function renderEventMarkdown(
         ]
       : []),
     await body(event, data.content),
-    ...relatedEntities(event, data.relatedEntities),
-    ...diaryList(event, data.diaryEntries),
+    ...(await relatedEntities(event, { type: 'event', id: stored.eventUuid })),
     ...tagList(event, data.tags),
   ];
   return {
@@ -176,7 +183,10 @@ export async function renderDiaryMarkdown(
   const lines = [
     `# ${data.date}`,
     await body(event, data.content),
-    ...relatedEntities(event, data.relatedEntities),
+    ...(await relatedEntities(event, {
+      type: 'diary-entry',
+      id: stored.diaryUuid,
+    })),
   ];
   return {
     body: join(lines),
@@ -290,58 +300,36 @@ async function withEntityAddresses(
 }
 
 /**
- * Relations as the sidebar lists them: plain ones first, then the two
- * directed kinds, each named from this entity's side.
+ * Relations as the page lists them: grouped by what they say, the directed
+ * kinds first, each named from this entity's side. A diary entry is listed
+ * by its day with its opening line, since it has no title to be called by.
  */
-function relatedEntities(
+async function relatedEntities(
   event: H3Event,
-  entities:
-    | {
-        title: string;
-        href?: string;
-        note?: string;
-        relationType?: RelationType;
-      }[]
-    | undefined,
-): string[] {
-  const visible = (entities ?? []).filter(
-    (entity) => !isPublicSecret(entity as object),
+  owner: RelationEndpoint,
+): Promise<string[]> {
+  const links = (await listPublicRelatedAll(owner, false)).filter(
+    (link): link is PublicEntityReference => !isPublicSecret(link),
   );
-  if (!visible.length) return [];
+  if (!links.length) return [];
   const phrase = THEI_SERVER.phrase;
-  const line = (entity: (typeof visible)[number]) =>
-    `- [${entity.title}](${siteUrl(event, entity.href!)})` +
-    (entity.note ? ` — ${entity.note}` : '');
   const lines = [`## ${phrase.related_entities}`];
-  lines.push(
-    ...visible
-      .filter((entity) => (entity.relationType ?? 'related') === 'related')
-      .map(line),
-  );
-  for (const [type, title] of [
-    ['influencing', phrase.relation_group_depends_on],
-    ['dependent', phrase.relation_group_affects],
-  ] as const) {
-    const group = visible.filter((entity) => entity.relationType === type);
-    if (group.length) lines.push(`### ${title}`, ...group.map(line));
+  for (const type of RELATION_GROUP_ORDER) {
+    const group = links.filter(
+      (link) => (link.relationType ?? 'related') === type,
+    );
+    if (!group.length) continue;
+    lines.push(`### ${phrase[relationGroupPhraseKey(type)]}`);
+    for (const link of group) {
+      const text =
+        link.note || (link.entityType === 'diary-entry' ? link.summary : '');
+      lines.push(
+        `- [${link.title}](${siteUrl(event, link.href)})` +
+          (text ? ` — ${text}` : ''),
+      );
+    }
   }
   return lines;
-}
-
-/** The diary entries tied to a project or an event, newest first. */
-function diaryList(
-  event: H3Event,
-  entries: PublicDiaryLink[] | undefined,
-): string[] {
-  if (!entries?.length) return [];
-  return [
-    `## ${THEI_SERVER.phrase.diary_entries}`,
-    ...entries.map(
-      (entry) =>
-        `- [${entry.date}](${siteUrl(event, entry.href)})` +
-        (entry.excerpt ? ` — ${entry.excerpt}` : ''),
-    ),
-  ];
 }
 
 function tagList(

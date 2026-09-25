@@ -6,6 +6,7 @@ import type { OtherAssetSaveItem } from './admin/project';
 import type { ProjectExternalLinkEditItem } from './external-link';
 import type { TagEditItem } from './tag';
 import type { MediaDescriptor } from './media';
+import type { RelationEditItem } from './relation';
 
 export type EventEditData = {
   title: string;
@@ -18,6 +19,7 @@ export type EventEditData = {
   otherAssets?: OtherAssetSaveItem[];
   externalLinks?: ProjectExternalLinkEditItem[];
   tags?: TagEditItem[];
+  relations?: RelationEditItem[];
   action?: ProjectActionEditData;
   reminder?: string;
   notes?: ContentFieldModelValue | null;

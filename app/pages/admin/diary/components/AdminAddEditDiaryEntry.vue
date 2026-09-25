@@ -20,6 +20,21 @@ const { diaryUuid } = defineProps<{ diaryUuid?: string }>();
  * nothing to pretend to be a project for.
  */
 const diaryData = ref<DiaryEditData>(emptyData());
+const relationsModel = computed({
+  get: () => diaryData.value.relations ?? [],
+  set: (value) => {
+    diaryData.value.relations = value;
+  },
+});
+/** The entry is called by its day, once it has one. */
+const ownerTitle = computed(() =>
+  diaryData.value.date
+    ? entityDisplayTitle({
+        title: diaryData.value.date,
+        date: diaryData.value.date,
+      })
+    : phrase.value.new_diary_entry,
+);
 const reminderModel = computed({
   get: () => diaryData.value.reminder ?? '',
   set: (value: string) => {
@@ -73,6 +88,7 @@ if (isEdit.value) {
     date: data.date,
     access: data.access,
     content: data.content,
+    relations: data.relations ?? [],
     reminder: data.reminder,
     notes: data.notes ?? null,
   };
@@ -158,6 +174,7 @@ function emptyData(): DiaryEditData {
     date: new Date().toISOString().slice(0, 10),
     access: ProjectEventAccessLevel.Public,
     content: null,
+    relations: [],
     reminder: '',
     notes: null,
   };
@@ -169,6 +186,7 @@ function diaryPayload(): DiaryEditData {
     date: value.date,
     access: value.access,
     content: value.content,
+    relations: value.relations,
     reminder: value.reminder,
     notes: value.notes,
   };
@@ -278,6 +296,11 @@ useRegisterAdminBarContextButton(
       </Field>
     </Box>
 
+    <AdminRelations
+      v-model="relationsModel"
+      :owner="diaryUuid ? { type: 'diary-entry', id: diaryUuid } : undefined"
+      :owner-title="ownerTitle"
+    />
     <ProjectShareLinks
       v-if="diaryUuid"
       entity-type="diary-entry"

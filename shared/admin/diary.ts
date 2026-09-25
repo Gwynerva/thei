@@ -9,6 +9,7 @@ import {
 import { isOneOf } from '../utils/isOneOf';
 import { isLifeDay } from '../life';
 import type { DiaryEditData, ValidatedDiaryEditData } from '../diary';
+import { RelationValidationError, validateRelations } from '../relation';
 
 export function validateDiaryData(
   data: DiaryEditData,
@@ -25,11 +26,16 @@ export function validateDiaryData(
       date,
       access: data.access,
       content: validateRequiredContent(data.content),
+      relations: validateRelations(data.relations),
       reminder: normalizeEntityReminder(data.reminder),
       notes: normalizeEntityNotes(data.notes),
     };
   } catch (error) {
-    if (error instanceof ContentValidationError || error instanceof Error)
+    if (
+      error instanceof ContentValidationError ||
+      error instanceof RelationValidationError ||
+      error instanceof Error
+    )
       return error.message;
     throw error;
   }

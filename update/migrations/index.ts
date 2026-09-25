@@ -5,7 +5,7 @@ import datePrecision from './0.0.2-date-precision';
 import entityReminders from './0.0.2-entity-reminders';
 import statusesOwner from './0.0.2-statuses-owner';
 import tagAccent from './0.0.2-tag-accent';
-import projectRelations from './0.0.2-project-relations';
+import entityRelations from './0.0.2-entity-relations';
 import diaryEntries from './0.0.2-diary-entries';
 import assetRecipeCrops from './0.0.2-asset-recipes';
 
@@ -26,7 +26,7 @@ export const migrationRegistry: TheiMigration[] = [
   entityReminders,
   statusesOwner,
   tagAccent,
-  projectRelations,
+  entityRelations,
   diaryEntries,
   assetRecipeCrops,
 ];

@@ -1,5 +1,4 @@
 import type {
-  PublicEntityLink,
   PublicReferences,
   PublicTagSummary,
 } from '#layers/thei/shared/api/public';
@@ -130,33 +129,11 @@ export function sortPublicDetailTimelineItems(
     .map(({ item }) => item);
 }
 
-const PROJECT_RELATION_TYPE_ORDER = {
-  related: 0,
-  influencing: 1,
-  dependent: 2,
-} as const;
-
-export function sortPublicEntityReferencesByRelationType<
-  T extends Pick<PublicEntityLink, 'relationType'>,
->(projects: T[]): T[] {
-  return projects
-    .map((project, index) => ({ project, index }))
-    .sort(
-      (left, right) =>
-        PROJECT_RELATION_TYPE_ORDER[left.project.relationType ?? 'related'] -
-          PROJECT_RELATION_TYPE_ORDER[
-            right.project.relationType ?? 'related'
-          ] || left.index - right.index,
-    )
-    .map(({ project }) => project);
-}
-
 export type PublicDetailPanelData = {
   contents?: ContentHeading[];
   chronology?: PublicDetailTimelineItem[];
   periods?: DateRange[];
   tags?: PublicTagSummary[];
-  relatedEntities?: PublicEntityLink[];
   references: PublicReferences;
 };
 
@@ -166,20 +143,14 @@ export type PublicDetailPanelData = {
  *
  * Only the lists worth opening the panel for are counted. Headings measure the
  * writing rather than the entity, key dates and a timeline are dates rather
- * than amounts, and tags say little by their number alone.
+ * than amounts, and tags say little by their number alone. Related entities
+ * have a block of their own in the page, so the panel says nothing of them.
  */
 export function publicDetailSummary(
   data: PublicDetailPanelData,
-  labels: { related: string; links: string; files: string },
+  labels: { links: string; files: string },
 ): PublicDetailMetric[] {
   const metrics: PublicDetailMetric[] = [
-    {
-      // The mark related entities carry everywhere else, on cards and in the
-      // admin; the relation markers are chains, which would read as links here.
-      icon: 'arrow-cycle',
-      label: labels.related,
-      value: data.relatedEntities?.length ?? 0,
-    },
     {
       icon: 'link',
       label: labels.links,

@@ -5,13 +5,11 @@ import {
   firstAndLastTimelineItems,
   publicDetailSummary,
   sortPublicDetailTimelineItems,
-  sortPublicEntityReferencesByRelationType,
 } from '#layers/thei/app/components/public/public-detail';
-import type { PublicEntityLink } from '#layers/thei/shared/api/public';
 import { emptyPublicReferences } from '#layers/thei/shared/public-references';
 
 describe('publicDetailSummary', () => {
-  const labels = { related: 'Related', links: 'Links', files: 'Files' };
+  const labels = { links: 'Links', files: 'Files' };
   const summary = (data: Parameters<typeof publicDetailSummary>[0]) =>
     publicDetailSummary(data, labels).map(({ label, value }) => [label, value]);
 
@@ -20,16 +18,7 @@ describe('publicDetailSummary', () => {
     references.links.manual.push({} as never);
     references.links.content.push({} as never, {} as never);
     references.files.shared.push({} as never);
-    expect(
-      summary({
-        relatedEntities: [
-          { title: 'Visible' },
-          { secret: true, title: 'Codename' },
-        ] as PublicEntityLink[],
-        references,
-      }),
-    ).toEqual([
-      ['Related', 2],
+    expect(summary({ references })).toEqual([
       ['Links', 3],
       ['Files', 1],
     ]);
@@ -44,7 +33,6 @@ describe('publicDetailSummary', () => {
         chronology: [{ icon: 'plus', label: 'Created', date: '2024-05-12' }],
         periods: [{ startDate: '2024-05-12', endDate: '2024-05-13' }],
         tags: [{} as never, {} as never, {} as never],
-        relatedEntities: [],
         references,
       }),
     ).toEqual([['Files', 1]]);
@@ -77,40 +65,6 @@ describe('sortPublicDetailTimelineItems', () => {
     expect(
       sortPublicDetailTimelineItems(items).map((item) => item.label),
     ).toEqual(['Первый', 'Второй']);
-  });
-});
-
-describe('sortPublicEntityReferencesByRelationType', () => {
-  it('groups relation types while preserving the admin order inside a type', () => {
-    const project = (
-      title: string,
-      relationType: 'related' | 'influencing' | 'dependent',
-    ) => ({
-      title,
-      summary: title,
-      href: `/${title}`,
-      iconMedia: { kind: 'image' as const, src: `/${title}.webp` },
-      relationType,
-    });
-    const projects = [
-      project('dependent-one', 'dependent'),
-      project('related-one', 'related'),
-      project('influencing-one', 'influencing'),
-      project('related-two', 'related'),
-      project('dependent-two', 'dependent'),
-    ];
-
-    expect(
-      sortPublicEntityReferencesByRelationType(projects).map(
-        (item) => item.title,
-      ),
-    ).toEqual([
-      'related-one',
-      'related-two',
-      'influencing-one',
-      'dependent-one',
-      'dependent-two',
-    ]);
   });
 });
 

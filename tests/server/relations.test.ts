@@ -4,28 +4,71 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { schema } from '../../server/thei/db/schema';
 import {
   applyRelations,
+  canonicalPair,
   deleteRelations,
   fromStoredRelationNote,
   fromStoredRelationType,
   prepareRelations,
+  readRelationRows,
   toStoredRelationNote,
   toStoredRelationType,
 } from '../../server/thei/relations';
-import projectRelationsMigration from '../../update/migrations/0.0.2-project-relations';
+import type { RelationEndpoint, RelationType } from '../../shared/relation';
+import { baselineSql } from '../../update/migrations';
+import relationsMigration from '../../update/migrations/0.0.2-entity-relations';
 
 let rawDb: Database.Database | undefined;
 
-afterEach(() => rawDb?.close());
+afterEach(() => {
+  rawDb?.close();
+  delete (globalThis as any).THEI_SERVER;
+});
 
-describe('project relation storage', () => {
-  it('maps a direction relative to either end', () => {
+describe('entity relation storage', () => {
+  it('writes a pair in one canonical order whichever side draws it', () => {
+    // `event:e1` sorts before `project:p1`, so the event is the first end
+    // however the pair is given.
+    expect(canonicalPair(project('p1'), event('e1'))).toEqual([
+      {
+        firstType: 'event',
+        firstId: 'e1',
+        secondType: 'project',
+        secondId: 'p1',
+      },
+      false,
+    ]);
+    expect(canonicalPair(event('e1'), project('p1'))[1]).toBe(true);
+    expect(canonicalPair(diary('d1'), event('e1'))).toEqual([
+      {
+        firstType: 'diary-entry',
+        firstId: 'd1',
+        secondType: 'event',
+        secondId: 'e1',
+      },
+      true,
+    ]);
+    expect(canonicalPair(project('b'), project('a'))).toEqual([
+      {
+        firstType: 'project',
+        firstId: 'a',
+        secondType: 'project',
+        secondId: 'b',
+      },
+      false,
+    ]);
+  });
+
+  it('maps a direction and a split note relative to either end', () => {
     expect(toStoredRelationType('dependent', true)).toBe(
-      'project-influences-entity',
+      'first-influences-second',
     );
-    expect(fromStoredRelationType('project-influences-entity', false)).toBe(
+    expect(toStoredRelationType('dependent', false)).toBe(
+      'second-influences-first',
+    );
+    expect(fromStoredRelationType('first-influences-second', false)).toBe(
       'influencing',
     );
-    expect(fromStoredRelationType('project-influences-entity', true)).toBe(
+    expect(fromStoredRelationType('first-influences-second', true)).toBe(
       'dependent',
     );
     expect(
@@ -33,76 +76,117 @@ describe('project relation storage', () => {
         { type: 'split', currentText: 'Current', relatedText: 'Related' },
         false,
       ),
-    ).toEqual({
-      type: 'split',
-      projectText: 'Related',
-      entityText: 'Current',
-    });
+    ).toEqual({ type: 'split', firstText: 'Related', secondText: 'Current' });
     expect(
       fromStoredRelationNote(
-        { type: 'split', projectText: 'Project', entityText: 'Entity' },
+        { type: 'split', firstText: 'First', secondText: 'Second' },
         false,
       ),
-    ).toEqual({
-      type: 'split',
-      currentText: 'Entity',
-      relatedText: 'Project',
-    });
+    ).toEqual({ type: 'split', currentText: 'Second', relatedText: 'First' });
   });
 
-  it('keeps one row per pair of projects and preserves the other side order', () => {
-    const db = createDb();
-    applyRelations(db, schema, project('a'), [
-      prepared('a', project('b'), 'related'),
-    ]);
-    applyRelations(db, schema, project('b'), [
-      prepared('a', project('b'), 'project-influences-entity'),
-    ]);
-
-    expect(db.select().from(schema.projectRelations).all()).toMatchObject([
-      {
-        projectUuid: 'a',
-        entityType: 'project',
-        entityId: 'b',
-        type: 'project-influences-entity',
-        projectSortOrder: 0,
-        entitySortOrder: 0,
-      },
-    ]);
-
-    deleteRelations(db, schema, project('a'));
-    expect(db.select().from(schema.projectRelations).all()).toEqual([]);
-  });
-
-  it('stores a project and an event with the project as its owner', () => {
+  it('keeps one row per pair and gives each side its own order', () => {
     const db = createDb();
     applyRelations(db, schema, project('p1'), [
-      prepared('p1', event('e1'), 'related'),
+      prepared(project('p1'), event('e1'), 'related'),
+      prepared(project('p1'), project('p2'), 'related'),
+    ]);
+    // The event then says it influences the project: the same row, with
+    // the direction written in, and the project's order left alone.
+    applyRelations(db, schema, event('e1'), [
+      prepared(event('e1'), project('p1'), 'dependent'),
     ]);
 
-    const rows = db.select().from(schema.projectRelations).all();
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
-      projectUuid: 'p1',
-      entityType: 'event',
-      entityId: 'e1',
-    });
+    expect(
+      db
+        .select()
+        .from(schema.entityRelations)
+        .all()
+        .sort((a, b) => a.firstType.localeCompare(b.firstType)),
+    ).toMatchObject([
+      {
+        firstType: 'event',
+        firstId: 'e1',
+        secondType: 'project',
+        secondId: 'p1',
+        type: 'first-influences-second',
+        firstSortOrder: 0,
+        secondSortOrder: 0,
+      },
+      {
+        firstType: 'project',
+        firstId: 'p1',
+        secondType: 'project',
+        secondId: 'p2',
+        type: 'related',
+        firstSortOrder: 1,
+        secondSortOrder: 0,
+      },
+    ]);
+    expect(readRelationRows(project('p1'))).toMatchObject([
+      { other: { type: 'event', id: 'e1' }, type: 'influencing', order: 0 },
+      { other: { type: 'project', id: 'p2' }, type: 'related', order: 1 },
+    ]);
+    expect(readRelationRows(event('e1'))).toMatchObject([
+      { other: { type: 'project', id: 'p1' }, type: 'dependent', order: 0 },
+    ]);
 
-    // The event's side is cleaned up when the event goes.
     deleteRelations(db, schema, event('e1'));
-    expect(db.select().from(schema.projectRelations).all()).toEqual([]);
+    expect(db.select().from(schema.entityRelations).all()).toMatchObject([
+      { firstId: 'p1', secondId: 'p2' },
+    ]);
   });
 
-  it('refuses relations edited from anything but a project', async () => {
+  it('refuses a relation to itself or to nothing, from any kind', async () => {
+    const db = createDb();
     await expect(
       prepareRelations(event('e1'), [
-        { entityType: 'project', entityId: 'p1', type: 'related' },
+        { entityType: 'event', entityId: 'e1', type: 'related' },
       ]),
-    ).rejects.toThrow('Only a project can edit its relations');
+    ).rejects.toThrow('An entity cannot be related to itself');
+    await expect(
+      prepareRelations(diary('d1'), [
+        { entityType: 'project', entityId: 'missing', type: 'related' },
+      ]),
+    ).rejects.toThrow('Related entity not found');
+
+    db.insert(schema.projects)
+      .values({
+        projectUuid: 'p1',
+        publicId: 'p1',
+        humanReadableSlug: 'p1',
+        title: 'P1',
+        summary: '',
+        access: 'public',
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    await expect(
+      prepareRelations(diary('d1'), [
+        {
+          entityType: 'project',
+          entityId: 'p1',
+          type: 'influencing',
+          note: { type: 'split', currentText: 'Mine', relatedText: 'Theirs' },
+        },
+      ]),
+    ).resolves.toMatchObject([
+      {
+        row: {
+          firstType: 'diary-entry',
+          firstId: 'd1',
+          secondType: 'project',
+          secondId: 'p1',
+        },
+        storedType: 'second-influences-first',
+        storedNote: { type: 'split', firstText: 'Mine', secondText: 'Theirs' },
+      },
+    ]);
   });
 });
 
-describe('project relations migration', () => {
+describe('relations migration', () => {
   it('moves 0.0.1 project and event relations into one table', () => {
     rawDb = new Database(':memory:');
     rawDb.exec(`
@@ -130,83 +214,84 @@ describe('project relations migration', () => {
     `);
 
     const run = () =>
-      projectRelationsMigration.up!({
+      relationsMigration.up!({
         rawDb: rawDb!,
         log: () => {},
       } as any);
     run();
-    // Safe to repeat: a second run finds the new shape and changes nothing.
+    // Safe to repeat: a second run finds nothing left to move.
     run();
 
     const rows = rawDb
-      .prepare('SELECT * FROM "project-relations" ORDER BY "entityType"')
+      .prepare('SELECT * FROM "entity-relations" ORDER BY "firstType"')
       .all();
     expect(rows).toEqual([
+      // `event:e1` sorts before `project:pa`: the event is the first end,
+      // keeps its own order, and the project side lands after its existing
+      // relation.
       {
-        projectUuid: 'pa',
-        entityType: 'event',
-        entityId: 'e1',
+        firstType: 'event',
+        firstId: 'e1',
+        secondType: 'project',
+        secondId: 'pa',
         type: 'related',
         note: '{"type":"shared","text":"Note"}',
-        projectSortOrder: 1,
-        entitySortOrder: 3,
+        firstSortOrder: 3,
+        secondSortOrder: 1,
       },
       {
-        projectUuid: 'pa',
-        entityType: 'project',
-        entityId: 'pb',
-        type: 'entity-influences-project',
-        note: '{"type":"split","projectText":"A","entityText":"B"}',
-        projectSortOrder: 0,
-        entitySortOrder: 1,
+        firstType: 'project',
+        firstId: 'pa',
+        secondType: 'project',
+        secondId: 'pb',
+        type: 'second-influences-first',
+        note: '{"type":"split","firstText":"A","secondText":"B"}',
+        firstSortOrder: 0,
+        secondSortOrder: 1,
       },
     ]);
     expect(
       rawDb
         .prepare(
-          "SELECT name FROM sqlite_master WHERE type = 'table' AND name != 'project-relations'",
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name != 'entity-relations'",
         )
         .all(),
     ).toEqual([]);
   });
 });
 
-function project(id: string) {
-  return { type: 'project' as const, id };
+function project(id: string): RelationEndpoint {
+  return { type: 'project', id };
 }
 
-function event(id: string) {
-  return { type: 'event' as const, id };
+function event(id: string): RelationEndpoint {
+  return { type: 'event', id };
 }
 
+function diary(id: string): RelationEndpoint {
+  return { type: 'diary-entry', id };
+}
+
+/** A relation as `prepareRelations` would hand it over, from `owner`'s side. */
 function prepared(
-  projectUuid: string,
-  entity: { type: 'project' | 'event'; id: string },
-  storedType:
-    'related' | 'project-influences-entity' | 'entity-influences-project',
+  owner: RelationEndpoint,
+  other: RelationEndpoint,
+  type: RelationType,
 ) {
+  const [row, ownerFirst] = canonicalPair(owner, other);
   return {
-    entityType: entity.type,
-    entityId: entity.id,
-    type: 'related' as const,
-    row: { projectUuid, entityType: entity.type, entityId: entity.id },
-    storedType,
+    entityType: other.type,
+    entityId: other.id,
+    type,
+    row,
+    storedType: toStoredRelationType(type, ownerFirst),
   };
 }
 
 function createDb() {
   rawDb = new Database(':memory:');
-  rawDb.exec(`
-    CREATE TABLE "project-relations" (
-      "projectUuid" text NOT NULL,
-      "entityType" text NOT NULL,
-      "entityId" text NOT NULL,
-      "type" text NOT NULL,
-      "note" text,
-      "projectSortOrder" integer NOT NULL,
-      "entitySortOrder" integer NOT NULL,
-      PRIMARY KEY("projectUuid", "entityType", "entityId")
-    );
-  `);
-  return drizzle(rawDb, { schema });
+  for (const statement of baselineSql) rawDb.prepare(statement).run();
+  const db = drizzle(rawDb, { schema });
+  Object.assign(globalThis, { THEI_SERVER: { useDb: () => ({ db, schema }) } });
+  return db;
 }

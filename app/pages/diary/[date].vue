@@ -7,6 +7,10 @@ import {
   type PublicDetailPanelData,
 } from '#layers/thei/app/components/public/public-detail';
 import { publicOwnerNotesHeading } from '#layers/thei/app/components/public/PublicOwnerNotes.vue';
+import {
+  publicRelatedHeading,
+  publicRelatedTotal,
+} from '#layers/thei/app/components/public/PublicRelatedBlock.vue';
 
 definePageMeta({ layout: 'public', key: (route) => route.path });
 const route = useRoute();
@@ -15,6 +19,9 @@ const resource = await useFetch<PublicDiaryResponse>(
 );
 const data = useRequiredResource(resource);
 const canonical = computed(() => buildDiaryUrl(data.value.date));
+const relatedUrl = computed(
+  () => `/api/diary/${encodeURIComponent(data.value.date)}/related`,
+);
 if (route.path !== canonical.value)
   await navigateTo(canonical.value, { redirectCode: 301 });
 
@@ -69,17 +76,22 @@ const details = computed(
           updated: phrase.value.diary_chronology_updated,
         },
       ),
-      relatedEntities: data.value.relatedEntities,
       references: data.value.references,
     }) satisfies PublicDetailPanelData,
 );
 
-/** The owner's notes sit below the entry and belong in its table. */
-const extraContents = computed(() =>
-  data.value.notes?.blocks.length
+/**
+ * The sections below the entry that belong in its table: what it is related
+ * to, then the owner's notes, which nobody else gets at all.
+ */
+const extraContents = computed(() => [
+  ...(publicRelatedTotal(data.value.related)
+    ? [publicRelatedHeading(phrase.value.related_entities)]
+    : []),
+  ...(data.value.notes?.blocks.length
     ? [publicOwnerNotesHeading(phrase.value.entity_notes)]
-    : [],
-);
+    : []),
+]);
 </script>
 
 <template>
@@ -96,6 +108,11 @@ const extraContents = computed(() =>
         v-if="data.content.blocks.length"
         :data="data.content"
         asset-viewer
+      />
+      <PublicRelatedBlock
+        :counts="data.related"
+        :url="relatedUrl"
+        class="mt-lg border-t border-border-1 pt-lg"
       />
       <PublicOwnerNotes :notes="data.notes" />
     </PublicDetailLayout>

@@ -1,16 +1,19 @@
-import { and, eq, or } from 'drizzle-orm';
+import { and, eq, inArray, or } from 'drizzle-orm';
 import {
+  relationEndpointKey,
   relationEndpointsEqual,
   type RelationEditItem,
   type RelationEndpoint,
+  type RelationEntityType,
   type RelationGetItem,
   type RelationNote,
   type RelationType,
 } from '#layers/thei/shared/relation';
+import type { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import type {
   StoredRelationNote,
   StoredRelationType,
-} from './db/schema/project-relations';
+} from './db/schema/entity-relations';
 import { buildContentPreview } from '#layers/thei/shared/content';
 import { buildAdminAssetUrls } from './assets/urls';
 import { resolveEntityIconMedia } from './media/generated-icon';
@@ -52,11 +55,12 @@ async function relationIconMedia(endpoint: RelationEndpoint) {
   );
 }
 
-/** The primary key of a row: its project end and the entity it points at. */
+/** The primary key of a row: its two ends, in canonical order. */
 type RelationRowKey = {
-  projectUuid: string;
-  entityType: RelationEndpoint['type'];
-  entityId: string;
+  firstType: RelationEntityType;
+  firstId: string;
+  secondType: RelationEntityType;
+  secondId: string;
 };
 
 type PreparedRelation = RelationEditItem & {
@@ -66,30 +70,65 @@ type PreparedRelation = RelationEditItem & {
 };
 
 /**
- * How a pair is written down, and whether `a` is the row's project end.
+ * How a pair is written down, and whether `a` is the row's first end.
  *
- * A relation is one row, not two. Its project end is the project; between two
- * projects, the smaller ID is, so both of them agree on how the pair is
- * written and the same relation cannot be recorded twice.
+ * A relation is one row, not two, so both ends have to agree on which of them
+ * is written first: the smaller `type:id` key is. Plain code-unit order, the
+ * same comparison the migration that created the table made.
  */
-function rowKey(
+export function canonicalPair(
   a: RelationEndpoint,
   b: RelationEndpoint,
 ): [RelationRowKey, boolean] {
-  const aIsProjectEnd =
-    a.type === 'project' &&
-    (b.type !== 'project' || a.id.localeCompare(b.id) <= 0);
-  const [project, other] = aIsProjectEnd ? [a, b] : [b, a];
-  if (project.type !== 'project')
-    throw new Error('A relation has to be drawn from a project');
+  const aIsFirst = relationEndpointKey(a) < relationEndpointKey(b);
+  const [first, second] = aIsFirst ? [a, b] : [b, a];
   return [
-    { projectUuid: project.id, entityType: other.type, entityId: other.id },
-    aIsProjectEnd,
+    {
+      firstType: first.type,
+      firstId: first.id,
+      secondType: second.type,
+      secondId: second.id,
+    },
+    aIsFirst,
   ];
 }
 
 function rowKeyString(key: RelationRowKey) {
-  return `${key.projectUuid}\0${key.entityType}:${key.entityId}`;
+  return `${key.firstType}:${key.firstId}|${key.secondType}:${key.secondId}`;
+}
+
+function rowEndpoints(row: any): [RelationEndpoint, RelationEndpoint] {
+  return [
+    { type: row.firstType, id: row.firstId },
+    { type: row.secondType, id: row.secondId },
+  ];
+}
+
+/** Whether the owner is the row's first end, rather than its second. */
+function ownerIsFirst(row: any, owner: RelationEndpoint) {
+  return row.firstType === owner.type && row.firstId === owner.id;
+}
+
+function rowMatches(schema: any, owner: RelationEndpoint) {
+  return or(
+    and(
+      eq(schema.entityRelations.firstType, owner.type),
+      eq(schema.entityRelations.firstId, owner.id),
+    ),
+    and(
+      eq(schema.entityRelations.secondType, owner.type),
+      eq(schema.entityRelations.secondId, owner.id),
+    ),
+  );
+}
+
+function rowWhere(schema: any, key: RelationRowKey) {
+  return and(
+    eq(schema.entityRelations.firstType, key.firstType),
+    eq(schema.entityRelations.firstId, key.firstId),
+    eq(schema.entityRelations.secondType, key.secondType),
+    eq(schema.entityRelations.secondId, key.secondId),
+  );
 }
 
 /**
@@ -99,80 +138,117 @@ function rowKeyString(key: RelationRowKey) {
  * three: it is what the entry is called, what its address is built from, and
  * what identifies it.
  */
-async function findEntity(endpoint: RelationEndpoint): Promise<
-  | {
-      title: string;
-      summary: string;
-      humanReadableSlug: string;
-      publicId: string;
-      date?: string;
-    }
-  | undefined
-> {
-  if (endpoint.type === 'project') {
-    const project = await THEI_SERVER.projects.findByUuid(endpoint.id);
-    return project && { ...project, date: undefined };
-  }
-  if (endpoint.type === 'event') {
-    const stored = await THEI_SERVER.events.findByUuid(endpoint.id);
-    return stored && { ...stored, date: undefined };
-  }
-  const entry = await THEI_SERVER.diary.findByUuid(endpoint.id);
-  return (
-    entry && {
-      title: entry.date,
-      summary: '',
-      humanReadableSlug: '',
-      publicId: '',
-      date: entry.date,
-    }
-  );
-}
+export type RelationTarget = {
+  type: RelationEntityType;
+  id: string;
+  title: string;
+  summary: string;
+  humanReadableSlug: string;
+  publicId: string;
+  date?: string;
+  access: ProjectEventAccessLevel;
+};
 
-function rowEndpoints(row: any): [RelationEndpoint, RelationEndpoint] {
-  return [
-    { type: 'project', id: row.projectUuid },
-    { type: row.entityType, id: row.entityId },
-  ];
-}
+/** SQLite takes a bounded number of parameters per statement. */
+const LOOKUP_CHUNK = 500;
 
-/** Whether the owner is the row's project end, rather than its other end. */
-function ownerIsProjectEnd(row: any, owner: RelationEndpoint) {
-  return owner.type === 'project' && row.projectUuid === owner.id;
-}
-
-function rowMatches(schema: any, owner: RelationEndpoint) {
-  const asEntity = and(
-    eq(schema.projectRelations.entityType, owner.type),
-    eq(schema.projectRelations.entityId, owner.id),
-  );
-  return owner.type === 'project'
-    ? or(eq(schema.projectRelations.projectUuid, owner.id), asEntity)
-    : asEntity;
-}
-
-function rowWhere(schema: any, key: RelationRowKey) {
-  return and(
-    eq(schema.projectRelations.projectUuid, key.projectUuid),
-    eq(schema.projectRelations.entityType, key.entityType),
-    eq(schema.projectRelations.entityId, key.entityId),
-  );
+function chunks<T>(items: T[]): T[][] {
+  const result: T[][] = [];
+  for (let index = 0; index < items.length; index += LOOKUP_CHUNK)
+    result.push(items.slice(index, index + LOOKUP_CHUNK));
+  return result;
 }
 
 /**
- * Checks and translates the relation list a project is saved with.
+ * The entities behind a set of endpoints, one query per kind.
  *
- * Only a project edits its relations. An event or a diary entry reads the
- * same rows from its side, but never writes them.
+ * A project may gather hundreds of diary entries, and looking each one up on
+ * its own would cost a query per row on every page view. An endpoint whose
+ * entity no longer exists is simply absent from the result.
+ */
+export async function loadRelationTargets(
+  endpoints: RelationEndpoint[],
+): Promise<Map<string, RelationTarget>> {
+  const { db, schema } = THEI_SERVER.useDb();
+  const targets = new Map<string, RelationTarget>();
+  const set = (target: RelationTarget) =>
+    targets.set(relationEndpointKey(target), target);
+  const idsOf = (type: RelationEntityType) => [
+    ...new Set(
+      endpoints.filter((item) => item.type === type).map((item) => item.id),
+    ),
+  ];
+
+  for (const ids of chunks(idsOf('project')))
+    for (const project of db
+      .select()
+      .from(schema.projects)
+      .where(inArray(schema.projects.projectUuid, ids))
+      .all())
+      set({
+        type: 'project',
+        id: project.projectUuid,
+        title: project.title,
+        summary: project.summary,
+        humanReadableSlug: project.humanReadableSlug,
+        publicId: project.publicId,
+        access: project.access,
+      });
+
+  for (const ids of chunks(idsOf('event')))
+    for (const event of db
+      .select()
+      .from(schema.events)
+      .where(inArray(schema.events.eventUuid, ids))
+      .all())
+      set({
+        type: 'event',
+        id: event.eventUuid,
+        title: event.title,
+        summary: event.summary,
+        humanReadableSlug: event.humanReadableSlug,
+        publicId: event.publicId,
+        access: event.access,
+      });
+
+  for (const ids of chunks(idsOf('diary-entry')))
+    for (const entry of db
+      .select()
+      .from(schema.diaryEntries)
+      .where(inArray(schema.diaryEntries.diaryUuid, ids))
+      .all())
+      set({
+        type: 'diary-entry',
+        id: entry.diaryUuid,
+        title: entry.date,
+        summary: '',
+        humanReadableSlug: '',
+        publicId: '',
+        date: entry.date,
+        access: entry.access,
+      });
+
+  return targets;
+}
+
+/**
+ * Checks and translates the relation list an entity is saved with.
+ *
+ * Any of the three kinds edits its relations; the other end of each reads the
+ * same row from its side.
  */
 export async function prepareRelations(
   owner: RelationEndpoint,
   relations: RelationEditItem[] | undefined,
 ): Promise<PreparedRelation[] | undefined> {
   if (relations === undefined) return undefined;
-  if (owner.type !== 'project')
-    throw new Error('Only a project can edit its relations');
 
+  const targets = await loadRelationTargets(
+    relations.map((relation) => ({
+      type: relation.entityType,
+      id: relation.entityId,
+    })),
+  );
   for (const relation of relations) {
     const target: RelationEndpoint = {
       type: relation.entityType,
@@ -180,20 +256,20 @@ export async function prepareRelations(
     };
     if (relationEndpointsEqual(target, owner))
       throw new Error('An entity cannot be related to itself');
-    if (!(await findEntity(target)))
+    if (!targets.has(relationEndpointKey(target)))
       throw new Error('Related entity not found');
   }
 
   return relations.map((relation) => {
-    const [row, ownerIsProject] = rowKey(owner, {
+    const [row, ownerFirst] = canonicalPair(owner, {
       type: relation.entityType,
       id: relation.entityId,
     });
     return {
       ...relation,
       row,
-      storedType: toStoredRelationType(relation.type, ownerIsProject),
-      storedNote: toStoredRelationNote(relation.note, ownerIsProject),
+      storedType: toStoredRelationType(relation.type, ownerFirst),
+      storedNote: toStoredRelationNote(relation.note, ownerFirst),
     };
   });
 }
@@ -207,55 +283,55 @@ export function applyRelations(
   if (relations === undefined) return;
   const existing = tx
     .select()
-    .from(schema.projectRelations)
+    .from(schema.entityRelations)
     .where(rowMatches(schema, owner))
     .all();
   const nextRows = new Set(relations.map((item) => rowKeyString(item.row)));
 
   for (const row of existing) {
     if (nextRows.has(rowKeyString(row))) continue;
-    tx.delete(schema.projectRelations).where(rowWhere(schema, row)).run();
+    tx.delete(schema.entityRelations).where(rowWhere(schema, row)).run();
   }
 
   for (let index = 0; index < relations.length; index++) {
     const relation = relations[index]!;
-    const ownerIsProject =
-      owner.type === 'project' && relation.row.projectUuid === owner.id;
+    const ownerFirst = ownerIsFirst(relation.row, owner);
     const previous = existing.find(
       (row: any) => rowKeyString(row) === rowKeyString(relation.row),
     );
-    const other: RelationEndpoint = ownerIsProject
-      ? { type: relation.row.entityType, id: relation.row.entityId }
-      : { type: 'project', id: relation.row.projectUuid };
+    const other: RelationEndpoint = ownerFirst
+      ? { type: relation.row.secondType, id: relation.row.secondId }
+      : { type: relation.row.firstType, id: relation.row.firstId };
     // The other entity's ordering is its own business: an existing row keeps
     // the position it had there, and a new one lands at the end of its list.
     const otherSortOrder =
       previous === undefined
         ? nextRelationOrder(tx, schema, other)
-        : ownerIsProject
-          ? previous.entitySortOrder
-          : previous.projectSortOrder;
+        : ownerFirst
+          ? previous.secondSortOrder
+          : previous.firstSortOrder;
 
-    tx.insert(schema.projectRelations)
+    tx.insert(schema.entityRelations)
       .values({
         ...relation.row,
         type: relation.storedType,
-        note: relation.storedNote,
-        projectSortOrder: ownerIsProject ? index : otherSortOrder,
-        entitySortOrder: ownerIsProject ? otherSortOrder : index,
+        note: relation.storedNote ?? null,
+        firstSortOrder: ownerFirst ? index : otherSortOrder,
+        secondSortOrder: ownerFirst ? otherSortOrder : index,
       })
       .onConflictDoUpdate({
         target: [
-          schema.projectRelations.projectUuid,
-          schema.projectRelations.entityType,
-          schema.projectRelations.entityId,
+          schema.entityRelations.firstType,
+          schema.entityRelations.firstId,
+          schema.entityRelations.secondType,
+          schema.entityRelations.secondId,
         ],
         set: {
           type: relation.storedType,
-          note: relation.storedNote,
-          ...(ownerIsProject
-            ? { projectSortOrder: index }
-            : { entitySortOrder: index }),
+          note: relation.storedNote ?? null,
+          ...(ownerFirst
+            ? { firstSortOrder: index }
+            : { secondSortOrder: index }),
         },
       })
       .run();
@@ -263,132 +339,132 @@ export function applyRelations(
 }
 
 export function deleteRelations(tx: any, schema: any, owner: RelationEndpoint) {
-  tx.delete(schema.projectRelations).where(rowMatches(schema, owner)).run();
+  tx.delete(schema.entityRelations).where(rowMatches(schema, owner)).run();
+}
+
+/** One relation read from its owner's side, before its target is looked up. */
+export type RelationRow = {
+  other: RelationEndpoint;
+  type: RelationType;
+  note?: RelationNote;
+  /** The owner's own position for it. */
+  order: number;
+};
+
+/**
+ * An entity's relations as stored, read from its side and in its own order.
+ *
+ * The cheap half of a relation list: who the other end is and what the
+ * relation says, without touching the other end itself. Whoever needs the
+ * other end loads the targets in one go.
+ */
+export function readRelationRows(owner: RelationEndpoint): RelationRow[] {
+  const { db, schema } = THEI_SERVER.useDb();
+  return db
+    .select()
+    .from(schema.entityRelations)
+    .where(rowMatches(schema, owner))
+    .all()
+    .map((row): RelationRow => {
+      const first = ownerIsFirst(row, owner);
+      const [a, b] = rowEndpoints(row);
+      return {
+        other: first ? b : a,
+        type: fromStoredRelationType(row.type, first),
+        note: fromStoredRelationNote(row.note ?? undefined, first),
+        order: first ? row.firstSortOrder : row.secondSortOrder,
+      };
+    })
+    .sort((a, b) => a.order - b.order);
 }
 
 export async function getRelations(
   owner: RelationEndpoint,
 ): Promise<RelationGetItem[]> {
-  const { db, schema } = THEI_SERVER.useDb();
-  const rows = db
-    .select()
-    .from(schema.projectRelations)
-    .where(rowMatches(schema, owner))
-    .all()
-    .sort((a, b) => relationOrder(a, owner) - relationOrder(b, owner));
-
+  const rows = readRelationRows(owner);
+  const targets = await loadRelationTargets(rows.map((row) => row.other));
   const items = await Promise.all(
     rows.map(async (row) => {
-      const [project, entity] = rowEndpoints(row);
-      const ownerIsProject = ownerIsProjectEnd(row, owner);
-      const other = ownerIsProject ? entity : project;
-      const found = await findEntity(other);
+      const found = targets.get(relationEndpointKey(row.other));
       // A relation can outlive its target only through a bug, and a broken
       // row should not take the whole page down with it.
       if (!found) return undefined;
-      const iconMedia = await relationIconMedia(other);
       return {
-        entityType: other.type,
-        entityId: other.id,
+        entityType: row.other.type,
+        entityId: row.other.id,
         title: found.title,
         summary: found.summary,
         humanReadableSlug: found.humanReadableSlug,
         publicId: found.publicId,
         ...(found.date ? { date: found.date } : {}),
-        type: fromStoredRelationType(row.type, ownerIsProject),
-        note: fromStoredRelationNote(row.note ?? undefined, ownerIsProject),
-        iconMedia,
-      };
+        type: row.type,
+        note: row.note,
+        iconMedia: await relationIconMedia(row.other),
+      } satisfies RelationGetItem;
     }),
   );
-  return items.filter((item) => Boolean(item)) as RelationGetItem[];
+  return items.filter((item) => item !== undefined);
 }
 
 export function toStoredRelationType(
   type: RelationType,
-  ownerIsProject: boolean,
+  ownerFirst: boolean,
 ): StoredRelationType {
   if (type === 'related') return 'related';
   const ownerInfluencesOther = type === 'dependent';
-  return ownerInfluencesOther === ownerIsProject
-    ? 'project-influences-entity'
-    : 'entity-influences-project';
+  return ownerInfluencesOther === ownerFirst
+    ? 'first-influences-second'
+    : 'second-influences-first';
 }
 
 export function fromStoredRelationType(
   type: StoredRelationType,
-  ownerIsProject: boolean,
+  ownerFirst: boolean,
 ): RelationType {
   if (type === 'related') return 'related';
-  const projectInfluencesEntity = type === 'project-influences-entity';
-  const ownerInfluencesOther = projectInfluencesEntity === ownerIsProject;
+  const firstInfluencesSecond = type === 'first-influences-second';
+  const ownerInfluencesOther = firstInfluencesSecond === ownerFirst;
   return ownerInfluencesOther ? 'dependent' : 'influencing';
 }
 
 export function toStoredRelationNote(
   note: RelationNote | undefined,
-  ownerIsProject: boolean,
+  ownerFirst: boolean,
 ): StoredRelationNote | undefined {
   if (!note || note.type === 'shared') return note;
   return {
     type: 'split',
-    projectText: ownerIsProject ? note.currentText : note.relatedText,
-    entityText: ownerIsProject ? note.relatedText : note.currentText,
+    firstText: ownerFirst ? note.currentText : note.relatedText,
+    secondText: ownerFirst ? note.relatedText : note.currentText,
   };
 }
 
 export function fromStoredRelationNote(
   note: StoredRelationNote | undefined,
-  ownerIsProject: boolean,
+  ownerFirst: boolean,
 ): RelationNote | undefined {
   if (!note || note.type === 'shared') return note;
   return {
     type: 'split',
-    currentText: ownerIsProject ? note.projectText : note.entityText,
-    relatedText: ownerIsProject ? note.entityText : note.projectText,
+    currentText: ownerFirst ? note.firstText : note.secondText,
+    relatedText: ownerFirst ? note.secondText : note.firstText,
   };
-}
-
-function relationOrder(row: any, owner: RelationEndpoint) {
-  return ownerIsProjectEnd(row, owner)
-    ? row.projectSortOrder
-    : row.entitySortOrder;
 }
 
 function nextRelationOrder(tx: any, schema: any, owner: RelationEndpoint) {
   const rows = tx
     .select()
-    .from(schema.projectRelations)
+    .from(schema.entityRelations)
     .where(rowMatches(schema, owner))
     .all();
   return (
     rows.reduce(
-      (max: number, row: any) => Math.max(max, relationOrder(row, owner)),
+      (max: number, row: any) =>
+        Math.max(
+          max,
+          ownerIsFirst(row, owner) ? row.firstSortOrder : row.secondSortOrder,
+        ),
       -1,
     ) + 1
   );
-}
-
-/**
- * The entities of one kind related to an entity, for the other side's lists.
- *
- * Used where a page shows related entities of a particular kind — a project's
- * related events, say — without caring about the relation's direction.
- */
-export async function listRelatedOfType(
-  owner: RelationEndpoint,
-  type: RelationEndpoint['type'],
-): Promise<RelationEndpoint[]> {
-  const { db, schema } = THEI_SERVER.useDb();
-  return db
-    .select()
-    .from(schema.projectRelations)
-    .where(rowMatches(schema, owner))
-    .all()
-    .sort((a, b) => relationOrder(a, owner) - relationOrder(b, owner))
-    .map((row) => {
-      const [project, entity] = rowEndpoints(row);
-      return ownerIsProjectEnd(row, owner) ? entity : project;
-    })
-    .filter((endpoint) => endpoint.type === type);
 }

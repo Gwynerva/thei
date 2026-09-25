@@ -19,6 +19,42 @@ function eventData(overrides: Partial<EventEditData> = {}): EventEditData {
 }
 
 describe('validateEventData', () => {
+  it('normalizes relations and rejects a repeated entity', () => {
+    expect(
+      validateEventData(
+        eventData({
+          relations: [
+            {
+              entityType: 'diary-entry',
+              entityId: ' d1 ',
+              type: 'dependent',
+              note: { type: 'split', currentText: ' Mine ', relatedText: '' },
+            },
+          ],
+        }),
+      ),
+    ).toMatchObject({
+      relations: [
+        {
+          entityType: 'diary-entry',
+          entityId: 'd1',
+          type: 'dependent',
+          note: { type: 'split', currentText: 'Mine', relatedText: undefined },
+        },
+      ],
+    });
+    expect(
+      validateEventData(
+        eventData({
+          relations: [
+            { entityType: 'project', entityId: 'p1', type: 'related' },
+            { entityType: 'project', entityId: 'p1', type: 'influencing' },
+          ],
+        }),
+      ),
+    ).toBe('Duplicate related entity');
+  });
+
   it('requires title, summary, dates, non-empty content and public ID', () => {
     expect(validateEventData(eventData({ title: ' ' }))).toBe(
       'Title cannot be empty',

@@ -8,7 +8,10 @@ import {
 } from '#layers/thei/app/components/public/public-detail';
 
 import { publicOwnerNotesHeading } from '#layers/thei/app/components/public/PublicOwnerNotes.vue';
-import { publicDiarySectionHeading } from '#layers/thei/app/components/public/PublicDiarySection.vue';
+import {
+  publicRelatedHeading,
+  publicRelatedTotal,
+} from '#layers/thei/app/components/public/PublicRelatedBlock.vue';
 
 definePageMeta({ layout: 'public', key: (route) => route.path });
 const route = useRoute();
@@ -18,6 +21,9 @@ const resource = await useFetch<PublicEventResponseFull>(
 const data = useRequiredResource(resource);
 const canonical = computed(() =>
   buildEventUrl(data.value.humanReadableSlug, data.value.publicId),
+);
+const relatedUrl = computed(
+  () => `/api/events/${encodeURIComponent(String(route.params.event))}/related`,
 );
 if (route.path !== canonical.value)
   await navigateTo(canonical.value, { redirectCode: 301 });
@@ -68,7 +74,6 @@ const details = computed(
         updated: phrase.value.event_chronology_updated,
       }),
       tags: data.value.tags,
-      relatedEntities: data.value.relatedEntities,
       references: data.value.references,
     }) satisfies PublicDetailPanelData,
 );
@@ -76,12 +81,12 @@ const details = computed(
 /**
  * The sections that live below the content but belong in its table.
  *
- * The diary block comes first because a visitor sees it; the owner's notes,
- * which nobody else gets at all, stay last.
+ * The related entities come first because a visitor sees them; the owner's
+ * notes, which nobody else gets at all, stay last.
  */
 const extraContents = computed(() => [
-  ...(data.value.diaryEntries.length
-    ? [publicDiarySectionHeading(phrase.value.diary_entries)]
+  ...(publicRelatedTotal(data.value.related)
+    ? [publicRelatedHeading(phrase.value.related_entities)]
     : []),
   ...(data.value.notes?.blocks.length
     ? [publicOwnerNotesHeading(phrase.value.entity_notes)]
@@ -110,7 +115,11 @@ const extraContents = computed(() => [
         :data="data.content"
         asset-viewer
       />
-      <PublicDiarySection :entries="data.diaryEntries" />
+      <PublicRelatedBlock
+        :counts="data.related"
+        :url="relatedUrl"
+        class="mt-lg border-t border-border-1 pt-lg"
+      />
       <PublicOwnerNotes :notes="data.notes" />
     </PublicDetailLayout>
   </main>

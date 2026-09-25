@@ -18,7 +18,12 @@ import {
   applyEventPeriods,
   getEventPeriods,
 } from '../../../thei/events/periods';
-import { deleteRelations } from '../../../thei/relations';
+import {
+  applyRelations,
+  deleteRelations,
+  getRelations,
+  prepareRelations,
+} from '../../../thei/relations';
 import {
   applyEventExternalLinks,
   getEventExternalLinks,
@@ -65,6 +70,18 @@ export default defineEventHandler(async (event) => {
     const assetError = await validateEventAssets(result);
     if (assetError)
       return { type: 'error', message: assetError } satisfies EventSaveResponse;
+    let preparedRelations;
+    try {
+      preparedRelations = await prepareRelations(
+        { type: 'event', id: eventUuid },
+        result.relations,
+      );
+    } catch (error) {
+      return {
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Invalid relations',
+      } satisfies EventSaveResponse;
+    }
 
     try {
       const [
@@ -127,6 +144,12 @@ export default defineEventHandler(async (event) => {
         );
         applyEventExternalLinks(tx, schema, eventUuid, externalLinks);
         applyTagUsages(tx, schema, 'event', eventUuid, tags);
+        applyRelations(
+          tx,
+          schema,
+          { type: 'event', id: eventUuid },
+          preparedRelations,
+        );
         syncEntityActionUsages(
           tx,
           schema,
@@ -241,6 +264,7 @@ async function getEvent(
     periods,
     externalLinks,
     tags,
+    relations,
   ] = await Promise.all([
     actionIcon ? buildAdminAssetUrls(actionIcon.asset) : undefined,
     actionBackground ? buildAdminAssetUrls(actionBackground.asset) : undefined,
@@ -254,6 +278,7 @@ async function getEvent(
     getEventPeriods(eventUuid),
     getEventExternalLinks(eventUuid),
     listTagsForContainer('event', eventUuid),
+    getRelations({ type: 'event', id: eventUuid }),
   ]);
   if (!content)
     throw createError({ statusCode: 500, message: 'Event content is missing' });
@@ -290,6 +315,7 @@ async function getEvent(
     otherAssets,
     externalLinks,
     tags,
+    relations,
     action: stored.action ?? { ...DEFAULT_PROJECT_ACTION },
     actionIconMedia: iconUrls?.media,
     actionIconAssetSize: actionIcon?.asset.size,

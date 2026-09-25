@@ -19,6 +19,7 @@ import {
   publicIdIsValid,
 } from '../public-link';
 import type { EventEditData, ValidatedEventEditData } from '../event';
+import { RelationValidationError, validateRelations } from '../relation';
 
 export function validateEventData(
   data: EventEditData,
@@ -49,6 +50,7 @@ export function validateEventData(
       otherAssets: validateFiles(data.otherAssets),
       externalLinks: validateExternalLinks(data.externalLinks),
       tags: validateTags(data.tags),
+      relations: validateRelations(data.relations),
       action: normalizeProjectAction(data.action),
       reminder: normalizeEntityReminder(data.reminder),
       notes: normalizeEntityNotes(data.notes),
@@ -57,6 +59,7 @@ export function validateEventData(
     if (
       error instanceof ContentValidationError ||
       error instanceof ProjectContentItemError ||
+      error instanceof RelationValidationError ||
       error instanceof Error
     )
       return error.message;

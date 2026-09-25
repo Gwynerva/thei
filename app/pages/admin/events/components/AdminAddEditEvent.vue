@@ -108,6 +108,7 @@ if (isEdit.value) {
     })),
     externalLinks: data.externalLinks,
     tags: data.tags,
+    relations: data.relations ?? [],
     action: data.action,
     reminder: data.reminder,
     notes: data.notes ?? null,
@@ -211,6 +212,7 @@ function emptyData(): EventFormData {
     otherAssets: [],
     externalLinks: [],
     tags: [],
+    relations: [],
     action: { ...DEFAULT_PROJECT_ACTION },
     reminder: '',
     notes: null,
@@ -235,6 +237,7 @@ function eventPayload(): EventEditData {
     otherAssets: value.otherAssets,
     externalLinks: value.externalLinks,
     tags: value.tags,
+    relations: value.relations,
     action: value.action,
     reminder: value.reminder,
     notes: value.notes,
@@ -257,6 +260,12 @@ function saveAfterContentEdit() {
   void save();
 }
 
+const relationsModel = computed({
+  get: () => eventData.value.relations ?? [],
+  set: (value) => {
+    eventData.value.relations = value;
+  },
+});
 const reminderModel = computed({
   get: () => eventData.value.reminder ?? '',
   set: (value: string) => {
@@ -390,6 +399,11 @@ function clone<T>(value: T): T {
     <ProjectTags
       :title="phrase.event_tags"
       :description="phrase.event_tags_hint"
+    />
+    <AdminRelations
+      v-model="relationsModel"
+      :owner="eventUuid ? { type: 'event', id: eventUuid } : undefined"
+      :owner-title="eventData.title.trim() || phrase.new_event"
     />
     <ProjectShareLinks
       v-if="eventUuid"

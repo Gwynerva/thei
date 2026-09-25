@@ -20,7 +20,7 @@ import {
   projectStages,
 } from './project-content-sections';
 import { stagePeriods } from './stage-periods';
-import { projectRelations } from './project-relations';
+import { entityRelations } from './entity-relations';
 import { tags } from './tags';
 import { tagUsages } from './tag-usages';
 import { externalLinks } from './external-links';
@@ -47,7 +47,7 @@ export const schema = {
   projectContentSections,
   projectStages,
   stagePeriods,
-  projectRelations,
+  entityRelations,
   tags,
   tagUsages,
   externalLinks,

@@ -10,7 +10,12 @@ import {
   applyPreparedContentSave,
   deleteContentForOwner,
 } from '../../../thei/content/repository';
-import { deleteRelations } from '../../../thei/relations';
+import {
+  applyRelations,
+  deleteRelations,
+  getRelations,
+  prepareRelations,
+} from '../../../thei/relations';
 
 export default defineEventHandler(async (event) => {
   const diaryUuid = getRouterParam(event, 'diaryUuid')!;
@@ -19,7 +24,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: 'Diary entry not found' });
 
   if (event.method === 'GET') {
-    const [content, notes] = await Promise.all([
+    const [content, notes, relations] = await Promise.all([
       THEI_SERVER.content.buildFieldValue(
         'diary-entry',
         diaryUuid,
@@ -30,6 +35,7 @@ export default defineEventHandler(async (event) => {
         diaryUuid,
         'diary-notes',
       ),
+      getRelations({ type: 'diary-entry', id: diaryUuid }),
     ]);
     if (!content)
       throw createError({
@@ -41,6 +47,7 @@ export default defineEventHandler(async (event) => {
       date: stored.date,
       access: stored.access,
       content,
+      relations,
       reminder: stored.reminder,
       notes,
     } satisfies DiaryGetResponse;
@@ -58,6 +65,18 @@ export default defineEventHandler(async (event) => {
         code: 'date-taken',
         message: THEI_SERVER.phrase.diary_date_already_taken,
       } satisfies DiarySaveResponse;
+    let preparedRelations;
+    try {
+      preparedRelations = await prepareRelations(
+        { type: 'diary-entry', id: diaryUuid },
+        result.relations,
+      );
+    } catch (error) {
+      return {
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Invalid relations',
+      } satisfies DiarySaveResponse;
+    }
 
     try {
       const [contentSave, notesSave] = await Promise.all([
@@ -107,6 +126,12 @@ export default defineEventHandler(async (event) => {
           diaryUuid,
           'diary-notes',
           notesSave,
+        );
+        applyRelations(
+          tx,
+          schema,
+          { type: 'diary-entry', id: diaryUuid },
+          preparedRelations,
         );
       });
       return {

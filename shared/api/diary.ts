@@ -2,12 +2,14 @@ import type { ProjectEventAccessLevel } from '../access-level';
 import type { ContentFieldValue } from '../content';
 import type { MediaDescriptor } from '../media';
 import type { AdminPaginatedResponse } from '../admin/entity-list';
+import type { RelationGetItem } from '../relation';
 
 export type DiaryGetResponse = {
   diaryUuid: string;
   date: string;
   access: ProjectEventAccessLevel;
   content: ContentFieldValue;
+  relations: RelationGetItem[];
   reminder: string;
   notes?: ContentFieldValue;
 };

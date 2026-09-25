@@ -16,6 +16,10 @@ import {
 import type { IconName } from '#thei/icons';
 
 import { publicOwnerNotesHeading } from '#layers/thei/app/components/public/PublicOwnerNotes.vue';
+import {
+  PUBLIC_RELATED_SECTION_ID,
+  publicRelatedTotal,
+} from '#layers/thei/app/components/public/PublicRelatedBlock.vue';
 
 definePageMeta({ layout: 'public', key: (route) => route.path });
 const route = useRoute();
@@ -78,6 +82,10 @@ usePublicSeo({
 const timelineHref = computed(() =>
   buildProjectTimelineUrl(data.value.humanReadableSlug, data.value.publicId),
 );
+const relatedUrl = computed(
+  () =>
+    `/api/projects/${encodeURIComponent(String(route.params.projectUuid))}/related`,
+);
 // Headings of the description, then the page's own sections in page order.
 const contents = computed<ContentHeading[]>(() => {
   const sections: {
@@ -97,6 +105,12 @@ const contents = computed<ContentHeading[]>(() => {
       title: phrase.value.project_timeline_latest,
       icon: 'heart',
       shown: data.value.timeline.latest.length > 0,
+    },
+    {
+      id: PUBLIC_RELATED_SECTION_ID,
+      title: phrase.value.related_entities,
+      icon: 'arrow-cycle',
+      shown: publicRelatedTotal(data.value.related) > 0,
     },
   ];
   return [
@@ -160,19 +174,8 @@ const details = computed(
             only: phrase.value.project_status,
           },
         ),
-        ...firstAndLastTimelineItems(
-          data.value.diaryEntries,
-          (entry) => ({ date: entry.date, href: entry.href }),
-          {
-            icon: 'thought',
-            first: phrase.value.project_chronology_first_diary,
-            last: phrase.value.project_chronology_last_diary,
-            only: phrase.value.diary_entry,
-          },
-        ),
       ],
       tags: data.value.tags,
-      relatedEntities: data.value.relatedEntities,
       references: data.value.references,
     }) satisfies PublicDetailPanelData,
 );
@@ -281,6 +284,7 @@ const ownerNotesContents = computed(() =>
               />
             </div>
           </section>
+          <PublicRelatedBlock :counts="data.related" :url="relatedUrl" />
           <PublicOwnerNotes :notes="data.notes" />
         </div>
       </PublicDetailLayout>

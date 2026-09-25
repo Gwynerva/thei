@@ -67,6 +67,44 @@ describe('diary validation', () => {
       }),
     ).toBe('Diary entry content is required');
   });
+
+  it('normalizes relations and rejects a repeated entity', () => {
+    const entry = (relations: unknown) => ({
+      date: '2026-04-28',
+      access: ProjectEventAccessLevel.Public,
+      content: content as never,
+      relations: relations as never,
+    });
+    expect(
+      validateDiaryData(
+        entry([
+          {
+            entityType: 'project',
+            entityId: ' p1 ',
+            type: 'influencing',
+            note: { type: 'shared', text: ' Why ' },
+          },
+        ]),
+      ),
+    ).toMatchObject({
+      relations: [
+        {
+          entityType: 'project',
+          entityId: 'p1',
+          type: 'influencing',
+          note: { type: 'shared', text: 'Why' },
+        },
+      ],
+    });
+    expect(
+      validateDiaryData(
+        entry([
+          { entityType: 'event', entityId: 'e1', type: 'related' },
+          { entityType: 'event', entityId: 'e1', type: 'dependent' },
+        ]),
+      ),
+    ).toBe('Duplicate related entity');
+  });
 });
 
 describe('diary excerpt of a body', () => {

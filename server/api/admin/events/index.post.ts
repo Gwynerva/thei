@@ -14,6 +14,7 @@ import { prepareExternalLinks } from '../../../thei/external-links/prepare';
 import { prepareTagUsages, applyTagUsages } from '../../../thei/tags';
 import { syncEntityActionUsages } from '../../../thei/projects/action-usages';
 import { cleanupOrphanExternalLinks } from '../../../thei/external-links/repository';
+import { applyRelations, prepareRelations } from '../../../thei/relations';
 
 export default defineEventHandler(async (event): Promise<EventSaveResponse> => {
   const body = await readBody<EventEditData>(event);
@@ -32,6 +33,18 @@ export default defineEventHandler(async (event): Promise<EventSaveResponse> => {
     EntityPrefix.Event,
     async (id) => !(await THEI_SERVER.events.findByUuid(id)),
   );
+  let preparedRelations;
+  try {
+    preparedRelations = await prepareRelations(
+      { type: 'event', id: eventUuid },
+      result.relations,
+    );
+  } catch (error) {
+    return {
+      type: 'error',
+      message: error instanceof Error ? error.message : 'Invalid relations',
+    };
+  }
   try {
     const [contentSave, notesSave, externalLinks, tags] = await Promise.all([
       prepareContentForSave('event', eventUuid, 'event-body', result.content),
@@ -78,6 +91,12 @@ export default defineEventHandler(async (event): Promise<EventSaveResponse> => {
       );
       applyEventExternalLinks(tx, schema, eventUuid, externalLinks);
       applyTagUsages(tx, schema, 'event', eventUuid, tags);
+      applyRelations(
+        tx,
+        schema,
+        { type: 'event', id: eventUuid },
+        preparedRelations,
+      );
       syncEntityActionUsages(tx, schema, [], 'event', eventUuid, result.action);
       result.otherAssets?.forEach((file, order) => {
         tx.insert(schema.assetUsages)

@@ -6,6 +6,7 @@ import {
   prepareContentForSave,
   applyPreparedContentSave,
 } from '../../../thei/content/repository';
+import { applyRelations, prepareRelations } from '../../../thei/relations';
 
 export default defineEventHandler(async (event): Promise<DiarySaveResponse> => {
   const body = await readBody<DiaryEditData>(event);
@@ -25,6 +26,18 @@ export default defineEventHandler(async (event): Promise<DiarySaveResponse> => {
     EntityPrefix.DiaryEntry,
     async (id) => !(await THEI_SERVER.diary.findByUuid(id)),
   );
+  let preparedRelations;
+  try {
+    preparedRelations = await prepareRelations(
+      { type: 'diary-entry', id: diaryUuid },
+      result.relations,
+    );
+  } catch (error) {
+    return {
+      type: 'error',
+      message: error instanceof Error ? error.message : 'Invalid relations',
+    };
+  }
   try {
     const [contentSave, notesSave] = await Promise.all([
       prepareContentForSave(
@@ -71,6 +84,12 @@ export default defineEventHandler(async (event): Promise<DiarySaveResponse> => {
         diaryUuid,
         'diary-notes',
         notesSave,
+      );
+      applyRelations(
+        tx,
+        schema,
+        { type: 'diary-entry', id: diaryUuid },
+        preparedRelations,
       );
     });
     return { type: 'success', diaryUuid, date: result.date };
