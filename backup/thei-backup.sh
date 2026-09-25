@@ -736,8 +736,8 @@ print_restore() {
   say
   say '  1. The service runs as the thei user; a copy unpacked as root needs the chown.'
   say '  2. Restore onto the same engine version or a newer one.'
-  say '  3. generated-media/ and external-link-favicons/ are missing on purpose:'
-  say '     they are caches the site rebuilds on first use.'
+  say '  3. generated-media/ is missing on purpose: it is a cache the site'
+  say '     rebuilds on first use.'
 }
 
 # --------------------------------------------------------------------- menu

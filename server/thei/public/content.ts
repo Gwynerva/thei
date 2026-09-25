@@ -29,7 +29,7 @@ import {
   buildPublicDiaryContentMedia,
   buildPublicProfileMedia,
 } from '../assets/urls';
-import { findExternalLink } from '../external-links/repository';
+import { createExternalLinkLoader } from '../external-links/repository';
 import { canResolveContentEntityLink } from '../content-links/access';
 import {
   CONTENT_ENTITY_TYPES,
@@ -210,10 +210,7 @@ async function hydratePublicContentData(
     privateSectionRanges.map((range) => [range.startIndex, range]),
   );
   const assetCache = new Map<string, any>();
-  const linkCache = new Map<
-    string,
-    Awaited<ReturnType<typeof findExternalLink>>
-  >();
+  const loadExternalLink = createExternalLinkLoader();
   const entityLinkCache = new Map<string, EntityLinkAccess>();
 
   /**
@@ -370,11 +367,7 @@ async function hydratePublicContentData(
       ).filter(Boolean);
     } else if (block.type === 'externalLink') {
       const url = (block.data as any).url;
-      let link = url ? linkCache.get(url) : undefined;
-      if (url && !linkCache.has(url)) {
-        link = await findExternalLink(url);
-        linkCache.set(url, link);
-      }
+      const link = url ? await loadExternalLink(url) : undefined;
       if (link) Object.assign(data, link);
     }
     return {

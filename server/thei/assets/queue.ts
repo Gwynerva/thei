@@ -18,8 +18,13 @@ import { AssetType } from '#layers/thei/shared/asset';
 const IMAGE_CONCURRENCY = Math.max(1, Math.min(cpus().length - 1, 3));
 const VIDEO_CONCURRENCY = 1;
 const PROBE_CONCURRENCY = 2;
+/**
+ * Reading a remote page for a link's details is mostly waiting, but a save
+ * that brings a hundred links must not open a hundred sockets at once.
+ */
+const EXTERNAL_LINK_CONCURRENCY = 4;
 
-type Lane = 'image' | 'video' | 'probe';
+type Lane = 'image' | 'video' | 'probe' | 'externalLink';
 
 interface LaneState {
   limit: number;
@@ -31,6 +36,7 @@ const lanes: Record<Lane, LaneState> = {
   image: { limit: IMAGE_CONCURRENCY, active: 0, waiting: [] },
   video: { limit: VIDEO_CONCURRENCY, active: 0, waiting: [] },
   probe: { limit: PROBE_CONCURRENCY, active: 0, waiting: [] },
+  externalLink: { limit: EXTERNAL_LINK_CONCURRENCY, active: 0, waiting: [] },
 };
 
 export interface ProcessingSlotOptions {
@@ -68,6 +74,14 @@ export async function withProbeSlot<T>(
   options: ProcessingSlotOptions = {},
 ): Promise<T> {
   return await withLaneSlot(lanes.probe, job, options);
+}
+
+/** Reads a remote site for an external link's details. */
+export async function withExternalLinkSlot<T>(
+  job: () => Promise<T>,
+  options: ProcessingSlotOptions = {},
+): Promise<T> {
+  return await withLaneSlot(lanes.externalLink, job, options);
 }
 
 async function withLaneSlot<T>(

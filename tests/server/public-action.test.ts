@@ -6,6 +6,7 @@ import { findExternalLink } from '../../server/thei/external-links/repository';
 
 vi.mock('../../server/thei/external-links/repository', () => ({
   findExternalLink: vi.fn(),
+  createExternalLinkLoader: vi.fn(),
 }));
 
 beforeEach(() => {

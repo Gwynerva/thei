@@ -63,7 +63,7 @@ type ProjectActionMediaSource = Pick<
   | 'actionFileMedia'
   | 'actionFileExtension'
   | 'actionFileSize'
-  | 'actionFaviconMedia'
+  | 'actionLink'
 >;
 
 /**
@@ -91,7 +91,7 @@ export function provideProjectActionMedia() {
     state.fileMedia.value = data.actionFileMedia;
     state.fileExtension.value = data.actionFileExtension;
     state.fileSize.value = data.actionFileSize;
-    state.faviconMedia.value = data.actionFaviconMedia;
+    state.faviconMedia.value = data.actionLink?.faviconMedia;
   }
 
   /** Forgets media of assets that normalization removed from the saved action. */

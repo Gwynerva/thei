@@ -3,7 +3,7 @@ import type { ContentFieldValue } from '../content';
 import type { DatedPeriod } from '../date-precision';
 import type { ProjectActionEditData } from '../project-action';
 import type { OtherAssetGetItem } from './project';
-import type { ProjectExternalLink } from '../external-link';
+import type { ExternalLink, ProjectExternalLink } from '../external-link';
 import type { TagItem } from '../tag';
 import type { MediaDescriptor } from '../media';
 import type { AdminPaginatedResponse } from '../admin/entity-list';
@@ -32,7 +32,8 @@ export type EventGetResponse = {
   actionFileMedia?: MediaDescriptor;
   actionFileExtension?: string;
   actionFileSize?: number;
-  actionFaviconMedia?: MediaDescriptor;
+  /** The stored record of the action button's link, when there is one. */
+  actionLink?: ExternalLink;
 };
 
 export type EventSaveResponse =

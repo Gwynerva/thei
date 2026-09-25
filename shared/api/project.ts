@@ -8,7 +8,7 @@ import type {
 import type { RelationGetItem } from '../relation';
 import type { MediaDescriptor } from '../media';
 import type { TagItem } from '../tag';
-import type { ProjectExternalLink } from '../external-link';
+import type { ExternalLink, ProjectExternalLink } from '../external-link';
 import type { ProjectActionEditData } from '../project-action';
 import type { AdminPaginatedResponse } from '../admin/entity-list';
 import type { ProfileHistoryPage } from '../profile';
@@ -75,7 +75,8 @@ export type ProjectGetResponse = {
   actionFileMedia?: MediaDescriptor;
   actionFileExtension?: string;
   actionFileSize?: number;
-  actionFaviconMedia?: MediaDescriptor;
+  /** The stored record of the action button's link, when there is one. */
+  actionLink?: ExternalLink;
   /** The first page of the project's status history, newest first. */
   statuses?: ProfileHistoryPage<StatusHistoryItem>;
   reminder: string;

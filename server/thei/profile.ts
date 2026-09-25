@@ -24,7 +24,7 @@ import {
   type AssetContainerType,
   type AssetRole,
 } from '#layers/thei/shared/asset';
-import { normalizeExternalLinkUrl } from '#layers/thei/shared/external-link';
+import { validateExternalLinkList } from '#layers/thei/shared/external-link';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
 import { buildAdminAssetUrls, buildPublicProfileMedia } from './assets/urls';
 import { resolveGeneratedIcon } from './media/generated-icon';
@@ -39,11 +39,14 @@ import {
   prepareContentForSave,
 } from './content/repository';
 import { ContentValidationError } from '#layers/thei/shared/content';
-import { prepareExternalLinks } from './external-links/prepare';
 import {
-  cleanupOrphanExternalLinks,
-  toExternalLink,
+  ensureExternalLinks,
+  scheduleExternalLinkSweep,
 } from './external-links/repository';
+import {
+  applyExternalLinkList,
+  getExternalLinkList,
+} from './external-links/lists';
 import { buildPublicPageIcon } from './public/entities';
 
 export function getProfile() {
@@ -187,27 +190,8 @@ export async function getProfileIdentity(admin = false) {
   };
 }
 
-export async function getProfileLinks(includePrivate: boolean) {
-  const { db, schema } = THEI_SERVER.useDb();
-  const rows = db
-    .select()
-    .from(schema.profileExternalLinks)
-    .innerJoin(
-      schema.externalLinks,
-      eq(schema.profileExternalLinks.url, schema.externalLinks.url),
-    )
-    .where(
-      includePrivate
-        ? undefined
-        : eq(schema.profileExternalLinks.isPrivate, false),
-    )
-    .orderBy(asc(schema.profileExternalLinks.sortOrder))
-    .all();
-  return rows.map((row) => ({
-    ...toExternalLink(row['external-links']),
-    name: row['profile-external-links'].name,
-    isPrivate: row['profile-external-links'].isPrivate,
-  }));
+export function getProfileLinks(includePrivate: boolean) {
+  return getExternalLinkList({ type: 'profile' }, { includePrivate });
 }
 
 export async function getPinnedPages() {
@@ -334,36 +318,9 @@ export async function saveProfile(input: ProfileEditData) {
     optionalId,
     text,
   });
-  if (!Array.isArray(input.externalLinks) || input.externalLinks.length > 100)
+  const links =
+    validateExternalLinkList(input.externalLinks, invalid) ??
     invalid('Invalid links');
-  const links = input.externalLinks.map((item) => {
-    const link = record(item, 'Invalid link');
-    let url: string;
-    try {
-      url = normalizeExternalLinkUrl(link.url);
-    } catch (error) {
-      invalid(error instanceof Error ? error.message : 'Invalid link URL');
-    }
-    if (typeof link.isPrivate !== 'boolean') invalid('Invalid link privacy');
-    let touchedAt: number | undefined;
-    if (link.touchedAt !== undefined) {
-      if (
-        typeof link.touchedAt !== 'number' ||
-        !Number.isSafeInteger(link.touchedAt) ||
-        link.touchedAt < 0
-      )
-        invalid('Invalid link timestamp');
-      touchedAt = link.touchedAt;
-    }
-    return {
-      url,
-      name: text(link.name, 300, true),
-      isPrivate: link.isPrivate,
-      touchedAt,
-    };
-  });
-  if (new Set(links.map((link) => link.url)).size !== links.length)
-    invalid('Duplicate links');
   const { db, schema } = THEI_SERVER.useDb();
   const current = getProfile();
   const currentAvatar = current.currentAvatarId
@@ -429,7 +386,7 @@ export async function saveProfile(input: ProfileEditData) {
       invalid(error instanceof Error ? error.message : 'Invalid content');
     throw error;
   }
-  await prepareExternalLinks(links);
+  await ensureExternalLinks(links.map((link) => link.url));
   const now = Date.now();
   db.transaction((tx) => {
     function detach(containerType: AssetContainerType, containerId: string) {
@@ -531,23 +488,8 @@ export async function saveProfile(input: ProfileEditData) {
           .values({ pageUuid, sortOrder })
           .run(),
       );
-    tx.delete(schema.profileExternalLinks).run();
-    links.forEach((link, sortOrder) =>
-      tx
-        .insert(schema.profileExternalLinks)
-        .values({
-          url: link.url,
-          name: link.name,
-          isPrivate: link.isPrivate,
-          sortOrder,
-        })
-        .run(),
-    );
+    applyExternalLinkList(tx, schema, { type: 'profile' }, links);
   });
-  await cleanupOrphanExternalLinks().catch((error) =>
-    THEI_SERVER.console
-      .tag('External links')
-      .warn('Failed to clean profile link previews', error),
-  );
+  scheduleExternalLinkSweep();
   return getAdminProfile();
 }

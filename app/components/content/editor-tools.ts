@@ -193,7 +193,7 @@ export class ExternalLinkTool implements BlockTool {
   /** The stored record, fetched from the remote page only if there is none. */
   private load() {
     return this.request((signal) =>
-      $fetch<ExternalLink>('/api/admin/external-link-previews', {
+      $fetch<ExternalLink>('/api/admin/external-links', {
         query: { url: this.url },
         signal,
       }),
@@ -203,7 +203,7 @@ export class ExternalLinkTool implements BlockTool {
   /** A deliberate re-read of the remote page, for a link just put in. */
   private refresh() {
     return this.request((signal) =>
-      $fetch<ExternalLink>('/api/admin/external-link-previews', {
+      $fetch<ExternalLink>('/api/admin/external-links', {
         method: 'POST',
         body: { url: this.url },
         signal,

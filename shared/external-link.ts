@@ -1,7 +1,8 @@
 import type { MediaDescriptor } from './media';
 
 export const EXTERNAL_LINK_TEXT_LIMIT = 300;
-export const EXTERNAL_LINK_PREVIEW_TIMEOUT = 10_000;
+export const EXTERNAL_LINK_LIST_LIMIT = 100;
+export const EXTERNAL_LINK_NAME_LIMIT = 300;
 
 export type ExternalLinkPreviewStatus = 'complete' | 'fallback';
 
@@ -11,28 +12,45 @@ export type ExternalLinkPreviewStatus = 'complete' | 'fallback';
  */
 export type ExternalLinkStatus = 'complete' | 'archived' | 'fallback';
 
-export interface ExternalLink {
+/**
+ * What a card shows. A stored record fits it, and so does a resolved inline
+ * link or a public reference, which carry no more than this.
+ */
+export interface ExternalLinkPreview {
   url: string;
   title?: string;
   description?: string;
+  faviconMedia?: MediaDescriptor;
+  status?: ExternalLinkStatus;
+}
+
+/** A stored record of a site. */
+export interface ExternalLink extends ExternalLinkPreview {
   faviconMedia: MediaDescriptor;
   hasFavicon?: boolean;
-  status?: ExternalLinkStatus;
   touchedAt: number;
   previewStatus?: ExternalLinkPreviewStatus;
 }
 
+/** One entry of a manual link list, as it is saved. */
+export interface ExternalLinkListItem {
+  url: string;
+  name: string;
+  isPrivate: boolean;
+}
+
+/**
+ * One entry of a manual link list, as it is read: the record and the entry's
+ * own name.
+ */
 export interface ProjectExternalLink extends ExternalLink {
   name: string;
   isPrivate: boolean;
 }
 
-export interface ProjectExternalLinkSaveItem {
-  url: string;
-  name: string;
-  isPrivate: boolean;
+export type ProjectExternalLinkSaveItem = ExternalLinkListItem & {
   touchedAt?: number;
-}
+};
 
 export type ProjectExternalLinkEditItem = ProjectExternalLinkSaveItem &
   Partial<Omit<ExternalLink, 'url'>>;
@@ -75,4 +93,40 @@ export function truncateExternalLinkText(
   const characters = Array.from(normalized);
   if (characters.length <= limit) return normalized;
   return `${characters.slice(0, Math.max(0, limit - 1)).join('')}…`;
+}
+
+/**
+ * A manual link list as the client sent it, checked the same way wherever it
+ * belongs. `fail` raises the caller's own kind of error; an absent list is
+ * left absent, so a form that did not send one changes nothing.
+ */
+export function validateExternalLinkList(
+  links: unknown,
+  fail: (message: string) => never,
+): ExternalLinkListItem[] | undefined {
+  if (links === undefined) return undefined;
+  if (!Array.isArray(links)) fail('Invalid external links');
+  if (links.length > EXTERNAL_LINK_LIST_LIMIT) fail('Too many external links');
+  const seen = new Set<string>();
+  return links.map((item): ExternalLinkListItem => {
+    if (!item || typeof item !== 'object') fail('Invalid external link');
+    const link = item as Record<string, unknown>;
+    let url: string;
+    try {
+      url = normalizeExternalLinkUrl(link.url);
+    } catch (error) {
+      fail(
+        error instanceof Error ? error.message : 'Invalid external link URL',
+      );
+    }
+    if (seen.has(url)) fail('Duplicate external link');
+    seen.add(url);
+    const name = typeof link.name === 'string' ? link.name.trim() : '';
+    if (!name) fail('External link name cannot be empty');
+    if (Array.from(name).length > EXTERNAL_LINK_NAME_LIMIT)
+      fail('External link name is too long');
+    if (typeof link.isPrivate !== 'boolean')
+      fail('Invalid external link privacy');
+    return { url, name, isPrivate: link.isPrivate };
+  });
 }

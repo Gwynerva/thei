@@ -16,10 +16,11 @@ import {
   buildAdminAssetUrls,
 } from '../../../thei/assets/urls';
 import {
-  cleanupOrphanExternalLinks,
+  ensureExternalLinks,
+  entityExternalLinkUrls,
   findExternalLink,
+  scheduleExternalLinkSweep,
 } from '../../../thei/external-links/repository';
-import { prepareExternalLinks } from '../../../thei/external-links/prepare';
 import {
   applyPreparedContentSave,
   deleteContentForOwner,
@@ -50,10 +51,10 @@ import {
   prepareRelations,
 } from '../../../thei/relations';
 import {
-  applyProjectExternalLinks,
-  deleteProjectExternalLinks,
-  getProjectExternalLinks,
-} from '../../../thei/projects/external-links';
+  applyExternalLinkList,
+  deleteExternalLinkList,
+  getExternalLinkList,
+} from '../../../thei/external-links/lists';
 import {
   applyTagUsages,
   deleteTagUsagesForContainer,
@@ -200,7 +201,7 @@ export default defineEventHandler(async (event) => {
         actionFileMedia: actionFileUrls?.media,
         actionFileExtension: actionFileUsage?.asset.extension,
         actionFileSize: actionFileUsage?.asset.size,
-        actionFaviconMedia: actionLink?.faviconMedia,
+        actionLink,
         descriptionContent: await THEI_SERVER.content.buildFieldValue(
           'project',
           projectUuid,
@@ -217,7 +218,10 @@ export default defineEventHandler(async (event) => {
         showcaseAssets,
         otherAssets,
         relations: await getRelations({ type: 'project', id: projectUuid }),
-        externalLinks: await getProjectExternalLinks(projectUuid),
+        externalLinks: getExternalLinkList({
+          type: 'project',
+          id: projectUuid,
+        }),
         tags: await listTagsForContainer('project', projectUuid),
         statuses: await getStatusHistory(
           { type: 'project', id: projectUuid },
@@ -321,18 +325,9 @@ export default defineEventHandler(async (event) => {
           message: error instanceof Error ? error.message : 'Invalid tags',
         } satisfies ProjectSaveResponse;
       }
-      let preparedExternalLinks;
-      try {
-        preparedExternalLinks = await prepareExternalLinks(
-          result.externalLinks,
-        );
-      } catch (error) {
-        return {
-          type: 'error',
-          message:
-            error instanceof Error ? error.message : 'Invalid external links',
-        } satisfies ProjectSaveResponse;
-      }
+      await ensureExternalLinks(
+        entityExternalLinkUrls(result.externalLinks, result.action),
+      );
 
       let preparedStatuses;
       try {
@@ -418,11 +413,11 @@ export default defineEventHandler(async (event) => {
           { type: 'project', id: projectUuid },
           preparedRelations,
         );
-        applyProjectExternalLinks(
+        applyExternalLinkList(
           tx,
           schema,
-          projectUuid,
-          preparedExternalLinks,
+          { type: 'project', id: projectUuid },
+          result.externalLinks,
         );
         applyTagUsages(tx, schema, 'project', projectUuid, preparedTags);
         // One timestamp for the whole save: statuses added together keep the
@@ -542,7 +537,7 @@ export default defineEventHandler(async (event) => {
         }
       });
 
-      await cleanupOrphanExternalLinks();
+      scheduleExternalLinkSweep();
       return {
         type: 'success',
         projectUuid,
@@ -579,7 +574,10 @@ export default defineEventHandler(async (event) => {
           id: projectUuid,
         });
         deleteRelations(tx, schema, { type: 'project', id: projectUuid });
-        deleteProjectExternalLinks(tx, schema, projectUuid);
+        deleteExternalLinkList(tx, schema, {
+          type: 'project',
+          id: projectUuid,
+        });
         deleteTagUsagesForContainer(tx, schema, 'project', projectUuid);
         deleteContentForOwner(tx, schema, 'project', projectUuid);
 
@@ -596,7 +594,7 @@ export default defineEventHandler(async (event) => {
           .where(eq(schema.projects.projectUuid, projectUuid))
           .run();
       });
-      await cleanupOrphanExternalLinks();
+      scheduleExternalLinkSweep();
       return;
     }
   }

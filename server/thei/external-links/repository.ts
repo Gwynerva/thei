@@ -1,152 +1,40 @@
-import { normalizeImageAccent } from '#layers/thei/shared/accent-color';
-import type { ImageAccent } from '#layers/thei/shared/accent-color';
-import { createHash } from 'node:crypto';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
-import { eq } from 'drizzle-orm';
-import sharp from 'sharp';
+import { readdir, rm, stat } from 'node:fs/promises';
+import { join } from 'node:path';
+import { eq, inArray } from 'drizzle-orm';
+import {
+  normalizeImageAccent,
+  type ImageAccent,
+} from '#layers/thei/shared/accent-color';
 import { collectContentExternalLinkUrls } from '#layers/thei/shared/content';
-import type {
-  ExternalLink,
-  ExternalLinkStatus,
+import type { ResolvedContentLink } from '#layers/thei/shared/content-link';
+import {
+  normalizeExternalLinkUrl,
+  type ExternalLink,
+  type ExternalLinkListItem,
+  type ExternalLinkStatus,
 } from '#layers/thei/shared/external-link';
-import { iconSymbols } from '#thei/icon-symbols';
-import { extractImageAccent } from '../assets/image-color';
-import { THEI_CONTENT_DIRS } from '../content-layout';
+import { withExternalLinkSlot } from '../assets/queue';
+import { collectExternalLink } from './fetch';
+import {
+  EXTERNAL_LINK_FAVICON_EXTENSION,
+  externalLinkFaviconDir,
+  externalLinkFaviconPath,
+  externalLinkMedia,
+  writeExternalLinkFavicon,
+} from './favicon';
 
-export const EXTERNAL_LINK_FAVICON_SIZE = 48;
-export const EXTERNAL_LINK_FAVICON_QUALITY = 80;
 /**
- * WebP, not AVIF, and deliberately so. At 48px AVIF's container overhead makes
- * the file larger rather than smaller, and its lossy alpha plane leaves a faint
- * haze across what should be fully transparent padding around an icon.
+ * A row younger than this is never swept: it may belong to a link that is
+ * being added right now and has not been saved into anything yet.
  */
-export const EXTERNAL_LINK_FAVICON_EXTENSION = 'webp';
-const ORPHAN_CLEANUP_GRACE_MS = 60_000;
+const SWEEP_GRACE_MS = 60_000;
+/** How long after a save the sweep runs, so a burst of saves costs one. */
+const SWEEP_DELAY_MS = 60_000;
+const FAVICON_FILE = new RegExp(
+  `^([a-f0-9]{64})\\.${EXTERNAL_LINK_FAVICON_EXTENSION}$`,
+);
 
-export function externalLinkKey(url: string) {
-  return createHash('sha256').update(url).digest('hex');
-}
-
-export function externalLinkFaviconPath(key: string) {
-  return THEI_SERVER.contentPath(
-    THEI_CONTENT_DIRS.externalLinkFavicons,
-    `${key}.${EXTERNAL_LINK_FAVICON_EXTENSION}`,
-  );
-}
-
-export function externalLinkMedia(
-  faviconKey: string,
-  accent: ImageAccent | undefined,
-  touchedAt?: number,
-): ExternalLink['faviconMedia'] {
-  const version = touchedAt ? `?v=${touchedAt}` : '';
-  const src = `/media/external-link-favicons/${faviconKey}.${EXTERNAL_LINK_FAVICON_EXTENSION}${version}`;
-  return {
-    src,
-    previewSrc: src,
-    kind: 'image',
-    ...(accent === undefined ? {} : { accent }),
-    width: EXTERNAL_LINK_FAVICON_SIZE,
-    height: EXTERNAL_LINK_FAVICON_SIZE,
-  };
-}
-
-export function externalLinkPreviewMedia(
-  buffer: Buffer,
-  accent: ImageAccent | undefined,
-): ExternalLink['faviconMedia'] {
-  const src = `data:image/${EXTERNAL_LINK_FAVICON_EXTENSION};base64,${buffer.toString('base64')}`;
-  return {
-    src,
-    previewSrc: src,
-    kind: 'image',
-    ...(accent === undefined ? {} : { accent }),
-    width: EXTERNAL_LINK_FAVICON_SIZE,
-    height: EXTERNAL_LINK_FAVICON_SIZE,
-  };
-}
-
-export async function findExternalLink(url: string) {
-  const { db, schema } = THEI_SERVER.useDb();
-  const row = await db.query.externalLinks.findFirst({
-    where: eq(schema.externalLinks.url, url),
-  });
-  return row ? toExternalLink(row) : undefined;
-}
-
-export async function cleanupOrphanExternalLinks() {
-  const { db, schema } = THEI_SERVER.useDb();
-  const rows = db
-    .select({
-      url: schema.externalLinks.url,
-      faviconKey: schema.externalLinks.faviconKey,
-      touchedAt: schema.externalLinks.touchedAt,
-    })
-    .from(schema.externalLinks)
-    .all();
-  if (!rows.length) return;
-
-  const usedUrls = new Set(
-    db
-      .select({ url: schema.projectExternalLinks.url })
-      .from(schema.projectExternalLinks)
-      .all()
-      .map((row) => row.url),
-  );
-  const actionRows = db
-    .select({ url: schema.profileExternalLinks.url })
-    .from(schema.profileExternalLinks)
-    .all();
-  for (const row of actionRows) usedUrls.add(row.url);
-  const projectActionRows = db
-    .select({ action: schema.projects.action })
-    .from(schema.projects)
-    .all();
-  for (const row of projectActionRows) {
-    const action = row.action as { externalUrl?: unknown } | null;
-    if (typeof action?.externalUrl === 'string')
-      usedUrls.add(action.externalUrl);
-  }
-  const contentRows = db
-    .select({ data: schema.content.data })
-    .from(schema.content)
-    .all();
-  for (const row of contentRows) {
-    try {
-      for (const url of collectContentExternalLinkUrls(row.data)) {
-        usedUrls.add(url);
-      }
-    } catch (error) {
-      THEI_SERVER.console
-        .tag('External links')
-        .warn('Skipped malformed content during preview cleanup', error);
-    }
-  }
-
-  const cleanupBefore = Date.now() - ORPHAN_CLEANUP_GRACE_MS;
-  const orphaned = rows.filter(
-    (row) => !usedUrls.has(row.url) && row.touchedAt < cleanupBefore,
-  );
-  if (!orphaned.length) return;
-
-  db.transaction((tx) => {
-    for (const row of orphaned) {
-      tx.delete(schema.externalLinks)
-        .where(eq(schema.externalLinks.url, row.url))
-        .run();
-    }
-  });
-  await Promise.all(
-    orphaned.map((row) =>
-      rm(externalLinkFaviconPath(row.faviconKey), { force: true }).catch(
-        () => {},
-      ),
-    ),
-  );
-}
-
-export function toExternalLink(row: {
+interface ExternalLinkRow {
   url: string;
   title: string | null;
   description: string | null;
@@ -154,7 +42,9 @@ export function toExternalLink(row: {
   accent: ImageAccent | null;
   status: ExternalLinkStatus;
   touchedAt: number;
-}): ExternalLink {
+}
+
+export function toExternalLink(row: ExternalLinkRow): ExternalLink {
   return {
     url: row.url,
     title: row.title ?? undefined,
@@ -169,12 +59,55 @@ export function toExternalLink(row: {
   };
 }
 
-export function upsertExternalLink(
-  data: Omit<ExternalLink, 'faviconMedia'> & {
-    faviconKey: string;
-    accent?: ImageAccent;
-  },
-) {
+export async function findExternalLink(
+  url: string,
+): Promise<ExternalLink | undefined> {
+  const { db, schema } = THEI_SERVER.useDb();
+  const row = await db.query.externalLinks.findFirst({
+    where: eq(schema.externalLinks.url, url),
+  });
+  return row ? toExternalLink(row) : undefined;
+}
+
+export async function findExternalLinks(
+  urls: Iterable<string>,
+): Promise<Map<string, ExternalLink>> {
+  const unique = [...new Set(urls)];
+  if (!unique.length) return new Map();
+  const { db, schema } = THEI_SERVER.useDb();
+  const rows = db
+    .select()
+    .from(schema.externalLinks)
+    .where(inArray(schema.externalLinks.url, unique))
+    .all();
+  return new Map(rows.map((row) => [row.url, toExternalLink(row)]));
+}
+
+/**
+ * A loader for the links of one piece of content: every address is read
+ * from the database once, however many blocks and anchors carry it.
+ */
+export function createExternalLinkLoader() {
+  const cache = new Map<string, Promise<ExternalLink | undefined>>();
+  return (url: string) => {
+    let pending = cache.get(url);
+    if (!pending) {
+      pending = findExternalLink(url);
+      cache.set(url, pending);
+    }
+    return pending;
+  };
+}
+
+export function upsertExternalLink(data: {
+  url: string;
+  title?: string;
+  description?: string;
+  faviconKey: string;
+  accent?: ImageAccent;
+  status?: ExternalLinkStatus;
+  touchedAt: number;
+}) {
   const { db, schema } = THEI_SERVER.useDb();
   const status = data.status ?? 'complete';
   db.insert(schema.externalLinks)
@@ -193,79 +126,234 @@ export function upsertExternalLink(
     .run();
 }
 
-export async function writeExternalLinkFavicon(url: string, source?: Buffer) {
-  const faviconKey = externalLinkKey(url);
-  const { buffer, accent } = await prepareExternalLinkFavicon(source);
-  await writeExternalLinkFaviconFile(faviconKey, buffer);
-  return { faviconKey, accent };
+const inFlight = new Map<string, Promise<ExternalLink>>();
+
+/**
+ * Reads the site and stores what it said — the one way a remote page is
+ * ever read. Callers asking about the same address at the same time share
+ * one read, so nothing is fetched or written twice.
+ */
+export function refreshExternalLink(rawUrl: unknown): Promise<ExternalLink> {
+  const url = normalizeExternalLinkUrl(rawUrl);
+  const pending = inFlight.get(url);
+  if (pending) return pending;
+  const request = withExternalLinkSlot(() => storeExternalLink(url)).finally(
+    () => {
+      if (inFlight.get(url) === request) inFlight.delete(url);
+    },
+  );
+  inFlight.set(url, request);
+  return request;
 }
 
-export async function prepareExternalLinkFavicon(source?: Buffer) {
-  let accent: ImageAccent | undefined;
-  let buffer: Buffer;
-  try {
-    if (!source) throw new Error('Missing favicon');
-    buffer = await convertExternalLinkFavicon(source);
-    accent = await extractImageAccent(buffer);
-  } catch {
-    accent = undefined;
-    buffer = await sharp(Buffer.from(fallbackSvg()))
-      .resize(EXTERNAL_LINK_FAVICON_SIZE, EXTERNAL_LINK_FAVICON_SIZE)
-      .webp({ quality: EXTERNAL_LINK_FAVICON_QUALITY, effort: 6 })
-      .toBuffer();
+async function storeExternalLink(url: string): Promise<ExternalLink> {
+  const collected = await collectExternalLink(url);
+  const { faviconKey, accent } = await writeExternalLinkFavicon(
+    url,
+    collected.favicon,
+  );
+  const touchedAt = Date.now();
+  upsertExternalLink({
+    url,
+    title: collected.title,
+    description: collected.description,
+    faviconKey,
+    accent,
+    status: collected.status,
+    touchedAt,
+  });
+  return {
+    url,
+    title: collected.title,
+    description: collected.description,
+    faviconMedia: externalLinkMedia(faviconKey, accent, touchedAt),
+    status: collected.status,
+    touchedAt,
+  };
+}
+
+/** The stored record, read from the site only when there is none yet. */
+export async function lookupExternalLink(
+  rawUrl: unknown,
+): Promise<ExternalLink> {
+  const url = normalizeExternalLinkUrl(rawUrl);
+  return (await findExternalLink(url)) ?? (await refreshExternalLink(url));
+}
+
+/**
+ * Makes sure every address has a record, reading only the ones without
+ * one. A site that cannot be read still gets a record, so a save never
+ * fails over a link and the same site is never asked again on its own.
+ */
+export async function ensureExternalLinks(
+  urls: Iterable<string>,
+): Promise<void> {
+  const unique = [...new Set(urls)];
+  if (!unique.length) return;
+  const known = await findExternalLinks(unique);
+  await Promise.all(
+    unique
+      .filter((url) => !known.has(url))
+      .map(async (url) => {
+        try {
+          await refreshExternalLink(url);
+        } catch (error) {
+          warn(`Failed to read ${url}`, error);
+        }
+      }),
+  );
+}
+
+/** Every address an entity's manual links and action button point at. */
+export function entityExternalLinkUrls(
+  links: ExternalLinkListItem[] | undefined,
+  action: { externalUrl?: string } | undefined,
+): string[] {
+  const urls = (links ?? []).map((link) => link.url);
+  if (action?.externalUrl) urls.push(action.externalUrl);
+  return urls;
+}
+
+export function toResolvedExternalLink(
+  link: ExternalLink,
+): ResolvedContentLink {
+  return {
+    kind: 'external',
+    url: link.url,
+    state: 'resolved',
+    href: link.url,
+    title: link.title,
+    description: link.description,
+    iconMedia: link.faviconMedia,
+  };
+}
+
+/**
+ * Every address something on the site still points at. This is the one list
+ * of places a link can live: a row missing from it is an orphan, so a new
+ * home for links has to be added here.
+ */
+export function collectUsedExternalLinkUrls(): Set<string> {
+  const { db, schema } = THEI_SERVER.useDb();
+  const used = new Set<string>();
+  for (const table of [
+    schema.projectExternalLinks,
+    schema.eventExternalLinks,
+    schema.profileExternalLinks,
+  ]) {
+    for (const row of db.select({ url: table.url }).from(table).all())
+      used.add(row.url);
   }
-  accent = normalizeImageAccent(accent);
-  return { buffer, accent };
+  for (const { action } of [
+    ...db
+      .select({ action: schema.projects.action })
+      .from(schema.projects)
+      .all(),
+    ...db.select({ action: schema.events.action }).from(schema.events).all(),
+  ]) {
+    if (typeof action?.externalUrl === 'string') used.add(action.externalUrl);
+  }
+  for (const row of db
+    .select({ data: schema.content.data })
+    .from(schema.content)
+    .all()) {
+    try {
+      for (const url of collectContentExternalLinkUrls(row.data)) used.add(url);
+    } catch (error) {
+      warn('Skipped malformed content during the sweep', error);
+    }
+  }
+  return used;
 }
 
-async function writeExternalLinkFaviconFile(
-  faviconKey: string,
-  buffer: Buffer,
-) {
-  const path = externalLinkFaviconPath(faviconKey);
-  const temporaryPath = `${path}.${process.pid}.${Date.now()}.tmp`;
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(temporaryPath, buffer);
-  await rename(temporaryPath, path).catch(async (error) => {
-    const destinationExists = await readFile(path)
-      .then(() => true)
-      .catch(() => false);
-    if (!destinationExists) {
-      await rm(temporaryPath, { force: true }).catch(() => {});
-      throw error;
+/**
+ * Forgets links nothing points at any more, and the files of links that are
+ * gone. Deletes only; a site is never read from here.
+ */
+export async function sweepExternalLinks(): Promise<void> {
+  const { db, schema } = THEI_SERVER.useDb();
+  const cutoff = Date.now() - SWEEP_GRACE_MS;
+  const rows = db
+    .select({
+      url: schema.externalLinks.url,
+      faviconKey: schema.externalLinks.faviconKey,
+      touchedAt: schema.externalLinks.touchedAt,
+    })
+    .from(schema.externalLinks)
+    .all();
+  const used = collectUsedExternalLinkUrls();
+  const kept = new Set<string>();
+  const removed: string[] = [];
+  for (const row of rows) {
+    if (used.has(row.url) || row.touchedAt >= cutoff) {
+      kept.add(row.faviconKey);
+      continue;
     }
     try {
-      await rm(path, { force: true });
-      await rename(temporaryPath, path);
-    } catch (replaceError) {
-      await rm(temporaryPath, { force: true }).catch(() => {});
-      throw replaceError;
+      db.delete(schema.externalLinks)
+        .where(eq(schema.externalLinks.url, row.url))
+        .run();
+      removed.push(row.faviconKey);
+    } catch (error) {
+      // Something still points here that the list above does not know.
+      kept.add(row.faviconKey);
+      warn(`Could not forget ${row.url}`, error);
     }
-  });
+  }
+  await Promise.all(
+    removed.map((key) =>
+      rm(externalLinkFaviconPath(key), { force: true }).catch(() => {}),
+    ),
+  );
+  await removeStrayFaviconFiles(kept, cutoff);
 }
 
-export async function convertExternalLinkFavicon(source: Buffer) {
-  return await sharp(source, { failOn: 'error' })
-    .resize(EXTERNAL_LINK_FAVICON_SIZE, EXTERNAL_LINK_FAVICON_SIZE, {
-      fit: 'contain',
-      background: { r: 0, g: 0, b: 0, alpha: 0 },
-    })
-    .ensureAlpha()
-    .webp({
-      quality: EXTERNAL_LINK_FAVICON_QUALITY,
-      alphaQuality: 100,
-      effort: 6,
-    })
-    .toBuffer();
+/**
+ * Files no row points at, left behind by a crash between a delete and its
+ * removal. A file still being written is protected by the same grace as a
+ * fresh row, and anything that is not a favicon is left alone.
+ */
+async function removeStrayFaviconFiles(kept: Set<string>, cutoff: number) {
+  const directory = externalLinkFaviconDir();
+  const names = await readdir(directory).catch(() => [] as string[]);
+  for (const name of names) {
+    const key = FAVICON_FILE.exec(name)?.[1];
+    if (!key || kept.has(key)) continue;
+    const path = join(directory, name);
+    const info = await stat(path).catch(() => undefined);
+    if (!info || info.mtimeMs >= cutoff) continue;
+    await rm(path, { force: true }).catch(() => {});
+  }
 }
 
-/** The interface's own external-link icon on a neutral tile. */
-function fallbackSvg() {
-  const icon = iconSymbols['external-link'];
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 960">
-    <rect width="960" height="960" rx="200" fill="#52525b"/>
-    <svg width="960" height="960" viewBox="${icon?.viewBox ?? '0 0 24 24'}">
-      <g fill="#e4e4e7">${(icon?.body ?? '').replaceAll('currentColor', '#e4e4e7')}</g>
-    </svg>
-  </svg>`;
+/** A sweep that tells the log about a failure instead of throwing. */
+export async function runExternalLinkSweep(): Promise<void> {
+  try {
+    await sweepExternalLinks();
+  } catch (error) {
+    warn('Failed to sweep external links', error);
+  }
+}
+
+let sweepTimer: ReturnType<typeof setTimeout> | undefined;
+
+/**
+ * Runs a sweep once things have settled. Called after a save; a burst of
+ * saves costs one sweep, and no request ever waits for it.
+ */
+export function scheduleExternalLinkSweep() {
+  if (sweepTimer) return;
+  sweepTimer = setTimeout(() => {
+    sweepTimer = undefined;
+    void runExternalLinkSweep();
+  }, SWEEP_DELAY_MS);
+  sweepTimer.unref?.();
+}
+
+function warn(message: string, error: unknown) {
+  try {
+    THEI_SERVER.console.tag('External links').warn(message, error);
+  } catch {
+    // Nothing to tell: the server is gone, as it is at the end of a test.
+  }
 }

@@ -38,7 +38,7 @@ const loadExternalPreview = async (version: number, url: string) => {
   const previewRequest =
     activeExternalPreviewUrl === url && activeExternalPreviewRequest
       ? activeExternalPreviewRequest
-      : $fetch<ExternalLink>('/api/admin/external-link-previews', {
+      : $fetch<ExternalLink>('/api/admin/external-links', {
           query: { url },
         });
   activeExternalPreviewUrl = url;

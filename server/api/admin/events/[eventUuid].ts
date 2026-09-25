@@ -25,10 +25,10 @@ import {
   prepareRelations,
 } from '../../../thei/relations';
 import {
-  applyEventExternalLinks,
-  getEventExternalLinks,
-} from '../../../thei/events/external-links';
-import { prepareExternalLinks } from '../../../thei/external-links/prepare';
+  applyExternalLinkList,
+  deleteExternalLinkList,
+  getExternalLinkList,
+} from '../../../thei/external-links/lists';
 import {
   prepareTagUsages,
   applyTagUsages,
@@ -37,8 +37,10 @@ import {
 } from '../../../thei/tags';
 import { syncEntityActionUsages } from '../../../thei/projects/action-usages';
 import {
-  cleanupOrphanExternalLinks,
+  ensureExternalLinks,
+  entityExternalLinkUrls,
   findExternalLink,
+  scheduleExternalLinkSweep,
 } from '../../../thei/external-links/repository';
 import {
   archivedOriginalFromMeta,
@@ -84,21 +86,27 @@ export default defineEventHandler(async (event) => {
     }
 
     try {
-      const [
-        contentSave,
-        notesSave,
-        externalLinks,
-        tags,
-        usages,
-        currentFiles,
-      ] = await Promise.all([
-        prepareContentForSave('event', eventUuid, 'event-body', result.content),
-        prepareContentForSave('event', eventUuid, 'event-notes', result.notes),
-        prepareExternalLinks(result.externalLinks),
-        prepareTagUsages(result.tags),
-        THEI_SERVER.assets.usages.findByContainer('event', eventUuid),
-        THEI_SERVER.assets.usages.findOtherForContainer('event', eventUuid),
-      ]);
+      await ensureExternalLinks(
+        entityExternalLinkUrls(result.externalLinks, result.action),
+      );
+      const [contentSave, notesSave, tags, usages, currentFiles] =
+        await Promise.all([
+          prepareContentForSave(
+            'event',
+            eventUuid,
+            'event-body',
+            result.content,
+          ),
+          prepareContentForSave(
+            'event',
+            eventUuid,
+            'event-notes',
+            result.notes,
+          ),
+          prepareTagUsages(result.tags),
+          THEI_SERVER.assets.usages.findByContainer('event', eventUuid),
+          THEI_SERVER.assets.usages.findOtherForContainer('event', eventUuid),
+        ]);
       if (contentSave.type !== 'save')
         return {
           type: 'error',
@@ -142,7 +150,12 @@ export default defineEventHandler(async (event) => {
           'event-notes',
           notesSave,
         );
-        applyEventExternalLinks(tx, schema, eventUuid, externalLinks);
+        applyExternalLinkList(
+          tx,
+          schema,
+          { type: 'event', id: eventUuid },
+          result.externalLinks,
+        );
         applyTagUsages(tx, schema, 'event', eventUuid, tags);
         applyRelations(
           tx,
@@ -188,7 +201,7 @@ export default defineEventHandler(async (event) => {
             .run();
         });
       });
-      await cleanupOrphanExternalLinks();
+      scheduleExternalLinkSweep();
       return {
         type: 'success',
         eventUuid,
@@ -219,9 +232,7 @@ export default defineEventHandler(async (event) => {
         )
         .run();
       deleteRelations(tx, schema, { type: 'event', id: eventUuid });
-      tx.delete(schema.eventExternalLinks)
-        .where(eq(schema.eventExternalLinks.eventUuid, eventUuid))
-        .run();
+      deleteExternalLinkList(tx, schema, { type: 'event', id: eventUuid });
       deleteTagUsagesForContainer(tx, schema, 'event', eventUuid);
       deleteContentForOwner(tx, schema, 'event', eventUuid);
       usages.forEach((usage) =>
@@ -231,7 +242,7 @@ export default defineEventHandler(async (event) => {
         .where(eq(schema.events.eventUuid, eventUuid))
         .run();
     });
-    await cleanupOrphanExternalLinks();
+    scheduleExternalLinkSweep();
     return;
   }
 
@@ -276,7 +287,7 @@ async function getEvent(
     THEI_SERVER.content.buildFieldValue('event', eventUuid, 'event-body'),
     THEI_SERVER.content.buildFieldValue('event', eventUuid, 'event-notes'),
     getEventPeriods(eventUuid),
-    getEventExternalLinks(eventUuid),
+    getExternalLinkList({ type: 'event', id: eventUuid }),
     listTagsForContainer('event', eventUuid),
     getRelations({ type: 'event', id: eventUuid }),
   ]);
@@ -324,7 +335,7 @@ async function getEvent(
     actionFileMedia: fileUrls?.media,
     actionFileExtension: actionFile?.asset.extension,
     actionFileSize: actionFile?.asset.size,
-    actionFaviconMedia: actionLink?.faviconMedia,
+    actionLink,
   } satisfies EventGetResponse;
 }
 

@@ -20,9 +20,11 @@ import {
   type ContentAssetUsageMeta,
 } from '#layers/thei/shared/asset';
 import { buildAdminAssetUrls, archivedOriginalFromMeta } from '../assets/urls';
-import { findExternalLink } from '../external-links/repository';
+import {
+  createExternalLinkLoader,
+  ensureExternalLinks,
+} from '../external-links/repository';
 import { assetSelectionError } from '#layers/thei/shared/asset-library';
-import { persistExternalLink } from '../external-links/preview';
 
 export async function findContentByOwner(
   ownerType: ContentOwnerType,
@@ -99,7 +101,7 @@ export async function prepareContentForSave(
   }
 
   const assetRows = await validateContentAssets(data);
-  await persistMissingContentExternalLinks(data);
+  await ensureExternalLinks(collectContentExternalLinkUrls(data));
   const summary = summarizeContentData(
     data,
     new Map(assetRows.map((asset) => [asset.assetUuid, asset.size])),
@@ -118,21 +120,6 @@ export async function prepareContentForSave(
     ...summary,
     assetUsages: buildPreparedAssetUsages(contentUuid, data),
   };
-}
-
-async function persistMissingContentExternalLinks(data: ContentOutputData) {
-  const urls = collectContentExternalLinkUrls(data);
-  await Promise.all(
-    urls.map(async (url) => {
-      try {
-        if (!(await findExternalLink(url))) await persistExternalLink(url);
-      } catch (error) {
-        THEI_SERVER.console
-          .tag('External links')
-          .warn(`Failed to persist content preview for ${url}`, error);
-      }
-    }),
-  );
 }
 
 export type PreparedContentSave = Awaited<
@@ -288,10 +275,7 @@ async function hydrateContentData(
 ): Promise<ContentOutputData> {
   const normalized = normalizeContentData(data);
   const assetCache = new Map<string, any>();
-  const externalLinkCache = new Map<
-    string,
-    Awaited<ReturnType<typeof findExternalLink>>
-  >();
+  const loadExternalLink = createExternalLinkLoader();
 
   async function hydrateAsset(assetUuid: string) {
     if (assetCache.has(assetUuid)) return assetCache.get(assetUuid);
@@ -336,11 +320,7 @@ async function hydrateContentData(
       ).filter(Boolean);
     } else if (block.type === 'externalLink') {
       const url = (block.data as any).url;
-      let link = url ? externalLinkCache.get(url) : undefined;
-      if (url && !externalLinkCache.has(url)) {
-        link = await findExternalLink(url);
-        externalLinkCache.set(url, link);
-      }
+      const link = url ? await loadExternalLink(url) : undefined;
       data.url = url;
       if (link) Object.assign(data, link);
     }

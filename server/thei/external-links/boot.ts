@@ -1,18 +1,9 @@
-import { cleanupOrphanExternalLinks } from './repository';
+import { runExternalLinkSweep } from './repository';
 
-const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+const SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 
+/** Forgets links nothing points at any more: once at boot, then hourly. */
 export function bootExternalLinkCleanup() {
-  void runCleanup();
-  setInterval(runCleanup, CLEANUP_INTERVAL_MS).unref();
-}
-
-async function runCleanup() {
-  try {
-    await cleanupOrphanExternalLinks();
-  } catch (error) {
-    THEI_SERVER.console
-      .tag('External links')
-      .error('Failed to clean orphaned previews', error);
-  }
+  void runExternalLinkSweep();
+  setInterval(() => void runExternalLinkSweep(), SWEEP_INTERVAL_MS).unref();
 }

@@ -31,7 +31,10 @@ import type {
 } from '#layers/thei/shared/api/page';
 import { coverDatedPeriods } from '#layers/thei/shared/date-precision';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
-import { externalLinkHostname } from '#layers/thei/shared/external-link';
+import {
+  externalLinkHostname,
+  type ProjectExternalLink,
+} from '#layers/thei/shared/external-link';
 import {
   extractContentReferenceCandidates,
   type ContentReferenceLinkCandidate,
@@ -66,15 +69,17 @@ import {
 import { resolveEntityIconMedia } from '../media/generated-icon';
 import { getProjectContentSections } from '../projects/content-sections';
 import { getProjectStages } from '../projects/stages';
-import { getProjectExternalLinks } from '../projects/external-links';
 import { getEventPeriods } from '../events/periods';
 import {
   buildPublicRelatedLinks,
   countPublicRelated,
   resolvePublicRelated,
 } from './related';
-import { getEventExternalLinks } from '../events/external-links';
-import { findExternalLink } from '../external-links/repository';
+import {
+  createExternalLinkLoader,
+  findExternalLink,
+} from '../external-links/repository';
+import { getExternalLinkList } from '../external-links/lists';
 import { listTagsForContainer } from '../tags';
 import { parseInternalUrl } from '#layers/thei/shared/internal-url';
 import { internalUrlSite } from '../site-url';
@@ -357,7 +362,7 @@ export async function buildPublicProject(
       { type: 'project', ...project },
       isAdmin,
     ),
-    getProjectExternalLinks(project.projectUuid),
+    getExternalLinkList({ type: 'project', id: project.projectUuid }),
     resolvePublicRelated({ type: 'project', id: project.projectUuid }, isAdmin),
     getCurrentStatus({ type: 'project', id: project.projectUuid }, isAdmin),
   ]);
@@ -615,7 +620,7 @@ export async function buildPublicEvent(
         'event',
         stored.eventUuid,
       ),
-      getEventExternalLinks(stored.eventUuid),
+      getExternalLinkList({ type: 'event', id: stored.eventUuid }),
       listTagsForContainer('event', stored.eventUuid),
       resolvePublicRelated({ type: 'event', id: stored.eventUuid }, isAdmin),
       THEI_SERVER.assets.usages.findByContainer('event', stored.eventUuid),
@@ -646,7 +651,7 @@ export async function buildPublicEvent(
       } satisfies PublicFile;
     }),
   );
-  const manual = buildPublicManualEventReferenceGroup(rawLinks, files, isAdmin);
+  const manual = buildPublicManualReferenceGroup(rawLinks, files, isAdmin);
   return {
     title: stored.title,
     summary: stored.summary,
@@ -685,8 +690,9 @@ function emptyPublicReferenceGroup(): PublicReferenceGroup {
   return { links: [], files: [] };
 }
 
-export function buildPublicManualEventReferenceGroup(
-  links: Awaited<ReturnType<typeof getEventExternalLinks>>,
+/** An entity's own list of links as the sidebar shows it: the name the admin gave each one first. */
+export function buildPublicManualReferenceGroup(
+  links: ProjectExternalLink[],
   files: PublicReferenceGroup['files'],
   includePrivate: boolean,
 ): PublicReferenceGroup {
@@ -695,25 +701,6 @@ export function buildPublicManualEventReferenceGroup(
       .filter((link) => includePrivate || !link.isPrivate)
       .map((link): PublicReferenceLink => ({
         kind: 'external',
-        title: link.name || link.title || externalLinkHostname(link.url),
-        href: link.url,
-        description: link.description,
-        iconMedia: link.faviconMedia,
-      })),
-    files,
-  };
-}
-
-function buildPublicManualReferenceGroup(
-  links: Awaited<ReturnType<typeof getProjectExternalLinks>>,
-  files: PublicReferenceGroup['files'],
-  includePrivate: boolean,
-): PublicReferenceGroup {
-  return {
-    links: links
-      .filter((link) => includePrivate || !link.isPrivate)
-      .map((link) => ({
-        kind: 'external' as const,
         title: link.name || link.title || externalLinkHostname(link.url),
         href: link.url,
         description: link.description,
@@ -792,9 +779,10 @@ export async function buildPublicContentReferenceGroup(
     referenceContent,
     includePrivate,
   );
+  const loadExternalLink = createExternalLinkLoader();
   const links = await Promise.all(
     candidates.links.map((candidate) =>
-      buildPublicReferenceLink(candidate, includePrivate),
+      buildPublicReferenceLink(candidate, includePrivate, loadExternalLink),
     ),
   );
   return {
@@ -825,6 +813,9 @@ export async function buildPublicContentReferenceGroup(
 async function buildPublicReferenceLink(
   candidate: ContentReferenceLinkCandidate,
   includePrivate: boolean,
+  loadExternalLink: ReturnType<
+    typeof createExternalLinkLoader
+  > = findExternalLink,
 ): Promise<PublicReferenceLink | undefined> {
   const resolved =
     candidate.kind === 'external'
@@ -836,7 +827,7 @@ async function buildPublicReferenceLink(
   // A note is why the link was worth making, which says more in a list than
   // the name of whatever it points at.
   if (resolved.kind === 'external') {
-    const link = await findExternalLink(resolved.url);
+    const link = await loadExternalLink(resolved.url);
     return {
       kind: 'external',
       title: resolved.note || link?.title || externalLinkHostname(resolved.url),

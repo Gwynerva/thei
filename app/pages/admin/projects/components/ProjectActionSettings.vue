@@ -206,7 +206,7 @@ onUnmounted(() => clearTimeout(linkTimer));
 async function loadLinkPreview(url: string, requestId: number) {
   try {
     const preview = await $fetch<ExternalLink>(
-      '/api/admin/external-link-previews',
+      '/api/admin/external-links',
       { method: 'POST', body: { url } },
     );
     if (requestId !== linkRequestId) return;

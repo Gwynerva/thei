@@ -146,7 +146,7 @@ const loadPreview = debounce(async (version: number, rawUrl: string) => {
     previewController = controller;
 
     const result = await $fetch<ExternalLink>(
-      '/api/admin/external-link-previews',
+      '/api/admin/external-links',
       {
         method: 'POST',
         body: { url },

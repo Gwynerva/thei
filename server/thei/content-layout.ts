@@ -10,7 +10,7 @@ export const THEI_CONTENT_DIRS = {
   assets: 'assets',
   /** Procedurally generated entity icons. Regenerable cache. */
   generatedMedia: 'generated-media',
-  /** Favicons fetched for external link previews. Regenerable cache. */
+  /** Favicons of external links, fetched once when a link is put in. */
   externalLinkFavicons: 'external-link-favicons',
 } as const;
 
@@ -24,20 +24,25 @@ export type TheiContentDir =
  * not a cache: nothing regenerates them, bulk re-encoding is forbidden, and a
  * missing file makes cleanup delete the `assets` row that points at it. Leaving
  * them out of a backup loses data rather than saving space.
+ *
+ * External link favicons are read from a site once, when the admin puts the
+ * link in, and never again on the engine's own initiative: a missing file is
+ * served as a neutral tile until the link is refreshed by hand. They are tiny,
+ * so a backup keeps them.
  */
 export const THEI_BACKUP_DIRS: readonly TheiContentDir[] = [
   THEI_CONTENT_DIRS.assets,
+  THEI_CONTENT_DIRS.externalLinkFavicons,
 ];
 
 /**
  * Directories the engine rebuilds on demand.
  *
- * Deliberately left out of backups: icons are redrawn and favicons refetched
- * the first time something asks for them.
+ * Deliberately left out of backups: icons are redrawn the first time
+ * something asks for them.
  */
 export const THEI_REGENERABLE_DIRS: readonly TheiContentDir[] = [
   THEI_CONTENT_DIRS.generatedMedia,
-  THEI_CONTENT_DIRS.externalLinkFavicons,
 ];
 
 /** Files at the root of `content/` that a backup has to capture. */

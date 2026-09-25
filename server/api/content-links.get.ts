@@ -7,8 +7,11 @@ import {
   type ResolvedContentLink,
 } from '#layers/thei/shared/content-link';
 import { normalizeExternalLinkUrl } from '#layers/thei/shared/external-link';
-import { findExternalLink } from '../thei/external-links/repository';
-import { persistExternalLink } from '../thei/external-links/preview';
+import {
+  findExternalLink,
+  refreshExternalLink,
+  toResolvedExternalLink,
+} from '../thei/external-links/repository';
 import { canResolveContentEntityLink } from '../thei/content-links/access';
 import { findContentEntity } from '../thei/content-entities';
 
@@ -85,9 +88,11 @@ async function resolveExternalLink(
     };
   }
 
+  // A visitor only ever sees what is stored; an admin's editor may bring a
+  // link the site has never seen, which is read once and kept.
   let link = await findExternalLink(url);
   if (!link && event.context.isAdmin) {
-    link = await persistExternalLink(url).catch(() => undefined);
+    link = await refreshExternalLink(url).catch(() => undefined);
   }
   if (!link) {
     return {
@@ -98,13 +103,5 @@ async function resolveExternalLink(
       reason: 'unavailable',
     };
   }
-  return {
-    kind: 'external',
-    url,
-    state: 'resolved',
-    href: url,
-    title: link.title,
-    description: link.description,
-    iconMedia: link.faviconMedia,
-  };
+  return toResolvedExternalLink(link);
 }

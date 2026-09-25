@@ -11,7 +11,7 @@ import {
   ProjectContentItemError,
 } from '../project-content-item';
 import { normalizeProjectAction } from '../project-action';
-import { normalizeExternalLinkUrl } from '../external-link';
+import { validateExternalLinkList } from '../external-link';
 import { isOneOf } from '../utils/isOneOf';
 import {
   normalizeHumanReadableSlug,
@@ -105,18 +105,8 @@ function validateFiles(files: EventEditData['otherAssets']) {
 }
 
 function validateExternalLinks(links: EventEditData['externalLinks']) {
-  if (links === undefined) return undefined;
-  if (!Array.isArray(links)) throw new Error('Invalid external links');
-  const seen = new Set<string>();
-  return links.map((link) => {
-    const url = normalizeExternalLinkUrl(link.url);
-    if (seen.has(url)) throw new Error('Duplicate external link');
-    seen.add(url);
-    const name = optionalText(link.name);
-    if (!name) throw new Error('External link name cannot be empty');
-    if (typeof link.isPrivate !== 'boolean')
-      throw new Error('Invalid external link privacy');
-    return { ...link, url, name, isPrivate: link.isPrivate };
+  return validateExternalLinkList(links, (message): never => {
+    throw new Error(message);
   });
 }
 

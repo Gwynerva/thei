@@ -6,8 +6,11 @@ import { and, eq } from 'drizzle-orm';
 import type { ProjectSaveResponse } from '#layers/thei/shared/api/project';
 import { ContentValidationError } from '#layers/thei/shared/content';
 import { EntityPrefix, generateUniqueId } from '../../../thei/entity-id';
-import { cleanupOrphanExternalLinks } from '../../../thei/external-links/repository';
-import { prepareExternalLinks } from '../../../thei/external-links/prepare';
+import {
+  ensureExternalLinks,
+  entityExternalLinkUrls,
+  scheduleExternalLinkSweep,
+} from '../../../thei/external-links/repository';
 import { validateProjectAssets } from '../../../thei/projects/validate-assets';
 import { syncProjectActionUsages } from '../../../thei/projects/action-usages';
 import {
@@ -28,7 +31,7 @@ import {
 } from '../../../thei/projects/content-items';
 import { applyRelations, prepareRelations } from '../../../thei/relations';
 import { applyTagUsages, prepareTagUsages } from '../../../thei/tags';
-import { applyProjectExternalLinks } from '../../../thei/projects/external-links';
+import { applyExternalLinkList } from '../../../thei/external-links/lists';
 import {
   applyStatusEdits,
   getStatusHistory,
@@ -135,16 +138,9 @@ export default defineEventHandler(
         message: error instanceof Error ? error.message : 'Invalid tags',
       };
     }
-    let preparedExternalLinks;
-    try {
-      preparedExternalLinks = await prepareExternalLinks(result.externalLinks);
-    } catch (error) {
-      return {
-        type: 'error',
-        message:
-          error instanceof Error ? error.message : 'Invalid external links',
-      };
-    }
+    await ensureExternalLinks(
+      entityExternalLinkUrls(result.externalLinks, result.action),
+    );
 
     const { db, schema } = THEI_SERVER.useDb();
     const now = Date.now();
@@ -192,7 +188,12 @@ export default defineEventHandler(
         { type: 'project', id: projectUuid },
         preparedRelations,
       );
-      applyProjectExternalLinks(tx, schema, projectUuid, preparedExternalLinks);
+      applyExternalLinkList(
+        tx,
+        schema,
+        { type: 'project', id: projectUuid },
+        result.externalLinks,
+      );
       applyTagUsages(tx, schema, 'project', projectUuid, preparedTags);
       applyStatusEdits(
         tx,
@@ -251,7 +252,7 @@ export default defineEventHandler(
       }
     });
 
-    await cleanupOrphanExternalLinks();
+    scheduleExternalLinkSweep();
     return {
       type: 'success',
       projectUuid,

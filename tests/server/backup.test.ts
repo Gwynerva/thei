@@ -33,12 +33,10 @@ describe('content classification', () => {
     expect(unclassifiedContentDirs()).toEqual([]);
   });
 
-  it('keeps assets in backups and the two caches out of them', () => {
+  it('keeps assets and favicons in backups and the icon cache out of them', () => {
     expect(THEI_BACKUP_DIRS).toContain(THEI_CONTENT_DIRS.assets);
+    expect(THEI_BACKUP_DIRS).toContain(THEI_CONTENT_DIRS.externalLinkFavicons);
     expect(THEI_REGENERABLE_DIRS).toContain(THEI_CONTENT_DIRS.generatedMedia);
-    expect(THEI_REGENERABLE_DIRS).toContain(
-      THEI_CONTENT_DIRS.externalLinkFavicons,
-    );
     expect(THEI_BACKUP_DIRS).not.toContain(THEI_CONTENT_DIRS.generatedMedia);
   });
 
@@ -61,9 +59,12 @@ describe('backup path resolution', () => {
     );
   });
 
-  it('serves asset files straight from content', () => {
+  it('serves asset and favicon files straight from content', () => {
     expect(resolveBackupFile(session, 'assets/ab/abcd.webp')).toBe(
       join(CONTENT, 'assets', 'ab', 'abcd.webp'),
+    );
+    expect(resolveBackupFile(session, 'external-link-favicons/x.webp')).toBe(
+      join(CONTENT, 'external-link-favicons', 'x.webp'),
     );
   });
 
@@ -84,9 +85,6 @@ describe('backup path resolution', () => {
   it('refuses directories the backup does not cover', () => {
     expect(
       resolveBackupFile(session, 'generated-media/x.avif'),
-    ).toBeUndefined();
-    expect(
-      resolveBackupFile(session, 'external-link-favicons/x.webp'),
     ).toBeUndefined();
     expect(resolveBackupFile(session, 'media-sources/x.bin')).toBeUndefined();
   });

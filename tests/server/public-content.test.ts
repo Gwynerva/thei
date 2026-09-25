@@ -8,7 +8,7 @@ import {
 } from '../../server/thei/public/content';
 import {
   buildPublicContentReferenceGroup,
-  buildPublicManualEventReferenceGroup,
+  buildPublicManualReferenceGroup,
   buildPublicReferences,
   resolveSiteEntityCandidate,
   buildPublicProjectSectionSummary,
@@ -888,7 +888,7 @@ describe('public content reference groups', () => {
       },
     ];
 
-    expect(buildPublicManualEventReferenceGroup(links, files, false)).toEqual({
+    expect(buildPublicManualReferenceGroup(links, files, false)).toEqual({
       links: [
         {
           kind: 'external',
@@ -901,7 +901,7 @@ describe('public content reference groups', () => {
       files,
     });
     expect(
-      buildPublicManualEventReferenceGroup(links, files, true).links,
+      buildPublicManualReferenceGroup(links, files, true).links,
     ).toHaveLength(2);
   });
 });

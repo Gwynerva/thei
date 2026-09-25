@@ -31,7 +31,7 @@ import {
   type ProjectActionEditData,
 } from '../project-action';
 import {
-  normalizeExternalLinkUrl,
+  validateExternalLinkList,
   type ProjectExternalLinkEditItem,
 } from '../external-link';
 import {
@@ -269,33 +269,9 @@ export function validateProjectData(
 
 function validateProjectExternalLinks(
   links: ProjectExternalLinkEditItem[] | undefined,
-): ProjectExternalLinkEditItem[] | undefined {
-  if (links === undefined) return undefined;
-  if (!Array.isArray(links))
-    throw new ProjectValidationError('Invalid external links');
-  const seen = new Set<string>();
-  return links.map((link) => {
-    const url = normalizeExternalLinkUrl(link.url);
-    if (seen.has(url))
-      throw new ProjectValidationError('Duplicate external link');
-    seen.add(url);
-    const name = link.name?.trim();
-    if (!name)
-      throw new ProjectValidationError('External link name cannot be empty');
-    if (Array.from(name).length > 300)
-      throw new ProjectValidationError('External link name is too long');
-    if (typeof link.isPrivate !== 'boolean')
-      throw new ProjectValidationError('Invalid external link privacy');
-    return {
-      url,
-      name,
-      isPrivate: link.isPrivate,
-      ...(typeof link.touchedAt === 'number' &&
-      Number.isFinite(link.touchedAt) &&
-      link.touchedAt > 0
-        ? { touchedAt: link.touchedAt }
-        : {}),
-    };
+) {
+  return validateExternalLinkList(links, (message): never => {
+    throw new ProjectValidationError(message);
   });
 }
 

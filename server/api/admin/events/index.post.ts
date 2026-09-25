@@ -9,11 +9,14 @@ import {
   applyPreparedContentSave,
 } from '../../../thei/content/repository';
 import { applyEventPeriods } from '../../../thei/events/periods';
-import { applyEventExternalLinks } from '../../../thei/events/external-links';
-import { prepareExternalLinks } from '../../../thei/external-links/prepare';
+import { applyExternalLinkList } from '../../../thei/external-links/lists';
 import { prepareTagUsages, applyTagUsages } from '../../../thei/tags';
 import { syncEntityActionUsages } from '../../../thei/projects/action-usages';
-import { cleanupOrphanExternalLinks } from '../../../thei/external-links/repository';
+import {
+  ensureExternalLinks,
+  entityExternalLinkUrls,
+  scheduleExternalLinkSweep,
+} from '../../../thei/external-links/repository';
 import { applyRelations, prepareRelations } from '../../../thei/relations';
 
 export default defineEventHandler(async (event): Promise<EventSaveResponse> => {
@@ -46,10 +49,12 @@ export default defineEventHandler(async (event): Promise<EventSaveResponse> => {
     };
   }
   try {
-    const [contentSave, notesSave, externalLinks, tags] = await Promise.all([
+    await ensureExternalLinks(
+      entityExternalLinkUrls(result.externalLinks, result.action),
+    );
+    const [contentSave, notesSave, tags] = await Promise.all([
       prepareContentForSave('event', eventUuid, 'event-body', result.content),
       prepareContentForSave('event', eventUuid, 'event-notes', result.notes),
-      prepareExternalLinks(result.externalLinks),
       prepareTagUsages(result.tags),
     ]);
     if (contentSave.type !== 'save')
@@ -89,7 +94,12 @@ export default defineEventHandler(async (event): Promise<EventSaveResponse> => {
         'event-notes',
         notesSave,
       );
-      applyEventExternalLinks(tx, schema, eventUuid, externalLinks);
+      applyExternalLinkList(
+        tx,
+        schema,
+        { type: 'event', id: eventUuid },
+        result.externalLinks,
+      );
       applyTagUsages(tx, schema, 'event', eventUuid, tags);
       applyRelations(
         tx,
@@ -120,7 +130,7 @@ export default defineEventHandler(async (event): Promise<EventSaveResponse> => {
           .run();
       });
     });
-    await cleanupOrphanExternalLinks();
+    scheduleExternalLinkSweep();
     return { type: 'success', eventUuid, action: result.action };
   } catch (error) {
     return {
