@@ -245,7 +245,7 @@ const ownerNotesContents = computed(() =>
               :title="phrase.project_content_sections"
               icon="file-tray-stack"
             />
-            <div class="grid gap-sm">
+            <div class="grid gap-md">
               <PublicProjectChildCard
                 v-for="section in data.sections"
                 :key="section.href"
@@ -274,7 +274,7 @@ const ownerNotesContents = computed(() =>
               }"
             />
             <!-- One card per row: the sidebar already narrows this column. -->
-            <div class="flex flex-col gap-sm">
+            <div class="flex flex-col gap-md">
               <LifePointCard
                 v-for="point in data.timeline.latest"
                 :key="point.key"

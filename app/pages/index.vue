@@ -94,31 +94,35 @@ usePublicSeo({
           icon: 'arrow-outward',
         }"
       />
-      <LifeActivityHeatmap />
-      <div
-        v-if="latest.points.length"
-        data-home-card-grid="latest"
-        class="grid gap-sm sm:grid-cols-2"
-      >
-        <LifePointCard
-          v-for="point in latest.points"
-          :key="point.key"
-          :point="point"
-          data-home-card
-          date-style="long"
-          compact
-          :class="{
-            'first:sm:col-span-2': publicCardGridFirstItemIsWide(
-              latest.points.length,
-            ),
-          }"
+      <!-- The heatmap is a card among the cards: the same step between it
+           and the first of them as between any two. -->
+      <div class="flex flex-col gap-md">
+        <LifeActivityHeatmap />
+        <div
+          v-if="latest.points.length"
+          data-home-card-grid="latest"
+          class="grid gap-md sm:grid-cols-2"
+        >
+          <LifePointCard
+            v-for="point in latest.points"
+            :key="point.key"
+            :point="point"
+            data-home-card
+            date-style="long"
+            compact
+            :class="{
+              'first:sm:col-span-2': publicCardGridFirstItemIsWide(
+                latest.points.length,
+              ),
+            }"
+          />
+        </div>
+        <PublicEmptyState
+          v-else
+          :title="phrase.life_empty"
+          :description="phrase.life_empty_description"
         />
       </div>
-      <PublicEmptyState
-        v-else
-        :title="phrase.life_empty"
-        :description="phrase.life_empty_description"
-      />
     </section>
     <section v-if="rewind.items.length" class="flex flex-col gap-sm">
       <PublicSectionHeader
@@ -134,7 +138,7 @@ usePublicSeo({
           icon: 'arrow-outward',
         }"
       />
-      <div data-home-card-grid="rewind" class="grid gap-sm sm:grid-cols-2">
+      <div data-home-card-grid="rewind" class="grid gap-md sm:grid-cols-2">
         <LifePointCard
           v-for="item in rewind.items"
           :key="item.point.key"
