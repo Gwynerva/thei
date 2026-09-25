@@ -74,10 +74,14 @@ const triggerClass = computed(() => {
     return 'size-9 justify-center rounded-sm text-text-2 hocus:bg-bg-3 hocus:text-text-1';
   if (variant === 'header')
     return 'gap-xs rounded-sm border border-border-1 bg-bg-2/60 px-sm py-2 text-sm font-semibold text-text-2 hocus:bg-bg-3 hocus:text-text-1';
+  // The tabs strip is light glass in the light theme and dark in the dark one.
   return [
-    'gap-xs px-xs py-sm text-sm sm:px-sm font-semibold hocus:bg-white/6',
-    'focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-inset',
-    isCustom.value ? 'text-white' : 'text-white/60 hocus:text-white',
+    'gap-xs px-xs py-sm text-sm sm:px-sm font-semibold',
+    'hocus:bg-bg-3/60 dark:hocus:bg-white/6',
+    'focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset',
+    isCustom.value
+      ? 'text-text-1 dark:text-white'
+      : 'text-text-2 hocus:text-text-1 dark:text-white/60 dark:hocus:text-white',
   ];
 });
 </script>

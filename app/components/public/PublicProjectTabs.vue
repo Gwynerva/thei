@@ -22,7 +22,7 @@ const { humanReadableSlug, publicId, active, timelineCount } = defineProps<{
 const tabs = computed(() => [
   {
     key: 'overview' as const,
-    icon: 'project' as const,
+    icon: 'blocks' as const,
     label: phrase.value.project_tab_overview,
     href: buildProjectUrl(humanReadableSlug, publicId),
   },
@@ -37,8 +37,13 @@ const tabs = computed(() => [
 </script>
 
 <template>
+  <!--
+    The hero is dark in either theme, but the strip follows the theme: in the
+    light one it is light glass, so the theme's own accent reads on it.
+  -->
   <nav
-    class="relative z-2 border-t border-white/10 bg-black/30 backdrop-blur-md"
+    class="relative z-2 border-t border-border-1 bg-bg-1/85 backdrop-blur-md
+      dark:border-white/10 dark:bg-black/30"
     :aria-label="phrase.project_tabs"
   >
     <div
@@ -51,27 +56,30 @@ const tabs = computed(() => [
         :to="tab.href"
         :aria-current="tab.key === active ? 'page' : undefined"
         class="relative flex items-center gap-xs px-xs py-sm text-sm
-          font-semibold transition focus-visible:ring-2 focus-visible:ring-white
-          focus-visible:ring-inset sm:px-sm"
+          font-semibold transition focus-visible:ring-2
+          focus-visible:ring-accent focus-visible:ring-inset sm:px-sm"
         :class="
           tab.key === active
-            ? 'text-white'
-            : 'text-white/60 hocus:bg-white/6 hocus:text-white'
+            ? 'text-accent'
+            : `text-text-2 dark:text-white/60 hocus:bg-bg-3/60 hocus:text-accent
+              dark:hocus:bg-white/6`
         "
       >
         <Icon :name="tab.icon" class="shrink-0" aria-hidden="true" />
-        <span>{{ tab.label }}</span>
+        <span class="tab-label">{{ tab.label }}</span>
         <span
           v-if="tab.count"
-          class="rounded-full bg-white/12 px-2 py-0.5 text-xs leading-none
-            tabular-nums"
+          class="rounded-full bg-bg-3 px-2 py-0.5 text-xs leading-none
+            tabular-nums dark:bg-white/12"
         >
           {{ tab.count }}
         </span>
+        <!-- Straddles the hero's lower edge, so it reads as the tab's own mark
+             rather than as the line between the hero and the page. -->
         <span
           v-if="tab.key === active"
-          class="absolute inset-x-xs bottom-0 h-0.5 rounded-full bg-white
-            sm:inset-x-sm"
+          class="absolute inset-x-xs -bottom-0.5 h-1 rounded-full bg-accent
+            shadow-md shadow-accent/50 sm:inset-x-sm"
           aria-hidden="true"
         />
       </TheiLink>
@@ -86,3 +94,12 @@ const tabs = computed(() => [
     </div>
   </nav>
 </template>
+
+<style scoped>
+/* A halo in the strip's own colour lifts the letters off the banner behind. */
+.tab-label {
+  text-shadow:
+    0 0.03em 0.08em var(--color-bg-1),
+    0 0 0.6em var(--color-bg-1);
+}
+</style>

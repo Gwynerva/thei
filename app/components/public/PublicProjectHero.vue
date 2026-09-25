@@ -30,7 +30,7 @@ const visibleTags = computed(() => props.tags.slice(0, 3));
 
 <template>
   <header
-    class="project-hero relative isolate w-full overflow-hidden text-white"
+    class="project-hero relative isolate w-full overflow-x-clip text-white"
     :class="{ 'project-hero-with-banner': bannerMedia }"
     :style="{
       '--project-hero-accent': accent,
