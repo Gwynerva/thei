@@ -163,7 +163,7 @@ function reset() {
                 focus-visible:outline-none"
               :class="
                 facet.state === 'include'
-                  ? `border-accent/45 bg-bg-accent text-text-1
+                  ? `border-accent/45 bg-bg-accent text-accent
                     hocus:border-accent`
                   : `border-border-error bg-bg-error text-text-2
                     hocus:text-text-1`
@@ -228,9 +228,11 @@ function reset() {
               />
               <Icon v-else name="tag" />
             </span>
-            <span class="min-w-0 flex-1 truncate text-xs">{{
-              facet.tag.title
-            }}</span>
+            <span
+              class="min-w-0 flex-1 truncate text-xs"
+              :style="{ color: tagAccentCssColor(facet.tag) }"
+              >{{ publicText(facet.tag.title) }}</span
+            >
             <span class="text-xs text-text-3 tabular-nums">{{
               facet.count
             }}</span>
