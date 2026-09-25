@@ -99,7 +99,8 @@ useHashDisclosure('#avatars', open, history.load);
     <div
       v-if="open"
       id="avatars"
-      class="border-t border-border-1 bg-bg-1/40 p-md"
+      class="scroll-mt-[var(--public-anchor-offset,8rem)] border-t
+        border-border-1 bg-bg-1/40 p-md"
     >
       <ProfileAvatarHistory
         :items="history.items.value"

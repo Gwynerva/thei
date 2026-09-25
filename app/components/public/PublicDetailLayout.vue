@@ -4,10 +4,7 @@ import {
   buildContentHeadings,
   type ContentHeading,
 } from '#layers/thei/app/components/content/content-headings';
-import {
-  useSheetContentNavigation,
-  type PublicDetailPanelData,
-} from './public-detail';
+import type { PublicDetailPanelData } from './public-detail';
 
 const props = defineProps<{
   details: PublicDetailPanelData;
@@ -24,18 +21,12 @@ const panelData = computed<PublicDetailPanelData>(() => ({
     ...(props.extraContents ?? []),
   ],
 }));
-const navigateFromSheet = useSheetContentNavigation();
 </script>
 
 <template>
   <PublicSheet :title="phrase.public_details_overview">
     <template #summary><PublicDetailMetrics :data="panelData" /></template>
-    <template #default="{ close }">
-      <PublicDetailPanel
-        :data="panelData"
-        @navigate="(id, event) => navigateFromSheet(id, event, close)"
-      />
-    </template>
+    <PublicDetailPanel :data="panelData" />
   </PublicSheet>
   <div
     class="grid min-w-0 items-start gap-md

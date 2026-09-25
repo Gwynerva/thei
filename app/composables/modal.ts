@@ -112,6 +112,11 @@ export function installModalNavigationInterceptor(router: Router) {
   function pushSentinel() {
     if (sentinelActive || !activeModal.value || activeModal.value.leaving)
       return;
+    // Releasing the sentinel travels back through history, and on a freshly
+    // loaded page, where Nuxt still leaves scrolling to the browser until the
+    // first navigation, that trip restores the scroll the page had when the
+    // modal opened, undoing whatever a link in the modal scrolled to.
+    window.history.scrollRestoration = 'manual';
     window.history.pushState(
       { ...window.history.state, [MODAL_HISTORY_STATE]: true },
       '',

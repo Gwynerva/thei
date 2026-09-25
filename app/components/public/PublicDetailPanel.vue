@@ -3,13 +3,6 @@ import type { PublicDetailPanelData } from './public-detail';
 import { publicReferenceSplitSize } from '#layers/thei/shared/public-references';
 
 const { data } = defineProps<{ data: PublicDetailPanelData }>();
-const emit = defineEmits<{
-  navigate: [id: string, event: MouseEvent];
-}>();
-
-function navigate(id: string, event: MouseEvent) {
-  emit('navigate', id, event);
-}
 
 /** Manual entries first, then whatever the content itself mentions. */
 function referenceGroups<T>(split: { manual: T[]; content: T[] }) {
@@ -36,7 +29,7 @@ function referenceGroups<T>(split: { manual: T[]; content: T[] }) {
       v-if="data.contents?.length"
       :title="phrase.public_details_contents"
     >
-      <PublicContentContents :items="data.contents" @navigate="navigate" />
+      <PublicContentContents :items="data.contents" />
     </PublicCollapsibleSection>
     <PublicCollapsibleSection
       v-if="data.periods?.length"

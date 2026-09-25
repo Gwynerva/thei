@@ -25,7 +25,12 @@ async function toggle() {
 useHashDisclosure('#statuses', expanded, history.load);
 </script>
 <template>
-  <ProfileInfoBlock id="statuses" :title="title" :compact="compact">
+  <ProfileInfoBlock
+    id="statuses"
+    :title="title"
+    :compact="compact"
+    class="scroll-mt-[var(--public-anchor-offset,8rem)]"
+  >
     <ProfileStatusItem v-if="!expanded" :item="current" standalone short-date />
     <div v-else class="scrollbar-hover max-h-96 overflow-y-auto pr-xs">
       <div class="divide-y divide-border-1">

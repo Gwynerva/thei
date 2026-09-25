@@ -2,9 +2,6 @@
 import type { ContentHeading } from '#layers/thei/app/components/content/content-headings';
 
 defineProps<{ items: ContentHeading[] }>();
-const emit = defineEmits<{
-  navigate: [id: string, event: MouseEvent];
-}>();
 </script>
 
 <template>
@@ -21,7 +18,6 @@ const emit = defineEmits<{
         focus-visible:ring-accent focus-visible:outline-none hocus:text-text-1
         hocus:underline"
       :class="item.level === 3 ? 'pl-sm text-xs' : 'text-sm'"
-      @click="emit('navigate', item.id, $event)"
     >
       <span v-if="item.icon" class="flex h-lh shrink-0 items-center">
         <Icon :name="item.icon" class="text-text-3" aria-hidden="true" />

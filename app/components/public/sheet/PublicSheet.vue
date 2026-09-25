@@ -11,7 +11,7 @@ const props = defineProps<{ title: string; icon?: IconName }>();
 const emit = defineEmits<{ open: []; close: [] }>();
 const slots = defineSlots<{
   summary?: () => unknown;
-  default: (props: { close: () => Promise<boolean> }) => unknown;
+  default: () => unknown;
 }>();
 
 async function open() {
@@ -20,7 +20,7 @@ async function open() {
     title: () => props.title,
     icon: () => props.icon,
     summary: () => slots.summary?.(),
-    content: (close) => slots.default({ close }),
+    content: () => slots.default(),
   });
   await modalHistorySettled();
   emit('close');
