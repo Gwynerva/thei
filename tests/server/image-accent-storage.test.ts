@@ -20,7 +20,7 @@ afterEach(() => {
 it('replaces a stored favicon color with neutral and clears a missing color', async () => {
   rawDb = new Database(':memory:');
   rawDb.exec(
-    'CREATE TABLE "external-links" (url TEXT PRIMARY KEY, title TEXT, description TEXT, faviconKey TEXT NOT NULL, accent TEXT, touchedAt INTEGER NOT NULL)',
+    `CREATE TABLE "external-links" (url TEXT PRIMARY KEY, title TEXT, description TEXT, faviconKey TEXT NOT NULL, accent TEXT, status TEXT NOT NULL DEFAULT 'complete', touchedAt INTEGER NOT NULL)`,
   );
   const schema = { externalLinks };
   const db = drizzle(rawDb, { schema });

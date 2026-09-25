@@ -5,12 +5,19 @@ export const EXTERNAL_LINK_PREVIEW_TIMEOUT = 10_000;
 
 export type ExternalLinkPreviewStatus = 'complete' | 'fallback';
 
+/**
+ * How the details of a link were obtained: from the site itself, from an
+ * archived copy of the page, or not at all (the hostname stands in).
+ */
+export type ExternalLinkStatus = 'complete' | 'archived' | 'fallback';
+
 export interface ExternalLink {
   url: string;
   title?: string;
   description?: string;
   faviconMedia: MediaDescriptor;
   hasFavicon?: boolean;
+  status?: ExternalLinkStatus;
   touchedAt: number;
   previewStatus?: ExternalLinkPreviewStatus;
 }

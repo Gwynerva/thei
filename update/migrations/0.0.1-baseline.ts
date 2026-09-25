@@ -260,6 +260,7 @@ export const baselineSql: string[] = [
 	\`description\` text,
 	\`faviconKey\` text NOT NULL,
 	\`accent\` text,
+	\`status\` text DEFAULT 'complete' NOT NULL,
 	\`touchedAt\` integer NOT NULL
 );
 `,

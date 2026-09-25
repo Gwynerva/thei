@@ -6,7 +6,10 @@ import { dirname } from 'node:path';
 import { eq } from 'drizzle-orm';
 import sharp from 'sharp';
 import { collectContentExternalLinkUrls } from '#layers/thei/shared/content';
-import type { ExternalLink } from '#layers/thei/shared/external-link';
+import type {
+  ExternalLink,
+  ExternalLinkStatus,
+} from '#layers/thei/shared/external-link';
 import { iconSymbols } from '#thei/icon-symbols';
 import { extractImageAccent } from '../assets/image-color';
 import { THEI_CONTENT_DIRS } from '../content-layout';
@@ -149,6 +152,7 @@ export function toExternalLink(row: {
   description: string | null;
   faviconKey: string;
   accent: ImageAccent | null;
+  status: ExternalLinkStatus;
   touchedAt: number;
 }): ExternalLink {
   return {
@@ -160,6 +164,7 @@ export function toExternalLink(row: {
       normalizeImageAccent(row.accent),
       row.touchedAt,
     ),
+    status: row.status,
     touchedAt: row.touchedAt,
   };
 }
@@ -171,8 +176,9 @@ export function upsertExternalLink(
   },
 ) {
   const { db, schema } = THEI_SERVER.useDb();
+  const status = data.status ?? 'complete';
   db.insert(schema.externalLinks)
-    .values(data)
+    .values({ ...data, status })
     .onConflictDoUpdate({
       target: schema.externalLinks.url,
       set: {
@@ -180,6 +186,7 @@ export function upsertExternalLink(
         description: data.description,
         faviconKey: data.faviconKey,
         accent: data.accent ?? null,
+        status,
         touchedAt: data.touchedAt,
       },
     })
