@@ -469,7 +469,7 @@ export default defineI18nBase({
     search_empty: 'Nothing found',
     search_empty_description: 'Try a different query or loosen the filters.',
     forbidden_title: 'This place is private',
-    forbidden_description: 'The owner has closed public access to this site.',
+    forbidden_description: 'Only the administrator can view this.',
     not_found_title: 'Nothing lives here',
     not_found_description:
       'The page may have moved, disappeared, or never existed.',
@@ -597,19 +597,20 @@ export default defineI18nBase({
     invalid_secret_phrase_or_password: 'Invalid secret phrase or password!',
     sign_in_too_many_attempts:
       'Too many sign-in attempts! Try again in a moment.',
-    sign_in_link: 'Sign-in link',
+    sign_in_link: 'Quick sign-in',
     sign_in_link_description:
       'A one-time link that signs you in on another device. Scan the code with the phone camera or send yourself the address.',
-    sign_in_link_create: 'Sign in on another device',
+    sign_in_link_renew: 'New link',
     sign_in_link_invalid:
       'This link no longer works: it has already been used or has expired.',
     sign_in_link_too_many:
       'Too many active links. Revoke one before creating another.',
     sign_in_link_expires: (time) => `Expires ${time}`,
     sign_in_link_confirm: 'Sign in on this device?',
-    sign_in_link_confirm_hint:
-      'The link works once. After signing in it stops working for everyone else who has it.',
     sign_in_link_copied: 'Link copied',
+    sign_in_link_copy: 'Copy link',
+    sign_in_link_copy_qr: 'Copy QR',
+    sign_in_link_qr: 'QR code of the sign-in link',
     copy: 'Copy',
     share_links: 'Temporary access',
     share_links_description:
@@ -710,6 +711,7 @@ export default defineI18nBase({
     disk_other_files: 'Other files',
     disk_free_space: 'Free',
     disk_free_short: (size) => `${size} free`,
+    disk_thei_short: (size) => `Thei uses ${size}`,
     backups: 'Backups',
     backups_description:
       'A copy of `content/` pulled onto a machine you control. Generate a ' +

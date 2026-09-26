@@ -95,11 +95,12 @@ async function openSignInLink() {
     <Button
       variant="secondary"
       class="shrink-0"
+      :aria-label="phrase.sign_in_link"
       :data-title-popup="phrase.sign_in_link_description"
       @click="openSignInLink"
     >
       <Icon name="link" class="mr-xs" />
-      <span class="max-sm:hidden">{{ phrase.sign_in_link_create }}</span>
+      <span class="max-sm:hidden">{{ phrase.sign_in_link }}</span>
     </Button>
   </div>
   <div

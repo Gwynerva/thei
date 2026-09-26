@@ -455,13 +455,15 @@ export type LanguagePhrases = {
   sign_in_too_many_attempts: string;
   sign_in_link: string;
   sign_in_link_description: string;
-  sign_in_link_create: string;
+  sign_in_link_renew: string;
   sign_in_link_invalid: string;
   sign_in_link_too_many: string;
   sign_in_link_expires: (time: string) => string;
   sign_in_link_confirm: string;
-  sign_in_link_confirm_hint: string;
   sign_in_link_copied: string;
+  sign_in_link_copy: string;
+  sign_in_link_copy_qr: string;
+  sign_in_link_qr: string;
   copy: string;
   share_links: string;
   share_links_description: string;
@@ -541,6 +543,7 @@ export type LanguagePhrases = {
   disk_other_files: string;
   disk_free_space: string;
   disk_free_short: (size: string) => string;
+  disk_thei_short: (size: string) => string;
   backups: string;
   backups_description: string;
   backup_last: string;

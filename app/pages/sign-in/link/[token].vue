@@ -64,9 +64,6 @@ async function signIn() {
           <div class="text-2xl font-bold">{{ publicAdmin.displayName }}</div>
           <div class="text-text-2">{{ phrase.sign_in_link_confirm }}</div>
         </div>
-        <p class="text-center text-sm text-text-3">
-          {{ phrase.sign_in_link_confirm_hint }}
-        </p>
         <Button
           class="text-lg font-semibold"
           :disabled="signingIn"
@@ -86,13 +83,6 @@ async function signIn() {
           <Icon name="warning" class="mr-xs" />
           <span>{{ error }}</span>
         </div>
-        <TheiLink
-          to="/sign-in/"
-          class="text-center text-sm text-text-3 underline-offset-2
-            hocus:underline"
-        >
-          {{ phrase.sign_in }}
-        </TheiLink>
       </section>
     </div>
   </AdminGridWrapper>

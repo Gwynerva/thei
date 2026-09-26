@@ -109,8 +109,10 @@ const diskPopup = computed(() => {
         </span>
       </div>
 
+      <!-- The disk and the backup each say two things, and break between
+      them where even a line of their own is too narrow for both. -->
       <div
-        class="flex shrink-0 items-center gap-xs"
+        class="flex min-w-0 items-center gap-xs"
         :class="disk ? undefined : 'text-text-error'"
         :data-title-popup="diskPopup"
         tabindex="0"
@@ -118,7 +120,7 @@ const diskPopup = computed(() => {
         <svg
           v-if="disk"
           viewBox="0 0 36 36"
-          class="size-5 -rotate-90"
+          class="size-5 shrink-0 -rotate-90"
           role="img"
           :aria-label="phrase.disk_usage"
         >
@@ -143,39 +145,44 @@ const diskPopup = computed(() => {
             :stroke-dashoffset="-segment.offset"
           />
         </svg>
-        <Icon v-else name="warning" />
-        <span>
-          {{
-            disk
-              ? phrase.disk_free_short(humanSize(disk.free))
-              : phrase.failed_to_fetch_data
-          }}
-        </span>
+        <Icon v-else name="warning" class="shrink-0" />
+        <span v-if="disk" class="flex min-w-0 flex-wrap items-center gap-x-xs"
+          ><span class="text-accent">{{
+            phrase.disk_thei_short(humanSize(disk.theiUsed))
+          }}</span
+          ><span class="text-text-3">{{
+            phrase.disk_free_short(humanSize(disk.free))
+          }}</span></span
+        >
+        <span v-else>{{ phrase.failed_to_fetch_data }}</span>
       </div>
 
       <div
-        class="flex shrink-0 items-center gap-xs"
+        class="flex min-w-0 items-center gap-xs"
         :class="backupStale ? 'text-text-warning' : undefined"
       >
         <Icon
           :name="backupStale ? 'warning' : 'files'"
+          class="shrink-0"
           :class="backupStale ? undefined : 'text-text-3'"
         />
-        <TheiLink
-          v-if="backupStale"
-          to="/admin/settings/"
-          class="underline-offset-2 hocus:underline"
-          :data-title-popup="phrase.backup_stale_warning"
-        >
-          {{ lastBackupAt ? phrase.backup_stale_short : phrase.backup_never }}
-        </TheiLink>
-        <span
-          v-if="lastBackupAt"
-          class="flex items-center gap-1"
-          :class="backupStale ? 'text-text-3' : undefined"
-          ><span>{{ phrase.backup_last }}</span
-          ><TheiTime :datetime="lastBackupAt"
-        /></span>
+        <span class="flex min-w-0 flex-wrap items-center gap-x-xs">
+          <TheiLink
+            v-if="backupStale"
+            to="/admin/settings/"
+            class="underline-offset-2 hocus:underline"
+            :data-title-popup="phrase.backup_stale_warning"
+          >
+            {{ lastBackupAt ? phrase.backup_stale_short : phrase.backup_never }}
+          </TheiLink>
+          <span
+            v-if="lastBackupAt"
+            class="flex items-center gap-1"
+            :class="backupStale ? 'text-text-3' : undefined"
+            ><span>{{ phrase.backup_last }}</span
+            ><TheiTime :datetime="lastBackupAt"
+          /></span>
+        </span>
       </div>
 
       <span v-if="systemError" class="flex items-center gap-1 text-text-error">

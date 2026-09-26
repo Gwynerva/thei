@@ -526,7 +526,7 @@ export default defineI18nModule({
     search_empty_description:
       'Попробуйте изменить запрос или ослабить фильтры.',
     forbidden_title: 'Это личное пространство',
-    forbidden_description: 'Владелец закрыл публичный доступ к сайту.',
+    forbidden_description: 'Только администратор может просматривать это.',
     not_found_title: 'Здесь ничего нет',
     not_found_description:
       'Страница могла переехать, исчезнуть или никогда не существовала.',
@@ -654,19 +654,20 @@ export default defineI18nModule({
     invalid_secret_phrase_or_password: 'Неверная секретная фраза или пароль!',
     sign_in_too_many_attempts:
       'Слишком много попыток входа! Попробуйте через несколько секунд.',
-    sign_in_link: 'Ссылка для входа',
+    sign_in_link: 'Быстрый вход',
     sign_in_link_description:
       'Одноразовая ссылка, которая входит в админку на другом устройстве. Отсканируйте код камерой телефона или отправьте себе адрес.',
-    sign_in_link_create: 'Войти на другом устройстве',
+    sign_in_link_renew: 'Новая ссылка',
     sign_in_link_invalid:
       'Эта ссылка больше не работает: её уже использовали или срок истёк.',
     sign_in_link_too_many:
       'Слишком много активных ссылок. Отзовите одну, прежде чем создавать новую.',
     sign_in_link_expires: (time) => `Истекает ${time}`,
     sign_in_link_confirm: 'Войти в админку на этом устройстве?',
-    sign_in_link_confirm_hint:
-      'Ссылка сработает один раз. После входа она перестанет работать у всех, у кого она есть.',
     sign_in_link_copied: 'Ссылка скопирована',
+    sign_in_link_copy: 'Копировать ссылку',
+    sign_in_link_copy_qr: 'Копировать QR',
+    sign_in_link_qr: 'QR-код ссылки для входа',
     copy: 'Копировать',
     share_links: 'Временный доступ',
     share_links_description:
@@ -771,6 +772,7 @@ export default defineI18nModule({
     disk_other_files: 'Прочие файлы',
     disk_free_space: 'Свободно',
     disk_free_short: (size) => `${size} свободно`,
+    disk_thei_short: (size) => `Thei занимает ${size}`,
     backups: 'Резервные копии',
     backups_description:
       'Копия `content/` на машине, которой вы управляете. Сгенерируйте токен, ' +
