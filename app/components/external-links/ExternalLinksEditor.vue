@@ -21,7 +21,6 @@ const links = defineModel<ExternalLinkListItem[]>({
   required: true,
 });
 
-const addButton = useTemplateRef<HTMLElement>('addButton');
 const linksRoot = useTemplateRef<HTMLElement>('linksRoot');
 
 const externalLinks = useExternalLinks();
@@ -153,26 +152,20 @@ onUnmounted(() => draft.reset());
 
 <template>
   <div>
-    <div class="mb-md flex items-center gap-md">
-      <SectionHeader
-        icon="external-link"
-        :title="title"
-        :description="description"
-        class="flex-1"
-      />
-
-      <button
-        ref="addButton"
-        type="button"
-        class="size-12 shrink-0 cursor-pointer rounded-normal bg-bg-3
-          text-text-2 transition-colors hocus:bg-bg-accent hocus:text-accent"
-        :aria-label="phrase.add_external_link"
-        :data-title-popup="phrase.add_external_link"
-        @click="openAdd"
-      >
-        <Icon name="plus" />
-      </button>
-    </div>
+    <SectionHeader
+      icon="external-link"
+      :title="title"
+      :description="description"
+      class="mb-md"
+    >
+      <template #action>
+        <SectionAddButton
+          :label="phrase.add_external_link"
+          :expanded="popupOpen && editingIndex === null"
+          @click="openAdd"
+        />
+      </template>
+    </SectionHeader>
 
     <Box>
       <div

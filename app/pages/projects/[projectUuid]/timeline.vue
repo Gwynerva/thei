@@ -157,11 +157,9 @@ watch(filter, (value) => {
       </template>
     </PublicProjectHero>
 
-    <div class="m-auto w-(--width-wide) max-w-full px-window pt-lg">
-      <PublicShareNotice />
-    </div>
     <LifeFeed
       v-if="resource.data.value"
+      class="pt-lg"
       v-model:filter="filter"
       v-model:active-date="activeDate"
       :initial="resource.data.value"

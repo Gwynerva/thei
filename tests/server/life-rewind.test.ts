@@ -3,6 +3,7 @@ import { getLifeRewind, getLifeWindow } from '../../server/thei/public/life';
 import { buildPublicEventSummary } from '../../server/thei/public/entities';
 import { freshTestDb } from '../helpers/fresh-db';
 import { ProjectEventAccessLevel } from '../../shared/access-level';
+import { STRANGER } from '../../server/thei/access-links/viewer';
 
 vi.mock('../../server/thei/public/entities', () => ({
   buildPublicEventSummary: vi.fn(async () => ({ media: undefined, tags: [] })),
@@ -103,14 +104,14 @@ describe('Life rewind service', () => {
 
   it('leaves the existing merged timeline unchanged', async () => {
     insertEvents(1);
-    const before = await getLifeWindow({ isAdmin: false });
+    const before = await getLifeWindow({ viewer: STRANGER });
     expect(before.days[0]!.points[0]).toMatchObject({
       date: '2025-09-20',
       transition: 'occurred',
     });
     const result = await getLifeRewind({ isAdmin: false, now });
     expect(result.items[0]!.point.date).toBe('2025-09-10');
-    expect(await getLifeWindow({ isAdmin: false })).toEqual(before);
+    expect(await getLifeWindow({ viewer: STRANGER })).toEqual(before);
   });
 
   it('returns an empty first page when there are no matches', async () => {

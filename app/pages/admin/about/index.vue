@@ -133,7 +133,7 @@ function addFact() {
   });
   factOpen.value = false;
 }
-const pageAnchor = useTemplateRef<HTMLElement>('pageAnchor');
+const pageAnchor = useTemplateRef('pageAnchor');
 const pageOpen = ref(false);
 function addPage(item: ContentEntitySearchItem) {
   if (!data.value.pinnedPageUuids.includes(item.entityId)) {
@@ -318,23 +318,21 @@ const birthDateMax = new Date();
         </Box>
       </section>
       <section>
-        <div class="mb-md flex items-center justify-between gap-md">
-          <SectionHeader
-            icon="page"
-            :title="phrase.profile_pinned_pages"
-            :description="phrase.profile_pinned_pages_hint"
-          /><button
-            ref="pageAnchor"
-            type="button"
-            class="size-12 shrink-0 cursor-pointer rounded-normal bg-bg-3
-              text-text-2 transition-colors hocus:bg-bg-accent
-              hocus:text-accent"
-            :aria-label="phrase.profile_add"
-            @click="pageOpen = true"
-          >
-            <Icon name="plus" />
-          </button>
-        </div>
+        <SectionHeader
+          icon="page"
+          :title="phrase.profile_pinned_pages"
+          :description="phrase.profile_pinned_pages_hint"
+          class="mb-md"
+        >
+          <template #action>
+            <SectionAddButton
+              ref="pageAnchor"
+              :label="phrase.profile_pinned_page_add"
+              :expanded="pageOpen"
+              @click="pageOpen = true"
+            />
+          </template>
+        </SectionHeader>
         <Box class="overflow-hidden"
           ><SortableList
             :items="pages"
@@ -382,7 +380,7 @@ const birthDateMax = new Date();
     >
     <FloatingPopup
       v-model:open="pageOpen"
-      :anchor="pageAnchor"
+      :anchor="pageAnchor?.element ?? null"
       placement="bottom-end"
       max-width="28rem"
       ><ContentEntitySearchPopup

@@ -31,7 +31,12 @@ export const shareLinks = sqliteTable(
   'share-links',
   {
     shareUuid: text().primaryKey(),
-    tokenHash: text().notNull().unique(),
+    /**
+     * Kept as is, unlike a sign-in link's hash, so the owner can copy the
+     * address again at any time. A link only opens what the same database
+     * already holds, for a day at most; a sign-in link opens the whole site.
+     */
+    token: text().notNull().unique(),
     /**
      * `project`, `event`, `page` or `diary-entry`; a stage or a section is
      * shared with its project.
@@ -40,7 +45,15 @@ export const shareLinks = sqliteTable(
       .notNull()
       .$type<'project' | 'event' | 'page' | 'diary-entry'>(),
     entityUuid: text().notNull(),
+    /** Who the link was made for, in the owner's words. */
+    label: text().notNull().default(''),
     createdAt: integer().notNull(),
+    /**
+     * When the link was last extended: the start of its current term, which
+     * the owner's countdown is measured against. `null` until the first
+     * extension, when the term started with `createdAt`.
+     */
+    extendedAt: integer(),
     expiresAt: integer().notNull(),
   },
   (t) => [

@@ -28,7 +28,6 @@ import ProjectExternalLinks from './ProjectExternalLinks.vue';
 import { projectDeleteModal } from './project-delete-modal';
 import ProjectContentItems from './ProjectContentItems.vue';
 import ProjectTags from './ProjectTags.vue';
-import ProjectShareLinks from './ProjectShareLinks.vue';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import {
   DEFAULT_PROJECT_ACTION,
@@ -491,7 +490,7 @@ async function openDeleteProjectModal() {
       :owner-title="projectData.title.trim() || phrase.new_project"
     />
     <ProjectTags />
-    <ProjectShareLinks
+    <AdminShareLinks
       v-if="resolvedProjectUuid"
       entity-type="project"
       :entity-uuid="resolvedProjectUuid"

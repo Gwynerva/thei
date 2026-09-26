@@ -7,6 +7,7 @@ import {
   deleteStatusesForOwner,
   getStatusHistory,
   prepareEntityStatusEdits,
+  projectStatusExists,
   statusUsageHooks,
 } from '../../server/thei/statuses';
 
@@ -136,6 +137,15 @@ describe('status edits', () => {
         ],
       }),
     ).toThrow('Status ID already exists');
+  });
+
+  it("knows a status only under its own project's address", () => {
+    // A status icon is judged by the project in its address, so another
+    // project's status must not be reachable through it.
+    expect(projectStatusExists('project-a', 'a-regular')).toBe(true);
+    expect(projectStatusExists('project-a', 'b-regular')).toBe(false);
+    expect(projectStatusExists('project-b', 'b-regular')).toBe(true);
+    expect(projectStatusExists('project-b', 'missing')).toBe(false);
   });
 
   it('leaves another owner alone when asked to delete its status', () => {

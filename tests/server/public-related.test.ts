@@ -8,6 +8,7 @@ import {
   PUBLIC_RELATED_PAGE_SIZE,
   resolvePublicRelated,
 } from '../../server/thei/public/related';
+import { OWNER, STRANGER } from '../../server/thei/access-links/viewer';
 import { freshTestDb } from '../helpers/fresh-db';
 
 let context: Awaited<ReturnType<typeof freshTestDb>>;
@@ -155,7 +156,7 @@ function row(
 describe('public related entities', () => {
   it('lists the directed kinds first and drops what a visitor may not see', async () => {
     seed();
-    const items = await resolvePublicRelated(event, false);
+    const items = await resolvePublicRelated(event, STRANGER);
     expect(
       items.map((item) => [item.endpoint.id, item.relationType, item.secret]),
     ).toEqual([
@@ -168,14 +169,47 @@ describe('public related entities', () => {
     // diary entry is not, since it is not shown at all.
     expect(countPublicRelated(items)).toEqual({ project: 2, 'diary-entry': 2 });
 
-    const owner = await resolvePublicRelated(event, true);
+    const owner = await resolvePublicRelated(event, OWNER);
     expect(countPublicRelated(owner)).toEqual({ project: 2, 'diary-entry': 3 });
     expect(owner.some((item) => item.secret)).toBe(false);
   });
 
+  it('opens nothing around an entity to the holder of its link', async () => {
+    seed();
+    // A link to the event itself: what it relates to is still judged for a
+    // stranger, so the private project stays a codename and the private
+    // entry stays out of the count.
+    const shared = await resolvePublicRelated(event, {
+      isAdmin: false,
+      grants: new Set(['event:e1']),
+    });
+    expect(countPublicRelated(shared)).toEqual({
+      project: 2,
+      'diary-entry': 2,
+    });
+    expect(shared.find((item) => item.endpoint.id === 'p-hidden')?.secret).toBe(
+      true,
+    );
+
+    // A link to the hidden project opens that project, and only it.
+    const both = await resolvePublicRelated(event, {
+      isAdmin: false,
+      grants: new Set(['project:p-hidden']),
+    });
+    expect(both.find((item) => item.endpoint.id === 'p-hidden')?.secret).toBe(
+      false,
+    );
+    expect(countPublicRelated(both)).toEqual({ project: 2, 'diary-entry': 2 });
+  });
+
   it('builds one kind at a time, with codenames and days', async () => {
     seed();
-    const projects = await buildPublicRelatedPage(event, 'project', 1, false);
+    const projects = await buildPublicRelatedPage(
+      event,
+      'project',
+      1,
+      STRANGER,
+    );
     expect(projects).toMatchObject({ page: 1, pageCount: 1, total: 2 });
     expect(projects.items.map(isPublicSecret)).toEqual([true, false]);
     expect(projects.items[0]).toMatchObject({
@@ -194,7 +228,7 @@ describe('public related entities', () => {
       event,
       'diary-entry',
       1,
-      false,
+      STRANGER,
     );
     expect(entries.items).toMatchObject([
       {
@@ -220,7 +254,12 @@ describe('public related entities', () => {
     }
     insertRelations(rows);
 
-    const first = await buildPublicRelatedPage(event, 'diary-entry', 1, false);
+    const first = await buildPublicRelatedPage(
+      event,
+      'diary-entry',
+      1,
+      STRANGER,
+    );
     expect(first).toMatchObject({
       page: 1,
       pageCount: 2,
@@ -231,10 +270,15 @@ describe('public related entities', () => {
     expect(first.items[0]).toMatchObject({ title: '2026-03-25' });
     expect(first.items.at(-1)).toMatchObject({ title: '2026-03-02' });
 
-    const second = await buildPublicRelatedPage(event, 'diary-entry', 2, false);
+    const second = await buildPublicRelatedPage(
+      event,
+      'diary-entry',
+      2,
+      STRANGER,
+    );
     expect(second.items.map((item) => item.title)).toEqual(['2026-03-01']);
     expect(
-      await buildPublicRelatedPage(event, 'project', 1, false),
+      await buildPublicRelatedPage(event, 'project', 1, STRANGER),
     ).toMatchObject({ items: [], total: 0 });
   });
 });

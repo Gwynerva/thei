@@ -47,7 +47,7 @@ const model = defineModel<RelationEditItem[]>({ required: true });
 
 const relationsRoot = useTemplateRef<HTMLElement>('relationsRoot');
 const relations = computed(() => model.value ?? []);
-const addRelationButton = useTemplateRef<HTMLElement>('addRelationButton');
+const addRelationButton = useTemplateRef('addRelationButton');
 const entitySearch =
   useTemplateRef<InstanceType<typeof ContentEntitySearchPopup>>('entitySearch');
 const entitySearchOpen = ref(false);
@@ -312,31 +312,25 @@ onUnmounted(cleanupSorters);
 
 <template>
   <div>
-    <div class="mb-md flex items-center gap-md">
-      <SectionHeader
-        icon="arrow-cycle"
-        :title="phrase.related_entities"
-        :description="phrase.related_entities_hint"
-        class="flex-1"
-      />
-      <button
-        ref="addRelationButton"
-        type="button"
-        class="size-12 shrink-0 cursor-pointer rounded-normal bg-bg-3
-          text-text-2 transition-colors hocus:bg-bg-accent hocus:text-accent"
-        :aria-label="phrase.related_entity_add"
-        :data-title-popup="phrase.related_entity_add"
-        :aria-expanded="entitySearchOpen"
-        aria-haspopup="dialog"
-        @click="openEntitySearch"
-      >
-        <Icon name="plus" />
-      </button>
-    </div>
+    <SectionHeader
+      icon="arrow-cycle"
+      :title="phrase.related_entities"
+      :description="phrase.related_entities_hint"
+      class="mb-md"
+    >
+      <template #action>
+        <SectionAddButton
+          ref="addRelationButton"
+          :label="phrase.related_entity_add"
+          :expanded="entitySearchOpen"
+          @click="openEntitySearch"
+        />
+      </template>
+    </SectionHeader>
 
     <FloatingPopup
       v-model:open="entitySearchOpen"
-      :anchor="addRelationButton"
+      :anchor="addRelationButton?.element ?? null"
       placement="bottom-end"
       @opened="focusEntitySearch"
       @closed="restoreAddRelationFocus"

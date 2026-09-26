@@ -21,6 +21,7 @@ import {
   buildProjectUrl,
 } from '#layers/thei/shared/project-url';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
+import type { ShareGrantOwner } from '#layers/thei/shared/share-link';
 import {
   buildAdminAssetUrls,
   buildPublicPageMedia,
@@ -28,6 +29,7 @@ import {
   buildPublicTagMedia,
 } from './assets/urls';
 import { resolveEntityIconMedia } from './media/generated-icon';
+import { opensPrivate, type PublicViewer } from './access-links/viewer';
 import {
   buildPublicContentPreviewMedia,
   type PublicContentEntity,
@@ -60,6 +62,11 @@ export type ContentEntityRecord = {
   date?: string;
   /** The project a stage or a section belongs to. */
   parent?: { title: string; href: string };
+  /**
+   * The entity whose share link opens this one: itself, or the project of a
+   * stage or a section. A tag has none; it is never private on its own.
+   */
+  grantOwner?: ShareGrantOwner;
   /**
    * The picture that stands for the entity: its icon, or the first picture of
    * its body. Drawn on demand, because a search lists far more entities than
@@ -183,6 +190,7 @@ function projectRecord(project: ProjectRow): ContentEntityRecord {
     updatedAt: project.updatedAt,
     humanReadableSlug: project.humanReadableSlug,
     publicId: project.publicId,
+    grantOwner: { entityType: 'project', entityId: project.projectUuid },
     media: iconMedia('project', project.projectUuid, (asset) =>
       buildPublicProjectMedia(project, asset, 'icon'),
     ),
@@ -215,6 +223,7 @@ function childRecord(
       title: project.title,
       href: buildProjectUrl(project.humanReadableSlug, project.publicId),
     },
+    grantOwner: { entityType: 'project', entityId: child.projectUuid },
     media: bodyMedia(
       kind,
       id,
@@ -235,6 +244,7 @@ function eventRecord(event: EventRow): ContentEntityRecord {
     updatedAt: event.updatedAt,
     humanReadableSlug: event.humanReadableSlug,
     publicId: event.publicId,
+    grantOwner: { entityType: 'event', entityId: event.eventUuid },
     media: bodyMedia('event', event.eventUuid, 'event-body', {
       type: 'event',
       ...event,
@@ -252,6 +262,7 @@ function pageRecord(page: PageRow): ContentEntityRecord {
     access: page.access,
     updatedAt: page.updatedAt,
     humanReadableSlug: page.slug,
+    grantOwner: { entityType: 'page', entityId: page.pageUuid },
     media: iconMedia('page', page.pageUuid, (asset) =>
       buildPublicPageMedia(page, asset),
     ),
@@ -340,6 +351,7 @@ function diaryRecord(
     updatedAt: entry.updatedAt,
     humanReadableSlug: entry.date,
     date: entry.date,
+    grantOwner: { entityType: 'diary-entry', entityId: entry.diaryUuid },
     media: bodyMedia('diary-entry', entry.diaryUuid, 'diary-body', {
       type: 'diary-entry',
       date: entry.date,
@@ -358,13 +370,13 @@ async function diaryBody(diaryUuid: string) {
 }
 
 /**
- * One entity by its kind and uuid. `includePrivate` only decides how much of
- * a diary entry's text its summary may quote; whether the reader may open the
- * entity at all is the caller's call, made from `access`.
+ * One entity by its kind and uuid. The viewer only decides how much of a diary
+ * entry's text its summary may quote; whether the reader may open the entity
+ * at all is the caller's call, made from `access` and `grantOwner`.
  */
 export async function findContentEntity(
   reference: Pick<ContentEntityReference, 'entityType' | 'entityId'>,
-  includePrivate: boolean,
+  viewer: PublicViewer,
 ): Promise<ContentEntityRecord | undefined> {
   const { entityType, entityId } = reference;
   if (!entityId) return undefined;
@@ -403,7 +415,11 @@ export async function findContentEntity(
       const entry = await THEI_SERVER.diary.findByUuid(entityId);
       return (
         entry &&
-        diaryRecord(entry, await diaryBody(entry.diaryUuid), includePrivate)
+        diaryRecord(
+          entry,
+          await diaryBody(entry.diaryUuid),
+          opensPrivate(viewer, 'diary-entry', entry.diaryUuid),
+        )
       );
     }
     case 'tag': {
@@ -426,7 +442,7 @@ export async function findContentEntity(
  */
 export async function findContentEntityByTarget(
   target: InternalUrlTarget,
-  includePrivate: boolean,
+  viewer: PublicViewer,
 ): Promise<ContentEntityRecord | undefined> {
   switch (target.entityType) {
     case 'project': {
@@ -483,7 +499,11 @@ export async function findContentEntityByTarget(
       const entry = await THEI_SERVER.diary.findByDate(target.date);
       return (
         entry &&
-        diaryRecord(entry, await diaryBody(entry.diaryUuid), includePrivate)
+        diaryRecord(
+          entry,
+          await diaryBody(entry.diaryUuid),
+          opensPrivate(viewer, 'diary-entry', entry.diaryUuid),
+        )
       );
     }
     case 'tag': {

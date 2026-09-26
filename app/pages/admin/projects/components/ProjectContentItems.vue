@@ -236,24 +236,16 @@ function moveSectionWithKeyboard(target: Item, direction: -1 | 1) {
 
 <template>
   <div>
-    <div class="mb-md flex items-center gap-md">
-      <SectionHeader
-        :icon="labels.icon"
-        :title="labels.title"
-        :description="labels.description"
-        class="flex-1"
-      />
-      <button
-        type="button"
-        class="size-12 shrink-0 cursor-pointer rounded-normal bg-bg-3
-          text-text-2 transition-colors hocus:bg-bg-accent hocus:text-accent"
-        :aria-label="labels.add"
-        :data-title-popup="labels.add"
-        @click="openItem()"
-      >
-        <Icon name="plus" />
-      </button>
-    </div>
+    <SectionHeader
+      :icon="labels.icon"
+      :title="labels.title"
+      :description="labels.description"
+      class="mb-md"
+    >
+      <template #action>
+        <SectionAddButton :label="labels.add" @click="openItem()" />
+      </template>
+    </SectionHeader>
 
     <div v-if="itemViews.length" ref="root" class="flex flex-col gap-xs">
       <ProjectContentItemRow

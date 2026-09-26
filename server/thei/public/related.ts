@@ -22,6 +22,11 @@ import {
 import { paginate } from '#layers/thei/shared/pagination';
 import { canListPublicEntity } from './entities';
 import { buildSecretReference } from './secret';
+import {
+  opensGrantOwner,
+  opensPrivate,
+  type PublicViewer,
+} from '../access-links/viewer';
 
 /** How many related entities one page of the block holds. */
 export const PUBLIC_RELATED_PAGE_SIZE = 24;
@@ -60,7 +65,7 @@ export type PublicRelatedItem = {
  */
 export async function resolvePublicRelated(
   owner: RelationEndpoint,
-  isAdmin: boolean,
+  viewer: PublicViewer,
 ): Promise<PublicRelatedItem[]> {
   const rows = readRelationRows(owner);
   const targets = await loadRelationTargets(rows.map((row) => row.other));
@@ -68,7 +73,12 @@ export async function resolvePublicRelated(
   for (const row of rows) {
     const target = targets.get(relationEndpointKey(row.other));
     if (!target) continue;
-    const listable = canListPublicEntity(target.access, isAdmin);
+    // Each end is judged on its own: a link to this entity opens nothing on
+    // the other side of its relations.
+    const listable = canListPublicEntity(
+      target.access,
+      opensPrivate(viewer, row.other.type, row.other.id),
+    );
     if (!listable && target.type === 'diary-entry') continue;
     const note =
       row.note?.type === 'split' ? row.note.currentText : row.note?.text;
@@ -117,7 +127,7 @@ export function countPublicRelated(
  */
 export async function buildPublicRelatedLinks(
   items: PublicRelatedItem[],
-  isAdmin: boolean,
+  viewer: PublicViewer,
 ): Promise<PublicEntityLink[]> {
   const links = await Promise.all(
     items.map(async (item): Promise<PublicEntityLink | undefined> => {
@@ -129,14 +139,17 @@ export async function buildPublicRelatedLinks(
           relationType: item.relationType,
           entityType,
         };
-      const entity = await findContentEntity({ entityType, entityId }, isAdmin);
+      const entity = await findContentEntity({ entityType, entityId }, viewer);
       if (!entity) return undefined;
       return {
         entityType,
         title: entity.title,
         summary: entity.summary,
         href: entity.href,
-        iconMedia: await entity.media('public', isAdmin),
+        iconMedia: await entity.media(
+          'public',
+          opensGrantOwner(viewer, entity.grantOwner),
+        ),
         relationType: item.relationType,
         ...(entity.date ? { date: entity.date } : {}),
         ...(item.note ? { note: item.note } : {}),
@@ -151,26 +164,26 @@ export async function buildPublicRelatedPage(
   owner: RelationEndpoint,
   kind: RelationEntityType,
   page: unknown,
-  isAdmin: boolean,
+  viewer: PublicViewer,
 ): Promise<PublicRelatedPage> {
-  const items = (await resolvePublicRelated(owner, isAdmin)).filter(
+  const items = (await resolvePublicRelated(owner, viewer)).filter(
     (item) => item.endpoint.type === kind,
   );
   const paged = paginate(items, page, PUBLIC_RELATED_PAGE_SIZE);
   return {
     ...paged,
-    items: await buildPublicRelatedLinks(paged.items, isAdmin),
+    items: await buildPublicRelatedLinks(paged.items, viewer),
   };
 }
 
 /** Every related entity of every kind at once, for the Markdown mirror. */
 export async function listPublicRelatedAll(
   owner: RelationEndpoint,
-  isAdmin: boolean,
+  viewer: PublicViewer,
 ): Promise<PublicEntityLink[]> {
   return buildPublicRelatedLinks(
-    await resolvePublicRelated(owner, isAdmin),
-    isAdmin,
+    await resolvePublicRelated(owner, viewer),
+    viewer,
   );
 }
 

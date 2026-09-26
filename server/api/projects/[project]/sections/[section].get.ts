@@ -10,7 +10,6 @@ import {
 } from '../../../../thei/public/entities';
 import { buildProjectSectionNeighbours } from '../../../../thei/public/neighbours';
 import { resolveEntityViewer } from '../../../../thei/access-links/viewer';
-import { markSharedResponse } from '../../../../thei/access-links/response';
 
 export default defineEventHandler(
   async (event): Promise<PublicProjectSectionResponse> => {
@@ -34,11 +33,10 @@ export default defineEventHandler(
     const section = sections.find((item) => item.publicId === publicId);
     if (!section || (section.isPrivate && !viewer.asOwner))
       throw createError({ statusCode: 404, statusText: 'Section not found' });
-    if (project.access === 'link-only' || viewer.viaShare)
+    if (project.access === 'link-only')
       setHeader(event, 'X-Robots-Tag', 'noindex, nofollow');
-    if (viewer.viaShare) markSharedResponse(event);
     const [response, neighbours] = await Promise.all([
-      buildPublicProjectSection(project, section, viewer.asOwner),
+      buildPublicProjectSection(project, section, viewer),
       buildProjectSectionNeighbours(project, sections, section, viewer.asOwner),
     ]);
     return { ...response, neighbours };

@@ -211,7 +211,6 @@ const ownerNotesContents = computed(() =>
     </PublicProjectHero>
 
     <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
-      <PublicShareNotice />
       <PublicReminderNotice :reminder="data.reminder" />
       <PublicDetailLayout
         :details="details"

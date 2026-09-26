@@ -30,6 +30,30 @@ export type StatusInvalid = (message: string) => never;
 /** The part of a project a public status icon address is built from. */
 type StatusProject = { humanReadableSlug: string; publicId: string };
 
+/**
+ * Whether a status belongs to this project. A status icon is served under its
+ * project's address and judged by that project's access, so the address must
+ * not be able to borrow another project's status.
+ */
+export function projectStatusExists(
+  projectUuid: string,
+  statusId: string,
+): boolean {
+  const { db, schema } = THEI_SERVER.useDb();
+  return Boolean(
+    db
+      .select({ id: schema.statuses.id })
+      .from(schema.statuses)
+      .where(
+        and(
+          eq(schema.statuses.id, statusId),
+          ownerWhere(schema, { type: 'project', id: projectUuid }),
+        ),
+      )
+      .get(),
+  );
+}
+
 function ownerWhere(schema: any, owner: StatusOwner) {
   return and(
     eq(schema.statuses.ownerType, owner.type),

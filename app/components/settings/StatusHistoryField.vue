@@ -181,19 +181,16 @@ defineExpose({ items: history.items, reset });
 
 <template>
   <section>
-    <div class="mb-md flex items-center justify-between gap-md">
-      <SectionHeader icon="pulse" :title="title" :description="description" />
-      <button
-        type="button"
-        class="size-12 shrink-0 cursor-pointer rounded-normal bg-bg-3
-          text-text-2 transition-colors hocus:bg-bg-accent hocus:text-accent"
-        :aria-label="addLabel"
-        :data-title-popup="addLabel"
-        @click="addStatus"
-      >
-        <Icon name="plus" />
-      </button>
-    </div>
+    <SectionHeader
+      icon="pulse"
+      :title="title"
+      :description="description"
+      class="mb-md"
+    >
+      <template #action>
+        <SectionAddButton :label="addLabel" @click="addStatus" />
+      </template>
+    </SectionHeader>
     <Box class="max-h-120 overflow-y-auto px-sm sm:px-md"
       ><div class="divide-y divide-border-1">
         <ProfileStatusItem

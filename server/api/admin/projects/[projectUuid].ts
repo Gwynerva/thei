@@ -50,6 +50,7 @@ import {
   getRelations,
   prepareRelations,
 } from '../../../thei/relations';
+import { deleteShareLinks } from '../../../thei/access-links/share-links';
 import {
   applyExternalLinkList,
   deleteExternalLinkList,
@@ -574,6 +575,7 @@ export default defineEventHandler(async (event) => {
           id: projectUuid,
         });
         deleteRelations(tx, schema, { type: 'project', id: projectUuid });
+        deleteShareLinks(tx, schema, 'project', projectUuid);
         deleteExternalLinkList(tx, schema, {
           type: 'project',
           id: projectUuid,

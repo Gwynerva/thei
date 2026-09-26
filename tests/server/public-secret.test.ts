@@ -7,6 +7,7 @@ import {
 } from '../../server/thei/public/entities';
 import { buildSecretReference } from '../../server/thei/public/secret';
 import { freshTestDb } from '../helpers/fresh-db';
+import { OWNER, STRANGER } from '../../server/thei/access-links/viewer';
 
 let context: Awaited<ReturnType<typeof freshTestDb>>;
 let otherFiles: unknown[] = [];
@@ -111,7 +112,7 @@ describe('secret references', () => {
       .run();
     const event = context.db.select().from(context.schema.events).get()!;
 
-    const visitor = await buildPublicEventSummary(event, false);
+    const visitor = await buildPublicEventSummary(event, STRANGER);
     const related = visitor.relatedEntities!;
     expect(related.map((project) => isPublicSecret(project))).toEqual([
       false,
@@ -127,7 +128,7 @@ describe('secret references', () => {
       expect(project).toHaveProperty('relationType', 'related');
     }
 
-    const admin = await buildPublicEventSummary(event, true);
+    const admin = await buildPublicEventSummary(event, OWNER);
     expect(admin.relatedEntities!.some(isPublicSecret)).toBe(false);
   });
 
@@ -164,14 +165,29 @@ describe('secret references', () => {
       .run();
     const event = context.db.select().from(context.schema.events).get()!;
 
-    const visitor = (await buildPublicEvent(event, false)).references.files
+    const visitor = (await buildPublicEvent(event, STRANGER)).references.files
       .manual;
     expect(visitor.map(isPublicSecret)).toEqual([false, true]);
     expect(visitor[1]!.title).toMatch(/^Secret file \S+$/);
     expect(JSON.stringify(visitor[1])).not.toMatch(/hidden-file|pdf|1234/);
     expect(visitor[1]).not.toHaveProperty('href');
 
-    const admin = (await buildPublicEvent(event, true)).references.files.manual;
+    const admin = (await buildPublicEvent(event, OWNER)).references.files
+      .manual;
     expect(admin.some(isPublicSecret)).toBe(false);
+
+    // A link to the event opens its private files, never the owner's own
+    // reminder or notes.
+    const flagged = { ...event, reminder: 'Only for me' };
+    expect((await buildPublicEvent(flagged, OWNER)).reminder).toBe(
+      'Only for me',
+    );
+    const shared = await buildPublicEvent(flagged, {
+      isAdmin: false,
+      grants: new Set(['event:event']),
+    });
+    expect(shared.references.files.manual.some(isPublicSecret)).toBe(false);
+    expect(shared).not.toHaveProperty('reminder');
+    expect(shared).not.toHaveProperty('notes');
   });
 });

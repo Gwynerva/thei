@@ -5,6 +5,8 @@ import {
   SiteAccessLevel,
 } from '../../../shared/access-level';
 import type { AssetRole, ContentAssetUsageMeta } from '../../../shared/asset';
+import { ENTITY_NOTES_SLOTS } from '../../../shared/entity-notes';
+import type { ShareGrantOwner } from '../../../shared/share-link';
 import { assetUsageIsPrivate } from './access';
 import {
   publicAssetFilename,
@@ -16,7 +18,7 @@ import {
   PUBLIC_ASSET_CACHE_CONTROL,
   SHARED_ASSET_CACHE_CONTROL,
 } from './cache-control';
-import { hasShareGrant } from '../access-links/viewer';
+import { opensGrantOwner, resolvePublicViewer } from '../access-links/viewer';
 
 interface AttachmentContext {
   ownerType:
@@ -31,11 +33,38 @@ interface AttachmentContext {
     | 'project-status';
   ownerId: string;
   access?: ProjectEventAccessLevel;
+  /**
+   * The entity whose share link opens this file. Defaults to the owner itself
+   * for a project, an event, a page or a diary entry; anything else is opened
+   * by no link unless the route names the entity it belongs to.
+   */
+  grantOwner?: ShareGrantOwner;
   role: AssetRole;
   filename: string;
 }
 
-/** A public use must belong to this URL's entity and an accessible owner. */
+function defaultGrantOwner(
+  context: AttachmentContext,
+): ShareGrantOwner | undefined {
+  const { ownerType, ownerId } = context;
+  return ownerType === 'project' ||
+    ownerType === 'event' ||
+    ownerType === 'page' ||
+    ownerType === 'diary-entry'
+    ? { entityType: ownerType, entityId: ownerId }
+    : undefined;
+}
+
+const NOTES_SLOTS = new Set<string>(Object.values(ENTITY_NOTES_SLOTS));
+
+/**
+ * Where a file is used in this URL's entity, and who may therefore have it.
+ *
+ * - `public`: a stranger — some use sits outside every private part;
+ * - `shared`: a share link's holder — some use is in the entity's own content,
+ *   private parts included, but not in the owner's notes;
+ * - `exists`: the owner — any use at all.
+ */
 export async function contentAttachmentAccess(
   ownerType: 'project' | 'event' | 'page' | 'profile' | 'diary-entry',
   ownerId: string,
@@ -94,6 +123,7 @@ export async function contentAttachmentAccess(
     .select({
       ownerType: schema.content.ownerType,
       ownerId: schema.content.ownerId,
+      slot: schema.content.slot,
       meta: schema.assetUsages.meta,
     })
     .from(schema.content)
@@ -108,9 +138,13 @@ export async function contentAttachmentAccess(
     )
     .where(or(...owners))
     .all();
+  // The owner's notes are theirs alone: a file placed only there reaches
+  // neither a visitor nor the holder of a share link.
+  const content = uses.filter((use) => !NOTES_SLOTS.has(use.slot));
   return {
     exists: uses.length > 0,
-    public: uses.some((use) => {
+    shared: content.length > 0,
+    public: content.some((use) => {
       if (privateOwners.has(`${use.ownerType}:${use.ownerId}`)) return false;
       const meta = use.meta as ContentAssetUsageMeta | null;
       return (
@@ -126,20 +160,18 @@ export async function sendContextAsset(
   context: AttachmentContext,
 ) {
   setHeader(event, 'Cache-Control', SHARED_ASSET_CACHE_CONTROL);
-  const isAdmin = await THEI_SERVER.isAdmin(event);
+  const viewer = await resolvePublicViewer(event);
   // A share link reaches the media of the entity it was made for, including
   // files inside its private stages and sections, and nothing else.
-  const viaShare =
-    !isAdmin &&
-    (context.ownerType === 'project' ||
-      context.ownerType === 'event' ||
-      context.ownerType === 'diary-entry') &&
-    hasShareGrant(event, context.ownerType, context.ownerId);
-  const asOwner = isAdmin || viaShare;
+  const opens = opensGrantOwner(
+    viewer,
+    context.grantOwner ?? defaultGrantOwner(context),
+  );
+  const viaShare = opens && !viewer.isAdmin;
   const publicParent =
     THEI_SERVER.config.siteAccessLevel !== SiteAccessLevel.Private &&
     context.access !== ProjectEventAccessLevel.Private;
-  if (!publicParent && !asOwner) throw createError({ statusCode: 404 });
+  if (!publicParent && !opens) throw createError({ statusCode: 404 });
   const dot = context.filename.lastIndexOf('.');
   if (dot <= 0) throw createError({ statusCode: 404 });
   const asset = await THEI_SERVER.assets.findBySlug(
@@ -150,7 +182,7 @@ export async function sendContextAsset(
     asset.extension !== context.filename.slice(dot + 1).toLowerCase()
   )
     throw createError({ statusCode: 404 });
-  let access: { exists: boolean; public: boolean };
+  let access: { exists: boolean; shared: boolean; public: boolean };
   if (
     context.role === 'content' &&
     (context.ownerType === 'project' ||
@@ -173,12 +205,14 @@ export async function sendContextAsset(
     );
     access = {
       exists: Boolean(usage),
+      shared: Boolean(usage),
       public: Boolean(usage) && !assetUsageIsPrivate(usage!.meta),
     };
   }
   const publicAccess = publicParent && access.public;
-  if (!access.exists || (!publicAccess && !asOwner))
-    throw createError({ statusCode: 404 });
+  const allowed =
+    publicAccess || (viewer.isAdmin ? access.exists : opens && access.shared);
+  if (!allowed) throw createError({ statusCode: 404 });
   const selected = await resolvePublicAssetVariant(event, asset);
   return sendAssetFile(
     event,

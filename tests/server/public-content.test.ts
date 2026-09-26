@@ -14,6 +14,7 @@ import {
   buildPublicProjectSectionSummary,
   buildPublicProjectStageSummary,
 } from '../../server/thei/public/entities';
+import { OWNER, STRANGER } from '../../server/thei/access-links/viewer';
 
 afterEach(() => {
   delete (globalThis as any).THEI_SERVER;
@@ -513,6 +514,7 @@ describe('public content media previews', () => {
       'project-description',
       entity,
       true,
+      OWNER,
     );
     expect(administrator?.blocks[1]).toMatchObject({
       type: 'privateSectionExpanded',
@@ -822,7 +824,7 @@ describe('public content reference groups', () => {
       ],
     } as any;
 
-    const visitor = await buildPublicContentReferenceGroup(content, false);
+    const visitor = await buildPublicContentReferenceGroup(content, STRANGER);
     expect(visitor.links).toHaveLength(1);
     expect(visitor.links[0]).toMatchObject({
       kind: 'project',
@@ -842,7 +844,10 @@ describe('public content reference groups', () => {
       },
     ]);
 
-    const administrator = await buildPublicContentReferenceGroup(content, true);
+    const administrator = await buildPublicContentReferenceGroup(
+      content,
+      OWNER,
+    );
     expect(administrator.links.map((link) => link.title)).toEqual([
       'Public project',
       'Private project',
@@ -1001,7 +1006,7 @@ describe('merged public references', () => {
           },
         ],
       },
-      false,
+      STRANGER,
     );
     expect(references.links.shared).toMatchObject([
       { kind: 'project', href: '/projects/linked-LinkedProject/' },
@@ -1130,9 +1135,52 @@ describe('entity links in public content', () => {
       'page-body',
       { type: 'page', slug: 'page' },
       true,
+      OWNER,
     );
 
     expect(JSON.stringify(content)).toContain(privateProject.projectUuid);
+    expect(content!.blocks[2]).toMatchObject({
+      data: { entityId: privateProject.projectUuid },
+    });
+  });
+
+  it("opens a shared page's own content, not the projects it mentions", async () => {
+    stubEntityLinkContent();
+    // The holder of a link to this page: its private parts are theirs to
+    // see, a private project it links to is not.
+    const content = await buildPublicContentData(
+      'page',
+      'page-uuid',
+      'page-body',
+      { type: 'page', slug: 'page' },
+      true,
+      { isAdmin: false, grants: new Set(['page:page-uuid']) },
+    );
+
+    expect(JSON.stringify(content)).not.toContain(privateProject.projectUuid);
+    expect(content!.blocks[2]).toEqual({
+      type: 'entityLink',
+      data: { entityType: 'project', restricted: true },
+    });
+    expect(content!.blocks[3]).toMatchObject({
+      data: { entityType: 'project', entityId: publicProject.projectUuid },
+    });
+  });
+
+  it('opens a private project to the holder of its own link', async () => {
+    stubEntityLinkContent();
+    const content = await buildPublicContentData(
+      'page',
+      'page-uuid',
+      'page-body',
+      { type: 'page', slug: 'page' },
+      false,
+      {
+        isAdmin: false,
+        grants: new Set([`project:${privateProject.projectUuid}`]),
+      },
+    );
+
     expect(content!.blocks[2]).toMatchObject({
       data: { entityId: privateProject.projectUuid },
     });

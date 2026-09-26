@@ -6,6 +6,10 @@ import {
 function getTitlePopup(
   el: HTMLElement,
 ): { lines: TitlePopupContentLine[]; popupClass: string } | null {
+  // A control whose own label is on screen needs no hint repeating it: the
+  // label may only be shown at some widths, and the hint covers the others.
+  const label = el.querySelector<HTMLElement>('[data-title-popup-label]');
+  if (label?.getClientRects().length) return null;
   const lines = readTitlePopup(
     el.dataset.titlePopup,
     el.dataset.titlePopupRich,

@@ -36,6 +36,7 @@ import { listPublicRelatedAll } from '../public/related';
 import { getProjectStages } from '../projects/stages';
 import { getProjectContentSections } from '../projects/content-sections';
 import { siteUrl } from '../site-url';
+import { STRANGER } from '../access-links/viewer';
 
 /**
  * Public pages as Markdown.
@@ -61,7 +62,7 @@ export async function renderProjectMarkdown(
 ): Promise<MarkdownDocument | undefined> {
   const project = await THEI_SERVER.projects.findByPublicId(part);
   if (!project || !canOpenPublicEntity(project.access, false)) return undefined;
-  const data = await buildPublicProject(project, false);
+  const data = await buildPublicProject(project, STRANGER);
   const canonical = buildProjectUrl(
     project.humanReadableSlug,
     project.publicId,
@@ -115,8 +116,8 @@ export async function renderProjectChildMarkdown(
   if (!child || child.isPrivate) return undefined;
   const data =
     kind === 'stages'
-      ? await buildPublicProjectStage(project, child as never, false)
-      : await buildPublicProjectSection(project, child as never, false);
+      ? await buildPublicProjectStage(project, child as never, STRANGER)
+      : await buildPublicProjectSection(project, child as never, STRANGER);
   const canonical = buildProjectChildUrl(
     project.humanReadableSlug,
     project.publicId,
@@ -143,7 +144,7 @@ export async function renderEventMarkdown(
   const stored = await THEI_SERVER.events.findByPublicId(part);
   if (!stored || stored.access === ProjectEventAccessLevel.Private)
     return undefined;
-  const data = await buildPublicEvent(stored, false);
+  const data = await buildPublicEvent(stored, STRANGER);
   const lines = [
     `# ${data.title}`,
     data.summary,
@@ -178,7 +179,7 @@ export async function renderDiaryMarkdown(
   const stored = await THEI_SERVER.diary.findByDate(date);
   if (!stored || stored.access === ProjectEventAccessLevel.Private)
     return undefined;
-  const data = await buildPublicDiaryEntry(stored, false);
+  const data = await buildPublicDiaryEntry(stored, STRANGER);
   // The day is the heading, because an entry has nothing else to be called.
   const lines = [
     `# ${data.date}`,
@@ -201,7 +202,7 @@ export async function renderPageMarkdown(
   const page = await THEI_SERVER.pages.findBySlug(slug);
   if (!page || page.access === ProjectEventAccessLevel.Private)
     return undefined;
-  const data = await buildPublicPage(page, false);
+  const data = await buildPublicPage(page, STRANGER);
   const lines = [
     `# ${data.title}`,
     data.summary,
@@ -247,7 +248,7 @@ async function withEntityAddresses(
     const key = `${reference.entityType}:${reference.entityId}`;
     let found = cache.get(key);
     if (!found) {
-      found = findContentEntity(reference, false).then((entity) =>
+      found = findContentEntity(reference, STRANGER).then((entity) =>
         entity && canResolveContentEntityLink(entity.access, false)
           ? entity
           : undefined,
@@ -308,7 +309,7 @@ async function relatedEntities(
   event: H3Event,
   owner: RelationEndpoint,
 ): Promise<string[]> {
-  const links = (await listPublicRelatedAll(owner, false)).filter(
+  const links = (await listPublicRelatedAll(owner, STRANGER)).filter(
     (link): link is PublicEntityReference => !isPublicSecret(link),
   );
   if (!links.length) return [];

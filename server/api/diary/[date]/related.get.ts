@@ -24,6 +24,6 @@ export default defineEventHandler(async (event): Promise<PublicRelatedPage> => {
     { type: 'diary-entry', id: stored.diaryUuid },
     kind,
     page,
-    viewer.isAdmin,
+    viewer,
   );
 });

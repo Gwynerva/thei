@@ -11,10 +11,12 @@ import {
   createShareLink,
   extendShareLink,
   listShareLinks,
+  normalizeShareLinkLabel,
   resolveShareToken,
   revokeShareLink,
   cleanupExpiredShareLinks,
 } from '../../server/thei/access-links/share-links';
+import { SHARE_LINK_LABEL_MAX } from '../../shared/share-link';
 import { hashAccessToken } from '../../server/thei/access-links/token';
 
 let context: Awaited<ReturnType<typeof freshTestDb>>;
@@ -78,23 +80,58 @@ describe('sign-in links', () => {
 describe('share links', () => {
   it('opens exactly the entity it was made for', async () => {
     const link = await createShareLink('project', 'project-1', '1h');
-    const resolved = resolveShareToken(link.token!);
+    const resolved = resolveShareToken(link.token);
     expect(resolved?.entityType).toBe('project');
     expect(resolved?.entityUuid).toBe('project-1');
-    // Nothing in the stored row reveals the token itself.
-    expect(listShareLinks('project', 'project-1')).toHaveLength(1);
+    // The token is kept, so the owner can copy the address again later.
+    expect(listShareLinks('project', 'project-1')).toMatchObject([
+      { token: link.token },
+    ]);
     expect(listShareLinks('event', 'project-1')).toHaveLength(0);
+    expect(resolveShareToken('x'.repeat(43))).toBeUndefined();
   });
 
-  it('extends from now and revokes at once', async () => {
+  it('keeps who the link is for, as one short line', async () => {
+    const link = await createShareLink(
+      'page',
+      'page-1',
+      '1h',
+      '  For\n  Anna\t ',
+    );
+    expect(link.label).toBe('For Anna');
+    expect(listShareLinks('page', 'page-1')[0]!.label).toBe('For Anna');
+    expect(normalizeShareLinkLabel('x'.repeat(200))).toHaveLength(
+      SHARE_LINK_LABEL_MAX,
+    );
+    expect(normalizeShareLinkLabel(42)).toBe('');
+  });
+
+  it('extends by adding to what is left, and revokes at once', async () => {
     const link = await createShareLink('event', 'event-1', '30m');
-    const before = link.expiresAt;
-    const extended = extendShareLink(link.shareUuid, '24h');
-    expect(extended!.expiresAt).toBeGreaterThan(before);
+    const extended = extendShareLink(link.shareUuid, '1h');
+    // Half an hour left plus an hour — never counted from now alone.
+    expect(extended!.expiresAt - link.expiresAt).toBeGreaterThanOrEqual(
+      60 * 60 * 1000,
+    );
+    // The extension starts a new term, which the owner's countdown refills.
+    expect(link.extendedAt).toBeNull();
+    expect(extended!.extendedAt).toBeGreaterThanOrEqual(link.createdAt);
+    expect(listShareLinks('event', 'event-1')[0]!.extendedAt).toBe(
+      extended!.extendedAt,
+    );
 
     expect(revokeShareLink(link.shareUuid)).toBe(true);
-    expect(resolveShareToken(link.token!)).toBeUndefined();
+    expect(resolveShareToken(link.token)).toBeUndefined();
     expect(listShareLinks('event', 'event-1')).toHaveLength(0);
+  });
+
+  it('does not bring a closed link back', async () => {
+    const link = await createShareLink('event', 'event-2', '30m');
+    context.db.run(
+      `UPDATE "share-links" SET expiresAt = 1 WHERE shareUuid = '${link.shareUuid}'` as never,
+    );
+    expect(extendShareLink(link.shareUuid, '24h')).toBeUndefined();
+    expect(resolveShareToken(link.token)).toBeUndefined();
   });
 
   it('forgets a link that has run out', async () => {
@@ -102,7 +139,7 @@ describe('share links', () => {
     context.db.run(
       `UPDATE "share-links" SET expiresAt = 1 WHERE shareUuid = '${link.shareUuid}'` as never,
     );
-    expect(resolveShareToken(link.token!)).toBeUndefined();
+    expect(resolveShareToken(link.token)).toBeUndefined();
     cleanupExpiredShareLinks();
     expect(listShareLinks('project', 'project-2')).toHaveLength(0);
   });

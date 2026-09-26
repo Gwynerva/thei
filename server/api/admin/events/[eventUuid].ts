@@ -24,6 +24,7 @@ import {
   getRelations,
   prepareRelations,
 } from '../../../thei/relations';
+import { deleteShareLinks } from '../../../thei/access-links/share-links';
 import {
   applyExternalLinkList,
   deleteExternalLinkList,
@@ -232,6 +233,7 @@ export default defineEventHandler(async (event) => {
         )
         .run();
       deleteRelations(tx, schema, { type: 'event', id: eventUuid });
+      deleteShareLinks(tx, schema, 'event', eventUuid);
       deleteExternalLinkList(tx, schema, { type: 'event', id: eventUuid });
       deleteTagUsagesForContainer(tx, schema, 'event', eventUuid);
       deleteContentForOwner(tx, schema, 'event', eventUuid);

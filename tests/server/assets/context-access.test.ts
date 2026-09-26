@@ -17,6 +17,7 @@ import {
   SiteAccessLevel,
 } from '../../../shared/access-level';
 import { resolveRequestAdminRole } from '../../../shared/public-view';
+import type { ShareGrantOwner } from '../../../shared/share-link';
 
 let context: Awaited<ReturnType<typeof freshTestDb>>;
 let contextType:
@@ -25,20 +26,26 @@ let contextType:
   | 'page'
   | 'profile'
   | 'profile-avatar'
-  | 'profile-status' = 'project';
+  | 'profile-status'
+  | 'project-status' = 'project';
 let contextRole: 'content' | 'icon' | 'banner' | 'favicon' = 'content';
+let contextGrantOwner: ShareGrantOwner | undefined;
 let parentAccess = ProjectEventAccessLevel.Public;
 let siteAccess = SiteAccessLevel.Public;
 const app = createApp().use(
-  defineEventHandler((event) =>
-    sendContextAsset(event, {
+  defineEventHandler((event) => {
+    // What the middleware reads from a share link's cookie, named directly.
+    const grant = getHeader(event, 'x-grant');
+    event.context.shareGrants = new Map(grant ? [[grant, Infinity]] : []);
+    return sendContextAsset(event, {
       ownerType: contextType,
       ownerId: 'parent',
       access: parentAccess,
+      grantOwner: contextGrantOwner,
       role: contextRole,
       filename: 'file.webp',
-    }),
-  ),
+    });
+  }),
 );
 const handle = toWebHandler(app);
 const request = (
@@ -147,6 +154,7 @@ afterAll(async () => {
 beforeEach(() => {
   contextType = 'project';
   contextRole = 'content';
+  contextGrantOwner = undefined;
   parentAccess = ProjectEventAccessLevel.Public;
   siteAccess = SiteAccessLevel.Public;
   const { db, schema } = context;
@@ -160,11 +168,13 @@ function use(
   ownerType: 'project' | 'event' | 'page' | 'project-stage' | 'project-section',
   isPrivate = false,
   ownerId = 'parent',
+  notes = false,
 ) {
   const { db, schema } = context;
-  const contentUuid = `${ownerType}:${ownerId}`;
-  const slot =
-    ownerType === 'project'
+  const contentUuid = `${ownerType}:${ownerId}${notes ? ':notes' : ''}`;
+  const slot = notes
+    ? `${ownerType}-notes`
+    : ownerType === 'project'
       ? 'project-description'
       : ownerType === 'event'
         ? 'event-body'
@@ -349,5 +359,73 @@ describe('contextual attachment authorization before HTTP caching', () => {
         'private, no-cache',
       );
     }
+  });
+});
+
+describe('share links and contextual attachments', () => {
+  const holding = (grant: string, headers: Record<string, string> = {}) =>
+    request('guest', { 'x-grant': grant, ...headers });
+
+  it('opens a private page and its private blocks to its own link only', async () => {
+    contextType = 'page';
+    parentAccess = ProjectEventAccessLevel.Private;
+    use('page', true);
+    expect((await request()).status).toBe(404);
+    const shared = await holding('page:parent');
+    expect(shared.status).toBe(200);
+    // Opened by a link that expires: nothing may keep a copy.
+    expect(shared.headers.get('cache-control')).toBe('private, no-store');
+    // Grants are keyed by kind as well as by id.
+    expect((await holding('project:parent')).status).toBe(404);
+    expect((await holding('page:other')).status).toBe(404);
+  });
+
+  it("opens a project's private stage files with the project's link", async () => {
+    const { db, schema } = context;
+    db.insert(schema.projectStages)
+      .values({
+        stageUuid: 'child',
+        projectUuid: 'parent',
+        title: 'Hidden stage',
+        humanReadableSlug: 'hidden',
+        publicId: 'childid',
+        isPrivate: true,
+        createdAt: 0,
+        updatedAt: 0,
+      })
+      .run();
+    use('project-stage', false, 'child');
+    expect((await request()).status).toBe(404);
+    expect((await holding('project:parent')).status).toBe(200);
+    expect((await holding('project:other')).status).toBe(404);
+  });
+
+  it("opens a project's status icon through the project named by the route", async () => {
+    contextType = 'project-status';
+    contextRole = 'icon';
+    parentAccess = ProjectEventAccessLevel.Private;
+    contextGrantOwner = { entityType: 'project', entityId: 'P' };
+    context.db
+      .insert(context.schema.assetUsages)
+      .values({
+        assetUuid: 'asset',
+        containerType: 'project-status',
+        containerId: 'parent',
+        role: 'icon',
+      })
+      .run();
+    expect((await request()).status).toBe(404);
+    expect((await holding('project:P')).status).toBe(200);
+    expect((await holding('project:Q')).status).toBe(404);
+  });
+
+  it("keeps a file placed only in the owner's notes to the owner", async () => {
+    use('project', false, 'parent', true);
+    expect((await request()).status).toBe(404);
+    expect((await holding('project:parent')).status).toBe(404);
+    expect((await request('admin')).status).toBe(200);
+    // The same file used in the page itself is as open as that use.
+    use('project');
+    expect((await request()).status).toBe(200);
   });
 });

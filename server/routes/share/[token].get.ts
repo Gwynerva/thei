@@ -1,7 +1,7 @@
 import {
+  findShareTarget,
   rememberShareToken,
   resolveShareToken,
-  shareGrantPath,
 } from '../../thei/access-links/share-links';
 import { sitePath } from '../../thei/site-url';
 
@@ -15,21 +15,17 @@ import { sitePath } from '../../thei/site-url';
  * event, so the token is not copied along with the link to the page.
  */
 export default defineEventHandler(async (event) => {
+  setHeader(event, 'X-Robots-Tag', 'noindex, nofollow');
+  setHeader(event, 'Cache-Control', 'private, no-store');
   const token = (getRouterParam(event, 'token') ?? '').replace(/\/$/, '');
   const link = resolveShareToken(token);
-  if (!link) {
-    setHeader(event, 'X-Robots-Tag', 'noindex, nofollow');
+  const target =
+    link && (await findShareTarget(link.entityType, link.entityUuid));
+  if (!target)
     throw createError({
       statusCode: 404,
       message: THEI_SERVER.phrase.share_link_expired,
     });
-  }
-
-  const target = await shareGrantPath(link.entityType, link.entityUuid);
-  if (!target) throw createError({ statusCode: 404 });
-
   rememberShareToken(event, token);
-  setHeader(event, 'X-Robots-Tag', 'noindex, nofollow');
-  setHeader(event, 'Cache-Control', 'private, no-store');
-  return sendRedirect(event, sitePath(target), 302);
+  return sendRedirect(event, sitePath(target.path), 302);
 });

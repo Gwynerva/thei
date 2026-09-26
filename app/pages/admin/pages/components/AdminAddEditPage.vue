@@ -15,7 +15,6 @@ import {
 import SlugInput from '../../components/SlugInput.vue';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
 import AssetTile from '#layers/thei/app/components/AssetTile.vue';
-import ProjectShareLinks from '../../projects/components/ProjectShareLinks.vue';
 import { useSingleMediaAsset } from '#layers/thei/app/composables/single-media-asset';
 import { singleAssetUsageDelta } from '#layers/thei/app/composables/single-media-asset-state';
 import { pageDeleteModal } from './page-delete-modal';
@@ -395,7 +394,7 @@ onBeforeRouteLeave(() => {
       </Field>
     </Box>
 
-    <ProjectShareLinks
+    <AdminShareLinks
       v-if="pageUuid"
       entity-type="page"
       :entity-uuid="pageUuid"

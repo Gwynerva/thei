@@ -37,6 +37,11 @@ import {
   type ContentEntityType,
 } from '#layers/thei/shared/content-link';
 import { findContentEntity } from '../content-entities';
+import {
+  opensGrantOwner,
+  STRANGER,
+  type PublicViewer,
+} from '../access-links/viewer';
 import { resolveEntityIconMedia } from '../media/generated-icon';
 
 /**
@@ -76,12 +81,21 @@ export type PublicContentEntity =
       date: string;
     };
 
+/**
+ * One field of content as a reader gets it.
+ *
+ * `includePrivate` opens this content's own private sections and files: the
+ * owner's, or a share link's for the entity it belongs to. Links to other
+ * entities are judged separately, each through `viewer`, because a link to
+ * one project opens nothing that project merely mentions.
+ */
 export async function buildPublicContentData(
   ownerType: ContentOwnerType,
   ownerId: string,
   slot: ContentSlot,
   entity: PublicContentEntity,
   includePrivate = false,
+  viewer: PublicViewer = STRANGER,
 ): Promise<PublicContentOutputData | undefined> {
   const row = await THEI_SERVER.content.findByOwner(ownerType, ownerId, slot);
   if (!row) return undefined;
@@ -91,6 +105,7 @@ export async function buildPublicContentData(
       entity,
       row.contentUuid,
       includePrivate,
+      viewer,
     );
   } catch (error) {
     if (error instanceof ContentValidationError) return { blocks: [] };
@@ -203,6 +218,7 @@ async function hydratePublicContentData(
   entity: PublicContentEntity,
   contentUuid: string,
   includePrivate: boolean,
+  viewer: PublicViewer,
 ): Promise<PublicContentOutputData> {
   const normalized = normalizeContentData(value);
   const privateSectionRanges = contentPrivateSectionRanges(normalized);
@@ -227,10 +243,13 @@ async function hydratePublicContentData(
     const key = `${entityType}:${entityId}`;
     const cached = entityLinkCache.get(key);
     if (cached) return cached;
-    const entity = await findContentEntity({ entityType, entityId }, false);
+    const entity = await findContentEntity({ entityType, entityId }, STRANGER);
     const access: EntityLinkAccess = !entity
       ? 'missing'
-      : canResolveContentEntityLink(entity.access, includePrivate)
+      : canResolveContentEntityLink(
+            entity.access,
+            opensGrantOwner(viewer, entity.grantOwner),
+          )
         ? 'resolvable'
         : 'restricted';
     entityLinkCache.set(key, access);
@@ -375,9 +394,11 @@ async function hydratePublicContentData(
           faviconMedia: link.faviconMedia,
         });
     }
+    // Only the owner may open every entity; anyone else — a share link's
+    // holder included — gets each link judged on its own.
     return {
       ...block,
-      data: includePrivate
+      data: viewer.isAdmin
         ? data
         : ((await redactBlockData(data)) as typeof data),
     };

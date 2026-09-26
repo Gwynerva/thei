@@ -31,7 +31,6 @@ import ProjectAssets from '../../projects/components/ProjectAssets.vue';
 import ProjectExternalLinks from '../../projects/components/ProjectExternalLinks.vue';
 import ProjectTags from '../../projects/components/ProjectTags.vue';
 import ProjectActionSettings from '../../projects/components/ProjectActionSettings.vue';
-import ProjectShareLinks from '../../projects/components/ProjectShareLinks.vue';
 import { eventDeleteModal } from './event-delete-modal';
 import { externalLinkListItems } from '#layers/thei/shared/external-link';
 import { useExternalLinks } from '#layers/thei/app/composables/external-links';
@@ -409,7 +408,7 @@ function clone<T>(value: T): T {
       :owner="eventUuid ? { type: 'event', id: eventUuid } : undefined"
       :owner-title="eventData.title.trim() || phrase.new_event"
     />
-    <ProjectShareLinks
+    <AdminShareLinks
       v-if="eventUuid"
       entity-type="event"
       :entity-uuid="eventUuid"

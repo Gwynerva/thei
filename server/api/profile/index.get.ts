@@ -20,6 +20,7 @@ import {
   buildPublicTagListItems,
   canListPublicEntity,
 } from '../../thei/public/entities';
+import { siteViewer } from '../../thei/access-links/viewer';
 import { buildSecretReference } from '../../thei/public/secret';
 
 export default defineEventHandler(
@@ -118,6 +119,7 @@ export default defineEventHandler(
         'profile-about',
         { type: 'profile', title: p.displayName },
         isAdmin,
+        siteViewer(isAdmin),
       ),
       getPinnedPages(),
       getProfileLinks(isAdmin),
@@ -138,7 +140,7 @@ export default defineEventHandler(
           .slice(0, 3)
           .map((event) =>
             canListPublicEntity(event.access, isAdmin)
-              ? buildPublicEventSummary(event, isAdmin)
+              ? buildPublicEventSummary(event, siteViewer(isAdmin))
               : buildSecretReference('event', event.eventUuid),
           ),
       ),

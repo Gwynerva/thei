@@ -96,7 +96,6 @@ const extraContents = computed(() => [
 
 <template>
   <main class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
-    <PublicShareNotice />
     <PublicPageHeader
       icon="event"
       :title="data.title"

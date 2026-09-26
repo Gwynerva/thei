@@ -6,9 +6,9 @@ import {
 } from '#layers/thei/shared/share-link';
 import {
   createShareLink,
-  shareLinkPath,
+  findShareTarget,
+  toShareLinkItem,
 } from '../../../thei/access-links/share-links';
-import { siteUrl } from '../../../thei/site-url';
 
 export default defineEventHandler(async (event): Promise<ShareLinkItem> => {
   // A closed site answers every visitor with a 403 before any of this, so a
@@ -19,25 +19,25 @@ export default defineEventHandler(async (event): Promise<ShareLinkItem> => {
       message: THEI_SERVER.phrase.share_link_private_site,
     });
   const body = await readBody<{
-    entityType?: string;
-    entityUuid?: string;
-    duration?: string;
+    entityType?: unknown;
+    entityUuid?: unknown;
+    duration?: unknown;
+    label?: unknown;
   }>(event);
-  const entityType = isShareLinkEntityType(body?.entityType)
-    ? body.entityType
-    : 'project';
-  const entityUuid = String(body?.entityUuid ?? '');
-  if (!entityUuid || !isShareLinkDuration(body?.duration))
+  if (
+    !isShareLinkEntityType(body?.entityType) ||
+    typeof body.entityUuid !== 'string' ||
+    !body.entityUuid ||
+    !isShareLinkDuration(body.duration)
+  )
     throw createError({ statusCode: 400, message: 'Invalid share link' });
-  const exists =
-    entityType === 'project'
-      ? await THEI_SERVER.projects.findByUuid(entityUuid)
-      : entityType === 'event'
-        ? await THEI_SERVER.events.findByUuid(entityUuid)
-        : entityType === 'diary-entry'
-          ? await THEI_SERVER.diary.findByUuid(entityUuid)
-          : await THEI_SERVER.pages.findByUuid(entityUuid);
-  if (!exists) throw createError({ statusCode: 404 });
-  const link = await createShareLink(entityType, entityUuid, body.duration);
-  return { ...link, url: siteUrl(event, shareLinkPath(link.token!)) };
+  if (!(await findShareTarget(body.entityType, body.entityUuid)))
+    throw createError({ statusCode: 404 });
+  const link = await createShareLink(
+    body.entityType,
+    body.entityUuid,
+    body.duration,
+    typeof body.label === 'string' ? body.label : '',
+  );
+  return toShareLinkItem(event, link);
 });

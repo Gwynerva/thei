@@ -50,6 +50,7 @@ useHead({
     ></div>
     <AdminBar />
     <PublicHeader />
+    <PublicShareBanner />
     <TheiLoadingIndicator />
     <slot></slot>
   </div>

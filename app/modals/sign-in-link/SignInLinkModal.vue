@@ -34,18 +34,11 @@ watch(
 );
 
 /** Which copy button shows its check for a moment. */
-const copied = ref<'link' | 'qr'>();
-let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+const { copied, copyText, flash } = useClipboardCopy<'link' | 'qr'>();
 /** Not every browser can put a picture on the clipboard. */
 const canCopyImage = ref(false);
 const copyButtonClass = `flex flex-1 items-center justify-center gap-xs
   whitespace-nowrap px-xs`;
-
-function showCopied(what: 'link' | 'qr') {
-  copied.value = what;
-  clearTimeout(copiedTimer);
-  copiedTimer = setTimeout(() => (copied.value = undefined), 2000);
-}
 
 const remaining = computed(() => {
   if (!link.value) return '';
@@ -76,13 +69,7 @@ async function create() {
 }
 
 async function copyLink() {
-  if (!link.value?.url) return;
-  try {
-    await navigator.clipboard.writeText(link.value.url);
-    showCopied('link');
-  } catch {
-    // A browser that refuses the clipboard still shows the address itself.
-  }
+  if (link.value?.url) await copyText('link', link.value.url);
 }
 
 async function copyQr() {
@@ -93,7 +80,7 @@ async function copyQr() {
     await navigator.clipboard.write([
       new ClipboardItem({ [qr.value.blob.type]: qr.value.blob }),
     ]);
-    showCopied('qr');
+    flash('qr');
   } catch {
     // The picture itself can still be copied from the browser's menu.
   }
@@ -114,7 +101,6 @@ onMounted(() => {
   void create();
 });
 onBeforeUnmount(() => {
-  clearTimeout(copiedTimer);
   // A link left on screen is a link left usable; closing the modal ends it.
   if (link.value && !expired.value) void revoke();
 });

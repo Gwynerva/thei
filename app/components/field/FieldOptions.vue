@@ -28,6 +28,7 @@ const model = defineModel<string>();
       <button
         v-for="(option, key) in options"
         :key
+        type="button"
         @click="model = key"
         :data-title-popup="direction === 'row' ? option.description : undefined"
         class="cursor-pointer rounded-normal border-2 p-xs transition"

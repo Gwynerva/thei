@@ -1,6 +1,7 @@
 import type { ContentEntitySearchItem } from '#layers/thei/shared/admin/content-entity-search';
 import { parseInternalUrl } from '#layers/thei/shared/internal-url';
 import { findContentEntityByTarget } from '../../../thei/content-entities';
+import { OWNER } from '../../../thei/access-links/viewer';
 import { contentEntitySearchItem } from '../../../thei/content-entity-search';
 import { internalUrlSite } from '../../../thei/site-url';
 
@@ -16,7 +17,7 @@ export default defineEventHandler(
     const url = getQuery(event).url;
     if (typeof url !== 'string') return { entity: null };
     const target = parseInternalUrl(url, internalUrlSite(event));
-    const record = target && (await findContentEntityByTarget(target, true));
+    const record = target && (await findContentEntityByTarget(target, OWNER));
     return { entity: record ? await contentEntitySearchItem(record) : null };
   },
 );

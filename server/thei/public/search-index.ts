@@ -16,6 +16,7 @@ import {
   buildPublicTags,
   canListPublicEntity,
 } from './entities';
+import { siteViewer } from '../access-links/viewer';
 import { paginate } from '#layers/thei/shared/pagination';
 
 /**
@@ -346,7 +347,7 @@ export async function runPublicSearch(
           .where(eq(schema.events.eventUuid, document.uuid))
           .get();
         return event
-          ? await buildPublicEventSummary(event, isAdmin)
+          ? await buildPublicEventSummary(event, siteViewer(isAdmin))
           : undefined;
       }),
     ),

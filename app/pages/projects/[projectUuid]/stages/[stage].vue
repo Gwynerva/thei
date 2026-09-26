@@ -80,7 +80,6 @@ const details = computed(
 
 <template>
   <main class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
-    <PublicShareNotice />
     <PublicPageHeader
       icon="calendar"
       :title="data.title"

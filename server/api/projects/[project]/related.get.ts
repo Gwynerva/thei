@@ -29,6 +29,6 @@ export default defineEventHandler(async (event): Promise<PublicRelatedPage> => {
     { type: 'project', id: project.projectUuid },
     kind,
     page,
-    viewer.isAdmin,
+    viewer,
   );
 });

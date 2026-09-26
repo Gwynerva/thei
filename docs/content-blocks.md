@@ -139,7 +139,10 @@ document holds:
 - `privateSectionPlaceholder` — a summary (`{ blockCount, wordCount, assetCount,
 assetTotalSize }`) and nothing else;
 - `privateSectionExpanded` — `{ summary, blocks }`, the same summary and the
-  blocks themselves, only ever sent to the owner.
+  blocks themselves, only ever sent to the owner or to the holder of a live
+  temporary access link for this very entity (a project's link covers its
+  stages and sections). Links inside it to other entities are still judged
+  for the holder as a stranger.
 
 ## Text and Markdown
 

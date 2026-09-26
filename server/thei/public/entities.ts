@@ -87,6 +87,13 @@ import {
 } from '../content-entities';
 import { buildSecretReference } from './secret';
 import {
+  opensGrantOwner,
+  opensPrivate,
+  OWNER,
+  STRANGER,
+  type PublicViewer,
+} from '../access-links/viewer';
+import {
   buildPublicContentData,
   buildPublicEntityPreviewMedia,
   type PublicContentEntity,
@@ -116,6 +123,7 @@ async function buildOwnerOnlyNotes(
     entityNotesSlot(owner),
     entity,
     true,
+    OWNER,
   );
   return {
     ...(reminder ? { reminder } : {}),
@@ -207,7 +215,7 @@ export async function buildPublicEntityReference(
 
 export async function buildPublicEventSummary(
   event: EventRow,
-  isAdmin = false,
+  viewer: PublicViewer = STRANGER,
 ): Promise<PublicEntitySummary> {
   const [media, periods, tags, relations] = await Promise.all([
     buildPublicEntityPreviewMedia(
@@ -215,11 +223,11 @@ export async function buildPublicEventSummary(
       event.eventUuid,
       'event-body',
       { type: 'event', ...event },
-      isAdmin,
+      opensPrivate(viewer, 'event', event.eventUuid),
     ),
     getEventPeriods(event.eventUuid),
     listTagsForContainer('event', event.eventUuid),
-    resolvePublicRelated({ type: 'event', id: event.eventUuid }, isAdmin),
+    resolvePublicRelated({ type: 'event', id: event.eventUuid }, viewer),
   ]);
   return {
     type: 'event',
@@ -238,9 +246,9 @@ export async function buildPublicEventSummary(
     // it: the rest waits on the event's own page.
     relatedEntities: await buildPublicRelatedLinks(
       relations.filter((item) => item.endpoint.type === 'project'),
-      isAdmin,
+      viewer,
     ),
-    ...(isAdmin && event.reminder ? { reminder: event.reminder } : {}),
+    ...(viewer.isAdmin && event.reminder ? { reminder: event.reminder } : {}),
   };
 }
 
@@ -270,20 +278,15 @@ export async function buildPublicPageListItem(
 
 export async function buildPublicPage(
   page: PageRow,
-  isAdmin: boolean,
-  /**
-   * The private view of this page in particular, which a share link grants
-   * without making its holder the owner of anything else. The owner's notes
-   * and reminder follow `isAdmin` rather than this.
-   */
-  asOwner = isAdmin,
+  viewer: PublicViewer,
 ): Promise<PublicPageResponse> {
   const content = (await buildPublicContentData(
     'page',
     page.pageUuid,
     'page-body',
     { type: 'page', ...page },
-    asOwner,
+    opensPrivate(viewer, 'page', page.pageUuid),
+    viewer,
   )) ?? { blocks: [] };
   return {
     title: page.title,
@@ -295,23 +298,30 @@ export async function buildPublicPage(
     content,
     references: await buildPublicReferences(
       emptyPublicReferenceGroup(),
-      await buildPublicContentReferenceGroup(content, asOwner),
-      asOwner,
+      await buildPublicContentReferenceGroup(content, viewer),
+      viewer,
     ),
     ...(await buildOwnerOnlyNotes(
       'page',
       page.pageUuid,
       { type: 'page', ...page },
       page.reminder,
-      isAdmin,
+      viewer.isAdmin,
     )),
   };
 }
 
+/**
+ * A project's page. The project's own parts — stages, sections, showcase,
+ * files, links, private sections — open with its share link; everything it
+ * points to is judged for the viewer as they are, and the owner's notes stay
+ * the owner's.
+ */
 export async function buildPublicProject(
   project: ProjectRow,
-  isAdmin: boolean,
+  viewer: PublicViewer,
 ): Promise<Omit<PublicProjectResponse, 'timeline'>> {
+  const own = opensPrivate(viewer, 'project', project.projectUuid);
   const usages = await THEI_SERVER.assets.usages.findByContainer(
     'project',
     project.projectUuid,
@@ -339,17 +349,21 @@ export async function buildPublicProject(
       project.projectUuid,
       'project-description',
       { type: 'project', ...project },
-      isAdmin,
+      own,
+      viewer,
     ),
     getExternalLinkList({ type: 'project', id: project.projectUuid }),
-    resolvePublicRelated({ type: 'project', id: project.projectUuid }, isAdmin),
-    getCurrentStatus({ type: 'project', id: project.projectUuid }, isAdmin),
+    resolvePublicRelated({ type: 'project', id: project.projectUuid }, viewer),
+    // Statuses are always as open as their project; `isAdmin` only picks the
+    // owner's preview addresses for the icons.
+    getCurrentStatus(
+      { type: 'project', id: project.projectUuid },
+      viewer.isAdmin,
+    ),
   ]);
-  const visibleStages = rawStages.filter(
-    (stage) => isAdmin || !stage.isPrivate,
-  );
+  const visibleStages = rawStages.filter((stage) => own || !stage.isPrivate);
   const visibleSections = rawSections.filter(
-    (section) => isAdmin || !section.isPrivate,
+    (section) => own || !section.isPrivate,
   );
   const showcase = await Promise.all(
     rawShowcase
@@ -358,7 +372,7 @@ export async function buildPublicProject(
           asset.type === AssetType.Image || asset.type === AssetType.Video,
       )
       .map(async ({ asset, meta }) => {
-        if (!isAdmin && usageIsPrivate(meta))
+        if (!own && usageIsPrivate(meta))
           return buildSecretReference(
             'media',
             `${project.projectUuid}:${asset.assetUuid}`,
@@ -375,7 +389,7 @@ export async function buildPublicProject(
   );
   const files = await Promise.all(
     rawFiles.map(({ asset, meta }) =>
-      !isAdmin && usageIsPrivate(meta)
+      !own && usageIsPrivate(meta)
         ? buildSecretReference(
             'file',
             `${project.projectUuid}:${asset.assetUuid}`,
@@ -390,12 +404,12 @@ export async function buildPublicProject(
   const [unsortedStageItems, sectionItems] = await Promise.all([
     Promise.all(
       visibleStages.map((stage) =>
-        buildPublicProjectStageSummary(project, stage, isAdmin),
+        buildPublicProjectStageSummary(project, stage, own),
       ),
     ),
     Promise.all(
       visibleSections.map((section) =>
-        buildPublicProjectSectionSummary(project, section, isAdmin),
+        buildPublicProjectSectionSummary(project, section, own),
       ),
     ),
   ]);
@@ -406,7 +420,7 @@ export async function buildPublicProject(
   const manualReferences = buildPublicManualReferenceGroup(
     rawLinks,
     files,
-    isAdmin,
+    own,
   );
   return {
     title: project.title,
@@ -441,16 +455,16 @@ export async function buildPublicProject(
     statusCount: status.total,
     references: await buildPublicReferences(
       manualReferences,
-      await buildPublicContentReferenceGroup(description, isAdmin),
-      isAdmin,
+      await buildPublicContentReferenceGroup(description, viewer),
+      viewer,
     ),
-    action: await buildPublicAction(project, usages, isAdmin),
+    action: await buildPublicAction(project, usages, own),
     ...(await buildOwnerOnlyNotes(
       'project',
       project.projectUuid,
       { type: 'project', ...project },
       project.reminder,
-      isAdmin,
+      viewer.isAdmin,
     )),
   };
 }
@@ -458,7 +472,7 @@ export async function buildPublicProject(
 export async function buildPublicProjectStageSummary(
   project: Pick<ProjectRow, 'humanReadableSlug' | 'publicId'>,
   stage: Awaited<ReturnType<typeof getProjectStages>>[number],
-  isAdmin = false,
+  includePrivate = false,
 ): Promise<PublicProjectStage> {
   const period = coverDatedPeriods(stage.periods);
   return {
@@ -472,7 +486,7 @@ export async function buildPublicProjectStageSummary(
       stage.stageUuid,
       'project-stage-body',
       { type: 'project', ...project },
-      isAdmin,
+      includePrivate,
     ),
     href: buildProjectChildUrl(
       project.humanReadableSlug,
@@ -487,7 +501,7 @@ export async function buildPublicProjectStageSummary(
 export async function buildPublicProjectSectionSummary(
   project: Pick<ProjectRow, 'humanReadableSlug' | 'publicId'>,
   section: Awaited<ReturnType<typeof getProjectContentSections>>[number],
-  isAdmin = false,
+  includePrivate = false,
 ): Promise<PublicProjectSection> {
   return {
     title: section.title,
@@ -498,7 +512,7 @@ export async function buildPublicProjectSectionSummary(
       section.sectionUuid,
       'project-section-body',
       { type: 'project', ...project },
-      isAdmin,
+      includePrivate,
     ),
     href: buildProjectChildUrl(
       project.humanReadableSlug,
@@ -522,16 +536,18 @@ export async function buildPublicProjectChildParent(project: ProjectRow) {
 export async function buildPublicProjectStage(
   project: ProjectRow,
   stage: Awaited<ReturnType<typeof getProjectStages>>[number],
-  isAdmin: boolean,
+  viewer: PublicViewer,
 ): Promise<PublicProjectStageResponse> {
+  const own = opensPrivate(viewer, 'project', project.projectUuid);
   const [summary, content, parent] = await Promise.all([
-    buildPublicProjectStageSummary(project, stage, isAdmin),
+    buildPublicProjectStageSummary(project, stage, own),
     buildPublicContentData(
       'project-stage',
       stage.stageUuid,
       'project-stage-body',
       { type: 'project', ...project },
-      isAdmin,
+      own,
+      viewer,
     ),
     buildPublicProjectChildParent(project),
   ]);
@@ -544,8 +560,8 @@ export async function buildPublicProjectStage(
     project: parent,
     references: await buildPublicReferences(
       emptyPublicReferenceGroup(),
-      await buildPublicContentReferenceGroup(content, isAdmin),
-      isAdmin,
+      await buildPublicContentReferenceGroup(content, viewer),
+      viewer,
     ),
   };
 }
@@ -553,16 +569,18 @@ export async function buildPublicProjectStage(
 export async function buildPublicProjectSection(
   project: ProjectRow,
   section: Awaited<ReturnType<typeof getProjectContentSections>>[number],
-  isAdmin: boolean,
+  viewer: PublicViewer,
 ): Promise<PublicProjectSectionResponse> {
+  const own = opensPrivate(viewer, 'project', project.projectUuid);
   const [summary, content, parent] = await Promise.all([
-    buildPublicProjectSectionSummary(project, section, isAdmin),
+    buildPublicProjectSectionSummary(project, section, own),
     buildPublicContentData(
       'project-section',
       section.sectionUuid,
       'project-section-body',
       { type: 'project', ...project },
-      isAdmin,
+      own,
+      viewer,
     ),
     buildPublicProjectChildParent(project),
   ]);
@@ -575,16 +593,17 @@ export async function buildPublicProjectSection(
     project: parent,
     references: await buildPublicReferences(
       emptyPublicReferenceGroup(),
-      await buildPublicContentReferenceGroup(content, isAdmin),
-      isAdmin,
+      await buildPublicContentReferenceGroup(content, viewer),
+      viewer,
     ),
   };
 }
 
 export async function buildPublicEvent(
   stored: EventRow,
-  isAdmin: boolean,
+  viewer: PublicViewer,
 ): Promise<PublicEventResponseFull> {
+  const own = opensPrivate(viewer, 'event', stored.eventUuid);
   const [periods, content, rawFiles, rawLinks, tags, relations, usages] =
     await Promise.all([
       getEventPeriods(stored.eventUuid),
@@ -593,7 +612,8 @@ export async function buildPublicEvent(
         stored.eventUuid,
         'event-body',
         { type: 'event', ...stored },
-        isAdmin,
+        own,
+        viewer,
       ),
       THEI_SERVER.assets.usages.findOtherForContainer(
         'event',
@@ -601,12 +621,12 @@ export async function buildPublicEvent(
       ),
       getExternalLinkList({ type: 'event', id: stored.eventUuid }),
       listTagsForContainer('event', stored.eventUuid),
-      resolvePublicRelated({ type: 'event', id: stored.eventUuid }, isAdmin),
+      resolvePublicRelated({ type: 'event', id: stored.eventUuid }, viewer),
       THEI_SERVER.assets.usages.findByContainer('event', stored.eventUuid),
     ]);
   const files = await Promise.all(
     rawFiles.map(({ asset, meta }) => {
-      if (!isAdmin && usageIsPrivate(meta))
+      if (!own && usageIsPrivate(meta))
         return buildSecretReference(
           'file',
           `${stored.eventUuid}:${asset.assetUuid}`,
@@ -630,7 +650,7 @@ export async function buildPublicEvent(
       } satisfies PublicFile;
     }),
   );
-  const manual = buildPublicManualReferenceGroup(rawLinks, files, isAdmin);
+  const manual = buildPublicManualReferenceGroup(rawLinks, files, own);
   return {
     title: stored.title,
     summary: stored.summary,
@@ -642,18 +662,18 @@ export async function buildPublicEvent(
     content: content ?? { blocks: [] },
     references: await buildPublicReferences(
       manual,
-      await buildPublicContentReferenceGroup(content, isAdmin),
-      isAdmin,
+      await buildPublicContentReferenceGroup(content, viewer),
+      viewer,
     ),
     tags: await buildPublicTags(tags),
     related: countPublicRelated(relations),
-    action: await buildPublicAction(stored, usages, isAdmin),
+    action: await buildPublicAction(stored, usages, own),
     ...(await buildOwnerOnlyNotes(
       'event',
       stored.eventUuid,
       { type: 'event', ...stored },
       stored.reminder,
-      isAdmin,
+      viewer.isAdmin,
     )),
   };
 }
@@ -704,8 +724,7 @@ export async function buildPublicDiaryEntry(
     createdAt: number;
     updatedAt: number;
   },
-  isAdmin: boolean,
-  asOwner = isAdmin,
+  viewer: PublicViewer,
 ): Promise<PublicDiaryResponse> {
   const [content, relations] = await Promise.all([
     buildPublicContentData(
@@ -713,12 +732,10 @@ export async function buildPublicDiaryEntry(
       stored.diaryUuid,
       'diary-body',
       { type: 'diary-entry', date: stored.date },
-      asOwner,
+      opensPrivate(viewer, 'diary-entry', stored.diaryUuid),
+      viewer,
     ),
-    resolvePublicRelated(
-      { type: 'diary-entry', id: stored.diaryUuid },
-      isAdmin,
-    ),
+    resolvePublicRelated({ type: 'diary-entry', id: stored.diaryUuid }, viewer),
   ]);
   return {
     date: stored.date,
@@ -727,8 +744,8 @@ export async function buildPublicDiaryEntry(
     content: content ?? { blocks: [] },
     references: await buildPublicReferences(
       emptyPublicReferenceGroup(),
-      await buildPublicContentReferenceGroup(content, asOwner),
-      asOwner,
+      await buildPublicContentReferenceGroup(content, viewer),
+      viewer,
     ),
     related: countPublicRelated(relations),
     ...(await buildOwnerOnlyNotes(
@@ -736,14 +753,19 @@ export async function buildPublicDiaryEntry(
       stored.diaryUuid,
       { type: 'diary-entry', date: stored.date },
       stored.reminder,
-      isAdmin,
+      viewer.isAdmin,
     )),
   };
 }
 
+/**
+ * The links and files a piece of content refers to, for the sidebar. Each
+ * linked entity is judged on its own: a share link opens the content it came
+ * with, not the entities that content mentions.
+ */
 export async function buildPublicContentReferenceGroup(
   content: ContentOutputData | PublicContentOutputData | null | undefined,
-  includePrivate: boolean,
+  viewer: PublicViewer,
 ): Promise<PublicReferenceGroup> {
   const referenceContent: ContentOutputData | undefined = content
     ? {
@@ -754,14 +776,16 @@ export async function buildPublicContentReferenceGroup(
         }),
       }
     : undefined;
+  // Hydrated content has no private boundaries left: a section the reader
+  // may not open is already gone. Raw content keeps them for the owner only.
   const candidates = extractContentReferenceCandidates(
     referenceContent,
-    includePrivate,
+    viewer.isAdmin,
   );
   const loadExternalLink = createExternalLinkLoader();
   const links = await Promise.all(
     candidates.links.map((candidate) =>
-      buildPublicReferenceLink(candidate, includePrivate, loadExternalLink),
+      buildPublicReferenceLink(candidate, viewer, loadExternalLink),
     ),
   );
   return {
@@ -791,7 +815,7 @@ export async function buildPublicContentReferenceGroup(
  */
 async function buildPublicReferenceLink(
   candidate: ContentReferenceLinkCandidate,
-  includePrivate: boolean,
+  viewer: PublicViewer,
   loadExternalLink: ReturnType<
     typeof createExternalLinkLoader
   > = findExternalLink,
@@ -815,10 +839,10 @@ async function buildPublicReferenceLink(
       iconMedia: link?.faviconMedia,
     };
   }
-  const entity = await findContentEntity(resolved, includePrivate);
-  if (!entity || !canOpenPublicEntity(entity.access, includePrivate))
-    return undefined;
-  const iconMedia = await entity.media('public', includePrivate);
+  const entity = await findContentEntity(resolved, viewer);
+  const opens = opensGrantOwner(viewer, entity?.grantOwner);
+  if (!entity || !canOpenPublicEntity(entity.access, opens)) return undefined;
+  const iconMedia = await entity.media('public', opens);
   return {
     kind: entity.entityType,
     title: resolved.note || entity.title,
@@ -844,7 +868,7 @@ export async function resolveSiteEntityCandidate(
   // bare path would be taken for this site whatever the author meant.
   if (!/^https?:\/\//i.test(url)) return external;
   const target = parseInternalUrl(url, internalUrlSite());
-  const entity = target && (await findContentEntityByTarget(target, false));
+  const entity = target && (await findContentEntityByTarget(target, STRANGER));
   return entity
     ? {
         kind: 'entity',
@@ -861,13 +885,11 @@ export async function resolveSiteEntityCandidate(
 export async function buildPublicReferences(
   manual: PublicReferenceGroup,
   content: PublicReferenceGroup,
-  includePrivate: boolean,
+  viewer: PublicViewer,
 ): Promise<PublicReferences> {
   const manualLinks = await Promise.all(
     manual.links.map((link) =>
-      link.kind === 'external'
-        ? buildManualSiteLink(link, includePrivate)
-        : link,
+      link.kind === 'external' ? buildManualSiteLink(link, viewer) : link,
     ),
   );
   // One file is the same file wherever its bytes are: two placements may hold
@@ -896,11 +918,11 @@ export async function buildPublicReferences(
 /** A hand-added address of this site becomes the entity it opens. */
 async function buildManualSiteLink(
   link: PublicReferenceLink,
-  includePrivate: boolean,
+  viewer: PublicViewer,
 ): Promise<PublicReferenceLink | undefined> {
   const candidate = await resolveSiteEntityCandidate(link.href);
   if (candidate.kind === 'external') return link;
-  return buildPublicReferenceLink(candidate, includePrivate);
+  return buildPublicReferenceLink(candidate, viewer);
 }
 
 export async function buildPublicTags(
@@ -998,10 +1020,10 @@ function buildPublicAssetDescriptor(
 export async function buildPublicAction(
   entity: ProjectRow | EventRow,
   usages: Awaited<ReturnType<typeof THEI_SERVER.assets.usages.findByContainer>>,
-  isAdmin: boolean,
+  includePrivate: boolean,
 ): Promise<PublicAction | undefined> {
   const action = entity.action;
-  if (!action?.enabled || (!isAdmin && action.isPrivate)) return;
+  if (!action?.enabled || (!includePrivate && action.isPrivate)) return;
   const isProject = 'projectUuid' in entity;
   const url = isProject
     ? buildProjectUrl(entity.humanReadableSlug, entity.publicId)

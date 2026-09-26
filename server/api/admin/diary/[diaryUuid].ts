@@ -16,6 +16,7 @@ import {
   getRelations,
   prepareRelations,
 } from '../../../thei/relations';
+import { deleteShareLinks } from '../../../thei/access-links/share-links';
 
 export default defineEventHandler(async (event) => {
   const diaryUuid = getRouterParam(event, 'diaryUuid')!;
@@ -152,6 +153,7 @@ export default defineEventHandler(async (event) => {
     const { db, schema } = THEI_SERVER.useDb();
     db.transaction((tx) => {
       deleteRelations(tx, schema, { type: 'diary-entry', id: diaryUuid });
+      deleteShareLinks(tx, schema, 'diary-entry', diaryUuid);
       deleteContentForOwner(tx, schema, 'diary-entry', diaryUuid);
       tx.delete(schema.diaryEntries)
         .where(eq(schema.diaryEntries.diaryUuid, diaryUuid))

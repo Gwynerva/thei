@@ -56,6 +56,12 @@ import {
 } from './entities';
 import { isPublicSecret } from '#layers/thei/shared/api/public';
 import { buildSecretReference, type SecretEntityKind } from './secret';
+import type { ShareGrantOwner } from '#layers/thei/shared/share-link';
+import {
+  opensGrantOwner,
+  siteViewer,
+  type PublicViewer,
+} from '../access-links/viewer';
 import {
   countLifeActivityEntities,
   type LifeActivityEntityPoint,
@@ -111,7 +117,11 @@ type LifeIndex = {
 export type LifeQuery = {
   scope?: LifeScope;
   filter?: LifeFilter;
-  isAdmin: boolean;
+  /**
+   * Who is reading. Each point asks it about the entity it belongs to, so a
+   * project's share link opens the project's own points and nothing else.
+   */
+  viewer: PublicViewer;
 };
 
 export async function getLifeWindow(
@@ -159,7 +169,7 @@ export async function getLifeWindow(
   }
   if (!selectedDates.length) selectedDates = [anchorDate];
   const days = await Promise.all(
-    selectedDates.map((date) => hydrateLifeDay(index, date, options.isAdmin)),
+    selectedDates.map((date) => hydrateLifeDay(index, date, options.viewer)),
   );
   const firstIndex = index.dates.indexOf(selectedDates[0]!);
   const lastIndex = index.dates.indexOf(selectedDates.at(-1)!);
@@ -187,7 +197,7 @@ export async function getLatestLifePoints(limit: number, options: LifeQuery) {
   return Promise.all(
     selected.map(async (point) =>
       withoutOwnProject(
-        await hydrateLifePoint(point, options.isAdmin),
+        await hydrateLifePoint(point, options.viewer),
         index.ownHref,
       ),
     ),
@@ -201,7 +211,7 @@ export async function getLatestLifePoints(limit: number, options: LifeQuery) {
  * because the feed behind the tab shows it too — under a codename — and a
  * number that disagrees with what the tab opens onto reads as a bug.
  */
-export function countLifePoints(options: Omit<LifeQuery, 'isAdmin'>): number {
+export function countLifePoints(options: Omit<LifeQuery, 'viewer'>): number {
   return buildLifeIndex(options.scope, options.filter).points.length;
 }
 
@@ -247,7 +257,7 @@ export async function getLifeRewind(options: {
     ...paged,
     items: await Promise.all(
       paged.items.map(async ({ point, match }) => ({
-        point: await hydrateLifePoint(point, options.isAdmin),
+        point: await hydrateLifePoint(point, siteViewer(options.isAdmin)),
         match,
       })),
     ),
@@ -556,30 +566,69 @@ function boundaryPoint(
 async function hydrateLifeDay(
   index: LifeIndex,
   date: string,
-  isAdmin: boolean,
+  viewer: PublicViewer,
 ): Promise<LifeDay> {
   return {
     date,
     points: await Promise.all(
       (index.pointsByDate.get(date) ?? []).map(async (point) =>
-        withoutOwnProject(
-          await hydrateLifePoint(point, isAdmin),
-          index.ownHref,
-        ),
+        withoutOwnProject(await hydrateLifePoint(point, viewer), index.ownHref),
       ),
     ),
   };
 }
 
+/** The entity whose share link opens a point: the project for its parts and statuses. */
+function pointGrantOwner(point: RawPoint): ShareGrantOwner | undefined {
+  switch (point.entityKind) {
+    case 'event':
+      return { entityType: 'event', entityId: point.event!.eventUuid };
+    case 'diary-entry':
+      return {
+        entityType: 'diary-entry',
+        entityId: point.diaryEntry!.diaryUuid,
+      };
+    case 'page':
+      return { entityType: 'page', entityId: point.page!.pageUuid };
+    case 'profile-avatar':
+      return undefined;
+    default:
+      return point.project
+        ? { entityType: 'project', entityId: point.project.projectUuid }
+        : undefined;
+  }
+}
+
+function pointIsVisible(point: RawPoint, viewer: PublicViewer): boolean {
+  return lifePointIsVisible(
+    point.access,
+    point.isPrivate,
+    opensGrantOwner(viewer, pointGrantOwner(point)),
+  );
+}
+
+/**
+ * The kind a hidden point is presented as. A project's status is as secret as
+ * its project and goes by the project's codename.
+ */
+function secretPointKind(point: RawPoint): SecretEntityKind {
+  return point.entityKind === 'profile-status'
+    ? 'project'
+    : (point.entityKind as SecretEntityKind);
+}
+
 async function hydrateLifePoint(
   point: RawPoint,
-  isAdmin: boolean,
+  viewer: PublicViewer,
 ): Promise<LifePoint> {
   const key = hash(`${point.identity}:${point.date}:${point.transition}`, 14);
-  const visible = lifePointIsVisible(point.access, point.isPrivate, isAdmin);
+  // The owner's side of this point: the site-wide role, or a link to the
+  // entity it belongs to. Everything else on the card stays the reader's.
+  const opens = opensGrantOwner(viewer, pointGrantOwner(point));
+  const visible = pointIsVisible(point, viewer);
   if (!visible) {
     const secret = buildSecretReference(
-      point.entityKind as SecretEntityKind,
+      secretPointKind(point),
       secretPointUuid(point),
     );
     return {
@@ -632,7 +681,7 @@ async function hydrateLifePoint(
       owner
         ? { type: 'project', id: owner.projectUuid }
         : { type: 'profile', id: PROFILE_ID },
-      isAdmin,
+      viewer.isAdmin,
       owner,
     );
     return {
@@ -653,7 +702,7 @@ async function hydrateLifePoint(
   }
   if (point.entityKind === 'event') {
     const event = point.event!;
-    const summary = await buildPublicEventSummary(event, isAdmin);
+    const summary = await buildPublicEventSummary(event, viewer);
     return {
       key,
       date: point.date,
@@ -678,7 +727,7 @@ async function hydrateLifePoint(
         entry.diaryUuid,
         'diary-body',
         { type: 'diary-entry', date: entry.date },
-        isAdmin,
+        opens,
       ),
       THEI_SERVER.content.findByOwner(
         'diary-entry',
@@ -697,7 +746,7 @@ async function hydrateLifePoint(
       title: '',
       summary: diaryContentExcerpt(
         content?.data,
-        isAdmin,
+        opens,
         THEI_SERVER.phrase.content_private_section,
       ),
       href: buildDiaryUrl(entry.date),
@@ -720,7 +769,7 @@ async function hydrateLifePoint(
   }
   const project = point.project!;
   if (point.entityKind === 'project') {
-    const summary = await buildPublicProjectSummary(project, isAdmin);
+    const summary = await buildPublicProjectSummary(project, viewer.isAdmin);
     return {
       key,
       date: point.date,
@@ -744,7 +793,7 @@ async function hydrateLifePoint(
         stage.stageUuid,
         'project-stage-body',
         { type: 'project', ...project },
-        isAdmin,
+        opens,
       ),
       buildPublicEntityReference(project),
     ]);
@@ -776,7 +825,7 @@ async function hydrateLifePoint(
       section.sectionUuid,
       'project-section-body',
       { type: 'project', ...project },
-      isAdmin,
+      opens,
     ),
     buildPublicEntityReference(project),
   ]);
@@ -859,11 +908,7 @@ export async function getLifeActivity(
     if (!date.startsWith(prefix)) continue;
     const counts: Partial<Record<LifeActivityKind, number>> = {};
     for (const point of points) {
-      const visible = lifePointIsVisible(
-        point.access,
-        point.isPrivate,
-        options.isAdmin,
-      );
+      const visible = pointIsVisible(point, options.viewer);
       const kind: LifeActivityKind = visible ? point.entityKind : 'secret';
       counts[kind] = (counts[kind] ?? 0) + 1;
       if ((LIFE_ACTIVITY_TOTAL_KINDS as readonly string[]).includes(kind))
@@ -892,5 +937,5 @@ export async function getLifeDay(
   options: LifeQuery,
 ): Promise<LifeDay> {
   const index = buildLifeIndex(options.scope, options.filter);
-  return hydrateLifeDay(index, date, options.isAdmin);
+  return hydrateLifeDay(index, date, options.viewer);
 }

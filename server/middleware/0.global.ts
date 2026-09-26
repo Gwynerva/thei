@@ -13,7 +13,8 @@ import {
 import { getRequestPath } from '../thei/request';
 import { siteOrigin, sitePath } from '../thei/site-url';
 import {
-  readShareGrants,
+  forgetDeadShareTokens,
+  readShareCookie,
   resolveShareGrantPaths,
   SHARE_COOKIE_NAME,
 } from '../thei/access-links/share-links';
@@ -74,16 +75,30 @@ export default defineEventHandler(async (event) => {
       // Resolved once per request: a page, the API calls it makes and the
       // media it references all have to agree on what the visitor may see.
       if (getCookie(event, SHARE_COOKIE_NAME)) {
-        const grants = readShareGrants(event);
-        event.context.shareGrants = grants;
-        if (grants.size) {
+        const cookie = readShareCookie(event);
+        event.context.shareGrants = cookie.grants;
+        // A page, not one of the requests it makes: the address carries no
+        // file extension and is not an API call. Opening a link writes the
+        // cookie itself.
+        const isPage =
+          !path.startsWith('/api/') &&
+          !path.startsWith('/share/') &&
+          !/\.\w+$/.test(path);
+        if (isPage) forgetDeadShareTokens(event, cookie);
+        if (cookie.grants.size) {
           // A share link is a private view, and a crawler that follows the
           // address out of a chat would be holding the same cookie as anyone
-          // else. Nothing seen through one belongs in an index.
+          // else. Nothing seen through one belongs in an index — or in any
+          // cache: the page and its payload carry what the link opened, and
+          // that stops being theirs to see the moment it expires.
           setHeader(event, 'X-Robots-Tag', 'noindex, nofollow');
-          if (!path.startsWith('/api/'))
-            event.context.shareGrantPaths =
-              await resolveShareGrantPaths(grants);
+          setHeader(event, 'Cache-Control', 'private, no-store');
+          // The owner sees everything anyway; a notice about a link would
+          // only mislead them.
+          if (isPage && !isAdmin)
+            event.context.shareGrantPaths = await resolveShareGrantPaths(
+              cookie.grants,
+            );
         }
       }
 

@@ -89,7 +89,7 @@ Around them:
 
 ## Public Text and Machine Readers
 
-- Every public project, event, stage, section and page is also served as Markdown at `<url>index.md`, built from the same `buildPublic*` functions with the visibility of a stranger. A representation must never be more permissive than the page it mirrors: pass `false` for `isAdmin`, never the request's own role.
+- Every public project, event, stage, section and page is also served as Markdown at `<url>index.md`, built from the same `buildPublic*` functions with the visibility of a stranger. A representation must never be more permissive than the page it mirrors: build it for `STRANGER` (`server/thei/access-links/viewer.ts`), never for the request's own viewer.
 - `/llms.txt` describes the site and what its entities mean. Keep it short and factual; it is a map, not a marketing page.
 - Open Graph cards are rendered on the server from the same public data. Only publicly openable entities get one, so a preview never shows what a visitor is about to be refused.
 

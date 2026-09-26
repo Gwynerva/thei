@@ -167,14 +167,16 @@ export const baselineSql: string[] = [
   `CREATE INDEX \`sign-in-links-expires-idx\` ON \`sign-in-links\` (\`expiresAt\`);`,
   `CREATE TABLE \`share-links\` (
 	\`shareUuid\` text PRIMARY KEY NOT NULL,
-	\`tokenHash\` text NOT NULL,
+	\`token\` text NOT NULL,
 	\`entityType\` text NOT NULL,
 	\`entityUuid\` text NOT NULL,
+	\`label\` text DEFAULT '' NOT NULL,
 	\`createdAt\` integer NOT NULL,
+	\`extendedAt\` integer,
 	\`expiresAt\` integer NOT NULL
 );
 `,
-  `CREATE UNIQUE INDEX \`share-links_tokenHash_unique\` ON \`share-links\` (\`tokenHash\`);`,
+  `CREATE UNIQUE INDEX \`share-links_token_unique\` ON \`share-links\` (\`token\`);`,
   `CREATE INDEX \`share-links-entity-idx\` ON \`share-links\` (\`entityType\`,\`entityUuid\`);`,
   `CREATE INDEX \`share-links-expires-idx\` ON \`share-links\` (\`expiresAt\`);`,
   `CREATE TABLE \`project-content-sections\` (

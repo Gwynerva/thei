@@ -7,7 +7,6 @@ import type {
   DiarySaveResponse,
 } from '#layers/thei/shared/api/diary';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
-import ProjectShareLinks from '../../projects/components/ProjectShareLinks.vue';
 import { diaryDeleteModal } from '../composables';
 
 const { diaryUuid } = defineProps<{ diaryUuid?: string }>();
@@ -301,7 +300,7 @@ useRegisterAdminBarContextButton(
       :owner="diaryUuid ? { type: 'diary-entry', id: diaryUuid } : undefined"
       :owner-title="ownerTitle"
     />
-    <ProjectShareLinks
+    <AdminShareLinks
       v-if="diaryUuid"
       entity-type="diary-entry"
       :entity-uuid="diaryUuid"

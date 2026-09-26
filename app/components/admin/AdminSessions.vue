@@ -85,24 +85,23 @@ async function openSignInLink() {
 </script>
 
 <template>
-  <div class="mb-md flex items-center gap-md">
-    <SectionHeader
-      icon="person-key"
-      :title="phrase.admin_sessions"
-      :description="phrase.admin_sessions_description"
-      class="min-w-0 flex-1"
-    />
-    <Button
-      variant="secondary"
-      class="shrink-0"
-      :aria-label="phrase.sign_in_link"
-      :data-title-popup="phrase.sign_in_link_description"
-      @click="openSignInLink"
-    >
-      <Icon name="link" class="mr-xs" />
-      <span class="max-sm:hidden">{{ phrase.sign_in_link }}</span>
-    </Button>
-  </div>
+  <SectionHeader
+    icon="person-key"
+    :title="phrase.admin_sessions"
+    :description="phrase.admin_sessions_description"
+    class="mb-md"
+  >
+    <template #action>
+      <Button
+        variant="secondary"
+        :data-title-popup="phrase.sign_in_link_description"
+        @click="openSignInLink"
+      >
+        <Icon name="link" class="mr-xs" />
+        <span>{{ phrase.sign_in_link }}</span>
+      </Button>
+    </template>
+  </SectionHeader>
   <div
     v-if="error"
     class="mb-md rounded-normal border border-border-error bg-bg-error p-xs

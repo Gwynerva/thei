@@ -7,6 +7,7 @@ import {
   buildPublicProjectSummary,
   buildPublicTagListItems,
 } from '../../thei/public/entities';
+import { siteViewer } from '../../thei/access-links/viewer';
 import { resolvePagination } from '#layers/thei/shared/pagination';
 import { PUBLIC_PAGE_SIZE } from '../../thei/public/pagination';
 
@@ -93,7 +94,7 @@ export default defineEventHandler(async (event): Promise<PublicTagResponse> => {
             .limit(pagination.pageSize)
             .offset(offset)
             .all()
-            .map((item) => buildPublicEventSummary(item, isAdmin)),
+            .map((item) => buildPublicEventSummary(item, siteViewer(isAdmin))),
         );
   const [tagItem] = await buildPublicTagListItems([
     { tag, projectCount, eventCount },

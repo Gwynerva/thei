@@ -5,8 +5,10 @@ import {
   canOpenPublicEntity,
 } from '../../thei/public/entities';
 import { countLifePoints, getLatestLifePoints } from '../../thei/public/life';
-import { resolveEntityViewer } from '../../thei/access-links/viewer';
-import { markSharedResponse } from '../../thei/access-links/response';
+import {
+  resolveEntityViewer,
+  scopedViewer,
+} from '../../thei/access-links/viewer';
 
 /** How many of the newest chronology points the overview tab shows. */
 const PROJECT_TIMELINE_PREVIEW_SIZE = 3;
@@ -30,20 +32,19 @@ export default defineEventHandler(
     );
     if (!canOpenPublicEntity(project.access, viewer.asOwner))
       throw createError({ statusCode: 404, statusText: 'Project not found' });
-    if (project.access === 'link-only' || viewer.viaShare)
+    if (project.access === 'link-only')
       setHeader(event, 'X-Robots-Tag', 'noindex, nofollow');
-    if (viewer.viaShare) markSharedResponse(event);
-    // The chronology is built for the visitor the reader really is: a share
-    // link opens this project, not the private points of everything around it.
     const scope = {
       kind: 'project' as const,
       projectUuid: project.projectUuid,
     };
     const [response, latest] = await Promise.all([
-      buildPublicProject(project, viewer.asOwner),
+      buildPublicProject(project, viewer),
+      // A share link opens this project's own points, not the private points
+      // of the events and diary entries gathered around it.
       getLatestLifePoints(PROJECT_TIMELINE_PREVIEW_SIZE, {
         scope,
-        isAdmin: viewer.isAdmin,
+        viewer: scopedViewer(viewer, 'project', project.projectUuid),
       }),
     ]);
     return {

@@ -81,7 +81,6 @@ const details = computed(
 
 <template>
   <main class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
-    <PublicShareNotice />
     <PublicPageHeader
       icon="file-tray-stack"
       :title="data.title"

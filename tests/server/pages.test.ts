@@ -72,7 +72,7 @@ describe('pages repository', () => {
     ).toEqual({ createdAt: '2026-08-23', updatedAt: '2026-08-24' });
   });
 
-  it('deletes the page body, content usages, and icon usages', () => {
+  it('deletes the page body, content usages, icon usages and share links', () => {
     const db = createDb();
     insertPage(db, 'pg-one', 'one', 1);
     db.insert(schema.content)
@@ -105,12 +105,24 @@ describe('pages repository', () => {
         },
       ])
       .run();
+    db.insert(schema.shareLinks)
+      .values({
+        shareUuid: 'sh-one',
+        token: 'token'.repeat(8),
+        entityType: 'page',
+        entityUuid: 'pg-one',
+        createdAt: 1,
+        expiresAt: Date.now() + 60_000,
+      })
+      .run();
 
     deletePage('pg-one');
 
     expect(db.select().from(schema.pages).all()).toEqual([]);
     expect(db.select().from(schema.content).all()).toEqual([]);
     expect(db.select().from(schema.assetUsages).all()).toEqual([]);
+    // A link to a page that is gone would only ever answer 404.
+    expect(db.select().from(schema.shareLinks).all()).toEqual([]);
   });
 });
 
@@ -149,6 +161,16 @@ function createDb() {
       role text NOT NULL,
       meta text,
       PRIMARY KEY(assetUuid, containerType, containerId, role)
+    );
+    CREATE TABLE "share-links" (
+      shareUuid text PRIMARY KEY NOT NULL,
+      token text NOT NULL UNIQUE,
+      entityType text NOT NULL,
+      entityUuid text NOT NULL,
+      label text DEFAULT '' NOT NULL,
+      createdAt integer NOT NULL,
+      extendedAt integer,
+      expiresAt integer NOT NULL
     );
   `);
   const db = drizzle(rawDb, { schema });

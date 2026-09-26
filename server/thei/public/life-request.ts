@@ -6,7 +6,12 @@ import {
 } from '#layers/thei/shared/life';
 import { publicIdFromProjectUrlPart } from '#layers/thei/shared/project-url';
 import type { H3Event } from 'h3';
-import { resolveEntityViewer } from '../access-links/viewer';
+import {
+  resolveEntityViewer,
+  scopedViewer,
+  siteViewer,
+  type PublicViewer,
+} from '../access-links/viewer';
 import { canOpenPublicEntity } from './entities';
 
 /**
@@ -19,16 +24,16 @@ import { canOpenPublicEntity } from './entities';
 export async function resolveLifeQuery(event: H3Event): Promise<{
   scope: LifeScope;
   filter: LifeFilter;
-  isAdmin: boolean;
+  viewer: PublicViewer;
 }> {
   const query = getQuery(event);
-  const isAdmin = await THEI_SERVER.isAdmin(event);
   const projectPart = query.project;
   if (typeof projectPart !== 'string' || !projectPart)
     return {
       scope: LIFE_SCOPE_LIFE,
       filter: parseLifeFilter(query.f, LIFE_SCOPE_LIFE),
-      isAdmin,
+      // The whole timeline is the site's, and a share link never widens it.
+      viewer: siteViewer(await THEI_SERVER.isAdmin(event)),
     };
 
   const project =
@@ -52,8 +57,8 @@ export async function resolveLifeQuery(event: H3Event): Promise<{
   return {
     scope,
     filter: parseLifeFilter(query.f, scope),
-    // A share link opens this project, not the rest of the site, so the points
-    // it contributes are still judged by the site-wide role.
-    isAdmin,
+    // A share link opens this project's own points; the events and diary
+    // entries gathered around it are still judged for the stranger.
+    viewer: scopedViewer(viewer, 'project', project.projectUuid),
   };
 }
