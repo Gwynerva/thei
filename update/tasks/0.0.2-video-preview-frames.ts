@@ -24,8 +24,11 @@ export default defineUpdateTask({
     ru: `${done} из ${total} видео`,
   }),
   async run({ progress }) {
-    const { refreshVideoPreviews } =
+    const { completeVideoMetas, refreshVideoPreviews } =
       await import('#layers/thei/server/thei/assets/preview-refresh');
+    // Videos from 0.0.1 lack their length, frame rate and audio; they are
+    // read once here instead of on every view.
+    await completeVideoMetas();
     await refreshVideoPreviews({ onProgress: progress });
   },
 });

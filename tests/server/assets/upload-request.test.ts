@@ -28,29 +28,6 @@ describe('asset upload request parsing', () => {
     });
   });
 
-  it('still reads the resize fields of a page built before crops', () => {
-    // A tab opened before an update keeps sending these until it reloads. The
-    // fit is kept so the request can be resolved; the upscale flag is dropped,
-    // because nothing is enlarged any more.
-    expect(
-      parseAssetUploadSettings(
-        JSON.stringify({
-          version: 4,
-          type: 'image-transform',
-          quality: 70,
-          dimensions: { width: 1200, height: 675 },
-          resizeMode: 'cover',
-          allowUpscale: true,
-        }),
-      ),
-    ).toEqual({
-      type: 'image-transform',
-      quality: 70,
-      dimensions: { width: 1200, height: 675 },
-      resizeMode: 'cover',
-    });
-  });
-
   it('reads a quarter turn and rejects any other angle', () => {
     const request = (rotation: unknown) =>
       JSON.stringify({

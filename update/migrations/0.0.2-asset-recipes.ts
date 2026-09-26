@@ -30,8 +30,7 @@ const IMAGE_FORMATS = new Set(['avif', 'webp', 'webp-lossless']);
  * unless a row with that key and those bytes already exists in the family.
  *
  * The file is what it is and is never re-encoded here; only its description
- * changes. Recipes an earlier 0.0.2 build already rewrote with a `legacyFit`
- * note are finished the same way.
+ * changes.
  */
 export default defineMigration({
   id: '0.0.2/008-asset-recipe-crops',
@@ -50,7 +49,7 @@ export default defineMigration({
         `SELECT assetUuid, familyUuid, contentHash, settingsKey, extension,
                 type, settings, meta
          FROM assets
-         WHERE settings LIKE '%"resizeMode"%' OR settings LIKE '%"legacyFit"%'`,
+         WHERE settings LIKE '%"resizeMode"%'`,
       )
       .all() as Array<{
       assetUuid: string;
@@ -83,7 +82,7 @@ export default defineMigration({
         recipe?.type !== 'video-transform'
       )
         continue;
-      const fit = recipe.resizeMode ?? recipe.legacyFit;
+      const fit = recipe.resizeMode;
       if (fit === undefined) continue;
       const isVideo = recipe.type === 'video-transform';
 

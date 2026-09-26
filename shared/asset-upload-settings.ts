@@ -1,6 +1,5 @@
 import { AssetType } from './asset';
 import {
-  centeredCropRect,
   clampCropRect,
   evenCropRect,
   isFullFrameCrop,
@@ -130,22 +129,13 @@ export type AssetSettingsForType<TType extends AssetType> =
       : AssetOriginalSettings | AssetFileZipSettings;
 
 /**
- * Fields an admin page built before crops existed still sends while an update
- * swaps the new build in. Accepted on the way in, never stored.
- */
-export interface LegacyAssetResizeFields {
-  resizeMode?: 'inside' | 'cover';
-  allowUpscale?: boolean;
-}
-
-/**
  * What a caller asks for, before it is checked against the source.
  *
  * A request may leave a side of the output out; it is then derived from the
  * crop. The server resolves it against the probed source, so the stored
  * recipe is always complete and canonical.
  */
-export interface AssetTransformRequestGeometry extends LegacyAssetResizeFields {
+export interface AssetTransformRequestGeometry {
   rotation?: AssetRotation;
   crop?: AssetCropRect;
   dimensions: AssetUploadDimensions;
@@ -303,11 +293,7 @@ function resolveTransformGeometry(
   const rotation = normalizeAssetRotation(request.rotation);
   // Everything after the turn is measured in the turned frame.
   const frame = rotatedDimensions(source, rotation);
-  let crop = request.crop
-    ? clampCropRect(request.crop, frame)
-    : request.resizeMode === 'cover' && requested.width && requested.height
-      ? centeredCropRect(frame, requested.width / requested.height)
-      : undefined;
+  let crop = request.crop ? clampCropRect(request.crop, frame) : undefined;
   if (crop && isVideo) crop = evenCropRect(crop, frame);
   if (crop && isFullFrameCrop(crop, frame)) crop = undefined;
 

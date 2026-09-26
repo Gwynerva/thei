@@ -1,6 +1,10 @@
 import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import { AssetType } from '#layers/thei/shared/asset';
-import { refreshMediaPreview, type StoredAssetRecord } from './storage';
+import {
+  completeVideoMeta,
+  refreshMediaPreview,
+  type StoredAssetRecord,
+} from './storage';
 
 /**
  * Videos whose preview frame was not chosen by colour.
@@ -105,6 +109,20 @@ export async function refreshVideoPreviews(
     'video(s)',
     options,
   );
+}
+
+/**
+ * Reads the length, frame rate, bit rate and audio of every video stored
+ * before they were recorded, once, so nothing has to probe a file when it is
+ * shown. A file that cannot be read is left as it is.
+ */
+export async function completeVideoMetas(): Promise<void> {
+  const { db, schema } = THEI_SERVER.useDb();
+  const videos = await db
+    .select()
+    .from(schema.assets)
+    .where(eq(schema.assets.type, AssetType.Video));
+  for (const video of videos) await completeVideoMeta(video);
 }
 
 /** Draws the preview of every SVG again, at the size a preview is shown. */

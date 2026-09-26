@@ -358,24 +358,14 @@ async function adoptStagedFile(source: string, target: string) {
 export async function buildAssetVariantInfo(
   asset: StoredAssetRecord,
 ): Promise<AssetVariantInfo> {
-  if (asset.type === AssetType.Video) await resolveVideoMeta(asset);
   const preview = await findMediaPreviewAsset(asset);
   return describeStoredAsset(asset, preview?.assetUuid);
 }
 
-/**
- * Describes a whole family at once.
- *
- * Previews come from one query. A legacy video row missing its dimensions is
- * probed one at a time, so a large family never starts a burst of ffmpeg
- * processes together.
- */
+/** Describes a whole family at once; previews come from one query. */
 export async function buildAssetVariantInfos(
   assets: StoredAssetRecord[],
 ): Promise<AssetVariantInfo[]> {
-  for (const asset of assets) {
-    if (asset.type === AssetType.Video) await resolveVideoMeta(asset);
-  }
   const previews = await findMediaPreviewUuids(
     assets.map((asset) => asset.assetUuid),
   );
@@ -482,7 +472,12 @@ function describeMedia(
   };
 }
 
-async function resolveVideoMeta(
+/**
+ * Probes a video stored before its length, frame rate, bit rate and audio
+ * were recorded, and records them. Run once over the library by the 0.0.2
+ * update task; every video stored since has them from the start.
+ */
+export async function completeVideoMeta(
   asset: StoredAssetRecord,
 ): Promise<VideoAssetMeta | null> {
   const meta = asset.meta as VideoAssetMeta | null;
@@ -503,8 +498,6 @@ async function resolveVideoMeta(
 
   if (!inspected) return meta;
 
-  // A file stored before the duration was read gets it now, once; a file
-  // whose duration cannot be read stays as it is and is probed next time.
   const { codec: _codec, ...video } = videoSourceInfo(inspected, asset.size);
   const resolvedMeta: VideoAssetMeta = {
     ...(meta ?? {}),

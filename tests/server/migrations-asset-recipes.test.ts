@@ -187,49 +187,6 @@ describe('asset recipes migration', () => {
     });
   });
 
-  it('finishes recipes an earlier build left with a fit note', () => {
-    insert(
-      'v-original',
-      'original',
-      { type: 'original' },
-      {
-        width: 1920,
-        height: 1440,
-        hasAudio: true,
-      },
-      { type: 'video', extension: 'mp4' },
-    );
-    insert(
-      'v-noted',
-      'video-transform:q85:w1200:h674:fit:cover:up:1:strip:1:fast:0',
-      {
-        type: 'video-transform',
-        quality: 85,
-        dimensions: { width: 1200, height: 674 },
-        stripAudio: true,
-        fastConversion: false,
-        legacyFit: 'cover',
-      },
-      { width: 1200, height: 674, hasAudio: false },
-      { type: 'video', extension: 'webm' },
-    );
-
-    assetRecipes.up!(context());
-
-    const { settings, settingsKey } = read('v-noted');
-    expect(settings).not.toHaveProperty('legacyFit');
-    // A video crop lands on even pixels.
-    expect(settings.crop).toEqual({
-      left: 0,
-      top: 180,
-      width: 1920,
-      height: 1080,
-    });
-    expect(settingsKey).toBe(
-      'video-transform:q85:w1200:h674:crop:0,180,1920,1080:strip:1:fast:0',
-    );
-  });
-
   it('keeps the old key where the new one is already taken by the same bytes', () => {
     const recipe = (allowUpscale: boolean) => ({
       type: 'image-transform',
