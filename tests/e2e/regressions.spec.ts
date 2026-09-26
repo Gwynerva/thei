@@ -143,6 +143,120 @@ test('Editor.js settles after structural operations and preserves semantic dirty
   await expect(save).toHaveText('Save');
 });
 
+/**
+ * The boxes the lock pattern lies on, and whether each spans a non-empty
+ * section from the line of its opening bracket to the line of its closing one.
+ */
+async function privatePattern(page: Page) {
+  return page.evaluate(() => {
+    const root = document.querySelector<HTMLElement>('.content-editor')!;
+    const boxes = Array.from(
+      root.querySelectorAll(':scope > .content-private-pattern'),
+      (box) => box.getBoundingClientRect(),
+    ).sort((left, right) => left.top - right.top);
+    const sections: DOMRect[][] = [];
+    const starts = root.querySelectorAll<HTMLElement>(
+      '.ce-block[data-private-section-edge="start"]',
+    );
+    for (const start of starts) {
+      const id = start.querySelector<HTMLElement>('[data-private-section-id]')!
+        .dataset.privateSectionId;
+      const end = root.querySelector(
+        `.ce-block[data-private-section-edge="end"]:has([data-private-section-id="${id}"])`,
+      );
+      if (!end || start.nextElementSibling === end) continue;
+      sections.push(
+        [start, end].map((block) =>
+          block
+            .querySelector('[data-private-section-id]')!
+            .getBoundingClientRect(),
+        ),
+      );
+    }
+    const aligned =
+      boxes.length === sections.length &&
+      sections.every(([start, end], index) => {
+        const box = boxes[index]!;
+        return [
+          box.top - (start!.top + start!.height / 2),
+          box.bottom - (end!.top + end!.height / 2),
+          box.left - start!.left,
+          box.width - start!.width,
+        ].every((difference) => Math.abs(difference) < 0.5);
+      });
+    return { boxes: boxes.length, aligned };
+  });
+}
+
+test('each private section in the editor lies on one lock pattern', async ({
+  page,
+}) => {
+  await page.route('**/slow-image.svg', (route) =>
+    route.fulfill({
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="320" height="180" fill="gray"/></svg>',
+    }),
+  );
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/editor-regression');
+  await expect(page.locator('[data-ready]')).toHaveAttribute(
+    'data-ready',
+    'true',
+  );
+  await expect
+    .poll(() => privatePattern(page))
+    .toEqual({ boxes: 2, aligned: true });
+
+  // A section grows with its blocks: as one is typed in, and as one moves in.
+  const firstHeight = () =>
+    page.evaluate(
+      () =>
+        Array.from(
+          document.querySelectorAll(
+            '.content-editor > .content-private-pattern',
+          ),
+          (box) => box.getBoundingClientRect(),
+        ).sort((left, right) => left.top - right.top)[0]!.height,
+    );
+  let height = await firstHeight();
+  await page
+    .locator('[data-id="p1"] [contenteditable]')
+    .fill('A paragraph long enough to wrap over several lines. '.repeat(12));
+  await expect.poll(firstHeight).toBeGreaterThan(height + 50);
+  await expect
+    .poll(() => privatePattern(page))
+    .toEqual({ boxes: 2, aligned: true });
+  height = await firstHeight();
+  const state = page.locator('[data-ready]');
+  const events = Number(await state.getAttribute('data-events'));
+  await page.getByRole('button', { name: 'Valid move', exact: true }).click();
+  await expect.poll(firstHeight).toBeGreaterThan(height);
+  // The sections read a move once Editor.js reports it, batched.
+  await expect
+    .poll(async () => Number(await state.getAttribute('data-events')))
+    .toBeGreaterThan(events);
+  await expect
+    .poll(() => privatePattern(page))
+    .toEqual({ boxes: 2, aligned: true });
+
+  // A new section gets a box of its own, and the ones below move down; back
+  // up once it is gone. It goes after the current block, outside the others.
+  await page.locator('[data-id="p0"] [contenteditable]').click();
+  await page.getByRole('button', { name: 'Insert section' }).click();
+  await expect
+    .poll(() => privatePattern(page))
+    .toEqual({ boxes: 3, aligned: true });
+  await page.getByRole('button', { name: 'Delete section' }).click();
+  await expect
+    .poll(() => privatePattern(page))
+    .toEqual({ boxes: 2, aligned: true });
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await expect
+    .poll(() => privatePattern(page))
+    .toEqual({ boxes: 2, aligned: true });
+});
+
 test('a click beside a paragraph places the caret at the start or end of that line', async ({
   page,
 }) => {

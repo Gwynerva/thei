@@ -348,6 +348,19 @@
     @apply content-private-lock-pattern;
   }
 
+  /*
+   * In the editor a section's blocks lie beside its brackets, not inside it,
+   * so the section is a box of its own under the editor, laid from one
+   * bracket's line to the other's by `editor-private-pattern.ts`. A shade
+   * fainter on the editor's panel.
+   */
+  .content-editor .content-private-pattern {
+    --content-private-pattern-opacity: 0.045;
+    position: absolute;
+    isolation: isolate;
+    pointer-events: none;
+  }
+
   .content-prose .content-private-bracket {
     position: relative;
     display: flex;
@@ -492,9 +505,9 @@
 
 /*
  * The lock pattern of a private section, drawn by a `::before` over whatever
- * box it is applied to: the section on a page, each member block in the
- * editor. Where it sits (`inset`, `z-index`) is the caller's; how faint it is
- * and how it fades at the top and bottom are the two custom properties.
+ * box it is applied to: the section on a page, the box laid under a section
+ * in the editor. Where it sits (`inset`, `z-index`) is the caller's; how faint
+ * it is and how it fades at the top and bottom are the two custom properties.
  */
 @utility content-private-lock-pattern {
   position: absolute;

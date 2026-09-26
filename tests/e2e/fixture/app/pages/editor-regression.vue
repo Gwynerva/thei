@@ -8,6 +8,7 @@ import {
 import { bindEditorGutterClick } from '#layers/thei/app/composables/editor-gutter-click';
 import { bindEditorLinkPaste } from '#layers/thei/app/composables/editor-link-paste';
 import { createEditorPrivateSections } from '#layers/thei/app/composables/editor-private-sections';
+import { createEditorPrivatePattern } from '#layers/thei/app/composables/editor-private-pattern';
 import {
   createEditorSnapshotManager,
   readCleanEditorOutput,
@@ -30,6 +31,7 @@ watch(dirty, (value) => transitions.value.push(value ? 'Save' : 'Saved'), {
 let editor: EditorJS;
 let unbindGutterClick: (() => void) | undefined;
 let unbindLinkPaste: (() => void) | undefined;
+let cleanupPrivatePattern: (() => void) | undefined;
 let sections: ReturnType<typeof createEditorPrivateSections>;
 let snapshots: ReturnType<typeof createEditorSnapshotManager>;
 const snapshotPending = computed(() => snapshots?.isPending.value ?? false);
@@ -121,6 +123,7 @@ onMounted(async () => {
     findEntity: (url) => findEntityByInternalUrl(url, site),
   });
   sections = createEditorPrivateSections(editor, { suppressionDuration: 20 });
+  cleanupPrivatePattern = createEditorPrivatePattern(holder.value!);
   snapshots = createEditorSnapshotManager({
     storageKey: 'fixture',
     storage: sessionStorage,
@@ -173,6 +176,7 @@ onBeforeUnmount(() => {
   ready.value = false;
   unbindGutterClick?.();
   unbindLinkPaste?.();
+  cleanupPrivatePattern?.();
   sections?.destroy();
   snapshots?.destroy();
   editor?.destroy();
@@ -196,6 +200,6 @@ onBeforeUnmount(() => {
       <button @click="editor.blocks.move(2, 4)">Valid move</button>
       <button @click="restore">Restore</button>
     </div>
-    <div ref="holder" class="content-editor" />
+    <div ref="holder" class="content-editor relative" />
   </main>
 </template>

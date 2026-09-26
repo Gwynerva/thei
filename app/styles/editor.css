@@ -431,49 +431,8 @@
     }
   }
 
-  /* 8. The lock pattern behind the blocks of a private section. */
-  & .ce-block[data-private-section-member='true']::before {
-    --content-private-pattern-opacity: 0.045;
-    inset: calc(-1 * var(--spacing-md) / 2) 0;
-    z-index: 0;
-    @apply content-private-lock-pattern;
-  }
-
-  & .ce-block[data-private-section-member-start='true']::before {
-    --content-private-vertical-mask: linear-gradient(
-      to bottom,
-      transparent,
-      black var(--spacing-md),
-      black 100%
-    );
-  }
-
-  & .ce-block[data-private-section-member-end='true']::before {
-    --content-private-vertical-mask: linear-gradient(
-      to bottom,
-      black 0%,
-      black calc(100% - var(--spacing-md)),
-      transparent
-    );
-  }
-
-  &
-    .ce-block[data-private-section-member-start='true'][data-private-section-member-end='true']::before {
-    --content-private-vertical-mask: linear-gradient(
-      to bottom,
-      transparent,
-      black var(--spacing-md),
-      black calc(100% - var(--spacing-md)),
-      transparent
-    );
-  }
-
-  & .ce-block[data-private-section-member='true'] > .ce-block__content {
-    z-index: 1;
-  }
-
   /*
-   * 9. A spoiler block: a dashed line around its column and a badge sitting
+   * 8. A spoiler block: a dashed line around its column and a badge sitting
    * on that line, in the gap above the block, so nothing reaches outside the
    * editor on any screen. The block keeps a wider gap above it, so the badge
    * never covers the end of the block before.

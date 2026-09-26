@@ -85,6 +85,7 @@ import { bindEditorGutterClick } from '#layers/thei/app/composables/editor-gutte
 import { bindEditorLinkPaste } from '#layers/thei/app/composables/editor-link-paste';
 import { bindEditorKeyboardBoundary } from '#layers/thei/app/composables/editor-keyboard-boundary';
 import { createEditorPrivateSections } from '#layers/thei/app/composables/editor-private-sections';
+import { createEditorPrivatePattern } from '#layers/thei/app/composables/editor-private-pattern';
 import { createEditorPopoverLayer } from '#layers/thei/app/composables/editor-popover-layer';
 import {
   invalidateContentLinks,
@@ -200,6 +201,7 @@ let editorAcceptsChanges = false;
 let transientEntitySelections = 0;
 let cleanupEditorDrag: (() => void) | undefined;
 let cleanupEditorPopoverLayer: (() => void) | undefined;
+let cleanupEditorPrivatePattern: (() => void) | undefined;
 let editorPrivateSections:
   ReturnType<typeof createEditorPrivateSections> | undefined;
 
@@ -643,6 +645,7 @@ onMounted(async () => {
   // nothing may be bound to it any more.
   if (disposed) return;
   editorPrivateSections = createEditorPrivateSections(editor);
+  cleanupEditorPrivatePattern = createEditorPrivatePattern(holder.value!);
   await editorSnapshots.initialize();
   if (disposed) return;
   editorAcceptsChanges = true;
@@ -689,6 +692,8 @@ onBeforeUnmount(() => {
   cleanupMediaPaste = undefined;
   cleanupEditorDrag?.();
   cleanupEditorDrag = undefined;
+  cleanupEditorPrivatePattern?.();
+  cleanupEditorPrivatePattern = undefined;
   editorPrivateSections?.destroy();
   editorPrivateSections = undefined;
   document.body.classList.remove(
@@ -1140,7 +1145,7 @@ function editorJsI18nMessages() {
 
     <div
       ref="holder"
-      class="content-editor content-prose w-full px-sm py-md"
+      class="content-editor content-prose relative w-full px-sm py-md"
       @click.capture="preventEditorLinkNavigation"
       @auxclick.capture="preventEditorLinkNavigation"
     ></div>

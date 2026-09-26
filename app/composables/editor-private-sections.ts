@@ -175,21 +175,10 @@ export function createEditorPrivateSections(
         const block = currentBlocks[index];
         if (!block) continue;
         desired.get(block.id)!.privateSectionMember = 'true';
-        if (index === group[0]!.index + 1) {
-          desired.get(block.id)!.privateSectionMemberStart = 'true';
-        }
-        if (index === group[1]!.index - 1) {
-          desired.get(block.id)!.privateSectionMemberEnd = 'true';
-        }
       }
     }
     for (const block of currentBlocks) {
-      for (const key of [
-        'privateSectionMember',
-        'privateSectionEdge',
-        'privateSectionMemberStart',
-        'privateSectionMemberEnd',
-      ]) {
+      for (const key of ['privateSectionMember', 'privateSectionEdge']) {
         const value = desired.get(block.id)![key];
         if (block.holder.dataset[key] === value) continue;
         if (value === undefined) delete block.holder.dataset[key];
@@ -293,8 +282,6 @@ export function createEditorPrivateSections(
     for (const block of blocks()) {
       block.holder.removeAttribute('data-private-section-member');
       block.holder.removeAttribute('data-private-section-edge');
-      block.holder.removeAttribute('data-private-section-member-start');
-      block.holder.removeAttribute('data-private-section-member-end');
     }
     boundaryByBlockId.clear();
   }
