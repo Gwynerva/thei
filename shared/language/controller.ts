@@ -22,6 +22,7 @@ export function createI18nController(
     secretCodenames: primary.secretCodenames ?? base.secretCodenames,
     secretSummaries: primary.secretSummaries ?? base.secretSummaries,
     sizeUnits: { ...base.sizeUnits, ...primary.sizeUnits },
+    listLetters: primary.listLetters,
     phrase: createPhraseProxy(
       primary.phrases,
       base.phrases,

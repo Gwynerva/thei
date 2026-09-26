@@ -1,4 +1,6 @@
-import previewFrames from './0.0.2-preview-frames';
+import videoPreviewFrames from './0.0.2-video-preview-frames';
+import externalLinksRefresh from './0.0.2-external-links-refresh';
+import svgPreviews from './0.0.2-svg-previews';
 import type { TheiUpdateTask } from './types';
 
 /**
@@ -9,4 +11,8 @@ import type { TheiUpdateTask } from './types';
  * here. On boot, every task the ledger has not recorded runs in this order,
  * after every migration.
  */
-export const updateTaskRegistry: TheiUpdateTask[] = [previewFrames];
+export const updateTaskRegistry: TheiUpdateTask[] = [
+  videoPreviewFrames,
+  externalLinksRefresh,
+  svgPreviews,
+];

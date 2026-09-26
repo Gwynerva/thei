@@ -14,6 +14,8 @@ const props = withDefaults(
     cornerTitle?: string;
     extension?: string;
     external?: boolean;
+    /** A file that is saved rather than opened: the link downloads it. */
+    download?: boolean;
     button?: boolean;
     /**
      * A link stands for an address, not for a file: it gets the icon without
@@ -46,8 +48,9 @@ const extensionFontSize = computed(() => {
   <component
     :is="button ? 'button' : href ? 'a' : 'div'"
     :href="!button ? href : undefined"
-    :target="!button && external ? '_blank' : undefined"
+    :target="!button && external && !download ? '_blank' : undefined"
     :rel="!button && external ? 'noopener noreferrer' : undefined"
+    :download="!button && href && download ? '' : undefined"
     :type="button ? 'button' : undefined"
     class="group flex w-full min-w-0 items-start gap-xs rounded-sm px-1 py-1.5
       text-left text-text-1 no-underline transition focus-visible:ring-2
@@ -60,7 +63,7 @@ const extensionFontSize = computed(() => {
       class="@container relative flex size-8 shrink-0 items-center
         justify-center overflow-hidden rounded-sm text-text-3"
       :class="
-        plainIcon && !iconMedia
+        plainIcon
           ? 'text-text-2'
           : extension && !iconMedia
             ? 'bg-bg-3/70'

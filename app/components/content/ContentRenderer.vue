@@ -145,6 +145,7 @@ function openGalleryItem(
           v-else-if="block.type === 'list'"
           :items="block.data.items as any[]"
           :style="block.data.style as any"
+          :meta="block.data.meta as any"
         />
         <blockquote
           v-else-if="block.type === 'quote'"
@@ -155,9 +156,11 @@ function openGalleryItem(
             class="content-quote__text"
             v-html="publicRichText(block.data.text as string)"
           ></p>
-          <cite v-if="block.data.caption" class="content-quote__caption">
-            {{ publicText(block.data.caption as string) }}
-          </cite>
+          <cite
+            v-if="block.data.caption"
+            class="content-quote__caption"
+            v-html="publicRichText(block.data.caption as string)"
+          ></cite>
         </blockquote>
         <div
           v-else-if="block.type === 'delimiter'"
@@ -189,7 +192,7 @@ function openGalleryItem(
         <ContentGallery
           v-else-if="block.type === 'contentGallery'"
           :items="block.data.items as any[]"
-          :choose-label="phrase.content_choose_media"
+          :choose-label="phrase.content_gallery_tile"
           :openable="assetViewer"
           @open="
             (item: ContentGalleryItem) =>

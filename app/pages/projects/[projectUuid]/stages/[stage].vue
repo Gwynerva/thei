@@ -65,6 +65,10 @@ const details = computed(
   () =>
     ({
       periods: data.value.periods,
+      neighbours: data.value.neighbours && {
+        kind: 'project-stage',
+        ...data.value.neighbours,
+      },
       chronology: createdAndUpdatedTimelineItems(data.value.chronology, {
         created: phrase.value.stage_chronology_created,
         updated: phrase.value.stage_chronology_updated,

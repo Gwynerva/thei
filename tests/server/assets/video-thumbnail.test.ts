@@ -9,8 +9,7 @@ import { AssetType } from '../../../shared/asset';
 import { createMediaPreview } from '../../../server/thei/assets/media-preview';
 import {
   extractVideoThumbnail,
-  FLAT_FRAME_SPREAD,
-  frameLiveliness,
+  scoreFrame,
 } from '../../../server/thei/assets/video-thumbnail';
 
 let directory = '';
@@ -93,31 +92,27 @@ describe('video thumbnails', () => {
     expect(red).toBeLessThan(60);
   }, 60_000);
 
-  it('tells an empty frame from one with something in it', async () => {
+  it('looks at the whole video and keeps its most colourful frame', async () => {
+    // A muted brown stretch comes first and is lively enough on its own; the
+    // vivid one after it still wins, because every point is compared.
+    const clip = await makeClip('muted-then-vivid.mp4', [
+      ['0x806040', 3],
+      ['0x20a0ff', 3],
+    ]);
+    const { frame, score } = await extractVideoThumbnail(clip);
+    const [red, , blue] = await meanColor(frame);
+    expect(blue).toBeGreaterThan(200);
+    expect(red).toBeLessThan(80);
+    expect(score).toBeGreaterThan(0);
+  }, 60_000);
+
+  it('ranks a black, a washed-out and a tinted-dark frame below a colourful one', async () => {
     const solid = (background: string) =>
       sharp({ create: { width: 32, height: 32, channels: 3, background } })
         .png()
         .toBuffer();
-    const busy = await sharp(
-      Buffer.from(
-        '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="16" height="32" fill="#000"/><rect x="16" width="16" height="32" fill="#fff"/></svg>',
-      ),
-    )
-      .png()
-      .toBuffer();
-    expect(await frameLiveliness(await solid('#101010'))).toBeLessThan(
-      FLAT_FRAME_SPREAD,
-    );
-    expect(await frameLiveliness(await solid('#f4f4f4'))).toBeLessThan(
-      FLAT_FRAME_SPREAD,
-    );
-    // A faint tint on black is still black.
-    expect(await frameLiveliness(await solid('#050514'))).toBeLessThan(
-      FLAT_FRAME_SPREAD,
-    );
-    expect(await frameLiveliness(await solid('#c02020'))).toBeGreaterThan(
-      FLAT_FRAME_SPREAD,
-    );
-    expect(await frameLiveliness(busy)).toBeGreaterThan(FLAT_FRAME_SPREAD);
+    const vivid = await scoreFrame(await solid('#c02020'));
+    for (const empty of ['#000000', '#101010', '#f8f8f8', '#050514'])
+      expect(await scoreFrame(await solid(empty))).toBeLessThan(vivid / 4);
   });
 });

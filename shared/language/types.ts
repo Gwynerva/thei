@@ -32,6 +32,11 @@ export type I18nModuleSpec = {
   /** One-line summaries shown on secrets in place of their real one. */
   secretSummaries?: string[];
   sizeUnits?: Partial<LanguageSizeUnits>;
+  /**
+   * The lowercase letters a lettered list counts in, in order: "а, б, в" in
+   * Russian. A language that counts in Latin leaves it out.
+   */
+  listLetters?: string;
   phrases: Partial<LanguagePhrases>;
 };
 
@@ -53,18 +58,15 @@ export type I18nController = {
   secretCodenames: string[];
   secretSummaries: string[];
   sizeUnits: LanguageSizeUnits;
+  listLetters?: string;
   phrase: LanguagePhrases;
 };
 
 export type EditorJsPhrases = {
   add: string;
-  filter: string;
-  nothing_found: string;
   convert_to: string;
   tune: string;
-  drag_to_move: string;
   text: string;
-  link: string;
   bold: string;
   italic: string;
   heading: string;
@@ -76,7 +78,6 @@ export type EditorJsPhrases = {
   media: string;
   gallery: string;
   file: string;
-  add_link: string;
   enter_quote: string;
   enter_caption: string;
   align_left: string;
@@ -367,6 +368,11 @@ export type LanguagePhrases = {
   public_details_files: string;
   public_details_overview: string;
   public_details_contents: string;
+  public_details_neighbour_stages: string;
+  public_details_neighbour_sections: string;
+  public_details_neighbour_entries: string;
+  public_neighbour_next: string;
+  public_neighbour_previous: string;
   public_details_chronology: string;
   public_details_timeline: string;
   project_chronology_page: string;
@@ -587,6 +593,8 @@ export type LanguagePhrases = {
   update_title_x: (version: string) => string;
   update_site_closed: string;
   update_waiting: string;
+  update_unavailable_title: string;
+  update_unavailable_note: string;
   update_continue: string;
   update_close: string;
   update_failed_title: string;
@@ -826,6 +834,7 @@ export type LanguagePhrases = {
   content_editor_i18n: EditorJsPhrases;
   content_asset_pick_error: string;
   content_choose_media: string;
+  content_gallery_tile: string;
   content_add_media: string;
   content_choose_file: string;
   content_choose_entity: string;
@@ -1105,7 +1114,6 @@ export type LanguagePhrases = {
   content_hint_placeholder: string;
   content_hint_remove: string;
   content_spoiler: string;
-  content_spoiler_hint: string;
   content_spoiler_reveal: string;
   content_link_note: string;
   content_link_note_placeholder: string;

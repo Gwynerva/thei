@@ -14,6 +14,7 @@ const ENTITY_TYPE_ICONS = {
   event: 'event',
   'diary-entry': 'thought',
   page: 'page',
+  tag: 'tag',
 } as const satisfies Record<ContentEntityType, string>;
 
 export function entityTypeIcon<T extends ContentEntityType>(

@@ -82,6 +82,18 @@ export function normalizeUrlSegment(value: unknown): string {
 /** What a person types to mean "a gap here", all of it becoming one hyphen. */
 const URL_SEGMENT_SEPARATORS = /[\s\-_./\|+~]/u;
 
+/**
+ * `normalizeUrlSegment` for a field that is still being typed in: a gap at
+ * the very end stays as a hyphen, so the next word can follow it. The field
+ * is normalized for good once it is left.
+ */
+export function normalizeUrlSegmentDraft(value: unknown): string {
+  const normalized = normalizeUrlSegment(value);
+  if (!normalized || typeof value !== 'string') return normalized;
+  const last = [...value].at(-1) ?? '';
+  return URL_SEGMENT_SEPARATORS.test(last) ? `${normalized}-` : normalized;
+}
+
 export function urlSegmentIsValid(value: unknown): value is string {
   return typeof value === 'string' && normalizeUrlSegment(value) === value;
 }

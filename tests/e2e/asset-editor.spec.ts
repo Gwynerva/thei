@@ -290,7 +290,7 @@ test('the quality bar walks its stops from the keyboard and by a tap', async ({
   await expect(useResult).toBeEnabled({ timeout: 20_000 });
 
   // Every stop is captioned with a size once its dry run is in.
-  const captions = page.locator('[role=slider] + div > button');
+  const captions = page.locator('[role=slider] + div > span');
   await expect(captions).toHaveCount(6);
   await expect(captions.last()).toHaveText(/(bytes|Kb|Mb)$/, {
     timeout: 20_000,

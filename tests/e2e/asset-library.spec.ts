@@ -4,6 +4,7 @@ import {
   type APIRequestContext,
   type Page,
 } from '@playwright/test';
+import { E2E_ORIGIN } from './fixture-url';
 import { fileURLToPath } from 'node:url';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -277,7 +278,7 @@ for (const width of [1280, 390]) {
 
 test('library endpoints require admin access', async ({ playwright }) => {
   const api = await playwright.request.newContext({
-    baseURL: 'http://127.0.0.1:3000',
+    baseURL: E2E_ORIGIN,
     storageState: { cookies: [], origins: [] },
   });
   for (const path of [

@@ -21,13 +21,15 @@ import { listEvents } from './events/repository/list';
 import { countDiaryEntries } from './diary/repository/count';
 import { findDiaryEntryByUuid } from './diary/repository/find-by-uuid';
 import { findDiaryEntryByDate } from './diary/repository/find-by-date';
+import { findDiaryEntryNeighbours } from './diary/repository/find-neighbours';
 import { listDiaryEntries } from './diary/repository/list';
 import { countPages } from './pages/repository/count';
 import { findPageByUuid } from './pages/repository/find-by-id';
 import { findPageBySlug } from './pages/repository/find-by-slug';
 import { listPages } from './pages/repository/list';
 import { getPublicAdminSessions } from './admin-session/repository/public';
-import { getCurrentAdminSession } from './admin-session';
+import { adminSessionsLoaded, getCurrentAdminSession } from './admin-session';
+import { isClosedSiteAdmin } from './admin-session/closed-site';
 import { createAsset } from './assets/repository/create';
 import { updateAsset } from './assets/repository/update';
 import { touchAsset } from './assets/repository/touch';
@@ -93,7 +95,11 @@ export const THEI_SERVER = {
       return event.context.isAuthenticatedAdmin;
     }
     const session = await getCurrentAdminSession(event);
-    return Boolean(session);
+    if (session) return true;
+    // Until the sessions are loaded — while an update's migrations run, or
+    // after one stopped — the closed site's own list of admins is all there
+    // is to go by.
+    return !adminSessionsLoaded() && isClosedSiteAdmin(event);
   },
   async isAdmin(event: H3Event) {
     if (typeof event.context.isAdmin === 'boolean') {
@@ -130,6 +136,7 @@ export const THEI_SERVER = {
     count: countDiaryEntries,
     findByUuid: findDiaryEntryByUuid,
     findByDate: findDiaryEntryByDate,
+    findNeighbours: findDiaryEntryNeighbours,
     list: listDiaryEntries,
   },
   pages: {

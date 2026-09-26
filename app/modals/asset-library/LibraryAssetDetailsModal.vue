@@ -90,6 +90,7 @@ const usageGroups = computed(() => {
         v-if="asset.media"
         :extension="asset.extension"
         :src="asset.media.src"
+        :poster="videoPosterOf(asset.media)"
         :has-audio="asset.media.hasAudio"
       />
       <FilePreview

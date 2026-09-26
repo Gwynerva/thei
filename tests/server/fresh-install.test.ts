@@ -97,7 +97,7 @@ describe('fresh database installation', () => {
           ...updateTaskRegistry.map((task) => taskLedgerId(task.id)),
         ]),
       );
-      expect(ids).toContain('task:0.0.2/001-preview-frames');
+      expect(ids).toContain('task:0.0.2/001-video-preview-frames');
     } finally {
       await context.close();
     }

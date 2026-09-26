@@ -71,6 +71,7 @@ const facts = computed(() => {
             v-for="link in profile.externalLinks"
             :key="link.url"
             :link="link"
+            :favicon-media="link.faviconMedia"
             size="compact"
           /></div
       ></ProfileInfoBlock>

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { E2E_ORIGIN } from './fixture-url';
 
 type Graph = { '@context': string; '@graph': Record<string, any>[] };
 
@@ -100,7 +101,7 @@ test('sitemap.xml lists public pages and nothing behind the admin', async ({
   expect(body.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
   expect(body.endsWith('</urlset>')).toBe(true);
   for (const path of ['/', '/life/', '/tags/', '/pages/page-0/']) {
-    expect(body).toContain(`<loc>${new URL(path, 'http://127.0.0.1:3000')}<`);
+    expect(body).toContain(`<loc>${new URL(path, E2E_ORIGIN)}<`);
   }
   for (const path of ['/admin', '/api/', '/sign-in', '/install', '/update']) {
     expect(body).not.toContain(`${path}</loc>`);

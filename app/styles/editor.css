@@ -1,70 +1,77 @@
 @reference './main.css';
 
-@layer base {
-  /* Theme tokens shared by the editor holder and body-level popovers. */
-  .content-editor,
-  body.content-editor-modal-open {
-    --content-editor-selection: color-mix(
-      in oklab,
-      var(--color-accent) 50%,
-      transparent
-    );
-    --content-editor-hover: color-mix(
-      in oklch,
-      var(--color-accent) 12%,
-      var(--color-bg-3)
-    );
-    --content-editor-active: color-mix(
-      in oklch,
-      var(--color-accent) 20%,
-      var(--color-bg-accent)
-    );
-    --content-editor-shadow: color-mix(
-      in oklch,
-      var(--color-shadow-2) 70%,
-      transparent
-    );
-    --content-editor-panel: color-mix(
-      in oklch,
-      var(--color-bg-2) 92%,
-      var(--color-bg-1)
-    );
-    --content-editor-panel-strong: color-mix(
-      in oklch,
-      var(--color-bg-2) 80%,
-      var(--color-bg-3)
-    );
-    --content-editor-modal-overlay: light-dark(
-      oklch(18% 0.04 var(--hue-accent) / 0.18),
-      oklch(4% 0.02 var(--hue-accent) / 0.62)
-    );
-  }
+/*
+ * Editor.js integration stylesheet.
+ *
+ * Unlayered on purpose. Editor.js and its tool plugins inject their CSS at
+ * runtime as plain, unlayered <style> elements, and a rule inside a cascade
+ * layer loses to any of them whatever its specificity. These rules therefore
+ * stay outside every layer and win on specificity instead: everything is
+ * nested under the editor root, and only elements Editor.js owns (`.ce-*`,
+ * `.cdx-*`, `.codex-editor*`) are ever addressed here — never the holder's
+ * own utilities and never the Vue trees the block tools render.
+ *
+ * `body.content-editor-modal-open` is a second root because Editor.js
+ * measures a popover on a clone appended to <body>.
+ *
+ * The mobile layout follows Editor.js's own switch (650px), mirrored by the
+ * modal as `data-content-editor-layout`, so the editor and its styling never
+ * disagree about which layout is on.
+ */
+:is(.content-editor, body.content-editor-modal-open) {
+  /* 1. Tokens shared by the editor holder and body-level popovers. */
+  --content-editor-selection: color-mix(
+    in oklab,
+    var(--color-accent) 50%,
+    transparent
+  );
+  --content-editor-hover: color-mix(
+    in oklch,
+    var(--color-accent) 12%,
+    var(--color-bg-3)
+  );
+  --content-editor-active: color-mix(
+    in oklch,
+    var(--color-accent) 20%,
+    var(--color-bg-accent)
+  );
+  --content-editor-shadow: color-mix(
+    in oklch,
+    var(--color-shadow-2) 70%,
+    transparent
+  );
+  --content-editor-panel: color-mix(
+    in oklch,
+    var(--color-bg-2) 92%,
+    var(--color-bg-1)
+  );
+  --content-editor-panel-strong: color-mix(
+    in oklch,
+    var(--color-bg-2) 80%,
+    var(--color-bg-3)
+  );
+  --content-editor-modal-overlay: light-dark(
+    oklch(18% 0.04 var(--hue-accent) / 0.18),
+    oklch(4% 0.02 var(--hue-accent) / 0.62)
+  );
+  /*
+   * The plus and settings buttons as Editor.js sizes them on a desktop:
+   * 26px plus, 3px between, 24px settings, plus the gap to the text below.
+   */
+  --content-editor-actions-width: calc(53px + var(--spacing));
 
-  /* Core canvas typography, layout, placeholders, and toolbar behavior. */
-  .content-editor .codex-editor {
-    --selectionColor: var(--content-editor-selection);
-    --inlineSelectionColor: var(--content-editor-selection);
-    --bg-light: var(--color-bg-3);
-    --grayText: var(--color-text-2);
-    --color-dark: var(--color-text-1);
-    --color-active-icon: var(--color-accent);
-    --color-gray-border: var(--color-border-1);
-    --color-line-gray: var(--color-border-1);
+  /* 2. Canvas, blocks, placeholders. */
+  & .codex-editor {
     color: inherit;
   }
 
-  .content-editor .ce-block {
-    position: relative;
+  & .codex-editor ::selection {
+    background-color: var(--content-editor-selection);
     color: inherit;
   }
 
-  .content-editor .codex-editor ::selection {
-    background-color: var(--content-editor-selection) !important;
-    color: inherit;
-  }
-
-  /* Editor.js paints its preserved selection with a hardcoded #a8d6ff. */
-  .content-editor
+  /* Editor.js paints its preserved selection with an inline #a8d6ff. */
+  &
     .codex-editor
     :is(
       [style*='background-color: rgb(168, 214, 255)'],
@@ -74,124 +81,209 @@
     color: inherit !important;
   }
 
-  .content-editor .codex-editor [data-placeholder]:empty::before,
-  .content-editor .codex-editor [data-placeholder][data-empty='true']::before,
-  .content-editor .codex-editor [data-placeholder-active]:empty::before,
-  .content-editor
+  &
     .codex-editor
-    [data-placeholder-active][data-empty='true']::before {
+    :is([data-placeholder], [data-placeholder-active]):is(
+      :empty,
+      [data-empty='true']
+    )::before {
     color: var(--color-text-3);
   }
 
-  .content-editor .ce-toolbar {
-    z-index: 5;
+  & .ce-block {
+    position: relative;
+    color: inherit;
+  }
+
+  /* The same rhythm as the page's in content.css. */
+  & .ce-block + .ce-block {
+    margin-top: var(--spacing-md);
+  }
+
+  /* The margins of a text block belong to its text: a click there places the caret. */
+  & .ce-block:has([contenteditable='true']):not(:has([data-mutation-free])) {
+    cursor: text;
   }
 
   /*
-   * Editor.js lays the toolbar over the top of the hovered block: `.ce-toolbar`
-   * spans the full row and `.ce-toolbar__content` spans the text column, both
-   * of them as ordinary boxes. The result is a dead strip across the first line
-   * of every block, which is why the caret could not be put in front of the
-   * first letter of a paragraph — the click landed on the toolbar.
-   *
-   * The toolbar keeps its layout and gives the clicks back; only the controls
-   * that are actually meant to be pressed take them.
+   * On a desktop the toolbar stands in the left margin. The text column keeps
+   * Editor.js's 650px while the margin — counting the holder's own padding —
+   * has room for the buttons, and gives way symmetrically when it has not.
+   * Editor.js decides its `--narrow` layout once, at start; this replaces it.
    */
-  .content-editor .ce-toolbar,
-  .content-editor .ce-toolbar__content {
+  &:not([data-content-editor-layout='mobile']) {
+    & :is(.ce-block__content, .ce-toolbar__content) {
+      max-width: min(
+        650px,
+        calc(
+          100% + 2 * var(--spacing-sm) - 2 * var(--content-editor-actions-width)
+        )
+      );
+    }
+
+    & .codex-editor--narrow .codex-editor__redactor {
+      margin-right: 0;
+    }
+
+    & .codex-editor--narrow .ce-toolbar__actions {
+      right: 100%;
+    }
+  }
+
+  /*
+   * Editor.js underlines every link in a block, unlayered, which beats the
+   * chip styles in `content.css`. Rolling that back to the layered rules
+   * makes a chip in the editor the same chip as on the page.
+   */
+  & .ce-block a {
+    cursor: revert-layer;
+    text-decoration: revert-layer;
+  }
+
+  /* 3. Tool plugins: the same rhythm as the rendered page. */
+  & .ce-paragraph {
+    @apply leading-relaxed;
+    padding: 0;
+    color: inherit;
+  }
+
+  /*
+   * Lists wear the page's markers and lines (the `content-list*` utilities
+   * in content.css) over the plugin's own grid, whose areas they share.
+   */
+  & .cdx-list {
+    /* The plugin shadows the project's own token inside a list. */
+    --spacing-xs: inherit;
+    --line-height: 1.625;
+    --size-checkbox: var(--content-list-marker-size);
+    --color-tick: var(--color-white);
+    @apply content-list-root;
+    color: inherit;
+  }
+
+  & .cdx-list__item {
+    @apply content-list-item;
+  }
+
+  & .cdx-list__item::after {
+    @apply content-list-line;
+  }
+
+  & :is(.cdx-list-ordered, .cdx-list-unordered) > .cdx-list__item::before {
+    @apply content-list-marker;
+  }
+
+  & .cdx-list-unordered > .cdx-list__item::before {
+    @apply content-list-marker-dot;
+  }
+
+  & .cdx-list-ordered > .cdx-list__item::before {
+    @apply content-list-marker-number;
+  }
+
+  & .cdx-list-checklist > .cdx-list__item::before {
+    display: none;
+  }
+
+  /*
+   * A line break is a `<br>`, as in a paragraph. The plugin keeps the text
+   * `pre-wrap`, where the browser breaks a line with a bare newline instead,
+   * and saving folds that into a space.
+   */
+  & .cdx-list__item-content {
+    padding-left: 0;
+    white-space: normal;
+  }
+
+  /* A nested list is a list of its own, with its own markers' column. */
+  & .cdx-list__item-children {
+    @apply content-list-root;
+    padding-top: var(--content-list-gap);
+  }
+
+  & .cdx-list__checkbox {
+    @apply content-list-check content-list-marker;
+    padding-top: 0;
+    width: auto;
+  }
+
+  & .cdx-list__checkbox--checked {
+    @apply content-list-check-done;
+  }
+
+  & .cdx-list__item:has(> .cdx-list__checkbox--checked) {
+    @apply content-list-item-done;
+  }
+
+  & .cdx-list__checkbox-check {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+
+    &::before {
+      display: none;
+    }
+  }
+
+  & .cdx-quote :is(.cdx-quote__text, .cdx-quote__caption) {
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    outline: none;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  /* 4. Toolbar: the plus and settings buttons beside the current block. */
+  & .ce-toolbar {
+    z-index: 5;
+    /* Only the buttons take clicks; the boxes around them are empty. */
     pointer-events: none;
   }
 
-  .content-editor .ce-toolbar__actions,
-  .content-editor .ce-toolbar__plus,
-  .content-editor .ce-toolbar__settings-btn {
-    pointer-events: auto;
+  & .ce-toolbar__actions {
+    padding-right: var(--spacing);
   }
 
-  .content-editor .ce-toolbar__plus,
-  .content-editor .ce-toolbar__settings-btn {
-    color: var(--color-text-2) !important;
+  & :is(.ce-toolbar__plus, .ce-toolbar__settings-btn) {
+    pointer-events: auto;
+    color: var(--color-text-2);
     transition-property: color, background-color;
     transition-duration: var(--default-transition-duration);
     transition-timing-function: var(--default-transition-timing-function);
   }
 
-  @variant sm {
-    .content-editor .ce-toolbar__actions {
-      padding-right: 0;
-      transform: translateX(var(--spacing));
-    }
-  }
-
-  .content-editor .cdx-settings-button {
+  &
+    :is(.ce-toolbar__plus, .ce-toolbar__settings-btn):is(
+      :hover,
+      :focus-visible
+    ) {
+    background-color: var(--color-bg-3);
     color: var(--color-text-1);
   }
 
-  .content-editor .ce-toolbar__settings-btn {
+  & .ce-toolbar__settings-btn {
     cursor: grab;
   }
 
-  .content-editor.content-editor--dragging-block .ce-toolbar__settings-btn {
-    cursor: grabbing;
-  }
-
-  .content-editor.content-editor--dragging-block {
+  &.content-editor--dragging-block {
     cursor: grabbing;
     user-select: none;
+
+    & .ce-toolbar__settings-btn {
+      cursor: grabbing;
+    }
   }
 
-  body.content-editor-block-dragging,
-  body.content-editor-block-dragging * {
-    cursor: grabbing !important;
-  }
-
-  .content-editor .ce-toolbar__plus:is(:hover, :focus-visible),
-  .content-editor .ce-toolbar__plus--active,
-  .content-editor .ce-toolbar__settings-btn:is(:hover, :focus-visible),
-  .content-editor .ce-toolbar__settings-btn--active {
-    background-color: var(--color-bg-3) !important;
-    color: var(--color-text-1) !important;
-  }
-
-  .content-editor .cdx-settings-button:hover,
-  .content-editor .cdx-settings-button--focused {
-    background: var(--content-editor-hover);
-  }
-
-  /* Selection and drag-and-drop feedback for editable blocks. */
-  .content-editor .ce-block--selected .ce-block__content {
-    border-radius: calc(var(--radius-normal) * 0.65);
-    background: var(--content-editor-active) !important;
-    box-shadow: inset 0 0 0 1px
-      color-mix(in oklch, var(--color-accent) 24%, transparent);
-  }
-
-  .content-editor .ce-block--drop-target .ce-block__content::before {
-    z-index: 2;
-    border-color: var(--color-accent) !important;
-    border-width: 3px 3px 0 0 !important;
-    filter: drop-shadow(
-      0 0 0.5rem color-mix(in oklch, var(--color-accent) 90%, transparent)
-    );
-  }
-
-  .content-editor .ce-block--drop-target .ce-block__content::after {
-    z-index: 2;
-    height: 4px !important;
-    border-radius: 9999px;
-    background: var(--color-accent) !important;
-    box-shadow:
-      0 0 0.5rem color-mix(in oklch, var(--color-accent) 90%, transparent),
-      0 0 1.25rem color-mix(in oklch, var(--color-accent) 60%, transparent);
-  }
-
-  .content-editor .ce-block--drop-target-before .ce-block__content::before,
-  .content-editor .ce-block--drop-target-before .ce-block__content::after {
-    top: 0 !important;
-  }
-
-  :is(.content-editor, body.content-editor-modal-open) .ce-popover,
-  :is(.content-editor, body.content-editor-modal-open) .ce-inline-toolbar {
+  /* 5. Popovers: the toolbox, block settings and the inline toolbar. */
+  & .ce-popover {
     --color-border: var(--color-border-1);
     --color-shadow: var(--content-editor-shadow);
     --color-background: var(--content-editor-panel);
@@ -213,300 +305,142 @@
     color: var(--color-text-1);
   }
 
-  :is(.content-editor, body.content-editor-modal-open) .ce-popover__container,
-  :is(.content-editor, body.content-editor-modal-open) .ce-inline-toolbar,
-  :is(.content-editor, body.content-editor-modal-open) .ce-conversion-toolbar,
-  :is(.content-editor, body.content-editor-modal-open) .ce-settings {
-    border-color: var(--color-border-1) !important;
-    background: var(--content-editor-panel) !important;
+  & .ce-popover__container {
     box-shadow:
       0 16px 36px -22px var(--content-editor-shadow),
       inset 0 0 0 1px
         color-mix(in oklch, var(--color-bw-reverse) 4%, transparent);
-    color: var(--color-text-1);
   }
 
-  :is(.content-editor, body.content-editor-modal-open) .ce-popover__overlay {
-    background: var(--content-editor-modal-overlay) !important;
+  & .ce-popover__overlay {
+    background: var(--content-editor-modal-overlay);
     backdrop-filter: blur(1.5px);
+    pointer-events: auto;
   }
 
-  :is(.content-editor, body.content-editor-modal-open) .ce-popover-item:hover,
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-popover-item--focused,
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-conversion-tool:hover,
-  :is(.content-editor, body.content-editor-modal-open) .ce-inline-tool:hover,
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-inline-toolbar__dropdown:hover {
-    background: var(--content-editor-hover) !important;
+  /*
+   * No filter field: the menus are short enough to read at a glance. Editor.js
+   * cannot be told to leave it out, so it is not rendered; the arrow keys and
+   * Enter still walk the items, and a typed letter closes the menu and lands
+   * in the text as usual.
+   */
+  & .ce-popover__search {
+    display: none;
   }
 
-  :is(.content-editor, body.content-editor-modal-open) .ce-popover-item--active,
-  :is(.content-editor, body.content-editor-modal-open) .ce-inline-tool--active,
-  :is(.content-editor, body.content-editor-modal-open)
-    .cdx-settings-button--active {
-    background: var(--color-bg-accent) !important;
-    color: var(--color-accent);
+  & .ce-popover__items {
+    @apply scrollbar-hover;
   }
 
-  :is(.content-editor, body.content-editor-modal-open) .cdx-input,
-  :is(.content-editor, body.content-editor-modal-open) .cdx-button,
-  :is(.content-editor, body.content-editor-modal-open) .cdx-search-field,
-  :is(.content-editor, body.content-editor-modal-open) .ce-inline-tool-input,
-  :is(.content-editor, body.content-editor-modal-open)
-    .cdx-list-start-with-field {
-    border-color: var(--color-border-1);
-    background: var(--content-editor-panel-strong) !important;
-    box-shadow: none;
-    color: var(--color-text-1);
-  }
-
-  .content-editor.content-prose
-    .cdx-quote
-    :is(.cdx-quote__text, .cdx-quote__caption) {
-    min-height: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    border: 0 !important;
-    border-radius: 0 !important;
-    outline: none;
-    background: transparent !important;
-    box-shadow: none !important;
-  }
-
-  :is(.content-editor, body.content-editor-modal-open) .cdx-button:hover {
-    background: var(--content-editor-hover) !important;
-    box-shadow: none;
-  }
-
-  :is(.content-editor, body.content-editor-modal-open) .cdx-search-field__input,
-  :is(.content-editor, body.content-editor-modal-open)
-    .cdx-list-start-with-field__input {
-    color: var(--color-text-1);
-  }
-
-  :is(.content-editor, body.content-editor-modal-open)
-    .cdx-search-field__input::placeholder,
-  :is(.content-editor, body.content-editor-modal-open)
-    .cdx-list-start-with-field__input::placeholder,
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-inline-tool-input::placeholder {
-    color: var(--color-text-3);
-  }
-
-  :is(.content-editor, body.content-editor-modal-open) .ce-popover-item,
-  :is(.content-editor, body.content-editor-modal-open) .ce-popover-item-html,
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-popover__custom-content,
-  :is(.content-editor, body.content-editor-modal-open) .ce-popover-item__title,
-  :is(.content-editor, body.content-editor-modal-open) .ce-popover-header,
-  :is(.content-editor, body.content-editor-modal-open) .ce-popover-header__text,
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-popover-header__back-button,
-  :is(.content-editor, body.content-editor-modal-open) .ce-inline-tool,
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-inline-toolbar__dropdown,
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-inline-toolbar__dropdown-content,
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-inline-toolbar__dropdown-arrow,
-  :is(.content-editor, body.content-editor-modal-open) .cdx-settings-button,
-  :is(.content-editor, body.content-editor-modal-open) .ce-settings__button {
-    color: var(--color-text-1) !important;
-  }
-
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-popover-item__secondary-title,
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-popover__nothing-found-message,
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-inline-toolbar__shortcut {
+  & .ce-popover-item__icon {
     color: var(--color-text-2);
   }
 
-  :is(.content-editor, body.content-editor-modal-open) .ce-popover-item__icon,
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-popover-item__icon
-    svg,
-  :is(.content-editor, body.content-editor-modal-open) .ce-settings__button svg,
-  :is(.content-editor, body.content-editor-modal-open) .cdx-settings-button svg,
-  :is(.content-editor, body.content-editor-modal-open) .ce-inline-tool svg,
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-inline-toolbar__dropdown
-    svg,
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-conversion-tool__icon,
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-conversion-tool__icon
-    svg {
-    border-color: var(--color-border-1) !important;
-    background: transparent !important;
-    color: var(--color-text-2) !important;
-  }
-
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-popover-item-separator__line,
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-inline-toolbar__dropdown,
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-inline-toolbar__dropdown
-    *,
-  :is(.content-editor, body.content-editor-modal-open) .ce-settings::before {
-    border-color: var(--color-border-1) !important;
-  }
-
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-popover-item-separator__line,
-  :is(.content-editor, body.content-editor-modal-open) .ce-settings::before {
-    background: var(--color-border-1) !important;
-  }
-
-  :is(.content-editor, body.content-editor-modal-open)
-    .cdx-settings-button--focused {
-    background: var(--content-editor-hover) !important;
-    box-shadow: inset 0 0 0 1px
-      color-mix(in oklch, var(--color-accent) 22%, transparent);
-  }
-
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-popover-item--active
-    .ce-popover-item__title {
-    color: var(--color-accent) !important;
-  }
-
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-popover-item--confirmation {
-    background: var(--color-bg-error) !important;
+  & .ce-popover-item--confirmation {
     box-shadow: inset 0 0 0 1px var(--color-border-error);
-  }
 
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-popover-item--confirmation:is(:hover, .ce-popover-item--focused) {
-    background: color-mix(
-      in oklch,
-      var(--color-border-error) 36%,
-      var(--color-bg-error)
-    ) !important;
-  }
-
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-popover-item--confirmation
-    .ce-popover-item__title,
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-popover-item--confirmation
-    .ce-popover-item__icon,
-  :is(.content-editor, body.content-editor-modal-open)
-    .ce-popover-item--confirmation
-    .ce-popover-item__icon
-    svg {
-    border-color: var(--color-border-error) !important;
-    color: var(--color-text-error) !important;
-  }
-
-  /* Match the project sm breakpoint without introducing an inline media query. */
-  @variant max-sm {
-    :is(.content-editor, body.content-editor-modal-open)
-      .ce-toolbar__settings-btn,
-    :is(.content-editor, body.content-editor-modal-open) .ce-toolbar__plus {
-      border-color: var(--color-border-1) !important;
-      background-color: var(--content-editor-panel) !important;
-      box-shadow: 0 10px 26px -18px var(--content-editor-shadow) !important;
-    }
-
-    :is(.content-editor, body.content-editor-modal-open)
-      .ce-popover-item__title,
-    :is(.content-editor, body.content-editor-modal-open)
-      .ce-popover-header__text {
-      font-size: var(--text-base) !important;
-    }
-
-    :is(.content-editor, body.content-editor-modal-open) .ce-popover-item__icon,
-    :is(.content-editor, body.content-editor-modal-open)
-      .ce-popover-header__back-button,
-    :is(.content-editor, body.content-editor-modal-open) .ce-inline-tool,
-    :is(.content-editor, body.content-editor-modal-open) .cdx-settings-button,
-    :is(.content-editor, body.content-editor-modal-open) .ce-settings__button,
-    :is(.content-editor, body.content-editor-modal-open)
-      .ce-conversion-tool__icon {
-      width: 2rem !important;
-      height: 2rem !important;
-    }
-
-    :is(.content-editor, body.content-editor-modal-open)
-      .ce-popover-item__icon
-      svg,
-    :is(.content-editor, body.content-editor-modal-open)
-      .ce-popover-header__back-button
-      svg,
-    :is(.content-editor, body.content-editor-modal-open) .ce-inline-tool svg,
-    :is(.content-editor, body.content-editor-modal-open)
-      .ce-inline-toolbar__dropdown
-      svg,
-    :is(.content-editor, body.content-editor-modal-open)
-      .cdx-settings-button
-      svg,
-    :is(.content-editor, body.content-editor-modal-open)
-      .ce-settings__button
-      svg,
-    :is(.content-editor, body.content-editor-modal-open)
-      .ce-conversion-tool__icon
-      svg {
-      width: 1.5rem !important;
-      height: 1.5rem !important;
-    }
-
-    :is(.content-editor, body.content-editor-modal-open)
-      .ce-popover--inline
-      .ce-popover__items
-      > .ce-popover-item {
-      box-sizing: border-box;
-      width: 2.5rem !important;
-      height: 2.5rem !important;
-      flex: 0 0 2.5rem;
-      padding: var(--spacing) !important;
+    & :is(.ce-popover-item__title, .ce-popover-item__icon) {
+      color: var(--color-text-error);
     }
   }
 
-  .content-editor .ce-stub {
+  & .cdx-list-start-with-field {
     border-color: var(--color-border-1);
-    background: var(--color-bg-3);
-    color: var(--color-text-2);
+    background: var(--content-editor-panel-strong);
   }
 
-  .content-editor .ce-block[data-private-section-member='true']::before {
-    --private-section-vertical-mask: linear-gradient(black 0 0);
-    position: absolute;
-    inset: calc(-1 * var(--spacing-sm) / 2) 0;
-    z-index: 0;
+  & .cdx-list-start-with-field__input {
+    color: var(--color-text-1);
+
+    &::placeholder {
+      color: var(--color-text-3);
+    }
+  }
+
+  /* 6. Block selection and drag-and-drop feedback. */
+  & .ce-block--selected .ce-block__content {
+    border-radius: calc(var(--radius-normal) * 0.65);
+    background: var(--content-editor-active);
+    box-shadow: inset 0 0 0 1px
+      color-mix(in oklch, var(--color-accent) 24%, transparent);
+  }
+
+  & .ce-block--drop-target .ce-block__content::before {
+    z-index: 2;
+    border-color: var(--color-accent);
+    border-width: 3px 3px 0 0;
+    filter: drop-shadow(
+      0 0 0.5rem color-mix(in oklch, var(--color-accent) 90%, transparent)
+    );
+  }
+
+  & .ce-block--drop-target .ce-block__content::after {
+    z-index: 2;
+    height: 4px;
+    border-radius: 9999px;
     background: var(--color-accent);
-    content: '';
-    opacity: 0.045;
-    pointer-events: none;
-    mask-image:
-      var(--content-private-lock),
-      linear-gradient(
-        to right,
-        transparent,
-        black var(--spacing-md),
-        black calc(100% - var(--spacing-md)),
-        transparent
-      ),
-      var(--private-section-vertical-mask);
-    mask-position:
-      0 0,
-      0 0,
-      0 0;
-    mask-size:
-      2rem 2rem,
-      100% 100%,
-      100% 100%;
-    mask-repeat: repeat, no-repeat, no-repeat;
-    mask-composite: intersect, intersect;
+    box-shadow:
+      0 0 0.5rem color-mix(in oklch, var(--color-accent) 90%, transparent),
+      0 0 1.25rem color-mix(in oklch, var(--color-accent) 60%, transparent);
   }
 
-  .content-editor .ce-block[data-private-section-member-start='true']::before {
-    --private-section-vertical-mask: linear-gradient(
+  & .ce-block--drop-target-before .ce-block__content::before,
+  & .ce-block--drop-target-before .ce-block__content::after {
+    top: 0;
+  }
+
+  /*
+   * 7. Mobile layout. Editor.js puts the toolbar below the current block,
+   * where it would cover the start of the next one; here it stands at the
+   * right end of the gap between the two, over the empty ends of their lines.
+   */
+  &[data-content-editor-layout='mobile'] {
+    & .ce-toolbar__actions {
+      right: 0;
+      left: auto;
+      padding-right: 0;
+      transform: translateY(calc(var(--spacing-md) / 2 - 50%));
+    }
+
+    & :is(.ce-toolbar__plus, .ce-toolbar__settings-btn) {
+      border-color: var(--color-border-1);
+      background-color: var(--content-editor-panel);
+      box-shadow: 0 10px 26px -18px var(--content-editor-shadow);
+    }
+
+    & :is(.ce-popover-item__title, .ce-popover-header__text) {
+      font-size: var(--text-base);
+    }
+
+    & :is(.ce-popover-item__icon, .ce-popover-header__back-button) {
+      width: 2rem;
+      height: 2rem;
+
+      & svg {
+        width: 1.5rem;
+        height: 1.5rem;
+      }
+    }
+
+    & .ce-popover--inline .ce-popover__items > .ce-popover-item {
+      box-sizing: border-box;
+      width: 2.5rem;
+      height: 2.5rem;
+      flex: 0 0 2.5rem;
+      padding: var(--spacing);
+    }
+  }
+
+  /* 8. The lock pattern behind the blocks of a private section. */
+  & .ce-block[data-private-section-member='true']::before {
+    --content-private-pattern-opacity: 0.045;
+    inset: calc(-1 * var(--spacing-md) / 2) 0;
+    z-index: 0;
+    @apply content-private-lock-pattern;
+  }
+
+  & .ce-block[data-private-section-member-start='true']::before {
+    --content-private-vertical-mask: linear-gradient(
       to bottom,
       transparent,
       black var(--spacing-md),
@@ -514,8 +448,8 @@
     );
   }
 
-  .content-editor .ce-block[data-private-section-member-end='true']::before {
-    --private-section-vertical-mask: linear-gradient(
+  & .ce-block[data-private-section-member-end='true']::before {
+    --content-private-vertical-mask: linear-gradient(
       to bottom,
       black 0%,
       black calc(100% - var(--spacing-md)),
@@ -523,9 +457,9 @@
     );
   }
 
-  .content-editor
+  &
     .ce-block[data-private-section-member-start='true'][data-private-section-member-end='true']::before {
-    --private-section-vertical-mask: linear-gradient(
+    --content-private-vertical-mask: linear-gradient(
       to bottom,
       transparent,
       black var(--spacing-md),
@@ -534,47 +468,64 @@
     );
   }
 
-  .content-editor
-    .ce-block[data-private-section-member='true']
-    > .ce-block__content {
-    position: relative;
+  & .ce-block[data-private-section-member='true'] > .ce-block__content {
     z-index: 1;
   }
 
   /*
-   * Every block is wrapped, spoiler or not, so the width of a block never
-   * depends on whether it carries the marker. The marker itself is taken out
-   * of the flow: in the margin where there is room for it, over the block's
-   * own corner where there is not.
+   * 9. A spoiler block: a dashed line around its column and a badge sitting
+   * on that line, in the gap above the block, so nothing reaches outside the
+   * editor on any screen. The block keeps a wider gap above it, so the badge
+   * never covers the end of the block before.
    */
-  .content-editor .content-spoiler-wrap {
-    position: relative;
+  & .ce-block:has(> .ce-block__content[data-spoiler='true']) {
+    --content-spoiler-outline: 2px;
+    --content-spoiler-offset: var(--spacing-xs);
   }
 
-  .content-editor .content-spoiler-marker {
+  & .ce-block + .ce-block:has(> .ce-block__content[data-spoiler='true']) {
+    margin-top: calc(var(--spacing-md) + var(--spacing-xs));
+  }
+
+  & .ce-block__content[data-spoiler='true'] {
+    border-radius: calc(var(--radius-normal) * 0.65);
+    outline: var(--content-spoiler-outline) dashed
+      color-mix(in oklab, var(--color-accent) 60%, transparent);
+    outline-offset: var(--content-spoiler-offset);
+  }
+
+  & .content-spoiler-badge {
     position: absolute;
-    top: 0;
-    right: -1.9rem;
-    display: none;
+    /* The middle of the outline, which is drawn outside the offset. */
+    top: calc(
+      -1 * (var(--content-spoiler-offset) + var(--content-spoiler-outline) / 2)
+    );
+    right: var(--spacing-sm);
+    z-index: 2;
+    display: inline-flex;
+    height: 1.5rem;
+    align-items: center;
+    gap: 0.3em;
+    padding: 0 var(--spacing-sm);
+    border-radius: 9999px;
+    background: var(--color-bg-accent);
+    box-shadow: 0 0 0 1px var(--color-accent);
     color: var(--color-accent);
-    opacity: 0.75;
-  }
+    font-size: var(--text-sm);
+    font-weight: 600;
+    line-height: 1;
+    pointer-events: none;
+    transform: translateY(-50%);
+    user-select: none;
 
-  .content-editor .content-spoiler-wrap[data-spoiler='true'] {
-    background: color-mix(in oklab, var(--color-accent) 6%, transparent);
-    border-radius: var(--radius-normal);
-  }
-
-  .content-editor
-    .content-spoiler-wrap[data-spoiler='true']
-    .content-spoiler-marker {
-    display: block;
-  }
-
-  @variant max-sm {
-    .content-editor .content-spoiler-marker {
-      top: 0.1rem;
-      right: 0.1rem;
+    & svg {
+      width: 1.1em;
+      height: 1.1em;
     }
   }
+}
+
+body.content-editor-block-dragging,
+body.content-editor-block-dragging * {
+  cursor: grabbing !important;
 }

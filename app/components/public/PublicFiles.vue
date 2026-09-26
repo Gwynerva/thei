@@ -13,9 +13,14 @@ const props = withDefaults(
   }>(),
   { compact: false },
 );
-/** The files of one list open together, so the viewer can step between them. */
+/**
+ * Pictures and videos open in the viewer, together, so it can step between
+ * them. Any other file has nothing to show there: it is simply downloaded.
+ */
 const openable = computed(() =>
-  props.files.filter((file): file is PublicFile => !isPublicSecret(file)),
+  props.files.filter(
+    (file): file is PublicFile => !isPublicSecret(file) && !!file.media,
+  ),
 );
 </script>
 
@@ -34,14 +39,22 @@ const openable = computed(() =>
         secret
       />
       <PublicCompactResourceItem
-        v-else
+        v-else-if="file.media"
         :title="file.title || phrase.asset"
         :description="file.description"
         :icon-media="file.media"
-        :extension="file.media ? undefined : file.extension"
-        :icon="file.media ? 'media' : 'file'"
+        icon="media"
         button
         @activate="openPublicAssets(openable, file)"
+      />
+      <PublicCompactResourceItem
+        v-else
+        :title="file.title || phrase.asset"
+        :description="file.description"
+        :extension="file.extension"
+        :href="sitePath(file.href)"
+        icon="file"
+        download
       />
     </template>
   </div>

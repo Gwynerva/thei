@@ -143,6 +143,104 @@ test('Editor.js settles after structural operations and preserves semantic dirty
   await expect(save).toHaveText('Save');
 });
 
+test('a click beside a paragraph places the caret at the start or end of that line', async ({
+  page,
+}) => {
+  await page.route('**/slow-image.svg', (route) =>
+    route.fulfill({
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="320" height="180" fill="gray"/></svg>',
+    }),
+  );
+  await page.goto('/editor-regression');
+  await expect(page.locator('[data-ready]')).toHaveAttribute(
+    'data-ready',
+    'true',
+  );
+  const caret = () =>
+    page.evaluate(() => {
+      const selection = window.getSelection();
+      const node = selection?.anchorNode;
+      const paragraph =
+        node instanceof Element ? node : (node?.parentElement ?? null);
+      return {
+        offset: selection?.anchorOffset ?? -1,
+        block: paragraph?.closest('.ce-block')?.getAttribute('data-id'),
+      };
+    });
+  const field = page.locator('[data-id="p0"] [contenteditable]');
+  const holder = page.locator('.content-editor');
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    const box = (await field.boundingBox())!;
+    const edge = (await holder.boundingBox())!.x;
+    const middle = box.y + box.height / 2;
+    // The margin left of the text column, inside the editor.
+    await page.mouse.click(edge + 4, middle);
+    expect(await caret()).toEqual({ offset: 0, block: 'p0' });
+    await page.mouse.click(box.x + box.width + 4, middle);
+    expect(await caret()).toEqual({ offset: 'Before'.length, block: 'p0' });
+  }
+  // Hovering opens the toolbar beside the block; it must not cover the text.
+  await page.setViewportSize({ width: 1280, height: 844 });
+  const box = (await field.boundingBox())!;
+  await page.mouse.move(box.x + 40, box.y + box.height / 2);
+  // The toolbar box itself has no height; its buttons are what shows.
+  await expect(page.locator('.ce-toolbar__actions--opened')).toBeVisible();
+  const under = await page.evaluate(
+    ([x, y]) =>
+      document.elementFromPoint(x!, y!)?.closest('[contenteditable]')
+        ? 'text'
+        : 'other',
+    [box.x + 1, box.y + box.height / 2],
+  );
+  expect(under).toBe('text');
+});
+
+test('an address pasted over selected text links that text instead of replacing it', async ({
+  page,
+}) => {
+  await page.goto('/editor-regression');
+  await expect(page.locator('[data-ready]')).toHaveAttribute(
+    'data-ready',
+    'true',
+  );
+  const field = page.locator('[data-id="p0"] [contenteditable]');
+  // A double click takes the space after a word along with it; the link
+  // takes only the word.
+  await field.evaluate((element) => {
+    element.textContent = 'Before tail';
+  });
+  const paste = (text: string) =>
+    field.evaluate((element, value) => {
+      const node = element.firstChild!;
+      const range = document.createRange();
+      range.setStart(node, 0);
+      range.setEnd(node, 'Before '.length);
+      (element as HTMLElement).focus();
+      const selection = window.getSelection()!;
+      selection.removeAllRanges();
+      selection.addRange(range);
+      const data = new DataTransfer();
+      data.setData('text/plain', value);
+      element.dispatchEvent(
+        new ClipboardEvent('paste', {
+          clipboardData: data,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    }, text);
+
+  await paste(' https://example.org/page ');
+  const link = field.locator('a');
+  await expect(link).toHaveCount(1);
+  await expect(link).toHaveText('Before');
+  await expect(link).toHaveAttribute('data-content-link', 'external');
+  await expect(link).toHaveAttribute('href', 'https://example.org/page');
+  await expect(field).toHaveText('Before tail');
+});
+
 test('life cache evicts distant windows, preserves focus and reloads both directions', async ({
   page,
 }) => {

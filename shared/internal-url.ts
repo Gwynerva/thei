@@ -6,6 +6,7 @@ import {
   publicIdFromProjectUrlPart,
 } from './project-url';
 import { normalizeBasePath, withoutSiteBase } from './site-url';
+import { publicIdFromTagUrlPart } from './tag-url';
 
 /**
  * The entity an address of this site opens, named the way the address names
@@ -20,7 +21,8 @@ export type InternalUrlTarget =
   | { entityType: 'project-section'; projectPublicId: string; publicId: string }
   | { entityType: 'event'; publicId: string }
   | { entityType: 'page'; slug: string }
-  | { entityType: 'diary-entry'; date: string };
+  | { entityType: 'diary-entry'; date: string }
+  | { entityType: 'tag'; publicId: string };
 
 /**
  * Where this site lives. `origins` holds every origin the site answers on —
@@ -98,6 +100,12 @@ function targetFromSegments(segments: string[]): InternalUrlTarget | undefined {
     const date = dateFromDiaryUrlPart(part);
     return date ? { entityType: 'diary-entry', date } : undefined;
   }
+  if (section === 'tags') {
+    const publicId = publicIdFromTagUrlPart(part);
+    return publicIdIsValid(publicId)
+      ? { entityType: 'tag', publicId }
+      : undefined;
+  }
   return undefined;
 }
 
@@ -113,7 +121,7 @@ export function internalUrlPastePattern(site: InternalUrlSite): RegExp {
   if (!origins.length) return /(?!)/;
   const base = escapeRegExp(normalizeBasePath(site.base));
   return new RegExp(
-    `^(?:${origins.join('|')})${base}(?:projects|events|pages|diary)/[^\\s]+$`,
+    `^(?:${origins.join('|')})${base}(?:projects|events|pages|diary|tags)/[^\\s]+$`,
     'i',
   );
 }

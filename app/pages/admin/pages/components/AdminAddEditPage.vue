@@ -12,6 +12,7 @@ import {
   pageSlugIsTaken,
   pageSlugIsValid,
 } from '#layers/thei/shared/admin/page';
+import SlugInput from '../../components/SlugInput.vue';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
 import AssetTile from '#layers/thei/app/components/AssetTile.vue';
 import ProjectShareLinks from '../../projects/components/ProjectShareLinks.vue';
@@ -61,7 +62,10 @@ if (pageUuid) {
       iconSize.value = response.iconAssetSize;
       savedIconAssetUuid.value = response.iconAssetUuid;
       initialSlug.value = response.slug;
-      slugSynchronized.value = false;
+      // As on the other edit pages: the chain stays whole while the slug is
+      // still the one the title gives.
+      slugSynchronized.value =
+        response.slug === language.value.slugify(response.title);
       markSaved();
     },
     { immediate: true },
@@ -160,27 +164,11 @@ const iconAsset = useSingleMediaAsset({
 });
 
 watch(
-  () => data.value.title,
-  (title) => {
-    if (slugSynchronized.value) data.value.slug = language.value.slugify(title);
-  },
-);
-watch(
   () => data.value.slug,
   () => {
     serverSlugError.value = undefined;
   },
 );
-
-function updateSlug(value: string | undefined) {
-  slugSynchronized.value = false;
-  data.value.slug = normalizePageSlug(value ?? '');
-}
-
-function synchronizeSlug() {
-  slugSynchronized.value = true;
-  data.value.slug = language.value.slugify(data.value.title);
-}
 
 async function save() {
   if (!canSave.value) return;
@@ -355,24 +343,13 @@ onBeforeRouteLeave(() => {
       <div class="flex flex-col gap-md sm:flex-row">
         <Field class="min-w-0 flex-1">
           <FieldLabel required>{{ phrase.page_slug }}</FieldLabel>
-          <div class="flex gap-xs">
-            <FieldInput
-              :model-value="data.slug"
-              type="text"
-              autocomplete="off"
-              spellcheck="false"
-              required
-              @update:model-value="updateSlug"
-            />
-            <Button
-              variant="secondary"
-              :aria-label="phrase.enable_url_synchronization"
-              :data-title-popup="phrase.enable_url_synchronization"
-              @click="synchronizeSlug"
-            >
-              <Icon name="refresh" />
-            </Button>
-          </div>
+          <SlugInput
+            v-model="data.slug"
+            v-model:synchronized="slugSynchronized"
+            :source="data.title"
+            :label="phrase.page_slug"
+            required
+          />
           <FieldHint>{{ phrase.page_slug_hint }}</FieldHint>
           <FieldHint v-if="slugInvalid" class="text-text-error">
             {{ phrase.page_slug_invalid }}

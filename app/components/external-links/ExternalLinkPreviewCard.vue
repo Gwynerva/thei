@@ -7,6 +7,11 @@ import {
 import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
 import type { MediaPlayback } from '#layers/thei/shared/media';
 
+/**
+ * The card a link to another site is shown as: the site's favicon, its
+ * title and its description. It is laid out to the same measures as the
+ * card of an internal link, so the two sit together in one flow.
+ */
 const props = defineProps<{
   link?: ExternalLinkPreview;
   url?: string;
@@ -66,7 +71,10 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
       class="external-link-preview flex min-h-16 w-full min-w-0 items-center
         gap-xs rounded-normal border border-border-1 bg-bg-2 text-text-1
         no-underline transition-colors"
-      :class="[{ 'cursor-pointer': interactiveHref }, flush ? '' : 'p-xs']"
+      :class="[
+        { 'cursor-pointer': interactiveHref },
+        flush ? '' : 'px-sm py-xs',
+      ]"
       :style="{ '--external-link-accent': accentColor }"
     >
       <Media
@@ -85,24 +93,17 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
         :class="{ 'm-xs mr-0': flush, 'animate-pulse': loading }"
         aria-hidden="true"
       >
-        <Icon name="external-link" />
+        <Icon name="globe" />
       </div>
-      <div class="min-w-0 flex-1">
-        <p
-          class="flex min-w-0 items-center gap-1 text-sm font-semibold
-            @max-[24rem]:text-xs"
-        >
-          <span class="min-w-0 truncate">{{ title }}</span>
-          <Icon
-            name="external-link"
-            class="size-3 shrink-0 text-text-3"
-            aria-hidden="true"
-          />
-        </p>
-        <p v-if="description" class="line-clamp-2 text-xs text-text-3">
+      <div
+        class="flex min-w-0 flex-1 flex-col gap-0.5"
+        :class="{ 'my-xs': flush }"
+      >
+        <p class="truncate text-sm font-semibold">{{ title }}</p>
+        <p v-if="description" class="line-clamp-2 text-sm text-text-3">
           {{ description }}
         </p>
-        <p v-else-if="loading && loadingText" class="text-xs text-text-3">
+        <p v-else-if="loading && loadingText" class="text-sm text-text-3">
           {{ loadingText }}
         </p>
         <p v-if="hint && !loading" class="text-xs text-text-3 italic">

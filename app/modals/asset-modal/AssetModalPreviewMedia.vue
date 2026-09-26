@@ -11,6 +11,12 @@ import { useVideoPlayback } from './use-video-playback';
 const props = defineProps<{
   extension: string;
   src: string;
+  /**
+   * A video's still, shown until it plays: its preview, or a frame chosen in
+   * the browser for a file not uploaded yet. Without it a video shows its
+   * first frame, which is often black.
+   */
+  poster?: string;
   hasAudio?: boolean;
   /** The media's size as shown: already turned when `rotation` is set. */
   displayDimensions?: { width: number; height: number };
@@ -189,6 +195,8 @@ defineExpose({
             v-if="isVideo"
             ref="media"
             :src="sitePath(props.src)"
+            :poster="props.poster && sitePath(props.poster)"
+            preload="metadata"
             class="pointer-events-none block max-h-none max-w-none"
             :class="turnStyle ? 'absolute top-1/2 left-1/2' : 'size-full'"
             :style="turnStyle"

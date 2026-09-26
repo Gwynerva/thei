@@ -36,6 +36,49 @@ describe('inlineToMarkdown', () => {
 });
 
 describe('contentToMarkdown', () => {
+  it('counts an ordered list from where it starts, nested ones from one', () => {
+    const markdown = contentToMarkdown(
+      {
+        blocks: [
+          {
+            type: 'list',
+            data: {
+              style: 'ordered',
+              meta: { start: 4, counterType: 'upper-roman' },
+              items: [
+                { content: 'four', items: [{ content: 'inner' }] },
+                { content: 'five' },
+              ],
+            },
+          },
+        ],
+      } as never,
+      options,
+    );
+    expect(markdown).toBe('4. four\n  1. inner\n5. five');
+  });
+
+  it('keeps a line broken inside a list item under that item', () => {
+    const markdown = contentToMarkdown(
+      {
+        blocks: [
+          {
+            type: 'list',
+            data: {
+              style: 'checklist',
+              items: [
+                { content: 'first<br>second', meta: { checked: true } },
+                { content: 'next' },
+              ],
+            },
+          },
+        ],
+      } as never,
+      options,
+    );
+    expect(markdown).toBe('- [x] first\n      second\n- [ ] next');
+  });
+
   it('renders blocks a reader can act on', () => {
     const markdown = contentToMarkdown(
       {

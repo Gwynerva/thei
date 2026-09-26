@@ -68,6 +68,10 @@ usePublicSeo({
 const details = computed(
   () =>
     ({
+      neighbours: data.value.neighbours && {
+        kind: 'diary-entry',
+        ...data.value.neighbours,
+      },
       chronology: diaryTimelineItems(
         { ...data.value, href: buildLifeUrl({ date: data.value.date }) },
         {

@@ -103,8 +103,13 @@ end in, without the database. The screen of one release polls the server of
 the next, so that response (`shared/api/update-progress.ts`) is frozen: it may
 only ever gain optional fields.
 
-While the site is closed, anyone who opens it is led to the same screen at
-`/update/` — with the steps, but never the log. Visitors are sent back to the
+While the site is closed, anyone who opens it is led to `/update/`. The admin
+sees the steps there, and why the update stopped if it did, but never the log;
+a visitor sees only that the site is temporarily unavailable, and the
+response tells them no more than that. The admin is recognised from the first
+step: sessions are only loaded after the migrations, so the tokens of the
+active sessions are read beforehand, raw, from the `admin-sessions` table
+(`server/thei/admin-session/closed-site.ts`). Visitors are sent back to the
 site as soon as it opens.
 
 Updating and restarting are only offered when Thei is running as a managed

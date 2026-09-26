@@ -1,4 +1,5 @@
 import { type LanguageCode, loadLanguage } from '#layers/thei/shared/language';
+import { listLetterCounterStyles } from '#layers/thei/shared/language/list-letters';
 import { _language, language } from '../composables/language';
 
 export default defineNuxtPlugin(async () => {
@@ -29,5 +30,12 @@ export default defineNuxtPlugin(async () => {
     htmlAttrs: {
       lang: computed(() => language.value.code),
     },
+    style: computed(() => {
+      const styles = listLetterCounterStyles(
+        language.value.listLetters,
+        language.value.code,
+      );
+      return styles ? [{ key: 'thei-list-letters', textContent: styles }] : [];
+    }),
   });
 });

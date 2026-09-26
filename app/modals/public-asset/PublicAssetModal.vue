@@ -47,6 +47,7 @@ const dimensions = computed(() => {
         :key="current.key"
         :extension="current.extension"
         :src="current.media.src"
+        :poster="videoPosterOf(current.media)"
         :has-audio="current.media.hasAudio"
         :display-dimensions="dimensions"
       />

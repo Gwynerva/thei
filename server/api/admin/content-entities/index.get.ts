@@ -3,6 +3,8 @@ import {
   isContentEntityType,
 } from '#layers/thei/shared/content-link';
 import {
+  CONTENT_ENTITY_SEARCH_LIMIT,
+  CONTENT_ENTITY_SEARCH_MAX_LIMIT,
   rankContentEntities,
   type ContentEntitySearchItem,
 } from '#layers/thei/shared/admin/content-entity-search';
@@ -14,11 +16,19 @@ import { contentEntitySearchItem } from '../../../thei/content-entity-search';
  *
  * `entityTypes` narrows the kinds (relations only join projects, events and
  * diary entries; pinned pages are pages), `exclude` drops what is already
- * chosen as `type:uuid` keys, and `publicOnly` keeps what a visitor can open.
+ * chosen as `type:uuid` keys, `publicOnly` keeps what a visitor can open, and
+ * `limit` is how many results the picker has room for.
  */
 export default defineEventHandler(
   async (event): Promise<ContentEntitySearchItem[]> => {
     const query = getQuery(event);
+    const limit = Math.min(
+      CONTENT_ENTITY_SEARCH_MAX_LIMIT,
+      Math.max(
+        1,
+        Math.trunc(Number(query.limit)) || CONTENT_ENTITY_SEARCH_LIMIT,
+      ),
+    );
     const requested =
       typeof query.entityTypes === 'string'
         ? query.entityTypes.split(',').filter(isContentEntityType)
@@ -34,6 +44,7 @@ export default defineEventHandler(
     const ranked = rankContentEntities(
       records,
       typeof query.query === 'string' ? query.query : '',
+      limit,
     );
     return await Promise.all(ranked.map(contentEntitySearchItem));
   },

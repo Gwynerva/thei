@@ -81,6 +81,9 @@ import {
 } from '#layers/thei/app/components/content/editor-spoiler-tune';
 import { assetDetailsModal } from '#layers/thei/app/modals/asset-details/modal';
 import { createEditorBlockDrag } from '#layers/thei/app/composables/editor-block-drag';
+import { bindEditorGutterClick } from '#layers/thei/app/composables/editor-gutter-click';
+import { bindEditorLinkPaste } from '#layers/thei/app/composables/editor-link-paste';
+import { bindEditorKeyboardBoundary } from '#layers/thei/app/composables/editor-keyboard-boundary';
 import { createEditorPrivateSections } from '#layers/thei/app/composables/editor-private-sections';
 import { createEditorPopoverLayer } from '#layers/thei/app/composables/editor-popover-layer';
 import {
@@ -127,6 +130,23 @@ const updatedAt = computed(
 );
 let cleanupSmartTypography: (() => void) | undefined;
 let cleanupMediaPaste: (() => void) | undefined;
+let cleanupGutterClick: (() => void) | undefined;
+let cleanupLinkPaste: (() => void) | undefined;
+let cleanupKeyboardBoundary: (() => void) | undefined;
+/**
+ * Editor.js switches to its mobile layout at this width — its own constant,
+ * not the project's breakpoint — and the styling follows the same switch, so
+ * the two never disagree about where the toolbar is.
+ */
+const EDITOR_MOBILE_LAYOUT_QUERY = '(max-width: 650px)';
+let editorLayoutQuery: MediaQueryList | undefined;
+
+function applyEditorLayout() {
+  const layout = editorLayoutQuery?.matches ? 'mobile' : 'desktop';
+  holder.value?.setAttribute('data-content-editor-layout', layout);
+  // The body too: Editor.js measures a popover on a clone appended there.
+  document.body.setAttribute('data-content-editor-layout', layout);
+}
 const modalContainer =
   useTemplateRef<InstanceType<typeof ModalContainer>>('modalContainer');
 const inlineLinkControls =
@@ -174,6 +194,8 @@ const headerSummary = ref<ContentSummary>({
     computedInitialSummary.assetTotalSize,
 });
 let editor: EditorJS | undefined;
+/** Set once the modal is on its way out, so an editor still loading stops. */
+let disposed = false;
 let editorAcceptsChanges = false;
 let transientEntitySelections = 0;
 let cleanupEditorDrag: (() => void) | undefined;
@@ -382,6 +404,9 @@ function headerTextOffset(root: HTMLElement, node: Node, offset: number) {
 
 onMounted(async () => {
   document.body.classList.add('content-editor-modal-open');
+  editorLayoutQuery = window.matchMedia(EDITOR_MOBILE_LAYOUT_QUERY);
+  editorLayoutQuery.addEventListener('change', applyEditorLayout);
+  applyEditorLayout();
 
   const [
     { default: Editor },
@@ -394,6 +419,8 @@ onMounted(async () => {
     import('@editorjs/list'),
     import('@editorjs/quote'),
   ]);
+  // Closed before the editor even loaded: there is nothing to build it in.
+  if (disposed || !holder.value) return;
 
   class PlainTextHeader extends Header {
     override getTag() {
@@ -442,31 +469,14 @@ onMounted(async () => {
       'contentEntityLink',
       'contentExternalInlineLink',
     ],
-    sanitizer: {
-      p: true,
-      b: true,
-      strong: true,
-      i: true,
-      em: true,
-      s: true,
-      strike: true,
-      abbr: { 'data-content-hint': true },
-      a: {
-        href: true,
-        rel: true,
-        target: true,
-        'data-content-link': true,
-        'data-entity-type': true,
-        'data-entity-id': true,
-      },
-      br: true,
-    },
+    // What may stay in inline text is decided by each inline tool's own
+    // `sanitize` and, on the way out, by `readCleanEditorOutput`; Editor.js
+    // 2.31 never reads a top-level sanitizer.
     tools: {
       spoiler: {
         class: ContentSpoilerTune as unknown as ToolConstructable,
         config: {
           title: phrase.value.content_spoiler,
-          markerTitle: phrase.value.content_spoiler_hint,
         } satisfies ContentSpoilerTuneConfig,
       },
       contentBold: {
@@ -491,7 +501,7 @@ onMounted(async () => {
         class: ContentEntityLinkTool as unknown as InlineToolConstructable,
         config: {
           open: (request: ContentInlineLinkRequest) =>
-            inlineLinkControls.value?.openProject(request),
+            inlineLinkControls.value?.openEntity(request),
         },
       },
       contentExternalInlineLink: {
@@ -550,6 +560,8 @@ onMounted(async () => {
       },
       delimiter: {
         class: ContentDelimiterTool,
+        // A divider has nothing to hide.
+        tunes: [],
         toolbox: {
           title: phrase.value.content_editor_i18n.delimiter,
           icon: editorIcon('asterisk'),
@@ -612,6 +624,8 @@ onMounted(async () => {
       privateSectionBoundary: {
         class: PrivateSectionBoundaryTool,
         inlineToolbar: false,
+        // The edge of a section is not content; it cannot be a spoiler.
+        tunes: [],
         toolbox: {
           title: phrase.value.content_private_section,
           icon: editorIcon('lock-close'),
@@ -625,8 +639,12 @@ onMounted(async () => {
   });
 
   await editor.isReady;
+  // Closed while the editor was starting: it has been destroyed by now, and
+  // nothing may be bound to it any more.
+  if (disposed) return;
   editorPrivateSections = createEditorPrivateSections(editor);
   await editorSnapshots.initialize();
+  if (disposed) return;
   editorAcceptsChanges = true;
   cleanupEditorPopoverLayer = createEditorPopoverLayer(holder.value!);
   cleanupEditorDrag = createEditorBlockDrag(holder.value!, editor, {
@@ -636,11 +654,33 @@ onMounted(async () => {
   // block is being typed in, and the rules read the caret, not the target.
   cleanupSmartTypography = bindSmartTypography(holder.value!);
   cleanupMediaPaste = bindEditorMediaPaste(holder.value!, editor);
+  cleanupGutterClick = bindEditorGutterClick(holder.value!, editor);
+  // The popups and the header live in the dialog, beside the editor.
+  cleanupKeyboardBoundary = bindEditorKeyboardBoundary(
+    holder.value!.closest('dialog') ?? document.body,
+    holder.value!,
+  );
+  cleanupLinkPaste = bindEditorLinkPaste(holder.value!, editor, {
+    site: internalSite,
+    // The heading is plain text; captions are the media blocks' own.
+    linkBlocks: new Set(['paragraph', 'list', 'quote']),
+    findEntity: (url) => findEntityByInternalUrl(url, internalSite),
+  });
 });
 
 onBeforeUnmount(() => {
+  disposed = true;
   editorAcceptsChanges = false;
+  editorLayoutQuery?.removeEventListener('change', applyEditorLayout);
+  editorLayoutQuery = undefined;
+  document.body.removeAttribute('data-content-editor-layout');
   editorSnapshots.destroy();
+  cleanupGutterClick?.();
+  cleanupGutterClick = undefined;
+  cleanupLinkPaste?.();
+  cleanupLinkPaste = undefined;
+  cleanupKeyboardBoundary?.();
+  cleanupKeyboardBoundary = undefined;
   cleanupEditorPopoverLayer?.();
   cleanupEditorPopoverLayer = undefined;
   cleanupSmartTypography?.();
@@ -908,29 +948,21 @@ function editorJsI18nMessages() {
       blockTunes: {
         toggler: {
           'Click to tune': text.tune,
-          'or drag to move': text.drag_to_move,
         },
-      },
-      inlineToolbar: {
-        converter: { 'Convert to': text.convert_to },
       },
       toolbar: {
         toolbox: { Add: text.add },
       },
       popover: {
-        Filter: text.filter,
-        'Nothing found': text.nothing_found,
         'Convert to': text.convert_to,
       },
     },
     toolNames: {
       Text: text.text,
-      Link: text.link,
       Bold: text.bold,
       Italic: text.italic,
       Strikethrough: phrase.value.content_strikethrough,
       Hint: phrase.value.content_hint,
-      'Project link': phrase.value.content_internal_link,
       'External link': phrase.value.content_external_link,
       'Internal link': phrase.value.content_internal_link,
       Heading: text.heading,
@@ -942,7 +974,6 @@ function editorJsI18nMessages() {
       File: text.file,
     },
     tools: {
-      link: { 'Add a link': text.add_link },
       header: {
         'Heading 2': text.heading,
         'Heading 3': text.subheading,
@@ -979,7 +1010,7 @@ function editorJsI18nMessages() {
 </script>
 
 <template>
-  <ModalContainer ref="modalContainer" class="max-w-192">
+  <ModalContainer ref="modalContainer" class="max-w-200">
     <ContentInlineLinkDecorator
       playback="interaction"
       :root="holder"

@@ -28,6 +28,26 @@ describe('media previews', () => {
     expect(MEDIA_PREVIEW_EXTENSION).toBe('avif');
   });
 
+  it('draws a small SVG at the preview size instead of its own', async () => {
+    const source = Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="32"><rect width="64" height="32" fill="#2474c8"/></svg>',
+    );
+
+    const preview = await createMediaPreview(source, AssetType.Image);
+
+    expect(preview).toMatchObject({ width: 720, height: 360 });
+  });
+
+  it('draws a huge SVG no larger than the preview needs', async () => {
+    const source = Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="40000" height="20000"><rect width="40000" height="20000" fill="#d93672"/></svg>',
+    );
+
+    const preview = await createMediaPreview(source, AssetType.Image);
+
+    expect(preview).toMatchObject({ width: 720, height: 360 });
+  });
+
   it('limits the long side to 720 and preserves aspect ratio', async () => {
     const source = await sharp({
       create: {
@@ -60,14 +80,14 @@ describe('media previews', () => {
     expect(preview).toMatchObject({ width: 200, height: 400 });
   });
 
-  it('rasterizes SVG without enlarging its intrinsic size', async () => {
+  it('rasterizes SVG at the preview size, whatever its units say', async () => {
     const source = Buffer.from(
       '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="480"><rect width="240" height="480" fill="#63b33e"/></svg>',
     );
 
     const preview = await createMediaPreview(source, AssetType.Image);
 
-    expect(preview).toMatchObject({ width: 240, height: 480 });
+    expect(preview).toMatchObject({ width: 360, height: 720 });
     expect((await sharp(preview.buffer).metadata()).format).toBe('heif');
   });
 });

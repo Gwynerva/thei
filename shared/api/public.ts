@@ -195,6 +195,25 @@ export type PublicProjectSection = {
   media?: MediaDescriptor;
 };
 
+/** A stage, section or diary entry beside the one on the page. */
+export type PublicNeighbour = {
+  title: string;
+  href: string;
+  media?: MediaDescriptor;
+  /** The day of a diary entry, shown in place of the title it lacks. */
+  date?: string;
+};
+
+/**
+ * The ones just before and just after, in the order a reader goes through
+ * them: stages and diary entries by time, sections as the project sorts them.
+ * Only what the viewer could open, and only when there is one.
+ */
+export type PublicNeighbours = {
+  previous?: PublicNeighbour;
+  next?: PublicNeighbour;
+};
+
 export type PublicProjectChildParent = PublicEntityReference & {
   access: ProjectEventAccessLevel;
   humanReadableSlug: string;
@@ -209,6 +228,8 @@ export type PublicProjectStageResponse = PublicProjectStage & {
   chronology: { createdAt: string; updatedAt?: string };
   project: PublicProjectChildParent;
   references: PublicReferences;
+  /** Set by the page's own route; the Markdown representation has none. */
+  neighbours?: PublicNeighbours;
 };
 
 export type PublicProjectSectionResponse = PublicProjectSection & {
@@ -219,6 +240,8 @@ export type PublicProjectSectionResponse = PublicProjectSection & {
   chronology: { createdAt: string; updatedAt?: string };
   project: PublicProjectChildParent;
   references: PublicReferences;
+  /** Set by the page's own route; the Markdown representation has none. */
+  neighbours?: PublicNeighbours;
 };
 
 export type PublicProjectResponse = {
@@ -296,6 +319,8 @@ export type PublicDiaryResponse = {
   content: PublicContentOutputData;
   references: PublicReferences;
   related: PublicRelatedCounts;
+  /** Set by the page's own route; the Markdown representation has none. */
+  neighbours?: PublicNeighbours;
   /** Owner only. */
   reminder?: string;
   /** Owner only. */

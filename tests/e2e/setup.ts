@@ -1,9 +1,10 @@
 import { request, expect } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { E2E_ORIGIN } from './fixture-url';
 
 export default async function setup() {
-  const api = await request.newContext({ baseURL: 'http://127.0.0.1:3000' });
+  const api = await request.newContext({ baseURL: E2E_ORIGIN });
   const marker = await api.get('/test-fixture.json');
   expect(await marker.json()).toEqual({ fixture: 'thei-regression' });
   const response = await api.get('/');

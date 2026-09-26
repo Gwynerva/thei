@@ -11,8 +11,8 @@ import sharp from 'sharp';
 import { AssetType, type VideoAssetMeta } from '../../../shared/asset';
 import { createOriginalAssetSettings } from '../../../shared/asset-upload-settings';
 import {
-  findVideosWithFirstFramePreviews,
-  refreshFirstFramePreviews,
+  findVideosWithUnscoredPreviews,
+  refreshVideoPreviews,
 } from '../../../server/thei/assets/preview-refresh';
 import { storeAsset } from '../../../server/thei/assets/storage';
 import { createAsset } from '../../../server/thei/assets/repository/create';
@@ -147,15 +147,15 @@ async function storeClip(name: string) {
   return asset;
 }
 
-describe('first-frame preview refresh', () => {
-  it('remakes the previews of videos that still have none chosen, once', async () => {
+describe('video preview refresh', () => {
+  it('remakes the previews of videos whose frame was not compared, once', async () => {
     const stored = await storeClip('fade.mp4');
     expect(
-      (await findVideosWithFirstFramePreviews()).map((row) => row.assetUuid),
+      (await findVideosWithUnscoredPreviews()).map((row) => row.assetUuid),
     ).toEqual([stored.assetUuid]);
 
     const reported: [number, number][] = [];
-    const result = await refreshFirstFramePreviews({
+    const result = await refreshVideoPreviews({
       onProgress: (done, total) => {
         reported.push([done, total]);
       },
@@ -170,6 +170,7 @@ describe('first-frame preview refresh', () => {
     const video = (await findAssetByUuid(stored.assetUuid))!;
     const meta = video.meta as VideoAssetMeta;
     expect(meta.previewAt).toBeGreaterThan(0);
+    expect(meta.previewScore).toBeGreaterThan(0);
     expect(meta.accent?.chroma).toBeGreaterThan(0);
 
     const preview = (
@@ -184,8 +185,8 @@ describe('first-frame preview refresh', () => {
     expect(Math.round(channels[2]!.mean)).toBeLessThan(40);
 
     // Dealt with: the next pass has nothing to do.
-    expect(await findVideosWithFirstFramePreviews()).toEqual([]);
-    expect(await refreshFirstFramePreviews()).toMatchObject({ total: 0 });
+    expect(await findVideosWithUnscoredPreviews()).toEqual([]);
+    expect(await refreshVideoPreviews()).toMatchObject({ total: 0 });
   }, 60_000);
 
   it('skips a video it cannot read and reports it', async () => {
@@ -203,11 +204,11 @@ describe('first-frame preview refresh', () => {
       meta: { width: 64, height: 64 },
     });
 
-    const result = await refreshFirstFramePreviews();
+    const result = await refreshVideoPreviews();
 
     expect(result).toEqual({ total: 1, failed: 1 });
     // Still without a chosen frame: it keeps its old preview, and the file
     // card in the library can remake it by hand.
-    expect(await findVideosWithFirstFramePreviews()).toHaveLength(1);
+    expect(await findVideosWithUnscoredPreviews()).toHaveLength(1);
   }, 60_000);
 });

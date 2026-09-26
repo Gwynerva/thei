@@ -8,6 +8,7 @@ import {
   buildPublicProjectSection,
   canOpenPublicEntity,
 } from '../../../../thei/public/entities';
+import { buildProjectSectionNeighbours } from '../../../../thei/public/neighbours';
 import { resolveEntityViewer } from '../../../../thei/access-links/viewer';
 import { markSharedResponse } from '../../../../thei/access-links/response';
 
@@ -29,14 +30,17 @@ export default defineEventHandler(
     const publicId = publicIdFromProjectChildUrlPart(
       getRouterParam(event, 'section') ?? '',
     );
-    const section = (await getProjectContentSections(project.projectUuid)).find(
-      (item) => item.publicId === publicId,
-    );
+    const sections = await getProjectContentSections(project.projectUuid);
+    const section = sections.find((item) => item.publicId === publicId);
     if (!section || (section.isPrivate && !viewer.asOwner))
       throw createError({ statusCode: 404, statusText: 'Section not found' });
     if (project.access === 'link-only' || viewer.viaShare)
       setHeader(event, 'X-Robots-Tag', 'noindex, nofollow');
     if (viewer.viaShare) markSharedResponse(event);
-    return buildPublicProjectSection(project, section, viewer.asOwner);
+    const [response, neighbours] = await Promise.all([
+      buildPublicProjectSection(project, section, viewer.asOwner),
+      buildProjectSectionNeighbours(project, sections, section, viewer.asOwner),
+    ]);
+    return { ...response, neighbours };
   },
 );

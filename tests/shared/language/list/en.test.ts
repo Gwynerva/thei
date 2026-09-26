@@ -35,7 +35,6 @@ describe('Editor.js phrases', () => {
       gallery: 'Gallery',
       file: 'File',
       add: 'Add',
-      filter: 'Filter',
       click_to_delete: 'Really delete?',
       move_down: 'Move down',
     });

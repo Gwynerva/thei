@@ -42,6 +42,13 @@ const props = withDefaults(
 const emit = defineEmits<{
   opened: [];
   closed: [];
+  /**
+   * The popup is being closed without a choice made in it: by a click or tap
+   * outside, or by Escape. Sent at once, before the outside click goes on to
+   * wherever it was aimed, so an owner can hand back a text selection it had
+   * borrowed while it still holds it.
+   */
+  dismiss: [reason: 'outside' | 'escape'];
 }>();
 
 const open = defineModel<boolean>('open', { required: true });
@@ -120,6 +127,7 @@ function onDocumentPointerDown(event: PointerEvent) {
   if (floatingElement.value?.contains(target)) return;
   if (props.anchor instanceof Node && props.anchor.contains(target)) return;
   if (props.outsideIgnore?.some((element) => element?.contains(target))) return;
+  emit('dismiss', 'outside');
   close();
 }
 
@@ -128,9 +136,15 @@ function onDocumentPointerDown(event: PointerEvent) {
 // agree on which step that is — the popup first, the modal underneath after.
 let removeDismissLayer: (() => void) | undefined;
 
+function dismissByEscape() {
+  emit('dismiss', 'escape');
+  close();
+}
+
 function addOpenListeners() {
   document.addEventListener('pointerdown', onDocumentPointerDown, true);
-  if (props.closeOnEscape) removeDismissLayer = registerDismissLayer(close);
+  if (props.closeOnEscape)
+    removeDismissLayer = registerDismissLayer(dismissByEscape);
   window.visualViewport?.addEventListener('resize', scheduleViewportUpdate);
   window.visualViewport?.addEventListener('scroll', scheduleViewportUpdate);
 }

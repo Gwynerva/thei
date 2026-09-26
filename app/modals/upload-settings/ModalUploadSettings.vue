@@ -175,6 +175,24 @@ const processingSrc = computed(
     '',
 );
 
+/**
+ * The still a video is shown with before it plays: the stored preview of a
+ * library video, or, for a video picked but not uploaded, the frame the
+ * browser finds best — the same points the server will weigh.
+ */
+const pickedPoster = useVideoPoster(() =>
+  !processingVariant.value &&
+  pickedFile &&
+  isExtensionAllowed(pickedFile.extension, videoExtensionProfile)
+    ? pickedFile.objectUrl
+    : undefined,
+);
+const processingPoster = computed(() =>
+  processingVariant.value
+    ? videoPosterOf(processingVariant.value.media)
+    : pickedPoster.value,
+);
+
 const { dimensions: pickedDimensions, duration: pickedDuration } = useFileInfo(
   pickedFile?.objectUrl ?? '',
   pickedFile?.extension ?? '',
@@ -856,6 +874,7 @@ const previewSource = computed(() => {
       key: `variant:${variant.assetUuid}`,
       extension: variant.extension,
       src: variant.media?.src ?? variant.assetUrl,
+      poster: videoPosterOf(variant.media),
       href: variant.assetUrl,
       isMedia: Boolean(variant.media),
       hasAudio:
@@ -867,6 +886,7 @@ const previewSource = computed(() => {
     key: `source:${originKey.value}`,
     extension: processingExtension.value,
     src: processingSrc.value,
+    poster: processingPoster.value,
     href: processingVariant.value?.assetUrl ?? pickedFile?.objectUrl ?? '',
     isMedia: Boolean(transformKind.value),
     hasAudio: transformSource.value?.hasAudio,
@@ -931,6 +951,7 @@ const compare = computed(() => {
       key: `crop:${originKey.value}:${rotation}:${crop.left},${crop.top},${crop.width},${crop.height}`,
       extension: processingExtension.value,
       src: processingSrc.value,
+      poster: processingPoster.value,
       hasAudio: transformSource.value?.hasAudio,
       displayDimensions: { width: crop.width, height: crop.height },
       crop: { rect: crop, source: frame, rotation },
@@ -973,6 +994,7 @@ const directHref = computed(() =>
         ref="mediaPreview"
         :extension="previewSource.extension"
         :src="previewSource.src"
+        :poster="previewSource.poster"
         :has-audio="previewSource.hasAudio"
         :display-dimensions="previewDimensions"
         :rotation="previewRotation"

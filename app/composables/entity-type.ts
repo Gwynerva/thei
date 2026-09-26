@@ -10,6 +10,7 @@ export function entityTypeLabel(type: ContentEntityType): string {
     event: value.event,
     'diary-entry': value.diary_entry,
     page: value.page,
+    tag: value.tag,
   }[type];
 }
 

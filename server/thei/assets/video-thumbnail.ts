@@ -3,6 +3,11 @@ import { randomUUID } from 'node:crypto';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import sharp from 'sharp';
+import {
+  FRAME_SCORE_SAMPLE_SIDE,
+  VIDEO_PREVIEW_FRAME_POSITIONS,
+  frameScore,
+} from '#layers/thei/shared/media-frame-score';
 import { theiTempPath } from './temp';
 import type { AssetBytes } from './bytes';
 import { inspectVideoFile } from './process';
@@ -10,24 +15,11 @@ import { inspectVideoFile } from './process';
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
 /**
- * Where in a video to look for a frame worth showing, as shares of its
- * length. The opening is skipped: a fade from black, a title card or a logo
- * is what a video starts with, not what it is about. Later points are tried
- * only when the earlier ones come out flat.
- */
-const FRAME_POSITIONS = [0.1, 0.3, 0.5, 0.75];
-/**
  * Frames ffmpeg's `thumbnail` filter weighs at each point, picking the one
  * nearest their average look, so a single black or blown-out frame in a run
  * of ordinary ones is passed over. About a second of video.
  */
 const THUMBNAIL_BATCH = 30;
-/**
- * Below this a frame is as good as empty: black, white, grey, a plain card.
- * It says nothing about the video and would make its accent colour neutral.
- * A frame of one strong colour is not empty — it at least has the colour.
- */
-export const FLAT_FRAME_SPREAD = 12;
 
 export interface VideoThumbnailOptions {
   /** Seconds, when the caller already knows; otherwise the file is probed. */
@@ -39,10 +31,14 @@ export interface VideoThumbnail {
   frame: Buffer;
   /** Seconds into the video the frame was looked for. */
   at: number;
+  /** How well it shows the video (`frameScore`). */
+  score: number;
 }
 
 /**
- * Extracts a representative frame of a video and returns it as a PNG buffer.
+ * Extracts the frame that best shows a video and returns it as a PNG buffer:
+ * the most colourful, well exposed of the points in
+ * `VIDEO_PREVIEW_FRAME_POSITIONS`, all of which are looked at.
  *
  * ffmpeg needs seekable input, so a video that is already staged on disk is
  * read from where it lies; only a video handed over as a buffer has to be
@@ -70,29 +66,27 @@ export async function extractVideoThumbnail(
       (await inspectVideoFile(inputPath).catch(() => undefined))?.duration;
     const positions =
       duration && duration > 1
-        ? FRAME_POSITIONS.map((share) => Math.round(share * duration * 10) / 10)
+        ? VIDEO_PREVIEW_FRAME_POSITIONS.map(
+            (share) => Math.round(share * duration * 10) / 10,
+          )
         : [0];
 
-    let best: { frame: Buffer; spread: number; at: number } | undefined;
+    let best: VideoThumbnail | undefined;
     for (const seconds of positions) {
       const frame = await grabFrame(inputPath, outputPath, seconds).catch(
         () => undefined,
       );
       if (!frame) continue;
-      const spread = await frameLiveliness(frame);
-      if (!best || spread > best.spread) best = { frame, spread, at: seconds };
-      if (spread >= FLAT_FRAME_SPREAD) break;
+      const score = await scoreFrame(frame);
+      if (!best || score > best.score) best = { frame, score, at: seconds };
     }
     // Nothing usable past the opening — a very short clip, or one the probe
     // misjudged: the first frame is still a frame.
     if (!best) {
-      best = {
-        frame: await grabFrame(inputPath, outputPath, 0),
-        spread: 0,
-        at: 0,
-      };
+      const frame = await grabFrame(inputPath, outputPath, 0);
+      best = { frame, score: await scoreFrame(frame), at: 0 };
     }
-    return { frame: best.frame, at: best.at };
+    return best;
   } finally {
     if (stagedInput) await rm(stagedInput, { force: true }).catch(() => {});
     await rm(outputPath, { force: true }).catch(() => {});
@@ -117,16 +111,12 @@ async function grabFrame(
   return await readFile(outputPath);
 }
 
-/**
- * How much a frame has to show: the spread of values within its widest
- * channel, or a third of how far its channels sit apart — a plain red card
- * scores by its colour, a dark frame with a faint tint does not.
- */
-export async function frameLiveliness(frame: Buffer): Promise<number> {
-  const { channels } = await sharp(frame).stats();
-  const colour = channels.slice(0, 3);
-  const spread = Math.max(...colour.map((channel) => channel.stdev));
-  const means = colour.map((channel) => channel.mean);
-  const colourfulness = Math.max(...means) - Math.min(...means);
-  return Math.max(spread, colourfulness / 3);
+/** `frameScore` of a frame, read from a small copy of it. */
+export async function scoreFrame(frame: Buffer): Promise<number> {
+  const { data } = await sharp(frame)
+    .resize(FRAME_SCORE_SAMPLE_SIDE, FRAME_SCORE_SAMPLE_SIDE, { fit: 'inside' })
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  return frameScore(data, 3);
 }

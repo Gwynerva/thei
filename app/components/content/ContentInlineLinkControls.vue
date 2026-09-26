@@ -1,5 +1,9 @@
 <script lang="ts" setup>
-import type { ContentEntitySearchItem } from '#layers/thei/shared/admin/content-entity-search';
+import type {
+  ContentEntityChoice,
+  ContentEntitySearchItem,
+} from '#layers/thei/shared/admin/content-entity-search';
+import type { ContentEntityReference } from '#layers/thei/shared/content-link';
 import {
   externalLinkHostname,
   normalizeExternalLinkUrl,
@@ -11,17 +15,37 @@ import {
   createExternalLinkDraft,
   useExternalLinks,
 } from '#layers/thei/app/composables/external-links';
+import {
+  invalidateContentLinks,
+  useContentLinkResolver,
+} from '#layers/thei/app/composables/content-link-resolver';
+import {
+  entityLinkAttributes,
+  externalLinkAttributes,
+} from './editor-inline-link-dom';
 import type {
   ContentInlineLinkControlsExpose,
   ContentInlineLinkRequest,
 } from './editor-inline-links';
 
-const props = defineProps<{ teleportTo?: string | HTMLElement }>();
+/**
+ * The popup behind the two inline link tools.
+ *
+ * One panel, two modes. An internal link is picked from a search of the
+ * site's own entities; an external one is typed as an address and read from
+ * the site it points to. Both may carry a note that stands in for the title
+ * in the chip, and neither is written until ✓: picking an entity only makes
+ * it the choice, so a note can still be added before the link is.
+ */
+defineProps<{ teleportTo?: string | HTMLElement }>();
+
 const open = ref(false);
-const mode = ref<'project' | 'external'>('project');
+const mode = ref<'entity' | 'external'>('entity');
 const request = shallowRef<ContentInlineLinkRequest>();
-const externalUrl = ref('');
 const note = ref('');
+/** The entity an internal link will point to once applied. */
+const chosen = shallowRef<ContentEntityChoice>();
+const resolver = useContentLinkResolver('admin');
 const draft = createExternalLinkDraft(useExternalLinks(), {
   errorText: () => phrase.value.content_link_broken_description,
 });
@@ -32,22 +56,32 @@ const draft = createExternalLinkDraft(useExternalLinks(), {
 const internalEntity = ref<ContentEntitySearchItem>();
 const internalEntityUrl = ref<string>();
 const internalLoading = ref(false);
+const refreshing = ref(false);
 const internalSite = useInternalUrlSite();
-const projectPopup = useTemplateRef<{ focus: () => void }>('projectPopup');
+const entityPopup = useTemplateRef<{ focus: () => void }>('entityPopup');
 const externalInput = ref<HTMLInputElement>();
+const noteInput = ref<HTMLInputElement>();
 let internalVersion = 0;
+let chosenVersion = 0;
 
+const externalUrl = computed({
+  get: () => draft.url,
+  set: (value: string) => {
+    // Typing changes nothing but the text and whether it is a valid address;
+    // the site is read once the address is done.
+    internalEntity.value = undefined;
+    internalEntityUrl.value = undefined;
+    draft.url = value;
+  },
+});
 const externalPreview = computed(() => draft.preview);
 const externalError = computed(() => draft.error);
 const externalLoading = computed(() => draft.loading || internalLoading.value);
-
-// Typing changes nothing but the text and whether it is a valid address; the
-// site is read once the address is done.
-watch(externalUrl, (value) => {
-  internalEntity.value = undefined;
-  internalEntityUrl.value = undefined;
-  draft.url = value;
-});
+const canRefresh = computed(
+  () =>
+    Boolean(externalPreview.value || externalError.value) &&
+    !internalEntity.value,
+);
 
 /** An address of this site is looked up as an entity before anything else. */
 async function findInternal(raw: string) {
@@ -68,7 +102,7 @@ async function findInternal(raw: string) {
 
 /** The address is done: pasted, left, or confirmed with Enter. */
 async function commitUrl() {
-  const raw = externalUrl.value.trim();
+  const raw = draft.url.trim();
   if (parseInternalUrl(raw, internalSite) && (await findInternal(raw))) return;
   await draft.commit();
 }
@@ -77,11 +111,52 @@ function onUrlPaste() {
   void nextTick(commitUrl);
 }
 
-function openProject(next: ContentInlineLinkRequest) {
-  mode.value = 'project';
+/** Reads the site again, and lets every chip on the page know it changed. */
+async function refreshExternal() {
+  if (refreshing.value || !draft.url.trim()) return;
+  refreshing.value = true;
+  try {
+    await draft.refresh();
+    invalidateContentLinks();
+  } finally {
+    refreshing.value = false;
+  }
+}
+
+function openEntity(next: ContentInlineLinkRequest) {
+  mode.value = 'entity';
   request.value = next;
   note.value = next.initialNote ?? '';
+  chosen.value = undefined;
+  if (next.initialEntity) void showChosen(next.initialEntity);
   open.value = true;
+}
+
+/**
+ * The target of the link being edited, as the chips see it. A target that
+ * is gone still shows, named as such, so the link can be pointed elsewhere.
+ */
+async function showChosen(reference: ContentEntityReference) {
+  const version = ++chosenVersion;
+  const resolved = await resolver(reference).catch(() => undefined);
+  if (version !== chosenVersion) return;
+  chosen.value =
+    resolved?.state === 'resolved' && resolved.kind === 'entity'
+      ? {
+          entityType: resolved.entityType,
+          entityId: resolved.entityId,
+          title: resolved.title,
+          summary: resolved.summary,
+          date: resolved.date,
+          parent: resolved.parent,
+          previewMedia: resolved.media,
+        }
+      : {
+          entityType: reference.entityType,
+          entityId: reference.entityId,
+          title: phrase.value.content_link_broken_title,
+          summary: '',
+        };
 }
 
 function openExternal(next: ContentInlineLinkRequest) {
@@ -90,8 +165,8 @@ function openExternal(next: ContentInlineLinkRequest) {
   note.value = next.initialNote ?? '';
   internalEntity.value = undefined;
   internalEntityUrl.value = undefined;
-  externalUrl.value = next.initialUrl ?? '';
   draft.reset();
+  draft.url = next.initialUrl ?? '';
   open.value = true;
   if (next.initialUrl) void openExisting(next.initialUrl);
 }
@@ -103,15 +178,15 @@ async function openExisting(url: string) {
   await draft.open(raw);
 }
 
-function selectProject(project: ContentEntitySearchItem) {
-  request.value?.apply(project.title, {
-    href: project.url,
-    'data-content-link': 'entity',
-    'data-entity-type': project.entityType,
-    'data-entity-id': project.entityId,
-    'data-content-note': noteAttribute(),
-  });
-  open.value = false;
+/** A picked entity becomes the choice, and the note is next. */
+function choose(entity: ContentEntitySearchItem) {
+  chosenVersion++;
+  chosen.value = entity;
+  focusNote();
+}
+
+function focusNote() {
+  void nextTick(() => noteInput.value?.focus({ preventScroll: true }));
 }
 
 /** An empty note is an absent attribute, never an empty one. */
@@ -119,24 +194,32 @@ function noteAttribute() {
   return note.value.trim() || undefined;
 }
 
-/**
- * Editing only the note of a link that already exists: the target is
- * untouched, so nothing but the note is written back.
- */
-function submitNoteOnly() {
-  request.value?.apply('', { 'data-content-note': noteAttribute() });
+function applyEntity() {
+  const entity = chosen.value;
+  if (!entity) return;
+  request.value?.apply(
+    entity.title,
+    entityLinkAttributes(
+      { ...entity, url: (entity as Partial<ContentEntitySearchItem>).url },
+      noteAttribute(),
+    ),
+  );
   open.value = false;
 }
 
 async function submitExternal() {
-  const raw = externalUrl.value.trim();
+  const raw = draft.url.trim();
   if (parseInternalUrl(raw, internalSite)) {
     const entity =
       internalEntityUrl.value === raw
         ? internalEntity.value
         : await findInternal(raw);
     if (entity) {
-      selectProject(entity);
+      request.value?.apply(
+        entity.title,
+        entityLinkAttributes(entity, noteAttribute()),
+      );
+      open.value = false;
       return;
     }
   }
@@ -148,13 +231,10 @@ async function submitExternal() {
     return;
   }
   const preview = await draft.commit();
-  request.value?.apply(preview?.title || externalLinkHostname(url), {
-    href: url,
-    'data-content-link': 'external',
-    'data-entity-type': undefined,
-    'data-entity-id': undefined,
-    'data-content-note': noteAttribute(),
-  });
+  request.value?.apply(
+    preview?.title || externalLinkHostname(url),
+    externalLinkAttributes(url, noteAttribute()),
+  );
   open.value = false;
 }
 
@@ -164,12 +244,14 @@ function removeLink() {
 }
 
 function focusPopup() {
-  if (mode.value === 'project') projectPopup.value?.focus();
+  if (mode.value === 'entity') entityPopup.value?.focus();
   else externalInput.value?.focus({ preventScroll: true });
 }
 
 function popupClosed() {
   note.value = '';
+  chosenVersion++;
+  chosen.value = undefined;
   internalVersion++;
   internalEntity.value = undefined;
   internalEntityUrl.value = undefined;
@@ -179,7 +261,7 @@ function popupClosed() {
   request.value = undefined;
 }
 
-defineExpose<ContentInlineLinkControlsExpose>({ openProject, openExternal });
+defineExpose<ContentInlineLinkControlsExpose>({ openEntity, openExternal });
 </script>
 
 <template>
@@ -192,108 +274,120 @@ defineExpose<ContentInlineLinkControlsExpose>({ openProject, openExternal });
     shift-cross-axis
     max-width="20rem"
     :teleport-to="teleportTo"
-    class="border border-border-1 bg-bg-2"
     @opened="focusPopup"
+    @dismiss="request?.restore()"
     @closed="popupClosed"
   >
-    <div class="flex max-h-(--floating-popup-available-height) flex-col">
-      <ContentEntitySearchPopup
-        v-if="mode === 'project'"
-        ref="projectPopup"
-        class="min-h-0 border-0"
-        @select="selectProject"
-      />
-      <form
-        v-else
-        class="flex min-h-0 flex-col gap-xs rounded-normal bg-bg-2 p-xs"
-        @submit.prevent="submitExternal"
-      >
-        <div class="flex items-start gap-1">
+    <ContentEntitySearchPopup
+      v-if="mode === 'entity'"
+      ref="entityPopup"
+      :chosen
+      @select="choose"
+      @confirm="focusNote"
+    >
+      <template #footer>
+        <form class="flex flex-col gap-xs" @submit.prevent="applyEntity">
           <FieldInput
-            v-model="externalUrl"
+            v-model="note"
             type="text"
-            inputmode="url"
-            autocomplete="url"
-            wrapper-class="min-w-0 flex-1"
+            autocomplete="off"
+            spellcheck="true"
             class="h-9 py-1 text-sm"
-            :placeholder="phrase.content_link_url"
-            :error="externalError"
-            @element="externalInput = $event"
-            @change="commitUrl"
-            @paste="onUrlPaste"
-            @submit="submitExternal"
+            :aria-label="phrase.content_link_note"
+            :placeholder="phrase.content_link_note_placeholder"
+            @element="noteInput = $event"
           />
-          <Button
-            v-if="request?.existing"
-            type="button"
-            variant="delete"
-            size="icon"
-            :aria-label="phrase.content_link_remove"
-            @click="removeLink"
-          >
-            <Icon name="delete" />
-          </Button>
-          <Button
-            type="submit"
-            size="icon"
-            :disabled="externalLoading"
-            :aria-label="phrase.content_external_link"
-            :aria-busy="externalLoading"
-          >
-            <Icon :name="externalLoading ? 'loading' : 'check'" />
-          </Button>
-        </div>
-        <template v-if="internalEntity">
-          <EntityLinkPreviewCard
-            :entity-type="internalEntity.entityType"
-            :title="internalEntity.title"
-            :summary="internalEntity.summary"
-            :date="internalEntity.date"
-            :parent="internalEntity.parent"
-            :icon-media="internalEntity.previewMedia"
-            :interactive="false"
-            compact
-          />
-          <p class="flex items-start gap-1 px-1 text-xs text-text-3">
-            <Icon name="link" class="mt-0.5 shrink-0 text-accent" />
-            {{ phrase.content_link_internal_detected }}
-          </p>
-        </template>
-        <ExternalLinkPreviewCard
-          v-else-if="externalPreview || externalLoading"
-          :link="externalPreview"
-          :url="externalUrl"
-          :loading="externalLoading"
-          :loading-text="phrase.external_link_loading"
-          :interactive="true"
+          <div class="flex justify-end gap-1">
+            <Button
+              v-if="request?.existing"
+              type="button"
+              variant="delete"
+              size="icon"
+              :aria-label="phrase.content_link_remove"
+              @click="removeLink"
+            >
+              <Icon name="delete" />
+            </Button>
+            <Button
+              type="submit"
+              size="icon"
+              :disabled="!chosen"
+              :aria-label="phrase.save"
+            >
+              <Icon name="check" />
+            </Button>
+          </div>
+        </form>
+      </template>
+    </ContentEntitySearchPopup>
+    <form
+      v-else
+      class="flex scrollbar-hover max-h-(--floating-popup-available-height)
+        min-h-0 flex-col gap-xs overflow-y-auto rounded-normal border
+        border-border-1 bg-bg-2 p-xs"
+      @submit.prevent="submitExternal"
+    >
+      <FieldInput
+        v-model="externalUrl"
+        type="text"
+        inputmode="url"
+        autocomplete="url"
+        spellcheck="false"
+        class="h-9 py-1 text-sm"
+        :placeholder="phrase.content_link_url"
+        :error="externalError"
+        @element="externalInput = $event"
+        @change="commitUrl"
+        @paste="onUrlPaste"
+      />
+      <template v-if="internalEntity">
+        <EntityLinkPreviewCard
+          :entity-type="internalEntity.entityType"
+          :title="internalEntity.title"
+          :summary="internalEntity.summary"
+          :date="internalEntity.date"
+          :parent="internalEntity.parent"
+          :icon-media="internalEntity.previewMedia"
+          :interactive="false"
+          compact
         />
-      </form>
-      <div
-        class="flex items-start gap-1 p-xs"
-        :class="mode === 'project' ? 'pt-0' : 'pt-0'"
-      >
-        <FieldInput
-          v-model="note"
-          type="text"
-          autocomplete="off"
-          spellcheck="true"
-          wrapper-class="min-w-0 flex-1"
-          class="h-9 py-1 text-sm"
-          :aria-label="phrase.content_link_note"
-          :placeholder="phrase.content_link_note_placeholder"
-          @submit="mode === 'project' ? submitNoteOnly() : submitExternal()"
-        />
+        <p class="flex items-start gap-1 px-1 text-xs text-text-3">
+          <Icon name="link" class="mt-0.5 shrink-0 text-accent" />
+          {{ phrase.content_link_internal_detected }}
+        </p>
+      </template>
+      <ExternalLinkPreviewCard
+        v-else-if="externalPreview || externalLoading"
+        :link="externalPreview"
+        :url="draft.url"
+        :loading="externalLoading"
+        :loading-text="phrase.external_link_loading"
+        :interactive="true"
+      />
+      <FieldInput
+        v-model="note"
+        type="text"
+        autocomplete="off"
+        spellcheck="true"
+        class="h-9 py-1 text-sm"
+        :aria-label="phrase.content_link_note"
+        :placeholder="phrase.content_link_note_placeholder"
+      />
+      <div class="flex justify-end gap-1">
         <Button
-          v-if="mode === 'project' && request?.existing"
+          v-if="canRefresh"
           type="button"
+          variant="secondary"
           size="icon"
-          :aria-label="phrase.save"
-          @click="submitNoteOnly"
+          :disabled="externalLoading"
+          :aria-label="phrase.refresh_external_link"
+          :data-title-popup="phrase.refresh_external_link"
+          @click="refreshExternal"
         >
-          <Icon name="check" />
+          <Icon :name="refreshing ? 'loading' : 'refresh'" />
         </Button>
         <Button
-          v-if="mode === 'project' && request?.existing"
+          v-if="request?.existing"
           type="button"
           variant="delete"
           size="icon"
@@ -302,7 +396,15 @@ defineExpose<ContentInlineLinkControlsExpose>({ openProject, openExternal });
         >
           <Icon name="delete" />
         </Button>
+        <Button
+          type="submit"
+          size="icon"
+          :aria-label="phrase.content_external_link"
+          :aria-busy="externalLoading"
+        >
+          <Icon :name="externalLoading ? 'loading' : 'check'" />
+        </Button>
       </div>
-    </div>
+    </form>
   </FloatingPopup>
 </template>

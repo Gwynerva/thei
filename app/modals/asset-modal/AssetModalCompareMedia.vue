@@ -25,6 +25,8 @@ export interface CompareMediaSource {
   key: string;
   extension: string;
   src: string;
+  /** A video's still, shown until it plays instead of its first frame. */
+  poster?: string;
   hasAudio?: boolean;
   displayDimensions?: CompareMediaDimensions;
   /**
@@ -476,6 +478,8 @@ function scheduleDividerResize(): void {
                 v-if="originalIsVideo"
                 ref="originalMedia"
                 :src="sitePath(original.src)"
+                :poster="original.poster && sitePath(original.poster)"
+                preload="metadata"
                 class="pointer-events-none block max-h-none max-w-none"
                 :class="
                   originalCrop.media ? 'absolute top-1/2 left-1/2' : 'size-full'
@@ -503,6 +507,8 @@ function scheduleDividerResize(): void {
             v-show="isReady"
             ref="originalMedia"
             :src="sitePath(original.src)"
+            :poster="original.poster && sitePath(original.poster)"
+            preload="metadata"
             class="pointer-events-none block max-h-none max-w-none shrink-0"
             :style="originalMediaStyle"
             @loadedmetadata="onVideoMeta('original', $event)"
@@ -533,6 +539,8 @@ function scheduleDividerResize(): void {
             v-show="isReady"
             ref="modifiedMedia"
             :src="sitePath(modified.src)"
+            :poster="modified.poster && sitePath(modified.poster)"
+            preload="metadata"
             class="pointer-events-none block max-h-none max-w-none shrink-0"
             :style="modifiedMediaStyle"
             @loadedmetadata="onVideoMeta('modified', $event)"

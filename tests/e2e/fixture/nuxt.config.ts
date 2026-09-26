@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import { E2E_PORT } from '../fixture-url';
 
 export default defineNuxtConfig({
   extends: [fileURLToPath(new URL('../../../', import.meta.url))],
@@ -22,7 +23,7 @@ export default defineNuxtConfig({
     },
   },
   devtools: { enabled: false },
-  devServer: { port: 3000, host: '127.0.0.1' },
+  devServer: { port: E2E_PORT, host: '127.0.0.1' },
   vite: { server: { strictPort: true } },
   nitro: {
     publicAssets: [

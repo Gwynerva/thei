@@ -1,21 +1,9 @@
 <script lang="ts" setup>
-import { normalizeUrlSegment } from '#layers/thei/shared/language/slugify';
+import SlugInput from './SlugInput.vue';
 
 const title = defineModel<string>('title', { required: true });
-const storedSlug = defineModel<string>('humanReadableSlug', {
+const readableSlug = defineModel<string>('humanReadableSlug', {
   required: true,
-});
-
-/**
- * What a URL cannot carry never makes it into the field. Typing a slash or a
- * question mark simply does nothing, instead of being accepted here and
- * quietly rewritten on save.
- */
-const readableSlug = computed({
-  get: () => storedSlug.value,
-  set: (value: string) => {
-    storedSlug.value = normalizeUrlSegment(value);
-  },
 });
 const publicId = defineModel<string>('publicId', { required: true });
 
@@ -33,15 +21,6 @@ function slugify(value: string) {
 
 const synchronized = ref(readableSlug.value === slugify(title.value));
 
-watch(title, (value) => {
-  if (synchronized.value) readableSlug.value = slugify(value);
-});
-
-function toggleSynchronization() {
-  synchronized.value = !synchronized.value;
-  if (synchronized.value) readableSlug.value = slugify(title.value);
-}
-
 const linkDescription = computed(() =>
   props.linkDescription(readableSlug.value, publicId.value),
 );
@@ -55,36 +34,12 @@ const linkDescription = computed(() =>
         <FieldLabel class="mb-xs text-sm font-normal text-text-2">
           {{ phrase.human_readable_url }}
         </FieldLabel>
-        <div class="flex">
-          <FieldInput
-            v-model="readableSlug"
-            type="text"
-            autocomplete="off"
-            spellcheck="false"
-            :readonly="synchronized"
-            :aria-label="phrase.human_readable_url"
-            wrapper-class="flex-1"
-            class="rounded-r-none"
-            :class="synchronized && 'text-text-2'"
-          />
-          <Button
-            variant="secondary"
-            class="h-12 rounded-l-none"
-            :data-title-popup="
-              synchronized
-                ? phrase.disable_url_synchronization
-                : phrase.enable_url_synchronization
-            "
-            @mousedown.prevent
-            @click="toggleSynchronization"
-          >
-            <Icon
-              :name="synchronized ? 'link' : 'link-broken'"
-              class="scale-110 transition-colors"
-              :class="synchronized ? 'text-accent' : 'text-text-3'"
-            />
-          </Button>
-        </div>
+        <SlugInput
+          v-model="readableSlug"
+          v-model:synchronized="synchronized"
+          :source="title"
+          :label="phrase.human_readable_url"
+        />
       </div>
       <div class="min-w-50 flex-1">
         <FieldLabel

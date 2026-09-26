@@ -20,10 +20,12 @@ import {
   buildProjectChildUrl,
   buildProjectUrl,
 } from '#layers/thei/shared/project-url';
+import { buildTagUrl } from '#layers/thei/shared/tag-url';
 import {
   buildAdminAssetUrls,
   buildPublicPageMedia,
   buildPublicProjectMedia,
+  buildPublicTagMedia,
 } from './assets/urls';
 import { resolveEntityIconMedia } from './media/generated-icon';
 import {
@@ -36,8 +38,9 @@ import {
  *
  * The link resolver, the picker and the sidebar each used to spell out the
  * kinds they knew and look each one up by hand; this is the one place that
- * knows how a project, a stage, a section, an event, a diary entry and a page
- * are found, what they are called, where they live and who may open them.
+ * knows how a project, a stage, a section, an event, a diary entry, a page and
+ * a tag are found, what they are called, where they live and who may open
+ * them.
  */
 export type ContentEntityRecord = {
   entityType: ContentEntityType;
@@ -106,8 +109,16 @@ type DiaryRow = {
   updatedAt: number;
 };
 
+type TagRow = {
+  tagUuid: string;
+  title: string;
+  slug: string;
+  publicId: string;
+  description: string;
+};
+
 function iconMedia(
-  kind: 'project' | 'page',
+  kind: 'project' | 'page' | 'tag',
   id: string,
   publicMedia: (asset: any) => Promise<MediaDescriptor>,
 ) {
@@ -248,6 +259,65 @@ function pageRecord(page: PageRow): ContentEntityRecord {
 }
 
 /**
+ * A tag has no visibility of its own: a stranger may open it once a public
+ * project or event carries it, exactly when its own page answers them.
+ */
+function tagRecord(tag: TagRow, isPublic: boolean): ContentEntityRecord {
+  return {
+    entityType: 'tag',
+    entityId: tag.tagUuid,
+    title: tag.title,
+    summary: tag.description,
+    href: buildTagUrl(tag.slug, tag.publicId),
+    access: isPublic
+      ? ProjectEventAccessLevel.Public
+      : ProjectEventAccessLevel.Private,
+    updatedAt: 0,
+    humanReadableSlug: tag.slug,
+    publicId: tag.publicId,
+    media: iconMedia('tag', tag.tagUuid, (asset) =>
+      buildPublicTagMedia(tag, asset),
+    ),
+  };
+}
+
+/** Which of the given tags (or of all of them) a public project or event carries. */
+function publicTagUuids(tagUuids?: string[]): Set<string> {
+  const { db, schema } = THEI_SERVER.useDb();
+  const { tagUsages, projects, events } = schema;
+  const only = tagUuids ? inArray(tagUsages.tagUuid, tagUuids) : undefined;
+  const viaProjects = db
+    .selectDistinct({ tagUuid: tagUsages.tagUuid })
+    .from(tagUsages)
+    .innerJoin(projects, eq(tagUsages.containerId, projects.projectUuid))
+    .where(
+      and(
+        eq(tagUsages.containerType, 'project'),
+        eq(projects.access, ProjectEventAccessLevel.Public),
+        only,
+      ),
+    )
+    .all();
+  const viaEvents = db
+    .selectDistinct({ tagUuid: tagUsages.tagUuid })
+    .from(tagUsages)
+    .innerJoin(events, eq(tagUsages.containerId, events.eventUuid))
+    .where(
+      and(
+        eq(tagUsages.containerType, 'event'),
+        eq(events.access, ProjectEventAccessLevel.Public),
+        only,
+      ),
+    )
+    .all();
+  return new Set([...viaProjects, ...viaEvents].map((row) => row.tagUuid));
+}
+
+function tagRecordOf(tag: TagRow | undefined) {
+  return tag && tagRecord(tag, publicTagUuids([tag.tagUuid]).has(tag.tagUuid));
+}
+
+/**
  * A diary entry is called by its day, and its opening lines stand in for a
  * summary — cut, for a visitor, from the public part of its text only.
  */
@@ -336,6 +406,16 @@ export async function findContentEntity(
         diaryRecord(entry, await diaryBody(entry.diaryUuid), includePrivate)
       );
     }
+    case 'tag': {
+      const { db, schema } = THEI_SERVER.useDb();
+      return tagRecordOf(
+        db
+          .select()
+          .from(schema.tags)
+          .where(eq(schema.tags.tagUuid, entityId))
+          .get(),
+      );
+    }
   }
 }
 
@@ -404,6 +484,16 @@ export async function findContentEntityByTarget(
       return (
         entry &&
         diaryRecord(entry, await diaryBody(entry.diaryUuid), includePrivate)
+      );
+    }
+    case 'tag': {
+      const { db, schema } = THEI_SERVER.useDb();
+      return tagRecordOf(
+        db
+          .select()
+          .from(schema.tags)
+          .where(eq(schema.tags.publicId, target.publicId))
+          .get(),
       );
     }
   }
@@ -484,6 +574,16 @@ export async function listContentEntities(
       ...entries.map((entry) =>
         diaryRecord(entry, bodies.get(entry.diaryUuid), true),
       ),
+    );
+  }
+  if (types.has('tag')) {
+    const open = publicTagUuids();
+    records.push(
+      ...db
+        .select()
+        .from(schema.tags)
+        .all()
+        .map((tag) => tagRecord(tag, open.has(tag.tagUuid))),
     );
   }
   return records;

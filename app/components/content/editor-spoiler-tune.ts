@@ -3,20 +3,19 @@ import type { MenuConfig } from '@editorjs/editorjs/types/tools/menu-config';
 import { editorIcon } from './editor-icons';
 
 export interface ContentSpoilerTuneConfig {
-  /** Label of the toggle in the block settings menu. */
+  /** Label of the toggle in the block settings menu, and of the badge. */
   title: string;
-  /** Explanation shown when the marker in the margin is hovered. */
-  markerTitle: string;
 }
 
 /**
  * Marks a block as a spoiler: still there, still readable, but not before the
  * reader asks for it.
  *
- * Every block is wrapped, spoiler or not, so a spoiler is exactly as wide as
- * its neighbours — the marker lives in the margin, out of the text flow, and
- * on a narrow screen it overlaps the block's own corner instead of pushing
- * anything aside.
+ * The state is written on the block's own content column, and a badge in the
+ * gap above the column says so. Nothing is wrapped, so the column keeps the
+ * layout Editor.js gives it, and the badge is `data-mutation-free`: adding or
+ * removing it is not a change of the content — the toggle reports that
+ * change itself.
  */
 export class ContentSpoilerTune implements BlockTune {
   static isTune = true as const;
@@ -24,7 +23,8 @@ export class ContentSpoilerTune implements BlockTune {
   private readonly block: BlockAPI;
   private readonly config: ContentSpoilerTuneConfig;
   private active: boolean;
-  private wrapper?: HTMLElement;
+  private content?: HTMLElement;
+  private badge?: HTMLElement;
 
   constructor(options: {
     data?: unknown;
@@ -32,10 +32,7 @@ export class ContentSpoilerTune implements BlockTune {
     config?: ContentSpoilerTuneConfig;
   }) {
     this.block = options.block;
-    this.config = options.config ?? {
-      title: 'Spoiler',
-      markerTitle: 'Spoiler',
-    };
+    this.config = options.config ?? { title: 'Spoiler' };
     this.active = options.data === true;
   }
 
@@ -45,23 +42,16 @@ export class ContentSpoilerTune implements BlockTune {
       title: this.config.title,
       toggle: true,
       isActive: this.active,
+      closeOnActivate: true,
       onActivate: () => this.toggle(),
     };
   }
 
+  /** Not a wrapper: the column is handed back as it is, only remembered. */
   wrap(blockContent: HTMLElement): HTMLElement {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'content-spoiler-wrap';
-
-    const marker = document.createElement('span');
-    marker.className = 'content-spoiler-marker';
-    marker.dataset.titlePopup = this.config.markerTitle;
-    marker.innerHTML = editorIcon('visibility-off');
-
-    wrapper.append(blockContent, marker);
-    this.wrapper = wrapper;
+    this.content = blockContent;
     this.sync();
-    return wrapper;
+    return blockContent;
   }
 
   save() {
@@ -77,7 +67,25 @@ export class ContentSpoilerTune implements BlockTune {
   }
 
   private sync() {
-    if (!this.wrapper) return;
-    this.wrapper.dataset.spoiler = this.active ? 'true' : 'false';
+    const content = this.content;
+    if (!content) return;
+    if (!this.active) {
+      delete content.dataset.spoiler;
+      this.badge?.remove();
+      return;
+    }
+    content.dataset.spoiler = 'true';
+    this.badge ??= createSpoilerBadge(this.config.title);
+    if (!this.badge.isConnected) content.append(this.badge);
   }
+}
+
+function createSpoilerBadge(title: string) {
+  const badge = document.createElement('span');
+  badge.className = 'content-spoiler-badge';
+  badge.dataset.mutationFree = 'true';
+  badge.setAttribute('aria-hidden', 'true');
+  badge.innerHTML = editorIcon('visibility-off');
+  badge.append(title);
+  return badge;
 }

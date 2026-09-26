@@ -1,10 +1,11 @@
 import type {
+  API,
   BlockTool,
   BlockToolConstructorOptions,
   BlockAPI,
 } from '@editorjs/editorjs';
 import { h } from 'vue';
-import { renderEditorBlock as renderVue } from './editor-block-render';
+import { VueBlockTool } from './editor-vue-block-tool';
 import { AssetType } from '#layers/thei/shared/asset';
 import type {
   ContentAssetData,
@@ -104,6 +105,13 @@ interface ContentGalleryToolConfig {
   labels: ContentToolLabels;
 }
 
+/** A file is picked or edited, never dropped in, so there is no upload here. */
+interface ContentAttachmentToolConfig {
+  pickAsset: ContentEditorPickAsset;
+  editAsset: ContentEditorEditAsset;
+  labels: ContentToolLabels;
+}
+
 interface EntityLinkToolConfig {
   pickEntity: (
     anchor: HTMLElement,
@@ -133,13 +141,12 @@ type ContentToolOptions<
   TConfig extends object,
 > = BlockToolConstructorOptions<TData, TConfig>;
 
-export class ExternalLinkTool implements BlockTool {
+export class ExternalLinkTool extends VueBlockTool implements BlockTool {
   static pasteConfig = {
     patterns: { externalLink: /^https?:\/\/[^\s]+$/i },
   };
 
   private url = '';
-  private wrapper?: HTMLElement;
   private loading = false;
   private error = false;
   private version = 0;
@@ -150,6 +157,7 @@ export class ExternalLinkTool implements BlockTool {
       ExternalLinkToolConfig
     >,
   ) {
+    super(options.block);
     this.url = options.data.url ?? '';
   }
 
@@ -157,16 +165,13 @@ export class ExternalLinkTool implements BlockTool {
     return contentToolConfig(this.options.config);
   }
 
-  render() {
-    this.wrapper = createToolWrapper();
-    this.renderContent();
+  protected override afterRender() {
     // Opening an editor is not a reason to go out to the network: the record
     // of a link the content came with is already in the store, and one the
     // site has never seen is looked up once and kept. Only a link just pasted,
     // or one the person asks to refresh, is read from the site.
     if (this.url && !this.options.readOnly && !this.config.links.get(this.url))
       void this.request(() => this.config.links.lookup(this.url));
-    return this.wrapper;
   }
 
   save() {
@@ -181,14 +186,13 @@ export class ExternalLinkTool implements BlockTool {
     }
   }
 
-  destroy() {
+  protected override onDestroy() {
     this.version += 1;
-    if (this.wrapper) renderVue(null, this.wrapper);
   }
 
   async onPaste(event: CustomEvent) {
     this.url = normalizeExternalLinkUrl(event.detail?.data);
-    this.options.block.dispatchChange();
+    this.dispatchChange();
     void this.refresh();
   }
 
@@ -225,18 +229,12 @@ export class ExternalLinkTool implements BlockTool {
     }
   }
 
-  private renderContent() {
-    if (!this.wrapper) return;
-    renderVue(
-      h(ExternalLinkBlockCard, {
-        url: this.url,
-        loading: this.loading,
-        errorText: this.error
-          ? this.config.labels.externalLinkError
-          : undefined,
-      }),
-      this.wrapper,
-    );
+  protected view() {
+    return h(ExternalLinkBlockCard, {
+      url: this.url,
+      loading: this.loading,
+      errorText: this.error ? this.config.labels.externalLinkError : undefined,
+    });
   }
 }
 
@@ -247,7 +245,7 @@ export class ExternalLinkTool implements BlockTool {
  * the providers' patterns, and must be registered before `externalLink` so it
  * gets the first chance at the address.
  */
-export class IntegrationTool implements BlockTool {
+export class IntegrationTool extends VueBlockTool implements BlockTool {
   static pasteConfig = {
     patterns: contentIntegrationPastePatterns(),
   };
@@ -257,23 +255,14 @@ export class IntegrationTool implements BlockTool {
   }
 
   private data?: ContentIntegrationData;
-  private wrapper?: HTMLElement;
 
   constructor(options: ContentToolOptions<Record<string, unknown>, object>) {
+    super(options.block);
     try {
       this.data = normalizeContentIntegration(options.data);
     } catch {
       this.data = undefined;
     }
-    this.block = options.block;
-  }
-
-  private block: BlockAPI;
-
-  render() {
-    this.wrapper = createToolWrapper();
-    this.renderContent();
-    return this.wrapper;
   }
 
   save() {
@@ -289,28 +278,19 @@ export class IntegrationTool implements BlockTool {
     }
   }
 
-  destroy() {
-    if (this.wrapper) renderVue(null, this.wrapper);
-  }
-
   onPaste(event: CustomEvent) {
     const data = matchContentIntegration(event.detail?.data);
     if (!data) return;
     this.data = data;
-    this.block.dispatchChange();
-    this.renderContent();
+    this.commit();
   }
 
-  private renderContent() {
-    if (!this.wrapper) return;
-    renderVue(
-      h(ContentIntegration, { data: this.data, showSource: true }),
-      this.wrapper,
-    );
+  protected view() {
+    return h(ContentIntegration, { data: this.data, showSource: true });
   }
 }
 
-export class EntityLinkTool implements BlockTool {
+export class EntityLinkTool extends VueBlockTool implements BlockTool {
   static toolbox = {
     title: 'Internal link',
     icon: editorIcon('link'),
@@ -323,7 +303,6 @@ export class EntityLinkTool implements BlockTool {
   private transientSelection = false;
   /** An address of this site that was pasted and is being looked up. */
   private pastedUrl?: string;
-  private wrapper?: HTMLElement;
 
   constructor(
     private options: ContentToolOptions<
@@ -331,6 +310,7 @@ export class EntityLinkTool implements BlockTool {
       EntityLinkToolConfig
     >,
   ) {
+    super(options.block);
     this.entityType = options.data.entityType;
     this.entityId = options.data.entityId;
     this.autoOpen = options.data.autoOpen === true;
@@ -340,14 +320,11 @@ export class EntityLinkTool implements BlockTool {
       contentToolConfig(options.config).beginTransientSelection?.();
   }
 
-  render() {
-    this.wrapper = createToolWrapper();
-    this.renderContent();
+  protected override afterRender() {
     if (this.autoOpen && !this.options.readOnly) {
       this.autoOpen = false;
       queueMicrotask(() => void this.pick());
     }
-    return this.wrapper;
   }
 
   save() {
@@ -358,9 +335,8 @@ export class EntityLinkTool implements BlockTool {
     return Boolean(contentEntityReference(data.entityType, data.entityId));
   }
 
-  destroy() {
+  protected override onDestroy() {
     this.pastedUrl = undefined;
-    if (this.wrapper) renderVue(null, this.wrapper);
   }
 
   /**
@@ -381,29 +357,26 @@ export class EntityLinkTool implements BlockTool {
     if (this.pastedUrl !== url) return;
     this.pastedUrl = undefined;
     if (!entity) {
-      const api = this.options.api;
-      api.blocks.insert(
+      await replaceBlock(
+        this.options.api,
+        this.options.block,
         'externalLink',
         { url },
-        undefined,
-        api.blocks.getBlockIndex(this.options.block.id),
         false,
-        true,
       );
       return;
     }
     this.entityType = entity.entityType;
     this.entityId = entity.entityId;
-    this.renderContent();
-    this.options.block.dispatchChange();
+    this.commit();
   }
 
   private async pick() {
-    if (!this.wrapper) return;
+    if (!this.element) return;
     const selected = await contentToolConfig(this.options.config).pickEntity(
-      this.wrapper,
+      this.element,
     );
-    if (!selected) {
+    if (!selected || this.destroyed) {
       // Keep the skeleton available in this editor session. Validation and
       // content normalization omit it from persisted data until it is chosen.
       this.finishTransientSelection(false);
@@ -416,7 +389,7 @@ export class EntityLinkTool implements BlockTool {
     this.entityId = selected.entityId;
     this.renderContent();
     this.finishTransientSelection(true);
-    if (changed) this.options.block.dispatchChange();
+    if (changed) this.dispatchChange();
   }
 
   private finishTransientSelection(persisted: boolean) {
@@ -425,32 +398,28 @@ export class EntityLinkTool implements BlockTool {
     contentToolConfig(this.options.config).endTransientSelection?.(persisted);
   }
 
-  private renderContent() {
-    if (!this.wrapper) return;
+  protected view() {
     const config = contentToolConfig(this.options.config);
-    renderVue(
-      this.entityType && this.entityId
-        ? h(ContentEntityLinkBlock, {
-            entityType: this.entityType,
-            entityId: this.entityId,
-            resolver: config.resolver,
-            interactive: true,
-            playback: 'interaction',
-          })
-        : this.pastedUrl
-          ? h(ContentLinkPreviewCard, {
-              label: this.pastedUrl,
-              loading: true,
-              interactive: false,
-            })
-          : h(ContentAssetSkeleton, {
-              icon: 'link',
-              label: config.labels.chooseEntity,
-              readOnly: this.options.readOnly,
-              onPick: () => void this.pick(),
-            }),
-      this.wrapper,
-    );
+    if (this.entityType && this.entityId)
+      return h(ContentEntityLinkBlock, {
+        entityType: this.entityType,
+        entityId: this.entityId,
+        resolver: config.resolver,
+        interactive: true,
+        playback: 'interaction',
+      });
+    if (this.pastedUrl)
+      return h(ContentLinkPreviewCard, {
+        label: this.pastedUrl,
+        loading: true,
+        interactive: false,
+      });
+    return h(ContentAssetSkeleton, {
+      icon: 'link',
+      label: config.labels.chooseEntity,
+      readOnly: this.options.readOnly,
+      onPick: () => void this.pick(),
+    });
   }
 }
 
@@ -468,7 +437,7 @@ export function entityLinkToolWithPaste(pattern: RegExp) {
   };
 }
 
-export class ContentMediaTool implements BlockTool {
+export class ContentMediaTool extends VueBlockTool implements BlockTool {
   static toolbox = {
     title: 'Media',
     icon: editorIcon('media'),
@@ -485,7 +454,6 @@ export class ContentMediaTool implements BlockTool {
   private autoOpen: boolean;
   /** A pasted file, stored before the block shows anything. Never saved. */
   private pendingFiles?: File[];
-  private wrapper?: HTMLElement;
 
   constructor(
     private options: ContentToolOptions<
@@ -499,6 +467,7 @@ export class ContentMediaTool implements BlockTool {
       ContentMediaToolConfig
     >,
   ) {
+    super(options.block);
     this.asset = options.data.asset ?? null;
     this.caption = normalizeContentMediaCaption(options.data.caption);
     const layout = options.data.layout;
@@ -520,16 +489,13 @@ export class ContentMediaTool implements BlockTool {
     if (options.data.files?.length) this.pendingFiles = options.data.files;
   }
 
-  render(): HTMLElement {
-    this.wrapper = createToolWrapper();
-    this.renderContent();
+  protected override afterRender() {
     if (this.pendingFiles && !this.options.readOnly) {
       queueMicrotask(() => void this.upload());
     } else if (this.autoOpen && !this.options.readOnly) {
       this.autoOpen = false;
       queueMicrotask(() => void this.pick());
     }
-    return this.wrapper;
   }
 
   save(): Record<string, unknown> {
@@ -589,31 +555,29 @@ export class ContentMediaTool implements BlockTool {
     ];
   }
 
-  private renderContent() {
-    if (!this.wrapper) return;
-    const content = this.asset
-      ? h(ContentMediaCard, {
-          asset: this.asset,
-          layout: this.layout,
-          caption: this.caption,
-          editable: !this.options.readOnly,
-          editLabel: this.labels.chooseMedia,
-          captionPlaceholder: this.labels.caption,
-          onEdit: () => void this.edit(),
-          onCaption: (value: string) => {
-            if (value === this.caption) return;
-            this.caption = value;
-            this.options.block.dispatchChange();
-          },
-        })
-      : h(ContentAssetSkeleton, {
-          icon: 'media',
-          label: this.labels.chooseMedia,
-          readOnly: this.options.readOnly,
-          loading: Boolean(this.pendingFiles),
-          onPick: () => void this.pick(),
-        });
-    renderVue(content, this.wrapper);
+  protected view() {
+    if (!this.asset)
+      return h(ContentAssetSkeleton, {
+        icon: 'media',
+        label: this.labels.chooseMedia,
+        readOnly: this.options.readOnly,
+        loading: Boolean(this.pendingFiles),
+        onPick: () => void this.pick(),
+      });
+    return h(ContentMediaCard, {
+      asset: this.asset,
+      layout: this.layout,
+      caption: this.caption,
+      editable: !this.options.readOnly,
+      editLabel: this.labels.chooseMedia,
+      captionPlaceholder: this.labels.caption,
+      onEdit: () => void this.edit(),
+      onCaption: (value: string) => {
+        if (value === this.caption) return;
+        this.caption = value;
+        this.dispatchChange();
+      },
+    });
   }
 
   private async upload() {
@@ -621,11 +585,11 @@ export class ContentMediaTool implements BlockTool {
     if (!files) return;
     const config = contentToolConfig(this.options.config);
     const [asset] = await config.uploadFiles(files).catch(() => []);
-    if (this.pendingFiles !== files) return;
+    if (this.pendingFiles !== files || this.destroyed) return;
     this.pendingFiles = undefined;
     if (asset) this.asset = asset;
     this.renderContent();
-    if (asset) this.options.block.dispatchChange();
+    if (asset) this.dispatchChange();
   }
 
   /**
@@ -634,9 +598,10 @@ export class ContentMediaTool implements BlockTool {
    */
   private convertToGallery() {
     if (!this.asset) return;
-    const api = this.options.api;
     const caption = normalizeContentMediaCaption(this.caption) || undefined;
-    api.blocks.insert(
+    void replaceBlock(
+      this.options.api,
+      this.options.block,
       'contentGallery',
       {
         items: [
@@ -647,43 +612,34 @@ export class ContentMediaTool implements BlockTool {
           },
         ],
       },
-      undefined,
-      api.blocks.getBlockIndex(this.options.block.id),
-      true,
       true,
     );
-  }
-
-  destroy() {
-    if (this.wrapper) renderVue(null, this.wrapper);
   }
 
   private async pick() {
     const config = contentToolConfig(this.options.config);
     const asset = await config.pickAsset('media');
-    if (!asset) return;
+    if (!asset || this.destroyed) return;
     this.asset = asset;
-    this.renderContent();
-    this.options.block.dispatchChange();
+    this.commit();
   }
 
   private setLayout(layout: ContentMediaLayout) {
     if (layout === this.layout) return;
     this.layout = layout;
-    this.renderContent();
-    this.options.block.dispatchChange();
+    this.commit();
   }
 
   private async edit() {
     if (!this.asset) return;
     const config = contentToolConfig(this.options.config);
     const asset = await config.editAsset(this.asset, 'media');
-    if (asset === undefined) return;
+    if (asset === undefined || this.destroyed) return;
     const changed = contentAssetSelectionChanged(this.asset, asset);
     this.asset = asset;
     if (asset === null) this.caption = '';
     this.renderContent();
-    if (changed) this.options.block.dispatchChange();
+    if (changed) this.dispatchChange();
   }
 
   private get labels() {
@@ -691,7 +647,7 @@ export class ContentMediaTool implements BlockTool {
   }
 }
 
-export class ContentGalleryTool implements BlockTool {
+export class ContentGalleryTool extends VueBlockTool implements BlockTool {
   static toolbox = {
     title: 'Gallery',
     icon: editorIcon('gallery'),
@@ -705,7 +661,6 @@ export class ContentGalleryTool implements BlockTool {
   private autoOpen: boolean;
   /** Pasted files, stored before the tiles appear. Never saved. */
   private pendingFiles?: File[];
-  private wrapper?: HTMLElement;
 
   constructor(
     private options: ContentToolOptions<
@@ -713,22 +668,20 @@ export class ContentGalleryTool implements BlockTool {
       ContentGalleryToolConfig
     >,
   ) {
+    super(options.block);
     this.items = options.data.items ?? [];
     this.selectedId = this.items[0]?.id;
     this.autoOpen = options.data.autoOpen === true;
     if (options.data.files?.length) this.pendingFiles = options.data.files;
   }
 
-  render(): HTMLElement {
-    this.wrapper = createToolWrapper();
-    this.renderContent();
+  protected override afterRender() {
     if (this.pendingFiles && !this.options.readOnly) {
       queueMicrotask(() => void this.upload());
     } else if (this.autoOpen && !this.options.readOnly) {
       this.autoOpen = false;
       queueMicrotask(() => void this.add());
     }
-    return this.wrapper;
   }
 
   private async upload() {
@@ -736,7 +689,7 @@ export class ContentGalleryTool implements BlockTool {
     if (!files) return;
     const config = contentToolConfig(this.options.config);
     const assets = await config.uploadFiles(files).catch(() => []);
-    if (this.pendingFiles !== files) return;
+    if (this.pendingFiles !== files || this.destroyed) return;
     this.pendingFiles = undefined;
     this.append(assets);
   }
@@ -749,59 +702,48 @@ export class ContentGalleryTool implements BlockTool {
     return Boolean(data.items?.length);
   }
 
-  destroy() {
-    if (this.wrapper) renderVue(null, this.wrapper);
-  }
-
-  private renderContent() {
-    if (!this.wrapper) return;
-    if (this.pendingFiles) {
-      renderVue(
-        h(ContentAssetSkeleton, {
-          icon: 'gallery',
-          label: this.labels.addMedia,
-          loading: true,
-        }),
-        this.wrapper,
-      );
-      return;
-    }
-    renderVue(
-      h(ContentGallery, {
-        items: this.items,
-        editable: !this.options.readOnly,
-        selectedId: this.selectedId,
-        chooseLabel: this.labels.chooseMedia,
-        addLabel: this.labels.addMedia,
-        removeLabel: this.labels.removeMedia,
-        captionPlaceholder: this.labels.caption,
-        'onUpdate:selectedId': (id: string | undefined) => {
-          this.selectedId = id;
-        },
-        onAdd: () => void this.add(),
-        onEdit: (id: string) => void this.edit(id),
-        onRemove: (id: string) => this.remove(id),
-        onReorder: (items: ContentGalleryItem[]) => {
-          this.items = items;
-          this.options.block.dispatchChange();
-        },
-        onCaption: (id: string, value: string) => {
-          const normalized = normalizeContentMediaCaption(value) || undefined;
-          const current = this.items.find((item) => item.id === id);
-          if (!current || current.caption === normalized) return;
-          this.items = this.items.map((item) =>
-            item.id === id ? { ...item, caption: normalized } : item,
-          );
-          this.options.block.dispatchChange();
-        },
-      }),
-      this.wrapper,
-    );
+  protected view() {
+    if (this.pendingFiles)
+      return h(ContentAssetSkeleton, {
+        icon: 'gallery',
+        label: this.labels.addMedia,
+        loading: true,
+      });
+    return h(ContentGallery, {
+      items: this.items,
+      editable: !this.options.readOnly,
+      selectedId: this.selectedId,
+      chooseLabel: this.labels.chooseMedia,
+      addLabel: this.labels.addMedia,
+      removeLabel: this.labels.removeMedia,
+      captionPlaceholder: this.labels.caption,
+      'onUpdate:selectedId': (id: string | undefined) => {
+        this.selectedId = id;
+      },
+      onAdd: () => void this.add(),
+      onEdit: (id: string) => void this.edit(id),
+      onRemove: (id: string) => this.remove(id),
+      onReorder: (items: ContentGalleryItem[]) => {
+        this.items = items;
+        this.dispatchChange();
+      },
+      onCaption: (id: string, value: string) => {
+        const normalized = normalizeContentMediaCaption(value) || undefined;
+        const current = this.items.find((item) => item.id === id);
+        if (!current || current.caption === normalized) return;
+        this.items = this.items.map((item) =>
+          item.id === id ? { ...item, caption: normalized } : item,
+        );
+        this.dispatchChange();
+      },
+    });
   }
 
   private async add() {
     const config = contentToolConfig(this.options.config);
-    this.append(await config.pickAssets('media'));
+    const assets = await config.pickAssets('media');
+    if (this.destroyed) return;
+    this.append(assets);
   }
 
   private append(assets: ContentAssetData[]) {
@@ -816,8 +758,7 @@ export class ContentGalleryTool implements BlockTool {
     const wasEmpty = this.items.length === 0;
     this.items = [...this.items, ...added];
     if (wasEmpty) this.selectedId = added[0]?.id;
-    this.renderContent();
-    this.options.block.dispatchChange();
+    this.commit();
   }
 
   private async edit(id: string) {
@@ -826,7 +767,7 @@ export class ContentGalleryTool implements BlockTool {
     if (!current) return;
     const config = contentToolConfig(this.options.config);
     const result = await config.editAsset(current.asset, 'media');
-    if (result === undefined) return;
+    if (result === undefined || this.destroyed) return;
     if (result === null) {
       this.remove(id);
       return;
@@ -836,7 +777,7 @@ export class ContentGalleryTool implements BlockTool {
       item.id === id ? { ...item, asset: result } : item,
     );
     this.renderContent();
-    if (changed) this.options.block.dispatchChange();
+    if (changed) this.dispatchChange();
   }
 
   private remove(id: string) {
@@ -848,8 +789,7 @@ export class ContentGalleryTool implements BlockTool {
       this.selectedId,
     );
     this.items = next;
-    this.renderContent();
-    this.options.block.dispatchChange();
+    this.commit();
   }
 
   private get labels() {
@@ -857,7 +797,7 @@ export class ContentGalleryTool implements BlockTool {
   }
 }
 
-export class ContentAttachmentTool implements BlockTool {
+export class ContentAttachmentTool extends VueBlockTool implements BlockTool {
   static toolbox = {
     title: 'File',
     icon: editorIcon('file'),
@@ -868,7 +808,6 @@ export class ContentAttachmentTool implements BlockTool {
   private title = '';
   private caption = '';
   private autoOpen: boolean;
-  private wrapper?: HTMLElement;
 
   constructor(
     private options: ContentToolOptions<
@@ -878,23 +817,21 @@ export class ContentAttachmentTool implements BlockTool {
         caption?: string;
         autoOpen?: boolean;
       },
-      ContentMediaToolConfig
+      ContentAttachmentToolConfig
     >,
   ) {
+    super(options.block);
     this.asset = options.data.asset ?? null;
     this.title = options.data.title ?? '';
     this.caption = options.data.caption ?? '';
     this.autoOpen = options.data.autoOpen === true;
   }
 
-  render(): HTMLElement {
-    this.wrapper = createToolWrapper();
-    this.renderContent();
+  protected override afterRender() {
     if (this.autoOpen && !this.options.readOnly) {
       this.autoOpen = false;
       queueMicrotask(() => void this.pick());
     }
-    return this.wrapper;
   }
 
   save(): Record<string, unknown> {
@@ -909,71 +846,62 @@ export class ContentAttachmentTool implements BlockTool {
     return Boolean(data.asset?.assetUuid);
   }
 
-  private renderContent() {
-    if (!this.wrapper) return;
-    const content = this.asset
-      ? h(ContentAttachmentCard, {
-          asset: this.asset,
-          title: this.title,
-          description: this.caption,
-          fallbackTitle: this.labels.fileWithExtension(this.asset.extension),
-          editable: !this.options.readOnly,
-          editLabel: this.labels.chooseFile,
-          titlePlaceholder: this.labels.title,
-          descriptionPlaceholder: this.labels.description,
-          onEdit: () => void this.edit(),
-          onTitle: (value: string) => {
-            if (value === this.title) return;
-            this.title = value;
-            this.options.block.dispatchChange();
-          },
-          onDescription: (value: string) => {
-            if (value === this.caption) return;
-            this.caption = value;
-            this.options.block.dispatchChange();
-          },
-        })
-      : h(ContentAssetSkeleton, {
-          icon: 'file',
-          label: this.labels.chooseFile,
-          readOnly: this.options.readOnly,
-          onPick: () => void this.pick(),
-        });
-    renderVue(content, this.wrapper);
-  }
-
-  destroy() {
-    if (this.wrapper) renderVue(null, this.wrapper);
+  protected view() {
+    if (!this.asset)
+      return h(ContentAssetSkeleton, {
+        icon: 'file',
+        label: this.labels.chooseFile,
+        readOnly: this.options.readOnly,
+        onPick: () => void this.pick(),
+      });
+    return h(ContentAttachmentCard, {
+      asset: this.asset,
+      title: this.title,
+      description: this.caption,
+      fallbackTitle: this.labels.fileWithExtension(this.asset.extension),
+      editable: !this.options.readOnly,
+      editLabel: this.labels.chooseFile,
+      titlePlaceholder: this.labels.title,
+      descriptionPlaceholder: this.labels.description,
+      onEdit: () => void this.edit(),
+      onTitle: (value: string) => {
+        if (value === this.title) return;
+        this.title = value;
+        this.dispatchChange();
+      },
+      onDescription: (value: string) => {
+        if (value === this.caption) return;
+        this.caption = value;
+        this.dispatchChange();
+      },
+    });
   }
 
   private async pick() {
     const config = contentToolConfig(this.options.config);
     const asset = await config.pickAsset('any');
-    if (!asset) return;
+    if (!asset || this.destroyed) return;
     this.asset = asset;
-    this.renderContent();
-    this.options.block.dispatchChange();
+    this.commit();
   }
 
   private async edit() {
     if (!this.asset) return;
     const config = contentToolConfig(this.options.config);
     const asset = await config.editAsset(this.asset, 'any');
-    if (asset === undefined) return;
+    if (asset === undefined || this.destroyed) return;
     if (asset === null) {
       this.asset = null;
       this.title = '';
       this.caption = '';
-      this.renderContent();
-      this.options.block.dispatchChange();
+      this.commit();
       return;
     }
     const previousTitle = this.title;
     const changed = contentAttachmentAssetChanged(this.asset, asset);
     this.asset = asset;
     this.renderContent();
-    if (changed || this.title !== previousTitle)
-      this.options.block.dispatchChange();
+    if (changed || this.title !== previousTitle) this.dispatchChange();
   }
 
   private get labels() {
@@ -1076,12 +1004,28 @@ function contentToolConfig<T extends object>(config: T | undefined): T {
   return config;
 }
 
-function createToolWrapper() {
-  const element = document.createElement('div');
-  element.className = 'my-sm flex flex-col gap-xs';
-  // The custom tools explicitly report every data change via dispatchChange().
-  // Their Vue-rendered previews also update asynchronously while media loads;
-  // exclude those presentation-only DOM mutations from Editor.js change tracking.
-  element.dataset.mutationFree = 'true';
-  return element;
+/**
+ * Puts a block of another kind in the place of this one, keeping its tunes:
+ * a media block turned into a gallery is still a spoiler if it was one.
+ * Editor.js's `insert` with `replace` leaves the tunes behind.
+ */
+async function replaceBlock(
+  api: API,
+  block: BlockAPI,
+  type: string,
+  data: object,
+  needToFocus: boolean,
+) {
+  const saved = (await block.save()) as
+    { tunes?: Record<string, unknown> } | undefined;
+  const tunes = saved?.tunes;
+  const index = api.blocks.getBlockIndex(block.id);
+  api.blocks.insert(type, data, undefined, index, needToFocus, true);
+  if (!tunes || !Object.keys(tunes).length) return;
+  const inserted = api.blocks.getBlockByIndex(index);
+  if (!inserted) return;
+  await api.blocks.update(inserted.id, undefined, tunes);
+  // `update` builds a fresh block and drops this one without a word to its
+  // tool, whose view would stay mounted in a detached element.
+  inserted.call('destroy');
 }

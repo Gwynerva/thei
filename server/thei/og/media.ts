@@ -3,6 +3,7 @@ import sharp from 'sharp';
 import { AssetType } from '#layers/thei/shared/asset';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import { assetFilePath } from '../assets/file-path';
+import { svgDensityFor } from '../assets/svg-density';
 import {
   ensureGeneratedIcon,
   GENERATED_ICON_EXTENSION,
@@ -60,7 +61,13 @@ export async function mediaDataUri(
   options: { width: number; height: number; fit?: 'cover' | 'contain' },
 ): Promise<string | undefined> {
   if (!filePath) return undefined;
-  const buffer = await sharp(filePath, { density: 288 })
+  // An SVG is drawn at the size the card shows it; anything else needs no
+  // density at all.
+  const density = await svgDensityFor(
+    filePath,
+    Math.max(options.width, options.height),
+  );
+  const buffer = await sharp(filePath, { density })
     .resize(options.width, options.height, {
       fit: options.fit ?? 'cover',
       background: { r: 0, g: 0, b: 0, alpha: 0 },

@@ -5,6 +5,7 @@ import {
   useDragSort,
 } from '#layers/thei/app/composables/drag-sort';
 import { gallerySelectedId } from './gallery-state';
+import { richTextToPlainText } from '#layers/thei/shared/rich-text';
 
 const props = withDefaults(
   defineProps<{
@@ -19,6 +20,17 @@ const props = withDefaults(
   }>(),
   { editable: false },
 );
+
+/**
+ * What a tile is called: while editing, the action it opens; on the page,
+ * the action of showing the picture, named by its caption when it has one —
+ * distinct from the picture's own button, which opens the viewer.
+ */
+function tileLabel(item: ContentGalleryItem) {
+  const caption =
+    !props.editable && item.caption && richTextToPlainText(item.caption);
+  return caption ? `${props.chooseLabel}: ${caption}` : props.chooseLabel;
+}
 
 const emit = defineEmits<{
   'update:selectedId': [id: string | undefined];
@@ -119,7 +131,7 @@ const dragSort = useDragSort(
           showSize: editable,
           size: item.asset.size,
         }"
-        :aria-label="chooseLabel"
+        :aria-label="tileLabel(item)"
         :aria-pressed="item.id === activeItem?.id"
         class="size-18 shrink-0 cursor-pointer"
         :class="editable ? 'cursor-grab active:cursor-grabbing' : ''"

@@ -8,6 +8,7 @@ import { updateTaskRegistry } from '#layers/thei/update/tasks';
 import type { TheiUpdateTask } from '#layers/thei/update/tasks/types';
 import { setBootUpdate, setBootUpdating } from '../boot/result';
 import { openUpdateBootRun } from '../updates/boot';
+import { rememberClosedSiteAdmins } from '../admin-session/closed-site';
 import { setTheiDbContext } from './global';
 import { openDb, wrapDbContext } from './utils';
 
@@ -39,6 +40,9 @@ export async function bootTheiDb(): Promise<TheiUpdateTask[]> {
       THEI_SERVER.console
         .tag('Boot')
         .log('The site is closed until the update is finished.');
+      // Before the migrations touch anything: the update screen shows its
+      // steps to the admin alone, from the first one.
+      rememberClosedSiteAdmins(rawDb);
     }
 
     // Migrations run before anything reads or repairs the schema: the rest of

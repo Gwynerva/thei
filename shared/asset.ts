@@ -66,7 +66,7 @@ export interface VideoAssetMeta extends AssetMetaBase {
   width?: number;
   /** Pixel height after upload/transformation when available. */
   height?: number;
-  /** Representative OKLCH color of the first-frame preview. */
+  /** Representative OKLCH color of the preview frame. */
   accent?: ImageAccent;
   /** Displayed size of the source a transform was made from. */
   sourceDimensions?: { width: number; height: number };
@@ -80,9 +80,15 @@ export interface VideoAssetMeta extends AssetMetaBase {
   /**
    * Seconds into the video its preview frame was taken from. Absent when the
    * preview is the first frame, as every preview was before frames were
-   * chosen: an update task makes such previews again.
+   * chosen.
    */
   previewAt?: number;
+  /**
+   * How well the preview frame shows the video (`frameScore`), the best of
+   * every point looked at. Absent on a preview chosen before frames were
+   * compared by colour, which an update task makes again.
+   */
+  previewScore?: number;
 }
 
 export interface AudioAssetMeta extends AssetMetaBase {}

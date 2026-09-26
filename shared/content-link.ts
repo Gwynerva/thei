@@ -16,15 +16,17 @@ export const CONTENT_ENTITY_TYPES = [
   'event',
   'diary-entry',
   'page',
+  'tag',
 ] as const;
 export type ContentEntityType = (typeof CONTENT_ENTITY_TYPES)[number];
 
 /**
  * Kinds that carry an icon of their own. The others are represented by the
- * first picture of their body, when they have one, and by a glyph otherwise.
+ * first picture of their body, when they have one, and by a drawn picture of
+ * their kind otherwise.
  */
 export function contentEntityHasIcon(type: ContentEntityType) {
-  return type === 'project' || type === 'page';
+  return type === 'project' || type === 'page' || type === 'tag';
 }
 
 export interface ContentEntityLink {

@@ -101,7 +101,7 @@ wizard as a real instance.
 
 ```bash
 bun run test        # unit tests
-bun run test:e2e    # browser regressions, see tests/e2e/README.md
+bun run test:e2e    # browser regressions on port 3001, see tests/e2e/README.md
 bun run typecheck
 bun run format
 ```

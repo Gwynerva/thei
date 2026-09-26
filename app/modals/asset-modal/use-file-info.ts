@@ -9,6 +9,32 @@ export interface FileInfoDimensions {
   height: number;
 }
 
+/**
+ * The size an SVG declares, as librsvg will read it: its `width` and
+ * `height` when they are plain lengths, otherwise its `viewBox` — scaled to
+ * the one length given, if any. A drawing sized in percent or with neither
+ * has no size of its own until the server reads it.
+ */
+function svgDimensions(svg: Element): FileInfoDimensions | undefined {
+  const length = (value: string | null) => {
+    const match = value && /^\s*(\d+(?:\.\d+)?)\s*(?:px)?\s*$/.exec(value);
+    return match ? Number(match[1]) : undefined;
+  };
+  const width = length(svg.getAttribute('width'));
+  const height = length(svg.getAttribute('height'));
+  if (width && height) return { width, height };
+  const box = svg
+    .getAttribute('viewBox')
+    ?.trim()
+    .split(/[\s,]+/)
+    .map(Number);
+  if (box?.length !== 4 || !(box[2]! > 0) || !(box[3]! > 0)) return undefined;
+  const [, , boxWidth, boxHeight] = box as [number, number, number, number];
+  if (width) return { width, height: (width * boxHeight) / boxWidth };
+  if (height) return { width: (height * boxWidth) / boxHeight, height };
+  return { width: boxWidth, height: boxHeight };
+}
+
 export function useFileInfo(objectUrl: string, extension: string) {
   const dimensions = ref<FileInfoDimensions | undefined>(undefined);
   /** Seconds of a video, once the browser has read its header. */
@@ -26,16 +52,7 @@ export function useFileInfo(objectUrl: string, extension: string) {
           .then((r) => r.text())
           .then((text) => {
             const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
-            const svg = doc.documentElement;
-            const w = svg.getAttribute('width');
-            const h = svg.getAttribute('height');
-            if (w !== null && h !== null) {
-              const width = parseFloat(w);
-              const height = parseFloat(h);
-              if (!isNaN(width) && !isNaN(height)) {
-                dimensions.value = { width, height };
-              }
-            }
+            dimensions.value = svgDimensions(doc.documentElement);
           })
           .catch(() => {});
       } else {

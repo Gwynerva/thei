@@ -173,23 +173,18 @@ test('modal labels use captions and preserve file descriptions', async ({
   const header = page.locator('dialog .tracking-tight').first();
   await expect(header).not.toHaveText('');
   await close(page);
-  for (const [locator, title, description] of [
-    [
-      root.getByRole('button', { name: 'Document title Document description' }),
-      'Document title',
-      'Document description',
-    ],
-    [
-      page.locator('[data-files]').getByRole('button'),
-      'Listed file',
-      'Listed description',
-    ],
-  ] as const) {
-    await locator.click();
-    await expect(page.locator('dialog')).toContainText(title);
-    await expect(page.locator('dialog')).toContainText(description);
-    await close(page);
-  }
+  // A file with nothing to show is downloaded rather than opened, and says
+  // what it is on its own card.
+  const document = root.getByRole('link', {
+    name: 'Document title Document description',
+  });
+  await expect(document).toHaveAttribute('download', '');
+  await expect(document).not.toHaveAttribute('target', /.+/);
+  const listed = page.locator('[data-files]').getByRole('button');
+  await listed.click();
+  await expect(page.locator('dialog')).toContainText('Listed file');
+  await expect(page.locator('dialog')).toContainText('Listed description');
+  await close(page);
 });
 
 test('secret media and files keep their place but cannot be opened', async ({

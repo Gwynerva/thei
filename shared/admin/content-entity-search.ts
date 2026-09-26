@@ -1,6 +1,5 @@
 import type { ContentEntityType } from '../content-link';
 import type { MediaDescriptor } from '../media';
-import type { TagItem } from '../tag';
 
 export type ContentEntitySearchItem = {
   entityType: ContentEntityType;
@@ -16,8 +15,21 @@ export type ContentEntitySearchItem = {
   parent?: { title: string; href: string };
   updatedAt: number;
   previewMedia?: MediaDescriptor;
-  tags?: TagItem[];
 };
+
+/**
+ * What a picker needs to show an entity as its choice: a search result, or
+ * the target of a link being edited, described by the link resolver.
+ */
+export type ContentEntityChoice = Pick<
+  ContentEntitySearchItem,
+  'entityType' | 'entityId' | 'title' | 'summary' | 'date' | 'parent'
+> & { previewMedia?: MediaDescriptor };
+
+/** How many results a picker shows unless it asks for more. */
+export const CONTENT_ENTITY_SEARCH_LIMIT = 5;
+/** The most a picker may ask for. */
+export const CONTENT_ENTITY_SEARCH_MAX_LIMIT = 20;
 
 type Rankable = {
   title: string;
@@ -30,7 +42,7 @@ type Rankable = {
 export function rankContentEntities<T extends Rankable>(
   items: T[],
   query: string,
-  limit = 8,
+  limit = CONTENT_ENTITY_SEARCH_LIMIT,
 ): T[] {
   const normalized = query.trim().toLocaleLowerCase();
   if (!normalized)

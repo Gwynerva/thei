@@ -55,13 +55,21 @@ export function useContentLinkResolver(
 }
 
 /**
+ * Announced on `document` when the resolved links were forgotten, so that the
+ * chips already on the page ask about their targets again.
+ */
+export const CONTENT_LINKS_INVALIDATED_EVENT = 'thei:content-links-invalidated';
+
+/**
  * Forgets every resolved link without leaving the page — for a view that may
  * follow an edit made on that same page, such as an editor opened again after
- * a save.
+ * a save, or a link whose site was just read again.
  */
 export function invalidateContentLinks() {
   const resolvers = appResolvers.get(useNuxtApp());
   if (resolvers) clearResolvers(resolvers);
+  if (import.meta.client)
+    document.dispatchEvent(new Event(CONTENT_LINKS_INVALIDATED_EVENT));
 }
 
 function clearResolvers(

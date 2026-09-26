@@ -18,10 +18,13 @@ export function trimInlineSelectionOffsets(
   return nextStart === nextEnd ? undefined : { start: nextStart, end: nextEnd };
 }
 
-export function trimCurrentInlineSelection(): Range | undefined {
-  const selection = window.getSelection();
-  if (!selection?.rangeCount) return;
-  const range = selection.getRangeAt(0);
+/**
+ * The same range without the spaces at its edges: a double click, or a drag
+ * to the end of a word, picks up the space beside it, and a link or a hint
+ * should not. `undefined` when there is nothing but spaces. A range that does
+ * not lie within one editable field is returned as it is.
+ */
+export function trimInlineRange(range: Range): Range | undefined {
   if (range.collapsed) return range;
   const root = editableRoot(range.startContainer);
   if (!root || !root.contains(range.endContainer)) return range;
@@ -42,6 +45,16 @@ export function trimCurrentInlineSelection(): Range | undefined {
   const endPoint = textPoint(root, offsets.end);
   next.setStart(startPoint.node, startPoint.offset);
   next.setEnd(endPoint.node, endPoint.offset);
+  return next;
+}
+
+/** Trims the current selection in place (see `trimInlineRange`). */
+export function trimCurrentInlineSelection(): Range | undefined {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount) return;
+  const range = selection.getRangeAt(0);
+  const next = trimInlineRange(range);
+  if (!next || next === range) return next;
   selection.removeAllRanges();
   selection.addRange(next);
   return next;

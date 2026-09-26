@@ -38,9 +38,9 @@ belongs in this file in the same commit.
 attributes this release knows about survive, and only when they are set — an
 absent `tunes` is the ordinary case.
 
-| attribute | meaning                                                            |
-| --------- | ------------------------------------------------------------------ |
-| `spoiler` | `true` — the block is blurred over until the reader asks to see it |
+| attribute | meaning                                                                    |
+| --------- | -------------------------------------------------------------------------- |
+| `spoiler` | `true` — the block is hidden under blur and dust until the reader opens it |
 
 A spoiler is presentation, not access control: the text is in the document and
 in the Markdown copy, and anyone can reveal it. Something a visitor must not
@@ -52,7 +52,8 @@ Text fields hold a deliberately small HTML subset, enforced by
 `normalizeContentInlineHtml` in `shared/content-link.ts`:
 
 - `<b>` / `<strong>`, `<i>` / `<em>`, `<s>`, `<br>`
-- `<a href="…">` for an external address
+- `<a href="…" data-content-link="external">` for an external address; a
+  relative `href` (`/…`) is kept as a plain `<a href="…">`
 - `<a data-content-link="entity" data-entity-type="…" data-entity-id="…">`
   for a link to something on this site — see the entity types below
 - `<abbr data-content-hint="…">` — a note attached to a span of text, shown on
@@ -75,10 +76,15 @@ survives the site moving to another domain. The kinds are those of
 | `event`           | event's uuid       |
 | `diary-entry`     | diary entry's uuid |
 | `page`            | page's uuid        |
+| `tag`             | tag's uuid         |
+
+A tag has no visibility of its own: a reader may open it once a public
+project or event carries it, as its own page decides.
 
 An address of this very site is never stored as an external link when the
-editor can tell what it opens: pasted into an empty paragraph or typed as an
-external link, it is stored as an entity link instead.
+editor can tell what it opens: pasted into an empty paragraph, pasted over
+selected text or typed as an external link, it is stored as an entity link
+instead.
 
 A target the reader may not open arrives without its uuid:
 `<a data-content-link="entity" data-entity-type="…" data-entity-restricted="true">`,
@@ -89,7 +95,8 @@ stranger gets when asking by uuid about a target they may not open.
 
 `<strike>` is accepted on the way in and stored as `<s>`, because that is what
 the browser's own editing command still produces. Everything else is stripped,
-and a heading holds plain text only.
+and a heading holds plain text only — stored HTML-escaped, as a text field in
+an HTML document is.
 
 ## Blocks
 
@@ -97,11 +104,11 @@ and a heading holds plain text only.
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
 | `paragraph`              | `{ text }` — inline HTML                                                                                           |
 | `header`                 | `{ text, level: 2 \| 3 }` — plain text                                                                             |
-| `quote`                  | `{ text, caption, alignment: 'left' \| 'center' }`                                                                 |
+| `quote`                  | `{ text, caption, alignment: 'left' \| 'center' }` — both inline HTML                                              |
 | `list`                   | `{ style: 'unordered' \| 'ordered' \| 'checklist', items, meta }`; an item is `{ content, items, meta }` and nests |
 | `delimiter`              | `{}`                                                                                                               |
 | `contentMedia`           | `{ asset, layout: 'centered' \| 'natural' \| 'stretch', caption }`                                                 |
-| `contentGallery`         | `{ items: [{ asset, caption }] }`                                                                                  |
+| `contentGallery`         | `{ items: [{ id, asset, caption }] }` — an item without an `id` is dropped                                         |
 | `contentAttachment`      | `{ asset, title, caption }` — any file, shown as a download                                                        |
 | `externalLink`           | `{ url }` — rendered as a preview card                                                                             |
 | `integration`            | `{ provider: 'youtube', videoId, … }`, see `shared/content-integrations.ts`                                        |
@@ -112,6 +119,15 @@ and a heading holds plain text only.
 asset carries its media descriptor and address, or is `null` when the reader
 may not see it.
 
+An item's `content` is inline HTML, like a paragraph's `text`, so a line
+broken inside an item is a `<br>`; in Markdown it goes on indented under the
+item.
+
+A list's `meta` is what the list tool keeps about the list as a whole: for an
+ordered list `{ start, counterType }`, where `counterType` is one of
+`numeric`, `lower-roman`, `upper-roman`, `lower-alpha`, `upper-alpha`. An
+item's `meta` is `{ checked }` in a checklist. Both are kept as given.
+
 ## Private sections
 
 A private section is a pair of `privateSectionBoundary` blocks sharing a
@@ -120,8 +136,10 @@ A private section is a pair of `privateSectionBoundary` blocks sharing a
 What a visitor receives never contains those blocks. In their place the public
 document holds:
 
-- `privateSectionPlaceholder` — `{ blockCount, … }`, a count and nothing else;
-- `privateSectionExpanded` — `{ blocks }`, only ever sent to the owner.
+- `privateSectionPlaceholder` — a summary (`{ blockCount, wordCount, assetCount,
+assetTotalSize }`) and nothing else;
+- `privateSectionExpanded` — `{ summary, blocks }`, the same summary and the
+  blocks themselves, only ever sent to the owner.
 
 ## Text and Markdown
 

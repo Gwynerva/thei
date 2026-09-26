@@ -15,7 +15,7 @@ export const GENERATED_ICON_EXTENSION = 'avif';
 /**
  * Every kind of thing that gets a drawn picture when it has none of its own.
  *
- * Projects and pages stand in for a missing icon; events, stages, sections
+ * Projects, pages and tags stand in for a missing icon; events, stages, sections
  * and diary entries for a body that opens without a picture. They all get the
  * same drawing — their kind's icon, dark, on a field of their own accent — so
  * a card, a tile or a link without a picture looks the same whatever it is.
@@ -27,6 +27,7 @@ export const GENERATED_ICON_KINDS = [
   'project-stage',
   'project-section',
   'diary-entry',
+  'tag',
   'author',
   'secret',
 ] as const;
@@ -160,6 +161,7 @@ const KIND_ICONS: Record<Exclude<GeneratedIconKind, 'author'>, string> = {
   'project-stage': entityTypeIcon('project-stage'),
   'project-section': entityTypeIcon('project-section'),
   'diary-entry': entityTypeIcon('diary-entry'),
+  tag: entityTypeIcon('tag'),
   secret: 'lock-close',
 };
 

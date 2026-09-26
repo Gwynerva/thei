@@ -35,10 +35,15 @@ const emit = defineEmits<{
 
 const humanSize = useHumanSize();
 
-// Opening goes through the asset viewer, which needs the file's address too.
+/**
+ * Only a picture or a video has something to show in the asset viewer, and
+ * only those open there; any other file is simply downloaded. Opening goes
+ * through the viewer, which needs the file's address too.
+ */
+const viewable = computed(() => !!props.asset.media);
 const mode = computed(() => {
   if (props.editable || !props.href) return 'static';
-  return props.openable ? 'open' : 'link';
+  return props.openable && viewable.value ? 'open' : 'link';
 });
 function onPreviewClick(event: MouseEvent) {
   if (!props.editable) return;
@@ -60,16 +65,17 @@ const details = computed(() =>
     :is="mode === 'open' ? 'button' : mode === 'link' ? 'a' : 'div'"
     :type="mode === 'open' ? 'button' : undefined"
     :href="mode === 'link' ? sitePath(href) : undefined"
-    :target="mode === 'link' ? '_blank' : undefined"
+    :target="mode === 'link' && viewable ? '_blank' : undefined"
     :rel="mode === 'link' ? 'noopener noreferrer' : undefined"
-    class="group relative flex w-full min-w-0 items-center gap-sm rounded-normal
-      border border-border-1 bg-bg-2 p-xs text-left text-text-1 no-underline
-      transition-colors outline-none sm:pr-sm"
+    :download="mode === 'link' && !viewable ? '' : undefined"
+    class="attachment-card group relative flex w-full min-w-0 items-center
+      gap-sm rounded-normal border border-border-1 bg-bg-2 p-xs text-left
+      text-text-1 no-underline transition-colors outline-none sm:pr-sm"
     :class="
       mode === 'static'
         ? 'focus-within:border-accent/50'
-        : `cursor-pointer focus-visible:ring-2 focus-visible:ring-accent
-          hocus:border-accent/40 hocus:bg-accent/6`
+        : `attachment-card-interactive cursor-pointer focus-visible:ring-2
+          focus-visible:ring-accent hocus:border-accent/40`
     "
     @click="mode === 'open' ? emit('open') : undefined"
   >
@@ -79,12 +85,11 @@ const details = computed(() =>
       :data-drag-ignore="editable || undefined"
       :aria-label="editable ? editLabel : undefined"
       :data-title-popup="editable ? editLabel : undefined"
-      class="relative flex size-14 shrink-0 items-center justify-center
-        rounded-sm bg-accent/10 text-accent transition-colors sm:size-16"
+      class="attachment-card-tile relative flex size-14 shrink-0 items-center
+        justify-center rounded-sm text-accent transition-colors sm:size-16"
       :class="{
-        [`cursor-pointer outline-none focus-visible:ring-2
-        focus-visible:ring-accent hocus:bg-accent/20`]: editable,
-        'group-hocus:bg-accent/18': !editable && mode !== 'static',
+        [`attachment-card-tile-editable cursor-pointer outline-none
+        focus-visible:ring-2 focus-visible:ring-accent`]: editable,
       }"
       @click="onPreviewClick"
     >
@@ -157,7 +162,47 @@ const details = computed(() =>
         group-hocus:text-white"
       aria-hidden="true"
     >
-      <Icon :name="mode === 'open' ? 'expand-diagonal' : 'download'" />
+      <Icon
+        :name="
+          mode === 'open'
+            ? 'expand-diagonal'
+            : viewable
+              ? 'arrow-outward'
+              : 'download'
+        "
+      />
     </span>
   </component>
 </template>
+
+<style scoped>
+/*
+ * The tints are mixed with the card's own surface rather than laid over it
+ * as transparency: the card may lie on a pattern — the locks of a private
+ * section — and a translucent tint would let it show through.
+ */
+.attachment-card-tile {
+  background-color: color-mix(
+    in oklab,
+    var(--color-accent) 10%,
+    var(--color-bg-2)
+  );
+}
+
+.attachment-card-interactive:is(:hover, :focus-visible) {
+  background-color: color-mix(
+    in oklab,
+    var(--color-accent) 6%,
+    var(--color-bg-2)
+  );
+}
+
+.attachment-card-interactive:is(:hover, :focus-visible) .attachment-card-tile,
+.attachment-card-tile-editable:is(:hover, :focus-visible) {
+  background-color: color-mix(
+    in oklab,
+    var(--color-accent) 20%,
+    var(--color-bg-2)
+  );
+}
+</style>

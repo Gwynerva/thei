@@ -5,8 +5,9 @@ useHead({
 });
 
 /**
- * What every page leads to while the site is closed for an update: how it is
- * going, and why it stopped if it did. Visitors are sent back to the site the
+ * What every page leads to while the site is closed for an update. The admin
+ * sees how it is going, and why it stopped if it did; a visitor only that
+ * the site is unavailable for now. Visitors are sent back to the site the
  * moment it opens; an admin first sees how the update ended.
  */
 const {
@@ -51,7 +52,7 @@ async function retry() {
     >
       <TransitionFade mode="out-in">
         <UpdateScreen
-          v-if="ready"
+          v-if="ready && progress?.admin"
           class="w-(--width-narrow)"
           :progress
           :screen
@@ -59,6 +60,10 @@ async function retry() {
           :error="actionError"
           @continue="openSite"
           @retry="retry"
+        />
+        <UpdateUnavailable
+          v-else-if="ready"
+          class="m-auto w-(--width-narrow) max-sm:mx-window max-sm:w-auto"
         />
         <TheiLoadingIndicator v-else />
       </TransitionFade>

@@ -20,10 +20,11 @@ export default defineEventHandler(async (event): Promise<UpdateProgress> => {
   const { site, failure } = describeSite();
   const state = await resolveState({ projectPath: THEI_SERVER.projectPath() });
 
-  // A closed site has nothing to say for itself but its update, so the steps
-  // are shown to anyone then; the build log never is. Content refused as a
-  // downgrade belongs to no run of this version.
-  const showRun = site === 'open' ? admin : failure?.reason !== 'downgrade';
+  // How an update goes, and why it stopped, is the admin's business: a
+  // visitor learns only that the site is closed for now. The build log is
+  // never shown, and content refused as a downgrade belongs to no run of
+  // this version.
+  const showRun = admin && failure?.reason !== 'downgrade';
   let run: UpdateRunView | undefined;
   if (state && showRun) {
     const { log: _log, pid: _pid, ...view } = state;
@@ -35,7 +36,7 @@ export default defineEventHandler(async (event): Promise<UpdateProgress> => {
     version: THEI_SERVER.version,
     admin,
     ...(run ? { run } : {}),
-    ...(failure ? { failure } : {}),
+    ...(failure && admin ? { failure } : {}),
     ...(site === 'failed'
       ? {
           canRetry: admin && isManaged() && failure?.reason !== 'downgrade',

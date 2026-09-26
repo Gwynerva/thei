@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { loadLanguage } from '../../../shared/language';
 import {
   normalizeUrlSegment,
+  normalizeUrlSegmentDraft,
   slugify,
   urlSegmentIsValid,
 } from '../../../shared/language/slugify';
@@ -45,5 +46,19 @@ describe('normalizeUrlSegment', () => {
   it('accepts what it has already normalized', () => {
     expect(urlSegmentIsValid('привет-мир')).toBe(true);
     expect(urlSegmentIsValid('Привет Мир')).toBe(false);
+  });
+});
+
+describe('normalizeUrlSegmentDraft', () => {
+  it.each([
+    ['My Page', 'my-page'],
+    ['my ', 'my-'],
+    ['my_', 'my-'],
+    ['my?', 'my'],
+    ['my page/', 'my-page-'],
+    [' ', ''],
+    ['', ''],
+  ])('keeps a trailing gap while typing: %j', (value, expected) => {
+    expect(normalizeUrlSegmentDraft(value)).toBe(expected);
   });
 });

@@ -32,8 +32,9 @@ export interface UpdateProgress {
   /** Whether the request came from a signed-in admin. */
   admin: boolean;
   /**
-   * The latest run: to anyone while the site is closed, since the closed site
-   * has nothing else to say for itself, and only to an admin once it is open.
+   * The latest run, and why the site stays closed: to an admin only. A
+   * visitor is told no more than `site`, and sees that the site is
+   * temporarily unavailable.
    */
   run?: UpdateRunView;
   failure?: UpdateFailure;

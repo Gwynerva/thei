@@ -9,6 +9,7 @@ import {
 import type { ExternalLink } from '#layers/thei/shared/external-link';
 import { iconSymbols } from '#thei/icon-symbols';
 import { extractImageAccent } from '../assets/image-color';
+import { svgDensityFor } from '../assets/svg-density';
 import { THEI_CONTENT_DIRS } from '../content-layout';
 
 export const EXTERNAL_LINK_FAVICON_SIZE = 48;
@@ -105,7 +106,10 @@ async function writeExternalLinkFaviconFile(
 }
 
 export async function convertExternalLinkFavicon(source: Buffer) {
-  return await sharp(source, { failOn: 'error' })
+  // A site's SVG icon is drawn at the tile's size, not at its own units,
+  // which for many icons are 16 px and would come out blurred.
+  const density = await svgDensityFor(source, EXTERNAL_LINK_FAVICON_SIZE);
+  return await sharp(source, { failOn: 'error', density })
     .resize(EXTERNAL_LINK_FAVICON_SIZE, EXTERNAL_LINK_FAVICON_SIZE, {
       fit: 'contain',
       background: { r: 0, g: 0, b: 0, alpha: 0 },

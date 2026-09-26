@@ -11,7 +11,7 @@ const subfolder = {
 };
 
 describe('parseInternalUrl', () => {
-  it('recognises all six kinds of entity address', () => {
+  it('recognises all seven kinds of entity address', () => {
     expect(
       parseInternalUrl('https://example.com/projects/studio-Pr0j/', site),
     ).toEqual({ entityType: 'project', publicId: 'Pr0j' });
@@ -45,6 +45,13 @@ describe('parseInternalUrl', () => {
     expect(
       parseInternalUrl('https://example.com/diary/2024-05-12/', site),
     ).toEqual({ entityType: 'diary-entry', date: '2024-05-12' });
+    expect(
+      parseInternalUrl('https://example.com/tags/sea-kayaking-0a1b2c/', site),
+    ).toEqual({ entityType: 'tag', publicId: '0a1b2c' });
+    expect(parseInternalUrl('/tags/0a1b2c/', site)).toEqual({
+      entityType: 'tag',
+      publicId: '0a1b2c',
+    });
   });
 
   it('tolerates a query, a hash, a missing slash and the Markdown mirror', () => {
@@ -108,6 +115,9 @@ describe('internalUrlPastePattern', () => {
       false,
     );
     expect(pattern.test('https://elsewhere.org/archive/pages/x/')).toBe(false);
+    expect(pattern.test('https://example.com/archive/tags/sea-0a1b2c/')).toBe(
+      true,
+    );
     expect(pattern.test('https://example.com/archive/life/')).toBe(false);
   });
 });

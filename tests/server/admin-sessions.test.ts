@@ -12,6 +12,10 @@ import {
   toSnapshotSessions,
   type AdminSessionData,
 } from '../../server/thei/admin-session';
+import {
+  isClosedSiteAdmin,
+  rememberClosedSiteAdmins,
+} from '../../server/thei/admin-session/closed-site';
 import { tokenAliases } from '../../server/thei/admin-session/token';
 import { getPublicAdminSessions } from '../../server/thei/admin-session/repository/public';
 
@@ -65,6 +69,43 @@ describe('admin sessions before they are loaded', () => {
 
     expect(await getCurrentAdminSession(event)).toBeUndefined();
     expect(response.getHeader('set-cookie')).toBeUndefined();
+  });
+
+  it('are recognised by a closed site from the table as it stood before the migrations', () => {
+    createDb();
+    const now = Date.now();
+    const rows = [
+      session('active', 'active', now + 60_000),
+      session('expired', 'active', now - 1),
+      session('destroyed', 'destroyed', now + 60_000),
+    ];
+    const insert = rawDb!.prepare(
+      'INSERT INTO "admin-sessions" (sessionUuid, data) VALUES (?, ?)',
+    );
+    for (const row of rows) insert.run(row.sessionUuid, JSON.stringify(row));
+    insert.run('broken', '{not json');
+    rememberClosedSiteAdmins(rawDb!);
+
+    const withToken = (token?: string) => {
+      const request = new IncomingMessage(new Socket());
+      if (token) request.headers.cookie = `thei-admin-session-token=${token}`;
+      return createEvent(request, new ServerResponse(request));
+    };
+    expect(isClosedSiteAdmin(withToken('active-token'))).toBe(true);
+    expect(isClosedSiteAdmin(withToken('expired-token'))).toBe(false);
+    expect(isClosedSiteAdmin(withToken('destroyed-token'))).toBe(false);
+    expect(isClosedSiteAdmin(withToken())).toBe(false);
+  });
+
+  it('recognise nobody early when the table cannot be read', () => {
+    const empty = new Database(':memory:');
+    rememberClosedSiteAdmins(empty);
+    empty.close();
+    const request = new IncomingMessage(new Socket());
+    request.headers.cookie = 'thei-admin-session-token=active-token';
+    expect(
+      isClosedSiteAdmin(createEvent(request, new ServerResponse(request))),
+    ).toBe(false);
   });
 });
 

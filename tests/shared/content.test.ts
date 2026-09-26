@@ -767,6 +767,25 @@ describe('content normalization', () => {
       items: [{ content: 'Done', meta: { checked: true }, items: [] }],
     });
   });
+
+  it('keeps a line break inside a list item, as a paragraph does', () => {
+    const data = normalizeContentData({
+      blocks: [
+        {
+          type: 'list',
+          data: {
+            style: 'unordered',
+            items: [{ content: 'first line <br> second line', items: [] }],
+          },
+        },
+      ],
+    });
+
+    expect(
+      (data.blocks[0]!.data as { items: { content: string }[] }).items[0]!
+        .content,
+    ).toBe('first line<br>second line');
+  });
 });
 
 describe('content preview', () => {

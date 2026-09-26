@@ -66,6 +66,10 @@ usePublicSeo({
 const details = computed(
   () =>
     ({
+      neighbours: data.value.neighbours && {
+        kind: 'project-section',
+        ...data.value.neighbours,
+      },
       chronology: createdAndUpdatedTimelineItems(data.value.chronology, {
         created: phrase.value.section_chronology_created,
         updated: phrase.value.section_chronology_updated,

@@ -20,6 +20,7 @@ describe('generated fallback icons', () => {
       'project-stage',
       'project-section',
       'diary-entry',
+      'tag',
       'author',
       'secret',
     ]);
@@ -28,7 +29,8 @@ describe('generated fallback icons', () => {
     expect(isGeneratedIconKind('author')).toBe(true);
     expect(isGeneratedIconKind('event')).toBe(true);
     expect(isGeneratedIconKind('diary-entry')).toBe(true);
-    expect(isGeneratedIconKind('tag')).toBe(false);
+    expect(isGeneratedIconKind('tag')).toBe(true);
+    expect(isGeneratedIconKind('person')).toBe(false);
     expect(isGeneratedIconKind(undefined)).toBe(false);
   });
 

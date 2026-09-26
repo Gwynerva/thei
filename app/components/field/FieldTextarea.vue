@@ -67,6 +67,13 @@ const placeholder = computed(() =>
   typeof attrs.placeholder === 'string' ? attrs.placeholder : '',
 );
 
+/**
+ * The field grows with its text and never scrolls, unless a `max-height`
+ * given from outside stops it: only then does the text scroll, under the
+ * scrollbar that shows itself on hover.
+ */
+const scrollable = ref(false);
+
 function resize() {
   const el = textarea.value;
   if (!el) {
@@ -79,8 +86,12 @@ function resize() {
     el.value = placeholder.value;
   }
 
+  // `scrollHeight` leaves the border out, and the box is sized border
+  // included: without it the text would always overflow by the border.
   el.style.height = 'auto';
-  el.style.height = `${el.scrollHeight}px`;
+  const border = el.offsetHeight - el.clientHeight;
+  el.style.height = `${el.scrollHeight + border}px`;
+  scrollable.value = el.scrollHeight > el.clientHeight + 1;
 
   if (measurePlaceholder) {
     el.value = value;
@@ -132,13 +143,14 @@ onUnmounted(() => {
       v-model="model"
       data-label-focus
       rows="1"
-      class="block w-full min-w-40 resize-none overflow-hidden border-2 bg-bg-1
-        p-xs text-text-1 transition placeholder:text-text-3
-        focus:border-border-3 hocus:border-border-3"
+      class="block w-full min-w-40 resize-none border-2 bg-bg-1 p-xs text-text-1
+        transition placeholder:text-text-3 focus:border-border-3
+        hocus:border-border-3"
       :class="[
         shownError
           ? 'rounded-t-lg border-border-error'
           : 'rounded-normal border-border-1',
+        scrollable ? 'scrollbar-hover overflow-y-auto' : 'overflow-hidden',
       ]"
       @focus="onFocus"
       @blur="onBlur"

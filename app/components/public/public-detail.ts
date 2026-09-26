@@ -1,4 +1,5 @@
 import type {
+  PublicNeighbours,
   PublicReferences,
   PublicTagSummary,
 } from '#layers/thei/shared/api/public';
@@ -128,8 +129,14 @@ export function sortPublicDetailTimelineItems(
     .map(({ item }) => item);
 }
 
+/** Where a stage, section or diary entry sits among its own kind. */
+export type PublicDetailNeighbours = PublicNeighbours & {
+  kind: 'project-stage' | 'project-section' | 'diary-entry';
+};
+
 export type PublicDetailPanelData = {
   contents?: ContentHeading[];
+  neighbours?: PublicDetailNeighbours;
   chronology?: PublicDetailTimelineItem[];
   periods?: DateRange[];
   tags?: PublicTagSummary[];

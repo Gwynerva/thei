@@ -49,6 +49,10 @@ export function markAdminSessionsLoaded() {
   sessionsLoaded = true;
 }
 
+export function adminSessionsLoaded() {
+  return sessionsLoaded;
+}
+
 export function cloneSession(session: AdminSessionData): AdminSessionData {
   return structuredClone(session);
 }

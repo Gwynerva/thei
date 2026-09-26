@@ -120,16 +120,23 @@ function renderList(
 ): string {
   const items = Array.isArray(data.items) ? data.items : [];
   const ordered = data.style === 'ordered';
+  // An ordered list may start elsewhere than 1; a nested one starts over.
+  const start =
+    depth === 0 && typeof data.meta?.start === 'number' ? data.meta.start : 1;
   const lines: string[] = [];
   items.forEach((item: any, index: number) => {
     const content = inlineToMarkdown(
       typeof item === 'string' ? item : item?.content,
       options,
     );
-    const marker = ordered ? `${index + 1}.` : '-';
+    const marker = ordered ? `${start + index}.` : '-';
     const checked =
       data.style === 'checklist' ? (item?.meta?.checked ? '[x] ' : '[ ] ') : '';
-    lines.push(`${'  '.repeat(depth)}${marker} ${checked}${content}`.trimEnd());
+    const prefix = `${'  '.repeat(depth)}${marker} ${checked}`;
+    // A line broken inside an item goes on under the item's own text, not at
+    // the margin, where it would read as the start of something else.
+    const continued = content.replace(/\n/g, `\n${' '.repeat(prefix.length)}`);
+    lines.push(`${prefix}${continued}`.trimEnd());
     const nested = item?.items;
     if (Array.isArray(nested) && nested.length)
       lines.push(renderList({ ...data, items: nested }, options, depth + 1));

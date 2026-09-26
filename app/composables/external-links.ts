@@ -146,6 +146,9 @@ export function createExternalLinkDraft(
   let target: string | undefined;
   /** The address this draft has already shown or read the record of. */
   let committed: string | undefined;
+  /** A read still under way, so that asking twice sends once. */
+  let pending:
+    { address: string; result: Promise<ExternalLink | undefined> } | undefined;
   let version = 0;
 
   function retarget(url: string | undefined) {
@@ -176,29 +179,35 @@ export function createExternalLinkDraft(
     if (normalized !== target) retarget(normalized);
   }
 
-  async function read(
-    url: string,
-    send: () => Promise<ExternalLink | undefined>,
-  ) {
+  function read(url: string, send: () => Promise<ExternalLink | undefined>) {
     const current = ++version;
     state.loading = true;
     state.error = undefined;
-    try {
-      const link = await send();
-      if (current !== version) return undefined;
-      if (link) {
-        state.preview = link;
-        state.url = link.url;
-        committed = url;
+    const result = (async () => {
+      try {
+        const link = await send();
+        if (current !== version) return undefined;
+        if (link) {
+          state.preview = link;
+          state.url = link.url;
+          committed = url;
+        }
+        return link;
+      } catch (cause: unknown) {
+        if (current !== version) return undefined;
+        state.error =
+          (cause as { data?: { statusMessage?: string } } | undefined)?.data
+            ?.statusMessage ?? options.errorText();
+        return undefined;
+      } finally {
+        if (current === version) {
+          state.loading = false;
+          pending = undefined;
+        }
       }
-      return link;
-    } catch (cause: any) {
-      if (current !== version) return undefined;
-      state.error = cause?.data?.statusMessage ?? options.errorText();
-      return undefined;
-    } finally {
-      if (current === version) state.loading = false;
-    }
+    })();
+    pending = { address: url, result };
+    return result;
   }
 
   return {
@@ -227,6 +236,8 @@ export function createExternalLinkDraft(
     async commit() {
       const address = target;
       if (!address || address === committed) return state.preview;
+      // Pasted and then confirmed with Enter: one read, not two.
+      if (pending?.address === address) return await pending.result;
       return await read(address, () => store.refresh(address));
     },
     async refresh() {
@@ -239,6 +250,7 @@ export function createExternalLinkDraft(
       retarget(undefined);
       state.error = undefined;
       committed = undefined;
+      pending = undefined;
     },
   };
 }

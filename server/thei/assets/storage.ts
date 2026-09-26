@@ -78,6 +78,8 @@ export async function createMediaPreviewAsset(
   accent?: ImageAccent;
   /** Of a video: seconds into it the preview frame was taken from. */
   frameAt?: number;
+  /** Of a video: how well that frame shows it. */
+  frameScore?: number;
 }> {
   const preview = await createMediaPreview(source, sourceType, options);
   const previewBuffer = preview.buffer;
@@ -96,6 +98,7 @@ export async function createMediaPreviewAsset(
       previewAssetUuid: existing.assetUuid,
       accent: meta?.accent,
       frameAt: preview.frameAt,
+      frameScore: preview.frameScore,
     };
   }
 
@@ -120,6 +123,7 @@ export async function createMediaPreviewAsset(
     previewAssetUuid: asset.assetUuid,
     accent,
     frameAt: preview.frameAt,
+    frameScore: preview.frameScore,
   };
 }
 
@@ -142,31 +146,33 @@ export async function findMediaPreviewAsset(asset: StoredAssetRecord) {
 }
 
 /**
- * Makes a stored video's preview again, from the file as it is.
+ * Makes a stored picture's or video's preview again, from the file as it is.
  *
- * A preview made by an older version shows the first frame, which for many
- * videos is black. The new one stands in for it, the old one is left with no
- * usage for the cleanup to take, and the video's accent colour follows the
- * new frame. Decoding runs in the video's own processing lane, like any
- * other work on it.
+ * A video preview made by an older version shows the first frame found
+ * lively enough, often a dark one; an SVG preview was drawn at the size of
+ * its units. The new preview stands in for the old one, which is left with no
+ * usage for the cleanup to take, and the accent colour follows it. Decoding
+ * runs in the file's own processing lane, like any other work on it.
  */
 export async function refreshMediaPreview(
   asset: StoredAssetRecord,
 ): Promise<AssetVariantInfo> {
-  const meta = asset.meta as VideoAssetMeta | null;
+  const isVideo = asset.type === AssetType.Video;
+  const meta = asset.meta as (VideoAssetMeta & ImageAssetMeta) | null;
   const bytes: AssetBytes = {
     path: THEI_SERVER.assets.filePath(asset.contentHash, asset.extension),
     size: asset.size,
     hash: asset.contentHash,
     owned: false,
   };
-  const { previewAssetUuid, accent, frameAt } = await withProcessingSlot(
-    asset.type,
-    () =>
-      createMediaPreviewAsset(bytes, AssetType.Video, {
-        duration: meta?.duration,
-      }),
-  );
+  const { previewAssetUuid, accent, frameAt, frameScore } =
+    await withProcessingSlot(asset.type, () =>
+      createMediaPreviewAsset(
+        bytes,
+        isVideo ? AssetType.Video : AssetType.Image,
+        { duration: isVideo ? meta?.duration : undefined },
+      ),
+    );
 
   const previous = await findMediaPreviewAsset(asset);
   if (previous && previous.assetUuid !== previewAssetUuid) {
@@ -180,10 +186,15 @@ export async function refreshMediaPreview(
   await attachMediaPreviewUsage(asset.assetUuid, previewAssetUuid);
 
   const { accent: _previous, ...rest } = meta ?? {};
-  const resolvedMeta: VideoAssetMeta = {
+  const resolvedMeta: VideoAssetMeta | ImageAssetMeta = {
     ...rest,
     ...(accent !== undefined ? { accent } : {}),
-    previewAt: frameAt ?? 0,
+    ...(isVideo
+      ? {
+          previewAt: frameAt ?? 0,
+          ...(frameScore !== undefined ? { previewScore: frameScore } : {}),
+        }
+      : {}),
   };
   await THEI_SERVER.assets.update(asset.assetUuid, { meta: resolvedMeta });
   asset.meta = resolvedMeta;

@@ -4,6 +4,17 @@ import { publicReferenceSplitSize } from '#layers/thei/shared/public-references'
 
 const { data } = defineProps<{ data: PublicDetailPanelData }>();
 
+const neighboursTitle = computed(() => {
+  switch (data.neighbours?.kind) {
+    case 'project-stage':
+      return phrase.value.public_details_neighbour_stages;
+    case 'project-section':
+      return phrase.value.public_details_neighbour_sections;
+    default:
+      return phrase.value.public_details_neighbour_entries;
+  }
+});
+
 /** Manual entries first, then whatever the content itself mentions. */
 function referenceGroups<T>(split: { manual: T[]; content: T[] }) {
   return [
@@ -30,6 +41,12 @@ function referenceGroups<T>(split: { manual: T[]; content: T[] }) {
       :title="phrase.public_details_contents"
     >
       <PublicContentContents :items="data.contents" />
+    </PublicCollapsibleSection>
+    <PublicCollapsibleSection
+      v-if="data.neighbours?.next || data.neighbours?.previous"
+      :title="neighboursTitle"
+    >
+      <PublicNeighbourLinks :neighbours="data.neighbours" />
     </PublicCollapsibleSection>
     <PublicCollapsibleSection
       v-if="data.periods?.length"

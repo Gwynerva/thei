@@ -5,11 +5,8 @@ import type {
 } from './editor-inline-links';
 
 /**
- * The popup behind the inline hint tool.
- *
- * It is deliberately the same shape as the link popup: one floating panel
- * anchored to the inline toolbar, opened through the editor's popover layer so
- * the modal's overflow cannot clip it. The field grows with the text and
+ * The popup behind the inline hint tool: one field for the explanation,
+ * laid out like the link popup's rows. The field grows with the text, and
  * `FloatingPopup` watches the panel's own size, so a hint of several lines
  * pushes the panel around rather than out of view.
  */
@@ -53,25 +50,27 @@ defineExpose<ContentHintControlsExpose>({ open: openControls });
     :fallback-placements="['top-start']"
     :offset="0"
     shift-cross-axis
-    max-width="22rem"
+    max-width="20rem"
     :teleport-to="teleportTo"
-    class="border border-border-1 bg-bg-2"
     @opened="field?.focus({ preventScroll: true })"
+    @dismiss="request?.restore()"
     @closed="popupClosed"
   >
     <form
-      class="flex w-75 max-w-full flex-col gap-xs p-xs"
+      class="flex flex-col gap-xs rounded-normal border border-border-1 bg-bg-2
+        p-xs"
       @submit.prevent="submit"
     >
       <FieldTextarea
         v-model="text"
-        class="max-h-40 text-sm"
+        class="max-h-40 min-h-9 py-1 text-sm"
         spellcheck="true"
         :placeholder="phrase.content_hint_placeholder"
         :aria-label="phrase.content_hint"
         @element="field = $event"
+        @keydown.enter.exact.prevent="submit"
       />
-      <div class="flex items-center justify-end gap-1">
+      <div class="flex justify-end gap-1">
         <Button
           v-if="request?.existing"
           type="button"

@@ -49,7 +49,7 @@ onUnmounted(() => {
 <template>
   <ContentLinkPreviewCard
     :result="result"
-    :label="phrase.content_link_loading"
+    :label="entityTypeLabel(entityType)"
     :interactive="interactive"
     :playback
     :continuous-project-media="contentEntityHasIcon(entityType)"

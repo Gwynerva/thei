@@ -5,6 +5,8 @@ import {
   ContentMediaTool,
   ContentGalleryTool,
 } from '#layers/thei/app/components/content/editor-tools';
+import { bindEditorGutterClick } from '#layers/thei/app/composables/editor-gutter-click';
+import { bindEditorLinkPaste } from '#layers/thei/app/composables/editor-link-paste';
 import { createEditorPrivateSections } from '#layers/thei/app/composables/editor-private-sections';
 import {
   createEditorSnapshotManager,
@@ -26,6 +28,8 @@ watch(dirty, (value) => transitions.value.push(value ? 'Save' : 'Saved'), {
   flush: 'sync',
 });
 let editor: EditorJS;
+let unbindGutterClick: (() => void) | undefined;
+let unbindLinkPaste: (() => void) | undefined;
 let sections: ReturnType<typeof createEditorPrivateSections>;
 let snapshots: ReturnType<typeof createEditorSnapshotManager>;
 const snapshotPending = computed(() => snapshots?.isPending.value ?? false);
@@ -109,6 +113,13 @@ onMounted(async () => {
     },
   });
   await editor.isReady;
+  unbindGutterClick = bindEditorGutterClick(holder.value!, editor);
+  const site = useInternalUrlSite();
+  unbindLinkPaste = bindEditorLinkPaste(holder.value!, editor, {
+    site,
+    linkBlocks: new Set(['paragraph']),
+    findEntity: (url) => findEntityByInternalUrl(url, site),
+  });
   sections = createEditorPrivateSections(editor, { suppressionDuration: 20 });
   snapshots = createEditorSnapshotManager({
     storageKey: 'fixture',
@@ -160,6 +171,8 @@ function remove() {
 }
 onBeforeUnmount(() => {
   ready.value = false;
+  unbindGutterClick?.();
+  unbindLinkPaste?.();
   sections?.destroy();
   snapshots?.destroy();
   editor?.destroy();

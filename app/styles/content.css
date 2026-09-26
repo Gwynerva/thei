@@ -38,12 +38,12 @@
     text-underline-offset: 0.2em;
   }
 
-  .content-renderer.content-prose > * + *,
-  .content-editor.content-prose .ce-block + .ce-block {
-    margin-top: var(--spacing-sm) !important;
+  /* The editor's blocks get the same rhythm in editor.css. */
+  .content-renderer.content-prose > * + * {
+    margin-top: var(--spacing-md) !important;
   }
 
-  .content-prose :is(p, .ce-paragraph) {
+  .content-prose p {
     @apply leading-relaxed;
   }
 
@@ -57,12 +57,13 @@
     overflow-wrap: anywhere;
   }
 
-  /* Editor.js tools inject unlayered spacing; content.css owns content rhythm. */
-  .content-editor.content-prose .ce-paragraph {
-    padding: 0 !important;
-    color: inherit;
-  }
-
+  /*
+   * `!important` on the headings, quotes and lists below: these rules serve
+   * the rendered page and the editor alike, and inside the editor they meet
+   * the unlayered CSS of the Editor.js tools, which a layered rule can only
+   * beat this way. Rules that exist for the editor alone live in editor.css,
+   * outside any layer, and need no such thing.
+   */
   .content-prose h2 {
     @apply w-full border-b border-border-1 text-[1.5rem] font-bold
       tracking-tight;
@@ -78,84 +79,69 @@
     line-height: 1.25 !important;
   }
 
-  .content-editor.content-prose :is(h2.ce-header, h3.ce-header) {
-    outline: none;
-  }
-
   /*
-   * Markers hang into the left margin so the text of a list lines up with the
-   * paragraphs around it. The editor gets the same treatment below, so a list
-   * looks the same while it is being written and after it is published.
+   * A list on the page, dressed by the `content-list*` utilities below: the
+   * same ones the editor's list is dressed with in editor.css, over the same
+   * grid, so a list looks the same while it is written and once published.
    */
   .content-prose .content-list {
-    @apply grid gap-1;
-    padding-left: 1.1em;
-    margin: 0;
-    list-style-position: outside;
-  }
-
-  .content-prose .content-list > li {
-    padding-left: 0.1em;
-  }
-
-  .content-editor.content-prose .cdx-list {
-    padding-left: 1.1em !important;
-    list-style-position: outside;
-  }
-
-  .content-prose .content-list-unordered {
-    list-style-type: disc;
+    @apply content-list-root leading-relaxed;
   }
 
   .content-prose .content-list-ordered {
-    list-style-type: decimal;
+    counter-reset: item;
+  }
+
+  .content-prose .content-list__item {
+    @apply content-list-item;
+  }
+
+  .content-prose .content-list__item::after {
+    @apply content-list-line;
   }
 
   .content-prose
-    :is(.content-list-unordered, .content-list-ordered)
-    > li::marker,
-  .content-editor.content-prose
-    :is(.cdx-list-unordered, .cdx-list-ordered)
-    .cdx-list__item::marker {
-    color: var(--color-text-2);
+    :is(.content-list-ordered, .content-list-unordered)
+    > .content-list__item::before {
+    @apply content-list-marker;
+    counter-increment: item;
   }
 
-  .content-prose .content-list-checklist {
-    padding-left: 0;
-    list-style-type: none;
+  .content-prose .content-list-unordered > .content-list__item::before {
+    @apply content-list-marker-dot;
   }
 
-  .content-prose .content-list .content-list {
-    margin-top: var(--spacing-xs);
+  .content-prose .content-list-ordered > .content-list__item::before {
+    @apply content-list-marker-number;
   }
 
-  .content-editor.content-prose .cdx-list {
-    --line-height: 1.625;
-    --spacing-s: var(--spacing-xs);
-    --spacing-xs: 0px;
-    --checkbox-background: var(--color-bg-1) !important;
-    --color-border: var(--color-border-1) !important;
-    --color-bg-checked: var(--color-bg-accent) !important;
-    --color-bg-checked-hover: var(--color-bg-accent) !important;
-    --color-tick: var(--color-accent) !important;
-    padding: 0 !important;
-    color: inherit;
+  .content-prose .content-list__check {
+    @apply content-list-check content-list-marker;
   }
 
-  .content-editor.content-prose .cdx-list__checkbox-check {
-    background: var(--checkbox-background);
+  .content-prose .content-list__item[data-checked='true'] {
+    @apply content-list-item-done;
   }
 
-  .content-editor.content-prose
-    .cdx-list__checkbox--checked
-    .cdx-list__checkbox-check {
-    border: 1px solid var(--color-accent) !important;
+  .content-prose
+    .content-list__item[data-checked='true']
+    > .content-list__check {
+    @apply content-list-check-done;
+  }
+
+  .content-prose .content-list__text {
+    grid-area: content;
+  }
+
+  .content-prose .content-list__children {
+    grid-area: child;
+    margin-top: var(--content-list-gap);
   }
 
   .content-prose :is(.content-quote, .cdx-quote) {
-    @apply relative grid gap-xs py-xs;
+    @apply relative grid gap-xs;
     box-sizing: border-box;
-    padding-left: var(--spacing-md) !important;
+    padding: var(--spacing-xs) 0 var(--spacing-xs) var(--spacing-md) !important;
     margin: 0;
     border: 0;
     color: inherit;
@@ -184,7 +170,7 @@
 
   @variant max-sm {
     .content-prose :is(.content-quote, .cdx-quote) {
-      padding-left: var(--spacing-sm) !important;
+      padding: var(--spacing-xs) 0 var(--spacing-xs) var(--spacing-sm) !important;
     }
   }
 
@@ -198,169 +184,151 @@
   }
 
   /*
-   * The icon is the chip's own background: it spans the full height of the
-   * inline box, flush with its left edge, whatever the font metrics are. The
-   * left padding reserves a square of roughly that height plus a small gap.
+   * A chip: a link set on a surface of its own. Every tint is mixed with the
+   * surface the prose lies on, never with transparency, so a pattern behind
+   * the prose — the locks of a private section — never shows through.
+   *
+   * A link to one of the site's own entities shows the target's picture —
+   * its icon, the first picture of its body, or its drawn stand-in — along
+   * its left edge, fading into a surface tinted with the picture's accent.
+   * A link elsewhere shows the site's favicon the size of a letter on a
+   * neutral surface. The underline is always there and only changes colour,
+   * so it fades in on hover instead of jumping into place.
    */
   .content-prose a[data-content-link] {
     display: inline;
-    padding: 0.08em 0.38em 0.08em 1.82em;
+    padding: 0.1em 0.45em 0.1em 0.35em;
     border-radius: var(--radius-sm);
-    background-color: color-mix(in oklab, var(--color-bg-3) 72%, transparent);
-    background-image: var(--content-link-icon, url('/favicon.svg'));
-    background-repeat: no-repeat;
-    background-position: left center;
-    background-size: auto 100%;
-    color: var(--color-text-1);
-    box-decoration-break: slice;
-    text-decoration-line: underline;
-    text-decoration-color: color-mix(
+    background-color: color-mix(
       in oklab,
-      var(--color-text-1) 28%,
-      transparent
-    ) !important;
+      var(--color-bg-3) 72%,
+      var(--content-surface)
+    );
+    color: var(--color-text-1);
+    box-decoration-break: clone;
+    text-decoration-line: underline;
+    text-decoration-color: transparent;
     text-decoration-thickness: 0.08em;
     text-underline-offset: 0.15em;
-    transition-property: background-color, text-decoration-color;
+    transition-property: background-color, color, text-decoration-color;
     transition-duration: var(--default-transition-duration);
     transition-timing-function: var(--default-transition-timing-function);
   }
 
-  /*
-   * The site's own favicon stands for its own entities. An external link
-   * shows nothing until its record arrives; the glyph after the text already
-   * says what it is.
-   */
-  .content-prose a[data-content-link='external'] {
-    background-image: var(--content-link-icon, none);
+  .content-prose a[data-content-link]:is(:hover, :focus-visible) {
+    background-color: var(--color-bg-3);
+    text-decoration-color: color-mix(
+      in oklab,
+      var(--color-text-1) 40%,
+      transparent
+    );
   }
 
-  /*
-   * Glyph icons have no backdrop of their own: they sit inline, tinted. Every
-   * kind without an icon of its own — all but projects and pages — gets one.
-   */
-  .content-prose
-    a[data-content-link]:is(
-      [data-entity-type='event'][data-content-link-state='resolved'],
-      [data-entity-type='project-stage'][data-content-link-state='resolved'],
-      [data-entity-type='project-section'][data-content-link-state='resolved'],
-      [data-entity-type='diary-entry'][data-content-link-state='resolved'],
-      [data-content-link-state='broken'],
-      [data-content-link-state='restricted']
-    ) {
-    padding-left: 0.3em;
-    background-image: none;
-  }
-
-  .content-prose
-    a[data-content-link]:is(
-      [data-entity-type='event'][data-content-link-state='resolved'],
-      [data-entity-type='project-stage'][data-content-link-state='resolved'],
-      [data-entity-type='project-section'][data-content-link-state='resolved'],
-      [data-entity-type='diary-entry'][data-content-link-state='resolved'],
-      [data-content-link-state='broken'],
-      [data-content-link-state='restricted']
-    )::before {
+  .content-prose a[data-content-link]::before {
     display: inline-block;
-    width: 1.1em;
-    height: 1.1em;
-    margin-right: 0.28em;
-    background-color: currentColor;
+    width: 1em;
+    height: 1em;
+    margin-right: 0.3em;
     content: '';
+    vertical-align: -0.15em;
+  }
+
+  /*
+   * A glyph: an external link before its favicon has arrived, and a link
+   * that cannot be followed, which says why rather than what it is.
+   */
+  .content-prose a[data-content-link]:not([data-content-link-icon])::before {
+    background-color: var(--content-link-accent, var(--color-text-3));
+    mask-image: var(--content-link-glyph, url('../assets/icons/globe.svg'));
     mask-position: center;
     mask-repeat: no-repeat;
     mask-size: contain;
-    vertical-align: -0.18em;
   }
 
-  .content-prose a[data-content-link-state='resolved']::before {
-    color: var(--content-link-accent, var(--color-accent));
+  /* The site's favicon. */
+  .content-prose a[data-content-link][data-content-link-icon='image']::before {
+    border-radius: 2px;
+    background-image: var(--content-link-icon);
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: contain;
   }
 
+  /*
+   * An entity link that can be followed, or has not answered yet. Its left
+   * edge is the target's picture, fading into the chip's tint the way a
+   * `MediaEdge` does, with the text starting over the faded part.
+   *
+   * Both are layers of the chip's own background, and the chip is sliced
+   * rather than cloned across lines: the picture sits at the very start of
+   * the chip and the lines after carry only the text, so a wrapped chip never
+   * leaves the picture alone at the end of a line. Covering the edge is the
+   * decorator's sum, from the picture's proportions. The room is kept before
+   * the picture arrives, so nothing moves when it does.
+   */
   .content-prose
-    a[data-entity-type='event'][data-content-link-state='resolved']::before {
-    mask-image: url('../assets/icons/event.svg');
-  }
-
-  .content-prose
-    a[data-entity-type='project-stage'][data-content-link-state='resolved']::before {
-    mask-image: url('../assets/icons/calendar.svg');
-  }
-
-  .content-prose
-    a[data-entity-type='project-section'][data-content-link-state='resolved']::before {
-    mask-image: url('../assets/icons/file-tray-stack.svg');
-  }
-
-  .content-prose
-    a[data-entity-type='diary-entry'][data-content-link-state='resolved']::before {
-    mask-image: url('../assets/icons/thought.svg');
-  }
-
-  .content-prose a[data-content-link-state='broken']::before {
-    mask-image: url('../assets/icons/link-broken.svg');
-  }
-
-  .content-prose a[data-content-link-state='restricted']::before {
-    color: var(--color-text-3);
-    mask-image: url('../assets/icons/lock-partial.svg');
-  }
-
-  .content-prose a[data-content-link][data-content-link-state='resolved'] {
-    background-color: color-mix(
+    a[data-content-link='entity']:not(
+      [data-content-link-state='restricted'],
+      [data-content-link-state='broken']
+    ) {
+    --content-link-surface: color-mix(
       in oklab,
       var(--content-link-accent, var(--color-accent)) 16%,
-      transparent
+      var(--content-surface)
     );
+    padding-left: 1.4em;
+    background:
+      linear-gradient(
+        to right,
+        transparent 0,
+        color-mix(in oklab, var(--content-link-surface) 10%, transparent) 1.08em,
+        color-mix(in oklab, var(--content-link-surface) 75%, transparent) 1.87em,
+        var(--content-link-surface) 2.4em
+      ),
+      var(--content-link-media, none) left center /
+        var(--content-link-media-size, auto 100%) no-repeat,
+      var(--content-link-surface);
+    box-decoration-break: slice;
+    transition-property: --content-link-surface, color, text-decoration-color;
+
+    &::before {
+      display: none;
+    }
+
+    &:is(:hover, :focus-visible) {
+      --content-link-surface: color-mix(
+        in oklab,
+        var(--content-link-accent, var(--color-accent)) 28%,
+        var(--content-surface)
+      );
+    }
   }
 
-  .content-prose a[data-content-link='external']::after {
-    display: inline-block;
-    width: 0.68em;
-    height: 0.68em;
-    margin-left: 0.22em;
-    background-color: var(--color-text-3);
-    content: '';
-    mask: url('../assets/icons/external-link.svg') center / contain no-repeat;
-    vertical-align: 0.01em;
-  }
-
-  .content-prose a[data-content-link]:is(:hover, :focus-visible) {
-    background-color: var(--color-bg-3);
-    text-decoration-color: currentColor !important;
-  }
-
-  .content-prose
-    a[data-content-link][data-content-link-state='resolved']:is(
-      :hover,
-      :focus-visible
-    ) {
-    background-color: color-mix(
-      in oklab,
-      var(--content-link-accent, var(--color-accent)) 28%,
-      transparent
-    );
+  .content-prose a[data-content-link-state='restricted'] {
+    --content-link-glyph: url('../assets/icons/lock-partial.svg');
+    --content-link-accent: var(--color-text-3);
   }
 
   .content-prose a[data-content-link-state='broken'] {
+    --content-link-glyph: url('../assets/icons/link-broken.svg');
+    --content-link-accent: var(--color-text-error);
     border: 1px solid var(--color-border-error);
     background-color: var(--color-bg-error);
     color: var(--color-text-error);
     cursor: help;
-    text-decoration-color: color-mix(
-      in oklab,
-      var(--color-text-error) 36%,
-      transparent
-    ) !important;
   }
 
+  /*
+   * The surface the prose lies on: what a chip and a bracket label are mixed
+   * with or drawn over. The page itself, or the editor's panel.
+   */
   .content-prose {
     --content-private-lock: url("data:image/svg+xml,%3Csvg width='18' height='20' viewBox='0 0 18 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M14 8V6A5 5 0 0 0 4 6v2H2v10h14V8h-2ZM6 6a3 3 0 0 1 6 0v2H6V6Zm8 10H4v-6h10v6Z' fill='black'/%3E%3C/svg%3E");
-    --content-private-bracket-bg: var(--color-bg-1);
+    --content-surface: var(--color-bg-1);
   }
 
   .content-editor.content-prose {
-    --content-private-bracket-bg: var(--color-bg-2);
+    --content-surface: var(--color-bg-2);
   }
 
   /*
@@ -375,33 +343,9 @@
       black calc(100% - var(--spacing-md)),
       transparent
     );
-    position: absolute;
     inset: 0;
     z-index: -1;
-    background: var(--color-accent);
-    content: '';
-    opacity: var(--content-private-pattern-opacity, 0.055);
-    pointer-events: none;
-    mask-image:
-      var(--content-private-lock),
-      linear-gradient(
-        to right,
-        transparent,
-        black var(--spacing-md),
-        black calc(100% - var(--spacing-md)),
-        transparent
-      ),
-      var(--content-private-vertical-mask);
-    mask-position:
-      0 0,
-      0 0,
-      0 0;
-    mask-size:
-      2rem 2rem,
-      100% 100%,
-      100% 100%;
-    mask-repeat: repeat, no-repeat, no-repeat;
-    mask-composite: intersect, intersect;
+    @apply content-private-lock-pattern;
   }
 
   .content-prose .content-private-bracket {
@@ -445,7 +389,7 @@
     align-items: center;
     gap: calc(var(--spacing-xs) / 2);
     padding: 0 var(--spacing-xs);
-    background: var(--content-private-bracket-bg);
+    background: var(--content-surface);
     font-size: var(--text-xs);
     font-weight: 600;
     line-height: 1.25rem;
@@ -459,89 +403,328 @@
 
   /*
    * A spoiler: the block stays where it is and keeps its size, but is blurred
-   * over and dusted with drifting specks until the reader asks for it.
-   *
-   * The dust is two `radial-gradient` layers moved with `transform`, which the
-   * compositor handles on its own — no per-frame JavaScript, no canvas, and
-   * nothing at all once the block is revealed, because both layers stop
-   * existing then.
+   * out and dusted with flying specks until the reader asks for it. The dust
+   * is drawn on a canvas by `content-spoiler-particles.ts`; here is only the
+   * cover it lives on and what happens to the content underneath.
    */
   .content-prose .content-spoiler {
     position: relative;
     border-radius: var(--radius-normal);
   }
 
+  /* The blur would spill past the block; it stays inside, like the dust. */
   .content-prose .content-spoiler[data-revealed='false'] {
-    overflow: hidden;
-    cursor: pointer;
     isolation: isolate;
+    overflow: clip;
   }
 
-  .content-prose .content-spoiler[data-revealed='false'] > * {
-    filter: blur(0.3em);
-    opacity: 0.85;
+  .content-prose
+    .content-spoiler[data-revealed='false']
+    > .content-spoiler__content {
+    filter: blur(1em);
+    opacity: 0.35;
     user-select: none;
     pointer-events: none;
   }
 
-  .content-prose .content-spoiler[data-revealed='false']::before,
-  .content-prose .content-spoiler[data-revealed='false']::after {
-    position: absolute;
-    z-index: 1;
-    inset: -50%;
-    background-repeat: repeat;
-    content: '';
-    will-change: transform;
-  }
-
-  .content-prose .content-spoiler[data-revealed='false']::before {
-    background-image: radial-gradient(
-      circle at center,
-      color-mix(in oklab, var(--color-text-1) 55%, transparent) 0 22%,
-      transparent 60%
-    );
-    background-size: 11px 11px;
-    animation: content-spoiler-drift-near 7s linear infinite;
-  }
-
-  .content-prose .content-spoiler[data-revealed='false']::after {
-    background-image: radial-gradient(
-      circle at center,
-      color-mix(in oklab, var(--color-text-1) 32%, transparent) 0 18%,
-      transparent 55%
-    );
-    background-size: 19px 19px;
-    animation: content-spoiler-drift-far 13s linear infinite reverse;
-  }
-
+  /* A picture keeps its shapes through a text-sized blur; it needs far more. */
   .content-prose
-    .content-spoiler[data-revealed='false']:is(:hover, :focus-visible) {
+    .content-spoiler[data-revealed='false']
+    > .content-spoiler__content:has(img, video, iframe) {
+    filter: blur(2.5em) saturate(0.6);
+  }
+
+  .content-prose .content-spoiler__cover {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: inherit;
+    /*
+     * The dust is the site's accent, moved along its own scale: darker and
+     * richer on a light page, paler on a dark one, so it reads as dust
+     * rather than as a solid accent tint in either theme.
+     */
+    background: color-mix(in oklab, var(--color-accent) 5%, transparent);
+    color: light-dark(
+      oklch(
+        calc(var(--lightness-accent) - 6%) calc(var(--chroma-accent) * 1.15)
+          var(--hue-accent)
+      ),
+      oklch(
+        calc(var(--lightness-accent) + 10%) calc(var(--chroma-accent) * 0.75)
+          var(--hue-accent)
+      )
+    );
+    /*
+     * A glow of the same colour along the edges, inside the block, so a
+     * hidden block catches the eye before its dust does.
+     */
+    box-shadow: inset 0 0 1.25em -0.25em
+      color-mix(in oklab, currentColor 45%, transparent);
+    cursor: pointer;
+    overflow: hidden;
+  }
+
+  .content-prose .content-spoiler__cover:focus-visible {
     outline: 2px solid var(--color-accent);
     outline-offset: 2px;
   }
 
-  @keyframes content-spoiler-drift-near {
-    from {
-      transform: translate3d(0, 0, 0);
-    }
-    to {
-      transform: translate3d(22px, 11px, 0);
-    }
+  .content-prose .content-spoiler__cover canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
   }
 
-  @keyframes content-spoiler-drift-far {
-    from {
-      transform: translate3d(0, 0, 0);
-    }
-    to {
-      transform: translate3d(-19px, 19px, 0);
-    }
+  .content-prose .content-spoiler-cover-leave-active {
+    transition: opacity var(--default-transition-duration)
+      var(--default-transition-timing-function);
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .content-prose .content-spoiler[data-revealed='false']::before,
-    .content-prose .content-spoiler[data-revealed='false']::after {
-      animation: none;
-    }
+  .content-prose .content-spoiler-cover-leave-to {
+    opacity: 0;
   }
+}
+
+/*
+ * The lock pattern of a private section, drawn by a `::before` over whatever
+ * box it is applied to: the section on a page, each member block in the
+ * editor. Where it sits (`inset`, `z-index`) is the caller's; how faint it is
+ * and how it fades at the top and bottom are the two custom properties.
+ */
+@utility content-private-lock-pattern {
+  position: absolute;
+  background: var(--color-accent);
+  content: '';
+  opacity: var(--content-private-pattern-opacity, 0.055);
+  pointer-events: none;
+  mask-image:
+    var(--content-private-lock),
+    linear-gradient(
+      to right,
+      transparent,
+      black var(--spacing-md),
+      black calc(100% - var(--spacing-md)),
+      transparent
+    ),
+    var(--content-private-vertical-mask, linear-gradient(black 0 0));
+  mask-position:
+    0 0,
+    0 0,
+    0 0;
+  mask-size:
+    2rem 2rem,
+    100% 100%,
+    100% 100%;
+  mask-repeat: repeat, no-repeat, no-repeat;
+  mask-composite: intersect, intersect;
+}
+
+/* A colour, so a chip's tint and the fade over its picture change together. */
+@property --content-link-surface {
+  syntax: '<color>';
+  inherits: false;
+  initial-value: transparent;
+}
+
+/*
+ * Lists, in the editor and on the page alike.
+ *
+ * Every item has its marker in a column of its own: a pale circle with a dot
+ * in it, a bold number without a full stop, or a check that fills with the
+ * accent once done. A thin line runs from the middle of the marker down the
+ * whole item, so a long item, or one holding a list of its own, shows where
+ * it ends. The line stops level with the bottom of the marker on the item's
+ * last line: an item of a single line keeps it entirely under its marker,
+ * and shows none.
+ *
+ * `content-list-root` goes on the list, `content-list-item` on each item,
+ * whose grid has the areas `marker`, `content` and `child` — the editor's
+ * list plugin lays its items out the same way — and the rest on the marker
+ * and on the item's `::after`. The first is not called `content-list`: that
+ * is the class the page gives the list itself, and a utility of the same
+ * name would be generated for it, outranking the page's own rules for it.
+ *
+ * A marker never breaks. Two digits and a short Roman numeral fit inside
+ * the circle; a longer one stretches it into a capsule. The markers' column
+ * belongs to the list, and each item takes it over as a subgrid, so it is as
+ * wide as the widest marker and the text of every item keeps one edge
+ * instead of a capsule running into its own.
+ */
+@utility content-list-root {
+  --content-list-marker-size: 1.5em;
+  --content-list-line-width: 1.5px;
+  --content-list-gap: calc(var(--spacing) * 2.5);
+  --content-list-text-gap: calc(var(--spacing) * 3.5);
+  /* Opaque, over whatever the prose lies on, so the line hides beneath. */
+  --content-list-rule: color-mix(
+    in oklab,
+    var(--color-text-3) 70%,
+    var(--content-surface, var(--color-bg-1))
+  );
+  --content-list-fill: color-mix(
+    in oklab,
+    var(--color-text-3) 32%,
+    var(--content-surface, var(--color-bg-1))
+  );
+  display: grid;
+  grid-template-columns:
+    minmax(var(--content-list-marker-size), max-content)
+    minmax(0, 1fr);
+  row-gap: var(--content-list-gap);
+  column-gap: var(--content-list-text-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  @variant max-sm {
+    --content-list-marker-size: 1.25em;
+    --content-list-line-width: 1px;
+  }
+}
+
+@utility content-list-item {
+  /* Centred on the item's first line, whatever its size. */
+  --content-list-marker-top: calc((1lh - var(--content-list-marker-size)) / 2);
+  position: relative;
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-template-areas:
+    'marker content'
+    '. child';
+  column-gap: var(--content-list-text-gap);
+  align-items: start;
+}
+
+/* A done item's line takes the accent of its check. */
+@utility content-list-item-done {
+  --content-list-rule: color-mix(
+    in oklab,
+    var(--color-accent) 45%,
+    var(--content-surface, var(--color-bg-1))
+  );
+}
+
+@utility content-list-marker {
+  grid-area: marker;
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  display: flex;
+  min-width: var(--content-list-marker-size);
+  height: var(--content-list-marker-size);
+  margin-top: var(--content-list-marker-top);
+  align-items: center;
+  justify-content: center;
+  justify-self: start;
+  padding-inline: calc(var(--content-list-marker-size) * 0.12);
+  border: 1px solid var(--content-list-rule);
+  border-radius: 9999px;
+  background-color: var(--content-list-fill);
+  color: var(--color-text-2);
+  line-height: 1;
+  /* The item's text may break anywhere; its marker may not. */
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+@utility content-list-marker-dot {
+  content: '';
+  background-image: radial-gradient(
+    circle closest-side,
+    var(--color-text-2) 0 30%,
+    transparent calc(30% + 0.75px)
+  );
+}
+
+/* The item's own number, in the list's counter style: `3`, not `2.3.`. */
+@utility content-list-marker-number {
+  content: counter(item, var(--list-counter-type, decimal));
+  font-size: 0.72em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * A check: an empty circle, filled with the accent once the item is done.
+ * The tick is the list tool's own stroked path, the same in the editor and
+ * on the page, so its size and weight are set here for both. The path keeps
+ * to the middle of its box, so the box is as large as the whole circle,
+ * border and all, and centred over it without taking any room.
+ */
+@utility content-list-check {
+  transition-property: background-color, border-color, color;
+  transition-duration: var(--default-transition-duration);
+  transition-timing-function: var(--default-transition-timing-function);
+
+  & svg {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    translate: -50% -50%;
+    width: var(--content-list-marker-size);
+    height: var(--content-list-marker-size);
+    /* The list tool keeps its tick within the box. */
+    max-width: none;
+    max-height: none;
+    overflow: visible;
+    opacity: 0;
+    transition: opacity var(--default-transition-duration);
+  }
+
+  & svg path {
+    stroke-width: 3;
+  }
+}
+
+@utility content-list-check-done {
+  border-color: var(--color-accent);
+  background-color: var(--color-accent);
+  color: var(--color-white);
+
+  & svg {
+    opacity: 1;
+  }
+}
+
+@utility content-list-line {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  top: calc(
+    var(--content-list-marker-top) + var(--content-list-marker-size) / 2
+  );
+  bottom: calc(
+    1lh - var(--content-list-marker-top) - var(--content-list-marker-size)
+  );
+  left: calc(
+    (var(--content-list-marker-size) - var(--content-list-line-width)) / 2
+  );
+  width: var(--content-list-line-width);
+  background-color: var(--content-list-rule);
+  pointer-events: none;
+}
+
+/*
+ * Lengths, so each is worked out once where it is set — the marker's size
+ * in the list's own text size, its offset from the item's line height — and
+ * inherited as it is. As plain custom properties they would be recomputed
+ * wherever they are used, and the smaller type of a number inside its marker
+ * would shrink the marker with it.
+ */
+@property --content-list-marker-size {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+@property --content-list-marker-top {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
 }

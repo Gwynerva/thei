@@ -5,6 +5,7 @@ import {
   type VideoThumbnailOptions,
 } from './video-thumbnail';
 import type { AssetBytes } from './bytes';
+import { svgDensityFor } from './svg-density';
 
 export const MEDIA_PREVIEW_MAX_LONG_SIDE = 720;
 /** On AVIF's own scale, not the displayed 10-100 upload scale. */
@@ -17,6 +18,8 @@ export interface MediaPreview {
   height: number;
   /** Of a video: seconds into it the preview frame was taken from. */
   frameAt?: number;
+  /** Of a video: how well that frame shows it (`frameScore`). */
+  frameScore?: number;
 }
 
 export async function createMediaPreview(
@@ -38,9 +41,15 @@ export async function createMediaPreview(
     ? thumbnail.frame
     : (bytes.buffer ?? bytes.path);
 
+  // An SVG is drawn at the preview's own size: at librsvg's default a small
+  // drawing would come out as small as its units, and look blurred enlarged.
+  const density = thumbnail
+    ? undefined
+    : await svgDensityFor(raster, MEDIA_PREVIEW_MAX_LONG_SIDE);
+
   // An original JPEG keeps its EXIF orientation, and its recorded dimensions
   // are already the displayed ones: the preview has to be turned the same way.
-  const { data, info } = await sharp(raster, { animated: false })
+  const { data, info } = await sharp(raster, { animated: false, density })
     .autoOrient()
     .resize({
       width: MEDIA_PREVIEW_MAX_LONG_SIDE,
@@ -55,6 +64,8 @@ export async function createMediaPreview(
     buffer: data,
     width: info.width,
     height: info.height,
-    ...(thumbnail ? { frameAt: thumbnail.at } : {}),
+    ...(thumbnail
+      ? { frameAt: thumbnail.at, frameScore: thumbnail.score }
+      : {}),
   };
 }

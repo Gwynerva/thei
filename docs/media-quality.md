@@ -63,11 +63,24 @@ file; rows stored before that are filled in the first time they are read.
 
 ## Video previews
 
-A video's preview is a frame chosen to show it, not its first frame: the
-opening is skipped (10 % in, then 30, 50 and 75 % if the earlier point comes
-out black, white or blank) and ffmpeg's `thumbnail` filter picks the most
-typical frame of the second that follows. The video's `meta.previewAt` records
-the seconds the frame was taken from. A video without it still has a
-first-frame preview from an older version; the update task
-`update/tasks/0.0.2-preview-frames.ts` remakes those while the site is closed
-for the update, and the library's file card can remake one by hand.
+A video's preview is the frame that best shows it, not its first frame. The
+video is looked at in seven points spread over its length, skipping the very
+opening and end (`VIDEO_PREVIEW_FRAME_POSITIONS` in
+`shared/media-frame-score.ts`); at each, ffmpeg's `thumbnail` filter picks the
+most typical frame of the second that follows, and `frameScore` weighs it: the
+most colourful, well exposed frame wins, so a dark or washed-out one loses
+even with a tint. The admin's browser weighs the same points with the same
+function to show a poster before a picked video is uploaded.
+
+The video's `meta.previewAt` records the seconds the frame was taken from, and
+`meta.previewScore` its score. A video without a score has a preview chosen
+by an older version; the update task
+`update/tasks/0.0.2-video-preview-frames.ts` remakes those while the site is
+closed for the update, and the library's file card can remake one by hand.
+
+An SVG's preview is drawn at the preview's own size (`svgDensityFor` in
+`server/thei/assets/svg-density.ts`), not at the size of its units, and
+`update/tasks/0.0.2-svg-previews.ts` redraws the ones an older version made.
+SVGs that rely on features librsvg does not implement — CSS custom properties
+(`var(--x)`) above all — rasterise wrongly everywhere a raster is made; the
+vector itself is always shown by the browser.

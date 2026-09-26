@@ -147,6 +147,8 @@ export function createEditorSnapshotManager(
 
   async function initialize() {
     const data = await readStable();
+    // Torn down while the first read was under way: nothing to keep alive.
+    if (destroyed) return cloneSnapshot(data);
     setCurrent(data);
     interval = setInterval(
       () => void captureScheduledSnapshot().catch(() => undefined),

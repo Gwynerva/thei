@@ -29,7 +29,6 @@ describe('Editor.js phrases', () => {
       gallery: 'Галерея',
       file: 'Файл',
       add: 'Добавить',
-      filter: 'Фильтр',
       click_to_delete: 'Точно удалить?',
       move_down: 'Спустить',
     });
