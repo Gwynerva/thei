@@ -1,6 +1,7 @@
 import { bootTheiServer } from './boot/process';
 import { invalidatePublicSearchIndex } from './public/search-index';
 import { isContentWriteRequest } from './read-only-request';
+import { invalidateTagRecommendationIndex } from './tag-recommendations';
 
 export default defineNitroPlugin(async (nitroApp) => {
   // Modules that must also load outside a Nuxt build — the scratch directory
@@ -10,10 +11,12 @@ export default defineNitroPlugin(async (nitroApp) => {
   (globalThis as { THEI_SERVER?: typeof THEI_SERVER }).THEI_SERVER =
     THEI_SERVER;
   THEI_SERVER.console.log('Server plugin started.');
-  // Every content write goes through the API, so any write drops the search
-  // index; it is rebuilt lazily by the next search.
+  // Every content write goes through the API, so any write drops the indexes
+  // built over the content; each is rebuilt lazily by its next reader.
   nitroApp.hooks.hook('afterResponse', (event) => {
-    if (isContentWriteRequest(event)) invalidatePublicSearchIndex();
+    if (!isContentWriteRequest(event)) return;
+    invalidatePublicSearchIndex();
+    invalidateTagRecommendationIndex();
   });
   await bootTheiServer();
 });

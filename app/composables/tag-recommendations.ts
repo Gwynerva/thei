@@ -1,14 +1,11 @@
 import { debounce } from 'perfect-debounce';
 import type { RelationEditItem } from '#layers/thei/shared/relation';
 import { isOneOf } from '#layers/thei/shared/utils/isOneOf';
-import {
-  TAG_CONTAINER_TYPES,
-  type TagEditItem,
-  type TagItem,
-} from '#layers/thei/shared/tag';
+import { TAG_CONTAINER_TYPES, type TagEditItem } from '#layers/thei/shared/tag';
 import {
   clampTagContextText,
   type TagContext,
+  type TagRecommendation,
   type TagRecommendationRequest,
 } from '#layers/thei/shared/tag-recommendation';
 
@@ -27,7 +24,7 @@ export function useTagRecommendations(options: {
   tags: MaybeRefOrGetter<TagEditItem[] | undefined>;
   relations: MaybeRefOrGetter<RelationEditItem[] | undefined>;
 }) {
-  const recommendations = ref<TagItem[]>([]);
+  const recommendations = ref<TagRecommendation[]>([]);
   const failed = ref(false);
   let version = 0;
 
@@ -57,10 +54,13 @@ export function useTagRecommendations(options: {
   async function load() {
     const current = ++version;
     try {
-      const result = await $fetch<TagItem[]>('/api/admin/tag-recommendations', {
-        method: 'POST',
-        body: request.value,
-      });
+      const result = await $fetch<TagRecommendation[]>(
+        '/api/admin/tag-recommendations',
+        {
+          method: 'POST',
+          body: request.value,
+        },
+      );
       if (current !== version) return;
       recommendations.value = result;
       failed.value = false;

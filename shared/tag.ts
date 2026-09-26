@@ -154,44 +154,6 @@ export function rankTagSearch<
     .map(({ tag }) => tag);
 }
 
-export function rankTagRecommendations<
-  T extends Pick<TagItem, 'tagUuid' | 'title'>,
->(
-  tags: T[],
-  text: string,
-  coUsage: ReadonlyMap<string, number>,
-  limit = 8,
-): T[] {
-  const normalizedText = normalizeTagTitle(text);
-  return tags
-    .map((tag) => {
-      const title = normalizeTagTitle(tag.title);
-      const phrase = normalizedText.includes(title) ? 1 : 0;
-      const words = title.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
-      const matchedWords = words.filter((word) =>
-        new RegExp(
-          `(^|[^\\p{L}\\p{N}])${escapeTagRegex(word)}([^\\p{L}\\p{N}]|$)`,
-          'u',
-        ).test(normalizedText),
-      ).length;
-      const together = coUsage.get(tag.tagUuid) ?? 0;
-      if (!phrase && !matchedWords && together < 4) return undefined;
-      return { tag, phrase, matchedWords, together };
-    })
-    .filter((item): item is NonNullable<typeof item> => Boolean(item))
-    .sort(
-      (a, b) =>
-        b.phrase - a.phrase ||
-        b.matchedWords - a.matchedWords ||
-        b.together - a.together ||
-        a.tag.title.localeCompare(b.tag.title, undefined, {
-          sensitivity: 'base',
-        }),
-    )
-    .slice(0, limit)
-    .map(({ tag }) => tag);
-}
-
 function tagSearchScore(
   tag: Pick<TagItem, 'title' | 'publicId' | 'slug'>,
   needle: string,
@@ -204,10 +166,6 @@ function tagSearchScore(
     if (value.includes(needle)) return fieldIndex * 10 + 2;
   }
   return Number.POSITIVE_INFINITY;
-}
-
-function escapeTagRegex(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**

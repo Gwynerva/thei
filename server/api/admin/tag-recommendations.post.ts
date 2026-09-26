@@ -1,77 +1,21 @@
-import { and, eq, inArray } from 'drizzle-orm';
 import { isRelationEntityType } from '#layers/thei/shared/relation';
-import {
-  rankTagRecommendations,
-  TAG_CONTAINER_TYPES,
-  type TagItem,
-} from '#layers/thei/shared/tag';
+import { TAG_CONTAINER_TYPES } from '#layers/thei/shared/tag';
 import {
   clampTagContextText,
+  type TagRecommendation,
   type TagRecommendationRequest,
 } from '#layers/thei/shared/tag-recommendation';
 import { isOneOf } from '#layers/thei/shared/utils/isOneOf';
-import { buildTagItems, isTagUuid } from '../../thei/tags';
+import { isTagUuid } from '../../thei/tags';
 import { markReadOnlyRequest } from '../../thei/read-only-request';
+import { recommendTagsForDraft } from '../../thei/tag-recommendations';
 
-export default defineEventHandler(async (event): Promise<TagItem[]> => {
-  markReadOnlyRequest(event);
-  const request = parseRequest(await readBody<unknown>(event));
-  const selected = new Set(request.selectedTagUuids);
-  const { db, schema } = THEI_SERVER.useDb();
-  const tags = db
-    .select()
-    .from(schema.tags)
-    .all()
-    .filter((tag) => !selected.has(tag.tagUuid));
-
-  const coUsage = new Map<string, number>();
-  if (selected.size) {
-    const containers = db
-      .select({
-        containerType: schema.tagUsages.containerType,
-        containerId: schema.tagUsages.containerId,
-      })
-      .from(schema.tagUsages)
-      .where(inArray(schema.tagUsages.tagUuid, [...selected]))
-      .groupBy(schema.tagUsages.containerType, schema.tagUsages.containerId)
-      .all();
-    const relatedContainerIds = new Set(
-      containers
-        .filter(
-          (container) =>
-            container.containerType === 'project' &&
-            container.containerId !== request.owner?.id,
-        )
-        .map((container) => container.containerId),
-    );
-    const related = relatedContainerIds.size
-      ? db
-          .select({
-            tagUuid: schema.tagUsages.tagUuid,
-            containerId: schema.tagUsages.containerId,
-          })
-          .from(schema.tagUsages)
-          .where(
-            and(
-              eq(schema.tagUsages.containerType, 'project'),
-              inArray(schema.tagUsages.containerId, [...relatedContainerIds]),
-            ),
-          )
-          .all()
-      : [];
-    for (const item of related) {
-      if (!selected.has(item.tagUuid))
-        coUsage.set(item.tagUuid, (coUsage.get(item.tagUuid) ?? 0) + 1);
-    }
-  }
-
-  const ranked = rankTagRecommendations(
-    tags,
-    `${request.title}\n${request.text}`,
-    coUsage,
-  );
-  return buildTagItems(ranked);
-});
+export default defineEventHandler(
+  async (event): Promise<TagRecommendation[]> => {
+    markReadOnlyRequest(event);
+    return recommendTagsForDraft(parseRequest(await readBody<unknown>(event)));
+  },
+);
 
 function fail(message: string): never {
   throw createError({ statusCode: 400, message });

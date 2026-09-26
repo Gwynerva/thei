@@ -4,7 +4,6 @@ import {
   normalizeTagEditItems,
   normalizeTagTitle,
   rankTagSearch,
-  rankTagRecommendations,
   tagAccent,
   tagAccentCssColor,
   validateTagData,
@@ -109,24 +108,6 @@ describe('tags', () => {
       'vue',
     );
     expect(ranked.map((tag) => tag.title)).toEqual(['Vue', 'Other', 'Third']);
-  });
-
-  it('recommends text matches and tags used together at least four times', () => {
-    const tags = [
-      { tagUuid: 'vue', title: 'Vue' },
-      { tagUuid: 'design', title: 'Product design' },
-      { tagUuid: 'rare', title: 'Rare' },
-    ];
-    expect(
-      rankTagRecommendations(
-        tags,
-        'A product design case',
-        new Map([
-          ['vue', 4],
-          ['rare', 3],
-        ]),
-      ).map((tag) => tag.tagUuid),
-    ).toEqual(['design', 'vue']);
   });
 });
 

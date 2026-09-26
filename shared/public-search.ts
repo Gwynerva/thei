@@ -1,3 +1,5 @@
+import { normalizeTermText } from './text-terms';
+
 export type PublicSearchType = 'project' | 'event';
 
 export interface PublicSearchFilters {
@@ -79,7 +81,7 @@ export function countPublicSearchFilters(filters: PublicSearchFilters) {
 }
 
 export function normalizePublicSearchText(value: string): string {
-  return value.normalize('NFKC').toLocaleLowerCase().replace(/ё/g, 'е');
+  return normalizeTermText(value);
 }
 
 export function publicSearchTokens(q: string): string[] {
