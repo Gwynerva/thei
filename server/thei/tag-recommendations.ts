@@ -5,6 +5,7 @@ import {
   buildTagProfile,
   joinTagContextText,
   recommendTags,
+  suggestTagSynonyms,
   tagCandidates,
   tagEntityKey,
   type TagCandidateItem,
@@ -12,6 +13,7 @@ import {
   type TagProfile,
   type TagRecommendation,
   type TagRecommendationRequest,
+  type TagSynonymSuggestion,
 } from '#layers/thei/shared/tag-recommendation';
 import {
   inverseDocumentFrequency,
@@ -43,6 +45,8 @@ export type TagRecommendationIndex = {
   profiles: TagProfile[];
   tagRows: Map<string, TagRow>;
   idf: (term: string) => number;
+  /** How many projects and events use a term. */
+  frequency: (term: string) => number;
   /** Projects and events related to each project or event. */
   relations: Map<string, string[]>;
 };
@@ -50,7 +54,10 @@ export type TagRecommendationIndex = {
 type TagRow = typeof import('./db/schema/tags').tags.$inferSelect;
 
 let cachedIndex: TagRecommendationIndex | undefined;
-const termsByDocument = new Map<string, { hash: string; counts: TermCounts }>();
+const termsByDocument = new Map<
+  string,
+  { hash: string; counts: TermCounts; surfaces: Map<string, string> }
+>();
 
 export function invalidateTagRecommendationIndex() {
   cachedIndex = undefined;
@@ -161,13 +168,15 @@ export function buildTagRecommendationIndex(): TagRecommendationIndex {
   const counted = sources.map((source) => {
     const key = tagEntityKey(source);
     liveKeys.add(key);
+    const { counts, surfaces } = documentTerms(key, source.title, source.text);
     return {
       type: source.type,
       id: source.id,
       title: source.title,
       key,
       tagUuids: tagUuidsByKey.get(key) ?? [],
-      terms: documentTerms(key, source.title, source.text),
+      terms: counts,
+      surfaces,
     };
   });
   for (const key of termsByDocument.keys())
@@ -223,18 +232,19 @@ export function buildTagRecommendationIndex(): TagRecommendationIndex {
     profiles: [...tagRows.values()].map((tag) => buildTagProfile(tag, idf)),
     tagRows,
     idf,
+    frequency: (term) => frequencies.get(term) ?? 0,
     relations,
   };
 }
 
 /** The words of one entity, read again only when its text has changed. */
-function documentTerms(key: string, title: string, text: string): TermCounts {
+function documentTerms(key: string, title: string, text: string) {
   const hash = textHash(`${title}\u0000${text}`);
   const known = termsByDocument.get(key);
-  if (known?.hash === hash) return known.counts;
-  const { counts } = readTerms({ title, text });
-  termsByDocument.set(key, { hash, counts });
-  return counts;
+  if (known?.hash === hash) return known;
+  const terms = { hash, ...readTerms({ title, text }) };
+  termsByDocument.set(key, terms);
+  return terms;
 }
 
 /** FNV-1a over the UTF-16 code units, with the length alongside. */
@@ -297,4 +307,13 @@ export async function findTagCandidates(
       previewMedia: await relationIconMedia(candidate),
     })),
   );
+}
+
+/** Words worth adding as a tag's synonyms, from the entities carrying it. */
+export function findTagSynonymSuggestions(
+  tagUuid: string,
+): TagSynonymSuggestion[] | undefined {
+  const index = getTagRecommendationIndex();
+  if (!index.tagRows.has(tagUuid)) return undefined;
+  return suggestTagSynonyms(tagUuid, index);
 }

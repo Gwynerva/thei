@@ -240,7 +240,8 @@ export const baselineSql: string[] = [
 	\`normalizedTitle\` text NOT NULL,
 	\`slug\` text NOT NULL,
 	\`publicId\` text NOT NULL,
-	\`description\` text DEFAULT '' NOT NULL
+	\`description\` text DEFAULT '' NOT NULL,
+	\`synonyms\` text DEFAULT '[]' NOT NULL
 );
 `,
   `CREATE UNIQUE INDEX \`tags_normalizedTitle_unique\` ON \`tags\` (\`normalizedTitle\`);`,

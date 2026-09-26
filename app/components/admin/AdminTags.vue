@@ -1,7 +1,6 @@
 <script lang="ts" setup>
 import type { TagEditItem } from '#layers/thei/shared/tag';
 import type { TagRecommendation } from '#layers/thei/shared/tag-recommendation';
-import TagAdder from '#layers/thei/app/components/TagAdder.vue';
 
 /**
  * The tags block of a project or an event: the tags themselves and the ones
@@ -21,25 +20,10 @@ const {
 }>();
 
 const tags = defineModel<TagEditItem[]>({ required: true });
-const root = useTemplateRef<HTMLElement>('root');
-const adder = useTemplateRef<InstanceType<typeof TagAdder>>('adder');
-
-/** Brings the block into view and puts the cursor in its field. */
-function reveal() {
-  const reduceMotion = window.matchMedia(
-    '(prefers-reduced-motion: reduce)',
-  ).matches;
-  root.value?.scrollIntoView({
-    behavior: reduceMotion ? 'auto' : 'smooth',
-    block: 'center',
-  });
-  adder.value?.focus({ preventScroll: true });
-}
-defineExpose({ reveal });
 </script>
 
 <template>
-  <div ref="root">
+  <div>
     <SectionHeader
       icon="tag"
       :title="title"
@@ -48,11 +32,7 @@ defineExpose({ reveal });
     />
     <Box>
       <div class="p-sm sm:p-md">
-        <TagAdder
-          ref="adder"
-          v-model="tags"
-          :recommendations="recommendations"
-        />
+        <TagAdder v-model="tags" :recommendations="recommendations" />
         <p
           v-if="recommendationsFailed"
           role="status"

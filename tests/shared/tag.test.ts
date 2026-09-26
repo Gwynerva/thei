@@ -1,17 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import {
   cleanTagTitle,
+  matchedTagSynonym,
   normalizeTagEditItems,
+  normalizeTagSynonyms,
   normalizeTagTitle,
   rankTagSearch,
   tagAccent,
   tagAccentCssColor,
+  tagNamedBy,
   validateTagData,
 } from '../../shared/tag';
 
 describe('tags', () => {
-  it('normalizes case and Unicode compatibility forms', () => {
+  it('normalizes case, Unicode compatibility forms and ё', () => {
     expect(normalizeTagTitle('  Ｖｕｅ.JS  ')).toBe('vue.js');
+    expect(normalizeTagTitle('Ёлка')).toBe(normalizeTagTitle('елка'));
   });
 
   it('accepts punctuation in titles and validates identity fields', () => {
@@ -126,5 +130,67 @@ describe('tag accent', () => {
     expect(tagAccentCssColor({ title: 'Design' })).toContain(
       String(derived.hue),
     );
+  });
+});
+
+describe('tag synonyms', () => {
+  const tag = {
+    title: 'Образы Петры',
+    publicId: 'obrazy',
+    slug: 'obrazy-petry',
+    synonyms: ['грим', 'косплей'],
+  };
+
+  it('cleans, splits and deduplicates synonyms and leaves out the title', () => {
+    expect(
+      normalizeTagSynonyms(
+        ['  Грим ', 'макияж, КОСПЛЕЙ; грим', 'образы петры', ''],
+        'Образы Петры',
+      ),
+    ).toEqual(['Грим', 'макияж', 'КОСПЛЕЙ']);
+    expect(normalizeTagSynonyms(undefined, 'Tag')).toEqual([]);
+    expect(normalizeTagSynonyms('грим', 'Tag')).toBe('Invalid synonyms');
+    expect(normalizeTagSynonyms(['x'.repeat(101)], 'Tag')).toBe(
+      'Tag synonym is too long',
+    );
+    expect(
+      normalizeTagSynonyms(
+        Array.from({ length: 21 }, (_, index) => `word ${index}`),
+        'Tag',
+      ),
+    ).toBe('Too many tag synonyms');
+  });
+
+  it('keeps synonyms through validation', () => {
+    expect(
+      validateTagData({
+        title: 'Образы Петры',
+        slug: 'obrazy',
+        publicId: 'Tag123',
+        description: '',
+        synonyms: ['грим', 'грим'],
+      }),
+    ).toMatchObject({ synonyms: ['грим'] });
+  });
+
+  it('finds a tag by a synonym and says which one', () => {
+    const other = { title: 'Гримёрка', publicId: 'grim', slug: 'grimerka' };
+    // A synonym typed whole ranks above a title that only begins with it.
+    expect(
+      rankTagSearch([other, tag], 'грим').map((item) => item.title),
+    ).toEqual(['Образы Петры', 'Гримёрка']);
+    expect(matchedTagSynonym(tag, 'КОСП')).toBe('косплей');
+    expect(matchedTagSynonym(tag, 'образ')).toBeUndefined();
+    expect(tagNamedBy(tag, ' Грим ')).toBe(true);
+    expect(tagNamedBy(tag, 'гри')).toBe(false);
+  });
+
+  it('reads ё as е in search', () => {
+    expect(
+      rankTagSearch(
+        [{ title: 'Ёлка', publicId: 'yolka', slug: 'yolka' }],
+        'елк',
+      ),
+    ).toHaveLength(1);
   });
 });

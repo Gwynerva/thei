@@ -682,8 +682,6 @@ export type LanguagePhrases = {
   tag_reason_similar: string;
   tag_reason_related: string;
   tag_reason_together: string;
-  tag_nudge: (count: number) => string;
-  tag_nudge_hint: string;
   tag_candidates: string;
   tag_candidates_hint: string;
   tag_candidates_empty: string;
@@ -691,6 +689,17 @@ export type LanguagePhrases = {
   tag_candidate_add: string;
   tag_candidate_added: string;
   tag_title_taken: string;
+  tag_title_is_synonym: (tag: string) => string;
+  tag_synonym_taken: (synonym: string, tag: string) => string;
+  tag_synonyms: string;
+  tag_synonyms_hint: string;
+  tag_synonyms_placeholder: string;
+  tag_synonyms_limit: (limit: number) => string;
+  tag_synonym_remove: (synonym: string) => string;
+  tag_synonym_suggestions: string;
+  tag_synonym_suggestion_add: (word: string) => string;
+  tag_synonym_found_in: string;
+  tag_synonym_already_added: (synonym: string, tag: string) => string;
   tag_slug_taken: string;
   tag_public_id_taken: string;
   tag_icon_not_found: string;

@@ -6,6 +6,7 @@ import { schema } from '../../server/thei/db/schema';
 import {
   applyTagUsages,
   deleteTagUsagesForContainer,
+  findTagNameConflict,
   prepareTagUsages,
 } from '../../server/thei/tags';
 
@@ -69,6 +70,16 @@ describe('tag usages', () => {
         .all()
         .map((tag) => tag.tagUuid),
     ).toEqual(['t-1']);
+  });
+
+  it('keeps an orphan tag that has synonyms', () => {
+    const db = createDb();
+    insertTag(db, 't-1', 'One', { synonyms: ['uno'] });
+    applyTagUsages(db, schema, 'project', 'p-1', [{ tagUuid: 't-1' }]);
+
+    deleteTagUsagesForContainer(db, schema, 'project', 'p-1');
+
+    expect(db.select().from(schema.tags).all()).toHaveLength(1);
   });
 
   it('keeps an orphan tag when it owns an icon usage', () => {
@@ -178,6 +189,16 @@ describe('prepared tag usages', () => {
     });
   });
 
+  it('resolves a title typed as a synonym to its tag', async () => {
+    const db = createDb();
+    insertTag(db, 't-1', 'Образы Петры', { synonyms: ['грим', 'Косплей'] });
+    vi.stubGlobal('THEI_SERVER', { useDb: () => ({ db, schema }) });
+
+    expect(
+      await prepareTagUsages([{ title: 'косплей' }, { title: 'ГРИМ' }]),
+    ).toEqual([{ tagUuid: 't-1' }]);
+  });
+
   it('refuses a tag that does not exist', async () => {
     const db = createDb();
     vi.stubGlobal('THEI_SERVER', { useDb: () => ({ db, schema }) });
@@ -198,7 +219,8 @@ function createDb() {
       normalizedTitle text NOT NULL UNIQUE,
       slug text NOT NULL UNIQUE,
       publicId text NOT NULL UNIQUE,
-      description text DEFAULT '' NOT NULL
+      description text DEFAULT '' NOT NULL,
+      synonyms text DEFAULT '[]' NOT NULL
     );
     CREATE TABLE "tag-usages" (
       tagUuid text NOT NULL,
@@ -236,3 +258,33 @@ function insertTag(
     })
     .run();
 }
+
+describe('tag names', () => {
+  it('keeps every word naming one tag at most', () => {
+    const db = createDb();
+    insertTag(db, 't-1', 'Образы Петры', { synonyms: ['грим'] });
+    insertTag(db, 't-2', 'Море');
+    vi.stubGlobal('THEI_SERVER', {
+      useDb: () => ({ db, schema }),
+      phrase: {
+        tag_title_is_synonym: (tag: string) => `title is synonym of ${tag}`,
+        tag_synonym_taken: (synonym: string, tag: string) =>
+          `${synonym} names ${tag}`,
+      },
+    });
+
+    expect(findTagNameConflict('Грим', [])?.message).toBe(
+      'title is synonym of Образы Петры',
+    );
+    expect(findTagNameConflict('Путешествия', ['море'])?.message).toBe(
+      'море names Море',
+    );
+    expect(findTagNameConflict('Путешествия', ['Грим'])?.message).toBe(
+      'Грим names Образы Петры',
+    );
+    // A tag's own names are not a clash with itself.
+    expect(
+      findTagNameConflict('Образы Петры', ['грим', 'косплей'], 't-1'),
+    ).toBeUndefined();
+  });
+});

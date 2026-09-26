@@ -45,13 +45,24 @@ export function stemTerm(token: string): string {
     word.length < 3
       ? word
       : CYRILLIC_WORD.test(word)
-        ? stemRussian(word)
+        ? russianStem(word)
         : LATIN_WORD.test(word)
           ? stemEnglish(word)
           : word;
   if (stems.size >= STEM_CACHE_LIMIT) stems.clear();
   stems.set(token, stem);
   return stem;
+}
+
+/**
+ * Snowball leaves a vowel at the end of some stems and not of others of the
+ * same word — «косплей» is «коспл», «косплея» is «коспле»; «музей», «музея»
+ * likewise. Dropping what vowels remain at the end brings them together.
+ */
+function russianStem(word: string) {
+  const stem = stemRussian(word);
+  const trimmed = stem.replace(/[аеиоуыэюяйь]+$/u, '');
+  return trimmed.length >= 2 ? trimmed : stem;
 }
 
 /** How often each stem occurs. */

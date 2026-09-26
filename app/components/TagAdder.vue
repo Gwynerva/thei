@@ -1,6 +1,10 @@
 <script lang="ts" setup>
 import { debounce } from 'perfect-debounce';
-import type { TagEditItem, TagItem } from '#layers/thei/shared/tag';
+import type {
+  TagEditItem,
+  TagItem,
+  TagSearchItem,
+} from '#layers/thei/shared/tag';
 import {
   cleanTagTitle,
   normalizeTagTitle,
@@ -30,12 +34,16 @@ const tagContainer = ref<HTMLElement | null>(null);
 const popupOpen = ref(false);
 const searching = ref(false);
 const searchFailed = ref(false);
-const suggestions = ref<TagItem[]>([]);
+const suggestions = ref<TagSearchItem[]>([]);
 const activeIndex = ref(-1);
 let searchVersion = 0;
 const listboxId = useId();
 const visibleSuggestions = computed(() =>
-  suggestions.value.slice(0, TAG_SEARCH_LIMIT),
+  suggestions.value.filter((tag) => !tag.selected).slice(0, TAG_SEARCH_LIMIT),
+);
+/** A tag already added that the query names by one of its synonyms. */
+const namedSelected = computed(() =>
+  suggestions.value.find((tag) => tag.selected),
 );
 /** The title a new tag would get from what is typed. */
 const typedTitle = computed(() => cleanTagTitle(query.value));
@@ -54,8 +62,10 @@ const createOptionVisible = computed(() => {
   return (
     Boolean(normalized) &&
     !tags.value.some((tag) => normalizeTagTitle(tag.title) === normalized) &&
+    // A tag found by the very words typed — its title or a synonym — is what
+    // was meant; a new tag of the same name could not be told apart from it.
     !suggestions.value.some(
-      (tag) => normalizeTagTitle(tag.title) === normalized,
+      (tag) => tag.exact || normalizeTagTitle(tag.title) === normalized,
     )
   );
 });
@@ -77,7 +87,7 @@ const search = debounce(async (version: number) => {
     return;
   }
   try {
-    const result = await $fetch<TagItem[]>(props.searchEndpoint, {
+    const result = await $fetch<TagSearchItem[]>(props.searchEndpoint, {
       query: {
         query: trimmed,
         exclude: tags.value
@@ -154,10 +164,9 @@ function onInputKeydown(event: KeyboardEvent) {
   }
 }
 
-function focusInput(options?: FocusOptions) {
-  inputElement.value?.focus(options);
+function focusInput() {
+  inputElement.value?.focus();
 }
-defineExpose({ focus: focusInput });
 
 function removeTag(index: number) {
   tags.value = tags.value.filter((_, itemIndex) => itemIndex !== index);
@@ -192,7 +201,7 @@ function recommendationPopup(tag: RecommendedTag) {
         rounded-normal border-2 border-dashed border-border-2 bg-bg-1/50 p-sm
         transition focus-within:border-accent hover:border-border-3
         focus-within:hover:border-accent"
-      @click.self="focusInput()"
+      @click.self="focusInput"
     >
       <div
         v-for="(tag, index) in tags"
@@ -286,7 +295,15 @@ function recommendationPopup(tag: RecommendedTag) {
             :active="activeIndex === index + (createOptionVisible ? 1 : 0)"
             @pointerdown.prevent
             @click="addTag(tag)"
-          />
+          >
+            <!-- Found by a synonym: say which, or the match looks random. -->
+            <span
+              v-if="tag.matchedSynonym"
+              class="min-w-0 shrink-2 truncate font-normal text-text-3"
+            >
+              {{ tag.matchedSynonym }}
+            </span>
+          </TagChip>
         </div>
         <div v-if="searching" class="flex justify-center p-sm text-text-3">
           <Icon name="loading" />
@@ -298,6 +315,15 @@ function recommendationPopup(tag: RecommendedTag) {
           class="p-sm text-center text-sm text-text-error"
         >
           {{ phrase.tag_search_error }}
+        </p>
+        <p
+          v-else-if="namedSelected"
+          role="status"
+          class="p-sm text-center text-sm text-text-3"
+        >
+          {{
+            phrase.tag_synonym_already_added(typedTitle, namedSelected.title)
+          }}
         </p>
         <p
           v-else-if="query.trim() && !optionCount"

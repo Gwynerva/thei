@@ -4,6 +4,7 @@ import {
   combineTagEvidence,
   recommendTags,
   similarTagSignal,
+  suggestTagSynonyms,
   tagCandidates,
   tagTextSignal,
   togetherTagSignal,
@@ -14,6 +15,7 @@ import {
   inverseDocumentFrequency,
   normalizeTermText,
   readTerms,
+  stemTerm,
   termVector,
   wordTokens,
 } from '../../shared/text-terms';
@@ -54,7 +56,9 @@ function corpus(entries: Entry[]) {
     title: entry.title,
     key: `${entry.type ?? 'event'}:${entry.id}`,
     tagUuids: entry.tags ?? [],
-    terms: readTerms(entry).counts,
+    ...(({ counts, surfaces }) => ({ terms: counts, surfaces }))(
+      readTerms(entry),
+    ),
   }));
   const frequencies = new Map<string, number>();
   for (const { terms } of counted)
@@ -379,5 +383,98 @@ describe('entities a tag may also fit, over templated text', () => {
         ? similar.entities.map((entity) => entity.id)
         : [],
     ).not.toContain('sea-3');
+  });
+});
+
+describe('tag synonyms in recommendations', () => {
+  it('finds a tag by any form of a synonym', () => {
+    const profile = buildTagProfile(
+      { tagUuid: 't', title: 'Образы Петры', synonyms: ['грим', 'косплей'] },
+      flat,
+    );
+    expect(
+      tagTextSignal(profile, draftText('Два часа ушло на грим и парик'), flat),
+    ).toEqual({ score: 1, terms: ['грим'] });
+    expect(
+      tagTextSignal(profile, draftText('Готовили косплея к фестивалю'), flat)
+        ?.score,
+    ).toBe(1);
+    expect(
+      tagTextSignal(profile, draftText('Косплей без грима не бывает'), flat)
+        ?.terms,
+    ).toEqual(['грима', 'косплей']);
+  });
+
+  it('suggests words the carriers share and the rest of the archive does not', () => {
+    const { documents, idf } = corpus([
+      {
+        id: 'a',
+        title: 'Фестиваль',
+        text: 'грим парик костюм сцена',
+        tags: ['t-looks'],
+      },
+      {
+        id: 'b',
+        title: 'Съёмка',
+        text: 'гримом и париками занялись утром',
+        tags: ['t-looks'],
+      },
+      {
+        id: 'c',
+        title: 'Показ',
+        text: 'костюмы и грима было много сцена',
+        tags: ['t-looks'],
+      },
+      { id: 'd', title: 'Поход', text: 'сцена лес палатка' },
+      { id: 'e', title: 'Море', text: 'лодка волны сцена', tags: ['t-sea'] },
+    ]);
+    const frequencies = new Map<string, number>();
+    for (const document of documents)
+      for (const term of document.terms.keys())
+        frequencies.set(term, (frequencies.get(term) ?? 0) + 1);
+    const profiles = [
+      buildTagProfile(
+        { tagUuid: 't-looks', title: 'Образы Петры', synonyms: ['костюм'] },
+        idf,
+      ),
+      buildTagProfile({ tagUuid: 't-sea', title: 'Море' }, idf),
+    ];
+    const suggestions = suggestTagSynonyms('t-looks', {
+      documents,
+      profiles,
+      frequency: (term) => frequencies.get(term) ?? 0,
+    });
+    const words = suggestions.map((suggestion) => suggestion.word);
+    // The shortest form the entries use, never an existing name, never a
+    // word the whole archive uses.
+    expect(words).toEqual(expect.arrayContaining(['грим', 'парик']));
+    expect(words).not.toContain('костюм');
+    expect(words).not.toContain('сцена');
+    expect(
+      suggestions.find((item) => item.word === 'грим')?.entities,
+    ).toHaveLength(3);
+  });
+
+  it('suggests nothing before the tag is on two entities', () => {
+    const { documents } = corpus([
+      { id: 'a', title: 'Фестиваль', text: 'грим парик', tags: ['t-looks'] },
+    ]);
+    expect(
+      suggestTagSynonyms('t-looks', {
+        documents,
+        profiles: [],
+        frequency: () => 1,
+      }),
+    ).toEqual([]);
+  });
+});
+
+describe('stems of Russian loanwords', () => {
+  it.each([
+    [['косплей', 'косплея', 'косплеем', 'косплеи']],
+    [['музей', 'музея', 'музеем', 'музеи']],
+    [['путешествие', 'путешествия', 'путешествием']],
+  ])('brings %j together', (forms) => {
+    expect(new Set(forms.map((form) => stemTerm(form))).size).toBe(1);
   });
 });

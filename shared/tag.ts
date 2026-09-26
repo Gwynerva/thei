@@ -4,6 +4,7 @@ import { normalizeUrlSegment } from './language/slugify';
 import type { ImageAccent } from './accent-color';
 import { imageAccentCssColor } from './accent-color';
 import { stringColorHue } from './utils/string-color';
+import { normalizeTermText } from './text-terms';
 
 export const TAG_CONTAINER_TYPES = ['project', 'event'] as const;
 export type TagContainerType = (typeof TAG_CONTAINER_TYPES)[number];
@@ -35,7 +36,22 @@ export type TagEditData = {
   slug: string;
   publicId: string;
   description: string;
+  /** Other words the tag is known by. Only the owner sees them. */
+  synonyms: string[];
   iconAssetUuid?: string;
+};
+
+/** A match of the tag picker's search. */
+export type TagSearchItem = TagItem & {
+  /** The synonym the query matched, when the title did not. */
+  matchedSynonym?: string;
+  /** The query is this tag's title or one of its synonyms, word for word. */
+  exact?: boolean;
+  /**
+   * Already on the entity: listed only because the query names it by a
+   * synonym, so that the picker does not offer to create it again.
+   */
+  selected?: boolean;
 };
 
 export type TagUsageStats = {
@@ -44,7 +60,8 @@ export type TagUsageStats = {
   events: number;
 };
 
-export type TagSaveErrorCode = 'title-taken' | 'slug-taken' | 'public-id-taken';
+export type TagSaveErrorCode =
+  'title-taken' | 'slug-taken' | 'public-id-taken' | 'name-taken';
 
 export type TagSaveResponse =
   | { type: 'success'; tagUuid: string }
@@ -59,8 +76,18 @@ export const TAG_TITLE_MAX_LENGTH = 100;
 /** How many matches the tag picker asks for and shows. */
 export const TAG_SEARCH_LIMIT = 5;
 
+/** More than this is a description, not a list of names. */
+export const TAG_SYNONYM_LIMIT = 20;
+
+/** What separates synonyms typed or pasted as one line. */
+export const TAG_SYNONYM_SEPARATOR = /[,;\n]/u;
+
+/**
+ * A tag's identity: its title without case, compatibility forms or the
+ * difference between «ё» and «е». Two titles that normalize alike name one tag.
+ */
 export function normalizeTagTitle(value: string): string {
-  return value.trim().normalize('NFKC').toLocaleLowerCase();
+  return normalizeTermText(value.trim());
 }
 
 /**
@@ -115,6 +142,8 @@ export function validateTagData(data: unknown): string | TagEditData {
   const description =
     typeof item.description === 'string' ? item.description.trim() : '';
   if (description.length > 2_000) return 'Tag description is too long';
+  const synonyms = normalizeTagSynonyms(item.synonyms, title);
+  if (typeof synonyms === 'string') return synonyms;
   const iconAssetUuid =
     typeof item.iconAssetUuid === 'string'
       ? item.iconAssetUuid.trim() || undefined
@@ -131,13 +160,69 @@ export function validateTagData(data: unknown): string | TagEditData {
     slug,
     publicId,
     description,
+    synonyms,
     iconAssetUuid,
   };
 }
 
-export function rankTagSearch<
-  T extends Pick<TagItem, 'title' | 'publicId' | 'slug'>,
->(tags: T[], query: string, limit = TAG_SEARCH_LIMIT): T[] {
+/**
+ * The synonyms of a tag as they are stored: cleaned like titles, split where
+ * several were typed as one line, each once, and never the title itself.
+ * Returns an error message for anything that cannot be a list of words.
+ */
+export function normalizeTagSynonyms(
+  value: unknown,
+  title: string,
+): string[] | string {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return 'Invalid synonyms';
+  const seen = new Set([normalizeTagTitle(title)]);
+  const synonyms: string[] = [];
+  for (const item of value) {
+    if (typeof item !== 'string') return 'Invalid synonyms';
+    for (const part of item.split(TAG_SYNONYM_SEPARATOR)) {
+      const synonym = cleanTagTitle(part);
+      if (!synonym) continue;
+      if (synonym.length > TAG_TITLE_MAX_LENGTH)
+        return 'Tag synonym is too long';
+      const identity = normalizeTagTitle(synonym);
+      if (seen.has(identity)) continue;
+      seen.add(identity);
+      synonyms.push(synonym);
+    }
+  }
+  if (synonyms.length > TAG_SYNONYM_LIMIT) return 'Too many tag synonyms';
+  return synonyms;
+}
+
+/** Whether a query is a tag's title or one of its synonyms, word for word. */
+export function tagNamedBy(
+  tag: { title: string; synonyms?: string[] },
+  query: string,
+): boolean {
+  const needle = normalizeTagTitle(cleanTagTitle(query));
+  return (
+    Boolean(needle) &&
+    [tag.title, ...(tag.synonyms ?? [])].some(
+      (name) => normalizeTagTitle(name) === needle,
+    )
+  );
+}
+
+type SearchableTag = Pick<TagItem, 'title' | 'publicId' | 'slug'> & {
+  synonyms?: string[];
+};
+
+/**
+ * Tags matching what is typed, best first: the title, then a synonym, then
+ * the public ID and the slug. A synonym typed word for word ranks right after
+ * a title typed word for word, above titles that merely begin with the query.
+ */
+export function rankTagSearch<T extends SearchableTag>(
+  tags: T[],
+  query: string,
+  limit = TAG_SEARCH_LIMIT,
+): T[] {
   const needle = normalizeTagTitle(cleanTagTitle(query));
   if (!needle) return tags.slice(0, limit);
   return tags
@@ -154,18 +239,45 @@ export function rankTagSearch<
     .map(({ tag }) => tag);
 }
 
-function tagSearchScore(
-  tag: Pick<TagItem, 'title' | 'publicId' | 'slug'>,
-  needle: string,
-) {
-  const fields = [tag.title, tag.publicId, tag.slug];
-  for (let fieldIndex = 0; fieldIndex < fields.length; fieldIndex++) {
-    const value = normalizeTagTitle(fields[fieldIndex]!);
-    if (value === needle) return fieldIndex * 10;
-    if (value.startsWith(needle)) return fieldIndex * 10 + 1;
-    if (value.includes(needle)) return fieldIndex * 10 + 2;
-  }
+/** The synonym a query found a tag by, when its title did not match. */
+export function matchedTagSynonym(
+  tag: SearchableTag,
+  query: string,
+): string | undefined {
+  const needle = normalizeTagTitle(cleanTagTitle(query));
+  if (!needle || textMatch(tag.title, needle) !== undefined) return undefined;
+  return synonymMatch(tag, needle)?.synonym;
+}
+
+function tagSearchScore(tag: SearchableTag, needle: string) {
+  const title = textMatch(tag.title, needle);
+  if (title !== undefined) return title;
+  const synonym = synonymMatch(tag, needle);
+  if (synonym) return synonym.score ? 10 + synonym.score : 0.5;
+  const publicId = textMatch(tag.publicId, needle);
+  if (publicId !== undefined) return 20 + publicId;
+  const slug = textMatch(tag.slug, needle);
+  if (slug !== undefined) return 30 + slug;
   return Number.POSITIVE_INFINITY;
+}
+
+/** 0 for the whole value, 1 for its beginning, 2 for anywhere in it. */
+function textMatch(value: string, needle: string) {
+  const normalized = normalizeTagTitle(value);
+  if (normalized === needle) return 0;
+  if (normalized.startsWith(needle)) return 1;
+  if (normalized.includes(needle)) return 2;
+  return undefined;
+}
+
+function synonymMatch(tag: SearchableTag, needle: string) {
+  let best: { synonym: string; score: number } | undefined;
+  for (const synonym of tag.synonyms ?? []) {
+    const score = textMatch(synonym, needle);
+    if (score !== undefined && (!best || score < best.score))
+      best = { synonym, score };
+  }
+  return best;
 }
 
 /**

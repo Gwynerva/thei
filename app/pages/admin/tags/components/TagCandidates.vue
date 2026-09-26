@@ -10,7 +10,11 @@ import type { TagCandidateItem } from '#layers/thei/shared/tag-recommendation';
  * Loaded in the browser only: the list is a suggestion, and the page is
  * complete without it.
  */
-const { tagUuid } = defineProps<{ tagUuid: string }>();
+const { tagUuid, revision = 0 } = defineProps<{
+  tagUuid: string;
+  /** Changes after each save of the tag; the list is asked for again. */
+  revision?: number;
+}>();
 const emit = defineEmits<{ added: [type: TagContainerType] }>();
 
 const candidates = ref<TagCandidateItem[]>();
@@ -21,14 +25,23 @@ const adding = ref(new Set<string>());
 const key = (candidate: TagCandidateItem) =>
   `${candidate.type}:${candidate.id}`;
 
-onMounted(async () => {
+async function load() {
   try {
     candidates.value = await $fetch<TagCandidateItem[]>(
       `/api/admin/tags/${tagUuid}/candidates`,
     );
+    failed.value = false;
   } catch {
     failed.value = true;
   }
+}
+
+onMounted(() => {
+  void load();
+  watch(
+    () => revision,
+    () => void load(),
+  );
 });
 
 async function add(candidate: TagCandidateItem) {

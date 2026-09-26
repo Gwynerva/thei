@@ -6,7 +6,11 @@ import {
   type TagEditData,
   type TagSaveResponse,
 } from '#layers/thei/shared/tag';
-import { findTagConflict, tagConflictMessage } from '../../../thei/tags';
+import {
+  findTagConflict,
+  findTagNameConflict,
+  tagConflictMessage,
+} from '../../../thei/tags';
 
 export default defineEventHandler(async (event): Promise<TagSaveResponse> => {
   const result = validateTagData(await readBody<TagEditData>(event));
@@ -23,6 +27,8 @@ export default defineEventHandler(async (event): Promise<TagSaveResponse> => {
       code: conflict,
       message: tagConflictMessage(conflict),
     };
+  const nameConflict = findTagNameConflict(result.title, result.synonyms);
+  if (nameConflict) return { type: 'error', ...nameConflict };
   if (
     result.iconAssetUuid &&
     !(await db.query.assets.findFirst({
@@ -45,6 +51,7 @@ export default defineEventHandler(async (event): Promise<TagSaveResponse> => {
           slug: result.slug,
           publicId: result.publicId,
           description: result.description,
+          synonyms: result.synonyms,
         })
         .run();
       if (result.iconAssetUuid) {

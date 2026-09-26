@@ -31,8 +31,6 @@ export const TAG_RECOMMENDATION = {
   limit: 8,
   /** Below this a tag is not worth showing. */
   minScore: 0.3,
-  /** From this on a tag is worth reminding of when an entity has none. */
-  strongScore: 0.6,
   weights: { text: 0.9, similar: 0.8, related: 0.5, together: 0.45 },
   /** How many of the most similar tagged entities vote. */
   neighbours: 10,
@@ -112,6 +110,8 @@ export type TagEvidenceDocument = TagRecommendationEntity & {
   key: string;
   tagUuids: string[];
   terms: TermCounts;
+  /** Each stem as the entity first writes it, to name a word to a person. */
+  surfaces?: Map<string, string>;
   vector: TermVector;
 };
 
@@ -122,9 +122,9 @@ export type TagProfile = {
   tagUuid: string;
   title: string;
   /**
-   * The name, and every alias written in brackets after it — «Доступность
-   * (a11y)» is found by either. A name listing several things — «C++, .NET &
-   * API» — is split into them.
+   * The name, every alias written in brackets after it — «Доступность
+   * (a11y)» is found by either — and every synonym. A name listing several
+   * things — «C++, .NET & API» — is split into them.
    */
   names: TagNamePart[][];
   /** The rarest words of the description, not already in the name. */
@@ -153,16 +153,28 @@ function nameParts(name: string): TagNamePart[] {
 }
 
 export function buildTagProfile(
-  tag: { tagUuid: string; title: string; description?: string },
+  tag: {
+    tagUuid: string;
+    title: string;
+    description?: string;
+    synonyms?: string[];
+  },
   idf: (term: string) => number,
 ): TagProfile {
   const aliases = [...tag.title.matchAll(NAME_ALIAS)].map((match) => match[1]!);
-  const names = [tag.title.replace(NAME_ALIAS, ' '), ...aliases]
+  // A synonym is a name like any other: found in a text, it counts in full.
+  const names = [
+    tag.title.replace(NAME_ALIAS, ' '),
+    ...aliases,
+    ...(tag.synonyms ?? []),
+  ]
     .map(nameParts)
     .filter((parts) => parts.length);
   const nameStems = new Set(names.flat().flatMap((part) => part.stems));
   const words = new Map<string, string>();
-  for (const token of wordTokens(`${tag.title} ${tag.description ?? ''}`)) {
+  for (const token of wordTokens(
+    [tag.title, ...(tag.synonyms ?? []), tag.description ?? ''].join(' '),
+  )) {
     const stem = stemTerm(token);
     if (!words.has(stem)) words.set(stem, token);
   }
@@ -248,6 +260,9 @@ export function tagTextSignal(
     if (score > best) {
       best = score;
       matched = terms;
+    } else if (score && score === best) {
+      // Several names found alike — «грим» and «макияж» — are all named.
+      matched = [...matched, ...terms];
     }
   }
   const described = profile.descriptionStems.filter((stem) =>
@@ -670,4 +685,84 @@ function tagDirection(
     for (const [term, weight] of direction)
       direction.set(term, weight / length);
   return direction;
+}
+
+/** How many words the tag page offers as synonyms. */
+export const TAG_SYNONYM_SUGGESTION_LIMIT = 8;
+
+export type TagSynonymSuggestion = {
+  word: string;
+  /** Entities carrying the tag that use the word. */
+  entities: TagRecommendationEntity[];
+};
+
+/**
+ * Words worth adding as a tag's synonyms: what the entities carrying it say
+ * that the rest of the archive says rarely. A word has to be used by several
+ * of them — one entry's quirk is not the tag's vocabulary — and not be a name
+ * of this or any other tag already.
+ *
+ * Each word is offered in the shortest form the entries use, which in both
+ * Russian and English is usually the plain one; any form would match, since
+ * words are compared by stem.
+ */
+export function suggestTagSynonyms(
+  tagUuid: string,
+  corpus: {
+    documents: TagEvidenceDocument[];
+    profiles: TagProfile[];
+    frequency: (term: string) => number;
+  },
+): TagSynonymSuggestion[] {
+  const carriers = corpus.documents.filter((document) =>
+    document.tagUuids.includes(tagUuid),
+  );
+  if (carriers.length < 2) return [];
+  const others = corpus.documents.length - carriers.length;
+  const direction = tagDirection(
+    carriers,
+    corpus.documents.filter((document) => !document.tagUuids.includes(tagUuid)),
+  );
+  const names = new Set(
+    corpus.profiles.flatMap((profile) =>
+      profile.names.flat().flatMap((part) => part.stems),
+    ),
+  );
+  const holdersOf = new Map<string, TagEvidenceDocument[]>();
+  for (const carrier of carriers)
+    for (const term of carrier.terms.keys()) {
+      const holders = holdersOf.get(term);
+      if (holders) holders.push(carrier);
+      else holdersOf.set(term, [carrier]);
+    }
+  const minHolders = Math.max(2, Math.ceil(carriers.length / 5));
+
+  return [...direction]
+    .flatMap(([stem, weight]) => {
+      const holders = holdersOf.get(stem) ?? [];
+      if (stem.length < 3 || names.has(stem) || holders.length < minHolders)
+        return [];
+      const share = holders.length / carriers.length;
+      const elsewhere =
+        (corpus.frequency(stem) - holders.length) / Math.max(1, others);
+      if (share < 2 * elsewhere) return [];
+      const word = holders
+        .map((holder) => holder.surfaces?.get(stem))
+        .filter((surface): surface is string =>
+          Boolean(surface && /^\p{L}+$/u.test(surface)),
+        )
+        .sort(
+          (left, right) =>
+            left.length - right.length || left.localeCompare(right),
+        )[0];
+      return word ? [{ word, holders, rank: weight * share }] : [];
+    })
+    .sort((left, right) => right.rank - left.rank)
+    .slice(0, TAG_SYNONYM_SUGGESTION_LIMIT)
+    .map(({ word, holders }) => ({
+      word,
+      entities: holders
+        .slice(0, TAG_RECOMMENDATION.reasonEntities)
+        .map(entityOf),
+    }));
 }

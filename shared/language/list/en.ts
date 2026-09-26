@@ -917,8 +917,6 @@ export default defineI18nBase({
     tag_reason_similar: 'Like',
     tag_reason_related: 'Related to',
     tag_reason_together: 'Often with',
-    tag_nudge: (count) => plural(count, 'suggested tag', 'suggested tags'),
-    tag_nudge_hint: 'No tags yet, but some clearly fit. Show them.',
     tag_candidates: 'May also fit',
     tag_candidates_hint:
       'Projects and events without this tag that it seems to fit.',
@@ -927,6 +925,21 @@ export default defineI18nBase({
     tag_candidate_add: 'Add tag',
     tag_candidate_added: 'Added',
     tag_title_taken: 'This tag title is already in use.',
+    tag_title_is_synonym: (tag) =>
+      `This title is already a synonym of the tag “${tag}”.`,
+    tag_synonym_taken: (synonym, tag) =>
+      `“${synonym}” already names the tag “${tag}”.`,
+    tag_synonyms: 'Synonyms',
+    tag_synonyms_hint:
+      'Other words the tag is known by: in the text of projects and events and in the tag field. Word forms are taken care of. Only you see synonyms.',
+    tag_synonyms_placeholder: 'Add synonym…',
+    tag_synonyms_limit: (limit) => `No more than ${limit} synonyms.`,
+    tag_synonym_remove: (synonym) => `Remove synonym “${synonym}”`,
+    tag_synonym_suggestions: 'Common in entries with this tag',
+    tag_synonym_suggestion_add: (word) => `Add synonym “${word}”`,
+    tag_synonym_found_in: 'Found in',
+    tag_synonym_already_added: (synonym, tag) =>
+      `“${synonym}” is a synonym of “${tag}”, which is already added.`,
     tag_slug_taken: 'This tag slug is already in use.',
     tag_public_id_taken: 'This public ID is already in use.',
     tag_icon_not_found: 'The selected icon no longer exists.',

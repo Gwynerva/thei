@@ -269,7 +269,6 @@ const tagsModel = computed({
     eventData.value.tags = value;
   },
 });
-const tagsBlock = useTemplateRef('tagsBlock');
 const tagRecommendations = useTagRecommendations({
   owner: () => (eventUuid ? { type: 'event', id: eventUuid } : undefined),
   context: () => eventTagContext(eventData.value),
@@ -314,10 +313,6 @@ function clone<T>(value: T): T {
         }}</span>
       </div>
       <div class="flex items-center gap-xs">
-        <AdminTagNudge
-          :count="tagRecommendations.reminderCount.value"
-          @reveal="tagsBlock?.reveal()"
-        />
         <Button
           v-if="isEdit"
           variant="delete"
@@ -417,7 +412,6 @@ function clone<T>(value: T): T {
       :empty-text="phrase.event_external_links_empty"
     />
     <AdminTags
-      ref="tagsBlock"
       v-model="tagsModel"
       :title="phrase.event_tags"
       :description="phrase.event_tags_hint"

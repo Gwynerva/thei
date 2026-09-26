@@ -33,6 +33,9 @@ export async function listTagsForContainer(
 
 type TagRow = typeof import('./db/schema/tags').tags.$inferSelect;
 
+/** A clash on one of the columns that must be unique among tags. */
+type TagIdentityConflict = Exclude<TagSaveErrorCode, 'name-taken'>;
+
 export function isTagUuid(value: string): boolean {
   return /^t-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value,
@@ -42,7 +45,7 @@ export function isTagUuid(value: string): boolean {
 export function findTagConflict(
   data: Pick<TagRow, 'normalizedTitle' | 'slug' | 'publicId'>,
   excludeTagUuid?: string,
-): TagSaveErrorCode | undefined {
+): TagIdentityConflict | undefined {
   const { db, schema } = THEI_SERVER.useDb();
   const conflicts = [
     ['title-taken', schema.tags.normalizedTitle, data.normalizedTitle],
@@ -64,7 +67,66 @@ export function findTagConflict(
   }
 }
 
-export function tagConflictMessage(code: TagSaveErrorCode): string {
+/**
+ * Whether a tag's names would clash with another tag's: its title may not be
+ * another tag's synonym, and none of its synonyms may be another tag's title
+ * or synonym. A word names one tag at most, so typing it can only mean that
+ * tag.
+ */
+export function findTagNameConflict(
+  title: string,
+  synonyms: string[],
+  excludeTagUuid?: string,
+): { code: 'name-taken'; message: string } | undefined {
+  const { db, schema } = THEI_SERVER.useDb();
+  const owners = new Map<string, string>();
+  const synonymOwners = new Map<string, string>();
+  for (const tag of db
+    .select({
+      tagUuid: schema.tags.tagUuid,
+      title: schema.tags.title,
+      synonyms: schema.tags.synonyms,
+    })
+    .from(schema.tags)
+    .all()) {
+    if (tag.tagUuid === excludeTagUuid) continue;
+    owners.set(normalizeTagTitle(tag.title), tag.title);
+    for (const synonym of tag.synonyms)
+      synonymOwners.set(normalizeTagTitle(synonym), tag.title);
+  }
+  const phrase = THEI_SERVER.phrase;
+  const titleOwner = synonymOwners.get(normalizeTagTitle(title));
+  if (titleOwner)
+    return {
+      code: 'name-taken',
+      message: phrase.tag_title_is_synonym(titleOwner),
+    };
+  for (const synonym of synonyms) {
+    const identity = normalizeTagTitle(synonym);
+    const owner = owners.get(identity) ?? synonymOwners.get(identity);
+    if (owner)
+      return {
+        code: 'name-taken',
+        message: phrase.tag_synonym_taken(synonym, owner),
+      };
+  }
+  return undefined;
+}
+
+/** Tags by each of their synonyms, as a typed title is resolved to a tag. */
+function tagUuidsBySynonym(): Map<string, string> {
+  const { db, schema } = THEI_SERVER.useDb();
+  const bySynonym = new Map<string, string>();
+  for (const tag of db
+    .select({ tagUuid: schema.tags.tagUuid, synonyms: schema.tags.synonyms })
+    .from(schema.tags)
+    .all())
+    for (const synonym of tag.synonyms)
+      bySynonym.set(normalizeTagTitle(synonym), tag.tagUuid);
+  return bySynonym;
+}
+
+export function tagConflictMessage(code: TagIdentityConflict): string {
   if (code === 'title-taken') return THEI_SERVER.phrase.tag_title_taken;
   if (code === 'slug-taken') return THEI_SERVER.phrase.tag_slug_taken;
   return THEI_SERVER.phrase.tag_public_id_taken;
@@ -135,9 +197,10 @@ export type PreparedTagUsage =
 /**
  * Resolves the tags of a save before its transaction opens.
  *
- * A title that already names a tag becomes that tag, and each tag is placed
- * once however many items resolve to it: a tag renamed in another tab and
- * then typed again by its new name is still one tag.
+ * A title that already names a tag — as its title or as one of its synonyms —
+ * becomes that tag, and each tag is placed once however many items resolve
+ * to it: a tag renamed in another tab and then typed again by its new name is
+ * still one tag.
  */
 export async function prepareTagUsages(
   items: TagEditItem[] | undefined,
@@ -150,6 +213,7 @@ export async function prepareTagUsages(
       .from(schema.tags)
       .where(condition)
       .get();
+  let bySynonym: Map<string, string> | undefined;
   const prepared: PreparedTagUsage[] = [];
   const placed = new Set<string>();
   const place = (item: PreparedTagUsage, identity = item.tagUuid) => {
@@ -171,6 +235,12 @@ export async function prepareTagUsages(
     const existing = findTag(eq(schema.tags.normalizedTitle, normalizedTitle));
     if (existing) {
       place({ tagUuid: existing.tagUuid });
+      continue;
+    }
+    bySynonym ??= tagUuidsBySynonym();
+    const named = bySynonym.get(normalizedTitle);
+    if (named) {
+      place({ tagUuid: named });
       continue;
     }
     if (placed.has(`new:${normalizedTitle}`)) continue;
@@ -320,7 +390,8 @@ function cleanupSimpleOrphanTags(tx: any, schema: any, tagUuids: string[]) {
       .from(schema.tags)
       .where(eq(schema.tags.tagUuid, tagUuid))
       .get();
-    if (!tag || tag.description) continue;
+    // A tag somebody described, named otherwise or drew is kept for them.
+    if (!tag || tag.description || tag.synonyms?.length) continue;
     const icon = tx
       .select({ assetUuid: schema.assetUsages.assetUuid })
       .from(schema.assetUsages)

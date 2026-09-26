@@ -2,6 +2,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import {
   buildTagItem,
   findTagConflict,
+  findTagNameConflict,
   isTagUuid,
   tagConflictMessage,
 } from '../../../thei/tags';
@@ -44,7 +45,11 @@ export default defineEventHandler(async (event) => {
         counts.find((row) => row.containerType === 'event')?.count ?? 0,
       ),
     };
-    return { ...(await buildTagItem(tag)), usageStats: stats };
+    return {
+      ...(await buildTagItem(tag)),
+      synonyms: tag.synonyms,
+      usageStats: stats,
+    };
   }
   if (event.method === 'PUT') {
     const result = validateTagData(await readBody<TagEditData>(event));
@@ -64,6 +69,13 @@ export default defineEventHandler(async (event) => {
         code: conflict,
         message: tagConflictMessage(conflict),
       } satisfies TagSaveResponse;
+    const nameConflict = findTagNameConflict(
+      result.title,
+      result.synonyms,
+      tagUuid,
+    );
+    if (nameConflict)
+      return { type: 'error', ...nameConflict } satisfies TagSaveResponse;
     if (
       result.iconAssetUuid &&
       !(await db.query.assets.findFirst({
@@ -80,6 +92,7 @@ export default defineEventHandler(async (event) => {
             slug: result.slug,
             publicId: result.publicId,
             description: result.description,
+            synonyms: result.synonyms,
           })
           .where(eq(schema.tags.tagUuid, tagUuid))
           .run();

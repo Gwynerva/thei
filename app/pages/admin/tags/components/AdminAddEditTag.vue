@@ -14,6 +14,7 @@ import { singleAssetUsageDelta } from '#layers/thei/app/composables/single-media
 import { tagDeleteModal } from './tag-delete-modal';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
 import TagCandidates from './TagCandidates.vue';
+import TagSynonymsField from './TagSynonymsField.vue';
 
 const { tagUuid } = defineProps<{ tagUuid?: string }>();
 const isEdit = computed(() => Boolean(tagUuid));
@@ -26,6 +27,7 @@ const data = ref<TagEditData>({
   slug: '',
   publicId: initialPublicId.value,
   description: '',
+  synonyms: [],
 });
 const iconMedia = ref<MediaDescriptor>();
 const iconSize = ref<number>();
@@ -33,6 +35,13 @@ const savedIconAssetUuid = ref<string>();
 const usageStats = ref<TagUsageStats>({ total: 0, projects: 0, events: 0 });
 /** The tag's UUID once loaded; the address may carry its public ID instead. */
 const resolvedTagUuid = ref<string>();
+/**
+ * Counts saves, so that what is learned from the saved tag — its candidates
+ * and synonym suggestions — is asked for again once new names are stored.
+ */
+const savedRevision = ref(0);
+/** Placements added from the candidates, which teach the suggestions too. */
+const addedCount = ref(0);
 const saved = ref('');
 const saving = ref(false);
 const error = ref<string>();
@@ -40,13 +49,14 @@ const publicIdError = ref<string>();
 
 if (tagUuid) {
   const response = await useRequestFetch()<
-    TagItem & { usageStats: TagUsageStats }
+    TagItem & { synonyms: string[]; usageStats: TagUsageStats }
   >(`/api/admin/tags/${tagUuid}`);
   data.value = {
     title: response.title,
     slug: response.slug,
     publicId: response.publicId,
     description: response.description ?? '',
+    synonyms: response.synonyms,
     iconAssetUuid: response.iconAssetUuid,
   };
   iconMedia.value = response.iconMedia;
@@ -92,6 +102,14 @@ watch(
     publicIdError.value = undefined;
   },
 );
+// A refused save is about the form as it was then; any change answers it.
+watch(
+  data,
+  () => {
+    error.value = undefined;
+  },
+  { deep: true },
+);
 
 const iconAsset = useSingleMediaAsset({
   uploadProfile: 'tag-icon',
@@ -132,6 +150,7 @@ async function save() {
     }
     saved.value = JSON.stringify(data.value);
     savedIconAssetUuid.value = data.value.iconAssetUuid;
+    savedRevision.value++;
     await refreshNuxtData('admin-tag-count');
     if (!tagUuid)
       await navigateTo(`/admin/tags/${result.tagUuid}/edit/`, {
@@ -172,6 +191,7 @@ async function remove() {
 }
 
 function countAddedUsage(type: TagContainerType) {
+  addedCount.value++;
   const stats = usageStats.value;
   usageStats.value = {
     total: stats.total + 1,
@@ -266,6 +286,13 @@ await useAdminTabTitle(
         :public-id-error="publicIdError"
       />
 
+      <TagSynonymsField
+        v-model="data.synonyms"
+        :tag-uuid="resolvedTagUuid"
+        :title="data.title"
+        :revision="savedRevision + addedCount"
+      />
+
       <footer
         v-if="isEdit"
         class="flex flex-col gap-1 border-t border-border-1 pt-sm text-sm"
@@ -279,6 +306,7 @@ await useAdminTabTitle(
     <TagCandidates
       v-if="resolvedTagUuid"
       :tag-uuid="resolvedTagUuid"
+      :revision="savedRevision"
       class="mt-lg"
       @added="countAddedUsage"
     />

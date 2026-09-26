@@ -976,14 +976,6 @@ export default defineI18nModule({
     tag_reason_similar: 'Похоже на',
     tag_reason_related: 'Связано с',
     tag_reason_together: 'Часто вместе с',
-    tag_nudge: (count) =>
-      plural(
-        count,
-        'предложенный тег',
-        'предложенных тега',
-        'предложенных тегов',
-      ),
-    tag_nudge_hint: 'Тегов пока нет, но некоторые явно подходят. Показать их.',
     tag_candidates: 'Может подойти ещё',
     tag_candidates_hint:
       'Проекты и события без этого тега, которым он, судя по всему, подходит.',
@@ -992,6 +984,22 @@ export default defineI18nModule({
     tag_candidate_add: 'Добавить тег',
     tag_candidate_added: 'Добавлен',
     tag_title_taken: 'Такое название уже используется.',
+    tag_title_is_synonym: (tag) =>
+      `Это название уже служит синонимом тега «${tag}».`,
+    tag_synonym_taken: (synonym, tag) =>
+      `«${synonym}» уже называет тег «${tag}».`,
+    tag_synonyms: 'Синонимы',
+    tag_synonyms_hint:
+      'Другие слова, по которым узнаётся тег: в текстах проектов и событий и в поле добавления тегов. Формы слова учитываются сами. Синонимы видны только вам.',
+    tag_synonyms_placeholder: 'Добавить синоним…',
+    tag_synonyms_limit: (limit) =>
+      `Не больше ${plural(limit, 'синонима', 'синонимов', 'синонимов')}.`,
+    tag_synonym_remove: (synonym) => `Убрать синоним «${synonym}»`,
+    tag_synonym_suggestions: 'Часто встречается в записях с этим тегом',
+    tag_synonym_suggestion_add: (word) => `Добавить синоним «${word}»`,
+    tag_synonym_found_in: 'Встречается в',
+    tag_synonym_already_added: (synonym, tag) =>
+      `«${synonym}» — синоним тега «${tag}», и он уже добавлен.`,
     tag_slug_taken: 'Такой slug уже используется.',
     tag_public_id_taken: 'Такой публичный идентификатор уже используется.',
     tag_icon_not_found: 'Выбранная иконка больше не существует.',
