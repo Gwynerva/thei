@@ -5,7 +5,9 @@ import {
   buildTagProfile,
   joinTagContextText,
   recommendTags,
+  tagCandidates,
   tagEntityKey,
+  type TagCandidateItem,
   type TagEvidenceDocument,
   type TagProfile,
   type TagRecommendation,
@@ -18,6 +20,7 @@ import {
   termVector,
   type TermCounts,
 } from '#layers/thei/shared/text-terms';
+import { relationIconMedia } from './relations';
 import { buildTagItems } from './tags';
 
 /**
@@ -274,4 +277,24 @@ export async function recommendTagsForDraft(
     score: ranked[position]!.score,
     reasons: ranked[position]!.reasons,
   }));
+}
+
+/** Projects and events without a tag that it seems to fit, with their pictures. */
+export async function findTagCandidates(
+  tagUuid: string,
+): Promise<TagCandidateItem[] | undefined> {
+  const index = getTagRecommendationIndex();
+  const profile = index.profiles.find((item) => item.tagUuid === tagUuid);
+  if (!profile) return undefined;
+  const candidates = tagCandidates(
+    profile,
+    index,
+    (other) => index.tagRows.get(other)?.title,
+  );
+  return Promise.all(
+    candidates.map(async (candidate) => ({
+      ...candidate,
+      previewMedia: await relationIconMedia(candidate),
+    })),
+  );
 }

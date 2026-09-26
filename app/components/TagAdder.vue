@@ -6,11 +6,15 @@ import {
   normalizeTagTitle,
   TAG_SEARCH_LIMIT,
 } from '#layers/thei/shared/tag';
+import type { TagRecommendationReason } from '#layers/thei/shared/tag-recommendation';
 import { moveItemById } from '#layers/thei/app/composables/drag-sort';
+import { titlePopup } from '#layers/thei/app/composables/title-popup-content';
+
+type RecommendedTag = TagItem & { reasons?: TagRecommendationReason[] };
 
 const props = withDefaults(
   defineProps<{
-    recommendations?: TagItem[];
+    recommendations?: RecommendedTag[];
     searchEndpoint?: string;
   }>(),
   {
@@ -150,9 +154,10 @@ function onInputKeydown(event: KeyboardEvent) {
   }
 }
 
-function focusInput() {
-  inputElement.value?.focus();
+function focusInput(options?: FocusOptions) {
+  inputElement.value?.focus(options);
 }
+defineExpose({ focus: focusInput });
 
 function removeTag(index: number) {
   tags.value = tags.value.filter((_, itemIndex) => itemIndex !== index);
@@ -167,6 +172,16 @@ useDragSort(tagContainer, {
     tags.value = moveItemById(tags.value, id, newIndex, tagDragId);
   },
 });
+
+/** Why a tag is recommended, one line per kind of evidence. */
+function recommendationPopup(tag: RecommendedTag) {
+  return titlePopup(
+    ...tagReasonLines(tag.reasons).map(([label, detail]) => [
+      { text: `${label}: `, bold: true },
+      { text: detail, clamp: true },
+    ]),
+  );
+}
 </script>
 
 <template>
@@ -177,7 +192,7 @@ useDragSort(tagContainer, {
         rounded-normal border-2 border-dashed border-border-2 bg-bg-1/50 p-sm
         transition focus-within:border-accent hover:border-border-3
         focus-within:hover:border-accent"
-      @click.self="focusInput"
+      @click.self="focusInput()"
     >
       <div
         v-for="(tag, index) in tags"
@@ -304,7 +319,10 @@ useDragSort(tagContainer, {
           :key="tag.tagUuid"
           :tag="tag"
           interactive
-          class="opacity-45 transition-opacity hocus:opacity-100"
+          suggested
+          :aria-label="phrase.tag_recommendation_add(tag.title)"
+          :aria-description="tagReasonText(tag.reasons) || undefined"
+          v-bind="recommendationPopup(tag)"
           @click="addTag(tag)"
         />
       </div>

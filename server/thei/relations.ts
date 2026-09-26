@@ -28,7 +28,12 @@ import { resolveEntityIconMedia } from './media/generated-icon';
  * Admin addresses: this is for the relations editor. Public pages build their
  * pictures through `findContentEntity`, with the visitor's view.
  */
-async function relationIconMedia(endpoint: RelationEndpoint) {
+/**
+ * The picture that stands for a project, an event or a diary entry in a list:
+ * a project's icon, the first media of an event or an entry, or else the icon
+ * generated from its identity.
+ */
+export async function relationIconMedia(endpoint: RelationEndpoint) {
   if (endpoint.type === 'project') {
     const icon = (
       await THEI_SERVER.assets.usages.findByContainer('project', endpoint.id)

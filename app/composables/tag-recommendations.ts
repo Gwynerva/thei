@@ -4,6 +4,7 @@ import { isOneOf } from '#layers/thei/shared/utils/isOneOf';
 import { TAG_CONTAINER_TYPES, type TagEditItem } from '#layers/thei/shared/tag';
 import {
   clampTagContextText,
+  TAG_RECOMMENDATION,
   type TagContext,
   type TagRecommendation,
   type TagRecommendationRequest,
@@ -75,5 +76,14 @@ export function useTagRecommendations(options: {
     watch(requestKey, () => void loadSoon());
   });
 
-  return { recommendations, failed };
+  /** Tags worth a reminder: the entity has none, and these clearly fit. */
+  const reminderCount = computed(() =>
+    (toValue(options.tags) ?? []).length
+      ? 0
+      : recommendations.value.filter(
+          ({ score }) => score >= TAG_RECOMMENDATION.strongScore,
+        ).length,
+  );
+
+  return { recommendations, failed, reminderCount };
 }

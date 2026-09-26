@@ -334,6 +334,7 @@ const tagsModel = computed({
     projectData.value.tags = value;
   },
 });
+const tagsBlock = useTemplateRef('tagsBlock');
 const tagRecommendations = useTagRecommendations({
   owner: () =>
     resolvedProjectUuid.value
@@ -448,6 +449,10 @@ async function openDeleteProjectModal() {
       </div>
 
       <div class="flex items-center gap-xs">
+        <AdminTagNudge
+          :count="tagRecommendations.reminderCount.value"
+          @reveal="tagsBlock?.reveal()"
+        />
         <Button
           v-if="isEdit"
           variant="delete"
@@ -507,6 +512,7 @@ async function openDeleteProjectModal() {
       :owner-title="projectData.title.trim() || phrase.new_project"
     />
     <AdminTags
+      ref="tagsBlock"
       v-model="tagsModel"
       :title="phrase.project_tags"
       :description="phrase.project_tags_hint"

@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type {
+  TagContainerType,
   TagEditData,
   TagItem,
   TagSaveResponse,
@@ -12,6 +13,7 @@ import { useSingleMediaAsset } from '#layers/thei/app/composables/single-media-a
 import { singleAssetUsageDelta } from '#layers/thei/app/composables/single-media-asset-state';
 import { tagDeleteModal } from './tag-delete-modal';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
+import TagCandidates from './TagCandidates.vue';
 
 const { tagUuid } = defineProps<{ tagUuid?: string }>();
 const isEdit = computed(() => Boolean(tagUuid));
@@ -29,6 +31,8 @@ const iconMedia = ref<MediaDescriptor>();
 const iconSize = ref<number>();
 const savedIconAssetUuid = ref<string>();
 const usageStats = ref<TagUsageStats>({ total: 0, projects: 0, events: 0 });
+/** The tag's UUID once loaded; the address may carry its public ID instead. */
+const resolvedTagUuid = ref<string>();
 const saved = ref('');
 const saving = ref(false);
 const error = ref<string>();
@@ -49,6 +53,7 @@ if (tagUuid) {
   iconSize.value = response.iconAssetSize;
   savedIconAssetUuid.value = response.iconAssetUuid;
   usageStats.value = response.usageStats;
+  resolvedTagUuid.value = response.tagUuid;
   // Reached by public ID from the admin bar on the public tag page: settle on
   // the UUID address, which saving and deleting use.
   if (tagUuid !== response.tagUuid)
@@ -166,6 +171,15 @@ async function remove() {
   }
 }
 
+function countAddedUsage(type: TagContainerType) {
+  const stats = usageStats.value;
+  usageStats.value = {
+    total: stats.total + 1,
+    projects: stats.projects + (type === 'project' ? 1 : 0),
+    events: stats.events + (type === 'event' ? 1 : 0),
+  };
+}
+
 await useAdminTabTitle(
   computed(() => (isEdit.value ? phrase.value.edit_tag : phrase.value.new_tag)),
 );
@@ -262,5 +276,11 @@ await useAdminTabTitle(
         <FieldHint>{{ phrase.tag_delete_hint }}</FieldHint>
       </footer>
     </Box>
+    <TagCandidates
+      v-if="resolvedTagUuid"
+      :tag-uuid="resolvedTagUuid"
+      class="mt-lg"
+      @added="countAddedUsage"
+    />
   </div>
 </template>

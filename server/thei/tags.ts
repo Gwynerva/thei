@@ -340,3 +340,57 @@ function cleanupSimpleOrphanTags(tx: any, schema: any, tagUuids: string[]) {
 export function randomTagPublicId() {
   return crypto.randomUUID().replaceAll('-', '').slice(0, 14);
 }
+
+/**
+ * Puts a tag on one more project or event, after the tags it already has.
+ * Placing a tag that is already there changes nothing. Returns false when the
+ * entity does not exist.
+ */
+export function addTagUsage(
+  tagUuid: string,
+  containerType: TagContainerType,
+  containerId: string,
+): boolean {
+  const { db, schema } = THEI_SERVER.useDb();
+  const now = Date.now();
+  return db.transaction((tx) => {
+    const usages = tx
+      .select({
+        tagUuid: schema.tagUsages.tagUuid,
+        sortOrder: schema.tagUsages.sortOrder,
+      })
+      .from(schema.tagUsages)
+      .where(
+        and(
+          eq(schema.tagUsages.containerType, containerType),
+          eq(schema.tagUsages.containerId, containerId),
+        ),
+      )
+      .all();
+    if (usages.some((usage) => usage.tagUuid === tagUuid)) return true;
+    // A tag changes the entity's page, so it is touched as any save would;
+    // touching nothing means there is no such entity.
+    const touched =
+      containerType === 'project'
+        ? tx
+            .update(schema.projects)
+            .set({ updatedAt: now })
+            .where(eq(schema.projects.projectUuid, containerId))
+            .run()
+        : tx
+            .update(schema.events)
+            .set({ updatedAt: now })
+            .where(eq(schema.events.eventUuid, containerId))
+            .run();
+    if (!touched.changes) return false;
+    tx.insert(schema.tagUsages)
+      .values({
+        tagUuid,
+        containerType,
+        containerId,
+        sortOrder: Math.max(-1, ...usages.map((usage) => usage.sortOrder)) + 1,
+      })
+      .run();
+    return true;
+  });
+}

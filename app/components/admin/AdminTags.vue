@@ -1,5 +1,7 @@
 <script lang="ts" setup>
-import type { TagEditItem, TagItem } from '#layers/thei/shared/tag';
+import type { TagEditItem } from '#layers/thei/shared/tag';
+import type { TagRecommendation } from '#layers/thei/shared/tag-recommendation';
+import TagAdder from '#layers/thei/app/components/TagAdder.vue';
 
 /**
  * The tags block of a project or an event: the tags themselves and the ones
@@ -14,15 +16,30 @@ const {
 } = defineProps<{
   title: string;
   description: string;
-  recommendations?: TagItem[];
+  recommendations?: TagRecommendation[];
   recommendationsFailed?: boolean;
 }>();
 
 const tags = defineModel<TagEditItem[]>({ required: true });
+const root = useTemplateRef<HTMLElement>('root');
+const adder = useTemplateRef<InstanceType<typeof TagAdder>>('adder');
+
+/** Brings the block into view and puts the cursor in its field. */
+function reveal() {
+  const reduceMotion = window.matchMedia(
+    '(prefers-reduced-motion: reduce)',
+  ).matches;
+  root.value?.scrollIntoView({
+    behavior: reduceMotion ? 'auto' : 'smooth',
+    block: 'center',
+  });
+  adder.value?.focus({ preventScroll: true });
+}
+defineExpose({ reveal });
 </script>
 
 <template>
-  <div>
+  <div ref="root">
     <SectionHeader
       icon="tag"
       :title="title"
@@ -31,7 +48,11 @@ const tags = defineModel<TagEditItem[]>({ required: true });
     />
     <Box>
       <div class="p-sm sm:p-md">
-        <TagAdder v-model="tags" :recommendations="recommendations" />
+        <TagAdder
+          ref="adder"
+          v-model="tags"
+          :recommendations="recommendations"
+        />
         <p
           v-if="recommendationsFailed"
           role="status"

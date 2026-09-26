@@ -4,6 +4,7 @@ import {
   combineTagEvidence,
   recommendTags,
   similarTagSignal,
+  tagCandidates,
   tagTextSignal,
   togetherTagSignal,
   type TagEvidenceDocument,
@@ -273,5 +274,110 @@ describe('combining evidence', () => {
       'text',
       'related',
     ]);
+  });
+});
+
+describe('entities a tag may also fit', () => {
+  it('finds untagged entities by name, likeness, relation and company', () => {
+    const { documents, idf } = corpus([
+      {
+        id: 'sea-1',
+        title: 'Harbour',
+        text: 'boats lighthouse waves',
+        tags: ['t-sea', 't-photo'],
+      },
+      {
+        id: 'sea-2',
+        title: 'Island',
+        text: 'boats waves island',
+        tags: ['t-sea', 't-photo'],
+      },
+      { id: 'named', title: 'Diary', text: 'We walked by the sea' },
+      { id: 'alike', title: 'Pier', text: 'boats waves lighthouse pier' },
+      { id: 'linked', title: 'Supper', text: 'soup' },
+      { id: 'company', title: 'Gallery', text: 'frames', tags: ['t-photo'] },
+      { id: 'company-2', title: 'Prints', text: 'paper', tags: ['t-photo'] },
+      { id: 'far', title: 'Compiler', text: 'code bugs' },
+    ]);
+    const byKey = new Map(
+      documents.map((document) => [document.key, document]),
+    );
+    const candidates = tagCandidates(
+      buildTagProfile({ tagUuid: 't-sea', title: 'Sea' }, idf),
+      {
+        documents,
+        byKey,
+        relations: new Map([['event:linked', ['event:sea-1']]]),
+        idf,
+      },
+      (tagUuid) => (tagUuid === 't-photo' ? 'Photo' : undefined),
+    );
+    const byId = new Map(
+      candidates.map((candidate) => [candidate.id, candidate]),
+    );
+
+    expect(byId.has('sea-1')).toBe(false);
+    expect(byId.has('far')).toBe(false);
+    expect(byId.get('named')?.reasons[0]).toEqual({
+      kind: 'text',
+      terms: ['sea'],
+    });
+    expect(byId.get('alike')?.reasons.map((reason) => reason.kind)).toContain(
+      'similar',
+    );
+    expect(byId.get('linked')?.reasons.map((reason) => reason.kind)).toEqual([
+      'related',
+    ]);
+  });
+});
+
+describe('entities a tag may also fit, over templated text', () => {
+  it('lets words every entry shares cancel out', () => {
+    const template = 'meeting materials programme participants context';
+    const { documents, idf } = corpus([
+      {
+        id: 'sea-1',
+        title: 'Harbour',
+        text: 'boats lighthouse waves',
+        tags: ['t-sea'],
+      },
+      {
+        id: 'sea-2',
+        title: 'Island',
+        text: 'boats waves island',
+        tags: ['t-sea'],
+      },
+      {
+        id: 'sea-3',
+        title: 'Shore',
+        text: `${template} gulls`,
+        tags: ['t-sea'],
+      },
+      { id: 'pier', title: 'Pier', text: 'boats waves pier' },
+      ...['a', 'b', 'c', 'd', 'e', 'f'].map((id) => ({
+        id,
+        title: `Talk ${id}`,
+        text: `${template} ${id}`,
+      })),
+    ]);
+    const candidates = tagCandidates(
+      buildTagProfile({ tagUuid: 't-sea', title: 'Sea' }, idf),
+      {
+        documents,
+        byKey: new Map(documents.map((document) => [document.key, document])),
+        relations: new Map(),
+        idf,
+      },
+      () => undefined,
+    );
+    expect(candidates.map((candidate) => candidate.id)).toEqual(['pier']);
+    const similar = candidates[0]!.reasons.find(
+      (reason) => reason.kind === 'similar',
+    );
+    expect(
+      similar && 'entities' in similar
+        ? similar.entities.map((entity) => entity.id)
+        : [],
+    ).not.toContain('sea-3');
   });
 });

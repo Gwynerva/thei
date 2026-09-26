@@ -5,6 +5,7 @@ import {
   invalidateTagRecommendationIndex,
   recommendTagsForDraft,
 } from '../../server/thei/tag-recommendations';
+import { addTagUsage } from '../../server/thei/tags';
 import { freshTestDb } from '../helpers/fresh-db';
 
 let context: Awaited<ReturnType<typeof freshTestDb>>;
@@ -214,5 +215,32 @@ describe('tag recommendations for a draft', () => {
     const terms = buildTagRecommendationIndex().byKey.get('event:e-1')!.terms;
     expect(terms.has('harbour')).toBe(false);
     expect(terms.has('mountain')).toBe(true);
+  });
+});
+
+describe('adding a tag from its page', () => {
+  it('appends the tag once and refuses an entity that does not exist', () => {
+    tag('t-1', 'One');
+    tag('t-2', 'Two');
+    event('e-1', 'Evening');
+    tagged('event', 'e-1', ['t-1']);
+
+    expect(addTagUsage('t-2', 'event', 'e-1')).toBe(true);
+    expect(addTagUsage('t-2', 'event', 'e-1')).toBe(true);
+    expect(addTagUsage('t-2', 'project', 'p-missing')).toBe(false);
+
+    expect(
+      context.db
+        .select()
+        .from(context.schema.tagUsages)
+        .all()
+        .map(({ tagUuid, sortOrder }) => [tagUuid, sortOrder]),
+    ).toEqual([
+      ['t-1', 0],
+      ['t-2', 1],
+    ]);
+    expect(
+      context.db.select().from(context.schema.events).get()?.updatedAt,
+    ).toBeGreaterThan(1);
   });
 });

@@ -8,7 +8,12 @@ const props = defineProps<{
   previewMedia?: MediaDescriptor;
   editTo: string;
   compact?: boolean;
+  /** Names the kind of entity before the title, for a list of mixed kinds. */
+  showType?: boolean;
 }>();
+const typeIcon = computed(() =>
+  props.entityType === 'diary-entry' ? 'thought' : props.entityType,
+);
 const { engaged, events: mediaEvents } = useMediaInteraction();
 </script>
 
@@ -31,7 +36,7 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
         class="w-24"
       >
         <span class="flex size-full items-center pl-sm text-2xl text-text-3">
-          <Icon :name="entityType === 'diary-entry' ? 'thought' : entityType" />
+          <Icon :name="typeIcon" />
         </span>
       </MediaEdge>
       <span class="relative ml-10 min-w-0 flex-1 py-1">
@@ -41,6 +46,13 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
             props.compact ? 'truncate text-sm' : 'line-clamp-2 wrap-break-word'
           "
         >
+          <template v-if="showType">
+            <Icon
+              :name="typeIcon"
+              class="mr-1 inline-block align-text-bottom text-text-3"
+            />
+            <span class="sr-only">{{ entityTypeLabel(entityType) }}: </span>
+          </template>
           {{ title }}
         </span>
         <span
@@ -81,6 +93,13 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
       class="hidden w-12 shrink-0 items-center justify-center pr-sm sm:flex"
     >
       <slot name="action"></slot>
+    </div>
+    <!-- An action the row exists for, so it stays at every width. -->
+    <div
+      v-if="$slots.trailing"
+      class="flex shrink-0 items-center px-xs sm:pr-sm"
+    >
+      <slot name="trailing"></slot>
     </div>
   </div>
 </template>

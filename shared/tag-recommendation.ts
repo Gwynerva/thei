@@ -1,3 +1,4 @@
+import type { MediaDescriptor } from './media';
 import type { RelationEndpoint } from './relation';
 import type { TagContainerType, TagItem } from './tag';
 import {
@@ -128,6 +129,8 @@ export type TagProfile = {
   names: TagNamePart[][];
   /** The rarest words of the description, not already in the name. */
   descriptionStems: string[];
+  /** Each stem as the tag itself writes it, to name a match found by stem. */
+  words: Map<string, string>;
 };
 
 const NAME_ALIAS = /\(([^)]*)\)/gu;
@@ -158,13 +161,24 @@ export function buildTagProfile(
     .map(nameParts)
     .filter((parts) => parts.length);
   const nameStems = new Set(names.flat().flatMap((part) => part.stems));
+  const words = new Map<string, string>();
+  for (const token of wordTokens(`${tag.title} ${tag.description ?? ''}`)) {
+    const stem = stemTerm(token);
+    if (!words.has(stem)) words.set(stem, token);
+  }
   const descriptionStems = [
     ...new Set(wordTokens(tag.description ?? '').map(stemTerm)),
   ]
     .filter((stem) => stem.length > 2 && !nameStems.has(stem))
     .sort((left, right) => idf(right) - idf(left))
     .slice(0, TAG_RECOMMENDATION.descriptionTerms);
-  return { tagUuid: tag.tagUuid, title: tag.title, names, descriptionStems };
+  return {
+    tagUuid: tag.tagUuid,
+    title: tag.title,
+    names,
+    descriptionStems,
+    words,
+  };
 }
 
 /**
@@ -222,7 +236,10 @@ export function tagTextSignal(
         terms.push(
           ...part.stems
             .filter((stem) => text.terms.has(stem))
-            .map((stem) => text.surfaces?.get(stem) ?? stem),
+            .map(
+              (stem) =>
+                text.surfaces?.get(stem) ?? profile.words.get(stem) ?? stem,
+            ),
         );
     }
     const nameCoverage = sum / parts.length;
@@ -242,7 +259,9 @@ export function tagTextSignal(
       Math.min(1, 2 * coverage(profile.descriptionStems, text.terms, idf));
     if (score > best) {
       best = score;
-      matched = described.map((stem) => text.surfaces?.get(stem) ?? stem);
+      matched = described.map(
+        (stem) => text.surfaces?.get(stem) ?? profile.words.get(stem) ?? stem,
+      );
     }
   }
   return best ? { score: best, terms: [...new Set(matched)] } : undefined;
@@ -471,4 +490,184 @@ export function recommendTags(
       score,
       reasons,
     }));
+}
+
+/** How many entities the tag page offers a tag to. */
+export const TAG_CANDIDATE_LIMIT = 10;
+
+export type TagCandidate = TagRecommendationEntity & {
+  score: number;
+  reasons: TagRecommendationReason[];
+};
+
+/** A candidate as the tag page lists it, with the picture of the entity. */
+export type TagCandidateItem = TagCandidate & { previewMedia: MediaDescriptor };
+
+/**
+ * Projects and events without a tag that it seems to fit, best first — what
+ * a tag created today should also have been given years ago.
+ *
+ * The same four kinds of evidence as recommendations, turned around. Instead
+ * of asking every entity's neighbours, which would compare everything with
+ * everything, an entity is compared with what sets the entities carrying the
+ * tag apart from the rest of the archive.
+ */
+export function tagCandidates(
+  profile: TagProfile,
+  corpus: {
+    documents: TagEvidenceDocument[];
+    byKey: ReadonlyMap<string, TagEvidenceDocument>;
+    relations: ReadonlyMap<string, string[]>;
+    idf: (term: string) => number;
+  },
+  tagTitle: (tagUuid: string) => string | undefined,
+): TagCandidate[] {
+  const { tagUuid } = profile;
+  const carriers = corpus.documents.filter((document) =>
+    document.tagUuids.includes(tagUuid),
+  );
+  const direction =
+    carriers.length >= 2
+      ? tagDirection(
+          carriers,
+          corpus.documents.filter(
+            (document) => !document.tagUuids.includes(tagUuid),
+          ),
+        )
+      : undefined;
+
+  // How often the tag goes with each other tag, for "often with".
+  const tagged = corpus.documents.filter(
+    (document) => document.tagUuids.length,
+  );
+  const counts = new Map<string, number>();
+  const withTag = new Map<string, number>();
+  for (const document of tagged) {
+    const carries = document.tagUuids.includes(tagUuid);
+    for (const other of document.tagUuids) {
+      counts.set(other, (counts.get(other) ?? 0) + 1);
+      if (carries && other !== tagUuid)
+        withTag.set(other, (withTag.get(other) ?? 0) + 1);
+    }
+  }
+  const base = carriers.length / Math.max(1, tagged.length);
+
+  const { minSimilarity, confidentSimilarity } = TAG_RECOMMENDATION;
+  return corpus.documents
+    .filter((document) => !document.tagUuids.includes(tagUuid))
+    .map((document) => {
+      const similarity = direction
+        ? cosineSimilarity(document.vector, direction)
+        : 0;
+      // Only the carriers it is actually like are named for it, and with
+      // none of them there is nothing to name.
+      const alike =
+        similarity > minSimilarity
+          ? carriers
+              .map((carrier) => ({
+                carrier,
+                similarity: cosineSimilarity(document.vector, carrier.vector),
+              }))
+              .filter((item) => item.similarity >= minSimilarity)
+              .sort((left, right) => right.similarity - left.similarity)
+          : [];
+      const similar = alike.length
+        ? {
+            score: Math.min(
+              1,
+              (similarity - minSimilarity) /
+                (confidentSimilarity - minSimilarity),
+            ),
+            entities: alike
+              .slice(0, TAG_RECOMMENDATION.reasonEntities)
+              .map(({ carrier }) => entityOf(carrier)),
+          }
+        : undefined;
+      const relatedCarriers = (corpus.relations.get(document.key) ?? [])
+        .map((key) => corpus.byKey.get(key))
+        .filter(
+          (related): related is TagEvidenceDocument =>
+            related?.tagUuids.includes(tagUuid) ?? false,
+        );
+      const together = document.tagUuids.flatMap((other) => {
+        const both = withTag.get(other) ?? 0;
+        const share = both / (counts.get(other) ?? both);
+        return both >= TAG_RECOMMENDATION.minTogether &&
+          share >= TAG_RECOMMENDATION.minLift * base
+          ? [{ other, share }]
+          : [];
+      });
+      return {
+        document,
+        ...combineTagEvidence(
+          {
+            text: tagTextSignal(profile, { terms: document.terms }, corpus.idf),
+            similar,
+            related: relatedCarriers.length
+              ? {
+                  score: 1,
+                  entities: relatedCarriers
+                    .slice(0, TAG_RECOMMENDATION.reasonEntities)
+                    .map(entityOf),
+                }
+              : undefined,
+            together: together.length
+              ? {
+                  score: Math.max(...together.map(({ share }) => share)),
+                  tagUuids: together.map(({ other }) => other),
+                }
+              : undefined,
+          },
+          tagTitle,
+        ),
+      };
+    })
+    .filter(({ score }) => score >= TAG_RECOMMENDATION.minScore)
+    .sort(
+      (left, right) =>
+        right.score - left.score ||
+        left.document.title.localeCompare(right.document.title, undefined, {
+          sensitivity: 'base',
+        }),
+    )
+    .slice(0, TAG_CANDIDATE_LIMIT)
+    .map(({ document, score, reasons }) => ({
+      ...entityOf(document),
+      score,
+      reasons,
+    }));
+}
+
+/**
+ * What the entities carrying a tag have in common that the rest of the archive
+ * does not: the mean of their vectors less the mean of everyone else's, with
+ * what is left positive kept and scaled to unit length. Words every entry
+ * shares — a template, a signature — cancel out instead of making everything
+ * look like everything (Rocchio's classifier).
+ */
+function tagDirection(
+  carriers: TagEvidenceDocument[],
+  others: TagEvidenceDocument[],
+): TermVector {
+  const direction: TermVector = new Map();
+  for (const { vector } of carriers)
+    for (const [term, weight] of vector)
+      direction.set(
+        term,
+        (direction.get(term) ?? 0) + weight / carriers.length,
+      );
+  for (const { vector } of others)
+    for (const [term, weight] of vector)
+      if (direction.has(term))
+        direction.set(term, direction.get(term)! - weight / others.length);
+  let length = 0;
+  for (const [term, weight] of direction) {
+    if (weight <= 0) direction.delete(term);
+    else length += weight * weight;
+  }
+  length = Math.sqrt(length);
+  if (length > 0)
+    for (const [term, weight] of direction)
+      direction.set(term, weight / length);
+  return direction;
 }
