@@ -1,6 +1,6 @@
-import { readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { writeFileAtomically } from './atomic-file';
 import { dependencySpecifier, repositoryUrl } from './environment';
 
 export const sourcePlaceholder = '__THEI_SOURCE__';
@@ -44,15 +44,7 @@ export async function writeInstanceManifest(
   projectPath: string,
   contents: string,
 ): Promise<void> {
-  const path = join(projectPath, 'package.json');
-  const temp = `${path}.${randomUUID()}.tmp`;
-
-  try {
-    await writeFile(temp, contents, 'utf8');
-    await rename(temp, path);
-  } finally {
-    await rm(temp, { force: true });
-  }
+  await writeFileAtomically(join(projectPath, 'package.json'), contents);
 }
 
 export async function backupInstanceManifest(

@@ -1,6 +1,6 @@
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
-import { dirname, join } from 'node:path';
+import { readFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { writeFileAtomically } from './atomic-file';
 import {
   isRunningStatus,
   type UpdateRunStatus,
@@ -37,19 +37,12 @@ export async function writeUpdateState(
   projectPath: string,
   state: UpdateState,
 ): Promise<void> {
-  const write = queue.then(async () => {
-    const path = stateFilePath(projectPath);
-    const temp = `${path}.${randomUUID()}.tmp`;
-
-    await mkdir(dirname(path), { recursive: true });
-
-    try {
-      await writeFile(temp, JSON.stringify(state, null, 2), 'utf8');
-      await rename(temp, path);
-    } finally {
-      await rm(temp, { force: true });
-    }
-  });
+  const write = queue.then(() =>
+    writeFileAtomically(
+      stateFilePath(projectPath),
+      JSON.stringify(state, null, 2),
+    ),
+  );
 
   queue = write.catch(() => {});
   await write;

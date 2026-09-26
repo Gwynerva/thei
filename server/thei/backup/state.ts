@@ -1,6 +1,6 @@
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
-import { dirname, join } from 'node:path';
+import { readFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { writeFileAtomically } from '#layers/thei/update/atomic-file';
 import { BACKUP_SESSION_TTL_MS } from '#layers/thei/shared/backup';
 import type { BackupKind } from '#layers/thei/shared/backup';
 
@@ -47,17 +47,9 @@ export async function readBackupSession(): Promise<
 export async function writeBackupSession(
   state: BackupSessionState,
 ): Promise<void> {
-  const write = queue.then(async () => {
-    const path = backupStatePath();
-    const temp = `${path}.${randomUUID()}.tmp`;
-    await mkdir(dirname(path), { recursive: true });
-    try {
-      await writeFile(temp, JSON.stringify(state, null, 2), 'utf8');
-      await rename(temp, path);
-    } finally {
-      await rm(temp, { force: true });
-    }
-  });
+  const write = queue.then(() =>
+    writeFileAtomically(backupStatePath(), JSON.stringify(state, null, 2)),
+  );
   queue = write.catch(() => {});
   await write;
 }
