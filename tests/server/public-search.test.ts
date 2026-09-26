@@ -7,10 +7,12 @@ import {
   publicSearchQuery,
 } from '../../shared/public-search';
 import {
+  buildPublicSearchIndex,
   comparePublicSearchDocuments,
   searchPublicDocuments,
   type PublicSearchDocument,
 } from '../../server/thei/public/search-index';
+import { freshTestDb } from '../helpers/fresh-db';
 
 function doc(
   uuid: string,
@@ -145,5 +147,49 @@ describe('public search documents', () => {
       'web',
       'none',
     ]);
+  });
+});
+
+describe('public search index', () => {
+  it('finds projects and events by the readable part of their URL', async () => {
+    const context = await freshTestDb();
+    Object.assign(context.server, { useDb: () => context });
+    try {
+      const { db, schema } = context;
+      const row = {
+        summary: '',
+        access: ProjectEventAccessLevel.Public,
+        createdAt: 1,
+        updatedAt: 1,
+      };
+      db.insert(schema.projects)
+        .values({
+          ...row,
+          projectUuid: 'project',
+          publicId: 'prj001',
+          humanReadableSlug: 'green-garden',
+          title: 'Сад',
+        })
+        .run();
+      db.insert(schema.events)
+        .values({
+          ...row,
+          eventUuid: 'event',
+          publicId: 'evt001',
+          humanReadableSlug: 'stone-garden',
+          title: 'Камни',
+        })
+        .run();
+      const { documents } = buildPublicSearchIndex();
+
+      expect(search(documents, { q: 'garden' }).sort()).toEqual([
+        'event',
+        'project',
+      ]);
+      expect(search(documents, { q: 'green garden' })).toEqual(['project']);
+      expect(search(documents, { q: 'stone-garden' })).toEqual(['event']);
+    } finally {
+      await context.close();
+    }
   });
 });

@@ -41,7 +41,10 @@ export interface PublicSearchDocument {
   sortDate: string;
   createdAt: number;
   tagUuids: string[];
-  /** Normalized title, summary, tag titles and description text. */
+  /**
+   * Normalized title, summary, readable URL part, tag titles and description
+   * text.
+   */
   text: string;
 }
 
@@ -203,6 +206,9 @@ export function buildPublicSearchIndex(): PublicSearchIndex {
         [
           row.title,
           row.summary,
+          // The readable part of the address: a reader who remembers a
+          // link finds what it led to.
+          row.humanReadableSlug,
           ...tagUuids.map((tagUuid) => tagsByUuid.get(tagUuid)?.title ?? ''),
           textByOwner.get(key) ?? '',
         ].join('\n'),
