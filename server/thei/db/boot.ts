@@ -21,14 +21,16 @@ import { openDb, wrapDbContext } from './utils';
  * which run once the rest of the server can be used.
  */
 export async function bootTheiDb(): Promise<TheiUpdateTask[]> {
-  const installedVersion = THEI_SERVER.config.version;
+  const installedVersion = THEI_SERVER.configHead.version;
   const log = (message: string) =>
     THEI_SERVER.console.tag('Migrations').log(message);
   const rawDb = openDb();
+  // Before anything can fail: whatever stops this boot — a migration, content
+  // newer than the engine — the update screen explains it to the admin alone.
+  rememberClosedSiteAdmins(rawDb);
 
   try {
     const pending = openLedger(rawDb, {
-      installedVersion,
       engineVersion: THEI_SERVER.version,
       tasks: updateTaskRegistry,
       log,
@@ -40,9 +42,6 @@ export async function bootTheiDb(): Promise<TheiUpdateTask[]> {
       THEI_SERVER.console
         .tag('Boot')
         .log('The site is closed until the update is finished.');
-      // Before the migrations touch anything: the update screen shows its
-      // steps to the admin alone, from the first one.
-      rememberClosedSiteAdmins(rawDb);
     }
 
     // Migrations run before anything reads or repairs the schema: the rest of

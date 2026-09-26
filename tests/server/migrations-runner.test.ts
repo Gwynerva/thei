@@ -102,18 +102,13 @@ describe('migration runner', () => {
     expect(second.applied).toEqual([]);
   });
 
-  it('adopts a ledger-less database at its recorded version', async () => {
-    // A database created by an older Thei: the baseline schema is already
-    // there, but nothing has ever been recorded.
+  it('refuses tables that no ledger accounts for', async () => {
     baseline.up(context());
     expect(hasLedger(rawDb)).toBe(false);
 
-    const result = await runPendingMigrations(rawDb, options('0.0.1'));
-
-    expect(result.adopted).toBe(1);
-    expect(result.applied.map((migration) => migration.id)).toEqual([
-      '0.2.0/001-add-color',
-    ]);
+    await expect(
+      runPendingMigrations(rawDb, options('0.0.1')),
+    ).rejects.toThrow('no migration ledger');
   });
 
   it('rolls back a failing migration and records nothing for it', async () => {
@@ -159,42 +154,11 @@ describe('migration runner', () => {
     expect((error as MigrationError).message).toContain('0.2.0');
   });
 
-  it('replaces a ledger table left in an older, incompatible shape', async () => {
-    baseline.up(context());
-    // The shape an earlier, abandoned migration system used.
-    rawDb
-      .prepare(
-        `CREATE TABLE "_thei_migrations" (
-          "id" text PRIMARY KEY NOT NULL,
-          "checksum" text NOT NULL,
-          "targetVersion" text NOT NULL,
-          "completedAt" integer NOT NULL
-        )`,
-      )
-      .run();
-    rawDb
-      .prepare('INSERT INTO _thei_migrations VALUES (?, ?, ?, ?)')
-      .run('0.0.1/000-baseline', 'abc', '0.0.1', Date.now());
-
-    const result = await runPendingMigrations(rawDb, options('0.0.1'));
-
-    expect(result.adopted).toBe(1);
-    expect(result.applied.map((migration) => migration.id)).toEqual([
-      '0.2.0/001-add-color',
-    ]);
-    expect(
-      readLedger(rawDb)
-        .map((entry) => entry.id)
-        .sort(),
-    ).toEqual(['0.0.1/001-baseline', '0.2.0/001-add-color']);
-  });
-
   it('seeds every migration for a database built from the baseline', async () => {
     seedLedger(rawDb, [baseline, addColor]);
 
     const result = await runPendingMigrations(rawDb, options('0.2.0'));
     expect(result.applied).toEqual([]);
-    expect(result.adopted).toBe(0);
   });
 
   it('reports progress for every pending migration', async () => {
@@ -236,21 +200,6 @@ describe('update tasks in the ledger', () => {
       openLedger(rawDb, { ...options('0.0.0'), tasks: [previews, colors] })
         .pendingTasks,
     ).toEqual([colors]);
-  });
-
-  it('adopts the tasks a ledger-less database already went through', () => {
-    baseline.up(context());
-
-    const ledger = openLedger(rawDb, {
-      ...options('0.2.0'),
-      tasks: [previews, colors],
-    });
-
-    expect(ledger.adopted).toBe(3);
-    expect(ledger.pendingTasks).toEqual([colors]);
-    expect(readLedger(rawDb).map((entry) => entry.id)).toContain(
-      'task:0.2.0/001-previews',
-    );
   });
 
   it('seeds the tasks of a database built from the baseline', () => {

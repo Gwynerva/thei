@@ -1,5 +1,6 @@
 <script lang="ts" setup>
-import type { UpdateRunStatus, UpdateStatus } from '#layers/thei/update/types';
+import type { UpdateStatus } from '#layers/thei/update/types';
+import type { BackupStatus } from '#layers/thei/shared/backup';
 
 type ActionResponse =
   { type: 'success' } | { type: 'error'; code?: string; message: string };
@@ -13,6 +14,12 @@ const { data: status, refresh } = await useFetch<UpdateStatus>(
   { key: 'admin-updates' },
 );
 
+// A manual backup is the way back from an update gone wrong, so the page
+// says when the last one was made.
+const { data: backup } = useLazyFetch<BackupStatus>('/api/admin/backup', {
+  key: 'admin-backup',
+});
+
 const busy = ref(false);
 const error = ref<string>();
 
@@ -20,7 +27,8 @@ const state = computed(() => status.value?.state);
 const running = computed(() => Boolean(status.value?.running));
 const managed = computed(() => Boolean(status.value?.managed));
 
-const statusLabels: Record<UpdateRunStatus, () => string> = {
+// Partial: a newer release may report a status this page does not know.
+const statusLabels: Partial<Record<string, () => string>> = {
   running: () => phrase.value.update_status_running,
   restarting: () => phrase.value.update_status_restarting,
   done: () => phrase.value.update_status_done,
@@ -28,7 +36,7 @@ const statusLabels: Record<UpdateRunStatus, () => string> = {
 };
 
 const statusLabel = computed(() =>
-  state.value ? statusLabels[state.value.status]() : '',
+  state.value ? (statusLabels[state.value.status]?.() ?? state.value.status) : '',
 );
 
 const availability = computed(() => {
@@ -163,6 +171,13 @@ async function restart() {
 
           <p v-if="managed" class="text-sm text-text-3">
             {{ phrase.update_backup_notice }}
+            <template v-if="backup?.lastBackup">
+              {{ phrase.update_last_backup }}
+              <TheiTime :datetime="backup.lastBackup.completedAt" />.
+            </template>
+            <template v-else-if="backup">
+              {{ phrase.update_no_backup }}
+            </template>
           </p>
         </div>
 

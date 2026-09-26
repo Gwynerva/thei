@@ -45,15 +45,6 @@ export default defineMigration({
       )
       .run();
 
-    // A fresh installation starts from the baseline, which no longer describes
-    // `profile-statuses` at all, and then replays this registry.
-    const legacy = rawDb
-      .prepare(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'profile-statuses'",
-      )
-      .get();
-    if (!legacy) return;
-
     // Every instance has exactly one profile row; its id is the owner id.
     const profile = rawDb.prepare('SELECT profileId FROM profiles').get() as
       { profileId: string } | undefined;

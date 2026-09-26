@@ -158,6 +158,22 @@ export function finishStep(
   return state;
 }
 
+/**
+ * Ends the run as failed: on `stepId` when the failure belongs to one step,
+ * otherwise on whichever step was running.
+ */
+export function failRun(
+  state: UpdateState,
+  message: string,
+  stepId?: string,
+): UpdateState {
+  if (stepId) finishStep(state, stepId, 'failed', message);
+  state.error = message;
+  appendLog(state, message);
+  setStatus(state, 'failed');
+  return settleSteps(state);
+}
+
 /** Marks what never got to run once the run as a whole has ended. */
 export function settleSteps(state: UpdateState): UpdateState {
   for (const step of state.steps) {

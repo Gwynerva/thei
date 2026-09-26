@@ -771,8 +771,11 @@ export default defineI18nBase({
     update_confirm: (version) =>
       `Update Thei to ${version}? The site will restart when it is done.`,
     update_backup_notice:
-      'Updates do not create a backup. If you want one, copy the content ' +
-      'folder before you start.',
+      'Before updating, make a manual backup with the backup client ' +
+      '(Settings → Backups). If anything goes wrong, install the previous ' +
+      'version and restore that copy.',
+    update_last_backup: 'Last backup:',
+    update_no_backup: 'No backup has been made yet.',
     update_in_progress: 'Updating…',
     update_status_running: 'Updating',
     update_status_restarting: 'Restarting',

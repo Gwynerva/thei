@@ -1,6 +1,11 @@
 import { exec } from './exec';
 import { repositoryUrl } from './environment';
-import { compareVersions, isVersion, normalizeVersion } from './semver';
+import {
+  compareVersions,
+  isStableVersion,
+  isVersion,
+  normalizeVersion,
+} from './semver';
 
 const checkTimeout = 20_000;
 const cacheTtl = 5 * 60 * 1000;
@@ -17,7 +22,8 @@ let cache: CachedCheck | undefined;
  * Extracts release tags from `git ls-remote --tags` output.
  *
  * Annotated tags appear twice, once as the tag object and once peeled as
- * `^{}`; anything that is not a plain semver tag is ignored.
+ * `^{}`. Only plain `major.minor.patch` tags are releases: a prerelease such
+ * as `v0.3.0-rc.1` is never offered as an update.
  */
 export function parseTags(output: string): string[] {
   const found = new Set<string>();
@@ -27,7 +33,7 @@ export function parseTags(output: string): string[] {
     if (!ref?.startsWith('refs/tags/')) continue;
 
     const tag = ref.slice('refs/tags/'.length).replace(/\^\{\}$/, '');
-    if (isVersion(tag)) found.add(tag);
+    if (isStableVersion(tag)) found.add(tag);
   }
 
   return [...found].sort(compareVersions);
@@ -85,9 +91,6 @@ export function getCachedCheck(): CachedCheck | undefined {
   return cache;
 }
 
-export function clearCheckCache(): void {
-  cache = undefined;
-}
 
 export function isNewer(candidate: string, current: string): boolean {
   return (

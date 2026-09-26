@@ -6,6 +6,8 @@ import type { SiteFaviconInfo } from '#layers/thei/shared/profile';
 import { resolveFaviconSet } from '../../thei/media/favicon';
 import { resolveGeneratedIcon } from '../../thei/media/generated-icon';
 import { getProfileIdentity } from '../../thei/profile';
+import { bootResult } from '../../thei/boot/result';
+import { CLOSED_SITE_RETRY_AFTER } from '../../thei/boot/closed-site';
 
 interface PublicAdmin {
   languageCode: LanguageCode;
@@ -19,6 +21,12 @@ interface PublicAdmin {
 }
 
 export default defineEventHandler(async (event): Promise<PublicAdmin> => {
+  // Let through in every state for the sign-in page of a private site; until
+  // the site is ready there is no whole config or database to read from.
+  if (bootResult.type !== 'ready') {
+    setHeader(event, 'Retry-After', CLOSED_SITE_RETRY_AFTER);
+    throw createError({ statusCode: 503, statusMessage: 'Not ready' });
+  }
   const isPrivateSite =
     THEI_SERVER.config.siteAccessLevel === SiteAccessLevel.Private;
   const isAdmin = await THEI_SERVER.isAuthenticatedAdmin(event);

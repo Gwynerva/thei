@@ -585,6 +585,8 @@ export type LanguagePhrases = {
   update_start: string;
   update_confirm: (version: string) => string;
   update_backup_notice: string;
+  update_last_backup: string;
+  update_no_backup: string;
   update_in_progress: string;
   update_status_running: string;
   update_status_restarting: string;

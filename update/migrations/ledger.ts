@@ -28,36 +28,13 @@ export function createLedger(rawDb: Database): void {
     .run();
 }
 
-const ledgerColumns = ['id', 'version', 'appliedAt'];
-
-function ledgerTableExists(rawDb: Database): boolean {
+/** The ledger has kept one shape since 0.0.1, the first release. */
+export function hasLedger(rawDb: Database): boolean {
   const row = rawDb
     .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`)
     .get(ledgerTable);
 
   return row !== undefined;
-}
-
-/**
- * True only when the ledger is present *and* has the shape this version reads.
- *
- * A table of the same name but a different shape is treated as absent, so the
- * caller drops it and rebuilds the history from the recorded version. Nothing
- * is lost: the ledger is bookkeeping, always reconstructible from the version
- * in `thei.config.json`.
- */
-export function hasLedger(rawDb: Database): boolean {
-  if (!ledgerTableExists(rawDb)) return false;
-
-  const columns = (
-    rawDb.pragma(`table_info('${ledgerTable}')`) as { name: string }[]
-  ).map((column) => column.name);
-
-  return ledgerColumns.every((column) => columns.includes(column));
-}
-
-export function dropLedger(rawDb: Database): void {
-  rawDb.prepare(`DROP TABLE IF EXISTS \`${ledgerTable}\``).run();
 }
 
 export function readLedger(rawDb: Database): LedgerEntry[] {

@@ -19,12 +19,6 @@ export default defineMigration({
   },
   up({ rawDb }) {
     for (const table of ['projects', 'events', 'pages']) {
-      const columns = (
-        rawDb.prepare(`PRAGMA table_info(\`${table}\`)`).all() as {
-          name: string;
-        }[]
-      ).map((column) => column.name);
-      if (columns.includes('reminder')) continue;
       rawDb
         .prepare(
           `ALTER TABLE \`${table}\` ADD COLUMN \`reminder\` text DEFAULT '' NOT NULL`,

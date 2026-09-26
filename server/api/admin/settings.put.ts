@@ -4,7 +4,8 @@ import type { SiteSettingsData } from '#layers/thei/shared/profile';
 import { normalizeSiteUrl } from '#layers/thei/shared/site-url';
 import { normalizeSiteAnalytics } from '#layers/thei/shared/analytics';
 import { generatePasswordData } from '../../thei/password';
-import { writeTheiConfig } from '../../thei/config/write';
+import { updateTheiConfig } from '../../thei/config/write';
+import type { TheiConfig } from '../../thei/config';
 import { setCurrentLanguage } from '../../thei/language';
 import { destroyOtherAdminSessions } from '../../thei/admin-session';
 
@@ -45,19 +46,23 @@ export default defineEventHandler(async (event) => {
       ? await THEI_SERVER.getAdmin(event)
       : undefined;
   const save = queue.then(async () => {
-    const previous = THEI_SERVER.config;
-    const config = {
-      ...previous,
-      languageCode: input.languageCode,
-      siteAccessLevel: input.siteAccessLevel,
-      siteUrl,
-      analytics,
-      secretPhrase: input.secretPhrase.trim(),
-      password: input.password
-        ? generatePasswordData(input.password)
-        : THEI_SERVER.config.password,
-    };
-    await writeTheiConfig(config);
+    let previous!: TheiConfig;
+    let config!: TheiConfig;
+    await updateTheiConfig((current) => {
+      previous = current;
+      config = {
+        ...current,
+        languageCode: input.languageCode,
+        siteAccessLevel: input.siteAccessLevel,
+        siteUrl,
+        analytics,
+        secretPhrase: input.secretPhrase.trim(),
+        password: input.password
+          ? generatePasswordData(input.password)
+          : current.password,
+      };
+      return config;
+    });
     await setCurrentLanguage(config.languageCode);
     if (
       currentSession &&

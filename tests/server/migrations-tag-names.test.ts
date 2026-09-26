@@ -83,25 +83,35 @@ describe('tag names migration', () => {
       "INSERT INTO \"asset-usages\" VALUES ('a-icon', 'tag', 't-ye', 'icon', NULL)",
     ).run();
 
-    tagNames.up({ rawDb: db } as never);
-    // Repeatable: a second run changes nothing.
+    tag(db, 't-space', '  Product   design ');
+
     tagNames.up({ rawDb: db } as never);
 
     expect(
       db
         .prepare(
-          'SELECT tagUuid, normalizedTitle, description, synonyms FROM tags ORDER BY tagUuid',
+          'SELECT tagUuid, title, normalizedTitle, description, synonyms FROM tags ORDER BY tagUuid',
         )
         .all(),
     ).toEqual([
       {
         tagUuid: 't-sea',
+        title: 'Море',
         normalizedTitle: 'море',
         description: '',
         synonyms: '[]',
       },
       {
+        // Stored the way a title saved today is, so saving it again finds it.
+        tagUuid: 't-space',
+        title: 'Product design',
+        normalizedTitle: 'product design',
+        description: '',
+        synonyms: '[]',
+      },
+      {
         tagUuid: 't-yo',
+        title: 'Ёлка',
         normalizedTitle: 'елка',
         description: 'New Year tree',
         synonyms: '[]',

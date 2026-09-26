@@ -21,11 +21,6 @@ export default defineMigration({
     ru: 'Тег берёт цвет из своей иконки или из названия, как и остальные сущности.',
   },
   up({ rawDb }) {
-    // A fresh installation starts from a baseline that never had the column.
-    const columns = rawDb.pragma("table_info('tags')") as Array<{
-      name: string;
-    }>;
-    if (!columns.some((column) => column.name === 'accentColor')) return;
     rawDb.prepare('ALTER TABLE `tags` DROP COLUMN `accentColor`').run();
   },
 });

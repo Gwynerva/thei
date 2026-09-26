@@ -5,7 +5,7 @@ import { projectPath, theiPath } from '#thei/static';
 import { bootResult as _bootResult } from './boot/result';
 import { makeLogger, tag } from './logger';
 import { currentLanguage, getCurrentLanguagePhrases } from './language';
-import { theiConfig } from './config/index';
+import { theiConfig, theiConfigHead } from './config/index';
 import { getTheiDbContext } from './db/global';
 import { countProjects } from './projects/repository/count';
 import { findProjectByPublicId } from './projects/repository/find-by-public-id';
@@ -78,8 +78,13 @@ export const THEI_SERVER = {
   get language() {
     return currentLanguage!;
   },
+  /** The whole config: loaded once the migrations have run. */
   get config() {
     return theiConfig!;
+  },
+  /** Content version and language: read before the migrations run. */
+  get configHead() {
+    return theiConfigHead!;
   },
   useDb() {
     return getTheiDbContext();
