@@ -116,14 +116,19 @@ export function useLifeFeed(
    * stuck; before then it is hidden, and the feed is read from where the bar
    * would start. Scrolling to a day always leaves room for it, because the
    * scroll is what sticks it, and the stuck state is only observed later.
+   *
+   * Read from the sticky box the bar hangs in rather than from the bar: the
+   * bar slides in with a transform, and until it is marked stuck it is still
+   * shifted up, so its own rect ends a few pixels short of where it comes to
+   * rest — enough to leave the day it was scrolled to under the bar.
    */
   function trackerBottom(assumeStuck = false) {
     const bar = document.querySelector<HTMLElement>('[data-life-sticky-bar]');
     if (!bar) return 0;
-    const rect = bar.getBoundingClientRect();
+    const top = (bar.parentElement ?? bar).getBoundingClientRect().top;
     return assumeStuck || bar.closest('[data-sticky-stuck]')
-      ? rect.bottom
-      : rect.top;
+      ? top + bar.getBoundingClientRect().height
+      : top;
   }
   function viewportItems() {
     const top = window.scrollY + trackerBottom();
@@ -347,7 +352,9 @@ export function useLifeFeed(
         requestAnimationFrame(() => resolve()),
       );
       if (disposed || generation !== positionGeneration) return;
-      scrollPaddingStart.value = trackerBottom(true);
+      // Rounded up: the browser snaps the scroll to device pixels, and a
+      // fraction lost there would tuck the day's top edge under the bar.
+      scrollPaddingStart.value = Math.ceil(trackerBottom(true));
       await nextTick();
       if (disposed || generation !== positionGeneration) return;
       virtualizer.value.scrollToIndex(index, { align: 'start' });
