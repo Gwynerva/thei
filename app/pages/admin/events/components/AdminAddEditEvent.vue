@@ -2,6 +2,7 @@
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import { isContentEmpty } from '#layers/thei/shared/content';
 import type { EventEditData } from '#layers/thei/shared/event';
+import { eventTagContext } from '#layers/thei/shared/admin/event';
 import type {
   EventGetResponse,
   EventSaveResponse,
@@ -29,7 +30,6 @@ import {
 import LinkField from '../../components/LinkField.vue';
 import ProjectAssets from '../../projects/components/ProjectAssets.vue';
 import ProjectExternalLinks from '../../projects/components/ProjectExternalLinks.vue';
-import ProjectTags from '../../projects/components/ProjectTags.vue';
 import ProjectActionSettings from '../../projects/components/ProjectActionSettings.vue';
 import { eventDeleteModal } from './event-delete-modal';
 import { externalLinkListItems } from '#layers/thei/shared/external-link';
@@ -263,6 +263,18 @@ function saveAfterContentEdit() {
   void save();
 }
 
+const tagsModel = computed({
+  get: () => eventData.value.tags ?? [],
+  set: (value) => {
+    eventData.value.tags = value;
+  },
+});
+const tagRecommendations = useTagRecommendations({
+  owner: () => (eventUuid ? { type: 'event', id: eventUuid } : undefined),
+  context: () => eventTagContext(eventData.value),
+  tags: () => eventData.value.tags,
+  relations: () => eventData.value.relations,
+});
 const relationsModel = computed({
   get: () => eventData.value.relations ?? [],
   set: (value) => {
@@ -399,9 +411,12 @@ function clone<T>(value: T): T {
       :description="phrase.event_external_links_hint"
       :empty-text="phrase.event_external_links_empty"
     />
-    <ProjectTags
+    <AdminTags
+      v-model="tagsModel"
       :title="phrase.event_tags"
       :description="phrase.event_tags_hint"
+      :recommendations="tagRecommendations.recommendations.value"
+      :recommendations-failed="tagRecommendations.failed.value"
     />
     <AdminRelations
       v-model="relationsModel"

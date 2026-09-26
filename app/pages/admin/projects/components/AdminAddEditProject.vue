@@ -1,5 +1,8 @@
 <script lang="ts" setup>
-import type { ProjectEditData } from '#layers/thei/shared/admin/project';
+import {
+  projectTagContext,
+  type ProjectEditData,
+} from '#layers/thei/shared/admin/project';
 import type {
   OtherAssetGetItem,
   ProjectContentItemIdentity,
@@ -27,7 +30,6 @@ import ProjectAssets from './ProjectAssets.vue';
 import ProjectExternalLinks from './ProjectExternalLinks.vue';
 import { projectDeleteModal } from './project-delete-modal';
 import ProjectContentItems from './ProjectContentItems.vue';
-import ProjectTags from './ProjectTags.vue';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import {
   DEFAULT_PROJECT_ACTION,
@@ -326,6 +328,21 @@ function saveAfterItemEdit(
 }
 provide(saveAfterItemEditKey, saveAfterItemEdit);
 
+const tagsModel = computed({
+  get: () => projectData.value.tags ?? [],
+  set: (value) => {
+    projectData.value.tags = value;
+  },
+});
+const tagRecommendations = useTagRecommendations({
+  owner: () =>
+    resolvedProjectUuid.value
+      ? { type: 'project', id: resolvedProjectUuid.value }
+      : undefined,
+  context: () => projectTagContext(projectData.value),
+  tags: () => projectData.value.tags,
+  relations: () => projectData.value.relations,
+});
 const relationsModel = computed({
   get: () => projectData.value.relations ?? [],
   set: (value) => {
@@ -489,7 +506,13 @@ async function openDeleteProjectModal() {
       "
       :owner-title="projectData.title.trim() || phrase.new_project"
     />
-    <ProjectTags />
+    <AdminTags
+      v-model="tagsModel"
+      :title="phrase.project_tags"
+      :description="phrase.project_tags_hint"
+      :recommendations="tagRecommendations.recommendations.value"
+      :recommendations-failed="tagRecommendations.failed.value"
+    />
     <AdminShareLinks
       v-if="resolvedProjectUuid"
       entity-type="project"

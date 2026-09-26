@@ -1,6 +1,9 @@
-import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne, sql, type SQL } from 'drizzle-orm';
 import {
+  cleanTagTitle,
   normalizeTagTitle,
+  TAG_TITLE_MAX_LENGTH,
+  type TagContainerType,
   type TagEditItem,
   type TagItem,
   type TagSaveErrorCode,
@@ -9,7 +12,7 @@ import { buildAdminAssetUrls } from './assets/urls';
 import { EntityPrefix, generateUniqueId } from './entity-id';
 
 export async function listTagsForContainer(
-  containerType: 'project' | 'event',
+  containerType: TagContainerType,
   containerId: string,
 ): Promise<TagItem[]> {
   const { db, schema } = THEI_SERVER.useDb();
@@ -112,72 +115,81 @@ export async function buildTagItem(tag: TagRow): Promise<TagItem> {
   return (await buildTagItems([tag]))[0]!;
 }
 
-export async function prepareTagUsages(items: TagEditItem[] | undefined) {
+/**
+ * A tag the save will place: an existing one by identity, or a new one with
+ * everything its row needs. Its slug and public ID are only proposals — the
+ * transaction settles them against whatever exists by then.
+ */
+export type PreparedTagUsage =
+  | { tagUuid: string; create?: undefined }
+  | {
+      tagUuid: string;
+      create: {
+        title: string;
+        normalizedTitle: string;
+        slug: string;
+        publicId: string;
+      };
+    };
+
+/**
+ * Resolves the tags of a save before its transaction opens.
+ *
+ * A title that already names a tag becomes that tag, and each tag is placed
+ * once however many items resolve to it: a tag renamed in another tab and
+ * then typed again by its new name is still one tag.
+ */
+export async function prepareTagUsages(
+  items: TagEditItem[] | undefined,
+): Promise<PreparedTagUsage[] | undefined> {
   if (items === undefined) return undefined;
   const { db, schema } = THEI_SERVER.useDb();
-  const prepared: Array<{
-    tagUuid: string;
-    title?: string;
-    normalizedTitle?: string;
-    slug?: string;
-    publicId?: string;
-  }> = [];
-  const reservedSlugs = new Set<string>();
-  const reservedPublicIds = new Set<string>();
+  const findTag = (condition: SQL) =>
+    db
+      .select({ tagUuid: schema.tags.tagUuid })
+      .from(schema.tags)
+      .where(condition)
+      .get();
+  const prepared: PreparedTagUsage[] = [];
+  const placed = new Set<string>();
+  const place = (item: PreparedTagUsage, identity = item.tagUuid) => {
+    if (placed.has(identity)) return;
+    placed.add(identity);
+    prepared.push(item);
+  };
   for (const item of items) {
     if (item.tagUuid) {
-      const existing = await db.query.tags.findFirst({
-        where: eq(schema.tags.tagUuid, item.tagUuid),
-      });
+      const existing = findTag(eq(schema.tags.tagUuid, item.tagUuid));
       if (!existing) throw new Error('Tag not found');
-      prepared.push({ tagUuid: existing.tagUuid });
+      place({ tagUuid: existing.tagUuid });
       continue;
     }
-    const title = item.title.trim();
-    if (!title || title.length > 100) throw new Error('Invalid tag title');
+    const title = cleanTagTitle(item.title);
+    if (!title || title.length > TAG_TITLE_MAX_LENGTH)
+      throw new Error('Invalid tag title');
     const normalizedTitle = normalizeTagTitle(title);
-    const existing = await db.query.tags.findFirst({
-      where: eq(schema.tags.normalizedTitle, normalizedTitle),
-    });
+    const existing = findTag(eq(schema.tags.normalizedTitle, normalizedTitle));
     if (existing) {
-      prepared.push({ tagUuid: existing.tagUuid });
+      place({ tagUuid: existing.tagUuid });
       continue;
     }
+    if (placed.has(`new:${normalizedTitle}`)) continue;
     const tagUuid = await generateUniqueId(
       EntityPrefix.Tag,
-      async (id) =>
-        !(await db.query.tags.findFirst({
-          where: eq(schema.tags.tagUuid, id),
-        })),
+      async (id) => !findTag(eq(schema.tags.tagUuid, id)),
     );
-    const language = THEI_SERVER.language;
-    let slug = language.slugify(title) || 'tag';
-    const originalSlug = slug;
-    let suffix = 2;
-    while (
-      reservedSlugs.has(slug) ||
-      (await db.query.tags.findFirst({ where: eq(schema.tags.slug, slug) }))
-    ) {
-      slug = `${originalSlug}-${suffix++}`;
-    }
-    reservedSlugs.add(slug);
-    let publicId = randomTagPublicId();
-    while (
-      reservedPublicIds.has(publicId) ||
-      (await db.query.tags.findFirst({
-        where: eq(schema.tags.publicId, publicId),
-      }))
-    ) {
-      publicId = randomTagPublicId();
-    }
-    reservedPublicIds.add(publicId);
-    prepared.push({
-      tagUuid,
-      title,
-      normalizedTitle,
-      slug,
-      publicId,
-    });
+    place(
+      {
+        tagUuid,
+        create: {
+          title,
+          normalizedTitle,
+          slug: THEI_SERVER.language.slugify(title) || 'tag',
+          publicId: randomTagPublicId(),
+        },
+      },
+      `new:${normalizedTitle}`,
+    );
   }
   return prepared;
 }
@@ -185,9 +197,9 @@ export async function prepareTagUsages(items: TagEditItem[] | undefined) {
 export function applyTagUsages(
   tx: any,
   schema: any,
-  containerType: 'project' | 'event',
+  containerType: TagContainerType,
   containerId: string,
-  prepared: Awaited<ReturnType<typeof prepareTagUsages>>,
+  prepared: PreparedTagUsage[] | undefined,
 ) {
   if (prepared === undefined) return;
   const oldTagUuids = tx
@@ -209,59 +221,68 @@ export function applyTagUsages(
       ),
     )
     .run();
-  prepared.forEach((item, sortOrder) => {
-    if (item.title) {
-      const originalSlug = item.slug!;
-      let suffix = 2;
-      let actual: { tagUuid: string } | undefined;
-      for (let attempt = 0; attempt < 100 && !actual; attempt++) {
-        tx.insert(schema.tags)
-          .values({
-            tagUuid: item.tagUuid,
-            title: item.title,
-            normalizedTitle: item.normalizedTitle,
-            slug: item.slug,
-            publicId: item.publicId,
-          })
-          .onConflictDoNothing()
-          .run();
-        actual = tx
-          .select({ tagUuid: schema.tags.tagUuid })
-          .from(schema.tags)
-          .where(eq(schema.tags.normalizedTitle, item.normalizedTitle))
-          .get();
-        if (actual) break;
-        if (
-          tx
-            .select({ tagUuid: schema.tags.tagUuid })
-            .from(schema.tags)
-            .where(eq(schema.tags.slug, item.slug))
-            .get()
-        )
-          item.slug = `${originalSlug}-${suffix++}`;
-        if (
-          tx
-            .select({ tagUuid: schema.tags.tagUuid })
-            .from(schema.tags)
-            .where(eq(schema.tags.publicId, item.publicId))
-            .get()
-        )
-          item.publicId = randomTagPublicId();
-      }
-      if (!actual) throw new Error('Failed to create tag');
-      item.tagUuid = actual.tagUuid;
-    }
+  const placed = new Set<string>();
+  for (const item of prepared) {
+    const tagUuid = item.create
+      ? createPreparedTag(tx, schema, item.tagUuid, item.create)
+      : item.tagUuid;
+    // Another request may have created the same new tag in the meantime.
+    if (placed.has(tagUuid)) continue;
     tx.insert(schema.tagUsages)
-      .values({ tagUuid: item.tagUuid, containerType, containerId, sortOrder })
+      .values({
+        tagUuid,
+        containerType,
+        containerId,
+        sortOrder: placed.size,
+      })
       .run();
-  });
+    placed.add(tagUuid);
+  }
   cleanupSimpleOrphanTags(tx, schema, oldTagUuids);
+}
+
+/**
+ * Inserts a tag prepared outside the transaction and returns the identity it
+ * ends up with: its own, or that of a tag another request created with the
+ * same title in the meantime. A slug or public ID taken since is moved aside.
+ */
+function createPreparedTag(
+  tx: any,
+  schema: any,
+  tagUuid: string,
+  create: Extract<PreparedTagUsage, { create: object }>['create'],
+): string {
+  const taken = (column: any, value: string) =>
+    Boolean(
+      tx
+        .select({ tagUuid: schema.tags.tagUuid })
+        .from(schema.tags)
+        .where(eq(column, value))
+        .get(),
+    );
+  let slug = create.slug;
+  let publicId = create.publicId;
+  for (let suffix = 2; suffix < 102; suffix++) {
+    tx.insert(schema.tags)
+      .values({ tagUuid, ...create, slug, publicId })
+      .onConflictDoNothing()
+      .run();
+    const actual = tx
+      .select({ tagUuid: schema.tags.tagUuid })
+      .from(schema.tags)
+      .where(eq(schema.tags.normalizedTitle, create.normalizedTitle))
+      .get();
+    if (actual) return actual.tagUuid;
+    if (taken(schema.tags.slug, slug)) slug = `${create.slug}-${suffix}`;
+    if (taken(schema.tags.publicId, publicId)) publicId = randomTagPublicId();
+  }
+  throw new Error('Failed to create tag');
 }
 
 export function deleteTagUsagesForContainer(
   tx: any,
   schema: any,
-  containerType: 'project' | 'event',
+  containerType: TagContainerType,
   containerId: string,
 ) {
   const tagUuids = tx
@@ -299,7 +320,7 @@ function cleanupSimpleOrphanTags(tx: any, schema: any, tagUuids: string[]) {
       .from(schema.tags)
       .where(eq(schema.tags.tagUuid, tagUuid))
       .get();
-    if (!tag || tag.description || tag.accentColor) continue;
+    if (!tag || tag.description) continue;
     const icon = tx
       .select({ assetUuid: schema.assetUsages.assetUuid })
       .from(schema.assetUsages)

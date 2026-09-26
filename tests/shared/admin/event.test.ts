@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { ProjectEventAccessLevel } from '../../../shared/access-level';
-import { validateEventData } from '../../../shared/admin/event';
+import {
+  eventTagContext,
+  validateEventData,
+} from '../../../shared/admin/event';
 import type { EventEditData } from '../../../shared/event';
 
 function eventData(overrides: Partial<EventEditData> = {}): EventEditData {
@@ -184,6 +187,27 @@ describe('validateEventData', () => {
         eventData({ tags: [{ title: 'Tag' }, { title: ' tag ' }] }),
       ),
     ).toBe('Duplicate tag');
+    expect(
+      validateEventData(eventData({ tags: [{ title: 'x'.repeat(101) }] })),
+    ).toBe('Tag title is too long');
+  });
+
+  it('reads tag context from the title, summary and content', () => {
+    const context = eventTagContext(
+      eventData({
+        title: 'Trip',
+        summary: 'A week by train',
+        content: {
+          data: {
+            blocks: [{ type: 'paragraph', data: { text: 'Stations' } }],
+          },
+        },
+      }),
+    );
+    expect(context).toEqual({
+      title: 'Trip',
+      text: 'A week by train\nStations',
+    });
   });
 
   it('rejects invalid access, public IDs and file privacy', () => {

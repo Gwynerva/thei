@@ -2,6 +2,7 @@ import { ProjectEventAccessLevel } from '../access-level';
 import { normalizeEntityNotes, normalizeEntityReminder } from '../entity-notes';
 import {
   ContentValidationError,
+  contentPlainText,
   isContentEmpty,
   normalizeContentData,
   type ContentFieldModelValue,
@@ -20,6 +21,19 @@ import {
 } from '../public-link';
 import type { EventEditData, ValidatedEventEditData } from '../event';
 import { RelationValidationError, validateRelations } from '../relation';
+import { normalizeTagEditItems } from '../tag';
+import { joinTagContextText, type TagContext } from '../tag-recommendation';
+
+/** An event as tag recommendations read it. */
+export function eventTagContext(event: EventEditData): TagContext {
+  return {
+    title: event.title,
+    text: joinTagContextText([
+      event.summary,
+      contentPlainText(event.content?.data),
+    ]),
+  };
+}
 
 export function validateEventData(
   data: EventEditData,
@@ -111,16 +125,8 @@ function validateExternalLinks(links: EventEditData['externalLinks']) {
 }
 
 function validateTags(tags: EventEditData['tags']) {
-  if (tags === undefined) return undefined;
-  if (!Array.isArray(tags)) throw new Error('Invalid tags');
-  const seen = new Set<string>();
-  return tags.map((tag) => {
-    const title = optionalText(tag.title);
-    if (!title) throw new Error('Tag title cannot be empty');
-    const key = title.normalize('NFKC').toLocaleLowerCase();
-    if (seen.has(key)) throw new Error('Duplicate tag');
-    seen.add(key);
-    return tag.tagUuid ? { ...tag, title } : { title };
+  return normalizeTagEditItems(tags, (message): never => {
+    throw new Error(message);
   });
 }
 

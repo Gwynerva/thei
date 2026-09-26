@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  cleanTagTitle,
+  normalizeTagEditItems,
   normalizeTagTitle,
   rankTagSearch,
   rankTagRecommendations,
@@ -54,6 +56,47 @@ describe('tags', () => {
         iconAssetUuid: 'not-an-asset',
       }),
     ).toBe('Invalid icon asset ID');
+  });
+
+  it('collapses whitespace inside a title', () => {
+    expect(cleanTagTitle('  Product \t  design ')).toBe('Product design');
+  });
+
+  it('cleans the tags of an entity and refuses two naming one tag', () => {
+    const fail = (message: string): never => {
+      throw new Error(message);
+    };
+    expect(
+      normalizeTagEditItems(
+        [
+          { title: '  Product   design ' },
+          { tagUuid: 't-1', title: 'Vue', slug: 'vue', publicId: 'vue' },
+        ],
+        fail,
+      ),
+    ).toEqual([
+      { title: 'Product design' },
+      { tagUuid: 't-1', title: 'Vue', slug: 'vue', publicId: 'vue' },
+    ]);
+    expect(() =>
+      normalizeTagEditItems(
+        [{ title: 'Product design' }, { title: 'product  DESIGN' }],
+        fail,
+      ),
+    ).toThrow('Duplicate tag');
+    expect(() =>
+      normalizeTagEditItems(
+        [
+          { tagUuid: 't-1', title: 'Old', slug: 'old', publicId: 'old' },
+          { tagUuid: 't-1', title: 'New', slug: 'new', publicId: 'new' },
+        ],
+        fail,
+      ),
+    ).toThrow('Duplicate tag');
+    expect(() =>
+      normalizeTagEditItems([{ title: 'x'.repeat(101) }], fail),
+    ).toThrow('Tag title is too long');
+    expect(normalizeTagEditItems(undefined, fail)).toBeUndefined();
   });
 
   it('ranks title before publicId and slug', () => {

@@ -1,40 +1,22 @@
 import { and, eq, inArray } from 'drizzle-orm';
-import { rankTagRecommendations, type TagItem } from '#layers/thei/shared/tag';
+import { isRelationEntityType } from '#layers/thei/shared/relation';
+import {
+  rankTagRecommendations,
+  TAG_CONTAINER_TYPES,
+  type TagItem,
+} from '#layers/thei/shared/tag';
+import {
+  clampTagContextText,
+  type TagRecommendationRequest,
+} from '#layers/thei/shared/tag-recommendation';
+import { isOneOf } from '#layers/thei/shared/utils/isOneOf';
 import { buildTagItems, isTagUuid } from '../../thei/tags';
-
-type RecommendationBody = {
-  text?: string;
-  selectedTagUuids?: string[];
-  projectUuid?: string;
-};
+import { markReadOnlyRequest } from '../../thei/read-only-request';
 
 export default defineEventHandler(async (event): Promise<TagItem[]> => {
-  const body = await readBody<RecommendationBody>(event);
-  if (!body || typeof body !== 'object' || Array.isArray(body))
-    throw createError({ statusCode: 400, message: 'Invalid request body' });
-  if (typeof body.text !== 'undefined' && typeof body.text !== 'string')
-    throw createError({
-      statusCode: 400,
-      message: 'Invalid recommendation text',
-    });
-  if ((body.text?.length ?? 0) > 20_000)
-    throw createError({
-      statusCode: 400,
-      message: 'Recommendation text is too long',
-    });
-  const selectedItems = body.selectedTagUuids ?? [];
-  if (
-    !Array.isArray(selectedItems) ||
-    selectedItems.length > 100 ||
-    selectedItems.some((item) => typeof item !== 'string' || !isTagUuid(item))
-  )
-    throw createError({ statusCode: 400, message: 'Invalid selected tags' });
-  if (
-    body.projectUuid !== undefined &&
-    (typeof body.projectUuid !== 'string' || !body.projectUuid.startsWith('p-'))
-  )
-    throw createError({ statusCode: 400, message: 'Invalid project ID' });
-  const selected = new Set(selectedItems);
+  markReadOnlyRequest(event);
+  const request = parseRequest(await readBody<unknown>(event));
+  const selected = new Set(request.selectedTagUuids);
   const { db, schema } = THEI_SERVER.useDb();
   const tags = db
     .select()
@@ -58,7 +40,7 @@ export default defineEventHandler(async (event): Promise<TagItem[]> => {
         .filter(
           (container) =>
             container.containerType === 'project' &&
-            container.containerId !== body.projectUuid,
+            container.containerId !== request.owner?.id,
         )
         .map((container) => container.containerId),
     );
@@ -83,6 +65,62 @@ export default defineEventHandler(async (event): Promise<TagItem[]> => {
     }
   }
 
-  const ranked = rankTagRecommendations(tags, body.text ?? '', coUsage);
+  const ranked = rankTagRecommendations(
+    tags,
+    `${request.title}\n${request.text}`,
+    coUsage,
+  );
   return buildTagItems(ranked);
 });
+
+function fail(message: string): never {
+  throw createError({ statusCode: 400, message });
+}
+
+function parseRequest(body: unknown): TagRecommendationRequest {
+  if (!body || typeof body !== 'object' || Array.isArray(body))
+    fail('Invalid request body');
+  const item = body as Partial<Record<keyof TagRecommendationRequest, unknown>>;
+  const title = item.title ?? '';
+  const text = item.text ?? '';
+  if (typeof title !== 'string' || typeof text !== 'string')
+    fail('Invalid recommendation text');
+  const selectedTagUuids = item.selectedTagUuids ?? [];
+  if (
+    !Array.isArray(selectedTagUuids) ||
+    selectedTagUuids.length > 100 ||
+    selectedTagUuids.some(
+      (uuid) => typeof uuid !== 'string' || !isTagUuid(uuid),
+    )
+  )
+    fail('Invalid selected tags');
+  const related = item.related ?? [];
+  if (
+    !Array.isArray(related) ||
+    related.length > 1_000 ||
+    related.some(
+      (endpoint) =>
+        !endpoint ||
+        typeof endpoint !== 'object' ||
+        !isRelationEntityType(endpoint.type) ||
+        typeof endpoint.id !== 'string',
+    )
+  )
+    fail('Invalid related entities');
+  const owner = item.owner as TagRecommendationRequest['owner'] | undefined;
+  if (
+    owner !== undefined &&
+    (!owner ||
+      typeof owner !== 'object' ||
+      !isOneOf(owner.type, TAG_CONTAINER_TYPES) ||
+      typeof owner.id !== 'string')
+  )
+    fail('Invalid owner');
+  return {
+    owner,
+    title: title.slice(0, 1_000),
+    text: clampTagContextText(text),
+    selectedTagUuids: selectedTagUuids as string[],
+    related: related as TagRecommendationRequest['related'],
+  };
+}

@@ -24,7 +24,8 @@ import {
   type ProjectStageContentItem,
 } from '../project-content-item';
 import type { MediaDescriptor } from '../media';
-import type { TagEditItem } from '../tag';
+import { normalizeTagEditItems, type TagEditItem } from '../tag';
+import { joinTagContextText, type TagContext } from '../tag-recommendation';
 import {
   normalizeProjectAction,
   projectActionAssetUuids,
@@ -140,24 +141,25 @@ export function countProjectAssetPlacements(
   return counts;
 }
 
-export function projectTagRecommendationText(project: ProjectEditData) {
-  return [
-    project.title,
-    project.summary,
-    contentPlainText(project.descriptionContent?.data),
-    ...(project.stages ?? []).flatMap((stage) => [
-      stage.title,
-      stage.summary,
-      contentPlainText(stage.content?.data),
+/** A project as tag recommendations read it: its own text and its parts'. */
+export function projectTagContext(project: ProjectEditData): TagContext {
+  return {
+    title: project.title,
+    text: joinTagContextText([
+      project.summary,
+      contentPlainText(project.descriptionContent?.data),
+      ...(project.stages ?? []).flatMap((stage) => [
+        stage.title,
+        stage.summary,
+        contentPlainText(stage.content?.data),
+      ]),
+      ...(project.contentSections ?? []).flatMap((section) => [
+        section.title,
+        section.summary,
+        contentPlainText(section.content?.data),
+      ]),
     ]),
-    ...(project.contentSections ?? []).flatMap((section) => [
-      section.title,
-      section.summary,
-      contentPlainText(section.content?.data),
-    ]),
-  ]
-    .filter(Boolean)
-    .join(' ');
+  };
 }
 
 export function validateProjectData(
@@ -278,19 +280,8 @@ function validateProjectExternalLinks(
 function validateProjectTags(
   tags: TagEditItem[] | undefined,
 ): TagEditItem[] | undefined {
-  if (tags === undefined) return undefined;
-  if (!Array.isArray(tags)) throw new ProjectValidationError('Invalid tags');
-  const seen = new Set<string>();
-  return tags.map((tag) => {
-    const title = tag.title?.trim();
-    if (!title) throw new ProjectValidationError('Tag title cannot be empty');
-    if (title.length > 100)
-      throw new ProjectValidationError('Tag title is too long');
-    const identity = title.normalize('NFKC').toLocaleLowerCase();
-    if (seen.has(identity)) throw new ProjectValidationError('Duplicate tag');
-    seen.add(identity);
-    if ('tagUuid' in tag && tag.tagUuid) return { ...tag, title };
-    return { title };
+  return normalizeTagEditItems(tags, (message): never => {
+    throw new ProjectValidationError(message);
   });
 }
 

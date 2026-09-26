@@ -1,7 +1,11 @@
 <script lang="ts" setup>
 import { debounce } from 'perfect-debounce';
 import type { TagEditItem, TagItem } from '#layers/thei/shared/tag';
-import { normalizeTagTitle } from '#layers/thei/shared/tag';
+import {
+  cleanTagTitle,
+  normalizeTagTitle,
+  TAG_SEARCH_LIMIT,
+} from '#layers/thei/shared/tag';
 import { moveItemById } from '#layers/thei/app/composables/drag-sort';
 
 const props = withDefaults(
@@ -26,7 +30,11 @@ const suggestions = ref<TagItem[]>([]);
 const activeIndex = ref(-1);
 let searchVersion = 0;
 const listboxId = useId();
-const visibleSuggestions = computed(() => suggestions.value.slice(0, 5));
+const visibleSuggestions = computed(() =>
+  suggestions.value.slice(0, TAG_SEARCH_LIMIT),
+);
+/** The title a new tag would get from what is typed. */
+const typedTitle = computed(() => cleanTagTitle(query.value));
 
 const visibleRecommendations = computed(() => {
   const selected = new Set(
@@ -38,7 +46,7 @@ const visibleRecommendations = computed(() => {
 });
 
 const createOptionVisible = computed(() => {
-  const normalized = normalizeTagTitle(query.value);
+  const normalized = normalizeTagTitle(typedTitle.value);
   return (
     Boolean(normalized) &&
     !tags.value.some((tag) => normalizeTagTitle(tag.title) === normalized) &&
@@ -113,7 +121,7 @@ function addTag(tag: TagEditItem) {
 function chooseActive() {
   if (!optionCount.value || activeIndex.value < 0) return;
   if (createOptionVisible.value && activeIndex.value === 0) {
-    addTag({ title: query.value.trim() });
+    addTag({ title: typedTitle.value });
     return;
   }
   const offset = createOptionVisible.value ? 1 : 0;
@@ -234,7 +242,7 @@ useDragSort(tagContainer, {
             type="button"
             role="option"
             :aria-selected="activeIndex === 0"
-            :aria-label="phrase.create_tag_named(query.trim())"
+            :aria-label="phrase.create_tag_named(typedTitle)"
             class="inline-flex h-8 w-full cursor-pointer items-center gap-1
               rounded-sm border-2 border-dashed border-accent/45 bg-accent/10
               p-1 text-left text-xs leading-none font-semibold text-accent
@@ -244,10 +252,10 @@ useDragSort(tagContainer, {
                 activeIndex === 0,
             }"
             @pointerdown.prevent
-            @click="addTag({ title: query.trim() })"
+            @click="addTag({ title: typedTitle })"
           >
             <Icon name="plus-circle" class="shrink-0" />
-            <span class="truncate">{{ query.trim() }}</span>
+            <span class="truncate">{{ typedTitle }}</span>
           </button>
           <TagChip
             v-for="(tag, index) in visibleSuggestions"

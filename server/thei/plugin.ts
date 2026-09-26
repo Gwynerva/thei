@@ -1,7 +1,6 @@
 import { bootTheiServer } from './boot/process';
 import { invalidatePublicSearchIndex } from './public/search-index';
-
-const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+import { isContentWriteRequest } from './read-only-request';
 
 export default defineNitroPlugin(async (nitroApp) => {
   // Modules that must also load outside a Nuxt build — the scratch directory
@@ -14,8 +13,7 @@ export default defineNitroPlugin(async (nitroApp) => {
   // Every content write goes through the API, so any write drops the search
   // index; it is rebuilt lazily by the next search.
   nitroApp.hooks.hook('afterResponse', (event) => {
-    if (!READ_METHODS.has(event.method) && event.path.startsWith('/api/'))
-      invalidatePublicSearchIndex();
+    if (isContentWriteRequest(event)) invalidatePublicSearchIndex();
   });
   await bootTheiServer();
 });

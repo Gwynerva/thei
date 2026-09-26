@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   countProjectAssetPlacements,
   projectAssetUsageDelta,
-  projectTagRecommendationText,
+  projectTagContext,
   validateProjectData,
   type ProjectEditData,
 } from '../../../shared/admin/project';
@@ -531,7 +531,7 @@ describe('validateProjectData asset metadata', () => {
     });
   });
 
-  it('builds tag recommendation text from stages and project sections', () => {
+  it('reads tag context from stages and project sections', () => {
     const project = baseProject({
       stages: [
         {
@@ -570,11 +570,11 @@ describe('validateProjectData asset metadata', () => {
       ],
     });
 
-    expect(projectTagRecommendationText(project)).toContain(
-      'Discovery Interviews Research findings',
-    );
-    expect(projectTagRecommendationText(project)).toContain(
-      'Design system Reusable patterns Token reference',
+    const context = projectTagContext(project);
+    expect(context.title).toBe(project.title);
+    expect(context.text).toContain('Discovery\nInterviews\nResearch findings');
+    expect(context.text).toContain(
+      'Design system\nReusable patterns\nToken reference',
     );
   });
 

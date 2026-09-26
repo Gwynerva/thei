@@ -54,17 +54,59 @@ export type TagSaveResponse =
       code?: TagSaveErrorCode;
     };
 
+export const TAG_TITLE_MAX_LENGTH = 100;
+
+/** How many matches the tag picker asks for and shows. */
+export const TAG_SEARCH_LIMIT = 5;
+
 export function normalizeTagTitle(value: string): string {
   return value.trim().normalize('NFKC').toLocaleLowerCase();
+}
+
+/**
+ * A tag title as it is stored: trimmed, with every run of whitespace inside
+ * it collapsed to one space, so "Product  design" cannot become a tag of its
+ * own beside "Product design".
+ */
+export function cleanTagTitle(value: string): string {
+  return value.trim().replace(/\s+/gu, ' ');
+}
+
+/**
+ * The tags of a project or an event, cleaned for saving. Two items naming one
+ * tag — by title or by identity — are refused rather than silently merged, so
+ * the list the person sees is the list that is stored.
+ */
+export function normalizeTagEditItems(
+  tags: TagEditItem[] | undefined,
+  fail: (message: string) => never,
+): TagEditItem[] | undefined {
+  if (tags === undefined) return undefined;
+  if (!Array.isArray(tags)) fail('Invalid tags');
+  const titles = new Set<string>();
+  const tagUuids = new Set<string>();
+  return tags.map((tag) => {
+    if (!tag || typeof tag !== 'object') fail('Invalid tags');
+    const title = typeof tag.title === 'string' ? cleanTagTitle(tag.title) : '';
+    if (!title) fail('Tag title cannot be empty');
+    if (title.length > TAG_TITLE_MAX_LENGTH) fail('Tag title is too long');
+    const identity = normalizeTagTitle(title);
+    if (titles.has(identity)) fail('Duplicate tag');
+    titles.add(identity);
+    if (typeof tag.tagUuid !== 'string' || !tag.tagUuid) return { title };
+    if (tagUuids.has(tag.tagUuid)) fail('Duplicate tag');
+    tagUuids.add(tag.tagUuid);
+    return { ...tag, title };
+  });
 }
 
 export function validateTagData(data: unknown): string | TagEditData {
   if (!data || typeof data !== 'object' || Array.isArray(data))
     return 'Invalid tag data';
   const item = data as Partial<Record<keyof TagEditData, unknown>>;
-  const title = typeof item.title === 'string' ? item.title.trim() : '';
+  const title = typeof item.title === 'string' ? cleanTagTitle(item.title) : '';
   if (!title) return 'Tag title cannot be empty';
-  if (title.length > 100) return 'Tag title is too long';
+  if (title.length > TAG_TITLE_MAX_LENGTH) return 'Tag title is too long';
   const slug = normalizeUrlSegment(item.slug);
   if (!slug) return 'Tag slug cannot be empty';
   if (slug.length > 100) return 'Tag slug is too long';
@@ -95,8 +137,8 @@ export function validateTagData(data: unknown): string | TagEditData {
 
 export function rankTagSearch<
   T extends Pick<TagItem, 'title' | 'publicId' | 'slug'>,
->(tags: T[], query: string, limit = 8): T[] {
-  const needle = normalizeTagTitle(query);
+>(tags: T[], query: string, limit = TAG_SEARCH_LIMIT): T[] {
+  const needle = normalizeTagTitle(cleanTagTitle(query));
   if (!needle) return tags.slice(0, limit);
   return tags
     .map((tag) => ({ tag, score: tagSearchScore(tag, needle) }))
