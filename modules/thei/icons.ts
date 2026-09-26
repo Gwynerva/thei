@@ -3,9 +3,19 @@ import { addTemplate, updateTemplates, useLogger } from 'nuxt/kit';
 import type { Nuxt } from 'nuxt/schema';
 import chokidar from 'chokidar';
 import { debounce } from 'perfect-debounce';
-import { normalizePath, type ViteDevServer } from 'vite';
+import { posix } from 'node:path';
+import type { ViteDevServer } from 'vite';
 import { hash } from '../../shared/utils/hash';
 import { parseIconSvg, type IconSymbol } from '../../shared/icon-svg';
+
+/**
+ * Vite's own module ids use forward slashes on every platform. Written here
+ * rather than imported: Vite belongs to Nuxt, not to this layer's declared
+ * dependencies, and an installed instance resolves only what is declared.
+ */
+function normalizePath(path: string): string {
+  return posix.normalize(path.replace(/\\/g, '/'));
+}
 
 export interface IconsData {
   iconNames: string[];
@@ -175,13 +185,18 @@ export const iconsHref = '/icons.svg?${iconsData.iconsHash}';
 
   // The server draws fallback pictures with the same icons the interface
   // shows, so a changed icon changes those pictures too.
+  //
+  // Plain JavaScript despite the extension: in an installed instance the
+  // build directory lives inside `node_modules/.cache`, where Nitro's server
+  // build does not strip TypeScript, so a type annotation here fails the
+  // build of every real site while the playground builds fine.
   const iconSymbolsTemplate = addTemplate({
     write: true,
     filename: 'thei/icon-symbols.ts',
 
     async getContents() {
       const iconsData = await getIconsData();
-      return `export const iconSymbols: Record<string, { viewBox: string; body: string }> = ${JSON.stringify(iconsData.iconSymbols)};
+      return `export const iconSymbols = ${JSON.stringify(iconsData.iconSymbols)};
 `;
     },
   });

@@ -178,7 +178,8 @@ function kindSymbol(kind: GeneratedIconKind): IconSymbol {
       viewBox: '0 0 960 960',
       body: `<path d="${AUTHOR_SILHOUETTE}"/>`,
     };
-  return iconSymbols[KIND_ICONS[kind]] ?? { viewBox: '0 0 24 24', body: '' };
+  const symbols: Partial<Record<string, IconSymbol>> = iconSymbols;
+  return symbols[KIND_ICONS[kind]] ?? { viewBox: '0 0 24 24', body: '' };
 }
 
 /**
