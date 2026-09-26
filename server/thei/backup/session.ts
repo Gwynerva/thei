@@ -1,9 +1,12 @@
-import { copyFile, mkdir, rm } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import type {
-  BackupKind,
-  BackupSessionResponse,
+import Database from 'better-sqlite3';
+import {
+  BACKUP_COUNTED_TABLES,
+  type BackupEntityCounts,
+  type BackupKind,
+  type BackupSessionResponse,
 } from '#layers/thei/shared/backup';
 import { buildBackupManifest, type BackupManifest } from './manifest';
 import {
@@ -23,6 +26,24 @@ import {
  * set that shifts underneath it.
  */
 const manifests = new Map<string, BackupManifest>();
+/** The paths each session may hand out: its manifest, and nothing else. */
+const allowedPaths = new Map<string, Set<string>>();
+
+function remember(sessionId: string, manifest: BackupManifest) {
+  manifests.set(sessionId, manifest);
+  allowedPaths.set(
+    sessionId,
+    new Set(manifest.entries.map((entry) => entry.path)),
+  );
+}
+
+function forget(sessionId: string) {
+  manifests.delete(sessionId);
+  allowedPaths.delete(sessionId);
+}
+
+/** Set from the first check to the written state, so two starts cannot both pass. */
+let opening = false;
 
 /** Set while a session is open, so cleanup can skip its expensive sweep. */
 let sessionOpen = false;
@@ -49,6 +70,19 @@ export async function startBackupSession(options: {
   kind: BackupKind;
   clientLabel?: string;
 }): Promise<BackupSessionResponse> {
+  if (opening) throw new BackupBusyError('A backup is already starting.');
+  opening = true;
+  try {
+    return await openBackupSession(options);
+  } finally {
+    opening = false;
+  }
+}
+
+async function openBackupSession(options: {
+  kind: BackupKind;
+  clientLabel?: string;
+}): Promise<BackupSessionResponse> {
   const existing = await readBackupSession();
   if (existing && !isAbandonedSession(existing)) {
     throw new BackupBusyError('A backup is already running.');
@@ -57,7 +91,7 @@ export async function startBackupSession(options: {
     THEI_SERVER.console
       .tag('Backup')
       .warn(`Reclaiming abandoned session ${existing.sessionId}`);
-    manifests.delete(existing.sessionId);
+    forget(existing.sessionId);
     await clearBackupSession(existing.sessionId);
   }
 
@@ -70,6 +104,7 @@ export async function startBackupSession(options: {
     // written to, and its bytes on disk are only a database between writes.
     const { rawDb } = THEI_SERVER.useDb();
     await rawDb.backup(join(work, 'thei.db'));
+    const counts = countEntities(join(work, 'thei.db'));
     await copyFile(
       THEI_SERVER.contentPath('thei.config.json'),
       join(work, 'thei.config.json'),
@@ -86,7 +121,10 @@ export async function startBackupSession(options: {
       totalBytes: manifest.totalBytes,
       skipped: manifest.skipped,
     };
-    manifests.set(sessionId, manifest);
+    // Kept beside the snapshot: a restarted server hands out the same list
+    // the client started paging through, not a new walk of the disk.
+    await writeFile(manifestPath(sessionId), JSON.stringify(manifest), 'utf8');
+    remember(sessionId, manifest);
     await writeBackupSession(state);
     sessionOpen = true;
 
@@ -102,12 +140,36 @@ export async function startBackupSession(options: {
       totalFiles: state.totalFiles,
       totalBytes: state.totalBytes,
       skipped: state.skipped,
+      counts,
     };
   } catch (error) {
-    manifests.delete(sessionId);
+    forget(sessionId);
     await rm(work, { recursive: true, force: true });
     throw error;
   }
+}
+
+/** Entity counts of the snapshot itself, so they match what the copy holds. */
+function countEntities(snapshotPath: string): BackupEntityCounts {
+  const snapshot = new Database(snapshotPath, { readonly: true });
+  try {
+    return Object.fromEntries(
+      Object.entries(BACKUP_COUNTED_TABLES).map(([entity, table]) => [
+        entity,
+        (
+          snapshot.prepare(`SELECT count(*) AS count FROM "${table}"`).get() as {
+            count: number;
+          }
+        ).count,
+      ]),
+    ) as BackupEntityCounts;
+  } finally {
+    snapshot.close();
+  }
+}
+
+function manifestPath(sessionId: string): string {
+  return join(backupWorkDir(sessionId), 'manifest.json');
 }
 
 /** The open session, or nothing when it was abandoned and has been reclaimed. */
@@ -130,15 +192,29 @@ export async function backupSessionManifest(
 ): Promise<BackupManifest> {
   const cached = manifests.get(sessionId);
   if (cached) return cached;
-  // The process restarted mid-transfer and lost the in-memory list. Rebuilding
-  // is honest here: the snapshot it belongs to is still on disk.
-  const manifest = await buildBackupManifest(sessionId);
-  manifests.set(sessionId, manifest);
+  // The process restarted mid-transfer and lost the in-memory list; the one
+  // written beside the snapshot is the list the client is paging through.
+  const manifest = JSON.parse(
+    await readFile(manifestPath(sessionId), 'utf8'),
+  ) as BackupManifest;
+  remember(sessionId, manifest);
   return manifest;
 }
 
+/**
+ * Whether `path` is a file of the session's manifest. Nothing else is ever
+ * handed out, whatever the path looks like once it reaches the disk.
+ */
+export async function backupSessionHasFile(
+  sessionId: string,
+  path: string,
+): Promise<boolean> {
+  await backupSessionManifest(sessionId);
+  return allowedPaths.get(sessionId)?.has(path) ?? false;
+}
+
 export async function endBackupSession(sessionId: string): Promise<void> {
-  manifests.delete(sessionId);
+  forget(sessionId);
   await clearBackupSession(sessionId);
   sessionOpen = false;
 }

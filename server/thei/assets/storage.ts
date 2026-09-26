@@ -3,6 +3,7 @@ import { copyFile, mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { dirname } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { and, eq, inArray } from 'drizzle-orm';
 import { buildAssetPreviewUrl } from '#layers/thei/shared/api/asset';
 import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
@@ -259,15 +260,20 @@ export async function storeAsset(input: StoreAssetInput): Promise<{
 
   if (wroteFile) {
     await mkdir(dirname(filePath), { recursive: true });
-    if (input.bytes.buffer) {
-      await writeFile(filePath, input.bytes.buffer);
-    } else if (input.bytes.owned) {
-      // Move rather than copy: the scratch file already holds the exact bytes,
-      // and a copy would read and write the whole file a second time.
-      await adoptStagedFile(input.bytes.path, filePath);
-    } else {
-      await copyFile(input.bytes.path, filePath);
-    }
+    const bytes = input.bytes;
+    // Written beside and renamed into place: a file cut short by a crash
+    // must never sit under the name its full content hash gives it.
+    await writeInPlace(filePath, async (partial) => {
+      if (bytes.buffer) {
+        await writeFile(partial, bytes.buffer);
+      } else if (bytes.owned) {
+        // Move rather than copy: the scratch file already holds the exact
+        // bytes, and a copy would read and write the whole file again.
+        await adoptStagedFile(bytes.path, partial);
+      } else {
+        await copyFile(bytes.path, partial);
+      }
+    });
   } else {
     // Nothing to store: the bytes are already on disk. Scratch that will never
     // be adopted has to go now, or an ffmpeg output that happened to dedup
@@ -307,6 +313,20 @@ export async function storeAsset(input: StoreAssetInput): Promise<{
       return { asset: normalizeAssetRecord(recovered), created: false };
     }
     throw createError({ statusCode: 500, message: 'Failed to save asset' });
+  }
+}
+
+/** Produces `target` through a temporary file beside it, renamed at the end. */
+async function writeInPlace(
+  target: string,
+  write: (partial: string) => Promise<void>,
+) {
+  const partial = `${target}.${randomUUID()}.partial`;
+  try {
+    await write(partial);
+    await rename(partial, target);
+  } finally {
+    await rm(partial, { force: true }).catch(() => {});
   }
 }
 

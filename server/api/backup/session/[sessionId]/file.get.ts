@@ -2,7 +2,10 @@ import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { parseAssetRange } from '../../../../thei/assets/send-file';
 import { resolveBackupFile } from '../../../../thei/backup/manifest';
-import { requireBackupSession } from '../../../../thei/backup/session';
+import {
+  backupSessionHasFile,
+  requireBackupSession,
+} from '../../../../thei/backup/session';
 import { requireBackupToken } from '../../../../thei/backup/token';
 
 export default defineEventHandler(async (event) => {
@@ -11,7 +14,10 @@ export default defineEventHandler(async (event) => {
   await requireBackupSession(sessionId);
 
   const requested = String(getQuery(event).path ?? '');
-  const filePath = resolveBackupFile(sessionId, requested);
+  // Only what the session listed, whatever else the path might resolve to.
+  const filePath = (await backupSessionHasFile(sessionId, requested))
+    ? resolveBackupFile(sessionId, requested)
+    : undefined;
   if (!filePath) {
     throw createError({ statusCode: 400, statusMessage: 'Invalid path' });
   }

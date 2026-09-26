@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { sn } from 'unslash';
 import { BACKUP_STALE_AFTER_MS, isBackupStale } from '../../shared/backup';
 import {
   THEI_BACKUP_DIRS,
@@ -16,7 +17,9 @@ const PROJECT = join('/srv', 'thei');
 
 beforeEach(() => {
   vi.stubGlobal('THEI_SERVER', {
-    contentPath: (...parts: string[]) => join(CONTENT, ...parts),
+    // The real helper: it turns backslashes into separators, which is what
+    // once let a path escape content.
+    contentPath: (...parts: string[]) => sn(CONTENT, ...parts),
     projectPath: (...parts: string[]) => join(PROJECT, ...parts),
     console: {
       tag: () => ({ log: () => {}, warn: () => {}, error: () => {} }),
@@ -61,10 +64,10 @@ describe('backup path resolution', () => {
 
   it('serves asset and favicon files straight from content', () => {
     expect(resolveBackupFile(session, 'assets/ab/abcd.webp')).toBe(
-      join(CONTENT, 'assets', 'ab', 'abcd.webp'),
+      resolve(CONTENT, 'assets', 'ab', 'abcd.webp'),
     );
     expect(resolveBackupFile(session, 'external-link-favicons/x.webp')).toBe(
-      join(CONTENT, 'external-link-favicons', 'x.webp'),
+      resolve(CONTENT, 'external-link-favicons', 'x.webp'),
     );
   });
 
@@ -77,6 +80,9 @@ describe('backup path resolution', () => {
       'assets//x',
       '',
       'assets/\0x',
+      String.raw`assets/..\..\..\etc\passwd`,
+      String.raw`assets/ab\..\..\thei.config.json`,
+      'assets/C:/Windows/win.ini',
     ]) {
       expect(resolveBackupFile(session, path), path).toBeUndefined();
     }

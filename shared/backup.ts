@@ -65,7 +65,25 @@ export type BackupSessionResponse = {
    * operator can see rather than a silent omission.
    */
   skipped: string[];
+  /**
+   * How many of each entity the snapshot holds. A client compares them with
+   * the last backup, so a database that lost its content while every file
+   * stayed on disk still raises the alarm. Absent from servers before 0.0.2.
+   */
+  counts?: BackupEntityCounts;
 };
+
+export type BackupEntityCounts = Record<BackupCountedEntity, number>;
+
+/** Tables whose shrinking is worth an alarm, by their name on the wire. */
+export const BACKUP_COUNTED_TABLES = {
+  projects: 'projects',
+  events: 'events',
+  diaryEntries: 'diary-entries',
+  pages: 'pages',
+} as const;
+
+export type BackupCountedEntity = keyof typeof BACKUP_COUNTED_TABLES;
 
 export type BackupManifestResponse = {
   entries: BackupManifestEntry[];
