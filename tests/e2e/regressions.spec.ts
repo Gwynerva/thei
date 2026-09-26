@@ -227,25 +227,24 @@ test('each private section in the editor lies on one lock pattern', async ({
     .poll(() => privatePattern(page))
     .toEqual({ boxes: 2, aligned: true });
   height = await firstHeight();
-  const state = page.locator('[data-ready]');
-  const events = Number(await state.getAttribute('data-events'));
   await page.getByRole('button', { name: 'Valid move', exact: true }).click();
   await expect.poll(firstHeight).toBeGreaterThan(height);
-  // The sections read a move once Editor.js reports it, batched.
-  await expect
-    .poll(async () => Number(await state.getAttribute('data-events')))
-    .toBeGreaterThan(events);
   await expect
     .poll(() => privatePattern(page))
     .toEqual({ boxes: 2, aligned: true });
 
   // A new section gets a box of its own, and the ones below move down; back
-  // up once it is gone. It goes after the current block, outside the others.
+  // up once it is gone. It goes after the current block, outside the others,
+  // and in the same batch of changes as the move: the move stays.
   await page.locator('[data-id="p0"] [contenteditable]').click();
   await page.getByRole('button', { name: 'Insert section' }).click();
   await expect
     .poll(() => privatePattern(page))
     .toEqual({ boxes: 3, aligned: true });
+  await expect(page.locator('[data-id="p2"]')).toHaveAttribute(
+    'data-private-section-member',
+    'true',
+  );
   await page.getByRole('button', { name: 'Delete section' }).click();
   await expect
     .poll(() => privatePattern(page))

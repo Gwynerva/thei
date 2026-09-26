@@ -34,6 +34,25 @@ export function editorPrivateSectionLayoutIsValid(
   return true;
 }
 
+/**
+ * The layout with the boundaries of an unpaired section read as plain blocks.
+ * Within one batch of Editor.js changes a section can be half there: a new one
+ * waits for its end, a removed one for the removal of its other boundary.
+ * Neither says anything about the rest of the layout.
+ */
+export function editorPrivateSectionPairedLayout(
+  blocks: readonly EditorPrivateSectionBlock[],
+): EditorPrivateSectionBlock[] {
+  const counts = new Map<string, number>();
+  for (const { sectionId } of blocks)
+    if (sectionId) counts.set(sectionId, (counts.get(sectionId) ?? 0) + 1);
+  return blocks.map((block) =>
+    block.sectionId && counts.get(block.sectionId) !== 2
+      ? { id: block.id }
+      : block,
+  );
+}
+
 export function editorPrivateSectionMoveIsValid(
   blocks: readonly EditorPrivateSectionBlock[],
   sourceIndex: number,
@@ -80,6 +99,13 @@ export function createEditorPrivateSections(
     string,
     { sectionId: string; edge: 'start' | 'end' }
   >();
+  /**
+   * The order of the blocks when the layout was last valid: where a block an
+   * invalid move took away goes back to. Editor.js batches its change events
+   * and keeps only the latest move of each block, with indexes the rest of the
+   * batch may have shifted, so the events themselves cannot say where it was.
+   */
+  let settledOrder: string[] = [];
 
   function boundaryFromBlock(block: ReturnType<typeof blockAt>) {
     if (!block) return undefined;
@@ -185,6 +211,47 @@ export function createEditorPrivateSections(
         else block.holder.dataset[key] = value;
       }
     }
+
+    const layout = descriptors();
+    if (
+      editorPrivateSectionLayoutIsValid(
+        editorPrivateSectionPairedLayout(layout),
+      )
+    )
+      settledOrder = layout.map((block) => block.id);
+  }
+
+  /**
+   * Puts the blocks an invalid batch of moves took away back after the block
+   * that stood before each of them in the settled order, earliest first, so
+   * a block restored first can be the place of the next.
+   */
+  function restoreMoved(movedIds: readonly string[]) {
+    const settledIndex = new Map(settledOrder.map((id, index) => [id, index]));
+    const restored = movedIds
+      .filter((id) => settledIndex.has(id))
+      .sort(
+        (left, right) => settledIndex.get(left)! - settledIndex.get(right)!,
+      );
+    for (const id of restored) {
+      const current = new Map(
+        blocks().map((block, index) => [block.id, index]),
+      );
+      const from = current.get(id);
+      if (from === undefined) continue;
+      let after = -1;
+      for (let index = settledIndex.get(id)! - 1; index >= 0; index--) {
+        const anchor = current.get(settledOrder[index]!);
+        if (anchor === undefined) continue;
+        after = anchor;
+        break;
+      }
+      // Taking the block out first shifts everything after it up by one.
+      const to = from < after ? after : after + 1;
+      if (to === from) continue;
+      suppress(ignoredMovedIds, id);
+      editor.blocks.move(to, from);
+    }
   }
 
   function handleChange(
@@ -193,7 +260,27 @@ export function createEditorPrivateSections(
     const events = Array.isArray(value) ? value : [value];
     let persistentChange = false;
 
+    // Moves first, together: the layout they left is judged before anything
+    // else in the batch reacts to it, and an invalid one is put back before a
+    // section added in the same batch is placed against it.
+    const movedIds: string[] = [];
     for (const event of events) {
+      if (event.type !== 'block-moved') continue;
+      const { id } = event.detail.target;
+      if (!ignoredMovedIds.delete(id)) movedIds.push(id);
+    }
+    if (movedIds.length > 0) {
+      if (
+        editorPrivateSectionLayoutIsValid(
+          editorPrivateSectionPairedLayout(descriptors()),
+        )
+      )
+        persistentChange = true;
+      else restoreMoved(movedIds);
+    }
+
+    for (const event of events) {
+      if (event.type === 'block-moved') continue;
       const target = event.detail.target;
       if (event.type === 'block-added') {
         if (ignoredAddedIds.delete(target.id)) continue;
@@ -209,7 +296,11 @@ export function createEditorPrivateSections(
             id: `${target.id}-counterpart`,
             sectionId: boundary.sectionId,
           });
-          if (!editorPrivateSectionLayoutIsValid(withCounterpart)) {
+          if (
+            !editorPrivateSectionLayoutIsValid(
+              editorPrivateSectionPairedLayout(withCounterpart),
+            )
+          ) {
             suppress(ignoredRemovedIds, target.id);
             editor.blocks.delete(index);
             continue;
@@ -253,22 +344,6 @@ export function createEditorPrivateSections(
         continue;
       }
 
-      if (event.type === 'block-moved') {
-        if (ignoredMovedIds.delete(target.id)) continue;
-        if (!editorPrivateSectionLayoutIsValid(descriptors())) {
-          const detail = event.detail as typeof event.detail & {
-            fromIndex: number;
-            toIndex: number;
-          };
-          suppress(ignoredMovedIds, target.id);
-          editor.blocks.move(detail.fromIndex, detail.toIndex);
-          refresh();
-          continue;
-        }
-        persistentChange = true;
-        continue;
-      }
-
       // Boundary UI is decorative; persisted boundaries change structurally.
       if (!boundaryFromBlock(target)) persistentChange = true;
     }
@@ -284,6 +359,7 @@ export function createEditorPrivateSections(
       block.holder.removeAttribute('data-private-section-edge');
     }
     boundaryByBlockId.clear();
+    settledOrder = [];
   }
 
   refresh();
