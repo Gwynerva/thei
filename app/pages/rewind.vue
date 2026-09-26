@@ -83,6 +83,10 @@ usePublicSeo({
         <Icon name="arrow-outward" />
       </TheiLink>
     </PublicEmptyState>
-    <PublicPagination :page="rewind.page" :page-count="rewind.pageCount" />
+    <Pagination
+      :page="rewind.page"
+      :page-count="rewind.pageCount"
+      :pending="resource.status.value === 'pending'"
+    />
   </main>
 </template>

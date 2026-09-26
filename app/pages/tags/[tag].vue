@@ -131,9 +131,10 @@ function tabTo(tab: 'projects' | 'events') {
           :entity="entity"
         />
       </div>
-      <PublicPagination
+      <Pagination
         :page="tag.items.page"
         :page-count="tag.items.pageCount"
+        :pending="resource.status.value === 'pending'"
       />
     </section>
   </main>

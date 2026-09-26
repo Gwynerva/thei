@@ -1,19 +1,17 @@
-import type {
-  PublicTagListItem,
-  PublicPaginatedResponse,
-} from '#layers/thei/shared/api/public';
-import type { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
+import type { PublicTagListItem } from '#layers/thei/shared/api/public';
 import {
-  PUBLIC_DIRECTORY_PAGE_SIZE,
-  publicPagination,
-} from '../../thei/public/pagination';
+  paginate,
+  type PaginatedResponse,
+} from '#layers/thei/shared/pagination';
+import type { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
+import { PUBLIC_DIRECTORY_PAGE_SIZE } from '../../thei/public/pagination';
 import {
   buildPublicTagListItems,
   canListPublicEntity,
 } from '../../thei/public/entities';
 
 export default defineEventHandler(
-  async (event): Promise<PublicPaginatedResponse<PublicTagListItem>> => {
+  async (event): Promise<PaginatedResponse<PublicTagListItem>> => {
     const isAdmin = await THEI_SERVER.isAdmin(event);
     const { db, schema } = THEI_SERVER.useDb();
     const visible = (rows: { id: string; access: ProjectEventAccessLevel }[]) =>
@@ -71,17 +69,14 @@ export default defineEventHandler(
           left.tag.title.localeCompare(right.tag.title) ||
           left.tag.publicId.localeCompare(right.tag.publicId),
       );
-    const pagination = publicPagination(
-      rows.length,
+    const paged = paginate(
+      rows,
       getQuery(event).page,
       PUBLIC_DIRECTORY_PAGE_SIZE,
     );
-    const offset = (pagination.page - 1) * pagination.pageSize;
     return {
-      ...pagination,
-      items: await buildPublicTagListItems(
-        rows.slice(offset, offset + pagination.pageSize),
-      ),
+      ...paged,
+      items: await buildPublicTagListItems(paged.items),
     };
   },
 );

@@ -10,7 +10,7 @@ definePageMeta({ layout: 'admin' });
 await useAdminTabTitle(computed(() => phrase.value.admin_events));
 
 const humanSize = useHumanSize();
-const { data, error, status, search, order, setPage } =
+const { data, error, status, search, order } =
   await useAdminEntityList<EventListItem>('/api/admin/events', 'admin-events');
 const list = computed<EventListResponse | undefined>(() => data.value);
 </script>
@@ -139,15 +139,19 @@ const list = computed<EventListResponse | undefined>(() => data.value);
       @reset-search="search = ''"
     />
 
-    <div v-if="status === 'pending'" class="flex justify-center p-md">
+    <div
+      v-if="status === 'pending' && !list?.items.length"
+      class="flex justify-center p-md"
+    >
       <Icon name="loading" class="text-lg text-text-2" />
     </div>
 
-    <AdminPagination
+    <Pagination
       v-if="list"
       :page="list.page"
       :page-count="list.pageCount"
-      @page="setPage"
+      :pending="status === 'pending'"
+      class="pt-md"
     />
   </div>
 </template>

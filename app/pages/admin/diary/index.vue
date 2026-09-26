@@ -10,7 +10,7 @@ definePageMeta({ layout: 'admin' });
 await useAdminTabTitle(computed(() => phrase.value.admin_diary));
 
 const humanSize = useHumanSize();
-const { data, error, status, search, order, setPage } =
+const { data, error, status, search, order } =
   await useAdminEntityList<DiaryListItem>('/api/admin/diary', 'admin-diary');
 const list = computed<DiaryListResponse | undefined>(() => data.value);
 
@@ -139,15 +139,19 @@ function dayOf(item: DiaryListItem) {
       @reset-search="search = ''"
     />
 
-    <div v-if="status === 'pending'" class="flex justify-center p-md">
+    <div
+      v-if="status === 'pending' && !list?.items.length"
+      class="flex justify-center p-md"
+    >
       <Icon name="loading" class="text-lg text-text-2" />
     </div>
 
-    <AdminPagination
+    <Pagination
       v-if="list"
       :page="list.page"
       :page-count="list.pageCount"
-      @page="setPage"
+      :pending="status === 'pending'"
+      class="pt-md"
     />
   </div>
 </template>

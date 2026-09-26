@@ -1,4 +1,3 @@
-import { publicPagination } from './pagination';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import { and, eq } from 'drizzle-orm';
 import {
@@ -11,7 +10,6 @@ import type {
   PublicEventResponseFull,
   PublicAction,
   PublicFile,
-  PublicPaginatedResponse,
   PublicReferenceGroup,
   PublicReferenceLink,
   PublicReferences,
@@ -159,25 +157,6 @@ export function canOpenPublicEntity(
   isAdmin: boolean,
 ) {
   return isAdmin || access !== ProjectEventAccessLevel.Private;
-}
-
-export function paginatePublic<T>(
-  items: T[],
-  pageValue: unknown,
-  pageSize = 24,
-): PublicPaginatedResponse<T> {
-  const { page, pageCount, total } = publicPagination(
-    items.length,
-    pageValue,
-    pageSize,
-  );
-  return {
-    items: items.slice((page - 1) * pageSize, page * pageSize),
-    page,
-    pageSize,
-    pageCount,
-    total,
-  };
 }
 
 export async function buildPublicProjectSummary(

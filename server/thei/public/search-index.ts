@@ -16,7 +16,7 @@ import {
   buildPublicTags,
   canListPublicEntity,
 } from './entities';
-import { publicPagination } from './pagination';
+import { paginate } from '#layers/thei/shared/pagination';
 
 /**
  * In-memory search over projects and events.
@@ -319,20 +319,11 @@ export async function runPublicSearch(
     filters,
     isAdmin,
   );
-  const pagination = publicPagination(
-    documents.length,
-    pageValue,
-    PUBLIC_SEARCH_PAGE_SIZE,
-  );
-  const offset = (pagination.page - 1) * PUBLIC_SEARCH_PAGE_SIZE;
+  const paged = paginate(documents, pageValue, PUBLIC_SEARCH_PAGE_SIZE);
   const { db, schema } = THEI_SERVER.useDb();
-  const pageDocuments = documents.slice(
-    offset,
-    offset + PUBLIC_SEARCH_PAGE_SIZE,
-  );
   const [items, summaries] = await Promise.all([
     Promise.all(
-      pageDocuments.map(async (document) => {
+      paged.items.map(async (document) => {
         if (document.type === 'project') {
           const project = db
             .select()
@@ -375,8 +366,8 @@ export async function runPublicSearch(
     );
 
   return {
+    ...paged,
     items: items.filter((item) => item !== undefined),
-    ...pagination,
     totals: {
       project: documents.filter((document) => document.type === 'project')
         .length,

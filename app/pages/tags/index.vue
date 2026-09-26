@@ -1,15 +1,13 @@
 <script lang="ts" setup>
-import type {
-  PublicTagListItem,
-  PublicPaginatedResponse,
-} from '#layers/thei/shared/api/public';
+import type { PublicTagListItem } from '#layers/thei/shared/api/public';
+import type { PaginatedResponse } from '#layers/thei/shared/pagination';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
 import { tagAccentCssColor } from '#layers/thei/shared/tag';
 
 definePageMeta({ layout: 'public' });
 const route = useRoute();
 const page = computed(() => String(route.query.page ?? '1'));
-const resource = await useFetch<PublicPaginatedResponse<PublicTagListItem>>(
+const resource = await useFetch<PaginatedResponse<PublicTagListItem>>(
   '/api/tags',
   { query: { page } },
 );
@@ -130,7 +128,11 @@ usePublicSeo({
       :title="phrase.public_tags_empty"
       :description="phrase.public_tags_empty_description"
     />
-    <PublicPagination :page="tags.page" :page-count="tags.pageCount" />
+    <Pagination
+      :page="tags.page"
+      :page-count="tags.pageCount"
+      :pending="resource.status.value === 'pending'"
+    />
   </main>
 </template>
 

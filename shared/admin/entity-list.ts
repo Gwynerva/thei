@@ -1,16 +1,13 @@
+import {
+  paginate,
+  resolvePagination,
+  type PaginatedResponse,
+  type PaginationInfo,
+} from '../pagination';
+
 export const ADMIN_ENTITY_LIST_ORDERS = ['newest', 'oldest'] as const;
 
 export type AdminEntityListOrder = (typeof ADMIN_ENTITY_LIST_ORDERS)[number];
-
-export type AdminPaginatedResponse<T> = {
-  items: T[];
-  total: number;
-  page: number;
-  pageSize: number;
-  pageCount: number;
-};
-
-export type AdminPaginationInfo = Omit<AdminPaginatedResponse<never>, 'items'>;
 
 export type AdminEntityListQuery = {
   q?: string;
@@ -39,13 +36,8 @@ export type CanonicalAdminEntityListRouteQuery = {
 export function resolveAdminPagination(
   totalItems: number,
   query: Pick<AdminEntityListQuery, 'page' | 'pageSize'>,
-): AdminPaginationInfo {
-  const total = normalizeNonNegativeInteger(totalItems);
-  const pageSize = clampInteger(query.pageSize, 1, 50, 20);
-  const pageCount = Math.max(1, Math.ceil(total / pageSize));
-  const page = clampInteger(query.page, 1, pageCount, 1);
-
-  return { total, page, pageSize, pageCount };
+): PaginationInfo {
+  return resolvePagination(totalItems, query.page, adminPageSize(query));
 }
 
 export function canonicalizeAdminEntityListRouteQuery(
@@ -67,7 +59,7 @@ export function canonicalizeAdminEntityListRouteQuery(
 export function paginateAdminEntities<T extends SearchableAdminEntity>(
   items: T[],
   query: AdminEntityListQuery,
-): AdminPaginatedResponse<T> {
+): PaginatedResponse<T> {
   const q = normalizeAdminSearchText(query.q ?? '');
   const order = query.order === 'oldest' ? 'oldest' : 'newest';
 
@@ -94,18 +86,16 @@ export function paginateAdminEntities<T extends SearchableAdminEntity>(
     );
   });
 
-  const pagination = resolveAdminPagination(filtered.length, query);
-  const { page, pageSize } = pagination;
-  const offset = (page - 1) * pageSize;
-
-  return {
-    items: filtered.slice(offset, offset + pageSize),
-    ...pagination,
-  };
+  return paginate(filtered, query.page, adminPageSize(query));
 }
 
 export function normalizeAdminSearchText(value: string): string {
   return value.normalize('NFKC').trim().toLocaleLowerCase();
+}
+
+/** The page size an admin list asked for, within what it may ask. */
+function adminPageSize(query: Pick<AdminEntityListQuery, 'pageSize'>) {
+  return clampInteger(query.pageSize, 1, 50, 20);
 }
 
 function clampInteger(
@@ -116,10 +106,6 @@ function clampInteger(
 ): number {
   if (!Number.isFinite(value)) return fallback;
   return Math.min(max, Math.max(min, Math.trunc(value as number)));
-}
-
-function normalizeNonNegativeInteger(value: number): number {
-  return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0;
 }
 
 function positiveInteger(value: unknown): number | undefined {

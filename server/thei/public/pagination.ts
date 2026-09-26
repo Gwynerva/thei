@@ -1,15 +1,5 @@
+/** Page size of the public lists of cards. */
+export const PUBLIC_PAGE_SIZE = 24;
+
 /** Page size of the plain directories — tags and pages — whose rows are small. */
 export const PUBLIC_DIRECTORY_PAGE_SIZE = 30;
-
-export function publicPagination(
-  total: number,
-  pageValue: unknown,
-  pageSize = 24,
-) {
-  const pageCount = Math.max(1, Math.ceil(total / pageSize));
-  const requested = Number(pageValue);
-  const page = Number.isInteger(requested)
-    ? Math.min(pageCount, Math.max(1, requested))
-    : 1;
-  return { page, pageSize, pageCount, total };
-}

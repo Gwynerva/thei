@@ -7,7 +7,8 @@ import {
   buildPublicProjectSummary,
   buildPublicTagListItems,
 } from '../../thei/public/entities';
-import { publicPagination } from '../../thei/public/pagination';
+import { resolvePagination } from '#layers/thei/shared/pagination';
+import { PUBLIC_PAGE_SIZE } from '../../thei/public/pagination';
 
 export default defineEventHandler(async (event): Promise<PublicTagResponse> => {
   const {
@@ -64,9 +65,10 @@ export default defineEventHandler(async (event): Promise<PublicTagResponse> => {
       : requestedTab === 'events' && !eventCount
         ? 'projects'
         : requestedTab;
-  const pagination = publicPagination(
+  const pagination = resolvePagination(
     activeTab === 'projects' ? projectCount : eventCount,
     query.page,
+    PUBLIC_PAGE_SIZE,
   );
   const offset = (pagination.page - 1) * pagination.pageSize;
   const items =

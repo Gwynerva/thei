@@ -19,7 +19,8 @@ import {
   readRelationRows,
   type RelationTarget,
 } from '../relations';
-import { canListPublicEntity, paginatePublic } from './entities';
+import { paginate } from '#layers/thei/shared/pagination';
+import { canListPublicEntity } from './entities';
 import { buildSecretReference } from './secret';
 
 /** How many related entities one page of the block holds. */
@@ -155,7 +156,7 @@ export async function buildPublicRelatedPage(
   const items = (await resolvePublicRelated(owner, isAdmin)).filter(
     (item) => item.endpoint.type === kind,
   );
-  const paged = paginatePublic(items, page, PUBLIC_RELATED_PAGE_SIZE);
+  const paged = paginate(items, page, PUBLIC_RELATED_PAGE_SIZE);
   return {
     ...paged,
     items: await buildPublicRelatedLinks(paged.items, isAdmin),

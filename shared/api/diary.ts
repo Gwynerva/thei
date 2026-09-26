@@ -1,7 +1,7 @@
 import type { ProjectEventAccessLevel } from '../access-level';
 import type { ContentFieldValue } from '../content';
 import type { MediaDescriptor } from '../media';
-import type { AdminPaginatedResponse } from '../admin/entity-list';
+import type { PaginatedResponse } from '../pagination';
 import type { RelationGetItem } from '../relation';
 
 export type DiaryGetResponse = {
@@ -32,4 +32,4 @@ export type DiaryListItem = {
   reminder?: string;
 };
 
-export type DiaryListResponse = AdminPaginatedResponse<DiaryListItem>;
+export type DiaryListResponse = PaginatedResponse<DiaryListItem>;

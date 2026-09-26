@@ -1,10 +1,10 @@
 import { isLifeDay, type LifePoint } from './life';
 import { sortLifePoints, type LifeBoundaryLike } from './life-timeline';
-import type { PublicPaginatedResponse } from './api/public';
+import type { PaginatedResponse } from './pagination';
 
 export type LifeRewindMatch = 'exact' | 'ongoing';
 export type LifeRewindItem = { point: LifePoint; match: LifeRewindMatch };
-export type LifeRewindResponse = PublicPaginatedResponse<LifeRewindItem> & {
+export type LifeRewindResponse = PaginatedResponse<LifeRewindItem> & {
   referenceDate: string;
 };
 

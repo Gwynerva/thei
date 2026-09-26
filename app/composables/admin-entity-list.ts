@@ -1,8 +1,8 @@
 import {
   canonicalizeAdminEntityListRouteQuery,
   type AdminEntityListOrder,
-  type AdminPaginatedResponse,
 } from '#layers/thei/shared/admin/entity-list';
+import type { PaginatedResponse } from '#layers/thei/shared/pagination';
 
 export async function useAdminEntityList<T>(endpoint: string, key: string) {
   const route = useRoute();
@@ -30,7 +30,7 @@ export async function useAdminEntityList<T>(endpoint: string, key: string) {
     pageSize: 20,
   }));
 
-  const fetchResult = useFetch<AdminPaginatedResponse<T>>(endpoint, {
+  const fetchResult = useFetch<PaginatedResponse<T>>(endpoint, {
     key,
     query: requestQuery,
   });
@@ -98,17 +98,11 @@ export async function useAdminEntityList<T>(endpoint: string, key: string) {
   async function replaceQuery(
     values: Record<string, string | number | undefined>,
   ) {
+    // The path goes along: rebuilt from the route's pattern, the address
+    // would lose its trailing slash.
     await router.replace({
+      path: route.path,
       query: { ...route.query, ...values },
-    });
-  }
-
-  async function setPage(nextPage: number) {
-    await router.push({
-      query: {
-        ...route.query,
-        page: nextPage === 1 ? undefined : nextPage,
-      },
     });
   }
 
@@ -122,7 +116,6 @@ export async function useAdminEntityList<T>(endpoint: string, key: string) {
     search,
     order,
     page,
-    setPage,
   };
 }
 

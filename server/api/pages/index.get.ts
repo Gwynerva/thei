@@ -1,16 +1,16 @@
 import type { PublicPageListItem } from '#layers/thei/shared/api/page';
-import type { PublicPaginatedResponse } from '#layers/thei/shared/api/public';
 import {
-  PUBLIC_DIRECTORY_PAGE_SIZE,
-  publicPagination,
-} from '../../thei/public/pagination';
+  paginate,
+  type PaginatedResponse,
+} from '#layers/thei/shared/pagination';
+import { PUBLIC_DIRECTORY_PAGE_SIZE } from '../../thei/public/pagination';
 import {
   buildPublicPageListItem,
   canListPublicEntity,
 } from '../../thei/public/entities';
 
 export default defineEventHandler(
-  async (event): Promise<PublicPaginatedResponse<PublicPageListItem>> => {
+  async (event): Promise<PaginatedResponse<PublicPageListItem>> => {
     const isAdmin = await THEI_SERVER.isAdmin(event);
     const { db, schema } = THEI_SERVER.useDb();
     const pages = db
@@ -24,19 +24,14 @@ export default defineEventHandler(
           right.createdAt - left.createdAt ||
           left.pageUuid.localeCompare(right.pageUuid),
       );
-    const pagination = publicPagination(
-      pages.length,
+    const paged = paginate(
+      pages,
       getQuery(event).page,
       PUBLIC_DIRECTORY_PAGE_SIZE,
     );
-    const offset = (pagination.page - 1) * pagination.pageSize;
     return {
-      ...pagination,
-      items: await Promise.all(
-        pages
-          .slice(offset, offset + pagination.pageSize)
-          .map(buildPublicPageListItem),
-      ),
+      ...paged,
+      items: await Promise.all(paged.items.map(buildPublicPageListItem)),
     };
   },
 );

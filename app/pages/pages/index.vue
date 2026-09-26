@@ -1,11 +1,11 @@
 <script lang="ts" setup>
 import type { PublicPageListItem } from '#layers/thei/shared/api/page';
-import type { PublicPaginatedResponse } from '#layers/thei/shared/api/public';
+import type { PaginatedResponse } from '#layers/thei/shared/pagination';
 
 definePageMeta({ layout: 'public' });
 const route = useRoute();
 const page = computed(() => String(route.query.page ?? '1'));
-const resource = await useFetch<PublicPaginatedResponse<PublicPageListItem>>(
+const resource = await useFetch<PaginatedResponse<PublicPageListItem>>(
   '/api/pages',
   { query: { page } },
 );
@@ -64,6 +64,10 @@ usePublicSeo({
       :title="phrase.no_pages"
       :description="phrase.public_pages_empty_description"
     />
-    <PublicPagination :page="pages.page" :page-count="pages.pageCount" />
+    <Pagination
+      :page="pages.page"
+      :page-count="pages.pageCount"
+      :pending="resource.status.value === 'pending'"
+    />
   </main>
 </template>

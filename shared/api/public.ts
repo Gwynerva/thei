@@ -13,6 +13,7 @@ import type { ArchivedOriginalFileMeta } from '../asset';
 import type { RelationEntityType, RelationType } from '../relation';
 import type { PublicSearchFilters } from '../public-search';
 import type { StatusHistoryItem } from '../status';
+import type { PaginatedResponse } from '../pagination';
 import type { LifePoint } from '../life';
 
 export type PublicTagSummary = {
@@ -73,7 +74,7 @@ export type PublicEntityLink = PublicEntityReference | PublicSecretReference;
 export type PublicRelatedCounts = Partial<Record<RelationEntityType, number>>;
 
 /** One page of one kind of related entity, in the order the block shows. */
-export type PublicRelatedPage = PublicPaginatedResponse<PublicEntityLink>;
+export type PublicRelatedPage = PaginatedResponse<PublicEntityLink>;
 
 export function isPublicSecret(value: object): value is PublicSecretReference {
   return 'secret' in value && value.secret === true;
@@ -102,20 +103,11 @@ export type PublicSearchTagFacet = {
   state?: 'include' | 'exclude';
 };
 
-export type PublicSearchResponse =
-  PublicPaginatedResponse<PublicEntitySummary> & {
-    filters: PublicSearchFilters;
-    tags: PublicSearchTagFacet[];
-    /** Matches by type across every page. */
-    totals: { project: number; event: number };
-  };
-
-export type PublicPaginatedResponse<T> = {
-  items: T[];
-  page: number;
-  pageSize: number;
-  pageCount: number;
-  total: number;
+export type PublicSearchResponse = PaginatedResponse<PublicEntitySummary> & {
+  filters: PublicSearchFilters;
+  tags: PublicSearchTagFacet[];
+  /** Matches by type across every page. */
+  totals: { project: number; event: number };
 };
 
 export type PublicAssetDescriptor = {
@@ -334,5 +326,5 @@ export type PublicTagListItem = PublicTagSummary & {
 
 export type PublicTagResponse = PublicTagListItem & {
   activeTab: 'projects' | 'events';
-  items: PublicPaginatedResponse<PublicEntitySummary>;
+  items: PaginatedResponse<PublicEntitySummary>;
 };

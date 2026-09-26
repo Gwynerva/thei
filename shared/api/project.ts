@@ -10,7 +10,7 @@ import type { MediaDescriptor } from '../media';
 import type { TagItem } from '../tag';
 import type { ExternalLink, ProjectExternalLink } from '../external-link';
 import type { ProjectActionEditData } from '../project-action';
-import type { AdminPaginatedResponse } from '../admin/entity-list';
+import type { PaginatedResponse } from '../pagination';
 import type { ProfileHistoryPage } from '../profile';
 import type { StatusHistoryItem } from '../status';
 
@@ -131,4 +131,4 @@ export type ProjectListItem = {
   reminder?: string;
 };
 
-export type ProjectListResponse = AdminPaginatedResponse<ProjectListItem>;
+export type ProjectListResponse = PaginatedResponse<ProjectListItem>;

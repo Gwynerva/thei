@@ -226,7 +226,11 @@ onMounted(() => input.value?.focus({ preventScroll: true }));
           :title="phrase.search_empty"
           :description="phrase.search_empty_description"
         />
-        <PublicPagination :page="search.page" :page-count="search.pageCount" />
+        <Pagination
+          :page="search.page"
+          :page-count="search.pageCount"
+          :pending
+        />
       </section>
 
       <PublicStickyAside :aria-label="phrase.search_filters">

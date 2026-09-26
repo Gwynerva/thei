@@ -6,7 +6,7 @@ import type { OtherAssetGetItem } from './project';
 import type { ExternalLink, ProjectExternalLink } from '../external-link';
 import type { TagItem } from '../tag';
 import type { MediaDescriptor } from '../media';
-import type { AdminPaginatedResponse } from '../admin/entity-list';
+import type { PaginatedResponse } from '../pagination';
 import type { RelationGetItem } from '../relation';
 
 export type EventGetResponse = {
@@ -55,7 +55,7 @@ export type EventListItem = {
   reminder?: string;
 };
 
-export type EventListResponse = AdminPaginatedResponse<EventListItem>;
+export type EventListResponse = PaginatedResponse<EventListItem>;
 
 export type PublicEventResponse = Pick<
   EventGetResponse,

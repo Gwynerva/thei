@@ -34,7 +34,8 @@ import {
   selectLifeRewindPoints,
   type LifeRewindResponse,
 } from '#layers/thei/shared/life-rewind';
-import { publicPagination } from './pagination';
+import { paginate } from '#layers/thei/shared/pagination';
+import { PUBLIC_PAGE_SIZE } from './pagination';
 import {
   isApproximateDate,
   normalizeDatePrecisionInfo,
@@ -236,22 +237,19 @@ export async function getLifeRewind(options: {
 }): Promise<LifeRewindResponse> {
   const referenceDate = (options.now ?? new Date()).toISOString().slice(0, 10);
   const selected = selectLifeRewindPoints(buildRawLifePoints(), referenceDate);
-  const pagination = publicPagination(
-    selected.length,
+  const paged = paginate(
+    selected,
     options.page,
-    options.pageSize ?? 24,
+    options.pageSize ?? PUBLIC_PAGE_SIZE,
   );
-  const offset = (pagination.page - 1) * pagination.pageSize;
   return {
     referenceDate,
-    ...pagination,
+    ...paged,
     items: await Promise.all(
-      selected
-        .slice(offset, offset + pagination.pageSize)
-        .map(async ({ point, match }) => ({
-          point: await hydrateLifePoint(point, options.isAdmin),
-          match,
-        })),
+      paged.items.map(async ({ point, match }) => ({
+        point: await hydrateLifePoint(point, options.isAdmin),
+        match,
+      })),
     ),
   };
 }

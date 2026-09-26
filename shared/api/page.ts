@@ -1,5 +1,5 @@
 import type { ProjectEventAccessLevel } from '../access-level';
-import type { AdminPaginatedResponse } from '../admin/entity-list';
+import type { PaginatedResponse } from '../pagination';
 import type { ContentFieldValue, PublicContentOutputData } from '../content';
 import type { MediaDescriptor } from '../media';
 import type { PublicReferences } from './public';
@@ -36,7 +36,7 @@ export type PageListItem = {
   reminder?: string;
 };
 
-export type PageListResponse = AdminPaginatedResponse<PageListItem>;
+export type PageListResponse = PaginatedResponse<PageListItem>;
 
 export type PublicPageListItem = {
   title: string;

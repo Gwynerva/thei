@@ -1,6 +1,6 @@
 import { AssetType, type AssetMeta, type AssetRole } from './asset';
 import type { AssetVariantInfo } from './api/asset';
-import type { AdminPaginatedResponse } from './admin/entity-list';
+import type { PaginatedResponse } from './pagination';
 import {
   ASSET_UPLOAD_LIMITS,
   ASSET_UPLOAD_DEFAULT_MAX_SIZE,
@@ -62,9 +62,8 @@ export interface AssetLibraryItem {
 export interface AssetLibrarySection extends AssetSource {
   count: number;
 }
-export type AssetLibraryResponse = AdminPaginatedResponse<AssetLibrarySection>;
-export type AssetLibraryFilesResponse =
-  AdminPaginatedResponse<AssetLibraryItem>;
+export type AssetLibraryResponse = PaginatedResponse<AssetLibrarySection>;
+export type AssetLibraryFilesResponse = PaginatedResponse<AssetLibraryItem>;
 export interface AssetLibraryAvailability {
   total: number;
   types: Partial<Record<AssetType, number>>;

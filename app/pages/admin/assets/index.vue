@@ -48,6 +48,7 @@ function resetFilters() {
 }
 function update(values: Record<string, string | undefined>) {
   void router.replace({
+    path: route.path,
     query: { ...route.query, page: undefined, ...values },
   });
 }
@@ -170,18 +171,19 @@ onMounted(() => {
         class="mt-md"
       />
     </template>
-    <div v-if="status === 'pending'" role="status" class="p-md text-center">
+    <div
+      v-if="status === 'pending' && !data?.items.length"
+      role="status"
+      class="p-md text-center"
+    >
       <Icon name="loading" />
     </div>
-    <AdminPagination
+    <Pagination
       v-if="data"
       :page="data.page"
       :page-count="data.pageCount"
-      @page="
-        router.push({
-          query: { ...route.query, page: $event === 1 ? undefined : $event },
-        })
-      "
+      :pending="status === 'pending'"
+      class="pt-md"
     />
   </div>
 </template>
