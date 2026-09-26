@@ -3,6 +3,9 @@ Description=Thei
 Documentation=https://github.com/Gwynerva/thei
 After=network-online.target
 Wants=network-online.target
+# Never give up on restarting. The default rate limit would leave the site down
+# permanently after a short crash loop, recoverable only over SSH.
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
@@ -24,17 +27,18 @@ Environment=PORT=__PORT__
 # Without it the panel disables both.
 Environment=THEI_MANAGED=systemd
 
-# An in-panel update shells out to Bun, which is not on systemd's PATH.
+# Where an in-panel update shells out to Bun, and where it looks for releases.
 Environment=THEI_BUN=__BUN__
+Environment=THEI_REPOSITORY=__REPOSITORY__
+
+# The content holds the password hash: files the site writes are not for
+# other users of the machine.
+UMask=0027
 
 # Restarting is how Thei applies an update: it exits cleanly and systemd brings
 # it back. Nothing needs sudo for that.
 Restart=always
 RestartSec=3
-
-# Never give up on restarting. The default rate limit would leave the site down
-# permanently after a short crash loop, recoverable only over SSH.
-StartLimitIntervalSec=0
 
 # A build is memory hungry. If the kernel kills a child process, that must not
 # take the service down with it.

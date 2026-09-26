@@ -6,6 +6,8 @@
 export default defineNuxtConfig({
   extends: ['thei'],
   srcDir: '.',
+  // A first build in a terminal would otherwise stop to ask about it.
+  telemetry: false,
 
   // An in-place update builds into a staging directory first and swaps it in at
   // the very end, so the running site keeps serving from an intact build.

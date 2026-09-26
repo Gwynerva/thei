@@ -1,20 +1,32 @@
-import { mkdir, rm, writeFile } from 'fs/promises';
-import { dirname } from 'path';
+import { mkdir, rm } from 'node:fs/promises';
 import { SiteAccessLevel } from '#layers/thei/shared/access-level';
 import type { InstallData } from '#layers/thei/shared/api/install';
 import { languageCodes } from '#layers/thei/shared/language';
 import { normalizeSiteUrl } from '#layers/thei/shared/site-url';
 import { emptySiteAnalytics } from '#layers/thei/shared/analytics';
+import { writeConfigFile } from '#layers/thei/update/config-file';
 import { generatePasswordData } from '../thei/password';
 import { createFreshDbContext } from '../thei/db/utils';
+import { setAsideOrphanDatabase } from '../thei/db/orphan';
 import { bootTheiServer } from '../thei/boot/process';
+import { bootResult } from '../thei/boot/result';
 import type { TheiConfig } from '../thei/config';
 
 type InstallResponse = { type: 'success' } | { type: 'error'; message: string };
 
+/** One installation at a time: a second click must not race the first. */
+let installing = false;
+
 export default defineEventHandler(async (event): Promise<InstallResponse> => {
-  const body = await readBody<InstallData>(event);
-  const installDataOrError = validateInstallData(body);
+  // The middleware sends every other request of an installed site elsewhere,
+  // but a route is also reachable by spellings it does not compare, such as
+  // a trailing slash. The handler guards itself.
+  if (bootResult.type !== 'install' || installing) {
+    throw createError({ statusCode: 409, statusMessage: 'Already installed' });
+  }
+
+  const body = await readBody<InstallData | undefined>(event);
+  const installDataOrError = validateInstallData(body ?? ({} as InstallData));
 
   if (typeof installDataOrError === 'string') {
     return {
@@ -23,42 +35,46 @@ export default defineEventHandler(async (event): Promise<InstallResponse> => {
     };
   }
 
-  const passwordData = generatePasswordData(installDataOrError.password);
+  installing = true;
+  try {
+    const passwordData = generatePasswordData(installDataOrError.password);
 
-  const configPath = THEI_SERVER.contentPath('thei.config.json');
-  await rm(THEI_SERVER.projectPath('.thei'), { force: true, recursive: true });
-  await mkdir(dirname(configPath), { recursive: true });
-  const fresh = await createFreshDbContext();
-  fresh.db
-    .insert(fresh.schema.profiles)
-    .values({
-      profileId: 'profile',
-      displayName: installDataOrError.displayName,
-    })
-    .run();
-  fresh.rawDb.close();
-  await writeFile(
-    configPath,
-    JSON.stringify(
-      {
-        version: THEI_SERVER.version,
-        languageCode: installDataOrError.languageCode,
-        siteAccessLevel: installDataOrError.siteAccessLevel,
-        siteUrl: installDataOrError.siteUrl,
-        analytics: emptySiteAnalytics,
-        secretPhrase: installDataOrError.secretPhrase,
-        password: {
-          hash: passwordData.hash,
-          salt: passwordData.salt,
-          iterations: passwordData.iterations,
-        },
-      } satisfies TheiConfig,
-      null,
-      2,
-    ),
-    'utf-8',
-  );
-  await bootTheiServer();
+    await rm(THEI_SERVER.projectPath('.thei'), { force: true, recursive: true });
+    await mkdir(THEI_SERVER.contentPath(), { recursive: true });
+    // Left by an attempt that failed before writing the config.
+    await setAsideOrphanDatabase();
+    const fresh = await createFreshDbContext();
+    try {
+      fresh.db
+        .insert(fresh.schema.profiles)
+        .values({
+          profileId: 'profile',
+          displayName: installDataOrError.displayName,
+        })
+        .run();
+    } finally {
+      fresh.rawDb.close();
+    }
+
+    // Written last, and atomically: its presence is what makes the site
+    // installed.
+    await writeConfigFile(THEI_SERVER.contentPath('thei.config.json'), {
+      version: THEI_SERVER.version,
+      languageCode: installDataOrError.languageCode,
+      siteAccessLevel: installDataOrError.siteAccessLevel,
+      siteUrl: installDataOrError.siteUrl,
+      analytics: emptySiteAnalytics,
+      secretPhrase: installDataOrError.secretPhrase,
+      password: {
+        hash: passwordData.hash,
+        salt: passwordData.salt,
+        iterations: passwordData.iterations,
+      },
+    } satisfies TheiConfig);
+    await bootTheiServer();
+  } finally {
+    installing = false;
+  }
 
   return { type: 'success' };
 });
