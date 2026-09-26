@@ -446,7 +446,7 @@ async function openOtherAsset(index: number) {
               editable: true,
             }"
             :aria-label="phrase.project_icon"
-            class="size-18 cursor-pointer"
+            class="size-18 shrink-0 cursor-pointer"
             @click="iconSlot.open"
           />
           <div class="tracking-tight">
@@ -465,7 +465,7 @@ async function openOtherAsset(index: number) {
               editable: true,
             }"
             :aria-label="phrase.project_banner"
-            class="aspect-video h-18 cursor-pointer"
+            class="aspect-video h-18 shrink-0 cursor-pointer"
             @click="bannerSlot.open"
           />
           <div class="tracking-tight">
