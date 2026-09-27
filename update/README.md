@@ -33,14 +33,21 @@ at the newest release, builds it, and starts it as a systemd service listening
 on `127.0.0.1:3000`. When it finishes it prints the address to open — the setup
 wizard runs in the browser.
 
-Requirements: systemd, at least **2 GB of RAM** (a build runs alongside the
-live site; add swap if you are short), and a few GB of disk.
+Requirements: systemd, at least **2 GB of RAM**, and a few GB of disk. A build
+alone takes about 2 GB, and an update builds while the site keeps running
+beside it, so memory and swap together should reach about 3.5 GB. The
+installer adds a swap file (`/swapfile-thei`) when they do not; set
+`THEI_SWAP=0` to be warned instead.
+
+Until the setup wizard is finished, whoever opens the site first can claim
+it. The installer binds to `127.0.0.1` and prints the SSH tunnel to reach it
+from your own computer; finish the wizard before putting the site on a domain.
 
 Two runtimes are installed on purpose. **Bun** installs dependencies and builds
 — it is much faster at both. **Node** runs the site, because `better-sqlite3` is
 a native Node addon that does not load under Bun. The unit file records where
-each one lives (`ExecStart` and `THEI_BUN`), so an update can find Bun even
-though systemd's `PATH` does not include it.
+each one lives (`ExecStart` and `THEI_BUN`) and which repository updates come
+from (`THEI_REPOSITORY`).
 
 You can override the defaults:
 
@@ -49,7 +56,11 @@ THEI_DIR=/srv/thei THEI_PORT=8080 bash <(curl -fsSL .../install.sh)
 ```
 
 `THEI_DIR`, `THEI_USER`, `THEI_SERVICE`, `THEI_PORT`, `THEI_HOST`,
-`THEI_REPOSITORY`, `THEI_VERSION`, `NODE_MAJOR`.
+`THEI_REPOSITORY` (a URL or a local path), `THEI_VERSION`, `NODE_MAJOR`,
+`THEI_SWAP`.
+
+If the installer stops halfway, it says what to remove before running it
+again; nothing is running at that point.
 
 ### Putting it on a domain
 
@@ -62,8 +73,10 @@ for TLS. The example file has the exact commands.
 Open **Updates** in the admin panel. It shows the installed version, checks for
 a newer release tag, and updates on one click.
 
-Set up backups before you start — see below. The update itself never touches
-`content/`, but a restore point costs nothing to have.
+**Make a manual backup first** with the backup client (see below): the Updates
+page says when the last one was made. An update migrates `content/` to the new
+version, and the way back from an update gone wrong is that copy — see
+[When something goes wrong](#when-something-goes-wrong).
 
 What happens when you press the button:
 
@@ -119,7 +132,16 @@ development checkout both are disabled.
 ## When something goes wrong
 
 **The build failed.** The site is still running the old version and nothing was
-swapped in. Read the log on the update page and try again.
+swapped in: the previous manifest and engine are put back too. Read the error
+on the update page and try again. A build killed for lack of memory needs more
+swap (see [Install](#install)).
+
+**"Thei needs attention" instead of the site.** A migration or a task failed,
+or the content belongs to a newer version than the engine. The site stays
+closed and the update screen tells a signed-in admin the step and the error.
+Everything that succeeded is recorded in the ledger — a migration that failed
+was rolled back — so **Try again** on the screen, or a restart of the service,
+carries on from the step that failed.
 
 **The site will not start after an update.**
 
@@ -127,31 +149,35 @@ swapped in. Read the log on the update page and try again.
 journalctl -u thei -n 50 --no-pager
 ```
 
-Then either rebuild in place:
+Rebuild in place:
 
 ```bash
-cd /opt/thei && sudo -u thei bun install && sudo -u thei bun run build
+cd /opt/thei
+runuser -u thei -- env HOME=/opt/thei bun install
+runuser -u thei -- env HOME=/opt/thei bun run build
 systemctl restart thei
 ```
 
-or roll back to the previous build:
+**Going back to the previous version.** Install that version from scratch and
+restore the manual backup made before the update:
+
+```bash
+systemctl stop thei && systemctl disable thei
+mv /opt/thei /opt/thei.broken && rm /etc/systemd/system/thei.service
+THEI_VERSION=v0.0.1 bash <(curl -fsSL https://raw.githubusercontent.com/Gwynerva/thei/main/update/install.sh)
+```
+
+then restore the copy as described in [Restoring](#restoring). A copy made on
+the newer version cannot go back: an older engine refuses content a newer one
+has migrated, and says so.
+
+When no migration ran — the update failed before the restart, or the new build
+will not start at all — `update/rollback.sh` swaps the previous build and
+manifest back in place:
 
 ```bash
 bash /opt/thei/node_modules/thei/update/rollback.sh
 ```
-
-**"Thei needs attention" instead of the site.** A migration or a task failed,
-or the content belongs to a newer version than the engine. The site stays
-closed and the update screen names the step and the error. Everything that
-succeeded is recorded in the ledger — a migration that failed was rolled back
-— so a restart carries on from the step that failed. When a task failed, a
-signed-in admin gets **Try again** on the screen, which does exactly that;
-after a failed migration sessions cannot be trusted yet, so fix the cause and
-restart the service.
-
-Rollback does **not** undo migrations. If an update applied one, the older
-engine will refuse to open the content and say so. Reinstall the newer version
-instead.
 
 ## Backups
 
@@ -167,19 +193,22 @@ machine you control pulls them.
    `thei-backup.cmd` for Windows, `thei-backup.sh` for Linux and macOS. Neither
    needs anything installed — PowerShell, `bash` and `curl` come with the
    system — and both arrive with the site address and the token filled in.
-3. Run it, pick a destination folder, and install the weekly schedule.
+3. Run it, pick a destination folder, and install the schedule.
 
-The schedule fires daily and backs up only when a week has passed. That is what
-lets a machine that was switched off at the appointed hour catch up on its own,
-and what lets a manual backup restart the week without touching the scheduler.
-It survives reboots: Task Scheduler starts a missed run when the machine is
-back, systemd timers are persistent (and lingering is enabled for a user
-timer), cron gets an `@reboot` entry, and launchd runs at login.
+The schedule fires daily and backs up only when the interval — a week unless
+set otherwise — has passed, give or take half a day, so a weekly backup stays
+weekly although each run ends a few minutes after the hour. That is what lets
+a machine that was switched off at the appointed hour catch up on its own,
+and what lets a manual backup restart the interval without touching the
+scheduler. It survives reboots: Task Scheduler starts a missed run when the
+machine is back, systemd timers are persistent (and lingering is enabled for
+a user timer), cron gets an `@reboot` entry, and launchd runs at login.
 
 Before it downloads anything, a run compares the site with the last backup. If
-it lost more than 30% of its files or size, the run stops without copying or
-rotating anything and raises an alarm — the kind of drop an intrusion or a
-broken update leaves behind. `backup/README.md` has the details.
+it lost more than 30% of its files or size, or of its projects, events, diary
+entries or pages, the run stops without copying or rotating anything and
+raises an alarm — the kind of drop an intrusion or a broken update leaves
+behind. `backup/README.md` has the details.
 
 Copies are named by when they finished:
 
@@ -192,12 +221,19 @@ Scheduled copies rotate three deep; a new one is renamed into place before the
 oldest is removed, so the destination is never without a complete copy. Manual
 copies do not take a slot and are never rotated out.
 
+Every copy is complete on its own and can be copied anywhere as ordinary
+files. An asset that did not change is shared with the copy it came from as a
+hard link rather than stored twice, so a new copy costs only what changed.
+Asset files are named by the SHA-256 of their bytes, and the client checks
+each one it downloads or reuses against its name, so a damaged file is never
+carried into the next copy.
+
 ### What is in a copy, and what is not
 
 |                           |                                                              |
 | ------------------------- | ------------------------------------------------------------ |
 | `thei.db`                 | a consistent snapshot, taken through SQLite's own backup API |
-| `thei.config.json`        | version, language, access level, password hash               |
+| `thei.config.json`        | version, language, access level, password and token hashes   |
 | `assets/`                 | uploaded originals and every derived variant                 |
 | `external-link-favicons/` | the icons of external links, fetched when a link was put in  |
 | `generated-media/`        | **not copied** — a cache the site rebuilds on demand         |
@@ -221,7 +257,7 @@ chown -R thei:thei /opt/thei/content
 systemctl start thei
 ```
 
-Three things that are easy to get wrong:
+Things that are easy to get wrong:
 
 1. **Ownership.** The service runs as the `thei` user. A copy unpacked as root
    is not writable by it.
@@ -231,10 +267,16 @@ Three things that are easy to get wrong:
 3. **No journal files.** The snapshot is one whole database file. This is also
    why a copy made with a plain `cp` of a running instance is not safe to
    restore: it can capture the database mid-write.
+4. **The whole copy.** A minute after startup the engine reconciles the
+   database against the files on disk, and drops the records of files that
+   are gone. When `assets/` is missing, or more than a few of its files are,
+   it takes that for a copy not finished yet, keeps every record and says so
+   in the journal: copy the rest and restart.
+5. **The token.** The restored site knows the backup token it had when the
+   copy was made. Generate a new one afterwards.
 
-A minute after startup the engine reconciles the database against the files on
-disk, and the caches refill as pages are visited. Both are part of a restore,
-not a fault.
+The caches refill as pages are visited; that is part of a restore, not a
+fault.
 
 ### While a backup is running
 
@@ -247,8 +289,9 @@ taken are protected by cleanup's own 24 hour grace period, which is far longer
 than a transfer. The weekly file sweep steps aside while a session is open so
 the two are not walking the same tree at once.
 
-Only one backup may run at a time. A session left open by a client that died,
-or by a server restart, is reclaimed automatically.
+Only one backup may run at a time. A client releases its session whenever it
+stops, and a session left open by a client that died, or by a server restart,
+is reclaimed automatically. A session hands out only the files it listed.
 
 ## Phases, migrations and tasks
 
@@ -446,9 +489,15 @@ Rules that matter:
 2. Add a migration for the change, a task for work over existing content, and
    an update phase for anything that has to happen before the build. Register
    each.
-3. `bun vitest run` — the baseline drift test must pass.
+3. `bun vitest run` — the baseline test and the upgrade test from every
+   released schema (`tests/server/fixtures/schema-*.ts`) must pass.
 4. Bump `version` in the engine's `package.json`. It must match the tag.
-5. `git tag v0.2.0 && git push --tags`.
+5. Run the release bench, `bun run test:release` (`tests/release/README.md`):
+   it installs the release in a container, updates the last release to it
+   through the last release's own panel, and backs up and restores the result.
+6. `git tag v0.2.0 && git push --tags`.
+7. Freeze the new release's schema for the upgrade test: add
+   `tests/server/fixtures/schema-<version>.ts` from the tagged baseline.
 
 Instances see the new tag within five minutes of their next check, or
 immediately when someone presses **Check for updates**.
@@ -456,23 +505,42 @@ immediately when someone presses **Check for updates**.
 Only `major.minor.patch` tags are offered as updates; prerelease tags such as
 `v0.3.0-rc.1` are ignored.
 
+### What one release says to another
+
+The previous release drives an update until it restarts, and an open page of
+one release talks to the server of the next. These are the contracts between
+them; each may only grow, never change:
+
+- the phase runner, `bun node_modules/thei/update/phases/cli.ts --project
+  --from --to [--lang]`, and its line protocol (`phases/run.ts`);
+- the instance templates in `instance/` and their placeholders;
+- `.thei/update-state.json` (`types.ts`), including the `restart` step id;
+- `GET /api/update/progress` (`shared/api/update-progress.ts`);
+- the backup API, which backup clients installed on other machines keep using.
+
 ## Files here
 
-| Path          | What it is                                                         |
-| ------------- | ------------------------------------------------------------------ |
-| `install.sh`  | The one-line installer.                                            |
-| `rollback.sh` | Restores the previous build and manifest.                          |
-| `instance/`   | Templates for the files the installer writes into an instance.     |
-| `migrations/` | Every schema and data change, plus the runner and the ledger.      |
-| `phases/`     | Scripted update phases, their runner and its line protocol.        |
-| `tasks/`      | Work over existing content with the new engine, and its runner.    |
-| `process.ts`  | The update procedure: install, phases, build, swap, restart.       |
-| `boot-run.ts` | Picks the run up on boot and records migrations and tasks into it. |
-| `remote.ts`   | Finds the newest release tag.                                      |
-| `state.ts`    | The progress file the update screen polls; survives the restart.   |
-| `text.ts`     | Step titles: a plain string or translations by language.           |
-| `output.ts`   | Swaps a staged build into place and repoints Nitro's links.        |
-| `semver.ts`   | Version comparison.                                                |
-| `scripts/`    | `generate-baseline.mts`, run by `bun run db:baseline`.             |
+| Path             | What it is                                                         |
+| ---------------- | ------------------------------------------------------------------ |
+| `install.sh`     | The one-line installer.                                            |
+| `rollback.sh`    | Restores the previous build and manifest.                          |
+| `instance/`      | Templates for the files the installer writes into an instance.     |
+| `instance.ts`    | Renders the instance manifest from its template.                   |
+| `migrations/`    | Every schema and data change, plus the runner and the ledger.      |
+| `phases/`        | Scripted update phases, their runner and its line protocol.        |
+| `tasks/`         | Work over existing content with the new engine, and its runner.    |
+| `process.ts`     | The update procedure: install, phases, build, swap, restart.       |
+| `boot-run.ts`    | Picks the run up on boot and records migrations and tasks into it. |
+| `remote.ts`      | Finds the newest release tag.                                      |
+| `state.ts`       | The progress file the update screen polls; survives the restart.   |
+| `types.ts`       | The shape of that file and of the update status.                   |
+| `text.ts`        | Step titles: a plain string or translations by language.           |
+| `output.ts`      | Swaps a staged build into place and repoints Nitro's links.        |
+| `semver.ts`      | Version comparison.                                                |
+| `exec.ts`        | Runs a command, streaming its output line by line.                 |
+| `environment.ts` | What the unit file tells the engine: managed, Bun, repository.     |
+| `config-file.ts` | Reads and atomically writes `thei.config.json` as a plain object.  |
+| `runtime.ts`     | The one place the update system reaches into the running server.   |
+| `scripts/`       | `generate-baseline.mts`, run by `bun run db:baseline`.             |
 
 The backup client itself lives outside this folder, in `backup/`.
