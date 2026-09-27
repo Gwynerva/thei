@@ -20,6 +20,9 @@ export default defineConfig({
       '**/.nuxt/**',
       '**/.output/**',
       'tests/e2e/**',
+      // The release bench runs in Docker, and keeps clones of this repository
+      // in its artifacts.
+      'tests/release/**',
     ],
     environment: 'node',
   },

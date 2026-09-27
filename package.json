@@ -16,6 +16,7 @@
     "test": "bun vitest",
     "test:types": "bun vitest --typecheck.enabled --typecheck.only",
     "test:e2e": "bunx playwright test --config=tests/e2e/playwright.config.ts",
+    "test:release": "bun tests/release/run.ts",
     "typecheck": "nuxt typecheck .playground --checker golar",
     "format": "prettier --write .",
     "db:push": "drizzle-kit push",
