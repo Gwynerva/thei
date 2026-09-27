@@ -444,14 +444,32 @@ printf '[Service]\\n${Object.entries(cacheEnv)
 systemctl daemon-reload`
       : '';
   log(`Installing Thei ${options.version} in ${server.name}`);
+  // Bun keeps a clone of each git dependency in its cache, and a fetch does
+  // not move a tag that clone already has: once cached, `#v0.0.2` would keep
+  // installing whatever tree the tag named in an earlier run. Registry
+  // packages stay cached; the engine is fetched afresh.
   const result = exec(
     server,
     `${exports}
 mkdir -p ${cacheInContainer} && chmod 777 ${cacheInContainer}
+rm -rf ${cacheInContainer}/*.git ${cacheInContainer}/@G@*
 ${cacheUnit}
 git -C /srv/thei.git show v${options.installerFrom ?? options.version}:update/install.sh > /root/install.sh
 bash /root/install.sh`,
   );
+  if (result.code === 0) {
+    // The engine installed has to be the tree the tag names, not one an
+    // earlier run left in a cache.
+    const installed = exec(
+      server,
+      `want=$(git -C /srv/thei.git rev-parse 'v${options.version}^{commit}')
+grep -q "thei.git#$want" /opt/thei/bun.lock || { echo "installed an engine other than v${options.version} ($want)"; exit 1; }`,
+    );
+    if (installed.code !== 0) {
+      result.code = installed.code;
+      result.stderr += `\n${installed.stdout}${installed.stderr}`;
+    }
+  }
   saveArtifact(
     `${server.name}-install-${options.version}.log`,
     `${result.stdout}\n--- stderr ---\n${result.stderr}`,
