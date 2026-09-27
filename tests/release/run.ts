@@ -204,6 +204,18 @@ function crawlSitemap(target: Server): void {
     failures.length === 0,
     `all ${paths.length} sitemap pages answer 200 (${failures.slice(0, 5).join(', ')})`,
   );
+
+  // A card depends on files a build has to carry along; development would
+  // draw it whether or not they made it into .output.
+  const cards = ['/og/site.png'];
+  const entity = paths.find((path) => /^\/(projects|events|pages)\/[^/]+\/$/.test(path));
+  const page = entity && api(target, 'GET', entity, undefined, { visitor: true });
+  const card = page?.text.match(/property="og:image" content="([^"]+)"/)?.[1];
+  if (card) cards.push(new URL(card).pathname);
+  for (const path of cards) {
+    const status = api(target, 'GET', path, undefined, { visitor: true }).status;
+    check(status === 200, `the Open Graph card ${path} answers ${status}`);
+  }
 }
 
 function adminPagesOpen(target: Server): void {

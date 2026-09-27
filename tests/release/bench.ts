@@ -3,7 +3,14 @@
  * fresh server, a local repository to install from, and a way to talk to the
  * instance inside. Scenarios live in `run.ts`.
  */
-import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -98,15 +105,31 @@ export function must(
 
 export function buildImage(): void {
   log(`Building the bench image (${mode})`);
-  must('docker', [
-    'build',
-    '-q',
-    '--target',
-    mode === 'full' ? 'bare' : 'ready',
-    '-t',
-    image,
-    benchDir,
+  const target = mode === 'full' ? 'bare' : 'ready';
+  const dockerfile = createHash('sha256')
+    .update(readFileSync(join(benchDir, 'Dockerfile')))
+    .digest('hex');
+  const label = 'thei.bench.dockerfile';
+  const build = run('docker', [
+    ...['build', '-q', '--target', target, '-t', image],
+    ...['--label', `${label}=${dockerfile}`, benchDir],
   ]);
+  if (build.code === 0) return;
+  // Even a fully cached build asks Docker Hub about the base image, and a
+  // flaky link fails it. The image built last time serves as long as it was
+  // built from this Dockerfile (or before images said which one they were).
+  const built = run('docker', [
+    ...['image', 'inspect', image, '-f'],
+    `{{index .Config.Labels "${label}"}}`,
+  ]);
+  const builtFrom = built.stdout.trim();
+  if (built.code === 0 && [dockerfile, '', '<no value>'].includes(builtFrom)) {
+    log(`Could not rebuild the image; using the one already built:\n${build.stderr.trim()}`);
+    return;
+  }
+  throw new BenchFailure(
+    `docker build exited with ${build.code}\n${build.stderr || build.stdout}`,
+  );
 }
 
 // -------------------------------------------------------------- repository
