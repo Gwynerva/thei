@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { baselineSql, migrationRegistry } from '../../update/migrations';
 import { runPendingMigrations, seedLedger } from '../../update/migrations/run';
 import { schema_0_0_1 } from './fixtures/schema-0.0.1';
+import { migrations_0_0_2, schema_0_0_2 } from './fixtures/schema-0.0.2';
 
 /**
  * The upgrade every existing site takes: a database and a config exactly as
@@ -42,9 +43,7 @@ function describeSchema(rawDb: Database.Database) {
     tables.map((table) => [
       table,
       {
-        columns: (
-          rawDb.pragma(`table_info(${quote(table)})`) as ColumnInfo[]
-        )
+        columns: (rawDb.pragma(`table_info(${quote(table)})`) as ColumnInfo[])
           .map((column) => ({ ...column, cid: undefined }))
           .sort((left, right) => left.name.localeCompare(right.name)),
         foreignKeys: (
@@ -310,5 +309,24 @@ describe('upgrading a 0.0.1 site', () => {
       tokenHash: createHash('sha256').update('backup-token').digest('hex'),
       createdAt: '2026-09-01T00:00:00Z',
     });
+  });
+});
+
+describe('upgrading a 0.0.2 site', () => {
+  it('ends with the schema a new installation starts from', async () => {
+    for (const statement of schema_0_0_2) rawDb.prepare(statement).run();
+    seedLedger(
+      rawDb,
+      migrationRegistry.filter(({ id }) => migrations_0_0_2.includes(id)),
+    );
+    await runPendingMigrations(rawDb, { contentPath });
+
+    const fresh = new Database(':memory:');
+    try {
+      for (const statement of baselineSql) fresh.prepare(statement).run();
+      expect(describeSchema(rawDb)).toEqual(describeSchema(fresh));
+    } finally {
+      fresh.close();
+    }
   });
 });
