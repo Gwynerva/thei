@@ -72,7 +72,10 @@ const list = computed<EventListResponse | undefined>(() => data.value);
             v-if="item.reminder"
             name="warning"
             v-bind="
-              reminderTitlePopup(phrase.entity_reminder_badge, item.reminder)
+              reminderTitlePopup(
+                phrase.entity_reminder_badge,
+                publicText(item.reminder),
+              )
             "
             :aria-label="phrase.entity_reminder_badge"
             role="img"

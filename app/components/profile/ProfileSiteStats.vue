@@ -30,8 +30,8 @@ const tileClass = `relative block size-9 shrink-0 overflow-hidden rounded-normal
           :class="tileClass" /><TheiLink
           v-else
           :to="item.href"
-          :aria-label="item.title"
-          :data-title-popup="item.title"
+          :aria-label="publicText(item.title)"
+          :data-title-popup="publicText(item.title)"
           :class="tileClass"
           ><Media
             v-if="item.media"

@@ -45,7 +45,7 @@ const accentColor = computed(() =>
       class="aspect-square h-4/6 shrink-0 rounded-xs"
     />
     <Icon v-else name="tag" class="tag-chip-fallback-icon shrink-0" />
-    <span class="min-w-0 truncate">{{ tag.title }}</span>
+    <span class="min-w-0 truncate">{{ publicText(tag.title) }}</span>
     <slot />
   </component>
 </template>

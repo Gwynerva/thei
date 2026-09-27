@@ -212,7 +212,7 @@ const usageGroups = computed(() => {
               </span>
             </div>
             <p class="mt-xs font-semibold wrap-anywhere">
-              {{ group.source.title }}
+              {{ publicText(group.source.title) }}
             </p>
             <ul class="mt-xs divide-y divide-border-1 border-t border-border-1">
               <li
@@ -257,7 +257,7 @@ const usageGroups = computed(() => {
                     rel="noopener"
                     class="text-accent"
                   >
-                    {{ placement.scope.title }}
+                    {{ publicText(placement.scope.title) }}
                   </a>
                   <span class="text-text-3">
                     · {{ assetPlacementScopeLabel(placement) }}

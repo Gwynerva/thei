@@ -33,7 +33,7 @@ const props = defineProps<{
 }>();
 const { engaged, events: mediaEvents } = useMediaInteraction();
 const icon = computed(() => entityTypeIcon(props.entityType));
-const heading = computed(() => entityDisplayTitle(props));
+const heading = computed(() => publicText(entityDisplayTitle(props)));
 </script>
 
 <template>
@@ -80,7 +80,7 @@ const heading = computed(() => entityDisplayTitle(props));
           text-text-3"
         ><Icon name="project" class="entity-type-icon shrink-0" /><span
           class="min-w-0 truncate"
-          >{{ parent.title }}</span
+          >{{ publicText(parent.title) }}</span
         ><Icon name="corner-down" class="shrink-0" aria-hidden="true"
       /></span>
       <span
@@ -99,7 +99,7 @@ const heading = computed(() => entityDisplayTitle(props));
           compact ? 'text-sm' : 'text-[0.9375rem] leading-snug',
           { italic: date },
         ]"
-        >{{ summary }}</span
+        >{{ publicText(summary) }}</span
       >
     </span>
   </component>

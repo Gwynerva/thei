@@ -515,9 +515,9 @@ async function openOtherAsset(index: number) {
             v-if="item.caption"
             class="line-clamp-2 w-full cursor-help text-center text-xs
               wrap-break-word text-text-2"
-            :data-title-popup="item.caption"
+            :data-title-popup="publicText(item.caption)"
           >
-            {{ item.caption }}
+            {{ publicText(item.caption) }}
           </div>
         </div>
 
@@ -563,9 +563,9 @@ async function openOtherAsset(index: number) {
           <div
             class="line-clamp-2 w-full cursor-help text-center text-xs
               wrap-break-word text-text-2"
-            :data-title-popup="item.title"
+            :data-title-popup="publicText(item.title)"
           >
-            {{ item.title }}
+            {{ publicText(item.title) }}
           </div>
         </div>
 

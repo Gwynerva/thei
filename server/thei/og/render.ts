@@ -111,8 +111,9 @@ export async function fitText(
     maxLines: number;
   },
 ): Promise<{ fontSize: number; lineClamp: number }> {
+  // A no-break space binds its words into one that cannot be wrapped either.
   const longestWord = text
-    .split(/\s+/)
+    .split(/[^\S\u00A0]+/)
     .reduce(
       (longest, word) => (word.length > longest.length ? word : longest),
       '',

@@ -15,6 +15,7 @@ import { canOpenPublicEntity } from '../public/entities';
 import { buildPublicEntityPreviewMedia } from '../public/content';
 import { resolveGeneratedIcon } from '../media/generated-icon';
 import { resolveFaviconSet } from '../media/favicon';
+import { ownerText } from '../owner-text';
 import { glyphDataUri, mediaDataUri, resolveMediaFile } from './media';
 import type { OgCard } from './templates';
 
@@ -84,7 +85,10 @@ export async function resolveOgCard(
 
   const identity = await getProfileIdentity();
   const faviconSet = await resolveFaviconSet();
-  const siteName = identity.profile.displayName;
+  // The owner's words get the typography the page gives them. Formatted text
+  // also goes into each signature, so a card drawn before that is drawn again.
+  const siteName = ownerText(identity.profile.displayName);
+  const slogan = ownerText(identity.profile.slogan);
   const base = {
     siteName,
     faviconDataUri: await mediaDataUri(faviconSet.source.filePath, {
@@ -97,14 +101,17 @@ export async function resolveOgCard(
 
   switch (target.kind) {
     case 'site': {
-      const accent = accentOf(identity.avatarMedia?.accent, siteName);
+      const accent = accentOf(
+        identity.avatarMedia?.accent,
+        identity.profile.displayName,
+      );
       return {
         card: {
           kind: 'home',
           ...base,
           ...accent,
           title: siteName,
-          slogan: identity.profile.slogan || undefined,
+          slogan: slogan || undefined,
           avatarDataUri: await mediaDataUri(
             await resolveMediaFile(identity.avatarMedia),
             { width: 600, height: 600 },
@@ -113,7 +120,7 @@ export async function resolveOgCard(
         signature: [
           'site',
           siteSignature,
-          identity.profile.slogan,
+          slogan,
           identity.avatarMedia?.src,
         ].join('|'),
       };
@@ -217,7 +224,7 @@ async function projectCard(
   return contentCard({
     base,
     siteSignature,
-    title: project.title,
+    title: ownerText(project.title),
     label: THEI_SERVER.phrase.project,
     media: generated,
     posterFile: poster
@@ -273,13 +280,13 @@ async function projectChildCard(
   return contentCard({
     base,
     siteSignature,
-    title: row.title,
+    title: ownerText(row.title),
     label:
       kind === 'stage'
         ? THEI_SERVER.phrase.project_stage
         : THEI_SERVER.phrase.content_section,
     parent: {
-      title: project.title,
+      title: ownerText(project.title),
       iconDataUri: await mediaDataUri(
         icon
           ? await assetFile(icon)
@@ -317,7 +324,7 @@ async function eventCard(
   return contentCard({
     base,
     siteSignature,
-    title: stored.title,
+    title: ownerText(stored.title),
     label: THEI_SERVER.phrase.event,
     media,
     posterFile: await resolveMediaFile(media),
@@ -394,7 +401,7 @@ async function pageCard(
   return contentCard({
     base,
     siteSignature,
-    title: page.title,
+    title: ownerText(page.title),
     label: THEI_SERVER.phrase.page,
     media: generated,
     posterFile: icon
@@ -422,7 +429,7 @@ async function tagCard(
   return contentCard({
     base,
     siteSignature,
-    title: tag.title,
+    title: ownerText(tag.title),
     label: THEI_SERVER.phrase.tag,
     posterFile: await assetFile(icon),
     posterAccent: assetAccent(icon),

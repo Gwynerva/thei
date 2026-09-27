@@ -30,7 +30,23 @@ export type PublicDatePresentationOptions = {
    * the language, so the caller hands it the phrases.
    */
   precisionLabels?: Partial<Record<DatePrecision, string>>;
+  /** Gives the owner's words for the doubt their typography. */
+  formatNote?: (note: string) => string;
 };
+
+/**
+ * The wording of a doubt in the current language: the precision phrases and
+ * the owner's typography for their own note, for the options above.
+ */
+export function publicDatePrecisionOptions(): Pick<
+  PublicDatePresentationOptions,
+  'precisionLabels' | 'formatNote'
+> {
+  return {
+    precisionLabels: publicDatePrecisionLabels(),
+    formatNote: publicText,
+  };
+}
 
 /**
  * The wording of each level of doubt. The formatter knows the precision but
@@ -110,11 +126,13 @@ export function approximateDateTitle(
   precision: DatePrecision,
   note: string,
   precisionLabels: Partial<Record<DatePrecision, string>>,
+  formatNote: (note: string) => string = (text) => text,
 ): TitlePopupLine[] {
   const lines: TitlePopupLine[] = [];
   const level = precisionLabels[precision];
   if (level) lines.push(level);
-  if (note) lines.push(TITLE_POPUP_GAP, { text: note, italic: true });
+  if (note)
+    lines.push(TITLE_POPUP_GAP, { text: formatNote(note), italic: true });
   return lines;
 }
 
@@ -135,6 +153,7 @@ function withPrecision(
       value.precision,
       value.precisionNote,
       options.precisionLabels ?? {},
+      options.formatNote,
     ),
   ];
   return {

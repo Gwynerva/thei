@@ -50,8 +50,8 @@ function openItem(item: PublicAssetDescriptor) {
           rounded-normal border-2 border-white/15 bg-black/16 shadow-md
           transition sm:size-30 hocus:-translate-y-0.5 hocus:border-white/35
           hocus:bg-black/24 hocus:shadow-xl"
-        :aria-label="item.title || phrase.asset"
-        :data-title-popup="item.title || phrase.asset"
+        :aria-label="publicText(item.title) || phrase.asset"
+        :data-title-popup="publicText(item.title) || phrase.asset"
         @click="openItem(item)"
       >
         <Media
@@ -93,7 +93,7 @@ function openItem(item: PublicAssetDescriptor) {
             item.key === active?.key ? 'border-accent' : 'border-transparent'
           "
           :aria-pressed="item.key === active?.key"
-          :aria-label="item.title || phrase.asset"
+          :aria-label="publicText(item.title) || phrase.asset"
           @click="selectedKey = item.key"
         >
           <Media

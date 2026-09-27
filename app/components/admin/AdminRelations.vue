@@ -69,9 +69,11 @@ function relationHref(item: RelationEditItem) {
 }
 
 function relationTitle(item: RelationEditItem) {
-  return item.date
-    ? entityDisplayTitle({ title: item.title ?? '', date: item.date })
-    : item.title || item.entityId;
+  if (item.date)
+    return publicText(
+      entityDisplayTitle({ title: item.title ?? '', date: item.date }),
+    );
+  return item.title ? publicText(item.title) : item.entityId;
 }
 
 /** Diary entries are listed by their day, newest first, wherever they go. */

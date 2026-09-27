@@ -167,7 +167,7 @@ watch(filter, (value) => {
       :base-path="base"
       scope-icon="project"
       :scope-media="project.iconMedia"
-      :scope-label="project.title"
+      :scope-label="publicText(project.title)"
       :initial-date="requestedDate"
     />
   </main>

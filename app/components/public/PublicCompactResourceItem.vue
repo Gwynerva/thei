@@ -3,6 +3,10 @@ import type { IconName } from '#thei/icons';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import { truncateExternalLinkText } from '#layers/thei/shared/external-link';
 
+/**
+ * One file or link in a compact list. It shows its text as given: the caller
+ * knows whose words they are, and formats the owner's (`publicText`).
+ */
 const props = withDefaults(
   defineProps<{
     title: string;
@@ -103,7 +107,7 @@ const extensionFontSize = computed(() => {
       <strong
         class="block truncate text-sm font-normal"
         :class="{ 'text-text-2 italic': secret }"
-        >{{ publicText(title) }}</strong
+        >{{ title }}</strong
       >
       <span
         v-if="compactDescription"

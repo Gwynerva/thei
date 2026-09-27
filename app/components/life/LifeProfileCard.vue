@@ -59,7 +59,7 @@ const isAvatar = computed(() => props.point.entityKind === 'profile-avatar');
         {{
           point.statusKind === 'empty'
             ? phrase.profile_empty_status
-            : point.summary
+            : publicText(point.summary)
         }}
       </p>
       <ProfileDate

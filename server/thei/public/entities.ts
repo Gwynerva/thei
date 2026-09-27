@@ -834,6 +834,7 @@ async function buildPublicReferenceLink(
     return {
       kind: 'external',
       title: resolved.note || link?.title || externalLinkHostname(resolved.url),
+      ...(resolved.note ? {} : { titleFromSite: true as const }),
       href: resolved.url,
       description: link?.description,
       iconMedia: link?.faviconMedia,

@@ -71,12 +71,15 @@ export type OgCard = OgContentCard | OgHomeCard | OgServiceCard;
  * The card carries four small font subsets and nothing else, so an emoji has
  * no glyph and would come out as an empty box. Dropping it is better than
  * showing the box, and a title rarely depends on one.
+ *
+ * Runs of white space fold into one, but a no-break space stays what it is:
+ * typography put it there so a short word never ends a line.
  */
 export function ogText(value: string | undefined): string {
   if (!value) return '';
   return value
     .replace(/\p{Extended_Pictographic}|\uFE0F|\u200D/gu, '')
-    .replace(/\s+/g, ' ')
+    .replace(/[^\S\u00A0]+/g, ' ')
     .trim();
 }
 

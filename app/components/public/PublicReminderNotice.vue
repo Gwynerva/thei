@@ -4,17 +4,23 @@
  *
  * Like the notes it is owner-only: the server leaves the field out entirely
  * for a visitor, so an empty prop is the normal case rather than an error.
+ * The text keeps the lines it was typed in: a reminder is often a short list.
  */
 defineProps<{ reminder?: string }>();
 </script>
 
 <template>
-  <p
+  <section
     v-if="reminder"
-    class="flex flex-wrap items-start gap-xs rounded-normal border
-      border-border-warning bg-bg-warning p-sm text-sm text-text-warning"
+    class="flex flex-col gap-xs rounded-normal border border-border-warning
+      bg-bg-warning p-sm text-sm text-text-warning"
   >
-    <Icon name="warning" class="mt-0.5 shrink-0" />
-    <span class="min-w-0 wrap-break-word">{{ reminder }}</span>
-  </p>
+    <h2 class="flex items-center gap-xs font-semibold">
+      <Icon name="warning" class="shrink-0" />
+      <span>{{ phrase.entity_reminder }}</span>
+    </h2>
+    <p class="min-w-0 wrap-break-word whitespace-pre-line">
+      {{ publicText(reminder) }}
+    </p>
+  </section>
 </template>

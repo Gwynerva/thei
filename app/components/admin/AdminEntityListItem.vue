@@ -53,7 +53,7 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
             />
             <span class="sr-only">{{ entityTypeLabel(entityType) }}: </span>
           </template>
-          {{ title }}
+          {{ publicText(title) }}
         </span>
         <span
           class="block text-text-2"
@@ -63,7 +63,7 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
               : 'line-clamp-1 text-sm wrap-break-word sm:line-clamp-2'
           "
         >
-          {{ summary }}
+          {{ publicText(summary) }}
         </span>
       </span>
     </TheiLink>

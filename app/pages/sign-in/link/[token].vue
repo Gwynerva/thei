@@ -61,7 +61,9 @@ async function signIn() {
           </div>
         </div>
         <div class="text-center">
-          <div class="text-2xl font-bold">{{ publicAdmin.displayName }}</div>
+          <div class="text-2xl font-bold">
+            {{ publicText(publicAdmin.displayName) }}
+          </div>
           <div class="text-text-2">{{ phrase.sign_in_link_confirm }}</div>
         </div>
         <Button

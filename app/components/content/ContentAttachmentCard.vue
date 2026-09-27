@@ -51,7 +51,10 @@ function onPreviewClick(event: MouseEvent) {
   emit('edit');
 }
 
-const resolvedTitle = computed(() => props.title || props.fallbackTitle);
+// The owner's title gets their typography; a file name stays as it is.
+const resolvedTitle = computed(
+  () => publicText(props.title) || props.fallbackTitle,
+);
 const details = computed(() =>
   [
     props.asset.extension?.toUpperCase(),
@@ -141,7 +144,7 @@ const details = computed(() =>
         v-else-if="description"
         class="line-clamp-2 text-sm leading-snug text-text-2"
       >
-        {{ description }}
+        {{ publicText(description) }}
       </span>
 
       <span

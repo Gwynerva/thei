@@ -33,15 +33,15 @@ const openable = computed(() =>
     <template v-for="file in files" :key="file.key">
       <PublicCompactResourceItem
         v-if="isPublicSecret(file)"
-        :title="file.title"
-        :description="file.summary"
+        :title="publicText(file.title)"
+        :description="publicText(file.summary)"
         :icon-media="file.iconMedia"
         secret
       />
       <PublicCompactResourceItem
         v-else-if="file.media"
-        :title="file.title || phrase.asset"
-        :description="file.description"
+        :title="publicText(file.title) || phrase.asset"
+        :description="publicText(file.description)"
         :icon-media="file.media"
         icon="media"
         button
@@ -49,8 +49,8 @@ const openable = computed(() =>
       />
       <PublicCompactResourceItem
         v-else
-        :title="file.title || phrase.asset"
-        :description="file.description"
+        :title="publicText(file.title) || phrase.asset"
+        :description="publicText(file.description)"
         :extension="file.extension"
         :href="sitePath(file.href)"
         icon="file"

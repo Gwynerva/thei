@@ -91,12 +91,14 @@ const facts = computed(() => {
             class="flex items-start justify-between gap-md py-sm first:pt-0
               last:pb-0"
           >
-            <dt class="min-w-0 text-sm text-text-2">{{ fact.name }}</dt>
+            <dt class="min-w-0 text-sm text-text-2">
+              {{ publicText(fact.name) }}
+            </dt>
             <dd
               class="min-w-0 flex-1 text-right text-sm font-semibold
                 wrap-anywhere whitespace-pre-wrap"
             >
-              {{ fact.value }}
+              {{ publicText(fact.value) }}
             </dd>
           </div>
         </dl>

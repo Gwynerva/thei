@@ -98,7 +98,7 @@ const buttonStyle = computed(() => ({
       class="action-icon shrink-0 text-xl"
     />
     <span class="action-label truncate">{{
-      text || phrase.project_action_placeholder
+      publicText(text) || phrase.project_action_placeholder
     }}</span>
   </component>
 </template>

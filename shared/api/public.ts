@@ -126,6 +126,11 @@ export type PublicFile = PublicAssetDescriptor;
 export type PublicReferenceLink = {
   kind: 'external' | ContentEntityType;
   title: string;
+  /**
+   * The title is the linked page's own, or its hostname, rather than words the
+   * owner wrote: it keeps its own typography, and a hostname none at all.
+   */
+  titleFromSite?: true;
   /** The day of a diary entry, shown in place of the title it lacks. */
   date?: string;
   href: string;

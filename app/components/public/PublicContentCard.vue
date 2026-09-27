@@ -10,7 +10,7 @@ import type { IconName } from '#thei/icons';
 import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
 import {
   datePresentationToneClass,
-  publicDatePrecisionLabels,
+  publicDatePrecisionOptions,
   type PublicDatePresentation,
 } from '#layers/thei/app/composables/public-date';
 
@@ -63,7 +63,7 @@ const datePresentation = computed(
       new Date(),
       {
         style: props.compact ? 'short' : 'long',
-        precisionLabels: publicDatePrecisionLabels(),
+        ...publicDatePrecisionOptions(),
       },
     ),
 );
@@ -132,7 +132,7 @@ const hasFooter = computed(
     <TheiLink
       v-if="href"
       :to="href"
-      :aria-label="title"
+      :aria-label="publicText(title)"
       class="absolute inset-0 z-1 rounded-normal focus-visible:ring-2
         focus-visible:ring-accent focus-visible:ring-inset"
     />
@@ -198,7 +198,12 @@ const hasFooter = computed(
         <Icon
           v-if="reminder"
           name="warning"
-          v-bind="reminderTitlePopup(phrase.entity_reminder_badge, reminder)"
+          v-bind="
+            reminderTitlePopup(
+              phrase.entity_reminder_badge,
+              publicText(reminder),
+            )
+          "
           :aria-label="phrase.entity_reminder_badge"
           role="img"
           class="pointer-events-auto relative z-3 shrink-0 text-text-warning"
@@ -227,7 +232,7 @@ const hasFooter = computed(
         <div v-if="parent" class="flex min-w-0 items-center gap-xs text-sm">
           <TheiLink
             :to="parent.href"
-            :data-title-popup="parent.summary"
+            :data-title-popup="publicText(parent.summary) || undefined"
             class="pointer-events-auto relative z-3 inline-flex min-w-0
               items-center gap-xs font-semibold text-text-2 transition
               focus-visible:ring-2 focus-visible:ring-accent
@@ -238,7 +243,7 @@ const hasFooter = computed(
               icon="project"
               class="size-5"
             />
-            <span class="min-w-0 truncate">{{ parent.title }}</span>
+            <span class="min-w-0 truncate">{{ publicText(parent.title) }}</span>
           </TheiLink>
           <Icon
             name="corner-down"

@@ -3,7 +3,7 @@ import type { LifePoint } from '#layers/thei/shared/life';
 import { buildLifeUrl } from '#layers/thei/shared/life';
 import type { LifeRewindMatch } from '#layers/thei/shared/life-rewind';
 import { lifeEntityKindIcon } from './life-entity-icon';
-import { publicDatePrecisionLabels } from '#layers/thei/app/composables/public-date';
+import { publicDatePrecisionOptions } from '#layers/thei/app/composables/public-date';
 
 const props = defineProps<{
   point: LifePoint;
@@ -62,7 +62,7 @@ const datePresentation = computed(() => {
     new Date(),
     {
       style: props.dateStyle ?? (props.compact ? 'short' : 'long'),
-      precisionLabels: publicDatePrecisionLabels(),
+      ...publicDatePrecisionOptions(),
     },
   );
 });

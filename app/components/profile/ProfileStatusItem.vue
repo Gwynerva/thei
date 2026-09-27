@@ -51,7 +51,11 @@ const actions = computed(() => props.editable || props.removable);
           actions ? 'max-sm:min-h-8 max-sm:content-center' : undefined,
         ]"
       >
-        {{ item.kind === 'empty' ? phrase.profile_empty_status : item.text }}
+        {{
+          item.kind === 'empty'
+            ? phrase.profile_empty_status
+            : publicText(item.text)
+        }}
       </p>
       <div
         class="flex shrink-0 items-center gap-xs"

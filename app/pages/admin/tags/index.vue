@@ -77,7 +77,7 @@ function placeholderStyle(tag: TagListItem) {
                   >
                     <Icon name="tag" />
                   </span>
-                  {{ tag.title }}
+                  {{ publicText(tag.title) }}
                 </TheiLink>
               </td>
               <td class="w-64 max-w-64 min-w-64 p-sm text-sm text-text-2">
@@ -143,7 +143,9 @@ function placeholderStyle(tag: TagListItem) {
             <Icon name="tag" />
           </span>
           <span class="min-w-0 flex-1">
-            <span class="block truncate font-semibold">{{ tag.title }}</span>
+            <span class="block truncate font-semibold">{{
+              publicText(tag.title)
+            }}</span>
             <span class="block truncate text-sm text-text-3">
               {{ tag.slug }}
             </span>

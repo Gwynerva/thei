@@ -20,6 +20,12 @@ const emit = defineEmits<{
   'update:modelValue': [value: string];
 }>();
 const root = useTemplateRef<HTMLElement>('root');
+// Read-only, the caption shows the owner's words with their typography. While
+// it is edited it holds exactly what is stored, or every keystroke would write
+// the typography back.
+const shown = computed(() =>
+  props.editable ? props.modelValue : publicRichText(props.modelValue),
+);
 
 // Captions are prose too, so they get the same typing shorthands as a field.
 useSmartTypography(() => (props.editable ? root.value : undefined));
@@ -59,13 +65,10 @@ function onBlur() {
   if (value !== props.modelValue) emit('update:modelValue', value);
 }
 
-watch(
-  () => props.modelValue,
-  (value) => {
-    if (!root.value || document.activeElement === root.value) return;
-    if (root.value.innerHTML !== value) root.value.innerHTML = value;
-  },
-);
+watch(shown, (value) => {
+  if (!root.value || document.activeElement === root.value) return;
+  if (root.value.innerHTML !== value) root.value.innerHTML = value;
+});
 </script>
 
 <template>
@@ -82,7 +85,7 @@ watch(
     :aria-label="editable ? placeholder : undefined"
     :aria-multiline="editable ? 'false' : undefined"
     :data-placeholder="placeholder"
-    v-html="modelValue"
+    v-html="shown"
     @input="sync"
     @keydown="onKeydown"
     @beforeinput="onBeforeInput"

@@ -1,7 +1,8 @@
 <script lang="ts" setup>
 const publicAdmin = await usePublicAdmin();
 const site = useSiteUrl();
-const siteName = computed(() => publicAdmin.value.displayName);
+// Formatted like every title the pages give the head, so the two compare.
+const siteName = computed(() => publicText(publicAdmin.value.displayName));
 const isAdmin = useIsAdmin();
 useSiteAnalytics({
   analytics: computed(() => publicAdmin.value.analytics),

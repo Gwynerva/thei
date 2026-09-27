@@ -97,7 +97,7 @@ function tabTo(tab: 'projects' | 'events') {
     <div
       role="tablist"
       class="grid grid-cols-2 rounded-normal bg-bg-3 p-1 text-sm font-semibold"
-      :aria-label="tag.title"
+      :aria-label="publicText(tag.title)"
     >
       <component
         :is="tab.count ? TheiLink : 'span'"

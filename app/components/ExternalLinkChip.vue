@@ -55,7 +55,7 @@ const accentColor = computed(() =>
     >
       <Icon name="external-link" />
     </span>
-    <span class="min-w-0 flex-1 truncate">{{ link.name }}</span>
+    <span class="min-w-0 flex-1 truncate">{{ publicText(link.name) }}</span>
     <slot />
   </component>
 </template>

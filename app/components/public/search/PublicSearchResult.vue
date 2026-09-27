@@ -26,7 +26,7 @@ const accent = computed(() =>
   >
     <TheiLink
       :to="entity.href"
-      :aria-label="entity.title"
+      :aria-label="publicText(entity.title)"
       class="absolute inset-0 z-1 rounded-normal focus-visible:ring-2
         focus-visible:ring-accent focus-visible:ring-inset"
     />
@@ -74,7 +74,10 @@ const accent = computed(() =>
           class="pointer-events-auto relative z-3 shrink-0 cursor-help
             text-text-warning"
           v-bind="
-            reminderTitlePopup(phrase.entity_reminder_badge, entity.reminder)
+            reminderTitlePopup(
+              phrase.entity_reminder_badge,
+              publicText(entity.reminder),
+            )
           "
         />
         <Icon

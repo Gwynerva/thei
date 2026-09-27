@@ -106,7 +106,7 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
             : 'text-text-3 italic'
         "
       >
-        {{ preview.text || emptyText }}
+        {{ publicText(preview.text) || emptyText }}
       </span>
     </span>
 

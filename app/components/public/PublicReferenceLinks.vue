@@ -41,6 +41,16 @@ function entityTitle(type?: PublicReferenceLink['kind']): string | undefined {
   if (isContentEntityType(type)) return entityTypeLabel(type);
 }
 
+/**
+ * The owner's own name for a link gets their typography; a title the linked
+ * page gave itself, or its hostname, stays as it came. So does the page's
+ * description.
+ */
+function externalTitle(link: PublicReferenceLink) {
+  const title = compactExternalLinkText(link.title) ?? link.title;
+  return link.titleFromSite ? title : publicText(title);
+}
+
 /** A diary entry is listed by its day, unless a note names it otherwise. */
 function linkTitle(link: PublicReferenceLink) {
   return link.date
@@ -57,8 +67,8 @@ function linkTitle(link: PublicReferenceLink) {
     >
       <PublicCompactResourceItem
         v-if="isPublicSecret(link)"
-        :title="link.title"
-        :description="link.summary"
+        :title="publicText(link.title)"
+        :description="publicText(link.summary)"
         :icon-media="link.iconMedia"
         :corner-icon="hideKind ? undefined : entityIcon(link.entityType)"
         :corner-title="hideKind ? undefined : entityTitle(link.entityType)"
@@ -67,8 +77,8 @@ function linkTitle(link: PublicReferenceLink) {
       />
       <PublicCompactResourceItem
         v-else-if="link.kind !== 'external'"
-        :title="linkTitle(link)"
-        :description="link.description"
+        :title="publicText(linkTitle(link))"
+        :description="publicText(link.description)"
         :icon-media="link.iconMedia"
         :corner-icon="
           link.iconMedia && !hideKind ? entityIcon(link.kind) : undefined
@@ -81,7 +91,7 @@ function linkTitle(link: PublicReferenceLink) {
       />
       <PublicCompactResourceItem
         v-else
-        :title="compactExternalLinkText(link.title) ?? link.title"
+        :title="externalTitle(link)"
         :description="link.description"
         :icon-media="link.iconMedia"
         :corner-icon="link.iconMedia ? entityIcon(link.kind) : undefined"

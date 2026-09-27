@@ -70,6 +70,40 @@ const URL_KEYS = new Set([
   'sameAs',
 ]);
 
+/**
+ * Keys whose string values are words a reader sees — in a search result, a
+ * link preview — and so get the owner's typography like the page itself.
+ */
+const TEXT_KEYS = new Set([
+  'name',
+  'headline',
+  'description',
+  'alternateName',
+  'keywords',
+  'caption',
+  'abstract',
+  'text',
+]);
+
+function formatTexts<T>(value: T): T {
+  if (Array.isArray(value)) return value.map(formatTexts) as T;
+  if (!value || typeof value !== 'object') return value;
+  const result: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value))
+    result[key] = !TEXT_KEYS.has(key)
+      ? formatTexts(item)
+      : typeof item === 'string'
+        ? publicText(item)
+        : Array.isArray(item)
+          ? item.map((entry) =>
+              typeof entry === 'string'
+                ? publicText(entry)
+                : formatTexts(entry),
+            )
+          : formatTexts(item);
+  return result as T;
+}
+
 function resolveUrls<T>(value: T, resolve: (path: string) => string): T {
   if (Array.isArray(value)) {
     return value.map((item) => resolveUrls(item, resolve)) as T;
@@ -85,18 +119,23 @@ function resolveUrls<T>(value: T, resolve: (path: string) => string): T {
   return result as T;
 }
 
+/**
+ * The head of a public page. Titles, descriptions and the words inside the
+ * structured data are the owner's, so they are formatted here once, whoever
+ * builds them — a phrase formatted again is left as it was.
+ */
 export function usePublicSeo(options: PublicSeoOptions) {
   const site = useSiteUrl();
 
   useHead(() => {
     const description = options.description
-      ? toValue(options.description)
+      ? publicText(toValue(options.description)) || undefined
       : undefined;
     const canonical = options.canonical
       ? toValue(options.canonical)
       : undefined;
     const noIndex = options.noIndex ? toValue(options.noIndex) : false;
-    const title = toValue(options.title);
+    const title = publicText(toValue(options.title));
     const ogImage = options.ogImage ? toValue(options.ogImage) : undefined;
     const meta: ResolvableMeta[] = [
       ...(description ? [{ name: 'description', content: description }] : []),
@@ -163,12 +202,14 @@ export function usePublicSeo(options: PublicSeoOptions) {
         ? `${site.resolve(canonical)}${path}`
         : site.resolve(path);
     const pageUrl = absolute(canonical);
-    const title = toValue(options.title);
+    const title = publicText(toValue(options.title));
     const description = options.description
-      ? toValue(options.description)
+      ? publicText(toValue(options.description)) || undefined
       : undefined;
     const image = options.image ? toValue(options.image) : undefined;
-    const entities = resolveUrls(toValue(options.entities) ?? [], absolute);
+    const entities = formatTexts(
+      resolveUrls(toValue(options.entities) ?? [], absolute),
+    );
     const trail = [
       ...(toValue(options.breadcrumbs) ?? []),
       {
@@ -178,7 +219,7 @@ export function usePublicSeo(options: PublicSeoOptions) {
             : undefined) ?? title,
         path: canonical,
       },
-    ];
+    ].map((crumb) => ({ ...crumb, name: publicText(crumb.name) }));
     // A lone crumb is the page itself and describes no trail at all.
     const hasTrail = trail.length > 1;
 

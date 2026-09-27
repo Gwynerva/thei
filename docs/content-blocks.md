@@ -150,4 +150,8 @@ assetTotalSize }`) and nothing else;
 - `publicContentPlainText(data, 'all' | 'prose')` — the same, with private
   sections already gone; `prose` keeps paragraphs, headings, quotes and lists.
 - `contentToMarkdown(data, options)` in `shared/content-markdown.ts` — the
-  public document as Markdown, which is what `…/index.md` serves.
+  public document as Markdown, which is what `…/index.md` serves. With
+  `options.format` the owner's words — text, captions, attachment titles,
+  hints, entity link titles — get the typography of the site's language, as
+  on the page; markup, addresses, file names and the titles of other sites
+  stay as they are. None of it is stored: the content keeps what was typed.

@@ -100,7 +100,7 @@ function tileTitle(item: AssetLibraryItem) {
 function title(section: AssetLibrarySection) {
   return section.type === 'unused'
     ? phrase.value.asset_library_unused
-    : section.title;
+    : publicText(section.title);
 }
 async function load(reset = false) {
   if (reset) {

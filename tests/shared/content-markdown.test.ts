@@ -25,6 +25,20 @@ describe('inlineToMarkdown', () => {
     ).toBe('[other](https://other.test/x)');
   });
 
+  it("gives the owner's words typography, never the markup", () => {
+    const format = (text: string) =>
+      text.replace(/"([^"]*)"/g, '«$1»').replace(/--/g, '—');
+    expect(
+      inlineToMarkdown(
+        'say "hi" -- <a href="/a--b/">the "page"</a> ' +
+          '<abbr data-content-hint="a &quot;hint&quot; -- here">word</abbr>',
+        { ...options, format },
+      ),
+    ).toBe(
+      'say «hi» — [the «page»](https://example.com/a--b/) word (a «hint» — here)',
+    );
+  });
+
   it('drops entity link markup but keeps its words', () => {
     expect(
       inlineToMarkdown(

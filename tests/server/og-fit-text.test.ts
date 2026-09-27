@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import { readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { fitText } from '../../server/thei/og/render';
+import { ogText } from '../../server/thei/og/templates';
 
 /**
  * The font files travel with the build as Nitro server assets; here they are
@@ -64,5 +65,20 @@ describe('fitText', () => {
     );
     expect(fit.fontSize).toBe(40);
     expect(fit.lineClamp).toBe(3);
+  });
+
+  it('keeps words a no-break space binds on one line', async () => {
+    // Bound, the pair is one unbreakable word wider than the column at 72px.
+    const fit = await fitText('Экспериментальный\u00A0путь', options);
+    expect(fit.fontSize).toBeLessThan(72);
+    expect(fit.lineClamp).toBe(0);
+  });
+});
+
+describe('ogText', () => {
+  it('folds white space but keeps the no-break spaces of typography', () => {
+    expect(ogText('  В\u00A0доме \n «тихо»  —\tдождь ')).toBe(
+      'В\u00A0доме «тихо» — дождь',
+    );
   });
 });

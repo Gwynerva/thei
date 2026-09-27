@@ -19,7 +19,7 @@ onMounted(() => {
       :type="item.media?.kind === 'video' ? undefined : 'button'"
       class="group relative isolate block w-full"
       :class="{ 'cursor-zoom-in': item.media?.kind !== 'video' }"
-      :aria-label="item.title || phrase.asset"
+      :aria-label="publicText(item.title) || phrase.asset"
       @click="item.media?.kind !== 'video' && emit('open')"
     >
       <Media

@@ -71,13 +71,14 @@ async function hydrateLinks() {
  * Stored content names the hint in its own terms; the tooltip plugin reads
  * `data-title-popup`. Copying it here keeps the presentation mechanism out of
  * what is written to the database, and costs one pass over the same DOM the
- * links are hydrated from.
+ * links are hydrated from. The hint is the owner's words, so the tooltip gets
+ * their typography; the stored attribute keeps them as typed.
  */
 function syncHints() {
   for (const hint of props.root?.querySelectorAll<HTMLElement>(
     'abbr[data-content-hint]',
   ) ?? []) {
-    const text = hint.dataset.contentHint ?? '';
+    const text = publicText(hint.dataset.contentHint);
     if (hint.dataset.titlePopup !== text) hint.dataset.titlePopup = text;
   }
 }

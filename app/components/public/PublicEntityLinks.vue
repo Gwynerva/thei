@@ -31,13 +31,13 @@ function typeLine(entity: PublicEntityLink) {
 function popupOf(entity: PublicEntityLink) {
   if (isPublicSecret(entity))
     return titlePopup(
-      `${entity.title} · ${phrase.value.secret_hint}`,
+      `${publicText(entity.title)} · ${phrase.value.secret_hint}`,
       TITLE_POPUP_GAP,
       typeLine(entity),
     );
   // A lone entity already shows its name, so its popup tells what it is about.
   return titlePopup(
-    single.value ? entity.summary : entity.title,
+    publicText(single.value ? entity.summary : entity.title),
     TITLE_POPUP_GAP,
     typeLine(entity),
   );
@@ -70,13 +70,13 @@ function popupOf(entity: PublicEntityLink) {
             class="size-6 sm:size-7"
           />
           <span v-if="single" class="min-w-0 truncate italic">
-            {{ entity.title }}
+            {{ publicText(entity.title) }}
           </span>
         </span>
         <TheiLink
           v-else
           :to="entity.href"
-          :aria-label="entity.title"
+          :aria-label="publicText(entity.title)"
           v-bind="popupOf(entity)"
           class="group/entity pointer-events-auto relative z-3 inline-flex
             min-w-0 items-center gap-xs rounded-sm text-text-2 transition
@@ -93,7 +93,7 @@ function popupOf(entity: PublicEntityLink) {
             v-if="single"
             class="min-w-0 truncate transition group-hocus/entity:text-accent"
           >
-            {{ entity.title }}
+            {{ publicText(entity.title) }}
           </span>
         </TheiLink>
       </template>

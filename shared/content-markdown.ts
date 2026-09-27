@@ -1,5 +1,6 @@
 import type { ContentOutputBlock, PublicContentOutputData } from './content';
 import { contentIntegrationUrl } from './content-integrations';
+import { normalizeInlineMarkup } from './language/general-normalize';
 
 /**
  * Editor.js content as Markdown.
@@ -14,6 +15,15 @@ export interface ContentMarkdownOptions {
   absolute: (path: string) => string;
   /** Text for the marker left where a private section was removed. */
   privateSectionLabel: string;
+  /**
+   * The typography of the site's language for the owner's words, which the
+   * page gives them too. Without it the words come out as typed.
+   */
+  format?: (text: string) => string;
+}
+
+function typeset(text: string, options: ContentMarkdownOptions) {
+  return text && options.format ? options.format(text) : text;
 }
 
 export function contentToMarkdown(
@@ -87,7 +97,7 @@ function renderBlock(
     case 'entityLink': {
       if (data.restricted) return '';
       const url = data.url ?? data.href;
-      const title = data.title ?? url;
+      const title = data.title ? typeset(data.title, options) : url;
       return url ? `[${title}](${options.absolute(url)})` : '';
     }
     case 'privateSectionPlaceholder':
@@ -155,8 +165,11 @@ export function inlineToMarkdown(
   options: ContentMarkdownOptions,
 ): string {
   if (typeof value !== 'string' || !value) return '';
+  const html = options.format
+    ? normalizeInlineMarkup(value, options.format)
+    : value;
   return decodeEntities(
-    value
+    html
       .replace(/<br\s*\/?>/gi, '\n')
       .replace(/<\/?(?:b|strong)>/gi, '**')
       .replace(/<\/?(?:i|em)>/gi, '_')
@@ -166,7 +179,7 @@ export function inlineToMarkdown(
       .replace(
         /<abbr\b[^>]*data-content-hint="([^"]*)"[^>]*>([\s\S]*?)<\/abbr>/gi,
         (_match, hint: string, text: string) =>
-          `${text.replace(/<[^>]+>/g, '')} (${hint})`,
+          `${text.replace(/<[^>]+>/g, '')} (${typeset(decodeEntities(hint), options)})`,
       )
       .replace(
         /<a\b[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi,
