@@ -1,6 +1,16 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
+const testExclude = [
+  '**/node_modules/**',
+  '**/.nuxt/**',
+  '**/.output/**',
+  'tests/e2e/**',
+  // The release bench runs in Docker, and may keep a clone of this repository
+  // in its artifacts.
+  'tests/release/**',
+];
+
 export default defineConfig({
   resolve: {
     alias: {
@@ -15,15 +25,8 @@ export default defineConfig({
     },
   },
   test: {
-    exclude: [
-      '**/node_modules/**',
-      '**/.nuxt/**',
-      '**/.output/**',
-      'tests/e2e/**',
-      // The release bench runs in Docker, and keeps clones of this repository
-      // in its artifacts.
-      'tests/release/**',
-    ],
+    exclude: testExclude,
+    typecheck: { exclude: testExclude },
     environment: 'node',
   },
 });

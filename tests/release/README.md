@@ -55,18 +55,20 @@ backup client on the last release:
 THEI_BENCH_REAL_COPY=/path/to/manual-20260926T180636Z bun run test:release
 ```
 
-The copy is only read. In the container its secret phrase and password are
-replaced with the bench's own and its site address is cleared, so nothing in
-the bench ever talks to the real site.
+The copy is only read. In the container its secret phrase is replaced, a
+bench password is added as `password.fallback` beside the real password hash,
+and its site address is cleared, so nothing in the bench ever talks to the
+real site.
 
 ## Ports and cleanup
 
-Containers publish the site on `127.0.0.1:3100`–`3105`, never on 3000 or 3001,
-which belong to the playground and the e2e fixture. They are removed after
+Containers publish the site on `127.0.0.1:3100`–`3105`. They are removed after
 each scenario unless `--keep` is given; remove kept ones with
 `docker rm -f $(docker ps -aq --filter name=thei-bench-)`.
 
-Logs, timelines and counts go to `tests/release/.artifacts/`.
+Logs, timelines and counts go to `tests/release/.artifacts/`. The working
+copies of the repository the bench builds its releases from are removed after
+a run, unless `--keep` is given.
 
 The Windows backup client is exercised on a Windows machine instead: see
 `backup/README.md`.

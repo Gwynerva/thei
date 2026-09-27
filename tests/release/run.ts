@@ -839,6 +839,8 @@ if (mode === 'full') {
 }
 
 saveArtifact('results.json', results);
+// A full copy of the repository, which every search of it would turn up.
+if (!keep) rmSync(workDir, { recursive: true, force: true });
 log(
   [
     ...results.map(
