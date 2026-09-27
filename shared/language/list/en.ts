@@ -300,6 +300,8 @@ export default defineI18nBase({
     profile_new_status: 'New status',
     profile_edit_status: 'Edit status',
     profile_status_placeholder: 'Today I feel…',
+    profile_status_icon: 'Icon',
+    profile_status_date: 'Date',
     profile_empty_status: 'no active status',
     profile_password_hint: 'Leave blank to keep the current password',
     profile_password_mismatch: 'Passwords do not match',

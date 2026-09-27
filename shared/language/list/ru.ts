@@ -343,6 +343,8 @@ export default defineI18nModule({
     profile_new_status: 'Новый статус',
     profile_edit_status: 'Изменение статуса',
     profile_status_placeholder: 'Сегодня я чувствую себя…',
+    profile_status_icon: 'Иконка',
+    profile_status_date: 'Дата',
     profile_empty_status: 'нет активного статуса',
     profile_password_hint: 'Оставьте пустым, чтобы сохранить текущий пароль',
     profile_password_mismatch: 'Пароли не совпадают',

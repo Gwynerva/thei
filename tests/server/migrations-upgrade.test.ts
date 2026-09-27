@@ -240,8 +240,14 @@ describe('upgrading a 0.0.1 site', () => {
     await runPendingMigrations(rawDb, { contentPath });
     const all = (query: string) => rawDb.prepare(query).all();
 
-    expect(all('SELECT ownerType, ownerId, text FROM statuses')).toEqual([
-      { ownerType: 'profile', ownerId: 'profile', text: 'Writing a thesis' },
+    // Dated by the day it has always been shown under.
+    expect(all('SELECT ownerType, ownerId, text, date FROM statuses')).toEqual([
+      {
+        ownerType: 'profile',
+        ownerId: 'profile',
+        text: 'Writing a thesis',
+        date: '2026-09-01',
+      },
     ]);
 
     // Stored once, smaller `type:id` first, direction and notes turned with it.

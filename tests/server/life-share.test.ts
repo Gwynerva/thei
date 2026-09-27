@@ -132,7 +132,9 @@ function seed() {
       kind: 'regular',
       text: 'Working on it',
       assetUuid: null,
-      createdAt: Date.parse('2026-05-01T00:00:00Z'),
+      // Written later, but dated by its owner: the day is what the grid counts.
+      createdAt: Date.parse('2026-06-15T00:00:00Z'),
+      date: '2026-05-01',
     })
     .run();
   db.insert(schema.entityRelations)

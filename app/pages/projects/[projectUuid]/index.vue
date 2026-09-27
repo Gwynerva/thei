@@ -165,10 +165,7 @@ const details = computed(
             (mark) =>
               typeof mark === 'string'
                 ? { date: mark, href: '#statuses' }
-                : mark && {
-                    date: new Date(mark.createdAt).toISOString().slice(0, 10),
-                    href: '#statuses',
-                  },
+                : mark && { date: mark.date, href: '#statuses' },
             {
               icon: 'pulse',
               first: phrase.value.project_chronology_first_status,

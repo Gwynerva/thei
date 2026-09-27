@@ -454,7 +454,9 @@ function buildRawLifePoints(): RawPoint[] {
       identity: `profile-status:${record.id}`,
       entityKind: 'profile-status',
       transition: 'created',
-      date: new Date(record.createdAt).toISOString().slice(0, 10),
+      // The day the owner gave it; the moment written orders that day's
+      // statuses the way their own history does.
+      date: record.date,
       sortTime: record.createdAt,
       access: project?.access ?? ProjectEventAccessLevel.Public,
       profileRecord: record,
@@ -669,6 +671,7 @@ async function hydrateLifePoint(
     const statusRecord = point.profileRecord! as {
       id: string;
       assetUuid: string | null;
+      date: string;
       createdAt: number;
       text: string;
       kind: 'regular' | 'empty';

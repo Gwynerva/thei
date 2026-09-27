@@ -22,6 +22,7 @@ function insertStatus(
   createdAt: number,
   kind: 'regular' | 'empty' = 'regular',
   assetUuid: string | null = null,
+  date = new Date(createdAt).toISOString().slice(0, 10),
 ) {
   context.db
     .insert(context.schema.statuses)
@@ -33,6 +34,7 @@ function insertStatus(
       text: kind === 'regular' ? `Статус ${id}` : '',
       assetUuid,
       createdAt,
+      date,
     })
     .run();
   if (assetUuid) {
@@ -122,7 +124,7 @@ describe('status edits', () => {
         updatedStatuses: [{ id: 'b-regular', text: 'Чужой' }],
       }),
     ).toThrow('Invalid status');
-    // An empty status can be filled in, but not with nothing.
+    // An empty status can be filled in or moved, but not rewritten as it is.
     expect(() =>
       prepareEntityStatusEdits(projectA, {
         newStatuses: [],
@@ -188,5 +190,161 @@ describe('status edits', () => {
     const page = await getStatusHistory(projectA);
     expect(page.items).toHaveLength(7);
     expect(findProject).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('status dates', () => {
+  const projectC: StatusOwner = { type: 'project', id: 'project-c' };
+  const stored = (id: string) =>
+    context.db
+      .select()
+      .from(context.schema.statuses)
+      .all()
+      .find((status) => status.id === id);
+  const days = async (owner = projectC) =>
+    (await getStatusHistory(owner)).items.map(
+      (item) => `${item.date} ${item.id}`,
+    );
+
+  beforeEach(() => {
+    insertStatus(projectC, 'r1', 10, 'regular', null, '2024-01-01');
+    insertStatus(projectC, 'e1', 20, 'empty', null, '2024-02-01');
+    insertStatus(projectC, 'r2', 30, 'regular', null, '2024-03-01');
+  });
+
+  it('dates a new status the day it is saved unless given a day', () => {
+    save(projectC, {
+      newStatuses: [
+        { id: 'today', kind: 'regular', text: 'Сегодня' },
+        { id: 'past', kind: 'regular', text: 'Давно', date: '2020-05-01' },
+      ],
+    });
+    expect(stored('today')?.date).toBe(new Date().toISOString().slice(0, 10));
+    expect(stored('past')?.date).toBe('2020-05-01');
+    expect(() =>
+      prepareEntityStatusEdits(projectC, {
+        newStatuses: [
+          { id: 'bad', kind: 'regular', text: 'Нет', date: '2024-02-30' },
+        ],
+      }),
+    ).toThrow('Invalid status date');
+  });
+
+  it('orders a history by its days, then by when each was written', async () => {
+    save(projectC, {
+      newStatuses: [
+        {
+          id: 'late',
+          kind: 'regular',
+          text: 'Задним числом',
+          date: '2024-01-01',
+        },
+      ],
+    });
+    expect(await days()).toEqual([
+      '2024-03-01 r2',
+      '2024-02-01 e1',
+      '2024-01-01 late',
+      '2024-01-01 r1',
+    ]);
+    // A rewrite moves a status to its new day and keeps what it said.
+    save(projectC, {
+      updatedStatuses: [{ id: 'r1', text: 'Статус r1', date: '2024-04-01' }],
+    });
+    expect(await days()).toEqual([
+      '2024-04-01 r1',
+      '2024-03-01 r2',
+      '2024-02-01 e1',
+      '2024-01-01 late',
+    ]);
+    expect(stored('r1')).toMatchObject({ text: 'Статус r1', createdAt: 10 });
+    // Without a day, as an older panel sends it, a rewrite keeps the day.
+    save(projectC, { updatedStatuses: [{ id: 'r2', text: 'Другой текст' }] });
+    expect(stored('r2')?.date).toBe('2024-03-01');
+  });
+
+  it('pages through days, and through a cursor that knows no day', async () => {
+    for (let index = 0; index < 3; index++)
+      insertStatus(
+        projectC,
+        `x${index}`,
+        40 + index,
+        'regular',
+        null,
+        '2023-06-01',
+      );
+    const first = await getStatusHistory(projectC, undefined, false, 2);
+    const second = await getStatusHistory(projectC, first.nextCursor, false, 2);
+    expect([...first.items, ...second.items].map((item) => item.id)).toEqual([
+      'r2',
+      'e1',
+      'r1',
+      'x2',
+    ]);
+    // A cursor handed out before statuses had days: its day is looked up.
+    const legacy = Buffer.from(
+      JSON.stringify({ createdAt: 20, id: 'e1' }),
+    ).toString('base64url');
+    expect(
+      (await getStatusHistory(projectC, legacy, false, 2)).items.map(
+        (item) => item.id,
+      ),
+    ).toEqual(['r1', 'x2']);
+  });
+
+  it('judges an empty status by the place its day gives it', () => {
+    // Right above another empty one.
+    expect(() =>
+      save(projectC, {
+        newStatuses: [{ id: 'e2', kind: 'empty', date: '2024-02-15' }],
+      }),
+    ).toThrow('Cannot append an empty status');
+    // Right under another empty one.
+    expect(() =>
+      save(projectC, {
+        newStatuses: [{ id: 'e2', kind: 'empty', date: '2024-01-15' }],
+      }),
+    ).toThrow('Cannot append an empty status');
+    // With nothing below it.
+    expect(() =>
+      save(projectC, {
+        newStatuses: [{ id: 'e2', kind: 'empty', date: '2023-12-01' }],
+      }),
+    ).toThrow('Cannot append an empty status');
+    // Moved under the newest regular one, it stands above a regular one.
+    expect(() =>
+      save(projectC, {
+        updatedStatuses: [{ id: 'e1', text: '', date: '2024-03-02' }],
+      }),
+    ).not.toThrow();
+    expect(stored('e1')).toMatchObject({ kind: 'empty', date: '2024-03-02' });
+    // A regular status given a day right under an empty one is no trouble.
+    save(projectC, {
+      newStatuses: [
+        { id: 'r3', kind: 'regular', text: 'Между', date: '2024-03-01' },
+      ],
+    });
+    expect(stored('r3')?.kind).toBe('regular');
+  });
+
+  it('takes a resent new status with its day as the same one', () => {
+    const input = {
+      newStatuses: [
+        {
+          id: 'again',
+          kind: 'regular' as const,
+          text: 'Повтор',
+          date: '2024-05-05',
+        },
+      ],
+    };
+    save(projectC, input);
+    save(projectC, input);
+    expect(stored('again')?.date).toBe('2024-05-05');
+    expect(() =>
+      prepareEntityStatusEdits(projectC, {
+        newStatuses: [{ ...input.newStatuses[0]!, date: '2024-05-06' }],
+      }),
+    ).toThrow('Status ID already exists');
   });
 });

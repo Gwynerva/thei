@@ -41,10 +41,11 @@ export const baselineSql: string[] = [
 	\`kind\` text DEFAULT 'regular' NOT NULL,
 	\`assetUuid\` text,
 	\`text\` text NOT NULL,
-	\`createdAt\` integer NOT NULL
+	\`createdAt\` integer NOT NULL,
+	\`date\` text DEFAULT '' NOT NULL
 );
 `,
-  `CREATE INDEX \`statuses-owner-date-idx\` ON \`statuses\` (\`ownerType\`,\`ownerId\`,\`createdAt\`,\`id\`);`,
+  `CREATE INDEX \`statuses-owner-date-idx\` ON \`statuses\` (\`ownerType\`,\`ownerId\`,\`date\`,\`createdAt\`,\`id\`);`,
   `CREATE TABLE \`assets\` (
 	\`assetUuid\` text PRIMARY KEY NOT NULL,
 	\`slug\` text NOT NULL,

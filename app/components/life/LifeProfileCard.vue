@@ -64,7 +64,7 @@ const isAvatar = computed(() => props.point.entityKind === 'profile-avatar');
       </p>
       <ProfileDate
         v-if="!rewind && !hideDate"
-        :timestamp="new Date(`${point.date}T00:00:00Z`).getTime()"
+        :date="point.date"
         :short="dateStyle ? dateStyle === 'short' : compact"
         class="mt-1 inline-block"
       />

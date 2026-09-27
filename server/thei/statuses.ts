@@ -1,6 +1,7 @@
-import { and, asc, count, desc, eq, inArray, notInArray } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray } from 'drizzle-orm';
 import {
   canAppendEmptyStatus,
+  compareStatusesNewestFirst,
   statusAssetContainer,
   type NewStatus,
   type StatusEditData,
@@ -11,6 +12,7 @@ import {
 } from '#layers/thei/shared/status';
 import type { ProfileHistoryPage } from '#layers/thei/shared/profile';
 import type { AssetContainerType } from '#layers/thei/shared/asset';
+import { isLifeDay } from '#layers/thei/shared/life';
 import {
   buildAdminAssetUrls,
   buildPublicProfileMedia,
@@ -20,6 +22,7 @@ import {
   buildHistoryPage,
   decodeHistoryCursor,
   olderThan,
+  type HistoryKey,
 } from './history-page';
 
 export const STATUS_PAGE_SIZE = 30;
@@ -91,6 +94,7 @@ async function statusMedia(
 export async function statusHistoryItem(
   row: {
     id: string;
+    date: string;
     createdAt: number;
     assetUuid: string | null;
     text: string;
@@ -102,11 +106,42 @@ export async function statusHistoryItem(
 ): Promise<StatusHistoryItem> {
   return {
     id: row.id,
+    date: row.date,
     createdAt: row.createdAt,
     kind: row.kind,
     text: row.text,
     ...(admin && row.assetUuid ? { assetUuid: row.assetUuid } : {}),
     media: await statusMedia(row.assetUuid, owner, row.id, admin, project),
+  };
+}
+
+/** The newest-first order of a history: the day, then the moment written. */
+function newestFirst(schema: any) {
+  return [
+    desc(schema.statuses.date),
+    desc(schema.statuses.createdAt),
+    desc(schema.statuses.id),
+  ];
+}
+
+/**
+ * A cursor of the day a status was dated by. One handed out before statuses
+ * had dates, to a panel still open from the previous release, carries none:
+ * its day is then read from the status it names, or taken from `createdAt` as
+ * the update dated every status that existed then.
+ */
+function statusCursor(cursor?: string): HistoryKey | undefined {
+  const key = decodeHistoryCursor(cursor);
+  if (!key || key.date !== undefined) return key;
+  const { db, schema } = THEI_SERVER.useDb();
+  const row = db
+    .select({ date: schema.statuses.date })
+    .from(schema.statuses)
+    .where(eq(schema.statuses.id, key.id))
+    .get();
+  return {
+    ...key,
+    date: row?.date ?? new Date(key.createdAt).toISOString().slice(0, 10),
   };
 }
 
@@ -122,8 +157,8 @@ export async function getStatusHistory(
   const rows = db
     .select()
     .from(schema.statuses)
-    .where(and(scope, olderThan(schema.statuses, decodeHistoryCursor(cursor))))
-    .orderBy(desc(schema.statuses.createdAt), desc(schema.statuses.id))
+    .where(and(scope, olderThan(schema.statuses, statusCursor(cursor))))
+    .orderBy(...newestFirst(schema))
     .limit(limit + 1)
     .all();
   const project =
@@ -148,22 +183,16 @@ export async function getCurrentStatus(owner: StatusOwner, admin = false) {
   };
 }
 
-/** The day the owner's oldest status was set, for "key dates" summaries. */
+/** The day the owner's oldest status speaks of, for "key dates" summaries. */
 function firstStatusAt(owner: StatusOwner): string | undefined {
   const { db, schema } = THEI_SERVER.useDb();
-  const row = db
-    .select({ createdAt: schema.statuses.createdAt })
+  return db
+    .select({ date: schema.statuses.date })
     .from(schema.statuses)
-    .where(
-      and(
-        eq(schema.statuses.ownerType, owner.type),
-        eq(schema.statuses.ownerId, owner.id),
-      ),
-    )
-    .orderBy(asc(schema.statuses.createdAt))
+    .where(ownerWhere(schema, owner))
+    .orderBy(asc(schema.statuses.date))
     .limit(1)
-    .get();
-  return row ? new Date(row.createdAt).toISOString().slice(0, 10) : undefined;
+    .get()?.date;
 }
 
 type StoredStatus = {
@@ -172,33 +201,49 @@ type StoredStatus = {
   kind: StatusKind;
   text: string;
   assetUuid: string | null;
+  date: string;
 };
 
 /** A resent new status is the stored one only if nothing about it differs. */
 function isSameStatus(
   stored: StoredStatus,
   owner: StatusOwner,
-  incoming: { kind: StatusKind; text: string; assetUuid: string | null },
+  incoming: {
+    kind: StatusKind;
+    text: string;
+    assetUuid: string | null;
+    date: string;
+  },
 ) {
   return (
     stored.ownerType === owner.type &&
     stored.ownerId === owner.id &&
     stored.kind === incoming.kind &&
     stored.text === incoming.text &&
-    stored.assetUuid === incoming.assetUuid
+    stored.assetUuid === incoming.assetUuid &&
+    stored.date === incoming.date
   );
 }
 
 /**
- * A rewrite keeps a status's date. Filling in an empty status turns it into a
- * regular one, which only ever removes an empty status and so cannot break the
- * order rule — but it has to leave something to say.
+ * What a rewrite leaves of a status. Anything to say makes it a regular one,
+ * which is how an empty status is filled in. With nothing to say an empty
+ * status stays empty, which is only worth a rewrite when it moves to another
+ * day; a regular one cannot be emptied this way, so there is no kind for it.
  */
-function canRewriteStatus(
-  kind: StatusKind,
-  update: { text: string; assetUuid: string | null },
-) {
-  return kind === 'regular' || Boolean(update.text || update.assetUuid);
+function rewrittenKind(
+  stored: { kind: StatusKind; date: string },
+  update: { text: string; assetUuid: string | null; date?: string },
+): StatusKind | undefined {
+  if (update.text || update.assetUuid) return 'regular';
+  return stored.kind === 'empty' && update.date && update.date !== stored.date
+    ? 'empty'
+    : undefined;
+}
+
+/** The UTC day of a moment: what a status without a chosen date is dated. */
+function utcDay(time: number) {
+  return new Date(time).toISOString().slice(0, 10);
 }
 
 export type PreparedStatusEdits = {
@@ -208,8 +253,16 @@ export type PreparedStatusEdits = {
     kind: 'regular' | 'empty';
     text: string;
     assetUuid: string | null;
+    date: string;
   }>;
-  updated: Array<{ id: string; text: string; assetUuid: string | null }>;
+  updated: Array<{
+    id: string;
+    kind: StatusKind;
+    text: string;
+    assetUuid: string | null;
+    /** Absent when the request kept the stored day. */
+    date?: string;
+  }>;
   deleted: string[];
   /** Every asset the edits reference, for the caller's own media checks. */
   referencedAssetUuids: string[];
@@ -219,10 +272,10 @@ export type PreparedStatusEdits = {
  * Validates one owner's status edits and checks them against what is stored.
  *
  * Kept apart from the entity savers because the rules are the status's own:
- * ids are client-chosen so a retry is idempotent, a rewritten status keeps its
- * date, and an empty status may only follow a regular one — which has to be
- * judged against the history as it will be *after* the deletions in the same
- * request, not as it stands now.
+ * ids are client-chosen so a retry is idempotent, and an empty status may only
+ * stand right above a regular one — which has to be judged against the history
+ * as it will be *after* every edit in the same request, since a status can now
+ * be dated into the middle of it, not as it stands now.
  */
 export function prepareStatusEdits(
   owner: StatusOwner,
@@ -231,11 +284,22 @@ export function prepareStatusEdits(
     invalid: StatusInvalid;
     ids: (value: unknown) => string[];
     optionalId: (value: unknown, message: string) => string | null;
-    text: (value: unknown, limit: number, allowEmpty?: boolean) => string;
   },
 ): PreparedStatusEdits {
-  const { invalid, ids, optionalId, text } = helpers;
+  const { invalid, ids, optionalId } = helpers;
   const { db, schema } = THEI_SERVER.useDb();
+  const today = utcDay(Date.now());
+  const text = (value: unknown): string => {
+    if (typeof value !== 'string' || value.length > 10000)
+      return invalid('Invalid status');
+    return value.trim();
+  };
+  const date = (value: unknown): string | undefined => {
+    if (value === undefined) return undefined;
+    if (typeof value !== 'string' || !isLifeDay(value))
+      return invalid('Invalid status date');
+    return value;
+  };
 
   const deleted = ids(input.deletedStatusIds);
   const deletedIds = new Set(deleted);
@@ -247,18 +311,29 @@ export function prepareStatusEdits(
     if (!status || typeof status !== 'object') invalid('Invalid status');
     const value = status as Record<string, unknown>;
     const id = ids([value.id])[0]!;
+    const day = date(value.date) ?? today;
     if (value.kind === 'empty') {
       if (value.assetUuid != null || (value.text != null && value.text !== ''))
         invalid('Invalid empty status');
-      return { id, kind: 'empty' as const, text: '', assetUuid: null };
+      return {
+        id,
+        kind: 'empty' as const,
+        text: '',
+        assetUuid: null,
+        date: day,
+      };
     }
     if (value.kind !== 'regular') invalid('Invalid status kind');
-    return {
+    const regular = {
       id,
       kind: 'regular' as const,
-      text: text(value.text, 10000, true),
+      text: text(value.text),
       assetUuid: optionalId(value.assetUuid, 'Invalid status media'),
+      date: day,
     };
+    // A regular status has to say something, in words or in a picture.
+    if (!regular.text && !regular.assetUuid) invalid('Invalid status');
+    return regular;
   });
   if (new Set(created.map((s) => s.id)).size !== created.length)
     invalid('Invalid status');
@@ -266,21 +341,23 @@ export function prepareStatusEdits(
   const rawUpdated = input.updatedStatuses ?? [];
   if (!Array.isArray(rawUpdated) || rawUpdated.length > 100)
     invalid('Invalid statuses');
-  const updated = (rawUpdated as UpdatedStatus[])
+  const requested = (rawUpdated as UpdatedStatus[])
     .map((status) => {
       if (!status || typeof status !== 'object') invalid('Invalid status');
       const value = status as unknown as Record<string, unknown>;
+      const day = date(value.date);
       return {
         id: ids([value.id])[0]!,
-        text: text(value.text, 10000, true),
+        text: text(value.text),
         assetUuid: optionalId(value.assetUuid, 'Invalid status media'),
+        ...(day ? { date: day } : {}),
       };
     })
     .filter((status) => !deletedIds.has(status.id));
   const newIds = new Set(created.map((status) => status.id));
   if (
-    new Set(updated.map((s) => s.id)).size !== updated.length ||
-    updated.some((s) => newIds.has(s.id))
+    new Set(requested.map((s) => s.id)).size !== requested.length ||
+    requested.some((s) => newIds.has(s.id))
   )
     invalid('Invalid status');
 
@@ -298,48 +375,60 @@ export function prepareStatusEdits(
       if (!isSameStatus(stored, owner, incomingById.get(stored.id)!))
         invalid('Status ID already exists');
 
-  // Checked here rather than in the transaction, so the saver can still answer
-  // with its own error instead of failing halfway through the write.
-  const storedKinds = new Map<string, StatusKind>(
-    updated.length
-      ? db
-          .select({ id: schema.statuses.id, kind: schema.statuses.kind })
-          .from(schema.statuses)
-          .where(
-            and(
-              scope,
-              inArray(
-                schema.statuses.id,
-                updated.map((status) => status.id),
-              ),
-            ),
-          )
-          .all()
-          .map((row) => [row.id, row.kind])
-      : [],
+  // The whole history, as it will be once this request is written. It is the
+  // owner's own and runs to hundreds of short rows at most, so the order rule
+  // is judged over all of it here rather than in the transaction, where the
+  // saver could no longer answer with its own error.
+  const history = new Map(
+    db
+      .select({
+        id: schema.statuses.id,
+        kind: schema.statuses.kind,
+        date: schema.statuses.date,
+        createdAt: schema.statuses.createdAt,
+      })
+      .from(schema.statuses)
+      .where(scope)
+      .all()
+      .filter((row) => !deletedIds.has(row.id) && !newIds.has(row.id))
+      .map((row) => [row.id, row]),
   );
-  for (const status of updated) {
-    const kind = storedKinds.get(status.id);
-    if (!kind || !canRewriteStatus(kind, status)) invalid('Invalid status');
-  }
-
-  const excluded = [...new Set([...deleted, ...newIds])];
-  let effectiveKind = db
-    .select({ kind: schema.statuses.kind })
-    .from(schema.statuses)
-    .where(
-      excluded.length
-        ? and(scope, notInArray(schema.statuses.id, excluded))
-        : scope,
-    )
-    .orderBy(desc(schema.statuses.createdAt), desc(schema.statuses.id))
-    .limit(1)
-    .get()?.kind;
-  for (const status of created) {
+  const placed = new Set<string>();
+  const updated = requested.map((status) => {
+    const stored = history.get(status.id);
+    const kind = stored && rewrittenKind(stored, status);
+    if (!stored || !kind) return invalid('Invalid status');
+    if (status.date && status.date !== stored.date) placed.add(status.id);
+    history.set(status.id, {
+      ...stored,
+      kind,
+      date: status.date ?? stored.date,
+    });
+    return { ...status, kind };
+  });
+  // Written after everything stored, in the order they came in.
+  const now = Date.now();
+  for (const [index, status] of created.entries()) {
     if (deletedIds.has(status.id)) continue;
-    if (status.kind === 'empty' && !canAppendEmptyStatus(effectiveKind))
+    placed.add(status.id);
+    history.set(status.id, {
+      id: status.id,
+      kind: status.kind,
+      date: status.date,
+      createdAt: now + index,
+    });
+  }
+  // Only where this request put something: a pair it left alone is as the
+  // owner had it, like the one a deletion closes up.
+  const ordered = [...history.values()].sort(compareStatusesNewestFirst);
+  for (const [index, status] of ordered.entries()) {
+    const older = ordered[index + 1];
+    if (
+      status.kind === 'empty' &&
+      (placed.has(status.id) || (older && placed.has(older.id))) &&
+      !canAppendEmptyStatus(older?.kind)
+    )
       invalid('Cannot append an empty status');
-    effectiveKind = status.kind;
   }
 
   return {
@@ -421,10 +510,15 @@ export function applyStatusEdits(
       .from(schema.statuses)
       .where(and(scope, eq(schema.statuses.id, status.id)))
       .get();
-    if (!existing || !canRewriteStatus(existing.kind, status))
-      hooks.invalid('Invalid status');
+    const kind = existing && rewrittenKind(existing, status);
+    if (!kind) return hooks.invalid('Invalid status');
     tx.update(schema.statuses)
-      .set({ kind: 'regular', text: status.text, assetUuid: status.assetUuid })
+      .set({
+        kind,
+        text: status.text,
+        assetUuid: status.assetUuid,
+        ...(status.date ? { date: status.date } : {}),
+      })
       .where(and(scope, eq(schema.statuses.id, status.id)))
       .run();
     hooks.detach(container, status.id);
@@ -491,15 +585,6 @@ export function prepareEntityStatusEdits(
       if (typeof value !== 'string' || !value || value.length > 200)
         invalid(message);
       return value;
-    },
-    text: (value, limit, allowEmpty = false) => {
-      if (
-        typeof value !== 'string' ||
-        value.length > limit ||
-        (!allowEmpty && !value.trim())
-      )
-        invalid('Invalid status');
-      return value.trim();
     },
   });
 }

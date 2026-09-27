@@ -316,7 +316,6 @@ export async function saveProfile(input: ProfileEditData) {
     invalid,
     ids,
     optionalId,
-    text,
   });
   const links =
     validateExternalLinkList(input.externalLinks, invalid) ??

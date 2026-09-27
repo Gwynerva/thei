@@ -1,17 +1,26 @@
 <script setup lang="ts">
 import type { MediaDescriptor } from '#layers/thei/shared/media';
+import type { StatusKind } from '#layers/thei/shared/status';
+import { toDateString } from '#layers/thei/shared/date-range';
 import ModalContainer from '../ModalContainer.vue';
 import ModalTitle from '../ModalTitle.vue';
 const { modalData } = defineProps<{
   modalData: {
     usageDelta: Record<string, number>;
-    canAddEmptyStatus: boolean;
+    /**
+     * Whether a status left blank may stand on this day as an empty one, which
+     * depends on what the history holds just below that day.
+     */
+    canBeEmptyOn: (date: string) => boolean;
     /**
      * A status to edit instead of adding a new one. An empty status comes in
-     * with blank text and leaves as a regular one.
+     * with blank text: filled in it becomes a regular one, left blank it can
+     * still move to another day.
      */
     initial?: {
       id: string;
+      kind: StatusKind;
+      date: string;
       text: string;
       assetUuid?: string;
       media?: MediaDescriptor;
@@ -24,44 +33,54 @@ const emit = defineEmits<{
         type: 'save';
         id: string;
         kind: 'regular';
+        date: string;
         text: string;
         assetUuid?: string;
         media?: MediaDescriptor;
       }
-    | { type: 'save'; id: string; kind: 'empty' },
+    | { type: 'save'; id: string; kind: 'empty'; date: string },
   ];
 }>();
 const initial = modalData.initial;
+const today = new Date();
 const text = ref(initial?.text ?? '');
+const date = ref(initial?.date ?? toDateString(today));
 const assetUuid = ref<string | null>(initial?.assetUuid ?? null);
 const media = ref<MediaDescriptor | undefined>(initial?.media);
-// An edited status is always a regular one: it can be filled in, not emptied.
+// A regular status keeps something to say; a blank one is empty, which only
+// a new or an already empty status may be, and only where the order allows.
 const valid = computed(
   () =>
-    Boolean(text.value.trim()) ||
-    (!initial && !assetUuid.value && modalData.canAddEmptyStatus),
+    Boolean(date.value) &&
+    (Boolean(text.value.trim()) ||
+      (initial?.kind !== 'regular' &&
+        !assetUuid.value &&
+        modalData.canBeEmptyOn(date.value))),
 );
 const dirty = computed(() =>
   initial
     ? text.value !== initial.text ||
+      date.value !== initial.date ||
       assetUuid.value !== (initial.assetUuid ?? null)
     : Boolean(text.value || assetUuid.value),
 );
 function save() {
   if (!valid.value) return;
   const value = text.value.trim();
+  const id = initial?.id ?? crypto.randomUUID();
   emit(
     'modalResult',
     value
       ? {
           type: 'save',
-          id: initial?.id ?? crypto.randomUUID(),
+          id,
           kind: 'regular',
+          date: date.value,
           text: value,
           assetUuid: assetUuid.value ?? undefined,
           media: media.value,
         }
-      : { type: 'save', id: crypto.randomUUID(), kind: 'empty' },
+      : { type: 'save', id, kind: 'empty', date: date.value },
   );
 }
 useModalCloseGuard(
@@ -76,29 +95,46 @@ useModalCloseGuard(
           :title="
             initial ? phrase.profile_edit_status : phrase.profile_new_status
           "
-        /><Button :disabled="!valid || (initial && !dirty)" @click="save">{{
-          initial ? phrase.save : phrase.add
-        }}</Button>
+          class="min-w-0"
+        /><Button
+          class="shrink-0"
+          :disabled="!valid || (initial && !dirty)"
+          @click="save"
+          >{{ initial ? phrase.save : phrase.add }}</Button
+        >
       </div></template
     >
-    <div class="flex min-w-0 items-start gap-sm p-md">
-      <ProfileMediaField
-        v-model="assetUuid"
-        v-model:media="media"
-        :title="phrase.profile_status"
-        profile="profile-status"
-        :usage-delta="modalData.usageDelta"
-        compact
-        hide-label
-        class="shrink-0"
-      />
-      <div class="min-w-0 flex-1">
+    <div class="flex flex-col gap-md p-md">
+      <div class="flex min-w-0 items-start gap-md">
+        <ProfileMediaField
+          v-model="assetUuid"
+          v-model:media="media"
+          :title="phrase.profile_status_icon"
+          profile="profile-status"
+          :usage-delta="modalData.usageDelta"
+          compact
+          class="shrink-0"
+        />
+        <Field class="min-w-0 flex-1">
+          <FieldLabel required>{{ phrase.profile_status_date }}</FieldLabel>
+          <FieldDatePicker
+            v-model="date"
+            :label="phrase.profile_status_date"
+            :max-date="today"
+            placement="bottom-start"
+            teleport-to="dialog"
+            required
+          />
+        </Field>
+      </div>
+      <Field>
+        <FieldLabel>{{ phrase.profile_status }}</FieldLabel>
         <FieldTextarea
           v-model="text"
-          class="min-h-12"
+          class="min-h-24"
           :placeholder="phrase.profile_status_placeholder"
         />
-      </div>
+      </Field>
     </div>
   </ModalContainer>
 </template>

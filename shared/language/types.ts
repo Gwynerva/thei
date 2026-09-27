@@ -211,6 +211,8 @@ export type LanguagePhrases = {
   profile_new_status: string;
   profile_edit_status: string;
   profile_status_placeholder: string;
+  profile_status_icon: string;
+  profile_status_date: string;
   profile_empty_status: string;
   profile_password_hint: string;
   profile_password_mismatch: string;
