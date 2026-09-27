@@ -984,8 +984,8 @@ const directHref = computed(() =>
         :key="`compare:${compare.key}`"
         :original="compare.original"
         :modified="compare.modified"
-        :original-label="phrase.upload_compare_source"
-        :modified-label="phrase.upload_compare_result"
+        :original-label="phrase.upload_processing_source"
+        :modified-label="phrase.upload_result"
         :modified-pending="transformKind === 'image' && renderPending"
       />
       <AssetModalPreviewMedia

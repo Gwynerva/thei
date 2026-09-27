@@ -77,7 +77,7 @@ useModalCloseGuard(
             initial ? phrase.profile_edit_status : phrase.profile_new_status
           "
         /><Button :disabled="!valid || (initial && !dirty)" @click="save">{{
-          initial ? phrase.save : phrase.profile_add
+          initial ? phrase.save : phrase.add
         }}</Button>
       </div></template
     >

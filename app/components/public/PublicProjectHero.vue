@@ -82,7 +82,7 @@ const visibleTags = computed(() => props.tags.slice(0, 3));
             :data-title-popup="phrase.project_cv_badge_hint"
           >
             <Icon name="case-important" />
-            <span>{{ phrase.project_cv_badge }}</span>
+            <span>{{ phrase.cv_project_label }}</span>
           </span>
         </div>
         <!-- Title and summary read as one block, like PublicPageHeader. -->
