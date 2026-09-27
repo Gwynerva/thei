@@ -65,8 +65,9 @@ again; nothing is running at that point.
 ### Putting it on a domain
 
 Thei binds to localhost, so put nginx in front of it. Copy
-`instance/nginx.conf.example`, replace the domain, then run `certbot --nginx`
-for TLS. The example file has the exact commands.
+`instance/nginx.conf.example`, replace the domain (and the port in
+`proxy_pass`, if you installed with another `THEI_PORT`), then run
+`certbot --nginx` for TLS. The example file has the exact commands.
 
 ## Update
 
@@ -195,38 +196,10 @@ machine you control pulls them.
    system — and both arrive with the site address and the token filled in.
 3. Run it, pick a destination folder, and install the schedule.
 
-The schedule fires daily and backs up only when the interval — a week unless
-set otherwise — has passed, give or take half a day, so a weekly backup stays
-weekly although each run ends a few minutes after the hour. That is what lets
-a machine that was switched off at the appointed hour catch up on its own,
-and what lets a manual backup restart the interval without touching the
-scheduler. It survives reboots: Task Scheduler starts a missed run when the
-machine is back, systemd timers are persistent (and lingering is enabled for
-a user timer), cron gets an `@reboot` entry, and launchd runs at login.
-
-Before it downloads anything, a run compares the site with the last backup. If
-it lost more than 30% of its files or size, or of its projects, events, diary
-entries or pages, the run stops without copying or rotating anything and
-raises an alarm — the kind of drop an intrusion or a broken update leaves
-behind. `backup/README.md` has the details.
-
-Copies are named by when they finished:
-
-```
-auto-20260915T030000Z/     the three newest scheduled copies
-manual-20260910T142233Z/   manual copies, kept until you delete them
-```
-
-Scheduled copies rotate three deep; a new one is renamed into place before the
-oldest is removed, so the destination is never without a complete copy. Manual
-copies do not take a slot and are never rotated out.
-
-Every copy is complete on its own and can be copied anywhere as ordinary
-files. An asset that did not change is shared with the copy it came from as a
-hard link rather than stored twice, so a new copy costs only what changed.
-Asset files are named by the SHA-256 of their bytes, and the client checks
-each one it downloads or reuses against its name, so a damaged file is never
-carried into the next copy.
+The client — its schedule, the copies it keeps, and the alarm it raises instead
+of rotating out a good copy when the site suddenly shrinks — is described in
+`backup/README.md`. Every copy is a complete folder of ordinary files that can
+be copied anywhere, onto any machine.
 
 ### What is in a copy, and what is not
 
@@ -367,9 +340,8 @@ order. `migrations/index.ts` is the registry — the upgrade path. An instance
 records what it has applied in a `_thei_migrations` table, and on every boot the
 engine applies whatever is missing.
 
-A database created before any of this existed is adopted on first boot: the
-version in `content/thei.config.json` decides which migrations it already
-contains.
+An empty database gets the ledger and every migration; a database that has
+tables but no ledger was not made by any release, and boot refuses it.
 
 Create `migrations/<version>-<slug>.ts` and append it to `migrationRegistry` in
 `migrations/index.ts`. A migration is one of two kinds.
@@ -460,8 +432,7 @@ export default defineUpdateTask({
 
 On every boot, the tasks the ledger has not recorded run in registry order,
 after every migration. A task is recorded once it resolves. A new installation
-records them all, having no old content to convert, and a database from before
-the ledger adopts those up to its recorded version, as it does migrations.
+records them all, having no old content to convert.
 
 Rules that matter:
 
@@ -512,7 +483,7 @@ one release talks to the server of the next. These are the contracts between
 them; each may only grow, never change:
 
 - the phase runner, `bun node_modules/thei/update/phases/cli.ts --project
-  --from --to [--lang]`, and its line protocol (`phases/run.ts`);
+--from --to [--lang]`, and its line protocol (`phases/run.ts`);
 - the instance templates in `instance/` and their placeholders;
 - `.thei/update-state.json` (`types.ts`), including the `restart` step id;
 - `GET /api/update/progress` (`shared/api/update-progress.ts`);

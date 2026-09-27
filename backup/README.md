@@ -68,6 +68,17 @@ time it runs, and a manual backup restarts the interval on its own.
 
 ## Copies
 
+Copies are named by when they finished:
+
+```
+auto-20260915T030000Z/     scheduled copies, the newest keepCount of them
+manual-20260910T142233Z/   manual copies, kept until you delete them
+```
+
+A new scheduled copy is renamed into place before the oldest is removed, so
+the destination is never without a complete copy. Manual copies do not take a
+slot and are never rotated out.
+
 Every copy is a complete folder of ordinary files that can be copied anywhere.
 An asset that did not change since an earlier copy is shared with it as a hard
 link rather than stored twice, so each new copy costs only what changed;
@@ -91,4 +102,4 @@ open when someone is watching. Every later run stops the same way.
 If the site lost that much on purpose, choose **Back up anyway** in the menu (or
 run with `--force`) to accept the new size.
 
-Full documentation, including how to restore, is in `update/README.md`.
+What a copy holds, and how to restore one: `update/README.md`, "Backups".
