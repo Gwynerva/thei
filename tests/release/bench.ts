@@ -34,6 +34,15 @@ export const mode: 'fast' | 'full' =
     : 'fast';
 const image = mode === 'full' ? 'thei-release-bench' : 'thei-release-bench-ready';
 const cacheInContainer = '/var/cache/thei-bench-bun';
+/**
+ * Where installs keep what they download: Bun's packages, and the native
+ * binaries that prebuild-install fetches from GitHub for better-sqlite3 into
+ * the npm cache — without it, every run depends on GitHub answering.
+ */
+const cacheEnv = {
+  BUN_INSTALL_CACHE_DIR: cacheInContainer,
+  npm_config_cache: `${cacheInContainer}/npm`,
+};
 
 /** The bare repositories scenarios install from, prepared once per run. */
 export const repositories = {
@@ -418,7 +427,7 @@ export function install(
     THEI_REPOSITORY: benchRepository,
     THEI_VERSION: `v${options.version}`,
     THEI_HOST: '0.0.0.0',
-    ...(mode === 'fast' ? { BUN_INSTALL_CACHE_DIR: cacheInContainer } : {}),
+    ...(mode === 'fast' ? cacheEnv : {}),
     ...options.env,
   };
   const exports = Object.entries(env)
@@ -429,7 +438,9 @@ export function install(
   const cacheUnit =
     mode === 'fast'
       ? `mkdir -p /etc/systemd/system/thei.service.d
-printf '[Service]\\nEnvironment=BUN_INSTALL_CACHE_DIR=${cacheInContainer}\\n' > /etc/systemd/system/thei.service.d/bench-cache.conf
+printf '[Service]\\n${Object.entries(cacheEnv)
+          .map(([key, value]) => `Environment=${key}=${value}\\n`)
+          .join('')}' > /etc/systemd/system/thei.service.d/bench-cache.conf
 systemctl daemon-reload`
       : '';
   log(`Installing Thei ${options.version} in ${server.name}`);
