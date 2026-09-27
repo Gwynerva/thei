@@ -13,6 +13,13 @@ const fontStyles = [
   '@fontsource-variable/noto-serif/wght-italic.css',
 ].map((path) => createRequire(import.meta.url).resolve(path));
 
+// Satori shapes the text of OG cards with HarfBuzz, whose hb.js loads hb.wasm
+// by a path Nitro's file tracing cannot see. Left out of a build, every card
+// fails while development, which reads node_modules directly, works.
+const harfbuzzWasm = createRequire(
+  createRequire(import.meta.url).resolve('satori'),
+).resolve('harfbuzzjs/hb.wasm');
+
 // Matches any file inside this layer, but not inside a nested `node_modules`.
 // Nuxt disables auto-imports for modules resolved from `node_modules`, which is
 // exactly where this layer lives once it is consumed as a dependency, so the
@@ -58,6 +65,7 @@ export default defineNuxtConfig({
     plugins: ['#layers/thei/server/thei/plugin.ts'],
     externals: {
       external: ['sharp'],
+      traceInclude: [harfbuzzWasm],
     },
     typescript: {
       tsConfig: {
