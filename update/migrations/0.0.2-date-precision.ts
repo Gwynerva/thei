@@ -18,30 +18,16 @@ export default defineMigration({
     en: 'Stage and event periods can now record how certain their dates are.',
     ru: 'Этапы и события теперь могут хранить степень уверенности в своих датах.',
   },
-  // A fresh installation starts from the baseline, which already has these
-  // columns, and only then replays the registry — hence the guard.
   up({ rawDb }) {
-    const columns = new Set(
-      (
-        rawDb.prepare('PRAGMA table_info(`stage-periods`)').all() as {
-          name: string;
-        }[]
-      ).map((column) => column.name),
-    );
-
-    if (!columns.has('precision')) {
-      rawDb
-        .prepare(
-          "ALTER TABLE `stage-periods` ADD COLUMN `precision` text DEFAULT 'exact' NOT NULL",
-        )
-        .run();
-    }
-    if (!columns.has('precisionNote')) {
-      rawDb
-        .prepare(
-          "ALTER TABLE `stage-periods` ADD COLUMN `precisionNote` text DEFAULT '' NOT NULL",
-        )
-        .run();
-    }
+    rawDb
+      .prepare(
+        "ALTER TABLE `stage-periods` ADD COLUMN `precision` text DEFAULT 'exact' NOT NULL",
+      )
+      .run();
+    rawDb
+      .prepare(
+        "ALTER TABLE `stage-periods` ADD COLUMN `precisionNote` text DEFAULT '' NOT NULL",
+      )
+      .run();
   },
 });

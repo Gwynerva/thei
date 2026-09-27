@@ -1,4 +1,4 @@
-import { readFile, rm } from 'node:fs/promises';
+import { copyFile, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { swapOutput } from './output';
 import { bunPath, isDryRun, isManaged } from './environment';
@@ -15,6 +15,7 @@ import { parseUpdatePhaseEvent } from './phases/run';
 import {
   appendLog,
   createUpdateState,
+  failRun,
   finishStep,
   pendingStep,
   planSteps,
@@ -148,10 +149,7 @@ export async function resolveState(
     return state;
   }
 
-  state.error = 'The server stopped while updating.';
-  appendLog(state, state.error);
-  setStatus(state, 'failed');
-  settleSteps(state);
+  failRun(state, 'The server stopped while updating.');
   await writeUpdateState(runtime.projectPath, state);
   return state;
 }
@@ -275,10 +273,34 @@ async function run(
     await writeUpdateState(projectPath, state);
   }
 
+  // Set once the manifest has been rewritten, until the new build is in place:
+  // a failure in between has to put the running version's manifest back.
+  let manifestChanged = false;
+
+  /**
+   * Puts the running version's manifest and engine back, so a failed update
+   * leaves the instance as it found it: the next attempt, a restart and the
+   * files the running build reads from the engine all see one version.
+   */
+  async function restoreManifest() {
+    try {
+      await copyFile(
+        join(projectPath, 'package.json.prev'),
+        join(projectPath, 'package.json'),
+      );
+      await install(`Restoring Thei ${runtime.currentVersion}...`);
+    } catch (error) {
+      await report(
+        `Could not restore the previous manifest: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
   try {
     startStep(state, 'prepare');
     await backupInstanceManifest(projectPath);
     await report('Saved the current manifest as package.json.prev.');
+    manifestChanged = true;
 
     const template = await readFile(templatePath(runtime.theiPath), 'utf8');
     await writeInstanceManifest(
@@ -349,6 +371,7 @@ async function run(
     if (isDryRun()) {
       await rm(stagingDir, { recursive: true, force: true });
       await report('Dry run: stopping before the build is swapped in.');
+      await restoreManifest();
       finishStep(state, 'build', 'done');
       setStatus(state, 'done');
       settleSteps(state);
@@ -357,6 +380,7 @@ async function run(
     }
 
     await step('swap');
+    manifestChanged = false;
     const { retargeted } = await swapOutput(projectPath, stagingDir);
     await report(
       retargeted
@@ -372,20 +396,36 @@ async function run(
   } catch (error) {
     const message =
       error instanceof ExecError
-        ? `${error.message}\n${error.result.output.trim().split(/\r?\n/).slice(-20).join('\n')}`
+        ? `${error.message}\n${failureExcerpt(error.result.output)}`
         : error instanceof Error
           ? error.message
           : String(error);
 
-    state.error = message;
-    appendLog(state, message);
     const current = state.steps.find((item) => item.status === 'running');
     if (current) finishStep(state, current.id, 'failed');
-    setStatus(state, 'failed');
-    settleSteps(state);
+    if (manifestChanged) await restoreManifest();
+    failRun(state, message);
     await writeUpdateState(projectPath, state);
     runtime.log(`Update failed: ${message}`);
   }
+}
+
+/**
+ * The part of a failed command's output worth showing: the lines that name
+ * an error, then the last few. Build tools print long file lists after the
+ * error itself, so the tail alone often misses it.
+ */
+export function failureExcerpt(output: string): string {
+  const lines = output
+    .split(/\r?\n/)
+    .map(cleanLine)
+    .filter((line) => line.trim());
+  const errors = lines
+    .filter((line) => /\bERROR\b|^\s*error\b|Error:|Error \[/i.test(line))
+    .slice(0, 8);
+  const tail = lines.slice(-8).filter((line) => !errors.includes(line));
+  return [...errors, ...(errors.length && tail.length ? ['…'] : []), ...tail]
+    .join('\n');
 }
 
 /** Exits so the supervisor starts a fresh process. */

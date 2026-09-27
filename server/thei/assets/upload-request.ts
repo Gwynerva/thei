@@ -219,23 +219,14 @@ function isCropRect(value: unknown): value is AssetCropRect {
   );
 }
 
-/**
- * A turn, a crop and an output size. The resize fields of a page built before
- * crops existed are still accepted, so an admin tab left open across an update
- * keeps working until it reloads.
- */
+/** A turn, a crop and an output size. */
 function hasGeometry(settings: Record<string, unknown>): boolean {
   return (
     isDimensions(settings.dimensions) &&
     (settings.rotation === undefined ||
       [0, 90, 180, 270].includes(settings.rotation as number)) &&
     (settings.crop === undefined || isCropRect(settings.crop)) &&
-    (settings.stretch === undefined || typeof settings.stretch === 'boolean') &&
-    (settings.resizeMode === undefined ||
-      settings.resizeMode === 'inside' ||
-      settings.resizeMode === 'cover') &&
-    (settings.allowUpscale === undefined ||
-      typeof settings.allowUpscale === 'boolean')
+    (settings.stretch === undefined || typeof settings.stretch === 'boolean')
   );
 }
 
@@ -263,7 +254,6 @@ function pickGeometry(
           },
         }
       : {}),
-    ...(settings.resizeMode ? { resizeMode: settings.resizeMode } : {}),
   };
 }
 

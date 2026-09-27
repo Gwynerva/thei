@@ -285,7 +285,7 @@ const birthDateMax = new Date();
               type="button"
               class="size-9 cursor-pointer rounded-normal bg-bg-3 text-text-2
                 hocus:text-accent"
-              :aria-label="phrase.profile_add"
+              :aria-label="phrase.add"
               @click="
                 factName = '';
                 factValue = '';
@@ -374,7 +374,7 @@ const birthDateMax = new Date();
         ><Button
           :disabled="!factName.trim() || !factValue.trim()"
           type="submit"
-          >{{ phrase.profile_add }}</Button
+          >{{ phrase.add }}</Button
         >
       </form></FloatingPopup
     >

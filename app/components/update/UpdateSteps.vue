@@ -4,7 +4,9 @@ import type { IconName } from '#thei/icons';
 
 defineProps<{ steps: UpdateStep[] }>();
 
-const stepIcons: Record<UpdateStep['status'], IconName> = {
+// A partial map on purpose: this screen may poll the server of a newer
+// release, whose steps can carry a status it has never heard of.
+const stepIcons: Partial<Record<string, IconName>> = {
   pending: 'minus',
   running: 'loading',
   done: 'check',
@@ -40,7 +42,7 @@ function stepKind(step: UpdateStep): string | undefined {
         }"
         aria-hidden="true"
       >
-        <Icon :name="stepIcons[step.status]" />
+        <Icon :name="stepIcons[step.status] ?? 'minus'" />
       </span>
       <span class="flex min-w-0 flex-1 flex-col gap-0.5">
         <span class="flex flex-wrap items-baseline gap-x-xs">

@@ -1,5 +1,5 @@
 import { readdir, stat } from 'node:fs/promises';
-import { join, posix, sep } from 'node:path';
+import { join, posix, resolve, sep } from 'node:path';
 import type { BackupManifestEntry } from '#layers/thei/shared/backup';
 import {
   THEI_BACKUP_DIRS,
@@ -31,7 +31,10 @@ async function walk(root: string, directory: string): Promise<string[]> {
   for (const entry of entries) {
     const full = `${directory}${sep}${entry.name}`;
     if (entry.isDirectory()) files.push(...(await walk(root, full)));
-    else if (entry.isFile()) files.push(full);
+    // A file still being written sits beside its final name until it is
+    // renamed into place; it is not content yet.
+    else if (entry.isFile() && !/\.(partial|tmp)$/.test(entry.name))
+      files.push(full);
   }
   return files;
 }
@@ -119,7 +122,9 @@ export function resolveBackupFile(
   sessionId: string,
   relative: string,
 ): string | undefined {
-  if (!relative || relative.includes('\0')) return undefined;
+  // Backslashes and drive colons are refused outright: path helpers further
+  // down turn a backslash into a separator, after this check has passed.
+  if (!relative || /[\0\\:]/.test(relative)) return undefined;
   const parts = relative.split('/');
   if (parts.some((part) => !part || part === '.' || part === '..')) {
     return undefined;
@@ -132,7 +137,9 @@ export function resolveBackupFile(
     return join(backupWorkDir(sessionId), head!);
   }
   if (parts.length > 1 && THEI_BACKUP_DIRS.includes(head as never)) {
-    return THEI_SERVER.contentPath(...parts);
+    const root = resolve(THEI_SERVER.contentPath(head!));
+    const file = resolve(root, ...parts.slice(1));
+    return file.startsWith(`${root}${sep}`) ? file : undefined;
   }
   return undefined;
 }

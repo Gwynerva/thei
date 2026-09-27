@@ -96,12 +96,14 @@ bun install
 bun run dev
 ```
 
-The dev server runs the `.playground` app on port 3000, with the same setup
-wizard as a real instance.
+The dev server runs the `.playground` app at `http://localhost:3000`, with the
+same setup wizard as a real instance. It refuses to start when the port is
+taken, rather than move to another one.
 
 ```bash
-bun run test        # unit tests
-bun run test:e2e    # browser regressions on port 3001, see tests/e2e/README.md
+bun run test           # unit tests
+bun run test:e2e       # browser tests on a production build, see tests/e2e/README.md
+bun run test:release   # install, update and backup in Docker, see tests/release/README.md
 bun run typecheck
 bun run format
 ```

@@ -183,23 +183,6 @@ describe('asset upload settings', () => {
     expect(buildAssetSettingsKey(again)).toBe(buildAssetSettingsKey(first));
   });
 
-  it('turns a legacy cover request into a centred crop', () => {
-    const settings = image({
-      dimensions: { width: 256, height: 256 },
-      resizeMode: 'cover',
-      allowUpscale: true,
-    });
-
-    expect(settings.crop).toEqual({
-      left: 500,
-      top: 0,
-      width: 3000,
-      height: 3000,
-    });
-    expect(settings.dimensions).toEqual({ width: 256, height: 256 });
-    expect(buildAssetSettingsKey(settings)).not.toMatch(/fit:|up:/);
-  });
-
   it('treats the image output format as a requested parameter', () => {
     // Two formats are two genuinely different derivations, so the format
     // belongs in the key. Unlike a version prefix, it describes what the

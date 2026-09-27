@@ -1,19 +1,33 @@
 import { defineConfig, devices } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
 import { E2E_ORIGIN } from './fixture-url';
 
-// Start the isolated fixture on port 3001 after checking its owner (AGENTS.md);
-// it runs beside the playground on 3000.
-// Never silently reuse an arbitrary server or select a different port.
+// Playwright builds the fixture and serves it on 3001, beside the playground
+// on 3000, and stops it afterwards. A fixture already running there, such as
+// `bun run e2e:dev` while iterating, is used as it is.
 export default defineConfig({
   testDir: '.',
   testMatch: '*.spec.ts',
   testIgnore: '.artifacts/**',
+  // One seeded database serves every test, and some of them add to it.
   workers: 1,
   timeout: 30_000,
   expect: { timeout: 5_000 },
   retries: 0,
-  maxFailures: 1,
   globalSetup: './setup.ts',
+  reporter: [
+    ['list'],
+    ['html', { open: 'never', outputFolder: '.artifacts/report' }],
+  ],
+  webServer: {
+    command: 'bun run e2e:serve',
+    cwd: fileURLToPath(new URL('../..', import.meta.url)),
+    url: `${E2E_ORIGIN}/test-fixture.json`,
+    reuseExistingServer: true,
+    timeout: 300_000,
+    stdout: 'ignore',
+    stderr: 'pipe',
+  },
   use: {
     baseURL: E2E_ORIGIN,
     actionTimeout: 5_000,

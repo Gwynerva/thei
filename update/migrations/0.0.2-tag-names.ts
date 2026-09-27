@@ -8,17 +8,25 @@ import { defineMigration } from './types';
  *
  * A tag's identity used to be its title without case and compatibility forms;
  * «Ёлка» and «Елка» were two tags. Identity now also reads «ё» as «е», so
- * every stored identity is computed again, and tags that turn out to be one
+ * every stored identity is computed again — from the title as this release
+ * stores it, runs of whitespace collapsed — and tags that turn out to be one
  * are merged into the one used most: the others' placements move over to it,
  * as does a description or an icon it lacks, and the others are removed.
  */
 
 type TagRow = { tagUuid: string; title: string; description: string };
 
+/**
+ * A title as this release stores it: trimmed, every run of whitespace inside
+ * collapsed to one space. Written out on purpose, like the identity below.
+ */
+function cleanTitle(title: string) {
+  return title.trim().replace(/\s+/gu, ' ');
+}
+
 /** The identity rule as it stands in this release, written out on purpose. */
 function tagIdentity(title: string) {
-  return title
-    .trim()
+  return cleanTitle(title)
     .normalize('NFKC')
     .toLocaleLowerCase()
     .replaceAll('ё', 'е');
@@ -36,15 +44,11 @@ export default defineMigration({
     ru: 'У тегов появляются синонимы, а теги, различающиеся только буквой «ё», становятся одним.',
   },
   up({ rawDb }) {
-    const columns = (
-      rawDb.prepare('PRAGMA table_info(`tags`)').all() as { name: string }[]
-    ).map((column) => column.name);
-    if (!columns.includes('synonyms'))
-      rawDb
-        .prepare(
-          "ALTER TABLE `tags` ADD COLUMN `synonyms` text DEFAULT '[]' NOT NULL",
-        )
-        .run();
+    rawDb
+      .prepare(
+        "ALTER TABLE `tags` ADD COLUMN `synonyms` text DEFAULT '[]' NOT NULL",
+      )
+      .run();
 
     const tags = rawDb
       .prepare('SELECT `tagUuid`, `title`, `description` FROM `tags`')
@@ -104,8 +108,10 @@ export default defineMigration({
           .run(tag.tagUuid);
       }
       rawDb
-        .prepare('UPDATE `tags` SET `normalizedTitle` = ? WHERE `tagUuid` = ?')
-        .run(identity, kept!.tagUuid);
+        .prepare(
+          'UPDATE `tags` SET `title` = ?, `normalizedTitle` = ? WHERE `tagUuid` = ?',
+        )
+        .run(cleanTitle(kept!.title), identity, kept!.tagUuid);
     }
   },
 });

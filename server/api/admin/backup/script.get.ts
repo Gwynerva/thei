@@ -20,9 +20,18 @@ const SCRIPTS = {
 export default defineEventHandler(async (event) => {
   const platform = getQuery(event).platform === 'windows' ? 'windows' : 'unix';
   const script = SCRIPTS[platform];
+  // Goes into a quoted string of a shell script: only what an address is
+  // made of, so nothing in it can end the string or mean anything else.
+  const siteUrl = siteRoot(event);
+  if (!/^https?:\/\/[A-Za-z0-9.:[\]-]+(\/[A-Za-z0-9._~%/-]*)?$/.test(siteUrl)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'The site address cannot be written into a script',
+    });
+  }
   let source = (
     await readFile(THEI_SERVER.theiPath('backup', script.file), 'utf8')
-  ).replace('__THEI_SITE_URL__', siteRoot(event).replace(/'/g, ''));
+  ).replace('__THEI_SITE_URL__', () => siteUrl);
   // cmd.exe misreads a batch file with bare LF line endings.
   if (platform === 'windows') source = source.replace(/\r?\n/g, '\r\n');
 

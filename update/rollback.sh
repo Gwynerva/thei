@@ -23,6 +23,8 @@ die() { printf '\n\033[1;31merror:\033[0m %s\n' "$1" >&2; exit 1; }
 
 say "Stopping $THEI_SERVICE"
 systemctl stop "$THEI_SERVICE"
+# Whatever fails from here on, the site is not left stopped.
+trap 'systemctl start "$THEI_SERVICE" || true' EXIT
 
 say "Restoring the previous version"
 cp "$THEI_DIR/package.json.prev" "$THEI_DIR/package.json"
@@ -42,12 +44,13 @@ cat <<EOF
 
   Rolled back. The failed build is kept at $THEI_DIR/.output.broken.
   If it will not start, rebuild in place:
-    sudo -u $THEI_USER $BUN_BIN install --cwd $THEI_DIR
-    sudo -u $THEI_USER $BUN_BIN run --cwd $THEI_DIR build
+    runuser -u $THEI_USER -- env HOME=$THEI_DIR $BUN_BIN install --cwd $THEI_DIR
+    runuser -u $THEI_USER -- env HOME=$THEI_DIR $BUN_BIN run --cwd $THEI_DIR build
     systemctl restart $THEI_SERVICE
 
-  Note that database migrations are not reversed. If the update applied any,
-  the older engine will refuse to start and say so on the update page — in
-  that case reinstall the newer version instead.
+  Database migrations are not reversed. If the update applied any, the older
+  engine refuses the content and says so on the update page: install the older
+  version from scratch and restore the backup made before the update
+  (update/README.md, "When something goes wrong").
 
 EOF

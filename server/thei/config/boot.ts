@@ -1,27 +1,22 @@
-import { readFile } from 'node:fs/promises';
-import { setTheiConfig } from './index';
-import {
-  emptySiteAnalytics,
-  normalizeSiteAnalytics,
-} from '#layers/thei/shared/analytics';
+import { readConfigFile } from '#layers/thei/update/config-file';
+import { setTheiConfig, setTheiConfigHead, toTheiConfig, toTheiConfigHead } from './index';
 
+function configPath() {
+  return THEI_SERVER.contentPath('thei.config.json');
+}
+
+/**
+ * Reads what the boot needs before the migrations: the version the content
+ * belongs to and the language the update screen speaks. The rest of the file
+ * may still be in an older release's shape.
+ */
 export async function bootTheiConfig() {
-  const configPath = THEI_SERVER.contentPath('thei.config.json');
-  const configRaw = await readFile(configPath, 'utf-8');
-  const config = JSON.parse(configRaw);
+  setTheiConfigHead(toTheiConfigHead(await readConfigFile(configPath())));
+  THEI_SERVER.console.tag('Boot').log('Config version and language read!');
+}
 
-  setTheiConfig({
-    version: config.version,
-    languageCode: config.languageCode,
-    siteAccessLevel: config.siteAccessLevel,
-    // Absent in the file means the same as empty: derive the address from the
-    // request. The loader is where the on-disk shape becomes the typed config.
-    siteUrl: config.siteUrl ?? '',
-    analytics: normalizeSiteAnalytics(config.analytics) ?? emptySiteAnalytics,
-    secretPhrase: config.secretPhrase,
-    password: config.password,
-    backup: config.backup,
-  });
-
+/** Loads the whole config, once the migrations have brought it up to date. */
+export async function loadTheiConfig() {
+  setTheiConfig(toTheiConfig(await readConfigFile(configPath())));
   THEI_SERVER.console.tag('Boot').log('Config checked and loaded!');
 }

@@ -20,8 +20,6 @@ export default defineMigration({
     en: 'Creates the tables for one-time sign-in links and temporary access links.',
     ru: 'Создаёт таблицы для одноразовых ссылок входа и ссылок временного доступа.',
   },
-  // `IF NOT EXISTS` throughout: a fresh installation starts from the baseline,
-  // which already describes these tables, and then replays the registry.
   up({ rawDb }) {
     rawDb
       .prepare(

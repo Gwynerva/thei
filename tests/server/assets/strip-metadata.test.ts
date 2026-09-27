@@ -152,7 +152,7 @@ describe('stripAssetMetadata', () => {
     const tagged = join(directory, 'tagged.mp4');
     await ffmpeg([
       '-i',
-      join(process.cwd(), 'tests/e2e/fixture/public/regression-video.mp4'),
+      join(process.cwd(), 'tests/e2e/fixture/media/regression-video.mp4'),
       '-c',
       'copy',
       '-metadata',

@@ -1,7 +1,7 @@
-import { copyFileSync, mkdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import type { Nuxt } from 'nuxt/schema';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import {
   resolvePath,
   addTemplate,
@@ -45,16 +45,17 @@ export default defineNuxtModule({
     });
     nuxt.options.alias['#thei/static'] = staticTemplate.dst;
 
-    const fontsDir = copyOgFonts(nuxt);
-
     nuxt.hook('nitro:config', (nitroConfig) => {
       // The OG renderer draws its text with real font files rather than
-      // whatever the server happens to have installed, so they travel with
-      // the build as server assets.
+      // whatever the server happens to have installed, so the four subsets it
+      // uses travel with the build as server assets, straight from the font
+      // package. A copy in the build directory would not: `nuxt build`
+      // empties that directory after the modules have run.
       nitroConfig.serverAssets ??= [];
       nitroConfig.serverAssets.push({
         baseName: 'thei-og-fonts',
-        dir: fontsDir,
+        dir: ogFontsDir(),
+        pattern: 'noto-sans-{latin,cyrillic}-{400,700}-normal.woff',
       });
 
       nitroConfig.alias ??= {};
@@ -111,22 +112,11 @@ function applyBasePath(nuxt: Nuxt, projectPath: string) {
   };
 }
 
-/**
- * Copies the four Noto Sans subsets the OG renderer needs out of the font
- * package, so the build carries exactly those files instead of the whole
- * family.
- */
-function copyOgFonts(nuxt: Nuxt): string {
-  const require = createRequire(import.meta.url);
-  const target = join(nuxt.options.buildDir, 'thei/og-fonts');
-  mkdirSync(target, { recursive: true });
-  for (const subset of ['latin', 'cyrillic'])
-    for (const weight of ['400', '700']) {
-      const name = `noto-sans-${subset}-${weight}-normal.woff`;
-      copyFileSync(
-        require.resolve(`@fontsource/noto-sans/files/${name}`),
-        join(target, name),
-      );
-    }
-  return target;
+/** The font package's folder of font files. */
+function ogFontsDir(): string {
+  return dirname(
+    createRequire(import.meta.url).resolve(
+      '@fontsource/noto-sans/files/noto-sans-latin-400-normal.woff',
+    ),
+  );
 }

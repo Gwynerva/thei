@@ -47,6 +47,11 @@ export function isVersion(value: string): boolean {
   return parseVersion(value) !== undefined;
 }
 
+/** A plain `major.minor.patch` version: what gets offered as an update. */
+export function isStableVersion(value: string): boolean {
+  return parseVersion(value)?.prerelease.length === 0;
+}
+
 function comparePrerelease(
   a: (string | number)[],
   b: (string | number)[],

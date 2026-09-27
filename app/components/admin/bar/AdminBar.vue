@@ -163,10 +163,17 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
         class="m-auto flex h-full w-(--width-wide) max-w-full items-stretch
           justify-between sm:px-window"
       >
-        <nav class="flex shrink-0 items-stretch" aria-label="Администрирование">
-          <AdminBarButton to="/" icon="home" title="Сайт" />
+        <nav
+          class="flex shrink-0 items-stretch"
+          :aria-label="phrase.admin_panel"
+        >
+          <AdminBarButton to="/" icon="home" :title="phrase.to_website" />
 
-          <AdminBarButton to="/admin/" icon="thei" title="Админ-панель" />
+          <AdminBarButton
+            to="/admin/"
+            icon="thei"
+            :title="phrase.to_admin_panel"
+          />
 
           <AdminBarButton
             to="/admin/projects"

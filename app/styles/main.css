@@ -1,12 +1,10 @@
-/* Noto Fonts */
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100..900;1,100..900&family=Noto+Serif:ital,wght@0,100..900;1,100..900&display=swap');
-
 @import 'tailwindcss' source('..');
 @import './content.css';
 
 @theme {
-  --font-sans: 'Noto Sans', sans-serif;
-  --font-serif: 'Noto Serif', serif;
+  /* Served by the site itself, see `css` in nuxt.config.ts */
+  --font-sans: 'Noto Sans Variable', sans-serif;
+  --font-serif: 'Noto Serif Variable', serif;
 
   --spacing-md: calc(5.5 * var(--spacing));
   --spacing-xs: calc(0.45 * var(--spacing-md));

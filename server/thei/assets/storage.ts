@@ -3,6 +3,7 @@ import { copyFile, mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { dirname } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { and, eq, inArray } from 'drizzle-orm';
 import { buildAssetPreviewUrl } from '#layers/thei/shared/api/asset';
 import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
@@ -259,15 +260,20 @@ export async function storeAsset(input: StoreAssetInput): Promise<{
 
   if (wroteFile) {
     await mkdir(dirname(filePath), { recursive: true });
-    if (input.bytes.buffer) {
-      await writeFile(filePath, input.bytes.buffer);
-    } else if (input.bytes.owned) {
-      // Move rather than copy: the scratch file already holds the exact bytes,
-      // and a copy would read and write the whole file a second time.
-      await adoptStagedFile(input.bytes.path, filePath);
-    } else {
-      await copyFile(input.bytes.path, filePath);
-    }
+    const bytes = input.bytes;
+    // Written beside and renamed into place: a file cut short by a crash
+    // must never sit under the name its full content hash gives it.
+    await writeInPlace(filePath, async (partial) => {
+      if (bytes.buffer) {
+        await writeFile(partial, bytes.buffer);
+      } else if (bytes.owned) {
+        // Move rather than copy: the scratch file already holds the exact
+        // bytes, and a copy would read and write the whole file again.
+        await adoptStagedFile(bytes.path, partial);
+      } else {
+        await copyFile(bytes.path, partial);
+      }
+    });
   } else {
     // Nothing to store: the bytes are already on disk. Scratch that will never
     // be adopted has to go now, or an ffmpeg output that happened to dedup
@@ -310,6 +316,20 @@ export async function storeAsset(input: StoreAssetInput): Promise<{
   }
 }
 
+/** Produces `target` through a temporary file beside it, renamed at the end. */
+async function writeInPlace(
+  target: string,
+  write: (partial: string) => Promise<void>,
+) {
+  const partial = `${target}.${randomUUID()}.partial`;
+  try {
+    await write(partial);
+    await rename(partial, target);
+  } finally {
+    await rm(partial, { force: true }).catch(() => {});
+  }
+}
+
 /** Removes a scratch file storage decided not to adopt. */
 export async function discardAssetScratch(bytes: AssetBytes) {
   if (!bytes.path || !bytes.owned) return;
@@ -338,24 +358,14 @@ async function adoptStagedFile(source: string, target: string) {
 export async function buildAssetVariantInfo(
   asset: StoredAssetRecord,
 ): Promise<AssetVariantInfo> {
-  if (asset.type === AssetType.Video) await resolveVideoMeta(asset);
   const preview = await findMediaPreviewAsset(asset);
   return describeStoredAsset(asset, preview?.assetUuid);
 }
 
-/**
- * Describes a whole family at once.
- *
- * Previews come from one query. A legacy video row missing its dimensions is
- * probed one at a time, so a large family never starts a burst of ffmpeg
- * processes together.
- */
+/** Describes a whole family at once; previews come from one query. */
 export async function buildAssetVariantInfos(
   assets: StoredAssetRecord[],
 ): Promise<AssetVariantInfo[]> {
-  for (const asset of assets) {
-    if (asset.type === AssetType.Video) await resolveVideoMeta(asset);
-  }
   const previews = await findMediaPreviewUuids(
     assets.map((asset) => asset.assetUuid),
   );
@@ -462,7 +472,12 @@ function describeMedia(
   };
 }
 
-async function resolveVideoMeta(
+/**
+ * Probes a video stored before its length, frame rate, bit rate and audio
+ * were recorded, and records them. Run once over the library by the 0.0.2
+ * update task; every video stored since has them from the start.
+ */
+export async function completeVideoMeta(
   asset: StoredAssetRecord,
 ): Promise<VideoAssetMeta | null> {
   const meta = asset.meta as VideoAssetMeta | null;
@@ -483,8 +498,6 @@ async function resolveVideoMeta(
 
   if (!inspected) return meta;
 
-  // A file stored before the duration was read gets it now, once; a file
-  // whose duration cannot be read stays as it is and is probed next time.
   const { codec: _codec, ...video } = videoSourceInfo(inspected, asset.size);
   const resolvedMeta: VideoAssetMeta = {
     ...(meta ?? {}),

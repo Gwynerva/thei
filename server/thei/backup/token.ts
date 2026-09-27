@@ -1,51 +1,51 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type { H3Event } from 'h3';
 import { BACKUP_TOKEN_HEADER } from '#layers/thei/shared/backup';
-import type { TheiConfig } from '../config';
-import { writeTheiConfig } from '../config/write';
+import { hashAccessToken } from '../access-links/token';
+import { updateTheiConfig } from '../config/write';
 
 const TOKEN_BYTES = 32;
 
 export function backupTokenConfigured(): boolean {
-  return Boolean(THEI_SERVER.config.backup?.token);
+  return Boolean(THEI_SERVER.config.backup?.tokenHash);
 }
 
 /**
  * Replace the backup token, returning the new one.
  *
- * Shown to the operator once, at generation time. The config file already
- * holds the site password hash and the secret phrase, so this adds no new
- * class of secret to it.
+ * Shown to the operator once, at generation time. Only its hash is kept, so
+ * neither the config nor a backup copy of it can be used to download the
+ * site.
  */
 export async function rotateBackupToken(): Promise<string> {
   const token = randomBytes(TOKEN_BYTES).toString('hex');
-  await writeBackupConfig({ token, createdAt: new Date().toISOString() });
+  await updateTheiConfig((config) => ({
+    ...config,
+    backup: {
+      tokenHash: hashAccessToken(token),
+      createdAt: new Date().toISOString(),
+    },
+  }));
   return token;
 }
 
 export async function revokeBackupToken(): Promise<void> {
-  await writeBackupConfig(undefined);
-}
-
-async function writeBackupConfig(backup: TheiConfig['backup']): Promise<void> {
-  const next: TheiConfig = { ...THEI_SERVER.config, backup };
-  if (!backup) delete next.backup;
-  await writeTheiConfig(next);
+  await updateTheiConfig(({ backup: _backup, ...config }) => config);
 }
 
 /**
  * Whether the request carries the instance's backup token.
  *
- * Compared in constant time: a token is guessed one byte at a time when the
- * comparison stops at the first mismatch.
+ * Hashes are compared in constant time: a token is guessed one byte at a time
+ * when the comparison stops at the first mismatch.
  */
 export function requestHasBackupToken(event: H3Event): boolean {
-  const expected = THEI_SERVER.config.backup?.token;
+  const expected = THEI_SERVER.config.backup?.tokenHash;
   if (!expected) return false;
   const provided = getHeader(event, BACKUP_TOKEN_HEADER);
   if (!provided) return false;
-  const left = Buffer.from(provided, 'utf8');
-  const right = Buffer.from(expected, 'utf8');
+  const left = Buffer.from(hashAccessToken(provided), 'hex');
+  const right = Buffer.from(expected, 'hex');
   if (left.length !== right.length) return false;
   return timingSafeEqual(left, right);
 }

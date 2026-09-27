@@ -99,9 +99,7 @@ export type EditorJsPhrases = {
 
 export type LanguagePhrases = {
   asset_library: string;
-  asset_library_choose: string;
   asset_library_search: string;
-  asset_aspect_ratio: string;
   asset_aspect_hint: (ratio: string, size: string) => string;
   asset_library_pending_deletion: (date: string) => string;
   asset_library_empty: string;
@@ -111,7 +109,6 @@ export type LanguagePhrases = {
   asset_library_used: string;
   asset_library_more: string;
   asset_library_insert: string;
-  asset_library_selected: string;
   asset_library_usage: string;
   asset_library_places: (count: number) => string;
   asset_library_properties: string;
@@ -204,9 +201,7 @@ export type LanguagePhrases = {
   profile_links_hint: string;
   profile_popular_tags: string;
   profile_show_all: string;
-  profile_show_previous: string;
   profile_hide: string;
-  profile_add: string;
   profile_pinned_page_add: string;
   profile_empty: string;
   profile_load_error: string;
@@ -217,8 +212,6 @@ export type LanguagePhrases = {
   profile_edit_status: string;
   profile_status_placeholder: string;
   profile_empty_status: string;
-  profile_set_empty_status: string;
-  profile_empty_status_unavailable: string;
   profile_password_hint: string;
   profile_password_mismatch: string;
   profile_settings_description: string;
@@ -266,7 +259,6 @@ export type LanguagePhrases = {
   life_rewind_explore_life: string;
   event_ongoing: string;
   stage_ongoing: string;
-  latest_pages: string;
   view_all: string;
   life_empty: string;
   event_started: string;
@@ -289,16 +281,10 @@ export type LanguagePhrases = {
   secret_file: (codename: string) => string;
   secret_hint: string;
   life_gap: (years: number, months: number, days: number) => string;
-  life_day: (value: string) => string;
-  life_month: (value: string) => string;
-  life_year: (value: string) => string;
   life_copy_link: string;
   life_filter: string;
   life_filter_all: string;
   life_filter_kind: (kind: string) => string;
-  life_day_label: string;
-  life_month_label: string;
-  life_year_label: string;
   public_timeline_from: (date: string) => string;
   public_timeline_until: (date: string) => string;
   public_timeline_duration: (
@@ -306,8 +292,6 @@ export type LanguagePhrases = {
     months: number,
     days: number,
   ) => string;
-  show_fully: string;
-  show_all: string;
   projects_count: (count: number) => string;
   events_count: (count: number) => string;
   public_life_description: string;
@@ -357,11 +341,7 @@ export type LanguagePhrases = {
   pagination: string;
   previous: string;
   next: string;
-  public_details: string;
   public_details_expand: string;
-  public_details_collapse: string;
-  public_details_summary: string;
-  public_details_references: string;
   content_integration_youtube: string;
   public_details_manual: string;
   public_details_from_content: string;
@@ -488,8 +468,6 @@ export type LanguagePhrases = {
   share_link_duration_1h: string;
   share_link_duration_6h: string;
   share_link_duration_24h: string;
-  unknown: string;
-  system: string;
   admin_sessions: string;
   admin_sessions_description: string;
   active_admin_sessions: string;
@@ -507,9 +485,7 @@ export type LanguagePhrases = {
   failed_to_fetch_data: string;
   admin_panel: string;
   admin_projects: string;
-  admin_projects_description: string;
   admin_events: string;
-  admin_events_description: string;
   admin_diary: string;
   admin_diary_description: string;
   admin_kind_project_title: string;
@@ -533,13 +509,11 @@ export type LanguagePhrases = {
   event: string;
   x_events: (count: number) => string;
   page: string;
-  x_pages: (count: number) => string;
   new_project: string;
   new_event: string;
   new_page: string;
   new_diary_entry: string;
   diary_entry: string;
-  diary_entries: string;
   diary: string;
   x_diary_entries: (count: number) => string;
   site_status: string;
@@ -585,6 +559,8 @@ export type LanguagePhrases = {
   update_start: string;
   update_confirm: (version: string) => string;
   update_backup_notice: string;
+  update_last_backup: string;
+  update_no_backup: string;
   update_in_progress: string;
   update_status_running: string;
   update_status_restarting: string;
@@ -713,7 +689,6 @@ export type LanguagePhrases = {
   project_summary: string;
   project_summary_hint: string;
   project_description: string;
-  project_description_hint: string;
   project_action: string;
   project_action_hint: string;
   project_action_enabled: string;
@@ -824,17 +799,13 @@ export type LanguagePhrases = {
   public_section_content_empty: string;
   public_section_content_empty_description: string;
   project_stage_content: string;
-  project_stage_content_hint: string;
   project_stage_add: string;
   delete_project_stage: string;
   content_section_title: string;
   content_section_summary: string;
   content_section_private: string;
   content_section_private_hint: string;
-  date_range_start: string;
-  date_range_end: string;
   content_section_content: string;
-  content_section_content_hint: string;
   content_section_add: string;
   content_section_sort: string;
   delete_content_section: string;
@@ -844,7 +815,6 @@ export type LanguagePhrases = {
   content_block_count: (count: number) => string;
   content_word_count: (count: number) => string;
   content_file_count: (count: number) => string;
-  content_file_total_size: string;
   content_file_with_extension: (extension?: string) => string;
   content_editor_placeholder: string;
   content_editor_save_error: string;
@@ -853,7 +823,6 @@ export type LanguagePhrases = {
   content_never_saved: string;
   content_snapshots: string;
   content_snapshot_restore_label: (date: string) => string;
-  content_project_link: string;
   content_internal_link: string;
   content_external_link: string;
   content_link_url: string;
@@ -895,19 +864,11 @@ export type LanguagePhrases = {
   diary_delete_confirm: string;
   edit_page: string;
   edit: string;
-  drafts: string;
   save: string;
   add: string;
   clear: string;
   delete: string;
   close_modal: string;
-  file_formats: string;
-  file_max_size: string;
-  file_any_format: string;
-  file_formats_images: string;
-  file_formats_videos: string;
-  file_formats_images_videos: string;
-  file_formats_any: string;
   asset_pick_upload: string;
   asset_pick_reuse: string;
   asset_pick_reuse_hint: string;
@@ -942,7 +903,6 @@ export type LanguagePhrases = {
   cv_project_label: string;
   project_showcase_badge: string;
   project_showcase_badge_hint: string;
-  project_cv_badge: string;
   project_cv_badge_hint: string;
   project_files: string;
   project_files_description: string;
@@ -980,7 +940,6 @@ export type LanguagePhrases = {
   event_external_links_empty: string;
   event_tags: string;
   event_tags_hint: string;
-  reorder: string;
   delete_event: string;
   project_icon: string;
   project_icon_hint: string;
@@ -999,30 +958,15 @@ export type LanguagePhrases = {
   showcase_description: string;
   showcase_add: string;
   showcase_details: string;
-  showcase_quality: string;
-  showcase_caption: string;
-  showcase_caption_hint: string;
-  asset_access: string;
   asset_private_access: string;
   asset_private_access_hint: string;
-  showcase_access_same_as_project: string;
-  showcase_access_private: string;
-  showcase_confirm_add: string;
-  showcase_drop_hint: string;
-  showcase_upload_image: string;
-  showcase_upload_video: string;
   other_files: string;
   project_file: string;
   other_files_description: string;
   other_add: string;
   other_details: string;
-  other_title: string;
   other_description: string;
   asset_replace: string;
-  asset_upload_drop_hint: string;
-  asset_upload_uploading: (percent: number) => string;
-  asset_upload_processing: string;
-  asset_upload_failed: string;
   asset_upload_retry: string;
   drop_browse_paste: string;
   format: string;
@@ -1033,7 +977,6 @@ export type LanguagePhrases = {
   any_file: string;
   file_wrong_type: (ext: string) => string;
   file_too_large: (size: string) => string;
-  only_site_owner_has_access_to_asset: string;
   direct_link_to_asset: string;
   asset_previous: string;
   asset_next: string;
@@ -1061,8 +1004,6 @@ export type LanguagePhrases = {
   upload_fast_conversion_hint: string;
   upload_compress_to_zip: string;
   upload_compress_to_zip_hint: string;
-  upload_compare_source: string;
-  upload_compare_result: string;
   upload_compare_divider: string;
   upload_compare_toggle_mode: string;
   upload_variant_unchanged: string;
@@ -1074,7 +1015,6 @@ export type LanguagePhrases = {
   video_unmute: string;
   video_volume: string;
   video_no_audio: string;
-  video_no_audio_short: string;
   asset_variant_current: string;
   asset_variant_usage_count: (count: number) => string;
   upload_error_load_variants: string;
@@ -1131,7 +1071,6 @@ export type LanguagePhrases = {
   date_precision_year_short: string;
   date_precision_note: string;
   date_precision_note_placeholder: string;
-  date_approximate: string;
   // Private notes and reminders
   entity_notes_section: string;
   entity_notes_section_description: string;

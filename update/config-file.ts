@@ -1,5 +1,5 @@
-import { readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { writeFileAtomically } from './atomic-file';
 
 /**
  * `thei.config.json` as update phases and migrations see it: a plain object,
@@ -17,11 +17,5 @@ export async function writeConfigFile(
   path: string,
   config: Record<string, unknown>,
 ): Promise<void> {
-  const temp = `${path}.${randomUUID()}.tmp`;
-  try {
-    await writeFile(temp, JSON.stringify(config, null, 2), 'utf8');
-    await rename(temp, path);
-  } finally {
-    await rm(temp, { force: true });
-  }
+  await writeFileAtomically(path, JSON.stringify(config, null, 2));
 }

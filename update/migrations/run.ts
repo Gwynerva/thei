@@ -3,7 +3,6 @@ import { compareVersions, newestVersion } from '../semver';
 import { migrationRegistry } from './index';
 import {
   createLedger,
-  dropLedger,
   hasLedger,
   readLedger,
   recordMigration,
@@ -39,8 +38,6 @@ export interface LedgerTask {
 }
 
 export interface OpenLedgerOptions<Task extends LedgerTask> {
-  /** Data version recorded in `thei.config.json`. */
-  installedVersion: string;
   /**
    * Version of the running engine. Content recorded by anything newer than
    * both this and the registries is refused as a downgrade.
@@ -54,15 +51,13 @@ export interface OpenLedgerOptions<Task extends LedgerTask> {
 export interface OpenLedgerResult<Task extends LedgerTask> {
   pendingMigrations: TheiMigration[];
   pendingTasks: Task[];
-  adopted: number;
 }
 
 /**
  * Reads what the database has already been through, and what is left.
  *
- * A database created before the ledger existed already contains everything
- * its recorded version shipped with, migrations and tasks alike, so those are
- * adopted rather than replayed. Content recorded by a newer Thei is refused.
+ * An empty database starts a new ledger. Content recorded by a newer Thei is
+ * refused.
  */
 export function openLedger<Task extends LedgerTask>(
   rawDb: Database,
@@ -72,35 +67,17 @@ export function openLedger<Task extends LedgerTask>(
   const tasks = options.tasks ?? [];
   const log = options.log ?? (() => {});
 
-  let adopted = 0;
-
   if (!hasLedger(rawDb)) {
-    // Also clears a ledger table left behind in an older, incompatible shape.
-    dropLedger(rawDb);
-    createLedger(rawDb);
-    const inherited = [
-      ...registry.map((migration) => ({
-        id: migration.id,
-        version: migration.version,
-      })),
-      ...tasks.map((task) => ({
-        id: taskLedgerId(task.id),
-        version: task.version,
-      })),
-    ].filter(
-      (entry) => compareVersions(entry.version, options.installedVersion) <= 0,
-    );
-
-    rawDb.transaction(() => {
-      for (const entry of inherited) {
-        recordMigration(rawDb, entry.id, entry.version);
-      }
-    })();
-
-    adopted = inherited.length;
-    if (adopted) {
-      log(`Adopted ${adopted} step(s) already present in this database.`);
+    // Every released Thei records its steps, starting with 0.0.1's baseline.
+    // Tables without a ledger were made by something else.
+    if (hasTables(rawDb)) {
+      throw new Error(
+        'This database has no migration ledger: it was not created by a ' +
+          'released Thei, so there is no telling which steps it went through.',
+      );
     }
+    createLedger(rawDb);
+    log('Starting a new migration ledger.');
   }
 
   const entries = readLedger(rawDb);
@@ -122,7 +99,6 @@ export function openLedger<Task extends LedgerTask>(
     pendingTasks: tasks.filter(
       (task) => !appliedIds.has(taskLedgerId(task.id)),
     ),
-    adopted,
   };
 }
 
@@ -206,7 +182,6 @@ export interface RunMigrationsOptions
 
 export interface RunMigrationsResult {
   applied: TheiMigration[];
-  adopted: number;
 }
 
 /**
@@ -217,9 +192,9 @@ export async function runPendingMigrations(
   rawDb: Database,
   options: RunMigrationsOptions,
 ): Promise<RunMigrationsResult> {
-  const { pendingMigrations, adopted } = openLedger(rawDb, options);
+  const { pendingMigrations } = openLedger(rawDb, options);
   const applied = await applyMigrations(rawDb, pendingMigrations, options);
-  return { applied, adopted };
+  return { applied };
 }
 
 /**
@@ -240,6 +215,16 @@ export function seedLedger(
       recordMigration(rawDb, taskLedgerId(task.id), task.version);
     }
   })();
+}
+
+function hasTables(rawDb: Database): boolean {
+  return (
+    rawDb
+      .prepare(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' LIMIT 1",
+      )
+      .get() !== undefined
+  );
 }
 
 function assertNotDowngraded(

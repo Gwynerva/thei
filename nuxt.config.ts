@@ -1,8 +1,24 @@
 import tailwindcss from '@tailwindcss/vite';
+import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
+
+// Resolved from the layer itself, which an instance keeps in node_modules.
+const fontStyles = [
+  '@fontsource-variable/noto-sans/wght.css',
+  '@fontsource-variable/noto-sans/wght-italic.css',
+  '@fontsource-variable/noto-serif/wght.css',
+  '@fontsource-variable/noto-serif/wght-italic.css',
+].map((path) => createRequire(import.meta.url).resolve(path));
+
+// Satori shapes the text of OG cards with HarfBuzz, whose hb.js loads hb.wasm
+// by a path Nitro's file tracing cannot see. Left out of a build, every card
+// fails while development, which reads node_modules directly, works.
+const harfbuzzWasm = createRequire(
+  createRequire(import.meta.url).resolve('satori'),
+).resolve('harfbuzzjs/hb.wasm');
 
 // Matches any file inside this layer, but not inside a nested `node_modules`.
 // Nuxt disables auto-imports for modules resolved from `node_modules`, which is
@@ -23,6 +39,7 @@ export default defineNuxtConfig({
   },
   ignore: ['/content', '/content/**', '/.thei', '/.thei/**'],
   css: [
+    ...fontStyles,
     '#layers/thei/app/styles/main.css',
     '#layers/thei/app/styles/editor.css',
   ],
@@ -48,6 +65,7 @@ export default defineNuxtConfig({
     plugins: ['#layers/thei/server/thei/plugin.ts'],
     externals: {
       external: ['sharp'],
+      traceInclude: [harfbuzzWasm],
     },
     typescript: {
       tsConfig: {

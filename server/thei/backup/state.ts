@@ -1,7 +1,10 @@
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
-import { dirname, join } from 'node:path';
-import { BACKUP_SESSION_TTL_MS } from '#layers/thei/shared/backup';
+import { readFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { writeFileAtomically } from '#layers/thei/update/atomic-file';
+import {
+  BACKUP_SESSION_IDLE_MS,
+  BACKUP_SESSION_TTL_MS,
+} from '#layers/thei/shared/backup';
 import type { BackupKind } from '#layers/thei/shared/backup';
 
 export type BackupSessionState = {
@@ -47,17 +50,9 @@ export async function readBackupSession(): Promise<
 export async function writeBackupSession(
   state: BackupSessionState,
 ): Promise<void> {
-  const write = queue.then(async () => {
-    const path = backupStatePath();
-    const temp = `${path}.${randomUUID()}.tmp`;
-    await mkdir(dirname(path), { recursive: true });
-    try {
-      await writeFile(temp, JSON.stringify(state, null, 2), 'utf8');
-      await rename(temp, path);
-    } finally {
-      await rm(temp, { force: true });
-    }
-  });
+  const write = queue.then(() =>
+    writeFileAtomically(backupStatePath(), JSON.stringify(state, null, 2)),
+  );
   queue = write.catch(() => {});
   await write;
 }
@@ -66,6 +61,17 @@ export async function clearBackupSession(sessionId?: string): Promise<void> {
   if (sessionId)
     await rm(backupWorkDir(sessionId), { recursive: true, force: true });
   await rm(backupStatePath(), { force: true });
+}
+
+/** When each open session last took a request or sent a byte, in memory. */
+const lastActivity = new Map<string, number>();
+
+export function touchBackupSession(sessionId: string, now = Date.now()) {
+  lastActivity.set(sessionId, now);
+}
+
+export function forgetBackupSessionActivity(sessionId: string) {
+  lastActivity.delete(sessionId);
 }
 
 /**
@@ -81,7 +87,10 @@ export function isAbandonedSession(
   now = Date.now(),
 ): boolean {
   if (now - state.startedAt > BACKUP_SESSION_TTL_MS) return true;
-  if (state.pid === process.pid) return false;
+  if (state.pid === process.pid) {
+    const last = lastActivity.get(state.sessionId) ?? state.startedAt;
+    return now - last > BACKUP_SESSION_IDLE_MS;
+  }
   try {
     process.kill(state.pid, 0);
     return false;

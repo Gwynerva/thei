@@ -16,11 +16,6 @@ export default defineMigration({
     ru: 'Запоминать, как была прочитана ссылка',
   },
   up({ rawDb }) {
-    // A fresh installation starts from a baseline that already has the column.
-    const columns = rawDb.pragma("table_info('external-links')") as Array<{
-      name: string;
-    }>;
-    if (columns.some((column) => column.name === 'status')) return;
     rawDb
       .prepare(
         "ALTER TABLE `external-links` ADD `status` text DEFAULT 'complete' NOT NULL",

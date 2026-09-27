@@ -114,7 +114,7 @@ watchEffect(() => {
               v-model="confirmPassword"
               type="password"
               autocomplete="off"
-              :error="password !== confirmPassword && 'Не совпадает бля!'"
+              :error="password !== confirmPassword && phrase.profile_password_mismatch"
             />
           </Field>
         </div>

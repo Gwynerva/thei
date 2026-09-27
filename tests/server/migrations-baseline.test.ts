@@ -9,7 +9,6 @@ import {
 } from 'drizzle-kit/api';
 import { schema } from '../../server/thei/db/schema';
 import { baselineSql, migrationRegistry } from '../../update/migrations';
-import { runPendingMigrations, seedLedger } from '../../update/migrations/run';
 
 interface SchemaObject {
   type: string;
@@ -59,13 +58,11 @@ describe('migration baseline', () => {
       return dumpSchema(rawDb);
     });
 
-    const fromBaseline = await withTempDb(async (rawDb) => {
+    // A new installation starts from the baseline alone and records every
+    // migration as applied; `migrations-upgrade.test.ts` checks that an
+    // upgraded site ends up with the same schema.
+    const fromBaseline = await withTempDb((rawDb) => {
       for (const statement of baselineSql) rawDb.prepare(statement).run();
-      seedLedger(rawDb, migrationRegistry.slice(0, 1));
-      await runPendingMigrations(rawDb, {
-        installedVersion: '0.0.0',
-        contentPath: (...parts: string[]) => join(...parts),
-      });
       return dumpSchema(rawDb);
     });
 

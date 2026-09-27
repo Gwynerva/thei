@@ -2,7 +2,11 @@ import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { parseAssetRange } from '../../../../thei/assets/send-file';
 import { resolveBackupFile } from '../../../../thei/backup/manifest';
-import { requireBackupSession } from '../../../../thei/backup/session';
+import {
+  backupSessionHasFile,
+  requireBackupSession,
+} from '../../../../thei/backup/session';
+import { touchBackupSession } from '../../../../thei/backup/state';
 import { requireBackupToken } from '../../../../thei/backup/token';
 
 export default defineEventHandler(async (event) => {
@@ -11,7 +15,10 @@ export default defineEventHandler(async (event) => {
   await requireBackupSession(sessionId);
 
   const requested = String(getQuery(event).path ?? '');
-  const filePath = resolveBackupFile(sessionId, requested);
+  // Only what the session listed, whatever else the path might resolve to.
+  const filePath = (await backupSessionHasFile(sessionId, requested))
+    ? resolveBackupFile(sessionId, requested)
+    : undefined;
   if (!filePath) {
     throw createError({ statusCode: 400, statusMessage: 'Invalid path' });
   }
@@ -46,10 +53,22 @@ export default defineEventHandler(async (event) => {
     setHeader(event, 'Content-Length', range.end - range.start + 1);
     return sendStream(
       event,
-      createReadStream(filePath, { start: range.start, end: range.end }),
+      keepAlive(
+        sessionId,
+        createReadStream(filePath, { start: range.start, end: range.end }),
+      ),
     );
   }
 
   setHeader(event, 'Content-Length', info.size);
-  return sendStream(event, createReadStream(filePath));
+  return sendStream(event, keepAlive(sessionId, createReadStream(filePath)));
 });
+
+/**
+ * A large file over a slow line can take longer than a session may stay
+ * silent; every chunk sent counts as the session being alive.
+ */
+function keepAlive<T extends NodeJS.ReadableStream>(sessionId: string, stream: T): T {
+  stream.on('data', () => touchBackupSession(sessionId));
+  return stream;
+}

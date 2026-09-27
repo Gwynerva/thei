@@ -1,6 +1,7 @@
 import pc from 'picocolors';
-import { readdir } from 'node:fs/promises';
-import { bootTheiConfig } from '../config/boot';
+import { existsSync } from 'node:fs';
+import { bootTheiConfig, loadTheiConfig } from '../config/boot';
+import { setAsideOrphanDatabase } from '../db/orphan';
 import {
   BootDecided,
   bootResult,
@@ -32,6 +33,8 @@ export async function bootTheiServer() {
     await bootTheiLanguage();
     // Closes the site when an update has work left, and runs the migrations.
     const tasks = await bootTheiDb();
+    // The migrations have brought the file to this release's shape.
+    await loadTheiConfig();
     await bootAdminSessions();
     // Still closed: tasks convert old content with the new engine's code.
     await bootUpdateTasks(tasks);
@@ -78,17 +81,15 @@ export async function bootTheiServer() {
   }
 }
 
+/**
+ * The installation writes the config last, so its absence is what "not
+ * installed" means. Whatever else sits in `content/` — files a visit to the
+ * wizard produced, a mounted volume's own entries, a database an installation
+ * left behind when it stopped halfway — does not make a site.
+ */
 async function trySwitchToInstall() {
-  let entries: string[];
-  try {
-    entries = await readdir(THEI_SERVER.contentPath());
-  } catch {
-    THEI_SERVER.console.tag('Boot').warn('Content directory does not exist!');
-    setBootInstall();
-  }
-
-  if (entries.length === 0) {
-    THEI_SERVER.console.tag('Boot').warn('Content directory is empty!');
-    setBootInstall();
-  }
+  if (existsSync(THEI_SERVER.contentPath('thei.config.json'))) return;
+  await setAsideOrphanDatabase();
+  THEI_SERVER.console.tag('Boot').warn('The site is not installed yet.');
+  setBootInstall();
 }

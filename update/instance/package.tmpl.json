@@ -7,7 +7,7 @@
     "start": "node .output/server/index.mjs"
   },
   "dependencies": {
-    "nuxt": "^4.5.2",
+    "nuxt": "4.5.2",
     "thei": "__THEI_SOURCE__"
   },
   "trustedDependencies": [

@@ -2,6 +2,7 @@ import { normalizeVersion } from './semver';
 import {
   appendLog,
   createUpdateState,
+  failRun,
   finishStep,
   pendingStep,
   planSteps,
@@ -115,17 +116,14 @@ export async function openBootRun(
     isRunningStatus(state.status) &&
     normalizeVersion(state.toVersion) !== current
   ) {
-    const message =
-      state.status === 'restarting'
+    const restarting = state.status === 'restarting';
+    failRun(
+      state,
+      restarting
         ? `The update did not take effect: expected ${state.toVersion}, running ${options.currentVersion}.`
-        : 'The server stopped while updating.';
-    if (state.status === 'restarting') {
-      finishStep(state, 'restart', 'failed', message);
-    }
-    state.error = message;
-    appendLog(state, message);
-    setStatus(state, 'failed');
-    settleSteps(state);
+        : 'The server stopped while updating.',
+      restarting ? 'restart' : undefined,
+    );
     await write();
   }
 
@@ -181,11 +179,7 @@ export async function openBootRun(
     },
     async fail(id, message) {
       if (!state) return;
-      if (id) finishStep(state, id, 'failed', message);
-      state.error = message;
-      appendLog(state, message);
-      setStatus(state, 'failed');
-      settleSteps(state);
+      failRun(state, message, id);
       await write();
     },
     async finish() {

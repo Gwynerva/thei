@@ -6,30 +6,32 @@
 # set of copies on this machine. Needs nothing but bash and curl, which every
 # Linux server, NAS and Mac already has.
 #
-#   ./thei-backup.sh                  interactive menu
-#   ./thei-backup.sh --run            back up now, as a manual copy
-#   ./thei-backup.sh --run --auto     back up if a week has passed
-#   ./thei-backup.sh --run --force    back up even if the site shrank sharply
-#   ./thei-backup.sh --status         print the current state and exit
-#   ./thei-backup.sh --config <path>  use a different settings file
+#   ./thei-backup.sh                          interactive menu
+#   ./thei-backup.sh --run                    back up now, as a manual copy
+#   ./thei-backup.sh --run --auto             back up if the interval has passed
+#   ./thei-backup.sh --run --force            back up even if the site shrank sharply
+#   ./thei-backup.sh --status                 print the current state and exit
+#   ./thei-backup.sh --install-schedule [H]   run daily at hour H (default 3)
+#   ./thei-backup.sh --remove-schedule        remove the schedule
+#   ./thei-backup.sh --config <path>          use a different settings file
 #
 # Downloaded from the admin panel, the site address (and a freshly generated
 # token) are already filled in below.
 
 set -u
+# Copies hold the site's password hash; nothing here is for other users.
+umask 077
 
 DEFAULT_SITE_URL='__THEI_SITE_URL__'
 DEFAULT_TOKEN='__THEI_BACKUP_TOKEN__'
 
-WEEK_SECONDS=$((7 * 24 * 60 * 60))
+DAY_SECONDS=$((24 * 60 * 60))
+# The schedule fires at a fixed hour and a run ends minutes later, so "a whole
+# interval since the last one" would slip a day each time. Half a day of slack
+# keeps a weekly backup weekly.
+DUE_SLACK_SECONDS=$((12 * 60 * 60))
 PARALLEL_DOWNLOADS=6
-AUTO_KEEP=3
-# A run stops instead of rotating out an old copy when the site lost more than
-# this share of its files or bytes since the last backup.
-SHRINK_ALERT_PERCENT=30
-UNIT_NAME='thei-backup'
-LAUNCHD_LABEL='net.thei.backup'
-CRON_MARK='# thei-backup'
+CURL_OPTIONS=(--connect-timeout 20 --retry 3 --retry-delay 2 --speed-limit 1024 --speed-time 60)
 
 SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
@@ -99,7 +101,31 @@ local_time_from_ms() {
     printf '%s' "$seconds"
 }
 
-file_size() { wc -c <"$1" 2>/dev/null | tr -d ' '; }
+file_size() {
+  stat -c %s "$1" 2>/dev/null || stat -f %z "$1" 2>/dev/null || wc -c <"$1" 2>/dev/null | tr -d ' '
+}
+
+sha256_of() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" 2>/dev/null | cut -d ' ' -f 1
+  else
+    shasum -a 256 "$1" 2>/dev/null | cut -d ' ' -f 1
+  fi
+}
+
+# Whether a file is what its path promises. Files under assets/ are named by
+# the SHA-256 of their bytes, so a damaged one is caught here — whether it just
+# arrived or has sat in an older copy for months. Other files carry no hash.
+file_intact() {
+  local file="$1" path="$2" size="$3"
+  [ -f "$file" ] && [ "$(file_size "$file")" = "$size" ] || return 1
+  case "$path" in
+  assets/*)
+    local name="${path##*/}"
+    [ "$(sha256_of "$file")" = "${name%%.*}" ]
+    ;;
+  esac
+}
 
 # ---------------------------------------------------------------- settings
 
@@ -107,40 +133,73 @@ CFG_siteUrl=''
 CFG_token=''
 CFG_destination=''
 CFG_clientLabel=''
+CFG_keepCount='3'
+CFG_intervalDays='7'
+CFG_shrinkPercent='30'
+CFG_alertCommand=''
 CFG_lastRunAt=0
 CFG_lastFileCount=0
 CFG_lastByteCount=0
+CFG_lastCounts=''
 CFG_alert=''
+CFG_bakedToken=''
 
-CONFIG_KEYS='siteUrl token destination clientLabel lastRunAt lastFileCount lastByteCount alert'
+CONFIG_KEYS='siteUrl token destination clientLabel keepCount intervalDays shrinkPercent alertCommand lastRunAt lastFileCount lastByteCount lastCounts alert bakedToken'
+
+# Set when the token written into this script was taken over this run.
+ADOPTED_TOKEN='no'
 
 placeholder() { case "$1" in __THEI_*__) return 0 ;; *) return 1 ;; esac; }
 
 read_config() {
   if [ -f "$CONFIG_PATH" ]; then
-    local key value
-    while IFS='=' read -r key value || [ -n "$key" ]; do
+    local line key value
+    while IFS= read -r line || [ -n "$line" ]; do
+      line="${line%$'\r'}"
+      case "$line" in *=*) ;; *) continue ;; esac
+      key="${line%%=*}"
+      value="${line#*=}"
       case " $CONFIG_KEYS " in
       *" $key "*) printf -v "CFG_$key" '%s' "$value" ;;
       esac
     done <"$CONFIG_PATH"
-  else
-    placeholder "$DEFAULT_SITE_URL" || CFG_siteUrl="$DEFAULT_SITE_URL"
-    placeholder "$DEFAULT_TOKEN" || CFG_token="$DEFAULT_TOKEN"
   fi
+  # The address the script was downloaded with, unless one was set since.
+  if [ -z "$CFG_siteUrl" ] && ! placeholder "$DEFAULT_SITE_URL"; then
+    CFG_siteUrl="$DEFAULT_SITE_URL"
+  fi
+  # A script downloaded right after generating a token carries it, and that
+  # token is newer than whatever an older settings file says — once. A token
+  # typed into Settings later wins over the one the script was born with.
+  if ! placeholder "$DEFAULT_TOKEN" && [ "$DEFAULT_TOKEN" != "$CFG_bakedToken" ]; then
+    CFG_token="$DEFAULT_TOKEN"
+    CFG_bakedToken="$DEFAULT_TOKEN"
+    ADOPTED_TOKEN='yes'
+  fi
+  number_or CFG_keepCount 3
+  number_or CFG_intervalDays 7
+  number_or CFG_shrinkPercent 30
+  number_or CFG_lastRunAt 0
+  number_or CFG_lastFileCount 0
+  number_or CFG_lastByteCount 0
+}
+
+# number_or NAME DEFAULT — keeps a setting only if it is a whole number.
+number_or() {
+  case "${!1}" in '' | *[!0-9]*) printf -v "$1" '%s' "$2" ;; *) printf -v "$1" '%d' "$((10#${!1}))" ;; esac
 }
 
 write_config() {
-  mkdir -p "$(dirname "$CONFIG_PATH")"
-  local temp="$CONFIG_PATH.$$.tmp" key value
-  (
-    umask 077
-    for key in $CONFIG_KEYS; do
-      eval "value=\${CFG_$key}"
-      printf '%s=%s\n' "$key" "$value"
-    done >"$temp"
-  ) && mv -f "$temp" "$CONFIG_PATH"
+  mkdir -p "$(dirname "$CONFIG_PATH")" || return 1
+  local temp="$CONFIG_PATH.$$.tmp" key variable
+  for key in $CONFIG_KEYS; do
+    variable="CFG_$key"
+    printf '%s=%s\n' "$key" "${!variable}"
+  done >"$temp" && mv -f "$temp" "$CONFIG_PATH"
+  local code=$?
   rm -f "$temp"
+  [ "$code" = 0 ] || warn "Could not save $CONFIG_PATH"
+  return "$code"
 }
 
 config_complete() {
@@ -151,31 +210,44 @@ site_base() { printf '%s' "${CFG_siteUrl%/}"; }
 
 destination_path() {
   case "$CFG_destination" in
-  "~"*) printf '%s%s' "$HOME" "${CFG_destination#\~}" ;;
+  "~"*) printf '%s%s' "${HOME:-}" "${CFG_destination#\~}" ;;
   /*) printf '%s' "$CFG_destination" ;;
   *) printf '%s/%s' "$SCRIPT_DIR" "$CFG_destination" ;;
   esac
+}
+
+# Every scheduler entry is named after the settings file, so each site backed
+# up from this machine gets a schedule of its own.
+schedule_name() {
+  local base
+  base="$(basename "$CONFIG_PATH")"
+  base="${base%.conf}"
+  base="$(printf '%s' "$base" | tr -c 'A-Za-z0-9_-' '-')"
+  [ "$base" = 'thei-backup' ] && printf 'thei-backup' || printf 'thei-backup-%s' "$base"
 }
 
 # ---------------------------------------------------------------------- api
 
 WORK_DIR=''
 HEADER_FILE=''
+SESSION_ID=''
 
 cleanup() {
+  # A session left open would hold the site's only backup slot for hours.
+  abandon_session
   printf '%s' "$C_RESET"
   [ -t 1 ] && printf '\033[?25h'
   [ -n "$WORK_DIR" ] && rm -rf "$WORK_DIR"
 }
 trap cleanup EXIT
-trap 'exit 130' INT TERM
+trap 'exit 130' INT TERM HUP
 
 prepare_work_dir() {
   [ -n "$WORK_DIR" ] && return
   WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/thei-backup.XXXXXX")"
   HEADER_FILE="$WORK_DIR/headers"
   # The token goes through a file, so it never shows up in `ps`.
-  (umask 077 && printf 'x-thei-backup-token: %s\n' "$CFG_token" >"$HEADER_FILE")
+  printf 'x-thei-backup-token: %s\n' "$CFG_token" >"$HEADER_FILE"
 }
 
 API_STATUS=''
@@ -185,7 +257,7 @@ api() {
   local method="$1" path="$2" output="$3"
   shift 3
   prepare_work_dir
-  API_STATUS="$(curl -sS -X "$method" -H @"$HEADER_FILE" -o "$output" \
+  API_STATUS="$(curl -sS "${CURL_OPTIONS[@]}" -X "$method" -H @"$HEADER_FILE" -o "$output" \
     -w '%{http_code}' "$@" "$(site_base)$path")" || {
     API_STATUS='000'
     return 1
@@ -194,10 +266,18 @@ api() {
 }
 
 api_error() {
-  local body="$1"
-  local detail=''
-  [ -f "$body" ] && detail="$(head -c 200 "$body" | tr '\n' ' ')"
-  printf '%s failed: HTTP %s %s' "$2" "$API_STATUS" "$detail"
+  local body="$1" what="$2" detail=''
+  case "$API_STATUS" in
+  000) printf '%s failed: the site did not answer.' "$what" ;;
+  3??) printf '%s failed: the site redirects elsewhere (HTTP %s). Set its final address, with https://, in Settings.' "$what" "$API_STATUS" ;;
+  403) printf '%s failed: the site refused the token. Generate a new one in Settings → Backups.' "$what" ;;
+  409) printf '%s failed: another backup of this site is running. Try again later.' "$what" ;;
+  503) printf '%s failed: the site is updating or not ready. Try again later.' "$what" ;;
+  *)
+    [ -f "$body" ] && detail="$(head -c 200 "$body" | tr '\n' ' ')"
+    printf '%s failed: HTTP %s %s' "$what" "$API_STATUS" "$detail"
+    ;;
+  esac
 }
 
 json_escape() {
@@ -206,9 +286,9 @@ json_escape() {
 
 # ------------------------------------------------------------------- backup
 
-SESSION_ID=''
 SESSION_FILES=0
 SESSION_BYTES=0
+SESSION_COUNTS=''
 
 open_session() {
   local kind="$1" body="$WORK_DIR/session"
@@ -221,13 +301,15 @@ open_session() {
     fail "$(api_error "$body" 'Opening a session')"
     return 1
   }
-  local field value skipped=''
-  while IFS="$(printf '\t')" read -r field value; do
+  local field value extra skipped=''
+  SESSION_COUNTS=''
+  while IFS="$(printf '\t')" read -r field value extra; do
     case "$field" in
     sessionId) SESSION_ID="$value" ;;
     totalFiles) SESSION_FILES="$value" ;;
     totalBytes) SESSION_BYTES="$value" ;;
     skipped) skipped="$skipped${skipped:+, }$value" ;;
+    count) SESSION_COUNTS="$SESSION_COUNTS${SESSION_COUNTS:+,}$value:$extra" ;;
     esac
   done <"$body"
   [ -n "$SESSION_ID" ] || {
@@ -240,7 +322,9 @@ open_session() {
 
 abandon_session() {
   [ -n "$SESSION_ID" ] || return 0
-  api DELETE "/api/backup/session/$SESSION_ID" /dev/null || true
+  local session="$SESSION_ID"
+  SESSION_ID=''
+  api DELETE "/api/backup/session/$session" /dev/null || true
 }
 
 # Percent lost from $1 to $2, or 0 when nothing was lost.
@@ -255,16 +339,31 @@ shrink_percent() {
 
 SHRINK_REPORT=''
 
+# Whether the site lost more than it plausibly meant to since the last backup:
+# a share of its files or bytes, or of any kind of entity.
 site_shrank() {
-  [ "${CFG_lastFileCount:-0}" -gt 0 ] || return 1
-  local files bytes
-  files="$(shrink_percent "$CFG_lastFileCount" "$SESSION_FILES")"
-  bytes="$(shrink_percent "$CFG_lastByteCount" "$SESSION_BYTES")"
-  if [ "$files" -gt "$SHRINK_ALERT_PERCENT" ] || [ "$bytes" -gt "$SHRINK_ALERT_PERCENT" ]; then
-    SHRINK_REPORT="files $CFG_lastFileCount → $SESSION_FILES (-$files%), size $(human_size "$CFG_lastByteCount") → $(human_size "$SESSION_BYTES") (-$bytes%)"
-    return 0
+  local limit="$CFG_shrinkPercent" report='' files bytes
+  if [ "${CFG_lastFileCount:-0}" -gt 0 ]; then
+    files="$(shrink_percent "$CFG_lastFileCount" "$SESSION_FILES")"
+    bytes="$(shrink_percent "$CFG_lastByteCount" "$SESSION_BYTES")"
+    if [ "$files" -gt "$limit" ] || [ "$bytes" -gt "$limit" ]; then
+      report="files $CFG_lastFileCount → $SESSION_FILES (-$files%), size $(human_size "$CFG_lastByteCount") → $(human_size "$SESSION_BYTES") (-$bytes%)"
+    fi
   fi
-  return 1
+  # Deleting a couple of entries is ordinary; losing a share of them, and more
+  # than two, is not.
+  local pair entity before after
+  for pair in ${CFG_lastCounts//,/ }; do
+    entity="${pair%%:*}"
+    before="${pair#*:}"
+    after="$(printf '%s' ",$SESSION_COUNTS," | sed -n "s/.*,$entity:\([0-9]*\),.*/\1/p")"
+    [ -n "$after" ] || continue
+    if [ $((before - after)) -gt 2 ] && [ "$(shrink_percent "$before" "$after")" -gt "$limit" ]; then
+      report="$report${report:+; }$entity $before → $after"
+    fi
+  done
+  SHRINK_REPORT="$report"
+  [ -n "$report" ]
 }
 
 notify_alert() {
@@ -282,6 +381,10 @@ notify_alert() {
   } >"$destination/ALERT.txt" 2>/dev/null
 
   command -v logger >/dev/null 2>&1 && logger -t thei-backup "$message"
+  if [ -n "$CFG_alertCommand" ]; then
+    THEI_BACKUP_ALERT="$message" sh -c "$CFG_alertCommand" >/dev/null 2>&1 ||
+      warn 'The alert command failed.'
+  fi
   if [ "$(uname)" = 'Darwin' ]; then
     osascript -e "display notification \"$(json_escape "$message")\" with title \"Thei backup stopped\"" >/dev/null 2>&1
   else
@@ -297,19 +400,20 @@ clear_alert() {
   rm -f "$(destination_path)/ALERT.txt" 2>/dev/null
 }
 
-# Newest first: every earlier copy and unfinished staging can supply files.
+# Earlier copies, newest first: each can supply files that did not change.
 reuse_sources() {
   local destination="$1"
-  (cd "$destination" 2>/dev/null && ls -1d auto-* manual-* .tmp-* 2>/dev/null) |
-    sort -r | while IFS= read -r name; do
+  (cd "$destination" 2>/dev/null && ls -1d auto-* manual-* 2>/dev/null) |
+    sort -t- -k2 -r | while IFS= read -r name; do
     [ -d "$destination/$name" ] && printf '%s\n' "$destination/$name"
   done
 }
 
-clone_file() {
-  # Copy-on-write where the filesystem can, a plain copy where it cannot.
-  cp --reflink=auto "$1" "$2" 2>/dev/null || cp -c "$1" "$2" 2>/dev/null ||
-    cp "$1" "$2"
+# A file that did not change is shared with the copy it came from rather than
+# stored again, so a weekly copy costs only what changed. Where links cannot
+# be made, it is copied.
+link_or_copy() {
+  ln "$1" "$2" 2>/dev/null || cp "$1" "$2"
 }
 
 # Worker run by xargs: fetch one file into the staging directory.
@@ -318,34 +422,42 @@ download_one() {
   local target="$STAGING/$path"
   local part="$target.part"
   mkdir -p "$(dirname "$target")"
-  if [ -f "$part" ]; then
-    local have
-    have="$(file_size "$part")"
-    [ "${have:-0}" -gt "$size" ] && rm -f "$part"
-  fi
+  # Only a file named by its hash can resume from an earlier attempt: the
+  # database and the config are new bytes in every session.
+  case "$path" in
+  assets/*) [ -f "$part" ] && [ "$(file_size "$part")" -gt "$size" ] && rm -f "$part" ;;
+  *) rm -f "$part" ;;
+  esac
   local status
   if [ -f "$part" ] && [ "$(file_size "$part")" = "$size" ]; then
     status=200
   else
-    status="$(curl -sS -H @"$HEADER_FILE" -C - -o "$part" -w '%{http_code}' \
-      -G --data-urlencode "path=$path" \
+    status="$(curl -sS --connect-timeout 20 --retry 3 --retry-delay 2 \
+      --speed-limit 1024 --speed-time 60 -H @"$HEADER_FILE" -C - -o "$part" \
+      -w '%{http_code}' -G --data-urlencode "path=$path" \
       "$SITE_BASE/api/backup/session/$SESSION_ID/file" 2>/dev/null)" ||
       status="${status:-000}"
   fi
   case "$status" in
   200 | 206 | 416)
-    if [ "$(file_size "$part")" = "$size" ]; then
+    if file_intact "$part" "$path" "$size"; then
       mv -f "$part" "$target"
       printf 'ok %s\n' "$size" >>"$RESULTS"
     else
-      printf 'fail %s %s\n' "$status" "$path" >>"$RESULTS"
+      rm -f "$part"
+      printf 'fail %s %s (damaged in transfer)\n' "$status" "$path" >>"$RESULTS"
     fi
     ;;
   404)
-    # Reclaimed by the site's own cleanup after the snapshot: garbage the
-    # snapshot does not depend on.
     rm -f "$part"
-    printf 'gone\n' >>"$RESULTS"
+    case "$path" in
+    assets/* | external-link-favicons/*)
+      # Reclaimed by the site's own cleanup after the snapshot: garbage the
+      # snapshot does not depend on.
+      printf 'gone\n' >>"$RESULTS"
+      ;;
+    *) printf 'fail 404 %s\n' "$path" >>"$RESULTS" ;;
+    esac
     ;;
   *)
     rm -f "$part"
@@ -364,6 +476,15 @@ progress_line() {
 }
 
 perform_backup() {
+  transfer "$@"
+  local code=$?
+  # A run that stopped anywhere releases its session at once, so the next
+  # attempt — the menu's or the schedule's — is not refused for hours.
+  abandon_session
+  return "$code"
+}
+
+transfer() {
   local kind="$1" force="$2"
   prepare_work_dir
   local destination
@@ -390,25 +511,27 @@ perform_backup() {
     return 2
   fi
 
-  STAGING="$destination/.tmp-$SESSION_ID"
+  # One staging directory for every attempt: what a failed run fetched is
+  # picked up by the next one instead of piling up.
+  STAGING="$destination/.partial"
   RESULTS="$WORK_DIR/results"
   SITE_BASE="$(site_base)"
   mkdir -p "$STAGING"
   : >"$RESULTS"
   export STAGING RESULTS SITE_BASE SESSION_ID HEADER_FILE
-  export -f download_one file_size
+  export -f download_one file_size file_intact sha256_of
 
   local sources queue="$WORK_DIR/queue" reused=0 reused_bytes=0
-  sources="$(reuse_sources "$destination" | grep -v "/.tmp-$SESSION_ID\$")"
+  sources="$(reuse_sources "$destination")"
   : >"$queue"
 
-  local cursor='' page="$WORK_DIR/manifest" kind_field size path
+  local cursor='' page="$WORK_DIR/manifest" listed="$WORK_DIR/listed" kind_field size path
+  : >"$listed"
   while :; do
     local query='format=text'
     [ -n "$cursor" ] && query="$query&cursor=$cursor"
     api GET "/api/backup/session/$SESSION_ID/manifest?$query" "$page" || {
       fail "$(api_error "$page" 'Reading the file list')"
-      abandon_session
       return 1
     }
     cursor=''
@@ -416,19 +539,21 @@ perform_backup() {
       case "$kind_field" in
       next) cursor="$size" ;;
       file)
+        printf '%s\n' "$path" >>"$listed"
         local target="$STAGING/$path" source='' candidate
-        if [ -f "$target" ] && [ "$(file_size "$target")" = "$size" ]; then
-          reused=$((reused + 1))
-          reused_bytes=$((reused_bytes + size))
-          continue
-        fi
         # Only assets/ is addressed by the hash of its bytes, so only there a
-        # matching name and size is guaranteed to be the same file.
+        # file already on this machine can stand for the one on the site.
         case "$path" in
         assets/*)
+          if file_intact "$target" "$path" "$size"; then
+            reused=$((reused + 1))
+            reused_bytes=$((reused_bytes + size))
+            continue
+          fi
+          rm -f "$target"
           while IFS= read -r candidate; do
             [ -n "$candidate" ] || continue
-            if [ -f "$candidate/$path" ] && [ "$(file_size "$candidate/$path")" = "$size" ]; then
+            if file_intact "$candidate/$path" "$path" "$size"; then
               source="$candidate/$path"
               break
             fi
@@ -436,10 +561,11 @@ perform_backup() {
 $sources
 EOF
           ;;
+        *) rm -f "$target" ;;
         esac
         if [ -n "$source" ]; then
           mkdir -p "$(dirname "$target")"
-          clone_file "$source" "$target"
+          link_or_copy "$source" "$target"
           reused=$((reused + 1))
           reused_bytes=$((reused_bytes + size))
         else
@@ -452,22 +578,23 @@ EOF
   done
 
   local total=$SESSION_FILES
-  [ -t 1 ] && printf '\033[?25l'
-  # Paths from the site never contain whitespace, so plain xargs splitting is
-  # safe with both GNU and BSD xargs.
-  tr '\t' '\n' <"$queue" | xargs -n 2 -P "$PARALLEL_DOWNLOADS" \
-    bash -c 'download_one "$1" "$2"' _ 2>/dev/null &
-  local worker=$!
-  while kill -0 "$worker" 2>/dev/null; do
-    if [ -t 1 ]; then
-      local count bytes
-      count=$(($(grep -c '' "$RESULTS") + reused))
-      bytes=$(($(awk '$1 == "ok" { sum += $2 } END { print sum + 0 }' "$RESULTS") + reused_bytes))
-      progress_line "$count" "$total" "$bytes" "$reused"
-    fi
-    sleep 0.5 2>/dev/null || sleep 1
-  done
-  wait "$worker"
+  if [ -s "$queue" ]; then
+    [ -t 1 ] && printf '\033[?25l'
+    # Paths from the site never contain whitespace or quotes.
+    tr '\t' '\n' <"$queue" | xargs -n 2 -P "$PARALLEL_DOWNLOADS" \
+      bash -c 'download_one "$1" "$2"' _ 2>/dev/null &
+    local worker=$!
+    while kill -0 "$worker" 2>/dev/null; do
+      if [ -t 1 ]; then
+        local count bytes
+        count=$(($(grep -c '' "$RESULTS") + reused))
+        bytes=$(($(awk '$1 == "ok" { sum += $2 } END { print sum + 0 }' "$RESULTS") + reused_bytes))
+        progress_line "$count" "$total" "$bytes" "$reused"
+      fi
+      sleep 0.5 2>/dev/null || sleep 1
+    done
+    wait "$worker"
+  fi
   local copied gone failed bytes
   copied=$(grep -c '^ok ' "$RESULTS")
   gone=$(grep -c '^gone' "$RESULTS")
@@ -481,38 +608,61 @@ EOF
   if [ "$failed" -gt 0 ]; then
     fail "$failed file(s) could not be downloaded, for example:"
     grep '^fail ' "$RESULTS" | head -3 | sed 's/^fail /  HTTP /' >&2
-    say "${C_DIM}  Everything already fetched stays in $STAGING and is reused next time.$C_RESET"
-    abandon_session
+    say "${C_DIM}  What was fetched stays in $STAGING and is picked up next time.$C_RESET"
+    return 1
+  fi
+  # Every listed file has to be accounted for: a worker that never ran must
+  # not pass for a complete copy.
+  if [ $((copied + gone + reused)) -ne "$SESSION_FILES" ]; then
+    fail "Only $((copied + gone + reused)) of $SESSION_FILES file(s) were accounted for."
     return 1
   fi
 
-  local completed="$WORK_DIR/completed" completed_at=''
-  api POST "/api/backup/session/$SESSION_ID/complete?format=text" "$completed" \
-    -H 'content-type: application/json' \
-    --data "{\"fileCount\":$((copied + reused)),\"byteCount\":$bytes}" || {
-    fail "$(api_error "$completed" 'Completing the session')"
-    abandon_session
-    return 1
-  }
-  local field value
-  while IFS="$(printf '\t')" read -r field value; do
-    [ "$field" = 'completedAt' ] && completed_at="$value"
-  done <"$completed"
-  [ -n "$completed_at" ] || completed_at="$(($(now_seconds) * 1000))"
+  # Whatever an earlier attempt left in staging that this session did not
+  # list is not part of the copy.
+  (cd "$STAGING" && find . -type f ! -name '*.part' | sed 's|^\./||') | LC_ALL=C sort >"$WORK_DIR/present"
+  LC_ALL=C sort "$listed" | LC_ALL=C comm -23 "$WORK_DIR/present" - | while IFS= read -r stray; do
+    rm -f "$STAGING/$stray"
+  done
+  find "$STAGING" -name '*.part' -type f -delete 2>/dev/null
+  find "$STAGING" -mindepth 1 -type d -empty -delete 2>/dev/null
 
   # Renamed into place only once everything is there: until this line the copy
-  # is a .tmp- directory nothing mistakes for a backup.
-  local final="$destination/$kind-$(stamp_from_ms "$completed_at")"
+  # is a staging directory nothing mistakes for a backup. The site records the
+  # backup only after that.
+  local final
+  final="$destination/$kind-$(stamp_from_ms "$(($(now_seconds) * 1000))")"
+  [ -e "$final" ] && final="$final-$$"
   mv "$STAGING" "$final" || {
     fail "Cannot move the finished copy to $final"
     return 1
   }
+
+  local completed="$WORK_DIR/completed" completed_at=''
+  if api POST "/api/backup/session/$SESSION_ID/complete?format=text" "$completed" \
+    -H 'content-type: application/json' \
+    --data "{\"fileCount\":$((copied + reused)),\"byteCount\":$bytes}"; then
+    SESSION_ID=''
+    local field value
+    while IFS="$(printf '\t')" read -r field value; do
+      [ "$field" = 'completedAt' ] && completed_at="$value"
+    done <"$completed"
+  else
+    warn "The copy is complete, but the site could not record it: $(api_error "$completed" 'Completing the session')"
+  fi
+  [ -n "$completed_at" ] || completed_at="$(($(now_seconds) * 1000))"
+
   local removed
   removed="$(rotate "$destination")"
+  # Staging from before one directory was reused for every attempt.
+  (cd "$destination" && ls -1d .tmp-* 2>/dev/null) | while IFS= read -r stale; do
+    rm -rf "${destination:?}/$stale"
+  done
 
   CFG_lastRunAt="$completed_at"
   CFG_lastFileCount="$SESSION_FILES"
   CFG_lastByteCount="$SESSION_BYTES"
+  CFG_lastCounts="$SESSION_COUNTS"
   clear_alert
   write_config
 
@@ -533,7 +683,7 @@ rotate() {
   while IFS= read -r name; do
     [ -n "$name" ] || continue
     index=$((index + 1))
-    if [ "$index" -gt "$AUTO_KEEP" ]; then
+    if [ "$index" -gt "$CFG_keepCount" ]; then
       rm -rf "${destination:?}/$name"
       doomed="$doomed${doomed:+, }$name"
     fi
@@ -543,53 +693,67 @@ EOF
   printf '%s' "$doomed"
 }
 
+interval_seconds() { printf '%d' $((CFG_intervalDays * DAY_SECONDS)); }
+
 # The OS task fires daily; this decides whether a run is actually due. That is
 # what lets a machine that was off catch up, and a manual backup restart the
-# week without touching the scheduler.
+# interval without touching the scheduler.
 backup_due() {
   [ "${CFG_lastRunAt:-0}" -gt 0 ] || return 0
-  [ $(($(now_seconds) - CFG_lastRunAt / 1000)) -ge "$WEEK_SECONDS" ]
+  [ $(($(now_seconds) - CFG_lastRunAt / 1000)) -ge $(($(interval_seconds) - DUE_SLACK_SECONDS)) ]
 }
 
 # --------------------------------------------------------------- scheduling
 
+# The command a scheduler runs, quoted for a shell.
 schedule_command() {
   printf "/usr/bin/env bash '%s' --run --auto --config '%s'" "$SCRIPT_PATH" "$CONFIG_PATH"
 }
 
+# systemd expands % and $ in ExecStart.
+systemd_escape() { printf '%s' "$1" | sed -e 's/%/%%/g' -e 's/\$/$$/g'; }
+# cron ends a command at an unescaped %.
+cron_escape() { printf '%s' "$1" | sed -e 's/%/\\%/g'; }
+xml_escape() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
+
 systemd_system_dir() { printf '/etc/systemd/system'; }
-systemd_user_dir() { printf '%s/.config/systemd/user' "$HOME"; }
+systemd_user_dir() { printf '%s/.config/systemd/user' "${HOME:-}"; }
 
 write_systemd_units() {
-  local directory="$1" hour="$2" wanted="$3"
+  local directory="$1" hour="$2" wanted="$3" name
+  name="$(schedule_name)"
   mkdir -p "$directory" || return 1
-  printf '[Unit]\nDescription=Thei content backup\nWants=network-online.target\nAfter=network-online.target\n\n[Service]\nType=oneshot\nExecStart=%s\n' \
-    "$(schedule_command)" >"$directory/$UNIT_NAME.service" || return 1
+  printf '[Unit]\nDescription=Thei content backup (%s)\nWants=network-online.target\nAfter=network-online.target\n\n[Service]\nType=oneshot\nExecStart=%s\n' \
+    "$name" "$(systemd_escape "$(schedule_command)")" >"$directory/$name.service" || return 1
   # Persistent=true runs a timer missed while the machine was off as soon as it
   # is back, which is what makes the schedule survive reboots.
-  printf '[Unit]\nDescription=Thei content backup\n\n[Timer]\nOnCalendar=*-*-* %02d:00:00\nOnBootSec=5min\nPersistent=true\n\n[Install]\nWantedBy=%s\n' \
-    "$hour" "$wanted" >"$directory/$UNIT_NAME.timer"
+  printf '[Unit]\nDescription=Thei content backup (%s)\n\n[Timer]\nOnCalendar=*-*-* %02d:00:00\nOnBootSec=5min\nPersistent=true\n\n[Install]\nWantedBy=%s\n' \
+    "$name" "$hour" "$wanted" >"$directory/$name.timer"
 }
 
+SCHEDULE_DESCRIPTION=''
+
 install_schedule() {
-  local hour="$1"
+  local hour="$1" name
+  name="$(schedule_name)"
   if [ "$(uname)" = 'Darwin' ]; then
-    local plist="$HOME/Library/LaunchAgents/$LAUNCHD_LABEL.plist"
+    local label="net.thei.${name#thei-}"
+    local plist="$HOME/Library/LaunchAgents/$label.plist"
     mkdir -p "$(dirname "$plist")"
     cat >"$plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>$LAUNCHD_LABEL</string>
+  <key>Label</key><string>$label</string>
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>$SCRIPT_PATH</string>
+    <string>$(xml_escape "$SCRIPT_PATH")</string>
     <string>--run</string>
     <string>--auto</string>
     <string>--config</string>
-    <string>$CONFIG_PATH</string>
+    <string>$(xml_escape "$CONFIG_PATH")</string>
   </array>
   <key>StartCalendarInterval</key>
   <dict><key>Hour</key><integer>$hour</integer><key>Minute</key><integer>0</integer></dict>
@@ -599,24 +763,25 @@ install_schedule() {
 EOF
     launchctl unload "$plist" >/dev/null 2>&1
     launchctl load "$plist" || return 1
-    SCHEDULE_DESCRIPTION="launchd agent $LAUNCHD_LABEL (daily at $hour:00 and at every login)"
+    SCHEDULE_DESCRIPTION="launchd agent $label (daily at $hour:00 and at every login)"
     return 0
   fi
 
-  if command -v systemctl >/dev/null 2>&1 && [ "$(id -u)" = '0' ]; then
-    write_systemd_units "$(systemd_system_dir)" "$hour" timers.target &&
+  if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ] && [ "$(id -u)" = '0' ]; then
+    if write_systemd_units "$(systemd_system_dir)" "$hour" timers.target &&
       systemctl daemon-reload &&
-      systemctl enable --now "$UNIT_NAME.timer" >/dev/null 2>&1 && {
-      SCHEDULE_DESCRIPTION="systemd timer $UNIT_NAME.timer (daily at $hour:00, catches up after a reboot)"
+      systemctl enable --now "$name.timer" >/dev/null 2>&1; then
+      SCHEDULE_DESCRIPTION="systemd timer $name.timer (daily at $hour:00, catches up after a reboot)"
       return 0
-    }
+    fi
+    rm -f "$(systemd_system_dir)/$name.timer" "$(systemd_system_dir)/$name.service"
   fi
 
   if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
     if write_systemd_units "$(systemd_user_dir)" "$hour" timers.target &&
       systemctl --user daemon-reload &&
-      systemctl --user enable --now "$UNIT_NAME.timer" >/dev/null 2>&1; then
-      SCHEDULE_DESCRIPTION="systemd user timer $UNIT_NAME.timer (daily at $hour:00, catches up after a reboot)"
+      systemctl --user enable --now "$name.timer" >/dev/null 2>&1; then
+      SCHEDULE_DESCRIPTION="systemd user timer $name.timer (daily at $hour:00, catches up after a reboot)"
       # A user's timers only run while that user is logged in, unless lingering
       # is on — without it a rebooted server would never back up.
       if ! loginctl enable-linger "$(id -un)" >/dev/null 2>&1; then
@@ -625,54 +790,78 @@ EOF
       fi
       return 0
     fi
+    rm -f "$(systemd_user_dir)/$name.timer" "$(systemd_user_dir)/$name.service"
   fi
 
   command -v crontab >/dev/null 2>&1 || {
     fail 'No systemd, launchd or cron found to schedule with.'
     return 1
   }
-  local lines
-  lines="$( (crontab -l 2>/dev/null || true) | grep -v "$CRON_MARK")"
+  local mark="# $name" command lines
+  command="$(cron_escape "$(schedule_command)")"
+  lines="$( (crontab -l 2>/dev/null || true) | grep -vF "$mark")"
   {
     [ -n "$lines" ] && printf '%s\n' "$lines"
-    printf '0 %d * * * %s %s\n' "$hour" "$(schedule_command)" "$CRON_MARK"
+    printf '0 %d * * * %s %s\n' "$hour" "$command" "$mark"
     # cron cannot catch up a missed run on its own; checking at boot can.
-    printf '@reboot sleep 300 && %s %s\n' "$(schedule_command)" "$CRON_MARK"
+    printf '@reboot sleep 300 && %s %s\n' "$command" "$mark"
   } | crontab - || return 1
   SCHEDULE_DESCRIPTION="crontab entries (daily at $hour:00 and after every reboot)"
+  if ! pgrep -x cron >/dev/null 2>&1 && ! pgrep -x crond >/dev/null 2>&1; then
+    warn 'No cron daemon seems to be running here; the entries will not run until one does.'
+  fi
 }
 
 remove_schedule() {
+  local name removed=1
+  name="$(schedule_name)"
   if [ "$(uname)" = 'Darwin' ]; then
-    local plist="$HOME/Library/LaunchAgents/$LAUNCHD_LABEL.plist"
+    local plist="$HOME/Library/LaunchAgents/net.thei.${name#thei-}.plist"
+    [ -f "$plist" ] || return 1
     launchctl unload "$plist" >/dev/null 2>&1
     rm -f "$plist"
     return 0
   fi
-  if [ -f "$(systemd_system_dir)/$UNIT_NAME.timer" ]; then
-    systemctl disable --now "$UNIT_NAME.timer" >/dev/null 2>&1
-    rm -f "$(systemd_system_dir)/$UNIT_NAME.timer" "$(systemd_system_dir)/$UNIT_NAME.service"
+  if [ -f "$(systemd_system_dir)/$name.timer" ]; then
+    if [ "$(id -u)" != '0' ]; then
+      fail "The schedule was installed by root; remove it as root."
+      return 1
+    fi
+    systemctl disable --now "$name.timer" >/dev/null 2>&1
+    rm -f "$(systemd_system_dir)/$name.timer" "$(systemd_system_dir)/$name.service"
     systemctl daemon-reload >/dev/null 2>&1
+    removed=0
   fi
-  if [ -f "$(systemd_user_dir)/$UNIT_NAME.timer" ]; then
-    systemctl --user disable --now "$UNIT_NAME.timer" >/dev/null 2>&1
-    rm -f "$(systemd_user_dir)/$UNIT_NAME.timer" "$(systemd_user_dir)/$UNIT_NAME.service"
+  if [ -f "$(systemd_user_dir)/$name.timer" ]; then
+    systemctl --user disable --now "$name.timer" >/dev/null 2>&1
+    rm -f "$(systemd_user_dir)/$name.timer" "$(systemd_user_dir)/$name.service"
     systemctl --user daemon-reload >/dev/null 2>&1
+    removed=0
   fi
-  if command -v crontab >/dev/null 2>&1 && crontab -l 2>/dev/null | grep -q "$CRON_MARK"; then
-    crontab -l 2>/dev/null | grep -v "$CRON_MARK" | crontab -
+  if command -v crontab >/dev/null 2>&1 && crontab -l 2>/dev/null | grep -qF "# $name"; then
+    crontab -l 2>/dev/null | grep -vF "# $name" | crontab -
+    removed=0
   fi
-  return 0
+  return "$removed"
 }
 
 schedule_installed() {
+  local name
+  name="$(schedule_name)"
   if [ "$(uname)" = 'Darwin' ]; then
-    [ -f "$HOME/Library/LaunchAgents/$LAUNCHD_LABEL.plist" ]
+    [ -f "$HOME/Library/LaunchAgents/net.thei.${name#thei-}.plist" ]
     return
   fi
-  [ -f "$(systemd_system_dir)/$UNIT_NAME.timer" ] && return 0
-  [ -f "$(systemd_user_dir)/$UNIT_NAME.timer" ] && return 0
-  command -v crontab >/dev/null 2>&1 && crontab -l 2>/dev/null | grep -q "$CRON_MARK"
+  [ -f "$(systemd_system_dir)/$name.timer" ] && return 0
+  [ -f "$(systemd_user_dir)/$name.timer" ] && return 0
+  command -v crontab >/dev/null 2>&1 && crontab -l 2>/dev/null | grep -qF "# $name"
+}
+
+# parse_hour VALUE — a whole hour 0-23 (leading zeros welcome), else 3.
+parse_hour() {
+  case "$1" in '' | *[!0-9]*) printf '3' && return ;; esac
+  local hour=$((10#$1))
+  [ "$hour" -le 23 ] && printf '%d' "$hour" || printf '3'
 }
 
 # ------------------------------------------------------------------- status
@@ -691,10 +880,11 @@ print_status() {
   if backup_due; then
     say "  Next due     ${C_YELLOW}now$C_RESET"
   else
-    say "  Next due     $(local_time_from_ms $((CFG_lastRunAt + WEEK_SECONDS * 1000)))"
+    say "  Next due     $(local_time_from_ms $((CFG_lastRunAt + ($(interval_seconds) - DUE_SLACK_SECONDS) * 1000)))"
   fi
+  say "  Keeps        $CFG_keepCount scheduled copies, every $CFG_intervalDays day(s)"
   if schedule_installed; then
-    say "  Schedule     ${C_GREEN}installed$C_RESET"
+    say "  Schedule     ${C_GREEN}installed$C_RESET ($(schedule_name))"
   else
     say "  Schedule     ${C_DIM}not installed$C_RESET"
   fi
@@ -703,7 +893,7 @@ print_status() {
   [ -n "$CFG_destination" ] || return 0
   local destination names name
   destination="$(destination_path)"
-  names="$(cd "$destination" 2>/dev/null && ls -1d auto-* manual-* 2>/dev/null | sort -r)"
+  names="$(cd "$destination" 2>/dev/null && ls -1d auto-* manual-* 2>/dev/null | sort -t- -k2 -r)"
   say
   if [ -z "$names" ]; then
     say "${C_DIM}  No copies yet.$C_RESET"
@@ -718,7 +908,9 @@ print_status() {
   done <<EOF
 $names
 EOF
-  say "${C_DIM}  Manual copies are never rotated out.$C_RESET"
+  [ -d "$destination/.partial" ] && say "${C_DIM}  An unfinished copy waits in .partial and is picked up next time.$C_RESET"
+  say "${C_DIM}  Manual copies are never rotated out. Files that did not change are$C_RESET"
+  say "${C_DIM}  shared between copies, so sizes overlap; each copy is complete.$C_RESET"
 }
 
 print_restore() {
@@ -726,18 +918,21 @@ print_restore() {
   [ -n "$CFG_destination" ] && example="$(destination_path)/auto-<timestamp>"
   say
   say "${C_BOLD}  Restoring a copy$C_RESET"
-  say '  On the server, as root:'
+  say "  Copy $example to the server, then there, as root:"
   say
   say "${C_CYAN}    systemctl stop thei$C_RESET"
   say "${C_CYAN}    mv /opt/thei/content /opt/thei/content.broken$C_RESET"
-  say "${C_CYAN}    cp -a $example /opt/thei/content$C_RESET"
+  say "${C_CYAN}    cp -a <the copy> /opt/thei/content$C_RESET"
   say "${C_CYAN}    chown -R thei:thei /opt/thei/content$C_RESET"
   say "${C_CYAN}    systemctl start thei$C_RESET"
   say
   say '  1. The service runs as the thei user; a copy unpacked as root needs the chown.'
-  say '  2. Restore onto the same engine version or a newer one.'
+  say '  2. Restore onto the same engine version or a newer one. To go back to an'
+  say '     older version, install that version first, then restore its copy.'
   say '  3. generated-media/ is missing on purpose: it is a cache the site'
   say '     rebuilds on first use.'
+  say '  4. Generate a new backup token afterwards: the restored site knows the'
+  say '     token it had when the copy was made.'
 }
 
 # --------------------------------------------------------------------- menu
@@ -816,6 +1011,8 @@ ask() {
     printf '  %s: ' "$label"
   fi
   read -r answer || answer=''
+  # Pasted text often brings spaces or a line ending along.
+  answer="$(printf '%s' "$answer" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
   ASK_RESULT="${answer:-$current}"
 }
 
@@ -831,11 +1028,18 @@ configure() {
   CFG_destination="$ASK_RESULT"
   ask 'Name for this machine (optional)' "$CFG_clientLabel"
   CFG_clientLabel="$ASK_RESULT"
-  write_config
+  ask 'Scheduled copies to keep' "$CFG_keepCount"
+  CFG_keepCount="$ASK_RESULT"
+  ask 'Days between scheduled copies' "$CFG_intervalDays"
+  CFG_intervalDays="$ASK_RESULT"
+  number_or CFG_keepCount 3
+  number_or CFG_intervalDays 7
+  [ "$CFG_keepCount" -ge 1 ] || CFG_keepCount=1
+  [ "$CFG_intervalDays" -ge 1 ] || CFG_intervalDays=1
+  write_config && ok "Saved to $CONFIG_PATH"
   HEADER_FILE=''
   [ -n "$WORK_DIR" ] && rm -rf "$WORK_DIR"
   WORK_DIR=''
-  ok "Saved to $CONFIG_PATH"
 }
 
 banner() {
@@ -853,10 +1057,10 @@ menu() {
   while :; do
     banner
     local items=('Back up now (manual copy, kept forever)')
-    # Stopping again next week is the point of the alert, so the only way past
+    # Stopping again next time is the point of the alert, so the only way past
     # it is a backup that accepts the new size.
     [ -n "$CFG_alert" ] && items+=('Back up anyway (accept the smaller site)')
-    items+=('Settings (site, token, destination)' 'Weekly schedule: install or remove' 'State and copies' 'How to restore' 'Quit')
+    items+=('Settings (site, token, destination, rotation)' 'Schedule: install or remove' 'State and copies' 'How to restore' 'Quit')
     choose 'What next?' "${items[@]}"
     local action="${items[$((MENU_CHOICE - 1))]}"
     say
@@ -871,7 +1075,7 @@ menu() {
       perform_backup manual "$force"
       ;;
     'Settings'*) configure ;;
-    'Weekly schedule'*)
+    'Schedule'*)
       if schedule_installed; then
         choose 'A schedule is installed. Remove it?' 'Keep it' 'Remove it'
         if [ "$MENU_CHOICE" = 2 ]; then
@@ -883,14 +1087,12 @@ menu() {
         fail 'Set the site, token and destination first (Settings).'
         continue
       fi
-      say "${C_DIM}  The task runs daily and backs up only when a week has passed,$C_RESET"
+      say "${C_DIM}  The task runs daily and backs up only when $CFG_intervalDays day(s) have passed,$C_RESET"
       say "${C_DIM}  so a machine that was off still catches up and a manual backup$C_RESET"
-      say "${C_DIM}  restarts the week on its own.$C_RESET"
+      say "${C_DIM}  restarts the interval on its own.$C_RESET"
       ask 'Hour of day, 0-23' '3'
-      local hour="$ASK_RESULT"
-      case "$hour" in '' | *[!0-9]*) hour=3 ;; esac
-      [ "$hour" -le 23 ] || hour=3
-      SCHEDULE_DESCRIPTION=''
+      local hour
+      hour="$(parse_hour "$ASK_RESULT")"
       if install_schedule "$hour"; then
         ok "Installed: $SCHEDULE_DESCRIPTION"
       else
@@ -906,21 +1108,38 @@ menu() {
 
 # --------------------------------------------------------------------- main
 
+absolute_path() {
+  case "$1" in
+  /*) printf '%s' "$1" ;;
+  *) printf '%s/%s' "$(pwd)" "$1" ;;
+  esac
+}
+
 main() {
-  local run='no' auto='no' force='no' status='no'
+  local run='no' auto='no' force='no' status='no' schedule='' hour=''
   while [ $# -gt 0 ]; do
     case "$1" in
     --run) run='yes' ;;
     --auto) auto='yes' ;;
     --force) force='yes' ;;
     --status) status='yes' ;;
+    --install-schedule)
+      schedule='install'
+      case "${2:-}" in [0-9]*) hour="$2" && shift ;; esac
+      ;;
+    --remove-schedule) schedule='remove' ;;
     --config)
       shift
-      CONFIG_PATH="${1:-$CONFIG_PATH}"
+      # A schedule runs from another directory: it needs the full path.
+      [ -n "${1:-}" ] && CONFIG_PATH="$(absolute_path "$1")"
       ;;
     -h | --help)
-      sed -n '2,17p' "$SCRIPT_PATH" | sed 's/^# \{0,1\}//'
+      sed -n '2,19p' "$SCRIPT_PATH" | sed 's/^# \{0,1\}//'
       return 0
+      ;;
+    *)
+      fail "Unknown option: $1 (see --help)"
+      return 1
       ;;
     esac
     shift
@@ -930,14 +1149,37 @@ main() {
     fail 'curl is required.'
     return 1
   }
+  local existed='no'
+  [ -f "$CONFIG_PATH" ] && existed='yes'
   read_config
   # A freshly downloaded script carries its site and token: keep them.
-  [ -f "$CONFIG_PATH" ] || { [ -n "$CFG_siteUrl" ] && write_config; }
+  if { [ "$existed" = 'no' ] && [ -n "$CFG_siteUrl" ]; } || [ "$ADOPTED_TOKEN" = 'yes' ]; then
+    write_config
+  fi
 
   if [ "$status" = 'yes' ]; then
     print_status
     return 0
   fi
+
+  case "$schedule" in
+  install)
+    config_complete || {
+      fail "Nothing configured in $CONFIG_PATH. Run without options to set it up."
+      return 1
+    }
+    install_schedule "$(parse_hour "$hour")" || {
+      fail 'Could not install the schedule.'
+      return 1
+    }
+    ok "Installed: $SCHEDULE_DESCRIPTION"
+    return 0
+    ;;
+  remove)
+    if remove_schedule; then ok 'Schedule removed.'; else info 'No schedule to remove.'; fi
+    return 0
+    ;;
+  esac
 
   if [ "$run" = 'yes' ]; then
     if ! config_complete; then

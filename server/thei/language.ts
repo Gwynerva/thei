@@ -21,7 +21,7 @@ export async function setCurrentLanguage(languageCode: LanguageCode) {
 }
 
 export async function bootTheiLanguage() {
-  const languageCode = THEI_SERVER.config.languageCode;
+  const languageCode = THEI_SERVER.configHead.languageCode;
 
   if (!isOneOf(languageCode, languageCodes)) {
     THEI_SERVER.console.error(
@@ -32,7 +32,7 @@ export async function bootTheiLanguage() {
     setBootError(`Invalid language code in config "${languageCode}"!`);
   }
 
-  await setCurrentLanguage(THEI_SERVER.config.languageCode);
+  await setCurrentLanguage(languageCode);
   THEI_SERVER.console
     .tag('Boot')
     .log(`Language ${pc.cyan(THEI_SERVER.phrase.language_name)} loaded!`);

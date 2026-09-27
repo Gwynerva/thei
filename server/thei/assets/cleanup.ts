@@ -8,6 +8,7 @@ import {
 } from '#layers/thei/shared/asset';
 import { ASSET_ORPHAN_GRACE_MS } from '#layers/thei/shared/asset-library';
 import { backupSessionOpen } from '../backup/session';
+import { THEI_CONTENT_DIRS } from '../content-layout';
 import { findOrphanedAssets } from './repository/find-orphaned';
 import { deleteStoredAsset } from './storage';
 import { sweepDraftDirectories } from './drafts';
@@ -189,32 +190,72 @@ async function cleanupDanglingUsages() {
   }
 }
 
+/**
+ * More missing files than this, or no asset directory at all, is not a few
+ * lost files but files not there yet — a restore half copied, a disk not
+ * mounted — and deleting their rows would lose the library for good.
+ */
+const MISSING_FILES_TOLERATED = { count: 20, share: 0.05 };
+
 async function cleanupMissingAssetFiles() {
+  const missing: { contentHash: string; extension: string; filePath: string }[] =
+    [];
+  let total = 0;
+  // Collected first, deleted after: deleting while paging by offset would
+  // skip rows, and the decision needs the whole count.
   for await (const batch of scanBlobs()) {
     for (const blob of batch) {
+      total++;
       const filePath = THEI_SERVER.assets.filePath(
         blob.contentHash,
         blob.extension,
       );
-      const missing = await stat(filePath).then(
+      const gone = await stat(filePath).then(
         () => false,
         (error: NodeJS.ErrnoException) => error.code === 'ENOENT',
       );
-      if (!missing) continue;
+      if (gone) missing.push({ ...blob, filePath });
+    }
+  }
+  if (!missing.length) return;
 
-      try {
-        const removed = deleteAssetRecordsAndUsages(blob, filePath);
-        if (!removed) continue;
-        THEI_SERVER.console
-          .tag('Assets')
-          .error(
-            `Removed ${removed} asset record(s) with missing file ${filePath}`,
-          );
-      } catch {
-        THEI_SERVER.console
-          .tag('Assets')
-          .error(`Failed to remove assets with missing file ${filePath}`);
-      }
+  const assetsDirExists = await stat(
+    THEI_SERVER.contentPath(THEI_CONTENT_DIRS.assets),
+  ).then(
+    () => true,
+    () => false,
+  );
+  if (
+    !assetsDirExists ||
+    missing.length >
+      Math.max(
+        MISSING_FILES_TOLERATED.count,
+        total * MISSING_FILES_TOLERATED.share,
+      )
+  ) {
+    THEI_SERVER.console
+      .tag('Assets')
+      .error(
+        `${missing.length} of ${total} stored files are missing from content/assets. ` +
+          'Their records are kept: put the files back (a restore copies the whole ' +
+          'assets directory) and restart.',
+      );
+    return;
+  }
+
+  for (const { filePath, ...blob } of missing) {
+    try {
+      const removed = deleteAssetRecordsAndUsages(blob, filePath);
+      if (!removed) continue;
+      THEI_SERVER.console
+        .tag('Assets')
+        .error(
+          `Removed ${removed} asset record(s) with missing file ${filePath}`,
+        );
+    } catch {
+      THEI_SERVER.console
+        .tag('Assets')
+        .error(`Failed to remove assets with missing file ${filePath}`);
     }
   }
 }

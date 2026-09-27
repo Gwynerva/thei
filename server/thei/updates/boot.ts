@@ -1,7 +1,12 @@
 import { openBootRun, type BootRun } from '#layers/thei/update/boot-run';
-import { readConfigFile } from '#layers/thei/update/config-file';
 import { isManaged } from '#layers/thei/update/environment';
 import { checkForUpdate } from '#layers/thei/update/remote';
+import {
+  failRun,
+  readUpdateState,
+  writeUpdateState,
+} from '#layers/thei/update/state';
+import { isRunningStatus } from '#layers/thei/update/types';
 import { updateRuntime } from '#layers/thei/update/runtime';
 import {
   runUpdateTasks,
@@ -10,9 +15,8 @@ import {
 } from '#layers/thei/update/tasks/run';
 import type { TheiUpdateTask } from '#layers/thei/update/tasks/types';
 import type { TheiMigration } from '#layers/thei/update/migrations/types';
-import { writeInstalledVersion } from '#layers/thei/update/version-file';
 import { setBootUpdate } from '../boot/result';
-import { setTheiConfig, type TheiConfig } from '../config';
+import { writeTheiConfig } from '../config/write';
 
 const CHECK_DELAY_MS = 60 * 1000;
 const CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000;
@@ -51,7 +55,7 @@ export async function openUpdateBootRun(pending: {
   bootRun = await openBootRun({
     projectPath: runtime.projectPath,
     currentVersion: runtime.currentVersion,
-    installedVersion: THEI_SERVER.config.version,
+    installedVersion: THEI_SERVER.configHead.version,
     languageCode: runtime.languageCode,
     migrations: pending.pendingMigrations,
     tasks: pending.pendingTasks,
@@ -66,7 +70,7 @@ export async function openUpdateBootRun(pending: {
  * the site closed: the release may count on its result.
  */
 export async function bootUpdateTasks(tasks: TheiUpdateTask[]) {
-  const installedVersion = THEI_SERVER.config.version;
+  const installedVersion = THEI_SERVER.configHead.version;
 
   if (tasks.length) {
     const run = bootRun;
@@ -92,16 +96,10 @@ export async function bootUpdateTasks(tasks: TheiUpdateTask[]) {
   }
 
   if (installedVersion !== THEI_SERVER.version) {
-    // Read back from disk: a migration may have rewritten the config.
-    const configPath = THEI_SERVER.contentPath('thei.config.json');
-    const config = (await writeInstalledVersion(
-      configPath,
-      THEI_SERVER.version,
-      await readConfigFile(configPath),
-    )) as unknown as TheiConfig;
-
-    setTheiConfig(config);
-
+    await writeTheiConfig({
+      ...THEI_SERVER.config,
+      version: THEI_SERVER.version,
+    });
     THEI_SERVER.console
       .tag('Boot')
       .log(
@@ -120,5 +118,16 @@ export async function finishUpdateBootRun() {
  * the update screen shows the error instead of waiting for ever.
  */
 export async function failUpdateBootRun(message: string) {
-  await bootRun?.fail(undefined, message);
+  if (bootRun) {
+    await bootRun.fail(undefined, message);
+    return;
+  }
+  // The boot stopped before it could open the run it was to finish — the
+  // config or the database would not open — so the run the restart left
+  // behind is settled here, with the real reason.
+  const projectPath = THEI_SERVER.projectPath();
+  const state = await readUpdateState(projectPath);
+  if (!state || !isRunningStatus(state.status)) return;
+  failRun(state, message, state.status === 'restarting' ? 'restart' : undefined);
+  await writeUpdateState(projectPath, state);
 }

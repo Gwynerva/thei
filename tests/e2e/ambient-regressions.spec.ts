@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { screenshot } from './screenshots';
 
 let releaseAmbientSlow: () => void;
 
@@ -180,9 +181,7 @@ for (const width of [390, 1280]) {
           'data-media-final-state',
           'visible',
         );
-        await page.screenshot({
-          path: `tests/e2e/.artifacts/ambient-${width}.png`,
-        });
+        await screenshot(page, `ambient-${width}`);
       }
     }
   });

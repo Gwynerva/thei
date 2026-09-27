@@ -29,6 +29,12 @@ export default defineEventHandler(async (event) => {
       ['totalFiles', session.totalFiles],
       ['totalBytes', session.totalBytes],
       ...session.skipped.map((name) => ['skipped', name]),
+      // `count <entity> <n>`: a client that does not know the field skips it.
+      ...Object.entries(session.counts ?? {}).map(([entity, count]) => [
+        'count',
+        entity,
+        count,
+      ]),
     ]);
   } catch (error) {
     if (error instanceof BackupBusyError) {

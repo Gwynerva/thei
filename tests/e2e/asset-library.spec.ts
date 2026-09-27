@@ -11,6 +11,7 @@ import { readFile } from 'node:fs/promises';
 import sharp from 'sharp';
 import { createOriginalAssetSettings } from '../../shared/asset-upload-settings';
 import { buildUploadHeaders } from '../../shared/api/asset-upload-headers';
+import { screenshot } from './screenshots';
 
 test.use({
   storageState: fileURLToPath(
@@ -39,7 +40,7 @@ async function upload(api: APIRequestContext, color = '#4368a2') {
 async function uploadVideo(api: APIRequestContext) {
   const buffer = await readFile(
     fileURLToPath(
-      new URL('./fixture/public/regression-video.mp4', import.meta.url),
+      new URL('./fixture/media/regression-video.mp4', import.meta.url),
     ),
   );
   const response = await api.post('/api/admin/assets', {
@@ -256,9 +257,7 @@ for (const width of [1280, 390]) {
         .locator('body')
         .evaluate((el) => el.scrollWidth <= window.innerWidth),
     ).toBe(true);
-    await page.screenshot({
-      path: `tests/e2e/.artifacts/library-details-${width}.png`,
-    });
+    await screenshot(page, `library-details-${width}`);
     await page.keyboard.press('Escape');
     await library(page);
     await page.getByRole('searchbox').fill('ИСКОМОЕ');
@@ -268,9 +267,7 @@ for (const width of [1280, 390]) {
     await expect(
       page.locator(`[data-asset-uuid="${first.asset.assetUuid}"]`).first(),
     ).toBeVisible();
-    await page.screenshot({
-      path: `tests/e2e/.artifacts/library-${width}.png`,
-    });
+    await screenshot(page, `library-${width}`);
     await page.keyboard.press('Escape');
     await expect(page.locator('[data-result]')).toHaveText('[]');
   });

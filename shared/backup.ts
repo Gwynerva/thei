@@ -19,6 +19,13 @@ export const BACKUP_TOKEN_HEADER = 'x-thei-backup-token';
  */
 export const BACKUP_SESSION_TTL_MS = 6 * 60 * 60 * 1000;
 
+/**
+ * How long a session may go without a request or a byte sent before it is
+ * reclaimed. A client killed outright never says goodbye; the next run should
+ * not wait hours for its slot.
+ */
+export const BACKUP_SESSION_IDLE_MS = 15 * 60 * 1000;
+
 /** Manifest rows handed out per request. */
 export const BACKUP_MANIFEST_PAGE_SIZE = 1000;
 
@@ -65,7 +72,25 @@ export type BackupSessionResponse = {
    * operator can see rather than a silent omission.
    */
   skipped: string[];
+  /**
+   * How many of each entity the snapshot holds. A client compares them with
+   * the last backup, so a database that lost its content while every file
+   * stayed on disk still raises the alarm. Absent from servers before 0.0.2.
+   */
+  counts?: BackupEntityCounts;
 };
+
+export type BackupEntityCounts = Record<BackupCountedEntity, number>;
+
+/** Tables whose shrinking is worth an alarm, by their name on the wire. */
+export const BACKUP_COUNTED_TABLES = {
+  projects: 'projects',
+  events: 'events',
+  diaryEntries: 'diary-entries',
+  pages: 'pages',
+} as const;
+
+export type BackupCountedEntity = keyof typeof BACKUP_COUNTED_TABLES;
 
 export type BackupManifestResponse = {
   entries: BackupManifestEntry[];

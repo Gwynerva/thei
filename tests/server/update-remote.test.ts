@@ -20,13 +20,8 @@ const lsRemote = [
 ].join('\n');
 
 describe('remote tag discovery', () => {
-  it('reads release tags, deduplicated and ordered', () => {
-    expect(parseTags(lsRemote)).toEqual([
-      'v0.1.0',
-      'v0.2.0',
-      'v0.10.0',
-      'v1.0.0-rc.1',
-    ]);
+  it('reads release tags, deduplicated and ordered, without prereleases', () => {
+    expect(parseTags(lsRemote)).toEqual(['v0.1.0', 'v0.2.0', 'v0.10.0']);
   });
 
   it('returns nothing for a repository without tags', () => {

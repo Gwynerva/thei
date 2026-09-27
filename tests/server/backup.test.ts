@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { sn } from 'unslash';
 import { BACKUP_STALE_AFTER_MS, isBackupStale } from '../../shared/backup';
 import {
   THEI_BACKUP_DIRS,
@@ -9,14 +10,20 @@ import {
   unclassifiedContentDirs,
 } from '../../server/thei/content-layout';
 import { resolveBackupFile } from '../../server/thei/backup/manifest';
-import { isAbandonedSession } from '../../server/thei/backup/state';
+import {
+  forgetBackupSessionActivity,
+  isAbandonedSession,
+  touchBackupSession,
+} from '../../server/thei/backup/state';
 
 const CONTENT = join('/srv', 'thei', 'content');
 const PROJECT = join('/srv', 'thei');
 
 beforeEach(() => {
   vi.stubGlobal('THEI_SERVER', {
-    contentPath: (...parts: string[]) => join(CONTENT, ...parts),
+    // The real helper: it turns backslashes into separators, which is what
+    // once let a path escape content.
+    contentPath: (...parts: string[]) => sn(CONTENT, ...parts),
     projectPath: (...parts: string[]) => join(PROJECT, ...parts),
     console: {
       tag: () => ({ log: () => {}, warn: () => {}, error: () => {} }),
@@ -61,10 +68,10 @@ describe('backup path resolution', () => {
 
   it('serves asset and favicon files straight from content', () => {
     expect(resolveBackupFile(session, 'assets/ab/abcd.webp')).toBe(
-      join(CONTENT, 'assets', 'ab', 'abcd.webp'),
+      resolve(CONTENT, 'assets', 'ab', 'abcd.webp'),
     );
     expect(resolveBackupFile(session, 'external-link-favicons/x.webp')).toBe(
-      join(CONTENT, 'external-link-favicons', 'x.webp'),
+      resolve(CONTENT, 'external-link-favicons', 'x.webp'),
     );
   });
 
@@ -77,6 +84,9 @@ describe('backup path resolution', () => {
       'assets//x',
       '',
       'assets/\0x',
+      String.raw`assets/..\..\..\etc\passwd`,
+      String.raw`assets/ab\..\..\thei.config.json`,
+      'assets/C:/Windows/win.ini',
     ]) {
       expect(resolveBackupFile(session, path), path).toBeUndefined();
     }
@@ -118,6 +128,17 @@ describe('session reclaim', () => {
         startedAt: Date.now() - 7 * 60 * 60 * 1000,
       }),
     ).toBe(true);
+  });
+
+  it('reclaims one whose client went silent, and keeps one still pulling', () => {
+    // A client killed outright never releases its session; the next run
+    // should not wait hours for the slot.
+    const now = Date.now();
+    const quiet = { ...base, sessionId: 'quiet', pid: process.pid, startedAt: now - 20 * 60 * 1000 };
+    expect(isAbandonedSession(quiet, now)).toBe(true);
+    touchBackupSession('quiet', now - 60 * 1000);
+    expect(isAbandonedSession(quiet, now)).toBe(false);
+    forgetBackupSessionActivity('quiet');
   });
 });
 
