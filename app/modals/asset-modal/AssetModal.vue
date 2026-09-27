@@ -6,10 +6,13 @@ const props = defineProps<{
 }>();
 
 const isAsideOpen = ref(true);
+
+const root = useTemplateRef<HTMLElement>('root');
+defineExpose({ root });
 </script>
 
 <template>
-  <section class="absolute flex h-dvh w-dvw flex-col sm:flex-row">
+  <section ref="root" class="absolute flex h-dvh w-dvw flex-col sm:flex-row">
     <div
       class="relative flex min-h-0 min-w-0 flex-1 items-center justify-center
         bg-bg-1"

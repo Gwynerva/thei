@@ -64,8 +64,9 @@ const dirty = computed(() =>
       assetUuid.value !== (initial.assetUuid ?? null)
     : Boolean(text.value || assetUuid.value),
 );
+const canSave = computed(() => valid.value && (!initial || dirty.value));
 function save() {
-  if (!valid.value) return;
+  if (!canSave.value) return;
   const value = text.value.trim();
   const id = initial?.id ?? crypto.randomUUID();
   emit(
@@ -83,12 +84,19 @@ function save() {
       : { type: 'save', id, kind: 'empty', date: date.value },
   );
 }
+const modalContainer =
+  useTemplateRef<InstanceType<typeof ModalContainer>>('modalContainer');
+useSaveShortcut(save, {
+  canSave,
+  root: () => modalContainer.value?.root,
+  exclusive: true,
+});
 useModalCloseGuard(
   () => !dirty.value || window.confirm(phrase.value.unsaved_modal_confirm),
 );
 </script>
 <template>
-  <ModalContainer class="max-w-120">
+  <ModalContainer ref="modalContainer" class="max-w-120">
     <template #header
       ><div class="flex items-center justify-between gap-sm p-sm">
         <ModalTitle
@@ -96,12 +104,9 @@ useModalCloseGuard(
             initial ? phrase.profile_edit_status : phrase.profile_new_status
           "
           class="min-w-0"
-        /><Button
-          class="shrink-0"
-          :disabled="!valid || (initial && !dirty)"
-          @click="save"
-          >{{ initial ? phrase.save : phrase.add }}</Button
-        >
+        /><Button class="shrink-0" :disabled="!canSave" @click="save">{{
+          initial ? phrase.save : phrase.add
+        }}</Button>
       </div></template
     >
     <div class="flex flex-col gap-md p-md">

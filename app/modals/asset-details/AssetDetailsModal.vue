@@ -104,10 +104,19 @@ function confirm() {
 function replace() {
   emit('modalResult', { type: 'replace', ...currentPatch() });
 }
+
+// Where the primary button saves the details, the shortcut saves them too.
+const assetModal =
+  useTemplateRef<InstanceType<typeof AssetModal>>('assetModal');
+useSaveShortcut(confirm, {
+  canSave: () => Boolean(props.modalData.primaryLabel),
+  root: () => assetModal.value?.root,
+  exclusive: true,
+});
 </script>
 
 <template>
-  <AssetModal :aside-title="modalData.asideTitle">
+  <AssetModal ref="assetModal" :aside-title="modalData.asideTitle">
     <template #preview>
       <AssetModalPreviewMedia
         v-if="isMedia && previewSrc"
