@@ -1,21 +1,26 @@
-Браузерные регрессии используют отдельное Nuxt-приложение `fixture`, его базу и медиа. Основная `.playground/content` не используется. Тестовый маршрут заполнения данных существует только в этом приложении.
+# Browser tests
 
-Тестовое приложение работает на порту 3001, рядом с песочницей на 3000, поэтому песочница может оставаться открытой во время прогона. Перед запуском проверьте владельцев IPv4/IPv6-порта 3001 согласно корневому AGENTS.md. Если там уже работает тестовое приложение, используйте его; чужой сервер не останавливайте и второе приложение не запускайте. На свободном порту запустите из корня репозитория:
+The specs here drive Chromium through a Nuxt app of their own, `fixture/`: it
+extends the layer, adds a few test pages and a seed route, and keeps its
+database and media in `fixture/content`, apart from the playground's.
 
-```sh
-bunx nuxt dev tests/e2e/fixture --port 3001 --host 127.0.0.1 --no-fork
-```
-
-При занятом порту остановите попытку запуска; переход на другой порт недопустим. Адрес задан в одном месте, `tests/e2e/fixture-url.ts`. В отдельном терминале:
-
-```sh
-bunx playwright install chromium
+```bash
+bunx playwright install chromium   # once
 bun run test:e2e
 ```
 
-Локальный прогон использует только Chromium, завершает запуск после первой
-ошибки и не сканирует диагностические файлы в `.artifacts`.
+`test:e2e` builds the fixture for production and serves it at
+`http://127.0.0.1:3001`, beside the playground on 3000, then stops it. The
+build is redone only when a source changed since the last one. A production
+build is the point: it is what a site runs, and some things only break there —
+a file a build fails to carry along, a response that differs from the
+development server's.
 
-Настройка тестов сначала проверяет маркер тестового приложения, выполняет установку через настоящий API, если база ещё не создана, и заполняет изолированную базу. Повторный запуск заменяет только данные тестового приложения. В наборе 2000 записей, включая 500 записей за один день, и собственные медиа. Артефакты, тестовая база и сессия администратора исключены из Git.
+While writing a spec, `bun run e2e:dev` serves the fixture from `nuxt dev`
+instead; `test:e2e` uses a fixture already running on 3001 as it is.
 
-После проверки завершите сервер только в том случае, если запустили его сами и подтвердили принадлежность PID этому приложению. При работе над обновлениями схемы проверяйте установку на новой тестовой директории; тест `fresh-install.test.ts` всегда создаёт новую базу настоящим установочным кодом.
+Before the specs, `setup.ts` installs the fixture through the real API if it
+has no database yet, signs in, and reseeds it: 2000 pages, 500 of them on one
+day, and a few media files. A rerun replaces only the fixture's data.
+Screenshots meant for a person are taken with `E2E_SCREENSHOTS=1`, into
+`.artifacts/screenshots/`; a report of the last run is in `.artifacts/report/`.

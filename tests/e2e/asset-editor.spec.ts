@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
+import { screenshot } from './screenshots';
 
 test.use({
   storageState: fileURLToPath(
@@ -8,19 +9,22 @@ test.use({
   ),
 });
 
-const shots = (name: string) =>
-  fileURLToPath(
-    new URL(`./test-results/asset-editor-${name}.png`, import.meta.url),
-  );
-
-/** A photo-like picture: noise over a gradient. */
+/**
+ * A photo-like picture: noise over a gradient. The noise is the same on
+ * every run, so every run encodes the same bytes.
+ */
 async function photo(width: number, height: number) {
+  let seed = width * height;
+  const random = () => {
+    seed = (Math.imul(seed, 1_664_525) + 1_013_904_223) >>> 0;
+    return seed / 4_294_967_296;
+  };
   const noise = Buffer.alloc(width * height * 3);
   for (let index = 0; index < noise.length; index += 3) {
     const x = (index / 3) % width;
-    noise[index] = (x * 255) / width + Math.random() * 40;
-    noise[index + 1] = 120 + Math.random() * 60;
-    noise[index + 2] = 200 - Math.random() * 60;
+    noise[index] = (x * 255) / width + random() * 40;
+    noise[index + 1] = 120 + random() * 60;
+    noise[index + 2] = 200 - random() * 60;
   }
   return await sharp(noise, { raw: { width, height, channels: 3 } })
     .png()
@@ -83,7 +87,7 @@ for (const viewport of [
     await expect(
       page.getByRole('group', { name: /Crop\s+area/ }),
     ).toBeVisible();
-    await page.screenshot({ path: shots(`${viewport.name}-crop`) });
+    await screenshot(page, `asset-editor-${viewport.name}-crop`);
 
     // Dragging a corner makes a smaller crop and a new dry run.
     const rendersBefore = counts.renders;
@@ -102,8 +106,7 @@ for (const viewport of [
     await expect(
       page.getByRole('separator', { name: 'Compare preview divider' }),
     ).toBeVisible();
-    await page.waitForTimeout(800);
-    await page.screenshot({ path: shots(`${viewport.name}-compare`) });
+    await screenshot(page, `asset-editor-${viewport.name}-compare`);
 
     const picked = (await auto.textContent())!.startsWith('AVIF')
       ? 'avif'

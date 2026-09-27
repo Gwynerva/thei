@@ -23,8 +23,10 @@ export default defineNuxtConfig({
     },
   },
   devtools: { enabled: false },
+  runtimeConfig: {
+    fixtureMedia: fileURLToPath(new URL('./media/', import.meta.url)),
+  },
   devServer: { port: E2E_PORT, host: '127.0.0.1' },
-  vite: { server: { strictPort: true } },
   nitro: {
     publicAssets: [
       { dir: fileURLToPath(new URL('./public/', import.meta.url)) },

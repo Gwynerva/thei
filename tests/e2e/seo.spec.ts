@@ -78,6 +78,22 @@ test('a listing page is a CollectionPage carrying a bounded ItemList', async ({
   expect(second.itemListElement[0].position).toBe(31);
 });
 
+test('Open Graph cards render as pictures', async ({ page, request }) => {
+  // The fixture is a production build: a card depends on files the build
+  // has to carry along (fonts, HarfBuzz's wasm) that development reads from
+  // node_modules.
+  await page.goto('/pages/page-0/');
+  const card = await page
+    .locator('meta[property="og:image"]')
+    .getAttribute('content');
+  for (const path of ['/og/site.png', new URL(card!).pathname]) {
+    const response = await request.get(path);
+    expect(response.status(), path).toBe(200);
+    expect(response.headers()['content-type'], path).toBe('image/png');
+    expect((await response.body()).length, path).toBeGreaterThan(10_000);
+  }
+});
+
 test('robots.txt points at the sitemap and holds back the private areas', async ({
   request,
 }) => {
