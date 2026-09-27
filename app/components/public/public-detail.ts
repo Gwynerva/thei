@@ -23,7 +23,13 @@ export type PublicDetailTimelineItem = {
 };
 
 /**
- * When something was made and last changed, as key dates.
+ * When something was made and last changed, as key dates, around the key
+ * dates of its own parts.
+ *
+ * The list comes newest first for the day it shares, since the timeline keeps
+ * that order among equal dates: an entity is made before any of its parts and
+ * edited after them, so on one day its parts sit between the edit and the
+ * creation rather than under it.
  *
  * The chronology already leaves `updatedAt` out when the change fell on the
  * day of creation, so an entity edited only that day has a single line.
@@ -31,9 +37,9 @@ export type PublicDetailTimelineItem = {
 export function createdAndUpdatedTimelineItems(
   chronology: { createdAt: string; updatedAt?: string },
   labels: { created: string; updated: string },
+  parts: PublicDetailTimelineItem[] = [],
 ): PublicDetailTimelineItem[] {
   return [
-    { icon: 'plus', label: labels.created, date: chronology.createdAt },
     ...(chronology.updatedAt
       ? [
           {
@@ -43,11 +49,13 @@ export function createdAndUpdatedTimelineItems(
           },
         ]
       : []),
+    ...parts,
+    { icon: 'plus', label: labels.created, date: chronology.createdAt },
   ];
 }
 
 /**
- * The first and the last of something, as key dates.
+ * The first and the last of something, as key dates, newest first.
  *
  * When there is only one — one stage, one status — or when both land on the
  * same day and the same page, "first" and "last" would name the same thing
@@ -71,8 +79,8 @@ export function firstAndLastTimelineItems<T>(
   )
     return [{ icon: labels.icon, label: labels.only, ...last }];
   return [
-    { icon: labels.icon, label: labels.first, ...first },
     { icon: labels.icon, label: labels.last, ...last },
+    { icon: labels.icon, label: labels.first, ...first },
   ];
 }
 
@@ -116,6 +124,10 @@ export function diaryTimelineItems(
   ];
 }
 
+/**
+ * Newest first. Items of one day keep the order they came in, which is how the
+ * builders above say what happened first on a day that holds several.
+ */
 export function sortPublicDetailTimelineItems(
   items: PublicDetailTimelineItem[],
 ): PublicDetailTimelineItem[] {

@@ -133,48 +133,51 @@ const details = computed(
   () =>
     ({
       contents: contents.value,
-      chronology: [
-        ...createdAndUpdatedTimelineItems(data.value.chronology, {
+      chronology: createdAndUpdatedTimelineItems(
+        data.value.chronology,
+        {
           created: phrase.value.project_chronology_page,
           updated: phrase.value.project_chronology_updated,
-        }),
-        ...firstAndLastTimelineItems(
-          data.value.stages,
-          (stage) => ({ date: stage.period.startDate, href: stage.href }),
-          {
-            icon: 'calendar',
-            first: phrase.value.project_chronology_first_stage,
-            last: phrase.value.project_chronology_last_stage,
-            only: phrase.value.project_chronology_stage,
-          },
-        ),
-        ...firstAndLastTimelineItems(
-          data.value.sections,
-          (section) => ({ date: section.date, href: section.href }),
-          {
-            icon: 'file-tray-stack',
-            first: phrase.value.project_chronology_first_section,
-            last: phrase.value.project_chronology_last_section,
-            only: phrase.value.project_chronology_section,
-          },
-        ),
-        ...firstAndLastTimelineItems(
-          [data.value.chronology.firstStatusAt, data.value.currentStatus],
-          (mark) =>
-            typeof mark === 'string'
-              ? { date: mark, href: '#statuses' }
-              : mark && {
-                  date: new Date(mark.createdAt).toISOString().slice(0, 10),
-                  href: '#statuses',
-                },
-          {
-            icon: 'pulse',
-            first: phrase.value.project_chronology_first_status,
-            last: phrase.value.project_chronology_last_status,
-            only: phrase.value.project_status,
-          },
-        ),
-      ],
+        },
+        [
+          ...firstAndLastTimelineItems(
+            data.value.stages,
+            (stage) => ({ date: stage.period.startDate, href: stage.href }),
+            {
+              icon: 'calendar',
+              first: phrase.value.project_chronology_first_stage,
+              last: phrase.value.project_chronology_last_stage,
+              only: phrase.value.project_chronology_stage,
+            },
+          ),
+          ...firstAndLastTimelineItems(
+            data.value.sections,
+            (section) => ({ date: section.date, href: section.href }),
+            {
+              icon: 'file-tray-stack',
+              first: phrase.value.project_chronology_first_section,
+              last: phrase.value.project_chronology_last_section,
+              only: phrase.value.project_chronology_section,
+            },
+          ),
+          ...firstAndLastTimelineItems(
+            [data.value.chronology.firstStatusAt, data.value.currentStatus],
+            (mark) =>
+              typeof mark === 'string'
+                ? { date: mark, href: '#statuses' }
+                : mark && {
+                    date: new Date(mark.createdAt).toISOString().slice(0, 10),
+                    href: '#statuses',
+                  },
+            {
+              icon: 'pulse',
+              first: phrase.value.project_chronology_first_status,
+              last: phrase.value.project_chronology_last_status,
+              only: phrase.value.project_status,
+            },
+          ),
+        ],
+      ),
       tags: data.value.tags,
       references: data.value.references,
     }) satisfies PublicDetailPanelData,

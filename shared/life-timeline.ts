@@ -110,7 +110,16 @@ function lifePointTier(point: Pick<LifeBoundaryLike, 'entityKind'>) {
   return point.entityKind === 'diary-entry' ? 0 : 1;
 }
 
-const PROJECT_PART_KINDS = new Set(['project-stage', 'project-section']);
+/**
+ * What a project is made of on the timeline. Statuses of both owners share one
+ * point kind, but only a project's own carry its uuid in `projectUuids`, so the
+ * person's statuses never count as anyone's part.
+ */
+const PROJECT_PART_KINDS = new Set([
+  'project-stage',
+  'project-section',
+  'profile-status',
+]);
 
 export function sortLifePoints<T extends LifeBoundaryLike>(points: T[]) {
   const sorted = [...points].sort(
@@ -128,9 +137,9 @@ export function sortLifePoints<T extends LifeBoundaryLike>(points: T[]) {
 }
 
 /**
- * A project created on the same day as some of its stages or sections is
- * placed under them: the project came first, so read newest first its parts
- * are above it. Done as a pass over the sorted list, because a pairwise "a part
+ * A project created on the same day as some of its stages, sections or
+ * statuses is placed under them: the project came first, so read newest first
+ * its parts are above it. Done as a pass over the sorted list, because a pairwise "a part
  * before its project" rule next to the rank rule would not be a consistent
  * order.
  */
