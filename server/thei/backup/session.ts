@@ -12,7 +12,9 @@ import { buildBackupManifest, type BackupManifest } from './manifest';
 import {
   backupWorkDir,
   clearBackupSession,
+  forgetBackupSessionActivity,
   isAbandonedSession,
+  touchBackupSession,
   readBackupSession,
   writeBackupSession,
   type BackupSessionState,
@@ -184,6 +186,7 @@ export async function requireBackupSession(
     await endBackupSession(sessionId);
     throw createError({ statusCode: 410, statusMessage: 'Session expired' });
   }
+  touchBackupSession(sessionId);
   return state;
 }
 
@@ -215,6 +218,7 @@ export async function backupSessionHasFile(
 
 export async function endBackupSession(sessionId: string): Promise<void> {
   forget(sessionId);
+  forgetBackupSessionActivity(sessionId);
   await clearBackupSession(sessionId);
   sessionOpen = false;
 }

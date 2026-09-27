@@ -19,6 +19,13 @@ export const BACKUP_TOKEN_HEADER = 'x-thei-backup-token';
  */
 export const BACKUP_SESSION_TTL_MS = 6 * 60 * 60 * 1000;
 
+/**
+ * How long a session may go without a request or a byte sent before it is
+ * reclaimed. A client killed outright never says goodbye; the next run should
+ * not wait hours for its slot.
+ */
+export const BACKUP_SESSION_IDLE_MS = 15 * 60 * 1000;
+
 /** Manifest rows handed out per request. */
 export const BACKUP_MANIFEST_PAGE_SIZE = 1000;
 

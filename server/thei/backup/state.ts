@@ -1,7 +1,10 @@
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { writeFileAtomically } from '#layers/thei/update/atomic-file';
-import { BACKUP_SESSION_TTL_MS } from '#layers/thei/shared/backup';
+import {
+  BACKUP_SESSION_IDLE_MS,
+  BACKUP_SESSION_TTL_MS,
+} from '#layers/thei/shared/backup';
 import type { BackupKind } from '#layers/thei/shared/backup';
 
 export type BackupSessionState = {
@@ -60,6 +63,17 @@ export async function clearBackupSession(sessionId?: string): Promise<void> {
   await rm(backupStatePath(), { force: true });
 }
 
+/** When each open session last took a request or sent a byte, in memory. */
+const lastActivity = new Map<string, number>();
+
+export function touchBackupSession(sessionId: string, now = Date.now()) {
+  lastActivity.set(sessionId, now);
+}
+
+export function forgetBackupSessionActivity(sessionId: string) {
+  lastActivity.delete(sessionId);
+}
+
 /**
  * A session nobody can finish any more.
  *
@@ -73,7 +87,10 @@ export function isAbandonedSession(
   now = Date.now(),
 ): boolean {
   if (now - state.startedAt > BACKUP_SESSION_TTL_MS) return true;
-  if (state.pid === process.pid) return false;
+  if (state.pid === process.pid) {
+    const last = lastActivity.get(state.sessionId) ?? state.startedAt;
+    return now - last > BACKUP_SESSION_IDLE_MS;
+  }
   try {
     process.kill(state.pid, 0);
     return false;

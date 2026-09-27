@@ -10,7 +10,11 @@ import {
   unclassifiedContentDirs,
 } from '../../server/thei/content-layout';
 import { resolveBackupFile } from '../../server/thei/backup/manifest';
-import { isAbandonedSession } from '../../server/thei/backup/state';
+import {
+  forgetBackupSessionActivity,
+  isAbandonedSession,
+  touchBackupSession,
+} from '../../server/thei/backup/state';
 
 const CONTENT = join('/srv', 'thei', 'content');
 const PROJECT = join('/srv', 'thei');
@@ -124,6 +128,17 @@ describe('session reclaim', () => {
         startedAt: Date.now() - 7 * 60 * 60 * 1000,
       }),
     ).toBe(true);
+  });
+
+  it('reclaims one whose client went silent, and keeps one still pulling', () => {
+    // A client killed outright never releases its session; the next run
+    // should not wait hours for the slot.
+    const now = Date.now();
+    const quiet = { ...base, sessionId: 'quiet', pid: process.pid, startedAt: now - 20 * 60 * 1000 };
+    expect(isAbandonedSession(quiet, now)).toBe(true);
+    touchBackupSession('quiet', now - 60 * 1000);
+    expect(isAbandonedSession(quiet, now)).toBe(false);
+    forgetBackupSessionActivity('quiet');
   });
 });
 
