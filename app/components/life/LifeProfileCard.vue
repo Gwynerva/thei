@@ -1,7 +1,13 @@
 <script setup lang="ts">
+import type { PublicEntityReference } from '#layers/thei/shared/api/public';
 import type { VisibleLifePoint } from '#layers/thei/shared/life';
 const props = defineProps<{
   point: VisibleLifePoint;
+  /**
+   * The project a status belongs to. Without it a project's status would read
+   * as the person's own, so it is named above, as a stage names its project.
+   */
+  parent?: PublicEntityReference;
   compact?: boolean;
   dateStyle?: 'long' | 'short';
   rewind?: boolean;
@@ -39,6 +45,7 @@ const isAvatar = computed(() => props.point.entityKind === 'profile-avatar');
       ><Icon name="pulse"
     /></span>
     <div class="min-w-0 flex-1">
+      <PublicParentLink v-if="parent" :parent="parent" class="mb-1" />
       <p class="text-xs font-semibold text-accent">
         <TheiLink
           v-if="rewind"

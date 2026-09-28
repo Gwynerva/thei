@@ -229,28 +229,7 @@ const hasFooter = computed(
           sm:max-w-3/4"
         :class="{ 'public-card-copy-over-media': media }"
       >
-        <div v-if="parent" class="flex min-w-0 items-center gap-xs text-sm">
-          <TheiLink
-            :to="parent.href"
-            :data-title-popup="publicText(parent.summary) || undefined"
-            class="pointer-events-auto relative z-3 inline-flex min-w-0
-              items-center gap-xs font-semibold text-text-2 transition
-              focus-visible:ring-2 focus-visible:ring-accent
-              focus-visible:outline-none hocus:text-accent"
-          >
-            <BeveledIcon
-              :media="parent.iconMedia"
-              icon="project"
-              class="size-5"
-            />
-            <span class="min-w-0 truncate">{{ publicText(parent.title) }}</span>
-          </TheiLink>
-          <Icon
-            name="corner-down"
-            class="shrink-0 text-text-3"
-            aria-hidden="true"
-          />
-        </div>
+        <PublicParentLink v-if="parent" :parent="parent" />
         <p
           v-if="titleless"
           class="public-card-title line-clamp-4 text-base leading-relaxed

@@ -95,6 +95,7 @@ const projects = computed(() =>
     :rewind="Boolean(rewindMatch)"
     :hide-date="hideDate"
     :hide-fallback-icon="onRail"
+    :parent="parent"
   />
   <PublicContentCard
     v-else-if="point.visibility === 'visible'"
