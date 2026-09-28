@@ -128,26 +128,34 @@ export default defineEventHandler(async (event): Promise<DiaryListResponse> => {
 
   return {
     ...result,
-    items: result.items.map((item) => {
-      const data = bodyByUuid.get(item.diaryUuid);
-      return {
-        diaryUuid: item.diaryUuid,
-        date: item.date,
-        access: item.access,
-        excerpt: diaryExcerpt(item.contentText),
-        previewMedia: resolveEntityIconMedia(
+    items: await Promise.all(
+      result.items.map(async (item) => {
+        // The stored body names its files by uuid alone; only the hydrated
+        // one carries the media a preview is drawn from. Searched and cut
+        // into an excerpt above as stored, it is hydrated for this page only.
+        const body = await THEI_SERVER.content.buildFieldValue(
           'diary-entry',
           item.diaryUuid,
-          buildContentPreview(data).media,
-        ),
-        createdAt: item.createdAt,
-        updatedAt: item.updatedAt,
-        totalSize: Array.from(sizes.get(item.diaryUuid)?.values() ?? []).reduce(
-          (sum, size) => sum + size,
-          0,
-        ),
-        ...(item.reminder ? { reminder: item.reminder } : {}),
-      };
-    }),
+          'diary-body',
+        );
+        return {
+          diaryUuid: item.diaryUuid,
+          date: item.date,
+          access: item.access,
+          excerpt: diaryExcerpt(item.contentText),
+          previewMedia: resolveEntityIconMedia(
+            'diary-entry',
+            item.diaryUuid,
+            buildContentPreview(body?.data).media,
+          ),
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+          totalSize: Array.from(
+            sizes.get(item.diaryUuid)?.values() ?? [],
+          ).reduce((sum, size) => sum + size, 0),
+          ...(item.reminder ? { reminder: item.reminder } : {}),
+        };
+      }),
+    ),
   };
 });
