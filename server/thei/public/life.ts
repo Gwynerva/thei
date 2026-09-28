@@ -700,6 +700,7 @@ async function hydrateLifePoint(
         : '/#statuses',
       media: record.media,
       statusKind: record.kind,
+      statusOwner: owner ? 'project' : 'profile',
       ...(owner ? { project: await buildPublicEntityReference(owner) } : {}),
     };
   }

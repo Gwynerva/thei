@@ -2,13 +2,15 @@
 import type { PublicEntityReference } from '#layers/thei/shared/api/public';
 
 /**
- * The project a card's subject belongs to — a stage, a section, a status —
- * named above it with its icon and an arrow down to what follows. A parent,
- * not a relation, so it never joins the list of related entities.
+ * The project a card's subject belongs to, with its icon.
+ *
+ * A stage or a section names it above its title, with an arrow down to what
+ * follows; a status names it `below` its words, where no arrow is needed. A
+ * parent, not a relation, so it never joins the list of related entities.
  *
  * The link stays clickable above a card's own full-size link.
  */
-defineProps<{ parent: PublicEntityReference }>();
+defineProps<{ parent: PublicEntityReference; below?: boolean }>();
 </script>
 
 <template>
@@ -23,6 +25,11 @@ defineProps<{ parent: PublicEntityReference }>();
       <BeveledIcon :media="parent.iconMedia" icon="project" class="size-5" />
       <span class="min-w-0 truncate">{{ publicText(parent.title) }}</span>
     </TheiLink>
-    <Icon name="corner-down" class="shrink-0 text-text-3" aria-hidden="true" />
+    <Icon
+      v-if="!below"
+      name="corner-down"
+      class="shrink-0 text-text-3"
+      aria-hidden="true"
+    />
   </div>
 </template>

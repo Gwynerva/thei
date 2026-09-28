@@ -4,8 +4,8 @@ import type { VisibleLifePoint } from '#layers/thei/shared/life';
 const props = defineProps<{
   point: VisibleLifePoint;
   /**
-   * The project a status belongs to. Without it a project's status would read
-   * as the person's own, so it is named above, as a stage names its project.
+   * The project a status belongs to, named under its words. A project's own
+   * chronology leaves it out; the label above still says whose status it is.
    */
   parent?: PublicEntityReference;
   compact?: boolean;
@@ -17,6 +17,12 @@ const props = defineProps<{
 }>();
 
 const isAvatar = computed(() => props.point.entityKind === 'profile-avatar');
+const label = computed(() => {
+  if (isAvatar.value) return phrase.value.profile_new_avatar;
+  return props.point.statusOwner === 'project'
+    ? phrase.value.profile_new_project_status
+    : phrase.value.profile_new_life_status;
+});
 </script>
 <template>
   <article class="flex min-w-0 items-center gap-sm">
@@ -45,18 +51,15 @@ const isAvatar = computed(() => props.point.entityKind === 'profile-avatar');
       ><Icon name="pulse"
     /></span>
     <div class="min-w-0 flex-1">
-      <PublicParentLink v-if="parent" :parent="parent" class="mb-1" />
       <p class="text-xs font-semibold text-accent">
         <TheiLink
           v-if="rewind"
           :to="point.href"
           class="transition hocus:underline"
         >
-          {{ isAvatar ? phrase.profile_new_avatar : phrase.profile_new_status }}
+          {{ label }}
         </TheiLink>
-        <template v-else>{{
-          isAvatar ? phrase.profile_new_avatar : phrase.profile_new_status
-        }}</template>
+        <template v-else>{{ label }}</template>
       </p>
       <p
         v-if="!isAvatar"
@@ -69,6 +72,7 @@ const isAvatar = computed(() => props.point.entityKind === 'profile-avatar');
             : publicText(point.summary)
         }}
       </p>
+      <PublicParentLink v-if="parent" :parent="parent" below class="mt-xs" />
       <ProfileDate
         v-if="!rewind && !hideDate"
         :date="point.date"

@@ -69,8 +69,9 @@ const datePresentation = computed(() => {
 const pointIcon = computed(() => lifeEntityKindIcon(props.point.entityKind));
 /**
  * A stage or a section names its project above the title: that project is
- * its parent, not something it is related to. A status names its project the
- * same way. Everything else lists what it is related to under the summary.
+ * its parent, not something it is related to. A status names its project too,
+ * under its words. Everything else lists what it is related to under the
+ * summary.
  */
 const parent = computed(() =>
   props.point.visibility === 'visible' ? props.point.project : undefined,

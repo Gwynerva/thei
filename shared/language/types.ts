@@ -209,6 +209,8 @@ export type LanguagePhrases = {
   profile_avatar_history: string;
   profile_best_projects: string;
   profile_new_status: string;
+  profile_new_project_status: string;
+  profile_new_life_status: string;
   profile_edit_status: string;
   profile_status_placeholder: string;
   profile_status_icon: string;

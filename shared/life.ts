@@ -6,7 +6,7 @@ import type {
 import type { DateRange } from './date-range';
 import type { DatePrecisionInfo } from './date-precision';
 import type { MediaDescriptor } from './media';
-import type { StatusKind } from './status';
+import type { StatusKind, StatusOwnerType } from './status';
 
 /**
  * Every kind of point, in the order a reader is offered them: the three main
@@ -50,6 +50,11 @@ export type VisibleLifePoint = LifePointBase & {
   project?: PublicEntityReference;
   relatedEntities?: PublicEntityLink[];
   statusKind?: StatusKind;
+  /**
+   * Whose status this is. Said apart from `project`, which a project's own
+   * chronology leaves out as saying nothing new.
+   */
+  statusOwner?: StatusOwnerType;
 };
 
 /** A point a visitor may not see, presented under a codename. */

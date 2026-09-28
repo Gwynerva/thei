@@ -298,6 +298,8 @@ export default defineI18nBase({
     profile_avatar_history: 'Avatar history',
     profile_best_projects: 'Showcase projects',
     profile_new_status: 'New status',
+    profile_new_project_status: 'New project status',
+    profile_new_life_status: 'New life status',
     profile_edit_status: 'Edit status',
     profile_status_placeholder: 'Today I feel…',
     profile_status_icon: 'Icon',

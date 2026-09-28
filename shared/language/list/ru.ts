@@ -341,6 +341,8 @@ export default defineI18nModule({
     profile_avatar_history: 'История аватарок',
     profile_best_projects: 'Витринные проекты',
     profile_new_status: 'Новый статус',
+    profile_new_project_status: 'Новый статус проекта',
+    profile_new_life_status: 'Новый статус жизни',
     profile_edit_status: 'Изменение статуса',
     profile_status_placeholder: 'Сегодня я чувствую себя…',
     profile_status_icon: 'Иконка',
