@@ -10,6 +10,7 @@ import {
   type LifePoint,
 } from '#layers/thei/shared/life';
 import { lifeEntityKindIcon } from './life-entity-icon';
+import { heatmapMonthLayout } from './heatmap-months';
 import TheiLink from '../TheiLink';
 
 /**
@@ -44,7 +45,6 @@ const weeks = computed(() => {
     weekStartsMonday.value ? (date.getUTCDay() + 6) % 7 : date.getUTCDay();
   const columns: {
     key: string;
-    month?: number;
     days: ({ date: string; level: number } | undefined)[];
   }[] = [];
   let column: (typeof columns)[number] = { key: 'w0', days: [] };
@@ -60,8 +60,6 @@ const weeks = computed(() => {
       columns.push(column);
       column = { key: `w${columns.length}`, days: [] };
     }
-    if (column.days.length === 0 || column.month === undefined)
-      column.month = cursor.getUTCMonth();
     column.days.push({
       date,
       level: lifeActivityLevel(
@@ -76,34 +74,16 @@ const weeks = computed(() => {
 });
 
 /**
- * Where each month begins and ends, in weeks.
- *
- * A week that straddles two months goes to the one holding most of its days,
- * so a month's label centres over the weeks that are mostly it and the
- * divider falls between two weeks rather than through one.
+ * Where the months begin and end: a border that steps around the week a month
+ * starts in, so every day sits on its own month's side, and a label over each
+ * month's real span (`heatmap-months.ts`).
  */
 const months = computed(() => {
   const formatter = new Intl.DateTimeFormat(locale.value, { month: 'short' });
-  const starts: number[] = [];
-  weeks.value.forEach((week, index) => {
-    const row = week.days.findIndex((item) => item?.date.endsWith('-01'));
-    if (row < 0) return;
-    // January always starts the grid, whatever weekday it falls on.
-    starts.push(starts.length === 0 ? 0 : row <= 3 ? index : index + 1);
-  });
-  return starts.map((start, month) => ({
-    key: month,
-    label: formatter.format(new Date(Date.UTC(2000, month, 1))),
-    start,
-    // The middle of the month's weeks, in weeks from the grid's start.
-    centre: (start + (starts[month + 1] ?? weeks.value.length)) / 2,
-  }));
+  return heatmapMonthLayout(weeks.value, (month) =>
+    formatter.format(new Date(Date.UTC(2000, month, 1))),
+  );
 });
-
-/** Weeks that open a month, which get a little extra room before them. */
-const monthStarts = computed(
-  () => new Set(months.value.slice(1).map((month) => month.start)),
-);
 
 const weekdayLabels = computed(() => {
   const formatter = new Intl.DateTimeFormat(locale.value, { weekday: 'short' });
@@ -307,35 +287,44 @@ onMounted(() => {
         ref="grid"
         class="heatmap-gaps -mb-(--heatmap-gap) scrollbar-hover rotate-x-180
           overflow-x-auto"
-        :style="{
-          '--weeks': weeks.length,
-          '--month-breaks': monthStarts.size,
-        }"
+        :style="{ '--weeks': weeks.length }"
       >
         <div
           class="relative flex w-max min-w-full rotate-x-180 gap-(--heatmap-gap)
             pb-(--heatmap-gap)"
         >
           <!-- Months are drawn over the weeks rather than inside them, so a
-               label can centre over its month and a divider can sit in the
-               gap between two weeks. -->
+               label can centre over its month and a border can run through
+               the gaps between the cells. -->
           <span
-            v-for="month in months"
+            v-for="month in months.labels"
             :key="`label-${month.key}`"
             class="heatmap-at absolute top-0 h-4 -translate-x-1/2
               text-[0.625rem] leading-4 whitespace-nowrap text-text-3"
-            :style="{ '--at': month.centre, '--breaks': month.key }"
+            :style="{ '--at': month.at }"
             aria-hidden="true"
             >{{ month.label }}</span
           >
-          <span
-            v-for="month in months.slice(1)"
-            :key="`divider-${month.key}`"
-            class="heatmap-at heatmap-divider absolute bottom-0 border-l
-              border-dashed border-border-2/60"
-            :style="{ '--at': month.start, '--breaks': month.key - 0.5 }"
-            aria-hidden="true"
-          />
+          <template v-for="divider in months.dividers" :key="divider.key">
+            <span
+              v-if="divider.kind === 'vertical'"
+              class="heatmap-at heatmap-divider-vertical absolute border-l
+                border-text-3/55"
+              :style="{
+                '--at': divider.at,
+                '--from': divider.from,
+                '--to': divider.to,
+              }"
+              aria-hidden="true"
+            />
+            <span
+              v-else
+              class="heatmap-at heatmap-divider-horizontal absolute border-t
+                border-text-3/55"
+              :style="{ '--at': divider.at, '--row': divider.row }"
+              aria-hidden="true"
+            />
+          </template>
           <div
             class="sticky left-0 z-1 flex w-6 shrink-0 flex-col
               gap-(--heatmap-gap) bg-bg-2"
@@ -353,7 +342,6 @@ onMounted(() => {
             v-for="(week, weekIndex) in weeks"
             :key="week.key"
             class="flex shrink-0 flex-col gap-(--heatmap-gap)"
-            :class="{ 'ml-(--month-break)': monthStarts.has(weekIndex) }"
           >
             <span class="h-4" aria-hidden="true" />
             <template v-for="(item, dayIndex) in week.days">
@@ -491,35 +479,51 @@ onMounted(() => {
 <style scoped>
 /*
  * The gap that makes the weeks fill the grid's width, never below a hair.
- * Rows use it too, so the cells stay evenly spaced both ways. 1.5rem is the
- * weekday column, 0.75rem a cell; each month boundary takes a little extra
- * room so its divider does not brush the cells on either side.
+ * Rows use it too, so the cells stay evenly spaced both ways, month borders
+ * included: 1.5rem is the weekday column, 0.75rem a cell.
  */
 .heatmap-gaps {
-  --month-break: 0.375rem;
   --heatmap-gap: max(
     0.25rem,
-    (
-        100cqw - 1.5rem - var(--weeks) * 0.75rem - var(--month-breaks) *
-          var(--month-break)
-      ) /
-      var(--weeks)
+    (100cqw - 1.5rem - var(--weeks) * 0.75rem) / var(--weeks)
+  );
+}
+
+/* A point along the weeks: `--at` counts weeks, 0 the gap before the first. */
+.heatmap-at {
+  left: calc(
+    1.5rem + var(--heatmap-gap) / 2 + var(--at) * (0.75rem + var(--heatmap-gap))
   );
 }
 
 /*
- * A point along the weeks: `--at` counts weeks (0 is the gap before the
- * first), `--breaks` how many month boundaries' extra room lies before it.
+ * A border down a gap, from the boundary above row `--from` to the one above
+ * row `--to` (rows 0-6, 7 past the last). Row 0 starts under the month labels
+ * and row 7 ends a gap below the last row, as a full border always has.
  */
-.heatmap-at {
-  left: calc(
-    1.5rem + var(--heatmap-gap) / 2 + var(--at) *
-      (0.75rem + var(--heatmap-gap)) + var(--breaks) * var(--month-break)
+.heatmap-divider-vertical {
+  top: calc(
+    1rem + min(var(--from), 1) *
+      (var(--heatmap-gap) / 2 + var(--from) * (0.75rem + var(--heatmap-gap)))
+  );
+  bottom: calc(
+    min(7 - var(--to), 1) *
+      (
+        var(--heatmap-gap) / 2 + (7 - var(--to)) *
+          (0.75rem + var(--heatmap-gap))
+      )
   );
 }
 
-/* From under the month labels to the last row. */
-.heatmap-divider {
-  top: 1rem;
+/*
+ * The step across a week split between two months, between rows `--row - 1`
+ * and `--row`: from the middle of the gap before the week to the middle of
+ * the one after it, plus the hairline's own width to close the corner.
+ */
+.heatmap-divider-horizontal {
+  top: calc(
+    1rem + var(--heatmap-gap) / 2 + var(--row) * (0.75rem + var(--heatmap-gap))
+  );
+  width: calc(0.75rem + var(--heatmap-gap) + 1px);
 }
 </style>
