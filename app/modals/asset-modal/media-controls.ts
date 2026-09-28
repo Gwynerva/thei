@@ -378,6 +378,10 @@ export function useMediaControls(options: MediaControlsOptions = {}) {
   }
 
   function onPointerDown(e: PointerEvent): void {
+    // Only the main button pans. A right press belongs to the context menu,
+    // which on some systems opens before the button is let go and swallows
+    // the release — a pan begun then would stay stuck to the pointer.
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
     snapToTarget();
     activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const el = e.currentTarget as HTMLElement;

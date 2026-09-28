@@ -177,7 +177,12 @@ defineExpose({
     >
       <!-- The box is sized by the zoom; anything laid over the media (a crop
            frame) is positioned in percent of it and so follows every zoom
-           and pan without knowing about them. -->
+           and pan without knowing about them.
+
+           The media itself takes the pointer, so the browser's own menu —
+           copy the image, save it, open it in a tab — works on it. Pan and
+           pinch still run on the container the events bubble to, and an
+           image is kept from being dragged out as a file. -->
       <Transition
         enter-from-class="opacity-0"
         enter-active-class="transition-opacity duration-300
@@ -197,7 +202,7 @@ defineExpose({
             :src="sitePath(props.src)"
             :poster="props.poster && sitePath(props.poster)"
             preload="metadata"
-            class="pointer-events-none block max-h-none max-w-none"
+            class="block max-h-none max-w-none"
             :class="turnStyle ? 'absolute top-1/2 left-1/2' : 'size-full'"
             :style="turnStyle"
             @loadedmetadata="onVideoMeta"
@@ -208,7 +213,7 @@ defineExpose({
             :src="sitePath(props.src)"
             alt=""
             draggable="false"
-            class="pointer-events-none block max-h-none max-w-none"
+            class="block max-h-none max-w-none"
             :class="turnStyle ? 'absolute top-1/2 left-1/2' : 'size-full'"
             :style="turnStyle"
             @load="onImgLoad"
