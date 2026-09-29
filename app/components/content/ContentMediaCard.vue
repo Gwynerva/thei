@@ -18,7 +18,6 @@ withDefaults(
     mediaNaturalSize?: boolean;
     captionClass?: string;
     openable?: boolean;
-    suspended?: boolean;
   }>(),
   { mediaRounded: true, mediaNaturalSize: true },
 );
@@ -27,21 +26,19 @@ const emit = defineEmits<{
   edit: [];
   caption: [value: string];
   open: [];
-  ready: [];
-  error: [];
 }>();
 </script>
 
 <template>
   <figure class="min-w-0">
+    <!-- Another picture is another frame: nothing measured for the last one
+         carries over. -->
     <ContentMedia
+      :key="asset.media?.src"
       :asset
       :layout
       :rounded="mediaRounded"
       :natural-size="mediaNaturalSize"
-      :suspended
-      @ready="emit('ready')"
-      @error="emit('error')"
     >
       <button
         v-if="openable && !editable && asset.media?.kind === 'image'"

@@ -575,7 +575,7 @@ export class ContentMediaTool extends VueBlockTool implements BlockTool {
       onCaption: (value: string) => {
         if (value === this.caption) return;
         this.caption = value;
-        this.dispatchChange();
+        this.commit();
       },
     });
   }
@@ -725,7 +725,7 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
       onRemove: (id: string) => this.remove(id),
       onReorder: (items: ContentGalleryItem[]) => {
         this.items = items;
-        this.dispatchChange();
+        this.commit();
       },
       onCaption: (id: string, value: string) => {
         const normalized = normalizeContentMediaCaption(value) || undefined;
@@ -734,7 +734,7 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
         this.items = this.items.map((item) =>
           item.id === id ? { ...item, caption: normalized } : item,
         );
-        this.dispatchChange();
+        this.commit();
       },
     });
   }
@@ -867,12 +867,12 @@ export class ContentAttachmentTool extends VueBlockTool implements BlockTool {
       onTitle: (value: string) => {
         if (value === this.title) return;
         this.title = value;
-        this.dispatchChange();
+        this.commit();
       },
       onDescription: (value: string) => {
         if (value === this.caption) return;
         this.caption = value;
-        this.dispatchChange();
+        this.commit();
       },
     });
   }

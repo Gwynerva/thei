@@ -25,7 +25,6 @@ const active = computed(
     openable.value.find((item) => item.key === selectedKey.value) ??
     openable.value[0],
 );
-const crossfade = useGalleryCrossfade(active, (item) => item.key);
 function openItem(item: PublicAssetDescriptor) {
   openPublicAssets(openable.value, item);
 }
@@ -111,41 +110,13 @@ function openItem(item: PublicAssetDescriptor) {
         </button>
       </template>
     </div>
-    <div v-if="crossfade.displayed.value" class="grid" data-gallery-crossfade>
-      <PublicAssetGalleryView
-        v-for="layer in crossfade.layers.value"
-        :key="layer.item.key"
-        :item="layer.item"
-        :suspended="
-          layer.role === 'displayed'
-            ? Boolean(crossfade.incoming.value)
-            : !crossfade.revealing.value
-        "
-        :inert="
-          layer.role === 'displayed'
-            ? Boolean(crossfade.incoming.value)
-            : !crossfade.revealing.value
-        "
-        class="col-start-1 row-start-1 transition-opacity duration-300
-          motion-reduce:duration-0"
-        :class="{
-          'pointer-events-none opacity-0':
-            layer.role === 'displayed'
-              ? crossfade.revealing.value
-              : !crossfade.revealing.value,
-          'pointer-events-auto opacity-100':
-            layer.role === 'incoming' && crossfade.revealing.value,
-        }"
-        :data-gallery-outgoing="layer.role === 'displayed' ? '' : undefined"
-        :data-gallery-incoming="layer.role === 'incoming' ? '' : undefined"
-        @ready="
-          layer.role === 'incoming' && crossfade.settleIncoming(layer.item.key)
-        "
-        @error="
-          layer.role === 'incoming' && crossfade.settleIncoming(layer.item.key)
-        "
-        @open="openItem(layer.item)"
-      />
-    </div>
+    <!-- A tile switches the picture at once, as the content gallery does. -->
+    <PublicAssetGalleryView
+      v-if="active"
+      :key="active.key"
+      :item="active"
+      data-gallery-view
+      @open="openItem(active)"
+    />
   </section>
 </template>
