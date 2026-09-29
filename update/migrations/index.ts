@@ -12,6 +12,7 @@ import externalLinkStatus from './0.0.2-external-link-status';
 import tagNames from './0.0.2-tag-names';
 import configShape from './0.0.2-config-shape';
 import statusDates from './0.0.3-status-dates';
+import sharedLinkFavicons from './0.0.3-shared-link-favicons';
 
 /**
  * Every migration Thei has ever shipped, oldest first.
@@ -37,6 +38,7 @@ export const migrationRegistry: TheiMigration[] = [
   tagNames,
   configShape,
   statusDates,
+  sharedLinkFavicons,
 ];
 
 export { baselineSql } from './0.0.1-baseline';

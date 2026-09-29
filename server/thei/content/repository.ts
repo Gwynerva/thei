@@ -23,6 +23,7 @@ import { buildAdminAssetUrls, archivedOriginalFromMeta } from '../assets/urls';
 import {
   createExternalLinkLoader,
   ensureExternalLinks,
+  scheduleExternalLinkSweep,
 } from '../external-links/repository';
 import { assetSelectionError } from '#layers/thei/shared/asset-library';
 
@@ -140,6 +141,8 @@ export function applyPreparedContentSave(
   slot: ContentSlot,
   prepared: PreparedContentSave,
 ) {
+  // A link the text no longer holds is forgotten once saving settles.
+  scheduleExternalLinkSweep();
   if (prepared.type === 'delete') {
     if (!prepared.existingContentUuid) return;
     deleteContentRowAndUsages(tx, schema, prepared.existingContentUuid);
@@ -224,6 +227,7 @@ export function deleteContentForOwner(
   for (const row of rows) {
     deleteContentRowAndUsages(tx, schema, row.contentUuid);
   }
+  if (rows.length) scheduleExternalLinkSweep();
 }
 
 async function validateContentAssets(data: ContentOutputData) {

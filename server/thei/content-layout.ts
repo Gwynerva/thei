@@ -10,7 +10,10 @@ export const THEI_CONTENT_DIRS = {
   assets: 'assets',
   /** Procedurally generated entity icons. Regenerable cache. */
   generatedMedia: 'generated-media',
-  /** Favicons of external links, fetched once when a link is put in. */
+  /**
+   * Favicons of external links, fetched once when a link is put in and
+   * addressed by content hash: links with the same icon share one file.
+   */
   externalLinkFavicons: 'external-link-favicons',
 } as const;
 

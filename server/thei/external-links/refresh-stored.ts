@@ -2,7 +2,11 @@ import { stat } from 'node:fs/promises';
 import { withExternalLinkSlot } from '../assets/queue';
 import type { externalLinks } from '../db/schema/external-links';
 import { collectExternalLink } from './fetch';
-import { externalLinkFaviconPath, writeExternalLinkFavicon } from './favicon';
+import {
+  externalLinkFaviconPath,
+  storeExternalLinkFavicon,
+  withExternalLinkFavicons,
+} from './favicon';
 import { upsertExternalLink } from './repository';
 
 /** How many sites one step of the pass reads before reporting progress. */
@@ -66,38 +70,35 @@ async function refreshStoredExternalLink(
   const collected = await withExternalLinkSlot(() =>
     collectExternalLink(row.url),
   );
-  if (collected.status === 'fallback' && row.status !== 'fallback') {
+  const keepStored =
+    collected.status === 'fallback' && row.status !== 'fallback';
+  if (keepStored) {
     const hasIcon = await stat(externalLinkFaviconPath(row.faviconKey)).then(
       () => true,
       () => false,
     );
     if (hasIcon) return;
-    const { faviconKey, accent } = await writeExternalLinkFavicon(
-      row.url,
+  }
+  await withExternalLinkFavicons(async () => {
+    const { faviconKey, accent } = await storeExternalLinkFavicon(
       collected.favicon,
     );
     upsertExternalLink({
       url: row.url,
-      title: row.title ?? undefined,
-      description: row.description ?? undefined,
+      ...(keepStored
+        ? {
+            title: row.title ?? undefined,
+            description: row.description ?? undefined,
+            status: row.status,
+          }
+        : {
+            title: collected.title,
+            description: collected.description,
+            status: collected.status,
+          }),
       faviconKey,
       accent,
-      status: row.status,
       touchedAt: Date.now(),
     });
-    return;
-  }
-  const { faviconKey, accent } = await writeExternalLinkFavicon(
-    row.url,
-    collected.favicon,
-  );
-  upsertExternalLink({
-    url: row.url,
-    title: collected.title,
-    description: collected.description,
-    faviconKey,
-    accent,
-    status: collected.status,
-    touchedAt: Date.now(),
   });
 }

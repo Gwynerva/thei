@@ -18,9 +18,9 @@ import { collectExternalLink } from './fetch';
 import {
   EXTERNAL_LINK_FAVICON_EXTENSION,
   externalLinkFaviconDir,
-  externalLinkFaviconPath,
   externalLinkMedia,
-  writeExternalLinkFavicon,
+  storeExternalLinkFavicon,
+  withExternalLinkFavicons,
 } from './favicon';
 
 /**
@@ -52,7 +52,6 @@ export function toExternalLink(row: ExternalLinkRow): ExternalLink {
     faviconMedia: externalLinkMedia(
       row.faviconKey,
       normalizeImageAccent(row.accent),
-      row.touchedAt,
     ),
     status: row.status,
     touchedAt: row.touchedAt,
@@ -148,28 +147,29 @@ export function refreshExternalLink(rawUrl: unknown): Promise<ExternalLink> {
 
 async function storeExternalLink(url: string): Promise<ExternalLink> {
   const collected = await collectExternalLink(url);
-  const { faviconKey, accent } = await writeExternalLinkFavicon(
-    url,
-    collected.favicon,
-  );
-  const touchedAt = Date.now();
-  upsertExternalLink({
-    url,
-    title: collected.title,
-    description: collected.description,
-    faviconKey,
-    accent,
-    status: collected.status,
-    touchedAt,
+  return await withExternalLinkFavicons(async () => {
+    const { faviconKey, accent } = await storeExternalLinkFavicon(
+      collected.favicon,
+    );
+    const touchedAt = Date.now();
+    upsertExternalLink({
+      url,
+      title: collected.title,
+      description: collected.description,
+      faviconKey,
+      accent,
+      status: collected.status,
+      touchedAt,
+    });
+    return {
+      url,
+      title: collected.title,
+      description: collected.description,
+      faviconMedia: externalLinkMedia(faviconKey, accent),
+      status: collected.status,
+      touchedAt,
+    };
   });
-  return {
-    url,
-    title: collected.title,
-    description: collected.description,
-    faviconMedia: externalLinkMedia(faviconKey, accent, touchedAt),
-    status: collected.status,
-    touchedAt,
-  };
 }
 
 /** The stored record, read from the site only when there is none yet. */
@@ -267,53 +267,52 @@ export function collectUsedExternalLinkUrls(): Set<string> {
 }
 
 /**
- * Forgets links nothing points at any more, and the files of links that are
- * gone. Deletes only; a site is never read from here.
+ * Forgets links nothing points at any more, and the icon files no remaining
+ * link points at. Deletes only; a site is never read from here.
  */
-export async function sweepExternalLinks(): Promise<void> {
-  const { db, schema } = THEI_SERVER.useDb();
-  const cutoff = Date.now() - SWEEP_GRACE_MS;
-  const rows = db
-    .select({
-      url: schema.externalLinks.url,
-      faviconKey: schema.externalLinks.faviconKey,
-      touchedAt: schema.externalLinks.touchedAt,
-    })
-    .from(schema.externalLinks)
-    .all();
-  const used = collectUsedExternalLinkUrls();
-  const kept = new Set<string>();
-  const removed: string[] = [];
-  for (const row of rows) {
-    if (used.has(row.url) || row.touchedAt >= cutoff) {
-      kept.add(row.faviconKey);
-      continue;
+export function sweepExternalLinks(): Promise<void> {
+  return withExternalLinkFavicons(async () => {
+    const { db, schema } = THEI_SERVER.useDb();
+    const cutoff = Date.now() - SWEEP_GRACE_MS;
+    const rows = db
+      .select({
+        url: schema.externalLinks.url,
+        faviconKey: schema.externalLinks.faviconKey,
+        touchedAt: schema.externalLinks.touchedAt,
+      })
+      .from(schema.externalLinks)
+      .all();
+    const used = collectUsedExternalLinkUrls();
+    const kept = new Set<string>();
+    for (const row of rows) {
+      if (used.has(row.url) || row.touchedAt >= cutoff) {
+        kept.add(row.faviconKey);
+        continue;
+      }
+      try {
+        db.delete(schema.externalLinks)
+          .where(eq(schema.externalLinks.url, row.url))
+          .run();
+      } catch (error) {
+        // Something still points here that the list above does not know.
+        kept.add(row.faviconKey);
+        warn(`Could not forget ${row.url}`, error);
+      }
     }
-    try {
-      db.delete(schema.externalLinks)
-        .where(eq(schema.externalLinks.url, row.url))
-        .run();
-      removed.push(row.faviconKey);
-    } catch (error) {
-      // Something still points here that the list above does not know.
-      kept.add(row.faviconKey);
-      warn(`Could not forget ${row.url}`, error);
-    }
-  }
-  await Promise.all(
-    removed.map((key) =>
-      rm(externalLinkFaviconPath(key), { force: true }).catch(() => {}),
-    ),
-  );
-  await removeStrayFaviconFiles(kept, cutoff);
+    await removeUnreferencedFaviconFiles(kept, cutoff);
+  });
 }
 
 /**
- * Files no row points at, left behind by a crash between a delete and its
- * removal. A file still being written is protected by the same grace as a
- * fresh row, and anything that is not a favicon is left alone.
+ * Files no remaining row points at. A forgotten link's icon goes only here:
+ * other links may share the same file, so it is never removed by the key of
+ * a row. A file younger than the grace is left, as is anything that is not
+ * a favicon.
  */
-async function removeStrayFaviconFiles(kept: Set<string>, cutoff: number) {
+async function removeUnreferencedFaviconFiles(
+  kept: Set<string>,
+  cutoff: number,
+) {
   const directory = externalLinkFaviconDir();
   const names = await readdir(directory).catch(() => [] as string[]);
   for (const name of names) {

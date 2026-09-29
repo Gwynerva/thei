@@ -17,6 +17,8 @@ export default defineEventHandler(async (event) => {
   const data = await readFile(externalLinkFaviconPath(match[1]!)).catch(
     () => null,
   );
+  // The name is the hash of the bytes, so what is served under it never
+  // changes: a new icon is a new name.
   if (data) {
     setHeader(event, 'cache-control', 'public, max-age=31536000, immutable');
     return data;

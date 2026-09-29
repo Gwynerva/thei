@@ -208,7 +208,7 @@ be copied anywhere, onto any machine.
 | `thei.db`                 | a consistent snapshot, taken through SQLite's own backup API |
 | `thei.config.json`        | version, language, access level, password and token hashes   |
 | `assets/`                 | uploaded originals and every derived variant                 |
-| `external-link-favicons/` | the icons of external links, fetched when a link was put in  |
+| `external-link-favicons/` | the icons of external links, one file per distinct icon      |
 | `generated-media/`        | **not copied** — a cache the site rebuilds on demand         |
 
 A copy therefore contains your site's credentials. Keep the destination folder
