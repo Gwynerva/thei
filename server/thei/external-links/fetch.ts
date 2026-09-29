@@ -7,7 +7,10 @@ import {
   truncateExternalLinkText,
   type ExternalLinkStatus,
 } from '#layers/thei/shared/external-link';
-import { convertExternalLinkFavicon } from './favicon';
+import {
+  convertExternalLinkFavicon,
+  EXTERNAL_LINK_FAVICON_SIZE,
+} from './favicon';
 
 /** The whole read, fallbacks included, has to finish within this. */
 export const EXTERNAL_LINK_FETCH_TIMEOUT = 15_000;
@@ -309,24 +312,52 @@ export function extractDocumentMeta($: CheerioAPI): {
 }
 
 /**
- * Every icon the page declares, best first: the ones closest to the stored
- * size come before the rest, and a web manifest's icons join them when it
- * can be read within the budget.
+ * Link relations that name an icon meant to be shown as it is. `mask-icon`
+ * is not one: it is a one-colour silhouette Safari tints itself.
+ */
+const ICON_RELATIONS = new Set([
+  'icon',
+  'apple-touch-icon',
+  'apple-touch-icon-precomposed',
+  'fluid-icon',
+]);
+/** How far down the list an icon goes for what it is, before its size. */
+const ICON_RANK = {
+  /** Drawn at any size. After an exact fit only. */
+  scalable: 5,
+  /**
+   * Of a size nobody gave: after every icon known to be large enough, before
+   * those known to be too small.
+   */
+  unsized: 500,
+  /** Known to be smaller than the tile; added to how much smaller. */
+  smaller: 1000,
+  /** A Windows tile image, usually a white glyph meant for a coloured tile. */
+  tile: 2000,
+  /** Meant only under a media condition, such as a dark colour scheme. */
+  conditional: 3000,
+};
+
+/**
+ * Every icon the page declares, best first: the one that fits the stored
+ * size, then those drawn down to it, then those stretched up. A web
+ * manifest's icons join them when it can be read within the budget. Of two
+ * icons that fit equally well, the one declared later wins, as in a browser.
  */
 export async function discoverFavicons(
   document: FetchedDocument,
   deadline = Date.now() + MANIFEST_BUDGET_MS,
 ): Promise<string[]> {
   const { $ } = document;
-  const candidates: Array<{ url: string; score: number }> = [];
-  const add = (value: string | undefined, score = 100) => {
+  const candidates: Array<{ url: string; score: number; order: number }> = [];
+  const add = (value: string | undefined, score: (url: URL) => number) => {
     if (!value) return;
     try {
+      const url = new URL(value, document.url);
       candidates.push({
-        url: value.startsWith('data:')
-          ? value
-          : new URL(value, document.url).href,
-        score,
+        url: value.startsWith('data:') ? value : url.href,
+        score: score(url),
+        order: candidates.length,
       });
     } catch {
       // Ignore malformed icon declarations.
@@ -334,19 +365,16 @@ export async function discoverFavicons(
   };
 
   $('link[href]').each((_, element) => {
-    const rel = ($(element).attr('rel') ?? '')
-      .toLowerCase()
-      .split(/\s+/)
-      .filter(Boolean);
-    if (
-      rel.includes('icon') ||
-      rel.includes('shortcut') ||
-      rel.includes('apple-touch-icon') ||
-      rel.includes('mask-icon') ||
-      rel.includes('fluid-icon')
-    ) {
-      add($(element).attr('href'), iconSizeScore($(element).attr('sizes')));
-    }
+    const link = $(element);
+    const rel = (link.attr('rel') ?? '').toLowerCase().split(/\s+/);
+    if (!rel.some((value) => ICON_RELATIONS.has(value))) return;
+    const media = link.attr('media')?.trim().toLowerCase();
+    add(
+      link.attr('href'),
+      (url) =>
+        iconScore(url, link.attr('sizes'), link.attr('type')) +
+        (media && media !== 'all' ? ICON_RANK.conditional : 0),
+    );
   });
 
   $('meta[content]').each((_, element) => {
@@ -359,7 +387,7 @@ export async function discoverFavicons(
       name === 'msapplication-tileimage' ||
       /^msapplication-square\d+x\d+logo$/.test(name)
     ) {
-      add($(element).attr('content'), 60);
+      add($(element).attr('content'), () => ICON_RANK.tile);
     }
   });
 
@@ -369,7 +397,7 @@ export async function discoverFavicons(
       /<([^>]+)>\s*;\s*rel\s*=\s*"?([^";,]+)"?/gi,
     )) {
       if (match[2]?.toLowerCase().split(/\s+/).includes('icon')) {
-        add(match[1], 70);
+        add(match[1], (url) => iconScore(url));
       }
     }
   }
@@ -389,11 +417,18 @@ export async function discoverFavicons(
       if (Array.isArray(icons)) {
         for (const icon of icons) {
           if (!icon || typeof icon !== 'object') continue;
-          const source = (icon as { src?: unknown }).src;
-          if (typeof source !== 'string') continue;
-          add(
-            new URL(source, manifestUrl).href,
-            iconSizeScore((icon as { sizes?: unknown }).sizes),
+          const { src, sizes, type, purpose } = icon as Record<string, unknown>;
+          if (typeof src !== 'string') continue;
+          // A maskable icon is cropped by whoever shows it, a monochrome one
+          // tinted; only an icon for any purpose is shown as it is.
+          if (
+            typeof purpose === 'string' &&
+            purpose.trim() &&
+            !purpose.toLowerCase().split(/\s+/).includes('any')
+          )
+            continue;
+          add(new URL(src, manifestUrl).href, (url) =>
+            iconScore(url, sizes, type),
           );
         }
       }
@@ -403,21 +438,31 @@ export async function discoverFavicons(
   }
 
   return candidates
-    .sort((left, right) => left.score - right.score)
+    .sort((left, right) => left.score - right.score || right.order - left.order)
     .map((candidate) => candidate.url);
 }
 
-function iconSizeScore(value: unknown) {
-  if (typeof value !== 'string') return 100;
-  if (value.toLowerCase().includes('any')) return 5;
-  const sizes = Array.from(value.matchAll(/(\d+)x(\d+)/gi))
+/**
+ * How well an icon suits the tile, lower being better. Drawing an icon down
+ * keeps it sharp and stretching it up does not, so any size at least as
+ * large as the tile comes before every smaller one.
+ */
+function iconScore(url: URL, sizes?: unknown, type?: unknown) {
+  const listed = typeof sizes === 'string' ? sizes.toLowerCase() : '';
+  if (
+    listed.split(/\s+/).includes('any') ||
+    (typeof type === 'string' && type.toLowerCase() === 'image/svg+xml') ||
+    url.pathname.toLowerCase().endsWith('.svg')
+  )
+    return ICON_RANK.scalable;
+  const values = Array.from(listed.matchAll(/(\d+)x(\d+)/g))
     .map((match) => Math.min(Number(match[1]), Number(match[2])))
     .filter((size) => Number.isFinite(size) && size > 0);
-  if (!sizes.length) return 100;
-  return (
-    Math.min(...sizes.map((size) => Math.abs(size - 48))) +
-    (sizes.some((size) => size >= 48) ? 0 : 40)
-  );
+  if (!values.length) return ICON_RANK.unsized;
+  const tile = EXTERNAL_LINK_FAVICON_SIZE;
+  const larger = values.filter((size) => size >= tile);
+  if (larger.length) return Math.min(...larger) - tile;
+  return ICON_RANK.smaller + tile - Math.max(...values);
 }
 
 /**

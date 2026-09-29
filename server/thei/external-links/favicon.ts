@@ -11,6 +11,7 @@ import { iconSymbols } from '#thei/icon-symbols';
 import { extractImageAccent } from '../assets/image-color';
 import { svgDensityFor } from '../assets/svg-density';
 import { THEI_CONTENT_DIRS } from '../content-layout';
+import { decodeIco, isIco } from './ico';
 
 export const EXTERNAL_LINK_FAVICON_SIZE = 48;
 export const EXTERNAL_LINK_FAVICON_QUALITY = 80;
@@ -128,10 +129,8 @@ function fileExists(path: string) {
 }
 
 export async function convertExternalLinkFavicon(source: Buffer) {
-  // A site's SVG icon is drawn at the tile's size, not at its own units,
-  // which for many icons are 16 px and would come out blurred.
-  const density = await svgDensityFor(source, EXTERNAL_LINK_FAVICON_SIZE);
-  return await sharp(source, { failOn: 'error', density })
+  const image = await openFavicon(source);
+  return await image
     .resize(EXTERNAL_LINK_FAVICON_SIZE, EXTERNAL_LINK_FAVICON_SIZE, {
       fit: 'contain',
       background: { r: 0, g: 0, b: 0, alpha: 0 },
@@ -143,6 +142,22 @@ export async function convertExternalLinkFavicon(source: Buffer) {
       effort: 6,
     })
     .toBuffer();
+}
+
+/** The icon opened for sharp, whatever format the site keeps it in. */
+async function openFavicon(source: Buffer) {
+  if (isIco(source)) {
+    const image = decodeIco(source, EXTERNAL_LINK_FAVICON_SIZE);
+    return image.kind === 'png'
+      ? sharp(image.data, { failOn: 'error' })
+      : sharp(image.data, {
+          raw: { width: image.width, height: image.height, channels: 4 },
+        });
+  }
+  // A site's SVG icon is drawn at the tile's size, not at its own units,
+  // which for many icons are 16 px and would come out blurred.
+  const density = await svgDensityFor(source, EXTERNAL_LINK_FAVICON_SIZE);
+  return sharp(source, { failOn: 'error', density });
 }
 
 let fallbackTile: Promise<Buffer> | undefined;
