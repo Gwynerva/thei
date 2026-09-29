@@ -13,8 +13,11 @@ import { canonicalizeContentData } from '#layers/thei/shared/content';
 import type { ContentEntitySearchItem } from '#layers/thei/shared/admin/content-entity-search';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import { externalLinkListItems } from '#layers/thei/shared/external-link';
+import { PROFILE_ID } from '#layers/thei/shared/profile';
+import { provideContentOwner } from '#layers/thei/app/composables/content-history/owner';
 import { useExternalLinks } from '#layers/thei/app/composables/external-links';
 definePageMeta({ layout: 'admin' });
+provideContentOwner('profile', PROFILE_ID);
 await useAdminTabTitle(computed(() => phrase.value.about_me));
 const initial =
   await useRequestFetch()<AdminProfileResponse>('/api/admin/about');
@@ -180,6 +183,7 @@ const birthDateMax = new Date();
           ><FieldLabel>{{ phrase.profile_detailed_description }}</FieldLabel
           ><FieldContentEditor
             v-model="data.aboutContent"
+            content-slot="profile-about"
             :title-label="phrase.profile_detailed_description"
         /></Field>
         <div class="flex min-w-0 flex-wrap gap-md">

@@ -7,6 +7,7 @@ import {
   type ContentFieldModelValue,
 } from '../content';
 import { isOneOf } from '../utils/isOneOf';
+import { optionalContentDraftRef } from '../content-history';
 import { isLifeDay } from '../life';
 import type { DiaryEditData, ValidatedDiaryEditData } from '../diary';
 import { RelationValidationError, validateRelations } from '../relation';
@@ -53,5 +54,6 @@ function validateRequiredContent(
     ...(typeof value.updatedAt === 'number' && Number.isFinite(value.updatedAt)
       ? { updatedAt: value.updatedAt }
       : {}),
+    ...optionalContentDraftRef(value.draftRef),
   };
 }

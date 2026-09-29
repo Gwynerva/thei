@@ -1,3 +1,5 @@
+import type { ContentHistoryReason } from '../content-history';
+
 export const languagesInfo = {
   en: 'English',
   ru: 'Русский',
@@ -102,6 +104,7 @@ export type LanguagePhrases = {
   asset_library_search: string;
   asset_aspect_hint: (ratio: string, size: string) => string;
   asset_library_pending_deletion: (date: string) => string;
+  asset_library_in_history: string;
   asset_library_empty: string;
   asset_library_unused: string;
   asset_library_unused_hint: string;
@@ -825,8 +828,38 @@ export type LanguagePhrases = {
   content_editor_title: string;
   content_editor_clear_confirm: string;
   content_never_saved: string;
-  content_snapshots: string;
-  content_snapshot_restore_label: (date: string) => string;
+  content_history: string;
+  content_history_empty: string;
+  content_history_unavailable: string;
+  content_history_load_error: string;
+  content_history_opened_version: string;
+  content_history_reasons: Record<ContentHistoryReason, string>;
+  content_history_row_label: (time: string, changes: string) => string;
+  content_history_delta: (value: string, delta: number) => string;
+  content_history_missing_assets: (count: number) => string;
+  content_history_back: string;
+  content_restore: string;
+  content_restore_cancel: string;
+  content_diff_removed: string;
+  content_diff_added: string;
+  content_diff_changed: string;
+  /** Above a rewritten block as it is now, before the restore. */
+  content_diff_before: string;
+  /** Above the same block as the restore would leave it. */
+  content_diff_after: string;
+  content_restore_title: (time: string) => string;
+  content_restore_keeps_current: string;
+  content_restore_same: string;
+  content_restored: (label: string) => string;
+  content_restore_undo: string;
+  content_draft_offer: (time: string) => string;
+  content_draft_dismiss: string;
+  content_draft_chip: (time: string) => string;
+  content_draft_status_offline_short: string;
+  content_draft_status_synced: (time: string) => string;
+  content_draft_status_offline: string;
+  content_field_unsaved_draft: (time: string) => string;
+  sign_out_unsynced_confirm: (count: number) => string;
   content_internal_link: string;
   content_external_link: string;
   content_link_url: string;

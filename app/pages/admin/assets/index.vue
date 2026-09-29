@@ -124,12 +124,15 @@ onMounted(() => {
           showSize: true,
           size: item.asset.size,
           pendingDeletion: Boolean(item.deleteAfter),
+          inHistory: item.inHistory,
         }"
         :aria-label="assetFileLabel(item.asset)"
         :data-title-popup="
           item.deleteAfter
             ? assetDeletionLabel(item.deleteAfter)
-            : assetFileLabel(item.asset)
+            : item.inHistory
+              ? phrase.asset_library_in_history
+              : assetFileLabel(item.asset)
         "
         class="aspect-square w-full cursor-pointer"
         @focus="focusedAssetUuid = item.asset.assetUuid"

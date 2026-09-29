@@ -94,18 +94,46 @@ import {
 import { useExternalLinks } from '#layers/thei/app/composables/external-links';
 import type { ExternalLink } from '#layers/thei/shared/external-link';
 import { internalUrlPastePattern } from '#layers/thei/shared/internal-url';
+import { readCleanEditorOutput } from '#layers/thei/app/composables/editor-output';
 import {
-  createEditorSnapshotManager,
-  groupEditorSnapshotsByDay,
-  readCleanEditorOutput,
-  type EditorSnapshotReference,
-} from '#layers/thei/app/composables/editor-snapshots';
+  createEditorHistorySession,
+  type EditorHistoryState,
+} from '#layers/thei/app/composables/content-history/session';
+import {
+  announceContentHistoryChange,
+  contentHistoryTransport,
+  joinContentHistoryTabs,
+} from '#layers/thei/app/composables/content-history/api';
+import { useContentHistoryBuffer } from '#layers/thei/app/composables/content-history/buffer';
+import {
+  isNewContentOwnerRef,
+  type ContentHistoryEntryMeta,
+  type ContentHistoryField,
+} from '#layers/thei/shared/content-history';
+import ContentHistoryPanel from '#layers/thei/app/components/content/ContentHistoryPanel.vue';
+import ContentRestoreBar from '#layers/thei/app/components/content/ContentRestoreBar.vue';
+import {
+  offerRestoreTarget,
+  type RestoreTarget,
+} from '#layers/thei/app/composables/content-history/restore-target';
+import ContentHistoryDiff from '#layers/thei/app/components/content/ContentHistoryDiff.vue';
 
 const props = defineProps<{
   modalData: {
     title?: string;
     value?: ContentFieldModelValue | null;
-    snapshotKey: string;
+    /**
+     * Where the field's draft and versions live. Without it the editor keeps
+     * no history.
+     */
+    history?: {
+      field: ContentHistoryField;
+      /**
+       * The latest draft written for another new owner, offered to a field
+       * whose owner is not created yet. Read as it changes.
+       */
+      pending?: () => ContentHistoryEntryMeta | undefined;
+    };
     onSave: (value: ContentFieldModelValue) => void;
     /**
      * Called once the content has been written back into the form behind the
@@ -171,15 +199,40 @@ const entityPicker = useTemplateRef<{ focus: () => void }>('entityPicker');
 let entityPickerResolve: ((item?: ContentEntitySearchItem) => void) | undefined;
 const saving = ref(false);
 const errorMessage = ref<string | undefined>();
-const snapshotPopupOpen = ref(false);
-const snapshotButton = useTemplateRef<HTMLElement>('snapshotButton');
+const historyPopupOpen = ref(false);
+const historyButton = useTemplateRef<HTMLElement>('historyButton');
+const restoredLabel = ref('');
+/** What a restore is being confirmed for, in the header's third row. */
+const restoring = shallowRef<{ target: RestoreTarget; fromList: boolean }>();
+/**
+ * While a restore is being confirmed, the text is shown read-only in the
+ * editor's place, marked with what the restore would change. The editor
+ * itself is left alone and is back as it was when the question is gone.
+ */
+const diff = shallowRef<{
+  current: ContentOutputData;
+  version: ContentOutputData;
+}>();
+
+function showDiff(version: ContentOutputData | undefined) {
+  diff.value = version
+    ? { current: editorSession.current(), version }
+    : undefined;
+}
 const initialData = normalizeContentData(props.modalData.value?.data);
+const openedKey = contentSemanticKey(initialData);
+const opened = { data: initialData, key: openedKey };
 let savedValue = props.modalData.value;
-const {
-  value: draftData,
-  isDirty,
-  markSaved,
-} = useSerializableState(initialData, { serialize: contentSemanticKey });
+/**
+ * The editor is dirty while what it holds differs from what it last wrote
+ * into the form. Both are semantic keys the session computes anyway, so a
+ * change is not serialized a second time just to be compared.
+ */
+const currentKey = shallowRef(openedKey);
+const savedKey = shallowRef(openedKey);
+const isDirty = computed(() => currentKey.value !== savedKey.value);
+/** Set once the owner confirmed closing with unsaved changes. */
+let discardConfirmed = false;
 const computedInitialSummary = summarizeContentData(
   initialData,
   collectContentAssetSizeMap(initialData),
@@ -228,8 +281,9 @@ function closeEntityPicker() {
   resolve?.();
 }
 
-const editorSnapshots = createEditorSnapshotManager({
-  storageKey: props.modalData.snapshotKey,
+const hasHistory = Boolean(props.modalData.history);
+if (hasHistory) joinContentHistoryTabs();
+const editorSession = createEditorHistorySession({
   read: async () => {
     if (!editor) throw new Error('Content editor is not available.');
     return readCleanEditorOutput(editor);
@@ -246,14 +300,49 @@ const editorSnapshots = createEditorSnapshotManager({
     editor.toolbar.close();
   },
   onCurrentChange: applyEditorData,
-  onError: () => {
-    errorMessage.value = phrase.value.content_editor_save_error;
+  onError: (_error, kind) => {
+    errorMessage.value =
+      kind === 'restore'
+        ? phrase.value.content_history_load_error
+        : phrase.value.content_editor_save_error;
   },
+  history: props.modalData.history
+    ? {
+        field: props.modalData.history.field,
+        transport: contentHistoryTransport,
+        buffer: useContentHistoryBuffer(),
+        pending: props.modalData.history.pending,
+      }
+    : undefined,
 });
-const editorChangePending = editorSnapshots.isPending;
-const snapshots = editorSnapshots.snapshots;
-const snapshotGroups = computed(() =>
-  groupEditorSnapshotsByDay(snapshots.value),
+const editorChangePending = editorSession.isPending;
+const historyStatus = editorSession.status;
+const draftOffer = editorSession.offer;
+const lastRestore = editorSession.lastRestore;
+const historyStatusText = computed(() => {
+  if (!hasHistory) return '';
+  if (historyStatus.value === 'offline')
+    return phrase.value.content_draft_status_offline;
+  // Text equal to what the form holds needs no reassurance.
+  if (!isDirty.value) return '';
+  const syncedAt = editorSession.lastSyncedAt.value;
+  return syncedAt
+    ? phrase.value.content_draft_status_synced(formatTime(syncedAt))
+    : '';
+});
+const undoLabel = computed(() =>
+  lastRestore.value
+    ? `${phrase.value.content_restore_undo} · ${phrase.value.content_restored(restoredLabel.value)}`
+    : '',
+);
+/** When the offered draft was last written; it follows the other tab. */
+const offerUpdatedAt = computed(() => {
+  const offer = draftOffer.value;
+  if (!offer) return undefined;
+  return offer.kind === 'server' ? offer.meta.updatedAt : offer.updatedAt;
+});
+const offerTime = computed(() =>
+  offerUpdatedAt.value ? formatTime(offerUpdatedAt.value) : '',
 );
 
 async function handleEditorChange(
@@ -262,13 +351,13 @@ async function handleEditorChange(
 ) {
   if (
     !editorAcceptsChanges ||
-    editorSnapshots.isApplying.value ||
+    editorSession.isApplying.value ||
     transientEntitySelections > 0
   )
     return;
   if (editorPrivateSections && !editorPrivateSections.handleChange(event))
     return;
-  editorSnapshots.recordChange();
+  editorSession.recordChange();
 }
 
 function beginTransientEntitySelection() {
@@ -287,60 +376,81 @@ function endTransientEntitySelection(persisted: boolean) {
   );
 }
 
-function applyEditorData(data: ContentOutputData) {
-  draftData.value = data;
+function applyEditorData(state: EditorHistoryState) {
+  currentKey.value = state.key;
   headerSummary.value = summarizeContentData(
-    data,
-    collectContentAssetSizeMap(data),
+    state.data,
+    collectContentAssetSizeMap(state.data),
   );
 }
 
-async function restoreSnapshot(snapshot: EditorSnapshotReference) {
-  if (await editorSnapshots.restore(snapshot)) snapshotPopupOpen.value = false;
-}
-
-function snapshotTime(createdAt: number) {
+function formatTime(value: number) {
   return new Intl.DateTimeFormat(language.value.code, {
     hour: '2-digit',
     minute: '2-digit',
     hourCycle: 'h23',
-  }).format(createdAt);
+  }).format(value);
 }
 
-function snapshotLabel(createdAt: number) {
-  return phrase.value.content_snapshot_restore_label(
-    new Intl.DateTimeFormat(language.value.code, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-      hourCycle: 'h23',
-    }).format(createdAt),
-  );
-}
-
-function snapshotDayLabel(dayStart: number) {
-  const now = new Date();
-  const todayStart = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-  ).getTime();
-  const yesterday = new Date(todayStart);
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (dayStart === todayStart || dayStart === yesterday.getTime()) {
-    return new Intl.RelativeTimeFormat(language.value.code, {
-      numeric: 'auto',
-    }).format(dayStart === todayStart ? 0 : -1, 'day');
+function toggleHistory() {
+  if (historyPopupOpen.value) {
+    historyPopupOpen.value = false;
+    return;
   }
-  return new Intl.DateTimeFormat(language.value.code, {
-    dateStyle: 'long',
-  }).format(dayStart);
+  closeRestore();
+  historyPopupOpen.value = true;
 }
 
-useModalCloseGuard(
-  () =>
-    (!editorChangePending.value && !isDirty.value) ||
-    window.confirm(phrase.value.unsaved_modal_confirm),
-);
+function chooseVersion(target: RestoreTarget) {
+  historyPopupOpen.value = false;
+  restoring.value = { target, fromList: true };
+}
+
+function openOffer() {
+  if (!draftOffer.value) return;
+  historyPopupOpen.value = false;
+  restoring.value = {
+    target: offerRestoreTarget(draftOffer.value, editorSession),
+    fromList: false,
+  };
+}
+
+function backToList() {
+  closeRestore();
+  historyPopupOpen.value = true;
+}
+
+function closeRestore() {
+  restoring.value = undefined;
+  diff.value = undefined;
+}
+
+function dismissOffer() {
+  if (restoring.value?.target.kind === 'offer') closeRestore();
+  void editorSession.dismissOffer();
+}
+
+function onRestored(label: string) {
+  const offer = restoring.value?.target.offer;
+  closeRestore();
+  if (offer) editorSession.clearOffer(offer);
+  restoredLabel.value = label;
+}
+
+function undoRestore() {
+  void editorSession.undoRestore();
+}
+
+useModalCloseGuard(() => {
+  if (!editorChangePending.value && !isDirty.value) return true;
+  const confirmed = window.confirm(phrase.value.unsaved_modal_confirm);
+  // The text is not simply dropped: the session keeps it as a version.
+  if (confirmed) discardConfirmed = true;
+  return confirmed;
+});
+// Everything typed reaches the browser's storage as the tab closes, so the
+// browser only has to ask when that storage is not available.
+useBeforeUnloadGuard(() => editorSession.needsUnloadGuard.value);
 
 function preventEditorLinkNavigation(event: MouseEvent) {
   if (event.type === 'auxclick' && event.button !== 1) return;
@@ -646,9 +756,10 @@ onMounted(async () => {
   if (disposed) return;
   editorPrivateSections = createEditorPrivateSections(editor);
   cleanupEditorPrivatePattern = createEditorPrivatePattern(holder.value!);
-  await editorSnapshots.initialize();
+  await editorSession.initialize();
   if (disposed) return;
   editorAcceptsChanges = true;
+  void editorSession.loadOffers();
   cleanupEditorPopoverLayer = createEditorPopoverLayer(holder.value!);
   cleanupEditorDrag = createEditorBlockDrag(holder.value!, editor, {
     canMove: editorPrivateSections.canMove,
@@ -677,7 +788,12 @@ onBeforeUnmount(() => {
   editorLayoutQuery?.removeEventListener('change', applyEditorLayout);
   editorLayoutQuery = undefined;
   document.body.removeAttribute('data-content-editor-layout');
-  editorSnapshots.destroy();
+  void editorSession.close({
+    discarded: discardConfirmed,
+    replacement: discardConfirmed
+      ? ((props.modalData.current?.() ?? savedValue)?.data ?? null)
+      : undefined,
+  });
   cleanupGutterClick?.();
   cleanupGutterClick = undefined;
   cleanupLinkPaste?.();
@@ -709,26 +825,34 @@ async function save() {
   saving.value = true;
   errorMessage.value = undefined;
   try {
-    const data = await editorSnapshots.synchronize();
-    draftData.value = data;
+    const data = await editorSession.synchronize();
     if (contentDataIsSemanticallyEqual(data, savedValue?.data)) {
-      markSaved(data);
+      savedKey.value = editorSession.currentKey();
       return;
     }
     const summary = summarizeContentData(
       data,
       collectContentAssetSizeMap(data),
     );
-    markSaved(data);
+    savedKey.value = editorSession.currentKey();
+    const field = editorSession.field();
     savedValue = {
       contentUuid: savedValue?.contentUuid,
       updatedAt: savedValue?.updatedAt,
       data,
       ...summary,
+      // Text written before its owner exists carries the history it was
+      // written under, so saving the owner hands that history over to it.
+      ...(field && isNewContentOwnerRef(field.ownerRef)
+        ? { draftRef: field.ownerRef }
+        : {}),
     };
     headerSummary.value = summary;
     props.modalData.onSave(savedValue);
     await props.modalData.onSaved?.();
+    // Saving the form lets drafts of the field go; the fields and the other
+    // tabs look again.
+    if (field) announceContentHistoryChange(field);
   } catch (error) {
     errorMessage.value =
       error instanceof ContentValidationError
@@ -748,8 +872,11 @@ useSaveShortcut(save, {
 async function clearContent() {
   if (!editor || headerSummary.value.blockCount === 0) return;
   if (!window.confirm(phrase.value.content_editor_clear_confirm)) return;
-  await editor.clear();
-  editorSnapshots.recordChange();
+  const target = editor;
+  // What the editor held is kept as a version before it is emptied.
+  await editorSession.clear(async () => {
+    await target.clear();
+  });
 }
 
 async function pickAsset(kind: ContentEditorAssetKind) {
@@ -857,7 +984,7 @@ function contentAssetOptions(kind: ContentEditorAssetKind): AssetWizardOptions {
 
 async function buildDraftUsageDelta() {
   if (!editor) return {};
-  const draft = editorSnapshots.current();
+  const draft = editorSession.current();
   const saved = normalizeContentData(props.modalData.value?.data);
   const draftCounts = countContentUsageByAsset(draft);
   const savedCounts = countContentUsageByAsset(saved);
@@ -1041,109 +1168,164 @@ function editorJsI18nMessages() {
     </FloatingPopup>
     <template #header>
       <div class="flex flex-col gap-xs p-sm">
-        <div class="flex min-w-0 items-center gap-xs">
-          <ModalTitle
-            icon="edit"
-            :title="modalData.title || phrase.content_editor_title"
-            class="flex-1"
-          />
-          <div
-            v-if="errorMessage"
-            class="min-w-0 truncate text-sm text-text-error"
-          >
-            {{ errorMessage }}
-          </div>
-          <ModalHeaderButton
-            icon="delete"
-            variant="delete"
-            :label="phrase.clear"
-            :disabled="headerSummary.blockCount === 0"
-            @click="clearContent"
-          />
-          <ModalHeaderButton
-            icon="close"
-            :label="phrase.close_modal"
-            @click="closeModal"
-          />
-          <ModalHeaderButton
-            variant="accent"
-            :label="phrase.save"
-            :disabled="saving || !isDirty"
-            @click="save"
-          >
-            <Icon v-if="saving" name="loading" />
-            {{ isDirty ? phrase.save : phrase.saved }}
-          </ModalHeaderButton>
-        </div>
-        <div class="flex min-w-0 items-center justify-between gap-sm">
+        <!-- Until a restore is decided, the question is the whole header. -->
+        <template v-if="!restoring">
           <div class="flex min-w-0 items-center gap-xs">
-            <div ref="snapshotButton" class="flex shrink-0">
-              <ModalHeaderButton
-                icon="history"
-                size="compact"
-                :label="phrase.content_snapshots"
-                :disabled="snapshots.length === 0"
-                :aria-expanded="snapshotPopupOpen"
-                aria-haspopup="dialog"
-                @click="snapshotPopupOpen = !snapshotPopupOpen"
-              />
-              <FloatingPopup
-                v-model:open="snapshotPopupOpen"
-                :anchor="snapshotButton"
-                placement="bottom-start"
-                :teleport-to="holder?.closest('dialog') ?? undefined"
-                fit-content
-              >
-                <div
-                  role="dialog"
-                  :aria-label="phrase.content_snapshots"
-                  class="flex scrollbar-mini
-                    max-h-[min(17.5rem,var(--floating-popup-available-height))]
-                    w-52 flex-col gap-sm overflow-y-auto rounded-normal border
-                    border-border-1 bg-bg-2 p-xs"
-                >
-                  <div
-                    v-for="group in snapshotGroups"
-                    :key="group.dayStart"
-                    class="flex flex-col gap-xs"
-                  >
-                    <div
-                      class="flex items-center gap-xs text-xs text-text-3
-                        first-letter:uppercase"
-                    >
-                      <span class="h-px grow bg-border-1" />
-                      <span>{{ snapshotDayLabel(group.dayStart) }}</span>
-                      <span class="h-px grow bg-border-1" />
-                    </div>
-                    <div class="flex flex-wrap gap-xs">
-                      <button
-                        v-for="(snapshot, index) in group.snapshots"
-                        :key="`${snapshot.createdAt}:${index}`"
-                        type="button"
-                        :aria-label="snapshotLabel(snapshot.createdAt)"
-                        class="cursor-pointer rounded-full bg-bg-3 px-xs py-1
-                          text-xs text-text-2 transition-colors
-                          hocus:bg-bg-accent hocus:text-accent"
-                        @click="restoreSnapshot(snapshot)"
-                      >
-                        {{ snapshotTime(snapshot.createdAt) }}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </FloatingPopup>
+            <ModalTitle
+              icon="edit"
+              :title="modalData.title || phrase.content_editor_title"
+              class="flex-1"
+            />
+            <div
+              v-if="errorMessage"
+              class="min-w-0 truncate text-sm text-text-error"
+            >
+              {{ errorMessage }}
             </div>
-            <ContentStats v-bind="headerSummary" />
+            <ModalHeaderButton
+              icon="delete"
+              variant="delete"
+              :label="phrase.clear"
+              :disabled="headerSummary.blockCount === 0"
+              @click="clearContent"
+            />
+            <ModalHeaderButton
+              icon="close"
+              :label="phrase.close_modal"
+              @click="closeModal"
+            />
+            <ModalHeaderButton
+              variant="accent"
+              :label="phrase.save"
+              :disabled="saving || !isDirty"
+              @click="save"
+            >
+              <Icon v-if="saving" name="loading" />
+              {{ isDirty ? phrase.save : phrase.saved }}
+            </ModalHeaderButton>
           </div>
-          <span class="shrink-0 text-xs text-text-3">
-            <TheiTime v-if="updatedAt" :datetime="updatedAt" />
-            <template v-else>{{ phrase.content_never_saved }}</template>
-          </span>
-        </div>
+          <div class="flex min-w-0 items-center justify-between gap-sm">
+            <div class="flex min-w-0 items-center gap-xs">
+              <div ref="historyButton" class="flex shrink-0">
+                <ModalHeaderButton
+                  icon="history"
+                  size="compact"
+                  :label="phrase.content_history"
+                  :disabled="!hasHistory"
+                  :aria-expanded="historyPopupOpen"
+                  aria-haspopup="dialog"
+                  data-history-button
+                  @click="toggleHistory"
+                />
+              </div>
+              <ModalHeaderButton
+                v-if="lastRestore"
+                size="compact"
+                :label="undoLabel"
+                :data-title-popup="undoLabel"
+                data-restore-undo
+                @click="undoRestore"
+              >
+                <Icon name="rotate-right" class="-scale-x-100" />
+              </ModalHeaderButton>
+              <div
+                v-if="draftOffer"
+                class="flex min-w-0 shrink items-center rounded-full
+                  bg-bg-warning text-xs text-text-warning"
+                :data-draft-offer="offerUpdatedAt"
+              >
+                <button
+                  type="button"
+                  class="min-w-0 cursor-pointer truncate py-1 pr-1 pl-xs
+                    hocus:underline"
+                  :aria-label="phrase.content_draft_offer(offerTime)"
+                  :data-title-popup="phrase.content_draft_offer(offerTime)"
+                  data-draft-offer-open
+                  @click="openOffer"
+                >
+                  {{ phrase.content_draft_chip(offerTime) }}
+                </button>
+                <button
+                  type="button"
+                  class="flex shrink-0 cursor-pointer items-center rounded-full
+                    p-1 transition-colors hocus:bg-text-warning/15"
+                  :aria-label="phrase.content_draft_dismiss"
+                  :data-title-popup="phrase.content_draft_dismiss"
+                  data-draft-dismiss
+                  @click="dismissOffer"
+                >
+                  <Icon name="close" />
+                </button>
+              </div>
+              <ContentStats v-bind="headerSummary" compact class="min-w-0" />
+            </div>
+            <div class="flex shrink-0 items-center gap-1 text-xs text-text-3">
+              <span
+                v-if="historyStatus === 'offline'"
+                class="inline-flex items-center gap-1 text-text-warning"
+                :data-title-popup="phrase.content_draft_status_offline"
+                data-history-status
+              >
+                <Icon name="warning" />
+                {{ phrase.content_draft_status_offline_short }}
+              </span>
+              <span
+                v-else-if="historyStatusText"
+                class="inline-flex"
+                role="img"
+                :aria-label="historyStatusText"
+                :data-title-popup="historyStatusText"
+                data-history-status
+              >
+                <Icon name="cloud-upload" />
+              </span>
+              <TheiTime v-if="updatedAt" :datetime="updatedAt" />
+              <template v-else>{{ phrase.content_never_saved }}</template>
+            </div>
+            <FloatingPopup
+              v-model:open="historyPopupOpen"
+              :anchor="historyButton"
+              placement="bottom-start"
+              :teleport-to="holder?.closest('dialog') ?? undefined"
+              fit-content
+            >
+              <div class="rounded-normal border border-border-1 bg-bg-2">
+                <ContentHistoryPanel
+                  :session="editorSession"
+                  :current="headerSummary"
+                  :current-key="currentKey"
+                  :opened="opened"
+                  @choose="chooseVersion"
+                />
+              </div>
+            </FloatingPopup>
+          </div>
+        </template>
+        <ContentRestoreBar
+          v-else
+          :key="restoring.target.key"
+          :session="editorSession"
+          :target="restoring.target"
+          :from-list="restoring.fromList"
+          :current="headerSummary"
+          :current-key="currentKey"
+          :error="errorMessage"
+          @preview="showDiff"
+          @back="backToList"
+          @close="closeRestore"
+          @restored="onRestored"
+        />
       </div>
     </template>
 
+    <ContentHistoryDiff
+      v-if="diff"
+      :current="diff.current"
+      :version="diff.version"
+      :link-resolver="contentLinkResolver"
+    />
     <div
+      v-show="!diff"
       ref="holder"
       class="content-editor content-prose relative w-full px-sm py-md"
       @click.capture="preventEditorLinkNavigation"

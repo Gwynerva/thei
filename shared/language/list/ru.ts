@@ -224,6 +224,8 @@ export default defineI18nModule({
       `Лучше всего подойдёт изображение или видео с пропорциями ${ratio}, например ${size} пикселей`,
     asset_library_pending_deletion: (date) =>
       `Не используется: будет удалён после ${date}`,
+    asset_library_in_history:
+      'Не используется, но хранится, пока его показывает версия какого-то текста',
     asset_library_empty: 'Подходящих файлов нет',
     asset_library_unused: 'Неиспользуемые',
     asset_library_unused_hint:
@@ -1143,8 +1145,55 @@ export default defineI18nModule({
     content_editor_title: 'Редактор контента',
     content_editor_clear_confirm: 'Очистить весь контент в редакторе?',
     content_never_saved: 'Не было сохранено',
-    content_snapshots: 'История версий',
-    content_snapshot_restore_label: (date) => `Восстановить версию от ${date}`,
+    content_history: 'История версий',
+    content_history_empty:
+      'Версий пока нет. Они появляются по ходу работы и хранятся двое суток.',
+    content_history_unavailable: 'История версий сейчас недоступна.',
+    content_history_load_error: 'Не удалось загрузить эту версию.',
+    content_history_opened_version: 'Как при открытии',
+    content_history_reasons: {
+      auto: 'Автосохранение',
+      'before-restore': 'Перед восстановлением',
+      'before-clear': 'Перед очисткой',
+      'large-drop': 'Перед крупным удалением',
+      discarded: 'Закрыто без сохранения',
+      dismissed: 'Отклонённый черновик',
+      displaced: 'Черновик другой вкладки',
+      replaced: 'Прошлая сохранённая версия',
+      cleared: 'Сохранённое до очистки',
+      deleted: 'Удалённый текст',
+      abandoned: 'Брошенный черновик',
+    },
+    content_history_row_label: (time, changes) =>
+      `Версия от ${time}: ${changes}`,
+    content_history_delta: (value, delta) =>
+      delta === 0
+        ? value
+        : `${value}, на ${Math.abs(delta)} ${delta < 0 ? 'меньше' : 'больше'}, чем сейчас`,
+    content_history_missing_assets: (count) =>
+      `Из этой версии уже удалено: ${plural(count, 'файл', 'файла', 'файлов')}`,
+    content_history_back: 'К списку версий',
+    content_restore: 'Восстановить',
+    content_restore_cancel: 'Отмена',
+    content_diff_removed: 'Пропадёт',
+    content_diff_added: 'Появится',
+    content_diff_changed: 'Изменится',
+    content_diff_before: 'Сейчас',
+    content_diff_after: 'Станет',
+    content_restore_title: (time) => `Версия от ${time}`,
+    content_restore_keeps_current: 'Текущий текст останется в истории.',
+    content_restore_same: 'Эта версия совпадает с текущим текстом.',
+    content_restored: (label) => `Восстановлено: ${label}`,
+    content_restore_undo: 'Вернуть как было',
+    content_draft_offer: (time) => `Несохранённый черновик от ${time}`,
+    content_draft_dismiss: 'Отклонить черновик (он останется в истории версий)',
+    content_draft_chip: (time) => `Черновик · ${time}`,
+    content_draft_status_offline_short: 'Нет связи',
+    content_draft_status_synced: (time) => `Черновик сохранён · ${time}`,
+    content_draft_status_offline: 'Нет связи — хранится в браузере',
+    content_field_unsaved_draft: (time) => `Несохранённый черновик · ${time}`,
+    sign_out_unsynced_confirm: (count) =>
+      `Ещё не на сервере: ${plural(count, 'текст', 'текста', 'текстов')}. Если выйти сейчас, они пропадут. Всё равно выйти?`,
     content_internal_link: 'Внутренняя ссылка',
     content_external_link: 'Внешняя ссылка',
     content_link_url: 'Адрес ссылки',

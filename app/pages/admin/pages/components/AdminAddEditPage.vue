@@ -18,9 +18,11 @@ import AssetTile from '#layers/thei/app/components/AssetTile.vue';
 import { useSingleMediaAsset } from '#layers/thei/app/composables/single-media-asset';
 import { singleAssetUsageDelta } from '#layers/thei/app/composables/single-media-asset-state';
 import { pageDeleteModal } from './page-delete-modal';
+import { provideContentOwner } from '#layers/thei/app/composables/content-history/owner';
 
 const { pageUuid } = defineProps<{ pageUuid?: string }>();
 const isEdit = computed(() => Boolean(pageUuid));
+provideContentOwner('page', () => pageUuid);
 const data = ref<PageEditData>(emptyData());
 const iconMedia = ref<MediaDescriptor>();
 const iconSize = ref<number>();
@@ -104,6 +106,7 @@ const notesModel = computed({
 });
 
 const dirty = computed(() => JSON.stringify(payload()) !== savedSnapshot.value);
+useBeforeUnloadGuard(() => dirty.value);
 const slugInvalid = computed(
   () => Boolean(data.value.slug) && !pageSlugIsValid(data.value.slug),
 );
@@ -387,6 +390,7 @@ onBeforeRouteLeave(() => {
         <FieldLabel required>{{ phrase.page_content }}</FieldLabel>
         <FieldContentEditor
           v-model="data.content"
+          content-slot="page-body"
           :title-label="phrase.page_content"
           @saved="saveAfterContentEdit()"
         />

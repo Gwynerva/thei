@@ -38,7 +38,7 @@ describe('Editor.js phrases', () => {
     expect(ruModule.phrases.content_private_section_end).toBe(
       'Конец приватной секции',
     );
-    expect(ruModule.phrases.content_snapshots).toBe('История версий');
+    expect(ruModule.phrases.content_history).toBe('История версий');
     expect(ruModule.phrases.content_media_stretch).toBe('Во всю ширину');
   });
 });

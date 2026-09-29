@@ -29,6 +29,7 @@ const props = withDefaults(
       isPrivate?: boolean;
       editable?: boolean;
       pendingDeletion?: boolean;
+      inHistory?: boolean;
       warning?: string;
     };
   }>(),

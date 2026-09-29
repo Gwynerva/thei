@@ -16,6 +16,7 @@ import ModalHeaderButton from '#layers/thei/app/modals/ModalHeaderButton.vue';
 import { buildProjectChildUrl } from '#layers/thei/shared/project-url';
 import LinkField from '../../components/LinkField.vue';
 import { projectContentItemDeleteModal } from './project-content-item-delete-modal';
+import { provideContentOwner } from '#layers/thei/app/composables/content-history/owner';
 
 type ProjectLinkIdentity = {
   projectHumanReadableSlug: string;
@@ -77,6 +78,16 @@ const canSave = computed(() => {
 
 useModalCloseGuard(
   () => !isDirty.value || window.confirm(phrase.value.unsaved_modal_confirm),
+);
+useBeforeUnloadGuard(() => isDirty.value);
+// A stage or section not saved yet keeps its text's history under an address
+// of its own; it is not offered drafts of other new ones, which it could not
+// tell apart.
+provideContentOwner(
+  props.modalData.isStage ? 'project-stage' : 'project-section',
+  () =>
+    props.modalData.isStage ? item.value.stageUuid : item.value.sectionUuid,
+  { offersPendingDrafts: false },
 );
 /**
  * A period is committed on a click, not the moment its dates are picked: its
@@ -358,6 +369,9 @@ async function deleteItem() {
         }}</FieldLabel>
         <FieldContentEditor
           v-model="item.content"
+          :content-slot="
+            isStage ? 'project-stage-body' : 'project-section-body'
+          "
           :title-label="
             item.title.trim() ||
             (isStage

@@ -1,14 +1,22 @@
+/**
+ * Asks the browser to confirm leaving the page — closing the tab, reloading,
+ * following an address — while `shouldGuard` says something would be lost.
+ */
+export function useBeforeUnloadGuard(shouldGuard: () => boolean) {
+  const beforeUnload = (event: BeforeUnloadEvent) => {
+    if (shouldGuard()) event.preventDefault();
+  };
+  onMounted(() => window.addEventListener('beforeunload', beforeUnload));
+  onUnmounted(() => window.removeEventListener('beforeunload', beforeUnload));
+}
+
 export function useSavedForm(
   isDirty: Ref<boolean>,
   save: () => void | Promise<void>,
   canSave: Ref<boolean>,
 ) {
   useSaveShortcut(save, { canSave });
-  const beforeUnload = (event: BeforeUnloadEvent) => {
-    if (isDirty.value) event.preventDefault();
-  };
-  onMounted(() => window.addEventListener('beforeunload', beforeUnload));
-  onUnmounted(() => window.removeEventListener('beforeunload', beforeUnload));
+  useBeforeUnloadGuard(() => isDirty.value);
   onBeforeRouteLeave(() => {
     if (interceptModalNavigation()) return false;
     return (

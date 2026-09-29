@@ -3,6 +3,7 @@ import {
   normalizeContentData,
   type ContentFieldModelValue,
 } from './content';
+import { optionalContentDraftRef } from './content-history';
 import {
   dateRangeEndTime,
   dateRangeStartTime,
@@ -155,6 +156,7 @@ export function normalizeProjectContentSections(
         ...(typeof contentSource.updatedAt === 'number'
           ? { updatedAt: contentSource.updatedAt }
           : {}),
+        ...optionalContentDraftRef(contentSource.draftRef),
       },
     };
   });
@@ -187,6 +189,7 @@ function normalizeProjectStage(value: unknown): ProjectStageContentItem {
           ...(typeof contentSource.updatedAt === 'number'
             ? { updatedAt: contentSource.updatedAt }
             : {}),
+          ...optionalContentDraftRef(contentSource.draftRef),
         }
       : source.content === null
         ? null

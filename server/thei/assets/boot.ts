@@ -1,7 +1,9 @@
 import { runAssetCleanup } from './cleanup';
 import { clearDraftDirectories } from './drafts';
+import { runContentHistoryMaintenance } from '../content/history';
 
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const ONE_HOUR_MS = 60 * 60 * 1000;
+const ONE_DAY_MS = 24 * ONE_HOUR_MS;
 const ONE_WEEK_MS = 7 * ONE_DAY_MS;
 
 /**
@@ -31,4 +33,25 @@ export function bootTheiAssets() {
   ).unref();
   setInterval(() => runAssetCleanup({ sweepFiles: false }), ONE_DAY_MS).unref();
   setInterval(() => runAssetCleanup({ sweepFiles: true }), ONE_WEEK_MS).unref();
+
+  // Versions of texts live two days; checking every hour keeps that close.
+  // The files they let go are touched, so they still get their day of grace.
+  setTimeout(maintainContentHistory, FIRST_RUN_DELAY_MS).unref();
+  setInterval(maintainContentHistory, ONE_HOUR_MS).unref();
+}
+
+function maintainContentHistory() {
+  try {
+    const { expired, abandoned } = runContentHistoryMaintenance();
+    if (expired || abandoned)
+      THEI_SERVER.console
+        .tag('Content')
+        .log(
+          `Let go of ${expired} old version(s) and ${abandoned} abandoned draft(s)`,
+        );
+  } catch {
+    THEI_SERVER.console
+      .tag('Content')
+      .error('Failed to maintain the history of texts');
+  }
 }

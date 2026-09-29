@@ -28,6 +28,7 @@ import { buildPageUrl } from '../../../shared/page-url';
 import { buildDiaryUrl } from '../../../shared/diary-url';
 import { buildTagUrl } from '../../../shared/tag-url';
 import { describeStoredAsset } from './storage';
+import { assetsHeldByHistory } from '../content/history';
 
 export interface LibraryQuery extends AssetSelectionConstraints {
   q?: string;
@@ -298,6 +299,9 @@ function readItems(
       .all()
       .map((u) => u.assetUuid),
   );
+  const held = assetsHeldByHistory(
+    ids.filter((assetUuid) => !referenced.has(assetUuid)),
+  );
   const items = new Map<string, AssetLibraryItem>();
   for (const row of rows) {
     const uses = placements.get(row.assetUuid) ?? [];
@@ -309,7 +313,9 @@ function readItems(
       touchedAt: row.touchedAt,
       ...(referenced.has(row.assetUuid)
         ? {}
-        : { deleteAfter: row.touchedAt + ASSET_ORPHAN_GRACE_MS }),
+        : held.has(row.assetUuid)
+          ? { inHistory: true as const }
+          : { deleteAfter: row.touchedAt + ASSET_ORPHAN_GRACE_MS }),
       ...summarizeAssetUsages(uses),
       roles: [
         ...new Set(
@@ -415,6 +421,7 @@ export function getAssetUsages(id: string) {
     placements: readPlacements([id]).get(id) ?? [],
     counts: item.counts,
     entityCount: item.entityCount,
+    ...(item.inHistory ? { inHistory: item.inHistory } : {}),
   };
 }
 

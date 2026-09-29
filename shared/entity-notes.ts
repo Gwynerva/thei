@@ -5,6 +5,7 @@ import {
   type ContentFieldModelValue,
   type ContentSlot,
 } from './content';
+import { optionalContentDraftRef } from './content-history';
 
 /**
  * Two private fields every main entity carries: a short reminder that flags
@@ -52,5 +53,6 @@ export function normalizeEntityNotes(
     ...(typeof value?.updatedAt === 'number' && Number.isFinite(value.updatedAt)
       ? { updatedAt: value.updatedAt }
       : {}),
+    ...optionalContentDraftRef(value?.draftRef),
   };
 }

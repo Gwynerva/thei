@@ -12,6 +12,7 @@ import externalLinkStatus from './0.0.2-external-link-status';
 import tagNames from './0.0.2-tag-names';
 import configShape from './0.0.2-config-shape';
 import statusDates from './0.0.3-status-dates';
+import contentHistory from './0.0.3-content-history';
 import sharedLinkFavicons from './0.0.3-shared-link-favicons';
 
 /**
@@ -38,6 +39,7 @@ export const migrationRegistry: TheiMigration[] = [
   tagNames,
   configShape,
   statusDates,
+  contentHistory,
   sharedLinkFavicons,
 ];
 

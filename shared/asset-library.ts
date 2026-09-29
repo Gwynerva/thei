@@ -54,6 +54,11 @@ export interface AssetLibraryItem {
   touchedAt: number;
   /** Unix ms after which cleanup deletes the asset; set only when unused. */
   deleteAfter?: number;
+  /**
+   * Unused, but a draft or a recent version of some text still shows it, so
+   * cleanup keeps it for as long as that version lives.
+   */
+  inHistory?: true;
   counts: AssetUsageCounts;
   entityCount: number;
   roles: AssetRole[];
@@ -73,6 +78,8 @@ export interface AssetUsagesResponse {
   placements: AssetPlacement[];
   counts: AssetUsageCounts;
   entityCount: number;
+  /** Unused, but kept while a version of some text still shows it. */
+  inHistory?: true;
 }
 export interface AssetSelectionConstraints {
   acceptedExtensions?: string[] | '*';

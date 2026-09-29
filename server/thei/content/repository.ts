@@ -3,6 +3,7 @@ import { EntityPrefix, generateUniqueId } from '../entity-id';
 import {
   canonicalizeContentData,
   collectContentExternalLinkUrls,
+  createEmptyContentData,
   ContentValidationError,
   extractContentAssetRefs,
   isContentAssetBlockType,
@@ -26,6 +27,12 @@ import {
   scheduleExternalLinkSweep,
 } from '../external-links/repository';
 import { assetSelectionError } from '#layers/thei/shared/asset-library';
+import { optionalContentDraftRef } from '#layers/thei/shared/content-history';
+import {
+  recordContentDeletion,
+  recordContentSave,
+  touchReleasedAssets,
+} from './history';
 
 export async function findContentByOwner(
   ownerType: ContentOwnerType,
@@ -80,10 +87,12 @@ export async function prepareContentForSave(
   | {
       type: 'delete';
       existingContentUuid?: string;
+      draftRef?: string;
     }
   | {
       type: 'save';
       contentUuid: string;
+      draftRef?: string;
       /** Whether the blocks differ from the ones already stored. */
       changed: boolean;
       data: ContentOutputData;
@@ -96,9 +105,14 @@ export async function prepareContentForSave(
 > {
   const existing = await findContentByOwner(ownerType, ownerId, slot);
   const data = canonicalizeContentData(value?.data);
+  const draft = optionalContentDraftRef(value?.draftRef);
 
   if (data.blocks.length === 0) {
-    return { type: 'delete', existingContentUuid: existing?.contentUuid };
+    return {
+      type: 'delete',
+      existingContentUuid: existing?.contentUuid,
+      ...draft,
+    };
   }
 
   const assetRows = await validateContentAssets(data);
@@ -120,6 +134,7 @@ export async function prepareContentForSave(
     data,
     ...summary,
     assetUsages: buildPreparedAssetUsages(contentUuid, data),
+    ...draft,
   };
 }
 
@@ -143,13 +158,60 @@ export function applyPreparedContentSave(
 ) {
   // A link the text no longer holds is forgotten once saving settles.
   scheduleExternalLinkSweep();
+  const now = Date.now();
+  // Read inside the transaction: this is the text the save replaces.
+  const previous = tx
+    .select({
+      contentUuid: schema.content.contentUuid,
+      data: schema.content.data,
+      updatedAt: schema.content.updatedAt,
+    })
+    .from(schema.content)
+    .where(
+      and(
+        eq(schema.content.ownerType, ownerType),
+        eq(schema.content.ownerId, ownerId),
+        eq(schema.content.slot, slot),
+      ),
+    )
+    .get();
+  const previousAssets: string[] = previous
+    ? tx
+        .select({ assetUuid: schema.assetUsages.assetUuid })
+        .from(schema.assetUsages)
+        .where(
+          and(
+            eq(schema.assetUsages.containerType, 'content'),
+            eq(schema.assetUsages.containerId, previous.contentUuid),
+          ),
+        )
+        .all()
+        .map((row: { assetUuid: string }) => row.assetUuid)
+    : [];
+  const recordHistory = (saved: ContentOutputData) =>
+    recordContentSave(
+      tx,
+      schema,
+      {
+        ownerType,
+        ownerId,
+        slot,
+        previous,
+        saved,
+        draftRef: prepared.draftRef,
+      },
+      now,
+    );
+
   if (prepared.type === 'delete') {
+    recordHistory(createEmptyContentData());
     if (!prepared.existingContentUuid) return;
     deleteContentRowAndUsages(tx, schema, prepared.existingContentUuid);
+    touchReleasedAssets(tx, schema, previousAssets, now);
     return;
   }
 
-  const now = Date.now();
+  recordHistory(prepared.data);
   tx.insert(schema.content)
     .values({
       contentUuid: prepared.contentUuid,
@@ -205,6 +267,17 @@ export function applyPreparedContentSave(
       .where(eq(schema.assets.assetUuid, usage.assetUuid))
       .run();
   }
+  // A file this text no longer shows gets its day of grace from now, not
+  // from whenever the text was last saved with it.
+  touchReleasedAssets(
+    tx,
+    schema,
+    previousAssets.filter(
+      (assetUuid) =>
+        !prepared.assetUsages.some((usage) => usage.assetUuid === assetUuid),
+    ),
+    now,
+  );
 }
 
 export function deleteContentForOwner(
@@ -214,7 +287,12 @@ export function deleteContentForOwner(
   ownerId: string,
 ) {
   const rows = tx
-    .select({ contentUuid: schema.content.contentUuid })
+    .select({
+      contentUuid: schema.content.contentUuid,
+      slot: schema.content.slot,
+      data: schema.content.data,
+      updatedAt: schema.content.updatedAt,
+    })
     .from(schema.content)
     .where(
       and(
@@ -224,6 +302,8 @@ export function deleteContentForOwner(
     )
     .all();
 
+  // What the owner held, saved or still a draft, stays in the history.
+  recordContentDeletion(tx, schema, ownerType, ownerId, rows);
   for (const row of rows) {
     deleteContentRowAndUsages(tx, schema, row.contentUuid);
   }
@@ -274,7 +354,7 @@ async function validateContentAssets(data: ContentOutputData) {
   return assets;
 }
 
-async function hydrateContentData(
+export async function hydrateContentData(
   data: ContentOutputData,
 ): Promise<ContentOutputData> {
   const normalized = normalizeContentData(data);

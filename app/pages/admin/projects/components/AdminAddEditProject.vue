@@ -45,6 +45,7 @@ import StatusHistoryField from '#layers/thei/app/components/settings/StatusHisto
 import ProjectActionSettings from './ProjectActionSettings.vue';
 import { externalLinkListItems } from '#layers/thei/shared/external-link';
 import { useExternalLinks } from '#layers/thei/app/composables/external-links';
+import { provideContentOwner } from '#layers/thei/app/composables/content-history/owner';
 
 const { projectUuid } = defineProps<{ projectUuid?: string }>();
 const route = useRoute();
@@ -99,6 +100,7 @@ const actionMedia = provideProjectActionMedia();
 
 const resolvedProjectUuid = ref<string | undefined>(projectUuid);
 provide(currentProjectUuidKey, resolvedProjectUuid);
+provideContentOwner('project', () => resolvedProjectUuid.value);
 
 const showcaseItems = ref<ShowcaseAssetGetItem[]>([]);
 provide(showcaseItemsKey, showcaseItems);
@@ -272,15 +274,7 @@ await useAdminTabTitle(
   ),
 );
 
-onMounted(() => {
-  window.addEventListener('beforeunload', handleBeforeUnload);
-});
-onUnmounted(() => {
-  window.removeEventListener('beforeunload', handleBeforeUnload);
-});
-function handleBeforeUnload(e: BeforeUnloadEvent) {
-  if (isDirty.value) e.preventDefault();
-}
+useBeforeUnloadGuard(() => isDirty.value);
 
 /**
  * Saving inside the content editor saves the whole entity too, but only when

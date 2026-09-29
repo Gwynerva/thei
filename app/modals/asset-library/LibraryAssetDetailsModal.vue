@@ -166,7 +166,11 @@ const usageGroups = computed(() => {
         </button>
         <p v-else-if="!data?.placements.length" class="text-sm text-text-3">
           {{ phrase.asset_library_no_usage }}
-          {{ phrase.asset_library_unused_hint }}
+          {{
+            data?.inHistory
+              ? phrase.asset_library_in_history
+              : phrase.asset_library_unused_hint
+          }}
         </p>
         <ul v-else class="space-y-sm">
           <li

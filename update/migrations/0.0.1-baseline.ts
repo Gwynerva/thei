@@ -101,6 +101,27 @@ export const baselineSql: string[] = [
 `,
   `CREATE UNIQUE INDEX \`content-owner-slot-idx\` ON \`content\` (\`ownerType\`,\`ownerId\`,\`slot\`);`,
   `CREATE INDEX \`content-owner-idx\` ON \`content\` (\`ownerType\`,\`ownerId\`);`,
+  `CREATE TABLE \`content-history\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`ownerType\` text NOT NULL,
+	\`ownerRef\` text NOT NULL,
+	\`slot\` text NOT NULL,
+	\`kind\` text NOT NULL,
+	\`reason\` text,
+	\`data\` text NOT NULL,
+	\`digest\` text NOT NULL,
+	\`wordCount\` integer NOT NULL,
+	\`blockCount\` integer NOT NULL,
+	\`assetCount\` integer NOT NULL,
+	\`size\` integer NOT NULL,
+	\`assetUuids\` text NOT NULL,
+	\`writer\` text DEFAULT '' NOT NULL,
+	\`createdAt\` integer NOT NULL,
+	\`updatedAt\` integer NOT NULL
+);
+`,
+  `CREATE INDEX \`content-history-field-idx\` ON \`content-history\` (\`ownerType\`,\`ownerRef\`,\`slot\`,\`kind\`,\`createdAt\`);`,
+  `CREATE INDEX \`content-history-kind-idx\` ON \`content-history\` (\`kind\`,\`createdAt\`);`,
   `CREATE TABLE \`events\` (
 	\`eventUuid\` text PRIMARY KEY NOT NULL,
 	\`title\` text NOT NULL,

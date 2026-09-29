@@ -16,6 +16,7 @@ import { eq } from 'drizzle-orm';
 import { AssetType } from '../../../shared/asset';
 import { runAssetCleanup } from '../../../server/thei/assets/cleanup';
 import { schema } from '../../../server/thei/db/schema';
+import { createContentHistoryTable } from '../fixtures/content-history-table';
 
 describe('asset cleanup', () => {
   it('cleans DB orphans, dangling usages, missing files, and old stray files', async () => {
@@ -102,6 +103,7 @@ describe('asset cleanup', () => {
           updatedAt integer NOT NULL
         );
       `);
+      createContentHistoryTable(rawDb);
 
       // Mirrors production: files are addressed by content hash, sharded by
       // the first two characters of the digest.

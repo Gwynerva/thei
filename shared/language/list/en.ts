@@ -181,6 +181,8 @@ export default defineI18nBase({
       `Works best with an image or video in ${ratio}, for example ${size} pixels`,
     asset_library_pending_deletion: (date) =>
       `Unused: will be deleted after ${date}`,
+    asset_library_in_history:
+      'Unused, but kept while a version of some text still shows it',
     asset_library_empty: 'No matching files',
     asset_library_unused: 'Unused',
     asset_library_unused_hint:
@@ -1084,8 +1086,56 @@ export default defineI18nBase({
     content_editor_title: 'Content editor',
     content_editor_clear_confirm: 'Clear all content in the editor?',
     content_never_saved: 'Never saved',
-    content_snapshots: 'Version history',
-    content_snapshot_restore_label: (date) => `Restore version from ${date}`,
+    content_history: 'Version history',
+    content_history_empty:
+      'No versions yet. They appear as you write and are kept for two days.',
+    content_history_unavailable: 'Version history is unavailable right now.',
+    content_history_load_error: 'Could not load this version.',
+    content_history_opened_version: 'As when opened',
+    content_history_reasons: {
+      auto: 'Autosaved',
+      'before-restore': 'Before a restore',
+      'before-clear': 'Before clearing',
+      'large-drop': 'Before a large deletion',
+      discarded: 'Closed without saving',
+      dismissed: 'Declined draft',
+      displaced: "Another tab's draft",
+      replaced: 'Previous saved version',
+      cleared: 'Saved before clearing',
+      deleted: 'Deleted text',
+      abandoned: 'Abandoned draft',
+    },
+    content_history_row_label: (time, changes) =>
+      `Version from ${time}: ${changes}`,
+    content_history_delta: (value, delta) =>
+      delta === 0
+        ? value
+        : `${value}, ${Math.abs(delta)} ${delta < 0 ? 'fewer' : 'more'} than now`,
+    content_history_missing_assets: (count) =>
+      `${plural(count, 'file', 'files')} of this version ${count === 1 ? 'is' : 'are'} already deleted`,
+    content_history_back: 'Back to versions',
+    content_restore: 'Restore',
+    content_restore_cancel: 'Cancel',
+    content_diff_removed: 'Would go',
+    content_diff_added: 'Would come back',
+    content_diff_changed: 'Would change',
+    content_diff_before: 'Now',
+    content_diff_after: 'After restoring',
+    content_restore_title: (time) => `Version from ${time}`,
+    content_restore_keeps_current: 'The current text stays in the history.',
+    content_restore_same: 'This version says the same as the current text.',
+    content_restored: (label) => `Restored: ${label}`,
+    content_restore_undo: 'Undo',
+    content_draft_offer: (time) => `Unsaved draft from ${time}`,
+    content_draft_dismiss:
+      'Decline the draft (it stays in the version history)',
+    content_draft_chip: (time) => `Draft · ${time}`,
+    content_draft_status_offline_short: 'Offline',
+    content_draft_status_synced: (time) => `Draft kept · ${time}`,
+    content_draft_status_offline: 'No connection — kept in the browser',
+    content_field_unsaved_draft: (time) => `Unsaved draft · ${time}`,
+    sign_out_unsynced_confirm: (count) =>
+      `Not on the server yet: ${plural(count, 'text', 'texts')}. Signing out now loses ${count === 1 ? 'it' : 'them'}. Sign out anyway?`,
     content_internal_link: 'Internal link',
     content_external_link: 'External link',
     content_link_url: 'Link URL',

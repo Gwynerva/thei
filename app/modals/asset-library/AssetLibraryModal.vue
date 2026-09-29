@@ -93,6 +93,7 @@ function tileTitle(item: AssetLibraryItem) {
     item.roles.map((role) => assetRoleLabel(role)).join(' · '),
     selectionErrorLabel(item.selectionError),
     item.deleteAfter ? assetDeletionLabel(item.deleteAfter) : undefined,
+    item.inHistory ? phrase.value.asset_library_in_history : undefined,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -397,6 +398,7 @@ onBeforeUnmount(() => {
                       showSize: true,
                       size: item.asset.size,
                       pendingDeletion: Boolean(item.deleteAfter),
+                      inHistory: item.inHistory,
                       warning: selectionErrorLabel(item.selectionError),
                     }"
                     class="aspect-square w-full"

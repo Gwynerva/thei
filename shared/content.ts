@@ -128,6 +128,11 @@ export interface ContentEditValue {
   contentUuid?: string;
   data: ContentOutputData | null;
   updatedAt?: number;
+  /**
+   * The history the text was written under before its owner existed
+   * (`new~<uuid>`). Saving hands that history over to the owner.
+   */
+  draftRef?: string;
 }
 
 export type ContentFieldModelValue = ContentEditValue & Partial<ContentSummary>;
@@ -442,48 +447,62 @@ function contentPlainTextFromNormalized(
   normalized: ContentOutputData,
   includeExternalLinks = true,
 ) {
+  return normalized.blocks
+    .flatMap((block) => contentBlockTextParts(block, includeExternalLinks))
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * The pieces of text a block shows, in reading order, as plain text: a
+ * paragraph, a quote and then its caption, each item of a list, each caption
+ * of a gallery.
+ */
+export function contentBlockTextParts(
+  block: ContentOutputBlock,
+  includeExternalLinks = true,
+): string[] {
   const textParts: string[] = [];
-  for (const block of normalized.blocks) {
-    switch (block.type) {
-      case 'paragraph':
-      case 'header':
-        appendPreviewText(textParts, (block.data as any).text);
-        break;
-      case 'quote':
-        appendPreviewText(textParts, (block.data as any).text);
-        appendPreviewText(textParts, (block.data as any).caption);
-        break;
-      case 'list':
-        collectListPreviewText(textParts, (block.data as any).items);
-        break;
-      case 'delimiter':
-        break;
-      case 'contentMedia':
-        appendPreviewText(textParts, (block.data as any).caption);
-        break;
-      case 'contentGallery':
-        collectGalleryPreviewText(textParts, (block.data as any).items);
-        break;
-      case 'contentAttachment':
-        appendPreviewText(textParts, (block.data as any).title);
-        appendPreviewText(textParts, (block.data as any).caption);
-        break;
-      case 'externalLink':
-        if (includeExternalLinks) {
-          appendPreviewText(textParts, (block.data as any).url);
-        }
-        break;
-      case 'integration':
-        if (includeExternalLinks) {
-          appendPreviewText(textParts, contentIntegrationUrl(block.data));
-        }
-        break;
-      case 'entityLink':
-      case 'privateSectionBoundary':
-        break;
-    }
+  switch (block.type) {
+    case 'paragraph':
+    case 'header':
+      appendPreviewText(textParts, (block.data as any).text);
+      break;
+    case 'quote':
+      appendPreviewText(textParts, (block.data as any).text);
+      appendPreviewText(textParts, (block.data as any).caption);
+      break;
+    case 'list':
+      collectListPreviewText(textParts, (block.data as any).items);
+      break;
+    case 'delimiter':
+      break;
+    case 'contentMedia':
+      appendPreviewText(textParts, (block.data as any).caption);
+      break;
+    case 'contentGallery':
+      collectGalleryPreviewText(textParts, (block.data as any).items);
+      break;
+    case 'contentAttachment':
+      appendPreviewText(textParts, (block.data as any).title);
+      appendPreviewText(textParts, (block.data as any).caption);
+      break;
+    case 'externalLink':
+      if (includeExternalLinks) {
+        appendPreviewText(textParts, (block.data as any).url);
+      }
+      break;
+    case 'integration':
+      if (includeExternalLinks) {
+        appendPreviewText(textParts, contentIntegrationUrl(block.data));
+      }
+      break;
+    case 'entityLink':
+    case 'privateSectionBoundary':
+      break;
   }
-  return textParts.join(' ').replace(/\s+/g, ' ').trim();
+  return textParts;
 }
 
 function contentPreviewTextFromNormalized(normalized: ContentOutputData) {

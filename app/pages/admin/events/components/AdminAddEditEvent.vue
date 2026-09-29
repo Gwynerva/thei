@@ -32,6 +32,7 @@ import ProjectAssets from '../../projects/components/ProjectAssets.vue';
 import ProjectExternalLinks from '../../projects/components/ProjectExternalLinks.vue';
 import ProjectActionSettings from '../../projects/components/ProjectActionSettings.vue';
 import { eventDeleteModal } from './event-delete-modal';
+import { provideContentOwner } from '#layers/thei/app/composables/content-history/owner';
 import { externalLinkListItems } from '#layers/thei/shared/external-link';
 import { useExternalLinks } from '#layers/thei/app/composables/external-links';
 
@@ -69,6 +70,7 @@ const actionMedia = provideProjectActionMedia();
 const externalLinks = useExternalLinks();
 
 const isEdit = computed(() => Boolean(eventUuid));
+provideContentOwner('event', () => eventUuid);
 const saving = ref(false);
 const savedSnapshot = ref(JSON.stringify(eventPayload()));
 const headerError = ref<string>();
@@ -76,6 +78,7 @@ const showPeriodsHint = ref(false);
 const isDirty = computed(
   () => JSON.stringify(eventPayload()) !== savedSnapshot.value,
 );
+useBeforeUnloadGuard(() => isDirty.value);
 const isValid = computed(() =>
   Boolean(
     eventData.value.title.trim() &&
@@ -386,6 +389,7 @@ function clone<T>(value: T): T {
         <FieldLabel required>{{ phrase.event_content }}</FieldLabel>
         <FieldContentEditor
           v-model="eventData.content"
+          content-slot="event-body"
           @saved="saveAfterContentEdit()"
           :title-label="phrase.event_content"
         />

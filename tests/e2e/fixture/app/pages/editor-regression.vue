@@ -9,14 +9,10 @@ import { bindEditorGutterClick } from '#layers/thei/app/composables/editor-gutte
 import { bindEditorLinkPaste } from '#layers/thei/app/composables/editor-link-paste';
 import { createEditorPrivateSections } from '#layers/thei/app/composables/editor-private-sections';
 import { createEditorPrivatePattern } from '#layers/thei/app/composables/editor-private-pattern';
-import {
-  createEditorSnapshotManager,
-  readCleanEditorOutput,
-} from '#layers/thei/app/composables/editor-snapshots';
-import {
-  contentSemanticKey,
-  type ContentOutputData,
-} from '#layers/thei/shared/content';
+import { readCleanEditorOutput } from '#layers/thei/app/composables/editor-output';
+import { createEditorHistorySession } from '#layers/thei/app/composables/content-history/session';
+import type { ContentHistoryTransport } from '#layers/thei/app/composables/content-history/api';
+import type { ContentOutputData } from '#layers/thei/shared/content';
 
 const holder = useTemplateRef<HTMLElement>('holder');
 const ready = ref(false);
@@ -33,8 +29,23 @@ let unbindGutterClick: (() => void) | undefined;
 let unbindLinkPaste: (() => void) | undefined;
 let cleanupPrivatePattern: (() => void) | undefined;
 let sections: ReturnType<typeof createEditorPrivateSections>;
-let snapshots: ReturnType<typeof createEditorSnapshotManager>;
+let snapshots: ReturnType<typeof createEditorHistorySession>;
 const snapshotPending = computed(() => snapshots?.isPending.value ?? false);
+/** Every write the session sent, as its hint or "plain". */
+const historyWrites = ref<string[]>([]);
+const transport: ContentHistoryTransport = {
+  sync: async (request) => {
+    historyWrites.value.push(request.hint ?? 'plain');
+    return { draft: null, others: [] };
+  },
+  discard: async () => ({ draft: null, others: [] }),
+  dismiss: async () => undefined,
+  index: async () => ({ drafts: [], revisions: [] }),
+  entry: async () => {
+    throw new Error('No entries in the fixture');
+  },
+  drafts: async () => [],
+};
 const initial: ContentOutputData = {
   blocks: [
     { id: 'p0', type: 'paragraph', data: { text: 'Before' } },
@@ -124,9 +135,7 @@ onMounted(async () => {
   });
   sections = createEditorPrivateSections(editor, { suppressionDuration: 20 });
   cleanupPrivatePattern = createEditorPrivatePattern(holder.value!);
-  snapshots = createEditorSnapshotManager({
-    storageKey: 'fixture',
-    storage: sessionStorage,
+  snapshots = createEditorHistorySession({
     read: () => readCleanEditorOutput(editor),
     render: async (data) => {
       sections.resetSuppression();
@@ -137,8 +146,12 @@ onMounted(async () => {
       }
       sections.refresh();
     },
-    onCurrentChange: (data) => {
-      currentKey.value = contentSemanticKey(data);
+    onCurrentChange: (state) => {
+      currentKey.value = state.key;
+    },
+    history: {
+      field: { ownerType: 'page', ownerRef: 'fixture', slot: 'page-body' },
+      transport,
     },
   });
   await snapshots.initialize();
@@ -152,7 +165,7 @@ async function save() {
   transitions.value = [];
 }
 async function restore() {
-  await snapshots.restore({ createdAt: Date.now(), data: initial });
+  await snapshots.restore(initial);
 }
 function insert() {
   editor.blocks.insert('privateSectionBoundary', {
@@ -191,6 +204,7 @@ onBeforeUnmount(() => {
       :data-events="events"
       :data-transitions="transitions.join(',')"
       :data-snapshot-pending="snapshotPending"
+      :data-history-writes="historyWrites.join(',')"
     >
       <button data-save @click="save">{{ dirty ? 'Save' : 'Saved' }}</button>
       <button @click="insert">Insert section</button>

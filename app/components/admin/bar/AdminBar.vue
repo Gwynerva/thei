@@ -8,6 +8,11 @@ import { publicIdFromTagUrlPart } from '#layers/thei/shared/tag-url';
 import { publicIdFromEventUrlPart } from '#layers/thei/shared/event-url';
 import { dateFromDiaryUrlPart } from '#layers/thei/shared/diary-url';
 import { parsePublicSearchFilters } from '#layers/thei/shared/public-search';
+import { contentHistoryTransport } from '#layers/thei/app/composables/content-history/api';
+import {
+  flushContentHistoryBuffers,
+  useContentHistoryBuffer,
+} from '#layers/thei/app/composables/content-history/buffer';
 
 const isAdmin = useIsAdmin();
 const adminBarData = isAdmin.value
@@ -19,8 +24,38 @@ const publicAdmin = await usePublicAdmin();
 const route = useRoute();
 const registeredContextButton = useAdminBarContextButton();
 
+const historyBuffer = useContentHistoryBuffer();
+
+/**
+ * Text an editor wrote while the server could not be reached waits in this
+ * browser; it goes out on the next admin page, and whenever the connection
+ * comes back.
+ */
+function sendUnsyncedTexts() {
+  return flushContentHistoryBuffers(contentHistoryTransport, historyBuffer);
+}
+
+onMounted(() => {
+  if (!isAdmin.value) return;
+  void sendUnsyncedTexts();
+  window.addEventListener('online', sendUnsyncedTexts);
+});
+onBeforeUnmount(() => window.removeEventListener('online', sendUnsyncedTexts));
+
 async function signOut() {
+  // Nothing typed may stay behind in the browser after signing out: it is sent
+  // first, and what cannot be sent is given up only when the owner agrees.
+  const unsynced = await sendUnsyncedTexts().catch(
+    () => historyBuffer.list().length,
+  );
+  if (
+    unsynced &&
+    !window.confirm(phrase.value.sign_out_unsynced_confirm(unsynced))
+  )
+    return;
   await $fetch('/api/admin/session', { method: 'DELETE' });
+  for (const entry of historyBuffer.list())
+    historyBuffer.remove(entry.field, entry.writer);
   await navigateTo(sitePath('/sign-in/'), { external: true });
 }
 

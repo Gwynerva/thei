@@ -16,6 +16,7 @@ import {
   type ContentFieldModelValue,
 } from '../content';
 import { isOneOf } from '../utils/isOneOf';
+import { optionalContentDraftRef } from '../content-history';
 import {
   normalizeProjectContentSections,
   normalizeProjectStages,
@@ -305,6 +306,7 @@ function validateContentField(
     ...(typeof value.updatedAt === 'number' && Number.isFinite(value.updatedAt)
       ? { updatedAt: value.updatedAt }
       : {}),
+    ...optionalContentDraftRef(value.draftRef),
   };
 }
 

@@ -3,7 +3,9 @@
 Every text in Thei — a project description, a stage, a section, an event body,
 a page, the "about me" — is one Editor.js document stored as JSON in the
 `content` table. This is the list of blocks such a document can hold, exactly
-as `normalizeBlockData` in `shared/content.ts` accepts them.
+as `normalizeBlockData` in `shared/content.ts` accepts them. Unsaved drafts and
+recent versions of a text, kept in the `content-history` table, are documents
+of exactly the same shape.
 
 It exists so that a reader outside the editor — a model rewriting a text, a
 script importing one, a person inspecting a backup — knows what a document can

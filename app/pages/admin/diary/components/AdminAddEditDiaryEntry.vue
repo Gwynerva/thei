@@ -8,6 +8,7 @@ import type {
 } from '#layers/thei/shared/api/diary';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { diaryDeleteModal } from '../composables';
+import { provideContentOwner } from '#layers/thei/app/composables/content-history/owner';
 
 const { diaryUuid } = defineProps<{ diaryUuid?: string }>();
 
@@ -54,6 +55,10 @@ const headerError = ref<string>();
 const isDirty = computed(
   () => JSON.stringify(diaryPayload()) !== savedSnapshot.value,
 );
+// Where the entry's texts keep their drafts and versions. A new entry keeps
+// them too, and its first save hands them over.
+provideContentOwner('diary-entry', () => diaryUuid);
+useBeforeUnloadGuard(() => isDirty.value);
 const isValid = computed(() =>
   Boolean(
     diaryData.value.date &&
@@ -288,6 +293,7 @@ useRegisterAdminBarContextButton(
         <FieldLabel required>{{ phrase.diary_content }}</FieldLabel>
         <FieldContentEditor
           v-model="diaryData.content"
+          content-slot="diary-body"
           :title-label="phrase.diary_content"
           @saved="saveAfterContentEdit()"
         />

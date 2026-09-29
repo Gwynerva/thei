@@ -14,6 +14,7 @@ import {
 import { normalizeProjectAction } from '../project-action';
 import { validateExternalLinkList } from '../external-link';
 import { isOneOf } from '../utils/isOneOf';
+import { optionalContentDraftRef } from '../content-history';
 import {
   normalizeHumanReadableSlug,
   normalizePublicId,
@@ -93,6 +94,7 @@ function validateRequiredContent(
     ...(typeof value.updatedAt === 'number' && Number.isFinite(value.updatedAt)
       ? { updatedAt: value.updatedAt }
       : {}),
+    ...optionalContentDraftRef(value.draftRef),
   };
 }
 

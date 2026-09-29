@@ -19,6 +19,7 @@ export default defineEventHandler(async (event) => {
   db.transaction((tx) => {
     for (const table of [
       schema.content,
+      schema.contentHistory,
       schema.assetUsages,
       schema.pages,
       schema.projectStages,
