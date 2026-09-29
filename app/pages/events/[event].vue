@@ -35,6 +35,9 @@ const ogImage = useOgImage(
   () => data.value.publicId,
   () => [data.value.title, data.value.summary],
 );
+const seoImage = computed(() =>
+  publicSeoImage(data.value.media, ogImage.value),
+);
 usePublicSeo({
   ogImage,
   markdown: true,
@@ -44,21 +47,26 @@ usePublicSeo({
   canonical,
   noIndex: () => data.value.access === 'link-only',
   breadcrumbs: () => [{ name: phrase.value.life, path: '/life/' }],
+  image: seoImage,
   entities: () => [
     {
-      // An Event without a date is not an Event to a crawler, so a dateless
-      // record stays a plain CreativeWork rather than an invalid node.
-      '@type': eventCover.value ? 'Event' : 'CreativeWork',
+      // Not a schema.org `Event`: to a search engine that is a gathering
+      // open to the public, with a venue and tickets, and it rejects one that
+      // has none. The page is the owner's account of a moment of their life,
+      // and when it happened is what the account covers.
+      '@type': 'Article',
       '@id': '#event',
-      name: data.value.title,
+      headline: data.value.title,
       description: data.value.summary,
-      ...(eventCover.value
-        ? {
-            startDate: eventCover.value.startDate,
-            endDate: eventCover.value.endDate,
-            eventStatus: 'https://schema.org/EventScheduled',
-          }
+      author: publicSeoOwner,
+      datePublished: data.value.chronology.createdAt,
+      ...(data.value.chronology.updatedAt
+        ? { dateModified: data.value.chronology.updatedAt }
         : {}),
+      ...(eventCover.value
+        ? { temporalCoverage: publicSeoTemporalCoverage(eventCover.value) }
+        : {}),
+      ...(seoImage.value ? { image: seoImage.value } : {}),
       ...(data.value.tags.length
         ? { keywords: data.value.tags.map((tag) => tag.title).join(', ') }
         : {}),

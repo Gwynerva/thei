@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 const publicAdmin = await usePublicAdmin();
-const site = useSiteUrl();
 // Formatted like every title the pages give the head, so the two compare.
 const siteName = computed(() => publicText(publicAdmin.value.displayName));
 const isAdmin = useIsAdmin();
@@ -25,20 +24,6 @@ useHead({
     !title || title === siteName.value
       ? siteName.value
       : `${title} - ${siteName.value}`,
-  script: [
-    {
-      key: 'public-website-jsonld',
-      type: 'application/ld+json',
-      textContent: serializeJsonLd({
-        '@context': 'https://schema.org',
-        '@type': 'WebSite',
-        '@id': `${site.resolve('/')}#website`,
-        name: siteName.value,
-        url: site.resolve('/'),
-        inLanguage: publicAdmin.value.languageCode,
-      }),
-    },
-  ],
 });
 </script>
 

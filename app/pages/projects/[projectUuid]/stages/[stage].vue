@@ -29,6 +29,9 @@ const ogImage = useOgImage(
   () => data.value.publicId,
   () => [data.value.title, data.value.project.title],
 );
+const seoImage = computed(() =>
+  publicSeoImage(data.value.media, ogImage.value),
+);
 usePublicSeo({
   ogImage,
   markdown: true,
@@ -43,18 +46,24 @@ usePublicSeo({
     { name: phrase.value.search, path: '/search/?type=project' },
     { name: data.value.project.title, path: data.value.project.href },
   ],
-  image: () => data.value.media?.src,
+  image: seoImage,
   entities: () => [
     {
-      '@type': 'CreativeWork',
+      '@type': 'Article',
       '@id': '#stage',
-      name: data.value.title,
+      headline: data.value.title,
       description: data.value.summary,
-      dateCreated: data.value.period.startDate,
-      temporalCoverage: `${data.value.period.startDate}/${data.value.period.endDate}`,
-      ...(data.value.media ? { image: data.value.media.src } : {}),
+      author: publicSeoOwner,
+      datePublished: data.value.chronology.createdAt,
+      ...(data.value.chronology.updatedAt
+        ? { dateModified: data.value.chronology.updatedAt }
+        : {}),
+      // The period of work the stage tells about, not when it was written.
+      temporalCoverage: publicSeoTemporalCoverage(data.value.period),
+      ...(seoImage.value ? { image: seoImage.value } : {}),
       isPartOf: {
         '@type': 'CreativeWork',
+        '@id': `${data.value.project.href}#project`,
         name: data.value.project.title,
         url: data.value.project.href,
       },

@@ -45,7 +45,7 @@ usePublicSeo({
   canonical,
   pageType: 'CollectionPage',
   breadcrumbs: () => [{ name: phrase.value.tags, path: '/tags/' }],
-  image: () => tag.value.iconMedia?.src,
+  image: () => publicSeoImage(tag.value.iconMedia, ogImage.value),
   entities: () => [
     {
       '@type': 'ItemList',

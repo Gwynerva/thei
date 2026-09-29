@@ -291,6 +291,8 @@ export type PublicEventResponseFull = {
   periods: DatedPeriod[];
   /** `updatedAt` only when the event was edited on a later day. */
   chronology: { createdAt: string; updatedAt?: string };
+  /** What stands for the event in a card: its first picture, or its icon. */
+  media: MediaDescriptor;
   content: PublicContentOutputData;
   references: PublicReferences;
   tags: PublicTagSummary[];
@@ -313,6 +315,8 @@ export type PublicDiaryResponse = {
    * `updatedAt` only when it was edited on a later day than it was written.
    */
   chronology: { createdAt: string; updatedAt?: string };
+  /** What stands for the entry in a card: its first picture, or its icon. */
+  media: MediaDescriptor;
   content: PublicContentOutputData;
   references: PublicReferences;
   related: PublicRelatedCounts;

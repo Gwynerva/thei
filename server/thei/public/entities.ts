@@ -604,9 +604,16 @@ export async function buildPublicEvent(
   viewer: PublicViewer,
 ): Promise<PublicEventResponseFull> {
   const own = opensPrivate(viewer, 'event', stored.eventUuid);
-  const [periods, content, rawFiles, rawLinks, tags, relations, usages] =
+  const [periods, media, content, rawFiles, rawLinks, tags, relations, usages] =
     await Promise.all([
       getEventPeriods(stored.eventUuid),
+      buildPublicEntityPreviewMedia(
+        'event',
+        stored.eventUuid,
+        'event-body',
+        { type: 'event', ...stored },
+        own,
+      ),
       buildPublicContentData(
         'event',
         stored.eventUuid,
@@ -659,6 +666,7 @@ export async function buildPublicEvent(
     publicId: stored.publicId,
     periods,
     chronology: buildPublicEntityChronology(stored),
+    media,
     content: content ?? { blocks: [] },
     references: await buildPublicReferences(
       manual,
@@ -726,13 +734,21 @@ export async function buildPublicDiaryEntry(
   },
   viewer: PublicViewer,
 ): Promise<PublicDiaryResponse> {
-  const [content, relations] = await Promise.all([
+  const own = opensPrivate(viewer, 'diary-entry', stored.diaryUuid);
+  const [media, content, relations] = await Promise.all([
+    buildPublicEntityPreviewMedia(
+      'diary-entry',
+      stored.diaryUuid,
+      'diary-body',
+      { type: 'diary-entry', date: stored.date },
+      own,
+    ),
     buildPublicContentData(
       'diary-entry',
       stored.diaryUuid,
       'diary-body',
       { type: 'diary-entry', date: stored.date },
-      opensPrivate(viewer, 'diary-entry', stored.diaryUuid),
+      own,
       viewer,
     ),
     resolvePublicRelated({ type: 'diary-entry', id: stored.diaryUuid }, viewer),
@@ -741,6 +757,7 @@ export async function buildPublicDiaryEntry(
     date: stored.date,
     access: stored.access,
     chronology: buildPublicEntityChronology(stored),
+    media,
     content: content ?? { blocks: [] },
     references: await buildPublicReferences(
       emptyPublicReferenceGroup(),

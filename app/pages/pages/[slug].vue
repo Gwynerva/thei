@@ -21,6 +21,9 @@ const ogImage = useOgImage(
   () => data.value.slug,
   () => [data.value.title, data.value.iconMedia.src],
 );
+const seoImage = computed(() =>
+  publicSeoImage(data.value.iconMedia, ogImage.value),
+);
 usePublicSeo({
   ogImage,
   markdown: true,
@@ -30,18 +33,19 @@ usePublicSeo({
   canonical,
   noIndex: () => data.value.access === 'link-only',
   breadcrumbs: () => [{ name: phrase.value.pages, path: '/pages/' }],
-  image: () => data.value.iconMedia.src,
+  image: seoImage,
   entities: () => [
     {
       '@type': 'Article',
       '@id': '#page',
       headline: data.value.title,
       description: data.value.summary,
+      author: publicSeoOwner,
       datePublished: data.value.chronology.createdAt,
       ...(data.value.chronology.updatedAt
         ? { dateModified: data.value.chronology.updatedAt }
         : {}),
-      image: data.value.iconMedia.src,
+      ...(seoImage.value ? { image: seoImage.value } : {}),
     },
   ],
 });

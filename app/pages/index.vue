@@ -41,6 +41,8 @@ const ogImage = useOgImage(
     profile.value.avatarMedia.src,
   ],
 );
+// A picture of the person or none: the site's card is not one.
+const avatarImage = computed(() => publicSeoImage(profile.value.avatarMedia));
 usePublicSeo({
   ogImage,
   ogType: 'profile',
@@ -55,11 +57,11 @@ usePublicSeo({
   ),
   canonical: '/',
   pageType: 'ProfilePage',
-  image: () => profile.value.avatarMedia.src,
+  image: () => avatarImage.value ?? ogImage.value,
   entities: () => [
     {
       '@type': 'Person',
-      '@id': '#person',
+      '@id': publicSeoOwner['@id'],
       name: profile.value.displayName,
       ...(profile.value.nickname.trim()
         ? { alternateName: profile.value.nickname.trim() }
@@ -67,7 +69,7 @@ usePublicSeo({
       ...(profile.value.slogan.trim()
         ? { description: profile.value.slogan.trim() }
         : {}),
-      image: profile.value.avatarMedia.src,
+      ...(avatarImage.value ? { image: avatarImage.value } : {}),
       url: '/',
       // `getProfileLinks` hands an admin their private links too, and those
       // describe the person to nobody but the admin.

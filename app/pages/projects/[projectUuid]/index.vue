@@ -43,6 +43,9 @@ const ogImage = useOgImage(
     data.value.iconMedia.src,
   ],
 );
+const seoImage = computed(() =>
+  publicSeoImage(data.value.bannerMedia ?? data.value.iconMedia, ogImage.value),
+);
 usePublicSeo({
   ogImage,
   markdown: true,
@@ -54,26 +57,39 @@ usePublicSeo({
   breadcrumbs: () => [
     { name: phrase.value.search, path: '/search/?type=project' },
   ],
-  image: () => (data.value.bannerMedia ?? data.value.iconMedia).src,
+  image: seoImage,
   entities: () => [
     {
       '@type': 'CreativeWork',
       '@id': '#project',
       name: data.value.title,
       description: data.value.summary,
-      dateCreated: data.value.chronology.createdAt,
+      author: publicSeoOwner,
+      datePublished: data.value.chronology.createdAt,
       ...(data.value.chronology.updatedAt
         ? { dateModified: data.value.chronology.updatedAt }
         : {}),
-      image: (data.value.bannerMedia ?? data.value.iconMedia).src,
+      ...(seoImage.value ? { image: seoImage.value } : {}),
       ...(data.value.tags.length
         ? { keywords: data.value.tags.map((tag) => tag.title).join(', ') }
         : {}),
       ...(data.value.stages.length + data.value.sections.length
         ? {
-            hasPart: [...data.value.sections, ...data.value.stages].map(
-              (part) => ({ '@type': 'CreativeWork', url: part.href }),
-            ),
+            // The same nodes the parts' own pages describe, by their @id.
+            hasPart: [
+              ...data.value.sections.map((part) => ({
+                '@type': 'Article',
+                '@id': `${part.href}#section`,
+                headline: part.title,
+                url: part.href,
+              })),
+              ...data.value.stages.map((part) => ({
+                '@type': 'Article',
+                '@id': `${part.href}#stage`,
+                headline: part.title,
+                url: part.href,
+              })),
+            ],
           }
         : {}),
     },
