@@ -8,6 +8,11 @@
  * nearest position inside the block's text instead: the start of that very
  * line from the left, its end from the right.
  *
+ * A block with no text of its own — a picture, a card, a divider — takes the
+ * focus itself (`editor-current-block.ts`), and a click on its wrapper gives
+ * it that natively. A click in the editor's padding beside it, which is what
+ * "beside" means on a phone, focuses it here.
+ *
  * The caret is placed on `click`, not on `mousedown`: Editor.js starts its
  * rectangle selection on a mousedown in the margin and drops every range on
  * the first mousemove, so a caret placed earlier would not survive a shaky
@@ -130,7 +135,11 @@ export function bindEditorGutterClick(root: HTMLElement, editor: EditorJS) {
         !input.closest('[data-mutation-free]') &&
         input.getClientRects().length > 0,
     );
-    return inputs.length ? { block, inputs } : undefined;
+    if (inputs.length) return { block, inputs };
+    // A block that takes the focus itself, clicked beside rather than on.
+    if (block.hasAttribute('tabindex') && !block.contains(target))
+      return { block, inputs };
+    return undefined;
   }
 
   function onMouseDown(event: MouseEvent) {
@@ -154,6 +163,16 @@ export function bindEditorGutterClick(root: HTMLElement, editor: EditorJS) {
     const hit = fieldsFor(event.target, event.clientY);
     if (!hit) return;
     const { block, inputs } = hit;
+    if (!inputs.length) {
+      block.focus({ preventScroll: true });
+      // Editor.js makes a block current, and moves its toolbar to it, when a
+      // touch lands in the block; this click landed beside it. Its API can
+      // do that only by placing a caret or selecting the block, so it is
+      // told of a touch instead — an event of the page, which no browser
+      // default follows.
+      block.dispatchEvent(new Event('touchstart', { bubbles: true }));
+      return;
+    }
 
     const rects = inputs.map((input) => input.getBoundingClientRect());
     const target = gutterCaretTarget(rects, {

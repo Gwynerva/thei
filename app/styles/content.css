@@ -413,6 +413,22 @@
     pointer-events: none;
   }
 
+  /*
+   * The glow of the editor's current block (editor.css) lies under the
+   * label, which would otherwise cut it out with the surface.
+   */
+  .content-editor:not(.content-editor--dragging-block)
+    .codex-editor:not(:has(.ce-block--selected))
+    .ce-block:focus-within
+    .content-private-bracket__label {
+    background:
+      linear-gradient(
+        var(--content-editor-current),
+        var(--content-editor-current)
+      ),
+      var(--content-surface);
+  }
+
   .content-prose .content-private-bracket__label svg {
     width: 1rem;
     height: 1rem;

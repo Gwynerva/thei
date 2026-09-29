@@ -5,14 +5,19 @@ import {
   ContentMediaTool,
   ContentGalleryTool,
 } from '#layers/thei/app/components/content/editor-tools';
+import { ContentDelimiterTool } from '#layers/thei/app/components/content/editor-delimiter-tool';
 import { bindEditorGutterClick } from '#layers/thei/app/composables/editor-gutter-click';
+import { bindEditorCurrentBlock } from '#layers/thei/app/composables/editor-current-block';
 import { bindEditorLinkPaste } from '#layers/thei/app/composables/editor-link-paste';
 import { createEditorPrivateSections } from '#layers/thei/app/composables/editor-private-sections';
 import { createEditorPrivatePattern } from '#layers/thei/app/composables/editor-private-pattern';
 import { readCleanEditorOutput } from '#layers/thei/app/composables/editor-output';
 import { createEditorHistorySession } from '#layers/thei/app/composables/content-history/session';
 import type { ContentHistoryTransport } from '#layers/thei/app/composables/content-history/api';
-import type { ContentOutputData } from '#layers/thei/shared/content';
+import type {
+  ContentAssetData,
+  ContentOutputData,
+} from '#layers/thei/shared/content';
 
 const holder = useTemplateRef<HTMLElement>('holder');
 const ready = ref(false);
@@ -26,6 +31,29 @@ watch(dirty, (value) => transitions.value.push(value ? 'Save' : 'Saved'), {
 });
 let editor: EditorJS;
 let unbindGutterClick: (() => void) | undefined;
+let unbindCurrentBlock: (() => void) | undefined;
+const picture = (id: string): ContentAssetData => ({
+  assetUuid: id,
+  extension: 'svg',
+  media: {
+    kind: 'image',
+    src: '/slow-image.svg',
+    previewSrc: '/slow-image.svg',
+  },
+});
+/** The picker of a media block, open until "Choose picture" answers it. */
+let answerPick: ((asset: ContentAssetData | null) => void) | undefined;
+const picking = ref(false);
+const mediaToolConfig = {
+  pickAsset: () =>
+    new Promise<ContentAssetData | null>((resolve) => {
+      picking.value = true;
+      answerPick = resolve;
+    }),
+  pickAssets: async () => [],
+  editAsset: async () => undefined,
+  uploadFiles: async () => [],
+};
 let unbindLinkPaste: (() => void) | undefined;
 let cleanupPrivatePattern: (() => void) | undefined;
 let sections: ReturnType<typeof createEditorPrivateSections>;
@@ -107,17 +135,38 @@ const initial: ContentOutputData = {
         })),
       },
     },
+    // New blocks go last: the move buttons and other tests count from the top.
+    { id: 'divider', type: 'delimiter', data: {} },
+    {
+      id: 'quote',
+      type: 'quote',
+      data: { text: 'Quoted', caption: 'Someone', alignment: 'left' },
+    },
+    { id: 'p4', type: 'paragraph', data: { text: 'After' } },
   ],
 };
 onMounted(async () => {
-  const Editor = (await import('@editorjs/editorjs')).default;
+  const [Editor, Quote] = await Promise.all([
+    import('@editorjs/editorjs').then((module) => module.default),
+    import('@editorjs/quote').then((module) => module.default),
+  ]);
   editor = new Editor({
     holder: holder.value!,
     data: initial as any,
     tools: {
       privateSectionBoundary: PrivateSectionBoundaryTool as any,
-      contentMedia: ContentMediaTool as any,
-      contentGallery: ContentGalleryTool as any,
+      contentMedia: {
+        class: ContentMediaTool as any,
+        inlineToolbar: true,
+        config: mediaToolConfig,
+      },
+      contentGallery: {
+        class: ContentGalleryTool as any,
+        inlineToolbar: true,
+        config: mediaToolConfig,
+      },
+      delimiter: ContentDelimiterTool as any,
+      quote: { class: Quote as any, inlineToolbar: true },
     },
     onChange: (_api, event) => {
       events.value++;
@@ -127,6 +176,9 @@ onMounted(async () => {
   });
   await editor.isReady;
   unbindGutterClick = bindEditorGutterClick(holder.value!, editor);
+  unbindCurrentBlock = bindEditorCurrentBlock(holder.value!, editor, {
+    textBlocks: new Set(['paragraph', 'quote']),
+  });
   const site = useInternalUrlSite();
   unbindLinkPaste = bindEditorLinkPaste(holder.value!, editor, {
     site,
@@ -185,9 +237,30 @@ function remove() {
   );
   if (index !== undefined) editor.blocks.delete(index);
 }
+/**
+ * A media block the way the toolbox adds one: a placeholder whose fields
+ * Editor.js reads straight away, and a picture only once the picker answers.
+ */
+function insertMedia() {
+  const block = editor.blocks.insert(
+    'contentMedia',
+    { layout: 'centered', autoOpen: true },
+    undefined,
+    editor.blocks.getBlocksCount(),
+    true,
+  );
+  // What the toolbox's handler of a new block does.
+  void block.focusable;
+}
+function choosePicture() {
+  picking.value = false;
+  answerPick?.(picture('chosen'));
+  answerPick = undefined;
+}
 onBeforeUnmount(() => {
   ready.value = false;
   unbindGutterClick?.();
+  unbindCurrentBlock?.();
   unbindLinkPaste?.();
   cleanupPrivatePattern?.();
   sections?.destroy();
@@ -213,6 +286,10 @@ onBeforeUnmount(() => {
       <button @click="editor.blocks.move(6, 1)">Invalid move</button>
       <button @click="editor.blocks.move(2, 4)">Valid move</button>
       <button @click="restore">Restore</button>
+      <button @click="insertMedia">Insert media</button>
+      <button :disabled="!picking" @click="choosePicture">
+        Choose picture
+      </button>
     </div>
     <div ref="holder" class="content-editor relative" />
   </main>

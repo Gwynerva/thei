@@ -82,6 +82,7 @@ import {
 import { assetDetailsModal } from '#layers/thei/app/modals/asset-details/modal';
 import { createEditorBlockDrag } from '#layers/thei/app/composables/editor-block-drag';
 import { bindEditorGutterClick } from '#layers/thei/app/composables/editor-gutter-click';
+import { bindEditorCurrentBlock } from '#layers/thei/app/composables/editor-current-block';
 import { bindEditorLinkPaste } from '#layers/thei/app/composables/editor-link-paste';
 import { bindEditorKeyboardBoundary } from '#layers/thei/app/composables/editor-keyboard-boundary';
 import { createEditorPrivateSections } from '#layers/thei/app/composables/editor-private-sections';
@@ -160,6 +161,7 @@ const updatedAt = computed(
 let cleanupSmartTypography: (() => void) | undefined;
 let cleanupMediaPaste: (() => void) | undefined;
 let cleanupGutterClick: (() => void) | undefined;
+let cleanupCurrentBlock: (() => void) | undefined;
 let cleanupLinkPaste: (() => void) | undefined;
 let cleanupKeyboardBoundary: (() => void) | undefined;
 /**
@@ -769,6 +771,10 @@ onMounted(async () => {
   cleanupSmartTypography = bindSmartTypography(holder.value!);
   cleanupMediaPaste = bindEditorMediaPaste(holder.value!, editor);
   cleanupGutterClick = bindEditorGutterClick(holder.value!, editor);
+  cleanupCurrentBlock = bindEditorCurrentBlock(holder.value!, editor, {
+    // The blocks whose Enter is Editor.js's own: split, before, after.
+    textBlocks: new Set(['paragraph', 'header', 'list', 'quote']),
+  });
   // The popups and the header live in the dialog, beside the editor.
   cleanupKeyboardBoundary = bindEditorKeyboardBoundary(
     holder.value!.closest('dialog') ?? document.body,
@@ -796,6 +802,8 @@ onBeforeUnmount(() => {
   });
   cleanupGutterClick?.();
   cleanupGutterClick = undefined;
+  cleanupCurrentBlock?.();
+  cleanupCurrentBlock = undefined;
   cleanupLinkPaste?.();
   cleanupLinkPaste = undefined;
   cleanupKeyboardBoundary?.();
