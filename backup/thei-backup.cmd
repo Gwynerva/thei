@@ -160,10 +160,12 @@ function ConfigComplete {
 
 function SiteBase { $Config.siteUrl.TrimEnd('/') }
 
+# Always a full path with no "." or "..": what is built from it is compared
+# with what Get-ChildItem lists, which comes normalized.
 function DestinationPath {
   $value = [Environment]::ExpandEnvironmentVariables($Config.destination)
-  if ([IO.Path]::IsPathRooted($value)) { return $value }
-  return (Join-Path $ScriptDir $value)
+  if (-not [IO.Path]::IsPathRooted($value)) { $value = Join-Path $ScriptDir $value }
+  return [IO.Path]::GetFullPath($value)
 }
 
 # Every scheduler entry is named after the settings file, so each site backed
@@ -547,9 +549,17 @@ function PerformBackup([string]$Kind, [bool]$Force) {
 
     # Whatever an earlier attempt left in staging that this session did not
     # list is not part of the copy.
+    $root = (Get-Item -LiteralPath $staging -Force).FullName.TrimEnd('\')
     foreach ($file in @(Get-ChildItem -LiteralPath $staging -Recurse -File -Force)) {
-      $relative = $file.FullName.Substring($staging.Length + 1)
+      $relative = $file.FullName.Substring($root.Length + 1)
       if ($file.Name.EndsWith('.part') -or -not $listed.Contains($relative)) { Remove-Item -LiteralPath $file.FullName -Force }
+    }
+    # The tally above counts what arrived, not what is left: checked on disk,
+    # a sweep that took the wrong files cannot pass for a complete copy.
+    $present = @(Get-ChildItem -LiteralPath $staging -Recurse -File -Force).Count
+    if ($present -ne $copied + $reused) {
+      Fail "Only $present of $($copied + $reused) file(s) are in $staging."
+      return 1
     }
 
     # Renamed into place only once everything is there: until this line the
