@@ -32,14 +32,20 @@ const items = computed<Item[]>(() =>
     ? (projectData.value.stages ?? [])
     : (projectData.value.contentSections ?? []),
 );
-const itemViews = computed(() =>
-  items.value.map((item) => ({
+/**
+ * Stages are shown newest first, where the owner is working; the project
+ * keeps them oldest first, as the server sorts them. Sections are shown in
+ * the owner's order, the one they are dragged into.
+ */
+const itemViews = computed(() => {
+  const views = items.value.map((item) => ({
     item,
     id: itemId(item),
     periods: 'periods' in item ? item.periods : [],
     analysis: analyzeContentData(item.content?.data),
-  })),
-);
+  }));
+  return props.kind === 'stage' ? views.reverse() : views;
+});
 const labels = computed(() =>
   props.kind === 'stage'
     ? {
@@ -73,7 +79,7 @@ function itemId(item: Item) {
   return generated;
 }
 
-/** Stages keep their chronological order; sections keep the owner's. */
+/** Stages are kept in chronological order; sections in the owner's. */
 function setItems(next: Item[]) {
   if (props.kind === 'stage')
     projectData.value.stages = (next as ProjectStageContentItem[]).sort(
