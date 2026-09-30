@@ -11,7 +11,8 @@ bun run test:release --full              # as a fresh VPS: before tagging a rele
 ```
 
 Needs Docker, and network access from the containers to bun.sh, NodeSource and
-the npm registry.
+the npm registry. Everything else comes from this repository: the bench needs
+no data from outside it.
 
 Two modes:
 
@@ -31,44 +32,56 @@ A bare clone of this repository, copied into every container as
 `/srv/thei.git` and installed from with `THEI_REPOSITORY=file:///srv/thei.git`.
 Nothing is pushed anywhere and no tag is created in this repository:
 
-- released tags come along with the clone;
-- the version under test is the working tree as it is, uncommitted and
-  untracked files included, tagged with the version in `package.json`;
+- released tags come along with the clone; the newest of them is the **last
+  release**, which every update starts from;
+- the **version under test** is the working tree as it is, uncommitted and
+  untracked files included. It is tagged with the version in `package.json`
+  when that is above the last release, and as the patch after it otherwise:
+  the version is bumped only when a release is cut. No existing tag is moved;
 - `next-release` adds a synthetic release after it, with one phase, one
   migration, one task and a changed instance template. Each step fails while
   a marker file sits in `content/`.
+
+## The seed site
+
+`upgrade`, `backup` and `recovery` work on a site the bench makes itself, in
+`seed.ts`: the last release is installed and filled through its own admin API
+with one of everything a site holds — each kind of entity at each access
+level, stages with several periods, every content block, tags, relations,
+statuses and files of each type in each place a file can go. Its `content/`
+is then copied out once and restored wherever a scenario needs it. Links in
+it point at an address the server refuses to fetch, so it never reaches the
+network.
+
+The same check runs on it wherever it lands: every entity opens with its name
+and parts, every file serves the bytes it was stored with, every address it
+had still answers, and nothing private is listed.
+
+The seed speaks the last release's API. When a release changes one of the
+requests it makes, `seed.ts` follows once that release is out.
 
 ## Scenarios
 
 | Scenario       | What it proves                                                                                                                                                   |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `seed`         | The last release makes the seed site through its own API. Runs by itself whenever a scenario below needs it; the others install meanwhile.                       |
 | `fresh`        | The installer sets up a working site; a restart before the setup wizard does no harm; a second installation is refused; every page and its Markdown twin answer. |
-| `upgrade-real` | A copy of a real site on the last release, updated through that release's own panel: every step done, nothing lost, settings open, every page answers.           |
+| `upgrade`      | The seed site on the last release, updated through that release's own panel: every step done, nothing lost, settings open, every page answers.                   |
 | `backup`       | The backup client end to end: copies, hashes, shared files, the schedule, rotation, alarms, interruption, both schedulers, the last release's client, restores.  |
 | `next-release` | The update the version under test will drive: a failing phase leaves the site as it was, a failing migration closes it on its step, and trying again finishes.   |
-| `recovery`     | The way back: this installer installs the last release, and the backup made before an update restores onto it.                                                   |
-
-`upgrade-real`, `backup` and `recovery` need a copy of a real site made by the
-backup client on the last release:
-
-```sh
-THEI_BENCH_REAL_COPY=/path/to/manual-20260926T180636Z bun run test:release
-```
-
-The copy is only read. In the container its secret phrase is replaced, a
-bench password is added as `password.fallback` beside the real password hash,
-and its site address is cleared, so nothing in the bench ever talks to the
-real site.
+| `recovery`     | The way back: this installer installs the last release, and the site as it was on that release restores onto it.                                                 |
 
 ## Ports and cleanup
 
-Containers publish the site on `127.0.0.1:3100`–`3105`. They are removed after
-each scenario unless `--keep` is given; remove kept ones with
+Containers publish the site on `127.0.0.1:3100`–`3105` for a person looking
+at a kept one; the bench itself talks to them from inside, and the seed
+server publishes nothing. They are removed after each scenario unless
+`--keep` is given; remove kept ones with
 `docker rm -f $(docker ps -aq --filter name=thei-bench-)`.
 
-Logs, timelines and counts go to `tests/release/.artifacts/`. The working
-copies of the repository the bench builds its releases from are removed after
-a run, unless `--keep` is given.
+Logs, timelines and results go to `tests/release/.artifacts/`, which every run
+starts afresh. The working copies of the repository and the seed site are
+removed after a run, unless `--keep` is given.
 
-The Windows backup client is exercised on a Windows machine instead: see
-`backup/README.md`.
+The Windows backup client, `backup/thei-backup.cmd`, has no automated test:
+it is checked by hand on a Windows machine.

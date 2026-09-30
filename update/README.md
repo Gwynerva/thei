@@ -159,13 +159,14 @@ runuser -u thei -- env HOME=/opt/thei bun run build
 systemctl restart thei
 ```
 
-**Going back to the previous version.** Install that version from scratch and
-restore the manual backup made before the update:
+**Going back to the previous version.** Install that version from scratch,
+with `vX.Y.Z` the version the site ran before, and restore the manual backup
+made before the update:
 
 ```bash
 systemctl stop thei && systemctl disable thei
 mv /opt/thei /opt/thei.broken && rm /etc/systemd/system/thei.service
-THEI_VERSION=v0.0.1 bash <(curl -fsSL https://raw.githubusercontent.com/Gwynerva/thei/main/update/install.sh)
+THEI_VERSION=vX.Y.Z bash <(curl -fsSL https://raw.githubusercontent.com/Gwynerva/thei/main/update/install.sh)
 ```
 
 then restore the copy as described in [Restoring](#restoring). A copy made on

@@ -2,9 +2,9 @@
  * Release bench: installs, updates, backs up and restores Thei in Docker
  * containers that stand in for a real server. See README.md.
  *
- *   bun tests/release/run.ts [scenario…] [--keep]
+ *   bun tests/release/run.ts [scenario…] [--keep] [--full]
  */
-import { appendFileSync, existsSync, rmSync } from 'node:fs';
+import { appendFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   api,
@@ -12,37 +12,37 @@ import {
   BenchFailure,
   buildImage,
   check,
-  copyInto,
+  completeWizard,
   copyRepository,
-  engineVersion,
   exec,
-  install,
+  installOrFail,
+  lastRelease,
   log,
   mode,
   must,
   mustExec,
-  pinRepositoryInUnit,
+  nextPatch,
   prepareNextRepository,
   prepareRepository,
   readJsonFile,
   removeServer,
   repositories,
+  resetArtifacts,
+  restoreSite,
   saveArtifact,
   signIn,
+  sitemapPaths,
   sql,
   startServer,
   tableCounts,
+  versionUnderTest,
   waitForHttp,
   workDir,
   type Server,
 } from './bench';
+import { awaitSeedSite, buildSeedSite, checkSeedSite, seedCopy } from './seed';
 
 const keep = process.argv.includes('--keep');
-/** The last released version, which every update scenario starts from. */
-const previousVersion = '0.0.1';
-const currentVersion = engineVersion();
-/** A copy of a real site on `previousVersion`, made by the backup client. */
-const realCopy = process.env.THEI_BENCH_REAL_COPY;
 
 const servers: Server[] = [];
 /** The scenario running in this process, which names its package cache. */
@@ -50,69 +50,16 @@ let scenarioName = '';
 
 function server(
   name: string,
-  port: number,
+  port?: number,
   repository = repositories.current,
 ): Server {
-  const started = startServer(`thei-bench-${name}`, port, scenarioName);
+  const started = startServer(`thei-bench-${name}`, scenarioName, port);
   servers.push(started);
   copyRepository(started, repository);
   return started;
 }
 
 // ------------------------------------------------------------------ steps
-
-function installOrFail(
-  target: Server,
-  version: string,
-  installerFrom?: string,
-): void {
-  const result = install(target, { version, installerFrom });
-  check(result.code === 0, `Thei ${version} installed`);
-  waitForHttp(target);
-}
-
-/** Submits the setup wizard the way the browser does. */
-function completeWizard(target: Server): void {
-  const response = api(target, 'POST', '/api/installation', {
-    languageCode: 'en',
-    siteAccessLevel: 'public',
-    siteUrl: '',
-    displayName: 'Bench',
-    ...{ secretPhrase: 'bench', password: 'bench-only-password' },
-  });
-  check(
-    response.status === 200 && (response.body as any)?.type === 'success',
-    'setup wizard completed',
-  );
-}
-
-/**
- * Puts a copy of a real site into the instance, the way README.md says to
- * restore one. Its credentials are replaced with the bench's own without
- * being read: the copy stays the owner's.
- */
-function restoreCopy(target: Server, copy: string): void {
-  copyInto(target, copy, '/root/restore');
-  mustExec(
-    target,
-    `systemctl stop thei
-rm -rf /opt/thei/content
-cp -a /root/restore /opt/thei/content
-node -e '
-const fs = require("fs");
-const path = "/opt/thei/content/thei.config.json";
-const config = JSON.parse(fs.readFileSync(path, "utf8"));
-config.secretPhrase = "bench";
-config.password.fallback = "bench-only-password";
-// The copy knows its real address; nothing here may ever talk to it.
-config.siteUrl = "";
-fs.writeFileSync(path, JSON.stringify(config, null, 2));
-'
-chown -R thei:thei /opt/thei/content
-systemctl start thei`,
-  );
-  waitForHttp(target);
-}
 
 interface UpdateTimelineEntry {
   at: string;
@@ -174,13 +121,7 @@ function containerNow(target: Server): number {
 
 /** Every page the sitemap lists, and its Markdown twin, answers 200. */
 function crawlSitemap(target: Server): void {
-  const sitemap = api(target, 'GET', '/sitemap.xml', undefined, {
-    visitor: true,
-  });
-  check(sitemap.status === 200, 'sitemap.xml answers');
-  const paths = [...sitemap.text.matchAll(/<loc>([^<]+)<\/loc>/g)].map(
-    (match) => new URL(match[1]!).pathname,
-  );
+  const paths = sitemapPaths(target);
   const failures: string[] = [];
   for (const path of paths) {
     const candidates = [path];
@@ -199,7 +140,10 @@ function crawlSitemap(target: Server): void {
       if (status !== 200) failures.push(`${status} ${candidate}`);
     }
   }
-  saveArtifact(`${target.name}-crawl.txt`, [...paths, '', ...failures].join('\n'));
+  saveArtifact(
+    `${target.name}-crawl.txt`,
+    [...paths, '', ...failures].join('\n'),
+  );
   check(
     failures.length === 0,
     `all ${paths.length} sitemap pages answer 200 (${failures.slice(0, 5).join(', ')})`,
@@ -208,12 +152,17 @@ function crawlSitemap(target: Server): void {
   // A card depends on files a build has to carry along; development would
   // draw it whether or not they made it into .output.
   const cards = ['/og/site.png'];
-  const entity = paths.find((path) => /^\/(projects|events|pages)\/[^/]+\/$/.test(path));
-  const page = entity && api(target, 'GET', entity, undefined, { visitor: true });
+  const entity = paths.find((path) =>
+    /^\/(projects|events|pages)\/[^/]+\/$/.test(path),
+  );
+  const page =
+    entity && api(target, 'GET', entity, undefined, { visitor: true });
   const card = page?.text.match(/property="og:image" content="([^"]+)"/)?.[1];
   if (card) cards.push(new URL(card).pathname);
   for (const path of cards) {
-    const status = api(target, 'GET', path, undefined, { visitor: true }).status;
+    const status = api(target, 'GET', path, undefined, {
+      visitor: true,
+    }).status;
     check(status === 200, `the Open Graph card ${path} answers ${status}`);
   }
 }
@@ -244,7 +193,10 @@ function adminPagesOpen(target: Server): void {
 function downloadClient(target: Server, path: string): void {
   const token = (api(target, 'POST', '/api/admin/backup/token').body as any)
     ?.token;
-  check(typeof token === 'string' && token.length > 0, 'a backup token was generated');
+  check(
+    typeof token === 'string' && token.length > 0,
+    'a backup token was generated',
+  );
   const script = api(target, 'GET', '/api/admin/backup/script?platform=unix');
   check(script.status === 200, 'the backup client downloads');
   mustExec(
@@ -257,7 +209,11 @@ THEI_BENCH_SCRIPT`,
 }
 
 /** Runs the client and returns its exit code and output. */
-function client(target: Server, args: string, env = ''): { code: number; out: string } {
+function client(
+  target: Server,
+  args: string,
+  env = '',
+): { code: number; out: string } {
   const result = exec(
     target,
     `${env} bash /root/client/thei-backup.sh ${args} 2>&1`,
@@ -286,11 +242,22 @@ function copies(target: Server, prefix = ''): string[] {
 
 // -------------------------------------------------------------- scenarios
 
+/** Scenarios that work on the seed site, and so need the `seed` step. */
+const onSeedSite = ['upgrade', 'backup', 'recovery'];
+
 const scenarios: Record<string, () => Promise<void> | void> = {
+  /**
+   * The site the other scenarios restore: made by the last release through
+   * its own API. See seed.ts.
+   */
+  async seed() {
+    await buildSeedSite(server('seed'));
+  },
+
   /** A new site on the version under test. */
   fresh() {
     const target = server('fresh', 3101);
-    installOrFail(target, currentVersion);
+    installOrFail(target, versionUnderTest);
     check(
       api(target, 'GET', '/', undefined, { visitor: true }).text.includes(
         'install',
@@ -317,7 +284,10 @@ const scenarios: Record<string, () => Promise<void> | void> = {
     const ledger = Number(sql(target, 'select count(*) from _thei_migrations'));
     check(ledger > 1, `a new database records every step (${ledger})`);
 
-    mustExec(target, 'mkdir -p /opt/thei/.thei && touch /opt/thei/.thei/bench-marker');
+    mustExec(
+      target,
+      'mkdir -p /opt/thei/.thei && touch /opt/thei/.thei/bench-marker',
+    );
     const again = api(
       target,
       'POST',
@@ -343,25 +313,18 @@ const scenarios: Record<string, () => Promise<void> | void> = {
     crawlSitemap(target);
   },
 
-  /** A copy of a real site, updated from the last release by its own panel. */
-  'upgrade-real'() {
-    if (!realCopy || !existsSync(realCopy)) {
-      throw new BenchFailure(
-        'Set THEI_BENCH_REAL_COPY to a backup copy of a site on the last release.',
-      );
-    }
+  /** The seed site on the last release, updated by that release's own panel. */
+  upgrade() {
     const target = server('upgrade', 3100);
-    installOrFail(target, previousVersion);
-    restoreCopy(target, realCopy);
-    pinRepositoryInUnit(target);
+    installOrFail(target, lastRelease);
+    const site = awaitSeedSite();
+    restoreSite(target, seedCopy);
     signIn(target);
-    const before = tableCounts(target);
-    saveArtifact(`${target.name}-counts-before.json`, before);
 
     const status = api(target, 'POST', '/api/admin/updates/check').body as any;
     check(
-      status?.latestVersion?.replace(/^v/, '') === currentVersion,
-      `the panel offers ${currentVersion} (${status?.latestVersion})`,
+      status?.latestVersion?.replace(/^v/, '') === versionUnderTest,
+      `the panel offers ${versionUnderTest} (${status?.latestVersion})`,
     );
     const since = containerNow(target);
     const start = api(target, 'POST', '/api/admin/updates/start').body as any;
@@ -376,64 +339,31 @@ const scenarios: Record<string, () => Promise<void> | void> = {
       state.steps.every((step: any) => step.status === 'done'),
       'every step is done',
     );
-
-    const after = tableCounts(target);
-    saveArtifact(`${target.name}-counts-after.json`, after);
-    for (const table of [
-      'projects',
-      'events',
-      'pages',
-      'content',
-      'project-stages',
-      'stage-periods',
-      'external-links',
-      'profiles',
-    ]) {
-      check(
-        after[table] === before[table],
-        `${table}: ${before[table]} → ${after[table]}`,
-      );
-    }
+    const running = (api(target, 'GET', '/api/update/progress').body as any)
+      ?.version;
     check(
-      after['entity-relations'] ===
-        (before['project-relations'] ?? 0) +
-          (before['event-project-relations'] ?? 0),
-      'relations carried over',
+      running === versionUnderTest,
+      `the site runs ${versionUnderTest} (${running})`,
     );
-    check(
-      after.statuses === before['profile-statuses'],
-      'statuses carried over',
-    );
-    check(after.assets! >= before.assets!, 'no asset rows lost');
 
     signIn(target);
+    checkSeedSite(target, site);
     adminPagesOpen(target);
     crawlSitemap(target);
   },
 
   /**
-   * The backup client against a site on the version under test — a copy of a
-   * real site from the last release, restored onto it and migrated on boot —
-   * and the copies it makes restored onto another instance.
+   * The backup client against a site on the version under test — the seed
+   * site from the last release, restored onto it and migrated on boot — and
+   * the copies it makes restored onto another instance.
    */
   backup() {
-    if (!realCopy || !existsSync(realCopy)) {
-      throw new BenchFailure(
-        'Set THEI_BENCH_REAL_COPY to a backup copy of a site on the last release.',
-      );
-    }
     const target = server('backup', 3104);
-    installOrFail(target, currentVersion);
-    completeWizard(target);
-    // A copy from the last release restored onto this one migrates on boot.
-    restoreCopy(target, realCopy);
-    waitForHttp(target, '/api/update/progress');
-    for (let waited = 0; waited < 120; waited++) {
-      if ((api(target, 'GET', '/api/update/progress').body as any)?.site === 'open')
-        break;
-      Bun.sleepSync(1000);
-    }
+    installOrFail(target, versionUnderTest);
+    const site = awaitSeedSite();
+    restoreSite(target, seedCopy);
     signIn(target);
+    checkSeedSite(target, site);
     adminPagesOpen(target);
     const siteCounts = tableCounts(target);
 
@@ -454,12 +384,19 @@ EOF`,
     check(first, 'the copy is in place');
     const copyDb = `/backups/${first}/thei.db`;
     check(
-      mustExec(target, `sqlite3 -readonly ${copyDb} 'PRAGMA integrity_check'`).trim() === 'ok',
+      mustExec(
+        target,
+        `sqlite3 -readonly ${copyDb} 'PRAGMA integrity_check'`,
+      ).trim() === 'ok',
       'the copied database is intact',
     );
     check(
-      Number(mustExec(target, `sqlite3 -readonly ${copyDb} 'select count(*) from projects'`)) ===
-        siteCounts.projects,
+      Number(
+        mustExec(
+          target,
+          `sqlite3 -readonly ${copyDb} 'select count(*) from projects'`,
+        ),
+      ) === siteCounts.projects,
       'the copy holds every project',
     );
     const damaged = mustExec(
@@ -472,50 +409,90 @@ EOF`,
       'the icon cache is left out',
     );
     check(
-      exec(target, 'ls /opt/thei/.thei/backup 2>/dev/null | wc -l').stdout.trim() === '0',
+      exec(
+        target,
+        'ls /opt/thei/.thei/backup 2>/dev/null | wc -l',
+      ).stdout.trim() === '0',
       'the server keeps no session behind',
     );
 
     // A second copy shares every unchanged asset with the first.
     run = client(target, '--run');
-    check(run.code === 0 && /[1-9][0-9]* reused/.test(run.out), 'a second copy reuses files');
+    check(
+      run.code === 0 && /[1-9][0-9]* reused/.test(run.out),
+      'a second copy reuses files',
+    );
     const [second] = copies(target, 'manual-').filter((name) => name !== first);
     const linked = mustExec(
       target,
       `find /backups/${second}/assets -type f -links 1 | wc -l`,
     ).trim();
-    check(linked === '0', `every asset of the second copy is shared (${linked} not)`);
+    check(
+      linked === '0',
+      `every asset of the second copy is shared (${linked} not)`,
+    );
 
     // The schedule: not due yet, due half a day early, three copies kept.
     run = client(target, '--run --auto');
-    check(run.code === 0 && /Not due yet/.test(run.out), 'a scheduled run waits for its day');
+    check(
+      run.code === 0 && /Not due yet/.test(run.out),
+      'a scheduled run waits for its day',
+    );
     const dayMs = 24 * 60 * 60 * 1000;
     for (let round = 0; round < 4; round++) {
       setConfig(target, 'lastRunAt', String(Date.now() - 6.6 * dayMs));
       run = client(target, '--run --auto');
-      check(run.code === 0 && /Scheduled backup complete/.test(run.out), `scheduled copy ${round + 1}`);
+      check(
+        run.code === 0 && /Scheduled backup complete/.test(run.out),
+        `scheduled copy ${round + 1}`,
+      );
       Bun.sleepSync(1100);
     }
-    check(copies(target, 'auto-').length === 3, 'three scheduled copies are kept');
-    check(copies(target, 'manual-').length === 2, 'manual copies are never rotated');
+    check(
+      copies(target, 'auto-').length === 3,
+      'three scheduled copies are kept',
+    );
+    check(
+      copies(target, 'manual-').length === 2,
+      'manual copies are never rotated',
+    );
 
     // The alarm: a site that lost files or entries stops the run.
     setConfig(target, 'lastFileCount', '100000');
     run = client(target, '--run');
-    check(run.code === 2 && /SHRANK/.test(run.out), 'losing most files raises the alarm');
-    check(exec(target, 'test -f /backups/ALERT.txt').code === 0, 'the alarm leaves ALERT.txt');
+    check(
+      run.code === 2 && /SHRANK/.test(run.out),
+      'losing most files raises the alarm',
+    );
+    check(
+      exec(target, 'test -f /backups/ALERT.txt').code === 0,
+      'the alarm leaves ALERT.txt',
+    );
     run = client(target, '--run');
     check(run.code === 2, 'the alarm holds on the next run');
     run = client(target, '--run --force');
     check(run.code === 0, 'backing up anyway accepts the new size');
-    check(exec(target, 'test -f /backups/ALERT.txt').code !== 0, 'the alarm is cleared');
-    setConfig(target, 'lastCounts', 'projects:100,events:2,diaryEntries:0,pages:2');
+    check(
+      exec(target, 'test -f /backups/ALERT.txt').code !== 0,
+      'the alarm is cleared',
+    );
+    setConfig(
+      target,
+      'lastCounts',
+      'projects:100,events:2,diaryEntries:0,pages:2',
+    );
     run = client(target, '--run');
-    check(run.code === 2 && /projects 100/.test(run.out), 'losing most projects raises the alarm');
+    check(
+      run.code === 2 && /projects 100/.test(run.out),
+      'losing most projects raises the alarm',
+    );
     client(target, '--run --force');
 
     // A run cut short releases its session: the next one is not refused.
-    exec(target, 'timeout -s INT 1 bash /root/client/thei-backup.sh --run >/dev/null 2>&1');
+    exec(
+      target,
+      'timeout -s INT 1 bash /root/client/thei-backup.sh --run >/dev/null 2>&1',
+    );
     run = client(target, '--run');
     check(run.code === 0, 'a run right after an interrupted one succeeds');
 
@@ -532,21 +509,30 @@ EOF`,
       'the timer fires at 08:00',
     );
     check(
-      exec(target, 'systemctl is-enabled thei-backup.timer').stdout.trim() === 'enabled',
+      exec(target, 'systemctl is-enabled thei-backup.timer').stdout.trim() ===
+        'enabled',
       'the timer is enabled',
     );
     mustExec(target, 'cp /root/client/thei-backup.conf /tmp/site2.conf');
-    run = client(target, '--config site2.conf --install-schedule', 'cd /tmp &&');
+    run = client(
+      target,
+      '--config site2.conf --install-schedule',
+      'cd /tmp &&',
+    );
     check(run.code === 0, 'a second site gets a schedule of its own');
     check(
       /--config '\/tmp\/site2\.conf'/.test(
-        exec(target, 'cat /etc/systemd/system/thei-backup-site2.service').stdout,
+        exec(target, 'cat /etc/systemd/system/thei-backup-site2.service')
+          .stdout,
       ),
       'its unit carries the full settings path',
     );
     exec(target, 'systemctl start thei-backup.service');
     check(
-      exec(target, 'systemctl show -p Result --value thei-backup.service').stdout.trim() === 'success',
+      exec(
+        target,
+        'systemctl show -p Result --value thei-backup.service',
+      ).stdout.trim() === 'success',
       'the scheduled unit itself runs',
     );
     client(target, '--remove-schedule');
@@ -574,7 +560,10 @@ EOF`,
         target,
         `curl -s -o /dev/null -w '%{http_code}' -H 'x-thei-backup-token: ${token}' 'http://127.0.0.1:3000/api/backup/session/${session}/file?path=${path}'`,
       ).trim();
-      check(status === '400', `${decodeURIComponent(path)} is refused (${status})`);
+      check(
+        status === '400',
+        `${decodeURIComponent(path)} is refused (${status})`,
+      );
     }
     mustExec(
       target,
@@ -585,53 +574,69 @@ EOF`,
     mustExec(
       target,
       `mkdir -p /root/old
-git -C /srv/thei.git show v${previousVersion}:backup/thei-backup.sh > /root/old/thei-backup.sh
+git -C /srv/thei.git show v${lastRelease}:backup/thei-backup.sh > /root/old/thei-backup.sh
 printf 'siteUrl=http://127.0.0.1:3000\\ntoken=${token}\\ndestination=/old-backups\\n' > /root/old/thei-backup.conf`,
     );
     const old = exec(target, 'bash /root/old/thei-backup.sh --run 2>&1');
-    check(old.code === 0, `the ${previousVersion} client still backs up\n${old.stdout.slice(-500)}`);
+    check(
+      old.code === 0,
+      `the ${lastRelease} client still backs up\n${old.stdout.slice(-500)}`,
+    );
 
     // A copy restores onto a new instance, and one missing its assets does
     // not cost the restored site its asset records.
     const restored = server('restored', 3105);
-    installOrFail(restored, currentVersion);
-    completeWizard(restored);
+    installOrFail(restored, versionUnderTest);
     const [latest] = copies(target, 'manual-').sort().reverse();
     const local = join(workDir, 'restore-copy');
     must('docker', ['cp', `${target.name}:/backups/${latest}`, local]);
-    restoreCopy(restored, local);
-    // A copy of someone's site; it has no business lying around here.
+    restoreSite(restored, local);
     rmSync(local, { recursive: true, force: true });
     signIn(restored);
     adminPagesOpen(restored);
+    checkSeedSite(restored, site);
     const restoredCounts = tableCounts(restored);
-    for (const table of ['projects', 'events', 'pages', 'assets', 'asset-usages']) {
+    for (const table of [
+      'projects',
+      'events',
+      'pages',
+      'assets',
+      'asset-usages',
+    ]) {
       check(
         restoredCounts[table] === siteCounts[table],
         `restored ${table}: ${restoredCounts[table]} of ${siteCounts[table]}`,
       );
     }
-    mustExec(restored, 'systemctl stop thei && rm -rf /opt/thei/content/assets && systemctl start thei');
+    mustExec(
+      restored,
+      'systemctl stop thei && rm -rf /opt/thei/content/assets && systemctl start thei',
+    );
     waitForHttp(restored);
-    log('  … waiting for the missing-file cleanup (90 s)');
-    Bun.sleepSync(90_000);
+    // The first cleanup runs a minute after boot.
+    log('  … waiting for the missing-file check');
+    let journal = '';
+    for (let waited = 0; waited < 180; waited += 5) {
+      journal = exec(restored, 'journalctl -u thei --no-pager').stdout;
+      if (/stored files are missing/.test(journal)) break;
+      Bun.sleepSync(5000);
+    }
+    check(/stored files are missing/.test(journal), 'the journal says why');
     // Orphaned rows — previews the update replaced — may go as usual; rows
     // still in use must not, for want of a file the restore has yet to copy.
-    const journal = exec(restored, 'journalctl -u thei --no-pager').stdout;
     check(
       !/with missing file/.test(journal),
       'no asset record is dropped for a missing file',
     );
     check(
       Number(
-        sql(
-          restored,
-          'select count(distinct assetUuid) from `asset-usages`',
+        sql(restored, 'select count(distinct assetUuid) from `asset-usages`'),
+      ) ===
+        Number(
+          sql(target, 'select count(distinct assetUuid) from `asset-usages`'),
         ),
-      ) === Number(sql(target, 'select count(distinct assetUuid) from `asset-usages`')),
       'every asset in use keeps its record',
     );
-    check(/stored files are missing/.test(journal), 'the journal says why');
   },
 
   /**
@@ -640,9 +645,9 @@ printf 'siteUrl=http://127.0.0.1:3000\\ntoken=${token}\\ndestination=/old-backup
    * template — first failing, then going through.
    */
   async 'next-release'() {
-    const next = nextVersion(currentVersion);
+    const next = nextPatch(versionUnderTest);
     const target = server('next', 3102, repositories.next);
-    installOrFail(target, currentVersion);
+    installOrFail(target, versionUnderTest);
     completeWizard(target);
     signIn(target);
     const marker = (name: string) =>
@@ -659,34 +664,44 @@ printf 'siteUrl=http://127.0.0.1:3000\\ntoken=${token}\\ndestination=/old-backup
     mustExec(target, marker('phase'));
     let since = containerNow(target);
     check(
-      (api(target, 'POST', '/api/admin/updates/start').body as any)?.type === 'success',
+      (api(target, 'POST', '/api/admin/updates/start').body as any)?.type ===
+        'success',
       'the update started',
     );
     let state = watchUpdate(target, 'phase-failure', since);
-    check(state.status === 'failed', `a failing phase fails the update (${state.status})`);
+    check(
+      state.status === 'failed',
+      `a failing phase fails the update (${state.status})`,
+    );
     check(
       exec(target, 'grep thei /opt/thei/package.json').stdout.includes(
-        `#v${currentVersion}"`,
+        `#v${versionUnderTest}"`,
       ),
       'the manifest points at the running version again',
     );
     check(
-      exec(target, 'grep \\"version\\" /opt/thei/node_modules/thei/package.json').stdout.includes(
-        `"${currentVersion}"`,
-      ),
+      exec(
+        target,
+        'grep \\"version\\" /opt/thei/node_modules/thei/package.json',
+      ).stdout.includes(`"${versionUnderTest}"`),
       'the engine in node_modules is the running version again',
     );
     check(
-      (api(target, 'GET', '/api/update/progress').body as any)?.version === currentVersion,
+      (api(target, 'GET', '/api/update/progress').body as any)?.version ===
+        versionUnderTest,
       'the site keeps running the current version',
     );
 
     // A migration that fails closes the site with the step named; the admin
     // tries again once the cause is gone.
-    mustExec(target, `rm -f /opt/thei/content/.bench-fail-phase && ${marker('migration')}`);
+    mustExec(
+      target,
+      `rm -f /opt/thei/content/.bench-fail-phase && ${marker('migration')}`,
+    );
     since = containerNow(target);
     check(
-      (api(target, 'POST', '/api/admin/updates/start').body as any)?.type === 'success',
+      (api(target, 'POST', '/api/admin/updates/start').body as any)?.type ===
+        'success',
       'the update started again',
     );
     state = watchUpdate(target, 'migration-failure', since);
@@ -697,9 +712,9 @@ printf 'siteUrl=http://127.0.0.1:3000\\ntoken=${token}\\ndestination=/old-backup
       `a failing migration keeps the site closed on its step (${failed?.failure?.stepId})`,
     );
     check(failed?.canRetry === true, 'the admin may try again');
+    const visitorView = api(target, 'GET', '/', undefined, { visitor: true });
     check(
-      api(target, 'GET', '/', undefined, { visitor: true }).status === 302 ||
-        api(target, 'GET', '/', undefined, { visitor: true }).text.includes('update'),
+      visitorView.status === 302 || visitorView.text.includes('update'),
       'visitors are led to the update screen',
     );
 
@@ -710,15 +725,27 @@ printf 'siteUrl=http://127.0.0.1:3000\\ntoken=${token}\\ndestination=/old-backup
       'try again is accepted',
     );
     state = watchUpdate(target, 'retry', since);
-    check(state.status === 'done', `the update finishes (${state.status}: ${state.error ?? ''})`);
-    const done = api(target, 'GET', '/api/update/progress').body as any;
-    check(done?.site === 'open' && done?.version === next, `the site runs ${next}`);
     check(
-      sql(target, "select count(*) from sqlite_master where name = 'bench-next'") === '1',
+      state.status === 'done',
+      `the update finishes (${state.status}: ${state.error ?? ''})`,
+    );
+    const done = api(target, 'GET', '/api/update/progress').body as any;
+    check(
+      done?.site === 'open' && done?.version === next,
+      `the site runs ${next}`,
+    );
+    check(
+      sql(
+        target,
+        "select count(*) from sqlite_master where name = 'bench-next'",
+      ) === '1',
       'the migration ran',
     );
     check(
-      sql(target, `select count(*) from _thei_migrations where id = 'task:${next}/001-bench-task'`) === '1',
+      sql(
+        target,
+        `select count(*) from _thei_migrations where id = 'task:${next}/001-bench-task'`,
+      ) === '1',
       'the task is recorded',
     );
     check(
@@ -729,7 +756,10 @@ printf 'siteUrl=http://127.0.0.1:3000\\ntoken=${token}\\ndestination=/old-backup
       'the phase ran',
     );
     check(
-      exec(target, 'grep -c "bench release" /opt/thei/package.json').stdout.trim() === '1',
+      exec(
+        target,
+        'grep -c "bench release" /opt/thei/package.json',
+      ).stdout.trim() === '1',
       'the new instance template was applied',
     );
     signIn(target);
@@ -738,35 +768,30 @@ printf 'siteUrl=http://127.0.0.1:3000\\ntoken=${token}\\ndestination=/old-backup
 
   /**
    * The way back from an update gone wrong: the installer of the version under
-   * test installs the last release, and the backup made before the update is
+   * test installs the last release, and the site as it was on that release is
    * restored onto it.
    */
   recovery() {
-    if (!realCopy || !existsSync(realCopy)) {
-      throw new BenchFailure(
-        'Set THEI_BENCH_REAL_COPY to a backup copy of a site on the last release.',
-      );
-    }
     const target = server('recovery', 3103);
-    installOrFail(target, previousVersion, currentVersion);
-    restoreCopy(target, realCopy);
+    installOrFail(target, lastRelease, { installerFrom: versionUnderTest });
+    const site = awaitSeedSite();
+    restoreSite(target, seedCopy);
     signIn(target);
     const status = api(target, 'GET', '/api/admin/updates').body as any;
     check(
-      status?.currentVersion === previousVersion,
-      `the site runs ${previousVersion} again (${status?.currentVersion})`,
+      status?.currentVersion === lastRelease,
+      `the site runs ${lastRelease} again (${status?.currentVersion})`,
     );
+    checkSeedSite(target, site);
     for (const path of ['/', '/admin/', '/api/admin/settings']) {
       const response = api(target, 'GET', path);
-      check(response.status === 200, `${path} answers 200 (${response.status})`);
+      check(
+        response.status === 200,
+        `${path} answers 200 (${response.status})`,
+      );
     }
   },
 };
-
-function nextVersion(version: string): string {
-  const [major, minor, patch] = version.split('.').map(Number);
-  return `${major}.${minor}.${patch! + 1}`;
-}
 
 // -------------------------------------------------------------------- main
 
@@ -778,12 +803,20 @@ interface ScenarioResult {
 }
 
 const requested = process.argv.slice(2).filter((arg) => !arg.startsWith('--'));
-const selected = requested.length ? requested : Object.keys(scenarios);
+const selected = requested.length ? [...requested] : Object.keys(scenarios);
 for (const name of selected) {
   if (!scenarios[name]) {
-    console.error(`Unknown scenario "${name}". Known: ${Object.keys(scenarios).join(', ')}`);
+    console.error(
+      `Unknown scenario "${name}". Known: ${Object.keys(scenarios).join(', ')}`,
+    );
     process.exit(2);
   }
+}
+if (
+  !selected.includes('seed') &&
+  selected.some((name) => onSeedSite.includes(name))
+) {
+  selected.unshift('seed');
 }
 
 /** Runs one scenario in this process; the parent has prepared everything. */
@@ -798,7 +831,12 @@ async function runScenario(name: string): Promise<ScenarioResult> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     log(`=== ${name}: FAILED\n${message}`);
-    return { name, ok: false, error: message, seconds: (Date.now() - started) / 1000 };
+    return {
+      name,
+      ok: false,
+      error: message,
+      seconds: (Date.now() - started) / 1000,
+    };
   } finally {
     if (!keep) for (const started of servers.splice(0)) removeServer(started);
   }
@@ -807,7 +845,13 @@ async function runScenario(name: string): Promise<ScenarioResult> {
 /** Runs a scenario as a process of its own, so several can run at once. */
 async function spawnScenario(name: string): Promise<ScenarioResult> {
   const child = Bun.spawn(
-    [process.execPath, import.meta.path, name, '--child', ...(keep ? ['--keep'] : [])],
+    [
+      process.execPath,
+      import.meta.path,
+      name,
+      '--child',
+      ...(keep ? ['--keep'] : []),
+    ],
     {
       env: { ...process.env, THEI_BENCH_MODE: mode, THEI_BENCH_SCENARIO: name },
       stdout: 'inherit',
@@ -820,27 +864,36 @@ async function spawnScenario(name: string): Promise<ScenarioResult> {
       await Bun.file(join(artifactsDir, `result-${name}.json`)).text(),
     ) as ScenarioResult;
   } catch {
-    return { name, ok: false, error: `The scenario process exited with ${child.exitCode}.`, seconds: 0 };
+    return {
+      name,
+      ok: false,
+      error: `The scenario process exited with ${child.exitCode}.`,
+      seconds: 0,
+    };
   }
 }
 
 if (process.argv.includes('--child')) {
-  const [name] = selected;
+  const [name] = requested;
   const result = await runScenario(name!);
   saveArtifact(`result-${name}.json`, result);
   process.exit(result.ok ? 0 : 1);
 }
 
 const startedAt = Date.now();
+resetArtifacts();
+log(
+  `Testing the working tree as v${versionUnderTest}, updating from v${lastRelease}`,
+);
 buildImage();
 prepareRepository();
 if (selected.includes('next-release')) {
-  await prepareNextRepository(currentVersion, nextVersion(currentVersion));
+  await prepareNextRepository(versionUnderTest, nextPatch(versionUnderTest));
 }
 log(
   mode === 'full'
-    ? `Running ${selected.length} scenario(s) one at a time, from a bare server`
-    : `Running ${selected.length} scenario(s) side by side (--full for a bare server, one at a time)`,
+    ? `Running ${selected.join(', ')} one at a time, from a bare server`
+    : `Running ${selected.join(', ')} side by side (--full for a bare server, one at a time)`,
 );
 
 const results: ScenarioResult[] = [];
