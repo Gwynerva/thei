@@ -43,7 +43,8 @@ const props = defineProps<{
   titleless?: boolean;
   /**
    * Draws the card as a thought bubble instead of a box — for a diary entry,
-   * which is a thought rather than a thing that happened.
+   * which is a thought rather than a thing that happened. Its date picks
+   * one of several clouds, so a feed of entries is not one shape repeated.
    */
   cloud?: boolean;
   /** Leaves the date out, for a card whose place already dates it. */
