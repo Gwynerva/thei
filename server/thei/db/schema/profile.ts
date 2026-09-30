@@ -36,7 +36,10 @@ export const profilePinnedPages = sqliteTable('profile-pinned-pages', {
 });
 export const profileExternalLinks = sqliteTable('profile-external-links', {
   url: text().primaryKey(),
+  /** The short name its chip carries, such as «GitHub». */
   name: text().notNull(),
   isPrivate: integer({ mode: 'boolean' }).notNull().default(false),
   sortOrder: integer().notNull(),
+  /** The owner's word on why the link is there; empty when there is none. */
+  note: text().notNull().default(''),
 });

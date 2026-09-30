@@ -723,7 +723,10 @@ function emptyPublicReferenceGroup(): PublicReferenceGroup {
   return { links: [], files: [] };
 }
 
-/** An entity's own list of links as the sidebar shows it: the name the admin gave each one first. */
+/**
+ * An entity's own list of links as the sidebar shows it: each page as it
+ * presents itself, with the owner's note under it.
+ */
 export function buildPublicManualReferenceGroup(
   links: ProjectExternalLink[],
   files: PublicReferenceGroup['files'],
@@ -734,9 +737,10 @@ export function buildPublicManualReferenceGroup(
       .filter((link) => includePrivate || !link.isPrivate)
       .map((link): PublicReferenceLink => ({
         kind: 'external',
-        title: link.name || link.title || externalLinkHostname(link.url),
+        title: link.title || externalLinkHostname(link.url),
         href: link.url,
         description: link.description,
+        ...(link.note ? { note: link.note } : {}),
         iconMedia: link.faviconMedia,
       })),
     files,
@@ -870,16 +874,17 @@ async function buildPublicReferenceLink(
           note: candidate.note,
         }
       : candidate;
-  // A note is why the link was worth making, which says more in a list than
-  // the name of whatever it points at.
+  // The target is shown as it presents itself; the owner's note on why the
+  // link was worth making comes with it, never in its place.
+  const note = resolved.note ? { note: resolved.note } : {};
   if (resolved.kind === 'external') {
     const link = await loadExternalLink(resolved.url);
     return {
       kind: 'external',
-      title: resolved.note || link?.title || externalLinkHostname(resolved.url),
-      ...(resolved.note ? {} : { titleFromSite: true as const }),
+      title: link?.title || externalLinkHostname(resolved.url),
       href: resolved.url,
       description: link?.description,
+      ...note,
       iconMedia: link?.faviconMedia,
     };
   }
@@ -889,12 +894,12 @@ async function buildPublicReferenceLink(
   const iconMedia = await entity.media('public', opens);
   return {
     kind: entity.entityType,
-    title: resolved.note || entity.title,
+    title: entity.title,
     href: entity.href,
     description: entity.summary,
-    // A diary entry is called by its day, which the page writes out; a note
-    // replaces the day just as it replaces any other title.
-    ...(entity.date && !resolved.note ? { date: entity.date } : {}),
+    ...note,
+    // A diary entry is called by its day, which the page writes out.
+    ...(entity.date ? { date: entity.date } : {}),
     ...(iconMedia ? { iconMedia } : {}),
   };
 }
@@ -959,14 +964,17 @@ export async function buildPublicReferences(
   };
 }
 
-/** A hand-added address of this site becomes the entity it opens. */
+/**
+ * A hand-added address of this site becomes the entity it opens, and keeps
+ * the note written for it.
+ */
 async function buildManualSiteLink(
   link: PublicReferenceLink,
   viewer: PublicViewer,
 ): Promise<PublicReferenceLink | undefined> {
   const candidate = await resolveSiteEntityCandidate(link.href);
   if (candidate.kind === 'external') return link;
-  return buildPublicReferenceLink(candidate, viewer);
+  return buildPublicReferenceLink({ ...candidate, note: link.note }, viewer);
 }
 
 export async function buildPublicTags(

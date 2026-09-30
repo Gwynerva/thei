@@ -125,19 +125,20 @@ export type PublicFile = PublicAssetDescriptor;
 
 export type PublicReferenceLink = {
   kind: 'external' | ContentEntityType;
-  title: string;
   /**
-   * The title is the linked page's own, or its hostname, rather than words the
-   * owner wrote: it keeps its own typography, and a hostname none at all.
+   * What the target calls itself: an entity's title, or the linked page's own
+   * title or hostname — the latter keep their own typography, and a hostname
+   * none at all.
    */
-  titleFromSite?: true;
+  title: string;
   /** The day of a diary entry, shown in place of the title it lacks. */
   date?: string;
   href: string;
   description?: string;
   /**
-   * The note of a relation, which says why the entity is related and is shown
-   * in place of its description.
+   * The owner's word on why the link is there, or why the entity is related.
+   * It is shown under the target's own title and description, never in
+   * place of them.
    */
   note?: string;
   iconMedia?: MediaDescriptor;

@@ -3,7 +3,10 @@ import type { DatedPeriod } from './date-precision';
 import type { ProjectEventAccessLevel } from './access-level';
 import type { ProjectActionEditData } from './project-action';
 import type { OtherAssetSaveItem } from './admin/project';
-import type { ExternalLinkListItem } from './external-link';
+import type {
+  ExternalLinkListInput,
+  ExternalLinkListItem,
+} from './external-link';
 import type { TagEditItem } from './tag';
 import type { MediaDescriptor } from './media';
 import type { RelationEditItem } from './relation';
@@ -27,8 +30,9 @@ export type EventEditData = {
 
 export type ValidatedEventEditData = Omit<
   EventEditData,
-  'access' | 'action'
+  'access' | 'action' | 'externalLinks'
 > & {
   access: ProjectEventAccessLevel;
   action: ProjectActionEditData;
+  externalLinks?: ExternalLinkListInput[];
 };

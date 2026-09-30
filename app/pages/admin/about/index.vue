@@ -12,7 +12,7 @@ import StatusHistoryField from '#layers/thei/app/components/settings/StatusHisto
 import { canonicalizeContentData } from '#layers/thei/shared/content';
 import type { ContentEntitySearchItem } from '#layers/thei/shared/admin/content-entity-search';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
-import { externalLinkListItems } from '#layers/thei/shared/external-link';
+import { namedExternalLinkListItems } from '#layers/thei/shared/external-link';
 import { PROFILE_ID } from '#layers/thei/shared/profile';
 import { provideContentOwner } from '#layers/thei/app/composables/content-history/owner';
 import { useExternalLinks } from '#layers/thei/app/composables/external-links';
@@ -23,7 +23,9 @@ const initial =
   await useRequestFetch()<AdminProfileResponse>('/api/admin/about');
 // The links arrive with their records; the form keeps only what it saves.
 useExternalLinks().seed(initial.data.externalLinks);
-initial.data.externalLinks = externalLinkListItems(initial.data.externalLinks);
+initial.data.externalLinks = namedExternalLinkListItems(
+  initial.data.externalLinks,
+);
 function serialize(value: ProfileEditData) {
   return JSON.stringify({
     ...value,
@@ -354,6 +356,7 @@ const birthDateMax = new Date();
       </section>
       <ExternalLinksEditor
         v-model="data.externalLinks"
+        named
         :title="phrase.profile_links"
         :description="phrase.profile_links_hint"
         :empty-text="phrase.profile_empty"

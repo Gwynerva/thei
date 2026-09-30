@@ -34,6 +34,7 @@ import {
 } from '../project-action';
 import {
   validateExternalLinkList,
+  type ExternalLinkListInput,
   type ExternalLinkListItem,
 } from '../external-link';
 import {
@@ -88,10 +89,11 @@ export type ProjectEditData = Partial<StatusEditData> & {
 
 export type ValidatedProjectEditData = Omit<
   ProjectEditData,
-  'access' | 'action'
+  'access' | 'action' | 'externalLinks'
 > & {
   access: ProjectEventAccessLevel;
   action: ProjectActionEditData;
+  externalLinks?: ExternalLinkListInput[];
 };
 
 export function projectAssetUsageDelta(

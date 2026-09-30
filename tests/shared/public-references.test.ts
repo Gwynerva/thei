@@ -102,6 +102,59 @@ describe('splitPublicReferenceLinks', () => {
     );
     expect(split.content).toHaveLength(2);
   });
+
+  const noted = (link: PublicReferenceLink, note: string) => ({
+    ...link,
+    note,
+  });
+
+  it('shows a link in both lists once when only one copy has a note', () => {
+    const split = splitPublicReferenceLinks(
+      [external('https://a.test/', 'Site')],
+      [noted(external('https://a.test', 'Site'), 'Why it is here')],
+    );
+    expect(split).toEqual({
+      shared: [noted(external('https://a.test/', 'Site'), 'Why it is here')],
+      manual: [],
+      content: [],
+    });
+  });
+
+  it('shows a link in both lists once when both notes read the same', () => {
+    const split = splitPublicReferenceLinks(
+      [noted(external('https://a.test/'), 'Same  words ')],
+      [noted(external('https://a.test/'), 'Same words')],
+    );
+    expect(split.shared).toHaveLength(1);
+    expect(split.shared[0]?.note).toBe('Same  words ');
+    expect(split.manual).toEqual([]);
+    expect(split.content).toEqual([]);
+  });
+
+  it('keeps both copies of a link whose notes say different things', () => {
+    const split = splitPublicReferenceLinks(
+      [noted(external('https://a.test/'), 'By hand')],
+      [noted(external('https://a.test/#part'), 'In the text')],
+    );
+    expect(split.shared).toEqual([]);
+    expect(split.manual.map((link) => link.note)).toEqual(['By hand']);
+    expect(split.content.map((link) => link.note)).toEqual(['In the text']);
+    expect(publicReferenceSplitSize(split)).toBe(2);
+  });
+
+  it('fills the note of a bare first mention from a later one in the same list', () => {
+    const split = splitPublicReferenceLinks(
+      [],
+      [
+        external('https://a.test/'),
+        noted(external('https://a.test/#x'), 'First note'),
+        noted(external('https://a.test'), 'Second note'),
+      ],
+    );
+    expect(split.content).toEqual([
+      noted(external('https://a.test/'), 'First note'),
+    ]);
+  });
 });
 
 describe('splitPublicReferenceFiles', () => {

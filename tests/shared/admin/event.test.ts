@@ -115,9 +115,15 @@ describe('validateEventData', () => {
         externalLinks: [
           {
             url: 'https://example.com/path',
-            name: '  Details  ',
+            note: '  Details  ',
             isPrivate: false,
           },
+          // What a panel of the previous release sends: a name, no note.
+          {
+            url: 'https://example.com/older',
+            name: 'Older',
+            isPrivate: false,
+          } as never,
         ],
         tags: [{ title: '  Research  ' }, { title: 'Community' }],
         content: {
@@ -129,6 +135,7 @@ describe('validateEventData', () => {
                   entityType: 'event',
                   entityId: '  e-related  ',
                   title: 'must not be persisted',
+                  note: '  Where  it  began  ',
                 },
               },
             ],
@@ -146,11 +153,10 @@ describe('validateEventData', () => {
         isPrivate: true,
       },
     ]);
-    expect(result.externalLinks?.[0]).toMatchObject({
-      url: 'https://example.com/path',
-      name: 'Details',
-      isPrivate: false,
-    });
+    expect(result.externalLinks).toEqual([
+      { url: 'https://example.com/path', note: 'Details', isPrivate: false },
+      { url: 'https://example.com/older', isPrivate: false },
+    ]);
     expect(result.tags).toEqual([
       { title: 'Research' },
       { title: 'Community' },
@@ -158,6 +164,7 @@ describe('validateEventData', () => {
     expect(result.content.data?.blocks[0]?.data).toEqual({
       entityType: 'event',
       entityId: 'e-related',
+      note: 'Where it began',
     });
   });
 
@@ -176,8 +183,8 @@ describe('validateEventData', () => {
       validateEventData(
         eventData({
           externalLinks: [
-            { url: 'https://example.com', name: 'One', isPrivate: false },
-            { url: 'https://example.com/', name: 'Two', isPrivate: false },
+            { url: 'https://example.com', note: 'One', isPrivate: false },
+            { url: 'https://example.com/', note: 'Two', isPrivate: false },
           ],
         }),
       ),

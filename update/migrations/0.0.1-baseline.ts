@@ -31,7 +31,8 @@ export const baselineSql: string[] = [
 	\`url\` text PRIMARY KEY NOT NULL,
 	\`name\` text NOT NULL,
 	\`isPrivate\` integer DEFAULT false NOT NULL,
-	\`sortOrder\` integer NOT NULL
+	\`sortOrder\` integer NOT NULL,
+	\`note\` text DEFAULT '' NOT NULL
 );
 `,
   `CREATE TABLE \`statuses\` (
@@ -292,9 +293,9 @@ export const baselineSql: string[] = [
   `CREATE TABLE \`project-external-links\` (
 	\`projectUuid\` text NOT NULL,
 	\`url\` text NOT NULL,
-	\`name\` text NOT NULL,
 	\`sortOrder\` integer NOT NULL,
 	\`isPrivate\` integer DEFAULT false NOT NULL,
+	\`note\` text DEFAULT '' NOT NULL,
 	PRIMARY KEY(\`projectUuid\`, \`url\`),
 	FOREIGN KEY (\`projectUuid\`) REFERENCES \`projects\`(\`projectUuid\`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (\`url\`) REFERENCES \`external-links\`(\`url\`) ON UPDATE no action ON DELETE no action
@@ -304,9 +305,9 @@ export const baselineSql: string[] = [
   `CREATE TABLE \`event-external-links\` (
 	\`eventUuid\` text NOT NULL,
 	\`url\` text NOT NULL,
-	\`name\` text NOT NULL,
 	\`sortOrder\` integer NOT NULL,
 	\`isPrivate\` integer DEFAULT false NOT NULL,
+	\`note\` text DEFAULT '' NOT NULL,
 	PRIMARY KEY(\`eventUuid\`, \`url\`),
 	FOREIGN KEY (\`eventUuid\`) REFERENCES \`events\`(\`eventUuid\`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (\`url\`) REFERENCES \`external-links\`(\`url\`) ON UPDATE no action ON DELETE no action

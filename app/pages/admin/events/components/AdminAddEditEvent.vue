@@ -423,6 +423,7 @@ function clone<T>(value: T): T {
       :title="phrase.event_external_links"
       :description="phrase.event_external_links_hint"
       :empty-text="phrase.event_external_links_empty"
+      :content-hint="phrase.external_link_in_event_content"
     />
     <AdminTags
       v-model="tagsModel"

@@ -11,12 +11,15 @@ import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
  * or a section also names its project above its title, since "Launch" alone
  * does not say whose launch it was; a diary entry is titled by its day and
  * quotes its opening lines in italics, as its own card on the timeline does.
- * A target with a picture of its own shows it along the right edge.
+ * A target with a picture of its own shows it along the right edge. The
+ * owner's note on the link comes last (`note`, or the `note` slot).
  */
 const props = defineProps<{
   entityType: ContentEntityType;
   title: string;
   summary: string;
+  /** The owner's note, as typed. */
+  note?: string;
   /** The day of a diary entry; formatted in place of the title. */
   date?: string;
   /** The project a stage or a section belongs to. */
@@ -31,6 +34,7 @@ const props = defineProps<{
   loop?: boolean;
   autoplayReducedMotion?: boolean;
 }>();
+defineSlots<{ note?(): unknown }>();
 const { engaged, events: mediaEvents } = useMediaInteraction();
 const icon = computed(() => entityTypeIcon(props.entityType));
 const heading = computed(() => publicText(entityDisplayTitle(props)));
@@ -114,6 +118,9 @@ const heading = computed(() => publicText(entityDisplayTitle(props)));
         ]"
         >{{ publicText(summary) }}</span
       >
+      <span v-if="$slots.note || note" class="mt-0.5 block text-sm">
+        <slot name="note"><ContentLinkNote :note /></slot>
+      </span>
     </span>
   </component>
 </template>

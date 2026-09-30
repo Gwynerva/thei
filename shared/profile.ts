@@ -4,8 +4,8 @@ import type {
 } from './content';
 import type { SiteAnalyticsSettings } from './analytics';
 import type {
-  ExternalLinkListItem,
-  ProjectExternalLink,
+  NamedExternalLink,
+  NamedExternalLinkListItem,
 } from './external-link';
 import type { MediaDescriptor } from './media';
 import type {
@@ -49,7 +49,7 @@ export interface ProfileEditData extends StatusEditData {
   aboutContent: ContentFieldModelValue | null;
   facts: ProfileFact[];
   pinnedPageUuids: string[];
-  externalLinks: ExternalLinkListItem[];
+  externalLinks: NamedExternalLinkListItem[];
   deletedAvatarIds: string[];
 }
 export interface ProfilePageLink {
@@ -84,7 +84,7 @@ export interface PublicProfileResponse {
   statusCount: number;
   aboutContent?: PublicContentOutputData;
   pinnedPages: ProfilePageLink[];
-  externalLinks: ProjectExternalLink[];
+  externalLinks: NamedExternalLink[];
   showcaseProjects: PublicEntityReference[];
   projects: {
     count: number;

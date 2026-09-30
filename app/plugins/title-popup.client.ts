@@ -25,14 +25,8 @@ function getTitlePopup(
   const label = el.querySelector<HTMLElement>('[data-title-popup-label]');
   if (label?.getClientRects().length) return null;
   // A popup that repeats the text on screen (`data-title-popup-clipped`) is
-  // only worth showing when some of that text is cut, unless it also says
-  // something the screen does not (`data-title-popup-always`).
-  if (
-    el.dataset.titlePopupClipped !== undefined &&
-    el.dataset.titlePopupAlways === undefined &&
-    !isClipped(el)
-  )
-    return null;
+  // only worth showing when some of that text is cut.
+  if (el.dataset.titlePopupClipped !== undefined && !isClipped(el)) return null;
   const lines = readTitlePopup(
     el.dataset.titlePopup,
     el.dataset.titlePopupRich,

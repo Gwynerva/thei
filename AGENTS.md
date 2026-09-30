@@ -85,7 +85,7 @@ Around them:
   - A page takes its card's address and description from `/api/og/<kind>/<id>`; the version in it is built from what the card shows, so never assemble one on the page.
 - Structured data (JSON-LD) says what a page is, not what Thei calls its entity; `usePublicSeo` (`app/composables/public-seo.ts`) lists the type of each page. An event is never a schema.org `Event`: search engines read that as a public gathering and reject one without a venue.
 - Everything the owner typed is stored exactly as typed and passes through the formatter on the way out: `publicText()` / `publicRichText()` (`app/composables/public-text.ts`) in the app, `ownerText()` / `ownerRichText()` (`server/thei/owner-text.ts`) on the server. That covers every place such text is shown or read: public pages and admin lists, cards, tooltips, `aria-label`s, `<title>`, meta tags and structured data, Open Graph cards, Markdown copies and `/llms.txt`. A new place that shows the owner's words formats them in the same change.
-- The exceptions are few and deliberate: a value inside a field being edited, anything used as an identifier or compared (slug, URL, hostname, file name, search key), and text fetched from other sites, such as a linked page's own title and description (`titleFromSite`). Never write formatted text back to storage.
+- The exceptions are few and deliberate: a value inside a field being edited, anything used as an identifier or compared (slug, URL, hostname, file name, search key), and text fetched from other sites, such as a linked page's own title and description (the owner's note on the link is theirs and is formatted). Never write formatted text back to storage.
 
 ## File Storage
 

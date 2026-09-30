@@ -142,10 +142,10 @@ describe('the sweep', () => {
     const { db, schema } = context;
     db.transaction((tx) => {
       applyExternalLinkList(tx, schema, { type: 'project', id: 'p1' }, [
-        { url: urls.projectList, name: 'A', isPrivate: false },
+        { url: urls.projectList, note: 'A', isPrivate: false },
       ]);
       applyExternalLinkList(tx, schema, { type: 'event', id: 'e1' }, [
-        { url: urls.eventList, name: 'B', isPrivate: true },
+        { url: urls.eventList, note: '', isPrivate: true },
       ]);
       applyExternalLinkList(tx, schema, { type: 'profile' }, [
         { url: urls.profileList, name: 'C', isPrivate: false },
@@ -374,17 +374,22 @@ describe('reading and storing', () => {
     entity('projects', 'p2');
     context.db.transaction((tx) => {
       applyExternalLinkList(tx, context.schema, { type: 'project', id: 'p2' }, [
-        { url: 'https://two.example/', name: 'Second', isPrivate: true },
-        { url: 'https://one.example/', name: 'First', isPrivate: false },
+        { url: 'https://two.example/', note: 'Second', isPrivate: true },
+        { url: 'https://one.example/', note: '', isPrivate: false },
       ]);
     });
     const all = getExternalLinkList({ type: 'project', id: 'p2' });
-    expect(all.map((link) => link.name)).toEqual(['Second', 'First']);
+    expect(all.map((link) => link.url)).toEqual([
+      'https://two.example/',
+      'https://one.example/',
+    ]);
     expect(all[0]).toMatchObject({
       url: 'https://two.example/',
+      note: 'Second',
       isPrivate: true,
       status: 'complete',
     });
+    expect(all[0]).not.toHaveProperty('name');
     expect(all[0]?.faviconMedia.src).toContain(
       '/media/external-link-favicons/',
     );
@@ -392,8 +397,48 @@ describe('reading and storing', () => {
       getExternalLinkList(
         { type: 'project', id: 'p2' },
         { includePrivate: false },
-      ).map((link) => link.name),
-    ).toEqual(['First']);
+      ).map((link) => link.url),
+    ).toEqual(['https://one.example/']);
     expect(getExternalLinkList({ type: 'profile' })).toEqual([]);
+  });
+
+  it('names the profile’s links, and keeps a note an older panel did not send', async () => {
+    storeRow('https://one.example/');
+    storeRow('https://two.example/');
+    entity('projects', 'p3');
+    context.db.transaction((tx) => {
+      applyExternalLinkList(tx, context.schema, { type: 'profile' }, [
+        {
+          url: 'https://one.example/',
+          name: 'GitHub',
+          note: 'Code',
+          isPrivate: false,
+        },
+      ]);
+      applyExternalLinkList(tx, context.schema, { type: 'project', id: 'p3' }, [
+        { url: 'https://one.example/', note: 'Why', isPrivate: false },
+        { url: 'https://two.example/', note: 'Kept', isPrivate: false },
+      ]);
+    });
+    context.db.transaction((tx) => {
+      applyExternalLinkList(tx, context.schema, { type: 'project', id: 'p3' }, [
+        { url: 'https://two.example/', isPrivate: true },
+        { url: 'https://one.example/', note: '', isPrivate: false },
+      ]);
+    });
+    expect(
+      getExternalLinkList({ type: 'profile' }).map(({ name, note }) => ({
+        name,
+        note,
+      })),
+    ).toEqual([{ name: 'GitHub', note: 'Code' }]);
+    expect(
+      getExternalLinkList({ type: 'project', id: 'p3' }).map(
+        ({ url, note, isPrivate }) => ({ url, note, isPrivate }),
+      ),
+    ).toEqual([
+      { url: 'https://two.example/', note: 'Kept', isPrivate: true },
+      { url: 'https://one.example/', note: '', isPrivate: false },
+    ]);
   });
 });

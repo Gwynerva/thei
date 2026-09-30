@@ -77,7 +77,17 @@ export function createExternalLinkStore(
           link.faviconMedia &&
           typeof link.touchedAt === 'number'
         )
-          links.set(link.url, link as ExternalLink);
+          // Only the record: a block or a list entry it arrived with carries
+          // the owner's own words about the link too, which belong to that
+          // one place and not to every card showing the address.
+          links.set(link.url, {
+            url: link.url,
+            title: link.title,
+            description: link.description,
+            faviconMedia: link.faviconMedia,
+            status: link.status ?? 'complete',
+            touchedAt: link.touchedAt,
+          });
       }
     },
     get: (url) => links.get(url),

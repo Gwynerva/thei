@@ -162,4 +162,46 @@ describe('public content reference extraction', () => {
       files: [{ asset: { assetUuid: 'section-file' } }],
     });
   });
+
+  it('reads the notes of link blocks, and the first note written wins', () => {
+    const noted = {
+      blocks: [
+        { type: 'externalLink', data: { url: 'https://a.example/' } },
+        {
+          type: 'paragraph',
+          data: {
+            text: '<a href="https://a.example/" data-content-link="external" data-content-note="Why a">A</a>',
+          },
+        },
+        {
+          type: 'externalLink',
+          data: { url: 'https://a.example/', note: 'Not this one' },
+        },
+        {
+          type: 'entityLink',
+          data: {
+            entityType: 'project',
+            entityId: 'project-one',
+            note: '  Where   it began ',
+          },
+        },
+        {
+          type: 'paragraph',
+          data: {
+            text: '<a data-content-link="entity" data-entity-type="project" data-entity-id="project-one" data-content-note="Later">P</a>',
+          },
+        },
+      ],
+    } as any;
+
+    expect(extractContentReferenceCandidates(noted).links).toEqual([
+      { kind: 'external', url: 'https://a.example/', note: 'Why a' },
+      {
+        kind: 'entity',
+        entityType: 'project',
+        entityId: 'project-one',
+        note: 'Where it began',
+      },
+    ]);
+  });
 });

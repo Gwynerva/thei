@@ -5,6 +5,7 @@ import type {
 } from '#layers/thei/shared/admin/content-entity-search';
 import type { ContentEntityReference } from '#layers/thei/shared/content-link';
 import {
+  EXTERNAL_LINK_NOTE_LIMIT,
   externalLinkHostname,
   normalizeExternalLinkUrl,
 } from '#layers/thei/shared/external-link';
@@ -34,9 +35,10 @@ import type {
  *
  * One panel, two modes. An internal link is picked from a search of the
  * site's own entities; an external one is typed as an address and read from
- * the site it points to. Both may carry a note that stands in for the title
- * in the chip, and neither is written until ✓: picking an entity only makes
- * it the choice, so a note can still be added before the link is.
+ * the site it points to. Both may carry a note — why the link is there —
+ * shown under the target's own details, and neither is written until ✓:
+ * picking an entity only makes it the choice, so a note can still be added
+ * before the link is.
  */
 defineProps<{ teleportTo?: string | HTMLElement }>();
 
@@ -299,6 +301,7 @@ defineExpose<ContentInlineLinkControlsExpose>({ openEntity, openExternal });
           <FieldInput
             v-model="note"
             type="text"
+            :maxlength="EXTERNAL_LINK_NOTE_LIMIT"
             autocomplete="off"
             spellcheck="true"
             class="h-9 py-1 text-sm"
@@ -357,6 +360,7 @@ defineExpose<ContentInlineLinkControlsExpose>({ openEntity, openExternal });
           :date="internalEntity.date"
           :parent="internalEntity.parent"
           :icon-media="internalEntity.previewMedia"
+          :note
           :interactive="false"
           compact
         />
@@ -371,11 +375,13 @@ defineExpose<ContentInlineLinkControlsExpose>({ openEntity, openExternal });
         :url="draft.url"
         :loading="externalLoading"
         :loading-text="phrase.external_link_loading"
+        :note
         :interactive="true"
       />
       <FieldInput
         v-model="note"
         type="text"
+        :maxlength="EXTERNAL_LINK_NOTE_LIMIT"
         autocomplete="off"
         spellcheck="true"
         class="h-9 py-1 text-sm"

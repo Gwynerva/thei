@@ -60,6 +60,8 @@ export interface SeedManifest {
     name: string;
     stages?: number;
     sections?: number;
+    /** The words written for each of a project's hand-made links. */
+    links?: string[];
   }[];
   /** Files as stored, by the hash of their bytes. */
   assets: { uuid: string; contentHash: string }[];
@@ -260,7 +262,7 @@ function createSite(
     kind: EntityKind,
     uuid: string,
     name: string,
-    parts?: { stages: number; sections: number },
+    parts?: { stages: number; sections: number; links?: string[] },
   ) => manifest.entities.push({ kind, uuid, name, ...parts });
 
   // Pages first: the article links to one.
@@ -393,6 +395,7 @@ function createSite(
   add('projects', project.projectUuid, projectTitle, {
     stages: 2,
     sections: 1,
+    links: ['Сайт проекта'],
   });
 
   const hiddenProject = create(
@@ -574,6 +577,17 @@ export function checkSeedSite(server: Server, manifest: SeedManifest): void {
         body.stages?.length === entity.stages &&
           body.contentSections?.length === entity.sections,
         `"${entity.name}" keeps ${entity.stages} stage(s) and ${entity.sections} section(s)`,
+      );
+    }
+    if (entity.links) {
+      // A link keeps the words written for it: its name until 0.0.3, and
+      // since then its note.
+      const words = (body.externalLinks ?? []).map(
+        (link: { note?: string; name?: string }) => link.note ?? link.name,
+      );
+      check(
+        JSON.stringify(words) === JSON.stringify(entity.links),
+        `"${entity.name}" keeps the words of its links (${JSON.stringify(words)})`,
       );
     }
   }

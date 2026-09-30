@@ -4,6 +4,8 @@ import {
   type PublicProfileResponse,
 } from '#layers/thei/shared/profile';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
+import ExternalLinkPreviewCard from '#layers/thei/app/components/external-links/ExternalLinkPreviewCard.vue';
+import LinkHoverPopup from '#layers/thei/app/components/LinkHoverPopup.vue';
 import PublicProfileHero from './PublicProfileHero.vue';
 import PublicStatusBlock from '#layers/thei/app/components/public/PublicStatusBlock.vue';
 const props = defineProps<{ profile: PublicProfileResponse }>();
@@ -37,6 +39,17 @@ const facts = computed(() => {
     });
   return rows.concat(props.profile.facts);
 });
+
+/**
+ * A chip carries the owner's short name for a link; the card of the page it
+ * opens, with the owner's note under it, comes up over the chip, as over a
+ * link in a text.
+ */
+const linksRoot = useTemplateRef<HTMLElement>('linksRoot');
+function linkAt(anchor: HTMLElement) {
+  const url = anchor.getAttribute('href');
+  return props.profile.externalLinks.find((link) => link.url === url);
+}
 </script>
 <template>
   <div class="flex flex-col gap-md">
@@ -66,14 +79,23 @@ const facts = computed(() => {
       <ProfileInfoBlock
         v-if="profile.externalLinks.length"
         :title="phrase.profile_links"
-        ><div class="flex flex-wrap gap-xs">
+        ><div ref="linksRoot" class="flex flex-wrap gap-xs">
           <ExternalLinkChip
             v-for="link in profile.externalLinks"
             :key="link.url"
-            :link="link"
+            :url="link.url"
+            :label="publicText(link.name)"
             :favicon-media="link.faviconMedia"
             size="compact"
-          /></div
+          />
+        </div>
+        <LinkHoverPopup v-slot="{ anchor }" :root="linksRoot" selector="a[href]"
+          ><ExternalLinkPreviewCard
+            :link="linkAt(anchor)"
+            :url="anchor.getAttribute('href') ?? ''"
+            :note="linkAt(anchor)?.note"
+            :interactive="false"
+            flush /></LinkHoverPopup
       ></ProfileInfoBlock>
       <PublicStatusBlock
         v-if="profile.currentStatus"

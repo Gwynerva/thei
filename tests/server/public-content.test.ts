@@ -866,7 +866,7 @@ describe('public content reference groups', () => {
     };
     const links = [
       {
-        name: 'Documentation',
+        note: 'Documentation',
         isPrivate: false,
         url: 'https://example.com/',
         title: 'Example',
@@ -875,7 +875,7 @@ describe('public content reference groups', () => {
         touchedAt: 0,
       },
       {
-        name: 'Private notes',
+        note: '',
         isPrivate: true,
         url: 'https://private.example/',
         title: 'Private',
@@ -897,9 +897,10 @@ describe('public content reference groups', () => {
       links: [
         {
           kind: 'external',
-          title: 'Documentation',
+          title: 'Example',
           href: 'https://example.com/',
           description: 'Public manual link',
+          note: 'Documentation',
           iconMedia,
         },
       ],
@@ -967,15 +968,16 @@ describe('merged public references', () => {
       });
   });
 
-  it('merges a manual site address with an entity link from the content', async () => {
+  it('merges a manual site address with an entity link from the content, keeping its note', async () => {
     mockServer();
     const references = await buildPublicReferences(
       {
         links: [
           {
             kind: 'external',
-            title: 'By hand',
+            title: 'Linked project',
             href: 'https://me.example/projects/linked-LinkedProject/',
+            note: 'Where it began',
           },
         ],
         files: [
@@ -1009,7 +1011,12 @@ describe('merged public references', () => {
       STRANGER,
     );
     expect(references.links.shared).toMatchObject([
-      { kind: 'project', href: '/projects/linked-LinkedProject/' },
+      {
+        kind: 'project',
+        title: 'Linked project',
+        href: '/projects/linked-LinkedProject/',
+        note: 'Where it began',
+      },
     ]);
     expect(references.links.manual).toEqual([]);
     expect(references.links.content).toEqual([]);

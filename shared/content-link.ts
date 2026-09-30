@@ -339,7 +339,7 @@ export function extractContentInlineLinks(html: string): ContentInlineLink[] {
     const label = plainInlineText(match[2] ?? '');
     const href = attributes.href;
     // The owner's own words about why the link is there; the sidebar shows
-    // them in place of the target's title.
+    // them under the target's own title and description.
     const note = attributes['data-content-note']?.trim() || undefined;
     if (attributes['data-content-link'] === 'external' || href) {
       try {

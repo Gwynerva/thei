@@ -10,7 +10,7 @@ import type { ResolvedContentLink } from '#layers/thei/shared/content-link';
 import {
   normalizeExternalLinkUrl,
   type ExternalLink,
-  type ExternalLinkListItem,
+  type ExternalLinkListInput,
   type ExternalLinkStatus,
 } from '#layers/thei/shared/external-link';
 import { withExternalLinkSlot } from '../assets/queue';
@@ -206,7 +206,7 @@ export async function ensureExternalLinks(
 
 /** Every address an entity's manual links and action button point at. */
 export function entityExternalLinkUrls(
-  links: ExternalLinkListItem[] | undefined,
+  links: ExternalLinkListInput[] | undefined,
   action: { externalUrl?: string } | undefined,
 ): string[] {
   const urls = (links ?? []).map((link) => link.url);

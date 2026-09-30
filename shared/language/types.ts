@@ -783,6 +783,8 @@ export type LanguagePhrases = {
   external_link_fallback: string;
   external_link_archived: string;
   external_link_duplicate: string;
+  external_link_in_project_description: string;
+  external_link_in_event_content: string;
   external_link_private: string;
   project_external_links_empty: string;
   refresh_external_link: string;

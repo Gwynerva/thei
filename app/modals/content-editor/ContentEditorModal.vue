@@ -1083,6 +1083,7 @@ function contentToolLabels() {
     privateSectionEnd: phrase.value.content_private_section_end,
     externalLinkError: phrase.value.external_link_error,
     refreshExternalLink: phrase.value.refresh_external_link,
+    linkNote: phrase.value.content_link_note_placeholder,
     chooseEntity: phrase.value.content_choose_entity,
     makeGallery: phrase.value.content_make_gallery,
     retryUpload: phrase.value.asset_upload_retry,

@@ -34,8 +34,9 @@ const props = withDefaults(
     /** A codename for something hidden from visitors; never a link. */
     secret?: boolean;
     /**
-     * The owner's note on why this is here, shown in place of the
-     * description, which the popup still carries.
+     * The owner's note on why this is here — a link's reason, a relation's
+     * explanation. It is a line of its own under the description, in
+     * italics, never a replacement for what the target says of itself.
      */
     note?: string;
     descriptionLines?: 2 | 3;
@@ -50,19 +51,23 @@ function oneLine(value: string | undefined) {
 
 const description = computed(() => oneLine(props.description));
 const note = computed(() => oneLine(props.note));
-const shownDescription = computed(() => note.value ?? description.value);
+/** A note takes a line from the description, so an item keeps its height. */
+const descriptionClamp = computed(
+  () =>
+    ({ 1: 'line-clamp-1', 2: 'line-clamp-2', 3: 'line-clamp-3' })[
+      note.value ? props.descriptionLines - 1 : props.descriptionLines
+    ],
+);
 const popup = computed(() => ({
   ...titlePopup(
     { text: props.title, bold: true },
     TITLE_POPUP_GAP,
-    note.value,
-    TITLE_POPUP_GAP,
     description.value,
+    TITLE_POPUP_GAP,
+    note.value && { text: note.value, italic: true },
   ),
-  // The popup repeats what is shown, so it only speaks when something is cut
-  // — or when the note stands in for a description the item has.
+  // The popup repeats what is shown, so it only speaks when something is cut.
   'data-title-popup-clipped': '',
-  'data-title-popup-always': note.value && description.value ? '' : undefined,
 }));
 
 const extensionFontSize = computed(() => {
@@ -139,11 +144,17 @@ const extensionFontSize = computed(() => {
         >{{ title }}</strong
       >
       <span
-        v-if="shownDescription"
+        v-if="description"
         class="text-xs text-text-3"
-        :class="descriptionLines === 3 ? 'line-clamp-3' : 'line-clamp-2'"
+        :class="descriptionClamp"
         data-title-popup-clip
-        >{{ shownDescription }}</span
+        >{{ description }}</span
+      >
+      <span
+        v-if="note"
+        class="mt-0.5 line-clamp-2 text-xs text-text-2 italic"
+        data-title-popup-clip
+        >{{ note }}</span
       >
     </span>
   </component>

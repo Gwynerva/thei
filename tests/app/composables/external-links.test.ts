@@ -31,6 +31,21 @@ function fetcher() {
 }
 
 describe('the link store', () => {
+  it("keeps only the site's record of what a block or a list entry seeds", () => {
+    const store = createExternalLinkStore(fetcher().fetch);
+    store.seed([
+      {
+        ...record('https://known.example/'),
+        note: 'Why it is here',
+        name: 'Chip',
+        isPrivate: true,
+      } as ExternalLink,
+    ]);
+    expect(store.get('https://known.example/')).toEqual(
+      record('https://known.example/'),
+    );
+  });
+
   it('remembers what the page came with and asks about an address once', async () => {
     const { fetch, calls } = fetcher();
     const store = createExternalLinkStore(fetch);

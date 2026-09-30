@@ -1038,6 +1038,10 @@ export default defineI18nBase({
     external_link_archived:
       'The site did not answer; these details come from an archived copy of the page.',
     external_link_duplicate: 'This link is already added.',
+    external_link_in_project_description:
+      'This link is already in the project description.',
+    external_link_in_event_content:
+      'This link is already in the event content.',
     external_link_private: 'Private link',
     project_external_links_empty: 'No external links yet.',
     refresh_external_link: 'Refresh link',

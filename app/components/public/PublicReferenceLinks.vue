@@ -37,16 +37,7 @@ function entityTitle(type?: PublicReferenceLink['kind']): string | undefined {
   if (isContentEntityType(type)) return entityTypeLabel(type);
 }
 
-/**
- * The owner's own name for a link gets their typography; a title the linked
- * page gave itself, or its hostname, stays as it came. So does the page's
- * description.
- */
-function externalTitle(link: PublicReferenceLink) {
-  return link.titleFromSite ? link.title : publicText(link.title);
-}
-
-/** A diary entry is listed by its day, unless a note names it otherwise. */
+/** A diary entry is listed by its day. */
 function linkTitle(link: PublicReferenceLink) {
   return link.date
     ? entityDisplayTitle({ ...link, date: link.date })
@@ -87,10 +78,13 @@ function linkTitle(link: PublicReferenceLink) {
         :continuous-media="contentEntityHasIcon(link.kind)"
         plain-icon
       />
+      <!-- A title the linked page gave itself, or its hostname, stays as it
+           came, and so does its description; the note is the owner's. -->
       <PublicCompactResourceItem
         v-else
-        :title="externalTitle(link)"
+        :title="link.title"
         :description="link.description"
+        :note="publicText(link.note)"
         :description-lines
         :icon-media="link.iconMedia"
         :corner-icon="link.iconMedia ? entityIcon(link.kind) : undefined"

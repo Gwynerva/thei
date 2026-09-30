@@ -1097,6 +1097,9 @@ export default defineI18nModule({
     external_link_archived:
       'Сайт не ответил — данные взяты из архивной копии страницы.',
     external_link_duplicate: 'Эта ссылка уже добавлена.',
+    external_link_in_project_description:
+      'Эта ссылка уже есть в описании проекта.',
+    external_link_in_event_content: 'Эта ссылка уже есть в содержимом события.',
     external_link_private: 'Приватная ссылка',
     project_external_links_empty: 'Внешних ссылок пока нет.',
     refresh_external_link: 'Обновить ссылку',

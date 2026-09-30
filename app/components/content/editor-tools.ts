@@ -95,6 +95,7 @@ interface ContentToolLabels {
   privateSectionEnd: string;
   externalLinkError: string;
   refreshExternalLink: string;
+  linkNote: string;
   chooseEntity: string;
   makeGallery: string;
   retryUpload: string;
@@ -173,18 +174,20 @@ export class ExternalLinkTool extends VueBlockTool implements BlockTool {
   };
 
   private url = '';
+  private note = '';
   private loading = false;
   private error = false;
   private version = 0;
 
   constructor(
     private options: ContentToolOptions<
-      { url?: string },
+      { url?: string; note?: string },
       ExternalLinkToolConfig
     >,
   ) {
     super(options.block);
     this.url = options.data.url ?? '';
+    this.note = options.data.note ?? '';
   }
 
   private get config() {
@@ -201,7 +204,7 @@ export class ExternalLinkTool extends VueBlockTool implements BlockTool {
   }
 
   save() {
-    return { url: this.url };
+    return { url: this.url, note: this.note.trim() || undefined };
   }
 
   validate(data: { url?: string }) {
@@ -233,7 +236,10 @@ export class ExternalLinkTool extends VueBlockTool implements BlockTool {
     ];
   }
 
-  /** A deliberate re-read of the site. Presentation only: the stored block is just the address. */
+  /**
+   * A deliberate re-read of the site. Presentation only: the stored block is
+   * the address and the owner's note, and what the site says lives apart.
+   */
   private refresh() {
     return this.request(() => this.config.links.refresh(this.url));
   }
@@ -258,8 +264,16 @@ export class ExternalLinkTool extends VueBlockTool implements BlockTool {
   protected view() {
     return h(ExternalLinkBlockCard, {
       url: this.url,
+      note: this.note,
+      editable: !this.options.readOnly,
+      notePlaceholder: this.config.labels.linkNote,
       loading: this.loading,
       errorText: this.error ? this.config.labels.externalLinkError : undefined,
+      'onUpdate:note': (value: string) => {
+        if (value === this.note) return;
+        this.note = value;
+        this.commit();
+      },
     });
   }
 }
@@ -325,6 +339,7 @@ export class EntityLinkTool extends VueBlockTool implements BlockTool {
 
   private entityType?: ContentEntityType;
   private entityId?: string;
+  private note = '';
   private autoOpen = false;
   private transientSelection = false;
   /** An address of this site that was pasted and is being looked up. */
@@ -332,13 +347,19 @@ export class EntityLinkTool extends VueBlockTool implements BlockTool {
 
   constructor(
     private options: ContentToolOptions<
-      { entityType?: ContentEntityType; entityId?: string; autoOpen?: boolean },
+      {
+        entityType?: ContentEntityType;
+        entityId?: string;
+        note?: string;
+        autoOpen?: boolean;
+      },
       EntityLinkToolConfig
     >,
   ) {
     super(options.block);
     this.entityType = options.data.entityType;
     this.entityId = options.data.entityId;
+    this.note = options.data.note ?? '';
     this.autoOpen = options.data.autoOpen === true;
     this.transientSelection =
       this.autoOpen && !this.entityType && !this.entityId && !options.readOnly;
@@ -354,7 +375,11 @@ export class EntityLinkTool extends VueBlockTool implements BlockTool {
   }
 
   save() {
-    return { entityType: this.entityType, entityId: this.entityId };
+    return {
+      entityType: this.entityType,
+      entityId: this.entityId,
+      note: this.note.trim() || undefined,
+    };
   }
 
   validate(data: { entityType?: string; entityId?: string }) {
@@ -433,6 +458,14 @@ export class EntityLinkTool extends VueBlockTool implements BlockTool {
         resolver: config.resolver,
         interactive: true,
         playback: 'interaction',
+        note: this.note,
+        editable: !this.options.readOnly,
+        notePlaceholder: config.labels.linkNote,
+        'onUpdate:note': (value: string) => {
+          if (value === this.note) return;
+          this.note = value;
+          this.commit();
+        },
       });
     if (this.pastedUrl)
       return h(ContentLinkPreviewCard, {
@@ -1145,6 +1178,7 @@ function getLabels(
       privateSectionEnd: 'End of private section',
       externalLinkError: 'Could not load link preview',
       refreshExternalLink: 'Refresh link',
+      linkNote: 'A note for the link',
       chooseEntity: 'Choose what to link to',
       makeGallery: 'Turn into a gallery',
       retryUpload: 'Try again',

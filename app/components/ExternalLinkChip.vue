@@ -3,17 +3,24 @@ import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 
 const props = defineProps<{
-  link: { url: string; name: string };
+  url: string;
+  /**
+   * What the chip says, as it is to be shown: the owner's name for the link
+   * gets their typography from the caller, a site's own title none.
+   */
+  label: string;
   /** The site's icon, from the link's stored record when there is one. */
   faviconMedia?: MediaDescriptor;
   interactive?: boolean;
   loading?: boolean;
   size?: 'default' | 'compact';
+  /** What the owner should know about this link: a ring and a sign say it. */
+  warning?: string;
 }>();
 
 const emit = defineEmits<{ click: [event: MouseEvent] }>();
 const component = computed(() =>
-  props.interactive ? 'button' : props.link.url ? 'a' : 'div',
+  props.interactive ? 'button' : props.url ? 'a' : 'div',
 );
 
 const accentColor = computed(() =>
@@ -25,7 +32,7 @@ const accentColor = computed(() =>
   <component
     :is="component"
     :type="interactive ? 'button' : undefined"
-    :href="!interactive ? link.url : undefined"
+    :href="!interactive ? url : undefined"
     :target="!interactive ? '_blank' : undefined"
     :rel="!interactive ? 'noopener noreferrer' : undefined"
     class="external-link-chip inline-flex max-w-64 items-center gap-2 rounded-sm
@@ -36,6 +43,7 @@ const accentColor = computed(() =>
       {
         'cursor-pointer': interactive,
         'animate-pulse': loading,
+        'ring-2 ring-text-warning': warning,
       },
     ]"
     @click="emit('click', $event)"
@@ -55,8 +63,16 @@ const accentColor = computed(() =>
     >
       <Icon name="external-link" />
     </span>
-    <span class="min-w-0 flex-1 truncate">{{ publicText(link.name) }}</span>
+    <span class="min-w-0 flex-1 truncate">{{ label }}</span>
     <slot />
+    <Icon
+      v-if="warning"
+      name="warning"
+      role="img"
+      :aria-label="warning"
+      :data-title-popup="warning"
+      class="shrink-0 cursor-help text-text-warning"
+    />
   </component>
 </template>
 

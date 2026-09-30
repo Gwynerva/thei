@@ -180,7 +180,10 @@ export interface ContentAnalysis {
 }
 
 export type ContentExternalLinkData = Pick<ExternalLink, 'url'> &
-  Partial<Omit<ExternalLink, 'url'>>;
+  Partial<Omit<ExternalLink, 'url'>> & {
+    /** The owner's word on why the link is there. */
+    note?: string;
+  };
 
 export class ContentValidationError extends Error {}
 
@@ -492,6 +495,8 @@ export function contentBlockTextParts(
       if (includeExternalLinks) {
         appendPreviewText(textParts, (block.data as any).url);
       }
+      // The note is the owner's own words, like a caption.
+      appendPreviewText(textParts, (block.data as any).note);
       break;
     case 'integration':
       if (includeExternalLinks) {
@@ -499,6 +504,8 @@ export function contentBlockTextParts(
       }
       break;
     case 'entityLink':
+      appendPreviewText(textParts, (block.data as any).note);
+      break;
     case 'privateSectionBoundary':
       break;
   }
@@ -745,7 +752,10 @@ function normalizeBlockData(
       };
 
     case 'externalLink':
-      return { url: normalizeExternalLinkUrl(data.url) };
+      return withLinkNote(
+        { url: normalizeExternalLinkUrl(data.url) },
+        data.note,
+      );
 
     case 'integration':
       try {
@@ -761,7 +771,7 @@ function normalizeBlockData(
         ? data.entityType
         : undefined;
       const entityId = optionalString(data.entityId)?.trim();
-      return { entityType, entityId };
+      return withLinkNote({ entityType, entityId }, data.note);
     }
 
     case 'privateSectionBoundary': {
@@ -1118,6 +1128,16 @@ function optionalTrimmedString(value: unknown): string | undefined {
 function optionalNormalizedText(value: unknown): string | undefined {
   const text = normalizeContentText(value);
   return text || undefined;
+}
+
+/**
+ * A link block's note, the owner's word on why the link is there. Only a note
+ * with words is kept, so a block without one stays exactly as it was stored
+ * before notes existed.
+ */
+function withLinkNote<T extends object>(data: T, value: unknown) {
+  const note = optionalNormalizedText(value);
+  return note ? { ...data, note } : data;
 }
 
 function optionalNormalizedInlineHtml(value: unknown): string | undefined {

@@ -206,6 +206,18 @@ async function createSite_0_0_1() {
     faviconKey: 'key',
     touchedAt: now,
   });
+  insert('project-external-links', {
+    projectUuid: 'project-a',
+    url: 'https://example.com/',
+    name: 'Where it all began',
+    sortOrder: 0,
+  });
+  insert('event-external-links', {
+    eventUuid: 'event-a',
+    url: 'https://example.com/',
+    name: 'Example',
+    sortOrder: 0,
+  });
 
   await writeFile(
     contentPath('thei.config.json'),
@@ -293,6 +305,14 @@ describe('upgrading a 0.0.1 site', () => {
       all('SELECT startDate, endDate, precision FROM `stage-periods`'),
     ).toEqual([
       { startDate: '2026-01-01', endDate: '2026-02-01', precision: 'exact' },
+    ]);
+
+    // A link's own name is its note now; one repeating the site's title goes.
+    expect(all('SELECT url, note FROM `project-external-links`')).toEqual([
+      { url: 'https://example.com/', note: 'Where it all began' },
+    ]);
+    expect(all('SELECT url, note FROM `event-external-links`')).toEqual([
+      { url: 'https://example.com/', note: '' },
     ]);
   });
 
