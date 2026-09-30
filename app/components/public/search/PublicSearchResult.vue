@@ -38,9 +38,9 @@ const accent = computed(() =>
       :engaged
       :loop="isProject"
       :muted="isProject"
-      media-class="opacity-60 transition duration-300 group-hocus:opacity-90
+      media-class="opacity-75 transition duration-300 group-hocus:opacity-90
         group-focus-within:opacity-90 motion-reduce:duration-150"
-      class="w-2/5 sm:w-1/3"
+      class="w-full"
     >
       <span
         class="flex size-full items-center justify-end pr-md text-6xl
@@ -52,6 +52,7 @@ const accent = computed(() =>
     <div
       class="pointer-events-none relative z-2 flex max-w-4/5 min-w-0 flex-col
         justify-center gap-1 p-sm sm:max-w-3/4 sm:px-md"
+      :class="{ 'search-result-over-media': entity.media }"
     >
       <span
         class="flex items-center gap-2 text-xs font-semibold text-accent/70"
@@ -95,9 +96,12 @@ const accent = computed(() =>
       >
         {{ publicText(entity.title) }}
       </h2>
+      <!-- Room for the halo on either side: clamping clips it otherwise, and
+           a clipped halo draws a hard seam across the media. -->
       <p
         v-if="entity.summary"
-        class="line-clamp-2 text-sm leading-relaxed font-semibold text-text-2"
+        class="-mx-[0.75em] line-clamp-2 px-[0.75em] text-sm leading-relaxed
+          font-semibold text-text-2"
       >
         {{ publicText(entity.summary) }}
       </p>
@@ -114,6 +118,14 @@ const accent = computed(() =>
 .search-result:focus-within {
   border-color: var(--search-result-accent);
   --tw-shadow-color: var(--search-result-shadow);
+}
+
+/* The media reaches under the text; a halo of the card's colour keeps it read. */
+.search-result-over-media {
+  text-shadow:
+    0 0 0.55em var(--color-bg-2),
+    0 0 0.9em var(--color-bg-2),
+    0 0.1em 0.45em var(--color-bg-2);
 }
 
 .group:hover .search-result-title,

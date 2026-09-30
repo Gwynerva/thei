@@ -42,7 +42,7 @@ usePublicSeo({
       :title="phrase.pages"
       :description="phrase.public_pages_description"
     />
-    <div v-if="pages.items.length" class="grid gap-md sm:grid-cols-2">
+    <div v-if="pages.items.length" class="grid grid-cols-cards gap-md">
       <PublicContentCard
         v-for="item in pages.items"
         :key="item.href"

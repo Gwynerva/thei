@@ -233,6 +233,21 @@ export function fillsBox(
 }
 
 /**
+ * The stops of an SVG gradient that goes from clear at `from` to opaque at
+ * `to`, both shares of its length, along a smoothstep — the curve the site's
+ * edge media dissolves along. A straight ramp shows where it starts and where
+ * it ends, which reads as an edge.
+ */
+export function easedFadeStops(from: number, to: number): string {
+  return Array.from({ length: 11 }, (_, index) => {
+    const t = index / 10;
+    const opacity = t * t * (3 - 2 * t);
+    const offset = from + (to - from) * t;
+    return `<stop offset="${+offset.toFixed(4)}" stop-color="#fff" stop-opacity="${+opacity.toFixed(4)}"/>`;
+  }).join('');
+}
+
+/**
  * A picture as a data URI, at exactly the size it is drawn — satori reads
  * PNG and JPEG only, and the library mostly holds AVIF and WebP.
  *
@@ -242,7 +257,8 @@ export function fillsBox(
  *
  * `fade` dissolves the picture's left edge into whatever is behind it: fully
  * transparent at `from` and fully opaque from `to`, both shares of its
- * width. It is baked into the picture, as satori has no masks.
+ * width, eased in between. It is baked into the picture, as satori has no
+ * masks.
  */
 export async function pictureDataUri(
   picture: OgPicture,
@@ -270,7 +286,7 @@ export async function pictureDataUri(
         [
           {
             input: Buffer.from(
-              `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><defs><linearGradient id="f" x1="0" y1="0" x2="1" y2="0"><stop offset="${options.fade.from}" stop-color="#fff" stop-opacity="0"/><stop offset="${options.fade.to}" stop-color="#fff" stop-opacity="1"/></linearGradient></defs><rect width="${w}" height="${h}" fill="url(#f)"/></svg>`,
+              `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><defs><linearGradient id="f" x1="0" y1="0" x2="1" y2="0">${easedFadeStops(options.fade.from, options.fade.to)}</linearGradient></defs><rect width="${w}" height="${h}" fill="url(#f)"/></svg>`,
             ),
             blend: 'dest-in',
           },

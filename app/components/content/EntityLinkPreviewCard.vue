@@ -64,13 +64,24 @@ const heading = computed(() => publicText(entityDisplayTitle(props)));
       :playback="playback ?? 'autoplay'"
       :loop
       :autoplay-reduced-motion
-      :class="compact ? 'w-24' : 'w-40 sm:w-48'"
+      :class="compact ? 'w-1/2 max-w-40' : 'w-3/4 max-w-72'"
     />
+    <!--
+      The words keep clear of the window where the picture stays sharp and
+      read over the rest of it; both scale with the card, so a narrow column
+      does not give the picture the room the title needs. A truncated line
+      clips its own halo, which draws a hard seam across the picture, so it
+      gets room for the halo all round.
+    -->
     <span
       class="entity-preview-text relative z-1 flex min-w-0 flex-1 flex-col"
       :class="[
         compact ? 'gap-0.5' : 'gap-1',
-        iconMedia ? (compact ? 'pr-10' : 'pr-24 sm:pr-36') : '',
+        iconMedia
+          ? compact
+            ? 'pr-[min(18%,3rem)]'
+            : 'pr-[min(24%,6rem)]'
+          : '',
         { 'm-xs': flush },
       ]"
     >
@@ -79,22 +90,24 @@ const heading = computed(() => publicText(entityDisplayTitle(props)));
         class="flex min-w-0 items-center gap-1 text-xs font-semibold
           text-text-3"
         ><Icon name="project" class="entity-type-icon shrink-0" /><span
-          class="min-w-0 truncate"
+          class="-m-[0.75em] min-w-0 truncate p-[0.75em]"
           >{{ publicText(parent.title) }}</span
         ><Icon name="corner-down" class="shrink-0" aria-hidden="true"
       /></span>
       <span
-        class="flex items-center truncate font-semibold"
+        class="flex min-w-0 items-center font-semibold"
         :class="compact ? 'gap-1 text-sm' : 'gap-1.5 text-base'"
         ><Icon
           :name="icon"
           class="entity-type-icon shrink-0 text-text-2"
           :class="compact ? 'text-xs' : 'text-base'"
-        />{{ heading }}</span
+        /><span class="-m-[0.75em] min-w-0 truncate p-[0.75em]">{{
+          heading
+        }}</span></span
       >
       <span
         v-if="summary"
-        class="line-clamp-2 text-text-3"
+        class="-mx-[0.75em] line-clamp-2 px-[0.75em] text-text-3"
         :class="[
           compact ? 'text-sm' : 'text-[0.9375rem] leading-snug',
           { italic: date },

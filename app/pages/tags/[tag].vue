@@ -120,7 +120,7 @@ function tabTo(tab: 'projects' | 'events') {
     </div>
 
     <section id="tag-entities" role="tabpanel" class="flex flex-col gap-sm">
-      <div class="grid gap-md sm:grid-cols-2">
+      <div class="grid grid-cols-cards gap-md">
         <PublicEntityCard
           v-for="entity in tag.items.items"
           :key="entity.href"

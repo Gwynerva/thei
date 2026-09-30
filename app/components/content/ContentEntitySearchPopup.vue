@@ -224,21 +224,25 @@ defineExpose({ focus: () => input.value?.focus({ preventScroll: true }) });
             :engaged
             class="w-24"
           />
+          <!-- A truncated line clips its own halo, which draws a hard seam
+               across the picture: each gets room for the halo all round. -->
           <span
             class="entity-search-text relative flex min-w-0 flex-1 flex-col
               gap-0.5 py-1 pr-16 pl-xs"
           >
-            <span class="flex items-center gap-1 truncate text-sm font-semibold"
+            <span class="flex min-w-0 items-center gap-1 text-sm font-semibold"
               ><Icon
                 :name="entityTypeIcon(row.item.entityType)"
                 :aria-label="entityTypeLabel(row.item.entityType)"
                 role="img"
                 class="shrink-0 text-xs text-text-2"
-              />{{ entityDisplayTitle(row.item) }}</span
+              /><span class="-m-[0.75em] min-w-0 truncate p-[0.75em]">{{
+                entityDisplayTitle(row.item)
+              }}</span></span
             >
             <span
               v-if="secondary(row.item)"
-              class="block truncate text-xs text-text-3"
+              class="-m-[0.75em] block truncate p-[0.75em] text-xs text-text-3"
               :class="{ italic: row.item.date }"
               >{{ secondary(row.item) }}</span
             >

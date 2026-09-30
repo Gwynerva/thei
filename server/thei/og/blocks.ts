@@ -1,6 +1,6 @@
 import type { ImageAccent } from '#layers/thei/shared/accent-color';
 import { withAlpha } from '#layers/thei/shared/oklch';
-import { analyzePicture, pictureDataUri } from './artwork';
+import { analyzePicture, easedFadeStops, pictureDataUri } from './artwork';
 import type { OgFitStep, OgStackItem, OgStackPlan } from './fit';
 import { OG_FONT_FAMILY } from './font-set';
 import { OG_HEIGHT, OG_WIDTH, ROW, TYPE, type OgBox } from './geometry';
@@ -636,7 +636,7 @@ export function accentField(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><defs>`,
     `<linearGradient id="field" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${neighbour}"/><stop offset="1" stop-color="${deep}"/></linearGradient>`,
     `<radialGradient id="light" cx="0.7" cy="0.25" r="0.65"><stop offset="0" stop-color="${light}"/><stop offset="1" stop-color="${light}" stop-opacity="0"/></radialGradient>`,
-    `<linearGradient id="fade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="${fade}" stop-color="#fff"/></linearGradient>`,
+    `<linearGradient id="fade" x1="0" y1="0" x2="1" y2="0">${easedFadeStops(0, fade)}</linearGradient>`,
     `<mask id="mask"><rect width="${width}" height="${height}" fill="url(#fade)"/></mask></defs>`,
     `<g mask="url(#mask)"><rect width="${width}" height="${height}" fill="url(#field)"/><rect width="${width}" height="${height}" fill="url(#light)"/></g></svg>`,
   ].join('');

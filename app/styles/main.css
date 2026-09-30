@@ -258,6 +258,20 @@
   animation: indeterminate 1.4s ease-in-out infinite;
 }
 
+/*
+ * Cards two to a row while each gets at least 24rem, one to a row below that:
+ * a card any narrower leaves its media a sliver beside the words. The track
+ * never drops under half the row, so a wide screen still gets two, not three;
+ * it is a pixel short of half so that rounding never tips two into one. Pair
+ * it with `gap-md`, which the halving accounts for.
+ */
+@utility grid-cols-cards {
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(100%, max(24rem, (100% - var(--spacing-md)) / 2 - 1px)), 1fr)
+  );
+}
+
 @layer base {
   :root {
     --width-narrow: min(700px, 100%);

@@ -95,7 +95,7 @@ usePublicSeo({
         <div
           v-if="latest.points.length"
           data-home-card-grid="latest"
-          class="grid gap-md sm:grid-cols-2"
+          class="grid grid-cols-cards gap-md"
         >
           <LifePointCard
             v-for="point in latest.points"
@@ -105,7 +105,7 @@ usePublicSeo({
             date-style="long"
             compact
             :class="{
-              'first:sm:col-span-2': publicCardGridFirstItemIsWide(
+              'first:col-span-full': publicCardGridFirstItemIsWide(
                 latest.points.length,
               ),
             }"
@@ -132,7 +132,7 @@ usePublicSeo({
           icon: 'arrow-outward',
         }"
       />
-      <div data-home-card-grid="rewind" class="grid gap-md sm:grid-cols-2">
+      <div data-home-card-grid="rewind" class="grid grid-cols-cards gap-md">
         <LifePointCard
           v-for="item in rewind.items"
           :key="item.point.key"
@@ -142,7 +142,7 @@ usePublicSeo({
           date-style="long"
           compact
           :class="{
-            'first:sm:col-span-2': publicCardGridFirstItemIsWide(
+            'first:col-span-full': publicCardGridFirstItemIsWide(
               rewind.items.length,
             ),
           }"

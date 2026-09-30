@@ -153,16 +153,20 @@ const hasFooter = computed(
         :autoplay-reduced-motion="continuousMedia"
         :loop="continuousMedia"
         :muted="continuousMedia"
-        media-class="opacity-70 transition duration-300 group-hocus:opacity-95
+        media-class="opacity-80 transition duration-300
+          group-focus-within:opacity-95 group-hocus:opacity-95
           motion-reduce:duration-150"
-        class="w-3/5 sm:w-1/2"
+        class="w-full"
       />
     </div>
 
     <div
       class="pointer-events-none relative z-2 flex min-h-full flex-1 flex-col
         gap-sm"
-      :class="compact ? 'p-sm sm:p-md' : 'p-md'"
+      :class="[
+        compact ? 'p-sm sm:p-md' : 'p-md',
+        { 'public-card-over-media': media },
+      ]"
     >
       <div
         class="flex max-w-4/5 flex-wrap items-center gap-x-2 gap-y-1 text-xs
@@ -224,17 +228,20 @@ const hasFooter = computed(
         One step of `gap-sm` between every piece of data — parent, copy,
         related entities, tags — so none of them reads as glued to its
         neighbour. Only a title and its summary sit closer: they are one unit.
+        A clamped block clips its own halo, which draws a hard seam across the
+        media, so it gets room for the halo on either side; none above or
+        below, where it would uncover the next line.
       -->
       <div
         class="public-card-copy flex max-w-4/5 min-w-0 flex-col gap-sm
           sm:max-w-3/4"
-        :class="{ 'public-card-copy-over-media': media }"
       >
         <PublicParentLink v-if="parent" :parent="parent" />
         <p
           v-if="titleless"
-          class="public-card-title line-clamp-4 text-base leading-relaxed
-            font-medium text-balance text-text-2 italic transition sm:text-lg"
+          class="public-card-title -mx-[0.75em] line-clamp-4 px-[0.75em]
+            text-base leading-relaxed font-medium text-balance text-text-2
+            italic transition sm:text-lg"
         >
           {{ publicText(summary) }}
         </p>
@@ -248,8 +255,8 @@ const hasFooter = computed(
           </h3>
           <p
             v-if="summary"
-            class="mt-xs line-clamp-3 text-base leading-relaxed font-semibold
-              text-text-2"
+            class="-mx-[0.75em] mt-xs line-clamp-3 px-[0.75em] text-base
+              leading-relaxed font-semibold text-text-2"
           >
             {{ publicText(summary) }}
           </p>
@@ -268,7 +275,11 @@ const hasFooter = computed(
 </template>
 
 <style scoped>
-.public-card-copy-over-media {
+/*
+ * A halo of the card's own colour keeps every line legible over the media,
+ * which reaches under the text.
+ */
+.public-card-over-media {
   text-shadow:
     0 0 0.55em var(--color-bg-2),
     0 0 0.9em var(--color-bg-2),
