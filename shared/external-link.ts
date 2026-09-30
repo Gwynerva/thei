@@ -84,6 +84,32 @@ export function normalizeExternalLinkUrl(value: unknown): string {
   return url.href;
 }
 
+/**
+ * Whether an address looks finished enough to be read while it is still
+ * being typed. `https://exa` is a valid address, but reading it would fetch a
+ * site nobody meant. The host is taken from the text as typed, because the
+ * URL parser completes partial hosts on its own — `https://192.168` becomes
+ * `192.0.0.168` — and turns a one-letter zone into a long punycode one.
+ */
+export function externalLinkHostLooksComplete(raw: string): boolean {
+  try {
+    normalizeExternalLinkUrl(raw);
+  } catch {
+    return false;
+  }
+  const host =
+    raw
+      .trim()
+      .replace(/^[a-z][a-z\d+.-]*:[\\/]*/i, '')
+      .split(/[/?#\\]/, 1)[0] ?? '';
+  // The parser only accepts an IPv6 literal once it is closed.
+  if (host.startsWith('[')) return true;
+  const labels = host.replace(/:\d*$/, '').split('.');
+  if (labels.length < 2 || labels.some((label) => !label)) return false;
+  if (labels.every((label) => /^\d+$/.test(label))) return labels.length === 4;
+  return Array.from(labels.at(-1)!).length >= 2;
+}
+
 export function truncateExternalLinkText(
   value: unknown,
   limit = EXTERNAL_LINK_TEXT_LIMIT,

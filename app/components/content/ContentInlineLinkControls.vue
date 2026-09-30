@@ -14,6 +14,7 @@ import { parseInternalUrl } from '#layers/thei/shared/internal-url';
 import {
   createExternalLinkDraft,
   useExternalLinks,
+  useExternalLinkTyping,
 } from '#layers/thei/app/composables/external-links';
 import {
   invalidateContentLinks,
@@ -49,6 +50,7 @@ const resolver = useContentLinkResolver('admin');
 const draft = createExternalLinkDraft(useExternalLinks(), {
   errorText: () => phrase.value.content_link_broken_description,
 });
+const typing = useExternalLinkTyping(commitUrl);
 /**
  * The entity an address typed as an external link turned out to open. Such a
  * link is stored as an internal one, so it outlives a change of domain.
@@ -67,8 +69,8 @@ let chosenVersion = 0;
 const externalUrl = computed({
   get: () => draft.url,
   set: (value: string) => {
-    // Typing changes nothing but the text and whether it is a valid address;
-    // the site is read once the address is done.
+    // Typing changes the text and whether it is a valid address at once; the
+    // address is looked up once typing pauses or the address is done.
     internalEntity.value = undefined;
     internalEntityUrl.value = undefined;
     draft.url = value;
@@ -100,15 +102,19 @@ async function findInternal(raw: string) {
   }
 }
 
-/** The address is done: pasted, left, or confirmed with Enter. */
-async function commitUrl() {
+/**
+ * The address is done — pasted, left, or confirmed with Enter — or, with
+ * `typing`, typing into it paused. An address of this site that opens no
+ * entity is read as a site only once it is done: while it is typed, it is
+ * most likely an entity's address not finished yet.
+ */
+async function commitUrl({ typing: paused = false } = {}) {
+  if (!paused) typing.cancel();
   const raw = draft.url.trim();
-  if (parseInternalUrl(raw, internalSite) && (await findInternal(raw))) return;
-  await draft.commit();
-}
-
-function onUrlPaste() {
-  void nextTick(commitUrl);
+  if (parseInternalUrl(raw, internalSite)) {
+    if ((await findInternal(raw)) || paused) return;
+  }
+  await draft.commit({ typing: paused });
 }
 
 /** Reads the site again, and lets every chip on the page know it changed. */
@@ -165,6 +171,7 @@ function openExternal(next: ContentInlineLinkRequest) {
   note.value = next.initialNote ?? '';
   internalEntity.value = undefined;
   internalEntityUrl.value = undefined;
+  typing.cancel();
   draft.reset();
   draft.url = next.initialUrl ?? '';
   open.value = true;
@@ -249,6 +256,7 @@ function focusPopup() {
 }
 
 function popupClosed() {
+  typing.cancel();
   note.value = '';
   chosenVersion++;
   chosen.value = undefined;
@@ -337,8 +345,8 @@ defineExpose<ContentInlineLinkControlsExpose>({ openEntity, openExternal });
         :placeholder="phrase.content_link_url"
         :error="externalError"
         @element="externalInput = $event"
-        @change="commitUrl"
-        @paste="onUrlPaste"
+        @input="typing.onInput"
+        @change="commitUrl()"
       />
       <template v-if="internalEntity">
         <EntityLinkPreviewCard

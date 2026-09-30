@@ -1,6 +1,7 @@
 import { normalizeImageAccent } from '../../shared/accent-color';
 import { describe, expect, it } from 'vitest';
 import {
+  externalLinkHostLooksComplete,
   normalizeExternalLinkUrl,
   truncateExternalLinkText,
 } from '../../shared/external-link';
@@ -26,6 +27,36 @@ describe('external links', () => {
     expect(() =>
       normalizeExternalLinkUrl('https://user:secret@example.com/'),
     ).toThrow();
+  });
+
+  it('tells a finished host from one still being typed', () => {
+    for (const url of [
+      'https://example.com',
+      'https://example.com/path?x=1#top',
+      'https://sub.example.co.uk',
+      'https://пример.рф',
+      'https://192.168.1.10',
+      'https://[2001:db8::1]',
+      'https://example.com:8080',
+      'http://Example.COM/',
+    ])
+      expect(externalLinkHostLooksComplete(url), url).toBe(true);
+    for (const url of [
+      '',
+      'https://',
+      'https://exa',
+      'https://example.',
+      'https://example.c',
+      'https://192.168',
+      'https://1',
+      'https://сайт.р',
+      'https://localhost:3000',
+      'https://example..com',
+      'ftp://example.com',
+      'example.com',
+      'https://u@example.com',
+    ])
+      expect(externalLinkHostLooksComplete(url), url).toBe(false);
   });
 
   it('accepts the full hue range including red at zero', () => {

@@ -647,6 +647,34 @@ test.describe('in the text editor of a page', () => {
   const editorBlocks = (page: Page) =>
     page.locator('dialog .content-editor .ce-block');
 
+  /**
+   * Answers reads of external sites in place of the sites, which are slow or
+   * out of reach at times, and lists the addresses read.
+   */
+  async function stubExternalLinks(page: Page) {
+    const reads: string[] = [];
+    await page.route('**/api/admin/external-links', async (route) => {
+      const request = route.request();
+      if (request.method() !== 'POST') return await route.fallback();
+      const url = (request.postDataJSON() as { url: string }).url;
+      reads.push(url);
+      await route.fulfill({
+        json: {
+          url,
+          title: `Stubbed ${new URL(url).pathname}`,
+          faviconMedia: {
+            kind: 'image',
+            src: '/favicon.ico',
+            previewSrc: '/favicon.ico',
+          },
+          status: 'complete',
+          touchedAt: Date.now(),
+        },
+      });
+    });
+    return reads;
+  }
+
   test('dragging a block to the edge of the modal scrolls it', async ({
     page,
   }) => {
@@ -707,6 +735,7 @@ test.describe('in the text editor of a page', () => {
     page,
   }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
+    await stubExternalLinks(page);
     await openEditor(page, 'link');
     const count = await editorBlocks(page).count();
     await editorBlocks(page).first().locator('[contenteditable]').click();
@@ -756,6 +785,60 @@ test.describe('in the text editor of a page', () => {
       editorBlocks(page).first().locator('a[href="https://example.com/"]'),
     ).toHaveText('world');
     expect(await editorBlocks(page).count()).toBe(count);
+  });
+
+  /** Selects the last `length` characters of the first block. */
+  async function selectEnd(page: Page, length: number) {
+    await editorBlocks(page).first().locator('[contenteditable]').click();
+    await page.keyboard.press('End');
+    for (let step = 0; step < length; step++)
+      await page.keyboard.press('Shift+ArrowLeft');
+  }
+
+  test('an address in the link popup is read once typing pauses, and at once when pasted', async ({
+    page,
+    context,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const reads = await stubExternalLinks(page);
+    await openEditor(page, 'typed-link');
+    await selectEnd(page, 'world'.length);
+    await page
+      .locator(
+        '.ce-popover--opened [data-item-name="contentExternalInlineLink"]',
+      )
+      .click();
+    const address = page.locator('dialog input[inputmode="url"]');
+    await expect(address).toBeFocused();
+
+    // Typed without a pause: one read, of the whole address, while the field
+    // keeps the focus and the text stays as typed.
+    await address.pressSequentially('https://example.com/about', {
+      delay: 20,
+    });
+    await expect(
+      page.locator('dialog').getByText('Stubbed /about'),
+    ).toBeVisible();
+    expect(reads).toEqual(['https://example.com/about']);
+    await expect(address).toBeFocused();
+    await expect(address).toHaveValue('https://example.com/about');
+
+    // Pasted: read as a finished address, tidied to the stored form.
+    await address.fill('');
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.evaluate(() =>
+      navigator.clipboard.writeText('https://EXAMPLE.com/pasted'),
+    );
+    await address.press('Control+V');
+    await expect(
+      page.locator('dialog').getByText('Stubbed /pasted'),
+    ).toBeVisible();
+    await expect(address).toHaveValue('https://example.com/pasted');
+    await expect(address).toBeFocused();
+    expect(reads).toEqual([
+      'https://example.com/about',
+      'https://example.com/pasted',
+    ]);
   });
 
   test('Enter chooses from the toolbox and from a block’s settings, and adds no block', async ({

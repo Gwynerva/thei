@@ -9,6 +9,7 @@ import { moveItemById } from '#layers/thei/app/composables/drag-sort';
 import {
   createExternalLinkDraft,
   useExternalLinks,
+  useExternalLinkTyping,
 } from '#layers/thei/app/composables/external-links';
 
 const props = defineProps<{
@@ -27,6 +28,7 @@ const externalLinks = useExternalLinks();
 const draft = createExternalLinkDraft(externalLinks, {
   errorText: () => phrase.value.external_link_error,
 });
+const typing = useExternalLinkTyping((options) => draft.commit(options));
 
 const popupOpen = ref(false);
 const popupAnchor = ref<HTMLElement | null>(null);
@@ -81,6 +83,7 @@ function openEdit(index: number, event: MouseEvent) {
 }
 
 function resetDraft() {
+  typing.cancel();
   editingIndex.value = null;
   draftName.value = '';
   suggestedName.value = '';
@@ -88,7 +91,11 @@ function resetDraft() {
   draft.reset();
 }
 
-/** The title is offered as the name until the person writes one of their own. */
+/**
+ * The title is offered as the name until the person writes one of their own,
+ * whenever the address in the field turns out to have one: read after a
+ * pause, when it is done, on a refresh, or known to the page already.
+ */
 function suggestName(link: ExternalLink) {
   if (
     editingIndex.value === null &&
@@ -98,20 +105,21 @@ function suggestName(link: ExternalLink) {
     draftName.value = link.title;
   suggestedName.value = link.title ?? '';
 }
+watch(
+  () => draft.preview,
+  (link) => {
+    if (link) suggestName(link);
+  },
+);
 
-/** The address is done: pasted, left, or confirmed with Enter. */
+/** The address is done: left, or confirmed with Enter. */
 async function commitUrl() {
-  const link = await draft.commit();
-  if (link) suggestName(link);
-}
-
-function onUrlPaste() {
-  void nextTick(commitUrl);
+  typing.cancel();
+  await draft.commit();
 }
 
 async function refreshPreview() {
-  const link = await draft.refresh();
-  if (link) suggestName(link);
+  await draft.refresh();
 }
 
 function save() {
@@ -222,10 +230,11 @@ onUnmounted(() => draft.reset());
             type="url"
             required
             autocomplete="url"
+            spellcheck="false"
             placeholder="https://example.com/"
             class="text-sm"
+            @input="typing.onInput"
             @change="commitUrl"
-            @paste="onUrlPaste"
             @submit="commitUrl"
           />
         </Field>
