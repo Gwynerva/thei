@@ -62,14 +62,14 @@ requests it makes, `seed.ts` follows once that release is out.
 
 ## Scenarios
 
-| Scenario       | What it proves                                                                                                                                                   |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `seed`         | The last release makes the seed site through its own API. Runs by itself whenever a scenario below needs it; the others install meanwhile.                       |
-| `fresh`        | The installer sets up a working site; a restart before the setup wizard does no harm; a second installation is refused; every page and its Markdown twin answer. |
-| `upgrade`      | The seed site on the last release, updated through that release's own panel: every step done, nothing lost, settings open, every page answers.                   |
-| `backup`       | The backup client end to end: copies, hashes, shared files, the schedule, rotation, alarms, interruption, both schedulers, the last release's client, restores.  |
-| `next-release` | The update the version under test will drive: a failing phase leaves the site as it was, a failing migration closes it on its step, and trying again finishes.   |
-| `recovery`     | The way back: this installer installs the last release, and the site as it was on that release restores onto it.                                                 |
+| Scenario       | What it proves                                                                                                                                                                                                                                                        |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `seed`         | The last release makes the seed site through its own API. Runs by itself whenever a scenario below needs it; the others install meanwhile.                                                                                                                            |
+| `fresh`        | The installer sets up a working site even without better-sqlite3's download, which it compiles from local headers; media processing works; a restart before the setup wizard does no harm; a second installation is refused; every page and its Markdown twin answer. |
+| `upgrade`      | The seed site on the last release, updated through that release's own panel: every step done, nothing lost, settings open, every page answers.                                                                                                                        |
+| `backup`       | The backup client end to end: copies, hashes, shared files, the schedule, rotation, alarms, interruption, both schedulers, the last release's client, restores.                                                                                                       |
+| `next-release` | The update the version under test will drive: a failing phase leaves the site as it was, a failing migration closes it on its step, and trying again finishes.                                                                                                        |
+| `recovery`     | The way back: this installer installs the last release, and the site as it was on that release restores onto it.                                                                                                                                                      |
 
 ## Ports and cleanup
 

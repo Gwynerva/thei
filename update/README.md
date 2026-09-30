@@ -49,6 +49,13 @@ a native Node addon that does not load under Bun. The unit file records where
 each one lives (`ExecStart` and `THEI_BUN`) and which repository updates come
 from (`THEI_REPOSITORY`).
 
+`better-sqlite3` downloads a prebuilt binary from GitHub. When there is none
+for the machine, or GitHub cannot be reached, it compiles itself: the
+installer brings the compiler and Python, the instance manifest brings
+`node-gyp`, and the headers are those of the Node that runs the site, so the
+build downloads nothing more. The installer, `rollback.sh` and the update
+engine all point `npm_config_nodedir` at them.
+
 You can override the defaults:
 
 ```bash

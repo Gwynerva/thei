@@ -40,7 +40,14 @@ import {
   workDir,
   type Server,
 } from './bench';
-import { awaitSeedSite, buildSeedSite, checkSeedSite, seedCopy } from './seed';
+import {
+  awaitSeedSite,
+  buildSeedSite,
+  checkSeedSite,
+  seedCopy,
+  uploadOrFail,
+  writeSampleFiles,
+} from './seed';
 
 const keep = process.argv.includes('--keep');
 
@@ -254,10 +261,28 @@ const scenarios: Record<string, () => Promise<void> | void> = {
     await buildSeedSite(server('seed'));
   },
 
-  /** A new site on the version under test. */
-  fresh() {
+  /**
+   * A new site on the version under test. better-sqlite3's download is sent
+   * nowhere, so it compiles itself the way it does when GitHub is down: with
+   * the node-gyp the instance manifest brings and the headers of the Node
+   * that runs the site.
+   */
+  async fresh() {
     const target = server('fresh', 3101);
-    installOrFail(target, versionUnderTest);
+    installOrFail(target, versionUnderTest, {
+      env: { npm_config_better_sqlite3_binary_host: 'http://127.0.0.1:9' },
+    });
+    check(
+      exec(
+        target,
+        'test -f /opt/thei/node_modules/better-sqlite3/build/config.gypi',
+      ).code === 0,
+      'better-sqlite3 compiled itself without its download',
+    );
+    check(
+      exec(target, 'test -e /opt/thei/.cache/node-gyp').code !== 0,
+      'and downloaded no Node headers for it',
+    );
     check(
       api(target, 'GET', '/', undefined, { visitor: true }).text.includes(
         'install',
@@ -281,6 +306,11 @@ const scenarios: Record<string, () => Promise<void> | void> = {
     completeWizard(target);
     signIn(target);
     adminPagesOpen(target);
+    // The native parts of media processing set themselves up on install.
+    const files = await writeSampleFiles(join(workDir, 'fresh-files'));
+    uploadOrFail(target, files.picture, 'a picture');
+    const video = uploadOrFail(target, files.video, 'a video');
+    check(video.media?.previewSrc, 'the video has a still made by ffmpeg');
     const ledger = Number(sql(target, 'select count(*) from _thei_migrations'));
     check(ledger > 1, `a new database records every step (${ledger})`);
 

@@ -7,6 +7,7 @@
     "start": "node .output/server/index.mjs"
   },
   "dependencies": {
+    "node-gyp": "12.4.0",
     "nuxt": "4.5.2",
     "thei": "__THEI_SOURCE__"
   },

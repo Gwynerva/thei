@@ -72,7 +72,7 @@ say "Installing system packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 # build-essential and python3 are the fallback path for building better-sqlite3
-# when no prebuilt binary matches this machine.
+# when no prebuilt binary matches this machine or GitHub cannot be reached.
 apt-get install -y -qq git curl unzip ca-certificates build-essential python3 >/dev/null
 
 # ------------------------------------------------------------------- memory
@@ -122,6 +122,14 @@ fi
 
 NODE_BIN="$(command -v node || true)"
 [ -x "$NODE_BIN" ] || die "Node.js is not available."
+
+# When better-sqlite3 has to compile itself, node-gyp (from the instance
+# manifest) uses the headers of the Node that will run the site rather than
+# downloading them. The update engine does the same (update/environment.ts).
+NODE_PREFIX="$(dirname "$(dirname "$NODE_BIN")")"
+if [ -f "$NODE_PREFIX/include/node/node.h" ]; then
+  export npm_config_nodedir="$NODE_PREFIX"
+fi
 
 # --------------------------------------------------------------- the engine
 if [ -n "${THEI_VERSION:-}" ]; then
@@ -176,12 +184,14 @@ esac
 
 # Fetch the engine with a throwaway manifest, then let the engine itself supply
 # the real one. That way a release owns its own instance configuration and this
-# script never has to know about its dependencies.
+# script never has to know about its dependencies. The fetch only needs the
+# files: install scripts run once, under the real manifest, which also brings
+# the node-gyp they may need.
 say "Fetching the engine"
 printf '{\n  "name": "thei-instance",\n  "private": true,\n  "dependencies": { "thei": "%s" }\n}\n' "$SOURCE" \
   > "$THEI_DIR/package.json"
 chown "$THEI_USER:$THEI_USER" "$THEI_DIR/package.json"
-run_as_thei "$BUN_BIN" install --cwd "$THEI_DIR"
+run_as_thei "$BUN_BIN" install --cwd "$THEI_DIR" --ignore-scripts
 
 TEMPLATES="$THEI_DIR/node_modules/thei/update/instance"
 [ -d "$TEMPLATES" ] || die "The installed engine has no instance templates at $TEMPLATES."

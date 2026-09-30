@@ -34,6 +34,12 @@ mv "$THEI_DIR/.output.prev" "$THEI_DIR/.output"
 chown -R "$THEI_USER:$THEI_USER" "$THEI_DIR/package.json" "$THEI_DIR/.output"
 
 say "Reinstalling dependencies"
+# A native addon that has to compile itself uses the headers of the Node that
+# runs the site, as install.sh arranges, rather than downloading them.
+NODE_PREFIX="$(dirname "$(dirname "$(command -v node || echo /nonexistent/bin/node)")")"
+if [ -f "$NODE_PREFIX/include/node/node.h" ]; then
+  export npm_config_nodedir="$NODE_PREFIX"
+fi
 runuser -u "$THEI_USER" -- env HOME="$THEI_DIR" PATH="/usr/local/bin:/usr/bin:/bin" \
   "$BUN_BIN" install --cwd "$THEI_DIR"
 
