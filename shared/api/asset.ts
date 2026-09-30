@@ -108,6 +108,10 @@ export interface AssetVariantsRequest {
 
 export type AssetVariantWithUsage = AssetVariantInfo & {
   usageCount: number;
+  /** Unix ms after which cleanup deletes the variant; set only when unused. */
+  deleteAfter?: number;
+  /** Unused, but kept while a version of some text still shows it. */
+  inHistory?: true;
 };
 
 export interface AssetVariantsResponse {

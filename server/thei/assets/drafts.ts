@@ -20,6 +20,7 @@ import type { AssetUploadProgress } from '#layers/thei/shared/api/asset-upload-p
 import { AssetType } from '#layers/thei/shared/asset';
 import {
   buildAssetSettingsKey,
+  createOriginalAssetSettings,
   type AssetImageTransformSettings,
   type AssetTransformSource,
   type AssetUploadRequest,
@@ -385,7 +386,8 @@ export function findDraftRender(
  *
  * An image already rendered with these settings is stored as it is: the admin
  * gets exactly the bytes they judged, and nothing is encoded twice. Anything
- * else is produced now, video included, inside a processing slot.
+ * else is produced now, video included, inside a processing slot. A new file
+ * turned into a variant is kept beside it as it was uploaded (`keepOriginal`).
  */
 export async function commitDraft(
   session: DraftSession,
@@ -414,7 +416,7 @@ export async function commitDraft(
     if (isProcessingQueued(session.type)) {
       options.onStatus?.({ phase: 'queued' });
     }
-    const result = await withProcessingSlot(
+    return await withProcessingSlot(
       session.type,
       async () => {
         options.onStatus?.({ phase: 'processing' });
@@ -438,32 +440,80 @@ export async function commitDraft(
           }
         }
         options.onStatus?.({ phase: 'finishing' });
-        return await commitProcessedAsset({
+        const variant = await commitProcessedAsset({
           processed,
           settings,
           familyUuid: session.familyUuid,
           source: session.source,
           transformSource: session.transform,
         });
+        const original =
+          settings.type === 'original'
+            ? variant
+            : await keepOriginal(session, options.signal);
+        // Keeping the original moved the staged file into the library. The
+        // draft goes on reading it from there, without owning it — told so
+        // before the slot passes to a render of it waiting in the queue.
+        if (original && session.source.owned) {
+          session.source = {
+            path: THEI_SERVER.assets.filePath(
+              original.contentHash,
+              original.extension,
+            ),
+            size: original.size,
+            hash: original.contentHash,
+            extension: original.extension,
+            owned: false,
+          };
+        }
+        return variant;
       },
       { signal: options.signal },
     );
-
-    // Keeping the original moved the staged file into the library. The draft
-    // goes on reading it from there, without owning it.
-    if (request.type === 'original' && session.source.owned) {
-      session.source = {
-        path: THEI_SERVER.assets.filePath(result.contentHash, result.extension),
-        size: result.size,
-        hash: result.contentHash,
-        extension: result.extension,
-        owned: false,
-      };
-    }
-    return result;
   } finally {
     session.busy -= 1;
     await releaseClosedDraft(session);
+  }
+}
+
+/**
+ * Stores a new file as it was uploaded, beside the variant just made of it.
+ *
+ * Nothing uses it, so the cleanup takes it a day later; until then an editor
+ * opened on the variant derives from this rather than from compressed bytes.
+ * Only a draft that owns its source has one to keep: a library file is kept
+ * already, and a draft that stored its original reads it from the library.
+ * Nobody wants it for a draft given up meanwhile. The variant is what was
+ * asked for, so a failure here is logged and the variant still returned.
+ */
+async function keepOriginal(
+  session: DraftSession,
+  signal: AbortSignal,
+): Promise<AssetUploadResponse | undefined> {
+  if (!session.source.owned || session.closing || signal.aborted) {
+    return undefined;
+  }
+  const settings = createOriginalAssetSettings();
+  try {
+    return await commitProcessedAsset({
+      processed: await renderAsset(session.source, settings),
+      settings,
+      familyUuid: session.familyUuid,
+      source: session.source,
+    });
+  } catch (error) {
+    console.error(
+      `Could not keep the original of draft ${session.id}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    // Storage may have moved the staged file before failing, and removed it
+    // after. The draft is then forgotten, and an editor still on it stages
+    // its file again as for any draft gone.
+    if (!(await stat(session.source.path).catch(() => null))?.isFile()) {
+      await closeDraft(session.id);
+    }
+    return undefined;
   }
 }
 

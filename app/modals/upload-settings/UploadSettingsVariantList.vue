@@ -15,6 +15,10 @@ export interface UploadSettingsVariantListItem {
   type: AssetType;
   hasAudio?: boolean;
   usageCount: number;
+  /** Unused, and when cleanup takes it: an original kept beside a paste. */
+  deleteAfter?: number;
+  /** Unused, but kept while a version of some text still shows it. */
+  inHistory?: boolean;
   isCurrent: boolean;
   /** How the file was made, for a tooltip; the list itself shows what it is. */
   recipe?: string;
@@ -74,6 +78,19 @@ const humanSize = useHumanSize();
             <Icon name="link" />
             {{ item.usageCount }}
           </span>
+          <Icon
+            v-if="item.deleteAfter"
+            name="delete"
+            class="text-text-error"
+            :data-title-popup="assetDeletionLabel(item.deleteAfter)"
+            data-asset-pending-deletion
+          />
+          <Icon
+            v-else-if="item.inHistory"
+            name="history"
+            :data-title-popup="phrase.asset_library_in_history"
+            data-asset-in-history
+          />
           <Icon
             v-if="item.type === AssetType.Video"
             :name="item.hasAudio === false ? 'volume-off' : 'volume-on'"

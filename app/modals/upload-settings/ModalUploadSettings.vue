@@ -669,6 +669,10 @@ const variantItems = computed(() =>
     hasAudio:
       variant.type === AssetType.Video ? variant.meta?.hasAudio : undefined,
     usageCount: variant.usageCount,
+    // One this very editor is placing is not going anywhere.
+    ...(variant.usageCount
+      ? {}
+      : { deleteAfter: variant.deleteAfter, inHistory: variant.inHistory }),
     isCurrent: variant.assetUuid === sourceAsset?.assetUuid,
     recipe: describeAssetRecipe(variant.settings, variant.meta, phrase.value),
   })),

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import {
   mkdir,
@@ -221,6 +221,109 @@ describe('editor drafts', () => {
     });
     const render = await renderDraft(session, request(200), live());
     expect(render.width).toBe(200);
+  });
+
+  it('keeps a new file as it was uploaded beside a variant made from it', async () => {
+    await stagedDraft();
+    const session = useDraft('draft-a');
+    const staged = session.source.path;
+
+    const variant = await commitDraft(session, request(400), {
+      signal: live(),
+    });
+
+    const family = () =>
+      rawDb
+        .prepare(
+          'SELECT assetUuid, contentHash, settingsKey FROM assets WHERE familyUuid = ? ORDER BY settingsKey',
+        )
+        .all(session.familyUuid) as {
+        assetUuid: string;
+        contentHash: string;
+        settingsKey: string;
+      }[];
+    const [made, kept] = family();
+    expect(made?.assetUuid).toBe(variant.assetUuid);
+    expect(kept?.settingsKey).toBe('original');
+    // Nothing places it: the cleanup takes it once its day is over.
+    expect(
+      rawDb
+        .prepare('SELECT COUNT(*) AS n FROM "asset-usages" WHERE assetUuid = ?')
+        .get(kept!.assetUuid),
+    ).toEqual({ n: 0 });
+    // Moved into the library, and read from there from now on.
+    await expect(stat(staged)).rejects.toThrow();
+    expect(session.source).toMatchObject({
+      owned: false,
+      hash: kept!.contentHash,
+    });
+
+    await commitDraft(session, request(200), { signal: live() });
+    expect(family().map((row) => row.settingsKey)).toEqual([
+      expect.stringContaining('w200'),
+      variant.settingsKey,
+      'original',
+    ]);
+  });
+
+  it('keeps nothing more for a draft opened on a library file', async () => {
+    const bytes = await sharp({
+      create: { width: 300, height: 200, channels: 3, background: '#d53a7b' },
+    })
+      .png()
+      .toBuffer();
+    const path = join(root, 'stored.png');
+    await writeFile(path, bytes);
+    const hash = createHash('sha256').update(bytes).digest('hex');
+    await openDraft({
+      id: 'from-asset',
+      source: { path, size: bytes.length, hash, extension: 'png', owned: false },
+      type: AssetType.Image,
+      familyUuid: 'af-stored',
+    });
+
+    await commitDraft(useDraft('from-asset'), request(100), {
+      signal: live(),
+    });
+
+    expect(
+      rawDb
+        .prepare('SELECT settingsKey FROM assets WHERE familyUuid = ?')
+        .all('af-stored'),
+    ).toEqual([{ settingsKey: expect.stringContaining('w100') }]);
+    expect((await stat(path)).isFile()).toBe(true);
+  });
+
+  it('returns the variant when the original cannot be kept, and forgets a draft left without its file', async () => {
+    await stagedDraft();
+    const session = useDraft('draft-a');
+    const assets = (globalThis as any).THEI_SERVER.assets;
+    assets.create = async (asset: { settingsKey: string }) => {
+      if (asset.settingsKey === 'original') throw new Error('disk full');
+      return await createAsset(asset as Parameters<typeof createAsset>[0]);
+    };
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const variant = await commitDraft(session, request(400), {
+        signal: live(),
+      });
+
+      expect(variant.settingsKey).toContain('w400');
+      expect(
+        rawDb
+          .prepare(
+            "SELECT COUNT(*) AS n FROM assets WHERE settingsKey = 'original'",
+          )
+          .get(),
+      ).toEqual({ n: 0 });
+      expect(logged).toHaveBeenCalledOnce();
+      // The failed store took the staged file along: the editor stages it
+      // again when it next asks.
+      expect(() => useDraft('draft-a')).toThrow('Draft has expired');
+    } finally {
+      logged.mockRestore();
+    }
   });
 
   it('refuses work for a request that is already gone', async () => {

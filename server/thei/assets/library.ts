@@ -7,7 +7,6 @@ import {
   resolveAdminPagination,
 } from '../../../shared/admin/entity-list';
 import {
-  ASSET_ORPHAN_GRACE_MS,
   assetSelectionError,
   assetSourceKey,
   summarizeAssetUsages,
@@ -28,7 +27,7 @@ import { buildPageUrl } from '../../../shared/page-url';
 import { buildDiaryUrl } from '../../../shared/diary-url';
 import { buildTagUrl } from '../../../shared/tag-url';
 import { describeStoredAsset } from './storage';
-import { assetsHeldByHistory } from '../content/history';
+import { readAssetRetention } from './retention';
 
 export interface LibraryQuery extends AssetSelectionConstraints {
   q?: string;
@@ -292,18 +291,7 @@ function readItems(
     .where(inArray(schema.assetUsages.containerId, ids))
     .all()
     .filter((u) => u.containerType === 'asset' && u.role === 'preview');
-  // Cleanup deletes an asset with no usage rows at all, whatever holds them.
-  const referenced = new Set(
-    db
-      .select({ assetUuid: schema.assetUsages.assetUuid })
-      .from(schema.assetUsages)
-      .where(inArray(schema.assetUsages.assetUuid, ids))
-      .all()
-      .map((u) => u.assetUuid),
-  );
-  const held = assetsHeldByHistory(
-    ids.filter((assetUuid) => !referenced.has(assetUuid)),
-  );
+  const retention = readAssetRetention(rows);
   const items = new Map<string, AssetLibraryItem>();
   for (const row of rows) {
     const uses = placements.get(row.assetUuid) ?? [];
@@ -313,11 +301,7 @@ function readItems(
         previews.find((p) => p.containerId === row.assetUuid)?.assetUuid,
       ),
       touchedAt: row.touchedAt,
-      ...(referenced.has(row.assetUuid)
-        ? {}
-        : held.has(row.assetUuid)
-          ? { inHistory: true as const }
-          : { deleteAfter: row.touchedAt + ASSET_ORPHAN_GRACE_MS }),
+      ...retention.get(row.assetUuid),
       ...summarizeAssetUsages(uses),
       roles: [
         ...new Set(

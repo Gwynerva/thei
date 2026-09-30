@@ -126,6 +126,20 @@ had finished is its first dry run. Dismissing the editor lets the default go
 on. A gallery pasted as several files stores them two at a time, since the
 server keeps only a few drafts and the editor may hold one.
 
+A new file is never lost to its first variant. Whenever a draft that owns its
+staged upload — a paste, or a file just picked in the editor — commits
+anything but the file as it is, the upload is stored beside that variant in
+the same commit, unchanged but for its metadata, as the unprocessed variant
+of the same family (`keepOriginal` in `server/thei/assets/drafts.ts`). Nothing
+uses it, so the library lists it as unused and the cleanup takes it a day
+after its last touch; the editor's list of variants shows the date. Until
+then, the editor opened on the pasted file derives every new variant from
+that original rather than from the compressed file, and opening it as a base
+starts its day again. Picking the same file once more meanwhile finds it,
+as the picker finds any file already stored, and the editor opens on the
+variants made from it. A failure to keep it is logged and does not cost the
+variant.
+
 ## What is stored
 
 Nothing about the levels: a recipe holds `quality` as a number (and

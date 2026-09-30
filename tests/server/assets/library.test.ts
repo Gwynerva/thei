@@ -15,6 +15,7 @@ import {
   listSourceAssets,
   listLibraryAssets,
 } from '../../../server/thei/assets/library';
+import { readAssetRetention } from '../../../server/thei/assets/retention';
 import {
   ASSET_ORPHAN_GRACE_MS,
   assetSelectionError,
@@ -365,6 +366,59 @@ describe('asset library', () => {
     expect(
       listSourceAssets('unused', 'all').items.map((i) => i.asset.assetUuid),
     ).toEqual(['b']);
+  });
+  it('tells which files cleanup will take, the same for the editor as for the library', () => {
+    db.insert(schema.assets)
+      .values({
+        assetUuid: 'held',
+        slug: 'held',
+        extension: 'webp',
+        familyUuid: 'held',
+        contentHash: 'h'.repeat(64),
+        settingsKey: 'original',
+        settings: createOriginalAssetSettings(),
+        type: AssetType.Image,
+        size: 100,
+        touchedAt: 20,
+        meta: {},
+      })
+      .run();
+    db.insert(schema.contentHistory)
+      .values({
+        id: 'version',
+        ownerType: 'project-section',
+        ownerRef: 'section',
+        slot: 'project-section-body',
+        kind: 'revision',
+        data: { blocks: [] },
+        digest: 'd',
+        wordCount: 0,
+        blockCount: 0,
+        assetCount: 1,
+        size: 0,
+        assetUuids: ['held'],
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+
+    const rows = db.select().from(schema.assets).all();
+    const retention = readAssetRetention(rows);
+
+    expect(retention.get('a')).toBeUndefined();
+    expect(retention.get('b')).toEqual({
+      deleteAfter: 10 + ASSET_ORPHAN_GRACE_MS,
+    });
+    expect(retention.get('held')).toEqual({ inHistory: true });
+    for (const item of listLibraryAssets().items) {
+      expect({
+        deleteAfter: item.deleteAfter,
+        inHistory: item.inHistory,
+      }).toEqual({
+        deleteAfter: retention.get(item.asset.assetUuid)?.deleteAfter,
+        inHistory: retention.get(item.asset.assetUuid)?.inHistory,
+      });
+    }
   });
   it('paginates deterministically and does not touch assets while browsing', () => {
     const template = db

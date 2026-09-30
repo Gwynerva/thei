@@ -140,7 +140,8 @@ test('a pasted picture is stored at medium, whole, at its own size, with progres
       .getAttribute('data-upload-errors'),
   ).toBe('');
 
-  // Once up, once stored, never as an original.
+  // Once up and once committed: the medium picture, with the file as it
+  // came kept beside it, unused, until the cleanup takes it.
   expect(counts).toEqual({ stage: 1, commit: 1, direct: 0 });
   expect(stored.extension).toBe('avif');
   const usages = await request.get(
@@ -153,6 +154,70 @@ test('a pasted picture is stored at medium, whole, at its own size, with progres
     dimensions: { width: 640, height: 480 },
   });
   expect(asset.settings.crop).toBeUndefined();
+  const family = await request.get(
+    `/api/admin/assets/${stored.assetUuid}/variants`,
+  );
+  const { variants } = (await family.json()) as {
+    variants: {
+      isUnprocessed: boolean;
+      extension: string;
+      usageCount: number;
+      deleteAfter?: number;
+    }[];
+  };
+  const original = variants.find((variant) => variant.isUnprocessed);
+  expect(original).toMatchObject({ extension: 'png', usageCount: 0 });
+  expect(original?.deleteAfter).toBeGreaterThan(Date.now());
+});
+
+test('the editor opened on a pasted picture makes new variants from the kept original', async ({
+  page,
+}) => {
+  await openFixture(page);
+  await emptyParagraph(page);
+  const committed = page.waitForResponse((response) =>
+    /\/drafts\/[^/]+\/commit$/.test(new URL(response.url()).pathname),
+  );
+  await paste(page, [await png()]);
+  const stored = (await (await committed).json()) as { assetUuid: string };
+
+  // Picked from the library, the stored picture opens in the asset editor.
+  await page.goto('/asset-regression');
+  await expect(page.locator('[data-ready]')).toHaveAttribute(
+    'data-ready',
+    'true',
+  );
+  await page.locator('[data-pick]').click();
+  await page.getByRole('button', { name: 'Reuse', exact: true }).click();
+  const tile = page.locator(`[data-asset-uuid="${stored.assetUuid}"]`).first();
+  const unused = page
+    .locator('[data-asset-library-section]')
+    .filter({ hasText: 'Unused' });
+  await expect(unused).toBeVisible();
+  if (!(await tile.isVisible())) await unused.click();
+  await tile.click();
+
+  // The original is listed, marked as going unless something uses it.
+  const dialog = page.locator('dialog[open]').last();
+  const kept = dialog.getByRole('button', { name: /^png 640×480 / });
+  await expect(kept).toHaveCount(1, { timeout: 20_000 });
+  await expect(kept.locator('[data-asset-pending-deletion]')).toBeVisible();
+
+  // A new variant starts from it, not from the compressed picture.
+  await dialog
+    .getByRole('button', { name: 'Create variant', exact: true })
+    .first()
+    .click();
+  const source = dialog
+    .locator('select')
+    .filter({ has: page.locator('option', { hasText: 'Unprocessed' }) });
+  await expect(source.locator('option:checked')).toHaveText(
+    /PNG.*Unprocessed/,
+  );
+  await expect(
+    dialog.getByText('This source is already compressed', { exact: false }),
+  ).toHaveCount(0);
+  await page.keyboard.press('Escape');
 });
 
 test('the editor opens on the pasted file while it is being stored, and the block goes on when it is dismissed', async ({

@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { screenshot } from './screenshots';
@@ -11,7 +12,10 @@ test.use({
 
 /**
  * A photo-like picture: noise over a gradient. The noise is the same on
- * every run, so every run encodes the same bytes.
+ * every run, so every run encodes nearly the same bytes; the first few
+ * pixels differ on every call. The file is then always new to the library:
+ * a file stored as a variant keeps its original there for a day, and the
+ * editor would open on that instead.
  */
 async function photo(width: number, height: number) {
   let seed = width * height;
@@ -26,6 +30,7 @@ async function photo(width: number, height: number) {
     noise[index + 1] = 120 + random() * 60;
     noise[index + 2] = 200 - random() * 60;
   }
+  randomBytes(12).copy(noise);
   return await sharp(noise, { raw: { width, height, channels: 3 } })
     .png()
     .toBuffer();
@@ -245,8 +250,10 @@ test('a flat graphic takes lossless WebP when that is the smallest', async ({
 });
 
 test('an SVG is cropped and stays a vector', async ({ page, request }) => {
+  // A comment of its own makes the drawing new to the library on every run.
   const svg = Buffer.from(
     '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 32 18">' +
+      `<!-- ${randomUUID()} -->` +
       '<rect width="32" height="18" fill="#123"/><circle cx="16" cy="9" r="6" fill="#fc0"/></svg>',
   );
   await page.goto('/asset-regression');
