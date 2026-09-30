@@ -22,13 +22,25 @@ describe('diary excerpt', () => {
     expect(diaryExcerpt('  Утро.\n\nБыло тихо. ')).toBe('Утро. Было тихо.');
   });
 
-  it('cuts at a word rather than through one', () => {
+  it('cuts at a word rather than through one, and says it cut', () => {
     const text = `${'a'.repeat(20)} ${'b'.repeat(20)} ${'c'.repeat(20)}`;
-    expect(diaryExcerpt(text, 45)).toBe(`${'a'.repeat(20)} ${'b'.repeat(20)}`);
+    expect(diaryExcerpt(text, 45)).toBe(`${'a'.repeat(20)} ${'b'.repeat(20)}…`);
   });
 
   it('cuts mid-word when retreating would leave almost nothing', () => {
-    expect(diaryExcerpt(`a ${'b'.repeat(40)}`, 10)).toBe('a bbbbbbbb');
+    expect(diaryExcerpt(`a ${'b'.repeat(40)}`, 10)).toBe('a bbbbbbbb…');
+  });
+
+  it('puts the ellipsis in place of the punctuation the cut leaves', () => {
+    expect(diaryExcerpt('Свет выставили, звук настроили', 18)).toBe(
+      'Свет выставили…',
+    );
+    expect(diaryExcerpt('Кофе остыл. Опять остыл', 14)).toBe('Кофе остыл…');
+    expect(diaryExcerpt('Вышла — и дождь', 8)).toBe('Вышла…');
+  });
+
+  it('leaves an entry that fits alone, ellipsis and all', () => {
+    expect(diaryExcerpt('Кофе остыл. Опять.', 18)).toBe('Кофе остыл. Опять.');
   });
 });
 
