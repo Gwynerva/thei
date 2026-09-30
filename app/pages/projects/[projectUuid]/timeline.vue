@@ -82,15 +82,10 @@ const presetTitle = computed(() => {
     return phrase.value.project_content_sections;
   return undefined;
 });
-const ogImage = useOgImage(
-  'project',
-  () => project.value.publicId,
-  () => [
-    project.value.title,
-    project.value.bannerMedia?.src,
-    project.value.iconMedia.src,
-  ],
-);
+const ogImage = useOgImage(() => ({
+  kind: 'project',
+  id: project.value.publicId,
+}));
 usePublicSeo({
   ogImage,
   title: () =>

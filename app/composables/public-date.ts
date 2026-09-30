@@ -1,5 +1,10 @@
 import type { DateRange } from '#layers/thei/shared/date-range';
 import {
+  formatAbsolutePublicDate,
+  formatPublicDateRange,
+  toUtcDate,
+} from '#layers/thei/shared/public-date-format';
+import {
   datePrecisionTone,
   isApproximateDate,
   type DatedPeriod,
@@ -10,6 +15,10 @@ import {
   TITLE_POPUP_GAP,
   type TitlePopupLine,
 } from '#layers/thei/app/composables/title-popup-content';
+
+// The spelling of dates is shared with the server, which draws them on
+// Open Graph cards; the page's own presentation of them stays here.
+export { formatAbsolutePublicDate };
 
 export type PublicDateValue = string | DateRange | DatedPeriod;
 
@@ -164,40 +173,6 @@ function withPrecision(
   };
 }
 
-export function formatAbsolutePublicDate(
-  date: string,
-  locale: string,
-  style: 'long' | 'short' = 'long',
-): string {
-  const parts = new Intl.DateTimeFormat(locale, {
-    day: style === 'short' ? '2-digit' : 'numeric',
-    month: style === 'short' ? '2-digit' : 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).formatToParts(new Date(`${date}T00:00:00Z`));
-
-  while (parts.at(-1)?.type === 'literal') parts.pop();
-  return parts.map((part) => part.value).join('');
-}
-
-function formatPublicDateRange(
-  period: DateRange,
-  locale: string,
-  style: 'long' | 'short',
-): string {
-  const formatter = new Intl.DateTimeFormat(locale, {
-    day: style === 'short' ? '2-digit' : 'numeric',
-    month: style === 'short' ? '2-digit' : 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
-  return formatter
-    .formatRange(toUtcDate(period.startDate), toUtcDate(period.endDate))
-    .replaceAll(/\s*г\./g, '')
-    .replaceAll(' – ', ' — ')
-    .trim();
-}
-
 function formatRecentPublicDate(
   date: string,
   locale: string,
@@ -243,10 +218,6 @@ function formatRecentPublicDate(
     style,
   }).format(-months, 'month');
   return style === 'long' ? formatted.replace(/^1\s+/u, '') : formatted;
-}
-
-function toUtcDate(date: string) {
-  return new Date(`${date}T00:00:00Z`);
 }
 
 function clampedUtcDate(year: number, month: number, day: number) {

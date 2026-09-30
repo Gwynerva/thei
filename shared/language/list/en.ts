@@ -1474,5 +1474,17 @@ export default defineI18nBase({
     search_preset_cv_title: 'Résumé',
     search_preset_cv_description:
       'The professional part of the archive: the projects that make up a working history.',
+    og_personal_archive: 'Personal archive',
+    og_stage_position: (index, total) => `Stage ${index} of ${total}`,
+    og_updated: (date) => `Updated ${date}`,
+    og_life_headline: (years) =>
+      `${plural(years, 'year', 'years')} in one chronicle`,
+    og_tags_headline: (count) =>
+      `${plural(count, 'thread', 'threads')} through a life`,
+    og_pages_headline: (count) =>
+      `${plural(count, 'text', 'texts')} outside the timeline`,
+    og_image_alt: (kind, title, site) => `${kind} “${title}” — ${site}`,
+    x_stages: (count) => plural(count, 'stage', 'stages'),
+    x_sections: (count) => plural(count, 'section', 'sections'),
   },
 });

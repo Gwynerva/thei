@@ -29,11 +29,7 @@ const canonical = computed(() =>
     page: tag.value.items.page,
   }),
 );
-const ogImage = useOgImage(
-  'tag',
-  () => tag.value.publicId,
-  () => [tag.value.title, tag.value.iconMedia?.src],
-);
+const ogImage = useOgImage(() => ({ kind: 'tag', id: tag.value.publicId }));
 usePublicSeo({
   ogImage,
   title: computed(() => tag.value.title),
@@ -45,7 +41,7 @@ usePublicSeo({
   canonical,
   pageType: 'CollectionPage',
   breadcrumbs: () => [{ name: phrase.value.tags, path: '/tags/' }],
-  image: () => publicSeoImage(tag.value.iconMedia, ogImage.value),
+  image: () => publicSeoImage(tag.value.iconMedia, ogImage.value?.url),
   entities: () => [
     {
       '@type': 'ItemList',

@@ -312,6 +312,68 @@ export async function buildPublicPage(
 }
 
 /**
+ * A project at a glance, as a viewer may see it: its pictures, the stages and
+ * sections they may open, its showcase pictures, tags, relations and current
+ * status.
+ *
+ * The page is built on it, and so is the project's Open Graph card, so a card
+ * never counts a stage or shows a picture its page would not.
+ */
+export async function buildPublicProjectHead(
+  project: ProjectRow,
+  viewer: PublicViewer,
+) {
+  const own = opensPrivate(viewer, 'project', project.projectUuid);
+  const usages = await THEI_SERVER.assets.usages.findByContainer(
+    'project',
+    project.projectUuid,
+  );
+  const icon = usages.find((usage) => usage.role === 'icon');
+  const banner = usages.find((usage) => usage.role === 'banner');
+  const [rawStages, rawSections, rawShowcase, tags, relations, status] =
+    await Promise.all([
+      getProjectStages(project.projectUuid),
+      getProjectContentSections(project.projectUuid),
+      THEI_SERVER.assets.usages.findShowcase(project.projectUuid),
+      listTagsForContainer('project', project.projectUuid),
+      resolvePublicRelated(
+        { type: 'project', id: project.projectUuid },
+        viewer,
+      ),
+      // Statuses are always as open as their project; `isAdmin` only picks
+      // the owner's preview addresses for the icons.
+      getCurrentStatus(
+        { type: 'project', id: project.projectUuid },
+        viewer.isAdmin,
+      ),
+    ]);
+  return {
+    own,
+    usages,
+    iconMedia: resolveEntityIconMedia(
+      'project',
+      project.projectUuid,
+      icon
+        ? await buildPublicProjectMedia(project, icon.asset, 'icon')
+        : undefined,
+    ),
+    bannerMedia: banner
+      ? await buildPublicProjectMedia(project, banner.asset, 'banner')
+      : undefined,
+    stages: rawStages.filter((stage) => own || !stage.isPrivate),
+    sections: rawSections.filter((section) => own || !section.isPrivate),
+    /** Pictures and videos; a private one is the page's to present. */
+    showcase: rawShowcase.filter(
+      ({ asset }) =>
+        asset.type === AssetType.Image || asset.type === AssetType.Video,
+    ),
+    tags: await buildPublicTags(tags),
+    relations,
+    status,
+  };
+}
+
+/**
  * A project's page. The project's own parts — stages, sections, showcase,
  * files, links, private sections — open with its share link; everything it
  * points to is judged for the viewer as they are, and the owner's notes stay
@@ -322,28 +384,9 @@ export async function buildPublicProject(
   viewer: PublicViewer,
 ): Promise<Omit<PublicProjectResponse, 'timeline'>> {
   const own = opensPrivate(viewer, 'project', project.projectUuid);
-  const usages = await THEI_SERVER.assets.usages.findByContainer(
-    'project',
-    project.projectUuid,
-  );
-  const icon = usages.find((usage) => usage.role === 'icon');
-  const banner = usages.find((usage) => usage.role === 'banner');
-  const [
-    rawStages,
-    rawSections,
-    rawShowcase,
-    rawFiles,
-    tags,
-    description,
-    rawLinks,
-    relations,
-    status,
-  ] = await Promise.all([
-    getProjectStages(project.projectUuid),
-    getProjectContentSections(project.projectUuid),
-    THEI_SERVER.assets.usages.findShowcase(project.projectUuid),
+  const [head, rawFiles, description, rawLinks] = await Promise.all([
+    buildPublicProjectHead(project, viewer),
     THEI_SERVER.assets.usages.findOther(project.projectUuid),
-    listTagsForContainer('project', project.projectUuid),
     buildPublicContentData(
       'project',
       project.projectUuid,
@@ -353,39 +396,30 @@ export async function buildPublicProject(
       viewer,
     ),
     getExternalLinkList({ type: 'project', id: project.projectUuid }),
-    resolvePublicRelated({ type: 'project', id: project.projectUuid }, viewer),
-    // Statuses are always as open as their project; `isAdmin` only picks the
-    // owner's preview addresses for the icons.
-    getCurrentStatus(
-      { type: 'project', id: project.projectUuid },
-      viewer.isAdmin,
-    ),
   ]);
-  const visibleStages = rawStages.filter((stage) => own || !stage.isPrivate);
-  const visibleSections = rawSections.filter(
-    (section) => own || !section.isPrivate,
-  );
+  const {
+    usages,
+    stages: visibleStages,
+    sections: visibleSections,
+    relations,
+    status,
+  } = head;
   const showcase = await Promise.all(
-    rawShowcase
-      .filter(
-        ({ asset }) =>
-          asset.type === AssetType.Image || asset.type === AssetType.Video,
-      )
-      .map(async ({ asset, meta }) => {
-        if (!own && usageIsPrivate(meta))
-          return buildSecretReference(
-            'media',
-            `${project.projectUuid}:${asset.assetUuid}`,
-          );
-        const item = meta as ShowcaseAssetUsageMeta | null;
-        const href = `${buildProjectUrl(project.humanReadableSlug, project.publicId)}media/showcase-asset/${asset.slug}.${asset.extension}`;
-        return buildPublicAssetDescriptor(
-          asset,
-          href,
-          await buildPublicProjectMedia(project, asset, 'showcase-asset'),
-          item?.role === 'showcase-asset' ? (item.caption ?? '') : '',
+    head.showcase.map(async ({ asset, meta }) => {
+      if (!own && usageIsPrivate(meta))
+        return buildSecretReference(
+          'media',
+          `${project.projectUuid}:${asset.assetUuid}`,
         );
-      }),
+      const item = meta as ShowcaseAssetUsageMeta | null;
+      const href = `${buildProjectUrl(project.humanReadableSlug, project.publicId)}media/showcase-asset/${asset.slug}.${asset.extension}`;
+      return buildPublicAssetDescriptor(
+        asset,
+        href,
+        await buildPublicProjectMedia(project, asset, 'showcase-asset'),
+        item?.role === 'showcase-asset' ? (item.caption ?? '') : '',
+      );
+    }),
   );
   const files = await Promise.all(
     rawFiles.map(({ asset, meta }) =>
@@ -434,22 +468,14 @@ export async function buildPublicProject(
     },
     isShowcase: project.showcase,
     isCv: project.cv,
-    iconMedia: resolveEntityIconMedia(
-      'project',
-      project.projectUuid,
-      icon
-        ? await buildPublicProjectMedia(project, icon.asset, 'icon')
-        : undefined,
-    ),
-    bannerMedia: banner
-      ? await buildPublicProjectMedia(project, banner.asset, 'banner')
-      : undefined,
+    iconMedia: head.iconMedia,
+    bannerMedia: head.bannerMedia,
     description,
     stages: stageItems,
     sections: sectionItems,
     showcase,
     files,
-    tags: await buildPublicTags(tags),
+    tags: head.tags,
     related: countPublicRelated(relations),
     currentStatus: status.current,
     statusCount: status.total,

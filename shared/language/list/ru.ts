@@ -1533,5 +1533,17 @@ export default defineI18nModule({
     search_preset_cv_title: 'Резюме',
     search_preset_cv_description:
       'Профессиональная часть архива: проекты, из которых складывается рабочая история.',
+    og_personal_archive: 'Личный архив',
+    og_stage_position: (index, total) => `Этап ${index} из ${total}`,
+    og_updated: (date) => `Обновлено ${date}`,
+    og_life_headline: (years) =>
+      `${plural(years, 'год', 'года', 'лет')} в одной хронике`,
+    og_tags_headline: (count) =>
+      `${plural(count, 'нить', 'нити', 'нитей')} через всю жизнь`,
+    og_pages_headline: (count) =>
+      `${plural(count, 'текст', 'текста', 'текстов')} вне хронологии`,
+    og_image_alt: (kind, title, site) => `${kind} «${title}» — ${site}`,
+    x_stages: (count) => plural(count, 'этап', 'этапа', 'этапов'),
+    x_sections: (count) => plural(count, 'раздел', 'раздела', 'разделов'),
   },
 });

@@ -63,11 +63,10 @@ const seoDescription = computed(() => {
     : phrase.value.public_life_description;
 });
 
-const ogImage = useOgImage(
-  'service',
-  () => 'life',
-  () => ['life'],
-);
+const ogImage = useOgImage(() => ({
+  kind: 'service',
+  id: preset.value ? 'diary' : 'life',
+}));
 usePublicSeo({
   ogImage,
   title: seoTitle,

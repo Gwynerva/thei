@@ -19,6 +19,7 @@
     "e2e:dev": "bun scripts/dev-server.ts fixture",
     "e2e:serve": "bun scripts/dev-server.ts fixture --build",
     "test:release": "bun tests/release/run.ts",
+    "og:gallery": "OG_GALLERY=1 bun vitest run tests/server/og/gallery.test.ts",
     "typecheck": "nuxt typecheck .playground --checker golar",
     "format": "prettier --write .",
     "db:push": "drizzle-kit push",

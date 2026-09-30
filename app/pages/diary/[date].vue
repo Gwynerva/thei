@@ -36,13 +36,9 @@ const heading = computed(() =>
   formatAbsolutePublicDate(data.value.date, language.value.code),
 );
 
-const ogImage = useOgImage(
-  'diary',
-  () => data.value.date,
-  () => [heading.value],
-);
+const ogImage = useOgImage(() => ({ kind: 'diary', id: data.value.date }));
 const seoImage = computed(() =>
-  publicSeoImage(data.value.media, ogImage.value),
+  publicSeoImage(data.value.media, ogImage.value?.url),
 );
 /**
  * When the entry last changed, if after its day. An entry is published on

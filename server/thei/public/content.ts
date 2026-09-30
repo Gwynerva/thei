@@ -113,15 +113,22 @@ export async function buildPublicContentData(
   }
 }
 
-export async function buildPublicContentPreviewMedia(
+type StoredAsset = NonNullable<
+  Awaited<ReturnType<typeof THEI_SERVER.assets.findByUuid>>
+>;
+
+/**
+ * The pictures and videos of one field of content that its reader sees, in
+ * reading order. Lazy: a preview takes the first and reads no further.
+ */
+export async function* publicContentMediaAssets(
   ownerType: ContentOwnerType,
   ownerId: string,
   slot: ContentSlot,
-  entity: PublicContentEntity,
   includePrivate = false,
-): Promise<MediaDescriptor | undefined> {
+): AsyncGenerator<StoredAsset> {
   const row = await THEI_SERVER.content.findByOwner(ownerType, ownerId, slot);
-  if (!row) return undefined;
+  if (!row) return;
 
   for (const assetUuid of selectPublicContentMediaAssetUuids(
     row.data,
@@ -137,10 +144,26 @@ export async function buildPublicContentPreviewMedia(
       continue;
     const asset = await THEI_SERVER.assets.findByUuid(assetUuid);
     if (
-      !asset ||
-      (asset.type !== AssetType.Image && asset.type !== AssetType.Video)
+      asset &&
+      (asset.type === AssetType.Image || asset.type === AssetType.Video)
     )
-      continue;
+      yield asset;
+  }
+}
+
+export async function buildPublicContentPreviewMedia(
+  ownerType: ContentOwnerType,
+  ownerId: string,
+  slot: ContentSlot,
+  entity: PublicContentEntity,
+  includePrivate = false,
+): Promise<MediaDescriptor | undefined> {
+  for await (const asset of publicContentMediaAssets(
+    ownerType,
+    ownerId,
+    slot,
+    includePrivate,
+  )) {
     return entity.type === 'profile'
       ? buildPublicProfileMedia(asset, 'profile', 'profile', 'content')
       : entity.type === 'event'

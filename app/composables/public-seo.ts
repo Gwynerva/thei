@@ -3,6 +3,7 @@ import type { MaybeRefOrGetter } from 'vue';
 import { toValue } from 'vue';
 import { version as theiVersion } from '#thei/static-public';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
+import type { OgImageInfo } from '#layers/thei/shared/og-url';
 
 /** One step of the trail leading to the current page. */
 export type PublicBreadcrumb = {
@@ -47,11 +48,12 @@ type PublicSeoOptions = {
   /**
    * The card a link to this page previews as, from `useOgImage`.
    *
-   * Left out where there is nothing to preview — a private entity, or a page
-   * kept out of the index — so a link shows plain text rather than a picture
-   * of something the visitor may not open.
+   * Every page a stranger may open has one, a link-only page included —
+   * those are exactly the pages people share by link. It is absent where the
+   * server draws none: a private entity, a closed site. A link then shows
+   * plain text rather than a broken picture.
    */
-  ogImage?: MaybeRefOrGetter<string | undefined>;
+  ogImage?: MaybeRefOrGetter<OgImageInfo | undefined>;
   /** `article` for a piece of content, `profile` for the home page. */
   ogType?: MaybeRefOrGetter<string | undefined>;
   /**
@@ -230,12 +232,13 @@ export function usePublicSeo(options: PublicSeoOptions) {
         : []),
       ...(ogImage
         ? [
-            { property: 'og:image', content: site.resolve(ogImage) },
+            { property: 'og:image', content: site.resolve(ogImage.url) },
             { property: 'og:image:type', content: 'image/png' },
             { property: 'og:image:width', content: '1200' },
             { property: 'og:image:height', content: '630' },
-            { property: 'og:image:alt', content: title },
+            { property: 'og:image:alt', content: ogImage.alt },
             { name: 'twitter:card', content: 'summary_large_image' },
+            { name: 'twitter:image:alt', content: ogImage.alt },
           ]
         : []),
     ];

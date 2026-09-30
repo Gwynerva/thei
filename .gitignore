@@ -6,6 +6,7 @@ dist
 .playground/content
 tests/e2e/fixture/content
 tests/e2e/.artifacts
+tests/.artifacts
 test-results
 playwright-report
 debug.log

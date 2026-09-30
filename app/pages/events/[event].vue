@@ -30,13 +30,9 @@ if (route.path !== canonical.value)
 const eventCover = computed(() =>
   data.value.periods.length ? coverDatedPeriods(data.value.periods) : undefined,
 );
-const ogImage = useOgImage(
-  'event',
-  () => data.value.publicId,
-  () => [data.value.title, data.value.summary],
-);
+const ogImage = useOgImage(() => ({ kind: 'event', id: data.value.publicId }));
 const seoImage = computed(() =>
-  publicSeoImage(data.value.media, ogImage.value),
+  publicSeoImage(data.value.media, ogImage.value?.url),
 );
 usePublicSeo({
   ogImage,

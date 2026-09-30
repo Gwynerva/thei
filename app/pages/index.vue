@@ -32,15 +32,7 @@ const publicLinks = computed(() =>
 
 useHead({ titleTemplate: null });
 // The card a link to the home page previews as.
-const ogImage = useOgImage(
-  'site',
-  () => 'site',
-  () => [
-    profile.value.displayName,
-    profile.value.slogan,
-    profile.value.avatarMedia.src,
-  ],
-);
+const ogImage = useOgImage(() => ({ kind: 'site', id: 'site' }));
 // A picture of the person or none: the site's card is not one.
 const avatarImage = computed(() => publicSeoImage(profile.value.avatarMedia));
 usePublicSeo({
@@ -57,7 +49,7 @@ usePublicSeo({
   ),
   canonical: '/',
   pageType: 'ProfilePage',
-  image: () => avatarImage.value ?? ogImage.value,
+  image: () => avatarImage.value ?? ogImage.value?.url,
   entities: () => [
     {
       '@type': 'Person',

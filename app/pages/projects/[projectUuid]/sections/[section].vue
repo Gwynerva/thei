@@ -24,13 +24,12 @@ const canonical = computed(() =>
 );
 if (route.path !== canonical.value)
   await navigateTo(canonical.value, { redirectCode: 301 });
-const ogImage = useOgImage(
-  'section',
-  () => data.value.publicId,
-  () => [data.value.title, data.value.project.title],
-);
+const ogImage = useOgImage(() => ({
+  kind: 'section',
+  id: data.value.publicId,
+}));
 const seoImage = computed(() =>
-  publicSeoImage(data.value.media, ogImage.value),
+  publicSeoImage(data.value.media, ogImage.value?.url),
 );
 usePublicSeo({
   ogImage,

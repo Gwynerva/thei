@@ -22,6 +22,9 @@ export default defineConfig({
       '#thei/icon-symbols': fileURLToPath(
         new URL('./tests/helpers/icon-symbols.ts', import.meta.url),
       ),
+      '#thei/og-signature': fileURLToPath(
+        new URL('./tests/helpers/og-signature.ts', import.meta.url),
+      ),
     },
   },
   test: {

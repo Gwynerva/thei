@@ -216,6 +216,30 @@ export function countLifePoints(options: Omit<LifeQuery, 'viewer'>): number {
 }
 
 /**
+ * How many points each year of a chronology holds, secrets included for the
+ * same reason as `countLifePoints`: the feed shows them too. Every year from
+ * the first to the last is present, an empty one with a count of 0, so a
+ * chart drawn from it keeps the gaps a life had.
+ */
+export function countLifePointsByYear(
+  options: Omit<LifeQuery, 'viewer'>,
+): { year: number; count: number }[] {
+  const counts = new Map<number, number>();
+  for (const point of buildLifeIndex(options.scope, options.filter).points) {
+    const year = Number(point.date.slice(0, 4));
+    counts.set(year, (counts.get(year) ?? 0) + 1);
+  }
+  if (!counts.size) return [];
+  const years = [...counts.keys()];
+  const first = Math.min(...years);
+  const last = Math.max(...years);
+  return Array.from({ length: last - first + 1 }, (_, index) => ({
+    year: first + index,
+    count: counts.get(first + index) ?? 0,
+  }));
+}
+
+/**
  * The newest points worth putting on a summary block.
  *
  * On the home page the person's own avatar and status changes are left out —

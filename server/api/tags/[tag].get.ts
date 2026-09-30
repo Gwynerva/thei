@@ -1,6 +1,5 @@
 import type { PublicTagResponse } from '#layers/thei/shared/api/public';
-import { and, asc, count, desc, eq, inArray } from 'drizzle-orm';
-import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
+import { asc, desc, eq } from 'drizzle-orm';
 import { publicIdFromTagUrlPart } from '#layers/thei/shared/tag-url';
 import {
   buildPublicEventSummary,
@@ -8,13 +7,17 @@ import {
   buildPublicTagListItems,
 } from '../../thei/public/entities';
 import { siteViewer } from '../../thei/access-links/viewer';
+import {
+  countPublicTagItems,
+  publicTagItemFilters,
+} from '../../thei/public/tags';
 import { resolvePagination } from '#layers/thei/shared/pagination';
 import { PUBLIC_PAGE_SIZE } from '../../thei/public/pagination';
 
 export default defineEventHandler(async (event): Promise<PublicTagResponse> => {
   const {
     db,
-    schema: { tags, tagUsages, projects, events },
+    schema: { tags, projects, events },
   } = THEI_SERVER.useDb();
   const tag = db
     .select()
@@ -28,34 +31,14 @@ export default defineEventHandler(async (event): Promise<PublicTagResponse> => {
     .get();
   if (!tag) throw createError({ statusCode: 404, statusText: 'Tag not found' });
   const isAdmin = await THEI_SERVER.isAdmin(event);
-  const tagged = (type: 'project' | 'event') =>
-    db
-      .select({ id: tagUsages.containerId })
-      .from(tagUsages)
-      .where(
-        and(
-          eq(tagUsages.tagUuid, tag.tagUuid),
-          eq(tagUsages.containerType, type),
-        ),
-      );
-  const projectFilter = and(
-    inArray(projects.projectUuid, tagged('project')),
-    isAdmin ? undefined : eq(projects.access, ProjectEventAccessLevel.Public),
+  const { projectFilter, eventFilter } = publicTagItemFilters(
+    tag.tagUuid,
+    isAdmin,
   );
-  const eventFilter = and(
-    inArray(events.eventUuid, tagged('event')),
-    isAdmin ? undefined : eq(events.access, ProjectEventAccessLevel.Public),
+  const { projectCount, eventCount } = countPublicTagItems(
+    tag.tagUuid,
+    isAdmin,
   );
-  const projectCount = db
-    .select({ count: count() })
-    .from(projects)
-    .where(projectFilter)
-    .get()!.count;
-  const eventCount = db
-    .select({ count: count() })
-    .from(events)
-    .where(eventFilter)
-    .get()!.count;
   if (!projectCount && !eventCount)
     throw createError({ statusCode: 404, statusText: 'Tag not found' });
   const query = getQuery(event);

@@ -13,11 +13,7 @@ const title = computed(() =>
     formatPublicMonthDay(rewind.value.referenceDate, language.value.code),
   ),
 );
-const ogImage = useOgImage(
-  'service',
-  () => 'rewind',
-  () => ['rewind'],
-);
+const ogImage = useOgImage(() => ({ kind: 'service', id: 'rewind' }));
 usePublicSeo({
   ogImage,
   title: computed(() => phrase.value.life_rewind_seo_title),

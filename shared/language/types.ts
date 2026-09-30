@@ -1139,4 +1139,13 @@ export type LanguagePhrases = {
   search_preset_showcase_description: string;
   search_preset_cv_title: string;
   search_preset_cv_description: string;
+  og_personal_archive: string;
+  og_stage_position: (index: number, total: number) => string;
+  og_updated: (date: string) => string;
+  og_life_headline: (years: number) => string;
+  og_tags_headline: (count: number) => string;
+  og_pages_headline: (count: number) => string;
+  og_image_alt: (kind: string, title: string, site: string) => string;
+  x_stages: (count: number) => string;
+  x_sections: (count: number) => string;
 };
