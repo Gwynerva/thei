@@ -4,19 +4,24 @@ import type {
   AssetSourceType,
   AssetPlacement,
 } from '#layers/thei/shared/asset-library';
+import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
 
 export const assetSourceIcon = {
-  project: 'project',
-  event: 'event',
-  page: 'page',
-  'diary-entry': 'thought',
-  tag: 'tag',
+  project: entityTypeIcon('project'),
+  'project-stage': entityTypeIcon('project-stage'),
+  'project-section': entityTypeIcon('project-section'),
+  event: entityTypeIcon('event'),
+  page: entityTypeIcon('page'),
+  'diary-entry': entityTypeIcon('diary-entry'),
+  tag: entityTypeIcon('tag'),
   profile: 'person',
   unused: 'delete',
 } as const satisfies Record<AssetSourceType, string>;
-export function assetSourceLabel(source: AssetSource) {
+export function assetSourceLabel(source: Pick<AssetSource, 'type'>) {
   return {
     project: phrase.value.project,
+    'project-stage': phrase.value.project_stage,
+    'project-section': phrase.value.content_section,
     event: phrase.value.event,
     page: phrase.value.page,
     'diary-entry': phrase.value.diary_entry,
@@ -95,12 +100,12 @@ export function assetPlacementContentContext(
   | 'event-description'
   | 'page-content'
   | 'profile-about' {
-  if (placement.role !== 'content' || placement.scope.kind !== 'entity') {
-    return 'content';
-  }
+  if (placement.role !== 'content') return 'content';
   return (
     {
       project: 'project-description',
+      'project-stage': 'content',
+      'project-section': 'content',
       event: 'event-description',
       page: 'page-content',
       'diary-entry': 'content',
@@ -109,12 +114,4 @@ export function assetPlacementContentContext(
       unused: 'content',
     } as const
   )[placement.source.type];
-}
-
-export function assetPlacementScopeLabel(placement: AssetPlacement) {
-  return placement.scope.kind === 'project-stage'
-    ? phrase.value.asset_scope_stage
-    : placement.scope.kind === 'project-section'
-      ? phrase.value.asset_scope_section
-      : undefined;
 }

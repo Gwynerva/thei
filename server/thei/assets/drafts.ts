@@ -16,6 +16,7 @@ import {
   type AssetDraftSource,
 } from '#layers/thei/shared/api/asset-draft';
 import type { AssetUploadResponse } from '#layers/thei/shared/api/asset';
+import type { AssetUploadProgress } from '#layers/thei/shared/api/asset-upload-progress';
 import { AssetType } from '#layers/thei/shared/asset';
 import {
   buildAssetSettingsKey,
@@ -34,18 +35,19 @@ import {
 } from './create-variant';
 import type { AssetSourceFile, ProcessedAsset } from './process';
 import { isProcessingQueued, withProbeSlot, withProcessingSlot } from './queue';
+import { discardAssetScratch } from './storage';
 import { theiTempDir } from './temp';
 
 /** How long a draft outlives its last request. */
 const DRAFT_IDLE_MS = 30 * 60 * 1000;
-/** Drafts held at once; the least recently used goes first. */
+/** Drafts held at once; the least recently used idle one goes first. */
 const MAX_DRAFTS = 4;
 /**
- * Dry runs kept per draft. Every change is rendered at each quality stop in
- * each lossy format plus lossless — up to twelve — so this keeps the last
- * couple of changes whole: the render a comparison still shows is never gone
- * before the next one replaces it, and going back to earlier settings is
- * instant.
+ * Dry runs kept per draft. A change is rendered at every quality stop in
+ * each lossy format plus lossless — up to twelve, a few at a time — so this
+ * keeps the last couple of changes whole: the render a comparison still
+ * shows is never gone before the next one replaces it, and going back to
+ * earlier settings is instant.
  */
 export const DRAFT_MAX_RENDERS = 32;
 const EXPIRY_CHECK_MS = 5 * 60 * 1000;
@@ -58,8 +60,8 @@ interface InflightRender {
   promise: Promise<DraftRenderRecord>;
   controller: AbortController;
   waiters: number;
-  /** Renders asked for together — one setting in every format — share one. */
-  batch?: string;
+  /** The encoder has the job; from here it runs to the end and is kept. */
+  started: boolean;
 }
 
 interface DraftSession {
@@ -73,6 +75,29 @@ interface DraftSession {
   lastAccess: number;
   renders: Map<string, DraftRenderRecord>;
   inflight: Map<string, InflightRender>;
+  /** Commits under way. A busy draft is neither expired nor evicted. */
+  busy: number;
+  /** Closed while at work: its directory goes once the work is over. */
+  closing?: boolean;
+  /** The upload id of the last commit run as a job of the draft's. */
+  job?: string;
+}
+
+/** Nothing reads the draft's files: it may go. */
+function isIdle(session: DraftSession) {
+  return session.busy === 0 && session.inflight.size === 0;
+}
+
+/**
+ * Removes the directory of a closed draft once nothing reads it any more.
+ *
+ * An encode that cannot be stopped is still reading the source, and a
+ * commit may be moving its result out of the directory: pulling it from
+ * under them would fail them for nothing and leave their output behind.
+ */
+async function releaseClosedDraft(session: DraftSession) {
+  if (!session.closing || !isIdle(session)) return;
+  await rm(session.directory, { recursive: true, force: true }).catch(() => {});
 }
 
 /**
@@ -138,6 +163,7 @@ export async function openDraft(input: {
     lastAccess: Date.now(),
     renders: new Map(),
     inflight: new Map(),
+    busy: 0,
   };
   drafts.set(id, session);
   await evictOverflow();
@@ -194,24 +220,26 @@ export async function closeDraft(id: string) {
   const session = drafts.get(id);
   if (!session) return;
   drafts.delete(id);
+  session.closing = true;
   for (const job of session.inflight.values()) {
     job.controller.abort(new DOMException('Draft closed', 'AbortError'));
   }
-  await rm(session.directory, { recursive: true, force: true }).catch(() => {});
+  await releaseClosedDraft(session);
 }
 
 /**
  * Encodes an image from a draft for the admin to judge, without storing it.
  *
  * Asking for settings already rendered answers at once; asking for the same
- * settings twice joins the one encode. A request for other settings abandons
- * older ones still waiting in the queue: the admin has moved on from them.
+ * settings twice joins the one encode. A render is dropped when its last
+ * requester goes: while it still waits for a slot it leaves the queue, and
+ * once the encoder has it, it runs to the end and is kept, since the next
+ * request for it is then free. Dry runs wait behind everything else.
  */
 export async function renderDraft(
   session: DraftSession,
   request: AssetUploadRequest,
   signal: AbortSignal,
-  batch?: string,
 ): Promise<AssetDraftRender> {
   signal.throwIfAborted();
   if (request.type !== 'image-transform') {
@@ -237,21 +265,30 @@ export async function renderDraft(
     return publicRender(cached);
   }
 
-  let job = session.inflight.get(key);
+  let job = joinableRender(session, key);
   if (!job) {
-    for (const [otherKey, other] of session.inflight) {
-      if (otherKey !== key && (!batch || other.batch !== batch)) {
-        other.controller.abort(new DOMException('Superseded', 'AbortError'));
-      }
-    }
     const controller = new AbortController();
-    const promise = withProcessingSlot(
+    const own = { controller, waiters: 0, started: false } as InflightRender;
+    own.promise = withProcessingSlot(
       AssetType.Image,
-      async () => await encodeDraftRender(session, settings, key),
-      { signal: controller.signal },
-    ).finally(() => session.inflight.delete(key));
-    job = { promise, controller, waiters: 0, batch };
-    session.inflight.set(key, job);
+      async () => {
+        controller.signal.throwIfAborted();
+        own.started = true;
+        return await encodeDraftRender(
+          session,
+          settings,
+          key,
+          controller.signal,
+        );
+      },
+      { signal: controller.signal, priority: 'low' },
+    ).finally(() => {
+      // Only its own entry: a successor may already stand under the key.
+      if (session.inflight.get(key) === own) session.inflight.delete(key);
+      void releaseClosedDraft(session);
+    });
+    job = own;
+    session.inflight.set(key, own);
   }
 
   const joined = job;
@@ -268,36 +305,62 @@ export async function renderDraft(
   }
 }
 
+/**
+ * The encode under way for these settings, if it is worth waiting for. One
+ * aborted before it started is about to reject with the reason of whoever
+ * left it, and a fresh job takes its place; one that has started finishes.
+ */
+function joinableRender(session: DraftSession, key: string) {
+  const job = session.inflight.get(key);
+  return job && (job.started || !job.controller.signal.aborted)
+    ? job
+    : undefined;
+}
+
 async function encodeDraftRender(
   session: DraftSession,
   settings: AssetImageTransformSettings,
   key: string,
+  signal: AbortSignal,
 ): Promise<DraftRenderRecord> {
-  const processed = await renderAsset(session.source, settings);
+  const processed = await renderAsset(session.source, settings, { signal });
+  return await cacheRender(session, key, settings, processed);
+}
+
+/**
+ * Keeps an encode as a render of the draft, whoever asked for it: a dry run,
+ * or a commit that was interrupted once its encode was done — the editor
+ * then opened on the draft finds it ready.
+ */
+async function cacheRender(
+  session: DraftSession,
+  key: string,
+  settings: AssetImageTransformSettings,
+  processed: ProcessedAsset,
+): Promise<DraftRenderRecord> {
   const renderId = sha256(Buffer.from(key)).slice(0, 16);
   const path = join(session.directory, `${renderId}.${processed.extension}`);
-  // A raster encode comes back in memory; a kept vector is already a file.
   const { bytes } = processed;
-  if (bytes.buffer) await writeFile(path, bytes.buffer);
-  else await rename(bytes.path, path);
-  const size = bytes.buffer ? bytes.buffer.length : bytes.size;
-
   const record: DraftRenderRecord = {
     renderId,
     settingsKey: key,
     settings,
     extension: processed.extension,
-    size,
+    size: bytes.buffer ? bytes.buffer.length : bytes.size,
     width: processed.dimensions.width ?? settings.dimensions.width,
     height: processed.dimensions.height ?? settings.dimensions.height,
     url: buildAssetDraftRenderUrl(session.id, renderId),
     path,
   };
-  // A draft closed while this was encoding has already lost its directory.
-  if (!drafts.has(session.id)) {
-    await rm(path, { force: true }).catch(() => {});
+  // A draft closed while this was encoding has no use for the result, and
+  // its directory is about to go: nothing is written there.
+  if (session.closing || !drafts.has(session.id)) {
+    await discardAssetScratch(bytes);
     return record;
   }
+  // A raster encode comes back in memory; a kept vector is already a file.
+  if (bytes.buffer) await writeFile(path, bytes.buffer);
+  else await rename(bytes.path, path);
   session.renders.set(key, record);
   while (session.renders.size > DRAFT_MAX_RENDERS) {
     const [oldestKey, oldest] = session.renders.entries().next().value!;
@@ -329,8 +392,8 @@ export async function commitDraft(
   request: AssetUploadRequest,
   options: {
     signal: AbortSignal;
-    onQueued?: () => void;
-    onProgress?: (progress: number) => void;
+    /** Told where the job is, for a client following it. */
+    onStatus?: (status: AssetUploadProgress) => void;
   },
 ): Promise<AssetUploadResponse> {
   validateAssetVariantSettings(session.type, session.source.extension, request);
@@ -341,45 +404,67 @@ export async function commitDraft(
     session.type,
     session.transform,
   );
-  // "Use" pressed while these very settings are still encoding: wait for that
-  // encode rather than starting a second one.
-  await session.inflight
-    .get(buildAssetSettingsKey(settings))
-    ?.promise.catch(() => undefined);
+  const key = buildAssetSettingsKey(settings);
+  session.busy += 1;
+  try {
+    // "Use" pressed while these very settings are still encoding: wait for
+    // that encode rather than starting a second one.
+    await joinableRender(session, key)?.promise.catch(() => undefined);
 
-  if (isProcessingQueued(session.type)) options.onQueued?.();
-  const result = await withProcessingSlot(
-    session.type,
-    async () => {
-      const processed =
-        (await takeRender(session, settings)) ??
-        (await renderAsset(session.source, settings, {
-          signal: options.signal,
-          onProgress: options.onProgress,
-        }));
-      return await commitProcessedAsset({
-        processed,
-        settings,
-        familyUuid: session.familyUuid,
-        source: session.source,
-        transformSource: session.transform,
-      });
-    },
-    { signal: options.signal },
-  );
+    if (isProcessingQueued(session.type)) {
+      options.onStatus?.({ phase: 'queued' });
+    }
+    const result = await withProcessingSlot(
+      session.type,
+      async () => {
+        options.onStatus?.({ phase: 'processing' });
+        let processed = await takeRender(session, settings);
+        if (!processed) {
+          processed = await renderAsset(session.source, settings, {
+            signal: options.signal,
+            onProgress: (progress) =>
+              options.onStatus?.({ phase: 'processing', progress }),
+          });
+          if (options.signal.aborted) {
+            // Nobody waits for the result, but the encode is done. A
+            // picture is kept as a render of the draft, so an editor opened
+            // on it has this at once; anything else is dropped.
+            if (settings.type === 'image-transform') {
+              await cacheRender(session, key, settings, processed);
+            } else if (processed.bytes.path !== session.source.path) {
+              await discardAssetScratch(processed.bytes);
+            }
+            options.signal.throwIfAborted();
+          }
+        }
+        options.onStatus?.({ phase: 'finishing' });
+        return await commitProcessedAsset({
+          processed,
+          settings,
+          familyUuid: session.familyUuid,
+          source: session.source,
+          transformSource: session.transform,
+        });
+      },
+      { signal: options.signal },
+    );
 
-  // Keeping the original moved the staged file into the library. The draft
-  // goes on reading it from there, without owning it.
-  if (request.type === 'original' && session.source.owned) {
-    session.source = {
-      path: THEI_SERVER.assets.filePath(result.contentHash, result.extension),
-      size: result.size,
-      hash: result.contentHash,
-      extension: result.extension,
-      owned: false,
-    };
+    // Keeping the original moved the staged file into the library. The draft
+    // goes on reading it from there, without owning it.
+    if (request.type === 'original' && session.source.owned) {
+      session.source = {
+        path: THEI_SERVER.assets.filePath(result.contentHash, result.extension),
+        size: result.size,
+        hash: result.contentHash,
+        extension: result.extension,
+        owned: false,
+      };
+    }
+    return result;
+  } finally {
+    session.busy -= 1;
+    await releaseClosedDraft(session);
   }
-  return result;
 }
 
 async function takeRender(
@@ -410,9 +495,11 @@ function publicRender(record: DraftRenderRecord): AssetDraftRender {
 
 async function evictOverflow() {
   while (drafts.size > MAX_DRAFTS) {
-    const oldest = [...drafts.values()].sort(
-      (left, right) => left.lastAccess - right.lastAccess,
-    )[0]!;
+    const oldest = [...drafts.values()]
+      .filter(isIdle)
+      .sort((left, right) => left.lastAccess - right.lastAccess)[0];
+    // Every draft is at work: one too many is kept until one goes idle.
+    if (!oldest) return;
     await closeDraft(oldest.id);
   }
 }
@@ -427,10 +514,7 @@ function scheduleExpiry() {
 
 export async function expireIdleDrafts(now = Date.now()) {
   for (const session of [...drafts.values()]) {
-    if (
-      now - session.lastAccess >= DRAFT_IDLE_MS &&
-      session.inflight.size === 0
-    ) {
+    if (now - session.lastAccess >= DRAFT_IDLE_MS && isIdle(session)) {
       await closeDraft(session.id);
     }
   }

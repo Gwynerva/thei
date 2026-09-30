@@ -5,6 +5,7 @@ import {
   videoExtensionProfile,
 } from '#layers/thei/shared/assets/extensions';
 import AssetModalVideoControls from './AssetModalVideoControls.vue';
+import { exactImageRendering } from './compare-media';
 import { useMediaControls } from './media-controls';
 import { useVideoPlayback } from './use-video-playback';
 
@@ -25,8 +26,10 @@ const props = defineProps<{
 }>();
 
 const isVideo = isExtensionAllowed(props.extension, videoExtensionProfile);
+const devicePixelRatio = useDevicePixelRatio();
 
 const {
+  deviceScale,
   transformStyle,
   mediaStyle,
   zoomPercent,
@@ -41,7 +44,17 @@ const {
   onPointerCancel,
   initMedia,
   onMediaLoaded,
-} = useMediaControls();
+} = useMediaControls({ devicePixelRatio: () => devicePixelRatio.value });
+
+/**
+ * From one device pixel per pixel of the media up, it is drawn as it is:
+ * every pixel is on screen and nothing is blended. (A vector has no pixels
+ * to keep and is drawn afresh at any size.)
+ */
+const renderingStyle = computed(() => ({
+  imageRendering:
+    props.extension === 'svg' ? 'auto' : exactImageRendering(deviceScale.value),
+}));
 
 const containerRef = useTemplateRef<HTMLElement>('container');
 const mediaRef = useTemplateRef<HTMLVideoElement | HTMLImageElement>('media');
@@ -204,7 +217,7 @@ defineExpose({
             preload="metadata"
             class="block max-h-none max-w-none"
             :class="turnStyle ? 'absolute top-1/2 left-1/2' : 'size-full'"
-            :style="turnStyle"
+            :style="[turnStyle, renderingStyle]"
             @loadedmetadata="onVideoMeta"
           />
           <img
@@ -215,7 +228,7 @@ defineExpose({
             draggable="false"
             class="block max-h-none max-w-none"
             :class="turnStyle ? 'absolute top-1/2 left-1/2' : 'size-full'"
-            :style="turnStyle"
+            :style="[turnStyle, renderingStyle]"
             @load="onImgLoad"
           />
           <slot name="overlay"></slot>

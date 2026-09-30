@@ -325,7 +325,19 @@ async function writeInPlace(
   const partial = `${target}.${randomUUID()}.partial`;
   try {
     await write(partial);
-    await rename(partial, target);
+    try {
+      await rename(partial, target);
+    } catch (error) {
+      // The name is the content hash, so a file that appeared under it
+      // meanwhile holds these very bytes: two commits of one output raced
+      // past the check, the other landed first, and Windows will not rename
+      // over a file still held open. The sizes agree unless it is cut short.
+      const [mine, theirs] = await Promise.all([
+        stat(partial).catch(() => null),
+        stat(target).catch(() => null),
+      ]);
+      if (!mine || !theirs?.isFile() || theirs.size !== mine.size) throw error;
+    }
   } finally {
     await rm(partial, { force: true }).catch(() => {});
   }

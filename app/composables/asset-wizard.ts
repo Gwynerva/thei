@@ -4,22 +4,23 @@ import type {
 } from '#layers/thei/shared/api/asset';
 import { AssetType } from '#layers/thei/shared/asset';
 import type { ExtensionProfile } from '#layers/thei/shared/assets/extensions';
-import {
-  anyFileExtensionProfile,
-  getPathExtension,
-} from '#layers/thei/shared/assets/extensions';
+import { anyFileExtensionProfile } from '#layers/thei/shared/assets/extensions';
 import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
 import {
   resolveAssetMaxSize,
   type AssetUploadLimitPolicy,
 } from '#layers/thei/shared/asset-upload-limits';
-import { buildUploadHeaders } from '#layers/thei/shared/api/asset-upload-headers';
 import { editFileModal } from '#layers/thei/app/modals/upload-settings/modal';
 import { pickReuseFileModal } from '#layers/thei/app/modals/pick-file/modal';
 import type { PickedFile } from '#layers/thei/app/modals/pick-file/picked-file';
 import type { PickedFiles } from '#layers/thei/app/modals/pick-file/picked-file';
-import { createOriginalAssetSettings } from '#layers/thei/shared/asset-upload-settings';
 import { runAssetBatch } from '#layers/thei/shared/asset-batch';
+import type { ContentAssetData } from '#layers/thei/shared/content';
+import {
+  PendingOriginalUpload,
+  type PendingMediaHandover,
+  type PendingUpload,
+} from './pending-upload';
 import { assetLibraryModal } from '../modals/asset-library/modal';
 
 export type AssetWizardAccept =
@@ -39,8 +40,15 @@ export interface AssetBatchError {
   message: string;
 }
 
+/**
+ * What a batch pick gives back the moment the files are known: the assets
+ * already in the library — picked there, or duplicates settled through the
+ * editor — and the new files, still on their way. Those are running; whoever
+ * placed them shows a tile for each and takes its `result` when it lands.
+ */
 export interface AssetBatchResult {
   assets: AssetVariantInfo[];
+  uploads: PendingUpload[];
   errors: AssetBatchError[];
 }
 
@@ -189,7 +197,7 @@ async function runAssetBatchWizard(
       multiple: true,
     });
     return selected.type === 'assets-ready'
-      ? { assets: selected.assets, errors: [] }
+      ? { assets: selected.assets, uploads: [], errors: [] }
       : undefined;
   }
   if (result.type !== 'picked-files') return undefined;
@@ -217,15 +225,32 @@ async function runAssetBatchWizard(
       if (edited.type === 'error')
         return {
           assets: [],
+          uploads: [],
           errors: [{ fileName: single.name, message: edited.message }],
         };
       return edited.type === 'asset-ready'
-        ? { assets: [edited.asset], errors: [] }
+        ? { assets: [edited.asset], uploads: [], errors: [] }
         : undefined;
     } finally {
       URL.revokeObjectURL(single.objectUrl);
     }
   }
+  // New files go up first, three at a time, while the admin settles any
+  // duplicates; each keeps a preview of its own, so the picker's can go.
+  const uploads = picked.files
+    .filter((file) => !file.existingAsset)
+    .map((file) => {
+      URL.revokeObjectURL(file.objectUrl);
+      return new PendingOriginalUpload(file.file, {
+        constraints: {
+          acceptedExtensions,
+          maxSize,
+          sizeLimitPolicy: options.sizeLimitPolicy,
+        },
+      });
+    });
+  void runAssetBatch(uploads, (upload) => upload.run(), 3);
+
   const errors: AssetBatchError[] = [...picked.errors];
   const resolved = new Map<PickedFile, AssetVariantInfo | undefined>();
   for (const file of picked.files.filter((file) => file.existingAsset)) {
@@ -257,36 +282,6 @@ async function runAssetBatchWizard(
       URL.revokeObjectURL(file.objectUrl);
     }
   }
-  const newFiles = picked.files.filter((file) => !file.existingAsset);
-  const settled = await runAssetBatch(
-    newFiles,
-    async (file) => {
-      try {
-        return await uploadOriginalFile(file, {
-          ...options,
-          acceptedExtensions,
-          maxSize,
-        });
-      } finally {
-        URL.revokeObjectURL(file.objectUrl);
-      }
-    },
-    3,
-  );
-  settled.forEach((result, index) => {
-    if (result.status === 'fulfilled') {
-      resolved.set(newFiles[index]!, result.value);
-      return;
-    }
-    const error = result.reason;
-    errors.push({
-      fileName: newFiles[index]!.name,
-      message:
-        error instanceof Error
-          ? error.message
-          : phrase.value.upload_error_apply,
-    });
-  });
   return {
     assets: [
       ...new Map(
@@ -296,68 +291,9 @@ async function runAssetBatchWizard(
         }),
       ).values(),
     ],
+    uploads,
     errors,
   };
-}
-
-/**
- * Files that arrived without a picker — pasted into the editor — stored as
- * they are, the way a batch stores its originals. Better versions are made
- * later through the usual editing of each file.
- */
-export async function uploadOriginalAssets(
-  files: File[],
-  options: AssetWizardOptions = {},
-): Promise<AssetBatchResult> {
-  const accept = options.accept ?? anyFileExtensionProfile;
-  const maxSize = resolveAssetMaxSize(options.sizeLimitPolicy, options.maxSize);
-  const acceptedExtensions =
-    options.acceptedExtensions ?? acceptedExtensionsFromAccept(accept);
-  const settled = await runAssetBatch(
-    files,
-    (file) =>
-      uploadOriginalFile(
-        { file, name: file.name },
-        { ...options, acceptedExtensions, maxSize },
-      ),
-    3,
-  );
-  const assets: AssetVariantInfo[] = [];
-  const errors: AssetBatchError[] = [];
-  settled.forEach((result, index) => {
-    if (result.status === 'fulfilled') assets.push(result.value);
-    else
-      errors.push({
-        fileName: files[index]!.name,
-        message:
-          result.reason instanceof Error
-            ? result.reason.message
-            : phrase.value.upload_error_apply,
-      });
-  });
-  return { assets, errors };
-}
-
-async function uploadOriginalFile(
-  file: Pick<PickedFile, 'file' | 'name'>,
-  options: AssetWizardOptions & {
-    acceptedExtensions: string[] | '*';
-    maxSize?: number;
-  },
-) {
-  // The file is the raw body and its metadata rides in headers, so the server
-  // can stream it to disk instead of holding the whole request in memory.
-  return await $fetch<AssetVariantInfo>('/api/admin/assets', {
-    method: 'POST',
-    headers: buildUploadHeaders({
-      settings: createOriginalAssetSettings(),
-      extension: getPathExtension(file.name),
-      maxSize: options.maxSize,
-      sizeLimitPolicy: options.sizeLimitPolicy,
-      acceptedExtensions: options.acceptedExtensions,
-    }),
-    body: file.file,
-  });
 }
 
 export function launchAssetEditor(
@@ -400,6 +336,64 @@ async function runAssetEditor(
     }
     return editResult.type === 'asset-ready' ? editResult.asset : undefined;
   }
+}
+
+/**
+ * The asset editor for a pasted file the text is still storing.
+ *
+ * It opens on the draft the block staged, so the file does not cross the
+ * network again; the block keeps that draft and deletes it when it is done.
+ * "Pick another file" leads into the usual wizard, as it does from any
+ * editor. Nothing means the editor was dismissed: the block goes on with
+ * the default.
+ */
+export function launchPendingFileEditor(
+  pending: PendingMediaHandover,
+  options: AssetWizardOptions = {},
+): Promise<AssetVariantInfo | undefined> {
+  return runModalFlow(() => runPendingFileEditor(pending, options));
+}
+
+async function runPendingFileEditor(
+  pending: PendingMediaHandover,
+  options: AssetWizardOptions,
+): Promise<AssetVariantInfo | undefined> {
+  const editResult = await openModal(editFileModal, {
+    source: { kind: 'draft', draft: pending.draft, file: pending.file },
+    maxSize: resolveAssetMaxSize(options.sizeLimitPolicy, options.maxSize),
+    acceptedExtensions:
+      options.acceptedExtensions ??
+      acceptedExtensionsFromAccept(options.accept ?? anyFileExtensionProfile),
+    sizeLimitPolicy: options.sizeLimitPolicy,
+    uploadProfile: options.uploadProfile,
+    usageDelta: options.usageDelta,
+  });
+  if (editResult.type === 'error') throw new Error(editResult.message);
+  if (editResult.type === 'upload-new' || editResult.type === 'asset-missing') {
+    return await launchAssetWizard(options);
+  }
+  return editResult.type === 'asset-ready' ? editResult.asset : undefined;
+}
+
+/** A stored file as a text block carries it. */
+export function contentAssetFromVariant(
+  asset: AssetVariantInfo,
+): ContentAssetData {
+  const result = mapAssetVariantToReplaceResult(asset);
+  return {
+    assetUuid: asset.assetUuid,
+    type: asset.type,
+    extension: asset.extension,
+    size: asset.size,
+    media: result.media,
+    assetUrl: result.assetUrl,
+    archivedOriginal:
+      asset.type === AssetType.Other &&
+      asset.meta &&
+      'archivedOriginal' in asset.meta
+        ? asset.meta.archivedOriginal
+        : undefined,
+  };
 }
 
 export function mapAssetVariantToReplaceResult(

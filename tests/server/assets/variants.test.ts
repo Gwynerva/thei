@@ -1,9 +1,9 @@
-import { mkdtemp, readdir, rm, stat } from 'node:fs/promises';
+import { copyFile, mkdtemp, readdir, rename, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AssetType } from '../../../shared/asset';
 import {
   createFileZipSettings,
@@ -24,6 +24,11 @@ import {
   countAssetPlacementsByUuids,
 } from '../../../server/thei/assets/repository/usage-count';
 import { schema } from '../../../server/thei/db/schema';
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...actual, rename: vi.fn(actual.rename) };
+});
 
 describe('asset variants', () => {
   let root = '';
@@ -79,6 +84,48 @@ describe('asset variants', () => {
     rawDb.close();
     delete (globalThis as any).THEI_SERVER;
     await rm(root, { recursive: true, force: true });
+  });
+
+  it('accepts a file another commit of the same bytes put in place first', async () => {
+    const buffer = Buffer.from('one output, stored twice at once');
+    const contentHash = sha256(buffer);
+    const target = join(root, contentHash.slice(0, 2), `${contentHash}.bin`);
+    const store = (bytes: Buffer, familyUuid: string) =>
+      storeAsset({
+        bytes: { buffer: bytes },
+        extension: 'bin',
+        familyUuid,
+        settingsKey: 'original',
+        settings: createOriginalAssetSettings(),
+        type: AssetType.Other,
+        meta: null,
+      });
+
+    // The other commit lands between the check and the rename, and Windows
+    // refuses to rename over the file it still holds open.
+    vi.mocked(rename).mockImplementationOnce(async (from, to) => {
+      await copyFile(from, to);
+      throw Object.assign(new Error('EPERM: operation not permitted'), {
+        code: 'EPERM',
+      });
+    });
+    const stored = await store(buffer, 'family-1');
+    expect(stored.created).toBe(true);
+    expect((await stat(target)).size).toBe(buffer.length);
+    expect(await readdir(dirname(target))).toEqual([`${contentHash}.bin`]);
+
+    // Without the bytes in place, the failure is real, and nothing is left.
+    vi.mocked(rename).mockRejectedValueOnce(
+      Object.assign(new Error('EPERM: operation not permitted'), {
+        code: 'EPERM',
+      }),
+    );
+    const other = Buffer.from('an output nobody stored');
+    await expect(store(other, 'family-2')).rejects.toThrow('EPERM');
+    const otherHash = sha256(other);
+    await expect(
+      readdir(join(root, otherHash.slice(0, 2))).catch(() => []),
+    ).resolves.toEqual([]);
   });
 
   it('hashes stored output and deduplicates only an exact family/settings match', async () => {

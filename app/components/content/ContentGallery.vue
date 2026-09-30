@@ -4,6 +4,8 @@ import {
   moveItemById,
   useDragSort,
 } from '#layers/thei/app/composables/drag-sort';
+import type { PendingUpload } from '#layers/thei/app/composables/pending-upload';
+import AssetPendingTile from '#layers/thei/app/components/AssetPendingTile.vue';
 import { gallerySelectedId } from './gallery-state';
 import { richTextToPlainText } from '#layers/thei/shared/rich-text';
 
@@ -17,8 +19,13 @@ const props = withDefaults(
     removeLabel?: string;
     captionPlaceholder?: string;
     openable?: boolean;
+    /** Files on their way in, shown as tiles of their own until they land. */
+    pending?: PendingUpload[];
+    cancelUploadLabel?: string;
+    retryUploadLabel?: string;
+    dismissUploadLabel?: string;
   }>(),
-  { editable: false },
+  { editable: false, pending: () => [] },
 );
 
 /**
@@ -40,6 +47,8 @@ const emit = defineEmits<{
   reorder: [items: ContentGalleryItem[]];
   caption: [id: string, value: string];
   open: [item: ContentGalleryItem];
+  'cancel-pending': [id: string];
+  'retry-pending': [id: string];
 }>();
 
 const tileRoot = useTemplateRef<HTMLElement>('tileRoot');
@@ -92,7 +101,7 @@ const dragSort = useDragSort(
 
 <template>
   <section
-    v-if="editable || items.length"
+    v-if="editable || items.length || pending.length"
     class="min-w-0 overflow-hidden rounded-normal bg-bg-3"
     data-content-gallery
   >
@@ -136,6 +145,20 @@ const dragSort = useDragSort(
           </button>
         </template>
       </AssetTile>
+
+      <!-- Files on their way stand after the pictures, not among them: they
+           cannot be dragged, and they are not part of the gallery yet. -->
+      <AssetPendingTile
+        v-for="upload in pending"
+        :key="upload.id"
+        :upload
+        :cancel-label="cancelUploadLabel"
+        :retry-label="retryUploadLabel"
+        :dismiss-label="dismissUploadLabel"
+        class="size-18 shrink-0"
+        @cancel="emit('cancel-pending', upload.id)"
+        @retry="emit('retry-pending', upload.id)"
+      />
 
       <AssetTile
         v-if="editable"

@@ -27,6 +27,7 @@ import {
   sweepDraftDirectories,
   useDraft,
 } from '../../../server/thei/assets/drafts';
+import { withProcessingSlot } from '../../../server/thei/assets/queue';
 import { createAsset } from '../../../server/thei/assets/repository/create';
 import { findAssetByIdentity } from '../../../server/thei/assets/repository/find-by-identity';
 import { findAssetBySlug } from '../../../server/thei/assets/repository/find-by-slug';
@@ -100,24 +101,32 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-async function stagedDraft(width = 800, height = 600) {
+async function stagedDraft(width = 800, height = 600, id = 'draft-a') {
   const bytes = await sharp({
     create: { width, height, channels: 3, background: '#3a7bd5' },
   })
     .png()
     .toBuffer();
-  const directory = join(draftsDirectory(), 'draft-a');
+  const directory = join(draftsDirectory(), id);
   await mkdir(directory, { recursive: true });
   const path = join(directory, 'source.png');
   await writeFile(path, bytes);
   const hash = createHash('sha256').update(bytes).digest('hex');
   return await openDraft({
-    id: 'draft-a',
+    id,
     directory,
     source: { path, size: bytes.length, hash, extension: 'png', owned: true },
     type: AssetType.Image,
     familyUuid: `af-${hash}`,
   });
+}
+
+/** A job that holds a lane's slot until released. */
+function holdSlot(type: AssetType) {
+  let release!: () => void;
+  const done = new Promise<void>((resolve) => (release = resolve));
+  const held = withProcessingSlot(type, () => done);
+  return { release, held };
 }
 
 const request = (width: number, quality = 80): AssetImageTransformRequest => ({
@@ -223,6 +232,118 @@ describe('editor drafts', () => {
     await expect(
       renderDraft(session, request(300), controller.signal),
     ).rejects.toThrow('closed');
+  });
+
+  it('drops a render whose requester left before it started, and encodes it afresh when asked again', async () => {
+    await stagedDraft();
+    const session = useDraft('draft-a');
+    // More held jobs than the image lane has slots: a render must wait.
+    const holds = [1, 2, 3, 4].map(() => holdSlot(AssetType.Image));
+    const controller = new AbortController();
+    const waiting = renderDraft(session, request(300), controller.signal);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(session.inflight.size).toBe(1);
+
+    controller.abort(new Error('closed'));
+    await expect(waiting).rejects.toThrow('closed');
+    // Asked again by someone else: a fresh job, not the one that just left.
+    const again = renderDraft(session, request(300), live());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(session.inflight.size).toBe(1);
+    for (const hold of holds) hold.release();
+    await Promise.all(holds.map((hold) => hold.held));
+
+    expect(await again).toMatchObject({ width: 300 });
+    expect(session.inflight.size).toBe(0);
+  });
+
+  it('reports where a commit is, and keeps an encode its requester abandoned', async () => {
+    await stagedDraft();
+    const session = useDraft('draft-a');
+    const statuses: string[] = [];
+    const controller = new AbortController();
+    const commit = commitDraft(session, request(500), {
+      signal: controller.signal,
+      onStatus: (status) => {
+        statuses.push(status.phase);
+        // The request closes while the picture is being encoded; sharp
+        // finishes anyway.
+        if (status.phase === 'processing') controller.abort(new Error('gone'));
+      },
+    });
+
+    await expect(commit).rejects.toThrow('gone');
+    expect(statuses).toEqual(['processing']);
+    expect(rawDb.prepare('SELECT COUNT(*) AS n FROM assets').get()).toEqual({
+      n: 0,
+    });
+    // The editor opened on this draft finds the encode ready.
+    const render = await renderDraft(session, request(500), live());
+    expect(render.width).toBe(500);
+    expect(session.busy).toBe(0);
+
+    const stored = await commitDraft(session, request(500), {
+      signal: live(),
+      onStatus: (status) => statuses.push(status.phase),
+    });
+    expect(stored.settingsKey).toBe(render.settingsKey);
+    expect(statuses).toEqual(['processing', 'processing', 'finishing']);
+  });
+
+  it('keeps the directory of a draft closed under a commit until the commit is over', async () => {
+    await stagedDraft(1600, 1200);
+    const session = useDraft('draft-a');
+    let directoryDuring: boolean | undefined;
+    const stored = await commitDraft(session, request(1500), {
+      signal: live(),
+      onStatus: async (status) => {
+        if (status.phase !== 'processing') return;
+        // The block that pasted the file is deleted while it is encoding.
+        await closeDraft('draft-a');
+        directoryDuring = (
+          await stat(session.directory).catch(() => null)
+        )?.isDirectory();
+      },
+    });
+
+    expect(directoryDuring).toBe(true);
+    expect(stored.settingsKey).toContain('w1500');
+    expect(() => useDraft('draft-a')).toThrow('Draft has expired');
+    await expect(stat(session.directory)).rejects.toThrow();
+  });
+
+  it('writes nothing for a render whose draft was closed meanwhile', async () => {
+    await stagedDraft();
+    const session = useDraft('draft-a');
+    const holds = [1, 2, 3, 4].map(() => holdSlot(AssetType.Image));
+    const render = renderDraft(session, request(300), live());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await closeDraft('draft-a');
+    for (const hold of holds) hold.release();
+    await Promise.all(holds.map((hold) => hold.held));
+
+    await expect(render).rejects.toThrow('Draft closed');
+    // The directory goes once the abandoned job has let go of the draft.
+    for (let waited = 0; waited < 50; waited++) {
+      if (!(await stat(session.directory).catch(() => null))) break;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    expect(session.inflight.size).toBe(0);
+    await expect(stat(session.directory)).rejects.toThrow();
+  });
+
+  it('never evicts a draft with a commit under way', async () => {
+    await stagedDraft(80, 60, 'busy');
+    const busy = useDraft('busy');
+    busy.busy += 1;
+    for (const id of ['b', 'c', 'd', 'e', 'f']) await stagedDraft(80, 60, id);
+
+    // The busy draft outlives newer idle ones though it was opened first.
+    expect(() => useDraft('busy')).not.toThrow();
+    expect(() => useDraft('b')).toThrow('Draft has expired');
+    busy.busy -= 1;
+    await expireIdleDrafts(Date.now() + 31 * 60 * 1000);
+    expect(() => useDraft('busy')).toThrow('Draft has expired');
   });
 
   it('forgets idle drafts and their files', async () => {

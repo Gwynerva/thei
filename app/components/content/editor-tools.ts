@@ -7,6 +7,14 @@ import type {
 import { h } from 'vue';
 import { VueBlockTool } from './editor-vue-block-tool';
 import { AssetType } from '#layers/thei/shared/asset';
+import { runAssetBatch } from '#layers/thei/shared/asset-batch';
+import { contentAssetFromVariant } from '#layers/thei/app/composables/asset-wizard';
+import type { UploadConstraints } from '#layers/thei/app/composables/upload-draft';
+import {
+  PendingMediaUpload,
+  type PendingMediaHandover,
+  type PendingUpload,
+} from '#layers/thei/app/composables/pending-upload';
 import type {
   ContentAssetData,
   ContentGalleryItem,
@@ -57,9 +65,14 @@ export type ContentEditorAssetKind = 'media' | 'any';
 export type ContentEditorPickAsset = (
   kind: ContentEditorAssetKind,
 ) => Promise<ContentAssetData | undefined>;
+/**
+ * Files added to a gallery: those known at once — picked from the library,
+ * or duplicates settled through the editor — and those still on their way,
+ * shown as tiles until each lands.
+ */
 export type ContentEditorPickAssets = (
   kind: ContentEditorAssetKind,
-) => Promise<ContentAssetData[]>;
+) => Promise<{ assets: ContentAssetData[]; uploads: PendingUpload[] }>;
 export type ContentEditorEditAsset = (
   asset: ContentAssetData,
   kind: ContentEditorAssetKind,
@@ -84,24 +97,37 @@ interface ContentToolLabels {
   refreshExternalLink: string;
   chooseEntity: string;
   makeGallery: string;
+  retryUpload: string;
+  cancelUpload: string;
+  dismissUpload: string;
 }
 
-/** Stores pasted files as they are and returns them as content assets. */
-export type ContentEditorUploadFiles = (
-  files: File[],
-) => Promise<ContentAssetData[]>;
+/** How a tool stores the files pasted into it. */
+export interface ContentEditorUploads {
+  /** The limits of the place the files go to. */
+  constraints: UploadConstraints;
+  /**
+   * The asset editor for a file still being stored: what the admin settled
+   * on, or nothing if the editor was dismissed.
+   */
+  editPending: (
+    pending: PendingMediaHandover,
+  ) => Promise<ContentAssetData | undefined>;
+  /** Counts blocks with uploads under way, so closing the editor asks first. */
+  track?: (delta: 1 | -1) => void;
+}
 
 interface ContentMediaToolConfig {
   pickAsset: ContentEditorPickAsset;
   editAsset: ContentEditorEditAsset;
-  uploadFiles: ContentEditorUploadFiles;
+  uploads: ContentEditorUploads;
   labels: ContentToolLabels;
 }
 
 interface ContentGalleryToolConfig {
   pickAssets: ContentEditorPickAssets;
   editAsset: ContentEditorEditAsset;
-  uploadFiles: ContentEditorUploadFiles;
+  uploads: ContentEditorUploads;
   labels: ContentToolLabels;
 }
 
@@ -452,8 +478,10 @@ export class ContentMediaTool extends VueBlockTool implements BlockTool {
   private caption = '';
   private layout: ContentMediaLayout;
   private autoOpen: boolean;
-  /** A pasted file, stored before the block shows anything. Never saved. */
+  /** A pasted file, kept until the block is on the page. Never saved. */
   private pendingFiles?: File[];
+  /** The pasted file on its way into the library. */
+  private pending?: PendingMediaUpload;
 
   constructor(
     private options: ContentToolOptions<
@@ -491,11 +519,18 @@ export class ContentMediaTool extends VueBlockTool implements BlockTool {
 
   protected override afterRender() {
     if (this.pendingFiles && !this.options.readOnly) {
-      queueMicrotask(() => void this.upload());
+      queueMicrotask(() => this.startPending());
     } else if (this.autoOpen && !this.options.readOnly) {
       this.autoOpen = false;
       queueMicrotask(() => void this.pick());
     }
+  }
+
+  protected override onDestroy() {
+    if (!this.pending) return;
+    this.pending.dispose();
+    this.pending = undefined;
+    contentToolConfig(this.options.config).uploads.track?.(-1);
   }
 
   save(): Record<string, unknown> {
@@ -560,9 +595,13 @@ export class ContentMediaTool extends VueBlockTool implements BlockTool {
       return h(ContentAssetSkeleton, {
         icon: 'media',
         label: this.labels.chooseMedia,
-        readOnly: this.options.readOnly,
-        loading: Boolean(this.pendingFiles),
+        readOnly: this.options.readOnly || Boolean(this.pendingFiles),
+        upload: this.pending,
+        editLabel: this.pending ? this.labels.chooseMedia : undefined,
+        retryLabel: this.labels.retryUpload,
         onPick: () => void this.pick(),
+        onEdit: () => void this.editPending(),
+        onRetry: () => this.pending?.retry(),
       });
     return h(ContentMediaCard, {
       asset: this.asset,
@@ -580,16 +619,59 @@ export class ContentMediaTool extends VueBlockTool implements BlockTool {
     });
   }
 
-  private async upload() {
-    const files = this.pendingFiles;
-    if (!files) return;
-    const config = contentToolConfig(this.options.config);
-    const [asset] = await config.uploadFiles(files).catch(() => []);
-    if (this.pendingFiles !== files || this.destroyed) return;
+  /**
+   * The pasted file goes into the library at the defaults, from here on.
+   * The skeleton follows its status by itself; the block only changes once
+   * the file has landed, and a failure waits in the skeleton for a retry.
+   */
+  private startPending() {
+    const [file] = this.pendingFiles ?? [];
     this.pendingFiles = undefined;
-    if (asset) this.asset = asset;
+    if (!file || this.destroyed) return;
+    const { uploads } = contentToolConfig(this.options.config);
+    const pending = new PendingMediaUpload(file, {
+      constraints: uploads.constraints,
+    });
+    this.pending = pending;
+    uploads.track?.(1);
     this.renderContent();
-    if (asset) this.dispatchChange();
+    void pending.run();
+    void pending.result.then((asset) => {
+      if (this.pending === pending && !this.destroyed && asset) {
+        this.finishPending(contentAssetFromVariant(asset));
+      }
+    });
+  }
+
+  /** The file has landed: the block shows it, and that is a change. */
+  private finishPending(asset: ContentAssetData) {
+    const pending = this.pending;
+    if (!pending) return;
+    this.pending = undefined;
+    pending.dispose();
+    contentToolConfig(this.options.config).uploads.track?.(-1);
+    this.asset = asset;
+    this.commit();
+  }
+
+  /** The asset editor, on the file still being stored. */
+  private async editPending() {
+    const pending = this.pending;
+    if (!pending) return;
+    let handover: PendingMediaHandover;
+    try {
+      handover = await pending.suspend();
+    } catch {
+      // Staging failed; the skeleton shows why and offers a retry.
+      return;
+    }
+    if (this.pending !== pending || this.destroyed) return;
+    const asset = await contentToolConfig(this.options.config)
+      .uploads.editPending(handover)
+      .catch(() => undefined);
+    if (this.pending !== pending || this.destroyed) return;
+    if (asset) this.finishPending(asset);
+    else void pending.run();
   }
 
   /**
@@ -659,8 +741,13 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
   private items: ContentGalleryItem[];
   private selectedId?: string;
   private autoOpen: boolean;
-  /** Pasted files, stored before the tiles appear. Never saved. */
+  /** Pasted files, kept until the block is on the page. Never saved. */
   private pendingFiles?: File[];
+  /**
+   * Files on their way into the library, shown as tiles of their own until
+   * each lands. Never saved: a gallery with nothing landed yet is empty.
+   */
+  private uploads: PendingUpload[] = [];
 
   constructor(
     private options: ContentToolOptions<
@@ -677,21 +764,76 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
 
   protected override afterRender() {
     if (this.pendingFiles && !this.options.readOnly) {
-      queueMicrotask(() => void this.upload());
+      queueMicrotask(() => this.startPasted());
     } else if (this.autoOpen && !this.options.readOnly) {
       this.autoOpen = false;
       queueMicrotask(() => void this.add());
     }
   }
 
-  private async upload() {
+  protected override onDestroy() {
+    if (!this.uploads.length) return;
+    for (const upload of this.uploads) upload.dispose();
+    this.uploads = [];
+    contentToolConfig(this.options.config).uploads.track?.(-1);
+  }
+
+  /**
+   * The pasted files go into the library at the defaults, two at a time:
+   * the server keeps only a few drafts, and one may be the editor's.
+   */
+  private startPasted() {
     const files = this.pendingFiles;
-    if (!files) return;
-    const config = contentToolConfig(this.options.config);
-    const assets = await config.uploadFiles(files).catch(() => []);
-    if (this.pendingFiles !== files || this.destroyed) return;
     this.pendingFiles = undefined;
-    this.append(assets);
+    if (!files?.length || this.destroyed) return;
+    const { constraints } = contentToolConfig(this.options.config).uploads;
+    this.startUploads(
+      files.map((file) => new PendingMediaUpload(file, { constraints })),
+      2,
+    );
+  }
+
+  /**
+   * Shows uploads as tiles until each lands. `concurrency` runs them here;
+   * without it they are already running, started by whoever picked them.
+   * The tiles follow their own status; the block re-renders only when the
+   * set of tiles changes, and dispatches a change only when a file lands.
+   */
+  private startUploads(uploads: PendingUpload[], concurrency?: number) {
+    if (!uploads.length) return;
+    if (this.destroyed) {
+      for (const upload of uploads) upload.dispose();
+      return;
+    }
+    const config = contentToolConfig(this.options.config).uploads;
+    if (!this.uploads.length) config.track?.(1);
+    this.uploads = [...this.uploads, ...uploads];
+    this.renderContent();
+    if (concurrency) {
+      void runAssetBatch(uploads, (upload) => upload.run(), concurrency);
+    }
+    // Every file lands as a tile of its own, the same bytes twice included:
+    // tiles have ids of their own, and a gallery may show one picture twice.
+    for (const upload of uploads) {
+      void upload.result.then((asset) => {
+        if (this.destroyed || !this.uploads.includes(upload)) return;
+        this.forget(upload);
+        if (!asset) {
+          this.renderContent();
+          return;
+        }
+        this.append([contentAssetFromVariant(asset)]);
+      });
+    }
+  }
+
+  /** The tile goes. Nothing stored changed, so nothing is dispatched here. */
+  private forget(upload: PendingUpload) {
+    this.uploads = this.uploads.filter((other) => other !== upload);
+    upload.dispose();
+    if (!this.uploads.length) {
+      contentToolConfig(this.options.config).uploads.track?.(-1);
+    }
   }
 
   save(): Record<string, unknown> {
@@ -703,12 +845,6 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
   }
 
   protected view() {
-    if (this.pendingFiles)
-      return h(ContentAssetSkeleton, {
-        icon: 'gallery',
-        label: this.labels.addMedia,
-        loading: true,
-      });
     return h(ContentGallery, {
       items: this.items,
       editable: !this.options.readOnly,
@@ -717,9 +853,21 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
       addLabel: this.labels.addMedia,
       removeLabel: this.labels.removeMedia,
       captionPlaceholder: this.labels.caption,
+      pending: this.uploads,
+      cancelUploadLabel: this.labels.cancelUpload,
+      retryUploadLabel: this.labels.retryUpload,
+      dismissUploadLabel: this.labels.dismissUpload,
       'onUpdate:selectedId': (id: string | undefined) => {
         this.selectedId = id;
       },
+      onCancelPending: (id: string) => {
+        const upload = this.uploads.find((other) => other.id === id);
+        if (!upload) return;
+        this.forget(upload);
+        this.renderContent();
+      },
+      onRetryPending: (id: string) =>
+        this.uploads.find((other) => other.id === id)?.retry(),
       onAdd: () => void this.add(),
       onEdit: (id: string) => void this.edit(id),
       onRemove: (id: string) => this.remove(id),
@@ -741,9 +889,13 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
 
   private async add() {
     const config = contentToolConfig(this.options.config);
-    const assets = await config.pickAssets('media');
-    if (this.destroyed) return;
+    const { assets, uploads } = await config.pickAssets('media');
+    if (this.destroyed) {
+      for (const upload of uploads) upload.dispose();
+      return;
+    }
     this.append(assets);
+    this.startUploads(uploads);
   }
 
   private append(assets: ContentAssetData[]) {
@@ -995,6 +1147,9 @@ function getLabels(
       refreshExternalLink: 'Refresh link',
       chooseEntity: 'Choose what to link to',
       makeGallery: 'Turn into a gallery',
+      retryUpload: 'Try again',
+      cancelUpload: 'Cancel',
+      dismissUpload: 'Dismiss',
     }
   );
 }

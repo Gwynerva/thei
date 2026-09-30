@@ -9,10 +9,8 @@ import type {
 } from '@editorjs/editorjs';
 import type {
   AssetReplaceResult,
-  AssetVariantInfo,
   AssetVariantsResponse,
 } from '#layers/thei/shared/api/asset';
-import { AssetType } from '#layers/thei/shared/asset';
 import {
   ContentValidationError,
   collectContentAssetSizeMap,
@@ -28,10 +26,11 @@ import {
 } from '#layers/thei/shared/content';
 import {
   launchAssetWizard,
+  acceptedExtensionsFromAccept,
+  contentAssetFromVariant,
   launchAssetBatchWizard,
   launchAssetEditor,
-  mapAssetVariantToReplaceResult,
-  uploadOriginalAssets,
+  launchPendingFileEditor,
   type AssetWizardOptions,
 } from '#layers/thei/app/composables/asset-wizard';
 import { bindEditorMediaPaste } from '#layers/thei/app/composables/editor-media-paste';
@@ -66,6 +65,7 @@ import {
   entityLinkToolWithPaste,
   PrivateSectionBoundaryTool,
   type ContentEditorAssetKind,
+  type ContentEditorUploads,
 } from '#layers/thei/app/components/content/editor-tools';
 import type {
   ContentHintControlsExpose,
@@ -444,6 +444,14 @@ function undoRestore() {
 }
 
 useModalCloseGuard(() => {
+  // A pasted file still on its way has nowhere to land once the editor is
+  // gone; unlike the text, it is not kept anywhere.
+  if (
+    pendingUploads.value > 0 &&
+    !window.confirm(phrase.value.content_media_pending_confirm)
+  ) {
+    return false;
+  }
   if (!editorChangePending.value && !isDirty.value) return true;
   const confirmed = window.confirm(phrase.value.unsaved_modal_confirm);
   // The text is not simply dropped: the session keeps it as a version.
@@ -452,7 +460,9 @@ useModalCloseGuard(() => {
 });
 // Everything typed reaches the browser's storage as the tab closes, so the
 // browser only has to ask when that storage is not available.
-useBeforeUnloadGuard(() => editorSession.needsUnloadGuard.value);
+useBeforeUnloadGuard(
+  () => editorSession.needsUnloadGuard.value || pendingUploads.value > 0,
+);
 
 function preventEditorLinkNavigation(event: MouseEvent) {
   if (event.type === 'auxclick' && event.button !== 1) return;
@@ -687,7 +697,7 @@ onMounted(async () => {
         config: {
           pickAsset,
           editAsset,
-          uploadFiles,
+          uploads,
           labels: contentToolLabels(),
         },
       },
@@ -697,7 +707,7 @@ onMounted(async () => {
         config: {
           pickAssets,
           editAsset,
-          uploadFiles,
+          uploads,
           labels: contentToolLabels(),
         },
       },
@@ -901,31 +911,44 @@ async function pickAssets(kind: ContentEditorAssetKind) {
         .map((error) => `${error.fileName}: ${error.message}`)
         .join(' · ');
     }
-    return result?.assets.map(mapAsset) ?? [];
+    return {
+      assets: result?.assets.map(mapAsset) ?? [],
+      uploads: result?.uploads ?? [],
+    };
   } catch (error) {
     console.error(error);
     errorMessage.value = phrase.value.content_asset_pick_error;
-    return [];
+    return { assets: [], uploads: [] };
   }
 }
 
-async function uploadFiles(files: File[]) {
-  try {
-    const result = await uploadOriginalAssets(
-      files,
-      contentAssetOptions('media'),
-    );
-    if (result.errors.length)
-      errorMessage.value = result.errors
-        .map((error) => `${error.fileName}: ${error.message}`)
-        .join(' · ');
-    return result.assets.map(mapAsset);
-  } catch (error) {
-    console.error(error);
-    errorMessage.value = phrase.value.content_asset_pick_error;
-    return [];
-  }
-}
+/** Pasted files on their way into the library; closing the editor asks first. */
+const pendingUploads = ref(0);
+const uploads: ContentEditorUploads = {
+  constraints: {
+    maxSize: contentAssetOptions('media').maxSize,
+    sizeLimitPolicy: contentAssetOptions('media').sizeLimitPolicy,
+    acceptedExtensions: acceptedExtensionsFromAccept(
+      contentAssetOptions('media').accept!,
+    ),
+  },
+  editPending: async (pending) => {
+    try {
+      const edited = await launchPendingFileEditor(pending, {
+        ...contentAssetOptions('media'),
+        usageDelta: await buildDraftUsageDelta(),
+      });
+      return edited ? mapAsset(edited) : undefined;
+    } catch (error) {
+      console.error(error);
+      errorMessage.value = phrase.value.content_asset_pick_error;
+      return undefined;
+    }
+  },
+  track: (delta) => {
+    pendingUploads.value += delta;
+  },
+};
 
 function editAsset(current: ContentAssetData, kind: ContentEditorAssetKind) {
   return runModalFlow(() => runEditAsset(current, kind));
@@ -1023,23 +1046,7 @@ async function launchContentAssetWizard(
   }
 }
 
-function mapAsset(asset: AssetVariantInfo) {
-  const result = mapAssetVariantToReplaceResult(asset);
-  return {
-    assetUuid: asset.assetUuid,
-    type: asset.type,
-    extension: asset.extension,
-    size: asset.size,
-    media: result.media,
-    assetUrl: result.assetUrl,
-    archivedOriginal:
-      asset.type === AssetType.Other &&
-      asset.meta &&
-      'archivedOriginal' in asset.meta
-        ? asset.meta.archivedOriginal
-        : undefined,
-  };
-}
+const mapAsset = contentAssetFromVariant;
 
 function contentAssetReplaceResult(
   asset: ContentAssetData,
@@ -1078,6 +1085,9 @@ function contentToolLabels() {
     refreshExternalLink: phrase.value.refresh_external_link,
     chooseEntity: phrase.value.content_choose_entity,
     makeGallery: phrase.value.content_make_gallery,
+    retryUpload: phrase.value.asset_upload_retry,
+    cancelUpload: phrase.value.upload_cancel,
+    dismissUpload: phrase.value.upload_dismiss,
   };
 }
 

@@ -613,7 +613,15 @@ test.describe('in the text editor of a page', () => {
     ),
   });
 
-  async function openEditor(page: Page, name: string) {
+  async function openEditor(
+    page: Page,
+    name: string,
+    blocks: object[] = [
+      { type: 'paragraph', data: { text: 'Hello world' } },
+      { type: 'delimiter', data: {} },
+      { type: 'paragraph', data: { text: 'The end' } },
+    ],
+  ) {
     const slug = `current-block-${name}-${Date.now()}`;
     const response = await page.request.post('/api/admin/pages', {
       data: {
@@ -621,15 +629,7 @@ test.describe('in the text editor of a page', () => {
         summary: 'A page for the current block spec.',
         slug,
         access: 'public',
-        content: {
-          data: {
-            blocks: [
-              { type: 'paragraph', data: { text: 'Hello world' } },
-              { type: 'delimiter', data: {} },
-              { type: 'paragraph', data: { text: 'The end' } },
-            ],
-          },
-        },
+        content: { data: { blocks } },
         reminder: '',
         notes: null,
       },
@@ -646,6 +646,62 @@ test.describe('in the text editor of a page', () => {
 
   const editorBlocks = (page: Page) =>
     page.locator('dialog .content-editor .ce-block');
+
+  test('dragging a block to the edge of the modal scrolls it', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 600 });
+    await openEditor(
+      page,
+      'drag-scroll',
+      Array.from({ length: 40 }, (_, index) => ({
+        type: 'paragraph',
+        data: { text: `Paragraph ${index + 1}` },
+      })),
+    );
+    const blocks = editorBlocks(page);
+    await expect(blocks).toHaveCount(40);
+    const scroller = page.locator('dialog section > div.overflow-auto');
+    const scrollTop = () => scroller.evaluate((element) => element.scrollTop);
+    expect(await scrollTop()).toBe(0);
+
+    // The settings button appears beside the hovered block and is the handle.
+    await blocks.first().hover();
+    const handle = page.locator('dialog .ce-toolbar__settings-btn');
+    await expect(handle).toBeVisible();
+    const handleBox = (await handle.boundingBox())!;
+    const scrollerBox = (await scroller.boundingBox())!;
+    await page.mouse.move(
+      handleBox.x + handleBox.width / 2,
+      handleBox.y + handleBox.height / 2,
+    );
+    await page.mouse.down();
+    const x = scrollerBox.x + scrollerBox.width / 2;
+    const edge = scrollerBox.y + scrollerBox.height - 10;
+    await page.mouse.move(handleBox.x + 30, handleBox.y + 30, { steps: 5 });
+    await page.mouse.move(x, edge, { steps: 10 });
+
+    // A held drag fires `dragover` only while the pointer moves, so it is
+    // nudged; the scroller must reach its end from those frames alone.
+    const atEnd = () =>
+      scroller.evaluate(
+        (element) =>
+          element.scrollTop + element.clientHeight >= element.scrollHeight - 1,
+      );
+    for (let step = 0; step < 300 && !(await atEnd()); step++) {
+      await page.mouse.move(x + (step % 2), edge);
+      await page.waitForTimeout(16);
+    }
+    expect(await scrollTop()).toBeGreaterThan(200);
+    expect(await atEnd()).toBe(true);
+
+    const lastBox = (await blocks.last().boundingBox())!;
+    await page.mouse.move(x, lastBox.y + lastBox.height * 0.75, { steps: 5 });
+    await page.mouse.up();
+
+    await expect(blocks.last()).toHaveText('Paragraph 1');
+    await expect(blocks.first()).toHaveText('Paragraph 2');
+  });
 
   test('Enter in the link popup links the text and adds no block', async ({
     page,

@@ -20,8 +20,10 @@ so files made by older versions at other numbers stay described exactly:
 | lossless |              100 | `webp-lossless` |            — |                      — |     — |
 
 A number between two levels reads the tables along the line between them
-(`interpolateByQualityLevel`). Images default to high, videos to medium. The
-tables live in `shared/asset-quality-levels.ts`.
+(`interpolateByQualityLevel`). Images and videos both default to medium; a
+place with an upload profile of its own may start higher
+(`shared/asset-upload-profiles.ts`). The tables live in
+`shared/asset-quality-levels.ts`.
 
 ## Video bitrate ladder
 
@@ -53,6 +55,76 @@ rate. See `videoTargetBitrate` in `shared/asset-upload-quality.ts` and
   per pixel. Guesses are marked ≈ and replaced as renders arrive.
 
 Both estimates are in `shared/asset-size-estimate.ts`.
+
+## Looking at the result exactly
+
+A browser resamples an image whenever it is not drawn at a whole number of
+device pixels per image pixel — and on a screen scaled to 125 % or 150 %, or
+with the browser zoomed, "100 %" of an image's CSS size is not that. The
+blur this adds looks like an artifact of the encode and is not one. The
+preview and the comparison therefore measure their zoom in device pixels
+(`useDevicePixelRatio`, `exactImageRendering` in
+`app/modals/asset-modal/compare-media.ts`): 100 % is one pixel of the file
+on one device pixel, "fit" never goes past it, and from 100 % up every side
+is drawn nearest-neighbour (`image-rendering: pixelated`, which every
+current browser honours for images; Chrome ignores it on video), so each
+device pixel shows one pixel of the file as it is. Below 100 % a side is
+smoothed, since dropping pixels would mislead as much. In seamless
+comparison the larger side is shown at the smaller one's size and is the
+one below 100 %; the real mode shows both at their own pixels.
+
+## Dry runs, the queue and cancellation
+
+The editor asks for its dry runs in order of worth (`draftRenderOrder` in
+`app/modals/upload-settings/quality-stops.ts`): first the format "Use" would
+store at the chosen stop, then the other formats "Auto" weighs there, then
+the other stops nearest first. Three requests are under way at a time — as
+many as the image lane runs on the largest box (`RenderPump` in
+`render-pump.ts`) — so "Use" is enabled as soon as the first one answers, and
+the rest fill in behind it. A settled change drops the requests no longer
+wanted at once and sends new ones after a short pause; a failed one is only
+asked for again on "Retry".
+
+On the server every dry run is low priority (`server/thei/assets/queue.ts`):
+a commit, an upload or a pasted file arriving later goes ahead of it. What a
+dropped request does depends on where its job is. Still waiting for a slot, it
+leaves the queue. Encoding a video, ffmpeg is killed. Encoding an image, sharp
+runs to the end — it cannot be stopped — and the result is kept as a render of
+the draft, so asking for it again costs nothing. A commit whose request has
+gone stores nothing; an image it had already encoded becomes a render of the
+draft the same way.
+
+A commit reports where it is under the `uploadId` the client gave it, polled
+at `GET /api/admin/uploads/<id>`: `queued` while it waits for a slot,
+`processing` (with a share for video and zip; sharp reports none), then
+`finishing` while the preview is made and the file moved into the library.
+
+A quick commit — a picture, usually a render the editor already judged — is
+stored within its request, and "Cancel" closes that request. A video encode
+or a zip (`isLongCommit` in `shared/asset-upload-settings.ts`) runs as a job
+instead (`server/thei/assets/jobs.ts`): the request answers `202` at once, the
+client polls the same address every second until the job reports `done` with
+the variant or `failed` with the error's message and code, and `DELETE` there
+cancels it — on "Cancel", when the editor closes, and as the tab goes. No
+connection has to stay open for the minutes an encode takes, so neither a
+dropped connection nor a proxy's read timeout can cut it short. A job nobody
+has polled for ten minutes is cancelled as a safety net. Jobs live in memory
+like drafts: after a restart the client is told the draft is gone and stages
+the file again. One long job runs per draft; a second request meanwhile is
+answered `409`.
+
+Behind a reverse proxy, the timeouts in `update/instance/nginx.conf.example`
+now only have to cover the upload of the file itself and a quick commit.
+
+A picture or a video pasted into the text is stored without asking, through
+a draft of its own, at medium quality, the whole frame at its own size, in
+the format the long-side rule picks (`shared/asset-paste-defaults.ts`). SVG
+and GIF are kept as they are: a re-encode would rasterise the one and flatten
+the other. The block shows the upload's progress and offers the asset editor
+meanwhile; the editor opens on the same draft, and an image encode the default
+had finished is its first dry run. Dismissing the editor lets the default go
+on. A gallery pasted as several files stores them two at a time, since the
+server keeps only a few drafts and the editor may hold one.
 
 ## What is stored
 

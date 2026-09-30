@@ -6,8 +6,10 @@ import {
 import {
   buildCompareMediaLayout,
   compareFitZoomTarget,
+  compareSideDeviceScale,
   compareSideZoomTarget,
   compareZoomPercent,
+  exactImageRendering,
   getCompareSideMetrics,
   type CompareMediaDimensions,
   type CompareMediaMode,
@@ -104,13 +106,15 @@ const isSeamlessMode = computed(
   () => effectiveCompareMode.value === 'seamless',
 );
 
+const devicePixelRatio = useDevicePixelRatio();
+
 const maxCompareZoom = computed(() => {
   const layout = compareLayout.value;
   if (!layout) return 5;
   return Math.max(
     5,
-    compareSideZoomTarget(layout.originalScale),
-    compareSideZoomTarget(layout.modifiedScale),
+    compareSideZoomTarget(layout.originalScale, devicePixelRatio.value),
+    compareSideZoomTarget(layout.modifiedScale, devicePixelRatio.value),
   );
 });
 
@@ -134,14 +138,53 @@ const {
   fitZoom: (container) => activeFitZoomTarget(container, activeFitSide.value),
   uncappedFitZoom: (container) =>
     activeFitZoomTarget(container, activeFitSide.value, false),
+  devicePixelRatio: () => devicePixelRatio.value,
 });
 
 const originalPercent = computed(() =>
-  compareZoomPercent(zoom.value, compareLayout.value?.originalScale ?? 1),
+  compareZoomPercent(
+    zoom.value,
+    compareLayout.value?.originalScale ?? 1,
+    devicePixelRatio.value,
+  ),
 );
 const modifiedPercent = computed(() =>
-  compareZoomPercent(zoom.value, compareLayout.value?.modifiedScale ?? 1),
+  compareZoomPercent(
+    zoom.value,
+    compareLayout.value?.modifiedScale ?? 1,
+    devicePixelRatio.value,
+  ),
 );
+
+/**
+ * Each side is sampled by its own magnification: from one device pixel per
+ * pixel of the file up it is drawn exactly, nearest neighbour, so what is
+ * seen is the file and not the browser's blending — a comparison between
+ * sizes and qualities is only worth anything that way. A side shown smaller
+ * than its pixels is smoothed, since dropping pixels would mislead as much.
+ * (A vector has no pixels to keep.)
+ */
+function renderingStyle(side: CompareMediaSide) {
+  const source = side === 'original' ? props.original : props.modified;
+  const scale =
+    side === 'original'
+      ? compareLayout.value?.originalScale
+      : compareLayout.value?.modifiedScale;
+  return {
+    imageRendering:
+      source.extension.toLowerCase() === 'svg'
+        ? 'auto'
+        : exactImageRendering(
+            compareSideDeviceScale(
+              zoom.value,
+              scale ?? 1,
+              devicePixelRatio.value,
+            ),
+          ),
+  };
+}
+const originalRendering = computed(() => renderingStyle('original'));
+const modifiedRendering = computed(() => renderingStyle('modified'));
 
 const dividerStyle = computed(() => ({ left: `${dividerPercent.value}%` }));
 const originalClipStyle = computed(() => ({
@@ -349,6 +392,7 @@ function sideFitZoomTarget(
     container,
     FIT_PADDING,
     capAtSideHundred,
+    devicePixelRatio.value,
   );
 }
 
@@ -357,6 +401,7 @@ function sideHundredZoomTarget(side: CompareMediaSide): number | undefined {
   if (!layout) return;
   return compareSideZoomTarget(
     side === 'original' ? layout.originalScale : layout.modifiedScale,
+    devicePixelRatio.value,
   );
 }
 
@@ -484,7 +529,7 @@ function scheduleDividerResize(): void {
                 :class="
                   originalCrop.media ? 'absolute top-1/2 left-1/2' : 'size-full'
                 "
-                :style="originalCrop.media"
+                :style="[originalCrop.media, originalRendering]"
                 @loadedmetadata="onVideoMeta('original', $event)"
               />
               <img
@@ -497,7 +542,7 @@ function scheduleDividerResize(): void {
                 :class="
                   originalCrop.media ? 'absolute top-1/2 left-1/2' : 'size-full'
                 "
-                :style="originalCrop.media"
+                :style="[originalCrop.media, originalRendering]"
                 @load="onImageLoad('original', $event)"
               />
             </div>
@@ -510,7 +555,7 @@ function scheduleDividerResize(): void {
             :poster="original.poster && sitePath(original.poster)"
             preload="metadata"
             class="pointer-events-none block max-h-none max-w-none shrink-0"
-            :style="originalMediaStyle"
+            :style="[originalMediaStyle, originalRendering]"
             @loadedmetadata="onVideoMeta('original', $event)"
           />
           <img
@@ -521,7 +566,7 @@ function scheduleDividerResize(): void {
             alt=""
             draggable="false"
             class="pointer-events-none block max-h-none max-w-none shrink-0"
-            :style="originalMediaStyle"
+            :style="[originalMediaStyle, originalRendering]"
             @load="onImageLoad('original', $event)"
           />
         </TransitionFade>
@@ -542,7 +587,7 @@ function scheduleDividerResize(): void {
             :poster="modified.poster && sitePath(modified.poster)"
             preload="metadata"
             class="pointer-events-none block max-h-none max-w-none shrink-0"
-            :style="modifiedMediaStyle"
+            :style="[modifiedMediaStyle, modifiedRendering]"
             @loadedmetadata="onVideoMeta('modified', $event)"
           />
         </TransitionFade>
@@ -555,7 +600,7 @@ function scheduleDividerResize(): void {
             alt=""
             draggable="false"
             class="pointer-events-none block max-h-none max-w-none shrink-0"
-            :style="modifiedMediaStyle"
+            :style="[modifiedMediaStyle, modifiedRendering]"
             @load="onImageLoad('modified', $event)"
           />
         </TransitionFade>

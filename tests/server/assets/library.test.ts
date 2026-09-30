@@ -203,37 +203,36 @@ describe('asset library', () => {
   it('counts placements while retaining unique entities, roles and private occurrences', () => {
     const uses = getAssetUsages('a').placements;
     expect(summarizeAssetUsages(uses)).toEqual({
-      entityCount: 4,
-      counts: { project: 4, page: 1, tag: 1, profile: 2 },
+      entityCount: 5,
+      counts: {
+        project: 1,
+        'project-section': 3,
+        page: 1,
+        tag: 1,
+        profile: 2,
+      },
     });
+    // A section holds its own files: the project group keeps only the banner.
     expect(
       uses
         .filter((p) => p.source.type === 'project')
         .reduce((n, p) => n + p.count, 0),
-    ).toBe(4);
+    ).toBe(1);
+    const section = {
+      type: 'project-section',
+      id: 'section',
+      title: 'Details',
+      url: '/projects/project-p/sections/details-s/',
+      editUrl: '/admin/projects/p/edit/?section=s',
+      parent: { title: 'Проект Луна', url: '/projects/project-p/' },
+    };
     expect(uses.filter((p) => p.role === 'content')).toMatchObject([
-      {
-        scope: {
-          kind: 'project-section',
-          title: 'Details',
-          url: '/projects/project-p/sections/details-s/',
-        },
-        isPrivate: false,
-        count: 2,
-      },
-      {
-        scope: {
-          kind: 'project-section',
-          title: 'Details',
-          url: '/projects/project-p/sections/details-s/',
-        },
-        isPrivate: true,
-        count: 1,
-      },
+      { source: section, isPrivate: false, count: 2 },
+      { source: section, isPrivate: true, count: 1 },
     ]);
-    expect(uses.find((p) => p.role === 'banner')?.scope).toEqual({
-      kind: 'entity',
-    });
+    expect(uses.find((p) => p.role === 'banner')?.source).not.toHaveProperty(
+      'parent',
+    );
     expect(
       uses.filter((p) => p.source.type === 'profile').map((p) => p.detail),
     ).toEqual(['avatar', 'status']);
@@ -241,15 +240,16 @@ describe('asset library', () => {
       '/preview/content',
     );
   });
-  it('returns structured project-stage scopes', () => {
+  function addStage(isPrivate = false) {
     db.insert(schema.projectStages)
       .values({
         stageUuid: 'stage',
         projectUuid: 'p',
         title: 'Launch',
-        summary: '',
+        summary: 'Rocket day',
         humanReadableSlug: 'launch',
         publicId: 'st',
+        isPrivate,
         createdAt: 1,
         updatedAt: 1,
       })
@@ -273,25 +273,72 @@ describe('asset library', () => {
         role: 'content',
       })
       .run();
+  }
+  it('lists a stage as a source of its own, named with its project', () => {
+    addStage();
 
     expect(getAssetUsages('b').placements).toMatchObject([
       {
-        scope: {
-          kind: 'project-stage',
+        source: {
+          type: 'project-stage',
+          id: 'stage',
           title: 'Launch',
+          summary: 'Rocket day',
           url: '/projects/project-p/stages/launch-st/',
+          editUrl: '/admin/projects/p/edit/?stage=st',
+          parent: { title: 'Проект Луна', url: '/projects/project-p/' },
         },
+        isPrivate: false,
       },
     ]);
+    // The stage took the only file nothing used, so no "unused" group is left.
+    const groups = listLibrarySections().items;
+    expect(groups.map((g) => `${g.type}:${g.id}:${g.count}`).sort()).toEqual([
+      'page:page:1',
+      'profile:me:1',
+      'project-section:section:1',
+      'project-stage:stage:1',
+      'project:p:1',
+      'tag:tag:1',
+    ]);
+    expect(groups.find((g) => g.type === 'project-stage')?.parent).toEqual({
+      title: 'Проект Луна',
+      url: '/projects/project-p/',
+    });
+    // Found by its own words, not the project's; and the project group does
+    // not repeat what its parts hold.
+    expect(listLibrarySections({ q: 'rocket' }).items.map((g) => g.id)).toEqual(
+      ['stage'],
+    );
+    expect(
+      listSourceAssets('project-stage', 'stage').items.map(
+        (i) => i.asset.assetUuid,
+      ),
+    ).toEqual(['b']);
+    expect(
+      listSourceAssets('project', 'p').items.map((i) => i.asset.assetUuid),
+    ).toEqual(['a']);
+  });
+  it('keeps a stage private when it or its project is', () => {
+    addStage(true);
+    expect(getAssetUsages('b').placements[0]?.isPrivate).toBe(true);
+
+    db.update(schema.projectStages).set({ isPrivate: false }).run();
+    expect(getAssetUsages('b').placements[0]?.isPrivate).toBe(false);
+
+    db.update(schema.projects)
+      .set({ access: 'private' as any })
+      .run();
+    expect(getAssetUsages('b').placements[0]?.isPrivate).toBe(true);
   });
   it('searches site-defined text without exposing internal previews', () => {
     expect(
       listLibrarySections({ q: 'КОСМОСА' }).items.map((g) => g.id),
     ).toEqual(['p']);
-    // An editor caption belongs to the project that holds the content.
+    // An editor caption belongs to the section that holds the content.
     expect(
       listLibrarySections({ q: 'фОТО луны' }).items.map((g) => g.id),
-    ).toEqual(['p']);
+    ).toEqual(['section']);
     expect(
       listLibraryAssets({ q: 'фОТО луны' }).items.map((i) => i.asset.assetUuid),
     ).toEqual(['a']);

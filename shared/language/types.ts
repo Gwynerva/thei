@@ -162,8 +162,6 @@ export type LanguagePhrases = {
   asset_role_action_file: string;
   asset_role_avatar: string;
   asset_role_status: string;
-  asset_scope_stage: string;
-  asset_scope_section: string;
   asset_source_profile: string;
   asset_library_view: string;
   asset_library_edit: string;
@@ -872,6 +870,7 @@ export type LanguagePhrases = {
   content_private_section_end: string;
   content_editor_i18n: EditorJsPhrases;
   content_asset_pick_error: string;
+  content_media_pending_confirm: string;
   content_choose_media: string;
   content_gallery_tile: string;
   content_add_media: string;
@@ -1034,6 +1033,11 @@ export type LanguagePhrases = {
   upload_apply_settings: string;
   upload_processing: string;
   upload_queued: string;
+  upload_finishing: string;
+  upload_cancel: string;
+  upload_dismiss: string;
+  upload_pending_leave_confirm: string;
+  upload_error_job_lost: string;
   upload_quality: string;
   upload_audio: string;
   upload_audio_none: string;

@@ -24,6 +24,7 @@ import {
   bannerSizeKey,
   currentProjectUuidKey,
   otherItemsKey,
+  pendingUploadsKey,
   showcaseItemsKey,
   provideProjectActionMedia,
 } from '../../projects/composables';
@@ -66,6 +67,8 @@ provide(currentProjectUuidKey, ref<string>());
 provide(showcaseItemsKey, ref([]));
 const otherItems = ref<EventGetResponse['otherAssets']>([]);
 provide(otherItemsKey, otherItems);
+const pendingUploads = ref(0);
+provide(pendingUploadsKey, pendingUploads);
 const actionMedia = provideProjectActionMedia();
 const externalLinks = useExternalLinks();
 
@@ -78,7 +81,7 @@ const showPeriodsHint = ref(false);
 const isDirty = computed(
   () => JSON.stringify(eventPayload()) !== savedSnapshot.value,
 );
-useBeforeUnloadGuard(() => isDirty.value);
+useBeforeUnloadGuard(() => isDirty.value || pendingUploads.value > 0);
 const isValid = computed(() =>
   Boolean(
     eventData.value.title.trim() &&
@@ -189,6 +192,12 @@ await useAdminTabTitle(
 );
 onBeforeRouteLeave(() => {
   if (interceptModalNavigation()) return false;
+  if (
+    pendingUploads.value > 0 &&
+    !window.confirm(phrase.value.upload_pending_leave_confirm)
+  ) {
+    return false;
+  }
   if (isDirty.value)
     return window.confirm(phrase.value.unsaved_changes_confirm);
 });

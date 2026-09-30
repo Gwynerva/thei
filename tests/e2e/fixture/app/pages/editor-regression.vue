@@ -9,11 +9,22 @@ import { ContentDelimiterTool } from '#layers/thei/app/components/content/editor
 import { bindEditorGutterClick } from '#layers/thei/app/composables/editor-gutter-click';
 import { bindEditorCurrentBlock } from '#layers/thei/app/composables/editor-current-block';
 import { bindEditorLinkPaste } from '#layers/thei/app/composables/editor-link-paste';
+import { bindEditorMediaPaste } from '#layers/thei/app/composables/editor-media-paste';
 import { createEditorPrivateSections } from '#layers/thei/app/composables/editor-private-sections';
 import { createEditorPrivatePattern } from '#layers/thei/app/composables/editor-private-pattern';
 import { readCleanEditorOutput } from '#layers/thei/app/composables/editor-output';
 import { createEditorHistorySession } from '#layers/thei/app/composables/content-history/session';
 import type { ContentHistoryTransport } from '#layers/thei/app/composables/content-history/api';
+import {
+  acceptedExtensionsFromAccept,
+  contentAssetFromVariant,
+  launchPendingFileEditor,
+} from '#layers/thei/app/composables/asset-wizard';
+import { ASSET_UPLOAD_LIMITS } from '#layers/thei/shared/asset-upload-limits';
+import {
+  imageExtensionProfile,
+  videoExtensionProfile,
+} from '#layers/thei/shared/assets/extensions';
 import type {
   ContentAssetData,
   ContentOutputData,
@@ -44,17 +55,42 @@ const picture = (id: string): ContentAssetData => ({
 /** The picker of a media block, open until "Choose picture" answers it. */
 let answerPick: ((asset: ContentAssetData | null) => void) | undefined;
 const picking = ref(false);
+/** Pasted files are stored for real, through the fixture's own server. */
+const uploadErrors = ref<string[]>([]);
+const pendingUploads = ref(0);
 const mediaToolConfig = {
   pickAsset: () =>
     new Promise<ContentAssetData | null>((resolve) => {
       picking.value = true;
       answerPick = resolve;
     }),
-  pickAssets: async () => [],
+  pickAssets: async () => ({ assets: [], uploads: [] }),
   editAsset: async () => undefined,
-  uploadFiles: async () => [],
+  uploads: {
+    constraints: {
+      maxSize: ASSET_UPLOAD_LIMITS.media,
+      sizeLimitPolicy: 'media' as const,
+      acceptedExtensions: acceptedExtensionsFromAccept([
+        imageExtensionProfile,
+        videoExtensionProfile,
+      ]),
+    },
+    editPending: async (
+      pending: Parameters<typeof launchPendingFileEditor>[0],
+    ) => {
+      const edited = await launchPendingFileEditor(pending, {
+        sizeLimitPolicy: 'media',
+        maxSize: ASSET_UPLOAD_LIMITS.media,
+      });
+      return edited ? contentAssetFromVariant(edited) : undefined;
+    },
+    track: (delta: 1 | -1) => {
+      pendingUploads.value += delta;
+    },
+  },
 };
 let unbindLinkPaste: (() => void) | undefined;
+let unbindMediaPaste: (() => void) | undefined;
 let cleanupPrivatePattern: (() => void) | undefined;
 let sections: ReturnType<typeof createEditorPrivateSections>;
 let snapshots: ReturnType<typeof createEditorHistorySession>;
@@ -185,6 +221,7 @@ onMounted(async () => {
     linkBlocks: new Set(['paragraph']),
     findEntity: (url) => findEntityByInternalUrl(url, site),
   });
+  unbindMediaPaste = bindEditorMediaPaste(holder.value!, editor);
   sections = createEditorPrivateSections(editor, { suppressionDuration: 20 });
   cleanupPrivatePattern = createEditorPrivatePattern(holder.value!);
   snapshots = createEditorHistorySession({
@@ -262,6 +299,7 @@ onBeforeUnmount(() => {
   unbindGutterClick?.();
   unbindCurrentBlock?.();
   unbindLinkPaste?.();
+  unbindMediaPaste?.();
   cleanupPrivatePattern?.();
   sections?.destroy();
   snapshots?.destroy();
@@ -278,6 +316,8 @@ onBeforeUnmount(() => {
       :data-transitions="transitions.join(',')"
       :data-snapshot-pending="snapshotPending"
       :data-history-writes="historyWrites.join(',')"
+      :data-upload-errors="uploadErrors.join(',')"
+      :data-pending-uploads="pendingUploads"
     >
       <button data-save @click="save">{{ dirty ? 'Save' : 'Saved' }}</button>
       <button @click="insert">Insert section</button>

@@ -20,6 +20,7 @@ import {
   bannerSizeKey,
   currentProjectUuidKey,
   otherItemsKey,
+  pendingUploadsKey,
   showcaseItemsKey,
   saveAfterContentEditKey,
   saveAfterItemEditKey,
@@ -107,6 +108,9 @@ provide(showcaseItemsKey, showcaseItems);
 
 const otherItems = ref<OtherAssetGetItem[]>([]);
 provide(otherItemsKey, otherItems);
+
+const pendingUploads = ref(0);
+provide(pendingUploadsKey, pendingUploads);
 
 const loadedStatuses = ref<ProfileHistoryPage<StatusHistoryItem>>();
 const statusField =
@@ -274,7 +278,7 @@ await useAdminTabTitle(
   ),
 );
 
-useBeforeUnloadGuard(() => isDirty.value);
+useBeforeUnloadGuard(() => isDirty.value || pendingUploads.value > 0);
 
 /**
  * Saving inside the content editor saves the whole entity too, but only when
@@ -411,6 +415,12 @@ function cloneProjectData(data: ProjectEditData): ProjectEditData {
 }
 onBeforeRouteLeave(() => {
   if (interceptModalNavigation()) return false;
+  if (
+    pendingUploads.value > 0 &&
+    !window.confirm(phrase.value.upload_pending_leave_confirm)
+  ) {
+    return false;
+  }
   if (isDirty.value) {
     return window.confirm(phrase.value.unsaved_changes_confirm);
   }

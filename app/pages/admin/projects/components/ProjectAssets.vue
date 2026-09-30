@@ -20,6 +20,9 @@ import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profil
 import { ASSET_UPLOAD_LIMITS } from '#layers/thei/shared/asset-upload-limits';
 import { DEFAULT_ASSET_IMAGE_FORMAT } from '#layers/thei/shared/asset-upload-settings';
 import AssetTile from '#layers/thei/app/components/AssetTile.vue';
+import type { ShallowRef } from 'vue';
+import AssetPendingTile from '#layers/thei/app/components/AssetPendingTile.vue';
+import type { PendingUpload } from '#layers/thei/app/composables/pending-upload';
 import type {
   OtherAssetGetItem,
   ShowcaseAssetGetItem,
@@ -33,6 +36,7 @@ import {
   iconSizeKey,
   bannerSizeKey,
   otherItemsKey,
+  pendingUploadsKey,
   showcaseItemsKey,
   currentProjectUuidKey,
 } from '../composables';
@@ -55,6 +59,52 @@ const currentProjectUuid = inject(currentProjectUuidKey)!;
 const batchErrorMessage = ref('');
 const showcaseRoot = useTemplateRef<HTMLElement>('showcaseRoot');
 const otherRoot = useTemplateRef<HTMLElement>('otherRoot');
+
+// Files still going up, shown as tiles of their own at the end of each list
+// until they land. The form knows nothing of them: leaving the page asks
+// through the count, and leaving lets them go.
+const pendingShowcase = shallowRef<PendingUpload[]>([]);
+const pendingOther = shallowRef<PendingUpload[]>([]);
+const pendingUploads = inject(pendingUploadsKey, undefined);
+watch([pendingShowcase, pendingOther], ([showcase, other]) => {
+  if (pendingUploads) pendingUploads.value = showcase.length + other.length;
+});
+onBeforeUnmount(() => {
+  for (const upload of [...pendingShowcase.value, ...pendingOther.value]) {
+    upload.dispose();
+  }
+  if (pendingUploads) pendingUploads.value = 0;
+});
+
+/** Shows uploads in a list until each lands, then places what landed. */
+function followUploads(
+  list: ShallowRef<PendingUpload[]>,
+  uploads: PendingUpload[],
+  place: (asset: AssetVariantInfo) => void,
+) {
+  if (!uploads.length) return;
+  list.value = [...list.value, ...uploads];
+  for (const upload of uploads) {
+    void upload.result.then((asset) => {
+      if (!list.value.includes(upload)) return;
+      forgetUpload(list, upload);
+      if (asset) place(asset);
+    });
+  }
+}
+
+/** The tile goes: the file landed, or was given up. */
+function forgetUpload(
+  list: ShallowRef<PendingUpload[]>,
+  upload: PendingUpload,
+) {
+  list.value = list.value.filter((other) => other !== upload);
+  upload.dispose();
+}
+const cancelShowcaseUpload = (upload: PendingUpload) =>
+  forgetUpload(pendingShowcase, upload);
+const cancelOtherUpload = (upload: PendingUpload) =>
+  forgetUpload(pendingOther, upload);
 
 type PickedAsset = {
   asset: AssetVariantInfo;
@@ -231,23 +281,26 @@ async function openShowcaseAdd() {
     sizeLimitPolicy: 'media',
   });
   if (!result) return;
-  for (const asset of result.assets) {
-    if (
-      (asset.type !== AssetType.Image && asset.type !== AssetType.Video) ||
-      !asset.media
-    ) {
-      continue;
-    }
-    addItem(
-      pickedToShowcaseItem(
-        { asset, result: mapAssetVariantToReplaceResult(asset) },
-        {},
-      ),
-    );
-  }
+  for (const asset of result.assets) placeShowcaseAsset(asset);
+  followUploads(pendingShowcase, result.uploads, placeShowcaseAsset);
   batchErrorMessage.value = result.errors
     .map((error) => `${error.fileName}: ${error.message}`)
     .join(' · ');
+}
+
+function placeShowcaseAsset(asset: AssetVariantInfo) {
+  if (
+    (asset.type !== AssetType.Image && asset.type !== AssetType.Video) ||
+    !asset.media
+  ) {
+    return;
+  }
+  addItem(
+    pickedToShowcaseItem(
+      { asset, result: mapAssetVariantToReplaceResult(asset) },
+      {},
+    ),
+  );
 }
 
 async function openShowcaseAsset(index: number) {
@@ -323,18 +376,16 @@ async function openOtherAdd() {
     sizeLimitPolicy: 'file',
   });
   if (!result) return;
-  for (const asset of result.assets) {
-    const picked = {
-      asset,
-      result: mapAssetVariantToReplaceResult(asset),
-    };
-    addOtherItem(
-      pickedToOtherItem(picked, { title: phrase.value.project_file }),
-    );
-  }
+  for (const asset of result.assets) placeOtherAsset(asset);
+  followUploads(pendingOther, result.uploads, placeOtherAsset);
   batchErrorMessage.value = result.errors
     .map((error) => `${error.fileName}: ${error.message}`)
     .join(' · ');
+}
+
+function placeOtherAsset(asset: AssetVariantInfo) {
+  const picked = { asset, result: mapAssetVariantToReplaceResult(asset) };
+  addOtherItem(pickedToOtherItem(picked, { title: phrase.value.project_file }));
 }
 
 async function openOtherAsset(index: number) {
@@ -521,6 +572,15 @@ async function openOtherAsset(index: number) {
           </div>
         </div>
 
+        <AssetPendingTile
+          v-for="upload in pendingShowcase"
+          :key="upload.id"
+          :upload
+          class="size-18"
+          @cancel="cancelShowcaseUpload(upload)"
+          @retry="upload.retry()"
+        />
+
         <!-- Add button (always last) -->
         <AssetTile
           :aria-label="phrase.showcase_add"
@@ -568,6 +628,15 @@ async function openOtherAsset(index: number) {
             {{ publicText(item.title) }}
           </div>
         </div>
+
+        <AssetPendingTile
+          v-for="upload in pendingOther"
+          :key="upload.id"
+          :upload
+          class="size-18"
+          @cancel="cancelOtherUpload(upload)"
+          @retry="upload.retry()"
+        />
 
         <AssetTile
           :aria-label="phrase.other_add"

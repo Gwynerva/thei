@@ -28,6 +28,7 @@ const newRouteFiles = [
   'server/routes/pages/[slug]/icon/[filename].get.ts',
   'server/routes/pages/[slug]/content/[filename].get.ts',
   'server/api/admin/uploads/[uploadId].get.ts',
+  'server/api/admin/uploads/[uploadId].delete.ts',
   'server/api/admin/session.post.ts',
   'server/api/admin/session.delete.ts',
   'server/api/generated-icons/[kind]/[seed].get.ts',

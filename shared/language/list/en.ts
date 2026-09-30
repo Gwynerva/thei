@@ -246,8 +246,6 @@ export default defineI18nBase({
     asset_role_action_file: 'Button file',
     asset_role_avatar: 'Avatar',
     asset_role_status: 'Status',
-    asset_scope_stage: 'Stage',
-    asset_scope_section: 'Section',
     asset_source_profile: 'Profile',
     asset_library_view: 'View entity',
     asset_library_edit: 'Edit entity',
@@ -1182,6 +1180,8 @@ export default defineI18nBase({
       move_down: 'Move down',
     },
     content_asset_pick_error: 'Failed to pick file.',
+    content_media_pending_confirm:
+      'A pasted file is still being stored. Close and lose it?',
     content_choose_media: 'Choose image or video',
     content_gallery_tile: 'Show this picture',
     content_add_media: 'Add image or video',
@@ -1357,6 +1357,13 @@ export default defineI18nBase({
     upload_apply_settings: 'Create variant',
     upload_processing: 'Processing...',
     upload_queued: 'Waiting in queue...',
+    upload_finishing: 'Finishing…',
+    upload_cancel: 'Cancel',
+    upload_dismiss: 'Dismiss',
+    upload_pending_leave_confirm:
+      'Files are still being stored. Leave and lose them?',
+    upload_error_job_lost:
+      'The server was restarted while the file was being stored.',
     upload_quality: 'Quality',
     upload_audio: 'Sound',
     upload_audio_none: 'none in the source',

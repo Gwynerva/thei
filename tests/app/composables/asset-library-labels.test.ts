@@ -5,10 +5,7 @@ import type {
   AssetSourceType,
 } from '../../../shared/asset-library';
 
-function placement(
-  sourceType: AssetSourceType,
-  scope: AssetPlacement['scope'] = { kind: 'entity' },
-): AssetPlacement {
+function placement(sourceType: AssetSourceType): AssetPlacement {
   return {
     source: {
       type: sourceType,
@@ -18,7 +15,6 @@ function placement(
       updatedAt: 0,
     },
     role: 'content',
-    scope,
     isPrivate: false,
     count: 1,
   };
@@ -35,13 +31,15 @@ describe('assetPlacementContentContext', () => {
   });
 
   it.each(['project-stage', 'project-section'] as const)(
-    'keeps nested %s content generic',
+    'keeps %s content generic',
     (kind) => {
-      expect(
-        assetPlacementContentContext(
-          placement('project', { kind, title: 'Child', url: '/child/' }),
-        ),
-      ).toBe('content');
+      expect(assetPlacementContentContext(placement(kind))).toBe('content');
     },
   );
+
+  it('describes only content by where it is', () => {
+    expect(
+      assetPlacementContentContext({ ...placement('project'), role: 'banner' }),
+    ).toBe('content');
+  });
 });

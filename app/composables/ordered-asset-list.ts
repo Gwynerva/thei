@@ -15,7 +15,9 @@ export function useOrderedAssetList<T extends { assetUuid: string }>(
     onSync(next);
   }
 
+  /** Appends, unless the asset is already in the list: rows are keyed by it. */
   function addItem(item: T) {
+    if (items.value.some((other) => other.assetUuid === item.assetUuid)) return;
     commit([...items.value, item]);
   }
 

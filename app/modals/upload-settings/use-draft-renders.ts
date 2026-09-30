@@ -3,12 +3,18 @@ import type {
   AssetDraftSource,
 } from '#layers/thei/shared/api/asset-draft';
 import type { AssetImageTransformRequest } from '#layers/thei/shared/asset-upload-settings';
+import { RenderPump } from './render-pump';
 
 /**
  * Settled edits wait this long, so a drag of the frame, a walk along the
- * quality bar or typing a size is one batch of requests, not one per step.
+ * quality bar or typing a size is one set of requests, not one per step.
  */
 const RENDER_DELAY_MS = 350;
+/**
+ * Dry runs under way at once: as many as the image lane runs on the largest
+ * box, so a change wastes at most that many encodes already started.
+ */
+const RENDER_WINDOW = 3;
 /**
  * Every stop in every format of the last couple of settings — no more than
  * the server keeps (`DRAFT_MAX_RENDERS`), or a remembered render could point
@@ -25,15 +31,14 @@ export interface DraftRenderRequest {
 /**
  * Dry runs of the current image settings, fetched as the admin edits.
  *
- * Each settled change asks the server to encode what "Use" would store in
- * every format, and then every other quality stop in the format that would
- * be stored there, so each shows its real size and "Auto" can pick by them.
- * The list is in order of worth — the chosen stop's formats first — and the
- * server takes jobs in the order they arrive. Settings already rendered are
- * answered from memory; a render still under way stays under way as long as
- * it is still wanted, and is cancelled the moment it is not. Results are
- * looked up by the settings asked for, so a request the server describes
- * differently still finds its answer.
+ * The requests come in order of worth — first what "Use" would store, then
+ * the other formats "Auto" weighs at that stop, then the other stops nearest
+ * first — and a few go out at a time, so the one that matters is answered
+ * before the rest are even asked for. Settings already rendered are answered
+ * from memory; a render still under way stays under way as long as it is
+ * still wanted, and is cancelled the moment it is not. Results are looked up
+ * by the settings asked for, so a request the server describes differently
+ * still finds its answer.
  */
 export function useDraftRenders(options: {
   withDraft: <T>(
@@ -46,13 +51,32 @@ export function useDraftRenders(options: {
 }) {
   const renders = shallowReactive(new Map<string, AssetDraftRender>());
   const failedKeys = shallowReactive(new Map<string, string>());
-  const inflight = new Map<string, AbortController>();
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  // One batch for a source's whole session. The server lets the requests of
-  // one batch run side by side and cancels those of another still waiting;
-  // here a render is dropped only when this editor stops wanting it, which
-  // it says by closing the request.
-  let batch = crypto.randomUUID();
+  const pump = new RenderPump<DraftRenderRequest, AssetDraftRender>({
+    window: RENDER_WINDOW,
+    delayMs: RENDER_DELAY_MS,
+    has: (key) => renders.has(key),
+    fetch: (item, signal) =>
+      options.withDraft((draft) =>
+        $fetch<AssetDraftRender>(
+          `/api/admin/assets/drafts/${draft.draftId}/renders`,
+          {
+            method: 'POST',
+            body: { settings: item.request },
+            signal,
+          },
+        ),
+      ),
+    onResult: (key, render) => {
+      failedKeys.delete(key);
+      remember(key, render);
+    },
+    onFailure: (key, reason) => {
+      failedKeys.set(
+        key,
+        errorMessage(reason, phrase.value.upload_result_failed),
+      );
+    },
+  });
 
   const primaryKey = computed(() => options.primaryKey());
   const current = computed(() => renders.get(primaryKey.value));
@@ -61,101 +85,22 @@ export function useDraftRenders(options: {
     () => Boolean(primaryKey.value) && !current.value && !error.value,
   );
 
-  // The set of settings, not their order: picking another format or stop
-  // reorders the same requests and must not touch encodes already under way.
   watch(
     () =>
       options
         .requests()
         .map((item) => item.key)
-        .sort()
         .join('|'),
-    schedule,
+    () => pump.setWanted(options.requests()),
     { immediate: true },
   );
-  onBeforeUnmount(() => {
-    clearTimeout(timer);
-    abortAll();
-  });
-
-  function schedule() {
-    clearTimeout(timer);
-    const missing = options
-      .requests()
-      .some(
-        (item) => item.key && !renders.has(item.key) && !inflight.has(item.key),
-      );
-    if (missing) timer = setTimeout(() => void run(), RENDER_DELAY_MS);
-  }
-
-  async function run() {
-    const wanted = options
-      .requests()
-      .filter((item) => item.key && !renders.has(item.key));
-    const wantedKeys = new Set(wanted.map((item) => item.key));
-    for (const [key, controller] of inflight) {
-      if (!wantedKeys.has(key)) {
-        controller.abort();
-        inflight.delete(key);
-      }
-    }
-    await Promise.all(
-      wanted
-        .filter((item) => !inflight.has(item.key))
-        .map((item) => fetchOne(item)),
-    );
-  }
-
-  async function fetchOne(item: DraftRenderRequest) {
-    const controller = new AbortController();
-    inflight.set(item.key, controller);
-    failedKeys.delete(item.key);
-    try {
-      const render = await options.withDraft((draft) =>
-        $fetch<AssetDraftRender>(
-          `/api/admin/assets/drafts/${draft.draftId}/renders`,
-          {
-            method: 'POST',
-            body: { settings: item.request, batch },
-            signal: controller.signal,
-          },
-        ),
-      );
-      remember(item.key, render);
-    } catch (reason) {
-      if (!controller.signal.aborted) {
-        failedKeys.set(
-          item.key,
-          errorMessage(reason, phrase.value.upload_result_failed),
-        );
-      }
-    } finally {
-      if (inflight.get(item.key) === controller) inflight.delete(item.key);
-    }
-  }
+  onBeforeUnmount(() => pump.abortAll());
 
   function remember(key: string, render: AssetDraftRender) {
     renders.delete(key);
     renders.set(key, render);
     while (renders.size > MAX_KEPT) {
       renders.delete(renders.keys().next().value!);
-    }
-  }
-
-  function abortAll() {
-    for (const controller of inflight.values()) controller.abort();
-    inflight.clear();
-  }
-
-  /**
-   * Gives up every render but one, so "Use" does not wait its turn behind
-   * dry runs of stops the admin has not chosen.
-   */
-  function abortExcept(key: string) {
-    for (const [own, controller] of inflight) {
-      if (own === key) continue;
-      controller.abort();
-      inflight.delete(own);
     }
   }
 
@@ -169,17 +114,15 @@ export function useDraftRenders(options: {
 
   /** Forgets every result, when they were made from another source. */
   function reset() {
-    clearTimeout(timer);
-    abortAll();
+    pump.reset();
     renders.clear();
     failedKeys.clear();
-    batch = crypto.randomUUID();
-    schedule();
+    pump.setWanted(options.requests());
   }
 
   function retry() {
     failedKeys.clear();
-    void run();
+    pump.retry();
   }
 
   return {
@@ -188,7 +131,9 @@ export function useDraftRenders(options: {
     error,
     renderFor,
     isPending,
-    abortExcept,
+    /** Keeps the render being stored and stops the rest, until released. */
+    hold: (key: string) => pump.hold(key),
+    release: () => pump.release(),
     retry,
     reset,
   };

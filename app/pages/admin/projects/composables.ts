@@ -127,6 +127,16 @@ export const showcaseItemsKey = Symbol('showcaseItems') as InjectionKey<
   Ref<ShowcaseAssetGetItem[]>
 >;
 
+/**
+ * Files still on their way into the showcase or the files list. They are
+ * not part of the form, so the form's own dirtiness knows nothing of them;
+ * leaving the page while any are up asks first, and a confirmed leave lets
+ * them go.
+ */
+export const pendingUploadsKey = Symbol('pendingUploads') as InjectionKey<
+  Ref<number>
+>;
+
 /** Full other-file items for display. Kept in sync with projectData.otherAssets. */
 export const otherItemsKey = Symbol('otherItems') as InjectionKey<
   Ref<OtherAssetGetItem[]>

@@ -61,10 +61,12 @@ import {
 } from './format-labels';
 import {
   buildQualityStops,
+  draftRenderOrder,
   LOSSY_IMAGE_FORMATS,
-  stopRenderOrder,
   type StopSize,
 } from './quality-stops';
+import { isAbortError } from '#layers/thei/app/composables/upload-draft';
+import { uploadStatusLabel } from '#layers/thei/app/composables/upload-progress';
 import type { DiscreteBarStop } from '../../components/field/discrete-bar-stops';
 import type { UploadSettingsFormatOption } from './UploadSettingsFormatList.vue';
 import {
@@ -99,13 +101,23 @@ const mediaPreview =
   useTemplateRef<InstanceType<typeof AssetModalPreviewMedia>>('mediaPreview');
 
 const pickedFile =
-  props.modalData.source.kind === 'file' ? props.modalData.source.file : null;
+  props.modalData.source.kind === 'file' ||
+  props.modalData.source.kind === 'draft'
+    ? props.modalData.source.file
+    : null;
 const sourceAsset =
   props.modalData.source.kind === 'asset' ? props.modalData.source.asset : null;
 const profile = getAssetUploadProfileConfig(props.modalData.uploadProfile);
 
-const { variants, loadingVariants, status, loadVariants, commit, touch } =
-  useUploadSettingsAssets(props.modalData);
+const {
+  variants,
+  loadingVariants,
+  status,
+  loadVariants,
+  commit,
+  cancelCommit,
+  touch,
+} = useUploadSettingsAssets(props.modalData);
 
 const errorText = ref('');
 const busy = ref<'commit' | 'finish' | null>(null);
@@ -129,9 +141,15 @@ const processingVariant = computed<AssetVariantInfo | undefined>(
 const origin = computed<DraftOrigin | undefined>(() =>
   processingVariant.value
     ? { kind: 'asset', assetUuid: processingVariant.value.assetUuid }
-    : pickedFile
-      ? { kind: 'file', file: pickedFile }
-      : undefined,
+    : props.modalData.source.kind === 'draft'
+      ? {
+          kind: 'draft',
+          draft: props.modalData.source.draft,
+          file: props.modalData.source.file,
+        }
+      : pickedFile
+        ? { kind: 'file', file: pickedFile }
+        : undefined,
 );
 const originKey = computed(() =>
   origin.value ? draftOriginKey(origin.value) : '',
@@ -292,15 +310,11 @@ const rendersActive = computed(
   () => section.value === 'create' && transformKind.value === 'image',
 );
 /** The image formats the current settings are rendered in. */
-const renderedFormats = computed<AssetImageFormat[]>(() => {
+const renderedFormats = computed<readonly AssetImageFormat[]>(() => {
   if (!rendersActive.value) return [];
-  const fixed = edit.fixedFormat.value;
-  if (fixed) return [fixed];
-  const chosen = edit.formatChoice.value;
-  // The chosen format first: the server starts on it before the rest.
-  return [...edit.availableFormats.value].sort(
-    (left, right) => Number(right === chosen) - Number(left === chosen),
-  );
+  return edit.fixedFormat.value
+    ? [edit.fixedFormat.value]
+    : edit.availableFormats.value;
 });
 /** A dry run's place in the cache: the source it is of, and its settings. */
 function renderRequest(
@@ -311,24 +325,28 @@ function renderRequest(
     : [];
 }
 /**
- * The current settings in every format, so each shows its real size, and
- * then every other quality stop in the format it would be stored in, so the
- * bar shows real sizes too — nearest stops first.
+ * Every dry run worth having, the most wanted first: what "Use" would store,
+ * then the current settings in the other formats, so each shows its real
+ * size, then every other quality stop in the format it would be stored in,
+ * so the bar shows real sizes too — nearest stops first.
  */
 const renderRequests = computed<DraftRenderRequest[]>(() => {
   if (!rendersActive.value) return [];
-  const atChosen = renderedFormats.value.flatMap((format) =>
-    renderRequest(edit.settingsAt({ format })),
-  );
-  const atOthers = stopRenderOrder(
-    edit.qualityLevel.value,
-    edit.fixedFormat.value ?? edit.formatChoice.value,
-  ).flatMap(({ level, format }) =>
+  return draftRenderOrder({
+    format: edit.format.value,
+    formatChoice: edit.formatChoice.value,
+    fixedFormat: edit.fixedFormat.value,
+    availableFormats: renderedFormats.value,
+    level: edit.qualityLevel.value,
+  }).flatMap(({ format, level }) =>
     renderRequest(
-      edit.settingsAt({ format, quality: ASSET_QUALITY_LEVEL_QUALITY[level] }),
+      edit.settingsAt(
+        level === undefined
+          ? { format }
+          : { format, quality: ASSET_QUALITY_LEVEL_QUALITY[level] },
+      ),
     ),
   );
-  return [...atChosen, ...atOthers];
 });
 const primaryRenderKey = computed(() =>
   rendersActive.value && edit.request.value?.type === 'image-transform'
@@ -363,7 +381,11 @@ function formatSizes(): Partial<Record<AssetImageFormat, number>> {
   );
 }
 
-/** "Auto" is still waiting for the sizes it picks by. */
+/**
+ * "Auto" is still weighing the sizes it picks by. Only its own row says so:
+ * the result and "Use" go by the render "Auto" stands on meanwhile, and
+ * when a smaller format comes in, its render is already there to switch to.
+ */
 const autoPending = computed(
   () =>
     rendersActive.value &&
@@ -372,9 +394,7 @@ const autoPending = computed(
     !edit.autoFormat.value?.reason &&
     AUTO_IMAGE_FORMATS.some((format) => renders.isPending(formatKey(format))),
 );
-const renderPending = computed(
-  () => renders.pending.value || autoPending.value,
-);
+const renderPending = computed(() => renders.pending.value);
 
 /**
  * The last image render shown, kept on screen while a newer one is made so
@@ -713,8 +733,7 @@ const canUseRender = computed(
   () =>
     !busy.value &&
     transformKind.value === 'image' &&
-    Boolean(renders.current.value) &&
-    !renderPending.value,
+    Boolean(renders.current.value),
 );
 const canUseCreated = computed(
   () => !busy.value && Boolean(currentCreated.value) && !selectionError.value,
@@ -723,19 +742,13 @@ const canUseSelected = computed(
   () => !busy.value && Boolean(selectedVariant.value) && !selectionError.value,
 );
 
-const busyLabel = computed(() => {
-  if (draftSession.stagingProgress.value !== null) {
-    return phrase.value.upload_staging(
-      Math.round(draftSession.stagingProgress.value * 100),
-    );
-  }
-  const current = status.value;
-  if (current?.phase === 'queued') return phrase.value.upload_queued;
-  if (current?.phase === 'processing' && current.progress !== undefined) {
-    return `${phrase.value.upload_processing} ${Math.round(current.progress * 100)}%`;
-  }
-  return phrase.value.upload_processing;
-});
+const busyLabel = computed(() =>
+  uploadStatusLabel(
+    draftSession.stagingProgress.value !== null
+      ? { phase: 'staging', progress: draftSession.stagingProgress.value }
+      : status.value,
+  ),
+);
 
 async function useUnchanged() {
   await commitAndThen(createOriginalAssetSettings(), (asset) =>
@@ -748,8 +761,12 @@ async function useRender() {
   if (!request) return;
   // Dry runs of the other stops would otherwise have the encoder's slots
   // first; the one being used is the only one still worth finishing.
-  renders.abortExcept(primaryRenderKey.value);
-  await commitAndThen(request, (asset) => finish(asset, false));
+  renders.hold(primaryRenderKey.value);
+  let finished = false;
+  await commitAndThen(request, async (asset) => {
+    finished = await finish(asset, false);
+  });
+  if (!finished) renders.release();
 }
 
 function toggleCropping() {
@@ -788,7 +805,7 @@ async function createVariant() {
 
 async function commitAndThen(
   request: AssetUploadRequest,
-  then: (asset: AssetVariantInfo) => void | Promise<void>,
+  then: (asset: AssetVariantInfo) => unknown,
 ) {
   errorText.value = '';
   busy.value = 'commit';
@@ -799,6 +816,8 @@ async function commitAndThen(
     busy.value = null;
     await then(asset);
   } catch (error) {
+    // Cancelled by the admin: nothing to say about it.
+    if (isAbortError(error)) return;
     if (!handleAssetMissing(error))
       errorText.value = errorMessage(error, phrase.value.upload_error_apply);
   } finally {
@@ -806,8 +825,9 @@ async function commitAndThen(
   }
 }
 
+/** Hands the asset over; false when the modal stays open instead. */
 async function finish(asset: AssetVariantInfo, confirm = true) {
-  if (assetSelectionError(asset, props.modalData)) return;
+  if (assetSelectionError(asset, props.modalData)) return false;
   busy.value = 'finish';
   try {
     // A variant picked from the list may have gone since it was listed; one
@@ -815,9 +835,11 @@ async function finish(asset: AssetVariantInfo, confirm = true) {
     if (confirm) await touch(asset.assetUuid);
     draftSession.close();
     emit('modalResult', { type: 'asset-ready', asset });
+    return true;
   } catch (error) {
     if (!handleAssetMissing(error))
       errorText.value = errorMessage(error, phrase.value.upload_error_apply);
+    return false;
   } finally {
     busy.value = null;
   }
@@ -1124,6 +1146,13 @@ const directHref = computed(() =>
                 }}
               </span>
             </Button>
+            <Button
+              v-if="busy === 'commit' && section === 'source'"
+              variant="secondary"
+              @click="cancelCommit"
+            >
+              {{ phrase.upload_cancel }}
+            </Button>
           </UploadSettingsSection>
         </template>
 
@@ -1282,6 +1311,13 @@ const directHref = computed(() =>
                     : phrase.upload_use
                 }}</span>
                 <Icon name="chevron-right" class="ml-xs" />
+              </Button>
+              <Button
+                v-if="busy === 'commit' && section === 'create'"
+                variant="secondary"
+                @click="cancelCommit"
+              >
+                {{ phrase.upload_cancel }}
               </Button>
             </UploadSettingsResultPanel>
           </UploadSettingsSection>

@@ -123,6 +123,7 @@ async function stagePng(width: number, height: number) {
 describe('upload pipeline', () => {
   it('encodes a transformed image as AVIF and stores it by content hash', async () => {
     const source = await stagePng(1600, 900);
+    const statuses: string[] = [];
     const result = await createAssetVariant({
       source,
       familyUuid: `af-${source.hash}`,
@@ -132,9 +133,12 @@ describe('upload pipeline', () => {
         quality: 90,
         dimensions: { width: 1200, height: 675 },
       },
+      onStatus: (status) => statuses.push(status.phase),
     });
 
     expect(result.created).toBe(true);
+    // A picture reports no share, but it does say when the encode is over.
+    expect(statuses).toEqual(['processing', 'finishing']);
     expect(result.extension).toBe('avif');
     expect(result.settingsKey).toBe('image-transform:q90:w1200:h675:fmt:avif');
 
@@ -146,6 +150,35 @@ describe('upload pipeline', () => {
     expect((await sharp(bytes).metadata()).format).toBe('heif');
     // The staged upload is the caller's to clean up and was not consumed by a
     // transform, which produced its own output.
+    expect((await stat(source.path)).size).toBe(source.size);
+  });
+
+  it('stores nothing for a request that went away during the encode', async () => {
+    const source = await stagePng(1600, 900);
+    const controller = new AbortController();
+    await expect(
+      createAssetVariant({
+        source,
+        familyUuid: `af-${source.hash}`,
+        sourceType: AssetType.Image,
+        settings: {
+          type: 'image-transform',
+          quality: 90,
+          dimensions: { width: 1200, height: 675 },
+        },
+        signal: controller.signal,
+        onStatus: (status) => {
+          if (status.phase === 'processing') {
+            controller.abort(new Error('closed'));
+          }
+        },
+      }),
+    ).rejects.toThrow('closed');
+
+    expect(rawDb.prepare('SELECT COUNT(*) AS n FROM assets').get()).toEqual({
+      n: 0,
+    });
+    // The staged file is still the caller's to discard.
     expect((await stat(source.path)).size).toBe(source.size);
   });
 

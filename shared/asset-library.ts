@@ -8,8 +8,15 @@ import {
 } from './asset-upload-limits';
 import { normalizeAssetExtension } from './assets/formats';
 
+/**
+ * What holds a file, as the library groups files: an entity of the site, a
+ * stage or a section of a project (with the project as its parent), or
+ * nothing at all.
+ */
 export const ASSET_SOURCE_TYPES = [
   'project',
+  'project-stage',
+  'project-section',
   'event',
   'page',
   'diary-entry',
@@ -26,14 +33,12 @@ export interface AssetSource {
   url?: string;
   editUrl?: string;
   updatedAt: number;
+  /** The project a stage or a section belongs to; its title as typed. */
+  parent?: { title: string; url: string };
 }
 export interface AssetPlacement {
   source: AssetSource;
   role: AssetRole;
-  scope:
-    | { kind: 'entity' }
-    | { kind: 'project-stage'; title: string; url: string }
-    | { kind: 'project-section'; title: string; url: string };
   detail?: 'avatar' | 'status';
   isPrivate: boolean;
   count: number;

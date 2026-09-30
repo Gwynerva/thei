@@ -3,6 +3,7 @@ import {
   test,
   type APIRequestContext,
   type Page,
+  type Route,
 } from '@playwright/test';
 import { E2E_ORIGIN } from './fixture-url';
 import { fileURLToPath } from 'node:url';
@@ -97,6 +98,78 @@ async function choose(page: Page, assetUuid: string) {
   }
   throw new Error('No usable asset variant button was rendered');
 }
+
+/** A picture nothing else has uploaded: the bytes differ on every run. */
+async function freshPicture(name: string) {
+  const buffer = await sharp({
+    create: {
+      width: 64,
+      height: 48,
+      channels: 3,
+      background: `#${randomUUID().slice(0, 6)}`,
+    },
+  })
+    .png()
+    .toBuffer();
+  return { name, mimeType: 'image/png', buffer };
+}
+
+test('a batch of new files goes up with a tile each; one is given up, one is tried again', async ({
+  page,
+}) => {
+  await page.goto('/asset-regression');
+  await expect(page.locator('[data-ready]')).toHaveAttribute(
+    'data-ready',
+    'true',
+  );
+  // Every upload is held until the test lets it through.
+  const held: Route[] = [];
+  let hold = true;
+  await page.route('**/api/admin/assets', async (route) => {
+    if (route.request().method() !== 'POST' || !hold) {
+      await route.continue();
+      return;
+    }
+    held.push(route);
+  });
+
+  await page.locator('[data-batch]').click();
+  await page
+    .locator('input[type=file]')
+    .setInputFiles([
+      await freshPicture('one.png'),
+      await freshPicture('two.png'),
+    ]);
+  const tiles = page.locator('[data-pending-upload]');
+  await expect(tiles).toHaveCount(2);
+  await expect(page.locator('[data-pending]')).toHaveAttribute(
+    'data-pending',
+    '2',
+  );
+  await expect(tiles.first().getByRole('status')).not.toHaveText('');
+  await expect.poll(() => held.length).toBe(2);
+  // The picker is gone: the page is the admin's again while files go up.
+  await expect(page.locator('dialog[open]')).toHaveCount(0);
+
+  // One is given up: its tile goes.
+  await tiles.first().locator('[data-pending-cancel]').click();
+  await expect(tiles).toHaveCount(1);
+  // The other fails on the way: the tile stays, says so, and offers another
+  // try, which lands it.
+  await held[1]!.abort('failed').catch(() => {});
+  await expect(tiles.first()).toHaveAttribute('data-pending-phase', 'failed');
+  hold = false;
+  await tiles.first().locator('[data-pending-retry]').click();
+  await expect(tiles).toHaveCount(0, { timeout: 20_000 });
+  await expect(page.locator('[data-pending]')).toHaveAttribute(
+    'data-pending',
+    '0',
+  );
+  const results = JSON.parse(
+    (await page.locator('[data-result]').textContent())!,
+  ) as { assetUuid: string }[];
+  expect(results).toHaveLength(1);
+});
 
 test('hash lookup reuses stored bytes without multipart upload, including renamed files', async ({
   page,
