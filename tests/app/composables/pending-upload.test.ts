@@ -48,14 +48,22 @@ beforeAll(() => {
   };
 });
 
-function upload(send: ReturnType<typeof fakeSend>['send']) {
-  return new PendingOriginalUpload(new File(['x'], 'shot.png'), {
+function upload(send: ReturnType<typeof fakeSend>['send'], name = 'shot.png') {
+  return new PendingOriginalUpload(new File(['x'], name), {
     constraints: { sizeLimitPolicy: 'media' },
     send,
   });
 }
 
 describe('a pending upload', () => {
+  it('shows a picture and a video by their bytes, any other file by its kind', () => {
+    const { send } = fakeSend();
+    expect(upload(send, 'clip.mp4').preview.kind).toBe('video');
+    expect(upload(send, 'photo.webp').preview.kind).toBe('image');
+    expect(upload(send, 'notes.pdf').preview.kind).toBe('file');
+    expect(upload(send, 'bundle.zip').preview.kind).toBe('file');
+  });
+
   it('reports the way up and hands the stored file over once', async () => {
     const { calls, send } = fakeSend();
     const pending = upload(send);

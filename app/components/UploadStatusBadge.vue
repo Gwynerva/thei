@@ -27,7 +27,7 @@ const progress = computed(() =>
     class="pointer-events-auto flex items-center justify-center rounded-full
       bg-bg-1/85 shadow backdrop-blur-sm"
     :class="[
-      large ? 'size-12 text-2xl' : 'size-8 text-base',
+      large ? 'size-12 text-2xl' : 'size-6 text-xs',
       error ? 'text-text-error' : 'text-accent',
     ]"
     aria-hidden="true"
@@ -37,7 +37,7 @@ const progress = computed(() =>
       v-else-if="progress !== undefined"
       viewBox="0 0 36 36"
       class="-rotate-90"
-      :class="large ? 'size-7' : 'size-5'"
+      :class="large ? 'size-7' : 'size-4'"
     >
       <circle
         cx="18"

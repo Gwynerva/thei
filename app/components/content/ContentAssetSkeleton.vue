@@ -29,11 +29,12 @@ const emit = defineEmits<{
 const videoPoster = useVideoPoster(() =>
   props.upload?.preview.kind === 'video' ? props.upload.preview.src : undefined,
 );
-const previewSrc = computed(() =>
-  props.upload?.preview.kind === 'video'
-    ? videoPoster.value
-    : props.upload?.preview.src,
-);
+const previewSrc = computed(() => {
+  const preview = props.upload?.preview;
+  if (preview?.kind === 'image') return preview.src;
+  if (preview?.kind === 'video') return videoPoster.value;
+  return undefined;
+});
 const status = computed(() => props.upload?.status.value ?? null);
 const error = computed(() => props.upload?.error.value);
 const label = computed(() => error.value ?? uploadStatusLabel(status.value));

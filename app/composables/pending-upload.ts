@@ -4,6 +4,7 @@ import type { AssetDraftSource } from '#layers/thei/shared/api/asset-draft';
 import { pastedMediaRequest } from '#layers/thei/shared/asset-paste-defaults';
 import {
   getPathExtension,
+  imageExtensionProfile,
   isExtensionAllowed,
   videoExtensionProfile,
 } from '#layers/thei/shared/assets/extensions';
@@ -20,10 +21,13 @@ import {
 } from './upload-draft';
 import type { UploadStatus } from './upload-progress';
 
-/** The file as the browser can already show it, before it is stored. */
+/**
+ * The file as the browser can already show it, before it is stored: a
+ * picture or a video by its object URL; any other file only by its kind.
+ */
 export interface PendingUploadPreview {
   src: string;
-  kind: 'image' | 'video';
+  kind: 'image' | 'video' | 'file';
 }
 
 export interface PendingUploadOptions {
@@ -90,7 +94,9 @@ abstract class PendingUploadBase implements PendingUpload {
       src: this.picked.objectUrl,
       kind: isExtensionAllowed(this.extension, videoExtensionProfile)
         ? 'video'
-        : 'image',
+        : isExtensionAllowed(this.extension, imageExtensionProfile)
+          ? 'image'
+          : 'file',
     };
     this.result = new Promise((resolve) => {
       this.settle = (asset) => {

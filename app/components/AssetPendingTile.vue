@@ -7,9 +7,9 @@ import UploadStatusBadge from './UploadStatusBadge.vue';
 
 /**
  * A tile for a file still on its way into the library: the file as the
- * browser can already show it, a badge saying where the upload is, and what
- * to do about a failure. It stands in a list among real tiles until the file
- * lands.
+ * browser can already show it, a badge in a corner saying where the upload
+ * is, and what to do about a failure. It stands in a list among real tiles
+ * until the file lands.
  */
 const props = defineProps<{
   upload: PendingUpload;
@@ -24,15 +24,17 @@ const emit = defineEmits<{
 }>();
 
 // A video's still is the frame that shows it best, the same the server will
-// choose; until it is found, the tile names the file's kind instead.
+// choose; until it is found, and for a file that is no picture at all, the
+// tile names the file's kind instead.
 const videoPoster = useVideoPoster(() =>
   props.upload.preview.kind === 'video' ? props.upload.preview.src : undefined,
 );
-const pictureSrc = computed(() =>
-  props.upload.preview.kind === 'video'
-    ? videoPoster.value
-    : props.upload.preview.src,
-);
+const pictureSrc = computed(() => {
+  const { kind, src } = props.upload.preview;
+  if (kind === 'image') return src;
+  if (kind === 'video') return videoPoster.value;
+  return undefined;
+});
 // Always a still: a video descriptor would start decoders on a file this
 // large and play it on hover.
 const media = computed<MediaDescriptor | undefined>(() =>
@@ -65,14 +67,20 @@ const labels = computed(() => ({
     :aria-busy="!error"
     :aria-label="upload.name"
   >
+    <!-- The corners: the way out top right, another try bottom left, and
+         the badge bottom right, so that the picture stays in view. -->
     <template #overlay>
       <div
-        class="pointer-events-none absolute inset-0 z-40 flex items-center
-          justify-center bg-bg-1/40"
-      >
-        <UploadStatusBadge :status :error :label />
-        <span role="status" class="sr-only">{{ label }}</span>
-      </div>
+        class="pointer-events-none absolute inset-0 z-40 bg-bg-1/40"
+        aria-hidden="true"
+      />
+      <UploadStatusBadge
+        :status
+        :error
+        :label
+        class="absolute right-1 bottom-1 z-50"
+      />
+      <span role="status" class="sr-only">{{ label }}</span>
       <button
         v-if="error"
         type="button"
