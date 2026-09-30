@@ -10,17 +10,13 @@ import {
 } from '#layers/thei/shared/content-link';
 import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
 import type { IconName } from '#thei/icons';
-import { truncateExternalLinkText } from '#layers/thei/shared/external-link';
 defineProps<{
   links: (PublicReferenceLink | PublicSecretReference)[];
   /** Leave the kind badge off the tiles, where the list already says it. */
   hideKind?: boolean;
+  /** How many lines of its description a tile shows. */
+  descriptionLines?: 2 | 3;
 }>();
-
-const SIDEBAR_EXTERNAL_LINK_TEXT_LIMIT = 120;
-function compactExternalLinkText(value?: string): string | undefined {
-  return truncateExternalLinkText(value, SIDEBAR_EXTERNAL_LINK_TEXT_LIMIT);
-}
 
 /**
  * The badge in the corner of a tile names what is on the other end.
@@ -47,8 +43,7 @@ function entityTitle(type?: PublicReferenceLink['kind']): string | undefined {
  * description.
  */
 function externalTitle(link: PublicReferenceLink) {
-  const title = compactExternalLinkText(link.title) ?? link.title;
-  return link.titleFromSite ? title : publicText(title);
+  return link.titleFromSite ? link.title : publicText(link.title);
 }
 
 /** A diary entry is listed by its day, unless a note names it otherwise. */
@@ -72,6 +67,7 @@ function linkTitle(link: PublicReferenceLink) {
         :icon-media="link.iconMedia"
         :corner-icon="hideKind ? undefined : entityIcon(link.entityType)"
         :corner-title="hideKind ? undefined : entityTitle(link.entityType)"
+        :description-lines
         icon="project"
         secret
       />
@@ -79,6 +75,8 @@ function linkTitle(link: PublicReferenceLink) {
         v-else-if="link.kind !== 'external'"
         :title="publicText(linkTitle(link))"
         :description="publicText(link.description)"
+        :note="publicText(link.note)"
+        :description-lines
         :icon-media="link.iconMedia"
         :corner-icon="
           link.iconMedia && !hideKind ? entityIcon(link.kind) : undefined
@@ -93,6 +91,7 @@ function linkTitle(link: PublicReferenceLink) {
         v-else
         :title="externalTitle(link)"
         :description="link.description"
+        :description-lines
         :icon-media="link.iconMedia"
         :corner-icon="link.iconMedia ? entityIcon(link.kind) : undefined"
         :corner-title="entityTitle(link.kind)"

@@ -135,6 +135,11 @@ export type PublicReferenceLink = {
   date?: string;
   href: string;
   description?: string;
+  /**
+   * The note of a relation, which says why the entity is related and is shown
+   * in place of its description.
+   */
+  note?: string;
   iconMedia?: MediaDescriptor;
   relationType?: RelationType;
 };

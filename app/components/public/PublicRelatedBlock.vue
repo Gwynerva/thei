@@ -103,7 +103,8 @@ function asReferenceLink(
         kind: entity.entityType,
         title: entity.title,
         href: entity.href,
-        description: entity.note || entity.summary,
+        description: entity.summary,
+        note: entity.note || undefined,
         iconMedia: entity.iconMedia,
         ...(entity.date ? { date: entity.date } : {}),
       };
@@ -201,10 +202,12 @@ export function publicRelatedHeading(title: string): ContentHeading {
             <span class="h-px min-w-0 flex-1 bg-border-1" aria-hidden="true" />
           </div>
           <!-- The tab already says what kind of thing these are, so the
-               tiles carry no kind badge of their own. -->
+               tiles carry no kind badge of their own. The main column has
+               room for more of each description than the sidebar. -->
           <PublicReferenceLinks
             :links="group.items"
             hide-kind
+            :description-lines="3"
             class="sm:grid sm:grid-cols-2"
           />
         </div>

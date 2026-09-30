@@ -1,11 +1,14 @@
 <script lang="ts" setup>
 import type { IconName } from '#thei/icons';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
-import { truncateExternalLinkText } from '#layers/thei/shared/external-link';
 
 /**
  * One file or link in a compact list. It shows its text as given: the caller
  * knows whose words they are, and formats the owner's (`publicText`).
+ *
+ * The title takes one line and the description `descriptionLines`, each cut
+ * with an ellipsis where it runs out of room. Whatever is cut is in the
+ * item's popup in full, which says nothing when nothing is cut.
  */
 const props = withDefaults(
   defineProps<{
@@ -30,13 +33,37 @@ const props = withDefaults(
     continuousMedia?: boolean;
     /** A codename for something hidden from visitors; never a link. */
     secret?: boolean;
+    /**
+     * The owner's note on why this is here, shown in place of the
+     * description, which the popup still carries.
+     */
+    note?: string;
+    descriptionLines?: 2 | 3;
   }>(),
-  { icon: 'link' },
+  { icon: 'link', descriptionLines: 2 },
 );
 defineEmits<{ activate: [] }>();
-const compactDescription = computed(() =>
-  truncateExternalLinkText(props.description, 70),
-);
+
+function oneLine(value: string | undefined) {
+  return value?.replace(/\s+/g, ' ').trim() || undefined;
+}
+
+const description = computed(() => oneLine(props.description));
+const note = computed(() => oneLine(props.note));
+const shownDescription = computed(() => note.value ?? description.value);
+const popup = computed(() => ({
+  ...titlePopup(
+    { text: props.title, bold: true },
+    TITLE_POPUP_GAP,
+    note.value,
+    TITLE_POPUP_GAP,
+    description.value,
+  ),
+  // The popup repeats what is shown, so it only speaks when something is cut
+  // — or when the note stands in for a description the item has.
+  'data-title-popup-clipped': '',
+  'data-title-popup-always': note.value && description.value ? '' : undefined,
+}));
 
 const extensionFontSize = computed(() => {
   const length = props.extension?.length ?? 0;
@@ -61,6 +88,7 @@ const extensionFontSize = computed(() => {
       focus-visible:ring-accent focus-visible:outline-none"
     :class="{ 'cursor-pointer hocus:bg-bg-3/70': button || href }"
     :data-public-secret="secret || undefined"
+    v-bind="popup"
     @click="button ? $emit('activate') : undefined"
   >
     <span
@@ -107,12 +135,15 @@ const extensionFontSize = computed(() => {
       <strong
         class="block truncate text-sm font-normal"
         :class="{ 'text-text-2 italic': secret }"
+        data-title-popup-clip
         >{{ title }}</strong
       >
       <span
-        v-if="compactDescription"
-        class="line-clamp-1 block text-xs text-text-3"
-        >{{ compactDescription }}</span
+        v-if="shownDescription"
+        class="text-xs text-text-3"
+        :class="descriptionLines === 3 ? 'line-clamp-3' : 'line-clamp-2'"
+        data-title-popup-clip
+        >{{ shownDescription }}</span
       >
     </span>
   </component>
