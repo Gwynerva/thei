@@ -5,7 +5,7 @@ import { AssetType } from '#layers/thei/shared/asset';
  * One stored file, described by what it is rather than by what was once done
  * to it. Which encoder ran, whether it was cropped or allowed to grow — none
  * of that is visible a week later, and none of it helps in choosing between
- * two files. Format, size, dimensions and where it is used do.
+ * two files. Format, size, dimensions, quality and where it is used do.
  */
 export interface UploadSettingsVariantListItem {
   assetUuid: string;
@@ -20,6 +20,8 @@ export interface UploadSettingsVariantListItem {
   /** Unused, but kept while a version of some text still shows it. */
   inHistory?: boolean;
   isCurrent: boolean;
+  /** A word or two on what sets it apart: "Unprocessed", "Medium quality". */
+  detail?: string;
   /** How the file was made, for a tooltip; the list itself shows what it is. */
   recipe?: string;
 }
@@ -37,39 +39,65 @@ const humanSize = useHumanSize();
 </script>
 
 <template>
-  <div class="flex flex-col gap-xs">
+  <!--
+    Laid out like the format list: what the file is on the first line, with
+    its size; how it differs on the second, with one mark of where it
+    stands — its places, or when the cleanup takes it.
+  -->
+  <div
+    class="flex flex-col gap-1 rounded-normal bg-bg-3 p-1 text-sm"
+    role="radiogroup"
+    :aria-label="phrase.upload_section_family"
+  >
     <button
       v-for="item in items"
       :key="item.assetUuid"
       type="button"
-      class="cursor-pointer rounded-normal border-2 p-xs text-left text-sm
-        transition"
+      role="radio"
+      :aria-checked="selectedUuid === item.assetUuid"
+      class="flex cursor-pointer flex-col gap-0.5 rounded-normal border-2 px-xs
+        py-1.5 text-left transition"
       :class="
         selectedUuid === item.assetUuid
           ? 'border-accent bg-bg-accent text-accent'
-          : 'border-border-1 bg-bg-1 text-text-2 hocus:border-border-3'
+          : `border-border-1 bg-bg-1 text-text-2 hocus:border-border-3
+            hocus:text-text-1`
       "
       :data-title-popup="item.recipe"
       @click="emit('select', item.assetUuid)"
     >
-      <div class="min-w-0">
-        <div class="flex flex-wrap items-center gap-x-sm gap-y-1">
+      <span class="flex items-baseline justify-between gap-sm">
+        <span class="min-w-0 truncate">
+          <span class="font-semibold">{{ item.extension.toUpperCase() }}</span>
+          <template v-if="item.dimensions">
+            · {{ item.dimensions.width }}×{{ item.dimensions.height }}
+          </template>
+        </span>
+        <span class="shrink-0 text-xs tabular-nums">
+          {{ humanSize(item.size) }}
+        </span>
+      </span>
+
+      <span class="flex items-center justify-between gap-sm text-xs">
+        <span class="flex min-w-0 items-center gap-xs text-text-3">
+          <span v-if="item.detail" class="truncate">{{ item.detail }}</span>
           <span
-            class="shrink-0 font-mono font-semibold uppercase"
-            :data-title-popup="phrase.file_info_extension"
+            v-if="item.isCurrent"
+            class="shrink-0 rounded-full bg-accent/15 px-xs text-accent"
+            :data-title-popup="phrase.asset_variant_current"
           >
-            {{ item.extension }}
+            {{ phrase.asset_variant_current_tag }}
           </span>
+        </span>
+        <span class="flex shrink-0 items-center gap-xs tabular-nums">
+          <Icon
+            v-if="item.type === AssetType.Video && item.hasAudio === false"
+            name="volume-off"
+            class="text-text-3"
+            :data-title-popup="phrase.video_no_audio"
+          />
           <span
-            v-if="item.dimensions"
-            :data-title-popup="phrase.file_info_dimensions"
-          >
-            {{ item.dimensions.width }}×{{ item.dimensions.height }}
-          </span>
-          <span :data-title-popup="phrase.file_info_size">
-            {{ humanSize(item.size) }}
-          </span>
-          <span
+            v-if="item.usageCount"
             class="inline-flex items-center gap-1"
             :data-title-popup="
               phrase.asset_variant_usage_count(item.usageCount)
@@ -79,7 +107,7 @@ const humanSize = useHumanSize();
             {{ item.usageCount }}
           </span>
           <Icon
-            v-if="item.deleteAfter"
+            v-else-if="item.deleteAfter"
             name="delete"
             class="text-text-error"
             :data-title-popup="assetDeletionLabel(item.deleteAfter)"
@@ -88,29 +116,20 @@ const humanSize = useHumanSize();
           <Icon
             v-else-if="item.inHistory"
             name="history"
+            class="text-text-3"
             :data-title-popup="phrase.asset_library_in_history"
             data-asset-in-history
           />
-          <Icon
-            v-if="item.type === AssetType.Video"
-            :name="item.hasAudio === false ? 'volume-off' : 'volume-on'"
-            :data-title-popup="
-              item.hasAudio === false
-                ? phrase.video_no_audio
-                : phrase.video_volume
-            "
-            :class="item.hasAudio === undefined ? 'text-text-3' : 'text-text-2'"
-          />
-        </div>
-        <div v-if="item.isCurrent" class="mt-1">
           <span
-            class="inline-block rounded-full bg-accent/15 px-xs text-xs
-              text-accent"
+            v-else
+            class="inline-flex items-center gap-1 text-text-3"
+            :data-title-popup="phrase.asset_variant_usage_count(0)"
           >
-            {{ phrase.asset_variant_current }}
+            <Icon name="link" />
+            0
           </span>
-        </div>
-      </div>
+        </span>
+      </span>
     </button>
   </div>
 </template>

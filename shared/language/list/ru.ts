@@ -1445,6 +1445,7 @@ export default defineI18nModule({
     video_volume: 'Громкость',
     video_no_audio: 'В этом видео нет звуковой дорожки',
     asset_variant_current: 'Используется сейчас',
+    asset_variant_current_tag: 'Текущий',
     asset_variant_usage_count: (count) => `Использований: ${count}`,
     upload_error_load_variants: 'Не удалось загрузить варианты файла.',
     upload_error_apply: 'Не удалось применить настройки.',

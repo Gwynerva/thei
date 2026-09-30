@@ -1059,6 +1059,7 @@ export type LanguagePhrases = {
   video_volume: string;
   video_no_audio: string;
   asset_variant_current: string;
+  asset_variant_current_tag: string;
   asset_variant_usage_count: (count: number) => string;
   upload_error_load_variants: string;
   upload_error_apply: string;

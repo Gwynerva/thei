@@ -1389,6 +1389,7 @@ export default defineI18nBase({
     video_volume: 'Volume',
     video_no_audio: 'This video has no audio track',
     asset_variant_current: 'Used now',
+    asset_variant_current_tag: 'Current',
     asset_variant_usage_count: (count) => `Usages: ${count}`,
     upload_error_load_variants: 'Failed to load file variants.',
     upload_error_apply: 'Failed to apply settings.',

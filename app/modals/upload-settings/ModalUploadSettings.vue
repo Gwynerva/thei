@@ -58,6 +58,7 @@ import {
   autoImageFormatDetail,
   imageFormatLabel,
   qualityStopLabels,
+  variantDetail,
 } from './format-labels';
 import {
   buildQualityStops,
@@ -674,6 +675,7 @@ const variantItems = computed(() =>
       ? {}
       : { deleteAfter: variant.deleteAfter, inHistory: variant.inHistory }),
     isCurrent: variant.assetUuid === sourceAsset?.assetUuid,
+    detail: variantDetail(variant.settings),
     recipe: describeAssetRecipe(variant.settings, variant.meta, phrase.value),
   })),
 );
@@ -683,14 +685,13 @@ const processingOptions = computed(() =>
       .filter((variant) => variant.type === sourceAsset?.type)
       .map((variant) => {
         const size = assetMetaDimensions(variant.meta);
+        // Worded as the list above words it.
         return [
           variant.assetUuid,
           [
             variant.extension.toUpperCase(),
             size ? `${size.width}×${size.height}` : undefined,
-            variant.isUnprocessed
-              ? phrase.value.upload_variant_unchanged
-              : undefined,
+            variantDetail(variant.settings),
           ]
             .filter(Boolean)
             .join(' · '),

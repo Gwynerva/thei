@@ -199,7 +199,7 @@ test('the editor opened on a pasted picture makes new variants from the kept ori
 
   // The original is listed, marked as going unless something uses it.
   const dialog = page.locator('dialog[open]').last();
-  const kept = dialog.getByRole('button', { name: /^png 640×480 / });
+  const kept = dialog.getByRole('radio', { name: /^PNG · 640×480 / });
   await expect(kept).toHaveCount(1, { timeout: 20_000 });
   await expect(kept.locator('[data-asset-pending-deletion]')).toBeVisible();
 
