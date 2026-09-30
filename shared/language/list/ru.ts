@@ -408,7 +408,7 @@ export default defineI18nModule({
     public_sign_in_hint: 'Для владельца сайта',
     activity_summary: 'Сводка активности',
     life_rewind: (day) => `${day} в прошлом`,
-    life_rewind_seo_title: 'Взгляд в прошлом',
+    life_rewind_seo_title: 'Взгляд в прошлое',
     life_rewind_description:
       'Каким был этот день в прошлые годы? Здесь собраны события, перемены и проекты, которые начались, завершились или продолжались в эту дату. Небольшое путешествие по разным годам жизни.',
     life_rewind_empty: 'У этого дня пока нет воспоминаний',
