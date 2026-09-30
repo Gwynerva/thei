@@ -45,18 +45,19 @@ const durationOptions = computed(() =>
   ),
 );
 
+/**
+ * The links as the server has them. The list is refreshed in the background,
+ * for links made or revoked elsewhere; a refresh that fails keeps the list it
+ * had, and is not retried at once — the next refresh is the retry.
+ */
 async function load() {
-  try {
-    links.value = await requestFetch<ShareLinkItem[]>(
-      '/api/admin/share-links',
-      { query: { entityType, entityUuid } },
-    );
-  } catch {
-    links.value = [];
-  }
+  links.value = await requestFetch<ShareLinkItem[]>('/api/admin/share-links', {
+    query: { entityType, entityUuid },
+    retry: 0,
+  });
 }
-await load();
-useAutoRefresh(load, 30000);
+await load().catch(() => {});
+const { forceRefresh } = useAutoRefresh(load, 30000);
 
 /**
  * Each live link with what its row shows about time. A link leaves the list
@@ -91,13 +92,18 @@ const urgencyTone: Record<ShareLinkUrgency, { ring: string; text: string }> = {
   closing: { ring: 'text-text-error', text: 'text-text-error' },
 };
 
+/**
+ * Creates, extends or revokes a link. What it did shows in the list at once;
+ * the list is then read again, and a failure to read it is no failure of the
+ * action.
+ */
 async function act(run: () => Promise<unknown>): Promise<boolean> {
   if (busy.value) return false;
   busy.value = true;
   error.value = '';
   try {
     await run();
-    await load();
+    await forceRefresh();
     return true;
   } catch (caught) {
     error.value =
@@ -107,6 +113,17 @@ async function act(run: () => Promise<unknown>): Promise<boolean> {
   } finally {
     busy.value = false;
   }
+}
+
+/**
+ * A link just made or extended, in the list before the list is read again,
+ * in the server's order: the soonest to close first.
+ */
+function showLink(link: ShareLinkItem) {
+  links.value = [
+    ...links.value.filter((item) => item.shareUuid !== link.shareUuid),
+    link,
+  ].sort((a, b) => a.expiresAt - b.expiresAt);
 }
 
 const addButton = useTemplateRef('addButton');
@@ -137,6 +154,7 @@ async function create() {
         label: draftLabel.value,
       },
     });
+    showLink(link);
     await copyText(link.shareUuid, link.url);
   });
   if (done) createOpen.value = false;
@@ -160,21 +178,27 @@ function openExtend(link: ShareLinkItem, event: MouseEvent) {
 async function extend(duration: ShareLinkDuration) {
   const link = extending.value;
   if (!link) return;
-  const done = await act(() =>
-    requestFetch<ShareLinkItem>('/api/admin/share-links/extend', {
-      method: 'POST',
-      body: { shareUuid: link.shareUuid, duration },
-    }),
+  const done = await act(async () =>
+    showLink(
+      await requestFetch<ShareLinkItem>('/api/admin/share-links/extend', {
+        method: 'POST',
+        body: { shareUuid: link.shareUuid, duration },
+      }),
+    ),
   );
   if (done) extendOpen.value = false;
 }
 
 function revoke(link: ShareLinkItem) {
-  return act(() =>
-    requestFetch<{ ok: true }>(`/api/admin/share-links/${link.shareUuid}`, {
-      method: 'DELETE',
-    }),
-  );
+  return act(async () => {
+    await requestFetch<{ ok: true }>(
+      `/api/admin/share-links/${link.shareUuid}`,
+      { method: 'DELETE' },
+    );
+    links.value = links.value.filter(
+      (item) => item.shareUuid !== link.shareUuid,
+    );
+  });
 }
 </script>
 
