@@ -7,14 +7,9 @@
     "start": "node .output/server/index.mjs"
   },
   "dependencies": {
-    "node-gyp": "12.4.0",
+    "better-sqlite3": "13.0.3",
     "nuxt": "4.5.2",
     "thei": "__THEI_SOURCE__"
   },
-  "trustedDependencies": [
-    "@ffmpeg-installer/ffmpeg",
-    "better-sqlite3",
-    "esbuild",
-    "sharp"
-  ]
+  "trustedDependencies": ["@ffmpeg-installer/ffmpeg", "esbuild", "sharp"]
 }

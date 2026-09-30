@@ -45,8 +45,9 @@ const image =
 const cacheInContainer = '/var/cache/thei-bench-bun';
 /**
  * Where installs keep what they download: Bun's packages, and the native
- * binaries that prebuild-install fetches from GitHub for better-sqlite3 into
- * the npm cache — without it, every run depends on GitHub answering.
+ * binaries that prebuild-install fetches from GitHub into the npm cache for
+ * the better-sqlite3 12 of releases before 0.0.3 — without it, every run of
+ * those depends on GitHub answering.
  */
 const cacheEnv = {
   BUN_INSTALL_CACHE_DIR: cacheInContainer,
@@ -351,10 +352,14 @@ export default defineUpdateTask({
 
   const register = async (file: string, name: string) => {
     const source = await Bun.file(path(file)).text();
+    // The list may be empty, on one line or on several, with or without a
+    // comma after its last item.
     const updated = `import ${name} from './${next}-bench';\n${source}`.replace(
       /= \[([\s\S]*?)\];/,
-      (_, items: string) =>
-        `= [${items.trimEnd() ? `${items.trimEnd()}\n` : '\n'}  ${name},\n];`,
+      (_, items: string) => {
+        const kept = items.trim().replace(/,$/, '');
+        return `= [${kept ? `\n  ${kept},` : ''}\n  ${name},\n];`;
+      },
     );
     if (!updated.includes(`  ${name},\n];`)) {
       throw new BenchFailure(`Could not register the bench step in ${file}.`);

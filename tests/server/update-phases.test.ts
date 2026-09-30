@@ -15,6 +15,9 @@ import {
   type UpdatePhaseContext,
 } from '../../update/phases/types';
 import { applyPhaseRunnerLine, createBuiltinSteps } from '../../update/process';
+import { exec } from '../../update/exec';
+import { updatePhaseRegistry } from '../../update/phases/index';
+import sqliteDriver from '../../update/phases/0.0.3-sqlite-driver';
 import { createUpdateState } from '../../update/state';
 
 let projectPath: string;
@@ -176,5 +179,60 @@ describe('update phases', () => {
       parseUpdatePhaseEvent('@@thei-update-phase {broken'),
     ).toBeUndefined();
     expect(parseUpdatePhaseEvent('plain')).toBeUndefined();
+  });
+});
+
+describe('the 0.0.3 check of the SQLite driver', () => {
+  const context = (
+    exec: UpdatePhaseContext['exec'],
+    languageCode?: string,
+  ): UpdatePhaseContext => ({
+    projectPath,
+    theiPath: join(import.meta.dirname, '..', '..'),
+    contentPath: (...parts) => join(projectPath, 'content', ...parts),
+    fromVersion: '0.0.2',
+    toVersion: '0.0.3',
+    languageCode,
+    readConfig: async () => ({}),
+    writeConfig: async () => {},
+    exec,
+    log: () => {},
+  });
+
+  it('runs on the update from 0.0.2', () => {
+    expect(
+      selectUpdatePhases(updatePhaseRegistry, '0.0.2', '0.0.3').map(
+        (item) => item.id,
+      ),
+    ).toEqual([sqliteDriver.id]);
+    expect(selectUpdatePhases(updatePhaseRegistry, '0.0.3', '0.0.4')).toEqual(
+      [],
+    );
+  });
+
+  it('loads the driver with the script it ships', async () => {
+    const calls: string[][] = [];
+    await sqliteDriver.run(
+      context(async (command, args) => {
+        calls.push([command, ...args]);
+        return exec(process.execPath, args, { cwd: projectPath });
+      }),
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0]![1]).toBe(
+      join(import.meta.dirname, '..', '..', 'update', 'sqlite-driver.mjs'),
+    );
+  });
+
+  it('stops the update, in the site language, when the driver does not run', async () => {
+    const failing = async (): Promise<never> => {
+      throw new Error('node exited with 1');
+    };
+    await expect(sqliteDriver.run(context(failing, 'ru'))).rejects.toThrow(
+      /остаётся на текущей версии.*glibc 2\.34/,
+    );
+    await expect(sqliteDriver.run(context(failing))).rejects.toThrow(
+      /keeps its current version.*glibc 2\.34/,
+    );
   });
 });

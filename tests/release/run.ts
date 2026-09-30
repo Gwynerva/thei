@@ -262,26 +262,27 @@ const scenarios: Record<string, () => Promise<void> | void> = {
   },
 
   /**
-   * A new site on the version under test. better-sqlite3's download is sent
-   * nowhere, so it compiles itself the way it does when GitHub is down: with
-   * the node-gyp the instance manifest brings and the headers of the Node
-   * that runs the site.
+   * A new site on the version under test. better-sqlite3 carries its
+   * binaries: nothing is downloaded or compiled for it, and the build takes
+   * along the one this server runs. A better-sqlite3 compiled here against
+   * Node 24.19 or later would abort the site whenever the garbage collector
+   * freed a statement (nodejs/node#65446).
    */
   async fresh() {
     const target = server('fresh', 3101);
-    installOrFail(target, versionUnderTest, {
-      env: { npm_config_better_sqlite3_binary_host: 'http://127.0.0.1:9' },
-    });
+    installOrFail(target, versionUnderTest);
+    check(
+      exec(target, 'test -e /opt/thei/node_modules/better-sqlite3/build')
+        .code !== 0 &&
+        exec(target, 'test -e /opt/thei/.cache/node-gyp').code !== 0,
+      'better-sqlite3 compiled nothing and downloaded no Node headers',
+    );
     check(
       exec(
         target,
-        'test -f /opt/thei/node_modules/better-sqlite3/build/config.gypi',
+        'test -f "/opt/thei/.output/server/node_modules/better-sqlite3/prebuilds/linux-$(node -p process.arch).node"',
       ).code === 0,
-      'better-sqlite3 compiled itself without its download',
-    );
-    check(
-      exec(target, 'test -e /opt/thei/.cache/node-gyp').code !== 0,
-      'and downloaded no Node headers for it',
+      'the build carries its binary for this server',
     );
     check(
       api(target, 'GET', '/', undefined, { visitor: true }).text.includes(

@@ -27,11 +27,12 @@ export function repositoryUrl(): string {
 /**
  * What `bun install` needs to compile a native addon without the network.
  *
- * better-sqlite3 downloads a prebuilt binary from GitHub and compiles itself
- * with node-gyp when it cannot. node-gyp would then download Node's headers
- * as well; the Node that runs the site ships them beside itself, and they are
- * the ones the addon has to match. `node` is the path of that Node, the
- * process running this code.
+ * No dependency of this release compiles: better-sqlite3 carries its binaries
+ * from 13 on. An addon that does — better-sqlite3 12 and before, which
+ * compiles itself with node-gyp when GitHub has no binary for it — would have
+ * node-gyp download Node's headers as well; the Node that runs the site ships
+ * them beside itself, and they are the ones the addon has to match. `node` is
+ * the path of that Node, the process running this code.
  */
 export function nativeBuildEnv(node = process.execPath): NodeJS.ProcessEnv {
   const prefix = dirname(dirname(node));

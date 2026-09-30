@@ -38,7 +38,6 @@
     "@tailwindcss/vite": "4.3.3",
     "@tanstack/vue-virtual": "3.13.36",
     "@vuepic/vue-datepicker": "14.0.0",
-    "better-sqlite3": "12.11.1",
     "cheerio": "1.0.0-rc.11",
     "chokidar": "5.0.0",
     "date-fns": "4.4.0",
@@ -59,7 +58,13 @@
     "uqr": "0.1.3"
   },
   "peerDependencies": {
+    "better-sqlite3": "^13.0.3",
     "nuxt": "^4.5.2"
+  },
+  "peerDependenciesMeta": {
+    "better-sqlite3": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@golar/vue": "^0.1.10",
@@ -69,6 +74,7 @@
     "@types/node": "^25.9.5",
     "@types/sharp": "^0.32.0",
     "@types/sortablejs": "^1.15.9",
+    "better-sqlite3": "13.0.3",
     "drizzle-kit": "^0.31.10",
     "golar": "^0.1.10",
     "nuxt": "^4.5.2",

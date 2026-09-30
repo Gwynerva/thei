@@ -71,8 +71,10 @@ trap on_error ERR
 say "Installing system packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-# build-essential and python3 are the fallback path for building better-sqlite3
-# when no prebuilt binary matches this machine or GitHub cannot be reached.
+# build-essential and python3 are the fallback path for a native addon that has
+# to compile itself: better-sqlite3 of a release before 0.0.3, which downloads
+# its binary from GitHub, when there is none for this machine or GitHub cannot
+# be reached. From 0.0.3 on it carries its binaries and compiles nothing.
 apt-get install -y -qq git curl unzip ca-certificates build-essential python3 >/dev/null
 
 # ------------------------------------------------------------------- memory
@@ -123,9 +125,9 @@ fi
 NODE_BIN="$(command -v node || true)"
 [ -x "$NODE_BIN" ] || die "Node.js is not available."
 
-# When better-sqlite3 has to compile itself, node-gyp (from the instance
-# manifest) uses the headers of the Node that will run the site rather than
-# downloading them. The update engine does the same (update/environment.ts).
+# When a native addon has to compile itself, node-gyp uses the headers of the
+# Node that will run the site rather than downloading them. The update engine
+# does the same (update/environment.ts).
 NODE_PREFIX="$(dirname "$(dirname "$NODE_BIN")")"
 if [ -f "$NODE_PREFIX/include/node/node.h" ]; then
   export npm_config_nodedir="$NODE_PREFIX"
@@ -185,8 +187,7 @@ esac
 # Fetch the engine with a throwaway manifest, then let the engine itself supply
 # the real one. That way a release owns its own instance configuration and this
 # script never has to know about its dependencies. The fetch only needs the
-# files: install scripts run once, under the real manifest, which also brings
-# the node-gyp they may need.
+# files: install scripts run once, under the real manifest.
 say "Fetching the engine"
 printf '{\n  "name": "thei-instance",\n  "private": true,\n  "dependencies": { "thei": "%s" }\n}\n' "$SOURCE" \
   > "$THEI_DIR/package.json"
@@ -201,6 +202,14 @@ sed "s|__THEI_SOURCE__|$SOURCE|" "$TEMPLATES/package.tmpl.json" > "$THEI_DIR/pac
 cp "$TEMPLATES/nuxt.config.tmpl.ts" "$THEI_DIR/nuxt.config.ts"
 chown "$THEI_USER:$THEI_USER" "$THEI_DIR/package.json" "$THEI_DIR/nuxt.config.ts"
 run_as_thei "$BUN_BIN" install --cwd "$THEI_DIR"
+
+# The SQLite driver carries its own binaries and nothing compiles in their
+# place, so a server they do not run on hears it now rather than from a site
+# that will not start after the build. Releases before 0.0.3 have no check.
+DRIVER_CHECK="$THEI_DIR/node_modules/thei/update/sqlite-driver.mjs"
+if [ -f "$DRIVER_CHECK" ] && ! run_as_thei "$NODE_BIN" "$DRIVER_CHECK"; then
+  die "The SQLite driver does not run on this server. Thei needs Linux with glibc 2.34 or newer (Debian 12, Ubuntu 22.04 or later) on x64 or arm64."
+fi
 
 say "Building (this takes a few minutes)"
 run_as_thei "$BUN_BIN" run --cwd "$THEI_DIR" build

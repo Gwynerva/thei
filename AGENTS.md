@@ -33,7 +33,7 @@ Around them:
 ## Package Manager
 
 - This project uses Bun. Use `bun install`, `bun run`, and `bunx` for dependencies, scripts, and package executables; do not use npm, pnpm, or Yarn.
-- Runtime `dependencies` and the `nuxt` version in `update/instance/package.tmpl.json` are pinned to exact versions: an instance installs them from the tag without a lockfile, so a range would install versions nobody tested. Upgrade them deliberately, and run the release bench (`tests/release/`) afterwards.
+- Runtime `dependencies` and the `nuxt` and `better-sqlite3` versions in `update/instance/package.tmpl.json` are pinned to exact versions: an instance installs them from the tag without a lockfile, so a range would install versions nobody tested. Upgrade them deliberately, and run the release bench (`tests/release/`) afterwards.
 
 ## Commits
 
@@ -57,6 +57,7 @@ Around them:
 - Prefer an update step over teaching the engine or the UI about an older shape. When a change leaves existing content, config or files in an older shape, convert them once with a migration, phase or task, and let the rest of the code assume only the current shape: no fallbacks for fields a migration guarantees, no `legacy*` branches, no optional types kept for old rows. Only a conversion that would be exceptionally heavy or slow is weighed separately, and the decision is written down where the compatibility code lives.
 - What an update step cannot reach is not legacy data: published URLs, backup clients installed on other machines, a panel of the previous release still open in a browser. Keep compatibility with those deliberately, and say so where it lives.
 - Keep the layer consumable from `node_modules`. Do not assume this repository is the project root, do not import a `devDependency` from runtime code, and declare every runtime import in `dependencies`. The published instance runs the layer from `node_modules/thei`, where an undeclared or dev-only dependency is simply absent.
+  - Two exceptions come from the instance manifest instead, as peers of the layer: `nuxt`, and `better-sqlite3` as an optional peer. An update installs the new engine under the previous release's manifest first, and that manifest trusts `better-sqlite3`, so Bun would build a newer one from source — it ignores `gypfile: false` — with nothing to build it with. As an optional peer it is absent until the new manifest brings it, untrusted: it carries its binaries and must never be compiled (see `update/README.md`).
 - Development reads everything from `node_modules`; a build carries only what it traces, and writes its own directory afresh. Check anything read from disk at runtime — fonts, wasm, templates, server assets — in a production build: `bun run test:e2e` runs one, and the release bench builds a real instance.
 - Declare new requirements of an installed instance in `update/instance/package.tmpl.json` rather than in installation steps. The engine owns the instance manifest, and an update re-renders it from the newly installed version.
 - Keep the boot sequence non-fatal. Report a failure through `setBootError` or `setBootUpdate` in `server/thei/boot/result.ts`. An exception escaping boot kills a process that a service supervisor will restart forever, which takes the site down permanently.
