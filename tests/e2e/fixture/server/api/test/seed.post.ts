@@ -28,6 +28,9 @@ export default defineEventHandler(async (event) => {
       schema.stagePeriods,
       schema.projects,
       schema.events,
+      // A day holds one entry: one left from an earlier run takes the day a
+      // spec writes to.
+      schema.diaryEntries,
       schema.tagUsages,
       schema.tags,
       schema.backups,
