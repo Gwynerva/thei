@@ -6,6 +6,7 @@ import {
 } from '#layers/thei/shared/content-link';
 import {
   CONTENT_ENTITY_SEARCH_LIMIT,
+  CONTENT_ENTITY_SUGGEST_TEXT_LIMIT,
   type ContentEntityChoice,
   type ContentEntitySearchItem,
 } from '#layers/thei/shared/admin/content-entity-search';
@@ -23,6 +24,10 @@ import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
  *
  * It is the surface of its popup, and the `footer` slot is for whatever the
  * popup wants below the list — a note field, say — on that same surface.
+ *
+ * A picker opened over some text passes it as `suggest`: until something is
+ * typed, the list starts with what the text names. The text never goes into
+ * the field, so typing searches just as it would without it.
  */
 const props = withDefaults(
   defineProps<{
@@ -31,6 +36,7 @@ const props = withDefaults(
     publicOnly?: boolean;
     limit?: number;
     chosen?: ContentEntityChoice;
+    suggest?: string;
   }>(),
   {
     entityTypes: () => [...CONTENT_ENTITY_TYPES],
@@ -64,12 +70,19 @@ const rows = computed<Row[]>(() => {
 
 const search = debounce(async (current: number) => {
   if (current !== version) return;
+  const text = query.value.trim();
+  const suggest = text
+    ? undefined
+    : Array.from(props.suggest?.trim() ?? '')
+        .slice(0, CONTENT_ENTITY_SUGGEST_TEXT_LIMIT)
+        .join('') || undefined;
   try {
     const response = await $fetch<ContentEntitySearchItem[]>(
       '/api/admin/content-entities',
       {
         query: {
-          query: query.value.trim(),
+          query: text,
+          suggest,
           entityTypes: props.entityTypes.join(','),
           exclude: props.exclude.join(','),
           publicOnly: props.publicOnly ? 'true' : undefined,

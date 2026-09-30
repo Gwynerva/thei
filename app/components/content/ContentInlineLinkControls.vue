@@ -290,6 +290,7 @@ defineExpose<ContentInlineLinkControlsExpose>({ openEntity, openExternal });
       v-if="mode === 'entity'"
       ref="entityPopup"
       :chosen
+      :suggest="request?.selectionText"
       @select="choose"
       @confirm="focusNote"
     >

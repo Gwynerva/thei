@@ -150,7 +150,16 @@ abstract class ContentInlineMarkupTool<
         ? document.activeElement.closest<HTMLElement>('button, [role="button"]')
         : null);
     if (!trigger) return;
-    if (!this.existing && !trimCurrentInlineSelection()) return;
+    const range = this.existing ? undefined : trimCurrentInlineSelection();
+    if (!this.existing && !range) return;
+    // Read before the highlight goes on; reading changes nothing.
+    const selectionText = (
+      this.existing?.textContent ??
+      range?.toString() ??
+      ''
+    )
+      .replace(/\s+/g, ' ')
+      .trim();
 
     const anchor = createInlineLinkAnchor(trigger);
     this.options.api.selection.setFakeBackground();
@@ -159,6 +168,7 @@ abstract class ContentInlineMarkupTool<
     const request = this.createRequest({
       anchor,
       existing: Boolean(this.existing),
+      selectionText,
       remove: () => this.remove(),
       restore: () => this.restoreSelection(),
     });

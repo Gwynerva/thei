@@ -10,6 +10,11 @@ export interface ContentInlineMarkupRequest {
   anchor: ReferenceElement;
   /** Whether the selection is inside an element of this kind already. */
   existing: boolean;
+  /**
+   * The words the tool is applied to: the selection, or the text of the
+   * element being edited. Whitespace is collapsed.
+   */
+  selectionText: string;
   remove: () => void;
   /**
    * Gives the selection back as it was, with the tool's highlight removed.

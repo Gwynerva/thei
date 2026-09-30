@@ -841,6 +841,57 @@ test.describe('in the text editor of a page', () => {
     ]);
   });
 
+  test('the internal link popup starts with what the selected words name', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const name = `Zephyrine${Date.now().toString(36)} Harbor`;
+    const created = await page.request.post('/api/admin/pages', {
+      data: {
+        title: name,
+        summary: 'A page the selected words name.',
+        slug: `suggested-${Date.now()}`,
+        access: 'public',
+        content: {
+          data: {
+            blocks: [{ type: 'paragraph', data: { text: 'Named by words.' } }],
+          },
+        },
+        reminder: '',
+        notes: null,
+      },
+    });
+    const result = await created.json();
+    expect(result.type, JSON.stringify(result)).toBe('success');
+    // The page being edited is newer, so only the words can put the other first.
+    await openEditor(page, 'suggest', [
+      { type: 'paragraph', data: { text: `We sailed to ${name}` } },
+    ]);
+    await selectEnd(page, name.length);
+    await page
+      .locator('.ce-popover--opened [data-item-name="contentEntityLink"]')
+      .click();
+
+    const search = page.locator('dialog input[type="search"]');
+    const options = page.locator('dialog [role="option"]');
+    await expect(search).toBeFocused();
+    await expect(search).toHaveValue('');
+    await expect(options.first()).toContainText(name);
+    await expect(options).toHaveCount(5);
+
+    // Typing searches as it always does; an empty field suggests again.
+    await search.fill('Current block suggest');
+    await expect(options.first()).toContainText('Current block suggest');
+    await search.fill('');
+    await expect(options.first()).toContainText(name);
+
+    await options.first().click();
+    await page.keyboard.press('Enter');
+    await expect(
+      editorBlocks(page).first().locator('a[data-content-link="entity"]'),
+    ).toHaveText(name);
+  });
+
   test('Enter chooses from the toolbox and from a block’s settings, and adds no block', async ({
     page,
   }) => {

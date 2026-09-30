@@ -5,7 +5,9 @@ import {
 import {
   CONTENT_ENTITY_SEARCH_LIMIT,
   CONTENT_ENTITY_SEARCH_MAX_LIMIT,
+  CONTENT_ENTITY_SUGGEST_TEXT_LIMIT,
   rankContentEntities,
+  suggestContentEntities,
   type ContentEntitySearchItem,
 } from '#layers/thei/shared/admin/content-entity-search';
 import { listContentEntities } from '../../../thei/content-entities';
@@ -18,6 +20,9 @@ import { contentEntitySearchItem } from '../../../thei/content-entity-search';
  * diary entries; pinned pages are pages), `exclude` drops what is already
  * chosen as `type:uuid` keys, `publicOnly` keeps what a visitor can open, and
  * `limit` is how many results the picker has room for.
+ *
+ * With nothing typed, `suggest` is the text a link is being made over: what
+ * it names comes first, the most recent after it.
  */
 export default defineEventHandler(
   async (event): Promise<ContentEntitySearchItem[]> => {
@@ -41,11 +46,18 @@ export default defineEventHandler(
         !excluded.has(`${record.entityType}:${record.entityId}`) &&
         (query.publicOnly !== 'true' || record.access === 'public'),
     );
-    const ranked = rankContentEntities(
-      records,
-      typeof query.query === 'string' ? query.query : '',
-      limit,
-    );
+    const search = typeof query.query === 'string' ? query.query.trim() : '';
+    const suggest =
+      typeof query.suggest === 'string'
+        ? Array.from(query.suggest)
+            .slice(0, CONTENT_ENTITY_SUGGEST_TEXT_LIMIT)
+            .join('')
+            .trim()
+        : '';
+    const ranked =
+      !search && suggest
+        ? suggestContentEntities(records, suggest, limit)
+        : rankContentEntities(records, search, limit);
     return await Promise.all(ranked.map(contentEntitySearchItem));
   },
 );
