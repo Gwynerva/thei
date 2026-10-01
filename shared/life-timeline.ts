@@ -1,6 +1,7 @@
 import type { ProjectEventAccessLevel } from './access-level';
 import type { DateRange } from './date-range';
 import type { LifeTransition } from './life';
+import { utcDayOf } from './date-range';
 
 export type LifeBoundaryLike = {
   identity: string;
@@ -182,7 +183,7 @@ export function lifePointIsVisible(
 }
 
 export function projectCreatedUtcDate(createdAt: number | string | Date) {
-  return new Date(createdAt).toISOString().slice(0, 10);
+  return utcDayOf(createdAt);
 }
 
 export function lifeGapDays(newerDate: string, olderDate: string) {

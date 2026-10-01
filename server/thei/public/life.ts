@@ -66,6 +66,7 @@ import {
   countLifeActivityEntities,
   type LifeActivityEntityPoint,
 } from './life-activity';
+import { utcDayOf } from '#layers/thei/shared/date-range';
 
 type RawPoint = {
   identity: string;
@@ -269,7 +270,7 @@ export async function getLifeRewind(options: {
   pageSize?: number;
   now?: Date;
 }): Promise<LifeRewindResponse> {
-  const referenceDate = (options.now ?? new Date()).toISOString().slice(0, 10);
+  const referenceDate = utcDayOf(options.now ?? new Date());
   const selected = selectLifeRewindPoints(buildRawLifePoints(), referenceDate);
   const paged = paginate(
     selected,
@@ -458,7 +459,7 @@ function buildRawLifePoints(): RawPoint[] {
       identity: `profile-avatar:${record.id}`,
       entityKind: 'profile-avatar',
       transition: 'created',
-      date: new Date(record.createdAt).toISOString().slice(0, 10),
+      date: utcDayOf(record.createdAt),
       sortTime: record.createdAt,
       access: ProjectEventAccessLevel.Public,
       profileRecord: record,

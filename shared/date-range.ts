@@ -28,6 +28,15 @@ export function dateRangeEndTime(value: string) {
   return Date.parse(`${value}T23:59:59.999`);
 }
 
+/**
+ * The UTC day of a moment, `YYYY-MM-DD`: what a stored timestamp is dated
+ * by wherever no one chose a day for it.
+ */
+export function utcDayOf(value: string | number | Date): string {
+  return new Date(value).toISOString().slice(0, 10);
+}
+
+/** The local day of a date, `YYYY-MM-DD`: the day the person is living. */
 export function toDateString(value: Date) {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
 }

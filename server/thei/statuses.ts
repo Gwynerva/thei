@@ -24,6 +24,7 @@ import {
   olderThan,
   type HistoryKey,
 } from './history-page';
+import { utcDayOf } from '#layers/thei/shared/date-range';
 
 export const STATUS_PAGE_SIZE = 30;
 
@@ -141,7 +142,7 @@ function statusCursor(cursor?: string): HistoryKey | undefined {
     .get();
   return {
     ...key,
-    date: row?.date ?? new Date(key.createdAt).toISOString().slice(0, 10),
+    date: row?.date ?? utcDayOf(key.createdAt),
   };
 }
 
@@ -241,11 +242,6 @@ function rewrittenKind(
     : undefined;
 }
 
-/** The UTC day of a moment: what a status without a chosen date is dated. */
-function utcDay(time: number) {
-  return new Date(time).toISOString().slice(0, 10);
-}
-
 export type PreparedStatusEdits = {
   owner: StatusOwner;
   created: Array<{
@@ -288,7 +284,7 @@ export function prepareStatusEdits(
 ): PreparedStatusEdits {
   const { invalid, ids, optionalId } = helpers;
   const { db, schema } = THEI_SERVER.useDb();
-  const today = utcDay(Date.now());
+  const today = utcDayOf(Date.now());
   const text = (value: unknown): string => {
     if (typeof value !== 'string' || value.length > 10000)
       return invalid('Invalid status');

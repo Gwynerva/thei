@@ -18,6 +18,7 @@ import {
 } from './entities';
 import { siteViewer } from '../access-links/viewer';
 import { paginate } from '#layers/thei/shared/pagination';
+import { utcDayOf } from '#layers/thei/shared/date-range';
 
 /**
  * In-memory search over projects and events.
@@ -87,7 +88,7 @@ export function comparePublicSearchDocuments(
 }
 
 function isoDate(timestamp: number) {
-  return new Date(timestamp).toISOString().slice(0, 10);
+  return utcDayOf(timestamp);
 }
 
 function latestDates(rows: { owner: string; date: string }[]) {

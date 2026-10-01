@@ -104,6 +104,7 @@ import {
   type EntityNotesOwner,
 } from '#layers/thei/shared/entity-notes';
 import { getCurrentStatus } from '../statuses';
+import { utcDayOf } from '#layers/thei/shared/date-range';
 
 /**
  * The two fields only the owner sees: the reminder that flags the entity, and
@@ -146,8 +147,8 @@ export function buildPublicEntityChronology(entity: {
   createdAt: number;
   updatedAt: number;
 }) {
-  const createdAt = new Date(entity.createdAt).toISOString().slice(0, 10);
-  const updatedAt = new Date(entity.updatedAt).toISOString().slice(0, 10);
+  const createdAt = utcDayOf(entity.createdAt);
+  const updatedAt = utcDayOf(entity.updatedAt);
   return {
     createdAt,
     ...(updatedAt !== createdAt ? { updatedAt } : {}),
@@ -210,7 +211,7 @@ export async function buildPublicProjectSummary(
     tags: await buildPublicTags(
       await listTagsForContainer('project', project.projectUuid),
     ),
-    date: new Date(project.createdAt).toISOString().slice(0, 10),
+    date: utcDayOf(project.createdAt),
     showcase: project.showcase,
     cv: project.cv,
     ...(isAdmin && project.reminder ? { reminder: project.reminder } : {}),
@@ -269,7 +270,7 @@ export async function buildPublicEventSummary(
       periods
         .map((period) => period.endDate)
         .sort()
-        .at(-1) ?? new Date(event.createdAt).toISOString().slice(0, 10),
+        .at(-1) ?? utcDayOf(event.createdAt),
     // A card names the projects an event belongs to, not everything around
     // it: the rest waits on the event's own page.
     relatedEntities: await buildPublicRelatedLinks(
@@ -300,7 +301,7 @@ export async function buildPublicPageListItem(
     href: buildPageUrl(page.slug),
     access: page.access,
     iconMedia: await buildPublicPageIcon(page),
-    updatedAt: new Date(page.updatedAt).toISOString().slice(0, 10),
+    updatedAt: utcDayOf(page.updatedAt),
   };
 }
 
@@ -560,7 +561,7 @@ export async function buildPublicProjectSectionSummary(
   return {
     title: section.title,
     summary: section.summary,
-    date: new Date(section.createdAt).toISOString().slice(0, 10),
+    date: utcDayOf(section.createdAt),
     media: await buildPublicEntityPreviewMedia(
       'project-section',
       section.sectionUuid,
