@@ -13,6 +13,10 @@ export type OgImageKind =
   | 'diary'
   | 'tag';
 
+/** The size every card is drawn at, and what a page says it is. */
+export const OG_IMAGE_WIDTH = 1200;
+export const OG_IMAGE_HEIGHT = 630;
+
 export interface OgImageTarget {
   kind: OgImageKind;
   id: string;

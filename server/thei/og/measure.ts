@@ -9,6 +9,7 @@ import {
   type OgStackPlan,
   type OgTextItem,
 } from './fit';
+import { OG_WIDTH } from './geometry';
 import { el, renderOgSvg, type OgNode } from './render';
 
 /**
@@ -99,7 +100,7 @@ export async function probe(
       ),
     ),
     {
-      width: 1200,
+      width: OG_WIDTH,
       onNode: (node) => {
         if (node.key && keys.has(node.key))
           boxes.set(node.key.slice('probe:'.length), {

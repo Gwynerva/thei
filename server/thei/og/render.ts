@@ -1,6 +1,7 @@
 import satori from 'satori';
 import sharp from 'sharp';
 import { loadOgFonts } from './fonts';
+import { OG_HEIGHT, OG_WIDTH } from './geometry';
 
 /**
  * Turning a layout into a PNG.
@@ -11,8 +12,6 @@ import { loadOgFonts } from './fonts';
  * counting characters — is what the previous attempt at this did, and it
  * breaks the moment a title is in a different script.
  */
-export const OG_IMAGE_WIDTH = 1200;
-export const OG_IMAGE_HEIGHT = 630;
 
 /** A React-element-like node; satori reads this shape without React. */
 export interface OgNode {
@@ -115,8 +114,8 @@ export async function renderOgSvg(
 
 export async function renderOgPng(node: OgNode): Promise<Buffer> {
   const svg = await renderOgSvg(node, {
-    width: OG_IMAGE_WIDTH,
-    height: OG_IMAGE_HEIGHT,
+    width: OG_WIDTH,
+    height: OG_HEIGHT,
   });
   return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
 }

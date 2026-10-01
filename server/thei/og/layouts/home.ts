@@ -1,5 +1,5 @@
 import { frame, label, place } from '../blocks';
-import { ROW, SAFE, TYPE } from '../geometry';
+import { OG_HEIGHT, ROW, SAFE, TYPE } from '../geometry';
 import { ogIcon, OG_META_ICONS } from '../icons';
 import { pictureBox } from '../picture';
 import { el } from '../render';
@@ -41,7 +41,7 @@ export const home: OgLayout = async (input) => {
         },
         ogIcon(OG_META_ICONS.person, palette.plate.text, inner * 0.5),
       );
-  const top = (630 - AVATAR) / 2;
+  const top = (OG_HEIGHT - AVATAR) / 2;
   const left = SAFE.left + AVATAR + 64;
   const domain = content.site.domain;
   const text = await textColumn(
@@ -57,7 +57,7 @@ export const home: OgLayout = async (input) => {
   return {
     node: frame(
       palette,
-      { x: SAFE.left + AVATAR / 2, y: 315 },
+      { x: SAFE.left + AVATAR / 2, y: OG_HEIGHT / 2 },
       el(
         'div',
         {

@@ -1,3 +1,5 @@
+import { OG_IMAGE_HEIGHT, OG_IMAGE_WIDTH } from '#layers/thei/shared/og-url';
+
 /**
  * The card's measurements.
  *
@@ -7,8 +9,8 @@
  * card cannot do without stays inside the safe area; artwork, glows and
  * watermarks may bleed past it, since losing an edge of them loses nothing.
  */
-export const OG_WIDTH = 1200;
-export const OG_HEIGHT = 630;
+export const OG_WIDTH = OG_IMAGE_WIDTH;
+export const OG_HEIGHT = OG_IMAGE_HEIGHT;
 
 export const SAFE = {
   left: 64,
