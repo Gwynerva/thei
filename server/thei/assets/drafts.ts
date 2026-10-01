@@ -188,7 +188,7 @@ export async function openDraft(input: {
   return describeDraft(session);
 }
 
-export function describeDraft(session: DraftSession): AssetDraftSource {
+function describeDraft(session: DraftSession): AssetDraftSource {
   return {
     draftId: session.id,
     type: session.type,
