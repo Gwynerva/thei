@@ -150,7 +150,7 @@ const visibleTags = computed(() => props.tags.slice(0, 3));
 .project-hero-with-banner {
   container-type: inline-size;
 }
-/* Darkens the blurred copy under the text; clear over the banner band. */
+/* Phones: darkens the blurred copy under the text; clear over the band. */
 .hero-shade {
   background: linear-gradient(
     to bottom,
@@ -189,16 +189,31 @@ const visibleTags = computed(() => props.tags.slice(0, 3));
 }
 
 @variant sm {
+  /*
+   * The column the words sit in, measured on the hero: the banner lays
+   * itself out from it too (`PublicProjectBanner`). Every box these are used
+   * in is as wide as the hero, which the column's percentage resolves to.
+   */
   .project-hero-with-banner {
+    --hero-column: var(--width-wide);
+    --hero-column-start: calc((100cqw - var(--hero-column)) / 2);
+    /* The words take two thirds of it. */
+    --hero-words-end: calc(
+      var(--hero-column-start) + var(--hero-column) * 2 / 3
+    );
     background: var(--color-black);
   }
+  /*
+   * Deepens the banner's dimmed copy under the words a little, and lets go
+   * along a smoothstep before the banner turns sharp: the words read on the
+   * banner's own colours, with no edge to the shade.
+   */
   .hero-shade {
-    background: rgb(0 0 0 / 70%);
-    mask-image: linear-gradient(
-      to right,
-      black calc((100% - var(--width-wide)) / 2 + var(--width-wide) / 3),
-      transparent calc((100% + var(--width-wide)) / 2 - var(--width-wide) / 6)
-    );
+    background: rgb(0 0 0 / 40%);
+    @apply mask-smoothstep;
+    --smoothstep-direction: to right;
+    --smoothstep-from: calc(var(--hero-column-start) + var(--hero-column) / 3);
+    --smoothstep-to: var(--hero-words-end);
   }
 }
 </style>

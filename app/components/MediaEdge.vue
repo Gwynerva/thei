@@ -58,6 +58,7 @@ const {
 </template>
 
 <style scoped>
+@reference "../styles/main.css";
 /*
  * Registered so that the window can open smoothly under a pointer: an
  * unregistered custom property would jump.
@@ -74,29 +75,10 @@ const {
  * The window of the sharp media inside it is drawn by `Media`.
  */
 .media-edge-strip {
-  --media-edge-rest: calc(100% - var(--media-edge-hold));
-  mask-image: linear-gradient(
-    var(--media-edge-inward),
-    #000 var(--media-edge-hold),
-    rgb(0 0 0 / 97.2%)
-      calc(var(--media-edge-hold) + var(--media-edge-rest) * 0.1),
-    rgb(0 0 0 / 89.6%)
-      calc(var(--media-edge-hold) + var(--media-edge-rest) * 0.2),
-    rgb(0 0 0 / 78.4%)
-      calc(var(--media-edge-hold) + var(--media-edge-rest) * 0.3),
-    rgb(0 0 0 / 64.8%)
-      calc(var(--media-edge-hold) + var(--media-edge-rest) * 0.4),
-    rgb(0 0 0 / 50%) calc(var(--media-edge-hold) + var(--media-edge-rest) * 0.5),
-    rgb(0 0 0 / 35.2%)
-      calc(var(--media-edge-hold) + var(--media-edge-rest) * 0.6),
-    rgb(0 0 0 / 21.6%)
-      calc(var(--media-edge-hold) + var(--media-edge-rest) * 0.7),
-    rgb(0 0 0 / 10.4%)
-      calc(var(--media-edge-hold) + var(--media-edge-rest) * 0.8),
-    rgb(0 0 0 / 2.8%)
-      calc(var(--media-edge-hold) + var(--media-edge-rest) * 0.9),
-    transparent 100%
-  );
+  @apply mask-smoothstep;
+  --smoothstep-direction: var(--media-edge-inward);
+  --smoothstep-from: var(--media-edge-hold);
+  --smoothstep-to: 100%;
   transition: --media-edge-clear 300ms ease-out;
 }
 @media (prefers-reduced-motion: reduce) {

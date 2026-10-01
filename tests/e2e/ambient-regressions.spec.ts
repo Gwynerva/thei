@@ -147,6 +147,24 @@ for (const width of [390, 1280]) {
         expect(background!.y + background!.height).toBeGreaterThanOrEqual(
           box!.y + box!.height,
         );
+        // Edge media along the hero's right edge: the banner reaches it,
+        // never leaving a glow there, and every fade is a smoothstep (its
+        // first step is 97.2% opaque), so none of them shows a line.
+        expect(mainBox!.x + mainBox!.width).toBeGreaterThanOrEqual(
+          box!.x + box!.width - 1,
+        );
+        for (const layer of [
+          banner.locator('[data-media-original-pair] [data-media-foreground]'),
+          foreground,
+        ])
+          await expect(layer).toHaveCSS(
+            'mask-image',
+            /^linear-gradient\(to left, rgb\(0, 0, 0\) .+?, rgba\(0, 0, 0, 0\.97/,
+          );
+        await expect(hero.locator('[data-hero-shade]')).toHaveCSS(
+          'mask-image',
+          /^linear-gradient\(to right, rgb\(0, 0, 0\) .+?, rgba\(0, 0, 0, 0\.97/,
+        );
       }
       const tags = hero.locator('[data-hero-tags]');
       await expect(tags.locator('a')).toHaveText(['Tag 1', 'Tag 2', 'Tag 3']);
@@ -584,14 +602,14 @@ test('an internal link card keeps most of a narrow column for its words', async 
     .locator('.entity-preview-text')
     .evaluate(
       (element) =>
-        element.clientWidth - parseFloat(getComputedStyle(element).paddingRight),
+        element.clientWidth -
+        parseFloat(getComputedStyle(element).paddingRight),
     );
   expect(words).toBeGreaterThan(linkBox.width * 0.6);
   // A truncated title ends in an ellipsis rather than a cut letter.
-  await expect(link.locator('.entity-preview-text .truncate').first()).toHaveCSS(
-    'text-overflow',
-    'ellipsis',
-  );
+  await expect(
+    link.locator('.entity-preview-text .truncate').first(),
+  ).toHaveCSS('text-overflow', 'ellipsis');
 });
 
 test('admin previews play only while hovered or focused, including nested focus', async ({

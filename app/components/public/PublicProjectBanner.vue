@@ -66,47 +66,64 @@ function rememberDimensions(width: number, height: number) {
   height: calc(100% + 12 * var(--blur-3xl));
   opacity: 1;
 }
+/*
+ * Wider screens: the banner is edge media along the hero's right edge, the
+ * way cards show theirs (`MediaEdge`). It fills the hero's height with its
+ * middle at the focus, 65% across the column, and loses its right side past
+ * the edge for it; a banner too narrow to reach the edge from there is
+ * pinned to it instead, so the edge never shows an empty glow. It stays
+ * sharp to the end of the words and dissolves across the third of the
+ * column before that into its own blurred copy, which fills the hero dimmed,
+ * so the words sit on the banner's own colours rather than on black. The
+ * column comes from the hero (`PublicProjectHero`); every fade is a
+ * smoothstep measured on the hero, from its right edge.
+ */
 @variant sm {
   .hero-banner {
-    --banner-center: calc(
-      (100% - var(--width-wide)) / 2 + var(--width-wide) * 0.65
+    --banner-focus: calc(var(--hero-column-start) + var(--hero-column) * 0.65);
+    --banner-clear: calc(100cqw - var(--hero-words-end));
+    --banner-width: calc(100cqh * var(--media-ratio));
+    --banner-middle: max(
+      var(--banner-focus),
+      calc(100cqw - var(--banner-width) / 2)
     );
   }
   :deep(.media-pair) {
     container-type: size;
   }
   :deep(.media-foreground) {
-    top: 0;
-    bottom: auto;
-    right: auto;
-    left: var(--banner-center);
-    height: 100%;
+    inset: 0;
     width: auto;
-    aspect-ratio: var(--media-ratio);
-    transform: translateX(-50%);
-    mask-image: linear-gradient(
-      to right,
-      transparent 0%,
-      rgb(0 0 0 / 15%) 10%,
-      rgb(0 0 0 / 50%) 24%,
-      rgb(0 0 0 / 85%) 38%,
-      black 48%,
-      black 70%,
-      rgb(0 0 0 / 85%) 78%,
-      rgb(0 0 0 / 50%) 88%,
-      rgb(0 0 0 / 15%) 96%,
-      transparent 100%
-    );
+    height: auto;
+    aspect-ratio: auto;
+    transform: none;
+    @apply mask-smoothstep;
+    --smoothstep-direction: to left;
+    --smoothstep-from: var(--banner-clear);
+    --smoothstep-to: calc(var(--banner-clear) + var(--hero-column) / 3);
+  }
+  /* Its own left side dissolves too, so it never ends in a hard line. */
+  :deep(.media-main) {
+    inset: 0 auto;
+    left: calc(var(--banner-middle) - var(--banner-width) / 2);
+    width: var(--banner-width);
+    max-width: none;
+    height: 100%;
+    @apply mask-smoothstep;
+    --smoothstep-direction: to left;
+    --smoothstep-from: 50%;
+    --smoothstep-to: 100%;
   }
   :deep(.media-backdrop) {
-    /* Same centre as the foreground; enlarge uniformly to reach every edge. */
+    /* Same centre as the banner; enlarged uniformly to reach every edge. */
     --tw-blur: blur(var(--blur-3xl));
-    opacity: 0.7;
+    --tw-brightness: brightness(0.6);
+    opacity: 1;
     inset: auto;
     top: 50%;
-    left: var(--banner-center);
+    left: var(--banner-middle);
     width: max(
-      calc(2 * var(--banner-center) + 6 * var(--blur-3xl)),
+      calc(2 * var(--banner-middle) + 6 * var(--blur-3xl)),
       calc((100cqh + 6 * var(--blur-3xl)) * var(--media-ratio))
     );
     height: auto;
