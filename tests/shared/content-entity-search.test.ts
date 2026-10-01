@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  preferContentEntities,
   rankContentEntities,
   suggestContentEntities,
   type ContentEntitySearchItem,
@@ -216,5 +217,88 @@ describe('suggestions from the words a link is made over', () => {
     expect(suggestContentEntities(items, '   ')).toEqual(
       rankContentEntities(items, '', 5),
     );
+  });
+});
+
+describe('entities a text already links to, offered first', () => {
+  function entity(
+    entityId: string,
+    updatedAt: number,
+    entityType: ContentEntitySearchItem['entityType'] = 'project',
+  ): ContentEntitySearchItem {
+    return {
+      entityType,
+      entityId,
+      title: entityId,
+      summary: '',
+      url: `/${entityId}/`,
+      humanReadableSlug: entityId,
+      updatedAt,
+    };
+  }
+  const all = [
+    entity('old', 1),
+    entity('older', 0),
+    entity('recent', 9),
+    entity('newer', 8),
+    entity('day', 5, 'diary-entry'),
+    entity('meet', 7, 'event'),
+  ];
+  const recent = (rest: ContentEntitySearchItem[], room: number) =>
+    rankContentEntities(rest, '', room);
+  const ids = (list: ContentEntitySearchItem[]) =>
+    list.map((item) => item.entityId);
+
+  it('takes the first places in the order of the text, the most recent after', () => {
+    expect(
+      ids(
+        preferContentEntities(
+          all,
+          ['diary-entry:day', 'project:older'],
+          4,
+          recent,
+        ),
+      ),
+    ).toEqual(['day', 'older', 'recent', 'newer']);
+  });
+
+  it('never makes the list longer than its limit', () => {
+    const keys = all.map((item) => `${item.entityType}:${item.entityId}`);
+    expect(ids(preferContentEntities(all, keys, 3, recent))).toEqual([
+      'old',
+      'older',
+      'recent',
+    ]);
+  });
+
+  it('skips what is not on offer, and names nothing twice', () => {
+    expect(
+      ids(
+        preferContentEntities(
+          all,
+          ['project:gone', 'event:meet', 'event:meet', 'project:day'],
+          3,
+          recent,
+        ),
+      ),
+    ).toEqual(['meet', 'recent', 'newer']);
+  });
+
+  it('leaves the ranking alone when the text links to nothing', () => {
+    expect(preferContentEntities(all, [], 5, recent)).toEqual(
+      rankContentEntities(all, '', 5),
+    );
+  });
+
+  it('fills the rest with what the words name, when there are words', () => {
+    const harbor = { ...entity('harbor', 0), title: 'Lantern Harbor' };
+    const items = [...all, harbor];
+    expect(
+      ids(
+        preferContentEntities(items, ['project:old'], 3, (rest, room) =>
+          suggestContentEntities(rest, 'sailed to Lantern Harbor', room),
+        ),
+      ),
+    ).toEqual(['old', 'harbor', 'recent']);
   });
 });

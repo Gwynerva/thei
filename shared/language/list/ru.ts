@@ -1070,6 +1070,15 @@ export default defineI18nModule({
       'Проекты, события и записи дневника, связанные с этой сущностью. Связь видна с обеих сторон.',
     related_entity_add: 'Добавить связь',
     relation_direction: 'Тип связи',
+    // Said of the entity on the left, whose gender the word takes.
+    relation_short_related: (owner) =>
+      owner === 'project'
+        ? 'связан с'
+        : owner === 'event'
+          ? 'связано с'
+          : 'связана с',
+    relation_short_depends_on: 'зависит от',
+    relation_short_affects: 'влияет на',
     relation_popup_related: (current, other) =>
       `«${current}» и «${other}» связаны`,
     relation_popup_depends_on: (current, other) =>
@@ -1106,6 +1115,7 @@ export default defineI18nModule({
     search_entity_placeholder: 'Название или дата записи дневника…',
     search_entity_no_results: 'Ничего подходящего не найдено.',
     search_entity_error: 'Не удалось выполнить поиск.',
+    entity_search_mentioned: 'Есть ссылка в тексте',
     content_section: 'Раздел проекта',
     content_section_delete_entity: 'раздел проекта',
     project_stage: 'Этап проекта',

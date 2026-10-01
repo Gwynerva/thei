@@ -6,6 +6,7 @@ import {
   CONTENT_ENTITY_SEARCH_LIMIT,
   CONTENT_ENTITY_SEARCH_MAX_LIMIT,
   CONTENT_ENTITY_SUGGEST_TEXT_LIMIT,
+  preferContentEntities,
   rankContentEntities,
   suggestContentEntities,
   type ContentEntitySearchItem,
@@ -22,7 +23,9 @@ import { contentEntitySearchItem } from '../../../thei/content-entity-search';
  * `limit` is how many results the picker has room for.
  *
  * With nothing typed, `suggest` is the text a link is being made over: what
- * it names comes first, the most recent after it.
+ * it names comes first, the most recent after it. `prefer` lists `type:uuid`
+ * keys to take the first places before either — the entities the text being
+ * related already links to — without making the list any longer.
  */
 export default defineEventHandler(
   async (event): Promise<ContentEntitySearchItem[]> => {
@@ -54,10 +57,20 @@ export default defineEventHandler(
             .join('')
             .trim()
         : '';
-    const ranked =
-      !search && suggest
-        ? suggestContentEntities(records, suggest, limit)
-        : rankContentEntities(records, search, limit);
+    const preferred =
+      typeof query.prefer === 'string'
+        ? query.prefer
+            .split(',')
+            .filter(Boolean)
+            .slice(0, CONTENT_ENTITY_SEARCH_MAX_LIMIT)
+        : [];
+    const ranked = search
+      ? rankContentEntities(records, search, limit)
+      : preferContentEntities(records, preferred, limit, (rest, room) =>
+          suggest
+            ? suggestContentEntities(rest, suggest, room)
+            : rankContentEntities(rest, '', room),
+        );
     return await Promise.all(ranked.map(contentEntitySearchItem));
   },
 );

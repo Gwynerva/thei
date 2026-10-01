@@ -508,7 +508,10 @@ async function openDeleteProjectModal() {
           ? { type: 'project', id: resolvedProjectUuid }
           : undefined
       "
+      owner-type="project"
       :owner-title="projectData.title.trim() || phrase.new_project"
+      :owner-media="iconMedia"
+      :text="projectData.descriptionContent?.data"
     />
     <AdminTags
       v-model="tagsModel"

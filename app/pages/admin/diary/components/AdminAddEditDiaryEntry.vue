@@ -304,7 +304,9 @@ useRegisterAdminBarContextButton(
     <AdminRelations
       v-model="relationsModel"
       :owner="diaryUuid ? { type: 'diary-entry', id: diaryUuid } : undefined"
+      owner-type="diary-entry"
       :owner-title="ownerTitle"
+      :text="diaryData.content?.data"
     />
     <AdminShareLinks
       v-if="diaryUuid"

@@ -40,6 +40,44 @@ export const CONTENT_ENTITY_SEARCH_MAX_LIMIT = 20;
 /** How much of the text a link is made over a picker reads for suggestions. */
 export const CONTENT_ENTITY_SUGGEST_TEXT_LIMIT = 300;
 
+/**
+ * A list led by what the caller prefers — the entities a text already links
+ * to — in the order given, and filled with what `rankRest` picks from the
+ * others, `limit` in all. Preferred keys that name nothing on offer are
+ * skipped; the preferred never push the list past its limit, they only take
+ * its first places.
+ */
+export function preferContentEntities<
+  T extends Pick<ContentEntitySearchItem, 'entityType' | 'entityId'>,
+>(
+  items: T[],
+  preferred: readonly string[],
+  limit: number,
+  rankRest: (rest: T[], room: number) => T[],
+): T[] {
+  const byKey = new Map(
+    items.map((item) => [`${item.entityType}:${item.entityId}`, item]),
+  );
+  const first = [
+    ...new Set(
+      preferred.flatMap((key) => {
+        const item = byKey.get(key);
+        return item ? [item] : [];
+      }),
+    ),
+  ].slice(0, limit);
+  const room = limit - first.length;
+  if (room <= 0) return first;
+  const taken = new Set<T>(first);
+  return [
+    ...first,
+    ...rankRest(
+      items.filter((item) => !taken.has(item)),
+      room,
+    ).slice(0, room),
+  ];
+}
+
 type Rankable = {
   title: string;
   humanReadableSlug: string;

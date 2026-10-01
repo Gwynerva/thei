@@ -435,7 +435,9 @@ function clone<T>(value: T): T {
     <AdminRelations
       v-model="relationsModel"
       :owner="eventUuid ? { type: 'event', id: eventUuid } : undefined"
+      owner-type="event"
       :owner-title="eventData.title.trim() || phrase.new_event"
+      :text="eventData.content?.data"
     />
     <AdminShareLinks
       v-if="eventUuid"

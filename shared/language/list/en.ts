@@ -1011,6 +1011,9 @@ export default defineI18nBase({
       'Projects, events and diary entries tied to this one. A relation is visible from both sides.',
     related_entity_add: 'Add a relation',
     relation_direction: 'Kind of relation',
+    relation_short_related: () => 'related to',
+    relation_short_depends_on: 'depends on',
+    relation_short_affects: 'affects',
     relation_popup_related: (current, other) =>
       `“${current}” and “${other}” are related`,
     relation_popup_depends_on: (current, other) =>
@@ -1048,6 +1051,7 @@ export default defineI18nBase({
     search_entity_placeholder: 'A title, or the date of a diary entry…',
     search_entity_no_results: 'Nothing matches.',
     search_entity_error: 'Could not search.',
+    entity_search_mentioned: 'Linked in the text',
     content_section: 'Project section',
     content_section_delete_entity: 'project section',
     project_stage: 'Project stage',

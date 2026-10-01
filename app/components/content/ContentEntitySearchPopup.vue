@@ -28,6 +28,10 @@ import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
  * A picker opened over some text passes it as `suggest`: until something is
  * typed, the list starts with what the text names. The text never goes into
  * the field, so typing searches just as it would without it.
+ *
+ * A picker for something a text already links to passes those links as
+ * `prefer`, `type:uuid` keys: until something is typed they take the first
+ * places, marked, within the same number of rows.
  */
 const props = withDefaults(
   defineProps<{
@@ -37,10 +41,12 @@ const props = withDefaults(
     limit?: number;
     chosen?: ContentEntityChoice;
     suggest?: string;
+    prefer?: string[];
   }>(),
   {
     entityTypes: () => [...CONTENT_ENTITY_TYPES],
     exclude: () => [],
+    prefer: () => [],
     limit: CONTENT_ENTITY_SEARCH_LIMIT,
   },
 );
@@ -83,6 +89,7 @@ const search = debounce(async (current: number) => {
         query: {
           query: text,
           suggest,
+          prefer: (!text && props.prefer.join(',')) || undefined,
           entityTypes: props.entityTypes.join(','),
           exclude: props.exclude.join(','),
           publicOnly: props.publicOnly ? 'true' : undefined,
@@ -122,6 +129,12 @@ function secondary(item: ContentEntityChoice) {
   return [item.parent?.title, item.summary].filter(Boolean).join(' · ');
 }
 
+/** Shown first because the text links to it, while nothing is typed. */
+const preferred = computed(() => new Set(props.prefer));
+function isPreferred(item: ContentEntityChoice) {
+  return !query.value.trim() && preferred.value.has(itemKey(item));
+}
+
 function isChosen(item: ContentEntityChoice) {
   return Boolean(props.chosen && itemKey(props.chosen) === itemKey(item));
 }
@@ -133,6 +146,11 @@ function move(step: number) {
   document
     .getElementById(optionId(activeIndex.value))
     ?.scrollIntoView({ block: 'nearest' });
+}
+
+/** The mouse takes the row it is over; a finger only picks what it taps. */
+function pointAt(event: PointerEvent, index: number) {
+  if (event.pointerType === 'mouse') activeIndex.value = index;
 }
 
 function pick(row: Row) {
@@ -213,7 +231,7 @@ defineExpose({ focus: () => input.value?.focus({ preventScroll: true }) });
             'bg-bg-3': index === activeIndex,
             'entity-search-chosen': isChosen(row.item),
           }"
-          @pointerenter="activeIndex = index"
+          @pointerenter="pointAt($event, index)"
           @click="pick(row)"
         >
           <MediaEdge
@@ -235,11 +253,18 @@ defineExpose({ focus: () => input.value?.focus({ preventScroll: true }) });
                 :name="entityTypeIcon(row.item.entityType)"
                 :aria-label="entityTypeLabel(row.item.entityType)"
                 role="img"
-                class="shrink-0 text-xs text-text-2"
-              /><span class="-m-[0.75em] min-w-0 truncate p-[0.75em]">{{
-                entityDisplayTitle(row.item)
-              }}</span></span
-            >
+                class="shrink-0 text-xs text-text-2" /><span
+                class="-m-[0.75em] min-w-0 truncate p-[0.75em]"
+                >{{ entityDisplayTitle(row.item) }}</span
+              ><Icon
+                v-if="isPreferred(row.item)"
+                name="link"
+                role="img"
+                :aria-label="phrase.entity_search_mentioned"
+                :data-title-popup="phrase.entity_search_mentioned"
+                data-entity-search-mentioned
+                class="shrink-0 text-xs text-accent"
+            /></span>
             <span
               v-if="secondary(row.item)"
               class="-m-[0.75em] block truncate p-[0.75em] text-xs text-text-3"

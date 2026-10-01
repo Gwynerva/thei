@@ -137,3 +137,24 @@ export function contentExternalLinkIdentities(
     ),
   );
 }
+
+/**
+ * The entities a text links to, each once, in the order the text first names
+ * them: what the owner already points at, and may well want to relate to.
+ * Private sections count, since their owner wrote them.
+ */
+export function contentEntityMentions(
+  value: ContentOutputData | null | undefined,
+): ContentEntityReference[] {
+  return extractContentReferenceCandidates(value, true).links.flatMap((link) =>
+    link.kind === 'entity'
+      ? [
+          {
+            kind: 'entity' as const,
+            entityType: link.entityType,
+            entityId: link.entityId,
+          },
+        ]
+      : [],
+  );
+}

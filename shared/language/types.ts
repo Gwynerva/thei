@@ -1,4 +1,5 @@
 import type { ContentHistoryReason } from '../content-history';
+import type { RelationEntityType } from '../relation';
 
 export const languagesInfo = {
   en: 'English',
@@ -762,6 +763,10 @@ export type LanguagePhrases = {
   related_entities_hint: string;
   related_entity_add: string;
   relation_direction: string;
+  /** What a relation is, said between the two icons it joins. */
+  relation_short_related: (owner: RelationEntityType) => string;
+  relation_short_depends_on: string;
+  relation_short_affects: string;
   relation_popup_related: (current: string, other: string) => string;
   relation_popup_depends_on: (current: string, other: string) => string;
   relation_popup_affects: (current: string, other: string) => string;
@@ -791,6 +796,7 @@ export type LanguagePhrases = {
   search_entity_placeholder: string;
   search_entity_no_results: string;
   search_entity_error: string;
+  entity_search_mentioned: string;
   content_section: string;
   content_section_delete_entity: string;
   project_stage: string;
