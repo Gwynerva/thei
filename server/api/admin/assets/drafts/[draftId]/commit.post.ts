@@ -3,6 +3,7 @@ import type { AssetSelectionConstraints } from '#layers/thei/shared/asset-librar
 import { isLongCommit } from '#layers/thei/shared/asset-upload-settings';
 import { commitDraft, useDraft } from '../../../../../thei/assets/drafts';
 import {
+  isUploadId,
   isUploadJobRunning,
   startUploadJob,
 } from '../../../../../thei/assets/jobs';
@@ -41,6 +42,8 @@ export default defineEventHandler(
     const settings = parseAssetUploadSettings(JSON.stringify(body?.settings));
     const constraints = parseSelectionConstraints({ ...body });
     const uploadId = body?.uploadId;
+    if (uploadId !== undefined && !isUploadId(uploadId))
+      throw createError({ statusCode: 400, message: 'Invalid upload id' });
 
     if (uploadId && isLongCommit(settings)) {
       // One long result at a time per draft: a second request while it

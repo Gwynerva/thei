@@ -147,8 +147,8 @@ export async function uploadOriginalFile(
 
 /** How often a commit run as a job is asked about. */
 const JOB_POLL_MS = 1000;
-/** Polls failing in a row before the job is given up as unreachable. */
-const JOB_POLL_FAILURES = 30;
+/** The longest wait between polls while the server cannot be reached. */
+const JOB_POLL_MAX_MS = 10_000;
 
 /**
  * A commit run as a job failed, or the job is gone. Carries what the
@@ -202,7 +202,12 @@ export async function commitDraftRequest(
       },
     );
   } catch (reason) {
-    if (signal?.aborted) throw abortError();
+    if (signal?.aborted) {
+      // Abandoned before the answer came: the job may have started all the
+      // same, and nothing would ever ask for it.
+      cancelUploadJob(uploadId);
+      throw abortError();
+    }
     throw reason;
   } finally {
     stop();
@@ -211,12 +216,26 @@ export async function commitDraftRequest(
   return await awaitUploadJob(uploadId, { signal, onStatus });
 }
 
+/** A DELETE sent with keepalive, so a tab that is closing still sends it. */
+function sendDelete(path: string) {
+  void fetch(sitePath(path), { method: 'DELETE', keepalive: true }).catch(
+    () => {},
+  );
+}
+
+/** Stops a job on the server. */
+function cancelUploadJob(uploadId: string) {
+  sendDelete(`/api/admin/uploads/${uploadId}`);
+}
+
 /**
  * Follows a commit run as a job until it settles. Abandoning it — the
  * signal, or the tab going away — cancels it: nothing would take the
  * result. A job the server no longer knows was lost to a restart, and so
  * was the draft; it is reported as the draft being gone, which makes the
- * caller stage the file again.
+ * caller stage the file again. A server that cannot be reached says nothing
+ * of the job, which may well go on there: it is asked again, less often,
+ * rather than given up and encoded a second time beside itself.
  */
 async function awaitUploadJob(
   uploadId: string,
@@ -226,27 +245,24 @@ async function awaitUploadJob(
   },
 ): Promise<AssetUploadResponse> {
   const { signal, onStatus } = options;
-  const cancel = () => {
-    void fetch(sitePath(`/api/admin/uploads/${uploadId}`), {
-      method: 'DELETE',
-      keepalive: true,
-    }).catch(() => {});
-  };
+  const cancel = () => cancelUploadJob(uploadId);
   signal?.addEventListener('abort', cancel, { once: true });
   window.addEventListener('pagehide', cancel);
   let failures = 0;
   try {
     while (true) {
-      await pause(JOB_POLL_MS, signal);
+      await pause(
+        Math.min(JOB_POLL_MS * 2 ** failures, JOB_POLL_MAX_MS),
+        signal,
+      );
       let status: AssetJobStatus | null;
       try {
         status = await $fetch<AssetJobStatus | null>(
           `/api/admin/uploads/${uploadId}`,
         );
-      } catch (reason) {
+      } catch {
         if (signal?.aborted) throw abortError();
-        // A blip: ask again. A server that stays away is a restart.
-        if (++failures >= JOB_POLL_FAILURES) throw jobLost();
+        failures++;
         continue;
       }
       failures = 0;
@@ -293,12 +309,9 @@ function jobLost() {
   });
 }
 
-/** Frees the server's copy; sent with keepalive so a closing tab still does. */
+/** Frees the server's copy. */
 export function deleteDraft(draftId: string) {
-  void fetch(sitePath(`/api/admin/assets/drafts/${draftId}`), {
-    method: 'DELETE',
-    keepalive: true,
-  }).catch(() => {});
+  sendDelete(`/api/admin/assets/drafts/${draftId}`);
 }
 
 /**

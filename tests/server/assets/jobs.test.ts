@@ -89,6 +89,31 @@ describe('upload jobs', () => {
     expect(cancelUploadJob('missing')).toBe(false);
   });
 
+  it('refuses an id already in use rather than take its job over', () => {
+    const first = heldJob();
+    startUploadJob('same', first.run);
+    expect(() => startUploadJob('same', heldJob().run)).toThrow(
+      'Upload id already in use',
+    );
+    expect(first.signal.aborted).toBe(false);
+    expect(isUploadJobRunning('same')).toBe(true);
+  });
+
+  it('cancels a job that runs for hours, however closely it is followed', () => {
+    const hour = 60 * 60 * 1000;
+    const base = Date.now();
+    const stuck = heldJob();
+    startUploadJob('stuck', stuck.run, base);
+    for (let at = 1; at <= 3; at++) {
+      getUploadJob('stuck', base + at * hour);
+      sweepUploadJobs(base + at * hour);
+    }
+    expect(stuck.signal.aborted).toBe(false);
+    getUploadJob('stuck', base + 4 * hour);
+    sweepUploadJobs(base + 4 * hour);
+    expect(stuck.signal.aborted).toBe(true);
+  });
+
   it('cancels a job nobody asks about, and forgets old results', async () => {
     const minute = 60 * 1000;
     const base = Date.now();

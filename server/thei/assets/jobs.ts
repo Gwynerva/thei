@@ -1,3 +1,4 @@
+import { createError } from 'h3';
 import type { AssetUploadResponse } from '#layers/thei/shared/api/asset';
 import {
   isSettledJob,
@@ -27,12 +28,19 @@ const SETTLED_KEEP_MS = 10 * 60 * 1000;
  * asleep for a moment must not lose a ten-minute encode.
  */
 const ORPHAN_MS = 10 * 60 * 1000;
+/**
+ * A job still running this long after it started is stuck, polled or not:
+ * no encode of a file within the upload limit takes hours, and a hung one
+ * would hold its lane for good.
+ */
+const MAX_RUN_MS = 4 * 60 * 60 * 1000;
 const SWEEP_MS = 30 * 1000;
 
 interface UploadJob {
   id: string;
   status: AssetJobStatus;
   controller: AbortController;
+  startedAt: number;
   lastSeen: number;
   settledAt?: number;
 }
@@ -41,7 +49,9 @@ const jobs = new Map<string, UploadJob>();
 let sweepTimer: ReturnType<typeof setInterval> | undefined;
 
 /**
- * Runs `run` as a job under `id`, at once and in the background.
+ * Runs `run` as a job under `id`, at once and in the background. An id
+ * already in use is refused rather than taken over: the job under it would
+ * run on with nothing left to stop it.
  *
  * The signal given to `run` is the job's own: it lets a queued encode leave
  * its lane and kills a running ffmpeg. What `run` reports through `report`
@@ -55,11 +65,14 @@ export function startUploadJob(
   ) => Promise<AssetUploadResponse>,
   now = Date.now(),
 ): void {
+  if (jobs.has(id))
+    throw createError({ statusCode: 409, message: 'Upload id already in use' });
   const controller = new AbortController();
   const job: UploadJob = {
     id,
     status: { phase: 'queued' },
     controller,
+    startedAt: now,
     lastSeen: now,
   };
   jobs.set(id, job);
@@ -70,6 +83,11 @@ export function startUploadJob(
     (asset) => settle(job, { phase: 'done', asset }),
     (reason: unknown) => settle(job, failedStatus(reason)),
   );
+}
+
+/** What a client may name a job by: the uuid it made for the request. */
+export function isUploadId(value: unknown): value is string {
+  return typeof value === 'string' && /^[\w-]{1,64}$/.test(value);
 }
 
 /** The job's status, noting that someone still cares. */
@@ -101,12 +119,15 @@ export function cancelUploadJob(id: string): boolean {
   return true;
 }
 
-/** Drops old results and cancels jobs whose owner has gone. */
+/** Drops old results and cancels jobs whose owner has gone or that hang. */
 export function sweepUploadJobs(now = Date.now()) {
   for (const job of [...jobs.values()]) {
     if (isSettledJob(job.status)) {
       if (now - (job.settledAt ?? now) >= SETTLED_KEEP_MS) jobs.delete(job.id);
-    } else if (now - job.lastSeen >= ORPHAN_MS) {
+    } else if (
+      now - job.lastSeen >= ORPHAN_MS ||
+      now - job.startedAt >= MAX_RUN_MS
+    ) {
       cancelUploadJob(job.id);
     }
   }
