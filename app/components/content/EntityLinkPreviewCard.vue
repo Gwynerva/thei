@@ -130,7 +130,7 @@ const heading = computed(() => publicText(entityDisplayTitle(props)));
   text-decoration: none;
 }
 
-.entity-link-preview-interactive:is(:hover, :focus-visible) {
+.entity-link-preview-interactive:focus-visible {
   border-color: color-mix(
     in oklab,
     var(--color-accent) 40%,
@@ -141,6 +141,21 @@ const heading = computed(() => publicText(entityDisplayTitle(props)));
     var(--color-accent) 8%,
     var(--color-bg-2)
   );
+}
+
+@media (hover: hover) {
+  .entity-link-preview-interactive:hover {
+    border-color: color-mix(
+      in oklab,
+      var(--color-accent) 40%,
+      var(--color-border-1)
+    );
+    background-color: color-mix(
+      in oklab,
+      var(--color-accent) 8%,
+      var(--color-bg-2)
+    );
+  }
 }
 
 .entity-preview-text {

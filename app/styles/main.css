@@ -105,7 +105,21 @@
 
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
-@custom-variant hocus (&:hover, &:focus-visible);
+/*
+ * Pointed at or reached with the keyboard. Pointing needs a pointer that can
+ * point, as for Tailwind's own `hover:`: a phone reports the last tap as a
+ * hover, and the look would stay on whatever was tapped.
+ */
+@custom-variant hocus {
+  &:focus-visible {
+    @slot;
+  }
+  &:hover {
+    @media (hover: hover) {
+      @slot;
+    }
+  }
+}
 
 @custom-variant sticky-stuck (&:where([data-sticky-stuck], [data-sticky-stuck] *));
 
@@ -405,5 +419,61 @@
   svg[thei-icon] {
     display: inline-block;
     vertical-align: -0.22em;
+  }
+
+  /*
+   * The first long press on a link or a control with a hint shows the hint
+   * (`press-hint.ts`), so the system's menu and text selection stand aside.
+   * iOS decides on its menu as the finger lands, before a script could say
+   * anything, so this is set ahead and lifted once the hint is up: the second
+   * long press is the system's. A hint that only sometimes shows — a name
+   * not cut short, a label already on screen — leaves the system its press,
+   * since it cannot know ahead whether it will need it.
+   */
+  @media (hover: none) {
+    :where(
+      a[href],
+      button:not(:disabled),
+      summary,
+      label,
+      [role='button'],
+      [role='link'],
+      [role='tab'],
+      [role='radio'],
+      [role='checkbox'],
+      [role='switch'],
+      [role='menuitem'],
+      [role='option'],
+      [data-title-popup-press='hold']
+    )[data-title-popup],
+    :where(
+        a[href],
+        button:not(:disabled),
+        summary,
+        label,
+        [role='button'],
+        [role='link'],
+        [role='tab'],
+        [role='radio'],
+        [role='checkbox'],
+        [role='switch'],
+        [role='menuitem'],
+        [role='option']
+      )
+      [data-title-popup],
+    [data-link-card-root] a[href] {
+      &:not(
+        [data-title-popup-open],
+        [data-title-popup-clipped],
+        [data-title-popup-press='tap'],
+        :has([data-title-popup-label]),
+        [contenteditable],
+        [contenteditable] *
+      ) {
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+    }
   }
 }

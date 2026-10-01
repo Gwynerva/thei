@@ -138,7 +138,13 @@ const {
   --media-edge-hold: 15%;
 }
 /* The window opens a little while the card or row it is in is engaged. */
-.group:is(:hover, :focus-visible, :focus-within) .media-edge-strip {
+.group:is(:focus-visible, :has(:focus-visible)) .media-edge-strip {
   --media-edge-clear: var(--media-edge-clear-open);
+}
+
+@media (hover: hover) {
+  .group:hover .media-edge-strip {
+    --media-edge-clear: var(--media-edge-clear-open);
+  }
 }
 </style>

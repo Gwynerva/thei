@@ -28,6 +28,18 @@ const props = withDefaults(
   },
 );
 const emit = defineEmits<{ pick: []; hover: [boolean] }>();
+
+/**
+ * Pointing tints the day; a finger only taps it, and the focus a tap leaves
+ * behind is no pointing either.
+ */
+function hoverBy(event: PointerEvent, on: boolean) {
+  if (event.pointerType !== 'touch') emit('hover', on);
+}
+
+function focusPoint(event: FocusEvent) {
+  if ((event.target as Element).matches(':focus-visible')) emit('hover', true);
+}
 const isNew = computed(() => props.tone === 'warning');
 const pointIcon = computed(() =>
   props.point.visibility === 'secret'
@@ -55,9 +67,9 @@ const pointIcon = computed(() =>
       :class="{ 'row-span-2 grid-rows-subgrid': first }"
       :aria-label="phrase.life_copy_link"
       @click="emit('pick')"
-      @pointerenter="emit('hover', true)"
-      @pointerleave="emit('hover', false)"
-      @focus="emit('hover', true)"
+      @pointerenter="hoverBy($event, true)"
+      @pointerleave="hoverBy($event, false)"
+      @focus="focusPoint"
       @blur="emit('hover', false)"
     >
       <span

@@ -17,8 +17,8 @@ const accent = computed(() =>
     v-on="mediaEvents"
     class="search-result group relative isolate flex min-h-24 min-w-0
       overflow-hidden rounded-normal border border-border-1 bg-bg-2 shadow-md
-      shadow-shadow-1 transition focus-within:-translate-y-px
-      focus-within:shadow-lg hocus:-translate-y-px hocus:shadow-lg"
+      shadow-shadow-1 transition has-focus-visible:-translate-y-px
+      has-focus-visible:shadow-lg hocus:-translate-y-px hocus:shadow-lg"
     :style="{
       '--search-result-accent': accent,
       '--search-result-shadow': `color-mix(in oklab, ${accent} 26%, transparent)`,
@@ -39,7 +39,7 @@ const accent = computed(() =>
       :loop="isProject"
       :muted="isProject"
       media-class="opacity-75 transition duration-300 group-hocus:opacity-90
-        group-focus-within:opacity-90 motion-reduce:duration-150"
+        group-has-focus-visible:opacity-90 motion-reduce:duration-150"
       class="w-full"
     >
       <span
@@ -114,10 +114,16 @@ const accent = computed(() =>
  * The same treatment the cards on "Life" get, in smaller measure: results sit
  * closer together here, so the lift is a single pixel and the glow is fainter.
  */
-.search-result:hover,
-.search-result:focus-within {
+.search-result:is(:focus-visible, :has(:focus-visible)) {
   border-color: var(--search-result-accent);
   --tw-shadow-color: var(--search-result-shadow);
+}
+
+@media (hover: hover) {
+  .search-result:hover {
+    border-color: var(--search-result-accent);
+    --tw-shadow-color: var(--search-result-shadow);
+  }
 }
 
 /* The media reaches under the text; a halo of the card's colour keeps it read. */
@@ -128,8 +134,13 @@ const accent = computed(() =>
     0 0.1em 0.45em var(--color-bg-2);
 }
 
-.group:hover .search-result-title,
-.group:focus-within .search-result-title {
+.group:is(:focus-visible, :has(:focus-visible)) .search-result-title {
   color: var(--search-result-accent);
+}
+
+@media (hover: hover) {
+  .group:hover .search-result-title {
+    color: var(--search-result-accent);
+  }
 }
 </style>

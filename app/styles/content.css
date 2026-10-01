@@ -215,13 +215,15 @@
     transition-timing-function: var(--default-transition-timing-function);
   }
 
-  .content-prose a[data-content-link]:is(:hover, :focus-visible) {
-    background-color: var(--color-bg-3);
-    text-decoration-color: color-mix(
-      in oklab,
-      var(--color-text-1) 40%,
-      transparent
-    );
+  .content-prose a[data-content-link] {
+    @variant hocus {
+      background-color: var(--color-bg-3);
+      text-decoration-color: color-mix(
+        in oklab,
+        var(--color-text-1) 40%,
+        transparent
+      );
+    }
   }
 
   /*
@@ -299,7 +301,7 @@
       display: none;
     }
 
-    &:is(:hover, :focus-visible) {
+    @variant hocus {
       --content-link-surface: color-mix(
         in oklab,
         var(--content-link-accent, var(--color-accent)) 28%,

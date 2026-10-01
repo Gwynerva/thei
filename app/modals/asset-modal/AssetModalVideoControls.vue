@@ -180,9 +180,11 @@ function emitVolume(e: Event): void {
   transition: transform 0.15s;
 }
 
-.seek-bar::-webkit-slider-thumb:hover,
-.volume-bar::-webkit-slider-thumb:hover {
-  transform: scale(1.3);
+@media (hover: hover) {
+  .seek-bar::-webkit-slider-thumb:hover,
+  .volume-bar::-webkit-slider-thumb:hover {
+    transform: scale(1.3);
+  }
 }
 
 .seek-bar::-moz-range-thumb,

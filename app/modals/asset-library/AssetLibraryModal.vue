@@ -508,7 +508,8 @@ onBeforeUnmount(() => {
               <template #overlay>
                 <span
                   class="absolute inset-0 z-40 flex items-center justify-center
-                    bg-bg-1/60 opacity-0 transition hocus:opacity-100"
+                    bg-bg-1/60 opacity-0 transition pointer-coarse:bg-bg-1/30
+                    pointer-coarse:opacity-100 hocus:opacity-100"
                 >
                   <Icon name="close" />
                 </span>

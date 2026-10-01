@@ -141,7 +141,7 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
   text-decoration: none;
 }
 
-.external-link-preview:is(a):is(:hover, :focus-visible) {
+.external-link-preview:is(a):focus-visible {
   border-color: color-mix(
     in oklab,
     var(--external-link-accent) 80%,
@@ -153,5 +153,21 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
     var(--color-bg-2)
   );
   color: var(--color-text-1);
+}
+
+@media (hover: hover) {
+  .external-link-preview:is(a):hover {
+    border-color: color-mix(
+      in oklab,
+      var(--external-link-accent) 80%,
+      var(--color-border-1)
+    );
+    background: color-mix(
+      in oklab,
+      var(--external-link-accent) 16%,
+      var(--color-bg-2)
+    );
+    color: var(--color-text-1);
+  }
 }
 </style>

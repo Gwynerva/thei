@@ -11,6 +11,7 @@ export default defineNuxtConfig({
         'media-regression',
         'ambient-regression',
         'asset-regression',
+        'press-hint-regression',
       ]) {
         pages.push({
           name,

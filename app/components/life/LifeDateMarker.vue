@@ -17,6 +17,18 @@ const { date, showYear } = defineProps<{
 
 const emit = defineEmits<{ pick: []; hover: [boolean] }>();
 
+/**
+ * Pointing tints the day; a finger only taps it, and the focus a tap leaves
+ * behind is no pointing either.
+ */
+function hoverBy(event: PointerEvent, on: boolean) {
+  if (event.pointerType !== 'touch') emit('hover', on);
+}
+
+function focusPoint(event: FocusEvent) {
+  if ((event.target as Element).matches(':focus-visible')) emit('hover', true);
+}
+
 const parsed = computed(() => new Date(`${date}T00:00:00Z`));
 const year = computed(() => date.slice(0, 4));
 const dayNumber = computed(() =>
@@ -52,9 +64,9 @@ const monthName = computed(
             : 'text-text-3/45'
       "
       @click="emit('pick')"
-      @pointerenter="emit('hover', true)"
-      @pointerleave="emit('hover', false)"
-      @focus="emit('hover', true)"
+      @pointerenter="hoverBy($event, true)"
+      @pointerleave="hoverBy($event, false)"
+      @focus="focusPoint"
       @blur="emit('hover', false)"
     >
       <span

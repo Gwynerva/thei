@@ -192,7 +192,7 @@ const details = computed(() =>
   );
 }
 
-.attachment-card-interactive:is(:hover, :focus-visible) {
+.attachment-card-interactive:focus-visible {
   background-color: color-mix(
     in oklab,
     var(--color-accent) 6%,
@@ -200,12 +200,33 @@ const details = computed(() =>
   );
 }
 
-.attachment-card-interactive:is(:hover, :focus-visible) .attachment-card-tile,
-.attachment-card-tile-editable:is(:hover, :focus-visible) {
+@media (hover: hover) {
+  .attachment-card-interactive:hover {
+    background-color: color-mix(
+      in oklab,
+      var(--color-accent) 6%,
+      var(--color-bg-2)
+    );
+  }
+}
+
+.attachment-card-interactive:focus-visible .attachment-card-tile,
+.attachment-card-tile-editable:focus-visible {
   background-color: color-mix(
     in oklab,
     var(--color-accent) 20%,
     var(--color-bg-2)
   );
+}
+
+@media (hover: hover) {
+  .attachment-card-interactive:hover .attachment-card-tile,
+  .attachment-card-tile-editable:hover {
+    background-color: color-mix(
+      in oklab,
+      var(--color-accent) 20%,
+      var(--color-bg-2)
+    );
+  }
 }
 </style>

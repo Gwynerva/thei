@@ -101,11 +101,11 @@ const hasFooter = computed(
         `overflow-hidden rounded-normal border border-border-1 bg-bg-2 shadow-md
         shadow-shadow-1`,
       href &&
-        `public-content-card-interactive focus-within:-translate-y-0.5
+        `public-content-card-interactive has-focus-visible:-translate-y-0.5
         hocus:-translate-y-0.5`,
       href &&
         !cloud &&
-        `focus-within:border-border-2 focus-within:shadow-xl
+        `has-focus-visible:border-border-2 has-focus-visible:shadow-xl
         hocus:border-border-2 hocus:shadow-xl`,
     ]"
     :style="cardStyle"
@@ -125,7 +125,7 @@ const hasFooter = computed(
       <path
         :d="cloudPath"
         class="fill-bg-2 stroke-border-1 transition-colors
-          group-focus-within:stroke-border-2 group-hover:stroke-border-2"
+          group-hover:stroke-border-2 group-has-focus-visible:stroke-border-2"
         stroke-width="1"
         stroke-linejoin="round"
       />
@@ -154,7 +154,7 @@ const hasFooter = computed(
         :loop="continuousMedia"
         :muted="continuousMedia"
         media-class="opacity-80 transition duration-300
-          group-focus-within:opacity-95 group-hocus:opacity-95
+          group-has-focus-visible:opacity-95 group-hocus:opacity-95
           motion-reduce:duration-150"
         class="w-full"
       />
@@ -286,9 +286,14 @@ const hasFooter = computed(
     0 0.1em 0.45em var(--color-bg-2);
 }
 
-.public-content-card-interactive:hover,
-.public-content-card-interactive:focus-within {
+.public-content-card-interactive:is(:focus-visible, :has(:focus-visible)) {
   --tw-shadow-color: var(--public-card-shadow-color);
+}
+
+@media (hover: hover) {
+  .public-content-card-interactive:hover {
+    --tw-shadow-color: var(--public-card-shadow-color);
+  }
 }
 
 /* The box's shadow, redrawn around the cloud's own outline. */
@@ -296,12 +301,25 @@ const hasFooter = computed(
   filter: drop-shadow(0 0.2rem 0.3rem var(--color-shadow-1));
 }
 
-.public-content-card-interactive:is(:hover, :focus-within) .public-cloud {
+.public-content-card-interactive:is(:focus-visible, :has(:focus-visible))
+  .public-cloud {
   filter: drop-shadow(0 0.6rem 0.9rem var(--public-card-shadow-color));
 }
 
-.public-content-card-interactive:hover .public-card-title,
-.public-content-card-interactive:focus-within .public-card-title {
+@media (hover: hover) {
+  .public-content-card-interactive:hover .public-cloud {
+    filter: drop-shadow(0 0.6rem 0.9rem var(--public-card-shadow-color));
+  }
+}
+
+.public-content-card-interactive:is(:focus-visible, :has(:focus-visible))
+  .public-card-title {
   color: var(--public-card-accent-color);
+}
+
+@media (hover: hover) {
+  .public-content-card-interactive:hover .public-card-title {
+    color: var(--public-card-accent-color);
+  }
 }
 </style>

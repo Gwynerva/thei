@@ -273,13 +273,11 @@
     transition-timing-function: var(--default-transition-timing-function);
   }
 
-  &
-    :is(.ce-toolbar__plus, .ce-toolbar__settings-btn):is(
-      :hover,
-      :focus-visible
-    ) {
-    background-color: var(--color-bg-3);
-    color: var(--color-text-1);
+  & :is(.ce-toolbar__plus, .ce-toolbar__settings-btn) {
+    @variant hocus {
+      background-color: var(--color-bg-3);
+      color: var(--color-text-1);
+    }
   }
 
   & .ce-toolbar__settings-btn {

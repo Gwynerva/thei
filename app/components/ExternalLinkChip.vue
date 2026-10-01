@@ -107,7 +107,7 @@ const accentColor = computed(() =>
   z-index: 1;
 }
 
-.external-link-chip:is(:hover, :focus-visible) {
+.external-link-chip:focus-visible {
   border-color: color-mix(
     in oklab,
     var(--external-link-accent) 80%,
@@ -115,8 +115,24 @@ const accentColor = computed(() =>
   );
 }
 
-.external-link-chip:is(:hover, :focus-visible)::before {
+@media (hover: hover) {
+  .external-link-chip:hover {
+    border-color: color-mix(
+      in oklab,
+      var(--external-link-accent) 80%,
+      transparent
+    );
+  }
+}
+
+.external-link-chip:focus-visible::before {
   opacity: 1;
+}
+
+@media (hover: hover) {
+  .external-link-chip:hover::before {
+    opacity: 1;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
