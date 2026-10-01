@@ -43,6 +43,13 @@ function ogDirectory() {
 export interface OgImageFile {
   filePath: string;
   etag: string;
+  /** The version as the page's address names it, in `?v=`. */
+  tag: string;
+}
+
+/** The version as an address names it: enough of it to tell versions apart. */
+function versionTag(version: string) {
+  return version.slice(0, 12);
 }
 
 /** A card as a page names it: its address with its version, and its words. */
@@ -54,10 +61,47 @@ export interface OgCardInfo {
 }
 
 /**
+ * What each card is, kept between requests. Every public page asks for its
+ * card's address while it renders, and a crawler then asks for the picture:
+ * building the card's content each time would be the page's own work over
+ * again. Any write drops all of it, and an entry goes after a while anyway,
+ * since some cards follow the calendar.
+ */
+const INFO_TTL_MS = 10 * 60 * 1000;
+const INFO_LIMIT = 500;
+const infos = new Map<
+  string,
+  { at: number; info: Promise<OgCardInfo | undefined> }
+>();
+
+/** Forgets every card's content: something it was built from changed. */
+export function invalidateOgCardInfo() {
+  infos.clear();
+}
+
+/**
  * What a target's card is, without drawing it: `undefined` exactly where the
  * picture itself would be refused.
  */
 export async function resolveOgCardInfo(
+  target: OgTarget,
+): Promise<OgCardInfo | undefined> {
+  const key = `${target.kind}:${target.id}`;
+  const now = Date.now();
+  const cached = infos.get(key);
+  if (cached && now - cached.at < INFO_TTL_MS) return await cached.info;
+  const info = buildOgCardInfo(target);
+  infos.delete(key);
+  infos.set(key, { at: now, info });
+  if (infos.size > INFO_LIMIT) infos.delete(infos.keys().next().value!);
+  // A failure is not remembered: the next request tries again.
+  info.catch(() => {
+    if (infos.get(key)?.info === info) infos.delete(key);
+  });
+  return await info;
+}
+
+async function buildOgCardInfo(
   target: OgTarget,
 ): Promise<OgCardInfo | undefined> {
   const content = await resolveOgContent(target);
@@ -66,7 +110,7 @@ export async function resolveOgCardInfo(
   return {
     content,
     version,
-    url: `${buildOgImagePath(target)}?v=${version.slice(0, 12)}`,
+    url: `${buildOgImagePath(target)}?v=${versionTag(version)}`,
     alt: content.alt,
   };
 }
@@ -99,9 +143,12 @@ const drawing = new Map<string, Promise<void>>();
 async function draw(content: OgCardContent, filePath: string) {
   // Drawing decodes pictures and rasterises the card: it waits its turn with
   // the rest of the media work, so a feed crawling every link at once cannot
-  // take the site down.
-  const buffer = await withProcessingSlot(AssetType.Image, async () =>
-    renderOgPng((await composeOgCard(content)).node),
+  // take the site down — and behind the owner's own, which arrives later
+  // and still goes first.
+  const buffer = await withProcessingSlot(
+    AssetType.Image,
+    async () => renderOgPng((await composeOgCard(content)).node),
+    { priority: 'low' },
   );
   await mkdir(dirname(filePath), { recursive: true });
   const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
@@ -122,6 +169,7 @@ export async function ensureOgImage(
   const key = ogContentKey(info.content);
   const filePath = join(ogDirectory(), `${key}.png`);
   const etag = `"${info.version}"`;
+  const tag = versionTag(info.version);
 
   const existing = await stat(filePath).catch(() => undefined);
   if (existing) {
@@ -129,7 +177,7 @@ export async function ensureOgImage(
     // card should not rewrite its own timestamp on every request.
     if (Date.now() - existing.mtimeMs > TOUCH_INTERVAL_MS)
       await utimes(filePath, new Date(), new Date()).catch(() => {});
-    return { filePath, etag };
+    return { filePath, etag, tag };
   }
 
   let pending = drawing.get(key);
@@ -138,7 +186,7 @@ export async function ensureOgImage(
     drawing.set(key, pending);
   }
   await pending;
-  return { filePath, etag };
+  return { filePath, etag, tag };
 }
 
 /** Drops cards nothing has asked for in two months. */

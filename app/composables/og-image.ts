@@ -13,7 +13,8 @@ import {
  * address changes exactly when the picture does — previewers cache by
  * address and ignore cache headers, so that is how a new title or a new
  * picture reaches them. Fetched while the page renders on the server, so it
- * is in the head the first time a crawler reads it.
+ * is in the head the first time a crawler reads it; a page reached by a
+ * click in the browser asks for nothing, since no previewer reads its head.
  */
 export function useOgImage(
   target: MaybeRefOrGetter<OgImageTarget | undefined>,
@@ -26,7 +27,7 @@ export function useOgImage(
     key,
     async () => {
       const value = toValue(target);
-      if (!value) return null;
+      if (!value || import.meta.client) return null;
       return $fetch<OgImageInfo>(buildOgInfoPath(value)).catch(() => null);
     },
     { dedupe: 'defer' },

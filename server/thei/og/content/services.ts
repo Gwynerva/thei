@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { count, eq } from 'drizzle-orm';
 import {
   PUBLIC_SEARCH_PRESETS,
   type PublicSearchPreset,
@@ -55,10 +55,12 @@ function phrase() {
  */
 function archiveTotals() {
   const { db, schema } = THEI_SERVER.useDb();
+  const total = (table: any) =>
+    db.select({ n: count() }).from(table).get()?.n ?? 0;
   return {
-    projects: db.select().from(schema.projects).all().length,
-    events: db.select().from(schema.events).all().length,
-    diary: db.select().from(schema.diaryEntries).all().length,
+    projects: total(schema.projects),
+    events: total(schema.events),
+    diary: total(schema.diaryEntries),
   };
 }
 

@@ -17,6 +17,10 @@ import { findDiaryEntryByDate } from '../../../server/thei/diary/repository/find
 import { findDiaryEntryByUuid } from '../../../server/thei/diary/repository/find-by-uuid';
 import { findEventByPublicId } from '../../../server/thei/events/repository/find-by-public-id';
 import { findEventByUuid } from '../../../server/thei/events/repository/find-by-id';
+import {
+  invalidateOgCardInfo,
+  resolveOgCardInfo,
+} from '../../../server/thei/og/cache';
 import { resolveOgContent } from '../../../server/thei/og/content';
 import { findPageBySlug } from '../../../server/thei/pages/repository/find-by-slug';
 import { findPageByUuid } from '../../../server/thei/pages/repository/find-by-id';
@@ -358,6 +362,24 @@ function tag(uuid: string, containers: [string, string][]) {
 }
 
 describe('Open Graph content', () => {
+  it('builds a card once until something is written', async () => {
+    invalidateOgCardInfo();
+    project('p', Public);
+    const first = await resolveOgCardInfo({ kind: 'project', id: 'p' });
+    context.db
+      .update(context.schema.projects)
+      .set({ title: 'A new title' })
+      .run();
+    // Every page asks for its card's address while it renders: the same
+    // answer, without building the card again.
+    expect(await resolveOgCardInfo({ kind: 'project', id: 'p' })).toBe(first);
+    // A write through the API drops it, and the address follows the title.
+    invalidateOgCardInfo();
+    const next = await resolveOgCardInfo({ kind: 'project', id: 'p' });
+    expect(next?.url).not.toBe(first?.url);
+    invalidateOgCardInfo();
+  });
+
   it('gives a closed site no cards at all', async () => {
     project('p', Public);
     config.siteAccessLevel = SiteAccessLevel.Private;
