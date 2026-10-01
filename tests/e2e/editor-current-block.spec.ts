@@ -66,6 +66,33 @@ async function expectCurrent(page: Page, id: string) {
   await expect.poll(() => glowing(page)).toEqual([id]);
 }
 
+/** The block the focus is in, and whether the block itself has it. */
+function focused(page: Page) {
+  return page.evaluate(() => {
+    const active = document.activeElement;
+    const item = active?.closest<HTMLElement>('.codex-editor .ce-block');
+    return item ? { id: item.dataset.id!, itself: item === active } : null;
+  });
+}
+
+/**
+ * Presses the key until the focus leaves the editor: the blocks it passed,
+ * in order and each once, with where in each it landed first. Every one of
+ * them has to be the current block on the way.
+ */
+async function walk(page: Page, key: 'Tab' | 'Shift+Tab') {
+  const passed: { id: string; itself: boolean }[] = [];
+  for (let step = 0; step < 60; step++) {
+    await page.keyboard.press(key);
+    const now = await focused(page);
+    if (!now) return passed;
+    if (passed.at(-1)?.id === now.id) continue;
+    passed.push(now);
+    await expectCurrent(page, now.id);
+  }
+  throw new Error(`${key} never left the editor`);
+}
+
 /** What follows a block: a new paragraph is empty and has the caret. */
 function blockAfter(page: Page, id: string) {
   return block(page, id).evaluate((item) => {
@@ -434,7 +461,7 @@ test.describe('on a desktop', () => {
     });
   });
 
-  test('only blocks without text take the focus, after a move, a new section and a restore too', async ({
+  test('only blocks without text take the focus and a place in the order of Tab, after a move, a new section and a restore too', async ({
     page,
   }) => {
     const focusable = () =>
@@ -446,7 +473,7 @@ test.describe('on a desktop', () => {
       );
     const expectFocusable = async () => {
       for (const item of await focusable())
-        expect(item.tabindex).toBe(item.text ? null : '-1');
+        expect(item.tabindex).toBe(item.text ? null : '0');
     };
     await expectFocusable();
     await page.getByRole('button', { name: 'Valid move', exact: true }).click();
@@ -464,6 +491,97 @@ test.describe('on a desktop', () => {
       0,
     );
     await expectFocusable();
+  });
+
+  test('Tab and Shift+Tab walk the blocks in order, the glow follows, and nothing changes', async ({
+    page,
+  }) => {
+    const before = await events(page);
+    const count = await blockCount(page);
+    const order = [
+      's1',
+      'p1',
+      'e1',
+      'p2',
+      's2',
+      'p3',
+      'e2',
+      'media',
+      'gallery',
+      'divider',
+      'quote',
+      'p4',
+    ];
+    const objects = new Set([
+      's1',
+      'e1',
+      's2',
+      'e2',
+      'media',
+      'gallery',
+      'divider',
+    ]);
+
+    await block(page, 'p0').locator('[contenteditable]').click();
+    // Away from the editor, where hovering a block would move its toolbar.
+    await page.mouse.move(1, 1);
+    const down = await walk(page, 'Tab');
+    expect(down.map((item) => item.id)).toEqual(order);
+    // A block without text is reached before anything inside it: the
+    // buttons, the tiles and the caption come after.
+    for (const item of down) expect(item.itself).toBe(objects.has(item.id));
+    // The keyboard leaves no toolbar behind.
+    await expect(page.locator('.ce-toolbar--opened')).toHaveCount(0);
+
+    const last = block(page, 'p4');
+    await last.scrollIntoViewIfNeeded();
+    await last.locator('[contenteditable]').click();
+    await page.mouse.move(1, 1);
+    const up = await walk(page, 'Shift+Tab');
+    expect(up.map((item) => item.id)).toEqual(
+      ['p0', ...order.slice(0, -1)].reverse(),
+    );
+    await expect(page.locator('.ce-toolbar--opened')).toHaveCount(0);
+
+    // Moving through the blocks is no change, and Tab adds none at the end.
+    expect(await blockCount(page)).toBe(count);
+    await page.waitForTimeout(500);
+    expect(await events(page)).toBe(before);
+    await expect(page.locator('[data-save]')).toHaveText('Saved');
+  });
+
+  test('keys typed in a block Tab came to act on that block', async ({
+    page,
+  }) => {
+    // From a bracket into the paragraph after it: Enter at its end adds a
+    // paragraph after it, not after the bracket the editor last knew of.
+    await block(page, 's1').scrollIntoViewIfNeeded();
+    await block(page, 's1').click();
+    await expectCurrent(page, 's1');
+    await page.keyboard.press('Tab');
+    await expectCurrent(page, 'p1');
+    await page.keyboard.press('End');
+    await page.keyboard.press('Enter');
+    await expect(block(page, 'p1')).toHaveText('Inside one');
+    expect(await blockAfter(page, 'p1')).toEqual(NEW_PARAGRAPH);
+
+    // Back into the caption of a quote: the editor knows the field, and the
+    // arrow at its start goes up into the quote's text.
+    const quote = block(page, 'quote');
+    const last = block(page, 'p4');
+    await last.scrollIntoViewIfNeeded();
+    await last.locator('[contenteditable]').click();
+    await page.keyboard.press('Shift+Tab');
+    await expect(quote.locator('.cdx-quote__caption')).toBeFocused();
+    await page.keyboard.press('ArrowUp');
+    await expect(quote.locator('.cdx-quote__text')).toBeFocused();
+
+    // Up onto a divider: Enter adds a paragraph after it.
+    await page.keyboard.press('Shift+Tab');
+    await expectCurrent(page, 'divider');
+    await expect(block(page, 'divider')).toBeFocused();
+    await page.keyboard.press('Enter');
+    expect(await blockAfter(page, 'divider')).toEqual(NEW_PARAGRAPH);
   });
 });
 
@@ -508,6 +626,22 @@ test.describe('on a phone, by touch', () => {
     await page.waitForTimeout(500);
     expect(await events(page)).toBe(before);
     await expect(state(page)).toHaveAttribute('data-transitions', '');
+  });
+
+  test('Tab and Shift+Tab move between the blocks of the phone layout too', async ({
+    page,
+  }) => {
+    await block(page, 'p0').locator('[contenteditable]').tap();
+    await page.keyboard.press('End');
+    await page.keyboard.press('Tab');
+    await expectCurrent(page, 's1');
+    await expect(block(page, 's1')).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expectCurrent(page, 'p1');
+    await page.keyboard.press('Shift+Tab');
+    await expectCurrent(page, 's1');
+    await page.keyboard.press('Shift+Tab');
+    await expectCurrent(page, 'p0');
   });
 
   test('Enter after a tap on a caption or a tile adds one paragraph after the gallery', async ({
@@ -674,6 +808,54 @@ test.describe('in the text editor of a page', () => {
     });
     return reads;
   }
+
+  test('Tab nests the items of a list where it can, and moves on past the list where it cannot', async ({
+    page,
+  }) => {
+    const item = (content: string) => ({ content, meta: {}, items: [] });
+    await openEditor(page, 'list-tab', [
+      { type: 'paragraph', data: { text: 'Before' } },
+      {
+        type: 'list',
+        data: {
+          style: 'unordered',
+          meta: {},
+          items: [item('One'), item('Two'), item('Three')],
+        },
+      },
+      { type: 'delimiter', data: {} },
+    ]);
+    const blocks = editorBlocks(page);
+    const before = blocks.nth(0).locator('[contenteditable="true"]');
+    const list = blocks.nth(1);
+    const items = list.locator('.cdx-list__item-content');
+    const nested = list.locator('.cdx-list__item .cdx-list__item');
+
+    await before.click();
+    await page.keyboard.press('End');
+    await page.keyboard.press('Tab');
+    await expect(items.nth(0)).toBeFocused();
+    // The first item has nothing to nest under: past the list, not on to
+    // the next item, whose Tab would nest it.
+    await page.keyboard.press('Tab');
+    await expect(blocks.nth(2)).toBeFocused();
+    // Back at the last item, which is at the top: up past the list.
+    await page.keyboard.press('Shift+Tab');
+    await expect(items.nth(2)).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(before).toBeFocused();
+    await expect(nested).toHaveCount(0);
+
+    // Where the list can, Tab nests an item and Shift+Tab takes it out.
+    await items.nth(1).click();
+    await page.keyboard.press('Tab');
+    await expect(nested).toHaveCount(1);
+    await expect(nested.locator('.cdx-list__item-content')).toHaveText('Two');
+    await expect(items.nth(1)).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(nested).toHaveCount(0);
+    await expect(items.nth(1)).toBeFocused();
+  });
 
   test('dragging a block to the edge of the modal scrolls it', async ({
     page,

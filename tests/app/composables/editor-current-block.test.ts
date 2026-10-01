@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   editorEnterAction,
+  editorListTakesTab,
   editorSelectedBlocksTakeEnter,
+  editorTabMovesFocus,
   type EditorEnterContext,
 } from '../../../app/composables/editor-current-block';
 
@@ -143,5 +145,72 @@ describe('Enter over selected blocks', () => {
     expect(selected({ textSelected: true })).toBe(false);
     expect(selected({ composing: true })).toBe(false);
     expect(selected({ handled: true })).toBe(false);
+  });
+});
+
+describe('Tab in the editor', () => {
+  const tab = (context: Partial<Parameters<typeof editorTabMovesFocus>[0]>) =>
+    editorTabMovesFocus({
+      composing: false,
+      modified: false,
+      handled: false,
+      menuOpen: false,
+      blocksSelected: false,
+      ...context,
+    });
+
+  it('moves the focus as the browser does, Shift+Tab too', () => {
+    // Shift is not a modifier here; it only turns the move back.
+    expect(tab({})).toBe(true);
+  });
+
+  it('leaves Ctrl, Alt or Meta with Tab alone', () => {
+    expect(tab({ modified: true })).toBe(false);
+  });
+
+  it('keeps out of menus, which walk their items with Tab', () => {
+    expect(tab({ menuOpen: true })).toBe(false);
+    expect(tab({ handled: true })).toBe(false);
+  });
+
+  it('leaves blocks selected with the arrows to move on as the arrows do', () => {
+    expect(tab({ blocksSelected: true })).toBe(false);
+  });
+
+  it('keeps out of a composition', () => {
+    expect(tab({ composing: true })).toBe(false);
+  });
+});
+
+describe('Tab in a list', () => {
+  const list = (context: Partial<Parameters<typeof editorListTakesTab>[0]>) =>
+    editorListTakesTab({
+      backward: false,
+      previousItem: false,
+      nested: false,
+      ...context,
+    });
+
+  it('nests an item under the one before it', () => {
+    expect(list({ previousItem: true })).toBe(true);
+    expect(list({ previousItem: true, nested: true })).toBe(true);
+  });
+
+  it('lets Tab go on from a first item, which has nothing to nest under', () => {
+    expect(list({})).toBe(false);
+    // The first item of a nested list too.
+    expect(list({ nested: true })).toBe(false);
+  });
+
+  it('takes a nested item out with Shift+Tab', () => {
+    expect(list({ backward: true, nested: true })).toBe(true);
+    expect(list({ backward: true, nested: true, previousItem: true })).toBe(
+      true,
+    );
+  });
+
+  it('lets Shift+Tab go on from an item at the top', () => {
+    expect(list({ backward: true })).toBe(false);
+    expect(list({ backward: true, previousItem: true })).toBe(false);
   });
 });

@@ -20,6 +20,7 @@
  */
 
 import type EditorJS from '@editorjs/editorjs';
+import { makeEditorBlockCurrent } from './editor-current-block';
 
 /** Anything a click is for on its own, or that the editor handles itself. */
 const SKIP_SELECTOR = [
@@ -166,11 +167,8 @@ export function bindEditorGutterClick(root: HTMLElement, editor: EditorJS) {
     if (!inputs.length) {
       block.focus({ preventScroll: true });
       // Editor.js makes a block current, and moves its toolbar to it, when a
-      // touch lands in the block; this click landed beside it. Its API can
-      // do that only by placing a caret or selecting the block, so it is
-      // told of a touch instead — an event of the page, which no browser
-      // default follows.
-      block.dispatchEvent(new Event('touchstart', { bubbles: true }));
+      // touch lands in the block; this click landed beside it.
+      makeEditorBlockCurrent(block);
       return;
     }
 

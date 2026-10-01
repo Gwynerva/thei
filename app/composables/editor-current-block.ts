@@ -16,6 +16,16 @@
  * it last clicked means one thing: a new paragraph right after the block. The
  * editor's styles light the block the focus is in (`editor.css`).
  *
+ * Tab and Shift+Tab are the browser's: the focus moves to the next or the
+ * previous place in the order of Tab — a field of text, a block that is not
+ * text, a button or a tile inside one — and the glow follows it. Editor.js
+ * is not shown the key. Its own Tab moves its caret instead: it selects a
+ * block without fields rather than focusing it, skips past a picture into
+ * its caption, and adds a paragraph after a last block that is not one.
+ * Editor.js learns of the block the user is in from a press or a touch in
+ * it, and is told the same way when Tab brings the focus to a block. A list
+ * keeps Tab to nest its items, and lets it go where it has nothing to do.
+ *
  * Blocks are told apart by their tool's name only. Reading a block's fields
  * through the API (`focusable`, `inputs`) makes Editor.js remember the fields
  * it sees at that moment, which is how a caption gets lost in the first place.
@@ -37,6 +47,9 @@ const FIELD_SELECTOR =
  */
 const LINE_FIELD_SELECTOR = '[aria-multiline="false"]';
 const QUOTE_CAPTION_SELECTOR = '.cdx-quote__caption';
+const LIST_ITEM_SELECTOR = '.cdx-list__item';
+/** The text of an item of a list: each one a field of its own. */
+const LIST_FIELD_SELECTOR = '.cdx-list__item-content';
 const CONTROL_SELECTOR = [
   'a[href]',
   'button',
@@ -154,6 +167,67 @@ export function editorSelectedBlocksTakeEnter(context: {
   );
 }
 
+/**
+ * Whether Tab moves the focus as the browser does, unseen by Editor.js.
+ *
+ * Tab is the same key in every keyboard layout and types nothing, so it is
+ * told by `key` alone; Shift only turns it back. It stays where it was when
+ * something has it already: an input method composing, a menu walking its
+ * items, the blocks Editor.js has selected with the arrows, which it moves
+ * on from as the arrows do. With Ctrl, Alt or Meta it is not a move of the
+ * focus at all.
+ */
+export function editorTabMovesFocus(context: {
+  composing: boolean;
+  /** Ctrl, Alt or Meta is held; Shift is not counted. */
+  modified: boolean;
+  handled: boolean;
+  menuOpen: boolean;
+  blocksSelected: boolean;
+}) {
+  return (
+    !context.composing &&
+    !context.modified &&
+    !context.handled &&
+    !context.menuOpen &&
+    !context.blocksSelected
+  );
+}
+
+/**
+ * Whether Tab in an item of a list is the list's own.
+ *
+ * A list nests an item under the one before it with Tab, and takes a nested
+ * item out with Shift+Tab. It keeps the key even where it can do neither —
+ * on its first item, on an item at the top — and the focus would never get
+ * past it. There the key moves on past the list, as it does past any block.
+ */
+export function editorListTakesTab(context: {
+  backward: boolean;
+  /** There is an item before this one, at its level, to nest under. */
+  previousItem: boolean;
+  /** The item is nested in another. */
+  nested: boolean;
+}) {
+  return context.backward ? context.nested : context.previousItem;
+}
+
+/**
+ * Makes a block Editor.js's current one, as a touch in it does: the keys
+ * typed there act on it, its current field is the one the caret is in, and
+ * its toolbar moves there and opens.
+ *
+ * Editor.js learns of the block the user is in only from a press or a touch
+ * in it, and from the moves it makes itself. Its API can make a block
+ * current only by placing a caret in it or by selecting it, and a block
+ * without text has nowhere to take a caret. So it is told of a touch on the
+ * block — an event of the page, which no browser default follows. The block
+ * itself is the target, not a part of it that may answer touches of its own.
+ */
+export function makeEditorBlockCurrent(block: HTMLElement) {
+  block.dispatchEvent(new Event('touchstart', { bubbles: true }));
+}
+
 export interface EditorCurrentBlockOptions {
   /** The blocks whose text Editor.js lays out; Enter there stays its own. */
   textBlocks: ReadonlySet<string>;
@@ -169,6 +243,8 @@ export function bindEditorCurrentBlock(
   let pressed: Node | undefined;
   /** The element the last click or tap focused. */
   let pointerFocus: Element | undefined;
+  /** A Tab is down: the focus it moves is the keyboard's. */
+  let tabbing = false;
 
   function isObjectBlock(block: HTMLElement) {
     const name = editor.blocks.getBlockByElement(block)?.name;
@@ -238,9 +314,10 @@ export function bindEditorCurrentBlock(
   }
 
   /**
-   * A block that is not text can take the focus itself, but stays out of
-   * the order of Tab: a click on a picture, beside it, on a divider or on a
-   * bracket makes it the current block.
+   * A block that is not text takes the focus itself, and has a place in the
+   * order of Tab as a field of text does: Tab reaches the picture, the
+   * divider or the bracket before anything inside it, and a click on one,
+   * or beside it, makes it the current block.
    */
   function decorate() {
     const redactor = root.querySelector(REDACTOR_SELECTOR);
@@ -250,7 +327,7 @@ export function bindEditorCurrentBlock(
         continue;
       if (isObjectBlock(block)) {
         present.add(block);
-        if (block.getAttribute('tabindex') !== '-1') block.tabIndex = -1;
+        if (block.getAttribute('tabindex') !== '0') block.tabIndex = 0;
       } else if (focusable.has(block)) {
         // The same element, now text: a conversion Editor.js did in place.
         block.removeAttribute('tabindex');
@@ -263,8 +340,15 @@ export function bindEditorCurrentBlock(
   /**
    * Enter over selected blocks: a paragraph after the last of them. Read
    * before Editor.js, which would remove them and stop the key there.
+   *
+   * And a Tab anywhere on the page, as one in the dialog around may bring
+   * the focus into the editor.
    */
   function onWindowKeydown(event: KeyboardEvent) {
+    if (event.key === 'Tab') {
+      tabbing = !(event.ctrlKey || event.altKey || event.metaKey);
+      return;
+    }
     if (event.key !== 'Enter') return;
     const target = event.target;
     if (!(target instanceof Node) || !root.contains(target)) return;
@@ -288,6 +372,43 @@ export function bindEditorCurrentBlock(
   }
 
   /**
+   * Tab in an item of a list where the list can do nothing with it: the key
+   * moves the focus on past the list.
+   *
+   * The list is not shown the key, which it would keep. Every item is a
+   * field of its own, and the browser would only step to the next one, where
+   * Tab nests the item instead; so the focus is put on the list's edge — its
+   * last item going on, its first going back — and the browser walks on from
+   * there, as it walks on from wherever the focus is.
+   */
+  function passListEdge(
+    event: KeyboardEvent,
+    target: Element,
+    block: HTMLElement,
+  ) {
+    const item = target.closest(LIST_ITEM_SELECTOR);
+    if (!item || !block.contains(item)) return;
+    const outer = item.parentElement?.closest(LIST_ITEM_SELECTOR);
+    if (
+      editorListTakesTab({
+        backward: event.shiftKey,
+        previousItem:
+          item.previousElementSibling?.matches(LIST_ITEM_SELECTOR) ?? false,
+        nested: Boolean(outer && block.contains(outer)),
+      })
+    )
+      return;
+    event.stopPropagation();
+    const fields = block.querySelectorAll<HTMLElement>(LIST_FIELD_SELECTOR);
+    const edge = event.shiftKey ? fields[0] : fields[fields.length - 1];
+    if (!edge || edge.contains(target)) return;
+    edge.focus({ preventScroll: true });
+    // That focus was a step on the way, followed as such; the move the key
+    // makes next is followed too.
+    tabbing = true;
+  }
+
+  /**
    * Every key typed in a block, after Editor.js has had its say about
    * selected blocks and its menus, and before the block's own handling.
    */
@@ -306,6 +427,19 @@ export function bindEditorCurrentBlock(
       // and was never shown a key from before it could take the focus.
       if (object && place === 'block' && !composing(event))
         hideKeyFromEditor(event);
+      if (
+        event.key === 'Tab' &&
+        editorTabMovesFocus({
+          composing: composing(event),
+          modified: event.ctrlKey || event.altKey || event.metaKey,
+          handled: event.defaultPrevented,
+          menuOpen: menuOpen(),
+          blocksSelected: selectedBlocks().length > 0,
+        })
+      ) {
+        hideKeyFromEditor(event);
+        if (!object) passListEdge(event, target, block);
+      }
       return;
     }
 
@@ -376,6 +510,47 @@ export function bindEditorCurrentBlock(
         ? target
         : undefined;
     pressed = undefined;
+    // Only the keyboard's focus is followed here. A press or a touch has
+    // told Editor.js already, and the moves Editor.js makes itself focus the
+    // next field before it takes the block for current.
+    if (!tabbing) return;
+    tabbing = false;
+    const block = blockOf(target);
+    if (!block || !(target instanceof HTMLElement)) return;
+    follow(block, target);
+  }
+
+  /**
+   * The focus came to a block by Tab: the block becomes Editor.js's current
+   * one, as the glow already shows it.
+   */
+  function follow(block: HTMLElement, target: HTMLElement) {
+    // The browser puts the caret into a field it focuses only after the
+    // focus events, while Editor.js takes its current field from the caret.
+    // It is put where the browser would put it: at the start.
+    const selection = window.getSelection();
+    if (
+      selection &&
+      target.isContentEditable &&
+      !(selection.anchorNode && target.contains(selection.anchorNode))
+    )
+      selection.collapse(target, 0);
+    makeEditorBlockCurrent(block);
+    // The keyboard has moved on, as it does with the arrows, and the toolbar
+    // waits for the pointer.
+    editor.toolbar.close();
+  }
+
+  /** Tab out of the editor leaves no toolbar behind. */
+  function onFocusOut(event: FocusEvent) {
+    if (!tabbing) return;
+    const next = event.relatedTarget;
+    if (next instanceof Node && root.contains(next)) return;
+    editor.toolbar.close();
+  }
+
+  function onWindowKeyup(event: KeyboardEvent) {
+    if (event.key === 'Tab') tabbing = false;
   }
 
   /**
@@ -399,23 +574,27 @@ export function bindEditorCurrentBlock(
 
   // The window hears the event before the document, where Editor.js listens.
   window.addEventListener('keydown', onWindowKeydown, true);
+  window.addEventListener('keyup', onWindowKeyup, true);
   window.addEventListener('paste', onPaste, true);
   root.addEventListener('keydown', onKeydown, true);
   root.addEventListener('beforeinput', onBeforeInput, true);
   root.addEventListener('pointerdown', onPointerDown, true);
   root.addEventListener('pointercancel', onPointerCancel, true);
   root.addEventListener('focusin', onFocusIn);
+  root.addEventListener('focusout', onFocusOut);
   root.addEventListener('click', onClick);
 
   return () => {
     observer.disconnect();
     window.removeEventListener('keydown', onWindowKeydown, true);
+    window.removeEventListener('keyup', onWindowKeyup, true);
     window.removeEventListener('paste', onPaste, true);
     root.removeEventListener('keydown', onKeydown, true);
     root.removeEventListener('beforeinput', onBeforeInput, true);
     root.removeEventListener('pointerdown', onPointerDown, true);
     root.removeEventListener('pointercancel', onPointerCancel, true);
     root.removeEventListener('focusin', onFocusIn);
+    root.removeEventListener('focusout', onFocusOut);
     root.removeEventListener('click', onClick);
     for (const block of focusable) block.removeAttribute('tabindex');
     focusable.clear();
