@@ -4,7 +4,7 @@ import {
   withAlpha,
 } from '#layers/thei/shared/oklch';
 import { accentField, frame, place } from '../blocks';
-import { pictureDataUri } from '../artwork';
+import { easedShadeStops, pictureDataUri } from '../artwork';
 import { OG_HEIGHT, OG_WIDTH, SAFE } from '../geometry';
 import { coverScrim, vividPlate, type OgPalette } from '../palette';
 import { iconImage } from '../picture';
@@ -22,7 +22,8 @@ const ICON = 132;
 /**
  * The shade under the words: never lighter than this, so the picture behind
  * them is a mood rather than a second thing to read, solid to `SHADE_SOLID`
- * and clear by `SHADE_END`.
+ * and clear by `SHADE_END`, eased between so that no line shows where it
+ * starts to lift.
  */
 const SHADE_MIN = 0.6;
 const SHADE_SOLID = 0.64;
@@ -130,7 +131,7 @@ export const project: OgLayout = async (input) => {
       el('div', {
         style: {
           ...place({ left: 0, top: 0, width: OG_WIDTH, height: OG_HEIGHT }),
-          backgroundImage: `linear-gradient(90deg, ${withAlpha(scrim.color, scrim.alpha)} 0%, ${withAlpha(scrim.color, scrim.alpha)} ${SHADE_SOLID * 100}%, ${withAlpha(scrim.color, 0)} ${SHADE_END * 100}%)`,
+          backgroundImage: `linear-gradient(90deg, ${withAlpha(scrim.color, scrim.alpha)} 0%, ${easedShadeStops(scrim.color, scrim.alpha, SHADE_SOLID, SHADE_END)})`,
         },
       }),
       ...text.nodes,

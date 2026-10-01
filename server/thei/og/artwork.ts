@@ -4,6 +4,7 @@ import {
   linearSrgbToOklch,
   srgbChannelToLinear,
   srgbLuminance,
+  withAlpha,
 } from '#layers/thei/shared/oklch';
 import { extractImageAccent } from '../assets/image-color';
 import { svgDensityFor } from '../assets/svg-density';
@@ -255,12 +256,40 @@ export function fillsBox(
  * it ends, which reads as an edge.
  */
 export function easedFadeStops(from: number, to: number): string {
+  return easedSteps(from, to)
+    .map(
+      ({ offset, eased }) =>
+        `<stop offset="${+offset.toFixed(4)}" stop-color="#fff" stop-opacity="${+eased.toFixed(4)}"/>`,
+    )
+    .join('');
+}
+
+/**
+ * The stops of a CSS gradient that holds `color` at `alpha` up to `from` and
+ * lets go of it by `to`, both shares of its length, along the same
+ * smoothstep: a shade, which satori draws as a background, with no line
+ * where it starts to lift.
+ */
+export function easedShadeStops(
+  color: string,
+  alpha: number,
+  from: number,
+  to: number,
+): string {
+  return easedSteps(from, to)
+    .map(
+      ({ offset, eased }) =>
+        `${withAlpha(color, +(alpha * (1 - eased)).toFixed(4))} ${+(offset * 100).toFixed(2)}%`,
+    )
+    .join(', ');
+}
+
+/** Tenths of the way from `from` to `to`, with t²(3 − 2t) at each. */
+function easedSteps(from: number, to: number) {
   return Array.from({ length: 11 }, (_, index) => {
     const t = index / 10;
-    const opacity = t * t * (3 - 2 * t);
-    const offset = from + (to - from) * t;
-    return `<stop offset="${+offset.toFixed(4)}" stop-color="#fff" stop-opacity="${+opacity.toFixed(4)}"/>`;
-  }).join('');
+    return { offset: from + (to - from) * t, eased: t * t * (3 - 2 * t) };
+  });
 }
 
 /**
