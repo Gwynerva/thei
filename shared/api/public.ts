@@ -205,6 +205,13 @@ export type PublicNeighbour = {
   media?: MediaDescriptor;
   /** The day of a diary entry, shown in place of the title it lacks. */
   date?: string;
+  /** When a stage was, shown under its title. */
+  period?: DatedPeriod;
+  /**
+   * What a section is about, or how a diary entry begins, as the viewer may
+   * read it.
+   */
+  summary?: string;
 };
 
 /**
