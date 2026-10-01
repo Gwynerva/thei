@@ -37,10 +37,11 @@ import {
  * Any of the three draws relations to any of the three, and the other end
  * lists the relation from its side without editing it here. One tab per
  * kind of thing on the other end. Each row reads as what it says — this
- * entity, what the relation is, the other one — as two pictures with a
- * three-way toggle between them, the chosen way put into words; the names
- * are in the pictures' hints, so the whole width below is left to the note,
- * written once or once per side. Projects and events are ordered by hand;
+ * entity, what the relation is, the other one — as two pictures with the
+ * kind of relation between them, in its icon and its words, chosen from a
+ * list; what can be done with the row sits at its end. The names are in the
+ * pictures' hints, so the whole width below is left to the note, written
+ * once or once per side. Projects and events are ordered by hand;
  * diary entries are days, so they keep the order of their days. A long
  * group scrolls inside itself rather than stretching the form.
  *
@@ -175,10 +176,16 @@ const tabs = computed<TabStripItem<RelationEntityType>[]>(() =>
   })),
 );
 
+/** The kinds a relation can be, in the order the list offers them. */
+const RELATION_TYPES = ['related', 'influencing', 'dependent'] as const;
+
+function isRelationType(value: string): value is RelationType {
+  return (RELATION_TYPES as readonly string[]).includes(value);
+}
+
 const directions = computed(() =>
-  (['related', 'influencing', 'dependent'] as const).map((type) => ({
+  RELATION_TYPES.map((type) => ({
     type,
-    icon: relationTypeIcon(type),
     label:
       type === 'influencing'
         ? phrase.value.relation_short_depends_on
@@ -258,7 +265,12 @@ function updateRelation(
   );
 }
 
-function setType(key: string, type: RelationType) {
+function directionLabel(type: RelationType) {
+  return directions.value.find((direction) => direction.type === type)?.label;
+}
+
+function setType(key: string, type: string) {
+  if (!isRelationType(type)) return;
   updateRelation(key, (item) =>
     item.type === type ? item : { ...item, type },
   );
@@ -434,237 +446,276 @@ onUnmounted(cleanupSorters);
             class="border-t border-border-1 p-sm first:border-t-0 sm:p-md"
             data-relation-row
           >
-            <!-- What the relation says, as it reads: this entity, the
-                 relation, the other one. The filled end of every relation
-                 icon is this entity; the chosen one is put into words. -->
-            <div class="flex min-w-0 items-center gap-0.5 sm:gap-1.5">
-              <button
-                v-if="activeGroup.sortable"
-                type="button"
-                class="flex h-8 w-4 shrink-0 cursor-grab items-center
-                  justify-center rounded-sm text-text-3 transition-colors
-                  active:cursor-grabbing sm:w-5 hocus:bg-bg-3 hocus:text-text-1"
-                :aria-label="`${activeGroup.title}: ${relationTitle(relation)}`"
-                data-relation-handle
-              >
-                <Icon name="grip" />
-              </button>
-              <span
-                role="img"
-                :aria-label="ownerName"
-                v-bind="titlePopup(ownerName)"
-                class="flex size-7 shrink-0 items-center justify-center
-                  overflow-hidden rounded-sm bg-bg-3 text-text-2 sm:size-8"
-                data-relation-owner
-              >
-                <Media
-                  v-if="ownerMedia"
-                  v-bind="ownerMedia"
-                  class="size-full object-cover"
-                />
-                <Icon v-else :name="relationEntityIcon(ownerType)" />
-              </span>
+            <div class="flex min-w-0 items-center gap-1 sm:gap-xs">
+              <!-- What the relation says, as it reads: this entity, the
+                   relation, the other one. The filled end of the relation's
+                   icon is this entity. -->
               <div
-                role="radiogroup"
-                :aria-label="phrase.relation_direction"
-                class="flex min-w-0 items-center gap-0.5 rounded-normal bg-bg-3
-                  p-0.5"
+                class="flex min-w-0 items-center gap-0.5 sm:gap-1.5"
+                data-relation-sentence
+              >
+                <span
+                  role="img"
+                  :aria-label="ownerName"
+                  v-bind="titlePopup(ownerName)"
+                  class="flex size-7 shrink-0 items-center justify-center
+                    overflow-hidden rounded-sm bg-bg-3 text-text-2 sm:size-8"
+                  data-relation-owner
+                >
+                  <Media
+                    v-if="ownerMedia"
+                    v-bind="ownerMedia"
+                    class="size-full object-cover"
+                  />
+                  <Icon v-else :name="relationEntityIcon(ownerType)" />
+                </span>
+                <!-- The kind of relation, chosen from a list: the system's
+                     own picker on a phone. What shows is the chosen kind,
+                     its icon and its words; the select lies over them. -->
+                <label
+                  class="relative flex h-7 min-w-0 cursor-pointer items-center
+                    gap-1 rounded-normal bg-bg-3 pr-1.5 pl-1 text-accent
+                    transition-colors has-focus-visible:ring-2
+                    has-focus-visible:ring-accent sm:h-8 sm:pr-2 sm:pl-1.5
+                    hocus:bg-bg-accent"
+                  data-relation-type
+                >
+                  <Icon
+                    :name="relationTypeIcon(relation.type)"
+                    class="shrink-0 text-lg"
+                    aria-hidden="true"
+                  />
+                  <span
+                    class="min-w-0 truncate text-xs font-semibold"
+                    aria-hidden="true"
+                    data-relation-direction-label
+                    >{{ directionLabel(relation.type) }}</span
+                  >
+                  <Icon
+                    name="chevron-right"
+                    class="shrink-0 rotate-90 text-sm text-text-3"
+                    aria-hidden="true"
+                  />
+                  <select
+                    :value="relation.type"
+                    :aria-label="phrase.relation_direction"
+                    :data-title-popup="directionTitle(relation, relation.type)"
+                    class="absolute inset-0 cursor-pointer appearance-none
+                      text-text-1 opacity-0"
+                    @change="
+                      setType(
+                        relationKey(relation),
+                        ($event.target as HTMLSelectElement).value,
+                      )
+                    "
+                  >
+                    <!-- The list opens in the theme's colours, as
+                         FieldSelect's does: an option left alone takes the
+                         system's light ones. -->
+                    <option
+                      v-for="direction in directions"
+                      :key="direction.type"
+                      :value="direction.type"
+                      class="bg-bg-1 checked:bg-accent checked:text-white"
+                    >
+                      {{ direction.label }}
+                    </option>
+                  </select>
+                </label>
+                <NuxtLink
+                  v-if="relationHref(relation)"
+                  :to="relationHref(relation)"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  :aria-label="relationTitle(relation)"
+                  v-bind="relationPopup(relation)"
+                  class="flex size-7 shrink-0 items-center justify-center
+                    overflow-hidden rounded-sm bg-bg-3 text-text-3 transition
+                    sm:size-8 hocus:ring-2 hocus:ring-accent"
+                  data-relation-other
+                >
+                  <Media
+                    v-if="relation.iconMedia"
+                    v-bind="relation.iconMedia"
+                    class="size-full object-cover"
+                  />
+                  <Icon
+                    v-else
+                    :name="relationEntityIcon(relation.entityType)"
+                  />
+                </NuxtLink>
+                <span
+                  v-else
+                  role="img"
+                  :aria-label="relationTitle(relation)"
+                  v-bind="relationPopup(relation)"
+                  class="flex size-7 shrink-0 items-center justify-center
+                    overflow-hidden rounded-sm bg-bg-3 text-text-3 sm:size-8"
+                  data-relation-other
+                >
+                  <Icon :name="relationEntityIcon(relation.entityType)" />
+                </span>
+              </div>
+              <!-- What can be done with the row, at its end: the note made
+                   one or two, the row moved, the row removed. -->
+              <div
+                class="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5"
+                data-relation-actions
               >
                 <button
-                  v-for="direction in directions"
-                  :key="direction.type"
                   type="button"
-                  role="radio"
-                  :aria-checked="relation.type === direction.type"
-                  :aria-label="directionTitle(relation, direction.type)"
-                  :data-title-popup="directionTitle(relation, direction.type)"
-                  class="flex h-7 min-w-7 cursor-pointer items-center
-                    justify-center gap-1 rounded-sm text-lg transition-colors
-                    sm:h-8 sm:min-w-8"
-                  :class="
-                    relation.type === direction.type
-                      ? `min-w-0 bg-bg-1 pr-1.5 pl-0.5 text-accent shadow-sm
-                        sm:pr-2 sm:pl-1`
-                      : `shrink-0 text-text-3 hocus:bg-bg-1/60
-                        hocus:text-text-1`
+                  class="flex size-7 shrink-0 cursor-pointer items-center
+                    justify-center rounded-normal bg-bg-3 text-text-2
+                    transition-colors sm:size-8 hocus:bg-bg-accent
+                    hocus:text-accent"
+                  :aria-label="
+                    relation.note?.type === 'split'
+                      ? phrase.merge_relation_note
+                      : phrase.split_relation_note
                   "
-                  @click="setType(relationKey(relation), direction.type)"
+                  :data-title-popup="
+                    relation.note?.type === 'split'
+                      ? phrase.merge_relation_note
+                      : phrase.split_relation_note
+                  "
+                  data-relation-split
+                  @click="toggleSplitNote(relation)"
                 >
-                  <Icon :name="direction.icon" class="shrink-0" />
-                  <span
-                    v-if="relation.type === direction.type"
-                    class="min-w-0 truncate text-xs font-semibold tracking-tight
-                      sm:tracking-normal"
-                    data-relation-direction-label
-                    >{{ direction.label }}</span
-                  >
+                  <Icon
+                    :name="
+                      relation.note?.type === 'split' ? 'link' : 'link-broken'
+                    "
+                  />
                 </button>
+                <button
+                  v-if="activeGroup.sortable"
+                  type="button"
+                  class="flex size-7 shrink-0 cursor-grab items-center
+                    justify-center rounded-normal bg-bg-3 text-text-2
+                    transition-colors active:cursor-grabbing sm:size-8
+                    hocus:bg-bg-accent hocus:text-accent"
+                  :aria-label="`${activeGroup.title}: ${relationTitle(relation)}`"
+                  data-relation-handle
+                >
+                  <Icon name="grip" />
+                </button>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="delete"
+                  class="size-7! sm:size-8!"
+                  :aria-label="phrase.delete_relation"
+                  :data-title-popup="phrase.delete_relation"
+                  @click="removeRelation(relationKey(relation))"
+                >
+                  <Icon name="delete" />
+                </Button>
               </div>
-              <NuxtLink
-                v-if="relationHref(relation)"
-                :to="relationHref(relation)"
-                target="_blank"
-                rel="noopener noreferrer"
-                :aria-label="relationTitle(relation)"
-                v-bind="relationPopup(relation)"
-                class="flex size-7 shrink-0 items-center justify-center
-                  overflow-hidden rounded-sm bg-bg-3 text-text-3 transition
-                  sm:size-8 hocus:ring-2 hocus:ring-accent"
-                data-relation-other
-              >
-                <Media
-                  v-if="relation.iconMedia"
-                  v-bind="relation.iconMedia"
-                  class="size-full object-cover"
-                />
-                <Icon v-else :name="relationEntityIcon(relation.entityType)" />
-              </NuxtLink>
-              <span
-                v-else
-                role="img"
-                :aria-label="relationTitle(relation)"
-                v-bind="relationPopup(relation)"
-                class="flex size-7 shrink-0 items-center justify-center
-                  overflow-hidden rounded-sm bg-bg-3 text-text-3 sm:size-8"
-                data-relation-other
-              >
-                <Icon :name="relationEntityIcon(relation.entityType)" />
-              </span>
-              <Button
-                type="button"
-                size="icon-sm"
-                variant="delete"
-                class="ml-auto"
-                :aria-label="phrase.delete_relation"
-                :data-title-popup="phrase.delete_relation"
-                @click="removeRelation(relationKey(relation))"
-              >
-                <Icon name="delete" />
-              </Button>
             </div>
-            <!-- The note has the whole width: it wraps rather than scrolls,
-                 and a note per side is marked with whose it is. -->
-            <div class="mt-xs flex items-start gap-xs">
-              <div
-                v-if="relation.note?.type === 'split'"
-                class="grid min-w-0 flex-1 gap-xs sm:grid-cols-2"
-              >
-                <div class="relative min-w-0">
-                  <span
-                    class="pointer-events-none absolute top-2 left-2 flex size-5
-                      items-center justify-center overflow-hidden rounded-sm
-                      bg-bg-3 text-xs text-text-2"
-                    aria-hidden="true"
-                  >
-                    <Media
-                      v-if="ownerMedia"
-                      v-bind="ownerMedia"
-                      class="size-full object-cover"
-                    />
-                    <Icon v-else :name="relationEntityIcon(ownerType)" />
-                  </span>
-                  <FieldTextarea
-                    :model-value="relation.note.currentText ?? ''"
-                    autocomplete="off"
-                    spellcheck="true"
-                    :placeholder="phrase.relation_note_for(ownerName)"
-                    :aria-label="phrase.relation_note_for(ownerName)"
-                    class="min-w-0! pl-9 text-sm"
-                    data-relation-note="current"
-                    @keydown.enter.prevent
-                    @update:model-value="
-                      updateSplitNote(
-                        relationKey(relation),
-                        'currentText',
-                        noteText($event),
-                      )
-                    "
+            <!-- The note has the whole width: it wraps rather than scrolls.
+                 Notes per side carry the picture of their side, set on the
+                 first line as a letter would be: the field's border and
+                 padding in, and as tall as a line of its text. -->
+            <div
+              v-if="relation.note?.type === 'split'"
+              class="mt-xs grid min-w-0 gap-xs sm:grid-cols-2"
+            >
+              <div class="relative min-w-0">
+                <span
+                  class="pointer-events-none absolute
+                    top-[calc(var(--spacing-xs)+2px)]
+                    left-[calc(var(--spacing-xs)+2px)] flex size-5 items-center
+                    justify-center overflow-hidden rounded-sm bg-bg-3 text-xs
+                    text-text-2"
+                  aria-hidden="true"
+                >
+                  <Media
+                    v-if="ownerMedia"
+                    v-bind="ownerMedia"
+                    class="size-full object-cover"
                   />
-                </div>
-                <div class="relative min-w-0">
-                  <span
-                    class="pointer-events-none absolute top-2 left-2 flex size-5
-                      items-center justify-center overflow-hidden rounded-sm
-                      bg-bg-3 text-xs text-text-3"
-                    aria-hidden="true"
-                  >
-                    <Media
-                      v-if="relation.iconMedia"
-                      v-bind="relation.iconMedia"
-                      class="size-full object-cover"
-                    />
-                    <Icon
-                      v-else
-                      :name="relationEntityIcon(relation.entityType)"
-                    />
-                  </span>
-                  <FieldTextarea
-                    :model-value="relation.note.relatedText ?? ''"
-                    autocomplete="off"
-                    spellcheck="true"
-                    :placeholder="
-                      phrase.relation_note_for(relationTitle(relation))
-                    "
-                    :aria-label="
-                      phrase.relation_note_for(relationTitle(relation))
-                    "
-                    class="min-w-0! pl-9 text-sm"
-                    data-relation-note="related"
-                    @keydown.enter.prevent
-                    @update:model-value="
-                      updateSplitNote(
-                        relationKey(relation),
-                        'relatedText',
-                        noteText($event),
-                      )
-                    "
-                  />
-                </div>
-              </div>
-              <div v-else class="min-w-0 flex-1">
+                  <Icon v-else :name="relationEntityIcon(ownerType)" />
+                </span>
                 <FieldTextarea
-                  :model-value="
-                    relation.note?.type === 'shared'
-                      ? (relation.note.text ?? '')
-                      : ''
-                  "
+                  :model-value="relation.note.currentText ?? ''"
                   autocomplete="off"
                   spellcheck="true"
-                  :placeholder="phrase.relation_note_placeholder"
-                  :aria-label="phrase.relation_note_placeholder"
-                  class="min-w-0! text-sm"
-                  data-relation-note="shared"
+                  :placeholder="phrase.relation_note_for(ownerName)"
+                  :aria-label="phrase.relation_note_for(ownerName)"
+                  class="min-w-0! pl-[calc(var(--spacing-xs)*2+1.25rem)]
+                    text-sm"
+                  data-relation-note="current"
                   @keydown.enter.prevent
                   @update:model-value="
-                    updateSharedNote(relationKey(relation), noteText($event))
+                    updateSplitNote(
+                      relationKey(relation),
+                      'currentText',
+                      noteText($event),
+                    )
                   "
                 />
               </div>
-              <button
-                type="button"
-                class="flex size-9 shrink-0 cursor-pointer items-center
-                  justify-center rounded-normal bg-bg-3 text-text-2
-                  transition-colors hocus:bg-bg-accent hocus:text-accent"
-                :aria-label="
-                  relation.note?.type === 'split'
-                    ? phrase.merge_relation_note
-                    : phrase.split_relation_note
-                "
-                :data-title-popup="
-                  relation.note?.type === 'split'
-                    ? phrase.merge_relation_note
-                    : phrase.split_relation_note
-                "
-                data-relation-split
-                @click="toggleSplitNote(relation)"
-              >
-                <Icon
-                  :name="
-                    relation.note?.type === 'split' ? 'link' : 'link-broken'
+              <div class="relative min-w-0">
+                <span
+                  class="pointer-events-none absolute
+                    top-[calc(var(--spacing-xs)+2px)]
+                    left-[calc(var(--spacing-xs)+2px)] flex size-5 items-center
+                    justify-center overflow-hidden rounded-sm bg-bg-3 text-xs
+                    text-text-3"
+                  aria-hidden="true"
+                >
+                  <Media
+                    v-if="relation.iconMedia"
+                    v-bind="relation.iconMedia"
+                    class="size-full object-cover"
+                  />
+                  <Icon
+                    v-else
+                    :name="relationEntityIcon(relation.entityType)"
+                  />
+                </span>
+                <FieldTextarea
+                  :model-value="relation.note.relatedText ?? ''"
+                  autocomplete="off"
+                  spellcheck="true"
+                  :placeholder="
+                    phrase.relation_note_for(relationTitle(relation))
+                  "
+                  :aria-label="
+                    phrase.relation_note_for(relationTitle(relation))
+                  "
+                  class="min-w-0! pl-[calc(var(--spacing-xs)*2+1.25rem)]
+                    text-sm"
+                  data-relation-note="related"
+                  @keydown.enter.prevent
+                  @update:model-value="
+                    updateSplitNote(
+                      relationKey(relation),
+                      'relatedText',
+                      noteText($event),
+                    )
                   "
                 />
-              </button>
+              </div>
             </div>
+            <FieldTextarea
+              v-else
+              :model-value="
+                relation.note?.type === 'shared'
+                  ? (relation.note.text ?? '')
+                  : ''
+              "
+              autocomplete="off"
+              spellcheck="true"
+              :placeholder="phrase.relation_note_placeholder"
+              :aria-label="phrase.relation_note_placeholder"
+              class="mt-xs min-w-0! text-sm"
+              data-relation-note="shared"
+              @keydown.enter.prevent
+              @update:model-value="
+                updateSharedNote(relationKey(relation), noteText($event))
+              "
+            />
           </div>
         </div>
       </Box>

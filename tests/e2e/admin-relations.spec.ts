@@ -188,23 +188,29 @@ for (const width of [320, 375, 1280]) {
   });
 }
 
-test('the kind of a relation is said between its two pictures', async ({
+test('the kind of a relation is chosen from a list between its two pictures', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 375, height: 900 });
   const { projectUuid } = await createProject(page);
   await page.goto(`/admin/projects/${projectUuid}/edit/`);
   const row = page.locator('[data-relation-row]').first();
+  const kind = row.getByRole('combobox');
   const label = row.locator('[data-relation-direction-label]');
-  await expect(label).toHaveCount(1);
-  const before = await label.textContent();
-  await row.getByRole('radio').first().click();
-  await expect(row.getByRole('radio').first()).toHaveAttribute(
-    'aria-checked',
-    'true',
+  await expect(kind).toHaveValue('influencing');
+  await expect(label).toHaveText('depends on');
+  await expect(kind).toHaveAttribute(
+    'data-title-popup',
+    /Related things.*depends on.*Linked meeting 2/,
   );
-  await expect(label).toHaveCount(1);
-  await expect(label).not.toHaveText(before!);
+  await kind.selectOption('dependent');
+  await expect(label).toHaveText('affects');
+  await expect(kind).toHaveAttribute(
+    'data-title-popup',
+    /Related things.*affects.*Linked meeting 2/,
+  );
+  await kind.selectOption('related');
+  await expect(label).toHaveText('related to');
   // The names are the pictures' to tell.
   await expect(row.locator('[data-relation-other]')).toHaveAttribute(
     'data-title-popup',
@@ -214,6 +220,12 @@ test('the kind of a relation is said between its two pictures', async ({
     'data-title-popup',
     /Related things/,
   );
+  // What can be done with the row sits at its end, in this order.
+  const actions = row.locator('[data-relation-actions] > *');
+  await expect(actions).toHaveCount(3);
+  await expect(actions.nth(0)).toHaveAttribute('data-relation-split', '');
+  await expect(actions.nth(1)).toHaveAttribute('data-relation-handle', '');
+  await expect(actions.nth(2)).toHaveAttribute('aria-label', /Delete/);
 });
 
 test('the picker offers first what the text links to, without growing', async ({
@@ -226,11 +238,14 @@ test('the picker offers first what the text links to, without growing', async ({
   await page
     .getByRole('button', { name: /Add a relation|Добавить связь/ })
     .click();
-  const options = page.getByRole('option');
+  // The picker's rows, not the options of the rows' kind lists.
+  const options = page.getByRole('dialog').getByRole('option');
   await expect(options.first()).toContainText(`Linked meeting 1 ${stamp}`);
   // Linked and already related is not offered again.
   await expect(
-    page.getByRole('option', { name: new RegExp(`Linked meeting 2 ${stamp}`) }),
+    page
+      .getByRole('dialog')
+      .getByRole('option', { name: new RegExp(`Linked meeting 2 ${stamp}`) }),
   ).toHaveCount(0);
   await expect(
     options.first().locator('[data-entity-search-mentioned]'),
