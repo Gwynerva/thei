@@ -7,7 +7,7 @@ const CHART = { left: SAFE.left, top: 380, width: SAFE.width, height: 150 };
 const LABELS_TOP = CHART.top + CHART.height + 10;
 
 /**
- * I: a life as a chart. How much was recorded each year, as bars in the
+ * A life as a chart. How much was recorded each year, as bars in the
  * accent's shades along the bottom of the card, from the first year to the
  * last; above them the name of the page and what it holds.
  */

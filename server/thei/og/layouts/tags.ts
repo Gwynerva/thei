@@ -81,7 +81,7 @@ function plusChip(count: number, palette: OgPalette) {
 }
 
 /**
- * J: the tags as a cloud. The most used first and largest, each in its own
+ * The tags as a cloud. The most used first and largest, each in its own
  * colour with its own icon — the Thei tag icon for one without — as many as
  * the right of the card holds, and a count of the rest.
  */

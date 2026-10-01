@@ -51,10 +51,6 @@ export const OG_META_ICONS = {
 
 const symbols: Partial<Record<string, IconSymbol>> = iconSymbols;
 
-export function hasOgIcon(name: string): boolean {
-  return Boolean(symbols[name]);
-}
-
 /**
  * One icon as an SVG picture in one colour, drawn the way the generated
  * icons draw their glyph: an unpainted shape takes the group's fill, and

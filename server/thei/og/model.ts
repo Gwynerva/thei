@@ -115,7 +115,6 @@ export interface OgCardContent {
   banner?: OgPicture;
   /** Pictures of what a collection opens with: search presets, pages. */
   tiles: OgPicture[];
-  tilesTotal: number;
   stats: OgStat[];
   histogram?: { values: number[]; first: string; last: string };
   cloud: OgTag[];
@@ -143,7 +142,6 @@ export function emptyOgContent(
     tags: [],
     tagsTotal: 0,
     tiles: [],
-    tilesTotal: 0,
     stats: [],
     cloud: [],
     cloudTotal: 0,

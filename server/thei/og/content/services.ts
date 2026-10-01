@@ -281,7 +281,6 @@ async function presetContent(
         : []),
     ],
     tiles,
-    tilesTotal: documents.length,
   };
 }
 
@@ -350,7 +349,6 @@ async function pagesContent(site: OgSite): Promise<OgCardContent> {
     chips: [{ icon: OG_SERVICE_ICONS.pages, label: phrase().pages }],
     summary: phrase().public_pages_description,
     tiles,
-    tilesTotal: pages.length,
   };
 }
 

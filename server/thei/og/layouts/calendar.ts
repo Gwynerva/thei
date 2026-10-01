@@ -65,7 +65,7 @@ function cloudLeaf(plate: OgPlate, seed: string): OgNode {
 }
 
 /**
- * D: the day is the thing — a diary entry's, the one kind of card called by
+ * The day is the thing — a diary entry's, the one kind of card called by
  * nothing else. A leaf of a tear-off calendar in the accent, outlined as a
  * cloud — weekday, the day in large figures, the month, the year — and
  * beside it the opening words of the entry. A picture the entry opens with

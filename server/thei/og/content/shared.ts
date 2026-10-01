@@ -165,10 +165,3 @@ export function ogStat(icon: string, text: string, count: number): OgStat {
     ? { icon, value: ogNumber(count), label: text.slice(raw.length).trim() }
     : { icon, value: ogNumber(count), label: text };
 }
-
-/** The first letter up, as a line of a card starts. */
-export function ogCapitalize(text: string): string {
-  return (
-    text.charAt(0).toLocaleUpperCase(THEI_SERVER.language.code) + text.slice(1)
-  );
-}

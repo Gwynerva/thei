@@ -9,7 +9,7 @@ const AVATAR = 340;
 const RING = 10;
 
 /**
- * H: the site as the person it belongs to — the avatar in a ring of its
+ * The site as the person it belongs to — the avatar in a ring of its
  * colour, the name, the slogan, and what the archive holds. The address,
  * when the site has one, is the signature: the name is already the title.
  */

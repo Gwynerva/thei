@@ -681,7 +681,6 @@ describe('Open Graph content', () => {
       id: 'showcase',
     }))!;
     expect(showcase.meta.map((item) => item.text)).toEqual(['1 project']);
-    expect(showcase.tilesTotal).toBe(1);
     const tags = (await resolve({ kind: 'service', id: 'tags' }))!;
     expect(tags.cloud).toMatchObject([{ title: 't title', count: 1 }]);
     expect(tags.cloudTotal).toBe(1);

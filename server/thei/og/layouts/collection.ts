@@ -12,7 +12,7 @@ const FAN = [
 ];
 
 /**
- * K: a listing — the showcase, the CV, the pages, a search preset — as a
+ * A listing — the showcase, the CV, the pages, a search preset — as a
  * fan of the pictures of what it lists, beside its name and how many there
  * are.
  */
