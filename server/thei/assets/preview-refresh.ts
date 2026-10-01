@@ -5,7 +5,7 @@ import {
   refreshMediaPreview,
   type StoredAssetRecord,
 } from './storage';
-import { svgNeedsSymbolSizes } from './svg-raster-input';
+import { svgNeedsUseSizes } from './svg-raster-input';
 
 /**
  * Videos whose preview frame was not chosen by colour.
@@ -134,23 +134,26 @@ export async function refreshSvgPreviews(
 }
 
 /**
- * SVGs that reuse sized symbols, which librsvg drew at the size of the whole
- * picture until their inputs were prepared for it (`svg-raster-input.ts`).
+ * SVGs with a `<use>` of a sized symbol or nested drawing, which librsvg drew
+ * at the size of the whole picture until their inputs were prepared for it
+ * (`svg-raster-input.ts`).
  * A file that cannot be read is left out: it keeps its preview either way.
  */
-export async function findSvgAssetsWithSymbols(): Promise<StoredAssetRecord[]> {
+export async function findSvgAssetsWithUnsizedUses(): Promise<
+  StoredAssetRecord[]
+> {
   const found: StoredAssetRecord[] = [];
   for (const asset of await findSvgAssets()) {
     const path = THEI_SERVER.assets.filePath(
       asset.contentHash,
       asset.extension,
     );
-    if (await svgNeedsSymbolSizes(path).catch(() => false)) found.push(asset);
+    if (await svgNeedsUseSizes(path).catch(() => false)) found.push(asset);
   }
   return found;
 }
 
-export interface RefreshSvgSymbolPreviewsResult extends RefreshPreviewsResult {
+export interface RefreshSvgUsePreviewsResult extends RefreshPreviewsResult {
   /**
    * Bitmaps saved from those SVGs. Their pixels are the file itself, drawn
    * wrong once and for all: saving the picture again from its SVG redraws it.
@@ -159,16 +162,16 @@ export interface RefreshSvgSymbolPreviewsResult extends RefreshPreviewsResult {
 }
 
 /**
- * Draws again the previews of SVGs that reuse sized symbols, and the accent
- * colour with them, and finds the bitmaps once saved from those SVGs.
+ * Draws again the previews of those SVGs, and the accent colour with them,
+ * and finds the bitmaps once saved from them.
  */
-export async function refreshSvgSymbolPreviews(
+export async function refreshSvgUsePreviews(
   options: RefreshPreviewsOptions = {},
-): Promise<RefreshSvgSymbolPreviewsResult> {
-  const assets = await findSvgAssetsWithSymbols();
+): Promise<RefreshSvgUsePreviewsResult> {
+  const assets = await findSvgAssetsWithUnsizedUses();
   const result = await refreshPreviews(
     assets,
-    'SVG file(s) drawn with symbols',
+    'SVG file(s) reusing sized parts',
     options,
   );
   const families = [...new Set(assets.map((asset) => asset.familyUuid))];

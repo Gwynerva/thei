@@ -1,7 +1,7 @@
 import videoPreviewFrames from './0.0.2-video-preview-frames';
 import externalLinksRefresh from './0.0.2-external-links-refresh';
 import svgPreviews from './0.0.2-svg-previews';
-import svgSymbolPreviews from './0.0.4-svg-symbol-previews';
+import svgUsePreviews from './0.0.4-svg-use-previews';
 import type { TheiUpdateTask } from './types';
 
 /**
@@ -16,5 +16,5 @@ export const updateTaskRegistry: TheiUpdateTask[] = [
   videoPreviewFrames,
   externalLinksRefresh,
   svgPreviews,
-  svgSymbolPreviews,
+  svgUsePreviews,
 ];

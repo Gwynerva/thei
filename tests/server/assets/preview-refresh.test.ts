@@ -16,9 +16,9 @@ import {
 } from '../../../shared/asset';
 import { createOriginalAssetSettings } from '../../../shared/asset-upload-settings';
 import {
-  findSvgAssetsWithSymbols,
+  findSvgAssetsWithUnsizedUses,
   findVideosWithUnscoredPreviews,
-  refreshSvgSymbolPreviews,
+  refreshSvgUsePreviews,
   refreshVideoPreviews,
 } from '../../../server/thei/assets/preview-refresh';
 import { storeAsset } from '../../../server/thei/assets/storage';
@@ -276,26 +276,25 @@ describe('SVG symbol preview refresh', () => {
       });
 
     expect(
-      (await findSvgAssetsWithSymbols()).map((asset) => asset.assetUuid),
+      (await findSvgAssetsWithUnsizedUses()).map((asset) => asset.assetUuid),
     ).toEqual([banner]);
 
-    const result = await refreshSvgSymbolPreviews();
+    const result = await refreshSvgUsePreviews();
 
     expect(result).toMatchObject({ total: 1, failed: 0 });
     expect(result.rasterised.map((asset) => asset.assetUuid)).toEqual([
       'a-banner-webp',
     ]);
-    const preview = (
-      await findAssetsByContainer('asset', banner)
-    ).find((usage) => usage.role === 'preview')?.asset;
+    const preview = (await findAssetsByContainer('asset', banner)).find(
+      (usage) => usage.role === 'preview',
+    )?.asset;
     const image = await readFile(
       THEI_SERVER.assets.filePath(preview!.contentHash, preview!.extension),
     );
     const { channels } = await sharp(image).stats();
     // The yellow field, lightly marked, not the dark mass of blown-up marks.
     expect(Math.round(channels[0]!.mean)).toBeGreaterThan(180);
-    const meta = (await findAssetByUuid(banner))!
-      .meta as ImageAssetMeta;
+    const meta = (await findAssetByUuid(banner))!.meta as ImageAssetMeta;
     expect(meta.accent?.chroma).toBeGreaterThan(0.05);
   }, 60_000);
 });

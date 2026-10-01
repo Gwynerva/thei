@@ -8,7 +8,7 @@ import { createMediaPreview } from '../../../server/thei/assets/media-preview';
 import {
   rasterReadySvg,
   svgBufferForRaster,
-  svgNeedsSymbolSizes,
+  svgNeedsUseSizes,
 } from '../../../server/thei/assets/svg-raster-input';
 
 let directory = '';
@@ -71,6 +71,16 @@ describe('preparing an SVG for librsvg', () => {
       expect(await prepared(svg, chunkSize)).toBe(expected);
   });
 
+  it('gives a use the size of a nested drawing, never of the root', async () => {
+    const root =
+      '<svg xmlns="http://www.w3.org/2000/svg" id="root" width="200" height="100">';
+    const svg = `${root}<defs><svg id="a" viewBox="0 0 10 10" width="10" height="10"/></defs><use href="#a"/><use href="#root"/></svg>`;
+
+    expect(await prepared(svg, 4)).toBe(
+      `${root}<defs><svg id="a" viewBox="0 0 10 10" width="10" height="10"/></defs><use width="10" height="10" href="#a"/><use href="#root"/></svg>`,
+    );
+  });
+
   it('keeps a size the use sets and fills in only the other one', async () => {
     const svg = `${SVG}<symbol id="a" width="20" height="30"/><use href="#a" width="5"/><use href="#a" height="7" width="8"/></svg>`;
 
@@ -94,9 +104,7 @@ describe('preparing an SVG for librsvg', () => {
     ];
     for (const svg of untouched) {
       expect(await prepared(svg)).toBeUndefined();
-      expect(await svgNeedsSymbolSizes(await file('plain.svg', svg))).toBe(
-        false,
-      );
+      expect(await svgNeedsUseSizes(await file('plain.svg', svg))).toBe(false);
     }
   });
 
@@ -125,7 +133,7 @@ describe('preparing an SVG for librsvg', () => {
     for (const input of [path, xml]) {
       const ready = await rasterReadySvg(input);
       expect(ready.input).toBe(input);
-      expect(await svgNeedsSymbolSizes(input)).toBe(false);
+      expect(await svgNeedsUseSizes(input)).toBe(false);
     }
     expect(svgBufferForRaster(png)).toBe(png);
   });
@@ -153,11 +161,6 @@ describe('drawing an SVG that repeats sized symbols', () => {
   }
 
   it('draws its preview as a browser draws it', async () => {
-    // librsvg alone blows each mark up to the whole picture, so the field
-    // all but disappears under them.
-    const unprepared = await sharp(Buffer.from(pattern())).png().toBuffer();
-    expect((await mean(unprepared))[0]).toBeLessThan(120);
-
     const path = await file('pattern.svg', pattern());
     const preview = await createMediaPreview(
       { path, size: pattern().length, hash: 'pattern', owned: false },
@@ -174,5 +177,37 @@ describe('drawing an SVG that repeats sized symbols', () => {
     expect(Math.abs(r! - rr!)).toBeLessThanOrEqual(2);
     expect(Math.abs(g! - rg!)).toBeLessThanOrEqual(2);
     expect(Math.abs(b! - rb!)).toBeLessThanOrEqual(2);
+  });
+});
+
+/**
+ * Why `svg-raster-input.ts` exists. When this fails, the librsvg sharp brings
+ * sizes these by itself: the module, its callers and the `0.0.4/001` update
+ * task can go.
+ */
+describe('librsvg', () => {
+  async function darkShare(svg: Buffer) {
+    const { data, info } = await sharp(svg)
+      .removeAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    let dark = 0;
+    for (let offset = 0; offset < data.length; offset += info.channels)
+      if (data[offset]! < 100) dark++;
+    return dark / (info.width * info.height);
+  }
+
+  it('still draws an unsized use of a sized symbol or drawing over everything', async () => {
+    for (const target of [
+      '<symbol id="a" viewBox="0 0 10 10" width="10" height="10"><rect width="10" height="10"/></symbol>',
+      '<defs><svg id="a" viewBox="0 0 10 10" width="10" height="10"><rect width="10" height="10"/></svg></defs>',
+    ]) {
+      const svg = Buffer.from(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100"><rect width="200" height="100" fill="#fff"/>${target}<use href="#a"/></svg>`,
+      );
+      // A browser covers 10 × 10 of 200 × 100; librsvg half the picture.
+      expect(await darkShare(svg)).toBeGreaterThan(0.4);
+      expect(await darkShare(svgBufferForRaster(svg))).toBeCloseTo(0.005, 3);
+    }
   });
 });

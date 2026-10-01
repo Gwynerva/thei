@@ -7,15 +7,20 @@ import { theiTempPath } from './temp';
 /**
  * An SVG prepared for librsvg, the renderer sharp draws SVG with.
  *
- * librsvg ignores the `width` and `height` SVG 2 gives a `<symbol>`. A
- * `<use>` of one that sets no size of its own is drawn at 100% of the
- * viewport instead, as SVG 1.1 had it, where a browser draws it at the
- * symbol's size. A pattern of a few icons repeated over a banner then comes
+ * A `<use>` that sets no size of its own takes the size of what it shows:
+ * the `width` and `height` of a `<symbol>` (SVG 2) or of a nested `<svg>`
+ * (SVG 1.1 already). librsvg ignores both and draws such a `<use>` at 100% of
+ * the viewport — the symbol's size it never read, the nested drawing's it
+ * stopped reading in 2.56 (librsvg#1235) — where every browser draws it at
+ * its own size. A pattern of a few icons repeated over a banner then comes
  * out as every icon blown up to the whole picture, hundreds of them on top
- * of each other. The copy gives each such `<use>` the size its symbol
- * declares, which is exactly what SVG 2 means by a `<use>` without one.
+ * of each other. The copy gives each such `<use>` the size of what it shows,
+ * which is the size the standard gives it anyway, so the drawing is the same
+ * in any renderer.
  *
- * Anything else, and an SVG that needs nothing, is handed over as it is.
+ * The stored file is never changed; only what sharp reads is. Anything else,
+ * and an SVG that needs nothing, is handed over as it is. Once librsvg draws
+ * these itself, a test in `svg-raster-input.test.ts` says so, and this goes.
  */
 export interface RasterReadySvg {
   /** What to open with sharp: the input itself, or the prepared copy. */
@@ -29,7 +34,7 @@ export interface SvgScanOptions {
   chunkSize?: number;
 }
 
-interface SymbolSize {
+interface TargetSize {
   width?: string;
   height?: string;
 }
@@ -43,12 +48,12 @@ export async function rasterReadySvg(
   if (Buffer.isBuffer(input))
     return { input: svgBufferForRaster(input), dispose: NOTHING_TO_DISPOSE };
 
-  const symbols = await symbolsToSize(input, options);
-  if (!symbols) return { input, dispose: NOTHING_TO_DISPOSE };
+  const targets = await sizesToCopy(input, options);
+  if (!targets) return { input, dispose: NOTHING_TO_DISPOSE };
   const outputPath = theiTempPath(`thei-svg-raster-${randomUUID()}.svg`);
   const dispose = () => rm(outputPath, { force: true }).catch(() => {});
   try {
-    await writeSized(input, outputPath, symbols, options);
+    await writeSized(input, outputPath, targets, options);
   } catch (error) {
     await dispose();
     throw error;
@@ -75,14 +80,14 @@ export async function withRasterReadySvg<T>(
  */
 export function svgBufferForRaster(source: Buffer): Buffer {
   const text = source.toString('latin1');
-  const collector = new SymbolCollector();
+  const collector = new UseCollector();
   collector.scanner.push(text);
-  const symbols = collector.end();
-  if (!symbols) return source;
+  const targets = collector.end();
+  if (!targets) return source;
   let output = '';
   const scanner = new TagScanner({
     raw: (piece) => (output += piece),
-    tag: (name, tag) => (output += sizedTag(name, tag, symbols)),
+    tag: (name, tag) => (output += sizedTag(name, tag, targets)),
   });
   scanner.push(text);
   scanner.end();
@@ -90,24 +95,25 @@ export function svgBufferForRaster(source: Buffer): Buffer {
 }
 
 /** Whether librsvg would draw this file differently from a browser. */
-export async function svgNeedsSymbolSizes(
+export async function svgNeedsUseSizes(
   path: string,
   options: SvgScanOptions = {},
 ): Promise<boolean> {
-  return Boolean(await symbolsToSize(path, options));
+  return Boolean(await sizesToCopy(path, options));
 }
 
 /**
- * The sizes to copy onto `<use>` elements, or nothing when no `<use>` lacks
- * one its symbol declares — or the input is not an SVG at all. A symbol may
- * be defined after the elements that use it, so the whole file is read
- * before anything is decided; it is read as a stream, never held whole.
+ * The sizes to copy onto `<use>` elements, by the id of what they show, or
+ * nothing when no `<use>` lacks one its target declares — or the input is
+ * not an SVG at all. A target may be defined after the elements that use
+ * it, so the whole file is read before anything is decided; it is read as a
+ * stream, never held whole.
  */
-async function symbolsToSize(
+async function sizesToCopy(
   path: string,
   options: SvgScanOptions,
-): Promise<Map<string, SymbolSize> | undefined> {
-  const collector = new SymbolCollector();
+): Promise<Map<string, TargetSize> | undefined> {
+  const collector = new UseCollector();
   for await (const chunk of readLatin1(path, options)) {
     collector.scanner.push(chunk);
     if (collector.scanner.notSvg) break;
@@ -115,21 +121,24 @@ async function symbolsToSize(
   return collector.end();
 }
 
-/** Notes every sized `<symbol>` and every `<use>` that lacks a size. */
-class SymbolCollector {
-  private readonly symbols = new Map<string, SymbolSize>();
+/**
+ * Notes every sized `<symbol>` and nested `<svg>`, and every `<use>` that
+ * lacks a size.
+ */
+class UseCollector {
+  private readonly targets = new Map<string, TargetSize>();
   private readonly usedWithoutWidth = new Set<string>();
   private readonly usedWithoutHeight = new Set<string>();
   readonly scanner = new TagScanner({
     tag: (name, text) => {
       const attributes = parseAttributes(text);
-      if (name === 'symbol') {
+      if (name !== 'use') {
         const id = attributes.get('id');
         const size = {
           width: definedSize(attributes.get('width')),
           height: definedSize(attributes.get('height')),
         };
-        if (id && (size.width || size.height)) this.symbols.set(id, size);
+        if (id && (size.width || size.height)) this.targets.set(id, size);
         return;
       }
       const id = referencedId(attributes);
@@ -139,11 +148,11 @@ class SymbolCollector {
     },
   });
 
-  /** The symbols some `<use>` needs the size of, if any. */
-  end(): Map<string, SymbolSize> | undefined {
+  /** The targets some `<use>` needs the size of, if any. */
+  end(): Map<string, TargetSize> | undefined {
     if (!this.scanner.end()) return undefined;
-    const needed = new Map<string, SymbolSize>();
-    for (const [id, size] of this.symbols) {
+    const needed = new Map<string, TargetSize>();
+    for (const [id, size] of this.targets) {
       if (
         (size.width && this.usedWithoutWidth.has(id)) ||
         (size.height && this.usedWithoutHeight.has(id))
@@ -168,7 +177,7 @@ function readLatin1(path: string, options: SvgScanOptions) {
 async function writeSized(
   sourcePath: string,
   outputPath: string,
-  symbols: Map<string, SymbolSize>,
+  targets: Map<string, TargetSize>,
   options: SvgScanOptions,
 ) {
   const writer = createWriteStream(outputPath);
@@ -179,7 +188,7 @@ async function writeSized(
   let pending = '';
   const scanner = new TagScanner({
     raw: (text) => (pending += text),
-    tag: (name, text) => (pending += sizedTag(name, text, symbols)),
+    tag: (name, text) => (pending += sizedTag(name, text, targets)),
   });
   const flush = async () => {
     if (!pending) return;
@@ -198,16 +207,16 @@ async function writeSized(
   await Promise.race([once(writer, 'finish'), failed]);
 }
 
-/** The tag with the sizes its symbol declares added, where it lacks them. */
+/** The tag with the sizes its target declares added, where it lacks them. */
 function sizedTag(
   name: TagName,
   text: string,
-  symbols: Map<string, SymbolSize>,
+  targets: Map<string, TargetSize>,
 ): string {
   if (name !== 'use') return text;
   const attributes = parseAttributes(text);
   const id = referencedId(attributes);
-  const size = id ? symbols.get(id) : undefined;
+  const size = id ? targets.get(id) : undefined;
   if (!size) return text;
   let added = '';
   if (size.width && !attributes.has('width'))
@@ -247,12 +256,15 @@ function quoted(value: string) {
   return value.includes('"') ? `'${value}'` : `"${value}"`;
 }
 
-type TagName = 'use' | 'symbol';
+type TagName = 'use' | 'symbol' | 'svg';
 
 interface ScanHandlers {
-  /** Everything but `<use>` and `<symbol>` start tags, verbatim and in order. */
+  /** Everything but the start tags below, verbatim and in order. */
   raw?: (text: string) => void;
-  /** A `<use>` or `<symbol>` start tag, whole; `name` without a prefix. */
+  /**
+   * A `<use>`, `<symbol>` or nested `<svg>` start tag, whole; `name`
+   * without a prefix.
+   */
   tag: (name: TagName, text: string) => void;
 }
 
@@ -270,9 +282,9 @@ const ELEMENT_NAME = /[^\s/>]*/y;
  *
  * Comments, CDATA sections, processing instructions and the doctype pass
  * through unread, so markup written inside them is never taken for an
- * element. Only `<use>` and `<symbol>` start tags are held until they end;
- * everything else goes on as it arrives, so even a path many megabytes long
- * never accumulates. Before the root element XML allows only blank text,
+ * element. Only `<use>`, `<symbol>` and nested `<svg>` start tags are held
+ * until they end; everything else goes on as it arrives, so even a path many
+ * megabytes long never accumulates. Before the root element XML allows only blank text,
  * which tells an SVG from a raster within the first bytes.
  */
 class TagScanner {
@@ -302,7 +314,8 @@ class TagScanner {
         const end = open === -1 ? text.length : open;
         const piece = text.slice(index, end);
         // A byte-order mark is Latin-1 `ï»¿` here.
-        if (!this.rootSeen && !/^[\sï»¿]*$/.test(piece)) return this.reject();
+        if (!this.rootSeen && !/^[\s\u00ef\u00bb\u00bf]*$/.test(piece))
+          return this.reject();
         this.raw(piece);
         if (open === -1) return;
         index = open;
@@ -396,7 +409,8 @@ class TagScanner {
     // The name may go on in the next chunk.
     if (index + 1 + name.length === text.length) return undefined;
     const local = name.slice(name.lastIndexOf(':') + 1);
-    if (!this.rootSeen) {
+    const root = !this.rootSeen;
+    if (root) {
       if (local !== 'svg') {
         this.reject();
         return undefined;
@@ -406,7 +420,7 @@ class TagScanner {
     this.depth = 0;
     this.quote = '';
     const opened = `<${name}`;
-    if (local === 'use' || local === 'symbol') {
+    if (local === 'use' || local === 'symbol' || (local === 'svg' && !root)) {
       this.mode = 'collect';
       this.collecting = local;
       this.collected = opened;
