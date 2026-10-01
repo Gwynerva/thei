@@ -21,6 +21,10 @@
 
 import type EditorJS from '@editorjs/editorjs';
 import { makeEditorBlockCurrent } from './editor-current-block';
+import {
+  EDITOR_BLOCK_SELECTOR,
+  EDITOR_SELECTED_BLOCK_SELECTOR,
+} from './editor-dom';
 
 /** Anything a click is for on its own, or that the editor handles itself. */
 const SKIP_SELECTOR = [
@@ -37,9 +41,7 @@ const SKIP_SELECTOR = [
   '.ce-popover',
   '.content-private-bracket',
 ].join(', ');
-const BLOCK_SELECTOR = '.ce-block';
 const EDITOR_SELECTOR = '.codex-editor';
-const SELECTED_BLOCK_SELECTOR = '.ce-block--selected';
 const INPUT_SELECTOR = '[contenteditable="true"]';
 /** How far a press may travel and still count as a click, in pixels. */
 const CLICK_TRAVEL = 3;
@@ -109,11 +111,11 @@ export function bindEditorGutterClick(root: HTMLElement, editor: EditorJS) {
    * block — the one level with the pointer.
    */
   function blockFor(target: Element, y: number) {
-    const block = target.closest<HTMLElement>(BLOCK_SELECTOR);
+    const block = target.closest<HTMLElement>(EDITOR_BLOCK_SELECTOR);
     if (block) return root.contains(block) ? block : undefined;
     if (target !== root && !target.closest(EDITOR_SELECTOR)) return;
     for (const candidate of root.querySelectorAll<HTMLElement>(
-      BLOCK_SELECTOR,
+      EDITOR_BLOCK_SELECTOR,
     )) {
       const rect = candidate.getBoundingClientRect();
       if (y >= rect.top && y <= rect.bottom) return candidate;
@@ -126,7 +128,7 @@ export function bindEditorGutterClick(root: HTMLElement, editor: EditorJS) {
     if (!block) return;
     // A selected block is being acted on as a whole, as Editor.js does below
     // the last block too.
-    if (root.querySelector(SELECTED_BLOCK_SELECTOR)) return;
+    if (root.querySelector(EDITOR_SELECTED_BLOCK_SELECTOR)) return;
     // The fields of a block the editor lays out itself; the ones inside a
     // Vue tree of a block tool are that tool's own business.
     const inputs = Array.from(

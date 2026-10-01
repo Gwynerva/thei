@@ -32,11 +32,14 @@
  */
 
 import type EditorJS from '@editorjs/editorjs';
+import {
+  EDITOR_BLOCK_SELECTOR as BLOCK_SELECTOR,
+  EDITOR_SELECTED_BLOCK_SELECTOR as SELECTED_BLOCK_SELECTOR,
+  editorBlockOf,
+} from './editor-dom';
 import { hideKeyFromEditor } from './editor-keyboard-boundary';
 
-const BLOCK_SELECTOR = '.ce-block';
 const REDACTOR_SELECTOR = '.codex-editor__redactor';
-const SELECTED_BLOCK_SELECTOR = '.ce-block--selected';
 const OPEN_MENU_SELECTOR = '.ce-popover--opened';
 const FIELD_SELECTOR =
   '[contenteditable]:not([contenteditable="false"]), input, textarea, select';
@@ -253,9 +256,7 @@ export function bindEditorCurrentBlock(
   }
 
   function blockOf(target: EventTarget | null) {
-    if (!(target instanceof Element)) return undefined;
-    const block = target.closest<HTMLElement>(BLOCK_SELECTOR);
-    return block && root.contains(block) ? block : undefined;
+    return editorBlockOf(root, target);
   }
 
   function placeOf(target: Element, block: HTMLElement, object: boolean) {

@@ -1,7 +1,10 @@
 import type EditorJS from '@editorjs/editorjs';
+import {
+  EDITOR_BLOCK_SELECTOR as BLOCK_SELECTOR,
+  editorBlockOf,
+} from './editor-dom';
 
 const SETTINGS_BUTTON_SELECTOR = '.ce-toolbar__settings-btn';
-const BLOCK_SELECTOR = '.ce-block';
 const DROP_TARGET_CLASS = 'ce-block--drop-target';
 const DROP_TARGET_BEFORE_CLASS = 'ce-block--drop-target-before';
 const BLOCK_DRAG_MIME = 'application/x-thei-editor-block';
@@ -365,11 +368,7 @@ function settingsButtonFromEvent(event: Event) {
 }
 
 function blockFromEvent(root: HTMLElement, event: Event) {
-  const block =
-    event.target instanceof Element
-      ? event.target.closest<HTMLElement>(BLOCK_SELECTOR)
-      : null;
-  return block && root.contains(block) ? block : null;
+  return editorBlockOf(root, event.target) ?? null;
 }
 
 function placementAt(block: HTMLElement, y: number): DropPlacement {
