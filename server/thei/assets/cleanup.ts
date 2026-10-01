@@ -8,7 +8,7 @@ import {
 } from '#layers/thei/shared/asset';
 import { ASSET_ORPHAN_GRACE_MS } from '#layers/thei/shared/asset-library';
 import { backupSessionOpen } from '../backup/session';
-import { THEI_CONTENT_DIRS } from '../content-layout';
+import { OG_CARDS_DIR, THEI_CONTENT_DIRS } from '../content-layout';
 import { findOrphanedAssets } from './repository/find-orphaned';
 import { deleteStoredAsset } from './storage';
 import { sweepDraftDirectories } from './drafts';
@@ -123,7 +123,12 @@ async function sweepTemp() {
 }
 
 async function cleanupGeneratedMedia(cutoffMs: number) {
-  const files = await listFiles(THEI_SERVER.contentPath('generated-media'));
+  const root = THEI_SERVER.contentPath(THEI_CONTENT_DIRS.generatedMedia);
+  // The cards sweep themselves, by age and with their drawing's signature.
+  const cards = `${root}/${OG_CARDS_DIR}/`;
+  const files = (await listFiles(root)).filter(
+    (file) => !file.startsWith(cards),
+  );
   for (const file of files) {
     const fileStat = await stat(file).catch(() => null);
     if (!fileStat || fileStat.mtimeMs >= cutoffMs) continue;
@@ -198,8 +203,11 @@ async function cleanupDanglingUsages() {
 const MISSING_FILES_TOLERATED = { count: 20, share: 0.05 };
 
 async function cleanupMissingAssetFiles() {
-  const missing: { contentHash: string; extension: string; filePath: string }[] =
-    [];
+  const missing: {
+    contentHash: string;
+    extension: string;
+    filePath: string;
+  }[] = [];
   let total = 0;
   // Collected first, deleted after: deleting while paging by offset would
   // skip rows, and the decision needs the whole count.

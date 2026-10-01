@@ -1,5 +1,6 @@
 import { createError } from 'h3';
 import type { AssetUploadResponse } from '#layers/thei/shared/api/asset';
+import type { AssetUploadProgress } from '#layers/thei/shared/api/asset-upload-progress';
 import { AssetType } from '#layers/thei/shared/asset';
 import type {
   AssetMeta,
@@ -43,8 +44,8 @@ export interface CreateAssetVariantInput {
   familyUuid: string;
   sourceType: AssetType;
   settings: AssetUploadRequest;
-  onProgress?: (progress: number) => void;
-  onQueued?: () => void;
+  /** Told where the job is, for a client following it. */
+  onStatus?: (status: AssetUploadProgress) => void;
   /** Aborted when nobody waits for the result any more. */
   signal?: AbortSignal;
 }
@@ -93,10 +94,13 @@ export async function createAssetVariant(
     input.settings,
   );
 
-  if (isProcessingQueued(input.sourceType)) input.onQueued?.();
+  if (isProcessingQueued(input.sourceType)) {
+    input.onStatus?.({ phase: 'queued' });
+  }
   return await withProcessingSlot(
     input.sourceType,
     async () => {
+      input.onStatus?.({ phase: 'processing' });
       const known =
         input.settings.type === 'image-transform' ||
         input.settings.type === 'video-transform'
@@ -108,7 +112,13 @@ export async function createAssetVariant(
         input.sourceType,
         known,
       );
-      const processed = await renderAsset(input.source, settings, input);
+      const processed = await renderAsset(input.source, settings, {
+        signal: input.signal,
+        onProgress: (progress) =>
+          input.onStatus?.({ phase: 'processing', progress }),
+      });
+      await assertStillWanted(input.signal, processed, input.source);
+      input.onStatus?.({ phase: 'finishing' });
       return await commitProcessedAsset({
         processed,
         settings,
@@ -119,6 +129,24 @@ export async function createAssetVariant(
     },
     { signal: input.signal },
   );
+}
+
+/**
+ * Nothing is stored for a request that has gone. The check comes after the
+ * encode because an encode under way is not always stoppable: the signal
+ * kills ffmpeg, but sharp runs to the end. What it made is dropped, unless
+ * it is the source itself handed through, which is the caller's to keep.
+ */
+export async function assertStillWanted(
+  signal: AbortSignal | undefined,
+  processed: ProcessedAsset,
+  source: Pick<AssetSourceFile, 'path'>,
+) {
+  if (!signal?.aborted) return;
+  if (processed.bytes.path !== source.path) {
+    await discardAssetScratch(processed.bytes);
+  }
+  signal.throwIfAborted();
 }
 
 /**

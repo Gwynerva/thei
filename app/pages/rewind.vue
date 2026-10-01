@@ -13,11 +13,7 @@ const title = computed(() =>
     formatPublicMonthDay(rewind.value.referenceDate, language.value.code),
   ),
 );
-const ogImage = useOgImage(
-  'service',
-  () => 'rewind',
-  () => ['rewind'],
-);
+const ogImage = useOgImage(() => ({ kind: 'service', id: 'rewind' }));
 usePublicSeo({
   ogImage,
   title: computed(() => phrase.value.life_rewind_seo_title),
@@ -59,7 +55,7 @@ usePublicSeo({
       :title="title"
       :description="phrase.life_rewind_description"
     />
-    <div v-if="rewind.items.length" class="grid gap-md sm:grid-cols-2">
+    <div v-if="rewind.items.length" class="grid grid-cols-cards gap-md">
       <LifePointCard
         v-for="item in rewind.items"
         :key="item.point.key"

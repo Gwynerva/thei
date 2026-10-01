@@ -16,9 +16,9 @@ defineProps<{ secret: PublicSecretReference; decorative?: boolean }>();
   <span
     :role="decorative ? undefined : 'img'"
     :tabindex="decorative ? undefined : 0"
-    :aria-label="decorative ? undefined : secret.title"
+    :aria-label="decorative ? undefined : publicText(secret.title)"
     :aria-hidden="decorative ? 'true' : undefined"
-    :data-title-popup="decorative ? undefined : secret.title"
+    :data-title-popup="decorative ? undefined : publicText(secret.title)"
     class="block overflow-hidden"
     :class="{
       [`cursor-help focus-visible:ring-2 focus-visible:ring-accent

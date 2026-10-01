@@ -36,11 +36,19 @@ const heading = computed(() =>
   formatAbsolutePublicDate(data.value.date, language.value.code),
 );
 
-const ogImage = useOgImage(
-  'diary',
-  () => data.value.date,
-  () => [heading.value],
+const ogImage = useOgImage(() => ({ kind: 'diary', id: data.value.date }));
+const seoImage = computed(() =>
+  publicSeoImage(data.value.media, ogImage.value?.url),
 );
+/**
+ * When the entry last changed, if after its day. An entry is published on
+ * the day it is about, which may be long before it was typed in.
+ */
+const seoModified = computed(() => {
+  const { createdAt, updatedAt } = data.value.chronology;
+  const latest = updatedAt ?? createdAt;
+  return latest > data.value.date ? latest : undefined;
+});
 usePublicSeo({
   ogImage,
   markdown: true,
@@ -55,12 +63,16 @@ usePublicSeo({
       path: buildLifeUrl({ filter: ['diary-entry'] }),
     },
   ],
+  image: seoImage,
   entities: () => [
     {
       '@type': 'BlogPosting',
       '@id': '#diary-entry',
       headline: heading.value,
+      author: publicSeoOwner,
       datePublished: data.value.date,
+      ...(seoModified.value ? { dateModified: seoModified.value } : {}),
+      ...(seoImage.value ? { image: seoImage.value } : {}),
     },
   ],
 });

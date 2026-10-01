@@ -55,6 +55,7 @@ import { deleteAsset } from './assets/repository/delete';
 import { assetFilePath } from './assets/file-path';
 import {
   buildContentFieldValue,
+  buildContentPreviewMedia,
   findContentByOwner,
   prepareContentForSave,
 } from './content/repository';
@@ -156,6 +157,7 @@ export const THEI_SERVER = {
   content: {
     findByOwner: findContentByOwner,
     buildFieldValue: buildContentFieldValue,
+    buildPreviewMedia: buildContentPreviewMedia,
     prepareForSave: prepareContentForSave,
   },
   assets: {

@@ -20,6 +20,7 @@ import {
   bannerSizeKey,
   currentProjectUuidKey,
   otherItemsKey,
+  pendingUploadsKey,
   showcaseItemsKey,
   saveAfterContentEditKey,
   saveAfterItemEditKey,
@@ -45,6 +46,7 @@ import StatusHistoryField from '#layers/thei/app/components/settings/StatusHisto
 import ProjectActionSettings from './ProjectActionSettings.vue';
 import { externalLinkListItems } from '#layers/thei/shared/external-link';
 import { useExternalLinks } from '#layers/thei/app/composables/external-links';
+import { provideContentOwner } from '#layers/thei/app/composables/content-history/owner';
 
 const { projectUuid } = defineProps<{ projectUuid?: string }>();
 const route = useRoute();
@@ -99,12 +101,16 @@ const actionMedia = provideProjectActionMedia();
 
 const resolvedProjectUuid = ref<string | undefined>(projectUuid);
 provide(currentProjectUuidKey, resolvedProjectUuid);
+provideContentOwner('project', () => resolvedProjectUuid.value);
 
 const showcaseItems = ref<ShowcaseAssetGetItem[]>([]);
 provide(showcaseItemsKey, showcaseItems);
 
 const otherItems = ref<OtherAssetGetItem[]>([]);
 provide(otherItemsKey, otherItems);
+
+const pendingUploads = ref(0);
+provide(pendingUploadsKey, pendingUploads);
 
 const loadedStatuses = ref<ProfileHistoryPage<StatusHistoryItem>>();
 const statusField =
@@ -272,15 +278,10 @@ await useAdminTabTitle(
   ),
 );
 
-onMounted(() => {
-  window.addEventListener('beforeunload', handleBeforeUnload);
+useLeaveGuard({
+  dirty: () => isDirty.value,
+  pendingUploads: () => pendingUploads.value,
 });
-onUnmounted(() => {
-  window.removeEventListener('beforeunload', handleBeforeUnload);
-});
-function handleBeforeUnload(e: BeforeUnloadEvent) {
-  if (isDirty.value) e.preventDefault();
-}
 
 /**
  * Saving inside the content editor saves the whole entity too, but only when
@@ -415,12 +416,6 @@ function applySavedAction(action: ProjectEditData['action']) {
 function cloneProjectData(data: ProjectEditData): ProjectEditData {
   return JSON.parse(JSON.stringify(data)) as ProjectEditData;
 }
-onBeforeRouteLeave(() => {
-  if (interceptModalNavigation()) return false;
-  if (isDirty.value) {
-    return window.confirm(phrase.value.unsaved_changes_confirm);
-  }
-});
 
 async function openDeleteProjectModal() {
   if (!resolvedProjectUuid.value) return;
@@ -504,7 +499,10 @@ async function openDeleteProjectModal() {
           ? { type: 'project', id: resolvedProjectUuid }
           : undefined
       "
+      owner-type="project"
       :owner-title="projectData.title.trim() || phrase.new_project"
+      :owner-media="iconMedia"
+      :text="projectData.descriptionContent?.data"
     />
     <AdminTags
       v-model="tagsModel"

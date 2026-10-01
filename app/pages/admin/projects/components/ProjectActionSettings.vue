@@ -27,6 +27,7 @@ import { normalizeExternalLinkUrl } from '#layers/thei/shared/external-link';
 import {
   createExternalLinkDraft,
   useExternalLinks,
+  useExternalLinkTyping,
 } from '#layers/thei/app/composables/external-links';
 import { projectAssetUsageDelta } from '#layers/thei/shared/admin/project';
 import { assetDetailsModal } from '#layers/thei/app/modals/asset-details/modal';
@@ -173,9 +174,10 @@ function validUrl(value: string | undefined) {
   }
 }
 
-// The field is the action's own; the draft only follows it. Typing reads
-// nothing: the site is read once the address is done — pasted, left, or
-// confirmed with Enter.
+// The field is the action's own; the draft only follows it. The site is read
+// once typing into the field pauses, or when the address is done — pasted,
+// left, or confirmed with Enter. An address set by the page itself, such as
+// the stored one, is not read by following it.
 watch(
   () => action.value.externalUrl,
   (value) => {
@@ -183,11 +185,12 @@ watch(
   },
   { immediate: true },
 );
+const linkTyping = useExternalLinkTyping((options) =>
+  isLink.value ? linkDraft.commit(options) : undefined,
+);
 function commitLink() {
+  linkTyping.cancel();
   if (isLink.value) void linkDraft.commit();
-}
-function onLinkPaste() {
-  void nextTick(commitLink);
 }
 // A stored link shows at once; one the site has never seen is looked up
 // once, after hydration so the first render agrees with the server's.
@@ -370,8 +373,9 @@ function openFileAsset() {
                 type="url"
                 placeholder="https://example.com/"
                 autocomplete="off"
+                spellcheck="false"
+                @input="linkTyping.onInput"
                 @change="commitLink"
-                @paste="onLinkPaste"
                 @submit="commitLink"
               />
               <ExternalLinkPreviewCard

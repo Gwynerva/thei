@@ -98,7 +98,7 @@ const buttonStyle = computed(() => ({
       class="action-icon shrink-0 text-xl"
     />
     <span class="action-label truncate">{{
-      text || phrase.project_action_placeholder
+      publicText(text) || phrase.project_action_placeholder
     }}</span>
   </component>
 </template>
@@ -116,11 +116,20 @@ const buttonStyle = computed(() => ({
     color-mix(in oklab, var(--action-color) 72%, white)
   );
 }
-.project-action-button:is(:hover, :focus-visible) {
+.project-action-button:focus-visible {
   border-color: var(--action-color);
   box-shadow:
     0 0 0.35rem color-mix(in oklab, var(--action-color) 55%, transparent),
     0 0 1.1rem color-mix(in oklab, var(--action-color) 35%, transparent);
+}
+
+@media (hover: hover) {
+  .project-action-button:hover {
+    border-color: var(--action-color);
+    box-shadow:
+      0 0 0.35rem color-mix(in oklab, var(--action-color) 55%, transparent),
+      0 0 1.1rem color-mix(in oklab, var(--action-color) 35%, transparent);
+  }
 }
 .project-action-button.has-image {
   border-color: transparent;

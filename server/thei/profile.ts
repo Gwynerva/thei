@@ -24,7 +24,7 @@ import {
   type AssetContainerType,
   type AssetRole,
 } from '#layers/thei/shared/asset';
-import { validateExternalLinkList } from '#layers/thei/shared/external-link';
+import { validateNamedExternalLinkList } from '#layers/thei/shared/external-link';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
 import { buildAdminAssetUrls, buildPublicProfileMedia } from './assets/urls';
 import { resolveGeneratedIcon } from './media/generated-icon';
@@ -316,10 +316,9 @@ export async function saveProfile(input: ProfileEditData) {
     invalid,
     ids,
     optionalId,
-    text,
   });
   const links =
-    validateExternalLinkList(input.externalLinks, invalid) ??
+    validateNamedExternalLinkList(input.externalLinks, invalid) ??
     invalid('Invalid links');
   const { db, schema } = THEI_SERVER.useDb();
   const current = getProfile();

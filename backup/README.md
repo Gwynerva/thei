@@ -92,12 +92,17 @@ once it is renamed into place.
 ## When the site shrinks
 
 Before downloading anything, the client compares the site with the last
-backup. If it lost more than 30% of its files or of its size, or more than 30%
-(and more than two) of its projects, events, diary entries or pages, the run
-stops: nothing is copied, no old copy is rotated out, and the client raises the
-alarm — `ALERT.txt` in the destination folder, the `alertCommand`, a dialog on
-Windows, a desktop notification or `wall` message elsewhere, and a window left
-open when someone is watching. Every later run stops the same way.
+backup. If it lost more than 30% of the files it uses or of their size, or more
+than 30% (and more than two) of its projects, events, diary entries or pages,
+the run stops. A file nothing on the site uses any more — an original kept a
+day for the editor, a variant replaced, a video taken out of every text — is
+not counted: the site's cleanup removes it, and its going is no loss.
+
+When the run stops, nothing is copied, no old copy is rotated out, and the
+client raises the alarm — `ALERT.txt` in the destination folder, the
+`alertCommand`, a dialog on Windows, a desktop notification or `wall` message
+elsewhere, and a window left open when someone is watching. Every later run
+stops the same way.
 
 If the site lost that much on purpose, choose **Back up anyway** in the menu (or
 run with `--force`) to accept the new size.

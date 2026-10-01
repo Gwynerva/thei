@@ -6,7 +6,7 @@ import {
 import {
   datePresentationToneClass,
   getPublicDatePresentation,
-  publicDatePrecisionLabels,
+  publicDatePrecisionOptions,
 } from '#layers/thei/app/composables/public-date';
 
 const props = defineProps<{ items: PublicDetailTimelineItem[] }>();
@@ -18,7 +18,7 @@ const orderedItems = computed(() =>
       item.date,
       language.value.code,
       new Date(liveNow.value),
-      { relativeMonths: 3, precisionLabels: publicDatePrecisionLabels() },
+      { relativeMonths: 3, ...publicDatePrecisionOptions() },
     ),
   })),
 );

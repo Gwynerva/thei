@@ -16,6 +16,7 @@ import {
   type ContentFieldModelValue,
 } from '../content';
 import { isOneOf } from '../utils/isOneOf';
+import { optionalContentDraftRef } from '../content-history';
 import {
   normalizeProjectContentSections,
   normalizeProjectStages,
@@ -33,6 +34,7 @@ import {
 } from '../project-action';
 import {
   validateExternalLinkList,
+  type ExternalLinkListInput,
   type ExternalLinkListItem,
 } from '../external-link';
 import {
@@ -87,10 +89,11 @@ export type ProjectEditData = Partial<StatusEditData> & {
 
 export type ValidatedProjectEditData = Omit<
   ProjectEditData,
-  'access' | 'action'
+  'access' | 'action' | 'externalLinks'
 > & {
   access: ProjectEventAccessLevel;
   action: ProjectActionEditData;
+  externalLinks?: ExternalLinkListInput[];
 };
 
 export function projectAssetUsageDelta(
@@ -305,6 +308,7 @@ function validateContentField(
     ...(typeof value.updatedAt === 'number' && Number.isFinite(value.updatedAt)
       ? { updatedAt: value.updatedAt }
       : {}),
+    ...optionalContentDraftRef(value.draftRef),
   };
 }
 

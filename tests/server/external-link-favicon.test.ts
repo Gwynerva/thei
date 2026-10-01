@@ -46,9 +46,9 @@ describe('external link favicon files', () => {
     expect(hue).toBeLessThan(280);
   });
 
-  it('cache-busts a refreshed favicon URL', () => {
-    expect(externalLinkMedia('key', { hue: 240, chroma: 0.15 }, 123).src).toBe(
-      '/media/external-link-favicons/key.webp?v=123',
+  it('addresses a favicon by its name alone, which is its content', () => {
+    expect(externalLinkMedia('key', { hue: 240, chroma: 0.15 }).src).toBe(
+      '/media/external-link-favicons/key.webp',
     );
   });
 

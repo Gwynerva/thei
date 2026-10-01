@@ -125,11 +125,22 @@ export type PublicFile = PublicAssetDescriptor;
 
 export type PublicReferenceLink = {
   kind: 'external' | ContentEntityType;
+  /**
+   * What the target calls itself: an entity's title, or the linked page's own
+   * title or hostname — the latter keep their own typography, and a hostname
+   * none at all.
+   */
   title: string;
   /** The day of a diary entry, shown in place of the title it lacks. */
   date?: string;
   href: string;
   description?: string;
+  /**
+   * The owner's word on why the link is there, or why the entity is related.
+   * It is shown under the target's own title and description, never in
+   * place of them.
+   */
+  note?: string;
   iconMedia?: MediaDescriptor;
   relationType?: RelationType;
 };
@@ -194,6 +205,13 @@ export type PublicNeighbour = {
   media?: MediaDescriptor;
   /** The day of a diary entry, shown in place of the title it lacks. */
   date?: string;
+  /** When a stage was, shown under its title. */
+  period?: DatedPeriod;
+  /**
+   * What a section is about, or how a diary entry begins, as the viewer may
+   * read it.
+   */
+  summary?: string;
 };
 
 /**
@@ -286,6 +304,8 @@ export type PublicEventResponseFull = {
   periods: DatedPeriod[];
   /** `updatedAt` only when the event was edited on a later day. */
   chronology: { createdAt: string; updatedAt?: string };
+  /** What stands for the event in a card: its first picture, or its icon. */
+  media: MediaDescriptor;
   content: PublicContentOutputData;
   references: PublicReferences;
   tags: PublicTagSummary[];
@@ -308,6 +328,8 @@ export type PublicDiaryResponse = {
    * `updatedAt` only when it was edited on a later day than it was written.
    */
   chronology: { createdAt: string; updatedAt?: string };
+  /** What stands for the entry in a card: its first picture, or its icon. */
+  media: MediaDescriptor;
   content: PublicContentOutputData;
   references: PublicReferences;
   related: PublicRelatedCounts;

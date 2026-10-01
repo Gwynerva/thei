@@ -131,6 +131,31 @@ const fieldValue = computed<ContentFieldModelValue>(() => ({
         class="h-120"
       />
     </div>
+    <div class="mx-auto grid max-w-72 gap-sm p-sm" data-narrow-card>
+      <PublicContentCard
+        href="#"
+        title="Narrow card"
+        summary="A card in a narrow column, with a wide picture"
+        date="2026-09-02"
+        :media="banner"
+      />
+      <ContentEntityLinkPreviewCard
+        entity-type="project"
+        title="An internal link with a title too long for a narrow column"
+        summary="Project, page or event"
+        :icon-media="banner"
+        :interactive="false"
+      />
+    </div>
+    <div class="mx-auto grid max-w-72 gap-sm p-sm" data-generated-card>
+      <PublicContentCard
+        href="#"
+        title="Drawn icon"
+        summary="A card whose picture is the icon drawn for its kind"
+        date="2026-09-02"
+        :media="{ ...image('square'), generated: true }"
+      />
+    </div>
     <div class="mx-auto grid max-w-180 gap-sm p-sm" data-admin-previews>
       <FieldContentEditor :model-value="fieldValue" data-test-field />
       <AssetTile

@@ -1,6 +1,6 @@
 import {
   contentBlockIsInPrivateSection,
-  contentPrivateSectionRanges,
+  normalizedContentPrivateSectionRanges,
   normalizeContentData,
   type ContentAssetData,
   type ContentOutputData,
@@ -14,11 +14,13 @@ import {
   type ContentLinkReference,
 } from './content-link';
 import { contentIntegrationUrl } from './content-integrations';
+import { externalLinkIdentity } from './external-link';
 
 /**
  * A link found in content, together with the owner's note about it if there is
- * one. The first mention wins: a note written once should not be overruled by
- * a bare second mention of the same address.
+ * one. A link mentioned several times is listed once, where it first appears,
+ * with the first note written for it: a bare mention neither overrules a note
+ * nor hides one written further on.
  */
 export type ContentReferenceLinkCandidate = { note?: string } & (
   ContentExternalReference | ContentEntityReference
@@ -40,19 +42,28 @@ export function extractContentReferenceCandidates(
   includePrivate = false,
 ): ContentReferenceCandidates {
   const data = normalizeContentData(value);
-  const privateSectionRanges = contentPrivateSectionRanges(data);
+  const privateSectionRanges = normalizedContentPrivateSectionRanges(data);
   const links: ContentReferenceLinkCandidate[] = [];
   const files: ContentReferenceFileCandidate[] = [];
-  const linkKeys = new Set<string>();
+  const linkByKey = new Map<string, ContentReferenceLinkCandidate>();
   const fileKeys = new Set<string>();
 
-  const append = (reference: ContentLinkReference, note?: string) => {
+  const append = (reference: ContentLinkReference, note?: unknown) => {
+    const text = typeof note === 'string' && note ? note : undefined;
     const key = contentLinkReferenceKey(reference);
-    if (linkKeys.has(key)) return;
-    linkKeys.add(key);
-    links.push({ ...reference, ...(note ? { note } : {}) });
+    const known = linkByKey.get(key);
+    if (known) {
+      if (!known.note && text) known.note = text;
+      return;
+    }
+    const link: ContentReferenceLinkCandidate = {
+      ...reference,
+      ...(text ? { note: text } : {}),
+    };
+    linkByKey.set(key, link);
+    links.push(link);
   };
-  const appendExternal = (url: string, note?: string) =>
+  const appendExternal = (url: string, note?: unknown) =>
     append({ kind: 'external', url }, note);
 
   for (const [index, block] of data.blocks.entries()) {
@@ -64,7 +75,7 @@ export function extractContentReferenceCandidates(
       continue;
 
     if (block.type === 'externalLink') {
-      appendExternal(block.data.url as string);
+      appendExternal(block.data.url as string, block.data.note);
     } else if (block.type === 'integration') {
       const url = contentIntegrationUrl(block.data);
       if (url) appendExternal(url);
@@ -73,7 +84,7 @@ export function extractContentReferenceCandidates(
         block.data.entityType,
         block.data.entityId,
       );
-      if (reference) append(reference);
+      if (reference) append(reference, block.data.note);
     } else if (block.type === 'contentAttachment') {
       const asset = block.data.asset as ContentAssetData | null;
       if (asset) {
@@ -110,4 +121,40 @@ export function extractContentReferenceCandidates(
   }
 
   return { links, files };
+}
+
+/**
+ * The pages a text links to by address, told apart as a reader tells them
+ * (`externalLinkIdentity`): what a list of links kept beside the text would
+ * repeat. Private sections count, since their owner reads them too.
+ */
+export function contentExternalLinkIdentities(
+  value: ContentOutputData | null | undefined,
+): Set<string> {
+  return new Set(
+    extractContentReferenceCandidates(value, true).links.flatMap((link) =>
+      link.kind === 'external' ? [externalLinkIdentity(link.url)] : [],
+    ),
+  );
+}
+
+/**
+ * The entities a text links to, each once, in the order the text first names
+ * them: what the owner already points at, and may well want to relate to.
+ * Private sections count, since their owner wrote them.
+ */
+export function contentEntityMentions(
+  value: ContentOutputData | null | undefined,
+): ContentEntityReference[] {
+  return extractContentReferenceCandidates(value, true).links.flatMap((link) =>
+    link.kind === 'entity'
+      ? [
+          {
+            kind: 'entity' as const,
+            entityType: link.entityType,
+            entityId: link.entityId,
+          },
+        ]
+      : [],
+  );
 }

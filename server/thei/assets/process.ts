@@ -229,6 +229,7 @@ export async function processFileZipAsset(
   const outputPath = theiTempPath(`thei-zip-out-${randomUUID()}.zip`);
   await zipFileToPath(source.path, source.size, source.extension, outputPath, {
     onProgress: options.onProgress,
+    signal: options.signal,
   });
   return {
     bytes: await fileBytes(outputPath),
@@ -250,6 +251,11 @@ export async function processMediaTransformAsset(
   return await processVideoToWebm(source, settings, options);
 }
 
+/**
+ * A started sharp encode cannot be stopped: there is no signal to hand it,
+ * and it runs to the end in the thread pool. Callers check their signal
+ * before starting it and again before storing what it made.
+ */
 async function processImage(
   source: AssetSourceFile,
   settings: AssetImageTransformSettings,

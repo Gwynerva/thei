@@ -1,5 +1,10 @@
 import type { DateRange } from '#layers/thei/shared/date-range';
 import {
+  formatAbsolutePublicDate,
+  formatPublicDateRange,
+  toUtcDate,
+} from '#layers/thei/shared/public-date-format';
+import {
   datePrecisionTone,
   isApproximateDate,
   type DatedPeriod,
@@ -10,6 +15,10 @@ import {
   TITLE_POPUP_GAP,
   type TitlePopupLine,
 } from '#layers/thei/app/composables/title-popup-content';
+
+// The spelling of dates is shared with the server, which draws them on
+// Open Graph cards; the page's own presentation of them stays here.
+export { formatAbsolutePublicDate };
 
 export type PublicDateValue = string | DateRange | DatedPeriod;
 
@@ -30,7 +39,23 @@ export type PublicDatePresentationOptions = {
    * the language, so the caller hands it the phrases.
    */
   precisionLabels?: Partial<Record<DatePrecision, string>>;
+  /** Gives the owner's words for the doubt their typography. */
+  formatNote?: (note: string) => string;
 };
+
+/**
+ * The wording of a doubt in the current language: the precision phrases and
+ * the owner's typography for their own note, for the options above.
+ */
+export function publicDatePrecisionOptions(): Pick<
+  PublicDatePresentationOptions,
+  'precisionLabels' | 'formatNote'
+> {
+  return {
+    precisionLabels: publicDatePrecisionLabels(),
+    formatNote: publicText,
+  };
+}
 
 /**
  * The wording of each level of doubt. The formatter knows the precision but
@@ -110,11 +135,13 @@ export function approximateDateTitle(
   precision: DatePrecision,
   note: string,
   precisionLabels: Partial<Record<DatePrecision, string>>,
+  formatNote: (note: string) => string = (text) => text,
 ): TitlePopupLine[] {
   const lines: TitlePopupLine[] = [];
   const level = precisionLabels[precision];
   if (level) lines.push(level);
-  if (note) lines.push(TITLE_POPUP_GAP, { text: note, italic: true });
+  if (note)
+    lines.push(TITLE_POPUP_GAP, { text: formatNote(note), italic: true });
   return lines;
 }
 
@@ -135,6 +162,7 @@ function withPrecision(
       value.precision,
       value.precisionNote,
       options.precisionLabels ?? {},
+      options.formatNote,
     ),
   ];
   return {
@@ -143,40 +171,6 @@ function withPrecision(
     tone: datePrecisionTone(value.precision),
     title: title.length ? title : undefined,
   };
-}
-
-export function formatAbsolutePublicDate(
-  date: string,
-  locale: string,
-  style: 'long' | 'short' = 'long',
-): string {
-  const parts = new Intl.DateTimeFormat(locale, {
-    day: style === 'short' ? '2-digit' : 'numeric',
-    month: style === 'short' ? '2-digit' : 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).formatToParts(new Date(`${date}T00:00:00Z`));
-
-  while (parts.at(-1)?.type === 'literal') parts.pop();
-  return parts.map((part) => part.value).join('');
-}
-
-function formatPublicDateRange(
-  period: DateRange,
-  locale: string,
-  style: 'long' | 'short',
-): string {
-  const formatter = new Intl.DateTimeFormat(locale, {
-    day: style === 'short' ? '2-digit' : 'numeric',
-    month: style === 'short' ? '2-digit' : 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
-  return formatter
-    .formatRange(toUtcDate(period.startDate), toUtcDate(period.endDate))
-    .replaceAll(/\s*г\./g, '')
-    .replaceAll(' – ', ' — ')
-    .trim();
 }
 
 function formatRecentPublicDate(
@@ -224,10 +218,6 @@ function formatRecentPublicDate(
     style,
   }).format(-months, 'month');
   return style === 'long' ? formatted.replace(/^1\s+/u, '') : formatted;
-}
-
-function toUtcDate(date: string) {
-  return new Date(`${date}T00:00:00Z`);
 }
 
 function clampedUtcDate(year: number, month: number, day: number) {

@@ -1,11 +1,14 @@
 <script lang="ts" setup>
 import type { ProfileHistoryPage } from '#layers/thei/shared/profile';
-import type {
-  NewStatus,
-  StatusHistoryItem,
-  UpdatedStatus,
+import {
+  canAppendEmptyStatus,
+  compareStatusesNewestFirst,
+  type NewStatus,
+  type StatusHistoryItem,
+  type UpdatedStatus,
 } from '#layers/thei/shared/status';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
+import { toDateString } from '#layers/thei/shared/date-range';
 import { statusModal } from '#layers/thei/app/modals/status/modal';
 
 /**
@@ -53,6 +56,7 @@ const visibleStatuses = computed<StatusHistoryItem[]>(() => {
       const preview = pendingPreviews.get(status.id);
       return {
         id: status.id,
+        date: status.date ?? toDateString(new Date()),
         createdAt: preview?.createdAt ?? 0,
         kind: status.kind,
         text: status.kind === 'regular' ? status.text : '',
@@ -62,7 +66,6 @@ const visibleStatuses = computed<StatusHistoryItem[]>(() => {
         ...(preview?.media ? { media: preview.media } : {}),
       };
     })
-    .reverse()
     .concat(
       history.items.value.map((status) => {
         const update = updates.get(status.id);
@@ -71,41 +74,67 @@ const visibleStatuses = computed<StatusHistoryItem[]>(() => {
         const media = editedMedia.get(status.id);
         return {
           ...rest,
-          // Editing is how an empty status is filled in.
-          kind: 'regular' as const,
+          // Anything to say is how an empty status is filled in; without it
+          // an empty one has only moved to another day.
+          kind:
+            update.text || update.assetUuid ? ('regular' as const) : rest.kind,
           text: update.text,
+          date: update.date ?? rest.date,
           ...(update.assetUuid ? { assetUuid: update.assetUuid } : {}),
           ...(media ? { media } : {}),
         };
       }),
     )
-    .filter((status) => !deleted.has(status.id));
+    .filter((status) => !deleted.has(status.id))
+    .sort(compareStatusesNewestFirst);
 });
-const canAddEmptyStatus = computed(
-  () => visibleStatuses.value[0]?.kind === 'regular',
-);
+
+/**
+ * Whether an empty status may stand on this day: only right above a regular
+ * one, and never right under another empty one. A new status is written after
+ * everything else, so it goes on top of its day; an edited one keeps its place
+ * among the statuses of the day. Pages load from the newest, so the status
+ * above is always at hand; when the loaded pages hold nothing older, the rest
+ * of the history decides, and only the server has it.
+ */
+function canBeEmptyOn(date: string, item?: StatusHistoryItem) {
+  const self = {
+    id: item?.id ?? '',
+    date,
+    createdAt: item?.createdAt ?? Number.MAX_SAFE_INTEGER,
+  };
+  const others = visibleStatuses.value.filter(
+    (status) => status.id !== self.id,
+  );
+  const olderIndex = others.findIndex(
+    (status) => compareStatusesNewestFirst(self, status) < 0,
+  );
+  const older = olderIndex < 0 ? undefined : others[olderIndex];
+  const newer = others[(olderIndex < 0 ? others.length : olderIndex) - 1];
+  if (newer?.kind === 'empty') return false;
+  return older
+    ? canAppendEmptyStatus(older.kind)
+    : Boolean(history.cursor.value);
+}
 
 async function addStatus() {
   const result = await openModal(statusModal, {
     usageDelta,
-    canAddEmptyStatus: canAddEmptyStatus.value,
+    canBeEmptyOn: (date: string) => canBeEmptyOn(date),
   });
   if (result.type !== 'save') return;
-  if (result.kind === 'regular')
-    newStatuses.value = [
-      ...newStatuses.value,
-      {
-        id: result.id,
-        kind: 'regular',
-        text: result.text,
-        assetUuid: result.assetUuid,
-      },
-    ];
-  else
-    newStatuses.value = [
-      ...newStatuses.value,
-      { id: result.id, kind: 'empty' },
-    ];
+  newStatuses.value = [
+    ...newStatuses.value,
+    result.kind === 'regular'
+      ? {
+          id: result.id,
+          kind: 'regular',
+          text: result.text,
+          assetUuid: result.assetUuid,
+          date: result.date,
+        }
+      : { id: result.id, kind: 'empty', date: result.date },
+  ];
   pendingPreviews.set(result.id, {
     createdAt: Date.now(),
     media: result.kind === 'regular' ? result.media : undefined,
@@ -116,48 +145,53 @@ async function editStatus(item: StatusHistoryItem) {
   // An empty status opens blank and becomes a regular one once filled in.
   const result = await openModal(statusModal, {
     usageDelta,
-    canAddEmptyStatus: false,
-    initial:
-      item.kind === 'regular'
-        ? {
-            id: item.id,
-            text: item.text,
-            assetUuid: item.assetUuid,
-            media: item.media,
-          }
-        : { id: item.id, text: '' },
+    canBeEmptyOn: (date: string) => canBeEmptyOn(date, item),
+    initial: {
+      id: item.id,
+      kind: item.kind,
+      date: item.date,
+      text: item.kind === 'regular' ? item.text : '',
+      ...(item.kind === 'regular'
+        ? { assetUuid: item.assetUuid, media: item.media }
+        : {}),
+    },
   });
-  if (result.type !== 'save' || result.kind !== 'regular') return;
+  if (result.type !== 'save') return;
+  const text = result.kind === 'regular' ? result.text : '';
+  const assetUuid = result.kind === 'regular' ? result.assetUuid : undefined;
   if (newStatuses.value.some((s) => s.id === item.id)) {
     newStatuses.value = newStatuses.value.map((s) =>
-      s.id === item.id
-        ? {
-            id: s.id,
-            kind: 'regular',
-            text: result.text,
-            assetUuid: result.assetUuid,
-          }
-        : s,
+      s.id !== item.id
+        ? s
+        : result.kind === 'regular'
+          ? { id: s.id, kind: 'regular', text, assetUuid, date: result.date }
+          : { id: s.id, kind: 'empty', date: result.date },
     );
     const preview = pendingPreviews.get(item.id);
-    if (preview) preview.media = result.media;
+    if (preview)
+      preview.media = result.kind === 'regular' ? result.media : undefined;
     return;
   }
   const saved = history.items.value.find((s) => s.id === item.id);
   const updates = updatedStatuses.value.filter((s) => s.id !== item.id);
   // Editing a status back to what is stored leaves nothing to save.
   if (
-    saved?.kind !== 'regular' ||
-    saved.text !== result.text ||
-    (saved?.assetUuid ?? undefined) !== result.assetUuid
+    saved?.kind !== result.kind ||
+    saved.text !== text ||
+    (saved.assetUuid ?? undefined) !== assetUuid ||
+    saved.date !== result.date
   )
     updates.push({
       id: item.id,
-      text: result.text,
-      ...(result.assetUuid ? { assetUuid: result.assetUuid } : {}),
+      text,
+      date: result.date,
+      ...(assetUuid ? { assetUuid } : {}),
     });
   updatedStatuses.value = updates;
-  editedMedia.set(item.id, result.media);
+  editedMedia.set(
+    item.id,
+    result.kind === 'regular' ? result.media : undefined,
+  );
 }
 
 function removeStatus(id: string) {

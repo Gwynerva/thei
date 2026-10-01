@@ -51,7 +51,10 @@ function onPreviewClick(event: MouseEvent) {
   emit('edit');
 }
 
-const resolvedTitle = computed(() => props.title || props.fallbackTitle);
+// The owner's title gets their typography; a file name stays as it is.
+const resolvedTitle = computed(
+  () => publicText(props.title) || props.fallbackTitle,
+);
 const details = computed(() =>
   [
     props.asset.extension?.toUpperCase(),
@@ -141,7 +144,7 @@ const details = computed(() =>
         v-else-if="description"
         class="line-clamp-2 text-sm leading-snug text-text-2"
       >
-        {{ description }}
+        {{ publicText(description) }}
       </span>
 
       <span
@@ -189,7 +192,7 @@ const details = computed(() =>
   );
 }
 
-.attachment-card-interactive:is(:hover, :focus-visible) {
+.attachment-card-interactive:focus-visible {
   background-color: color-mix(
     in oklab,
     var(--color-accent) 6%,
@@ -197,12 +200,33 @@ const details = computed(() =>
   );
 }
 
-.attachment-card-interactive:is(:hover, :focus-visible) .attachment-card-tile,
-.attachment-card-tile-editable:is(:hover, :focus-visible) {
+@media (hover: hover) {
+  .attachment-card-interactive:hover {
+    background-color: color-mix(
+      in oklab,
+      var(--color-accent) 6%,
+      var(--color-bg-2)
+    );
+  }
+}
+
+.attachment-card-interactive:focus-visible .attachment-card-tile,
+.attachment-card-tile-editable:focus-visible {
   background-color: color-mix(
     in oklab,
     var(--color-accent) 20%,
     var(--color-bg-2)
   );
+}
+
+@media (hover: hover) {
+  .attachment-card-interactive:hover .attachment-card-tile,
+  .attachment-card-tile-editable:hover {
+    background-color: color-mix(
+      in oklab,
+      var(--color-accent) 20%,
+      var(--color-bg-2)
+    );
+  }
 }
 </style>

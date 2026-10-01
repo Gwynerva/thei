@@ -22,6 +22,7 @@ import {
 } from '../../thei/public/entities';
 import { siteViewer } from '../../thei/access-links/viewer';
 import { buildSecretReference } from '../../thei/public/secret';
+import { listPublicTagCountsByUse } from '../../thei/public/tags';
 
 export default defineEventHandler(
   async (event): Promise<PublicProfileResponse> => {
@@ -36,9 +37,6 @@ export default defineEventHandler(
       .from(schema.projects)
       .all()
       .sort((a, b) => b.updatedAt - a.updatedAt);
-    const projects = allProjects.filter((p) =>
-      canListPublicEntity(p.access, isAdmin),
-    );
     const showcaseProjects = db
       .select()
       .from(schema.projects)
@@ -58,49 +56,7 @@ export default defineEventHandler(
       .from(schema.events)
       .all()
       .sort((a, b) => b.updatedAt - a.updatedAt);
-    const events = allEvents.filter((p) =>
-      canListPublicEntity(p.access, isAdmin),
-    );
-    const projectIds = new Set(projects.map((p) => p.projectUuid));
-    const eventIds = new Set(events.map((p) => p.eventUuid));
-    const usages = db.select().from(schema.tagUsages).all();
-    const counts = new Map<
-      string,
-      { projectCount: number; eventCount: number }
-    >();
-    for (const usage of usages) {
-      const count = counts.get(usage.tagUuid) ?? {
-        projectCount: 0,
-        eventCount: 0,
-      };
-      if (
-        usage.containerType === 'project' &&
-        projectIds.has(usage.containerId)
-      )
-        count.projectCount += 1;
-      else if (
-        usage.containerType === 'event' &&
-        eventIds.has(usage.containerId)
-      )
-        count.eventCount += 1;
-      counts.set(usage.tagUuid, count);
-    }
-    const tags = db
-      .select()
-      .from(schema.tags)
-      .all()
-      .map((tag) => ({
-        tag,
-        projectCount: counts.get(tag.tagUuid)?.projectCount ?? 0,
-        eventCount: counts.get(tag.tagUuid)?.eventCount ?? 0,
-      }))
-      .filter((t) => t.projectCount + t.eventCount > 0)
-      .sort(
-        (a, b) =>
-          b.projectCount + b.eventCount - a.projectCount - a.eventCount ||
-          a.tag.title.localeCompare(b.tag.title),
-      )
-      .slice(0, 5);
+    const tags = listPublicTagCountsByUse(isAdmin).slice(0, 5);
     const [
       aboutContent,
       pinnedPages,

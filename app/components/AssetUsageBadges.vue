@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import type { AssetUsageCounts } from '#layers/thei/shared/asset-library';
-import { assetSourceIcon } from '../composables/asset-library-labels';
+import {
+  assetSourceIcon,
+  assetSourceLabel,
+} from '../composables/asset-library-labels';
 defineProps<{ counts: AssetUsageCounts }>();
-const labels = computed(() => ({
-  project: phrase.value.project,
-  event: phrase.value.event,
-  page: phrase.value.page,
-  'diary-entry': phrase.value.diary_entry,
-  tag: phrase.value.tag,
-  profile: phrase.value.asset_source_profile,
-}));
+const labels = computed(
+  () =>
+    Object.fromEntries(
+      (Object.keys(assetSourceIcon) as (keyof typeof assetSourceIcon)[]).map(
+        (type) => [type, assetSourceLabel({ type })],
+      ),
+    ) as Record<keyof typeof assetSourceIcon, string>,
+);
 </script>
 <template>
   <div

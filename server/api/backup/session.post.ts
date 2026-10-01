@@ -28,6 +28,8 @@ export default defineEventHandler(async (event) => {
       ['sessionId', session.sessionId],
       ['totalFiles', session.totalFiles],
       ['totalBytes', session.totalBytes],
+      ['usedFiles', session.usedFiles],
+      ['usedBytes', session.usedBytes],
       ...session.skipped.map((name) => ['skipped', name]),
       // `count <entity> <n>`: a client that does not know the field skips it.
       ...Object.entries(session.counts ?? {}).map(([entity, count]) => [

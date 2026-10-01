@@ -8,6 +8,7 @@ import { baselineSql, migrationRegistry } from '../../update/migrations';
 import { runPendingMigrations, seedLedger } from '../../update/migrations/run';
 import { schema_0_0_1 } from './fixtures/schema-0.0.1';
 import { migrations_0_0_2, schema_0_0_2 } from './fixtures/schema-0.0.2';
+import { migrations_0_0_3, schema_0_0_3 } from './fixtures/schema-0.0.3';
 
 /**
  * The upgrade every existing site takes: a database and a config exactly as
@@ -206,6 +207,18 @@ async function createSite_0_0_1() {
     faviconKey: 'key',
     touchedAt: now,
   });
+  insert('project-external-links', {
+    projectUuid: 'project-a',
+    url: 'https://example.com/',
+    name: 'Where it all began',
+    sortOrder: 0,
+  });
+  insert('event-external-links', {
+    eventUuid: 'event-a',
+    url: 'https://example.com/',
+    name: 'Example',
+    sortOrder: 0,
+  });
 
   await writeFile(
     contentPath('thei.config.json'),
@@ -240,8 +253,14 @@ describe('upgrading a 0.0.1 site', () => {
     await runPendingMigrations(rawDb, { contentPath });
     const all = (query: string) => rawDb.prepare(query).all();
 
-    expect(all('SELECT ownerType, ownerId, text FROM statuses')).toEqual([
-      { ownerType: 'profile', ownerId: 'profile', text: 'Writing a thesis' },
+    // Dated by the day it has always been shown under.
+    expect(all('SELECT ownerType, ownerId, text, date FROM statuses')).toEqual([
+      {
+        ownerType: 'profile',
+        ownerId: 'profile',
+        text: 'Writing a thesis',
+        date: '2026-09-01',
+      },
     ]);
 
     // Stored once, smaller `type:id` first, direction and notes turned with it.
@@ -288,6 +307,14 @@ describe('upgrading a 0.0.1 site', () => {
     ).toEqual([
       { startDate: '2026-01-01', endDate: '2026-02-01', precision: 'exact' },
     ]);
+
+    // A link's own name is its note now; one repeating the site's title goes.
+    expect(all('SELECT url, note FROM `project-external-links`')).toEqual([
+      { url: 'https://example.com/', note: 'Where it all began' },
+    ]);
+    expect(all('SELECT url, note FROM `event-external-links`')).toEqual([
+      { url: 'https://example.com/', note: '' },
+    ]);
   });
 
   it('brings the config to the shape this release reads', async () => {
@@ -318,6 +345,25 @@ describe('upgrading a 0.0.2 site', () => {
     seedLedger(
       rawDb,
       migrationRegistry.filter(({ id }) => migrations_0_0_2.includes(id)),
+    );
+    await runPendingMigrations(rawDb, { contentPath });
+
+    const fresh = new Database(':memory:');
+    try {
+      for (const statement of baselineSql) fresh.prepare(statement).run();
+      expect(describeSchema(rawDb)).toEqual(describeSchema(fresh));
+    } finally {
+      fresh.close();
+    }
+  });
+});
+
+describe('upgrading a 0.0.3 site', () => {
+  it('ends with the schema a new installation starts from', async () => {
+    for (const statement of schema_0_0_3) rawDb.prepare(statement).run();
+    seedLedger(
+      rawDb,
+      migrationRegistry.filter(({ id }) => migrations_0_0_3.includes(id)),
     );
     await runPendingMigrations(rawDb, { contentPath });
 

@@ -11,6 +11,10 @@ import assetRecipeCrops from './0.0.2-asset-recipes';
 import externalLinkStatus from './0.0.2-external-link-status';
 import tagNames from './0.0.2-tag-names';
 import configShape from './0.0.2-config-shape';
+import statusDates from './0.0.3-status-dates';
+import contentHistory from './0.0.3-content-history';
+import sharedLinkFavicons from './0.0.3-shared-link-favicons';
+import externalLinkNotes from './0.0.3-external-link-notes';
 
 /**
  * Every migration Thei has ever shipped, oldest first.
@@ -35,6 +39,10 @@ export const migrationRegistry: TheiMigration[] = [
   externalLinkStatus,
   tagNames,
   configShape,
+  statusDates,
+  contentHistory,
+  sharedLinkFavicons,
+  externalLinkNotes,
 ];
 
 export { baselineSql } from './0.0.1-baseline';

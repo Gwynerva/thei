@@ -93,6 +93,7 @@ function tileTitle(item: AssetLibraryItem) {
     item.roles.map((role) => assetRoleLabel(role)).join(' · '),
     selectionErrorLabel(item.selectionError),
     item.deleteAfter ? assetDeletionLabel(item.deleteAfter) : undefined,
+    item.inHistory ? phrase.value.asset_library_in_history : undefined,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -100,7 +101,7 @@ function tileTitle(item: AssetLibraryItem) {
 function title(section: AssetLibrarySection) {
   return section.type === 'unused'
     ? phrase.value.asset_library_unused
-    : section.title;
+    : publicText(section.title);
 }
 async function load(reset = false) {
   if (reset) {
@@ -337,18 +338,34 @@ onBeforeUnmount(() => {
               motion-reduce:transition-none hocus:bg-bg-3"
             @click.prevent="toggleSection(section)"
           >
-            <Icon
-              :name="assetSourceIcon[section.type]"
-              class="shrink-0 text-text-3"
-            /><span
-              class="min-w-0 truncate font-semibold"
-              :class="{ italic: section.type === 'unused' }"
-              >{{ title(section) }}</span
-            ><span
-              class="rounded-normal bg-bg-3 px-xs py-1 text-xs text-text-2
-                tabular-nums"
-              >{{ section.count }}</span
-            ><span class="min-w-0 flex-1"></span
+            <span class="flex min-w-0 flex-1 flex-col gap-0.5"
+              ><!-- A stage or a section is named under its project: "Launch"
+                   alone does not say whose launch it was. --><span
+                v-if="section.parent"
+                data-asset-library-parent
+                class="flex min-w-0 items-center gap-1 text-xs font-semibold
+                  text-text-3"
+                ><Icon name="project" class="shrink-0" /><span
+                  class="min-w-0 truncate"
+                  >{{ publicText(section.parent.title) }}</span
+                ><Icon
+                  name="corner-down"
+                  class="shrink-0"
+                  aria-hidden="true" /></span
+              ><span class="flex min-w-0 items-center gap-xs"
+                ><Icon
+                  :name="assetSourceIcon[section.type]"
+                  class="shrink-0 text-text-3"
+                /><span
+                  class="min-w-0 truncate font-semibold"
+                  :class="{ italic: section.type === 'unused' }"
+                  >{{ title(section) }}</span
+                ><span
+                  class="rounded-normal bg-bg-3 px-xs py-1 text-xs text-text-2
+                    tabular-nums"
+                  >{{ section.count }}</span
+                ></span
+              ></span
             ><Icon
               name="chevron-right"
               class="shrink-0 rotate-90 transition-transform duration-250
@@ -397,6 +414,7 @@ onBeforeUnmount(() => {
                       showSize: true,
                       size: item.asset.size,
                       pendingDeletion: Boolean(item.deleteAfter),
+                      inHistory: item.inHistory,
                       warning: selectionErrorLabel(item.selectionError),
                     }"
                     class="aspect-square w-full"
@@ -490,7 +508,8 @@ onBeforeUnmount(() => {
               <template #overlay>
                 <span
                   class="absolute inset-0 z-40 flex items-center justify-center
-                    bg-bg-1/60 opacity-0 transition hocus:opacity-100"
+                    bg-bg-1/60 opacity-0 transition pointer-coarse:bg-bg-1/30
+                    pointer-coarse:opacity-100 hocus:opacity-100"
                 >
                   <Icon name="close" />
                 </span>

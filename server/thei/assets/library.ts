@@ -7,7 +7,6 @@ import {
   resolveAdminPagination,
 } from '../../../shared/admin/entity-list';
 import {
-  ASSET_ORPHAN_GRACE_MS,
   assetSelectionError,
   assetSourceKey,
   summarizeAssetUsages,
@@ -28,6 +27,7 @@ import { buildPageUrl } from '../../../shared/page-url';
 import { buildDiaryUrl } from '../../../shared/diary-url';
 import { buildTagUrl } from '../../../shared/tag-url';
 import { describeStoredAsset } from './storage';
+import { readAssetRetention } from './retention';
 
 export interface LibraryQuery extends AssetSelectionConstraints {
   q?: string;
@@ -38,37 +38,34 @@ export interface LibraryQuery extends AssetSelectionConstraints {
 
 // Resolve owners in SQL. Only page assets and their placements are materialized;
 // rendering the library never hydrates content or invokes media processing.
+// A stage or a section is a source of its own, carrying its project as the
+// parent; a private project makes everything in it private.
 const ownersSql = `
 WITH sources AS (
   SELECT 'project' AS sourceType, projectUuid AS sourceId, title, summary,
-    humanReadableSlug AS slug, publicId, updatedAt, access='private' AS sourcePrivate FROM projects
-  UNION ALL SELECT 'event',eventUuid,title,summary,humanReadableSlug,publicId,updatedAt,access='private' FROM events
-  UNION ALL SELECT 'page',pageUuid,title,summary,slug,'',updatedAt,access='private' FROM pages
-  UNION ALL SELECT 'diary-entry',diaryUuid,date,'',date,'',updatedAt,access='private' FROM "diary-entries"
-  UNION ALL SELECT 'tag',tagUuid,title,description,slug,publicId,0,0 FROM tags
-  UNION ALL SELECT 'profile',profileId,displayName,slogan,'','',0,0 FROM profiles
-),
-children AS (
-  SELECT 'project-stage' AS ownerType,stageUuid AS ownerId,projectUuid,title,summary,isPrivate,
-    humanReadableSlug AS childSlug,publicId AS childPublicId FROM "project-stages"
-  UNION ALL SELECT 'project-section',sectionUuid,projectUuid,title,summary,isPrivate,humanReadableSlug,publicId FROM "project-content-sections"
+    humanReadableSlug AS slug, publicId, updatedAt, access='private' AS sourcePrivate,
+    '' AS parentId, '' AS parentTitle, '' AS parentSlug, '' AS parentPublicId FROM projects
+  UNION ALL SELECT 'event',eventUuid,title,summary,humanReadableSlug,publicId,updatedAt,access='private','','','','' FROM events
+  UNION ALL SELECT 'page',pageUuid,title,summary,slug,'',updatedAt,access='private','','','','' FROM pages
+  UNION ALL SELECT 'diary-entry',diaryUuid,date,'',date,'',updatedAt,access='private','','','','' FROM "diary-entries"
+  UNION ALL SELECT 'tag',tagUuid,title,description,slug,publicId,0,0,'','','','' FROM tags
+  UNION ALL SELECT 'profile',profileId,displayName,slogan,'','',0,0,'','','','' FROM profiles
+  UNION ALL SELECT 'project-stage',st.stageUuid,st.title,st.summary,st.humanReadableSlug,st.publicId,st.updatedAt,
+    (st.isPrivate OR p.access='private'),p.projectUuid,p.title,p.humanReadableSlug,p.publicId
+    FROM "project-stages" st JOIN projects p ON p.projectUuid=st.projectUuid
+  UNION ALL SELECT 'project-section',se.sectionUuid,se.title,se.summary,se.humanReadableSlug,se.publicId,se.updatedAt,
+    (se.isPrivate OR p.access='private'),p.projectUuid,p.title,p.humanReadableSlug,p.publicId
+    FROM "project-content-sections" se JOIN projects p ON p.projectUuid=se.projectUuid
 ),
 contexts AS (
-  SELECT sourceType AS containerType,sourceId AS containerId,sourceType,sourceId,
-    '' AS scopeTitle,'entity' AS scopeKind,'' AS scopeSlug,'' AS scopePublicId,
-    '' AS detail,0 AS parentPrivate,'' AS description FROM sources
-  UNION ALL
-  SELECT 'content',c.contentUuid,CASE WHEN ch.projectUuid IS NULL THEN c.ownerType ELSE 'project' END,
-    coalesce(ch.projectUuid,c.ownerId),coalesce(ch.title,''),coalesce(ch.ownerType,'entity'),
-    coalesce(ch.childSlug,''),coalesce(ch.childPublicId,''),'',coalesce(ch.isPrivate,0),coalesce(ch.summary,'')
-    FROM content c LEFT JOIN children ch ON ch.ownerType=c.ownerType AND ch.ownerId=c.ownerId
-  UNION ALL SELECT 'profile-avatar',a.id,'profile',p.profileId,'','entity','','','avatar',0,'' FROM "profile-avatars" a CROSS JOIN profiles p
-  UNION ALL SELECT 'profile-status',a.id,'profile',a.ownerId,'','entity','','','status',0,coalesce(a.text,'') FROM statuses a WHERE a.ownerType='profile'
-  UNION ALL SELECT 'project-status',a.id,'project',a.ownerId,'','entity','','','status',0,coalesce(a.text,'') FROM statuses a WHERE a.ownerType='project'
+  SELECT sourceType AS containerType,sourceId AS containerId,sourceType,sourceId,'' AS detail,'' AS description FROM sources
+  UNION ALL SELECT 'content',c.contentUuid,c.ownerType,c.ownerId,'','' FROM content c
+  UNION ALL SELECT 'profile-avatar',a.id,'profile',p.profileId,'avatar','' FROM "profile-avatars" a CROSS JOIN profiles p
+  UNION ALL SELECT 'profile-status',a.id,'profile',a.ownerId,'status',coalesce(a.text,'') FROM statuses a WHERE a.ownerType='profile'
+  UNION ALL SELECT 'project-status',a.id,'project',a.ownerId,'status',coalesce(a.text,'') FROM statuses a WHERE a.ownerType='project'
 ),
 placements AS (
-  SELECT u.assetUuid,u.role,u.meta,u.containerType,u.containerId,s.*,c.scopeTitle,c.scopeKind,
-    c.scopeSlug,c.scopePublicId,c.detail,c.parentPrivate,c.description
+  SELECT u.assetUuid,u.role,u.meta,u.containerType,u.containerId,s.*,c.detail,c.description
   FROM "asset-usages" u JOIN contexts c ON c.containerType=u.containerType AND c.containerId=u.containerId
   JOIN sources s ON s.sourceType=c.sourceType AND s.sourceId=c.sourceId
 ),
@@ -90,7 +87,7 @@ function siteTextMatchSql(scoped: boolean) {
     : '';
   return `(EXISTS (
       SELECT 1 FROM placements p WHERE p.assetUuid=a.assetUuid${scope}
-      AND instr(asset_search_text(coalesce(p.title,'') || ' ' || coalesce(p.summary,'') || ' ' || p.scopeTitle || ' ' || p.description || ' ' || coalesce(json_extract(p.meta,'$.caption'),'') || ' ' || coalesce(json_extract(p.meta,'$.title'),'')),?)>0)
+      AND instr(asset_search_text(coalesce(p.title,'') || ' ' || coalesce(p.summary,'') || ' ' || p.description || ' ' || coalesce(json_extract(p.meta,'$.caption'),'') || ' ' || coalesce(json_extract(p.meta,'$.title'),'')),?)>0)
     OR EXISTS (
       SELECT 1 FROM placements p JOIN content c ON p.containerType='content' AND c.contentUuid=p.containerId,
         json_each(c.data,'$.blocks') b
@@ -172,20 +169,47 @@ interface SourceRow {
   publicId: string;
   updatedAt: number;
   sourcePrivate: number;
+  /** The project of a stage or a section; empty for every other source. */
+  parentId: string;
+  parentTitle: string;
+  parentSlug: string;
+  parentPublicId: string;
 }
 interface PlacementRow extends SourceRow {
   assetUuid: string;
   role: AssetPlacement['role'];
   meta: string | null;
-  scopeTitle: string;
-  scopeKind: 'entity' | 'project-stage' | 'project-section';
-  scopeSlug: string;
-  scopePublicId: string;
   detail: '' | 'avatar' | 'status';
-  parentPrivate: number;
 }
 function sourceInfo(row: SourceRow): AssetSource {
   const { sourceType: type, sourceId: id, slug, publicId } = row;
+  const base = {
+    type,
+    id,
+    title: row.title ?? '',
+    summary: row.summary ?? '',
+    updatedAt: row.updatedAt,
+  };
+  if (type === 'project-stage' || type === 'project-section') {
+    // A stage or a section has no editor of its own: the project's editor
+    // opens with that part's modal already up, as the admin bar does.
+    const isStage = type === 'project-stage';
+    return {
+      ...base,
+      url: buildProjectChildUrl(
+        row.parentSlug,
+        row.parentPublicId,
+        isStage ? 'stages' : 'sections',
+        slug,
+        publicId,
+      ),
+      editUrl: `/admin/projects/${row.parentId}/edit/?${isStage ? 'stage' : 'section'}=${encodeURIComponent(publicId)}`,
+      parent: {
+        title: row.parentTitle,
+        url: buildProjectUrl(row.parentSlug, row.parentPublicId),
+      },
+    };
+  }
   const url =
     type === 'project'
       ? buildProjectUrl(slug, publicId)
@@ -208,15 +232,7 @@ function sourceInfo(row: SourceRow): AssetSource {
         : type === 'diary-entry'
           ? `/admin/diary/${id}/edit/`
           : `/admin/${type === 'page' ? 'pages' : type === 'tag' ? 'tags' : type + 's'}/${id}/edit/`;
-  return {
-    type,
-    id,
-    title: row.title ?? '',
-    summary: row.summary ?? '',
-    updatedAt: row.updatedAt,
-    url,
-    editUrl,
-  };
+  return { ...base, url, editUrl };
 }
 function readPlacements(ids: string[]) {
   const result = new Map<string, AssetPlacement[]>();
@@ -233,24 +249,10 @@ function readPlacements(ids: string[]) {
     const base: Omit<AssetPlacement, 'count' | 'isPrivate'> = {
       source: sourceInfo(row),
       role: row.role,
-      scope:
-        row.scopeKind === 'entity'
-          ? { kind: 'entity' }
-          : {
-              kind: row.scopeKind,
-              title: row.scopeTitle,
-              url: buildProjectChildUrl(
-                row.slug,
-                row.publicId,
-                row.scopeKind === 'project-stage' ? 'stages' : 'sections',
-                row.scopeSlug,
-                row.scopePublicId,
-              ),
-            },
       detail: row.detail || undefined,
     };
     const uses = result.get(row.assetUuid) ?? [];
-    const parentPrivate = Boolean(row.sourcePrivate || row.parentPrivate);
+    const parentPrivate = Boolean(row.sourcePrivate);
     const groups = refs
       ? [false, true].map((isPrivate) => ({
           count: refs.filter((r) => Boolean(r.isPrivate) === isPrivate).length,
@@ -289,15 +291,7 @@ function readItems(
     .where(inArray(schema.assetUsages.containerId, ids))
     .all()
     .filter((u) => u.containerType === 'asset' && u.role === 'preview');
-  // Cleanup deletes an asset with no usage rows at all, whatever holds them.
-  const referenced = new Set(
-    db
-      .select({ assetUuid: schema.assetUsages.assetUuid })
-      .from(schema.assetUsages)
-      .where(inArray(schema.assetUsages.assetUuid, ids))
-      .all()
-      .map((u) => u.assetUuid),
-  );
+  const retention = readAssetRetention(rows);
   const items = new Map<string, AssetLibraryItem>();
   for (const row of rows) {
     const uses = placements.get(row.assetUuid) ?? [];
@@ -307,9 +301,7 @@ function readItems(
         previews.find((p) => p.containerId === row.assetUuid)?.assetUuid,
       ),
       touchedAt: row.touchedAt,
-      ...(referenced.has(row.assetUuid)
-        ? {}
-        : { deleteAfter: row.touchedAt + ASSET_ORPHAN_GRACE_MS }),
+      ...retention.get(row.assetUuid),
       ...summarizeAssetUsages(uses),
       roles: [
         ...new Set(
@@ -364,6 +356,7 @@ export function listLibrarySections(query: LibraryQuery = {}) {
   const { rawDb } = connection();
   const { where, args } = matchSql(query, true);
   const from = `SELECT m.sourceType,m.sourceId,s.title,s.summary,s.slug,s.publicId,s.sourcePrivate,
+    s.parentId,s.parentTitle,s.parentSlug,s.parentPublicId,
     max(max(a.touchedAt,coalesce(s.updatedAt,0))) AS updatedAt,count(DISTINCT a.assetUuid) AS count
     FROM members m JOIN assets a ON a.assetUuid=m.assetUuid LEFT JOIN sources s ON s.sourceType=m.sourceType AND s.sourceId=m.sourceId
     WHERE ${where} GROUP BY m.sourceType,m.sourceId`;
@@ -415,6 +408,7 @@ export function getAssetUsages(id: string) {
     placements: readPlacements([id]).get(id) ?? [],
     counts: item.counts,
     entityCount: item.entityCount,
+    ...(item.inHistory ? { inHistory: item.inHistory } : {}),
   };
 }
 

@@ -10,17 +10,13 @@ import {
 } from '#layers/thei/shared/content-link';
 import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
 import type { IconName } from '#thei/icons';
-import { truncateExternalLinkText } from '#layers/thei/shared/external-link';
 defineProps<{
   links: (PublicReferenceLink | PublicSecretReference)[];
   /** Leave the kind badge off the tiles, where the list already says it. */
   hideKind?: boolean;
+  /** How many lines of its description a tile shows. */
+  descriptionLines?: 2 | 3;
 }>();
-
-const SIDEBAR_EXTERNAL_LINK_TEXT_LIMIT = 120;
-function compactExternalLinkText(value?: string): string | undefined {
-  return truncateExternalLinkText(value, SIDEBAR_EXTERNAL_LINK_TEXT_LIMIT);
-}
 
 /**
  * The badge in the corner of a tile names what is on the other end.
@@ -41,7 +37,7 @@ function entityTitle(type?: PublicReferenceLink['kind']): string | undefined {
   if (isContentEntityType(type)) return entityTypeLabel(type);
 }
 
-/** A diary entry is listed by its day, unless a note names it otherwise. */
+/** A diary entry is listed by its day. */
 function linkTitle(link: PublicReferenceLink) {
   return link.date
     ? entityDisplayTitle({ ...link, date: link.date })
@@ -57,18 +53,21 @@ function linkTitle(link: PublicReferenceLink) {
     >
       <PublicCompactResourceItem
         v-if="isPublicSecret(link)"
-        :title="link.title"
-        :description="link.summary"
+        :title="publicText(link.title)"
+        :description="publicText(link.summary)"
         :icon-media="link.iconMedia"
         :corner-icon="hideKind ? undefined : entityIcon(link.entityType)"
         :corner-title="hideKind ? undefined : entityTitle(link.entityType)"
+        :description-lines
         icon="project"
         secret
       />
       <PublicCompactResourceItem
         v-else-if="link.kind !== 'external'"
-        :title="linkTitle(link)"
-        :description="link.description"
+        :title="publicText(linkTitle(link))"
+        :description="publicText(link.description)"
+        :note="publicText(link.note)"
+        :description-lines
         :icon-media="link.iconMedia"
         :corner-icon="
           link.iconMedia && !hideKind ? entityIcon(link.kind) : undefined
@@ -79,10 +78,14 @@ function linkTitle(link: PublicReferenceLink) {
         :continuous-media="contentEntityHasIcon(link.kind)"
         plain-icon
       />
+      <!-- A title the linked page gave itself, or its hostname, stays as it
+           came, and so does its description; the note is the owner's. -->
       <PublicCompactResourceItem
         v-else
-        :title="compactExternalLinkText(link.title) ?? link.title"
+        :title="link.title"
         :description="link.description"
+        :note="publicText(link.note)"
+        :description-lines
         :icon-media="link.iconMedia"
         :corner-icon="link.iconMedia ? entityIcon(link.kind) : undefined"
         :corner-title="entityTitle(link.kind)"

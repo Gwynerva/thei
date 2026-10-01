@@ -14,6 +14,8 @@ withDefaults(
     editable?: boolean;
     /** Unused asset that cleanup is going to delete. */
     pendingDeletion?: boolean;
+    /** Unused, but kept while a version of some text still shows it. */
+    inHistory?: boolean;
     /** Why the asset cannot be chosen here, shown as a warning badge. */
     warning?: string;
   }>(),
@@ -45,6 +47,14 @@ const chip = 'bg-black/30 text-xs leading-none text-white backdrop-blur-sm';
           data-asset-pending-deletion
         >
           <Icon name="delete" />
+        </span>
+        <span
+          v-if="inHistory"
+          :class="chip"
+          class="rounded-full p-1"
+          data-asset-in-history
+        >
+          <Icon name="history" />
         </span>
         <span
           v-if="warning"

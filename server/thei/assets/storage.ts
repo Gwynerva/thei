@@ -4,7 +4,7 @@ import { createReadStream, createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { buildAssetPreviewUrl } from '#layers/thei/shared/api/asset';
 import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
 import { AssetType } from '#layers/thei/shared/asset';
@@ -28,6 +28,7 @@ import { extractImageAccent } from './image-color';
 import { inspectVideoFile, videoSourceInfo } from './process';
 import { createMediaPreview, MEDIA_PREVIEW_EXTENSION } from './media-preview';
 import { withProcessingSlot } from './queue';
+import { assetHeldByHistorySql } from '../content/history';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import {
   assetBytesHash,
@@ -324,7 +325,19 @@ async function writeInPlace(
   const partial = `${target}.${randomUUID()}.partial`;
   try {
     await write(partial);
-    await rename(partial, target);
+    try {
+      await rename(partial, target);
+    } catch (error) {
+      // The name is the content hash, so a file that appeared under it
+      // meanwhile holds these very bytes: two commits of one output raced
+      // past the check, the other landed first, and Windows will not rename
+      // over a file still held open. The sizes agree unless it is cut short.
+      const [mine, theirs] = await Promise.all([
+        stat(partial).catch(() => null),
+        stat(target).catch(() => null),
+      ]);
+      if (!mine || !theirs?.isFile() || theirs.size !== mine.size) throw error;
+    }
   } finally {
     await rm(partial, { force: true }).catch(() => {});
   }
@@ -538,6 +551,23 @@ export async function deleteStoredAsset(
       .where(eq(schema.assets.assetUuid, assetUuid))
       .get();
     if (!current || (cutoffMs !== undefined && current.touchedAt >= cutoffMs)) {
+      return { deleted: false, blobOrphaned: false };
+    }
+    // Cleanup never takes a file a draft or a version still shows. Deleting
+    // one by hand is the owner's decision and stays possible.
+    if (
+      cutoffMs !== undefined &&
+      tx
+        .select({ held: sql<number>`1` })
+        .from(schema.assets)
+        .where(
+          and(
+            eq(schema.assets.assetUuid, assetUuid),
+            assetHeldByHistorySql(schema.assets.assetUuid),
+          ),
+        )
+        .get()
+    ) {
       return { deleted: false, blobOrphaned: false };
     }
     const usage = tx

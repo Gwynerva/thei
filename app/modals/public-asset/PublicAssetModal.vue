@@ -39,7 +39,7 @@ const dimensions = computed(() => {
 </script>
 
 <template>
-  <AssetModal :aside-title="current.title">
+  <AssetModal :aside-title="publicText(current.title)">
     <template #preview>
       <AssetModalPreviewMedia
         v-if="current.media"
@@ -88,7 +88,7 @@ const dimensions = computed(() => {
           v-if="current.description"
           class="text-sm leading-relaxed text-text-2"
         >
-          {{ current.description }}
+          {{ publicText(current.description) }}
         </p>
         <AssetModalFileInfo
           :key="current.key"

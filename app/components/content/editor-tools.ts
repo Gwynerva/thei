@@ -7,6 +7,15 @@ import type {
 import { h } from 'vue';
 import { VueBlockTool } from './editor-vue-block-tool';
 import { AssetType } from '#layers/thei/shared/asset';
+import { runAssetBatch } from '#layers/thei/shared/asset-batch';
+import { contentAssetFromVariant } from '#layers/thei/app/composables/asset-wizard';
+import type { UploadConstraints } from '#layers/thei/app/composables/upload-draft';
+import {
+  createPendingUploadList,
+  PendingMediaUpload,
+  type PendingMediaHandover,
+  type PendingUpload,
+} from '#layers/thei/app/composables/pending-upload';
 import type {
   ContentAssetData,
   ContentGalleryItem,
@@ -57,9 +66,14 @@ export type ContentEditorAssetKind = 'media' | 'any';
 export type ContentEditorPickAsset = (
   kind: ContentEditorAssetKind,
 ) => Promise<ContentAssetData | undefined>;
+/**
+ * Files added to a gallery: those known at once — picked from the library,
+ * or duplicates settled through the editor — and those still on their way,
+ * shown as tiles until each lands.
+ */
 export type ContentEditorPickAssets = (
   kind: ContentEditorAssetKind,
-) => Promise<ContentAssetData[]>;
+) => Promise<{ assets: ContentAssetData[]; uploads: PendingUpload[] }>;
 export type ContentEditorEditAsset = (
   asset: ContentAssetData,
   kind: ContentEditorAssetKind,
@@ -82,26 +96,40 @@ interface ContentToolLabels {
   privateSectionEnd: string;
   externalLinkError: string;
   refreshExternalLink: string;
+  linkNote: string;
   chooseEntity: string;
   makeGallery: string;
+  retryUpload: string;
+  cancelUpload: string;
+  dismissUpload: string;
 }
 
-/** Stores pasted files as they are and returns them as content assets. */
-export type ContentEditorUploadFiles = (
-  files: File[],
-) => Promise<ContentAssetData[]>;
+/** How a tool stores the files pasted into it. */
+export interface ContentEditorUploads {
+  /** The limits of the place the files go to. */
+  constraints: UploadConstraints;
+  /**
+   * The asset editor for a file still being stored: what the admin settled
+   * on, or nothing if the editor was dismissed.
+   */
+  editPending: (
+    pending: PendingMediaHandover,
+  ) => Promise<ContentAssetData | undefined>;
+  /** Counts blocks with uploads under way, so closing the editor asks first. */
+  track?: (delta: 1 | -1) => void;
+}
 
 interface ContentMediaToolConfig {
   pickAsset: ContentEditorPickAsset;
   editAsset: ContentEditorEditAsset;
-  uploadFiles: ContentEditorUploadFiles;
+  uploads: ContentEditorUploads;
   labels: ContentToolLabels;
 }
 
 interface ContentGalleryToolConfig {
   pickAssets: ContentEditorPickAssets;
   editAsset: ContentEditorEditAsset;
-  uploadFiles: ContentEditorUploadFiles;
+  uploads: ContentEditorUploads;
   labels: ContentToolLabels;
 }
 
@@ -147,18 +175,20 @@ export class ExternalLinkTool extends VueBlockTool implements BlockTool {
   };
 
   private url = '';
+  private note = '';
   private loading = false;
   private error = false;
   private version = 0;
 
   constructor(
     private options: ContentToolOptions<
-      { url?: string },
+      { url?: string; note?: string },
       ExternalLinkToolConfig
     >,
   ) {
     super(options.block);
     this.url = options.data.url ?? '';
+    this.note = options.data.note ?? '';
   }
 
   private get config() {
@@ -175,7 +205,7 @@ export class ExternalLinkTool extends VueBlockTool implements BlockTool {
   }
 
   save() {
-    return { url: this.url };
+    return { url: this.url, note: this.note.trim() || undefined };
   }
 
   validate(data: { url?: string }) {
@@ -207,7 +237,10 @@ export class ExternalLinkTool extends VueBlockTool implements BlockTool {
     ];
   }
 
-  /** A deliberate re-read of the site. Presentation only: the stored block is just the address. */
+  /**
+   * A deliberate re-read of the site. Presentation only: the stored block is
+   * the address and the owner's note, and what the site says lives apart.
+   */
   private refresh() {
     return this.request(() => this.config.links.refresh(this.url));
   }
@@ -232,8 +265,16 @@ export class ExternalLinkTool extends VueBlockTool implements BlockTool {
   protected view() {
     return h(ExternalLinkBlockCard, {
       url: this.url,
+      note: this.note,
+      editable: !this.options.readOnly,
+      notePlaceholder: this.config.labels.linkNote,
       loading: this.loading,
       errorText: this.error ? this.config.labels.externalLinkError : undefined,
+      'onUpdate:note': (value: string) => {
+        if (value === this.note) return;
+        this.note = value;
+        this.commit();
+      },
     });
   }
 }
@@ -299,6 +340,7 @@ export class EntityLinkTool extends VueBlockTool implements BlockTool {
 
   private entityType?: ContentEntityType;
   private entityId?: string;
+  private note = '';
   private autoOpen = false;
   private transientSelection = false;
   /** An address of this site that was pasted and is being looked up. */
@@ -306,13 +348,19 @@ export class EntityLinkTool extends VueBlockTool implements BlockTool {
 
   constructor(
     private options: ContentToolOptions<
-      { entityType?: ContentEntityType; entityId?: string; autoOpen?: boolean },
+      {
+        entityType?: ContentEntityType;
+        entityId?: string;
+        note?: string;
+        autoOpen?: boolean;
+      },
       EntityLinkToolConfig
     >,
   ) {
     super(options.block);
     this.entityType = options.data.entityType;
     this.entityId = options.data.entityId;
+    this.note = options.data.note ?? '';
     this.autoOpen = options.data.autoOpen === true;
     this.transientSelection =
       this.autoOpen && !this.entityType && !this.entityId && !options.readOnly;
@@ -328,7 +376,11 @@ export class EntityLinkTool extends VueBlockTool implements BlockTool {
   }
 
   save() {
-    return { entityType: this.entityType, entityId: this.entityId };
+    return {
+      entityType: this.entityType,
+      entityId: this.entityId,
+      note: this.note.trim() || undefined,
+    };
   }
 
   validate(data: { entityType?: string; entityId?: string }) {
@@ -407,6 +459,14 @@ export class EntityLinkTool extends VueBlockTool implements BlockTool {
         resolver: config.resolver,
         interactive: true,
         playback: 'interaction',
+        note: this.note,
+        editable: !this.options.readOnly,
+        notePlaceholder: config.labels.linkNote,
+        'onUpdate:note': (value: string) => {
+          if (value === this.note) return;
+          this.note = value;
+          this.commit();
+        },
       });
     if (this.pastedUrl)
       return h(ContentLinkPreviewCard, {
@@ -452,8 +512,10 @@ export class ContentMediaTool extends VueBlockTool implements BlockTool {
   private caption = '';
   private layout: ContentMediaLayout;
   private autoOpen: boolean;
-  /** A pasted file, stored before the block shows anything. Never saved. */
+  /** A pasted file, kept until the block is on the page. Never saved. */
   private pendingFiles?: File[];
+  /** The pasted file on its way into the library. */
+  private pending?: PendingMediaUpload;
 
   constructor(
     private options: ContentToolOptions<
@@ -491,11 +553,18 @@ export class ContentMediaTool extends VueBlockTool implements BlockTool {
 
   protected override afterRender() {
     if (this.pendingFiles && !this.options.readOnly) {
-      queueMicrotask(() => void this.upload());
+      queueMicrotask(() => this.startPending());
     } else if (this.autoOpen && !this.options.readOnly) {
       this.autoOpen = false;
       queueMicrotask(() => void this.pick());
     }
+  }
+
+  protected override onDestroy() {
+    if (!this.pending) return;
+    this.pending.dispose();
+    this.pending = undefined;
+    contentToolConfig(this.options.config).uploads.track?.(-1);
   }
 
   save(): Record<string, unknown> {
@@ -560,9 +629,13 @@ export class ContentMediaTool extends VueBlockTool implements BlockTool {
       return h(ContentAssetSkeleton, {
         icon: 'media',
         label: this.labels.chooseMedia,
-        readOnly: this.options.readOnly,
-        loading: Boolean(this.pendingFiles),
+        readOnly: this.options.readOnly || Boolean(this.pendingFiles),
+        upload: this.pending,
+        editLabel: this.pending ? this.labels.chooseMedia : undefined,
+        retryLabel: this.labels.retryUpload,
         onPick: () => void this.pick(),
+        onEdit: () => void this.editPending(),
+        onRetry: () => this.pending?.retry(),
       });
     return h(ContentMediaCard, {
       asset: this.asset,
@@ -575,21 +648,64 @@ export class ContentMediaTool extends VueBlockTool implements BlockTool {
       onCaption: (value: string) => {
         if (value === this.caption) return;
         this.caption = value;
-        this.dispatchChange();
+        this.commit();
       },
     });
   }
 
-  private async upload() {
-    const files = this.pendingFiles;
-    if (!files) return;
-    const config = contentToolConfig(this.options.config);
-    const [asset] = await config.uploadFiles(files).catch(() => []);
-    if (this.pendingFiles !== files || this.destroyed) return;
+  /**
+   * The pasted file goes into the library at the defaults, from here on.
+   * The skeleton follows its status by itself; the block only changes once
+   * the file has landed, and a failure waits in the skeleton for a retry.
+   */
+  private startPending() {
+    const [file] = this.pendingFiles ?? [];
     this.pendingFiles = undefined;
-    if (asset) this.asset = asset;
+    if (!file || this.destroyed) return;
+    const { uploads } = contentToolConfig(this.options.config);
+    const pending = new PendingMediaUpload(file, {
+      constraints: uploads.constraints,
+    });
+    this.pending = pending;
+    uploads.track?.(1);
     this.renderContent();
-    if (asset) this.dispatchChange();
+    void pending.run();
+    void pending.result.then((asset) => {
+      if (this.pending === pending && !this.destroyed && asset) {
+        this.finishPending(contentAssetFromVariant(asset));
+      }
+    });
+  }
+
+  /** The file has landed: the block shows it, and that is a change. */
+  private finishPending(asset: ContentAssetData) {
+    const pending = this.pending;
+    if (!pending) return;
+    this.pending = undefined;
+    pending.dispose();
+    contentToolConfig(this.options.config).uploads.track?.(-1);
+    this.asset = asset;
+    this.commit();
+  }
+
+  /** The asset editor, on the file still being stored. */
+  private async editPending() {
+    const pending = this.pending;
+    if (!pending) return;
+    let handover: PendingMediaHandover;
+    try {
+      handover = await pending.suspend();
+    } catch {
+      // Staging failed; the skeleton shows why and offers a retry.
+      return;
+    }
+    if (this.pending !== pending || this.destroyed) return;
+    const asset = await contentToolConfig(this.options.config)
+      .uploads.editPending(handover)
+      .catch(() => undefined);
+    if (this.pending !== pending || this.destroyed) return;
+    if (asset) this.finishPending(asset);
+    else void pending.run();
   }
 
   /**
@@ -659,8 +775,25 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
   private items: ContentGalleryItem[];
   private selectedId?: string;
   private autoOpen: boolean;
-  /** Pasted files, stored before the tiles appear. Never saved. */
+  /** Pasted files, kept until the block is on the page. Never saved. */
   private pendingFiles?: File[];
+  /**
+   * Files on their way into the library, shown as tiles of their own until
+   * each lands. Never saved: a gallery with nothing landed yet is empty. The
+   * block re-renders when the set of tiles changes, and dispatches a change
+   * only when a file lands; while any is under way, closing the editor asks.
+   */
+  private readonly uploads = createPendingUploadList({
+    onLanded: (asset) => this.append([contentAssetFromVariant(asset)]),
+    onChange: (uploads) => {
+      const track = contentToolConfig(this.options.config).uploads.track;
+      if (uploads.length && !this.tracking) track?.(1);
+      else if (!uploads.length && this.tracking) track?.(-1);
+      this.tracking = uploads.length > 0;
+      if (!this.destroyed) this.renderContent();
+    },
+  });
+  private tracking = false;
 
   constructor(
     private options: ContentToolOptions<
@@ -677,21 +810,45 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
 
   protected override afterRender() {
     if (this.pendingFiles && !this.options.readOnly) {
-      queueMicrotask(() => void this.upload());
+      queueMicrotask(() => this.startPasted());
     } else if (this.autoOpen && !this.options.readOnly) {
       this.autoOpen = false;
       queueMicrotask(() => void this.add());
     }
   }
 
-  private async upload() {
+  protected override onDestroy() {
+    this.uploads.dispose();
+  }
+
+  /**
+   * The pasted files go into the library at the defaults, two at a time:
+   * the server keeps only a few drafts, and one may be the editor's.
+   */
+  private startPasted() {
     const files = this.pendingFiles;
-    if (!files) return;
-    const config = contentToolConfig(this.options.config);
-    const assets = await config.uploadFiles(files).catch(() => []);
-    if (this.pendingFiles !== files || this.destroyed) return;
     this.pendingFiles = undefined;
-    this.append(assets);
+    if (!files?.length || this.destroyed) return;
+    const { constraints } = contentToolConfig(this.options.config).uploads;
+    this.startUploads(
+      files.map((file) => new PendingMediaUpload(file, { constraints })),
+      2,
+    );
+  }
+
+  /**
+   * Shows uploads as tiles until each lands. `concurrency` runs them here;
+   * without it they are already running, started by whoever picked them.
+   */
+  private startUploads(uploads: PendingUpload[], concurrency?: number) {
+    if (this.destroyed) {
+      for (const upload of uploads) upload.dispose();
+      return;
+    }
+    this.uploads.follow(uploads);
+    if (concurrency && uploads.length) {
+      void runAssetBatch(uploads, (upload) => upload.run(), concurrency);
+    }
   }
 
   save(): Record<string, unknown> {
@@ -703,12 +860,6 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
   }
 
   protected view() {
-    if (this.pendingFiles)
-      return h(ContentAssetSkeleton, {
-        icon: 'gallery',
-        label: this.labels.addMedia,
-        loading: true,
-      });
     return h(ContentGallery, {
       items: this.items,
       editable: !this.options.readOnly,
@@ -717,15 +868,25 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
       addLabel: this.labels.addMedia,
       removeLabel: this.labels.removeMedia,
       captionPlaceholder: this.labels.caption,
+      pending: this.uploads.uploads,
+      cancelUploadLabel: this.labels.cancelUpload,
+      retryUploadLabel: this.labels.retryUpload,
+      dismissUploadLabel: this.labels.dismissUpload,
       'onUpdate:selectedId': (id: string | undefined) => {
         this.selectedId = id;
       },
+      onCancelPending: (id: string) => {
+        const upload = this.uploads.uploads.find((other) => other.id === id);
+        if (upload) this.uploads.forget(upload);
+      },
+      onRetryPending: (id: string) =>
+        this.uploads.uploads.find((other) => other.id === id)?.retry(),
       onAdd: () => void this.add(),
       onEdit: (id: string) => void this.edit(id),
       onRemove: (id: string) => this.remove(id),
       onReorder: (items: ContentGalleryItem[]) => {
         this.items = items;
-        this.dispatchChange();
+        this.commit();
       },
       onCaption: (id: string, value: string) => {
         const normalized = normalizeContentMediaCaption(value) || undefined;
@@ -734,16 +895,20 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
         this.items = this.items.map((item) =>
           item.id === id ? { ...item, caption: normalized } : item,
         );
-        this.dispatchChange();
+        this.commit();
       },
     });
   }
 
   private async add() {
     const config = contentToolConfig(this.options.config);
-    const assets = await config.pickAssets('media');
-    if (this.destroyed) return;
+    const { assets, uploads } = await config.pickAssets('media');
+    if (this.destroyed) {
+      for (const upload of uploads) upload.dispose();
+      return;
+    }
     this.append(assets);
+    this.startUploads(uploads);
   }
 
   private append(assets: ContentAssetData[]) {
@@ -867,12 +1032,12 @@ export class ContentAttachmentTool extends VueBlockTool implements BlockTool {
       onTitle: (value: string) => {
         if (value === this.title) return;
         this.title = value;
-        this.dispatchChange();
+        this.commit();
       },
       onDescription: (value: string) => {
         if (value === this.caption) return;
         this.caption = value;
-        this.dispatchChange();
+        this.commit();
       },
     });
   }
@@ -993,8 +1158,12 @@ function getLabels(
       privateSectionEnd: 'End of private section',
       externalLinkError: 'Could not load link preview',
       refreshExternalLink: 'Refresh link',
+      linkNote: 'A note for the link',
       chooseEntity: 'Choose what to link to',
       makeGallery: 'Turn into a gallery',
+      retryUpload: 'Try again',
+      cancelUpload: 'Cancel',
+      dismissUpload: 'Dismiss',
     }
   );
 }

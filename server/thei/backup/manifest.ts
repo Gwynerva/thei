@@ -23,6 +23,11 @@ function toRelative(path: string, root: string): string {
     .join(posix.sep);
 }
 
+/** A path inside `content/` as a manifest names it. */
+export function contentRelativePath(path: string): string {
+  return toRelative(path, THEI_SERVER.contentPath());
+}
+
 async function walk(root: string, directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true }).catch(
     () => [],

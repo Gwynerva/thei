@@ -29,11 +29,7 @@ const canonical = computed(() =>
     page: tag.value.items.page,
   }),
 );
-const ogImage = useOgImage(
-  'tag',
-  () => tag.value.publicId,
-  () => [tag.value.title, tag.value.iconMedia?.src],
-);
+const ogImage = useOgImage(() => ({ kind: 'tag', id: tag.value.publicId }));
 usePublicSeo({
   ogImage,
   title: computed(() => tag.value.title),
@@ -45,7 +41,7 @@ usePublicSeo({
   canonical,
   pageType: 'CollectionPage',
   breadcrumbs: () => [{ name: phrase.value.tags, path: '/tags/' }],
-  image: () => tag.value.iconMedia?.src,
+  image: () => publicSeoImage(tag.value.iconMedia, ogImage.value?.url),
   entities: () => [
     {
       '@type': 'ItemList',
@@ -97,7 +93,7 @@ function tabTo(tab: 'projects' | 'events') {
     <div
       role="tablist"
       class="grid grid-cols-2 rounded-normal bg-bg-3 p-1 text-sm font-semibold"
-      :aria-label="tag.title"
+      :aria-label="publicText(tag.title)"
     >
       <component
         :is="tab.count ? TheiLink : 'span'"
@@ -124,7 +120,7 @@ function tabTo(tab: 'projects' | 'events') {
     </div>
 
     <section id="tag-entities" role="tabpanel" class="flex flex-col gap-sm">
-      <div class="grid gap-md sm:grid-cols-2">
+      <div class="grid grid-cols-cards gap-md">
         <PublicEntityCard
           v-for="entity in tag.items.items"
           :key="entity.href"

@@ -1,7 +1,13 @@
 <script setup lang="ts">
+import type { PublicEntityReference } from '#layers/thei/shared/api/public';
 import type { VisibleLifePoint } from '#layers/thei/shared/life';
 const props = defineProps<{
   point: VisibleLifePoint;
+  /**
+   * The project a status belongs to, named under its words. A project's own
+   * chronology leaves it out; the label above still says whose status it is.
+   */
+  parent?: PublicEntityReference;
   compact?: boolean;
   dateStyle?: 'long' | 'short';
   rewind?: boolean;
@@ -11,6 +17,12 @@ const props = defineProps<{
 }>();
 
 const isAvatar = computed(() => props.point.entityKind === 'profile-avatar');
+const label = computed(() => {
+  if (isAvatar.value) return phrase.value.profile_new_avatar;
+  return props.point.statusOwner === 'project'
+    ? phrase.value.profile_new_project_status
+    : phrase.value.profile_new_life_status;
+});
 </script>
 <template>
   <article class="flex min-w-0 items-center gap-sm">
@@ -45,11 +57,9 @@ const isAvatar = computed(() => props.point.entityKind === 'profile-avatar');
           :to="point.href"
           class="transition hocus:underline"
         >
-          {{ isAvatar ? phrase.profile_new_avatar : phrase.profile_new_status }}
+          {{ label }}
         </TheiLink>
-        <template v-else>{{
-          isAvatar ? phrase.profile_new_avatar : phrase.profile_new_status
-        }}</template>
+        <template v-else>{{ label }}</template>
       </p>
       <p
         v-if="!isAvatar"
@@ -59,12 +69,13 @@ const isAvatar = computed(() => props.point.entityKind === 'profile-avatar');
         {{
           point.statusKind === 'empty'
             ? phrase.profile_empty_status
-            : point.summary
+            : publicText(point.summary)
         }}
       </p>
+      <PublicParentLink v-if="parent" :parent="parent" below class="mt-xs" />
       <ProfileDate
         v-if="!rewind && !hideDate"
-        :timestamp="new Date(`${point.date}T00:00:00Z`).getTime()"
+        :date="point.date"
         :short="dateStyle ? dateStyle === 'short' : compact"
         class="mt-1 inline-block"
       />

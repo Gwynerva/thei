@@ -1,5 +1,36 @@
 import type { RelationEntityType, RelationType } from './relation';
+import type { LanguagePhrases } from './language/types';
 import { entityTypeIcon } from './entity-icon';
+
+/**
+ * How each kind of relation is drawn and named from this entity's side, in
+ * one place: its icon, the title of its group, its word in the editor's
+ * list, and the sentence that says it with both names.
+ */
+const RELATION_TYPE_DISPLAY = {
+  related: {
+    icon: 'relation-related',
+    group: 'relation_group_related',
+    sentence: 'relation_popup_related',
+  },
+  influencing: {
+    icon: 'relation-depends',
+    group: 'relation_group_depends_on',
+    sentence: 'relation_popup_depends_on',
+  },
+  dependent: {
+    icon: 'relation-affects',
+    group: 'relation_group_affects',
+    sentence: 'relation_popup_affects',
+  },
+} as const satisfies Record<
+  RelationType,
+  {
+    icon: string;
+    group: keyof LanguagePhrases;
+    sentence: keyof LanguagePhrases;
+  }
+>;
 
 /**
  * The icon for a relation's direction.
@@ -12,9 +43,7 @@ import { entityTypeIcon } from './entity-icon';
  * the other end.
  */
 export function relationTypeIcon(type: RelationType) {
-  if (type === 'influencing') return 'relation-depends' as const;
-  if (type === 'dependent') return 'relation-affects' as const;
-  return 'relation-related' as const;
+  return RELATION_TYPE_DISPLAY[type].icon;
 }
 
 /**
@@ -31,9 +60,31 @@ export const RELATION_GROUP_ORDER: readonly RelationType[] = [
 
 /** The phrase that titles a group of one kind, from this entity's side. */
 export function relationGroupPhraseKey(type: RelationType) {
-  if (type === 'influencing') return 'relation_group_depends_on' as const;
-  if (type === 'dependent') return 'relation_group_affects' as const;
-  return 'relation_group_related' as const;
+  return RELATION_TYPE_DISPLAY[type].group;
+}
+
+/** A kind's word in the editor's list, from the side of `owner`. */
+export function relationShortLabel(
+  phrase: LanguagePhrases,
+  type: RelationType,
+  owner: RelationEntityType,
+): string {
+  if (type === 'influencing') return phrase.relation_short_depends_on;
+  if (type === 'dependent') return phrase.relation_short_affects;
+  return phrase.relation_short_related(owner);
+}
+
+/**
+ * What a relation says with both names in it: "A depends on B" reads at
+ * once, where "Depends on" alone still asks which side is which.
+ */
+export function relationSentence(
+  phrase: LanguagePhrases,
+  type: RelationType,
+  current: string,
+  other: string,
+): string {
+  return phrase[RELATION_TYPE_DISPLAY[type].sentence](current, other);
 }
 
 /** The icon for the kind of thing on the other end of a relation. */

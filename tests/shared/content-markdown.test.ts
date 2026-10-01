@@ -25,6 +25,20 @@ describe('inlineToMarkdown', () => {
     ).toBe('[other](https://other.test/x)');
   });
 
+  it("gives the owner's words typography, never the markup", () => {
+    const format = (text: string) =>
+      text.replace(/"([^"]*)"/g, '«$1»').replace(/--/g, '—');
+    expect(
+      inlineToMarkdown(
+        'say "hi" -- <a href="/a--b/">the "page"</a> ' +
+          '<abbr data-content-hint="a &quot;hint&quot; -- here">word</abbr>',
+        { ...options, format },
+      ),
+    ).toBe(
+      'say «hi» — [the «page»](https://example.com/a--b/) word (a «hint» — here)',
+    );
+  });
+
   it('drops entity link markup but keeps its words', () => {
     expect(
       inlineToMarkdown(
@@ -33,9 +47,60 @@ describe('inlineToMarkdown', () => {
       ),
     ).toBe('Project');
   });
+
+  it("carries the owner's note on a link as its title", () => {
+    const format = (text: string) => text.replace(/--/g, '—');
+    expect(
+      inlineToMarkdown(
+        '<a href="https://other.test/x" data-content-link="external" ' +
+          'data-content-note="the &quot;why&quot; -- a \\ &amp;lt;">other</a> and ' +
+          '<a href="/projects/p/" data-content-link="entity" data-entity-type="project" ' +
+          'data-entity-id="p1" data-content-note="began">P</a>',
+        { ...options, format },
+      ),
+    ).toBe(
+      '[other](https://other.test/x "the \\"why\\" — a \\\\ &lt;") and ' +
+        '[P](https://example.com/projects/p/ "began")',
+    );
+  });
 });
 
 describe('contentToMarkdown', () => {
+  it("gives link blocks the owner's note as their title", () => {
+    expect(
+      contentToMarkdown(
+        {
+          blocks: [
+            {
+              type: 'externalLink',
+              data: {
+                url: 'https://other.test/',
+                title: 'Other "site"',
+                note: 'Why it is here',
+              },
+            },
+            { type: 'externalLink', data: { url: 'https://bare.test/' } },
+            {
+              type: 'entityLink',
+              data: {
+                url: '/projects/p/',
+                title: 'Project',
+                note: 'Say "when"',
+              },
+            },
+          ],
+        } as never,
+        options,
+      ),
+    ).toBe(
+      [
+        '[Other "site"](https://other.test/ "Why it is here")',
+        '[https://bare.test/](https://bare.test/)',
+        '[Project](https://example.com/projects/p/ "Say \\"when\\"")',
+      ].join('\n\n'),
+    );
+  });
+
   it('counts an ordered list from where it starts, nested ones from one', () => {
     const markdown = contentToMarkdown(
       {

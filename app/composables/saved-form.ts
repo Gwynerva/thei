@@ -1,20 +1,47 @@
+/**
+ * Asks the browser to confirm leaving the page — closing the tab, reloading,
+ * following an address — while `shouldGuard` says something would be lost.
+ */
+export function useBeforeUnloadGuard(shouldGuard: () => boolean) {
+  const beforeUnload = (event: BeforeUnloadEvent) => {
+    if (shouldGuard()) event.preventDefault();
+  };
+  onMounted(() => window.addEventListener('beforeunload', beforeUnload));
+  onUnmounted(() => window.removeEventListener('beforeunload', beforeUnload));
+}
+
+/**
+ * Asks before a form is left with something unsaved: going to another page
+ * of the site, closing the tab or reloading it. A modal open over the form is
+ * closed instead of the page. Files still going up ask first, since leaving
+ * lets them go.
+ */
+export function useLeaveGuard(options: {
+  dirty: () => boolean;
+  pendingUploads?: () => number;
+}) {
+  const uploading = () => (options.pendingUploads?.() ?? 0) > 0;
+  useBeforeUnloadGuard(() => options.dirty() || uploading());
+  onBeforeRouteLeave(() => {
+    if (interceptModalNavigation()) return false;
+    if (
+      uploading() &&
+      !window.confirm(phrase.value.upload_pending_leave_confirm)
+    )
+      return false;
+    return (
+      !options.dirty() || window.confirm(phrase.value.unsaved_changes_confirm)
+    );
+  });
+}
+
 export function useSavedForm(
   isDirty: Ref<boolean>,
   save: () => void | Promise<void>,
   canSave: Ref<boolean>,
 ) {
   useSaveShortcut(save, { canSave });
-  const beforeUnload = (event: BeforeUnloadEvent) => {
-    if (isDirty.value) event.preventDefault();
-  };
-  onMounted(() => window.addEventListener('beforeunload', beforeUnload));
-  onUnmounted(() => window.removeEventListener('beforeunload', beforeUnload));
-  onBeforeRouteLeave(() => {
-    if (interceptModalNavigation()) return false;
-    return (
-      !isDirty.value || window.confirm(phrase.value.unsaved_changes_confirm)
-    );
-  });
+  useLeaveGuard({ dirty: () => isDirty.value });
 }
 
 /**

@@ -3,6 +3,7 @@ import type {
   PublicNeighbours,
 } from '#layers/thei/shared/api/public';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
+import { diaryContentExcerpt } from '#layers/thei/shared/diary-text';
 import type { getProjectStages } from '../projects/stages';
 import type { getProjectContentSections } from '../projects/content-sections';
 import { buildPublicEntityPreviewMedia } from './content';
@@ -58,7 +59,12 @@ export async function buildProjectStageNeighbours(
       item,
       isOwner,
     );
-    return { title: summary.title, href: summary.href, media: summary.media };
+    return {
+      title: summary.title,
+      href: summary.href,
+      media: summary.media,
+      period: summary.period,
+    };
   });
 }
 
@@ -76,14 +82,20 @@ export async function buildProjectSectionNeighbours(
       item,
       isOwner,
     );
-    return { title: summary.title, href: summary.href, media: summary.media };
+    return {
+      title: summary.title,
+      href: summary.href,
+      media: summary.media,
+      ...(summary.summary ? { summary: summary.summary } : {}),
+    };
   });
 }
 
 /**
- * The entries written before and after a day. Only the owner steps onto
- * entries a visitor cannot find: a link shared for one entry opens that
- * entry, not the ones beside it.
+ * The entries written before and after a day, each with how it begins. Only
+ * the owner steps onto entries a visitor cannot find: a link shared for one
+ * entry opens that entry, not the ones beside it. A private section of an
+ * entry stays out of what a visitor reads of its beginning.
  */
 export async function buildDiaryEntryNeighbours(
   date: string,
@@ -92,17 +104,33 @@ export async function buildDiaryEntryNeighbours(
   const pair = await THEI_SERVER.diary.findNeighbours(date, isAdmin);
   return await describe(
     { previous: pair.previous ?? undefined, next: pair.next ?? undefined },
-    async (entry) => ({
-      title: '',
-      date: entry.date,
-      href: buildDiaryUrl(entry.date),
-      media: await buildPublicEntityPreviewMedia(
-        'diary-entry',
-        entry.diaryUuid,
-        'diary-body',
-        { type: 'diary-entry', date: entry.date },
+    async (entry) => {
+      const [media, content] = await Promise.all([
+        buildPublicEntityPreviewMedia(
+          'diary-entry',
+          entry.diaryUuid,
+          'diary-body',
+          { type: 'diary-entry', date: entry.date },
+          isAdmin,
+        ),
+        THEI_SERVER.content.findByOwner(
+          'diary-entry',
+          entry.diaryUuid,
+          'diary-body',
+        ),
+      ]);
+      const summary = diaryContentExcerpt(
+        content?.data,
         isAdmin,
-      ),
-    }),
+        THEI_SERVER.phrase.content_private_section,
+      );
+      return {
+        title: '',
+        date: entry.date,
+        href: buildDiaryUrl(entry.date),
+        media,
+        ...(summary ? { summary } : {}),
+      };
+    },
   );
 }

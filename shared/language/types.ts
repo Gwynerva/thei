@@ -1,3 +1,6 @@
+import type { ContentHistoryReason } from '../content-history';
+import type { RelationEntityType } from '../relation';
+
 export const languagesInfo = {
   en: 'English',
   ru: 'Русский',
@@ -102,6 +105,7 @@ export type LanguagePhrases = {
   asset_library_search: string;
   asset_aspect_hint: (ratio: string, size: string) => string;
   asset_library_pending_deletion: (date: string) => string;
+  asset_library_in_history: string;
   asset_library_empty: string;
   asset_library_unused: string;
   asset_library_unused_hint: string;
@@ -159,8 +163,6 @@ export type LanguagePhrases = {
   asset_role_action_file: string;
   asset_role_avatar: string;
   asset_role_status: string;
-  asset_scope_stage: string;
-  asset_scope_section: string;
   asset_source_profile: string;
   asset_library_view: string;
   asset_library_edit: string;
@@ -209,8 +211,12 @@ export type LanguagePhrases = {
   profile_avatar_history: string;
   profile_best_projects: string;
   profile_new_status: string;
+  profile_new_project_status: string;
+  profile_new_life_status: string;
   profile_edit_status: string;
   profile_status_placeholder: string;
+  profile_status_icon: string;
+  profile_status_date: string;
   profile_empty_status: string;
   profile_password_hint: string;
   profile_password_mismatch: string;
@@ -757,6 +763,10 @@ export type LanguagePhrases = {
   related_entities_hint: string;
   related_entity_add: string;
   relation_direction: string;
+  /** What a relation is, said between the two icons it joins. */
+  relation_short_related: (owner: RelationEntityType) => string;
+  relation_short_depends_on: string;
+  relation_short_affects: string;
   relation_popup_related: (current: string, other: string) => string;
   relation_popup_depends_on: (current: string, other: string) => string;
   relation_popup_affects: (current: string, other: string) => string;
@@ -778,12 +788,15 @@ export type LanguagePhrases = {
   external_link_fallback: string;
   external_link_archived: string;
   external_link_duplicate: string;
+  external_link_in_project_description: string;
+  external_link_in_event_content: string;
   external_link_private: string;
   project_external_links_empty: string;
   refresh_external_link: string;
   search_entity_placeholder: string;
   search_entity_no_results: string;
   search_entity_error: string;
+  entity_search_mentioned: string;
   content_section: string;
   content_section_delete_entity: string;
   project_stage: string;
@@ -821,8 +834,40 @@ export type LanguagePhrases = {
   content_editor_title: string;
   content_editor_clear_confirm: string;
   content_never_saved: string;
-  content_snapshots: string;
-  content_snapshot_restore_label: (date: string) => string;
+  content_history: string;
+  content_history_empty: string;
+  content_history_unavailable: string;
+  content_history_load_error: string;
+  content_history_opened_version: string;
+  content_history_reasons: Record<ContentHistoryReason, string>;
+  content_history_row_label: (time: string, changes: string) => string;
+  content_history_delta: (value: string, delta: number) => string;
+  content_history_missing_assets: (count: number) => string;
+  content_history_back: string;
+  content_restore: string;
+  content_restore_cancel: string;
+  content_diff_removed: string;
+  content_diff_added: string;
+  content_diff_changed: string;
+  /** Above a rewritten block as it is now, before the restore. */
+  content_diff_before: string;
+  /** Above the same block as the restore would leave it. */
+  content_diff_after: string;
+  content_restore_title: (time: string) => string;
+  content_restore_keeps_current: string;
+  content_restore_same: string;
+  content_restored: (label: string) => string;
+  content_restore_undo: string;
+  content_draft_offer: (time: string) => string;
+  content_draft_dismiss: string;
+  content_draft_chip: (time: string) => string;
+  content_draft_status_offline_short: string;
+  content_draft_status_synced: (time: string) => string;
+  content_draft_status_offline: string;
+  content_draft_status_refused_short: string;
+  content_draft_status_refused: string;
+  content_field_unsaved_draft: (time: string) => string;
+  sign_out_unsynced_confirm: (count: number) => string;
   content_internal_link: string;
   content_external_link: string;
   content_link_url: string;
@@ -835,6 +880,7 @@ export type LanguagePhrases = {
   content_private_section_end: string;
   content_editor_i18n: EditorJsPhrases;
   content_asset_pick_error: string;
+  content_media_pending_confirm: string;
   content_choose_media: string;
   content_gallery_tile: string;
   content_add_media: string;
@@ -997,6 +1043,11 @@ export type LanguagePhrases = {
   upload_apply_settings: string;
   upload_processing: string;
   upload_queued: string;
+  upload_finishing: string;
+  upload_cancel: string;
+  upload_dismiss: string;
+  upload_pending_leave_confirm: string;
+  upload_error_job_lost: string;
   upload_quality: string;
   upload_audio: string;
   upload_audio_none: string;
@@ -1016,6 +1067,7 @@ export type LanguagePhrases = {
   video_volume: string;
   video_no_audio: string;
   asset_variant_current: string;
+  asset_variant_current_tag: string;
   asset_variant_usage_count: (count: number) => string;
   upload_error_load_variants: string;
   upload_error_apply: string;
@@ -1102,4 +1154,13 @@ export type LanguagePhrases = {
   search_preset_showcase_description: string;
   search_preset_cv_title: string;
   search_preset_cv_description: string;
+  og_personal_archive: string;
+  og_stage_position: (index: number, total: number) => string;
+  og_updated: (date: string) => string;
+  og_life_headline: (years: number) => string;
+  og_tags_headline: (count: number) => string;
+  og_pages_headline: (count: number) => string;
+  og_image_alt: (kind: string, title: string, site: string) => string;
+  x_stages: (count: number) => string;
+  x_sections: (count: number) => string;
 };

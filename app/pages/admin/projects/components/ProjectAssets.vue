@@ -20,6 +20,11 @@ import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profil
 import { ASSET_UPLOAD_LIMITS } from '#layers/thei/shared/asset-upload-limits';
 import { DEFAULT_ASSET_IMAGE_FORMAT } from '#layers/thei/shared/asset-upload-settings';
 import AssetTile from '#layers/thei/app/components/AssetTile.vue';
+import AssetPendingTile from '#layers/thei/app/components/AssetPendingTile.vue';
+import {
+  createPendingUploadList,
+  type PendingUpload,
+} from '#layers/thei/app/composables/pending-upload';
 import type {
   OtherAssetGetItem,
   ShowcaseAssetGetItem,
@@ -33,6 +38,7 @@ import {
   iconSizeKey,
   bannerSizeKey,
   otherItemsKey,
+  pendingUploadsKey,
   showcaseItemsKey,
   currentProjectUuidKey,
 } from '../composables';
@@ -55,6 +61,28 @@ const currentProjectUuid = inject(currentProjectUuidKey)!;
 const batchErrorMessage = ref('');
 const showcaseRoot = useTemplateRef<HTMLElement>('showcaseRoot');
 const otherRoot = useTemplateRef<HTMLElement>('otherRoot');
+
+// Files still going up, shown as tiles of their own at the end of each list
+// until they land. The form knows nothing of them: leaving the page asks
+// through the count, and leaving lets them go.
+const pendingShowcase = shallowRef<readonly PendingUpload[]>([]);
+const pendingOther = shallowRef<readonly PendingUpload[]>([]);
+const pendingUploads = inject(pendingUploadsKey, undefined);
+watch([pendingShowcase, pendingOther], ([showcase, other]) => {
+  if (pendingUploads) pendingUploads.value = showcase.length + other.length;
+});
+const showcaseUploads = createPendingUploadList({
+  onLanded: (asset) => placeShowcaseAsset(asset),
+  onChange: (uploads) => (pendingShowcase.value = uploads),
+});
+const otherUploads = createPendingUploadList({
+  onLanded: (asset) => placeOtherAsset(asset),
+  onChange: (uploads) => (pendingOther.value = uploads),
+});
+onBeforeUnmount(() => {
+  showcaseUploads.dispose();
+  otherUploads.dispose();
+});
 
 type PickedAsset = {
   asset: AssetVariantInfo;
@@ -231,23 +259,26 @@ async function openShowcaseAdd() {
     sizeLimitPolicy: 'media',
   });
   if (!result) return;
-  for (const asset of result.assets) {
-    if (
-      (asset.type !== AssetType.Image && asset.type !== AssetType.Video) ||
-      !asset.media
-    ) {
-      continue;
-    }
-    addItem(
-      pickedToShowcaseItem(
-        { asset, result: mapAssetVariantToReplaceResult(asset) },
-        {},
-      ),
-    );
-  }
+  for (const asset of result.assets) placeShowcaseAsset(asset);
+  showcaseUploads.follow(result.uploads);
   batchErrorMessage.value = result.errors
     .map((error) => `${error.fileName}: ${error.message}`)
     .join(' · ');
+}
+
+function placeShowcaseAsset(asset: AssetVariantInfo) {
+  if (
+    (asset.type !== AssetType.Image && asset.type !== AssetType.Video) ||
+    !asset.media
+  ) {
+    return;
+  }
+  addItem(
+    pickedToShowcaseItem(
+      { asset, result: mapAssetVariantToReplaceResult(asset) },
+      {},
+    ),
+  );
 }
 
 async function openShowcaseAsset(index: number) {
@@ -323,18 +354,16 @@ async function openOtherAdd() {
     sizeLimitPolicy: 'file',
   });
   if (!result) return;
-  for (const asset of result.assets) {
-    const picked = {
-      asset,
-      result: mapAssetVariantToReplaceResult(asset),
-    };
-    addOtherItem(
-      pickedToOtherItem(picked, { title: phrase.value.project_file }),
-    );
-  }
+  for (const asset of result.assets) placeOtherAsset(asset);
+  otherUploads.follow(result.uploads);
   batchErrorMessage.value = result.errors
     .map((error) => `${error.fileName}: ${error.message}`)
     .join(' · ');
+}
+
+function placeOtherAsset(asset: AssetVariantInfo) {
+  const picked = { asset, result: mapAssetVariantToReplaceResult(asset) };
+  addOtherItem(pickedToOtherItem(picked, { title: phrase.value.project_file }));
 }
 
 async function openOtherAsset(index: number) {
@@ -515,11 +544,20 @@ async function openOtherAsset(index: number) {
             v-if="item.caption"
             class="line-clamp-2 w-full cursor-help text-center text-xs
               wrap-break-word text-text-2"
-            :data-title-popup="item.caption"
+            :data-title-popup="publicText(item.caption)"
           >
-            {{ item.caption }}
+            {{ publicText(item.caption) }}
           </div>
         </div>
+
+        <AssetPendingTile
+          v-for="upload in pendingShowcase"
+          :key="upload.id"
+          :upload
+          class="size-18"
+          @cancel="showcaseUploads.forget(upload)"
+          @retry="upload.retry()"
+        />
 
         <!-- Add button (always last) -->
         <AssetTile
@@ -563,11 +601,20 @@ async function openOtherAsset(index: number) {
           <div
             class="line-clamp-2 w-full cursor-help text-center text-xs
               wrap-break-word text-text-2"
-            :data-title-popup="item.title"
+            :data-title-popup="publicText(item.title)"
           >
-            {{ item.title }}
+            {{ publicText(item.title) }}
           </div>
         </div>
+
+        <AssetPendingTile
+          v-for="upload in pendingOther"
+          :key="upload.id"
+          :upload
+          class="size-18"
+          @cancel="otherUploads.forget(upload)"
+          @retry="upload.retry()"
+        />
 
         <AssetTile
           :aria-label="phrase.other_add"

@@ -4,19 +4,34 @@ const liveNow = useLiveNow();
 
 const { data, error, refresh } = await useFetch('/api/admin/sessions', {
   key: 'admin-sessions',
+  // The next refresh is the retry.
+  retry: 0,
+});
+
+/**
+ * The sessions last read. A failed refresh clears `data`, but the table keeps
+ * what it had under the error, rather than going blank until the next one.
+ */
+const sessions = shallowRef(data.value);
+watch(data, (value) => {
+  if (value) sessions.value = value;
 });
 
 const refreshInterval = 5000;
-const { forceRefresh } = useAutoRefresh(refresh, refreshInterval);
+const { forceRefresh } = useAutoRefresh(async () => {
+  await refresh();
+  // A failed refresh does not throw; the refresher must know to wait longer.
+  if (error.value) throw error.value;
+}, refreshInterval);
 
 type Session = NonNullable<typeof data.value>[number];
 
 const structuredSessions = computed(() => {
-  if (!data.value) {
+  if (!sessions.value) {
     return undefined;
   }
 
-  const grouped = groupSessions(data.value);
+  const grouped = groupSessions(sessions.value);
 
   if (!grouped.current && !grouped.active.length && !grouped.destroyed.length) {
     return undefined;

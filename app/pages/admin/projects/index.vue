@@ -76,7 +76,10 @@ const list = computed<ProjectListResponse | undefined>(() => data.value);
             v-if="project.reminder"
             name="warning"
             v-bind="
-              reminderTitlePopup(phrase.entity_reminder_badge, project.reminder)
+              reminderTitlePopup(
+                phrase.entity_reminder_badge,
+                publicText(project.reminder),
+              )
             "
             :aria-label="phrase.entity_reminder_badge"
             role="img"

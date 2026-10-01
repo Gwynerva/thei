@@ -45,7 +45,7 @@ const accentColor = computed(() =>
       class="aspect-square h-4/6 shrink-0 rounded-xs"
     />
     <Icon v-else name="tag" class="tag-chip-fallback-icon shrink-0" />
-    <span class="min-w-0 truncate">{{ tag.title }}</span>
+    <span class="min-w-0 truncate">{{ publicText(tag.title) }}</span>
     <slot />
   </component>
 </template>
@@ -103,12 +103,24 @@ const accentColor = computed(() =>
   color: color-mix(in oklab, var(--tag-accent) 75%, var(--color-text-1));
 }
 
-.tag-chip:is(:hover, :focus-visible) {
+.tag-chip:focus-visible {
   border-color: color-mix(in oklab, var(--tag-accent) 80%, transparent);
 }
 
-.tag-chip:is(:hover, :focus-visible)::before {
+@media (hover: hover) {
+  .tag-chip:hover {
+    border-color: color-mix(in oklab, var(--tag-accent) 80%, transparent);
+  }
+}
+
+.tag-chip:focus-visible::before {
   opacity: 1;
+}
+
+@media (hover: hover) {
+  .tag-chip:hover::before {
+    opacity: 1;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,49 +1,35 @@
+import type { HintPlacement } from './press-hint';
 import type { TitlePopupContentLine } from './title-popup-content';
 
 // Module-level state — safe because this composable is client-only.
 // A single shared instance is correct: there is only ever one active title popup.
-let _showTimeout: ReturnType<typeof setTimeout> | undefined;
-const SHOW_DELAY = 400;
-// When already visible, debounce anchor switches to absorb sub-pixel browser
-// hit-test oscillation at element boundaries.
-const SWITCH_DEBOUNCE = 60;
+// When it shows is decided in `press-hint.ts`; this only holds what is shown.
 const anchor = shallowRef<HTMLElement>();
 const lines = shallowRef<TitlePopupContentLine[]>([]);
 const visible = ref(false);
 const popupClass = ref('');
+const placement = ref<HintPlacement>('bottom');
 
 export function useTitlePopup() {
   function show(
     el: HTMLElement,
     content: TitlePopupContentLine[],
     extraClass: string = '',
+    where: HintPlacement = 'bottom',
   ) {
-    clearTimeout(_showTimeout);
-
-    if (visible.value && el !== anchor.value) {
-      // Popup already showing — debounce the anchor switch so rapid boundary
-      // oscillation from the browser doesn't cause the popup to flicker.
-      _showTimeout = setTimeout(() => {
-        anchor.value = el;
-        lines.value = content;
-        popupClass.value = extraClass;
-      }, SWITCH_DEBOUNCE);
-      return;
-    }
-
     anchor.value = el;
     lines.value = content;
     popupClass.value = extraClass;
-    _showTimeout = setTimeout(() => {
-      visible.value = true;
-    }, SHOW_DELAY);
+    placement.value = where;
+    visible.value = true;
   }
 
-  function hide() {
-    clearTimeout(_showTimeout);
+  /** Hides the popup, or only the one of `el` when given. */
+  function hide(el?: HTMLElement) {
+    if (el && el !== anchor.value) return;
     visible.value = false;
     anchor.value = undefined;
   }
 
-  return { anchor, lines, visible, popupClass, show, hide };
+  return { anchor, lines, visible, popupClass, placement, show, hide };
 }

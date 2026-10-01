@@ -1,7 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { effectScope } from 'vue';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createExternalLinkDraft,
   createExternalLinkStore,
+  EXTERNAL_LINK_TYPING_DELAY_MS,
+  useExternalLinkTyping,
   type ExternalLinkFetcher,
 } from '../../../app/composables/external-links';
 import type { ExternalLink } from '../../../shared/external-link';
@@ -28,6 +31,21 @@ function fetcher() {
 }
 
 describe('the link store', () => {
+  it("keeps only the site's record of what a block or a list entry seeds", () => {
+    const store = createExternalLinkStore(fetcher().fetch);
+    store.seed([
+      {
+        ...record('https://known.example/'),
+        note: 'Why it is here',
+        name: 'Chip',
+        isPrivate: true,
+      } as ExternalLink,
+    ]);
+    expect(store.get('https://known.example/')).toEqual(
+      record('https://known.example/'),
+    );
+  });
+
   it('remembers what the page came with and asks about an address once', async () => {
     const { fetch, calls } = fetcher();
     const store = createExternalLinkStore(fetch);
@@ -153,5 +171,154 @@ describe('a link draft', () => {
     expect(await draft.commit()).toBeUndefined();
     expect(draft.error).toBe('Bad address');
     expect(draft.loading).toBe(false);
+  });
+
+  it('reads after a pause only a finished host, and leaves the text alone', async () => {
+    const { fetch, calls } = fetcher();
+    const draft = createExternalLinkDraft(createExternalLinkStore(fetch), {
+      errorText,
+    });
+    draft.url = 'https://exa';
+    expect(await draft.commit({ typing: true })).toBeUndefined();
+    expect(calls).toEqual([]);
+
+    draft.url = 'https://example.com';
+    const link = await draft.commit({ typing: true });
+    expect(link?.title).toBe('Read 1');
+    expect(draft.preview).toEqual(link);
+    expect(draft.url).toBe('https://example.com');
+    expect(calls).toEqual([{ method: 'POST', url: 'https://example.com/' }]);
+
+    // Done: nothing more to read, and the field shows the stored address.
+    expect(await draft.commit()).toEqual(link);
+    expect(calls).toHaveLength(1);
+    expect(draft.url).toBe('https://example.com/');
+  });
+
+  it('joins a read started by a pause when the address is confirmed', async () => {
+    const { fetch, calls } = fetcher();
+    const draft = createExternalLinkDraft(createExternalLinkStore(fetch), {
+      errorText,
+    });
+    draft.url = 'https://example.com';
+    const paused = draft.commit({ typing: true });
+    const done = draft.commit();
+    const [first, second] = await Promise.all([paused, done]);
+    expect(first).toEqual(second);
+    expect(calls).toHaveLength(1);
+    expect(draft.url).toBe('https://example.com/');
+  });
+
+  it('reads an address typed away from and back to anew', async () => {
+    const { fetch, calls } = fetcher();
+    const draft = createExternalLinkDraft(createExternalLinkStore(fetch), {
+      errorText,
+    });
+    draft.url = 'https://example.com';
+    const dropped = draft.commit({ typing: true });
+    draft.url = 'https://example.com/a';
+    draft.url = 'https://example.com';
+    expect(await dropped).toBeUndefined();
+
+    const link = await draft.commit();
+    expect(link?.title).toBe('Read 2');
+    expect(draft.preview).toEqual(link);
+    expect(calls).toHaveLength(2);
+  });
+
+  it('does not read an address the page knows while it is typed', async () => {
+    const { fetch, calls } = fetcher();
+    const store = createExternalLinkStore(fetch);
+    store.seed([record('https://known.example/', 'Known')]);
+    const draft = createExternalLinkDraft(store, { errorText });
+    draft.url = 'https://known.example';
+    expect((await draft.commit({ typing: true }))?.title).toBe('Known');
+    expect(calls).toEqual([]);
+    expect(draft.url).toBe('https://known.example');
+  });
+});
+
+describe('typing into an address', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function input(inputType = 'insertText', isComposing = false) {
+    return Object.assign(new Event('input'), { inputType, isComposing });
+  }
+
+  function typed(settle: (options: { typing: boolean }) => unknown) {
+    const scope = effectScope();
+    const typing = scope.run(() => useExternalLinkTyping(settle))!;
+    return { scope, typing };
+  }
+
+  it('settles once, a pause after the last keystroke', () => {
+    vi.useFakeTimers();
+    const settle = vi.fn();
+    const { typing } = typed(settle);
+    typing.onInput(input());
+    vi.advanceTimersByTime(EXTERNAL_LINK_TYPING_DELAY_MS - 1);
+    typing.onInput(input());
+    vi.advanceTimersByTime(EXTERNAL_LINK_TYPING_DELAY_MS - 1);
+    expect(settle).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(settle).toHaveBeenCalledExactlyOnceWith({ typing: true });
+  });
+
+  it('measures the pause from the keystroke even while a read is under way', () => {
+    vi.useFakeTimers();
+    const settle = vi.fn(
+      () => new Promise((resolve) => setTimeout(resolve, 5000)),
+    );
+    const { typing } = typed(settle);
+    typing.onInput(input());
+    vi.advanceTimersByTime(EXTERNAL_LINK_TYPING_DELAY_MS);
+    expect(settle).toHaveBeenCalledTimes(1);
+    typing.onInput(input());
+    vi.advanceTimersByTime(EXTERNAL_LINK_TYPING_DELAY_MS);
+    expect(settle).toHaveBeenCalledTimes(2);
+  });
+
+  it('waits for composed text and settles a paste or a drop at once, as done', () => {
+    vi.useFakeTimers();
+    const settle = vi.fn();
+    const { typing } = typed(settle);
+    typing.onInput(input('insertCompositionText', true));
+    vi.advanceTimersByTime(EXTERNAL_LINK_TYPING_DELAY_MS * 2);
+    expect(settle).not.toHaveBeenCalled();
+
+    typing.onInput(input('insertFromPaste'));
+    expect(settle).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(0);
+    expect(settle).toHaveBeenCalledExactlyOnceWith({ typing: false });
+
+    typing.onInput(input('insertFromDrop'));
+    vi.advanceTimersByTime(0);
+    expect(settle).toHaveBeenLastCalledWith({ typing: false });
+  });
+
+  it('forgets a pending pause when cancelled or disposed', () => {
+    vi.useFakeTimers();
+    const settle = vi.fn();
+    const { scope, typing } = typed(settle);
+    typing.onInput(input());
+    typing.cancel();
+    vi.advanceTimersByTime(EXTERNAL_LINK_TYPING_DELAY_MS);
+    typing.onInput(input());
+    scope.stop();
+    vi.advanceTimersByTime(EXTERNAL_LINK_TYPING_DELAY_MS);
+    expect(settle).not.toHaveBeenCalled();
+  });
+
+  it('swallows a failed settle', async () => {
+    vi.useFakeTimers();
+    const settle = vi.fn(async () => {
+      throw new Error('offline');
+    });
+    const { typing } = typed(settle);
+    typing.onInput(input());
+    await vi.advanceTimersByTimeAsync(EXTERNAL_LINK_TYPING_DELAY_MS);
+    expect(settle).toHaveBeenCalledTimes(1);
   });
 });

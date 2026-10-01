@@ -33,7 +33,7 @@ Around them:
 ## Package Manager
 
 - This project uses Bun. Use `bun install`, `bun run`, and `bunx` for dependencies, scripts, and package executables; do not use npm, pnpm, or Yarn.
-- Runtime `dependencies` and the `nuxt` version in `update/instance/package.tmpl.json` are pinned to exact versions: an instance installs them from the tag without a lockfile, so a range would install versions nobody tested. Upgrade them deliberately, and run the release bench (`tests/release/`) afterwards.
+- Runtime `dependencies` and the `nuxt` and `better-sqlite3` versions in `update/instance/package.tmpl.json` are pinned to exact versions: an instance installs them from the tag without a lockfile, so a range would install versions nobody tested. Upgrade them deliberately, and run the release bench (`tests/release/`) afterwards.
 
 ## Commits
 
@@ -57,6 +57,7 @@ Around them:
 - Prefer an update step over teaching the engine or the UI about an older shape. When a change leaves existing content, config or files in an older shape, convert them once with a migration, phase or task, and let the rest of the code assume only the current shape: no fallbacks for fields a migration guarantees, no `legacy*` branches, no optional types kept for old rows. Only a conversion that would be exceptionally heavy or slow is weighed separately, and the decision is written down where the compatibility code lives.
 - What an update step cannot reach is not legacy data: published URLs, backup clients installed on other machines, a panel of the previous release still open in a browser. Keep compatibility with those deliberately, and say so where it lives.
 - Keep the layer consumable from `node_modules`. Do not assume this repository is the project root, do not import a `devDependency` from runtime code, and declare every runtime import in `dependencies`. The published instance runs the layer from `node_modules/thei`, where an undeclared or dev-only dependency is simply absent.
+  - Two exceptions come from the instance manifest instead, as peers of the layer: `nuxt`, and `better-sqlite3` as an optional peer. An update installs the new engine under the previous release's manifest first, and that manifest trusts `better-sqlite3`, so Bun would build a newer one from source — it ignores `gypfile: false` — with nothing to build it with. As an optional peer it is absent until the new manifest brings it, untrusted: it carries its binaries and must never be compiled (see `update/README.md`).
 - Development reads everything from `node_modules`; a build carries only what it traces, and writes its own directory afresh. Check anything read from disk at runtime — fonts, wasm, templates, server assets — in a production build: `bun run test:e2e` runs one, and the release bench builds a real instance.
 - Declare new requirements of an installed instance in `update/instance/package.tmpl.json` rather than in installation steps. The engine owns the instance manifest, and an update re-renders it from the newly installed version.
 - Keep the boot sequence non-fatal. Report a failure through `setBootError` or `setBootUpdate` in `server/thei/boot/result.ts`. An exception escaping boot kills a process that a service supervisor will restart forever, which takes the site down permanently.
@@ -64,7 +65,7 @@ Around them:
 
 ## Editor.js
 
-- Check every change related to Editor.js for compatibility with content snapshots history system, including tools, block mutations, rendering, normalization, asynchronous hydration, assets, and editor event handling.
+- Check every change related to Editor.js for compatibility with the content history — the drafts and versions of texts kept on the server (`app/composables/content-history/`, `server/thei/content/history.ts`) — including tools, block mutations, rendering, normalization, asynchronous hydration, assets, and editor event handling.
 - Verify that Editor.js changes do not emit transient or no-op content mutations that briefly change the dirty state. The save control must never flash from “Saved” to “Save” and immediately back to “Saved” without a real persistent content change.
 - `docs/content-blocks.md` is the written contract for stored content. Update it in the same commit as any change to a block type, its data, the inline markup or the Markdown output, and keep it to what is actually stored.
 
@@ -80,6 +81,12 @@ Around them:
 - Every public project, event, stage, section and page is also served as Markdown at `<url>index.md`, built from the same `buildPublic*` functions with the visibility of a stranger. A representation must never be more permissive than the page it mirrors: build it for `STRANGER` (`server/thei/access-links/viewer.ts`), never for the request's own viewer.
 - `/llms.txt` describes the site and what its entities mean. Keep it short and factual; it is a map, not a marketing page.
 - Open Graph cards are rendered on the server from the same public data. Only publicly openable entities get one, so a preview never shows what a visitor is about to be refused.
+  - A card's content is built for `STRANGER` in `server/thei/og/content/` with the builders the page uses, and counts what the page counts. Layouts draw only that content (`server/thei/og/model.ts`); which layout and tone a card takes is chosen from it (`design.ts`), never set by hand.
+  - Every layout must fit any amount of data: text goes through the stack solver (`fit.ts`), not fixed sizes. `tests/server/og/layouts.test.ts` checks the boxes satori lays out for every fixture; a change to how cards look is looked at with `bun run og:gallery` and recorded with `OG_UPDATE_GOLDENS=1`.
+  - A page takes its card's address and description from `/api/og/<kind>/<id>`; the version in it is built from what the card shows, so never assemble one on the page.
+- Structured data (JSON-LD) says what a page is, not what Thei calls its entity; `usePublicSeo` (`app/composables/public-seo.ts`) lists the type of each page. An event is never a schema.org `Event`: search engines read that as a public gathering and reject one without a venue.
+- Everything the owner typed is stored exactly as typed and passes through the formatter on the way out: `publicText()` / `publicRichText()` (`app/composables/public-text.ts`) in the app, `ownerText()` / `ownerRichText()` (`server/thei/owner-text.ts`) on the server. That covers every place such text is shown or read: public pages and admin lists, cards, tooltips, `aria-label`s, `<title>`, meta tags and structured data, Open Graph cards, Markdown copies and `/llms.txt`. A new place that shows the owner's words formats them in the same change.
+- The exceptions are few and deliberate: a value inside a field being edited, anything used as an identifier or compared (slug, URL, hostname, file name, search key), and text fetched from other sites, such as a linked page's own title and description (the owner's note on the link is theirs and is formatted). Never write formatted text back to storage.
 
 ## File Storage
 
@@ -105,3 +112,5 @@ Around them:
 - Project spacing tokens named `xs`, `sm`, `md`, `lg`, and `xl` also affect similarly named Tailwind dimension utilities. Verify the generated value before using utilities such as `max-w-sm`, `max-w-md`, or `max-w-lg`; use an appropriate numeric utility when a standard container width is intended. The responsive `sm:` prefix is unrelated to this collision and remains the project's allowed breakpoint convention.
 - Keep arbitrary Tailwind values to the minimum. Use them only when no semantically correct project token or standard utility exists, including CSS-variable calculations and intrinsic or container-relative geometry.
 - Preserve accessibility media queries such as pointer capability and reduced-motion queries when they describe user or device capabilities rather than layout breakpoints.
+- `hocus:` is a mouse or pen pointing, or the keyboard's focus; a touch screen never matches it, as with Tailwind's own `hover:`. Write a scoped `:hover` the same way, under `@media (hover: hover)`. A control that only appears on hover needs a way to show on touch (`pointer-coarse:`), or a phone never reaches it.
+- Hints (`data-title-popup`, and the link cards of `LinkHoverPopup`) open on hover, on keyboard focus, on a tap of something that has no action of its own, and on a first long press of a link or a control, whose tap stays its action (`app/composables/press-hint.ts`). Mark an element whose action lives only in a script handler with `data-title-popup-press="hold"`.

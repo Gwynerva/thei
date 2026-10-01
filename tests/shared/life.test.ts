@@ -281,6 +281,31 @@ describe('Life point construction', () => {
     ]);
   });
 
+  it("puts a project under its own statuses, not the person's", () => {
+    const ordered = sortLifePoints([
+      {
+        ...point('project:a', '2026-08-22', 'created', 3, 'project'),
+        projectUuids: ['a'],
+      },
+      // Set a day back: written after the project, but its sortTime is older.
+      {
+        ...point('profile-status:p', '2026-08-22', 'created', 1),
+        entityKind: 'profile-status',
+        projectUuids: ['a'],
+      },
+      {
+        ...point('profile-status:me', '2026-08-22', 'created', 0),
+        entityKind: 'profile-status',
+        projectUuids: [],
+      },
+    ]);
+    expect(ordered.map((item) => item.identity)).toEqual([
+      'profile-status:p',
+      'project:a',
+      'profile-status:me',
+    ]);
+  });
+
   it('groups project timestamps by their UTC day', () => {
     expect(projectCreatedUtcDate('2026-08-21T23:30:00-03:00')).toBe(
       '2026-08-22',

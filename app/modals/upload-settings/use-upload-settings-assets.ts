@@ -5,23 +5,21 @@ import type {
   AssetVariantsResponse,
 } from '#layers/thei/shared/api/asset';
 import type { AssetDraftSource } from '#layers/thei/shared/api/asset-draft';
+import type { AssetUploadProgress } from '#layers/thei/shared/api/asset-upload-progress';
 import type { AssetUploadRequest } from '#layers/thei/shared/asset-upload-settings';
 import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
 import type { AssetUploadLimitPolicy } from '#layers/thei/shared/asset-upload-limits';
+import { commitDraftRequest } from '#layers/thei/app/composables/upload-draft';
 import type { PickedFile } from '../pick-file/picked-file';
-
-export type UploadSettingsStatus =
-  | { phase: 'uploading'; progress?: number }
-  /** Waiting for a processing slot, so the user is not left staring at 0%. */
-  | { phase: 'queued'; progress?: number }
-  | { phase: 'processing'; progress?: number };
 
 export interface UploadSettingsModalData {
   duplicateNotice?: boolean;
   librarySelection?: boolean;
   source:
     | { kind: 'file'; file: PickedFile }
-    | { kind: 'asset'; asset: AssetVariantInfo };
+    | { kind: 'asset'; asset: AssetVariantInfo }
+    /** A file someone else staged — a block storing a paste — and the file. */
+    | { kind: 'draft'; draft: AssetDraftSource; file: PickedFile };
   maxSize?: number;
   acceptedExtensions?: string[] | '*';
   sizeLimitPolicy?: AssetUploadLimitPolicy;
@@ -36,17 +34,14 @@ export interface UploadSettingsModalData {
 export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
   const variants = ref<AssetVariantWithUsage[]>([]);
   const loadingVariants = ref(false);
-  const status = ref<UploadSettingsStatus | null>(null);
-  let progressTimer: ReturnType<typeof setInterval> | undefined;
+  /** Where the commit under way is; nothing while none is. */
+  const status = ref<AssetUploadProgress | null>(null);
   let commitController: AbortController | null = null;
 
-  onBeforeUnmount(() => {
-    commitController?.abort();
-    stopProgressPolling();
-  });
+  onBeforeUnmount(() => commitController?.abort());
 
   async function loadVariants(): Promise<AssetVariantWithUsage[]> {
-    if (modalData.source.kind === 'file') return variants.value;
+    if (modalData.source.kind !== 'asset') return variants.value;
     loadingVariants.value = true;
     try {
       const response = await $fetch<AssetVariantsResponse>(
@@ -68,7 +63,7 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
   /**
    * Stores a result made from the draft. An image already rendered with
    * these settings is stored as it was shown; anything else is made now,
-   * with progress for the slow cases.
+   * with progress for the slow cases. A second commit replaces the first.
    */
   async function commit(
     draft: AssetDraftSource,
@@ -77,31 +72,32 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
     commitController?.abort();
     const controller = new AbortController();
     commitController = controller;
-    const uploadId = crypto.randomUUID();
     status.value = { phase: 'processing' };
-    startProgressPolling(uploadId);
     try {
-      const result = await $fetch<AssetUploadResponse>(
-        `/api/admin/assets/drafts/${draft.draftId}/commit`,
+      const result = await commitDraftRequest(
+        draft.draftId,
+        settings,
+        modalData,
         {
-          method: 'POST',
           signal: controller.signal,
-          body: {
-            settings,
-            uploadId,
-            maxSize: modalData.maxSize,
-            acceptedExtensions: modalData.acceptedExtensions,
-            sizeLimitPolicy: modalData.sizeLimitPolicy,
+          onStatus: (progress) => {
+            if (commitController === controller) status.value = progress;
           },
         },
       );
       remember(result);
       return result;
     } finally {
-      stopProgressPolling();
-      status.value = null;
-      if (commitController === controller) commitController = null;
+      if (commitController === controller) {
+        commitController = null;
+        status.value = null;
+      }
     }
+  }
+
+  /** Gives the commit under way up: a queued job leaves, an encode stops. */
+  function cancelCommit() {
+    commitController?.abort();
   }
 
   function remember(asset: AssetVariantInfo) {
@@ -128,32 +124,13 @@ export function useUploadSettingsAssets(modalData: UploadSettingsModalData) {
     });
   }
 
-  function startProgressPolling(uploadId: string) {
-    stopProgressPolling();
-    progressTimer = setInterval(async () => {
-      try {
-        const progress = await $fetch<UploadSettingsStatus | null>(
-          `/api/admin/uploads/${uploadId}`,
-        );
-        if (progress && status.value) status.value = progress;
-      } catch {
-        // Errors surface through the request itself.
-      }
-    }, 500);
-  }
-
-  function stopProgressPolling() {
-    if (!progressTimer) return;
-    clearInterval(progressTimer);
-    progressTimer = undefined;
-  }
-
   return {
     variants,
     loadingVariants,
     status,
     loadVariants,
     commit,
+    cancelCommit,
     touch,
   };
 }

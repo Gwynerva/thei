@@ -7,7 +7,9 @@ import type {
   DiarySaveResponse,
 } from '#layers/thei/shared/api/diary';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
+import { toDateString } from '#layers/thei/shared/date-range';
 import { diaryDeleteModal } from '../composables';
+import { provideContentOwner } from '#layers/thei/app/composables/content-history/owner';
 
 const { diaryUuid } = defineProps<{ diaryUuid?: string }>();
 
@@ -54,6 +56,10 @@ const headerError = ref<string>();
 const isDirty = computed(
   () => JSON.stringify(diaryPayload()) !== savedSnapshot.value,
 );
+// Where the entry's texts keep their drafts and versions. A new entry keeps
+// them too, and its first save hands them over.
+provideContentOwner('diary-entry', () => diaryUuid);
+useLeaveGuard({ dirty: () => isDirty.value });
 const isValid = computed(() =>
   Boolean(
     diaryData.value.date &&
@@ -138,11 +144,6 @@ await useAdminTabTitle(
     isEdit.value ? phrase.value.edit_diary_entry : phrase.value.new_diary_entry,
   ),
 );
-onBeforeRouteLeave(() => {
-  if (interceptModalNavigation()) return false;
-  if (isDirty.value)
-    return window.confirm(phrase.value.unsaved_changes_confirm);
-});
 
 async function deleteEntry() {
   if (!diaryUuid) return;
@@ -169,8 +170,9 @@ function saveAfterContentEdit() {
 function emptyData(): DiaryEditData {
   return {
     // A new entry is about today until told otherwise, which is what makes
-    // one quick enough to write on the way past.
-    date: new Date().toISOString().slice(0, 10),
+    // one quick enough to write on the way past — the writer's today, not
+    // UTC's, or a late evening east of Greenwich would date it yesterday.
+    date: toDateString(new Date()),
     access: ProjectEventAccessLevel.Public,
     content: null,
     relations: [],
@@ -288,6 +290,7 @@ useRegisterAdminBarContextButton(
         <FieldLabel required>{{ phrase.diary_content }}</FieldLabel>
         <FieldContentEditor
           v-model="diaryData.content"
+          content-slot="diary-body"
           :title-label="phrase.diary_content"
           @saved="saveAfterContentEdit()"
         />
@@ -298,7 +301,9 @@ useRegisterAdminBarContextButton(
     <AdminRelations
       v-model="relationsModel"
       :owner="diaryUuid ? { type: 'diary-entry', id: diaryUuid } : undefined"
+      owner-type="diary-entry"
       :owner-title="ownerTitle"
+      :text="diaryData.content?.data"
     />
     <AdminShareLinks
       v-if="diaryUuid"

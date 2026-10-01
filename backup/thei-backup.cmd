@@ -33,7 +33,7 @@ $DayMs = [long](24 * 60 * 60 * 1000)
 # keeps a weekly backup weekly.
 $DueSlackMs = [long](12 * 60 * 60 * 1000)
 $ParallelDownloads = 6
-$ConfigKeys = @('siteUrl', 'token', 'destination', 'clientLabel', 'keepCount', 'intervalDays', 'shrinkPercent', 'alertCommand', 'lastRunAt', 'lastFileCount', 'lastByteCount', 'lastCounts', 'alert', 'bakedToken')
+$ConfigKeys = @('siteUrl', 'token', 'destination', 'clientLabel', 'keepCount', 'intervalDays', 'shrinkPercent', 'alertCommand', 'lastRunAt', 'lastFileCount', 'lastByteCount', 'lastUsedFiles', 'lastUsedBytes', 'lastCounts', 'alert', 'bakedToken')
 $ConfigDefaults = @{ keepCount = '3'; intervalDays = '7'; shrinkPercent = '30'; lastRunAt = '0'; lastFileCount = '0'; lastByteCount = '0' }
 $Invariant = [Globalization.CultureInfo]::InvariantCulture
 
@@ -160,10 +160,12 @@ function ConfigComplete {
 
 function SiteBase { $Config.siteUrl.TrimEnd('/') }
 
+# Always a full path with no "." or "..": what is built from it is compared
+# with what Get-ChildItem lists, which comes normalized.
 function DestinationPath {
   $value = [Environment]::ExpandEnvironmentVariables($Config.destination)
-  if ([IO.Path]::IsPathRooted($value)) { return $value }
-  return (Join-Path $ScriptDir $value)
+  if (-not [IO.Path]::IsPathRooted($value)) { $value = Join-Path $ScriptDir $value }
+  return [IO.Path]::GetFullPath($value)
 }
 
 # Every scheduler entry is named after the settings file, so each site backed
@@ -326,17 +328,28 @@ function ShrinkPercent([long]$Before, [long]$After) {
 }
 
 # What the site lost since the last backup that it plausibly did not mean
-# to: a share of its files or bytes, or of any kind of entity. Empty if none.
+# to: a share of the files it uses or of their size, or of any kind of
+# entity. Empty if none.
 function ShrinkReport($Session, [string]$Counts) {
   $limit = [int]$Config.shrinkPercent
   $parts = New-Object Collections.Generic.List[string]
-  $lastFiles = [long]$Config.lastFileCount
-  $lastBytes = [long]$Config.lastByteCount
-  if ($lastFiles -gt 0) {
-    $filesLost = ShrinkPercent $lastFiles $Session.totalFiles
-    $bytesLost = ShrinkPercent $lastBytes $Session.totalBytes
+  $sizes = $null
+  if ($Session.PSObject.Properties['usedFiles']) {
+    # The site says which of its files are in use: one nothing uses any
+    # more, which its cleanup removes, is no loss however large. Judged
+    # against the last run that measured the same way; the first has none.
+    if ([string]$Config.lastUsedFiles -match '^\d+$' -and [long]$Config.lastUsedFiles -gt 0) {
+      $sizes = @([long]$Config.lastUsedFiles, [long]$Session.usedFiles, [long]$Config.lastUsedBytes, [long]$Session.usedBytes)
+    }
+  } elseif ([long]$Config.lastFileCount -gt 0) {
+    # A site before 0.0.3 counts every file it holds.
+    $sizes = @([long]$Config.lastFileCount, [long]$Session.totalFiles, [long]$Config.lastByteCount, [long]$Session.totalBytes)
+  }
+  if ($sizes) {
+    $filesLost = ShrinkPercent $sizes[0] $sizes[1]
+    $bytesLost = ShrinkPercent $sizes[2] $sizes[3]
     if ($filesLost -gt $limit -or $bytesLost -gt $limit) {
-      $parts.Add("files $lastFiles -> $($Session.totalFiles) (-$filesLost%), size $(HumanSize $lastBytes) -> $(HumanSize $Session.totalBytes) (-$bytesLost%)")
+      $parts.Add("files $($sizes[0]) -> $($sizes[1]) (-$filesLost%), size $(HumanSize $sizes[2]) -> $(HumanSize $sizes[3]) (-$bytesLost%)")
     }
   }
   # Deleting a couple of entries is ordinary; losing a share of them, and more
@@ -547,9 +560,17 @@ function PerformBackup([string]$Kind, [bool]$Force) {
 
     # Whatever an earlier attempt left in staging that this session did not
     # list is not part of the copy.
+    $root = (Get-Item -LiteralPath $staging -Force).FullName.TrimEnd('\')
     foreach ($file in @(Get-ChildItem -LiteralPath $staging -Recurse -File -Force)) {
-      $relative = $file.FullName.Substring($staging.Length + 1)
+      $relative = $file.FullName.Substring($root.Length + 1)
       if ($file.Name.EndsWith('.part') -or -not $listed.Contains($relative)) { Remove-Item -LiteralPath $file.FullName -Force }
+    }
+    # The tally above counts what arrived, not what is left: checked on disk,
+    # a sweep that took the wrong files cannot pass for a complete copy.
+    $present = @(Get-ChildItem -LiteralPath $staging -Recurse -File -Force).Count
+    if ($present -ne $copied + $reused) {
+      Fail "Only $present of $($copied + $reused) file(s) are in $staging."
+      return 1
     }
 
     # Renamed into place only once everything is there: until this line the
@@ -576,6 +597,9 @@ function PerformBackup([string]$Kind, [bool]$Force) {
     $Config.lastRunAt = [string]$completedAt
     $Config.lastFileCount = [string]$session.totalFiles
     $Config.lastByteCount = [string]$session.totalBytes
+    $hasUsed = [bool]$session.PSObject.Properties['usedFiles']
+    $Config.lastUsedFiles = if ($hasUsed) { [string]$session.usedFiles } else { '' }
+    $Config.lastUsedBytes = if ($hasUsed) { [string]$session.usedBytes } else { '' }
     $Config.lastCounts = $counts
     ClearAlert
     WriteConfig

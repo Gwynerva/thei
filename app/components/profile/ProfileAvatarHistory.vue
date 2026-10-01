@@ -69,7 +69,7 @@ function view(item: ProfileAvatarHistoryItem) {
         <Icon name="delete" />
       </Button>
       <ProfileDate
-        :timestamp="item.createdAt"
+        :date="new Date(item.createdAt).toISOString().slice(0, 10)"
         :short="shortDate"
         class="mt-xs block text-center"
       />

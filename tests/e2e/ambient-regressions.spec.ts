@@ -27,19 +27,40 @@ async function images(page: Page) {
   });
 }
 
-/** Edge media spans the whole strip height and is pinned to its edge. */
+/**
+ * Edge media spans the whole strip height and always reaches the outer edge.
+ * Centred media too wide to sit whole around the strip's focus puts its middle
+ * there and runs past the edge; anything else is pinned to the edge.
+ */
 async function expectEdgeMedia(
   surface: ReturnType<Page['locator']>,
   side: 'left' | 'right',
+  { centred = true } = {},
 ) {
   const main = surface.locator('[data-media-main]');
   await expect(main).toHaveCSS('object-fit', 'cover');
   const box = (await surface.boundingBox())!;
   const mainBox = (await main.boundingBox())!;
+  const focus = Number(
+    await surface.evaluate((element) =>
+      getComputedStyle(element).getPropertyValue('--media-edge-focus'),
+    ),
+  );
+  expect(focus).toBeGreaterThan(0);
   expect(mainBox.height).toBeCloseTo(box.height, 0);
   expect(mainBox.y).toBeCloseTo(box.y, 0);
-  if (side === 'left') expect(mainBox.x).toBeCloseTo(box.x, 0);
-  else expect(mainBox.x + mainBox.width).toBeCloseTo(box.x + box.width, 0);
+  // Distances from the outer edge, inwards.
+  const outer =
+    side === 'left'
+      ? mainBox.x - box.x
+      : box.x + box.width - (mainBox.x + mainBox.width);
+  const middle = outer + mainBox.width / 2;
+  if (centred && mainBox.width / 2 > focus * box.width) {
+    expect(outer).toBeLessThan(0);
+    expect(middle).toBeCloseTo(focus * box.width, 0);
+  } else {
+    expect(outer).toBeCloseTo(0, 0);
+  }
 }
 
 test.beforeEach(async ({ page }) => {
@@ -159,15 +180,15 @@ for (const width of [390, 1280]) {
             'mask-image',
             index === 1 ? /to right/ : /to left/,
           );
-          await expect(layer).toHaveCSS(
-            'mask-position',
-            index === 1 ? '0% 50%' : '100% 50%',
-          );
           await expect(layer).toHaveCSS('mask-repeat', 'no-repeat');
         }
         await expect(
           card.locator('[data-media-original-pair] img.media-backdrop'),
         ).toHaveCSS('object-fit', 'cover');
+        // The window the sharp media stays clear in is measured on the strip.
+        await expect(
+          card.locator('[data-media-original-pair] [data-media-foreground]'),
+        ).toHaveCSS('mask-image', index === 1 ? /to right/ : /to left/);
       }
       const tall = page.locator(
         '[data-tall-card] [data-media-variant="ambient"]',
@@ -516,10 +537,62 @@ for (const width of [390, 1280]) {
     const frame = await field.locator('.media-edge-strip').boundingBox();
     expect(box!.height).toBeCloseTo(frame!.height, 1);
     expect(box!.width / box!.height).toBeCloseTo(640 / 180, 2);
-    expect(box!.x).toBeCloseTo(frame!.x, 1);
     expect(box!.width).toBeGreaterThan(frame!.width);
+    await expectEdgeMedia(field.locator('[data-media-final-state]'), 'left');
   });
 }
+
+for (const width of [390, 1280]) {
+  test(`edge media shows a wide picture's middle in a narrow card at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/ambient-regression?banner=wide');
+    const card = page.locator('[data-narrow-card] .public-content-card');
+    await card.scrollIntoViewIfNeeded();
+    const surface = card.locator('[data-media-variant="ambient"]');
+    await expect(surface).toHaveAttribute('data-media-final-state', 'visible');
+    // The strip is the whole card, and the picture, far wider than the card,
+    // loses its right side past the edge so that its middle shows.
+    const cardBox = (await card.boundingBox())!;
+    const stripBox = (await surface.boundingBox())!;
+    expect(stripBox.width).toBeCloseTo(cardBox.width - 2, 0);
+    const mainBox = (await surface.locator('[data-media-main]').boundingBox())!;
+    expect(mainBox.x + mainBox.width).toBeGreaterThan(
+      stripBox.x + stripBox.width + 1,
+    );
+    await expectEdgeMedia(surface, 'right');
+    // A drawn icon is a mark, not a picture with a subject: it stays pinned.
+    const icon = page.locator(
+      '[data-generated-card] [data-media-variant="ambient"]',
+    );
+    await icon.scrollIntoViewIfNeeded();
+    await expect(icon).toHaveAttribute('data-media-final-state', 'visible');
+    await expectEdgeMedia(icon, 'right', { centred: false });
+  });
+}
+
+test('an internal link card keeps most of a narrow column for its words', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto('/ambient-regression?banner=wide');
+  const link = page.locator('[data-narrow-card] .entity-link-preview');
+  await link.scrollIntoViewIfNeeded();
+  const linkBox = (await link.boundingBox())!;
+  const words = await link
+    .locator('.entity-preview-text')
+    .evaluate(
+      (element) =>
+        element.clientWidth - parseFloat(getComputedStyle(element).paddingRight),
+    );
+  expect(words).toBeGreaterThan(linkBox.width * 0.6);
+  // A truncated title ends in an ellipsis rather than a cut letter.
+  await expect(link.locator('.entity-preview-text .truncate').first()).toHaveCSS(
+    'text-overflow',
+    'ellipsis',
+  );
+});
 
 test('admin previews play only while hovered or focused, including nested focus', async ({
   page,

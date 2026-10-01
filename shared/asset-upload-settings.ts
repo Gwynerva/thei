@@ -165,6 +165,16 @@ export type AssetTransformRequest =
 export type AssetUploadRequest =
   AssetOriginalSettings | AssetTransformRequest | AssetFileZipSettings;
 
+/**
+ * Whether storing this takes long enough to run as a job the client polls,
+ * rather than inside its request: a video encode is minutes, a zip of a
+ * large file the same order; a picture is seconds, and usually a render the
+ * editor already has.
+ */
+export function isLongCommit(request: AssetUploadRequest): boolean {
+  return request.type === 'video-transform' || request.type === 'file-zip';
+}
+
 /** What a transform needs to know about its source. */
 export interface AssetTransformSource extends FileDimensions {
   /** Vector sources are redrawn at any size, so they may be enlarged. */

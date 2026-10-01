@@ -62,6 +62,7 @@ function approximateTitle(period: DateRange | DatedPeriod) {
       precision,
       precisionNote,
       publicDatePrecisionLabels(),
+      publicText,
     ),
   );
 }

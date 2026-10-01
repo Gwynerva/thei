@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  preferContentEntities,
   rankContentEntities,
+  suggestContentEntities,
   type ContentEntitySearchItem,
 } from '../../shared/admin/content-entity-search';
 
@@ -89,5 +91,214 @@ describe('diary entries in the entity search', () => {
       items[1],
       items[0],
     ]);
+  });
+});
+
+describe('suggestions from the words a link is made over', () => {
+  let id = 0;
+  function entity(
+    title: string,
+    updatedAt: number,
+    extra: Partial<ContentEntitySearchItem> = {},
+  ): ContentEntitySearchItem {
+    id += 1;
+    return {
+      entityType: 'project',
+      entityId: `s-${id}`,
+      title,
+      summary: '',
+      url: `/projects/s-${id}/`,
+      humanReadableSlug: `s-${id}`,
+      updatedAt,
+      ...extra,
+    };
+  }
+  /** Ten recent entities that share nothing with the texts below. */
+  function fillers() {
+    return Array.from({ length: 10 }, (_, index) =>
+      entity(`Filler ${String.fromCharCode(97 + index)}`, 100 + index),
+    );
+  }
+  const ids = (items: ContentEntitySearchItem[]) =>
+    items.map((item) => item.title);
+
+  it('puts what the words name first, then the most recent, five in all', () => {
+    const target = entity('Lantern Harbor', 1);
+    const items = [...fillers(), target];
+    const suggested = suggestContentEntities(
+      items,
+      'We sailed to Lantern Harbor',
+    );
+    expect(ids(suggested)).toEqual([
+      'Lantern Harbor',
+      'Filler j',
+      'Filler i',
+      'Filler h',
+      'Filler g',
+    ]);
+  });
+
+  it('matches any one of the words, in any of its forms', () => {
+    const museum = entity('Музей космонавтики', 1);
+    const trip = entity('Поездка на море', 2);
+    const items = [...fillers(), museum, trip];
+    const top = suggestContentEntities(items, 'зашли в музея после поездки');
+    expect(new Set(top.slice(0, 2))).toEqual(new Set([museum, trip]));
+  });
+
+  it('counts short words, so a name like «2B» is found', () => {
+    const character = entity('2B', 1, { entityType: 'tag' });
+    const items = [...fillers(), character];
+    expect(suggestContentEntities(items, 'косплей на 2B')[0]).toBe(character);
+  });
+
+  it('matches a short word only whole, and a longer one also at a word start', () => {
+    const bike = entity('Велосипед', 1);
+    const harbor = entity('Harborfront', 2);
+    const items = [...fillers(), bike, harbor];
+    const suggested = suggestContentEntities(items, 'в Harbor');
+    expect(suggested[0]).toBe(harbor);
+    expect(suggested).not.toContain(bike);
+  });
+
+  it('lets no word common to the archive match on its own', () => {
+    const items = Array.from({ length: 9 }, (_, index) =>
+      entity(`Поход ${index + 1}`, index + 1),
+    );
+    const rare = entity('Поход на Эльбрус', 0);
+    const suggested = suggestContentEntities([...items, rare], 'поход');
+    expect(suggested).toEqual(rankContentEntities([...items, rare], '', 5));
+    expect(suggestContentEntities([...items, rare], 'поход Эльбрус')[0]).toBe(
+      rare,
+    );
+  });
+
+  it('prefers a title found whole over words found apart', () => {
+    const scattered = entity('Studio Open Day Archive', 2);
+    const whole = entity('Open Studio', 1);
+    const items = [...fillers(), scattered, whole];
+    expect(suggestContentEntities(items, 'the open studio night')[0]).toBe(
+      whole,
+    );
+  });
+
+  it('prefers a title matched in full over a long one sharing a word', () => {
+    const long = entity('Garden notes from the northern valley trip', 2);
+    const short = entity('Garden', 1);
+    const items = [...fillers(), long, short];
+    expect(suggestContentEntities(items, 'garden')[0]).toBe(short);
+  });
+
+  it('finds a diary entry by the words of its text, never by its day', () => {
+    const entry = entity('2024-05-12', 1, {
+      entityType: 'diary-entry',
+      date: '2024-05-12',
+      summary: 'Весь день шёл дождь над заливом',
+    });
+    const items = [...fillers(), entry];
+    expect(suggestContentEntities(items, 'дождь')[0]).toBe(entry);
+    expect(suggestContentEntities(items, '2024-05-12')[0]).not.toBe(entry);
+  });
+
+  it('still matches in a small archive', () => {
+    const one = entity('Lantern Harbor', 1);
+    const two = entity('Quiet Valley', 2);
+    expect(ids(suggestContentEntities([one, two], 'harbor'))).toEqual([
+      'Lantern Harbor',
+      'Quiet Valley',
+    ]);
+  });
+
+  it('offers the most recent when the words name nothing', () => {
+    const items = fillers();
+    expect(suggestContentEntities(items, 'nothing here')).toEqual(
+      rankContentEntities(items, '', 5),
+    );
+    expect(suggestContentEntities(items, '   ')).toEqual(
+      rankContentEntities(items, '', 5),
+    );
+  });
+});
+
+describe('entities a text already links to, offered first', () => {
+  function entity(
+    entityId: string,
+    updatedAt: number,
+    entityType: ContentEntitySearchItem['entityType'] = 'project',
+  ): ContentEntitySearchItem {
+    return {
+      entityType,
+      entityId,
+      title: entityId,
+      summary: '',
+      url: `/${entityId}/`,
+      humanReadableSlug: entityId,
+      updatedAt,
+    };
+  }
+  const all = [
+    entity('old', 1),
+    entity('older', 0),
+    entity('recent', 9),
+    entity('newer', 8),
+    entity('day', 5, 'diary-entry'),
+    entity('meet', 7, 'event'),
+  ];
+  const recent = (rest: ContentEntitySearchItem[], room: number) =>
+    rankContentEntities(rest, '', room);
+  const ids = (list: ContentEntitySearchItem[]) =>
+    list.map((item) => item.entityId);
+
+  it('takes the first places in the order of the text, the most recent after', () => {
+    expect(
+      ids(
+        preferContentEntities(
+          all,
+          ['diary-entry:day', 'project:older'],
+          4,
+          recent,
+        ),
+      ),
+    ).toEqual(['day', 'older', 'recent', 'newer']);
+  });
+
+  it('never makes the list longer than its limit', () => {
+    const keys = all.map((item) => `${item.entityType}:${item.entityId}`);
+    expect(ids(preferContentEntities(all, keys, 3, recent))).toEqual([
+      'old',
+      'older',
+      'recent',
+    ]);
+  });
+
+  it('skips what is not on offer, and names nothing twice', () => {
+    expect(
+      ids(
+        preferContentEntities(
+          all,
+          ['project:gone', 'event:meet', 'event:meet', 'project:day'],
+          3,
+          recent,
+        ),
+      ),
+    ).toEqual(['meet', 'recent', 'newer']);
+  });
+
+  it('leaves the ranking alone when the text links to nothing', () => {
+    expect(preferContentEntities(all, [], 5, recent)).toEqual(
+      rankContentEntities(all, '', 5),
+    );
+  });
+
+  it('fills the rest with what the words name, when there are words', () => {
+    const harbor = { ...entity('harbor', 0), title: 'Lantern Harbor' };
+    const items = [...all, harbor];
+    expect(
+      ids(
+        preferContentEntities(items, ['project:old'], 3, (rest, room) =>
+          suggestContentEntities(rest, 'sailed to Lantern Harbor', room),
+        ),
+      ),
+    ).toEqual(['old', 'harbor', 'recent']);
   });
 });

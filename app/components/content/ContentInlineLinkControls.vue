@@ -5,6 +5,7 @@ import type {
 } from '#layers/thei/shared/admin/content-entity-search';
 import type { ContentEntityReference } from '#layers/thei/shared/content-link';
 import {
+  EXTERNAL_LINK_NOTE_LIMIT,
   externalLinkHostname,
   normalizeExternalLinkUrl,
 } from '#layers/thei/shared/external-link';
@@ -14,6 +15,7 @@ import { parseInternalUrl } from '#layers/thei/shared/internal-url';
 import {
   createExternalLinkDraft,
   useExternalLinks,
+  useExternalLinkTyping,
 } from '#layers/thei/app/composables/external-links';
 import {
   invalidateContentLinks,
@@ -33,9 +35,10 @@ import type {
  *
  * One panel, two modes. An internal link is picked from a search of the
  * site's own entities; an external one is typed as an address and read from
- * the site it points to. Both may carry a note that stands in for the title
- * in the chip, and neither is written until ✓: picking an entity only makes
- * it the choice, so a note can still be added before the link is.
+ * the site it points to. Both may carry a note — why the link is there —
+ * shown under the target's own details, and neither is written until ✓:
+ * picking an entity only makes it the choice, so a note can still be added
+ * before the link is.
  */
 defineProps<{ teleportTo?: string | HTMLElement }>();
 
@@ -49,6 +52,7 @@ const resolver = useContentLinkResolver('admin');
 const draft = createExternalLinkDraft(useExternalLinks(), {
   errorText: () => phrase.value.content_link_broken_description,
 });
+const typing = useExternalLinkTyping(commitUrl);
 /**
  * The entity an address typed as an external link turned out to open. Such a
  * link is stored as an internal one, so it outlives a change of domain.
@@ -67,8 +71,8 @@ let chosenVersion = 0;
 const externalUrl = computed({
   get: () => draft.url,
   set: (value: string) => {
-    // Typing changes nothing but the text and whether it is a valid address;
-    // the site is read once the address is done.
+    // Typing changes the text and whether it is a valid address at once; the
+    // address is looked up once typing pauses or the address is done.
     internalEntity.value = undefined;
     internalEntityUrl.value = undefined;
     draft.url = value;
@@ -100,15 +104,19 @@ async function findInternal(raw: string) {
   }
 }
 
-/** The address is done: pasted, left, or confirmed with Enter. */
-async function commitUrl() {
+/**
+ * The address is done — pasted, left, or confirmed with Enter — or, with
+ * `typing`, typing into it paused. An address of this site that opens no
+ * entity is read as a site only once it is done: while it is typed, it is
+ * most likely an entity's address not finished yet.
+ */
+async function commitUrl({ typing: paused = false } = {}) {
+  if (!paused) typing.cancel();
   const raw = draft.url.trim();
-  if (parseInternalUrl(raw, internalSite) && (await findInternal(raw))) return;
-  await draft.commit();
-}
-
-function onUrlPaste() {
-  void nextTick(commitUrl);
+  if (parseInternalUrl(raw, internalSite)) {
+    if ((await findInternal(raw)) || paused) return;
+  }
+  await draft.commit({ typing: paused });
 }
 
 /** Reads the site again, and lets every chip on the page know it changed. */
@@ -165,6 +173,7 @@ function openExternal(next: ContentInlineLinkRequest) {
   note.value = next.initialNote ?? '';
   internalEntity.value = undefined;
   internalEntityUrl.value = undefined;
+  typing.cancel();
   draft.reset();
   draft.url = next.initialUrl ?? '';
   open.value = true;
@@ -249,6 +258,7 @@ function focusPopup() {
 }
 
 function popupClosed() {
+  typing.cancel();
   note.value = '';
   chosenVersion++;
   chosen.value = undefined;
@@ -282,6 +292,7 @@ defineExpose<ContentInlineLinkControlsExpose>({ openEntity, openExternal });
       v-if="mode === 'entity'"
       ref="entityPopup"
       :chosen
+      :suggest="request?.selectionText"
       @select="choose"
       @confirm="focusNote"
     >
@@ -290,6 +301,7 @@ defineExpose<ContentInlineLinkControlsExpose>({ openEntity, openExternal });
           <FieldInput
             v-model="note"
             type="text"
+            :maxlength="EXTERNAL_LINK_NOTE_LIMIT"
             autocomplete="off"
             spellcheck="true"
             class="h-9 py-1 text-sm"
@@ -337,8 +349,8 @@ defineExpose<ContentInlineLinkControlsExpose>({ openEntity, openExternal });
         :placeholder="phrase.content_link_url"
         :error="externalError"
         @element="externalInput = $event"
-        @change="commitUrl"
-        @paste="onUrlPaste"
+        @input="typing.onInput"
+        @change="commitUrl()"
       />
       <template v-if="internalEntity">
         <EntityLinkPreviewCard
@@ -348,6 +360,7 @@ defineExpose<ContentInlineLinkControlsExpose>({ openEntity, openExternal });
           :date="internalEntity.date"
           :parent="internalEntity.parent"
           :icon-media="internalEntity.previewMedia"
+          :note
           :interactive="false"
           compact
         />
@@ -362,11 +375,13 @@ defineExpose<ContentInlineLinkControlsExpose>({ openEntity, openExternal });
         :url="draft.url"
         :loading="externalLoading"
         :loading-text="phrase.external_link_loading"
+        :note
         :interactive="true"
       />
       <FieldInput
         v-model="note"
         type="text"
+        :maxlength="EXTERNAL_LINK_NOTE_LIMIT"
         autocomplete="off"
         spellcheck="true"
         class="h-9 py-1 text-sm"

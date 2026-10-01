@@ -5,7 +5,8 @@ export const useAdminTabTitle = (...parts: (string | Ref<string>)[]) => {
   return new Promise<void>(async (resolve) => {
     const adminPublic = await adminPublicPromise;
     const title = computed(() => {
-      const postfix = ' \\ ' + adminPublic.value.displayName + ' - Thei';
+      const postfix =
+        ' \\ ' + publicText(adminPublic.value.displayName) + ' - Thei';
       return (
         [
           ...parts.map((part) =>

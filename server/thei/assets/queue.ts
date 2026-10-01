@@ -26,10 +26,21 @@ const EXTERNAL_LINK_CONCURRENCY = 4;
 
 type Lane = 'image' | 'video' | 'probe' | 'externalLink';
 
+/**
+ * `low` is work nobody is waiting on: dry runs of settings beyond the one
+ * chosen. Normal work arriving later still goes ahead of it.
+ */
+export type ProcessingPriority = 'normal' | 'low';
+
+interface Waiter {
+  admit: () => void;
+  low: boolean;
+}
+
 interface LaneState {
   limit: number;
   active: number;
-  waiting: (() => void)[];
+  waiting: Waiter[];
 }
 
 const lanes: Record<Lane, LaneState> = {
@@ -42,6 +53,7 @@ const lanes: Record<Lane, LaneState> = {
 export interface ProcessingSlotOptions {
   /** Aborting while queued gives the place up without running the job. */
   signal?: AbortSignal;
+  priority?: ProcessingPriority;
 }
 
 function laneFor(type: AssetType): Lane {
@@ -57,8 +69,8 @@ export function isProcessingQueued(type: AssetType): boolean {
 /**
  * Runs `job` once a slot in its lane is free.
  *
- * Callers are admitted in arrival order, so a queued upload cannot be starved
- * by later ones.
+ * Callers of one priority are admitted in arrival order, so a queued upload
+ * cannot be starved by later ones; only low work waits for everything else.
  */
 export async function withProcessingSlot<T>(
   type: AssetType,
@@ -87,7 +99,7 @@ export async function withExternalLinkSlot<T>(
 async function withLaneSlot<T>(
   lane: LaneState,
   job: () => Promise<T>,
-  { signal }: ProcessingSlotOptions,
+  { signal, priority = 'normal' }: ProcessingSlotOptions,
 ): Promise<T> {
   signal?.throwIfAborted();
 
@@ -95,16 +107,25 @@ async function withLaneSlot<T>(
     // A freed slot is handed straight to the next waiter, still counted as
     // active, so nothing arriving in between can take it first.
     await new Promise<void>((resolve, reject) => {
-      const admit = () => {
-        signal?.removeEventListener('abort', leave);
-        resolve();
+      const waiter: Waiter = {
+        admit: () => {
+          signal?.removeEventListener('abort', leave);
+          resolve();
+        },
+        low: priority === 'low',
       };
       const leave = () => {
-        const index = lane.waiting.indexOf(admit);
+        const index = lane.waiting.indexOf(waiter);
         if (index >= 0) lane.waiting.splice(index, 1);
         reject(signal!.reason);
       };
-      lane.waiting.push(admit);
+      // Normal work lines up behind its own kind and ahead of every low job.
+      const firstLow = waiter.low ? -1 : lane.waiting.findIndex((w) => w.low);
+      lane.waiting.splice(
+        firstLow < 0 ? lane.waiting.length : firstLow,
+        0,
+        waiter,
+      );
       signal?.addEventListener('abort', leave, { once: true });
     });
   } else {
@@ -115,7 +136,7 @@ async function withLaneSlot<T>(
     return await job();
   } finally {
     const next = lane.waiting.shift();
-    if (next) next();
+    if (next) next.admit();
     else lane.active -= 1;
   }
 }

@@ -135,7 +135,7 @@ test('content video controls work inline; showcase videos still open a modal', a
   const gallery = root.locator('[data-content-gallery]');
   await gallery.locator('[role="button"]').nth(1).click();
   await expect(gallery.locator('video[controls]')).toBeVisible();
-  await expect(gallery.locator('[data-gallery-incoming]')).toHaveCount(0);
+  await expect(gallery.locator('[data-gallery-view]')).toHaveCount(1);
   expect(await gallery.locator('figure button').count()).toBe(0);
   await gallery.getByText('Gallery video', { exact: true }).click();
   await expect(page.locator('dialog')).not.toBeVisible();
@@ -248,14 +248,6 @@ test('media hydration, gallery selection and snapshot restore do not flash dirty
   await expect(state).toHaveAttribute('data-transitions', '');
   await editor.locator('[data-content-gallery] [role="button"]').nth(1).click();
   await expect(
-    editor.locator(
-      '[data-content-gallery] [data-gallery-incoming] [contenteditable="true"]',
-    ),
-  ).toContainText('second');
-  await expect(
-    editor.locator('[data-content-gallery] [data-gallery-incoming]'),
-  ).toHaveCount(0);
-  await expect(
     editor.locator('[data-content-gallery] [contenteditable="true"]'),
   ).toContainText('second');
   await expect(state).toHaveAttribute('data-snapshot-pending', 'false');
@@ -267,47 +259,111 @@ test('media hydration, gallery selection and snapshot restore do not flash dirty
   await expect(state).toHaveAttribute('data-transitions', '');
 });
 
-test('gallery keeps the previous visual until a slow replacement can crossfade', async ({
+test('a gallery caption stays with its tile, and typing it back undoes it', async ({
+  page,
+}) => {
+  const editor = page.locator('[data-editor]');
+  const gallery = editor.locator('[data-content-gallery]');
+  const caption = gallery.locator('[contenteditable="true"]');
+  const tiles = gallery.locator('[role="button"]');
+  releaseSlowImages();
+  await gallery.scrollIntoViewIfNeeded();
+
+  await caption.click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' edited');
+  await tiles.nth(1).click();
+  await expect(caption).toHaveText('second');
+  await tiles.nth(0).click();
+  await expect(caption).toHaveText('first edited');
+  await expect(editor.locator('[data-save]')).toHaveText('Save');
+
+  // The caption ends as it began, so the block is as saved again.
+  await caption.click();
+  await page.keyboard.press('End');
+  for (let i = 0; i < ' edited'.length; i++)
+    await page.keyboard.press('Backspace');
+  await tiles.nth(1).click();
+  await tiles.nth(0).click();
+  await expect(caption).toHaveText('first');
+  await expect(editor.locator('[data-save]')).toHaveText('Saved');
+});
+
+test('gallery tiles reordered twice keep their order and captions', async ({
+  page,
+}) => {
+  const editor = page.locator('[data-editor]');
+  const gallery = editor.locator('[data-content-gallery]');
+  const caption = gallery.locator('[contenteditable="true"]');
+  const tiles = gallery.locator('[data-drag-id]');
+  const save = editor.locator('[data-save]');
+  releaseSlowImages();
+  await gallery.scrollIntoViewIfNeeded();
+
+  // Sortable follows the pointer in steps; a single jump is not a drag. The
+  // hover waits for the page to stop scrolling the tile into view.
+  async function moveSecondToFront() {
+    await tiles.nth(1).hover();
+    const from = (await tiles.nth(1).boundingBox())!;
+    const to = (await tiles.nth(0).boundingBox())!;
+    const y = from.y + from.height / 2;
+    await page.mouse.move(from.x + from.width / 2, y);
+    await page.mouse.down();
+    for (let step = 1; step <= 20; step++) {
+      const x = from.x + from.width / 2 + ((to.x - from.x) * step) / 20;
+      await page.mouse.move(x - step / 2, y);
+    }
+    await page.mouse.up();
+  }
+
+  await moveSecondToFront();
+  await expect(tiles.first()).toHaveAttribute('data-drag-id', 'second');
+  await expect(save).toHaveText('Save');
+  // Back as they were: the second move counts from the first one's order.
+  await moveSecondToFront();
+  await expect(tiles.first()).toHaveAttribute('data-drag-id', 'first');
+  await expect(save).toHaveText('Saved');
+
+  await caption.click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' typed');
+  await moveSecondToFront();
+  await expect(tiles.first()).toHaveAttribute('data-drag-id', 'second');
+  // A click right after a drop is taken for the end of the drag.
+  await expect(async () => {
+    await gallery.locator('[data-drag-id="second"]').click();
+    await expect(caption).toHaveText('second', { timeout: 500 });
+  }).toPass();
+  await gallery.locator('[data-drag-id="first"]').click();
+  await expect(caption).toHaveText('first typed');
+});
+
+test('gallery switches to a slow picture at once, in a frame of its size', async ({
   page,
 }) => {
   const gallery = page.locator('[data-renderer] [data-content-gallery]');
-  const outgoing = gallery.locator('[data-gallery-outgoing]');
-  await expect(outgoing).toContainText('Gallery caption');
+  const view = gallery.locator('[data-gallery-view]');
+  await expect(view).toContainText('Gallery caption');
 
+  // The picture is still held back, and the tile shows it anyway: the frame
+  // already has its proportions, so nothing moves once it arrives.
   await gallery.locator('[role="button"]').nth(2).click();
-  await expect(outgoing).toContainText('Gallery caption');
-  await expect(outgoing).toHaveCSS('opacity', '1');
-  await expect(gallery.locator('[data-gallery-incoming]')).toContainText(
-    'Slow gallery',
-  );
-  await gallery.locator('[data-gallery-incoming]').evaluate((element) => {
-    element.setAttribute('data-crossfade-instance', 'preserved');
-  });
-
+  await expect(view).toHaveCount(1);
+  await expect(view).toContainText('Slow gallery');
+  await expect(view).not.toContainText('Gallery caption');
+  const frame = view.locator('[data-content-media-layout]');
+  const height = (await frame.boundingBox())?.height;
   releaseSlowImages();
-  await expect.poll(() => outgoing.textContent()).toContain('Slow gallery');
-  await expect(gallery.locator('[data-gallery-incoming]')).toHaveCount(0);
-  await expect(outgoing).toHaveAttribute(
-    'data-crossfade-instance',
-    'preserved',
-  );
+  await expect(
+    view.locator('[data-media-final-state="visible"]'),
+  ).toBeVisible();
+  expect((await frame.boundingBox())?.height).toBe(height);
 
   const publicGallery = page.locator('[data-default-gallery]');
-  const publicOutgoing = publicGallery.locator('[data-gallery-outgoing]');
+  const publicView = publicGallery.locator('[data-gallery-view]');
   await publicGallery
     .getByRole('button', { name: 'Showcase slow-image' })
     .click();
-  const publicIncoming = publicGallery.locator('[data-gallery-incoming]');
-  await expect(publicIncoming).toContainText('Showcase slow-image');
-  await publicIncoming.evaluate((element) => {
-    element.setAttribute('data-crossfade-instance', 'preserved');
-  });
-  await expect
-    .poll(() => publicOutgoing.textContent())
-    .toContain('Showcase slow-image');
-  await expect(publicIncoming).toHaveCount(0);
-  await expect(publicOutgoing).toHaveAttribute(
-    'data-crossfade-instance',
-    'preserved',
-  );
+  await expect(publicView).toHaveCount(1);
+  await expect(publicView).toContainText('Showcase slow-image');
 });

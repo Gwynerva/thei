@@ -55,6 +55,7 @@ const approximateTitle = computed(() =>
           precision.value,
           note.value,
           publicDatePrecisionLabels(),
+          publicText,
         ),
       )
     : undefined,

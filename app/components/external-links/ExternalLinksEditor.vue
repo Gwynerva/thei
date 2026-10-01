@@ -1,23 +1,47 @@
-<script lang="ts" setup>
+<script
+  lang="ts"
+  setup
+  generic="T extends ExternalLinkListItem | NamedExternalLinkListItem"
+>
 import ExternalLinkPreviewCard from './ExternalLinkPreviewCard.vue';
 import {
+  EXTERNAL_LINK_NAME_LIMIT,
+  EXTERNAL_LINK_NOTE_LIMIT,
+  externalLinkHostname,
+  externalLinkIdentity,
+  externalLinkListItem,
+  namedExternalLinkListItem,
   normalizeExternalLinkUrl,
   type ExternalLink,
   type ExternalLinkListItem,
+  type NamedExternalLinkListItem,
 } from '#layers/thei/shared/external-link';
 import { moveItemById } from '#layers/thei/app/composables/drag-sort';
 import {
   createExternalLinkDraft,
   useExternalLinks,
+  useExternalLinkTyping,
 } from '#layers/thei/app/composables/external-links';
 
+/**
+ * A hand-made list of links. Each shows the page as it presents itself, and
+ * the owner may say why it is there. A list shown as chips (`named`, the
+ * profile's) also gives each link a short name of its own.
+ */
 const props = defineProps<{
   title: string;
   description: string;
   emptyText: string;
+  named?: boolean;
+  /**
+   * The pages the entity's own text already links to
+   * (`contentExternalLinkIdentities`), with what to say of a link here that
+   * repeats one of them: the page would list it twice.
+   */
+  contentLinks?: { identities: ReadonlySet<string>; hint: string };
 }>();
 
-const links = defineModel<ExternalLinkListItem[]>({
+const links = defineModel<T[]>({
   required: true,
 });
 
@@ -27,6 +51,7 @@ const externalLinks = useExternalLinks();
 const draft = createExternalLinkDraft(externalLinks, {
   errorText: () => phrase.value.external_link_error,
 });
+const typing = useExternalLinkTyping((options) => draft.commit(options));
 
 const popupOpen = ref(false);
 const popupAnchor = ref<HTMLElement | null>(null);
@@ -34,6 +59,7 @@ const editingIndex = ref<number | null>(null);
 
 const draftName = ref('');
 const suggestedName = ref('');
+const draftNote = ref('');
 const draftPrivate = ref(false);
 
 const initialLoading = computed(() => draft.loading && !draft.preview);
@@ -41,25 +67,57 @@ const refreshingPreview = computed(
   () => draft.loading && Boolean(draft.preview),
 );
 
-const duplicate = computed(() => {
+/** The page the address in the field opens, as links are told apart. */
+const draftIdentity = computed(() => {
   try {
-    const normalized = normalizeExternalLinkUrl(draft.url);
-    return links.value.some(
-      (link, index) => index !== editingIndex.value && link.url === normalized,
-    );
+    return externalLinkIdentity(normalizeExternalLinkUrl(draft.url));
   } catch {
-    return false;
+    return undefined;
   }
 });
+
+const duplicate = computed(
+  () =>
+    draftIdentity.value !== undefined &&
+    links.value.some(
+      (link, index) =>
+        index !== editingIndex.value &&
+        externalLinkIdentity(link.url) === draftIdentity.value,
+    ),
+);
+
+/** What to say of a link that the entity's text already links to. */
+function contentWarning(url: string) {
+  return props.contentLinks?.identities.has(externalLinkIdentity(url))
+    ? props.contentLinks.hint
+    : undefined;
+}
+const draftWarning = computed(() =>
+  draft.preview ? contentWarning(draft.preview.url) : undefined,
+);
 
 const canSave = computed(
   () =>
     !draft.loading &&
     !draft.error &&
     !duplicate.value &&
-    Boolean(draftName.value.trim()) &&
+    (!props.named || Boolean(draftName.value.trim())) &&
     Boolean(draft.preview),
 );
+
+/** A chip shows the owner's name for the link, or the page's own title. */
+function chipLabel(link: T) {
+  if ('name' in link) return publicText(link.name);
+  return externalLinks.get(link.url)?.title || externalLinkHostname(link.url);
+}
+
+function chipPopup(link: T) {
+  return titlePopup(
+    link.url,
+    TITLE_POPUP_GAP,
+    link.note && { text: publicText(link.note), italic: true },
+  );
+}
 
 function openAdd(event: MouseEvent) {
   resetDraft();
@@ -72,7 +130,8 @@ function openEdit(index: number, event: MouseEvent) {
   if (!link) return;
   resetDraft();
   editingIndex.value = index;
-  draftName.value = link.name;
+  if ('name' in link) draftName.value = link.name;
+  draftNote.value = link.note;
   draftPrivate.value = link.isPrivate;
   // An existing link shows its stored record; the site is not read.
   void draft.open(link.url);
@@ -81,14 +140,21 @@ function openEdit(index: number, event: MouseEvent) {
 }
 
 function resetDraft() {
+  typing.cancel();
   editingIndex.value = null;
   draftName.value = '';
   suggestedName.value = '';
+  draftNote.value = '';
   draftPrivate.value = false;
   draft.reset();
 }
 
-/** The title is offered as the name until the person writes one of their own. */
+/**
+ * The page's title is offered as a chip's name until the person writes one
+ * of their own, whenever the address in the field turns out to have one:
+ * read after a pause, when it is done, on a refresh, or known to the page
+ * already.
+ */
 function suggestName(link: ExternalLink) {
   if (
     editingIndex.value === null &&
@@ -98,29 +164,35 @@ function suggestName(link: ExternalLink) {
     draftName.value = link.title;
   suggestedName.value = link.title ?? '';
 }
+watch(
+  () => draft.preview,
+  (link) => {
+    if (link && props.named) suggestName(link);
+  },
+);
 
-/** The address is done: pasted, left, or confirmed with Enter. */
+/** The address is done: left, or confirmed with Enter. */
 async function commitUrl() {
-  const link = await draft.commit();
-  if (link) suggestName(link);
-}
-
-function onUrlPaste() {
-  void nextTick(commitUrl);
+  typing.cancel();
+  await draft.commit();
 }
 
 async function refreshPreview() {
-  const link = await draft.refresh();
-  if (link) suggestName(link);
+  await draft.refresh();
 }
 
 function save() {
   if (!canSave.value || !draft.preview) return;
-  const item: ExternalLinkListItem = {
+  const entry = {
     url: draft.preview.url,
-    name: draftName.value.trim(),
+    note: draftNote.value.trim(),
     isPrivate: draftPrivate.value,
   };
+  const item = (
+    props.named
+      ? namedExternalLinkListItem({ ...entry, name: draftName.value.trim() })
+      : externalLinkListItem(entry)
+  ) as T;
   const next = [...links.value];
   if (editingIndex.value === null) {
     next.push(item);
@@ -179,11 +251,13 @@ onUnmounted(() => draft.reset());
           class="rounded-sm transition-colors"
         >
           <ExternalLinkChip
-            :link="link"
+            :url="link.url"
+            :label="chipLabel(link)"
             :favicon-media="externalLinks.get(link.url)?.faviconMedia"
+            :warning="contentWarning(link.url)"
             interactive
             class="cursor-grab active:cursor-grabbing"
-            :data-title-popup="link.url"
+            v-bind="chipPopup(link)"
             @click="guardClick(() => openEdit(index, $event))"
           >
             <Icon
@@ -222,10 +296,11 @@ onUnmounted(() => draft.reset());
             type="url"
             required
             autocomplete="url"
+            spellcheck="false"
             placeholder="https://example.com/"
             class="text-sm"
+            @input="typing.onInput"
             @change="commitUrl"
-            @paste="onUrlPaste"
             @submit="commitUrl"
           />
         </Field>
@@ -249,16 +324,25 @@ onUnmounted(() => draft.reset());
           >
             {{ duplicate ? phrase.external_link_duplicate : draft.error }}
           </p>
+          <p
+            v-else-if="draftWarning"
+            role="status"
+            class="flex items-start gap-xs text-sm text-text-warning"
+          >
+            <Icon name="warning" class="mt-0.5 shrink-0" />
+            <span>{{ draftWarning }}</span>
+          </p>
 
           <ExternalLinkPreviewCard
             v-if="draft.preview"
             :link="draft.preview"
             :url="draft.preview.url"
+            :note="draftNote"
             :interactive="true"
           />
         </template>
 
-        <Field v-if="draft.preview">
+        <Field v-if="draft.preview && named">
           <FieldLabel class="text-sm">
             {{ phrase.external_link_name }}
           </FieldLabel>
@@ -267,7 +351,21 @@ onUnmounted(() => draft.reset());
             v-model="draftName"
             type="text"
             required
-            maxlength="300"
+            :maxlength="EXTERNAL_LINK_NAME_LIMIT"
+            class="text-sm"
+          />
+        </Field>
+
+        <Field v-if="draft.preview">
+          <FieldLabel class="text-sm">
+            {{ phrase.content_link_note }}
+          </FieldLabel>
+
+          <FieldInput
+            v-model="draftNote"
+            type="text"
+            :maxlength="EXTERNAL_LINK_NOTE_LIMIT"
+            :placeholder="phrase.content_link_note_placeholder"
             class="text-sm"
           />
         </Field>

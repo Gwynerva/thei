@@ -12,11 +12,7 @@ const resource = await useFetch<PaginatedResponse<PublicTagListItem>>(
   { query: { page } },
 );
 const tags = useRequiredResource(resource);
-const ogImage = useOgImage(
-  'service',
-  () => 'tags',
-  () => ['tags'],
-);
+const ogImage = useOgImage(() => ({ kind: 'service', id: 'tags' }));
 usePublicSeo({
   ogImage,
   title: computed(() => phrase.value.tags),

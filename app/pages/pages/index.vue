@@ -10,11 +10,7 @@ const resource = await useFetch<PaginatedResponse<PublicPageListItem>>(
   { query: { page } },
 );
 const pages = useRequiredResource(resource);
-const ogImage = useOgImage(
-  'service',
-  () => 'pages',
-  () => ['pages'],
-);
+const ogImage = useOgImage(() => ({ kind: 'service', id: 'pages' }));
 usePublicSeo({
   ogImage,
   title: computed(() => phrase.value.pages),
@@ -46,7 +42,7 @@ usePublicSeo({
       :title="phrase.pages"
       :description="phrase.public_pages_description"
     />
-    <div v-if="pages.items.length" class="grid gap-md sm:grid-cols-2">
+    <div v-if="pages.items.length" class="grid grid-cols-cards gap-md">
       <PublicContentCard
         v-for="item in pages.items"
         :key="item.href"

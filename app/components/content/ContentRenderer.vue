@@ -72,6 +72,11 @@ function assetMedia(value: unknown) {
   return asset(value).media as MediaDescriptor;
 }
 
+/** A link block's note: the last line of its card. */
+function linkNote(value: Record<string, unknown>) {
+  return typeof value.note === 'string' ? value.note : undefined;
+}
+
 function externalLink(
   value: Record<string, unknown>,
 ): ExternalLinkPreview | undefined {
@@ -226,6 +231,7 @@ function openGalleryItem(
           v-else-if="block.type === 'externalLink'"
           :link="externalLink(block.data)"
           :url="block.data.url as string"
+          :note="linkNote(block.data)"
           :interactive="true"
         />
         <ContentIntegration
@@ -238,6 +244,7 @@ function openGalleryItem(
           :entity-id="block.data.entityId as string | undefined"
           :restricted="block.data.restricted as boolean | undefined"
           :resolver="linkResolver"
+          :note="linkNote(block.data)"
         />
         <ContentPrivatePlaceholder
           v-else-if="block.type === 'privateSectionPlaceholder'"

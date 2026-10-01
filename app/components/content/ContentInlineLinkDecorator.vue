@@ -11,6 +11,7 @@ import {
 import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
 import { CONTENT_LINKS_INVALIDATED_EVENT } from '#layers/thei/app/composables/content-link-resolver';
 import ContentLinkPreviewCard from './ContentLinkPreviewCard.vue';
+import LinkHoverPopup from '../LinkHoverPopup.vue';
 
 const props = defineProps<{
   root: HTMLElement | null;
@@ -18,14 +19,9 @@ const props = defineProps<{
   resolver?: ContentLinkResolver;
 }>();
 
-const open = ref(false);
-const anchor = ref<HTMLAnchorElement | null>(null);
 const result = ref<ResolvedContentLink>();
-const teleportTarget = computed(() => props.root?.closest('dialog') ?? 'body');
 let observer: MutationObserver | undefined;
 let requestVersion = 0;
-let showTimer: ReturnType<typeof setTimeout> | undefined;
-const HOVER_OPEN_DELAY = 350;
 
 function links() {
   return Array.from(
@@ -53,10 +49,9 @@ async function resolveLink(link: HTMLAnchorElement) {
   return resolved;
 }
 
+/** The popup opened over a link: what it opens is asked about afresh. */
 async function show(link: HTMLAnchorElement) {
-  anchor.value = link;
   result.value = undefined;
-  open.value = true;
   const version = ++requestVersion;
   const resolved = await resolveLink(link);
   if (version === requestVersion) result.value = resolved;
@@ -71,13 +66,14 @@ async function hydrateLinks() {
  * Stored content names the hint in its own terms; the tooltip plugin reads
  * `data-title-popup`. Copying it here keeps the presentation mechanism out of
  * what is written to the database, and costs one pass over the same DOM the
- * links are hydrated from.
+ * links are hydrated from. The hint is the owner's words, so the tooltip gets
+ * their typography; the stored attribute keeps them as typed.
  */
 function syncHints() {
   for (const hint of props.root?.querySelectorAll<HTMLElement>(
     'abbr[data-content-hint]',
   ) ?? []) {
-    const text = hint.dataset.contentHint ?? '';
+    const text = publicText(hint.dataset.contentHint);
     if (hint.dataset.titlePopup !== text) hint.dataset.titlePopup = text;
   }
 }
@@ -174,43 +170,10 @@ function cssUrl(value: string) {
   return value.replace(/["\\\n\r\f]/g, (character) => `\\${character}`);
 }
 
-function linkFromEvent(event: Event) {
-  const link = (event.target as Element | null)?.closest<HTMLAnchorElement>(
-    'a[data-content-link]',
-  );
-  return link && props.root?.contains(link) ? link : undefined;
-}
-
-function onPointerOver(event: Event) {
-  const link = linkFromEvent(event);
-  if (!link || link === anchor.value) return;
-  clearTimeout(showTimer);
-  showTimer = setTimeout(() => void show(link), HOVER_OPEN_DELAY);
-}
-
-function onPointerOut(event: PointerEvent) {
-  const link = linkFromEvent(event);
-  if (!link) return;
-  if (event.relatedTarget instanceof Node && link.contains(event.relatedTarget))
-    return;
-  clearTimeout(showTimer);
-  requestVersion += 1;
-  open.value = false;
-  anchor.value = null;
-}
-
-function onFocusIn(event: Event) {
-  const link = linkFromEvent(event);
-  if (link) void show(link);
-}
-
 function attach(root: HTMLElement | null) {
   observer?.disconnect();
   observer = undefined;
   if (!root) return;
-  root.addEventListener('pointerover', onPointerOver);
-  root.addEventListener('pointerout', onPointerOut);
-  root.addEventListener('focusin', onFocusIn);
   observer = new MutationObserver(() => void hydrateLinks());
   // A link changes its target in place when the editor rewrites it; the
   // attributes it is made of are watched along with the nodes.
@@ -232,16 +195,7 @@ function onLinksInvalidated() {
   void hydrateLinks();
 }
 
-watch(
-  () => props.root,
-  (next, previous) => {
-    previous?.removeEventListener('pointerover', onPointerOver);
-    previous?.removeEventListener('pointerout', onPointerOut);
-    previous?.removeEventListener('focusin', onFocusIn);
-    attach(next);
-  },
-  { immediate: true, flush: 'post' },
-);
+watch(() => props.root, attach, { immediate: true, flush: 'post' });
 
 onMounted(() => {
   document.addEventListener(
@@ -255,26 +209,24 @@ onBeforeUnmount(() => {
     CONTENT_LINKS_INVALIDATED_EVENT,
     onLinksInvalidated,
   );
-  props.root?.removeEventListener('pointerover', onPointerOver);
-  props.root?.removeEventListener('pointerout', onPointerOut);
-  props.root?.removeEventListener('focusin', onFocusIn);
-  clearTimeout(showTimer);
   observer?.disconnect();
 });
 </script>
 
 <template>
-  <FloatingPopup
-    v-model:open="open"
-    :anchor="anchor"
-    placement="bottom-start"
-    max-width="22rem"
-    :teleport-to="teleportTarget"
-    class="border border-border-1 bg-bg-2"
+  <LinkHoverPopup
+    v-slot="{ anchor }"
+    :root
+    selector="a[data-content-link]"
+    @show="show($event as HTMLAnchorElement)"
+    @hide="requestVersion += 1"
   >
+    <!-- The note is not in the text, where the link only mentions its
+         target: it is read here, under the card. -->
     <ContentLinkPreviewCard
       :result="result"
-      :label="anchor?.textContent || ''"
+      :label="anchor.textContent || ''"
+      :note="anchor.dataset.contentNote"
       :loading="!result"
       :interactive="false"
       :playback
@@ -283,5 +235,5 @@ onBeforeUnmount(() => {
       "
       flush
     />
-  </FloatingPopup>
+  </LinkHoverPopup>
 </template>

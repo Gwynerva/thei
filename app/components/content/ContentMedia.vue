@@ -12,12 +12,9 @@ const props = withDefaults(
     alt?: string;
     rounded?: boolean;
     naturalSize?: boolean;
-    suspended?: boolean;
   }>(),
   { rounded: true, naturalSize: true },
 );
-
-const emit = defineEmits<{ ready: []; error: [] }>();
 
 const measuredWidth = ref<number>();
 const measuredHeight = ref<number>();
@@ -72,8 +69,7 @@ function rememberDimensions(nextWidth: number, nextHeight: number) {
   >
     <Media
       v-bind="media"
-      :autoplay="autoplay && !suspended"
-      :suspended
+      :autoplay
       :loop="autoplay"
       :controls="media.kind === 'video'"
       fit="contain"
@@ -84,8 +80,6 @@ function rememberDimensions(nextWidth: number, nextHeight: number) {
       :alt
       class="size-full bg-bg-1"
       @dimensions="rememberDimensions"
-      @ready="emit('ready')"
-      @error="emit('error')"
     />
     <slot />
   </div>

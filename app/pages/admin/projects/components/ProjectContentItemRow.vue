@@ -39,14 +39,14 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
         class="content-item-text leading-snug font-semibold wrap-break-word
           transition-colors group-hocus:text-accent"
       >
-        {{ title }}
+        {{ publicText(title) }}
       </span>
       <span
         v-if="summary"
         class="content-item-text line-clamp-2 text-sm wrap-break-word
           text-text-2"
       >
-        {{ summary }}
+        {{ publicText(summary) }}
       </span>
       <span v-if="periods.length" class="flex flex-wrap gap-1">
         <DateRangeChip

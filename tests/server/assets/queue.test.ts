@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { withProbeSlot } from '../../../server/thei/assets/queue';
+import { AssetType } from '../../../shared/asset';
+import {
+  withProbeSlot,
+  withProcessingSlot,
+} from '../../../server/thei/assets/queue';
 
 /** A job that runs until released, recording that it started. */
 function heldJob(started: string[], name: string) {
@@ -71,6 +75,52 @@ describe('processing queue', () => {
     second.release();
     next.release();
     await Promise.all([running[1], nextRun]);
+  });
+
+  it('lets normal work go ahead of low work, in arrival order within a kind', async () => {
+    const started: string[] = [];
+    // The video lane has one slot: one held job makes everything else wait.
+    const held = heldJob(started, 'held');
+    const running = [withProcessingSlot(AssetType.Video, held.job)];
+    const order = ['low-1', 'low-2', 'normal-1', 'low-3', 'normal-2'];
+    const jobs = order.map((name) => {
+      const job = heldJob(started, name);
+      running.push(
+        withProcessingSlot(AssetType.Video, job.job, {
+          priority: name.startsWith('low') ? 'low' : 'normal',
+        }),
+      );
+      return job;
+    });
+    await Promise.resolve();
+    expect(started).toEqual(['held']);
+
+    // An aborted low job leaves without disturbing the order of the rest.
+    const controller = new AbortController();
+    const abandoned = withProcessingSlot(
+      AssetType.Video,
+      async () => {
+        started.push('abandoned');
+      },
+      { signal: controller.signal, priority: 'low' },
+    );
+    controller.abort(new Error('gone'));
+    await expect(abandoned).rejects.toThrow('gone');
+
+    held.release();
+    for (const job of jobs) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      job.release();
+    }
+    await Promise.all(running);
+    expect(started).toEqual([
+      'held',
+      'normal-1',
+      'normal-2',
+      'low-1',
+      'low-2',
+      'low-3',
+    ]);
   });
 
   it('refuses a job whose request is already gone', async () => {

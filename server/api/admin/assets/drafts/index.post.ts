@@ -1,3 +1,4 @@
+import { rm } from 'node:fs/promises';
 import type { AssetDraftSource } from '#layers/thei/shared/api/asset-draft';
 import {
   openDraft,
@@ -15,18 +16,20 @@ import {
  *
  * The body is streamed to disk once, like any upload, and kept as a draft:
  * every dry run and the final result are made from it, so trying settings
- * never sends the file again. Nothing enters the library here.
+ * never sends the file again. Nothing enters the library here. A file that
+ * does not arrive whole — the tab closed, the connection gone — leaves
+ * nothing behind either.
  */
 export default defineEventHandler(async (event): Promise<AssetDraftSource> => {
   const { extension, sourceType, maxSizeBytes, acceptedExtensions } =
     readUploadFileHeaders(event);
   const draft = await prepareDraftDirectory(extension);
-  const staged = await stageUploadBody(event, {
-    maxSizeBytes,
-    path: draft.sourcePath,
-  });
 
   try {
+    const staged = await stageUploadBody(event, {
+      maxSizeBytes,
+      path: draft.sourcePath,
+    });
     validateFileInput({
       extension,
       size: staged.size,
@@ -50,7 +53,7 @@ export default defineEventHandler(async (event): Promise<AssetDraftSource> => {
       familyUuid: match?.familyUuid ?? `af-${staged.hash}`,
     });
   } catch (error) {
-    await staged.discard();
+    await rm(draft.directory, { recursive: true, force: true }).catch(() => {});
     throw error;
   }
 });

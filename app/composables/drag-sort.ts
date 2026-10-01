@@ -1,4 +1,5 @@
 import Sortable, { type Options, type SortableEvent } from 'sortablejs';
+import { dismissPressHints } from './press-hint-dom';
 
 const CLICK_GUARD_MS = 250;
 
@@ -37,6 +38,8 @@ export function createDragSort(
     ghostClass: 'opacity-35',
     chosenClass: 'ring-2',
     dragClass: 'shadow-xl',
+    // A hint held up by a long press would ride along with the drag.
+    onStart: () => dismissPressHints(),
     onEnd(event) {
       skipClickUntil = Date.now() + CLICK_GUARD_MS;
       if (

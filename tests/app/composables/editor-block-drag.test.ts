@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { resolveEditorBlockMove } from '../../../app/composables/editor-block-drag';
+import {
+  edgeScrollStep,
+  resolveEditorBlockMove,
+} from '../../../app/composables/editor-block-drag';
 import {
   editorPrivateSectionLayoutIsValid,
   editorPrivateSectionMoveIsValid,
@@ -62,6 +65,31 @@ describe('Editor.js block drag helpers', () => {
     expect(
       resolveEditorBlockMove('first', 'removed', getIndex),
     ).toBeUndefined();
+  });
+});
+
+describe('edge auto-scroll while dragging', () => {
+  it('stays still between the edge zones', () => {
+    expect(edgeScrollStep(300, 100, 700, 56, 18)).toBe(0);
+    expect(edgeScrollStep(156, 100, 700, 56, 18)).toBe(0);
+    expect(edgeScrollStep(644, 100, 700, 56, 18)).toBe(0);
+  });
+
+  it('scrolls faster the nearer the pointer is to an edge, up or down', () => {
+    expect(edgeScrollStep(150, 100, 700, 56, 18)).toBe(-2);
+    expect(edgeScrollStep(128, 100, 700, 56, 18)).toBe(-9);
+    expect(edgeScrollStep(100, 100, 700, 56, 18)).toBe(-18);
+    // Over the sticky header, above the scroller's top: full speed.
+    expect(edgeScrollStep(20, 100, 700, 56, 18)).toBe(-18);
+    expect(edgeScrollStep(650, 100, 700, 56, 18)).toBe(2);
+    expect(edgeScrollStep(700, 100, 700, 56, 18)).toBe(18);
+    expect(edgeScrollStep(900, 100, 700, 56, 18)).toBe(18);
+  });
+
+  it('leaves the middle of a short scroller still', () => {
+    // 90 px tall: zones shrink to 30 px each, so 45 is between them.
+    expect(edgeScrollStep(45, 0, 90, 56, 18)).toBe(0);
+    expect(edgeScrollStep(10, 0, 90, 56, 18)).toBe(-12);
   });
 });
 

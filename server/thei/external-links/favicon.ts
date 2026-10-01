@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import sharp from 'sharp';
 import {
@@ -11,6 +11,7 @@ import { iconSymbols } from '#thei/icon-symbols';
 import { extractImageAccent } from '../assets/image-color';
 import { svgDensityFor } from '../assets/svg-density';
 import { THEI_CONTENT_DIRS } from '../content-layout';
+import { decodeIco, isIco } from './ico';
 
 export const EXTERNAL_LINK_FAVICON_SIZE = 48;
 export const EXTERNAL_LINK_FAVICON_QUALITY = 80;
@@ -20,10 +21,6 @@ export const EXTERNAL_LINK_FAVICON_QUALITY = 80;
  * haze across what should be fully transparent padding around an icon.
  */
 export const EXTERNAL_LINK_FAVICON_EXTENSION = 'webp';
-
-export function externalLinkKey(url: string) {
-  return createHash('sha256').update(url).digest('hex');
-}
 
 export function externalLinkFaviconDir() {
   return THEI_SERVER.contentPath(THEI_CONTENT_DIRS.externalLinkFavicons);
@@ -36,13 +33,15 @@ export function externalLinkFaviconPath(key: string) {
   );
 }
 
+/**
+ * The address of a stored icon. The file is named after its own bytes, so
+ * the address changes exactly when the icon does and needs no version.
+ */
 export function externalLinkMedia(
   faviconKey: string,
   accent: ImageAccent | undefined,
-  touchedAt?: number,
 ): ExternalLink['faviconMedia'] {
-  const version = touchedAt ? `?v=${touchedAt}` : '';
-  const src = `/media/external-link-favicons/${faviconKey}.${EXTERNAL_LINK_FAVICON_EXTENSION}${version}`;
+  const src = `/media/external-link-favicons/${faviconKey}.${EXTERNAL_LINK_FAVICON_EXTENSION}`;
   return {
     src,
     previewSrc: src,
@@ -53,12 +52,39 @@ export function externalLinkMedia(
   };
 }
 
-export async function writeExternalLinkFavicon(url: string, source?: Buffer) {
-  const faviconKey = externalLinkKey(url);
-  const { buffer, accent } = await prepareExternalLinkFavicon(source);
-  await writeExternalLinkFaviconFile(faviconKey, buffer);
-  return { faviconKey, accent };
+let filesLock: Promise<unknown> = Promise.resolve();
+
+/**
+ * Runs `task` alone among the others given here. Icon files are shared by
+ * every link whose icon is the same, so storing one and pointing a row at
+ * it has to happen as one step with respect to the sweep; otherwise the
+ * sweep could take a file between the two, just as a new link claims it.
+ */
+export function withExternalLinkFavicons<T>(
+  task: () => Promise<T> | T,
+): Promise<T> {
+  const result = filesLock.then(task);
+  filesLock = result.catch(() => {});
+  return result;
 }
+
+/**
+ * Stores a prepared icon under the hash of its bytes and says which it is.
+ * Links with the same icon share one file, which is written only once;
+ * call it inside `withExternalLinkFavicons`, together with the row that
+ * will point at the file.
+ */
+export async function storeExternalLinkFavicon(
+  prepared: PreparedExternalLinkFavicon,
+) {
+  const faviconKey = createHash('sha256').update(prepared.buffer).digest('hex');
+  await writeExternalLinkFaviconFile(faviconKey, prepared.buffer);
+  return { faviconKey, accent: prepared.accent };
+}
+
+export type PreparedExternalLinkFavicon = Awaited<
+  ReturnType<typeof prepareExternalLinkFavicon>
+>;
 
 /**
  * The stored form of an icon: the tile size, WebP, with its accent read
@@ -79,37 +105,37 @@ export async function prepareExternalLinkFavicon(source?: Buffer) {
   return { buffer, accent };
 }
 
+/**
+ * A file named after its content is never replaced: one that is already
+ * there holds these very bytes.
+ */
 async function writeExternalLinkFaviconFile(
   faviconKey: string,
   buffer: Buffer,
 ) {
   const path = externalLinkFaviconPath(faviconKey);
+  if (await fileExists(path)) return;
   const temporaryPath = `${path}.${process.pid}.${Date.now()}.tmp`;
   await mkdir(dirname(path), { recursive: true });
   await writeFile(temporaryPath, buffer);
-  await rename(temporaryPath, path).catch(async (error) => {
-    const destinationExists = await readFile(path)
-      .then(() => true)
-      .catch(() => false);
-    if (!destinationExists) {
-      await rm(temporaryPath, { force: true }).catch(() => {});
-      throw error;
-    }
-    try {
-      await rm(path, { force: true });
-      await rename(temporaryPath, path);
-    } catch (replaceError) {
-      await rm(temporaryPath, { force: true }).catch(() => {});
-      throw replaceError;
-    }
-  });
+  try {
+    await rename(temporaryPath, path);
+  } catch (error) {
+    await rm(temporaryPath, { force: true }).catch(() => {});
+    if (!(await fileExists(path))) throw error;
+  }
+}
+
+function fileExists(path: string) {
+  return stat(path).then(
+    () => true,
+    () => false,
+  );
 }
 
 export async function convertExternalLinkFavicon(source: Buffer) {
-  // A site's SVG icon is drawn at the tile's size, not at its own units,
-  // which for many icons are 16 px and would come out blurred.
-  const density = await svgDensityFor(source, EXTERNAL_LINK_FAVICON_SIZE);
-  return await sharp(source, { failOn: 'error', density })
+  const image = await openFavicon(source);
+  return await image
     .resize(EXTERNAL_LINK_FAVICON_SIZE, EXTERNAL_LINK_FAVICON_SIZE, {
       fit: 'contain',
       background: { r: 0, g: 0, b: 0, alpha: 0 },
@@ -121,6 +147,22 @@ export async function convertExternalLinkFavicon(source: Buffer) {
       effort: 6,
     })
     .toBuffer();
+}
+
+/** The icon opened for sharp, whatever format the site keeps it in. */
+async function openFavicon(source: Buffer) {
+  if (isIco(source)) {
+    const image = decodeIco(source, EXTERNAL_LINK_FAVICON_SIZE);
+    return image.kind === 'png'
+      ? sharp(image.data, { failOn: 'error' })
+      : sharp(image.data, {
+          raw: { width: image.width, height: image.height, channels: 4 },
+        });
+  }
+  // A site's SVG icon is drawn at the tile's size, not at its own units,
+  // which for many icons are 16 px and would come out blurred.
+  const density = await svgDensityFor(source, EXTERNAL_LINK_FAVICON_SIZE);
+  return sharp(source, { failOn: 'error', density });
 }
 
 let fallbackTile: Promise<Buffer> | undefined;

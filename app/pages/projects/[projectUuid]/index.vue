@@ -34,14 +34,15 @@ const canonical = computed(() =>
 );
 if (route.path !== canonical.value)
   await navigateTo(canonical.value, { redirectCode: 301 });
-const ogImage = useOgImage(
-  'project',
-  () => data.value.publicId,
-  () => [
-    data.value.title,
-    data.value.bannerMedia?.src,
-    data.value.iconMedia.src,
-  ],
+const ogImage = useOgImage(() => ({
+  kind: 'project',
+  id: data.value.publicId,
+}));
+const seoImage = computed(() =>
+  publicSeoImage(
+    data.value.bannerMedia ?? data.value.iconMedia,
+    ogImage.value?.url,
+  ),
 );
 usePublicSeo({
   ogImage,
@@ -54,26 +55,39 @@ usePublicSeo({
   breadcrumbs: () => [
     { name: phrase.value.search, path: '/search/?type=project' },
   ],
-  image: () => (data.value.bannerMedia ?? data.value.iconMedia).src,
+  image: seoImage,
   entities: () => [
     {
       '@type': 'CreativeWork',
       '@id': '#project',
       name: data.value.title,
       description: data.value.summary,
-      dateCreated: data.value.chronology.createdAt,
+      author: publicSeoOwner,
+      datePublished: data.value.chronology.createdAt,
       ...(data.value.chronology.updatedAt
         ? { dateModified: data.value.chronology.updatedAt }
         : {}),
-      image: (data.value.bannerMedia ?? data.value.iconMedia).src,
+      ...(seoImage.value ? { image: seoImage.value } : {}),
       ...(data.value.tags.length
         ? { keywords: data.value.tags.map((tag) => tag.title).join(', ') }
         : {}),
       ...(data.value.stages.length + data.value.sections.length
         ? {
-            hasPart: [...data.value.sections, ...data.value.stages].map(
-              (part) => ({ '@type': 'CreativeWork', url: part.href }),
-            ),
+            // The same nodes the parts' own pages describe, by their @id.
+            hasPart: [
+              ...data.value.sections.map((part) => ({
+                '@type': 'Article',
+                '@id': `${part.href}#section`,
+                headline: part.title,
+                url: part.href,
+              })),
+              ...data.value.stages.map((part) => ({
+                '@type': 'Article',
+                '@id': `${part.href}#stage`,
+                headline: part.title,
+                url: part.href,
+              })),
+            ],
           }
         : {}),
     },
@@ -133,48 +147,48 @@ const details = computed(
   () =>
     ({
       contents: contents.value,
-      chronology: [
-        ...createdAndUpdatedTimelineItems(data.value.chronology, {
+      chronology: createdAndUpdatedTimelineItems(
+        data.value.chronology,
+        {
           created: phrase.value.project_chronology_page,
           updated: phrase.value.project_chronology_updated,
-        }),
-        ...firstAndLastTimelineItems(
-          data.value.stages,
-          (stage) => ({ date: stage.period.startDate, href: stage.href }),
-          {
-            icon: 'calendar',
-            first: phrase.value.project_chronology_first_stage,
-            last: phrase.value.project_chronology_last_stage,
-            only: phrase.value.project_chronology_stage,
-          },
-        ),
-        ...firstAndLastTimelineItems(
-          data.value.sections,
-          (section) => ({ date: section.date, href: section.href }),
-          {
-            icon: 'file-tray-stack',
-            first: phrase.value.project_chronology_first_section,
-            last: phrase.value.project_chronology_last_section,
-            only: phrase.value.project_chronology_section,
-          },
-        ),
-        ...firstAndLastTimelineItems(
-          [data.value.chronology.firstStatusAt, data.value.currentStatus],
-          (mark) =>
-            typeof mark === 'string'
-              ? { date: mark, href: '#statuses' }
-              : mark && {
-                  date: new Date(mark.createdAt).toISOString().slice(0, 10),
-                  href: '#statuses',
-                },
-          {
-            icon: 'pulse',
-            first: phrase.value.project_chronology_first_status,
-            last: phrase.value.project_chronology_last_status,
-            only: phrase.value.project_status,
-          },
-        ),
-      ],
+        },
+        [
+          ...firstAndLastTimelineItems(
+            data.value.stages,
+            (stage) => ({ date: stage.period.startDate, href: stage.href }),
+            {
+              icon: 'calendar',
+              first: phrase.value.project_chronology_first_stage,
+              last: phrase.value.project_chronology_last_stage,
+              only: phrase.value.project_chronology_stage,
+            },
+          ),
+          ...firstAndLastTimelineItems(
+            data.value.sections,
+            (section) => ({ date: section.date, href: section.href }),
+            {
+              icon: 'file-tray-stack',
+              first: phrase.value.project_chronology_first_section,
+              last: phrase.value.project_chronology_last_section,
+              only: phrase.value.project_chronology_section,
+            },
+          ),
+          ...firstAndLastTimelineItems(
+            [data.value.chronology.firstStatusAt, data.value.currentStatus],
+            (mark) =>
+              typeof mark === 'string'
+                ? { date: mark, href: '#statuses' }
+                : mark && { date: mark.date, href: '#statuses' },
+            {
+              icon: 'pulse',
+              first: phrase.value.project_chronology_first_status,
+              last: phrase.value.project_chronology_last_status,
+              only: phrase.value.project_status,
+            },
+          ),
+        ],
+      ),
       tags: data.value.tags,
       references: data.value.references,
     }) satisfies PublicDetailPanelData,

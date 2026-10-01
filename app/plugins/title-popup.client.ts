@@ -1,139 +1,36 @@
-import {
-  readTitlePopup,
-  type TitlePopupContentLine,
-} from '#layers/thei/app/composables/title-popup-content';
+import { getTitlePopup } from '#layers/thei/app/composables/title-popup-dom';
+import { usePressHints } from '#layers/thei/app/composables/press-hint-dom';
+import { modalStack } from '#layers/thei/app/composables/modal';
 
-function getTitlePopup(
-  el: HTMLElement,
-): { lines: TitlePopupContentLine[]; popupClass: string } | null {
-  // A control whose own label is on screen needs no hint repeating it: the
-  // label may only be shown at some widths, and the hint covers the others.
-  const label = el.querySelector<HTMLElement>('[data-title-popup-label]');
-  if (label?.getClientRects().length) return null;
-  const lines = readTitlePopup(
-    el.dataset.titlePopup,
-    el.dataset.titlePopupRich,
-  );
-  if (!lines) return null;
-  const popupClass = el.dataset.titlePopupClass ?? '';
-  return { lines, popupClass };
-}
-
+/**
+ * Title popups: the hint of every `[data-title-popup]` anchor, shown when
+ * `press-hint.ts` says — after a pause under the mouse, on a long press of a
+ * link or a button, on a tap of anything that does nothing else when tapped,
+ * and on a focus moved by the keyboard.
+ */
 export default defineNuxtPlugin(() => {
+  const hints = usePressHints();
+  if (!hints) return;
   const { show, hide } = useTitlePopup();
   const router = useRouter();
 
-  // Track the element currently "targeted" so rapid mouseover across child
-  // elements of the same anchor doesn't re-arm the delay timer.
-  let currentAnchor: HTMLElement | null = null;
-
-  // --- Touch-only helpers ---
-
-  let touchScrollBreaker: (() => void) | null = null;
-  let touchOutsideCloser: ((e: TouchEvent) => void) | null = null;
-
-  function enableTouchScrollBreaker() {
-    touchScrollBreaker = () => {
-      hide();
-      disableTouchListeners();
-    };
-    window.addEventListener('scroll', touchScrollBreaker, { passive: true });
-    window.addEventListener('resize', touchScrollBreaker);
-  }
-
-  function disableTouchScrollBreaker() {
-    if (!touchScrollBreaker) return;
-    window.removeEventListener('scroll', touchScrollBreaker);
-    window.removeEventListener('resize', touchScrollBreaker);
-    touchScrollBreaker = null;
-  }
-
-  function enableTouchOutsideCloser(anchor: HTMLElement) {
-    touchOutsideCloser = (e: TouchEvent) => {
-      const target = e.target as Node | null;
-      // Touch inside the anchor keeps the popup open
-      if (target && anchor.contains(target)) return;
-      hide();
-      disableTouchListeners();
-    };
-    window.addEventListener('touchstart', touchOutsideCloser, true);
-  }
-
-  function disableTouchOutsideCloser() {
-    if (!touchOutsideCloser) return;
-    window.removeEventListener('touchstart', touchOutsideCloser, true);
-    touchOutsideCloser = null;
-  }
-
-  function disableTouchListeners() {
-    disableTouchScrollBreaker();
-    disableTouchOutsideCloser();
-    currentAnchor = null;
-  }
-
-  // --- Mouse ---
-
-  // mouseover bubbles → one delegated listener covers the whole document.
-  // The anchor comparison prevents re-arming the delay when cursor moves
-  // between child elements of the same anchor.
-  document.addEventListener('mouseover', (e) => {
-    const target = e.target as HTMLElement | null;
-    if (!target) return;
-    // Cursor entered the popup itself — ignore
-    if (target.closest('[data-title-popup-el]')) return;
-
-    const anchor = target.closest<HTMLElement>('[data-title-popup]');
-    if (anchor === currentAnchor) return;
-    currentAnchor = anchor;
-
-    if (anchor) {
+  hints.register({
+    id: 'title',
+    anchorFor: (target) => target.closest<HTMLElement>('[data-title-popup]'),
+    hasHint: (anchor) => getTitlePopup(anchor) !== null,
+    show(anchor, { placement }) {
       const data = getTitlePopup(anchor);
-      if (data) show(anchor, data.lines, data.popupClass);
-      else hide();
-    } else {
-      hide();
-    }
-  });
-
-  // Cursor left the viewport
-  document.documentElement.addEventListener('mouseleave', () => {
-    currentAnchor = null;
-    hide();
-  });
-
-  // --- Touch ---
-
-  document.addEventListener(
-    'touchstart',
-    (e) => {
-      const target = e.target as HTMLElement | null;
-      if (!target) return;
-      if (target.closest('[data-title-popup-el]')) return;
-
-      const anchor = target.closest<HTMLElement>('[data-title-popup]');
-      if (!anchor) {
-        hide();
-        disableTouchListeners();
-        return;
-      }
-
-      const data = getTitlePopup(anchor);
-      if (!data) return;
-
-      // Reset any previous touch session before starting a new one
-      disableTouchListeners();
-      currentAnchor = anchor;
-      enableTouchScrollBreaker();
-      enableTouchOutsideCloser(anchor);
-      show(anchor, data.lines, data.popupClass);
+      if (data) show(anchor, data.lines, data.popupClass, placement);
     },
-    { passive: true },
-  );
-
-  // --- Navigation ---
-
-  router.afterEach(() => {
-    hide();
-    disableTouchListeners();
+    hide: (anchor) => hide(anchor),
+    delays: { hover: 400, focus: 400 },
   });
+
+  router.afterEach(() => hints.dismiss());
+  // A modal opening or closing changes what is under the hint, and what
+  // Escape is for.
+  watch(
+    () => modalStack.value.length,
+    () => hints.dismiss(),
+  );
 });

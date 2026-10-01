@@ -1,10 +1,12 @@
 /**
  * Everything the update system needs to know about how this instance is run.
  *
- * All of it comes from the systemd unit the installer writes, so a development
- * checkout is automatically recognised as unmanaged and never tries to update
- * or restart itself.
+ * Most of it comes from the systemd unit the installer writes, so a
+ * development checkout is automatically recognised as unmanaged and never
+ * tries to update or restart itself.
  */
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 export const defaultRepositoryUrl = 'https://github.com/Gwynerva/thei.git';
 
@@ -20,6 +22,23 @@ export function bunPath(): string {
 
 export function repositoryUrl(): string {
   return process.env.THEI_REPOSITORY || defaultRepositoryUrl;
+}
+
+/**
+ * What `bun install` needs to compile a native addon without the network.
+ *
+ * No dependency of this release compiles: better-sqlite3 carries its binaries
+ * from 13 on. An addon that does — better-sqlite3 12 and before, which
+ * compiles itself with node-gyp when GitHub has no binary for it — would have
+ * node-gyp download Node's headers as well; the Node that runs the site ships
+ * them beside itself, and they are the ones the addon has to match. `node` is
+ * the path of that Node, the process running this code.
+ */
+export function nativeBuildEnv(node = process.execPath): NodeJS.ProcessEnv {
+  const prefix = dirname(dirname(node));
+  return existsSync(join(prefix, 'include', 'node', 'node.h'))
+    ? { npm_config_nodedir: prefix }
+    : {};
 }
 
 /**

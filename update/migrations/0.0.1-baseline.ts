@@ -31,7 +31,8 @@ export const baselineSql: string[] = [
 	\`url\` text PRIMARY KEY NOT NULL,
 	\`name\` text NOT NULL,
 	\`isPrivate\` integer DEFAULT false NOT NULL,
-	\`sortOrder\` integer NOT NULL
+	\`sortOrder\` integer NOT NULL,
+	\`note\` text DEFAULT '' NOT NULL
 );
 `,
   `CREATE TABLE \`statuses\` (
@@ -41,10 +42,11 @@ export const baselineSql: string[] = [
 	\`kind\` text DEFAULT 'regular' NOT NULL,
 	\`assetUuid\` text,
 	\`text\` text NOT NULL,
-	\`createdAt\` integer NOT NULL
+	\`createdAt\` integer NOT NULL,
+	\`date\` text DEFAULT '' NOT NULL
 );
 `,
-  `CREATE INDEX \`statuses-owner-date-idx\` ON \`statuses\` (\`ownerType\`,\`ownerId\`,\`createdAt\`,\`id\`);`,
+  `CREATE INDEX \`statuses-owner-date-idx\` ON \`statuses\` (\`ownerType\`,\`ownerId\`,\`date\`,\`createdAt\`,\`id\`);`,
   `CREATE TABLE \`assets\` (
 	\`assetUuid\` text PRIMARY KEY NOT NULL,
 	\`slug\` text NOT NULL,
@@ -100,6 +102,27 @@ export const baselineSql: string[] = [
 `,
   `CREATE UNIQUE INDEX \`content-owner-slot-idx\` ON \`content\` (\`ownerType\`,\`ownerId\`,\`slot\`);`,
   `CREATE INDEX \`content-owner-idx\` ON \`content\` (\`ownerType\`,\`ownerId\`);`,
+  `CREATE TABLE \`content-history\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`ownerType\` text NOT NULL,
+	\`ownerRef\` text NOT NULL,
+	\`slot\` text NOT NULL,
+	\`kind\` text NOT NULL,
+	\`reason\` text,
+	\`data\` text NOT NULL,
+	\`digest\` text NOT NULL,
+	\`wordCount\` integer NOT NULL,
+	\`blockCount\` integer NOT NULL,
+	\`assetCount\` integer NOT NULL,
+	\`size\` integer NOT NULL,
+	\`assetUuids\` text NOT NULL,
+	\`writer\` text DEFAULT '' NOT NULL,
+	\`createdAt\` integer NOT NULL,
+	\`updatedAt\` integer NOT NULL
+);
+`,
+  `CREATE INDEX \`content-history-field-idx\` ON \`content-history\` (\`ownerType\`,\`ownerRef\`,\`slot\`,\`kind\`,\`createdAt\`);`,
+  `CREATE INDEX \`content-history-kind-idx\` ON \`content-history\` (\`kind\`,\`createdAt\`);`,
   `CREATE TABLE \`events\` (
 	\`eventUuid\` text PRIMARY KEY NOT NULL,
 	\`title\` text NOT NULL,
@@ -270,9 +293,9 @@ export const baselineSql: string[] = [
   `CREATE TABLE \`project-external-links\` (
 	\`projectUuid\` text NOT NULL,
 	\`url\` text NOT NULL,
-	\`name\` text NOT NULL,
 	\`sortOrder\` integer NOT NULL,
 	\`isPrivate\` integer DEFAULT false NOT NULL,
+	\`note\` text DEFAULT '' NOT NULL,
 	PRIMARY KEY(\`projectUuid\`, \`url\`),
 	FOREIGN KEY (\`projectUuid\`) REFERENCES \`projects\`(\`projectUuid\`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (\`url\`) REFERENCES \`external-links\`(\`url\`) ON UPDATE no action ON DELETE no action
@@ -282,9 +305,9 @@ export const baselineSql: string[] = [
   `CREATE TABLE \`event-external-links\` (
 	\`eventUuid\` text NOT NULL,
 	\`url\` text NOT NULL,
-	\`name\` text NOT NULL,
 	\`sortOrder\` integer NOT NULL,
 	\`isPrivate\` integer DEFAULT false NOT NULL,
+	\`note\` text DEFAULT '' NOT NULL,
 	PRIMARY KEY(\`eventUuid\`, \`url\`),
 	FOREIGN KEY (\`eventUuid\`) REFERENCES \`events\`(\`eventUuid\`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (\`url\`) REFERENCES \`external-links\`(\`url\`) ON UPDATE no action ON DELETE no action

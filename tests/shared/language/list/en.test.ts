@@ -44,7 +44,7 @@ describe('Editor.js phrases', () => {
     expect(enModule.phrases.content_private_section_end).toBe(
       'End of private section',
     );
-    expect(enModule.phrases.content_snapshots).toBe('Version history');
+    expect(enModule.phrases.content_history).toBe('Version history');
     expect(enModule.phrases.content_media_stretch).toBe('Full width');
   });
 });

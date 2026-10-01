@@ -224,6 +224,8 @@ export default defineI18nModule({
       `Лучше всего подойдёт изображение или видео с пропорциями ${ratio}, например ${size} пикселей`,
     asset_library_pending_deletion: (date) =>
       `Не используется: будет удалён после ${date}`,
+    asset_library_in_history:
+      'Не используется, но хранится, пока его показывает версия какого-то текста',
     asset_library_empty: 'Подходящих файлов нет',
     asset_library_unused: 'Неиспользуемые',
     asset_library_unused_hint:
@@ -286,8 +288,6 @@ export default defineI18nModule({
     asset_role_action_file: 'Файл кнопки',
     asset_role_avatar: 'Аватар',
     asset_role_status: 'Статус',
-    asset_scope_stage: 'Этап',
-    asset_scope_section: 'Раздел',
     asset_source_profile: 'Профиль',
     asset_library_view: 'Открыть сущность',
     asset_library_edit: 'Редактировать сущность',
@@ -341,8 +341,12 @@ export default defineI18nModule({
     profile_avatar_history: 'История аватарок',
     profile_best_projects: 'Витринные проекты',
     profile_new_status: 'Новый статус',
+    profile_new_project_status: 'Новый статус проекта',
+    profile_new_life_status: 'Новый статус жизни',
     profile_edit_status: 'Изменение статуса',
     profile_status_placeholder: 'Сегодня я чувствую себя…',
+    profile_status_icon: 'Иконка',
+    profile_status_date: 'Дата',
     profile_empty_status: 'нет активного статуса',
     profile_password_hint: 'Оставьте пустым, чтобы сохранить текущий пароль',
     profile_password_mismatch: 'Пароли не совпадают',
@@ -402,7 +406,7 @@ export default defineI18nModule({
     public_sign_in_hint: 'Для владельца сайта',
     activity_summary: 'Сводка активности',
     life_rewind: (day) => `${day} в прошлом`,
-    life_rewind_seo_title: 'Взгляд в прошлом',
+    life_rewind_seo_title: 'Взгляд в прошлое',
     life_rewind_description:
       'Каким был этот день в прошлые годы? Здесь собраны события, перемены и проекты, которые начались, завершились или продолжались в эту дату. Небольшое путешествие по разным годам жизни.',
     life_rewind_empty: 'У этого дня пока нет воспоминаний',
@@ -1066,6 +1070,15 @@ export default defineI18nModule({
       'Проекты, события и записи дневника, связанные с этой сущностью. Связь видна с обеих сторон.',
     related_entity_add: 'Добавить связь',
     relation_direction: 'Тип связи',
+    // Said of the entity on the left, whose gender the word takes.
+    relation_short_related: (owner) =>
+      owner === 'project'
+        ? 'связан с'
+        : owner === 'event'
+          ? 'связано с'
+          : 'связана с',
+    relation_short_depends_on: 'зависит от',
+    relation_short_affects: 'влияет на',
     relation_popup_related: (current, other) =>
       `«${current}» и «${other}» связаны`,
     relation_popup_depends_on: (current, other) =>
@@ -1093,12 +1106,16 @@ export default defineI18nModule({
     external_link_archived:
       'Сайт не ответил — данные взяты из архивной копии страницы.',
     external_link_duplicate: 'Эта ссылка уже добавлена.',
+    external_link_in_project_description:
+      'Эта ссылка уже есть в описании проекта.',
+    external_link_in_event_content: 'Эта ссылка уже есть в содержимом события.',
     external_link_private: 'Приватная ссылка',
     project_external_links_empty: 'Внешних ссылок пока нет.',
     refresh_external_link: 'Обновить ссылку',
     search_entity_placeholder: 'Название или дата записи дневника…',
     search_entity_no_results: 'Ничего подходящего не найдено.',
     search_entity_error: 'Не удалось выполнить поиск.',
+    entity_search_mentioned: 'Есть ссылка в тексте',
     content_section: 'Раздел проекта',
     content_section_delete_entity: 'раздел проекта',
     project_stage: 'Этап проекта',
@@ -1139,8 +1156,58 @@ export default defineI18nModule({
     content_editor_title: 'Редактор контента',
     content_editor_clear_confirm: 'Очистить весь контент в редакторе?',
     content_never_saved: 'Не было сохранено',
-    content_snapshots: 'История версий',
-    content_snapshot_restore_label: (date) => `Восстановить версию от ${date}`,
+    content_history: 'История версий',
+    content_history_empty:
+      'Версий пока нет. Они появляются по ходу работы и хранятся двое суток.',
+    content_history_unavailable: 'История версий сейчас недоступна.',
+    content_history_load_error: 'Не удалось загрузить эту версию.',
+    content_history_opened_version: 'Как при открытии',
+    content_history_reasons: {
+      auto: 'Автосохранение',
+      'before-restore': 'Перед восстановлением',
+      'before-clear': 'Перед очисткой',
+      'large-drop': 'Перед крупным удалением',
+      discarded: 'Закрыто без сохранения',
+      dismissed: 'Отклонённый черновик',
+      displaced: 'Черновик другой вкладки',
+      replaced: 'Прошлая сохранённая версия',
+      cleared: 'Сохранённое до очистки',
+      deleted: 'Удалённый текст',
+      abandoned: 'Брошенный черновик',
+    },
+    content_history_row_label: (time, changes) =>
+      `Версия от ${time}: ${changes}`,
+    content_history_delta: (value, delta) =>
+      delta === 0
+        ? value
+        : `${value}, на ${Math.abs(delta)} ${delta < 0 ? 'меньше' : 'больше'}, чем сейчас`,
+    content_history_missing_assets: (count) =>
+      `Из этой версии уже удалено: ${plural(count, 'файл', 'файла', 'файлов')}`,
+    content_history_back: 'К списку версий',
+    content_restore: 'Восстановить',
+    content_restore_cancel: 'Отмена',
+    content_diff_removed: 'Пропадёт',
+    content_diff_added: 'Появится',
+    content_diff_changed: 'Изменится',
+    content_diff_before: 'Сейчас',
+    content_diff_after: 'Станет',
+    content_restore_title: (time) => `Версия от ${time}`,
+    content_restore_keeps_current: 'Текущий текст останется в истории.',
+    content_restore_same: 'Эта версия совпадает с текущим текстом.',
+    content_restored: (label) => `Восстановлено: ${label}`,
+    content_restore_undo: 'Вернуть как было',
+    content_draft_offer: (time) => `Несохранённый черновик от ${time}`,
+    content_draft_dismiss: 'Отклонить черновик (он останется в истории версий)',
+    content_draft_chip: (time) => `Черновик · ${time}`,
+    content_draft_status_offline_short: 'Нет связи',
+    content_draft_status_synced: (time) => `Черновик сохранён · ${time}`,
+    content_draft_status_offline: 'Нет связи — хранится в браузере',
+    content_draft_status_refused_short: 'Не сохраняется',
+    content_draft_status_refused:
+      'Сервер не принял черновик — текст есть только в этом окне',
+    content_field_unsaved_draft: (time) => `Несохранённый черновик · ${time}`,
+    sign_out_unsynced_confirm: (count) =>
+      `Ещё не на сервере: ${plural(count, 'текст', 'текста', 'текстов')}. Если выйти сейчас, они пропадут. Всё равно выйти?`,
     content_internal_link: 'Внутренняя ссылка',
     content_external_link: 'Внешняя ссылка',
     content_link_url: 'Адрес ссылки',
@@ -1187,6 +1254,8 @@ export default defineI18nModule({
       move_down: 'Спустить',
     },
     content_asset_pick_error: 'Не удалось выбрать файл.',
+    content_media_pending_confirm:
+      'Вставленный файл ещё сохраняется. Закрыть и потерять его?',
     content_choose_media: 'Выбрать изображение или видео',
     content_gallery_tile: 'Показать это изображение',
     content_add_media: 'Добавить изображение или видео',
@@ -1363,6 +1432,11 @@ export default defineI18nModule({
     upload_apply_settings: 'Создать вариант',
     upload_processing: 'Обработка...',
     upload_queued: 'Ожидание в очереди...',
+    upload_finishing: 'Завершение…',
+    upload_cancel: 'Отмена',
+    upload_dismiss: 'Убрать',
+    upload_error_job_lost: 'Сервер перезапустился, пока файл сохранялся.',
+    upload_pending_leave_confirm: 'Файлы ещё сохраняются. Уйти и потерять их?',
     upload_quality: 'Качество',
     upload_audio: 'Звук',
     upload_audio_none: 'в исходнике нет',
@@ -1384,6 +1458,7 @@ export default defineI18nModule({
     video_volume: 'Громкость',
     video_no_audio: 'В этом видео нет звуковой дорожки',
     asset_variant_current: 'Используется сейчас',
+    asset_variant_current_tag: 'Текущий',
     asset_variant_usage_count: (count) => `Использований: ${count}`,
     upload_error_load_variants: 'Не удалось загрузить варианты файла.',
     upload_error_apply: 'Не удалось применить настройки.',
@@ -1480,5 +1555,17 @@ export default defineI18nModule({
     search_preset_cv_title: 'Резюме',
     search_preset_cv_description:
       'Профессиональная часть архива: проекты, из которых складывается рабочая история.',
+    og_personal_archive: 'Личный архив',
+    og_stage_position: (index, total) => `Этап ${index} из ${total}`,
+    og_updated: (date) => `Обновлено ${date}`,
+    og_life_headline: (years) =>
+      `${plural(years, 'год', 'года', 'лет')} в одной хронике`,
+    og_tags_headline: (count) =>
+      `${plural(count, 'нить', 'нити', 'нитей')} через всю жизнь`,
+    og_pages_headline: (count) =>
+      `${plural(count, 'текст', 'текста', 'текстов')} вне хронологии`,
+    og_image_alt: (kind, title, site) => `${kind} «${title}» — ${site}`,
+    x_stages: (count) => plural(count, 'этап', 'этапа', 'этапов'),
+    x_sections: (count) => plural(count, 'раздел', 'раздела', 'разделов'),
   },
 });

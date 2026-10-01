@@ -2,6 +2,7 @@ import { SiteAccessLevel } from '#layers/thei/shared/access-level';
 import { getProfileIdentity } from '../thei/profile';
 import { LIFE_PRESETS, lifePresetHref } from '#layers/thei/shared/life-presets';
 import { siteUrl } from '../thei/site-url';
+import { ownerText } from '../thei/owner-text';
 
 /**
  * A map of the site for language models, in the llms.txt convention.
@@ -22,9 +23,9 @@ export default defineEventHandler(async (event) => {
   setHeader(event, 'Content-Type', 'text/plain; charset=utf-8');
   setHeader(event, 'Cache-Control', 'public, max-age=3600');
   return [
-    `# ${identity.profile.displayName}`,
+    `# ${ownerText(identity.profile.displayName)}`,
     '',
-    `> ${identity.profile.slogan || phrase.public_life_description}`,
+    `> ${ownerText(identity.profile.slogan) || phrase.public_life_description}`,
     '',
     phrase.llms_txt_intro,
     '',

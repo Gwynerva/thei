@@ -8,6 +8,7 @@ import {
 import type { PageEditData, ValidatedPageEditData } from '../page';
 import { normalizeUrlSegment } from '../language/slugify';
 import { isOneOf } from '../utils/isOneOf';
+import { optionalContentDraftRef } from '../content-history';
 
 export function normalizePageSlug(value: unknown) {
   return normalizeUrlSegment(value);
@@ -66,6 +67,7 @@ export function validatePageData(
         Number.isFinite(data.content.updatedAt)
           ? { updatedAt: data.content.updatedAt }
           : {}),
+        ...optionalContentDraftRef(data.content?.draftRef),
       },
       reminder: normalizeEntityReminder(data.reminder),
       notes: normalizeEntityNotes(data.notes),

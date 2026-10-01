@@ -329,6 +329,71 @@ describe('the pieces', () => {
     expect(icons).toContain('https://example.com/tile.png');
     expect(icons).toContain('https://example.com/header-icon.png');
   });
+
+  it('draws icons down rather than up, and leaves silhouettes last or out', async () => {
+    const icons = await discoverFavicons({
+      url: 'https://example.com/',
+      headers: new Headers(),
+      $: load(`<html><head>
+        <link rel="icon" media="(prefers-color-scheme: dark)" sizes="48x48" href="/dark.png">
+        <link rel="icon" sizes="16x16" href="/icon-16.png">
+        <link rel="icon" sizes="32x32" href="/icon-32.png">
+        <link rel="mask-icon" href="/pinned.svg" color="#000">
+        <meta name="msapplication-TileImage" content="/tile.png">
+        <link rel="shortcut icon" href="/favicon.ico">
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple.png">
+      </head></html>`),
+    });
+    expect(icons).toEqual([
+      'https://example.com/apple.png',
+      'https://example.com/favicon.ico',
+      'https://example.com/icon-32.png',
+      'https://example.com/icon-16.png',
+      'https://example.com/tile.png',
+      'https://example.com/dark.png',
+    ]);
+  });
+
+  it('takes the later of two equally good icons, as a browser does', async () => {
+    const icons = await discoverFavicons({
+      url: 'https://example.com/',
+      headers: new Headers(),
+      $: load(`<link rel="icon" href="/first.png"><link rel="icon" href="/second.png">
+        <link rel="icon" type="image/svg+xml" href="/logo">`),
+    });
+    expect(icons).toEqual([
+      'https://example.com/logo',
+      'https://example.com/second.png',
+      'https://example.com/first.png',
+    ]);
+  });
+
+  it('takes from a manifest only the icons shown as they are', async () => {
+    stubFetch((url) =>
+      url === 'https://example.com/app.webmanifest'
+        ? new Response(
+            JSON.stringify({
+              icons: [
+                { src: '/maskable.png', sizes: '192x192', purpose: 'maskable' },
+                { src: '/mono.png', sizes: '192x192', purpose: 'monochrome' },
+                { src: '/both.png', sizes: '512x512', purpose: 'any maskable' },
+                { src: '/plain.png', sizes: '96x96' },
+              ],
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          )
+        : undefined,
+    );
+    const icons = await discoverFavicons({
+      url: 'https://example.com/',
+      headers: new Headers(),
+      $: load('<link rel="manifest" href="/app.webmanifest">'),
+    });
+    expect(icons).toEqual([
+      'https://example.com/plain.png',
+      'https://example.com/both.png',
+    ]);
+  });
 });
 
 describe('the address guard', () => {

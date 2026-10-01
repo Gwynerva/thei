@@ -82,15 +82,10 @@ const presetTitle = computed(() => {
     return phrase.value.project_content_sections;
   return undefined;
 });
-const ogImage = useOgImage(
-  'project',
-  () => project.value.publicId,
-  () => [
-    project.value.title,
-    project.value.bannerMedia?.src,
-    project.value.iconMedia.src,
-  ],
-);
+const ogImage = useOgImage(() => ({
+  kind: 'project',
+  id: project.value.publicId,
+}));
 usePublicSeo({
   ogImage,
   title: () =>
@@ -167,7 +162,7 @@ watch(filter, (value) => {
       :base-path="base"
       scope-icon="project"
       :scope-media="project.iconMedia"
-      :scope-label="project.title"
+      :scope-label="publicText(project.title)"
       :initial-date="requestedDate"
     />
   </main>

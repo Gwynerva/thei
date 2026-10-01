@@ -8,6 +8,11 @@
  * nearest position inside the block's text instead: the start of that very
  * line from the left, its end from the right.
  *
+ * A block with no text of its own — a picture, a card, a divider — takes the
+ * focus itself (`editor-current-block.ts`), and a click on its wrapper gives
+ * it that natively. A click in the editor's padding beside it, which is what
+ * "beside" means on a phone, focuses it here.
+ *
  * The caret is placed on `click`, not on `mousedown`: Editor.js starts its
  * rectangle selection on a mousedown in the margin and drops every range on
  * the first mousemove, so a caret placed earlier would not survive a shaky
@@ -15,6 +20,11 @@
  */
 
 import type EditorJS from '@editorjs/editorjs';
+import { makeEditorBlockCurrent } from './editor-current-block';
+import {
+  EDITOR_BLOCK_SELECTOR,
+  EDITOR_SELECTED_BLOCK_SELECTOR,
+} from './editor-dom';
 
 /** Anything a click is for on its own, or that the editor handles itself. */
 const SKIP_SELECTOR = [
@@ -31,9 +41,7 @@ const SKIP_SELECTOR = [
   '.ce-popover',
   '.content-private-bracket',
 ].join(', ');
-const BLOCK_SELECTOR = '.ce-block';
 const EDITOR_SELECTOR = '.codex-editor';
-const SELECTED_BLOCK_SELECTOR = '.ce-block--selected';
 const INPUT_SELECTOR = '[contenteditable="true"]';
 /** How far a press may travel and still count as a click, in pixels. */
 const CLICK_TRAVEL = 3;
@@ -103,11 +111,11 @@ export function bindEditorGutterClick(root: HTMLElement, editor: EditorJS) {
    * block — the one level with the pointer.
    */
   function blockFor(target: Element, y: number) {
-    const block = target.closest<HTMLElement>(BLOCK_SELECTOR);
+    const block = target.closest<HTMLElement>(EDITOR_BLOCK_SELECTOR);
     if (block) return root.contains(block) ? block : undefined;
     if (target !== root && !target.closest(EDITOR_SELECTOR)) return;
     for (const candidate of root.querySelectorAll<HTMLElement>(
-      BLOCK_SELECTOR,
+      EDITOR_BLOCK_SELECTOR,
     )) {
       const rect = candidate.getBoundingClientRect();
       if (y >= rect.top && y <= rect.bottom) return candidate;
@@ -120,7 +128,7 @@ export function bindEditorGutterClick(root: HTMLElement, editor: EditorJS) {
     if (!block) return;
     // A selected block is being acted on as a whole, as Editor.js does below
     // the last block too.
-    if (root.querySelector(SELECTED_BLOCK_SELECTOR)) return;
+    if (root.querySelector(EDITOR_SELECTED_BLOCK_SELECTOR)) return;
     // The fields of a block the editor lays out itself; the ones inside a
     // Vue tree of a block tool are that tool's own business.
     const inputs = Array.from(
@@ -130,7 +138,11 @@ export function bindEditorGutterClick(root: HTMLElement, editor: EditorJS) {
         !input.closest('[data-mutation-free]') &&
         input.getClientRects().length > 0,
     );
-    return inputs.length ? { block, inputs } : undefined;
+    if (inputs.length) return { block, inputs };
+    // A block that takes the focus itself, clicked beside rather than on.
+    if (block.hasAttribute('tabindex') && !block.contains(target))
+      return { block, inputs };
+    return undefined;
   }
 
   function onMouseDown(event: MouseEvent) {
@@ -154,6 +166,13 @@ export function bindEditorGutterClick(root: HTMLElement, editor: EditorJS) {
     const hit = fieldsFor(event.target, event.clientY);
     if (!hit) return;
     const { block, inputs } = hit;
+    if (!inputs.length) {
+      block.focus({ preventScroll: true });
+      // Editor.js makes a block current, and moves its toolbar to it, when a
+      // touch lands in the block; this click landed beside it.
+      makeEditorBlockCurrent(block);
+      return;
+    }
 
     const rects = inputs.map((input) => input.getBoundingClientRect());
     const target = gutterCaretTarget(rects, {

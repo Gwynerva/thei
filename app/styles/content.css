@@ -215,22 +215,28 @@
     transition-timing-function: var(--default-transition-timing-function);
   }
 
-  .content-prose a[data-content-link]:is(:hover, :focus-visible) {
-    background-color: var(--color-bg-3);
-    text-decoration-color: color-mix(
-      in oklab,
-      var(--color-text-1) 40%,
-      transparent
-    );
+  .content-prose a[data-content-link] {
+    @variant hocus {
+      background-color: var(--color-bg-3);
+      text-decoration-color: color-mix(
+        in oklab,
+        var(--color-text-1) 40%,
+        transparent
+      );
+    }
   }
 
+  /*
+   * The icon is an inline box around a word joiner, never an inline-block: a
+   * line may always break after an inline-block, which would leave the icon
+   * at the end of one line and the text it belongs to on the next. The
+   * padding is its width, the line's text its height, and the icon fills the
+   * 1em square in the middle.
+   */
   .content-prose a[data-content-link]::before {
-    display: inline-block;
-    width: 1em;
-    height: 1em;
+    padding-inline: 0.5em;
     margin-right: 0.3em;
-    content: '';
-    vertical-align: -0.15em;
+    content: '\2060';
   }
 
   /*
@@ -245,13 +251,13 @@
     mask-size: contain;
   }
 
-  /* The site's favicon. */
+  /* The site's favicon, its corners rounded on the square it fills. */
   .content-prose a[data-content-link][data-content-link-icon='image']::before {
-    border-radius: 2px;
     background-image: var(--content-link-icon);
     background-position: center;
     background-repeat: no-repeat;
     background-size: contain;
+    clip-path: inset(calc(50% - 0.5em) 0 round 2px);
   }
 
   /*
@@ -295,7 +301,7 @@
       display: none;
     }
 
-    &:is(:hover, :focus-visible) {
+    @variant hocus {
       --content-link-surface: color-mix(
         in oklab,
         var(--content-link-accent, var(--color-accent)) 28%,
@@ -407,6 +413,22 @@
     font-weight: 600;
     line-height: 1.25rem;
     pointer-events: none;
+  }
+
+  /*
+   * The glow of the editor's current block (editor.css) lies under the
+   * label, which would otherwise cut it out with the surface.
+   */
+  .content-editor:not(.content-editor--dragging-block)
+    .codex-editor:not(:has(.ce-block--selected))
+    .ce-block:focus-within
+    .content-private-bracket__label {
+    background:
+      linear-gradient(
+        var(--content-editor-current),
+        var(--content-editor-current)
+      ),
+      var(--content-surface);
   }
 
   .content-prose .content-private-bracket__label svg {

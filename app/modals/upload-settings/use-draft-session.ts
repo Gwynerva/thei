@@ -1,27 +1,44 @@
 import type { AssetDraftSource } from '#layers/thei/shared/api/asset-draft';
-import { buildUploadHeaders } from '#layers/thei/shared/api/asset-upload-headers';
-import { createOriginalAssetSettings } from '#layers/thei/shared/asset-upload-settings';
 import { getPathExtension } from '#layers/thei/shared/assets/extensions';
+import {
+  deleteDraft,
+  isDraftExpired,
+  stageDraftFile,
+} from '#layers/thei/app/composables/upload-draft';
 import type { PickedFile } from '../pick-file/picked-file';
 import type { UploadSettingsModalData } from './use-upload-settings-assets';
 
-/** What a draft is opened from: the picked file, or a file in the library. */
+/**
+ * What a draft is opened from: the picked file, a file in the library, or a
+ * draft someone else already staged — a block storing a pasted file — with
+ * the file itself in case that draft is gone.
+ */
 export type DraftOrigin =
-  { kind: 'file'; file: PickedFile } | { kind: 'asset'; assetUuid: string };
+  | { kind: 'file'; file: PickedFile }
+  | { kind: 'asset'; assetUuid: string }
+  | { kind: 'draft'; draft: AssetDraftSource; file: PickedFile };
 
+/**
+ * Tells origins apart. A picked file is told by its object URL: two files
+ * of the same name and size are still two files.
+ */
 export function draftOriginKey(origin: DraftOrigin): string {
   return origin.kind === 'file'
-    ? `file:${origin.file.name}:${origin.file.size}`
-    : `asset:${origin.assetUuid}`;
+    ? `file:${origin.file.objectUrl}`
+    : origin.kind === 'asset'
+      ? `asset:${origin.assetUuid}`
+      : `draft:${origin.draft.draftId}`;
 }
 
 /**
  * The server-side copy the editor works on.
  *
  * The picked file crosses the network once, however many settings are tried;
- * a library file is opened in place. A draft the server has forgotten — after
- * a restart or a long pause — is opened again the next time it is needed, and
- * the request that found it gone is retried.
+ * a library file is opened in place; a draft handed in is used as it is. A
+ * draft the server has forgotten — after a restart or a long pause — is
+ * opened again the next time it is needed, and the request that found it
+ * gone is retried. A draft opened here is deleted here; one handed in stays
+ * its owner's to delete.
  */
 export function useDraftSession(
   modalData: UploadSettingsModalData,
@@ -33,7 +50,10 @@ export function useDraftSession(
   const error = ref<unknown>(null);
   let opening: Promise<AssetDraftSource> | null = null;
   let openedFor = '';
-  let activeXhr: XMLHttpRequest | null = null;
+  let owned = false;
+  /** The origin whose handed-in draft was found gone: its file is staged. */
+  let expiredFor = '';
+  let staging: AbortController | null = null;
 
   watch(
     () => {
@@ -42,6 +62,7 @@ export function useDraftSession(
     },
     (key) => {
       if (key !== openedFor) close();
+      expiredFor = '';
     },
   );
 
@@ -57,10 +78,16 @@ export function useDraftSession(
     close();
     openedFor = key;
     error.value = null;
-    const attempt = open(current).then(
+    const attempt = open(current, key).then(
       (opened) => {
-        if (openedFor === key) draft.value = opened;
-        return opened;
+        if (openedFor === key) {
+          draft.value = opened.draft;
+          owned = opened.owned;
+        } else if (opened.owned) {
+          // Closed while it was opening: nothing will ever use it.
+          deleteDraft(opened.draft.draftId);
+        }
+        return opened.draft;
       },
       (reason: unknown) => {
         if (openedFor === key) error.value = reason;
@@ -84,114 +111,65 @@ export function useDraftSession(
       return await request(opened);
     } catch (reason) {
       if (!isDraftExpired(reason)) throw reason;
+      expiredFor = openedFor;
       draft.value = null;
       return await request(await ensure());
     }
   }
 
   function close() {
-    activeXhr?.abort();
-    activeXhr = null;
+    staging?.abort();
+    staging = null;
     opening = null;
     stagingProgress.value = null;
     const closing = draft.value;
+    const wasOwned = owned;
     draft.value = null;
     openedFor = '';
-    if (!closing) return;
-    // Sent with keepalive so a closing tab still frees the server's copy.
-    void fetch(sitePath(`/api/admin/assets/drafts/${closing.draftId}`), {
-      method: 'DELETE',
-      keepalive: true,
-    }).catch(() => {});
+    owned = false;
+    if (closing && wasOwned) deleteDraft(closing.draftId);
   }
 
-  async function open(current: DraftOrigin): Promise<AssetDraftSource> {
+  /** Opens a draft, saying whether it is this session's to delete. */
+  async function open(
+    current: DraftOrigin,
+    key: string,
+  ): Promise<{ draft: AssetDraftSource; owned: boolean }> {
     if (current.kind === 'asset') {
-      return await $fetch<AssetDraftSource>(
+      const opened = await $fetch<AssetDraftSource>(
         `/api/admin/assets/drafts/from-asset/${current.assetUuid}`,
         { method: 'POST' },
       );
+      return { draft: opened, owned: true };
     }
-    return await stage(current.file);
+    if (current.kind === 'draft' && expiredFor !== key)
+      return { draft: current.draft, owned: false };
+    return { draft: await stage(current.file), owned: true };
   }
 
-  function stage(file: PickedFile): Promise<AssetDraftSource> {
-    const headers = buildUploadHeaders({
-      // Staging stores nothing; the header only has to be well formed.
-      settings: createOriginalAssetSettings(),
-      extension: getPathExtension(file.name),
-      ...(modalData.maxSize !== undefined
-        ? { maxSize: modalData.maxSize }
-        : {}),
-      ...(modalData.sizeLimitPolicy
-        ? { sizeLimitPolicy: modalData.sizeLimitPolicy }
-        : {}),
-      ...(modalData.acceptedExtensions
-        ? { acceptedExtensions: modalData.acceptedExtensions }
-        : {}),
-    });
-
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      activeXhr = xhr;
-      stagingProgress.value = 0;
-      xhr.open('POST', sitePath('/api/admin/assets/drafts'));
-      for (const [name, value] of Object.entries(headers)) {
-        xhr.setRequestHeader(name, value);
-      }
-      xhr.upload.addEventListener('progress', (event) => {
-        if (event.lengthComputable) {
-          stagingProgress.value = event.loaded / event.total;
-        }
-      });
-      const finish = () => {
-        if (activeXhr === xhr) activeXhr = null;
+  async function stage(file: PickedFile): Promise<AssetDraftSource> {
+    const controller = new AbortController();
+    staging = controller;
+    stagingProgress.value = 0;
+    try {
+      return await stageDraftFile(
+        file.file,
+        getPathExtension(file.name),
+        modalData,
+        {
+          signal: controller.signal,
+          onProgress: (share) => {
+            if (staging === controller) stagingProgress.value = share;
+          },
+        },
+      );
+    } finally {
+      if (staging === controller) {
+        staging = null;
         stagingProgress.value = null;
-      };
-      xhr.addEventListener('load', () => {
-        finish();
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            resolve(JSON.parse(xhr.responseText) as AssetDraftSource);
-          } catch {
-            reject(new Error(phrase.value.upload_error_invalid_response));
-          }
-          return;
-        }
-        reject(new Error(readXhrMessage(xhr)));
-      });
-      xhr.addEventListener('error', () => {
-        finish();
-        reject(new Error(phrase.value.upload_error_network));
-      });
-      xhr.addEventListener('abort', () => {
-        finish();
-        reject(
-          new DOMException(phrase.value.upload_error_cancelled, 'AbortError'),
-        );
-      });
-      xhr.send(file.file);
-    });
+      }
+    }
   }
 
   return { draft, stagingProgress, error, ensure, withDraft, close };
-}
-
-export function isDraftExpired(reason: unknown): boolean {
-  const data =
-    reason && typeof reason === 'object' && 'data' in reason
-      ? (reason as { data?: { data?: { draftExpired?: boolean } } }).data
-      : undefined;
-  return Boolean(data?.data?.draftExpired);
-}
-
-function readXhrMessage(xhr: XMLHttpRequest): string {
-  try {
-    const response = JSON.parse(xhr.responseText) as { message?: string };
-    return (
-      response.message ?? phrase.value.upload_error_request_failed(xhr.status)
-    );
-  } catch {
-    return phrase.value.upload_error_request_failed(xhr.status);
-  }
 }

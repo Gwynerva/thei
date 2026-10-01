@@ -6,6 +6,7 @@ import {
 } from '#layers/thei/shared/content-link';
 import {
   CONTENT_ENTITY_SEARCH_LIMIT,
+  CONTENT_ENTITY_SUGGEST_TEXT_LIMIT,
   type ContentEntityChoice,
   type ContentEntitySearchItem,
 } from '#layers/thei/shared/admin/content-entity-search';
@@ -23,6 +24,14 @@ import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
  *
  * It is the surface of its popup, and the `footer` slot is for whatever the
  * popup wants below the list — a note field, say — on that same surface.
+ *
+ * A picker opened over some text passes it as `suggest`: until something is
+ * typed, the list starts with what the text names. The text never goes into
+ * the field, so typing searches just as it would without it.
+ *
+ * A picker for something a text already links to passes those links as
+ * `prefer`, `type:uuid` keys: until something is typed they take the first
+ * places, marked, within the same number of rows.
  */
 const props = withDefaults(
   defineProps<{
@@ -31,10 +40,13 @@ const props = withDefaults(
     publicOnly?: boolean;
     limit?: number;
     chosen?: ContentEntityChoice;
+    suggest?: string;
+    prefer?: string[];
   }>(),
   {
     entityTypes: () => [...CONTENT_ENTITY_TYPES],
     exclude: () => [],
+    prefer: () => [],
     limit: CONTENT_ENTITY_SEARCH_LIMIT,
   },
 );
@@ -64,12 +76,20 @@ const rows = computed<Row[]>(() => {
 
 const search = debounce(async (current: number) => {
   if (current !== version) return;
+  const text = query.value.trim();
+  const suggest = text
+    ? undefined
+    : Array.from(props.suggest?.trim() ?? '')
+        .slice(0, CONTENT_ENTITY_SUGGEST_TEXT_LIMIT)
+        .join('') || undefined;
   try {
     const response = await $fetch<ContentEntitySearchItem[]>(
       '/api/admin/content-entities',
       {
         query: {
-          query: query.value.trim(),
+          query: text,
+          suggest,
+          prefer: (!text && props.prefer.join(',')) || undefined,
           entityTypes: props.entityTypes.join(','),
           exclude: props.exclude.join(','),
           publicOnly: props.publicOnly ? 'true' : undefined,
@@ -109,6 +129,12 @@ function secondary(item: ContentEntityChoice) {
   return [item.parent?.title, item.summary].filter(Boolean).join(' · ');
 }
 
+/** Shown first because the text links to it, while nothing is typed. */
+const preferred = computed(() => new Set(props.prefer));
+function isPreferred(item: ContentEntityChoice) {
+  return !query.value.trim() && preferred.value.has(itemKey(item));
+}
+
 function isChosen(item: ContentEntityChoice) {
   return Boolean(props.chosen && itemKey(props.chosen) === itemKey(item));
 }
@@ -120,6 +146,11 @@ function move(step: number) {
   document
     .getElementById(optionId(activeIndex.value))
     ?.scrollIntoView({ block: 'nearest' });
+}
+
+/** The mouse takes the row it is over; a finger only picks what it taps. */
+function pointAt(event: PointerEvent, index: number) {
+  if (event.pointerType === 'mouse') activeIndex.value = index;
 }
 
 function pick(row: Row) {
@@ -200,7 +231,7 @@ defineExpose({ focus: () => input.value?.focus({ preventScroll: true }) });
             'bg-bg-3': index === activeIndex,
             'entity-search-chosen': isChosen(row.item),
           }"
-          @pointerenter="activeIndex = index"
+          @pointerenter="pointAt($event, index)"
           @click="pick(row)"
         >
           <MediaEdge
@@ -211,21 +242,32 @@ defineExpose({ focus: () => input.value?.focus({ preventScroll: true }) });
             :engaged
             class="w-24"
           />
+          <!-- A truncated line clips its own halo, which draws a hard seam
+               across the picture: each gets room for the halo all round. -->
           <span
             class="entity-search-text relative flex min-w-0 flex-1 flex-col
               gap-0.5 py-1 pr-16 pl-xs"
           >
-            <span class="flex items-center gap-1 truncate text-sm font-semibold"
+            <span class="flex min-w-0 items-center gap-1 text-sm font-semibold"
               ><Icon
                 :name="entityTypeIcon(row.item.entityType)"
                 :aria-label="entityTypeLabel(row.item.entityType)"
                 role="img"
-                class="shrink-0 text-xs text-text-2"
-              />{{ entityDisplayTitle(row.item) }}</span
-            >
+                class="shrink-0 text-xs text-text-2" /><span
+                class="-m-[0.75em] min-w-0 truncate p-[0.75em]"
+                >{{ entityDisplayTitle(row.item) }}</span
+              ><Icon
+                v-if="isPreferred(row.item)"
+                name="link"
+                role="img"
+                :aria-label="phrase.entity_search_mentioned"
+                :data-title-popup="phrase.entity_search_mentioned"
+                data-entity-search-mentioned
+                class="shrink-0 text-xs text-accent"
+            /></span>
             <span
               v-if="secondary(row.item)"
-              class="block truncate text-xs text-text-3"
+              class="-m-[0.75em] block truncate p-[0.75em] text-xs text-text-3"
               :class="{ italic: row.item.date }"
               >{{ secondary(row.item) }}</span
             >

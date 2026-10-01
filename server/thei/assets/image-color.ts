@@ -1,31 +1,24 @@
 import sharp from 'sharp';
 import type { ImageAccent } from '#layers/thei/shared/accent-color';
+import {
+  linearSrgbToOklab,
+  srgbChannelToLinear,
+} from '#layers/thei/shared/oklch';
 
 const HUE_BIN_COUNT = 24;
 
-/** sRGB channel value (0–255) → linear light */
-function linearize(c: number): number {
-  const s = c / 255;
-  return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-}
-
-/** Linear sRGB (0–1) → perceptual chromatic components in OKLab. */
+/** sRGB channels (0–255) → the chromatic components of OKLab. */
 function rgbToOklab(
-  r: number,
-  g: number,
-  b: number,
+  red: number,
+  green: number,
+  blue: number,
 ): { a: number; b: number; chroma: number } {
-  // Linear sRGB → cube-root LMS.
-  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
-  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
-  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
-
-  // LMS → OKLab
-  const a = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s;
-  const bVal = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s;
-
-  const chroma = Math.sqrt(a * a + bVal * bVal);
-  return { a, b: bVal, chroma };
+  const { a, b } = linearSrgbToOklab(
+    srgbChannelToLinear(red),
+    srgbChannelToLinear(green),
+    srgbChannelToLinear(blue),
+  );
+  return { a, b, chroma: Math.sqrt(a * a + b * b) };
 }
 
 /**
@@ -52,9 +45,9 @@ export async function extractImageAccent(
     if (alpha < 0.12) continue;
     visibleArea += alpha;
     const color = rgbToOklab(
-      linearize(data[offset]!),
-      linearize(data[offset + 1]!),
-      linearize(data[offset + 2]!),
+      data[offset]!,
+      data[offset + 1]!,
+      data[offset + 2]!,
     );
     if (color.chroma < 0.018) continue;
     const hue = (Math.atan2(color.b, color.a) * (180 / Math.PI) + 360) % 360;

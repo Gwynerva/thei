@@ -5,17 +5,29 @@ import {
   ContentMediaTool,
   ContentGalleryTool,
 } from '#layers/thei/app/components/content/editor-tools';
+import { ContentDelimiterTool } from '#layers/thei/app/components/content/editor-delimiter-tool';
 import { bindEditorGutterClick } from '#layers/thei/app/composables/editor-gutter-click';
+import { bindEditorCurrentBlock } from '#layers/thei/app/composables/editor-current-block';
 import { bindEditorLinkPaste } from '#layers/thei/app/composables/editor-link-paste';
+import { bindEditorMediaPaste } from '#layers/thei/app/composables/editor-media-paste';
 import { createEditorPrivateSections } from '#layers/thei/app/composables/editor-private-sections';
 import { createEditorPrivatePattern } from '#layers/thei/app/composables/editor-private-pattern';
+import { readCleanEditorOutput } from '#layers/thei/app/composables/editor-output';
+import { createEditorHistorySession } from '#layers/thei/app/composables/content-history/session';
+import type { ContentHistoryTransport } from '#layers/thei/app/composables/content-history/api';
 import {
-  createEditorSnapshotManager,
-  readCleanEditorOutput,
-} from '#layers/thei/app/composables/editor-snapshots';
+  acceptedExtensionsFromAccept,
+  contentAssetFromVariant,
+  launchPendingFileEditor,
+} from '#layers/thei/app/composables/asset-wizard';
+import { ASSET_UPLOAD_LIMITS } from '#layers/thei/shared/asset-upload-limits';
 import {
-  contentSemanticKey,
-  type ContentOutputData,
+  imageExtensionProfile,
+  videoExtensionProfile,
+} from '#layers/thei/shared/assets/extensions';
+import type {
+  ContentAssetData,
+  ContentOutputData,
 } from '#layers/thei/shared/content';
 
 const holder = useTemplateRef<HTMLElement>('holder');
@@ -30,11 +42,74 @@ watch(dirty, (value) => transitions.value.push(value ? 'Save' : 'Saved'), {
 });
 let editor: EditorJS;
 let unbindGutterClick: (() => void) | undefined;
+let unbindCurrentBlock: (() => void) | undefined;
+const picture = (id: string): ContentAssetData => ({
+  assetUuid: id,
+  extension: 'svg',
+  media: {
+    kind: 'image',
+    src: '/slow-image.svg',
+    previewSrc: '/slow-image.svg',
+  },
+});
+/** The picker of a media block, open until "Choose picture" answers it. */
+let answerPick: ((asset: ContentAssetData | null) => void) | undefined;
+const picking = ref(false);
+/** Pasted files are stored for real, through the fixture's own server. */
+const uploadErrors = ref<string[]>([]);
+const pendingUploads = ref(0);
+const mediaToolConfig = {
+  pickAsset: () =>
+    new Promise<ContentAssetData | null>((resolve) => {
+      picking.value = true;
+      answerPick = resolve;
+    }),
+  pickAssets: async () => ({ assets: [], uploads: [] }),
+  editAsset: async () => undefined,
+  uploads: {
+    constraints: {
+      maxSize: ASSET_UPLOAD_LIMITS.media,
+      sizeLimitPolicy: 'media' as const,
+      acceptedExtensions: acceptedExtensionsFromAccept([
+        imageExtensionProfile,
+        videoExtensionProfile,
+      ]),
+    },
+    editPending: async (
+      pending: Parameters<typeof launchPendingFileEditor>[0],
+    ) => {
+      const edited = await launchPendingFileEditor(pending, {
+        sizeLimitPolicy: 'media',
+        maxSize: ASSET_UPLOAD_LIMITS.media,
+      });
+      return edited ? contentAssetFromVariant(edited) : undefined;
+    },
+    track: (delta: 1 | -1) => {
+      pendingUploads.value += delta;
+    },
+  },
+};
 let unbindLinkPaste: (() => void) | undefined;
+let unbindMediaPaste: (() => void) | undefined;
 let cleanupPrivatePattern: (() => void) | undefined;
 let sections: ReturnType<typeof createEditorPrivateSections>;
-let snapshots: ReturnType<typeof createEditorSnapshotManager>;
+let snapshots: ReturnType<typeof createEditorHistorySession>;
 const snapshotPending = computed(() => snapshots?.isPending.value ?? false);
+/** Every write the session sent, as its hint or "plain". */
+const historyWrites = ref<string[]>([]);
+const transport: ContentHistoryTransport = {
+  sync: async (request) => {
+    historyWrites.value.push(request.hint ?? 'plain');
+    return { draft: null, others: [] };
+  },
+  discard: async () => ({ draft: null, others: [] }),
+  dismiss: async () => undefined,
+  index: async () => ({ drafts: [], revisions: [] }),
+  entry: async () => {
+    throw new Error('No entries in the fixture');
+  },
+  drafts: async () => [],
+};
 const initial: ContentOutputData = {
   blocks: [
     { id: 'p0', type: 'paragraph', data: { text: 'Before' } },
@@ -96,17 +171,38 @@ const initial: ContentOutputData = {
         })),
       },
     },
+    // New blocks go last: the move buttons and other tests count from the top.
+    { id: 'divider', type: 'delimiter', data: {} },
+    {
+      id: 'quote',
+      type: 'quote',
+      data: { text: 'Quoted', caption: 'Someone', alignment: 'left' },
+    },
+    { id: 'p4', type: 'paragraph', data: { text: 'After' } },
   ],
 };
 onMounted(async () => {
-  const Editor = (await import('@editorjs/editorjs')).default;
+  const [Editor, Quote] = await Promise.all([
+    import('@editorjs/editorjs').then((module) => module.default),
+    import('@editorjs/quote').then((module) => module.default),
+  ]);
   editor = new Editor({
     holder: holder.value!,
     data: initial as any,
     tools: {
       privateSectionBoundary: PrivateSectionBoundaryTool as any,
-      contentMedia: ContentMediaTool as any,
-      contentGallery: ContentGalleryTool as any,
+      contentMedia: {
+        class: ContentMediaTool as any,
+        inlineToolbar: true,
+        config: mediaToolConfig,
+      },
+      contentGallery: {
+        class: ContentGalleryTool as any,
+        inlineToolbar: true,
+        config: mediaToolConfig,
+      },
+      delimiter: ContentDelimiterTool as any,
+      quote: { class: Quote as any, inlineToolbar: true },
     },
     onChange: (_api, event) => {
       events.value++;
@@ -116,17 +212,19 @@ onMounted(async () => {
   });
   await editor.isReady;
   unbindGutterClick = bindEditorGutterClick(holder.value!, editor);
+  unbindCurrentBlock = bindEditorCurrentBlock(holder.value!, editor, {
+    textBlocks: new Set(['paragraph', 'quote']),
+  });
   const site = useInternalUrlSite();
   unbindLinkPaste = bindEditorLinkPaste(holder.value!, editor, {
     site,
     linkBlocks: new Set(['paragraph']),
     findEntity: (url) => findEntityByInternalUrl(url, site),
   });
+  unbindMediaPaste = bindEditorMediaPaste(holder.value!, editor);
   sections = createEditorPrivateSections(editor, { suppressionDuration: 20 });
   cleanupPrivatePattern = createEditorPrivatePattern(holder.value!);
-  snapshots = createEditorSnapshotManager({
-    storageKey: 'fixture',
-    storage: sessionStorage,
+  snapshots = createEditorHistorySession({
     read: () => readCleanEditorOutput(editor),
     render: async (data) => {
       sections.resetSuppression();
@@ -137,8 +235,12 @@ onMounted(async () => {
       }
       sections.refresh();
     },
-    onCurrentChange: (data) => {
-      currentKey.value = contentSemanticKey(data);
+    onCurrentChange: (state) => {
+      currentKey.value = state.key;
+    },
+    history: {
+      field: { ownerType: 'page', ownerRef: 'fixture', slot: 'page-body' },
+      transport,
     },
   });
   await snapshots.initialize();
@@ -152,7 +254,7 @@ async function save() {
   transitions.value = [];
 }
 async function restore() {
-  await snapshots.restore({ createdAt: Date.now(), data: initial });
+  await snapshots.restore(initial);
 }
 function insert() {
   editor.blocks.insert('privateSectionBoundary', {
@@ -172,10 +274,32 @@ function remove() {
   );
   if (index !== undefined) editor.blocks.delete(index);
 }
+/**
+ * A media block the way the toolbox adds one: a placeholder whose fields
+ * Editor.js reads straight away, and a picture only once the picker answers.
+ */
+function insertMedia() {
+  const block = editor.blocks.insert(
+    'contentMedia',
+    { layout: 'centered', autoOpen: true },
+    undefined,
+    editor.blocks.getBlocksCount(),
+    true,
+  );
+  // What the toolbox's handler of a new block does.
+  void block.focusable;
+}
+function choosePicture() {
+  picking.value = false;
+  answerPick?.(picture('chosen'));
+  answerPick = undefined;
+}
 onBeforeUnmount(() => {
   ready.value = false;
   unbindGutterClick?.();
+  unbindCurrentBlock?.();
   unbindLinkPaste?.();
+  unbindMediaPaste?.();
   cleanupPrivatePattern?.();
   sections?.destroy();
   snapshots?.destroy();
@@ -191,6 +315,9 @@ onBeforeUnmount(() => {
       :data-events="events"
       :data-transitions="transitions.join(',')"
       :data-snapshot-pending="snapshotPending"
+      :data-history-writes="historyWrites.join(',')"
+      :data-upload-errors="uploadErrors.join(',')"
+      :data-pending-uploads="pendingUploads"
     >
       <button data-save @click="save">{{ dirty ? 'Save' : 'Saved' }}</button>
       <button @click="insert">Insert section</button>
@@ -199,6 +326,10 @@ onBeforeUnmount(() => {
       <button @click="editor.blocks.move(6, 1)">Invalid move</button>
       <button @click="editor.blocks.move(2, 4)">Valid move</button>
       <button @click="restore">Restore</button>
+      <button @click="insertMedia">Insert media</button>
+      <button :disabled="!picking" @click="choosePicture">
+        Choose picture
+      </button>
     </div>
     <div ref="holder" class="content-editor relative" />
   </main>

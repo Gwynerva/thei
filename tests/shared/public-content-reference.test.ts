@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { extractContentReferenceCandidates } from '../../shared/public-content-reference';
+import {
+  contentEntityMentions,
+  extractContentReferenceCandidates,
+} from '../../shared/public-content-reference';
 
 describe('public content reference extraction', () => {
   const content = {
@@ -161,5 +164,101 @@ describe('public content reference extraction', () => {
       links: [{ kind: 'external', url: 'https://section-secret.example/' }],
       files: [{ asset: { assetUuid: 'section-file' } }],
     });
+  });
+
+  it('reads the notes of link blocks, and the first note written wins', () => {
+    const noted = {
+      blocks: [
+        { type: 'externalLink', data: { url: 'https://a.example/' } },
+        {
+          type: 'paragraph',
+          data: {
+            text: '<a href="https://a.example/" data-content-link="external" data-content-note="Why a">A</a>',
+          },
+        },
+        {
+          type: 'externalLink',
+          data: { url: 'https://a.example/', note: 'Not this one' },
+        },
+        {
+          type: 'entityLink',
+          data: {
+            entityType: 'project',
+            entityId: 'project-one',
+            note: '  Where   it began ',
+          },
+        },
+        {
+          type: 'paragraph',
+          data: {
+            text: '<a data-content-link="entity" data-entity-type="project" data-entity-id="project-one" data-content-note="Later">P</a>',
+          },
+        },
+      ],
+    } as any;
+
+    expect(extractContentReferenceCandidates(noted).links).toEqual([
+      { kind: 'external', url: 'https://a.example/', note: 'Why a' },
+      {
+        kind: 'entity',
+        entityType: 'project',
+        entityId: 'project-one',
+        note: 'Where it began',
+      },
+    ]);
+  });
+});
+
+describe('contentEntityMentions', () => {
+  const entityLink = (type: string, id: string) =>
+    `<a data-content-link="entity" data-entity-type="${type}" data-entity-id="${id}">${id}</a>`;
+
+  it('lists the entities a text links to, once each, in the order it names them', () => {
+    const content = {
+      blocks: [
+        {
+          id: 'first',
+          type: 'paragraph',
+          data: {
+            text: `Met at ${entityLink('event', 'meet')}, for ${entityLink('project', 'harbor')} and <a href="https://example.com/" data-content-link="external">a site</a>.`,
+          },
+        },
+        {
+          id: 'card',
+          type: 'entityLink',
+          data: { entityType: 'diary-entry', entityId: 'day', note: 'Why' },
+        },
+        {
+          id: 'again',
+          type: 'paragraph',
+          data: { text: `Back to ${entityLink('event', 'meet')}.` },
+        },
+        {
+          type: 'privateSectionBoundary',
+          data: { sectionId: 'mine', edge: 'start' },
+        },
+        {
+          id: 'private',
+          type: 'paragraph',
+          data: { text: `Only mine: ${entityLink('page', 'notes')}` },
+        },
+        {
+          type: 'privateSectionBoundary',
+          data: { sectionId: 'mine', edge: 'end' },
+        },
+      ],
+    } as any;
+
+    expect(contentEntityMentions(content)).toEqual([
+      { kind: 'entity', entityType: 'event', entityId: 'meet' },
+      { kind: 'entity', entityType: 'project', entityId: 'harbor' },
+      { kind: 'entity', entityType: 'diary-entry', entityId: 'day' },
+      { kind: 'entity', entityType: 'page', entityId: 'notes' },
+    ]);
+  });
+
+  it('is empty for no text', () => {
+    expect(contentEntityMentions(null)).toEqual([]);
+    expect(contentEntityMentions({ blocks: [] } as any)).toEqual([]);
   });
 });

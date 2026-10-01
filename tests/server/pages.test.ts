@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { schema } from '../../server/thei/db/schema';
+import { createContentHistoryTable } from './fixtures/content-history-table';
 import { countPages } from '../../server/thei/pages/repository/count';
 import { findPageBySlug } from '../../server/thei/pages/repository/find-by-slug';
 import { findPageByUuid } from '../../server/thei/pages/repository/find-by-id';
@@ -173,6 +174,7 @@ function createDb() {
       expiresAt integer NOT NULL
     );
   `);
+  createContentHistoryTable(rawDb);
   const db = drizzle(rawDb, { schema });
   (globalThis as any).THEI_SERVER = {
     useDb: () => ({ db, schema }),

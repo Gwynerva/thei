@@ -6,7 +6,9 @@ import { openDraft } from '../../../../../thei/assets/drafts';
  * Opens a draft on a file already in the library.
  *
  * The stored file is read where it is. The draft never owns it, so nothing a
- * draft does can move or delete a library file.
+ * draft does can move or delete a library file. Opening it restarts its
+ * unused day: an original kept beside a pasted file is not cleaned up under
+ * the editor deriving from it, and one worked from stays another day.
  */
 export default defineEventHandler(async (event): Promise<AssetDraftSource> => {
   const assetUuid = getRouterParam(event, 'assetUuid');
@@ -21,6 +23,7 @@ export default defineEventHandler(async (event): Promise<AssetDraftSource> => {
   if (!file?.isFile()) {
     throw createError({ statusCode: 404, message: 'Asset file not found' });
   }
+  await THEI_SERVER.assets.touch(asset.assetUuid);
 
   return await openDraft({
     source: {

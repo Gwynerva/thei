@@ -51,8 +51,7 @@ const accent = computed(() => imageAccentCssColor(props.page.media?.accent));
 </template>
 
 <style scoped>
-.pinned-page:hover,
-.pinned-page:focus-within {
+.pinned-page:is(:focus-visible, :has(:focus-visible)) {
   border-color: color-mix(in oklab, var(--pinned-page-accent) 40%, transparent);
   background-color: color-mix(
     in oklab,
@@ -62,14 +61,35 @@ const accent = computed(() => imageAccentCssColor(props.page.media?.accent));
   color: var(--pinned-page-accent);
 }
 
+@media (hover: hover) {
+  .pinned-page:hover {
+    border-color: color-mix(
+      in oklab,
+      var(--pinned-page-accent) 40%,
+      transparent
+    );
+    background-color: color-mix(
+      in oklab,
+      var(--pinned-page-accent) 12%,
+      transparent
+    );
+    color: var(--pinned-page-accent);
+  }
+}
+
 /*
  * In an editor row the row's own buttons follow the page, and a solid tint
  * ended in a hard edge against them. There the tint dissolves toward them
  * instead, drawn as a layer of its own so that it can still fade in.
  */
-.pinned-page-fading:hover,
-.pinned-page-fading:focus-within {
+.pinned-page-fading:is(:focus-visible, :has(:focus-visible)) {
   background-color: transparent;
+}
+
+@media (hover: hover) {
+  .pinned-page-fading:hover {
+    background-color: transparent;
+  }
 }
 
 .pinned-page-fading::before {
@@ -86,13 +106,23 @@ const accent = computed(() => imageAccentCssColor(props.page.media?.accent));
     var(--default-transition-timing-function);
 }
 
-.pinned-page-fading:hover::before,
-.pinned-page-fading:focus-within::before {
+.pinned-page-fading:is(:focus-visible, :has(:focus-visible))::before {
   opacity: 1;
 }
 
-.pinned-page:hover :deep(svg),
-.pinned-page:focus-within :deep(svg) {
+@media (hover: hover) {
+  .pinned-page-fading:hover::before {
+    opacity: 1;
+  }
+}
+
+.pinned-page:is(:focus-visible, :has(:focus-visible)) :deep(svg) {
   color: var(--pinned-page-accent);
+}
+
+@media (hover: hover) {
+  .pinned-page:hover :deep(svg) {
+    color: var(--pinned-page-accent);
+  }
 }
 </style>

@@ -3,7 +3,7 @@ import type { LifePoint } from '#layers/thei/shared/life';
 import { buildLifeUrl } from '#layers/thei/shared/life';
 import type { LifeRewindMatch } from '#layers/thei/shared/life-rewind';
 import { lifeEntityKindIcon } from './life-entity-icon';
-import { publicDatePrecisionLabels } from '#layers/thei/app/composables/public-date';
+import { publicDatePrecisionOptions } from '#layers/thei/app/composables/public-date';
 
 const props = defineProps<{
   point: LifePoint;
@@ -62,15 +62,16 @@ const datePresentation = computed(() => {
     new Date(),
     {
       style: props.dateStyle ?? (props.compact ? 'short' : 'long'),
-      precisionLabels: publicDatePrecisionLabels(),
+      ...publicDatePrecisionOptions(),
     },
   );
 });
 const pointIcon = computed(() => lifeEntityKindIcon(props.point.entityKind));
 /**
  * A stage or a section names its project above the title: that project is
- * its parent, not something it is related to. A status names its project the
- * same way. Everything else lists what it is related to under the summary.
+ * its parent, not something it is related to. A status names its project too,
+ * under its words. Everything else lists what it is related to under the
+ * summary.
  */
 const parent = computed(() =>
   props.point.visibility === 'visible' ? props.point.project : undefined,
@@ -95,6 +96,7 @@ const projects = computed(() =>
     :rewind="Boolean(rewindMatch)"
     :hide-date="hideDate"
     :hide-fallback-icon="onRail"
+    :parent="parent"
   />
   <PublicContentCard
     v-else-if="point.visibility === 'visible'"

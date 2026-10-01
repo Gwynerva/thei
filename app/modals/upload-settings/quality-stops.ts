@@ -53,6 +53,38 @@ export function stopRenderOrder(
     .flatMap(({ level }) => formats.map((format) => ({ level, format })));
 }
 
+/** A dry run in the order they are worth asking for. */
+export interface DraftRenderSlot {
+  format: AssetImageFormat;
+  /** Another stop than the chosen one; absent for the chosen stop itself. */
+  level?: AssetQualityLevel;
+}
+
+/**
+ * Every dry run worth having for the current settings, the most wanted
+ * first: the format "Use" would store — the one resolved, so that under the
+ * lossless stop it is the lossless WebP and not "Auto"'s stand-in — then
+ * the other formats "Auto" weighs at this stop, then the other stops nearest
+ * first. A place that fixes the format gets only that format.
+ */
+export function draftRenderOrder(input: {
+  format: AssetImageFormat | undefined;
+  formatChoice: 'auto' | AssetImageFormat;
+  fixedFormat: AssetImageFormat | undefined;
+  availableFormats: readonly AssetImageFormat[];
+  level: AssetQualityStop;
+}): DraftRenderSlot[] {
+  const chosen = input.fixedFormat ?? input.format ?? input.availableFormats[0];
+  if (!chosen) return [];
+  const formats = input.fixedFormat
+    ? [input.fixedFormat]
+    : [chosen, ...input.availableFormats.filter((format) => format !== chosen)];
+  return [
+    ...formats.map((format) => ({ format })),
+    ...stopRenderOrder(input.level, input.fixedFormat ?? input.formatChoice),
+  ];
+}
+
 export interface StopSize {
   bytes: number;
   approximate: boolean;

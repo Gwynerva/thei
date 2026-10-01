@@ -3,6 +3,9 @@ import { EntityPrefix, generateUniqueId } from '../entity-id';
 import {
   canonicalizeContentData,
   collectContentExternalLinkUrls,
+  contentAssetMedia,
+  contentPreviewAssets,
+  createEmptyContentData,
   ContentValidationError,
   extractContentAssetRefs,
   isContentAssetBlockType,
@@ -19,12 +22,20 @@ import {
   AssetType,
   type ContentAssetUsageMeta,
 } from '#layers/thei/shared/asset';
+import type { MediaDescriptor } from '#layers/thei/shared/media';
 import { buildAdminAssetUrls, archivedOriginalFromMeta } from '../assets/urls';
 import {
   createExternalLinkLoader,
   ensureExternalLinks,
+  scheduleExternalLinkSweep,
 } from '../external-links/repository';
 import { assetSelectionError } from '#layers/thei/shared/asset-library';
+import { optionalContentDraftRef } from '#layers/thei/shared/content-history';
+import {
+  recordContentDeletion,
+  recordContentSave,
+  touchReleasedAssets,
+} from './history';
 
 export async function findContentByOwner(
   ownerType: ContentOwnerType,
@@ -70,6 +81,31 @@ export async function buildContentFieldValue(
   };
 }
 
+/**
+ * A text's preview picture as the admin sees it, for a row of a list: only
+ * the files the picture is chosen from are looked up, in order, rather than
+ * the whole text hydrated with every file and link it holds.
+ */
+export async function buildContentPreviewMedia(
+  ownerType: ContentOwnerType,
+  ownerId: string,
+  slot: ContentSlot,
+): Promise<MediaDescriptor | undefined> {
+  const row = await findContentByOwner(ownerType, ownerId, slot);
+  if (!row) return undefined;
+  for (const ref of contentPreviewAssets(normalizeContentData(row.data))) {
+    const assetUuid = (ref as { assetUuid?: unknown } | null)?.assetUuid;
+    if (typeof assetUuid !== 'string' || !assetUuid) continue;
+    const asset = await THEI_SERVER.assets.findByUuid(assetUuid);
+    if (!asset) continue;
+    const media = contentAssetMedia({
+      media: (await buildAdminAssetUrls(asset)).media,
+    });
+    if (media) return media;
+  }
+  return undefined;
+}
+
 export async function prepareContentForSave(
   ownerType: ContentOwnerType,
   ownerId: string,
@@ -79,10 +115,12 @@ export async function prepareContentForSave(
   | {
       type: 'delete';
       existingContentUuid?: string;
+      draftRef?: string;
     }
   | {
       type: 'save';
       contentUuid: string;
+      draftRef?: string;
       /** Whether the blocks differ from the ones already stored. */
       changed: boolean;
       data: ContentOutputData;
@@ -95,9 +133,14 @@ export async function prepareContentForSave(
 > {
   const existing = await findContentByOwner(ownerType, ownerId, slot);
   const data = canonicalizeContentData(value?.data);
+  const draft = optionalContentDraftRef(value?.draftRef);
 
   if (data.blocks.length === 0) {
-    return { type: 'delete', existingContentUuid: existing?.contentUuid };
+    return {
+      type: 'delete',
+      existingContentUuid: existing?.contentUuid,
+      ...draft,
+    };
   }
 
   const assetRows = await validateContentAssets(data);
@@ -119,6 +162,7 @@ export async function prepareContentForSave(
     data,
     ...summary,
     assetUsages: buildPreparedAssetUsages(contentUuid, data),
+    ...draft,
   };
 }
 
@@ -140,13 +184,62 @@ export function applyPreparedContentSave(
   slot: ContentSlot,
   prepared: PreparedContentSave,
 ) {
+  // A link the text no longer holds is forgotten once saving settles.
+  scheduleExternalLinkSweep();
+  const now = Date.now();
+  // Read inside the transaction: this is the text the save replaces.
+  const previous = tx
+    .select({
+      contentUuid: schema.content.contentUuid,
+      data: schema.content.data,
+      updatedAt: schema.content.updatedAt,
+    })
+    .from(schema.content)
+    .where(
+      and(
+        eq(schema.content.ownerType, ownerType),
+        eq(schema.content.ownerId, ownerId),
+        eq(schema.content.slot, slot),
+      ),
+    )
+    .get();
+  const previousAssets: string[] = previous
+    ? tx
+        .select({ assetUuid: schema.assetUsages.assetUuid })
+        .from(schema.assetUsages)
+        .where(
+          and(
+            eq(schema.assetUsages.containerType, 'content'),
+            eq(schema.assetUsages.containerId, previous.contentUuid),
+          ),
+        )
+        .all()
+        .map((row: { assetUuid: string }) => row.assetUuid)
+    : [];
+  const recordHistory = (saved: ContentOutputData) =>
+    recordContentSave(
+      tx,
+      schema,
+      {
+        ownerType,
+        ownerId,
+        slot,
+        previous,
+        saved,
+        draftRef: prepared.draftRef,
+      },
+      now,
+    );
+
   if (prepared.type === 'delete') {
+    recordHistory(createEmptyContentData());
     if (!prepared.existingContentUuid) return;
     deleteContentRowAndUsages(tx, schema, prepared.existingContentUuid);
+    touchReleasedAssets(tx, schema, previousAssets, now);
     return;
   }
 
-  const now = Date.now();
+  recordHistory(prepared.data);
   tx.insert(schema.content)
     .values({
       contentUuid: prepared.contentUuid,
@@ -202,6 +295,17 @@ export function applyPreparedContentSave(
       .where(eq(schema.assets.assetUuid, usage.assetUuid))
       .run();
   }
+  // A file this text no longer shows gets its day of grace from now, not
+  // from whenever the text was last saved with it.
+  touchReleasedAssets(
+    tx,
+    schema,
+    previousAssets.filter(
+      (assetUuid) =>
+        !prepared.assetUsages.some((usage) => usage.assetUuid === assetUuid),
+    ),
+    now,
+  );
 }
 
 export function deleteContentForOwner(
@@ -211,7 +315,12 @@ export function deleteContentForOwner(
   ownerId: string,
 ) {
   const rows = tx
-    .select({ contentUuid: schema.content.contentUuid })
+    .select({
+      contentUuid: schema.content.contentUuid,
+      slot: schema.content.slot,
+      data: schema.content.data,
+      updatedAt: schema.content.updatedAt,
+    })
     .from(schema.content)
     .where(
       and(
@@ -221,9 +330,12 @@ export function deleteContentForOwner(
     )
     .all();
 
+  // What the owner held, saved or still a draft, stays in the history.
+  recordContentDeletion(tx, schema, ownerType, ownerId, rows);
   for (const row of rows) {
     deleteContentRowAndUsages(tx, schema, row.contentUuid);
   }
+  if (rows.length) scheduleExternalLinkSweep();
 }
 
 async function validateContentAssets(data: ContentOutputData) {
@@ -270,7 +382,7 @@ async function validateContentAssets(data: ContentOutputData) {
   return assets;
 }
 
-async function hydrateContentData(
+export async function hydrateContentData(
   data: ContentOutputData,
 ): Promise<ContentOutputData> {
   const normalized = normalizeContentData(data);

@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { schema } from '../../../server/thei/db/schema';
+import { createContentHistoryTable } from '../fixtures/content-history-table';
 import {
   applyProjectContentSections,
   deleteProjectContentSections,
@@ -290,6 +291,7 @@ function createDb() {
       PRIMARY KEY("assetUuid", "containerType", "containerId", "role")
     );
   `);
+  createContentHistoryTable(rawDb);
   return drizzle(rawDb, { schema });
 }
 

@@ -211,7 +211,8 @@ function captionClass(stop: DiscreteBarStop, at: number) {
     >
       <!-- A caption is a pointer shortcut the slider already covers, so it
            is hidden from assistive technology and never takes focus: the
-           slider does, as when the track itself is pressed. -->
+           slider does, as when the track itself is pressed. A tap on it
+           picks its stop, so its hint waits for a long press. -->
       <span
         v-for="(stop, at) in stops"
         :key="stop.value"
@@ -222,6 +223,7 @@ function captionClass(stop: DiscreteBarStop, at: number) {
           disabled ? 'cursor-default' : 'cursor-pointer',
         ]"
         :data-title-popup="stop.title"
+        :data-title-popup-press="disabled ? undefined : 'hold'"
         @click="pickCaption(at)"
       >
         <Icon

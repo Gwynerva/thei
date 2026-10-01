@@ -1,15 +1,8 @@
 <script lang="ts" setup>
 import type { PublicAssetDescriptor } from '#layers/thei/shared/api/public';
 
-const props = defineProps<{
-  item: PublicAssetDescriptor;
-  suspended?: boolean;
-}>();
-const emit = defineEmits<{ ready: []; error: []; open: [] }>();
-
-onMounted(() => {
-  if (!props.item.media) emit('ready');
-});
+defineProps<{ item: PublicAssetDescriptor }>();
+const emit = defineEmits<{ open: [] }>();
 </script>
 
 <template>
@@ -19,7 +12,7 @@ onMounted(() => {
       :type="item.media?.kind === 'video' ? undefined : 'button'"
       class="group relative isolate block w-full"
       :class="{ 'cursor-zoom-in': item.media?.kind !== 'video' }"
-      :aria-label="item.title || phrase.asset"
+      :aria-label="publicText(item.title) || phrase.asset"
       @click="item.media?.kind !== 'video' && emit('open')"
     >
       <Media
@@ -28,10 +21,7 @@ onMounted(() => {
         fit="contain"
         backdrop
         :controls="item.media.kind === 'video'"
-        :suspended
         class="max-h-144 min-h-48 w-full"
-        @ready="emit('ready')"
-        @error="emit('error')"
       />
       <FilePreview
         v-else

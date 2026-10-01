@@ -181,6 +181,8 @@ export default defineI18nBase({
       `Works best with an image or video in ${ratio}, for example ${size} pixels`,
     asset_library_pending_deletion: (date) =>
       `Unused: will be deleted after ${date}`,
+    asset_library_in_history:
+      'Unused, but kept while a version of some text still shows it',
     asset_library_empty: 'No matching files',
     asset_library_unused: 'Unused',
     asset_library_unused_hint:
@@ -244,8 +246,6 @@ export default defineI18nBase({
     asset_role_action_file: 'Button file',
     asset_role_avatar: 'Avatar',
     asset_role_status: 'Status',
-    asset_scope_stage: 'Stage',
-    asset_scope_section: 'Section',
     asset_source_profile: 'Profile',
     asset_library_view: 'View entity',
     asset_library_edit: 'Edit entity',
@@ -298,8 +298,12 @@ export default defineI18nBase({
     profile_avatar_history: 'Avatar history',
     profile_best_projects: 'Showcase projects',
     profile_new_status: 'New status',
+    profile_new_project_status: 'New project status',
+    profile_new_life_status: 'New life status',
     profile_edit_status: 'Edit status',
     profile_status_placeholder: 'Today I feel…',
+    profile_status_icon: 'Icon',
+    profile_status_date: 'Date',
     profile_empty_status: 'no active status',
     profile_password_hint: 'Leave blank to keep the current password',
     profile_password_mismatch: 'Passwords do not match',
@@ -1007,6 +1011,9 @@ export default defineI18nBase({
       'Projects, events and diary entries tied to this one. A relation is visible from both sides.',
     related_entity_add: 'Add a relation',
     relation_direction: 'Kind of relation',
+    relation_short_related: () => 'related to',
+    relation_short_depends_on: 'depends on',
+    relation_short_affects: 'affects',
     relation_popup_related: (current, other) =>
       `“${current}” and “${other}” are related`,
     relation_popup_depends_on: (current, other) =>
@@ -1034,12 +1041,17 @@ export default defineI18nBase({
     external_link_archived:
       'The site did not answer; these details come from an archived copy of the page.',
     external_link_duplicate: 'This link is already added.',
+    external_link_in_project_description:
+      'This link is already in the project description.',
+    external_link_in_event_content:
+      'This link is already in the event content.',
     external_link_private: 'Private link',
     project_external_links_empty: 'No external links yet.',
     refresh_external_link: 'Refresh link',
     search_entity_placeholder: 'A title, or the date of a diary entry…',
     search_entity_no_results: 'Nothing matches.',
     search_entity_error: 'Could not search.',
+    entity_search_mentioned: 'Linked in the text',
     content_section: 'Project section',
     content_section_delete_entity: 'project section',
     project_stage: 'Project stage',
@@ -1080,8 +1092,59 @@ export default defineI18nBase({
     content_editor_title: 'Content editor',
     content_editor_clear_confirm: 'Clear all content in the editor?',
     content_never_saved: 'Never saved',
-    content_snapshots: 'Version history',
-    content_snapshot_restore_label: (date) => `Restore version from ${date}`,
+    content_history: 'Version history',
+    content_history_empty:
+      'No versions yet. They appear as you write and are kept for two days.',
+    content_history_unavailable: 'Version history is unavailable right now.',
+    content_history_load_error: 'Could not load this version.',
+    content_history_opened_version: 'As when opened',
+    content_history_reasons: {
+      auto: 'Autosaved',
+      'before-restore': 'Before a restore',
+      'before-clear': 'Before clearing',
+      'large-drop': 'Before a large deletion',
+      discarded: 'Closed without saving',
+      dismissed: 'Declined draft',
+      displaced: "Another tab's draft",
+      replaced: 'Previous saved version',
+      cleared: 'Saved before clearing',
+      deleted: 'Deleted text',
+      abandoned: 'Abandoned draft',
+    },
+    content_history_row_label: (time, changes) =>
+      `Version from ${time}: ${changes}`,
+    content_history_delta: (value, delta) =>
+      delta === 0
+        ? value
+        : `${value}, ${Math.abs(delta)} ${delta < 0 ? 'fewer' : 'more'} than now`,
+    content_history_missing_assets: (count) =>
+      `${plural(count, 'file', 'files')} of this version ${count === 1 ? 'is' : 'are'} already deleted`,
+    content_history_back: 'Back to versions',
+    content_restore: 'Restore',
+    content_restore_cancel: 'Cancel',
+    content_diff_removed: 'Would go',
+    content_diff_added: 'Would come back',
+    content_diff_changed: 'Would change',
+    content_diff_before: 'Now',
+    content_diff_after: 'After restoring',
+    content_restore_title: (time) => `Version from ${time}`,
+    content_restore_keeps_current: 'The current text stays in the history.',
+    content_restore_same: 'This version says the same as the current text.',
+    content_restored: (label) => `Restored: ${label}`,
+    content_restore_undo: 'Undo',
+    content_draft_offer: (time) => `Unsaved draft from ${time}`,
+    content_draft_dismiss:
+      'Decline the draft (it stays in the version history)',
+    content_draft_chip: (time) => `Draft · ${time}`,
+    content_draft_status_offline_short: 'Offline',
+    content_draft_status_synced: (time) => `Draft kept · ${time}`,
+    content_draft_status_offline: 'No connection — kept in the browser',
+    content_draft_status_refused_short: 'Not kept',
+    content_draft_status_refused:
+      'The server refused the draft — the text is only in this window',
+    content_field_unsaved_draft: (time) => `Unsaved draft · ${time}`,
+    sign_out_unsynced_confirm: (count) =>
+      `Not on the server yet: ${plural(count, 'text', 'texts')}. Signing out now loses ${count === 1 ? 'it' : 'them'}. Sign out anyway?`,
     content_internal_link: 'Internal link',
     content_external_link: 'External link',
     content_link_url: 'Link URL',
@@ -1128,6 +1191,8 @@ export default defineI18nBase({
       move_down: 'Move down',
     },
     content_asset_pick_error: 'Failed to pick file.',
+    content_media_pending_confirm:
+      'A pasted file is still being stored. Close and lose it?',
     content_choose_media: 'Choose image or video',
     content_gallery_tile: 'Show this picture',
     content_add_media: 'Add image or video',
@@ -1303,6 +1368,13 @@ export default defineI18nBase({
     upload_apply_settings: 'Create variant',
     upload_processing: 'Processing...',
     upload_queued: 'Waiting in queue...',
+    upload_finishing: 'Finishing…',
+    upload_cancel: 'Cancel',
+    upload_dismiss: 'Dismiss',
+    upload_pending_leave_confirm:
+      'Files are still being stored. Leave and lose them?',
+    upload_error_job_lost:
+      'The server was restarted while the file was being stored.',
     upload_quality: 'Quality',
     upload_audio: 'Sound',
     upload_audio_none: 'none in the source',
@@ -1324,6 +1396,7 @@ export default defineI18nBase({
     video_volume: 'Volume',
     video_no_audio: 'This video has no audio track',
     asset_variant_current: 'Used now',
+    asset_variant_current_tag: 'Current',
     asset_variant_usage_count: (count) => `Usages: ${count}`,
     upload_error_load_variants: 'Failed to load file variants.',
     upload_error_apply: 'Failed to apply settings.',
@@ -1420,5 +1493,17 @@ export default defineI18nBase({
     search_preset_cv_title: 'Résumé',
     search_preset_cv_description:
       'The professional part of the archive: the projects that make up a working history.',
+    og_personal_archive: 'Personal archive',
+    og_stage_position: (index, total) => `Stage ${index} of ${total}`,
+    og_updated: (date) => `Updated ${date}`,
+    og_life_headline: (years) =>
+      `${plural(years, 'year', 'years')} in one chronicle`,
+    og_tags_headline: (count) =>
+      `${plural(count, 'thread', 'threads')} through a life`,
+    og_pages_headline: (count) =>
+      `${plural(count, 'text', 'texts')} outside the timeline`,
+    og_image_alt: (kind, title, site) => `${kind} “${title}” — ${site}`,
+    x_stages: (count) => plural(count, 'stage', 'stages'),
+    x_sections: (count) => plural(count, 'section', 'sections'),
   },
 });

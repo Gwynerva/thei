@@ -10,7 +10,7 @@ import {
 } from '@floating-ui/vue';
 import { isTitlePopupGap } from '#layers/thei/app/composables/title-popup-content';
 
-const { anchor, lines, visible, popupClass } = useTitlePopup();
+const { anchor, lines, visible, popupClass, placement } = useTitlePopup();
 
 const floatingEl = ref<HTMLElement>();
 
@@ -27,9 +27,11 @@ const EDGE_PADDING = 8;
 
 // `fixed` keeps the popup out of the document flow: an absolutely positioned
 // popup near the page edge would grow the page and bring scrollbars with it.
+// Under a pointer it hangs below; a finger would cover it there, so a hint a
+// finger opened sits above.
 const { floatingStyles, middlewareData } = useFloating(anchor, floatingEl, {
   strategy: 'fixed',
-  placement: 'bottom',
+  placement,
   middleware: [
     offset(6),
     flip({ padding: EDGE_PADDING }),
@@ -58,6 +60,7 @@ const hidden = computed(() => middlewareData.value.hide?.referenceHidden);
       <div
         v-if="visible && hasText"
         ref="floatingEl"
+        role="tooltip"
         data-title-popup-el
         :style="[floatingStyles, hidden ? { visibility: 'hidden' } : {}]"
         :class="popupClass || undefined"

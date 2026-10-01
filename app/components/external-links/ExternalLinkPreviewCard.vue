@@ -9,12 +9,16 @@ import type { MediaPlayback } from '#layers/thei/shared/media';
 
 /**
  * The card a link to another site is shown as: the site's favicon, its
- * title and its description. It is laid out to the same measures as the
- * card of an internal link, so the two sit together in one flow.
+ * title and its description, then the owner's note on why the link is there
+ * (`note`, or the `note` slot, where the editor writes one). It is laid out
+ * to the same measures as the card of an internal link, so the two sit
+ * together in one flow.
  */
 const props = defineProps<{
   link?: ExternalLinkPreview;
   url?: string;
+  /** The owner's note, as typed. */
+  note?: string;
   loading?: boolean;
   errorText?: string;
   loadingText?: string;
@@ -22,7 +26,10 @@ const props = defineProps<{
   interactive: boolean;
   playback?: MediaPlayback;
 }>();
+defineSlots<{ note?(): unknown }>();
 
+/** The site said nothing of itself, and reading it failed just now. */
+const failed = computed(() => !props.link?.title && Boolean(props.errorText));
 const title = computed(
   () =>
     props.link?.title ||
@@ -35,13 +42,20 @@ const iconMedia = computed(() => props.link?.faviconMedia);
 /**
  * How the details were obtained, when that is worth knowing: a site that
  * did not answer can be refreshed later. Public data never carries a
- * status, so visitors never see this line.
+ * status, so visitors never see this line. It is set upright and in colour,
+ * so it never reads as the owner's italic note.
  */
 const hint = computed(() => {
   if (props.link?.status === 'fallback')
-    return phrase.value.external_link_fallback;
+    return {
+      text: phrase.value.external_link_fallback,
+      tone: 'text-text-error',
+    };
   if (props.link?.status === 'archived')
-    return phrase.value.external_link_archived;
+    return {
+      text: phrase.value.external_link_archived,
+      tone: 'text-text-warning',
+    };
   return undefined;
 });
 
@@ -97,17 +111,25 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
       </div>
       <div
         class="flex min-w-0 flex-1 flex-col gap-0.5"
-        :class="{ 'my-xs': flush }"
+        :class="{ 'my-xs mr-xs': flush }"
       >
-        <p class="truncate text-sm font-semibold">{{ title }}</p>
+        <p
+          class="truncate text-sm font-semibold"
+          :class="{ 'text-text-error': failed }"
+        >
+          {{ title }}
+        </p>
         <p v-if="description" class="line-clamp-2 text-sm text-text-3">
           {{ description }}
         </p>
         <p v-else-if="loading && loadingText" class="text-sm text-text-3">
           {{ loadingText }}
         </p>
-        <p v-if="hint && !loading" class="text-xs text-text-3 italic">
-          {{ hint }}
+        <div v-if="$slots.note || note" class="mt-0.5 text-sm">
+          <slot name="note"><ContentLinkNote :note /></slot>
+        </div>
+        <p v-if="hint && !loading" class="text-xs" :class="hint.tone">
+          {{ hint.text }}
         </p>
       </div>
     </component>
@@ -119,7 +141,7 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
   text-decoration: none;
 }
 
-.external-link-preview:is(a):is(:hover, :focus-visible) {
+.external-link-preview:is(a):focus-visible {
   border-color: color-mix(
     in oklab,
     var(--external-link-accent) 80%,
@@ -131,5 +153,21 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
     var(--color-bg-2)
   );
   color: var(--color-text-1);
+}
+
+@media (hover: hover) {
+  .external-link-preview:is(a):hover {
+    border-color: color-mix(
+      in oklab,
+      var(--external-link-accent) 80%,
+      var(--color-border-1)
+    );
+    background: color-mix(
+      in oklab,
+      var(--external-link-accent) 16%,
+      var(--color-bg-2)
+    );
+    color: var(--color-text-1);
+  }
 }
 </style>

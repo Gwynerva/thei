@@ -24,10 +24,12 @@ const canonical = computed(() =>
 );
 if (route.path !== canonical.value)
   await navigateTo(canonical.value, { redirectCode: 301 });
-const ogImage = useOgImage(
-  'section',
-  () => data.value.publicId,
-  () => [data.value.title, data.value.project.title],
+const ogImage = useOgImage(() => ({
+  kind: 'section',
+  id: data.value.publicId,
+}));
+const seoImage = computed(() =>
+  publicSeoImage(data.value.media, ogImage.value?.url),
 );
 usePublicSeo({
   ogImage,
@@ -43,20 +45,22 @@ usePublicSeo({
     { name: phrase.value.search, path: '/search/?type=project' },
     { name: data.value.project.title, path: data.value.project.href },
   ],
-  image: () => data.value.media?.src,
+  image: seoImage,
   entities: () => [
     {
-      '@type': 'CreativeWork',
+      '@type': 'Article',
       '@id': '#section',
-      name: data.value.title,
+      headline: data.value.title,
       description: data.value.summary,
-      dateCreated: data.value.chronology.createdAt,
+      author: publicSeoOwner,
+      datePublished: data.value.chronology.createdAt,
       ...(data.value.chronology.updatedAt
         ? { dateModified: data.value.chronology.updatedAt }
         : {}),
-      ...(data.value.media ? { image: data.value.media.src } : {}),
+      ...(seoImage.value ? { image: seoImage.value } : {}),
       isPartOf: {
         '@type': 'CreativeWork',
+        '@id': `${data.value.project.href}#project`,
         name: data.value.project.title,
         url: data.value.project.href,
       },

@@ -80,6 +80,7 @@ describe('fresh database installation', () => {
           'assetUuid',
           'text',
           'createdAt',
+          'date',
         ]),
       );
       expect(context.rawDb.pragma('quick_check', { simple: true })).toBe('ok');

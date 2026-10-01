@@ -9,7 +9,7 @@ import {
 } from '../../../thei/assets/selection';
 import {
   clearAssetUploadProgress,
-  setAssetUploadProgress,
+  uploadStatusReporter,
 } from '../../../thei/assets/progress';
 import {
   readUploadFileHeaders,
@@ -81,12 +81,7 @@ export default defineEventHandler(
         sourceType,
         settings,
         signal,
-        onQueued: () => setAssetUploadProgress(uploadId, { phase: 'queued' }),
-        onProgress: (progress) =>
-          setAssetUploadProgress(uploadId, {
-            phase: 'processing',
-            progress,
-          }),
+        onStatus: uploadStatusReporter(uploadId),
       });
 
       assertAssetSelection(result, constraints);

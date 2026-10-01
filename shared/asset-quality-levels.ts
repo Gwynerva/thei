@@ -36,11 +36,14 @@ export const ASSET_QUALITY_LEVEL_QUALITY: Record<AssetQualityLevel, number> = {
   maximum: 95,
 };
 
-export const DEFAULT_IMAGE_QUALITY_LEVEL: AssetQualityLevel = 'high';
 /**
- * Video starts a step lower: the bitrate ladder spends what a good camera
- * would, and at medium a minute of 1080p30 is already about 26 MB.
+ * Both kinds start at medium. A photo at high is about 1.7× the size of the
+ * same one at medium for a difference few screens show, and the video
+ * bitrate ladder already spends what a good camera would: at medium a minute
+ * of 1080p30 is about 26 MB. A place with a profile of its own may start
+ * higher (`asset-upload-profiles.ts`).
  */
+export const DEFAULT_IMAGE_QUALITY_LEVEL: AssetQualityLevel = 'medium';
 export const DEFAULT_VIDEO_QUALITY_LEVEL: AssetQualityLevel = 'medium';
 
 export function isAssetQualityLevel(

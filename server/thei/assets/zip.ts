@@ -4,6 +4,8 @@ import { AsyncZipDeflate, Zip } from 'fflate';
 
 export interface ZipSingleFileOptions {
   onProgress?: (progress: number) => void;
+  /** Aborting stops the deflate and removes the partial archive. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -24,8 +26,10 @@ export async function zipFileToPath(
   targetPath: string,
   options: ZipSingleFileOptions = {},
 ): Promise<void> {
+  options.signal?.throwIfAborted();
   const entryName = zipEntryName(extension);
   const output = createWriteStream(targetPath);
+  let onAbort: (() => void) | undefined;
 
   try {
     await new Promise<void>((resolve, reject) => {
@@ -61,6 +65,13 @@ export async function zipFileToPath(
 
       archive.add(entry);
       options.onProgress?.(0.01);
+      // The read loop stops at the next chunk; the deflate worker is told
+      // straight away, so nothing of it outlives the request.
+      onAbort = () => {
+        entry.terminate();
+        fail(options.signal!.reason);
+      };
+      options.signal?.addEventListener('abort', onAbort, { once: true });
 
       void (async () => {
         try {
@@ -86,6 +97,8 @@ export async function zipFileToPath(
     output.destroy();
     await rm(targetPath, { force: true }).catch(() => {});
     throw error;
+  } finally {
+    if (onAbort) options.signal?.removeEventListener('abort', onAbort);
   }
 }
 

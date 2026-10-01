@@ -16,10 +16,9 @@ const data = useRequiredResource(resource);
 const canonical = computed(() => buildPageUrl(data.value.slug));
 if (route.path !== canonical.value)
   await navigateTo(canonical.value, { redirectCode: 301 });
-const ogImage = useOgImage(
-  'page',
-  () => data.value.slug,
-  () => [data.value.title, data.value.iconMedia.src],
+const ogImage = useOgImage(() => ({ kind: 'page', id: data.value.slug }));
+const seoImage = computed(() =>
+  publicSeoImage(data.value.iconMedia, ogImage.value?.url),
 );
 usePublicSeo({
   ogImage,
@@ -30,18 +29,19 @@ usePublicSeo({
   canonical,
   noIndex: () => data.value.access === 'link-only',
   breadcrumbs: () => [{ name: phrase.value.pages, path: '/pages/' }],
-  image: () => data.value.iconMedia.src,
+  image: seoImage,
   entities: () => [
     {
       '@type': 'Article',
       '@id': '#page',
       headline: data.value.title,
       description: data.value.summary,
+      author: publicSeoOwner,
       datePublished: data.value.chronology.createdAt,
       ...(data.value.chronology.updatedAt
         ? { dateModified: data.value.chronology.updatedAt }
         : {}),
-      image: data.value.iconMedia.src,
+      ...(seoImage.value ? { image: seoImage.value } : {}),
     },
   ],
 });

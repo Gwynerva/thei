@@ -1,8 +1,73 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildQualityStops,
+  draftRenderOrder,
   stopRenderOrder,
 } from '../../../../app/modals/upload-settings/quality-stops';
+
+describe('draft render order', () => {
+  const raster = ['avif', 'webp', 'webp-lossless'] as const;
+
+  it('asks first for what "Use" would store, then the other formats, then the other stops', () => {
+    const order = draftRenderOrder({
+      format: 'webp',
+      formatChoice: 'auto',
+      fixedFormat: undefined,
+      availableFormats: raster,
+      level: 'medium',
+    });
+    expect(order.slice(0, 3)).toEqual([
+      { format: 'webp' },
+      { format: 'avif' },
+      { format: 'webp-lossless' },
+    ]);
+    // The other stops follow, nearest first, in both lossy formats.
+    expect(order.slice(3, 7)).toEqual([
+      { level: 'low', format: 'avif' },
+      { level: 'low', format: 'webp' },
+      { level: 'high', format: 'avif' },
+      { level: 'high', format: 'webp' },
+    ]);
+    expect(order).toHaveLength(3 + 8);
+  });
+
+  it('puts the lossless WebP first under the lossless stop', () => {
+    const order = draftRenderOrder({
+      format: 'webp-lossless',
+      formatChoice: 'auto',
+      fixedFormat: undefined,
+      availableFormats: raster,
+      level: 'lossless',
+    });
+    expect(order[0]).toEqual({ format: 'webp-lossless' });
+    expect(order.filter((item) => item.level)).toHaveLength(10);
+  });
+
+  it('renders only the format a place fixes', () => {
+    const order = draftRenderOrder({
+      format: 'webp',
+      formatChoice: 'auto',
+      fixedFormat: 'webp',
+      availableFormats: raster,
+      level: 'high',
+    });
+    expect(order[0]).toEqual({ format: 'webp' });
+    expect(order.every((item) => item.format === 'webp')).toBe(true);
+    expect(order).toHaveLength(1 + 4);
+  });
+
+  it('keeps a vector first when that is what "Auto" picked', () => {
+    const order = draftRenderOrder({
+      format: 'svg',
+      formatChoice: 'auto',
+      fixedFormat: undefined,
+      availableFormats: [...raster, 'svg'],
+      level: 'high',
+    });
+    expect(order[0]).toEqual({ format: 'svg' });
+    expect(order.slice(1, 4).map((item) => item.format)).toEqual([...raster]);
+  });
+});
 
 const labels = {
   minimal: 'Minimal',

@@ -1,7 +1,9 @@
 <script lang="ts" setup>
 import {
   isRelationEntityType,
+  orderRelationsForEditing,
   RELATION_ENTITY_TYPES,
+  RELATION_TYPES,
   relationEndpointKey,
   type RelationEditItem,
   type RelationEndpoint,
@@ -11,14 +13,17 @@ import {
 } from '#layers/thei/shared/relation';
 import {
   relationEntityIcon,
-  relationTypeIcon,
+  relationShortLabel,
 } from '#layers/thei/shared/relation-display';
-import type { ContentEntitySearchItem } from '#layers/thei/shared/admin/content-entity-search';
+import {
+  CONTENT_ENTITY_SEARCH_MAX_LIMIT,
+  type ContentEntitySearchItem,
+} from '#layers/thei/shared/admin/content-entity-search';
+import type { ContentOutputData } from '#layers/thei/shared/content';
+import type { MediaDescriptor } from '#layers/thei/shared/media';
+import { contentEntityMentions } from '#layers/thei/shared/public-content-reference';
 import type { IconName } from '#thei/icons';
 import type { TabStripItem } from '#layers/thei/app/components/TabStrip.vue';
-import { buildProjectUrl } from '#layers/thei/shared/project-url';
-import { buildEventUrl } from '#layers/thei/shared/event-url';
-import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import ContentEntitySearchPopup from '#layers/thei/app/components/content/ContentEntitySearchPopup.vue';
 import {
   createDragSort,
@@ -30,17 +35,24 @@ import {
  *
  * Any of the three draws relations to any of the three, and the other end
  * lists the relation from its side without editing it here. One tab per
- * kind of thing on the other end, each row says what the relation is with a
- * three-way toggle, and carries a note written once or once per side.
- * Projects and events are ordered by hand; diary entries are days, so they
- * keep the order of their days. A long group scrolls inside itself rather
- * than stretching the form.
+ * kind of thing on the other end, each relation a row of its own
+ * (`AdminRelationRow`). Projects and events are ordered by hand; diary
+ * entries are days, so they keep the order of their days. A long group
+ * scrolls inside itself rather than stretching the form.
+ *
+ * The picker of a new relation offers first what the entity's own text
+ * already links to.
  */
-const { owner, ownerTitle } = defineProps<{
+const { owner, ownerType, ownerTitle, ownerMedia, text } = defineProps<{
   /** The entity being edited, kept out of the picker; absent until created. */
   owner?: RelationEndpoint;
-  /** What the entity is called, for the "note from its side" placeholder. */
+  ownerType: RelationEntityType;
+  /** What the entity is called, for its hint and its side's note. */
   ownerTitle: string;
+  /** Its picture, if it has one of its own yet; its kind's glyph otherwise. */
+  ownerMedia?: MediaDescriptor;
+  /** Its text as it is being edited, whose links the picker offers first. */
+  text?: ContentOutputData | null;
 }>();
 
 const model = defineModel<RelationEditItem[]>({ required: true });
@@ -56,34 +68,28 @@ const excludedKeys = computed(() => [
   ...relations.value.map(relationKey),
 ]);
 
+/** What the text links to and is not related yet, in the text's order. */
+const mentionedKeys = computed(() => {
+  const excluded = new Set(excludedKeys.value);
+  return contentEntityMentions(text)
+    .filter((mention) => isRelationEntityType(mention.entityType))
+    .map((mention) => `${mention.entityType}:${mention.entityId}`)
+    .filter((key) => !excluded.has(key))
+    .slice(0, CONTENT_ENTITY_SEARCH_MAX_LIMIT);
+});
+
+const ownerName = computed(() => publicText(ownerTitle));
+
 function relationKey(item: RelationEditItem) {
   return relationEndpointKey({ type: item.entityType, id: item.entityId });
 }
 
-function relationHref(item: RelationEditItem) {
-  if (item.date) return buildDiaryUrl(item.date);
-  if (!item.publicId) return undefined;
-  return item.entityType === 'project'
-    ? buildProjectUrl(item.humanReadableSlug ?? '', item.publicId)
-    : buildEventUrl(item.humanReadableSlug ?? '', item.publicId);
-}
-
-function relationTitle(item: RelationEditItem) {
-  return item.date
-    ? entityDisplayTitle({ title: item.title ?? '', date: item.date })
-    : item.title || item.entityId;
-}
-
-/** Diary entries are listed by their day, newest first, wherever they go. */
-function byDay(items: RelationEditItem[]) {
-  return [...items].sort((left, right) =>
-    (right.date ?? '').localeCompare(left.date ?? ''),
-  );
-}
-
+/**
+ * The relations to one kind of entity. The list is kept in the order it is
+ * shown (`replaceRelations`), so a kind's rows are already in theirs.
+ */
 function ofKind(items: RelationEditItem[], type: RelationEntityType) {
-  const kind = items.filter((item) => item.entityType === type);
-  return type === 'diary-entry' ? byDay(kind) : kind;
+  return items.filter((item) => item.entityType === type);
 }
 
 type Group = {
@@ -133,26 +139,13 @@ const tabs = computed<TabStripItem<RelationEntityType>[]>(() =>
   })),
 );
 
+/** The kinds a relation can be, with their words, as the list offers them. */
 const directions = computed(() =>
-  (['related', 'influencing', 'dependent'] as const).map((type) => ({
+  RELATION_TYPES.map((type) => ({
     type,
-    icon: relationTypeIcon(type),
+    label: relationShortLabel(phrase.value, type, ownerType),
   })),
 );
-
-/**
- * What a direction means for this very pair, with both names in it: "A
- * depends on B" reads at once, where "Depends on" alone still asks which
- * side is which.
- */
-function directionTitle(relation: RelationEditItem, type: RelationType) {
-  const other = relationTitle(relation);
-  if (type === 'influencing')
-    return phrase.value.relation_popup_depends_on(ownerTitle, other);
-  if (type === 'dependent')
-    return phrase.value.relation_popup_affects(ownerTitle, other);
-  return phrase.value.relation_popup_related(ownerTitle, other);
-}
 
 function openEntitySearch() {
   entitySearchOpen.value = true;
@@ -192,70 +185,33 @@ function removeRelation(key: string) {
 }
 
 /**
- * The list is kept in the order it is shown: one kind after another, and the
- * diary entries by their days. That order is what the other side sees too.
+ * The list is kept in the order it is shown, which is the order the edit API
+ * reads it out in (`orderRelationsForEditing`): a change and its undoing
+ * leave the form as it was loaded.
  */
 function replaceRelations(value: RelationEditItem[]) {
-  model.value = RELATION_ENTITY_TYPES.flatMap((type) => ofKind(value, type));
+  model.value = orderRelationsForEditing(value);
 }
 
+/**
+ * Changes one relation in place. Neither its kind nor its note moves it, so
+ * the list keeps its order, and every other row keeps the very item it drew.
+ */
 function updateRelation(
   key: string,
   patch: (item: RelationEditItem) => RelationEditItem,
 ) {
-  replaceRelations(
-    relations.value.map((item) =>
-      relationKey(item) === key ? patch(item) : item,
-    ),
+  model.value = relations.value.map((item) =>
+    relationKey(item) === key ? patch(item) : item,
   );
 }
 
 function setType(key: string, type: RelationType) {
-  updateRelation(key, (item) =>
-    item.type === type ? item : { ...item, type },
-  );
+  updateRelation(key, (item) => ({ ...item, type }));
 }
 
 function updateNote(key: string, note: RelationNote) {
   updateRelation(key, (item) => ({ ...item, note }));
-}
-
-function updateSharedNote(key: string, text: string) {
-  updateNote(key, { type: 'shared', text });
-}
-
-function updateSplitNote(
-  key: string,
-  side: 'currentText' | 'relatedText',
-  text: string,
-) {
-  const relation = relations.value.find((item) => relationKey(item) === key);
-  const note =
-    relation?.note?.type === 'split'
-      ? relation.note
-      : { type: 'split' as const };
-  updateNote(key, { ...note, [side]: text });
-}
-
-function toggleSplitNote(relation: RelationEditItem) {
-  const note = relation.note;
-  const key = relationKey(relation);
-  if (note?.type === 'split') {
-    const current = note.currentText ?? '';
-    const related = note.relatedText ?? '';
-    const text =
-      current === related
-        ? current
-        : !current
-          ? related
-          : !related
-            ? current
-            : `${current} — ${related}`;
-    updateNote(key, { type: 'shared', text });
-    return;
-  }
-  const text = note?.text ?? '';
-  updateNote(key, { type: 'split', currentText: text, relatedText: text });
 }
 
 function moveRelation(type: RelationEntityType, key: string, newIndex: number) {
@@ -339,6 +295,7 @@ onUnmounted(cleanupSorters);
         ref="entitySearch"
         :entity-types="['project', 'event', 'diary-entry']"
         :exclude="excludedKeys"
+        :prefer="mentionedKeys"
         @select="addRelation"
       />
     </FloatingPopup>
@@ -368,206 +325,24 @@ onUnmounted(cleanupSorters);
           class="flex scrollbar-mini max-h-120 flex-col overflow-y-auto
             overscroll-contain"
         >
-          <div
+          <AdminRelationRow
             v-for="relation in activeGroup.items"
             :key="relationKey(relation)"
             :data-drag-id="
               activeGroup.sortable ? relationKey(relation) : undefined
             "
-            class="border-t border-border-1 p-sm first:border-t-0 sm:p-md"
-          >
-            <div class="flex min-w-0 items-center gap-xs">
-              <div
-                class="flex size-10 shrink-0 items-center justify-center
-                  overflow-hidden rounded-normal text-text-3"
-              >
-                <Media
-                  v-if="relation.iconMedia"
-                  v-bind="relation.iconMedia"
-                  class="size-full object-cover"
-                />
-                <Icon v-else :name="relationEntityIcon(relation.entityType)" />
-              </div>
-              <div class="min-w-0 flex-1">
-                <div class="truncate font-semibold">
-                  {{ relationTitle(relation) }}
-                </div>
-                <div
-                  class="flex min-w-0 items-center gap-1 text-xs text-text-3"
-                >
-                  <NuxtLink
-                    v-if="relation.humanReadableSlug && relation.publicId"
-                    :to="relationHref(relation)"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="max-w-1/2 truncate rounded-sm transition
-                      hocus:text-accent hocus:underline"
-                  >
-                    {{ relation.humanReadableSlug }}
-                  </NuxtLink>
-                  <span
-                    v-if="relation.humanReadableSlug && relation.publicId"
-                    aria-hidden="true"
-                    >·</span
-                  >
-                  <NuxtLink
-                    v-if="relation.date"
-                    :to="relationHref(relation)"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="truncate rounded-sm transition hocus:text-accent
-                      hocus:underline"
-                  >
-                    {{ relationHref(relation) }}
-                  </NuxtLink>
-                  <NuxtLink
-                    v-else-if="relation.publicId"
-                    :to="relationHref(relation)"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="max-w-1/2 truncate rounded-sm transition
-                      hocus:text-accent hocus:underline"
-                  >
-                    {{ relation.publicId }}
-                  </NuxtLink>
-                  <span v-else class="truncate">{{ relation.entityId }}</span>
-                </div>
-              </div>
-              <Button
-                v-if="activeGroup.sortable"
-                type="button"
-                size="icon-lg"
-                variant="secondary"
-                drag-handle
-                :aria-label="`${activeGroup.title}: ${relationTitle(relation)}`"
-                data-relation-handle
-              >
-                <Icon name="grip" />
-              </Button>
-              <Button
-                type="button"
-                size="icon-lg"
-                variant="delete"
-                :aria-label="phrase.delete_relation"
-                :data-title-popup="phrase.delete_relation"
-                @click="removeRelation(relationKey(relation))"
-              >
-                <Icon name="delete" />
-              </Button>
-            </div>
-            <div class="mt-xs flex items-start gap-xs">
-              <!-- What the relation is, from this entity's side: the
-                     filled end of every icon is this entity. -->
-              <div
-                role="radiogroup"
-                :aria-label="phrase.relation_direction"
-                class="flex shrink-0 gap-0.5 rounded-normal bg-bg-3 p-0.5"
-              >
-                <button
-                  v-for="direction in directions"
-                  :key="direction.type"
-                  type="button"
-                  role="radio"
-                  :aria-checked="relation.type === direction.type"
-                  :aria-label="directionTitle(relation, direction.type)"
-                  :data-title-popup="directionTitle(relation, direction.type)"
-                  class="flex size-10 cursor-pointer items-center justify-center
-                    rounded-sm text-2xl transition-colors"
-                  :class="
-                    relation.type === direction.type
-                      ? 'bg-bg-1 text-accent shadow-sm'
-                      : 'text-text-3 hocus:bg-bg-1/60 hocus:text-text-1'
-                  "
-                  @click="setType(relationKey(relation), direction.type)"
-                >
-                  <Icon :name="direction.icon" />
-                </button>
-              </div>
-              <div
-                v-if="relation.note?.type === 'split'"
-                class="grid min-w-0 flex-1 gap-xs sm:grid-cols-2"
-              >
-                <FieldInput
-                  :model-value="relation.note.currentText ?? ''"
-                  type="text"
-                  autocomplete="off"
-                  spellcheck="true"
-                  :placeholder="phrase.relation_note_for(ownerTitle)"
-                  :data-title-popup="phrase.relation_note_for(ownerTitle)"
-                  wrapper-class="min-w-0 w-full"
-                  class="w-full min-w-0 text-sm"
-                  @update:model-value="
-                    updateSplitNote(
-                      relationKey(relation),
-                      'currentText',
-                      String($event ?? ''),
-                    )
-                  "
-                />
-                <FieldInput
-                  :model-value="relation.note.relatedText ?? ''"
-                  type="text"
-                  autocomplete="off"
-                  spellcheck="true"
-                  :placeholder="
-                    phrase.relation_note_for(relationTitle(relation))
-                  "
-                  :data-title-popup="
-                    phrase.relation_note_for(relationTitle(relation))
-                  "
-                  wrapper-class="min-w-0 w-full"
-                  class="w-full min-w-0 text-sm"
-                  @update:model-value="
-                    updateSplitNote(
-                      relationKey(relation),
-                      'relatedText',
-                      String($event ?? ''),
-                    )
-                  "
-                />
-              </div>
-              <FieldInput
-                v-else
-                :model-value="
-                  relation.note?.type === 'shared'
-                    ? (relation.note.text ?? '')
-                    : ''
-                "
-                type="text"
-                autocomplete="off"
-                spellcheck="true"
-                :placeholder="phrase.relation_note_placeholder"
-                wrapper-class="min-w-0 flex-1"
-                class="w-full min-w-0 text-sm"
-                @update:model-value="
-                  updateSharedNote(relationKey(relation), String($event ?? ''))
-                "
-              />
-              <button
-                type="button"
-                class="flex size-10 shrink-0 cursor-pointer items-center
-                  justify-center rounded-normal bg-bg-3 text-text-2
-                  transition-colors hocus:bg-bg-accent hocus:text-accent"
-                :aria-label="
-                  relation.note?.type === 'split'
-                    ? phrase.merge_relation_note
-                    : phrase.split_relation_note
-                "
-                :data-title-popup="
-                  relation.note?.type === 'split'
-                    ? phrase.merge_relation_note
-                    : phrase.split_relation_note
-                "
-                @click="toggleSplitNote(relation)"
-              >
-                <Icon
-                  :name="
-                    relation.note?.type === 'split' ? 'link' : 'link-broken'
-                  "
-                />
-              </button>
-            </div>
-          </div>
+            data-relation-row
+            :relation
+            :owner-type="ownerType"
+            :owner-name="ownerName"
+            :owner-media="ownerMedia"
+            :directions
+            :sortable="activeGroup.sortable"
+            :group-title="activeGroup.title"
+            @type="setType(relationKey(relation), $event)"
+            @note="updateNote(relationKey(relation), $event)"
+            @remove="removeRelation(relationKey(relation))"
+          />
         </div>
       </Box>
     </div>

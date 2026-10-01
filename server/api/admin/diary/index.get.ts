@@ -1,9 +1,6 @@
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { resolveEntityIconMedia } from '../../../thei/media/generated-icon';
-import {
-  buildContentPreview,
-  contentPlainText,
-} from '#layers/thei/shared/content';
+import { contentPlainText } from '#layers/thei/shared/content';
 import type { DiaryListResponse } from '#layers/thei/shared/api/diary';
 import {
   normalizeAdminSearchText,
@@ -128,26 +125,31 @@ export default defineEventHandler(async (event): Promise<DiaryListResponse> => {
 
   return {
     ...result,
-    items: result.items.map((item) => {
-      const data = bodyByUuid.get(item.diaryUuid);
-      return {
-        diaryUuid: item.diaryUuid,
-        date: item.date,
-        access: item.access,
-        excerpt: diaryExcerpt(item.contentText),
-        previewMedia: resolveEntityIconMedia(
+    items: await Promise.all(
+      result.items.map(async (item) => {
+        const media = await THEI_SERVER.content.buildPreviewMedia(
           'diary-entry',
           item.diaryUuid,
-          buildContentPreview(data).media,
-        ),
-        createdAt: item.createdAt,
-        updatedAt: item.updatedAt,
-        totalSize: Array.from(sizes.get(item.diaryUuid)?.values() ?? []).reduce(
-          (sum, size) => sum + size,
-          0,
-        ),
-        ...(item.reminder ? { reminder: item.reminder } : {}),
-      };
-    }),
+          'diary-body',
+        );
+        return {
+          diaryUuid: item.diaryUuid,
+          date: item.date,
+          access: item.access,
+          excerpt: diaryExcerpt(item.contentText),
+          previewMedia: resolveEntityIconMedia(
+            'diary-entry',
+            item.diaryUuid,
+            media,
+          ),
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+          totalSize: Array.from(
+            sizes.get(item.diaryUuid)?.values() ?? [],
+          ).reduce((sum, size) => sum + size, 0),
+          ...(item.reminder ? { reminder: item.reminder } : {}),
+        };
+      }),
+    ),
   };
 });

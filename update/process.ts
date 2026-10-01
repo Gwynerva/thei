@@ -1,7 +1,7 @@
 import { copyFile, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { swapOutput } from './output';
-import { bunPath, isDryRun, isManaged } from './environment';
+import { bunPath, isDryRun, isManaged, nativeBuildEnv } from './environment';
 import { cleanLine, exec, ExecError } from './exec';
 import {
   backupInstanceManifest,
@@ -267,6 +267,7 @@ async function run(
     await report(label);
     await exec(bunPath(), ['install'], {
       cwd: projectPath,
+      env: nativeBuildEnv(),
       timeout: installTimeout,
       onLine: (line) => appendLog(state, line),
     });
@@ -424,8 +425,11 @@ export function failureExcerpt(output: string): string {
     .filter((line) => /\bERROR\b|^\s*error\b|Error:|Error \[/i.test(line))
     .slice(0, 8);
   const tail = lines.slice(-8).filter((line) => !errors.includes(line));
-  return [...errors, ...(errors.length && tail.length ? ['…'] : []), ...tail]
-    .join('\n');
+  return [
+    ...errors,
+    ...(errors.length && tail.length ? ['…'] : []),
+    ...tail,
+  ].join('\n');
 }
 
 /** Exits so the supervisor starts a fresh process. */

@@ -1,4 +1,10 @@
-import { expect, test, type Page } from '@playwright/test';
+import {
+  expect,
+  request as playwright,
+  test,
+  type Page,
+} from '@playwright/test';
+import { fileURLToPath } from 'node:url';
 import { E2E_ORIGIN } from './fixture-url';
 
 type Graph = { '@context': string; '@graph': Record<string, any>[] };
@@ -9,13 +15,25 @@ async function graph(page: Page): Promise<Graph> {
   const blocks = await page
     .locator('script[type="application/ld+json"]')
     .allTextContents();
-  const raw = blocks.find((block) => block.includes('"@graph"'));
-  expect(raw, 'no page-level JSON-LD graph was rendered').toBeTruthy();
-  return JSON.parse(raw!);
+  // One graph per page: the site and its owner live in it, not beside it.
+  expect(blocks).toHaveLength(1);
+  expect(blocks[0], 'no page-level JSON-LD graph was rendered').toContain(
+    '"@graph"',
+  );
+  return JSON.parse(blocks[0]!);
 }
 
 const node = (value: Graph, type: string) =>
   value['@graph'].find((item) => item['@type'] === type);
+
+/** Every `@type` anywhere in the graph, nested nodes included. */
+function types(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap(types);
+  if (!value || typeof value !== 'object') return [];
+  return Object.entries(value).flatMap(([key, item]) =>
+    key === '@type' ? [String(item)] : types(item),
+  );
+}
 
 test('a detail page describes itself with metadata and a linked graph', async ({
   page,
@@ -33,17 +51,24 @@ test('a detail page describes itself with metadata and a linked graph', async ({
   expect(new URL(canonical!).pathname).toBe('/pages/page-0/');
 
   const value = await graph(page);
+  const webSite = node(value, 'WebSite')!;
+  const person = node(value, 'Person')!;
   const webPage = node(value, 'WebPage')!;
   const crumbs = node(value, 'BreadcrumbList')!;
   const article = node(value, 'Article')!;
 
   expect(webPage.url).toBe(canonical);
   expect(webPage.inLanguage).toBe('en');
-  // The page hangs off the site node the layout emits, and points at both its
+  // The page hangs off the site node in its own graph, and points at both its
   // trail and the thing it is about.
-  expect(webPage.isPartOf['@id']).toMatch(/#website$/);
+  expect(webPage.isPartOf['@id']).toBe(webSite['@id']);
+  expect(webSite['@id']).toMatch(/#website$/);
   expect(webPage.breadcrumb['@id']).toBe(crumbs['@id']);
   expect(webPage.mainEntity['@id']).toBe(article['@id']);
+  // The author is named on the page itself, not only on the home page.
+  expect(person.name).toBe('Regression');
+  expect(article.author['@id']).toBe(person['@id']);
+  expect(webSite.publisher['@id']).toBe(person['@id']);
 
   expect(
     crumbs.itemListElement.map((item: any) => [item.position, item.name]),
@@ -55,6 +80,56 @@ test('a detail page describes itself with metadata and a linked graph', async ({
     expect(item.item).toMatch(/^https?:\/\//);
   }
   expect(article.datePublished).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+});
+
+test('an event is an article about a moment, never a schema.org Event', async ({
+  page,
+}) => {
+  // Search engines take an `Event` for a public gathering and flag every one
+  // without a venue, which a moment of a life never has.
+  const admin = await playwright.newContext({
+    baseURL: E2E_ORIGIN,
+    storageState: fileURLToPath(
+      new URL('./.artifacts/admin.json', import.meta.url),
+    ),
+  });
+  const publicId = `seo${Date.now()}`;
+  const created = await (
+    await admin.post('/api/admin/events', {
+      data: {
+        title: 'Slipped on the ice',
+        summary: 'A winter morning worth remembering.',
+        access: 'public',
+        humanReadableSlug: 'slipped-on-the-ice',
+        publicId,
+        content: {
+          data: {
+            blocks: [{ type: 'paragraph', data: { text: 'It was icy.' } }],
+          },
+        },
+        periods: [{ startDate: '2026-01-10', endDate: '2026-01-12' }],
+      },
+    })
+  ).json();
+  await admin.dispose();
+  expect(created.type, JSON.stringify(created)).toBe('success');
+
+  await page.goto(`/events/slipped-on-the-ice-${publicId}/`);
+  const value = await graph(page);
+  expect(types(value)).not.toContain('Event');
+
+  const webPage = node(value, 'WebPage')!;
+  const article = node(value, 'Article')!;
+  const person = node(value, 'Person')!;
+  expect(webPage.mainEntity['@id']).toBe(article['@id']);
+  // The owner's typography binds short words with a no-break space.
+  expect(article.headline.replace(/\s/g, ' ')).toBe('Slipped on the ice');
+  expect(article.temporalCoverage).toBe('2026-01-10/2026-01-12');
+  expect(article.datePublished).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  expect(article.author['@id']).toBe(person['@id']);
+  // Without a picture of its own, the event is shown by its card.
+  expect(new URL(article.image).pathname).toBe(`/og/event/${publicId}.png`);
+  expect(webPage.primaryImageOfPage).toBe(article.image);
 });
 
 test('a listing page is a CollectionPage carrying a bounded ItemList', async ({

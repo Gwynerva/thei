@@ -19,6 +19,7 @@ import {
   buildProjectUrl,
 } from '#layers/thei/shared/project-url';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
+import { utcDayOf } from '#layers/thei/shared/date-range';
 
 export type SitemapEntry = {
   path: string;
@@ -99,7 +100,7 @@ function isListable(entity: AccessLike): boolean {
 
 function isoDate(epochMs: number): string | undefined {
   if (!Number.isFinite(epochMs) || epochMs <= 0) return undefined;
-  return new Date(epochMs).toISOString().slice(0, 10);
+  return utcDayOf(epochMs);
 }
 
 export function buildSitemapEntries(input: SitemapInput): SitemapEntry[] {

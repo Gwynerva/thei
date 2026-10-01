@@ -35,6 +35,12 @@ interface MediaControlsOptions {
     container: { width: number; height: number },
     content: { width: number; height: number },
   ) => number | undefined;
+  /**
+   * Device pixels per CSS pixel. "100 %" is one pixel of the media on one
+   * device pixel, the only size at which the browser draws it without
+   * resampling; the zoom is in CSS pixels, so that is 1 / ratio of it.
+   */
+  devicePixelRatio?: () => number;
 }
 
 export function useMediaControls(options: MediaControlsOptions = {}) {
@@ -80,7 +86,18 @@ export function useMediaControls(options: MediaControlsOptions = {}) {
     };
   });
 
-  const zoomPercent = computed(() => Math.round(zoom.value * 100));
+  /** Device pixels per pixel of the media. */
+  const deviceScale = computed(() => zoom.value * devicePixelRatio());
+  const zoomPercent = computed(() => Math.round(deviceScale.value * 100));
+
+  function devicePixelRatio(): number {
+    return options.devicePixelRatio?.() || 1;
+  }
+
+  /** The zoom that shows one pixel of the media on one device pixel. */
+  function hundredZoom(): number {
+    return 1 / devicePixelRatio();
+  }
 
   function maxZoom(): number {
     return Math.max(DEFAULT_ZOOM_MAX, options.maxZoom?.() ?? DEFAULT_ZOOM_MAX);
@@ -143,7 +160,12 @@ export function useMediaControls(options: MediaControlsOptions = {}) {
 
     const availW = Math.max(containerW - FIT_PADDING, 1);
     const availH = Math.max(containerH - FIT_PADDING, 1);
-    return Math.min(availW / contentW.value, availH / contentH.value, 1);
+    // Fitting never magnifies past the media's own pixels.
+    return Math.min(
+      availW / contentW.value,
+      availH / contentH.value,
+      hundredZoom(),
+    );
   }
 
   function computeUncappedFitZoom(): number {
@@ -312,7 +334,7 @@ export function useMediaControls(options: MediaControlsOptions = {}) {
       return;
     }
 
-    enterZoomMode(1);
+    enterZoomMode(hundredZoom());
   }
 
   function handleZoomTargetButtonClick(value: number): void {
@@ -378,6 +400,10 @@ export function useMediaControls(options: MediaControlsOptions = {}) {
   }
 
   function onPointerDown(e: PointerEvent): void {
+    // Only the main button pans. A right press belongs to the context menu,
+    // which on some systems opens before the button is let go and swallows
+    // the release — a pan begun then would stay stuck to the pointer.
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
     snapToTarget();
     activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const el = e.currentTarget as HTMLElement;
@@ -553,6 +579,7 @@ export function useMediaControls(options: MediaControlsOptions = {}) {
 
   return {
     zoom,
+    deviceScale,
     transformStyle,
     mediaStyle,
     zoomPercent,

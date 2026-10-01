@@ -11,12 +11,17 @@ import EntityLinkPreviewCard from './EntityLinkPreviewCard.vue';
 /**
  * A resolved link as a card, whatever it turned out to be: an entity, a
  * site, one the reader may not open, one that no longer exists — or one
- * still being asked about. Every state is laid out to the same measures.
+ * still being asked about. Every state is laid out to the same measures, and
+ * every state carries the owner's note on the link (`note`, or the `note`
+ * slot), so a note being written never vanishes while the target is asked
+ * about.
  */
 const props = defineProps<{
   result?: ResolvedContentLink;
   /** What to call the link while it is still being asked about. */
   label?: string;
+  /** The owner's note, as typed. */
+  note?: string;
   loading?: boolean;
   interactive: boolean;
   playback?: MediaPlayback;
@@ -24,6 +29,7 @@ const props = defineProps<{
   continuousProjectMedia?: boolean;
 }>();
 
+const slots = defineSlots<{ note?(): unknown }>();
 const externalLink = computed(() => externalLinkFromResolved(props.result));
 </script>
 
@@ -33,6 +39,7 @@ const externalLink = computed(() => externalLinkFromResolved(props.result));
     :entity-type="result.entityType"
     :title="result.title"
     :summary="result.summary"
+    :note
     :date="result.date"
     :parent="result.parent"
     :icon-media="result.media"
@@ -45,15 +52,20 @@ const externalLink = computed(() => externalLinkFromResolved(props.result));
     "
     :flush="flush"
     :compact="flush"
-  />
+  >
+    <template v-if="slots.note" #note><slot name="note" /></template>
+  </EntityLinkPreviewCard>
   <ExternalLinkPreviewCard
     v-else-if="result?.state === 'resolved' && result.kind === 'external'"
     :link="externalLink"
     :url="result.href"
+    :note
     :interactive="interactive"
     :playback
     :flush="flush"
-  />
+  >
+    <template v-if="slots.note" #note><slot name="note" /></template>
+  </ExternalLinkPreviewCard>
   <div
     v-else
     class="flex w-full min-w-0 items-center gap-xs rounded-normal border"
@@ -88,7 +100,7 @@ const externalLink = computed(() => externalLinkFromResolved(props.result));
     </span>
     <span
       class="flex min-w-0 flex-1 flex-col"
-      :class="flush ? 'my-xs gap-0.5' : 'gap-1'"
+      :class="flush ? 'my-xs mr-xs gap-0.5' : 'gap-1'"
     >
       <span
         class="truncate font-semibold"
@@ -113,6 +125,9 @@ const externalLink = computed(() => externalLinkFromResolved(props.result));
         :class="flush ? 'text-sm' : 'text-[0.9375rem] leading-snug'"
       >
         {{ phrase.content_link_loading }}
+      </span>
+      <span v-if="slots.note || note" class="mt-0.5 block text-sm">
+        <slot name="note"><ContentLinkNote :note /></slot>
       </span>
     </span>
   </div>

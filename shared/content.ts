@@ -128,6 +128,11 @@ export interface ContentEditValue {
   contentUuid?: string;
   data: ContentOutputData | null;
   updatedAt?: number;
+  /**
+   * The history the text was written under before its owner existed
+   * (`new~<uuid>`). Saving hands that history over to the owner.
+   */
+  draftRef?: string;
 }
 
 export type ContentFieldModelValue = ContentEditValue & Partial<ContentSummary>;
@@ -175,7 +180,10 @@ export interface ContentAnalysis {
 }
 
 export type ContentExternalLinkData = Pick<ExternalLink, 'url'> &
-  Partial<Omit<ExternalLink, 'url'>>;
+  Partial<Omit<ExternalLink, 'url'>> & {
+    /** The owner's word on why the link is there. */
+    note?: string;
+  };
 
 export class ContentValidationError extends Error {}
 
@@ -213,10 +221,11 @@ export function normalizeContentData(value: unknown): ContentOutputData {
   };
 }
 
-export function contentPrivateSectionRanges(
-  value: ContentOutputData | null | undefined,
+/** Where the private sections of data `normalizeContentData` gave run. */
+export function normalizedContentPrivateSectionRanges(
+  normalized: ContentOutputData,
 ): ContentPrivateSectionRange[] {
-  const blocks = normalizeContentData(value).blocks;
+  const blocks = normalized.blocks;
   const boundaries = new Map<string, number[]>();
 
   blocks.forEach((block, index) => {
@@ -264,7 +273,12 @@ export function contentDataIsSemanticallyEqual(
 export function canonicalizeContentData(
   value: ContentOutputData | null | undefined,
 ): ContentOutputData {
-  const normalized = normalizeContentData(value);
+  return canonicalizeNormalizedContentData(normalizeContentData(value));
+}
+
+function canonicalizeNormalizedContentData(
+  normalized: ContentOutputData,
+): ContentOutputData {
   return {
     ...normalized,
     blocks: normalized.blocks.map((block) => {
@@ -312,8 +326,21 @@ export function canonicalizeContentData(
 export function contentSemanticKey(
   data: ContentOutputData | null | undefined,
 ): string {
+  return normalizedContentSemanticKey(normalizeContentData(data));
+}
+
+/**
+ * `contentSemanticKey` of data `normalizeContentData` already gave. An
+ * editor keys every state of a text it reads, and normalizing a long text
+ * once more for it costs more than the key itself.
+ */
+export function normalizedContentSemanticKey(
+  normalized: ContentOutputData,
+): string {
   return JSON.stringify(
-    canonicalizeContentData(data).blocks.map(({ id: _id, ...block }) => block),
+    canonicalizeNormalizedContentData(normalized).blocks.map(
+      ({ id: _id, ...block }) => block,
+    ),
   );
 }
 
@@ -361,24 +388,27 @@ export function analyzeContentData(
   };
 }
 
+/**
+ * The files a text's preview picture is chosen from, in the order it looks
+ * at them: the first with a picture to show is the one. Stored, each is
+ * `{ assetUuid }`; hydrated, it carries its media.
+ */
+export function contentPreviewAssets(normalized: ContentOutputData): unknown[] {
+  return normalized.blocks.flatMap((block) => {
+    if (block.type === 'contentMedia') return [(block.data as any).asset];
+    if (block.type !== 'contentGallery') return [];
+    const items = (block.data as any).items;
+    return Array.isArray(items) ? items.map((item: any) => item?.asset) : [];
+  });
+}
+
 function buildNormalizedContentPreview(
   normalized: ContentOutputData,
   textLimit: number,
 ): ContentPreview {
-  let media: MediaDescriptor | undefined;
-
-  for (const block of normalized.blocks) {
-    if (!media && block.type === 'contentMedia') {
-      media = contentAssetMedia((block.data as any).asset);
-    } else if (!media && block.type === 'contentGallery') {
-      const items = Array.isArray((block.data as any).items)
-        ? (block.data as any).items
-        : [];
-      media = items
-        .map((item: any) => contentAssetMedia(item?.asset))
-        .find(Boolean);
-    }
-  }
+  const media = contentPreviewAssets(normalized)
+    .map(contentAssetMedia)
+    .find(Boolean);
 
   return {
     text: truncatePreviewText(
@@ -408,7 +438,7 @@ export function publicContentPlainText(
   options: { privatePlaceholder?: string } = {},
 ): string {
   const normalized = normalizeContentData(data);
-  const ranges = contentPrivateSectionRanges(normalized);
+  const ranges = normalizedContentPrivateSectionRanges(normalized);
   const placeholderAt = new Set(
     options.privatePlaceholder
       ? ranges
@@ -442,48 +472,66 @@ function contentPlainTextFromNormalized(
   normalized: ContentOutputData,
   includeExternalLinks = true,
 ) {
+  return normalized.blocks
+    .flatMap((block) => contentBlockTextParts(block, includeExternalLinks))
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * The pieces of text a block shows, in reading order, as plain text: a
+ * paragraph, a quote and then its caption, each item of a list, each caption
+ * of a gallery.
+ */
+export function contentBlockTextParts(
+  block: ContentOutputBlock,
+  includeExternalLinks = true,
+): string[] {
   const textParts: string[] = [];
-  for (const block of normalized.blocks) {
-    switch (block.type) {
-      case 'paragraph':
-      case 'header':
-        appendPreviewText(textParts, (block.data as any).text);
-        break;
-      case 'quote':
-        appendPreviewText(textParts, (block.data as any).text);
-        appendPreviewText(textParts, (block.data as any).caption);
-        break;
-      case 'list':
-        collectListPreviewText(textParts, (block.data as any).items);
-        break;
-      case 'delimiter':
-        break;
-      case 'contentMedia':
-        appendPreviewText(textParts, (block.data as any).caption);
-        break;
-      case 'contentGallery':
-        collectGalleryPreviewText(textParts, (block.data as any).items);
-        break;
-      case 'contentAttachment':
-        appendPreviewText(textParts, (block.data as any).title);
-        appendPreviewText(textParts, (block.data as any).caption);
-        break;
-      case 'externalLink':
-        if (includeExternalLinks) {
-          appendPreviewText(textParts, (block.data as any).url);
-        }
-        break;
-      case 'integration':
-        if (includeExternalLinks) {
-          appendPreviewText(textParts, contentIntegrationUrl(block.data));
-        }
-        break;
-      case 'entityLink':
-      case 'privateSectionBoundary':
-        break;
-    }
+  switch (block.type) {
+    case 'paragraph':
+    case 'header':
+      appendPreviewText(textParts, (block.data as any).text);
+      break;
+    case 'quote':
+      appendPreviewText(textParts, (block.data as any).text);
+      appendPreviewText(textParts, (block.data as any).caption);
+      break;
+    case 'list':
+      collectListPreviewText(textParts, (block.data as any).items);
+      break;
+    case 'delimiter':
+      break;
+    case 'contentMedia':
+      appendPreviewText(textParts, (block.data as any).caption);
+      break;
+    case 'contentGallery':
+      collectGalleryPreviewText(textParts, (block.data as any).items);
+      break;
+    case 'contentAttachment':
+      appendPreviewText(textParts, (block.data as any).title);
+      appendPreviewText(textParts, (block.data as any).caption);
+      break;
+    case 'externalLink':
+      if (includeExternalLinks) {
+        appendPreviewText(textParts, (block.data as any).url);
+      }
+      // The note is the owner's own words, like a caption.
+      appendPreviewText(textParts, (block.data as any).note);
+      break;
+    case 'integration':
+      if (includeExternalLinks) {
+        appendPreviewText(textParts, contentIntegrationUrl(block.data));
+      }
+      break;
+    case 'entityLink':
+      appendPreviewText(textParts, (block.data as any).note);
+      break;
+    case 'privateSectionBoundary':
+      break;
   }
-  return textParts.join(' ').replace(/\s+/g, ' ').trim();
+  return textParts;
 }
 
 function contentPreviewTextFromNormalized(normalized: ContentOutputData) {
@@ -514,12 +562,25 @@ export function summarizeContentData(
   return summarizeNormalizedContentData(normalized, assetSizes);
 }
 
+/**
+ * The summary of data `normalizeContentData` already gave, with the sizes
+ * its hydrated files carry: what an editor shows of the text it holds.
+ */
+export function summarizeNormalizedContent(
+  normalized: ContentOutputData,
+): ContentSummary {
+  return summarizeNormalizedContentData(
+    normalized,
+    collectNormalizedContentAssetSizeMap(normalized),
+  );
+}
+
 function summarizeNormalizedContentData(
   normalized: ContentOutputData,
   assetSizes: Map<string, number>,
 ): ContentSummary {
   const assetUuids = new Set<string>();
-  for (const ref of extractContentAssetRefs(normalized)) {
+  for (const ref of extractNormalizedContentAssetRefs(normalized)) {
     assetUuids.add(ref.assetUuid);
   }
 
@@ -575,8 +636,13 @@ function collectNormalizedContentAssetSizeMap(
 export function extractContentAssetRefs(
   data: ContentOutputData,
 ): ContentAssetRef[] {
-  const normalized = normalizeContentData(data);
-  const ranges = contentPrivateSectionRanges(normalized);
+  return extractNormalizedContentAssetRefs(normalizeContentData(data));
+}
+
+function extractNormalizedContentAssetRefs(
+  normalized: ContentOutputData,
+): ContentAssetRef[] {
+  const ranges = normalizedContentPrivateSectionRanges(normalized);
   const refs: ContentAssetRef[] = [];
   for (const [index, block] of normalized.blocks.entries()) {
     const isPrivate = contentBlockIsInPrivateSection(ranges, index);
@@ -726,7 +792,10 @@ function normalizeBlockData(
       };
 
     case 'externalLink':
-      return { url: normalizeExternalLinkUrl(data.url) };
+      return withLinkNote(
+        { url: normalizeExternalLinkUrl(data.url) },
+        data.note,
+      );
 
     case 'integration':
       try {
@@ -742,7 +811,7 @@ function normalizeBlockData(
         ? data.entityType
         : undefined;
       const entityId = optionalString(data.entityId)?.trim();
-      return { entityType, entityId };
+      return withLinkNote({ entityType, entityId }, data.note);
     }
 
     case 'privateSectionBoundary': {
@@ -1046,7 +1115,8 @@ function appendPreviewText(parts: string[], value: unknown) {
   if (text) parts.push(text);
 }
 
-function contentAssetMedia(value: unknown): MediaDescriptor | undefined {
+/** The picture of a hydrated file of a text, if it has one. */
+export function contentAssetMedia(value: unknown): MediaDescriptor | undefined {
   if (!isRecord(value)) return undefined;
   return normalizeMediaDescriptor(value.media);
 }
@@ -1099,6 +1169,16 @@ function optionalTrimmedString(value: unknown): string | undefined {
 function optionalNormalizedText(value: unknown): string | undefined {
   const text = normalizeContentText(value);
   return text || undefined;
+}
+
+/**
+ * A link block's note, the owner's word on why the link is there. Only a note
+ * with words is kept, so a block without one stays exactly as it was stored
+ * before notes existed.
+ */
+function withLinkNote<T extends object>(data: T, value: unknown) {
+  const note = optionalNormalizedText(value);
+  return note ? { ...data, note } : data;
 }
 
 function optionalNormalizedInlineHtml(value: unknown): string | undefined {

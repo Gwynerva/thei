@@ -89,9 +89,24 @@ describe('firstAndLastTimelineItems', () => {
         labels,
       ),
     ).toEqual([
-      { icon: 'calendar', label: 'First', date: '2024-01-01', href: '/a/' },
       { icon: 'calendar', label: 'Last', date: '2026-05-01', href: '/c/' },
+      { icon: 'calendar', label: 'First', date: '2024-01-01', href: '/a/' },
     ]);
+  });
+
+  it('keeps the last above the first when both share a day', () => {
+    expect(
+      sortPublicDetailTimelineItems(
+        firstAndLastTimelineItems(
+          [
+            { date: '2024-01-01', href: '/a/' },
+            { date: '2024-01-01', href: '/b/' },
+          ],
+          pick,
+          labels,
+        ),
+      ).map((item) => item.label),
+    ).toEqual(['Last', 'First']);
   });
 
   it('collapses a single item into one line under the plain name', () => {
@@ -134,8 +149,8 @@ describe('createdAndUpdatedTimelineItems', () => {
         labels,
       ),
     ).toEqual([
-      { icon: 'plus', label: 'Created', date: '2024-05-12' },
       { icon: 'history', label: 'Updated', date: '2024-07-02' },
+      { icon: 'plus', label: 'Created', date: '2024-05-12' },
     ]);
   });
 
@@ -143,6 +158,31 @@ describe('createdAndUpdatedTimelineItems', () => {
     expect(
       createdAndUpdatedTimelineItems({ createdAt: '2024-05-12' }, labels),
     ).toEqual([{ icon: 'plus', label: 'Created', date: '2024-05-12' }]);
+  });
+
+  it('puts the parts of a day between its edit and its creation', () => {
+    const stages = firstAndLastTimelineItems(
+      [
+        { date: '2024-05-12', href: '/stage-a/' },
+        { date: '2024-05-12', href: '/stage-b/' },
+      ],
+      (item) => item,
+      { icon: 'calendar', first: 'First stage', last: 'Last stage', only: '' },
+    );
+    const status = {
+      icon: 'pulse' as const,
+      label: 'Status',
+      date: '2024-05-12',
+    };
+    expect(
+      sortPublicDetailTimelineItems(
+        createdAndUpdatedTimelineItems(
+          { createdAt: '2024-05-12', updatedAt: '2024-06-01' },
+          labels,
+          [...stages, status],
+        ),
+      ).map((item) => item.label),
+    ).toEqual(['Updated', 'Last stage', 'First stage', 'Status', 'Created']);
   });
 });
 

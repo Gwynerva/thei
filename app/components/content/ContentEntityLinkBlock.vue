@@ -7,7 +7,12 @@ import {
   type ResolvedContentLink,
 } from '#layers/thei/shared/content-link';
 import ContentLinkPreviewCard from './ContentLinkPreviewCard.vue';
+import ContentLinkNote from './ContentLinkNote.vue';
 
+/**
+ * The card of an `entityLink` block. Where the block can be edited, the card
+ * is not a link: its last line is the owner's note, written in place.
+ */
 const props = withDefaults(
   defineProps<{
     entityType: ContentEntityType;
@@ -18,9 +23,14 @@ const props = withDefaults(
     resolver: ContentLinkResolver;
     interactive?: boolean;
     playback?: MediaPlayback;
+    /** The owner's note, the last line of the card. */
+    note?: string;
+    editable?: boolean;
+    notePlaceholder?: string;
   }>(),
   { interactive: true },
 );
+const emit = defineEmits<{ 'update:note': [value: string] }>();
 const result = ref<ResolvedContentLink>();
 let version = 0;
 watch(
@@ -50,8 +60,17 @@ onUnmounted(() => {
   <ContentLinkPreviewCard
     :result="result"
     :label="entityTypeLabel(entityType)"
-    :interactive="interactive"
+    :interactive="interactive && !editable"
     :playback
     :continuous-project-media="contentEntityHasIcon(entityType)"
-  />
+  >
+    <template v-if="editable || note" #note>
+      <ContentLinkNote
+        :note
+        :editable
+        :placeholder="notePlaceholder"
+        @update:note="emit('update:note', $event)"
+      />
+    </template>
+  </ContentLinkPreviewCard>
 </template>

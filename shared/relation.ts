@@ -24,8 +24,17 @@ export function isRelationEntityType(
   return RELATION_ENTITY_TYPES.includes(value as RelationEntityType);
 }
 
-/** One entity's reading of a relation: always relative to the entity itself. */
-export type RelationType = 'related' | 'influencing' | 'dependent';
+/**
+ * One entity's reading of a relation: always relative to the entity itself.
+ * "influencing" reads "this depends on the other", "dependent" reads "this
+ * affects the other".
+ */
+export const RELATION_TYPES = ['related', 'influencing', 'dependent'] as const;
+export type RelationType = (typeof RELATION_TYPES)[number];
+
+export function isRelationType(value: unknown): value is RelationType {
+  return RELATION_TYPES.includes(value as RelationType);
+}
 
 export type RelationNote =
   | { type: 'shared'; text?: string }
@@ -66,6 +75,26 @@ export type RelationGetItem = RelationEditItem & {
 
 export function relationEndpointKey(endpoint: RelationEndpoint) {
   return `${endpoint.type}:${endpoint.id}`;
+}
+
+/**
+ * A relation list in the order its editor keeps it: one kind after another,
+ * projects and events in their own hand-made order, diary entries by their
+ * days, newest first. The editor writes every change in this order, and the
+ * edit API reads a list out in it, so a list that was not changed compares
+ * equal to the one that was loaded. How the kinds interleave in storage —
+ * a relation drawn from the other end lands wherever it lands — means
+ * nothing to anyone: every list of relations is shown one kind at a time.
+ */
+export function orderRelationsForEditing<
+  T extends { entityType: RelationEntityType; date?: string },
+>(items: readonly T[]): T[] {
+  return RELATION_ENTITY_TYPES.flatMap((type) => {
+    const kind = items.filter((item) => item.entityType === type);
+    return type === 'diary-entry'
+      ? kind.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
+      : kind;
+  });
 }
 
 export function relationEndpointsEqual(
@@ -121,11 +150,7 @@ export function validateRelations(
     if (seen.has(key))
       throw new RelationValidationError('Duplicate related entity');
     seen.add(key);
-    if (
-      relation.type !== 'related' &&
-      relation.type !== 'influencing' &&
-      relation.type !== 'dependent'
-    )
+    if (!isRelationType(relation.type))
       throw new RelationValidationError('Invalid relation type');
     return {
       entityType: relation.entityType,

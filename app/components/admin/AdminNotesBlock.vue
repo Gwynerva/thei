@@ -1,6 +1,11 @@
 <script lang="ts" setup>
 import type { ContentFieldModelValue } from '#layers/thei/shared/content';
-import { ENTITY_REMINDER_MAX_LENGTH } from '#layers/thei/shared/entity-notes';
+import {
+  ENTITY_NOTES_SLOTS,
+  ENTITY_REMINDER_MAX_LENGTH,
+  type EntityNotesOwner,
+} from '#layers/thei/shared/entity-notes';
+import { injectContentOwner } from '#layers/thei/app/composables/content-history/owner';
 
 /**
  * The private half of an entity: a short reminder and longer notes.
@@ -13,6 +18,13 @@ const reminder = defineModel<string>('reminder', { required: true });
 const notes = defineModel<ContentFieldModelValue | null | undefined>('notes');
 
 const emit = defineEmits<{ notesSaved: [] }>();
+
+/** The notes are a field of whatever entity the form edits. */
+const owner = injectContentOwner();
+const notesSlot =
+  owner && owner.ownerType in ENTITY_NOTES_SLOTS
+    ? ENTITY_NOTES_SLOTS[owner.ownerType as EntityNotesOwner]
+    : undefined;
 </script>
 
 <template>
@@ -39,6 +51,7 @@ const emit = defineEmits<{ notesSaved: [] }>();
         <FieldLabel>{{ phrase.entity_notes }}</FieldLabel>
         <FieldContentEditor
           v-model="notes"
+          :content-slot="notesSlot"
           :title-label="phrase.entity_notes"
           @saved="emit('notesSaved')"
         />

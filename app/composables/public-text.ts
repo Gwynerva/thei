@@ -1,18 +1,18 @@
-import { normalizeInlineMarkup } from '#layers/thei/shared/language/general-normalize';
-import type { LanguageInstance } from '#layers/thei/shared/language';
+import { ownerTextFormatter } from '#layers/thei/shared/language/owner-text';
 
 /**
  * Typography for text the owner wrote, applied on the way to the screen.
  *
  * UI phrases are already normalized by the language proxy. Everything the
- * owner typed — titles, summaries, captions, content — is stored exactly as
- * they typed it and only looks like proper typography once it is displayed.
- * Nothing here ever writes back: the quotes, dashes and non-breaking spaces
- * live in the rendered page, not in the database.
+ * owner typed — titles, summaries, captions, notes, reminders, statuses,
+ * content — is stored exactly as they typed it and only looks like proper
+ * typography once it is displayed, in public pages and admin lists alike,
+ * tooltips and `aria-label`s included. Nothing here ever writes back: the
+ * quotes, dashes and non-breaking spaces live in the rendered page, not in the
+ * database. The server formats its own output with `server/thei/owner-text.ts`.
  */
 export function publicText(value: string | undefined | null): string {
-  if (!value) return '';
-  return language.value.normalize(value);
+  return ownerTextFormatter(language.value.normalize).text(value);
 }
 
 /**
@@ -20,16 +20,5 @@ export function publicText(value: string | undefined | null): string {
  * attributes are left alone — a normalized `href` is a broken `href`.
  */
 export function publicRichText(value: string | undefined | null): string {
-  if (!value) return '';
-  return normalizeInlineMarkup(value, language.value.normalize);
-}
-
-/** The pair, bound to one language instance, for code outside a component. */
-export function publicTextWith(instance: LanguageInstance) {
-  return {
-    text: (value: string | undefined | null) =>
-      value ? instance.normalize(value) : '',
-    richText: (value: string | undefined | null) =>
-      value ? normalizeInlineMarkup(value, instance.normalize) : '',
-  };
+  return ownerTextFormatter(language.value.normalize).richText(value);
 }

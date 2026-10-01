@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Route } from '@playwright/test';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { screenshot } from './screenshots';
@@ -11,7 +12,10 @@ test.use({
 
 /**
  * A photo-like picture: noise over a gradient. The noise is the same on
- * every run, so every run encodes the same bytes.
+ * every run, so every run encodes nearly the same bytes; the first few
+ * pixels differ on every call. The file is then always new to the library:
+ * a file stored as a variant keeps its original there for a day, and the
+ * editor would open on that instead.
  */
 async function photo(width: number, height: number) {
   let seed = width * height;
@@ -26,6 +30,7 @@ async function photo(width: number, height: number) {
     noise[index + 1] = 120 + random() * 60;
     noise[index + 2] = 200 - random() * 60;
   }
+  randomBytes(12).copy(noise);
   return await sharp(noise, { raw: { width, height, channels: 3 } })
     .png()
     .toBuffer();
@@ -111,6 +116,18 @@ for (const viewport of [
     const picked = (await auto.textContent())!.startsWith('AVIF')
       ? 'avif'
       : 'webp';
+    // The dry runs of the other stops keep coming a few at a time; once they
+    // have all been asked for, "Use" must not ask for another encode.
+    await expect
+      .poll(
+        async () => {
+          const seen = counts.renders;
+          await page.waitForTimeout(800);
+          return counts.renders === seen;
+        },
+        { timeout: 40_000 },
+      )
+      .toBe(true);
     const rendersBeforeUse = counts.renders;
     await useResult.click();
     await expect(page.locator('[data-result]')).toContainText('assetUuid');
@@ -233,8 +250,10 @@ test('a flat graphic takes lossless WebP when that is the smallest', async ({
 });
 
 test('an SVG is cropped and stays a vector', async ({ page, request }) => {
+  // A comment of its own makes the drawing new to the library on every run.
   const svg = Buffer.from(
     '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 32 18">' +
+      `<!-- ${randomUUID()} -->` +
       '<rect width="32" height="18" fill="#123"/><circle cx="16" cy="9" r="6" fill="#fc0"/></svg>',
   );
   await page.goto('/asset-regression');
@@ -278,6 +297,149 @@ test('an SVG is cropped and stays a vector', async ({ page, request }) => {
   expect(text).toContain('viewBox="0 0 32 18"');
   expect(text).toContain('width="1200" height="675"');
   expect(text).toContain('<circle');
+});
+
+test('"Use result" is ready with the render "Auto" stands on, before the other formats are weighed', async ({
+  page,
+}) => {
+  // Every render but the AVIF stand-in is held back.
+  const held: Route[] = [];
+  await page.route('**/api/admin/assets/drafts/*/renders', async (route) => {
+    const body = route.request().postDataJSON() as {
+      settings?: { format?: string };
+    };
+    if (body?.settings?.format === 'avif') await route.continue();
+    else held.push(route);
+  });
+  await openBannerEditor(page, await photo(800, 600));
+  const useResult = page.getByRole('button', {
+    name: 'Use result',
+    exact: true,
+  });
+  await expect(useResult).toBeEnabled({ timeout: 20_000 });
+  expect(held.length).toBeGreaterThan(0);
+  // "Auto" has not settled: nothing is named the smallest yet.
+  await expect(page.getByText(/the\s+smallest/)).toHaveCount(0);
+
+  for (const route of held.splice(0)) await route.continue().catch(() => {});
+  await expect(page.getByText(/(AVIF|WebP):\s+the\s+smallest/)).toBeVisible({
+    timeout: 20_000,
+  });
+  await expect(useResult).toBeEnabled();
+});
+
+test('a change of settings drops the dry runs still under way', async ({
+  page,
+}) => {
+  const held: Route[] = [];
+  await page.route('**/api/admin/assets/drafts/*/renders', async (route) => {
+    held.push(route);
+  });
+  const failed: string[] = [];
+  page.on('requestfailed', (request) => {
+    if (/\/renders$/.test(new URL(request.url()).pathname))
+      failed.push(request.url());
+  });
+  await openBannerEditor(page, await photo(800, 600));
+  await expect.poll(() => held.length, { timeout: 20_000 }).toBeGreaterThan(0);
+  const dropped = held.length;
+
+  // Another size: every render under way is of the old one, and goes at
+  // once. (Another stop would drop nothing: the other stops are rendered
+  // too, nearest first, so their keys stay wanted.)
+  await page.getByRole('button', { name: '720', exact: true }).click();
+  await expect(page.getByText('720 × 405').first()).toBeVisible();
+  await page.waitForTimeout(300);
+  // A held request the page has already given up fails the moment it is let
+  // through.
+  for (const route of held.splice(0)) await route.continue().catch(() => {});
+  await expect.poll(() => failed.length).toBe(dropped);
+
+  // Whatever the change asked for afterwards is let through as well.
+  await page.waitForTimeout(500);
+  for (const route of held.splice(0)) await route.continue().catch(() => {});
+});
+
+test('a commit under way can be cancelled', async ({ page }) => {
+  const held: Route[] = [];
+  await page.route('**/api/admin/assets/drafts/*/commit', async (route) => {
+    held.push(route);
+  });
+  await openBannerEditor(page, await photo(800, 600));
+  const useResult = page.getByRole('button', {
+    name: 'Use result',
+    exact: true,
+  });
+  await expect(useResult).toBeEnabled({ timeout: 20_000 });
+  await useResult.click();
+  // While the commit runs, the button says so instead, and Cancel appears.
+  await expect.poll(() => held.length).toBe(1);
+  await expect(useResult).toHaveCount(0);
+  const cancel = page.getByRole('button', { name: 'Cancel', exact: true });
+  await expect(cancel).toBeVisible();
+  await cancel.click();
+
+  await expect(useResult).toBeEnabled();
+  await expect(cancel).toHaveCount(0);
+  await expect(page.locator('[data-result]')).toHaveText('[]');
+  for (const route of held.splice(0)) await route.abort().catch(() => {});
+});
+
+test('a video variant is made as a job the editor follows', async ({
+  page,
+  request,
+}) => {
+  await page.goto('/asset-regression');
+  await expect(page.locator('[data-ready]')).toHaveAttribute(
+    'data-ready',
+    'true',
+  );
+  await page.locator('[data-pick]').click();
+  await page
+    .locator('input[type=file]')
+    .setInputFiles(
+      fileURLToPath(
+        new URL('./fixture/media/regression-video.mp4', import.meta.url),
+      ),
+    );
+
+  // The editor opens on the video with "Use as is" up; the settings live in
+  // the "Create variant" section, whose action carries the same name.
+  const createVariant = page.getByRole('button', {
+    name: 'Create variant',
+    exact: true,
+  });
+  await createVariant.first().click();
+  await page.getByText('Fast conversion', { exact: true }).click();
+  const polls: string[] = [];
+  page.on('request', (req) => {
+    if (req.method() === 'GET' && /\/api\/admin\/uploads\//.test(req.url()))
+      polls.push(req.url());
+  });
+  const commit = page.waitForResponse((response) =>
+    /\/drafts\/[^/]+\/commit$/.test(new URL(response.url()).pathname),
+  );
+  await createVariant.last().click();
+  // The request is answered at once; the encode is followed by polling.
+  expect((await commit).status()).toBe(202);
+
+  const useResult = page.getByRole('button', {
+    name: 'Use result',
+    exact: true,
+  });
+  await expect(useResult).toBeEnabled({ timeout: 90_000 });
+  expect(polls.length).toBeGreaterThan(0);
+  await useResult.click();
+  await expect(page.locator('[data-result]')).toContainText('assetUuid');
+  const [stored] = JSON.parse(
+    (await page.locator('[data-result]').textContent())!,
+  ) as { assetUuid: string }[];
+  const usages = await request.get(
+    `/api/admin/assets/${stored!.assetUuid}/usages`,
+  );
+  const { asset } = await usages.json();
+  expect(asset.extension).toBe('webm');
+  expect(asset.settings.type).toBe('video-transform');
 });
 
 test('the quality bar walks its stops from the keyboard and by a tap', async ({

@@ -2,19 +2,28 @@
 import {
   analyzeContentData,
   type ContentFieldModelValue,
+  type ContentSlot,
 } from '#layers/thei/shared/content';
+import {
+  contentDigest,
+  createNewContentOwnerRef,
+  isNewContentOwnerRef,
+  type ContentHistoryField,
+} from '#layers/thei/shared/content-history';
 import { contentEditorModal } from '#layers/thei/app/modals/content-editor/modal';
+import { injectContentOwner } from '#layers/thei/app/composables/content-history/owner';
 import ContentStats from '#layers/thei/app/components/content/ContentStats.vue';
 import ContentMediaEdge from '#layers/thei/app/components/content/ContentMediaEdge.vue';
-import {
-  editorSnapshotStorageKey,
-  migrateEditorSnapshots,
-  persistentEditorSnapshotKey,
-} from '#layers/thei/app/composables/editor-snapshots';
 
 const props = defineProps<{
   modelValue?: ContentFieldModelValue | null;
   titleLabel?: string;
+  /**
+   * Which of its owner's fields this is. With the owner a form provides, it
+   * is where the field's draft and versions are kept; without either, the
+   * editor keeps no history.
+   */
+  contentSlot?: ContentSlot;
 }>();
 
 const emit = defineEmits<{
@@ -22,7 +31,53 @@ const emit = defineEmits<{
   /** The editor wrote its content back; the form may now save itself. */
   saved: [];
 }>();
-const temporarySnapshotKey = `draft:${crypto.randomUUID()}`;
+
+const owner = injectContentOwner();
+/**
+ * Text written before its owner exists is kept under an address of its own,
+ * fixed for as long as the field is on the page and carried in its value
+ * once the editor writes into the form.
+ */
+const newOwnerRef = import.meta.client ? createNewContentOwnerRef() : '';
+
+const historyField = computed<ContentHistoryField | undefined>(() => {
+  if (!owner || !props.contentSlot) return undefined;
+  const draftRef = props.modelValue?.draftRef;
+  return {
+    ownerType: owner.ownerType,
+    ownerRef:
+      owner.ownerId() ??
+      (isNewContentOwnerRef(draftRef) ? draftRef : newOwnerRef),
+    slot: props.contentSlot,
+  };
+});
+
+const valueDigest = computed(() => contentDigest(props.modelValue?.data));
+
+/**
+ * The latest draft of the field that says something else than the form, from
+ * any tab; for an owner not created yet, from any new one of its kind.
+ */
+const waitingDraft = computed(() => {
+  const field = historyField.value;
+  if (!owner || !field) return undefined;
+  return owner
+    .draftsFor(field.slot)
+    .find((draft) => draft.digest !== valueDigest.value);
+});
+
+/**
+ * The latest draft written for another new owner, which the editor offers to
+ * take up. Drafts of the field itself it finds by its address.
+ */
+function pendingDraft() {
+  const field = historyField.value;
+  if (!owner || !field || !isNewContentOwnerRef(field.ownerRef))
+    return undefined;
+  return owner
+    .draftsFor(field.slot)
+    .find((draft) => draft.ownerRef !== field.ownerRef);
+}
 
 const analysis = computed(() => analyzeContentData(props.modelValue?.data));
 const summary = computed(() => ({
@@ -39,40 +94,22 @@ const emptyText = computed(() =>
     : phrase.value.content_empty,
 );
 
-watch(
-  () => props.modelValue?.contentUuid,
-  (contentUuid) => {
-    if (!contentUuid) return;
-    migrateEditorSnapshots(
-      temporarySnapshotKey,
-      persistentEditorSnapshotKey(contentUuid),
-    );
-  },
-);
-
-onBeforeUnmount(() => {
-  if (!props.modelValue?.contentUuid) {
-    localStorage.removeItem(editorSnapshotStorageKey(temporarySnapshotKey));
-  }
-});
+function draftTime(value: number) {
+  const today = new Date().toDateString() === new Date(value).toDateString();
+  return new Intl.DateTimeFormat(language.value.code, {
+    ...(today ? {} : { dateStyle: 'short' }),
+    timeStyle: 'short',
+    hourCycle: 'h23',
+  }).format(value);
+}
 
 function openEditor() {
-  const snapshotKey = props.modelValue?.contentUuid
-    ? persistentEditorSnapshotKey(props.modelValue.contentUuid)
-    : temporarySnapshotKey;
+  const field = historyField.value;
   void openModal(contentEditorModal, {
     title: props.titleLabel,
     value: props.modelValue,
-    snapshotKey,
-    onSave: (value) => {
-      if (value.contentUuid) {
-        migrateEditorSnapshots(
-          snapshotKey,
-          persistentEditorSnapshotKey(value.contentUuid),
-        );
-      }
-      emit('update:modelValue', value);
-    },
+    history: field ? { field, pending: pendingDraft } : undefined,
+    onSave: (value) => emit('update:modelValue', value),
     onSaved: () => emit('saved'),
     current: () => props.modelValue,
   });
@@ -106,7 +143,7 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
             : 'text-text-3 italic'
         "
       >
-        {{ preview.text || emptyText }}
+        {{ publicText(preview.text) || emptyText }}
       </span>
     </span>
 
@@ -115,6 +152,15 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
         text-text-3"
     >
       <ContentStats v-bind="summary" class="justify-end" />
+      <span
+        v-if="waitingDraft"
+        class="text-right text-text-warning"
+        data-field-unsaved-draft
+      >
+        {{
+          phrase.content_field_unsaved_draft(draftTime(waitingDraft.updatedAt))
+        }}
+      </span>
       <TheiTime v-if="modelValue?.updatedAt" :datetime="modelValue.updatedAt" />
       <span v-else>{{ phrase.content_never_saved }}</span>
     </span>

@@ -32,15 +32,9 @@ const publicLinks = computed(() =>
 
 useHead({ titleTemplate: null });
 // The card a link to the home page previews as.
-const ogImage = useOgImage(
-  'site',
-  () => 'site',
-  () => [
-    profile.value.displayName,
-    profile.value.slogan,
-    profile.value.avatarMedia.src,
-  ],
-);
+const ogImage = useOgImage(() => ({ kind: 'site', id: 'site' }));
+// A picture of the person or none: the site's card is not one.
+const avatarImage = computed(() => publicSeoImage(profile.value.avatarMedia));
 usePublicSeo({
   ogImage,
   ogType: 'profile',
@@ -55,11 +49,11 @@ usePublicSeo({
   ),
   canonical: '/',
   pageType: 'ProfilePage',
-  image: () => profile.value.avatarMedia.src,
+  image: () => avatarImage.value ?? ogImage.value?.url,
   entities: () => [
     {
       '@type': 'Person',
-      '@id': '#person',
+      '@id': publicSeoOwner['@id'],
       name: profile.value.displayName,
       ...(profile.value.nickname.trim()
         ? { alternateName: profile.value.nickname.trim() }
@@ -67,7 +61,7 @@ usePublicSeo({
       ...(profile.value.slogan.trim()
         ? { description: profile.value.slogan.trim() }
         : {}),
-      image: profile.value.avatarMedia.src,
+      ...(avatarImage.value ? { image: avatarImage.value } : {}),
       url: '/',
       // `getProfileLinks` hands an admin their private links too, and those
       // describe the person to nobody but the admin.
@@ -101,7 +95,7 @@ usePublicSeo({
         <div
           v-if="latest.points.length"
           data-home-card-grid="latest"
-          class="grid gap-md sm:grid-cols-2"
+          class="grid grid-cols-cards gap-md"
         >
           <LifePointCard
             v-for="point in latest.points"
@@ -111,7 +105,7 @@ usePublicSeo({
             date-style="long"
             compact
             :class="{
-              'first:sm:col-span-2': publicCardGridFirstItemIsWide(
+              'first:col-span-full': publicCardGridFirstItemIsWide(
                 latest.points.length,
               ),
             }"
@@ -138,7 +132,7 @@ usePublicSeo({
           icon: 'arrow-outward',
         }"
       />
-      <div data-home-card-grid="rewind" class="grid gap-md sm:grid-cols-2">
+      <div data-home-card-grid="rewind" class="grid grid-cols-cards gap-md">
         <LifePointCard
           v-for="item in rewind.items"
           :key="item.point.key"
@@ -148,7 +142,7 @@ usePublicSeo({
           date-style="long"
           compact
           :class="{
-            'first:sm:col-span-2': publicCardGridFirstItemIsWide(
+            'first:col-span-full': publicCardGridFirstItemIsWide(
               rewind.items.length,
             ),
           }"

@@ -39,8 +39,8 @@ function accentStyle(project: PublicEntityReference) {
         v-for="project in projects"
         :key="project.href"
         :to="project.href"
-        :aria-label="project.title"
-        :data-title-popup="project.summary"
+        :aria-label="publicText(project.title)"
+        :data-title-popup="publicText(project.summary) || undefined"
         class="group flex w-24 min-w-0 flex-col items-center text-center
           text-text-2 transition-colors sm:w-30 hocus:text-text-1"
       >

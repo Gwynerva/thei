@@ -93,7 +93,7 @@ describe('profile statuses', () => {
       saveProfile(
         edit([{ id: 'blank-regular', kind: 'regular', text: '   ' }]),
       ),
-    ).rejects.toThrow('Invalid profile text');
+    ).rejects.toThrow('Invalid status');
     await expect(
       saveProfile(edit([{ id: 'empty-first', kind: 'empty' }])),
     ).rejects.toThrow('Cannot append an empty status');
@@ -170,9 +170,9 @@ describe('profile statuses', () => {
         ...edit([]),
         updatedStatuses: [{ id: 'empty-1', text: '   ' }],
       }),
-    ).rejects.toThrow('Invalid profile text');
+    ).rejects.toThrow('Invalid status');
     expect(stored().kind).toBe('empty');
-    // Project statuses allow blank text, so the rule has to hold on its own.
+    // The rule is the status's own, whichever saver asks.
     expect(() =>
       prepareEntityStatusEdits(
         { type: 'profile', id: PROFILE_ID },
@@ -197,7 +197,7 @@ describe('profile statuses', () => {
     await saveProfile(edit([{ id: 'empty-2', kind: 'empty' }]));
   });
 
-  it('paginates status history by timestamp and UUID without duplicates', async () => {
+  it('paginates status history by day, timestamp and UUID without duplicates', async () => {
     context.db
       .insert(context.schema.statuses)
       .values(
@@ -208,6 +208,8 @@ describe('profile statuses', () => {
           kind: 'regular' as const,
           text: `Статус ${index}`,
           createdAt: 1_000 + Math.floor(index / 2),
+          // Days that run against the moments written, so the day decides.
+          date: `2024-01-${String(10 - Math.floor(index / 4)).padStart(2, '0')}`,
         })),
       )
       .run();
@@ -218,9 +220,14 @@ describe('profile statuses', () => {
     expect(second.items).toHaveLength(5);
     expect(first.total).toBe(35);
     expect(second.total).toBe(35);
-    expect(
-      new Set([...first.items, ...second.items].map((item) => item.id)).size,
-    ).toBe(35);
+    const all = [...first.items, ...second.items];
+    expect(new Set(all.map((item) => item.id)).size).toBe(35);
+    expect(all.map((item) => item.date)).toEqual(
+      all
+        .map((item) => item.date)
+        .sort()
+        .reverse(),
+    );
     expect(
       [...first.items, ...second.items].every(
         (item) => item.kind === 'regular',

@@ -29,6 +29,10 @@
   --color-bg-warning: light-dark(oklch(96% 0.04 60), oklch(24% 0.04 60));
   --color-border-warning: light-dark(oklch(80% 0.1 60), oklch(42% 0.1 60));
 
+  --color-text-success: light-dark(oklch(55% 0.15 150), oklch(75% 0.14 150));
+  --color-bg-success: light-dark(oklch(95% 0.04 150), oklch(24% 0.04 150));
+  --color-border-success: light-dark(oklch(80% 0.1 150), oklch(40% 0.1 150));
+
   --color-white: white;
   --color-black: black;
   --color-bw: light-dark(white, black);
@@ -101,7 +105,21 @@
 
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
-@custom-variant hocus (&:hover, &:focus-visible);
+/*
+ * Pointed at or reached with the keyboard. Pointing needs a pointer that can
+ * point, as for Tailwind's own `hover:`: a phone reports the last tap as a
+ * hover, and the look would stay on whatever was tapped.
+ */
+@custom-variant hocus {
+  &:focus-visible {
+    @slot;
+  }
+  &:hover {
+    @media (hover: hover) {
+      @slot;
+    }
+  }
+}
 
 @custom-variant sticky-stuck (&:where([data-sticky-stuck], [data-sticky-stuck] *));
 
@@ -254,6 +272,20 @@
   animation: indeterminate 1.4s ease-in-out infinite;
 }
 
+/*
+ * Cards two to a row while each gets at least 24rem, one to a row below that:
+ * a card any narrower leaves its media a sliver beside the words. The track
+ * never drops under half the row, so a wide screen still gets two, not three;
+ * it is a pixel short of half so that rounding never tips two into one. Pair
+ * it with `gap-md`, which the halving accounts for.
+ */
+@utility grid-cols-cards {
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(100%, max(24rem, (100% - var(--spacing-md)) / 2 - 1px)), 1fr)
+  );
+}
+
 @layer base {
   :root {
     --width-narrow: min(700px, 100%);
@@ -387,5 +419,75 @@
   svg[thei-icon] {
     display: inline-block;
     vertical-align: -0.22em;
+  }
+
+  /*
+   * The first long press on a link or a control with a hint shows the hint
+   * (`press-hint.ts`), so the system's menu and text selection stand aside.
+   * iOS decides on its menu as the finger lands, before a script could say
+   * anything, so this is set ahead and lifted once the hint is up: the second
+   * long press is the system's. A hint that only sometimes shows — a name
+   * not cut short, a label already on screen — leaves the system its press,
+   * since it cannot know ahead whether it will need it.
+   *
+   * The controls are `INTERACTIVE_SELECTOR` of `press-hint-dom.ts` but for
+   * the ones a finger types into, which must keep their text selectable;
+   * `tests/app/styles/press-hint-selectors.test.ts` keeps the two lists one.
+   */
+  @media (hover: none) {
+    :where(
+      a[href],
+      area[href],
+      button:not(:disabled),
+      summary,
+      label,
+      [role='button'],
+      [role='link'],
+      [role='tab'],
+      [role='radio'],
+      [role='checkbox'],
+      [role='switch'],
+      [role='menuitem'],
+      [role='menuitemradio'],
+      [role='menuitemcheckbox'],
+      [role='option'],
+      [role='slider'],
+      [role='treeitem'],
+      [data-title-popup-press='hold']
+    )[data-title-popup],
+    :where(
+        a[href],
+        area[href],
+        button:not(:disabled),
+        summary,
+        label,
+        [role='button'],
+        [role='link'],
+        [role='tab'],
+        [role='radio'],
+        [role='checkbox'],
+        [role='switch'],
+        [role='menuitem'],
+        [role='menuitemradio'],
+        [role='menuitemcheckbox'],
+        [role='option'],
+        [role='slider'],
+        [role='treeitem']
+      )
+      [data-title-popup],
+    [data-link-card-root] a[href] {
+      &:not(
+        [data-title-popup-open],
+        [data-title-popup-clipped],
+        [data-title-popup-press='tap'],
+        :has([data-title-popup-label]),
+        [contenteditable],
+        [contenteditable] *
+      ) {
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+    }
   }
 }

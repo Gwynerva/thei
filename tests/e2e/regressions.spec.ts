@@ -41,6 +41,24 @@ test('home lays out three latest cards as one wide card and a pair', async ({
   expect(second!.y).toBeCloseTo(third!.y, 0);
 });
 
+test('home stacks its cards when a pair would leave each too narrow', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 760, height: 900 });
+  await page.goto('/');
+  const grid = page.locator('[data-home-card-grid="latest"]');
+  const cards = grid.locator('[data-home-card]');
+  await expect(cards).toHaveCount(3);
+  const gridBox = (await grid.boundingBox())!;
+  let bottom = gridBox.y;
+  for (const card of await cards.all()) {
+    const box = (await card.boundingBox())!;
+    expect(box.width).toBeCloseTo(gridBox.width, 0);
+    expect(box.y).toBeGreaterThanOrEqual(bottom);
+    bottom = box.y + box.height;
+  }
+});
+
 test('life confirms reading and preserves date navigation through browser history', async ({
   page,
 }) => {

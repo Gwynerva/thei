@@ -67,6 +67,16 @@ export type BackupSessionResponse = {
   totalFiles: number;
   totalBytes: number;
   /**
+   * The part of the copy the site uses: the database and the config, every
+   * stored file placed somewhere, and every link icon a link points at. A
+   * client judges a loss by these rather than by the totals: what cleanup
+   * sweeps — an original kept a day for the editor, a variant replaced, a
+   * file taken out of every text — was in nobody's use, and its going is no
+   * loss however large it was. Absent from servers before 0.0.3.
+   */
+  usedFiles: number;
+  usedBytes: number;
+  /**
    * Entries found in `content/` that this version does not own, and therefore
    * does not copy. Reported so their absence from a backup is a decision the
    * operator can see rather than a silent omission.

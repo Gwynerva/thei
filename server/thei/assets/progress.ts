@@ -1,12 +1,9 @@
-export interface AssetUploadProgress {
-  /**
-   * `queued` means the upload is waiting for a processing slot. Without it a
-   * queued upload is indistinguishable from a stalled one.
-   */
-  phase: 'queued' | 'processing';
-  progress?: number;
-}
+import type { AssetUploadProgress } from '#layers/thei/shared/api/asset-upload-progress';
 
+/**
+ * Progress of uploads the client follows by an id of its own choosing, in
+ * memory: a restart forgets it, and the request itself still answers.
+ */
 const uploadProgress = new Map<string, AssetUploadProgress>();
 
 export function setAssetUploadProgress(
@@ -24,4 +21,10 @@ export function getAssetUploadProgress(uploadId: string) {
 export function clearAssetUploadProgress(uploadId: string | undefined) {
   if (!uploadId) return;
   setTimeout(() => uploadProgress.delete(uploadId), 60_000).unref();
+}
+
+/** The status callback of a job the client follows by `uploadId`, if any. */
+export function uploadStatusReporter(uploadId: string | undefined) {
+  return (status: AssetUploadProgress) =>
+    setAssetUploadProgress(uploadId, status);
 }

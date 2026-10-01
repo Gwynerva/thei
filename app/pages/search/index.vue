@@ -69,11 +69,10 @@ const presetDescriptions: Record<PublicSearchPresetId, () => string> = {
   showcase: () => phrase.value.search_preset_showcase_description,
   cv: () => phrase.value.search_preset_cv_description,
 };
-const ogImage = useOgImage(
-  'service',
-  () => 'search',
-  () => ['search'],
-);
+const ogImage = useOgImage(() => ({
+  kind: 'service',
+  id: !preset.value || preset.value.id === 'all' ? 'search' : preset.value.id,
+}));
 usePublicSeo({
   ogImage,
   title: () => {

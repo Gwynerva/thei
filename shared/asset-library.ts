@@ -8,8 +8,15 @@ import {
 } from './asset-upload-limits';
 import { normalizeAssetExtension } from './assets/formats';
 
+/**
+ * What holds a file, as the library groups files: an entity of the site, a
+ * stage or a section of a project (with the project as its parent), or
+ * nothing at all.
+ */
 export const ASSET_SOURCE_TYPES = [
   'project',
+  'project-stage',
+  'project-section',
   'event',
   'page',
   'diary-entry',
@@ -26,14 +33,12 @@ export interface AssetSource {
   url?: string;
   editUrl?: string;
   updatedAt: number;
+  /** The project a stage or a section belongs to; its title as typed. */
+  parent?: { title: string; url: string };
 }
 export interface AssetPlacement {
   source: AssetSource;
   role: AssetRole;
-  scope:
-    | { kind: 'entity' }
-    | { kind: 'project-stage'; title: string; url: string }
-    | { kind: 'project-section'; title: string; url: string };
   detail?: 'avatar' | 'status';
   isPrivate: boolean;
   count: number;
@@ -54,6 +59,11 @@ export interface AssetLibraryItem {
   touchedAt: number;
   /** Unix ms after which cleanup deletes the asset; set only when unused. */
   deleteAfter?: number;
+  /**
+   * Unused, but a draft or a recent version of some text still shows it, so
+   * cleanup keeps it for as long as that version lives.
+   */
+  inHistory?: true;
   counts: AssetUsageCounts;
   entityCount: number;
   roles: AssetRole[];
@@ -73,6 +83,8 @@ export interface AssetUsagesResponse {
   placements: AssetPlacement[];
   counts: AssetUsageCounts;
   entityCount: number;
+  /** Unused, but kept while a version of some text still shows it. */
+  inHistory?: true;
 }
 export interface AssetSelectionConstraints {
   acceptedExtensions?: string[] | '*';

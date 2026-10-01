@@ -1,5 +1,6 @@
 import type { ContentOutputBlock, PublicContentOutputData } from './content';
 import { contentIntegrationUrl } from './content-integrations';
+import { normalizeInlineMarkup } from './language/general-normalize';
 
 /**
  * Editor.js content as Markdown.
@@ -14,6 +15,26 @@ export interface ContentMarkdownOptions {
   absolute: (path: string) => string;
   /** Text for the marker left where a private section was removed. */
   privateSectionLabel: string;
+  /**
+   * The typography of the site's language for the owner's words, which the
+   * page gives them too. Without it the words come out as typed.
+   */
+  format?: (text: string) => string;
+}
+
+function typeset(text: string, options: ContentMarkdownOptions) {
+  return text && options.format ? options.format(text) : text;
+}
+
+/**
+ * The owner's note on a link as a Markdown link title, `[text](url "note")`:
+ * a reader of the copy learns why the link is there, as a visitor does on
+ * hover, and the text itself reads as written.
+ */
+function linkTitle(note: unknown, options: ContentMarkdownOptions): string {
+  if (typeof note !== 'string') return '';
+  const text = typeset(note.replace(/\s+/g, ' ').trim(), options);
+  return text ? ` "${text.replace(/[\\"]/g, '\\$&')}"` : '';
 }
 
 export function contentToMarkdown(
@@ -76,7 +97,7 @@ function renderBlock(
       const url = data.url;
       if (!url) return '';
       const title = data.title || url;
-      return `[${title}](${url})`;
+      return `[${title}](${url}${linkTitle(data.note, options)})`;
     }
     case 'integration': {
       const url = contentIntegrationUrl(
@@ -87,8 +108,10 @@ function renderBlock(
     case 'entityLink': {
       if (data.restricted) return '';
       const url = data.url ?? data.href;
-      const title = data.title ?? url;
-      return url ? `[${title}](${options.absolute(url)})` : '';
+      const title = data.title ? typeset(data.title, options) : url;
+      return url
+        ? `[${title}](${options.absolute(url)}${linkTitle(data.note, options)})`
+        : '';
     }
     case 'privateSectionPlaceholder':
       return `*${options.privateSectionLabel}*`;
@@ -155,8 +178,11 @@ export function inlineToMarkdown(
   options: ContentMarkdownOptions,
 ): string {
   if (typeof value !== 'string' || !value) return '';
+  const html = options.format
+    ? normalizeInlineMarkup(value, options.format)
+    : value;
   return decodeEntities(
-    value
+    html
       .replace(/<br\s*\/?>/gi, '\n')
       .replace(/<\/?(?:b|strong)>/gi, '**')
       .replace(/<\/?(?:i|em)>/gi, '_')
@@ -166,17 +192,27 @@ export function inlineToMarkdown(
       .replace(
         /<abbr\b[^>]*data-content-hint="([^"]*)"[^>]*>([\s\S]*?)<\/abbr>/gi,
         (_match, hint: string, text: string) =>
-          `${text.replace(/<[^>]+>/g, '')} (${hint})`,
+          `${text.replace(/<[^>]+>/g, '')} (${typeset(decodeEntities(hint), options)})`,
       )
       .replace(
-        /<a\b[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi,
-        (_match, href: string, text: string) =>
-          `[${text.replace(/<[^>]+>/g, '')}](${
+        /<a\b([^>]*)>([\s\S]*?)<\/a>/gi,
+        (_match, attributes: string, text: string) => {
+          const href = /\bhref="([^"]*)"/.exec(attributes)?.[1];
+          // An entity link carries its target in data attributes; one that
+          // was given no address keeps its words and loses the link.
+          if (!href) return text;
+          const note = /\bdata-content-note="([^"]*)"/.exec(attributes)?.[1];
+          // The note is read out of the markup here, and what is built from
+          // it passes the decoding below once more.
+          const title = linkTitle(
+            note && decodeEntities(note),
+            options,
+          ).replace(/&/g, '&amp;');
+          return `[${text.replace(/<[^>]+>/g, '')}](${
             href.startsWith('/') ? options.absolute(href) : href
-          })`,
+          }${title})`;
+        },
       )
-      // An entity link carries its target in data attributes, not in href.
-      .replace(/<a\b[^>]*>([\s\S]*?)<\/a>/gi, '$1')
       .replace(/<[^>]+>/g, ''),
   ).trim();
 }

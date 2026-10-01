@@ -1,4 +1,5 @@
 import { bootTheiServer } from './boot/process';
+import { invalidateOgCardInfo } from './og/cache';
 import { invalidatePublicSearchIndex } from './public/search-index';
 import { isContentWriteRequest } from './read-only-request';
 import { invalidateTagRecommendationIndex } from './tag-recommendations';
@@ -17,6 +18,7 @@ export default defineNitroPlugin(async (nitroApp) => {
     if (!isContentWriteRequest(event)) return;
     invalidatePublicSearchIndex();
     invalidateTagRecommendationIndex();
+    invalidateOgCardInfo();
   });
   await bootTheiServer();
 });

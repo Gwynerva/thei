@@ -4,6 +4,8 @@ import {
   moveItemById,
   useDragSort,
 } from '#layers/thei/app/composables/drag-sort';
+import type { PendingUpload } from '#layers/thei/app/composables/pending-upload';
+import AssetPendingTile from '#layers/thei/app/components/AssetPendingTile.vue';
 import { gallerySelectedId } from './gallery-state';
 import { richTextToPlainText } from '#layers/thei/shared/rich-text';
 
@@ -17,8 +19,13 @@ const props = withDefaults(
     removeLabel?: string;
     captionPlaceholder?: string;
     openable?: boolean;
+    /** Files on their way in, shown as tiles of their own until they land. */
+    pending?: readonly PendingUpload[];
+    cancelUploadLabel?: string;
+    retryUploadLabel?: string;
+    dismissUploadLabel?: string;
   }>(),
-  { editable: false },
+  { editable: false, pending: () => [] },
 );
 
 /**
@@ -40,6 +47,8 @@ const emit = defineEmits<{
   reorder: [items: ContentGalleryItem[]];
   caption: [id: string, value: string];
   open: [item: ContentGalleryItem];
+  'cancel-pending': [id: string];
+  'retry-pending': [id: string];
 }>();
 
 const tileRoot = useTemplateRef<HTMLElement>('tileRoot');
@@ -50,29 +59,6 @@ const activeId = computed(() =>
 const activeItem = computed(
   () =>
     props.items.find((item) => item.id === activeId.value) ?? props.items[0],
-);
-const crossfade = useGalleryCrossfade(activeItem, (item) => item.id);
-const galleryLayers = computed(() =>
-  crossfade.layers.value.filter((layer) => layer.item.asset.media),
-);
-watch(
-  () => crossfade.incoming.value,
-  async (item) => {
-    if (!item) return;
-    const incomingMedia = item.asset.media;
-    const displayedMedia = crossfade.displayed.value?.asset.media;
-    if (
-      incomingMedia &&
-      (!displayedMedia ||
-        incomingMedia.kind !== displayedMedia.kind ||
-        incomingMedia.src !== displayedMedia.src ||
-        incomingMedia.previewSrc !== displayedMedia.previewSrc)
-    ) {
-      return;
-    }
-    await nextTick();
-    crossfade.settleIncoming(item.id);
-  },
 );
 
 function select(id: string) {
@@ -115,7 +101,7 @@ const dragSort = useDragSort(
 
 <template>
   <section
-    v-if="editable || items.length"
+    v-if="editable || items.length || pending.length"
     class="min-w-0 overflow-hidden rounded-normal bg-bg-3"
     data-content-gallery
   >
@@ -160,6 +146,20 @@ const dragSort = useDragSort(
         </template>
       </AssetTile>
 
+      <!-- Files on their way stand after the pictures, not among them: they
+           cannot be dragged, and they are not part of the gallery yet. -->
+      <AssetPendingTile
+        v-for="upload in pending"
+        :key="upload.id"
+        :upload
+        :cancel-label="cancelUploadLabel"
+        :retry-label="retryUploadLabel"
+        :dismiss-label="dismissUploadLabel"
+        class="size-18 shrink-0"
+        @cancel="emit('cancel-pending', upload.id)"
+        @retry="emit('retry-pending', upload.id)"
+      />
+
       <AssetTile
         v-if="editable"
         data-drag-ignore
@@ -169,56 +169,27 @@ const dragSort = useDragSort(
       />
     </div>
 
-    <div
-      v-if="crossfade.displayed.value?.asset.media"
-      class="grid border-t border-border-1"
-      data-gallery-crossfade
-    >
-      <ContentMediaCard
-        v-for="layer in galleryLayers"
-        :key="layer.item.id"
-        :asset="layer.item.asset"
-        layout="centered"
-        :caption="layer.item.caption"
-        :editable
-        :edit-label="chooseLabel"
-        :caption-placeholder
-        :media-rounded="false"
-        :media-natural-size="false"
-        :openable
-        :suspended="
-          layer.role === 'displayed'
-            ? Boolean(crossfade.incoming.value)
-            : !crossfade.revealing.value
-        "
-        :inert="
-          layer.role === 'displayed'
-            ? Boolean(crossfade.incoming.value)
-            : !crossfade.revealing.value
-        "
-        caption-class="px-xs pb-xs"
-        class="col-start-1 row-start-1 transition-opacity duration-300
-          motion-reduce:duration-0"
-        :class="{
-          'pointer-events-none opacity-0':
-            layer.role === 'displayed'
-              ? crossfade.revealing.value
-              : !crossfade.revealing.value,
-          'pointer-events-auto opacity-100':
-            layer.role === 'incoming' && crossfade.revealing.value,
-        }"
-        :data-gallery-outgoing="layer.role === 'displayed' ? '' : undefined"
-        :data-gallery-incoming="layer.role === 'incoming' ? '' : undefined"
-        @ready="
-          layer.role === 'incoming' && crossfade.settleIncoming(layer.item.id)
-        "
-        @error="
-          layer.role === 'incoming' && crossfade.settleIncoming(layer.item.id)
-        "
-        @edit="emit('edit', layer.item.id)"
-        @caption="emit('caption', layer.item.id, $event)"
-        @open="emit('open', layer.item)"
-      />
-    </div>
+    <!-- A tile switches the picture at once: its frame already has the
+         picture's proportions, and the picture loads into it. The card
+         itself stays, so the caption is one element for every tile — the one
+         Editor.js found in the block and follows the caret in. -->
+    <ContentMediaCard
+      v-if="activeItem?.asset.media"
+      :asset="activeItem.asset"
+      layout="centered"
+      :caption="activeItem.caption"
+      :editable
+      :edit-label="chooseLabel"
+      :caption-placeholder
+      :media-rounded="false"
+      :media-natural-size="false"
+      :openable
+      caption-class="px-xs pb-xs"
+      class="border-t border-border-1"
+      data-gallery-view
+      @edit="emit('edit', activeItem.id)"
+      @caption="emit('caption', activeItem.id, $event)"
+      @open="emit('open', activeItem)"
+    />
   </section>
 </template>

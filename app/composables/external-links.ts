@@ -1,5 +1,11 @@
-import { reactive, shallowReactive } from 'vue';
 import {
+  getCurrentScope,
+  onScopeDispose,
+  reactive,
+  shallowReactive,
+} from 'vue';
+import {
+  externalLinkHostLooksComplete,
   normalizeExternalLinkUrl,
   type ExternalLink,
 } from '#layers/thei/shared/external-link';
@@ -71,7 +77,17 @@ export function createExternalLinkStore(
           link.faviconMedia &&
           typeof link.touchedAt === 'number'
         )
-          links.set(link.url, link as ExternalLink);
+          // Only the record: a block or a list entry it arrived with carries
+          // the owner's own words about the link too, which belong to that
+          // one place and not to every card showing the address.
+          links.set(link.url, {
+            url: link.url,
+            title: link.title,
+            description: link.description,
+            faviconMedia: link.faviconMedia,
+            status: link.status ?? 'complete',
+            touchedAt: link.touchedAt,
+          });
       }
     },
     get: (url) => links.get(url),
@@ -110,9 +126,10 @@ export function useExternalLinks(): ExternalLinkStore {
 }
 
 /**
- * An address being entered, with the preview that goes with it. Typing
- * changes nothing but the text and whether it is a valid address; the site
- * is read when the address is done — `commit` — or on an explicit `refresh`.
+ * An address being entered, with the preview that goes with it. Setting the
+ * text only validates it and shows a record the page already knows; the site
+ * is read on `commit` — once typing pauses (`useExternalLinkTyping`), or when
+ * the address is done — or on an explicit `refresh`.
  */
 export interface ExternalLinkDraft {
   /** The field's text. Setting it validates and shows a known record at once. */
@@ -125,8 +142,16 @@ export interface ExternalLinkDraft {
    * never seen it, and then only once.
    */
   open(url: string): Promise<void>;
-  /** The address is done being entered: reads the site, unless this draft already has for it. */
-  commit(): Promise<ExternalLink | undefined>;
+  /**
+   * Reads the site, unless this draft already has for the address.
+   *
+   * By default the address is done — left, confirmed or pasted — and the
+   * field is tidied to the address as stored. With `typing` the person is
+   * still at it: an address whose host is not finished yet, or one the page
+   * already knows, is not read, and the text is never touched, so an answer
+   * landing mid-word cannot move what is being typed.
+   */
+  commit(options?: { typing?: boolean }): Promise<ExternalLink | undefined>;
   /** Reads the site again. */
   refresh(): Promise<ExternalLink | undefined>;
   reset(): void;
@@ -154,6 +179,9 @@ export function createExternalLinkDraft(
   function retarget(url: string | undefined) {
     target = url;
     version += 1;
+    // The answer of a read for another address is thrown away when it comes,
+    // so nothing may wait for it: coming back to that address reads anew.
+    pending = undefined;
     state.loading = false;
     // A record the site already has shows at once; nothing is requested.
     state.preview = url ? store.get(url) : undefined;
@@ -189,7 +217,6 @@ export function createExternalLinkDraft(
         if (current !== version) return undefined;
         if (link) {
           state.preview = link;
-          state.url = link.url;
           committed = url;
         }
         return link;
@@ -208,6 +235,12 @@ export function createExternalLinkDraft(
     })();
     pending = { address: url, result };
     return result;
+  }
+
+  /** The field shows the address as the site stores it, if it is still this one. */
+  function show(address: string, link: ExternalLink | undefined) {
+    if (link && target === address) state.url = link.url;
+    return link;
   }
 
   return {
@@ -231,19 +264,31 @@ export function createExternalLinkDraft(
       const address = target;
       if (!address) return;
       committed = address;
-      if (!state.preview) await read(address, () => store.lookup(address));
+      if (!state.preview)
+        show(address, await read(address, () => store.lookup(address)));
     },
-    async commit() {
+    async commit({ typing = false } = {}) {
       const address = target;
-      if (!address || address === committed) return state.preview;
-      // Pasted and then confirmed with Enter: one read, not two.
-      if (pending?.address === address) return await pending.result;
-      return await read(address, () => store.refresh(address));
+      if (!address) return undefined;
+      if (
+        typing &&
+        address !== committed &&
+        (state.preview || !externalLinkHostLooksComplete(state.url))
+      )
+        return state.preview;
+      const link =
+        address === committed
+          ? state.preview
+          : // Read after a pause and then confirmed: one read, not two.
+            pending?.address === address
+            ? await pending.result
+            : await read(address, () => store.refresh(address));
+      return typing ? link : show(address, link);
     },
     async refresh() {
       const address = target;
       if (!address) return undefined;
-      return await read(address, () => store.refresh(address));
+      return show(address, await read(address, () => store.refresh(address)));
     },
     reset() {
       state.url = '';
@@ -253,4 +298,55 @@ export function createExternalLinkDraft(
       pending = undefined;
     },
   };
+}
+
+/** How long typing into an address must pause before the site is read. */
+export const EXTERNAL_LINK_TYPING_DELAY_MS = 600;
+
+/**
+ * Reads an address as it is typed into a field: `onInput` goes on the field's
+ * `input` event, and `settle` — the field's own "the address is done" — runs
+ * once typing pauses, with `typing: true`. A paste or a drop puts in a whole
+ * address at once, so it settles right away and as done.
+ *
+ * Only the person's input starts it. An address the page sets itself — a
+ * stored link, a restored draft — fires no `input` event and is never read
+ * by it.
+ */
+export function useExternalLinkTyping(
+  settle: (options: { typing: boolean }) => unknown,
+  delay = EXTERNAL_LINK_TYPING_DELAY_MS,
+) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  function cancel() {
+    clearTimeout(timer);
+    timer = undefined;
+  }
+
+  function schedule(typing: boolean, wait: number) {
+    // A plain timer rather than a debounced call: it never waits for the
+    // previous read to finish, so the pause is always measured from the last
+    // keystroke.
+    timer = setTimeout(() => {
+      timer = undefined;
+      void Promise.resolve(settle({ typing })).catch(() => {});
+    }, wait);
+  }
+
+  function onInput(event: Event) {
+    cancel();
+    const { inputType, isComposing } = event as Partial<InputEvent>;
+    // Text being composed is not typed yet; the input that ends the
+    // composition schedules the read.
+    if (isComposing) return;
+    // The text is in the field once the event has run, so even an address
+    // put in whole is read on the next task, not from inside the event.
+    if (inputType === 'insertFromPaste' || inputType === 'insertFromDrop')
+      schedule(false, 0);
+    else schedule(true, delay);
+  }
+
+  if (getCurrentScope()) onScopeDispose(cancel);
+  return { onInput, cancel };
 }

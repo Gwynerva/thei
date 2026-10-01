@@ -1,4 +1,5 @@
 import type { AssetVariantsResponse } from '#layers/thei/shared/api/asset';
+import { readAssetRetention } from '../../../../thei/assets/retention';
 import { buildAssetVariantInfos } from '../../../../thei/assets/storage';
 
 export default defineEventHandler(
@@ -21,11 +22,14 @@ export default defineEventHandler(
         assets.map((asset) => asset.assetUuid),
       ),
     ]);
+    // An original kept beside a pasted file shows the day it has left.
+    const retention = readAssetRetention(assets);
     return {
       currentAssetUuid: current.assetUuid,
       variants: variants.map((variant) => ({
         ...variant,
         usageCount: usageCounts.get(variant.assetUuid) ?? 0,
+        ...retention.get(variant.assetUuid),
       })),
     };
   },

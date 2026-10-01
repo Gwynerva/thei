@@ -49,6 +49,29 @@ a native Node addon that does not load under Bun. The unit file records where
 each one lives (`ExecStart` and `THEI_BUN`) and which repository updates come
 from (`THEI_REPOSITORY`).
 
+`better-sqlite3` carries its binaries in the package — Linux with glibc 2.34
+or newer (Debian 12, Ubuntu 22.04 and later) or musl, on x64 and arm64 — and
+nothing compiles at install, from GitHub or anywhere else. The installer and
+the update to 0.0.3 load it under the Node that will run the site before
+building anything (`sqlite-driver.mjs`), so a server it does not run on is
+refused with the reason, and an update to it stops with the site as it was.
+
+The instance manifest brings it, pinned and not trusted, rather than the
+engine's dependencies: the package still holds a `binding.gyp`, and Bun runs
+`node-gyp rebuild` for a trusted package that has one, whatever its
+`gypfile: false` says. An update first installs the new engine under the
+previous manifest, which trusts `better-sqlite3`; the engine lists it only as
+an optional peer, so it is not installed until the new manifest brings it.
+
+Releases before 0.0.3 used `better-sqlite3` 12, which downloads its binary
+from GitHub and otherwise compiles itself. Compiled against the headers of
+Node 24.19 or later it aborts the process when the garbage collector frees a
+statement ([nodejs/node#65446](https://github.com/nodejs/node/issues/65446)).
+The installer still brings the compiler and Python, and the installer,
+`rollback.sh` and the update engine still point `npm_config_nodedir` at the
+headers of the Node that runs the site, for a native addon that has to
+compile itself — as when an older version is put back.
+
 You can override the defaults:
 
 ```bash
@@ -159,13 +182,14 @@ runuser -u thei -- env HOME=/opt/thei bun run build
 systemctl restart thei
 ```
 
-**Going back to the previous version.** Install that version from scratch and
-restore the manual backup made before the update:
+**Going back to the previous version.** Install that version from scratch,
+with `vX.Y.Z` the version the site ran before, and restore the manual backup
+made before the update:
 
 ```bash
 systemctl stop thei && systemctl disable thei
 mv /opt/thei /opt/thei.broken && rm /etc/systemd/system/thei.service
-THEI_VERSION=v0.0.1 bash <(curl -fsSL https://raw.githubusercontent.com/Gwynerva/thei/main/update/install.sh)
+THEI_VERSION=vX.Y.Z bash <(curl -fsSL https://raw.githubusercontent.com/Gwynerva/thei/main/update/install.sh)
 ```
 
 then restore the copy as described in [Restoring](#restoring). A copy made on
@@ -208,7 +232,7 @@ be copied anywhere, onto any machine.
 | `thei.db`                 | a consistent snapshot, taken through SQLite's own backup API |
 | `thei.config.json`        | version, language, access level, password and token hashes   |
 | `assets/`                 | uploaded originals and every derived variant                 |
-| `external-link-favicons/` | the icons of external links, fetched when a link was put in  |
+| `external-link-favicons/` | the icons of external links, one file per distinct icon      |
 | `generated-media/`        | **not copied** — a cache the site rebuilds on demand         |
 
 A copy therefore contains your site's credentials. Keep the destination folder

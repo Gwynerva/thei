@@ -1,5 +1,6 @@
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import { and, eq } from 'drizzle-orm';
+import type { SQLiteColumn } from 'drizzle-orm/sqlite-core';
 import {
   AssetType,
   type OtherAssetUsageMeta,
@@ -103,6 +104,7 @@ import {
   type EntityNotesOwner,
 } from '#layers/thei/shared/entity-notes';
 import { getCurrentStatus } from '../statuses';
+import { utcDayOf } from '#layers/thei/shared/date-range';
 
 /**
  * The two fields only the owner sees: the reminder that flags the entity, and
@@ -145,8 +147,8 @@ export function buildPublicEntityChronology(entity: {
   createdAt: number;
   updatedAt: number;
 }) {
-  const createdAt = new Date(entity.createdAt).toISOString().slice(0, 10);
-  const updatedAt = new Date(entity.updatedAt).toISOString().slice(0, 10);
+  const createdAt = utcDayOf(entity.createdAt);
+  const updatedAt = utcDayOf(entity.updatedAt);
   return {
     createdAt,
     ...(updatedAt !== createdAt ? { updatedAt } : {}),
@@ -158,6 +160,33 @@ export function canListPublicEntity(
   isAdmin: boolean,
 ) {
   return isAdmin || access === ProjectEventAccessLevel.Public;
+}
+
+/** `canListPublicEntity` as the condition of a query over `access`. */
+export function listablePublicEntityWhere(
+  access: SQLiteColumn,
+  isAdmin: boolean,
+) {
+  return isAdmin ? undefined : eq(access, ProjectEventAccessLevel.Public);
+}
+
+/**
+ * The pages a reader may list, recently changed first: the pages directory
+ * and its card list the same ones in the same order.
+ */
+export function listPublicPages(isAdmin: boolean) {
+  const { db, schema } = THEI_SERVER.useDb();
+  return db
+    .select()
+    .from(schema.pages)
+    .all()
+    .filter((page) => canListPublicEntity(page.access, isAdmin))
+    .sort(
+      (left, right) =>
+        right.updatedAt - left.updatedAt ||
+        right.createdAt - left.createdAt ||
+        left.pageUuid.localeCompare(right.pageUuid),
+    );
 }
 
 export function canOpenPublicEntity(
@@ -182,7 +211,7 @@ export async function buildPublicProjectSummary(
     tags: await buildPublicTags(
       await listTagsForContainer('project', project.projectUuid),
     ),
-    date: new Date(project.createdAt).toISOString().slice(0, 10),
+    date: utcDayOf(project.createdAt),
     showcase: project.showcase,
     cv: project.cv,
     ...(isAdmin && project.reminder ? { reminder: project.reminder } : {}),
@@ -241,7 +270,7 @@ export async function buildPublicEventSummary(
       periods
         .map((period) => period.endDate)
         .sort()
-        .at(-1) ?? new Date(event.createdAt).toISOString().slice(0, 10),
+        .at(-1) ?? utcDayOf(event.createdAt),
     // A card names the projects an event belongs to, not everything around
     // it: the rest waits on the event's own page.
     relatedEntities: await buildPublicRelatedLinks(
@@ -272,7 +301,7 @@ export async function buildPublicPageListItem(
     href: buildPageUrl(page.slug),
     access: page.access,
     iconMedia: await buildPublicPageIcon(page),
-    updatedAt: new Date(page.updatedAt).toISOString().slice(0, 10),
+    updatedAt: utcDayOf(page.updatedAt),
   };
 }
 
@@ -312,6 +341,68 @@ export async function buildPublicPage(
 }
 
 /**
+ * A project at a glance, as a viewer may see it: its pictures, the stages and
+ * sections they may open, its showcase pictures, tags, relations and current
+ * status.
+ *
+ * The page is built on it, and so is the project's Open Graph card, so a card
+ * never counts a stage or shows a picture its page would not.
+ */
+export async function buildPublicProjectHead(
+  project: ProjectRow,
+  viewer: PublicViewer,
+) {
+  const own = opensPrivate(viewer, 'project', project.projectUuid);
+  const usages = await THEI_SERVER.assets.usages.findByContainer(
+    'project',
+    project.projectUuid,
+  );
+  const icon = usages.find((usage) => usage.role === 'icon');
+  const banner = usages.find((usage) => usage.role === 'banner');
+  const [rawStages, rawSections, rawShowcase, tags, relations, status] =
+    await Promise.all([
+      getProjectStages(project.projectUuid),
+      getProjectContentSections(project.projectUuid),
+      THEI_SERVER.assets.usages.findShowcase(project.projectUuid),
+      listTagsForContainer('project', project.projectUuid),
+      resolvePublicRelated(
+        { type: 'project', id: project.projectUuid },
+        viewer,
+      ),
+      // Statuses are always as open as their project; `isAdmin` only picks
+      // the owner's preview addresses for the icons.
+      getCurrentStatus(
+        { type: 'project', id: project.projectUuid },
+        viewer.isAdmin,
+      ),
+    ]);
+  return {
+    own,
+    usages,
+    iconMedia: resolveEntityIconMedia(
+      'project',
+      project.projectUuid,
+      icon
+        ? await buildPublicProjectMedia(project, icon.asset, 'icon')
+        : undefined,
+    ),
+    bannerMedia: banner
+      ? await buildPublicProjectMedia(project, banner.asset, 'banner')
+      : undefined,
+    stages: rawStages.filter((stage) => own || !stage.isPrivate),
+    sections: rawSections.filter((section) => own || !section.isPrivate),
+    /** Pictures and videos; a private one is the page's to present. */
+    showcase: rawShowcase.filter(
+      ({ asset }) =>
+        asset.type === AssetType.Image || asset.type === AssetType.Video,
+    ),
+    tags: await buildPublicTags(tags),
+    relations,
+    status,
+  };
+}
+
+/**
  * A project's page. The project's own parts — stages, sections, showcase,
  * files, links, private sections — open with its share link; everything it
  * points to is judged for the viewer as they are, and the owner's notes stay
@@ -322,28 +413,9 @@ export async function buildPublicProject(
   viewer: PublicViewer,
 ): Promise<Omit<PublicProjectResponse, 'timeline'>> {
   const own = opensPrivate(viewer, 'project', project.projectUuid);
-  const usages = await THEI_SERVER.assets.usages.findByContainer(
-    'project',
-    project.projectUuid,
-  );
-  const icon = usages.find((usage) => usage.role === 'icon');
-  const banner = usages.find((usage) => usage.role === 'banner');
-  const [
-    rawStages,
-    rawSections,
-    rawShowcase,
-    rawFiles,
-    tags,
-    description,
-    rawLinks,
-    relations,
-    status,
-  ] = await Promise.all([
-    getProjectStages(project.projectUuid),
-    getProjectContentSections(project.projectUuid),
-    THEI_SERVER.assets.usages.findShowcase(project.projectUuid),
+  const [head, rawFiles, description, rawLinks] = await Promise.all([
+    buildPublicProjectHead(project, viewer),
     THEI_SERVER.assets.usages.findOther(project.projectUuid),
-    listTagsForContainer('project', project.projectUuid),
     buildPublicContentData(
       'project',
       project.projectUuid,
@@ -353,39 +425,30 @@ export async function buildPublicProject(
       viewer,
     ),
     getExternalLinkList({ type: 'project', id: project.projectUuid }),
-    resolvePublicRelated({ type: 'project', id: project.projectUuid }, viewer),
-    // Statuses are always as open as their project; `isAdmin` only picks the
-    // owner's preview addresses for the icons.
-    getCurrentStatus(
-      { type: 'project', id: project.projectUuid },
-      viewer.isAdmin,
-    ),
   ]);
-  const visibleStages = rawStages.filter((stage) => own || !stage.isPrivate);
-  const visibleSections = rawSections.filter(
-    (section) => own || !section.isPrivate,
-  );
+  const {
+    usages,
+    stages: visibleStages,
+    sections: visibleSections,
+    relations,
+    status,
+  } = head;
   const showcase = await Promise.all(
-    rawShowcase
-      .filter(
-        ({ asset }) =>
-          asset.type === AssetType.Image || asset.type === AssetType.Video,
-      )
-      .map(async ({ asset, meta }) => {
-        if (!own && usageIsPrivate(meta))
-          return buildSecretReference(
-            'media',
-            `${project.projectUuid}:${asset.assetUuid}`,
-          );
-        const item = meta as ShowcaseAssetUsageMeta | null;
-        const href = `${buildProjectUrl(project.humanReadableSlug, project.publicId)}media/showcase-asset/${asset.slug}.${asset.extension}`;
-        return buildPublicAssetDescriptor(
-          asset,
-          href,
-          await buildPublicProjectMedia(project, asset, 'showcase-asset'),
-          item?.role === 'showcase-asset' ? (item.caption ?? '') : '',
+    head.showcase.map(async ({ asset, meta }) => {
+      if (!own && usageIsPrivate(meta))
+        return buildSecretReference(
+          'media',
+          `${project.projectUuid}:${asset.assetUuid}`,
         );
-      }),
+      const item = meta as ShowcaseAssetUsageMeta | null;
+      const href = `${buildProjectUrl(project.humanReadableSlug, project.publicId)}media/showcase-asset/${asset.slug}.${asset.extension}`;
+      return buildPublicAssetDescriptor(
+        asset,
+        href,
+        await buildPublicProjectMedia(project, asset, 'showcase-asset'),
+        item?.role === 'showcase-asset' ? (item.caption ?? '') : '',
+      );
+    }),
   );
   const files = await Promise.all(
     rawFiles.map(({ asset, meta }) =>
@@ -434,22 +497,14 @@ export async function buildPublicProject(
     },
     isShowcase: project.showcase,
     isCv: project.cv,
-    iconMedia: resolveEntityIconMedia(
-      'project',
-      project.projectUuid,
-      icon
-        ? await buildPublicProjectMedia(project, icon.asset, 'icon')
-        : undefined,
-    ),
-    bannerMedia: banner
-      ? await buildPublicProjectMedia(project, banner.asset, 'banner')
-      : undefined,
+    iconMedia: head.iconMedia,
+    bannerMedia: head.bannerMedia,
     description,
     stages: stageItems,
     sections: sectionItems,
     showcase,
     files,
-    tags: await buildPublicTags(tags),
+    tags: head.tags,
     related: countPublicRelated(relations),
     currentStatus: status.current,
     statusCount: status.total,
@@ -506,7 +561,7 @@ export async function buildPublicProjectSectionSummary(
   return {
     title: section.title,
     summary: section.summary,
-    date: new Date(section.createdAt).toISOString().slice(0, 10),
+    date: utcDayOf(section.createdAt),
     media: await buildPublicEntityPreviewMedia(
       'project-section',
       section.sectionUuid,
@@ -604,9 +659,16 @@ export async function buildPublicEvent(
   viewer: PublicViewer,
 ): Promise<PublicEventResponseFull> {
   const own = opensPrivate(viewer, 'event', stored.eventUuid);
-  const [periods, content, rawFiles, rawLinks, tags, relations, usages] =
+  const [periods, media, content, rawFiles, rawLinks, tags, relations, usages] =
     await Promise.all([
       getEventPeriods(stored.eventUuid),
+      buildPublicEntityPreviewMedia(
+        'event',
+        stored.eventUuid,
+        'event-body',
+        { type: 'event', ...stored },
+        own,
+      ),
       buildPublicContentData(
         'event',
         stored.eventUuid,
@@ -659,6 +721,7 @@ export async function buildPublicEvent(
     publicId: stored.publicId,
     periods,
     chronology: buildPublicEntityChronology(stored),
+    media,
     content: content ?? { blocks: [] },
     references: await buildPublicReferences(
       manual,
@@ -689,7 +752,10 @@ function emptyPublicReferenceGroup(): PublicReferenceGroup {
   return { links: [], files: [] };
 }
 
-/** An entity's own list of links as the sidebar shows it: the name the admin gave each one first. */
+/**
+ * An entity's own list of links as the sidebar shows it: each page as it
+ * presents itself, with the owner's note under it.
+ */
 export function buildPublicManualReferenceGroup(
   links: ProjectExternalLink[],
   files: PublicReferenceGroup['files'],
@@ -700,9 +766,10 @@ export function buildPublicManualReferenceGroup(
       .filter((link) => includePrivate || !link.isPrivate)
       .map((link): PublicReferenceLink => ({
         kind: 'external',
-        title: link.name || link.title || externalLinkHostname(link.url),
+        title: link.title || externalLinkHostname(link.url),
         href: link.url,
         description: link.description,
+        ...(link.note ? { note: link.note } : {}),
         iconMedia: link.faviconMedia,
       })),
     files,
@@ -726,13 +793,21 @@ export async function buildPublicDiaryEntry(
   },
   viewer: PublicViewer,
 ): Promise<PublicDiaryResponse> {
-  const [content, relations] = await Promise.all([
+  const own = opensPrivate(viewer, 'diary-entry', stored.diaryUuid);
+  const [media, content, relations] = await Promise.all([
+    buildPublicEntityPreviewMedia(
+      'diary-entry',
+      stored.diaryUuid,
+      'diary-body',
+      { type: 'diary-entry', date: stored.date },
+      own,
+    ),
     buildPublicContentData(
       'diary-entry',
       stored.diaryUuid,
       'diary-body',
       { type: 'diary-entry', date: stored.date },
-      opensPrivate(viewer, 'diary-entry', stored.diaryUuid),
+      own,
       viewer,
     ),
     resolvePublicRelated({ type: 'diary-entry', id: stored.diaryUuid }, viewer),
@@ -741,6 +816,7 @@ export async function buildPublicDiaryEntry(
     date: stored.date,
     access: stored.access,
     chronology: buildPublicEntityChronology(stored),
+    media,
     content: content ?? { blocks: [] },
     references: await buildPublicReferences(
       emptyPublicReferenceGroup(),
@@ -827,15 +903,17 @@ async function buildPublicReferenceLink(
           note: candidate.note,
         }
       : candidate;
-  // A note is why the link was worth making, which says more in a list than
-  // the name of whatever it points at.
+  // The target is shown as it presents itself; the owner's note on why the
+  // link was worth making comes with it, never in its place.
+  const note = resolved.note ? { note: resolved.note } : {};
   if (resolved.kind === 'external') {
     const link = await loadExternalLink(resolved.url);
     return {
       kind: 'external',
-      title: resolved.note || link?.title || externalLinkHostname(resolved.url),
+      title: link?.title || externalLinkHostname(resolved.url),
       href: resolved.url,
       description: link?.description,
+      ...note,
       iconMedia: link?.faviconMedia,
     };
   }
@@ -845,12 +923,12 @@ async function buildPublicReferenceLink(
   const iconMedia = await entity.media('public', opens);
   return {
     kind: entity.entityType,
-    title: resolved.note || entity.title,
+    title: entity.title,
     href: entity.href,
     description: entity.summary,
-    // A diary entry is called by its day, which the page writes out; a note
-    // replaces the day just as it replaces any other title.
-    ...(entity.date && !resolved.note ? { date: entity.date } : {}),
+    ...note,
+    // A diary entry is called by its day, which the page writes out.
+    ...(entity.date ? { date: entity.date } : {}),
     ...(iconMedia ? { iconMedia } : {}),
   };
 }
@@ -915,14 +993,17 @@ export async function buildPublicReferences(
   };
 }
 
-/** A hand-added address of this site becomes the entity it opens. */
+/**
+ * A hand-added address of this site becomes the entity it opens, and keeps
+ * the note written for it.
+ */
 async function buildManualSiteLink(
   link: PublicReferenceLink,
   viewer: PublicViewer,
 ): Promise<PublicReferenceLink | undefined> {
   const candidate = await resolveSiteEntityCandidate(link.href);
   if (candidate.kind === 'external') return link;
-  return buildPublicReferenceLink(candidate, viewer);
+  return buildPublicReferenceLink({ ...candidate, note: link.note }, viewer);
 }
 
 export async function buildPublicTags(

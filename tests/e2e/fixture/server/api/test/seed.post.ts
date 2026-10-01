@@ -3,6 +3,7 @@ import {
   prepareContentForSave,
   applyPreparedContentSave,
 } from '#layers/thei/server/thei/content/repository';
+import { upsertExternalLink } from '#layers/thei/server/thei/external-links/repository';
 import sharp from 'sharp';
 import { AssetType } from '#layers/thei/shared/asset';
 import {
@@ -19,6 +20,7 @@ export default defineEventHandler(async (event) => {
   db.transaction((tx) => {
     for (const table of [
       schema.content,
+      schema.contentHistory,
       schema.assetUsages,
       schema.pages,
       schema.projectStages,
@@ -26,6 +28,9 @@ export default defineEventHandler(async (event) => {
       schema.stagePeriods,
       schema.projects,
       schema.events,
+      // A day holds one entry: one left from an earlier run takes the day a
+      // spec writes to.
+      schema.diaryEntries,
       schema.tagUsages,
       schema.tags,
       schema.backups,
@@ -78,6 +83,41 @@ export default defineEventHandler(async (event) => {
         })
         .run();
   });
+  // The sites the link specs point at, stored as though they had been read,
+  // so that no spec waits on the network. The last one never answered.
+  const sites = [
+    ['https://noted.example/', 'Noted site', 'complete'],
+    ['https://listed.example/', 'Listed site', 'complete'],
+    ['https://block.example/', 'Block site', 'complete'],
+    ['https://silent.example/', 'silent.example', 'fallback'],
+  ] as const;
+  for (const [url, title, status] of sites)
+    upsertExternalLink({
+      url,
+      title,
+      description:
+        status === 'complete' ? `${title}, as it describes itself.` : undefined,
+      faviconKey: 'fixture-link',
+      status,
+      touchedAt: Date.now(),
+    });
+  // A page links to them, or the sweep would take them for unused a minute
+  // later, while the specs before theirs still run.
+  const linking = await prepareContentForSave('page', 'page-1', 'page-body', {
+    data: {
+      blocks: sites.map(([url]) => ({ type: 'externalLink', data: { url } })),
+    },
+  });
+  db.transaction((tx) =>
+    applyPreparedContentSave(
+      tx,
+      schema,
+      'page',
+      'page-1',
+      'page-body',
+      linking,
+    ),
+  );
   const prepared = await prepareContentForSave('page', 'page-0', 'page-body', {
     data: {
       blocks: [

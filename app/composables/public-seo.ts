@@ -2,6 +2,12 @@ import type { ResolvableLink, ResolvableMeta } from '@unhead/vue/types';
 import type { MaybeRefOrGetter } from 'vue';
 import { toValue } from 'vue';
 import { version as theiVersion } from '#thei/static-public';
+import type { MediaDescriptor } from '#layers/thei/shared/media';
+import {
+  OG_IMAGE_HEIGHT,
+  OG_IMAGE_WIDTH,
+  type OgImageInfo,
+} from '#layers/thei/shared/og-url';
 
 /** One step of the trail leading to the current page. */
 export type PublicBreadcrumb = {
@@ -30,24 +36,28 @@ type PublicSeoOptions = {
   /** Name of the page's own crumb, when the tab title reads badly in a trail. */
   breadcrumbName?: MaybeRefOrGetter<string | undefined>;
   /**
-   * Schema.org nodes for what the page is about — a CreativeWork, an Event, a
-   * Person. The first one becomes the WebPage's `mainEntity`.
+   * Schema.org nodes for what the page is about — an Article, a Person, a
+   * list. The first one becomes the WebPage's `mainEntity`.
    *
    * Inside them, `@id`, `url`, `image`, `item`, `contentUrl`, `logo` and
    * `sameAs` are resolved against the site origin, so a node can be written
    * with a bare `#fragment` or a site-relative path.
    */
   entities?: MaybeRefOrGetter<PublicSeoEntity[] | undefined>;
-  /** Representative image of the page, for `primaryImageOfPage`. */
+  /**
+   * Representative image of the page, for `primaryImageOfPage` — usually
+   * `publicSeoImage()`, the same picture the main entity names.
+   */
   image?: MaybeRefOrGetter<string | undefined>;
   /**
    * The card a link to this page previews as, from `useOgImage`.
    *
-   * Left out where there is nothing to preview — a private entity, or a page
-   * kept out of the index — so a link shows plain text rather than a picture
-   * of something the visitor may not open.
+   * Every page a stranger may open has one, a link-only page included —
+   * those are exactly the pages people share by link. It is absent where the
+   * server draws none: a private entity, a closed site. A link then shows
+   * plain text rather than a broken picture.
    */
-  ogImage?: MaybeRefOrGetter<string | undefined>;
+  ogImage?: MaybeRefOrGetter<OgImageInfo | undefined>;
   /** `article` for a piece of content, `profile` for the home page. */
   ogType?: MaybeRefOrGetter<string | undefined>;
   /**
@@ -70,6 +80,40 @@ const URL_KEYS = new Set([
   'sameAs',
 ]);
 
+/**
+ * Keys whose string values are words a reader sees — in a search result, a
+ * link preview — and so get the owner's typography like the page itself.
+ */
+const TEXT_KEYS = new Set([
+  'name',
+  'headline',
+  'description',
+  'alternateName',
+  'keywords',
+  'caption',
+  'abstract',
+  'text',
+]);
+
+function formatTexts<T>(value: T): T {
+  if (Array.isArray(value)) return value.map(formatTexts) as T;
+  if (!value || typeof value !== 'object') return value;
+  const result: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value))
+    result[key] = !TEXT_KEYS.has(key)
+      ? formatTexts(item)
+      : typeof item === 'string'
+        ? publicText(item)
+        : Array.isArray(item)
+          ? item.map((entry) =>
+              typeof entry === 'string'
+                ? publicText(entry)
+                : formatTexts(entry),
+            )
+          : formatTexts(item);
+  return result as T;
+}
+
 function resolveUrls<T>(value: T, resolve: (path: string) => string): T {
   if (Array.isArray(value)) {
     return value.map((item) => resolveUrls(item, resolve)) as T;
@@ -85,18 +129,90 @@ function resolveUrls<T>(value: T, resolve: (path: string) => string): T {
   return result as T;
 }
 
+/**
+ * The owner of the site, as the author of everything on it. Every graph
+ * carries the node it points at, so a reader of one page needs no other.
+ */
+export const publicSeoOwner = { '@id': '/#person' } as const;
+
+/**
+ * The smallest picture Google takes as the image of an article, in pixels
+ * (width times height).
+ */
+const MIN_SEO_IMAGE_PIXELS = 50_000;
+
+/**
+ * The picture that stands for a page in structured data: the entity's own
+ * image when it has one worth showing, otherwise the page's Open Graph card.
+ *
+ * A drawn placeholder icon depicts the entity's name rather than the entity,
+ * and search engines ask for a picture of what the page is about, so it is
+ * never offered; neither is an icon too small to be shown. A video stands in
+ * by its still frame.
+ */
+export function publicSeoImage(
+  media: MediaDescriptor | undefined,
+  fallback?: string,
+): string | undefined {
+  if (!media || media.generated) return fallback;
+  if (
+    media.width &&
+    media.height &&
+    media.width * media.height < MIN_SEO_IMAGE_PIXELS
+  )
+    return fallback;
+  return media.kind === 'video' ? media.previewSrc : media.src;
+}
+
+/**
+ * When the things a page tells about happened, as schema.org's
+ * `temporalCoverage` spells it: one ISO 8601 date, or an interval of two.
+ */
+export function publicSeoTemporalCoverage(period: {
+  startDate: string;
+  endDate: string;
+}): string {
+  return period.startDate === period.endDate
+    ? period.startDate
+    : `${period.startDate}/${period.endDate}`;
+}
+
+/**
+ * The head of a public page. Titles, descriptions and the words inside the
+ * structured data are the owner's, so they are formatted here once, whoever
+ * builds them — a phrase formatted again is left as it was.
+ *
+ * The structured data says what a page is, not what Thei calls its entity:
+ *
+ * - the home page is the owner's `ProfilePage`, about a `Person`;
+ * - a project is a `CreativeWork`, since a project may be anything at all;
+ * - a stage, a section, an event and a page are an `Article` — something the
+ *   owner wrote — and a diary entry is a `BlogPosting`;
+ * - a list of any of them is a `CollectionPage` holding an `ItemList`.
+ *
+ * An event is never a schema.org `Event`. Search engines read that as a
+ * gathering open to the public, and demand a venue and an address a moment
+ * of a life does not have; when it happened goes in `temporalCoverage`.
+ *
+ * Every written node names `publicSeoOwner` as its author, and every graph
+ * carries the site and its owner, so no reader has to fetch the home page to
+ * know who wrote what.
+ */
 export function usePublicSeo(options: PublicSeoOptions) {
   const site = useSiteUrl();
+  // The layout has already fetched it; what the site is called and whose it
+  // is are the same thing here.
+  const { data: owner } = useNuxtData<{ displayName: string }>('admin-profile');
 
   useHead(() => {
     const description = options.description
-      ? toValue(options.description)
+      ? publicText(toValue(options.description)) || undefined
       : undefined;
     const canonical = options.canonical
       ? toValue(options.canonical)
       : undefined;
     const noIndex = options.noIndex ? toValue(options.noIndex) : false;
-    const title = toValue(options.title);
+    const title = publicText(toValue(options.title));
     const ogImage = options.ogImage ? toValue(options.ogImage) : undefined;
     const meta: ResolvableMeta[] = [
       ...(description ? [{ name: 'description', content: description }] : []),
@@ -120,12 +236,16 @@ export function usePublicSeo(options: PublicSeoOptions) {
         : []),
       ...(ogImage
         ? [
-            { property: 'og:image', content: site.resolve(ogImage) },
+            { property: 'og:image', content: site.resolve(ogImage.url) },
             { property: 'og:image:type', content: 'image/png' },
-            { property: 'og:image:width', content: '1200' },
-            { property: 'og:image:height', content: '630' },
-            { property: 'og:image:alt', content: title },
+            { property: 'og:image:width', content: String(OG_IMAGE_WIDTH) },
+            {
+              property: 'og:image:height',
+              content: String(OG_IMAGE_HEIGHT),
+            },
+            { property: 'og:image:alt', content: ogImage.alt },
             { name: 'twitter:card', content: 'summary_large_image' },
+            { name: 'twitter:image:alt', content: ogImage.alt },
           ]
         : []),
     ];
@@ -163,12 +283,14 @@ export function usePublicSeo(options: PublicSeoOptions) {
         ? `${site.resolve(canonical)}${path}`
         : site.resolve(path);
     const pageUrl = absolute(canonical);
-    const title = toValue(options.title);
+    const title = publicText(toValue(options.title));
     const description = options.description
-      ? toValue(options.description)
+      ? publicText(toValue(options.description)) || undefined
       : undefined;
     const image = options.image ? toValue(options.image) : undefined;
-    const entities = resolveUrls(toValue(options.entities) ?? [], absolute);
+    const entities = formatTexts(
+      resolveUrls(toValue(options.entities) ?? [], absolute),
+    );
     const trail = [
       ...(toValue(options.breadcrumbs) ?? []),
       {
@@ -178,9 +300,26 @@ export function usePublicSeo(options: PublicSeoOptions) {
             : undefined) ?? title,
         path: canonical,
       },
-    ];
+    ].map((crumb) => ({ ...crumb, name: publicText(crumb.name) }));
     // A lone crumb is the page itself and describes no trail at all.
     const hasTrail = trail.length > 1;
+
+    const siteUrl = absolute('/');
+    const personId = absolute(publicSeoOwner['@id']);
+    const siteName = publicText(owner.value?.displayName ?? '');
+    const webSite: PublicSeoEntity = {
+      '@type': 'WebSite',
+      '@id': `${siteUrl}#website`,
+      url: siteUrl,
+      ...(siteName ? { name: siteName } : {}),
+      inLanguage: language.value.code,
+      publisher: { '@id': personId },
+    };
+    // The home page describes the owner in full under the same @id.
+    const person: PublicSeoEntity[] =
+      siteName && !entities.some((entity) => entity['@id'] === personId)
+        ? [{ '@type': 'Person', '@id': personId, name: siteName, url: siteUrl }]
+        : [];
 
     const webPage: PublicSeoEntity = {
       '@type':
@@ -189,7 +328,7 @@ export function usePublicSeo(options: PublicSeoOptions) {
       url: pageUrl,
       name: title,
       inLanguage: language.value.code,
-      isPartOf: { '@id': `${absolute('/')}#website` },
+      isPartOf: { '@id': webSite['@id'] },
       ...(description ? { description } : {}),
       ...(image ? { primaryImageOfPage: absolute(image) } : {}),
       ...(hasTrail ? { breadcrumb: { '@id': `${pageUrl}#breadcrumb` } } : {}),
@@ -206,6 +345,8 @@ export function usePublicSeo(options: PublicSeoOptions) {
           textContent: serializeJsonLd({
             '@context': 'https://schema.org',
             '@graph': [
+              webSite,
+              ...person,
               webPage,
               ...(hasTrail
                 ? [

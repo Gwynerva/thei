@@ -24,6 +24,7 @@ import {
   bannerSizeKey,
   currentProjectUuidKey,
   otherItemsKey,
+  pendingUploadsKey,
   showcaseItemsKey,
   provideProjectActionMedia,
 } from '../../projects/composables';
@@ -32,6 +33,7 @@ import ProjectAssets from '../../projects/components/ProjectAssets.vue';
 import ProjectExternalLinks from '../../projects/components/ProjectExternalLinks.vue';
 import ProjectActionSettings from '../../projects/components/ProjectActionSettings.vue';
 import { eventDeleteModal } from './event-delete-modal';
+import { provideContentOwner } from '#layers/thei/app/composables/content-history/owner';
 import { externalLinkListItems } from '#layers/thei/shared/external-link';
 import { useExternalLinks } from '#layers/thei/app/composables/external-links';
 
@@ -65,10 +67,13 @@ provide(currentProjectUuidKey, ref<string>());
 provide(showcaseItemsKey, ref([]));
 const otherItems = ref<EventGetResponse['otherAssets']>([]);
 provide(otherItemsKey, otherItems);
+const pendingUploads = ref(0);
+provide(pendingUploadsKey, pendingUploads);
 const actionMedia = provideProjectActionMedia();
 const externalLinks = useExternalLinks();
 
 const isEdit = computed(() => Boolean(eventUuid));
+provideContentOwner('event', () => eventUuid);
 const saving = ref(false);
 const savedSnapshot = ref(JSON.stringify(eventPayload()));
 const headerError = ref<string>();
@@ -76,6 +81,10 @@ const showPeriodsHint = ref(false);
 const isDirty = computed(
   () => JSON.stringify(eventPayload()) !== savedSnapshot.value,
 );
+useLeaveGuard({
+  dirty: () => isDirty.value,
+  pendingUploads: () => pendingUploads.value,
+});
 const isValid = computed(() =>
   Boolean(
     eventData.value.title.trim() &&
@@ -184,11 +193,6 @@ await useAdminTabTitle(
     isEdit.value ? phrase.value.edit_event : phrase.value.new_event,
   ),
 );
-onBeforeRouteLeave(() => {
-  if (interceptModalNavigation()) return false;
-  if (isDirty.value)
-    return window.confirm(phrase.value.unsaved_changes_confirm);
-});
 
 async function deleteEvent() {
   if (!eventUuid) return;
@@ -386,6 +390,7 @@ function clone<T>(value: T): T {
         <FieldLabel required>{{ phrase.event_content }}</FieldLabel>
         <FieldContentEditor
           v-model="eventData.content"
+          content-slot="event-body"
           @saved="saveAfterContentEdit()"
           :title-label="phrase.event_content"
         />
@@ -410,6 +415,7 @@ function clone<T>(value: T): T {
       :title="phrase.event_external_links"
       :description="phrase.event_external_links_hint"
       :empty-text="phrase.event_external_links_empty"
+      :content-hint="phrase.external_link_in_event_content"
     />
     <AdminTags
       v-model="tagsModel"
@@ -421,7 +427,9 @@ function clone<T>(value: T): T {
     <AdminRelations
       v-model="relationsModel"
       :owner="eventUuid ? { type: 'event', id: eventUuid } : undefined"
+      owner-type="event"
       :owner-title="eventData.title.trim() || phrase.new_event"
+      :text="eventData.content?.data"
     />
     <AdminShareLinks
       v-if="eventUuid"

@@ -112,6 +112,7 @@ const saveAfterContentEdit = inject(saveAfterContentEditKey, undefined);
       <FieldLabel>{{ phrase.project_description }}</FieldLabel>
       <FieldContentEditor
         v-model="projectData.descriptionContent"
+        content-slot="project-description"
         :title-label="phrase.project_description"
         @saved="saveAfterContentEdit?.()"
       />

@@ -11,12 +11,15 @@ import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
  * or a section also names its project above its title, since "Launch" alone
  * does not say whose launch it was; a diary entry is titled by its day and
  * quotes its opening lines in italics, as its own card on the timeline does.
- * A target with a picture of its own shows it along the right edge.
+ * A target with a picture of its own shows it along the right edge. The
+ * owner's note on the link comes last (`note`, or the `note` slot).
  */
 const props = defineProps<{
   entityType: ContentEntityType;
   title: string;
   summary: string;
+  /** The owner's note, as typed. */
+  note?: string;
   /** The day of a diary entry; formatted in place of the title. */
   date?: string;
   /** The project a stage or a section belongs to. */
@@ -31,9 +34,10 @@ const props = defineProps<{
   loop?: boolean;
   autoplayReducedMotion?: boolean;
 }>();
+defineSlots<{ note?(): unknown }>();
 const { engaged, events: mediaEvents } = useMediaInteraction();
 const icon = computed(() => entityTypeIcon(props.entityType));
-const heading = computed(() => entityDisplayTitle(props));
+const heading = computed(() => publicText(entityDisplayTitle(props)));
 </script>
 
 <template>
@@ -64,13 +68,24 @@ const heading = computed(() => entityDisplayTitle(props));
       :playback="playback ?? 'autoplay'"
       :loop
       :autoplay-reduced-motion
-      :class="compact ? 'w-24' : 'w-40 sm:w-48'"
+      :class="compact ? 'w-1/2 max-w-40' : 'w-3/4 max-w-72'"
     />
+    <!--
+      The words keep clear of the window where the picture stays sharp and
+      read over the rest of it; both scale with the card, so a narrow column
+      does not give the picture the room the title needs. A truncated line
+      clips its own halo, which draws a hard seam across the picture, so it
+      gets room for the halo all round.
+    -->
     <span
       class="entity-preview-text relative z-1 flex min-w-0 flex-1 flex-col"
       :class="[
         compact ? 'gap-0.5' : 'gap-1',
-        iconMedia ? (compact ? 'pr-10' : 'pr-24 sm:pr-36') : '',
+        iconMedia
+          ? compact
+            ? 'pr-[min(18%,3rem)]'
+            : 'pr-[min(24%,6rem)]'
+          : '',
         { 'm-xs': flush },
       ]"
     >
@@ -79,28 +94,33 @@ const heading = computed(() => entityDisplayTitle(props));
         class="flex min-w-0 items-center gap-1 text-xs font-semibold
           text-text-3"
         ><Icon name="project" class="entity-type-icon shrink-0" /><span
-          class="min-w-0 truncate"
-          >{{ parent.title }}</span
+          class="-m-[0.75em] min-w-0 truncate p-[0.75em]"
+          >{{ publicText(parent.title) }}</span
         ><Icon name="corner-down" class="shrink-0" aria-hidden="true"
       /></span>
       <span
-        class="flex items-center truncate font-semibold"
+        class="flex min-w-0 items-center font-semibold"
         :class="compact ? 'gap-1 text-sm' : 'gap-1.5 text-base'"
         ><Icon
           :name="icon"
           class="entity-type-icon shrink-0 text-text-2"
           :class="compact ? 'text-xs' : 'text-base'"
-        />{{ heading }}</span
+        /><span class="-m-[0.75em] min-w-0 truncate p-[0.75em]">{{
+          heading
+        }}</span></span
       >
       <span
         v-if="summary"
-        class="line-clamp-2 text-text-3"
+        class="-mx-[0.75em] line-clamp-2 px-[0.75em] text-text-3"
         :class="[
           compact ? 'text-sm' : 'text-[0.9375rem] leading-snug',
           { italic: date },
         ]"
-        >{{ summary }}</span
+        >{{ publicText(summary) }}</span
       >
+      <span v-if="$slots.note || note" class="mt-0.5 block text-sm">
+        <slot name="note"><ContentLinkNote :note /></slot>
+      </span>
     </span>
   </component>
 </template>
@@ -110,7 +130,7 @@ const heading = computed(() => entityDisplayTitle(props));
   text-decoration: none;
 }
 
-.entity-link-preview-interactive:is(:hover, :focus-visible) {
+.entity-link-preview-interactive:focus-visible {
   border-color: color-mix(
     in oklab,
     var(--color-accent) 40%,
@@ -121,6 +141,21 @@ const heading = computed(() => entityDisplayTitle(props));
     var(--color-accent) 8%,
     var(--color-bg-2)
   );
+}
+
+@media (hover: hover) {
+  .entity-link-preview-interactive:hover {
+    border-color: color-mix(
+      in oklab,
+      var(--color-accent) 40%,
+      var(--color-border-1)
+    );
+    background-color: color-mix(
+      in oklab,
+      var(--color-accent) 8%,
+      var(--color-bg-2)
+    );
+  }
 }
 
 .entity-preview-text {

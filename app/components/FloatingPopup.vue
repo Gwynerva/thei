@@ -182,6 +182,8 @@ watch(
 onBeforeUnmount(() => {
   if (import.meta.client) removeOpenListeners();
 });
+
+defineExpose({ element: floatingElement });
 </script>
 
 <template>

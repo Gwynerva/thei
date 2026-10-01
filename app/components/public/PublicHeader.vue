@@ -42,7 +42,7 @@ function active(to: string) {
           />
         </span>
         <span class="truncate font-semibold tracking-tight">
-          {{ publicAdmin.displayName }}
+          {{ publicText(publicAdmin.displayName) }}
         </span>
       </TheiLink>
 

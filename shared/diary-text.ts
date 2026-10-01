@@ -15,10 +15,13 @@ import {
 export const DIARY_EXCERPT_LENGTH = 240;
 
 /**
- * The opening of an entry, cut at a word.
+ * The opening of an entry, cut at a word and marked as cut.
  *
  * Cutting mid-word reads as damage rather than as an excerpt, so the cut
  * retreats to the last space before the limit when there is one close enough.
+ * An ellipsis ends whatever was cut: without it, an opening shorter than the
+ * clamp of its card reads as if the entry itself stopped there. It takes the
+ * place of a comma, a dash or a full stop the cut would leave hanging.
  */
 export function diaryExcerpt(
   text: string,
@@ -28,7 +31,8 @@ export function diaryExcerpt(
   if (clean.length <= limit) return clean;
   const cut = clean.slice(0, limit);
   const lastSpace = cut.lastIndexOf(' ');
-  return (lastSpace > limit * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd();
+  const kept = lastSpace > limit * 0.6 ? cut.slice(0, lastSpace) : cut;
+  return `${kept.replace(/[\s,;:.–—-]+$/, '')}…`;
 }
 
 /**

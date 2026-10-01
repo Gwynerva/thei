@@ -107,7 +107,7 @@ watch(cooldown, (newCooldown) => {
         </div>
         <div class="text-center">
           <div class="text-2xl font-bold">
-            {{ publicAdmin.displayName }}
+            {{ publicText(publicAdmin.displayName) }}
           </div>
           <div class="text-text-2">
             {{ phrase.thei_admin_panel_sign_in }}

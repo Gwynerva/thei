@@ -1,9 +1,13 @@
 import type { AutoImageFormat } from '#layers/thei/shared/asset-image-format-auto';
 import {
   ASSET_QUALITY_STOPS,
+  assetQualityLevelAt,
   type AssetQualityStop,
 } from '#layers/thei/shared/asset-quality-levels';
-import type { AssetImageFormat } from '#layers/thei/shared/asset-upload-settings';
+import type {
+  AssetImageFormat,
+  AssetUploadSettings,
+} from '#layers/thei/shared/asset-upload-settings';
 
 export function qualityStopLabel(stop: AssetQualityStop): string {
   return phrase.value[`asset_quality_${stop}`];
@@ -13,6 +17,34 @@ export function qualityStopLabels(): Record<AssetQualityStop, string> {
   return Object.fromEntries(
     ASSET_QUALITY_STOPS.map((stop) => [stop, qualityStopLabel(stop)]),
   ) as Record<AssetQualityStop, string>;
+}
+
+/**
+ * What sets a stored variant apart besides its format and size, in a word
+ * or two: "Unprocessed", "Medium quality", "Lossless". How it was cut and
+ * turned is the recipe's, shown on hover; a vector has nothing to add.
+ */
+export function variantDetail(
+  settings: AssetUploadSettings | null | undefined,
+): string | undefined {
+  if (!settings) return undefined;
+  if (settings.type === 'original') return phrase.value.upload_variant_unchanged;
+  if (settings.type === 'file-zip') return phrase.value.asset_recipe_zip;
+  if (settings.type === 'image-transform' && settings.format === 'svg') {
+    return undefined;
+  }
+  if (
+    settings.type === 'image-transform' &&
+    settings.format === 'webp-lossless'
+  ) {
+    return phrase.value.asset_quality_lossless;
+  }
+  // A file made by an older version at another number is "Quality 85".
+  const level = assetQualityLevelAt(settings.quality);
+  const text = level
+    ? phrase.value.asset_recipe_quality_level(qualityStopLabel(level))
+    : phrase.value.asset_recipe_quality(settings.quality);
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 export function imageFormatLabel(format: AssetImageFormat): string {

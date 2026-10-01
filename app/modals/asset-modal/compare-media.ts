@@ -63,15 +63,48 @@ export function pickCompareNavigationDimensions(
   };
 }
 
+/**
+ * Device pixels per one of a side's own pixels at the shared zoom.
+ *
+ * Measured in device pixels, not CSS pixels: a screen scaled to 125 % and a
+ * browser zoomed in both put more than one device pixel under a CSS pixel,
+ * and an image shown at "100 %" of its CSS size is then resampled — which
+ * looks like blur the file does not have.
+ */
+export function compareSideDeviceScale(
+  sharedZoom: number,
+  normalizeScale: number,
+  devicePixelRatio = 1,
+): number {
+  return sharedZoom * normalizeScale * devicePixelRatio;
+}
+
 export function compareZoomPercent(
   sharedZoom: number,
   normalizeScale: number,
+  devicePixelRatio = 1,
 ): number {
-  return Math.round(sharedZoom * normalizeScale * 100);
+  return Math.round(
+    compareSideDeviceScale(sharedZoom, normalizeScale, devicePixelRatio) * 100,
+  );
 }
 
-export function compareSideZoomTarget(normalizeScale: number): number {
-  return normalizeScale > 0 ? 1 / normalizeScale : 1;
+/** The shared zoom at which a side shows each of its pixels on one device pixel. */
+export function compareSideZoomTarget(
+  normalizeScale: number,
+  devicePixelRatio = 1,
+): number {
+  return normalizeScale > 0 ? 1 / (normalizeScale * devicePixelRatio) : 1;
+}
+
+/**
+ * How the browser should sample a side drawn at this many device pixels per
+ * pixel of its own. From one up, every pixel of the file is on screen and
+ * nearest-neighbour sampling draws it exactly, magnified or not; below one
+ * some pixels have to go, and smooth scaling reads better than dropping them.
+ */
+export function exactImageRendering(deviceScale: number): 'pixelated' | 'auto' {
+  return deviceScale >= 1 - 1e-3 ? 'pixelated' : 'auto';
 }
 
 export function getCompareSideMetrics(
@@ -94,6 +127,7 @@ export function compareFitZoomTarget(
   container: CompareMediaDimensions,
   padding = 0,
   capAtSideHundred = true,
+  devicePixelRatio = 1,
 ): number {
   if (sideMetrics.width <= 0 || sideMetrics.height <= 0) return 1;
 
@@ -105,7 +139,10 @@ export function compareFitZoomTarget(
   );
 
   return capAtSideHundred
-    ? Math.min(fitZoom, compareSideZoomTarget(sideMetrics.scale))
+    ? Math.min(
+        fitZoom,
+        compareSideZoomTarget(sideMetrics.scale, devicePixelRatio),
+      )
     : fitZoom;
 }
 

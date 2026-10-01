@@ -10,7 +10,7 @@ import type { IconName } from '#thei/icons';
 import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
 import {
   datePresentationToneClass,
-  publicDatePrecisionLabels,
+  publicDatePrecisionOptions,
   type PublicDatePresentation,
 } from '#layers/thei/app/composables/public-date';
 
@@ -43,7 +43,8 @@ const props = defineProps<{
   titleless?: boolean;
   /**
    * Draws the card as a thought bubble instead of a box — for a diary entry,
-   * which is a thought rather than a thing that happened.
+   * which is a thought rather than a thing that happened. Its date picks
+   * one of several clouds, so a feed of entries is not one shape repeated.
    */
   cloud?: boolean;
   /** Leaves the date out, for a card whose place already dates it. */
@@ -63,7 +64,7 @@ const datePresentation = computed(
       new Date(),
       {
         style: props.compact ? 'short' : 'long',
-        precisionLabels: publicDatePrecisionLabels(),
+        ...publicDatePrecisionOptions(),
       },
     ),
 );
@@ -100,11 +101,11 @@ const hasFooter = computed(
         `overflow-hidden rounded-normal border border-border-1 bg-bg-2 shadow-md
         shadow-shadow-1`,
       href &&
-        `public-content-card-interactive focus-within:-translate-y-0.5
+        `public-content-card-interactive has-focus-visible:-translate-y-0.5
         hocus:-translate-y-0.5`,
       href &&
         !cloud &&
-        `focus-within:border-border-2 focus-within:shadow-xl
+        `has-focus-visible:border-border-2 has-focus-visible:shadow-xl
         hocus:border-border-2 hocus:shadow-xl`,
     ]"
     :style="cardStyle"
@@ -124,7 +125,7 @@ const hasFooter = computed(
       <path
         :d="cloudPath"
         class="fill-bg-2 stroke-border-1 transition-colors
-          group-focus-within:stroke-border-2 group-hover:stroke-border-2"
+          group-hover:stroke-border-2 group-has-focus-visible:stroke-border-2"
         stroke-width="1"
         stroke-linejoin="round"
       />
@@ -132,7 +133,7 @@ const hasFooter = computed(
     <TheiLink
       v-if="href"
       :to="href"
-      :aria-label="title"
+      :aria-label="publicText(title)"
       class="absolute inset-0 z-1 rounded-normal focus-visible:ring-2
         focus-visible:ring-accent focus-visible:ring-inset"
     />
@@ -152,16 +153,20 @@ const hasFooter = computed(
         :autoplay-reduced-motion="continuousMedia"
         :loop="continuousMedia"
         :muted="continuousMedia"
-        media-class="opacity-70 transition duration-300 group-hocus:opacity-95
+        media-class="opacity-80 transition duration-300
+          group-has-focus-visible:opacity-95 group-hocus:opacity-95
           motion-reduce:duration-150"
-        class="w-3/5 sm:w-1/2"
+        class="w-full"
       />
     </div>
 
     <div
       class="pointer-events-none relative z-2 flex min-h-full flex-1 flex-col
         gap-sm"
-      :class="compact ? 'p-sm sm:p-md' : 'p-md'"
+      :class="[
+        compact ? 'p-sm sm:p-md' : 'p-md',
+        { 'public-card-over-media': media },
+      ]"
     >
       <div
         class="flex max-w-4/5 flex-wrap items-center gap-x-2 gap-y-1 text-xs
@@ -184,12 +189,21 @@ const hasFooter = computed(
             <Icon v-if="datePresentation.approximate" name="approximate" />
             {{ datePresentation.label }}
           </TheiLink>
+          <!-- The text lets the pointer through to the card's link; a date
+               with a hint to give — the day behind "2 days ago", how sure
+               it is — takes the pointer back, as the marks beside it do. -->
           <time
             v-else
             :datetime="date"
             v-bind="titlePopup(...(datePresentation.title ?? []))"
             class="inline-flex items-center gap-1 text-text-3"
-            :class="datePresentationToneClass(datePresentation)"
+            :class="[
+              datePresentationToneClass(datePresentation),
+              {
+                'pointer-events-auto relative z-3':
+                  datePresentation.title?.length,
+              },
+            ]"
           >
             <Icon v-if="datePresentation.approximate" name="approximate" />
             {{ datePresentation.label }}
@@ -198,7 +212,12 @@ const hasFooter = computed(
         <Icon
           v-if="reminder"
           name="warning"
-          v-bind="reminderTitlePopup(phrase.entity_reminder_badge, reminder)"
+          v-bind="
+            reminderTitlePopup(
+              phrase.entity_reminder_badge,
+              publicText(reminder),
+            )
+          "
           :aria-label="phrase.entity_reminder_badge"
           role="img"
           class="pointer-events-auto relative z-3 shrink-0 text-text-warning"
@@ -218,38 +237,20 @@ const hasFooter = computed(
         One step of `gap-sm` between every piece of data — parent, copy,
         related entities, tags — so none of them reads as glued to its
         neighbour. Only a title and its summary sit closer: they are one unit.
+        A clamped block clips its own halo, which draws a hard seam across the
+        media, so it gets room for the halo on either side; none above or
+        below, where it would uncover the next line.
       -->
       <div
         class="public-card-copy flex max-w-4/5 min-w-0 flex-col gap-sm
           sm:max-w-3/4"
-        :class="{ 'public-card-copy-over-media': media }"
       >
-        <div v-if="parent" class="flex min-w-0 items-center gap-xs text-sm">
-          <TheiLink
-            :to="parent.href"
-            :data-title-popup="parent.summary"
-            class="pointer-events-auto relative z-3 inline-flex min-w-0
-              items-center gap-xs font-semibold text-text-2 transition
-              focus-visible:ring-2 focus-visible:ring-accent
-              focus-visible:outline-none hocus:text-accent"
-          >
-            <BeveledIcon
-              :media="parent.iconMedia"
-              icon="project"
-              class="size-5"
-            />
-            <span class="min-w-0 truncate">{{ parent.title }}</span>
-          </TheiLink>
-          <Icon
-            name="corner-down"
-            class="shrink-0 text-text-3"
-            aria-hidden="true"
-          />
-        </div>
+        <PublicParentLink v-if="parent" :parent="parent" />
         <p
           v-if="titleless"
-          class="public-card-title line-clamp-4 text-base leading-relaxed
-            font-medium text-balance text-text-2 italic transition sm:text-lg"
+          class="public-card-title -mx-[0.75em] line-clamp-4 px-[0.75em]
+            text-base leading-relaxed font-medium text-balance text-text-2
+            italic transition sm:text-lg"
         >
           {{ publicText(summary) }}
         </p>
@@ -263,8 +264,8 @@ const hasFooter = computed(
           </h3>
           <p
             v-if="summary"
-            class="mt-xs line-clamp-3 text-base leading-relaxed font-semibold
-              text-text-2"
+            class="-mx-[0.75em] mt-xs line-clamp-3 px-[0.75em] text-base
+              leading-relaxed font-semibold text-text-2"
           >
             {{ publicText(summary) }}
           </p>
@@ -283,16 +284,25 @@ const hasFooter = computed(
 </template>
 
 <style scoped>
-.public-card-copy-over-media {
+/*
+ * A halo of the card's own colour keeps every line legible over the media,
+ * which reaches under the text.
+ */
+.public-card-over-media {
   text-shadow:
     0 0 0.55em var(--color-bg-2),
     0 0 0.9em var(--color-bg-2),
     0 0.1em 0.45em var(--color-bg-2);
 }
 
-.public-content-card-interactive:hover,
-.public-content-card-interactive:focus-within {
+.public-content-card-interactive:is(:focus-visible, :has(:focus-visible)) {
   --tw-shadow-color: var(--public-card-shadow-color);
+}
+
+@media (hover: hover) {
+  .public-content-card-interactive:hover {
+    --tw-shadow-color: var(--public-card-shadow-color);
+  }
 }
 
 /* The box's shadow, redrawn around the cloud's own outline. */
@@ -300,12 +310,25 @@ const hasFooter = computed(
   filter: drop-shadow(0 0.2rem 0.3rem var(--color-shadow-1));
 }
 
-.public-content-card-interactive:is(:hover, :focus-within) .public-cloud {
+.public-content-card-interactive:is(:focus-visible, :has(:focus-visible))
+  .public-cloud {
   filter: drop-shadow(0 0.6rem 0.9rem var(--public-card-shadow-color));
 }
 
-.public-content-card-interactive:hover .public-card-title,
-.public-content-card-interactive:focus-within .public-card-title {
+@media (hover: hover) {
+  .public-content-card-interactive:hover .public-cloud {
+    filter: drop-shadow(0 0.6rem 0.9rem var(--public-card-shadow-color));
+  }
+}
+
+.public-content-card-interactive:is(:focus-visible, :has(:focus-visible))
+  .public-card-title {
   color: var(--public-card-accent-color);
+}
+
+@media (hover: hover) {
+  .public-content-card-interactive:hover .public-card-title {
+    color: var(--public-card-accent-color);
+  }
 }
 </style>

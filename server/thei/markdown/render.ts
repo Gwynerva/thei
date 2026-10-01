@@ -37,6 +37,7 @@ import { getProjectStages } from '../projects/stages';
 import { getProjectContentSections } from '../projects/content-sections';
 import { siteUrl } from '../site-url';
 import { STRANGER } from '../access-links/viewer';
+import { ownerText } from '../owner-text';
 
 /**
  * Public pages as Markdown.
@@ -49,6 +50,8 @@ import { STRANGER } from '../access-links/viewer';
  * Everything is built with the visibility of a stranger, whoever asks. The
  * Markdown of a page has no owner's view, so no session and no share link can
  * turn it into one.
+ *
+ * The owner's words get the typography the page gives them (`ownerText`).
  */
 export interface MarkdownDocument {
   body: string;
@@ -68,8 +71,8 @@ export async function renderProjectMarkdown(
     project.publicId,
   );
   const lines = [
-    `# ${data.title}`,
-    data.summary,
+    `# ${ownerText(data.title)}`,
+    ownerText(data.summary),
     await body(event, data.description),
   ];
 
@@ -77,16 +80,16 @@ export async function renderProjectMarkdown(
     lines.push(`## ${THEI_SERVER.phrase.project_stages}`);
     for (const stage of data.stages)
       lines.push(
-        `- [${stage.title}](${siteUrl(event, stage.href)})` +
-          (stage.summary ? ` — ${stage.summary}` : ''),
+        `- [${ownerText(stage.title)}](${siteUrl(event, stage.href)})` +
+          (stage.summary ? ` — ${ownerText(stage.summary)}` : ''),
       );
   }
   if (data.sections.length) {
     lines.push(`## ${THEI_SERVER.phrase.project_content_sections}`);
     for (const section of data.sections)
       lines.push(
-        `- [${section.title}](${siteUrl(event, section.href)})` +
-          (section.summary ? ` — ${section.summary}` : ''),
+        `- [${ownerText(section.title)}](${siteUrl(event, section.href)})` +
+          (section.summary ? ` — ${ownerText(section.summary)}` : ''),
       );
   }
   lines.push(
@@ -126,9 +129,9 @@ export async function renderProjectChildMarkdown(
     child.publicId,
   );
   const lines = [
-    `# ${data.title}`,
-    data.summary,
-    `${THEI_SERVER.phrase.project}: [${project.title}](${siteUrl(
+    `# ${ownerText(data.title)}`,
+    ownerText(data.summary),
+    `${THEI_SERVER.phrase.project}: [${ownerText(project.title)}](${siteUrl(
       event,
       buildProjectUrl(project.humanReadableSlug, project.publicId),
     )})`,
@@ -146,8 +149,8 @@ export async function renderEventMarkdown(
     return undefined;
   const data = await buildPublicEvent(stored, STRANGER);
   const lines = [
-    `# ${data.title}`,
-    data.summary,
+    `# ${ownerText(data.title)}`,
+    ownerText(data.summary),
     ...(data.periods.length
       ? [
           data.periods
@@ -204,8 +207,8 @@ export async function renderPageMarkdown(
     return undefined;
   const data = await buildPublicPage(page, STRANGER);
   const lines = [
-    `# ${data.title}`,
-    data.summary,
+    `# ${ownerText(data.title)}`,
+    ownerText(data.summary),
     await body(event, data.content),
   ];
   return {
@@ -221,6 +224,7 @@ async function body(
   return contentToMarkdown(await withEntityAddresses(content), {
     absolute: (path) => siteUrl(event, path),
     privateSectionLabel: THEI_SERVER.phrase.secret_hint,
+    format: ownerText,
   });
 }
 
@@ -325,8 +329,8 @@ async function relatedEntities(
       const text =
         link.note || (link.entityType === 'diary-entry' ? link.summary : '');
       lines.push(
-        `- [${link.title}](${siteUrl(event, link.href)})` +
-          (text ? ` — ${text}` : ''),
+        `- [${ownerText(link.title)}](${siteUrl(event, link.href)})` +
+          (text ? ` — ${ownerText(text)}` : ''),
       );
     }
   }
@@ -343,7 +347,7 @@ function tagList(
     tags
       .map(
         (tag) =>
-          `[${tag.title}](${siteUrl(event, `/tags/${tag.slug}-${tag.publicId}/`)})`,
+          `[${ownerText(tag.title)}](${siteUrl(event, `/tags/${tag.slug}-${tag.publicId}/`)})`,
       )
       .join(', '),
   ];

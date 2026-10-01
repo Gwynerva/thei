@@ -16,6 +16,7 @@ import { eq } from 'drizzle-orm';
 import { AssetType } from '../../../shared/asset';
 import { runAssetCleanup } from '../../../server/thei/assets/cleanup';
 import { schema } from '../../../server/thei/db/schema';
+import { createContentHistoryTable } from '../fixtures/content-history-table';
 
 describe('asset cleanup', () => {
   it('cleans DB orphans, dangling usages, missing files, and old stray files', async () => {
@@ -102,6 +103,7 @@ describe('asset cleanup', () => {
           updatedAt integer NOT NULL
         );
       `);
+      createContentHistoryTable(rawDb);
 
       // Mirrors production: files are addressed by content hash, sharded by
       // the first two characters of the digest.
@@ -189,6 +191,20 @@ describe('asset cleanup', () => {
       const strayFile = await writeAssetFile('a-stray', 'webp');
       await utimes(strayFile, new Date(old), new Date(old));
 
+      // Generated media unused for over a month goes; the Open Graph cards
+      // keep their own age, and the signature of the code that drew them.
+      const longAgo = now - 40 * 24 * 60 * 60 * 1000;
+      const generated = async (...parts: string[]) => {
+        const path = join(root, 'generated-media', ...parts);
+        await mkdir(join(path, '..'), { recursive: true });
+        await writeFile(path, 'generated');
+        await utimes(path, new Date(longAgo), new Date(longAgo));
+        return path;
+      };
+      const oldIcon = await generated('icons', 'old.webp');
+      const ogSignature = await generated('og', '.signature');
+      const ogCard = await generated('og', 'card.png');
+
       await db.insert(schema.content).values({
         contentUuid: 'c-live',
         ownerType: 'project',
@@ -259,6 +275,9 @@ describe('asset cleanup', () => {
       expect(await fileExists(contentFile)).toBe(true);
       expect(await fileExists(orphanFile)).toBe(false);
       expect(await fileExists(strayFile)).toBe(false);
+      expect(await fileExists(oldIcon)).toBe(false);
+      expect(await fileExists(ogSignature)).toBe(true);
+      expect(await fileExists(ogCard)).toBe(true);
 
       const remainingAssets = await db
         .select({ assetUuid: schema.assets.assetUuid })

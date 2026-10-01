@@ -181,7 +181,7 @@ onMounted(() => {
               { text: `${phrase.tag_synonym_found_in}: `, bold: true },
               {
                 text: suggestion.entities
-                  .map((entity) => entity.title)
+                  .map((entity) => publicText(entity.title))
                   .join(', '),
                 clamp: true,
               },

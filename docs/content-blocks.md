@@ -3,7 +3,9 @@
 Every text in Thei — a project description, a stage, a section, an event body,
 a page, the "about me" — is one Editor.js document stored as JSON in the
 `content` table. This is the list of blocks such a document can hold, exactly
-as `normalizeBlockData` in `shared/content.ts` accepts them.
+as `normalizeBlockData` in `shared/content.ts` accepts them. Unsaved drafts and
+recent versions of a text, kept in the `content-history` table, are documents
+of exactly the same shape.
 
 It exists so that a reader outside the editor — a model rewriting a text, a
 script importing one, a person inspecting a backup — knows what a document can
@@ -60,9 +62,13 @@ Text fields hold a deliberately small HTML subset, enforced by
   hover; a hint with an empty note is dropped and its text kept
 
 Either kind of `<a>` may carry `data-content-note="…"`: the owner's words about
-why the link is there. The sidebar shows that note in place of the target's own
-title, unless the same link was also attached by hand — a title written on
-purpose wins.
+why the link is there, stored as typed, trimmed; an empty note is no attribute.
+It never stands in for what the target says of itself: the target's own title
+and description are shown, and the note under them — in the popup over the
+link and in the sidebar. A link block carries the same kind of note in its
+data (see below), shown as the last line of its card. When the same address is attached by hand too, the sidebar
+lists it once if only one of them has a note or both say the same, and twice
+if they say different things.
 
 An entity link names its target by kind and uuid, never by address, so it
 survives the site moving to another domain. The kinds are those of
@@ -110,14 +116,21 @@ an HTML document is.
 | `contentMedia`           | `{ asset, layout: 'centered' \| 'natural' \| 'stretch', caption }`                                                 |
 | `contentGallery`         | `{ items: [{ id, asset, caption }] }` — an item without an `id` is dropped                                         |
 | `contentAttachment`      | `{ asset, title, caption }` — any file, shown as a download                                                        |
-| `externalLink`           | `{ url }` — rendered as a preview card                                                                             |
+| `externalLink`           | `{ url, note? }` — rendered as a preview card                                                                      |
 | `integration`            | `{ provider: 'youtube', videoId, … }`, see `shared/content-integrations.ts`                                        |
-| `entityLink`             | `{ entityType, entityId }` — a card for something on this site; the types are listed under inline markup           |
+| `entityLink`             | `{ entityType, entityId, note? }` — a card for something on this site; the types are listed under inline markup    |
 | `privateSectionBoundary` | `{ sectionId, edge: 'start' \| 'end' }`                                                                            |
 
 `asset` is `{ assetUuid }` when stored. What a reader receives is hydrated: the
 asset carries its media descriptor and address, or is `null` when the reader
 may not see it.
+
+A link block's `note` is the owner's plain-text word on why the link is there,
+like `data-content-note` inline: whitespace collapsed, and absent rather than
+empty, so a block without a note is stored exactly as before notes existed.
+What a site says of itself — its title, description and icon — is never stored
+in the block. An `entityLink` whose target the reader may not open arrives
+without its note.
 
 An item's `content` is inline HTML, like a paragraph's `text`, so a line
 broken inside an item is a `<br>`; in Markdown it goes on indented under the
@@ -146,8 +159,15 @@ assetTotalSize }`) and nothing else;
 
 ## Text and Markdown
 
-- `contentPlainText(data)` — everything as plain text.
+- `contentPlainText(data)` — everything as plain text. A link block's note is
+  part of it, as a caption is; an inline link's note, an attribute, is not.
 - `publicContentPlainText(data, 'all' | 'prose')` — the same, with private
   sections already gone; `prose` keeps paragraphs, headings, quotes and lists.
 - `contentToMarkdown(data, options)` in `shared/content-markdown.ts` — the
-  public document as Markdown, which is what `…/index.md` serves.
+  public document as Markdown, which is what `…/index.md` serves. A link's
+  note, inline or on a block, is the link's title: `[text](url "note")`. With
+  `options.format` the owner's words — text, captions, attachment titles,
+  hints, link notes, entity link titles — get the typography of the site's
+  language, as on the page; markup, addresses, file names and the titles of
+  other sites stay as they are. None of it is stored: the content keeps what
+  was typed.

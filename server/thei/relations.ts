@@ -1,5 +1,6 @@
 import { and, eq, inArray, or } from 'drizzle-orm';
 import {
+  orderRelationsForEditing,
   relationEndpointKey,
   relationEndpointsEqual,
   type RelationEditItem,
@@ -383,6 +384,11 @@ export function readRelationRows(owner: RelationEndpoint): RelationRow[] {
     .sort((a, b) => a.order - b.order);
 }
 
+/**
+ * An entity's relations for its edit form, in the order the form keeps them
+ * (`orderRelationsForEditing`), so that an untouched form compares equal to
+ * what it loaded.
+ */
 export async function getRelations(
   owner: RelationEndpoint,
 ): Promise<RelationGetItem[]> {
@@ -408,7 +414,7 @@ export async function getRelations(
       } satisfies RelationGetItem;
     }),
   );
-  return items.filter((item) => item !== undefined);
+  return orderRelationsForEditing(items.filter((item) => item !== undefined));
 }
 
 export function toStoredRelationType(

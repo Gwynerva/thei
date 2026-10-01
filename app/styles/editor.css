@@ -54,6 +54,14 @@
     oklch(18% 0.04 var(--hue-accent) / 0.18),
     oklch(4% 0.02 var(--hue-accent) / 0.62)
   );
+  /* Faint, so the locks of a private section show through it. */
+  --content-editor-current: color-mix(
+    in oklab,
+    var(--color-accent) 8%,
+    transparent
+  );
+  /* The text column; the mobile layout gives it the whole width. */
+  --content-editor-column: 100%;
   /*
    * The plus and settings buttons as Editor.js sizes them on a desktop:
    * 26px plus, 3px between, 24px settings, plus the gap to the text below.
@@ -93,6 +101,9 @@
   & .ce-block {
     position: relative;
     color: inherit;
+    /* A block that takes the focus itself has the glow below to show it. */
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
   }
 
   /* The same rhythm as the page's in content.css. */
@@ -112,13 +123,15 @@
    * Editor.js decides its `--narrow` layout once, at start; this replaces it.
    */
   &:not([data-content-editor-layout='mobile']) {
+    --content-editor-column: min(
+      650px,
+      calc(
+        100% + 2 * var(--spacing-sm) - 2 * var(--content-editor-actions-width)
+      )
+    );
+
     & :is(.ce-block__content, .ce-toolbar__content) {
-      max-width: min(
-        650px,
-        calc(
-          100% + 2 * var(--spacing-sm) - 2 * var(--content-editor-actions-width)
-        )
-      );
+      max-width: var(--content-editor-column);
     }
 
     & .codex-editor--narrow .codex-editor__redactor {
@@ -260,13 +273,11 @@
     transition-timing-function: var(--default-transition-timing-function);
   }
 
-  &
-    :is(.ce-toolbar__plus, .ce-toolbar__settings-btn):is(
-      :hover,
-      :focus-visible
-    ) {
-    background-color: var(--color-bg-3);
-    color: var(--color-text-1);
+  & :is(.ce-toolbar__plus, .ce-toolbar__settings-btn) {
+    @variant hocus {
+      background-color: var(--color-bg-3);
+      color: var(--color-text-1);
+    }
   }
 
   & .ce-toolbar__settings-btn {
@@ -357,7 +368,87 @@
     }
   }
 
-  /* 6. Block selection and drag-and-drop feedback. */
+  /*
+   * 6. The current block, selection and drag-and-drop feedback.
+   *
+   * The current block is the one the keyboard is in — where Enter acts
+   * (`editor-current-block.ts`). It glows faintly, and the glow fades out
+   * over a margin around its column, wider at the sides; on a phone the
+   * sides reach only the editor's padding, so nothing scrolls sideways. It
+   * lies under the content of every block: `.codex-editor` is a stacking
+   * context of its own, and the glow is at its bottom. A selected block has
+   * a stronger look of its own, and a drag shows where the block goes
+   * instead.
+   */
+  & .ce-block::before {
+    --content-editor-glow-x: var(--spacing-lg);
+    --content-editor-glow-y: var(--spacing-md);
+    position: absolute;
+    top: calc(-1 * var(--content-editor-glow-y));
+    bottom: calc(-1 * var(--content-editor-glow-y));
+    left: calc(
+      50% - var(--content-editor-column) / 2 - var(--content-editor-glow-x)
+    );
+    z-index: -1;
+    width: calc(
+      var(--content-editor-column) + 2 * var(--content-editor-glow-x)
+    );
+    background: var(--content-editor-current);
+    content: '';
+    mask-image:
+      linear-gradient(
+        to right,
+        transparent,
+        black var(--content-editor-glow-x),
+        black calc(100% - var(--content-editor-glow-x)),
+        transparent
+      ),
+      linear-gradient(
+        to bottom,
+        transparent,
+        black var(--content-editor-glow-y),
+        black calc(100% - var(--content-editor-glow-y)),
+        transparent
+      );
+    mask-composite: intersect;
+    opacity: 0;
+    pointer-events: none;
+    /*
+     * The glow waits a moment before it goes: a click on a button of the
+     * inline toolbar takes the focus for an instant and gives it back.
+     */
+    transition: opacity var(--default-transition-duration)
+      var(--default-transition-timing-function)
+      var(--default-transition-duration);
+
+    @media (prefers-reduced-motion: reduce) {
+      transition-duration: 0s;
+    }
+  }
+
+  &[data-content-editor-layout='mobile'] .ce-block::before {
+    --content-editor-glow-x: var(--spacing-sm);
+  }
+
+  & .ce-block:focus-within::before {
+    opacity: 1;
+    transition-delay: 0s;
+  }
+
+  /* The focus moved on to another block: one glow at a time. */
+  &
+    .codex-editor:has(.ce-block:focus-within)
+    .ce-block:not(:focus-within)::before,
+  &.content-editor--dragging-block .ce-block::before,
+  & .codex-editor:has(.ce-block--selected) .ce-block::before {
+    transition-delay: 0s;
+  }
+
+  &.content-editor--dragging-block .ce-block::before,
+  & .codex-editor:has(.ce-block--selected) .ce-block::before {
+    opacity: 0;
+  }
+
   & .ce-block--selected .ce-block__content {
     border-radius: calc(var(--radius-normal) * 0.65);
     background: var(--content-editor-active);

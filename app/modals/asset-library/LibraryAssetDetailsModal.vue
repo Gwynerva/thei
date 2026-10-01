@@ -10,7 +10,6 @@ import {
 import {
   assetFileLabel,
   assetPlacementLabel,
-  assetPlacementScopeLabel,
   assetSourceIcon,
   assetSourceLabel,
 } from '../../composables/asset-library-labels';
@@ -18,7 +17,7 @@ import AssetModal from '../asset-modal/AssetModal.vue';
 import AssetModalButton from '../asset-modal/AssetModalButton.vue';
 import AssetModalPreviewMedia from '../asset-modal/AssetModalPreviewMedia.vue';
 import AssetModalFileInfo from '../asset-modal/AssetModalFileInfo.vue';
-import { errorMessage } from '../upload-settings/use-draft-renders';
+import { errorMessage } from '#layers/thei/app/composables/upload-draft';
 const props = defineProps<{
   modalData: {
     asset: AssetVariantInfo;
@@ -166,7 +165,11 @@ const usageGroups = computed(() => {
         </button>
         <p v-else-if="!data?.placements.length" class="text-sm text-text-3">
           {{ phrase.asset_library_no_usage }}
-          {{ phrase.asset_library_unused_hint }}
+          {{
+            data?.inHistory
+              ? phrase.asset_library_in_history
+              : phrase.asset_library_unused_hint
+          }}
         </p>
         <ul v-else class="space-y-sm">
           <li
@@ -211,13 +214,23 @@ const usageGroups = computed(() => {
                 </a>
               </span>
             </div>
+            <p
+              v-if="group.source.parent"
+              class="mt-xs flex min-w-0 items-center gap-1 text-xs font-semibold
+                text-text-3"
+            >
+              <Icon name="project" class="shrink-0" /><span
+                class="min-w-0 truncate"
+                >{{ publicText(group.source.parent.title) }}</span
+              ><Icon name="corner-down" class="shrink-0" aria-hidden="true" />
+            </p>
             <p class="mt-xs font-semibold wrap-anywhere">
-              {{ group.source.title }}
+              {{ publicText(group.source.title) }}
             </p>
             <ul class="mt-xs divide-y divide-border-1 border-t border-border-1">
               <li
                 v-for="(placement, index) in group.placements"
-                :key="`${placement.role}:${placement.scope.kind}:${placement.isPrivate}:${index}`"
+                :key="`${placement.role}:${placement.isPrivate}:${index}`"
                 class="py-xs first:pt-xs last:pb-0"
               >
                 <div class="flex items-start justify-between gap-xs">
@@ -247,22 +260,6 @@ const usageGroups = computed(() => {
                     />
                   </span>
                 </div>
-                <p
-                  v-if="placement.scope.kind !== 'entity'"
-                  class="mt-1 text-xs wrap-anywhere"
-                >
-                  <a
-                    :href="sitePath(placement.scope.url)"
-                    target="_blank"
-                    rel="noopener"
-                    class="text-accent"
-                  >
-                    {{ placement.scope.title }}
-                  </a>
-                  <span class="text-text-3">
-                    · {{ assetPlacementScopeLabel(placement) }}
-                  </span>
-                </p>
               </li>
             </ul>
           </li>

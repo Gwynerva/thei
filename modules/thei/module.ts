@@ -10,7 +10,9 @@ import {
 } from 'nuxt/kit';
 import { version } from '../../package.json';
 import { setupTheiIcons } from './icons';
+import { setupOgSignature } from './og-signature';
 import { siteUrlBasePath } from '../../shared/site-url';
+import { ogFontAssetPattern } from '../../server/thei/og/font-set';
 
 export default defineNuxtModule({
   meta: {
@@ -24,6 +26,7 @@ export default defineNuxtModule({
     applyBasePath(nuxt, projectPath);
 
     await setupTheiIcons(nuxt, theiPath);
+    setupOgSignature(nuxt, theiPath);
 
     const staticPublicTemplate = addTemplate({
       write: true,
@@ -47,15 +50,15 @@ export default defineNuxtModule({
 
     nuxt.hook('nitro:config', (nitroConfig) => {
       // The OG renderer draws its text with real font files rather than
-      // whatever the server happens to have installed, so the four subsets it
-      // uses travel with the build as server assets, straight from the font
-      // package. A copy in the build directory would not: `nuxt build`
+      // whatever the server happens to have installed, so the files it uses
+      // (`font-set.ts` lists them) travel with the build as server assets,
+      // straight from the font package. A copy in the build directory would not: `nuxt build`
       // empties that directory after the modules have run.
       nitroConfig.serverAssets ??= [];
       nitroConfig.serverAssets.push({
         baseName: 'thei-og-fonts',
         dir: ogFontsDir(),
-        pattern: 'noto-sans-{latin,cyrillic}-{400,700}-normal.woff',
+        pattern: ogFontAssetPattern(),
       });
 
       nitroConfig.alias ??= {};

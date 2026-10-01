@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdir, stat, utimes, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdir, readdir, stat, utimes, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { freshTestDb } from '../helpers/fresh-db';
 
@@ -20,8 +21,11 @@ import {
 import {
   externalLinkFaviconDir,
   externalLinkFaviconPath,
-  externalLinkKey,
+  prepareExternalLinkFavicon,
+  storeExternalLinkFavicon,
+  withExternalLinkFavicons,
 } from '../../server/thei/external-links/favicon';
+import type { ExternalLink } from '../../shared/external-link';
 import {
   applyExternalLinkList,
   getExternalLinkList,
@@ -47,8 +51,12 @@ afterEach(async () => {
 
 const LONG_AGO = Date.now() - 10 * 60_000;
 
-function storeRow(url: string, touchedAt = LONG_AGO) {
-  upsertExternalLink({ url, faviconKey: externalLinkKey(url), touchedAt });
+/** A stand-in for the hash of an icon's bytes: the sweep only compares keys. */
+const keyOf = (value: string) =>
+  createHash('sha256').update(value).digest('hex');
+
+function storeRow(url: string, touchedAt = LONG_AGO, faviconKey = keyOf(url)) {
+  upsertExternalLink({ url, faviconKey, touchedAt });
 }
 
 async function storeFile(name: string, ageMs = 10 * 60_000) {
@@ -60,8 +68,23 @@ async function storeFile(name: string, ageMs = 10 * 60_000) {
   return path;
 }
 
-const faviconFile = (url: string, ageMs?: number) =>
-  storeFile(`${externalLinkKey(url)}.webp`, ageMs);
+const faviconFile = (key: string, ageMs?: number) =>
+  storeFile(`${key}.webp`, ageMs);
+
+/** The file a stored link's icon is served from. */
+const iconPath = (link: ExternalLink) =>
+  externalLinkFaviconPath(
+    /([a-f0-9]{64})\.webp$/.exec(link.faviconMedia.src)![1]!,
+  );
+
+const iconFiles = async () =>
+  (await readdir(externalLinkFaviconDir()).catch(() => [] as string[])).filter(
+    (name) => name.endsWith('.webp'),
+  );
+
+const ICON = Buffer.from(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><circle cx="24" cy="24" r="20" fill="#168de2"/></svg>',
+);
 
 const exists = (path: string) =>
   stat(path).then(
@@ -113,17 +136,17 @@ describe('the sweep', () => {
     };
     for (const url of Object.values(urls)) {
       storeRow(url, url === urls.freshOrphan ? Date.now() : LONG_AGO);
-      await faviconFile(url);
+      await faviconFile(keyOf(url));
     }
     entity('projects', 'p1', urls.projectAction);
     entity('events', 'e1', urls.eventAction);
     const { db, schema } = context;
     db.transaction((tx) => {
       applyExternalLinkList(tx, schema, { type: 'project', id: 'p1' }, [
-        { url: urls.projectList, name: 'A', isPrivate: false },
+        { url: urls.projectList, note: 'A', isPrivate: false },
       ]);
       applyExternalLinkList(tx, schema, { type: 'event', id: 'e1' }, [
-        { url: urls.eventList, name: 'B', isPrivate: true },
+        { url: urls.eventList, note: '', isPrivate: true },
       ]);
       applyExternalLinkList(tx, schema, { type: 'profile' }, [
         { url: urls.profileList, name: 'C', isPrivate: false },
@@ -159,30 +182,98 @@ describe('the sweep', () => {
         .filter((url) => url !== urls.orphan)
         .sort(),
     );
-    expect(
-      await exists(externalLinkFaviconPath(externalLinkKey(urls.orphan))),
-    ).toBe(false);
-    expect(
-      await exists(externalLinkFaviconPath(externalLinkKey(urls.eventList))),
-    ).toBe(true);
-    expect(
-      await exists(externalLinkFaviconPath(externalLinkKey(urls.freshOrphan))),
-    ).toBe(true);
+    expect(await exists(externalLinkFaviconPath(keyOf(urls.orphan)))).toBe(
+      false,
+    );
+    expect(await exists(externalLinkFaviconPath(keyOf(urls.eventList)))).toBe(
+      true,
+    );
+    expect(await exists(externalLinkFaviconPath(keyOf(urls.freshOrphan)))).toBe(
+      true,
+    );
     expect(warn).not.toHaveBeenCalled();
   });
 
   it('removes stray files, but neither fresh ones nor anything it does not own', async () => {
-    const stray = await faviconFile('https://gone.example/');
-    const fresh = await faviconFile('https://new.example/', 0);
-    const temporary = await storeFile(`${externalLinkKey('x')}.webp.123.tmp`);
+    const stray = await faviconFile(keyOf('https://gone.example/'));
+    const fresh = await faviconFile(keyOf('https://new.example/'), 0);
+    // An icon a crash left half written, and one being written right now.
+    const abandoned = await storeFile(`${keyOf('x')}.webp.123.456.tmp`);
+    const writing = await storeFile(`${keyOf('y')}.webp.123.789.tmp`, 0);
     const foreign = await storeFile('readme.txt');
 
     await sweepExternalLinks();
 
     expect(await exists(stray)).toBe(false);
     expect(await exists(fresh)).toBe(true);
-    expect(await exists(temporary)).toBe(true);
+    expect(await exists(abandoned)).toBe(false);
+    expect(await exists(writing)).toBe(true);
     expect(await exists(foreign)).toBe(true);
+  });
+
+  it('keeps an icon file while any link still shows it', async () => {
+    const shared = keyOf('one icon for two links');
+    const path = await faviconFile(shared);
+    storeRow('https://kept.example/a', LONG_AGO, shared);
+    storeRow('https://gone.example/b', LONG_AGO, shared);
+    context.db.transaction((tx) => {
+      applyExternalLinkList(tx, context.schema, { type: 'profile' }, [
+        { url: 'https://kept.example/a', name: 'A', isPrivate: false },
+      ]);
+    });
+
+    await sweepExternalLinks();
+    expect(await findExternalLink('https://gone.example/b')).toBeUndefined();
+    expect(await exists(path)).toBe(true);
+
+    context.db.transaction((tx) => {
+      applyExternalLinkList(tx, context.schema, { type: 'profile' }, []);
+    });
+    await sweepExternalLinks();
+    expect(await findExternalLink('https://kept.example/a')).toBeUndefined();
+    expect(await exists(path)).toBe(false);
+  });
+
+  it('never takes a file between a store and the row that claims it', async () => {
+    // The icon is already on disk, old and claimed by no row, so storing it
+    // again writes nothing and leaves the file as the sweep would find it.
+    const { faviconKey } = await storeExternalLinkFavicon(
+      await prepareExternalLinkFavicon(ICON),
+    );
+    const path = externalLinkFaviconPath(faviconKey);
+    const old = new Date(LONG_AGO);
+    await utimes(path, old, old);
+
+    let release!: () => void;
+    let reachedPause!: () => void;
+    const paused = new Promise<void>((resolve) => (release = resolve));
+    const betweenFileAndRow = new Promise<void>(
+      (resolve) => (reachedPause = resolve),
+    );
+    const storing = withExternalLinkFavicons(async () => {
+      const stored = await storeExternalLinkFavicon(
+        await prepareExternalLinkFavicon(ICON),
+      );
+      reachedPause();
+      await paused;
+      upsertExternalLink({
+        url: 'https://site.example/',
+        faviconKey: stored.faviconKey,
+        touchedAt: Date.now(),
+      });
+    });
+    await betweenFileAndRow;
+    const sweeping = sweepExternalLinks();
+    // Time enough for a sweep that did not wait to have finished.
+    await Promise.race([
+      sweeping,
+      new Promise((resolve) => setTimeout(resolve, 200)),
+    ]);
+    release();
+    await Promise.all([storing, sweeping]);
+
+    expect(await findExternalLink('https://site.example/')).toBeDefined();
+    expect(await exists(path)).toBe(true);
   });
 
   it('tolerates malformed content and never throws', async () => {
@@ -237,15 +328,42 @@ describe('reading and storing', () => {
       description: 'The description',
       status: 'archived',
     });
-    expect(await exists(externalLinkFaviconPath(externalLinkKey(url)))).toBe(
-      true,
-    );
+    expect(await exists(iconPath(first))).toBe(true);
 
     // Ensuring never reads a site that already has a record.
     await ensureExternalLinks([url, 'https://other.example/']);
     expect(collectExternalLink).toHaveBeenCalledTimes(2);
     expect(vi.mocked(collectExternalLink).mock.calls[1]?.[0]).toBe(
       'https://other.example/',
+    );
+  });
+
+  it('stores one file for every link with the same icon', async () => {
+    vi.mocked(collectExternalLink).mockImplementation(async (value) => ({
+      url: String(value),
+      status: 'complete',
+      favicon: String(value).includes('store.example') ? ICON : undefined,
+    }));
+
+    const first = await refreshExternalLink('https://store.example/app/1/');
+    const second = await refreshExternalLink('https://store.example/app/2/');
+    expect(second.faviconMedia.src).toBe(first.faviconMedia.src);
+    // Refreshed with the same bytes, the address stays, and so does the
+    // copy a browser already has.
+    const again = await refreshExternalLink('https://store.example/app/1/');
+    expect(again.faviconMedia.src).toBe(first.faviconMedia.src);
+    expect(again.faviconMedia.src).not.toContain('?');
+
+    // Links without an icon of their own share the neutral tile.
+    const bare = await refreshExternalLink('https://bare.example/');
+    const other = await refreshExternalLink('https://other-bare.example/');
+    expect(other.faviconMedia.src).toBe(bare.faviconMedia.src);
+    expect(bare.faviconMedia.src).not.toBe(first.faviconMedia.src);
+
+    expect((await iconFiles()).sort()).toEqual(
+      [iconPath(first), iconPath(bare)]
+        .map((path) => path.split(/[\\/]/).pop()!)
+        .sort(),
     );
   });
 
@@ -264,17 +382,22 @@ describe('reading and storing', () => {
     entity('projects', 'p2');
     context.db.transaction((tx) => {
       applyExternalLinkList(tx, context.schema, { type: 'project', id: 'p2' }, [
-        { url: 'https://two.example/', name: 'Second', isPrivate: true },
-        { url: 'https://one.example/', name: 'First', isPrivate: false },
+        { url: 'https://two.example/', note: 'Second', isPrivate: true },
+        { url: 'https://one.example/', note: '', isPrivate: false },
       ]);
     });
     const all = getExternalLinkList({ type: 'project', id: 'p2' });
-    expect(all.map((link) => link.name)).toEqual(['Second', 'First']);
+    expect(all.map((link) => link.url)).toEqual([
+      'https://two.example/',
+      'https://one.example/',
+    ]);
     expect(all[0]).toMatchObject({
       url: 'https://two.example/',
+      note: 'Second',
       isPrivate: true,
       status: 'complete',
     });
+    expect(all[0]).not.toHaveProperty('name');
     expect(all[0]?.faviconMedia.src).toContain(
       '/media/external-link-favicons/',
     );
@@ -282,8 +405,48 @@ describe('reading and storing', () => {
       getExternalLinkList(
         { type: 'project', id: 'p2' },
         { includePrivate: false },
-      ).map((link) => link.name),
-    ).toEqual(['First']);
+      ).map((link) => link.url),
+    ).toEqual(['https://one.example/']);
     expect(getExternalLinkList({ type: 'profile' })).toEqual([]);
+  });
+
+  it('names the profile’s links, and keeps a note an older panel did not send', async () => {
+    storeRow('https://one.example/');
+    storeRow('https://two.example/');
+    entity('projects', 'p3');
+    context.db.transaction((tx) => {
+      applyExternalLinkList(tx, context.schema, { type: 'profile' }, [
+        {
+          url: 'https://one.example/',
+          name: 'GitHub',
+          note: 'Code',
+          isPrivate: false,
+        },
+      ]);
+      applyExternalLinkList(tx, context.schema, { type: 'project', id: 'p3' }, [
+        { url: 'https://one.example/', note: 'Why', isPrivate: false },
+        { url: 'https://two.example/', note: 'Kept', isPrivate: false },
+      ]);
+    });
+    context.db.transaction((tx) => {
+      applyExternalLinkList(tx, context.schema, { type: 'project', id: 'p3' }, [
+        { url: 'https://two.example/', isPrivate: true },
+        { url: 'https://one.example/', note: '', isPrivate: false },
+      ]);
+    });
+    expect(
+      getExternalLinkList({ type: 'profile' }).map(({ name, note }) => ({
+        name,
+        note,
+      })),
+    ).toEqual([{ name: 'GitHub', note: 'Code' }]);
+    expect(
+      getExternalLinkList({ type: 'project', id: 'p3' }).map(
+        ({ url, note, isPrivate }) => ({ url, note, isPrivate }),
+      ),
+    ).toEqual([
+      { url: 'https://two.example/', note: 'Kept', isPrivate: true },
+      { url: 'https://one.example/', note: '', isPrivate: false },
+    ]);
   });
 });

@@ -1,8 +1,15 @@
 <script lang="ts" setup>
 import type { IconName } from '#thei/icons';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
-import { truncateExternalLinkText } from '#layers/thei/shared/external-link';
 
+/**
+ * One file or link in a compact list. It shows its text as given: the caller
+ * knows whose words they are, and formats the owner's (`publicText`).
+ *
+ * The title takes one line and the description `descriptionLines`, each cut
+ * with an ellipsis where it runs out of room. Whatever is cut is in the
+ * item's popup in full, which says nothing when nothing is cut.
+ */
 const props = withDefaults(
   defineProps<{
     title: string;
@@ -26,13 +33,42 @@ const props = withDefaults(
     continuousMedia?: boolean;
     /** A codename for something hidden from visitors; never a link. */
     secret?: boolean;
+    /**
+     * The owner's note on why this is here — a link's reason, a relation's
+     * explanation. It is a line of its own under the description, in
+     * italics, never a replacement for what the target says of itself.
+     */
+    note?: string;
+    descriptionLines?: 2 | 3;
   }>(),
-  { icon: 'link' },
+  { icon: 'link', descriptionLines: 2 },
 );
 defineEmits<{ activate: [] }>();
-const compactDescription = computed(() =>
-  truncateExternalLinkText(props.description, 70),
+
+function oneLine(value: string | undefined) {
+  return value?.replace(/\s+/g, ' ').trim() || undefined;
+}
+
+const description = computed(() => oneLine(props.description));
+const note = computed(() => oneLine(props.note));
+/** A note takes a line from the description, so an item keeps its height. */
+const descriptionClamp = computed(
+  () =>
+    ({ 1: 'line-clamp-1', 2: 'line-clamp-2', 3: 'line-clamp-3' })[
+      note.value ? props.descriptionLines - 1 : props.descriptionLines
+    ],
 );
+const popup = computed(() => ({
+  ...titlePopup(
+    { text: props.title, bold: true },
+    TITLE_POPUP_GAP,
+    description.value,
+    TITLE_POPUP_GAP,
+    note.value && { text: note.value, italic: true },
+  ),
+  // The popup repeats what is shown, so it only speaks when something is cut.
+  'data-title-popup-clipped': '',
+}));
 
 const extensionFontSize = computed(() => {
   const length = props.extension?.length ?? 0;
@@ -57,6 +93,7 @@ const extensionFontSize = computed(() => {
       focus-visible:ring-accent focus-visible:outline-none"
     :class="{ 'cursor-pointer hocus:bg-bg-3/70': button || href }"
     :data-public-secret="secret || undefined"
+    v-bind="popup"
     @click="button ? $emit('activate') : undefined"
   >
     <span
@@ -103,12 +140,21 @@ const extensionFontSize = computed(() => {
       <strong
         class="block truncate text-sm font-normal"
         :class="{ 'text-text-2 italic': secret }"
-        >{{ publicText(title) }}</strong
+        data-title-popup-clip
+        >{{ title }}</strong
       >
       <span
-        v-if="compactDescription"
-        class="line-clamp-1 block text-xs text-text-3"
-        >{{ compactDescription }}</span
+        v-if="description"
+        class="text-xs text-text-3"
+        :class="descriptionClamp"
+        data-title-popup-clip
+        >{{ description }}</span
+      >
+      <span
+        v-if="note"
+        class="mt-0.5 line-clamp-2 text-xs text-text-2 italic"
+        data-title-popup-clip
+        >{{ note }}</span
       >
     </span>
   </component>
