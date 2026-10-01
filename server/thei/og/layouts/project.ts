@@ -20,16 +20,24 @@ const BANNER_MAX = 1000;
 const BANNER_FADE = 0.55;
 const ICON = 132;
 /**
- * The shade under the words: never lighter than this, so the picture behind
- * them is a mood rather than a second thing to read, solid to `SHADE_SOLID`
- * and clear by `SHADE_END`, the card's edge. It lifts across all of the
- * banner the words leave free, along a curve level at both ends, so no line
- * shows where it starts to; by the end of the longest line it has barely
- * begun.
+ * The shade under the words: never lighter than this where the words start,
+ * so the picture behind them is a mood rather than a second thing to read,
+ * solid to `SHADE_SOLID` and clear by `SHADE_END`, the card's edge. It lifts
+ * across most of the card, the right half of the words included, along a
+ * curve level at both ends, so nowhere can be pointed at as where it starts
+ * or ends; the halo keeps the words readable where it has thinned.
  */
 const SHADE_MIN = 0.6;
-const SHADE_SOLID = 0.6;
+const SHADE_SOLID = 0.3;
 const SHADE_END = 1;
+/**
+ * A halo of the shade's colour behind every word, as the page's header has:
+ * it keeps the words readable where the shade has begun to lift under them.
+ */
+const HALO = [
+  { blur: 10, alpha: 0.85 },
+  { blur: 26, alpha: 0.7 },
+];
 
 /**
  * A project, the way its page's header shows it: the banner at full height
@@ -136,7 +144,20 @@ export const project: OgLayout = async (input) => {
           backgroundImage: `linear-gradient(90deg, ${withAlpha(scrim.color, scrim.alpha)} 0%, ${easedShadeStops(scrim.color, scrim.alpha, SHADE_SOLID, SHADE_END)})`,
         },
       }),
-      ...text.nodes,
+      // Every word inherits the halo; the plates of chips cover theirs.
+      el(
+        'div',
+        {
+          style: {
+            ...place({ left: 0, top: 0, width: OG_WIDTH, height: OG_HEIGHT }),
+            textShadow: HALO.map(
+              ({ blur, alpha }) =>
+                `0 0 ${blur}px ${withAlpha(scrim.color, alpha)}`,
+            ).join(', '),
+          },
+        },
+        ...text.nodes,
+      ),
     ),
     stacks: { text: text.fitted },
   };
