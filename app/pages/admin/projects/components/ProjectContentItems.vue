@@ -273,7 +273,7 @@ function moveSectionWithKeyboard(target: Item, direction: -1 | 1) {
             size="icon-sm"
             variant="secondary"
             drag-handle
-            :aria-label="`${phrase.content_section_sort}: ${item.title}`"
+            :aria-label="`${phrase.content_section_sort}: ${publicText(item.title)}`"
             data-content-section-handle
             @keydown.up.prevent.stop="moveSectionWithKeyboard(item, -1)"
             @keydown.down.prevent.stop="moveSectionWithKeyboard(item, 1)"
@@ -284,7 +284,7 @@ function moveSectionWithKeyboard(target: Item, direction: -1 | 1) {
             type="button"
             size="icon-sm"
             variant="delete"
-            :aria-label="`${labels.delete}: ${item.title}`"
+            :aria-label="`${labels.delete}: ${publicText(item.title)}`"
             :data-title-popup="labels.delete"
             data-drag-ignore
             @click="deleteItem(item)"

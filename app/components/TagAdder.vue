@@ -214,7 +214,7 @@ function recommendationPopup(tag: RecommendedTag) {
             type="button"
             class="-ml-1 shrink-0 cursor-pointer leading-none transition
               hocus:text-text-error"
-            :aria-label="`${phrase.delete}: ${tag.title}`"
+            :aria-label="`${phrase.delete}: ${publicText(tag.title)}`"
             data-drag-ignore
             @click.stop="removeTag(index)"
           >
