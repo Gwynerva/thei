@@ -8,11 +8,11 @@ import {
   isExtensionAllowed,
   videoExtensionProfile,
 } from '#layers/thei/shared/assets/extensions';
-import { errorMessage } from '#layers/thei/app/modals/upload-settings/use-draft-renders';
 import type { PickedFile } from '#layers/thei/app/modals/pick-file/picked-file';
 import {
   commitDraftRequest,
   deleteDraft,
+  errorMessage,
   isAbortError,
   isDraftExpired,
   stageDraftFile,
@@ -165,6 +165,69 @@ abstract class PendingUploadBase implements PendingUpload {
   }
 }
 
+/**
+ * Uploads shown as tiles of their own until each lands, beside the files a
+ * list or a gallery already holds. A file that lands goes to `onLanded` to
+ * be placed; `onChange` hears every change of the set of tiles, and only
+ * that, since each tile follows its own status. Giving a tile up, or the
+ * whole list, lets its upload go.
+ */
+export function createPendingUploadList(options: {
+  onLanded(asset: AssetVariantInfo): void;
+  onChange(uploads: readonly PendingUpload[]): void;
+}) {
+  let uploads: readonly PendingUpload[] = [];
+  let disposed = false;
+
+  function set(next: readonly PendingUpload[]) {
+    uploads = next;
+    options.onChange(uploads);
+  }
+
+  /** The tile goes: its file landed, or was given up. */
+  function forget(upload: PendingUpload) {
+    if (!uploads.includes(upload)) return;
+    set(uploads.filter((other) => other !== upload));
+    upload.dispose();
+  }
+
+  return {
+    get uploads() {
+      return uploads;
+    },
+    /**
+     * Shows uploads until each lands. Every file lands on its own, the same
+     * bytes twice included: a list may hold one file twice.
+     */
+    follow(added: readonly PendingUpload[]) {
+      if (!added.length) return;
+      if (disposed) {
+        for (const upload of added) upload.dispose();
+        return;
+      }
+      set([...uploads, ...added]);
+      for (const upload of added) {
+        void upload.result.then((asset) => {
+          if (disposed || !uploads.includes(upload)) return;
+          forget(upload);
+          if (asset) options.onLanded(asset);
+        });
+      }
+    },
+    forget,
+    /** The list goes, and every upload still on its way with it. */
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      const left = uploads;
+      if (left.length) set([]);
+      for (const upload of left) upload.dispose();
+    },
+  };
+}
+
+export type PendingUploadList = ReturnType<typeof createPendingUploadList>;
+
 /** A file stored as it is, the way a batch of files is added to a list. */
 export class PendingOriginalUpload extends PendingUploadBase {
   private readonly send: typeof uploadOriginalFile;
@@ -272,18 +335,15 @@ export class PendingMediaUpload extends PendingUploadBase {
     const controller = new AbortController();
     this.staging = controller;
     this.report({ phase: 'staging', progress: 0 });
-    this.draft = this.requests.stage(
-      this.picked.file,
-      this.extension,
-      this.options.constraints,
-      {
+    this.draft = this.requests
+      .stage(this.picked.file, this.extension, this.options.constraints, {
         signal: controller.signal,
         onProgress: (progress) => this.report({ phase: 'staging', progress }),
-      },
-    ).catch((reason: unknown) => {
-      this.draft = null;
-      throw reason;
-    });
+      })
+      .catch((reason: unknown) => {
+        this.draft = null;
+        throw reason;
+      });
     return this.draft;
   }
 

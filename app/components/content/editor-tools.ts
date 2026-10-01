@@ -11,6 +11,7 @@ import { runAssetBatch } from '#layers/thei/shared/asset-batch';
 import { contentAssetFromVariant } from '#layers/thei/app/composables/asset-wizard';
 import type { UploadConstraints } from '#layers/thei/app/composables/upload-draft';
 import {
+  createPendingUploadList,
   PendingMediaUpload,
   type PendingMediaHandover,
   type PendingUpload,
@@ -778,9 +779,21 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
   private pendingFiles?: File[];
   /**
    * Files on their way into the library, shown as tiles of their own until
-   * each lands. Never saved: a gallery with nothing landed yet is empty.
+   * each lands. Never saved: a gallery with nothing landed yet is empty. The
+   * block re-renders when the set of tiles changes, and dispatches a change
+   * only when a file lands; while any is under way, closing the editor asks.
    */
-  private uploads: PendingUpload[] = [];
+  private readonly uploads = createPendingUploadList({
+    onLanded: (asset) => this.append([contentAssetFromVariant(asset)]),
+    onChange: (uploads) => {
+      const track = contentToolConfig(this.options.config).uploads.track;
+      if (uploads.length && !this.tracking) track?.(1);
+      else if (!uploads.length && this.tracking) track?.(-1);
+      this.tracking = uploads.length > 0;
+      if (!this.destroyed) this.renderContent();
+    },
+  });
+  private tracking = false;
 
   constructor(
     private options: ContentToolOptions<
@@ -805,10 +818,7 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
   }
 
   protected override onDestroy() {
-    if (!this.uploads.length) return;
-    for (const upload of this.uploads) upload.dispose();
-    this.uploads = [];
-    contentToolConfig(this.options.config).uploads.track?.(-1);
+    this.uploads.dispose();
   }
 
   /**
@@ -829,43 +839,15 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
   /**
    * Shows uploads as tiles until each lands. `concurrency` runs them here;
    * without it they are already running, started by whoever picked them.
-   * The tiles follow their own status; the block re-renders only when the
-   * set of tiles changes, and dispatches a change only when a file lands.
    */
   private startUploads(uploads: PendingUpload[], concurrency?: number) {
-    if (!uploads.length) return;
     if (this.destroyed) {
       for (const upload of uploads) upload.dispose();
       return;
     }
-    const config = contentToolConfig(this.options.config).uploads;
-    if (!this.uploads.length) config.track?.(1);
-    this.uploads = [...this.uploads, ...uploads];
-    this.renderContent();
-    if (concurrency) {
+    this.uploads.follow(uploads);
+    if (concurrency && uploads.length) {
       void runAssetBatch(uploads, (upload) => upload.run(), concurrency);
-    }
-    // Every file lands as a tile of its own, the same bytes twice included:
-    // tiles have ids of their own, and a gallery may show one picture twice.
-    for (const upload of uploads) {
-      void upload.result.then((asset) => {
-        if (this.destroyed || !this.uploads.includes(upload)) return;
-        this.forget(upload);
-        if (!asset) {
-          this.renderContent();
-          return;
-        }
-        this.append([contentAssetFromVariant(asset)]);
-      });
-    }
-  }
-
-  /** The tile goes. Nothing stored changed, so nothing is dispatched here. */
-  private forget(upload: PendingUpload) {
-    this.uploads = this.uploads.filter((other) => other !== upload);
-    upload.dispose();
-    if (!this.uploads.length) {
-      contentToolConfig(this.options.config).uploads.track?.(-1);
     }
   }
 
@@ -886,7 +868,7 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
       addLabel: this.labels.addMedia,
       removeLabel: this.labels.removeMedia,
       captionPlaceholder: this.labels.caption,
-      pending: this.uploads,
+      pending: this.uploads.uploads,
       cancelUploadLabel: this.labels.cancelUpload,
       retryUploadLabel: this.labels.retryUpload,
       dismissUploadLabel: this.labels.dismissUpload,
@@ -894,13 +876,11 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
         this.selectedId = id;
       },
       onCancelPending: (id: string) => {
-        const upload = this.uploads.find((other) => other.id === id);
-        if (!upload) return;
-        this.forget(upload);
-        this.renderContent();
+        const upload = this.uploads.uploads.find((other) => other.id === id);
+        if (upload) this.uploads.forget(upload);
       },
       onRetryPending: (id: string) =>
-        this.uploads.find((other) => other.id === id)?.retry(),
+        this.uploads.uploads.find((other) => other.id === id)?.retry(),
       onAdd: () => void this.add(),
       onEdit: (id: string) => void this.edit(id),
       onRemove: (id: string) => this.remove(id),

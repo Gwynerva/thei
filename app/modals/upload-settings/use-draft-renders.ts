@@ -1,7 +1,9 @@
-import type {
-  AssetDraftRender,
-  AssetDraftSource,
+import {
+  ASSET_DRAFT_MAX_RENDERS,
+  type AssetDraftRender,
+  type AssetDraftSource,
 } from '#layers/thei/shared/api/asset-draft';
+import { errorMessage } from '#layers/thei/app/composables/upload-draft';
 import type { AssetImageTransformRequest } from '#layers/thei/shared/asset-upload-settings';
 import { RenderPump } from './render-pump';
 
@@ -15,12 +17,6 @@ const RENDER_DELAY_MS = 350;
  * box, so a change wastes at most that many encodes already started.
  */
 const RENDER_WINDOW = 3;
-/**
- * Every stop in every format of the last couple of settings — no more than
- * the server keeps (`DRAFT_MAX_RENDERS`), or a remembered render could point
- * at a file it has already dropped.
- */
-const MAX_KEPT = 32;
 
 export interface DraftRenderRequest {
   /** Identifies the request in the cache; empty when nothing is to render. */
@@ -99,7 +95,7 @@ export function useDraftRenders(options: {
   function remember(key: string, render: AssetDraftRender) {
     renders.delete(key);
     renders.set(key, render);
-    while (renders.size > MAX_KEPT) {
+    while (renders.size > ASSET_DRAFT_MAX_RENDERS) {
       renders.delete(renders.keys().next().value!);
     }
   }
@@ -137,12 +133,4 @@ export function useDraftRenders(options: {
     retry,
     reset,
   };
-}
-
-export function errorMessage(reason: unknown, fallback: string): string {
-  if (reason && typeof reason === 'object' && 'data' in reason) {
-    const data = (reason as { data?: { message?: string } }).data;
-    if (data?.message) return data.message;
-  }
-  return reason instanceof Error && reason.message ? reason.message : fallback;
 }

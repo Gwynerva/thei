@@ -314,6 +314,15 @@ export function deleteDraft(draftId: string) {
   sendDelete(`/api/admin/assets/drafts/${draftId}`);
 }
 
+/** What went wrong with a request, in the words the server gave if any. */
+export function errorMessage(reason: unknown, fallback: string): string {
+  if (reason && typeof reason === 'object' && 'data' in reason) {
+    const data = (reason as { data?: { message?: string } }).data;
+    if (data?.message) return data.message;
+  }
+  return reason instanceof Error && reason.message ? reason.message : fallback;
+}
+
 /**
  * A request answered with "this draft is gone": the file is staged again.
  * A job lost to a restart says the same, in its own shape.

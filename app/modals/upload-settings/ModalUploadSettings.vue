@@ -66,15 +66,14 @@ import {
   LOSSY_IMAGE_FORMATS,
   type StopSize,
 } from './quality-stops';
-import { isAbortError } from '#layers/thei/app/composables/upload-draft';
+import {
+  errorMessage,
+  isAbortError,
+} from '#layers/thei/app/composables/upload-draft';
 import { uploadStatusLabel } from '#layers/thei/app/composables/upload-progress';
 import type { DiscreteBarStop } from '../../components/field/discrete-bar-stops';
 import type { UploadSettingsFormatOption } from './UploadSettingsFormatList.vue';
-import {
-  errorMessage,
-  useDraftRenders,
-  type DraftRenderRequest,
-} from './use-draft-renders';
+import { useDraftRenders, type DraftRenderRequest } from './use-draft-renders';
 import {
   draftOriginKey,
   useDraftSession,

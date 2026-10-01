@@ -17,7 +17,7 @@ import AssetModal from '../asset-modal/AssetModal.vue';
 import AssetModalButton from '../asset-modal/AssetModalButton.vue';
 import AssetModalPreviewMedia from '../asset-modal/AssetModalPreviewMedia.vue';
 import AssetModalFileInfo from '../asset-modal/AssetModalFileInfo.vue';
-import { errorMessage } from '../upload-settings/use-draft-renders';
+import { errorMessage } from '#layers/thei/app/composables/upload-draft';
 const props = defineProps<{
   modalData: {
     asset: AssetVariantInfo;

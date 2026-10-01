@@ -3,6 +3,7 @@ import type { AssetVariantInfo } from '../../../shared/api/asset';
 import type { AssetDraftSource } from '../../../shared/api/asset-draft';
 import { AssetType } from '../../../shared/asset';
 import {
+  createPendingUploadList,
   PendingMediaUpload,
   PendingOriginalUpload,
   type PendingMediaRequests,
@@ -204,5 +205,39 @@ describe('a pasted file', () => {
     pending.dispose();
     await settle();
     expect(released).toEqual(['d-3']);
+  });
+});
+
+describe('a list of pending uploads', () => {
+  it('shows each upload until it lands, places what landed, and lets the rest go', async () => {
+    const { calls, send } = fakeSend();
+    const landed: AssetVariantInfo[] = [];
+    const seen: number[] = [];
+    const list = createPendingUploadList({
+      onLanded: (stored) => landed.push(stored),
+      onChange: (uploads) => seen.push(uploads.length),
+    });
+    const first = upload(send, 'one.png');
+    const second = upload(send, 'two.png');
+    const third = upload(send, 'three.png');
+    list.follow([first, second, third]);
+    void first.run();
+    void second.run();
+    expect(list.uploads).toEqual([first, second, third]);
+
+    calls[0]!.resolve(asset);
+    await settle();
+    expect(landed).toEqual([asset]);
+    expect(list.uploads).toEqual([second, third]);
+
+    // Given up by hand: nothing lands, and its request is stopped.
+    list.forget(second);
+    expect(calls[1]!.signal.aborted).toBe(true);
+    // The list goes with the page: what is still on its way goes too.
+    list.dispose();
+    expect(await third.result).toBeUndefined();
+    expect(list.uploads).toEqual([]);
+    expect(seen).toEqual([3, 2, 1, 0]);
+    expect(landed).toEqual([asset]);
   });
 });

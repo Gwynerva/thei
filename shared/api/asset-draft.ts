@@ -2,6 +2,17 @@ import type { AssetType } from '../asset';
 import type { AssetImageTransformSettings } from '../asset-upload-settings';
 
 /**
+ * Dry runs kept per draft, by the server and the editor alike. A change is
+ * rendered at every quality stop in each lossy format plus lossless — up to
+ * twelve, a few at a time — so this keeps the last couple of changes whole:
+ * the render a comparison still shows is never gone before the next one
+ * replaces it, and going back to earlier settings is instant. The editor
+ * remembers no more than the server keeps, or a render it remembers could
+ * point at a file already dropped.
+ */
+export const ASSET_DRAFT_MAX_RENDERS = 32;
+
+/**
  * A file the editor works on, staged on the server once.
  *
  * Every attempt at a variant — each dry run, each committed result — is made

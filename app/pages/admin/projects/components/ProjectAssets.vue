@@ -20,9 +20,11 @@ import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profil
 import { ASSET_UPLOAD_LIMITS } from '#layers/thei/shared/asset-upload-limits';
 import { DEFAULT_ASSET_IMAGE_FORMAT } from '#layers/thei/shared/asset-upload-settings';
 import AssetTile from '#layers/thei/app/components/AssetTile.vue';
-import type { ShallowRef } from 'vue';
 import AssetPendingTile from '#layers/thei/app/components/AssetPendingTile.vue';
-import type { PendingUpload } from '#layers/thei/app/composables/pending-upload';
+import {
+  createPendingUploadList,
+  type PendingUpload,
+} from '#layers/thei/app/composables/pending-upload';
 import type {
   OtherAssetGetItem,
   ShowcaseAssetGetItem,
@@ -63,48 +65,24 @@ const otherRoot = useTemplateRef<HTMLElement>('otherRoot');
 // Files still going up, shown as tiles of their own at the end of each list
 // until they land. The form knows nothing of them: leaving the page asks
 // through the count, and leaving lets them go.
-const pendingShowcase = shallowRef<PendingUpload[]>([]);
-const pendingOther = shallowRef<PendingUpload[]>([]);
+const pendingShowcase = shallowRef<readonly PendingUpload[]>([]);
+const pendingOther = shallowRef<readonly PendingUpload[]>([]);
 const pendingUploads = inject(pendingUploadsKey, undefined);
 watch([pendingShowcase, pendingOther], ([showcase, other]) => {
   if (pendingUploads) pendingUploads.value = showcase.length + other.length;
 });
-onBeforeUnmount(() => {
-  for (const upload of [...pendingShowcase.value, ...pendingOther.value]) {
-    upload.dispose();
-  }
-  if (pendingUploads) pendingUploads.value = 0;
+const showcaseUploads = createPendingUploadList({
+  onLanded: (asset) => placeShowcaseAsset(asset),
+  onChange: (uploads) => (pendingShowcase.value = uploads),
 });
-
-/** Shows uploads in a list until each lands, then places what landed. */
-function followUploads(
-  list: ShallowRef<PendingUpload[]>,
-  uploads: PendingUpload[],
-  place: (asset: AssetVariantInfo) => void,
-) {
-  if (!uploads.length) return;
-  list.value = [...list.value, ...uploads];
-  for (const upload of uploads) {
-    void upload.result.then((asset) => {
-      if (!list.value.includes(upload)) return;
-      forgetUpload(list, upload);
-      if (asset) place(asset);
-    });
-  }
-}
-
-/** The tile goes: the file landed, or was given up. */
-function forgetUpload(
-  list: ShallowRef<PendingUpload[]>,
-  upload: PendingUpload,
-) {
-  list.value = list.value.filter((other) => other !== upload);
-  upload.dispose();
-}
-const cancelShowcaseUpload = (upload: PendingUpload) =>
-  forgetUpload(pendingShowcase, upload);
-const cancelOtherUpload = (upload: PendingUpload) =>
-  forgetUpload(pendingOther, upload);
+const otherUploads = createPendingUploadList({
+  onLanded: (asset) => placeOtherAsset(asset),
+  onChange: (uploads) => (pendingOther.value = uploads),
+});
+onBeforeUnmount(() => {
+  showcaseUploads.dispose();
+  otherUploads.dispose();
+});
 
 type PickedAsset = {
   asset: AssetVariantInfo;
@@ -282,7 +260,7 @@ async function openShowcaseAdd() {
   });
   if (!result) return;
   for (const asset of result.assets) placeShowcaseAsset(asset);
-  followUploads(pendingShowcase, result.uploads, placeShowcaseAsset);
+  showcaseUploads.follow(result.uploads);
   batchErrorMessage.value = result.errors
     .map((error) => `${error.fileName}: ${error.message}`)
     .join(' · ');
@@ -377,7 +355,7 @@ async function openOtherAdd() {
   });
   if (!result) return;
   for (const asset of result.assets) placeOtherAsset(asset);
-  followUploads(pendingOther, result.uploads, placeOtherAsset);
+  otherUploads.follow(result.uploads);
   batchErrorMessage.value = result.errors
     .map((error) => `${error.fileName}: ${error.message}`)
     .join(' · ');
@@ -577,7 +555,7 @@ async function openOtherAsset(index: number) {
           :key="upload.id"
           :upload
           class="size-18"
-          @cancel="cancelShowcaseUpload(upload)"
+          @cancel="showcaseUploads.forget(upload)"
           @retry="upload.retry()"
         />
 
@@ -634,7 +612,7 @@ async function openOtherAsset(index: number) {
           :key="upload.id"
           :upload
           class="size-18"
-          @cancel="cancelOtherUpload(upload)"
+          @cancel="otherUploads.forget(upload)"
           @retry="upload.retry()"
         />
 

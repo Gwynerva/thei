@@ -18,7 +18,6 @@ import sharp from 'sharp';
 import {
   closeDraft,
   commitDraft,
-  DRAFT_MAX_RENDERS,
   draftsDirectory,
   expireIdleDrafts,
   openDraft,
@@ -28,6 +27,7 @@ import {
   useDraft,
 } from '../../../server/thei/assets/drafts';
 import { withProcessingSlot } from '../../../server/thei/assets/queue';
+import { ASSET_DRAFT_MAX_RENDERS as DRAFT_MAX_RENDERS } from '../../../shared/api/asset-draft';
 import { createAsset } from '../../../server/thei/assets/repository/create';
 import { findAssetByIdentity } from '../../../server/thei/assets/repository/find-by-identity';
 import { findAssetBySlug } from '../../../server/thei/assets/repository/find-by-slug';
@@ -305,7 +305,13 @@ describe('editor drafts', () => {
     const hash = createHash('sha256').update(bytes).digest('hex');
     await openDraft({
       id: 'from-asset',
-      source: { path, size: bytes.length, hash, extension: 'png', owned: false },
+      source: {
+        path,
+        size: bytes.length,
+        hash,
+        extension: 'png',
+        owned: false,
+      },
       type: AssetType.Image,
       familyUuid: 'af-stored',
     });

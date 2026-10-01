@@ -20,7 +20,7 @@ const props = withDefaults(
     captionPlaceholder?: string;
     openable?: boolean;
     /** Files on their way in, shown as tiles of their own until they land. */
-    pending?: PendingUpload[];
+    pending?: readonly PendingUpload[];
     cancelUploadLabel?: string;
     retryUploadLabel?: string;
     dismissUploadLabel?: string;

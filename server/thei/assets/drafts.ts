@@ -11,6 +11,7 @@ import {
 import { join } from 'node:path';
 import { createError } from 'h3';
 import {
+  ASSET_DRAFT_MAX_RENDERS,
   buildAssetDraftRenderUrl,
   type AssetDraftRender,
   type AssetDraftSource,
@@ -43,14 +44,6 @@ import { theiTempDir } from './temp';
 const DRAFT_IDLE_MS = 30 * 60 * 1000;
 /** Drafts held at once; the least recently used idle one goes first. */
 const MAX_DRAFTS = 4;
-/**
- * Dry runs kept per draft. A change is rendered at every quality stop in
- * each lossy format plus lossless — up to twelve, a few at a time — so this
- * keeps the last couple of changes whole: the render a comparison still
- * shows is never gone before the next one replaces it, and going back to
- * earlier settings is instant.
- */
-export const DRAFT_MAX_RENDERS = 32;
 const EXPIRY_CHECK_MS = 5 * 60 * 1000;
 
 interface DraftRenderRecord extends AssetDraftRender {
@@ -387,7 +380,7 @@ async function cacheRender(
   if (bytes.buffer) await writeFile(path, bytes.buffer);
   else await rename(bytes.path, path);
   session.renders.set(key, record);
-  while (session.renders.size > DRAFT_MAX_RENDERS) {
+  while (session.renders.size > ASSET_DRAFT_MAX_RENDERS) {
     const [oldestKey, oldest] = session.renders.entries().next().value!;
     session.renders.delete(oldestKey);
     await rm(oldest.path, { force: true }).catch(() => {});
