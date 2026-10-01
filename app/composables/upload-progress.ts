@@ -1,4 +1,5 @@
 import type { AssetUploadProgress } from '#layers/thei/shared/api/asset-upload-progress';
+import type { PendingUpload } from './pending-upload';
 
 /**
  * Where a file on its way into the library is: still leaving the browser,
@@ -38,6 +39,34 @@ export function trackUploadProgress(
     stopped = true;
     clearTimeout(timer);
   };
+}
+
+/**
+ * What a tile or a block shows of a file on its way: the picture the browser
+ * already has of it — a video by the still the server will choose as well,
+ * rather than its first frame, which is often black — where the upload is,
+ * and what went wrong. `idle` is told while no attempt reports anything.
+ */
+export function usePendingUploadView(
+  upload: () => PendingUpload | undefined,
+  idle: UploadStatus | null = null,
+) {
+  const videoPoster = useVideoPoster(() => {
+    const preview = upload()?.preview;
+    return preview?.kind === 'video' ? preview.src : undefined;
+  });
+  const previewSrc = computed(() => {
+    const preview = upload()?.preview;
+    if (preview?.kind === 'image') return preview.src;
+    if (preview?.kind === 'video') return videoPoster.value;
+    return undefined;
+  });
+  const status = computed(() => upload()?.status.value ?? null);
+  const error = computed(() => upload()?.error.value);
+  const statusLabel = computed(
+    () => error.value ?? uploadStatusLabel(status.value ?? idle),
+  );
+  return { previewSrc, status, error, statusLabel };
 }
 
 /** The status in words, with the share done where one is known. */

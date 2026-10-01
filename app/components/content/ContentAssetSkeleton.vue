@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { IconName } from '#thei/icons';
 import type { PendingUpload } from '#layers/thei/app/composables/pending-upload';
-import { uploadStatusLabel } from '#layers/thei/app/composables/upload-progress';
+import { usePendingUploadView } from '#layers/thei/app/composables/upload-progress';
 import UploadStatusBadge from '../UploadStatusBadge.vue';
 
 const props = defineProps<{
@@ -24,20 +24,9 @@ const emit = defineEmits<{
   retry: [];
 }>();
 
-// A video's still is the frame that shows it best — the same the server
-// will choose — rather than its first frame, which is often black.
-const videoPoster = useVideoPoster(() =>
-  props.upload?.preview.kind === 'video' ? props.upload.preview.src : undefined,
+const { previewSrc, status, error, statusLabel } = usePendingUploadView(
+  () => props.upload,
 );
-const previewSrc = computed(() => {
-  const preview = props.upload?.preview;
-  if (preview?.kind === 'image') return preview.src;
-  if (preview?.kind === 'video') return videoPoster.value;
-  return undefined;
-});
-const status = computed(() => props.upload?.status.value ?? null);
-const error = computed(() => props.upload?.error.value);
-const label = computed(() => error.value ?? uploadStatusLabel(status.value));
 </script>
 
 <template>
@@ -59,7 +48,7 @@ const label = computed(() => error.value ?? uploadStatusLabel(status.value));
         transition-colors outline-none hocus:bg-accent/20 hocus:text-accent"
       :class="upload && previewSrc ? 'absolute inset-0' : 'h-34'"
       :disabled="readOnly || Boolean(upload)"
-      :aria-label="label"
+      :aria-label="upload ? statusLabel : label"
       :aria-busy="Boolean(upload) && !error"
       @click="emit('pick')"
     >
@@ -75,9 +64,9 @@ const label = computed(() => error.value ?? uploadStatusLabel(status.value));
       class="pointer-events-none absolute inset-0 flex items-center
         justify-center gap-sm"
     >
-      <UploadStatusBadge :status :error :label large />
+      <UploadStatusBadge :status :error :label="statusLabel" large />
       <span role="status" data-content-asset-status class="sr-only">{{
-        label
+        statusLabel
       }}</span>
       <button
         v-if="error"

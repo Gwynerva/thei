@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { PendingUpload } from '#layers/thei/app/composables/pending-upload';
-import { uploadStatusLabel } from '#layers/thei/app/composables/upload-progress';
+import { usePendingUploadView } from '#layers/thei/app/composables/upload-progress';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import AssetTile from './AssetTile.vue';
 import UploadStatusBadge from './UploadStatusBadge.vue';
@@ -23,32 +23,23 @@ const emit = defineEmits<{
   retry: [];
 }>();
 
-// A video's still is the frame that shows it best, the same the server will
-// choose; until it is found, and for a file that is no picture at all, the
-// tile names the file's kind instead.
-const videoPoster = useVideoPoster(() =>
-  props.upload.preview.kind === 'video' ? props.upload.preview.src : undefined,
-);
-const pictureSrc = computed(() => {
-  const { kind, src } = props.upload.preview;
-  if (kind === 'image') return src;
-  if (kind === 'video') return videoPoster.value;
-  return undefined;
-});
+// Until a video's still is found, and for a file that is no picture at
+// all, the tile names the file's kind instead.
+const {
+  previewSrc,
+  status,
+  error,
+  statusLabel: label,
+} = usePendingUploadView(() => props.upload, { phase: 'queued' });
 // Always a still: a video descriptor would start decoders on a file this
 // large and play it on hover.
 const media = computed<MediaDescriptor | undefined>(() =>
-  pictureSrc.value
-    ? { kind: 'image', src: pictureSrc.value, previewSrc: pictureSrc.value }
+  previewSrc.value
+    ? { kind: 'image', src: previewSrc.value, previewSrc: previewSrc.value }
     : undefined,
 );
-const status = computed(() => props.upload.status.value);
-const error = computed(() => props.upload.error.value);
 const phase = computed(() =>
   error.value ? 'failed' : (status.value?.phase ?? 'queued'),
-);
-const label = computed(
-  () => error.value ?? uploadStatusLabel(status.value ?? { phase: 'queued' }),
 );
 const labels = computed(() => ({
   cancel: props.cancelLabel ?? phrase.value.upload_cancel,
