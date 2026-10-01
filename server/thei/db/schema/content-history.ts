@@ -14,8 +14,8 @@ import type {
  *
  * A field is addressed the way `content` addresses it — owner and slot — with
  * `ownerRef` standing for an owner that does not exist yet as `new~<uuid>`.
- * A field has at most one `draft` row. Before the draft is overwritten, the
- * server may retire it into a `revision` instead, so a version is always a
+ * A field has at most one `draft` row per tab writing it (`writer`). Before
+ * a draft is overwritten, the server may retire it into a `revision` instead, so a version is always a
  * former draft or a saved text that was replaced, and nothing else.
  *
  * `data` is canonical, as in `content`: hydration happens when it is read.

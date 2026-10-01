@@ -65,7 +65,7 @@ Around them:
 
 ## Editor.js
 
-- Check every change related to Editor.js for compatibility with content snapshots history system, including tools, block mutations, rendering, normalization, asynchronous hydration, assets, and editor event handling.
+- Check every change related to Editor.js for compatibility with the content history — the drafts and versions of texts kept on the server (`app/composables/content-history/`, `server/thei/content/history.ts`) — including tools, block mutations, rendering, normalization, asynchronous hydration, assets, and editor event handling.
 - Verify that Editor.js changes do not emit transient or no-op content mutations that briefly change the dirty state. The save control must never flash from “Saved” to “Save” and immediately back to “Saved” without a real persistent content change.
 - `docs/content-blocks.md` is the written contract for stored content. Update it in the same commit as any change to a block type, its data, the inline markup or the Markdown output, and keep it to what is actually stored.
 

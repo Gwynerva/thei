@@ -48,7 +48,10 @@ export function olderThan(
     lt(table.createdAt, key.createdAt),
     and(eq(table.createdAt, key.createdAt), lt(table.id, key.id)),
   );
-  if (!table.date || key.date === undefined) return byTime;
+  if (!table.date) return byTime;
+  // A dated history read with an undated key would page by the wrong order.
+  if (key.date === undefined)
+    throw new Error('A history ordered by day needs a cursor with its day');
   return or(lt(table.date, key.date), and(eq(table.date, key.date), byTime));
 }
 

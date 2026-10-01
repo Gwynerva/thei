@@ -289,7 +289,7 @@ function retireDraft(
   // An empty draft protects nothing, and one the latest version already
   // repeats would only be a second copy of it.
   const kept =
-    (draft.data?.blocks?.length ?? 0) > 0 &&
+    draft.blockCount > 0 &&
     latestRevision(tx, schema, field)?.digest !== draft.digest;
   if (!kept) {
     tx.delete(schema.contentHistory)
