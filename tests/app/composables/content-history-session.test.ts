@@ -7,6 +7,7 @@ import {
 import {
   createLocalContentHistoryBuffer,
   flushContentHistoryBuffers,
+  forgetBrowserSnapshots,
 } from '../../../app/composables/content-history/buffer';
 import type { ContentHistoryTransport } from '../../../app/composables/content-history/api';
 import { cleanEditorSnapshot } from '../../../app/composables/editor-output';
@@ -371,6 +372,19 @@ describe('editor history session', () => {
     expect(
       buffer.read(field, 'tab-1')?.entries.at(-1)?.data.blocks[0]?.data.text,
     ).toBe('Typed just before closing');
+  });
+
+  it('takes away the snapshots of releases before, and nothing else', () => {
+    const storage = createStorage();
+    storage.setItem('thei:content-editor-snapshots:v2:content:c-1', '[]');
+    storage.setItem('thei:content-editor-snapshots:v2:new:x', '[]');
+    storage.setItem('thei:content-unsynced:/:page:pg-1:page-body:tab', '{}');
+    storage.setItem('theme', 'dark');
+    forgetBrowserSnapshots(() => storage);
+    expect([...Array(storage.length)].map((_, i) => storage.key(i))).toEqual([
+      'thei:content-unsynced:/:page:pg-1:page-body:tab',
+      'theme',
+    ]);
   });
 
   it('sends what an earlier session left in the browser', async () => {

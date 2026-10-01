@@ -255,5 +255,30 @@ export function isRefusedWrite(error: unknown): boolean {
   return status === 400 || status === 410 || status === 413 || status === 422;
 }
 
+/**
+ * Removes the snapshots editors kept in the browser before 0.0.3: up to
+ * thirty whole texts for every field ever edited, which would now only fill
+ * the storage that unsent text needs. An update cannot reach a browser, so
+ * this runs where an admin page opens; it can go once no browser that ran
+ * an older release is left to open one.
+ */
+export function forgetBrowserSnapshots(
+  storage: () => Storage | undefined = () =>
+    typeof localStorage === 'undefined' ? undefined : localStorage,
+) {
+  try {
+    const target = storage();
+    if (!target) return;
+    const keys: string[] = [];
+    for (let index = 0; index < target.length; index++) {
+      const key = target.key(index);
+      if (key?.startsWith('thei:content-editor-snapshots:')) keys.push(key);
+    }
+    for (const key of keys) target.removeItem(key);
+  } catch {
+    // Storage that cannot be read holds nothing to take away.
+  }
+}
+
 /** Entries of sessions open in this page, which are theirs to send. */
 export const activeBufferKeys = new Set<string>();

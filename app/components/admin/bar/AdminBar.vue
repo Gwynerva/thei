@@ -11,6 +11,7 @@ import { parsePublicSearchFilters } from '#layers/thei/shared/public-search';
 import { contentHistoryTransport } from '#layers/thei/app/composables/content-history/api';
 import {
   flushContentHistoryBuffers,
+  forgetBrowserSnapshots,
   useContentHistoryBuffer,
 } from '#layers/thei/app/composables/content-history/buffer';
 
@@ -37,6 +38,7 @@ function sendUnsyncedTexts() {
 
 onMounted(() => {
   if (!isAdmin.value) return;
+  forgetBrowserSnapshots();
   void sendUnsyncedTexts();
   window.addEventListener('online', sendUnsyncedTexts);
 });
