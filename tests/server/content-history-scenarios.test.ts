@@ -53,6 +53,7 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const START = Date.UTC(2026, 8, 28, 7, 0);
 const PAGE = 'pg-elbrus';
+const PAGES = [PAGE];
 const field: ContentHistoryField = {
   ownerType: 'page',
   ownerRef: PAGE,
@@ -67,6 +68,13 @@ beforeEach(() => {
   vi.useFakeTimers({ now: START });
   rawDb = new Database(':memory:');
   for (const statement of baselineSql) rawDb.prepare(statement).run();
+  // The owners the texts belong to: a draft is kept only for one that exists.
+  for (const pageUuid of PAGES)
+    rawDb
+      .prepare(
+        "INSERT INTO pages (pageUuid, slug, title, summary, access, createdAt, updatedAt) VALUES (?, ?, '', '', 'public', 0, 0)",
+      )
+      .run(pageUuid, pageUuid);
   db = drizzle(rawDb, { schema });
   Object.assign(globalThis, {
     THEI_SERVER: { useDb: () => ({ db, schema, rawDb }) },

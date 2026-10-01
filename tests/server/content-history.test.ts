@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { schema } from '../../server/thei/db/schema';
 import { baselineSql } from '../../update/migrations';
 import {
+  ContentHistoryOwnerGoneError,
   discardContentDraft,
   dismissContentDraft,
   listOwnerDrafts,
@@ -34,6 +35,13 @@ let db: ReturnType<typeof drizzle<typeof schema>>;
 beforeEach(() => {
   rawDb = new Database(':memory:');
   for (const statement of baselineSql) rawDb.prepare(statement).run();
+  // The owners the texts belong to: a draft is kept only for one that exists.
+  for (const pageUuid of PAGES)
+    rawDb
+      .prepare(
+        "INSERT INTO pages (pageUuid, slug, title, summary, access, createdAt, updatedAt) VALUES (?, ?, '', '', 'public', 0, 0)",
+      )
+      .run(pageUuid, pageUuid);
   db = drizzle(rawDb, { schema });
   Object.assign(globalThis, {
     THEI_SERVER: { useDb: () => ({ db, schema, rawDb }) },
@@ -45,6 +53,7 @@ afterEach(() => {
   delete (globalThis as any).THEI_SERVER;
 });
 
+const PAGES = ['pg-1', 'pg-2'];
 const NEW_REF = 'new~0f8fad5b-d9cb-469f-a165-70867728950e';
 const field: ContentHistoryField = {
   ownerType: 'page',
@@ -344,6 +353,28 @@ describe('saving content', () => {
     const history = readFieldHistory({ ...field, ownerRef: 'pg-2' });
     expect(history.drafts).toEqual([]);
     expect(history.revisions.map((row) => row.reason)).toEqual(['large-drop']);
+  });
+
+  it('keeps no draft for an owner deleted while a tab still wrote to it', () => {
+    sync(text('Before'), 0);
+    rawDb.prepare('DELETE FROM pages WHERE pageUuid = ?').run('pg-1');
+    expect(() => sync(text('After'), 1_000)).toThrow(
+      ContentHistoryOwnerGoneError,
+    );
+    expect(() =>
+      discardContentDraft({
+        ...field,
+        writer: 'tab-a',
+        replacement: text('Form'),
+      }),
+    ).toThrow(ContentHistoryOwnerGoneError);
+    expect(() =>
+      sync(text('Never existed'), 2_000, {}, { ...field, ownerRef: 'pg-9' }),
+    ).toThrow(ContentHistoryOwnerGoneError);
+    // A new owner exists only once it is saved: its texts are kept until then.
+    expect(() =>
+      sync(text('Not saved yet'), 3_000, {}, { ...field, ownerRef: NEW_REF }),
+    ).not.toThrow();
   });
 
   it('keeps what a deleted owner held, saved or not', () => {

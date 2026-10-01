@@ -53,6 +53,50 @@ import { isOneOf } from '#layers/thei/shared/utils/isOneOf';
 type Row =
   typeof import('../db/schema/content-history').contentHistory.$inferSelect;
 
+/**
+ * A write for an owner that is gone. Deleting an owner retires its drafts,
+ * but a tab still open on it may go on writing; kept, such a draft would be
+ * offered nowhere, outlive every check of age, and hold its files for ever.
+ */
+export class ContentHistoryOwnerGoneError extends Error {
+  constructor() {
+    super('The owner of this text no longer exists');
+    this.name = 'ContentHistoryOwnerGoneError';
+  }
+}
+
+/** The table and key each kind of owner lives under. */
+function ownerKeys(
+  schema: any,
+): Record<ContentOwnerType, { table: any; id: any }> {
+  return {
+    profile: { table: schema.profiles, id: schema.profiles.profileId },
+    project: { table: schema.projects, id: schema.projects.projectUuid },
+    'project-stage': {
+      table: schema.projectStages,
+      id: schema.projectStages.stageUuid,
+    },
+    'project-section': {
+      table: schema.projectContentSections,
+      id: schema.projectContentSections.sectionUuid,
+    },
+    event: { table: schema.events, id: schema.events.eventUuid },
+    page: { table: schema.pages, id: schema.pages.pageUuid },
+    'diary-entry': {
+      table: schema.diaryEntries,
+      id: schema.diaryEntries.diaryUuid,
+    },
+  };
+}
+
+/** Refuses a write for an owner that is gone; a new one has none yet. */
+function assertOwnerExists(tx: any, schema: any, field: ContentHistoryField) {
+  if (isNewContentOwnerRef(field.ownerRef)) return;
+  const { table, id } = ownerKeys(schema)[field.ownerType];
+  if (!tx.select({ id }).from(table).where(eq(id, field.ownerRef)).get())
+    throw new ContentHistoryOwnerGoneError();
+}
+
 interface DescribedData {
   data: ContentOutputData;
   key: string;
@@ -360,6 +404,7 @@ export function syncContentDraft(
   };
   const { db, schema } = THEI_SERVER.useDb();
   return db.transaction((tx) => {
+    assertOwnerExists(tx, schema, field);
     const isSaved = savedKey(tx, schema, field) === described.key;
     const drafts = fieldDrafts(tx, schema, field);
     let own = drafts.find((row) => row.writer === input.writer);
@@ -424,6 +469,7 @@ export function discardContentDraft(
   };
   const { db, schema } = THEI_SERVER.useDb();
   return db.transaction((tx) => {
+    assertOwnerExists(tx, schema, field);
     const drafts = fieldDrafts(tx, schema, field);
     const own = drafts.find((row) => row.writer === input.writer);
     if (own) retireDraft(tx, schema, own, 'discarded', now);

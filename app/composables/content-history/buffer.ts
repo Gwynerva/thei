@@ -244,14 +244,15 @@ export async function flushContentHistoryBuffers(
 }
 
 /**
- * The server refused the write itself, so sending it again cannot help. A
- * lost session (401, 403) is not a refusal: the text waits for the next one.
+ * The server refused the write itself, so sending it again cannot help: the
+ * text is not one it takes, or its owner was deleted meanwhile (410). A lost
+ * session (401, 403) is not a refusal: the text waits for the next one.
  */
 export function isRefusedWrite(error: unknown): boolean {
   const status =
     (error as { statusCode?: number } | null)?.statusCode ??
     (error as { status?: number } | null)?.status;
-  return status === 400 || status === 413 || status === 422;
+  return status === 400 || status === 410 || status === 413 || status === 422;
 }
 
 /** Entries of sessions open in this page, which are theirs to send. */

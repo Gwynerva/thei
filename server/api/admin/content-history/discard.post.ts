@@ -4,6 +4,7 @@ import type {
   ContentHistorySyncResponse,
 } from '#layers/thei/shared/content-history';
 import {
+  ContentHistoryOwnerGoneError,
   discardContentDraft,
   parseContentHistoryField,
   parseContentHistoryWriter,
@@ -27,6 +28,8 @@ export default defineEventHandler(
         replacement: body.replacement,
       });
     } catch (error) {
+      if (error instanceof ContentHistoryOwnerGoneError)
+        throw createError({ statusCode: 410, message: error.message });
       if (error instanceof ContentValidationError)
         throw createError({ statusCode: 400, message: error.message });
       throw error;

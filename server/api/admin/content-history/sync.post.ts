@@ -6,6 +6,7 @@ import {
 } from '#layers/thei/shared/content-history';
 import { isOneOf } from '#layers/thei/shared/utils/isOneOf';
 import {
+  ContentHistoryOwnerGoneError,
   parseContentHistoryField,
   parseContentHistoryWriter,
   syncContentDraft,
@@ -32,6 +33,8 @@ export default defineEventHandler(
         hint: body.hint,
       });
     } catch (error) {
+      if (error instanceof ContentHistoryOwnerGoneError)
+        throw createError({ statusCode: 410, message: error.message });
       if (error instanceof ContentValidationError)
         throw createError({ statusCode: 400, message: error.message });
       throw error;
