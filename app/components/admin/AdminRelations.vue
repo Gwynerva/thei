@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import {
   isRelationEntityType,
+  orderRelationsForEditing,
   RELATION_ENTITY_TYPES,
   relationEndpointKey,
   type RelationEditItem,
@@ -117,16 +118,11 @@ function relationPopup(item: RelationEditItem) {
   );
 }
 
-/** Diary entries are listed by their day, newest first, wherever they go. */
-function byDay(items: RelationEditItem[]) {
-  return [...items].sort((left, right) =>
-    (right.date ?? '').localeCompare(left.date ?? ''),
-  );
-}
-
+/** The relations to one kind of entity, diary entries by their days. */
 function ofKind(items: RelationEditItem[], type: RelationEntityType) {
-  const kind = items.filter((item) => item.entityType === type);
-  return type === 'diary-entry' ? byDay(kind) : kind;
+  return orderRelationsForEditing(
+    items.filter((item) => item.entityType === type),
+  );
 }
 
 type Group = {
@@ -247,11 +243,12 @@ function removeRelation(key: string) {
 }
 
 /**
- * The list is kept in the order it is shown: one kind after another, and the
- * diary entries by their days. That order is what the other side sees too.
+ * The list is kept in the order it is shown, which is the order the edit API
+ * reads it out in (`orderRelationsForEditing`): a change and its undoing
+ * leave the form as it was loaded.
  */
 function replaceRelations(value: RelationEditItem[]) {
-  model.value = RELATION_ENTITY_TYPES.flatMap((type) => ofKind(value, type));
+  model.value = orderRelationsForEditing(value);
 }
 
 function updateRelation(

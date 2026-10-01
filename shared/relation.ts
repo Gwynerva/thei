@@ -68,6 +68,26 @@ export function relationEndpointKey(endpoint: RelationEndpoint) {
   return `${endpoint.type}:${endpoint.id}`;
 }
 
+/**
+ * A relation list in the order its editor keeps it: one kind after another,
+ * projects and events in their own hand-made order, diary entries by their
+ * days, newest first. The editor writes every change in this order, and the
+ * edit API reads a list out in it, so a list that was not changed compares
+ * equal to the one that was loaded. How the kinds interleave in storage —
+ * a relation drawn from the other end lands wherever it lands — means
+ * nothing to anyone: every list of relations is shown one kind at a time.
+ */
+export function orderRelationsForEditing<
+  T extends { entityType: RelationEntityType; date?: string },
+>(items: readonly T[]): T[] {
+  return RELATION_ENTITY_TYPES.flatMap((type) => {
+    const kind = items.filter((item) => item.entityType === type);
+    return type === 'diary-entry'
+      ? kind.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
+      : kind;
+  });
+}
+
 export function relationEndpointsEqual(
   left: RelationEndpoint,
   right: RelationEndpoint,

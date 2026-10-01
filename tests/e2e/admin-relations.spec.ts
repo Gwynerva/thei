@@ -265,3 +265,80 @@ test('the picker offers first what the text links to, without growing', async ({
   await options.first().click();
   await expect(page.locator('[data-relation-row]')).toHaveCount(3);
 });
+
+test('a form whose relations were stored mixed loads as saved, and an undone change leaves it so', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const stamp = Date.now();
+  const event = await createEvent(page, stamp, 4);
+  // Days in a year no other spec writes to.
+  const month = String(1 + (stamp % 9)).padStart(2, '0');
+  const diary: string[] = [];
+  for (const day of ['01', '02']) {
+    const response = await page.request.post('/api/admin/diary', {
+      data: {
+        date: `2014-${month}-${day}`,
+        access: 'public',
+        content: content(`Day ${day}.`),
+      },
+    });
+    const body = await response.json();
+    expect(body.type, JSON.stringify(body)).toBe('success');
+    diary.push(body.diaryUuid as string);
+  }
+  const other = await page.request.post('/api/admin/projects', {
+    data: {
+      title: `Other project ${stamp}`,
+      summary: 'Related.',
+      access: 'public',
+      humanReadableSlug: 'other-project',
+      publicId: `op${stamp}`,
+      showcase: false,
+      cv: false,
+      descriptionContent: content('Other.'),
+    },
+  });
+  const otherBody = await other.json();
+  expect(otherBody.type, JSON.stringify(otherBody)).toBe('success');
+  // Stored in an order the form does not keep: kinds mixed, the older day
+  // first — as relations drawn from their other ends come to be stored.
+  const created = await page.request.post('/api/admin/projects', {
+    data: {
+      title: `Mixed relations ${stamp}`,
+      summary: 'Relations of every kind.',
+      access: 'public',
+      humanReadableSlug: 'mixed-relations',
+      publicId: `mix${stamp}`,
+      showcase: false,
+      cv: false,
+      descriptionContent: content('Mixed.'),
+      relations: [
+        { entityType: 'diary-entry', entityId: diary[0], type: 'related' },
+        { entityType: 'event', entityId: event, type: 'related' },
+        { entityType: 'diary-entry', entityId: diary[1], type: 'related' },
+        {
+          entityType: 'project',
+          entityId: otherBody.projectUuid,
+          type: 'related',
+        },
+      ],
+    },
+  });
+  const body = await created.json();
+  expect(body.type, JSON.stringify(body)).toBe('success');
+
+  await page.goto(`/admin/projects/${body.projectUuid}/edit/`);
+  const saved = page.getByRole('button', { name: 'Saved', exact: true });
+  const save = page.getByRole('button', { name: 'Save', exact: true });
+  await expect(saved).toBeVisible();
+
+  const kind = page
+    .locator('[data-relation-row]')
+    .first()
+    .getByRole('combobox');
+  await kind.selectOption('dependent');
+  await expect(save).toBeVisible();
+  await kind.selectOption('related');
+  await expect(saved).toBeVisible();
+});
