@@ -1,6 +1,13 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { AssetVariantInfo } from '../../../shared/api/asset';
-import { PendingOriginalUpload } from '../../../app/composables/pending-upload';
+import type { AssetDraftSource } from '../../../shared/api/asset-draft';
+import { AssetType } from '../../../shared/asset';
+import {
+  PendingMediaUpload,
+  PendingOriginalUpload,
+  type PendingMediaRequests,
+} from '../../../app/composables/pending-upload';
+import { UploadJobError } from '../../../app/composables/upload-draft';
 
 interface SendCall {
   signal: AbortSignal;
@@ -137,5 +144,65 @@ describe('a pending upload', () => {
     expect(pending.status.value).toEqual({ phase: 'staging', progress: 0 });
     calls[1]!.resolve(asset);
     expect(await pending.result).toBe(asset);
+  });
+});
+
+describe('a pasted file', () => {
+  const draft = (id: string): AssetDraftSource => ({
+    draftId: id,
+    type: AssetType.Image,
+    extension: 'png',
+    size: 1,
+  });
+  const expired = () =>
+    new UploadJobError('Draft has expired', 404, { draftExpired: true });
+
+  function pasted(commit: PendingMediaRequests['commit']) {
+    const staged: string[] = [];
+    const released: string[] = [];
+    const pending = new PendingMediaUpload(new File(['x'], 'shot.png'), {
+      constraints: { sizeLimitPolicy: 'media' },
+      requests: {
+        stage: async () => {
+          const next = draft(`d-${staged.length + 1}`);
+          staged.push(next.draftId);
+          return next;
+        },
+        commit,
+        release: (draftId) => released.push(draftId),
+      },
+    });
+    return { pending, staged, released };
+  }
+
+  it('is staged again once when the server forgot its draft', async () => {
+    const committed: string[] = [];
+    const { pending, staged } = pasted(async (draftId) => {
+      committed.push(draftId);
+      if (draftId === 'd-1') throw expired();
+      return asset;
+    });
+    await pending.run();
+    expect(staged).toEqual(['d-1', 'd-2']);
+    expect(committed).toEqual(['d-1', 'd-2']);
+    expect(await pending.result).toBe(asset);
+  });
+
+  it('stops sending the file round when the draft is lost again', async () => {
+    const { pending, staged, released } = pasted(async () => {
+      throw expired();
+    });
+    await pending.run();
+    // One fresh staging, then the failure waits for a retry.
+    expect(staged).toEqual(['d-1', 'd-2']);
+    expect(pending.error.value).toBe('Draft has expired');
+
+    pending.retry();
+    await settle();
+    await settle();
+    expect(staged).toEqual(['d-1', 'd-2', 'd-3']);
+    pending.dispose();
+    await settle();
+    expect(released).toEqual(['d-3']);
   });
 });

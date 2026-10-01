@@ -449,6 +449,30 @@ describe('editor drafts', () => {
     expect(() => useDraft('busy')).toThrow('Draft has expired');
   });
 
+  it('keeps the draft just opened when every other one is at work', async () => {
+    const busy = ['a', 'b', 'c', 'd'];
+    for (const id of busy) {
+      await stagedDraft(80, 60, id);
+      useDraft(id).busy += 1;
+    }
+    await stagedDraft(80, 60, 'fresh');
+
+    // Its file was staged a moment ago: closing it would throw the upload
+    // away and send the client round to stage it again.
+    expect(() => useDraft('fresh')).not.toThrow();
+    for (const id of busy) expect(() => useDraft(id)).not.toThrow();
+
+    // Its commit starts; once another draft is idle again, the next one
+    // opened closes that one instead.
+    useDraft('fresh').busy += 1;
+    useDraft('a').busy -= 1;
+    await stagedDraft(80, 60, 'later');
+    expect(() => useDraft('a')).toThrow('Draft has expired');
+    expect(() => useDraft('fresh')).not.toThrow();
+    expect(() => useDraft('later')).not.toThrow();
+    for (const id of ['b', 'c', 'd', 'fresh']) useDraft(id).busy -= 1;
+  });
+
   it('forgets idle drafts and their files', async () => {
     await stagedDraft();
     const session = useDraft('draft-a');

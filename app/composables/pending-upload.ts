@@ -195,6 +195,13 @@ export class PendingOriginalUpload extends PendingUploadBase {
   }
 }
 
+/** The requests a pasted file makes on its way in. */
+export interface PendingMediaRequests {
+  stage: typeof stageDraftFile;
+  commit: typeof commitDraftRequest;
+  release: typeof deleteDraft;
+}
+
 /** A pasted file with the draft it is staged as, for an editor to take over. */
 export interface PendingMediaHandover {
   draft: AssetDraftSource;
@@ -214,6 +221,23 @@ export class PendingMediaUpload extends PendingUploadBase {
   private staging: AbortController | null = null;
   /** Handed to an editor: the default is not stored until `run` again. */
   private suspended = false;
+  private readonly requests: PendingMediaRequests;
+
+  constructor(
+    file: File,
+    options: PendingUploadOptions & {
+      /** The requests themselves, replaceable for tests. */
+      requests?: Partial<PendingMediaRequests>;
+    },
+  ) {
+    super(file, options);
+    this.requests = {
+      stage: stageDraftFile,
+      commit: commitDraftRequest,
+      release: deleteDraft,
+      ...options.requests,
+    };
+  }
 
   /**
    * Stops storing the default and hands the draft over. Storing the default
@@ -237,7 +261,7 @@ export class PendingMediaUpload extends PendingUploadBase {
   protected override release() {
     this.staging?.abort();
     void this.draft?.then(
-      (draft) => deleteDraft(draft.draftId),
+      (draft) => this.requests.release(draft.draftId),
       () => {},
     );
   }
@@ -248,7 +272,7 @@ export class PendingMediaUpload extends PendingUploadBase {
     const controller = new AbortController();
     this.staging = controller;
     this.report({ phase: 'staging', progress: 0 });
-    this.draft = stageDraftFile(
+    this.draft = this.requests.stage(
       this.picked.file,
       this.extension,
       this.options.constraints,
@@ -266,20 +290,24 @@ export class PendingMediaUpload extends PendingUploadBase {
   private async commit(
     draft: AssetDraftSource,
     signal: AbortSignal,
+    restaged = false,
   ): Promise<AssetVariantInfo> {
     this.report({ phase: 'processing' });
     try {
-      return await commitDraftRequest(
+      return await this.requests.commit(
         draft.draftId,
         pastedMediaRequest(draft),
         this.options.constraints,
         { signal, onStatus: (status) => this.report(status) },
       );
     } catch (reason) {
-      // The server forgot the draft — a restart, a long pause: staged again.
-      if (isDraftExpired(reason) && !signal.aborted) {
+      // The server forgot the draft — a restart, a long pause: staged again,
+      // once. A draft lost a second time is a server that cannot keep one
+      // now, and sending the whole file round again would not change that:
+      // the failure waits for a retry instead.
+      if (isDraftExpired(reason) && !signal.aborted && !restaged) {
         this.draft = null;
-        return await this.commit(await this.stage(), signal);
+        return await this.commit(await this.stage(), signal, true);
       }
       throw reason;
     }

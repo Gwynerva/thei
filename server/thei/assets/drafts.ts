@@ -167,7 +167,7 @@ export async function openDraft(input: {
     busy: 0,
   };
   drafts.set(id, session);
-  await evictOverflow();
+  await evictOverflow(id);
   scheduleExpiry();
   return describeDraft(session);
 }
@@ -543,12 +543,18 @@ function publicRender(record: DraftRenderRecord): AssetDraftRender {
   return render;
 }
 
-async function evictOverflow() {
+/**
+ * Closes the least recently used idle drafts past the limit. The draft just
+ * opened is never one of them: it is idle only because nothing has asked it
+ * for anything yet, and its file was staged a moment ago.
+ */
+async function evictOverflow(opened: string) {
   while (drafts.size > MAX_DRAFTS) {
     const oldest = [...drafts.values()]
-      .filter(isIdle)
+      .filter((session) => session.id !== opened && isIdle(session))
       .sort((left, right) => left.lastAccess - right.lastAccess)[0];
-    // Every draft is at work: one too many is kept until one goes idle.
+    // Every other draft is at work: one too many is kept until a draft
+    // opened later finds one of them idle.
     if (!oldest) return;
     await closeDraft(oldest.id);
   }
