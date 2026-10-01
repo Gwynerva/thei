@@ -429,10 +429,15 @@
    * long press is the system's. A hint that only sometimes shows — a name
    * not cut short, a label already on screen — leaves the system its press,
    * since it cannot know ahead whether it will need it.
+   *
+   * The controls are `INTERACTIVE_SELECTOR` of `press-hint-dom.ts` but for
+   * the ones a finger types into, which must keep their text selectable;
+   * `tests/app/styles/press-hint-selectors.test.ts` keeps the two lists one.
    */
   @media (hover: none) {
     :where(
       a[href],
+      area[href],
       button:not(:disabled),
       summary,
       label,
@@ -443,11 +448,16 @@
       [role='checkbox'],
       [role='switch'],
       [role='menuitem'],
+      [role='menuitemradio'],
+      [role='menuitemcheckbox'],
       [role='option'],
+      [role='slider'],
+      [role='treeitem'],
       [data-title-popup-press='hold']
     )[data-title-popup],
     :where(
         a[href],
+        area[href],
         button:not(:disabled),
         summary,
         label,
@@ -458,7 +468,11 @@
         [role='checkbox'],
         [role='switch'],
         [role='menuitem'],
-        [role='option']
+        [role='menuitemradio'],
+        [role='menuitemcheckbox'],
+        [role='option'],
+        [role='slider'],
+        [role='treeitem']
       )
       [data-title-popup],
     [data-link-card-root] a[href] {

@@ -1,5 +1,6 @@
 import {
   initialPressHint,
+  isTouchSource,
   PRESS_HINT_CONFIG,
   stepPressHint,
   type AnchorKind,
@@ -136,8 +137,6 @@ function elementOf(target: EventTarget | null): Element | null {
   return target instanceof Node ? target.parentElement : null;
 }
 
-const TOUCH_SOURCES: readonly HintSource[] = ['hold', 'tap'];
-
 export function installPressHints(win: Window & typeof globalThis): PressHints {
   const doc = win.document;
   const providers = new Map<string, PressHintProvider>();
@@ -187,7 +186,7 @@ export function installPressHints(win: Window & typeof globalThis): PressHints {
   function perform(action: PressHintAction<HTMLElement>, event?: Event) {
     switch (action.type) {
       case 'show': {
-        const touch = TOUCH_SOURCES.includes(action.source);
+        const touch = isTouchSource(action.source);
         if (touch) {
           action.anchor.setAttribute(PRESS_HINT_OPEN_ATTRIBUTE, '');
           shownAt = action.anchor.getBoundingClientRect();
@@ -420,7 +419,7 @@ export function installPressHints(win: Window & typeof globalThis): PressHints {
         });
     }
     const wantScroll = Boolean(
-      state.shown && TOUCH_SOURCES.includes(state.shown.source),
+      state.shown && isTouchSource(state.shown.source),
     );
     if (wantScroll !== scrollListening) {
       scrollListening = wantScroll;

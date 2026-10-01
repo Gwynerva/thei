@@ -186,14 +186,17 @@ export function initialPressHint<A>(): PressHintState<A> {
   };
 }
 
-const TOUCH_SOURCES: readonly HintSource[] = ['hold', 'tap'];
+/** Whether a finger opened the hint: a long press or a tap. */
+export function isTouchSource(source: HintSource): boolean {
+  return source === 'hold' || source === 'tap';
+}
 
 function isTouchHint<A>(shown: Shown<A> | null): shown is Shown<A> {
-  return Boolean(shown && TOUCH_SOURCES.includes(shown.source));
+  return Boolean(shown && isTouchSource(shown.source));
 }
 
 function quietAfterEscape<A>(shown: Shown<A>): PressHintState<A>['quiet'] {
-  if (TOUCH_SOURCES.includes(shown.source)) return null;
+  if (isTouchSource(shown.source)) return null;
   return {
     anchor: shown.anchor,
     until: shown.source === 'focus' ? 'focus-leaves' : 'pointer-leaves',
@@ -234,7 +237,7 @@ export function stepPressHint<A>(
       anchor: target.anchor,
       provider: target.provider,
       source,
-      placement: TOUCH_SOURCES.includes(source) ? 'top' : 'bottom',
+      placement: isTouchSource(source) ? 'top' : 'bottom',
     });
   }
 
