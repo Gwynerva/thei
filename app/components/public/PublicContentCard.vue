@@ -189,12 +189,21 @@ const hasFooter = computed(
             <Icon v-if="datePresentation.approximate" name="approximate" />
             {{ datePresentation.label }}
           </TheiLink>
+          <!-- The text lets the pointer through to the card's link; a date
+               with a hint to give — the day behind "2 days ago", how sure
+               it is — takes the pointer back, as the marks beside it do. -->
           <time
             v-else
             :datetime="date"
             v-bind="titlePopup(...(datePresentation.title ?? []))"
             class="inline-flex items-center gap-1 text-text-3"
-            :class="datePresentationToneClass(datePresentation)"
+            :class="[
+              datePresentationToneClass(datePresentation),
+              {
+                'pointer-events-auto relative z-3':
+                  datePresentation.title?.length,
+              },
+            ]"
           >
             <Icon v-if="datePresentation.approximate" name="approximate" />
             {{ datePresentation.label }}

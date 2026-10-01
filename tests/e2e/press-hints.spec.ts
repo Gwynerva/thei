@@ -343,7 +343,43 @@ test.describe('by touch', () => {
       page.locator('[data-test-dialog] [data-title-popup-el]'),
     ).toHaveText('Dialog hint');
   });
+
+  test('a card’s date gives its day on a tap, and the rest of the card opens it', async ({
+    page,
+  }) => {
+    const card = page.locator('[data-test-plain-date-card]');
+    const date = card.locator('time');
+    await date.scrollIntoViewIfNeeded();
+    await date.tap();
+    await expect(hint(page)).toContainText(year());
+    expect(page.url()).not.toContain('opened=');
+    // The title lies under the card's link, as the rest of it does.
+    const title = await centre(card.locator('h3'));
+    await page.touchscreen.tap(title.x, title.y);
+    await expect(page).toHaveURL(/opened=card/);
+  });
+
+  test('a card’s linked date follows its link on a tap, and gives its day on a long press', async ({
+    page,
+  }) => {
+    const date = page.locator(
+      '[data-test-linked-date-card] a[href*="opened=date"]',
+    );
+    await date.scrollIntoViewIfNeeded();
+    await hold(page, date, 900);
+    await expect(hint(page)).toContainText(year());
+    await page.waitForTimeout(300);
+    expect(page.url()).not.toContain('opened=');
+    await page.waitForTimeout(500);
+    await date.tap();
+    await expect(page).toHaveURL(/opened=date/);
+  });
 });
+
+/** The year of the fixture cards' date, two days back. */
+function year() {
+  return String(new Date(Date.now() - 2 * 86_400_000).getUTCFullYear());
+}
 
 test.describe('by mouse', () => {
   test.beforeEach(async ({ page }) => open(page));
@@ -368,6 +404,18 @@ test.describe('by mouse', () => {
     await page.mouse.move(5, 5);
     await button.hover();
     await expect(hint(page)).toHaveText('Menu hint');
+  });
+
+  test('a card’s date gives its day under the pointer, and a click beside it opens the card', async ({
+    page,
+  }) => {
+    const card = page.locator('[data-test-plain-date-card]');
+    await card.locator('time').hover();
+    await expect(hint(page)).toContainText(year());
+    // The title lies under the card's link, as the rest of it does.
+    const title = await centre(card.locator('h3'));
+    await page.mouse.click(title.x, title.y);
+    await expect(page).toHaveURL(/opened=card/);
   });
 
   test('the innermost anchor speaks', async ({ page }) => {

@@ -15,6 +15,8 @@ const cardRoot = useTemplateRef<HTMLElement>('cardRoot');
 const dialog = useTemplateRef<HTMLDialogElement>('dialog');
 const chipList = useTemplateRef<HTMLElement>('chipList');
 const chips = ref(['one', 'two', 'three']);
+// Two days ago reads as a relative date, whose hint is the day itself.
+const recent = new Date(Date.now() - 2 * 86_400_000).toISOString().slice(0, 10);
 
 useDragSort(chipList, {
   onDrop: ({ id, newIndex }) => {
@@ -26,10 +28,7 @@ useDragSort(chipList, {
 <template>
   <!-- Tailwind writes only the classes the layer's own app uses, so the
        geometry the spec relies on is set inline. -->
-  <main
-    class="flex flex-col items-start gap-md p-md"
-    style="padding-top: 6rem"
-  >
+  <main class="flex flex-col items-start gap-md p-md" style="padding-top: 6rem">
     <button
       ref="menuButton"
       type="button"
@@ -135,6 +134,26 @@ useDragSort(chipList, {
       </button>
     </div>
     <output data-test-chip-clicks>{{ clicks.chip }}</output>
+
+    <div data-test-cards class="flex flex-col gap-md" style="width: 20rem">
+      <PublicContentCard
+        data-test-plain-date-card
+        href="/press-hint-regression?opened=card"
+        title="A card"
+        summary="Its date has a hint."
+        :date="recent"
+        compact
+      />
+      <PublicContentCard
+        data-test-linked-date-card
+        href="/press-hint-regression?opened=linked-card"
+        title="A dated card"
+        summary="Its date is a link."
+        :date="recent"
+        date-href="/press-hint-regression?opened=date"
+        compact
+      />
+    </div>
 
     <button type="button" data-test-open-dialog @click="dialog?.showModal()">
       Open dialog
