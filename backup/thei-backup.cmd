@@ -33,7 +33,7 @@ $DayMs = [long](24 * 60 * 60 * 1000)
 # keeps a weekly backup weekly.
 $DueSlackMs = [long](12 * 60 * 60 * 1000)
 $ParallelDownloads = 6
-$ConfigKeys = @('siteUrl', 'token', 'destination', 'clientLabel', 'keepCount', 'intervalDays', 'shrinkPercent', 'alertCommand', 'lastRunAt', 'lastFileCount', 'lastByteCount', 'lastCounts', 'alert', 'bakedToken')
+$ConfigKeys = @('siteUrl', 'token', 'destination', 'clientLabel', 'keepCount', 'intervalDays', 'shrinkPercent', 'alertCommand', 'lastRunAt', 'lastFileCount', 'lastByteCount', 'lastUsedFiles', 'lastUsedBytes', 'lastCounts', 'alert', 'bakedToken')
 $ConfigDefaults = @{ keepCount = '3'; intervalDays = '7'; shrinkPercent = '30'; lastRunAt = '0'; lastFileCount = '0'; lastByteCount = '0' }
 $Invariant = [Globalization.CultureInfo]::InvariantCulture
 
@@ -328,17 +328,28 @@ function ShrinkPercent([long]$Before, [long]$After) {
 }
 
 # What the site lost since the last backup that it plausibly did not mean
-# to: a share of its files or bytes, or of any kind of entity. Empty if none.
+# to: a share of the files it uses or of their size, or of any kind of
+# entity. Empty if none.
 function ShrinkReport($Session, [string]$Counts) {
   $limit = [int]$Config.shrinkPercent
   $parts = New-Object Collections.Generic.List[string]
-  $lastFiles = [long]$Config.lastFileCount
-  $lastBytes = [long]$Config.lastByteCount
-  if ($lastFiles -gt 0) {
-    $filesLost = ShrinkPercent $lastFiles $Session.totalFiles
-    $bytesLost = ShrinkPercent $lastBytes $Session.totalBytes
+  $sizes = $null
+  if ($Session.PSObject.Properties['usedFiles']) {
+    # The site says which of its files are in use: one nothing uses any
+    # more, which its cleanup removes, is no loss however large. Judged
+    # against the last run that measured the same way; the first has none.
+    if ([string]$Config.lastUsedFiles -match '^\d+$' -and [long]$Config.lastUsedFiles -gt 0) {
+      $sizes = @([long]$Config.lastUsedFiles, [long]$Session.usedFiles, [long]$Config.lastUsedBytes, [long]$Session.usedBytes)
+    }
+  } elseif ([long]$Config.lastFileCount -gt 0) {
+    # A site before 0.0.3 counts every file it holds.
+    $sizes = @([long]$Config.lastFileCount, [long]$Session.totalFiles, [long]$Config.lastByteCount, [long]$Session.totalBytes)
+  }
+  if ($sizes) {
+    $filesLost = ShrinkPercent $sizes[0] $sizes[1]
+    $bytesLost = ShrinkPercent $sizes[2] $sizes[3]
     if ($filesLost -gt $limit -or $bytesLost -gt $limit) {
-      $parts.Add("files $lastFiles -> $($Session.totalFiles) (-$filesLost%), size $(HumanSize $lastBytes) -> $(HumanSize $Session.totalBytes) (-$bytesLost%)")
+      $parts.Add("files $($sizes[0]) -> $($sizes[1]) (-$filesLost%), size $(HumanSize $sizes[2]) -> $(HumanSize $sizes[3]) (-$bytesLost%)")
     }
   }
   # Deleting a couple of entries is ordinary; losing a share of them, and more
@@ -586,6 +597,9 @@ function PerformBackup([string]$Kind, [bool]$Force) {
     $Config.lastRunAt = [string]$completedAt
     $Config.lastFileCount = [string]$session.totalFiles
     $Config.lastByteCount = [string]$session.totalBytes
+    $hasUsed = [bool]$session.PSObject.Properties['usedFiles']
+    $Config.lastUsedFiles = if ($hasUsed) { [string]$session.usedFiles } else { '' }
+    $Config.lastUsedBytes = if ($hasUsed) { [string]$session.usedBytes } else { '' }
     $Config.lastCounts = $counts
     ClearAlert
     WriteConfig

@@ -8,7 +8,13 @@ import {
   type BackupKind,
   type BackupSessionResponse,
 } from '#layers/thei/shared/backup';
-import { buildBackupManifest, type BackupManifest } from './manifest';
+import { THEI_BACKUP_FILES } from '../content-layout';
+import { externalLinkFaviconPath } from '../external-links/favicon';
+import {
+  buildBackupManifest,
+  contentRelativePath,
+  type BackupManifest,
+} from './manifest';
 import {
   backupWorkDir,
   clearBackupSession,
@@ -107,6 +113,7 @@ async function openBackupSession(options: {
     const { rawDb } = THEI_SERVER.useDb();
     await rawDb.backup(join(work, 'thei.db'));
     const counts = countEntities(join(work, 'thei.db'));
+    const usedPaths = usedContentPaths(join(work, 'thei.db'));
     await copyFile(
       THEI_SERVER.contentPath('thei.config.json'),
       join(work, 'thei.config.json'),
@@ -136,11 +143,18 @@ async function openBackupSession(options: {
         `Session ${sessionId} opened: ${manifest.entries.length} file(s), ${manifest.totalBytes} byte(s)`,
       );
 
+    const used = manifest.entries.filter(
+      (entry) =>
+        (THEI_BACKUP_FILES as readonly string[]).includes(entry.path) ||
+        usedPaths.has(entry.path),
+    );
     return {
       sessionId,
       startedAt: state.startedAt,
       totalFiles: state.totalFiles,
       totalBytes: state.totalBytes,
+      usedFiles: used.length,
+      usedBytes: used.reduce((total, entry) => total + entry.size, 0),
       skipped: state.skipped,
       counts,
     };
@@ -148,6 +162,66 @@ async function openBackupSession(options: {
     forget(sessionId);
     await rm(work, { recursive: true, force: true });
     throw error;
+  }
+}
+
+/**
+ * The files the snapshot's site uses, by the paths a manifest gives them:
+ * every stored file placed somewhere on the site, the stills placed on those
+ * files, and every icon a link points at. A file no row places — kept a day
+ * for the editor, replaced, taken out of every text, or only in a draft or a
+ * version — is left to cleanup, and left out here.
+ */
+function usedContentPaths(snapshotPath: string): Set<string> {
+  const snapshot = new Database(snapshotPath, { readonly: true });
+  try {
+    const placements = snapshot
+      .prepare(
+        `SELECT a."assetUuid" AS assetUuid, a."contentHash" AS contentHash,
+          a."extension" AS extension, u."containerType" AS containerType,
+          u."containerId" AS containerId
+        FROM "assets" a JOIN "asset-usages" u ON u."assetUuid" = a."assetUuid"`,
+      )
+      .all() as {
+      assetUuid: string;
+      contentHash: string;
+      extension: string;
+      containerType: string;
+      containerId: string;
+    }[];
+    // Placed on the site itself, and then the stills placed on those files.
+    const used = new Set(
+      placements
+        .filter((placement) => placement.containerType !== 'asset')
+        .map((placement) => placement.assetUuid),
+    );
+    for (const placement of placements)
+      if (
+        placement.containerType === 'asset' &&
+        used.has(placement.containerId)
+      )
+        used.add(placement.assetUuid);
+    const paths = new Set<string>();
+    for (const placement of placements)
+      if (used.has(placement.assetUuid))
+        paths.add(
+          contentRelativePath(
+            THEI_SERVER.assets.filePath(
+              placement.contentHash,
+              placement.extension,
+            ),
+          ),
+        );
+    const icons = snapshot
+      .prepare(
+        'SELECT DISTINCT "faviconKey" AS faviconKey FROM "external-links"',
+      )
+      .all() as { faviconKey: string }[];
+    for (const { faviconKey } of icons)
+      paths.add(contentRelativePath(externalLinkFaviconPath(faviconKey)));
+    return paths;
+  } finally {
+    snapshot.close();
   }
 }
 
@@ -159,7 +233,9 @@ function countEntities(snapshotPath: string): BackupEntityCounts {
       Object.entries(BACKUP_COUNTED_TABLES).map(([entity, table]) => [
         entity,
         (
-          snapshot.prepare(`SELECT count(*) AS count FROM "${table}"`).get() as {
+          snapshot
+            .prepare(`SELECT count(*) AS count FROM "${table}"`)
+            .get() as {
             count: number;
           }
         ).count,

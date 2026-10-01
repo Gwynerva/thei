@@ -140,11 +140,13 @@ CFG_alertCommand=''
 CFG_lastRunAt=0
 CFG_lastFileCount=0
 CFG_lastByteCount=0
+CFG_lastUsedFiles=''
+CFG_lastUsedBytes=''
 CFG_lastCounts=''
 CFG_alert=''
 CFG_bakedToken=''
 
-CONFIG_KEYS='siteUrl token destination clientLabel keepCount intervalDays shrinkPercent alertCommand lastRunAt lastFileCount lastByteCount lastCounts alert bakedToken'
+CONFIG_KEYS='siteUrl token destination clientLabel keepCount intervalDays shrinkPercent alertCommand lastRunAt lastFileCount lastByteCount lastUsedFiles lastUsedBytes lastCounts alert bakedToken'
 
 # Set when the token written into this script was taken over this run.
 ADOPTED_TOKEN='no'
@@ -182,6 +184,8 @@ read_config() {
   number_or CFG_lastRunAt 0
   number_or CFG_lastFileCount 0
   number_or CFG_lastByteCount 0
+  number_or CFG_lastUsedFiles ''
+  number_or CFG_lastUsedBytes ''
 }
 
 # number_or NAME DEFAULT — keeps a setting only if it is a whole number.
@@ -288,6 +292,8 @@ json_escape() {
 
 SESSION_FILES=0
 SESSION_BYTES=0
+SESSION_USED_FILES=''
+SESSION_USED_BYTES=''
 SESSION_COUNTS=''
 
 open_session() {
@@ -303,11 +309,15 @@ open_session() {
   }
   local field value extra skipped=''
   SESSION_COUNTS=''
+  SESSION_USED_FILES=''
+  SESSION_USED_BYTES=''
   while IFS="$(printf '\t')" read -r field value extra; do
     case "$field" in
     sessionId) SESSION_ID="$value" ;;
     totalFiles) SESSION_FILES="$value" ;;
     totalBytes) SESSION_BYTES="$value" ;;
+    usedFiles) SESSION_USED_FILES="$value" ;;
+    usedBytes) SESSION_USED_BYTES="$value" ;;
     skipped) skipped="$skipped${skipped:+, }$value" ;;
     count) SESSION_COUNTS="$SESSION_COUNTS${SESSION_COUNTS:+,}$value:$extra" ;;
     esac
@@ -339,16 +349,34 @@ shrink_percent() {
 
 SHRINK_REPORT=''
 
+# size_loss FILES_BEFORE FILES_AFTER BYTES_BEFORE BYTES_AFTER — what was lost,
+# if more than the limit allows; nothing otherwise.
+size_loss() {
+  local files bytes
+  files="$(shrink_percent "$1" "$2")"
+  bytes="$(shrink_percent "$3" "$4")"
+  if [ "$files" -gt "$CFG_shrinkPercent" ] || [ "$bytes" -gt "$CFG_shrinkPercent" ]; then
+    printf 'files %s → %s (-%s%%), size %s → %s (-%s%%)' "$1" "$2" "$files" \
+      "$(human_size "$3")" "$(human_size "$4")" "$bytes"
+  fi
+}
+
 # Whether the site lost more than it plausibly meant to since the last backup:
-# a share of its files or bytes, or of any kind of entity.
+# a share of the files it uses or of their size, or of any kind of entity.
 site_shrank() {
-  local limit="$CFG_shrinkPercent" report='' files bytes
-  if [ "${CFG_lastFileCount:-0}" -gt 0 ]; then
-    files="$(shrink_percent "$CFG_lastFileCount" "$SESSION_FILES")"
-    bytes="$(shrink_percent "$CFG_lastByteCount" "$SESSION_BYTES")"
-    if [ "$files" -gt "$limit" ] || [ "$bytes" -gt "$limit" ]; then
-      report="files $CFG_lastFileCount → $SESSION_FILES (-$files%), size $(human_size "$CFG_lastByteCount") → $(human_size "$SESSION_BYTES") (-$bytes%)"
+  local limit="$CFG_shrinkPercent" report=''
+  if [ -n "$SESSION_USED_FILES" ]; then
+    # The site says which of its files are in use: one nothing uses any
+    # more, which its cleanup removes, is no loss however large. Judged
+    # against the last run that measured the same way; the first has none.
+    if [ -n "$CFG_lastUsedFiles" ] && [ "$CFG_lastUsedFiles" -gt 0 ]; then
+      report="$(size_loss "$CFG_lastUsedFiles" "$SESSION_USED_FILES" \
+        "${CFG_lastUsedBytes:-0}" "${SESSION_USED_BYTES:-0}")"
     fi
+  elif [ "${CFG_lastFileCount:-0}" -gt 0 ]; then
+    # A site before 0.0.3 counts every file it holds.
+    report="$(size_loss "$CFG_lastFileCount" "$SESSION_FILES" \
+      "$CFG_lastByteCount" "$SESSION_BYTES")"
   fi
   # Deleting a couple of entries is ordinary; losing a share of them, and more
   # than two, is not.
@@ -662,6 +690,8 @@ EOF
   CFG_lastRunAt="$completed_at"
   CFG_lastFileCount="$SESSION_FILES"
   CFG_lastByteCount="$SESSION_BYTES"
+  CFG_lastUsedFiles="$SESSION_USED_FILES"
+  CFG_lastUsedBytes="$SESSION_USED_BYTES"
   CFG_lastCounts="$SESSION_COUNTS"
   clear_alert
   write_config

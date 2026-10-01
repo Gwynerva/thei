@@ -488,8 +488,14 @@ EOF`,
       'manual copies are never rotated',
     );
 
-    // The alarm: a site that lost files or entries stops the run.
+    // The alarm: a site that lost files or entries stops the run. Files
+    // are judged by the ones the site uses: totals that fell — cleanup
+    // sweeping what nothing used — raise nothing.
     setConfig(target, 'lastFileCount', '100000');
+    setConfig(target, 'lastByteCount', '1000000000000');
+    run = client(target, '--run');
+    check(run.code === 0, 'files nothing used going raises no alarm');
+    setConfig(target, 'lastUsedFiles', '100000');
     run = client(target, '--run');
     check(
       run.code === 2 && /SHRANK/.test(run.out),
