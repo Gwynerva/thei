@@ -58,7 +58,7 @@ const isDirty = computed(
 // Where the entry's texts keep their drafts and versions. A new entry keeps
 // them too, and its first save hands them over.
 provideContentOwner('diary-entry', () => diaryUuid);
-useBeforeUnloadGuard(() => isDirty.value);
+useLeaveGuard({ dirty: () => isDirty.value });
 const isValid = computed(() =>
   Boolean(
     diaryData.value.date &&
@@ -143,11 +143,6 @@ await useAdminTabTitle(
     isEdit.value ? phrase.value.edit_diary_entry : phrase.value.new_diary_entry,
   ),
 );
-onBeforeRouteLeave(() => {
-  if (interceptModalNavigation()) return false;
-  if (isDirty.value)
-    return window.confirm(phrase.value.unsaved_changes_confirm);
-});
 
 async function deleteEntry() {
   if (!diaryUuid) return;

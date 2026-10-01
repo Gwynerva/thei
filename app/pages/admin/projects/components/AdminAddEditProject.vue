@@ -278,7 +278,10 @@ await useAdminTabTitle(
   ),
 );
 
-useBeforeUnloadGuard(() => isDirty.value || pendingUploads.value > 0);
+useLeaveGuard({
+  dirty: () => isDirty.value,
+  pendingUploads: () => pendingUploads.value,
+});
 
 /**
  * Saving inside the content editor saves the whole entity too, but only when
@@ -413,18 +416,6 @@ function applySavedAction(action: ProjectEditData['action']) {
 function cloneProjectData(data: ProjectEditData): ProjectEditData {
   return JSON.parse(JSON.stringify(data)) as ProjectEditData;
 }
-onBeforeRouteLeave(() => {
-  if (interceptModalNavigation()) return false;
-  if (
-    pendingUploads.value > 0 &&
-    !window.confirm(phrase.value.upload_pending_leave_confirm)
-  ) {
-    return false;
-  }
-  if (isDirty.value) {
-    return window.confirm(phrase.value.unsaved_changes_confirm);
-  }
-});
 
 async function openDeleteProjectModal() {
   if (!resolvedProjectUuid.value) return;

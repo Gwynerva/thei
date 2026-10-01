@@ -81,7 +81,10 @@ const showPeriodsHint = ref(false);
 const isDirty = computed(
   () => JSON.stringify(eventPayload()) !== savedSnapshot.value,
 );
-useBeforeUnloadGuard(() => isDirty.value || pendingUploads.value > 0);
+useLeaveGuard({
+  dirty: () => isDirty.value,
+  pendingUploads: () => pendingUploads.value,
+});
 const isValid = computed(() =>
   Boolean(
     eventData.value.title.trim() &&
@@ -190,17 +193,6 @@ await useAdminTabTitle(
     isEdit.value ? phrase.value.edit_event : phrase.value.new_event,
   ),
 );
-onBeforeRouteLeave(() => {
-  if (interceptModalNavigation()) return false;
-  if (
-    pendingUploads.value > 0 &&
-    !window.confirm(phrase.value.upload_pending_leave_confirm)
-  ) {
-    return false;
-  }
-  if (isDirty.value)
-    return window.confirm(phrase.value.unsaved_changes_confirm);
-});
 
 async function deleteEvent() {
   if (!eventUuid) return;

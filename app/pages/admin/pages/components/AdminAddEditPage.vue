@@ -106,7 +106,7 @@ const notesModel = computed({
 });
 
 const dirty = computed(() => JSON.stringify(payload()) !== savedSnapshot.value);
-useBeforeUnloadGuard(() => dirty.value);
+useLeaveGuard({ dirty: () => dirty.value });
 const slugInvalid = computed(
   () => Boolean(data.value.slug) && !pageSlugIsValid(data.value.slug),
 );
@@ -260,10 +260,6 @@ await useAdminTabTitle(
     isEdit.value ? phrase.value.edit_page : phrase.value.new_page,
   ),
 );
-onBeforeRouteLeave(() => {
-  if (interceptModalNavigation()) return false;
-  if (dirty.value) return window.confirm(phrase.value.unsaved_changes_confirm);
-});
 </script>
 
 <template>
