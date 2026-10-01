@@ -78,8 +78,8 @@ function rememberDimensions(width: number, height: number) {
  * before the other into its own blurred copy, which fills the hero: the
  * banner never reaches past the content, and the words sit on its own
  * colours rather than on black, under a shade the hero lays only there. The
- * column comes from the hero (`PublicProjectHero`); every fade is a
- * smoothstep measured on the hero.
+ * column comes from the hero (`PublicProjectHero`); every fade follows
+ * `mask-ease`, measured on the hero.
  */
 @variant sm {
   .hero-banner {
@@ -100,14 +100,12 @@ function rememberDimensions(width: number, height: number) {
     height: auto;
     aspect-ratio: auto;
     transform: none;
-    @apply mask-smoothstep;
-    --smoothstep-direction: to right;
-    --smoothstep-rise-from: calc(
-      var(--hero-words-end) - var(--hero-column) / 3
-    );
-    --smoothstep-rise-to: var(--hero-words-end);
-    --smoothstep-from: calc(var(--hero-column-end) - var(--banner-release));
-    --smoothstep-to: var(--hero-column-end);
+    @apply mask-ease;
+    --ease-direction: to right;
+    --ease-rise-from: calc(var(--hero-words-end) - var(--hero-column) / 3);
+    --ease-rise-to: var(--hero-words-end);
+    --ease-from: calc(var(--hero-column-end) - var(--banner-release));
+    --ease-to: var(--hero-column-end);
   }
   /* Its own left side dissolves too, so it never ends in a hard line. */
   :deep(.media-main) {
@@ -116,10 +114,10 @@ function rememberDimensions(width: number, height: number) {
     width: var(--banner-width);
     max-width: none;
     height: 100%;
-    @apply mask-smoothstep;
-    --smoothstep-direction: to left;
-    --smoothstep-from: 50%;
-    --smoothstep-to: 100%;
+    @apply mask-ease;
+    --ease-direction: to left;
+    --ease-from: 50%;
+    --ease-to: 100%;
   }
   :deep(.media-backdrop) {
     /* Same centre as the banner; enlarged uniformly to reach every edge. */

@@ -205,17 +205,18 @@ const visibleTags = computed(() => props.tags.slice(0, 3));
     background: var(--color-black);
   }
   /*
-   * Darkens the banner's blurred copy under the words only, and lets go
-   * along a smoothstep before the banner turns sharp: the words read on the
-   * banner's own colours, with no edge to the shade, and the rest of the
-   * hero, where there is nothing to read, keeps them as they are.
+   * Darkens the banner's blurred copy where the words start and lets go
+   * across the whole column, so slowly that nowhere can be pointed at as
+   * where it ends: the words read on the banner's own colours, and the
+   * margin past the column, where there is nothing to read, keeps them as
+   * they are.
    */
   .hero-shade {
     background: rgb(0 0 0 / 60%);
-    @apply mask-smoothstep;
-    --smoothstep-direction: to right;
-    --smoothstep-from: calc(var(--hero-column-start) + var(--hero-column) / 3);
-    --smoothstep-to: var(--hero-words-end);
+    @apply mask-ease;
+    --ease-direction: to right;
+    --ease-from: var(--hero-column-start);
+    --ease-to: var(--hero-column-end);
   }
 }
 </style>

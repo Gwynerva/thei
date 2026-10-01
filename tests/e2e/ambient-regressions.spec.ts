@@ -149,27 +149,34 @@ for (const width of [390, 1280]) {
         );
         // Edge media along the right edge of the content's column: the
         // banner reaches it, never leaving a glow there, and its window
-        // rises after the words and lets go at that edge. Every fade is a
-        // smoothstep (its steps run through about 2.8% and 97.2%, as the
-        // browser rounds them to eight-bit alpha), so none of them
-        // shows a line.
+        // rises after the words and lets go at that edge. Every fade is the
+        // eased curve of `mask-ease`, a stop at every twentieth of it rather
+        // than a straight ramp, so none of them shows a line.
         const columnRight =
           box!.x + (box!.width + Math.min(1100, box!.width)) / 2;
         expect(mainBox!.x + mainBox!.width).toBeGreaterThanOrEqual(
           columnRight - 1,
         );
-        const smoothstep = (direction: string) =>
-          new RegExp(
-            `^linear-gradient\\(to ${direction}, rgba\\(0, 0, 0, 0\\) .*rgba\\(0, 0, 0, 0\\.02[78]\\).*rgba\\(0, 0, 0, 0\\.97`,
+        for (const [layer, direction] of [
+          [
+            banner.locator(
+              '[data-media-original-pair] [data-media-foreground]',
+            ),
+            'right',
+          ],
+          [foreground, 'left'],
+          [hero.locator('[data-hero-shade]'), 'right'],
+        ] as const) {
+          const mask = await layer.evaluate(
+            (element) => getComputedStyle(element).maskImage,
           );
-        await expect(
-          banner.locator('[data-media-original-pair] [data-media-foreground]'),
-        ).toHaveCSS('mask-image', smoothstep('right'));
-        await expect(foreground).toHaveCSS('mask-image', smoothstep('left'));
-        await expect(hero.locator('[data-hero-shade]')).toHaveCSS(
-          'mask-image',
-          smoothstep('right'),
-        );
+          expect(mask).toMatch(
+            new RegExp(`^linear-gradient\\(to ${direction},`),
+          );
+          // Both changes of 21 stops each, the rise's often collapsed.
+          expect(mask.match(/rgba?\(/g)).toHaveLength(42);
+          expect(mask).toContain('rgba(0, 0, 0, 0.5)');
+        }
       }
       const tags = hero.locator('[data-hero-tags]');
       await expect(tags.locator('a')).toHaveText(['Tag 1', 'Tag 2', 'Tag 3']);

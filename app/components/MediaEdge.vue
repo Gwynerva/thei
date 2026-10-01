@@ -71,14 +71,14 @@ const {
 
 /*
  * The strip itself, blurred backdrop included, holds up to `--media-edge-hold`
- * and dissolves into the parent along a smoothstep over the rest of its width.
+ * and dissolves into the parent over the rest of its width (`mask-ease`).
  * The window of the sharp media inside it is drawn by `Media`.
  */
 .media-edge-strip {
-  @apply mask-smoothstep;
-  --smoothstep-direction: var(--media-edge-inward);
-  --smoothstep-from: var(--media-edge-hold);
-  --smoothstep-to: 100%;
+  @apply mask-ease;
+  --ease-direction: var(--media-edge-inward);
+  --ease-from: var(--media-edge-hold);
+  --ease-to: 100%;
   transition: --media-edge-clear 300ms ease-out;
 }
 @media (prefers-reduced-motion: reduce) {

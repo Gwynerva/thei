@@ -22,12 +22,14 @@ const ICON = 132;
 /**
  * The shade under the words: never lighter than this, so the picture behind
  * them is a mood rather than a second thing to read, solid to `SHADE_SOLID`
- * and clear by `SHADE_END`, eased between so that no line shows where it
- * starts to lift.
+ * and clear by `SHADE_END`, the card's edge. It lifts across all of the
+ * banner the words leave free, along a curve level at both ends, so no line
+ * shows where it starts to; by the end of the longest line it has barely
+ * begun.
  */
 const SHADE_MIN = 0.6;
-const SHADE_SOLID = 0.64;
-const SHADE_END = 0.9;
+const SHADE_SOLID = 0.6;
+const SHADE_END = 1;
 
 /**
  * A project, the way its page's header shows it: the banner at full height

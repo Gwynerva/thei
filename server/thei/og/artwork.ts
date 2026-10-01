@@ -251,9 +251,9 @@ export function fillsBox(
 
 /**
  * The stops of an SVG gradient that goes from clear at `from` to opaque at
- * `to`, both shares of its length, along a smoothstep — the curve the site's
- * edge media dissolves along. A straight ramp shows where it starts and where
- * it ends, which reads as an edge.
+ * `to`, both shares of its length, along the curve the site's fades follow
+ * (`mask-ease`): a straight ramp shows where it starts and where it ends,
+ * which reads as an edge.
  */
 export function easedFadeStops(from: number, to: number): string {
   return easedSteps(from, to)
@@ -266,9 +266,9 @@ export function easedFadeStops(from: number, to: number): string {
 
 /**
  * The stops of a CSS gradient that holds `color` at `alpha` up to `from` and
- * lets go of it by `to`, both shares of its length, along the same
- * smoothstep: a shade, which satori draws as a background, with no line
- * where it starts to lift.
+ * lets go of it by `to`, both shares of its length, along the same curve: a
+ * shade, which satori draws as a background, with no line where it starts
+ * to lift.
  */
 export function easedShadeStops(
   color: string,
@@ -284,11 +284,17 @@ export function easedShadeStops(
     .join(', ');
 }
 
-/** Tenths of the way from `from` to `to`, with t²(3 − 2t) at each. */
+/**
+ * Twentieths of the way from `from` to `to`, with 6t⁵ − 15t⁴ + 10t³ at each:
+ * level in slope and in curvature at both ends, so neither shows.
+ */
 function easedSteps(from: number, to: number) {
-  return Array.from({ length: 11 }, (_, index) => {
-    const t = index / 10;
-    return { offset: from + (to - from) * t, eased: t * t * (3 - 2 * t) };
+  return Array.from({ length: 21 }, (_, index) => {
+    const t = index / 20;
+    return {
+      offset: from + (to - from) * t,
+      eased: t * t * t * (t * (6 * t - 15) + 10),
+    };
   });
 }
 

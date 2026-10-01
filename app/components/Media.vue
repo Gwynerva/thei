@@ -99,13 +99,13 @@ defineExpose({
 }
 /*
  * Both fades below run from opaque at `--media-edge-from` to clear at
- * `--media-edge-to`, along a smoothstep.
+ * `--media-edge-to`, along `mask-ease`.
  */
 .media-edge :deep(:is(.media-foreground, .media-main)) {
-  @apply mask-smoothstep;
-  --smoothstep-direction: var(--media-edge-inward);
-  --smoothstep-from: var(--media-edge-from);
-  --smoothstep-to: var(--media-edge-to);
+  @apply mask-ease;
+  --ease-direction: var(--media-edge-inward);
+  --ease-from: var(--media-edge-from);
+  --ease-to: var(--media-edge-to);
 }
 /*
  * The window: the sharp media stays clear across the outer part of the strip
