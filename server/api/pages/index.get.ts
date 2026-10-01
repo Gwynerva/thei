@@ -6,26 +6,14 @@ import {
 import { PUBLIC_DIRECTORY_PAGE_SIZE } from '../../thei/public/pagination';
 import {
   buildPublicPageListItem,
-  canListPublicEntity,
+  listPublicPages,
 } from '../../thei/public/entities';
 
 export default defineEventHandler(
   async (event): Promise<PaginatedResponse<PublicPageListItem>> => {
     const isAdmin = await THEI_SERVER.isAdmin(event);
-    const { db, schema } = THEI_SERVER.useDb();
-    const pages = db
-      .select()
-      .from(schema.pages)
-      .all()
-      .filter((page) => canListPublicEntity(page.access, isAdmin))
-      .sort(
-        (left, right) =>
-          right.updatedAt - left.updatedAt ||
-          right.createdAt - left.createdAt ||
-          left.pageUuid.localeCompare(right.pageUuid),
-      );
     const paged = paginate(
-      pages,
+      listPublicPages(isAdmin),
       getQuery(event).page,
       PUBLIC_DIRECTORY_PAGE_SIZE,
     );

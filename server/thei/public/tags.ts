@@ -1,6 +1,6 @@
 import { and, count, eq, inArray } from 'drizzle-orm';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
-import { canListPublicEntity } from './entities';
+import { canListPublicEntity, listablePublicEntityWhere } from './entities';
 
 /**
  * How many projects and events carry each tag, as a reader may list them.
@@ -64,6 +64,20 @@ export function listPublicTagCounts(isAdmin: boolean) {
 }
 
 /**
+ * The same, the most used tags first: the home page and the tags card show
+ * the head of this list.
+ */
+export function listPublicTagCountsByUse(isAdmin: boolean) {
+  return listPublicTagCounts(isAdmin).sort(
+    (left, right) =>
+      right.projectCount +
+        right.eventCount -
+        left.projectCount -
+        left.eventCount || left.tag.title.localeCompare(right.tag.title),
+  );
+}
+
+/**
  * The conditions that pick one tag's projects and events a reader may list;
  * a visitor sees only public ones.
  */
@@ -82,11 +96,11 @@ export function publicTagItemFilters(tagUuid: string, isAdmin: boolean) {
   return {
     projectFilter: and(
       inArray(projects.projectUuid, tagged('project')),
-      isAdmin ? undefined : eq(projects.access, ProjectEventAccessLevel.Public),
+      listablePublicEntityWhere(projects.access, isAdmin),
     ),
     eventFilter: and(
       inArray(events.eventUuid, tagged('event')),
-      isAdmin ? undefined : eq(events.access, ProjectEventAccessLevel.Public),
+      listablePublicEntityWhere(events.access, isAdmin),
     ),
   };
 }

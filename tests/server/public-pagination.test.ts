@@ -24,9 +24,14 @@ import {
   buildPublicTagListItems,
 } from '../../server/thei/public/entities';
 
-vi.mock('../../server/thei/public/entities', () => ({
+vi.mock('../../server/thei/public/entities', async () => ({
   canListPublicEntity: (access: string, isAdmin: boolean) =>
     isAdmin || access === 'public',
+  listablePublicEntityWhere: (
+    await vi.importActual<typeof import('../../server/thei/public/entities')>(
+      '../../server/thei/public/entities',
+    )
+  ).listablePublicEntityWhere,
   buildPublicProjectSummary: vi.fn(async (row) => ({ href: row.projectUuid })),
   buildPublicEventSummary: vi.fn(async (row) => ({ href: row.eventUuid })),
   buildPublicTagListItems: vi.fn(async (rows) =>

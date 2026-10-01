@@ -22,7 +22,7 @@ import {
 } from '../../thei/public/entities';
 import { siteViewer } from '../../thei/access-links/viewer';
 import { buildSecretReference } from '../../thei/public/secret';
-import { listPublicTagCounts } from '../../thei/public/tags';
+import { listPublicTagCountsByUse } from '../../thei/public/tags';
 
 export default defineEventHandler(
   async (event): Promise<PublicProfileResponse> => {
@@ -56,13 +56,7 @@ export default defineEventHandler(
       .from(schema.events)
       .all()
       .sort((a, b) => b.updatedAt - a.updatedAt);
-    const tags = listPublicTagCounts(isAdmin)
-      .sort(
-        (a, b) =>
-          b.projectCount + b.eventCount - a.projectCount - a.eventCount ||
-          a.tag.title.localeCompare(b.tag.title),
-      )
-      .slice(0, 5);
+    const tags = listPublicTagCountsByUse(isAdmin).slice(0, 5);
     const [
       aboutContent,
       pinnedPages,

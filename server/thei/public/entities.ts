@@ -1,5 +1,6 @@
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import { and, eq } from 'drizzle-orm';
+import type { SQLiteColumn } from 'drizzle-orm/sqlite-core';
 import {
   AssetType,
   type OtherAssetUsageMeta,
@@ -158,6 +159,33 @@ export function canListPublicEntity(
   isAdmin: boolean,
 ) {
   return isAdmin || access === ProjectEventAccessLevel.Public;
+}
+
+/** `canListPublicEntity` as the condition of a query over `access`. */
+export function listablePublicEntityWhere(
+  access: SQLiteColumn,
+  isAdmin: boolean,
+) {
+  return isAdmin ? undefined : eq(access, ProjectEventAccessLevel.Public);
+}
+
+/**
+ * The pages a reader may list, recently changed first: the pages directory
+ * and its card list the same ones in the same order.
+ */
+export function listPublicPages(isAdmin: boolean) {
+  const { db, schema } = THEI_SERVER.useDb();
+  return db
+    .select()
+    .from(schema.pages)
+    .all()
+    .filter((page) => canListPublicEntity(page.access, isAdmin))
+    .sort(
+      (left, right) =>
+        right.updatedAt - left.updatedAt ||
+        right.createdAt - left.createdAt ||
+        left.pageUuid.localeCompare(right.pageUuid),
+    );
 }
 
 export function canOpenPublicEntity(

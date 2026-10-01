@@ -8,14 +8,14 @@ import {
   buildPublicEntityReference,
   buildPublicPageListItem,
   buildPublicTags,
-  canListPublicEntity,
+  listPublicPages,
 } from '../../public/entities';
 import { countLifePointsByYear } from '../../public/life';
 import {
   getPublicSearchIndex,
   searchPublicDocuments,
 } from '../../public/search-index';
-import { listPublicTagCounts } from '../../public/tags';
+import { listPublicTagCountsByUse } from '../../public/tags';
 import { getProfileIdentity } from '../../profile';
 import { ownerText } from '../../owner-text';
 import { OG_META_ICONS, OG_SERVICE_ICONS } from '../icons';
@@ -287,13 +287,7 @@ async function presetContent(
 
 /** The tags page as a cloud of the most used tags, each in its own colour. */
 async function tagsContent(site: OgSite): Promise<OgCardContent> {
-  const rows = listPublicTagCounts(false).sort(
-    (left, right) =>
-      right.projectCount +
-        right.eventCount -
-        left.projectCount -
-        left.eventCount || left.tag.title.localeCompare(right.tag.title),
-  );
+  const rows = listPublicTagCountsByUse(false);
   const top = rows.slice(0, CLOUD_LIMIT);
   const summaries = await buildPublicTags(
     top.map(({ tag }) => ({
@@ -332,18 +326,7 @@ async function tagsContent(site: OgSite): Promise<OgCardContent> {
 
 /** The pages directory: how many, and the icons of the newest. */
 async function pagesContent(site: OgSite): Promise<OgCardContent> {
-  const { db, schema } = THEI_SERVER.useDb();
-  const pages = db
-    .select()
-    .from(schema.pages)
-    .all()
-    .filter((page) => canListPublicEntity(page.access, false))
-    .sort(
-      (left, right) =>
-        right.updatedAt - left.updatedAt ||
-        right.createdAt - left.createdAt ||
-        left.pageUuid.localeCompare(right.pageUuid),
-    );
+  const pages = listPublicPages(false);
   const tiles = (
     await Promise.all(
       pages
