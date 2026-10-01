@@ -6,7 +6,7 @@ import {
   ContentValidationError,
   collectContentAssetUuids,
   contentBlockIsInPrivateSection,
-  contentPrivateSectionRanges,
+  normalizedContentPrivateSectionRanges,
   normalizeContentData,
   summarizeContentData,
   type ContentOutputBlock,
@@ -208,7 +208,8 @@ export function selectPublicContentMediaAssetUuids(
   includePrivate = false,
 ) {
   const normalized = normalizeContentData(value);
-  const privateSectionRanges = contentPrivateSectionRanges(normalized);
+  const privateSectionRanges =
+    normalizedContentPrivateSectionRanges(normalized);
   const assetUuids: string[] = [];
   const seen = new Set<string>();
   const append = (value: unknown) => {
@@ -244,7 +245,8 @@ async function hydratePublicContentData(
   viewer: PublicViewer,
 ): Promise<PublicContentOutputData> {
   const normalized = normalizeContentData(value);
-  const privateSectionRanges = contentPrivateSectionRanges(normalized);
+  const privateSectionRanges =
+    normalizedContentPrivateSectionRanges(normalized);
   const sectionByStartIndex = new Map(
     privateSectionRanges.map((range) => [range.startIndex, range]),
   );

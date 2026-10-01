@@ -98,7 +98,7 @@ import { internalUrlPastePattern } from '#layers/thei/shared/internal-url';
 import { readCleanEditorOutput } from '#layers/thei/app/composables/editor-output';
 import {
   createEditorHistorySession,
-  type EditorHistoryState,
+  type EditorHistoryCurrent,
 } from '#layers/thei/app/composables/content-history/session';
 import {
   announceContentHistoryChange,
@@ -380,12 +380,9 @@ function endTransientEntitySelection(persisted: boolean) {
   );
 }
 
-function applyEditorData(state: EditorHistoryState) {
+function applyEditorData(state: EditorHistoryCurrent) {
   currentKey.value = state.key;
-  headerSummary.value = summarizeContentData(
-    state.data,
-    collectContentAssetSizeMap(state.data),
-  );
+  headerSummary.value = state.summary;
 }
 
 function formatTime(value: number) {

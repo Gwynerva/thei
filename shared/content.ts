@@ -221,10 +221,11 @@ export function normalizeContentData(value: unknown): ContentOutputData {
   };
 }
 
-export function contentPrivateSectionRanges(
-  value: ContentOutputData | null | undefined,
+/** Where the private sections of data `normalizeContentData` gave run. */
+export function normalizedContentPrivateSectionRanges(
+  normalized: ContentOutputData,
 ): ContentPrivateSectionRange[] {
-  const blocks = normalizeContentData(value).blocks;
+  const blocks = normalized.blocks;
   const boundaries = new Map<string, number[]>();
 
   blocks.forEach((block, index) => {
@@ -272,7 +273,12 @@ export function contentDataIsSemanticallyEqual(
 export function canonicalizeContentData(
   value: ContentOutputData | null | undefined,
 ): ContentOutputData {
-  const normalized = normalizeContentData(value);
+  return canonicalizeNormalizedContentData(normalizeContentData(value));
+}
+
+function canonicalizeNormalizedContentData(
+  normalized: ContentOutputData,
+): ContentOutputData {
   return {
     ...normalized,
     blocks: normalized.blocks.map((block) => {
@@ -320,8 +326,21 @@ export function canonicalizeContentData(
 export function contentSemanticKey(
   data: ContentOutputData | null | undefined,
 ): string {
+  return normalizedContentSemanticKey(normalizeContentData(data));
+}
+
+/**
+ * `contentSemanticKey` of data `normalizeContentData` already gave. An
+ * editor keys every state of a text it reads, and normalizing a long text
+ * once more for it costs more than the key itself.
+ */
+export function normalizedContentSemanticKey(
+  normalized: ContentOutputData,
+): string {
   return JSON.stringify(
-    canonicalizeContentData(data).blocks.map(({ id: _id, ...block }) => block),
+    canonicalizeNormalizedContentData(normalized).blocks.map(
+      ({ id: _id, ...block }) => block,
+    ),
   );
 }
 
@@ -419,7 +438,7 @@ export function publicContentPlainText(
   options: { privatePlaceholder?: string } = {},
 ): string {
   const normalized = normalizeContentData(data);
-  const ranges = contentPrivateSectionRanges(normalized);
+  const ranges = normalizedContentPrivateSectionRanges(normalized);
   const placeholderAt = new Set(
     options.privatePlaceholder
       ? ranges
@@ -543,12 +562,25 @@ export function summarizeContentData(
   return summarizeNormalizedContentData(normalized, assetSizes);
 }
 
+/**
+ * The summary of data `normalizeContentData` already gave, with the sizes
+ * its hydrated files carry: what an editor shows of the text it holds.
+ */
+export function summarizeNormalizedContent(
+  normalized: ContentOutputData,
+): ContentSummary {
+  return summarizeNormalizedContentData(
+    normalized,
+    collectNormalizedContentAssetSizeMap(normalized),
+  );
+}
+
 function summarizeNormalizedContentData(
   normalized: ContentOutputData,
   assetSizes: Map<string, number>,
 ): ContentSummary {
   const assetUuids = new Set<string>();
-  for (const ref of extractContentAssetRefs(normalized)) {
+  for (const ref of extractNormalizedContentAssetRefs(normalized)) {
     assetUuids.add(ref.assetUuid);
   }
 
@@ -604,8 +636,13 @@ function collectNormalizedContentAssetSizeMap(
 export function extractContentAssetRefs(
   data: ContentOutputData,
 ): ContentAssetRef[] {
-  const normalized = normalizeContentData(data);
-  const ranges = contentPrivateSectionRanges(normalized);
+  return extractNormalizedContentAssetRefs(normalizeContentData(data));
+}
+
+function extractNormalizedContentAssetRefs(
+  normalized: ContentOutputData,
+): ContentAssetRef[] {
+  const ranges = normalizedContentPrivateSectionRanges(normalized);
   const refs: ContentAssetRef[] = [];
   for (const [index, block] of normalized.blocks.entries()) {
     const isPrivate = contentBlockIsInPrivateSection(ranges, index);

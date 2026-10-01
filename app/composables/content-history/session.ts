@@ -2,7 +2,10 @@ import { computed, readonly, ref, shallowRef } from 'vue';
 import {
   canonicalizeContentData,
   contentSemanticKey,
+  normalizedContentSemanticKey,
+  summarizeNormalizedContent,
   type ContentOutputData,
+  type ContentSummary,
 } from '#layers/thei/shared/content';
 import {
   contentDigest,
@@ -66,6 +69,11 @@ export interface EditorHistoryState {
   key: string;
 }
 
+/** What the editor holds now, with its summary, read once for everyone. */
+export interface EditorHistoryCurrent extends EditorHistoryState {
+  summary: ContentSummary;
+}
+
 /** A draft this editor could take up. */
 export type EditorHistoryOffer =
   | {
@@ -96,7 +104,7 @@ export interface EditorHistoryLifecycle {
 export interface EditorHistorySessionOptions {
   read: () => Promise<ContentOutputData>;
   render: (data: ContentOutputData) => Promise<void>;
-  onCurrentChange?: (state: EditorHistoryState) => void;
+  onCurrentChange?: (state: EditorHistoryCurrent) => void;
   onError?: (error: unknown, kind: 'read' | 'restore') => void;
   /** Where the field's history lives. Without it nothing is kept. */
   history?: {
@@ -273,7 +281,7 @@ export function createEditorHistorySession(
         hasPendingCapture.value = false;
         try {
           const data = await readStable();
-          if (!destroyed && !isApplying.value) setCurrent(data);
+          if (!destroyed && !isApplying.value) setCurrent(data, false, true);
         } catch (error) {
           if (!destroyed) options.onError?.(error, 'read');
         }
@@ -298,20 +306,30 @@ export function createEditorHistorySession(
     }
   }
 
-  function setCurrent(data: ContentOutputData, force = false) {
-    const next = cleanEditorSnapshot(data);
-    const key = contentSemanticKey(next);
+  /**
+   * Takes what the editor holds as current. A long text costs a moment to
+   * normalize: data `readStable` gave is `clean` already, and is keyed and
+   * summed up as it is, once for the session and the editor around it.
+   */
+  function setCurrent(data: ContentOutputData, force = false, clean = false) {
+    const next = clean ? data : cleanEditorSnapshot(data);
+    const key = normalizedContentSemanticKey(next);
     const previous = { data: currentData, key: currentKey };
     currentData = next;
     if (!force && key === currentKey) return;
     currentKey = key;
     if (history) currentDigest.value = contentDigestOfKey(key);
-    options.onCurrentChange?.({ data: cloneSerializable(next), key });
+    const summary = summarizeNormalizedContent(next);
+    options.onCurrentChange?.({ data: cloneSerializable(next), key, summary });
     // Restores and clears send what they did themselves.
     if (!history || !initialized || isApplying.value || closed) return;
     lastRestore.value = undefined;
     const previousStats = currentStats;
-    currentStats = contentHistoryStats(next);
+    currentStats = {
+      wordCount: summary.wordCount,
+      blockCount: summary.blockCount,
+      assetCount: summary.assetCount,
+    };
     if (previousStats && isLargeContentDrop(previousStats, currentStats)) {
       // The text just before the loss goes out as it was, so the server keeps
       // exactly that, not whatever it last received seconds earlier.

@@ -1,6 +1,6 @@
 import {
   contentBlockIsInPrivateSection,
-  contentPrivateSectionRanges,
+  normalizedContentPrivateSectionRanges,
   normalizeContentData,
   type ContentAssetData,
   type ContentOutputData,
@@ -42,7 +42,7 @@ export function extractContentReferenceCandidates(
   includePrivate = false,
 ): ContentReferenceCandidates {
   const data = normalizeContentData(value);
-  const privateSectionRanges = contentPrivateSectionRanges(data);
+  const privateSectionRanges = normalizedContentPrivateSectionRanges(data);
   const links: ContentReferenceLinkCandidate[] = [];
   const files: ContentReferenceFileCandidate[] = [];
   const linkByKey = new Map<string, ContentReferenceLinkCandidate>();
