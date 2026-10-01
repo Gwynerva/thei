@@ -3,6 +3,7 @@ import type { ImageAccent } from '#layers/thei/shared/accent-color';
 import {
   linearSrgbToOklch,
   srgbChannelToLinear,
+  srgbLuminance,
 } from '#layers/thei/shared/oklch';
 import { extractImageAccent } from '../assets/image-color';
 import { svgDensityFor } from '../assets/svg-density';
@@ -172,9 +173,11 @@ async function analyze(
     for (let x = 0; x < 72; x++) {
       const offset = (y * cover.info.width + x) * cover.info.channels;
       luminances.push(
-        0.2126 * srgbChannelToLinear(cover.data[offset]!) +
-          0.7152 * srgbChannelToLinear(cover.data[offset + 1]!) +
-          0.0722 * srgbChannelToLinear(cover.data[offset + 2]!),
+        srgbLuminance(
+          cover.data[offset]!,
+          cover.data[offset + 1]!,
+          cover.data[offset + 2]!,
+        ),
       );
     }
   luminances.sort((a, b) => a - b);

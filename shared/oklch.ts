@@ -1,12 +1,13 @@
 /**
- * Colour arithmetic in OKLCH, for pictures the server draws itself.
+ * Colour arithmetic in OKLCH, for pictures the server draws itself, and the
+ * one place its conversions are written out.
  *
  * `oklchToHex` in `accent-color.ts` clips each channel, which is what a
  * browser does with an `oklch()` it cannot show and what the site's generated
  * icons were drawn with. A card built from a vivid accent needs the opposite:
  * a colour that keeps its hue and lightness and gives up chroma until it fits
  * the screen, and a text colour that is provably readable on it. Both live
- * here, apart from the old function, so the icons already drawn keep their
+ * here, beside the clipping one, so the icons already drawn keep their
  * colours.
  */
 export interface Oklch {
@@ -39,20 +40,31 @@ export function oklchToLinearSrgb({
   ];
 }
 
-export function linearSrgbToOklch(
+/** Linear sRGB, 0–1 a channel, to OKLab. */
+export function linearSrgbToOklab(
   red: number,
   green: number,
   blue: number,
-): Oklch {
+): { l: number; a: number; b: number } {
   const lCube = 0.4122214708 * red + 0.5363325363 * green + 0.0514459929 * blue;
   const mCube = 0.2119034982 * red + 0.6806995451 * green + 0.1073969566 * blue;
   const sCube = 0.0883024619 * red + 0.2817188376 * green + 0.6299787005 * blue;
   const lRoot = Math.cbrt(lCube);
   const mRoot = Math.cbrt(mCube);
   const sRoot = Math.cbrt(sCube);
-  const l = 0.2104542553 * lRoot + 0.793617785 * mRoot - 0.0040720468 * sRoot;
-  const a = 1.9779984951 * lRoot - 2.428592205 * mRoot + 0.4505937099 * sRoot;
-  const b = 0.0259040371 * lRoot + 0.7827717662 * mRoot - 0.808675766 * sRoot;
+  return {
+    l: 0.2104542553 * lRoot + 0.793617785 * mRoot - 0.0040720468 * sRoot,
+    a: 1.9779984951 * lRoot - 2.428592205 * mRoot + 0.4505937099 * sRoot,
+    b: 0.0259040371 * lRoot + 0.7827717662 * mRoot - 0.808675766 * sRoot,
+  };
+}
+
+export function linearSrgbToOklch(
+  red: number,
+  green: number,
+  blue: number,
+): Oklch {
+  const { l, a, b } = linearSrgbToOklab(red, green, blue);
   const c = Math.hypot(a, b);
   // A grey has no hue; 0 is the canonical one, as in `normalizeImageAccent`.
   const h = c < 1e-6 ? 0 : ((Math.atan2(b, a) * 180) / Math.PI + 360) % 360;
@@ -67,7 +79,8 @@ export function srgbChannelToLinear(value: number): number {
     : ((channel + 0.055) / 1.055) ** 2.4;
 }
 
-function linearToSrgbChannel(value: number): number {
+/** Linear light, clipped to 0–1, to one sRGB channel, 0–255. */
+export function linearToSrgbChannel(value: number): number {
   const encoded =
     value <= 0.0031308 ? 12.92 * value : 1.055 * value ** (1 / 2.4) - 0.055;
   return Math.round(Math.min(1, Math.max(0, encoded)) * 255);
@@ -107,7 +120,8 @@ export function oklchToSrgbHex(color: Oklch): string {
   return linearToHex(oklchToLinearSrgb(gamutMapOklch(color)));
 }
 
-function linearToHex(channels: [number, number, number]): string {
+/** Linear sRGB as `#rrggbb`, each channel clipped. */
+export function linearToHex(channels: [number, number, number]): string {
   return `#${channels
     .map((channel) =>
       linearToSrgbChannel(channel).toString(16).padStart(2, '0'),
@@ -137,12 +151,16 @@ export function hexToOklch(hex: string): Oklch {
 
 /** WCAG 2 relative luminance of an opaque colour. */
 export function relativeLuminance(hex: string): number {
-  const [red, green, blue] = hexToRgb(hex).map(srgbChannelToLinear) as [
-    number,
-    number,
-    number,
-  ];
-  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+  return srgbLuminance(...hexToRgb(hex));
+}
+
+/** WCAG 2 relative luminance of sRGB channels, 0–255 each. */
+export function srgbLuminance(red: number, green: number, blue: number) {
+  return (
+    0.2126 * srgbChannelToLinear(red) +
+    0.7152 * srgbChannelToLinear(green) +
+    0.0722 * srgbChannelToLinear(blue)
+  );
 }
 
 /** WCAG 2 contrast ratio, 1–21, whichever colour is lighter. */

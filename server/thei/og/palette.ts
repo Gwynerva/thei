@@ -3,6 +3,7 @@ import {
   blendHex,
   contrastRatio,
   ensureContrast,
+  linearToHex,
   oklchToSrgbHex,
   relativeLuminance,
   type Oklch,
@@ -327,14 +328,7 @@ export function ogPalette(
  * contrast, at a point that bright.
  */
 function greyOfLuminance(luminance: number) {
-  const encoded =
-    luminance <= 0.0031308
-      ? 12.92 * luminance
-      : 1.055 * luminance ** (1 / 2.4) - 0.055;
-  const channel = Math.round(Math.min(1, Math.max(0, encoded)) * 255)
-    .toString(16)
-    .padStart(2, '0');
-  return `#${channel}${channel}${channel}`;
+  return linearToHex([luminance, luminance, luminance]);
 }
 
 /**
