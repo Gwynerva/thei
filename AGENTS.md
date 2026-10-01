@@ -39,6 +39,12 @@ Around them:
 
 - Keep a commit title whole on its first line, even past the recommended length; never carry part of it into the description. Aim for about 50 characters, 72 at most: generalize when a change touches several things, leave details to the description, and do not start a title with a version.
 
+## Branches
+
+- Work towards a release goes on `release/x.y.z`, branched from `main`. It lands on `main` as one squash commit through a pull request titled "Release x.y.z", and the tag `vx.y.z` goes on that commit.
+- Never name a branch like a tag (`v0.0.4`): the installer resolves `github:Gwynerva/thei#vX.Y.Z`, which a branch of the same name makes ambiguous.
+- Delete a branch once its work is merged. GitHub removes it from `origin` on merge; remove the local one with `git branch -D` (a squash merge leaves it unmerged in git's eyes) and `git fetch --prune`. Its commits stay readable in the pull request.
+
 ## Development Servers
 
 | Server                                    | Open at                 | Start                                                           |
