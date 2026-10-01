@@ -7,6 +7,7 @@ import type {
   DiarySaveResponse,
 } from '#layers/thei/shared/api/diary';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
+import { toDateString } from '#layers/thei/shared/date-range';
 import { diaryDeleteModal } from '../composables';
 import { provideContentOwner } from '#layers/thei/app/composables/content-history/owner';
 
@@ -169,8 +170,9 @@ function saveAfterContentEdit() {
 function emptyData(): DiaryEditData {
   return {
     // A new entry is about today until told otherwise, which is what makes
-    // one quick enough to write on the way past.
-    date: new Date().toISOString().slice(0, 10),
+    // one quick enough to write on the way past — the writer's today, not
+    // UTC's, or a late evening east of Greenwich would date it yesterday.
+    date: toDateString(new Date()),
     access: ProjectEventAccessLevel.Public,
     content: null,
     relations: [],
