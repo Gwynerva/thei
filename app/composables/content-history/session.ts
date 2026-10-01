@@ -58,7 +58,7 @@ import {
  */
 
 export type EditorHistoryStatus =
-  'off' | 'synced' | 'pending' | 'saving' | 'offline';
+  'off' | 'synced' | 'pending' | 'saving' | 'offline' | 'refused';
 
 export interface EditorHistoryState {
   data: ContentOutputData;
@@ -169,6 +169,8 @@ export function createEditorHistorySession(
     () => isCapturing.value || hasPendingCapture.value || isApplying.value,
   );
   const status = ref<EditorHistoryStatus>(history ? 'synced' : 'off');
+  /** The server refused the last text it was sent; the next change tries again. */
+  let refused = false;
   const lastSyncedAt = ref<number>();
   /** The text before the last restore, until the next edit. */
   const lastRestore = shallowRef<EditorHistoryState>();
@@ -364,11 +366,12 @@ export function createEditorHistorySession(
     if (!history || closed) return;
     if (!hasUnconfirmed()) {
       clearSyncTimers();
-      if (!sending) status.value = 'synced';
+      if (!sending) status.value = refused ? 'refused' : 'synced';
       scheduleBufferWrite();
       return;
     }
-    if (status.value === 'synced') status.value = 'pending';
+    if (status.value === 'synced' || status.value === 'refused')
+      status.value = 'pending';
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => void flushSync(), timing.debounceMs);
     maxWaitTimer ??= setTimeout(() => void flushSync(), timing.maxWaitMs);
@@ -401,6 +404,7 @@ export function createEditorHistorySession(
             ...(write.hint ? { hint: write.hint } : {}),
           });
           ackedKey = write.key;
+          refused = false;
           lastSyncedAt.value = now();
           retryIndex = 0;
           if (fieldRef.value && isSameField(write.field))
@@ -416,13 +420,19 @@ export function createEditorHistorySession(
             scheduleRetry();
             return;
           }
-          // The server refused this text; nothing sent again would change it.
+          // The server refused this text; nothing sent again would change
+          // it. It is not kept there, and the editor says so.
           ackedKey = write.key;
+          refused = true;
         } finally {
           inFlight = undefined;
         }
       }
-      status.value = currentKey === ackedKey ? 'synced' : 'pending';
+      status.value = refused
+        ? 'refused'
+        : currentKey === ackedKey
+          ? 'synced'
+          : 'pending';
       writeBufferNow();
       // Fields behind the editor are told when it closes, not on every write.
     })().finally(() => {
@@ -785,6 +795,9 @@ export function createEditorHistorySession(
     stopTimers();
     const field = fieldRef.value;
     if (!history || !field) return;
+    // Closed before the editor was read: nothing of this session to send,
+    // and what an earlier one left in the browser stays for the next.
+    if (!initialized) return;
     enqueueCurrent();
     writeBufferNow();
     activeBufferKeys.delete(contentHistoryBufferKey(field, writer));

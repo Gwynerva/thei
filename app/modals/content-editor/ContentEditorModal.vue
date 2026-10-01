@@ -325,6 +325,8 @@ const historyStatusText = computed(() => {
   if (!hasHistory) return '';
   if (historyStatus.value === 'offline')
     return phrase.value.content_draft_status_offline;
+  if (historyStatus.value === 'refused')
+    return phrase.value.content_draft_status_refused;
   // Text equal to what the form holds needs no reassurance.
   if (!isDirty.value) return '';
   const syncedAt = editorSession.lastSyncedAt.value;
@@ -1280,13 +1282,19 @@ function editorJsI18nMessages() {
             </div>
             <div class="flex shrink-0 items-center gap-1 text-xs text-text-3">
               <span
-                v-if="historyStatus === 'offline'"
+                v-if="
+                  historyStatus === 'offline' || historyStatus === 'refused'
+                "
                 class="inline-flex items-center gap-1 text-text-warning"
-                :data-title-popup="phrase.content_draft_status_offline"
+                :data-title-popup="historyStatusText"
                 data-history-status
               >
                 <Icon name="warning" />
-                {{ phrase.content_draft_status_offline_short }}
+                {{
+                  historyStatus === 'offline'
+                    ? phrase.content_draft_status_offline_short
+                    : phrase.content_draft_status_refused_short
+                }}
               </span>
               <span
                 v-else-if="historyStatusText"

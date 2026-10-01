@@ -864,6 +864,8 @@ export type LanguagePhrases = {
   content_draft_status_offline_short: string;
   content_draft_status_synced: (time: string) => string;
   content_draft_status_offline: string;
+  content_draft_status_refused_short: string;
+  content_draft_status_refused: string;
   content_field_unsaved_draft: (time: string) => string;
   sign_out_unsynced_confirm: (count: number) => string;
   content_internal_link: string;

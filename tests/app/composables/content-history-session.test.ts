@@ -188,6 +188,42 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe('editor history session', () => {
+  it('says so when the server refuses a draft, and tries again on the next change', async () => {
+    const { session, transport, type } = setup();
+    await session.initialize();
+    vi.mocked(transport.sync).mockRejectedValueOnce(
+      Object.assign(new Error('Too large'), { statusCode: 413 }),
+    );
+    type(text('Too much to keep'));
+    await vi.advanceTimersByTimeAsync(10_000);
+    // Not kept, and not sent again as it is: nothing would change.
+    expect(session.status.value).toBe('refused');
+    expect(transport.sync).toHaveBeenCalledTimes(1);
+
+    type(text('Shorter'));
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(sentTexts(transport)).toEqual([
+      { text: 'Shorter', hint: undefined },
+    ]);
+    expect(session.status.value).toBe('synced');
+  });
+
+  it('leaves what an earlier session left when closed before it read the editor', async () => {
+    const storage = createStorage();
+    const buffer = createLocalContentHistoryBuffer('/', () => storage);
+    buffer.write({
+      field,
+      writer: 'tab-1',
+      entries: [{ data: text('Written offline before') }],
+      updatedAt: 1,
+    });
+    const { session } = setup(text('Opened'), { buffer });
+    await session.close();
+    expect(buffer.read(field, 'tab-1')?.entries[0]?.data).toEqual(
+      text('Written offline before'),
+    );
+  });
+
   it('writes nothing for the text it opened with', async () => {
     const { session, transport } = setup();
     await session.initialize();

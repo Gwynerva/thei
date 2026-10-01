@@ -1139,6 +1139,9 @@ export default defineI18nBase({
     content_draft_status_offline_short: 'Offline',
     content_draft_status_synced: (time) => `Draft kept · ${time}`,
     content_draft_status_offline: 'No connection — kept in the browser',
+    content_draft_status_refused_short: 'Not kept',
+    content_draft_status_refused:
+      'The server refused the draft — the text is only in this window',
     content_field_unsaved_draft: (time) => `Unsaved draft · ${time}`,
     sign_out_unsynced_confirm: (count) =>
       `Not on the server yet: ${plural(count, 'text', 'texts')}. Signing out now loses ${count === 1 ? 'it' : 'them'}. Sign out anyway?`,

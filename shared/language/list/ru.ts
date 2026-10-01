@@ -1202,6 +1202,9 @@ export default defineI18nModule({
     content_draft_status_offline_short: 'Нет связи',
     content_draft_status_synced: (time) => `Черновик сохранён · ${time}`,
     content_draft_status_offline: 'Нет связи — хранится в браузере',
+    content_draft_status_refused_short: 'Не сохраняется',
+    content_draft_status_refused:
+      'Сервер не принял черновик — текст есть только в этом окне',
     content_field_unsaved_draft: (time) => `Несохранённый черновик · ${time}`,
     sign_out_unsynced_confirm: (count) =>
       `Ещё не на сервере: ${plural(count, 'текст', 'текста', 'текстов')}. Если выйти сейчас, они пропадут. Всё равно выйти?`,
