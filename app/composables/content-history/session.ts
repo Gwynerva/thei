@@ -28,11 +28,13 @@ import {
 } from './api';
 import {
   activeBufferKeys,
+  browserContentHistoryLocks,
   contentHistoryBufferKey,
   flushContentHistoryBuffers,
   isRefusedWrite,
   type ContentHistoryBuffer,
   type ContentHistoryBufferEntry,
+  type ContentHistoryWriterLocks,
 } from './buffer';
 
 /**
@@ -101,6 +103,8 @@ export interface EditorHistorySessionOptions {
     field: ContentHistoryField;
     transport: ContentHistoryTransport;
     buffer?: ContentHistoryBuffer;
+    /** Which tabs of the browser are open; the browser's Web Locks by default. */
+    locks?: ContentHistoryWriterLocks;
     /**
      * The latest draft written for another new owner of the same kind, which
      * a field of an owner not created yet may take up. Read reactively.
@@ -155,6 +159,7 @@ export function createEditorHistorySession(
   const timing = { ...DEFAULT_TIMING, ...options.timing };
   const history = options.history;
   const writer = options.writer ?? contentHistoryTabWriter();
+  const locks = history?.locks ?? browserContentHistoryLocks;
   const fieldRef = shallowRef(history?.field);
 
   const isApplying = ref(false);
@@ -211,6 +216,9 @@ export function createEditorHistorySession(
     ackedKey = currentKey;
     if (history && fieldRef.value) {
       currentStats = contentHistoryStats(currentData);
+      // Held before anything is buffered: other tabs leave this one's
+      // unconfirmed text to it for as long as it is open.
+      locks.hold(writer);
       activeBufferKeys.add(contentHistoryBufferKey(fieldRef.value, writer));
       takeOverLeftovers();
       const lifecycle = options.lifecycle ?? browserLifecycle;
@@ -684,10 +692,14 @@ export function createEditorHistorySession(
         history.transport,
         history.buffer,
         field,
+        locks,
       ).catch(() => 0);
+      // A tab still open sends its own text; its draft is offered from the
+      // server once it has.
+      const live = await locks.live();
       const left = history.buffer
         .list(field)
-        .filter((entry) => entry.writer !== writer)
+        .filter((entry) => entry.writer !== writer && !live.has(entry.writer))
         .sort((left, right) => right.updatedAt - left.updatedAt)[0];
       const data = left?.entries.at(-1)?.data;
       if (left && data && !destroyed)

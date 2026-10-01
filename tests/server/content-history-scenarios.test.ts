@@ -38,6 +38,7 @@ import type { ContentHistoryTransport } from '../../app/composables/content-hist
 import {
   createLocalContentHistoryBuffer,
   flushContentHistoryBuffers,
+  type ContentHistoryWriterLocks,
 } from '../../app/composables/content-history/buffer';
 
 /**
@@ -405,12 +406,35 @@ const network = { online: true };
 interface Browser {
   storage: Storage;
   tabs: Tab[];
+  /** The tabs open, by writer, as the browser's Web Locks keep them. */
+  locks: ContentHistoryWriterLocks & { close(writer: string): void };
+}
+
+function createLocks(): Browser['locks'] {
+  const open = new Set<string>();
+  const sending = new Set<string>();
+  return {
+    hold: (writer) => void open.add(writer),
+    async whileIdle(writer, send) {
+      if (open.has(writer) || sending.has(writer)) return false;
+      sending.add(writer);
+      try {
+        await send();
+      } finally {
+        sending.delete(writer);
+      }
+      return true;
+    },
+    live: async () => new Set(open),
+    close: (writer) => void open.delete(writer),
+  };
 }
 
 function createBrowser(): Browser {
   const values = new Map<string, string>();
   return {
     tabs: [],
+    locks: createLocks(),
     storage: {
       get length() {
         return values.size;
@@ -536,11 +560,18 @@ async function openTab(browser: Browser, writer: string): Promise<Tab> {
       field,
       transport: transportFor(browser, tab),
       buffer: createLocalContentHistoryBuffer('/', () => browser.storage),
+      locks: browser.locks,
     },
     writer,
     lifecycle: tab.lifecycle,
     events: tab.events,
   });
+  // A session destroyed here is a tab gone, and the browser lets its lock go.
+  const destroy = tab.session.destroy;
+  tab.session.destroy = () => {
+    destroy();
+    browser.locks.close(writer);
+  };
   tab.write = async (next) => {
     data = structuredClone(next);
     tab.session.recordChange();
@@ -873,10 +904,48 @@ describe('writing a long article', () => {
       await flushContentHistoryBuffers(
         transportFor(laptop),
         createLocalContentHistoryBuffer('/', () => laptop.storage),
+        undefined,
+        laptop.locks,
       ),
     ).toBe(0);
     expect(drafts()).toMatchObject([
       { writer: 'tab-closed', digest: contentDigest(edited(6)) },
     ]);
+  });
+
+  it('leaves what an open tab has not sent yet to that tab', async () => {
+    saveArticle(articleA());
+    const laptop = createBrowser();
+    const writing = await openTab(laptop, 'tab-writing');
+    network.online = false;
+    await writing.write(edited(6));
+    writing.lifecycle.hide();
+    network.online = true;
+    // Another page of the admin opens, or the connection comes back in every
+    // tab at once: its admin bar sends what earlier sessions left. The text
+    // of the tab still open is not one of them — sent from here, it could
+    // land after a newer one the open tab already had confirmed.
+    const buffer = createLocalContentHistoryBuffer('/', () => laptop.storage);
+    expect(
+      await flushContentHistoryBuffers(
+        transportFor(laptop),
+        buffer,
+        undefined,
+        laptop.locks,
+      ),
+    ).toBe(1);
+    expect(drafts()).toEqual([]);
+    expect(buffer.list()).toHaveLength(1);
+    // Nor is it offered as text left behind to an editor opened meanwhile.
+    const reader = await openTab(laptop, 'tab-reading');
+    expect(reader.session.offer.value).toBeUndefined();
+
+    // The open tab sends its text itself, and only then is it offered.
+    await writing.write(edited(7));
+    await settle();
+    expect(drafts()).toMatchObject([
+      { writer: 'tab-writing', digest: contentDigest(edited(7)) },
+    ]);
+    expect(buffer.list()).toEqual([]);
   });
 });
