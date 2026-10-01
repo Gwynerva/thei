@@ -18,9 +18,13 @@ export type DraftOrigin =
   | { kind: 'asset'; assetUuid: string }
   | { kind: 'draft'; draft: AssetDraftSource; file: PickedFile };
 
+/**
+ * Tells origins apart. A picked file is told by its object URL: two files
+ * of the same name and size are still two files.
+ */
 export function draftOriginKey(origin: DraftOrigin): string {
   return origin.kind === 'file'
-    ? `file:${origin.file.name}:${origin.file.size}`
+    ? `file:${origin.file.objectUrl}`
     : origin.kind === 'asset'
       ? `asset:${origin.assetUuid}`
       : `draft:${origin.draft.draftId}`;
@@ -76,8 +80,14 @@ export function useDraftSession(
     error.value = null;
     const attempt = open(current, key).then(
       (opened) => {
-        if (openedFor === key) draft.value = opened;
-        return opened;
+        if (openedFor === key) {
+          draft.value = opened.draft;
+          owned = opened.owned;
+        } else if (opened.owned) {
+          // Closed while it was opening: nothing will ever use it.
+          deleteDraft(opened.draft.draftId);
+        }
+        return opened.draft;
       },
       (reason: unknown) => {
         if (openedFor === key) error.value = reason;
@@ -120,23 +130,21 @@ export function useDraftSession(
     if (closing && wasOwned) deleteDraft(closing.draftId);
   }
 
+  /** Opens a draft, saying whether it is this session's to delete. */
   async function open(
     current: DraftOrigin,
     key: string,
-  ): Promise<AssetDraftSource> {
+  ): Promise<{ draft: AssetDraftSource; owned: boolean }> {
     if (current.kind === 'asset') {
-      owned = true;
-      return await $fetch<AssetDraftSource>(
+      const opened = await $fetch<AssetDraftSource>(
         `/api/admin/assets/drafts/from-asset/${current.assetUuid}`,
         { method: 'POST' },
       );
+      return { draft: opened, owned: true };
     }
-    if (current.kind === 'draft' && expiredFor !== key) {
-      owned = false;
-      return current.draft;
-    }
-    owned = true;
-    return await stage(current.file);
+    if (current.kind === 'draft' && expiredFor !== key)
+      return { draft: current.draft, owned: false };
+    return { draft: await stage(current.file), owned: true };
   }
 
   async function stage(file: PickedFile): Promise<AssetDraftSource> {
@@ -165,5 +173,3 @@ export function useDraftSession(
 
   return { draft, stagingProgress, error, ensure, withDraft, close };
 }
-
-export { isDraftExpired };

@@ -266,6 +266,34 @@ describe('editor drafts', () => {
     ]);
   });
 
+  it('keeps the original once when commits and dry runs of a draft overlap', async () => {
+    await stagedDraft(1600, 1200);
+    const session = useDraft('draft-a');
+
+    // Two results asked for at once, and a dry run beside them: whichever
+    // commit keeps the original moves the staged file into the library, and
+    // the rest read it from there rather than from where it was.
+    const [first, second, dry] = await Promise.all([
+      commitDraft(session, request(400), { signal: live() }),
+      commitDraft(session, request(300), { signal: live() }),
+      renderDraft(session, request(200), live()),
+    ]);
+
+    expect(first.assetUuid).not.toBe(second.assetUuid);
+    expect(dry.width).toBe(200);
+    expect(() => useDraft('draft-a')).not.toThrow();
+    expect(session.source.owned).toBe(false);
+    expect(
+      rawDb
+        .prepare(
+          "SELECT COUNT(*) AS n FROM assets WHERE familyUuid = ? AND settingsKey = 'original'",
+        )
+        .get(session.familyUuid),
+    ).toEqual({ n: 1 });
+    // And a dry run afterwards still has a file to read.
+    expect((await renderDraft(session, request(100), live())).width).toBe(100);
+  });
+
   it('keeps nothing more for a draft opened on a library file', async () => {
     const bytes = await sharp({
       create: { width: 300, height: 200, channels: 3, background: '#d53a7b' },

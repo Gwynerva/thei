@@ -82,6 +82,29 @@ interface DraftSession {
   closing?: boolean;
   /** The upload id of the last commit run as a job of the draft's. */
   job?: string;
+  /**
+   * Set while a commit may move the staged source into the library. Work
+   * that reads the source waits for it: the path it would open is about to
+   * stop existing, and the one that replaces it is only known afterwards.
+   */
+  moving?: Promise<void>;
+}
+
+/** The draft's source once no commit is moving it into the library. */
+async function sourceAtRest(session: DraftSession): Promise<AssetSourceFile> {
+  while (session.moving) await session.moving;
+  return session.source;
+}
+
+/** Marks the source as possibly on its way into the library; returns the end. */
+function holdSource(session: DraftSession): () => void {
+  let release!: () => void;
+  const moving = new Promise<void>((resolve) => (release = resolve));
+  session.moving = moving;
+  return () => {
+    if (session.moving === moving) session.moving = undefined;
+    release();
+  };
 }
 
 /** Nothing reads the draft's files: it may go. */
@@ -324,7 +347,8 @@ async function encodeDraftRender(
   key: string,
   signal: AbortSignal,
 ): Promise<DraftRenderRecord> {
-  const processed = await renderAsset(session.source, settings, { signal });
+  const source = await sourceAtRest(session);
+  const processed = await renderAsset(source, settings, { signal });
   return await cacheRender(session, key, settings, processed);
 }
 
@@ -399,16 +423,17 @@ export async function commitDraft(
   },
 ): Promise<AssetUploadResponse> {
   validateAssetVariantSettings(session.type, session.source.extension, request);
-  // The source was probed when the draft opened, so this reads no file.
-  const settings = await resolveAssetRequest(
-    request,
-    session.source,
-    session.type,
-    session.transform,
-  );
-  const key = buildAssetSettingsKey(settings);
+  // Busy from the first await on: an idle draft may be evicted meanwhile.
   session.busy += 1;
   try {
+    // The source was probed when the draft opened, so this reads no file.
+    const settings = await resolveAssetRequest(
+      request,
+      session.source,
+      session.type,
+      session.transform,
+    );
+    const key = buildAssetSettingsKey(settings);
     // "Use" pressed while these very settings are still encoding: wait for
     // that encode rather than starting a second one.
     await joinableRender(session, key)?.promise.catch(() => undefined);
@@ -422,7 +447,7 @@ export async function commitDraft(
         options.onStatus?.({ phase: 'processing' });
         let processed = await takeRender(session, settings);
         if (!processed) {
-          processed = await renderAsset(session.source, settings, {
+          processed = await renderAsset(await sourceAtRest(session), settings, {
             signal: options.signal,
             onProgress: (progress) =>
               options.onStatus?.({ phase: 'processing', progress }),
@@ -440,33 +465,41 @@ export async function commitDraft(
           }
         }
         options.onStatus?.({ phase: 'finishing' });
-        const variant = await commitProcessedAsset({
-          processed,
-          settings,
-          familyUuid: session.familyUuid,
-          source: session.source,
-          transformSource: session.transform,
-        });
-        const original =
-          settings.type === 'original'
-            ? variant
-            : await keepOriginal(session, options.signal);
-        // Keeping the original moved the staged file into the library. The
-        // draft goes on reading it from there, without owning it — told so
-        // before the slot passes to a render of it waiting in the queue.
-        if (original && session.source.owned) {
-          session.source = {
-            path: THEI_SERVER.assets.filePath(
-              original.contentHash,
-              original.extension,
-            ),
-            size: original.size,
-            hash: original.contentHash,
-            extension: original.extension,
-            owned: false,
-          };
+        // Another commit of the draft may be moving the source right now;
+        // this one then finds it in the library and keeps nothing more.
+        await sourceAtRest(session);
+        const moved = session.source.owned ? holdSource(session) : undefined;
+        try {
+          const variant = await commitProcessedAsset({
+            processed,
+            settings,
+            familyUuid: session.familyUuid,
+            source: session.source,
+            transformSource: session.transform,
+          });
+          const original =
+            settings.type === 'original'
+              ? variant
+              : await keepOriginal(session, options.signal);
+          // Keeping the original moved the staged file into the library. The
+          // draft goes on reading it from there, without owning it — told so
+          // before anything waiting to read it goes on.
+          if (original && session.source.owned) {
+            session.source = {
+              path: THEI_SERVER.assets.filePath(
+                original.contentHash,
+                original.extension,
+              ),
+              size: original.size,
+              hash: original.contentHash,
+              extension: original.extension,
+              owned: false,
+            };
+          }
+          return variant;
+        } finally {
+          moved?.();
         }
-        return variant;
       },
       { signal: options.signal },
     );
@@ -525,11 +558,11 @@ async function takeRender(
   const key = buildAssetSettingsKey(settings);
   const record = session.renders.get(key);
   if (!record) return undefined;
+  // Handed over, not shared: storage moves the file into the library. Taken
+  // off the list first, so no render cached meanwhile evicts it.
+  session.renders.delete(key);
   const present = await stat(record.path).catch(() => null);
   if (!present?.isFile()) return undefined;
-
-  // Handed over, not shared: storage moves the file into the library.
-  session.renders.delete(key);
   return {
     bytes: await fileBytes(record.path, true),
     extension: record.extension,
