@@ -1,9 +1,6 @@
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { resolveEntityIconMedia } from '../../../thei/media/generated-icon';
-import {
-  buildContentPreview,
-  contentPlainText,
-} from '#layers/thei/shared/content';
+import { contentPlainText } from '#layers/thei/shared/content';
 import type { DiaryListResponse } from '#layers/thei/shared/api/diary';
 import {
   normalizeAdminSearchText,
@@ -130,10 +127,7 @@ export default defineEventHandler(async (event): Promise<DiaryListResponse> => {
     ...result,
     items: await Promise.all(
       result.items.map(async (item) => {
-        // The stored body names its files by uuid alone; only the hydrated
-        // one carries the media a preview is drawn from. Searched and cut
-        // into an excerpt above as stored, it is hydrated for this page only.
-        const body = await THEI_SERVER.content.buildFieldValue(
+        const media = await THEI_SERVER.content.buildPreviewMedia(
           'diary-entry',
           item.diaryUuid,
           'diary-body',
@@ -146,7 +140,7 @@ export default defineEventHandler(async (event): Promise<DiaryListResponse> => {
           previewMedia: resolveEntityIconMedia(
             'diary-entry',
             item.diaryUuid,
-            buildContentPreview(body?.data).media,
+            media,
           ),
           createdAt: item.createdAt,
           updatedAt: item.updatedAt,

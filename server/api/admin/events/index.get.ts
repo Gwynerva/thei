@@ -1,9 +1,6 @@
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { resolveEntityIconMedia } from '../../../thei/media/generated-icon';
-import {
-  buildContentPreview,
-  contentPlainText,
-} from '#layers/thei/shared/content';
+import { contentPlainText } from '#layers/thei/shared/content';
 import type { EventListResponse } from '#layers/thei/shared/api/event';
 import {
   normalizeAdminSearchText,
@@ -150,12 +147,11 @@ export default defineEventHandler(async (event): Promise<EventListResponse> => {
     ...result,
     items: await Promise.all(
       result.items.map(async (item) => {
-        const content = await THEI_SERVER.content.buildFieldValue(
+        const media = await THEI_SERVER.content.buildPreviewMedia(
           'event',
           item.eventUuid,
           'event-body',
         );
-        const preview = buildContentPreview(content?.data);
         return {
           eventUuid: item.eventUuid,
           title: item.title,
@@ -163,11 +159,7 @@ export default defineEventHandler(async (event): Promise<EventListResponse> => {
           access: item.access,
           humanReadableSlug: item.humanReadableSlug,
           publicId: item.publicId,
-          previewMedia: resolveEntityIconMedia(
-            'event',
-            item.eventUuid,
-            preview.media,
-          ),
+          previewMedia: resolveEntityIconMedia('event', item.eventUuid, media),
           createdAt: item.createdAt,
           updatedAt: item.updatedAt,
           totalSize: Array.from(

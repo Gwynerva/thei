@@ -369,24 +369,27 @@ export function analyzeContentData(
   };
 }
 
+/**
+ * The files a text's preview picture is chosen from, in the order it looks
+ * at them: the first with a picture to show is the one. Stored, each is
+ * `{ assetUuid }`; hydrated, it carries its media.
+ */
+export function contentPreviewAssets(normalized: ContentOutputData): unknown[] {
+  return normalized.blocks.flatMap((block) => {
+    if (block.type === 'contentMedia') return [(block.data as any).asset];
+    if (block.type !== 'contentGallery') return [];
+    const items = (block.data as any).items;
+    return Array.isArray(items) ? items.map((item: any) => item?.asset) : [];
+  });
+}
+
 function buildNormalizedContentPreview(
   normalized: ContentOutputData,
   textLimit: number,
 ): ContentPreview {
-  let media: MediaDescriptor | undefined;
-
-  for (const block of normalized.blocks) {
-    if (!media && block.type === 'contentMedia') {
-      media = contentAssetMedia((block.data as any).asset);
-    } else if (!media && block.type === 'contentGallery') {
-      const items = Array.isArray((block.data as any).items)
-        ? (block.data as any).items
-        : [];
-      media = items
-        .map((item: any) => contentAssetMedia(item?.asset))
-        .find(Boolean);
-    }
-  }
+  const media = contentPreviewAssets(normalized)
+    .map(contentAssetMedia)
+    .find(Boolean);
 
   return {
     text: truncatePreviewText(
@@ -1075,7 +1078,8 @@ function appendPreviewText(parts: string[], value: unknown) {
   if (text) parts.push(text);
 }
 
-function contentAssetMedia(value: unknown): MediaDescriptor | undefined {
+/** The picture of a hydrated file of a text, if it has one. */
+export function contentAssetMedia(value: unknown): MediaDescriptor | undefined {
   if (!isRecord(value)) return undefined;
   return normalizeMediaDescriptor(value.media);
 }

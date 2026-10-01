@@ -3,6 +3,8 @@ import { EntityPrefix, generateUniqueId } from '../entity-id';
 import {
   canonicalizeContentData,
   collectContentExternalLinkUrls,
+  contentAssetMedia,
+  contentPreviewAssets,
   createEmptyContentData,
   ContentValidationError,
   extractContentAssetRefs,
@@ -20,6 +22,7 @@ import {
   AssetType,
   type ContentAssetUsageMeta,
 } from '#layers/thei/shared/asset';
+import type { MediaDescriptor } from '#layers/thei/shared/media';
 import { buildAdminAssetUrls, archivedOriginalFromMeta } from '../assets/urls';
 import {
   createExternalLinkLoader,
@@ -76,6 +79,31 @@ export async function buildContentFieldValue(
     assetTotalSize: row.assetTotalSize,
     updatedAt: row.updatedAt,
   };
+}
+
+/**
+ * A text's preview picture as the admin sees it, for a row of a list: only
+ * the files the picture is chosen from are looked up, in order, rather than
+ * the whole text hydrated with every file and link it holds.
+ */
+export async function buildContentPreviewMedia(
+  ownerType: ContentOwnerType,
+  ownerId: string,
+  slot: ContentSlot,
+): Promise<MediaDescriptor | undefined> {
+  const row = await findContentByOwner(ownerType, ownerId, slot);
+  if (!row) return undefined;
+  for (const ref of contentPreviewAssets(normalizeContentData(row.data))) {
+    const assetUuid = (ref as { assetUuid?: unknown } | null)?.assetUuid;
+    if (typeof assetUuid !== 'string' || !assetUuid) continue;
+    const asset = await THEI_SERVER.assets.findByUuid(assetUuid);
+    if (!asset) continue;
+    const media = contentAssetMedia({
+      media: (await buildAdminAssetUrls(asset)).media,
+    });
+    if (media) return media;
+  }
+  return undefined;
 }
 
 export async function prepareContentForSave(
