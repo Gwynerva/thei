@@ -287,15 +287,63 @@
 }
 
 /*
- * A mask opaque up to `--smoothstep-from` and clear from `--smoothstep-to`,
- * along `--smoothstep-direction`, with a smoothstep between: a straight ramp
- * shows where it starts and where it ends, which reads as an edge. The stops
- * are t²(3 − 2t) at every tenth.
+ * A mask clear up to `--smoothstep-rise-from` and opaque from
+ * `--smoothstep-rise-to` (both at the start unless given), opaque up to
+ * `--smoothstep-from` and clear from `--smoothstep-to`, along
+ * `--smoothstep-direction`, with a smoothstep through each change: a
+ * straight ramp shows where it starts and where it ends, which reads as an
+ * edge. The stops are t²(3 − 2t) at every tenth.
+ *
+ * Every element states its own fade: these never pass to its children,
+ * which may be masked along other lines.
  */
+@property --smoothstep-direction {
+  syntax: '*';
+  inherits: false;
+}
+@property --smoothstep-rise-from {
+  syntax: '*';
+  inherits: false;
+}
+@property --smoothstep-rise-to {
+  syntax: '*';
+  inherits: false;
+}
+@property --smoothstep-from {
+  syntax: '*';
+  inherits: false;
+}
+@property --smoothstep-to {
+  syntax: '*';
+  inherits: false;
+}
 @utility mask-smoothstep {
+  --smoothstep-rise: calc(
+    var(--smoothstep-rise-to, 0%) - var(--smoothstep-rise-from, 0%)
+  );
   --smoothstep-span: calc(var(--smoothstep-to) - var(--smoothstep-from));
   mask-image: linear-gradient(
     var(--smoothstep-direction),
+    transparent var(--smoothstep-rise-from, 0%),
+    rgb(0 0 0 / 2.8%)
+      calc(var(--smoothstep-rise-from, 0%) + var(--smoothstep-rise) * 0.1),
+    rgb(0 0 0 / 10.4%)
+      calc(var(--smoothstep-rise-from, 0%) + var(--smoothstep-rise) * 0.2),
+    rgb(0 0 0 / 21.6%)
+      calc(var(--smoothstep-rise-from, 0%) + var(--smoothstep-rise) * 0.3),
+    rgb(0 0 0 / 35.2%)
+      calc(var(--smoothstep-rise-from, 0%) + var(--smoothstep-rise) * 0.4),
+    rgb(0 0 0 / 50%)
+      calc(var(--smoothstep-rise-from, 0%) + var(--smoothstep-rise) * 0.5),
+    rgb(0 0 0 / 64.8%)
+      calc(var(--smoothstep-rise-from, 0%) + var(--smoothstep-rise) * 0.6),
+    rgb(0 0 0 / 78.4%)
+      calc(var(--smoothstep-rise-from, 0%) + var(--smoothstep-rise) * 0.7),
+    rgb(0 0 0 / 89.6%)
+      calc(var(--smoothstep-rise-from, 0%) + var(--smoothstep-rise) * 0.8),
+    rgb(0 0 0 / 97.2%)
+      calc(var(--smoothstep-rise-from, 0%) + var(--smoothstep-rise) * 0.9),
+    #000 var(--smoothstep-rise-to, 0%),
     #000 var(--smoothstep-from),
     rgb(0 0 0 / 97.2%)
       calc(var(--smoothstep-from) + var(--smoothstep-span) * 0.1),

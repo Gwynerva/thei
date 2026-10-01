@@ -147,23 +147,28 @@ for (const width of [390, 1280]) {
         expect(background!.y + background!.height).toBeGreaterThanOrEqual(
           box!.y + box!.height,
         );
-        // Edge media along the hero's right edge: the banner reaches it,
-        // never leaving a glow there, and every fade is a smoothstep (its
-        // first step is 97.2% opaque), so none of them shows a line.
+        // Edge media along the right edge of the content's column: the
+        // banner reaches it, never leaving a glow there, and its window
+        // rises after the words and lets go at that edge. Every fade is a
+        // smoothstep (its steps run through about 2.8% and 97.2%, as the
+        // browser rounds them to eight-bit alpha), so none of them
+        // shows a line.
+        const columnRight =
+          box!.x + (box!.width + Math.min(1100, box!.width)) / 2;
         expect(mainBox!.x + mainBox!.width).toBeGreaterThanOrEqual(
-          box!.x + box!.width - 1,
+          columnRight - 1,
         );
-        for (const layer of [
-          banner.locator('[data-media-original-pair] [data-media-foreground]'),
-          foreground,
-        ])
-          await expect(layer).toHaveCSS(
-            'mask-image',
-            /^linear-gradient\(to left, rgb\(0, 0, 0\) .+?, rgba\(0, 0, 0, 0\.97/,
+        const smoothstep = (direction: string) =>
+          new RegExp(
+            `^linear-gradient\\(to ${direction}, rgba\\(0, 0, 0, 0\\) .*rgba\\(0, 0, 0, 0\\.02[78]\\).*rgba\\(0, 0, 0, 0\\.97`,
           );
+        await expect(
+          banner.locator('[data-media-original-pair] [data-media-foreground]'),
+        ).toHaveCSS('mask-image', smoothstep('right'));
+        await expect(foreground).toHaveCSS('mask-image', smoothstep('left'));
         await expect(hero.locator('[data-hero-shade]')).toHaveCSS(
           'mask-image',
-          /^linear-gradient\(to right, rgb\(0, 0, 0\) .+?, rgba\(0, 0, 0, 0\.97/,
+          smoothstep('right'),
         );
       }
       const tags = hero.locator('[data-hero-tags]');

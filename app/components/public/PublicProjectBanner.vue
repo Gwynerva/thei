@@ -67,25 +67,28 @@ function rememberDimensions(width: number, height: number) {
   opacity: 1;
 }
 /*
- * Wider screens: the banner is edge media along the hero's right edge, the
- * way cards show theirs (`MediaEdge`). It fills the hero's height with its
- * middle at the focus, 65% across the column, and loses its right side past
- * the edge for it; a banner too narrow to reach the edge from there is
- * pinned to it instead, so the edge never shows an empty glow. It stays
- * sharp to the end of the words and dissolves across the third of the
- * column before that into its own blurred copy, which fills the hero dimmed,
- * so the words sit on the banner's own colours rather than on black. The
+ * Wider screens: the banner is edge media along the right edge of the
+ * column the page's content keeps to, the way cards show theirs
+ * (`MediaEdge`). It fills the hero's height with its middle at the focus,
+ * 65% across the column, and loses its right side past the column's edge
+ * for it; a banner too narrow to reach that edge from there is pinned to it
+ * instead, so the edge never shows an empty glow. It is sharp from the end
+ * of the words to the column's edge, dissolving across the third of the
+ * column before the one and a margin's width (a sixth of the column at most)
+ * before the other into its own blurred copy, which fills the hero: the
+ * banner never reaches past the content, and the words sit on its own
+ * colours rather than on black, under a shade the hero lays only there. The
  * column comes from the hero (`PublicProjectHero`); every fade is a
- * smoothstep measured on the hero, from its right edge.
+ * smoothstep measured on the hero.
  */
 @variant sm {
   .hero-banner {
     --banner-focus: calc(var(--hero-column-start) + var(--hero-column) * 0.65);
-    --banner-clear: calc(100cqw - var(--hero-words-end));
+    --banner-release: min(var(--hero-column-start), var(--hero-column) / 6);
     --banner-width: calc(100cqh * var(--media-ratio));
     --banner-middle: max(
       var(--banner-focus),
-      calc(100cqw - var(--banner-width) / 2)
+      calc(var(--hero-column-end) - var(--banner-width) / 2)
     );
   }
   :deep(.media-pair) {
@@ -98,9 +101,13 @@ function rememberDimensions(width: number, height: number) {
     aspect-ratio: auto;
     transform: none;
     @apply mask-smoothstep;
-    --smoothstep-direction: to left;
-    --smoothstep-from: var(--banner-clear);
-    --smoothstep-to: calc(var(--banner-clear) + var(--hero-column) / 3);
+    --smoothstep-direction: to right;
+    --smoothstep-rise-from: calc(
+      var(--hero-words-end) - var(--hero-column) / 3
+    );
+    --smoothstep-rise-to: var(--hero-words-end);
+    --smoothstep-from: calc(var(--hero-column-end) - var(--banner-release));
+    --smoothstep-to: var(--hero-column-end);
   }
   /* Its own left side dissolves too, so it never ends in a hard line. */
   :deep(.media-main) {
@@ -117,7 +124,6 @@ function rememberDimensions(width: number, height: number) {
   :deep(.media-backdrop) {
     /* Same centre as the banner; enlarged uniformly to reach every edge. */
     --tw-blur: blur(var(--blur-3xl));
-    --tw-brightness: brightness(0.6);
     opacity: 1;
     inset: auto;
     top: 50%;

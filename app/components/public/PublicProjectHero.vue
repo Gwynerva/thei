@@ -197,6 +197,7 @@ const visibleTags = computed(() => props.tags.slice(0, 3));
   .project-hero-with-banner {
     --hero-column: var(--width-wide);
     --hero-column-start: calc((100cqw - var(--hero-column)) / 2);
+    --hero-column-end: calc(var(--hero-column-start) + var(--hero-column));
     /* The words take two thirds of it. */
     --hero-words-end: calc(
       var(--hero-column-start) + var(--hero-column) * 2 / 3
@@ -204,12 +205,13 @@ const visibleTags = computed(() => props.tags.slice(0, 3));
     background: var(--color-black);
   }
   /*
-   * Deepens the banner's dimmed copy under the words a little, and lets go
+   * Darkens the banner's blurred copy under the words only, and lets go
    * along a smoothstep before the banner turns sharp: the words read on the
-   * banner's own colours, with no edge to the shade.
+   * banner's own colours, with no edge to the shade, and the rest of the
+   * hero, where there is nothing to read, keeps them as they are.
    */
   .hero-shade {
-    background: rgb(0 0 0 / 40%);
+    background: rgb(0 0 0 / 60%);
     @apply mask-smoothstep;
     --smoothstep-direction: to right;
     --smoothstep-from: calc(var(--hero-column-start) + var(--hero-column) / 3);
