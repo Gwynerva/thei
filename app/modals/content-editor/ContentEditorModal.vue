@@ -118,6 +118,7 @@ import {
   type RestoreTarget,
 } from '#layers/thei/app/composables/content-history/restore-target';
 import ContentHistoryDiff from '#layers/thei/app/components/content/ContentHistoryDiff.vue';
+import { historyTime } from '#layers/thei/app/composables/content-history/time-labels';
 
 const props = defineProps<{
   modalData: {
@@ -331,7 +332,7 @@ const historyStatusText = computed(() => {
   if (!isDirty.value) return '';
   const syncedAt = editorSession.lastSyncedAt.value;
   return syncedAt
-    ? phrase.value.content_draft_status_synced(formatTime(syncedAt))
+    ? phrase.value.content_draft_status_synced(historyTime(syncedAt))
     : '';
 });
 const undoLabel = computed(() =>
@@ -346,7 +347,7 @@ const offerUpdatedAt = computed(() => {
   return offer.kind === 'server' ? offer.meta.updatedAt : offer.updatedAt;
 });
 const offerTime = computed(() =>
-  offerUpdatedAt.value ? formatTime(offerUpdatedAt.value) : '',
+  offerUpdatedAt.value ? historyTime(offerUpdatedAt.value) : '',
 );
 
 async function handleEditorChange(
@@ -383,14 +384,6 @@ function endTransientEntitySelection(persisted: boolean) {
 function applyEditorData(state: EditorHistoryCurrent) {
   currentKey.value = state.key;
   headerSummary.value = state.summary;
-}
-
-function formatTime(value: number) {
-  return new Intl.DateTimeFormat(language.value.code, {
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).format(value);
 }
 
 function toggleHistory() {

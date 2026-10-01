@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createEditorHistorySession,
-  groupHistoryByDay,
   type EditorHistoryLifecycle,
 } from '../../../app/composables/content-history/session';
 import {
@@ -11,6 +10,7 @@ import {
 } from '../../../app/composables/content-history/buffer';
 import type { ContentHistoryTransport } from '../../../app/composables/content-history/api';
 import { cleanEditorSnapshot } from '../../../app/composables/editor-output';
+import { groupHistoryByDay } from '../../../app/composables/content-history/time-labels';
 import type { ContentOutputData } from '../../../shared/content';
 import {
   contentDigest,

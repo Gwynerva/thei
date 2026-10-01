@@ -1,6 +1,6 @@
 <script lang="ts" setup>
-import type { IconName } from '#thei/icons';
 import type { ContentHistoryStats } from '#layers/thei/shared/content-history';
+import { CONTENT_HISTORY_MEASURES } from '#layers/thei/app/composables/content-history/measures';
 
 /**
  * How much a version differs from the text as it is now: blocks, words and
@@ -15,13 +15,10 @@ const { from, to } = defineProps<{
 const compactNumber = useCompactNumber();
 
 const items = computed(() =>
-  (
-    [
-      { icon: 'blocks', delta: to.blockCount - from.blockCount },
-      { icon: 'text', delta: to.wordCount - from.wordCount },
-      { icon: 'files', delta: to.assetCount - from.assetCount },
-    ] as { icon: IconName; delta: number }[]
-  ).filter((item) => item.delta !== 0),
+  CONTENT_HISTORY_MEASURES.map(({ icon, key }) => ({
+    icon,
+    delta: to[key] - from[key],
+  })).filter((item) => item.delta !== 0),
 );
 
 function signed(delta: number) {

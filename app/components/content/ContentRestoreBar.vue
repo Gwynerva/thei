@@ -10,6 +10,7 @@ import {
 import type { EditorHistorySession } from '#layers/thei/app/composables/content-history/session';
 import type { RestoreTarget } from '#layers/thei/app/composables/content-history/restore-target';
 import { useHistoryTimeLabels } from '#layers/thei/app/composables/content-history/time-labels';
+import { CONTENT_HISTORY_MEASURES } from '#layers/thei/app/composables/content-history/measures';
 import { registerDismissLayer } from '#layers/thei/app/composables/modal';
 import ModalHeaderButton from '#layers/thei/app/modals/ModalHeaderButton.vue';
 import ContentStatsDelta from '#layers/thei/app/components/content/ContentStatsDelta.vue';
@@ -116,18 +117,10 @@ const detail = computed(() => {
 
 /** The full comparison, for the tooltip and for screen readers. */
 const comparison = computed(() =>
-  (
-    [
-      ['content_block_count', 'blockCount'],
-      ['content_word_count', 'wordCount'],
-      ['content_file_count', 'assetCount'],
-    ] as const
-  )
-    .map(
-      ([label, key]) =>
-        `${phrase.value[label](props.current[key])} → ${compactNumber(props.target.stats[key])}`,
-    )
-    .join(' · '),
+  CONTENT_HISTORY_MEASURES.map(
+    ({ phrase: label, key }) =>
+      `${phrase.value[label](props.current[key])} → ${compactNumber(props.target.stats[key])}`,
+  ).join(' · '),
 );
 
 async function restore() {

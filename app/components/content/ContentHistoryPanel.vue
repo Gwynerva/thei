@@ -6,17 +6,18 @@ import {
   type ContentHistoryEntryMeta,
   type ContentHistoryStats,
 } from '#layers/thei/shared/content-history';
-import {
-  groupHistoryByDay,
-  type EditorHistorySession,
-} from '#layers/thei/app/composables/content-history/session';
+import type { EditorHistorySession } from '#layers/thei/app/composables/content-history/session';
 import {
   openedRestoreTarget,
   revisionRestoreTarget,
   type RestoreTarget,
 } from '#layers/thei/app/composables/content-history/restore-target';
 import ContentStatsDelta from '#layers/thei/app/components/content/ContentStatsDelta.vue';
-import { useHistoryTimeLabels } from '#layers/thei/app/composables/content-history/time-labels';
+import { CONTENT_HISTORY_MEASURES } from '#layers/thei/app/composables/content-history/measures';
+import {
+  groupHistoryByDay,
+  useHistoryTimeLabels,
+} from '#layers/thei/app/composables/content-history/time-labels';
 
 /**
  * The versions of a text, one line each: when it was written and how much
@@ -76,20 +77,12 @@ function losesMuch(stats: ContentHistoryStats) {
 
 function changesLabel(stats: ContentHistoryStats) {
   const text = phrase.value;
-  return [
+  return CONTENT_HISTORY_MEASURES.map(({ phrase: label, key }) =>
     text.content_history_delta(
-      text.content_block_count(stats.blockCount),
-      stats.blockCount - props.current.blockCount,
+      text[label](stats[key]),
+      stats[key] - props.current[key],
     ),
-    text.content_history_delta(
-      text.content_word_count(stats.wordCount),
-      stats.wordCount - props.current.wordCount,
-    ),
-    text.content_history_delta(
-      text.content_file_count(stats.assetCount),
-      stats.assetCount - props.current.assetCount,
-    ),
-  ].join('; ');
+  ).join('; ');
 }
 
 function rowLabel(entry: ContentHistoryEntryMeta) {

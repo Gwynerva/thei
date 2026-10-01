@@ -917,25 +917,3 @@ const browserLifecycle: EditorHistoryLifecycle = {
     return () => window.removeEventListener('online', callback);
   },
 };
-
-/** Groups versions, newest first, under the local day they were written. */
-export function groupHistoryByDay<T extends { updatedAt: number }>(
-  entries: readonly T[],
-): { dayStart: number; entries: T[] }[] {
-  const groups = new Map<number, T[]>();
-  for (const entry of entries) {
-    const date = new Date(entry.updatedAt);
-    const dayStart = new Date(
-      date.getFullYear(),
-      date.getMonth(),
-      date.getDate(),
-    ).getTime();
-    const group = groups.get(dayStart);
-    if (group) group.push(entry);
-    else groups.set(dayStart, [entry]);
-  }
-  return Array.from(groups, ([dayStart, items]) => ({
-    dayStart,
-    entries: items.sort((left, right) => right.updatedAt - left.updatedAt),
-  })).sort((left, right) => right.dayStart - left.dayStart);
-}
