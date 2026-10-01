@@ -14,7 +14,11 @@ import type {
   ContentOwnerType,
   ContentSlot,
 } from '#layers/thei/shared/content';
-import type { ContentHistoryEntryMeta } from '#layers/thei/shared/content-history';
+import {
+  isNewContentOwnerRef,
+  type ContentHistoryEntryMeta,
+  type ContentHistoryField,
+} from '#layers/thei/shared/content-history';
 import {
   contentHistoryEvents,
   contentHistoryTransport,
@@ -86,9 +90,18 @@ export function provideContentOwner(
   };
 
   let timer: ReturnType<typeof setTimeout> | undefined;
+  /**
+   * Whether a change of drafts may touch this owner's list: its own fields,
+   * or, before it exists, those of any new owner of its kind.
+   */
+  const concerns = (field: ContentHistoryField) => {
+    if (field.ownerType !== ownerType) return false;
+    const id = toValue(ownerId);
+    return id ? field.ownerRef === id : isNewContentOwnerRef(field.ownerRef);
+  };
   const onChange = (event: Event) => {
     const change = (event as CustomEvent<ContentHistoryChange>).detail;
-    if (change?.field && change.field.ownerType !== ownerType) return;
+    if (change?.field && !concerns(change.field)) return;
     clearTimeout(timer);
     timer = setTimeout(() => void refresh(), 300);
   };
