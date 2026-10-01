@@ -1,5 +1,11 @@
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, readFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { defineMigration } from './types';
 
@@ -12,7 +18,9 @@ import { defineMigration } from './types';
  * Each file is copied to its new name, never moved or deleted, so a rollback
  * or a second run finds nothing to undo; the old names are left to the sweep
  * at boot, which removes files no row points at. A row whose file is missing
- * keeps its key and goes on showing the neutral tile, as it did.
+ * keeps its key and goes on showing the neutral tile, as it did. A copy is
+ * made beside its name and renamed into place, so a file under a content
+ * hash is always whole, whenever the update is cut short.
  *
  * The files are 48 px WebP of a few kilobytes, so reading one whole to hash
  * it is fine. An open page of the previous release asks for the old names
@@ -46,7 +54,15 @@ export default defineMigration({
         .digest('hex');
       if (hash === row.faviconKey) continue;
       const target = join(directory, `${hash}.webp`);
-      if (!existsSync(target)) copyFileSync(current, target);
+      if (!existsSync(target)) {
+        const partial = `${target}.${process.pid}.${Date.now()}.tmp`;
+        try {
+          copyFileSync(current, partial);
+          renameSync(partial, target);
+        } finally {
+          rmSync(partial, { force: true });
+        }
+      }
       update.run(hash, row.url);
     }
   },

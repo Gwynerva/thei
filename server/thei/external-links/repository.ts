@@ -19,6 +19,7 @@ import {
   EXTERNAL_LINK_FAVICON_EXTENSION,
   externalLinkFaviconDir,
   externalLinkMedia,
+  prepareExternalLinkFavicon,
   storeExternalLinkFavicon,
   withExternalLinkFavicons,
 } from './favicon';
@@ -32,6 +33,10 @@ const SWEEP_GRACE_MS = 60_000;
 const SWEEP_DELAY_MS = 60_000;
 const FAVICON_FILE = new RegExp(
   `^([a-f0-9]{64})\\.${EXTERNAL_LINK_FAVICON_EXTENSION}$`,
+);
+/** An icon being written, renamed into place once whole. */
+const FAVICON_PARTIAL = new RegExp(
+  `^[a-f0-9]{64}\\.${EXTERNAL_LINK_FAVICON_EXTENSION}\\.[\\w.]+\\.tmp$`,
 );
 
 interface ExternalLinkRow {
@@ -147,26 +152,40 @@ export function refreshExternalLink(rawUrl: unknown): Promise<ExternalLink> {
 
 async function storeExternalLink(url: string): Promise<ExternalLink> {
   const collected = await collectExternalLink(url);
+  return await saveExternalLink(
+    {
+      url,
+      title: collected.title,
+      description: collected.description,
+      status: collected.status,
+    },
+    collected.favicon,
+  );
+}
+
+/**
+ * Writes what a site said of a link, with its icon. The icon is converted
+ * first, outside the lock every link's files share — a conversion takes a
+ * moment, and nothing else needs to wait for it — and is stored with the row
+ * under it, so the sweep never finds the one without the other.
+ */
+export async function saveExternalLink(
+  record: {
+    url: string;
+    title?: string;
+    description?: string;
+    status: ExternalLinkStatus;
+  },
+  favicon: Buffer | undefined,
+): Promise<ExternalLink> {
+  const prepared = await prepareExternalLinkFavicon(favicon);
   return await withExternalLinkFavicons(async () => {
-    const { faviconKey, accent } = await storeExternalLinkFavicon(
-      collected.favicon,
-    );
+    const { faviconKey, accent } = await storeExternalLinkFavicon(prepared);
     const touchedAt = Date.now();
-    upsertExternalLink({
-      url,
-      title: collected.title,
-      description: collected.description,
-      faviconKey,
-      accent,
-      status: collected.status,
-      touchedAt,
-    });
+    upsertExternalLink({ ...record, faviconKey, accent, touchedAt });
     return {
-      url,
-      title: collected.title,
-      description: collected.description,
+      ...record,
       faviconMedia: externalLinkMedia(faviconKey, accent),
-      status: collected.status,
       touchedAt,
     };
   });
@@ -306,8 +325,8 @@ export function sweepExternalLinks(): Promise<void> {
 /**
  * Files no remaining row points at. A forgotten link's icon goes only here:
  * other links may share the same file, so it is never removed by the key of
- * a row. A file younger than the grace is left, as is anything that is not
- * a favicon.
+ * a row. So does an icon a crash left half written. A file younger than the
+ * grace is left, as is anything that is not a favicon.
  */
 async function removeUnreferencedFaviconFiles(
   kept: Set<string>,
@@ -317,7 +336,8 @@ async function removeUnreferencedFaviconFiles(
   const names = await readdir(directory).catch(() => [] as string[]);
   for (const name of names) {
     const key = FAVICON_FILE.exec(name)?.[1];
-    if (!key || kept.has(key)) continue;
+    const partial = FAVICON_PARTIAL.test(name);
+    if (!partial && (!key || kept.has(key))) continue;
     const path = join(directory, name);
     const info = await stat(path).catch(() => undefined);
     if (!info || info.mtimeMs >= cutoff) continue;

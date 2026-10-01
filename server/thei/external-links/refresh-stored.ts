@@ -2,12 +2,8 @@ import { stat } from 'node:fs/promises';
 import { withExternalLinkSlot } from '../assets/queue';
 import type { externalLinks } from '../db/schema/external-links';
 import { collectExternalLink } from './fetch';
-import {
-  externalLinkFaviconPath,
-  storeExternalLinkFavicon,
-  withExternalLinkFavicons,
-} from './favicon';
-import { upsertExternalLink } from './repository';
+import { externalLinkFaviconPath } from './favicon';
+import { saveExternalLink } from './repository';
 
 /** How many sites one step of the pass reads before reporting progress. */
 const REFRESH_BATCH = 5;
@@ -79,26 +75,20 @@ async function refreshStoredExternalLink(
     );
     if (hasIcon) return;
   }
-  await withExternalLinkFavicons(async () => {
-    const { faviconKey, accent } = await storeExternalLinkFavicon(
-      collected.favicon,
-    );
-    upsertExternalLink({
-      url: row.url,
-      ...(keepStored
-        ? {
-            title: row.title ?? undefined,
-            description: row.description ?? undefined,
-            status: row.status,
-          }
-        : {
-            title: collected.title,
-            description: collected.description,
-            status: collected.status,
-          }),
-      faviconKey,
-      accent,
-      touchedAt: Date.now(),
-    });
-  });
+  await saveExternalLink(
+    keepStored
+      ? {
+          url: row.url,
+          title: row.title ?? undefined,
+          description: row.description ?? undefined,
+          status: row.status,
+        }
+      : {
+          url: row.url,
+          title: collected.title,
+          description: collected.description,
+          status: collected.status,
+        },
+    collected.favicon,
+  );
 }

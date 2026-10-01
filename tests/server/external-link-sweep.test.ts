@@ -21,6 +21,7 @@ import {
 import {
   externalLinkFaviconDir,
   externalLinkFaviconPath,
+  prepareExternalLinkFavicon,
   storeExternalLinkFavicon,
   withExternalLinkFavicons,
 } from '../../server/thei/external-links/favicon';
@@ -196,14 +197,17 @@ describe('the sweep', () => {
   it('removes stray files, but neither fresh ones nor anything it does not own', async () => {
     const stray = await faviconFile(keyOf('https://gone.example/'));
     const fresh = await faviconFile(keyOf('https://new.example/'), 0);
-    const temporary = await storeFile(`${keyOf('x')}.webp.123.tmp`);
+    // An icon a crash left half written, and one being written right now.
+    const abandoned = await storeFile(`${keyOf('x')}.webp.123.456.tmp`);
+    const writing = await storeFile(`${keyOf('y')}.webp.123.789.tmp`, 0);
     const foreign = await storeFile('readme.txt');
 
     await sweepExternalLinks();
 
     expect(await exists(stray)).toBe(false);
     expect(await exists(fresh)).toBe(true);
-    expect(await exists(temporary)).toBe(true);
+    expect(await exists(abandoned)).toBe(false);
+    expect(await exists(writing)).toBe(true);
     expect(await exists(foreign)).toBe(true);
   });
 
@@ -233,7 +237,9 @@ describe('the sweep', () => {
   it('never takes a file between a store and the row that claims it', async () => {
     // The icon is already on disk, old and claimed by no row, so storing it
     // again writes nothing and leaves the file as the sweep would find it.
-    const { faviconKey } = await storeExternalLinkFavicon(ICON);
+    const { faviconKey } = await storeExternalLinkFavicon(
+      await prepareExternalLinkFavicon(ICON),
+    );
     const path = externalLinkFaviconPath(faviconKey);
     const old = new Date(LONG_AGO);
     await utimes(path, old, old);
@@ -245,7 +251,9 @@ describe('the sweep', () => {
       (resolve) => (reachedPause = resolve),
     );
     const storing = withExternalLinkFavicons(async () => {
-      const stored = await storeExternalLinkFavicon(ICON);
+      const stored = await storeExternalLinkFavicon(
+        await prepareExternalLinkFavicon(ICON),
+      );
       reachedPause();
       await paused;
       upsertExternalLink({

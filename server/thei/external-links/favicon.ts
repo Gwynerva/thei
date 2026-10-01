@@ -69,17 +69,22 @@ export function withExternalLinkFavicons<T>(
 }
 
 /**
- * Stores an icon under the hash of its stored bytes and says which it is.
+ * Stores a prepared icon under the hash of its bytes and says which it is.
  * Links with the same icon share one file, which is written only once;
  * call it inside `withExternalLinkFavicons`, together with the row that
  * will point at the file.
  */
-export async function storeExternalLinkFavicon(source?: Buffer) {
-  const { buffer, accent } = await prepareExternalLinkFavicon(source);
-  const faviconKey = createHash('sha256').update(buffer).digest('hex');
-  await writeExternalLinkFaviconFile(faviconKey, buffer);
-  return { faviconKey, accent };
+export async function storeExternalLinkFavicon(
+  prepared: PreparedExternalLinkFavicon,
+) {
+  const faviconKey = createHash('sha256').update(prepared.buffer).digest('hex');
+  await writeExternalLinkFaviconFile(faviconKey, prepared.buffer);
+  return { faviconKey, accent: prepared.accent };
 }
+
+export type PreparedExternalLinkFavicon = Awaited<
+  ReturnType<typeof prepareExternalLinkFavicon>
+>;
 
 /**
  * The stored form of an icon: the tile size, WebP, with its accent read
