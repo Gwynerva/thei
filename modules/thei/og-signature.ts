@@ -28,8 +28,22 @@ export const OG_SIGNATURE_SOURCES = [
   'shared/cloud-outline.ts',
   'shared/utils/hash.ts',
   'shared/entity-icon.ts',
-  'shared/public-date-format.ts',
   'app/assets/icons',
+];
+
+/**
+ * What builds a card's content and what caches or serves it draw nothing. A
+ * change there either changes the content, which names the card anew by
+ * itself, or changes nothing of its pixels; hashed, it would only redraw
+ * every card after a release for no reason.
+ */
+export const OG_SIGNATURE_EXCLUDED = [
+  'server/thei/og/content',
+  'server/thei/og/boot.ts',
+  'server/thei/og/cache.ts',
+  'server/thei/og/response.ts',
+  'server/thei/og/targets.ts',
+  'server/thei/og/version.ts',
 ];
 
 const PACKAGES = ['satori', 'sharp', '@fontsource/noto-sans'];
@@ -49,8 +63,11 @@ export async function computeOgTemplateSignature(
   theiPath: string,
 ): Promise<string> {
   const hash = createHash('sha256');
+  const excluded = OG_SIGNATURE_EXCLUDED.map((path) => join(theiPath, path));
   for (const source of OG_SIGNATURE_SOURCES) {
-    const files = (await filesOf(join(theiPath, source))).sort();
+    const files = (await filesOf(join(theiPath, source)))
+      .filter((file) => !excluded.some((path) => file.startsWith(path)))
+      .sort();
     for (const file of files) {
       const content = await readFile(file, 'utf8').catch(() => '');
       // Line endings are how a checkout stores the file, not what it says.
