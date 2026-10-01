@@ -10,6 +10,7 @@ import type { ExternalLink } from '#layers/thei/shared/external-link';
 import { iconSymbols } from '#thei/icon-symbols';
 import { extractImageAccent } from '../assets/image-color';
 import { svgDensityFor } from '../assets/svg-density';
+import { svgBufferForRaster } from '../assets/svg-raster-input';
 import { THEI_CONTENT_DIRS } from '../content-layout';
 import { decodeIco, isIco } from './ico';
 
@@ -162,7 +163,7 @@ async function openFavicon(source: Buffer) {
   // A site's SVG icon is drawn at the tile's size, not at its own units,
   // which for many icons are 16 px and would come out blurred.
   const density = await svgDensityFor(source, EXTERNAL_LINK_FAVICON_SIZE);
-  return sharp(source, { failOn: 'error', density });
+  return sharp(svgBufferForRaster(source), { failOn: 'error', density });
 }
 
 let fallbackTile: Promise<Buffer> | undefined;

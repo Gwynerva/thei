@@ -7,6 +7,7 @@ import {
 } from '#layers/thei/shared/oklch';
 import { extractImageAccent } from '../assets/image-color';
 import { svgDensityFor } from '../assets/svg-density';
+import { withRasterReadySvg } from '../assets/svg-raster-input';
 import { buildIconSvg } from '../media/generated-icon';
 import type { OgPicture } from './model';
 
@@ -52,20 +53,23 @@ function pictureKey(picture: OgPicture) {
 }
 
 /**
- * The bytes sharp should open, at a density that draws a vector picture
- * crisply at `longSide` pixels.
+ * Runs `use` with the bytes sharp should open, at a density that draws a
+ * vector picture crisply at `longSide` pixels. A stored SVG is prepared for
+ * librsvg first, which draws some of them unlike a browser.
  */
-async function pictureInput(picture: OgPicture, longSide: number) {
+async function withPictureInput<T>(
+  picture: OgPicture,
+  longSide: number,
+  use: (input: string | Buffer, density: number | undefined) => Promise<T>,
+): Promise<T> {
   if (picture.type === 'generated')
-    return {
-      input: Buffer.from(buildIconSvg(picture.kind, picture.hue)),
+    return await use(
+      Buffer.from(buildIconSvg(picture.kind, picture.hue)),
       // The drawing is 960 units square.
-      density: Math.max(72, (72 * 2 * longSide) / 960),
-    };
-  return {
-    input: picture.file,
-    density: await svgDensityFor(picture.file, longSide),
-  };
+      Math.max(72, (72 * 2 * longSide) / 960),
+    );
+  const density = await svgDensityFor(picture.file, longSide);
+  return await withRasterReadySvg(picture.file, (input) => use(input, density));
 }
 
 function classify(
@@ -98,7 +102,16 @@ async function analyze(
       coverBright: 0.35,
     });
 
-  const { input, density } = await pictureInput(picture, ANALYSIS_SIZE);
+  return await withPictureInput(picture, ANALYSIS_SIZE, (input, density) =>
+    analyzeInput(picture, input, density),
+  );
+}
+
+async function analyzeInput(
+  picture: Extract<OgPicture, { type: 'file' }>,
+  input: string | Buffer,
+  density: number | undefined,
+): Promise<OgArtworkAnalysis | undefined> {
   const image = () => sharp(input, { density });
   const metadata = await image().metadata();
   const width = picture.width ?? metadata.width ?? 0;
@@ -277,36 +290,45 @@ export async function pictureDataUri(
   const w = Math.max(1, Math.round(width));
   const h = Math.max(1, Math.round(height));
   try {
-    const { input, density } = await pictureInput(picture, Math.max(w, h));
-    let pipeline = sharp(input, { density }).resize(w, h, {
-      fit: options.fit,
-      background: { r: 0, g: 0, b: 0, alpha: 0 },
-    });
-    if (options.blur) pipeline = pipeline.blur(options.blur);
-    if (options.fade) {
-      // Composited after the resize and the blur, at the drawn size.
-      pipeline = sharp(await pipeline.ensureAlpha().png().toBuffer()).composite(
-        [
-          {
-            input: Buffer.from(
-              `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><defs><linearGradient id="f" x1="0" y1="0" x2="1" y2="0">${easedFadeStops(options.fade.from, options.fade.to)}</linearGradient></defs><rect width="${w}" height="${h}" fill="url(#f)"/></svg>`,
-            ),
-            blend: 'dest-in',
-          },
-        ],
-      );
-    }
-    const png =
-      Boolean(options.fade) ||
-      (!options.blur && (options.fit === 'contain' || options.alpha));
-    const buffer = png
-      ? await pipeline.png({ compressionLevel: 6 }).toBuffer()
-      : await pipeline
-          .flatten({ background: '#808080' })
-          .jpeg({ quality: 84 })
-          .toBuffer();
-    return `data:image/${png ? 'png' : 'jpeg'};base64,${buffer.toString('base64')}`;
+    return await withPictureInput(picture, Math.max(w, h), (input, density) =>
+      drawPicture(input, density, w, h, options),
+    );
   } catch {
     return undefined;
   }
+}
+
+async function drawPicture(
+  input: string | Buffer,
+  density: number | undefined,
+  w: number,
+  h: number,
+  options: Parameters<typeof pictureDataUri>[3],
+): Promise<string> {
+  let pipeline = sharp(input, { density }).resize(w, h, {
+    fit: options.fit,
+    background: { r: 0, g: 0, b: 0, alpha: 0 },
+  });
+  if (options.blur) pipeline = pipeline.blur(options.blur);
+  if (options.fade) {
+    // Composited after the resize and the blur, at the drawn size.
+    pipeline = sharp(await pipeline.ensureAlpha().png().toBuffer()).composite([
+      {
+        input: Buffer.from(
+          `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><defs><linearGradient id="f" x1="0" y1="0" x2="1" y2="0">${easedFadeStops(options.fade.from, options.fade.to)}</linearGradient></defs><rect width="${w}" height="${h}" fill="url(#f)"/></svg>`,
+        ),
+        blend: 'dest-in',
+      },
+    ]);
+  }
+  const png =
+    Boolean(options.fade) ||
+    (!options.blur && (options.fit === 'contain' || options.alpha));
+  const buffer = png
+    ? await pipeline.png({ compressionLevel: 6 }).toBuffer()
+    : await pipeline
+        .flatten({ background: '#808080' })
+        .jpeg({ quality: 84 })
+        .toBuffer();
+  return `data:image/${png ? 'png' : 'jpeg'};base64,${buffer.toString('base64')}`;
 }

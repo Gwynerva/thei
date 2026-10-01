@@ -6,6 +6,7 @@ import {
 } from './video-thumbnail';
 import type { AssetBytes } from './bytes';
 import { svgDensityFor } from './svg-density';
+import { withRasterReadySvg } from './svg-raster-input';
 
 export const MEDIA_PREVIEW_MAX_LONG_SIDE = 720;
 /** On AVIF's own scale, not the displayed 10-100 upload scale. */
@@ -49,16 +50,18 @@ export async function createMediaPreview(
 
   // An original JPEG keeps its EXIF orientation, and its recorded dimensions
   // are already the displayed ones: the preview has to be turned the same way.
-  const { data, info } = await sharp(raster, { animated: false, density })
-    .autoOrient()
-    .resize({
-      width: MEDIA_PREVIEW_MAX_LONG_SIDE,
-      height: MEDIA_PREVIEW_MAX_LONG_SIDE,
-      fit: 'inside',
-      withoutEnlargement: true,
-    })
-    .avif({ quality: MEDIA_PREVIEW_QUALITY, effort: 4 })
-    .toBuffer({ resolveWithObject: true });
+  const { data, info } = await withRasterReadySvg(raster, (input) =>
+    sharp(input, { animated: false, density })
+      .autoOrient()
+      .resize({
+        width: MEDIA_PREVIEW_MAX_LONG_SIDE,
+        height: MEDIA_PREVIEW_MAX_LONG_SIDE,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .avif({ quality: MEDIA_PREVIEW_QUALITY, effort: 4 })
+      .toBuffer({ resolveWithObject: true }),
+  );
 
   return {
     buffer: data,

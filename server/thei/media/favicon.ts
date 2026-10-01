@@ -6,6 +6,7 @@ import { THEI_CONTENT_DIRS } from '../content-layout';
 import { getProfile } from '../profile';
 import { assetFilePath } from '../assets/file-path';
 import { svgDensityFor } from '../assets/svg-density';
+import { withRasterReadySvg } from '../assets/svg-raster-input';
 
 /**
  * The set of icons a site needs in 2026, and no more.
@@ -198,25 +199,33 @@ async function renderFaviconVariant(
 }
 
 /**
- * The artwork on a transparent square. An SVG is drawn at the icon's own
- * size — at librsvg's default 72 dpi a small drawing would be blurred at
- * anything larger, and a fixed high density would turn a large drawing into
- * a raster too big to hold.
+ * The artwork on a transparent square, encoded by `encode`. An SVG is drawn
+ * at the icon's own size — at librsvg's default 72 dpi a small drawing would
+ * be blurred at anything larger, and a fixed high density would turn a large
+ * drawing into a raster too big to hold — and prepared for librsvg first.
  */
-async function loadSquare(source: FaviconSource, size: number) {
+async function loadSquare(
+  source: FaviconSource,
+  size: number,
+  encode: (square: sharp.Sharp) => Promise<Buffer>,
+) {
   const density = source.isSvg
     ? await svgDensityFor(source.filePath, size)
     : undefined;
-  return sharp(source.filePath, { density }).resize(size, size, {
-    fit: 'contain',
-    background: { r: 0, g: 0, b: 0, alpha: 0 },
-  });
+  return await withRasterReadySvg(source.filePath, (input) =>
+    encode(
+      sharp(input, { density }).resize(size, size, {
+        fit: 'contain',
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      }),
+    ),
+  );
 }
 
 async function renderSquarePng(source: FaviconSource, size: number) {
-  return (await loadSquare(source, size))
-    .png({ compressionLevel: 9 })
-    .toBuffer();
+  return await loadSquare(source, size, (square) =>
+    square.png({ compressionLevel: 9 }).toBuffer(),
+  );
 }
 
 /**
@@ -230,7 +239,7 @@ async function renderAppleTouchIcon(source: FaviconSource): Promise<Buffer> {
   const size = FAVICON_SIZES.apple;
   const inner = Math.round(size * (1 - APPLE_PADDING * 2));
   const [artwork, background] = await Promise.all([
-    loadSquare(source, inner).then((square) => square.png().toBuffer()),
+    loadSquare(source, inner, (square) => square.png().toBuffer()),
     faviconPlateColor(source),
   ]);
   return sharp({
@@ -253,17 +262,17 @@ async function renderAppleTouchIcon(source: FaviconSource): Promise<Buffer> {
  * looks like the icon, while artwork of any lightness stays legible on it.
  */
 async function faviconPlateColor(source: FaviconSource) {
-  const stats = await sharp(source.filePath, {
-    density: source.isSvg
-      ? await svgDensityFor(source.filePath, 32)
-      : undefined,
-  })
-    .resize(32, 32, {
-      fit: 'contain',
-      background: { r: 0, g: 0, b: 0, alpha: 0 },
-    })
-    .stats()
-    .catch(() => undefined);
+  const density = source.isSvg
+    ? await svgDensityFor(source.filePath, 32)
+    : undefined;
+  const stats = await withRasterReadySvg(source.filePath, (input) =>
+    sharp(input, { density })
+      .resize(32, 32, {
+        fit: 'contain',
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      })
+      .stats(),
+  ).catch(() => undefined);
   const dominant = stats?.dominant;
   if (!dominant) return { r: 24, g: 24, b: 27, alpha: 1 };
   const luminance =

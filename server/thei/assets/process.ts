@@ -33,6 +33,7 @@ import {
 } from '../../../shared/asset-crop';
 import { cropSvgToFile } from './svg-crop';
 import { SVG_BASE_DENSITY, svgRasterDensity } from './svg-density';
+import { withRasterReadySvg } from './svg-raster-input';
 import { zipFileToPath } from './zip';
 import { stripAssetMetadata } from './strip-metadata';
 
@@ -267,43 +268,45 @@ async function processImage(
   const { dimensions } = settings;
   if (settings.format === 'svg') return await keepVector(source, settings);
   const raster = await rasterSource(source, settings);
-  let pipeline = sharp(source.path, {
-    animated: false,
-    density: raster.density,
-  }).autoOrient();
-  // The admin's turn comes after the photo's own orientation, and sharp
-  // applies both before an extract called later: the crop names a region of
-  // the turned frame, which is what the editor showed.
-  if (settings.rotation) pipeline = pipeline.rotate(settings.rotation);
+  const { data, info } = await withRasterReadySvg(source.path, (input) => {
+    let pipeline = sharp(input, {
+      animated: false,
+      density: raster.density,
+    }).autoOrient();
+    // The admin's turn comes after the photo's own orientation, and sharp
+    // applies both before an extract called later: the crop names a region of
+    // the turned frame, which is what the editor showed.
+    if (settings.rotation) pipeline = pipeline.rotate(settings.rotation);
 
-  // Cropping before resizing, in that call order, makes sharp cut the region
-  // from the oriented source first. The output size already has the crop's
-  // proportions, so filling it distorts nothing.
-  if (raster.crop) pipeline = pipeline.extract(raster.crop);
-  pipeline = pipeline.resize(dimensions.width, dimensions.height, {
-    fit: 'fill',
+    // Cropping before resizing, in that call order, makes sharp cut the region
+    // from the oriented source first. The output size already has the crop's
+    // proportions, so filling it distorts nothing.
+    if (raster.crop) pipeline = pipeline.extract(raster.crop);
+    pipeline = pipeline.resize(dimensions.width, dimensions.height, {
+      fit: 'fill',
+    });
+
+    // `effort` is not comparable between the two encoders: WebP 6 is quick,
+    // while AVIF climbs steeply past 4 for very little size. 4 is sharp's own
+    // default and keeps a large upload from occupying a worker for minutes.
+    // Lossy WebP is always 4:2:0; smart subsampling keeps coloured edges, such
+    // as red text on white, from fringing.
+    const encoded =
+      settings.format === 'webp-lossless'
+        ? pipeline.webp({ lossless: true, effort: 6 })
+        : settings.format === 'webp'
+          ? pipeline.webp({
+              quality: settings.quality,
+              effort: 6,
+              smartSubsample: true,
+            })
+          : pipeline.avif({
+              quality: imageDisplayQualityToAvifQuality(settings.quality),
+              effort: 4,
+            });
+
+    return encoded.toBuffer({ resolveWithObject: true });
   });
-
-  // `effort` is not comparable between the two encoders: WebP 6 is quick,
-  // while AVIF climbs steeply past 4 for very little size. 4 is sharp's own
-  // default and keeps a large upload from occupying a worker for minutes.
-  // Lossy WebP is always 4:2:0; smart subsampling keeps coloured edges, such
-  // as red text on white, from fringing.
-  const encoded =
-    settings.format === 'webp-lossless'
-      ? pipeline.webp({ lossless: true, effort: 6 })
-      : settings.format === 'webp'
-        ? pipeline.webp({
-            quality: settings.quality,
-            effort: 6,
-            smartSubsample: true,
-          })
-        : pipeline.avif({
-            quality: imageDisplayQualityToAvifQuality(settings.quality),
-            effort: 4,
-          });
-
-  const { data, info } = await encoded.toBuffer({ resolveWithObject: true });
 
   return {
     bytes: { buffer: data },

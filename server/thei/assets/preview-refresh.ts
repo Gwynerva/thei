@@ -1,10 +1,11 @@
-import { and, eq, isNotNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
 import { AssetType } from '#layers/thei/shared/asset';
 import {
   completeVideoMeta,
   refreshMediaPreview,
   type StoredAssetRecord,
 } from './storage';
+import { svgNeedsSymbolSizes } from './svg-raster-input';
 
 /**
  * Videos whose preview frame was not chosen by colour.
@@ -130,4 +131,59 @@ export async function refreshSvgPreviews(
   options: RefreshPreviewsOptions = {},
 ): Promise<RefreshPreviewsResult> {
   return await refreshPreviews(await findSvgAssets(), 'SVG file(s)', options);
+}
+
+/**
+ * SVGs that reuse sized symbols, which librsvg drew at the size of the whole
+ * picture until their inputs were prepared for it (`svg-raster-input.ts`).
+ * A file that cannot be read is left out: it keeps its preview either way.
+ */
+export async function findSvgAssetsWithSymbols(): Promise<StoredAssetRecord[]> {
+  const found: StoredAssetRecord[] = [];
+  for (const asset of await findSvgAssets()) {
+    const path = THEI_SERVER.assets.filePath(
+      asset.contentHash,
+      asset.extension,
+    );
+    if (await svgNeedsSymbolSizes(path).catch(() => false)) found.push(asset);
+  }
+  return found;
+}
+
+export interface RefreshSvgSymbolPreviewsResult extends RefreshPreviewsResult {
+  /**
+   * Bitmaps saved from those SVGs. Their pixels are the file itself, drawn
+   * wrong once and for all: saving the picture again from its SVG redraws it.
+   */
+  rasterised: StoredAssetRecord[];
+}
+
+/**
+ * Draws again the previews of SVGs that reuse sized symbols, and the accent
+ * colour with them, and finds the bitmaps once saved from those SVGs.
+ */
+export async function refreshSvgSymbolPreviews(
+  options: RefreshPreviewsOptions = {},
+): Promise<RefreshSvgSymbolPreviewsResult> {
+  const assets = await findSvgAssetsWithSymbols();
+  const result = await refreshPreviews(
+    assets,
+    'SVG file(s) drawn with symbols',
+    options,
+  );
+  const families = [...new Set(assets.map((asset) => asset.familyUuid))];
+  if (!families.length) return { ...result, rasterised: [] };
+  const { db, schema } = THEI_SERVER.useDb();
+  const rasterised = await db
+    .select()
+    .from(schema.assets)
+    .where(
+      and(
+        inArray(schema.assets.familyUuid, families),
+        eq(schema.assets.type, AssetType.Image),
+        ne(schema.assets.extension, 'svg'),
+        isNotNull(schema.assets.settings),
+      ),
+    );
+  return { ...result, rasterised };
 }

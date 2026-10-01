@@ -17,7 +17,8 @@ import {
  * library holds, so every run starts from the same pixels: a photograph of a
  * sunset, a forest, a panorama, a portrait, an icon on a flat field, a logo
  * on nothing, a picture too small to be anything, pure white, pure black, a
- * vector drawing, and a file that is not a picture at all.
+ * vector drawing, a vector banner of repeated symbols, and a file that is not
+ * a picture at all.
  */
 export interface OgArtworkSet {
   directory: string;
@@ -33,6 +34,7 @@ export interface OgArtworkSet {
   black: OgPicture;
   grey: OgPicture;
   vector: OgPicture;
+  symbols: OgPicture;
   corrupt: OgPicture;
   generated: (
     kind:
@@ -74,6 +76,29 @@ function icon(size: number, field: string | undefined, glyph: string) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 100 100">
   ${field ? `<rect width="100" height="100" fill="${field}"/>` : ''}
   <path d="M50 12 L61 38 L89 40 L67 58 L74 86 L50 71 L26 86 L33 58 L11 40 L39 38 Z" fill="${glyph}"/>
+</svg>`;
+}
+
+/**
+ * A light banner covered in a pattern of marks, each a `<use>` of a symbol
+ * that declares its size the SVG 2 way, as a designer's export does. librsvg
+ * alone draws every mark as large as the banner.
+ */
+function symbolPattern(width: number, height: number) {
+  const uses: string[] = [];
+  for (let row = -2; row < height / 60 + 2; row++)
+    for (let column = -2; column < width / 90 + 2; column++)
+      uses.push(
+        `<use href="#${(row + column) % 2 ? 'ring' : 'mark'}" x="${column * 90 + (row % 2) * 45}" y="${row * 60}"/>`,
+      );
+  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <defs>
+    <symbol id="mark" viewBox="0 0 70 23" width="52" height="17"><path d="M0 0h14c5 0 9 4 9 9v5c0 5-4 9-9 9H0Zm25 0h23v6h-8v17h-7V6h-8Zm26 0h19v6h-12v4h9v6h-9v7h-7Z"/></symbol>
+    <symbol id="ring" viewBox="0 0 24 24" width="30" height="30"><path d="M12 2a10 10 0 1 0 0 20a10 10 0 1 0 0-20Zm0 5a5 5 0 1 1 0 10a5 5 0 1 1 0-10Z"/></symbol>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f2faff"/><stop offset="1" stop-color="#bcdbf3"/></linearGradient>
+  </defs>
+  <rect width="${width}" height="${height}" fill="url(#bg)"/>
+  <g transform="rotate(-12 ${width / 2} ${height / 2})" fill="#2a5fc8" fill-opacity="0.18">${uses.join('')}</g>
 </svg>`;
 }
 
@@ -219,6 +244,14 @@ export async function createArtwork(): Promise<OgArtworkSet> {
       { width: 24, height: 24 },
       { hue: 170, chroma: 0.1 },
     ),
+    symbols: await write(
+      directory,
+      'symbols',
+      symbolPattern(1920, 1080),
+      'svg',
+      { width: 1920, height: 1080 },
+      { hue: 240, chroma: 0.04 },
+    ),
     corrupt: {
       type: 'file',
       key: 'corrupt.webp',
@@ -347,6 +380,22 @@ export function ogFixtures(art: OgArtworkSet): OgFixture[] {
           meta: projectMeta,
           picture: art.flatIcon,
           banner: art.panorama,
+        },
+      ),
+    },
+    {
+      name: 'project with an SVG banner of symbols',
+      content: content(
+        'project',
+        'project-symbols',
+        'LDTF',
+        { hue: 240, chroma: 0.04 },
+        {
+          chips: [projectChips[0]!],
+          summary:
+            'Полный локальный архив профиля со всеми постами, комментариями и медиа.',
+          picture: art.flatIcon,
+          banner: art.symbols,
         },
       ),
     },
