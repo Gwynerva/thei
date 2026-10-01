@@ -7,6 +7,7 @@ import type {
 } from '#layers/thei/shared/relation';
 import {
   relationEntityIcon,
+  relationSentence,
   relationTypeIcon,
 } from '#layers/thei/shared/relation-display';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
@@ -86,18 +87,10 @@ const directionLabel = computed(
   () => directions.find((direction) => direction.type === relation.type)?.label,
 );
 
-/**
- * What the chosen direction means for this very pair, with both names in it:
- * "A depends on B" reads at once, where "Depends on" alone still asks which
- * side is which.
- */
-const directionTitle = computed(() => {
-  if (relation.type === 'influencing')
-    return phrase.value.relation_popup_depends_on(ownerName, title.value);
-  if (relation.type === 'dependent')
-    return phrase.value.relation_popup_affects(ownerName, title.value);
-  return phrase.value.relation_popup_related(ownerName, title.value);
-});
+/** What the chosen direction means for this very pair. */
+const directionTitle = computed(() =>
+  relationSentence(phrase.value, relation.type, ownerName, title.value),
+);
 
 function setType(value: string) {
   const direction = directions.find((option) => option.type === value);

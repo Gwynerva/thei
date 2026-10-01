@@ -3,6 +3,7 @@ import {
   isRelationEntityType,
   orderRelationsForEditing,
   RELATION_ENTITY_TYPES,
+  RELATION_TYPES,
   relationEndpointKey,
   type RelationEditItem,
   type RelationEndpoint,
@@ -10,7 +11,10 @@ import {
   type RelationNote,
   type RelationType,
 } from '#layers/thei/shared/relation';
-import { relationEntityIcon } from '#layers/thei/shared/relation-display';
+import {
+  relationEntityIcon,
+  relationShortLabel,
+} from '#layers/thei/shared/relation-display';
 import {
   CONTENT_ENTITY_SEARCH_MAX_LIMIT,
   type ContentEntitySearchItem,
@@ -135,18 +139,11 @@ const tabs = computed<TabStripItem<RelationEntityType>[]>(() =>
   })),
 );
 
-/** The kinds a relation can be, in the order the list offers them. */
-const RELATION_TYPES = ['related', 'influencing', 'dependent'] as const;
-
+/** The kinds a relation can be, with their words, as the list offers them. */
 const directions = computed(() =>
   RELATION_TYPES.map((type) => ({
     type,
-    label:
-      type === 'influencing'
-        ? phrase.value.relation_short_depends_on
-        : type === 'dependent'
-          ? phrase.value.relation_short_affects
-          : phrase.value.relation_short_related(ownerType),
+    label: relationShortLabel(phrase.value, type, ownerType),
   })),
 );
 

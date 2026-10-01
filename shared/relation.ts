@@ -24,8 +24,17 @@ export function isRelationEntityType(
   return RELATION_ENTITY_TYPES.includes(value as RelationEntityType);
 }
 
-/** One entity's reading of a relation: always relative to the entity itself. */
-export type RelationType = 'related' | 'influencing' | 'dependent';
+/**
+ * One entity's reading of a relation: always relative to the entity itself.
+ * "influencing" reads "this depends on the other", "dependent" reads "this
+ * affects the other".
+ */
+export const RELATION_TYPES = ['related', 'influencing', 'dependent'] as const;
+export type RelationType = (typeof RELATION_TYPES)[number];
+
+export function isRelationType(value: unknown): value is RelationType {
+  return RELATION_TYPES.includes(value as RelationType);
+}
 
 export type RelationNote =
   | { type: 'shared'; text?: string }
@@ -141,11 +150,7 @@ export function validateRelations(
     if (seen.has(key))
       throw new RelationValidationError('Duplicate related entity');
     seen.add(key);
-    if (
-      relation.type !== 'related' &&
-      relation.type !== 'influencing' &&
-      relation.type !== 'dependent'
-    )
+    if (!isRelationType(relation.type))
       throw new RelationValidationError('Invalid relation type');
     return {
       entityType: relation.entityType,
