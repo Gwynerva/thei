@@ -17,6 +17,15 @@ export const THEI_CONTENT_DIRS = {
   externalLinkFavicons: 'external-link-favicons',
 } as const;
 
+/**
+ * The Open Graph cards, inside `generated-media`. They are swept by when
+ * they were last asked for (`og/cache.ts`), beside the signature of the
+ * drawing code that made them; the sweep of generated media leaves them
+ * alone, or the signature would go with an old card and every card would
+ * be drawn again.
+ */
+export const OG_CARDS_DIR = 'og';
+
 export type TheiContentDir =
   (typeof THEI_CONTENT_DIRS)[keyof typeof THEI_CONTENT_DIRS];
 

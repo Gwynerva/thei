@@ -13,7 +13,7 @@ import { ogTemplateSignature } from '#thei/og-signature';
 import { AssetType } from '#layers/thei/shared/asset';
 import { buildOgImagePath } from '#layers/thei/shared/og-url';
 import { withProcessingSlot } from '../assets/queue';
-import { THEI_CONTENT_DIRS } from '../content-layout';
+import { OG_CARDS_DIR, THEI_CONTENT_DIRS } from '../content-layout';
 import { composeOgCard } from './compose';
 import { resolveOgContent } from './content';
 import type { OgCardContent } from './model';
@@ -34,7 +34,10 @@ const CACHE_TTL_MS = 60 * 24 * 60 * 60 * 1000;
 const TOUCH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 function ogDirectory() {
-  return THEI_SERVER.contentPath(THEI_CONTENT_DIRS.generatedMedia, 'og');
+  return THEI_SERVER.contentPath(
+    THEI_CONTENT_DIRS.generatedMedia,
+    OG_CARDS_DIR,
+  );
 }
 
 export interface OgImageFile {
