@@ -147,15 +147,19 @@ for (const width of [390, 1280]) {
         expect(background!.y + background!.height).toBeGreaterThanOrEqual(
           box!.y + box!.height,
         );
-        // Edge media along the right edge of the content's column: the
-        // banner reaches it, never leaving a glow there, and its window
-        // rises after the words and lets go at that edge. Every fade is the
-        // eased curve of `mask-ease`, a stop at every twentieth of it rather
-        // than a straight ramp, so none of them shows a line.
+        // Edge media along the right of the content's column: the banner's
+        // middle stays within the column, its right side covers the
+        // column's edge, never leaving a glow there, and may run past it.
+        // Its window rises after the words. Every fade is the eased curve
+        // of `mask-ease`, a stop at every twentieth of it rather than a
+        // straight ramp, so none of them shows a line.
         const columnRight =
           box!.x + (box!.width + Math.min(1100, box!.width)) / 2;
         expect(mainBox!.x + mainBox!.width).toBeGreaterThanOrEqual(
           columnRight - 1,
+        );
+        expect(mainBox!.x + mainBox!.width / 2).toBeLessThanOrEqual(
+          columnRight + 1,
         );
         for (const [layer, direction] of [
           [
@@ -164,7 +168,7 @@ for (const width of [390, 1280]) {
             ),
             'right',
           ],
-          [foreground, 'left'],
+          [foreground, 'right'],
           [hero.locator('[data-hero-shade]'), 'right'],
         ] as const) {
           const mask = await layer.evaluate(

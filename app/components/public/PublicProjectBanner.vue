@@ -67,33 +67,39 @@ function rememberDimensions(width: number, height: number) {
   opacity: 1;
 }
 /*
- * Wider screens: the banner is edge media along the right edge of the
- * column the page's content keeps to, the way cards show theirs
- * (`MediaEdge`). It fills the hero's height with its middle at the focus,
- * 65% across the column, and loses its right side past the column's edge
- * for it; a banner too narrow to reach that edge from there is pinned to it
- * instead, so the edge never shows an empty glow. It is sharp from the end
- * of the words to the column's edge, dissolving across the third of the
- * column before the one and a margin's width (a sixth of the column at most)
- * before the other into its own blurred copy, which fills the hero: the
- * banner never reaches past the content, and the words sit on its own
- * colours rather than on black, under a shade the hero lays only there. The
- * column comes from the hero (`PublicProjectHero`); every fade follows
- * `mask-ease`, measured on the hero.
+ * Wider screens: the banner is edge media along the right of the column the
+ * page's content keeps to, the way cards show theirs (`MediaEdge`). It fills
+ * the hero's height with its middle, where a picture's subject usually is,
+ * always within the column: at the focus, 65% across it, or, for a banner
+ * too narrow to reach the column's edge from there, as far right as keeps
+ * that edge covered. Its right side shows as it is out to its own edge,
+ * past the column's if it reaches so far, and only its last fifth dissolves
+ * into its blurred copy, which goes on past it: the grain of a sharp picture
+ * stopping all at once would draw a line even where the colours meet.
+ * Leftwards it dissolves into that copy across the third of the column
+ * before the words end, and the copy fills the hero: the words sit on the
+ * banner's own colours rather than on black, under a shade the hero lays
+ * only there. The column comes from the hero (`PublicProjectHero`); every
+ * fade follows `mask-ease`.
  */
 @variant sm {
   .hero-banner {
     --banner-focus: calc(var(--hero-column-start) + var(--hero-column) * 0.65);
-    --banner-release: min(var(--hero-column-start), var(--hero-column) / 6);
     --banner-width: calc(100cqh * var(--media-ratio));
     --banner-middle: max(
       var(--banner-focus),
       calc(var(--hero-column-end) - var(--banner-width) / 2)
     );
+    /* How far the copy has to reach from that middle to cover the hero. */
+    --banner-reach: max(
+      var(--banner-middle),
+      calc(100cqw - var(--banner-middle))
+    );
   }
   :deep(.media-pair) {
     container-type: size;
   }
+  /* Measured on the hero: the banner shows once the words are about to end. */
   :deep(.media-foreground) {
     inset: 0;
     width: auto;
@@ -104,10 +110,13 @@ function rememberDimensions(width: number, height: number) {
     --ease-direction: to right;
     --ease-rise-from: calc(var(--hero-words-end) - var(--hero-column) / 3);
     --ease-rise-to: var(--hero-words-end);
-    --ease-from: calc(var(--hero-column-end) - var(--banner-release));
-    --ease-to: var(--hero-column-end);
+    --ease-from: 100%;
+    --ease-to: 100%;
   }
-  /* Its own left side dissolves too, so it never ends in a hard line. */
+  /*
+   * Measured on the banner: its left half dissolves too, so it never ends in
+   * a hard line under the words, and so does its last fifth on the right.
+   */
   :deep(.media-main) {
     inset: 0 auto;
     left: calc(var(--banner-middle) - var(--banner-width) / 2);
@@ -115,8 +124,10 @@ function rememberDimensions(width: number, height: number) {
     max-width: none;
     height: 100%;
     @apply mask-ease;
-    --ease-direction: to left;
-    --ease-from: 50%;
+    --ease-direction: to right;
+    --ease-rise-from: 0%;
+    --ease-rise-to: 50%;
+    --ease-from: 80%;
     --ease-to: 100%;
   }
   :deep(.media-backdrop) {
@@ -127,7 +138,7 @@ function rememberDimensions(width: number, height: number) {
     top: 50%;
     left: var(--banner-middle);
     width: max(
-      calc(2 * var(--banner-middle) + 6 * var(--blur-3xl)),
+      calc(2 * var(--banner-reach) + 6 * var(--blur-3xl)),
       calc((100cqh + 6 * var(--blur-3xl)) * var(--media-ratio))
     );
     height: auto;
