@@ -95,6 +95,16 @@ async function createProject(page: Page) {
   };
 }
 
+async function openEditForm(page: Page, projectUuid: string) {
+  await page.goto(`/admin/projects/${projectUuid}/edit/`);
+  // The form is drawn on the server: a choice made in it before it hydrates
+  // changes only the markup, and hydration puts the stored value back.
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-nuxt-hydrated',
+    'true',
+  );
+}
+
 function overlaps(a: DOMRect, b: DOMRect) {
   return (
     a.left < b.right - 0.5 &&
@@ -140,7 +150,7 @@ for (const width of [320, 375, 1280]) {
   }) => {
     await page.setViewportSize({ width, height: 900 });
     const { projectUuid } = await createProject(page);
-    await page.goto(`/admin/projects/${projectUuid}/edit/`);
+    await openEditForm(page, projectUuid);
     const rows = page.locator('[data-relation-row]');
     await expect(rows).toHaveCount(2);
 
@@ -193,7 +203,7 @@ test('the kind of a relation is chosen from a list between its two pictures', as
 }) => {
   await page.setViewportSize({ width: 375, height: 900 });
   const { projectUuid } = await createProject(page);
-  await page.goto(`/admin/projects/${projectUuid}/edit/`);
+  await openEditForm(page, projectUuid);
   const row = page.locator('[data-relation-row]').first();
   const kind = row.getByRole('combobox');
   const label = row.locator('[data-relation-direction-label]');
@@ -233,7 +243,7 @@ test('the picker offers first what the text links to, without growing', async ({
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   const { projectUuid, stamp } = await createProject(page);
-  await page.goto(`/admin/projects/${projectUuid}/edit/`);
+  await openEditForm(page, projectUuid);
   await expect(page.locator('[data-relation-row]')).toHaveCount(2);
   await page
     .getByRole('button', { name: /Add a relation|Добавить связь/ })
@@ -328,7 +338,7 @@ test('a form whose relations were stored mixed loads as saved, and an undone cha
   const body = await created.json();
   expect(body.type, JSON.stringify(body)).toBe('success');
 
-  await page.goto(`/admin/projects/${body.projectUuid}/edit/`);
+  await openEditForm(page, body.projectUuid);
   const saved = page.getByRole('button', { name: 'Saved', exact: true });
   const save = page.getByRole('button', { name: 'Save', exact: true });
   await expect(saved).toBeVisible();
