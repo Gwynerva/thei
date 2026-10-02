@@ -962,7 +962,7 @@ export default defineI18nBase({
     project_action_icon_site: 'From site',
     project_action_icon_custom: 'Custom',
     project_action_icon_custom_hint:
-      'A square image, ideally with a transparent background',
+      'A square image, ideally with a transparent background. Shown as is, without a shadow',
     project_action_icon_select: 'Select action button icon',
     project_action_icon_edit: 'Edit action button icon',
     project_action_background: 'Background',

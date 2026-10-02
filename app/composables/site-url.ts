@@ -67,3 +67,15 @@ export function sitePath(path: string | undefined): string | undefined {
   if (/^[a-z][a-z0-9+.-]*:|^\/\//i.test(path)) return path;
   return withSiteBase(path, currentBase());
 }
+
+/**
+ * A style's `url()` for a path in data. The router never sees a style, so
+ * the base path is added here, as `sitePath()` adds it to an attribute.
+ */
+export function siteCssUrl(path: string): string {
+  const url = sitePath(path).replace(
+    /["\\\n\r\f]/g,
+    (character) => `\\${character}`,
+  );
+  return `url("${url}")`;
+}

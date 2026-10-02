@@ -235,6 +235,25 @@ test('admin and public CTA share all color modes and the standard fallback', asy
   );
 });
 
+test('a CTA shadows only its built-in glyph, never an image icon', async ({
+  page,
+}) => {
+  const filters = (mode: string, selector: string) =>
+    page
+      .locator(`[data-action="${mode}"] .project-action-button ${selector}`)
+      .evaluateAll((icons) =>
+        icons.map((icon) => getComputedStyle(icon).filter),
+      );
+  // Preview and public button alike.
+  expect(await filters('standard-gradient', '.media-surface')).toEqual([
+    'none',
+    'none',
+  ]);
+  const glyphs = await filters('missing-color', '.action-glyph');
+  expect(glyphs).toHaveLength(2);
+  for (const filter of glyphs) expect(filter).toContain('drop-shadow');
+});
+
 test('media hydration, gallery selection and snapshot restore do not flash dirty state', async ({
   page,
 }) => {

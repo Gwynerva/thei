@@ -122,7 +122,7 @@ function writeRuntimeState(
     const picture = mediaUrl(resolved.media);
     if (picture) {
       link.dataset.contentLinkMedia = '';
-      link.style.setProperty('--content-link-media', `url("${picture}")`);
+      link.style.setProperty('--content-link-media', picture);
       link.style.setProperty(
         '--content-link-media-size',
         chipEdgeSize(resolved.media),
@@ -138,7 +138,7 @@ function writeRuntimeState(
   const favicon = mediaUrl(resolved.iconMedia);
   if (favicon) {
     link.dataset.contentLinkIcon = 'image';
-    link.style.setProperty('--content-link-icon', `url("${favicon}")`);
+    link.style.setProperty('--content-link-icon', favicon);
   }
 }
 
@@ -157,17 +157,13 @@ function mediaUrl(media: { previewSrc?: string; src?: string } | undefined) {
   // A style's `url()` is a DOM address the router does not own: it carries
   // the site's base path only if it is added here.
   const url = media?.previewSrc || media?.src;
-  return url ? cssUrl(sitePath(url)) : undefined;
+  return url ? siteCssUrl(url) : undefined;
 }
 
 function setNavigation(link: HTMLAnchorElement, href: string) {
   link.href = href;
   link.target = '_blank';
   link.rel = 'noopener noreferrer';
-}
-
-function cssUrl(value: string) {
-  return value.replace(/["\\\n\r\f]/g, (character) => `\\${character}`);
 }
 
 function attach(root: HTMLElement | null) {

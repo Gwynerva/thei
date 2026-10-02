@@ -321,7 +321,6 @@ function openFileAsset() {
             :background-mode="action.backgroundMode"
             :background-size="action.backgroundSize"
             :background-repeat="action.backgroundRepeat"
-            class="w-full sm:w-auto"
           />
           <span
             v-if="action.isPrivate"

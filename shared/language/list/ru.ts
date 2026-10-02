@@ -1022,7 +1022,7 @@ export default defineI18nModule({
     project_action_icon_site: 'С сайта',
     project_action_icon_custom: 'Своя',
     project_action_icon_custom_hint:
-      'Квадратное изображение, лучше всего с прозрачным фоном',
+      'Квадратное изображение, лучше с прозрачным фоном. Показывается как есть, без тени',
     project_action_icon_select: 'Выбрать иконку кнопки действия',
     project_action_icon_edit: 'Изменить иконку кнопки действия',
     project_action_background: 'Фон',
