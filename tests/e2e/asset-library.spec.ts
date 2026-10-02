@@ -39,11 +39,18 @@ async function upload(api: APIRequestContext, color = '#4368a2') {
 }
 
 async function uploadVideo(api: APIRequestContext) {
-  const buffer = await readFile(
+  const video = await readFile(
     fileURLToPath(
       new URL('./fixture/media/regression-video.mp4', import.meta.url),
     ),
   );
+  // A `free` box after the file gives the same video new bytes, so it is
+  // stored and given its preview afresh, not found as an earlier run left it.
+  const filler = Buffer.from(randomUUID());
+  const free = Buffer.alloc(8);
+  free.writeUInt32BE(free.length + filler.length, 0);
+  free.write('free', 4, 'latin1');
+  const buffer = Buffer.concat([video, free, filler]);
   const response = await api.post('/api/admin/assets', {
     headers: buildUploadHeaders({
       settings: createOriginalAssetSettings(),
@@ -382,32 +389,28 @@ test('video previews play on hover and keyboard focus in both library views', as
     focusTarget = tile,
   ) {
     await page.mouse.move(0, 0);
-    await expect(tile.locator('[data-media-preview-pair]')).toBeVisible();
     const video = tile.locator('video.media-main');
-    await expect
-      .poll(() => video.evaluate((el: HTMLVideoElement) => el.paused), {
-        timeout: 3_000,
-      })
-      .toBe(true);
+    // At rest a tile shows the preview, and the video is not even fetched
+    // until the tile is engaged.
+    await expect(tile.locator('[data-media-preview-state]')).toHaveAttribute(
+      'data-media-preview-state',
+      'visible',
+    );
+    await expect(video).toHaveCount(0);
+    // `evaluateAll` reads the video as it is; `evaluate` would wait for one
+    // still being mounted, past the poll's own timeout.
+    const playing = () =>
+      video.evaluateAll((elements) =>
+        elements.every((element) => !(element as HTMLVideoElement).paused),
+      );
     await focusTarget.focus();
-    await expect
-      .poll(() => video.evaluate((el: HTMLVideoElement) => !el.paused), {
-        timeout: 3_000,
-      })
-      .toBe(true);
+    await expect(video).toHaveCount(1);
+    await expect.poll(playing, { timeout: 3_000 }).toBe(true);
     await page.getByRole('searchbox').focus();
-    await expect
-      .poll(() => video.evaluate((el: HTMLVideoElement) => el.paused), {
-        timeout: 3_000,
-      })
-      .toBe(true);
+    await expect.poll(playing, { timeout: 3_000 }).toBe(false);
     await tile.hover();
     await expect(tile.locator('[data-media-original-pair]')).toBeVisible();
-    await expect
-      .poll(() => video.evaluate((el: HTMLVideoElement) => !el.paused), {
-        timeout: 3_000,
-      })
-      .toBe(true);
+    await expect.poll(playing, { timeout: 3_000 }).toBe(true);
   }
 
   await page.goto('/admin/assets/');
