@@ -59,6 +59,19 @@ const showcase = [
     size: 100,
     media: icon,
   },
+  {
+    key: 'video',
+    title: 'Showcase video',
+    href: '/regression-video.mp4',
+    extension: 'mp4',
+    size: 100,
+    media: {
+      kind: 'video' as const,
+      src: '/regression-video.mp4',
+      previewSrc: '/ambient-square.svg',
+      accent: { hue: 140, chroma: 0.15 },
+    },
+  },
 ];
 const fieldValue = computed<ContentFieldModelValue>(() => ({
   data: {

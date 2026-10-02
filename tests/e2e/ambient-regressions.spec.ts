@@ -677,3 +677,28 @@ test('admin previews play only while hovered or focused, including nested focus'
       .toBe(true);
   }
 });
+
+test('a video in the hero showcase wears its mark and plays only while pointed at or focused', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/ambient-regression');
+  const hero = page.locator('[data-test-hero]');
+  const image = hero.getByRole('button', { name: 'Showcase image' });
+  const video = hero.getByRole('button', { name: 'Showcase video' });
+  // The mark every tile of a video wears; a picture's tile has none.
+  await expect(video.locator('use[href*="play-circle"]')).toHaveCount(1);
+  await expect(image.locator('use[href*="play-circle"]')).toHaveCount(0);
+
+  const main = video.locator('video[data-media-main]');
+  const paused = () => main.evaluate((v: HTMLVideoElement) => v.paused);
+  await video.hover();
+  await expect.poll(paused).toBe(false);
+  await page.mouse.move(0, 0);
+  await expect.poll(paused).toBe(true);
+
+  await video.focus();
+  await expect.poll(paused).toBe(false);
+  await image.focus();
+  await expect.poll(paused).toBe(true);
+});

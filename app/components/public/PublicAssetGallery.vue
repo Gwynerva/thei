@@ -42,34 +42,7 @@ function openItem(item: PublicAssetDescriptor) {
         class="size-24 shrink-0 rounded-normal border-2 border-white/15
           shadow-md sm:size-30"
       />
-      <button
-        v-else
-        type="button"
-        class="group relative size-24 shrink-0 cursor-zoom-in overflow-hidden
-          rounded-normal border-2 border-white/15 bg-black/16 shadow-md
-          transition sm:size-30 hocus:-translate-y-0.5 hocus:border-white/35
-          hocus:bg-black/24 hocus:shadow-xl"
-        :aria-label="publicText(item.title) || phrase.asset"
-        :data-title-popup="publicText(item.title) || phrase.asset"
-        @click="openItem(item)"
-      >
-        <Media
-          v-if="item.media"
-          v-bind="item.media"
-          fit="contain"
-          backdrop
-          class="size-full"
-        />
-        <FilePreview
-          v-else
-          :extension="item.extension"
-          class="size-full p-xs"
-        />
-        <span
-          class="absolute inset-0 bg-black/0 transition group-hocus:bg-black/8"
-          aria-hidden="true"
-        ></span>
-      </button>
+      <PublicAssetGalleryTile v-else :item @open="openItem(item)" />
     </template>
   </div>
   <section
