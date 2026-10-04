@@ -1,0 +1,177 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  countLifePoints,
+  getLatestLifePoints,
+  getLifeActivity,
+  getLifeWindow,
+} from '../../server/thei/public/life';
+import { STRANGER } from '../../server/thei/access-links/viewer';
+import { ProjectEventAccessLevel } from '../../shared/access-level';
+import { lifeArrivalCutoff, type LifePoint } from '../../shared/life';
+import { freshTestDb } from '../helpers/fresh-db';
+
+vi.mock('../../server/thei/public/entities', () => ({
+  buildPublicEventSummary: vi.fn(async () => ({
+    media: undefined,
+    tags: [],
+    relatedEntities: [],
+  })),
+  buildPublicEntityReference: vi.fn(async () => undefined),
+  buildPublicPageIcon: vi.fn(async () => undefined),
+}));
+vi.mock('../../server/thei/public/content', () => ({
+  buildPublicEntityPreviewMedia: vi.fn(async () => undefined),
+}));
+
+let context: Awaited<ReturnType<typeof freshTestDb>>;
+
+/** Noon in UTC: somewhere on Earth it is already the next day. */
+const NOON = new Date('2026-06-10T12:00:00Z');
+/** Nine in the morning: nowhere is it the next day yet. */
+const MORNING = new Date('2026-06-10T09:00:00Z');
+
+beforeEach(async () => {
+  context = await freshTestDb();
+  Object.assign(context.server, {
+    useDb: () => context,
+    content: { findByOwner: async () => undefined },
+  });
+  event('past', '2026-01-01', '2026-01-05');
+  event('running', '2026-03-01', '2026-12-31');
+  event('planned', '2026-11-01', '2026-11-03');
+  diary('tomorrow', '2026-06-11');
+  diary('later', '2026-06-12');
+});
+afterEach(async () => {
+  await context.close();
+  delete (globalThis as any).THEI_SERVER;
+});
+
+function event(uuid: string, startDate: string, endDate: string) {
+  const { db, schema } = context;
+  db.insert(schema.events)
+    .values({
+      eventUuid: uuid,
+      publicId: uuid,
+      humanReadableSlug: uuid,
+      title: uuid,
+      summary: '',
+      access: ProjectEventAccessLevel.Public,
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    .run();
+  db.insert(schema.periods)
+    .values({
+      ownerType: 'event',
+      ownerId: uuid,
+      sortOrder: 0,
+      startDate,
+      endDate,
+    })
+    .run();
+}
+
+function diary(uuid: string, date: string) {
+  context.db
+    .insert(context.schema.diaryEntries)
+    .values({
+      diaryUuid: uuid,
+      date,
+      access: ProjectEventAccessLevel.Public,
+      reminder: '',
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    .run();
+}
+
+const describePoint = (point: LifePoint) =>
+  `${point.date} ${point.entityKind} ${point.title || '·'} ${point.transition}${point.ongoing ? ' ongoing' : ''}`;
+
+describe('what a chronology shows of days to come', () => {
+  it('takes the day it already is somewhere on Earth', () => {
+    expect(lifeArrivalCutoff(NOON)).toBe('2026-06-11');
+    expect(lifeArrivalCutoff(MORNING)).toBe('2026-06-10');
+  });
+
+  it('shows a running period by its start alone, and nothing dated later', async () => {
+    const window = await getLifeWindow({ viewer: STRANGER, now: NOON });
+    expect(window.newestDate).toBe('2026-06-11');
+    expect(window.days.flatMap((day) => day.points.map(describePoint))).toEqual(
+      [
+        '2026-06-11 diary-entry · created',
+        '2026-03-01 event running started ongoing',
+        '2026-01-05 event past occurred',
+      ],
+    );
+  });
+
+  it('keeps the latest list, the counts and the activity grid to what has come', async () => {
+    const latest = await getLatestLifePoints(20, {
+      viewer: STRANGER,
+      now: NOON,
+    });
+    expect(latest.map((point) => point.date)).toEqual([
+      '2026-06-11',
+      '2026-03-01',
+      '2026-01-05',
+    ]);
+    expect(countLifePoints({ now: NOON })).toBe(3);
+    const activity = await getLifeActivity({ viewer: STRANGER, now: NOON });
+    expect(activity.year).toBe(2026);
+    // The past event is one card on its last day, counted on its first too.
+    expect(Object.keys(activity.days).sort()).toEqual([
+      '2026-01-01',
+      '2026-01-05',
+      '2026-03-01',
+      '2026-06-11',
+    ]);
+  });
+
+  it('lets a day in only once it has come somewhere', async () => {
+    const window = await getLifeWindow({ viewer: STRANGER, now: MORNING });
+    expect(window.newestDate).toBe('2026-03-01');
+    expect(countLifePoints({ now: MORNING })).toBe(2);
+  });
+});
+
+describe('what a card of a period knows', () => {
+  it('gives a running start its whole period, and a secret none of it', async () => {
+    const { db, schema } = context;
+    db.insert(schema.events)
+      .values({
+        eventUuid: 'hidden',
+        publicId: 'hidden',
+        humanReadableSlug: 'hidden',
+        title: 'hidden',
+        summary: '',
+        access: ProjectEventAccessLevel.Private,
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    db.insert(schema.periods)
+      .values({
+        ownerType: 'event',
+        ownerId: 'hidden',
+        sortOrder: 0,
+        startDate: '2026-05-01',
+        endDate: '2026-12-01',
+      })
+      .run();
+
+    const points = (
+      await getLifeWindow({ viewer: STRANGER, now: NOON })
+    ).days.flatMap((day) => day.points);
+    expect(points.find((point) => point.title === 'running')).toMatchObject({
+      transition: 'started',
+      ongoing: true,
+      period: { startDate: '2026-03-01', endDate: '2026-12-31' },
+    });
+    const secret = points.find((point) => point.visibility === 'secret')!;
+    expect(secret).toMatchObject({ date: '2026-05-01', transition: 'started' });
+    expect(secret).not.toHaveProperty('period');
+    expect(secret).not.toHaveProperty('ongoing');
+  });
+});

@@ -10,7 +10,7 @@ import {
 } from '#layers/thei/app/composables/public-date';
 import { titlePopup } from '#layers/thei/app/composables/title-popup-content';
 import type { Period } from '#layers/thei/shared/period';
-import { formatPublicDateRange } from '#layers/thei/shared/public-date-format';
+import { formatPublicPeriodAtPrecision } from '#layers/thei/shared/public-date-format';
 
 const props = withDefaults(
   defineProps<{
@@ -24,9 +24,16 @@ const props = withDefaults(
 );
 const emit = defineEmits<{ remove: []; edit: [] }>();
 
-/** The days, months abbreviated and what both ends share said once. */
+/**
+ * The days, months abbreviated and what both ends share said once — or the
+ * months or the year, when that is all the owner knows.
+ */
 const dates = computed(() =>
-  formatPublicDateRange(props.period, language.value.code, 'abbreviated'),
+  formatPublicPeriodAtPrecision(
+    props.period as DatedPeriod,
+    language.value.code,
+    'abbreviated',
+  ),
 );
 /** The owner's name for the period, read before its dates. */
 const name = computed(() =>

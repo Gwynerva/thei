@@ -125,6 +125,45 @@ test('a named period reads by its name, with its dates under it', async ({
   expect(markdown).toContain('2011-05-05');
 });
 
+test('a period known to the month reads so on the page and in its copy', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  const created = await (
+    await page.request.post('/api/admin/events', {
+      data: {
+        title: `Summer away ${stamp}`,
+        summary: 'Some weeks of it, nobody remembers which.',
+        access: 'public',
+        humanReadableSlug: 'summer-away',
+        publicId: `summer${stamp}`,
+        content: {
+          data: { blocks: [{ type: 'paragraph', data: { text: 'Away.' } }] },
+        },
+        periods: [
+          {
+            ...period('2011-06-01', '2011-08-31'),
+            precision: 'month',
+          },
+        ],
+      },
+    })
+  ).json();
+  expect(created.type, JSON.stringify(created)).toBe('success');
+  const path = `/events/summer-away-summer${stamp}/`;
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await open(page, path);
+  const timeline = page.locator('aside').first();
+  // Phrases carry no-break spaces, which `\s` matches.
+  await expect(timeline).toContainText(/(To|По)\s(August|август)\s2011/);
+  await expect(timeline).toContainText(/(From|С)\s(June|июня)\s2011/);
+  await expect(timeline).not.toContainText(/31/);
+
+  const markdown = await (await page.request.get(`${path}index.md`)).text();
+  expect(markdown).toContain('~2011-06 — 2011-08');
+});
+
 test('a life card names the period it marks', async ({ page }) => {
   await createTrip(page);
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -134,16 +173,28 @@ test('a life card names the period it marks', async ({ page }) => {
     .filter({ hasText: /France/ })
     .first();
   await expect(card).toBeVisible();
-  // What kind of moment it is, in a word, and the whole sentence on hover.
-  await expect(card).toContainText(/(Happened|Произошло)\s*France/);
-  const kicker = card.locator('[data-title-popup]').filter({
-    hasText: 'France',
-  });
+  // A whole stretch on one card: the name alone beside the mark of a span,
+  // whose hint gives the sentence of its kind.
+  await expect(card.getByText('France', { exact: true })).toBeVisible();
+  const mark = card.locator('[data-period-mark]');
+  await expect(mark).toHaveAttribute('data-period-mark', 'span');
   // Phrases carry no-break spaces, which `\s` matches.
-  await expect(kicker).toHaveAttribute(
+  await expect(mark).toHaveAttribute(
     'data-title-popup',
     /An\s+event\s+took\s+place|Состоялось\s+событие/,
   );
+  // The mark is no part of the card's link: it explains, it does not open.
+  await mark.click();
+  await expect(page).toHaveURL(/\/life\//);
+
+  // A period without a name goes by its kind.
+  await open(page, '/life/?d=2011-05-05');
+  const day = page
+    .locator('article')
+    .filter({ has: page.locator('[data-period-mark="day"]') })
+    .filter({ hasText: /Grand tour/ })
+    .first();
+  await expect(day.getByText(/^(Event|Событие)$/)).toBeVisible();
 });
 
 test('the popup names a period and picks a day by picking it twice', async ({

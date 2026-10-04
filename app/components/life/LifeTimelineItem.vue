@@ -112,8 +112,8 @@ const pointIcon = computed(() =>
     />
     <!--
       The day's header already dates every card under it. A card keeps its
-      own date only when it says more: the span of a merged start and end,
-      or a date the owner is not sure of.
+      own date only when it says more: the period it is a start, an end or
+      the whole of, or a date the owner is not sure of.
     -->
     <LifePointCard
       :point="point"
@@ -128,7 +128,7 @@ const pointIcon = computed(() =>
 .life-point-marker {
   background: radial-gradient(
     circle,
-    color-mix(in oklab, var(--color-accent), black 32%) 0%,
+    color-mix(in oklab, var(--color-accent), black 20%) 0%,
     var(--color-accent) 72%
   );
 }
@@ -137,7 +137,7 @@ const pointIcon = computed(() =>
 .life-new-marker {
   background: radial-gradient(
     circle,
-    color-mix(in oklab, var(--color-text-warning), black 32%) 0%,
+    color-mix(in oklab, var(--color-text-warning), black 20%) 0%,
     var(--color-text-warning) 72%
   );
 }

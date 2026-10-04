@@ -37,6 +37,11 @@ import { siteUrl } from '../site-url';
 import { STRANGER } from '../access-links/viewer';
 import { ownerText } from '../owner-text';
 import type { Period } from '#layers/thei/shared/period';
+import {
+  isApproximateDate,
+  type DatedPeriod,
+} from '#layers/thei/shared/date-precision';
+import { lifeArrivalCutoff } from '#layers/thei/shared/life';
 
 /**
  * Public pages as Markdown.
@@ -80,6 +85,7 @@ export async function renderProjectMarkdown(
     for (const section of data.sections)
       lines.push(
         `- [${ownerText(section.title)}](${siteUrl(event, section.href)})` +
+          (section.period ? ` (${periodDates(section.period)})` : '') +
           (section.summary ? ` — ${ownerText(section.summary)}` : ''),
       );
   }
@@ -151,22 +157,42 @@ export async function renderEventMarkdown(
 }
 
 /**
- * When an event or a section happened, on one line: each period's dates, with
- * the owner's name for it after them.
+ * When an event or a section happened, on one line: each period's dates, then
+ * the owner's name for it and whether it is still running or yet to come.
  */
 function periodLines(periods: Period[]): string[] {
   if (!periods.length) return [];
+  const cutoff = lifeArrivalCutoff();
   return [
     periods
       .map((period) => {
-        const dates =
-          period.endDate !== period.startDate
-            ? `${period.startDate} — ${period.endDate}`
-            : period.startDate;
-        return period.label ? `${dates} (${ownerText(period.label)})` : dates;
+        const notes = [
+          ...(period.label ? [ownerText(period.label)] : []),
+          ...(period.startDate > cutoff
+            ? [THEI_SERVER.phrase.period_state_upcoming]
+            : period.endDate > cutoff
+              ? [THEI_SERVER.phrase.period_state_ongoing]
+              : []),
+        ];
+        const dates = periodDates(period);
+        return notes.length ? `${dates} (${notes.join(', ')})` : dates;
       })
       .join(', '),
   ];
+}
+
+/**
+ * A period's dates as sure as the owner is of them: cut to the month or the
+ * year they know, and marked `~` when they are a guess, so the copy never
+ * reads more definite than the page.
+ */
+function periodDates(period: DatedPeriod): string {
+  const length =
+    period.precision === 'year' ? 4 : period.precision === 'month' ? 7 : 10;
+  const start = period.startDate.slice(0, length);
+  const end = period.endDate.slice(0, length);
+  const doubt = isApproximateDate(period.precision) ? '~' : '';
+  return `${doubt}${start === end ? start : `${start} — ${end}`}`;
 }
 
 export async function renderDiaryMarkdown(

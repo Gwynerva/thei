@@ -89,7 +89,10 @@ export type PublicEntitySummary = {
   access: ProjectEventAccessLevel;
   media?: MediaDescriptor;
   tags: PublicTagSummary[];
+  /** The day a card is dated by: an event's last day, a project's first. */
   date: string;
+  /** The stretch an event's periods cover, as sure as the owner is of it. */
+  period?: DatedPeriod;
   showcase?: boolean;
   cv?: boolean;
   relatedEntities?: PublicEntityLink[];

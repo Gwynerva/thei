@@ -6,10 +6,20 @@ import {
 import type { LifeRailTone } from '#layers/thei/shared/life';
 
 const props = withDefaults(
-  defineProps<{ duration: LifeGapDuration; tone?: LifeRailTone }>(),
-  { tone: 'accent' },
+  defineProps<{
+    duration: LifeGapDuration;
+    tone?: LifeRailTone;
+    /**
+     * A period runs across the gap: the rail goes on unbroken, since this
+     * is a stretch of something rather than a pause in everything.
+     */
+    bridged?: boolean;
+  }>(),
+  { tone: 'accent', bridged: false },
 );
-const style = computed(() => lifeGapStyle(props.duration));
+const style = computed(() =>
+  props.bridged ? 'bridged' : lifeGapStyle(props.duration),
+);
 const label = computed(() =>
   phrase.value.life_gap(
     props.duration.years,
@@ -52,14 +62,16 @@ const label = computed(() =>
         class="life-gap-stub life-gap-stub--bottom absolute bottom-0 left-1/2
           w-0.5 -translate-x-1/2 sm:w-1"
       ></span>
-      <span
-        class="life-gap-slash life-gap-slash--top absolute left-1/2 w-0.5
-          sm:w-1"
-      ></span>
-      <span
-        class="life-gap-slash life-gap-slash--bottom absolute left-1/2 w-0.5
-          sm:w-1"
-      ></span>
+      <template v-if="style !== 'bridged'">
+        <span
+          class="life-gap-slash life-gap-slash--top absolute left-1/2 w-0.5
+            sm:w-1"
+        ></span>
+        <span
+          class="life-gap-slash life-gap-slash--bottom absolute left-1/2 w-0.5
+            sm:w-1"
+        ></span>
+      </template>
     </div>
     <!--
       Only the words themselves sharpen on hover, not the empty row. The label
@@ -155,6 +167,15 @@ const label = computed(() =>
 
 .life-gap-slash--bottom {
   top: calc(100% - var(--life-gap-cut-bottom));
+}
+
+/* A period running across: the rail goes on whole, with no cut in it. */
+.life-gap--bridged .life-gap-middle {
+  opacity: var(--life-gap-opacity);
+}
+
+.life-gap--bridged {
+  --life-gap-cut: 0rem;
 }
 
 /* One to three months: the faded line breaks up into clear dashes. */

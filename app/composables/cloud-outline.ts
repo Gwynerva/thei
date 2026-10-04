@@ -11,6 +11,19 @@ export function useCloudOutline(
   target: Readonly<Ref<Element | null | undefined>>,
   seed: MaybeRefOrGetter<string>,
 ) {
+  return useMeasuredOutline(target, (width, height) =>
+    cloudOutlinePath(width, height, toValue(seed)),
+  );
+}
+
+/**
+ * An outline drawn by `build` for the size an element has, redrawn as it
+ * changes, and empty until it has been measured.
+ */
+export function useMeasuredOutline(
+  target: Readonly<Ref<Element | null | undefined>>,
+  build: (width: number, height: number) => string,
+) {
   const size = shallowRef<{ width: number; height: number }>();
   let observer: ResizeObserver | undefined;
 
@@ -34,8 +47,6 @@ export function useCloudOutline(
   onBeforeUnmount(() => observer?.disconnect());
 
   return computed(() =>
-    size.value
-      ? cloudOutlinePath(size.value.width, size.value.height, toValue(seed))
-      : '',
+    size.value ? build(size.value.width, size.value.height) : '',
   );
 }

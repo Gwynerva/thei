@@ -263,10 +263,11 @@ export type LanguagePhrases = {
   life_rewind_empty_description: string;
   life_rewind_explore_life: string;
   event_ongoing: string;
-  period_started: string;
-  period_ended: string;
-  period_occurred: string;
-  period_ongoing: string;
+  event_was_ongoing: string;
+  period_until: (date: string) => string;
+  period_state_ongoing: string;
+  period_state_upcoming: string;
+  public_timeline_ongoing_until: (date: string) => string;
   view_all: string;
   life_empty: string;
   event_started: string;
@@ -279,6 +280,7 @@ export type LanguagePhrases = {
   section_ended: string;
   section_occurred: string;
   section_ongoing: string;
+  section_was_ongoing: string;
   diary_written: string;
   secret_event: (codename: string) => string;
   secret_project: (codename: string) => string;
@@ -510,6 +512,8 @@ export type LanguagePhrases = {
   x_projects: (count: number) => string;
   event: string;
   x_events: (count: number) => string;
+  /** A section of a project, named by its kind alone, as on a life card. */
+  section: string;
   page: string;
   new_project: string;
   new_event: string;

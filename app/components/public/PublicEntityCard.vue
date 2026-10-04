@@ -12,6 +12,7 @@ defineProps<{ entity: PublicEntitySummary }>();
     :label="entity.type === 'event' ? phrase.event : phrase.project"
     :icon="entity.type === 'event' ? 'event' : 'project'"
     :date="entity.date"
+    :period="entity.period"
     :media="entity.media"
     :continuous-media="entity.type === 'project'"
     :projects="entity.relatedEntities"

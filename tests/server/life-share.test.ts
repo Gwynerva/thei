@@ -207,6 +207,7 @@ describe("a project's chronology through its share link", () => {
       '2026-04-01': { secret: 1 },
       '2026-03-01': { secret: 1 },
       '2026-02-10': { 'project-section': 1 },
+      '2026-02-01': { 'project-section': 1 },
       '2026-01-01': { project: 1 },
     });
   });

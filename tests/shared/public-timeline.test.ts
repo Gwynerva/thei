@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  lifeTransitionMark,
+  lifePointMark,
+  publicPeriodState,
   publicTimelineGapBefore,
   publicTimelineGapDuration,
   publicTimelineHasGap,
@@ -72,6 +73,21 @@ describe('public timeline ranges', () => {
         endDate: '2026-08-23',
       }),
     ).toBe(false);
+    // Known only to the month or the year, a stretch within one is a moment.
+    expect(
+      publicTimelineIsDay({
+        startDate: '2026-08-01',
+        endDate: '2026-08-31',
+        precision: 'month',
+      }),
+    ).toBe(true);
+    expect(
+      publicTimelineIsDay({
+        startDate: '2026-01-01',
+        endDate: '2027-12-31',
+        precision: 'year',
+      }),
+    ).toBe(false);
   });
 
   it('counts both boundary dates in a period duration', () => {
@@ -125,9 +141,29 @@ describe('public timeline ranges', () => {
   });
 
   it('marks the start, the end and a single day of a period', () => {
-    expect(lifeTransitionMark('started')).toBe('start');
-    expect(lifeTransitionMark('ended')).toBe('end');
-    expect(lifeTransitionMark('occurred')).toBe('day');
-    expect(lifeTransitionMark('created')).toBeUndefined();
+    const range = { startDate: '2026-03-01', endDate: '2026-03-05' };
+    expect(lifePointMark({ transition: 'started' })).toBe('start');
+    expect(lifePointMark({ transition: 'started', ongoing: true })).toBe(
+      'ongoing',
+    );
+    expect(lifePointMark({ transition: 'ended', period: range })).toBe('end');
+    expect(lifePointMark({ transition: 'occurred' })).toBe('day');
+    expect(lifePointMark({ transition: 'occurred', period: range })).toBe(
+      'span',
+    );
+    expect(
+      lifePointMark({ transition: 'occurred', period: range }, 'ongoing'),
+    ).toBe('ongoing');
+    expect(lifePointMark({ transition: 'created' })).toBeUndefined();
+  });
+});
+
+describe('publicPeriodState', () => {
+  const period = { startDate: '2026-03-01', endDate: '2026-03-10' };
+  it('tells a period gone by, still running, or yet to come', () => {
+    expect(publicPeriodState(period, '2026-03-10')).toBe('past');
+    expect(publicPeriodState(period, '2026-03-09')).toBe('ongoing');
+    expect(publicPeriodState(period, '2026-03-01')).toBe('ongoing');
+    expect(publicPeriodState(period, '2026-02-28')).toBe('upcoming');
   });
 });

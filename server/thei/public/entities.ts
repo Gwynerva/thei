@@ -255,6 +255,7 @@ export async function buildPublicEventSummary(
     listTagsForContainer('event', event.eventUuid),
     resolvePublicRelated({ type: 'event', id: event.eventUuid }, viewer),
   ]);
+  const period = periods.length ? coverDatedPeriods(periods) : undefined;
   return {
     type: 'event',
     title: event.title,
@@ -263,11 +264,8 @@ export async function buildPublicEventSummary(
     access: event.access,
     media,
     tags: await buildPublicTags(tags),
-    date:
-      periods
-        .map((period) => period.endDate)
-        .sort()
-        .at(-1) ?? utcDayOf(event.createdAt),
+    date: period?.endDate ?? utcDayOf(event.createdAt),
+    ...(period ? { period } : {}),
     // A card names the projects an event belongs to, not everything around
     // it: the rest waits on the event's own page.
     relatedEntities: await buildPublicRelatedLinks(

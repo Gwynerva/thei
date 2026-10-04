@@ -3,7 +3,7 @@ import type {
   PublicEntityReference,
   PublicTagSummary,
 } from './api/public';
-import type { DateRange } from './date-range';
+import { utcDayOf, type DateRange } from './date-range';
 import type { DatePrecisionInfo } from './date-precision';
 import type { MediaDescriptor } from './media';
 import type { StatusKind, StatusOwnerType } from './status';
@@ -27,6 +27,10 @@ export type LifeRailTone = 'accent' | 'warning' | 'warning-to-accent';
 
 type LifePointBase = {
   date: string;
+  /**
+   * The whole period a point of an event or a section belongs to: the start
+   * and end a card stands at one of, or the two it folds into one.
+   */
   period?: DateRange;
   /**
    * How sure the owner is of the date, present only when they doubt it. A
@@ -36,7 +40,25 @@ type LifePointBase = {
   precision?: DatePrecisionInfo;
   entityKind: LifeEntityKind;
   transition: LifeTransition;
+  /**
+   * The start of a period still running on the day the chronology is read:
+   * its end has yet to come, so the feed holds no card for it. Never on a
+   * secret, whose end is the owner's to tell.
+   */
+  ongoing?: true;
 };
+
+/**
+ * The last day a chronology shows: the day it already is somewhere on Earth.
+ *
+ * The site keeps no time zone, and an owner east of UTC writes the day's entry
+ * before UTC has reached that day; the earliest time zone, fourteen hours
+ * ahead, is the one that says a day has come. Anything dated later — a
+ * period's planned end, a day still to come — waits for its day.
+ */
+export function lifeArrivalCutoff(now: Date | number = Date.now()): string {
+  return utcDayOf(Number(now) + 14 * 60 * 60 * 1000);
+}
 
 export type VisibleLifePoint = LifePointBase & {
   key: string;
@@ -75,6 +97,12 @@ export type LifePoint = VisibleLifePoint | SecretLifePoint;
 export type LifeDay = {
   date: string;
   points: LifePoint[];
+  /**
+   * A period the feed shows runs on from this day to the next newer day it
+   * holds, so the stretch between them is no pause. Only that it runs is
+   * said, never whose it is.
+   */
+  bridged?: true;
 };
 
 export type LifeWindowResponse = {

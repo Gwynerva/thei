@@ -9,6 +9,8 @@ import type { DateRange } from '#layers/thei/shared/date-range';
 import type { IconName } from '#thei/icons';
 import type { PublicPeriodMark } from '#layers/thei/shared/public-timeline';
 import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
+import { continuationOutlinePath } from '#layers/thei/shared/continuation-outline';
+import { useMeasuredOutline } from '#layers/thei/app/composables/cloud-outline';
 import {
   datePresentationToneClass,
   publicDatePrecisionOptions,
@@ -23,14 +25,17 @@ const props = defineProps<{
   label?: string;
   icon?: IconName;
   /**
-   * Draws the label as the name of a period: its start, end or day mark in
-   * place of the icon. The kind of moment it is — "An event started" — is
-   * then given by `labelHint`, on hover and to assistive technology.
+   * Marks the label as a moment of a period — its start, end, day, whole
+   * stretch, or a start still running — beside the icon, if any.
    */
   mark?: PublicPeriodMark;
-  /** A word before a period's name — "Started" — in a lighter weight. */
-  labelLead?: string;
+  /**
+   * Says what the mark stands for — "An event started" — on hover over it
+   * and to assistive technology.
+   */
   labelHint?: string;
+  /** The label is the period's own name rather than a word for its kind. */
+  labelNamed?: boolean;
   date: string;
   period?: DateRange;
   dateHref?: string;
@@ -63,6 +68,12 @@ const props = defineProps<{
   reminder?: string;
   /** Presents a codename for something hidden from visitors. */
   secret?: boolean;
+  /**
+   * The card is one end of a period that goes on beyond it: up, for a start
+   * whose period runs on to a newer day, or down, for an end whose period
+   * began on an older one. The edge on that side says so.
+   */
+  continues?: 'up' | 'down';
 }>();
 
 const datePresentation = computed(
@@ -93,6 +104,33 @@ const cloudPath = useCloudOutline(
   computed(() => (props.cloud ? card.value : null)),
   () => props.date,
 );
+/**
+ * A start or an end of a period, torn on the side its period goes on to.
+ * Until the card is measured it is an ordinary box, so the first paint
+ * already has its border and shade; the drawn outline takes over as soon as
+ * it can.
+ */
+const continuationPath = useMeasuredOutline(
+  computed(() => (props.continues && !props.cloud ? card.value : null)),
+  (width, height) =>
+    props.continues
+      ? continuationOutlinePath(width, height, props.continues, normalRadius())
+      : '',
+);
+const outlinePath = computed(() =>
+  props.cloud ? cloudPath.value : continuationPath.value,
+);
+/** Whether the card is drawn by an outline rather than bordered as a box. */
+const drawn = computed(() => props.cloud || Boolean(continuationPath.value));
+
+/** The corner every box card has, for an outline drawn in its place. */
+function normalRadius() {
+  const root = getComputedStyle(document.documentElement);
+  const value = root.getPropertyValue('--radius-normal').trim();
+  return value.endsWith('rem')
+    ? parseFloat(value) * parseFloat(root.fontSize)
+    : parseFloat(value) || 0;
+}
 const visibleTags = computed(() => props.tags?.slice(0, 3) ?? []);
 const visibleProjects = computed(() => props.projects ?? []);
 const hasFooter = computed(
@@ -107,33 +145,35 @@ const hasFooter = computed(
       transition"
     :class="[
       compact ? 'min-h-28' : 'min-h-36',
-      !cloud &&
+      !drawn &&
         `overflow-hidden rounded-normal border border-border-1 bg-bg-2 shadow-md
         shadow-shadow-1`,
       href &&
         `public-content-card-interactive has-focus-visible:-translate-y-0.5
         hocus:-translate-y-0.5`,
       href &&
-        !cloud &&
+        !drawn &&
         `has-focus-visible:border-border-2 has-focus-visible:shadow-xl
         hocus:border-border-2 hocus:shadow-xl`,
     ]"
     :style="cardStyle"
     :data-secret="secret || undefined"
+    :data-continues="continues"
   >
     <!--
-      The cloud is drawn rather than bordered: its outline depends on the
-      card's size, so it stays hidden until the card has been measured.
+      A cloud, or the torn edge of a period's start or end, is drawn rather
+      than bordered: its outline depends on the card's size, so a cloud stays
+      hidden until the card has been measured.
     -->
     <svg
-      v-if="cloud"
-      class="public-cloud pointer-events-none absolute inset-0 -z-1 size-full
+      v-if="cloud || continuationPath"
+      class="public-outline pointer-events-none absolute inset-0 -z-1 size-full
         overflow-visible transition"
-      :class="cloudPath ? 'opacity-100' : 'opacity-0'"
+      :class="outlinePath ? 'opacity-100' : 'opacity-0'"
       aria-hidden="true"
     >
       <path
-        :d="cloudPath"
+        :d="outlinePath"
         class="fill-bg-2 stroke-border-1 transition-colors
           group-hover:stroke-border-2 group-has-focus-visible:stroke-border-2"
         stroke-width="1"
@@ -151,9 +191,11 @@ const hasFooter = computed(
     <div
       v-if="media"
       :class="
-        cloud ? ['absolute inset-0', { invisible: !cloudPath }] : 'contents'
+        drawn ? ['absolute inset-0', { invisible: !outlinePath }] : 'contents'
       "
-      :style="cloud && cloudPath ? { clipPath: `path('${cloudPath}')` } : {}"
+      :style="
+        drawn && outlinePath ? { clipPath: `path('${outlinePath}')` } : {}
+      "
     >
       <MediaEdge
         :media
@@ -182,23 +224,29 @@ const hasFooter = computed(
         class="flex max-w-4/5 flex-wrap items-center gap-x-2 gap-y-1 text-xs
           font-semibold text-accent sm:max-w-3/4"
       >
-        <span
-          v-if="label && mark"
-          class="pointer-events-auto relative z-3 flex min-w-0 items-center
-            gap-1.5 opacity-80"
-          :data-title-popup="labelHint"
-        >
-          <PublicPeriodMark :kind="mark" bare />
-          <span v-if="labelHint" class="sr-only">{{ labelHint }}:</span>
-          <span class="min-w-0 wrap-break-word">
-            <span
-              v-if="labelLead"
-              class="font-normal"
-              :aria-hidden="labelHint ? 'true' : undefined"
-              >{{ labelLead }}</span
-            >
-            {{ label }}
+        <!--
+          A period's own name reads stronger than a word for its kind, which
+          stays as quiet as any other card's label. The mark says which moment
+          of the period the card is, and its hint says it in words. It sits
+          above the card's link, so a tap on it shows the hint rather than
+          opening the card.
+        -->
+        <span v-if="label && mark" class="flex min-w-0 items-center gap-1.5">
+          <Icon v-if="icon" :name="icon" class="shrink-0 opacity-55" />
+          <span
+            class="pointer-events-auto relative z-3 flex shrink-0 cursor-help
+              opacity-80"
+            :data-title-popup="labelHint"
+            :data-period-mark="mark"
+          >
+            <PublicPeriodMark :kind="mark" outline />
           </span>
+          <span v-if="labelHint" class="sr-only">{{ labelHint }}:</span>
+          <span
+            class="min-w-0 wrap-break-word"
+            :class="labelNamed ? 'opacity-80' : 'opacity-55'"
+            >{{ label }}</span
+          >
         </span>
         <span v-else-if="label" class="flex items-center gap-2 opacity-55">
           <Icon v-if="icon" :name="icon" class="shrink-0" />
@@ -333,18 +381,18 @@ const hasFooter = computed(
   }
 }
 
-/* The box's shadow, redrawn around the cloud's own outline. */
-.public-cloud {
+/* The box's shadow, redrawn around a drawn outline. */
+.public-outline {
   filter: drop-shadow(0 0.2rem 0.3rem var(--color-shadow-1));
 }
 
 .public-content-card-interactive:is(:focus-visible, :has(:focus-visible))
-  .public-cloud {
+  .public-outline {
   filter: drop-shadow(0 0.6rem 0.9rem var(--public-card-shadow-color));
 }
 
 @media (hover: hover) {
-  .public-content-card-interactive:hover .public-cloud {
+  .public-content-card-interactive:hover .public-outline {
     filter: drop-shadow(0 0.6rem 0.9rem var(--public-card-shadow-color));
   }
 }
