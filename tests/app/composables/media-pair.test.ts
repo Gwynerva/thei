@@ -100,7 +100,8 @@ function setup(overrides: Partial<MediaSurfaceProps> = {}) {
       string,
       (event: Event) => void
     >;
-    handlers[name]!({ currentTarget: element } as unknown as Event);
+    // An event nobody listens to does nothing, as in a browser.
+    handlers[name]?.({ currentTarget: element } as unknown as Event);
   }
   return { pair, props, dimensions, attach, fire };
 }
@@ -223,7 +224,7 @@ describe('media pairs', () => {
     expect(pair.loading.value).toBe(false);
   });
 
-  it('starts both videos only when both are ready', async () => {
+  it('starts the main video once both are ready, and the backdrop once it plays', async () => {
     const { pair, fire } = setup({ kind: 'video', playback: 'autoplay' });
     const main = new TestVideo();
     const backdrop = new TestVideo();
@@ -237,8 +238,10 @@ describe('media pairs', () => {
     fire('backdrop', 'loadeddata', backdrop);
     await settle();
     expect(main.play).toHaveBeenCalledOnce();
-    expect(backdrop.play).toHaveBeenCalledOnce();
+    expect(backdrop.play).not.toHaveBeenCalled();
     expect(pair.revealed.value).toBe(true);
+    fire('main', 'playing', main);
+    expect(backdrop.play).toHaveBeenCalledOnce();
   });
 
   it('defers interaction video loading and does not play after the pointer has left', async () => {
@@ -263,6 +266,7 @@ describe('media pairs', () => {
     expect(backdrop.play).not.toHaveBeenCalled();
     props.engaged = true;
     await settle();
+    fire('main', 'playing', main);
     expect(main.paused || backdrop.paused).toBe(false);
     props.engaged = false;
     await settle();
@@ -291,7 +295,7 @@ describe('media pairs', () => {
     expect(pair.status.previewBackdrop).toBe('ready');
   });
 
-  it('pauses both layers for buffering and resumes only after both can play', async () => {
+  it('never pauses or restarts the main video while it is in view', async () => {
     const { pair, fire } = setup({ kind: 'video', playback: 'autoplay' });
     const main = new TestVideo();
     const backdrop = new TestVideo();
@@ -299,18 +303,66 @@ describe('media pairs', () => {
     pair.register('main', main as unknown as Element);
     pair.register('backdrop', backdrop as unknown as Element);
     await settle();
-    backdrop.readyState = 2;
-    fire('backdrop', 'waiting', backdrop);
-    fire('main', 'pause', main);
+    fire('main', 'playing', main);
+    expect(backdrop.paused).toBe(false);
+
+    // Buffering holds only the backdrop, until the main video moves again.
+    main.readyState = 2;
+    fire('main', 'waiting', main);
+    expect(backdrop.paused).toBe(true);
+    main.readyState = 4;
     fire('main', 'canplay', main);
-    expect(main.paused && backdrop.paused).toBe(true);
-    backdrop.readyState = 4;
-    fire('backdrop', 'canplay', backdrop);
-    await settle();
-    expect(main.paused || backdrop.paused).toBe(false);
+    fire('main', 'playing', main);
+    expect(backdrop.paused).toBe(false);
+
+    // A loop seeks the main video back to its start; the backdrop follows.
+    main.seeking = true;
+    main.currentTime = 0;
+    backdrop.currentTime = 2.9;
+    fire('main', 'seeking', main);
+    main.seeking = false;
+    fire('main', 'seeked', main);
+    expect(backdrop.currentTime).toBe(0);
+
+    // Drift is corrected on the backdrop alone, and only once it shows.
+    main.currentTime = 2.1;
+    backdrop.currentTime = 2;
+    fire('main', 'timeupdate', main);
+    expect(backdrop.currentTime).toBe(2);
+    main.currentTime = 3;
+    fire('main', 'timeupdate', main);
+    expect(backdrop.currentTime).toBe(3);
+
+    // The backdrop's own stalls stay its own.
+    for (const name of ['waiting', 'seeking', 'seeked', 'canplay', 'pause'])
+      fire('backdrop', name, backdrop);
+    fire('main', 'ended', main);
+
+    expect(main.pause).not.toHaveBeenCalled();
+    expect(main.play).toHaveBeenCalledOnce();
+    expect(main.paused).toBe(false);
   });
 
-  it('keeps a manually started video where it was across viewport re-entry, and respects reduced motion', async () => {
+  it('plays an autoplay video that left before it was ready once it is back', async () => {
+    const { pair } = setup({
+      kind: 'video',
+      playback: 'autoplay',
+      backdrop: false,
+    });
+    intersect([{ isIntersecting: false }]);
+    const main = new TestVideo();
+    main.readyState = 4;
+    pair.register('main', main as unknown as Element);
+    await settle();
+    expect(pair.revealed.value).toBe(true);
+    expect(main.play).not.toHaveBeenCalled();
+
+    intersect([{ isIntersecting: true }]);
+    await settle();
+    expect(main.paused).toBe(false);
+  });
+
+  it('keeps a manually started or paused video so across viewport re-entry, and respects reduced motion', async () => {
     const { pair, fire } = setup({ kind: 'video', playback: 'manual' });
     const main = new TestVideo();
     const backdrop = new TestVideo();
@@ -318,7 +370,11 @@ describe('media pairs', () => {
     pair.register('main', main as unknown as Element);
     pair.register('backdrop', backdrop as unknown as Element);
     await settle();
-    await pair.play();
+    expect(main.play).not.toHaveBeenCalled();
+
+    // Started with its own controls.
+    await main.play();
+    fire('main', 'playing', main);
     main.currentTime = backdrop.currentTime = 2;
 
     // Leaving the viewport pauses the pair; the elements stay, so nothing is
@@ -330,11 +386,20 @@ describe('media pairs', () => {
 
     intersect([{ isIntersecting: true }]);
     await settle();
+    fire('main', 'playing', main);
     expect(main.currentTime).toBe(2);
     expect(main.paused || backdrop.paused).toBe(false);
 
-    await pair.pause();
+    // Paused with its own controls, it stays paused when it comes back.
+    main.pause();
+    fire('main', 'pause', main);
+    expect(backdrop.paused).toBe(true);
+    intersect([{ isIntersecting: false }]);
+    await settle();
+    intersect([{ isIntersecting: true }]);
+    await settle();
     expect(main.paused && backdrop.paused).toBe(true);
+
     reduced = true;
     motionChanged();
     await settle();
@@ -368,6 +433,7 @@ describe('media pairs', () => {
     pair.register('main', main as unknown as Element);
     pair.register('backdrop', backdrop as unknown as Element);
     await settle();
+    fire('main', 'playing', main);
     expect(main.paused || backdrop.paused).toBe(false);
 
     main.pause();

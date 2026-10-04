@@ -17,12 +17,29 @@ type Status = 'loading' | 'ready' | 'error';
 type MediaElement = HTMLImageElement | HTMLVideoElement;
 
 /**
+ * The blurred backdrop may lag the main video this far before it is moved to
+ * the main video's time: the blur hides it, and a seek stalls the backdrop.
+ */
+const BACKDROP_DRIFT = 0.25;
+const BACKDROP_STILL_DRIFT = 0.04;
+
+/**
  * Owns readiness and playback only; the two presentations own their geometry.
  *
  * Media starts loading the first time it scrolls into view and then stays
  * mounted: the browser already keeps offscreen images cheap, while unmounting
  * would decode, seek and fade the same bytes in again on every return. Only
  * videos keep watching the viewport, to pause while nobody can see them.
+ *
+ * A video on screen is left alone. Only entering the viewport starts it (once
+ * it is ready, if it was not yet), and only leaving pauses it, after noting
+ * whether it was playing: that is how a pause made with its own controls is
+ * kept, without listening for one. Buffering, seeking and looping belong to
+ * the browser; pausing and resuming around them showed a phone's controls
+ * over the video on every loop. A hidden tab is left to the browser too. Only
+ * deliberate signals act on a video in view: the pointer or focus over a tile
+ * that plays while engaged, the reduced motion setting, a new source. The
+ * backdrop copies the main video and never steers it.
  */
 export function useMediaPair(
   props: MediaSurfaceProps,
@@ -108,68 +125,55 @@ export function useMediaPair(
   let motion: MediaQueryList | undefined;
   let firstFrame = 0;
   let secondFrame = 0;
-  let starting = false;
-  let command = 0;
   let playbackIntentInitialized = false;
-  const expectedPauses = new WeakSet<HTMLVideoElement>();
 
   function video(role: Role) {
     const element = elements[role];
     return element instanceof HTMLVideoElement ? element : undefined;
   }
   function pauseVideos() {
-    command++;
-    starting = false;
     for (const role of ['main', 'backdrop'] as const) {
       const element = video(role);
-      if (element && !element.paused) {
-        expectedPauses.add(element);
-        element.pause();
-      }
+      if (element && !element.paused) element.pause();
     }
   }
-  function synchronize(force = false) {
+  /**
+   * Asks the main video to play, once. Without data yet the browser starts it
+   * as soon as it can; a refused start, for blocked autoplay or a pause of
+   * ours, simply leaves it paused.
+   */
+  function start() {
     const main = video('main');
-    const backdrop = video('backdrop');
-    if (!main || !backdrop || status.backdrop !== 'ready') return;
-    backdrop.playbackRate = main.playbackRate;
-    if (force || Math.abs(backdrop.currentTime - main.currentTime) > 0.08) {
-      if (Math.abs(backdrop.currentTime - main.currentTime) > 0.01)
-        backdrop.currentTime = main.currentTime;
-    }
-  }
-  async function startVideos() {
-    const main = video('main');
-    const backdrop =
-      status.backdrop === 'ready' ? video('backdrop') : undefined;
     if (
+      !main?.paused ||
       props.suspended ||
       !active.value ||
       !inView.value ||
-      document.hidden ||
       !revealed.value ||
-      !wantsPlayback.value ||
-      !main ||
-      starting
+      status.main === 'error' ||
+      !wantsPlayback.value
     )
       return;
-    const pair = backdrop ? [main, backdrop] : [main];
-    if (pair.some((element) => element.seeking || element.readyState < 3))
-      return;
-    if (pair.every((element) => !element.paused)) return;
-    synchronize();
-    if (backdrop?.seeking) return;
-    starting = true;
-    const currentCommand = ++command;
-    const outcomes = await Promise.allSettled(
-      pair.map((element) => element.play()),
-    );
-    if (currentCommand !== command) return;
-    starting = false;
-    if (outcomes.some((outcome) => outcome.status === 'rejected')) {
-      wantsPlayback.value = false;
-      pauseVideos();
-    }
+    main.play().catch(() => {});
+  }
+  /** Keeps the backdrop on the main video's time, rate and motion. */
+  function follow() {
+    const main = video('main');
+    const backdrop =
+      status.backdrop === 'ready' ? video('backdrop') : undefined;
+    if (!main || !backdrop) return;
+    if (backdrop.playbackRate !== main.playbackRate)
+      backdrop.playbackRate = main.playbackRate;
+    const moving = !main.paused && main.readyState >= 3;
+    // A still frame stays in sight, so a still backdrop matches it closely.
+    const drift = moving ? BACKDROP_DRIFT : BACKDROP_STILL_DRIFT;
+    if (
+      !main.seeking &&
+      Math.abs(backdrop.currentTime - main.currentTime) > drift
+    )
+      backdrop.currentTime = main.currentTime;
+    if (moving && backdrop.paused) backdrop.play().catch(() => {});
+    else if (!moving && !backdrop.paused) backdrop.pause();
   }
   function reveal() {
     cancelAnimationFrame(firstFrame);
@@ -179,9 +183,10 @@ export function useMediaPair(
       secondFrame = requestAnimationFrame(() => {
         if (!active.value || current !== generation.value) return;
         if (previewReady.value) previewRevealed.value = true;
-        if (originalReady.value) {
+        if (originalReady.value && !revealed.value) {
           revealed.value = true;
-          void nextTick(startVideos);
+          // The rest of entering: the video did not exist yet.
+          void nextTick(start);
         }
       });
     });
@@ -256,56 +261,27 @@ export function useMediaPair(
     reveal();
   }
   function events(role: Role) {
+    // Only the main video's own events move the backdrop; neither video's
+    // events ever start or pause the main one.
+    const followMain = () => {
+      if (role === 'main') follow();
+    };
     const handlers: Record<string, (event: Event) => void> = {
       load: (event: Event) =>
         void loaded(role, event.currentTarget as MediaElement),
       loadeddata: (event: Event) =>
         void loaded(role, event.currentTarget as MediaElement),
       error: (event: Event) => fail(role, event.currentTarget as MediaElement),
-      canplay: () => void startVideos(),
-      play: () => {
-        if (role !== 'main' || starting) return;
-        if (props.playback === 'interaction' && !allowedPlayback.value) {
-          pauseVideos();
-          return;
-        }
-        wantsPlayback.value = true;
-        void startVideos();
-      },
-      pause: (event: Event) => {
-        const element = event.currentTarget as HTMLVideoElement;
-        if (expectedPauses.delete(element) || role !== 'main') return;
-        wantsPlayback.value = false;
-        pauseVideos();
-      },
-      waiting: () => {
-        if (revealed.value) pauseVideos();
-      },
-      seeking: () => {
-        // Backdrop seeks are drift corrections and must not stall the video.
-        if (!revealed.value || role !== 'main') return;
-        pauseVideos();
-        synchronize(true);
-      },
       seeked: (event: Event) => {
         if (status[role] === 'loading')
           void loaded(role, event.currentTarget as MediaElement);
-        if (role === 'main') synchronize();
-        // Resumes a pair whose other half finished seeking first.
-        void startVideos();
+        followMain();
       },
-      ratechange: () => {
-        if (role === 'main') synchronize();
-      },
-      timeupdate: () => {
-        if (role === 'main') synchronize();
-      },
-      ended: () => {
-        if (role === 'main') {
-          synchronize(true);
-          pauseVideos();
-        }
-      },
+      playing: followMain,
+      pause: followMain,
+      waiting: followMain,
+      ratechange: followMain,
+      timeupdate: followMain,
     };
     return Object.fromEntries(
       Object.entries(handlers).map(([name, handle]) => [
@@ -329,22 +305,27 @@ export function useMediaPair(
   }
   function enter() {
     inView.value = true;
-    if (active.value) {
-      void startVideos();
-      return;
+    if (!active.value) {
+      active.value = true;
+      requested.value =
+        props.kind !== 'video' ||
+        props.playback !== 'interaction' ||
+        !previewSrc.value ||
+        allowedPlayback.value;
+      if (!playbackIntentInitialized && props.playback !== 'manual')
+        wantsPlayback.value = allowedPlayback.value;
+      playbackIntentInitialized = true;
     }
-    active.value = true;
-    requested.value =
-      props.kind !== 'video' ||
-      props.playback !== 'interaction' ||
-      !previewSrc.value ||
-      allowedPlayback.value;
-    if (!playbackIntentInitialized && props.playback !== 'manual')
-      wantsPlayback.value = allowedPlayback.value;
-    playbackIntentInitialized = true;
+    start();
   }
   function leave() {
     inView.value = false;
+    const main = video('main');
+    // A video comes back doing what it was left doing, whether its own
+    // controls or the autoplay got it there. A tile that plays while engaged
+    // follows the engagement instead.
+    if (main && revealed.value && props.playback !== 'interaction')
+      wantsPlayback.value = !main.paused;
     pauseVideos();
   }
   function watchViewport() {
@@ -361,7 +342,7 @@ export function useMediaPair(
       }
     });
   }
-  async function play() {
+  function play() {
     if (
       props.suspended ||
       (props.playback === 'interaction' && !allowedPlayback.value)
@@ -369,7 +350,7 @@ export function useMediaPair(
       return;
     wantsPlayback.value = true;
     requested.value = true;
-    await startVideos();
+    start();
   }
   function pause() {
     wantsPlayback.value = false;
@@ -379,7 +360,7 @@ export function useMediaPair(
     wantsPlayback.value = value;
     if (value) {
       requested.value = true;
-      void startVideos();
+      start();
     } else pauseVideos();
   });
   watch(
@@ -406,21 +387,15 @@ export function useMediaPair(
   function updateMotion() {
     reducedMotion.value = motion?.matches ?? true;
   }
-  function updateVisibility() {
-    if (document.hidden) pauseVideos();
-    else void startVideos();
-  }
   onMounted(() => {
     motion = window.matchMedia('(prefers-reduced-motion: reduce)');
     updateMotion();
     motion.addEventListener('change', updateMotion);
-    document.addEventListener('visibilitychange', updateVisibility);
     watchViewport();
   });
   onBeforeUnmount(() => {
     stopObserving?.();
     motion?.removeEventListener('change', updateMotion);
-    document.removeEventListener('visibilitychange', updateVisibility);
     clear();
   });
   return {
