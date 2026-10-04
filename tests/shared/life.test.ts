@@ -273,11 +273,48 @@ describe('Life point construction', () => {
     ]);
     expect(ordered.map((item) => item.identity)).toEqual([
       'project-section:x',
-      'event:z',
-      'project-stage:o',
       'project-stage:s',
       'project:a',
+      'event:z',
+      'project-stage:o',
       'project-stage:y',
+    ]);
+  });
+
+  it("keeps a project's cards of one day together, with nothing between", () => {
+    const part = (
+      identity: string,
+      transition: 'started' | 'ended' | 'occurred' | 'created',
+      entityKind: string,
+      projectUuids: string[],
+      sortTime = 0,
+    ) => ({
+      ...point(identity, '2026-08-22', transition, sortTime),
+      entityKind,
+      projectUuids,
+    });
+    const ordered = sortLifePoints([
+      part('project-stage:end', 'ended', 'project-stage', ['a']),
+      part('event:e', 'ended', 'event', ['a']),
+      part('diary-entry:d', 'created', 'diary-entry', ['a']),
+      part('project-stage:other', 'occurred', 'project-stage', ['b']),
+      part('profile-status:p', 'created', 'profile-status', ['a'], 2),
+      part('profile-status:me', 'created', 'profile-status', [], 3),
+      part('project-stage:start', 'started', 'project-stage', ['a']),
+      part('event:f', 'started', 'event', []),
+    ]);
+    expect(ordered.map((item) => item.identity)).toEqual([
+      // A diary entry still opens the day.
+      'diary-entry:d',
+      // An event related to project a is no part of it.
+      'event:e',
+      // Project a stands where its first card would, all of it at once.
+      'project-stage:end',
+      'profile-status:p',
+      'project-stage:start',
+      'profile-status:me',
+      'project-stage:other',
+      'event:f',
     ]);
   });
 
