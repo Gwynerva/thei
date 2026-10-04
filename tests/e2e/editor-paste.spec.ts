@@ -211,9 +211,7 @@ test('the editor opened on a pasted picture makes new variants from the kept ori
   const source = dialog
     .locator('select')
     .filter({ has: page.locator('option', { hasText: 'Unprocessed' }) });
-  await expect(source.locator('option:checked')).toHaveText(
-    /PNG.*Unprocessed/,
-  );
+  await expect(source.locator('option:checked')).toHaveText(/PNG.*Unprocessed/);
   await expect(
     dialog.getByText('This source is already compressed', { exact: false }),
   ).toHaveCount(0);

@@ -99,23 +99,24 @@ function tagged(
 }
 
 describe('tag recommendation index', () => {
-  it('reads projects with their stages and sections, and events', () => {
+  it('reads projects with their sections, and events', () => {
     project('p-1', 'Voyage', 'Summer');
     body('project', 'p-1', 'project-description', 'harbour');
     context.db
-      .insert(context.schema.projectStages)
+      .insert(context.schema.projectContentSections)
       .values({
-        stageUuid: 'pst-1',
+        sectionUuid: 'pcs-1',
         projectUuid: 'p-1',
-        publicId: 'stage1',
+        publicId: 'section1',
         humanReadableSlug: 'crossing',
         title: 'Crossing',
         summary: 'Storm',
+        sortOrder: 0,
         createdAt: 1,
         updatedAt: 1,
       })
       .run();
-    body('project-stage', 'pst-1', 'project-stage-body', 'lighthouse');
+    body('project-section', 'pcs-1', 'project-section-body', 'lighthouse');
     event('e-1', 'Concert');
     body('event', 'e-1', 'event-body', 'orchestra');
     tag('t-sea', 'Sea');

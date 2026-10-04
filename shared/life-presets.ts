@@ -41,13 +41,13 @@ export function lifePresetHref(preset: LifePreset): string {
 /**
  * The readings of one project's chronology that are pages of their own.
  *
- * A project's stages and its sections each used to have a list of their own;
- * those addresses now open the project's chronology through the matching
- * filter, and the two that are worth indexing keep a line in the sitemap.
- * Related events redirect too, but as a way in, not as a page to index.
+ * A project's sections used to have a list of their own; that address opens
+ * the project's chronology through the matching filter and keeps a line in
+ * the sitemap. Related events redirect too, but as a way in, not as a page to
+ * index.
  */
 export interface ProjectTimelinePreset {
-  id: 'stages' | 'sections' | 'events';
+  id: 'sections' | 'events';
   /** The old address segment, `/projects/<x>/<segment>/`. */
   segment: string;
   filter: readonly LifeEntityKind[];
@@ -56,7 +56,6 @@ export interface ProjectTimelinePreset {
 }
 
 export const PROJECT_TIMELINE_PRESETS: ProjectTimelinePreset[] = [
-  { id: 'stages', segment: 'stages', filter: ['project-stage'], listed: true },
   {
     id: 'sections',
     segment: 'sections',

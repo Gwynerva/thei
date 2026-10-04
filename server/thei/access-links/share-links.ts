@@ -28,7 +28,7 @@ import { createAccessToken, isAccessTokenShape } from './token';
  * leaks; here the leaked copy is already dead.
  *
  * The grant is scoped to a single entity and everything that belongs to it —
- * its stages, sections, files and media. It never widens the rest of the site:
+ * its sections, files and media. It never widens the rest of the site:
  * related projects, lists, search and the timeline still answer as they would
  * to any visitor.
  *

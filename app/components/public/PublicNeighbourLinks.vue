@@ -4,10 +4,10 @@ import type { IconName } from '#thei/icons';
 import type { PublicDetailNeighbours } from './public-detail';
 
 /**
- * The way back to the stage, section or diary entry before this one, and on
+ * The way back to the section or diary entry before this one, and on
  * to the next: two tiles, the one before above the one after, each with the
- * other one's picture, its name, and what tells it apart — when a stage was,
- * what a section is about, how a diary entry begins. Either is left out when
+ * other one's picture, its name, and what tells it apart — when a dated
+ * section was, what another is about, how a diary entry begins. Either is left out when
  * there is nothing that way.
  *
  * The chevrons point where the reader goes, at the outer edges, and the
@@ -57,7 +57,7 @@ function title(neighbour: PublicNeighbour) {
   );
 }
 
-/** The line under the name: a stage's time, or the text it opens with. */
+/** The line under the name: a section's time, or the text it opens with. */
 function detail(neighbour: PublicNeighbour) {
   if (neighbour.period)
     return getPublicDatePresentation(

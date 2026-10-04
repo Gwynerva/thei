@@ -8,7 +8,7 @@ import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
  *
  * The shape that stands for "another entity" wherever one is mentioned in
  * passing — a related project under a card, the parent project above a
- * stage. A cut corner reads as a token rather than as a thumbnail, which is
+ * section. A cut corner reads as a token rather than as a thumbnail, which is
  * what these are: a way to point at something, not a preview of it.
  */
 const { media, icon, plain } = defineProps<{

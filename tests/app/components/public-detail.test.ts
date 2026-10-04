@@ -169,13 +169,18 @@ describe('createdAndUpdatedTimelineItems', () => {
   });
 
   it('puts the parts of a day between its edit and its creation', () => {
-    const stages = firstAndLastTimelineItems(
+    const sections = firstAndLastTimelineItems(
       [
-        { date: '2024-05-12', href: '/stage-a/' },
-        { date: '2024-05-12', href: '/stage-b/' },
+        { date: '2024-05-12', href: '/section-a/' },
+        { date: '2024-05-12', href: '/section-b/' },
       ],
       (item) => item,
-      { icon: 'calendar', first: 'First stage', last: 'Last stage', only: '' },
+      {
+        icon: 'calendar',
+        first: 'First section',
+        last: 'Last section',
+        only: '',
+      },
     );
     const status = {
       icon: 'pulse' as const,
@@ -187,10 +192,16 @@ describe('createdAndUpdatedTimelineItems', () => {
         createdAndUpdatedTimelineItems(
           { createdAt: '2024-05-12', updatedAt: '2024-06-01' },
           labels,
-          [...stages, status],
+          [...sections, status],
         ),
       ).map((item) => item.label),
-    ).toEqual(['Updated', 'Last stage', 'First stage', 'Status', 'Created']);
+    ).toEqual([
+      'Updated',
+      'Last section',
+      'First section',
+      'Status',
+      'Created',
+    ]);
   });
 });
 

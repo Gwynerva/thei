@@ -43,7 +43,7 @@ export interface OgArtworkSet {
       | 'event'
       | 'tag'
       | 'diary-entry'
-      | 'project-stage'
+      | 'project-section'
       | 'author',
     hue: number,
   ) => OgPicture;
@@ -306,8 +306,7 @@ export function ogFixtures(art: OgArtworkSet): OgFixture[] {
     { icon: 'star', label: 'В витрине' },
   ];
   const projectMeta = [
-    { icon: 'calendar', text: '2023 — 2026 · 7 этапов' },
-    { icon: 'file-tray-stack', text: '12 разделов' },
+    { icon: 'calendar', text: '2023 — 2026 · 12 разделов' },
     { icon: 'event', text: '48 событий' },
     { icon: 'thought', text: '130 записей' },
   ];
@@ -542,14 +541,14 @@ export function ogFixtures(art: OgArtworkSet): OgFixture[] {
       ),
     },
     {
-      name: 'stage with a photo',
+      name: 'dated section with a photo',
       content: content(
-        'stage',
-        'stage-photo',
+        'section',
+        'section-photo',
         'Реставрация фонаря',
         { hue: 355, chroma: 0.14 },
         {
-          chips: [{ icon: 'calendar', label: 'Этап 3 из 7' }],
+          chips: [{ icon: 'project-section', label: 'Раздел 3 из 7' }],
           parent: { title: 'Атлас северных маяков', picture: art.logo },
           summary: 'Разобрали фонарь, отмыли призмы и заново собрали механизм.',
           meta: [{ icon: 'calendar', text: 'май — август 2025' }],
@@ -565,7 +564,7 @@ export function ogFixtures(art: OgArtworkSet): OgFixture[] {
         'Карта маршрута',
         { hue: 45, chroma: 0.16 },
         {
-          chips: [{ icon: 'file-tray-stack', label: 'Раздел' }],
+          chips: [{ icon: 'project-section', label: 'Раздел' }],
           parent: { title: 'Атлас северных маяков', picture: art.logo },
           summary: 'Где мы шли, где ночевали и где ждали погоду.',
           meta: [{ icon: 'history', text: 'обновлено 2 сентября 2026' }],
@@ -581,14 +580,14 @@ export function ogFixtures(art: OgArtworkSet): OgFixture[] {
         'Как устроена линза Френеля',
         { hue: 170, chroma: 0.1 },
         {
-          chips: [{ icon: 'file-tray-stack', label: 'Раздел' }],
+          chips: [{ icon: 'project-section', label: 'Раздел' }],
           parent: {
             title: 'Мастерская линз',
             picture: art.generated('project', 45),
           },
           summary: 'Кольца, призмы и почему маяк видно за двадцать миль.',
           meta: [{ icon: 'history', text: 'обновлено 2 сентября 2026' }],
-          picture: art.generated('project-stage', 170),
+          picture: art.generated('project-section', 170),
         },
       ),
     },

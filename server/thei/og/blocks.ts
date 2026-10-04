@@ -288,7 +288,7 @@ export async function signature(
   );
 }
 
-/** The line naming what a stage or a section belongs to. */
+/** The line naming what a section belongs to. */
 export async function parentLine(
   parent: NonNullable<OgCardContent['parent']>,
   palette: OgPalette,

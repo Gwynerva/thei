@@ -29,9 +29,8 @@ export default defineEventHandler(async (event) => {
       schema.content,
       schema.contentHistory,
       schema.pages,
-      schema.projectStages,
       schema.projectContentSections,
-      schema.stagePeriods,
+      schema.periods,
       schema.projects,
       schema.events,
       // A day holds one entry: one left from an earlier run takes the day a

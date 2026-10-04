@@ -18,8 +18,6 @@ import type {
   PublicProjectSectionResponse,
   PublicProjectResponse,
   PublicEntityReference,
-  PublicProjectStage,
-  PublicProjectStageResponse,
   PublicDiaryResponse,
   PublicTagListItem,
   PublicTagSummary,
@@ -50,7 +48,7 @@ import type {
   PublicContentOutputData,
 } from '#layers/thei/shared/content';
 import {
-  buildProjectChildUrl,
+  buildProjectSectionUrl,
   buildProjectUrl,
   publicIdFromProjectUrlPart,
 } from '#layers/thei/shared/project-url';
@@ -66,8 +64,7 @@ import {
   buildPublicPageMedia,
 } from '../assets/urls';
 import { resolveEntityIconMedia } from '../media/generated-icon';
-import { getProjectContentSections } from '../projects/content-sections';
-import { getProjectStages } from '../projects/stages';
+import { getProjectSections } from '../projects/content-sections';
 import { getEventPeriods } from '../events/periods';
 import {
   buildPublicRelatedLinks,
@@ -341,12 +338,11 @@ export async function buildPublicPage(
 }
 
 /**
- * A project at a glance, as a viewer may see it: its pictures, the stages and
- * sections they may open, its showcase pictures, tags, relations and current
- * status.
+ * A project at a glance, as a viewer may see it: its pictures, the sections
+ * they may open, its showcase pictures, tags, relations and current status.
  *
  * The page is built on it, and so is the project's Open Graph card, so a card
- * never counts a stage or shows a picture its page would not.
+ * never counts a section or shows a picture its page would not.
  */
 export async function buildPublicProjectHead(
   project: ProjectRow,
@@ -359,10 +355,9 @@ export async function buildPublicProjectHead(
   );
   const icon = usages.find((usage) => usage.role === 'icon');
   const banner = usages.find((usage) => usage.role === 'banner');
-  const [rawStages, rawSections, rawShowcase, tags, relations, status] =
-    await Promise.all([
-      getProjectStages(project.projectUuid),
-      getProjectContentSections(project.projectUuid),
+  const [rawSections, rawShowcase, tags, relations, status] = await Promise.all(
+    [
+      getProjectSections(project.projectUuid),
       THEI_SERVER.assets.usages.findShowcase(project.projectUuid),
       listTagsForContainer('project', project.projectUuid),
       resolvePublicRelated(
@@ -375,7 +370,8 @@ export async function buildPublicProjectHead(
         { type: 'project', id: project.projectUuid },
         viewer.isAdmin,
       ),
-    ]);
+    ],
+  );
   return {
     own,
     usages,
@@ -389,7 +385,6 @@ export async function buildPublicProjectHead(
     bannerMedia: banner
       ? await buildPublicProjectMedia(project, banner.asset, 'banner')
       : undefined,
-    stages: rawStages.filter((stage) => own || !stage.isPrivate),
     sections: rawSections.filter((section) => own || !section.isPrivate),
     /** Pictures and videos; a private one is the page's to present. */
     showcase: rawShowcase.filter(
@@ -403,8 +398,8 @@ export async function buildPublicProjectHead(
 }
 
 /**
- * A project's page. The project's own parts — stages, sections, showcase,
- * files, links, private sections — open with its share link; everything it
+ * A project's page. The project's own parts — sections, showcase, files,
+ * links, private parts of its texts — open with its share link; everything it
  * points to is judged for the viewer as they are, and the owner's notes stay
  * the owner's.
  */
@@ -426,13 +421,7 @@ export async function buildPublicProject(
     ),
     getExternalLinkList({ type: 'project', id: project.projectUuid }),
   ]);
-  const {
-    usages,
-    stages: visibleStages,
-    sections: visibleSections,
-    relations,
-    status,
-  } = head;
+  const { usages, sections: visibleSections, relations, status } = head;
   const showcase = await Promise.all(
     head.showcase.map(async ({ asset, meta }) => {
       if (!own && usageIsPrivate(meta))
@@ -464,21 +453,10 @@ export async function buildPublicProject(
           ),
     ),
   );
-  const [unsortedStageItems, sectionItems] = await Promise.all([
-    Promise.all(
-      visibleStages.map((stage) =>
-        buildPublicProjectStageSummary(project, stage, own),
-      ),
+  const sectionItems = await Promise.all(
+    visibleSections.map((section) =>
+      buildPublicProjectSectionSummary(project, section, own),
     ),
-    Promise.all(
-      visibleSections.map((section) =>
-        buildPublicProjectSectionSummary(project, section, own),
-      ),
-    ),
-  ]);
-  const stageItems = sortPublicTimelineItemsNewestFirst(
-    unsortedStageItems,
-    (stage) => stage.period,
   );
   const manualReferences = buildPublicManualReferenceGroup(
     rawLinks,
@@ -500,8 +478,15 @@ export async function buildPublicProject(
     iconMedia: head.iconMedia,
     bannerMedia: head.bannerMedia,
     description,
-    stages: stageItems,
-    sections: sectionItems,
+    // The owner's order for the sections about a topic, then the dated ones
+    // as a chronology reads them, newest first.
+    sections: [
+      ...sectionItems.filter((section) => !section.period),
+      ...sortPublicTimelineItemsNewestFirst(
+        sectionItems.filter((section) => section.period),
+        (section) => section.period!,
+      ),
+    ],
     showcase,
     files,
     tags: head.tags,
@@ -524,44 +509,20 @@ export async function buildPublicProject(
   };
 }
 
-export async function buildPublicProjectStageSummary(
-  project: Pick<ProjectRow, 'humanReadableSlug' | 'publicId'>,
-  stage: Awaited<ReturnType<typeof getProjectStages>>[number],
-  includePrivate = false,
-): Promise<PublicProjectStage> {
-  const period = coverDatedPeriods(stage.periods);
-  return {
-    title: stage.title,
-    summary: stage.summary,
-    date: period.endDate,
-    period,
-    periods: stage.periods,
-    media: await buildPublicEntityPreviewMedia(
-      'project-stage',
-      stage.stageUuid,
-      'project-stage-body',
-      { type: 'project', ...project },
-      includePrivate,
-    ),
-    href: buildProjectChildUrl(
-      project.humanReadableSlug,
-      project.publicId,
-      'stages',
-      stage.humanReadableSlug,
-      stage.publicId,
-    ),
-  };
-}
-
 export async function buildPublicProjectSectionSummary(
   project: Pick<ProjectRow, 'humanReadableSlug' | 'publicId'>,
-  section: Awaited<ReturnType<typeof getProjectContentSections>>[number],
+  section: Awaited<ReturnType<typeof getProjectSections>>[number],
   includePrivate = false,
 ): Promise<PublicProjectSection> {
+  const period = section.periods.length
+    ? coverDatedPeriods(section.periods)
+    : undefined;
   return {
     title: section.title,
     summary: section.summary,
-    date: utcDayOf(section.createdAt),
+    date: period?.endDate ?? utcDayOf(section.createdAt),
+    ...(period ? { period } : {}),
+    periods: section.periods,
     media: await buildPublicEntityPreviewMedia(
       'project-section',
       section.sectionUuid,
@@ -569,10 +530,9 @@ export async function buildPublicProjectSectionSummary(
       { type: 'project', ...project },
       includePrivate,
     ),
-    href: buildProjectChildUrl(
+    href: buildProjectSectionUrl(
       project.humanReadableSlug,
       project.publicId,
-      'sections',
       section.humanReadableSlug,
       section.publicId,
     ),
@@ -588,42 +548,9 @@ export async function buildPublicProjectChildParent(project: ProjectRow) {
   };
 }
 
-export async function buildPublicProjectStage(
-  project: ProjectRow,
-  stage: Awaited<ReturnType<typeof getProjectStages>>[number],
-  viewer: PublicViewer,
-): Promise<PublicProjectStageResponse> {
-  const own = opensPrivate(viewer, 'project', project.projectUuid);
-  const [summary, content, parent] = await Promise.all([
-    buildPublicProjectStageSummary(project, stage, own),
-    buildPublicContentData(
-      'project-stage',
-      stage.stageUuid,
-      'project-stage-body',
-      { type: 'project', ...project },
-      own,
-      viewer,
-    ),
-    buildPublicProjectChildParent(project),
-  ]);
-  return {
-    ...summary,
-    humanReadableSlug: stage.humanReadableSlug,
-    publicId: stage.publicId,
-    chronology: buildPublicEntityChronology(stage),
-    content,
-    project: parent,
-    references: await buildPublicReferences(
-      emptyPublicReferenceGroup(),
-      await buildPublicContentReferenceGroup(content, viewer),
-      viewer,
-    ),
-  };
-}
-
 export async function buildPublicProjectSection(
   project: ProjectRow,
-  section: Awaited<ReturnType<typeof getProjectContentSections>>[number],
+  section: Awaited<ReturnType<typeof getProjectSections>>[number],
   viewer: PublicViewer,
 ): Promise<PublicProjectSectionResponse> {
   const own = opensPrivate(viewer, 'project', project.projectUuid);

@@ -2,7 +2,7 @@ import type { ProjectEventAccessLevel } from '../access-level';
 import type { PublicContentOutputData } from '../content';
 import type { ContentEntityType } from '../content-link';
 import type { DatedPeriod } from '../date-precision';
-import type { StagePeriod } from '../stage-period';
+import type { Period } from '../period';
 import type {
   ProjectActionBackgroundMode,
   ProjectActionBackgroundRepeat,
@@ -181,35 +181,34 @@ export type PublicAction = {
   backgroundRepeat: ProjectActionBackgroundRepeat;
 };
 
-export type PublicProjectStage = {
-  title: string;
-  summary: string;
-  href: string;
-  date: string;
-  period: DatedPeriod;
-  periods: StagePeriod[];
-  media?: MediaDescriptor;
-};
-
+/**
+ * A part of a project as its pages list it. A dated section carries its
+ * periods and the stretch they cover, and is dated by the last day of it; an
+ * undated one by the day it was written.
+ */
 export type PublicProjectSection = {
   title: string;
   summary: string;
   href: string;
   date: string;
+  /** The stretch the periods cover; absent for an undated section. */
+  period?: DatedPeriod;
+  /** Empty for an undated section. */
+  periods: Period[];
   media?: MediaDescriptor;
 };
 
-/** A stage, section or diary entry beside the one on the page. */
+/** A section or a diary entry beside the one on the page. */
 export type PublicNeighbour = {
   title: string;
   href: string;
   media?: MediaDescriptor;
   /** The day of a diary entry, shown in place of the title it lacks. */
   date?: string;
-  /** When a stage was, shown under its title. */
+  /** When a dated section was, shown under its title. */
   period?: DatedPeriod;
   /**
-   * What a section is about, or how a diary entry begins, as the viewer may
+   * What an undated section is about, or how a diary entry begins, as the viewer may
    * read it.
    */
   summary?: string;
@@ -217,7 +216,8 @@ export type PublicNeighbour = {
 
 /**
  * The ones just before and just after, in the order a reader goes through
- * them: stages and diary entries by time, sections as the project sorts them.
+ * them: dated sections and diary entries by time, undated sections as the
+ * project sorts them — each section among its own kind.
  * Only what the viewer could open, and only when there is one.
  */
 export type PublicNeighbours = {
@@ -229,18 +229,6 @@ export type PublicProjectChildParent = PublicEntityReference & {
   access: ProjectEventAccessLevel;
   humanReadableSlug: string;
   publicId: string;
-};
-
-export type PublicProjectStageResponse = PublicProjectStage & {
-  humanReadableSlug: string;
-  publicId: string;
-  content?: PublicContentOutputData;
-  /** `updatedAt` only when the stage was edited on a later day. */
-  chronology: { createdAt: string; updatedAt?: string };
-  project: PublicProjectChildParent;
-  references: PublicReferences;
-  /** Set by the page's own route; the Markdown representation has none. */
-  neighbours?: PublicNeighbours;
 };
 
 export type PublicProjectSectionResponse = PublicProjectSection & {
@@ -272,7 +260,7 @@ export type PublicProjectResponse = {
   iconMedia: MediaDescriptor;
   bannerMedia?: MediaDescriptor;
   description?: PublicContentOutputData;
-  stages: PublicProjectStage[];
+  /** The undated sections in the owner's order, then the dated ones, newest first. */
   sections: PublicProjectSection[];
   showcase: (PublicAssetDescriptor | PublicSecretReference)[];
   files: (PublicFile | PublicSecretReference)[];
@@ -302,7 +290,7 @@ export type PublicEventResponseFull = {
   access: ProjectEventAccessLevel;
   humanReadableSlug: string;
   publicId: string;
-  periods: StagePeriod[];
+  periods: Period[];
   /** `updatedAt` only when the event was edited on a later day. */
   chronology: { createdAt: string; updatedAt?: string };
   /** What stands for the event in a card: its first picture, or its icon. */

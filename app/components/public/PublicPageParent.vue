@@ -2,7 +2,7 @@
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 
 /**
- * "Project stage — <project>", as a line of text above a title.
+ * "Project section — <project>", as a line of text above a title.
  *
  * Deliberately not a button and not a "back" arrow: the page is part of the
  * project, not a step away from it. The faint bold label says what the page

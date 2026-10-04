@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { ContentAnalysis } from '#layers/thei/shared/content';
-import type { StagePeriod } from '#layers/thei/shared/stage-period';
+import type { Period } from '#layers/thei/shared/period';
 import ContentStats from '#layers/thei/app/components/content/ContentStats.vue';
 import ContentMediaEdge from '#layers/thei/app/components/content/ContentMediaEdge.vue';
 import DateRangeChip from '#layers/thei/app/components/DateRangeChip.vue';
@@ -8,7 +8,7 @@ import DateRangeChip from '#layers/thei/app/components/DateRangeChip.vue';
 defineProps<{
   title: string;
   summary: string;
-  periods: StagePeriod[];
+  periods: Period[];
   analysis: ContentAnalysis;
   isPrivate: boolean;
   privateLabel: string;

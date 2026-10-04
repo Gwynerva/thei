@@ -23,7 +23,7 @@ import {
   type LifeWindowResponse,
 } from '#layers/thei/shared/life';
 import {
-  buildProjectChildUrl,
+  buildProjectSectionUrl,
   buildProjectUrl,
 } from '#layers/thei/shared/project-url';
 import { hash } from '#layers/thei/shared/utils/hash';
@@ -86,12 +86,11 @@ type RawPoint = {
   /**
    * Every project this point belongs to, for scoping.
    *
-   * A stage belongs to one project; an event may relate to several; a status
+   * A section belongs to one project; an event may relate to several; a status
    * belongs to whichever project owns it. Kept separate from `project`, which
    * is the project shown on the card.
    */
   projectUuids?: string[];
-  stage?: any;
   section?: any;
   diaryEntry?: any;
   profileRecord?: {
@@ -293,19 +292,21 @@ export async function getLifeRewind(options: {
 
 function buildRawLifePoints(): RawPoint[] {
   const { db, schema } = THEI_SERVER.useDb();
-  const [events, projects, pages, stages, sections, periods] = [
+  const [events, projects, pages, sections, periods] = [
     db.select().from(schema.events).all(),
     db.select().from(schema.projects).all(),
     db.select().from(schema.pages).all(),
-    db.select().from(schema.projectStages).all(),
     db.select().from(schema.projectContentSections).all(),
-    db.select().from(schema.stagePeriods).all(),
+    db.select().from(schema.periods).all(),
   ];
   const projectById = new Map(
     projects.map((project) => [project.projectUuid, project]),
   );
   const eventById = new Map(events.map((event) => [event.eventUuid, event]));
-  const stageById = new Map(stages.map((stage) => [stage.stageUuid, stage]));
+  const sectionById = new Map(
+    sections.map((section) => [section.sectionUuid, section]),
+  );
+  const datedSections = new Set<string>();
   // An event belongs to a project's chronology through its relations, which is
   // the same list the project page already shows as related events.
   const projectsByEvent = new Map<string, string[]>();
@@ -331,8 +332,8 @@ function buildRawLifePoints(): RawPoint[] {
   const raw: RawPoint[] = [];
 
   for (const period of periods) {
-    if (period.stageType === 'event-stage') {
-      const event = eventById.get(period.stageUuid);
+    if (period.ownerType === 'event') {
+      const event = eventById.get(period.ownerId);
       if (!event) continue;
       raw.push(
         boundaryPoint(
@@ -365,37 +366,40 @@ function buildRawLifePoints(): RawPoint[] {
         ),
       );
     } else {
-      const stage = stageById.get(period.stageUuid);
-      const project = stage ? projectById.get(stage.projectUuid) : undefined;
-      if (!stage || !project) continue;
+      const section = sectionById.get(period.ownerId);
+      const project = section
+        ? projectById.get(section.projectUuid)
+        : undefined;
+      if (!section || !project) continue;
+      datedSections.add(section.sectionUuid);
       raw.push(
         boundaryPoint(
-          'project-stage',
-          stage.stageUuid,
+          'project-section',
+          section.sectionUuid,
           period.startDate,
           'started',
           project.access,
           period.sortOrder,
           {
-            stage,
+            section,
             project,
-            isPrivate: stage.isPrivate,
+            isPrivate: section.isPrivate,
             projectUuids: [project.projectUuid],
             ...periodPrecision(period),
             ...periodLabel(period),
           },
         ),
         boundaryPoint(
-          'project-stage',
-          stage.stageUuid,
+          'project-section',
+          section.sectionUuid,
           period.endDate,
           'ended',
           project.access,
           period.sortOrder,
           {
-            stage,
+            section,
             project,
-            isPrivate: stage.isPrivate,
+            isPrivate: section.isPrivate,
             projectUuids: [project.projectUuid],
             ...periodPrecision(period),
             ...periodLabel(period),
@@ -428,7 +432,10 @@ function buildRawLifePoints(): RawPoint[] {
       page,
     });
   }
+  // A section without dates lands on the day it was written; a dated one is
+  // on the timeline by its periods instead.
   for (const section of sections) {
+    if (datedSections.has(section.sectionUuid)) continue;
     const project = projectById.get(section.projectUuid);
     if (!project) continue;
     raw.push({
@@ -826,40 +833,6 @@ async function hydrateLifePoint(
       tags: summary.tags,
     };
   }
-  if (point.entityKind === 'project-stage') {
-    const stage = point.stage!;
-    const [media, projectReference] = await Promise.all([
-      buildPublicEntityPreviewMedia(
-        'project-stage',
-        stage.stageUuid,
-        'project-stage-body',
-        { type: 'project', ...project },
-        opens,
-      ),
-      buildPublicEntityReference(project),
-    ]);
-    return {
-      key,
-      date: point.date,
-      ...(point.period ? { period: point.period } : {}),
-      ...(point.precision ? { precision: point.precision } : {}),
-      ...(point.periodLabel ? { periodLabel: point.periodLabel } : {}),
-      entityKind: point.entityKind,
-      transition: point.transition,
-      visibility: 'visible',
-      title: stage.title,
-      summary: stage.summary,
-      href: buildProjectChildUrl(
-        project.humanReadableSlug,
-        project.publicId,
-        'stages',
-        stage.humanReadableSlug,
-        stage.publicId,
-      ),
-      media,
-      project: projectReference,
-    };
-  }
   const section = point.section!;
   const [media, projectReference] = await Promise.all([
     buildPublicEntityPreviewMedia(
@@ -875,15 +848,16 @@ async function hydrateLifePoint(
     key,
     date: point.date,
     ...(point.period ? { period: point.period } : {}),
+    ...(point.precision ? { precision: point.precision } : {}),
+    ...(point.periodLabel ? { periodLabel: point.periodLabel } : {}),
     entityKind: point.entityKind,
     transition: point.transition,
     visibility: 'visible',
     title: section.title,
     summary: section.summary,
-    href: buildProjectChildUrl(
+    href: buildProjectSectionUrl(
       project.humanReadableSlug,
       project.publicId,
-      'sections',
       section.humanReadableSlug,
       section.publicId,
     ),
@@ -896,7 +870,6 @@ function secretPointUuid(point: RawPoint): string {
   if (point.entityKind === 'event') return point.event!.eventUuid;
   if (point.entityKind === 'diary-entry') return point.diaryEntry!.diaryUuid;
   if (point.entityKind === 'page') return point.page!.pageUuid;
-  if (point.entityKind === 'project-stage') return point.stage!.stageUuid;
   if (point.entityKind === 'project-section') return point.section!.sectionUuid;
   return point.project!.projectUuid;
 }
@@ -920,7 +893,7 @@ export { buildLifeUrl };
  * One year of the timeline as per-day counts, for the activity grid.
  *
  * Counts are of timeline points, the same things the feed shows, so a day with
- * two events and a stage that ended counts three. What the visitor may not see
+ * two events and a section that ended counts three. What the visitor may not see
  * is counted as `secret` — the feed already admits that something happened on
  * that day without saying what.
  */

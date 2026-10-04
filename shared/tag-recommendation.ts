@@ -13,7 +13,7 @@ import {
 
 /**
  * How much of an entity's text a recommendation reads. A project with many
- * stages and sections easily runs past a few dozen pages; the beginning of it
+ * sections easily runs past a few dozen pages; the beginning of it
  * says enough about what it is, and the rest is cut rather than refused.
  */
 export const TAG_RECOMMENDATION_TEXT_MAX_LENGTH = 100_000;

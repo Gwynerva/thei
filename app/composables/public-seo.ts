@@ -186,7 +186,7 @@ export function publicSeoTemporalCoverage(period: {
  *
  * - the home page is the owner's `ProfilePage`, about a `Person`;
  * - a project is a `CreativeWork`, since a project may be anything at all;
- * - a stage, a section, an event and a page are an `Article` — something the
+ * - a section, an event and a page are an `Article` — something the
  *   owner wrote — and a diary entry is a `BlogPosting`;
  * - a list of any of them is a `CollectionPage` holding an `ItemList`.
  *

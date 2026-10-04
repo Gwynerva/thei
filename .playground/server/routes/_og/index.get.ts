@@ -30,18 +30,6 @@ export default defineEventHandler(async (event) => {
     })),
     ...db
       .select()
-      .from(schema.projectStages)
-      .all()
-      .filter(
-        (stage) => !stage.isPrivate && openProjects.has(stage.projectUuid),
-      )
-      .map((stage) => ({
-        kind: 'stage',
-        id: stage.publicId,
-        name: stage.title,
-      })),
-    ...db
-      .select()
       .from(schema.projectContentSections)
       .all()
       .filter(

@@ -129,30 +129,31 @@ function project(
     .run();
 }
 
-function stage(
+function datedSection(
   uuid: string,
   projectUuid: string,
   period: [string, string],
   isPrivate = false,
 ) {
   const { db, schema } = context;
-  db.insert(schema.projectStages)
+  db.insert(schema.projectContentSections)
     .values({
-      stageUuid: uuid,
+      sectionUuid: uuid,
       projectUuid,
       title: `${uuid} title`,
       summary: '',
       humanReadableSlug: uuid,
       publicId: uuid,
       isPrivate,
+      sortOrder: 1,
       createdAt: 1,
       updatedAt: 1,
     })
     .run();
-  db.insert(schema.stagePeriods)
+  db.insert(schema.periods)
     .values({
-      stageType: 'project-stage',
-      stageUuid: uuid,
+      ownerType: 'project-section',
+      ownerId: uuid,
       sortOrder: 0,
       startDate: period[0],
       endDate: period[1],
@@ -196,10 +197,10 @@ function event(
     })
     .run();
   if (period)
-    db.insert(schema.stagePeriods)
+    db.insert(schema.periods)
       .values({
-        stageType: 'event-stage',
-        stageUuid: uuid,
+        ownerType: 'event',
+        ownerId: uuid,
         sortOrder: 0,
         startDate: period[0],
         endDate: period[1],
@@ -400,9 +401,9 @@ describe('Open Graph content', () => {
 
   it('counts a project the way its page does', async () => {
     project('p', Public, { showcase: true });
-    stage('s1', 'p', ['2023-03-01', '2023-05-01']);
-    stage('s2', 'p', ['2025-01-01', '2026-02-01']);
-    stage('hidden', 'p', ['2019-01-01', '2019-02-01'], true);
+    datedSection('s1', 'p', ['2023-03-01', '2023-05-01']);
+    datedSection('s2', 'p', ['2025-01-01', '2026-02-01']);
+    datedSection('hidden', 'p', ['2019-01-01', '2019-02-01'], true);
     section('open', 'p');
     section('closed', 'p', true);
     event('e1', Public);
@@ -423,9 +424,9 @@ describe('Open Graph content', () => {
     expect(content.headline).toBe('p title');
     expect(content.summary).toBe('p summary');
     const meta = content.meta.map((item) => item.text);
-    // The private stage and section are neither dated nor counted.
-    expect(meta[0]).toBe('2023 — 2026 · 2 stages');
-    expect(meta).toContain('1 section');
+    // The private sections are neither dated nor counted; the span is the
+    // dated ones', the count every section a stranger may open.
+    expect(meta[0]).toBe('2023 — 2026 · 3 sections');
     // A private event is a secret the related tab names and counts; a
     // private diary entry is simply absent there.
     expect(meta).toContain('2 events');
@@ -472,19 +473,20 @@ describe('Open Graph content', () => {
     expect(plain.banner).toBeUndefined();
   });
 
-  it('draws a stage only when both it and its project are open', async () => {
+  it('draws a dated section only when both it and its project are open', async () => {
     project('p', Public);
     project('closed', Private);
-    stage('s1', 'p', ['2020-01-01', '2020-02-01']);
-    stage('s2', 'p', ['2021-05-01', '2021-08-31']);
-    stage('s3', 'p', ['2022-01-01', '2022-02-01'], true);
-    stage('inside', 'closed', ['2020-01-01', '2020-02-01']);
-    expect(await resolve({ kind: 'stage', id: 's3' })).toBeUndefined();
-    expect(await resolve({ kind: 'stage', id: 'inside' })).toBeUndefined();
+    datedSection('s1', 'p', ['2020-01-01', '2020-02-01']);
+    datedSection('s2', 'p', ['2021-05-01', '2021-08-31']);
+    datedSection('s3', 'p', ['2022-01-01', '2022-02-01'], true);
+    datedSection('inside', 'closed', ['2020-01-01', '2020-02-01']);
+    section('topic', 'p');
+    expect(await resolve({ kind: 'section', id: 's3' })).toBeUndefined();
+    expect(await resolve({ kind: 'section', id: 'inside' })).toBeUndefined();
 
-    const content = (await resolve({ kind: 'stage', id: 's2' }))!;
-    // Its place among the stages a stranger sees.
-    expect(content.chips[0]!.label).toBe('Stage 2 of 2');
+    const content = (await resolve({ kind: 'section', id: 's2' }))!;
+    // Its place among the dated sections a stranger sees.
+    expect(content.chips[0]!.label).toBe('Section 2 of 2');
     expect(content.parent?.title).toBe('p title');
     expect(content.meta[0]!.text).toBe('May — August 2021');
     expect(content.date).toBeUndefined();
@@ -492,9 +494,9 @@ describe('Open Graph content', () => {
 
   it('shows the first picture of a public body a card can draw', async () => {
     project('p', Public);
-    stage('photo', 'p', ['2020-01-01', '2020-02-01']);
-    stage('still', 'p', ['2020-03-01', '2020-04-01']);
-    stage('bare', 'p', ['2020-05-01', '2020-06-01']);
+    datedSection('photo', 'p', ['2020-01-01', '2020-02-01']);
+    datedSection('still', 'p', ['2020-03-01', '2020-04-01']);
+    datedSection('bare', 'p', ['2020-05-01', '2020-06-01']);
     section('past-private', 'p');
     section('past-video', 'p');
     event('e', Public);
@@ -503,12 +505,14 @@ describe('Open Graph content', () => {
     asset('secret', 'image');
     asset('film', 'video', 'film-still');
     asset('raw-film', 'video');
-    body('project-stage', 'photo', 'project-stage-body', [
+    body('project-section', 'photo', 'project-section-body', [
       { asset: 'image-1' },
     ]);
-    body('project-stage', 'still', 'project-stage-body', [{ asset: 'film' }]);
+    body('project-section', 'still', 'project-section-body', [
+      { asset: 'film' },
+    ]);
     // Media only in a private section: nothing a stranger may see.
-    body('project-stage', 'bare', 'project-stage-body', [
+    body('project-section', 'bare', 'project-section-body', [
       { asset: 'secret', hidden: true },
     ]);
     body('project-section', 'past-private', 'project-section-body', [
@@ -522,19 +526,19 @@ describe('Open Graph content', () => {
     ]);
     body('event', 'e', 'event-body', [{ asset: 'image-2' }]);
 
-    const pictureOf = async (kind: 'stage' | 'section' | 'event', id: string) =>
+    const pictureOf = async (kind: 'section' | 'event', id: string) =>
       (await resolve({ kind, id }))!.picture;
-    expect(await pictureOf('stage', 'photo')).toMatchObject({
+    expect(await pictureOf('section', 'photo')).toMatchObject({
       type: 'file',
       key: 'image-1-hash.webp',
     });
-    expect(await pictureOf('stage', 'still')).toMatchObject({
+    expect(await pictureOf('section', 'still')).toMatchObject({
       type: 'file',
       key: 'film-still-hash.webp',
     });
-    expect(await pictureOf('stage', 'bare')).toMatchObject({
+    expect(await pictureOf('section', 'bare')).toMatchObject({
       type: 'generated',
-      kind: 'project-stage',
+      kind: 'project-section',
     });
     expect(await pictureOf('section', 'past-private')).toMatchObject({
       type: 'file',

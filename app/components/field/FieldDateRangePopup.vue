@@ -9,9 +9,9 @@ import {
   type DatePrecision,
 } from '#layers/thei/shared/date-precision';
 import {
-  STAGE_PERIOD_LABEL_MAX_LENGTH,
-  type StagePeriod,
-} from '#layers/thei/shared/stage-period';
+  PERIOD_LABEL_MAX_LENGTH,
+  type Period,
+} from '#layers/thei/shared/period';
 import { formatPublicDateRange } from '#layers/thei/shared/public-date-format';
 import FloatingPopup from '#layers/thei/app/components/FloatingPopup.vue';
 import FieldDateRangePicker from '#layers/thei/app/components/field/FieldDateRangePicker.vue';
@@ -42,7 +42,7 @@ const props = withDefaults(
 const emit = defineEmits<{ confirm: [] }>();
 
 const open = defineModel<boolean>('open', { required: true });
-const model = defineModel<StagePeriod | undefined>();
+const model = defineModel<Period | undefined>();
 
 /**
  * The dates first, then the rest of the period in the same popup: its name,
@@ -204,7 +204,7 @@ function confirmFromLabel(event: KeyboardEvent) {
           v-model="labelModel"
           class="text-sm"
           autocomplete="off"
-          :maxlength="STAGE_PERIOD_LABEL_MAX_LENGTH"
+          :maxlength="PERIOD_LABEL_MAX_LENGTH"
           :aria-label="phrase.period_label"
           :placeholder="phrase.period_label_placeholder"
           @element="labelInput = $event"

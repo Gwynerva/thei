@@ -58,7 +58,7 @@ describe('Life periods', () => {
     expect(parseLifeFilter('nonsense')).toBeUndefined();
     expect(
       parseLifeFilter(
-        'event,project,page,project-stage,project-section,profile-avatar,profile-status,diary-entry',
+        'event,project,page,project-section,profile-avatar,profile-status,diary-entry',
       ),
     ).toBeUndefined();
     expect(serializeLifeFilter(undefined)).toBeUndefined();
@@ -70,7 +70,7 @@ describe('Life periods', () => {
     expect(parseLifeFilter('event,profile-avatar', scope)).toEqual(['event']);
     expect(
       parseLifeFilter(
-        'event,project-stage,project-section,profile-status,diary-entry',
+        'event,project-section,profile-status,diary-entry',
         scope,
       ),
     ).toBeUndefined();
@@ -140,23 +140,23 @@ describe('Life point construction', () => {
     ).toHaveLength(2);
   });
 
-  it('merges event and project-stage periods independently', () => {
+  it('merges event and section periods independently', () => {
     const merged = mergeLifeBoundaryPoints([
       point('event:a:period:0', '2026-08-21', 'started'),
       point('event:a:period:0', '2026-08-22', 'ended'),
       point(
-        'project-stage:a:period:0',
+        'project-section:a:period:0',
         '2026-08-21',
         'started',
         undefined,
-        'project-stage',
+        'project-section',
       ),
       point(
-        'project-stage:a:period:0',
+        'project-section:a:period:0',
         '2026-08-22',
         'ended',
         undefined,
-        'project-stage',
+        'project-section',
       ),
     ]);
     expect(merged).toHaveLength(2);
@@ -242,11 +242,11 @@ describe('Life point construction', () => {
       },
       {
         ...point(
-          'project-stage:s',
+          'project-section:s',
           '2026-08-22',
           'started',
           0,
-          'project-stage',
+          'project-section',
         ),
         projectUuids: ['a'],
       },
@@ -257,27 +257,33 @@ describe('Life point construction', () => {
       },
       {
         ...point(
-          'project-stage:o',
+          'project-section:o',
           '2026-08-22',
           'started',
           0,
-          'project-stage',
+          'project-section',
         ),
         projectUuids: ['b'],
       },
       point('event:z', '2026-08-22', 'started'),
       {
-        ...point('project-stage:y', '2026-08-21', 'ended', 0, 'project-stage'),
+        ...point(
+          'project-section:y',
+          '2026-08-21',
+          'ended',
+          0,
+          'project-section',
+        ),
         projectUuids: ['a'],
       },
     ]);
     expect(ordered.map((item) => item.identity)).toEqual([
       'project-section:x',
-      'project-stage:s',
+      'project-section:s',
       'project:a',
       'event:z',
-      'project-stage:o',
-      'project-stage:y',
+      'project-section:o',
+      'project-section:y',
     ]);
   });
 
@@ -294,13 +300,13 @@ describe('Life point construction', () => {
       projectUuids,
     });
     const ordered = sortLifePoints([
-      part('project-stage:end', 'ended', 'project-stage', ['a']),
+      part('project-section:end', 'ended', 'project-section', ['a']),
       part('event:e', 'ended', 'event', ['a']),
       part('diary-entry:d', 'created', 'diary-entry', ['a']),
-      part('project-stage:other', 'occurred', 'project-stage', ['b']),
+      part('project-section:other', 'occurred', 'project-section', ['b']),
       part('profile-status:p', 'created', 'profile-status', ['a'], 2),
       part('profile-status:me', 'created', 'profile-status', [], 3),
-      part('project-stage:start', 'started', 'project-stage', ['a']),
+      part('project-section:start', 'started', 'project-section', ['a']),
       part('event:f', 'started', 'event', []),
     ]);
     expect(ordered.map((item) => item.identity)).toEqual([
@@ -309,11 +315,11 @@ describe('Life point construction', () => {
       // An event related to project a is no part of it.
       'event:e',
       // Project a stands where its first card would, all of it at once.
-      'project-stage:end',
+      'project-section:end',
       'profile-status:p',
-      'project-stage:start',
+      'project-section:start',
       'profile-status:me',
-      'project-stage:other',
+      'project-section:other',
       'event:f',
     ]);
   });

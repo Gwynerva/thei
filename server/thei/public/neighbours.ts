@@ -4,19 +4,15 @@ import type {
 } from '#layers/thei/shared/api/public';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { diaryContentExcerpt } from '#layers/thei/shared/diary-text';
-import type { getProjectStages } from '../projects/stages';
-import type { getProjectContentSections } from '../projects/content-sections';
+import { isDatedSection } from '#layers/thei/shared/project-content-item';
+import type { getProjectSections } from '../projects/content-sections';
 import { buildPublicEntityPreviewMedia } from './content';
-import {
-  buildPublicProjectSectionSummary,
-  buildPublicProjectStageSummary,
-} from './entities';
+import { buildPublicProjectSectionSummary } from './entities';
 
 type ProjectRow = NonNullable<
   Awaited<ReturnType<typeof THEI_SERVER.projects.findByUuid>>
 >;
-type Stage = Awaited<ReturnType<typeof getProjectStages>>[number];
-type Section = Awaited<ReturnType<typeof getProjectContentSections>>[number];
+type Section = Awaited<ReturnType<typeof getProjectSections>>[number];
 
 /** The items right before and right after `current` in an ordered list. */
 export function neighboursOf<T>(items: readonly T[], current: T) {
@@ -43,39 +39,22 @@ async function describe<T>(
 }
 
 /**
- * A stage's neighbours in time, among the stages the viewer may open. The
- * list comes from `getProjectStages`, which already orders them by period.
+ * A section's neighbours among the sections of its own kind the viewer may
+ * open: a dated one beside the dated ones in time, each with its stretch; an
+ * undated one beside the undated ones in the project's own order, each with
+ * what it is about. The list comes from `getProjectSections`, which keeps
+ * both orders.
  */
-export async function buildProjectStageNeighbours(
-  project: ProjectRow,
-  stages: Stage[],
-  stage: Stage,
-  isOwner: boolean,
-): Promise<PublicNeighbours> {
-  const visible = stages.filter((item) => isOwner || !item.isPrivate);
-  return await describe(neighboursOf(visible, stage), async (item) => {
-    const summary = await buildPublicProjectStageSummary(
-      project,
-      item,
-      isOwner,
-    );
-    return {
-      title: summary.title,
-      href: summary.href,
-      media: summary.media,
-      period: summary.period,
-    };
-  });
-}
-
-/** A section's neighbours in the project's own order. */
 export async function buildProjectSectionNeighbours(
   project: ProjectRow,
   sections: Section[],
   section: Section,
   isOwner: boolean,
 ): Promise<PublicNeighbours> {
-  const visible = sections.filter((item) => isOwner || !item.isPrivate);
+  const dated = isDatedSection(section);
+  const visible = sections.filter(
+    (item) => (isOwner || !item.isPrivate) && isDatedSection(item) === dated,
+  );
   return await describe(neighboursOf(visible, section), async (item) => {
     const summary = await buildPublicProjectSectionSummary(
       project,
@@ -86,7 +65,11 @@ export async function buildProjectSectionNeighbours(
       title: summary.title,
       href: summary.href,
       media: summary.media,
-      ...(summary.summary ? { summary: summary.summary } : {}),
+      ...(summary.period
+        ? { period: summary.period }
+        : summary.summary
+          ? { summary: summary.summary }
+          : {}),
     };
   });
 }

@@ -18,7 +18,7 @@ export type ContentEntitySearchItem = {
   publicId?: string;
   /** The day of a diary entry, which stands in for its missing title. */
   date?: string;
-  /** The project a stage or a section belongs to. */
+  /** The project a section belongs to. */
   parent?: { title: string; href: string };
   updatedAt: number;
   previewMedia?: MediaDescriptor;

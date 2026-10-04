@@ -140,7 +140,7 @@ function expectFits(
     expect(apart, `${label}: text clear of ${picture.key}`).toBe(true);
   }
 
-  // The picture of a stage, a section or an event keeps to its half.
+  // The picture of a section or an event keeps to its half.
   const art = nodes.find(({ key }) => key === 'art');
   if (card.design.layout === 'media' && art)
     expect(

@@ -54,10 +54,10 @@ export function useSavedForm(
  * five minutes ago whose content has been edited since counts as clean.
  *
  * The search goes all the way down on purpose. A project holds the content of
- * every stage and section inside itself, so a shallow check would either
- * refuse every edit made inside a stage or wave through a stage renamed in
- * passing. Going deep allows the content of any stage to differ, and nothing
- * else — not a title, not a date, not a stage that was not there before.
+ * every section inside itself, so a shallow check would either refuse every
+ * edit made inside a section or wave through a section renamed in passing.
+ * Going deep allows the content of any section to differ, and nothing else —
+ * not a title, not a date, not a section that was not there before.
  */
 export function changedOnlyIn(
   current: unknown,
@@ -78,7 +78,7 @@ export function changedOnlyIn(
 
 /**
  * Keys come out sorted: the comparison is by value, and an object rebuilt
- * elsewhere — a stage coming back from its modal — lists the same fields in
+ * elsewhere — a section coming back from its modal — lists the same fields in
  * its own order, which `JSON.stringify` would otherwise read as a change.
  */
 function withoutFields(value: unknown, fields: readonly string[]): unknown {
@@ -105,7 +105,7 @@ function withoutFields(value: unknown, fields: readonly string[]): unknown {
  * saved rather than a change of their own.
  *
  * Items of a list are matched to their saved counterparts by public ID, so a
- * stage moved up the list is not mistaken for new writing.
+ * section moved up the list is not mistaken for new writing.
  */
 export function stampSavedContent(
   current: unknown,

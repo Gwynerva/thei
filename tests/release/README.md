@@ -47,7 +47,7 @@ Nothing is pushed anywhere and no tag is created in this repository:
 `upgrade`, `backup` and `recovery` work on a site the bench makes itself, in
 `seed.ts`: the last release is installed and filled through its own admin API
 with one of everything a site holds — each kind of entity at each access
-level, stages with several periods, every content block, tags, relations,
+level, sections with several periods, every content block, tags, relations,
 statuses and files of each type in each place a file can go. Its `content/`
 is then copied out once and restored wherever a scenario needs it. Links in
 it point at an address the server refuses to fetch, so it never reaches the

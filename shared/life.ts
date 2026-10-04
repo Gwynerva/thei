@@ -16,7 +16,6 @@ export const LIFE_ENTITY_KINDS = [
   'project',
   'event',
   'diary-entry',
-  'project-stage',
   'project-section',
   'page',
   'profile-status',
@@ -56,7 +55,7 @@ export type VisibleLifePoint = LifePointBase & {
    */
   statusOwner?: StatusOwnerType;
   /**
-   * The owner's name for the period an event's or a stage's point bounds. A
+   * The owner's name for the period an event's or a section's point bounds. A
    * secret point never carries one: what a period was is its content.
    */
   periodLabel?: string;
@@ -127,7 +126,6 @@ export type LifeScopeRef =
 export const PROJECT_LIFE_ENTITY_KINDS = [
   'event',
   'diary-entry',
-  'project-stage',
   'project-section',
   'profile-status',
 ] as const satisfies readonly LifeEntityKind[];
@@ -246,7 +244,6 @@ export const LIFE_ACTIVITY_TOTAL_KINDS = [
   'project',
   'event',
   'diary-entry',
-  'project-stage',
   'project-section',
 ] as const satisfies readonly LifeEntityKind[];
 export type LifeActivityTotalKind = (typeof LIFE_ACTIVITY_TOTAL_KINDS)[number];
@@ -259,7 +256,7 @@ export type LifeActivityResponse = {
   days: Record<string, Partial<Record<LifeActivityKind, number>>>;
   /**
    * How many distinct entities of each kind appeared on the timeline during
-   * the year — a stage that both started and ended in it counts once. Only
+   * the year — a section that both started and ended in it counts once. Only
    * what the visitor may see is counted by kind.
    */
   totals: Partial<Record<LifeActivityTotalKind, number>>;

@@ -5,7 +5,7 @@ import {
   isApproximateDate,
   type DatedPeriod,
 } from '#layers/thei/shared/date-precision';
-import type { StagePeriod } from '#layers/thei/shared/stage-period';
+import type { Period } from '#layers/thei/shared/period';
 import { buildLifeUrl } from '#layers/thei/shared/life';
 import {
   publicTimelineGapBefore,
@@ -21,9 +21,9 @@ import {
 } from '#layers/thei/app/composables/public-date';
 import { titlePopup } from '#layers/thei/app/composables/title-popup-content';
 
-type Period = DateRange | DatedPeriod | StagePeriod;
+type TimelinePeriod = DateRange | DatedPeriod | Period;
 
-const props = defineProps<{ periods: Period[] }>();
+const props = defineProps<{ periods: TimelinePeriod[] }>();
 const orderedPeriods = computed(() =>
   sortPublicTimelineItemsNewestFirst(props.periods, (period) => period),
 );
@@ -42,7 +42,7 @@ function tailAfter(index: number) {
   return publicTimelineHasGap(gapDuration(index + 1)) ? 'dots' : 'line';
 }
 
-function labelOf(period: Period) {
+function labelOf(period: TimelinePeriod) {
   return 'label' in period ? period.label : '';
 }
 
@@ -54,11 +54,11 @@ function formatDate(value: string) {
  * A period the owner is unsure of carries the doubt on both of its ends, since
  * the whole stretch is a guess rather than one of its edges.
  */
-function approximate(period: Period) {
+function approximate(period: TimelinePeriod) {
   return 'precision' in period && isApproximateDate(period.precision);
 }
 
-function approximateClass(period: Period) {
+function approximateClass(period: TimelinePeriod) {
   if (!approximate(period)) return '';
   const tone = datePrecisionTone((period as DatedPeriod).precision);
   return tone === 'alert'
@@ -73,7 +73,7 @@ function approximateClass(period: Period) {
  * doubt still colours them, whatever else they are. A date that is the whole
  * link lights up with it.
  */
-function dateClass(period: Period, link = false) {
+function dateClass(period: TimelinePeriod, link = false) {
   const tone = approximateClass(period);
   if (!labelOf(period)) return ['text-sm leading-5', tone];
   if (tone) return ['text-xs', tone];
@@ -83,7 +83,7 @@ function dateClass(period: Period, link = false) {
   ];
 }
 
-function approximateTitle(period: Period) {
+function approximateTitle(period: TimelinePeriod) {
   if (!approximate(period)) return undefined;
   const { precision, precisionNote } = period as DatedPeriod;
   return titlePopup(

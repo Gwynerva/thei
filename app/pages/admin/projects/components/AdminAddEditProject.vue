@@ -66,8 +66,7 @@ const projectData = ref<ProjectEditData>({
   showcase: false,
   cv: false,
   descriptionContent: null,
-  contentSections: [],
-  stages: [],
+  sections: [],
   relations: [],
   externalLinks: [],
   tags: [],
@@ -174,8 +173,7 @@ if (isEdit.value) {
     showcase: data.showcase,
     cv: data.cv,
     descriptionContent: data.descriptionContent ?? null,
-    contentSections: data.contentSections ?? [],
-    stages: data.stages ?? [],
+    sections: data.sections ?? [],
     iconAssetUuid: data.iconAssetUuid,
     bannerAssetUuid: data.bannerAssetUuid,
     showcaseAssets: (data.showcaseAssets ?? []).map((item) => ({
@@ -209,7 +207,7 @@ if (isEdit.value) {
   markProjectSaved();
   resolvedProjectUuid.value = data.projectUuid;
   if (projectUuid !== data.projectUuid) {
-    // The query may ask for a stage or a section to be opened; it has to
+    // The query may ask for a section to be opened; it has to
     // survive the move to the UUID address.
     await navigateTo(
       {
@@ -301,28 +299,23 @@ function saveAfterContentEdit() {
 provide(saveAfterContentEditKey, saveAfterContentEdit);
 
 /**
- * A stage or a section is edited in a modal of its own, so saving it there is
- * the same decision as saving the project — as long as nothing else waits.
- * The item is left out of both sides of the comparison; everything else has
- * to match the last save, content fields aside.
+ * A section is edited in a modal of its own, so saving it there is the same
+ * decision as saving the project — as long as nothing else waits. The section
+ * is left out of both sides of the comparison; everything else has to match
+ * the last save, content fields aside.
  */
-function saveAfterItemEdit(
-  list: 'stages' | 'contentSections',
-  item: object,
-  itemUuid: string | undefined,
-) {
+function saveAfterItemEdit(item: object, sectionUuid: string | undefined) {
   if (saving.value || !canSave.value || !isEdit.value) return;
-  const idKey = list === 'stages' ? 'stageUuid' : 'sectionUuid';
   const edited = toRaw(item);
   const current = {
     ...projectData.value,
-    [list]: (projectData.value[list] ?? []).filter(
+    sections: (projectData.value.sections ?? []).filter(
       (entry) => toRaw(entry) !== edited,
     ),
   };
   const saved = JSON.parse(savedSnapshot.value) as Record<string, unknown>;
-  saved[list] = ((saved[list] ?? []) as Record<string, unknown>[]).filter(
-    (entry) => !itemUuid || entry[idKey] !== itemUuid,
+  saved.sections = ((saved.sections ?? []) as Record<string, unknown>[]).filter(
+    (entry) => !sectionUuid || entry.sectionUuid !== sectionUuid,
   );
   if (!changedOnlyIn(current, JSON.stringify(saved), CONTENT_FIELDS)) return;
   void handleSave();
@@ -383,26 +376,19 @@ function applySavedStatuses(page: ProfileHistoryPage<StatusHistoryItem>) {
 }
 
 /**
- * Takes the identities the server assigned to stages and sections.
+ * Takes the identities the server assigned to sections.
  *
- * Until this runs, a stage created in this session has no uuid on the client,
+ * Until this runs, a section created in this session has no uuid on the client,
  * and the next save would offer its public ID as if nobody owned it yet — which
  * the storage layer reads as a collision with the row it wrote itself.
  */
 function applySavedContentItemIds(result: {
-  stages: ProjectContentItemIdentity[];
   sections: ProjectContentItemIdentity[];
 }) {
-  const stageUuids = new Map(
-    result.stages.map(({ publicId, itemUuid }) => [publicId, itemUuid]),
-  );
-  for (const stage of projectData.value.stages ?? [])
-    stage.stageUuid = stageUuids.get(stage.publicId) ?? stage.stageUuid;
-
   const sectionUuids = new Map(
     result.sections.map(({ publicId, itemUuid }) => [publicId, itemUuid]),
   );
-  for (const section of projectData.value.contentSections ?? [])
+  for (const section of projectData.value.sections ?? [])
     section.sectionUuid =
       sectionUuids.get(section.publicId) ?? section.sectionUuid;
 }
@@ -490,8 +476,7 @@ async function openDeleteProjectModal() {
       :add-label="phrase.project_new_status"
       :empty-label="phrase.project_status_empty"
     />
-    <ProjectContentItems kind="stage" />
-    <ProjectContentItems kind="section" />
+    <ProjectContentItems />
     <AdminRelations
       v-model="relationsModel"
       :owner="

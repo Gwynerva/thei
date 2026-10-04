@@ -100,7 +100,6 @@ const kindLabels: Record<LifeActivityKind, (count: number) => string> = {
   event: (count) => phrase.value.life_activity_events(count),
   project: (count) => phrase.value.life_activity_projects(count),
   page: (count) => phrase.value.life_activity_pages(count),
-  'project-stage': (count) => phrase.value.life_activity_stages(count),
   'project-section': (count) => phrase.value.life_activity_sections(count),
   'profile-avatar': (count) => phrase.value.life_activity_profile(count),
   'profile-status': (count) => phrase.value.life_activity_statuses(count),

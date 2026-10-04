@@ -66,7 +66,7 @@ describe('validateEventData', () => {
       'Summary cannot be empty',
     );
     expect(validateEventData(eventData({ periods: [] }))).toBe(
-      'Stage period is required',
+      'Period is required',
     );
     expect(
       validateEventData(eventData({ content: { data: { blocks: [] } } })),

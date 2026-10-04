@@ -18,13 +18,12 @@ import {
 import { isOneOf } from '../utils/isOneOf';
 import { optionalContentDraftRef } from '../content-history';
 import {
-  normalizeProjectContentSections,
-  normalizeProjectStages,
+  normalizeProjectSections,
   ProjectContentItemError,
-  type ProjectSectionContentItem,
-  type ProjectStageContentItem,
+  type ProjectSectionItem,
 } from '../project-content-item';
 import type { MediaDescriptor } from '../media';
+import { PeriodError } from '../period';
 import { normalizeTagEditItems, type TagEditItem } from '../tag';
 import { joinTagContextText, type TagContext } from '../tag-recommendation';
 import {
@@ -71,8 +70,8 @@ export type ProjectEditData = Partial<StatusEditData> & {
   iconAssetUuid?: string;
   bannerAssetUuid?: string;
   descriptionContent?: ContentFieldModelValue | null;
-  contentSections?: ProjectSectionContentItem[];
-  stages?: ProjectStageContentItem[];
+  /** The project's sections in their order; absent leaves them as they are. */
+  sections?: ProjectSectionItem[];
   /** Showcase assets in display order. Array index = sort order. */
   showcaseAssets?: ShowcaseAssetEditItem[];
   /** Other files in display order. Array index = sort order. */
@@ -137,10 +136,7 @@ export function countProjectAssetPlacements(
     collectContentAssetUuids(content?.data).forEach(add);
   };
   addContent(project.descriptionContent);
-  for (const stage of project.stages ?? []) addContent(stage.content);
-  for (const section of project.contentSections ?? []) {
-    addContent(section.content);
-  }
+  for (const section of project.sections ?? []) addContent(section.content);
   return counts;
 }
 
@@ -151,12 +147,7 @@ export function projectTagContext(project: ProjectEditData): TagContext {
     text: joinTagContextText([
       project.summary,
       contentPlainText(project.descriptionContent?.data),
-      ...(project.stages ?? []).flatMap((stage) => [
-        stage.title,
-        stage.summary,
-        contentPlainText(stage.content?.data),
-      ]),
-      ...(project.contentSections ?? []).flatMap((section) => [
+      ...(project.sections ?? []).flatMap((section) => [
         section.title,
         section.summary,
         contentPlainText(section.content?.data),
@@ -228,10 +219,7 @@ export function validateProjectData(
           );
 
     const descriptionContent = validateContentField(data.descriptionContent);
-    const contentSections = normalizeProjectContentSections(
-      data.contentSections,
-    );
-    const stages = normalizeProjectStages(data.stages);
+    const sections = normalizeProjectSections(data.sections);
     const relations = validateRelations(data.relations);
     const externalLinks = validateProjectExternalLinks(data.externalLinks);
     const tags = validateProjectTags(data.tags);
@@ -252,8 +240,7 @@ export function validateProjectData(
       publicId,
       access: data.access,
       descriptionContent,
-      contentSections,
-      stages,
+      sections,
       showcaseAssets,
       otherAssets,
       relations,
@@ -266,7 +253,11 @@ export function validateProjectData(
   } catch (error) {
     if (error instanceof ProjectValidationError) return error.message;
     if (error instanceof ContentValidationError) return error.message;
-    if (error instanceof ProjectContentItemError) return error.message;
+    if (
+      error instanceof ProjectContentItemError ||
+      error instanceof PeriodError
+    )
+      return error.message;
     if (error instanceof RelationValidationError) return error.message;
     throw error;
   }

@@ -85,13 +85,13 @@ export async function ogPictureOfMedia(
 }
 
 /**
- * The picture of a stage, a section, an event or a diary entry: the first
+ * The picture of a section, an event or a diary entry: the first
  * picture of its public body a card can draw — a video by its still, passed
  * over while it has none — else the drawn icon its page shows for a thing
  * without one.
  */
 export async function ogBodyPicture(
-  ownerType: 'event' | 'project-stage' | 'project-section' | 'diary-entry',
+  ownerType: 'event' | 'project-section' | 'diary-entry',
   ownerId: string,
   slot: ContentSlot,
 ): Promise<OgPicture | undefined> {

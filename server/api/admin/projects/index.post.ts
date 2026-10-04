@@ -18,13 +18,9 @@ import {
   prepareContentForSave,
 } from '../../../thei/content/repository';
 import {
-  applyProjectContentSections,
-  prepareProjectContentSections,
+  applyProjectSections,
+  prepareProjectSections,
 } from '../../../thei/projects/content-sections';
-import {
-  applyProjectStages,
-  prepareProjectStages,
-} from '../../../thei/projects/stages';
 import {
   ProjectContentItemStorageError,
   projectContentItemIdentities,
@@ -88,12 +84,10 @@ export default defineEventHandler(
     );
 
     let preparedSections;
-    let preparedStages;
     try {
-      preparedStages = await prepareProjectStages(projectUuid, result.stages);
-      preparedSections = await prepareProjectContentSections(
+      preparedSections = await prepareProjectSections(
         projectUuid,
-        result.contentSections,
+        result.sections,
       );
     } catch (error) {
       if (
@@ -180,8 +174,7 @@ export default defineEventHandler(
         'project-notes',
         preparedNotes,
       );
-      applyProjectContentSections(tx, schema, projectUuid, preparedSections);
-      applyProjectStages(tx, schema, projectUuid, preparedStages);
+      applyProjectSections(tx, schema, projectUuid, preparedSections);
       applyRelations(
         tx,
         schema,
@@ -257,11 +250,6 @@ export default defineEventHandler(
       type: 'success',
       projectUuid,
       action: result.action,
-      stages: projectContentItemIdentities(
-        preparedStages,
-        (stage) => stage.stageUuid,
-        (stage) => stage.publicId,
-      ),
       sections: projectContentItemIdentities(
         preparedSections,
         (section) => section.sectionUuid,

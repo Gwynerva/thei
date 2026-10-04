@@ -312,7 +312,7 @@ export default defineI18nModule({
     project_tab_timeline: 'Хронология',
     project_timeline_latest: 'Последнее из хронологии',
     project_timeline_seo_description: (title) =>
-      `Хронология проекта «${title}»: этапы, разделы, статусы, связанные события и записи дневника.`,
+      `Хронология проекта «${title}»: разделы, статусы, связанные события и записи дневника.`,
     project_status_hint:
       'Краткие описания состояний, в которых находится проект.',
     project_new_status: 'Новый статус проекта',
@@ -374,8 +374,6 @@ export default defineI18nModule({
       plural(count, 'проект', 'проекта', 'проектов'),
     life_activity_pages: (count) =>
       plural(count, 'страница', 'страницы', 'страниц'),
-    life_activity_stages: (count) =>
-      plural(count, 'этап проекта', 'этапа проекта', 'этапов проектов'),
     life_activity_sections: (count) =>
       plural(count, 'раздел проекта', 'раздела проекта', 'разделов проектов'),
     life_activity_profile: (count) =>
@@ -418,7 +416,6 @@ export default defineI18nModule({
     period_ended: 'Завершилось',
     period_occurred: 'Произошло',
     period_ongoing: 'Продолжалось',
-    stage_ongoing: 'Идет этап проекта',
     view_all: 'Смотреть все',
     life_empty: 'В Жизни пока нет публичных моментов',
     event_started: 'Началось событие',
@@ -426,16 +423,16 @@ export default defineI18nModule({
     event_occurred: 'Состоялось событие',
     project_created: 'Создан проект',
     page_created: 'Создана страница',
-    stage_started: 'Начался этап проекта',
-    stage_ended: 'Завершился этап проекта',
-    stage_occurred: 'Состоялся этап проекта',
     section_created: 'Создан раздел проекта',
+    section_started: 'Начался раздел проекта',
+    section_ended: 'Завершился раздел проекта',
+    section_occurred: 'Состоялся раздел проекта',
+    section_ongoing: 'Продолжается раздел проекта',
     diary_written: 'Запись в дневнике',
     secret_event: (codename: string) => `Секретное событие ${codename}`,
     secret_project: (codename: string) => `Секретный проект ${codename}`,
     secret_page: (codename: string) => `Секретная страница ${codename}`,
     secret_diary_entry: (codename: string) => `Секретная запись ${codename}`,
-    secret_stage: (codename: string) => `Секретный этап ${codename}`,
     secret_section: (codename: string) => `Секретный раздел ${codename}`,
     secret_media: (codename: string) => `Секретное медиа ${codename}`,
     secret_file: (codename: string) => `Секретный файл ${codename}`,
@@ -450,7 +447,6 @@ export default defineI18nModule({
         event: 'События',
         project: 'Проекты',
         page: 'Страницы',
-        'project-stage': 'Этапы проектов',
         'project-section': 'Разделы проектов',
         'profile-avatar': 'Аватарки',
         'profile-status': 'Статусы',
@@ -462,10 +458,10 @@ export default defineI18nModule({
     projects_count: (count) => plural(count, 'проект', 'проекта', 'проектов'),
     events_count: (count) => plural(count, 'событие', 'события', 'событий'),
     public_life_description:
-      'Непрерывная лента событий, проектов и важных этапов.',
+      'Непрерывная лента событий, проектов и записей дневника.',
     home: 'Главная',
     llms_txt_intro:
-      'Личный архив одной жизни. Три основных вида записей, от простого к сложному: запись дневника — датированная мысль без заголовка, событие — оформленный памятный момент, проект — крупный эпизод со своими этапами и разделами. Рядом с ними страницы — самостоятельные тексты, теги — сквозные темы, а Жизнь — единая хронология, на которую всё это ложится.',
+      'Личный архив одной жизни. Три основных вида записей, от простого к сложному: запись дневника — датированная мысль без заголовка, событие — оформленный памятный момент, проект — крупный эпизод из своих разделов: одни о теме, другие о датированном промежутке работы. Рядом с ними страницы — самостоятельные тексты, теги — сквозные темы, а Жизнь — единая хронология, на которую всё это ложится.',
     llms_txt_sections: 'Разделы',
     llms_txt_home:
       'кто это, текущий статус, лучшие проекты и последние моменты',
@@ -478,7 +474,7 @@ export default defineI18nModule({
     llms_txt_markdown:
       'Любой публичный проект, событие, страница или запись дневника отдаются и в Markdown: добавьте index.md к адресу, например /projects/name-id/index.md. Приватных частей там нет — ровно как и для любого другого посетителя.',
     public_life_period_description: (period, siteName) =>
-      `События, проекты и важные этапы за ${period.toLocaleLowerCase('ru-RU')} — ${siteName}.`,
+      `События, проекты и записи дневника за ${period.toLocaleLowerCase('ru-RU')} — ${siteName}.`,
     public_pages_description:
       'Самостоятельные статичные материалы сайта: каждый существует сам по себе и не связан ни с проектами, ни с событиями, ни с другими записями.',
     public_tags_description:
@@ -537,7 +533,6 @@ export default defineI18nModule({
     public_details_from_content: 'Из содержимого',
     public_details_overview: 'Сводка',
     public_details_contents: 'Содержание',
-    public_details_neighbour_stages: 'Соседние этапы',
     public_details_neighbour_sections: 'Соседние разделы',
     public_details_neighbour_entries: 'Соседние записи',
     public_neighbour_next: 'Вперёд',
@@ -545,10 +540,7 @@ export default defineI18nModule({
     public_details_chronology: 'Основные даты',
     public_details_timeline: 'Хронология',
     project_chronology_page: 'Страница проекта',
-    project_chronology_first_stage: 'Первый этап проекта',
-    project_chronology_last_stage: 'Последний этап проекта',
     project_chronology_updated: 'Обновление проекта',
-    project_chronology_stage: 'Этап проекта',
     project_chronology_first_section: 'Первый раздел проекта',
     project_chronology_last_section: 'Последний раздел проекта',
     project_chronology_section: 'Раздел проекта',
@@ -558,8 +550,6 @@ export default defineI18nModule({
     page_chronology_updated: 'Страница обновлена',
     section_chronology_created: 'Раздел создан',
     section_chronology_updated: 'Раздел обновлён',
-    stage_chronology_created: 'Этап создан',
-    stage_chronology_updated: 'Этап обновлён',
     event_chronology_created: 'Событие создано',
     event_chronology_updated: 'Событие обновлено',
     diary_chronology_day: 'Запись относится к',
@@ -710,7 +700,7 @@ export default defineI18nModule({
       'Короткие датированные мысли: одна запись на день, без заголовка и без лишних полей.',
     admin_kind_project_title: 'Что такое проект',
     admin_kind_project_what:
-      'Проект — самостоятельный, крупный эпизод жизни со своей структурой: этапы работы, тематические разделы, витрина, файлы и ссылки.',
+      'Проект — самостоятельный, крупный эпизод жизни со своей структурой: разделы — тематические и датированные промежутки работы, — витрина, файлы и ссылки.',
     admin_kind_project_rank:
       'Самая весомая сущность. Проект собирает вокруг себя события и записи дневника — связи с ними задаются именно здесь. Если хватает названия и пары абзацев, это скорее событие.',
     admin_kind_project_examples:
@@ -719,7 +709,7 @@ export default defineI18nModule({
     admin_kind_event_what:
       'Событие — небольшой памятный момент, который не хочется забыть: у него есть название, даты, теги и медиа.',
     admin_kind_event_rank:
-      'Весомее записи дневника, но легче проекта: без этапов и разделов. Событие никогда не является частью проекта — проект лишь может быть с ним связан.',
+      'Весомее записи дневника, но легче проекта: без разделов. Событие никогда не является частью проекта — проект лишь может быть с ним связан.',
     admin_kind_event_examples:
       'Например: концерт любимой группы, доклад на митапе, получение водительских прав, поездка на выходные.',
     admin_kind_diary_title: 'Что такое запись дневника',
@@ -874,7 +864,7 @@ export default defineI18nModule({
       'Попробуйте изменить запрос или сбросить поиск.',
     reset_search: 'Сбросить поиск',
     admin_projects_empty_description:
-      'Создайте первый проект: опишите идею, добавьте этапы, материалы и кнопку действия.',
+      'Создайте первый проект: опишите идею, добавьте разделы, материалы и кнопку действия.',
     admin_events_empty_description:
       'Создайте первое событие, чтобы отметить важный момент на временной шкале Жизни.',
     admin_pages_empty_description:
@@ -1062,10 +1052,9 @@ export default defineI18nModule({
     project_action_issue_color: 'цвет фона в формате #RRGGBB',
     project_content_sections: 'Разделы проекта',
     project_content_sections_hint:
-      'Самостоятельные разделы с подробностями проекта.',
-    project_stages: 'Этапы проекта',
-    project_stages_hint:
-      'Ключевые временные этапы, через которые прошёл проект.',
+      'Части проекта: темы — в вашем порядке, датированные промежутки работы — по времени.',
+    project_sections_dated: 'С датами',
+    project_sections_undated: 'Без дат',
     relation_group_related: 'Связаны',
     relation_group_depends_on: 'Зависит от',
     relation_group_affects: 'Влияет на',
@@ -1090,7 +1079,6 @@ export default defineI18nModule({
     relation_popup_affects: (current, other) =>
       `«${current}» влияет на «${other}»`,
     relations_empty: 'Связей пока нет.',
-    project_stages_empty: 'Этапов пока нет.',
     project_content_sections_empty: 'Разделов пока нет.',
     relation_note_placeholder: 'Пояснение связи…',
     relation_note_for: (title) => `Пояснение в «${title}»`,
@@ -1122,23 +1110,15 @@ export default defineI18nModule({
     entity_search_mentioned: 'Есть ссылка в тексте',
     content_section: 'Раздел проекта',
     content_section_delete_entity: 'раздел проекта',
-    project_stage: 'Этап проекта',
-    project_stage_delete_entity: 'этап проекта',
-    project_stage_title: 'Название этапа',
-    project_stage_summary: 'Суть этапа',
-    project_stage_private: 'Приватный этап',
-    project_stage_private_hint: 'Виден только вам',
-    project_stage_period: 'Временные промежутки',
-    project_stage_period_empty: 'Добавьте хотя бы один промежуток!',
-    public_stage_content_empty: 'Этап не имеет содержимого',
-    public_stage_content_empty_description:
+    section_periods: 'Временные промежутки',
+    section_needs_body_or_period:
+      'Напишите раздел или добавьте хотя бы один временной промежуток.',
+    public_section_dates_only: 'У раздела нет текста',
+    public_section_dates_only_description:
       'Подробности так и не были записаны…',
     public_section_content_empty: 'Здесь пока нечего читать',
     public_section_content_empty_description:
       'В этом разделе нет открытого для чтения контента.',
-    project_stage_content: 'Контент этапа',
-    project_stage_add: 'Добавить этап',
-    delete_project_stage: 'Удалить этап',
     content_section_title: 'Название раздела',
     content_section_summary: 'Суть раздела',
     content_section_private: 'Приватный раздел',
@@ -1277,7 +1257,6 @@ export default defineI18nModule({
     edit_event: 'Изменить событие',
     edit_page: 'Изменить страницу',
     edit_diary_entry: 'Изменить запись',
-    edit_project_stage: 'Изменить этап',
     edit_content_section: 'Изменить раздел',
     diary_access: 'Доступ к записи',
     diary_date: 'Дата записи',
@@ -1319,7 +1298,6 @@ export default defineI18nModule({
       'Сайт закрытый! Доступ все равно будет только у вас!',
     view_event: 'Смотреть на сайте',
     view_page: 'Смотреть на сайте',
-    view_project_stage: 'Смотреть на сайте',
     view_content_section: 'Смотреть на сайте',
     view_tag: 'Смотреть на сайте',
     saved: 'Сохранено',
@@ -1562,7 +1540,7 @@ export default defineI18nModule({
     search_preset_cv_description:
       'Профессиональная часть архива: проекты, из которых складывается рабочая история.',
     og_personal_archive: 'Личный архив',
-    og_stage_position: (index, total) => `Этап ${index} из ${total}`,
+    og_section_position: (index, total) => `Раздел ${index} из ${total}`,
     og_updated: (date) => `Обновлено ${date}`,
     og_life_headline: (years) =>
       `${plural(years, 'год', 'года', 'лет')} в одной хронике`,
@@ -1571,7 +1549,6 @@ export default defineI18nModule({
     og_pages_headline: (count) =>
       `${plural(count, 'текст', 'текста', 'текстов')} вне хронологии`,
     og_image_alt: (kind, title, site) => `${kind} «${title}» — ${site}`,
-    x_stages: (count) => plural(count, 'этап', 'этапа', 'этапов'),
     x_sections: (count) => plural(count, 'раздел', 'раздела', 'разделов'),
   },
 });

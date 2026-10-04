@@ -270,7 +270,7 @@ export default defineI18nBase({
     project_tab_timeline: 'Chronology',
     project_timeline_latest: 'Latest from the chronology',
     project_timeline_seo_description: (title) =>
-      `The chronology of “${title}”: stages, sections, statuses, related events and diary entries.`,
+      `The chronology of “${title}”: its sections, statuses, related events and diary entries.`,
     project_status_hint: 'Short descriptions of the states the project is in.',
     project_new_status: 'New project status',
     project_status_empty: 'No statuses yet',
@@ -327,8 +327,6 @@ export default defineI18nBase({
     life_activity_events: (count) => plural(count, 'event', 'events'),
     life_activity_projects: (count) => plural(count, 'project', 'projects'),
     life_activity_pages: (count) => plural(count, 'page', 'pages'),
-    life_activity_stages: (count) =>
-      plural(count, 'project stage', 'project stages'),
     life_activity_sections: (count) =>
       plural(count, 'project section', 'project sections'),
     life_activity_profile: (count) =>
@@ -365,7 +363,6 @@ export default defineI18nBase({
     period_ended: 'Ended',
     period_occurred: 'Happened',
     period_ongoing: 'Ongoing',
-    stage_ongoing: 'A project stage is in progress',
     view_all: 'View all',
     life_empty: 'Life has no public moments yet',
     event_started: 'An event started',
@@ -373,16 +370,16 @@ export default defineI18nBase({
     event_occurred: 'An event took place',
     project_created: 'A project was created',
     page_created: 'A page was created',
-    stage_started: 'A project stage started',
-    stage_ended: 'A project stage ended',
-    stage_occurred: 'A project stage took place',
     section_created: 'A project section was created',
+    section_started: 'A project section started',
+    section_ended: 'A project section ended',
+    section_occurred: 'A project section took place',
+    section_ongoing: 'A project section is in progress',
     diary_written: 'Written in the diary',
     secret_event: (codename: string) => `Secret event ${codename}`,
     secret_project: (codename: string) => `Secret project ${codename}`,
     secret_page: (codename: string) => `Secret page ${codename}`,
     secret_diary_entry: (codename: string) => `Secret entry ${codename}`,
-    secret_stage: (codename: string) => `Secret stage ${codename}`,
     secret_section: (codename: string) => `Secret section ${codename}`,
     secret_media: (codename: string) => `Secret media ${codename}`,
     secret_file: (codename: string) => `Secret file ${codename}`,
@@ -397,7 +394,6 @@ export default defineI18nBase({
         event: 'Events',
         project: 'Projects',
         page: 'Pages',
-        'project-stage': 'Project stages',
         'project-section': 'Project sections',
         'profile-avatar': 'Avatars',
         'profile-status': 'Statuses',
@@ -410,10 +406,10 @@ export default defineI18nBase({
       `${count} ${count === 1 ? 'project' : 'projects'}`,
     events_count: (count) => `${count} ${count === 1 ? 'event' : 'events'}`,
     public_life_description:
-      'A continuous timeline of events, projects, and important stages.',
+      'A continuous timeline of events, projects and diary entries.',
     home: 'Home',
     llms_txt_intro:
-      'A personal archive of one life. Three main kinds of record, simplest first: a diary entry is a dated thought with no title, an event is a memorable moment written up, a project is a substantial episode with its own stages and sections. Alongside them, pages are standalone writing, tags are threads across all of it, and Life is the single timeline they land on.',
+      'A personal archive of one life. Three main kinds of record, simplest first: a diary entry is a dated thought with no title, an event is a memorable moment written up, a project is a substantial episode made of its own sections, some about a topic and some about a dated stretch of work. Alongside them, pages are standalone writing, tags are threads across all of it, and Life is the single timeline they land on.',
     llms_txt_sections: 'Sections',
     llms_txt_home:
       'who this is, current status, best projects and the latest moments',
@@ -426,7 +422,7 @@ export default defineI18nBase({
     llms_txt_markdown:
       'Any public project, event, page or diary entry is also served as Markdown: add index.md to its address, for example /projects/name-id/index.md. Private parts are absent there, exactly as they are for any other visitor.',
     public_life_period_description: (period, siteName) =>
-      `Events, projects, and important stages for ${period} — ${siteName}.`,
+      `Events, projects and diary entries for ${period} — ${siteName}.`,
     public_pages_description:
       'Standalone static content: each piece stands on its own, unconnected to projects, events or anything else on the site.',
     public_tags_description:
@@ -481,7 +477,6 @@ export default defineI18nBase({
     public_details_from_content: 'From the content',
     public_details_overview: 'Summary',
     public_details_contents: 'Contents',
-    public_details_neighbour_stages: 'Nearby stages',
     public_details_neighbour_sections: 'Nearby sections',
     public_details_neighbour_entries: 'Nearby entries',
     public_neighbour_next: 'Next',
@@ -489,10 +484,7 @@ export default defineI18nBase({
     public_details_chronology: 'Key dates',
     public_details_timeline: 'Timeline',
     project_chronology_page: 'Project page',
-    project_chronology_first_stage: 'First project stage',
-    project_chronology_last_stage: 'Last project stage',
     project_chronology_updated: 'Project update',
-    project_chronology_stage: 'Project stage',
     project_chronology_first_section: 'First project section',
     project_chronology_last_section: 'Last project section',
     project_chronology_section: 'Project section',
@@ -502,8 +494,6 @@ export default defineI18nBase({
     page_chronology_updated: 'Page updated',
     section_chronology_created: 'Section created',
     section_chronology_updated: 'Section updated',
-    stage_chronology_created: 'Stage created',
-    stage_chronology_updated: 'Stage updated',
     event_chronology_created: 'Event created',
     event_chronology_updated: 'Event updated',
     diary_chronology_day: 'Entry is about',
@@ -654,7 +644,7 @@ export default defineI18nBase({
       'Short dated thoughts: one entry a day, with no title and nothing else to fill in.',
     admin_kind_project_title: 'What a project is',
     admin_kind_project_what:
-      'A project is a self-contained, substantial episode of a life with a structure of its own: stages of work, topical sections, a showcase, files and links.',
+      'A project is a self-contained, substantial episode of a life with a structure of its own: sections — topical ones and dated stretches of work — a showcase, files and links.',
     admin_kind_project_rank:
       'The weightiest kind. A project gathers events and diary entries around it, and its relations to them are set here. If a title and a couple of paragraphs are enough, it is probably an event.',
     admin_kind_project_examples:
@@ -663,7 +653,7 @@ export default defineI18nBase({
     admin_kind_event_what:
       'An event is a small memorable moment worth not forgetting: it has a title, dates, tags and media.',
     admin_kind_event_rank:
-      'Weightier than a diary entry, lighter than a project: no stages or sections. An event is never a part of a project; a project can only be related to it.',
+      'Weightier than a diary entry, lighter than a project: no sections. An event is never a part of a project; a project can only be related to it.',
     admin_kind_event_examples:
       "For example: a favourite band's concert, a meetup talk, getting a driving licence, a weekend trip.",
     admin_kind_diary_title: 'What a diary entry is',
@@ -818,7 +808,7 @@ export default defineI18nBase({
       'Try a different query or clear the search.',
     reset_search: 'Clear search',
     admin_projects_empty_description:
-      'Create your first project: describe the idea and add stages, materials and an action button.',
+      'Create your first project: describe the idea and add sections, materials and an action button.',
     admin_events_empty_description:
       'Create your first event to mark an important moment on the Life timeline.',
     admin_pages_empty_description:
@@ -1004,9 +994,9 @@ export default defineI18nBase({
     project_action_issue_color: 'a background color as #RRGGBB',
     project_content_sections: 'Project sections',
     project_content_sections_hint:
-      'Independent sections with details about the project.',
-    project_stages: 'Project stages',
-    project_stages_hint: 'Key periods in the project timeline.',
+      'Parts of the project: topics in your order, dated stretches of work in time order.',
+    project_sections_dated: 'Dated',
+    project_sections_undated: 'Undated',
     relation_group_related: 'Related',
     relation_group_depends_on: 'Depends on',
     relation_group_affects: 'Affects',
@@ -1025,7 +1015,6 @@ export default defineI18nBase({
     relation_popup_affects: (current, other) =>
       `“${current}” affects “${other}”`,
     relations_empty: 'No relations yet.',
-    project_stages_empty: 'No stages yet.',
     project_content_sections_empty: 'No sections yet.',
     relation_note_placeholder: 'Reason for the relation…',
     relation_note_for: (title) => `Explanation in “${title}”`,
@@ -1058,23 +1047,15 @@ export default defineI18nBase({
     entity_search_mentioned: 'Linked in the text',
     content_section: 'Project section',
     content_section_delete_entity: 'project section',
-    project_stage: 'Project stage',
-    project_stage_delete_entity: 'project stage',
-    project_stage_title: 'Stage title',
-    project_stage_summary: 'Stage summary',
-    project_stage_private: 'Private stage',
-    project_stage_private_hint: 'Visible only to you in the admin panel.',
-    project_stage_period: 'Time period',
-    project_stage_period_empty: 'Add at least one time period!',
-    public_stage_content_empty: 'This stage has no content',
-    public_stage_content_empty_description:
+    section_periods: 'Time periods',
+    section_needs_body_or_period:
+      'Write the section or give it at least one time period.',
+    public_section_dates_only: 'This section has no text',
+    public_section_dates_only_description:
       'The details were never written down…',
     public_section_content_empty: 'Nothing to read here yet',
     public_section_content_empty_description:
       'This section has no content open to readers.',
-    project_stage_content: 'Stage content',
-    project_stage_add: 'Add stage',
-    delete_project_stage: 'Delete stage',
     content_section_title: 'Section title',
     content_section_summary: 'Section summary',
     content_section_private: 'Private section',
@@ -1213,7 +1194,6 @@ export default defineI18nBase({
     content_description: 'Description',
     edit_event: 'Edit Event',
     edit_diary_entry: 'Edit Entry',
-    edit_project_stage: 'Edit Stage',
     edit_content_section: 'Edit Section',
     diary_access: 'Entry access',
     diary_date: 'Entry date',
@@ -1255,7 +1235,6 @@ export default defineI18nBase({
     site_access_close_priority: 'Site closed! Only you will have access!',
     view_event: 'View on Site',
     view_page: 'View on Site',
-    view_project_stage: 'View on Site',
     view_content_section: 'View on Site',
     view_tag: 'View on Site',
     saved: 'Saved',
@@ -1500,7 +1479,7 @@ export default defineI18nBase({
     search_preset_cv_description:
       'The professional part of the archive: the projects that make up a working history.',
     og_personal_archive: 'Personal archive',
-    og_stage_position: (index, total) => `Stage ${index} of ${total}`,
+    og_section_position: (index, total) => `Section ${index} of ${total}`,
     og_updated: (date) => `Updated ${date}`,
     og_life_headline: (years) =>
       `${plural(years, 'year', 'years')} in one chronicle`,
@@ -1509,7 +1488,6 @@ export default defineI18nBase({
     og_pages_headline: (count) =>
       `${plural(count, 'text', 'texts')} outside the timeline`,
     og_image_alt: (kind, title, site) => `${kind} “${title}” — ${site}`,
-    x_stages: (count) => plural(count, 'stage', 'stages'),
     x_sections: (count) => plural(count, 'section', 'sections'),
   },
 });

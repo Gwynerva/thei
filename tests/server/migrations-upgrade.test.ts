@@ -27,18 +27,19 @@ interface ColumnInfo {
 /**
  * The schema as a comparable structure. Column order is left out: SQLite
  * appends a column added later, while a fresh table lists it where the
- * schema declares it.
+ * schema declares it. CHECK constraints are read from the table's own
+ * statement, which no pragma describes.
  */
 function describeSchema(rawDb: Database.Database) {
-  const tables = (
-    rawDb
-      .prepare(
-        `SELECT name FROM sqlite_master WHERE type = 'table'
-         AND name NOT LIKE 'sqlite_%' AND name != '_thei_migrations'
-         ORDER BY name`,
-      )
-      .all() as { name: string }[]
-  ).map(({ name }) => name);
+  const rows = rawDb
+    .prepare(
+      `SELECT name, sql FROM sqlite_master WHERE type = 'table'
+       AND name NOT LIKE 'sqlite_%' AND name != '_thei_migrations'
+       ORDER BY name`,
+    )
+    .all() as { name: string; sql: string }[];
+  const tables = rows.map(({ name }) => name);
+  const sqlOf = new Map(rows.map(({ name, sql }) => [name, sql]));
   const quote = (name: string) => `'${name.replace(/'/g, "''")}'`;
   return Object.fromEntries(
     tables.map((table) => [
@@ -75,9 +76,36 @@ function describeSchema(rawDb: Database.Database) {
             ).map((column) => column.name),
           }))
           .sort((left, right) => left.name.localeCompare(right.name)),
+        checks: checksOf(sqlOf.get(table) ?? ''),
       },
     ]),
   );
+}
+
+/**
+ * The CHECK constraints of a `CREATE TABLE` statement, each as its name and
+ * its condition, with quoting and spacing left out of the comparison.
+ */
+function checksOf(sql: string): string[] {
+  const checks: string[] = [];
+  const pattern = /(?:CONSTRAINT\s+("[^"]+"|`[^`]+`|\S+)\s+)?CHECK\s*\(/gi;
+  for (const match of sql.matchAll(pattern)) {
+    const start = match.index + match[0].length;
+    let depth = 1;
+    let end = start;
+    for (; end < sql.length && depth; end++) {
+      if (sql[end] === '(') depth++;
+      else if (sql[end] === ')') depth--;
+    }
+    const name = (match[1] ?? '').replace(/["`]/g, '');
+    const condition = sql
+      .slice(start, end - 1)
+      .replace(/["`]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    checks.push(`${name}: ${condition}`);
+  }
+  return checks.sort();
 }
 
 let directory: string;
@@ -302,11 +330,21 @@ describe('upgrading a 0.0.1 site', () => {
       all('SELECT containerId FROM `tag-usages` ORDER BY containerId'),
     ).toEqual([{ containerId: 'project-a' }, { containerId: 'project-b' }]);
 
-    // A period made before labels existed is simply unnamed.
+    // A stage is a section now, with its period — made before labels
+    // existed, so simply unnamed.
     expect(
-      all('SELECT startDate, endDate, precision, label FROM `stage-periods`'),
+      all(
+        'SELECT sectionUuid, publicId, sortOrder FROM `project-content-sections`',
+      ),
+    ).toEqual([{ sectionUuid: 'stage-a', publicId: 'sa', sortOrder: 0 }]);
+    expect(
+      all(
+        'SELECT ownerType, ownerId, startDate, endDate, precision, label FROM periods',
+      ),
     ).toEqual([
       {
+        ownerType: 'project-section',
+        ownerId: 'stage-a',
         startDate: '2026-01-01',
         endDate: '2026-02-01',
         precision: 'exact',

@@ -27,7 +27,7 @@ const description = computed(() => {
   if (props.rewindMatch === 'ongoing') {
     return props.point.entityKind === 'event'
       ? phrase.value.event_ongoing
-      : phrase.value.stage_ongoing;
+      : phrase.value.section_ongoing;
   }
   const key = `${props.point.entityKind}:${props.point.transition}`;
   const labels: Record<string, string> = {
@@ -36,9 +36,9 @@ const description = computed(() => {
     'event:occurred': phrase.value.event_occurred,
     'project:created': phrase.value.project_created,
     'page:created': phrase.value.page_created,
-    'project-stage:started': phrase.value.stage_started,
-    'project-stage:ended': phrase.value.stage_ended,
-    'project-stage:occurred': phrase.value.stage_occurred,
+    'project-section:started': phrase.value.section_started,
+    'project-section:ended': phrase.value.section_ended,
+    'project-section:occurred': phrase.value.section_occurred,
     'project-section:created': phrase.value.section_created,
     'diary-entry:created': phrase.value.diary_written,
   };
@@ -94,7 +94,7 @@ const periodLead = computed(() => {
   }
 });
 /**
- * A stage or a section names its project above the title: that project is
+ * A section names its project above the title: that project is
  * its parent, not something it is related to. A status names its project too,
  * under its words. Everything else lists what it is related to under the
  * summary.

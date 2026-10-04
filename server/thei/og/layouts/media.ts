@@ -16,7 +16,7 @@ const CENTRE = HALF + Math.round(HALF * 0.62);
 const ICON = 340;
 
 /**
- * A stage, a section or an event, as their cards in a feed show them: the
+ * A section or an event, as their cards in a feed show them: the
  * right half of the card is their first picture, dissolving leftwards into
  * a plain dark field that holds the words. A photograph fills the half; an
  * icon or a see-through drawing stands whole on a field of its accent; a

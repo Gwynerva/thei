@@ -20,7 +20,7 @@ import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import {
-  buildProjectChildUrl,
+  buildProjectSectionUrl,
   buildProjectUrl,
 } from '#layers/thei/shared/project-url';
 import {
@@ -29,16 +29,14 @@ import {
   buildPublicPage,
   buildPublicProject,
   buildPublicProjectSection,
-  buildPublicProjectStage,
   canOpenPublicEntity,
 } from '../public/entities';
 import { listPublicRelatedAll } from '../public/related';
-import { getProjectStages } from '../projects/stages';
-import { getProjectContentSections } from '../projects/content-sections';
+import { getProjectSections } from '../projects/content-sections';
 import { siteUrl } from '../site-url';
 import { STRANGER } from '../access-links/viewer';
 import { ownerText } from '../owner-text';
-import type { StagePeriod } from '#layers/thei/shared/stage-period';
+import type { Period } from '#layers/thei/shared/period';
 
 /**
  * Public pages as Markdown.
@@ -77,14 +75,6 @@ export async function renderProjectMarkdown(
     await body(event, data.description),
   ];
 
-  if (data.stages.length) {
-    lines.push(`## ${THEI_SERVER.phrase.project_stages}`);
-    for (const stage of data.stages)
-      lines.push(
-        `- [${ownerText(stage.title)}](${siteUrl(event, stage.href)})` +
-          (stage.summary ? ` — ${ownerText(stage.summary)}` : ''),
-      );
-  }
   if (data.sections.length) {
     lines.push(`## ${THEI_SERVER.phrase.project_content_sections}`);
     for (const section of data.sections)
@@ -104,30 +94,23 @@ export async function renderProjectMarkdown(
   return { body: join(lines), canonical: siteUrl(event, canonical) };
 }
 
-export async function renderProjectChildMarkdown(
+export async function renderProjectSectionMarkdown(
   event: H3Event,
-  kind: 'stages' | 'sections',
   projectPart: string,
-  childPart: string,
+  sectionPart: string,
 ): Promise<MarkdownDocument | undefined> {
   const project = await THEI_SERVER.projects.findByPublicId(projectPart);
   if (!project || !canOpenPublicEntity(project.access, false)) return undefined;
-  const children =
-    kind === 'stages'
-      ? await getProjectStages(project.projectUuid)
-      : await getProjectContentSections(project.projectUuid);
-  const child = children.find((item) => item.publicId === childPart);
-  if (!child || child.isPrivate) return undefined;
-  const data =
-    kind === 'stages'
-      ? await buildPublicProjectStage(project, child as never, STRANGER)
-      : await buildPublicProjectSection(project, child as never, STRANGER);
-  const canonical = buildProjectChildUrl(
+  const section = (await getProjectSections(project.projectUuid)).find(
+    (item) => item.publicId === sectionPart,
+  );
+  if (!section || section.isPrivate) return undefined;
+  const data = await buildPublicProjectSection(project, section, STRANGER);
+  const canonical = buildProjectSectionUrl(
     project.humanReadableSlug,
     project.publicId,
-    kind === 'stages' ? 'stages' : 'sections',
-    child.humanReadableSlug,
-    child.publicId,
+    section.humanReadableSlug,
+    section.publicId,
   );
   const lines = [
     `# ${ownerText(data.title)}`,
@@ -136,7 +119,7 @@ export async function renderProjectChildMarkdown(
       event,
       buildProjectUrl(project.humanReadableSlug, project.publicId),
     )})`,
-    ...('periods' in data ? periodLines(data.periods) : []),
+    ...periodLines(data.periods),
     await body(event, data.content),
   ];
   return { body: join(lines), canonical: siteUrl(event, canonical) };
@@ -168,10 +151,10 @@ export async function renderEventMarkdown(
 }
 
 /**
- * When an event or a stage happened, on one line: each period's dates, with
+ * When an event or a section happened, on one line: each period's dates, with
  * the owner's name for it after them.
  */
-function periodLines(periods: StagePeriod[]): string[] {
+function periodLines(periods: Period[]): string[] {
   if (!periods.length) return [];
   return [
     periods

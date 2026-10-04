@@ -17,8 +17,8 @@ const props = defineProps<{
   /** Accent for the fallback icon and the page glow, e.g. a tag color. */
   accentColor?: string;
   /**
-   * What this page is a part of — a stage's or a section's project. Read as a
-   * line of text, not a button: "Project stage" and then the project, with
+   * What this page is a part of — a section's project. Read as a line of
+   * text, not a button: "Project section" and then the project, with
    * only the project itself being the link back.
    */
   parent?: {

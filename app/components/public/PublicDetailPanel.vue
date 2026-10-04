@@ -6,8 +6,6 @@ const { data } = defineProps<{ data: PublicDetailPanelData }>();
 
 const neighboursTitle = computed(() => {
   switch (data.neighbours?.kind) {
-    case 'project-stage':
-      return phrase.value.public_details_neighbour_stages;
     case 'project-section':
       return phrase.value.public_details_neighbour_sections;
     default:

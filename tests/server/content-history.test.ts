@@ -12,6 +12,7 @@ import {
   parseContentHistoryField,
   parseContentHistoryOwner,
   readFieldHistory,
+  refreshContentHistoryFingerprints,
   runContentHistoryMaintenance,
   syncContentDraft,
 } from '../../server/thei/content/history';
@@ -492,5 +493,46 @@ describe('request parsing', () => {
         { allowNewPlaceholder: true },
       ),
     ).toEqual({ ownerType: 'page', ownerRef: 'new' });
+  });
+});
+
+describe('content history fingerprints', () => {
+  it('recounts only the rows whose text was rewritten under them', async () => {
+    sync(text('Kept as it was'), 1000);
+    const [kept] = rows();
+    // A row whose text an update rewrote, still described by its old words.
+    db.insert(schema.contentHistory)
+      .values({
+        id: 'rewritten',
+        ownerType: 'page',
+        ownerRef: 'pg-2',
+        slot: 'page-body',
+        kind: 'draft',
+        data: text('New words'),
+        digest: 'stale',
+        wordCount: 2,
+        blockCount: 1,
+        assetCount: 0,
+        size: 1,
+        assetUuids: [],
+        createdAt: 1000,
+        updatedAt: 1000,
+      })
+      .run();
+    const progress: number[] = [];
+
+    await expect(
+      refreshContentHistoryFingerprints((done) => {
+        progress.push(done);
+      }),
+    ).resolves.toEqual({ refreshed: 1, total: 2 });
+
+    expect(progress).toEqual([1, 2]);
+    const after = new Map(rows().map((row) => [row.id, row]));
+    expect(after.get(kept!.id)).toEqual(kept);
+    expect(after.get('rewritten')!.digest).not.toBe('stale');
+    expect(after.get('rewritten')!.size).toBe(
+      JSON.stringify(after.get('rewritten')!.data).length,
+    );
   });
 });

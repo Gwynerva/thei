@@ -224,11 +224,11 @@ export default defineEventHandler(async (event) => {
     );
     const { db, schema } = THEI_SERVER.useDb();
     db.transaction((tx) => {
-      tx.delete(schema.stagePeriods)
+      tx.delete(schema.periods)
         .where(
           and(
-            eq(schema.stagePeriods.stageType, 'event-stage'),
-            eq(schema.stagePeriods.stageUuid, eventUuid),
+            eq(schema.periods.ownerType, 'event'),
+            eq(schema.periods.ownerId, eventUuid),
           ),
         )
         .run();

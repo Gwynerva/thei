@@ -10,7 +10,6 @@ import { el, type OgNode } from './render';
  */
 export const OG_KIND_ICONS: Record<OgEntityKind, string> = {
   project: entityTypeIcon('project'),
-  stage: entityTypeIcon('project-stage'),
   section: entityTypeIcon('project-section'),
   event: entityTypeIcon('event'),
   diary: entityTypeIcon('diary-entry'),
@@ -35,7 +34,6 @@ export const OG_SERVICE_ICONS: Record<OgServiceId, string> = {
 export const OG_META_ICONS = {
   period: 'calendar',
   updated: 'history',
-  stages: entityTypeIcon('project-stage'),
   sections: entityTypeIcon('project-section'),
   projects: entityTypeIcon('project'),
   events: entityTypeIcon('event'),

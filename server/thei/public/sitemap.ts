@@ -14,7 +14,7 @@ import {
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
 import {
-  buildProjectChildUrl,
+  buildProjectSectionUrl,
   buildProjectTimelineUrl,
   buildProjectUrl,
 } from '#layers/thei/shared/project-url';
@@ -67,23 +67,14 @@ export type SitemapTagUsage = {
   containerId: string;
 };
 
-export type SitemapPeriod = {
-  stageType: string;
-  stageUuid: string;
-  startDate: string;
-  endDate: string;
-};
-
 export type SitemapInput = {
   projects: readonly SitemapProject[];
   sections: readonly SitemapProjectChild[];
-  stages: readonly SitemapProjectChild[];
   events: readonly SitemapEvent[];
   pages: readonly SitemapPage[];
   diaryEntries: readonly SitemapDiaryEntry[];
   tags: readonly SitemapTag[];
   tagUsages: readonly SitemapTagUsage[];
-  periods: readonly SitemapPeriod[];
 };
 
 /**
@@ -112,22 +103,18 @@ export function buildSitemapEntries(input: SitemapInput): SitemapEntry[] {
     projects.map((project) => [project.projectUuid, project]),
   );
 
-  // A child is reachable only when its project is listable AND the child is
-  // not private on its own: a public project may hold private stages.
-  const child = (
-    items: readonly SitemapProjectChild[],
-    kind: 'sections' | 'stages',
-  ): SitemapEntry[] =>
+  // A section is reachable only when its project is listable AND it is not
+  // private on its own: a public project may hold private sections.
+  const sections = (items: readonly SitemapProjectChild[]): SitemapEntry[] =>
     items.flatMap((item) => {
       if (item.isPrivate) return [];
       const project = projectByUuid.get(item.projectUuid);
       if (!project) return [];
       return [
         {
-          path: buildProjectChildUrl(
+          path: buildProjectSectionUrl(
             project.humanReadableSlug,
             project.publicId,
-            kind,
             item.humanReadableSlug,
             item.publicId,
           ),
@@ -178,8 +165,8 @@ export function buildSitemapEntries(input: SitemapInput): SitemapEntry[] {
           path: buildProjectUrl(project.humanReadableSlug, project.publicId),
           lastmod: isoDate(project.updatedAt),
         },
-        // Both tabs of the page, and the two filters of its chronology that
-        // used to be lists of their own.
+        // Both tabs of the page, and the filter of its chronology that used to
+        // be a list of its own.
         { path: timeline },
         ...PROJECT_TIMELINE_PRESETS.filter((preset) => preset.listed).map(
           (preset) => ({
@@ -188,8 +175,7 @@ export function buildSitemapEntries(input: SitemapInput): SitemapEntry[] {
         ),
       ];
     }),
-    ...child(input.sections, 'sections'),
-    ...child(input.stages, 'stages'),
+    ...sections(input.sections),
     ...events.map((event) => ({
       path: buildEventUrl(event.humanReadableSlug, event.publicId),
       lastmod: isoDate(event.updatedAt),

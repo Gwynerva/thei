@@ -7,10 +7,8 @@ import {
   normalizeContentData,
   type ContentFieldModelValue,
 } from '../content';
-import {
-  normalizeStagePeriods,
-  ProjectContentItemError,
-} from '../project-content-item';
+import { ProjectContentItemError } from '../project-content-item';
+import { normalizePeriods, PeriodError } from '../period';
 import { normalizeProjectAction } from '../project-action';
 import { validateExternalLinkList } from '../external-link';
 import { isOneOf } from '../utils/isOneOf';
@@ -60,7 +58,7 @@ export function validateEventData(
       humanReadableSlug,
       publicId,
       access: data.access,
-      periods: normalizeStagePeriods(data.periods),
+      periods: normalizePeriods(data.periods),
       content: validateRequiredContent(data.content),
       otherAssets: validateFiles(data.otherAssets),
       externalLinks: validateExternalLinks(data.externalLinks),
@@ -74,6 +72,7 @@ export function validateEventData(
     if (
       error instanceof ContentValidationError ||
       error instanceof ProjectContentItemError ||
+      error instanceof PeriodError ||
       error instanceof RelationValidationError ||
       error instanceof Error
     )

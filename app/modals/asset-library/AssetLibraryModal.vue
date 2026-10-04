@@ -339,7 +339,7 @@ onBeforeUnmount(() => {
             @click.prevent="toggleSection(section)"
           >
             <span class="flex min-w-0 flex-1 flex-col gap-0.5"
-              ><!-- A stage or a section is named under its project: "Launch"
+              ><!-- A section is named under its project: "Launch"
                    alone does not say whose launch it was. --><span
                 v-if="section.parent"
                 data-asset-library-parent

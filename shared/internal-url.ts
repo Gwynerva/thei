@@ -2,7 +2,7 @@ import { dateFromDiaryUrlPart } from './diary-url';
 import { publicIdFromEventUrlPart } from './event-url';
 import { publicIdIsValid } from './public-link';
 import {
-  publicIdFromProjectChildUrlPart,
+  publicIdFromProjectSectionUrlPart,
   publicIdFromProjectUrlPart,
 } from './project-url';
 import { normalizeBasePath, withoutSiteBase } from './site-url';
@@ -17,7 +17,6 @@ import { publicIdFromTagUrlPart } from './tag-url';
  */
 export type InternalUrlTarget =
   | { entityType: 'project'; publicId: string }
-  | { entityType: 'project-stage'; projectPublicId: string; publicId: string }
   | { entityType: 'project-section'; projectPublicId: string; publicId: string }
   | { entityType: 'event'; publicId: string }
   | { entityType: 'page'; slug: string }
@@ -80,10 +79,8 @@ function targetFromSegments(segments: string[]): InternalUrlTarget | undefined {
     if (!publicIdIsValid(projectPublicId)) return undefined;
     if (!childKind) return { entityType: 'project', publicId: projectPublicId };
     if (!childPart) return undefined;
-    const publicId = publicIdFromProjectChildUrlPart(childPart);
+    const publicId = publicIdFromProjectSectionUrlPart(childPart);
     if (!publicIdIsValid(publicId)) return undefined;
-    if (childKind === 'stages')
-      return { entityType: 'project-stage', projectPublicId, publicId };
     if (childKind === 'sections')
       return { entityType: 'project-section', projectPublicId, publicId };
     return undefined;

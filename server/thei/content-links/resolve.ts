@@ -15,7 +15,7 @@ import { canResolveContentEntityLink } from './access';
  * has a legitimate reason to see the two told apart.
  *
  * A share link opens its own entity's links — a project's link, its private
- * stages and sections — and none of the others.
+ * sections — and none of the others.
  */
 export async function resolveContentEntityLink(
   viewer: PublicViewer,

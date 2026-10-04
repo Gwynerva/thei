@@ -63,7 +63,7 @@ export function opensPrivate(
 }
 
 /**
- * The same question about a stage, a section or anything else that is shared
+ * The same question about a section or anything else that is shared
  * through an owner of its own. Nothing without an owner — a tag — is private.
  */
 export function opensGrantOwner(

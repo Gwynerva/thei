@@ -18,12 +18,9 @@ describe('life presets', () => {
     expect(lifePreset(['diary-entry', 'event'])).toBeUndefined();
   });
 
-  it('keeps stages and sections as pages of a project, but not events', () => {
-    expect(projectTimelinePreset(['project-stage'])?.id).toBe('stages');
+  it('keeps sections as a page of a project, but not events', () => {
     expect(projectTimelinePreset(['project-section'])?.id).toBe('sections');
     expect(projectTimelinePreset(['event'])).toBeUndefined();
-    expect(
-      projectTimelinePreset(['project-stage', 'project-section']),
-    ).toBeUndefined();
+    expect(projectTimelinePreset(['project-section', 'event'])).toBeUndefined();
   });
 });

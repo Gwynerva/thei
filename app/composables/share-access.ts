@@ -7,7 +7,7 @@ import type { ShareGrantPath } from '#layers/thei/shared/share-link';
  * Filled on the server from the visitor's cookie and carried in the payload,
  * so the notice renders with the page instead of appearing after it. A grant
  * covers its entity's address and everything under it, which is how a
- * project's link reaches its stages, sections and chronology.
+ * project's link reaches its sections and chronology.
  */
 export function useShareAccess() {
   const grants = useState<ShareGrantPath[]>('share-grants', () => []);

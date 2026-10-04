@@ -1,10 +1,7 @@
 import type { ProjectEventAccessLevel } from '../access-level';
 import type { ArchivedOriginalFileMeta, AssetType } from '../asset';
 import type { ContentFieldValue } from '../content';
-import type {
-  ProjectSectionContentValue,
-  ProjectStageContentValue,
-} from '../project-content-item';
+import type { ProjectSectionValue } from '../project-content-item';
 import type { RelationGetItem } from '../relation';
 import type { MediaDescriptor } from '../media';
 import type { TagItem } from '../tag';
@@ -60,8 +57,7 @@ export type ProjectGetResponse = {
   /** Stored file size in bytes. */
   bannerAssetSize?: number;
   descriptionContent?: ContentFieldValue;
-  contentSections?: ProjectSectionContentValue[];
-  stages?: ProjectStageContentValue[];
+  sections?: ProjectSectionValue[];
   showcaseAssets?: ShowcaseAssetGetItem[];
   otherAssets?: OtherAssetGetItem[];
   relations?: RelationGetItem[];
@@ -86,7 +82,7 @@ export type ProjectGetResponse = {
 export type { RelationType } from '../relation';
 
 /**
- * Identities the server assigned to freshly created stages and sections.
+ * Identities the server assigned to freshly created sections.
  *
  * The form knows an item only by its public ID until the first save; without
  * these pairs the next save would offer the same public ID with no uuid
@@ -103,7 +99,6 @@ export type ProjectSaveResponse =
       type: 'success';
       projectUuid: string;
       action: ProjectActionEditData;
-      stages: ProjectContentItemIdentity[];
       sections: ProjectContentItemIdentity[];
       /** The first page of statuses as saved, like the profile save returns. */
       statuses: ProfileHistoryPage<StatusHistoryItem>;

@@ -116,14 +116,10 @@ function lifePointTier(point: Pick<LifeBoundaryLike, 'entityKind'>) {
  * point kind, but only a project's own carry its uuid in `projectUuids`, so the
  * person's statuses never count as anyone's part.
  */
-const PROJECT_PART_KINDS = new Set([
-  'project-stage',
-  'project-section',
-  'profile-status',
-]);
+const PROJECT_PART_KINDS = new Set(['project-section', 'profile-status']);
 
 /**
- * The project a point is a piece of: its creation, a stage, a section, one of
+ * The project a point is a piece of: its creation, a section, one of
  * its statuses. An event or a diary entry may relate to a project, and that
  * is all — it is never a part of one.
  */

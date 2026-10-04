@@ -16,8 +16,8 @@ import { tagAccent } from '#layers/thei/shared/tag';
 import { STRANGER } from '../../access-links/viewer';
 import { getEventPeriods } from '../../events/periods';
 import { ownerText } from '../../owner-text';
-import { getProjectContentSections } from '../../projects/content-sections';
-import { getProjectStages } from '../../projects/stages';
+import { getProjectSections } from '../../projects/content-sections';
+import { isDatedSection } from '#layers/thei/shared/project-content-item';
 import {
   buildPublicEntityChronology,
   buildPublicEntityReference,
@@ -130,24 +130,20 @@ export async function projectContent(
   ]);
 
   const meta: OgMeta[] = [];
-  if (head.stages.length) {
-    const period = formatCompactPublicPeriod(
-      coverDatedPeriods(head.stages.flatMap((stage) => stage.periods)),
-      locale(),
-    );
+  const sectionCount = ogCount(
+    phrase().x_sections(head.sections.length),
+    head.sections.length,
+  );
+  const sectionPeriods = head.sections.flatMap((section) => section.periods);
+  // The stretch the dated sections cover is the project's own span; the count
+  // beside it is of every section a stranger may open.
+  if (sectionPeriods.length)
     meta.push({
       icon: OG_META_ICONS.period,
-      text: `${period} · ${ogCount(phrase().x_stages(head.stages.length), head.stages.length)}`,
+      text: `${formatCompactPublicPeriod(coverDatedPeriods(sectionPeriods), locale())} · ${sectionCount}`,
     });
-  }
-  if (head.sections.length)
-    meta.push({
-      icon: OG_META_ICONS.sections,
-      text: ogCount(
-        phrase().x_sections(head.sections.length),
-        head.sections.length,
-      ),
-    });
+  else if (head.sections.length)
+    meta.push({ icon: OG_META_ICONS.sections, text: sectionCount });
   meta.push(
     ...relatedMeta(countPublicRelated(head.relations), [
       'event',
@@ -193,90 +189,39 @@ export async function projectContent(
   };
 }
 
-export async function projectChildContent(
-  kind: 'stage' | 'section',
+export async function sectionContent(
   publicId: string,
   site: OgSite,
 ): Promise<OgCardContent | undefined> {
   const { db, schema } = THEI_SERVER.useDb();
-  const row =
-    kind === 'stage'
-      ? db
-          .select({
-            uuid: schema.projectStages.stageUuid,
-            projectUuid: schema.projectStages.projectUuid,
-            isPrivate: schema.projectStages.isPrivate,
-          })
-          .from(schema.projectStages)
-          .where(eq(schema.projectStages.publicId, publicId))
-          .get()
-      : db
-          .select({
-            uuid: schema.projectContentSections.sectionUuid,
-            projectUuid: schema.projectContentSections.projectUuid,
-            isPrivate: schema.projectContentSections.isPrivate,
-          })
-          .from(schema.projectContentSections)
-          .where(eq(schema.projectContentSections.publicId, publicId))
-          .get();
+  const row = db
+    .select({
+      uuid: schema.projectContentSections.sectionUuid,
+      projectUuid: schema.projectContentSections.projectUuid,
+      isPrivate: schema.projectContentSections.isPrivate,
+    })
+    .from(schema.projectContentSections)
+    .where(eq(schema.projectContentSections.publicId, publicId))
+    .get();
   if (!row || row.isPrivate) return undefined;
   const project = await THEI_SERVER.projects.findByUuid(row.projectUuid);
   if (!project || !canOpenPublicEntity(project.access, false)) return undefined;
+  const sections = (await getProjectSections(project.projectUuid)).filter(
+    (section) => !section.isPrivate,
+  );
+  const section = sections.find((item) => item.sectionUuid === row.uuid);
+  if (!section) return undefined;
   const reference = await buildPublicEntityReference(project);
   const parent = {
     title: ownerText(project.title),
     picture: await ogPictureOfMedia(reference.iconMedia),
   };
-
-  if (kind === 'stage') {
-    // Its place among the stages a stranger sees, oldest first: "Stage 3 of 7".
-    const stages = (await getProjectStages(project.projectUuid))
-      .filter((stage) => !stage.isPrivate)
-      .sort((left, right) =>
-        coverDatedPeriods(left.periods).startDate.localeCompare(
-          coverDatedPeriods(right.periods).startDate,
-        ),
-      );
-    const position = stages.findIndex((stage) => stage.stageUuid === row.uuid);
-    const stage = stages[position];
-    if (!stage) return undefined;
-    const picture = await ogBodyPicture(
-      'project-stage',
-      stage.stageUuid,
-      'project-stage-body',
-    );
-    return {
-      ...emptyOgContent(
-        'stage',
-        stage.stageUuid,
-        ownerText(stage.title),
-        site,
-        accentOf(picture, stage.stageUuid),
-      ),
-      chips: [
-        {
-          icon: OG_KIND_ICONS.stage,
-          label: phrase().og_stage_position(position + 1, stages.length),
-        },
-      ],
-      parent,
-      summary: ownerText(stage.summary),
-      meta: [dated(stage.periods)],
-      ...(picture ? { picture } : {}),
-    };
-  }
-
-  const section = (await getProjectContentSections(project.projectUuid)).find(
-    (item) => item.sectionUuid === row.uuid,
-  );
-  if (!section) return undefined;
   const picture = await ogBodyPicture(
     'project-section',
     section.sectionUuid,
     'project-section-body',
   );
-  const chronology = buildPublicEntityChronology(section);
-  return {
+  const content = {
     ...emptyOgContent(
       'section',
       section.sectionUuid,
@@ -284,9 +229,34 @@ export async function projectChildContent(
       site,
       accentOf(picture, section.sectionUuid),
     ),
-    chips: [{ icon: OG_KIND_ICONS.section, label: phrase().content_section }],
     parent,
     summary: ownerText(section.summary),
+    ...(picture ? { picture } : {}),
+  };
+
+  if (isDatedSection(section)) {
+    // Its place in the project's chronology, among the dated sections a
+    // stranger sees, oldest first: "Section 3 of 7".
+    const datedSections = sections.filter(isDatedSection);
+    return {
+      ...content,
+      chips: [
+        {
+          icon: OG_KIND_ICONS.section,
+          label: phrase().og_section_position(
+            datedSections.indexOf(section) + 1,
+            datedSections.length,
+          ),
+        },
+      ],
+      meta: [dated(section.periods)],
+    };
+  }
+
+  const chronology = buildPublicEntityChronology(section);
+  return {
+    ...content,
+    chips: [{ icon: OG_KIND_ICONS.section, label: phrase().content_section }],
     meta: [
       {
         icon: OG_META_ICONS.updated,
@@ -298,7 +268,6 @@ export async function projectChildContent(
         ),
       },
     ],
-    ...(picture ? { picture } : {}),
   };
 }
 

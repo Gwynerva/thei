@@ -1,25 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import {
-  normalizeProjectContentSections,
-  normalizeProjectStages,
-  normalizeStagePeriods,
-} from '../../shared/project-content-item';
+import { normalizeProjectSections } from '../../shared/project-content-item';
+import { normalizePeriods } from '../../shared/period';
 
 const content = (text = 'Body') => ({
   data: { blocks: [{ type: 'paragraph', data: { text } }] },
 });
 const link = { humanReadableSlug: 'item', publicId: 'ItemPublicId' };
 
-describe('project stages', () => {
-  it('requires one valid period and sorts stages from oldest to newest', () => {
+describe('project sections', () => {
+  it('keeps undated ones in the given order, then dated ones oldest first', () => {
     expect(
-      normalizeProjectStages([
+      normalizeProjectSections([
         {
           ...link,
+          publicId: 'LaterPublicId',
           title: 'Later',
           summary: '',
           isPrivate: false,
           periods: [{ startDate: '2026-06-01', endDate: '2026-06-30' }],
+        },
+        {
+          ...link,
+          publicId: 'TopicPublicId',
+          title: 'Topic',
+          summary: '',
+          isPrivate: false,
+          content: content(),
         },
         {
           ...link,
@@ -29,45 +35,63 @@ describe('project stages', () => {
           isPrivate: false,
           periods: [{ startDate: '2025-01-01', endDate: '2025-02-01' }],
         },
-      ])?.map((stage) => stage.title),
-    ).toEqual(['Earlier', 'Later']);
-  });
-
-  it('allows no content and rejects missing or inverted periods', () => {
-    expect(
-      normalizeProjectStages([
         {
           ...link,
-          title: 'Stage',
+          publicId: 'NotesPublicId',
+          title: 'Notes',
           summary: '',
           isPrivate: false,
-          periods: [{ startDate: '2026-01-01', endDate: '2026-01-02' }],
+          periods: [],
+          content: content(),
         },
-      ])?.[0]?.content,
-    ).toBeUndefined();
+      ])?.map((section) => section.title),
+    ).toEqual(['Topic', 'Notes', 'Earlier', 'Later']);
+  });
+
+  it('takes a body, periods or both, but never neither', () => {
+    const [onlyDates, both] = normalizeProjectSections([
+      {
+        ...link,
+        title: 'Only dates',
+        summary: '',
+        isPrivate: false,
+        periods: [{ startDate: '2026-01-01', endDate: '2026-01-02' }],
+      },
+      {
+        ...link,
+        publicId: 'BothPublicId',
+        title: 'Both',
+        summary: '',
+        isPrivate: false,
+        periods: [{ startDate: '2026-03-01', endDate: '2026-03-02' }],
+        content: content(),
+      },
+    ])!;
+    expect(onlyDates!.content.data.blocks).toEqual([]);
+    expect(both!.content.data.blocks).toHaveLength(1);
     expect(() =>
-      normalizeProjectStages([
-        { ...link, title: 'Stage', summary: '', isPrivate: false },
+      normalizeProjectSections([
+        { ...link, title: 'Nothing', summary: '', isPrivate: false },
       ]),
-    ).toThrow('Stage period is required');
+    ).toThrow('A section needs a body or a period');
     expect(() =>
-      normalizeProjectStages([
+      normalizeProjectSections([
         {
           ...link,
-          title: 'Stage',
+          title: 'Inverted',
           summary: '',
           isPrivate: false,
           periods: [{ startDate: '2026-02-01', endDate: '2026-01-01' }],
         },
       ]),
-    ).toThrow('Invalid stage period');
+    ).toThrow('Invalid period');
   });
 });
 
-describe('stage periods', () => {
+describe('periods', () => {
   it('sorts and merges overlaps but keeps adjacent days separate', () => {
     expect(
-      normalizeStagePeriods([
+      normalizePeriods([
         { startDate: '2026-01-10', endDate: '2026-01-15' },
         { startDate: '2026-01-05', endDate: '2026-01-12' },
         { startDate: '2026-01-16', endDate: '2026-01-20' },
@@ -92,7 +116,7 @@ describe('stage periods', () => {
 
   it('keeps the wider doubt and the first explanation when merging', () => {
     expect(
-      normalizeStagePeriods([
+      normalizePeriods([
         {
           startDate: '2026-01-10',
           endDate: '2026-01-15',
@@ -114,7 +138,7 @@ describe('stage periods', () => {
 
   it('drops an explanation left behind by an exact date', () => {
     expect(
-      normalizeStagePeriods([
+      normalizePeriods([
         {
           startDate: '2026-01-05',
           endDate: '2026-01-12',
@@ -135,7 +159,7 @@ describe('stage periods', () => {
 
   it('merges overlapping periods only when they are named alike', () => {
     expect(
-      normalizeStagePeriods([
+      normalizePeriods([
         { startDate: '2026-07-10', endDate: '2026-07-20', label: 'France' },
         { startDate: '2026-07-01', endDate: '2026-07-10', label: 'Italy' },
         { startDate: '2026-07-08', endDate: '2026-07-12', label: ' Italy ' },
@@ -159,7 +183,7 @@ describe('stage periods', () => {
   });
 
   it('sorts again once a named period grows past another', () => {
-    const periods = normalizeStagePeriods([
+    const periods = normalizePeriods([
       { startDate: '2026-01-01', endDate: '2026-01-05', label: 'x' },
       { startDate: '2026-01-01', endDate: '2026-01-08', label: 'y' },
       { startDate: '2026-01-03', endDate: '2026-01-12', label: 'x' },
@@ -174,42 +198,42 @@ describe('stage periods', () => {
       ['2026-01-01', '2026-01-08', 'y'],
       ['2026-01-01', '2026-01-12', 'x'],
     ]);
-    expect(normalizeStagePeriods(periods)).toEqual(periods);
+    expect(normalizePeriods(periods)).toEqual(periods);
   });
 
   it('orders periods with the same dates by their labels', () => {
     const dates = { startDate: '2026-03-01', endDate: '2026-03-02' };
-    const sorted = normalizeStagePeriods([
+    const sorted = normalizePeriods([
       { ...dates, label: 'b' },
       { ...dates, label: 'a' },
       { ...dates, label: '' },
     ]);
     expect(sorted.map((period) => period.label)).toEqual(['', 'a', 'b']);
-    expect(normalizeStagePeriods([...sorted].reverse())).toEqual(sorted);
+    expect(normalizePeriods([...sorted].reverse())).toEqual(sorted);
   });
 
   it('reads a period without a label as unnamed and caps a label', () => {
     const day = { startDate: '2026-01-01', endDate: '2026-01-01' };
-    expect(normalizeStagePeriods([{ ...day, label: 7 }])[0]!.label).toBe('');
-    expect(normalizeStagePeriods([day])[0]!.label).toBe('');
+    expect(normalizePeriods([{ ...day, label: 7 }])[0]!.label).toBe('');
+    expect(normalizePeriods([day])[0]!.label).toBe('');
     expect(
-      normalizeStagePeriods([{ ...day, label: 'я'.repeat(100) }])[0]!.label,
+      normalizePeriods([{ ...day, label: 'я'.repeat(100) }])[0]!.label,
     ).toHaveLength(100);
     expect(() =>
-      normalizeStagePeriods([{ ...day, label: 'я'.repeat(101) }]),
-    ).toThrow('Stage period label is too long');
+      normalizePeriods([{ ...day, label: 'я'.repeat(101) }]),
+    ).toThrow('Period label is too long');
   });
 
   it('rejects date-time values', () => {
     expect(() =>
-      normalizeStagePeriods([
+      normalizePeriods([
         { startDate: '2026-01-01T12:00', endDate: '2026-01-02' },
       ]),
-    ).toThrow('Invalid stage period');
+    ).toThrow('Invalid period');
   });
 });
 
-describe('project content sections', () => {
+describe('section bodies', () => {
   it.each([
     ['missing content', undefined],
     ['null content', null],
@@ -242,7 +266,7 @@ describe('project content sections', () => {
     ],
   ])('rejects %s', (_scenario, sectionContent) => {
     expect(() =>
-      normalizeProjectContentSections([
+      normalizeProjectSections([
         {
           ...link,
           title: 'Section',
@@ -251,12 +275,12 @@ describe('project content sections', () => {
           ...(sectionContent === undefined ? {} : { content: sectionContent }),
         },
       ]),
-    ).toThrow('Content section cannot be empty');
+    ).toThrow('A section needs a body or a period');
   });
 
   it('rejects an invalid link instead of treating it as content', () => {
     expect(() =>
-      normalizeProjectContentSections([
+      normalizeProjectSections([
         {
           ...link,
           title: 'Section',
@@ -274,7 +298,7 @@ describe('project content sections', () => {
 
   it('accepts text or media as meaningful content', () => {
     expect(
-      normalizeProjectContentSections([
+      normalizeProjectSections([
         {
           ...link,
           title: 'Text section',
@@ -308,7 +332,7 @@ describe('project content sections', () => {
 
   it('trims text and preserves manual order', () => {
     expect(
-      normalizeProjectContentSections([
+      normalizeProjectSections([
         {
           ...link,
           title: ' Second ',

@@ -160,12 +160,11 @@ beforeEach(() => {
   const { db, schema } = context;
   db.delete(schema.assetUsages).run();
   db.delete(schema.content).run();
-  db.delete(schema.projectStages).run();
   db.delete(schema.projectContentSections).run();
 });
 
 function use(
-  ownerType: 'project' | 'event' | 'page' | 'project-stage' | 'project-section',
+  ownerType: 'project' | 'event' | 'page' | 'project-section',
   isPrivate = false,
   ownerId = 'parent',
   notes = false,
@@ -180,9 +179,7 @@ function use(
         ? 'event-body'
         : ownerType === 'page'
           ? 'page-body'
-          : ownerType === 'project-stage'
-            ? 'project-stage-body'
-            : 'project-section-body';
+          : 'project-section-body';
   db.insert(schema.content)
     .values({
       contentUuid,
@@ -252,39 +249,32 @@ describe('contextual attachment authorization before HTTP caching', () => {
       expect(admin.headers.get('cache-control')).toBe('private, no-cache');
     },
   );
-  it.each(['project-stage', 'project-section'] as const)(
-    'requires an accessible %s, but permits another public use',
-    async (type) => {
-      const { db, schema } = context;
-      const child = {
+  it('requires an accessible project section, but permits another public use', async () => {
+    const { db, schema } = context;
+    db.insert(schema.projectContentSections)
+      .values({
+        sectionUuid: 'child',
         projectUuid: 'parent',
         title: 'Hidden child',
         humanReadableSlug: 'hidden',
         publicId: 'childid',
         isPrivate: true,
+        sortOrder: 0,
         createdAt: 0,
         updatedAt: 0,
-      };
-      if (type === 'project-stage')
-        db.insert(schema.projectStages)
-          .values({ ...child, stageUuid: 'child' })
-          .run();
-      else
-        db.insert(schema.projectContentSections)
-          .values({ ...child, sectionUuid: 'child', sortOrder: 0 })
-          .run();
-      use(type, false, 'child');
-      expect((await request()).status).toBe(404);
-      expect((await request('admin')).headers.get('cache-control')).toBe(
-        'private, no-cache',
-      );
-      use('project', false);
-      expect((await request()).status).toBe(200);
-      expect((await request()).headers.get('cache-control')).toBe(
-        'public, max-age=86400, s-maxage=300',
-      );
-    },
-  );
+      })
+      .run();
+    use('project-section', false, 'child');
+    expect((await request()).status).toBe(404);
+    expect((await request('admin')).headers.get('cache-control')).toBe(
+      'private, no-cache',
+    );
+    use('project', false);
+    expect((await request()).status).toBe(200);
+    expect((await request()).headers.get('cache-control')).toBe(
+      'public, max-age=86400, s-maxage=300',
+    );
+  });
   it('does not authorize a reference from a different project', async () => {
     use('project', false, 'different');
     expect((await request()).status).toBe(404);
@@ -380,21 +370,22 @@ describe('share links and contextual attachments', () => {
     expect((await holding('page:other')).status).toBe(404);
   });
 
-  it("opens a project's private stage files with the project's link", async () => {
+  it("opens a project's private section files with the project's link", async () => {
     const { db, schema } = context;
-    db.insert(schema.projectStages)
+    db.insert(schema.projectContentSections)
       .values({
-        stageUuid: 'child',
+        sectionUuid: 'child',
         projectUuid: 'parent',
-        title: 'Hidden stage',
+        title: 'Hidden section',
         humanReadableSlug: 'hidden',
         publicId: 'childid',
         isPrivate: true,
+        sortOrder: 0,
         createdAt: 0,
         updatedAt: 0,
       })
       .run();
-    use('project-stage', false, 'child');
+    use('project-section', false, 'child');
     expect((await request()).status).toBe(404);
     expect((await holding('project:parent')).status).toBe(200);
     expect((await holding('project:other')).status).toBe(404);

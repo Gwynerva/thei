@@ -50,12 +50,12 @@ type ContentItemFields = {
 };
 
 /**
- * When a stage or a section was last edited.
+ * When a section was last edited.
  *
- * A project save sends every stage and section it holds, touched or not, so
+ * A project save sends every section it holds, touched or not, so
  * the time of the save is only the time of an edit for the items that differ
  * from what is stored: their own fields, their content, or anything else the
- * caller compares (`otherChanged`, e.g. a stage's periods). The order of
+ * caller compares (`otherChanged`, such as its periods). The order of
  * sections is the project's arrangement, not an edit of a section.
  */
 export function projectContentItemUpdatedAt(
@@ -93,7 +93,7 @@ export function deleteProjectContentItemContent(
 /**
  * The identities a save assigned, paired with the public ID the form knows.
  *
- * A form that never learns the uuid of a stage it has just created keeps
+ * A form that never learns the uuid of a section it has just created keeps
  * offering it without one, and the next save reads the row it wrote itself as
  * somebody else's claim on that public ID.
  */

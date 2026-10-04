@@ -34,8 +34,8 @@ export default defineEventHandler((event) => {
   // `/diary/` is the diary, while `/diary/<day>/` is one entry in it.
   const life = LIFE_PRESETS.find((candidate) => candidate.path === normalized);
   if (life) return sendRedirect(event, lifePresetHref(life), 301);
-  // A project's stages, sections and related events used to be lists of their
-  // own; each is now its chronology read through the matching filter.
+  // A project's sections and related events used to be lists of their own;
+  // each is now its chronology read through the matching filter.
   const child = /^\/projects\/([^/]+)\/([^/]+)\/$/.exec(normalized);
   const projectPreset =
     child && PROJECT_TIMELINE_PRESETS.find((item) => item.segment === child[2]);

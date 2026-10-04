@@ -39,7 +39,7 @@ export interface PublicSearchDocument {
   access: ProjectEventAccessLevel;
   showcase: boolean;
   cv: boolean;
-  /** Latest stage or period date, else the creation date (YYYY-MM-DD). */
+  /** Latest end of a period, else the creation date (YYYY-MM-DD). */
   sortDate: string;
   createdAt: number;
   tagUuids: string[];
@@ -129,22 +129,22 @@ export function buildPublicSearchIndex(): PublicSearchIndex {
       ),
     )
     .all();
-  // Private stages stay out of the order, as they stay out of the page.
-  const stageDates = latestDates(
+  // Private sections stay out of the order, as they stay out of the page.
+  const sectionDates = latestDates(
     db
       .select({
-        owner: schema.projectStages.projectUuid,
-        date: schema.stagePeriods.endDate,
+        owner: schema.projectContentSections.projectUuid,
+        date: schema.periods.endDate,
       })
-      .from(schema.stagePeriods)
+      .from(schema.periods)
       .innerJoin(
-        schema.projectStages,
-        eq(schema.projectStages.stageUuid, schema.stagePeriods.stageUuid),
+        schema.projectContentSections,
+        eq(schema.projectContentSections.sectionUuid, schema.periods.ownerId),
       )
       .where(
         and(
-          eq(schema.stagePeriods.stageType, 'project-stage'),
-          eq(schema.projectStages.isPrivate, false),
+          eq(schema.periods.ownerType, 'project-section'),
+          eq(schema.projectContentSections.isPrivate, false),
         ),
       )
       .all(),
@@ -152,11 +152,11 @@ export function buildPublicSearchIndex(): PublicSearchIndex {
   const eventDates = latestDates(
     db
       .select({
-        owner: schema.stagePeriods.stageUuid,
-        date: schema.stagePeriods.endDate,
+        owner: schema.periods.ownerId,
+        date: schema.periods.endDate,
       })
-      .from(schema.stagePeriods)
-      .where(eq(schema.stagePeriods.stageType, 'event-stage'))
+      .from(schema.periods)
+      .where(eq(schema.periods.ownerType, 'event'))
       .all(),
   );
 
@@ -226,7 +226,7 @@ export function buildPublicSearchIndex(): PublicSearchIndex {
           'project',
           project,
           project.projectUuid,
-          stageDates.get(project.projectUuid),
+          sectionDates.get(project.projectUuid),
         ),
       ),
       ...events.map((event) =>

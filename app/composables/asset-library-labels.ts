@@ -8,7 +8,6 @@ import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
 
 export const assetSourceIcon = {
   project: entityTypeIcon('project'),
-  'project-stage': entityTypeIcon('project-stage'),
   'project-section': entityTypeIcon('project-section'),
   event: entityTypeIcon('event'),
   page: entityTypeIcon('page'),
@@ -20,7 +19,6 @@ export const assetSourceIcon = {
 export function assetSourceLabel(source: Pick<AssetSource, 'type'>) {
   return {
     project: phrase.value.project,
-    'project-stage': phrase.value.project_stage,
     'project-section': phrase.value.content_section,
     event: phrase.value.event,
     page: phrase.value.page,
@@ -104,7 +102,6 @@ export function assetPlacementContentContext(
   return (
     {
       project: 'project-description',
-      'project-stage': 'content',
       'project-section': 'content',
       event: 'event-description',
       page: 'page-content',

@@ -72,10 +72,6 @@ function ownerKeys(
   return {
     profile: { table: schema.profiles, id: schema.profiles.profileId },
     project: { table: schema.projects, id: schema.projects.projectUuid },
-    'project-stage': {
-      table: schema.projectStages,
-      id: schema.projectStages.stageUuid,
-    },
     'project-section': {
       table: schema.projectContentSections,
       id: schema.projectContentSections.sectionUuid,
@@ -833,6 +829,41 @@ function enforceFieldCap(
     excess.flatMap((revision) => revision.assetUuids),
     now,
   );
+}
+
+/**
+ * Recomputes what every kept draft and version says about its own text: its
+ * fingerprint and its size. An update that rewrites the stored text — the
+ * links of 0.0.4 that named a stage — leaves both describing the old words,
+ * and a draft equal to its saved text would then read as different once.
+ * Only rows whose description changed are written.
+ */
+export async function refreshContentHistoryFingerprints(
+  onProgress: (done: number, total: number) => void | Promise<void>,
+) {
+  const { db, schema } = THEI_SERVER.useDb();
+  const rows = db
+    .select({
+      id: schema.contentHistory.id,
+      data: schema.contentHistory.data,
+      digest: schema.contentHistory.digest,
+      size: schema.contentHistory.size,
+    })
+    .from(schema.contentHistory)
+    .all();
+  let refreshed = 0;
+  for (const [index, row] of rows.entries()) {
+    const described = describeHistoryData(row.data);
+    if (described.digest !== row.digest || described.size !== row.size) {
+      db.update(schema.contentHistory)
+        .set({ digest: described.digest, size: described.size })
+        .where(eq(schema.contentHistory.id, row.id))
+        .run();
+      refreshed++;
+    }
+    await onProgress(index + 1, rows.length);
+  }
+  return { refreshed, total: rows.length };
 }
 
 /**

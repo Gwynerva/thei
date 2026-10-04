@@ -6,7 +6,7 @@ import {
   renderDiaryMarkdown,
   renderEventMarkdown,
   renderPageMarkdown,
-  renderProjectChildMarkdown,
+  renderProjectSectionMarkdown,
   renderProjectMarkdown,
   type MarkdownDocument,
 } from '../thei/markdown/render';
@@ -49,14 +49,9 @@ function resolve(
   if (section === 'projects' && part) {
     const publicId = publicIdOf(part);
     if (segments.length === 2) return renderProjectMarkdown(event, publicId);
-    if (
-      segments.length === 4 &&
-      (childKind === 'stages' || childKind === 'sections') &&
-      childPart
-    )
-      return renderProjectChildMarkdown(
+    if (segments.length === 4 && childKind === 'sections' && childPart)
+      return renderProjectSectionMarkdown(
         event,
-        childKind,
         publicId,
         publicIdOf(childPart),
       );

@@ -1,5 +1,8 @@
 import { eq, inArray } from 'drizzle-orm';
-import type { ProjectSectionContentItem } from '#layers/thei/shared/project-content-item';
+import {
+  orderProjectSections,
+  type ProjectSectionItem,
+} from '#layers/thei/shared/project-content-item';
 import { createEmptyContentFieldValue } from '#layers/thei/shared/content';
 import { EntityPrefix, generateUniqueId } from '../entity-id';
 import {
@@ -7,6 +10,13 @@ import {
   prepareContentForSave,
   type PreparedContentSave,
 } from '../content/repository';
+import {
+  deletePeriods,
+  periodsEqual,
+  readPeriods,
+  readPeriodsOf,
+  replacePeriods,
+} from '../periods';
 import {
   deleteProjectContentItemContent,
   prepareProjectContentItems,
@@ -18,14 +28,14 @@ import type { projectContentSections } from '../db/schema/project-content-sectio
 
 type ProjectContentSectionRow = typeof projectContentSections.$inferSelect;
 
-type PreparedSection = ProjectSectionContentItem & {
+type PreparedSection = ProjectSectionItem & {
   sectionUuid: string;
   contentSave: PreparedContentSave;
 };
 
-export async function prepareProjectContentSections(
+export async function prepareProjectSections(
   projectUuid: string,
-  sections: ProjectSectionContentItem[] | undefined,
+  sections: ProjectSectionItem[] | undefined,
 ): Promise<PreparedSection[] | undefined> {
   if (sections === undefined) return undefined;
   const { db, schema } = THEI_SERVER.useDb();
@@ -68,8 +78,10 @@ export async function prepareProjectContentSections(
             .where(eq(schema.projectContentSections.sectionUuid, id))
             .get(),
       ),
-    label: 'content section',
+    label: 'section',
     prepare: async (section, sectionUuid) => {
+      // An empty body is no body: a section that is only its dates keeps
+      // no text at all.
       const contentSave = await prepareContentForSave(
         'project-section',
         sectionUuid,
@@ -81,7 +93,7 @@ export async function prepareProjectContentSections(
   });
 }
 
-export function applyProjectContentSections(
+export function applyProjectSections(
   tx: any,
   schema: any,
   projectUuid: string,
@@ -99,6 +111,7 @@ export function applyProjectContentSections(
     sections.map((section) => section.sectionUuid),
   );
   deleteProjectContentItemContent(tx, schema, 'project-section', removed);
+  deletePeriods(tx, schema, 'project-section', removed);
   if (removed.length) {
     tx.delete(schema.projectContentSections)
       .where(inArray(schema.projectContentSections.sectionUuid, removed))
@@ -106,13 +119,20 @@ export function applyProjectContentSections(
   }
 
   const now = Date.now();
-  for (let index = 0; index < sections.length; index++) {
-    const section = sections[index]!;
+  const ordered = orderProjectSections(sections);
+  for (let index = 0; index < ordered.length; index++) {
+    const section = ordered[index]!;
+    const stored = existingById.get(section.sectionUuid);
     const updatedAt = projectContentItemUpdatedAt(
-      existingById.get(section.sectionUuid),
+      stored,
       section,
       section.contentSave,
       now,
+      Boolean(stored) &&
+        !periodsEqual(
+          readPeriods(tx, schema, 'project-section', section.sectionUuid),
+          section.periods,
+        ),
     );
     tx.insert(schema.projectContentSections)
       .values({
@@ -140,6 +160,13 @@ export function applyProjectContentSections(
         },
       })
       .run();
+    replacePeriods(
+      tx,
+      schema,
+      'project-section',
+      section.sectionUuid,
+      section.periods,
+    );
     applyPreparedContentSave(
       tx,
       schema,
@@ -151,7 +178,7 @@ export function applyProjectContentSections(
   }
 }
 
-export function deleteProjectContentSections(
+export function deleteProjectSections(
   tx: any,
   schema: any,
   projectUuid: string,
@@ -163,13 +190,14 @@ export function deleteProjectContentSections(
     .all();
   const ids = rows.map((row: { sectionUuid: string }) => row.sectionUuid);
   deleteProjectContentItemContent(tx, schema, 'project-section', ids);
+  deletePeriods(tx, schema, 'project-section', ids);
   if (!ids.length) return;
   tx.delete(schema.projectContentSections)
     .where(eq(schema.projectContentSections.projectUuid, projectUuid))
     .run();
 }
 
-export async function getProjectContentSections(projectUuid: string) {
+export async function getProjectSections(projectUuid: string) {
   const { db, schema } = THEI_SERVER.useDb();
   const rows = db
     .select()
@@ -177,24 +205,32 @@ export async function getProjectContentSections(projectUuid: string) {
     .where(eq(schema.projectContentSections.projectUuid, projectUuid))
     .orderBy(schema.projectContentSections.sortOrder)
     .all();
+  const periods = readPeriodsOf(
+    db,
+    schema,
+    'project-section',
+    rows.map((row) => row.sectionUuid),
+  );
 
-  return await Promise.all(
-    rows.map(async (section) => ({
-      isStage: false as const,
-      sectionUuid: section.sectionUuid,
-      title: section.title,
-      summary: section.summary,
-      humanReadableSlug: section.humanReadableSlug,
-      publicId: section.publicId,
-      isPrivate: section.isPrivate,
-      createdAt: section.createdAt,
-      updatedAt: section.updatedAt,
-      content:
-        (await THEI_SERVER.content.buildFieldValue(
-          'project-section',
-          section.sectionUuid,
-          'project-section-body',
-        )) ?? createEmptyContentFieldValue(),
-    })),
+  return orderProjectSections(
+    await Promise.all(
+      rows.map(async (section) => ({
+        sectionUuid: section.sectionUuid,
+        title: section.title,
+        summary: section.summary,
+        humanReadableSlug: section.humanReadableSlug,
+        publicId: section.publicId,
+        isPrivate: section.isPrivate,
+        createdAt: section.createdAt,
+        updatedAt: section.updatedAt,
+        periods: periods.get(section.sectionUuid) ?? [],
+        content:
+          (await THEI_SERVER.content.buildFieldValue(
+            'project-section',
+            section.sectionUuid,
+            'project-section-body',
+          )) ?? createEmptyContentFieldValue(),
+      })),
+    ),
   );
 }

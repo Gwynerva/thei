@@ -9,9 +9,9 @@ import { fileURLToPath } from 'node:url';
 import { E2E_ORIGIN } from './fixture-url';
 
 /**
- * The way to the stage, section or diary entry before and after, in the
- * summary panel: two tiles, the one before above, each with the other's
- * picture, its name and what tells it apart — the time of a stage, how a
+ * The way to the section or diary entry before and after, in the summary
+ * panel: two tiles, the one before above, each with the other's picture, its
+ * name and what tells it apart — the time of a dated section, how a
  * diary entry begins, never what a private section of it says.
  */
 
@@ -21,7 +21,7 @@ const adminState = fileURLToPath(
 
 const stamp = Date.now();
 const LONG =
-  'A stage whose name runs far too long to sit on two lines of the narrow summary beside the page';
+  'A section whose name runs far too long to sit on two lines of the narrow summary beside the page';
 const SECRET = `Kept to myself ${stamp}`;
 const project = `neighbours-np${stamp}`;
 /**
@@ -62,31 +62,41 @@ test.beforeAll(async () => {
       return ['01', '02', '03'].map((day) => `2013-${month}-${day}`);
     }).find((month) => month.every((day) => !taken.has(day))) ?? [];
   expect(days, 'a month of 2013 with its first days free').toHaveLength(3);
-  const stage = (title: string, slug: string, start: string, end: string) => ({
+  const dated = (title: string, slug: string, start: string, end: string) => ({
     title,
     summary: `About ${slug}`,
     humanReadableSlug: slug,
     publicId: `${slug}${stamp}`,
     isPrivate: false,
-    isStage: true,
-    content: text(`The ${slug} stage.`),
+    content: text(`The ${slug} section.`),
     periods: [{ startDate: start, endDate: end }],
   });
   const created = await (
     await owner.post('/api/admin/projects', {
       data: {
         title: 'Neighbours',
-        summary: 'A project with stages in a row.',
+        summary: 'A project with sections in a row.',
         access: 'public',
         humanReadableSlug: 'neighbours',
         publicId: `np${stamp}`,
         showcase: false,
         cv: false,
-        descriptionContent: text('Stages.'),
-        stages: [
-          stage('Groundwork', 'first', '2020-01-01', '2020-02-01'),
-          stage('Building', 'middle', '2020-03-01', '2020-04-01'),
-          stage(LONG, 'last', '2020-05-01', '2020-06-01'),
+        descriptionContent: text('Sections.'),
+        sections: [
+          // About a topic: kept in the owner's order, apart from the dated
+          // ones, so it is nobody's neighbour among them.
+          {
+            title: 'Notes',
+            summary: 'About the whole',
+            humanReadableSlug: 'notes',
+            publicId: `notes${stamp}`,
+            isPrivate: false,
+            content: text('Notes.'),
+            periods: [],
+          },
+          dated('Groundwork', 'first', '2020-01-01', '2020-02-01'),
+          dated('Building', 'middle', '2020-03-01', '2020-04-01'),
+          dated(LONG, 'last', '2020-05-01', '2020-06-01'),
         ],
       },
     })
@@ -128,11 +138,11 @@ test.beforeAll(async () => {
 
 const tiles = (scope: Locator) => scope.locator('[data-neighbour]');
 
-test('a stage leads back above and on below, by picture, name and time', async ({
+test('a dated section leads back above and on below, by picture, name and time', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  await open(page, `/projects/${project}/stages/middle-middle${stamp}/`);
+  await open(page, `/projects/${project}/sections/middle-middle${stamp}/`);
   const aside = page.locator('aside').first();
   const links = tiles(aside);
   await expect(links).toHaveCount(2);
@@ -168,12 +178,35 @@ test('a stage leads back above and on below, by picture, name and time', async (
   await expect(page.locator('[data-title-popup-el]')).toBeHidden();
 });
 
-test('the first stage only leads on', async ({ page }) => {
+test('the first dated section only leads on, past the undated one', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  await open(page, `/projects/${project}/stages/first-first${stamp}/`);
+  await open(page, `/projects/${project}/sections/first-first${stamp}/`);
   const links = tiles(page.locator('aside').first());
   await expect(links).toHaveCount(1);
   await expect(links.first()).toHaveAttribute('rel', 'next');
+  await expect(links.first()).toContainText('Building');
+});
+
+test('an undated section has no dated neighbours', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await open(page, `/projects/${project}/sections/notes-notes${stamp}/`);
+  await expect(tiles(page.locator('aside').first())).toHaveCount(0);
+});
+
+test('a project lists its undated and dated sections in two tabs', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await open(page, `/projects/${project}/`);
+  const block = page.locator('#project-sections');
+  const titles = block.locator('#project-sections-panel h3');
+  await expect(block.getByRole('tab')).toHaveCount(2);
+  await expect(titles).toHaveText(['Notes']);
+  await block.getByRole('tab', { name: /Dated|С датами/ }).click();
+  // Newest first, as a chronology reads them.
+  await expect(titles).toHaveText([LONG, 'Building', 'Groundwork']);
 });
 
 test('a diary entry shows how its neighbours begin, and not their private sections', async ({

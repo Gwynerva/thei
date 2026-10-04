@@ -9,12 +9,12 @@ import {
   publicDatePrecisionLabels,
 } from '#layers/thei/app/composables/public-date';
 import { titlePopup } from '#layers/thei/app/composables/title-popup-content';
-import type { StagePeriod } from '#layers/thei/shared/stage-period';
+import type { Period } from '#layers/thei/shared/period';
 import { formatPublicDateRange } from '#layers/thei/shared/public-date-format';
 
 const props = withDefaults(
   defineProps<{
-    period: DateRange | DatedPeriod | StagePeriod;
+    period: DateRange | DatedPeriod | Period;
     removable?: boolean;
     /** Turns the label into a button that asks to reopen the picker. */
     editable?: boolean;

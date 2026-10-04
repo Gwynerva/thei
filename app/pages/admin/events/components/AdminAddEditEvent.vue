@@ -46,8 +46,7 @@ type EventFormData = EventEditData & {
   cv: false;
   descriptionContent: EventEditData['content'];
   showcaseAssets: [];
-  contentSections: [];
-  stages: [];
+  sections: [];
 };
 const eventData = ref<EventFormData>(emptyData());
 provide(eventDataInjectionKey, eventData as Ref<EventEditData>);
@@ -226,8 +225,7 @@ function emptyData(): EventFormData {
     showcase: false,
     cv: false,
     showcaseAssets: [],
-    contentSections: [],
-    stages: [],
+    sections: [],
   };
 }
 

@@ -71,23 +71,15 @@ usePublicSeo({
       ...(data.value.tags.length
         ? { keywords: data.value.tags.map((tag) => tag.title).join(', ') }
         : {}),
-      ...(data.value.stages.length + data.value.sections.length
+      ...(data.value.sections.length
         ? {
-            // The same nodes the parts' own pages describe, by their @id.
-            hasPart: [
-              ...data.value.sections.map((part) => ({
-                '@type': 'Article',
-                '@id': `${part.href}#section`,
-                headline: part.title,
-                url: part.href,
-              })),
-              ...data.value.stages.map((part) => ({
-                '@type': 'Article',
-                '@id': `${part.href}#stage`,
-                headline: part.title,
-                url: part.href,
-              })),
-            ],
+            // The same nodes the sections' own pages describe, by their @id.
+            hasPart: data.value.sections.map((part) => ({
+              '@type': 'Article',
+              '@id': `${part.href}#section`,
+              headline: part.title,
+              url: part.href,
+            })),
           }
         : {}),
     },
@@ -111,7 +103,7 @@ const contents = computed<ContentHeading[]>(() => {
     {
       id: 'project-sections',
       title: phrase.value.project_content_sections,
-      icon: 'file-tray-stack',
+      icon: 'project-section',
       shown: data.value.sections.length > 0,
     },
     {
@@ -154,21 +146,17 @@ const details = computed(
           updated: phrase.value.project_chronology_updated,
         },
         [
-          ...firstAndLastTimelineItems(
-            data.value.stages,
-            (stage) => ({ date: stage.period.startDate, href: stage.href }),
-            {
-              icon: 'calendar',
-              first: phrase.value.project_chronology_first_stage,
-              last: phrase.value.project_chronology_last_stage,
-              only: phrase.value.project_chronology_stage,
-            },
-          ),
+          // Only dated sections are dates of the project; when one about a
+          // topic was written is the site's history, not the project's.
           ...firstAndLastTimelineItems(
             data.value.sections,
-            (section) => ({ date: section.date, href: section.href }),
+            (section) =>
+              section.period && {
+                date: section.period.startDate,
+                href: section.href,
+              },
             {
-              icon: 'file-tray-stack',
+              icon: 'project-section',
               first: phrase.value.project_chronology_first_section,
               last: phrase.value.project_chronology_last_section,
               only: phrase.value.project_chronology_section,
@@ -246,27 +234,7 @@ const ownerNotesContents = computed(() =>
             asset-viewer
           />
 
-          <section
-            v-if="data.sections.length"
-            id="project-sections"
-            aria-labelledby="sections-heading"
-            class="flex scroll-mt-[var(--public-anchor-offset,8rem)] flex-col
-              gap-sm"
-          >
-            <PublicSectionHeader
-              heading-id="sections-heading"
-              :title="phrase.project_content_sections"
-              icon="file-tray-stack"
-            />
-            <div class="grid gap-md">
-              <PublicProjectChildCard
-                v-for="section in data.sections"
-                :key="section.href"
-                :item="section"
-                kind="section"
-              />
-            </div>
-          </section>
+          <PublicProjectSections :sections="data.sections" />
 
           <section
             v-if="data.timeline.latest.length"

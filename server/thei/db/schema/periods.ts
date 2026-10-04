@@ -6,18 +6,21 @@ import {
   sqliteTable,
   text,
 } from 'drizzle-orm/sqlite-core';
-import { STAGE_TYPES } from '../../../../shared/stage-period';
+import { PERIOD_OWNER_TYPES } from '../../../../shared/period';
 import { DATE_PRECISIONS } from '../../../../shared/date-precision';
 
-const allowedStageTypes = sql.raw(
-  STAGE_TYPES.map((type) => `'${type.replaceAll("'", "''")}'`).join(', '),
+const allowedOwnerTypes = sql.raw(
+  PERIOD_OWNER_TYPES.map((type) => `'${type.replaceAll("'", "''")}'`).join(
+    ', ',
+  ),
 );
 
-export const stagePeriods = sqliteTable(
-  'stage-periods',
+/** The dated stretches of an event or a project section, in their order. */
+export const periods = sqliteTable(
+  'periods',
   {
-    stageType: text({ enum: STAGE_TYPES }).notNull(),
-    stageUuid: text().notNull(),
+    ownerType: text({ enum: PERIOD_OWNER_TYPES }).notNull(),
+    ownerId: text().notNull(),
     sortOrder: integer().notNull(),
     startDate: text().notNull(),
     endDate: text().notNull(),
@@ -29,10 +32,10 @@ export const stagePeriods = sqliteTable(
     label: text().notNull().default(''),
   },
   (t) => [
-    primaryKey({ columns: [t.stageType, t.stageUuid, t.sortOrder] }),
+    primaryKey({ columns: [t.ownerType, t.ownerId, t.sortOrder] }),
     check(
-      'stage-periods-stage-type-check',
-      sql`${t.stageType} in (${allowedStageTypes})`,
+      'periods-owner-type-check',
+      sql`${t.ownerType} in (${allowedOwnerTypes})`,
     ),
   ],
 );

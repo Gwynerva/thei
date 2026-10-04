@@ -21,7 +21,7 @@ There are **three main kinds of entity**, and they form a ladder of complexity. 
 
 - **Diary entries** are a single dated thought — the simplest kind. No title, no summary, no tags, no action: a date and a body, one entry per day, addressed by the day alone (`/diary/YYYY-MM-DD/`). Never give a diary entry a title field or let one grow fields it does not need; the point of it is that writing one costs nothing. Relations are the one optional structure an entry carries: they are how an entry says what it is about, and what puts it on a project's chronology.
 - **Events** are small memorable moments worth not forgetting — too small or too loose to be a project. An event may relate to other entities and carry tags, but it is never a part of a project. Call events shown on a project page "related events", never "project events" or anything that implies ownership.
-- **Projects** are self-contained, structured, substantial episodes of a life. A project is made of its own parts: **stages** (dated periods of work) and **sections** (topical write-ups), plus media, a showcase, files, links and relations to other entities.
+- **Projects** are self-contained, structured, substantial episodes of a life. A project is made of its own parts, **sections** — write-ups of one part of it, each with a body, dated periods, or both — plus media, a showcase, files, links and relations to other entities. There is one kind of section: its periods are what put it on the project's chronology and among the dated sections, read in time order; the ones without dates are topical and read in the owner's order. The two groups are shown as two tabs, never as two kinds.
 
 Around them:
 
@@ -84,7 +84,7 @@ Around them:
 
 ## Public Text and Machine Readers
 
-- Every public project, event, stage, section and page is also served as Markdown at `<url>index.md`, built from the same `buildPublic*` functions with the visibility of a stranger. A representation must never be more permissive than the page it mirrors: build it for `STRANGER` (`server/thei/access-links/viewer.ts`), never for the request's own viewer.
+- Every public project, event, project section and page is also served as Markdown at `<url>index.md`, built from the same `buildPublic*` functions with the visibility of a stranger. A representation must never be more permissive than the page it mirrors: build it for `STRANGER` (`server/thei/access-links/viewer.ts`), never for the request's own viewer.
 - `/llms.txt` describes the site and what its entities mean. Keep it short and factual; it is a map, not a marketing page.
 - Open Graph cards are rendered on the server from the same public data. Only publicly openable entities get one, so a preview never shows what a visitor is about to be refused.
   - A card's content is built for `STRANGER` in `server/thei/og/content/` with the builders the page uses, and counts what the page counts. Layouts draw only that content (`server/thei/og/model.ts`); which layout and tone a card takes is chosen from it (`design.ts`), never set by hand.

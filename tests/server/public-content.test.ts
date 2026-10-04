@@ -12,7 +12,6 @@ import {
   buildPublicReferences,
   resolveSiteEntityCandidate,
   buildPublicProjectSectionSummary,
-  buildPublicProjectStageSummary,
 } from '../../server/thei/public/entities';
 import { OWNER, STRANGER } from '../../server/thei/access-links/viewer';
 
@@ -597,12 +596,12 @@ describe('public content media previews', () => {
     ).resolves.toEqual({ blocks: [] });
   });
 
-  it('builds a project stage card with its covering period and first media', async () => {
+  it('builds a dated section card with its covering period and first media', async () => {
     const image = {
-      assetUuid: 'stage-image',
-      familyUuid: 'stage-family',
-      contentHash: 'stage-hash',
-      slug: 'stage-image',
+      assetUuid: 'dated-image',
+      familyUuid: 'dated-family',
+      contentHash: 'dated-hash',
+      slug: 'dated-image',
       extension: 'webp',
       settingsKey: 'original',
       settings: null,
@@ -613,7 +612,7 @@ describe('public content media previews', () => {
     (globalThis as any).THEI_SERVER = {
       content: {
         findByOwner: async () => ({
-          contentUuid: 'stage-content',
+          contentUuid: 'dated-content',
           data: {
             blocks: [
               {
@@ -638,14 +637,15 @@ describe('public content media previews', () => {
       },
     };
 
-    const result = await buildPublicProjectStageSummary(
+    const result = await buildPublicProjectSectionSummary(
       { humanReadableSlug: 'project', publicId: 'Project' } as any,
       {
-        stageUuid: 'stage-uuid',
+        sectionUuid: 'dated-uuid',
         title: 'Research',
-        summary: 'Stage summary',
+        summary: 'Section summary',
         humanReadableSlug: 'research',
         publicId: 'Research',
+        createdAt: Date.UTC(2025, 0, 1),
         periods: [
           { startDate: '2027-03-10', endDate: '2027-03-14' },
           { startDate: '2026-11-02', endDate: '2026-11-08' },
@@ -658,7 +658,7 @@ describe('public content media previews', () => {
       period: { startDate: '2026-11-02', endDate: '2027-03-14' },
       media: {
         accent: { hue: 28, chroma: 0.15 },
-        src: '/projects/project-Project/content/stage-image.webp',
+        src: '/projects/project-Project/content/dated-image.webp',
       },
     });
     expect(result).not.toHaveProperty('projects');
@@ -723,12 +723,14 @@ describe('public content media previews', () => {
       humanReadableSlug: 'details',
       publicId: 'Details',
       createdAt: Date.UTC(2027, 3, 6),
+      periods: [],
     } as any;
 
     // A visitor never sees the private picture; the section is drawn instead,
     // like any entity whose body opens without one it may see.
     const visitor = await buildPublicProjectSectionSummary(project, section);
     expect(visitor.date).toBe('2027-04-06');
+    expect(visitor).not.toHaveProperty('period');
     expect(visitor.media).toMatchObject({ generated: true });
     expect(visitor.media!.src).toMatch(
       /^\/media\/generated-icons\/project-section\/[a-f0-9]{64}\.avif$/,

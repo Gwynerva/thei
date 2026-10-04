@@ -1,48 +1,41 @@
 <script lang="ts" setup>
+import type { ProjectSectionItem } from '#layers/thei/shared/project-content-item';
+import { normalizePeriods, type Period } from '#layers/thei/shared/period';
 import {
-  normalizeStagePeriods,
-  type ProjectContentItemBase,
-  type ProjectSectionContentItem,
-  type ProjectStageContentItem,
-} from '#layers/thei/shared/project-content-item';
-import type { StagePeriod } from '#layers/thei/shared/stage-period';
-import { isContentEmpty } from '#layers/thei/shared/content';
+  createEmptyContentFieldValue,
+  isContentEmpty,
+  type ContentFieldModelValue,
+} from '#layers/thei/shared/content';
+import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
 import FieldContentEditor from '#layers/thei/app/components/field/FieldContentEditor.vue';
 import FieldDateRangePopup from '#layers/thei/app/components/field/FieldDateRangePopup.vue';
 import DateRangeChip from '#layers/thei/app/components/DateRangeChip.vue';
 import ModalContainer from '#layers/thei/app/modals/ModalContainer.vue';
 import ModalTitle from '#layers/thei/app/modals/ModalTitle.vue';
 import ModalHeaderButton from '#layers/thei/app/modals/ModalHeaderButton.vue';
-import { buildProjectChildUrl } from '#layers/thei/shared/project-url';
+import { buildProjectSectionUrl } from '#layers/thei/shared/project-url';
 import LinkField from '../../components/LinkField.vue';
 import { projectContentItemDeleteModal } from './project-content-item-delete-modal';
 import { provideContentOwner } from '#layers/thei/app/composables/content-history/owner';
 
-type ProjectLinkIdentity = {
+type ModalData = {
   projectHumanReadableSlug: string;
   projectPublicId: string;
-};
-type ModalData = ProjectLinkIdentity & {
+  item?: ProjectSectionItem;
   /**
-   * Hands the item over to the project form, which saves itself when nothing
-   * else is waiting. The modal stays open: saving is a checkpoint, and closing
-   * is a decision of its own.
+   * Hands the section over to the project form, which saves itself when
+   * nothing else is waiting. The modal stays open: saving is a checkpoint,
+   * and closing is a decision of its own.
    */
-  onSave: (item: ProjectStageContentItem | ProjectSectionContentItem) => void;
-} & (
-    | { isStage: true; item?: ProjectStageContentItem }
-    | { isStage: false; item?: ProjectSectionContentItem }
-  );
+  onSave: (item: ProjectSectionItem) => void;
+};
 type Result = { type: 'deleted' };
-type ItemDraft = ProjectContentItemBase & {
-  stageUuid?: string;
-  sectionUuid?: string;
-  periods?: StagePeriod[];
+type SectionDraft = Omit<ProjectSectionItem, 'content'> & {
+  content: ContentFieldModelValue | null;
 };
 
 const emit = defineEmits<{ modalResult: [result: Result] }>();
 const props = defineProps<{ modalData: ModalData }>();
-const isStage = computed(() => props.modalData.isStage);
 /**
  * The content object is shared with the project form once handed over, and a
  * project save stamps it with the time it was stored. The stamp is not an edit
@@ -59,36 +52,35 @@ const {
       content: draft.content && { ...draft.content, updatedAt: undefined },
     }),
 });
-/** Whether the project form holds this item: opened from it, or saved once. */
+/** Whether the project form holds this section: opened from it, or saved once. */
 const exists = ref(Boolean(props.modalData.item));
-/** The title the item is known by in the project form. */
+/** The title the section is known by in the project form. */
 const savedTitle = ref(props.modalData.item?.title ?? '');
 const periodPopupOpen = ref(false);
 const periodPopupAnchor = useTemplateRef<HTMLElement>('periodPopupAnchor');
-const pendingPeriod = ref<StagePeriod>();
+const pendingPeriod = ref<Period>();
 const editedPeriodIndex = ref<number>();
 const modalContainer =
   useTemplateRef<InstanceType<typeof ModalContainer>>('modalContainer');
-const canSave = computed(() => {
-  if (!isDirty.value || !item.value.title.trim()) return false;
-  return isStage.value
-    ? Boolean(item.value.periods?.length)
-    : !isContentEmpty(item.value.content?.data);
-});
+const hasBody = computed(() => !isContentEmpty(item.value.content?.data));
+/** A section says something with a body, its dates, or both. */
+const canSave = computed(
+  () =>
+    isDirty.value &&
+    Boolean(item.value.title.trim()) &&
+    (item.value.periods.length > 0 || hasBody.value),
+);
 
 useModalCloseGuard(
   () => !isDirty.value || window.confirm(phrase.value.unsaved_modal_confirm),
 );
 useBeforeUnloadGuard(() => isDirty.value);
-// A stage or section not saved yet keeps its text's history under an address
-// of its own; it is not offered drafts of other new ones, which it could not
-// tell apart.
-provideContentOwner(
-  props.modalData.isStage ? 'project-stage' : 'project-section',
-  () =>
-    props.modalData.isStage ? item.value.stageUuid : item.value.sectionUuid,
-  { offersPendingDrafts: false },
-);
+// A section not saved yet keeps its text's history under an address of its
+// own; it is not offered drafts of other new ones, which it could not tell
+// apart.
+provideContentOwner('project-section', () => item.value.sectionUuid, {
+  offersPendingDrafts: false,
+});
 /**
  * A period is committed on a click, not the moment its dates are picked: its
  * certainty is chosen afterwards, on the popup's second step, and closing the
@@ -97,10 +89,10 @@ provideContentOwner(
 function confirmPeriod() {
   const period = pendingPeriod.value;
   if (!period) return;
-  const rest = (item.value.periods ?? []).filter(
+  const rest = item.value.periods.filter(
     (_, index) => index !== editedPeriodIndex.value,
   );
-  item.value.periods = normalizeStagePeriods([...rest, period]);
+  item.value.periods = normalizePeriods([...rest, period]);
   pendingPeriod.value = undefined;
   editedPeriodIndex.value = undefined;
   periodPopupOpen.value = false;
@@ -109,7 +101,7 @@ function confirmPeriod() {
 function openPeriod(index?: number) {
   editedPeriodIndex.value = index;
   pendingPeriod.value =
-    index === undefined ? undefined : { ...item.value.periods![index]! };
+    index === undefined ? undefined : { ...item.value.periods[index]! };
   periodPopupOpen.value = true;
 }
 
@@ -120,14 +112,14 @@ watch(periodPopupOpen, (isOpen) => {
 });
 
 /**
- * Saving inside the content editor hands the stage or section over too, the
- * same as the Save button: the editor stays open, and the project form decides
- * for itself whether this item is all that changed.
+ * Saving inside the content editor hands the section over too, the same as
+ * the Save button: the editor stays open, and the project form decides for
+ * itself whether this section is all that changed.
  *
- * A brand-new stage is left out until it has been saved once. Adding it is a
- * decision of its own, and it is made with the Save button. And an item the
- * Save button would refuse — no title, no period — is not handed over either:
- * the project could save it straight away.
+ * A brand-new section is left out until it has been saved once. Adding it is
+ * a decision of its own, and it is made with the Save button. And a section
+ * the Save button would refuse — no title — is not handed over either: the
+ * project could save it straight away.
  */
 function saveAfterContentEdit() {
   if (exists.value) save();
@@ -141,28 +133,19 @@ function handOver() {
   markSaved();
 }
 
-function buildItem(): ProjectStageContentItem | ProjectSectionContentItem {
-  const base: ProjectContentItemBase = {
+function buildItem(): ProjectSectionItem {
+  return {
+    sectionUuid: item.value.sectionUuid,
     title: item.value.title.trim(),
     summary: item.value.summary.trim(),
     humanReadableSlug: item.value.humanReadableSlug,
     publicId: item.value.publicId,
     isPrivate: item.value.isPrivate,
-    content: item.value.content,
+    periods: item.value.periods.length
+      ? normalizePeriods(item.value.periods)
+      : [],
+    content: item.value.content ?? createEmptyContentFieldValue(),
   };
-  return props.modalData.isStage
-    ? {
-        ...base,
-        isStage: true,
-        stageUuid: item.value.stageUuid,
-        periods: normalizeStagePeriods(item.value.periods),
-      }
-    : {
-        ...base,
-        isStage: false,
-        sectionUuid: item.value.sectionUuid,
-        content: item.value.content!,
-      };
 }
 
 function save() {
@@ -175,63 +158,57 @@ useSaveShortcut(save, {
   exclusive: true,
 });
 
-function createInitialItem(data: ModalData): ItemDraft {
+function createInitialItem(data: ModalData): SectionDraft {
   return {
-    stageUuid: data.isStage ? data.item?.stageUuid : undefined,
-    sectionUuid: !data.isStage ? data.item?.sectionUuid : undefined,
+    sectionUuid: data.item?.sectionUuid,
     title: data.item?.title ?? '',
     summary: data.item?.summary ?? '',
     humanReadableSlug: data.item?.humanReadableSlug ?? '',
     publicId: data.item?.publicId ?? randomId(14),
     isPrivate: data.item?.isPrivate ?? false,
+    periods: data.item?.periods ?? [],
     content: data.item?.content ?? null,
-    periods: data.isStage ? (data.item?.periods ?? []) : undefined,
   };
 }
 
-function childLinkDescription(slug: string, publicId: string) {
-  return buildProjectChildUrl(
+function sectionLinkDescription(slug: string, publicId: string) {
+  return buildProjectSectionUrl(
     props.modalData.projectHumanReadableSlug,
     props.modalData.projectPublicId,
-    isStage.value ? 'stages' : 'sections',
     slug,
     publicId,
   );
 }
 
 /**
- * While a stage or section that already exists on the site is open, the admin
- * bar's eye leads to its own public page rather than to the project's. It
- * uses the address the item was opened with: an unsaved edit of the slug has
- * no page yet.
+ * While a section that already exists on the site is open, the admin bar's
+ * eye leads to its own public page rather than to the project's. It uses the
+ * address the section was opened with: an unsaved edit of the slug has no
+ * page yet.
  */
 useRegisterAdminBarContextButton(
   computed(() => {
-    const data = props.modalData;
-    const opened = data.item;
-    const saved = data.isStage ? data.item?.stageUuid : data.item?.sectionUuid;
-    if (!opened || !saved || !props.modalData.projectPublicId) return undefined;
+    const opened = props.modalData.item;
+    if (!opened?.sectionUuid || !props.modalData.projectPublicId)
+      return undefined;
     return {
       to: {
-        href: childLinkDescription(opened.humanReadableSlug, opened.publicId),
+        href: sectionLinkDescription(opened.humanReadableSlug, opened.publicId),
         external: true,
       },
       icon: 'visibility',
-      title: isStage.value
-        ? phrase.value.view_project_stage
-        : phrase.value.view_content_section,
+      title: phrase.value.view_content_section,
     };
   }),
 );
 
 function removePeriod(index: number) {
-  item.value.periods = (item.value.periods ?? []).filter((_, i) => i !== index);
+  item.value.periods = item.value.periods.filter((_, i) => i !== index);
 }
 
 async function deleteItem() {
   if (!exists.value) return;
   const result = await openModal(projectContentItemDeleteModal, {
-    kind: props.modalData.isStage ? 'stage' : 'section',
     title: savedTitle.value,
   });
   if (result.type === 'deleted') emit('modalResult', result);
@@ -243,8 +220,8 @@ async function deleteItem() {
     <template #header>
       <div class="flex items-center gap-sm p-sm">
         <ModalTitle
-          :icon="isStage ? 'calendar' : 'file-tray-stack'"
-          :title="isStage ? phrase.project_stage : phrase.content_section"
+          :icon="entityTypeIcon('project-section')"
+          :title="phrase.content_section"
           class="flex-1"
         />
         <div class="flex items-center gap-xs">
@@ -252,11 +229,7 @@ async function deleteItem() {
             v-if="exists"
             icon="delete"
             variant="delete"
-            :label="
-              isStage
-                ? phrase.delete_project_stage
-                : phrase.delete_content_section
-            "
+            :label="phrase.delete_content_section"
             @click="deleteItem"
           />
           <ModalHeaderButton
@@ -279,25 +252,13 @@ async function deleteItem() {
     <div class="flex flex-col gap-md p-sm">
       <Field>
         <div class="flex items-center justify-between gap-sm">
-          <FieldLabel required>{{
-            isStage ? phrase.project_stage_title : phrase.content_section_title
-          }}</FieldLabel>
-          <span
-            :data-title-popup="
-              isStage
-                ? phrase.project_stage_private_hint
-                : phrase.content_section_private_hint
-            "
-          >
+          <FieldLabel required>{{ phrase.content_section_title }}</FieldLabel>
+          <span :data-title-popup="phrase.content_section_private_hint">
             <FieldToggle v-model="item.isPrivate">
               <span class="inline-flex items-center gap-1">
                 <Icon name="lock-close" />
                 <span class="max-sm:hidden">
-                  {{
-                    isStage
-                      ? phrase.project_stage_private
-                      : phrase.content_section_private
-                  }}
+                  {{ phrase.content_section_private }}
                 </span>
               </span>
             </FieldToggle>
@@ -309,20 +270,16 @@ async function deleteItem() {
         v-model:title="item.title"
         v-model:human-readable-slug="item.humanReadableSlug"
         v-model:public-id="item.publicId"
-        :entity-name="isStage ? phrase.project_stage : phrase.content_section"
-        :link-description="childLinkDescription"
+        :entity-name="phrase.content_section"
+        :link-description="sectionLinkDescription"
       />
       <Field>
-        <FieldLabel>{{
-          isStage
-            ? phrase.project_stage_summary
-            : phrase.content_section_summary
-        }}</FieldLabel>
+        <FieldLabel>{{ phrase.content_section_summary }}</FieldLabel>
         <FieldTextarea v-model="item.summary" />
       </Field>
-      <Field v-if="isStage">
+      <Field>
         <div class="flex items-center justify-between gap-sm">
-          <FieldLabel required>{{ phrase.project_stage_period }}</FieldLabel>
+          <FieldLabel>{{ phrase.section_periods }}</FieldLabel>
           <div ref="periodPopupAnchor">
             <ModalHeaderButton
               icon="plus"
@@ -347,8 +304,16 @@ async function deleteItem() {
           </div>
         </div>
         <div class="flex flex-wrap gap-xs">
-          <span v-if="!item.periods?.length" class="text-sm text-text-3 italic">
-            {{ phrase.project_stage_period_empty }}
+          <span
+            v-if="!item.periods.length"
+            class="text-sm text-text-3 italic"
+            data-section-periods-empty
+          >
+            {{
+              hasBody
+                ? phrase.project_sections_undated
+                : phrase.section_needs_body_or_period
+            }}
           </span>
           <DateRangeChip
             v-for="(period, index) in item.periods"
@@ -363,22 +328,11 @@ async function deleteItem() {
       </Field>
 
       <Field>
-        <FieldLabel :required="!isStage">{{
-          isStage
-            ? phrase.project_stage_content
-            : phrase.content_section_content
-        }}</FieldLabel>
+        <FieldLabel>{{ phrase.content_section_content }}</FieldLabel>
         <FieldContentEditor
           v-model="item.content"
-          :content-slot="
-            isStage ? 'project-stage-body' : 'project-section-body'
-          "
-          :title-label="
-            item.title.trim() ||
-            (isStage
-              ? phrase.project_stage_content
-              : phrase.content_section_content)
-          "
+          content-slot="project-section-body"
+          :title-label="item.title.trim() || phrase.content_section_content"
           @saved="saveAfterContentEdit"
         />
       </Field>

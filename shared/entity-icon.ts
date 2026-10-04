@@ -9,8 +9,7 @@ import type { ContentEntityType } from './content-link';
  */
 const ENTITY_TYPE_ICONS = {
   project: 'project',
-  'project-stage': 'calendar',
-  'project-section': 'file-tray-stack',
+  'project-section': 'project-section',
   event: 'event',
   'diary-entry': 'thought',
   page: 'page',

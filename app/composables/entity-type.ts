@@ -5,7 +5,6 @@ export function entityTypeLabel(type: ContentEntityType): string {
   const value = phrase.value;
   return {
     project: value.project,
-    'project-stage': value.project_stage,
     'project-section': value.content_section,
     event: value.event,
     'diary-entry': value.diary_entry,

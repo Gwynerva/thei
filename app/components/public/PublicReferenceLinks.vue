@@ -24,7 +24,7 @@ defineProps<{
  * In "Related" the relation's own direction is carried by the sub-list a tile
  * sits in, and in "Links" a tile may lead anywhere, so what a reader cannot
  * tell from a tile is what kind of thing it opens: a project, one of its
- * stages, an event, a diary entry, a page — or another site. A tile that
+ * sections, an event, a diary entry, a page — or another site. A tile that
  * shows the kind's own glyph for want of a picture needs no badge repeating it.
  */
 function entityIcon(type?: PublicReferenceLink['kind']): IconName | undefined {

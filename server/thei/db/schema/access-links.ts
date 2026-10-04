@@ -38,7 +38,7 @@ export const shareLinks = sqliteTable(
      */
     token: text().notNull().unique(),
     /**
-     * `project`, `event`, `page` or `diary-entry`; a stage or a section is
+     * `project`, `event`, `page` or `diary-entry`; a section is
      * shared with its project.
      */
     entityType: text()

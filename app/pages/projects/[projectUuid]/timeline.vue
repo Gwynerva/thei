@@ -16,7 +16,7 @@ import { buildProjectTimelineUrl } from '#layers/thei/shared/project-url';
  * A project's own chronology: the second tab of its page.
  *
  * The same feed as `/life/`, narrowed to what belongs to this project — its
- * stages and sections, its statuses, and the events and diary entries related
+ * sections, its statuses, and the events and diary entries related
  * to it. The hero is the overview's hero, so switching tabs changes what is
  * under it and nothing else.
  */
@@ -71,13 +71,12 @@ if (!resource.data.value) throw createResourceError({ statusCode: 502 });
 const activeDate = ref(requestedDate.value ?? resource.data.value.anchorDate);
 
 /**
- * Stages and sections used to have lists of their own; those filters are
- * still pages in their own right, with a name and a canonical. Any other
- * filter is a way of reading this page and points back at it.
+ * Sections used to have a list of their own; that filter is still a page in
+ * its own right, with a name and a canonical. Any other filter is a way of
+ * reading this page and points back at it.
  */
 const preset = computed(() => projectTimelinePreset(filter.value));
 const presetTitle = computed(() => {
-  if (preset.value?.id === 'stages') return phrase.value.project_stages;
   if (preset.value?.id === 'sections')
     return phrase.value.project_content_sections;
   return undefined;

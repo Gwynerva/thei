@@ -1,6 +1,6 @@
 # Content blocks
 
-Every text in Thei — a project description, a stage, a section, an event body,
+Every text in Thei — a project description, a project section, an event body,
 a page, the "about me" — is one Editor.js document stored as JSON in the
 `content` table. This is the list of blocks such a document can hold, exactly
 as `normalizeBlockData` in `shared/content.ts` accepts them. Unsaved drafts and
@@ -77,7 +77,6 @@ survives the site moving to another domain. The kinds are those of
 | `entityType`      | `entityId` is the  |
 | ----------------- | ------------------ |
 | `project`         | project's uuid     |
-| `project-stage`   | stage's uuid       |
 | `project-section` | section's uuid     |
 | `event`           | event's uuid       |
 | `diary-entry`     | diary entry's uuid |
@@ -154,7 +153,7 @@ assetTotalSize }`) and nothing else;
 - `privateSectionExpanded` — `{ summary, blocks }`, the same summary and the
   blocks themselves, only ever sent to the owner or to the holder of a live
   temporary access link for this very entity (a project's link covers its
-  stages and sections). Links inside it to other entities are still judged
+  sections). Links inside it to other entities are still judged
   for the holder as a stranger.
 
 ## Text and Markdown

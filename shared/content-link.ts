@@ -11,7 +11,6 @@ import {
  */
 export const CONTENT_ENTITY_TYPES = [
   'project',
-  'project-stage',
   'project-section',
   'event',
   'diary-entry',
@@ -71,7 +70,7 @@ export type ResolvedContentEntityLink = ContentEntityReference & {
    * same day and a reader formats it as a date.
    */
   date?: string;
-  /** The project a stage or a section belongs to. */
+  /** The project a section belongs to. */
   parent?: { title: string; href: string };
 };
 

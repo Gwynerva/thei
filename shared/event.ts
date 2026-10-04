@@ -1,5 +1,5 @@
 import type { ContentFieldModelValue } from './content';
-import type { StagePeriod } from './stage-period';
+import type { Period } from './period';
 import type { ProjectEventAccessLevel } from './access-level';
 import type { ProjectActionEditData } from './project-action';
 import type { OtherAssetSaveItem } from './admin/project';
@@ -17,7 +17,7 @@ export type EventEditData = {
   access: ProjectEventAccessLevel | '';
   humanReadableSlug: string;
   publicId: string;
-  periods: StagePeriod[];
+  periods: Period[];
   content: ContentFieldModelValue | null;
   otherAssets?: OtherAssetSaveItem[];
   externalLinks?: ExternalLinkListItem[];

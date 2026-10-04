@@ -241,26 +241,27 @@ describe('asset library', () => {
       '/preview/content',
     );
   });
-  function addStage(isPrivate = false) {
-    db.insert(schema.projectStages)
+  function addLaunch(isPrivate = false) {
+    db.insert(schema.projectContentSections)
       .values({
-        stageUuid: 'stage',
+        sectionUuid: 'launch',
         projectUuid: 'p',
         title: 'Launch',
         summary: 'Rocket day',
         humanReadableSlug: 'launch',
-        publicId: 'st',
+        publicId: 'ls',
         isPrivate,
+        sortOrder: 1,
         createdAt: 1,
         updatedAt: 1,
       })
       .run();
     db.insert(schema.content)
       .values({
-        contentUuid: 'stage-content',
-        ownerType: 'project-stage',
-        ownerId: 'stage',
-        slot: 'project-stage-body',
+        contentUuid: 'launch-content',
+        ownerType: 'project-section',
+        ownerId: 'launch',
+        slot: 'project-section-body',
         data: { blocks: [] },
         createdAt: 1,
         updatedAt: 1,
@@ -270,49 +271,49 @@ describe('asset library', () => {
       .values({
         assetUuid: 'b',
         containerType: 'content',
-        containerId: 'stage-content',
+        containerId: 'launch-content',
         role: 'content',
       })
       .run();
   }
-  it('lists a stage as a source of its own, named with its project', () => {
-    addStage();
+  it('lists a section as a source of its own, named with its project', () => {
+    addLaunch();
 
     expect(getAssetUsages('b').placements).toMatchObject([
       {
         source: {
-          type: 'project-stage',
-          id: 'stage',
+          type: 'project-section',
+          id: 'launch',
           title: 'Launch',
           summary: 'Rocket day',
-          url: '/projects/project-p/stages/launch-st/',
-          editUrl: '/admin/projects/p/edit/?stage=st',
+          url: '/projects/project-p/sections/launch-ls/',
+          editUrl: '/admin/projects/p/edit/?section=ls',
           parent: { title: 'Проект Луна', url: '/projects/project-p/' },
         },
         isPrivate: false,
       },
     ]);
-    // The stage took the only file nothing used, so no "unused" group is left.
+    // The section took the only file nothing used, so no "unused" group is left.
     const groups = listLibrarySections().items;
     expect(groups.map((g) => `${g.type}:${g.id}:${g.count}`).sort()).toEqual([
       'page:page:1',
       'profile:me:1',
+      'project-section:launch:1',
       'project-section:section:1',
-      'project-stage:stage:1',
       'project:p:1',
       'tag:tag:1',
     ]);
-    expect(groups.find((g) => g.type === 'project-stage')?.parent).toEqual({
+    expect(groups.find((g) => g.id === 'launch')?.parent).toEqual({
       title: 'Проект Луна',
       url: '/projects/project-p/',
     });
     // Found by its own words, not the project's; and the project group does
     // not repeat what its parts hold.
     expect(listLibrarySections({ q: 'rocket' }).items.map((g) => g.id)).toEqual(
-      ['stage'],
+      ['launch'],
     );
     expect(
-      listSourceAssets('project-stage', 'stage').items.map(
+      listSourceAssets('project-section', 'launch').items.map(
         (i) => i.asset.assetUuid,
       ),
     ).toEqual(['b']);
@@ -320,11 +321,11 @@ describe('asset library', () => {
       listSourceAssets('project', 'p').items.map((i) => i.asset.assetUuid),
     ).toEqual(['a']);
   });
-  it('keeps a stage private when it or its project is', () => {
-    addStage(true);
+  it('keeps a section private when it or its project is', () => {
+    addLaunch(true);
     expect(getAssetUsages('b').placements[0]?.isPrivate).toBe(true);
 
-    db.update(schema.projectStages).set({ isPrivate: false }).run();
+    db.update(schema.projectContentSections).set({ isPrivate: false }).run();
     expect(getAssetUsages('b').placements[0]?.isPrivate).toBe(false);
 
     db.update(schema.projects)

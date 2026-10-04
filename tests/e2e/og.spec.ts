@@ -86,13 +86,10 @@ test('every kind of page previews as its own card', async ({
         cv: false,
         descriptionContent: content,
         tags: [{ title: `og-tag-${stamp}` }],
-        contentSections: [
-          { ...child, isStage: false, publicId: `ogsec${stamp}` },
-        ],
-        stages: [
+        sections: [
+          { ...child, publicId: `ogsec${stamp}`, periods: [] },
           {
             ...child,
-            isStage: true,
             publicId: `ogst${stamp}`,
             periods: [{ startDate: '2025-05-01', endDate: '2025-08-31' }],
           },
@@ -140,8 +137,8 @@ test('every kind of page previews as its own card', async ({
     ['/pages/page-0/', '/og/page/page-0.png'],
     [`/projects/og-project-ogp${stamp}/`, `/og/project/ogp${stamp}.png`],
     [
-      `/projects/og-project-ogp${stamp}/stages/part-ogst${stamp}/`,
-      `/og/stage/ogst${stamp}.png`,
+      `/projects/og-project-ogp${stamp}/sections/part-ogst${stamp}/`,
+      `/og/section/ogst${stamp}.png`,
     ],
     [
       `/projects/og-project-ogp${stamp}/sections/part-ogsec${stamp}/`,
@@ -176,19 +173,14 @@ test('a private project has no card, and its address draws none', async ({
         showcase: false,
         cv: false,
         descriptionContent: content,
-        contentSections: [],
-        stages: [],
+        sections: [],
       },
     })
   ).json();
   await owner.dispose();
   expect(created.type, JSON.stringify(created)).toBe('success');
-  expect((await request.get(`/og/project/${publicId}.png`)).status()).toBe(
-    404,
-  );
-  expect((await request.get(`/api/og/project/${publicId}`)).status()).toBe(
-    404,
-  );
+  expect((await request.get(`/og/project/${publicId}.png`)).status()).toBe(404);
+  expect((await request.get(`/api/og/project/${publicId}`)).status()).toBe(404);
 });
 
 test('an edit that changes a card gives it a new address', async ({

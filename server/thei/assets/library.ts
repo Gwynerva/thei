@@ -19,7 +19,7 @@ import {
 import { normalizeAssetExtension } from '../../../shared/assets/formats';
 import { richTextToPlainText } from '../../../shared/rich-text';
 import {
-  buildProjectChildUrl,
+  buildProjectSectionUrl,
   buildProjectUrl,
 } from '../../../shared/project-url';
 import { buildEventUrl } from '../../../shared/event-url';
@@ -38,8 +38,7 @@ export interface LibraryQuery extends AssetSelectionConstraints {
 
 // Resolve owners in SQL. Only page assets and their placements are materialized;
 // rendering the library never hydrates content or invokes media processing.
-// A stage or a section is a source of its own, carrying its project as the
-// parent; a private project makes everything in it private.
+// A section is a source of its own, carrying its project as the parent; a private project makes everything in it private.
 const ownersSql = `
 WITH sources AS (
   SELECT 'project' AS sourceType, projectUuid AS sourceId, title, summary,
@@ -50,9 +49,6 @@ WITH sources AS (
   UNION ALL SELECT 'diary-entry',diaryUuid,date,'',date,'',updatedAt,access='private','','','','' FROM "diary-entries"
   UNION ALL SELECT 'tag',tagUuid,title,description,slug,publicId,0,0,'','','','' FROM tags
   UNION ALL SELECT 'profile',profileId,displayName,slogan,'','',0,0,'','','','' FROM profiles
-  UNION ALL SELECT 'project-stage',st.stageUuid,st.title,st.summary,st.humanReadableSlug,st.publicId,st.updatedAt,
-    (st.isPrivate OR p.access='private'),p.projectUuid,p.title,p.humanReadableSlug,p.publicId
-    FROM "project-stages" st JOIN projects p ON p.projectUuid=st.projectUuid
   UNION ALL SELECT 'project-section',se.sectionUuid,se.title,se.summary,se.humanReadableSlug,se.publicId,se.updatedAt,
     (se.isPrivate OR p.access='private'),p.projectUuid,p.title,p.humanReadableSlug,p.publicId
     FROM "project-content-sections" se JOIN projects p ON p.projectUuid=se.projectUuid
@@ -169,7 +165,7 @@ interface SourceRow {
   publicId: string;
   updatedAt: number;
   sourcePrivate: number;
-  /** The project of a stage or a section; empty for every other source. */
+  /** The project of a section; empty for every other source. */
   parentId: string;
   parentTitle: string;
   parentSlug: string;
@@ -190,20 +186,18 @@ function sourceInfo(row: SourceRow): AssetSource {
     summary: row.summary ?? '',
     updatedAt: row.updatedAt,
   };
-  if (type === 'project-stage' || type === 'project-section') {
-    // A stage or a section has no editor of its own: the project's editor
-    // opens with that part's modal already up, as the admin bar does.
-    const isStage = type === 'project-stage';
+  if (type === 'project-section') {
+    // A section has no editor of its own: the project's editor opens with
+    // its modal already up, as the admin bar does.
     return {
       ...base,
-      url: buildProjectChildUrl(
+      url: buildProjectSectionUrl(
         row.parentSlug,
         row.parentPublicId,
-        isStage ? 'stages' : 'sections',
         slug,
         publicId,
       ),
-      editUrl: `/admin/projects/${row.parentId}/edit/?${isStage ? 'stage' : 'section'}=${encodeURIComponent(publicId)}`,
+      editUrl: `/admin/projects/${row.parentId}/edit/?section=${encodeURIComponent(publicId)}`,
       parent: {
         title: row.parentTitle,
         url: buildProjectUrl(row.parentSlug, row.parentPublicId),

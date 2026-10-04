@@ -217,31 +217,17 @@ export const baselineSql: string[] = [
 `,
   `CREATE INDEX \`project-content-sections-project-idx\` ON \`project-content-sections\` (\`projectUuid\`,\`sortOrder\`);`,
   `CREATE UNIQUE INDEX \`project-content-sections-public-id-unique\` ON \`project-content-sections\` (\`publicId\`);`,
-  `CREATE TABLE \`project-stages\` (
-	\`stageUuid\` text PRIMARY KEY NOT NULL,
-	\`projectUuid\` text NOT NULL,
-	\`title\` text NOT NULL,
-	\`summary\` text DEFAULT '' NOT NULL,
-	\`humanReadableSlug\` text NOT NULL,
-	\`publicId\` text NOT NULL,
-	\`isPrivate\` integer DEFAULT false NOT NULL,
-	\`createdAt\` integer NOT NULL,
-	\`updatedAt\` integer NOT NULL
-);
-`,
-  `CREATE INDEX \`project-stages-project-idx\` ON \`project-stages\` (\`projectUuid\`);`,
-  `CREATE UNIQUE INDEX \`project-stages-public-id-unique\` ON \`project-stages\` (\`publicId\`);`,
-  `CREATE TABLE \`stage-periods\` (
-	\`stageType\` text NOT NULL,
-	\`stageUuid\` text NOT NULL,
+  `CREATE TABLE \`periods\` (
+	\`ownerType\` text NOT NULL,
+	\`ownerId\` text NOT NULL,
 	\`sortOrder\` integer NOT NULL,
 	\`startDate\` text NOT NULL,
 	\`endDate\` text NOT NULL,
 	\`precision\` text DEFAULT 'exact' NOT NULL,
 	\`precisionNote\` text DEFAULT '' NOT NULL,
 	\`label\` text DEFAULT '' NOT NULL,
-	PRIMARY KEY(\`stageType\`, \`stageUuid\`, \`sortOrder\`),
-	CONSTRAINT "stage-periods-stage-type-check" CHECK("stage-periods"."stageType" in ('project-stage', 'event-stage'))
+	PRIMARY KEY(\`ownerType\`, \`ownerId\`, \`sortOrder\`),
+	CONSTRAINT "periods-owner-type-check" CHECK("periods"."ownerType" in ('event', 'project-section'))
 );
 `,
   `CREATE TABLE \`entity-relations\` (

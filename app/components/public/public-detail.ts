@@ -3,7 +3,7 @@ import type {
   PublicReferences,
   PublicTagSummary,
 } from '#layers/thei/shared/api/public';
-import type { StagePeriod } from '#layers/thei/shared/stage-period';
+import type { Period } from '#layers/thei/shared/period';
 import { publicReferenceSplitSize } from '#layers/thei/shared/public-references';
 import type { IconName } from '#thei/icons';
 import type { ContentHeading } from '#layers/thei/app/components/content/content-headings';
@@ -57,7 +57,7 @@ export function createdAndUpdatedTimelineItems(
 /**
  * The first and the last of something, as key dates, newest first.
  *
- * When there is only one — one stage, one status — or when both land on the
+ * When there is only one — one section, one status — or when both land on the
  * same day and the same page, "first" and "last" would name the same thing
  * twice, so it collapses into a single line under the plain name instead.
  */
@@ -141,16 +141,16 @@ export function sortPublicDetailTimelineItems(
     .map(({ item }) => item);
 }
 
-/** Where a stage, section or diary entry sits among its own kind. */
+/** Where a section or a diary entry sits among its own kind. */
 export type PublicDetailNeighbours = PublicNeighbours & {
-  kind: 'project-stage' | 'project-section' | 'diary-entry';
+  kind: 'project-section' | 'diary-entry';
 };
 
 export type PublicDetailPanelData = {
   contents?: ContentHeading[];
   neighbours?: PublicDetailNeighbours;
   chronology?: PublicDetailTimelineItem[];
-  periods?: StagePeriod[];
+  periods?: Period[];
   tags?: PublicTagSummary[];
   references: PublicReferences;
 };

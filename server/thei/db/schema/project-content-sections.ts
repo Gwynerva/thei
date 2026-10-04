@@ -28,22 +28,3 @@ export const projectContentSections = sqliteTable(
     uniqueIndex('project-content-sections-public-id-unique').on(t.publicId),
   ],
 );
-
-export const projectStages = sqliteTable(
-  'project-stages',
-  {
-    stageUuid: text().primaryKey(),
-    projectUuid: text().notNull(),
-    title: text().notNull(),
-    summary: text().notNull().default(''),
-    humanReadableSlug: text().notNull(),
-    publicId: text().notNull(),
-    isPrivate: integer({ mode: 'boolean' }).notNull().default(false),
-    createdAt: integer().notNull(),
-    updatedAt: integer().notNull(),
-  },
-  (t) => [
-    index('project-stages-project-idx').on(t.projectUuid),
-    uniqueIndex('project-stages-public-id-unique').on(t.publicId),
-  ],
-);

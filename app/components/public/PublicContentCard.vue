@@ -38,7 +38,7 @@ const props = defineProps<{
   media?: MediaDescriptor;
   projects?: PublicEntityLink[];
   /**
-   * The project a stage or a section belongs to. Not a relation — a parent —
+   * The project a section belongs to. Not a relation — a parent —
    * so it sits above the title rather than among the related entities.
    */
   parent?: PublicEntityReference;

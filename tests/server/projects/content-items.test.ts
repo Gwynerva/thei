@@ -4,24 +4,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { schema } from '../../../server/thei/db/schema';
 import { createContentHistoryTable } from '../fixtures/content-history-table';
 import {
-  applyProjectContentSections,
-  deleteProjectContentSections,
-  getProjectContentSections,
-  prepareProjectContentSections,
+  applyProjectSections,
+  deleteProjectSections,
+  getProjectSections,
+  prepareProjectSections,
 } from '../../../server/thei/projects/content-sections';
-import {
-  applyProjectStages,
-  deleteProjectStages,
-  getProjectStages,
-  prepareProjectStages,
-} from '../../../server/thei/projects/stages';
 import {
   prepareProjectContentItems,
   ProjectContentItemStorageError,
   projectContentItemIdentities,
   projectContentItemIdsToRemove,
 } from '../../../server/thei/projects/content-items';
-import { stagePeriodsEqual } from '../../../server/thei/projects/stage-periods';
+import { periodsEqual } from '../../../server/thei/periods';
+import type { Period } from '../../../shared/period';
+import type { ProjectSectionItem } from '../../../shared/project-content-item';
 
 let rawDb: Database.Database | undefined;
 
@@ -38,7 +34,7 @@ describe('project content item preparation', () => {
       existingIds: new Set(['known']),
       getId: (item: { id?: string }) => item.id,
       createId: async () => 'created',
-      label: 'stage',
+      label: 'section',
       prepare: async (item: { id?: string }, id: string) => ({ ...item, id }),
     };
 
@@ -53,22 +49,22 @@ describe('project content item preparation', () => {
     ).rejects.toThrow(ProjectContentItemStorageError);
     await expect(
       prepareProjectContentItems([{ id: 'foreign' }], baseOptions),
-    ).rejects.toThrow('Unknown stage');
+    ).rejects.toThrow('Unknown section');
     expect(projectContentItemIdsToRemove(['a', 'b'], ['b', 'c'])).toEqual([
       'a',
     ]);
   });
 });
 
-describe('project content item storage', () => {
-  it('rejects unsupported stage owner types', () => {
+describe('project section storage', () => {
+  it('rejects unsupported period owner types', () => {
     const db = createDb();
     expect(() =>
       db
-        .insert(schema.stagePeriods)
+        .insert(schema.periods)
         .values({
-          stageType: 'unsupported-stage' as 'project-stage',
-          stageUuid: 'stage',
+          ownerType: 'project-stage' as 'project-section',
+          ownerId: 'section',
           sortOrder: 0,
           startDate: '2026-01-01',
           endDate: '2026-01-02',
@@ -77,124 +73,118 @@ describe('project content item storage', () => {
     ).toThrow();
   });
 
-  it('sorts stages, preserves section order, and cleans removed content', async () => {
+  it('keeps the owner order of undated sections before the dated ones in time, and cleans removed ones', async () => {
     const db = createDb();
     installServerContext(db);
-    const stages: NonNullable<Parameters<typeof applyProjectStages>[3]> = [
-      {
-        stageUuid: 'stage-late',
-        isStage: true,
-        title: 'Late',
-        summary: '',
-        humanReadableSlug: 'late',
-        publicId: 'StageLate',
-        isPrivate: false,
-        periods: [{ startDate: '2026-06-01', endDate: '2026-06-30' }],
-        contentSave: preparedContent('content-late', 'Late content'),
-      },
-      {
-        stageUuid: 'stage-early',
-        isStage: true,
-        title: 'Early',
-        summary: '',
-        humanReadableSlug: 'early',
-        publicId: 'StageEarly',
-        isPrivate: false,
-        periods: [{ startDate: '2025-01-01', endDate: '2025-01-31' }],
-        contentSave: preparedContent('content-early', 'Early content'),
-      },
-    ];
-    const sections: NonNullable<
-      Parameters<typeof applyProjectContentSections>[3]
-    > = [
-      {
-        sectionUuid: 'section-second',
-        isStage: false,
-        title: 'Second',
-        summary: '',
-        humanReadableSlug: 'second',
-        publicId: 'SectionSecond',
-        isPrivate: false,
-        content: { data: { blocks: [] } },
-        contentSave: preparedContent('content-second', 'Second content'),
-      },
-      {
-        sectionUuid: 'section-first',
-        isStage: false,
-        title: 'First',
-        summary: '',
-        humanReadableSlug: 'first',
-        publicId: 'SectionFirst',
-        isPrivate: true,
-        content: { data: { blocks: [] } },
-        contentSave: preparedContent('content-first', 'First content'),
-      },
+    const sections: NonNullable<Parameters<typeof applyProjectSections>[3]> = [
+      section('section-late', 'Late', {
+        periods: [period('2026-06-01', '2026-06-30')],
+      }),
+      section('section-second', 'Second'),
+      section('section-early', 'Early', {
+        periods: [period('2025-01-01', '2025-01-31')],
+      }),
+      section('section-first', 'First', { isPrivate: true }),
     ];
 
-    applyProjectStages(db, schema, 'project', stages);
-    db.insert(schema.stagePeriods)
+    applyProjectSections(db, schema, 'project', sections);
+    db.insert(schema.periods)
       .values({
-        stageType: 'event-stage',
-        stageUuid: 'stage-late',
+        ownerType: 'event',
+        ownerId: 'section-late',
         sortOrder: 0,
         startDate: '2027-01-01',
         endDate: '2027-01-02',
       })
       .run();
-    applyProjectContentSections(db, schema, 'project', sections);
     db.insert(schema.assetUsages)
       .values({
         assetUuid: 'asset-orphan',
         containerType: 'content',
-        containerId: 'content-late',
+        containerId: 'content-section-late',
         role: 'content',
       })
       .run();
 
-    await expect(getProjectStages('project')).resolves.toMatchObject([
-      { stageUuid: 'stage-early' },
-      { stageUuid: 'stage-late' },
+    await expect(getProjectSections('project')).resolves.toMatchObject([
+      { sectionUuid: 'section-second', periods: [] },
+      { sectionUuid: 'section-first', periods: [] },
+      { sectionUuid: 'section-early' },
+      { sectionUuid: 'section-late' },
     ]);
-    await expect(getProjectContentSections('project')).resolves.toMatchObject([
-      { sectionUuid: 'section-second' },
-      { sectionUuid: 'section-first' },
-    ]);
-
-    applyProjectStages(db, schema, 'project', [
-      {
-        ...stages[1]!,
-        contentSave: {
-          type: 'delete',
-          existingContentUuid: 'content-early',
-        },
-      },
-    ]);
-    deleteProjectContentSections(db, schema, 'project');
-
-    expect(db.select().from(schema.projectStages).all()).toHaveLength(1);
     expect(
       db
         .select()
-        .from(schema.stagePeriods)
+        .from(schema.projectContentSections)
         .all()
-        .filter((period) => period.stageType === 'event-stage'),
-    ).toHaveLength(1);
+        .sort((left, right) => left.sortOrder - right.sortOrder)
+        .map((row) => row.sectionUuid),
+    ).toEqual([
+      'section-second',
+      'section-first',
+      'section-early',
+      'section-late',
+    ]);
+
+    // The late section goes, and its body, files and periods with it; an
+    // event's period that happens to share its id stays.
+    applyProjectSections(db, schema, 'project', [
+      sections[1]!,
+      sections[2]!,
+      sections[3]!,
+    ]);
+    expect(
+      db
+        .select()
+        .from(schema.content)
+        .all()
+        .map((row) => row.contentUuid),
+    ).not.toContain('content-section-late');
+    expect(db.select().from(schema.assetUsages).all()).toEqual([]);
+    expect(
+      db
+        .select()
+        .from(schema.periods)
+        .all()
+        .map((row) => `${row.ownerType}:${row.ownerId}`)
+        .sort(),
+    ).toEqual(['event:section-late', 'project-section:section-early']);
+
+    deleteProjectSections(db, schema, 'project');
     expect(db.select().from(schema.projectContentSections).all()).toEqual([]);
     expect(db.select().from(schema.content).all()).toEqual([]);
-    expect(db.select().from(schema.assetUsages).all()).toEqual([]);
-
-    deleteProjectStages(db, schema, 'project');
-    expect(db.select().from(schema.projectStages).all()).toEqual([]);
-    expect(db.select().from(schema.stagePeriods).all()).toEqual([
+    expect(db.select().from(schema.periods).all()).toEqual([
       {
-        stageType: 'event-stage',
-        stageUuid: 'stage-late',
+        ownerType: 'event',
+        ownerId: 'section-late',
         sortOrder: 0,
         startDate: '2027-01-01',
         endDate: '2027-01-02',
         precision: 'exact',
         precisionNote: '',
         label: '',
+      },
+    ]);
+  });
+
+  it('keeps a section that is only its dates without any body', async () => {
+    const db = createDb();
+    installServerContext(db);
+    applyProjectSections(db, schema, 'project', [
+      {
+        ...section('section-dates', 'Dates', {
+          periods: [period('2026-03-01', '2026-03-10')],
+        }),
+        contentSave: { type: 'delete' },
+      },
+    ]);
+
+    expect(db.select().from(schema.content).all()).toEqual([]);
+    await expect(getProjectSections('project')).resolves.toMatchObject([
+      {
+        sectionUuid: 'section-dates',
+        periods: [{ startDate: '2026-03-01', endDate: '2026-03-10' }],
+        content: { data: { blocks: [] } },
       },
     ]);
   });
@@ -207,32 +197,22 @@ describe('project content item storage', () => {
       { ...dates, precision: 'exact' as const, precisionNote: '', label: 'b' },
       { ...dates, precision: 'exact' as const, precisionNote: '', label: 'a' },
     ];
-    applyProjectStages(db, schema, 'project', [
-      {
-        stageUuid: 'stage',
-        isStage: true,
-        title: 'Trip',
-        summary: '',
-        humanReadableSlug: 'trip',
-        publicId: 'StageTrip',
-        isPrivate: false,
-        periods,
-        contentSave: preparedContent('content-trip', 'Trip content'),
-      },
+    applyProjectSections(db, schema, 'project', [
+      section('section', 'Trip', { periods }),
     ]);
 
-    const [stage] = await getProjectStages('project');
-    expect(stage!.periods.map((period) => period.label)).toEqual(['b', 'a']);
-    expect(stagePeriodsEqual(stage!.periods, periods)).toBe(true);
+    const [stored] = await getProjectSections('project');
+    expect(stored!.periods.map((item) => item.label)).toEqual(['b', 'a']);
+    expect(periodsEqual(stored!.periods, periods)).toBe(true);
     expect(
-      stagePeriodsEqual(stage!.periods, [
+      periodsEqual(stored!.periods, [
         periods[0]!,
         { ...periods[1]!, label: 'c' },
       ]),
     ).toBe(false);
   });
 
-  it('returns explicit empty content for a damaged section row', async () => {
+  it('returns explicit empty content for a section without a body row', async () => {
     const db = createDb();
     installServerContext(db);
     db.insert(schema.projectContentSections)
@@ -250,7 +230,7 @@ describe('project content item storage', () => {
       })
       .run();
 
-    await expect(getProjectContentSections('project')).resolves.toMatchObject([
+    await expect(getProjectSections('project')).resolves.toMatchObject([
       {
         sectionUuid: 'section-empty',
         content: {
@@ -268,29 +248,18 @@ describe('project content item storage', () => {
 function createDb() {
   rawDb = new Database(':memory:');
   rawDb.exec(`
-    CREATE TABLE "project-stages" (
-      "stageUuid" text PRIMARY KEY NOT NULL,
-      "projectUuid" text NOT NULL,
-      "title" text NOT NULL,
-      "summary" text DEFAULT '' NOT NULL,
-      "humanReadableSlug" text NOT NULL,
-      "publicId" text NOT NULL UNIQUE,
-      "isPrivate" integer DEFAULT false NOT NULL,
-      "createdAt" integer NOT NULL,
-      "updatedAt" integer NOT NULL
-    );
-    CREATE TABLE "stage-periods" (
-      "stageType" text NOT NULL,
-      "stageUuid" text NOT NULL,
+    CREATE TABLE "periods" (
+      "ownerType" text NOT NULL,
+      "ownerId" text NOT NULL,
       "sortOrder" integer NOT NULL,
       "startDate" text NOT NULL,
       "endDate" text NOT NULL,
       "precision" text DEFAULT 'exact' NOT NULL,
       "precisionNote" text DEFAULT '' NOT NULL,
       "label" text DEFAULT '' NOT NULL,
-      PRIMARY KEY("stageType", "stageUuid", "sortOrder"),
-      CONSTRAINT "stage-periods-stage-type-check"
-        CHECK("stageType" in ('project-stage', 'event-stage'))
+      PRIMARY KEY("ownerType", "ownerId", "sortOrder"),
+      CONSTRAINT "periods-owner-type-check"
+        CHECK("ownerType" in ('event', 'project-section'))
     );
     CREATE TABLE "project-content-sections" (
       "sectionUuid" text PRIMARY KEY NOT NULL,
@@ -379,83 +348,90 @@ function preparedContent(contentUuid: string, text: string) {
   };
 }
 
-describe('project content item identity round trip', () => {
-  it('keeps a saved stage addressable on the next save', async () => {
+/** A section as the storage layer receives it, its body already prepared. */
+function section(
+  sectionUuid: string,
+  title: string,
+  overrides: {
+    periods?: Period[];
+    isPrivate?: boolean;
+  } = {},
+) {
+  return {
+    sectionUuid,
+    title,
+    summary: '',
+    humanReadableSlug: title.toLowerCase(),
+    publicId: sectionUuid.replace(/[^A-Za-z0-9]/g, ''),
+    isPrivate: overrides.isPrivate ?? false,
+    periods: overrides.periods ?? [],
+    content: { data: { blocks: [] } },
+    contentSave: preparedContent(`content-${sectionUuid}`, `${title} text`),
+  };
+}
+
+describe('project section identity round trip', () => {
+  it.each([
+    ['an undated', () => newSection()],
+    ['a dated', () => newSection([period('2026-01-01', '2026-01-31')])],
+  ])('keeps %s saved section addressable on the next save', async (_, make) => {
     const db = createDb();
     installServerContext(db);
 
     // First save: the form has no uuid yet, only the public ID it made up.
-    const created = await prepareProjectStages('project', [newStage()]);
-    applyProjectStages(db, schema, 'project', created);
+    const created = await prepareProjectSections('project', [make()]);
+    applyProjectSections(db, schema, 'project', created);
     const identities = projectContentItemIdentities(
       created,
-      (stage) => stage.stageUuid,
-      (stage) => stage.publicId,
+      (item) => item.sectionUuid,
+      (item) => item.publicId,
     );
     expect(identities).toEqual([
-      { publicId: 'StageOne', itemUuid: created![0]!.stageUuid },
+      { publicId: 'SectionOne', itemUuid: created![0]!.sectionUuid },
     ]);
 
     // Second save with the identity applied back: the row is its own, not a
     // stranger's claim on the public ID.
     await expect(
-      prepareProjectStages('project', [
-        { ...newStage(), stageUuid: identities[0]!.itemUuid },
+      prepareProjectSections('project', [
+        { ...make(), sectionUuid: identities[0]!.itemUuid },
       ]),
-    ).resolves.toMatchObject([{ stageUuid: identities[0]!.itemUuid }]);
+    ).resolves.toMatchObject([{ sectionUuid: identities[0]!.itemUuid }]);
 
     // Without it — the bug this pairing exists to prevent.
-    await expect(prepareProjectStages('project', [newStage()])).rejects.toThrow(
-      'Stage public ID is already taken',
+    await expect(prepareProjectSections('project', [make()])).rejects.toThrow(
+      'Section public ID is already taken',
     );
-  });
-
-  it('keeps a saved section addressable on the next save', async () => {
-    const db = createDb();
-    installServerContext(db);
-
-    const created = await prepareProjectContentSections('project', [
-      newSection(),
-    ]);
-    applyProjectContentSections(db, schema, 'project', created);
-    const [identity] = projectContentItemIdentities(
-      created,
-      (section) => section.sectionUuid,
-      (section) => section.publicId,
-    );
-
-    await expect(
-      prepareProjectContentSections('project', [
-        { ...newSection(), sectionUuid: identity!.itemUuid },
-      ]),
-    ).resolves.toMatchObject([{ sectionUuid: identity!.itemUuid }]);
-    await expect(
-      prepareProjectContentSections('project', [newSection()]),
-    ).rejects.toThrow('Section public ID is already taken');
   });
 });
 
-describe('project content item edit times', () => {
-  it('moves the edit time of a stage only when it changed', async () => {
+describe('project section edit times', () => {
+  it('moves the edit time of a section only when it changed', async () => {
     const db = createDb();
     installServerContext(db);
     const now = vi.spyOn(Date, 'now').mockReturnValue(1000);
-    const created = await prepareProjectStages('project', [newStage()]);
-    applyProjectStages(db, schema, 'project', created);
-    const stageUuid = created![0]!.stageUuid;
+    const created = await prepareProjectSections('project', [
+      newSection([period('2026-01-01', '2026-01-31')]),
+    ]);
+    applyProjectSections(db, schema, 'project', created);
+    const sectionUuid = created![0]!.sectionUuid;
     const updatedAt = () =>
-      db.select().from(schema.projectStages).get()!.updatedAt;
-    const save = async (stage: Partial<ReturnType<typeof newStage>>) =>
-      applyProjectStages(
+      db.select().from(schema.projectContentSections).get()!.updatedAt;
+    const save = async (changes: Partial<ReturnType<typeof newSection>>) =>
+      applyProjectSections(
         db,
         schema,
         'project',
-        await prepareProjectStages('project', [
-          { ...newStage(), ...stage, stageUuid },
+        await prepareProjectSections('project', [
+          {
+            ...newSection([period('2026-01-01', '2026-01-31')]),
+            ...changes,
+            sectionUuid,
+          },
         ]),
       );
 
-    // The project saved again, this stage untouched.
+    // The project saved again, this section untouched.
     now.mockReturnValue(2000);
     await save({});
     expect(updatedAt()).toBe(1000);
@@ -471,13 +447,26 @@ describe('project content item edit times', () => {
     });
     expect(updatedAt()).toBe(4000);
 
-    // A label is part of what the stage says about when it was.
+    // A label is part of what the section says about when it was.
     now.mockReturnValue(5000);
     await save({
       periods: [period('2026-02-01', '2026-02-28', 'Winter')],
       title: 'Renamed',
     });
     expect(updatedAt()).toBe(5000);
+
+    // Losing its dates is an edit too.
+    now.mockReturnValue(6000);
+    await save({
+      periods: [],
+      title: 'Renamed',
+      content: {
+        data: {
+          blocks: [{ type: 'paragraph', data: { text: 'Now a topic' } }],
+        },
+      },
+    });
+    expect(updatedAt()).toBe(6000);
   });
 
   it('does not count a new position as an edit of a section', async () => {
@@ -485,11 +474,11 @@ describe('project content item edit times', () => {
     installServerContext(db);
     const now = vi.spyOn(Date, 'now').mockReturnValue(1000);
     const second = { ...newSection(), publicId: 'SectionTwo', title: 'Two' };
-    const created = await prepareProjectContentSections('project', [
+    const created = await prepareProjectSections('project', [
       newSection(),
       second,
     ]);
-    applyProjectContentSections(db, schema, 'project', created);
+    applyProjectSections(db, schema, 'project', created);
     const [first, other] = created!;
     const updatedAt = (uuid: string) =>
       db
@@ -499,11 +488,11 @@ describe('project content item edit times', () => {
         .find((row) => row.sectionUuid === uuid)!.updatedAt;
 
     now.mockReturnValue(2000);
-    applyProjectContentSections(
+    applyProjectSections(
       db,
       schema,
       'project',
-      await prepareProjectContentSections('project', [
+      await prepareProjectSections('project', [
         { ...second, sectionUuid: other!.sectionUuid },
         { ...newSection(), title: 'Renamed', sectionUuid: first!.sectionUuid },
       ]),
@@ -513,20 +502,8 @@ describe('project content item edit times', () => {
   });
 });
 
-function newStage() {
-  return {
-    isStage: true as const,
-    title: 'One',
-    summary: '',
-    humanReadableSlug: 'one',
-    publicId: 'StageOne',
-    isPrivate: false,
-    periods: [period('2026-01-01', '2026-01-31')],
-  };
-}
-
 /** A period as the form sends it, already normalized. */
-function period(startDate: string, endDate: string, label = '') {
+function period(startDate: string, endDate: string, label = ''): Period {
   return {
     startDate,
     endDate,
@@ -536,14 +513,16 @@ function period(startDate: string, endDate: string, label = '') {
   };
 }
 
-function newSection() {
+function newSection(periods: Period[] = []): ProjectSectionItem {
   return {
-    isStage: false as const,
     title: 'One',
     summary: '',
     humanReadableSlug: 'one',
     publicId: 'SectionOne',
     isPrivate: false,
-    content: { data: { blocks: [] } },
+    periods,
+    content: {
+      data: { blocks: [{ type: 'paragraph', data: { text: 'Body' } }] },
+    },
   };
 }
