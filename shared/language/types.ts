@@ -367,18 +367,12 @@ export type LanguagePhrases = {
   public_details_timeline: string;
   project_chronology_page: string;
   project_chronology_updated: string;
-  project_chronology_first_section: string;
-  project_chronology_last_section: string;
-  project_chronology_section: string;
-  project_chronology_first_status: string;
-  project_chronology_last_status: string;
   page_chronology_created: string;
   page_chronology_updated: string;
   section_chronology_created: string;
   section_chronology_updated: string;
   event_chronology_created: string;
   event_chronology_updated: string;
-  diary_chronology_day: string;
   diary_chronology_created: string;
   diary_chronology_updated: string;
   install_thei: string;

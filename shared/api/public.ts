@@ -252,12 +252,8 @@ export type PublicProjectResponse = {
   access: ProjectEventAccessLevel;
   humanReadableSlug: string;
   publicId: string;
-  chronology: {
-    createdAt: string;
-    /** When the project's oldest status was set. */
-    firstStatusAt?: string;
-    updatedAt?: string;
-  };
+  /** `updatedAt` only when the project was edited on a later day. */
+  chronology: { createdAt: string; updatedAt?: string };
   isShowcase: boolean;
   isCv: boolean;
   iconMedia: MediaDescriptor;

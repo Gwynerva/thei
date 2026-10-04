@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray } from 'drizzle-orm';
+import { and, count, desc, eq, inArray } from 'drizzle-orm';
 import {
   canAppendEmptyStatus,
   compareStatusesNewestFirst,
@@ -177,23 +177,7 @@ export async function getStatusHistory(
 
 export async function getCurrentStatus(owner: StatusOwner, admin = false) {
   const page = await getStatusHistory(owner, undefined, admin, 1);
-  return {
-    current: page.items[0],
-    total: page.total,
-    firstAt: firstStatusAt(owner),
-  };
-}
-
-/** The day the owner's oldest status speaks of, for "key dates" summaries. */
-function firstStatusAt(owner: StatusOwner): string | undefined {
-  const { db, schema } = THEI_SERVER.useDb();
-  return db
-    .select({ date: schema.statuses.date })
-    .from(schema.statuses)
-    .where(ownerWhere(schema, owner))
-    .orderBy(asc(schema.statuses.date))
-    .limit(1)
-    .get()?.date;
+  return { current: page.items[0], total: page.total };
 }
 
 type StoredStatus = {

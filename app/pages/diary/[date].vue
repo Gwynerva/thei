@@ -3,7 +3,7 @@ import type { PublicDiaryResponse } from '#layers/thei/shared/api/public';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { buildLifeUrl } from '#layers/thei/shared/life';
 import {
-  diaryTimelineItems,
+  createdAndUpdatedTimelineItems,
   type PublicDetailPanelData,
 } from '#layers/thei/app/components/public/public-detail';
 import { publicOwnerNotesHeading } from '#layers/thei/app/components/public/PublicOwnerNotes.vue';
@@ -84,14 +84,11 @@ const details = computed(
         kind: 'diary-entry',
         ...data.value.neighbours,
       },
-      chronology: diaryTimelineItems(
-        { ...data.value, href: buildLifeUrl({ date: data.value.date }) },
-        {
-          day: phrase.value.diary_chronology_day,
-          created: phrase.value.diary_chronology_created,
-          updated: phrase.value.diary_chronology_updated,
-        },
-      ),
+      // The day the entry is about is its heading, not a technical date.
+      chronology: createdAndUpdatedTimelineItems(data.value.chronology, {
+        created: phrase.value.diary_chronology_created,
+        updated: phrase.value.diary_chronology_updated,
+      }),
       references: data.value.references,
     }) satisfies PublicDetailPanelData,
 );

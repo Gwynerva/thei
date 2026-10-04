@@ -467,10 +467,7 @@ export async function buildPublicProject(
     access: project.access,
     humanReadableSlug: project.humanReadableSlug,
     publicId: project.publicId,
-    chronology: {
-      ...buildPublicEntityChronology(project),
-      ...(status.firstAt ? { firstStatusAt: status.firstAt } : {}),
-    },
+    chronology: buildPublicEntityChronology(project),
     isShowcase: project.showcase,
     isCv: project.cv,
     iconMedia: head.iconMedia,

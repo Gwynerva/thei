@@ -2,7 +2,6 @@
 import type { PublicProjectResponse } from '#layers/thei/shared/api/public';
 import {
   createdAndUpdatedTimelineItems,
-  firstAndLastTimelineItems,
   type PublicDetailPanelData,
 } from '#layers/thei/app/components/public/public-detail';
 import {
@@ -139,44 +138,10 @@ const details = computed(
   () =>
     ({
       contents: contents.value,
-      chronology: createdAndUpdatedTimelineItems(
-        data.value.chronology,
-        {
-          created: phrase.value.project_chronology_page,
-          updated: phrase.value.project_chronology_updated,
-        },
-        [
-          // Only dated sections are dates of the project; when one about a
-          // topic was written is the site's history, not the project's.
-          ...firstAndLastTimelineItems(
-            data.value.sections,
-            (section) =>
-              section.period && {
-                date: section.period.startDate,
-                href: section.href,
-              },
-            {
-              icon: 'project-section',
-              first: phrase.value.project_chronology_first_section,
-              last: phrase.value.project_chronology_last_section,
-              only: phrase.value.project_chronology_section,
-            },
-          ),
-          ...firstAndLastTimelineItems(
-            [data.value.chronology.firstStatusAt, data.value.currentStatus],
-            (mark) =>
-              typeof mark === 'string'
-                ? { date: mark, href: '#statuses' }
-                : mark && { date: mark.date, href: '#statuses' },
-            {
-              icon: 'pulse',
-              first: phrase.value.project_chronology_first_status,
-              last: phrase.value.project_chronology_last_status,
-              only: phrase.value.project_status,
-            },
-          ),
-        ],
-      ),
+      chronology: createdAndUpdatedTimelineItems(data.value.chronology, {
+        created: phrase.value.project_chronology_page,
+        updated: phrase.value.project_chronology_updated,
+      }),
       tags: data.value.tags,
       references: data.value.references,
     }) satisfies PublicDetailPanelData,

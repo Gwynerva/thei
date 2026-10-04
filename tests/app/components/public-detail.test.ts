@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   createdAndUpdatedTimelineItems,
-  diaryTimelineItems,
-  firstAndLastTimelineItems,
   publicDetailSummary,
   sortPublicDetailTimelineItems,
 } from '#layers/thei/app/components/public/public-detail';
@@ -76,77 +74,6 @@ describe('sortPublicDetailTimelineItems', () => {
   });
 });
 
-describe('firstAndLastTimelineItems', () => {
-  const labels = {
-    icon: 'calendar' as const,
-    first: 'First',
-    last: 'Last',
-    only: 'Only',
-  };
-  const pick = (item: { date: string; href: string }) => item;
-
-  it('names the earliest and the latest of several', () => {
-    expect(
-      firstAndLastTimelineItems(
-        [
-          { date: '2025-03-01', href: '/b/' },
-          { date: '2024-01-01', href: '/a/' },
-          { date: '2026-05-01', href: '/c/' },
-        ],
-        pick,
-        labels,
-      ),
-    ).toEqual([
-      { icon: 'calendar', label: 'Last', date: '2026-05-01', href: '/c/' },
-      { icon: 'calendar', label: 'First', date: '2024-01-01', href: '/a/' },
-    ]);
-  });
-
-  it('keeps the last above the first when both share a day', () => {
-    expect(
-      sortPublicDetailTimelineItems(
-        firstAndLastTimelineItems(
-          [
-            { date: '2024-01-01', href: '/a/' },
-            { date: '2024-01-01', href: '/b/' },
-          ],
-          pick,
-          labels,
-        ),
-      ).map((item) => item.label),
-    ).toEqual(['Last', 'First']);
-  });
-
-  it('collapses a single item into one line under the plain name', () => {
-    expect(
-      firstAndLastTimelineItems(
-        [{ date: '2024-01-01', href: '/a/' }],
-        pick,
-        labels,
-      ),
-    ).toEqual([
-      { icon: 'calendar', label: 'Only', date: '2024-01-01', href: '/a/' },
-    ]);
-  });
-
-  it('collapses two marks that land on the same day and page', () => {
-    expect(
-      firstAndLastTimelineItems(
-        [
-          { date: '2024-01-01', href: '#statuses' },
-          { date: '2024-01-01', href: '#statuses' },
-        ],
-        pick,
-        labels,
-      ),
-    ).toHaveLength(1);
-  });
-
-  it('says nothing when there is nothing', () => {
-    expect(firstAndLastTimelineItems([], pick, labels)).toEqual([]);
-  });
-});
-
 describe('createdAndUpdatedTimelineItems', () => {
   const labels = { created: 'Created', updated: 'Updated' };
 
@@ -166,99 +93,5 @@ describe('createdAndUpdatedTimelineItems', () => {
     expect(
       createdAndUpdatedTimelineItems({ createdAt: '2024-05-12' }, labels),
     ).toEqual([{ icon: 'plus', label: 'Created', date: '2024-05-12' }]);
-  });
-
-  it('puts the parts of a day between its edit and its creation', () => {
-    const sections = firstAndLastTimelineItems(
-      [
-        { date: '2024-05-12', href: '/section-a/' },
-        { date: '2024-05-12', href: '/section-b/' },
-      ],
-      (item) => item,
-      {
-        icon: 'calendar',
-        first: 'First section',
-        last: 'Last section',
-        only: '',
-      },
-    );
-    const status = {
-      icon: 'pulse' as const,
-      label: 'Status',
-      date: '2024-05-12',
-    };
-    expect(
-      sortPublicDetailTimelineItems(
-        createdAndUpdatedTimelineItems(
-          { createdAt: '2024-05-12', updatedAt: '2024-06-01' },
-          labels,
-          [...sections, status],
-        ),
-      ).map((item) => item.label),
-    ).toEqual([
-      'Updated',
-      'Last section',
-      'First section',
-      'Status',
-      'Created',
-    ]);
-  });
-});
-
-describe('diaryTimelineItems', () => {
-  const labels = { day: 'Day', created: 'Created', updated: 'Updated' };
-  /** The lines as the timeline shows them, newest first. */
-  const items = (date: string, createdAt: string, updatedAt?: string) =>
-    sortPublicDetailTimelineItems(
-      diaryTimelineItems(
-        { date, chronology: { createdAt, updatedAt }, href: '/life/' },
-        labels,
-      ),
-    ).map(({ label, date, href }) => ({ label, date, href }));
-
-  it('shows the day, the writing and the edit apart when all differ', () => {
-    expect(items('2024-05-12', '2024-06-01', '2024-07-02')).toEqual([
-      { label: 'Updated', date: '2024-07-02', href: undefined },
-      { label: 'Created', date: '2024-06-01', href: undefined },
-      { label: 'Day', date: '2024-05-12', href: '/life/' },
-    ]);
-  });
-
-  it('lets the writing stand for the day it was written on', () => {
-    expect(items('2024-05-12', '2024-05-12', '2024-07-02')).toEqual([
-      { label: 'Updated', date: '2024-07-02', href: undefined },
-      { label: 'Created', date: '2024-05-12', href: '/life/' },
-    ]);
-  });
-
-  it('never lets an edit stand for the day, even one made on it', () => {
-    expect(items('2024-05-12', '2024-05-01', '2024-05-12')).toEqual([
-      { label: 'Updated', date: '2024-05-12', href: undefined },
-      { label: 'Day', date: '2024-05-12', href: '/life/' },
-      { label: 'Created', date: '2024-05-01', href: undefined },
-    ]);
-  });
-
-  it('places the day of an entry written ahead after its edits', () => {
-    expect(items('2024-05-12', '2024-05-01', '2024-05-05')).toEqual([
-      { label: 'Day', date: '2024-05-12', href: '/life/' },
-      { label: 'Updated', date: '2024-05-05', href: undefined },
-      { label: 'Created', date: '2024-05-01', href: undefined },
-    ]);
-  });
-
-  it('collapses into one line when everything happened on the day', () => {
-    expect(items('2024-05-12', '2024-05-12')).toEqual([
-      { label: 'Created', date: '2024-05-12', href: '/life/' },
-    ]);
-    expect(items('2024-05-12', '2024-05-12', '2024-05-12')).toHaveLength(1);
-  });
-
-  it('keeps a backdated entry to two lines when it was never edited later', () => {
-    expect(items('2024-05-12', '2024-06-01')).toEqual([
-      { label: 'Created', date: '2024-06-01', href: undefined },
-      { label: 'Day', date: '2024-05-12', href: '/life/' },
-    ]);
-    expect(items('2024-05-12', '2024-06-01', '2024-06-01')).toHaveLength(2);
   });
 });
