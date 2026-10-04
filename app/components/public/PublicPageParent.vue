@@ -36,7 +36,7 @@ defineProps<{
         font-semibold text-text-1 transition focus-visible:ring-2
         focus-visible:ring-accent focus-visible:outline-none hocus:text-accent"
     >
-      <BeveledIcon
+      <EntityTokenIcon
         :media="parent.iconMedia"
         icon="project"
         plain

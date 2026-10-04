@@ -4,12 +4,11 @@ import type { IconName } from '#thei/icons';
 import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
 
 /**
- * A small square picture with its corners cut off.
+ * A small square picture with softly rounded corners.
  *
- * The shape that stands for "another entity" wherever one is mentioned in
+ * The token that stands for "another entity" wherever one is mentioned in
  * passing — a related project under a card, the parent project above a
- * section. A cut corner reads as a token rather than as a thumbnail, which is
- * what these are: a way to point at something, not a preview of it.
+ * section: a way to point at something, not a preview of it.
  */
 const { media, icon, plain } = defineProps<{
   media?: MediaDescriptor;
@@ -26,7 +25,7 @@ const accent = computed(() =>
 
 <template>
   <span
-    class="beveled flex shrink-0 items-center justify-center overflow-hidden"
+    class="flex shrink-0 items-center justify-center overflow-hidden rounded-sm"
     :class="plain ? '' : 'bg-bg-4'"
     :style="accent ? { color: accent } : undefined"
   >
@@ -43,19 +42,3 @@ const accent = computed(() =>
     <Icon v-else :name="icon" class="size-3/5 text-accent" />
   </span>
 </template>
-
-<style scoped>
-/* One cut per corner, proportional so the shape holds at every size. */
-.beveled {
-  clip-path: polygon(
-    20% 0,
-    80% 0,
-    100% 20%,
-    100% 80%,
-    80% 100%,
-    20% 100%,
-    0 80%,
-    0 20%
-  );
-}
-</style>
