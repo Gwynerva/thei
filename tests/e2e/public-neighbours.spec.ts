@@ -3,6 +3,7 @@ import {
   request as playwright,
   test,
   type Locator,
+  type Page,
 } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import { E2E_ORIGIN } from './fixture-url';
@@ -23,9 +24,21 @@ const LONG =
   'A stage whose name runs far too long to sit on two lines of the narrow summary beside the page';
 const SECRET = `Kept to myself ${stamp}`;
 const project = `neighbours-np${stamp}`;
-// Three days in a row, in a year no other spec writes to.
-const month = String(1 + (stamp % 9)).padStart(2, '0');
-const days = ['01', '02', '03'].map((day) => `2013-${month}-${day}`);
+/**
+ * Three days in a row, in a year no other spec writes to, and in a month this
+ * spec has not written to yet: a worker started again after a failure runs
+ * `beforeAll` once more, over the entries of the first.
+ */
+let days: string[] = [];
+
+/** Opens a page once it answers clicks and hovers. */
+async function open(page: Page, path: string) {
+  await page.goto(path);
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-nuxt-hydrated',
+    'true',
+  );
+}
 
 const text = (value: string) => ({
   data: { blocks: [{ type: 'paragraph', data: { text: value } }] },
@@ -36,6 +49,19 @@ test.beforeAll(async () => {
     baseURL: E2E_ORIGIN,
     storageState: adminState,
   });
+  const taken = new Set(
+    (
+      (await (await owner.get('/api/admin/diary/dates')).json()) as {
+        date: string;
+      }[]
+    ).map((entry) => entry.date),
+  );
+  days =
+    Array.from({ length: 12 }, (_, index) => {
+      const month = String(1 + ((stamp + index) % 12)).padStart(2, '0');
+      return ['01', '02', '03'].map((day) => `2013-${month}-${day}`);
+    }).find((month) => month.every((day) => !taken.has(day))) ?? [];
+  expect(days, 'a month of 2013 with its first days free').toHaveLength(3);
   const stage = (title: string, slug: string, start: string, end: string) => ({
     title,
     summary: `About ${slug}`,
@@ -106,7 +132,7 @@ test('a stage leads back above and on below, by picture, name and time', async (
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto(`/projects/${project}/stages/middle-middle${stamp}/`);
+  await open(page, `/projects/${project}/stages/middle-middle${stamp}/`);
   const aside = page.locator('aside').first();
   const links = tiles(aside);
   await expect(links).toHaveCount(2);
@@ -144,7 +170,7 @@ test('a stage leads back above and on below, by picture, name and time', async (
 
 test('the first stage only leads on', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto(`/projects/${project}/stages/first-first${stamp}/`);
+  await open(page, `/projects/${project}/stages/first-first${stamp}/`);
   const links = tiles(page.locator('aside').first());
   await expect(links).toHaveCount(1);
   await expect(links.first()).toHaveAttribute('rel', 'next');
@@ -154,7 +180,7 @@ test('a diary entry shows how its neighbours begin, and not their private sectio
   page,
 }) => {
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.goto(`/diary/${days[1]}/`);
+  await open(page, `/diary/${days[1]}/`);
   await page.getByRole('button', { name: /Expand|Развернуть/ }).click();
   const sheet = page.locator('dialog[open]');
   const links = tiles(sheet);

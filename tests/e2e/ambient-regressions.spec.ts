@@ -28,6 +28,19 @@ async function images(page: Page) {
 }
 
 /**
+ * Opens a page and waits until it has hydrated. Before that a scroll is undone
+ * by the router's first navigation, which puts the page at its top, and a
+ * pointer already resting on a tile never tells it so.
+ */
+async function open(page: Page, path: string) {
+  await page.goto(path);
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-nuxt-hydrated',
+    'true',
+  );
+}
+
+/**
  * Edge media spans the whole strip height and always reaches the outer edge.
  * Centred media too wide to sit whole around the strip's focus puts its middle
  * there and runs past the edge; anything else is pinned to the edge.
@@ -79,7 +92,7 @@ for (const width of [390, 1280]) {
       'transparent',
       'unknown',
     ]) {
-      await page.goto(`/ambient-regression?banner=${shape}`);
+      await open(page, `/ambient-regression?banner=${shape}`);
       const hero = page.locator('[data-test-hero]');
       const banner = hero.locator('.hero-banner');
       await expect(banner).toHaveAttribute('data-media-final-state', 'visible');
@@ -246,7 +259,7 @@ for (const width of [390, 1280]) {
   }) => {
     await page.setViewportSize({ width, height: 900 });
     for (const count of [0, 1, 3, 5]) {
-      await page.goto(`/ambient-regression?banner=none&tags=${count}`);
+      await open(page, `/ambient-regression?banner=none&tags=${count}`);
       const hero = page.locator('[data-test-hero]');
       expect(await hero.locator('.hero-banner').count()).toBe(0);
       expect(await hero.locator('[data-hero-tags] a').count()).toBe(
@@ -279,7 +292,7 @@ test('slow video keeps the color pulse until ready, then both layers play and fo
     await gate;
     await route.continue();
   });
-  await page.goto('/ambient-regression?banner=video');
+  await open(page, '/ambient-regression?banner=video');
   const banner = page.locator('.hero-banner');
   await expect(banner).toHaveAttribute('data-media-preview-state', 'visible');
   await expect(banner.locator('[data-media-loading]')).toBeVisible();
@@ -400,7 +413,7 @@ test('preview failures, final failures and source changes recover without stale 
   page,
 }) => {
   for (const scenario of ['missing-preview', 'error', 'no-preview']) {
-    await page.goto(`/ambient-regression?banner=${scenario}`);
+    await open(page, `/ambient-regression?banner=${scenario}`);
     const banner = page.locator('.hero-banner');
     await expect(banner).toHaveAttribute(
       'data-media-final-state',
@@ -416,7 +429,7 @@ test('preview failures, final failures and source changes recover without stale 
         '1',
       );
   }
-  await page.goto('/ambient-regression?banner=slow');
+  await open(page, '/ambient-regression?banner=slow');
   const banner = page.locator('.hero-banner');
   await expect(banner).toHaveAttribute('data-media-final-state', 'loading');
   await page.locator('[data-switch-source]').click();
@@ -435,14 +448,14 @@ test('reduced motion disables ambient playback and pulse; background failure lea
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/ambient-regression?banner=slow');
+  await open(page, '/ambient-regression?banner=slow');
   const banner = page.locator('.hero-banner');
   await expect(banner.locator('[data-media-loading] > span')).toHaveCSS(
     'animation-name',
     'none',
   );
   releaseAmbientSlow();
-  await page.goto('/ambient-regression?banner=video');
+  await open(page, '/ambient-regression?banner=video');
   await expect(banner).toHaveAttribute('data-media-final-state', 'visible');
   const main = banner.locator('video[data-media-main]');
   expect(await main.evaluate((v: HTMLVideoElement) => v.paused)).toBe(true);
@@ -482,7 +495,7 @@ test('a delayed backdrop decode holds the entire pair, including with a cached f
         await gate;
     };
   });
-  await page.goto('/ambient-regression?banner=wide');
+  await open(page, '/ambient-regression?banner=wide');
   const banner = page.locator('.hero-banner');
   await expect(banner.locator('[data-media-main]')).toHaveJSProperty(
     'complete',
@@ -555,7 +568,7 @@ for (const width of [390, 1280]) {
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 });
-    await page.goto('/ambient-regression?banner=wide');
+    await open(page, '/ambient-regression?banner=wide');
     await expect(page.locator('[data-test-hero] .hero-banner')).toHaveAttribute(
       'data-media-final-state',
       'visible',
@@ -581,7 +594,7 @@ for (const width of [390, 1280]) {
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 });
-    await page.goto('/ambient-regression?banner=wide');
+    await open(page, '/ambient-regression?banner=wide');
     const card = page.locator('[data-narrow-card] .public-content-card');
     await card.scrollIntoViewIfNeeded();
     const surface = card.locator('[data-media-variant="ambient"]');
@@ -610,7 +623,7 @@ test('an internal link card keeps most of a narrow column for its words', async 
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 900 });
-  await page.goto('/ambient-regression?banner=wide');
+  await open(page, '/ambient-regression?banner=wide');
   const link = page.locator('[data-narrow-card] .entity-link-preview');
   await link.scrollIntoViewIfNeeded();
   const linkBox = (await link.boundingBox())!;
@@ -631,7 +644,7 @@ test('an internal link card keeps most of a narrow column for its words', async 
 test('admin previews play only while hovered or focused, including nested focus', async ({
   page,
 }) => {
-  await page.goto('/ambient-regression?banner=video');
+  await open(page, '/ambient-regression?banner=video');
   await expect(page.locator('[data-test-hero] .hero-banner')).toHaveAttribute(
     'data-media-final-state',
     'visible',
@@ -682,7 +695,7 @@ test('a video in the hero showcase wears its mark and plays only while pointed a
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto('/ambient-regression');
+  await open(page, '/ambient-regression');
   const hero = page.locator('[data-test-hero]');
   const image = hero.getByRole('button', { name: 'Showcase image' });
   const video = hero.getByRole('button', { name: 'Showcase video' });
