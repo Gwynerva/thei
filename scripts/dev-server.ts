@@ -87,7 +87,13 @@ if (process.argv.includes('--build')) {
   const args = ['x', 'nuxt', 'dev', target.dir, '--port', String(target.port)];
   args.push('--host', host);
   if (!target.fork) args.push('--no-fork');
-  run(bun, args, { NUXT_LOCK: '1' });
+  run(bun, args, {
+    NUXT_LOCK: '1',
+    // Nitro's dev worker takes requests from the dev server over a named pipe
+    // on Windows, where reading an upload's body from it can stall the worker
+    // for seconds, every request with it. A port on localhost has no stall.
+    ...(process.platform === 'win32' ? { NITRO_NO_UNIX_SOCKET: '1' } : {}),
+  });
 }
 
 function modifiedAt(path: string): number | undefined {
