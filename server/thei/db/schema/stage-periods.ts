@@ -25,6 +25,8 @@ export const stagePeriods = sqliteTable(
     precision: text({ enum: DATE_PRECISIONS }).notNull().default('exact'),
     /** The owner's own words about the doubt, shown next to the date. */
     precisionNote: text().notNull().default(''),
+    /** What this stretch was, in the owner's words; empty when unnamed. */
+    label: text().notNull().default(''),
   },
   (t) => [
     primaryKey({ columns: [t.stageType, t.stageUuid, t.sortOrder] }),

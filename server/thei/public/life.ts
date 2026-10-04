@@ -76,6 +76,8 @@ type RawPoint = {
   sortTime: number;
   period?: import('#layers/thei/shared/date-range').DateRange;
   precision?: DatePrecisionInfo;
+  /** The owner's name for the period this point bounds, when they gave one. */
+  periodLabel?: string;
   access: ProjectEventAccessLevel;
   isPrivate?: boolean;
   event?: any;
@@ -344,6 +346,7 @@ function buildRawLifePoints(): RawPoint[] {
             event,
             projectUuids: projectsByEvent.get(event.eventUuid) ?? [],
             ...periodPrecision(period),
+            ...periodLabel(period),
           },
         ),
         boundaryPoint(
@@ -357,6 +360,7 @@ function buildRawLifePoints(): RawPoint[] {
             event,
             projectUuids: projectsByEvent.get(event.eventUuid) ?? [],
             ...periodPrecision(period),
+            ...periodLabel(period),
           },
         ),
       );
@@ -378,6 +382,7 @@ function buildRawLifePoints(): RawPoint[] {
             isPrivate: stage.isPrivate,
             projectUuids: [project.projectUuid],
             ...periodPrecision(period),
+            ...periodLabel(period),
           },
         ),
         boundaryPoint(
@@ -393,6 +398,7 @@ function buildRawLifePoints(): RawPoint[] {
             isPrivate: stage.isPrivate,
             projectUuids: [project.projectUuid],
             ...periodPrecision(period),
+            ...periodLabel(period),
           },
         ),
       );
@@ -558,6 +564,11 @@ function withoutOwnProject(point: LifePoint, ownHref?: string): LifePoint {
     ...(project && project.href !== ownHref ? { project } : {}),
     ...(related?.length ? { relatedEntities: related } : {}),
   };
+}
+
+/** A period's name, carried on its points only when it has one. */
+function periodLabel(period: { label: string }): { periodLabel?: string } {
+  return period.label ? { periodLabel: period.label } : {};
 }
 
 /** A period's doubt, carried on its points only when there is any. */
@@ -737,6 +748,7 @@ async function hydrateLifePoint(
       date: point.date,
       ...(point.period ? { period: point.period } : {}),
       ...(point.precision ? { precision: point.precision } : {}),
+      ...(point.periodLabel ? { periodLabel: point.periodLabel } : {}),
       entityKind: point.entityKind,
       transition: point.transition,
       visibility: 'visible',
@@ -831,6 +843,7 @@ async function hydrateLifePoint(
       date: point.date,
       ...(point.period ? { period: point.period } : {}),
       ...(point.precision ? { precision: point.precision } : {}),
+      ...(point.periodLabel ? { periodLabel: point.periodLabel } : {}),
       entityKind: point.entityKind,
       transition: point.transition,
       visibility: 'visible',

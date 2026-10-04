@@ -239,6 +239,7 @@ export const baselineSql: string[] = [
 	\`endDate\` text NOT NULL,
 	\`precision\` text DEFAULT 'exact' NOT NULL,
 	\`precisionNote\` text DEFAULT '' NOT NULL,
+	\`label\` text DEFAULT '' NOT NULL,
 	PRIMARY KEY(\`stageType\`, \`stageUuid\`, \`sortOrder\`),
 	CONSTRAINT "stage-periods-stage-type-check" CHECK("stage-periods"."stageType" in ('project-stage', 'event-stage'))
 );

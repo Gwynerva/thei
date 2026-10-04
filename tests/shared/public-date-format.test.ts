@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatCompactPublicPeriod,
+  formatPublicDateRange,
   publicCalendarDay,
 } from '../../shared/public-date-format';
 
@@ -58,6 +59,27 @@ describe('formatCompactPublicPeriod', () => {
       expect(plain(formatCompactPublicPeriod(period, 'ru'))).toBe(ru);
       expect(plain(formatCompactPublicPeriod(period, 'en'))).toBe(en);
     });
+});
+
+describe('formatPublicDateRange', () => {
+  it('abbreviates months and keeps August whole', () => {
+    const range = { startDate: '2025-08-12', endDate: '2025-09-16' };
+    expect(plain(formatPublicDateRange(range, 'ru', 'abbreviated'))).toBe(
+      '12 авг. — 16 сент. 2025',
+    );
+    expect(
+      plain(
+        formatPublicDateRange(
+          { startDate: '2026-11-11', endDate: '2026-11-12' },
+          'ru',
+          'abbreviated',
+        ),
+      ),
+    ).toBe('11–12 нояб. 2026');
+    expect(plain(formatPublicDateRange(range, 'ru'))).toBe(
+      '12 августа — 16 сентября 2025',
+    );
+  });
 });
 
 describe('publicCalendarDay', () => {

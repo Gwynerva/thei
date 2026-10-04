@@ -55,6 +55,11 @@ export type VisibleLifePoint = LifePointBase & {
    * chronology leaves out as saying nothing new.
    */
   statusOwner?: StatusOwnerType;
+  /**
+   * The owner's name for the period an event's or a stage's point bounds. A
+   * secret point never carries one: what a period was is its content.
+   */
+  periodLabel?: string;
 };
 
 /** A point a visitor may not see, presented under a codename. */

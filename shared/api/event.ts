@@ -1,6 +1,6 @@
 import type { ProjectEventAccessLevel } from '../access-level';
 import type { ContentFieldValue } from '../content';
-import type { DatedPeriod } from '../date-precision';
+import type { StagePeriod } from '../stage-period';
 import type { ProjectActionEditData } from '../project-action';
 import type { OtherAssetGetItem } from './project';
 import type { ExternalLink, ProjectExternalLink } from '../external-link';
@@ -16,7 +16,7 @@ export type EventGetResponse = {
   access: ProjectEventAccessLevel;
   humanReadableSlug: string;
   publicId: string;
-  periods: DatedPeriod[];
+  periods: StagePeriod[];
   content: ContentFieldValue;
   reminder: string;
   notes?: ContentFieldValue;

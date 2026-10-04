@@ -1,13 +1,12 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
-import type { DatedPeriod } from '#layers/thei/shared/date-precision';
-import type { StageType } from '#layers/thei/shared/stage-period';
+import type { StagePeriod, StageType } from '#layers/thei/shared/stage-period';
 
 export function replaceStagePeriods(
   tx: any,
   schema: any,
   stageType: StageType,
   stageUuid: string,
-  periods: DatedPeriod[],
+  periods: StagePeriod[],
 ) {
   deleteStagePeriods(tx, schema, stageType, [stageUuid]);
   if (!periods.length) return;
@@ -21,6 +20,7 @@ export function replaceStagePeriods(
         endDate: period.endDate,
         precision: period.precision,
         precisionNote: period.precisionNote,
+        label: period.label,
       })),
     )
     .run();
@@ -31,13 +31,14 @@ export function readStagePeriods(
   schema: any,
   stageType: StageType,
   stageUuid: string,
-): DatedPeriod[] {
+): StagePeriod[] {
   return tx
     .select({
       startDate: schema.stagePeriods.startDate,
       endDate: schema.stagePeriods.endDate,
       precision: schema.stagePeriods.precision,
       precisionNote: schema.stagePeriods.precisionNote,
+      label: schema.stagePeriods.label,
     })
     .from(schema.stagePeriods)
     .where(
@@ -50,7 +51,7 @@ export function readStagePeriods(
     .all();
 }
 
-export function stagePeriodsEqual(left: DatedPeriod[], right: DatedPeriod[]) {
+export function stagePeriodsEqual(left: StagePeriod[], right: StagePeriod[]) {
   return (
     left.length === right.length &&
     left.every((period, index) => {
@@ -59,7 +60,8 @@ export function stagePeriodsEqual(left: DatedPeriod[], right: DatedPeriod[]) {
         period.startDate === other.startDate &&
         period.endDate === other.endDate &&
         (period.precision ?? 'exact') === (other.precision ?? 'exact') &&
-        (period.precisionNote ?? '') === (other.precisionNote ?? '')
+        (period.precisionNote ?? '') === (other.precisionNote ?? '') &&
+        period.label === other.label
       );
     })
   );

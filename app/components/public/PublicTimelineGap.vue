@@ -25,19 +25,7 @@ const label = computed(() =>
     "
   >
     <div class="relative flex justify-center">
-      <span
-        class="public-timeline-gap-dots absolute inset-y-0 left-1/2 w-1
-          -translate-x-1/2 [--timeline-dot-end:0.12rem]
-          [--timeline-dot-radius:0.1rem] [--timeline-dot-step:0.55rem]"
-        :class="
-          compact
-            ? 'opacity-30'
-            : `opacity-80 sm:w-2 sm:[--timeline-dot-end:0.18rem]
-              sm:[--timeline-dot-radius:0.16rem]
-              sm:[--timeline-dot-step:0.8rem]`
-        "
-        aria-hidden="true"
-      ></span>
+      <PublicTimelineDots :compact />
     </div>
     <p
       class="italic"
@@ -51,17 +39,3 @@ const label = computed(() =>
     </p>
   </div>
 </template>
-
-<style scoped>
-.public-timeline-gap-dots {
-  background: var(--color-accent);
-  mask-image: radial-gradient(
-    circle,
-    black 0 var(--timeline-dot-radius),
-    transparent var(--timeline-dot-end)
-  );
-  mask-position: center;
-  mask-size: 100% var(--timeline-dot-step);
-  mask-repeat: repeat-y;
-}
-</style>

@@ -78,12 +78,14 @@ describe('stage periods', () => {
         endDate: '2026-01-15',
         precision: 'exact',
         precisionNote: '',
+        label: '',
       },
       {
         startDate: '2026-01-16',
         endDate: '2026-01-20',
         precision: 'exact',
         precisionNote: '',
+        label: '',
       },
     ]);
   });
@@ -105,6 +107,7 @@ describe('stage periods', () => {
         endDate: '2026-01-15',
         precision: 'month',
         precisionNote: 'somewhere that winter',
+        label: '',
       },
     ]);
   });
@@ -125,8 +128,76 @@ describe('stage periods', () => {
         endDate: '2026-01-12',
         precision: 'exact',
         precisionNote: '',
+        label: '',
       },
     ]);
+  });
+
+  it('merges overlapping periods only when they are named alike', () => {
+    expect(
+      normalizeStagePeriods([
+        { startDate: '2026-07-10', endDate: '2026-07-20', label: 'France' },
+        { startDate: '2026-07-01', endDate: '2026-07-10', label: 'Italy' },
+        { startDate: '2026-07-08', endDate: '2026-07-12', label: ' Italy ' },
+      ]),
+    ).toEqual([
+      {
+        startDate: '2026-07-01',
+        endDate: '2026-07-12',
+        precision: 'exact',
+        precisionNote: '',
+        label: 'Italy',
+      },
+      {
+        startDate: '2026-07-10',
+        endDate: '2026-07-20',
+        precision: 'exact',
+        precisionNote: '',
+        label: 'France',
+      },
+    ]);
+  });
+
+  it('sorts again once a named period grows past another', () => {
+    const periods = normalizeStagePeriods([
+      { startDate: '2026-01-01', endDate: '2026-01-05', label: 'x' },
+      { startDate: '2026-01-01', endDate: '2026-01-08', label: 'y' },
+      { startDate: '2026-01-03', endDate: '2026-01-12', label: 'x' },
+    ]);
+    expect(
+      periods.map(({ startDate, endDate, label }) => [
+        startDate,
+        endDate,
+        label,
+      ]),
+    ).toEqual([
+      ['2026-01-01', '2026-01-08', 'y'],
+      ['2026-01-01', '2026-01-12', 'x'],
+    ]);
+    expect(normalizeStagePeriods(periods)).toEqual(periods);
+  });
+
+  it('orders periods with the same dates by their labels', () => {
+    const dates = { startDate: '2026-03-01', endDate: '2026-03-02' };
+    const sorted = normalizeStagePeriods([
+      { ...dates, label: 'b' },
+      { ...dates, label: 'a' },
+      { ...dates, label: '' },
+    ]);
+    expect(sorted.map((period) => period.label)).toEqual(['', 'a', 'b']);
+    expect(normalizeStagePeriods([...sorted].reverse())).toEqual(sorted);
+  });
+
+  it('reads a period without a label as unnamed and caps a label', () => {
+    const day = { startDate: '2026-01-01', endDate: '2026-01-01' };
+    expect(normalizeStagePeriods([{ ...day, label: 7 }])[0]!.label).toBe('');
+    expect(normalizeStagePeriods([day])[0]!.label).toBe('');
+    expect(
+      normalizeStagePeriods([{ ...day, label: 'я'.repeat(100) }])[0]!.label,
+    ).toHaveLength(100);
+    expect(() =>
+      normalizeStagePeriods([{ ...day, label: 'я'.repeat(101) }]),
+    ).toThrow('Stage period label is too long');
   });
 
   it('rejects date-time values', () => {

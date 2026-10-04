@@ -7,6 +7,7 @@ import type {
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import type { DateRange } from '#layers/thei/shared/date-range';
 import type { IconName } from '#thei/icons';
+import type { PublicPeriodMark } from '#layers/thei/shared/public-timeline';
 import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
 import {
   datePresentationToneClass,
@@ -21,6 +22,15 @@ const props = defineProps<{
   summary: string;
   label?: string;
   icon?: IconName;
+  /**
+   * Draws the label as the name of a period: its start, end or day mark in
+   * place of the icon. The kind of moment it is — "An event started" — is
+   * then given by `labelHint`, on hover and to assistive technology.
+   */
+  mark?: PublicPeriodMark;
+  /** A word before a period's name — "Started" — in a lighter weight. */
+  labelLead?: string;
+  labelHint?: string;
   date: string;
   period?: DateRange;
   dateHref?: string;
@@ -172,7 +182,25 @@ const hasFooter = computed(
         class="flex max-w-4/5 flex-wrap items-center gap-x-2 gap-y-1 text-xs
           font-semibold text-accent sm:max-w-3/4"
       >
-        <span v-if="label" class="flex items-center gap-2 opacity-55">
+        <span
+          v-if="label && mark"
+          class="pointer-events-auto relative z-3 flex min-w-0 items-center
+            gap-1.5 opacity-80"
+          :data-title-popup="labelHint"
+        >
+          <PublicPeriodMark :kind="mark" bare />
+          <span v-if="labelHint" class="sr-only">{{ labelHint }}:</span>
+          <span class="min-w-0 wrap-break-word">
+            <span
+              v-if="labelLead"
+              class="font-normal"
+              :aria-hidden="labelHint ? 'true' : undefined"
+              >{{ labelLead }}</span
+            >
+            {{ label }}
+          </span>
+        </span>
+        <span v-else-if="label" class="flex items-center gap-2 opacity-55">
           <Icon v-if="icon" :name="icon" class="shrink-0" />
           <span>{{ label }}</span>
         </span>

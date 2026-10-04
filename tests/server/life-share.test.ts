@@ -104,6 +104,7 @@ function seed() {
         sortOrder: 0,
         startDate: '2026-02-01',
         endDate: '2026-02-10',
+        label: 'Kickoff',
       },
       {
         stageType: 'event-stage',
@@ -111,6 +112,7 @@ function seed() {
         sortOrder: 0,
         startDate: '2026-03-01',
         endDate: '2026-03-01',
+        label: 'Launch party',
       },
     ])
     .run();
@@ -206,6 +208,27 @@ describe("a project's chronology through its share link", () => {
       '2026-02-10': { 'project-stage': 1 },
       '2026-01-01': { project: 1 },
     });
+  });
+
+  it('names the periods it opens and keeps the names of secrets', async () => {
+    const points = await getLatestLifePoints(20, {
+      scope,
+      viewer: scopedViewer(holder, 'project', 'P'),
+    });
+    const stagePoints = points.filter(
+      (point) => point.entityKind === 'project-stage',
+    );
+    expect(stagePoints.length).toBeGreaterThan(0);
+    for (const point of stagePoints)
+      expect(point).toMatchObject({ periodLabel: 'Kickoff' });
+    const event = points.find((point) => point.entityKind === 'event');
+    expect(event).toMatchObject({ visibility: 'secret' });
+    expect(JSON.stringify(event)).not.toContain('Launch party');
+
+    const window = await getLifeWindow({ scope, viewer: STRANGER });
+    const json = JSON.stringify(window);
+    expect(json).not.toContain('Kickoff');
+    expect(json).not.toContain('Launch party');
   });
 
   it("shows a stranger a hidden project's status as a secret", async () => {

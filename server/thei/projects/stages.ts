@@ -207,10 +207,9 @@ export async function getProjectStages(projectUuid: string) {
             inArray(schema.stagePeriods.stageUuid, stageIds),
           ),
         )
-        .orderBy(
-          asc(schema.stagePeriods.startDate),
-          asc(schema.stagePeriods.endDate),
-        )
+        // The stored order is the canonical one: two periods may share
+        // their dates and differ only in their labels.
+        .orderBy(asc(schema.stagePeriods.sortOrder))
         .all()
     : [];
   const periodsByStage = Map.groupBy(periods, (period) => period.stageUuid);
@@ -228,11 +227,12 @@ export async function getProjectStages(projectUuid: string) {
         createdAt: stage.createdAt,
         updatedAt: stage.updatedAt,
         periods: (periodsByStage.get(stage.stageUuid) ?? []).map(
-          ({ startDate, endDate, precision, precisionNote }) => ({
+          ({ startDate, endDate, precision, precisionNote, label }) => ({
             startDate,
             endDate,
             precision,
             precisionNote,
+            label,
           }),
         ),
         content: await THEI_SERVER.content.buildFieldValue(

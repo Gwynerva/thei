@@ -4,6 +4,7 @@ import { buildLifeUrl } from '#layers/thei/shared/life';
 import type { LifeRewindMatch } from '#layers/thei/shared/life-rewind';
 import { lifeEntityKindIcon } from './life-entity-icon';
 import { publicDatePrecisionOptions } from '#layers/thei/app/composables/public-date';
+import { lifeTransitionMark } from '#layers/thei/shared/public-timeline';
 
 const props = defineProps<{
   point: LifePoint;
@@ -68,6 +69,31 @@ const datePresentation = computed(() => {
 });
 const pointIcon = computed(() => lifeEntityKindIcon(props.point.entityKind));
 /**
+ * A period the owner named is announced by its name, with the mark of the
+ * moment it is — start, end, the day — rather than by a sentence that every
+ * card of its kind repeats. The sentence stays as the mark's hint.
+ */
+const periodLabel = computed(() =>
+  props.point.visibility === 'visible' && props.point.periodLabel
+    ? publicText(props.point.periodLabel)
+    : undefined,
+);
+const periodMark = computed(() =>
+  periodLabel.value ? lifeTransitionMark(props.point.transition) : undefined,
+);
+/** The moment the card is of the named period, in one plain word. */
+const periodLead = computed(() => {
+  if (props.rewindMatch === 'ongoing') return phrase.value.period_ongoing;
+  switch (props.point.transition) {
+    case 'started':
+      return phrase.value.period_started;
+    case 'ended':
+      return phrase.value.period_ended;
+    default:
+      return phrase.value.period_occurred;
+  }
+});
+/**
  * A stage or a section names its project above the title: that project is
  * its parent, not something it is related to. A status names its project too,
  * under its words. Everything else lists what it is related to under the
@@ -103,8 +129,11 @@ const projects = computed(() =>
     :href="point.href"
     :title="point.title"
     :summary="point.summary"
-    :label="description"
+    :label="periodMark ? periodLabel : description"
     :icon="pointIcon"
+    :mark="periodMark"
+    :label-lead="periodMark ? periodLead : undefined"
+    :label-hint="periodMark ? description : undefined"
     :date="point.date"
     :period="point.period"
     :date-href="rewindMatch ? undefined : buildLifeUrl({ date: point.date })"

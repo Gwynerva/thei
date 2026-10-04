@@ -264,6 +264,10 @@ export type LanguagePhrases = {
   life_rewind_empty_description: string;
   life_rewind_explore_life: string;
   event_ongoing: string;
+  period_started: string;
+  period_ended: string;
+  period_occurred: string;
+  period_ongoing: string;
   stage_ongoing: string;
   view_all: string;
   life_empty: string;
@@ -1122,7 +1126,9 @@ export type LanguagePhrases = {
   date_precision_month_short: string;
   date_precision_year_short: string;
   date_precision_note: string;
-  date_precision_note_placeholder: string;
+  period_label: string;
+  period_label_placeholder: string;
+  period_dates_edit: string;
   // Private notes and reminders
   entity_notes_section: string;
   entity_notes_section_description: string;

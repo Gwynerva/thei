@@ -38,6 +38,7 @@ import { getProjectContentSections } from '../projects/content-sections';
 import { siteUrl } from '../site-url';
 import { STRANGER } from '../access-links/viewer';
 import { ownerText } from '../owner-text';
+import type { StagePeriod } from '#layers/thei/shared/stage-period';
 
 /**
  * Public pages as Markdown.
@@ -135,6 +136,7 @@ export async function renderProjectChildMarkdown(
       event,
       buildProjectUrl(project.humanReadableSlug, project.publicId),
     )})`,
+    ...('periods' in data ? periodLines(data.periods) : []),
     await body(event, data.content),
   ];
   return { body: join(lines), canonical: siteUrl(event, canonical) };
@@ -151,17 +153,7 @@ export async function renderEventMarkdown(
   const lines = [
     `# ${ownerText(data.title)}`,
     ownerText(data.summary),
-    ...(data.periods.length
-      ? [
-          data.periods
-            .map((period) =>
-              period.endDate && period.endDate !== period.startDate
-                ? `${period.startDate} — ${period.endDate}`
-                : period.startDate,
-            )
-            .join(', '),
-        ]
-      : []),
+    ...periodLines(data.periods),
     await body(event, data.content),
     ...(await relatedEntities(event, { type: 'event', id: stored.eventUuid })),
     ...tagList(event, data.tags),
@@ -173,6 +165,25 @@ export async function renderEventMarkdown(
       buildEventUrl(stored.humanReadableSlug, stored.publicId),
     ),
   };
+}
+
+/**
+ * When an event or a stage happened, on one line: each period's dates, with
+ * the owner's name for it after them.
+ */
+function periodLines(periods: StagePeriod[]): string[] {
+  if (!periods.length) return [];
+  return [
+    periods
+      .map((period) => {
+        const dates =
+          period.endDate !== period.startDate
+            ? `${period.startDate} — ${period.endDate}`
+            : period.startDate;
+        return period.label ? `${dates} (${ownerText(period.label)})` : dates;
+      })
+      .join(', '),
+  ];
 }
 
 export async function renderDiaryMarkdown(

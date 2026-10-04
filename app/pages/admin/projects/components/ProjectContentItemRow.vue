@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { ContentAnalysis } from '#layers/thei/shared/content';
-import type { DatedPeriod } from '#layers/thei/shared/date-precision';
+import type { StagePeriod } from '#layers/thei/shared/stage-period';
 import ContentStats from '#layers/thei/app/components/content/ContentStats.vue';
 import ContentMediaEdge from '#layers/thei/app/components/content/ContentMediaEdge.vue';
 import DateRangeChip from '#layers/thei/app/components/DateRangeChip.vue';
@@ -8,7 +8,7 @@ import DateRangeChip from '#layers/thei/app/components/DateRangeChip.vue';
 defineProps<{
   title: string;
   summary: string;
-  periods: DatedPeriod[];
+  periods: StagePeriod[];
   analysis: ContentAnalysis;
   isPrivate: boolean;
   privateLabel: string;
@@ -51,7 +51,7 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
       <span v-if="periods.length" class="flex flex-wrap gap-1">
         <DateRangeChip
           v-for="period in periods"
-          :key="`${period.startDate}:${period.endDate}`"
+          :key="`${period.startDate}:${period.endDate}:${period.label}`"
           :period="period"
         />
       </span>

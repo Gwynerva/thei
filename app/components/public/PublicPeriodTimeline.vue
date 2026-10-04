@@ -5,9 +5,10 @@ import {
   isApproximateDate,
   type DatedPeriod,
 } from '#layers/thei/shared/date-precision';
+import type { StagePeriod } from '#layers/thei/shared/stage-period';
 import { buildLifeUrl } from '#layers/thei/shared/life';
 import {
-  publicTimelineGapDuration,
+  publicTimelineGapBefore,
   publicTimelineHasGap,
   publicTimelineIsDay,
   publicTimelinePeriodDuration,
@@ -20,16 +21,29 @@ import {
 } from '#layers/thei/app/composables/public-date';
 import { titlePopup } from '#layers/thei/app/composables/title-popup-content';
 
-const props = defineProps<{ periods: (DateRange | DatedPeriod)[] }>();
+type Period = DateRange | DatedPeriod | StagePeriod;
+
+const props = defineProps<{ periods: Period[] }>();
 const orderedPeriods = computed(() =>
   sortPublicTimelineItemsNewestFirst(props.periods, (period) => period),
 );
 
 function gapDuration(index: number) {
-  const newer = orderedPeriods.value[index - 1];
-  const older = orderedPeriods.value[index];
-  if (!newer || !older) return { years: 0, months: 0, days: 0 };
-  return publicTimelineGapDuration(newer, older);
+  return publicTimelineGapBefore(orderedPeriods.value, index);
+}
+
+/**
+ * What the rail does under a period's last row, which a name makes taller
+ * than its mark: nothing below the oldest one, the dots of the pause that
+ * follows, or a line straight on to the next period.
+ */
+function tailAfter(index: number) {
+  if (index >= orderedPeriods.value.length - 1) return 'none';
+  return publicTimelineHasGap(gapDuration(index + 1)) ? 'dots' : 'line';
+}
+
+function labelOf(period: Period) {
+  return 'label' in period ? period.label : '';
 }
 
 function formatDate(value: string) {
@@ -40,11 +54,11 @@ function formatDate(value: string) {
  * A period the owner is unsure of carries the doubt on both of its ends, since
  * the whole stretch is a guess rather than one of its edges.
  */
-function approximate(period: DateRange | DatedPeriod) {
+function approximate(period: Period) {
   return 'precision' in period && isApproximateDate(period.precision);
 }
 
-function approximateClass(period: DateRange | DatedPeriod) {
+function approximateClass(period: Period) {
   if (!approximate(period)) return '';
   const tone = datePrecisionTone((period as DatedPeriod).precision);
   return tone === 'alert'
@@ -54,7 +68,22 @@ function approximateClass(period: DateRange | DatedPeriod) {
       : '';
 }
 
-function approximateTitle(period: DateRange | DatedPeriod) {
+/**
+ * A named period is read by its name, so its dates step back under it; a
+ * doubt still colours them, whatever else they are. A date that is the whole
+ * link lights up with it.
+ */
+function dateClass(period: Period, link = false) {
+  const tone = approximateClass(period);
+  if (!labelOf(period)) return ['text-sm leading-5', tone];
+  if (tone) return ['text-xs', tone];
+  return [
+    'text-xs text-text-3',
+    link ? 'transition group-hocus:text-accent' : '',
+  ];
+}
+
+function approximateTitle(period: Period) {
   if (!approximate(period)) return undefined;
   const { precision, precisionNote } = period as DatedPeriod;
   return titlePopup(
@@ -81,7 +110,7 @@ function periodDurationLabel(period: DateRange) {
   <ol v-if="orderedPeriods.length" class="relative flex flex-col">
     <template
       v-for="(period, index) in orderedPeriods"
-      :key="`${period.startDate}:${period.endDate}`"
+      :key="`${period.startDate}:${period.endDate}:${labelOf(period)}`"
     >
       <li v-if="index">
         <PublicTimelineGap
@@ -99,35 +128,29 @@ function periodDurationLabel(period: DateRange) {
           </span>
         </div>
       </li>
-      <li
-        class="grid min-w-0 grid-cols-[1.75rem_minmax(0,1fr)] items-center
-          gap-xs"
-      >
-        <span
-          class="flex size-5 items-center justify-center justify-self-center
-            rounded-full bg-accent ring-2 ring-bg-1"
-          aria-hidden="true"
-        >
-          <span
-            v-if="publicTimelineIsDay(period)"
-            class="size-2 rounded-full bg-white"
-          ></span>
-          <span
-            v-else
-            class="h-2.5 w-3 rotate-180 bg-white
-              [clip-path:polygon(50%_0,100%_100%,0_100%)]"
-          ></span>
-        </span>
+      <li class="grid min-w-0 grid-cols-[1.75rem_minmax(0,1fr)] gap-xs">
+        <PublicPeriodRail
+          :mark="publicTimelineIsDay(period) ? 'day' : 'end'"
+          :tail="publicTimelineIsDay(period) ? tailAfter(index) : 'bar'"
+        />
         <TheiLink
           :to="buildLifeUrl({ date: period.endDate })"
-          class="min-w-0 rounded-xs leading-tight text-text-1 transition
+          class="group flex min-w-0 flex-col rounded-xs text-text-1 transition
             focus-visible:ring-2 focus-visible:ring-accent
-            focus-visible:outline-none hocus:text-accent"
+            focus-visible:outline-none"
+          :class="labelOf(period) ? '' : 'hocus:text-accent'"
         >
+          <span
+            v-if="labelOf(period)"
+            class="text-sm leading-5 wrap-break-word transition
+              group-hocus:text-accent"
+          >
+            {{ publicText(labelOf(period)) }}
+          </span>
           <time
             :datetime="period.endDate"
-            class="flex items-center gap-1 text-sm"
-            :class="approximateClass(period)"
+            class="flex items-center gap-1"
+            :class="dateClass(period)"
             v-bind="approximateTitle(period)"
           >
             <Icon v-if="approximate(period)" name="approximate" />
@@ -145,7 +168,7 @@ function periodDurationLabel(period: DateRange) {
         class="grid grid-cols-[1.75rem_minmax(0,1fr)] gap-xs"
       >
         <span class="flex justify-center" aria-hidden="true">
-          <span class="h-full w-1 rounded-full bg-accent"></span>
+          <span class="h-full w-1 bg-accent"></span>
         </span>
         <span class="py-xs text-xs leading-relaxed text-text-3 italic">
           {{ periodDurationLabel(period) }}
@@ -153,29 +176,22 @@ function periodDurationLabel(period: DateRange) {
       </li>
       <li
         v-if="!publicTimelineIsDay(period)"
-        class="grid min-w-0 grid-cols-[1.75rem_minmax(0,1fr)] items-center
-          gap-xs"
+        class="grid min-w-0 grid-cols-[1.75rem_minmax(0,1fr)] gap-xs"
       >
-        <span
-          class="flex size-5 items-center justify-center justify-self-center
-            rounded-full bg-accent ring-2 ring-bg-1"
-          aria-hidden="true"
-        >
-          <span
-            class="h-2.5 w-3 bg-white
-              [clip-path:polygon(50%_0,100%_100%,0_100%)]"
-          ></span>
-        </span>
+        <PublicPeriodRail mark="start" :tail="tailAfter(index)" />
+        <!-- The start leads to the period's end as well: the life timeline
+             folds a short period into one card on its last day, and a day
+             before it may hold nothing of this period at all. -->
         <TheiLink
           :to="buildLifeUrl({ date: period.endDate })"
-          class="min-w-0 rounded-xs leading-tight text-text-1 transition
+          class="group min-w-0 rounded-xs text-text-1 transition
             focus-visible:ring-2 focus-visible:ring-accent
             focus-visible:outline-none hocus:text-accent"
         >
           <time
             :datetime="period.startDate"
-            class="flex items-center gap-1 text-sm"
-            :class="approximateClass(period)"
+            class="flex items-center gap-1 leading-5"
+            :class="dateClass(period, true)"
             v-bind="approximateTitle(period)"
           >
             <Icon v-if="approximate(period)" name="approximate" />

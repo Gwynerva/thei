@@ -2,6 +2,7 @@ import type { ProjectEventAccessLevel } from '../access-level';
 import type { PublicContentOutputData } from '../content';
 import type { ContentEntityType } from '../content-link';
 import type { DatedPeriod } from '../date-precision';
+import type { StagePeriod } from '../stage-period';
 import type {
   ProjectActionBackgroundMode,
   ProjectActionBackgroundRepeat,
@@ -186,7 +187,7 @@ export type PublicProjectStage = {
   href: string;
   date: string;
   period: DatedPeriod;
-  periods: DatedPeriod[];
+  periods: StagePeriod[];
   media?: MediaDescriptor;
 };
 
@@ -301,7 +302,7 @@ export type PublicEventResponseFull = {
   access: ProjectEventAccessLevel;
   humanReadableSlug: string;
   publicId: string;
-  periods: DatedPeriod[];
+  periods: StagePeriod[];
   /** `updatedAt` only when the event was edited on a later day. */
   chronology: { createdAt: string; updatedAt?: string };
   /** What stands for the event in a card: its first picture, or its icon. */

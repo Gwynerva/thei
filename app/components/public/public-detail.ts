@@ -3,7 +3,7 @@ import type {
   PublicReferences,
   PublicTagSummary,
 } from '#layers/thei/shared/api/public';
-import type { DateRange } from '#layers/thei/shared/date-range';
+import type { StagePeriod } from '#layers/thei/shared/stage-period';
 import { publicReferenceSplitSize } from '#layers/thei/shared/public-references';
 import type { IconName } from '#thei/icons';
 import type { ContentHeading } from '#layers/thei/app/components/content/content-headings';
@@ -150,7 +150,7 @@ export type PublicDetailPanelData = {
   contents?: ContentHeading[];
   neighbours?: PublicDetailNeighbours;
   chronology?: PublicDetailTimelineItem[];
-  periods?: DateRange[];
+  periods?: StagePeriod[];
   tags?: PublicTagSummary[];
   references: PublicReferences;
 };

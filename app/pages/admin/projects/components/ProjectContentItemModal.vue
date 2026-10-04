@@ -5,7 +5,7 @@ import {
   type ProjectSectionContentItem,
   type ProjectStageContentItem,
 } from '#layers/thei/shared/project-content-item';
-import type { DatedPeriod } from '#layers/thei/shared/date-precision';
+import type { StagePeriod } from '#layers/thei/shared/stage-period';
 import { isContentEmpty } from '#layers/thei/shared/content';
 import FieldContentEditor from '#layers/thei/app/components/field/FieldContentEditor.vue';
 import FieldDateRangePopup from '#layers/thei/app/components/field/FieldDateRangePopup.vue';
@@ -37,7 +37,7 @@ type Result = { type: 'deleted' };
 type ItemDraft = ProjectContentItemBase & {
   stageUuid?: string;
   sectionUuid?: string;
-  periods?: DatedPeriod[];
+  periods?: StagePeriod[];
 };
 
 const emit = defineEmits<{ modalResult: [result: Result] }>();
@@ -65,7 +65,7 @@ const exists = ref(Boolean(props.modalData.item));
 const savedTitle = ref(props.modalData.item?.title ?? '');
 const periodPopupOpen = ref(false);
 const periodPopupAnchor = useTemplateRef<HTMLElement>('periodPopupAnchor');
-const pendingPeriod = ref<DatedPeriod>();
+const pendingPeriod = ref<StagePeriod>();
 const editedPeriodIndex = ref<number>();
 const modalContainer =
   useTemplateRef<InstanceType<typeof ModalContainer>>('modalContainer');
@@ -338,6 +338,7 @@ async function deleteItem() {
               v-model:open="periodPopupOpen"
               :anchor="periodPopupAnchor"
               teleport-to="dialog"
+              labelled
               :confirm-label="
                 editedPeriodIndex === undefined ? phrase.add : phrase.save
               "
@@ -351,7 +352,7 @@ async function deleteItem() {
           </span>
           <DateRangeChip
             v-for="(period, index) in item.periods"
-            :key="`${period.startDate}:${period.endDate}`"
+            :key="`${period.startDate}:${period.endDate}:${period.label}`"
             :period="period"
             removable
             editable

@@ -302,10 +302,16 @@ describe('upgrading a 0.0.1 site', () => {
       all('SELECT containerId FROM `tag-usages` ORDER BY containerId'),
     ).toEqual([{ containerId: 'project-a' }, { containerId: 'project-b' }]);
 
+    // A period made before labels existed is simply unnamed.
     expect(
-      all('SELECT startDate, endDate, precision FROM `stage-periods`'),
+      all('SELECT startDate, endDate, precision, label FROM `stage-periods`'),
     ).toEqual([
-      { startDate: '2026-01-01', endDate: '2026-02-01', precision: 'exact' },
+      {
+        startDate: '2026-01-01',
+        endDate: '2026-02-01',
+        precision: 'exact',
+        label: '',
+      },
     ]);
 
     // A link's own name is its note now; one repeating the site's title goes.

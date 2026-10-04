@@ -31,7 +31,15 @@ describe('publicDetailSummary', () => {
       summary({
         contents: [{} as never, {} as never],
         chronology: [{ icon: 'plus', label: 'Created', date: '2024-05-12' }],
-        periods: [{ startDate: '2024-05-12', endDate: '2024-05-13' }],
+        periods: [
+          {
+            startDate: '2024-05-12',
+            endDate: '2024-05-13',
+            precision: 'exact',
+            precisionNote: '',
+            label: 'Trip',
+          },
+        ],
         tags: [{} as never, {} as never, {} as never],
         references,
       }),

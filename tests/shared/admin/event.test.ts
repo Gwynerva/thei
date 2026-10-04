@@ -90,12 +90,14 @@ describe('validateEventData', () => {
         endDate: '2026-08-26',
         precision: 'exact',
         precisionNote: '',
+        label: '',
       },
       {
         startDate: '2026-09-01',
         endDate: '2026-09-01',
         precision: 'exact',
         precisionNote: '',
+        label: '',
       },
     ]);
     expect(periods).toHaveLength(4);

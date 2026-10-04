@@ -1,5 +1,25 @@
-import type { DateRange } from './date-range';
+import { coverDateRanges, type DateRange } from './date-range';
+import type { LifeTransition } from './life';
 import { lifeGapDuration, type LifeGapDuration } from './life-timeline';
+
+/** How a period is drawn: a dot for a day, a triangle at a start or an end. */
+export type PublicPeriodMark = 'day' | 'start' | 'end';
+
+/** The mark of a point on the life timeline, for a period's start or end. */
+export function lifeTransitionMark(
+  transition: LifeTransition,
+): PublicPeriodMark | undefined {
+  switch (transition) {
+    case 'started':
+      return 'start';
+    case 'ended':
+      return 'end';
+    case 'occurred':
+      return 'day';
+    default:
+      return undefined;
+  }
+}
 
 const EMPTY_DURATION: LifeGapDuration = { years: 0, months: 0, days: 0 };
 
@@ -24,6 +44,24 @@ export function publicTimelineGapDuration(
 ): LifeGapDuration {
   if (newer.startDate <= older.endDate) return { ...EMPTY_DURATION };
   return lifeGapDuration(newer.startDate, older.endDate);
+}
+
+/**
+ * The pause before the period at `index` of a newest-first list: from its end
+ * to the start of everything newer. Periods may overlap or hold one another,
+ * so the neighbour above is not enough — a long period can cover a gap
+ * between two shorter ones it contains.
+ */
+export function publicTimelineGapBefore(
+  ordered: readonly DateRange[],
+  index: number,
+): LifeGapDuration {
+  const older = ordered[index];
+  if (!older || index < 1) return { ...EMPTY_DURATION };
+  return publicTimelineGapDuration(
+    coverDateRanges(ordered.slice(0, index)),
+    older,
+  );
 }
 
 export function publicTimelinePeriodDuration(

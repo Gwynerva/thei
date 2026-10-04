@@ -15,6 +15,7 @@ import statusDates from './0.0.3-status-dates';
 import contentHistory from './0.0.3-content-history';
 import sharedLinkFavicons from './0.0.3-shared-link-favicons';
 import externalLinkNotes from './0.0.3-external-link-notes';
+import periodLabels from './0.0.4-period-labels';
 
 /**
  * Every migration Thei has ever shipped, oldest first.
@@ -43,6 +44,7 @@ export const migrationRegistry: TheiMigration[] = [
   contentHistory,
   sharedLinkFavicons,
   externalLinkNotes,
+  periodLabels,
 ];
 
 export { baselineSql } from './0.0.1-baseline';

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  lifeTransitionMark,
+  publicTimelineGapBefore,
   publicTimelineGapDuration,
   publicTimelineHasGap,
   publicTimelineIsDay,
@@ -91,5 +93,41 @@ describe('public timeline ranges', () => {
         endDate: '2026-03-03',
       }),
     ).toEqual({ years: 0, months: 2, days: 4 });
+  });
+
+  it('measures a gap from everything newer, not just the neighbour', () => {
+    // The long period covers the days between the two short ones inside it.
+    const ordered = [
+      { startDate: '2026-01-01', endDate: '2026-01-20' },
+      { startDate: '2026-01-05', endDate: '2026-01-10' },
+      { startDate: '2026-01-01', endDate: '2026-01-03' },
+    ];
+    expect(publicTimelineHasGap(publicTimelineGapBefore(ordered, 1))).toBe(
+      false,
+    );
+    expect(publicTimelineHasGap(publicTimelineGapBefore(ordered, 2))).toBe(
+      false,
+    );
+    expect(
+      publicTimelineGapBefore(
+        [
+          { startDate: '2026-03-01', endDate: '2026-03-02' },
+          { startDate: '2026-01-01', endDate: '2026-01-31' },
+        ],
+        1,
+      ),
+    ).toEqual({ years: 0, months: 1, days: 1 });
+    expect(publicTimelineGapBefore(ordered, 0)).toEqual({
+      years: 0,
+      months: 0,
+      days: 0,
+    });
+  });
+
+  it('marks the start, the end and a single day of a period', () => {
+    expect(lifeTransitionMark('started')).toBe('start');
+    expect(lifeTransitionMark('ended')).toBe('end');
+    expect(lifeTransitionMark('occurred')).toBe('day');
+    expect(lifeTransitionMark('created')).toBeUndefined();
   });
 });

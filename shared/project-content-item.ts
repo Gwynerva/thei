@@ -12,8 +12,12 @@ import {
 import {
   mergeDatePrecision,
   normalizeDatePrecisionInfo,
-  type DatedPeriod,
 } from './date-precision';
+import {
+  normalizeStagePeriodLabel,
+  STAGE_PERIOD_LABEL_MAX_LENGTH,
+  type StagePeriod,
+} from './stage-period';
 import {
   normalizeHumanReadableSlug,
   normalizePublicId,
@@ -32,7 +36,7 @@ export interface ProjectContentItemBase {
 export type ProjectStageContentItem = ProjectContentItemBase & {
   isStage: true;
   stageUuid?: string;
-  periods: DatedPeriod[];
+  periods: StagePeriod[];
 };
 
 export type ProjectSectionContentItem = Omit<
@@ -80,11 +84,21 @@ export function compareProjectStages(
   );
 }
 
-export function normalizeStagePeriods(value: unknown): DatedPeriod[] {
+/**
+ * The periods of an event or a stage, sorted and with overlaps folded.
+ *
+ * Overlapping periods are one stretch only when they are named alike: two
+ * unnamed ones, or two with the same label. Differently named ones say
+ * different things — "Italy" ending the day "France" begins — and both stay.
+ *
+ * A period without a `label` reads as unnamed. That is also what a panel of
+ * the previous release, still open in a browser, sends.
+ */
+export function normalizeStagePeriods(value: unknown): StagePeriod[] {
   if (!Array.isArray(value) || value.length === 0)
     throw new ProjectContentItemError('Stage period is required');
   const sorted = value
-    .map((period) => {
+    .map((period): StagePeriod => {
       if (!period || typeof period !== 'object')
         throw new ProjectContentItemError('Invalid stage period');
       const source = period as Record<string, unknown>;
@@ -94,6 +108,9 @@ export function normalizeStagePeriods(value: unknown): DatedPeriod[] {
         dateRangeStartTime(source.startDate) > dateRangeEndTime(source.endDate)
       )
         throw new ProjectContentItemError('Invalid stage period');
+      const label = normalizeStagePeriodLabel(source.label);
+      if (Array.from(label).length > STAGE_PERIOD_LABEL_MAX_LENGTH)
+        throw new ProjectContentItemError('Stage period label is too long');
       return {
         startDate: source.startDate,
         endDate: source.endDate,
@@ -101,22 +118,38 @@ export function normalizeStagePeriods(value: unknown): DatedPeriod[] {
           precision: source.precision as never,
           precisionNote: source.precisionNote as never,
         }),
+        label,
       };
     })
-    .sort(
-      (a, b) =>
-        dateRangeStartTime(a.startDate) - dateRangeStartTime(b.startDate) ||
-        dateRangeEndTime(a.endDate) - dateRangeEndTime(b.endDate),
-    );
-  const merged: DatedPeriod[] = [];
+    .sort(compareStagePeriods);
+  const merged: StagePeriod[] = [];
+  const lastByLabel = new Map<string, StagePeriod>();
   for (const period of sorted) {
-    const previous = merged.at(-1);
+    const previous = lastByLabel.get(period.label);
     if (previous && period.startDate <= previous.endDate) {
       if (period.endDate > previous.endDate) previous.endDate = period.endDate;
       Object.assign(previous, mergeDatePrecision(previous, period));
-    } else merged.push({ ...period });
+    } else {
+      const copy = { ...period };
+      merged.push(copy);
+      lastByLabel.set(period.label, copy);
+    }
   }
-  return merged;
+  // A period that grew may now end after one named otherwise.
+  return merged.sort(compareStagePeriods);
+}
+
+/**
+ * Earliest first, then the shorter one, then by label. The label is compared
+ * by code unit rather than by locale, so the browser and the server put two
+ * periods with the same dates in the same order.
+ */
+function compareStagePeriods(left: StagePeriod, right: StagePeriod) {
+  return (
+    dateRangeStartTime(left.startDate) - dateRangeStartTime(right.startDate) ||
+    dateRangeEndTime(left.endDate) - dateRangeEndTime(right.endDate) ||
+    (left.label < right.label ? -1 : left.label > right.label ? 1 : 0)
+  );
 }
 
 export function normalizeProjectContentSections(

@@ -28,22 +28,34 @@ export function formatAbsolutePublicDate(
   return parts.map((part) => part.value).join('');
 }
 
-/** Tidies a range Intl has written: an em dash, no year abbreviation. */
+/**
+ * Tidies a range Intl has written: an em dash, no year abbreviation. The
+ * abbreviation is "г." after a year, never the end of "авг.".
+ */
 function tidyRange(text: string): string {
   return text
-    .replaceAll(/\s*г\./g, '')
+    .replaceAll(/(?<=\d)\s*г\./g, '')
     .replaceAll(' – ', ' — ')
     .trim();
 }
 
+/**
+ * A period's days: "11–12 ноября 2026", or with `abbreviated` months, for a
+ * place as narrow as a chip, "11–12 нояб. 2026".
+ */
 export function formatPublicDateRange(
   period: DateRange,
   locale: string,
-  style: 'long' | 'short' = 'long',
+  style: 'long' | 'short' | 'abbreviated' = 'long',
 ): string {
   const formatter = new Intl.DateTimeFormat(locale, {
     day: style === 'short' ? '2-digit' : 'numeric',
-    month: style === 'short' ? '2-digit' : 'long',
+    month:
+      style === 'short'
+        ? '2-digit'
+        : style === 'abbreviated'
+          ? 'short'
+          : 'long',
     year: 'numeric',
     timeZone: 'UTC',
   });

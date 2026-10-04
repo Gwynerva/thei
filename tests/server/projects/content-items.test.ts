@@ -21,6 +21,7 @@ import {
   projectContentItemIdentities,
   projectContentItemIdsToRemove,
 } from '../../../server/thei/projects/content-items';
+import { stagePeriodsEqual } from '../../../server/thei/projects/stage-periods';
 
 let rawDb: Database.Database | undefined;
 
@@ -193,8 +194,42 @@ describe('project content item storage', () => {
         endDate: '2027-01-02',
         precision: 'exact',
         precisionNote: '',
+        label: '',
       },
     ]);
+  });
+
+  it('keeps period labels in their stored order', async () => {
+    const db = createDb();
+    installServerContext(db);
+    const dates = { startDate: '2026-07-01', endDate: '2026-07-10' };
+    const periods = [
+      { ...dates, precision: 'exact' as const, precisionNote: '', label: 'b' },
+      { ...dates, precision: 'exact' as const, precisionNote: '', label: 'a' },
+    ];
+    applyProjectStages(db, schema, 'project', [
+      {
+        stageUuid: 'stage',
+        isStage: true,
+        title: 'Trip',
+        summary: '',
+        humanReadableSlug: 'trip',
+        publicId: 'StageTrip',
+        isPrivate: false,
+        periods,
+        contentSave: preparedContent('content-trip', 'Trip content'),
+      },
+    ]);
+
+    const [stage] = await getProjectStages('project');
+    expect(stage!.periods.map((period) => period.label)).toEqual(['b', 'a']);
+    expect(stagePeriodsEqual(stage!.periods, periods)).toBe(true);
+    expect(
+      stagePeriodsEqual(stage!.periods, [
+        periods[0]!,
+        { ...periods[1]!, label: 'c' },
+      ]),
+    ).toBe(false);
   });
 
   it('returns explicit empty content for a damaged section row', async () => {
@@ -252,6 +287,7 @@ function createDb() {
       "endDate" text NOT NULL,
       "precision" text DEFAULT 'exact' NOT NULL,
       "precisionNote" text DEFAULT '' NOT NULL,
+      "label" text DEFAULT '' NOT NULL,
       PRIMARY KEY("stageType", "stageUuid", "sortOrder"),
       CONSTRAINT "stage-periods-stage-type-check"
         CHECK("stageType" in ('project-stage', 'event-stage'))
@@ -425,17 +461,23 @@ describe('project content item edit times', () => {
     expect(updatedAt()).toBe(1000);
 
     now.mockReturnValue(3000);
-    await save({
-      periods: [{ startDate: '2026-02-01', endDate: '2026-02-28' }],
-    });
+    await save({ periods: [period('2026-02-01', '2026-02-28')] });
     expect(updatedAt()).toBe(3000);
 
     now.mockReturnValue(4000);
     await save({
-      periods: [{ startDate: '2026-02-01', endDate: '2026-02-28' }],
+      periods: [period('2026-02-01', '2026-02-28')],
       title: 'Renamed',
     });
     expect(updatedAt()).toBe(4000);
+
+    // A label is part of what the stage says about when it was.
+    now.mockReturnValue(5000);
+    await save({
+      periods: [period('2026-02-01', '2026-02-28', 'Winter')],
+      title: 'Renamed',
+    });
+    expect(updatedAt()).toBe(5000);
   });
 
   it('does not count a new position as an edit of a section', async () => {
@@ -479,7 +521,18 @@ function newStage() {
     humanReadableSlug: 'one',
     publicId: 'StageOne',
     isPrivate: false,
-    periods: [{ startDate: '2026-01-01', endDate: '2026-01-31' }],
+    periods: [period('2026-01-01', '2026-01-31')],
+  };
+}
+
+/** A period as the form sends it, already normalized. */
+function period(startDate: string, endDate: string, label = '') {
+  return {
+    startDate,
+    endDate,
+    precision: 'exact' as const,
+    precisionNote: '',
+    label,
   };
 }
 

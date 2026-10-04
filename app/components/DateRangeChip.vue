@@ -9,10 +9,12 @@ import {
   publicDatePrecisionLabels,
 } from '#layers/thei/app/composables/public-date';
 import { titlePopup } from '#layers/thei/app/composables/title-popup-content';
+import type { StagePeriod } from '#layers/thei/shared/stage-period';
+import { formatPublicDateRange } from '#layers/thei/shared/public-date-format';
 
 const props = withDefaults(
   defineProps<{
-    period: DateRange | DatedPeriod;
+    period: DateRange | DatedPeriod | StagePeriod;
     removable?: boolean;
     /** Turns the label into a button that asks to reopen the picker. */
     editable?: boolean;
@@ -22,22 +24,19 @@ const props = withDefaults(
 );
 const emit = defineEmits<{ remove: []; edit: [] }>();
 
-const formatter = computed(
-  () =>
-    new Intl.DateTimeFormat(language.value.code, {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    }),
+/** The days, months abbreviated and what both ends share said once. */
+const dates = computed(() =>
+  formatPublicDateRange(props.period, language.value.code, 'abbreviated'),
 );
-const formatDate = (value: string) =>
-  formatter.value.format(new Date(`${value}T00:00`));
-const label = computed(() => {
-  const startDate = formatDate(props.period.startDate);
-  return props.period.startDate === props.period.endDate
-    ? startDate
-    : `${startDate} — ${formatDate(props.period.endDate)}`;
-});
+/** The owner's name for the period, read before its dates. */
+const name = computed(() =>
+  'label' in props.period && props.period.label
+    ? publicText(props.period.label)
+    : '',
+);
+const label = computed(() =>
+  name.value ? `${name.value}, ${dates.value}` : dates.value,
+);
 
 const precision = computed(() =>
   'precision' in props.period ? props.period.precision : 'exact',
@@ -74,31 +73,42 @@ const toneClass = computed(() => {
 </script>
 
 <template>
+  <!-- Two lines, as the chronology shows a period: its name, then its dates.
+       A period without a name is its dates alone, in the name's place; the
+       chips of one row share a height, so it sits in the middle of it. -->
   <component
     :is="href && !removable ? 'a' : 'span'"
     :href="href && !removable ? href : undefined"
-    class="inline-flex max-w-full items-center rounded-full bg-bg-3 py-1 text-xs
-      text-text-2 no-underline transition focus-visible:ring-2
-      focus-visible:ring-accent focus-visible:outline-none hocus:bg-bg-4
-      hocus:text-text-1"
+    class="inline-flex max-w-full items-center gap-1 rounded-normal bg-bg-3 py-1
+      text-xs leading-tight text-text-2 no-underline transition
+      focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none
+      hocus:bg-bg-4 hocus:text-text-1"
     :class="removable ? 'pr-1 pl-xs' : 'px-xs'"
   >
     <component
       :is="editable ? 'button' : 'span'"
       :type="editable ? 'button' : undefined"
-      class="inline-flex min-w-0 items-center gap-1"
+      class="flex min-w-0 flex-col items-start text-left"
       :class="editable ? 'cursor-pointer' : ''"
       :aria-label="editable ? `${phrase.edit}: ${label}` : undefined"
       @click="editable ? emit('edit') : undefined"
     >
-      <Icon
-        v-if="approximate"
-        name="approximate"
-        class="shrink-0"
-        :class="toneClass"
-        v-bind="approximateTitle"
-      />
-      <span class="truncate" :class="toneClass">{{ label }}</span>
+      <span v-if="name" class="max-w-full truncate font-semibold text-text-1">
+        {{ name }}
+      </span>
+      <span
+        class="inline-flex max-w-full items-center gap-1"
+        :class="name ? '' : 'text-text-1'"
+      >
+        <Icon
+          v-if="approximate"
+          name="approximate"
+          class="shrink-0"
+          :class="toneClass"
+          v-bind="approximateTitle"
+        />
+        <span class="truncate" :class="toneClass">{{ dates }}</span>
+      </span>
     </component>
     <button
       v-if="removable"
