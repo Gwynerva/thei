@@ -39,7 +39,10 @@ export default defineEventHandler(async (event): Promise<InstallResponse> => {
   try {
     const passwordData = generatePasswordData(installDataOrError.password);
 
-    await rm(THEI_SERVER.projectPath('.thei'), { force: true, recursive: true });
+    await rm(THEI_SERVER.projectPath('.thei'), {
+      force: true,
+      recursive: true,
+    });
     await mkdir(THEI_SERVER.contentPath(), { recursive: true });
     // Left by an attempt that failed before writing the config.
     await setAsideOrphanDatabase();

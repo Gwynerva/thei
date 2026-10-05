@@ -134,7 +134,12 @@ describe('session reclaim', () => {
     // A client killed outright never releases its session; the next run
     // should not wait hours for the slot.
     const now = Date.now();
-    const quiet = { ...base, sessionId: 'quiet', pid: process.pid, startedAt: now - 20 * 60 * 1000 };
+    const quiet = {
+      ...base,
+      sessionId: 'quiet',
+      pid: process.pid,
+      startedAt: now - 20 * 60 * 1000,
+    };
     expect(isAbandonedSession(quiet, now)).toBe(true);
     touchBackupSession('quiet', now - 60 * 1000);
     expect(isAbandonedSession(quiet, now)).toBe(false);

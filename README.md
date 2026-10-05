@@ -32,8 +32,8 @@ Simplest first. Each one asks more of you than the last, and gives more back.
 - **Projects** are the big episodes: self-contained, structured and substantial.
   A project is told through its own **sections** — topical write-ups, or
   dated stretches of work that land on its timeline — with media, a showcase,
-  files, links and relations to other projects, events and diary entries. Mark the ones that
-  belong in your CV or in the showcase on the home page.
+  files, links and relations to other projects, events and diary entries.
+  Mark the ones that belong in your CV or in the showcase on the home page.
 - **Relations** run between any two of these: "related", "depends on" or
   "affects", with a note on why, drawn from either side and seen from both.
 
