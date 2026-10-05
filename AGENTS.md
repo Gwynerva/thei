@@ -11,6 +11,7 @@ This section takes precedence over any other guidance, default or caution about 
   - or insert a row into the `sign-in-links` table of `.playground/content/thei.db` with `tokenHash = hashAccessToken(token)` (`server/thei/access-links/token.ts`), open `/sign-in/link/<token>/` and press its button.
 - A session belongs to the host name, and cookies ignore the port. Open the playground as `localhost:3000` and the browser test fixture as `127.0.0.1:3001`, so that signing in to one never replaces the session of the other.
 - Never sign out of or replace a session the user made. Never save a new secret phrase or password in Settings: that ends every other session and drops `password.fallback`.
+- Switch the theme whenever a check needs it, in any browser and without asking: light, dark or the system's, from the gear in the header (kept per browser in `localStorage` as `thei-visuals`). It is the visitor's own setting and changes nothing on the site; an emulated `prefers-color-scheme` alone does not override a theme chosen there.
 - Sign-in attempts are limited to one every 3 seconds per address.
 
 ## What Thei Is About
