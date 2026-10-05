@@ -548,7 +548,7 @@ export function ogFixtures(art: OgArtworkSet): OgFixture[] {
         'Реставрация фонаря',
         { hue: 355, chroma: 0.14 },
         {
-          chips: [{ icon: 'project-section', label: 'Раздел 3 из 7' }],
+          chips: [{ icon: 'project-section', label: 'Этап 3 из 7' }],
           parent: { title: 'Атлас северных маяков', picture: art.logo },
           summary: 'Разобрали фонарь, отмыли призмы и заново собрали механизм.',
           meta: [{ icon: 'calendar', text: 'май — август 2025' }],

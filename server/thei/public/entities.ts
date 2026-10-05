@@ -473,8 +473,8 @@ export async function buildPublicProject(
     iconMedia: head.iconMedia,
     bannerMedia: head.bannerMedia,
     description,
-    // The owner's order for the sections about a topic, then the dated ones
-    // as a chronology reads them, newest first.
+    // The general sections in the owner's order, then the stages as a
+    // chronology reads them, newest first.
     sections: [
       ...sectionItems.filter((section) => !section.period),
       ...sortPublicTimelineItemsNewestFirst(
@@ -515,7 +515,6 @@ export async function buildPublicProjectSectionSummary(
   return {
     title: section.title,
     summary: section.summary,
-    date: period?.endDate ?? utcDayOf(section.createdAt),
     ...(period ? { period } : {}),
     periods: section.periods,
     media: await buildPublicEntityPreviewMedia(

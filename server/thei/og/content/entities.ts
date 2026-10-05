@@ -235,8 +235,9 @@ export async function sectionContent(
   };
 
   if (isDatedSection(section)) {
-    // Its place in the project's chronology, among the dated sections a
-    // stranger sees, oldest first: "Section 3 of 7".
+    // Its place among the stages — the dated sections a stranger sees —
+    // oldest first: "Stage 3 of 7". It is still a section; the number says
+    // which stage of the project's way it was.
     const datedSections = sections.filter(isDatedSection);
     return {
       ...content,

@@ -61,13 +61,15 @@ usePublicSeo({
 const tabs = computed(() => [
   {
     name: 'projects' as const,
+    icon: 'project' as const,
     count: tag.value.projectCount,
-    label: phrase.value.projects_count(tag.value.projectCount),
+    label: phrase.value.projects,
   },
   {
     name: 'events' as const,
+    icon: 'event' as const,
     count: tag.value.eventCount,
-    label: phrase.value.events_count(tag.value.eventCount),
+    label: phrase.value.events,
   },
 ]);
 
@@ -90,9 +92,13 @@ function tabTo(tab: 'projects' | 'events') {
       :description="tag.description"
     />
 
+    <!-- Underlined like every row of tabs that switches what a page lists —
+         its relations, a project's sections — but links: each tab is an
+         address of its own. -->
     <div
       role="tablist"
-      class="grid grid-cols-2 rounded-normal bg-bg-3 p-1 text-sm font-semibold"
+      class="flex min-w-0 border-b border-border-1 text-sm font-semibold
+        max-sm:justify-center"
       :aria-label="publicText(tag.title)"
     >
       <component
@@ -104,18 +110,32 @@ function tabTo(tab: 'projects' | 'events') {
         :aria-selected="tag.activeTab === tab.name"
         :aria-disabled="tab.count ? undefined : 'true'"
         aria-controls="tag-entities"
-        class="flex items-center justify-center gap-xs rounded-sm px-xs py-xs
-          transition"
+        class="relative flex items-center gap-xs px-xs py-sm no-underline
+          transition focus-visible:ring-2 focus-visible:ring-accent
+          focus-visible:outline-none focus-visible:ring-inset sm:px-sm"
         :class="
           tag.activeTab === tab.name
-            ? 'bg-bg-1 text-text-1 shadow-sm'
+            ? 'text-accent'
             : tab.count
-              ? 'text-text-2 hocus:text-accent'
+              ? 'text-text-2 hocus:bg-bg-3/60 hocus:text-accent'
               : 'cursor-not-allowed text-text-3'
         "
       >
-        <Icon :name="tab.name === 'projects' ? 'project' : 'event'" />
+        <Icon :name="tab.icon" class="shrink-0" aria-hidden="true" />
         {{ tab.label }}
+        <span
+          v-if="tab.count"
+          class="shrink-0 rounded-full bg-bg-3 px-2 py-0.5 text-xs leading-none
+            tabular-nums"
+        >
+          {{ tab.count }}
+        </span>
+        <span
+          v-if="tag.activeTab === tab.name"
+          class="absolute inset-x-xs -bottom-0.5 h-1 rounded-full bg-accent
+            shadow-md shadow-accent/50 sm:inset-x-sm"
+          aria-hidden="true"
+        />
       </component>
     </div>
 

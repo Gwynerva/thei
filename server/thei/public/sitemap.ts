@@ -5,12 +5,7 @@ import {
 import { resolveSiteUrl } from '#layers/thei/shared/site-url';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
-import { buildLifeUrl } from '#layers/thei/shared/life';
-import {
-  LIFE_PRESETS,
-  lifePresetHref,
-  PROJECT_TIMELINE_PRESETS,
-} from '#layers/thei/shared/life-presets';
+import { LIFE_PRESETS, lifePresetHref } from '#layers/thei/shared/life-presets';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
 import {
@@ -165,14 +160,9 @@ export function buildSitemapEntries(input: SitemapInput): SitemapEntry[] {
           path: buildProjectUrl(project.humanReadableSlug, project.publicId),
           lastmod: isoDate(project.updatedAt),
         },
-        // Both tabs of the page, and the filter of its chronology that used to
-        // be a list of its own.
+        // Both tabs of the page. Its sections are a block of the overview,
+        // and a filter of its chronology only a way of reading it.
         { path: timeline },
-        ...PROJECT_TIMELINE_PRESETS.filter((preset) => preset.listed).map(
-          (preset) => ({
-            path: buildLifeUrl({ filter: preset.filter }, timeline),
-          }),
-        ),
       ];
     }),
     ...sections(input.sections),

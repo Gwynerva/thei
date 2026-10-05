@@ -3,13 +3,15 @@ import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import {
   isPublicSecret,
   type PublicEntityReference,
+  type PublicProjectSection,
 } from '#layers/thei/shared/api/public';
 import { contentEntityReference } from '#layers/thei/shared/content-link';
-import type { RelationEndpoint } from '#layers/thei/shared/relation';
 import {
-  RELATION_GROUP_ORDER,
-  relationGroupPhraseKey,
-} from '#layers/thei/shared/relation-display';
+  RELATION_ENTITY_TYPES,
+  type RelationEndpoint,
+  type RelationEntityType,
+} from '#layers/thei/shared/relation';
+import { relationLabel } from '#layers/thei/shared/relation-display';
 import {
   findContentEntity,
   type ContentEntityRecord,
@@ -80,15 +82,7 @@ export async function renderProjectMarkdown(
     await body(event, data.description),
   ];
 
-  if (data.sections.length) {
-    lines.push(`## ${THEI_SERVER.phrase.project_content_sections}`);
-    for (const section of data.sections)
-      lines.push(
-        `- [${ownerText(section.title)}](${siteUrl(event, section.href)})` +
-          (section.period ? ` (${periodDates(section.period)})` : '') +
-          (section.summary ? ` — ${ownerText(section.summary)}` : ''),
-      );
-  }
+  lines.push(...sectionList(event, data.sections));
   lines.push(
     ...(await relatedEntities(event, {
       type: 'project',
@@ -325,9 +319,37 @@ async function withEntityAddresses(
 }
 
 /**
- * Relations as the page lists them: grouped by what they say, the directed
- * kinds first, each named from this entity's side. A diary entry is listed
- * by its day with its opening line, since it has no title to be called by.
+ * A project's sections as its page shows them: the general ones in the
+ * owner's order, then the stages, newest first, each with its stretch.
+ */
+function sectionList(event: H3Event, sections: PublicProjectSection[]) {
+  if (!sections.length) return [];
+  const phrase = THEI_SERVER.phrase;
+  const lines = [`## ${phrase.project_content_sections}`];
+  const groups = [
+    [phrase.project_sections_undated, sections.filter((item) => !item.period)],
+    [phrase.project_sections_dated, sections.filter((item) => item.period)],
+  ] as const;
+  for (const [title, group] of groups) {
+    if (!group.length) continue;
+    lines.push(`### ${title}`);
+    for (const section of group)
+      lines.push(
+        `- [${ownerText(section.title)}](${siteUrl(event, section.href)})` +
+          (section.period ? ` (${periodDates(section.period)})` : '') +
+          (section.summary ? ` — ${ownerText(section.summary)}` : ''),
+      );
+  }
+  return lines;
+}
+
+/**
+ * Relations as the page lists them: one list per kind of entity, in the
+ * order of its tabs, the directed relations first. A directed one says its
+ * word for the other end — "Influences", "Depends" — run into the owner's
+ * reason; a plain one says no word, and each falls back on what the entity
+ * says of itself. A diary entry is called by its day, since it has no title.
+ * A codename is left out: a copy for machines lists only what it can link.
  */
 async function relatedEntities(
   event: H3Event,
@@ -338,19 +360,28 @@ async function relatedEntities(
   );
   if (!links.length) return [];
   const phrase = THEI_SERVER.phrase;
+  const kindTitles: Record<RelationEntityType, string> = {
+    project: phrase.projects,
+    event: phrase.events,
+    'diary-entry': phrase.diary,
+  };
   const lines = [`## ${phrase.related_entities}`];
-  for (const type of RELATION_GROUP_ORDER) {
-    const group = links.filter(
-      (link) => (link.relationType ?? 'related') === type,
-    );
+  for (const kind of RELATION_ENTITY_TYPES) {
+    const group = links.filter((link) => link.entityType === kind);
     if (!group.length) continue;
-    lines.push(`### ${phrase[relationGroupPhraseKey(type)]}`);
+    lines.push(`### ${kindTitles[kind]}`);
     for (const link of group) {
-      const text =
-        link.note || (link.entityType === 'diary-entry' ? link.summary : '');
+      const type = link.relationType ?? 'related';
+      const text = link.note || link.summary;
+      const said = [
+        type === 'related' ? '' : relationLabel(phrase, type),
+        text ? ownerText(text) : '',
+      ]
+        .filter(Boolean)
+        .join(' · ');
       lines.push(
         `- [${ownerText(link.title)}](${siteUrl(event, link.href)})` +
-          (text ? ` — ${ownerText(text)}` : ''),
+          (said ? ` — ${said}` : ''),
       );
     }
   }

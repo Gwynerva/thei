@@ -21,7 +21,7 @@ const {
 } = defineProps<{
   media?: MediaDescriptor;
   side?: 'left' | 'right';
-  fade?: 'row' | 'preview' | 'card';
+  fade?: 'row' | 'preview' | 'card' | 'chip';
   playback?: MediaPlayback;
   engaged?: boolean;
   loop?: boolean;
@@ -110,6 +110,15 @@ const {
   --media-edge-clear-open: 36%;
   --media-edge-dissolve: 46%;
   --media-edge-hold: 15%;
+}
+/* A chip is a few lines tall: the picture keeps the outer half, its name
+   starts where it has all but dissolved. */
+.media-edge-strip[data-fade='chip'] {
+  --media-edge-focus: 0.35;
+  --media-edge-clear: 30%;
+  --media-edge-clear-open: 42%;
+  --media-edge-dissolve: 45%;
+  --media-edge-hold: 25%;
 }
 /* A card's strip is the whole card, its text over the inner three quarters. */
 .media-edge-strip[data-fade='card'] {

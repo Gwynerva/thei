@@ -22,7 +22,11 @@ defineProps<{ parent: PublicEntityReference; below?: boolean }>();
         gap-xs font-semibold text-text-2 transition focus-visible:ring-2
         focus-visible:ring-accent focus-visible:outline-none hocus:text-accent"
     >
-      <EntityTokenIcon :media="parent.iconMedia" icon="project" class="size-5" />
+      <EntityTokenIcon
+        :media="parent.iconMedia"
+        icon="project"
+        class="size-5"
+      />
       <span class="min-w-0 truncate">{{ publicText(parent.title) }}</span>
     </TheiLink>
     <Icon

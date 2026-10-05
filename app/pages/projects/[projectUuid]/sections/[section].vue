@@ -101,7 +101,7 @@ const details = computed(
         :data="data.content"
         asset-viewer
       />
-      <!-- A dated section may be only its dates; one about a topic that
+      <!-- A stage may be only its dates; a general section that
            shows nothing has a body the visitor may not read. -->
       <PublicEmptyState
         v-else-if="data.periods.length"

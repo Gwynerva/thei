@@ -7,7 +7,7 @@ import {
   type ProjectSectionItem,
 } from '#layers/thei/shared/project-content-item';
 import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
-import type { TabStripItem } from '#layers/thei/app/components/TabStrip.vue';
+import type { TabItem } from '#layers/thei/app/components/UnderlineTabs.vue';
 import {
   moveItemById,
   useDragSort,
@@ -18,14 +18,15 @@ import {
   saveAfterItemEditKey,
 } from '../composables';
 import { projectContentItemModal } from './project-content-item-modal';
-import { projectContentItemDeleteModal } from './project-content-item-delete-modal';
 import ProjectContentItemRow from './ProjectContentItemRow.vue';
 
 /**
- * A project's sections, in two tabs: the ones about a stretch of time, newest
- * first, where the owner is working, and the ones about a topic, in the order
- * they are dragged into. A section moves between the tabs as its dates come
- * and go; the strip shows only when both hold something.
+ * A project's sections, in two tabs heading one block, as the relations
+ * below are: the general ones, about a part of the project, in the order
+ * they are dragged into, and the stages, about a stretch of time, newest
+ * first, where the owner is working. Both tabs are always there, so the
+ * owner sees where a section will go; a section moves between them as its
+ * dates come and go.
  */
 type Group = 'undated' | 'dated';
 
@@ -42,16 +43,10 @@ const undated = computed(() =>
 const dated = computed(() =>
   sections.value.filter(isDatedSection).sort(compareDatedSections).reverse(),
 );
-const selected = ref<Group>(undated.value.length ? 'undated' : 'dated');
-const showTabs = computed(
-  () => undated.value.length > 0 && dated.value.length > 0,
+const selected = ref<Group>(
+  undated.value.length || !dated.value.length ? 'undated' : 'dated',
 );
-/** The tab in view: the chosen one, or the only one that holds anything. */
-const group = computed<Group>(() => {
-  if (showTabs.value) return selected.value;
-  return dated.value.length ? 'dated' : 'undated';
-});
-const tabs = computed<TabStripItem<Group>[]>(() => [
+const tabs = computed<TabItem<Group>[]>(() => [
   {
     key: 'undated',
     label: phrase.value.project_sections_undated,
@@ -66,10 +61,10 @@ const tabs = computed<TabStripItem<Group>[]>(() => [
   },
 ]);
 const itemViews = computed(() =>
-  (group.value === 'dated' ? dated.value : undated.value).map((item) => ({
+  (selected.value === 'dated' ? dated.value : undated.value).map((item) => ({
     item,
     id: itemId(item),
-    analysis: analyzeContentData(item.content?.data),
+    media: analyzeContentData(item.content?.data).preview.media,
   })),
 );
 
@@ -152,7 +147,7 @@ function mergeSaved(
 }
 
 const dragSort = useDragSort(
-  () => (group.value === 'undated' ? root.value : null),
+  () => (selected.value === 'undated' ? root.value : null),
   {
     handle: '[data-content-section-handle]',
     onDrop: ({ id, newIndex }) => moveUndated(id, newIndex),
@@ -229,19 +224,21 @@ onMounted(async () => {
   await openItem(target);
 });
 
-function deleteItem(target: ProjectSectionItem) {
-  return exclusively(async () => {
-    const result = await openModal(projectContentItemDeleteModal, {
-      title: target.title,
-    });
-    if (result.type === 'deleted') removeItem(target);
-  });
-}
-
-function moveWithKeyboard(target: ProjectSectionItem, direction: -1 | 1) {
+/**
+ * Moving a row moves its element, and an element moved in the document
+ * loses the focus: the grip takes it back, so the arrows can go on.
+ */
+async function moveWithKeyboard(target: ProjectSectionItem, direction: -1 | 1) {
   const newIndex = undated.value.indexOf(target) + direction;
   if (newIndex < 0 || newIndex >= undated.value.length) return;
-  moveUndated(itemId(target), newIndex);
+  const id = itemId(target);
+  moveUndated(id, newIndex);
+  await nextTick();
+  root.value
+    ?.querySelector<HTMLElement>(
+      `[data-drag-id="${id}"] [data-content-section-handle]`,
+    )
+    ?.focus();
 }
 </script>
 
@@ -261,66 +258,41 @@ function moveWithKeyboard(target: ProjectSectionItem, direction: -1 | 1) {
       </template>
     </SectionHeader>
 
-    <TabStrip
-      v-if="showTabs"
-      v-model="selected"
-      :tabs="tabs"
-      :label="phrase.project_content_sections"
-      controls="project-sections-list"
-      class="mb-sm"
-    />
-    <div
-      v-if="itemViews.length"
-      id="project-sections-list"
-      ref="root"
-      :role="showTabs ? 'tabpanel' : undefined"
-      :data-section-group="group"
-      class="flex flex-col gap-xs"
-    >
-      <ProjectContentItemRow
-        v-for="{ item, id, analysis } in itemViews"
-        :key="id"
-        :data-drag-id="id"
-        :title="item.title"
-        :summary="item.summary"
-        :periods="item.periods"
-        :analysis
-        :is-private="item.isPrivate"
-        :private-label="phrase.content_section_private"
-        @open="dragSort.guardClick(() => openItem(item))"
+    <Box class="flex flex-col overflow-hidden" data-sections>
+      <UnderlineTabs
+        v-model="selected"
+        :tabs="tabs"
+        :label="phrase.project_content_sections"
+        controls="project-sections-list"
+        class="px-xs max-sm:justify-center sm:px-sm"
+      />
+      <div
+        id="project-sections-list"
+        ref="root"
+        role="tabpanel"
+        :aria-labelledby="`project-sections-list-${selected}-tab`"
+        :data-section-group="selected"
+        class="flex flex-col gap-2 p-sm sm:p-md"
       >
-        <template #actions>
-          <Button
-            v-if="group === 'undated'"
-            type="button"
-            size="icon-sm"
-            variant="secondary"
-            drag-handle
-            :aria-label="`${phrase.content_section_sort}: ${publicText(item.title)}`"
-            data-content-section-handle
-            @keydown.up.prevent.stop="moveWithKeyboard(item, -1)"
-            @keydown.down.prevent.stop="moveWithKeyboard(item, 1)"
-          >
-            <Icon name="grip" />
-          </Button>
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="delete"
-            :aria-label="`${phrase.delete_content_section}: ${publicText(item.title)}`"
-            :data-title-popup="phrase.delete_content_section"
-            data-drag-ignore
-            @click="deleteItem(item)"
-          >
-            <Icon name="delete" />
-          </Button>
-        </template>
-      </ProjectContentItemRow>
-    </div>
-    <Box v-else>
-      <div class="flex min-h-16 items-center p-sm sm:p-md">
-        <p class="text-sm text-text-3 italic">
-          {{ phrase.project_content_sections_empty }}
+        <ProjectContentItemRow
+          v-for="{ item, id, media } in itemViews"
+          :key="id"
+          :data-drag-id="id"
+          :title="item.title"
+          :summary="item.summary"
+          :periods="item.periods"
+          :media
+          :is-private="item.isPrivate"
+          :sortable="selected === 'undated'"
+          @open="dragSort.guardClick(() => openItem(item))"
+          @move="moveWithKeyboard(item, $event)"
+        />
+        <p
+          v-if="!itemViews.length"
+          class="self-center text-sm text-text-3 italic"
+          data-sections-empty
+        >
+          {{ phrase.project_sections_empty_of(selected) }}
         </p>
       </div>
     </Box>

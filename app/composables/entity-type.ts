@@ -15,13 +15,17 @@ export function entityTypeLabel(type: ContentEntityType): string {
 
 /**
  * The name to show for a linked entity. A diary entry has no title and is
- * called by its day, so its `date` is written out as one.
+ * called by its day, so its `date` is written out as one — with its month
+ * abbreviated (`abbreviated`) where the name has the room of a chip.
  */
-export function entityDisplayTitle(entity: {
-  title: string;
-  date?: string;
-}): string {
+export function entityDisplayTitle(
+  entity: {
+    title: string;
+    date?: string;
+  },
+  style: 'long' | 'abbreviated' = 'long',
+): string {
   return entity.date
-    ? formatAbsolutePublicDate(entity.date, language.value.code)
+    ? formatAbsolutePublicDate(entity.date, language.value.code, style)
     : entity.title;
 }

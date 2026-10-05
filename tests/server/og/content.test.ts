@@ -486,7 +486,7 @@ describe('Open Graph content', () => {
 
     const content = (await resolve({ kind: 'section', id: 's2' }))!;
     // Its place among the dated sections a stranger sees.
-    expect(content.chips[0]!.label).toBe('Section 2 of 2');
+    expect(content.chips[0]!.label).toBe('Stage 2 of 2');
     expect(content.parent?.title).toBe('p title');
     expect(content.meta[0]!.text).toBe('May — August 2021');
     expect(content.date).toBeUndefined();

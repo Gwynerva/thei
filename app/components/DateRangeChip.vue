@@ -44,6 +44,14 @@ const name = computed(() =>
 const label = computed(() =>
   name.value ? `${name.value}, ${dates.value}` : dates.value,
 );
+/**
+ * A chip that does nothing when pressed — in a row the whole of which opens
+ * something — wears the raised look the others take under the pointer, so it
+ * stands off whatever it lies on; its ground lets a picture beneath tint it.
+ */
+const interactive = computed(
+  () => Boolean(props.href) || props.removable || props.editable,
+);
 
 const precision = computed(() =>
   'precision' in props.period ? props.period.precision : 'exact',
@@ -67,10 +75,15 @@ const approximateTitle = computed(() =>
     : undefined,
 );
 
+/**
+ * The dates are pale in every chip, under the period's name or alone, exact
+ * or about a day: only a month or a year that is a guess colours them, and
+ * the "about" mark says the rest.
+ */
 const toneClass = computed(() => {
   switch (datePrecisionTone(precision.value)) {
     case 'neutral':
-      return approximate.value ? 'text-text-2' : '';
+      return '';
     case 'warning':
       return 'text-text-warning';
     case 'alert':
@@ -86,11 +99,16 @@ const toneClass = computed(() => {
   <component
     :is="href && !removable ? 'a' : 'span'"
     :href="href && !removable ? href : undefined"
-    class="inline-flex max-w-full items-center gap-1 rounded-normal bg-bg-3 py-1
-      text-xs leading-tight text-text-2 no-underline transition
-      focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none
-      hocus:bg-bg-4 hocus:text-text-1"
-    :class="removable ? 'pr-1 pl-xs' : 'px-xs'"
+    class="inline-flex max-w-full items-center gap-1 rounded-normal py-1 text-xs
+      leading-tight no-underline"
+    :class="[
+      removable ? 'pr-1 pl-xs' : 'px-xs',
+      interactive
+        ? `bg-bg-3 transition focus-visible:ring-2 focus-visible:ring-accent
+          focus-visible:outline-none hocus:bg-bg-4`
+        : 'bg-bg-4/75',
+    ]"
+    data-date-range-chip
   >
     <component
       :is="editable ? 'button' : 'span'"
@@ -100,13 +118,10 @@ const toneClass = computed(() => {
       :aria-label="editable ? `${phrase.edit}: ${label}` : undefined"
       @click="editable ? emit('edit') : undefined"
     >
-      <span v-if="name" class="max-w-full truncate font-semibold text-text-1">
+      <span v-if="name" class="max-w-full truncate text-text-1">
         {{ name }}
       </span>
-      <span
-        class="inline-flex max-w-full items-center gap-1"
-        :class="name ? '' : 'text-text-1'"
-      >
+      <span class="inline-flex max-w-full items-center gap-1 text-text-2">
         <Icon
           v-if="approximate"
           name="approximate"

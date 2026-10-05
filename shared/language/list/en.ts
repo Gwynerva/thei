@@ -268,7 +268,6 @@ export default defineI18nBase({
     project_tabs: 'Project page tabs',
     project_tab_overview: 'Overview',
     project_tab_timeline: 'Chronology',
-    project_timeline_latest: 'Latest from the chronology',
     project_timeline_seo_description: (title) =>
       `The chronology of “${title}”: its sections, statuses, related events and diary entries.`,
     project_status_hint: 'Short descriptions of the states the project is in.',
@@ -404,14 +403,11 @@ export default defineI18nBase({
     public_timeline_from: (date) => `From ${date}`,
     public_timeline_until: (date) => `To ${date}`,
     public_timeline_duration: formatDuration,
-    projects_count: (count) =>
-      `${count} ${count === 1 ? 'project' : 'projects'}`,
-    events_count: (count) => `${count} ${count === 1 ? 'event' : 'events'}`,
     public_life_description:
       'A continuous timeline of events, projects and diary entries.',
     home: 'Home',
     llms_txt_intro:
-      'A personal archive of one life. Three main kinds of record, simplest first: a diary entry is a dated thought with no title, an event is a memorable moment written up, a project is a substantial episode made of its own sections, some about a topic and some about a dated stretch of work. Alongside them, pages are standalone writing, tags are threads across all of it, and Life is the single timeline they land on.',
+      'A personal archive of one life. Three main kinds of record, simplest first: a diary entry is a dated thought with no title, an event is a memorable moment written up, a project is a substantial episode made of its own sections — general ones about a part of it, and stages, the sections with dates it went through. Relations join projects, events and diary entries: each lists the others it is related to, marking those that influence it or depend on it. Alongside them, pages are standalone writing, tags are threads across all of it, and Life is the single timeline they land on.',
     llms_txt_sections: 'Sections',
     llms_txt_home:
       'who this is, current status, best projects and the latest moments',
@@ -422,7 +418,7 @@ export default defineI18nBase({
     llms_txt_sitemap: 'every public address on this site',
     llms_txt_markdown_title: 'Markdown',
     llms_txt_markdown:
-      'Any public project, event, page or diary entry is also served as Markdown: add index.md to its address, for example /projects/name-id/index.md. Private parts are absent there, exactly as they are for any other visitor.',
+      'Any public project, project section, event, page or diary entry is also served as Markdown: add index.md to its address, for example /projects/name-id/index.md. Private parts are absent there, exactly as they are for any other visitor.',
     public_life_period_description: (period, siteName) =>
       `Events, projects and diary entries for ${period} — ${siteName}.`,
     public_pages_description:
@@ -640,7 +636,7 @@ export default defineI18nBase({
       'Short dated thoughts: one entry a day, with no title and nothing else to fill in.',
     admin_kind_project_title: 'What a project is',
     admin_kind_project_what:
-      'A project is a self-contained, substantial episode of a life with a structure of its own: sections — topical ones and dated stretches of work — a showcase, files and links.',
+      'A project is a self-contained, substantial episode of a life with a structure of its own: sections — general ones and stages with dates — a showcase, files and links.',
     admin_kind_project_rank:
       'The weightiest kind. A project gathers events and diary entries around it, and its relations to them are set here. If a title and a couple of paragraphs are enough, it is probably an event.',
     admin_kind_project_examples:
@@ -991,33 +987,45 @@ export default defineI18nBase({
     project_action_issue_color: 'a background color as #RRGGBB',
     project_content_sections: 'Project sections',
     project_content_sections_hint:
-      'Parts of the project: topics in your order, dated stretches of work in time order.',
-    project_sections_dated: 'Dated',
-    project_sections_undated: 'Undated',
-    relation_group_related: 'Related',
-    relation_group_depends_on: 'Depends on',
-    relation_group_affects: 'Affects',
+      "Detailed write-ups of the project's parts and of the stages it went through.",
+    project_sections_dated: 'Dated stages',
+    project_sections_undated: 'General sections',
     related_entities: 'Related entities',
     related_entities_hint:
       'Projects, events and diary entries tied to this one. A relation is visible from both sides.',
     related_entity_add: 'Add a relation',
     relation_direction: 'Kind of relation',
-    relation_short_related: () => 'related to',
-    relation_short_depends_on: 'depends on',
-    relation_short_affects: 'affects',
+    relation_label_related: 'Related',
+    relation_label_influencing: 'Influences',
+    relation_label_dependent: 'Depends',
     relation_popup_related: (current, other) =>
       `“${current}” and “${other}” are related`,
     relation_popup_depends_on: (current, other) =>
       `“${current}” depends on “${other}”`,
     relation_popup_affects: (current, other) =>
       `“${current}” affects “${other}”`,
-    relations_empty: 'No relations yet.',
-    project_content_sections_empty: 'No sections yet.',
+    relations_empty_of: (kind) =>
+      kind === 'project'
+        ? 'No related projects yet.'
+        : kind === 'event'
+          ? 'No related events yet.'
+          : 'No related diary entries yet.',
+    project_sections_empty_of: (group) =>
+      group === 'dated' ? 'No dated stages yet.' : 'No general sections yet.',
+    relation_entity: 'Related entity',
+    relation_entity_choose: 'A project, an event or a diary entry',
+    relation: 'Relation',
+    relation_edit: (title) => `Edit the relation to “${title}”`,
+    relation_note: 'Explanation',
     relation_note_placeholder: 'Reason for the relation…',
-    relation_note_for: (title) => `Explanation in “${title}”`,
-    split_relation_note: 'Split the explanation for both sides',
-    merge_relation_note: 'Merge explanations',
+    relation_note_shared_hint: 'Shown on the pages of both.',
+    relation_note_split: 'Separately',
+    relation_note_split_hint: 'A separate explanation for each page',
+    relation_note_on_page: 'Explanation on the page of',
     delete_relation: 'Delete relation',
+    recommended_relations: 'Recommended relations',
+    relation_recommendation_add: (title) => `Add a relation to “${title}”`,
+    relation_recommendation_reason: 'Linked in the text',
     project_external_links: 'Project external links',
     project_external_links_hint:
       'Websites, publications, and other pages related to the project.',
@@ -1041,10 +1049,10 @@ export default defineI18nBase({
     search_entity_placeholder: 'A title, or the date of a diary entry…',
     search_entity_no_results: 'Nothing matches.',
     search_entity_error: 'Could not search.',
-    entity_search_mentioned: 'Linked in the text',
     content_section: 'Project section',
     content_section_delete_entity: 'project section',
     section_periods: 'Time periods',
+    section_undated_hint: 'No dates: a general section.',
     section_needs_body_or_period:
       'Write the section or give it at least one time period.',
     public_section_dates_only: 'This section has no text',
@@ -1211,6 +1219,7 @@ export default defineI18nBase({
     clear: 'Clear',
     delete: 'Delete',
     close_modal: 'Close dialog',
+    done: 'Done',
     public_link: (entityName) => `${entityName} Link`,
     human_readable_url: 'Readable URL',
     public_id: 'Public ID',
@@ -1476,7 +1485,7 @@ export default defineI18nBase({
     search_preset_cv_description:
       'The professional part of the archive: the projects that make up a working history.',
     og_personal_archive: 'Personal archive',
-    og_section_position: (index, total) => `Section ${index} of ${total}`,
+    og_section_position: (index, total) => `Stage ${index} of ${total}`,
     og_updated: (date) => `Updated ${date}`,
     og_life_headline: (years) =>
       `${plural(years, 'year', 'years')} in one chronicle`,

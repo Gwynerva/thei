@@ -2,6 +2,7 @@
 import type { PublicNeighbour } from '#layers/thei/shared/api/public';
 import type { IconName } from '#thei/icons';
 import type { PublicDetailNeighbours } from './public-detail';
+import { datePresentationToneClass } from '#layers/thei/app/composables/public-date';
 
 /**
  * The way back to the section or diary entry before this one, and on
@@ -57,15 +58,25 @@ function title(neighbour: PublicNeighbour) {
   );
 }
 
+/**
+ * A dated section's stretch, as a section card says it — the months named
+ * shortly, with the owner's doubt about it, if any.
+ */
+function period(neighbour: PublicNeighbour) {
+  return neighbour.period
+    ? getPublicDatePresentation(
+        neighbour.period,
+        language.value.code,
+        new Date(),
+        { style: 'abbreviated', ...publicDatePrecisionOptions() },
+      )
+    : undefined;
+}
+
 /** The line under the name: a section's time, or the text it opens with. */
 function detail(neighbour: PublicNeighbour) {
-  if (neighbour.period)
-    return getPublicDatePresentation(
-      neighbour.period,
-      language.value.code,
-      new Date(),
-      { style: 'short', ...publicDatePrecisionOptions() },
-    ).label;
+  const time = period(neighbour);
+  if (time) return time.label;
   return neighbour.summary ? publicText(neighbour.summary) : '';
 }
 
@@ -145,13 +156,21 @@ function popup(neighbour: PublicNeighbour) {
             >{{ title(side.neighbour) }}</span
           >
           <span
-            v-if="detail(side.neighbour)"
-            class="-mx-[0.75em] px-[0.75em] text-xs text-text-3"
-            :class="
-              side.neighbour.period
-                ? 'truncate'
-                : ['line-clamp-2', { italic: isDiary }]
-            "
+            v-if="period(side.neighbour)"
+            class="-mx-[0.75em] truncate px-[0.75em] text-xs text-text-3"
+            :class="datePresentationToneClass(period(side.neighbour)!)"
+            data-title-popup-clip
+            ><Icon
+              v-if="period(side.neighbour)!.approximate"
+              name="approximate"
+              class="mr-0.5"
+              aria-hidden="true"
+            />{{ detail(side.neighbour) }}</span
+          >
+          <span
+            v-else-if="detail(side.neighbour)"
+            class="-mx-[0.75em] line-clamp-2 px-[0.75em] text-xs text-text-3"
+            :class="{ italic: isDiary }"
             data-title-popup-clip
             >{{ detail(side.neighbour) }}</span
           >

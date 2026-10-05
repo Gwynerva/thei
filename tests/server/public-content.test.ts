@@ -654,7 +654,6 @@ describe('public content media previews', () => {
     );
 
     expect(result).toMatchObject({
-      date: '2027-03-14',
       period: { startDate: '2026-11-02', endDate: '2027-03-14' },
       media: {
         accent: { hue: 28, chroma: 0.15 },
@@ -729,7 +728,8 @@ describe('public content media previews', () => {
     // A visitor never sees the private picture; the section is drawn instead,
     // like any entity whose body opens without one it may see.
     const visitor = await buildPublicProjectSectionSummary(project, section);
-    expect(visitor.date).toBe('2027-04-06');
+    // A general section says no date at all.
+    expect(visitor).not.toHaveProperty('date');
     expect(visitor).not.toHaveProperty('period');
     expect(visitor.media).toMatchObject({ generated: true });
     expect(visitor.media!.src).toMatch(
@@ -738,7 +738,6 @@ describe('public content media previews', () => {
     await expect(
       buildPublicProjectSectionSummary(project, section, true),
     ).resolves.toMatchObject({
-      date: '2027-04-06',
       media: {
         accent: { hue: 310, chroma: 0.15 },
         src: '/projects/project-Project/content/section-image.webp',

@@ -311,7 +311,7 @@ async function deleteItem() {
           >
             {{
               hasBody
-                ? phrase.project_sections_undated
+                ? phrase.section_undated_hint
                 : phrase.section_needs_body_or_period
             }}
           </span>

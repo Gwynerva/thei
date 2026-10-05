@@ -1,13 +1,16 @@
 <script lang="ts" setup>
 import type { PublicProjectSection } from '#layers/thei/shared/api/public';
 import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
-import type { TabStripItem } from '../TabStrip.vue';
+import { PROJECT_SECTIONS_ANCHOR } from '#layers/thei/shared/project-url';
+import type { TabItem } from '../UnderlineTabs.vue';
 
 /**
- * A project's sections on its page, in two tabs: the ones about a topic, in
- * the owner's order, and the dated ones, newest first, each with the stretch
- * it covers. They are one kind of thing, so the strip shows only when there
- * are both; a project with sections of one kind lists them plainly.
+ * A project's sections on its page, under tabs heading the block, as its
+ * relations are: the general ones, in the owner's order, and the stages,
+ * newest first, each with the stretch it covers. They are one kind of thing
+ * read two ways, so a tab is there only for a way that holds something; a
+ * project with sections of one kind shows its one tab, which says what they
+ * are.
  */
 type Group = 'undated' | 'dated';
 
@@ -19,35 +22,34 @@ const undated = computed(() =>
 const dated = computed(() =>
   props.sections.filter((section) => section.period),
 );
-const tabs = computed<TabStripItem<Group>[]>(() => [
-  {
-    key: 'undated',
-    label: phrase.value.project_sections_undated,
-    icon: 'text',
-    count: undated.value.length,
-  },
-  {
-    key: 'dated',
-    label: phrase.value.project_sections_dated,
-    icon: 'calendar',
-    count: dated.value.length,
-  },
-]);
-const showTabs = computed(
-  () => undated.value.length > 0 && dated.value.length > 0,
+const tabs = computed<TabItem<Group>[]>(() =>
+  (
+    [
+      {
+        key: 'undated',
+        label: phrase.value.project_sections_undated,
+        icon: 'text',
+        count: undated.value.length,
+      },
+      {
+        key: 'dated',
+        label: phrase.value.project_sections_dated,
+        icon: 'calendar',
+        count: dated.value.length,
+      },
+    ] satisfies TabItem<Group>[]
+  ).filter((tab) => tab.count),
 );
 const selected = ref<Group>(undated.value.length ? 'undated' : 'dated');
-const shown = computed(() => {
-  if (showTabs.value)
-    return selected.value === 'dated' ? dated.value : undated.value;
-  return dated.value.length ? dated.value : undated.value;
-});
+const shown = computed(() =>
+  selected.value === 'dated' ? dated.value : undated.value,
+);
 </script>
 
 <template>
   <section
     v-if="sections.length"
-    id="project-sections"
+    :id="PROJECT_SECTIONS_ANCHOR"
     aria-labelledby="sections-heading"
     class="flex scroll-mt-[var(--public-anchor-offset,8rem)] flex-col gap-sm"
   >
@@ -56,8 +58,7 @@ const shown = computed(() => {
       :title="phrase.project_content_sections"
       :icon="entityTypeIcon('project-section')"
     />
-    <TabStrip
-      v-if="showTabs"
+    <UnderlineTabs
       v-model="selected"
       :tabs="tabs"
       :label="phrase.project_content_sections"
@@ -65,13 +66,14 @@ const shown = computed(() => {
     />
     <div
       id="project-sections-panel"
-      :role="showTabs ? 'tabpanel' : undefined"
-      class="grid gap-md"
+      role="tabpanel"
+      :aria-labelledby="`project-sections-panel-${selected}-tab`"
+      class="grid min-w-0 gap-sm sm:grid-cols-2"
     >
-      <PublicProjectChildCard
+      <PublicSectionCard
         v-for="section in shown"
         :key="section.href"
-        :item="section"
+        :section
       />
     </div>
   </section>

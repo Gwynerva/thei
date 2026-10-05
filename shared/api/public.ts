@@ -15,7 +15,6 @@ import type { RelationEntityType, RelationType } from '../relation';
 import type { PublicSearchFilters } from '../public-search';
 import type { StatusHistoryItem } from '../status';
 import type { PaginatedResponse } from '../pagination';
-import type { LifePoint } from '../life';
 
 export type PublicTagSummary = {
   title: string;
@@ -140,13 +139,11 @@ export type PublicReferenceLink = {
   href: string;
   description?: string;
   /**
-   * The owner's word on why the link is there, or why the entity is related.
-   * It is shown under the target's own title and description, never in
-   * place of them.
+   * The owner's word on why the link is there. It is shown under the
+   * target's own title and description, never in place of them.
    */
   note?: string;
   iconMedia?: MediaDescriptor;
-  relationType?: RelationType;
 };
 
 export type PublicReferenceGroup = {
@@ -185,16 +182,15 @@ export type PublicAction = {
 };
 
 /**
- * A part of a project as its pages list it. A dated section carries its
- * periods and the stretch they cover, and is dated by the last day of it; an
- * undated one by the day it was written.
+ * A part of a project as its pages list it. A stage — a dated section —
+ * carries its periods and the stretch they cover; a general one says no
+ * date, since the day it was written says nothing of it.
  */
 export type PublicProjectSection = {
   title: string;
   summary: string;
   href: string;
-  date: string;
-  /** The stretch the periods cover; absent for an undated section. */
+  /** The stretch the periods cover; absent for a general section. */
   period?: DatedPeriod;
   /** Empty for an undated section. */
   periods: Period[];
@@ -268,11 +264,8 @@ export type PublicProjectResponse = {
   /** The newest status, if the project keeps any; `statusCount` counts them. */
   currentStatus?: StatusHistoryItem;
   statusCount: number;
-  /**
-   * The newest points of the project's own chronology, for the overview tab;
-   * `total` is the counter on the "Chronology" tab.
-   */
-  timeline: { latest: LifePoint[]; total: number };
+  /** How many points the project's chronology tab holds, for its counter. */
+  timeline: { total: number };
   references: PublicReferences;
   action?: PublicAction;
   /**

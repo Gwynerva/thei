@@ -123,7 +123,7 @@ const extraContents = computed(() => [
         :url="relatedUrl"
         class="mt-lg"
       />
-      <PublicOwnerNotes :notes="data.notes" />
+      <PublicOwnerNotes :notes="data.notes" class="mt-lg" />
     </PublicDetailLayout>
   </main>
 </template>

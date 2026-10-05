@@ -265,8 +265,8 @@ export function countLifePointsByYear(
  * The newest points worth putting on a summary block.
  *
  * On the home page the person's own avatar and status changes are left out —
- * they have their own blocks right there. A project's summary keeps its
- * statuses, because that is the only place they are summarised.
+ * they have their own blocks right there. Read for one project, its statuses
+ * stay: they are points of the project's own.
  */
 export function selectLatestContentLifePoints<
   T extends { entityKind: LifeEntityKind },

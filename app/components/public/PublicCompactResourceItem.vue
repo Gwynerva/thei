@@ -6,9 +6,9 @@ import type { MediaDescriptor } from '#layers/thei/shared/media';
  * One file or link in a compact list. It shows its text as given: the caller
  * knows whose words they are, and formats the owner's (`publicText`).
  *
- * The title takes one line and the description `descriptionLines`, each cut
- * with an ellipsis where it runs out of room. Whatever is cut is in the
- * item's popup in full, which says nothing when nothing is cut.
+ * The title takes one line and the description two, each cut with an
+ * ellipsis where it runs out of room. Whatever is cut is in the item's popup
+ * in full, which says nothing when nothing is cut.
  */
 const props = withDefaults(
   defineProps<{
@@ -34,14 +34,13 @@ const props = withDefaults(
     /** A codename for something hidden from visitors; never a link. */
     secret?: boolean;
     /**
-     * The owner's note on why this is here — a link's reason, a relation's
-     * explanation. It is a line of its own under the description, in
-     * italics, never a replacement for what the target says of itself.
+     * The owner's note on why this link is here. It is a line of its own
+     * under the description, in italics, never a replacement for what the
+     * target says of itself.
      */
     note?: string;
-    descriptionLines?: 2 | 3;
   }>(),
-  { icon: 'link', descriptionLines: 2 },
+  { icon: 'link' },
 );
 defineEmits<{ activate: [] }>();
 
@@ -52,11 +51,8 @@ function oneLine(value: string | undefined) {
 const description = computed(() => oneLine(props.description));
 const note = computed(() => oneLine(props.note));
 /** A note takes a line from the description, so an item keeps its height. */
-const descriptionClamp = computed(
-  () =>
-    ({ 1: 'line-clamp-1', 2: 'line-clamp-2', 3: 'line-clamp-3' })[
-      note.value ? props.descriptionLines - 1 : props.descriptionLines
-    ],
+const descriptionClamp = computed(() =>
+  note.value ? 'line-clamp-1' : 'line-clamp-2',
 );
 const popup = computed(() => ({
   ...titlePopup(

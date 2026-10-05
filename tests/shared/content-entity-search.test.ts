@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  preferContentEntities,
+  pickContentEntities,
   rankContentEntities,
   suggestContentEntities,
   type ContentEntitySearchItem,
@@ -220,7 +220,7 @@ describe('suggestions from the words a link is made over', () => {
   });
 });
 
-describe('entities a text already links to, offered first', () => {
+describe('entities a text links to, picked by their keys', () => {
   function entity(
     entityId: string,
     updatedAt: number,
@@ -240,65 +240,42 @@ describe('entities a text already links to, offered first', () => {
     entity('old', 1),
     entity('older', 0),
     entity('recent', 9),
-    entity('newer', 8),
     entity('day', 5, 'diary-entry'),
     entity('meet', 7, 'event'),
   ];
-  const recent = (rest: ContentEntitySearchItem[], room: number) =>
-    rankContentEntities(rest, '', room);
   const ids = (list: ContentEntitySearchItem[]) =>
     list.map((item) => item.entityId);
 
-  it('takes the first places in the order of the text, the most recent after', () => {
+  it('keeps the order of the keys, whatever was updated last', () => {
     expect(
       ids(
-        preferContentEntities(
+        pickContentEntities(
           all,
-          ['diary-entry:day', 'project:older'],
-          4,
-          recent,
+          ['diary-entry:day', 'project:older', 'event:meet'],
+          5,
         ),
       ),
-    ).toEqual(['day', 'older', 'recent', 'newer']);
-  });
-
-  it('never makes the list longer than its limit', () => {
-    const keys = all.map((item) => `${item.entityType}:${item.entityId}`);
-    expect(ids(preferContentEntities(all, keys, 3, recent))).toEqual([
-      'old',
-      'older',
-      'recent',
-    ]);
+    ).toEqual(['day', 'older', 'meet']);
   });
 
   it('skips what is not on offer, and names nothing twice', () => {
     expect(
       ids(
-        preferContentEntities(
+        pickContentEntities(
           all,
           ['project:gone', 'event:meet', 'event:meet', 'project:day'],
-          3,
-          recent,
+          5,
         ),
       ),
-    ).toEqual(['meet', 'recent', 'newer']);
+    ).toEqual(['meet']);
   });
 
-  it('leaves the ranking alone when the text links to nothing', () => {
-    expect(preferContentEntities(all, [], 5, recent)).toEqual(
-      rankContentEntities(all, '', 5),
-    );
+  it('gives no more than its limit', () => {
+    const keys = all.map((item) => `${item.entityType}:${item.entityId}`);
+    expect(ids(pickContentEntities(all, keys, 2))).toEqual(['old', 'older']);
   });
 
-  it('fills the rest with what the words name, when there are words', () => {
-    const harbor = { ...entity('harbor', 0), title: 'Lantern Harbor' };
-    const items = [...all, harbor];
-    expect(
-      ids(
-        preferContentEntities(items, ['project:old'], 3, (rest, room) =>
-          suggestContentEntities(rest, 'sailed to Lantern Harbor', room),
-        ),
-      ),
-    ).toEqual(['old', 'harbor', 'recent']);
+  it('gives nothing for no keys', () => {
+    expect(pickContentEntities(all, [], 5)).toEqual([]);
   });
 });

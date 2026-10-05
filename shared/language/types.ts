@@ -185,7 +185,6 @@ export type LanguagePhrases = {
   project_tabs: string;
   project_tab_overview: string;
   project_tab_timeline: string;
-  project_timeline_latest: string;
   project_timeline_seo_description: (title: string) => string;
   project_status_hint: string;
   project_new_status: string;
@@ -302,8 +301,6 @@ export type LanguagePhrases = {
     months: number,
     days: number,
   ) => string;
-  projects_count: (count: number) => string;
-  events_count: (count: number) => string;
   public_life_description: string;
   home: string;
   llms_txt_intro: string;
@@ -750,27 +747,34 @@ export type LanguagePhrases = {
   project_content_sections_hint: string;
   project_sections_dated: string;
   project_sections_undated: string;
-  relation_group_related: string;
-  relation_group_depends_on: string;
-  relation_group_affects: string;
   related_entities: string;
   related_entities_hint: string;
   related_entity_add: string;
   relation_direction: string;
-  /** What a relation is, said between the two icons it joins. */
-  relation_short_related: (owner: RelationEntityType) => string;
-  relation_short_depends_on: string;
-  relation_short_affects: string;
+  /** What the other end is to this entity, in one word under its name. */
+  relation_label_related: string;
+  relation_label_influencing: string;
+  relation_label_dependent: string;
   relation_popup_related: (current: string, other: string) => string;
   relation_popup_depends_on: (current: string, other: string) => string;
   relation_popup_affects: (current: string, other: string) => string;
-  relations_empty: string;
-  project_content_sections_empty: string;
+  relations_empty_of: (kind: RelationEntityType) => string;
+  project_sections_empty_of: (group: 'undated' | 'dated') => string;
+  relation: string;
+  relation_entity: string;
+  relation_entity_choose: string;
+  relation_edit: (title: string) => string;
+  relation_note: string;
   relation_note_placeholder: string;
-  relation_note_for: (title: string) => string;
-  split_relation_note: string;
-  merge_relation_note: string;
+  relation_note_shared_hint: string;
+  relation_note_split: string;
+  relation_note_split_hint: string;
+  /** Labels a side's note; that side's picture and name follow it. */
+  relation_note_on_page: string;
   delete_relation: string;
+  recommended_relations: string;
+  relation_recommendation_add: (title: string) => string;
+  relation_recommendation_reason: string;
   project_external_links: string;
   project_external_links_hint: string;
   add_external_link: string;
@@ -789,11 +793,11 @@ export type LanguagePhrases = {
   search_entity_placeholder: string;
   search_entity_no_results: string;
   search_entity_error: string;
-  entity_search_mentioned: string;
   content_section: string;
   content_section_delete_entity: string;
   section_periods: string;
   section_needs_body_or_period: string;
+  section_undated_hint: string;
   public_section_dates_only: string;
   public_section_dates_only_description: string;
   public_section_content_empty: string;
@@ -898,6 +902,7 @@ export type LanguagePhrases = {
   clear: string;
   delete: string;
   close_modal: string;
+  done: string;
   asset_pick_upload: string;
   asset_pick_reuse: string;
   asset_pick_reuse_hint: string;

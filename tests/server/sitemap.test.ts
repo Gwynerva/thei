@@ -212,7 +212,7 @@ describe('sitemap privacy', () => {
     ]);
   });
 
-  it('lists both tabs of a public project and its sections view', () => {
+  it('lists both tabs of a public project and no filter of its chronology', () => {
     const listed = paths(
       input({ projects: [project('Open', ProjectEventAccessLevel.Public)] }),
     );
@@ -220,11 +220,13 @@ describe('sitemap privacy', () => {
       expect.arrayContaining([
         '/projects/slug-Open-Open/',
         '/projects/slug-Open-Open/timeline/',
-        '/projects/slug-Open-Open/timeline/?f=project-section',
       ]),
     );
-    // Related events redirect into the chronology but are not a page of
-    // their own.
+    // The sections are a block of the overview; a filter of the chronology
+    // is only a way of reading it.
+    expect(listed).not.toContain(
+      '/projects/slug-Open-Open/timeline/?f=project-section',
+    );
     expect(listed).not.toContain('/projects/slug-Open-Open/timeline/?f=event');
   });
 

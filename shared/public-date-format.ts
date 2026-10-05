@@ -11,15 +11,18 @@ export function toUtcDate(date: string): Date {
   return new Date(`${date}T00:00:00Z`);
 }
 
-/** "6 апреля 2027", "April 6, 2027"; the Russian year abbreviation goes. */
+/**
+ * "6 апреля 2027", "April 6, 2027"; with `abbreviated` months, for a place as
+ * narrow as a chip, "6 апр. 2027". The Russian year abbreviation goes.
+ */
 export function formatAbsolutePublicDate(
   date: string,
   locale: string,
-  style: 'long' | 'short' = 'long',
+  style: 'long' | 'short' | 'abbreviated' = 'long',
 ): string {
   const parts = new Intl.DateTimeFormat(locale, {
     day: style === 'short' ? '2-digit' : 'numeric',
-    month: style === 'short' ? '2-digit' : 'long',
+    month: monthStyle(style),
     year: 'numeric',
     timeZone: 'UTC',
   }).formatToParts(toUtcDate(date));
@@ -145,10 +148,7 @@ export function formatPublicDateAtPrecision(
       .find((part) => part.type === 'month')!.value;
     return { standalone, governed: `${month} ${value.getUTCFullYear()}` };
   }
-  const full =
-    style === 'abbreviated'
-      ? formatPublicDateRange({ startDate: date, endDate: date }, locale, style)
-      : formatAbsolutePublicDate(date, locale, style);
+  const full = formatAbsolutePublicDate(date, locale, style);
   return { standalone: full, governed: full };
 }
 

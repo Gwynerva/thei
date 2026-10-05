@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  formatAbsolutePublicDate,
   formatCompactPublicPeriod,
   formatPublicDateAtPrecision,
   formatPublicDateRange,
@@ -61,6 +62,30 @@ describe('formatCompactPublicPeriod', () => {
       expect(plain(formatCompactPublicPeriod(period, 'ru'))).toBe(ru);
       expect(plain(formatCompactPublicPeriod(period, 'en'))).toBe(en);
     });
+});
+
+describe('formatAbsolutePublicDate', () => {
+  it('abbreviates the month for a chip, without the year abbreviation', () => {
+    expect(
+      plain(formatAbsolutePublicDate('2022-09-28', 'ru', 'abbreviated')),
+    ).toBe('28 сент. 2022');
+    expect(
+      plain(formatAbsolutePublicDate('2022-05-03', 'ru', 'abbreviated')),
+    ).toBe('3 мая 2022');
+    expect(
+      plain(formatAbsolutePublicDate('2022-09-28', 'en', 'abbreviated')),
+    ).toBe('Sep 28, 2022');
+    expect(plain(formatAbsolutePublicDate('2022-09-28', 'ru'))).toBe(
+      '28 сентября 2022',
+    );
+  });
+
+  it('is the abbreviated end of a period known to the day', () => {
+    expect(
+      formatPublicDateAtPrecision('2022-09-28', 'exact', 'ru', 'abbreviated')
+        .standalone,
+    ).toBe(formatAbsolutePublicDate('2022-09-28', 'ru', 'abbreviated'));
+  });
 });
 
 describe('formatPublicDateRange', () => {

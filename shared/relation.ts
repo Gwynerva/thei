@@ -73,6 +73,46 @@ export type RelationGetItem = RelationEditItem & {
   iconMedia?: MediaDescriptor;
 };
 
+/** Whether a relation says anything of its own, on either side. */
+export function relationHasNote(note: RelationNote | undefined): boolean {
+  if (!note) return false;
+  return note.type === 'shared'
+    ? Boolean(note.text?.trim())
+    : Boolean(note.currentText?.trim() || note.relatedText?.trim());
+}
+
+/**
+ * A note written once, made into one per side: each side starts from what
+ * was written for both, to be told apart from there.
+ */
+export function splitRelationNote(
+  note: RelationNote | undefined,
+): RelationNote {
+  if (note?.type === 'split') return note;
+  const text = note?.text ?? '';
+  return { type: 'split', currentText: text, relatedText: text };
+}
+
+/**
+ * Notes per side, made into one again. Nothing written is lost: the same
+ * text stays as it is, a lone side's text is taken, and two different texts
+ * are joined with a dash.
+ */
+export function mergeRelationNote(
+  note: RelationNote | undefined,
+): RelationNote {
+  if (note?.type !== 'split') return { type: 'shared', text: note?.text ?? '' };
+  const current = note.currentText ?? '';
+  const related = note.relatedText ?? '';
+  const text =
+    current === related || !related
+      ? current
+      : !current
+        ? related
+        : `${current} — ${related}`;
+  return { type: 'shared', text };
+}
+
 export function relationEndpointKey(endpoint: RelationEndpoint) {
   return `${endpoint.type}:${endpoint.id}`;
 }

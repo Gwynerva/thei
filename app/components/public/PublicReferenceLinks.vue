@@ -12,20 +12,15 @@ import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
 import type { IconName } from '#thei/icons';
 defineProps<{
   links: (PublicReferenceLink | PublicSecretReference)[];
-  /** Leave the kind badge off the tiles, where the list already says it. */
-  hideKind?: boolean;
-  /** How many lines of its description a tile shows. */
-  descriptionLines?: 2 | 3;
 }>();
 
 /**
  * The badge in the corner of a tile names what is on the other end.
  *
- * In "Related" the relation's own direction is carried by the sub-list a tile
- * sits in, and in "Links" a tile may lead anywhere, so what a reader cannot
- * tell from a tile is what kind of thing it opens: a project, one of its
- * sections, an event, a diary entry, a page — or another site. A tile that
- * shows the kind's own glyph for want of a picture needs no badge repeating it.
+ * A link may lead anywhere, so what a reader cannot tell from a tile is what
+ * kind of thing it opens: a project, one of its sections, an event, a diary
+ * entry, a page — or another site. A tile that shows the kind's own glyph for
+ * want of a picture needs no badge repeating it.
  */
 function entityIcon(type?: PublicReferenceLink['kind']): IconName | undefined {
   if (type === 'external') return 'external-link';
@@ -56,9 +51,8 @@ function linkTitle(link: PublicReferenceLink) {
         :title="publicText(link.title)"
         :description="publicText(link.summary)"
         :icon-media="link.iconMedia"
-        :corner-icon="hideKind ? undefined : entityIcon(link.entityType)"
-        :corner-title="hideKind ? undefined : entityTitle(link.entityType)"
-        :description-lines
+        :corner-icon="entityIcon(link.entityType)"
+        :corner-title="entityTitle(link.entityType)"
         icon="project"
         secret
       />
@@ -67,12 +61,9 @@ function linkTitle(link: PublicReferenceLink) {
         :title="publicText(linkTitle(link))"
         :description="publicText(link.description)"
         :note="publicText(link.note)"
-        :description-lines
         :icon-media="link.iconMedia"
-        :corner-icon="
-          link.iconMedia && !hideKind ? entityIcon(link.kind) : undefined
-        "
-        :corner-title="hideKind ? undefined : entityTitle(link.kind)"
+        :corner-icon="link.iconMedia ? entityIcon(link.kind) : undefined"
+        :corner-title="entityTitle(link.kind)"
         :href="link.href"
         :icon="entityTypeIcon(link.kind)"
         :continuous-media="contentEntityHasIcon(link.kind)"
@@ -85,7 +76,6 @@ function linkTitle(link: PublicReferenceLink) {
         :title="link.title"
         :description="link.description"
         :note="publicText(link.note)"
-        :description-lines
         :icon-media="link.iconMedia"
         :corner-icon="link.iconMedia ? entityIcon(link.kind) : undefined"
         :corner-title="entityTitle(link.kind)"

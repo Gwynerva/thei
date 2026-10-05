@@ -195,18 +195,67 @@ test('an undated section has no dated neighbours', async ({ page }) => {
   await expect(tiles(page.locator('aside').first())).toHaveCount(0);
 });
 
-test('a project lists its undated and dated sections in two tabs', async ({
+test('a project lists its general sections and dated stages in two tabs', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await open(page, `/projects/${project}/`);
   const block = page.locator('#project-sections');
+  const cards = block.locator('[data-section-card]');
   const titles = block.locator('#project-sections-panel h3');
   await expect(block.getByRole('tab')).toHaveCount(2);
   await expect(titles).toHaveText(['Notes']);
-  await block.getByRole('tab', { name: /Dated|С датами/ }).click();
+  // A general section says no date: the day it was written says nothing.
+  await expect(cards.locator('[data-section-period]')).toHaveCount(0);
+  await block.getByRole('tab', { name: /Dated stages|Этапы с датами/ }).click();
   // Newest first, as a chronology reads them.
   await expect(titles).toHaveText([LONG, 'Building', 'Groundwork']);
+  await expect(cards.locator('[data-section-period]')).toHaveCount(3);
+  await expect(cards.last().locator('[data-section-period]')).toContainText(
+    '2020',
+  );
+
+  // Two cards a row beside the summary panel, each with its picture along
+  // its right edge and its words to the left of it.
+  const [first, second] = [
+    (await cards.nth(0).boundingBox())!,
+    (await cards.nth(1).boundingBox())!,
+  ];
+  expect(Math.abs(first.y - second.y)).toBeLessThan(1);
+  expect(second.x).toBeGreaterThan(first.x + first.width);
+  for (const card of await cards.all()) {
+    const rect = (await card.boundingBox())!;
+    const media = (await card.locator('[data-section-media]').boundingBox())!;
+    expect(
+      Math.abs(media.x + media.width - (rect.x + rect.width)),
+    ).toBeLessThan(2);
+    const words = (await card.locator('[data-section-text]').boundingBox())!;
+    expect(words.width).toBeLessThanOrEqual(rect.width * 0.8 + 1);
+  }
+
+  // The chronology is a tab of its own, not a block of the overview.
+  await expect(page.locator('#project-timeline')).toHaveCount(0);
+});
+
+test('a phone lists the sections one under another', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await open(page, `/projects/${project}/`);
+  const block = page.locator('#project-sections');
+  await block.getByRole('tab', { name: /Dated stages|Этапы с датами/ }).click();
+  const cards = block.locator('[data-section-card]');
+  await expect(cards).toHaveCount(3);
+  const box = (await block.boundingBox())!;
+  let bottom = 0;
+  for (const card of await cards.all()) {
+    const rect = (await card.boundingBox())!;
+    expect(rect.x).toBeGreaterThanOrEqual(box.x - 0.5);
+    expect(rect.x + rect.width).toBeLessThanOrEqual(box.x + box.width + 0.5);
+    expect(rect.y).toBeGreaterThanOrEqual(bottom);
+    bottom = rect.y + rect.height;
+  }
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(375);
 });
 
 test('a diary entry shows how its neighbours begin, and not their private sections', async ({
@@ -223,4 +272,21 @@ test('a diary entry shows how its neighbours begin, and not their private sectio
   await expect(sheet).not.toContainText(SECRET);
   await links.nth(1).click();
   await expect(page).toHaveURL(new RegExp(`/diary/${days[2]}/$`));
+});
+
+test('the Markdown copy splits the sections as the tabs do', async ({
+  request,
+}) => {
+  const response = await request.get(`/projects/${project}/index.md`);
+  expect(response.ok()).toBe(true);
+  const markdown = (await response.text()).replaceAll('\u00a0', ' ');
+  const general = markdown.indexOf('### General sections');
+  const stages = markdown.indexOf('### Dated stages');
+  expect(general).toBeGreaterThan(-1);
+  expect(stages).toBeGreaterThan(general);
+  expect(markdown.slice(general, stages)).toContain('[Notes](');
+  expect(markdown.slice(general, stages)).not.toContain('[Groundwork](');
+  expect(markdown.slice(stages)).toMatch(
+    /\[Groundwork\]\([^)]+\) \(2020-01-01/,
+  );
 });

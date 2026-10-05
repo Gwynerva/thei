@@ -33,7 +33,8 @@ export type PublicDatePresentation = {
 
 export type PublicDatePresentationOptions = {
   relativeMonths?: number;
-  style?: 'long' | 'short';
+  /** `abbreviated` names the month shortly, "9 Mar 2026", for a small card. */
+  style?: 'long' | 'short' | 'abbreviated';
   /**
    * How the doubt should be worded. The composable knows the precision but not
    * the language, so the caller hands it the phrases.
@@ -123,7 +124,7 @@ export function getPublicDatePresentation(
     locale,
     now,
     options.relativeMonths ?? 1,
-    style,
+    style === 'abbreviated' ? 'short' : style,
   );
   return relative
     ? {

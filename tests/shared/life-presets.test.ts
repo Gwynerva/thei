@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  lifePreset,
-  lifePresetHref,
-  projectTimelinePreset,
-} from '../../shared/life-presets';
+import { lifePreset, lifePresetHref } from '../../shared/life-presets';
 
 describe('life presets', () => {
   it('recognises the diary as a destination of its own', () => {
@@ -16,11 +12,5 @@ describe('life presets', () => {
     expect(lifePreset(undefined)).toBeUndefined();
     expect(lifePreset(['event'])).toBeUndefined();
     expect(lifePreset(['diary-entry', 'event'])).toBeUndefined();
-  });
-
-  it('keeps sections as a page of a project, but not events', () => {
-    expect(projectTimelinePreset(['project-section'])?.id).toBe('sections');
-    expect(projectTimelinePreset(['event'])).toBeUndefined();
-    expect(projectTimelinePreset(['project-section', 'event'])).toBeUndefined();
   });
 });

@@ -5,8 +5,8 @@ import {
   type PublicDetailPanelData,
 } from '#layers/thei/app/components/public/public-detail';
 import {
-  buildProjectTimelineUrl,
   buildProjectUrl,
+  PROJECT_SECTIONS_ANCHOR,
 } from '#layers/thei/shared/project-url';
 import {
   buildContentHeadings,
@@ -84,9 +84,6 @@ usePublicSeo({
     },
   ],
 });
-const timelineHref = computed(() =>
-  buildProjectTimelineUrl(data.value.humanReadableSlug, data.value.publicId),
-);
 const relatedUrl = computed(
   () =>
     `/api/projects/${encodeURIComponent(String(route.params.projectUuid))}/related`,
@@ -100,16 +97,10 @@ const contents = computed<ContentHeading[]>(() => {
     shown: boolean;
   }[] = [
     {
-      id: 'project-sections',
+      id: PROJECT_SECTIONS_ANCHOR,
       title: phrase.value.project_content_sections,
       icon: 'project-section',
       shown: data.value.sections.length > 0,
-    },
-    {
-      id: 'project-timeline',
-      title: phrase.value.project_timeline_latest,
-      icon: 'heart',
-      shown: data.value.timeline.latest.length > 0,
     },
     {
       id: PUBLIC_RELATED_SECTION_ID,
@@ -200,36 +191,6 @@ const ownerNotesContents = computed(() =>
           />
 
           <PublicProjectSections :sections="data.sections" />
-
-          <section
-            v-if="data.timeline.latest.length"
-            id="project-timeline"
-            aria-labelledby="timeline-heading"
-            class="flex scroll-mt-[var(--public-anchor-offset,8rem)] flex-col
-              gap-sm"
-          >
-            <PublicSectionHeader
-              heading-id="timeline-heading"
-              :title="phrase.project_timeline_latest"
-              icon="heart"
-              :action="{
-                href: timelineHref,
-                label: phrase.view_all,
-                count: data.timeline.total,
-                icon: 'arrow-outward',
-              }"
-            />
-            <!-- One card per row: the sidebar already narrows this column. -->
-            <div class="flex flex-col gap-md">
-              <LifePointCard
-                v-for="point in data.timeline.latest"
-                :key="point.key"
-                :point="point"
-                date-style="long"
-                compact
-              />
-            </div>
-          </section>
           <PublicRelatedBlock :counts="data.related" :url="relatedUrl" />
           <PublicOwnerNotes :notes="data.notes" />
         </div>

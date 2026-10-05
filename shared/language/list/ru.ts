@@ -310,7 +310,6 @@ export default defineI18nModule({
     project_tabs: 'Разделы страницы проекта',
     project_tab_overview: 'Обзор',
     project_tab_timeline: 'Хронология',
-    project_timeline_latest: 'Последнее из хронологии',
     project_timeline_seo_description: (title) =>
       `Хронология проекта «${title}»: разделы, статусы, связанные события и записи дневника.`,
     project_status_hint:
@@ -457,13 +456,11 @@ export default defineI18nModule({
     public_timeline_from: (date) => `С ${date}`,
     public_timeline_until: (date) => `По ${date}`,
     public_timeline_duration: formatDuration,
-    projects_count: (count) => plural(count, 'проект', 'проекта', 'проектов'),
-    events_count: (count) => plural(count, 'событие', 'события', 'событий'),
     public_life_description:
       'Непрерывная лента событий, проектов и записей дневника.',
     home: 'Главная',
     llms_txt_intro:
-      'Личный архив одной жизни. Три основных вида записей, от простого к сложному: запись дневника — датированная мысль без заголовка, событие — оформленный памятный момент, проект — крупный эпизод из своих разделов: одни о теме, другие о датированном промежутке работы. Рядом с ними страницы — самостоятельные тексты, теги — сквозные темы, а Жизнь — единая хронология, на которую всё это ложится.',
+      'Личный архив одной жизни. Три основных вида записей, от простого к сложному: запись дневника — датированная мысль без заголовка, событие — оформленный памятный момент, проект — крупный эпизод из своих разделов: общих — о его составных частях — и этапов, разделов с датами, через которые он прошёл. Связи соединяют проекты, события и записи дневника: у каждой записи перечислены связанные с ней и отмечены те, что на неё влияют или от неё зависят. Рядом с ними страницы — самостоятельные тексты, теги — сквозные темы, а Жизнь — единая хронология, на которую всё это ложится.',
     llms_txt_sections: 'Разделы',
     llms_txt_home:
       'кто это, текущий статус, лучшие проекты и последние моменты',
@@ -474,7 +471,7 @@ export default defineI18nModule({
     llms_txt_sitemap: 'все публичные адреса этого сайта',
     llms_txt_markdown_title: 'Markdown',
     llms_txt_markdown:
-      'Любой публичный проект, событие, страница или запись дневника отдаются и в Markdown: добавьте index.md к адресу, например /projects/name-id/index.md. Приватных частей там нет — ровно как и для любого другого посетителя.',
+      'Любой публичный проект, раздел проекта, событие, страница или запись дневника отдаются и в Markdown: добавьте index.md к адресу, например /projects/name-id/index.md. Приватных частей там нет — ровно как и для любого другого посетителя.',
     public_life_period_description: (period, siteName) =>
       `События, проекты и записи дневника за ${period.toLocaleLowerCase('ru-RU')} — ${siteName}.`,
     public_pages_description:
@@ -696,7 +693,7 @@ export default defineI18nModule({
       'Короткие датированные мысли: одна запись на день, без заголовка и без лишних полей.',
     admin_kind_project_title: 'Что такое проект',
     admin_kind_project_what:
-      'Проект — самостоятельный, крупный эпизод жизни со своей структурой: разделы — тематические и датированные промежутки работы, — витрина, файлы и ссылки.',
+      'Проект — самостоятельный, крупный эпизод жизни со своей структурой: разделы — общие и этапы с датами, — витрина, файлы и ссылки.',
     admin_kind_project_rank:
       'Самая весомая сущность. Проект собирает вокруг себя события и записи дневника — связи с ними задаются именно здесь. Если хватает названия и пары абзацев, это скорее событие.',
     admin_kind_project_examples:
@@ -1049,39 +1046,47 @@ export default defineI18nModule({
     project_action_issue_color: 'цвет фона в формате #RRGGBB',
     project_content_sections: 'Разделы проекта',
     project_content_sections_hint:
-      'Части проекта: темы — в вашем порядке, датированные промежутки работы — по времени.',
-    project_sections_dated: 'С датами',
-    project_sections_undated: 'Без дат',
-    relation_group_related: 'Связаны',
-    relation_group_depends_on: 'Зависит от',
-    relation_group_affects: 'Влияет на',
+      'Детальные описания составных частей проекта и этапов, через которые он прошел.',
+    project_sections_dated: 'Этапы с датами',
+    project_sections_undated: 'Общие разделы',
     related_entities: 'Связанные сущности',
     related_entities_hint:
       'Проекты, события и записи дневника, связанные с этой сущностью. Связь видна с обеих сторон.',
     related_entity_add: 'Добавить связь',
     relation_direction: 'Тип связи',
-    // Said of the entity on the left, whose gender the word takes.
-    relation_short_related: (owner) =>
-      owner === 'project'
-        ? 'связан с'
-        : owner === 'event'
-          ? 'связано с'
-          : 'связана с',
-    relation_short_depends_on: 'зависит от',
-    relation_short_affects: 'влияет на',
+    relation_label_related: 'Связан',
+    relation_label_influencing: 'Влияет',
+    relation_label_dependent: 'Зависит',
     relation_popup_related: (current, other) =>
       `«${current}» и «${other}» связаны`,
     relation_popup_depends_on: (current, other) =>
       `«${current}» зависит от «${other}»`,
     relation_popup_affects: (current, other) =>
       `«${current}» влияет на «${other}»`,
-    relations_empty: 'Связей пока нет.',
-    project_content_sections_empty: 'Разделов пока нет.',
+    relations_empty_of: (kind) =>
+      kind === 'project'
+        ? 'Связанных проектов пока нет.'
+        : kind === 'event'
+          ? 'Связанных событий пока нет.'
+          : 'Связанных записей дневника пока нет.',
+    project_sections_empty_of: (group) =>
+      group === 'dated'
+        ? 'Этапов с датами пока нет.'
+        : 'Общих разделов пока нет.',
+    relation_entity: 'Связанная сущность',
+    relation_entity_choose: 'Проект, событие или запись дневника',
+    relation: 'Связь',
+    relation_edit: (title) => `Изменить связь с «${title}»`,
+    relation_note: 'Пояснение',
     relation_note_placeholder: 'Пояснение связи…',
-    relation_note_for: (title) => `Пояснение в «${title}»`,
-    split_relation_note: 'Разделить пояснение для двух сторон',
-    merge_relation_note: 'Объединить пояснения',
+    relation_note_shared_hint: 'Видно на страницах обеих сторон.',
+    relation_note_split: 'Раздельно',
+    relation_note_split_hint: 'Отдельное пояснение для каждой страницы',
+    relation_note_on_page: 'Пояснение на странице',
     delete_relation: 'Удалить связь',
+    recommended_relations: 'Рекомендуемые связи',
+    relation_recommendation_add: (title) => `Добавить связь с «${title}»`,
+    relation_recommendation_reason: 'Есть ссылка в тексте',
     project_external_links: 'Внешние ссылки проекта',
     project_external_links_hint:
       'Сайты, публикации и другие страницы, связанные с проектом.',
@@ -1104,10 +1109,10 @@ export default defineI18nModule({
     search_entity_placeholder: 'Название или дата записи дневника…',
     search_entity_no_results: 'Ничего подходящего не найдено.',
     search_entity_error: 'Не удалось выполнить поиск.',
-    entity_search_mentioned: 'Есть ссылка в тексте',
     content_section: 'Раздел проекта',
     content_section_delete_entity: 'раздел проекта',
     section_periods: 'Временные промежутки',
+    section_undated_hint: 'Без дат — это общий раздел.',
     section_needs_body_or_period:
       'Напишите раздел или добавьте хотя бы один временной промежуток.',
     public_section_dates_only: 'У раздела нет текста',
@@ -1273,6 +1278,7 @@ export default defineI18nModule({
     clear: 'Очистить',
     delete: 'Удалить',
     close_modal: 'Закрыть окно',
+    done: 'Готово',
     public_link: (entityName) => `Ссылка на ${entityName.toLowerCase()}`,
     human_readable_url: 'Читаемая часть URL',
     public_id: 'Публичный ID',
@@ -1537,7 +1543,7 @@ export default defineI18nModule({
     search_preset_cv_description:
       'Профессиональная часть архива: проекты, из которых складывается рабочая история.',
     og_personal_archive: 'Личный архив',
-    og_section_position: (index, total) => `Раздел ${index} из ${total}`,
+    og_section_position: (index, total) => `Этап ${index} из ${total}`,
     og_updated: (date) => `Обновлено ${date}`,
     og_life_headline: (years) =>
       `${plural(years, 'год', 'года', 'лет')} в одной хронике`,

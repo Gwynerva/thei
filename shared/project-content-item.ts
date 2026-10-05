@@ -15,9 +15,9 @@ import {
 /**
  * A part of a project: a write-up with a title, a body and an address of its
  * own. It may be about stretches of time — then its periods put it on the
- * project's chronology and it reads among the dated parts, in time order —
- * or about a topic, read in the order the owner gives. It needs a body or a
- * period, or it would say nothing at all.
+ * project's chronology and it reads among the stages, in time order — or
+ * about a part of the project, a general section read in the order the owner
+ * gives. It needs a body or a period, or it would say nothing at all.
  */
 export interface ProjectSectionItem {
   sectionUuid?: string;
