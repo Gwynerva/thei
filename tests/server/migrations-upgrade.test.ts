@@ -9,6 +9,7 @@ import { runPendingMigrations, seedLedger } from '../../update/migrations/run';
 import { schema_0_0_1 } from './fixtures/schema-0.0.1';
 import { migrations_0_0_2, schema_0_0_2 } from './fixtures/schema-0.0.2';
 import { migrations_0_0_3, schema_0_0_3 } from './fixtures/schema-0.0.3';
+import { migrations_0_0_4, schema_0_0_4 } from './fixtures/schema-0.0.4';
 
 /**
  * The upgrade every existing site takes: a database and a config exactly as
@@ -408,6 +409,25 @@ describe('upgrading a 0.0.3 site', () => {
     seedLedger(
       rawDb,
       migrationRegistry.filter(({ id }) => migrations_0_0_3.includes(id)),
+    );
+    await runPendingMigrations(rawDb, { contentPath });
+
+    const fresh = new Database(':memory:');
+    try {
+      for (const statement of baselineSql) fresh.prepare(statement).run();
+      expect(describeSchema(rawDb)).toEqual(describeSchema(fresh));
+    } finally {
+      fresh.close();
+    }
+  });
+});
+
+describe('upgrading a 0.0.4 site', () => {
+  it('ends with the schema a new installation starts from', async () => {
+    for (const statement of schema_0_0_4) rawDb.prepare(statement).run();
+    seedLedger(
+      rawDb,
+      migrationRegistry.filter(({ id }) => migrations_0_0_4.includes(id)),
     );
     await runPendingMigrations(rawDb, { contentPath });
 
