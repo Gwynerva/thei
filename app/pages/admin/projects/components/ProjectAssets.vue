@@ -6,8 +6,8 @@ import type {
 import {
   launchAssetBatchWizard,
   launchAssetEditor,
-  launchAssetWizard,
   mapAssetVariantToReplaceResult,
+  type AssetBatchResult,
 } from '#layers/thei/app/composables/asset-wizard';
 import type { AssetVariantsResponse } from '#layers/thei/shared/api/asset';
 import { AssetType, type AssetMeta } from '#layers/thei/shared/asset';
@@ -16,7 +16,6 @@ import {
   imageExtensionProfile,
   videoExtensionProfile,
 } from '#layers/thei/shared/assets/extensions';
-import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
 import { ASSET_UPLOAD_LIMITS } from '#layers/thei/shared/asset-upload-limits';
 import { DEFAULT_ASSET_IMAGE_FORMAT } from '#layers/thei/shared/asset-upload-settings';
 import AssetTile from '#layers/thei/app/components/AssetTile.vue';
@@ -42,7 +41,6 @@ import {
   showcaseItemsKey,
   currentProjectUuidKey,
 } from '../composables';
-import type { MediaDescriptor } from '#layers/thei/shared/media';
 import { assetDetailsModal } from '#layers/thei/app/modals/asset-details/modal';
 import { useOrderedAssetList } from '#layers/thei/app/composables/ordered-asset-list';
 import { useSingleMediaAsset } from '#layers/thei/app/composables/single-media-asset';
@@ -104,37 +102,6 @@ function extensionFromUrl(url: string | undefined, fallback: string) {
   const filename = path.split('/').pop() ?? '';
   const dot = filename.lastIndexOf('.');
   return dot === -1 ? fallback : filename.slice(dot + 1).toLowerCase();
-}
-
-async function pickProjectMediaAsset(
-  uploadProfile?: AssetUploadProfile,
-): Promise<PickedAsset | undefined> {
-  const asset = await launchProjectAssetWizard({
-    accept: [imageExtensionProfile, videoExtensionProfile],
-    maxSize: ASSET_UPLOAD_LIMITS.media,
-    sizeLimitPolicy: 'media',
-    uploadProfile,
-  });
-  if (
-    !asset ||
-    (asset.type !== AssetType.Image && asset.type !== AssetType.Video)
-  ) {
-    return undefined;
-  }
-
-  const result = mapAssetVariantToReplaceResult(asset);
-  return result.media ? { asset, result } : undefined;
-}
-
-async function launchProjectAssetWizard(
-  options: Parameters<typeof launchAssetWizard>[0],
-) {
-  try {
-    return await launchAssetWizard(options);
-  } catch (error) {
-    console.error(error);
-    return undefined;
-  }
 }
 
 async function editProjectAsset(
@@ -255,21 +222,44 @@ const {
   otherRoot,
 );
 
-// Showcase handlers
+/**
+ * The file one pick settled on, when it was a single one: made in the editor,
+ * chosen among the variants of a duplicate, or taken from the library. A
+ * batch is placed as it is, and each of its tiles is described later.
+ */
+function singleSettledAsset(result: AssetBatchResult) {
+  return result.assets.length === 1 &&
+    !result.uploads.length &&
+    !result.errors.length
+    ? result.assets[0]
+    : undefined;
+}
 
-async function openShowcaseAdd() {
-  batchErrorMessage.value = '';
-  const result = await launchAssetBatchWizard({
-    accept: [imageExtensionProfile, videoExtensionProfile],
-    maxSize: ASSET_UPLOAD_LIMITS.media,
-    sizeLimitPolicy: 'media',
-  });
-  if (!result) return;
-  for (const asset of result.assets) placeShowcaseAsset(asset);
-  showcaseUploads.follow(result.uploads);
+function reportBatchErrors(result: AssetBatchResult) {
   batchErrorMessage.value = result.errors
     .map((error) => `${error.fileName}: ${error.message}`)
     .join(' · ');
+}
+
+// Showcase handlers
+
+// One flow: the picker, the editor and the details a single file goes on to,
+// where its caption is written, replace one another.
+function openShowcaseAdd() {
+  return runModalFlow(async () => {
+    batchErrorMessage.value = '';
+    const result = await launchAssetBatchWizard({
+      accept: [imageExtensionProfile, videoExtensionProfile],
+      maxSize: ASSET_UPLOAD_LIMITS.media,
+      sizeLimitPolicy: 'media',
+    });
+    if (!result) return;
+    for (const asset of result.assets) placeShowcaseAsset(asset);
+    showcaseUploads.follow(result.uploads);
+    reportBatchErrors(result);
+    const single = singleSettledAsset(result);
+    if (single) await runShowcaseDetails(single.assetUuid);
+  });
 }
 
 function placeShowcaseAsset(asset: AssetVariantInfo) {
@@ -287,8 +277,19 @@ function placeShowcaseAsset(asset: AssetVariantInfo) {
   );
 }
 
-async function openShowcaseAsset(index: number) {
-  const snapshot = showcaseItems.value[index];
+function openShowcaseAsset(index: number) {
+  const item = showcaseItems.value[index];
+  if (item) return runModalFlow(() => runShowcaseDetails(item.assetUuid));
+}
+
+/**
+ * A tile's details: its caption and who sees it. "Change" goes through the
+ * editor and comes back here; closing keeps the tile as it is.
+ */
+async function runShowcaseDetails(assetUuid: string) {
+  const snapshot = showcaseItems.value.find(
+    (item) => item.assetUuid === assetUuid,
+  );
   if (!snapshot) return;
   let currentAssetUuid = snapshot.assetUuid;
   let current: AssetReplaceResult = {
@@ -352,19 +353,21 @@ async function openShowcaseAsset(index: number) {
 
 // Other-files handlers
 
-async function openOtherAdd() {
-  batchErrorMessage.value = '';
-  const result = await launchAssetBatchWizard({
-    accept: anyFileExtensionProfile,
-    maxSize: ASSET_UPLOAD_LIMITS.file,
-    sizeLimitPolicy: 'file',
+function openOtherAdd() {
+  return runModalFlow(async () => {
+    batchErrorMessage.value = '';
+    const result = await launchAssetBatchWizard({
+      accept: anyFileExtensionProfile,
+      maxSize: ASSET_UPLOAD_LIMITS.file,
+      sizeLimitPolicy: 'file',
+    });
+    if (!result) return;
+    for (const asset of result.assets) placeOtherAsset(asset);
+    otherUploads.follow(result.uploads);
+    reportBatchErrors(result);
+    const single = singleSettledAsset(result);
+    if (single) await runOtherDetails(single.assetUuid);
   });
-  if (!result) return;
-  for (const asset of result.assets) placeOtherAsset(asset);
-  otherUploads.follow(result.uploads);
-  batchErrorMessage.value = result.errors
-    .map((error) => `${error.fileName}: ${error.message}`)
-    .join(' · ');
 }
 
 function placeOtherAsset(asset: AssetVariantInfo) {
@@ -372,8 +375,16 @@ function placeOtherAsset(asset: AssetVariantInfo) {
   addOtherItem(pickedToOtherItem(picked, { title: phrase.value.project_file }));
 }
 
-async function openOtherAsset(index: number) {
-  const snapshot = otherItems.value[index];
+function openOtherAsset(index: number) {
+  const item = otherItems.value[index];
+  if (item) return runModalFlow(() => runOtherDetails(item.assetUuid));
+}
+
+/** A file's details: its title, description and who sees it. */
+async function runOtherDetails(assetUuid: string) {
+  const snapshot = otherItems.value.find(
+    (item) => item.assetUuid === assetUuid,
+  );
   if (!snapshot) return;
   let currentAssetUuid = snapshot.assetUuid;
   let current: AssetReplaceResult = {
