@@ -361,7 +361,7 @@ function createSite(
         },
       ],
       externalLinks: [
-        { url: offline('north'), name: 'Сайт проекта', isPrivate: false },
+        { url: offline('north'), note: 'Сайт проекта', isPrivate: false },
       ],
       tags: [{ title: 'Бенч' }, { title: 'Release' }],
       iconAssetUuid: files.picture,
@@ -585,10 +585,9 @@ export function checkSeedSite(server: Server, manifest: SeedManifest): void {
       );
     }
     if (entity.links) {
-      // A link keeps the words written for it: its name until 0.0.3, and
-      // since then its note.
+      // A link keeps the words written for it, its note.
       const words = (body.externalLinks ?? []).map(
-        (link: { note?: string; name?: string }) => link.note ?? link.name,
+        (link: { note?: string }) => link.note,
       );
       check(
         JSON.stringify(words) === JSON.stringify(entity.links),
