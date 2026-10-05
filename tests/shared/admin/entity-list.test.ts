@@ -34,6 +34,16 @@ describe('admin entity list', () => {
     );
   });
 
+  it('also finds what a kind matches in its own way, only while searching', () => {
+    const byId = (item: { entityId: string }) => item.entityId === 'p3';
+    expect(
+      paginateAdminEntities(items, { q: 'первый' }, byId).items.map(
+        (item) => item.entityId,
+      ),
+    ).toEqual(['p3', 'p1']);
+    expect(paginateAdminEntities(items, {}, () => false).items).toHaveLength(3);
+  });
+
   it('sorts newest by update, then creation and stable id', () => {
     const tied = [
       entity('b', 'B', '', 'b', 'B', 1, 5),

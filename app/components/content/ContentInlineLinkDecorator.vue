@@ -4,6 +4,7 @@ import {
   contentEntityHasIcon,
   contentLinkIsRestricted,
   contentLinkReferenceFromAnchor,
+  withLinkFragment,
   type ContentLinkReference,
   type ContentLinkResolver,
   type ResolvedContentLink,
@@ -160,8 +161,17 @@ function mediaUrl(media: { previewSrc?: string; src?: string } | undefined) {
   return url ? siteCssUrl(url) : undefined;
 }
 
+/**
+ * Where a link opens: its target's address — leading, for an entity, to the
+ * place inside it the link names — with the site's base path, since an
+ * `href` written here is an attribute the router does not own.
+ */
 function setNavigation(link: HTMLAnchorElement, href: string) {
-  link.href = href;
+  const fragment =
+    link.dataset.contentLink === 'entity'
+      ? link.dataset.entityFragment
+      : undefined;
+  link.href = sitePath(withLinkFragment(href, fragment));
   link.target = '_blank';
   link.rel = 'noopener noreferrer';
 }
@@ -181,6 +191,7 @@ function attach(root: HTMLElement | null) {
       'data-content-link',
       'data-entity-type',
       'data-entity-id',
+      'data-entity-fragment',
       'data-content-note',
     ],
   });

@@ -10,5 +10,6 @@ export const CONTENT_CAPTION_SANITIZE = {
     'data-content-link': true,
     'data-entity-type': true,
     'data-entity-id': true,
+    'data-entity-fragment': true,
   },
 } as const;

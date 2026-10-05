@@ -56,22 +56,30 @@ export function canonicalizeAdminEntityListRouteQuery(
   };
 }
 
+/**
+ * One page of an admin list, searched and sorted. The search finds the query
+ * in an entity's title, summary, slug, public ID or text; `matches` lets a
+ * kind find its entities in some other way too — a diary entry by its day.
+ */
 export function paginateAdminEntities<T extends SearchableAdminEntity>(
   items: T[],
   query: AdminEntityListQuery,
+  matches?: (item: T) => boolean,
 ): PaginatedResponse<T> {
   const q = normalizeAdminSearchText(query.q ?? '');
   const order = query.order === 'oldest' ? 'oldest' : 'newest';
 
   const filtered = q
-    ? items.filter((item) =>
-        [
-          item.title,
-          item.summary,
-          item.humanReadableSlug,
-          item.publicId,
-          item.contentText ?? '',
-        ].some((value) => normalizeAdminSearchText(value).includes(q)),
+    ? items.filter(
+        (item) =>
+          [
+            item.title,
+            item.summary,
+            item.humanReadableSlug,
+            item.publicId,
+            item.contentText ?? '',
+          ].some((value) => normalizeAdminSearchText(value).includes(q)) ||
+          matches?.(item),
       )
     : [...items];
 

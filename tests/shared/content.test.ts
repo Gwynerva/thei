@@ -428,6 +428,38 @@ describe('content normalization', () => {
     ]);
   });
 
+  it('keeps the place inside the target an entity link leads to', () => {
+    const data = normalizeContentData({
+      blocks: [
+        {
+          id: 'to-a-heading',
+          type: 'entityLink',
+          data: {
+            entityType: 'event',
+            entityId: 'event-1',
+            fragment: '#глава 2',
+            note: 'why',
+          },
+        },
+        {
+          id: 'to-nowhere',
+          type: 'entityLink',
+          data: { entityType: 'event', entityId: 'event-1', fragment: ' ' },
+        },
+      ],
+    });
+
+    expect(data.blocks.map((block) => block.data)).toEqual([
+      {
+        entityType: 'event',
+        entityId: 'event-1',
+        fragment: '%D0%B3%D0%BB%D0%B0%D0%B2%D0%B0%202',
+        note: 'why',
+      },
+      { entityType: 'event', entityId: 'event-1' },
+    ]);
+  });
+
   it('keeps semantic delimiters with no decorative data', () => {
     const data = normalizeContentData({
       blocks: [

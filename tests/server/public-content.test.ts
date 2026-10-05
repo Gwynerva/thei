@@ -1200,6 +1200,61 @@ describe('entity links in public content', () => {
     );
   });
 
+  it('lets no place inside a hidden target outlive its uuid', async () => {
+    stubEntityLinkContent();
+    const anchor = (projectUuid: string) =>
+      '<a data-content-link="entity" data-entity-type="project" ' +
+      `data-entity-id="${projectUuid}" data-entity-fragment="secret-plans" ` +
+      'data-content-note="why">here</a>';
+    (globalThis as any).THEI_SERVER.content.findByOwner = async () => ({
+      contentUuid: 'page-content',
+      data: {
+        blocks: [
+          {
+            type: 'paragraph',
+            data: {
+              text: `${anchor(privateProject.projectUuid)} ${anchor(publicProject.projectUuid)}`,
+            },
+          },
+          {
+            type: 'entityLink',
+            data: {
+              entityType: 'project',
+              entityId: privateProject.projectUuid,
+              fragment: 'secret-plans',
+            },
+          },
+          {
+            type: 'entityLink',
+            data: {
+              entityType: 'project',
+              entityId: publicProject.projectUuid,
+              fragment: 'gallery',
+            },
+          },
+        ],
+      },
+    });
+    const content = await buildPublicContentData(
+      'page',
+      'page-uuid',
+      'page-body',
+      { type: 'page', slug: 'page' },
+    );
+
+    expect(content!.blocks[0]!.data.text).toBe(
+      '<a data-content-link="entity" data-entity-type="project" ' +
+        `data-entity-restricted="true">here</a> ${anchor(publicProject.projectUuid)}`,
+    );
+    expect(content!.blocks[1]).toEqual({
+      type: 'entityLink',
+      data: { entityType: 'project', restricted: true },
+    });
+    expect(content!.blocks[2]).toMatchObject({
+      data: { entityId: publicProject.projectUuid, fragment: 'gallery' },
+    });
+  });
+
   it('leaves every link intact for an administrator', async () => {
     stubEntityLinkContent();
     const content = await buildPublicContentData(

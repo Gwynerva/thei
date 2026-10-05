@@ -1,5 +1,8 @@
 import type EditorJS from '@editorjs/editorjs';
-import type { ContentEntityType } from '#layers/thei/shared/content-link';
+import {
+  linkFragment,
+  type ContentEntityType,
+} from '#layers/thei/shared/content-link';
 import { normalizeExternalLinkUrl } from '#layers/thei/shared/external-link';
 import {
   parseInternalUrl,
@@ -139,7 +142,10 @@ export function bindEditorLinkPaste(
       // The text may have been edited while the site was asked; a range that
       // no longer holds the same words is left alone.
       if (!bound || !rangeStillHolds(range, text)) return;
-      if (entity) attributes = entityLinkAttributes(entity);
+      if (entity)
+        attributes = entityLinkAttributes(entity, {
+          fragment: linkFragment(target.raw),
+        });
       else if (/^https?:\/\//i.test(target.raw)) {
         try {
           const url = normalizeExternalLinkUrl(target.raw);

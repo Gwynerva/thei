@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import type { AssetLibraryFilesResponse } from '#layers/thei/shared/asset-library';
+import { AssetType } from '#layers/thei/shared/asset';
+import {
+  assetLibraryWhereFromQuery,
+  assetLibraryWhereQuery,
+  type AssetLibraryAssetsResponse,
+  type AssetLibraryWhere,
+} from '#layers/thei/shared/asset-library';
 import { libraryAssetDetailsModal } from '../../../modals/asset-library/details-modal';
 import {
   assetDeletionLabel,
@@ -13,38 +19,42 @@ const search = ref(typeof route.query.q === 'string' ? route.query.q : '');
 const ready = ref(false);
 const focusedAssetUuid = ref<string>();
 let timer: ReturnType<typeof setTimeout> | undefined;
-const query = computed(() => ({
-  q: typeof route.query.q === 'string' ? route.query.q : '',
-  type: typeof route.query.type === 'string' ? route.query.type : undefined,
-  usage: typeof route.query.usage === 'string' ? route.query.usage : undefined,
-  page: Number(route.query.page ?? 1),
-}));
+/** The address holds the search, so a filtered list can be shared and reloaded. */
+const query = computed(() => {
+  const value = route.query;
+  return {
+    q: typeof value.q === 'string' ? value.q : '',
+    type: Object.values(AssetType).includes(value.type as AssetType)
+      ? (value.type as AssetType)
+      : undefined,
+    ...assetLibraryWhereQuery(assetLibraryWhereFromQuery(value)),
+    page: Number(value.page ?? 1),
+  };
+});
 const { data, status, error, refresh } =
-  await useFetch<AssetLibraryFilesResponse>('/api/admin/assets', { query });
-const typeOptions = computed(() => ({
-  '': phrase.value.asset_library_all,
-  image: phrase.value.image,
-  video: phrase.value.video,
-  audio: phrase.value.audio,
-  other: phrase.value.other_files,
-}));
-const usageOptions = computed(() => ({
-  '': phrase.value.asset_library_all,
-  used: phrase.value.asset_library_used,
-  unused: phrase.value.asset_library_unused,
-}));
+  await useFetch<AssetLibraryAssetsResponse>('/api/admin/assets', { query });
 const type = computed({
   get: () => query.value.type ?? '',
-  set: (value: string) => update({ type: value || undefined }),
+  set: (value: AssetType | '') => update({ type: value || undefined }),
 });
-const usage = computed({
-  get: () => query.value.usage ?? '',
-  set: (value: string) => update({ usage: value || undefined }),
+const where = computed({
+  get: () => assetLibraryWhereFromQuery(query.value),
+  set: (value: AssetLibraryWhere) =>
+    update({
+      source: undefined,
+      usage: undefined,
+      ...assetLibraryWhereQuery(value),
+    }),
 });
 function resetFilters() {
   clearTimeout(timer);
   search.value = '';
-  update({ q: undefined, type: undefined, usage: undefined });
+  update({
+    q: undefined,
+    type: undefined,
+    source: undefined,
+    usage: undefined,
+  });
 }
 function update(values: Record<string, string | undefined>) {
   void router.replace({
@@ -77,28 +87,12 @@ onMounted(() => {
     class="m-auto w-(--width-wide) max-w-full px-window py-lg"
     :data-admin-assets-ready="ready ? 'true' : undefined"
   >
-    <div class="flex flex-wrap items-stretch gap-xs">
-      <FieldInput
-        v-model="search"
-        type="search"
-        :placeholder="phrase.asset_library_search"
-        :aria-label="phrase.asset_library_search"
-        class="h-10 text-sm"
-        wrapper-class="min-w-52 flex-1 basis-72"
-      />
-      <FieldSelect
-        v-model="type"
-        :options="typeOptions"
-        :aria-label="phrase.format"
-        wrapper-class="h-10"
-      />
-      <FieldSelect
-        v-model="usage"
-        :options="usageOptions"
-        :aria-label="phrase.asset_library_usage"
-        wrapper-class="h-10"
-      />
-    </div>
+    <AssetLibrarySearch
+      v-model:search="search"
+      v-model:type="type"
+      v-model:where="where"
+      :facets="data?.facets"
+    />
     <div v-if="error" class="mt-md text-text-error">
       {{ phrase.failed_to_fetch_data }}
       <button class="cursor-pointer underline" @click="refresh()">
@@ -149,8 +143,8 @@ onMounted(() => {
     </div>
     <template v-else-if="status !== 'pending' && !error">
       <EmptyState
-        v-if="query.q || query.type || query.usage"
-        icon="gallery"
+        v-if="query.q || query.type || where !== 'all'"
+        icon="face-dead"
         :title="phrase.asset_library_empty"
         :description="phrase.admin_search_no_results_description"
         class="mt-md"

@@ -49,6 +49,7 @@ import { editorIcon } from './editor-icons';
 import type { ContentEntitySearchItem } from '#layers/thei/shared/admin/content-entity-search';
 import {
   contentEntityReference,
+  linkFragment,
   type ContentEntityType,
   type ContentLinkResolver,
 } from '#layers/thei/shared/content-link';
@@ -353,6 +354,8 @@ export class EntityLinkTool extends VueBlockTool implements BlockTool {
 
   private entityType?: ContentEntityType;
   private entityId?: string;
+  /** Where inside the entity the link leads, if anywhere. */
+  private fragment?: string;
   private note = '';
   private autoOpen = false;
   private transientSelection = false;
@@ -364,6 +367,7 @@ export class EntityLinkTool extends VueBlockTool implements BlockTool {
       {
         entityType?: ContentEntityType;
         entityId?: string;
+        fragment?: string;
         note?: string;
         autoOpen?: boolean;
       },
@@ -373,6 +377,7 @@ export class EntityLinkTool extends VueBlockTool implements BlockTool {
     super(options.block);
     this.entityType = options.data.entityType;
     this.entityId = options.data.entityId;
+    this.fragment = options.data.fragment;
     this.note = options.data.note ?? '';
     this.autoOpen = options.data.autoOpen === true;
     this.transientSelection =
@@ -392,6 +397,7 @@ export class EntityLinkTool extends VueBlockTool implements BlockTool {
     return {
       entityType: this.entityType,
       entityId: this.entityId,
+      fragment: this.fragment,
       note: this.note.trim() || undefined,
     };
   }
@@ -411,7 +417,8 @@ export class EntityLinkTool extends VueBlockTool implements BlockTool {
    * so it keeps working when the site moves to another domain. The paste
    * pattern only knows the address has the shape of an entity page; if the
    * site has nothing there, the block becomes the external link it would have
-   * been anyway.
+   * been anyway. A `#…` of the address is kept: the link leads to that place
+   * inside the entity.
    */
   async onPaste(event: CustomEvent) {
     const url = String(event.detail?.data ?? '').trim();
@@ -433,6 +440,7 @@ export class EntityLinkTool extends VueBlockTool implements BlockTool {
     }
     this.entityType = entity.entityType;
     this.entityId = entity.entityId;
+    this.fragment = linkFragment(url);
     this.commit();
   }
 
@@ -452,6 +460,8 @@ export class EntityLinkTool extends VueBlockTool implements BlockTool {
       this.entityId !== selected.entityId;
     this.entityType = selected.entityType;
     this.entityId = selected.entityId;
+    // A place inside the entity the link led to belongs to that entity only.
+    if (changed) this.fragment = undefined;
     this.renderContent();
     this.finishTransientSelection(true);
     if (changed) this.dispatchChange();
@@ -469,6 +479,7 @@ export class EntityLinkTool extends VueBlockTool implements BlockTool {
       return h(ContentEntityLinkBlock, {
         entityType: this.entityType,
         entityId: this.entityId,
+        fragment: this.fragment,
         resolver: config.resolver,
         interactive: true,
         playback: 'interaction',
@@ -478,6 +489,10 @@ export class EntityLinkTool extends VueBlockTool implements BlockTool {
         'onUpdate:note': (value: string) => {
           if (value === this.note) return;
           this.note = value;
+          this.commit();
+        },
+        onRemoveFragment: () => {
+          this.fragment = undefined;
           this.commit();
         },
       });

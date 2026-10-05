@@ -219,7 +219,7 @@ export default defineI18nModule({
   ],
   phrases: {
     asset_library: 'Хранилище файлов',
-    asset_library_search: 'Поиск по подписям и названиям…',
+    asset_library_search: 'Поиск по файлам',
     asset_aspect_hint: (ratio, size) =>
       `Лучше всего подойдёт изображение или видео с пропорциями ${ratio}, например ${size} пикселей`,
     asset_library_pending_deletion: (date) =>
@@ -231,6 +231,8 @@ export default defineI18nModule({
     asset_library_unused_hint:
       'Неиспользуемые файлы автоматически удаляются через сутки.',
     asset_library_all: 'Все',
+    asset_library_anywhere: 'Везде',
+    asset_library_widen: 'Искать шире',
     asset_library_used: 'Используются',
     asset_library_more: 'Показать ещё',
     asset_library_insert: 'Вставить выбранное',
@@ -1259,6 +1261,8 @@ export default defineI18nModule({
     content_make_gallery: 'Сделать галереей',
     content_link_internal_detected:
       'Это адрес страницы этого сайта — ссылка будет сохранена как внутренняя.',
+    content_link_fragment: 'Ведёт к этому месту страницы',
+    content_link_fragment_remove: 'Ссылаться на страницу целиком',
     content_caption: 'Подпись',
     content_media_centered: 'По центру',
     content_media_natural: 'Исходный размер',

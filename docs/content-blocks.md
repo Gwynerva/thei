@@ -87,17 +87,30 @@ survives the site moving to another domain. The kinds are those of
 A tag has no visibility of its own: a reader may open it once a public
 project or event carries it, as its own page decides.
 
+An entity link may lead to a place inside its target — a heading, a block of
+the page, a passage of text: `data-entity-fragment="…"`, written between
+`data-entity-id` and `data-content-note`, and an `entityLink` block's
+`fragment`. It is the part of an address after `#`, without the `#`, kept
+the way an address carries it (`normalizeLinkFragment`): nothing in it is
+decoded, so `:~:text=…` and an encoded heading keep working, and what an
+address cannot carry as it is — a space, a quote — is percent-encoded. An
+empty one, or one longer than `CONTENT_LINK_FRAGMENT_LIMIT`, is no
+attribute. The link opens its target's address with `#` and the fragment
+appended; whether the target still has that place is not checked, and a
+browser simply opens the page when it does not.
+
 An address of this very site is never stored as an external link when the
 editor can tell what it opens: pasted into an empty paragraph, pasted over
 selected text or typed as an external link, it is stored as an entity link
-instead.
+instead, with the address's `#…` as its fragment.
 
 A target the reader may not open arrives without its uuid:
 `<a data-content-link="entity" data-entity-type="…" data-entity-restricted="true">`,
 and an `entityLink` block as `{ entityType, restricted: true }`, and is shown
-as closed. A target that no longer exists keeps its uuid and is shown as a
-broken link: the resolver answers that it was not found — the same answer a
-stranger gets when asking by uuid about a target they may not open.
+as closed; its fragment goes with the uuid. A target that no longer exists
+keeps its uuid and is shown as a broken link: the resolver answers that it was
+not found — the same answer a stranger gets when asking by uuid about a target
+they may not open.
 
 `<strike>` is accepted on the way in and stored as `<s>`, because that is what
 the browser's own editing command still produces. Everything else is stripped,
@@ -119,7 +132,7 @@ an HTML document is.
 | `contentAttachment`      | `{ asset, title, caption }` — any file, shown as a download                                                        |
 | `externalLink`           | `{ url, note? }` — rendered as a preview card                                                                      |
 | `integration`            | `{ provider: 'youtube', videoId, … }`, see `shared/content-integrations.ts`                                        |
-| `entityLink`             | `{ entityType, entityId, note? }` — a card for something on this site; the types are listed under inline markup    |
+| `entityLink`             | `{ entityType, entityId, fragment?, note? }` — a card for something on this site; see inline markup                |
 | `privateSectionBoundary` | `{ sectionId, edge: 'start' \| 'end' }`                                                                            |
 
 `asset` is `{ assetUuid }` when stored. What a reader receives is hydrated: the
@@ -191,7 +204,9 @@ assetTotalSize }`) and nothing else;
   sections already gone; `prose` keeps paragraphs, headings, quotes and lists.
 - `contentToMarkdown(data, options)` in `shared/content-markdown.ts` — the
   public document as Markdown, which is what `…/index.md` serves. A link's
-  note, inline or on a block, is the link's title: `[text](url "note")`. A
+  note, inline or on a block, is the link's title: `[text](url "note")`. An
+  entity link's address, given to it before (`withEntityAddresses`), ends
+  with its fragment: `[text](https://…/pages/cv/#skills)`. A
   recording is a link to its file followed by its length,
   `[title](url) (m:ss)`, named `options.audioLabel` when it has no title, and
   then its caption. With `options.format` the owner's words — text, captions,

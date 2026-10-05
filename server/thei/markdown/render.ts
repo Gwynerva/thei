@@ -5,7 +5,11 @@ import {
   type PublicEntityReference,
   type PublicProjectSection,
 } from '#layers/thei/shared/api/public';
-import { contentEntityReference } from '#layers/thei/shared/content-link';
+import {
+  contentEntityReference,
+  normalizeLinkFragment,
+  withLinkFragment,
+} from '#layers/thei/shared/content-link';
 import {
   RELATION_ENTITY_TYPES,
   type RelationEndpoint,
@@ -243,9 +247,13 @@ async function body(
   });
 }
 
-/** An entity anchor in the canonical form stored content writes it in. */
+/**
+ * An entity anchor in the canonical form stored content writes it in, with
+ * the place inside the target it leads to, if any — escaped as an attribute
+ * already, which is what the address is written back as.
+ */
 const ENTITY_ANCHOR =
-  /<a data-content-link="entity" data-entity-type="([a-z-]+)" data-entity-id="([^"]*)"/g;
+  /<a data-content-link="entity" data-entity-type="([a-z-]+)" data-entity-id="([^"]*)"(?: data-entity-fragment="([^"]*)")?/g;
 
 /**
  * Gives every link to an entity of this site the address it opens.
@@ -256,7 +264,7 @@ const ENTITY_ANCHOR =
  * its address, and a link block its title too; a link to what a stranger may
  * not open keeps its words and loses the link.
  */
-async function withEntityAddresses(
+export async function withEntityAddresses(
   content: Parameters<typeof contentToMarkdown>[0],
 ): Promise<Parameters<typeof contentToMarkdown>[0]> {
   if (!content) return content;
@@ -284,10 +292,15 @@ async function withEntityAddresses(
         const entity = await target(entityType, entityId);
         if (entity) hrefs.set(`${entityType}:${entityId}`, entity.href);
       }
-      return value.replace(ENTITY_ANCHOR, (anchor, entityType, entityId) => {
-        const href = hrefs.get(`${entityType}:${entityId}`);
-        return href ? `<a href="${href}"${anchor.slice(2)}` : anchor;
-      });
+      return value.replace(
+        ENTITY_ANCHOR,
+        (anchor, entityType, entityId, fragment?: string) => {
+          const href = hrefs.get(`${entityType}:${entityId}`);
+          return href
+            ? `<a href="${withLinkFragment(href, fragment)}"${anchor.slice(2)}`
+            : anchor;
+        },
+      );
     }
     if (Array.isArray(value)) return Promise.all(value.map(inline));
     if (value && typeof value === 'object')
@@ -311,7 +324,14 @@ async function withEntityAddresses(
         return entity
           ? {
               ...block,
-              data: { ...block.data, url: entity.href, title: entity.title },
+              data: {
+                ...block.data,
+                url: withLinkFragment(
+                  entity.href,
+                  normalizeLinkFragment(block.data.fragment),
+                ),
+                title: entity.title,
+              },
             }
           : block;
       }),

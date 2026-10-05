@@ -13,6 +13,7 @@ import {
   isContentEntityType,
   normalizeContentInlineHtml,
   normalizeContentText,
+  normalizeLinkFragment,
 } from './content-link';
 import {
   normalizeCaptionText,
@@ -831,7 +832,11 @@ function normalizeBlockData(
         ? data.entityType
         : undefined;
       const entityId = optionalString(data.entityId)?.trim();
-      return withLinkNote({ entityType, entityId }, data.note);
+      const fragment = normalizeLinkFragment(data.fragment);
+      return withLinkNote(
+        { entityType, entityId, ...(fragment ? { fragment } : {}) },
+        data.note,
+      );
     }
 
     case 'privateSectionBoundary': {

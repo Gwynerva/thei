@@ -12,6 +12,7 @@ import {
   assetPlacementLabel,
   assetSourceIcon,
   assetSourceLabel,
+  assetSourceTitle,
 } from '../../composables/asset-library-labels';
 import AssetModal from '../asset-modal/AssetModal.vue';
 import AssetModalButton from '../asset-modal/AssetModalButton.vue';
@@ -245,7 +246,7 @@ const usageGroups = computed(() => {
               ><Icon name="corner-down" class="shrink-0" aria-hidden="true" />
             </p>
             <p class="mt-xs font-semibold wrap-anywhere">
-              {{ publicText(group.source.title) }}
+              {{ assetSourceTitle(group.source) }}
             </p>
             <ul class="mt-xs divide-y divide-border-1 border-t border-border-1">
               <li

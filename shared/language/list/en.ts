@@ -176,7 +176,7 @@ export default defineI18nBase({
   ],
   phrases: {
     asset_library: 'File storage',
-    asset_library_search: 'Search captions and titles…',
+    asset_library_search: 'Search files',
     asset_aspect_hint: (ratio, size) =>
       `Works best with an image or video in ${ratio}, for example ${size} pixels`,
     asset_library_pending_deletion: (date) =>
@@ -188,6 +188,8 @@ export default defineI18nBase({
     asset_library_unused_hint:
       'Unused files are automatically removed after 24 hours.',
     asset_library_all: 'All',
+    asset_library_anywhere: 'Anywhere',
+    asset_library_widen: 'Look wider',
     asset_library_used: 'In use',
     asset_library_more: 'Show more',
     asset_library_insert: 'Insert selected',
@@ -1200,6 +1202,8 @@ export default defineI18nBase({
     content_make_gallery: 'Turn into a gallery',
     content_link_internal_detected:
       'This is a page of this site, so the link will be stored as an internal one.',
+    content_link_fragment: 'Leads to this place on the page',
+    content_link_fragment_remove: 'Link to the page as a whole',
     content_caption: 'Caption',
     content_media_centered: 'Centered',
     content_media_natural: 'Natural size',

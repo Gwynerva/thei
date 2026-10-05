@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CONTENT_LINK_FRAGMENT_LIMIT,
   contentInlineLinkSanitizeConfig,
   contentInlineLinksFromData,
   extractContentInlineLinks,
+  linkFragment,
   normalizeContentInlineHtml,
   normalizeContentText,
+  normalizeLinkFragment,
   stripHydratedContentInlineLinks,
+  withLinkFragment,
 } from '../../shared/content-link';
 
 describe('content inline links', () => {
@@ -115,6 +119,7 @@ describe('content inline links', () => {
       'data-content-link': true,
       'data-entity-type': true,
       'data-entity-id': true,
+      'data-entity-fragment': true,
       'data-content-note': true,
     });
   });
@@ -141,6 +146,76 @@ describe('content inline links', () => {
     expect(stripHydratedContentInlineLinks(value)).toEqual({
       text: '<a data-content-link="entity" data-entity-type="project" data-entity-id="p-1">Project label</a> <a href="https://example.com/" data-content-link="external">External label</a>',
     });
+  });
+});
+
+describe('a place inside the target of an entity link', () => {
+  const entity = (attributes: string) =>
+    `<a data-content-link="entity" data-entity-type="event" data-entity-id="e-1"${attributes}>x</a>`;
+
+  it('keeps it between the target and the note, written as an address carries it', () => {
+    expect(
+      normalizeContentInlineHtml(
+        entity(' data-content-note="why" data-entity-fragment=" #gallery "'),
+      ),
+    ).toBe(entity(' data-entity-fragment="gallery" data-content-note="why"'));
+    // Nothing is decoded, and what an address cannot carry is encoded.
+    expect(
+      normalizeContentInlineHtml(
+        entity(
+          ' data-entity-fragment=":~:text=two%20words&amp;x=&quot;y&quot;"',
+        ),
+      ),
+    ).toBe(entity(' data-entity-fragment=":~:text=two%20words&amp;x=%22y%22"'));
+    expect(
+      normalizeContentInlineHtml(entity(' data-entity-fragment="глава 2"')),
+    ).toBe(
+      entity(' data-entity-fragment="%D0%B3%D0%BB%D0%B0%D0%B2%D0%B0%202"'),
+    );
+  });
+
+  it('is stable, and leaves a link without one as it was', () => {
+    const once = normalizeContentInlineHtml(
+      entity(' data-entity-fragment=":~:text=a&amp;b"'),
+    );
+    expect(normalizeContentInlineHtml(once)).toBe(once);
+    expect(normalizeContentInlineHtml(entity(''))).toBe(entity(''));
+    expect(
+      normalizeContentInlineHtml(entity(' data-entity-fragment=" # "')),
+    ).toBe(entity(''));
+    expect(
+      normalizeContentInlineHtml(
+        entity(
+          ` data-entity-fragment="${'a'.repeat(CONTENT_LINK_FRAGMENT_LIMIT + 1)}"`,
+        ),
+      ),
+    ).toBe(entity(''));
+  });
+
+  it('belongs to entity links only', () => {
+    expect(
+      normalizeContentInlineHtml(
+        '<a href="https://example.com/#top" data-content-link="external" data-entity-fragment="top">x</a>',
+      ),
+    ).toBe(
+      '<a href="https://example.com/#top" data-content-link="external">x</a>',
+    );
+  });
+
+  it('is read from an address and written back onto one', () => {
+    expect(linkFragment('https://site.test/events/e-E1/#gallery')).toBe(
+      'gallery',
+    );
+    expect(linkFragment('/diary/2024-05-12/?x=1#:~:text=rain')).toBe(
+      ':~:text=rain',
+    );
+    expect(linkFragment('https://site.test/events/e-E1/#')).toBeUndefined();
+    expect(linkFragment('https://site.test/events/e-E1/')).toBeUndefined();
+    expect(normalizeLinkFragment(42)).toBeUndefined();
+    expect(withLinkFragment('/events/e-E1/', 'gallery')).toBe(
+      '/events/e-E1/#gallery',
+    );
+    expect(withLinkFragment('/events/e-E1/')).toBe('/events/e-E1/');
   });
 });
 

@@ -368,6 +368,163 @@ describe('asset library', () => {
       listSourceAssets('unused', 'all').items.map((i) => i.asset.assetUuid),
     ).toEqual(['b']);
   });
+  describe('diary entries, kinds of entity and their order', () => {
+    beforeEach(() => {
+      db.insert(schema.diaryEntries)
+        .values({
+          diaryUuid: 'day',
+          date: '2024-05-12',
+          access: 'public' as any,
+          createdAt: 1,
+          updatedAt: 5,
+        })
+        .run();
+      db.insert(schema.events)
+        .values({
+          eventUuid: 'event',
+          title: 'Concert',
+          summary: '',
+          access: 'public' as any,
+          humanReadableSlug: 'concert',
+          publicId: 'e',
+          createdAt: 1,
+          updatedAt: 9,
+        })
+        .run();
+      db.insert(schema.content)
+        .values({
+          contentUuid: 'diary-body',
+          ownerType: 'diary-entry',
+          ownerId: 'day',
+          slot: 'diary-body',
+          data: { blocks: [] },
+          createdAt: 1,
+          updatedAt: 1,
+        })
+        .run();
+      db.insert(schema.assetUsages)
+        .values([
+          {
+            assetUuid: 'b',
+            containerType: 'content',
+            containerId: 'diary-body',
+            role: 'content',
+          },
+          {
+            assetUuid: 'b',
+            containerType: 'event',
+            containerId: 'event',
+            role: 'banner',
+          },
+        ])
+        .run();
+    });
+
+    it('finds the files of a diary entry by its day, written in any way', () => {
+      for (const q of ['12 мая 2024', 'may 2024', '12.05.2024', '2024-05'])
+        expect(
+          listLibrarySections({ q }).items.map((group) => group.id),
+          q,
+        ).toEqual(['day']);
+      expect(
+        listLibraryAssets({ q: '12.05.2024' }).items.map(
+          (item) => item.asset.assetUuid,
+        ),
+      ).toEqual(['b']);
+      expect(listLibrarySections({ q: '13 мая 2024' }).items).toEqual([]);
+    });
+
+    it('never finds a diary entry by the characters of its stored date', () => {
+      for (const q of ['0', '-', '24-05', '-1', '4-0'])
+        expect(
+          listLibrarySections({ q, source: 'diary-entry' }).items,
+          q,
+        ).toEqual([]);
+    });
+
+    it('lists the entities changed last first, the profile and tags after them', () => {
+      expect(
+        listLibrarySections().items.map((group) => `${group.type}:${group.id}`),
+      ).toEqual([
+        'event:event',
+        'diary-entry:day',
+        'page:page',
+        'project:p',
+        'project-section:section',
+        'profile:me',
+        'tag:tag',
+      ]);
+      const template = db
+        .select()
+        .from(schema.assets)
+        .all()
+        .find((asset) => asset.assetUuid === 'b')!;
+      db.insert(schema.assets)
+        .values({
+          ...template,
+          assetUuid: 'loose',
+          slug: 'loose',
+          familyUuid: 'loose',
+        })
+        .run();
+      // Files nothing holds stay on top, and are no entity to narrow to.
+      expect(listLibrarySections().items[0]?.type).toBe('unused');
+      expect(
+        listLibrarySections({ source: 'event' }).items.map((group) => group.id),
+      ).toEqual(['event']);
+    });
+
+    it('narrows the groups to one kind of entity, counting every kind', () => {
+      const result = listLibrarySections({ source: 'diary-entry' });
+      expect(result.items.map((group) => group.id)).toEqual(['day']);
+      expect(result.total).toBe(1);
+      expect(result.facets).toEqual({
+        sources: {
+          project: 1,
+          'project-section': 1,
+          event: 1,
+          page: 1,
+          'diary-entry': 1,
+          tag: 1,
+          profile: 1,
+        },
+        // Files of the diary entry, by kind, and every group anywhere.
+        types: { image: 1 },
+        anywhere: 7,
+      });
+      expect(
+        listLibrarySections({ q: 'concert', source: 'event' }).facets,
+      ).toEqual({ sources: { event: 1 }, types: { image: 1 }, anywhere: 1 });
+      expect(
+        listLibrarySections({ source: 'page', q: 'concert' }).items,
+      ).toEqual([]);
+      // A kind of file that is not there counts as nothing, not as absent.
+      expect(listLibrarySections({ type: 'video' }).facets.sources).toEqual({});
+    });
+
+    it('narrows the flat list to a kind of entity, or to where nothing holds a file', () => {
+      expect(
+        listLibraryAssets({ source: 'diary-entry' }).items.map(
+          (item) => item.asset.assetUuid,
+        ),
+      ).toEqual(['b']);
+      expect(
+        listLibraryAssets({ source: 'profile' as never }).items,
+      ).toHaveLength(1);
+      const all = listLibraryAssets();
+      expect(all.facets.anywhere).toBe(2);
+      expect(all.facets.sources).toMatchObject({
+        'diary-entry': 1,
+        event: 1,
+        project: 1,
+        page: 1,
+      });
+      expect(listLibraryAssets({ usage: 'unused' }).items).toEqual([]);
+      expect(
+        listLibraryAssets({ usage: 'unused' }).facets.sources.unused,
+      ).toBeUndefined();
+    });
+  });
   it('tells which files cleanup will take, the same for the editor as for the library', () => {
     db.insert(schema.assets)
       .values({

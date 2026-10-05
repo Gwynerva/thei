@@ -3,7 +3,10 @@ import type {
   ContentEntityChoice,
   ContentEntitySearchItem,
 } from '#layers/thei/shared/admin/content-entity-search';
-import type { ContentEntityReference } from '#layers/thei/shared/content-link';
+import {
+  linkFragment,
+  type ContentEntityReference,
+} from '#layers/thei/shared/content-link';
 import {
   EXTERNAL_LINK_NOTE_LIMIT,
   externalLinkHostname,
@@ -11,6 +14,7 @@ import {
 } from '#layers/thei/shared/external-link';
 import ExternalLinkPreviewCard from '#layers/thei/app/components/external-links/ExternalLinkPreviewCard.vue';
 import EntityLinkPreviewCard from './EntityLinkPreviewCard.vue';
+import ContentLinkFragment from './ContentLinkFragment.vue';
 import { parseInternalUrl } from '#layers/thei/shared/internal-url';
 import { normalizeCaptionText } from '#layers/thei/shared/terminal-punctuation';
 import {
@@ -40,6 +44,10 @@ import type {
  * shown under the target's own details, and neither is written until ✓:
  * picking an entity only makes it the choice, so a note can still be added
  * before the link is.
+ *
+ * An internal link may lead to a place inside its target — the `#…` of the
+ * address it was made from. It is kept while the link is edited, shown so it
+ * can be let go of, and dropped when the link is pointed elsewhere.
  */
 defineProps<{ teleportTo?: string | HTMLElement }>();
 
@@ -49,6 +57,8 @@ const request = shallowRef<ContentInlineLinkRequest>();
 const note = ref('');
 /** The entity an internal link will point to once applied. */
 const chosen = shallowRef<ContentEntityChoice>();
+/** Where inside the chosen entity the link leads, if anywhere. */
+const fragment = ref<string>();
 const resolver = useContentLinkResolver('admin');
 const draft = createExternalLinkDraft(useExternalLinks(), {
   errorText: () => phrase.value.content_link_broken_description,
@@ -82,6 +92,10 @@ const externalUrl = computed({
 const externalPreview = computed(() => draft.preview);
 const externalError = computed(() => draft.error);
 const externalLoading = computed(() => draft.loading || internalLoading.value);
+/** Where inside the entity a typed address of this site leads. */
+const internalFragment = computed(() =>
+  internalEntity.value ? linkFragment(draft.url) : undefined,
+);
 const canRefresh = computed(
   () =>
     Boolean(externalPreview.value || externalError.value) &&
@@ -136,6 +150,7 @@ function openEntity(next: ContentInlineLinkRequest) {
   mode.value = 'entity';
   request.value = next;
   note.value = next.initialNote ?? '';
+  fragment.value = next.initialEntity ? next.initialFragment : undefined;
   chosen.value = undefined;
   if (next.initialEntity) void showChosen(next.initialEntity);
   open.value = true;
@@ -188,11 +203,27 @@ async function openExisting(url: string) {
   await draft.open(raw);
 }
 
-/** A picked entity becomes the choice, and the note is next. */
+/**
+ * A picked entity becomes the choice, and the note is next. A place inside
+ * the entity the link led to belongs to that entity only.
+ */
 function choose(entity: ContentEntitySearchItem) {
   chosenVersion++;
+  const initial = request.value?.initialEntity;
+  if (
+    initial?.entityType !== entity.entityType ||
+    initial.entityId !== entity.entityId
+  )
+    fragment.value = undefined;
   chosen.value = entity;
   focusNote();
+}
+
+/** The typed address, leading to its page as a whole. */
+function dropInternalFragment() {
+  const raw = draft.url.replace(/#.*$/, '');
+  draft.url = raw;
+  internalEntityUrl.value = raw.trim();
 }
 
 function focusNote() {
@@ -211,7 +242,7 @@ function applyEntity() {
     entity.title,
     entityLinkAttributes(
       { ...entity, url: (entity as Partial<ContentEntitySearchItem>).url },
-      noteAttribute(),
+      { note: noteAttribute(), fragment: fragment.value },
     ),
   );
   open.value = false;
@@ -227,7 +258,10 @@ async function submitExternal() {
     if (entity) {
       request.value?.apply(
         entity.title,
-        entityLinkAttributes(entity, noteAttribute()),
+        entityLinkAttributes(entity, {
+          note: noteAttribute(),
+          fragment: linkFragment(raw),
+        }),
       );
       open.value = false;
       return;
@@ -261,6 +295,7 @@ function focusPopup() {
 function popupClosed() {
   typing.cancel();
   note.value = '';
+  fragment.value = undefined;
   chosenVersion++;
   chosen.value = undefined;
   internalVersion++;
@@ -299,6 +334,12 @@ defineExpose<ContentInlineLinkControlsExpose>({ openEntity, openExternal });
     >
       <template #footer>
         <form class="flex flex-col gap-xs" @submit.prevent="applyEntity">
+          <ContentLinkFragment
+            v-if="fragment && chosen"
+            :fragment
+            removable
+            @remove="fragment = undefined"
+          />
           <FieldInput
             v-model="note"
             type="text"
@@ -364,6 +405,12 @@ defineExpose<ContentInlineLinkControlsExpose>({ openEntity, openExternal });
           :note
           :interactive="false"
           compact
+        />
+        <ContentLinkFragment
+          v-if="internalFragment"
+          :fragment="internalFragment"
+          removable
+          @remove="dropInternalFragment"
         />
         <p class="flex items-start gap-1 px-1 text-xs text-text-3">
           <Icon name="link" class="mt-0.5 shrink-0 text-accent" />

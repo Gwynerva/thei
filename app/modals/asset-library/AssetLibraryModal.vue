@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
-import { AssetType } from '#layers/thei/shared/asset';
+import type { AssetType } from '#layers/thei/shared/asset';
 import {
+  assetLibraryWhereQuery,
   assetSourceKey,
+  type AssetLibraryFacets,
   type AssetLibrarySection,
   type AssetLibraryResponse,
   type AssetLibraryFilesResponse,
-  type AssetLibraryAvailability,
   type AssetLibraryItem,
+  type AssetLibraryWhere,
   type AssetSelectionConstraints,
 } from '#layers/thei/shared/asset-library';
 import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
@@ -17,6 +19,7 @@ import {
   assetFileLabel,
   assetRoleLabel,
   assetSourceIcon,
+  assetSourceTitle,
 } from '../../composables/asset-library-labels';
 
 const props = defineProps<{
@@ -31,7 +34,12 @@ const emit = defineEmits<{
 }>();
 const search = ref('');
 const query = ref('');
-const type = ref('');
+/** The kind of file shown; empty for any. */
+const type = ref<AssetType | ''>('');
+/** Where the files shown are used. */
+const where = ref<AssetLibraryWhere>('all');
+/** How the last answer counted each choice of the filters. */
+const facets = ref<AssetLibraryFacets>();
 const sections = ref<AssetLibrarySection[]>([]);
 const focusedAssetUuid = ref<string>();
 const files = reactive<Record<string, AssetLibraryFilesResponse>>({});
@@ -62,27 +70,9 @@ const selectionQuery = () => ({
 });
 const requestQuery = () => ({
   ...selectionQuery(),
+  ...assetLibraryWhereQuery(where.value),
   q: query.value,
   type: type.value || undefined,
-});
-const { data: availability } = useFetch<AssetLibraryAvailability>(
-  '/api/admin/assets/availability',
-  { query: computed(selectionQuery) },
-);
-const filters = computed<Record<string, string>>(() => {
-  const result: Record<string, string> = {
-    '': phrase.value.asset_library_all,
-  };
-  const available = availability.value?.types;
-  if (available?.[AssetType.Image])
-    result[AssetType.Image] = phrase.value.image;
-  if (available?.[AssetType.Video])
-    result[AssetType.Video] = phrase.value.video;
-  if (available?.[AssetType.Audio])
-    result[AssetType.Audio] = phrase.value.audio;
-  if (available?.[AssetType.Other])
-    result[AssetType.Other] = phrase.value.other_files;
-  return result;
 });
 function selectionErrorLabel(error: AssetLibraryItem['selectionError']) {
   if (error === 'size') return phrase.value.asset_selection_size;
@@ -97,11 +87,6 @@ function tileTitle(item: AssetLibraryItem) {
   ]
     .filter(Boolean)
     .join(' · ');
-}
-function title(section: AssetLibrarySection) {
-  return section.type === 'unused'
-    ? phrase.value.asset_library_unused
-    : publicText(section.title);
 }
 async function load(reset = false) {
   if (reset) {
@@ -141,8 +126,13 @@ async function load(reset = false) {
           ),
         ];
     pageCount.value = result.pageCount;
-    const firstUsed = result.items.find((section) => section.type !== 'unused');
-    if (reset && firstUsed) await openSection(firstUsed);
+    facets.value = result.facets;
+    // The files nothing holds are many and rarely the ones wanted, so the
+    // first entity opens instead — unless they are all there is to show.
+    const first =
+      result.items.find((section) => section.type !== 'unused') ??
+      (result.items.length === 1 ? result.items[0] : undefined);
+    if (reset && first) await openSection(first);
   } catch (e) {
     if (current === generation && !controller?.signal.aborted)
       error.value = true;
@@ -256,11 +246,8 @@ watch(search, (value) => {
     void load(true);
   }, 250);
 });
-watch(type, () => {
+watch([type, where], () => {
   void load(true);
-});
-watch(filters, (options) => {
-  if (type.value && !Object.hasOwn(options, type.value)) type.value = '';
 });
 onMounted(() => {
   searchInput.value?.focus();
@@ -295,24 +282,14 @@ onBeforeUnmount(() => {
             <Icon name="close" />
           </button>
         </div>
-        <div class="flex h-10 items-stretch gap-xs">
-          <FieldInput
-            v-model="search"
-            type="search"
-            :placeholder="phrase.asset_library_search"
-            :aria-label="phrase.asset_library_search"
-            wrapper-class="min-w-0 flex-1"
-            class="h-full min-w-0!"
-            @element="searchInput = $event"
-          />
-          <FieldSelect
-            v-model="type"
-            :options="filters"
-            :aria-label="phrase.format"
-            wrapper-class="h-full shrink-0"
-            class="min-w-32"
-          />
-        </div>
+        <AssetLibrarySearch
+          v-model:search="search"
+          v-model:type="type"
+          v-model:where="where"
+          :facets
+          teleport-to="dialog"
+          @element="searchInput = $event"
+        />
       </div>
     </header>
     <div class="min-h-0 flex-1 overflow-y-auto p-sm sm:p-md">
@@ -359,7 +336,7 @@ onBeforeUnmount(() => {
                 /><span
                   class="min-w-0 truncate font-semibold"
                   :class="{ italic: section.type === 'unused' }"
-                  >{{ title(section) }}</span
+                  >{{ assetSourceTitle(section) }}</span
                 ><span
                   class="rounded-normal bg-bg-3 px-xs py-1 text-xs text-text-2
                     tabular-nums"
@@ -451,12 +428,53 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </details>
-        <p
+        <!-- A narrowed search that found nothing says how to look wider,
+             and how much there is anywhere for what was typed. -->
+        <EmptyState
           v-if="!loading && !error && !sections.length"
-          class="p-lg text-center text-text-3"
+          data-asset-library-empty
+          icon="face-dead"
+          :title="phrase.asset_library_empty"
+          :description="
+            where === 'all' && !type
+              ? phrase.admin_search_no_results_description
+              : undefined
+          "
         >
-          {{ phrase.asset_library_empty }}
-        </p>
+          <template v-if="where !== 'all' || type">
+            <span class="text-sm text-text-3"
+              >{{ phrase.asset_library_widen }}:</span
+            >
+            <button
+              v-if="where !== 'all'"
+              type="button"
+              class="inline-flex cursor-pointer items-center gap-1 rounded-full
+                border border-border-1 bg-bg-1 py-1 pl-sm text-sm text-text-2
+                transition hocus:border-border-3 hocus:text-text-1"
+              :class="facets?.anywhere ? 'pr-1.5' : 'pr-sm'"
+              @click="where = 'all'"
+            >
+              <Icon name="globe" class="shrink-0" />{{
+                phrase.asset_library_anywhere
+              }}<span
+                v-if="facets?.anywhere"
+                class="rounded-full bg-bg-3 px-2 py-0.5 text-xs leading-none
+                  tabular-nums"
+                >{{ facets.anywhere }}</span
+              >
+            </button>
+            <button
+              v-if="type"
+              type="button"
+              class="inline-flex cursor-pointer items-center gap-1 rounded-full
+                border border-border-1 bg-bg-1 px-sm py-1 text-sm text-text-2
+                transition hocus:border-border-3 hocus:text-text-1"
+              @click="type = ''"
+            >
+              <Icon name="files" class="shrink-0" />{{ phrase.any_file }}
+            </button>
+          </template>
+        </EmptyState>
         <div v-if="loading" role="status" class="p-md text-center">
           <Icon name="loading" />
         </div>

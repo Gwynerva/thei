@@ -86,6 +86,32 @@ describe('diary entries in the entity search', () => {
     expect(rankContentEntities(diary, '2024')).toHaveLength(2);
   });
 
+  it('finds an entry by a day with its month written as a word', () => {
+    for (const query of ['12 мая 2024', 'May 12', '12 мая', 'мая 2024'])
+      expect(
+        rankContentEntities(diary, query).map((item) => item.entityId),
+        query,
+      ).toEqual(['d-1']);
+    expect(
+      rankContentEntities(diary, 'июнь').map((item) => item.entityId),
+    ).toEqual(['d-2']);
+  });
+
+  it('puts the newest of the days found equally well first', () => {
+    expect(
+      rankContentEntities(diary, '2024').map((item) => item.entityId),
+    ).toEqual(['d-2', 'd-1']);
+  });
+
+  it('puts a whole day before a project only found in part', () => {
+    const project = { ...items[1]!, title: 'Notes 2024-05-12 trip' };
+    expect(
+      rankContentEntities([project, ...diary], '2024-05-12').map(
+        (item) => item.entityId,
+      ),
+    ).toEqual(['d-1', 'p-1']);
+  });
+
   it('does not match an entry by words, since it has no title', () => {
     expect(rankContentEntities([...diary, ...items], 'studio')).toEqual([
       items[1],

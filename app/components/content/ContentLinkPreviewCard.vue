@@ -3,6 +3,7 @@ import type { MediaPlayback } from '#layers/thei/shared/media';
 import {
   contentEntityHasIcon,
   externalLinkFromResolved,
+  withLinkFragment,
   type ResolvedContentLink,
 } from '#layers/thei/shared/content-link';
 import ExternalLinkPreviewCard from '#layers/thei/app/components/external-links/ExternalLinkPreviewCard.vue';
@@ -22,6 +23,8 @@ const props = defineProps<{
   label?: string;
   /** The owner's note, as typed. */
   note?: string;
+  /** Where inside an entity the link leads, if anywhere. */
+  fragment?: string;
   loading?: boolean;
   interactive: boolean;
   playback?: MediaPlayback;
@@ -43,7 +46,7 @@ const externalLink = computed(() => externalLinkFromResolved(props.result));
     :date="result.date"
     :parent="result.parent"
     :icon-media="result.media"
-    :href="result.href"
+    :href="sitePath(withLinkFragment(result.href, fragment))"
     :interactive="interactive"
     :playback
     :loop="continuousProjectMedia && contentEntityHasIcon(result.entityType)"

@@ -47,11 +47,12 @@ import { resolveEntityIconMedia } from '../media/generated-icon';
 
 /**
  * Canonical shape `normalizeContentInlineHtml` writes entity anchors in, so
- * rewriting them is an exact match rather than HTML parsing. The owner's note
- * comes last and is optional.
+ * rewriting them is an exact match rather than HTML parsing. The place inside
+ * the target and the owner's note come last, in that order, both optional; a
+ * restricted anchor is written afresh, so neither outlives the uuid.
  */
 const INLINE_ENTITY_ANCHOR = new RegExp(
-  `<a data-content-link="entity" data-entity-type="(${CONTENT_ENTITY_TYPES.join('|')})" data-entity-id="([^"]*)"(?: data-content-note="[^"]*")?>`,
+  `<a data-content-link="entity" data-entity-type="(${CONTENT_ENTITY_TYPES.join('|')})" data-entity-id="([^"]*)"(?: data-entity-fragment="[^"]*")?(?: data-content-note="[^"]*")?>`,
   'g',
 );
 

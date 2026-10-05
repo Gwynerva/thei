@@ -251,6 +251,7 @@ function openGalleryItem(
           :entity-type="block.data.entityType as ContentEntityType"
           :entity-id="block.data.entityId as string | undefined"
           :restricted="block.data.restricted as boolean | undefined"
+          :fragment="block.data.fragment as string | undefined"
           :resolver="linkResolver"
           :note="linkNote(block.data)"
         />

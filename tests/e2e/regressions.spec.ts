@@ -370,6 +370,35 @@ test('an address pasted over selected text links that text instead of replacing 
   await expect(link).toHaveAttribute('data-content-link', 'external');
   await expect(link).toHaveAttribute('href', 'https://example.org/page');
   await expect(field).toHaveText('Before tail');
+
+  // An address of this very site becomes a link to what it opens, and
+  // keeps the place inside it the address leads to.
+  await page.route('**/api/admin/content-entities/by-url**', (route) =>
+    route.fulfill({
+      json: {
+        entity: {
+          entityType: 'event',
+          entityId: 'e-encore',
+          title: 'Concert',
+          summary: '',
+          url: '/events/concert-Encore1/',
+          humanReadableSlug: 'concert',
+          publicId: 'Encore1',
+          updatedAt: 1,
+        },
+      },
+    }),
+  );
+  const origin = new URL(page.url()).origin;
+  await field.evaluate((element) => {
+    element.textContent = 'Before tail';
+  });
+  await paste(`${origin}/events/concert-Encore1/#second-set`);
+  await expect(link).toHaveAttribute('data-content-link', 'entity');
+  await expect(link).toHaveAttribute('data-entity-id', 'e-encore');
+  await expect(link).toHaveAttribute('data-entity-fragment', 'second-set');
+  await expect(link).toHaveAttribute('href', /#second-set$/);
+  await expect(field).toHaveText('Before tail');
 });
 
 test('life cache evicts distant windows, preserves focus and reloads both directions', async ({

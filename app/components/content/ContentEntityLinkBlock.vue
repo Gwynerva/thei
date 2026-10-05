@@ -8,10 +8,12 @@ import {
 } from '#layers/thei/shared/content-link';
 import ContentLinkPreviewCard from './ContentLinkPreviewCard.vue';
 import ContentLinkNote from './ContentLinkNote.vue';
+import ContentLinkFragment from './ContentLinkFragment.vue';
 
 /**
  * The card of an `entityLink` block. Where the block can be edited, the card
- * is not a link: its last line is the owner's note, written in place.
+ * is not a link: its last line is the owner's note, written in place, under
+ * the place inside the target the link leads to, if it leads to one.
  */
 const props = withDefaults(
   defineProps<{
@@ -23,6 +25,8 @@ const props = withDefaults(
     resolver: ContentLinkResolver;
     interactive?: boolean;
     playback?: MediaPlayback;
+    /** Where inside the target the link leads, if anywhere. */
+    fragment?: string;
     /** The owner's note, the last line of the card. */
     note?: string;
     editable?: boolean;
@@ -30,7 +34,10 @@ const props = withDefaults(
   }>(),
   { interactive: true },
 );
-const emit = defineEmits<{ 'update:note': [value: string] }>();
+const emit = defineEmits<{
+  'update:note': [value: string];
+  removeFragment: [];
+}>();
 const result = ref<ResolvedContentLink>();
 let version = 0;
 watch(
@@ -60,11 +67,19 @@ onUnmounted(() => {
   <ContentLinkPreviewCard
     :result="result"
     :label="entityTypeLabel(entityType)"
+    :fragment
     :interactive="interactive && !editable"
     :playback
     :continuous-project-media="contentEntityHasIcon(entityType)"
   >
     <template v-if="editable || note" #note>
+      <ContentLinkFragment
+        v-if="editable && fragment"
+        :fragment
+        removable
+        class="mb-1"
+        @remove="emit('removeFragment')"
+      />
       <ContentLinkNote
         :note
         :editable

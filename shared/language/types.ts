@@ -111,6 +111,10 @@ export type LanguagePhrases = {
   asset_library_unused: string;
   asset_library_unused_hint: string;
   asset_library_all: string;
+  /** Files used anywhere at all: no kind of entity singled out. */
+  asset_library_anywhere: string;
+  /** Leads the ways out of a narrowed search that found nothing. */
+  asset_library_widen: string;
   asset_library_used: string;
   asset_library_more: string;
   asset_library_insert: string;
@@ -884,6 +888,9 @@ export type LanguagePhrases = {
   content_choose_entity: string;
   content_make_gallery: string;
   content_link_internal_detected: string;
+  /** Names the place inside the target a link leads to, its `#…`. */
+  content_link_fragment: string;
+  content_link_fragment_remove: string;
   content_caption: string;
   content_media_centered: string;
   content_media_natural: string;

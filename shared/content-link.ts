@@ -48,6 +48,40 @@ export interface ContentExternalInlineLink {
 
 export type ContentInlineLink = ContentEntityLink | ContentExternalInlineLink;
 
+/** The longest fragment a link keeps; a longer one is dropped whole. */
+export const CONTENT_LINK_FRAGMENT_LIMIT = 1000;
+
+/**
+ * Where inside its target a link to an entity leads: the part of an address
+ * after `#` — a heading, a block of the page, a passage of text — without
+ * the `#`, written the way an address carries it. Nothing in it is decoded,
+ * so a text fragment (`:~:text=…`) or an encoded heading keeps working;
+ * what an address cannot carry as it is gets percent-encoded. Empty or too
+ * long, it is no fragment.
+ */
+export function normalizeLinkFragment(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const raw = value.trim().replace(/^#/, '');
+  if (!raw) return undefined;
+  const fragment = new URL(`https://fragment.invalid/#${raw}`).hash.slice(1);
+  return fragment && fragment.length <= CONTENT_LINK_FRAGMENT_LIMIT
+    ? fragment
+    : undefined;
+}
+
+/** The fragment of an address, absolute or a path of the site. */
+export function linkFragment(address: string): string | undefined {
+  const index = address.indexOf('#');
+  return index < 0
+    ? undefined
+    : normalizeLinkFragment(address.slice(index + 1));
+}
+
+/** An entity's address, leading to the place a link's fragment names. */
+export function withLinkFragment(href: string, fragment?: string): string {
+  return fragment ? `${href}#${fragment}` : href;
+}
+
 export type ContentEntityReference = {
   kind: 'entity';
   entityType: ContentEntityType;
@@ -136,6 +170,7 @@ export function contentInlineLinkSanitizeConfig() {
     'data-content-link': true,
     'data-entity-type': true,
     'data-entity-id': true,
+    'data-entity-fragment': true,
     'data-content-note': true,
   };
 }
@@ -176,7 +211,13 @@ export function normalizeContentInlineHtml(value: unknown): string {
         ? ` data-content-note="${escapeAttribute(note)}"`
         : '';
       if (kind === 'entity' && isContentEntityType(entityType) && entityId) {
-        return `<a data-content-link="entity" data-entity-type="${entityType}" data-entity-id="${escapeAttribute(entityId)}"${noteAttribute}>`;
+        const fragment = normalizeLinkFragment(
+          attributes['data-entity-fragment'],
+        );
+        const fragmentAttribute = fragment
+          ? ` data-entity-fragment="${escapeAttribute(fragment)}"`
+          : '';
+        return `<a data-content-link="entity" data-entity-type="${entityType}" data-entity-id="${escapeAttribute(entityId)}"${fragmentAttribute}${noteAttribute}>`;
       }
 
       const href = attributes.href;

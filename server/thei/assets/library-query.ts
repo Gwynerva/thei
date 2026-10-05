@@ -1,6 +1,10 @@
 import { createError } from 'h3';
 import type { LibraryQuery } from './library';
-import type { AssetSelectionConstraints } from '../../../shared/asset-library';
+import {
+  ASSET_LIBRARY_QUERY_LIMIT,
+  isAssetLibrarySourceFilter,
+  type AssetSelectionConstraints,
+} from '../../../shared/asset-library';
 import {
   parseAcceptedExtensions,
   parseOptionalPositiveInt,
@@ -12,7 +16,7 @@ export function parseLibraryQuery(
 ): LibraryQuery {
   const string = (key: string) =>
     typeof query[key] === 'string' ? (query[key] as string) : '';
-  if (string('q').length > 500)
+  if (string('q').length > ASSET_LIBRARY_QUERY_LIMIT)
     throw createError({ statusCode: 400, message: 'Search is too long' });
   if (
     string('type') &&
@@ -21,10 +25,14 @@ export function parseLibraryQuery(
     throw createError({ statusCode: 400, message: 'Invalid asset type' });
   if (string('usage') && !['used', 'unused'].includes(string('usage')))
     throw createError({ statusCode: 400, message: 'Invalid usage filter' });
+  const source = string('source');
+  if (source && !isAssetLibrarySourceFilter(source))
+    throw createError({ statusCode: 400, message: 'Invalid source filter' });
   return {
     q: string('q'),
     type: string('type'),
     usage: string('usage'),
+    source: isAssetLibrarySourceFilter(source) ? source : undefined,
     page: Number(string('page') || 1),
     ...parseSelectionConstraints(query),
   };

@@ -9,6 +9,7 @@ import {
   type AdminEntityListOrder,
 } from '#layers/thei/shared/admin/entity-list';
 import { diaryExcerpt } from '#layers/thei/shared/diary-text';
+import { dayQueryRank, parseDayQuery } from '#layers/thei/shared/day-query';
 
 export default defineEventHandler(async (event): Promise<DiaryListResponse> => {
   const query = getQuery(event);
@@ -36,8 +37,10 @@ export default defineEventHandler(async (event): Promise<DiaryListResponse> => {
   /**
    * The shape the shared list helpers expect.
    *
-   * A diary entry has no title, slug or public ID, so its day stands in for
-   * all three — which is also how one is actually looked for.
+   * A diary entry has no title, slug or public ID, so all three are empty: an
+   * entry is looked for by its day, read as a day (`day-query.ts`), or by its
+   * words — never by the characters of its stored date, which a lone `0`
+   * would find in every entry.
    */
   type Row = Awaited<ReturnType<typeof THEI_SERVER.diary.list>>[number] & {
     entityId: string;
@@ -53,17 +56,20 @@ export default defineEventHandler(async (event): Promise<DiaryListResponse> => {
   ): Row => ({
     ...item,
     entityId: item.diaryUuid,
-    title: item.date,
+    title: '',
     summary: '',
-    humanReadableSlug: item.date,
-    publicId: item.date,
+    humanReadableSlug: '',
+    publicId: '',
     contentText: contentPlainText(bodyByUuid.get(item.diaryUuid)),
   });
 
+  /** An entry is found by its day, written in any way, or by its words. */
   function searchEntries() {
+    const day = parseDayQuery(q);
     return paginateAdminEntities(
       db.select().from(schema.diaryEntries).all().map(asRow),
       { q, order, ...paginationQuery },
+      (row) => Boolean(day && dayQueryRank(row.date, day) !== undefined),
     );
   }
 

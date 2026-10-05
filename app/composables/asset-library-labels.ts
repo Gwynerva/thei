@@ -29,6 +29,16 @@ export function assetSourceLabel(source: Pick<AssetSource, 'type'>) {
   }[source.type];
 }
 /**
+ * What holds a file, named as the owner knows it: a diary entry, which has
+ * no title, by its day written out; anything else by its title, formatted.
+ */
+export function assetSourceTitle(source: Pick<AssetSource, 'type' | 'title'>) {
+  if (source.type === 'unused') return phrase.value.asset_library_unused;
+  return source.type === 'diary-entry'
+    ? entityDisplayTitle({ title: source.title, date: source.title })
+    : publicText(source.title);
+}
+/**
  * Describes a stored file for tooltips and screen readers.
  *
  * Only what the site knows about the bytes: the uploaded file's name is never
