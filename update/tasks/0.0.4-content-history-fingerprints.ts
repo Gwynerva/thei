@@ -25,8 +25,13 @@ export default defineUpdateTask({
   async run({ progress, log }) {
     const { refreshContentHistoryFingerprints } =
       await import('#layers/thei/server/thei/content/history');
-    const { refreshed, total } =
-      await refreshContentHistoryFingerprints(progress);
+    const { refreshed, total } = await refreshContentHistoryFingerprints(
+      progress,
+      (id) =>
+        log(
+          `A draft or version (${id}) could not be read and was left as it was.`,
+        ),
+    );
     if (refreshed)
       log(`Recounted ${refreshed} of ${total} drafts and versions.`);
   },

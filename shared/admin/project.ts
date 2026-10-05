@@ -16,6 +16,10 @@ import {
   type ContentFieldModelValue,
 } from '../content';
 import { isOneOf } from '../utils/isOneOf';
+import {
+  normalizeCaptionText,
+  normalizeHeadingText,
+} from '../terminal-punctuation';
 import { optionalContentDraftRef } from '../content-history';
 import {
   normalizeProjectSections,
@@ -162,7 +166,7 @@ export function projectTagContext(project: ProjectEditData): TagContext {
 export function validateProjectData(
   data: ProjectEditData,
 ): string | ValidatedProjectEditData {
-  const title = data.title?.trim();
+  const title = normalizeHeadingText(data.title?.trim() ?? '');
   if (!title) return 'Title cannot be empty';
 
   const summary = data.summary?.trim();
@@ -188,7 +192,7 @@ export function validateProjectData(
 
               return {
                 assetUuid: item.assetUuid,
-                caption: normalizeOptionalText(item.caption),
+                caption: optionalCaption(item.caption),
                 isPrivate,
               };
             }),
@@ -204,7 +208,7 @@ export function validateProjectData(
               if (isPrivate === undefined)
                 throw new ProjectValidationError('Invalid asset privacy');
 
-              const itemTitle = normalizeOptionalText(item.title);
+              const itemTitle = optionalHeading(item.title);
               if (!itemTitle) {
                 throw new ProjectValidationError(
                   'Other file title cannot be empty',
@@ -214,7 +218,7 @@ export function validateProjectData(
               return {
                 assetUuid: item.assetUuid,
                 title: itemTitle,
-                caption: normalizeOptionalText(item.caption),
+                caption: optionalCaption(item.caption),
                 isPrivate,
               };
             }),
@@ -285,6 +289,14 @@ function validateProjectTags(
 function normalizeOptionalText(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed || undefined;
+}
+
+function optionalCaption(value: string | undefined): string | undefined {
+  return normalizeCaptionText(value?.trim() ?? '') || undefined;
+}
+
+function optionalHeading(value: string | undefined): string | undefined {
+  return normalizeHeadingText(value?.trim() ?? '') || undefined;
 }
 
 function validateProjectAssetIsPrivate(value: unknown): boolean | undefined {

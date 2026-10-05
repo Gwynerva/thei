@@ -173,3 +173,15 @@ describe('inline markup: strikethrough and hints', () => {
     ).toBe('<abbr data-content-hint="note">t</abbr>');
   });
 });
+
+describe('inline link notes', () => {
+  it('settle their ending, and leave the visible text as typed', () => {
+    expect(
+      normalizeContentInlineHtml(
+        '<b>Кот.</b> <a href="https://example.com/" data-content-note="Мой профиль.">там</a>.',
+      ),
+    ).toBe(
+      '<b>Кот.</b> <a href="https://example.com/" data-content-link="external" data-content-note="Мой профиль">там</a>.',
+    );
+  });
+});

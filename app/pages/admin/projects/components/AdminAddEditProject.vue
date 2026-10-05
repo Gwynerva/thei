@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { normalizeHeadingText } from '#layers/thei/shared/terminal-punctuation';
 import {
   projectTagContext,
   type ProjectEditData,
@@ -240,6 +241,10 @@ async function handleSave() {
       applySavedContentItemIds(result);
       applySavedAction(result.action);
       applySavedStatuses(result.statuses);
+      // The title as the server stored it, its ending settled.
+      projectData.value.title = normalizeHeadingText(
+        projectData.value.title.trim(),
+      );
       stampSavedContent(projectData.value, savedSnapshot.value, CONTENT_FIELDS);
       markProjectSaved();
     } else {

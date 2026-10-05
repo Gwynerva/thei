@@ -12,6 +12,10 @@ import { normalizePeriods, PeriodError } from '../period';
 import { normalizeProjectAction } from '../project-action';
 import { validateExternalLinkList } from '../external-link';
 import { isOneOf } from '../utils/isOneOf';
+import {
+  normalizeCaptionText,
+  normalizeHeadingText,
+} from '../terminal-punctuation';
 import { optionalContentDraftRef } from '../content-history';
 import {
   normalizeHumanReadableSlug,
@@ -38,7 +42,7 @@ export function validateEventData(
   data: EventEditData,
 ): string | ValidatedEventEditData {
   try {
-    const title = data.title?.trim();
+    const title = normalizeHeadingText(data.title?.trim() ?? '');
     if (!title) return 'Title cannot be empty';
     const summary = data.summary?.trim();
     if (!summary) return 'Summary cannot be empty';
@@ -110,14 +114,15 @@ function validateFiles(files: EventEditData['otherAssets']) {
     if (!assetUuid) throw new Error('Invalid event file');
     if (seen.has(assetUuid)) throw new Error('Duplicate event file');
     seen.add(assetUuid);
-    const title = optionalText(file.title);
+    const title = normalizeHeadingText(optionalText(file.title) ?? '');
     if (!title) throw new Error('Event file title cannot be empty');
     if (typeof file.isPrivate !== 'boolean')
       throw new Error('Invalid file privacy');
     return {
       assetUuid,
       title,
-      caption: optionalText(file.caption),
+      caption:
+        normalizeCaptionText(optionalText(file.caption) ?? '') || undefined,
       isPrivate: file.isPrivate,
     };
   });

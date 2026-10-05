@@ -832,14 +832,17 @@ function enforceFieldCap(
 }
 
 /**
- * Recomputes what every kept draft and version says about its own text: its
- * fingerprint and its size. An update that rewrites the stored text — the
- * links of 0.0.4 that named a stage — leaves both describing the old words,
- * and a draft equal to its saved text would then read as different once.
- * Only rows whose description changed are written.
+ * Brings every kept draft and version in line with what a save stores today:
+ * its text canonical — the links of 0.0.4 that named a stage, the endings of
+ * captions and headings — and its fingerprint and size describing that text.
+ * Left describing the old words, a draft equal to its saved text would be
+ * offered once as different, and two versions would differ by a full stop.
+ * A row that no longer reads as a text is left as it is and reported. Only
+ * rows that changed are written.
  */
 export async function refreshContentHistoryFingerprints(
   onProgress: (done: number, total: number) => void | Promise<void>,
+  onSkip?: (id: string, error: unknown) => void,
 ) {
   const { db, schema } = THEI_SERVER.useDb();
   const rows = db
@@ -853,10 +856,34 @@ export async function refreshContentHistoryFingerprints(
     .all();
   let refreshed = 0;
   for (const [index, row] of rows.entries()) {
-    const described = describeHistoryData(row.data);
-    if (described.digest !== row.digest || described.size !== row.size) {
+    let described: DescribedData | undefined;
+    try {
+      described = describeHistoryData(row.data);
+    } catch (error) {
+      onSkip?.(row.id, error);
+    }
+    const rewritten =
+      described && JSON.stringify(described.data) !== JSON.stringify(row.data);
+    if (
+      described &&
+      (rewritten ||
+        described.digest !== row.digest ||
+        described.size !== row.size)
+    ) {
       db.update(schema.contentHistory)
-        .set({ digest: described.digest, size: described.size })
+        .set({
+          ...(rewritten
+            ? {
+                data: described.data,
+                wordCount: described.wordCount,
+                blockCount: described.blockCount,
+                assetCount: described.assetCount,
+                assetUuids: described.assetUuids,
+              }
+            : {}),
+          digest: described.digest,
+          size: described.size,
+        })
         .where(eq(schema.contentHistory.id, row.id))
         .run();
       refreshed++;

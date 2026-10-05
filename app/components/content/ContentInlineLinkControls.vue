@@ -12,6 +12,7 @@ import {
 import ExternalLinkPreviewCard from '#layers/thei/app/components/external-links/ExternalLinkPreviewCard.vue';
 import EntityLinkPreviewCard from './EntityLinkPreviewCard.vue';
 import { parseInternalUrl } from '#layers/thei/shared/internal-url';
+import { normalizeCaptionText } from '#layers/thei/shared/terminal-punctuation';
 import {
   createExternalLinkDraft,
   useExternalLinks,
@@ -200,7 +201,7 @@ function focusNote() {
 
 /** An empty note is an absent attribute, never an empty one. */
 function noteAttribute() {
-  return note.value.trim() || undefined;
+  return normalizeCaptionText(note.value.trim()) || undefined;
 }
 
 function applyEntity() {

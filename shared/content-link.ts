@@ -3,6 +3,7 @@ import {
   normalizeExternalLinkUrl,
   type ExternalLinkPreview,
 } from './external-link';
+import { normalizeCaptionText } from './terminal-punctuation';
 
 /**
  * Every kind of entity content may link to, in the order a person would name
@@ -166,7 +167,11 @@ export function normalizeContentInlineHtml(value: unknown): string {
       const kind = attributes['data-content-link'];
       const entityType = attributes['data-entity-type'];
       const entityId = attributes['data-entity-id']?.trim();
-      const note = attributes['data-content-note']?.trim();
+      // A note is committed whole from its popup, never typed into the text
+      // being normalized, so its ending can be settled right here.
+      const note = normalizeCaptionText(
+        attributes['data-content-note']?.trim() ?? '',
+      );
       const noteAttribute = note
         ? ` data-content-note="${escapeAttribute(note)}"`
         : '';

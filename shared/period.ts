@@ -8,6 +8,7 @@ import {
   normalizeDatePrecisionInfo,
   type DatedPeriod,
 } from './date-precision';
+import { normalizeHeadingText } from './terminal-punctuation';
 
 export const PERIOD_OWNER_TYPES = ['event', 'project-section'] as const;
 
@@ -24,8 +25,9 @@ export const PERIOD_LABEL_MAX_LENGTH = 100;
 
 export class PeriodError extends Error {}
 
+/** A label names a stretch, as a heading does, and ends as one. */
 export function normalizePeriodLabel(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
+  return typeof value === 'string' ? normalizeHeadingText(value.trim()) : '';
 }
 
 /**

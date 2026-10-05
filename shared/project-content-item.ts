@@ -7,6 +7,7 @@ import {
 import { optionalContentDraftRef } from './content-history';
 import { comparePeriods, normalizePeriods, type Period } from './period';
 import type { MediaDescriptor } from './media';
+import { normalizeHeadingText } from './terminal-punctuation';
 import {
   normalizeHumanReadableSlug,
   normalizePublicId,
@@ -87,7 +88,10 @@ function normalizeProjectSection(value: unknown): ProjectSectionItem {
   if (!value || typeof value !== 'object')
     throw new ProjectContentItemError('Invalid section');
   const source = value as Record<string, unknown>;
-  const title = typeof source.title === 'string' ? source.title.trim() : '';
+  const title =
+    typeof source.title === 'string'
+      ? normalizeHeadingText(source.title.trim())
+      : '';
   if (!title)
     throw new ProjectContentItemError('Section title cannot be empty');
   if (typeof source.isPrivate !== 'boolean')

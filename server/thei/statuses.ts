@@ -25,6 +25,7 @@ import {
   type HistoryKey,
 } from './history-page';
 import { utcDayOf } from '#layers/thei/shared/date-range';
+import { normalizeCaptionText } from '#layers/thei/shared/terminal-punctuation';
 
 export const STATUS_PAGE_SIZE = 30;
 
@@ -272,7 +273,8 @@ export function prepareStatusEdits(
   const text = (value: unknown): string => {
     if (typeof value !== 'string' || value.length > 10000)
       return invalid('Invalid status');
-    return value.trim();
+    // A status is a caption to the day; it ends as one.
+    return normalizeCaptionText(value.trim());
   };
   const date = (value: unknown): string | undefined => {
     if (value === undefined) return undefined;

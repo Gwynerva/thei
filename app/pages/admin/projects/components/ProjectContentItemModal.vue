@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { ProjectSectionItem } from '#layers/thei/shared/project-content-item';
 import { normalizePeriods, type Period } from '#layers/thei/shared/period';
+import { normalizeHeadingText } from '#layers/thei/shared/terminal-punctuation';
 import {
   createEmptyContentFieldValue,
   isContentEmpty,
@@ -144,13 +145,15 @@ function handOver() {
   props.modalData.onSave(built);
   exists.value = true;
   savedTitle.value = built.title;
+  // The field shows the title as it was handed over, its ending settled.
+  item.value.title = built.title;
   markSaved();
 }
 
 function buildItem(): ProjectSectionItem {
   return {
     sectionUuid: item.value.sectionUuid,
-    title: item.value.title.trim(),
+    title: normalizeHeadingText(item.value.title.trim()),
     summary: item.value.summary.trim(),
     humanReadableSlug: item.value.humanReadableSlug,
     publicId: item.value.publicId,

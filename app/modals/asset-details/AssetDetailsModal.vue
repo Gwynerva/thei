@@ -7,6 +7,10 @@ import AssetModalFileInfo from '#layers/thei/app/modals/asset-modal/AssetModalFi
 import AssetModalPreviewAudio from '#layers/thei/app/modals/asset-modal/AssetModalPreviewAudio.vue';
 import AssetModalPreviewMedia from '#layers/thei/app/modals/asset-modal/AssetModalPreviewMedia.vue';
 import FilePreview from '#layers/thei/app/components/FilePreview.vue';
+import {
+  normalizeCaptionText,
+  normalizeHeadingText,
+} from '#layers/thei/shared/terminal-punctuation';
 
 type AssetDetailsResult =
   | {
@@ -90,10 +94,10 @@ const previewSrc = computed(
 function currentPatch() {
   return {
     title: props.modalData.showTitle
-      ? title.value.trim() || undefined
+      ? normalizeHeadingText(title.value.trim()) || undefined
       : undefined,
     caption: props.modalData.showCaption
-      ? caption.value.trim() || undefined
+      ? normalizeCaptionText(caption.value.trim()) || undefined
       : undefined,
     isPrivate: props.modalData.showAccess ? isPrivate.value : undefined,
   };

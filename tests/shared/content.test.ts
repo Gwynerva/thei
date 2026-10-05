@@ -11,6 +11,7 @@ import {
   contentPlainText,
   extractContentAssetRefs,
   normalizeContentData,
+  normalizeContentMediaCaption,
   summarizeContentData,
 } from '../../shared/content';
 
@@ -1070,5 +1071,89 @@ describe('content audio', () => {
     };
     expect(contentPlainText(data)).toBe('Song At the dacha');
     expect(buildContentPreview(data).media).toBeUndefined();
+  });
+});
+
+describe('the endings of captions and headings', () => {
+  const asset = { assetUuid: 'media' };
+  const normalized = normalizeContentData({
+    blocks: [
+      { type: 'header', data: { text: 'Итоги года.', level: 2 } },
+      {
+        type: 'contentMedia',
+        data: { layout: 'natural', asset, caption: '<i>Кот на окне.</i>' },
+      },
+      {
+        type: 'contentGallery',
+        data: {
+          items: [
+            { id: 'one', asset, caption: 'Кот спит. <b>Пёс</b>' },
+            { id: 'two', asset, caption: 'Москва, 1990 г.' },
+          ],
+        },
+      },
+      {
+        type: 'quote',
+        data: { text: 'Слова', caption: 'А. С. Пушкин.' },
+      },
+      {
+        type: 'contentAttachment',
+        data: { asset, title: 'Отчёт.', caption: 'Итоги. Планы' },
+      },
+      {
+        type: 'contentAudio',
+        data: { asset, title: 'Запись!', caption: 'Голос.' },
+      },
+      {
+        type: 'externalLink',
+        data: { url: 'https://example.com/', note: 'Мой профиль.' },
+      },
+      { type: 'paragraph', data: { text: 'Абзац остаётся.' } },
+    ],
+  });
+
+  it('settles them where a block is normalized', () => {
+    expect(normalized.blocks.map((block) => block.data)).toEqual([
+      { text: 'Итоги года', level: 2 },
+      { layout: 'natural', asset, caption: '<i>Кот на окне</i>' },
+      {
+        items: [
+          { id: 'one', asset, caption: 'Кот спит. <b>Пёс</b>.' },
+          { id: 'two', asset, caption: 'Москва, 1990 г.' },
+        ],
+      },
+      { text: 'Слова', caption: 'А. С. Пушкин', alignment: 'left' },
+      { asset, title: 'Отчёт', caption: 'Итоги. Планы.' },
+      { asset, title: 'Запись!', caption: 'Голос' },
+      { url: 'https://example.com/', note: 'Мой профиль' },
+      { text: 'Абзац остаётся.' },
+    ]);
+  });
+
+  it('does not count a full stop typed after one sentence as a change', () => {
+    const caption = (value: string) => ({
+      blocks: [
+        {
+          type: 'contentMedia',
+          data: { layout: 'natural', asset, caption: value },
+        },
+      ],
+    });
+    expect(
+      contentDataIsSemanticallyEqual(
+        caption('Кот на окне') as never,
+        caption('Кот на окне.') as never,
+      ),
+    ).toBe(true);
+    expect(
+      contentDataIsSemanticallyEqual(
+        caption('Кот спит. Пёс') as never,
+        caption('Кот спит. Пёс лает') as never,
+      ),
+    ).toBe(false);
+  });
+
+  it('leaves the caption being typed as it is', () => {
+    expect(normalizeContentMediaCaption('Кот на окне.')).toBe('Кот на окне.');
   });
 });

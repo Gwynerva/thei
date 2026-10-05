@@ -14,6 +14,12 @@ import {
   normalizeContentInlineHtml,
   normalizeContentText,
 } from './content-link';
+import {
+  normalizeCaptionText,
+  normalizeHeadingText,
+  punctuateInlineHtml,
+  type TerminalPunctuationKind,
+} from './terminal-punctuation';
 
 export const CONTENT_OWNER_TYPES = [
   'profile',
@@ -764,7 +770,10 @@ function normalizeBlockData(
     case 'quote':
       return {
         text: normalizeContentInlineHtml(data.text),
-        caption: normalizeContentInlineHtml(data.caption),
+        caption: punctuatedInlineHtml(
+          normalizeContentInlineHtml(data.caption),
+          'caption',
+        ),
         alignment: data.alignment === 'center' ? 'center' : 'left',
       };
 
@@ -798,8 +807,8 @@ function normalizeBlockData(
     case 'contentAudio':
       return {
         asset: normalizeContentAsset(data.asset),
-        title: optionalNormalizedText(data.title),
-        caption: optionalNormalizedText(data.caption),
+        title: optionalHeadingText(data.title),
+        caption: optionalCaptionText(data.caption),
       };
 
     case 'externalLink':
@@ -1033,6 +1042,11 @@ function normalizeContentMediaLayout(value: unknown): ContentMediaLayout {
   throw new ContentValidationError('Invalid content media layout');
 }
 
+/**
+ * A media caption's markup, made canonical. It runs on every keystroke in the
+ * caption, so its ending is left as typed here: that is settled where the
+ * block is, by `optionalContentMediaCaption`.
+ */
 export function normalizeContentMediaCaption(value: unknown): string {
   if (typeof value !== 'string') return '';
   return normalizeContentInlineHtml(
@@ -1041,12 +1055,26 @@ export function normalizeContentMediaCaption(value: unknown): string {
 }
 
 function optionalContentMediaCaption(value: unknown): string | undefined {
-  return normalizeContentMediaCaption(value) || undefined;
+  return (
+    punctuatedInlineHtml(normalizeContentMediaCaption(value), 'caption') ||
+    undefined
+  );
+}
+
+/** Inline markup with its ending settled, and canonical again if it moved. */
+function punctuatedInlineHtml(
+  html: string,
+  kind: TerminalPunctuationKind,
+): string {
+  const punctuated = punctuateInlineHtml(html, kind);
+  return punctuated === html ? html : normalizeContentInlineHtml(punctuated);
 }
 
 function normalizeHeaderText(value: unknown): string {
-  const text = normalizeContentText(
-    plainText(stringValue(value).replace(/<br\s*\/?>/gi, ' ')),
+  const text = normalizeHeadingText(
+    normalizeContentText(
+      plainText(stringValue(value).replace(/<br\s*\/?>/gi, ' ')),
+    ),
   );
   return text
     .replace(/&/g, '&amp;')
@@ -1180,9 +1208,12 @@ function optionalTrimmedString(value: unknown): string | undefined {
   return text || undefined;
 }
 
-function optionalNormalizedText(value: unknown): string | undefined {
-  const text = normalizeContentText(value);
-  return text || undefined;
+function optionalCaptionText(value: unknown): string | undefined {
+  return normalizeCaptionText(normalizeContentText(value)) || undefined;
+}
+
+function optionalHeadingText(value: unknown): string | undefined {
+  return normalizeHeadingText(normalizeContentText(value)) || undefined;
 }
 
 /**
@@ -1191,7 +1222,7 @@ function optionalNormalizedText(value: unknown): string | undefined {
  * before notes existed.
  */
 function withLinkNote<T extends object>(data: T, value: unknown) {
-  const note = optionalNormalizedText(value);
+  const note = optionalCaptionText(value);
   return note ? { ...data, note } : data;
 }
 

@@ -535,4 +535,51 @@ describe('content history fingerprints', () => {
       JSON.stringify(after.get('rewritten')!.data).length,
     );
   });
+
+  it('brings the text itself in line with a save, and skips what it cannot read', async () => {
+    const row = {
+      ownerType: 'page' as const,
+      ownerRef: 'pg-1',
+      slot: 'page-body' as const,
+      kind: 'draft' as const,
+      digest: 'stale',
+      wordCount: 1,
+      blockCount: 1,
+      assetCount: 0,
+      size: 1,
+      assetUuids: [],
+      createdAt: 1000,
+      updatedAt: 1000,
+    };
+    db.insert(schema.contentHistory)
+      .values([
+        {
+          ...row,
+          id: 'heading',
+          data: {
+            blocks: [
+              { id: 'h', type: 'header', data: { text: 'Итоги.', level: 2 } },
+            ],
+          },
+        },
+        { ...row, id: 'broken', data: { blocks: 'nope' } as never },
+      ])
+      .run();
+    const skipped: string[] = [];
+
+    await expect(
+      refreshContentHistoryFingerprints(
+        () => {},
+        (id) => skipped.push(id),
+      ),
+    ).resolves.toEqual({ refreshed: 1, total: 2 });
+
+    expect(skipped).toEqual(['broken']);
+    const after = new Map(rows().map((item) => [item.id, item]));
+    expect(after.get('heading')!.data.blocks[0]!.data).toEqual({
+      text: 'Итоги',
+      level: 2,
+    });
+    expect(after.get('broken')!.digest).toBe('stale');
+  });
 });

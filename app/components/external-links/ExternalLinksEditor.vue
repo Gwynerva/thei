@@ -4,6 +4,7 @@
   generic="T extends ExternalLinkListItem | NamedExternalLinkListItem"
 >
 import ExternalLinkPreviewCard from './ExternalLinkPreviewCard.vue';
+import { normalizeCaptionText } from '#layers/thei/shared/terminal-punctuation';
 import {
   EXTERNAL_LINK_NAME_LIMIT,
   EXTERNAL_LINK_NOTE_LIMIT,
@@ -185,7 +186,7 @@ function save() {
   if (!canSave.value || !draft.preview) return;
   const entry = {
     url: draft.preview.url,
-    note: draftNote.value.trim(),
+    note: normalizeCaptionText(draftNote.value.trim()),
     isPrivate: draftPrivate.value,
   };
   const item = (

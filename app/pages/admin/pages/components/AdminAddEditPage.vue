@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { normalizeHeadingText } from '#layers/thei/shared/terminal-punctuation';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import { isContentEmpty } from '#layers/thei/shared/content';
 import type { PageEditData } from '#layers/thei/shared/page';
@@ -188,6 +189,8 @@ async function save() {
       return;
     }
     const previousSlug = initialSlug.value;
+    // The title as the server stored it, its ending settled.
+    data.value.title = normalizeHeadingText(data.value.title.trim());
     data.value.slug = result.slug;
     savedIconAssetUuid.value = data.value.iconAssetUuid;
     registeredSlugs.value = registeredSlugs.value.filter(

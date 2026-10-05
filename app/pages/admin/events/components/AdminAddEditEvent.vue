@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { normalizeHeadingText } from '#layers/thei/shared/terminal-punctuation';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import { isContentEmpty } from '#layers/thei/shared/content';
 import type { EventEditData } from '#layers/thei/shared/event';
@@ -176,6 +177,8 @@ async function save() {
     const previousAction = eventData.value.action;
     eventData.value.action = result.action;
     actionMedia.applySaved(previousAction, result.action);
+    // The title as the server stored it, its ending settled.
+    eventData.value.title = normalizeHeadingText(eventData.value.title.trim());
     stampSavedContent(eventData.value, savedSnapshot.value, CONTENT_FIELDS);
     markSaved();
     await refreshNuxtData('admin-bar');

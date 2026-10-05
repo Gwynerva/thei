@@ -241,3 +241,23 @@ describe('validateEventData', () => {
     ).toBe('Invalid file privacy');
   });
 });
+
+describe('validateEventData endings', () => {
+  it('ends the title and the period labels as headings', () => {
+    const result = validateEventData(
+      eventData({
+        title: 'Поездка в Рим.',
+        periods: [
+          { startDate: '2020-01-01', endDate: '2020-02-01', label: 'Рим' },
+          { startDate: '2020-01-15', endDate: '2020-03-01', label: 'Рим.' },
+        ],
+      }),
+    );
+    if (typeof result === 'string') throw new Error(result);
+    expect(result.title).toBe('Поездка в Рим');
+    // Named alike once their endings agree, the two are one stretch.
+    expect(result.periods).toMatchObject([
+      { startDate: '2020-01-01', endDate: '2020-03-01', label: 'Рим' },
+    ]);
+  });
+});

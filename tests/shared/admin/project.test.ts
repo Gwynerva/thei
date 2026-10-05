@@ -752,3 +752,31 @@ describe('validateProjectData asset metadata', () => {
     ).not.toBe('string');
   });
 });
+
+describe('validateProjectData endings', () => {
+  it('ends titles as headings and captions as captions', () => {
+    const result = validateProjectData(
+      baseProject({
+        title: 'Дом у моря.',
+        showcaseAssets: [
+          { assetUuid: 'asset-1', caption: 'Кот на окне.', isPrivate: false },
+        ],
+        otherAssets: [
+          {
+            assetUuid: 'asset-2',
+            title: 'Отчёт.',
+            caption: 'Итоги года. Планы',
+            isPrivate: false,
+          },
+        ],
+      }),
+    );
+    if (typeof result === 'string') throw new Error(result);
+    expect(result.title).toBe('Дом у моря');
+    expect(result.showcaseAssets?.[0]?.caption).toBe('Кот на окне');
+    expect(result.otherAssets?.[0]).toMatchObject({
+      title: 'Отчёт',
+      caption: 'Итоги года. Планы.',
+    });
+  });
+});

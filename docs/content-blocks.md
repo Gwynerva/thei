@@ -62,7 +62,8 @@ Text fields hold a deliberately small HTML subset, enforced by
   hover; a hint with an empty note is dropped and its text kept
 
 Either kind of `<a>` may carry `data-content-note="…"`: the owner's words about
-why the link is there, stored as typed, trimmed; an empty note is no attribute.
+why the link is there, stored trimmed and ended as a caption (see "Endings"
+below); an empty note is no attribute.
 It never stands in for what the target says of itself: the target's own title
 and description are shown, and the note under them — in the popup over the
 link and in the sidebar. A link block carries the same kind of note in its
@@ -130,8 +131,9 @@ channels? }` — its length in seconds and up to 128 loudness values from 0 to
 the same data, so either turns into the other as it is.
 
 A link block's `note` is the owner's plain-text word on why the link is there,
-like `data-content-note` inline: whitespace collapsed, and absent rather than
-empty, so a block without a note is stored exactly as before notes existed.
+like `data-content-note` inline: whitespace collapsed, ended as a caption, and
+absent rather than empty, so a block without a note is stored exactly as
+before notes existed.
 What a site says of itself — its title, description and icon — is never stored
 in the block. An `entityLink` whose target the reader may not open arrives
 without its note.
@@ -144,6 +146,26 @@ A list's `meta` is what the list tool keeps about the list as a whole: for an
 ordered list `{ start, counterType }`, where `counterType` is one of
 `numeric`, `lower-roman`, `upper-roman`, `lower-alpha`, `upper-alpha`. An
 item's `meta` is `{ checked }` in a checklist. Both are kept as given.
+
+## Endings
+
+The last mark of a caption or a heading is settled where a block is
+normalized (`shared/terminal-punctuation.ts`), never while it is typed:
+
+- A caption — `contentMedia.caption`, a gallery item's `caption`,
+  `quote.caption`, the `caption` of `contentAudio` and `contentAttachment`,
+  a link block's `note` and `data-content-note` — ends without a full stop
+  when it is one sentence, of any length, and with a mark when it has several:
+  a full stop is added after a last sentence left open.
+- A heading — `header.text`, the `title` of `contentAudio` and
+  `contentAttachment` — never ends with a full stop.
+- Both keep `?`, `!`, `…` and `...` as typed, and the full stop that closes an
+  abbreviation or an initial ("1990 г.", "и т. д.", "А. С."). Spaces before
+  the last mark, a doubled full stop and a trailing comma or semicolon go.
+
+In inline HTML only the characters of the visible ending are touched, inside
+whatever tag holds them; an added full stop goes after the closing tags.
+Everything else a block holds — a paragraph above all — stays as typed.
 
 ## Private sections
 
