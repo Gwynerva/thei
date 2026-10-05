@@ -323,6 +323,37 @@ test('a pasted vector is kept as it is', async ({ page }) => {
   expect(stored.settings.type).toBe('original');
 });
 
+test('a paste goes to the paragraph the caret is in, whichever block Editor.js takes for current', async ({
+  page,
+}) => {
+  await openFixture(page);
+  const before = await figures(page).count();
+  await emptyParagraph(page);
+  const count = await blocks(page).count();
+  // A press on the first block makes it Editor.js's current one. The caret
+  // then comes back to the empty paragraph without a press, as it does when a
+  // closing dialog gives the focus back, and Editor.js does not follow it.
+  await page.evaluate(() => {
+    const all = document.querySelectorAll('.content-editor .ce-block');
+    all[0]!
+      .querySelector('.ce-block__content')!
+      .dispatchEvent(
+        new MouseEvent('mousedown', { bubbles: true, cancelable: true }),
+      );
+    const field = all[all.length - 1]!.querySelector<HTMLElement>(
+      '[contenteditable="true"]',
+    )!;
+    field.focus();
+    getSelection()!.collapse(field, 0);
+  });
+  await paste(page, [await png()]);
+
+  // The picture takes the empty paragraph's place.
+  await expect(figures(page)).toHaveCount(before + 1, { timeout: 30_000 });
+  await expect(blocks(page)).toHaveCount(count);
+  await expect(blocks(page).last().locator('figure')).toBeVisible();
+});
+
 test('several pasted pictures become one gallery', async ({ page }) => {
   await openFixture(page);
   const galleries = page.locator('[data-content-gallery]');

@@ -305,7 +305,7 @@ async function moveWithKeyboard(target: ProjectSectionItem, direction: -1 | 1) {
         />
         <p
           v-if="!itemViews.length"
-          class="self-center text-sm text-text-3 italic"
+          class="text-sm text-text-3 italic"
           data-sections-empty
         >
           {{ phrase.project_sections_empty_of(selected) }}

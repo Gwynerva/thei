@@ -18,9 +18,17 @@ export function bindEditorMediaPaste(holder: HTMLElement, editor: EditorJS) {
       /^(?:image|video)\//.test(file.type),
     );
     if (!files.length) return;
-    const index = editor.blocks.getCurrentBlockIndex();
-    const block = index >= 0 ? editor.blocks.getBlockByIndex(index) : undefined;
+    // The paragraph is the one the paste lands in, as Editor.js finds it
+    // itself. Its current block lags behind a caret moved without a press —
+    // a focus given back by a closing dialog — and a paste read from it would
+    // be cancelled by Editor.js and go nowhere.
+    const target = event.target;
+    const block =
+      target instanceof HTMLElement
+        ? editor.blocks.getBlockByElement(target)
+        : undefined;
     if (!block || block.name !== 'paragraph' || !block.isEmpty) return;
+    const index = editor.blocks.getBlockIndex(block.id);
     event.preventDefault();
     event.stopImmediatePropagation();
     if (files.length === 1)
