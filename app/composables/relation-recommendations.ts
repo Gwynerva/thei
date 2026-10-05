@@ -29,6 +29,12 @@ export function useRelationRecommendations(keys: MaybeRefOrGetter<string[]>) {
   /** Keys asked for or about to be, so none is asked for twice. */
   const asked = new Set<string>();
   const pending = new Set<string>();
+  /** The form is gone: a request still waiting for its turn is not made. */
+  let disposed = false;
+  onScopeDispose(() => {
+    disposed = true;
+    pending.clear();
+  });
 
   async function describe(missing: string[]) {
     try {
@@ -56,16 +62,19 @@ export function useRelationRecommendations(keys: MaybeRefOrGetter<string[]>) {
   }
 
   const flush = debounce(async () => {
+    if (disposed) return;
     const missing = [...pending];
     pending.clear();
     for (
       let start = 0;
       start < missing.length;
       start += CONTENT_ENTITY_SEARCH_MAX_LIMIT
-    )
+    ) {
+      if (disposed) return;
       await describe(
         missing.slice(start, start + CONTENT_ENTITY_SEARCH_MAX_LIMIT),
       );
+    }
   }, 300);
 
   onMounted(() => {

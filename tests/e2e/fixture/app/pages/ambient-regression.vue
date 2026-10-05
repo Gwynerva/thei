@@ -99,13 +99,15 @@ const fieldValue = computed<ContentFieldModelValue>(() => ({
       "
       summary="Only the words: nothing under them gives the hero its height."
       :banner-media="banner"
-      :kind="{
-        icon: kind === 'event' ? 'event' : 'project-section',
-        label: kind === 'event' ? 'Event' : 'Project section',
-      }"
+      :kind="kind === 'event' ? { icon: 'event', label: 'Event' } : undefined"
       :parent="
         kind === 'section'
-          ? { href: '#', title: 'The project', iconMedia: icon }
+          ? {
+              label: 'Project section',
+              href: '#',
+              title: 'The project',
+              iconMedia: icon,
+            }
           : undefined
       "
       data-test-hero

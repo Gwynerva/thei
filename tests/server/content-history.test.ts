@@ -527,7 +527,8 @@ describe('content history fingerprints', () => {
       }),
     ).resolves.toEqual({ refreshed: 1, total: 2 });
 
-    expect(progress).toEqual([1, 2]);
+    // Told once a page, not once a row.
+    expect(progress).toEqual([2]);
     const after = new Map(rows().map((row) => [row.id, row]));
     expect(after.get(kept!.id)).toEqual(kept);
     expect(after.get('rewritten')!.digest).not.toBe('stale');
@@ -581,5 +582,42 @@ describe('content history fingerprints', () => {
       level: 2,
     });
     expect(after.get('broken')!.digest).toBe('stale');
+  });
+
+  it('goes through a long history a page at a time, missing no row', async () => {
+    db.insert(schema.contentHistory)
+      .values(
+        Array.from({ length: 450 }, (_, index) => ({
+          id: `row-${String(index).padStart(3, '0')}`,
+          ownerType: 'page' as const,
+          ownerRef: 'pg-1',
+          slot: 'page-body' as const,
+          kind: 'draft' as const,
+          data: text(`Words ${index}`),
+          digest: 'stale',
+          wordCount: 2,
+          blockCount: 1,
+          assetCount: 0,
+          size: 1,
+          assetUuids: [],
+          createdAt: 1000,
+          updatedAt: 1000,
+        })),
+      )
+      .run();
+    const progress: [number, number][] = [];
+
+    await expect(
+      refreshContentHistoryFingerprints((done, total) => {
+        progress.push([done, total]);
+      }),
+    ).resolves.toEqual({ refreshed: 450, total: 450 });
+
+    expect(progress).toEqual([
+      [200, 450],
+      [400, 450],
+      [450, 450],
+    ]);
+    expect(rows().filter((row) => row.digest === 'stale')).toEqual([]);
   });
 });

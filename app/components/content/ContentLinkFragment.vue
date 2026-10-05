@@ -36,8 +36,9 @@ const label = computed(() => {
     <button
       v-if="removable"
       type="button"
-      class="shrink-0 cursor-pointer leading-none transition
-        hocus:text-text-error"
+      class="shrink-0 cursor-pointer rounded-sm leading-none transition
+        focus-visible:ring-2 focus-visible:ring-accent
+        focus-visible:outline-none hocus:text-text-error"
       :aria-label="phrase.content_link_fragment_remove"
       :data-title-popup="phrase.content_link_fragment_remove"
       @click="emit('remove')"

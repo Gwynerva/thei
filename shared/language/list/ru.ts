@@ -230,7 +230,6 @@ export default defineI18nModule({
     asset_library_unused: 'Неиспользуемые',
     asset_library_unused_hint:
       'Неиспользуемые файлы автоматически удаляются через сутки.',
-    asset_library_all: 'Все',
     asset_library_anywhere: 'Везде',
     asset_library_widen: 'Искать шире',
     asset_library_used: 'Используются',

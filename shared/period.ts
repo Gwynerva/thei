@@ -26,7 +26,7 @@ export const PERIOD_LABEL_MAX_LENGTH = 100;
 export class PeriodError extends Error {}
 
 /** A label names a stretch, as a heading does, and ends as one. */
-export function normalizePeriodLabel(value: unknown): string {
+function normalizePeriodLabel(value: unknown): string {
   return typeof value === 'string' ? normalizeHeadingText(value.trim()) : '';
 }
 
@@ -36,9 +36,7 @@ export function normalizePeriodLabel(value: unknown): string {
  * Overlapping periods are one stretch only when they are named alike: two
  * unnamed ones, or two with the same label. Differently named ones say
  * different things — "Italy" ending the day "France" begins — and both stay.
- *
- * A period without a `label` reads as unnamed. That is also what a panel of
- * the previous release, still open in a browser, sends.
+ * A period without a `label` reads as unnamed.
  */
 export function normalizePeriods(value: unknown): Period[] {
   if (!Array.isArray(value) || value.length === 0)

@@ -26,6 +26,8 @@ const SERVER_BARS = 64;
 /** The height a silent stretch keeps, so the track still reads as one. */
 const FLOOR = 8;
 const KEY_STEP = 5;
+/** How far a finger goes sideways before it scrubs rather than scrolls. */
+const TOUCH_SLOP_PX = 8;
 
 const root = useTemplateRef<HTMLElement>('root');
 const barCount = ref(SERVER_BARS);
@@ -66,23 +68,53 @@ function timeAt(clientX: number): number {
   return share * props.duration;
 }
 
+/**
+ * A finger on the waveform, not scrubbing yet. The page scrolls under a
+ * finger that goes up or down, and the browser then cancels the press; one
+ * that goes sideways scrubs, and one that lifts where it landed seeks there.
+ * Scrubbing at once would hold the sound for every scroll that happens to
+ * start on a player.
+ */
+let pressed: { id: number; x: number; y: number } | null = null;
+
 function onPointerDown(event: PointerEvent) {
   if (event.pointerType === 'mouse' && event.button !== 0) return;
   // No text or block selection starts from here, in a page or the editor.
   event.preventDefault();
   root.value?.focus({ preventScroll: true });
+  if (event.pointerType === 'touch') {
+    pressed = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    return;
+  }
+  startScrub(event);
+}
+
+function startScrub(event: PointerEvent) {
   root.value?.setPointerCapture(event.pointerId);
   scrubbing.value = timeAt(event.clientX);
   emit('scrub', scrubbing.value);
 }
 
 function onPointerMove(event: PointerEvent) {
+  if (pressed?.id === event.pointerId) {
+    const across = Math.abs(event.clientX - pressed.x);
+    if (across < TOUCH_SLOP_PX || across < Math.abs(event.clientY - pressed.y))
+      return;
+    pressed = null;
+    startScrub(event);
+    return;
+  }
   if (scrubbing.value === null) return;
   scrubbing.value = timeAt(event.clientX);
   emit('scrub', scrubbing.value);
 }
 
 function onPointerUp(event: PointerEvent) {
+  if (pressed?.id === event.pointerId) {
+    pressed = null;
+    emit('seek', timeAt(event.clientX));
+    return;
+  }
   if (scrubbing.value === null) return;
   const time = timeAt(event.clientX);
   scrubbing.value = null;
@@ -92,6 +124,7 @@ function onPointerUp(event: PointerEvent) {
 }
 
 function onPointerCancel() {
+  pressed = null;
   if (scrubbing.value === null) return;
   scrubbing.value = null;
   emit('scrub', null);
@@ -165,25 +198,14 @@ function onKeydown(event: KeyboardEvent) {
     @lostpointercapture="onPointerCancel"
     @keydown="onKeydown"
   >
-    <span class="flex size-full items-center gap-px text-text-3/50">
-      <span
-        v-for="(bar, index) in bars"
-        :key="index"
-        class="min-w-px flex-1 rounded-full bg-current"
-        :style="{ height: `${bar}%` }"
-      />
-    </span>
+    <AudioWaveformBars :bars class="text-text-3/50" />
+    <!-- Only this clip follows the sound; the bars under it stay put. -->
     <span
-      class="absolute inset-0 flex items-center gap-px text-accent"
+      class="absolute inset-0 text-accent"
       :style="{ clipPath: `inset(0 calc(100% - ${played}) 0 0)` }"
       aria-hidden="true"
     >
-      <span
-        v-for="(bar, index) in bars"
-        :key="index"
-        class="min-w-px flex-1 rounded-full bg-current"
-        :style="{ height: `${bar}%` }"
-      />
+      <AudioWaveformBars :bars />
     </span>
   </div>
 </template>

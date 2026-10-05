@@ -147,6 +147,39 @@ describe('recordings stored before their waveforms were read', () => {
     expect((await completeAudioMetas()).total).toBe(0);
   });
 
+  it('fails the pass, rather than mark the files unreadable, when ffmpeg cannot run', async () => {
+    const memo = await storeOld('memo', Buffer.from('anything'), 'wav');
+    const installed = ffmpegInstaller.path;
+    (ffmpegInstaller as { path: string }).path = join(root, 'no-ffmpeg');
+    try {
+      await expect(completeAudioMetas()).rejects.toThrow();
+    } finally {
+      (ffmpegInstaller as { path: string }).path = installed;
+    }
+    expect(
+      (await findAudioWithoutWaveforms()).map((asset) => asset.assetUuid),
+    ).toEqual([memo.assetUuid]);
+  });
+
+  it('reads the bytes several recordings share once', async () => {
+    const wav = join(root, 'memo.wav');
+    await ffmpeg([
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=220:sample_rate=16000:duration=1',
+      wav,
+    ]);
+    const bytes = await readFile(wav);
+    const first = await storeOld('first', bytes, 'wav');
+    const second = await storeOld('second', bytes, 'wav');
+    const { unreadable } = await completeAudioMetas();
+    expect(unreadable).toEqual([]);
+    expect((await findAssetByUuid(second.assetUuid))!.meta).toEqual(
+      (await findAssetByUuid(first.assetUuid))!.meta,
+    );
+  });
+
   it('leaves a recording that already has its waveform alone', async () => {
     const { asset } = await storeAsset({
       bytes: { buffer: Buffer.from('already read') },

@@ -5,7 +5,10 @@ import { defineUpdateTask } from './types';
  * caption of one sentence and every heading lose their full stop, a caption
  * of several sentences gains one, and the full stop of an abbreviation stays
  * (`shared/terminal-punctuation.ts`). Everything stored before is settled once
- * here, as a save would settle it.
+ * here, as a save would settle it. The kept drafts and versions of texts are
+ * brought in line with their saves too, those whose links to stages migration
+ * `0.0.4/002` rewrote included: their fingerprints are recounted from the
+ * words they now hold.
  */
 export default defineUpdateTask({
   id: '0.0.4/004-terminal-punctuation',

@@ -108,6 +108,23 @@ function onKeydown(event: KeyboardEvent) {
   flex-shrink: 0;
 }
 
+/*
+ * A finger needs more than the drawn line to land on: the slider takes a
+ * taller box, and the line stays as thin, in the middle of it. A volume
+ * slider grows longer too, so a small move of the finger is a small change.
+ */
+@media (pointer: coarse) {
+  .media-range {
+    box-sizing: content-box;
+    padding-block: calc(var(--spacing) * 2.5);
+    background-clip: content-box;
+  }
+
+  .media-range-volume {
+    width: calc(var(--spacing) * 16);
+  }
+}
+
 .media-range::-webkit-slider-thumb {
   appearance: none;
   -webkit-appearance: none;

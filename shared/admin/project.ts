@@ -17,8 +17,9 @@ import {
 } from '../content';
 import { isOneOf } from '../utils/isOneOf';
 import {
-  normalizeCaptionText,
   normalizeHeadingText,
+  optionalCaption,
+  optionalHeading,
 } from '../terminal-punctuation';
 import { optionalContentDraftRef } from '../content-history';
 import {
@@ -289,14 +290,6 @@ function validateProjectTags(
 function normalizeOptionalText(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed || undefined;
-}
-
-function optionalCaption(value: string | undefined): string | undefined {
-  return normalizeCaptionText(value?.trim() ?? '') || undefined;
-}
-
-function optionalHeading(value: string | undefined): string | undefined {
-  return normalizeHeadingText(value?.trim() ?? '') || undefined;
 }
 
 function validateProjectAssetIsPrivate(value: unknown): boolean | undefined {

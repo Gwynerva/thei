@@ -49,15 +49,10 @@ function rememberDimensions(width: number, height: number) {
   width: auto;
   aspect-ratio: var(--media-ratio);
   transform: translateX(-50%);
-  mask-image: linear-gradient(
-    to bottom,
-    black 0%,
-    black 52%,
-    rgb(0 0 0 / 82%) 66%,
-    rgb(0 0 0 / 50%) 80%,
-    rgb(0 0 0 / 18%) 92%,
-    transparent 100%
-  );
+  @apply mask-ease;
+  --ease-direction: to bottom;
+  --ease-from: 52%;
+  --ease-to: 100%;
 }
 :deep(.media-backdrop) {
   --tw-blur: blur(calc(2 * var(--blur-3xl)));

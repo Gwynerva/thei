@@ -5,13 +5,8 @@ import {
   type PublicRelatedCounts,
   type PublicRelatedPage,
 } from '#layers/thei/shared/api/public';
-import {
-  RELATION_ENTITY_TYPES,
-  type RelationEntityType,
-} from '#layers/thei/shared/relation';
-import { relationEntityIcon } from '#layers/thei/shared/relation-display';
+import type { RelationEntityType } from '#layers/thei/shared/relation';
 import type { ContentHeading } from '#layers/thei/app/components/content/content-headings';
-import type { TabItem } from '../UnderlineTabs.vue';
 
 /**
  * Everything related to a page's entity, at the foot of the page.
@@ -30,20 +25,8 @@ const { counts, url } = defineProps<{
 }>();
 
 const total = computed(() => publicRelatedTotal(counts));
-const kindLabels = computed<Record<RelationEntityType, string>>(() => ({
-  project: phrase.value.projects,
-  event: phrase.value.events,
-  'diary-entry': phrase.value.diary,
-}));
-const tabs = computed<TabItem<RelationEntityType>[]>(() =>
-  RELATION_ENTITY_TYPES.filter((type) => (counts[type] ?? 0) > 0).map(
-    (type) => ({
-      key: type,
-      label: kindLabels.value[type],
-      icon: relationEntityIcon(type),
-      count: counts[type],
-    }),
-  ),
+const tabs = computed(() =>
+  relationKindTabs(counts).filter((tab) => (tab.count ?? 0) > 0),
 );
 const kind = ref<RelationEntityType>(tabs.value[0]?.key ?? 'project');
 
@@ -63,28 +46,36 @@ const loadingMore = ref(false);
 const moreError = ref(false);
 const more = computed(() => (page.value?.pageCount ?? 0) >= nextPage.value);
 
+/**
+ * Each request for more is numbered; one answered after another took its
+ * place — the reader moved to another tab — is ignored.
+ */
+let moreRequest = 0;
+
 watch(kind, () => {
+  moreRequest++;
   extra.value = [];
   nextPage.value = 2;
+  loadingMore.value = false;
   moreError.value = false;
 });
 
 async function loadMore() {
   if (!more.value || loadingMore.value) return;
+  const request = ++moreRequest;
   loadingMore.value = true;
   moreError.value = false;
-  const current = kind.value;
   try {
     const loaded = await $fetch<PublicRelatedPage>(url, {
-      query: { kind: current, page: nextPage.value },
+      query: { kind: kind.value, page: nextPage.value },
     });
-    if (kind.value !== current) return;
+    if (request !== moreRequest) return;
     extra.value = [...extra.value, ...loaded.items];
     nextPage.value += 1;
   } catch {
-    if (kind.value === current) moreError.value = true;
+    if (request === moreRequest) moreError.value = true;
   } finally {
-    if (kind.value === current) loadingMore.value = false;
+    if (request === moreRequest) loadingMore.value = false;
   }
 }
 

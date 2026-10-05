@@ -42,7 +42,8 @@ const accent = computed(() =>
     v-on="mediaEvents"
     class="section-row group relative isolate flex min-h-16 items-stretch
       overflow-hidden rounded-normal border border-border-1 bg-bg-3
-      transition-colors"
+      transition-colors has-[[data-section-open]:focus-visible]:ring-2
+      has-[[data-section-open]:focus-visible]:ring-accent"
     :style="{ '--section-accent': accent }"
     data-section-row
   >
@@ -53,7 +54,7 @@ const accent = computed(() =>
       fade="card"
       playback="interaction"
       :engaged
-      media-class="opacity-75 transition duration-300 group-hover:opacity-90
+      media-class="opacity-75 transition duration-300 group-hocus:opacity-90
         group-has-focus-visible:opacity-90 motion-reduce:duration-150"
       class="w-full"
       data-section-media
@@ -63,7 +64,7 @@ const accent = computed(() =>
       type="button"
       class="relative z-1 flex w-7 shrink-0 cursor-grab items-center
         justify-center self-stretch text-lg text-text-3/50 transition-colors
-        group-hover:text-text-3 focus-visible:ring-2 focus-visible:ring-accent
+        group-hocus:text-text-3 focus-visible:ring-2 focus-visible:ring-accent
         focus-visible:outline-none focus-visible:ring-inset
         active:cursor-grabbing hocus:text-accent"
       :aria-label="`${phrase.content_section_sort}: ${publicText(title)}`"
@@ -84,12 +85,14 @@ const accent = computed(() =>
       <!-- The words keep to the left of where the picture stays sharp, with
            a halo of the row's ground where they reach over the rest of it. -->
       <span
-        class="section-row-text flex min-w-0 flex-col gap-1"
+        class="flex min-w-0 flex-col gap-1 text-halo-bg-3"
         :class="media ? 'max-w-4/5 sm:max-w-3/4' : undefined"
       >
         <span
           class="line-clamp-2 leading-snug font-semibold wrap-break-word
-            transition-colors group-hocus:text-accent"
+            transition-colors
+            group-has-[[data-section-open]:focus-visible]:text-accent
+            group-hocus:text-accent"
           data-section-title
           ><span
             v-if="isPrivate"
@@ -124,13 +127,6 @@ const accent = computed(() =>
 </template>
 
 <style scoped>
-.section-row-text {
-  text-shadow:
-    0 0 0.5em var(--color-bg-3),
-    0 0 0.9em var(--color-bg-3),
-    0 0.12em 0.45em var(--color-bg-3);
-}
-
 .section-row:has(:focus-visible) {
   border-color: color-mix(in oklab, var(--section-accent) 80%, transparent);
 }

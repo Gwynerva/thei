@@ -481,7 +481,7 @@ export function listLibrarySections(
   return {
     ...page,
     items: rows.map((row) => ({ ...sourceInfo(row), count: row.count })),
-    facets: libraryFacets(query, true),
+    ...(page.page === 1 ? { facets: libraryFacets(query, true) } : {}),
   };
 }
 export function listSourceAssets(

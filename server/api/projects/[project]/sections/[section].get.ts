@@ -3,7 +3,7 @@ import {
   publicIdFromProjectSectionUrlPart,
   publicIdFromProjectUrlPart,
 } from '#layers/thei/shared/project-url';
-import { getProjectSections } from '../../../../thei/projects/content-sections';
+import { listProjectSections } from '../../../../thei/projects/content-sections';
 import {
   buildPublicProjectSection,
   canOpenPublicEntity,
@@ -29,7 +29,7 @@ export default defineEventHandler(
     const publicId = publicIdFromProjectSectionUrlPart(
       getRouterParam(event, 'section') ?? '',
     );
-    const sections = await getProjectSections(project.projectUuid);
+    const sections = listProjectSections(project.projectUuid);
     const section = sections.find((item) => item.publicId === publicId);
     if (!section || (section.isPrivate && !viewer.asOwner))
       throw createError({ statusCode: 404, statusText: 'Section not found' });

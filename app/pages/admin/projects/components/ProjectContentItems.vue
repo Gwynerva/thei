@@ -1,13 +1,12 @@
 <script lang="ts" setup>
 import { analyzeContentData } from '#layers/thei/shared/content';
 import {
-  compareDatedSections,
   isDatedSection,
   orderProjectSections,
+  sortStagesNewestFirst,
   type ProjectSectionItem,
 } from '#layers/thei/shared/project-content-item';
 import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
-import type { TabItem } from '#layers/thei/app/components/UnderlineTabs.vue';
 import {
   moveItemById,
   useDragSort,
@@ -30,7 +29,6 @@ import ProjectContentItemRow from './ProjectContentItemRow.vue';
  * owner sees where a section will go; a section moves between them as its
  * dates come and go.
  */
-type Group = 'undated' | 'dated';
 
 const projectData = inject(projectDataInjectionKey)!;
 const savedProjectData = inject(savedProjectDataInjectionKey)!;
@@ -43,26 +41,16 @@ const sections = computed(() => projectData.value.sections ?? []);
 const undated = computed(() =>
   sections.value.filter((section) => !isDatedSection(section)),
 );
-const dated = computed(() =>
-  sections.value.filter(isDatedSection).sort(compareDatedSections).reverse(),
-);
-const selected = ref<Group>(
+const dated = computed(() => sortStagesNewestFirst(sections.value));
+const selected = ref<SectionGroup>(
   undated.value.length || !dated.value.length ? 'undated' : 'dated',
 );
-const tabs = computed<TabItem<Group>[]>(() => [
-  {
-    key: 'undated',
-    label: phrase.value.project_sections_undated,
-    icon: 'text',
-    count: undated.value.length,
-  },
-  {
-    key: 'dated',
-    label: phrase.value.project_sections_dated,
-    icon: 'calendar',
-    count: dated.value.length,
-  },
-]);
+const tabs = computed(() =>
+  sectionGroupTabs({
+    undated: undated.value.length,
+    dated: dated.value.length,
+  }),
+);
 const itemViews = computed(() =>
   (selected.value === 'dated' ? dated.value : undated.value).map((item) => ({
     item,
@@ -72,7 +60,7 @@ const itemViews = computed(() =>
   })),
 );
 
-function groupOf(item: ProjectSectionItem): Group {
+function groupOf(item: ProjectSectionItem): SectionGroup {
   return isDatedSection(item) ? 'dated' : 'undated';
 }
 
@@ -205,7 +193,11 @@ function openItem(target?: ProjectSectionItem) {
           {
             ...projectData.value,
             sections: current
-              ? sections.value.map((item) => (item === current ? draft : item))
+              ? sections.value.map((item) =>
+                  // The list holds proxies; `current` may be the plain
+                  // object the last save put there.
+                  toRaw(item) === toRaw(current) ? draft : item,
+                )
               : [...sections.value, draft],
           },
           savedProjectData.value,

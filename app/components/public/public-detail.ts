@@ -27,7 +27,8 @@ export type PublicDetailTimelineItem = {
  * places of their own.
  *
  * The chronology already leaves `updatedAt` out when the change fell on the
- * day of creation, so an entity edited only that day has a single line.
+ * day of creation, so an entity edited only that day has a single line. The
+ * newest comes first, as the panel lists them.
  */
 export function createdAndUpdatedTimelineItems(
   chronology: { createdAt: string; updatedAt?: string },
@@ -45,20 +46,6 @@ export function createdAndUpdatedTimelineItems(
       : []),
     { icon: 'plus', label: labels.created, date: chronology.createdAt },
   ];
-}
-
-/** Newest first. Items of one day keep the order they came in. */
-export function sortPublicDetailTimelineItems(
-  items: PublicDetailTimelineItem[],
-): PublicDetailTimelineItem[] {
-  return items
-    .map((item, index) => ({ item, index }))
-    .sort(
-      (left, right) =>
-        right.item.date.localeCompare(left.item.date) ||
-        left.index - right.index,
-    )
-    .map(({ item }) => item);
 }
 
 /** Where a section or a diary entry sits among its own kind. */

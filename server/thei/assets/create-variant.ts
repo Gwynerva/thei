@@ -122,11 +122,16 @@ export async function createAssetVariant(
         input.sourceType,
         known,
       );
-      const processed = await renderAsset(input.source, settings, {
-        signal: input.signal,
-        onProgress: (progress) =>
-          input.onStatus?.({ phase: 'processing', progress }),
-      });
+      const processed = await renderAsset(
+        input.source,
+        settings,
+        {
+          signal: input.signal,
+          onProgress: (progress) =>
+            input.onStatus?.({ phase: 'processing', progress }),
+        },
+        known && !('width' in known) ? known : undefined,
+      );
       await assertStillWanted(input.signal, processed, input.source);
       input.onStatus?.({ phase: 'finishing' });
       return await commitProcessedAsset({
@@ -135,6 +140,7 @@ export async function createAssetVariant(
         familyUuid: input.familyUuid,
         source: input.source,
         transformSource: known && 'width' in known ? known : undefined,
+        signal: input.signal,
       });
     },
     { signal: input.signal },
@@ -220,11 +226,15 @@ export async function probeTransformSource(
   };
 }
 
-/** Produces the bytes of a variant, without storing them. */
+/**
+ * Produces the bytes of a variant, without storing them. `audio` is what was
+ * read of a recording already, which its encode then does not read again.
+ */
 export async function renderAsset(
   source: AssetSourceFile,
   settings: AssetUploadSettings,
   options: AssetProcessOptions = {},
+  audio?: AssetAudioSource,
 ): Promise<ProcessedAsset> {
   if (settings.type === 'original') {
     return await processOriginalAsset(source);
@@ -235,7 +245,7 @@ export async function renderAsset(
   }
 
   if (settings.type === 'audio-transform') {
-    return await processAudioToOpus(source, settings, options);
+    return await processAudioToOpus(source, settings, options, audio);
   }
 
   return await processMediaTransformAsset(source, settings, options);
@@ -251,9 +261,11 @@ export async function commitProcessedAsset(input: {
   processed: ProcessedAsset;
   settings: AssetUploadSettings;
   familyUuid: string;
-  source: Pick<AssetSourceFile, 'extension' | 'size'>;
+  source: Pick<AssetSourceFile, 'path' | 'extension' | 'size'>;
   /** The size the transform was made from, recorded for its description. */
   transformSource?: AssetTransformSource;
+  /** Stops reading a recording nobody is waiting for any more. */
+  signal?: AbortSignal;
 }): Promise<AssetUploadResponse> {
   const { processed, settings } = input;
   const settingsKey = buildAssetSettingsKey(settings);
@@ -268,27 +280,37 @@ export async function commitProcessedAsset(input: {
     return { ...(await buildAssetVariantInfo(existing)), created: false };
   }
 
-  const { meta, previewAssetUuid } = await buildProcessedAssetMeta(
-    processed.bytes,
-    processed.type,
-    {
-      ...processed.dimensions,
-      ...(input.transformSource &&
-      (settings.type === 'image-transform' ||
-        settings.type === 'video-transform')
-        ? {
-            sourceDimensions: {
-              width: input.transformSource.width,
-              height: input.transformSource.height,
-            },
-          }
-        : {}),
-    },
-    settings,
-    processed.hasAudio,
-    input.source,
-    processed.video,
-  );
+  let described: Awaited<ReturnType<typeof buildProcessedAssetMeta>>;
+  try {
+    described = await buildProcessedAssetMeta(
+      processed.bytes,
+      processed.type,
+      {
+        ...processed.dimensions,
+        ...(input.transformSource &&
+        (settings.type === 'image-transform' ||
+          settings.type === 'video-transform')
+          ? {
+              sourceDimensions: {
+                width: input.transformSource.width,
+                height: input.transformSource.height,
+              },
+            }
+          : {}),
+      },
+      settings,
+      processed.hasAudio,
+      input.source,
+      processed.video,
+      input.signal,
+    );
+  } catch (error) {
+    // Nothing will adopt what was made; the source itself is the caller's.
+    if (processed.bytes.path !== input.source.path)
+      await discardAssetScratch(processed.bytes);
+    throw error;
+  }
+  const { meta, previewAssetUuid } = described;
 
   const stored = await storeAsset({
     bytes: processed.bytes,
@@ -322,6 +344,7 @@ async function buildProcessedAssetMeta(
   hasAudio?: boolean,
   sourceFile?: { extension: string; size: number },
   video?: { duration?: number; fps?: number; bitrate?: number },
+  signal?: AbortSignal,
 ): Promise<{ meta: AssetMeta | null; previewAssetUuid?: string }> {
   if (type === AssetType.Image) {
     const preview = await createMediaPreviewAsset(bytes, AssetType.Image);
@@ -355,7 +378,7 @@ async function buildProcessedAssetMeta(
   // as they are or encoded, so the player draws exactly what it plays.
   if (type === AssetType.Audio) {
     if (!bytes.path) throw new Error('Recordings are stored from files');
-    return { meta: await readAudioMeta(bytes.path, bytes.size) };
+    return { meta: await readAudioMeta(bytes.path, bytes.size, { signal }) };
   }
 
   if (settings.type === 'file-zip' && sourceFile) {

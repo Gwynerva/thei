@@ -1,28 +1,22 @@
 <script lang="ts" setup>
 import type { PublicEntitySummary } from '#layers/thei/shared/api/public';
-import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
 
+/**
+ * A project or an event in the results of a search: the card is no link
+ * itself, so the badges on it keep their own hints; a link lies over the
+ * whole of it. Results sit close together, so the lift is a single pixel.
+ */
 const props = defineProps<{ entity: PublicEntitySummary }>();
-const { engaged, events: mediaEvents } = useMediaInteraction();
 const isProject = computed(() => props.entity.type === 'project');
-const accent = computed(() =>
-  props.entity.media
-    ? imageAccentCssColor(props.entity.media.accent)
-    : 'var(--color-accent)',
-);
 </script>
 
 <template>
-  <article
-    v-on="mediaEvents"
-    class="search-result group relative isolate flex min-h-24 min-w-0
-      overflow-hidden rounded-normal border border-border-1 bg-bg-2 shadow-md
-      shadow-shadow-1 transition has-focus-visible:-translate-y-px
-      has-focus-visible:shadow-lg hocus:-translate-y-px hocus:shadow-lg"
-    :style="{
-      '--search-result-accent': accent,
-      '--search-result-shadow': `color-mix(in oklab, ${accent} 26%, transparent)`,
-    }"
+  <MediaEdgeCard
+    as="article"
+    :media="entity.media"
+    :loop="isProject"
+    :muted="isProject"
+    class="min-h-24"
   >
     <TheiLink
       :to="entity.href"
@@ -30,29 +24,18 @@ const accent = computed(() =>
       class="absolute inset-0 z-1 rounded-normal focus-visible:ring-2
         focus-visible:ring-accent focus-visible:ring-inset"
     />
-    <MediaEdge
-      :media="entity.media"
-      side="right"
-      fade="card"
-      playback="interaction"
-      :engaged
-      :loop="isProject"
-      :muted="isProject"
-      media-class="opacity-75 transition duration-300 group-hocus:opacity-90
-        group-has-focus-visible:opacity-90 motion-reduce:duration-150"
-      class="w-full"
-    >
+    <template #fallback>
       <span
         class="flex size-full items-center justify-end pr-md text-6xl
           text-text-3/25"
       >
         <Icon :name="entity.type" />
       </span>
-    </MediaEdge>
+    </template>
     <div
       class="pointer-events-none relative z-2 flex max-w-4/5 min-w-0 flex-col
         justify-center gap-1 p-sm sm:max-w-3/4 sm:px-md"
-      :class="{ 'search-result-over-media': entity.media }"
+      :class="{ 'text-halo-bg-2': entity.media }"
     >
       <span
         class="flex items-center gap-2 text-xs font-semibold text-accent/70"
@@ -91,8 +74,9 @@ const accent = computed(() =>
         />
       </span>
       <h2
-        class="search-result-title text-lg leading-snug font-bold tracking-tight
-          wrap-break-word transition"
+        class="text-lg leading-snug font-bold tracking-tight wrap-break-word
+          transition group-has-focus-visible:text-(--card-accent)
+          group-hocus:text-(--card-accent)"
       >
         {{ publicText(entity.title) }}
       </h2>
@@ -106,41 +90,5 @@ const accent = computed(() =>
         {{ publicText(entity.summary) }}
       </p>
     </div>
-  </article>
+  </MediaEdgeCard>
 </template>
-
-<style scoped>
-/*
- * The same treatment the cards on "Life" get, in smaller measure: results sit
- * closer together here, so the lift is a single pixel and the glow is fainter.
- */
-.search-result:is(:focus-visible, :has(:focus-visible)) {
-  border-color: var(--search-result-accent);
-  --tw-shadow-color: var(--search-result-shadow);
-}
-
-@media (hover: hover) {
-  .search-result:hover {
-    border-color: var(--search-result-accent);
-    --tw-shadow-color: var(--search-result-shadow);
-  }
-}
-
-/* The media reaches under the text; a halo of the card's colour keeps it read. */
-.search-result-over-media {
-  text-shadow:
-    0 0 0.55em var(--color-bg-2),
-    0 0 0.9em var(--color-bg-2),
-    0 0.1em 0.45em var(--color-bg-2);
-}
-
-.group:is(:focus-visible, :has(:focus-visible)) .search-result-title {
-  color: var(--search-result-accent);
-}
-
-@media (hover: hover) {
-  .group:hover .search-result-title {
-    color: var(--search-result-accent);
-  }
-}
-</style>

@@ -126,7 +126,8 @@ async function load(reset = false) {
           ),
         ];
     pageCount.value = result.pageCount;
-    facets.value = result.facets;
+    // Counted with the first page; the next ones add to the same counts.
+    if (result.facets) facets.value = result.facets;
     // The files nothing holds are many and rarely the ones wanted, so the
     // first entity opens instead — unless they are all there is to show.
     const first =

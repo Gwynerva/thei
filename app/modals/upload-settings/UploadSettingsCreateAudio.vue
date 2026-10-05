@@ -1,16 +1,10 @@
 <script lang="ts" setup>
 import type { AssetQualityStop } from '#layers/thei/shared/asset-quality-levels';
 import type { DiscreteBarStop } from '../../components/field/discrete-bar-stops';
+import UploadSettingsQualityBar from './UploadSettingsQualityBar.vue';
 
 const qualityLevel = defineModel<AssetQualityStop>('qualityLevel', {
   required: true,
-});
-/** The bar deals in plain strings; the stops it is given are the levels. */
-const levelModel = computed<string>({
-  get: () => qualityLevel.value,
-  set: (stop) => {
-    qualityLevel.value = stop as AssetQualityStop;
-  },
 });
 const mono = defineModel<boolean>('mono', { required: true });
 
@@ -49,13 +43,11 @@ defineProps<{
       />
     </div>
 
-    <FieldDiscreteBar
-      v-model="levelModel"
+    <UploadSettingsQualityBar
+      v-model="qualityLevel"
       :stops="qualityStops"
-      :label="phrase.upload_quality"
-      :title="phrase.upload_quality"
       :detail="qualityDetail"
-      :disabled="disabled"
+      :disabled
     />
   </fieldset>
 </template>

@@ -25,11 +25,11 @@ import {
   formatPublicPeriodAtPrecision,
 } from '#layers/thei/shared/public-date-format';
 import { titlePopup } from '#layers/thei/app/composables/title-popup-content';
+import TheiLink from '../TheiLink';
 
 type TimelinePeriod = DateRange | DatedPeriod | Period;
 
 const props = defineProps<{ periods: TimelinePeriod[] }>();
-const TheiLink = resolveComponent('TheiLink');
 /**
  * The day the page is read on, as the server saw it when it drew the page:
  * the browser takes it from the payload, so a period ending around midnight

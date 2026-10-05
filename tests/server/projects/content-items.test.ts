@@ -473,6 +473,34 @@ describe('project section identity round trip', () => {
       'Section public ID is already taken',
     );
   });
+
+  it('lets two sections swap their public IDs in one save', async () => {
+    const db = createDb();
+    installServerContext(db);
+    applyProjectSections(db, schema, 'project', [
+      section('a', 'A'),
+      section('b', 'B'),
+    ] as any);
+
+    const swapped = await prepareProjectSections('project', [
+      { ...section('a', 'A'), publicId: 'b' },
+      { ...section('b', 'B'), publicId: 'a' },
+    ]);
+    applyProjectSections(db, schema, 'project', swapped);
+
+    expect(
+      db
+        .select({
+          sectionUuid: schema.projectContentSections.sectionUuid,
+          publicId: schema.projectContentSections.publicId,
+        })
+        .from(schema.projectContentSections)
+        .all(),
+    ).toEqual([
+      { sectionUuid: 'a', publicId: 'b' },
+      { sectionUuid: 'b', publicId: 'a' },
+    ]);
+  });
 });
 
 describe('project section edit times', () => {

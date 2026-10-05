@@ -137,8 +137,8 @@ for (const width of [375, 1280]) {
     const tabs = block(page).getByRole('tab');
     await expect(tabs).toHaveCount(2);
     await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
-    await expect(tabs.nth(0)).toHaveAccessibleName('General sections');
-    await expect(tabs.nth(1)).toHaveAccessibleName('Dated stages');
+    await expect(tabs.nth(0)).toHaveAccessibleName('General sections (3)');
+    await expect(tabs.nth(1)).toHaveAccessibleName('Dated stages (2)');
     await expect(tabs.nth(0)).toContainText('3');
     await expect(tabs.nth(1)).toContainText('2');
 

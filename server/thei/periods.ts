@@ -59,8 +59,8 @@ export function periodsEqual(left: Period[], right: Period[]) {
       return (
         period.startDate === other.startDate &&
         period.endDate === other.endDate &&
-        (period.precision ?? 'exact') === (other.precision ?? 'exact') &&
-        (period.precisionNote ?? '') === (other.precisionNote ?? '') &&
+        period.precision === other.precision &&
+        period.precisionNote === other.precisionNote &&
         period.label === other.label
       );
     })

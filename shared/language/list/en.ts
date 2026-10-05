@@ -187,7 +187,6 @@ export default defineI18nBase({
     asset_library_unused: 'Unused',
     asset_library_unused_hint:
       'Unused files are automatically removed after 24 hours.',
-    asset_library_all: 'All',
     asset_library_anywhere: 'Anywhere',
     asset_library_widen: 'Look wider',
     asset_library_used: 'In use',

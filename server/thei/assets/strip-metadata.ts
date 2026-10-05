@@ -1,10 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { spawn } from 'node:child_process';
 import { open, rm, type FileHandle } from 'node:fs/promises';
-import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import { createError } from 'h3';
 import { AssetType } from '../../../shared/asset';
 import { theiTempPath } from './temp';
+import { runFfmpeg } from './ffmpeg';
 
 /**
  * Removes embedded metadata from a file stored as uploaded, without re-encoding.
@@ -509,14 +508,7 @@ async function remuxWithoutMetadata(
       : []),
     outputPath,
   ];
-  const succeeded = await new Promise<boolean>((resolve) => {
-    const child = spawn(ffmpegInstaller.path, args, {
-      windowsHide: true,
-      stdio: ['ignore', 'ignore', 'ignore'],
-    });
-    child.on('error', () => resolve(false));
-    child.on('close', (code) => resolve(code === 0));
-  });
+  const succeeded = (await runFfmpeg(args).catch(() => null)) === 0;
   if (!succeeded) {
     await rm(outputPath, { force: true }).catch(() => {});
     throw createError({

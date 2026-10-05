@@ -53,12 +53,7 @@ export function formatPublicDateRange(
 ): string {
   const formatter = new Intl.DateTimeFormat(locale, {
     day: style === 'short' ? '2-digit' : 'numeric',
-    month:
-      style === 'short'
-        ? '2-digit'
-        : style === 'abbreviated'
-          ? 'short'
-          : 'long',
+    month: monthStyle(style),
     year: 'numeric',
     timeZone: 'UTC',
   });

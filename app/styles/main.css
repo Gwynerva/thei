@@ -287,6 +287,34 @@
 }
 
 /*
+ * A halo around words laid over a picture's dissolving edge, in the colour of
+ * the ground they stand on, so they read on any picture: `text-halo-bg-2` on
+ * a card, `text-halo-bg-1` on the page, `text-halo-(--ground)` on a ground of
+ * the element's own. Two blurs wrap the letters; a third, lower, lifts them.
+ */
+@utility text-halo-* {
+  --halo-ground: --value(--color-*, [color]);
+  text-shadow:
+    0 0 0.55em var(--halo-ground),
+    0 0 0.9em var(--halo-ground),
+    0 0.1em 0.45em var(--halo-ground);
+}
+
+/*
+ * A round marker on a rail, shaded towards its middle so the white shape on
+ * it stands out of the colour: `marker-shade-accent` on the life rail and in
+ * a chronology, `marker-shade-text-warning` for what is new.
+ */
+@utility marker-shade-* {
+  --marker-shade: --value(--color-*, [color]);
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--marker-shade), black 20%) 0%,
+    var(--marker-shade) 72%
+  );
+}
+
+/*
  * A mask clear up to `--ease-rise-from` and opaque from `--ease-rise-to`
  * (both at the start unless given), opaque up to `--ease-from` and clear
  * from `--ease-to`, along `--ease-direction`. Each change follows

@@ -222,18 +222,8 @@ function describeDraft(session: DraftSession): AssetDraftSource {
             : {}),
         }
       : {}),
-    ...(session.audio
-      ? {
-          ...(session.audio.duration
-            ? { duration: session.audio.duration }
-            : {}),
-          ...(session.audio.bitrate ? { bitrate: session.audio.bitrate } : {}),
-          ...(session.audio.codec ? { codec: session.audio.codec } : {}),
-          ...(session.audio.channels
-            ? { channels: session.audio.channels }
-            : {}),
-        }
-      : {}),
+    // Read by `audioSourceInfo`, which leaves out what it does not know.
+    ...session.audio,
   };
 }
 
@@ -460,11 +450,16 @@ export async function commitDraft(
         options.onStatus?.({ phase: 'processing' });
         let processed = await takeRender(session, settings);
         if (!processed) {
-          processed = await renderAsset(await sourceAtRest(session), settings, {
-            signal: options.signal,
-            onProgress: (progress) =>
-              options.onStatus?.({ phase: 'processing', progress }),
-          });
+          processed = await renderAsset(
+            await sourceAtRest(session),
+            settings,
+            {
+              signal: options.signal,
+              onProgress: (progress) =>
+                options.onStatus?.({ phase: 'processing', progress }),
+            },
+            session.audio,
+          );
           if (options.signal.aborted) {
             // Nobody waits for the result, but the encode is done. A
             // picture is kept as a render of the draft, so an editor opened
@@ -489,6 +484,7 @@ export async function commitDraft(
             familyUuid: session.familyUuid,
             source: session.source,
             transformSource: session.transform,
+            signal: options.signal,
           });
           const original =
             settings.type === 'original'
@@ -546,6 +542,7 @@ async function keepOriginal(
       settings,
       familyUuid: session.familyUuid,
       source: session.source,
+      signal,
     });
   } catch (error) {
     console.error(

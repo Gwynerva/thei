@@ -3,6 +3,7 @@ import {
   isRelationEntityType,
   orderRelationsForEditing,
   RELATION_ENTITY_TYPES,
+  relationEndOf,
   relationEndpointKey,
   type RelationEditItem,
   type RelationEndpoint,
@@ -19,7 +20,6 @@ import {
 import type { ContentOutputData } from '#layers/thei/shared/content';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import { contentEntityMentions } from '#layers/thei/shared/public-content-reference';
-import type { TabItem } from '#layers/thei/app/components/UnderlineTabs.vue';
 import { moveItemById } from '#layers/thei/app/composables/drag-sort';
 import { useRelationRecommendations } from '#layers/thei/app/composables/relation-recommendations';
 import { relationModal } from '#layers/thei/app/modals/relation/modal';
@@ -74,12 +74,7 @@ function relationTitle(
   item: Pick<RelationEditItem, 'title' | 'date' | 'entityId'>,
   style: 'long' | 'abbreviated' = 'long',
 ) {
-  if (item.date)
-    return entityDisplayTitle(
-      { title: item.title ?? '', date: item.date },
-      style,
-    );
-  return item.title ? publicText(item.title) : item.entityId;
+  return entityListName(item, style);
 }
 
 /**
@@ -89,12 +84,6 @@ function relationTitle(
 function ofKind(items: RelationEditItem[], type: RelationEntityType) {
   return items.filter((item) => item.entityType === type);
 }
-
-const kindTitles = computed<Record<RelationEntityType, string>>(() => ({
-  project: phrase.value.projects,
-  event: phrase.value.events,
-  'diary-entry': phrase.value.diary,
-}));
 
 function firstKind() {
   return (
@@ -124,13 +113,15 @@ const shown = computed(() => ofKind(relations.value, selected.value));
 /** Diary entries keep the order of their days; the rest is dragged. */
 const sortable = computed(() => selected.value !== 'diary-entry');
 
-const tabs = computed<TabItem<RelationEntityType>[]>(() =>
-  RELATION_ENTITY_TYPES.map((type) => ({
-    key: type,
-    label: kindTitles.value[type],
-    icon: relationEntityIcon(type),
-    count: ofKind(relations.value, type).length,
-  })),
+const tabs = computed(() =>
+  relationKindTabs(
+    Object.fromEntries(
+      RELATION_ENTITY_TYPES.map((type) => [
+        type,
+        ofKind(relations.value, type).length,
+      ]),
+    ),
+  ),
 );
 
 /** What the text links to and is not related yet, in the text's order. */
@@ -188,14 +179,7 @@ function addRelation(entity: ContentEntitySearchItem) {
   replaceRelations([
     ...relations.value,
     {
-      entityType: entity.entityType,
-      entityId: entity.entityId,
-      title: entity.title,
-      summary: entity.summary,
-      humanReadableSlug: entity.humanReadableSlug,
-      publicId: entity.publicId,
-      ...(entity.date ? { date: entity.date } : {}),
-      iconMedia: entity.previewMedia,
+      ...relationEndOf({ ...entity, entityType: entity.entityType }),
       type: 'related',
     },
   ]);
@@ -339,7 +323,7 @@ const { guardClick } = useDragSort(panel, {
           :entity-type="relation.entityType"
           :title="relationTitle(relation, 'abbreviated')"
           :media="relation.iconMedia"
-          :class="{ 'cursor-grab active:cursor-grabbing': sortable }"
+          :sortable
           :aria-label="phrase.relation_edit(relationTitle(relation))"
           v-bind="chipPopup(relation)"
           @click="guardClick(() => openRelation(relation))"

@@ -95,8 +95,7 @@ const details = computed(
       :title="data.title"
       :summary="data.summary"
       :banner-media="data.bannerMedia"
-      :kind="{ icon: 'project-section', label: phrase.content_section }"
-      :parent="data.project"
+      :parent="{ ...data.project, label: phrase.content_section }"
     />
     <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
       <PublicPageHeader

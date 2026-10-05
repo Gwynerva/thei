@@ -78,7 +78,7 @@ const heading = computed(() => publicText(entityDisplayTitle(props)));
       gets room for the halo all round.
     -->
     <span
-      class="entity-preview-text relative z-1 flex min-w-0 flex-1 flex-col"
+      class="relative z-1 flex min-w-0 flex-1 flex-col text-halo-bg-2"
       :class="[
         compact ? 'gap-0.5' : 'gap-1',
         iconMedia
@@ -88,6 +88,7 @@ const heading = computed(() => publicText(entityDisplayTitle(props)));
           : '',
         { 'm-xs': flush },
       ]"
+      data-entity-preview-text
     >
       <span
         v-if="parent"
@@ -156,13 +157,6 @@ const heading = computed(() => publicText(entityDisplayTitle(props)));
       var(--color-bg-2)
     );
   }
-}
-
-.entity-preview-text {
-  text-shadow:
-    0 0 0.5em var(--color-bg-2),
-    0 0 0.9em var(--color-bg-2),
-    0 0.12em 0.45em var(--color-bg-2);
 }
 
 .entity-type-icon {

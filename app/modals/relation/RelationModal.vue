@@ -3,6 +3,7 @@ import {
   isRelationEntityType,
   mergeRelationNote,
   RELATION_TYPES,
+  relationEndOf,
   relationHasNote,
   splitRelationNote,
   type RelationEditItem,
@@ -84,13 +85,9 @@ function update(patch: Partial<Draft>) {
 }
 
 /** What the other end is called: a diary entry by its day. */
-const otherName = computed(() => {
-  const item = other.value;
-  if (!item) return '';
-  if (item.date)
-    return entityDisplayTitle({ title: item.title ?? '', date: item.date });
-  return item.title ? publicText(item.title) : item.entityId;
-});
+const otherName = computed(() =>
+  other.value ? entityListName(other.value) : '',
+);
 
 /** The other end as the picker pins it, marked, at the top of its list. */
 const choice = computed<ContentEntityChoice | undefined>(() => {
@@ -109,16 +106,7 @@ const choice = computed<ContentEntityChoice | undefined>(() => {
 function pick(entity: ContentEntitySearchItem) {
   pickerOpen.value = false;
   if (!isRelationEntityType(entity.entityType)) return;
-  update({
-    entityType: entity.entityType,
-    entityId: entity.entityId,
-    title: entity.title,
-    summary: entity.summary,
-    humanReadableSlug: entity.humanReadableSlug,
-    publicId: entity.publicId,
-    date: entity.date,
-    iconMedia: entity.previewMedia,
-  });
+  update(relationEndOf({ ...entity, entityType: entity.entityType }));
 }
 
 // A new relation starts with its other end: the picker is open at once.

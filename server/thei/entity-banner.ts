@@ -5,6 +5,7 @@ import {
   buildPublicEventMedia,
   buildPublicProjectSectionMedia,
 } from './assets/urls';
+import type { StoredAssetRecord } from './assets/storage';
 import { buildPublicEntityPreviewMedia } from './public/content';
 
 /**
@@ -20,13 +21,42 @@ import { buildPublicEntityPreviewMedia } from './public/content';
 type BannerOwner = 'event' | 'project-section';
 type Addressed = { humanReadableSlug: string; publicId: string };
 
+/** An event or a section, with what its public addresses are built from. */
+export type BannerHolder =
+  | { type: 'event'; event: Addressed & { eventUuid: string } }
+  | {
+      type: 'project-section';
+      project: Addressed;
+      section: Addressed & { sectionUuid: string };
+    };
+
+function holderId(holder: BannerHolder) {
+  return holder.type === 'event'
+    ? holder.event.eventUuid
+    : holder.section.sectionUuid;
+}
+
+/** The banner's file, read by the one placement that holds it. */
 export async function findEntityBannerAsset(
   ownerType: BannerOwner,
   ownerId: string,
 ) {
-  return (
-    await THEI_SERVER.assets.usages.findByContainer(ownerType, ownerId)
-  ).find((usage) => usage.role === 'banner')?.asset;
+  const { db, schema } = THEI_SERVER.useDb();
+  return db
+    .select({ asset: schema.assets })
+    .from(schema.assetUsages)
+    .innerJoin(
+      schema.assets,
+      eq(schema.assets.assetUuid, schema.assetUsages.assetUuid),
+    )
+    .where(
+      and(
+        eq(schema.assetUsages.containerType, ownerType),
+        eq(schema.assetUsages.containerId, ownerId),
+        eq(schema.assetUsages.role, 'banner'),
+      ),
+    )
+    .get()?.asset;
 }
 
 /**
@@ -110,57 +140,51 @@ export async function buildAdminEntityBanner(
   return asset ? (await buildAdminAssetUrls(asset)).media : undefined;
 }
 
-export async function buildPublicEventBanner(
-  event: Addressed & { eventUuid: string },
+/**
+ * The banner as its owner's page serves it. A caller that holds the banner
+ * already — or knows there is none, `null` — passes it, and nothing is read.
+ */
+export async function buildPublicBanner(
+  holder: BannerHolder,
+  banner?: StoredAssetRecord | null,
 ): Promise<MediaDescriptor | undefined> {
-  const asset = await findEntityBannerAsset('event', event.eventUuid);
-  return asset ? buildPublicEventMedia(event, asset, 'banner') : undefined;
+  const asset =
+    banner === undefined
+      ? await findEntityBannerAsset(holder.type, holderId(holder))
+      : banner;
+  if (!asset) return undefined;
+  return holder.type === 'event'
+    ? await buildPublicEventMedia(holder.event, asset, 'banner')
+    : await buildPublicProjectSectionMedia(
+        holder.project,
+        holder.section,
+        asset,
+        'banner',
+      );
 }
 
-export async function buildPublicSectionBanner(
-  project: Addressed,
-  section: Addressed & { sectionUuid: string },
-): Promise<MediaDescriptor | undefined> {
-  const asset = await findEntityBannerAsset(
-    'project-section',
-    section.sectionUuid,
-  );
-  return asset
-    ? buildPublicProjectSectionMedia(project, section, asset, 'banner')
-    : undefined;
-}
-
-/** What stands for an event in a card: its banner, else its body's picture. */
-export async function buildPublicEventCardMedia(
-  event: Addressed & { eventUuid: string },
+/** What stands for an event or a section in a card: its banner, else its body's picture. */
+export async function buildPublicCardMedia(
+  holder: BannerHolder,
   includePrivate = false,
+  banner?: StoredAssetRecord | null,
 ): Promise<MediaDescriptor> {
   return (
-    (await buildPublicEventBanner(event)) ??
-    buildPublicEntityPreviewMedia(
-      'event',
-      event.eventUuid,
-      'event-body',
-      { type: 'event', ...event },
-      includePrivate,
-    )
-  );
-}
-
-/** What stands for a section in a card: its banner, else its body's picture. */
-export async function buildPublicSectionCardMedia(
-  project: Addressed,
-  section: Addressed & { sectionUuid: string },
-  includePrivate = false,
-): Promise<MediaDescriptor> {
-  return (
-    (await buildPublicSectionBanner(project, section)) ??
-    buildPublicEntityPreviewMedia(
-      'project-section',
-      section.sectionUuid,
-      'project-section-body',
-      { type: 'project', ...project },
-      includePrivate,
-    )
+    (await buildPublicBanner(holder, banner)) ??
+    (holder.type === 'event'
+      ? buildPublicEntityPreviewMedia(
+          'event',
+          holder.event.eventUuid,
+          'event-body',
+          { type: 'event', ...holder.event },
+          includePrivate,
+        )
+      : buildPublicEntityPreviewMedia(
+          'project-section',
+          holder.section.sectionUuid,
+          'project-section-body',
+          { type: 'project', ...holder.project },
+          includePrivate,
+        ))
   );
 }

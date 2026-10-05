@@ -6,6 +6,8 @@ import {
 } from './content';
 import { optionalContentDraftRef } from './content-history';
 import { comparePeriods, normalizePeriods, type Period } from './period';
+import { coverDateRanges } from './date-range';
+import { sortPublicTimelineItemsNewestFirst } from './public-timeline';
 import type { MediaDescriptor } from './media';
 import { normalizeHeadingText } from './terminal-punctuation';
 import {
@@ -40,7 +42,7 @@ export interface ProjectSectionItem {
 
 export type ProjectSectionValue = ProjectSectionItem & { sectionUuid: string };
 
-export function normalizeProjectContentItemId(value: unknown) {
+function normalizeProjectContentItemId(value: unknown) {
   if (typeof value !== 'string') return undefined;
   const id = value.trim();
   return id || undefined;
@@ -51,11 +53,25 @@ export function isDatedSection(section: Pick<ProjectSectionItem, 'periods'>) {
 }
 
 /** Oldest first, by the first of each section's periods. */
-export function compareDatedSections(
+function compareDatedSections(
   left: Pick<ProjectSectionItem, 'periods'>,
   right: Pick<ProjectSectionItem, 'periods'>,
 ) {
   return comparePeriods(left.periods[0]!, right.periods[0]!);
+}
+
+/**
+ * The stages — the dated sections — as every list of them reads: newest
+ * first, by the end of the stretch each covers, then by its start. A stage's
+ * number counts the other way, from the oldest.
+ */
+export function sortStagesNewestFirst<
+  T extends Pick<ProjectSectionItem, 'periods'>,
+>(sections: readonly T[]): T[] {
+  return sortPublicTimelineItemsNewestFirst(
+    sections.filter(isDatedSection),
+    (section) => coverDateRanges(section.periods),
+  );
 }
 
 /**

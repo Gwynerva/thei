@@ -1,8 +1,5 @@
 <script lang="ts" setup>
-import {
-  sortPublicDetailTimelineItems,
-  type PublicDetailTimelineItem,
-} from './public-detail';
+import type { PublicDetailTimelineItem } from './public-detail';
 import {
   datePresentationToneClass,
   getPublicDatePresentation,
@@ -12,7 +9,7 @@ import {
 const props = defineProps<{ items: PublicDetailTimelineItem[] }>();
 const liveNow = useLiveNow();
 const orderedItems = computed(() =>
-  sortPublicDetailTimelineItems(props.items).map((item) => ({
+  props.items.map((item) => ({
     ...item,
     presentation: getPublicDatePresentation(
       item.date,

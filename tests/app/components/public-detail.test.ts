@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   createdAndUpdatedTimelineItems,
   publicDetailSummary,
-  sortPublicDetailTimelineItems,
 } from '#layers/thei/app/components/public/public-detail';
 import { emptyPublicReferences } from '#layers/thei/shared/public-references';
 
@@ -46,31 +45,6 @@ describe('publicDetailSummary', () => {
 
   it('says nothing for a panel without lists', () => {
     expect(summary({ references: emptyPublicReferences() })).toEqual([]);
-  });
-});
-
-describe('sortPublicDetailTimelineItems', () => {
-  it('orders chronology from newest to oldest', () => {
-    const items = [
-      { icon: 'plus' as const, label: 'Создание', date: '2024-01-10' },
-      { icon: 'history' as const, label: 'Обновление', date: '2026-08-01' },
-      { icon: 'event' as const, label: 'Этап', date: '2025-04-03' },
-    ];
-
-    expect(
-      sortPublicDetailTimelineItems(items).map((item) => item.label),
-    ).toEqual(['Обновление', 'Этап', 'Создание']);
-  });
-
-  it('preserves the source order when dates match', () => {
-    const items = [
-      { icon: 'plus' as const, label: 'Первый', date: '2026-08-01' },
-      { icon: 'history' as const, label: 'Второй', date: '2026-08-01' },
-    ];
-
-    expect(
-      sortPublicDetailTimelineItems(items).map((item) => item.label),
-    ).toEqual(['Первый', 'Второй']);
   });
 });
 

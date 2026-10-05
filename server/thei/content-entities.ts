@@ -29,11 +29,7 @@ import {
   buildPublicTagMedia,
 } from './assets/urls';
 import { resolveEntityIconMedia } from './media/generated-icon';
-import {
-  buildAdminEntityBanner,
-  buildPublicEventBanner,
-  buildPublicSectionBanner,
-} from './entity-banner';
+import { buildAdminEntityBanner, buildPublicBanner } from './entity-banner';
 import { opensPrivate, type PublicViewer } from './access-links/viewer';
 import {
   buildPublicContentPreviewMedia,
@@ -238,7 +234,11 @@ function sectionRecord(
       (view) =>
         view === 'admin'
           ? buildAdminEntityBanner('project-section', id)
-          : buildPublicSectionBanner(project, { ...child, sectionUuid: id }),
+          : buildPublicBanner({
+              type: 'project-section',
+              project,
+              section: { ...child, sectionUuid: id },
+            }),
     ),
   };
 }
@@ -263,7 +263,7 @@ function eventRecord(event: EventRow): ContentEntityRecord {
       (view) =>
         view === 'admin'
           ? buildAdminEntityBanner('event', event.eventUuid)
-          : buildPublicEventBanner(event),
+          : buildPublicBanner({ type: 'event', event }),
     ),
   };
 }

@@ -4,15 +4,18 @@ import type {
 } from '#layers/thei/shared/api/public';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { diaryContentExcerpt } from '#layers/thei/shared/diary-text';
-import { isDatedSection } from '#layers/thei/shared/project-content-item';
-import type { getProjectSections } from '../projects/content-sections';
+import {
+  isDatedSection,
+  sortStagesNewestFirst,
+} from '#layers/thei/shared/project-content-item';
+import type { ProjectSectionRecord } from '../projects/content-sections';
 import { buildPublicEntityPreviewMedia } from './content';
 import { buildPublicProjectSectionSummary } from './entities';
 
 type ProjectRow = NonNullable<
   Awaited<ReturnType<typeof THEI_SERVER.projects.findByUuid>>
 >;
-type Section = Awaited<ReturnType<typeof getProjectSections>>[number];
+type Section = ProjectSectionRecord;
 
 /** The items right before and right after `current` in an ordered list. */
 export function neighboursOf<T>(items: readonly T[], current: T) {
@@ -42,7 +45,7 @@ async function describe<T>(
  * A section's neighbours among the sections of its own kind the viewer may
  * open: a dated one beside the dated ones in time, each with its stretch; an
  * undated one beside the undated ones in the project's own order, each with
- * what it is about. The list comes from `getProjectSections`, which keeps
+ * what it is about. The list comes from `listProjectSections`, which keeps
  * both orders.
  */
 export async function buildProjectSectionNeighbours(
@@ -55,7 +58,10 @@ export async function buildProjectSectionNeighbours(
   const visible = sections.filter(
     (item) => (isOwner || !item.isPrivate) && isDatedSection(item) === dated,
   );
-  return await describe(neighboursOf(visible, section), async (item) => {
+  // The stages from the oldest, in the order their page lists them and
+  // counts them.
+  const ordered = dated ? sortStagesNewestFirst(visible).reverse() : visible;
+  return await describe(neighboursOf(ordered, section), async (item) => {
     const summary = await buildPublicProjectSectionSummary(
       project,
       item,

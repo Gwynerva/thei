@@ -82,12 +82,22 @@ const LOSSLESS_AUDIO_CODECS = new Set([
 ]);
 
 /**
+ * The PCM codecs that are not lossless: G.711 squeezes each sample into 8
+ * bits on a curve, as telephony, voicemail and call recorders store it, at
+ * 64 kbit/s — a bitrate that does say how much there is to keep.
+ */
+const COMPANDED_PCM_CODECS = new Set(['pcm_alaw', 'pcm_mulaw']);
+
+/**
  * Whether a codec, as ffmpeg names it, keeps every sample: its bitrate then
  * says nothing about how much a lossy encode may spend.
  */
 export function isLosslessAudioCodec(codec: string | undefined): boolean {
   if (!codec) return false;
-  return codec.startsWith('pcm_') || LOSSLESS_AUDIO_CODECS.has(codec);
+  return (
+    (codec.startsWith('pcm_') && !COMPANDED_PCM_CODECS.has(codec)) ||
+    LOSSLESS_AUDIO_CODECS.has(codec)
+  );
 }
 
 /** Pools stored peaks into `count` bars, each the loudest of its share. */

@@ -13,7 +13,6 @@ import {
 import {
   deletePeriods,
   periodsEqual,
-  readPeriods,
   readPeriodsOf,
   replacePeriods,
 } from '../periods';
@@ -121,6 +120,12 @@ export function applyProjectSections(
     'project-section',
     existing.map((item) => item.sectionUuid),
   );
+  const storedPeriods = readPeriodsOf(
+    tx,
+    schema,
+    'project-section',
+    existing.map((item) => item.sectionUuid),
+  );
   deleteProjectContentItemContent(tx, schema, 'project-section', removed);
   deletePeriods(tx, schema, 'project-section', removed);
   deleteEntityBanners(tx, schema, 'project-section', removed);
@@ -128,6 +133,20 @@ export function applyProjectSections(
     tx.delete(schema.projectContentSections)
       .where(inArray(schema.projectContentSections.sectionUuid, removed))
       .run();
+  }
+
+  // Public IDs may change hands within one save — two sections swapping
+  // theirs — and the column is unique at every step, not only at the end:
+  // each one that changes is let go before any is taken.
+  for (const section of sections) {
+    const stored = existingById.get(section.sectionUuid);
+    if (stored && stored.publicId !== section.publicId)
+      tx.update(schema.projectContentSections)
+        .set({ publicId: `~${section.sectionUuid}` })
+        .where(
+          eq(schema.projectContentSections.sectionUuid, section.sectionUuid),
+        )
+        .run();
   }
 
   const now = Date.now();
@@ -151,7 +170,7 @@ export function applyProjectSections(
       Boolean(stored) &&
         (bannerChanged ||
           !periodsEqual(
-            readPeriods(tx, schema, 'project-section', section.sectionUuid),
+            storedPeriods.get(section.sectionUuid) ?? [],
             section.periods,
           )),
     );
@@ -219,7 +238,12 @@ export function deleteProjectSections(
     .run();
 }
 
-export async function getProjectSections(projectUuid: string) {
+/**
+ * A project's sections in their order, without their bodies: what every
+ * page but the editor reads — a list, a card, an address — where preparing
+ * every section's text would only be thrown away.
+ */
+export function listProjectSections(projectUuid: string) {
   const { db, schema } = THEI_SERVER.useDb();
   const rows = db
     .select()
@@ -230,29 +254,39 @@ export async function getProjectSections(projectUuid: string) {
   const ids = rows.map((row) => row.sectionUuid);
   const periods = readPeriodsOf(db, schema, 'project-section', ids);
   const banners = readEntityBannerUuids(db, schema, 'project-section', ids);
-
   return orderProjectSections(
-    await Promise.all(
-      rows.map(async (section) => ({
-        sectionUuid: section.sectionUuid,
-        title: section.title,
-        summary: section.summary,
-        humanReadableSlug: section.humanReadableSlug,
-        publicId: section.publicId,
-        isPrivate: section.isPrivate,
-        createdAt: section.createdAt,
-        updatedAt: section.updatedAt,
-        periods: periods.get(section.sectionUuid) ?? [],
-        ...(banners.has(section.sectionUuid)
-          ? { bannerAssetUuid: banners.get(section.sectionUuid) }
-          : {}),
-        content:
-          (await THEI_SERVER.content.buildFieldValue(
-            'project-section',
-            section.sectionUuid,
-            'project-section-body',
-          )) ?? createEmptyContentFieldValue(),
-      })),
-    ),
+    rows.map((section) => ({
+      sectionUuid: section.sectionUuid,
+      title: section.title,
+      summary: section.summary,
+      humanReadableSlug: section.humanReadableSlug,
+      publicId: section.publicId,
+      isPrivate: section.isPrivate,
+      createdAt: section.createdAt,
+      updatedAt: section.updatedAt,
+      periods: periods.get(section.sectionUuid) ?? [],
+      ...(banners.has(section.sectionUuid)
+        ? { bannerAssetUuid: banners.get(section.sectionUuid) }
+        : {}),
+    })),
+  );
+}
+
+export type ProjectSectionRecord = ReturnType<
+  typeof listProjectSections
+>[number];
+
+/** A project's sections with their bodies, as the editor opens them. */
+export async function getProjectSections(projectUuid: string) {
+  return await Promise.all(
+    listProjectSections(projectUuid).map(async (section) => ({
+      ...section,
+      content:
+        (await THEI_SERVER.content.buildFieldValue(
+          'project-section',
+          section.sectionUuid,
+          'project-section-body',
+        )) ?? createEmptyContentFieldValue(),
+    })),
   );
 }

@@ -287,20 +287,29 @@ for (const width of [390, 1280]) {
       const hero = page.locator('[data-test-hero]');
       const banner = hero.locator('.hero-banner');
       await expect(banner).toHaveAttribute('data-media-final-state', 'visible');
-      // What the page is says itself in a pill; a section names its project.
-      await expect(hero.locator('[data-hero-kind]')).toHaveText(
-        kind === 'event' ? 'Event' : 'Project section',
-      );
-      await expect(hero.locator('[data-hero-parent]')).toHaveCount(
-        kind === 'section' ? 1 : 0,
-      );
+      // An event says what it is in a pill; a section says it in the one
+      // line naming its project, as its plain header does.
+      if (kind === 'event') {
+        await expect(hero.locator('[data-hero-kind]')).toHaveText('Event');
+        await expect(hero.locator('[data-hero-parent]')).toHaveCount(0);
+      } else {
+        await expect(hero.locator('[data-hero-kind]')).toHaveCount(0);
+        await expect(hero.locator('[data-hero-parent]')).toHaveText(
+          // The owner's words carry a no-break space after a short word.
+          /Project\ssection\s*The\sproject/,
+        );
+      }
       await expect(
         hero.locator('[data-hero-icon], [data-hero-tags]'),
       ).toHaveCount(0);
       const box = (await hero.boundingBox())!;
       const main = (await banner.locator('[data-media-main]').boundingBox())!;
       const title = (await hero.locator('h1').boundingBox())!;
-      const pills = (await hero.locator('[data-hero-pills]').boundingBox())!;
+      // The words begin with the event's pill, or the section's project.
+      const pills = (await hero
+        .locator('[data-hero-pills], [data-hero-parent]')
+        .first()
+        .boundingBox())!;
       const summary = (await hero.locator('.hero-summary').boundingBox())!;
       if (width === 390) {
         // The sharp band on top, the words centred under it.
@@ -676,7 +685,7 @@ test('an internal link card keeps most of a narrow column for its words', async 
   await link.scrollIntoViewIfNeeded();
   const linkBox = (await link.boundingBox())!;
   const words = await link
-    .locator('.entity-preview-text')
+    .locator('[data-entity-preview-text]')
     .evaluate(
       (element) =>
         element.clientWidth -
@@ -685,7 +694,7 @@ test('an internal link card keeps most of a narrow column for its words', async 
   expect(words).toBeGreaterThan(linkBox.width * 0.6);
   // A truncated title ends in an ellipsis rather than a cut letter.
   await expect(
-    link.locator('.entity-preview-text .truncate').first(),
+    link.locator('[data-entity-preview-text] .truncate').first(),
   ).toHaveCSS('text-overflow', 'ellipsis');
 });
 

@@ -28,6 +28,16 @@ export function normalizeHeadingText(value: string): string {
   return normalizeTerminalPunctuation(value, 'heading');
 }
 
+/** A caption as it is stored: trimmed and settled, or nothing at all. */
+export function optionalCaption(value: string | undefined): string | undefined {
+  return normalizeCaptionText(value?.trim() ?? '') || undefined;
+}
+
+/** A heading as it is stored: trimmed and settled, or nothing at all. */
+export function optionalHeading(value: string | undefined): string | undefined {
+  return normalizeHeadingText(value?.trim() ?? '') || undefined;
+}
+
 export function normalizeTerminalPunctuation(
   value: string,
   kind: TerminalPunctuationKind,

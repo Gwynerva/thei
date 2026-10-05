@@ -20,16 +20,21 @@ import type { MediaDescriptor } from '#layers/thei/shared/media';
  * a transition of `transform` would swallow the sort's own slide of the
  * chips making way, and they would jump to their new places.
  */
-const { entityType, title, media, suggested } = defineProps<{
+const { entityType, title, media, suggested, sortable } = defineProps<{
   entityType: RelationEntityType;
   /** The entity's name as it is to be shown, formatted by the caller. */
   title: string;
   media?: MediaDescriptor;
   /** Offered rather than chosen: outlined, on the plain surface. */
   suggested?: boolean;
+  /** Dragged to sort as well as pressed: the pointer says it can be held. */
+  sortable?: boolean;
 }>();
 
+const slots = useSlots();
 const { engaged, events: mediaEvents } = useMediaInteraction();
+/** What the slot says of the entity, read after the chip's own name. */
+const descriptionId = useId();
 
 const accent = computed(() =>
   imageAccentCssColor(media?.accent, 'var(--color-accent)'),
@@ -41,14 +46,17 @@ const accent = computed(() =>
     v-on="mediaEvents"
     type="button"
     class="relation-chip group relative flex h-12 max-w-full min-w-0
-      cursor-pointer items-center overflow-hidden rounded-sm border text-left
-      transition-colors focus-visible:outline-none sm:max-w-72"
-    :class="
+      items-center overflow-hidden rounded-sm border text-left transition-colors
+      focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none
+      sm:max-w-72"
+    :class="[
       suggested
         ? 'relation-chip-suggested border-dashed border-border-3'
-        : 'border-border-1'
-    "
+        : 'border-border-1',
+      sortable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
+    ]"
     :style="{ '--relation-accent': accent }"
+    :aria-describedby="slots.default ? descriptionId : undefined"
   >
     <MediaEdge
       :media
@@ -69,8 +77,8 @@ const accent = computed(() =>
     <!-- A truncated line clips its own halo, which draws a hard seam across
          the picture: each gets room for the halo all round. -->
     <span
-      class="relation-chip-text relative flex min-w-0 flex-col pr-12 pl-sm
-        text-xs"
+      class="text-halo-(--relation-chip-ground) relative flex min-w-0 flex-col
+        pr-12 pl-sm text-xs"
     >
       <span
         class="-m-[0.75em] truncate p-[0.75em] font-semibold"
@@ -78,7 +86,10 @@ const accent = computed(() =>
         data-relation-title
         >{{ title }}</span
       >
-      <span class="-m-[0.75em] min-w-0 p-[0.75em] text-text-2">
+      <span
+        :id="descriptionId"
+        class="-m-[0.75em] min-w-0 p-[0.75em] text-text-2"
+      >
         <slot />
       </span>
     </span>
@@ -93,14 +104,6 @@ const accent = computed(() =>
 
 .relation-chip-suggested {
   --relation-chip-ground: var(--color-bg-2);
-}
-
-/* The words lie over the picture's dissolving edge: a halo of the chip's
-   own ground keeps them legible on any picture. */
-.relation-chip-text {
-  text-shadow:
-    0 0 0.5em var(--relation-chip-ground),
-    0 0 0.9em var(--relation-chip-ground);
 }
 
 .relation-chip:focus-visible {

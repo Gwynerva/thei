@@ -232,8 +232,8 @@ defineExpose({ focus: () => input.value?.focus({ preventScroll: true }) });
           <!-- A truncated line clips its own halo, which draws a hard seam
                across the picture: each gets room for the halo all round. -->
           <span
-            class="entity-search-text relative flex min-w-0 flex-1 flex-col
-              gap-0.5 py-1 pr-16 pl-xs"
+            class="relative flex min-w-0 flex-1 flex-col gap-0.5 py-1 pr-16
+              pl-xs text-halo-bg-1"
           >
             <span class="flex min-w-0 items-center gap-1 text-sm font-semibold"
               ><Icon
@@ -275,11 +275,5 @@ defineExpose({ focus: () => input.value?.focus({ preventScroll: true }) });
   );
   outline: 1.5px solid var(--color-accent);
   outline-offset: -1.5px;
-}
-
-.entity-search-text {
-  text-shadow:
-    0 0 0.5em var(--color-bg-1),
-    0 0 0.9em var(--color-bg-1);
 }
 </style>

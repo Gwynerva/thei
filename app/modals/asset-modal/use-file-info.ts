@@ -72,40 +72,30 @@ export function useFileInfo(objectUrl: string, extension: string) {
           img.src = '';
         };
       }
-    } else if (isVideo) {
-      const video = document.createElement('video');
-      video.muted = true;
-      video.preload = 'metadata';
-      const onMeta = () => {
-        dimensions.value = {
-          width: video.videoWidth,
-          height: video.videoHeight,
-        };
-        if (Number.isFinite(video.duration) && video.duration > 0) {
-          duration.value = video.duration;
-        }
-      };
-      video.addEventListener('loadedmetadata', onMeta, { once: true });
-      video.src = objectUrl;
-      cleanup = () => {
-        video.removeEventListener('loadedmetadata', onMeta);
-        video.src = '';
-      };
-    } else if (isAudio) {
+    } else if (isVideo || isAudio) {
       // A format this browser cannot play has no length here; the server's
       // reading of the draft stands in once it is staged.
-      const audio = new Audio();
-      audio.preload = 'metadata';
+      const media = document.createElement(isVideo ? 'video' : 'audio');
+      media.muted = true;
+      media.preload = 'metadata';
       const onMeta = () => {
-        if (Number.isFinite(audio.duration) && audio.duration > 0) {
-          duration.value = audio.duration;
+        if (media instanceof HTMLVideoElement) {
+          dimensions.value = {
+            width: media.videoWidth,
+            height: media.videoHeight,
+          };
+        }
+        if (Number.isFinite(media.duration) && media.duration > 0) {
+          duration.value = media.duration;
         }
       };
-      audio.addEventListener('loadedmetadata', onMeta, { once: true });
-      audio.src = objectUrl;
+      media.addEventListener('loadedmetadata', onMeta, { once: true });
+      media.src = objectUrl;
       cleanup = () => {
-        audio.removeEventListener('loadedmetadata', onMeta);
-        audio.removeAttribute('src');
+        media.removeEventListener('loadedmetadata', onMeta);
+        // An element keeps what it loaded until it is told to load nothing.
+        media.removeAttribute('src');
+        media.load();
       };
     }
 

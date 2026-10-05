@@ -16,8 +16,9 @@ import {
   normalizeLinkFragment,
 } from './content-link';
 import {
-  normalizeCaptionText,
   normalizeHeadingText,
+  optionalCaption,
+  optionalHeading,
   punctuateInlineHtml,
   type TerminalPunctuationKind,
 } from './terminal-punctuation';
@@ -1214,11 +1215,11 @@ function optionalTrimmedString(value: unknown): string | undefined {
 }
 
 function optionalCaptionText(value: unknown): string | undefined {
-  return normalizeCaptionText(normalizeContentText(value)) || undefined;
+  return optionalCaption(normalizeContentText(value));
 }
 
 function optionalHeadingText(value: unknown): string | undefined {
-  return normalizeHeadingText(normalizeContentText(value)) || undefined;
+  return optionalHeading(normalizeContentText(value));
 }
 
 /**

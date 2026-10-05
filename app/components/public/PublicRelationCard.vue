@@ -5,7 +5,6 @@ import {
 } from '#layers/thei/shared/api/public';
 import type { RelationEntityType } from '#layers/thei/shared/relation';
 import { relationEntityIcon } from '#layers/thei/shared/relation-display';
-import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
 import TheiLink from '../TheiLink';
 
 /**
@@ -26,24 +25,15 @@ const { link, kind } = defineProps<{
   kind: RelationEntityType;
 }>();
 
-const { engaged, events: mediaEvents } = useMediaInteraction();
-
 const secret = computed(() => isPublicSecret(link));
 const entityType = computed(() => link.entityType ?? kind);
 const href = computed(() => (isPublicSecret(link) ? undefined : link.href));
-const accent = computed(() =>
-  imageAccentCssColor(link.iconMedia?.accent, 'var(--color-accent)'),
-);
 
 /** A diary entry is called by its day. */
 const title = computed(() =>
-  publicText(
-    !isPublicSecret(link) && link.date
-      ? entityDisplayTitle(
-          { title: link.title, date: link.date },
-          'abbreviated',
-        )
-      : link.title,
+  entityListName(
+    isPublicSecret(link) ? { title: link.title } : link,
+    'abbreviated',
   ),
 );
 
@@ -71,50 +61,30 @@ const popup = computed(() => ({
 </script>
 
 <template>
-  <component
-    :is="href ? TheiLink : 'div'"
-    v-on="mediaEvents"
+  <MediaEdgeCard
+    :as="href ? TheiLink : 'div'"
     :to="href"
+    :media="link.iconMedia"
+    :interactive="Boolean(href)"
     v-bind="popup"
-    class="relation-card group relative isolate flex min-h-14 min-w-0
-      items-center overflow-hidden rounded-normal border border-border-1 bg-bg-2
-      text-text-1 no-underline shadow-md shadow-shadow-1"
-    :class="{
-      [`relation-card-link transition focus-visible:ring-2
-      focus-visible:ring-accent focus-visible:outline-none hocus:shadow-lg
-      motion-safe:hocus:-translate-y-px`]: href,
-    }"
-    :style="{
-      '--relation-card-accent': accent,
-      '--relation-card-shadow': `color-mix(in oklab, ${accent} 26%, transparent)`,
-    }"
+    class="min-h-14 items-center"
     :data-public-secret="secret || undefined"
     data-relation-card
   >
-    <MediaEdge
-      :media="link.iconMedia"
-      side="right"
-      fade="card"
-      playback="interaction"
-      :engaged
-      media-class="opacity-75 transition duration-300 group-hocus:opacity-90
-        group-has-focus-visible:opacity-90 motion-reduce:duration-150"
-      class="w-full"
-      data-relation-media
-    >
+    <template #fallback>
       <span
         class="flex size-full items-center justify-end pr-md text-4xl
           text-text-3/25"
       >
         <Icon :name="relationEntityIcon(entityType)" />
       </span>
-    </MediaEdge>
+    </template>
     <!-- The words keep to the left three quarters, clear of where the picture
          stays sharp, and carry a halo where they reach over the rest of it;
          a truncated line gets room for its halo, or it draws a seam. -->
     <span
-      class="relation-card-text relative z-1 flex max-w-4/5 min-w-0 flex-col
-        gap-0.5 px-sm py-xs text-xs sm:max-w-3/4"
+      class="relative z-1 flex max-w-4/5 min-w-0 flex-col gap-0.5 px-sm py-xs
+        text-xs text-halo-bg-2 sm:max-w-3/4"
       data-relation-text
     >
       <span
@@ -135,26 +105,5 @@ const popup = computed(() => ({
         data-title-popup-clip
       />
     </span>
-  </component>
+  </MediaEdgeCard>
 </template>
-
-<style scoped>
-.relation-card-text {
-  text-shadow:
-    0 0 0.55em var(--color-bg-2),
-    0 0 0.9em var(--color-bg-2),
-    0 0.1em 0.45em var(--color-bg-2);
-}
-
-.relation-card-link:is(:focus-visible, :has(:focus-visible)) {
-  border-color: var(--relation-card-accent);
-  --tw-shadow-color: var(--relation-card-shadow);
-}
-
-@media (hover: hover) {
-  .relation-card-link:hover {
-    border-color: var(--relation-card-accent);
-    --tw-shadow-color: var(--relation-card-shadow);
-  }
-}
-</style>

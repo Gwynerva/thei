@@ -128,7 +128,11 @@ export interface AssetLibraryFacets {
   anywhere: number;
 }
 export type AssetLibraryResponse = PaginatedResponse<AssetLibrarySection> & {
-  facets: AssetLibraryFacets;
+  /**
+   * With the first page only: the picker loads the next ones onto it, and
+   * the counts do not change with the page.
+   */
+  facets?: AssetLibraryFacets;
 };
 export type AssetLibraryFilesResponse = PaginatedResponse<AssetLibraryItem>;
 /** The flat list of the storage page: files, and how the filters count them. */

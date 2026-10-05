@@ -16,8 +16,11 @@ import { tagAccent } from '#layers/thei/shared/tag';
 import { STRANGER } from '../../access-links/viewer';
 import { getEventPeriods } from '../../events/periods';
 import { ownerText } from '../../owner-text';
-import { getProjectSections } from '../../projects/content-sections';
-import { isDatedSection } from '#layers/thei/shared/project-content-item';
+import { listProjectSections } from '../../projects/content-sections';
+import {
+  isDatedSection,
+  sortStagesNewestFirst,
+} from '#layers/thei/shared/project-content-item';
 import {
   buildPublicEntityChronology,
   buildPublicEntityReference,
@@ -206,7 +209,7 @@ export async function sectionContent(
   if (!row || row.isPrivate) return undefined;
   const project = await THEI_SERVER.projects.findByUuid(row.projectUuid);
   if (!project || !canOpenPublicEntity(project.access, false)) return undefined;
-  const sections = (await getProjectSections(project.projectUuid)).filter(
+  const sections = listProjectSections(project.projectUuid).filter(
     (section) => !section.isPrivate,
   );
   const section = sections.find((item) => item.sectionUuid === row.uuid);
@@ -236,17 +239,18 @@ export async function sectionContent(
 
   if (isDatedSection(section)) {
     // Its place among the stages — the dated sections a stranger sees —
-    // oldest first: "Stage 3 of 7". It is still a section; the number says
-    // which stage of the project's way it was.
-    const datedSections = sections.filter(isDatedSection);
+    // counted from the oldest of the order the page lists them in: "Stage 3
+    // of 7". It is still a section; the number says which stage of the
+    // project's way it was.
+    const stages = sortStagesNewestFirst(sections);
     return {
       ...content,
       chips: [
         {
           icon: OG_KIND_ICONS.section,
           label: phrase().og_section_position(
-            datedSections.indexOf(section) + 1,
-            datedSections.length,
+            stages.length - stages.indexOf(section),
+            stages.length,
           ),
         },
       ],

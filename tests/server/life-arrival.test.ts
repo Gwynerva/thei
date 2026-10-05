@@ -4,6 +4,7 @@ import {
   getLatestLifePoints,
   getLifeActivity,
   getLifeWindow,
+  invalidateLifeIndex,
 } from '../../server/thei/public/life';
 import { STRANGER } from '../../server/thei/access-links/viewer';
 import { ProjectEventAccessLevel } from '../../shared/access-level';
@@ -17,6 +18,7 @@ vi.mock('../../server/thei/public/entities', () => ({
     relatedEntities: [],
   })),
   buildPublicEntityReference: vi.fn(async () => undefined),
+  buildPublicProjectSummary: vi.fn(async () => ({ tags: [] })),
   buildPublicPageIcon: vi.fn(async () => undefined),
 }));
 vi.mock('../../server/thei/public/content', () => ({
@@ -134,6 +136,52 @@ describe('what a chronology shows of days to come', () => {
     expect(window.newestDate).toBe('2026-03-01');
     expect(countLifePoints({ now: MORNING })).toBe(2);
   });
+
+  it('keeps a section dated only ahead waiting, not on the day it was written', async () => {
+    const { db, schema } = context;
+    db.insert(schema.projects)
+      .values({
+        projectUuid: 'project',
+        publicId: 'project',
+        humanReadableSlug: 'project',
+        title: 'project',
+        summary: '',
+        access: ProjectEventAccessLevel.Public,
+        createdAt: Date.parse('2026-02-01T00:00:00Z'),
+        updatedAt: 1,
+      })
+      .run();
+    db.insert(schema.projectContentSections)
+      .values({
+        sectionUuid: 'ahead',
+        projectUuid: 'project',
+        title: 'ahead',
+        humanReadableSlug: 'ahead',
+        publicId: 'ahead',
+        sortOrder: 0,
+        createdAt: Date.parse('2026-04-01T00:00:00Z'),
+        updatedAt: 1,
+      })
+      .run();
+    db.insert(schema.periods)
+      .values({
+        ownerType: 'project-section',
+        ownerId: 'ahead',
+        sortOrder: 0,
+        startDate: '2026-11-01',
+        endDate: '2026-11-03',
+      })
+      .run();
+
+    const scope = { kind: 'project' as const, projectUuid: 'project' };
+    const window = await getLifeWindow({ viewer: STRANGER, now: NOON, scope });
+    expect(
+      window.days.flatMap((day) => day.points.map((point) => point.entityKind)),
+    ).not.toContain('project-section');
+    expect(countLifePoints({ now: NOON, scope })).toBe(1);
+    const activity = await getLifeActivity({ viewer: STRANGER, now: NOON });
+    expect(activity.days).not.toHaveProperty('2026-04-01');
+  });
 });
 
 describe('what a card of a period knows', () => {
@@ -173,5 +221,20 @@ describe('what a card of a period knows', () => {
     expect(secret).toMatchObject({ date: '2026-05-01', transition: 'started' });
     expect(secret).not.toHaveProperty('period');
     expect(secret).not.toHaveProperty('ongoing');
+  });
+});
+
+describe('the points kept between requests', () => {
+  it('keeps them until the content changes, and builds them anew for a new day', () => {
+    expect(countLifePoints({ now: MORNING })).toBe(2);
+    // Written behind the API's back: the kept points do not know of it.
+    diary('earlier', '2026-02-02');
+    expect(countLifePoints({ now: MORNING })).toBe(2);
+    // A day that comes is read afresh, and the new entry with it.
+    expect(countLifePoints({ now: NOON })).toBe(4);
+    diary('another', '2026-02-03');
+    expect(countLifePoints({ now: NOON })).toBe(4);
+    invalidateLifeIndex();
+    expect(countLifePoints({ now: NOON })).toBe(5);
   });
 });

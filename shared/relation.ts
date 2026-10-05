@@ -1,3 +1,4 @@
+import type { ContentEntitySearchItem } from './admin/content-entity-search';
 import type { MediaDescriptor } from './media';
 
 /**
@@ -61,6 +62,35 @@ export type RelationEditItem = {
   date?: string;
   iconMedia?: MediaDescriptor;
 };
+
+/**
+ * The other end of a relation as the entity search found it: what a chip
+ * and the modal show of it. `date` is always set, absent or not, so the end
+ * picked replaces every field of the one before.
+ */
+export function relationEndOf(
+  entity: Pick<
+    ContentEntitySearchItem,
+    | 'entityId'
+    | 'title'
+    | 'summary'
+    | 'humanReadableSlug'
+    | 'publicId'
+    | 'date'
+    | 'previewMedia'
+  > & { entityType: RelationEntityType },
+): Omit<RelationEditItem, 'type' | 'note'> {
+  return {
+    entityType: entity.entityType,
+    entityId: entity.entityId,
+    title: entity.title,
+    summary: entity.summary,
+    humanReadableSlug: entity.humanReadableSlug,
+    publicId: entity.publicId,
+    date: entity.date,
+    iconMedia: entity.previewMedia,
+  };
+}
 
 export type RelationGetItem = RelationEditItem & {
   title: string;

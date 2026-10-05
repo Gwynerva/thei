@@ -39,6 +39,7 @@ const model = defineModel<V>({ required: true });
 const open = ref(false);
 const trigger = useTemplateRef<HTMLButtonElement>('trigger');
 const list = useTemplateRef<HTMLElement>('list');
+const listId = useId();
 
 const chosen = computed(
   () =>
@@ -82,8 +83,16 @@ function focusChosen() {
   )?.focus({ preventScroll: true });
 }
 
-/** The arrows walk the options that can be picked, as in a select. */
+/**
+ * The arrows walk the options that can be picked, as in a select. Tab leaves
+ * the popup for good: it closes, and the focus goes on from the trigger.
+ */
 function onKeydown(event: KeyboardEvent) {
+  if (event.key === 'Tab') {
+    open.value = false;
+    trigger.value?.focus({ preventScroll: true });
+    return;
+  }
   const buttons = optionButtons();
   const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
   const target =
@@ -99,6 +108,11 @@ function onKeydown(event: KeyboardEvent) {
   if (target === undefined) return;
   event.preventDefault();
   buttons[target]?.focus({ preventScroll: true });
+}
+
+/** Escape gives the focus back to the trigger; a click elsewhere keeps it there. */
+function onDismiss(reason: string) {
+  if (reason === 'escape') trigger.value?.focus({ preventScroll: true });
 }
 
 function onTriggerKeydown(event: KeyboardEvent) {
@@ -120,6 +134,7 @@ function onTriggerKeydown(event: KeyboardEvent) {
       "
       aria-haspopup="listbox"
       :aria-expanded="open"
+      :aria-controls="open ? listId : undefined"
       :aria-label="triggerLabel"
       :data-title-popup="collapsible ? triggerLabel : undefined"
       @click="open = !open"
@@ -134,6 +149,7 @@ function onTriggerKeydown(event: KeyboardEvent) {
       <span
         class="min-w-0 truncate"
         :class="{ 'max-sm:hidden': collapsible, 'text-accent': narrowed }"
+        data-title-popup-label
         >{{ chosen?.label }}</span
       >
       <Icon
@@ -151,6 +167,7 @@ function onTriggerKeydown(event: KeyboardEvent) {
       :teleport-to="teleportTo"
       fit-content
       @opened="focusChosen"
+      @dismiss="onDismiss"
     >
       <div
         class="flex scrollbar-hover max-h-(--floating-popup-available-height)
@@ -161,6 +178,7 @@ function onTriggerKeydown(event: KeyboardEvent) {
           {{ label }}
         </p>
         <div
+          :id="listId"
           ref="list"
           role="listbox"
           :aria-label="label"
@@ -198,7 +216,11 @@ function onTriggerKeydown(event: KeyboardEvent) {
                 >{{ option.count }}</span
               >
             </button>
-            <hr v-if="option.divider" class="my-1 border-border-1" />
+            <hr
+              v-if="option.divider"
+              role="none"
+              class="my-1 border-border-1"
+            />
           </template>
         </div>
       </div>

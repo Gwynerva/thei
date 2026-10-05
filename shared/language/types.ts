@@ -110,7 +110,6 @@ export type LanguagePhrases = {
   asset_library_empty: string;
   asset_library_unused: string;
   asset_library_unused_hint: string;
-  asset_library_all: string;
   /** Files used anywhere at all: no kind of entity singled out. */
   asset_library_anywhere: string;
   /** Leads the ways out of a narrowed search that found nothing. */

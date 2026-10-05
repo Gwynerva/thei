@@ -225,7 +225,7 @@ export type PublicNeighbours = {
   next?: PublicNeighbour;
 };
 
-export type PublicProjectChildParent = PublicEntityReference & {
+export type PublicSectionParent = PublicEntityReference & {
   access: ProjectEventAccessLevel;
   humanReadableSlug: string;
   publicId: string;
@@ -239,7 +239,7 @@ export type PublicProjectSectionResponse = PublicProjectSection & {
   content: PublicContentOutputData;
   /** `updatedAt` only when the section was edited on a later day. */
   chronology: { createdAt: string; updatedAt?: string };
-  project: PublicProjectChildParent;
+  project: PublicSectionParent;
   references: PublicReferences;
   /** Set by the page's own route; the Markdown representation has none. */
   neighbours?: PublicNeighbours;

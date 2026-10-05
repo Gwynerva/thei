@@ -1,6 +1,15 @@
 import type { Ref } from 'vue';
-import { AUDIO_PLAYBACK_RATES } from '#layers/thei/shared/audio';
+import {
+  AUDIO_OUTPUT_EXTENSION,
+  AUDIO_PLAYBACK_RATES,
+} from '#layers/thei/shared/audio';
 import { getAssetMimeType } from '#layers/thei/shared/assets/formats';
+import {
+  applyMediaVolume,
+  volumeSetTo,
+  volumeToggled,
+  type MediaVolume,
+} from './media-volume';
 
 /** The recording playing on this page: starting another pauses it. */
 let playing: HTMLAudioElement | null = null;
@@ -19,7 +28,7 @@ const SESSION_SKIP = 10;
 
 /** What a browser is asked whether it plays, by the file's extension. */
 function playableType(extension: string): string {
-  if (extension === 'weba') return 'audio/webm; codecs="opus"';
+  if (extension === AUDIO_OUTPUT_EXTENSION) return 'audio/webm; codecs="opus"';
   if (extension === 'opus') return 'audio/ogg; codecs="opus"';
   return getAssetMimeType(extension);
 }
@@ -91,6 +100,12 @@ export function useAudioPlayback(
   async function play() {
     const el = element();
     if (!el || unsupported.value) return;
+    // A load that failed — the connection dropped — is tried afresh, from
+    // where the player stands.
+    if (el.error) {
+      if (current.value > 0) pendingSeek = current.value;
+      el.load();
+    }
     try {
       await el.play();
     } catch (error) {
@@ -145,26 +160,19 @@ export function useAudioPlayback(
     updatePositionState();
   }
 
-  function setVolume(value: number) {
+  function setLoudness(next: MediaVolume) {
+    volume.value = next.volume;
+    muted.value = next.muted;
     const el = element();
-    const next = Math.min(1, Math.max(0, value));
-    volume.value = next;
-    muted.value = next === 0;
-    if (el) {
-      el.volume = next;
-      el.muted = next === 0;
-    }
+    if (el) applyMediaVolume(el, next);
+  }
+
+  function setVolume(value: number) {
+    setLoudness(volumeSetTo(value));
   }
 
   function toggleMute() {
-    const el = element();
-    const next = !muted.value;
-    muted.value = next;
-    if (!next && volume.value === 0) volume.value = 1;
-    if (el) {
-      el.muted = next;
-      el.volume = volume.value;
-    }
+    setLoudness(volumeToggled({ volume: volume.value, muted: muted.value }));
   }
 
   function updatePositionState() {
@@ -294,9 +302,13 @@ export function useAudioPlayback(
     [
       'error',
       () => {
-        unsupported.value = true;
         paused.value = true;
+        waiting.value = false;
         stopFollowing();
+        // Only a file the browser cannot play is said to be unplayable; a
+        // failed request may well succeed when play is pressed again.
+        if (element()?.error?.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED)
+          unsupported.value = true;
       },
     ],
   ];

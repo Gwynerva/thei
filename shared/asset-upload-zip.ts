@@ -1,4 +1,11 @@
-const ZIP_EXCLUDED_EXTENSIONS = new Set([
+import {
+  AUDIO_EXTENSIONS,
+  IMAGE_EXTENSIONS,
+  normalizeAssetExtension,
+  VIDEO_EXTENSIONS,
+} from './assets/formats';
+
+const ZIP_EXCLUDED_EXTENSIONS = new Set<string>([
   'zip',
   'rar',
   '7z',
@@ -17,31 +24,13 @@ const ZIP_EXCLUDED_EXTENSIONS = new Set([
   'odt',
   'ods',
   'odp',
-  'jpg',
-  'jpeg',
-  'png',
-  'gif',
-  'webp',
-  'avif',
-  'svg',
-  'mp4',
-  'webm',
-  'mov',
-  'avi',
-  'mp3',
-  'wav',
-  'ogg',
-  'flac',
-  'm4a',
-  'aac',
-  'opus',
-  'oga',
-  'weba',
-  'aif',
-  'aiff',
+  // Media is compressed already, and a library plays or shows it as it is.
+  ...IMAGE_EXTENSIONS,
+  ...VIDEO_EXTENSIONS,
+  ...AUDIO_EXTENSIONS,
 ]);
 
 export function canZipAssetExtension(extension: string): boolean {
-  const normalized = extension.trim().replace(/^\./, '').toLowerCase();
+  const normalized = normalizeAssetExtension(extension);
   return normalized.length > 0 && !ZIP_EXCLUDED_EXTENSIONS.has(normalized);
 }

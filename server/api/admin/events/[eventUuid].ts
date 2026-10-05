@@ -38,6 +38,7 @@ import {
 } from '../../../thei/tags';
 import { syncEntityActionUsages } from '../../../thei/projects/action-usages';
 import { syncEntityBanner } from '../../../thei/entity-banner';
+import { deletePeriods } from '../../../thei/periods';
 import {
   ensureExternalLinks,
   entityExternalLinkUrls,
@@ -233,14 +234,7 @@ export default defineEventHandler(async (event) => {
     );
     const { db, schema } = THEI_SERVER.useDb();
     db.transaction((tx) => {
-      tx.delete(schema.periods)
-        .where(
-          and(
-            eq(schema.periods.ownerType, 'event'),
-            eq(schema.periods.ownerId, eventUuid),
-          ),
-        )
-        .run();
+      deletePeriods(tx, schema, 'event', [eventUuid]);
       deleteRelations(tx, schema, { type: 'event', id: eventUuid });
       deleteShareLinks(tx, schema, 'event', eventUuid);
       deleteExternalLinkList(tx, schema, { type: 'event', id: eventUuid });

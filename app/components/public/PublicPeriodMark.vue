@@ -27,7 +27,9 @@ defineProps<{
 
 <template>
   <!-- A disc is positioned so that its ring always lies over the rail it
-       sits on, parting it from the line the same on both sides. -->
+       sits on, parting it from the line the same on both sides; it is
+       shaded as a marker on the life rail is, so the white shape stands out
+       of the accent. -->
   <span
     class="flex shrink-0 items-center justify-center"
     :class="
@@ -35,7 +37,7 @@ defineProps<{
         ? 'size-5 rounded-full border border-current'
         : [
             'relative size-5 rounded-full ring-2 ring-bg-1',
-            muted ? 'bg-bg-3 text-text-3' : 'public-period-disc text-white',
+            muted ? 'bg-bg-3 text-text-3' : 'text-white marker-shade-accent',
           ]
     "
     aria-hidden="true"
@@ -79,15 +81,3 @@ defineProps<{
     ></span>
   </span>
 </template>
-
-<style scoped>
-/* Shaded towards its middle, as a marker on the life rail is, so the white
-   shape stands out of the accent. */
-.public-period-disc {
-  background: radial-gradient(
-    circle,
-    color-mix(in oklab, var(--color-accent), black 20%) 0%,
-    var(--color-accent) 72%
-  );
-}
-</style>

@@ -49,7 +49,7 @@ import {
   sortLifePoints,
 } from '#layers/thei/shared/life-timeline';
 import { buildPublicEntityPreviewMedia } from './content';
-import { buildPublicSectionCardMedia } from '../entity-banner';
+import { buildPublicCardMedia } from '../entity-banner';
 import {
   buildPublicEventSummary,
   buildPublicPageIcon,
@@ -293,7 +293,7 @@ export async function getLifeRewind(options: {
   now?: Date;
 }): Promise<LifeRewindResponse> {
   const referenceDate = utcDayOf(options.now ?? new Date());
-  const selected = selectLifeRewindPoints(buildRawLifePoints(), referenceDate);
+  const selected = selectLifeRewindPoints(cachedRawLifePoints(), referenceDate);
   const paged = paginate(
     selected,
     options.page,
@@ -309,6 +309,39 @@ export async function getLifeRewind(options: {
       })),
     ),
   };
+}
+
+/**
+ * The points of every entity, kept until the content changes: every
+ * chronology, the activity grid, a project page's count and the Rewind read
+ * them, and building them reads every table that holds a date. Any write
+ * through the API drops them (`server/thei/plugin.ts`), and a day that comes
+ * builds them anew, since what has arrived differs. They are shared by every
+ * reader, which never changes them. Kept by database, so a test's fresh one
+ * starts afresh too.
+ */
+const rawPointsByDb = new WeakMap<object, Map<string, RawPoint[]>>();
+
+export function invalidateLifeIndex() {
+  const { db } = THEI_SERVER.useDb();
+  rawPointsByDb.delete(db);
+}
+
+function cachedRawLifePoints(cutoff?: string): RawPoint[] {
+  const { db } = THEI_SERVER.useDb();
+  let byCutoff = rawPointsByDb.get(db);
+  if (!byCutoff) rawPointsByDb.set(db, (byCutoff = new Map()));
+  const key = cutoff ?? '';
+  let points = byCutoff.get(key);
+  if (!points) {
+    // The points of a day gone by are never read again; the Rewind's, which
+    // look at no day in particular, stay.
+    if (cutoff)
+      for (const other of byCutoff.keys()) if (other) byCutoff.delete(other);
+    points = buildRawLifePoints(cutoff);
+    byCutoff.set(key, points);
+  }
+  return points;
 }
 
 /**
@@ -333,7 +366,14 @@ function buildRawLifePoints(cutoff?: string): RawPoint[] {
   const sectionById = new Map(
     sections.map((section) => [section.sectionUuid, section]),
   );
-  const datedSections = new Set<string>();
+  // A section with periods is on the timeline by them, even before the first
+  // of them has come: until then it waits, rather than landing on the day it
+  // was written.
+  const datedSections = new Set(
+    periods
+      .filter((period) => period.ownerType === 'project-section')
+      .map((period) => period.ownerId),
+  );
   // An event belongs to a project's chronology through its relations, which is
   // the same list the project page already shows as related events.
   const projectsByEvent = new Map<string, string[]>();
@@ -406,7 +446,6 @@ function buildRawLifePoints(cutoff?: string): RawPoint[] {
         ? projectById.get(section.projectUuid)
         : undefined;
       if (!section || !project) continue;
-      datedSections.add(section.sectionUuid);
       raw.push(
         boundaryPoint(
           'project-section',
@@ -562,7 +601,7 @@ function buildLifeIndex(
   now: Date | number = Date.now(),
 ): LifeIndex {
   const cutoff = lifeArrivalCutoff(now);
-  const scoped = buildRawLifePoints(cutoff).filter(
+  const scoped = cachedRawLifePoints(cutoff).filter(
     (point) =>
       scope.kind !== 'project' ||
       (point.projectUuids?.includes(scope.projectUuid) ?? false),
@@ -951,7 +990,7 @@ async function hydrateLifePoint(
   }
   const section = point.section!;
   const [media, projectReference] = await Promise.all([
-    buildPublicSectionCardMedia(project, section, opens),
+    buildPublicCardMedia({ type: 'project-section', project, section }, opens),
     buildPublicEntityReference(project),
   ]);
   return {

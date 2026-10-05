@@ -225,7 +225,7 @@ test('a project lists its general sections and dated stages in two tabs', async 
   expect(second.x).toBeGreaterThan(first.x + first.width);
   for (const card of await cards.all()) {
     const rect = (await card.boundingBox())!;
-    const media = (await card.locator('[data-section-media]').boundingBox())!;
+    const media = (await card.locator('[data-card-media]').boundingBox())!;
     expect(
       Math.abs(media.x + media.width - (rect.x + rect.width)),
     ).toBeLessThan(2);

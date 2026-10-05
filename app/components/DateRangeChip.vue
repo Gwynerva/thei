@@ -18,7 +18,6 @@ const props = withDefaults(
     removable?: boolean;
     /** Turns the label into a button that asks to reopen the picker. */
     editable?: boolean;
-    href?: string;
   }>(),
   { removable: false, editable: false },
 );
@@ -49,9 +48,7 @@ const label = computed(() =>
  * something — wears the raised look the others take under the pointer, so it
  * stands off whatever it lies on; its ground lets a picture beneath tint it.
  */
-const interactive = computed(
-  () => Boolean(props.href) || props.removable || props.editable,
-);
+const interactive = computed(() => props.removable || props.editable);
 
 const precision = computed(() =>
   'precision' in props.period ? props.period.precision : 'exact',
@@ -96,9 +93,7 @@ const toneClass = computed(() => {
   <!-- Two lines, as the chronology shows a period: its name, then its dates.
        A period without a name is its dates alone, in the name's place; the
        chips of one row share a height, so it sits in the middle of it. -->
-  <component
-    :is="href && !removable ? 'a' : 'span'"
-    :href="href && !removable ? href : undefined"
+  <span
     class="inline-flex max-w-full items-center gap-1 rounded-normal py-1 text-xs
       leading-tight no-underline"
     :class="[
@@ -143,5 +138,5 @@ const toneClass = computed(() => {
     >
       <Icon name="close" />
     </button>
-  </component>
+  </span>
 </template>

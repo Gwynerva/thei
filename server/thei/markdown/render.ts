@@ -38,7 +38,7 @@ import {
   canOpenPublicEntity,
 } from '../public/entities';
 import { listPublicRelatedAll } from '../public/related';
-import { getProjectSections } from '../projects/content-sections';
+import { listProjectSections } from '../projects/content-sections';
 import { siteUrl } from '../site-url';
 import { STRANGER } from '../access-links/viewer';
 import { ownerText } from '../owner-text';
@@ -48,6 +48,7 @@ import {
   type DatedPeriod,
 } from '#layers/thei/shared/date-precision';
 import { lifeArrivalCutoff } from '#layers/thei/shared/life';
+import { publicPeriodState } from '#layers/thei/shared/public-timeline';
 
 /**
  * Public pages as Markdown.
@@ -105,7 +106,7 @@ export async function renderProjectSectionMarkdown(
 ): Promise<MarkdownDocument | undefined> {
   const project = await THEI_SERVER.projects.findByPublicId(projectPart);
   if (!project || !canOpenPublicEntity(project.access, false)) return undefined;
-  const section = (await getProjectSections(project.projectUuid)).find(
+  const section = listProjectSections(project.projectUuid).find(
     (item) => item.publicId === sectionPart,
   );
   if (!section || section.isPrivate) return undefined;
@@ -164,11 +165,12 @@ function periodLines(periods: Period[]): string[] {
   return [
     periods
       .map((period) => {
+        const state = publicPeriodState(period, cutoff);
         const notes = [
           ...(period.label ? [ownerText(period.label)] : []),
-          ...(period.startDate > cutoff
+          ...(state === 'upcoming'
             ? [THEI_SERVER.phrase.period_state_upcoming]
-            : period.endDate > cutoff
+            : state === 'ongoing'
               ? [THEI_SERVER.phrase.period_state_ongoing]
               : []),
         ];

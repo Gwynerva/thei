@@ -106,7 +106,16 @@ export default defineEventHandler(
       return { ...result, items: [] };
     }
 
-    const [iconUsages, directAssetRows, contentAssetRows] = await Promise.all([
+    // A project's size is what it holds and what its sections hold: their
+    // banners and the files of their bodies, as the editor counts them.
+    const sections = schema.projectContentSections;
+    const [
+      iconUsages,
+      directAssetRows,
+      contentAssetRows,
+      sectionAssetRows,
+      sectionContentAssetRows,
+    ] = await Promise.all([
       db
         .select({
           asset: schema.assets,
@@ -163,6 +172,50 @@ export default defineEventHandler(
             inArray(schema.content.ownerId, projectUuids),
           ),
         ),
+      db
+        .select({
+          projectUuid: sections.projectUuid,
+          assetUuid: schema.assets.assetUuid,
+          size: schema.assets.size,
+        })
+        .from(schema.assets)
+        .innerJoin(
+          schema.assetUsages,
+          eq(schema.assets.assetUuid, schema.assetUsages.assetUuid),
+        )
+        .innerJoin(
+          sections,
+          eq(schema.assetUsages.containerId, sections.sectionUuid),
+        )
+        .where(
+          and(
+            eq(schema.assetUsages.containerType, 'project-section'),
+            inArray(sections.projectUuid, projectUuids),
+          ),
+        ),
+      db
+        .select({
+          projectUuid: sections.projectUuid,
+          assetUuid: schema.assets.assetUuid,
+          size: schema.assets.size,
+        })
+        .from(schema.assets)
+        .innerJoin(
+          schema.assetUsages,
+          eq(schema.assets.assetUuid, schema.assetUsages.assetUuid),
+        )
+        .innerJoin(
+          schema.content,
+          eq(schema.assetUsages.containerId, schema.content.contentUuid),
+        )
+        .innerJoin(sections, eq(schema.content.ownerId, sections.sectionUuid))
+        .where(
+          and(
+            eq(schema.assetUsages.containerType, 'content'),
+            eq(schema.content.ownerType, 'project-section'),
+            inArray(sections.projectUuid, projectUuids),
+          ),
+        ),
     ]);
 
     const iconUrlByProjectUuid = new Map(
@@ -170,7 +223,12 @@ export default defineEventHandler(
     );
 
     const assetsByProjectUuid = new Map<string, Map<string, number>>();
-    for (const row of [...directAssetRows, ...contentAssetRows]) {
+    for (const row of [
+      ...directAssetRows,
+      ...contentAssetRows,
+      ...sectionAssetRows,
+      ...sectionContentAssetRows,
+    ]) {
       const assets =
         assetsByProjectUuid.get(row.projectUuid) ?? new Map<string, number>();
       assets.set(row.assetUuid, row.size);

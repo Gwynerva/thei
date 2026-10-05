@@ -14,10 +14,10 @@ import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
  *
  * A project always opens with it, banner or not, its icon beside the title
  * and its showcase, tags and tabs under the words. An event or a section
- * opens with it only once it has a banner, and says what it is in a line of
- * pills above the title instead: the kind, and the project a section is a
- * part of. Without a banner they keep `PublicPageHeader`, whose words these
- * are.
+ * opens with it only once it has a banner, and says what it is above the
+ * title instead: an event in a pill, a section in the one line naming its
+ * project that its plain header has too (`PublicPageParent`). Without a
+ * banner they keep `PublicPageHeader`, whose words these are.
  */
 const props = defineProps<{
   title: string;
@@ -27,8 +27,9 @@ const props = defineProps<{
   iconMedia?: MediaDescriptor;
   /** What the page is, when it has no icon of its own. */
   kind?: { icon: IconName; label: string };
-  /** What the page is a part of: a section's project. */
+  /** What the page is a part of, and what it is of it: a section's project. */
   parent?: {
+    label: string;
     href: string;
     title: string;
     iconMedia?: MediaDescriptor;
@@ -61,6 +62,9 @@ const tall = computed(
 );
 // The hero paints the page top.
 usePublicPageGlow({ enabled: false });
+/** The pills over the banner: what the page is, and its marks. */
+const heroPill = `inline-flex items-center gap-2 rounded-full bg-white/9 text-sm
+  font-semibold ring-1 ring-white/12`;
 </script>
 
 <template>
@@ -96,43 +100,24 @@ usePublicPageGlow({ enabled: false });
         :class="bannerMedia ? 'sm:max-w-2/3' : 'sm:max-w-4/5'"
       >
         <div
-          v-if="isShowcase || isCv || kind || parent"
+          v-if="isShowcase || isCv || kind"
           class="flex max-w-full flex-wrap items-center justify-center gap-xs
             sm:justify-start"
           data-hero-pills
         >
           <span
             v-if="kind"
-            class="inline-flex items-center gap-2 rounded-full bg-white/9 px-xs
-              py-1 text-sm font-semibold text-white/78 ring-1 ring-white/12"
+            :class="heroPill"
+            class="px-xs py-1 text-white/78"
             data-hero-kind
           >
             <Icon :name="kind.icon" />
             <span>{{ kind.label }}</span>
           </span>
-          <TheiLink
-            v-if="parent"
-            :to="parent.href"
-            class="inline-flex max-w-full min-w-0 items-center gap-2
-              rounded-full bg-white/9 py-1 pr-xs pl-1 text-sm font-semibold
-              text-white/88 ring-1 ring-white/12 transition focus-visible:ring-2
-              focus-visible:ring-white focus-visible:outline-none
-              hocus:bg-white/16 hocus:text-white"
-            data-hero-parent
-          >
-            <EntityTokenIcon
-              :media="parent.iconMedia"
-              icon="project"
-              plain
-              class="size-5 rounded-full"
-            />
-            <span class="min-w-0 truncate">{{ publicText(parent.title) }}</span>
-          </TheiLink>
           <span
             v-if="isShowcase"
-            class="inline-flex cursor-help items-center gap-2 rounded-full
-              bg-white/9 px-xs py-1 text-sm font-semibold text-white/78 ring-1
-              ring-white/12"
+            :class="heroPill"
+            class="cursor-help px-xs py-1 text-white/78"
             :data-title-popup="phrase.project_showcase_badge_hint"
           >
             <Icon name="star" />
@@ -140,42 +125,54 @@ usePublicPageGlow({ enabled: false });
           </span>
           <span
             v-if="isCv"
-            class="inline-flex cursor-help items-center gap-2 rounded-full
-              bg-white/9 px-xs py-1 text-sm font-semibold text-white/78 ring-1
-              ring-white/12"
+            :class="heroPill"
+            class="cursor-help px-xs py-1 text-white/78"
             :data-title-popup="phrase.project_cv_badge_hint"
           >
             <Icon name="case-important" />
             <span>{{ phrase.cv_project_label }}</span>
           </span>
         </div>
-        <!-- Title and summary read as one block, like PublicPageHeader. -->
+        <!-- Title and summary read as one block, like PublicPageHeader, and
+             a section's project heads it at the same small distance. -->
         <div
           class="flex max-w-full min-w-0 flex-col items-center gap-sm
             sm:items-start"
         >
           <div
-            class="flex max-w-full min-w-0 flex-col items-center gap-sm
-              sm:flex-row sm:gap-md"
+            class="flex max-w-full min-w-0 flex-col items-center gap-xs
+              sm:items-start"
           >
-            <Media
-              v-if="iconMedia"
-              v-bind="iconMedia"
-              fit="contain"
-              playback="autoplay"
-              autoplay-reduced-motion
-              loop
-              muted
-              class="size-24 shrink-0 rounded-normal"
-              data-hero-icon
+            <PublicPageParent
+              v-if="parent"
+              :parent
+              on-dark
+              class="hero-parent"
+              data-hero-parent
             />
-            <h1
-              class="hero-title max-w-full min-w-0 text-3xl leading-tight
-                font-bold tracking-tight text-balance wrap-break-word
-                sm:text-5xl"
+            <div
+              class="flex max-w-full min-w-0 flex-col items-center gap-sm
+                sm:flex-row sm:gap-md"
             >
-              {{ publicText(title) }}
-            </h1>
+              <Media
+                v-if="iconMedia"
+                v-bind="iconMedia"
+                fit="contain"
+                playback="autoplay"
+                autoplay-reduced-motion
+                loop
+                muted
+                class="size-24 shrink-0 rounded-normal"
+                data-hero-icon
+              />
+              <h1
+                class="hero-title max-w-full min-w-0 text-3xl leading-tight
+                  font-bold tracking-tight text-balance wrap-break-word
+                  sm:text-5xl"
+              >
+                {{ publicText(title) }}
+              </h1>
+            </div>
           </div>
           <p
             v-if="summary"
@@ -211,8 +208,6 @@ usePublicPageGlow({ enabled: false });
 }
 .hero-with-banner {
   background: var(--hero-icon-accent);
-}
-.hero-with-banner {
   container-type: inline-size;
 }
 /* Phones: darkens the blurred copy under the text; clear over the band. */
@@ -248,6 +243,10 @@ usePublicPageGlow({ enabled: false });
 .hero-tags {
   --lightness-accent: var(--lightness-accent-dark);
   --chroma-accent: var(--chroma-accent-dark);
+}
+/* Small words over the banner, with the shade they need on a light one. */
+.hero-tags,
+.hero-parent {
   text-shadow:
     0 0.03em 0.08em rgb(0 0 0 / 72%),
     0 0 0.6em rgb(0 0 0 / 80%);

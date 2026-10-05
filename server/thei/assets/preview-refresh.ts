@@ -6,6 +6,7 @@ import {
   type StoredAssetRecord,
 } from './storage';
 import { svgNeedsUseSizes } from './svg-raster-input';
+import { eachWithProgress } from './each-with-progress';
 
 /**
  * Videos whose preview frame was not chosen by colour.
@@ -70,11 +71,9 @@ async function refreshPreviews(
   const console = THEI_SERVER.console.tag('Assets');
   if (assets.length)
     console.log(`Remaking the previews of ${assets.length} ${noun}...`);
-  await options.onProgress?.(0, assets.length);
 
-  let done = 0;
   let failed = 0;
-  for (const asset of assets) {
+  await eachWithProgress(assets, options.onProgress, async (asset) => {
     try {
       await refreshMediaPreview(asset);
     } catch (error) {
@@ -85,9 +84,7 @@ async function refreshPreviews(
         }`,
       );
     }
-    done += 1;
-    await options.onProgress?.(done, assets.length);
-  }
+  });
 
   if (assets.length)
     console.log(
@@ -143,12 +140,16 @@ export async function findSvgAssetsWithUnsizedUses(): Promise<
   StoredAssetRecord[]
 > {
   const found: StoredAssetRecord[] = [];
+  // Rows of one file share its answer: the file is read once.
+  const needsByPath = new Map<string, boolean>();
   for (const asset of await findSvgAssets()) {
     const path = THEI_SERVER.assets.filePath(
       asset.contentHash,
       asset.extension,
     );
-    if (await svgNeedsUseSizes(path).catch(() => false)) found.push(asset);
+    if (!needsByPath.has(path))
+      needsByPath.set(path, await svgNeedsUseSizes(path).catch(() => false));
+    if (needsByPath.get(path)) found.push(asset);
   }
   return found;
 }

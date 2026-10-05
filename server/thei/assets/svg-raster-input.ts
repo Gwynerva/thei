@@ -197,12 +197,18 @@ async function writeSized(
     if (!writer.write(text, 'latin1'))
       await Promise.race([once(writer, 'drain'), failed]);
   };
-  for await (const chunk of readLatin1(sourcePath, options)) {
-    scanner.push(chunk);
+  try {
+    for await (const chunk of readLatin1(sourcePath, options)) {
+      scanner.push(chunk);
+      await flush();
+    }
+    scanner.end();
     await flush();
+  } catch (error) {
+    // The copy is never finished; its file is let go so it can be removed.
+    writer.destroy();
+    throw error;
   }
-  scanner.end();
-  await flush();
   writer.end();
   await Promise.race([once(writer, 'finish'), failed]);
 }

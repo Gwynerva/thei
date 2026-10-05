@@ -32,7 +32,7 @@ export type SitemapProject = AccessLike & {
   updatedAt: number;
 };
 
-export type SitemapProjectChild = {
+export type SitemapProjectSection = {
   projectUuid: string;
   humanReadableSlug: string;
   publicId: string;
@@ -64,7 +64,7 @@ export type SitemapTagUsage = {
 
 export type SitemapInput = {
   projects: readonly SitemapProject[];
-  sections: readonly SitemapProjectChild[];
+  sections: readonly SitemapProjectSection[];
   events: readonly SitemapEvent[];
   pages: readonly SitemapPage[];
   diaryEntries: readonly SitemapDiaryEntry[];
@@ -100,7 +100,7 @@ export function buildSitemapEntries(input: SitemapInput): SitemapEntry[] {
 
   // A section is reachable only when its project is listable AND it is not
   // private on its own: a public project may hold private sections.
-  const sections = (items: readonly SitemapProjectChild[]): SitemapEntry[] =>
+  const sections = (items: readonly SitemapProjectSection[]): SitemapEntry[] =>
     items.flatMap((item) => {
       if (item.isPrivate) return [];
       const project = projectByUuid.get(item.projectUuid);

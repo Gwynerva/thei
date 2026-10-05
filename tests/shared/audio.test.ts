@@ -120,6 +120,14 @@ describe('audio bitrate', () => {
     expect(isLosslessAudioCodec('opus')).toBe(false);
     expect(isLosslessAudioCodec(undefined)).toBe(false);
   });
+
+  it("takes a telephone recording's 64 kbit/s as its ceiling", () => {
+    expect(isLosslessAudioCodec('pcm_alaw')).toBe(false);
+    expect(isLosslessAudioCodec('pcm_mulaw')).toBe(false);
+    expect(
+      audioTargetBitrate(95, true, { bitrate: 64_000, codec: 'pcm_mulaw' }),
+    ).toBeLessThanOrEqual(64_000);
+  });
 });
 
 describe('audio size estimate', () => {

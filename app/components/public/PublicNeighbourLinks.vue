@@ -51,10 +51,8 @@ const sides = computed<Side[]>(() => {
 const isDiary = computed(() => neighbours.kind === 'diary-entry');
 
 function title(neighbour: PublicNeighbour) {
-  return publicText(
-    neighbour.date && !neighbour.title
-      ? formatAbsolutePublicDate(neighbour.date, language.value.code)
-      : neighbour.title,
+  return entityListName(
+    neighbour.title ? { title: neighbour.title } : { date: neighbour.date },
   );
 }
 
@@ -145,8 +143,8 @@ function popup(neighbour: PublicNeighbour) {
         <!-- The words keep clear of the window where the picture stays
              sharp, and carry a halo where they reach over the rest of it. -->
         <span
-          class="neighbour-text relative z-1 flex min-w-0 flex-1 flex-col
-            gap-0.5"
+          class="relative z-1 flex min-w-0 flex-1 flex-col gap-0.5
+            text-halo-bg-2"
           :class="side.key === 'previous' ? 'pr-10' : 'pl-10'"
         >
           <span
@@ -179,12 +177,3 @@ function popup(neighbour: PublicNeighbour) {
     </MediaInteraction>
   </nav>
 </template>
-
-<style scoped>
-.neighbour-text {
-  text-shadow:
-    0 0 0.5em var(--color-bg-2),
-    0 0 0.9em var(--color-bg-2),
-    0 0.12em 0.45em var(--color-bg-2);
-}
-</style>

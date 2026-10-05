@@ -499,7 +499,9 @@ describe('asset library', () => {
         listLibrarySections({ source: 'page', q: 'concert' }).items,
       ).toEqual([]);
       // A kind of file that is not there counts as nothing, not as absent.
-      expect(listLibrarySections({ type: 'video' }).facets.sources).toEqual({});
+      expect(listLibrarySections({ type: 'video' }).facets!.sources).toEqual(
+        {},
+      );
     });
 
     it('narrows the flat list to a kind of entity, or to where nothing holds a file', () => {

@@ -1,11 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { readFile, rm, writeFile } from 'node:fs/promises';
-import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import { createError } from 'h3';
 import sharp from 'sharp';
 import { theiTempPath } from './temp';
+import { runFfmpeg } from './ffmpeg';
 import { assetBytesSize, fileBytes, type AssetBytes } from './bytes';
 import { AssetType } from '../../../shared/asset';
 import {
@@ -574,27 +573,13 @@ export function videoSourceInfo(
 }
 
 export async function readFfmpegInputInfo(filePath: string): Promise<string> {
-  return await new Promise<string>((resolve, reject) => {
-    const child = spawn(
-      ffmpegInstaller.path,
-      ['-hide_banner', '-i', filePath],
-      {
-        windowsHide: true,
-        stdio: ['ignore', 'ignore', 'pipe'],
-      },
-    );
-
-    let stderr = '';
-    child.stderr.setEncoding('utf8');
-    child.stderr.on('data', (chunk: string) => {
+  let stderr = '';
+  await runFfmpeg(['-hide_banner', '-i', filePath], {
+    onStderr: (chunk) => {
       stderr += chunk;
-    });
-
-    child.on('error', reject);
-    child.on('close', () => {
-      resolve(stderr);
-    });
+    },
   });
+  return stderr;
 }
 
 /**
@@ -803,36 +788,29 @@ export async function runFfmpegWithProgress(
   duration: number | undefined,
   options: AssetProcessOptions,
 ) {
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(ffmpegInstaller.path, args, {
-      windowsHide: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+  let progressBuffer = '';
+  let errorOutput = '';
+  let lastProgress = 0;
+  if (duration) options.onProgress?.(0.01);
 
-    let progressBuffer = '';
-    let errorOutput = '';
-    let lastProgress = 0;
-    if (duration) options.onProgress?.(0.01);
+  const emitProgress = (progress: number) => {
+    const nextProgress = Math.max(lastProgress, Math.min(progress, 0.99));
+    lastProgress = nextProgress;
+    options.onProgress?.(nextProgress);
+  };
 
-    const emitProgress = (progress: number) => {
-      const nextProgress = Math.max(lastProgress, Math.min(progress, 0.99));
-      lastProgress = nextProgress;
-      options.onProgress?.(nextProgress);
-    };
-
-    child.stdout.setEncoding('utf8');
-    child.stdout.on('data', (chunk: string) => {
-      progressBuffer += chunk;
+  const code = await runFfmpeg(args, {
+    signal: options.signal,
+    onStdout: (chunk) => {
+      progressBuffer += chunk.toString('utf8');
       const lines = progressBuffer.split(/\r?\n/);
       progressBuffer = lines.pop() ?? '';
       for (const line of lines) {
         const progress = parseProgressLine(line, duration);
         if (progress !== undefined) emitProgress(progress);
       }
-    });
-
-    child.stderr.setEncoding('utf8');
-    child.stderr.on('data', (chunk: string) => {
+    },
+    onStderr: (chunk) => {
       errorOutput = `${errorOutput}${chunk}`.slice(-8000);
       const hadDuration = Boolean(duration);
       const parsedDuration = parseDuration(errorOutput);
@@ -842,32 +820,11 @@ export async function runFfmpegWithProgress(
       }
       const progress = parseStatsProgress(chunk, duration);
       if (progress !== undefined) emitProgress(progress);
-    });
-
-    const signal = options.signal;
-    const abort = () => child.kill('SIGKILL');
-    signal?.addEventListener('abort', abort, { once: true });
-
-    child.on('error', (error) => {
-      signal?.removeEventListener('abort', abort);
-      reject(error);
-    });
-    child.on('close', (code) => {
-      signal?.removeEventListener('abort', abort);
-      if (signal?.aborted) {
-        reject(signal.reason);
-        return;
-      }
-      if (code === 0) {
-        options.onProgress?.(1);
-        resolve();
-        return;
-      }
-      reject(
-        new Error(errorOutput.trim() || `ffmpeg exited with code ${code}`),
-      );
-    });
+    },
   });
+  if (code !== 0)
+    throw new Error(errorOutput.trim() || `ffmpeg exited with code ${code}`);
+  options.onProgress?.(1);
 }
 
 function splitFfmpegOptions(options: string[]): string[] {

@@ -1,7 +1,10 @@
 <script lang="ts" setup>
 import { normalizeHeadingText } from '#layers/thei/shared/terminal-punctuation';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
-import { isContentEmpty } from '#layers/thei/shared/content';
+import {
+  analyzeContentData,
+  isContentEmpty,
+} from '#layers/thei/shared/content';
 import type { EventEditData } from '#layers/thei/shared/event';
 import { eventTagContext } from '#layers/thei/shared/admin/event';
 import type {
@@ -62,6 +65,15 @@ provide(publicIdErrorKey, publicIdError);
 provide(iconMediaKey, ref<MediaDescriptor>());
 const bannerMedia = ref<MediaDescriptor>();
 provide(bannerMediaKey, bannerMedia);
+/**
+ * What stands for the event beside its relations, as on its cards: its
+ * banner, else the first picture of its text.
+ */
+const ownerMedia = computed(
+  () =>
+    bannerMedia.value ??
+    analyzeContentData(eventData.value.content?.data).preview.media,
+);
 provide(iconSizeKey, ref<number>());
 const bannerSize = ref<number>();
 provide(bannerSizeKey, bannerSize);
@@ -436,6 +448,7 @@ function clone<T>(value: T): T {
       :owner="eventUuid ? { type: 'event', id: eventUuid } : undefined"
       owner-type="event"
       :owner-title="eventData.title.trim() || phrase.new_event"
+      :owner-media
       :text="eventData.content?.data"
     />
     <AdminShareLinks

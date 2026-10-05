@@ -2,7 +2,6 @@
 import type { PublicProjectSection } from '#layers/thei/shared/api/public';
 import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
 import { PROJECT_SECTIONS_ANCHOR } from '#layers/thei/shared/project-url';
-import type { TabItem } from '../UnderlineTabs.vue';
 
 /**
  * A project's sections on its page, under tabs heading the block, as its
@@ -12,7 +11,6 @@ import type { TabItem } from '../UnderlineTabs.vue';
  * project with sections of one kind shows its one tab, which says what they
  * are.
  */
-type Group = 'undated' | 'dated';
 
 const props = defineProps<{ sections: PublicProjectSection[] }>();
 
@@ -22,25 +20,13 @@ const undated = computed(() =>
 const dated = computed(() =>
   props.sections.filter((section) => section.period),
 );
-const tabs = computed<TabItem<Group>[]>(() =>
-  (
-    [
-      {
-        key: 'undated',
-        label: phrase.value.project_sections_undated,
-        icon: 'text',
-        count: undated.value.length,
-      },
-      {
-        key: 'dated',
-        label: phrase.value.project_sections_dated,
-        icon: 'calendar',
-        count: dated.value.length,
-      },
-    ] satisfies TabItem<Group>[]
-  ).filter((tab) => tab.count),
+const tabs = computed(() =>
+  sectionGroupTabs({
+    undated: undated.value.length,
+    dated: dated.value.length,
+  }).filter((tab) => tab.count),
 );
-const selected = ref<Group>(undated.value.length ? 'undated' : 'dated');
+const selected = ref<SectionGroup>(undated.value.length ? 'undated' : 'dated');
 const shown = computed(() =>
   selected.value === 'dated' ? dated.value : undated.value,
 );

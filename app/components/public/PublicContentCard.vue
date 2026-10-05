@@ -10,7 +10,10 @@ import type { IconName } from '#thei/icons';
 import type { PublicPeriodMark } from '#layers/thei/shared/public-timeline';
 import { imageAccentCssColor } from '#layers/thei/shared/accent-color';
 import { continuationOutlinePath } from '#layers/thei/shared/continuation-outline';
-import { useMeasuredOutline } from '#layers/thei/app/composables/cloud-outline';
+import {
+  boxRadius,
+  useMeasuredOutline,
+} from '#layers/thei/app/composables/cloud-outline';
 import {
   datePresentationToneClass,
   publicDatePrecisionOptions,
@@ -114,7 +117,7 @@ const continuationPath = useMeasuredOutline(
   computed(() => (props.continues && !props.cloud ? card.value : null)),
   (width, height) =>
     props.continues
-      ? continuationOutlinePath(width, height, props.continues, normalRadius())
+      ? continuationOutlinePath(width, height, props.continues, boxRadius())
       : '',
 );
 const outlinePath = computed(() =>
@@ -123,14 +126,6 @@ const outlinePath = computed(() =>
 /** Whether the card is drawn by an outline rather than bordered as a box. */
 const drawn = computed(() => props.cloud || Boolean(continuationPath.value));
 
-/** The corner every box card has, for an outline drawn in its place. */
-function normalRadius() {
-  const root = getComputedStyle(document.documentElement);
-  const value = root.getPropertyValue('--radius-normal').trim();
-  return value.endsWith('rem')
-    ? parseFloat(value) * parseFloat(root.fontSize)
-    : parseFloat(value) || 0;
-}
 const visibleTags = computed(() => props.tags?.slice(0, 3) ?? []);
 const visibleProjects = computed(() => props.projects ?? []);
 const hasFooter = computed(
@@ -215,10 +210,7 @@ const hasFooter = computed(
     <div
       class="pointer-events-none relative z-2 flex min-h-full flex-1 flex-col
         gap-sm"
-      :class="[
-        compact ? 'p-sm sm:p-md' : 'p-md',
-        { 'public-card-over-media': media },
-      ]"
+      :class="[compact ? 'p-sm sm:p-md' : 'p-md', { 'text-halo-bg-2': media }]"
     >
       <div
         class="flex max-w-4/5 flex-wrap items-center gap-x-2 gap-y-1 text-xs
@@ -360,17 +352,6 @@ const hasFooter = computed(
 </template>
 
 <style scoped>
-/*
- * A halo of the card's own colour keeps every line legible over the media,
- * which reaches under the text.
- */
-.public-card-over-media {
-  text-shadow:
-    0 0 0.55em var(--color-bg-2),
-    0 0 0.9em var(--color-bg-2),
-    0 0.1em 0.45em var(--color-bg-2);
-}
-
 .public-content-card-interactive:is(:focus-visible, :has(:focus-visible)) {
   --tw-shadow-color: var(--public-card-shadow-color);
 }

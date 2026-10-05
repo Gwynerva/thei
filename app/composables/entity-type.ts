@@ -29,3 +29,17 @@ export function entityDisplayTitle(
     ? formatAbsolutePublicDate(entity.date, language.value.code, style)
     : entity.title;
 }
+
+/**
+ * What an entity is called where it is listed — a relation, a neighbour:
+ * a diary entry by its day, anything else by its title, formatted as the
+ * owner's words are, or by its id while it has none.
+ */
+export function entityListName(
+  entity: { title?: string; date?: string; entityId?: string },
+  style: 'long' | 'abbreviated' = 'long',
+): string {
+  if (entity.date)
+    return formatAbsolutePublicDate(entity.date, language.value.code, style);
+  return entity.title ? publicText(entity.title) : (entity.entityId ?? '');
+}

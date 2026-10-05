@@ -154,9 +154,7 @@ for (const width of [375, 1280]) {
     for (const card of await cards.all()) {
       const rect = (await card.boundingBox())!;
       expect(rect.x + rect.width).toBeLessThanOrEqual(box.x + box.width + 0.5);
-      const media = (await card
-        .locator('[data-relation-media]')
-        .boundingBox())!;
+      const media = (await card.locator('[data-card-media]').boundingBox())!;
       expect(
         Math.abs(media.x + media.width - (rect.x + rect.width)),
       ).toBeLessThan(2);

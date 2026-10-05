@@ -1,20 +1,19 @@
 import { ProjectEventAccessLevel } from '../access-level';
 import { normalizeEntityNotes, normalizeEntityReminder } from '../entity-notes';
 import {
-  ContentValidationError,
   contentPlainText,
   isContentEmpty,
   normalizeContentData,
   type ContentFieldModelValue,
 } from '../content';
-import { ProjectContentItemError } from '../project-content-item';
-import { normalizePeriods, PeriodError } from '../period';
+import { normalizePeriods } from '../period';
 import { normalizeProjectAction } from '../project-action';
 import { validateExternalLinkList } from '../external-link';
 import { isOneOf } from '../utils/isOneOf';
 import {
-  normalizeCaptionText,
   normalizeHeadingText,
+  optionalCaption,
+  optionalHeading,
 } from '../terminal-punctuation';
 import { optionalContentDraftRef } from '../content-history';
 import {
@@ -23,7 +22,7 @@ import {
   publicIdIsValid,
 } from '../public-link';
 import type { EventEditData, ValidatedEventEditData } from '../event';
-import { RelationValidationError, validateRelations } from '../relation';
+import { validateRelations } from '../relation';
 import { normalizeTagEditItems } from '../tag';
 import { joinTagContextText, type TagContext } from '../tag-recommendation';
 
@@ -77,14 +76,7 @@ export function validateEventData(
       notes: normalizeEntityNotes(data.notes),
     };
   } catch (error) {
-    if (
-      error instanceof ContentValidationError ||
-      error instanceof ProjectContentItemError ||
-      error instanceof PeriodError ||
-      error instanceof RelationValidationError ||
-      error instanceof Error
-    )
-      return error.message;
+    if (error instanceof Error) return error.message;
     throw error;
   }
 }
@@ -114,15 +106,14 @@ function validateFiles(files: EventEditData['otherAssets']) {
     if (!assetUuid) throw new Error('Invalid event file');
     if (seen.has(assetUuid)) throw new Error('Duplicate event file');
     seen.add(assetUuid);
-    const title = normalizeHeadingText(optionalText(file.title) ?? '');
+    const title = optionalHeading(optionalText(file.title));
     if (!title) throw new Error('Event file title cannot be empty');
     if (typeof file.isPrivate !== 'boolean')
       throw new Error('Invalid file privacy');
     return {
       assetUuid,
       title,
-      caption:
-        normalizeCaptionText(optionalText(file.caption) ?? '') || undefined,
+      caption: optionalCaption(optionalText(file.caption)),
       isPrivate: file.isPrivate,
     };
   });

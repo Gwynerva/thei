@@ -82,23 +82,14 @@ function onSeekChange(value: number): void {
       own margin from the edge instead of running into it.
     -->
     <div v-if="hasAudio !== false" class="flex shrink-0 items-center">
-      <button
-        type="button"
-        class="flex shrink-0 cursor-pointer items-center justify-center
-          rounded-full p-xs text-text-1/70 transition hocus:text-text-1"
-        :aria-label="isMuted ? phrase.video_unmute : phrase.video_mute"
-        @click="emit('toggleMute')"
-      >
-        <Icon :name="isMuted || volume === 0 ? 'volume-off' : 'volume-on'" />
-      </button>
-
-      <MediaRange
-        variant="volume"
-        class="mr-xs"
-        :max="1"
-        :value="isMuted ? 0 : volume"
-        :label="phrase.video_volume"
-        @input="emit('volume', $event)"
+      <MediaVolumeControl
+        :volume
+        :muted="isMuted"
+        button-class="justify-center rounded-full p-xs text-text-1/70
+          transition hocus:text-text-1"
+        range-class="mr-xs"
+        @toggle="emit('toggleMute')"
+        @volume="emit('volume', $event)"
       />
     </div>
   </div>

@@ -10,16 +10,10 @@ import UploadSettingsFormatList, {
   type UploadSettingsFormatOption,
 } from './UploadSettingsFormatList.vue';
 import type { CropAspectChoice, FormatChoice } from './use-edit-settings';
+import UploadSettingsQualityBar from './UploadSettingsQualityBar.vue';
 
 const qualityLevel = defineModel<AssetQualityStop>('qualityLevel', {
   required: true,
-});
-/** The bar deals in plain strings; the stops it is given are the levels. */
-const levelModel = computed<string>({
-  get: () => qualityLevel.value,
-  set: (stop) => {
-    qualityLevel.value = stop as AssetQualityStop;
-  },
 });
 const formatChoice = defineModel<FormatChoice>('formatChoice', {
   required: true,
@@ -291,14 +285,12 @@ function parsePositive(value: string): number | undefined {
       />
     </div>
 
-    <FieldDiscreteBar
+    <UploadSettingsQualityBar
       v-if="!vectorKept"
-      v-model="levelModel"
+      v-model="qualityLevel"
       :stops="qualityStops"
-      :label="phrase.upload_quality"
-      :title="phrase.upload_quality"
       :detail="qualityDetail"
-      :disabled="disabled"
+      :disabled
     />
 
     <FieldToggle v-if="kind === 'video'" v-model="fastConversion">

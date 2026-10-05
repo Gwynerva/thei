@@ -1,3 +1,10 @@
+import {
+  applyMediaVolume,
+  volumeSetTo,
+  volumeToggled,
+  type MediaVolume,
+} from '#layers/thei/app/composables/media-volume';
+
 /**
  * Playback controller for the asset modal players.
  *
@@ -182,25 +189,16 @@ export class VideoPlaybackController {
   }
 
   setVolume(value: number): void {
-    const volume = Math.min(1, Math.max(0, value));
-    this.state.volume = volume;
-    if (this.master) {
-      this.master.volume = volume;
-      this.master.muted = volume === 0;
-    }
-    this.emit({ volume, muted: volume === 0 });
+    this.setLoudness(volumeSetTo(value));
   }
 
   toggleMute(): void {
-    const muted = !this.state.muted;
-    if (this.master) {
-      this.master.muted = muted;
-      if (!muted && this.master.volume === 0) this.master.volume = 1;
-    }
-    this.emit({
-      muted,
-      volume: !muted && this.state.volume === 0 ? 1 : this.state.volume,
-    });
+    this.setLoudness(volumeToggled(this.state));
+  }
+
+  private setLoudness(next: MediaVolume): void {
+    if (this.master) applyMediaVolume(this.master, next);
+    this.emit(next);
   }
 
   /** Aligns followers with the master; exposed for tests. */

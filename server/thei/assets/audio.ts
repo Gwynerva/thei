@@ -1,7 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { spawn } from 'node:child_process';
 import { rm } from 'node:fs/promises';
-import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import { createError } from 'h3';
 import { AssetType, type AudioAssetMeta } from '#layers/thei/shared/asset';
@@ -13,6 +11,8 @@ import type {
 import { AUDIO_OUTPUT_EXTENSION } from '#layers/thei/shared/audio';
 import { WAVEFORM_SAMPLE_RATE, WaveformAccumulator } from './audio-waveform';
 import { fileBytes } from './bytes';
+import { runFfmpeg } from './ffmpeg';
+import { eachWithProgress } from './each-with-progress';
 import {
   parseFfmpegInputInfo,
   readFfmpegInputInfo,
@@ -33,9 +33,7 @@ export async function inspectAudioFile(
   const inspection = parseFfmpegInputInfo(
     await readFfmpegInputInfo(filePath).catch(() => ''),
   );
-  if (!inspection.hasAudio) {
-    throw createError({ statusCode: 400, message: 'Invalid audio file' });
-  }
+  if (!inspection.hasAudio) throw unreadableAudio();
   return inspection;
 }
 
@@ -125,13 +123,19 @@ export function buildAudioEncodeArgs(
   ];
 }
 
+/**
+ * Encodes a recording to Opus. `known` is what was read of the source
+ * already — a draft and a variant request both probe it before choosing a
+ * bitrate — so the file is not asked again.
+ */
 export async function processAudioToOpus(
   source: AssetSourceFile,
   settings: AssetAudioTransformSettings,
   options: AssetProcessOptions = {},
+  known?: AssetAudioSource,
 ): Promise<ProcessedAsset> {
   options.signal?.throwIfAborted();
-  const info = await probeAudioSource(source);
+  const info = known ?? (await probeAudioSource(source));
   const outputPath = theiTempPath(
     `thei-opus-out-${randomUUID()}.${AUDIO_OUTPUT_EXTENSION}`,
   );
@@ -172,67 +176,67 @@ const PROBE_HEAD_LIMIT = 16 * 1024;
  * the samples themselves (an MP3's header may only guess it), and its
  * waveform. ffmpeg writes small mono PCM to a pipe that is measured as it
  * flows; nothing holds the file, or the sound, as a whole.
+ *
+ * A file cut short, or damaged towards its end, decodes as far as it goes,
+ * and that much is what a browser plays of it too: it is refused only when
+ * not a single sample comes out.
  */
 export async function readAudioDetails(
   filePath: string,
   options: { signal?: AbortSignal } = {},
 ): Promise<AudioDetails> {
-  options.signal?.throwIfAborted();
   const waveform = new WaveformAccumulator();
-  const { head, code } = await new Promise<{
-    head: string;
-    code: number | null;
-  }>((resolve, reject) => {
-    const child = spawn(
-      ffmpegInstaller.path,
-      [
-        '-hide_banner',
-        '-nostdin',
-        '-i',
-        filePath,
-        '-map',
-        '0:a:0',
-        '-vn',
-        '-ac',
-        '1',
-        '-ar',
-        String(WAVEFORM_SAMPLE_RATE),
-        '-c:a',
-        'pcm_s16le',
-        '-f',
-        's16le',
-        'pipe:1',
-      ],
-      { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] },
-    );
-    let head = '';
-    child.stdout.on('data', (chunk: Buffer) => waveform.push(chunk));
-    child.stderr.setEncoding('utf8');
-    child.stderr.on('data', (chunk: string) => {
-      if (head.length < PROBE_HEAD_LIMIT) head += chunk;
-    });
-    const signal = options.signal;
-    const abort = () => child.kill('SIGKILL');
-    signal?.addEventListener('abort', abort, { once: true });
-    child.on('error', (error) => {
-      signal?.removeEventListener('abort', abort);
-      reject(error);
-    });
-    child.on('close', (code) => {
-      signal?.removeEventListener('abort', abort);
-      if (signal?.aborted) reject(signal.reason);
-      else resolve({ head, code });
-    });
-  });
-  if (code !== 0 || !waveform.samples) {
-    throw createError({ statusCode: 400, message: 'Invalid audio file' });
-  }
+  let head = '';
+  await runFfmpeg(
+    [
+      '-hide_banner',
+      '-nostdin',
+      '-i',
+      filePath,
+      '-map',
+      '0:a:0',
+      '-vn',
+      '-ac',
+      '1',
+      '-ar',
+      String(WAVEFORM_SAMPLE_RATE),
+      '-c:a',
+      'pcm_s16le',
+      '-f',
+      's16le',
+      'pipe:1',
+    ],
+    {
+      signal: options.signal,
+      onStdout: (chunk) => waveform.push(chunk),
+      onStderr: (chunk) => {
+        if (head.length < PROBE_HEAD_LIMIT) head += chunk;
+      },
+    },
+  );
+  if (!waveform.samples) throw unreadableAudio();
   return {
     inspection: parseFfmpegInputInfo(head.split(/^Stream mapping:/m)[0]!),
     duration:
       Math.round((waveform.samples / WAVEFORM_SAMPLE_RATE) * 1000) / 1000,
     peaks: waveform.finish(),
   };
+}
+
+function unreadableAudio() {
+  return createError({ statusCode: 400, message: 'Invalid audio file' });
+}
+
+/**
+ * Whether reading a recording failed on the file itself — nothing in it
+ * decodes as sound — rather than on ffmpeg, which would not start.
+ */
+function isUnreadableAudio(error: unknown) {
+  return (
+    Boolean(error) &&
+    typeof error === 'object' &&
+    (error as { statusCode?: unknown }).statusCode === 400
+  );
 }
 
 export function audioMetaFromDetails(
@@ -292,33 +296,41 @@ export interface CompleteAudioMetasOptions {
 
 /**
  * Reads the length and waveform of every recording that has none, one at a
- * time in the sound lane. A file that cannot be read gets an empty waveform
- * and no length, and is named in the result rather than failing the rest:
- * its player still plays what the browser can, and asks the file its length.
+ * time in the sound lane, and the bytes several rows share only once. A file
+ * nothing in which decodes as sound gets an empty waveform and no length, and
+ * is named in the result rather than failing the rest: its player still
+ * plays what the browser can, and asks the file its length. ffmpeg that
+ * would not start at all fails the whole pass, which the next boot runs
+ * again, rather than marking every file as unreadable for good.
  */
 export async function completeAudioMetas(
   options: CompleteAudioMetasOptions = {},
 ): Promise<{ total: number; unreadable: StoredAssetRecord[] }> {
   const assets = await findAudioWithoutWaveforms();
   const unreadable: StoredAssetRecord[] = [];
-  await options.onProgress?.(0, assets.length);
-  let done = 0;
-  for (const asset of assets) {
+  const readByFile = new Map<string, AudioAssetMeta | undefined>();
+  await eachWithProgress(assets, options.onProgress, async (asset) => {
     const filePath = THEI_SERVER.assets.filePath(
       asset.contentHash,
       asset.extension,
     );
-    const read = await withProcessingSlot(AssetType.Audio, () =>
-      readAudioMeta(filePath, asset.size),
-    ).catch(() => undefined);
+    if (!readByFile.has(filePath))
+      readByFile.set(
+        filePath,
+        await withProcessingSlot(AssetType.Audio, () =>
+          readAudioMeta(filePath, asset.size),
+        ).catch((error) => {
+          if (isUnreadableAudio(error)) return undefined;
+          throw error;
+        }),
+      );
+    const read = readByFile.get(filePath);
     if (!read) unreadable.push(asset);
     const meta: AudioAssetMeta = {
       ...((asset.meta as Partial<AudioAssetMeta> | null) ?? {}),
       ...(read ?? { duration: 0, peaks: [] }),
     };
     await THEI_SERVER.assets.update(asset.assetUuid, { meta });
-    done += 1;
-    await options.onProgress?.(done, assets.length);
-  }
+  });
   return { total: assets.length, unreadable };
 }

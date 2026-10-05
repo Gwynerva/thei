@@ -138,26 +138,13 @@ const downloadName = computed(() =>
         >
           {{ rateLabel }}
         </button>
-        <button
-          type="button"
-          data-drag-ignore
-          class="flex cursor-pointer items-center rounded-sm p-0.5 text-base
-            transition outline-none focus-visible:ring-2
-            focus-visible:ring-accent hocus:text-text-1"
-          :aria-label="muted ? phrase.video_unmute : phrase.video_mute"
-          @click="playback.toggleMute()"
-        >
-          <Icon :name="muted || volume === 0 ? 'volume-off' : 'volume-on'" />
-        </button>
-        <!-- A phone sets its volume with its own buttons; iOS ignores this. -->
-        <MediaRange
-          variant="volume"
-          data-drag-ignore
-          class="hidden pointer-fine:block"
-          :max="1"
-          :value="muted ? 0 : volume"
-          :label="phrase.video_volume"
-          @input="playback.setVolume($event)"
+        <MediaVolumeControl
+          :volume
+          :muted
+          button-class="rounded-sm p-0.5 text-base transition outline-none
+            focus-visible:ring-2 focus-visible:ring-accent hocus:text-text-1"
+          @toggle="playback.toggleMute()"
+          @volume="playback.setVolume($event)"
         />
       </template>
       <a

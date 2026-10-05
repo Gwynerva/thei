@@ -50,7 +50,7 @@ export async function createMediaPreview(
 
   // An original JPEG keeps its EXIF orientation, and its recorded dimensions
   // are already the displayed ones: the preview has to be turned the same way.
-  const { data, info } = await withRasterReadySvg(raster, (input) =>
+  const draw = (input: Buffer | string) =>
     sharp(input, { animated: false, density })
       .autoOrient()
       .resize({
@@ -60,8 +60,13 @@ export async function createMediaPreview(
         withoutEnlargement: true,
       })
       .avif({ quality: MEDIA_PREVIEW_QUALITY, effort: 4 })
-      .toBuffer({ resolveWithObject: true }),
-  );
+      .toBuffer({ resolveWithObject: true });
+  // Only an SVG — what has a density — is prepared for librsvg; a photo or a
+  // video's frame is drawn as it is, never scanned for SVG tags.
+  const { data, info } =
+    density === undefined
+      ? await draw(raster)
+      : await withRasterReadySvg(raster, draw);
 
   return {
     buffer: data,

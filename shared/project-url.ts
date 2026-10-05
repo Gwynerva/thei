@@ -8,15 +8,15 @@ export function buildProjectUrl(
   return `/projects/${pathPart}/`;
 }
 
+/** The id of the sections block on a project's overview, for a link to it. */
+export const PROJECT_SECTIONS_ANCHOR = 'project-sections';
+
 /**
  * A project's own chronology — the second tab of its page.
  *
  * The day and the filter travel in the query string exactly as on `/life/`;
  * pass this as the base to `buildLifeUrl` to add them.
  */
-/** The id of the sections block on a project's overview, for a link to it. */
-export const PROJECT_SECTIONS_ANCHOR = 'project-sections';
-
 export function buildProjectTimelineUrl(
   humanReadable: string,
   publicId: string,

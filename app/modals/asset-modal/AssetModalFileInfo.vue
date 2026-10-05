@@ -34,7 +34,7 @@ const formattedDimensions = computed(() =>
 );
 const formattedDuration = computed(() =>
   duration !== undefined && duration > 0
-    ? formatMediaTime(Math.round(duration))
+    ? formatMediaTime(duration)
     : undefined,
 );
 

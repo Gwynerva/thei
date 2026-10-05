@@ -231,6 +231,12 @@ const { dimensions: pickedDimensions, duration: pickedDuration } = useFileInfo(
   pickedFile?.objectUrl ?? '',
   pickedFile?.extension ?? '',
 );
+/** What the picked file spends a second, until the server reads its streams. */
+const pickedBitrate = computed(() =>
+  pickedFile && pickedDuration.value
+    ? (pickedFile.size * 8) / pickedDuration.value
+    : undefined,
+);
 const humanSize = useHumanSize();
 const pickedHasAudio = ref<boolean | undefined>();
 if (
@@ -270,12 +276,7 @@ const transformSource = computed(() => {
   const duration =
     draft?.duration ?? videoMeta?.duration ?? pickedDuration.value;
   const fps = draft?.fps ?? videoMeta?.fps;
-  const bitrate =
-    draft?.bitrate ??
-    videoMeta?.bitrate ??
-    (pickedFile && pickedDuration.value
-      ? (pickedFile.size * 8) / pickedDuration.value
-      : undefined);
+  const bitrate = draft?.bitrate ?? videoMeta?.bitrate ?? pickedBitrate.value;
   return {
     width: dimensions.width,
     height: dimensions.height,
@@ -311,12 +312,7 @@ const audioSource = computed<AssetAudioSource | undefined>(() => {
       : null;
   const duration =
     draft?.duration ?? (meta?.duration || undefined) ?? pickedDuration.value;
-  const bitrate =
-    draft?.bitrate ??
-    meta?.bitrate ??
-    (pickedFile && pickedDuration.value
-      ? (pickedFile.size * 8) / pickedDuration.value
-      : undefined);
+  const bitrate = draft?.bitrate ?? meta?.bitrate ?? pickedBitrate.value;
   const channels = draft?.channels ?? meta?.channels;
   return {
     ...(duration ? { duration } : {}),
@@ -863,9 +859,15 @@ async function useAudio() {
   }
   const request = edit.request.value;
   if (!request) return;
+  const key = createKey.value;
   usingDirectly.value = true;
   try {
-    await commitAndThen(request, (asset) => finish(asset, false));
+    await commitAndThen(request, (asset) => {
+      // Stored either way: when this place cannot take it, the modal stays
+      // on it and says why, and the next "Use" does not store it again.
+      created.value = { key, asset };
+      return finish(asset, false);
+    });
   } finally {
     usingDirectly.value = false;
   }

@@ -1,4 +1,7 @@
-import { AUDIO_WAVEFORM_PEAKS } from '#layers/thei/shared/audio';
+import {
+  AUDIO_WAVEFORM_PEAKS,
+  poolAudioPeaks,
+} from '#layers/thei/shared/audio';
 
 /** The rate a recording is decoded at to draw it: speech and music alike. */
 export const WAVEFORM_SAMPLE_RATE = 8000;
@@ -47,20 +50,8 @@ export class WaveformAccumulator {
   finish(count = AUDIO_WAVEFORM_PEAKS): number[] {
     if (this.windowFilled) this.closeWindow();
     if (this.spanFilled) this.closeSpan();
-    const levels = this.levels;
-    if (!levels.length) return [];
-    const pooled = Array.from({ length: count }, (_, index) => {
-      const from = Math.floor((index * levels.length) / count);
-      const to = Math.max(
-        from + 1,
-        Math.floor(((index + 1) * levels.length) / count),
-      );
-      let loudest = 0;
-      for (let at = from; at < to; at++) {
-        loudest = Math.max(loudest, levels[at]!);
-      }
-      return loudest;
-    });
+    const pooled = poolAudioPeaks(this.levels, count);
+    if (!pooled.length) return [];
     const loudest = Math.max(...pooled);
     if (!(loudest > 0)) return pooled.map(() => 0);
     // A square root lifts quiet passages: speech next to music, or a voice
