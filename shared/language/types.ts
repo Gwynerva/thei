@@ -80,6 +80,7 @@ export type EditorJsPhrases = {
   delimiter: string;
   media: string;
   gallery: string;
+  audio: string;
   file: string;
   enter_quote: string;
   enter_caption: string;
@@ -128,6 +129,8 @@ export type LanguagePhrases = {
   asset_recipe_lossless: string;
   asset_recipe_no_audio: string;
   asset_recipe_fast: string;
+  asset_recipe_bitrate: (kbps: number) => string;
+  asset_recipe_mono: string;
   // Quality levels
   asset_quality_minimal: string;
   asset_quality_low: string;
@@ -875,6 +878,9 @@ export type LanguagePhrases = {
   content_gallery_tile: string;
   content_add_media: string;
   content_choose_file: string;
+  content_choose_audio: string;
+  content_audio_as_player: string;
+  content_audio_as_file: string;
   content_choose_entity: string;
   content_make_gallery: string;
   content_link_internal_detected: string;
@@ -1057,6 +1063,14 @@ export type LanguagePhrases = {
   video_unmute: string;
   video_volume: string;
   video_no_audio: string;
+  audio_position: (current: string, total: string) => string;
+  audio_speed: (rate: string) => string;
+  audio_download: string;
+  audio_unsupported: string;
+  audio_channel_count: (count: number) => string;
+  upload_audio_mono: string;
+  upload_audio_mono_hint: string;
+  upload_audio_source_mono: string;
   asset_variant_current: string;
   asset_variant_current_tag: string;
   asset_variant_usage_count: (count: number) => string;
@@ -1099,6 +1113,8 @@ export type LanguagePhrases = {
   file_info_size: string;
   file_info_dimensions: string;
   file_info_duration: string;
+  file_info_channels: string;
+  file_info_bitrate: string;
   file_info_empty: string;
   file_info_archived_extension: string;
   file_info_archived_size: string;

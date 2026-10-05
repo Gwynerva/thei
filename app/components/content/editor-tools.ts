@@ -28,6 +28,7 @@ import ContentMediaCard from '#layers/thei/app/components/content/ContentMediaCa
 import ContentGallery from '#layers/thei/app/components/content/ContentGallery.vue';
 import ContentAssetSkeleton from '#layers/thei/app/components/content/ContentAssetSkeleton.vue';
 import ContentAttachmentCard from '#layers/thei/app/components/content/ContentAttachmentCard.vue';
+import ContentAudioCard from '#layers/thei/app/components/content/ContentAudioCard.vue';
 import { CONTENT_CAPTION_SANITIZE } from '#layers/thei/app/components/content/content-caption-config';
 import { gallerySelectedIdAfterRemoval } from '#layers/thei/app/components/content/gallery-state';
 import {
@@ -62,7 +63,7 @@ export {
   ContentStrikeTool,
 } from './editor-inline-tools';
 
-export type ContentEditorAssetKind = 'media' | 'any';
+export type ContentEditorAssetKind = 'media' | 'audio' | 'any';
 export type ContentEditorPickAsset = (
   kind: ContentEditorAssetKind,
 ) => Promise<ContentAssetData | undefined>;
@@ -84,6 +85,9 @@ interface ContentToolLabels {
   addMedia: string;
   removeMedia: string;
   chooseFile: string;
+  chooseAudio: string;
+  audioAsFile: string;
+  audioAsPlayer: string;
   caption: string;
   mediaCentered: string;
   mediaNatural: string;
@@ -133,11 +137,20 @@ interface ContentGalleryToolConfig {
   labels: ContentToolLabels;
 }
 
+interface ContentAudioToolConfig {
+  pickAsset: ContentEditorPickAsset;
+  editAsset: ContentEditorEditAsset;
+  uploads: ContentEditorUploads;
+  labels: ContentToolLabels;
+}
+
 /** A file is picked or edited, never dropped in, so there is no upload here. */
 interface ContentAttachmentToolConfig {
   pickAsset: ContentEditorPickAsset;
   editAsset: ContentEditorEditAsset;
   labels: ContentToolLabels;
+  /** The editor has a player block a recording can be shown in instead. */
+  audio?: boolean;
 }
 
 interface EntityLinkToolConfig {
@@ -962,6 +975,243 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
   }
 }
 
+/**
+ * Recordings pasted together go up two at a time, as the files of a gallery
+ * do: the server keeps only a few staged files at once, and one staged too
+ * early could be dropped before its turn to be stored.
+ */
+const AUDIO_PASTE_CONCURRENCY = 2;
+let audioPastesRunning = 0;
+const audioPasteQueue: (() => void)[] = [];
+
+async function withAudioPasteSlot(job: () => Promise<void>) {
+  if (audioPastesRunning >= AUDIO_PASTE_CONCURRENCY) {
+    await new Promise<void>((resolve) => audioPasteQueue.push(resolve));
+  }
+  audioPastesRunning += 1;
+  try {
+    await job();
+  } finally {
+    audioPastesRunning -= 1;
+    audioPasteQueue.shift()?.();
+  }
+}
+
+export class ContentAudioTool extends VueBlockTool implements BlockTool {
+  static toolbox = {
+    title: 'Audio',
+    icon: editorIcon('audio'),
+    data: { autoOpen: true },
+  };
+
+  private asset: ContentAssetData | null;
+  private title = '';
+  private caption = '';
+  private autoOpen: boolean;
+  /** A pasted file, kept until the block is on the page. Never saved. */
+  private pendingFile?: File;
+  /** The pasted file on its way into the library. */
+  private pending?: PendingMediaUpload;
+
+  constructor(
+    private options: ContentToolOptions<
+      {
+        asset?: ContentAssetData;
+        title?: string;
+        caption?: string;
+        autoOpen?: boolean;
+        files?: File[];
+      },
+      ContentAudioToolConfig
+    >,
+  ) {
+    super(options.block);
+    this.asset = options.data.asset ?? null;
+    this.title = options.data.title ?? '';
+    this.caption = options.data.caption ?? '';
+    this.autoOpen = options.data.autoOpen === true;
+    this.pendingFile = options.data.files?.[0];
+  }
+
+  protected override afterRender() {
+    if (this.options.readOnly) return;
+    if (this.pendingFile) {
+      queueMicrotask(() => this.startPending());
+    } else if (this.autoOpen) {
+      this.autoOpen = false;
+      queueMicrotask(() => void this.pick());
+    }
+  }
+
+  protected override onDestroy() {
+    if (!this.pending) return;
+    this.pending.dispose();
+    this.pending = undefined;
+    contentToolConfig(this.options.config).uploads.track?.(-1);
+  }
+
+  save(): Record<string, unknown> {
+    return {
+      asset: this.asset,
+      title: this.title.trim() || undefined,
+      caption: this.caption.trim() || undefined,
+    };
+  }
+
+  validate(data: { asset?: ContentAssetData | null }): boolean {
+    return Boolean(data.asset?.assetUuid);
+  }
+
+  renderSettings() {
+    if (!this.asset) return [];
+    return [
+      {
+        icon: editorIcon('file'),
+        title: this.labels.audioAsFile,
+        closeOnActivate: true,
+        onActivate: () => this.convertToFile(),
+      },
+    ];
+  }
+
+  protected view() {
+    if (!this.asset)
+      return h(ContentAssetSkeleton, {
+        icon: 'audio',
+        label: this.labels.chooseAudio,
+        readOnly: this.options.readOnly || Boolean(this.pendingFile),
+        upload: this.pending,
+        editLabel: this.pending ? this.labels.chooseAudio : undefined,
+        retryLabel: this.labels.retryUpload,
+        onPick: () => void this.pick(),
+        onEdit: () => void this.editPending(),
+        onRetry: () => this.pending?.retry(),
+      });
+    return h(ContentAudioCard, {
+      asset: this.asset,
+      title: this.title,
+      caption: this.caption,
+      editable: !this.options.readOnly,
+      editLabel: this.labels.chooseAudio,
+      titlePlaceholder: this.labels.title,
+      captionPlaceholder: this.labels.caption,
+      onEdit: () => void this.edit(),
+      onTitle: (value: string) => {
+        if (value === this.title) return;
+        this.title = value;
+        this.commit();
+      },
+      onCaption: (value: string) => {
+        if (value === this.caption) return;
+        this.caption = value;
+        this.commit();
+      },
+    });
+  }
+
+  /**
+   * The pasted file goes into the library at the defaults: Opus, at medium.
+   * The skeleton follows its status by itself; the block only changes once
+   * the file has landed, and a failure waits in the skeleton for a retry.
+   */
+  private startPending() {
+    const file = this.pendingFile;
+    this.pendingFile = undefined;
+    if (!file || this.destroyed) return;
+    const { uploads } = contentToolConfig(this.options.config);
+    const pending = new PendingMediaUpload(file, {
+      constraints: uploads.constraints,
+    });
+    this.pending = pending;
+    uploads.track?.(1);
+    this.renderContent();
+    void withAudioPasteSlot(async () => {
+      // Gone, or landed through the editor, while it waited for its turn.
+      if (this.pending !== pending || this.destroyed) return;
+      await pending.run();
+    });
+    void pending.result.then((asset) => {
+      if (this.pending === pending && !this.destroyed && asset) {
+        this.finishPending(contentAssetFromVariant(asset));
+      }
+    });
+  }
+
+  /** The file has landed: the block shows it, and that is a change. */
+  private finishPending(asset: ContentAssetData) {
+    const pending = this.pending;
+    if (!pending) return;
+    this.pending = undefined;
+    pending.dispose();
+    contentToolConfig(this.options.config).uploads.track?.(-1);
+    this.asset = asset;
+    this.commit();
+  }
+
+  /** The asset editor, on the file still being stored. */
+  private async editPending() {
+    const pending = this.pending;
+    if (!pending) return;
+    let handover: PendingMediaHandover;
+    try {
+      handover = await pending.suspend();
+    } catch {
+      // Staging failed; the skeleton shows why and offers a retry.
+      return;
+    }
+    if (this.pending !== pending || this.destroyed) return;
+    const asset = await contentToolConfig(this.options.config)
+      .uploads.editPending(handover)
+      .catch(() => undefined);
+    if (this.pending !== pending || this.destroyed) return;
+    if (asset) this.finishPending(asset);
+    else void pending.run();
+  }
+
+  /** The same recording as a file to download, title and caption kept. */
+  private convertToFile() {
+    if (!this.asset) return;
+    void replaceBlock(
+      this.options.api,
+      this.options.block,
+      'contentAttachment',
+      {
+        asset: this.asset,
+        ...(this.title.trim() ? { title: this.title.trim() } : {}),
+        ...(this.caption.trim() ? { caption: this.caption.trim() } : {}),
+      },
+      true,
+    );
+  }
+
+  private async pick() {
+    const config = contentToolConfig(this.options.config);
+    const asset = await config.pickAsset('audio');
+    if (!asset || this.destroyed) return;
+    this.asset = asset;
+    this.commit();
+  }
+
+  private async edit() {
+    if (!this.asset) return;
+    const config = contentToolConfig(this.options.config);
+    const asset = await config.editAsset(this.asset, 'audio');
+    if (asset === undefined || this.destroyed) return;
+    const changed = contentAssetSelectionChanged(this.asset, asset);
+    this.asset = asset;
+    if (asset === null) {
+      this.title = '';
+      this.caption = '';
+    }
+    this.renderContent();
+    if (changed) this.dispatchChange();
+  }
+
+  private get labels() {
+    return getLabels(contentToolConfig(this.options.config));
+  }
+}
+
 export class ContentAttachmentTool extends VueBlockTool implements BlockTool {
   static toolbox = {
     title: 'File',
@@ -1009,6 +1259,35 @@ export class ContentAttachmentTool extends VueBlockTool implements BlockTool {
 
   validate(data: { asset?: ContentAssetData | null }): boolean {
     return Boolean(data.asset?.assetUuid);
+  }
+
+  renderSettings() {
+    const config = contentToolConfig(this.options.config);
+    if (!config.audio || this.asset?.type !== AssetType.Audio) return [];
+    return [
+      {
+        icon: editorIcon('audio'),
+        title: this.labels.audioAsPlayer,
+        closeOnActivate: true,
+        onActivate: () => this.convertToPlayer(),
+      },
+    ];
+  }
+
+  /** A recording kept as a file, played in place instead, words kept. */
+  private convertToPlayer() {
+    if (!this.asset) return;
+    void replaceBlock(
+      this.options.api,
+      this.options.block,
+      'contentAudio',
+      {
+        asset: this.asset,
+        ...(this.title.trim() ? { title: this.title.trim() } : {}),
+        ...(this.caption.trim() ? { caption: this.caption.trim() } : {}),
+      },
+      true,
+    );
   }
 
   protected view() {
@@ -1145,6 +1424,9 @@ function getLabels(
       addMedia: 'Add image or video',
       removeMedia: 'Remove image or video',
       chooseFile: 'Choose file',
+      chooseAudio: 'Choose audio',
+      audioAsFile: 'Show as a file',
+      audioAsPlayer: 'Show as a player',
       caption: 'Caption',
       mediaCentered: 'Centered',
       mediaNatural: 'As is',

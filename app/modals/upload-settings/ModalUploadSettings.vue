@@ -6,6 +6,7 @@ import type {
 import {
   AssetType,
   assetMetaDimensions,
+  type AudioAssetMeta,
   type VideoAssetMeta,
 } from '#layers/thei/shared/asset';
 import { assetSelectionError } from '#layers/thei/shared/asset-library';
@@ -18,6 +19,7 @@ import {
 } from '#layers/thei/shared/asset-quality-levels';
 import { describeAssetRecipe } from '#layers/thei/shared/asset-recipe';
 import {
+  estimateAudioSize,
   estimateImageSize,
   estimateVideoSize,
   type ImageSizeFallback,
@@ -31,11 +33,15 @@ import {
   createFileZipSettings,
   createOriginalAssetSettings,
   isAssetTransformSettings,
+  type AssetAudioSource,
+  type AssetAudioTransformSettings,
   type AssetImageFormat,
   type AssetUploadRequest,
 } from '#layers/thei/shared/asset-upload-settings';
+import { AUDIO_OUTPUT_EXTENSION } from '#layers/thei/shared/audio';
 import { canZipAssetExtension } from '#layers/thei/shared/asset-upload-zip';
 import {
+  audioExtensionProfile,
   imageExtensionProfile,
   isExtensionAllowed,
   videoExtensionProfile,
@@ -44,12 +50,14 @@ import AssetModal from '../asset-modal/AssetModal.vue';
 import AssetModalButton from '../asset-modal/AssetModalButton.vue';
 import AssetModalCompareMedia from '../asset-modal/AssetModalCompareMedia.vue';
 import AssetModalFileInfo from '../asset-modal/AssetModalFileInfo.vue';
+import AssetModalPreviewAudio from '../asset-modal/AssetModalPreviewAudio.vue';
 import AssetModalPreviewMedia from '../asset-modal/AssetModalPreviewMedia.vue';
 import FilePreview from '../../components/FilePreview.vue';
 import { useFileInfo } from '../asset-modal/use-file-info';
 import { detectVideoAudio } from '../asset-modal/video-audio';
 import AssetCropBox from './AssetCropBox.vue';
 import UploadSettingsCreate from './UploadSettingsCreate.vue';
+import UploadSettingsCreateAudio from './UploadSettingsCreateAudio.vue';
 import UploadSettingsDivider from './UploadSettingsDivider.vue';
 import UploadSettingsResultPanel from './UploadSettingsResultPanel.vue';
 import UploadSettingsSection from './UploadSettingsSection.vue';
@@ -165,14 +173,22 @@ const processingType = computed<AssetType>(() => {
     return AssetType.Image;
   if (isExtensionAllowed(processingExtension.value, videoExtensionProfile))
     return AssetType.Video;
+  if (isExtensionAllowed(processingExtension.value, audioExtensionProfile))
+    return AssetType.Audio;
   return AssetType.Other;
 });
-const transformKind = computed<'image' | 'video' | undefined>(() =>
+const transformKind = computed<'image' | 'video' | 'audio' | undefined>(() =>
   processingType.value === AssetType.Image
     ? 'image'
     : processingType.value === AssetType.Video
       ? 'video'
-      : undefined,
+      : processingType.value === AssetType.Audio
+        ? 'audio'
+        : undefined,
+);
+/** A kind with a frame: turned, cropped, sized and previewed as a picture. */
+const frameKind = computed<'image' | 'video' | undefined>(() =>
+  transformKind.value === 'audio' ? undefined : transformKind.value,
 );
 const canZip = computed(
   () =>
@@ -280,15 +296,49 @@ const sourceDimensions = computed(() =>
     : undefined,
 );
 
+/**
+ * Length, rate and channels of a recording: the server's probe once the
+ * draft is open, the stored file's own reading for a library file, and until
+ * then what the browser reads of the picked file.
+ */
+const audioSource = computed<AssetAudioSource | undefined>(() => {
+  if (transformKind.value !== 'audio') return undefined;
+  const draft = draftSession.draft.value;
+  const variant = processingVariant.value;
+  const meta =
+    variant?.type === AssetType.Audio
+      ? (variant.meta as AudioAssetMeta | null)
+      : null;
+  const duration =
+    draft?.duration ?? (meta?.duration || undefined) ?? pickedDuration.value;
+  const bitrate =
+    draft?.bitrate ??
+    meta?.bitrate ??
+    (pickedFile && pickedDuration.value
+      ? (pickedFile.size * 8) / pickedDuration.value
+      : undefined);
+  const channels = draft?.channels ?? meta?.channels;
+  return {
+    ...(duration ? { duration } : {}),
+    ...(bitrate ? { bitrate } : {}),
+    ...(draft?.codec ? { codec: draft.codec } : {}),
+    ...(channels ? { channels } : {}),
+  };
+});
+
 const sourceFileInfo = computed(() => ({
   extension: processingExtension.value,
   size: processingVariant.value?.size ?? pickedFile?.size,
   dimensions: sourceDimensions.value,
-  duration: transformSource.value?.duration,
+  duration: transformSource.value?.duration ?? audioSource.value?.duration,
+  channels: audioSource.value?.channels,
+  bitrate: audioSource.value?.bitrate,
 }));
 
-const processingIsCompressed = computed(() =>
-  isAssetTransformSettings(processingVariant.value?.settings),
+const processingIsCompressed = computed(
+  () =>
+    isAssetTransformSettings(processingVariant.value?.settings) ||
+    processingVariant.value?.settings?.type === 'audio-transform',
 );
 
 // ---------------------------------------------------------------------------
@@ -301,7 +351,8 @@ const section = ref<Section>(initialSection());
 // function, read only once both exist.
 const edit = useEditSettings({
   kind: () => transformKind.value,
-  source: () => transformSource.value,
+  source: () =>
+    transformKind.value === 'audio' ? audioSource.value : transformSource.value,
   profile: () => profile,
   formatSizes: () => formatSizes(),
 });
@@ -451,6 +502,13 @@ const expectedResult = computed(() => {
   if (canZip.value) return { extension: 'zip' };
   const resolved = edit.resolved.value;
   if (!resolved) return undefined;
+  if (resolved.type === 'audio-transform') {
+    const size = audioStopSize(resolved);
+    return {
+      extension: AUDIO_OUTPUT_EXTENSION,
+      ...(size ? { size: size.bytes, approximate: size.approximate } : {}),
+    };
+  }
   const size =
     resolved.type === 'video-transform'
       ? videoStopSize(resolved)
@@ -475,7 +533,9 @@ const sourceLossless = computed(() =>
 /** What an image estimate falls back on before anything is rendered. */
 const imageFallback = computed<ImageSizeFallback | undefined>(() => {
   const source = transformSource.value;
-  const output = edit.resolved.value?.dimensions;
+  const resolved = edit.resolved.value;
+  const output =
+    resolved && 'dimensions' in resolved ? resolved.dimensions : undefined;
   const bytes = sourceFileInfo.value.size;
   if (!source || !output || !bytes) return undefined;
   return {
@@ -545,12 +605,24 @@ function videoStopSize(
   return estimate ? { bytes: estimate.bytes, approximate: true } : undefined;
 }
 
+/** What a recording comes out at with these settings: an estimate, always. */
+function audioStopSize(
+  settings: AssetAudioTransformSettings,
+): StopSize | undefined {
+  const source = audioSource.value;
+  const estimate = source ? estimateAudioSize(settings, source) : undefined;
+  return estimate ? { bytes: estimate.bytes, approximate: true } : undefined;
+}
+
 /** What the file comes out at on a stop, whatever kind it is. */
 function stopSize(stop: AssetQualityStop): StopSize | undefined {
   if (transformKind.value === 'image') return imageStopSize(stop);
   if (stop === 'lossless') return undefined;
   const at = edit.settingsAt({ quality: ASSET_QUALITY_LEVEL_QUALITY[stop] });
-  return at ? videoStopSize(at.settings) : undefined;
+  if (!at) return undefined;
+  return at.settings.type === 'audio-transform'
+    ? audioStopSize(at.settings)
+    : videoStopSize(at.settings);
 }
 
 /** The bar's stops, each with the size it comes out at. */
@@ -742,6 +814,17 @@ const canUseRender = computed(
 const canUseCreated = computed(
   () => !busy.value && Boolean(currentCreated.value) && !selectionError.value,
 );
+/**
+ * A recording is stored in one press: its encode takes seconds, so "Use"
+ * makes it if "Apply" has not, and listening first stays a choice.
+ */
+const canUseAudio = computed(() =>
+  currentCreated.value
+    ? canUseCreated.value
+    : !busy.value && Boolean(edit.request.value),
+);
+/** "Use" is storing the recording itself; "Apply" shows no progress then. */
+const usingDirectly = ref(false);
 const canUseSelected = computed(
   () => !busy.value && Boolean(selectedVariant.value) && !selectionError.value,
 );
@@ -771,6 +854,21 @@ async function useRender() {
     finished = await finish(asset, false);
   });
   if (!finished) renders.release();
+}
+
+async function useAudio() {
+  if (currentCreated.value) {
+    await finish(currentCreated.value);
+    return;
+  }
+  const request = edit.request.value;
+  if (!request) return;
+  usingDirectly.value = true;
+  try {
+    await commitAndThen(request, (asset) => finish(asset, false));
+  } finally {
+    usingDirectly.value = false;
+  }
 }
 
 function toggleCropping() {
@@ -857,9 +955,12 @@ function selectVariant(assetUuid: string) {
 function initialSection(): Section {
   if (props.modalData.librarySelection || sourceAsset) return 'family';
   const type = processingType.value;
-  // An image is worth preparing for its place; a video or another file is
-  // taken as it is unless asked, since creating a variant of it takes time.
-  return type === AssetType.Image || (profile && type === AssetType.Video)
+  // An image is worth preparing for its place, and a recording is worth
+  // compressing, which is quick; a video or another file is taken as it is
+  // unless asked, since creating a variant of it takes time.
+  return type === AssetType.Image ||
+    type === AssetType.Audio ||
+    (profile && type === AssetType.Video)
     ? 'create'
     : 'source';
 }
@@ -869,7 +970,9 @@ function pickProcessingSource(loaded: AssetVariantInfo[]): string {
   const media = loaded.filter((variant) => variant.type === sourceAsset?.type);
   const unprocessed = media.find((variant) => variant.isUnprocessed);
   if (unprocessed) return unprocessed.assetUuid;
+  // The most a file holds: its pixels, or a recording's bits per second.
   const area = (variant: AssetVariantInfo) => {
+    if (variant.type === AssetType.Audio) return variant.meta?.bitrate ?? 0;
     const size = assetMetaDimensions(variant.meta);
     return size ? size.width * size.height : 0;
   };
@@ -914,10 +1017,61 @@ const previewSource = computed(() => {
     src: processingSrc.value,
     poster: processingPoster.value,
     href: processingVariant.value?.assetUrl ?? pickedFile?.objectUrl ?? '',
-    isMedia: Boolean(transformKind.value),
+    isMedia: Boolean(frameKind.value),
     hasAudio: transformSource.value?.hasAudio,
     dimensions: sourceDimensions.value,
   };
+});
+
+/**
+ * A recording is listened to rather than shown: the file in view, and once a
+ * new version is made from it, that version under it.
+ */
+const audioPlayers = computed(() => {
+  if (section.value === 'family' && selectedVariant.value) {
+    const variant = selectedVariant.value;
+    if (variant.type !== AssetType.Audio) return [];
+    return [
+      {
+        key: `variant:${variant.assetUuid}`,
+        src: variant.assetUrl,
+        extension: variant.extension,
+        duration: variant.meta?.duration,
+        peaks: variant.meta?.peaks,
+      },
+    ];
+  }
+  if (transformKind.value !== 'audio' || !processingSrc.value) return [];
+  const meta =
+    processingVariant.value?.type === AssetType.Audio
+      ? processingVariant.value.meta
+      : null;
+  const made =
+    section.value === 'create' && currentCreated.value?.type === AssetType.Audio
+      ? currentCreated.value
+      : undefined;
+  return [
+    {
+      key: `source:${originKey.value}`,
+      src: processingSrc.value,
+      extension: processingExtension.value,
+      duration: meta?.duration ?? audioSource.value?.duration,
+      peaks: meta?.peaks,
+      label: made ? phrase.value.upload_processing_source : undefined,
+    },
+    ...(made
+      ? [
+          {
+            key: `result:${made.assetUuid}`,
+            src: made.assetUrl,
+            extension: made.extension,
+            duration: made.meta?.duration,
+            peaks: made.meta?.peaks,
+            label: phrase.value.upload_result,
+          },
+        ]
+      : []),
+  ];
 });
 
 /** The source is being prepared for a new variant: shown as it will be cut. */
@@ -1013,6 +1167,10 @@ const directHref = computed(() =>
         :original-label="phrase.upload_processing_source"
         :modified-label="phrase.upload_result"
         :modified-pending="transformKind === 'image' && renderPending"
+      />
+      <AssetModalPreviewAudio
+        v-else-if="audioPlayers.length"
+        :players="audioPlayers"
       />
       <AssetModalPreviewMedia
         v-else-if="previewSource.isMedia && previewSource.src"
@@ -1222,13 +1380,22 @@ const directHref = computed(() =>
               </p>
             </div>
 
+            <UploadSettingsCreateAudio
+              v-if="transformKind === 'audio'"
+              v-model:quality-level="edit.qualityLevel.value"
+              v-model:mono="edit.mono.value"
+              :disabled="Boolean(busy)"
+              :quality-stops="qualityStops"
+              :quality-detail="qualityDetail"
+              :source-channels="audioSource?.channels"
+            />
             <UploadSettingsCreate
-              v-if="transformKind"
+              v-else-if="frameKind"
               v-model:quality-level="edit.qualityLevel.value"
               v-model:format-choice="edit.formatChoice.value"
               v-model:strip-audio="edit.stripAudio.value"
               v-model:fast-conversion="edit.fastConversion.value"
-              :kind="transformKind"
+              :kind="frameKind"
               :disabled="Boolean(busy)"
               :rotation="edit.rotation.value"
               :aspect-choice="edit.aspectChoice.value"
@@ -1269,7 +1436,7 @@ const directHref = computed(() =>
               "
               :source="sourceFileInfo"
               :result="result ?? expectedResult"
-              :include-dimensions="Boolean(transformKind)"
+              :include-dimensions="Boolean(frameKind)"
               @retry="renders.retry()"
             >
               <Button
@@ -1279,12 +1446,14 @@ const directHref = computed(() =>
                 @click="createVariant"
               >
                 <Icon
-                  :name="busy === 'commit' ? 'loading' : 'tune'"
+                  :name="
+                    busy === 'commit' && !usingDirectly ? 'loading' : 'tune'
+                  "
                   class="mr-xs"
                 />
                 <span>
                   {{
-                    busy === 'commit'
+                    busy === 'commit' && !usingDirectly
                       ? busyLabel
                       : canZip
                         ? phrase.upload_compress_to_zip
@@ -1295,22 +1464,29 @@ const directHref = computed(() =>
               <Button
                 variant="primary"
                 :disabled="
-                  transformKind === 'image' ? !canUseRender : !canUseCreated
+                  transformKind === 'image'
+                    ? !canUseRender
+                    : transformKind === 'audio'
+                      ? !canUseAudio
+                      : !canUseCreated
                 "
                 class="font-semibold"
                 @click="
                   transformKind === 'image'
                     ? useRender()
-                    : currentCreated && finish(currentCreated)
+                    : transformKind === 'audio'
+                      ? useAudio()
+                      : currentCreated && finish(currentCreated)
                 "
               >
                 <Icon
-                  v-if="busy && transformKind === 'image'"
+                  v-if="busy && (transformKind === 'image' || usingDirectly)"
                   name="loading"
                   class="mr-xs"
                 />
                 <span>{{
-                  busy === 'commit' && transformKind === 'image'
+                  busy === 'commit' &&
+                  (transformKind === 'image' || usingDirectly)
                     ? busyLabel
                     : phrase.upload_use
                 }}</span>

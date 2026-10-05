@@ -12,6 +12,7 @@ import {
   AssetSettingsError,
   buildAssetSettingsKey,
   resolveAssetUploadSettings,
+  type AssetAudioSource,
   type AssetTransformSource,
   type AssetUploadRequest,
   type AssetUploadSettings,
@@ -29,6 +30,7 @@ import {
   type ProcessedAsset,
 } from './process';
 import { isProcessingQueued, withProcessingSlot } from './queue';
+import { probeAudioSource, processAudioToOpus, readAudioMeta } from './audio';
 import { assetBytesHash, type AssetBytes } from './bytes';
 import {
   attachMediaPreviewUsage,
@@ -65,6 +67,12 @@ export function validateAssetVariantSettings(
     throw createError({
       statusCode: 400,
       message: 'Selected video settings do not match the asset type',
+    });
+  }
+  if (settings.type === 'audio-transform' && type !== AssetType.Audio) {
+    throw createError({
+      statusCode: 400,
+      message: 'Selected audio settings do not match the asset type',
     });
   }
   if (
@@ -105,7 +113,9 @@ export async function createAssetVariant(
         input.settings.type === 'image-transform' ||
         input.settings.type === 'video-transform'
           ? await probeTransformSource(input.source, input.sourceType)
-          : undefined;
+          : input.settings.type === 'audio-transform'
+            ? await probeAudioSource(input.source)
+            : undefined;
       const settings = await resolveAssetRequest(
         input.settings,
         input.source,
@@ -124,7 +134,7 @@ export async function createAssetVariant(
         settings,
         familyUuid: input.familyUuid,
         source: input.source,
-        transformSource: known,
+        transformSource: known && 'width' in known ? known : undefined,
       });
     },
     { signal: input.signal },
@@ -157,7 +167,7 @@ export async function resolveAssetRequest(
   request: AssetUploadRequest,
   source: AssetSourceFile,
   sourceType: AssetType,
-  known?: AssetTransformSource,
+  known?: AssetTransformSource | AssetAudioSource,
 ): Promise<AssetUploadSettings> {
   if (request.type === 'original' || request.type === 'file-zip') {
     return resolveAssetUploadSettings(request);
@@ -165,7 +175,10 @@ export async function resolveAssetRequest(
   try {
     return resolveAssetUploadSettings(
       request,
-      known ?? (await probeTransformSource(source, sourceType)),
+      known ??
+        (request.type === 'audio-transform'
+          ? await probeAudioSource(source)
+          : await probeTransformSource(source, sourceType)),
     );
   } catch (error) {
     if (error instanceof AssetSettingsError) {
@@ -219,6 +232,10 @@ export async function renderAsset(
 
   if (settings.type === 'file-zip') {
     return await processFileZipAsset(source, settings, options);
+  }
+
+  if (settings.type === 'audio-transform') {
+    return await processAudioToOpus(source, settings, options);
   }
 
   return await processMediaTransformAsset(source, settings, options);
@@ -332,6 +349,13 @@ async function buildProcessedAssetMeta(
         : {}),
     };
     return { meta, previewAssetUuid: preview.previewAssetUuid };
+  }
+
+  // A recording's length and waveform are read from the bytes stored, kept
+  // as they are or encoded, so the player draws exactly what it plays.
+  if (type === AssetType.Audio) {
+    if (!bytes.path) throw new Error('Recordings are stored from files');
+    return { meta: await readAudioMeta(bytes.path, bytes.size) };
   }
 
   if (settings.type === 'file-zip' && sourceFile) {

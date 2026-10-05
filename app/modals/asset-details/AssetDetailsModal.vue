@@ -4,6 +4,7 @@ import type { ArchivedOriginalFileMeta } from '#layers/thei/shared/asset';
 import AssetModal from '#layers/thei/app/modals/asset-modal/AssetModal.vue';
 import AssetModalButton from '#layers/thei/app/modals/asset-modal/AssetModalButton.vue';
 import AssetModalFileInfo from '#layers/thei/app/modals/asset-modal/AssetModalFileInfo.vue';
+import AssetModalPreviewAudio from '#layers/thei/app/modals/asset-modal/AssetModalPreviewAudio.vue';
 import AssetModalPreviewMedia from '#layers/thei/app/modals/asset-modal/AssetModalPreviewMedia.vue';
 import FilePreview from '#layers/thei/app/components/FilePreview.vue';
 
@@ -69,6 +70,20 @@ const directHref = computed(
   () => props.modalData.asset.assetUrl ?? props.modalData.asset.media?.src,
 );
 const isMedia = computed(() => Boolean(props.modalData.asset.media));
+/** A recording is played where a picture would be shown. */
+const audioPlayers = computed(() => {
+  const { asset } = props.modalData;
+  if (!asset.audio || !asset.assetUrl) return [];
+  return [
+    {
+      key: asset.assetUuid,
+      src: asset.assetUrl,
+      extension: asset.extension,
+      duration: asset.audio.duration,
+      peaks: asset.audio.peaks,
+    },
+  ];
+});
 const previewSrc = computed(
   () => props.modalData.asset.media?.src ?? props.modalData.asset.assetUrl,
 );
@@ -127,6 +142,10 @@ useSaveShortcut(confirm, {
         :poster="videoPosterOf(modalData.asset.media)"
         :has-audio="modalData.asset.media?.hasAudio"
       />
+      <AssetModalPreviewAudio
+        v-else-if="audioPlayers.length"
+        :players="audioPlayers"
+      />
       <FilePreview
         v-else
         :key="`file:${modalData.asset.assetUuid}:${modalData.asset.extension}`"
@@ -160,6 +179,8 @@ useSaveShortcut(confirm, {
           <AssetModalFileInfo
             :extension="modalData.asset.extension"
             :size="modalData.asset.size"
+            :duration="modalData.asset.audio?.duration"
+            :channels="modalData.asset.audio?.channels"
             :archived-original="modalData.archivedOriginal"
           />
         </div>

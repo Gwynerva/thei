@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   mkdir,
@@ -12,6 +13,7 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import sharp from 'sharp';
@@ -136,6 +138,20 @@ const request = (width: number, quality = 80): AssetImageTransformRequest => ({
 });
 
 const live = () => new AbortController().signal;
+
+async function ffmpeg(args: string[]) {
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(
+      ffmpegInstaller.path,
+      ['-y', '-loglevel', 'error', ...args],
+      { windowsHide: true, stdio: 'ignore' },
+    );
+    child.on('error', reject);
+    child.on('close', (code) =>
+      code === 0 ? resolve() : reject(new Error(`ffmpeg exited ${code}`)),
+    );
+  });
+}
 
 describe('editor drafts', () => {
   it('reads the size of a staged source once', async () => {
@@ -264,6 +280,86 @@ describe('editor drafts', () => {
       variant.settingsKey,
       'original',
     ]);
+  });
+
+  it('reads a recording, converts it, and keeps it as it was beside', async () => {
+    const id = 'draft-audio';
+    const directory = join(draftsDirectory(), id);
+    await mkdir(directory, { recursive: true });
+    const path = join(directory, 'source.wav');
+    await ffmpeg([
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=330:sample_rate=22050:duration=1.5',
+      '-ac',
+      '1',
+      path,
+    ]);
+    const bytes = await readFile(path);
+    const hash = createHash('sha256').update(bytes).digest('hex');
+    const draft = await openDraft({
+      id,
+      directory,
+      source: { path, size: bytes.length, hash, extension: 'wav', owned: true },
+      type: AssetType.Audio,
+      familyUuid: `af-${hash}`,
+    });
+    expect(draft).toMatchObject({
+      type: AssetType.Audio,
+      codec: 'pcm_s16le',
+      channels: 1,
+    });
+    expect(draft.duration).toBeCloseTo(1.5, 1);
+
+    const session = useDraft(id);
+    const variant = await commitDraft(
+      session,
+      { type: 'audio-transform', quality: 75, mono: false },
+      { signal: live() },
+    );
+    // A mono source is described as mono, whatever was asked.
+    expect(variant).toMatchObject({
+      type: AssetType.Audio,
+      extension: 'weba',
+      settingsKey: 'audio-transform:q75:mono:1',
+    });
+    expect(variant.meta).toMatchObject({ channels: 1 });
+    expect(variant.meta!.peaks).toHaveLength(128);
+    expect(variant.meta!.duration).toBeCloseTo(1.5, 1);
+
+    const kept = rawDb
+      .prepare(
+        "SELECT extension, meta FROM assets WHERE familyUuid = ? AND settingsKey = 'original'",
+      )
+      .get(session.familyUuid) as { extension: string; meta: string };
+    expect(kept.extension).toBe('wav');
+    expect(JSON.parse(kept.meta)).toMatchObject({ channels: 1 });
+  });
+
+  it('refuses a recording that is not one', async () => {
+    const id = 'draft-noise';
+    const directory = join(draftsDirectory(), id);
+    await mkdir(directory, { recursive: true });
+    const path = join(directory, 'source.mp3');
+    await writeFile(path, 'not a recording');
+    await expect(
+      openDraft({
+        id,
+        directory,
+        source: {
+          path,
+          size: 15,
+          hash: 'noise',
+          extension: 'mp3',
+          owned: true,
+        },
+        type: AssetType.Audio,
+        familyUuid: 'af-noise',
+      }),
+    ).rejects.toMatchObject({ statusCode: 400 });
+    // Nothing of it stays behind.
+    await expect(stat(directory)).rejects.toThrow();
   });
 
   it('keeps the original once when commits and dry runs of a draft overlap', async () => {

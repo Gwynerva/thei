@@ -10,20 +10,62 @@ A variant is made at one of five named levels, or — for a raster image — at
 the lossless stop past them. The recipe keeps the number a level stands for,
 so files made by older versions at other numbers stay described exactly:
 
-| Level    | Stored `quality` |    WebP quality | AVIF quality | Video bitrate × medium |  Opus |
-| -------- | ---------------: | --------------: | -----------: | ---------------------: | ----: |
-| minimal  |               40 |              40 |           30 |                    0.3 |  64 k |
-| low      |               60 |              60 |           45 |                   0.55 |  96 k |
-| medium   |               75 |              75 |           55 |                      1 | 128 k |
-| high     |               90 |              90 |           65 |                    1.7 | 128 k |
-| maximum  |               95 |              95 |           72 |                    2.8 | 128 k |
-| lossless |              100 | `webp-lossless` |            — |                      — |     — |
+| Level    | Stored `quality` |    WebP quality | AVIF quality | Video bitrate × medium | Video's Opus | Recording, stereo / mono |
+| -------- | ---------------: | --------------: | -----------: | ---------------------: | -----------: | -----------------------: |
+| minimal  |               40 |              40 |           30 |                    0.3 |         64 k |              48 k / 24 k |
+| low      |               60 |              60 |           45 |                   0.55 |         96 k |              64 k / 32 k |
+| medium   |               75 |              75 |           55 |                      1 |        128 k |              96 k / 48 k |
+| high     |               90 |              90 |           65 |                    1.7 |        128 k |             128 k / 64 k |
+| maximum  |               95 |              95 |           72 |                    2.8 |        128 k |             160 k / 80 k |
+| lossless |              100 | `webp-lossless` |            — |                      — |            — |                        — |
 
 A number between two levels reads the tables along the line between them
-(`interpolateByQualityLevel`). Images and videos both default to medium; a
-place with an upload profile of its own may start higher
+(`interpolateByQualityLevel`). Images, videos and recordings all default to
+medium; a place with an upload profile of its own may start higher
 (`shared/asset-upload-profiles.ts`). The tables live in
 `shared/asset-quality-levels.ts`.
+
+## Recordings
+
+A recording is stored as Opus in WebM, under the extension `weba` (MIME
+`audio/webm`): the codec and container video sound already uses, played by
+every current browser — Chrome, Edge, Firefox, and Safari from 16 on macOS
+and 17.4 on iOS — and the smallest of what they all play. At medium, stereo
+is 96 kbit/s, which Xiph puts at the low end of storing music and near
+transparent for it; mono is half of that, more than a voice needs. A minute
+of WAV is about 10 MB; at medium it is 0.7 MB, or 0.35 MB in mono.
+
+The bitrate is capped by a lossy source's own (`audioTargetBitrate` in
+`shared/asset-upload-quality.ts`): an MP3 at 64 kbit/s is not re-encoded at 96. A lossless source — PCM, FLAC, ALAC — has no such ceiling. Anything with
+more than two channels is folded into stereo, and "Mono" folds it into one;
+a mono source is always described as mono, so both spellings share one
+settings key (`audio-transform:q75:mono:1`). The encode
+(`buildAudioEncodeArgs` in `server/thei/assets/audio.ts`) is
+
+```
+-map 0:a:0 -vn -map_metadata -1 -map_chapters -1
+-c:a libopus -b:a <bitrate> -vbr on -ar 48000 -ac <1|2>
+-fflags +bitexact -flags:a +bitexact -f webm out.weba
+```
+
+— the muxer is named because ffmpeg does not know `weba`, and `bitexact`
+keeps its own version out of the bytes, so one source and one recipe always
+make one file. A recording pasted into the text is converted at medium
+without asking, unless it is already Opus in a `weba`: a second pass would
+only lose a little more.
+
+Every stored recording, converted or kept as it is, is decoded once more
+right after it is made (`readAudioDetails`): to 8 kHz mono PCM on a pipe,
+measured as it flows, never held whole. Its `meta` records the `duration`
+counted from the samples (an MP3's header may only guess it), its
+`channels` and `bitrate`, and 128 `peaks`: the loudest 10 ms RMS window of
+each slice, normalised to the loudest slice and put through a square root,
+so quiet speech still shows. The player draws those before it loads a byte
+of sound. Recordings run in a lane of their own (`server/thei/assets/queue.ts`):
+libopus takes one core and little memory, so a recording never waits behind
+a video encode. Recordings stored before 0.0.4 are read by the update task
+`update/tasks/0.0.4-audio-waveforms.ts`; one that cannot be read gets an
+empty waveform and no length, and its player asks the file.
 
 ## Video bitrate ladder
 
@@ -47,6 +89,13 @@ rate. See `videoTargetBitrate` in `shared/asset-upload-quality.ts` and
 - **Video**: `(video bitrate × 0.96 + audio bitrate) × duration / 8`, plus one
   percent and 4 KiB for the container. The 0.96 is where two-pass libvpx
   lands against its target on this project's clips. Shown as ≈ until the
+  variant exists.
+- **Recordings**: `(bitrate + 3 kbit/s) × duration / 8 + 1 KiB`, the 3 kbit/s
+  being what WebM spends around Opus's 20 ms packets. Opus in VBR mode takes
+  the rate as a target: varied sound lands near it, a "stereo" recording of
+  one voice or long quiet stretches come out well under it (pink noise with
+  the same sound in both channels: 66 kbit/s of a 96 target), and only
+  something as bare as a pure tone goes over (106). Shown as ≈ until the
   variant exists.
 - **Images**: every quality stop is rendered on the server for real, the
   chosen stop first and the rest nearest first. Until a stop's render is in,
@@ -100,18 +149,18 @@ at `GET /api/admin/uploads/<id>`: `queued` while it waits for a slot,
 `finishing` while the preview is made and the file moved into the library.
 
 A quick commit — a picture, usually a render the editor already judged — is
-stored within its request, and "Cancel" closes that request. A video encode
-or a zip (`isLongCommit` in `shared/asset-upload-settings.ts`) runs as a job
-instead (`server/thei/assets/jobs.ts`): the request answers `202` at once, the
-client polls the same address every second until the job reports `done` with
-the variant or `failed` with the error's message and code, and `DELETE` there
-cancels it — on "Cancel", when the editor closes, and as the tab goes. No
-connection has to stay open for the minutes an encode takes, so neither a
-dropped connection nor a proxy's read timeout can cut it short. A job nobody
-has polled for ten minutes is cancelled as a safety net. Jobs live in memory
-like drafts: after a restart the client is told the draft is gone and stages
-the file again. One long job runs per draft; a second request meanwhile is
-answered `409`.
+stored within its request, and "Cancel" closes that request. A video or audio
+encode, or a zip (`isLongCommit` in `shared/asset-upload-settings.ts`), runs
+as a job instead (`server/thei/assets/jobs.ts`): the request answers `202` at
+once, the client polls the same address every second until the job reports
+`done` with the variant or `failed` with the error's message and code, and
+`DELETE` there cancels it — on "Cancel", when the editor closes, and as the
+tab goes. No connection has to stay open for the minutes an encode takes, so
+neither a dropped connection nor a proxy's read timeout can cut it short. A
+job nobody has polled for ten minutes is cancelled as a safety net. Jobs live
+in memory like drafts: after a restart the client is told the draft is gone
+and stages the file again. One long job runs per draft; a second request
+meanwhile is answered `409`.
 
 Behind a reverse proxy, the timeouts in `update/instance/nginx.conf.example`
 now only have to cover the upload of the file itself and a quick commit.
@@ -145,7 +194,9 @@ variant.
 Nothing about the levels: a recipe holds `quality` as a number (and
 `format: 'webp-lossless'` for the lossless stop), exactly as before. A video's
 `meta` additionally records `duration`, `fps` and `bitrate` of the stored
-file; rows stored before that are filled in the first time they are read.
+file; rows stored before that are filled in the first time they are read. A
+recording's `meta` (`AudioAssetMeta`) records `duration`, `peaks`, `channels`
+and `bitrate`, as described above.
 
 ## Video previews
 

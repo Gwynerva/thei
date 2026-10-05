@@ -31,12 +31,17 @@ export interface AssetDraftSource {
   /** `false` only when a video is known to be silent. */
   hasAudio?: boolean;
   isVector?: boolean;
-  /** Of a video: what the editor estimates a variant's size from. */
+  /**
+   * Of a video or a recording: what the editor estimates a variant's size
+   * from. For a recording, the bitrate and codec are those of its sound.
+   */
   duration?: number;
   fps?: number;
-  /** Bits per second of the video stream. */
+  /** Bits per second of the video stream, or of a recording's sound. */
   bitrate?: number;
   codec?: string;
+  /** Channels of a recording's sound. */
+  channels?: number;
 }
 
 /** An image encoded from a draft for the admin to judge, not yet stored. */

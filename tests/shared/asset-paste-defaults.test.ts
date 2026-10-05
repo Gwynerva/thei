@@ -63,6 +63,40 @@ describe('pastedMediaRequest', () => {
     });
   });
 
+  it('converts a pasted recording to Opus at medium, in stereo', () => {
+    const request = pastedMediaRequest({
+      type: AssetType.Audio,
+      extension: 'm4a',
+      codec: 'aac',
+    });
+    expect(request).toEqual({
+      type: 'audio-transform',
+      quality: 75,
+      mono: false,
+    });
+    expect(buildAssetSettingsKey(resolveAssetUploadSettings(request, {}))).toBe(
+      'audio-transform:q75:mono:0',
+    );
+  });
+
+  it('keeps a recording that is already Opus in a weba as it is', () => {
+    expect(
+      pastedMediaRequest({
+        type: AssetType.Audio,
+        extension: 'WEBA',
+        codec: 'opus',
+      }),
+    ).toEqual({ type: 'original' });
+    // Opus in Ogg plays on fewer browsers than the WebM it would become.
+    expect(
+      pastedMediaRequest({
+        type: AssetType.Audio,
+        extension: 'opus',
+        codec: 'opus',
+      }).type,
+    ).toBe('audio-transform');
+  });
+
   it('keeps anything else as it is', () => {
     expect(
       pastedMediaRequest({ type: AssetType.Other, extension: 'pdf' }),

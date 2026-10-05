@@ -1,4 +1,5 @@
 import {
+  audioExtensionProfile,
   imageExtensionProfile,
   isExtensionAllowed,
   videoExtensionProfile,
@@ -37,12 +38,13 @@ function svgDimensions(svg: Element): FileInfoDimensions | undefined {
 
 export function useFileInfo(objectUrl: string, extension: string) {
   const dimensions = ref<FileInfoDimensions | undefined>(undefined);
-  /** Seconds of a video, once the browser has read its header. */
+  /** Seconds of a video or a recording, once the browser has read its header. */
   const duration = ref<number | undefined>(undefined);
 
   if (import.meta.client) {
     const isImage = isExtensionAllowed(extension, imageExtensionProfile);
     const isVideo = isExtensionAllowed(extension, videoExtensionProfile);
+    const isAudio = isExtensionAllowed(extension, audioExtensionProfile);
 
     let cleanup: (() => void) | undefined;
 
@@ -88,6 +90,22 @@ export function useFileInfo(objectUrl: string, extension: string) {
       cleanup = () => {
         video.removeEventListener('loadedmetadata', onMeta);
         video.src = '';
+      };
+    } else if (isAudio) {
+      // A format this browser cannot play has no length here; the server's
+      // reading of the draft stands in once it is staged.
+      const audio = new Audio();
+      audio.preload = 'metadata';
+      const onMeta = () => {
+        if (Number.isFinite(audio.duration) && audio.duration > 0) {
+          duration.value = audio.duration;
+        }
+      };
+      audio.addEventListener('loadedmetadata', onMeta, { once: true });
+      audio.src = objectUrl;
+      cleanup = () => {
+        audio.removeEventListener('loadedmetadata', onMeta);
+        audio.removeAttribute('src');
       };
     }
 

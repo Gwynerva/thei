@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AssetType } from '../../../shared/asset';
 import {
+  isProcessingQueued,
   withProbeSlot,
   withProcessingSlot,
 } from '../../../server/thei/assets/queue';
@@ -137,5 +138,35 @@ describe('processing queue', () => {
       ),
     ).rejects.toThrow('gone');
     expect(ran).toBe(false);
+  });
+
+  it('runs recordings in a lane of their own, beside a video encode', async () => {
+    const started: string[] = [];
+    const video = heldJob(started, 'video');
+    const picture = heldJob(started, 'picture');
+    const recording = heldJob(started, 'recording');
+    const second = heldJob(started, 'second recording');
+    const running = [
+      withProcessingSlot(AssetType.Video, video.job),
+      withProcessingSlot(AssetType.Audio, recording.job),
+      withProcessingSlot(AssetType.Audio, second.job),
+      withProcessingSlot(AssetType.Image, picture.job),
+    ];
+    await Promise.resolve();
+    // One recording at a time, neither waiting for the video nor holding up
+    // the picture.
+    expect(started).toEqual(['video', 'recording', 'picture']);
+    expect(isProcessingQueued(AssetType.Audio)).toBe(true);
+
+    recording.release();
+    await running[1];
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(started).toContain('second recording');
+
+    video.release();
+    picture.release();
+    second.release();
+    await Promise.all(running);
+    expect(isProcessingQueued(AssetType.Audio)).toBe(false);
   });
 });

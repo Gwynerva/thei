@@ -32,6 +32,13 @@ const ZIP_EXCLUDED_EXTENSIONS = new Set([
   'wav',
   'ogg',
   'flac',
+  'm4a',
+  'aac',
+  'opus',
+  'oga',
+  'weba',
+  'aif',
+  'aiff',
 ]);
 
 export function canZipAssetExtension(extension: string): boolean {

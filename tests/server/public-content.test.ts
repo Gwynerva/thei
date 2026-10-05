@@ -418,6 +418,71 @@ describe('public content media previews', () => {
     });
   });
 
+  it('hydrates a recording with its address and what its player draws', async () => {
+    const recording = {
+      assetUuid: 'project-recording',
+      familyUuid: 'project-recording-family',
+      contentHash: 'project-recording-hash',
+      slug: 'project-recording',
+      extension: 'weba',
+      settingsKey: 'audio-transform:q75:mono:0',
+      settings: { type: 'audio-transform', quality: 75, mono: false },
+      type: AssetType.Audio,
+      size: 72_000,
+      meta: { duration: 6, peaks: [0, 50, 100], channels: 2, bitrate: 96_000 },
+    };
+    (globalThis as any).THEI_SERVER = {
+      content: {
+        findByOwner: async () => ({
+          contentUuid: 'project-content',
+          data: {
+            blocks: [
+              {
+                type: 'contentAudio',
+                data: {
+                  asset: { assetUuid: 'project-recording' },
+                  title: 'Song',
+                },
+              },
+            ],
+          },
+        }),
+      },
+      assets: {
+        findByUuid: async (assetUuid: string) =>
+          assetUuid === recording.assetUuid ? recording : undefined,
+        usages: {
+          findOne: async () => ({
+            meta: { role: 'content', refs: [{ isPrivate: false }] },
+          }),
+          findByContainer: async () => [],
+        },
+      },
+    };
+
+    const result = await buildPublicContentData(
+      'project',
+      'project-uuid',
+      'project-description',
+      { type: 'project', humanReadableSlug: 'project', publicId: 'Project' },
+    );
+
+    const block = result?.blocks[0] as any;
+    expect(block.type).toBe('contentAudio');
+    expect(block.data.title).toBe('Song');
+    expect(block.data.asset).toEqual({
+      // Never the storage uuid.
+      assetUuid: 'project-recording',
+      type: AssetType.Audio,
+      extension: 'weba',
+      size: 72_000,
+      media: undefined,
+      audio: { duration: 6, peaks: [0, 50, 100], channels: 2 },
+      assetUrl: '/projects/project-Project/content/project-recording.weba',
+      archivedOriginal: undefined,
+    });
+  });
+
   it('replaces private sections with stats without leaking their payload', async () => {
     const secretAsset = {
       assetUuid: 'secret-asset-uuid',

@@ -1,5 +1,6 @@
 import { normalizeImageAccent } from './accent-color';
 import { AssetType, type ArchivedOriginalFileMeta } from './asset';
+import { normalizeAudioDescriptor, type AudioDescriptor } from './audio';
 import type { MediaDescriptor } from './media';
 import { normalizeExternalLinkUrl, type ExternalLink } from './external-link';
 import {
@@ -46,6 +47,7 @@ export const CONTENT_BLOCK_TYPES = [
   'delimiter',
   'contentMedia',
   'contentGallery',
+  'contentAudio',
   'contentAttachment',
   'externalLink',
   'integration',
@@ -142,6 +144,8 @@ export interface ContentAssetData {
   extension?: string;
   size?: number;
   media?: MediaDescriptor;
+  /** Of a recording: what its player draws before it loads. */
+  audio?: AudioDescriptor;
   assetUrl?: string;
   archivedOriginal?: ArchivedOriginalFileMeta;
 }
@@ -305,7 +309,7 @@ function canonicalizeNormalizedContentData(
           },
         };
       }
-      if (block.type === 'contentAttachment') {
+      if (block.type === 'contentAttachment' || block.type === 'contentAudio') {
         return {
           ...block,
           data: {
@@ -508,6 +512,7 @@ export function contentBlockTextParts(
       collectGalleryPreviewText(textParts, (block.data as any).items);
       break;
     case 'contentAttachment':
+    case 'contentAudio':
       appendPreviewText(textParts, (block.data as any).title);
       appendPreviewText(textParts, (block.data as any).caption);
       break;
@@ -615,7 +620,7 @@ function collectNormalizedContentAssetSizeMap(
   const sizes = new Map<string, number>();
 
   for (const block of normalized.blocks) {
-    if (block.type === 'contentMedia' || block.type === 'contentAttachment') {
+    if (hasSingleContentAsset(block.type)) {
       addAssetSize(sizes, (block.data as any).asset);
       continue;
     }
@@ -646,7 +651,7 @@ function extractNormalizedContentAssetRefs(
     const isPrivate = contentBlockIsInPrivateSection(ranges, index);
     const blockId = block.id;
 
-    if (block.type === 'contentMedia' || block.type === 'contentAttachment') {
+    if (hasSingleContentAsset(block.type)) {
       const asset = normalizeContentAsset((block.data as any).asset);
       if (asset) {
         refs.push({
@@ -697,9 +702,14 @@ function addAssetSize(sizes: Map<string, number>, value: unknown) {
 }
 
 export function isContentAssetBlockType(type: ContentBlockType): boolean {
+  return hasSingleContentAsset(type) || type === 'contentGallery';
+}
+
+/** Blocks that hold one file, as `data.asset`. */
+function hasSingleContentAsset(type: ContentBlockType): boolean {
   return (
     type === 'contentMedia' ||
-    type === 'contentGallery' ||
+    type === 'contentAudio' ||
     type === 'contentAttachment'
   );
 }
@@ -782,7 +792,10 @@ function normalizeBlockData(
           : [],
       };
 
+    // A recording is shaped as a file is: plain title and caption, so either
+    // turns into the other without losing a word.
     case 'contentAttachment':
+    case 'contentAudio':
       return {
         asset: normalizeContentAsset(data.asset),
         title: optionalNormalizedText(data.title),
@@ -844,6 +857,7 @@ function isContentBlockEmpty(block: ContentOutputBlock): boolean {
       return false;
 
     case 'contentMedia':
+    case 'contentAudio':
     case 'contentAttachment':
       return !normalizeContentAsset((block.data as any).asset);
 
@@ -945,6 +959,7 @@ function normalizeContentAsset(value: unknown): ContentAssetData | null {
   const assetUuid = optionalString(value.assetUuid);
   if (!assetUuid) return null;
   const archivedOriginal = normalizeArchivedOriginal(value.archivedOriginal);
+  const audio = normalizeAudioDescriptor(value.audio);
 
   return {
     assetUuid,
@@ -952,6 +967,7 @@ function normalizeContentAsset(value: unknown): ContentAssetData | null {
     extension: optionalString(value.extension),
     size: optionalNumber(value.size),
     media: normalizeMediaDescriptor(value.media),
+    ...(audio ? { audio } : {}),
     assetUrl: optionalString(value.assetUrl),
     ...(archivedOriginal ? { archivedOriginal } : {}),
   };

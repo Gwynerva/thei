@@ -114,6 +114,7 @@ an HTML document is.
 | `delimiter`              | `{}`                                                                                                               |
 | `contentMedia`           | `{ asset, layout: 'centered' \| 'natural' \| 'stretch', caption }`                                                 |
 | `contentGallery`         | `{ items: [{ id, asset, caption }] }` — an item without an `id` is dropped                                         |
+| `contentAudio`           | `{ asset, title, caption }` — an audio file, played in place; both plain text, as a file's                         |
 | `contentAttachment`      | `{ asset, title, caption }` — any file, shown as a download                                                        |
 | `externalLink`           | `{ url, note? }` — rendered as a preview card                                                                      |
 | `integration`            | `{ provider: 'youtube', videoId, … }`, see `shared/content-integrations.ts`                                        |
@@ -122,7 +123,11 @@ an HTML document is.
 
 `asset` is `{ assetUuid }` when stored. What a reader receives is hydrated: the
 asset carries its media descriptor and address, or is `null` when the reader
-may not see it.
+may not see it. A recording's asset also carries `audio: { duration, peaks,
+channels? }` — its length in seconds and up to 128 loudness values from 0 to
+100 — which is what its player draws before it loads anything. A
+`contentAudio` block holds only audio files; it and a `contentAttachment` have
+the same data, so either turns into the other as it is.
 
 A link block's `note` is the owner's plain-text word on why the link is there,
 like `data-content-note` inline: whitespace collapsed, and absent rather than
@@ -164,9 +169,12 @@ assetTotalSize }`) and nothing else;
   sections already gone; `prose` keeps paragraphs, headings, quotes and lists.
 - `contentToMarkdown(data, options)` in `shared/content-markdown.ts` — the
   public document as Markdown, which is what `…/index.md` serves. A link's
-  note, inline or on a block, is the link's title: `[text](url "note")`. With
-  `options.format` the owner's words — text, captions, attachment titles,
-  hints, link notes, entity link titles — get the typography of the site's
+  note, inline or on a block, is the link's title: `[text](url "note")`. A
+  recording is a link to its file followed by its length,
+  `[title](url) (m:ss)`, named `options.audioLabel` when it has no title, and
+  then its caption. With `options.format` the owner's words — text, captions,
+  attachment and recording titles, hints, link notes, entity link titles —
+  get the typography of the site's
   language, as on the page; markup, addresses, file names and the titles of
   other sites stay as they are. None of it is stored: the content keeps what
   was typed.

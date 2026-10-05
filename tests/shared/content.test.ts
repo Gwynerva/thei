@@ -972,3 +972,103 @@ describe('content preview', () => {
     ).toEqual({ text: '' });
   });
 });
+
+describe('content audio', () => {
+  const hydrated = {
+    assetUuid: 'a-audio',
+    type: 'audio',
+    extension: 'weba',
+    size: 72_000,
+    assetUrl: '/api/admin/assets/a-audio/content',
+    audio: { duration: 6, peaks: [0, 40, 100], channels: 1 },
+  };
+
+  it('keeps a recording, its title and its caption, plain', () => {
+    const data = normalizeContentData({
+      blocks: [
+        {
+          id: 'voice',
+          type: 'contentAudio',
+          data: {
+            asset: hydrated,
+            title: '  Grandma’s   song ',
+            caption: 'Recorded 	 in 1998 ',
+          },
+        },
+      ],
+    });
+    expect(data.blocks[0]!.data).toEqual({
+      asset: { ...hydrated, media: undefined },
+      title: 'Grandma’s song',
+      caption: 'Recorded in 1998',
+    });
+  });
+
+  it('drops a recording block with no file', () => {
+    expect(
+      normalizeContentData({
+        blocks: [{ type: 'contentAudio', data: { title: 'Nothing' } }],
+      }).blocks,
+    ).toEqual([]);
+  });
+
+  it('stores and keys the file by its id alone', () => {
+    const block = (asset: object) => ({
+      id: 'voice',
+      type: 'contentAudio',
+      data: { asset, title: 'Song' },
+    });
+    expect(
+      canonicalizeContentData({ blocks: [block(hydrated)] }).blocks[0]!.data,
+    ).toEqual({
+      asset: { assetUuid: 'a-audio' },
+      title: 'Song',
+      caption: undefined,
+    });
+    // What the player was told is not a change to the text.
+    expect(contentSemanticKey({ blocks: [block(hydrated)] })).toBe(
+      contentSemanticKey({ blocks: [block({ assetUuid: 'a-audio' })] }),
+    );
+  });
+
+  it('counts the file as the text’s, privately inside a private section', () => {
+    const data = {
+      blocks: [
+        {
+          type: 'privateSectionBoundary',
+          data: { sectionId: 'voice', edge: 'start' },
+        },
+        { id: 'inside', type: 'contentAudio', data: { asset: hydrated } },
+        {
+          type: 'privateSectionBoundary',
+          data: { sectionId: 'voice', edge: 'end' },
+        },
+      ],
+    };
+    expect(extractContentAssetRefs(data)).toEqual([
+      {
+        assetUuid: 'a-audio',
+        blockId: 'inside',
+        blockType: 'contentAudio',
+        isPrivate: true,
+      },
+    ]);
+    expect(summarizeContentData(normalizeContentData(data))).toMatchObject({
+      assetCount: 1,
+    });
+    expect(analyzeContentData(data).summary.assetTotalSize).toBe(72_000);
+  });
+
+  it('reads its title and caption as text, and never as a preview picture', () => {
+    const data = {
+      blocks: [
+        {
+          type: 'contentAudio',
+          data: { asset: hydrated, title: 'Song', caption: 'At the dacha' },
+        },
+      ],
+    };
+    expect(contentPlainText(data)).toBe('Song At the dacha');
+    expect(buildContentPreview(data).media).toBeUndefined();
+  });
+});

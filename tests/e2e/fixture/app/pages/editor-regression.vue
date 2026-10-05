@@ -2,6 +2,7 @@
 import type EditorJS from '@editorjs/editorjs';
 import {
   PrivateSectionBoundaryTool,
+  ContentAudioTool,
   ContentMediaTool,
   ContentGalleryTool,
 } from '#layers/thei/app/components/content/editor-tools';
@@ -22,6 +23,7 @@ import {
 } from '#layers/thei/app/composables/asset-wizard';
 import { ASSET_UPLOAD_LIMITS } from '#layers/thei/shared/asset-upload-limits';
 import {
+  audioExtensionProfile,
   imageExtensionProfile,
   videoExtensionProfile,
 } from '#layers/thei/shared/assets/extensions';
@@ -86,6 +88,28 @@ const mediaToolConfig = {
     },
     track: (delta: 1 | -1) => {
       pendingUploads.value += delta;
+    },
+  },
+};
+/** Recordings go up as the editor sends them: a file's limit, sound only. */
+const audioToolConfig = {
+  ...mediaToolConfig,
+  uploads: {
+    ...mediaToolConfig.uploads,
+    constraints: {
+      maxSize: ASSET_UPLOAD_LIMITS.file,
+      sizeLimitPolicy: 'file' as const,
+      acceptedExtensions: acceptedExtensionsFromAccept(audioExtensionProfile),
+    },
+    editPending: async (
+      pending: Parameters<typeof launchPendingFileEditor>[0],
+    ) => {
+      const edited = await launchPendingFileEditor(pending, {
+        accept: audioExtensionProfile,
+        sizeLimitPolicy: 'file',
+        maxSize: ASSET_UPLOAD_LIMITS.file,
+      });
+      return edited ? contentAssetFromVariant(edited) : undefined;
     },
   },
 };
@@ -201,6 +225,10 @@ onMounted(async () => {
         inlineToolbar: true,
         config: mediaToolConfig,
       },
+      contentAudio: {
+        class: ContentAudioTool as any,
+        config: audioToolConfig,
+      },
       delimiter: ContentDelimiterTool as any,
       quote: { class: Quote as any, inlineToolbar: true },
     },
@@ -221,7 +249,9 @@ onMounted(async () => {
     linkBlocks: new Set(['paragraph']),
     findEntity: (url) => findEntityByInternalUrl(url, site),
   });
-  unbindMediaPaste = bindEditorMediaPaste(holder.value!, editor);
+  unbindMediaPaste = bindEditorMediaPaste(holder.value!, editor, {
+    audio: true,
+  });
   sections = createEditorPrivateSections(editor, { suppressionDuration: 20 });
   cleanupPrivatePattern = createEditorPrivatePattern(holder.value!);
   snapshots = createEditorHistorySession({

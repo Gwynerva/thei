@@ -15,6 +15,7 @@ import {
 } from '../../composables/asset-library-labels';
 import AssetModal from '../asset-modal/AssetModal.vue';
 import AssetModalButton from '../asset-modal/AssetModalButton.vue';
+import AssetModalPreviewAudio from '../asset-modal/AssetModalPreviewAudio.vue';
 import AssetModalPreviewMedia from '../asset-modal/AssetModalPreviewMedia.vue';
 import AssetModalFileInfo from '../asset-modal/AssetModalFileInfo.vue';
 import { errorMessage } from '#layers/thei/app/composables/upload-draft';
@@ -31,6 +32,11 @@ const { data, status, error, refresh } = useFetch<AssetUsagesResponse>(
 const asset = computed(() => data.value?.asset ?? props.modalData.asset);
 const videoMeta = computed(() =>
   asset.value.type === AssetType.Video && asset.value.meta
+    ? asset.value.meta
+    : undefined,
+);
+const audioMeta = computed(() =>
+  asset.value.type === AssetType.Audio && asset.value.meta
     ? asset.value.meta
     : undefined,
 );
@@ -92,6 +98,18 @@ const usageGroups = computed(() => {
         :poster="videoPosterOf(asset.media)"
         :has-audio="asset.media.hasAudio"
       />
+      <AssetModalPreviewAudio
+        v-else-if="asset.type === AssetType.Audio"
+        :players="[
+          {
+            key: asset.assetUuid,
+            src: asset.assetUrl,
+            extension: asset.extension,
+            duration: audioMeta?.duration,
+            peaks: audioMeta?.peaks,
+          },
+        ]"
+      />
       <FilePreview
         v-else
         :extension="asset.extension"
@@ -129,8 +147,10 @@ const usageGroups = computed(() => {
           :duration="
             videoMeta && 'duration' in videoMeta
               ? videoMeta.duration
-              : undefined
+              : audioMeta?.duration
           "
+          :channels="audioMeta?.channels"
+          :bitrate="audioMeta?.bitrate"
           :archived-original="
             asset.meta && 'archivedOriginal' in asset.meta
               ? asset.meta.archivedOriginal

@@ -1,5 +1,8 @@
+import { isLosslessAudioCodec } from './audio';
 import {
   assetQualityLevelOf,
+  AUDIO_BITRATE_BY_LEVEL,
+  AUDIO_MONO_BITRATE_BY_LEVEL,
   AVIF_QUALITY_BY_LEVEL,
   interpolateByQualityLevel,
   VIDEO_AUDIO_BITRATE_BY_LEVEL,
@@ -87,4 +90,36 @@ export function videoAudioBitrate(quality: number): number {
   return VIDEO_AUDIO_BITRATE_BY_LEVEL[
     assetQualityLevelOf(normalizeAssetUploadQuality(quality))
   ];
+}
+
+export const AUDIO_MIN_BITRATE = 12_000;
+
+export interface AudioBitrateSource {
+  /** Bits per second of the source's sound, when known. */
+  bitrate?: number;
+  /** The source's audio codec, as ffmpeg names it. */
+  codec?: string;
+}
+
+/**
+ * The Opus bitrate a recording is encoded at.
+ *
+ * A lossy source's own bitrate caps it, as a video's does: re-encoding an MP3
+ * at 64 kbit/s at 96 would only spend bytes on what the MP3 already threw
+ * away. A lossless source has no such ceiling — its bitrate measures samples,
+ * not detail.
+ */
+export function audioTargetBitrate(
+  quality: number,
+  mono: boolean,
+  source: AudioBitrateSource = {},
+): number {
+  let target = interpolateByQualityLevel(
+    mono ? AUDIO_MONO_BITRATE_BY_LEVEL : AUDIO_BITRATE_BY_LEVEL,
+    normalizeAssetUploadQuality(quality),
+  );
+  if (source.bitrate && !isLosslessAudioCodec(source.codec)) {
+    target = Math.min(target, source.bitrate);
+  }
+  return Math.round(Math.max(AUDIO_MIN_BITRATE, target) / 1000) * 1000;
 }

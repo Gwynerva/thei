@@ -22,6 +22,7 @@ import { AssetType } from '#layers/thei/shared/asset';
 import {
   buildAssetSettingsKey,
   createOriginalAssetSettings,
+  type AssetAudioSource,
   type AssetImageTransformSettings,
   type AssetTransformSource,
   type AssetUploadRequest,
@@ -35,6 +36,7 @@ import {
   resolveAssetRequest,
   validateAssetVariantSettings,
 } from './create-variant';
+import { probeAudioSource } from './audio';
 import type { AssetSourceFile, ProcessedAsset } from './process';
 import { isProcessingQueued, withProbeSlot, withProcessingSlot } from './queue';
 import { discardAssetScratch } from './storage';
@@ -66,6 +68,8 @@ interface DraftSession {
   familyUuid: string;
   /** Known size of a media source; absent for anything else. */
   transform?: AssetTransformSource;
+  /** What a recording's encode needs to know about it; only for sound. */
+  audio?: AssetAudioSource;
   lastAccess: number;
   renders: Map<string, DraftRenderRecord>;
   inflight: Map<string, InflightRender>;
@@ -159,15 +163,18 @@ export async function openDraft(input: {
   await mkdir(directory, { recursive: true });
 
   let transform: AssetTransformSource | undefined;
-  if (input.type === AssetType.Image || input.type === AssetType.Video) {
-    try {
+  let audio: AssetAudioSource | undefined;
+  try {
+    if (input.type === AssetType.Image || input.type === AssetType.Video) {
       transform = await withProbeSlot(() =>
         probeTransformSource(input.source, input.type),
       );
-    } catch (error) {
-      await rm(directory, { recursive: true, force: true }).catch(() => {});
-      throw error;
+    } else if (input.type === AssetType.Audio) {
+      audio = await withProbeSlot(() => probeAudioSource(input.source));
     }
+  } catch (error) {
+    await rm(directory, { recursive: true, force: true }).catch(() => {});
+    throw error;
   }
 
   const session: DraftSession = {
@@ -177,6 +184,7 @@ export async function openDraft(input: {
     type: input.type,
     familyUuid: input.familyUuid,
     transform,
+    audio,
     lastAccess: Date.now(),
     renders: new Map(),
     inflight: new Map(),
@@ -211,6 +219,18 @@ function describeDraft(session: DraftSession): AssetDraftSource {
             : {}),
           ...(session.transform.codec
             ? { codec: session.transform.codec }
+            : {}),
+        }
+      : {}),
+    ...(session.audio
+      ? {
+          ...(session.audio.duration
+            ? { duration: session.audio.duration }
+            : {}),
+          ...(session.audio.bitrate ? { bitrate: session.audio.bitrate } : {}),
+          ...(session.audio.codec ? { codec: session.audio.codec } : {}),
+          ...(session.audio.channels
+            ? { channels: session.audio.channels }
             : {}),
         }
       : {}),
@@ -424,7 +444,7 @@ export async function commitDraft(
       request,
       session.source,
       session.type,
-      session.transform,
+      session.transform ?? session.audio,
     );
     const key = buildAssetSettingsKey(settings);
     // "Use" pressed while these very settings are still encoding: wait for

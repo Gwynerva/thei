@@ -111,22 +111,38 @@ export interface AssetVideoTransformSettings extends AssetTransformGeometry {
   fastConversion: boolean;
 }
 
+/**
+ * A recording re-encoded as Opus. There is no format to choose and no
+ * geometry: only how many bits it is worth, and whether two channels are.
+ */
+export interface AssetAudioTransformSettings {
+  type: 'audio-transform';
+  quality: number;
+  mono: boolean;
+}
+
 export interface AssetFileZipSettings {
   type: 'file-zip';
 }
 
+/** The transforms with a frame: crop, turn and size apply to them. */
 export type AssetTransformSettings =
   AssetImageTransformSettings | AssetVideoTransformSettings;
 
 export type AssetUploadSettings =
-  AssetOriginalSettings | AssetTransformSettings | AssetFileZipSettings;
+  | AssetOriginalSettings
+  | AssetTransformSettings
+  | AssetAudioTransformSettings
+  | AssetFileZipSettings;
 
 export type AssetSettingsForType<TType extends AssetType> =
   TType extends AssetType.Image
     ? AssetOriginalSettings | AssetImageTransformSettings
     : TType extends AssetType.Video
       ? AssetOriginalSettings | AssetVideoTransformSettings
-      : AssetOriginalSettings | AssetFileZipSettings;
+      : TType extends AssetType.Audio
+        ? AssetOriginalSettings | AssetAudioTransformSettings
+        : AssetOriginalSettings | AssetFileZipSettings;
 
 /**
  * What a caller asks for, before it is checked against the source.
@@ -162,17 +178,30 @@ export interface AssetVideoTransformRequest extends AssetTransformRequestGeometr
 export type AssetTransformRequest =
   AssetImageTransformRequest | AssetVideoTransformRequest;
 
+export interface AssetAudioTransformRequest {
+  type: 'audio-transform';
+  quality: number;
+  mono: boolean;
+}
+
 export type AssetUploadRequest =
-  AssetOriginalSettings | AssetTransformRequest | AssetFileZipSettings;
+  | AssetOriginalSettings
+  | AssetTransformRequest
+  | AssetAudioTransformRequest
+  | AssetFileZipSettings;
 
 /**
  * Whether storing this takes long enough to run as a job the client polls,
  * rather than inside its request: a video encode is minutes, a zip of a
- * large file the same order; a picture is seconds, and usually a render the
- * editor already has.
+ * large file the same order, and an hour of sound is a minute of Opus; a
+ * picture is seconds, and usually a render the editor already has.
  */
 export function isLongCommit(request: AssetUploadRequest): boolean {
-  return request.type === 'video-transform' || request.type === 'file-zip';
+  return (
+    request.type === 'video-transform' ||
+    request.type === 'audio-transform' ||
+    request.type === 'file-zip'
+  );
 }
 
 /** What a transform needs to know about its source. */
@@ -188,6 +217,17 @@ export interface AssetTransformSource extends FileDimensions {
   bitrate?: number;
   /** The video codec, as ffmpeg names it. */
   codec?: string;
+}
+
+/** What an audio transform needs to know about its source. */
+export interface AssetAudioSource {
+  /** Seconds of sound: what a size estimate multiplies the bitrate by. */
+  duration?: number;
+  /** Bits per second of the sound: the most a lossy source's re-encode is worth. */
+  bitrate?: number;
+  /** The audio codec, as ffmpeg names it. */
+  codec?: string;
+  channels?: number;
 }
 
 export class AssetSettingsError extends Error {
@@ -255,11 +295,22 @@ export function createFileZipSettings(): AssetFileZipSettings {
  */
 export function resolveAssetUploadSettings(
   request: AssetUploadRequest,
-  source?: AssetTransformSource,
+  source?: AssetTransformSource | AssetAudioSource,
 ): AssetUploadSettings {
   if (request.type === 'original') return createOriginalAssetSettings();
   if (request.type === 'file-zip') return createFileZipSettings();
-  if (!source?.width || !source.height) {
+  if (request.type === 'audio-transform') {
+    return {
+      type: 'audio-transform',
+      quality: normalizeAssetUploadQuality(request.quality),
+      // A mono source has one channel to keep either way, so it is described
+      // as mono: both spellings must map to one settings key.
+      mono:
+        Boolean(request.mono) ||
+        (source && 'channels' in source ? source.channels === 1 : false),
+    };
+  }
+  if (!source || !('width' in source) || !source.width || !source.height) {
     throw new AssetSettingsError('Source dimensions are unknown');
   }
 
@@ -463,6 +514,14 @@ export function buildAssetSettingsKey(settings: AssetUploadSettings): string {
 
   if (settings.type === 'file-zip') {
     return 'file-zip';
+  }
+
+  if (settings.type === 'audio-transform') {
+    return [
+      settings.type,
+      `q${settings.quality}`,
+      `mono:${settings.mono ? 1 : 0}`,
+    ].join(':');
   }
 
   const { rotation, crop, dimensions } = settings;

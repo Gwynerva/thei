@@ -463,6 +463,12 @@ async function skipSubBlocks(reader: PositionalReader, position: number) {
 // Video and audio -----------------------------------------------------------
 
 /**
+ * Extensions ffmpeg cannot place a muxer for by themselves. `weba` is what a
+ * recording is stored as here (`shared/audio.ts`): WebM, named as audio.
+ */
+const MUXER_BY_EXTENSION: Record<string, string> = { weba: 'webm' };
+
+/**
  * Copies the streams into a fresh container without metadata or chapters.
  *
  * Only real video and audio streams are kept: attached cover pictures and data
@@ -498,6 +504,9 @@ async function remuxWithoutMetadata(
     '+bitexact',
     '-flags:a',
     '+bitexact',
+    ...(MUXER_BY_EXTENSION[extension]
+      ? ['-f', MUXER_BY_EXTENSION[extension]]
+      : []),
     outputPath,
   ];
   const succeeded = await new Promise<boolean>((resolve) => {

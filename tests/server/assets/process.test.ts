@@ -116,6 +116,9 @@ describe('ffmpeg input info', () => {
       overallBitrate: 900_000,
       audioBitrate: 128_000,
       codec: 'h264',
+      audioCodec: 'aac',
+      channels: 2,
+      sampleRate: 48_000,
     });
   });
 

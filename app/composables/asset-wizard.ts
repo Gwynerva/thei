@@ -3,6 +3,7 @@ import type {
   AssetVariantInfo,
 } from '#layers/thei/shared/api/asset';
 import { AssetType } from '#layers/thei/shared/asset';
+import { audioDescriptorFromMeta } from '#layers/thei/shared/audio';
 import type { ExtensionProfile } from '#layers/thei/shared/assets/extensions';
 import { anyFileExtensionProfile } from '#layers/thei/shared/assets/extensions';
 import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
@@ -386,6 +387,7 @@ export function contentAssetFromVariant(
     extension: asset.extension,
     size: asset.size,
     media: result.media,
+    ...(result.audio ? { audio: result.audio } : {}),
     assetUrl: result.assetUrl,
     archivedOriginal:
       asset.type === AssetType.Other &&
@@ -407,6 +409,10 @@ export function mapAssetVariantToReplaceResult(
     media:
       asset.type === AssetType.Image || asset.type === AssetType.Video
         ? asset.media
+        : undefined,
+    audio:
+      asset.type === AssetType.Audio
+        ? audioDescriptorFromMeta(asset.meta)
         : undefined,
     assetUrl: asset.assetUrl,
     meta: asset.meta,

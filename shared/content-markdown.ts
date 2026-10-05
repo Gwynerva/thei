@@ -1,3 +1,4 @@
+import { formatMediaTime } from './audio';
 import type { ContentOutputBlock, PublicContentOutputData } from './content';
 import { contentIntegrationUrl } from './content-integrations';
 import { normalizeInlineMarkup } from './language/general-normalize';
@@ -15,6 +16,8 @@ export interface ContentMarkdownOptions {
   absolute: (path: string) => string;
   /** Text for the marker left where a private section was removed. */
   privateSectionLabel: string;
+  /** What a recording with no title of its own is called. */
+  audioLabel?: string;
   /**
    * The typography of the site's language for the owner's words, which the
    * page gives them too. Without it the words come out as typed.
@@ -91,6 +94,18 @@ function renderBlock(
       if (!url) return '';
       const caption = inlineToMarkdown(data.caption, options);
       const link = `[${title || url}](${options.absolute(url)})`;
+      return caption ? `${link}\n\n${caption}` : link;
+    }
+    case 'contentAudio': {
+      const url = data.asset?.assetUrl;
+      if (!url) return '';
+      const title =
+        inlineToMarkdown(data.title, options) || options.audioLabel || url;
+      const duration = data.asset?.audio?.duration;
+      const link = `[${title}](${options.absolute(url)})${
+        duration > 0 ? ` (${formatMediaTime(duration)})` : ''
+      }`;
+      const caption = inlineToMarkdown(data.caption, options);
       return caption ? `${link}\n\n${caption}` : link;
     }
     case 'externalLink': {

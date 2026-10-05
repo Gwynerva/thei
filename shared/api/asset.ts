@@ -7,12 +7,14 @@ import type {
 } from '../asset';
 import { AssetType } from '../asset';
 import type {
+  AssetAudioTransformSettings,
   AssetImageTransformSettings,
   AssetFileZipSettings,
   AssetOriginalSettings,
   AssetUploadSettings,
   AssetVideoTransformSettings,
 } from '../asset-upload-settings';
+import type { AudioDescriptor } from '../audio';
 import type { MediaDescriptor } from '../media';
 
 export function buildAssetPreviewUrl(assetUuid: string) {
@@ -57,7 +59,7 @@ export interface VideoAssetVariantInfo extends BaseAssetVariantInfo<
 export interface AudioAssetVariantInfo extends BaseAssetVariantInfo<
   AssetType.Audio,
   AudioAssetMeta,
-  AssetOriginalSettings | null
+  AssetOriginalSettings | AssetAudioTransformSettings | null
 > {
   media?: never;
 }
@@ -97,6 +99,8 @@ export type AssetReplaceResult = {
   size: number;
   /** Display descriptor. Absent for unknown file types. */
   media?: MediaDescriptor;
+  /** What a player draws a recording with; only for audio. */
+  audio?: AudioDescriptor;
   /** Canonical download URL. Always present for View on unknown files. */
   assetUrl: string;
   meta?: AssetMeta | null;

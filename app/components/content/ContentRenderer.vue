@@ -204,6 +204,14 @@ function openGalleryItem(
               openGalleryItem(block.data.items as ContentGalleryItem[], item)
           "
         />
+        <ContentAudioCard
+          v-else-if="
+            block.type === 'contentAudio' && asset(block.data.asset).assetUrl
+          "
+          :asset="asset(block.data.asset)"
+          :title="block.data.title as string | undefined"
+          :caption="block.data.caption as string | undefined"
+        />
         <ContentAttachmentCard
           v-else-if="
             block.type === 'contentAttachment' &&

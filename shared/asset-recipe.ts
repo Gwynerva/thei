@@ -21,6 +21,8 @@ type RecipePhrases = Pick<
   | 'asset_recipe_lossless'
   | 'asset_recipe_no_audio'
   | 'asset_recipe_fast'
+  | 'asset_recipe_bitrate'
+  | 'asset_recipe_mono'
   | 'asset_quality_minimal'
   | 'asset_quality_low'
   | 'asset_quality_medium'
@@ -50,6 +52,17 @@ export function describeAssetRecipe(
   if (!settings) return undefined;
   if (settings.type === 'original') return phrase.asset_recipe_original;
   if (settings.type === 'file-zip') return phrase.asset_recipe_zip;
+  if (settings.type === 'audio-transform') {
+    const bitrate = meta && 'bitrate' in meta ? meta.bitrate : undefined;
+    return [
+      'Opus',
+      ...(bitrate
+        ? [phrase.asset_recipe_bitrate(Math.round(bitrate / 1000))]
+        : []),
+      describeQuality(settings.quality, phrase),
+      ...(settings.mono ? [phrase.asset_recipe_mono] : []),
+    ].join(' · ');
+  }
 
   const output = formatDimensions(settings.dimensions);
   const recorded =

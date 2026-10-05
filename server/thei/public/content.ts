@@ -18,6 +18,7 @@ import {
 } from '#layers/thei/shared/content';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
+import { audioDescriptorFromMeta } from '#layers/thei/shared/audio';
 import { buildProjectUrl } from '#layers/thei/shared/project-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
@@ -366,6 +367,10 @@ async function hydratePublicContentData(
       extension: asset.extension,
       size: asset.size,
       media,
+      audio:
+        asset.type === AssetType.Audio
+          ? audioDescriptorFromMeta(asset.meta)
+          : undefined,
       assetUrl: baseUrl,
       archivedOriginal:
         asset.type === AssetType.Other
@@ -392,6 +397,7 @@ async function hydratePublicContentData(
         return { ...block, data: { entityType, restricted: true } };
     } else if (
       block.type === 'contentMedia' ||
+      block.type === 'contentAudio' ||
       block.type === 'contentAttachment'
     ) {
       const assetUuid = (block.data as any).asset?.assetUuid;

@@ -57,6 +57,10 @@ export interface VideoInspection extends AssetDimensions {
   audioBitrate?: number;
   /** The video codec, as ffmpeg names it. */
   codec?: string;
+  /** Of the first sound stream: its codec, as ffmpeg names it. */
+  audioCodec?: string;
+  channels?: number;
+  sampleRate?: number;
 }
 
 /** What a transform and its size estimate learn about a video. */
@@ -569,7 +573,7 @@ export function videoSourceInfo(
   };
 }
 
-async function readFfmpegInputInfo(filePath: string): Promise<string> {
+export async function readFfmpegInputInfo(filePath: string): Promise<string> {
   return await new Promise<string>((resolve, reject) => {
     const child = spawn(
       ffmpegInstaller.path,
@@ -622,6 +626,10 @@ export function parseFfmpegInputInfo(text: string): VideoInspection {
     text.match(/bitrate:\s*(\d+(?:\.\d+)?\s*kb\/s)/)?.[1],
   );
   const codec = videoLine?.match(/Video:\s*([A-Za-z0-9_-]+)/)?.[1];
+  const audioCodec = audioLine?.match(/Audio:\s*([A-Za-z0-9_]+)/)?.[1];
+  const audioFormat = audioLine?.match(/(\d+)\s*Hz,\s*([^,]+?)\s*(?:,|$)/);
+  const sampleRate = parseNumber(audioFormat?.[1]);
+  const channels = channelCount(audioFormat?.[2]);
 
   return {
     ...(coded
@@ -635,8 +643,35 @@ export function parseFfmpegInputInfo(text: string): VideoInspection {
     ...(overallBitrate ? { overallBitrate } : {}),
     ...(audioBitrate ? { audioBitrate } : {}),
     ...(codec ? { codec } : {}),
+    ...(audioCodec ? { audioCodec } : {}),
+    ...(channels ? { channels } : {}),
+    ...(sampleRate ? { sampleRate } : {}),
     hasAudio: Boolean(audioLine),
   };
+}
+
+const NAMED_CHANNEL_LAYOUTS: Record<string, number> = {
+  mono: 1,
+  stereo: 2,
+  downmix: 2,
+  quad: 4,
+  hexagonal: 6,
+  octagonal: 8,
+};
+
+/**
+ * The channels in a layout as ffmpeg prints it: a name ("stereo"), a count
+ * ("3 channels"), or speakers plus subwoofers ("5.1(side)").
+ */
+export function channelCount(layout: string | undefined): number | undefined {
+  if (!layout) return undefined;
+  const name = layout.trim().replace(/\(.*\)$/, '');
+  if (NAMED_CHANNEL_LAYOUTS[name]) return NAMED_CHANNEL_LAYOUTS[name];
+  const counted = name.match(/^(\d+)\s*channels?$/);
+  if (counted) return Number(counted[1]) || undefined;
+  const speakers = name.match(/^(\d+)\.(\d+)$/);
+  if (speakers) return Number(speakers[1]) + Number(speakers[2]) || undefined;
+  return undefined;
 }
 
 /** A stream line's ", 850 kb/s" as bits per second. */
@@ -763,7 +798,7 @@ export function buildVideoEncodePasses(
   };
 }
 
-async function runFfmpegWithProgress(
+export async function runFfmpegWithProgress(
   args: string[],
   duration: number | undefined,
   options: AssetProcessOptions,

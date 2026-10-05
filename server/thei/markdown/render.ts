@@ -238,6 +238,7 @@ async function body(
   return contentToMarkdown(await withEntityAddresses(content), {
     absolute: (path) => siteUrl(event, path),
     privateSectionLabel: THEI_SERVER.phrase.secret_hint,
+    audioLabel: THEI_SERVER.phrase.audio,
     format: ownerText,
   });
 }

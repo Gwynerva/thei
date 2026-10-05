@@ -45,6 +45,11 @@ export const ASSET_QUALITY_LEVEL_QUALITY: Record<AssetQualityLevel, number> = {
  */
 export const DEFAULT_IMAGE_QUALITY_LEVEL: AssetQualityLevel = 'medium';
 export const DEFAULT_VIDEO_QUALITY_LEVEL: AssetQualityLevel = 'medium';
+/**
+ * Medium is 96 kbit/s of stereo Opus — near transparent for music, where Xiph
+ * puts storing it at 96–128 — and 48 of mono, more than a voice needs.
+ */
+export const DEFAULT_AUDIO_QUALITY_LEVEL: AssetQualityLevel = 'medium';
 
 export function isAssetQualityLevel(
   value: unknown,
@@ -132,6 +137,26 @@ export const VIDEO_BITRATE_FACTOR_BY_LEVEL: Record<AssetQualityLevel, number> =
     high: 1.7,
     maximum: 2.8,
   };
+
+/**
+ * Opus bitrate of a recording at each level, in bits per second: stereo, and
+ * mono at about half, since one channel carries half the information.
+ */
+export const AUDIO_BITRATE_BY_LEVEL: Record<AssetQualityLevel, number> = {
+  minimal: 48_000,
+  low: 64_000,
+  medium: 96_000,
+  high: 128_000,
+  maximum: 160_000,
+};
+
+export const AUDIO_MONO_BITRATE_BY_LEVEL: Record<AssetQualityLevel, number> = {
+  minimal: 24_000,
+  low: 32_000,
+  medium: 48_000,
+  high: 64_000,
+  maximum: 80_000,
+};
 
 /** Opus bitrate of a video's sound at each level, in bits per second. */
 export const VIDEO_AUDIO_BITRATE_BY_LEVEL: Record<AssetQualityLevel, number> = {

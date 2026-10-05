@@ -124,6 +124,25 @@ describe('public content reference extraction', () => {
     expect(content).toEqual(before);
   });
 
+  it('lists a recording among the files, once, whichever block shows it', () => {
+    const recording = {
+      assetUuid: 'song',
+      assetUrl: '/content/song.weba',
+      extension: 'weba',
+    };
+    expect(
+      extractContentReferenceCandidates({
+        blocks: [
+          {
+            type: 'contentAudio',
+            data: { asset: recording, title: 'Song', caption: 'Live' },
+          },
+          { type: 'contentAttachment', data: { asset: recording } },
+        ],
+      } as any).files,
+    ).toEqual([{ asset: recording, title: 'Song', caption: 'Live' }]);
+  });
+
   it('can include references from private sections for an administrator', () => {
     expect(
       extractContentReferenceCandidates(content, true).links,

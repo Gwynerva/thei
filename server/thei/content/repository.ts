@@ -23,6 +23,7 @@ import {
   type ContentAssetUsageMeta,
 } from '#layers/thei/shared/asset';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
+import { audioDescriptorFromMeta } from '#layers/thei/shared/audio';
 import { buildAdminAssetUrls, archivedOriginalFromMeta } from '../assets/urls';
 import {
   createExternalLinkLoader,
@@ -361,7 +362,10 @@ async function validateContentAssets(data: ContentOutputData) {
       const asset = assetByUuid.get(ref.assetUuid);
       if (!asset) continue;
       const selectionError = assetSelectionError(asset, {
-        sizeLimitPolicy: block.type === 'contentAttachment' ? 'file' : 'media',
+        sizeLimitPolicy:
+          block.type === 'contentAttachment' || block.type === 'contentAudio'
+            ? 'file'
+            : 'media',
       });
       if (selectionError === 'size')
         throw new ContentValidationError(
@@ -374,6 +378,11 @@ async function validateContentAssets(data: ContentOutputData) {
       ) {
         throw new ContentValidationError(
           'Content media and gallery blocks can only use images or videos',
+        );
+      }
+      if (block.type === 'contentAudio' && asset.type !== AssetType.Audio) {
+        throw new ContentValidationError(
+          'Content audio blocks can only use audio files',
         );
       }
     }
@@ -400,6 +409,10 @@ export async function hydrateContentData(
       extension: asset.extension,
       size: asset.size,
       media: urls.media,
+      audio:
+        asset.type === AssetType.Audio
+          ? audioDescriptorFromMeta(asset.meta)
+          : undefined,
       assetUrl: urls.assetUrl,
       archivedOriginal:
         asset.type === AssetType.Other
@@ -413,7 +426,11 @@ export async function hydrateContentData(
   const blocks: ContentOutputBlock[] = [];
   for (const block of normalized.blocks) {
     const data = { ...block.data };
-    if (block.type === 'contentMedia' || block.type === 'contentAttachment') {
+    if (
+      block.type === 'contentMedia' ||
+      block.type === 'contentAudio' ||
+      block.type === 'contentAttachment'
+    ) {
       const assetUuid = (block.data as any).asset?.assetUuid;
       data.asset = assetUuid ? await hydrateAsset(assetUuid) : null;
     } else if (block.type === 'contentGallery') {

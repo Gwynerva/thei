@@ -85,7 +85,10 @@ export function extractContentReferenceCandidates(
         block.data.entityId,
       );
       if (reference) append(reference, block.data.note);
-    } else if (block.type === 'contentAttachment') {
+    } else if (
+      block.type === 'contentAttachment' ||
+      block.type === 'contentAudio'
+    ) {
       const asset = block.data.asset as ContentAssetData | null;
       if (asset) {
         const key = asset.assetUrl || asset.assetUuid;
