@@ -47,7 +47,12 @@ import { assetDetailsModal } from '#layers/thei/app/modals/asset-details/modal';
 import { useOrderedAssetList } from '#layers/thei/app/composables/ordered-asset-list';
 import { useSingleMediaAsset } from '#layers/thei/app/composables/single-media-asset';
 
-const { filesOnly = false } = defineProps<{ filesOnly?: boolean }>();
+/**
+ * A project's files: icon, banner, showcase and the rest. An event, which
+ * borrows this form, has only a banner and the rest.
+ */
+const { kind = 'project' } = defineProps<{ kind?: 'project' | 'event' }>();
+const isProject = computed(() => kind === 'project');
 
 const projectData = inject(projectDataInjectionKey)!;
 const savedProjectData = inject(savedProjectDataInjectionKey)!;
@@ -174,8 +179,9 @@ const iconSlot = useSingleMediaAsset({
 });
 
 const bannerSlot = useSingleMediaAsset({
-  uploadProfile: 'project-banner',
-  asideTitle: () => phrase.value.project_banner,
+  uploadProfile: 'entity-banner',
+  asideTitle: () =>
+    isProject.value ? phrase.value.project_banner : phrase.value.event_banner,
   getAssetUuid: () => projectData.value.bannerAssetUuid,
   setAssetUuid: (assetUuid) => {
     projectData.value.bannerAssetUuid = assetUuid;
@@ -447,11 +453,11 @@ async function openOtherAsset(index: number) {
   <div>
     <SectionHeader
       icon="files"
-      :title="filesOnly ? phrase.event_files : phrase.project_files"
+      :title="isProject ? phrase.project_files : phrase.event_files"
       :description="
-        filesOnly
-          ? phrase.event_files_description
-          : phrase.project_files_description
+        isProject
+          ? phrase.project_files_description
+          : phrase.event_files_description
       "
       class="mb-md"
     />
@@ -464,9 +470,12 @@ async function openOtherAsset(index: number) {
         <Icon name="warning" class="mr-xs" />
         {{ batchErrorMessage }}
       </div>
-      <div v-if="!filesOnly" class="flex flex-wrap gap-md p-sm sm:p-md">
+      <div
+        class="flex flex-wrap gap-md p-sm sm:p-md"
+        :class="{ 'border-b border-border-1': !isProject }"
+      >
         <!-- Project Icon -->
-        <div class="flex flex-1 items-center gap-sm">
+        <div v-if="isProject" class="flex flex-1 items-center gap-sm">
           <AssetTile
             :media="iconMedia"
             :overlay="{
@@ -484,8 +493,8 @@ async function openOtherAsset(index: number) {
           </div>
         </div>
 
-        <!-- Project Banner -->
-        <div class="flex flex-1 items-center gap-sm">
+        <!-- Banner -->
+        <div class="flex flex-1 items-center gap-sm" data-banner-field>
           <AssetTile
             :media="bannerMedia"
             :overlay="{
@@ -493,21 +502,31 @@ async function openOtherAsset(index: number) {
               showSize: bannerSize != null,
               editable: true,
             }"
-            :aria-label="phrase.project_banner"
+            :aria-label="
+              isProject ? phrase.project_banner : phrase.event_banner
+            "
             class="aspect-video h-18 shrink-0 cursor-pointer"
             @click="bannerSlot.open"
           />
           <div class="tracking-tight">
-            <div class="font-semibold">{{ phrase.project_banner }}</div>
-            <p class="text-sm text-text-2">{{ phrase.project_banner_hint }}</p>
-            <AssetAspectHint profile="project-banner" class="mt-1" />
+            <div class="font-semibold">
+              {{ isProject ? phrase.project_banner : phrase.event_banner }}
+            </div>
+            <p class="text-sm text-text-2">
+              {{
+                isProject
+                  ? phrase.project_banner_hint
+                  : phrase.event_banner_hint
+              }}
+            </p>
+            <AssetAspectHint profile="entity-banner" class="mt-1" />
           </div>
         </div>
       </div>
 
       <!-- Showcase header -->
       <div
-        v-if="!filesOnly"
+        v-if="isProject"
         class="border-y border-border-1 bg-bg-3 px-md py-xs text-sm
           tracking-tight"
       >
@@ -517,7 +536,7 @@ async function openOtherAsset(index: number) {
 
       <!-- Showcase grid -->
       <div
-        v-if="!filesOnly"
+        v-if="isProject"
         ref="showcaseRoot"
         class="flex flex-wrap gap-sm p-sm sm:p-md"
       >
@@ -569,7 +588,7 @@ async function openOtherAsset(index: number) {
 
       <!-- Other-files header -->
       <div
-        v-if="!filesOnly"
+        v-if="isProject"
         class="border-y border-border-1 bg-bg-3 px-md py-xs text-sm
           tracking-tight"
       >

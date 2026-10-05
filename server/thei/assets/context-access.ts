@@ -23,6 +23,7 @@ import { opensGrantOwner, resolvePublicViewer } from '../access-links/viewer';
 interface AttachmentContext {
   ownerType:
     | 'project'
+    | 'project-section'
     | 'event'
     | 'page'
     | 'diary-entry'

@@ -554,6 +554,45 @@ describe('Open Graph content', () => {
     });
   });
 
+  it("draws a section's or an event's banner ahead of its body's picture", async () => {
+    project('p', Public);
+    datedSection('s', 'p', ['2020-01-01', '2020-02-01']);
+    event('e', Public);
+    asset('image-1', 'image');
+    asset('banner', 'image');
+    body('project-section', 's', 'project-section-body', [
+      { asset: 'image-1' },
+    ]);
+    body('event', 'e', 'event-body', [{ asset: 'image-1' }]);
+    for (const [containerType, containerId] of [
+      ['project-section', 's'],
+      ['event', 'e'],
+    ] as const)
+      context.db
+        .insert(context.schema.assetUsages)
+        .values({
+          assetUuid: 'banner',
+          containerType,
+          containerId,
+          role: 'banner',
+          meta: null,
+        })
+        .run();
+
+    for (const [kind, id] of [
+      ['section', 's'],
+      ['event', 'e'],
+    ] as const) {
+      const content = (await resolve({ kind, id }))!;
+      expect(content.picture).toMatchObject({
+        type: 'file',
+        key: 'banner-hash.webp',
+      });
+      // The layout of a section or an event stays the one it had.
+      expect(content.banner).toBeUndefined();
+    }
+  });
+
   it('says when a section last changed', async () => {
     project('p', Public);
     section('open', 'p');

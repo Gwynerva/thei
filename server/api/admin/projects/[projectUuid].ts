@@ -141,9 +141,22 @@ export default defineEventHandler(async (event) => {
       // The times are the server's own record of edits, not fields of the
       // form: an item edited in its modal comes back without them, and the
       // form would read that as a change of its own.
-      const sections = storedSections.map(
-        ({ createdAt: _createdAt, updatedAt: _updatedAt, ...section }) =>
-          section,
+      const sections = await Promise.all(
+        storedSections.map(
+          async ({
+            createdAt: _createdAt,
+            updatedAt: _updatedAt,
+            ...section
+          }) => {
+            const banner =
+              section.bannerAssetUuid &&
+              (await THEI_SERVER.assets.findByUuid(section.bannerAssetUuid));
+            const bannerMedia = banner
+              ? (await buildAdminAssetUrls(banner)).media
+              : undefined;
+            return bannerMedia ? { ...section, bannerMedia } : section;
+          },
+        ),
       );
 
       const otherAssets: OtherAssetGetItem[] = await Promise.all(

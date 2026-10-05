@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
+import {
+  getAssetUploadProfileConfig,
+  type AssetUploadProfile,
+} from '#layers/thei/shared/asset-upload-profiles';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import { imageExtensionProfile } from '#layers/thei/shared/assets/extensions';
 const props = defineProps<{
@@ -12,11 +15,17 @@ const props = defineProps<{
   hideLabel?: boolean;
   detailsAside?: boolean;
   shape?: 'normal' | 'circle';
-  usageDelta?: Record<string, number>;
+  /** A function when counting is costly: it is asked only as the editor opens. */
+  usageDelta?: Record<string, number> | (() => Record<string, number>);
 }>();
 const assetUuid = defineModel<string | null>({ required: true });
 const media = defineModel<MediaDescriptor | undefined>('media');
 const error = ref<string>();
+/** A wide tile takes the proportions of the place it fills. */
+const wideAspect = computed(() => {
+  const aspect = getAssetUploadProfileConfig(props.profile)?.aspect;
+  return aspect ? `${aspect.width} / ${aspect.height}` : '3 / 1';
+});
 const slot = useSingleMediaAsset({
   uploadProfile: props.profile,
   asideTitle: () => props.title,
@@ -26,7 +35,10 @@ const slot = useSingleMediaAsset({
   },
   media,
   accept: props.imageOnly ? [imageExtensionProfile] : undefined,
-  usageDelta: () => props.usageDelta ?? {},
+  usageDelta: () =>
+    (typeof props.usageDelta === 'function'
+      ? props.usageDelta()
+      : props.usageDelta) ?? {},
   onError: (e) => {
     error.value = e instanceof Error ? e.message : String(e);
   },
@@ -51,7 +63,8 @@ const slot = useSingleMediaAsset({
         :shape
         :aria-label="title"
         :overlay="{ showVideo: true, editable: true }"
-        :class="wide ? 'h-24 w-72 max-w-full' : compact ? 'size-12' : 'size-24'"
+        :class="wide ? 'h-24 max-w-full' : compact ? 'size-12' : 'size-24'"
+        :style="wide ? { aspectRatio: wideAspect } : undefined"
         class="shrink-0 cursor-pointer"
         @click="slot.open()"
       />

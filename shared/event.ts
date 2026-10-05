@@ -19,6 +19,8 @@ export type EventEditData = {
   publicId: string;
   periods: Period[];
   content: ContentFieldModelValue | null;
+  /** The picture the event's page opens with and its cards show. */
+  bannerAssetUuid?: string;
   otherAssets?: OtherAssetSaveItem[];
   externalLinks?: ExternalLinkListItem[];
   tags?: TagEditItem[];

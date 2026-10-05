@@ -79,7 +79,7 @@ function rememberDimensions(width: number, height: number) {
  * Leftwards it dissolves into that copy across the third of the column
  * before the words end, and the copy fills the hero: the words sit on the
  * banner's own colours rather than on black, under a shade the hero lays
- * only there. The column comes from the hero (`PublicProjectHero`); every
+ * only there. The column comes from the hero (`PublicHero`); every
  * fade follows `mask-ease`.
  */
 @variant sm {

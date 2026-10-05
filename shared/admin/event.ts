@@ -60,6 +60,10 @@ export function validateEventData(
       access: data.access,
       periods: normalizePeriods(data.periods),
       content: validateRequiredContent(data.content),
+      bannerAssetUuid:
+        typeof data.bannerAssetUuid === 'string' && data.bannerAssetUuid
+          ? data.bannerAssetUuid
+          : undefined,
       otherAssets: validateFiles(data.otherAssets),
       externalLinks: validateExternalLinks(data.externalLinks),
       tags: validateTags(data.tags),

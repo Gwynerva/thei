@@ -68,7 +68,7 @@ async function pick(
     ><button
       data-banner
       class="m-sm"
-      @click="pick(false, false, 'project-banner')"
+      @click="pick(false, false, 'entity-banner')"
     >
       Banner
     </button>

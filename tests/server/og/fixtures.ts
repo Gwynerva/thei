@@ -316,7 +316,7 @@ export function ogFixtures(art: OgArtworkSet): OgFixture[] {
       name: 'project with a wide banner',
       content: content(
         'project',
-        'project-banner',
+        'entity-banner',
         'Атлас северных маяков',
         { hue: 40, chroma: 0.12 },
         {

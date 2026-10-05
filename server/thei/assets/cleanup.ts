@@ -144,6 +144,7 @@ async function cleanupDanglingUsages() {
   }[AssetContainerType][] = [
     ['asset', 'assets', 'assetUuid'],
     ['project', 'projects', 'projectUuid'],
+    ['project-section', 'project-content-sections', 'sectionUuid'],
     ['event', 'events', 'eventUuid'],
     ['page', 'pages', 'pageUuid'],
     ['diary-entry', 'diary-entries', 'diaryUuid'],

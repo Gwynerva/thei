@@ -18,6 +18,7 @@ export const ASSET_CONTAINER_TYPES = [
   'profile-status',
   'project-status',
   'project',
+  'project-section',
   'event',
   'page',
   'diary-entry',

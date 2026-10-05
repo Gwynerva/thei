@@ -136,7 +136,10 @@ export function countProjectAssetPlacements(
     collectContentAssetUuids(content?.data).forEach(add);
   };
   addContent(project.descriptionContent);
-  for (const section of project.sections ?? []) addContent(section.content);
+  for (const section of project.sections ?? []) {
+    add(section.bannerAssetUuid);
+    addContent(section.content);
+  }
   return counts;
 }
 

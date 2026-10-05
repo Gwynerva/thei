@@ -1123,6 +1123,9 @@ export default defineI18nModule({
       'В этом разделе нет открытого для чтения контента.',
     content_section_title: 'Название раздела',
     content_section_summary: 'Суть раздела',
+    content_section_banner: 'Баннер',
+    content_section_banner_hint:
+      'Широкое изображение вверху страницы раздела и на его карточках.',
     content_section_private: 'Приватный раздел',
     content_section_private_hint: 'Виден только вам',
     content_section_content: 'Контент раздела',
@@ -1346,7 +1349,11 @@ export default defineI18nModule({
     page_slug_already_taken: 'Страница с таким slug уже существует.',
     delete_page: 'Удалить страницу',
     event_files: 'Файлы события',
-    event_files_description: 'Произвольные файлы события любого формата.',
+    event_files_description:
+      'Баннер и произвольные файлы события любого формата.',
+    event_banner: 'Баннер события',
+    event_banner_hint:
+      'Широкое изображение вверху страницы события и на его карточках.',
     event_action: 'Кнопка действия события',
     event_action_hint: 'Главное действие, которое можно выполнить из события.',
     event_external_links: 'Внешние ссылки события',
@@ -1361,7 +1368,7 @@ export default defineI18nModule({
     project_icon_hint:
       'Квадратная картинка для карточек, ссылок и превью. Без неё будет автоиконка.',
     project_banner: 'Баннер проекта',
-    project_banner_hint: 'Широкое изображение для страницы проекта.',
+    project_banner_hint: 'Широкое изображение вверху страницы проекта.',
     delete_project: 'Удалить проект',
     delete_confirmation_description: (entityType, entityName) =>
       `Вы собираетесь удалить ${entityType} "${entityName}". Это действие нельзя отменить.`,

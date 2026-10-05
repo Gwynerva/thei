@@ -29,6 +29,11 @@ import {
   buildPublicTagMedia,
 } from './assets/urls';
 import { resolveEntityIconMedia } from './media/generated-icon';
+import {
+  buildAdminEntityBanner,
+  buildPublicEventBanner,
+  buildPublicSectionBanner,
+} from './entity-banner';
 import { opensPrivate, type PublicViewer } from './access-links/viewer';
 import {
   buildPublicContentPreviewMedia,
@@ -68,8 +73,8 @@ export type ContentEntityRecord = {
    */
   grantOwner?: ShareGrantOwner;
   /**
-   * The picture that stands for the entity: its icon, or the first picture of
-   * its body. Drawn on demand, because a search lists far more entities than
+   * The picture that stands for the entity: its icon, its banner, or the
+   * first picture of its body. Drawn on demand, because a search lists far more entities than
    * it ever shows. `admin` serves the files through the admin's own preview
    * addresses; `public` through the entity's public ones, from the public part
    * of its body unless `includePrivate`.
@@ -146,16 +151,19 @@ function iconMedia(
 }
 
 /**
- * The first picture of the body, or the drawn icon of the kind when the body
- * opens with none — the same fallback a project without an icon gets.
+ * The banner of an event or a section, else the first picture of the body,
+ * else the drawn icon of the kind when the body opens with none — the same
+ * fallback a project without an icon gets.
  */
 function bodyMedia(
   ownerType: BodyEntityKind,
   id: string,
   slot: ContentSlot,
   context: PublicContentEntity,
+  banner?: (view: MediaView) => Promise<MediaDescriptor | undefined>,
 ) {
   return async (view: MediaView, includePrivate = false) =>
+    (await banner?.(view)) ??
     resolveEntityIconMedia(
       ownerType,
       id,
@@ -222,10 +230,16 @@ function sectionRecord(
       href: buildProjectUrl(project.humanReadableSlug, project.publicId),
     },
     grantOwner: { entityType: 'project', entityId: child.projectUuid },
-    media: bodyMedia('project-section', id, 'project-section-body', {
-      type: 'project',
-      ...project,
-    }),
+    media: bodyMedia(
+      'project-section',
+      id,
+      'project-section-body',
+      { type: 'project', ...project },
+      (view) =>
+        view === 'admin'
+          ? buildAdminEntityBanner('project-section', id)
+          : buildPublicSectionBanner(project, { ...child, sectionUuid: id }),
+    ),
   };
 }
 
@@ -241,10 +255,16 @@ function eventRecord(event: EventRow): ContentEntityRecord {
     humanReadableSlug: event.humanReadableSlug,
     publicId: event.publicId,
     grantOwner: { entityType: 'event', entityId: event.eventUuid },
-    media: bodyMedia('event', event.eventUuid, 'event-body', {
-      type: 'event',
-      ...event,
-    }),
+    media: bodyMedia(
+      'event',
+      event.eventUuid,
+      'event-body',
+      { type: 'event', ...event },
+      (view) =>
+        view === 'admin'
+          ? buildAdminEntityBanner('event', event.eventUuid)
+          : buildPublicEventBanner(event),
+    ),
   };
 }
 

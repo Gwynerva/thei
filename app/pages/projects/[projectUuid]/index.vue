@@ -26,8 +26,6 @@ const resource = await useFetch<PublicProjectResponse>(
   () => `/api/projects/${encodeURIComponent(String(route.params.projectUuid))}`,
 );
 const data = useRequiredResource(resource);
-// The hero already paints the page top.
-usePublicPageGlow({ enabled: false });
 const canonical = computed(() =>
   buildProjectUrl(data.value.humanReadableSlug, data.value.publicId),
 );
@@ -147,7 +145,7 @@ const ownerNotesContents = computed(() =>
 
 <template>
   <main class="flex flex-col">
-    <PublicProjectHero
+    <PublicHero
       :title="data.title"
       :summary="data.summary"
       :icon-media="data.iconMedia"
@@ -166,7 +164,7 @@ const ownerNotesContents = computed(() =>
           active="overview"
         />
       </template>
-    </PublicProjectHero>
+    </PublicHero>
 
     <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
       <PublicReminderNotice :reminder="data.reminder" />

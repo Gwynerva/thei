@@ -27,6 +27,7 @@ Around them:
 
 - **Pages** are standalone writing that belongs to no timeline entity.
 - **Tags** are threads across projects and events. Diary entries carry none.
+- **Banners** are 16:9 pictures a project, an event or a section may open its page with, in the same dark hero. An event's or a section's banner also stands for it on every card, ahead of the first picture of its body; a project's cards keep its icon. Diary entries have none.
 - **Life** is the one timeline everything dated lands on, once its day has come somewhere on Earth: a period still running shows by its start alone, and a day still to come waits. A card of a period marks which moment of it the card is — a start, an end, a single day, a whole stretch, or a start still running — and the edge of a start or an end is torn on the side its period goes on to.
 - **Relations** join any two of projects, events and diary entries, and are edited from either side. One row per pair, read from either side as "related", "depends on" or "affects", with a note written once or once per side. A relation is a deliberate claim; a link inside the content is only a mention. Public pages show them in a block of their own with one tab per kind, loaded a page at a time, because a project may gather hundreds of diary entries; cards name only the projects an event belongs to.
 

@@ -1063,6 +1063,9 @@ export default defineI18nBase({
       'This section has no content open to readers.',
     content_section_title: 'Section title',
     content_section_summary: 'Section summary',
+    content_section_banner: 'Banner',
+    content_section_banner_hint:
+      'Wide image at the top of the section page and on its cards.',
     content_section_private: 'Private section',
     content_section_private_hint: 'Visible only to you in the admin panel.',
     content_section_content: 'Section content',
@@ -1286,7 +1289,10 @@ export default defineI18nBase({
     page_slug_already_taken: 'A page with this slug already exists.',
     delete_page: 'Delete Page',
     event_files: 'Event files',
-    event_files_description: 'Arbitrary event files in any format.',
+    event_files_description: 'Banner and arbitrary event files in any format.',
+    event_banner: 'Event Banner',
+    event_banner_hint:
+      'Wide image at the top of the event page and on its cards.',
     event_action: 'Event action button',
     event_action_hint: 'The primary action available from this event.',
     event_external_links: 'Event external links',
@@ -1301,7 +1307,7 @@ export default defineI18nBase({
     project_icon_hint:
       'Square image for cards, links and previews. Without one, a generated icon is used.',
     project_banner: 'Project Banner',
-    project_banner_hint: 'Wide image for the project page.',
+    project_banner_hint: 'Wide image at the top of the project page.',
     delete_project: 'Delete Project',
     delete_confirmation_description: (entityType, entityName) =>
       `You are about to delete the ${entityType} "${entityName}". This action cannot be undone.`,

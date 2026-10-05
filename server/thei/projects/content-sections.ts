@@ -25,6 +25,11 @@ import {
   ProjectContentItemStorageError,
 } from './content-items';
 import type { projectContentSections } from '../db/schema/project-content-sections';
+import {
+  deleteEntityBanners,
+  readEntityBannerUuids,
+  syncEntityBanner,
+} from '../entity-banner';
 
 type ProjectContentSectionRow = typeof projectContentSections.$inferSelect;
 
@@ -110,8 +115,15 @@ export function applyProjectSections(
     existing.map((item) => item.sectionUuid),
     sections.map((section) => section.sectionUuid),
   );
+  const banners = readEntityBannerUuids(
+    tx,
+    schema,
+    'project-section',
+    existing.map((item) => item.sectionUuid),
+  );
   deleteProjectContentItemContent(tx, schema, 'project-section', removed);
   deletePeriods(tx, schema, 'project-section', removed);
+  deleteEntityBanners(tx, schema, 'project-section', removed);
   if (removed.length) {
     tx.delete(schema.projectContentSections)
       .where(inArray(schema.projectContentSections.sectionUuid, removed))
@@ -123,16 +135,25 @@ export function applyProjectSections(
   for (let index = 0; index < ordered.length; index++) {
     const section = ordered[index]!;
     const stored = existingById.get(section.sectionUuid);
+    const bannerChanged = syncEntityBanner(
+      tx,
+      schema,
+      'project-section',
+      section.sectionUuid,
+      banners.get(section.sectionUuid),
+      section.bannerAssetUuid,
+    );
     const updatedAt = projectContentItemUpdatedAt(
       stored,
       section,
       section.contentSave,
       now,
       Boolean(stored) &&
-        !periodsEqual(
-          readPeriods(tx, schema, 'project-section', section.sectionUuid),
-          section.periods,
-        ),
+        (bannerChanged ||
+          !periodsEqual(
+            readPeriods(tx, schema, 'project-section', section.sectionUuid),
+            section.periods,
+          )),
     );
     tx.insert(schema.projectContentSections)
       .values({
@@ -191,6 +212,7 @@ export function deleteProjectSections(
   const ids = rows.map((row: { sectionUuid: string }) => row.sectionUuid);
   deleteProjectContentItemContent(tx, schema, 'project-section', ids);
   deletePeriods(tx, schema, 'project-section', ids);
+  deleteEntityBanners(tx, schema, 'project-section', ids);
   if (!ids.length) return;
   tx.delete(schema.projectContentSections)
     .where(eq(schema.projectContentSections.projectUuid, projectUuid))
@@ -205,12 +227,9 @@ export async function getProjectSections(projectUuid: string) {
     .where(eq(schema.projectContentSections.projectUuid, projectUuid))
     .orderBy(schema.projectContentSections.sortOrder)
     .all();
-  const periods = readPeriodsOf(
-    db,
-    schema,
-    'project-section',
-    rows.map((row) => row.sectionUuid),
-  );
+  const ids = rows.map((row) => row.sectionUuid);
+  const periods = readPeriodsOf(db, schema, 'project-section', ids);
+  const banners = readEntityBannerUuids(db, schema, 'project-section', ids);
 
   return orderProjectSections(
     await Promise.all(
@@ -224,6 +243,9 @@ export async function getProjectSections(projectUuid: string) {
         createdAt: section.createdAt,
         updatedAt: section.updatedAt,
         periods: periods.get(section.sectionUuid) ?? [],
+        ...(banners.has(section.sectionUuid)
+          ? { bannerAssetUuid: banners.get(section.sectionUuid) }
+          : {}),
         content:
           (await THEI_SERVER.content.buildFieldValue(
             'project-section',

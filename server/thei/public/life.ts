@@ -49,6 +49,7 @@ import {
   sortLifePoints,
 } from '#layers/thei/shared/life-timeline';
 import { buildPublicEntityPreviewMedia } from './content';
+import { buildPublicSectionCardMedia } from '../entity-banner';
 import {
   buildPublicEventSummary,
   buildPublicPageIcon,
@@ -950,13 +951,7 @@ async function hydrateLifePoint(
   }
   const section = point.section!;
   const [media, projectReference] = await Promise.all([
-    buildPublicEntityPreviewMedia(
-      'project-section',
-      section.sectionUuid,
-      'project-section-body',
-      { type: 'project', ...project },
-      opens,
-    ),
+    buildPublicSectionCardMedia(project, section, opens),
     buildPublicEntityReference(project),
   ]);
   return {

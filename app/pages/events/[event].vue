@@ -99,31 +99,43 @@ const extraContents = computed(() => [
 </script>
 
 <template>
-  <main class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
-    <PublicPageHeader
-      icon="event"
+  <main class="flex flex-col">
+    <!-- A banner opens the page with it; without one, the plain header. -->
+    <PublicHero
+      v-if="data.bannerMedia"
       :title="data.title"
-      :description="data.summary"
-    >
-      <PublicAction v-if="data.action" :action="data.action" />
-    </PublicPageHeader>
-    <PublicReminderNotice :reminder="data.reminder" />
-    <PublicDetailLayout
-      :details="details"
-      :content="data.content"
-      :extra-contents="extraContents"
-    >
-      <ContentRenderer
-        v-if="data.content.blocks.length"
-        :data="data.content"
-        asset-viewer
-      />
-      <PublicRelatedBlock
-        :counts="data.related"
-        :url="relatedUrl"
-        class="mt-lg"
-      />
-      <PublicOwnerNotes :notes="data.notes" class="mt-lg" />
-    </PublicDetailLayout>
+      :summary="data.summary"
+      :banner-media="data.bannerMedia"
+      :kind="{ icon: 'event', label: phrase.event }"
+      :action="data.action"
+    />
+    <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
+      <PublicPageHeader
+        v-if="!data.bannerMedia"
+        icon="event"
+        :title="data.title"
+        :description="data.summary"
+      >
+        <PublicAction v-if="data.action" :action="data.action" />
+      </PublicPageHeader>
+      <PublicReminderNotice :reminder="data.reminder" />
+      <PublicDetailLayout
+        :details="details"
+        :content="data.content"
+        :extra-contents="extraContents"
+      >
+        <ContentRenderer
+          v-if="data.content.blocks.length"
+          :data="data.content"
+          asset-viewer
+        />
+        <PublicRelatedBlock
+          :counts="data.related"
+          :url="relatedUrl"
+          class="mt-lg"
+        />
+        <PublicOwnerNotes :notes="data.notes" class="mt-lg" />
+      </PublicDetailLayout>
+    </div>
   </main>
 </template>

@@ -27,7 +27,8 @@ let contextType:
   | 'profile'
   | 'profile-avatar'
   | 'profile-status'
-  | 'project-status' = 'project';
+  | 'project-status'
+  | 'project-section' = 'project';
 let contextRole: 'content' | 'icon' | 'banner' | 'favicon' = 'content';
 let contextGrantOwner: ShareGrantOwner | undefined;
 let parentAccess = ProjectEventAccessLevel.Public;
@@ -408,6 +409,31 @@ describe('share links and contextual attachments', () => {
     expect((await request()).status).toBe(404);
     expect((await holding('project:P')).status).toBe(200);
     expect((await holding('project:Q')).status).toBe(404);
+  });
+
+  it('opens a banner placed on a section, as open as the section is', async () => {
+    contextType = 'project-section';
+    contextRole = 'banner';
+    contextGrantOwner = { entityType: 'project', entityId: 'P' };
+    // The route names a private section's access as private.
+    parentAccess = ProjectEventAccessLevel.Private;
+    expect((await request('admin')).status).toBe(404);
+    context.db
+      .insert(context.schema.assetUsages)
+      .values({
+        assetUuid: 'asset',
+        containerType: 'project-section',
+        containerId: 'parent',
+        role: 'banner',
+      })
+      .run();
+    expect((await request()).status).toBe(404);
+    expect((await holding('project:P')).status).toBe(200);
+    expect((await holding('project:Q')).status).toBe(404);
+    expect((await request('admin')).status).toBe(200);
+    // A section open to all has a banner open to all.
+    parentAccess = ProjectEventAccessLevel.Public;
+    expect((await request()).status).toBe(200);
   });
 
   it("keeps a file placed only in the owner's notes to the owner", async () => {

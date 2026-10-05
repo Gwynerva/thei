@@ -3,7 +3,7 @@ import { getAssetUploadProfileAspect } from '../../shared/asset-upload-profiles'
 
 describe('upload profile aspect hints', () => {
   it('describes the proportions of non-square slots', () => {
-    expect(getAssetUploadProfileAspect('project-banner')).toEqual({
+    expect(getAssetUploadProfileAspect('entity-banner')).toEqual({
       ratio: '16:9',
       width: 1200,
       height: 675,

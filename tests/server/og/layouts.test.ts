@@ -140,7 +140,8 @@ function expectFits(
     expect(apart, `${label}: text clear of ${picture.key}`).toBe(true);
   }
 
-  // The picture of a section or an event keeps to its half.
+  // A drawing a section or an event shows whole keeps to the right half;
+  // a photograph is the card's cover, under the shade the words sit on.
   const art = nodes.find(({ key }) => key === 'art');
   if (card.design.layout === 'media' && art)
     expect(
@@ -213,7 +214,7 @@ describe('card layouts', () => {
     )!;
     const { card, nodes } = await draw(fixture.content);
     expect(card.design.layout).toBe('project');
-    expect(nodes.some(({ key }) => key === 'banner')).toBe(false);
+    expect(nodes.some(({ key }) => key === 'cover')).toBe(false);
     expect(nodes.some(({ key }) => key === 'essential:icon')).toBe(false);
   });
 });

@@ -34,6 +34,9 @@ vi.mock('../../server/thei/public/entities', () => ({
 vi.mock('../../server/thei/public/content', () => ({
   buildPublicEntityPreviewMedia: vi.fn(async () => undefined),
 }));
+vi.mock('../../server/thei/entity-banner', () => ({
+  buildPublicSectionCardMedia: vi.fn(async () => undefined),
+}));
 
 let context: Awaited<ReturnType<typeof freshTestDb>>;
 

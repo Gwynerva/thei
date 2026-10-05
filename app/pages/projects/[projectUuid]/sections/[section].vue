@@ -88,31 +88,43 @@ const details = computed(
 </script>
 
 <template>
-  <main class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
-    <PublicPageHeader
-      icon="project-section"
+  <main class="flex flex-col">
+    <!-- A banner opens the page with it; without one, the plain header. -->
+    <PublicHero
+      v-if="data.bannerMedia"
       :title="data.title"
-      :description="data.summary"
-      :parent="{ ...data.project, label: phrase.content_section }"
+      :summary="data.summary"
+      :banner-media="data.bannerMedia"
+      :kind="{ icon: 'project-section', label: phrase.content_section }"
+      :parent="data.project"
     />
-    <PublicDetailLayout :details="details" :content="data.content">
-      <ContentRenderer
-        v-if="data.content.blocks.length"
-        :data="data.content"
-        asset-viewer
+    <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
+      <PublicPageHeader
+        v-if="!data.bannerMedia"
+        icon="project-section"
+        :title="data.title"
+        :description="data.summary"
+        :parent="{ ...data.project, label: phrase.content_section }"
       />
-      <!-- A stage may be only its dates; a general section that
-           shows nothing has a body the visitor may not read. -->
-      <PublicEmptyState
-        v-else-if="data.periods.length"
-        :title="phrase.public_section_dates_only"
-        :description="phrase.public_section_dates_only_description"
-      />
-      <PublicEmptyState
-        v-else
-        :title="phrase.public_section_content_empty"
-        :description="phrase.public_section_content_empty_description"
-      />
-    </PublicDetailLayout>
+      <PublicDetailLayout :details="details" :content="data.content">
+        <ContentRenderer
+          v-if="data.content.blocks.length"
+          :data="data.content"
+          asset-viewer
+        />
+        <!-- A stage may be only its dates; a general section that
+             shows nothing has a body the visitor may not read. -->
+        <PublicEmptyState
+          v-else-if="data.periods.length"
+          :title="phrase.public_section_dates_only"
+          :description="phrase.public_section_dates_only_description"
+        />
+        <PublicEmptyState
+          v-else
+          :title="phrase.public_section_content_empty"
+          :description="phrase.public_section_content_empty_description"
+        />
+      </PublicDetailLayout>
+    </div>
   </main>
 </template>

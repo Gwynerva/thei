@@ -271,12 +271,60 @@ for (const width of [390, 1280]) {
       expect(await shade.boundingBox()).toEqual(await hero.boundingBox());
       expect(
         await hero.evaluate((element) =>
-          getComputedStyle(element)
-            .getPropertyValue('--project-hero-accent')
-            .trim(),
+          getComputedStyle(element).getPropertyValue('--hero-accent').trim(),
         ),
       ).not.toBe('');
       await expect(hero).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    }
+  });
+
+  test(`an event or a section opens with its banner and only its words at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    for (const kind of ['event', 'section'] as const) {
+      await open(page, `/ambient-regression?banner=wide&kind=${kind}`);
+      const hero = page.locator('[data-test-hero]');
+      const banner = hero.locator('.hero-banner');
+      await expect(banner).toHaveAttribute('data-media-final-state', 'visible');
+      // What the page is says itself in a pill; a section names its project.
+      await expect(hero.locator('[data-hero-kind]')).toHaveText(
+        kind === 'event' ? 'Event' : 'Project section',
+      );
+      await expect(hero.locator('[data-hero-parent]')).toHaveCount(
+        kind === 'section' ? 1 : 0,
+      );
+      await expect(
+        hero.locator('[data-hero-icon], [data-hero-tags]'),
+      ).toHaveCount(0);
+      const box = (await hero.boundingBox())!;
+      const main = (await banner.locator('[data-media-main]').boundingBox())!;
+      const title = (await hero.locator('h1').boundingBox())!;
+      const pills = (await hero.locator('[data-hero-pills]').boundingBox())!;
+      const summary = (await hero.locator('.hero-summary').boundingBox())!;
+      if (width === 390) {
+        // The sharp band on top, the words centred under it.
+        const band = (box.width * 9) / 16;
+        expect(main.height).toBeCloseTo(band, 0);
+        expect(pills.y).toBeGreaterThan(box.y + band);
+        expect(title.x + title.width / 2).toBeCloseTo(box.x + box.width / 2, 0);
+      } else {
+        // Words alone keep a height the banner reads at, in its middle, and
+        // within the two thirds of the column the banner leaves them.
+        expect(box.height).toBeGreaterThanOrEqual(320);
+        expect(pills.y - box.y).toBeCloseTo(
+          box.y + box.height - (summary.y + summary.height),
+          0,
+        );
+        const column = Math.min(1100, box.width);
+        const columnStart = box.x + (box.width - column) / 2;
+        expect(title.x + title.width).toBeLessThanOrEqual(
+          columnStart + (column * 2) / 3 + 1,
+        );
+        expect(main.x + main.width).toBeGreaterThanOrEqual(
+          columnStart + column - 1,
+        );
+      }
     }
   });
 }

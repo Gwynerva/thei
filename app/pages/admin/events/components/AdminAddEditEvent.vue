@@ -59,9 +59,11 @@ provide(savedProjectDataInjectionKey, savedAdapter);
 const publicIdError = ref<string>();
 provide(publicIdErrorKey, publicIdError);
 provide(iconMediaKey, ref<MediaDescriptor>());
-provide(bannerMediaKey, ref<MediaDescriptor>());
+const bannerMedia = ref<MediaDescriptor>();
+provide(bannerMediaKey, bannerMedia);
 provide(iconSizeKey, ref<number>());
-provide(bannerSizeKey, ref<number>());
+const bannerSize = ref<number>();
+provide(bannerSizeKey, bannerSize);
 provide(currentProjectUuidKey, ref<string>());
 provide(showcaseItemsKey, ref([]));
 const otherItems = ref<EventGetResponse['otherAssets']>([]);
@@ -110,6 +112,7 @@ if (isEdit.value) {
     periods: data.periods,
     content: data.content,
     descriptionContent: data.content,
+    bannerAssetUuid: data.bannerAssetUuid,
     otherAssets: data.otherAssets.map((item) => ({
       assetUuid: item.assetUuid,
       title: item.title,
@@ -124,6 +127,8 @@ if (isEdit.value) {
     notes: data.notes ?? null,
   };
   otherItems.value = data.otherAssets;
+  bannerMedia.value = data.bannerMedia;
+  bannerSize.value = data.bannerAssetSize;
   externalLinks.seed(data.externalLinks);
   actionMedia.applyLoaded(data);
   markSaved();
@@ -239,6 +244,7 @@ function eventPayload(): EventEditData {
     publicId: value.publicId,
     periods: value.periods,
     content: value.content,
+    bannerAssetUuid: value.bannerAssetUuid,
     otherAssets: value.otherAssets,
     externalLinks: value.externalLinks,
     tags: value.tags,
@@ -408,7 +414,7 @@ function clone<T>(value: T): T {
       :section-title="phrase.event_action"
       :section-description="phrase.event_action_hint"
     />
-    <ProjectAssets files-only />
+    <ProjectAssets kind="event" />
     <ProjectExternalLinks
       :title="phrase.event_external_links"
       :description="phrase.event_external_links_hint"

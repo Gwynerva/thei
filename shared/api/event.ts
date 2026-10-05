@@ -20,6 +20,9 @@ export type EventGetResponse = {
   content: ContentFieldValue;
   reminder: string;
   notes?: ContentFieldValue;
+  bannerAssetUuid?: string;
+  bannerMedia?: MediaDescriptor;
+  bannerAssetSize?: number;
   otherAssets: OtherAssetGetItem[];
   externalLinks: ProjectExternalLink[];
   tags: TagItem[];

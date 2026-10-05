@@ -167,6 +167,72 @@ describe('project section storage', () => {
     ]);
   });
 
+  it("keeps a section's banner as one placement of its own, and an edit when it changes", async () => {
+    const db = createDb();
+    installServerContext(db);
+    const banners = () =>
+      db
+        .select()
+        .from(schema.assetUsages)
+        .all()
+        .filter((row) => row.role === 'banner')
+        .map(
+          (row) => `${row.containerType}:${row.containerId}:${row.assetUuid}`,
+        )
+        .sort();
+    const updatedAt = (sectionUuid: string) =>
+      db
+        .select()
+        .from(schema.projectContentSections)
+        .all()
+        .find((row) => row.sectionUuid === sectionUuid)!.updatedAt;
+    const unchanged = (item: ReturnType<typeof section>) => ({
+      ...item,
+      contentSave: { ...item.contentSave, changed: false },
+    });
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1000);
+    const first = section('section-a', 'A', { bannerAssetUuid: 'banner-1' });
+    const second = section('section-b', 'B');
+    applyProjectSections(db, schema, 'project', [first, second]);
+    expect(banners()).toEqual(['project-section:section-a:banner-1']);
+    await expect(getProjectSections('project')).resolves.toMatchObject([
+      { sectionUuid: 'section-a', bannerAssetUuid: 'banner-1' },
+      { sectionUuid: 'section-b' },
+    ]);
+
+    // Saved again as it was: no new placement, and no edit.
+    now.mockReturnValue(2000);
+    applyProjectSections(db, schema, 'project', [
+      unchanged(first),
+      unchanged(second),
+    ]);
+    expect(banners()).toEqual(['project-section:section-a:banner-1']);
+    expect(updatedAt('section-a')).toBe(1000);
+
+    // A new banner replaces the old placement, and is an edit of the section.
+    now.mockReturnValue(3000);
+    applyProjectSections(db, schema, 'project', [
+      unchanged({ ...first, bannerAssetUuid: 'banner-2' }),
+      unchanged({ ...second, bannerAssetUuid: 'banner-2' }),
+    ]);
+    expect(banners()).toEqual([
+      'project-section:section-a:banner-2',
+      'project-section:section-b:banner-2',
+    ]);
+    expect(updatedAt('section-a')).toBe(3000);
+
+    // Taken off, and gone with its section.
+    applyProjectSections(db, schema, 'project', [
+      unchanged({ ...first, bannerAssetUuid: undefined }),
+    ]);
+    expect(banners()).toEqual([]);
+    applyProjectSections(db, schema, 'project', [
+      unchanged({ ...first, bannerAssetUuid: 'banner-3' }),
+    ]);
+    deleteProjectSections(db, schema, 'project');
+    expect(banners()).toEqual([]);
+  });
+
   it('keeps a section that is only its dates without any body', async () => {
     const db = createDb();
     installServerContext(db);
@@ -355,9 +421,13 @@ function section(
   overrides: {
     periods?: Period[];
     isPrivate?: boolean;
+    bannerAssetUuid?: string;
   } = {},
 ) {
   return {
+    ...(overrides.bannerAssetUuid
+      ? { bannerAssetUuid: overrides.bannerAssetUuid }
+      : {}),
     sectionUuid,
     title,
     summary: '',

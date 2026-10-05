@@ -6,6 +6,7 @@ import {
 } from './content';
 import { optionalContentDraftRef } from './content-history';
 import { comparePeriods, normalizePeriods, type Period } from './period';
+import type { MediaDescriptor } from './media';
 import {
   normalizeHumanReadableSlug,
   normalizePublicId,
@@ -30,6 +31,10 @@ export interface ProjectSectionItem {
   periods: Period[];
   /** Empty for a section that is only its dates. */
   content: ContentFieldModelValue;
+  /** The picture the section's page opens with and its cards show. */
+  bannerAssetUuid?: string;
+  /** How the form shows that banner; the server never reads it. */
+  bannerMedia?: MediaDescriptor;
 }
 
 export type ProjectSectionValue = ProjectSectionItem & { sectionUuid: string };
@@ -116,6 +121,9 @@ function normalizeProjectSection(value: unknown): ProjectSectionItem {
     isPrivate: source.isPrivate,
     periods,
     content,
+    ...(typeof source.bannerAssetUuid === 'string' && source.bannerAssetUuid
+      ? { bannerAssetUuid: source.bannerAssetUuid }
+      : {}),
   };
 }
 

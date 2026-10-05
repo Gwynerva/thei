@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { resolveEntityIconMedia } from '../../../thei/media/generated-icon';
+import { buildAdminEntityBanner } from '../../../thei/entity-banner';
 import { contentPlainText } from '#layers/thei/shared/content';
 import type { EventListResponse } from '#layers/thei/shared/api/event';
 import {
@@ -108,7 +109,7 @@ export default defineEventHandler(async (event): Promise<EventListResponse> => {
       .where(
         and(
           eq(schema.assetUsages.containerType, 'event'),
-          eq(schema.assetUsages.role, 'other-asset'),
+          inArray(schema.assetUsages.role, ['other-asset', 'banner']),
           inArray(schema.assetUsages.containerId, eventUuids),
         ),
       ),
@@ -147,11 +148,13 @@ export default defineEventHandler(async (event): Promise<EventListResponse> => {
     ...result,
     items: await Promise.all(
       result.items.map(async (item) => {
-        const media = await THEI_SERVER.content.buildPreviewMedia(
-          'event',
-          item.eventUuid,
-          'event-body',
-        );
+        const media =
+          (await buildAdminEntityBanner('event', item.eventUuid)) ??
+          (await THEI_SERVER.content.buildPreviewMedia(
+            'event',
+            item.eventUuid,
+            'event-body',
+          ));
         return {
           eventUuid: item.eventUuid,
           title: item.title,

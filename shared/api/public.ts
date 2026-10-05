@@ -194,6 +194,7 @@ export type PublicProjectSection = {
   period?: DatedPeriod;
   /** Empty for an undated section. */
   periods: Period[];
+  /** What stands for the section in a card: its banner, its first picture, or its icon. */
   media?: MediaDescriptor;
 };
 
@@ -231,6 +232,8 @@ export type PublicProjectChildParent = PublicEntityReference & {
 };
 
 export type PublicProjectSectionResponse = PublicProjectSection & {
+  /** The picture the page opens with, when the section has one. */
+  bannerMedia?: MediaDescriptor;
   humanReadableSlug: string;
   publicId: string;
   content: PublicContentOutputData;
@@ -285,8 +288,10 @@ export type PublicEventResponseFull = {
   periods: Period[];
   /** `updatedAt` only when the event was edited on a later day. */
   chronology: { createdAt: string; updatedAt?: string };
-  /** What stands for the event in a card: its first picture, or its icon. */
+  /** What stands for the event in a card: its banner, its first picture, or its icon. */
   media: MediaDescriptor;
+  /** The picture the page opens with, when the event has one. */
+  bannerMedia?: MediaDescriptor;
   content: PublicContentOutputData;
   references: PublicReferences;
   tags: PublicTagSummary[];

@@ -28,6 +28,11 @@ type ModalData = {
    * and closing is a decision of its own.
    */
   onSave: (item: ProjectSectionItem) => void;
+  /**
+   * How many more times each file would be placed in the project, were this
+   * section saved as it stands: the editor counts a file's uses with it.
+   */
+  usageDelta: (item: ProjectSectionItem) => Record<string, number>;
 };
 type Result = { type: 'deleted' };
 type SectionDraft = Omit<ProjectSectionItem, 'content'> & {
@@ -63,6 +68,15 @@ const editedPeriodIndex = ref<number>();
 const modalContainer =
   useTemplateRef<InstanceType<typeof ModalContainer>>('modalContainer');
 const hasBody = computed(() => !isContentEmpty(item.value.content?.data));
+const bannerAssetUuid = computed({
+  get: () => item.value.bannerAssetUuid ?? null,
+  set: (value: string | null) => {
+    item.value.bannerAssetUuid = value ?? undefined;
+  },
+});
+function bannerUsageDelta() {
+  return props.modalData.usageDelta(buildItem());
+}
 /** A section says something with a body, its dates, or both. */
 const canSave = computed(
   () =>
@@ -145,6 +159,12 @@ function buildItem(): ProjectSectionItem {
       ? normalizePeriods(item.value.periods)
       : [],
     content: item.value.content ?? createEmptyContentFieldValue(),
+    ...(item.value.bannerAssetUuid
+      ? {
+          bannerAssetUuid: item.value.bannerAssetUuid,
+          bannerMedia: item.value.bannerMedia,
+        }
+      : {}),
   };
 }
 
@@ -168,6 +188,8 @@ function createInitialItem(data: ModalData): SectionDraft {
     isPrivate: data.item?.isPrivate ?? false,
     periods: data.item?.periods ?? [],
     content: data.item?.content ?? null,
+    bannerAssetUuid: data.item?.bannerAssetUuid,
+    bannerMedia: data.item?.bannerMedia,
   };
 }
 
@@ -336,6 +358,17 @@ async function deleteItem() {
           @saved="saveAfterContentEdit"
         />
       </Field>
+      <ProfileMediaField
+        v-model="bannerAssetUuid"
+        v-model:media="item.bannerMedia"
+        :title="phrase.content_section_banner"
+        :description="phrase.content_section_banner_hint"
+        profile="entity-banner"
+        wide
+        details-aside
+        :usage-delta="bannerUsageDelta"
+        data-section-banner
+      />
     </div>
   </ModalContainer>
 </template>

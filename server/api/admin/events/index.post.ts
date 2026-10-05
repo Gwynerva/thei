@@ -12,6 +12,7 @@ import { applyEventPeriods } from '../../../thei/events/periods';
 import { applyExternalLinkList } from '../../../thei/external-links/lists';
 import { prepareTagUsages, applyTagUsages } from '../../../thei/tags';
 import { syncEntityActionUsages } from '../../../thei/projects/action-usages';
+import { syncEntityBanner } from '../../../thei/entity-banner';
 import {
   ensureExternalLinks,
   entityExternalLinkUrls,
@@ -108,6 +109,14 @@ export default defineEventHandler(async (event): Promise<EventSaveResponse> => {
         preparedRelations,
       );
       syncEntityActionUsages(tx, schema, [], 'event', eventUuid, result.action);
+      syncEntityBanner(
+        tx,
+        schema,
+        'event',
+        eventUuid,
+        undefined,
+        result.bannerAssetUuid,
+      );
       result.otherAssets?.forEach((file, order) => {
         tx.insert(schema.assetUsages)
           .values({

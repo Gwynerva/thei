@@ -37,6 +37,7 @@ import {
   deleteTagUsagesForContainer,
 } from '../../../thei/tags';
 import { syncEntityActionUsages } from '../../../thei/projects/action-usages';
+import { syncEntityBanner } from '../../../thei/entity-banner';
 import {
   ensureExternalLinks,
   entityExternalLinkUrls,
@@ -172,6 +173,14 @@ export default defineEventHandler(async (event) => {
           eventUuid,
           result.action,
         );
+        syncEntityBanner(
+          tx,
+          schema,
+          'event',
+          eventUuid,
+          usages.find((usage) => usage.role === 'banner')?.asset.assetUuid,
+          result.bannerAssetUuid,
+        );
 
         for (const { asset } of currentFiles) {
           if (!nextIds.has(asset.assetUuid))
@@ -266,7 +275,9 @@ async function getEvent(
     (usage) => usage.role === 'action-background',
   );
   const actionFile = usages.find((usage) => usage.role === 'action-file');
+  const banner = usages.find((usage) => usage.role === 'banner');
   const [
+    bannerUrls,
     iconUrls,
     backgroundUrls,
     fileUrls,
@@ -279,6 +290,7 @@ async function getEvent(
     tags,
     relations,
   ] = await Promise.all([
+    banner ? buildAdminAssetUrls(banner.asset) : undefined,
     actionIcon ? buildAdminAssetUrls(actionIcon.asset) : undefined,
     actionBackground ? buildAdminAssetUrls(actionBackground.asset) : undefined,
     actionFile ? buildAdminAssetUrls(actionFile.asset) : undefined,
@@ -325,6 +337,9 @@ async function getEvent(
     content,
     reminder: stored.reminder,
     notes,
+    bannerAssetUuid: banner?.asset.assetUuid,
+    bannerMedia: bannerUrls?.media,
+    bannerAssetSize: banner?.asset.size,
     otherAssets,
     externalLinks,
     tags,

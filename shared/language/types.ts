@@ -804,6 +804,8 @@ export type LanguagePhrases = {
   public_section_content_empty_description: string;
   content_section_title: string;
   content_section_summary: string;
+  content_section_banner: string;
+  content_section_banner_hint: string;
   content_section_private: string;
   content_section_private_hint: string;
   content_section_content: string;
@@ -966,6 +968,8 @@ export type LanguagePhrases = {
   delete_page: string;
   event_files: string;
   event_files_description: string;
+  event_banner: string;
+  event_banner_hint: string;
   event_action: string;
   event_action_hint: string;
   event_external_links: string;

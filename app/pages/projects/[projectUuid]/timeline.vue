@@ -27,7 +27,6 @@ const projectResource = await useFetch<PublicProjectResponse>(
   () => `/api/projects/${encodeURIComponent(part)}`,
 );
 const project = useRequiredResource(projectResource);
-usePublicPageGlow({ enabled: false });
 
 const base = computed(() =>
   buildProjectTimelineUrl(
@@ -105,7 +104,7 @@ watch(filter, (value) => {
     :data-life-active-date="activeDate"
     :data-life-newest-date="resource.data.value?.newestDate"
   >
-    <PublicProjectHero
+    <PublicHero
       :title="project.title"
       :summary="project.summary"
       :icon-media="project.iconMedia"
@@ -133,7 +132,7 @@ watch(filter, (value) => {
           </template>
         </PublicProjectTabs>
       </template>
-    </PublicProjectHero>
+    </PublicHero>
 
     <LifeFeed
       v-if="resource.data.value"

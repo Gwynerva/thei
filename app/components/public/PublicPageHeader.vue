@@ -48,7 +48,7 @@ usePublicPageGlow({ color: accent });
 
 <template>
   <!--
-    Header rhythm shared with PublicProjectHero: the title, back link and
+    Header rhythm shared with PublicHero: the title, back link and
     description sit together (sm), and whatever follows them — a call to
     action — keeps a clear md gap.
   -->

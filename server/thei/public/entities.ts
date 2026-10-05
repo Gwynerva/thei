@@ -101,6 +101,12 @@ import {
   type EntityNotesOwner,
 } from '#layers/thei/shared/entity-notes';
 import { getCurrentStatus } from '../statuses';
+import {
+  buildPublicEventBanner,
+  buildPublicEventCardMedia,
+  buildPublicSectionBanner,
+  buildPublicSectionCardMedia,
+} from '../entity-banner';
 import { utcDayOf } from '#layers/thei/shared/date-range';
 
 /**
@@ -244,11 +250,8 @@ export async function buildPublicEventSummary(
   viewer: PublicViewer = STRANGER,
 ): Promise<PublicEntitySummary> {
   const [media, periods, tags, relations] = await Promise.all([
-    buildPublicEntityPreviewMedia(
-      'event',
-      event.eventUuid,
-      'event-body',
-      { type: 'event', ...event },
+    buildPublicEventCardMedia(
+      event,
       opensPrivate(viewer, 'event', event.eventUuid),
     ),
     getEventPeriods(event.eventUuid),
@@ -517,13 +520,7 @@ export async function buildPublicProjectSectionSummary(
     summary: section.summary,
     ...(period ? { period } : {}),
     periods: section.periods,
-    media: await buildPublicEntityPreviewMedia(
-      'project-section',
-      section.sectionUuid,
-      'project-section-body',
-      { type: 'project', ...project },
-      includePrivate,
-    ),
+    media: await buildPublicSectionCardMedia(project, section, includePrivate),
     href: buildProjectSectionUrl(
       project.humanReadableSlug,
       project.publicId,
@@ -548,8 +545,9 @@ export async function buildPublicProjectSection(
   viewer: PublicViewer,
 ): Promise<PublicProjectSectionResponse> {
   const own = opensPrivate(viewer, 'project', project.projectUuid);
-  const [summary, content, parent] = await Promise.all([
+  const [summary, bannerMedia, content, parent] = await Promise.all([
     buildPublicProjectSectionSummary(project, section, own),
+    buildPublicSectionBanner(project, section),
     buildPublicContentData(
       'project-section',
       section.sectionUuid,
@@ -562,6 +560,7 @@ export async function buildPublicProjectSection(
   ]);
   return {
     ...summary,
+    ...(bannerMedia ? { bannerMedia } : {}),
     humanReadableSlug: section.humanReadableSlug,
     publicId: section.publicId,
     chronology: buildPublicEntityChronology(section),
@@ -580,33 +579,34 @@ export async function buildPublicEvent(
   viewer: PublicViewer,
 ): Promise<PublicEventResponseFull> {
   const own = opensPrivate(viewer, 'event', stored.eventUuid);
-  const [periods, media, content, rawFiles, rawLinks, tags, relations, usages] =
-    await Promise.all([
-      getEventPeriods(stored.eventUuid),
-      buildPublicEntityPreviewMedia(
-        'event',
-        stored.eventUuid,
-        'event-body',
-        { type: 'event', ...stored },
-        own,
-      ),
-      buildPublicContentData(
-        'event',
-        stored.eventUuid,
-        'event-body',
-        { type: 'event', ...stored },
-        own,
-        viewer,
-      ),
-      THEI_SERVER.assets.usages.findOtherForContainer(
-        'event',
-        stored.eventUuid,
-      ),
-      getExternalLinkList({ type: 'event', id: stored.eventUuid }),
-      listTagsForContainer('event', stored.eventUuid),
-      resolvePublicRelated({ type: 'event', id: stored.eventUuid }, viewer),
-      THEI_SERVER.assets.usages.findByContainer('event', stored.eventUuid),
-    ]);
+  const [
+    periods,
+    media,
+    bannerMedia,
+    content,
+    rawFiles,
+    rawLinks,
+    tags,
+    relations,
+    usages,
+  ] = await Promise.all([
+    getEventPeriods(stored.eventUuid),
+    buildPublicEventCardMedia(stored, own),
+    buildPublicEventBanner(stored),
+    buildPublicContentData(
+      'event',
+      stored.eventUuid,
+      'event-body',
+      { type: 'event', ...stored },
+      own,
+      viewer,
+    ),
+    THEI_SERVER.assets.usages.findOtherForContainer('event', stored.eventUuid),
+    getExternalLinkList({ type: 'event', id: stored.eventUuid }),
+    listTagsForContainer('event', stored.eventUuid),
+    resolvePublicRelated({ type: 'event', id: stored.eventUuid }, viewer),
+    THEI_SERVER.assets.usages.findByContainer('event', stored.eventUuid),
+  ]);
   const files = await Promise.all(
     rawFiles.map(({ asset, meta }) => {
       if (!own && usageIsPrivate(meta))
@@ -643,6 +643,7 @@ export async function buildPublicEvent(
     periods,
     chronology: buildPublicEntityChronology(stored),
     media,
+    ...(bannerMedia ? { bannerMedia } : {}),
     content: content ?? { blocks: [] },
     references: await buildPublicReferences(
       manual,

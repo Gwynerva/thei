@@ -12,9 +12,11 @@ import {
   moveItemById,
   useDragSort,
 } from '#layers/thei/app/composables/drag-sort';
+import { projectAssetUsageDelta } from '#layers/thei/shared/admin/project';
 import {
   currentProjectUuidKey,
   projectDataInjectionKey,
+  savedProjectDataInjectionKey,
   saveAfterItemEditKey,
 } from '../composables';
 import { projectContentItemModal } from './project-content-item-modal';
@@ -31,6 +33,7 @@ import ProjectContentItemRow from './ProjectContentItemRow.vue';
 type Group = 'undated' | 'dated';
 
 const projectData = inject(projectDataInjectionKey)!;
+const savedProjectData = inject(savedProjectDataInjectionKey)!;
 const saveAfterItemEdit = inject(saveAfterItemEditKey, undefined);
 const currentProjectUuid = inject(currentProjectUuidKey)!;
 const route = useRoute();
@@ -64,7 +67,8 @@ const itemViews = computed(() =>
   (selected.value === 'dated' ? dated.value : undated.value).map((item) => ({
     item,
     id: itemId(item),
-    media: analyzeContentData(item.content?.data).preview.media,
+    media:
+      item.bannerMedia ?? analyzeContentData(item.content?.data).preview.media,
   })),
 );
 
@@ -194,6 +198,18 @@ function openItem(target?: ProjectSectionItem) {
         selected.value = groupOf(merged);
         saveProject(merged);
       },
+      // The section as the modal holds it, in place of the one it was
+      // opened with, against the project as last saved.
+      usageDelta: (draft: ProjectSectionItem) =>
+        projectAssetUsageDelta(
+          {
+            ...projectData.value,
+            sections: current
+              ? sections.value.map((item) => (item === current ? draft : item))
+              : [...sections.value, draft],
+          },
+          savedProjectData.value,
+        ),
     });
     if (result.type === 'deleted' && current) removeItem(current);
   });
