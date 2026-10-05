@@ -370,6 +370,35 @@ test('an address pasted over selected text links that text instead of replacing 
   await expect(link).toHaveAttribute('data-content-link', 'external');
   await expect(link).toHaveAttribute('href', 'https://example.org/page');
   await expect(field).toHaveText('Before tail');
+
+  // An address of this very site becomes a link to what it opens, and
+  // keeps the place inside it the address leads to.
+  await page.route('**/api/admin/content-entities/by-url**', (route) =>
+    route.fulfill({
+      json: {
+        entity: {
+          entityType: 'event',
+          entityId: 'e-encore',
+          title: 'Concert',
+          summary: '',
+          url: '/events/concert-Encore1/',
+          humanReadableSlug: 'concert',
+          publicId: 'Encore1',
+          updatedAt: 1,
+        },
+      },
+    }),
+  );
+  const origin = new URL(page.url()).origin;
+  await field.evaluate((element) => {
+    element.textContent = 'Before tail';
+  });
+  await paste(`${origin}/events/concert-Encore1/#second-set`);
+  await expect(link).toHaveAttribute('data-content-link', 'entity');
+  await expect(link).toHaveAttribute('data-entity-id', 'e-encore');
+  await expect(link).toHaveAttribute('data-entity-fragment', 'second-set');
+  await expect(link).toHaveAttribute('href', /#second-set$/);
+  await expect(field).toHaveText('Before tail');
 });
 
 test('life cache evicts distant windows, preserves focus and reloads both directions', async ({
@@ -581,7 +610,7 @@ test('public lists reuse SSR data and a client API failure remains an API error'
 
 test.describe('administrator content and keyboard panels', () => {
   test.use({ storageState: adminState });
-  test('creates and saves pages, projects, stages, sections and events on the fresh schema', async ({
+  test('creates and saves pages, projects, sections and events on the fresh schema', async ({
     request,
     browserName,
   }) => {
@@ -627,14 +656,14 @@ test.describe('administrator content and keyboard panels', () => {
       showcase: false,
       cv: false,
       descriptionContent: content,
-      contentSections: [
-        { ...child, isStage: false, publicId: `section${browserName}` },
-      ],
-      stages: [
+      sections: [
+        { ...child, publicId: `section${browserName}`, periods: [] },
         {
-          ...child,
-          isStage: true,
-          publicId: `stage${browserName}`,
+          title: 'Only dates',
+          summary: '',
+          humanReadableSlug: 'dates',
+          isPrivate: false,
+          publicId: `dated${browserName}`,
           periods: [{ startDate: '2026-01-01', endDate: '2026-01-02' }],
         },
       ],
@@ -646,15 +675,14 @@ test.describe('administrator content and keyboard panels', () => {
     const storedProject = await (
       await request.get(`/api/admin/projects/${createdProject.projectUuid}`)
     ).json();
-    expect(storedProject.stages).toHaveLength(1);
-    expect(storedProject.contentSections).toHaveLength(1);
+    expect(storedProject.sections).toHaveLength(2);
+    expect(storedProject.sections[1].periods).toHaveLength(1);
     expect(
       await (
         await request.put(`/api/admin/projects/${createdProject.projectUuid}`, {
           data: {
             ...projectData,
-            stages: storedProject.stages,
-            contentSections: storedProject.contentSections,
+            sections: storedProject.sections,
             title: 'Saved project',
           },
         })

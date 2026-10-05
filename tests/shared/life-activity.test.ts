@@ -3,7 +3,7 @@ import { lifeActivityDayTotal, lifeActivityLevel } from '../../shared/life';
 
 describe('lifeActivityDayTotal', () => {
   it('counts every kind of point on the day', () => {
-    expect(lifeActivityDayTotal({ event: 2, 'project-stage': 1 })).toBe(3);
+    expect(lifeActivityDayTotal({ event: 2, 'project-section': 1 })).toBe(3);
     expect(lifeActivityDayTotal(undefined)).toBe(0);
     expect(lifeActivityDayTotal({})).toBe(0);
   });

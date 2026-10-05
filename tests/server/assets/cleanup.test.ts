@@ -33,6 +33,7 @@ describe('asset cleanup', () => {
         CREATE TABLE "profile-avatars" (id text PRIMARY KEY);
         CREATE TABLE statuses (id text PRIMARY KEY);
         CREATE TABLE "diary-entries" (diaryUuid text PRIMARY KEY);
+        CREATE TABLE "project-content-sections" (sectionUuid text PRIMARY KEY);
         CREATE TABLE assets (
           assetUuid text PRIMARY KEY,
           slug text NOT NULL UNIQUE,
@@ -180,6 +181,9 @@ describe('asset cleanup', () => {
         updatedAt: now,
       });
 
+      rawDb.exec(
+        `INSERT INTO "project-content-sections" (sectionUuid) VALUES ('s-live')`,
+      );
       await insertAsset(db, 'a-live', 'webp', now);
       await insertAsset(db, 'a-content', 'webp', old);
       await insertAsset(db, 'a-missing', 'webp', now);
@@ -267,6 +271,18 @@ describe('asset cleanup', () => {
           containerId: 'c-gone',
           role: 'content',
         },
+        {
+          assetUuid: 'a-live',
+          containerType: 'project-section',
+          containerId: 's-live',
+          role: 'banner',
+        },
+        {
+          assetUuid: 'a-live',
+          containerType: 'project-section',
+          containerId: 's-gone',
+          role: 'banner',
+        },
       ]);
 
       await runAssetCleanup();
@@ -288,7 +304,7 @@ describe('asset cleanup', () => {
       ]);
 
       const remainingUsages = await db.select().from(schema.assetUsages);
-      expect(remainingUsages).toHaveLength(4);
+      expect(remainingUsages).toHaveLength(5);
       expect(remainingUsages).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -314,6 +330,12 @@ describe('asset cleanup', () => {
             containerType: 'page',
             containerId: 'pg-live',
             role: 'icon',
+          }),
+          expect.objectContaining({
+            assetUuid: 'a-live',
+            containerType: 'project-section',
+            containerId: 's-live',
+            role: 'banner',
           }),
         ]),
       );

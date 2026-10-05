@@ -8,7 +8,7 @@ export type AssetUploadProfile =
   | 'profile-favicon'
   | 'profile-status'
   | 'project-icon'
-  | 'project-banner'
+  | 'entity-banner'
   | 'project-action-icon'
   | 'project-action-background'
   | 'tag-icon';
@@ -86,7 +86,8 @@ export const ASSET_UPLOAD_PROFILE_CONFIGS = {
     videoQuality: medium,
     stripAudio: true,
   },
-  'project-banner': {
+  // A project's, an event's or a section's: the same hero opens each page.
+  'entity-banner': {
     box: { width: 1200, height: 675 },
     aspect: { width: 16, height: 9 },
     imageQuality: high,

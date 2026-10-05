@@ -46,16 +46,6 @@ export default defineEventHandler(async (event) => {
       })
       .from(schema.projectContentSections)
       .all(),
-    stages: db
-      .select({
-        projectUuid: schema.projectStages.projectUuid,
-        humanReadableSlug: schema.projectStages.humanReadableSlug,
-        publicId: schema.projectStages.publicId,
-        isPrivate: schema.projectStages.isPrivate,
-        updatedAt: schema.projectStages.updatedAt,
-      })
-      .from(schema.projectStages)
-      .all(),
     events: db
       .select({
         eventUuid: schema.events.eventUuid,
@@ -97,15 +87,6 @@ export default defineEventHandler(async (event) => {
         containerId: schema.tagUsages.containerId,
       })
       .from(schema.tagUsages)
-      .all(),
-    periods: db
-      .select({
-        stageType: schema.stagePeriods.stageType,
-        stageUuid: schema.stagePeriods.stageUuid,
-        startDate: schema.stagePeriods.startDate,
-        endDate: schema.stagePeriods.endDate,
-      })
-      .from(schema.stagePeriods)
       .all(),
   };
 

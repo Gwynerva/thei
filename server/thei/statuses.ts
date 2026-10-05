@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray } from 'drizzle-orm';
+import { and, count, desc, eq, inArray } from 'drizzle-orm';
 import {
   canAppendEmptyStatus,
   compareStatusesNewestFirst,
@@ -25,6 +25,7 @@ import {
   type HistoryKey,
 } from './history-page';
 import { utcDayOf } from '#layers/thei/shared/date-range';
+import { normalizeCaptionText } from '#layers/thei/shared/terminal-punctuation';
 
 export const STATUS_PAGE_SIZE = 30;
 
@@ -177,23 +178,7 @@ export async function getStatusHistory(
 
 export async function getCurrentStatus(owner: StatusOwner, admin = false) {
   const page = await getStatusHistory(owner, undefined, admin, 1);
-  return {
-    current: page.items[0],
-    total: page.total,
-    firstAt: firstStatusAt(owner),
-  };
-}
-
-/** The day the owner's oldest status speaks of, for "key dates" summaries. */
-function firstStatusAt(owner: StatusOwner): string | undefined {
-  const { db, schema } = THEI_SERVER.useDb();
-  return db
-    .select({ date: schema.statuses.date })
-    .from(schema.statuses)
-    .where(ownerWhere(schema, owner))
-    .orderBy(asc(schema.statuses.date))
-    .limit(1)
-    .get()?.date;
+  return { current: page.items[0], total: page.total };
 }
 
 type StoredStatus = {
@@ -288,7 +273,8 @@ export function prepareStatusEdits(
   const text = (value: unknown): string => {
     if (typeof value !== 'string' || value.length > 10000)
       return invalid('Invalid status');
-    return value.trim();
+    // A status is a caption to the day; it ends as one.
+    return normalizeCaptionText(value.trim());
   };
   const date = (value: unknown): string | undefined => {
     if (value === undefined) return undefined;

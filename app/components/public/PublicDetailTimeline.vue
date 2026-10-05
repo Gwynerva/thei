@@ -1,8 +1,5 @@
 <script lang="ts" setup>
-import {
-  sortPublicDetailTimelineItems,
-  type PublicDetailTimelineItem,
-} from './public-detail';
+import type { PublicDetailTimelineItem } from './public-detail';
 import {
   datePresentationToneClass,
   getPublicDatePresentation,
@@ -12,7 +9,7 @@ import {
 const props = defineProps<{ items: PublicDetailTimelineItem[] }>();
 const liveNow = useLiveNow();
 const orderedItems = computed(() =>
-  sortPublicDetailTimelineItems(props.items).map((item) => ({
+  props.items.map((item) => ({
     ...item,
     presentation: getPublicDatePresentation(
       item.date,
@@ -28,7 +25,7 @@ const orderedItems = computed(() =>
   <ol v-if="orderedItems.length" class="relative flex flex-col">
     <li
       v-for="(item, index) in orderedItems"
-      :key="`${item.label}:${item.date}:${item.href ?? ''}`"
+      :key="`${item.label}:${item.date}`"
       class="relative grid min-w-0 grid-cols-[1.75rem_minmax(0,1fr)] gap-xs
         pb-sm last:pb-0"
     >
@@ -46,15 +43,7 @@ const orderedItems = computed(() =>
         <Icon :name="item.icon" />
       </span>
       <span class="min-w-0 pt-0.5">
-        <TheiLink
-          v-if="item.href"
-          :to="item.href"
-          class="block text-sm leading-tight text-text-1 transition
-            hocus:text-accent hocus:underline"
-        >
-          {{ item.label }}
-        </TheiLink>
-        <span v-else class="block text-sm leading-tight text-text-1">
+        <span class="block text-sm leading-tight text-text-1">
           {{ item.label }}
         </span>
         <time

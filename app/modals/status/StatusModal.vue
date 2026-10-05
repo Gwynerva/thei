@@ -2,6 +2,7 @@
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import type { StatusKind } from '#layers/thei/shared/status';
 import { toDateString } from '#layers/thei/shared/date-range';
+import { normalizeCaptionText } from '#layers/thei/shared/terminal-punctuation';
 import ModalContainer from '../ModalContainer.vue';
 import ModalTitle from '../ModalTitle.vue';
 const { modalData } = defineProps<{
@@ -67,7 +68,7 @@ const dirty = computed(() =>
 const canSave = computed(() => valid.value && (!initial || dirty.value));
 function save() {
   if (!canSave.value) return;
-  const value = text.value.trim();
+  const value = normalizeCaptionText(text.value.trim());
   const id = initial?.id ?? crypto.randomUUID();
   emit(
     'modalResult',

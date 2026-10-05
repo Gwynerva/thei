@@ -32,13 +32,13 @@ const buildSources = [
   'bun.lock',
   'tsconfig.json',
 ];
-const skippedInSources = new Set([
-  'node_modules',
-  '.nuxt',
-  '.output',
-  '.thei',
-  'content',
-]);
+const skippedInSources = new Set(['node_modules', '.nuxt', '.output', '.thei']);
+/**
+ * The fixture's own data, which the tests write to: skipped by its path, not
+ * by its name, or every folder called `content` — the editor's components
+ * among them — would go unwatched and leave the build stale.
+ */
+const skippedSourcePaths = new Set(['tests/e2e/fixture/content']);
 const name = process.argv[2] as keyof typeof targets;
 const target = targets[name];
 if (!target) {
@@ -87,7 +87,13 @@ if (process.argv.includes('--build')) {
   const args = ['x', 'nuxt', 'dev', target.dir, '--port', String(target.port)];
   args.push('--host', host);
   if (!target.fork) args.push('--no-fork');
-  run(bun, args, { NUXT_LOCK: '1' });
+  run(bun, args, {
+    NUXT_LOCK: '1',
+    // Nitro's dev worker takes requests from the dev server over a named pipe
+    // on Windows, where reading an upload's body from it can stall the worker
+    // for seconds, every request with it. A port on localhost has no stall.
+    ...(process.platform === 'win32' ? { NITRO_NO_UNIX_SOCKET: '1' } : {}),
+  });
 }
 
 function modifiedAt(path: string): number | undefined {
@@ -104,8 +110,9 @@ function newerThan(path: string, time: number): boolean {
   if (!existsSync(full)) return false;
   if (!statSync(full).isDirectory()) return statSync(full).mtimeMs > time;
   for (const entry of readdirSync(full, { withFileTypes: true })) {
-    if (skippedInSources.has(entry.name)) continue;
     const child = `${path}/${entry.name}`;
+    if (skippedInSources.has(entry.name) || skippedSourcePaths.has(child))
+      continue;
     if (
       entry.isDirectory() ? newerThan(child, time) : modifiedAt(child)! > time
     )

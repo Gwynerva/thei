@@ -8,7 +8,6 @@ import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
 
 export const assetSourceIcon = {
   project: entityTypeIcon('project'),
-  'project-stage': entityTypeIcon('project-stage'),
   'project-section': entityTypeIcon('project-section'),
   event: entityTypeIcon('event'),
   page: entityTypeIcon('page'),
@@ -20,7 +19,6 @@ export const assetSourceIcon = {
 export function assetSourceLabel(source: Pick<AssetSource, 'type'>) {
   return {
     project: phrase.value.project,
-    'project-stage': phrase.value.project_stage,
     'project-section': phrase.value.content_section,
     event: phrase.value.event,
     page: phrase.value.page,
@@ -29,6 +27,16 @@ export function assetSourceLabel(source: Pick<AssetSource, 'type'>) {
     profile: phrase.value.asset_source_profile,
     unused: phrase.value.asset_library_unused,
   }[source.type];
+}
+/**
+ * What holds a file, named as the owner knows it: a diary entry, which has
+ * no title, by its day written out; anything else by its title, formatted.
+ */
+export function assetSourceTitle(source: Pick<AssetSource, 'type' | 'title'>) {
+  if (source.type === 'unused') return phrase.value.asset_library_unused;
+  return source.type === 'diary-entry'
+    ? entityDisplayTitle({ title: source.title, date: source.title })
+    : publicText(source.title);
 }
 /**
  * Describes a stored file for tooltips and screen readers.
@@ -104,7 +112,6 @@ export function assetPlacementContentContext(
   return (
     {
       project: 'project-description',
-      'project-stage': 'content',
       'project-section': 'content',
       event: 'event-description',
       page: 'page-content',

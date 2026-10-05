@@ -12,7 +12,6 @@ import {
   buildPublicReferences,
   resolveSiteEntityCandidate,
   buildPublicProjectSectionSummary,
-  buildPublicProjectStageSummary,
 } from '../../server/thei/public/entities';
 import { OWNER, STRANGER } from '../../server/thei/access-links/viewer';
 
@@ -419,6 +418,71 @@ describe('public content media previews', () => {
     });
   });
 
+  it('hydrates a recording with its address and what its player draws', async () => {
+    const recording = {
+      assetUuid: 'project-recording',
+      familyUuid: 'project-recording-family',
+      contentHash: 'project-recording-hash',
+      slug: 'project-recording',
+      extension: 'weba',
+      settingsKey: 'audio-transform:q75:mono:0',
+      settings: { type: 'audio-transform', quality: 75, mono: false },
+      type: AssetType.Audio,
+      size: 72_000,
+      meta: { duration: 6, peaks: [0, 50, 100], channels: 2, bitrate: 96_000 },
+    };
+    (globalThis as any).THEI_SERVER = {
+      content: {
+        findByOwner: async () => ({
+          contentUuid: 'project-content',
+          data: {
+            blocks: [
+              {
+                type: 'contentAudio',
+                data: {
+                  asset: { assetUuid: 'project-recording' },
+                  title: 'Song',
+                },
+              },
+            ],
+          },
+        }),
+      },
+      assets: {
+        findByUuid: async (assetUuid: string) =>
+          assetUuid === recording.assetUuid ? recording : undefined,
+        usages: {
+          findOne: async () => ({
+            meta: { role: 'content', refs: [{ isPrivate: false }] },
+          }),
+          findByContainer: async () => [],
+        },
+      },
+    };
+
+    const result = await buildPublicContentData(
+      'project',
+      'project-uuid',
+      'project-description',
+      { type: 'project', humanReadableSlug: 'project', publicId: 'Project' },
+    );
+
+    const block = result?.blocks[0] as any;
+    expect(block.type).toBe('contentAudio');
+    expect(block.data.title).toBe('Song');
+    expect(block.data.asset).toEqual({
+      // Never the storage uuid.
+      assetUuid: 'project-recording',
+      type: AssetType.Audio,
+      extension: 'weba',
+      size: 72_000,
+      media: undefined,
+      audio: { duration: 6, peaks: [0, 50, 100], channels: 2 },
+      assetUrl: '/projects/project-Project/content/project-recording.weba',
+      archivedOriginal: undefined,
+    });
+  });
+
   it('replaces private sections with stats without leaking their payload', async () => {
     const secretAsset = {
       assetUuid: 'secret-asset-uuid',
@@ -597,12 +661,12 @@ describe('public content media previews', () => {
     ).resolves.toEqual({ blocks: [] });
   });
 
-  it('builds a project stage card with its covering period and first media', async () => {
+  it('builds a dated section card with its covering period and first media', async () => {
     const image = {
-      assetUuid: 'stage-image',
-      familyUuid: 'stage-family',
-      contentHash: 'stage-hash',
-      slug: 'stage-image',
+      assetUuid: 'dated-image',
+      familyUuid: 'dated-family',
+      contentHash: 'dated-hash',
+      slug: 'dated-image',
       extension: 'webp',
       settingsKey: 'original',
       settings: null,
@@ -613,7 +677,7 @@ describe('public content media previews', () => {
     (globalThis as any).THEI_SERVER = {
       content: {
         findByOwner: async () => ({
-          contentUuid: 'stage-content',
+          contentUuid: 'dated-content',
           data: {
             blocks: [
               {
@@ -638,14 +702,15 @@ describe('public content media previews', () => {
       },
     };
 
-    const result = await buildPublicProjectStageSummary(
+    const result = await buildPublicProjectSectionSummary(
       { humanReadableSlug: 'project', publicId: 'Project' } as any,
       {
-        stageUuid: 'stage-uuid',
+        sectionUuid: 'dated-uuid',
         title: 'Research',
-        summary: 'Stage summary',
+        summary: 'Section summary',
         humanReadableSlug: 'research',
         publicId: 'Research',
+        createdAt: Date.UTC(2025, 0, 1),
         periods: [
           { startDate: '2027-03-10', endDate: '2027-03-14' },
           { startDate: '2026-11-02', endDate: '2026-11-08' },
@@ -654,11 +719,10 @@ describe('public content media previews', () => {
     );
 
     expect(result).toMatchObject({
-      date: '2027-03-14',
       period: { startDate: '2026-11-02', endDate: '2027-03-14' },
       media: {
         accent: { hue: 28, chroma: 0.15 },
-        src: '/projects/project-Project/content/stage-image.webp',
+        src: '/projects/project-Project/content/dated-image.webp',
       },
     });
     expect(result).not.toHaveProperty('projects');
@@ -723,12 +787,15 @@ describe('public content media previews', () => {
       humanReadableSlug: 'details',
       publicId: 'Details',
       createdAt: Date.UTC(2027, 3, 6),
+      periods: [],
     } as any;
 
     // A visitor never sees the private picture; the section is drawn instead,
     // like any entity whose body opens without one it may see.
     const visitor = await buildPublicProjectSectionSummary(project, section);
-    expect(visitor.date).toBe('2027-04-06');
+    // A general section says no date at all.
+    expect(visitor).not.toHaveProperty('date');
+    expect(visitor).not.toHaveProperty('period');
     expect(visitor.media).toMatchObject({ generated: true });
     expect(visitor.media!.src).toMatch(
       /^\/media\/generated-icons\/project-section\/[a-f0-9]{64}\.avif$/,
@@ -736,7 +803,6 @@ describe('public content media previews', () => {
     await expect(
       buildPublicProjectSectionSummary(project, section, true),
     ).resolves.toMatchObject({
-      date: '2027-04-06',
       media: {
         accent: { hue: 310, chroma: 0.15 },
         src: '/projects/project-Project/content/section-image.webp',
@@ -1132,6 +1198,61 @@ describe('entity links in public content', () => {
         '<a data-content-link="entity" data-entity-type="project" ' +
         `data-entity-id="${publicProject.projectUuid}">the open one</a>.`,
     );
+  });
+
+  it('lets no place inside a hidden target outlive its uuid', async () => {
+    stubEntityLinkContent();
+    const anchor = (projectUuid: string) =>
+      '<a data-content-link="entity" data-entity-type="project" ' +
+      `data-entity-id="${projectUuid}" data-entity-fragment="secret-plans" ` +
+      'data-content-note="why">here</a>';
+    (globalThis as any).THEI_SERVER.content.findByOwner = async () => ({
+      contentUuid: 'page-content',
+      data: {
+        blocks: [
+          {
+            type: 'paragraph',
+            data: {
+              text: `${anchor(privateProject.projectUuid)} ${anchor(publicProject.projectUuid)}`,
+            },
+          },
+          {
+            type: 'entityLink',
+            data: {
+              entityType: 'project',
+              entityId: privateProject.projectUuid,
+              fragment: 'secret-plans',
+            },
+          },
+          {
+            type: 'entityLink',
+            data: {
+              entityType: 'project',
+              entityId: publicProject.projectUuid,
+              fragment: 'gallery',
+            },
+          },
+        ],
+      },
+    });
+    const content = await buildPublicContentData(
+      'page',
+      'page-uuid',
+      'page-body',
+      { type: 'page', slug: 'page' },
+    );
+
+    expect(content!.blocks[0]!.data.text).toBe(
+      '<a data-content-link="entity" data-entity-type="project" ' +
+        `data-entity-restricted="true">here</a> ${anchor(publicProject.projectUuid)}`,
+    );
+    expect(content!.blocks[1]).toEqual({
+      type: 'entityLink',
+      data: { entityType: 'project', restricted: true },
+    });
+    expect(content!.blocks[2]).toMatchObject({
+      data: { entityId: publicProject.projectUuid, fragment: 'gallery' },
+    });
   });
 
   it('leaves every link intact for an administrator', async () => {

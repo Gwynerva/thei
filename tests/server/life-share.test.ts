@@ -34,6 +34,9 @@ vi.mock('../../server/thei/public/entities', () => ({
 vi.mock('../../server/thei/public/content', () => ({
   buildPublicEntityPreviewMedia: vi.fn(async () => undefined),
 }));
+vi.mock('../../server/thei/entity-banner', () => ({
+  buildPublicCardMedia: vi.fn(async () => undefined),
+}));
 
 let context: Awaited<ReturnType<typeof freshTestDb>>;
 
@@ -53,7 +56,7 @@ afterEach(async () => {
 });
 
 /**
- * A private project with a private stage and a status, and around it a
+ * A private project with a private dated section and a status, and around it a
  * private event and a private diary entry related to it.
  */
 function seed() {
@@ -71,15 +74,16 @@ function seed() {
       updatedAt: 1,
     })
     .run();
-  db.insert(schema.projectStages)
+  db.insert(schema.projectContentSections)
     .values({
-      stageUuid: 'S',
+      sectionUuid: 'S',
       projectUuid: 'P',
-      title: 'The stage',
+      title: 'The section',
       summary: '',
       humanReadableSlug: 's',
       publicId: 'S',
       isPrivate: true,
+      sortOrder: 0,
       createdAt: 1,
       updatedAt: 1,
     })
@@ -96,21 +100,23 @@ function seed() {
       updatedAt: 1,
     })
     .run();
-  db.insert(schema.stagePeriods)
+  db.insert(schema.periods)
     .values([
       {
-        stageType: 'project-stage',
-        stageUuid: 'S',
+        ownerType: 'project-section',
+        ownerId: 'S',
         sortOrder: 0,
         startDate: '2026-02-01',
         endDate: '2026-02-10',
+        label: 'Kickoff',
       },
       {
-        stageType: 'event-stage',
-        stageUuid: 'E',
+        ownerType: 'event',
+        ownerId: 'E',
         sortOrder: 0,
         startDate: '2026-03-01',
         endDate: '2026-03-01',
+        label: 'Launch party',
       },
     ])
     .run();
@@ -184,7 +190,7 @@ describe("a project's chronology through its share link", () => {
       'profile-status': 'visible',
       'diary-entry': 'secret',
       event: 'secret',
-      'project-stage': 'visible',
+      'project-section': 'visible',
       project: 'visible',
     });
     const status = points.find(
@@ -203,9 +209,31 @@ describe("a project's chronology through its share link", () => {
       '2026-05-01': { 'profile-status': 1 },
       '2026-04-01': { secret: 1 },
       '2026-03-01': { secret: 1 },
-      '2026-02-10': { 'project-stage': 1 },
+      '2026-02-10': { 'project-section': 1 },
+      '2026-02-01': { 'project-section': 1 },
       '2026-01-01': { project: 1 },
     });
+  });
+
+  it('names the periods it opens and keeps the names of secrets', async () => {
+    const points = await getLatestLifePoints(20, {
+      scope,
+      viewer: scopedViewer(holder, 'project', 'P'),
+    });
+    const sectionPoints = points.filter(
+      (point) => point.entityKind === 'project-section',
+    );
+    expect(sectionPoints.length).toBeGreaterThan(0);
+    for (const point of sectionPoints)
+      expect(point).toMatchObject({ periodLabel: 'Kickoff' });
+    const event = points.find((point) => point.entityKind === 'event');
+    expect(event).toMatchObject({ visibility: 'secret' });
+    expect(JSON.stringify(event)).not.toContain('Launch party');
+
+    const window = await getLifeWindow({ scope, viewer: STRANGER });
+    const json = JSON.stringify(window);
+    expect(json).not.toContain('Kickoff');
+    expect(json).not.toContain('Launch party');
   });
 
   it("shows a stranger a hidden project's status as a secret", async () => {

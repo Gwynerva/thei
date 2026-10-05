@@ -128,6 +128,10 @@ export async function failUpdateBootRun(message: string) {
   const projectPath = THEI_SERVER.projectPath();
   const state = await readUpdateState(projectPath);
   if (!state || !isRunningStatus(state.status)) return;
-  failRun(state, message, state.status === 'restarting' ? 'restart' : undefined);
+  failRun(
+    state,
+    message,
+    state.status === 'restarting' ? 'restart' : undefined,
+  );
   await writeUpdateState(projectPath, state);
 }

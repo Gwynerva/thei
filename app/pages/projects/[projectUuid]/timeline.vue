@@ -1,7 +1,6 @@
 <script lang="ts" setup>
 import type { PublicProjectResponse } from '#layers/thei/shared/api/public';
 import {
-  buildLifeUrl,
   isLifeDay,
   parseLifeFilter,
   serializeLifeFilter,
@@ -9,14 +8,13 @@ import {
   type LifeScopeRef,
   type LifeWindowResponse,
 } from '#layers/thei/shared/life';
-import { projectTimelinePreset } from '#layers/thei/shared/life-presets';
 import { buildProjectTimelineUrl } from '#layers/thei/shared/project-url';
 
 /**
  * A project's own chronology: the second tab of its page.
  *
  * The same feed as `/life/`, narrowed to what belongs to this project — its
- * stages and sections, its statuses, and the events and diary entries related
+ * sections, its statuses, and the events and diary entries related
  * to it. The hero is the overview's hero, so switching tabs changes what is
  * under it and nothing else.
  */
@@ -29,7 +27,6 @@ const projectResource = await useFetch<PublicProjectResponse>(
   () => `/api/projects/${encodeURIComponent(part)}`,
 );
 const project = useRequiredResource(projectResource);
-usePublicPageGlow({ enabled: false });
 
 const base = computed(() =>
   buildProjectTimelineUrl(
@@ -70,32 +67,17 @@ if (!resource.data.value) throw createResourceError({ statusCode: 502 });
 
 const activeDate = ref(requestedDate.value ?? resource.data.value.anchorDate);
 
-/**
- * Stages and sections used to have lists of their own; those filters are
- * still pages in their own right, with a name and a canonical. Any other
- * filter is a way of reading this page and points back at it.
- */
-const preset = computed(() => projectTimelinePreset(filter.value));
-const presetTitle = computed(() => {
-  if (preset.value?.id === 'stages') return phrase.value.project_stages;
-  if (preset.value?.id === 'sections')
-    return phrase.value.project_content_sections;
-  return undefined;
-});
 const ogImage = useOgImage(() => ({
   kind: 'project',
   id: project.value.publicId,
 }));
 usePublicSeo({
   ogImage,
-  title: () =>
-    `${presetTitle.value ?? phrase.value.project_tab_timeline} · ${project.value.title}`,
+  title: () => `${phrase.value.project_tab_timeline} · ${project.value.title}`,
   description: () =>
     phrase.value.project_timeline_seo_description(project.value.title),
-  canonical: () =>
-    preset.value
-      ? buildLifeUrl({ filter: preset.value.filter }, base.value)
-      : base.value,
+  // A filter is a way of reading this page, and points back at it.
+  canonical: () => base.value,
   noIndex: () => project.value.access === 'link-only',
   pageType: 'CollectionPage',
   breadcrumbs: () => [
@@ -122,7 +104,7 @@ watch(filter, (value) => {
     :data-life-active-date="activeDate"
     :data-life-newest-date="resource.data.value?.newestDate"
   >
-    <PublicProjectHero
+    <PublicHero
       :title="project.title"
       :summary="project.summary"
       :icon-media="project.iconMedia"
@@ -150,7 +132,7 @@ watch(filter, (value) => {
           </template>
         </PublicProjectTabs>
       </template>
-    </PublicProjectHero>
+    </PublicHero>
 
     <LifeFeed
       v-if="resource.data.value"

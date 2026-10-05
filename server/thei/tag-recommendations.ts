@@ -72,7 +72,6 @@ export function getTagRecommendationIndex(): TagRecommendationIndex {
 const BODY_SLOTS = [
   'project-description',
   'event-body',
-  'project-stage-body',
   'project-section-body',
 ] as const;
 
@@ -94,27 +93,16 @@ export function buildTagRecommendationIndex(): TagRecommendationIndex {
     })
     .from(schema.events)
     .all();
-  const parts = [
-    ...db
-      .select({
-        id: schema.projectStages.stageUuid,
-        projectUuid: schema.projectStages.projectUuid,
-        title: schema.projectStages.title,
-        summary: schema.projectStages.summary,
-      })
-      .from(schema.projectStages)
-      .all(),
-    ...db
-      .select({
-        id: schema.projectContentSections.sectionUuid,
-        projectUuid: schema.projectContentSections.projectUuid,
-        title: schema.projectContentSections.title,
-        summary: schema.projectContentSections.summary,
-      })
-      .from(schema.projectContentSections)
-      .orderBy(asc(schema.projectContentSections.sortOrder))
-      .all(),
-  ];
+  const parts = db
+    .select({
+      id: schema.projectContentSections.sectionUuid,
+      projectUuid: schema.projectContentSections.projectUuid,
+      title: schema.projectContentSections.title,
+      summary: schema.projectContentSections.summary,
+    })
+    .from(schema.projectContentSections)
+    .orderBy(asc(schema.projectContentSections.sortOrder))
+    .all();
   const bodies = new Map(
     db
       .select({

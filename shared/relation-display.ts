@@ -4,30 +4,30 @@ import { entityTypeIcon } from './entity-icon';
 
 /**
  * How each kind of relation is drawn and named from this entity's side, in
- * one place: its icon, the title of its group, its word in the editor's
- * list, and the sentence that says it with both names.
+ * one place: its icon, the word that says what the other end is to this
+ * one, and the sentence that says it with both names.
  */
 const RELATION_TYPE_DISPLAY = {
   related: {
     icon: 'relation-related',
-    group: 'relation_group_related',
+    label: 'relation_label_related',
     sentence: 'relation_popup_related',
   },
   influencing: {
     icon: 'relation-depends',
-    group: 'relation_group_depends_on',
+    label: 'relation_label_influencing',
     sentence: 'relation_popup_depends_on',
   },
   dependent: {
     icon: 'relation-affects',
-    group: 'relation_group_affects',
+    label: 'relation_label_dependent',
     sentence: 'relation_popup_affects',
   },
 } as const satisfies Record<
   RelationType,
   {
     icon: string;
-    group: keyof LanguagePhrases;
+    label: keyof LanguagePhrases;
     sentence: keyof LanguagePhrases;
   }
 >;
@@ -47,10 +47,10 @@ export function relationTypeIcon(type: RelationType) {
 }
 
 /**
- * The order the three kinds are listed in, wherever they are grouped.
+ * The order relations are listed in, inside the list of one kind of entity.
  *
  * The directed kinds first: they are the deliberate claims, and the plain
- * "related" list is the one that grows long.
+ * "related" ones are those that grow many.
  */
 export const RELATION_GROUP_ORDER: readonly RelationType[] = [
   'influencing',
@@ -58,20 +58,16 @@ export const RELATION_GROUP_ORDER: readonly RelationType[] = [
   'related',
 ];
 
-/** The phrase that titles a group of one kind, from this entity's side. */
-export function relationGroupPhraseKey(type: RelationType) {
-  return RELATION_TYPE_DISPLAY[type].group;
-}
-
-/** A kind's word in the editor's list, from the side of `owner`. */
-export function relationShortLabel(
+/**
+ * What the other end is to this entity, in one word under its name:
+ * "Influences" when this one depends on it, "Depends" when this one affects
+ * it.
+ */
+export function relationLabel(
   phrase: LanguagePhrases,
   type: RelationType,
-  owner: RelationEntityType,
 ): string {
-  if (type === 'influencing') return phrase.relation_short_depends_on;
-  if (type === 'dependent') return phrase.relation_short_affects;
-  return phrase.relation_short_related(owner);
+  return phrase[RELATION_TYPE_DISPLAY[type].label];
 }
 
 /**
@@ -85,6 +81,31 @@ export function relationSentence(
   other: string,
 ): string {
   return phrase[RELATION_TYPE_DISPLAY[type].sentence](current, other);
+}
+
+export type RelationSentencePart = string | { side: 'current' | 'other' };
+
+/**
+ * A relation's sentence in pieces, its two names left for the caller to draw
+ * — each with its picture, say. The quotes around a name go with it: the
+ * picture already sets the name apart.
+ */
+export function relationSentenceParts(
+  phrase: LanguagePhrases,
+  type: RelationType,
+): RelationSentencePart[] {
+  const current = '\u0000';
+  const other = '\u0001';
+  return relationSentence(phrase, type, current, other)
+    .split(/[«“"]?([\u0000\u0001])[»”"]?/)
+    .filter(Boolean)
+    .map((part) =>
+      part === current
+        ? { side: 'current' as const }
+        : part === other
+          ? { side: 'other' as const }
+          : part,
+    );
 }
 
 /** The icon for the kind of thing on the other end of a relation. */

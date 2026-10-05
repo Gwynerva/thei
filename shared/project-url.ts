@@ -8,6 +8,9 @@ export function buildProjectUrl(
   return `/projects/${pathPart}/`;
 }
 
+/** The id of the sections block on a project's overview, for a link to it. */
+export const PROJECT_SECTIONS_ANCHOR = 'project-sections';
+
 /**
  * A project's own chronology — the second tab of its page.
  *
@@ -30,21 +33,18 @@ export function isPublicId(value: string): boolean {
   return publicIdIsValid(value);
 }
 
-export type ProjectChildKind = 'stages' | 'sections';
-
-export function buildProjectChildUrl(
+export function buildProjectSectionUrl(
   projectHumanReadable: string,
   projectPublicId: string,
-  kind: ProjectChildKind,
-  childHumanReadable: string,
-  childPublicId: string,
+  sectionHumanReadable: string,
+  sectionPublicId: string,
 ) {
-  const childPart = childHumanReadable
-    ? `${childHumanReadable}-${childPublicId}`
-    : childPublicId;
-  return `${buildProjectUrl(projectHumanReadable, projectPublicId)}${kind}/${childPart}/`;
+  const sectionPart = sectionHumanReadable
+    ? `${sectionHumanReadable}-${sectionPublicId}`
+    : sectionPublicId;
+  return `${buildProjectUrl(projectHumanReadable, projectPublicId)}sections/${sectionPart}/`;
 }
 
-export function publicIdFromProjectChildUrlPart(value: string): string {
+export function publicIdFromProjectSectionUrlPart(value: string): string {
   return value.slice(value.lastIndexOf('-') + 1);
 }

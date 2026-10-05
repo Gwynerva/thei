@@ -17,7 +17,6 @@ describe('generated fallback icons', () => {
       'project',
       'page',
       'event',
-      'project-stage',
       'project-section',
       'diary-entry',
       'tag',
@@ -85,7 +84,7 @@ describe('generated fallback icons', () => {
   });
 
   it('draws each kind with the icon the interface names it by', () => {
-    for (const kind of ['project', 'diary-entry', 'project-stage'] as const) {
+    for (const kind of ['project', 'diary-entry', 'project-section'] as const) {
       const body = iconSymbols[entityTypeIcon(kind)]!.body;
       expect(body).not.toBe('');
       expect(buildIconSvg(kind, 120)).toContain(

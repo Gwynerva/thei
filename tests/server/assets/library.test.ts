@@ -241,26 +241,27 @@ describe('asset library', () => {
       '/preview/content',
     );
   });
-  function addStage(isPrivate = false) {
-    db.insert(schema.projectStages)
+  function addLaunch(isPrivate = false) {
+    db.insert(schema.projectContentSections)
       .values({
-        stageUuid: 'stage',
+        sectionUuid: 'launch',
         projectUuid: 'p',
         title: 'Launch',
         summary: 'Rocket day',
         humanReadableSlug: 'launch',
-        publicId: 'st',
+        publicId: 'ls',
         isPrivate,
+        sortOrder: 1,
         createdAt: 1,
         updatedAt: 1,
       })
       .run();
     db.insert(schema.content)
       .values({
-        contentUuid: 'stage-content',
-        ownerType: 'project-stage',
-        ownerId: 'stage',
-        slot: 'project-stage-body',
+        contentUuid: 'launch-content',
+        ownerType: 'project-section',
+        ownerId: 'launch',
+        slot: 'project-section-body',
         data: { blocks: [] },
         createdAt: 1,
         updatedAt: 1,
@@ -270,49 +271,49 @@ describe('asset library', () => {
       .values({
         assetUuid: 'b',
         containerType: 'content',
-        containerId: 'stage-content',
+        containerId: 'launch-content',
         role: 'content',
       })
       .run();
   }
-  it('lists a stage as a source of its own, named with its project', () => {
-    addStage();
+  it('lists a section as a source of its own, named with its project', () => {
+    addLaunch();
 
     expect(getAssetUsages('b').placements).toMatchObject([
       {
         source: {
-          type: 'project-stage',
-          id: 'stage',
+          type: 'project-section',
+          id: 'launch',
           title: 'Launch',
           summary: 'Rocket day',
-          url: '/projects/project-p/stages/launch-st/',
-          editUrl: '/admin/projects/p/edit/?stage=st',
+          url: '/projects/project-p/sections/launch-ls/',
+          editUrl: '/admin/projects/p/edit/?section=ls',
           parent: { title: 'Проект Луна', url: '/projects/project-p/' },
         },
         isPrivate: false,
       },
     ]);
-    // The stage took the only file nothing used, so no "unused" group is left.
+    // The section took the only file nothing used, so no "unused" group is left.
     const groups = listLibrarySections().items;
     expect(groups.map((g) => `${g.type}:${g.id}:${g.count}`).sort()).toEqual([
       'page:page:1',
       'profile:me:1',
+      'project-section:launch:1',
       'project-section:section:1',
-      'project-stage:stage:1',
       'project:p:1',
       'tag:tag:1',
     ]);
-    expect(groups.find((g) => g.type === 'project-stage')?.parent).toEqual({
+    expect(groups.find((g) => g.id === 'launch')?.parent).toEqual({
       title: 'Проект Луна',
       url: '/projects/project-p/',
     });
     // Found by its own words, not the project's; and the project group does
     // not repeat what its parts hold.
     expect(listLibrarySections({ q: 'rocket' }).items.map((g) => g.id)).toEqual(
-      ['stage'],
+      ['launch'],
     );
     expect(
-      listSourceAssets('project-stage', 'stage').items.map(
+      listSourceAssets('project-section', 'launch').items.map(
         (i) => i.asset.assetUuid,
       ),
     ).toEqual(['b']);
@@ -320,11 +321,11 @@ describe('asset library', () => {
       listSourceAssets('project', 'p').items.map((i) => i.asset.assetUuid),
     ).toEqual(['a']);
   });
-  it('keeps a stage private when it or its project is', () => {
-    addStage(true);
+  it('keeps a section private when it or its project is', () => {
+    addLaunch(true);
     expect(getAssetUsages('b').placements[0]?.isPrivate).toBe(true);
 
-    db.update(schema.projectStages).set({ isPrivate: false }).run();
+    db.update(schema.projectContentSections).set({ isPrivate: false }).run();
     expect(getAssetUsages('b').placements[0]?.isPrivate).toBe(false);
 
     db.update(schema.projects)
@@ -366,6 +367,165 @@ describe('asset library', () => {
     expect(
       listSourceAssets('unused', 'all').items.map((i) => i.asset.assetUuid),
     ).toEqual(['b']);
+  });
+  describe('diary entries, kinds of entity and their order', () => {
+    beforeEach(() => {
+      db.insert(schema.diaryEntries)
+        .values({
+          diaryUuid: 'day',
+          date: '2024-05-12',
+          access: 'public' as any,
+          createdAt: 1,
+          updatedAt: 5,
+        })
+        .run();
+      db.insert(schema.events)
+        .values({
+          eventUuid: 'event',
+          title: 'Concert',
+          summary: '',
+          access: 'public' as any,
+          humanReadableSlug: 'concert',
+          publicId: 'e',
+          createdAt: 1,
+          updatedAt: 9,
+        })
+        .run();
+      db.insert(schema.content)
+        .values({
+          contentUuid: 'diary-body',
+          ownerType: 'diary-entry',
+          ownerId: 'day',
+          slot: 'diary-body',
+          data: { blocks: [] },
+          createdAt: 1,
+          updatedAt: 1,
+        })
+        .run();
+      db.insert(schema.assetUsages)
+        .values([
+          {
+            assetUuid: 'b',
+            containerType: 'content',
+            containerId: 'diary-body',
+            role: 'content',
+          },
+          {
+            assetUuid: 'b',
+            containerType: 'event',
+            containerId: 'event',
+            role: 'banner',
+          },
+        ])
+        .run();
+    });
+
+    it('finds the files of a diary entry by its day, written in any way', () => {
+      for (const q of ['12 мая 2024', 'may 2024', '12.05.2024', '2024-05'])
+        expect(
+          listLibrarySections({ q }).items.map((group) => group.id),
+          q,
+        ).toEqual(['day']);
+      expect(
+        listLibraryAssets({ q: '12.05.2024' }).items.map(
+          (item) => item.asset.assetUuid,
+        ),
+      ).toEqual(['b']);
+      expect(listLibrarySections({ q: '13 мая 2024' }).items).toEqual([]);
+    });
+
+    it('never finds a diary entry by the characters of its stored date', () => {
+      for (const q of ['0', '-', '24-05', '-1', '4-0'])
+        expect(
+          listLibrarySections({ q, source: 'diary-entry' }).items,
+          q,
+        ).toEqual([]);
+    });
+
+    it('lists the entities changed last first, the profile and tags after them', () => {
+      expect(
+        listLibrarySections().items.map((group) => `${group.type}:${group.id}`),
+      ).toEqual([
+        'event:event',
+        'diary-entry:day',
+        'page:page',
+        'project:p',
+        'project-section:section',
+        'profile:me',
+        'tag:tag',
+      ]);
+      const template = db
+        .select()
+        .from(schema.assets)
+        .all()
+        .find((asset) => asset.assetUuid === 'b')!;
+      db.insert(schema.assets)
+        .values({
+          ...template,
+          assetUuid: 'loose',
+          slug: 'loose',
+          familyUuid: 'loose',
+        })
+        .run();
+      // Files nothing holds stay on top, and are no entity to narrow to.
+      expect(listLibrarySections().items[0]?.type).toBe('unused');
+      expect(
+        listLibrarySections({ source: 'event' }).items.map((group) => group.id),
+      ).toEqual(['event']);
+    });
+
+    it('narrows the groups to one kind of entity, counting every kind', () => {
+      const result = listLibrarySections({ source: 'diary-entry' });
+      expect(result.items.map((group) => group.id)).toEqual(['day']);
+      expect(result.total).toBe(1);
+      expect(result.facets).toEqual({
+        sources: {
+          project: 1,
+          'project-section': 1,
+          event: 1,
+          page: 1,
+          'diary-entry': 1,
+          tag: 1,
+          profile: 1,
+        },
+        // Files of the diary entry, by kind, and every group anywhere.
+        types: { image: 1 },
+        anywhere: 7,
+      });
+      expect(
+        listLibrarySections({ q: 'concert', source: 'event' }).facets,
+      ).toEqual({ sources: { event: 1 }, types: { image: 1 }, anywhere: 1 });
+      expect(
+        listLibrarySections({ source: 'page', q: 'concert' }).items,
+      ).toEqual([]);
+      // A kind of file that is not there counts as nothing, not as absent.
+      expect(listLibrarySections({ type: 'video' }).facets!.sources).toEqual(
+        {},
+      );
+    });
+
+    it('narrows the flat list to a kind of entity, or to where nothing holds a file', () => {
+      expect(
+        listLibraryAssets({ source: 'diary-entry' }).items.map(
+          (item) => item.asset.assetUuid,
+        ),
+      ).toEqual(['b']);
+      expect(
+        listLibraryAssets({ source: 'profile' as never }).items,
+      ).toHaveLength(1);
+      const all = listLibraryAssets();
+      expect(all.facets.anywhere).toBe(2);
+      expect(all.facets.sources).toMatchObject({
+        'diary-entry': 1,
+        event: 1,
+        project: 1,
+        page: 1,
+      });
+      expect(listLibraryAssets({ usage: 'unused' }).items).toEqual([]);
+      expect(
+        listLibraryAssets({ usage: 'unused' }).facets.sources.unused,
+      ).toBeUndefined();
+    });
   });
   it('tells which files cleanup will take, the same for the editor as for the library', () => {
     db.insert(schema.assets)

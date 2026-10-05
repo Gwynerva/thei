@@ -3,8 +3,9 @@ import type { IconName } from '#thei/icons';
 
 /**
  * Empty state of an admin list. While a search is active it explains that
- * nothing matched and offers to clear the query; otherwise it invites the
- * author to create the first entity.
+ * nothing matched, under the same downcast face as every search that finds
+ * nothing, and offers to clear the query; otherwise it invites the author to
+ * create the first entity, under the list's own icon.
  */
 defineProps<{
   icon: IconName;
@@ -21,7 +22,7 @@ const emit = defineEmits<{ resetSearch: [] }>();
 <template>
   <EmptyState
     v-if="searching"
-    :icon="icon"
+    icon="face-dead"
     :title="phrase.admin_search_no_results"
     :description="phrase.admin_search_no_results_description"
   >

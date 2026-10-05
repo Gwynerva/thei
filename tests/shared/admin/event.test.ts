@@ -66,7 +66,7 @@ describe('validateEventData', () => {
       'Summary cannot be empty',
     );
     expect(validateEventData(eventData({ periods: [] }))).toBe(
-      'Stage period is required',
+      'Period is required',
     );
     expect(
       validateEventData(eventData({ content: { data: { blocks: [] } } })),
@@ -90,12 +90,14 @@ describe('validateEventData', () => {
         endDate: '2026-08-26',
         precision: 'exact',
         precisionNote: '',
+        label: '',
       },
       {
         startDate: '2026-09-01',
         endDate: '2026-09-01',
         precision: 'exact',
         precisionNote: '',
+        label: '',
       },
     ]);
     expect(periods).toHaveLength(4);
@@ -237,5 +239,25 @@ describe('validateEventData', () => {
         }),
       ),
     ).toBe('Invalid file privacy');
+  });
+});
+
+describe('validateEventData endings', () => {
+  it('ends the title and the period labels as headings', () => {
+    const result = validateEventData(
+      eventData({
+        title: 'Поездка в Рим.',
+        periods: [
+          { startDate: '2020-01-01', endDate: '2020-02-01', label: 'Рим' },
+          { startDate: '2020-01-15', endDate: '2020-03-01', label: 'Рим.' },
+        ],
+      }),
+    );
+    if (typeof result === 'string') throw new Error(result);
+    expect(result.title).toBe('Поездка в Рим');
+    // Named alike once their endings agree, the two are one stretch.
+    expect(result.periods).toMatchObject([
+      { startDate: '2020-01-01', endDate: '2020-03-01', label: 'Рим' },
+    ]);
   });
 });

@@ -1,11 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { readFile, rm, writeFile } from 'node:fs/promises';
-import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import { createError } from 'h3';
 import sharp from 'sharp';
 import { theiTempPath } from './temp';
+import { runFfmpeg } from './ffmpeg';
 import { assetBytesSize, fileBytes, type AssetBytes } from './bytes';
 import { AssetType } from '../../../shared/asset';
 import {
@@ -33,6 +32,7 @@ import {
 } from '../../../shared/asset-crop';
 import { cropSvgToFile } from './svg-crop';
 import { SVG_BASE_DENSITY, svgRasterDensity } from './svg-density';
+import { withRasterReadySvg } from './svg-raster-input';
 import { zipFileToPath } from './zip';
 import { stripAssetMetadata } from './strip-metadata';
 
@@ -56,6 +56,10 @@ export interface VideoInspection extends AssetDimensions {
   audioBitrate?: number;
   /** The video codec, as ffmpeg names it. */
   codec?: string;
+  /** Of the first sound stream: its codec, as ffmpeg names it. */
+  audioCodec?: string;
+  channels?: number;
+  sampleRate?: number;
 }
 
 /** What a transform and its size estimate learn about a video. */
@@ -267,43 +271,45 @@ async function processImage(
   const { dimensions } = settings;
   if (settings.format === 'svg') return await keepVector(source, settings);
   const raster = await rasterSource(source, settings);
-  let pipeline = sharp(source.path, {
-    animated: false,
-    density: raster.density,
-  }).autoOrient();
-  // The admin's turn comes after the photo's own orientation, and sharp
-  // applies both before an extract called later: the crop names a region of
-  // the turned frame, which is what the editor showed.
-  if (settings.rotation) pipeline = pipeline.rotate(settings.rotation);
+  const { data, info } = await withRasterReadySvg(source.path, (input) => {
+    let pipeline = sharp(input, {
+      animated: false,
+      density: raster.density,
+    }).autoOrient();
+    // The admin's turn comes after the photo's own orientation, and sharp
+    // applies both before an extract called later: the crop names a region of
+    // the turned frame, which is what the editor showed.
+    if (settings.rotation) pipeline = pipeline.rotate(settings.rotation);
 
-  // Cropping before resizing, in that call order, makes sharp cut the region
-  // from the oriented source first. The output size already has the crop's
-  // proportions, so filling it distorts nothing.
-  if (raster.crop) pipeline = pipeline.extract(raster.crop);
-  pipeline = pipeline.resize(dimensions.width, dimensions.height, {
-    fit: 'fill',
+    // Cropping before resizing, in that call order, makes sharp cut the region
+    // from the oriented source first. The output size already has the crop's
+    // proportions, so filling it distorts nothing.
+    if (raster.crop) pipeline = pipeline.extract(raster.crop);
+    pipeline = pipeline.resize(dimensions.width, dimensions.height, {
+      fit: 'fill',
+    });
+
+    // `effort` is not comparable between the two encoders: WebP 6 is quick,
+    // while AVIF climbs steeply past 4 for very little size. 4 is sharp's own
+    // default and keeps a large upload from occupying a worker for minutes.
+    // Lossy WebP is always 4:2:0; smart subsampling keeps coloured edges, such
+    // as red text on white, from fringing.
+    const encoded =
+      settings.format === 'webp-lossless'
+        ? pipeline.webp({ lossless: true, effort: 6 })
+        : settings.format === 'webp'
+          ? pipeline.webp({
+              quality: settings.quality,
+              effort: 6,
+              smartSubsample: true,
+            })
+          : pipeline.avif({
+              quality: imageDisplayQualityToAvifQuality(settings.quality),
+              effort: 4,
+            });
+
+    return encoded.toBuffer({ resolveWithObject: true });
   });
-
-  // `effort` is not comparable between the two encoders: WebP 6 is quick,
-  // while AVIF climbs steeply past 4 for very little size. 4 is sharp's own
-  // default and keeps a large upload from occupying a worker for minutes.
-  // Lossy WebP is always 4:2:0; smart subsampling keeps coloured edges, such
-  // as red text on white, from fringing.
-  const encoded =
-    settings.format === 'webp-lossless'
-      ? pipeline.webp({ lossless: true, effort: 6 })
-      : settings.format === 'webp'
-        ? pipeline.webp({
-            quality: settings.quality,
-            effort: 6,
-            smartSubsample: true,
-          })
-        : pipeline.avif({
-            quality: imageDisplayQualityToAvifQuality(settings.quality),
-            effort: 4,
-          });
-
-  const { data, info } = await encoded.toBuffer({ resolveWithObject: true });
 
   return {
     bytes: { buffer: data },
@@ -566,28 +572,14 @@ export function videoSourceInfo(
   };
 }
 
-async function readFfmpegInputInfo(filePath: string): Promise<string> {
-  return await new Promise<string>((resolve, reject) => {
-    const child = spawn(
-      ffmpegInstaller.path,
-      ['-hide_banner', '-i', filePath],
-      {
-        windowsHide: true,
-        stdio: ['ignore', 'ignore', 'pipe'],
-      },
-    );
-
-    let stderr = '';
-    child.stderr.setEncoding('utf8');
-    child.stderr.on('data', (chunk: string) => {
+export async function readFfmpegInputInfo(filePath: string): Promise<string> {
+  let stderr = '';
+  await runFfmpeg(['-hide_banner', '-i', filePath], {
+    onStderr: (chunk) => {
       stderr += chunk;
-    });
-
-    child.on('error', reject);
-    child.on('close', () => {
-      resolve(stderr);
-    });
+    },
   });
+  return stderr;
 }
 
 /**
@@ -619,6 +611,10 @@ export function parseFfmpegInputInfo(text: string): VideoInspection {
     text.match(/bitrate:\s*(\d+(?:\.\d+)?\s*kb\/s)/)?.[1],
   );
   const codec = videoLine?.match(/Video:\s*([A-Za-z0-9_-]+)/)?.[1];
+  const audioCodec = audioLine?.match(/Audio:\s*([A-Za-z0-9_]+)/)?.[1];
+  const audioFormat = audioLine?.match(/(\d+)\s*Hz,\s*([^,]+?)\s*(?:,|$)/);
+  const sampleRate = parseNumber(audioFormat?.[1]);
+  const channels = channelCount(audioFormat?.[2]);
 
   return {
     ...(coded
@@ -632,8 +628,35 @@ export function parseFfmpegInputInfo(text: string): VideoInspection {
     ...(overallBitrate ? { overallBitrate } : {}),
     ...(audioBitrate ? { audioBitrate } : {}),
     ...(codec ? { codec } : {}),
+    ...(audioCodec ? { audioCodec } : {}),
+    ...(channels ? { channels } : {}),
+    ...(sampleRate ? { sampleRate } : {}),
     hasAudio: Boolean(audioLine),
   };
+}
+
+const NAMED_CHANNEL_LAYOUTS: Record<string, number> = {
+  mono: 1,
+  stereo: 2,
+  downmix: 2,
+  quad: 4,
+  hexagonal: 6,
+  octagonal: 8,
+};
+
+/**
+ * The channels in a layout as ffmpeg prints it: a name ("stereo"), a count
+ * ("3 channels"), or speakers plus subwoofers ("5.1(side)").
+ */
+export function channelCount(layout: string | undefined): number | undefined {
+  if (!layout) return undefined;
+  const name = layout.trim().replace(/\(.*\)$/, '');
+  if (NAMED_CHANNEL_LAYOUTS[name]) return NAMED_CHANNEL_LAYOUTS[name];
+  const counted = name.match(/^(\d+)\s*channels?$/);
+  if (counted) return Number(counted[1]) || undefined;
+  const speakers = name.match(/^(\d+)\.(\d+)$/);
+  if (speakers) return Number(speakers[1]) + Number(speakers[2]) || undefined;
+  return undefined;
 }
 
 /** A stream line's ", 850 kb/s" as bits per second. */
@@ -760,41 +783,34 @@ export function buildVideoEncodePasses(
   };
 }
 
-async function runFfmpegWithProgress(
+export async function runFfmpegWithProgress(
   args: string[],
   duration: number | undefined,
   options: AssetProcessOptions,
 ) {
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(ffmpegInstaller.path, args, {
-      windowsHide: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+  let progressBuffer = '';
+  let errorOutput = '';
+  let lastProgress = 0;
+  if (duration) options.onProgress?.(0.01);
 
-    let progressBuffer = '';
-    let errorOutput = '';
-    let lastProgress = 0;
-    if (duration) options.onProgress?.(0.01);
+  const emitProgress = (progress: number) => {
+    const nextProgress = Math.max(lastProgress, Math.min(progress, 0.99));
+    lastProgress = nextProgress;
+    options.onProgress?.(nextProgress);
+  };
 
-    const emitProgress = (progress: number) => {
-      const nextProgress = Math.max(lastProgress, Math.min(progress, 0.99));
-      lastProgress = nextProgress;
-      options.onProgress?.(nextProgress);
-    };
-
-    child.stdout.setEncoding('utf8');
-    child.stdout.on('data', (chunk: string) => {
-      progressBuffer += chunk;
+  const code = await runFfmpeg(args, {
+    signal: options.signal,
+    onStdout: (chunk) => {
+      progressBuffer += chunk.toString('utf8');
       const lines = progressBuffer.split(/\r?\n/);
       progressBuffer = lines.pop() ?? '';
       for (const line of lines) {
         const progress = parseProgressLine(line, duration);
         if (progress !== undefined) emitProgress(progress);
       }
-    });
-
-    child.stderr.setEncoding('utf8');
-    child.stderr.on('data', (chunk: string) => {
+    },
+    onStderr: (chunk) => {
       errorOutput = `${errorOutput}${chunk}`.slice(-8000);
       const hadDuration = Boolean(duration);
       const parsedDuration = parseDuration(errorOutput);
@@ -804,32 +820,11 @@ async function runFfmpegWithProgress(
       }
       const progress = parseStatsProgress(chunk, duration);
       if (progress !== undefined) emitProgress(progress);
-    });
-
-    const signal = options.signal;
-    const abort = () => child.kill('SIGKILL');
-    signal?.addEventListener('abort', abort, { once: true });
-
-    child.on('error', (error) => {
-      signal?.removeEventListener('abort', abort);
-      reject(error);
-    });
-    child.on('close', (code) => {
-      signal?.removeEventListener('abort', abort);
-      if (signal?.aborted) {
-        reject(signal.reason);
-        return;
-      }
-      if (code === 0) {
-        options.onProgress?.(1);
-        resolve();
-        return;
-      }
-      reject(
-        new Error(errorOutput.trim() || `ffmpeg exited with code ${code}`),
-      );
-    });
+    },
   });
+  if (code !== 0)
+    throw new Error(errorOutput.trim() || `ffmpeg exited with code ${code}`);
+  options.onProgress?.(1);
 }
 
 function splitFfmpegOptions(options: string[]): string[] {

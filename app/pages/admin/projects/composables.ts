@@ -152,19 +152,15 @@ export const saveAfterContentEditKey = Symbol(
 ) as InjectionKey<() => void>;
 
 /**
- * Lets a stage or section modal ask the project form to save itself once that
- * one item — added or edited — is the only difference from the last save.
- * `item` is the item as the form now holds it; `itemUuid` names its stored
- * counterpart (none while it was never saved).
+ * Lets a section's modal ask the project form to save itself once that one
+ * section — added or edited — is the only difference from the last save.
+ * `item` is the section as the form now holds it; `sectionUuid` names its
+ * stored counterpart (none while it was never saved).
  *
- * Removing an item never asks: it waits for the project's own Save button, and
+ * Removing a section never asks: it waits for the project's own Save button, and
  * while it waits, it is a difference that keeps every later edit from saving
  * the project by itself too.
  */
 export const saveAfterItemEditKey = Symbol('saveAfterItemEdit') as InjectionKey<
-  (
-    list: 'stages' | 'contentSections',
-    item: object,
-    itemUuid: string | undefined,
-  ) => void
+  (item: object, sectionUuid: string | undefined) => void
 >;

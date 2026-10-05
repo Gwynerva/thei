@@ -295,6 +295,8 @@ abstract class ContentInlineLinkTool extends ContentInlineMarkupTool<ContentInli
               existing.dataset.entityId,
             )
           : undefined,
+      initialFragment:
+        existing?.getAttribute('data-entity-fragment') ?? undefined,
       apply: (label, attributes) => this.applyLink(label, attributes),
     };
   }

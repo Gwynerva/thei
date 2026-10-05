@@ -35,18 +35,19 @@ export function useSiteAnalytics(options: {
   );
 
   useHead({
+    // No `key` here: unhead leaves a keyed meta tag unmarked in the server's
+    // markup, so the browser would not know the tag for its own and would
+    // write a second one beside it.
     meta: computed(() => {
       const value = options.analytics.value;
-      const tags: { key: string; name: string; content: string }[] = [];
+      const tags: { name: string; content: string }[] = [];
       if (value?.googleSiteVerification)
         tags.push({
-          key: 'google-site-verification',
           name: 'google-site-verification',
           content: value.googleSiteVerification,
         });
       if (value?.yandexVerification)
         tags.push({
-          key: 'yandex-verification',
           name: 'yandex-verification',
           content: value.yandexVerification,
         });

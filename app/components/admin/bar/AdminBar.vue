@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { AdminBarButtonProps } from './AdminBarButton.vue';
 import {
-  publicIdFromProjectChildUrlPart,
+  publicIdFromProjectSectionUrlPart,
   publicIdFromProjectUrlPart,
 } from '#layers/thei/shared/project-url';
 import { publicIdFromTagUrlPart } from '#layers/thei/shared/tag-url';
@@ -65,21 +65,16 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
   if (registeredContextButton.value?.routePath === route.path)
     return registeredContextButton.value.props;
 
-  // A stage or a section has no editor of its own: the button opens the
-  // project's editor with that part's modal already open.
-  const child = /^\/projects\/([^/]+)\/(stages|sections)\/([^/]+)\/$/.exec(
-    route.path,
-  );
+  // A section has no editor of its own: the button opens the project's
+  // editor with that section's modal already open.
+  const child = /^\/projects\/([^/]+)\/sections\/([^/]+)\/$/.exec(route.path);
   if (child) {
     const projectId = publicIdFromProjectUrlPart(child[1]!);
-    const childId = publicIdFromProjectChildUrlPart(child[3]!);
-    const isStage = child[2] === 'stages';
+    const sectionId = publicIdFromProjectSectionUrlPart(child[2]!);
     return {
-      to: `/admin/projects/${projectId}/edit/?${isStage ? 'stage' : 'section'}=${encodeURIComponent(childId)}`,
+      to: `/admin/projects/${projectId}/edit/?section=${encodeURIComponent(sectionId)}`,
       icon: 'edit',
-      title: isStage
-        ? phrase.value.edit_project_stage
-        : phrase.value.edit_content_section,
+      title: phrase.value.edit_content_section,
     };
   }
 

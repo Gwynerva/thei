@@ -113,8 +113,7 @@ export function splitShareLinkRemaining(ms: number): {
 
 /**
  * The entity whose share link opens something: the thing itself for a
- * project, event, page or diary entry, and the project for its stages and
- * sections.
+ * project, event, page or diary entry, and the project for its sections.
  */
 export interface ShareGrantOwner {
   entityType: ShareLinkEntityType;

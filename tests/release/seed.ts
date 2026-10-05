@@ -361,7 +361,7 @@ function createSite(
         },
       ],
       externalLinks: [
-        { url: offline('north'), name: 'Сайт проекта', isPrivate: false },
+        { url: offline('north'), note: 'Сайт проекта', isPrivate: false },
       ],
       tags: [{ title: 'Бенч' }, { title: 'Release' }],
       iconAssetUuid: files.picture,
@@ -573,17 +573,21 @@ export function checkSeedSite(server: Server, manifest: SeedManifest): void {
       `${entity.kind} "${entity.name}" opens (${response.status})`,
     );
     if (entity.kind === 'projects') {
+      // Until 0.0.4 a project kept stages and sections apart; since then a
+      // stage is a section with dates, and they come back as one list.
+      const parts =
+        (body.sections ?? body.contentSections ?? []).length +
+        (body.stages?.length ?? 0);
+      const expected = (entity.stages ?? 0) + (entity.sections ?? 0);
       check(
-        body.stages?.length === entity.stages &&
-          body.contentSections?.length === entity.sections,
-        `"${entity.name}" keeps ${entity.stages} stage(s) and ${entity.sections} section(s)`,
+        parts === expected,
+        `"${entity.name}" keeps its ${expected} part(s) (${parts})`,
       );
     }
     if (entity.links) {
-      // A link keeps the words written for it: its name until 0.0.3, and
-      // since then its note.
+      // A link keeps the words written for it, its note.
       const words = (body.externalLinks ?? []).map(
-        (link: { note?: string; name?: string }) => link.note ?? link.name,
+        (link: { note?: string }) => link.note,
       );
       check(
         JSON.stringify(words) === JSON.stringify(entity.links),
@@ -617,12 +621,23 @@ export function checkSeedSite(server: Server, manifest: SeedManifest): void {
     'the profile keeps its slogan',
   );
 
-  const lost = manifest.sitemap.filter((path) => {
+  const answers = (path: string) => {
     const status = api(server, 'GET', path, undefined, {
       visitor: true,
     }).status;
-    return !(status >= 200 && status < 400);
-  });
+    return status >= 200 && status < 400;
+  };
+  // Stage addresses are dropped on purpose in 0.0.4, not redirected: a stage
+  // became a section with the same slug and public ID, and has to answer at
+  // that section's address instead.
+  const lost = manifest.sitemap.filter(
+    (path) =>
+      !answers(path) &&
+      !(
+        /^\/projects\/[^/]+\/stages\/[^/]+\/$/.test(path) &&
+        answers(path.replace(/\/stages\//, '/sections/'))
+      ),
+  );
   check(
     lost.length === 0,
     `all ${manifest.sitemap.length} addresses the site had answer${failing(lost)}`,

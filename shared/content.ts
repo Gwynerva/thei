@@ -1,5 +1,6 @@
 import { normalizeImageAccent } from './accent-color';
 import { AssetType, type ArchivedOriginalFileMeta } from './asset';
+import { normalizeAudioDescriptor, type AudioDescriptor } from './audio';
 import type { MediaDescriptor } from './media';
 import { normalizeExternalLinkUrl, type ExternalLink } from './external-link';
 import {
@@ -12,12 +13,19 @@ import {
   isContentEntityType,
   normalizeContentInlineHtml,
   normalizeContentText,
+  normalizeLinkFragment,
 } from './content-link';
+import {
+  normalizeHeadingText,
+  optionalCaption,
+  optionalHeading,
+  punctuateInlineHtml,
+  type TerminalPunctuationKind,
+} from './terminal-punctuation';
 
 export const CONTENT_OWNER_TYPES = [
   'profile',
   'project',
-  'project-stage',
   'project-section',
   'event',
   'page',
@@ -28,7 +36,6 @@ export type ContentOwnerType = (typeof CONTENT_OWNER_TYPES)[number];
 export const CONTENT_SLOTS = [
   'profile-about',
   'project-description',
-  'project-stage-body',
   'project-section-body',
   'event-body',
   'page-body',
@@ -48,6 +55,7 @@ export const CONTENT_BLOCK_TYPES = [
   'delimiter',
   'contentMedia',
   'contentGallery',
+  'contentAudio',
   'contentAttachment',
   'externalLink',
   'integration',
@@ -144,6 +152,8 @@ export interface ContentAssetData {
   extension?: string;
   size?: number;
   media?: MediaDescriptor;
+  /** Of a recording: what its player draws before it loads. */
+  audio?: AudioDescriptor;
   assetUrl?: string;
   archivedOriginal?: ArchivedOriginalFileMeta;
 }
@@ -307,7 +317,7 @@ function canonicalizeNormalizedContentData(
           },
         };
       }
-      if (block.type === 'contentAttachment') {
+      if (block.type === 'contentAttachment' || block.type === 'contentAudio') {
         return {
           ...block,
           data: {
@@ -510,6 +520,7 @@ export function contentBlockTextParts(
       collectGalleryPreviewText(textParts, (block.data as any).items);
       break;
     case 'contentAttachment':
+    case 'contentAudio':
       appendPreviewText(textParts, (block.data as any).title);
       appendPreviewText(textParts, (block.data as any).caption);
       break;
@@ -617,7 +628,7 @@ function collectNormalizedContentAssetSizeMap(
   const sizes = new Map<string, number>();
 
   for (const block of normalized.blocks) {
-    if (block.type === 'contentMedia' || block.type === 'contentAttachment') {
+    if (hasSingleContentAsset(block.type)) {
       addAssetSize(sizes, (block.data as any).asset);
       continue;
     }
@@ -648,7 +659,7 @@ function extractNormalizedContentAssetRefs(
     const isPrivate = contentBlockIsInPrivateSection(ranges, index);
     const blockId = block.id;
 
-    if (block.type === 'contentMedia' || block.type === 'contentAttachment') {
+    if (hasSingleContentAsset(block.type)) {
       const asset = normalizeContentAsset((block.data as any).asset);
       if (asset) {
         refs.push({
@@ -699,9 +710,14 @@ function addAssetSize(sizes: Map<string, number>, value: unknown) {
 }
 
 export function isContentAssetBlockType(type: ContentBlockType): boolean {
+  return hasSingleContentAsset(type) || type === 'contentGallery';
+}
+
+/** Blocks that hold one file, as `data.asset`. */
+function hasSingleContentAsset(type: ContentBlockType): boolean {
   return (
     type === 'contentMedia' ||
-    type === 'contentGallery' ||
+    type === 'contentAudio' ||
     type === 'contentAttachment'
   );
 }
@@ -756,7 +772,10 @@ function normalizeBlockData(
     case 'quote':
       return {
         text: normalizeContentInlineHtml(data.text),
-        caption: normalizeContentInlineHtml(data.caption),
+        caption: punctuatedInlineHtml(
+          normalizeContentInlineHtml(data.caption),
+          'caption',
+        ),
         alignment: data.alignment === 'center' ? 'center' : 'left',
       };
 
@@ -784,11 +803,14 @@ function normalizeBlockData(
           : [],
       };
 
+    // A recording is shaped as a file is: plain title and caption, so either
+    // turns into the other without losing a word.
     case 'contentAttachment':
+    case 'contentAudio':
       return {
         asset: normalizeContentAsset(data.asset),
-        title: optionalNormalizedText(data.title),
-        caption: optionalNormalizedText(data.caption),
+        title: optionalHeadingText(data.title),
+        caption: optionalCaptionText(data.caption),
       };
 
     case 'externalLink':
@@ -811,7 +833,11 @@ function normalizeBlockData(
         ? data.entityType
         : undefined;
       const entityId = optionalString(data.entityId)?.trim();
-      return withLinkNote({ entityType, entityId }, data.note);
+      const fragment = normalizeLinkFragment(data.fragment);
+      return withLinkNote(
+        { entityType, entityId, ...(fragment ? { fragment } : {}) },
+        data.note,
+      );
     }
 
     case 'privateSectionBoundary': {
@@ -846,6 +872,7 @@ function isContentBlockEmpty(block: ContentOutputBlock): boolean {
       return false;
 
     case 'contentMedia':
+    case 'contentAudio':
     case 'contentAttachment':
       return !normalizeContentAsset((block.data as any).asset);
 
@@ -947,6 +974,7 @@ function normalizeContentAsset(value: unknown): ContentAssetData | null {
   const assetUuid = optionalString(value.assetUuid);
   if (!assetUuid) return null;
   const archivedOriginal = normalizeArchivedOriginal(value.archivedOriginal);
+  const audio = normalizeAudioDescriptor(value.audio);
 
   return {
     assetUuid,
@@ -954,6 +982,7 @@ function normalizeContentAsset(value: unknown): ContentAssetData | null {
     extension: optionalString(value.extension),
     size: optionalNumber(value.size),
     media: normalizeMediaDescriptor(value.media),
+    ...(audio ? { audio } : {}),
     assetUrl: optionalString(value.assetUrl),
     ...(archivedOriginal ? { archivedOriginal } : {}),
   };
@@ -1019,6 +1048,11 @@ function normalizeContentMediaLayout(value: unknown): ContentMediaLayout {
   throw new ContentValidationError('Invalid content media layout');
 }
 
+/**
+ * A media caption's markup, made canonical. It runs on every keystroke in the
+ * caption, so its ending is left as typed here: that is settled where the
+ * block is, by `optionalContentMediaCaption`.
+ */
 export function normalizeContentMediaCaption(value: unknown): string {
   if (typeof value !== 'string') return '';
   return normalizeContentInlineHtml(
@@ -1027,12 +1061,26 @@ export function normalizeContentMediaCaption(value: unknown): string {
 }
 
 function optionalContentMediaCaption(value: unknown): string | undefined {
-  return normalizeContentMediaCaption(value) || undefined;
+  return (
+    punctuatedInlineHtml(normalizeContentMediaCaption(value), 'caption') ||
+    undefined
+  );
+}
+
+/** Inline markup with its ending settled, and canonical again if it moved. */
+function punctuatedInlineHtml(
+  html: string,
+  kind: TerminalPunctuationKind,
+): string {
+  const punctuated = punctuateInlineHtml(html, kind);
+  return punctuated === html ? html : normalizeContentInlineHtml(punctuated);
 }
 
 function normalizeHeaderText(value: unknown): string {
-  const text = normalizeContentText(
-    plainText(stringValue(value).replace(/<br\s*\/?>/gi, ' ')),
+  const text = normalizeHeadingText(
+    normalizeContentText(
+      plainText(stringValue(value).replace(/<br\s*\/?>/gi, ' ')),
+    ),
   );
   return text
     .replace(/&/g, '&amp;')
@@ -1166,9 +1214,12 @@ function optionalTrimmedString(value: unknown): string | undefined {
   return text || undefined;
 }
 
-function optionalNormalizedText(value: unknown): string | undefined {
-  const text = normalizeContentText(value);
-  return text || undefined;
+function optionalCaptionText(value: unknown): string | undefined {
+  return optionalCaption(normalizeContentText(value));
+}
+
+function optionalHeadingText(value: unknown): string | undefined {
+  return optionalHeading(normalizeContentText(value));
 }
 
 /**
@@ -1177,7 +1228,7 @@ function optionalNormalizedText(value: unknown): string | undefined {
  * before notes existed.
  */
 function withLinkNote<T extends object>(data: T, value: unknown) {
-  const note = optionalNormalizedText(value);
+  const note = optionalCaptionText(value);
   return note ? { ...data, note } : data;
 }
 

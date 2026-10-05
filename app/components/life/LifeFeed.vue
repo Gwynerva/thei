@@ -290,6 +290,7 @@ defineExpose({ reset, cancel, activeDate });
                 v-if="row.kind === 'gap'"
                 :duration="row.duration"
                 :tone="gapTone(row)"
+                :bridged="row.bridged"
               />
               <LifeTimelineItem
                 v-else-if="row.kind === 'point'"

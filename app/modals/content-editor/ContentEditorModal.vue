@@ -36,6 +36,7 @@ import {
 import { bindEditorMediaPaste } from '#layers/thei/app/composables/editor-media-paste';
 import {
   anyFileExtensionProfile,
+  audioExtensionProfile,
   imageExtensionProfile,
   videoExtensionProfile,
 } from '#layers/thei/shared/assets/extensions';
@@ -52,6 +53,7 @@ import ContentEntitySearchPopup from '#layers/thei/app/components/content/Conten
 import type { ContentEntitySearchItem } from '#layers/thei/shared/admin/content-entity-search';
 import {
   ContentAttachmentTool,
+  ContentAudioTool,
   ContentBoldTool,
   ContentHintTool,
   ContentStrikeTool,
@@ -703,6 +705,16 @@ onMounted(async () => {
           labels: contentToolLabels(),
         },
       },
+      contentAudio: {
+        class: ContentAudioTool,
+        inlineToolbar: false,
+        config: {
+          pickAsset,
+          editAsset,
+          uploads: audioUploads,
+          labels: contentToolLabels(),
+        },
+      },
       contentAttachment: {
         class: ContentAttachmentTool,
         inlineToolbar: false,
@@ -710,6 +722,7 @@ onMounted(async () => {
           pickAsset,
           editAsset,
           labels: contentToolLabels(),
+          audio: true,
         },
       },
       // Before externalLink: Editor.js hands a paste to the first tool whose
@@ -771,7 +784,9 @@ onMounted(async () => {
   // One binding for the whole editor: the events bubble up from whichever
   // block is being typed in, and the rules read the caret, not the target.
   cleanupSmartTypography = bindSmartTypography(holder.value!);
-  cleanupMediaPaste = bindEditorMediaPaste(holder.value!, editor);
+  cleanupMediaPaste = bindEditorMediaPaste(holder.value!, editor, {
+    audio: true,
+  });
   cleanupGutterClick = bindEditorGutterClick(holder.value!, editor);
   cleanupCurrentBlock = bindEditorCurrentBlock(holder.value!, editor, {
     // The blocks whose Enter is Editor.js's own: split, before, after.
@@ -916,31 +931,35 @@ async function pickAssets(kind: ContentEditorAssetKind) {
 
 /** Pasted files on their way into the library; closing the editor asks first. */
 const pendingUploads = ref(0);
-const uploads: ContentEditorUploads = {
-  constraints: {
-    maxSize: contentAssetOptions('media').maxSize,
-    sizeLimitPolicy: contentAssetOptions('media').sizeLimitPolicy,
-    acceptedExtensions: acceptedExtensionsFromAccept(
-      contentAssetOptions('media').accept!,
-    ),
-  },
-  editPending: async (pending) => {
-    try {
-      const edited = await launchPendingFileEditor(pending, {
-        ...contentAssetOptions('media'),
-        usageDelta: await buildDraftUsageDelta(),
-      });
-      return edited ? mapAsset(edited) : undefined;
-    } catch (error) {
-      console.error(error);
-      errorMessage.value = phrase.value.content_asset_pick_error;
-      return undefined;
-    }
-  },
-  track: (delta) => {
-    pendingUploads.value += delta;
-  },
-};
+const uploads = pastedUploads('media');
+const audioUploads = pastedUploads('audio');
+
+function pastedUploads(kind: ContentEditorAssetKind): ContentEditorUploads {
+  const options = contentAssetOptions(kind);
+  return {
+    constraints: {
+      maxSize: options.maxSize,
+      sizeLimitPolicy: options.sizeLimitPolicy,
+      acceptedExtensions: acceptedExtensionsFromAccept(options.accept!),
+    },
+    editPending: async (pending) => {
+      try {
+        const edited = await launchPendingFileEditor(pending, {
+          ...options,
+          usageDelta: await buildDraftUsageDelta(),
+        });
+        return edited ? mapAsset(edited) : undefined;
+      } catch (error) {
+        console.error(error);
+        errorMessage.value = phrase.value.content_asset_pick_error;
+        return undefined;
+      }
+    },
+    track: (delta) => {
+      pendingUploads.value += delta;
+    },
+  };
+}
 
 function editAsset(current: ContentAssetData, kind: ContentEditorAssetKind) {
   return runModalFlow(() => runEditAsset(current, kind));
@@ -992,17 +1011,25 @@ async function replaceAsset(
 }
 
 function contentAssetOptions(kind: ContentEditorAssetKind): AssetWizardOptions {
-  return kind === 'media'
-    ? {
-        accept: [imageExtensionProfile, videoExtensionProfile],
-        maxSize: ASSET_UPLOAD_LIMITS.media,
-        sizeLimitPolicy: 'media',
-      }
-    : {
-        accept: anyFileExtensionProfile,
-        maxSize: ASSET_UPLOAD_LIMITS.file,
-        sizeLimitPolicy: 'file',
-      };
+  if (kind === 'media')
+    return {
+      accept: [imageExtensionProfile, videoExtensionProfile],
+      maxSize: ASSET_UPLOAD_LIMITS.media,
+      sizeLimitPolicy: 'media',
+    };
+  // A recording may be long: an hour of WAV is over half a gigabyte, so it
+  // has a file's limit. Its Opus copy, `weba`, is an audio extension too.
+  if (kind === 'audio')
+    return {
+      accept: audioExtensionProfile,
+      maxSize: ASSET_UPLOAD_LIMITS.file,
+      sizeLimitPolicy: 'file',
+    };
+  return {
+    accept: anyFileExtensionProfile,
+    maxSize: ASSET_UPLOAD_LIMITS.file,
+    sizeLimitPolicy: 'file',
+  };
 }
 
 async function buildDraftUsageDelta() {
@@ -1049,6 +1076,7 @@ function contentAssetReplaceResult(
     extension: asset.extension ?? '',
     size: asset.size ?? 0,
     media: asset.media,
+    ...(asset.audio ? { audio: asset.audio } : {}),
     assetUrl: asset.assetUrl ?? asset.media?.src ?? '',
   };
 }
@@ -1063,6 +1091,9 @@ function contentToolLabels() {
     addMedia: phrase.value.content_add_media,
     removeMedia: phrase.value.delete,
     chooseFile: phrase.value.content_choose_file,
+    chooseAudio: phrase.value.content_choose_audio,
+    audioAsFile: phrase.value.content_audio_as_file,
+    audioAsPlayer: phrase.value.content_audio_as_player,
     caption: phrase.value.content_caption,
     mediaCentered: phrase.value.content_media_centered,
     mediaNatural: phrase.value.content_media_natural,
@@ -1114,6 +1145,7 @@ function editorJsI18nMessages() {
       Delimiter: text.delimiter,
       Media: text.media,
       Gallery: text.gallery,
+      Audio: text.audio,
       File: text.file,
     },
     tools: {

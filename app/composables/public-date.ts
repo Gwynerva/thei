@@ -1,7 +1,7 @@
 import type { DateRange } from '#layers/thei/shared/date-range';
 import {
   formatAbsolutePublicDate,
-  formatPublicDateRange,
+  formatPublicPeriodAtPrecision,
   toUtcDate,
 } from '#layers/thei/shared/public-date-format';
 import {
@@ -33,7 +33,8 @@ export type PublicDatePresentation = {
 
 export type PublicDatePresentationOptions = {
   relativeMonths?: number;
-  style?: 'long' | 'short';
+  /** `abbreviated` names the month shortly, "9 Mar 2026", for a small card. */
+  style?: 'long' | 'short' | 'abbreviated';
   /**
    * How the doubt should be worded. The composable knows the precision but not
    * the language, so the caller hands it the phrases.
@@ -105,7 +106,13 @@ export function getPublicDatePresentation(
   const style = options.style ?? 'long';
   if (typeof value !== 'string') {
     return withPrecision(
-      { label: formatPublicDateRange(value, locale, style) },
+      {
+        label: formatPublicPeriodAtPrecision(
+          value as DatedPeriod,
+          locale,
+          style,
+        ),
+      },
       value,
       options,
     );
@@ -117,7 +124,7 @@ export function getPublicDatePresentation(
     locale,
     now,
     options.relativeMonths ?? 1,
-    style,
+    style === 'abbreviated' ? 'short' : style,
   );
   return relative
     ? {

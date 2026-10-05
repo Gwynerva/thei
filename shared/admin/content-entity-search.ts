@@ -1,4 +1,5 @@
 import type { ContentEntityType } from '../content-link';
+import { dayQueryRank, parseDayQuery, type DayQuery } from '../day-query';
 import type { MediaDescriptor } from '../media';
 import {
   containsPhrase,
@@ -18,7 +19,7 @@ export type ContentEntitySearchItem = {
   publicId?: string;
   /** The day of a diary entry, which stands in for its missing title. */
   date?: string;
-  /** The project a stage or a section belongs to. */
+  /** The project a section belongs to. */
   parent?: { title: string; href: string };
   updatedAt: number;
   previewMedia?: MediaDescriptor;
@@ -41,41 +42,24 @@ export const CONTENT_ENTITY_SEARCH_MAX_LIMIT = 20;
 export const CONTENT_ENTITY_SUGGEST_TEXT_LIMIT = 300;
 
 /**
- * A list led by what the caller prefers — the entities a text already links
- * to — in the order given, and filled with what `rankRest` picks from the
- * others, `limit` in all. Preferred keys that name nothing on offer are
- * skipped; the preferred never push the list past its limit, they only take
- * its first places.
+ * The entities named by `type:uuid` keys — the ones a text links to, say —
+ * in the order the keys give, `limit` at most. A key that names nothing on
+ * offer is skipped, and a repeated one counts once.
  */
-export function preferContentEntities<
+export function pickContentEntities<
   T extends Pick<ContentEntitySearchItem, 'entityType' | 'entityId'>,
->(
-  items: T[],
-  preferred: readonly string[],
-  limit: number,
-  rankRest: (rest: T[], room: number) => T[],
-): T[] {
+>(items: T[], keys: readonly string[], limit: number): T[] {
   const byKey = new Map(
     items.map((item) => [`${item.entityType}:${item.entityId}`, item]),
   );
-  const first = [
+  return [
     ...new Set(
-      preferred.flatMap((key) => {
+      keys.flatMap((key) => {
         const item = byKey.get(key);
         return item ? [item] : [];
       }),
     ),
   ].slice(0, limit);
-  const room = limit - first.length;
-  if (room <= 0) return first;
-  const taken = new Set<T>(first);
-  return [
-    ...first,
-    ...rankRest(
-      items.filter((item) => !taken.has(item)),
-      room,
-    ).slice(0, room),
-  ];
 }
 
 type Rankable = {
@@ -98,65 +82,53 @@ export function rankContentEntities<T extends Rankable>(
         (a, b) => b.updatedAt - a.updatedAt || a.title.localeCompare(b.title),
       )
       .slice(0, limit);
-  const day = normalizeDayQuery(normalized);
-  return items
-    .map((item) => ({ item, rank: bestRank(item, normalized, day) }))
-    .filter(({ rank }) => Number.isFinite(rank))
-    .sort((a, b) => a.rank - b.rank || a.item.title.localeCompare(b.item.title))
-    .slice(0, limit)
-    .map(({ item }) => item);
-}
-
-function bestRank(item: Rankable, query: string, day?: string) {
-  // A diary entry has no name to search by, only its day, which a person
-  // types either way round: `2024.05.12` or `12.05.2024`.
-  const fields = item.date
-    ? day
-      ? [item.date, dayFirst(item.date)]
-      : []
-    : [item.title, item.publicId, item.humanReadableSlug];
-  const needle = item.date ? day! : query;
-  let best = Number.POSITIVE_INFINITY;
-  fields
-    .filter((value): value is string => Boolean(value))
-    .map((value) => value.toLocaleLowerCase())
-    .forEach((value, index) => {
-      const rank =
-        value === needle
-          ? 0
-          : value.startsWith(needle)
-            ? 1
-            : value.includes(needle)
-              ? 2
-              : 3;
-      if (rank < 3) best = Math.min(best, index * 10 + rank);
-    });
-  return best;
-}
-
-/**
- * A query that looks like a day or part of one, with its separators made
- * `-` and one-digit parts padded — `5.3.2024` becomes `05-03-2024` — so it
- * compares with an entry's day in either order. Anything else is not a day.
- */
-export function normalizeDayQuery(query: string): string | undefined {
-  if (!/^\d{1,4}(?:[.\-/ ]\d{1,4}){0,2}[.\-/ ]?$/.test(query)) return undefined;
-  const parts = query.split(/[.\-/ ]/).filter(Boolean);
-  const complete = parts.length === 3;
+  const day = parseDayQuery(query);
   return (
-    parts
-      .map((part, index) =>
-        part.length === 1 && (complete || index < parts.length - 1)
-          ? `0${part}`
-          : part,
+    items
+      .map((item) => ({ item, rank: bestRank(item, normalized, day) }))
+      .filter(({ rank }) => Number.isFinite(rank))
+      // Diary entries found equally well come newest first: of the days of a
+      // month or a year, the recent ones are the likely link.
+      .sort(
+        (a, b) =>
+          a.rank - b.rank ||
+          (b.item.date ?? '').localeCompare(a.item.date ?? '') ||
+          a.item.title.localeCompare(b.item.title),
       )
-      .join('-') + (/[.\-/ ]$/.test(query) ? '-' : '')
+      .slice(0, limit)
+      .map(({ item }) => item)
   );
 }
 
-/** `2024-05-12` → `12-05-2024`. */
-function dayFirst(date: string) {
-  return date.split('-').reverse().join('-');
+/**
+ * How well an entity answers a query, lower being better: by its title, then
+ * its public ID, then its slug — the whole of one, its start, or any part of
+ * it; 0 to 2 for the title, 10 to 12 for the public ID, and so on.
+ *
+ * A diary entry has no name to search by, only its day, written however the
+ * person is used to (`day-query.ts`): a whole day as written ranks with a
+ * whole title, a month or a year with a title found in part.
+ */
+function bestRank(item: Rankable, query: string, day?: DayQuery) {
+  if (item.date)
+    return (day && dayQueryRank(item.date, day)) ?? Number.POSITIVE_INFINITY;
+  let best = Number.POSITIVE_INFINITY;
+  [item.title, item.publicId, item.humanReadableSlug].forEach(
+    (value, index) => {
+      if (!value) return;
+      const field = value.toLocaleLowerCase();
+      const rank =
+        field === query
+          ? 0
+          : field.startsWith(query)
+            ? 1
+            : field.includes(query)
+              ? 2
+              : 3;
+      if (rank < 3) best = Math.min(best, index * 10 + rank);
+    },
+  );
+  return best;
 }
 
 type Suggestible = Rankable & { summary: string };

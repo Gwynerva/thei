@@ -5,6 +5,7 @@ import {
 } from '#layers/thei/server/thei/content/repository';
 import { upsertExternalLink } from '#layers/thei/server/thei/external-links/repository';
 import sharp from 'sharp';
+import { ne } from 'drizzle-orm';
 import { AssetType } from '#layers/thei/shared/asset';
 import {
   storeAsset,
@@ -18,14 +19,18 @@ export default defineEventHandler(async (event) => {
   const { db, schema } = THEI_SERVER.useDb();
   // This route only exists in the isolated fixture. Keep repeated runs deterministic.
   db.transaction((tx) => {
+    // A file's preview belongs to the file, which stays: a file left without
+    // one shows itself in its place, as no site ever does, and a spec that
+    // reuses its bytes would see that instead of the preview.
+    tx.delete(schema.assetUsages)
+      .where(ne(schema.assetUsages.containerType, 'asset'))
+      .run();
     for (const table of [
       schema.content,
       schema.contentHistory,
-      schema.assetUsages,
       schema.pages,
-      schema.projectStages,
       schema.projectContentSections,
-      schema.stagePeriods,
+      schema.periods,
       schema.projects,
       schema.events,
       // A day holds one entry: one left from an earlier run takes the day a

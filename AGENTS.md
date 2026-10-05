@@ -11,6 +11,7 @@ This section takes precedence over any other guidance, default or caution about 
   - or insert a row into the `sign-in-links` table of `.playground/content/thei.db` with `tokenHash = hashAccessToken(token)` (`server/thei/access-links/token.ts`), open `/sign-in/link/<token>/` and press its button.
 - A session belongs to the host name, and cookies ignore the port. Open the playground as `localhost:3000` and the browser test fixture as `127.0.0.1:3001`, so that signing in to one never replaces the session of the other.
 - Never sign out of or replace a session the user made. Never save a new secret phrase or password in Settings: that ends every other session and drops `password.fallback`.
+- Switch the theme whenever a check needs it, in any browser and without asking: light, dark or the system's, from the gear in the header (kept per browser in `localStorage` as `thei-visuals`). It is the visitor's own setting and changes nothing on the site; an emulated `prefers-color-scheme` alone does not override a theme chosen there.
 - Sign-in attempts are limited to one every 3 seconds per address.
 
 ## What Thei Is About
@@ -21,13 +22,14 @@ There are **three main kinds of entity**, and they form a ladder of complexity. 
 
 - **Diary entries** are a single dated thought — the simplest kind. No title, no summary, no tags, no action: a date and a body, one entry per day, addressed by the day alone (`/diary/YYYY-MM-DD/`). Never give a diary entry a title field or let one grow fields it does not need; the point of it is that writing one costs nothing. Relations are the one optional structure an entry carries: they are how an entry says what it is about, and what puts it on a project's chronology.
 - **Events** are small memorable moments worth not forgetting — too small or too loose to be a project. An event may relate to other entities and carry tags, but it is never a part of a project. Call events shown on a project page "related events", never "project events" or anything that implies ownership.
-- **Projects** are self-contained, structured, substantial episodes of a life. A project is made of its own parts: **stages** (dated periods of work) and **sections** (topical write-ups), plus media, a showcase, files, links and relations to other entities.
+- **Projects** are self-contained, structured, substantial episodes of a life. A project is made of its own parts, **sections** — write-ups of one part of it, each with a body, dated periods, or both — plus media, a showcase, files, links and relations to other entities. There is one kind of section: its periods are what put it on the project's chronology and among the stages — the sections with dates it went through — read in time order; the ones without dates are general sections, read in the owner's order. The two groups are shown as two tabs, "General sections" and "Dated stages", never as two kinds: "section" stays the word for any of them, and "stage" only says where a dated one stands on the project's way ("Stage 3 of 7").
 
 Around them:
 
 - **Pages** are standalone writing that belongs to no timeline entity.
 - **Tags** are threads across projects and events. Diary entries carry none.
-- **Life** is the one timeline everything dated lands on.
+- **Banners** are 16:9 pictures a project, an event or a section may open its page with, in the same dark hero. An event's or a section's banner also stands for it on every card, ahead of the first picture of its body; a project's cards keep its icon. Diary entries have none.
+- **Life** is the one timeline everything dated lands on, once its day has come somewhere on Earth: a period still running shows by its start alone, and a day still to come waits. A card of a period marks which moment of it the card is — a start, an end, a single day, a whole stretch, or a start still running — and the edge of a start or an end is torn on the side its period goes on to.
 - **Relations** join any two of projects, events and diary entries, and are edited from either side. One row per pair, read from either side as "related", "depends on" or "affects", with a note written once or once per side. A relation is a deliberate claim; a link inside the content is only a mention. Public pages show them in a block of their own with one tab per kind, loaded a page at a time, because a project may gather hundreds of diary entries; cards name only the projects an event belongs to.
 
 ## Package Manager
@@ -38,6 +40,12 @@ Around them:
 ## Commits
 
 - Keep a commit title whole on its first line, even past the recommended length; never carry part of it into the description. Aim for about 50 characters, 72 at most: generalize when a change touches several things, leave details to the description, and do not start a title with a version.
+
+## Branches
+
+- Work towards a release goes on `release/x.y.z`, branched from `main`. It lands on `main` as one squash commit through a pull request titled "Release x.y.z", and the tag `vx.y.z` goes on that commit.
+- Never name a branch like a tag (`v0.0.4`): the installer resolves `github:Gwynerva/thei#vX.Y.Z`, which a branch of the same name makes ambiguous.
+- Delete a branch once its work is merged. GitHub removes it from `origin` on merge; remove the local one with `git branch -D` (a squash merge leaves it unmerged in git's eyes) and `git fetch --prune`. Its commits stay readable in the pull request.
 
 ## Development Servers
 
@@ -55,7 +63,7 @@ Around them:
 - Thei is updated in place over sites that already hold real content made by older versions. Check every change against that, and read `update/README.md` before touching `update/`, the boot sequence, the database schema, the shape of `content/` or `thei.config.json`, or what an instance is installed with. It says which step a change needs — a migration, an update phase or an update task — and the rules each keeps: raw SQL in migrations, a released migration never edited, file operations safe to repeat, no media processed in a migration, heavy work over content in a task, a clear `title` for the update screen.
 - A change to the Drizzle schema in `server/thei/db/schema/` needs a migration: add `update/migrations/<version>-<slug>.ts`, register it in `update/migrations/index.ts` and run `bun run db:baseline`. `tests/server/migrations-baseline.test.ts` fails when a fresh installation and an upgraded one would differ.
 - Prefer an update step over teaching the engine or the UI about an older shape. When a change leaves existing content, config or files in an older shape, convert them once with a migration, phase or task, and let the rest of the code assume only the current shape: no fallbacks for fields a migration guarantees, no `legacy*` branches, no optional types kept for old rows. Only a conversion that would be exceptionally heavy or slow is weighed separately, and the decision is written down where the compatibility code lives.
-- What an update step cannot reach is not legacy data: published URLs, backup clients installed on other machines, a panel of the previous release still open in a browser. Keep compatibility with those deliberately, and say so where it lives.
+- What an update step cannot reach gets no compatibility either, unless the task asks for it in so many words: published URLs, API parameters and response fields, backup clients installed on other machines, a panel of the previous release still open in a browser. When a change moves an address, a format or a behaviour, the old one goes: no redirects from former URLs, no reading of retired parameters, no fallbacks for an older client. Dead functionality is not carried along.
 - Keep the layer consumable from `node_modules`. Do not assume this repository is the project root, do not import a `devDependency` from runtime code, and declare every runtime import in `dependencies`. The published instance runs the layer from `node_modules/thei`, where an undeclared or dev-only dependency is simply absent.
   - Two exceptions come from the instance manifest instead, as peers of the layer: `nuxt`, and `better-sqlite3` as an optional peer. An update installs the new engine under the previous release's manifest first, and that manifest trusts `better-sqlite3`, so Bun would build a newer one from source — it ignores `gypfile: false` — with nothing to build it with. As an optional peer it is absent until the new manifest brings it, untrusted: it carries its binaries and must never be compiled (see `update/README.md`).
 - Development reads everything from `node_modules`; a build carries only what it traces, and writes its own directory afresh. Check anything read from disk at runtime — fonts, wasm, templates, server assets — in a production build: `bun run test:e2e` runs one, and the release bench builds a real instance.
@@ -78,7 +86,7 @@ Around them:
 
 ## Public Text and Machine Readers
 
-- Every public project, event, stage, section and page is also served as Markdown at `<url>index.md`, built from the same `buildPublic*` functions with the visibility of a stranger. A representation must never be more permissive than the page it mirrors: build it for `STRANGER` (`server/thei/access-links/viewer.ts`), never for the request's own viewer.
+- Every public project, event, project section and page is also served as Markdown at `<url>index.md`, built from the same `buildPublic*` functions with the visibility of a stranger. A representation must never be more permissive than the page it mirrors: build it for `STRANGER` (`server/thei/access-links/viewer.ts`), never for the request's own viewer.
 - `/llms.txt` describes the site and what its entities mean. Keep it short and factual; it is a map, not a marketing page.
 - Open Graph cards are rendered on the server from the same public data. Only publicly openable entities get one, so a preview never shows what a visitor is about to be refused.
   - A card's content is built for `STRANGER` in `server/thei/og/content/` with the builders the page uses, and counts what the page counts. Layouts draw only that content (`server/thei/og/model.ts`); which layout and tone a card takes is chosen from it (`design.ts`), never set by hand.
@@ -86,6 +94,7 @@ Around them:
   - A page takes its card's address and description from `/api/og/<kind>/<id>`; the version in it is built from what the card shows, so never assemble one on the page.
 - Structured data (JSON-LD) says what a page is, not what Thei calls its entity; `usePublicSeo` (`app/composables/public-seo.ts`) lists the type of each page. An event is never a schema.org `Event`: search engines read that as a public gathering and reject one without a venue.
 - Everything the owner typed is stored exactly as typed and passes through the formatter on the way out: `publicText()` / `publicRichText()` (`app/composables/public-text.ts`) in the app, `ownerText()` / `ownerRichText()` (`server/thei/owner-text.ts`) on the server. That covers every place such text is shown or read: public pages and admin lists, cards, tooltips, `aria-label`s, `<title>`, meta tags and structured data, Open Graph cards, Markdown copies and `/llms.txt`. A new place that shows the owner's words formats them in the same change.
+- One part of the owner's words is settled on the way in instead: the last mark of a caption or a heading (`shared/terminal-punctuation.ts`). A caption — under a picture, on a tile, on a file, a link note, a status — takes no full stop when it is one sentence and ends with a mark when it has several; a heading — a title, a heading block, a file's title, a period's label — never ends with a full stop; `?`, `!`, `…` and an abbreviation's full stop stay. It runs where a value is validated or a block normalized, never while it is typed, and update task `0.0.4/004` settled what was stored before. A new caption or heading field goes through it in the same change.
 - The exceptions are few and deliberate: a value inside a field being edited, anything used as an identifier or compared (slug, URL, hostname, file name, search key), and text fetched from other sites, such as a linked page's own title and description (the owner's note on the link is theirs and is formatted). Never write formatted text back to storage.
 
 ## File Storage

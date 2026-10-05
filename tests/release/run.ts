@@ -132,11 +132,11 @@ function crawlSitemap(target: Server): void {
   const failures: string[] = [];
   for (const path of paths) {
     const candidates = [path];
-    // Entities — projects with their stages and sections, events, diary days
-    // and pages — are served as Markdown too; lists and views are not.
+    // Entities — projects with their sections, events, diary days and pages
+    // — are served as Markdown too; lists and views are not.
     if (
       /^\/(projects|events|pages|diary)\/[^/]+\/$/.test(path) ||
-      /^\/projects\/[^/]+\/(stages|sections)\/[^/]+\/$/.test(path)
+      /^\/projects\/[^/]+\/sections\/[^/]+\/$/.test(path)
     ) {
       candidates.push(`${path}index.md`);
     }

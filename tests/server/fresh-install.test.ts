@@ -38,7 +38,7 @@ describe('fresh database installation', () => {
       expect(tables).toEqual(
         expect.arrayContaining([
           'pages',
-          'project-stages',
+          'periods',
           'project-content-sections',
           'assets',
           'content',
@@ -53,7 +53,6 @@ describe('fresh database installation', () => {
       expect(indexes).toEqual(
         expect.arrayContaining([
           'pages_slug_unique',
-          'project-stages-public-id-unique',
           'project-content-sections-public-id-unique',
           'content-owner-slot-idx',
         ]),
@@ -65,8 +64,8 @@ describe('fresh database installation', () => {
       ).toThrow(/NOT NULL/);
       expect(() =>
         context.rawDb
-          .prepare('INSERT INTO "stage-periods" VALUES (?, ?, ?, ?, ?, ?, ?)')
-          .run('invalid', 'id', 0, '2026', '2026', 'exact', ''),
+          .prepare('INSERT INTO "periods" VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+          .run('project-stage', 'id', 0, '2026', '2026', 'exact', '', ''),
       ).toThrow(/CHECK/);
       const statusColumns = context.rawDb
         .pragma("table_info('statuses')")

@@ -7,8 +7,8 @@ import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
  * The card a link to one of the site's own entities is shown as — a link
  * block in content, or the popup over an inline link.
  *
- * Every kind gets the same card and says what it is with its glyph. A stage
- * or a section also names its project above its title, since "Launch" alone
+ * Every kind gets the same card and says what it is with its glyph. A
+ * section also names its project above its title, since "Launch" alone
  * does not say whose launch it was; a diary entry is titled by its day and
  * quotes its opening lines in italics, as its own card on the timeline does.
  * A target with a picture of its own shows it along the right edge. The
@@ -22,7 +22,7 @@ const props = defineProps<{
   note?: string;
   /** The day of a diary entry; formatted in place of the title. */
   date?: string;
-  /** The project a stage or a section belongs to. */
+  /** The project a section belongs to. */
   parent?: { title: string; href: string };
   iconMedia?: MediaDescriptor;
   href?: string;
@@ -78,7 +78,7 @@ const heading = computed(() => publicText(entityDisplayTitle(props)));
       gets room for the halo all round.
     -->
     <span
-      class="entity-preview-text relative z-1 flex min-w-0 flex-1 flex-col"
+      class="relative z-1 flex min-w-0 flex-1 flex-col text-halo-bg-2"
       :class="[
         compact ? 'gap-0.5' : 'gap-1',
         iconMedia
@@ -88,6 +88,7 @@ const heading = computed(() => publicText(entityDisplayTitle(props)));
           : '',
         { 'm-xs': flush },
       ]"
+      data-entity-preview-text
     >
       <span
         v-if="parent"
@@ -156,13 +157,6 @@ const heading = computed(() => publicText(entityDisplayTitle(props)));
       var(--color-bg-2)
     );
   }
-}
-
-.entity-preview-text {
-  text-shadow:
-    0 0 0.5em var(--color-bg-2),
-    0 0 0.9em var(--color-bg-2),
-    0 0.12em 0.45em var(--color-bg-2);
 }
 
 .entity-type-icon {

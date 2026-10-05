@@ -68,7 +68,10 @@ export default defineEventHandler(async (event) => {
  * A large file over a slow line can take longer than a session may stay
  * silent; every chunk sent counts as the session being alive.
  */
-function keepAlive<T extends NodeJS.ReadableStream>(sessionId: string, stream: T): T {
+function keepAlive<T extends NodeJS.ReadableStream>(
+  sessionId: string,
+  stream: T,
+): T {
   stream.on('data', () => touchBackupSession(sessionId));
   return stream;
 }

@@ -1,7 +1,10 @@
 import { buildAssetPreviewUrl } from '#layers/thei/shared/api/asset';
 import type { AssetRole } from '#layers/thei/shared/asset';
 import { AssetType, type AssetMeta } from '#layers/thei/shared/asset';
-import { buildProjectUrl } from '#layers/thei/shared/project-url';
+import {
+  buildProjectSectionUrl,
+  buildProjectUrl,
+} from '#layers/thei/shared/project-url';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
@@ -39,6 +42,18 @@ export async function buildPublicProjectMedia(
 ) {
   const media = await buildStoredMediaDescriptor(asset);
   const src = `${buildProjectUrl(project.humanReadableSlug, project.publicId)}media/${role}/${asset.slug}.${asset.extension}`;
+  return { ...media, src, previewSrc: `${src}?preview=1` };
+}
+
+/** A section's own file, such as its banner, served from its own address. */
+export async function buildPublicProjectSectionMedia(
+  project: { humanReadableSlug: string; publicId: string },
+  section: { humanReadableSlug: string; publicId: string },
+  asset: StoredAssetRecord,
+  role: AssetRole,
+) {
+  const media = await buildStoredMediaDescriptor(asset);
+  const src = `${buildProjectSectionUrl(project.humanReadableSlug, project.publicId, section.humanReadableSlug, section.publicId)}media/${role}/${asset.slug}.${asset.extension}`;
   return { ...media, src, previewSrc: `${src}?preview=1` };
 }
 

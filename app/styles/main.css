@@ -286,6 +286,133 @@
   );
 }
 
+/*
+ * A halo around words laid over a picture's dissolving edge, in the colour of
+ * the ground they stand on, so they read on any picture: `text-halo-bg-2` on
+ * a card, `text-halo-bg-1` on the page, `text-halo-(--ground)` on a ground of
+ * the element's own. Two blurs wrap the letters; a third, lower, lifts them.
+ */
+@utility text-halo-* {
+  --halo-ground: --value(--color-*, [color]);
+  text-shadow:
+    0 0 0.55em var(--halo-ground),
+    0 0 0.9em var(--halo-ground),
+    0 0.1em 0.45em var(--halo-ground);
+}
+
+/*
+ * A round marker on a rail, shaded towards its middle so the white shape on
+ * it stands out of the colour: `marker-shade-accent` on the life rail and in
+ * a chronology, `marker-shade-text-warning` for what is new.
+ */
+@utility marker-shade-* {
+  --marker-shade: --value(--color-*, [color]);
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--marker-shade), black 20%) 0%,
+    var(--marker-shade) 72%
+  );
+}
+
+/*
+ * A mask clear up to `--ease-rise-from` and opaque from `--ease-rise-to`
+ * (both at the start unless given), opaque up to `--ease-from` and clear
+ * from `--ease-to`, along `--ease-direction`. Each change follows
+ * 6t⁵ − 15t⁴ + 10t³, sampled at every twentieth: it leaves and reaches the
+ * flat parts with neither slope nor curvature, so no line shows where a
+ * fade starts or ends, which a straight ramp, or even a smoothstep, still
+ * gives away on a smooth light picture.
+ *
+ * Every element states its own fade: these never pass to its children,
+ * which may be masked along other lines.
+ */
+@property --ease-direction {
+  syntax: '*';
+  inherits: false;
+}
+@property --ease-rise-from {
+  syntax: '*';
+  inherits: false;
+}
+@property --ease-rise-to {
+  syntax: '*';
+  inherits: false;
+}
+@property --ease-from {
+  syntax: '*';
+  inherits: false;
+}
+@property --ease-to {
+  syntax: '*';
+  inherits: false;
+}
+@utility mask-ease {
+  --ease-rise: calc(var(--ease-rise-to, 0%) - var(--ease-rise-from, 0%));
+  --ease-span: calc(var(--ease-to) - var(--ease-from));
+  mask-image: linear-gradient(
+    var(--ease-direction),
+    transparent var(--ease-rise-from, 0%),
+    rgb(0 0 0 / 0.116%)
+      calc(var(--ease-rise-from, 0%) + var(--ease-rise) * 0.05),
+    rgb(0 0 0 / 0.856%) calc(var(--ease-rise-from, 0%) + var(--ease-rise) * 0.1),
+    rgb(0 0 0 / 2.661%)
+      calc(var(--ease-rise-from, 0%) + var(--ease-rise) * 0.15),
+    rgb(0 0 0 / 5.792%) calc(var(--ease-rise-from, 0%) + var(--ease-rise) * 0.2),
+    rgb(0 0 0 / 10.352%)
+      calc(var(--ease-rise-from, 0%) + var(--ease-rise) * 0.25),
+    rgb(0 0 0 / 16.308%)
+      calc(var(--ease-rise-from, 0%) + var(--ease-rise) * 0.3),
+    rgb(0 0 0 / 23.517%)
+      calc(var(--ease-rise-from, 0%) + var(--ease-rise) * 0.35),
+    rgb(0 0 0 / 31.744%)
+      calc(var(--ease-rise-from, 0%) + var(--ease-rise) * 0.4),
+    rgb(0 0 0 / 40.687%)
+      calc(var(--ease-rise-from, 0%) + var(--ease-rise) * 0.45),
+    rgb(0 0 0 / 50%) calc(var(--ease-rise-from, 0%) + var(--ease-rise) * 0.5),
+    rgb(0 0 0 / 59.313%)
+      calc(var(--ease-rise-from, 0%) + var(--ease-rise) * 0.55),
+    rgb(0 0 0 / 68.256%)
+      calc(var(--ease-rise-from, 0%) + var(--ease-rise) * 0.6),
+    rgb(0 0 0 / 76.483%)
+      calc(var(--ease-rise-from, 0%) + var(--ease-rise) * 0.65),
+    rgb(0 0 0 / 83.692%)
+      calc(var(--ease-rise-from, 0%) + var(--ease-rise) * 0.7),
+    rgb(0 0 0 / 89.648%)
+      calc(var(--ease-rise-from, 0%) + var(--ease-rise) * 0.75),
+    rgb(0 0 0 / 94.208%)
+      calc(var(--ease-rise-from, 0%) + var(--ease-rise) * 0.8),
+    rgb(0 0 0 / 97.339%)
+      calc(var(--ease-rise-from, 0%) + var(--ease-rise) * 0.85),
+    rgb(0 0 0 / 99.144%)
+      calc(var(--ease-rise-from, 0%) + var(--ease-rise) * 0.9),
+    rgb(0 0 0 / 99.884%)
+      calc(var(--ease-rise-from, 0%) + var(--ease-rise) * 0.95),
+    #000 var(--ease-rise-to, 0%),
+    #000 var(--ease-from),
+    rgb(0 0 0 / 99.884%) calc(var(--ease-from) + var(--ease-span) * 0.05),
+    rgb(0 0 0 / 99.144%) calc(var(--ease-from) + var(--ease-span) * 0.1),
+    rgb(0 0 0 / 97.339%) calc(var(--ease-from) + var(--ease-span) * 0.15),
+    rgb(0 0 0 / 94.208%) calc(var(--ease-from) + var(--ease-span) * 0.2),
+    rgb(0 0 0 / 89.648%) calc(var(--ease-from) + var(--ease-span) * 0.25),
+    rgb(0 0 0 / 83.692%) calc(var(--ease-from) + var(--ease-span) * 0.3),
+    rgb(0 0 0 / 76.483%) calc(var(--ease-from) + var(--ease-span) * 0.35),
+    rgb(0 0 0 / 68.256%) calc(var(--ease-from) + var(--ease-span) * 0.4),
+    rgb(0 0 0 / 59.313%) calc(var(--ease-from) + var(--ease-span) * 0.45),
+    rgb(0 0 0 / 50%) calc(var(--ease-from) + var(--ease-span) * 0.5),
+    rgb(0 0 0 / 40.687%) calc(var(--ease-from) + var(--ease-span) * 0.55),
+    rgb(0 0 0 / 31.744%) calc(var(--ease-from) + var(--ease-span) * 0.6),
+    rgb(0 0 0 / 23.517%) calc(var(--ease-from) + var(--ease-span) * 0.65),
+    rgb(0 0 0 / 16.308%) calc(var(--ease-from) + var(--ease-span) * 0.7),
+    rgb(0 0 0 / 10.352%) calc(var(--ease-from) + var(--ease-span) * 0.75),
+    rgb(0 0 0 / 5.792%) calc(var(--ease-from) + var(--ease-span) * 0.8),
+    rgb(0 0 0 / 2.661%) calc(var(--ease-from) + var(--ease-span) * 0.85),
+    rgb(0 0 0 / 0.856%) calc(var(--ease-from) + var(--ease-span) * 0.9),
+    rgb(0 0 0 / 0.116%) calc(var(--ease-from) + var(--ease-span) * 0.95),
+    transparent var(--ease-to)
+  );
+  mask-repeat: no-repeat;
+}
+
 @layer base {
   :root {
     --width-narrow: min(700px, 100%);

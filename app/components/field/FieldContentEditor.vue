@@ -139,7 +139,7 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
         class="-ml-xs max-w-100 min-w-0 pl-xs text-sm sm:text-base"
         :class="
           preview.text
-            ? 'content-preview-text line-clamp-3 text-text-2'
+            ? 'line-clamp-3 text-text-2 text-halo-bg-1'
             : 'text-text-3 italic'
         "
       >
@@ -166,12 +166,3 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
     </span>
   </button>
 </template>
-
-<style scoped>
-.content-preview-text {
-  text-shadow:
-    0 0 0.5em var(--color-bg-1),
-    0 0 0.9em var(--color-bg-1),
-    0 0.12em 0.45em var(--color-bg-1);
-}
-</style>

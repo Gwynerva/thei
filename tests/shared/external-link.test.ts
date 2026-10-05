@@ -198,3 +198,20 @@ describe('manual link lists', () => {
     ).toThrow('External link name cannot be empty');
   });
 });
+
+describe('link notes', () => {
+  it('end as captions do', () => {
+    const fail = (message: string): never => {
+      throw new Error(message);
+    };
+    expect(
+      validateExternalLinkList(
+        [
+          { url: 'https://a.test/', note: 'Мой профиль.', isPrivate: false },
+          { url: 'https://b.test/', note: 'Код. Статьи', isPrivate: false },
+        ],
+        fail,
+      ).map((link) => link.note),
+    ).toEqual(['Мой профиль', 'Код. Статьи.']);
+  });
+});

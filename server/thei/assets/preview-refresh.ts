@@ -1,10 +1,12 @@
-import { and, eq, isNotNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
 import { AssetType } from '#layers/thei/shared/asset';
 import {
   completeVideoMeta,
   refreshMediaPreview,
   type StoredAssetRecord,
 } from './storage';
+import { svgNeedsUseSizes } from './svg-raster-input';
+import { eachWithProgress } from './each-with-progress';
 
 /**
  * Videos whose preview frame was not chosen by colour.
@@ -69,11 +71,9 @@ async function refreshPreviews(
   const console = THEI_SERVER.console.tag('Assets');
   if (assets.length)
     console.log(`Remaking the previews of ${assets.length} ${noun}...`);
-  await options.onProgress?.(0, assets.length);
 
-  let done = 0;
   let failed = 0;
-  for (const asset of assets) {
+  await eachWithProgress(assets, options.onProgress, async (asset) => {
     try {
       await refreshMediaPreview(asset);
     } catch (error) {
@@ -84,9 +84,7 @@ async function refreshPreviews(
         }`,
       );
     }
-    done += 1;
-    await options.onProgress?.(done, assets.length);
-  }
+  });
 
   if (assets.length)
     console.log(
@@ -130,4 +128,66 @@ export async function refreshSvgPreviews(
   options: RefreshPreviewsOptions = {},
 ): Promise<RefreshPreviewsResult> {
   return await refreshPreviews(await findSvgAssets(), 'SVG file(s)', options);
+}
+
+/**
+ * SVGs with a `<use>` of a sized symbol or nested drawing, which librsvg drew
+ * at the size of the whole picture until their inputs were prepared for it
+ * (`svg-raster-input.ts`).
+ * A file that cannot be read is left out: it keeps its preview either way.
+ */
+export async function findSvgAssetsWithUnsizedUses(): Promise<
+  StoredAssetRecord[]
+> {
+  const found: StoredAssetRecord[] = [];
+  // Rows of one file share its answer: the file is read once.
+  const needsByPath = new Map<string, boolean>();
+  for (const asset of await findSvgAssets()) {
+    const path = THEI_SERVER.assets.filePath(
+      asset.contentHash,
+      asset.extension,
+    );
+    if (!needsByPath.has(path))
+      needsByPath.set(path, await svgNeedsUseSizes(path).catch(() => false));
+    if (needsByPath.get(path)) found.push(asset);
+  }
+  return found;
+}
+
+export interface RefreshSvgUsePreviewsResult extends RefreshPreviewsResult {
+  /**
+   * Bitmaps saved from those SVGs. Their pixels are the file itself, drawn
+   * wrong once and for all: saving the picture again from its SVG redraws it.
+   */
+  rasterised: StoredAssetRecord[];
+}
+
+/**
+ * Draws again the previews of those SVGs, and the accent colour with them,
+ * and finds the bitmaps once saved from them.
+ */
+export async function refreshSvgUsePreviews(
+  options: RefreshPreviewsOptions = {},
+): Promise<RefreshSvgUsePreviewsResult> {
+  const assets = await findSvgAssetsWithUnsizedUses();
+  const result = await refreshPreviews(
+    assets,
+    'SVG file(s) reusing sized parts',
+    options,
+  );
+  const families = [...new Set(assets.map((asset) => asset.familyUuid))];
+  if (!families.length) return { ...result, rasterised: [] };
+  const { db, schema } = THEI_SERVER.useDb();
+  const rasterised = await db
+    .select()
+    .from(schema.assets)
+    .where(
+      and(
+        inArray(schema.assets.familyUuid, families),
+        eq(schema.assets.type, AssetType.Image),
+        ne(schema.assets.extension, 'svg'),
+        isNotNull(schema.assets.settings),
+      ),
+    );
+  return { ...result, rasterised };
 }

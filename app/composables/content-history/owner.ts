@@ -36,7 +36,7 @@ export interface ContentOwnerContext {
   ownerId(): string | undefined;
   /**
    * Whether a field of an owner not created yet is offered the latest draft
-   * written for a new one. A form for a whole new entity says yes; a stage
+   * written for a new one. A form for a whole new entity says yes; a section
    * inside a project does not, since it could not tell whose draft it is.
    */
   offersPendingDrafts: boolean;

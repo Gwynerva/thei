@@ -43,15 +43,16 @@ beforeEach(async () => {
         updatedAt: 1,
       })
       .run();
-    db.insert(schema.projectStages)
+    db.insert(schema.projectContentSections)
       .values({
-        stageUuid: `${projectUuid}-stage`,
+        sectionUuid: `${projectUuid}-section`,
         projectUuid,
-        title: `Private stage of ${projectUuid}`,
+        title: `Private section of ${projectUuid}`,
         summary: '',
-        humanReadableSlug: 'stage',
-        publicId: `${projectUuid}Stage`,
+        humanReadableSlug: 'section',
+        publicId: `${projectUuid}Section`,
         isPrivate: true,
+        sortOrder: 0,
         createdAt: 1,
         updatedAt: 1,
       })
@@ -64,10 +65,10 @@ afterEach(async () => {
   delete (globalThis as any).THEI_SERVER;
 });
 
-const stageOf = (projectUuid: string) => ({
+const sectionOf = (projectUuid: string) => ({
   kind: 'entity' as const,
-  entityType: 'project-stage' as const,
-  entityId: `${projectUuid}-stage`,
+  entityType: 'project-section' as const,
+  entityId: `${projectUuid}-section`,
 });
 
 describe('content links through a share link', () => {
@@ -76,36 +77,36 @@ describe('content links through a share link', () => {
     grants: new Set(['project:A']),
   };
 
-  it("resolves the shared project's own private stage", async () => {
+  it("resolves the shared project's own private section", async () => {
     expect(
-      await resolveContentEntityLink(holderOfA, stageOf('A'), false),
+      await resolveContentEntityLink(holderOfA, sectionOf('A'), false),
     ).toMatchObject({
       state: 'resolved',
-      title: 'Private stage of A',
-      href: '/projects/a-A/stages/stage-AStage/',
+      title: 'Private section of A',
+      href: '/projects/a-A/sections/section-ASection/',
     });
   });
 
-  it("keeps another project's private stage as a dead link", async () => {
+  it("keeps another project's private section as a dead link", async () => {
     const other = await resolveContentEntityLink(
       holderOfA,
-      stageOf('B'),
+      sectionOf('B'),
       false,
     );
     expect(other).toEqual({
-      ...stageOf('B'),
+      ...sectionOf('B'),
       state: 'broken',
       reason: 'not-found',
     });
-    expect(JSON.stringify(other)).not.toContain('Private stage of B');
+    expect(JSON.stringify(other)).not.toContain('Private section of B');
   });
 
   it('answers a stranger and the owner as before', async () => {
     expect(
-      await resolveContentEntityLink(STRANGER, stageOf('A'), false),
+      await resolveContentEntityLink(STRANGER, sectionOf('A'), false),
     ).toMatchObject({ state: 'broken' });
     expect(
-      await resolveContentEntityLink(OWNER, stageOf('B'), true),
+      await resolveContentEntityLink(OWNER, sectionOf('B'), true),
     ).toMatchObject({ state: 'resolved' });
   });
 });

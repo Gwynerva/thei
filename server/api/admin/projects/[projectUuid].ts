@@ -29,17 +29,11 @@ import {
 import { validateProjectAssets } from '../../../thei/projects/validate-assets';
 import { syncProjectActionUsages } from '../../../thei/projects/action-usages';
 import {
-  applyProjectContentSections,
-  deleteProjectContentSections,
-  getProjectContentSections,
-  prepareProjectContentSections,
+  applyProjectSections,
+  deleteProjectSections,
+  getProjectSections,
+  prepareProjectSections,
 } from '../../../thei/projects/content-sections';
-import {
-  applyProjectStages,
-  deleteProjectStages,
-  getProjectStages,
-  prepareProjectStages,
-} from '../../../thei/projects/stages';
 import {
   ProjectContentItemStorageError,
   projectContentItemIdentities,
@@ -143,19 +137,26 @@ export default defineEventHandler(async (event) => {
 
       const rawOther = await THEI_SERVER.assets.usages.findOther(projectUuid);
 
-      const [storedSections, storedStages] = await Promise.all([
-        getProjectContentSections(projectUuid),
-        getProjectStages(projectUuid),
-      ]);
+      const storedSections = await getProjectSections(projectUuid);
       // The times are the server's own record of edits, not fields of the
       // form: an item edited in its modal comes back without them, and the
       // form would read that as a change of its own.
-      const contentSections = storedSections.map(
-        ({ createdAt: _createdAt, updatedAt: _updatedAt, ...section }) =>
-          section,
-      );
-      const stages = storedStages.map(
-        ({ createdAt: _createdAt, updatedAt: _updatedAt, ...stage }) => stage,
+      const sections = await Promise.all(
+        storedSections.map(
+          async ({
+            createdAt: _createdAt,
+            updatedAt: _updatedAt,
+            ...section
+          }) => {
+            const banner =
+              section.bannerAssetUuid &&
+              (await THEI_SERVER.assets.findByUuid(section.bannerAssetUuid));
+            const bannerMedia = banner
+              ? (await buildAdminAssetUrls(banner)).media
+              : undefined;
+            return bannerMedia ? { ...section, bannerMedia } : section;
+          },
+        ),
       );
 
       const otherAssets: OtherAssetGetItem[] = await Promise.all(
@@ -214,8 +215,7 @@ export default defineEventHandler(async (event) => {
           projectUuid,
           'project-notes',
         ),
-        contentSections,
-        stages,
+        sections,
         showcaseAssets,
         otherAssets,
         relations: await getRelations({ type: 'project', id: projectUuid }),
@@ -285,12 +285,10 @@ export default defineEventHandler(async (event) => {
       );
 
       let preparedSections;
-      let preparedStages;
       try {
-        preparedStages = await prepareProjectStages(projectUuid, result.stages);
-        preparedSections = await prepareProjectContentSections(
+        preparedSections = await prepareProjectSections(
           projectUuid,
-          result.contentSections,
+          result.sections,
         );
       } catch (error) {
         if (
@@ -406,8 +404,7 @@ export default defineEventHandler(async (event) => {
           'project-notes',
           preparedNotes,
         );
-        applyProjectContentSections(tx, schema, projectUuid, preparedSections);
-        applyProjectStages(tx, schema, projectUuid, preparedStages);
+        applyProjectSections(tx, schema, projectUuid, preparedSections);
         applyRelations(
           tx,
           schema,
@@ -543,11 +540,6 @@ export default defineEventHandler(async (event) => {
         type: 'success',
         projectUuid,
         action: result.action,
-        stages: projectContentItemIdentities(
-          preparedStages,
-          (stage) => stage.stageUuid,
-          (stage) => stage.publicId,
-        ),
         sections: projectContentItemIdentities(
           preparedSections,
           (section) => section.sectionUuid,
@@ -568,8 +560,7 @@ export default defineEventHandler(async (event) => {
       );
       const { db, schema } = THEI_SERVER.useDb();
       db.transaction((tx) => {
-        deleteProjectContentSections(tx, schema, projectUuid);
-        deleteProjectStages(tx, schema, projectUuid);
+        deleteProjectSections(tx, schema, projectUuid);
         deleteStatusesForOwner(tx, schema, {
           type: 'project',
           id: projectUuid,

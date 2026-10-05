@@ -74,3 +74,16 @@ describe('page validation', () => {
     expect(pageSlugIsTaken('new-page', registered, 'about')).toBe(false);
   });
 });
+
+describe('page title endings', () => {
+  it('drop a full stop, and keep an abbreviation', () => {
+    const title = (value: string) => {
+      const result = validatePageData(pageData({ title: value }));
+      if (typeof result === 'string') throw new Error(result);
+      return result.title;
+    };
+    expect(title('Обо мне.')).toBe('Обо мне');
+    expect(title('Записи 1990 г.')).toBe('Записи 1990 г.');
+    expect(title('Кто я?')).toBe('Кто я?');
+  });
+});

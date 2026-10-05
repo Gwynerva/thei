@@ -3,8 +3,14 @@ import {
   type AssetQualityLevel,
   type AssetQualityStop,
 } from './asset-quality-levels';
-import { videoAudioBitrate, videoTargetBitrate } from './asset-upload-quality';
+import {
+  audioTargetBitrate,
+  videoAudioBitrate,
+  videoTargetBitrate,
+} from './asset-upload-quality';
 import type {
+  AssetAudioSource,
+  AssetAudioTransformSettings,
   AssetImageFormat,
   AssetVideoTransformSettings,
 } from './asset-upload-settings';
@@ -63,6 +69,40 @@ export function estimateVideoSize(
     bytes: Math.round(payload * (1 + CONTAINER_SHARE) + CONTAINER_HEAD),
     videoBitrate,
     audioBitrate,
+  };
+}
+
+export interface AudioSizeEstimate {
+  bytes: number;
+  bitrate: number;
+}
+
+/**
+ * Bits per second WebM spends around 20 ms Opus packets: a block header for
+ * each fifty times a second, and the cues.
+ */
+const AUDIO_CONTAINER_BITRATE = 3_000;
+const AUDIO_CONTAINER_HEAD = 1024;
+
+/**
+ * What a recording comes out at: the bitrate times the duration. Opus in VBR
+ * mode treats the rate as a target, not a cap. Varied sound lands near it;
+ * two channels that carry the same sound — a voice recorded in "stereo" —
+ * or long quiet stretches come out well under it, and only something as bare
+ * as a pure tone goes over. So it is approximate, like a video's.
+ */
+export function estimateAudioSize(
+  settings: AssetAudioTransformSettings,
+  source: AssetAudioSource,
+): AudioSizeEstimate | undefined {
+  if (!source.duration || !(source.duration > 0)) return undefined;
+  const bitrate = audioTargetBitrate(settings.quality, settings.mono, source);
+  return {
+    bytes: Math.round(
+      ((bitrate + AUDIO_CONTAINER_BITRATE) * source.duration) / 8 +
+        AUDIO_CONTAINER_HEAD,
+    ),
+    bitrate,
   };
 }
 

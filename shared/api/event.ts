@@ -1,6 +1,6 @@
 import type { ProjectEventAccessLevel } from '../access-level';
 import type { ContentFieldValue } from '../content';
-import type { DatedPeriod } from '../date-precision';
+import type { Period } from '../period';
 import type { ProjectActionEditData } from '../project-action';
 import type { OtherAssetGetItem } from './project';
 import type { ExternalLink, ProjectExternalLink } from '../external-link';
@@ -16,10 +16,13 @@ export type EventGetResponse = {
   access: ProjectEventAccessLevel;
   humanReadableSlug: string;
   publicId: string;
-  periods: DatedPeriod[];
+  periods: Period[];
   content: ContentFieldValue;
   reminder: string;
   notes?: ContentFieldValue;
+  bannerAssetUuid?: string;
+  bannerMedia?: MediaDescriptor;
+  bannerAssetSize?: number;
   otherAssets: OtherAssetGetItem[];
   externalLinks: ProjectExternalLink[];
   tags: TagItem[];

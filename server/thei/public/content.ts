@@ -18,6 +18,7 @@ import {
 } from '#layers/thei/shared/content';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
+import { audioDescriptorFromMeta } from '#layers/thei/shared/audio';
 import { buildProjectUrl } from '#layers/thei/shared/project-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
@@ -46,11 +47,12 @@ import { resolveEntityIconMedia } from '../media/generated-icon';
 
 /**
  * Canonical shape `normalizeContentInlineHtml` writes entity anchors in, so
- * rewriting them is an exact match rather than HTML parsing. The owner's note
- * comes last and is optional.
+ * rewriting them is an exact match rather than HTML parsing. The place inside
+ * the target and the owner's note come last, in that order, both optional; a
+ * restricted anchor is written afresh, so neither outlives the uuid.
  */
 const INLINE_ENTITY_ANCHOR = new RegExp(
-  `<a data-content-link="entity" data-entity-type="(${CONTENT_ENTITY_TYPES.join('|')})" data-entity-id="([^"]*)"(?: data-content-note="[^"]*")?>`,
+  `<a data-content-link="entity" data-entity-type="(${CONTENT_ENTITY_TYPES.join('|')})" data-entity-id="([^"]*)"(?: data-entity-fragment="[^"]*")?(?: data-content-note="[^"]*")?>`,
   'g',
 );
 
@@ -178,13 +180,14 @@ export async function buildPublicContentPreviewMedia(
 }
 
 /**
- * What stands for an event, a stage, a section or a diary entry in a card, a
+ * What stands for an event, a section or a diary entry in a card, a
  * tile or a link: the first picture of its body, or — when the body opens with
  * none — its kind's drawn icon in its own accent, exactly as a project without
- * an icon gets one. Seeded by the uuid, so a rename keeps the colour.
+ * an icon gets one. Seeded by the uuid, so a rename keeps the colour. An
+ * event's or a section's banner goes ahead of all this (`entity-banner.ts`).
  */
 export async function buildPublicEntityPreviewMedia(
-  ownerType: 'event' | 'project-stage' | 'project-section' | 'diary-entry',
+  ownerType: 'event' | 'project-section' | 'diary-entry',
   ownerId: string,
   slot: ContentSlot,
   entity: PublicContentEntity,
@@ -365,6 +368,10 @@ async function hydratePublicContentData(
       extension: asset.extension,
       size: asset.size,
       media,
+      audio:
+        asset.type === AssetType.Audio
+          ? audioDescriptorFromMeta(asset.meta)
+          : undefined,
       assetUrl: baseUrl,
       archivedOriginal:
         asset.type === AssetType.Other
@@ -391,6 +398,7 @@ async function hydratePublicContentData(
         return { ...block, data: { entityType, restricted: true } };
     } else if (
       block.type === 'contentMedia' ||
+      block.type === 'contentAudio' ||
       block.type === 'contentAttachment'
     ) {
       const assetUuid = (block.data as any).asset?.assetUuid;

@@ -1,5 +1,10 @@
 import { readConfigFile } from '#layers/thei/update/config-file';
-import { setTheiConfig, setTheiConfigHead, toTheiConfig, toTheiConfigHead } from './index';
+import {
+  setTheiConfig,
+  setTheiConfigHead,
+  toTheiConfig,
+  toTheiConfigHead,
+} from './index';
 
 function configPath() {
   return THEI_SERVER.contentPath('thei.config.json');

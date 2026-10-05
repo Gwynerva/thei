@@ -1,5 +1,16 @@
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq, inArray, like, lt, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  inArray,
+  like,
+  lt,
+  sql,
+} from 'drizzle-orm';
 import {
   CONTENT_OWNER_TYPES,
   CONTENT_SLOTS,
@@ -72,10 +83,6 @@ function ownerKeys(
   return {
     profile: { table: schema.profiles, id: schema.profiles.profileId },
     project: { table: schema.projects, id: schema.projects.projectUuid },
-    'project-stage': {
-      table: schema.projectStages,
-      id: schema.projectStages.stageUuid,
-    },
     'project-section': {
       table: schema.projectContentSections,
       id: schema.projectContentSections.sectionUuid,
@@ -833,6 +840,86 @@ function enforceFieldCap(
     excess.flatMap((revision) => revision.assetUuids),
     now,
   );
+}
+
+/** Kept texts read and written at once: each may run to megabytes. */
+const REFRESH_PAGE_SIZE = 200;
+
+/**
+ * Brings every kept draft and version in line with what a save stores today:
+ * its text canonical — the links of 0.0.4 that named a stage, the endings of
+ * captions and headings — and its fingerprint and size describing that text.
+ * Left describing the old words, a draft equal to its saved text would be
+ * offered once as different, and two versions would differ by a full stop.
+ * A row that no longer reads as a text is left as it is and reported. Only
+ * rows that changed are written, a page at a time, and progress is told once
+ * a page.
+ */
+export async function refreshContentHistoryFingerprints(
+  onProgress: (done: number, total: number) => void | Promise<void>,
+  onSkip?: (id: string, error: unknown) => void,
+) {
+  const { db, schema } = THEI_SERVER.useDb();
+  const history = schema.contentHistory;
+  const total = db.select({ value: count() }).from(history).get()?.value ?? 0;
+  let refreshed = 0;
+  let done = 0;
+  let cursor = '';
+  while (true) {
+    const rows = db
+      .select({
+        id: history.id,
+        data: history.data,
+        digest: history.digest,
+        size: history.size,
+      })
+      .from(history)
+      .where(gt(history.id, cursor))
+      .orderBy(asc(history.id))
+      .limit(REFRESH_PAGE_SIZE)
+      .all();
+    if (!rows.length) break;
+    cursor = rows.at(-1)!.id;
+    db.transaction((tx) => {
+      for (const row of rows) {
+        let described: DescribedData;
+        try {
+          described = describeHistoryData(row.data);
+        } catch (error) {
+          onSkip?.(row.id, error);
+          continue;
+        }
+        const rewritten =
+          JSON.stringify(described.data) !== JSON.stringify(row.data);
+        if (
+          !rewritten &&
+          described.digest === row.digest &&
+          described.size === row.size
+        )
+          continue;
+        tx.update(history)
+          .set({
+            ...(rewritten
+              ? {
+                  data: described.data,
+                  wordCount: described.wordCount,
+                  blockCount: described.blockCount,
+                  assetCount: described.assetCount,
+                  assetUuids: described.assetUuids,
+                }
+              : {}),
+            digest: described.digest,
+            size: described.size,
+          })
+          .where(eq(history.id, row.id))
+          .run();
+        refreshed++;
+      }
+    });
+    done += rows.length;
+    await onProgress(done, total);
+  }
+  return { refreshed, total };
 }
 
 /**

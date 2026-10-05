@@ -18,6 +18,7 @@ import type {
 import { buildContentPreview } from '#layers/thei/shared/content';
 import { buildAdminAssetUrls } from './assets/urls';
 import { resolveEntityIconMedia } from './media/generated-icon';
+import { buildAdminEntityBanner } from './entity-banner';
 
 /**
  * The picture that stands for a related entity in a list.
@@ -44,6 +45,10 @@ export async function relationIconMedia(endpoint: RelationEndpoint) {
       endpoint.id,
       icon ? (await buildAdminAssetUrls(icon.asset)).media! : undefined,
     );
+  }
+  if (endpoint.type === 'event') {
+    const banner = await buildAdminEntityBanner('event', endpoint.id);
+    if (banner) return banner;
   }
   const [ownerType, slot] =
     endpoint.type === 'event'

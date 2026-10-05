@@ -8,7 +8,19 @@ export const IMAGE_EXTENSIONS = [
   'svg',
 ] as const;
 export const VIDEO_EXTENSIONS = ['mp4', 'webm', 'mov', 'avi'] as const;
-export const AUDIO_EXTENSIONS = ['mp3', 'wav', 'ogg', 'flac'] as const;
+export const AUDIO_EXTENSIONS = [
+  'mp3',
+  'wav',
+  'ogg',
+  'flac',
+  'm4a',
+  'aac',
+  'opus',
+  'oga',
+  'weba',
+  'aif',
+  'aiff',
+] as const;
 
 export type ImageExtension = (typeof IMAGE_EXTENSIONS)[number];
 export type VideoExtension = (typeof VIDEO_EXTENSIONS)[number];
@@ -35,6 +47,13 @@ const ASSET_MIME_TYPES: Record<string, string> = {
   wav: 'audio/wav',
   ogg: 'audio/ogg',
   flac: 'audio/flac',
+  m4a: 'audio/mp4',
+  aac: 'audio/aac',
+  opus: 'audio/ogg',
+  oga: 'audio/ogg',
+  weba: 'audio/webm',
+  aif: 'audio/aiff',
+  aiff: 'audio/aiff',
   zip: 'application/zip',
 };
 

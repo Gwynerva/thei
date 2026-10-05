@@ -23,7 +23,7 @@ export type OgServiceId =
   | 'pages';
 
 export type OgEntityKind =
-  'project' | 'stage' | 'section' | 'event' | 'diary' | 'page' | 'tag';
+  'project' | 'section' | 'event' | 'diary' | 'page' | 'tag';
 
 export type OgCardKind = 'site' | OgEntityKind | `service:${OgServiceId}`;
 
@@ -92,7 +92,7 @@ export interface OgCardContent {
   accent: ImageAccent;
   /** The kind first, then badges such as "In showcase". */
   chips: OgChip[];
-  /** What a stage or a section belongs to. */
+  /** What a section belongs to. */
   parent?: { title: string; picture?: OgPicture };
   headline: string;
   summary?: string;
@@ -108,7 +108,7 @@ export interface OgCardContent {
   tagsTotal: number;
   /**
    * What the thing is shown by: a project's, a page's or a tag's icon, the
-   * first picture of a stage, a section, an event or an entry, an avatar.
+   * first picture of a section, an event or an entry, an avatar.
    */
   picture?: OgPicture;
   /** A project's banner, drawn behind it the way its page's header does. */

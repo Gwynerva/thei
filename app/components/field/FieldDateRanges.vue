@@ -1,13 +1,9 @@
 <script lang="ts" setup>
-import {
-  EXACT_DATE_PRECISION,
-  type DatedPeriod,
-} from '#layers/thei/shared/date-precision';
-import { normalizeStagePeriods } from '#layers/thei/shared/project-content-item';
+import { normalizePeriods, type Period } from '#layers/thei/shared/period';
 import DateRangeChip from '#layers/thei/app/components/DateRangeChip.vue';
 import FieldDateRangePopup from '#layers/thei/app/components/field/FieldDateRangePopup.vue';
 
-const model = defineModel<DatedPeriod[]>({ required: true });
+const model = defineModel<Period[]>({ required: true });
 const popupOpen = ref(false);
 const anchor = useTemplateRef<HTMLElement>('anchor');
 
@@ -16,15 +12,13 @@ const anchor = useTemplateRef<HTMLElement>('anchor');
  * moment a date is picked, because certainty is chosen after the dates and
  * closing the popup underneath the person would take that away.
  */
-const pending = ref<DatedPeriod>();
+const pending = ref<Period>();
 const editedIndex = ref<number>();
 
 function open(index?: number) {
   editedIndex.value = index;
   pending.value =
-    index === undefined
-      ? undefined
-      : { ...(model.value[index] as DatedPeriod) };
+    index === undefined ? undefined : { ...(model.value[index] as Period) };
   popupOpen.value = true;
 }
 
@@ -35,7 +29,7 @@ function confirm() {
     editedIndex.value === undefined
       ? model.value
       : model.value.filter((_, index) => index !== editedIndex.value);
-  model.value = normalizeStagePeriods([...rest, period]);
+  model.value = normalizePeriods([...rest, period]);
   pending.value = undefined;
   editedIndex.value = undefined;
   popupOpen.value = false;
@@ -57,7 +51,7 @@ function remove(index: number) {
     <div class="flex flex-wrap gap-xs">
       <DateRangeChip
         v-for="(period, index) in model"
-        :key="`${period.startDate}:${period.endDate}`"
+        :key="`${period.startDate}:${period.endDate}:${period.label}`"
         :period="period"
         removable
         editable
@@ -81,6 +75,7 @@ function remove(index: number) {
       v-model:open="popupOpen"
       :anchor="anchor"
       placement="bottom-start"
+      labelled
       :confirm-label="editedIndex === undefined ? phrase.add : phrase.save"
       @confirm="confirm"
     />

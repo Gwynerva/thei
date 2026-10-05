@@ -29,6 +29,8 @@ export interface ContentInlineLinkRequest extends ContentInlineMarkupRequest {
   initialNote?: string;
   /** The entity an internal link being edited points to. */
   initialEntity?: ContentEntityReference;
+  /** Where inside that entity the link leads, if anywhere. */
+  initialFragment?: string;
   apply: (label: string, attributes: InlineLinkAttributes) => void;
 }
 

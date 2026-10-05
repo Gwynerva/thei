@@ -6,9 +6,13 @@ import {
   DATE_PRECISIONS,
   datePrecisionTone,
   normalizeDatePrecisionInfo,
-  type DatedPeriod,
   type DatePrecision,
 } from '#layers/thei/shared/date-precision';
+import {
+  PERIOD_LABEL_MAX_LENGTH,
+  type Period,
+} from '#layers/thei/shared/period';
+import { formatPublicDateRange } from '#layers/thei/shared/public-date-format';
 import FloatingPopup from '#layers/thei/app/components/FloatingPopup.vue';
 import FieldDateRangePicker from '#layers/thei/app/components/field/FieldDateRangePicker.vue';
 import FieldDiscreteBar from '#layers/thei/app/components/field/FieldDiscreteBar.vue';
@@ -23,6 +27,8 @@ const props = withDefaults(
     maxDate?: Date;
     /** Certainty is meaningless for a date the engine picks, such as a filter. */
     precision?: boolean;
+    /** Lets the owner name the period, above its dates. */
+    labelled?: boolean;
     /** Shown on the button that commits the period; omitted, there is none. */
     confirmLabel?: string;
   }>(),
@@ -36,38 +42,47 @@ const props = withDefaults(
 const emit = defineEmits<{ confirm: [] }>();
 
 const open = defineModel<boolean>('open', { required: true });
-const model = defineModel<DatedPeriod | undefined>();
+const model = defineModel<Period | undefined>();
 
 /**
- * The dates first, then how sure they are, one after the other in the same
- * popup. `@vuepic/vue-datepicker` never shares its surface with anything it
- * did not render — that is where it kept falling apart — and certainty is a
- * separate question anyway. A period that already has dates opens straight
- * on its certainty; the dates are one click away from there.
+ * The dates first, then the rest of the period in the same popup: its name,
+ * its dates and how sure they are, as the fields of one small form.
+ * `@vuepic/vue-datepicker` never shares its surface with anything it did not
+ * render — that is where it kept falling apart — so the calendar has a step
+ * of its own. A period that already has dates opens straight on the rest;
+ * the dates are one click away from there.
  */
-const step = ref<'dates' | 'certainty'>('dates');
-const certaintyShown = computed(
-  () => props.precision && step.value === 'certainty' && !!model.value,
+const step = ref<'dates' | 'details'>('dates');
+const hasDetails = computed(() => props.precision || props.labelled);
+const detailsShown = computed(
+  () => hasDetails.value && step.value === 'details' && !!model.value,
 );
 const calendar =
   useTemplateRef<InstanceType<typeof FieldDateRangePicker>>('calendar');
-const editButton = useTemplateRef<ComponentPublicInstance>('editButton');
+const datesButton = useTemplateRef<ComponentPublicInstance>('datesButton');
+/** Handed over by the field once it renders, so it can take the focus. */
+const labelInput = shallowRef<HTMLInputElement>();
 
 watch(
   open,
   (isOpen) => {
-    if (isOpen) step.value = model.value ? 'certainty' : 'dates';
+    if (!isOpen) return;
+    step.value = model.value ? 'details' : 'dates';
   },
   { immediate: true },
 );
 
 async function onPicked() {
-  if (!props.precision) return;
-  step.value = 'certainty';
+  if (!hasDetails.value) return;
+  step.value = 'details';
   await nextTick();
-  (editButton.value?.$el as HTMLElement | undefined)?.focus({
-    preventScroll: true,
-  });
+  // The name is what is left to type; a touch screen would cover the popup
+  // with its keyboard, so there the dates keep the focus until asked.
+  const typing = props.labelled && window.matchMedia('(pointer: fine)').matches;
+  const target = typing
+    ? labelInput.value
+    : (datesButton.value?.$el as HTMLElement | undefined);
+  target?.focus({ preventScroll: true });
 }
 
 async function editDates() {
@@ -83,26 +98,21 @@ const range = computed<DateRange | undefined>({
       model.value = undefined;
       return;
     }
-    // Changing the dates keeps whatever certainty was already chosen.
-    model.value = { ...value, ...normalizeDatePrecisionInfo(model.value) };
+    // Changing the dates keeps whatever was already said about them.
+    model.value = {
+      ...value,
+      ...normalizeDatePrecisionInfo(model.value),
+      label: model.value?.label ?? '',
+    };
   },
 });
 
 /** The chosen dates, with the months abbreviated so a period fits a line. */
-const periodLabel = computed(() => {
-  if (!model.value) return '';
-  const utc = (date: string) => new Date(`${date}T00:00:00Z`);
-  return new Intl.DateTimeFormat(language.value.code, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  })
-    .formatRange(utc(model.value.startDate), utc(model.value.endDate))
-    .replaceAll(/\s+г\./g, '')
-    .replaceAll(/\s+–\s+/g, ' — ')
-    .trim();
-});
+const datesText = computed(() =>
+  model.value
+    ? formatPublicDateRange(model.value, language.value.code, 'abbreviated')
+    : '',
+);
 
 const precisionModel = computed<string>({
   get: () => model.value?.precision ?? 'exact',
@@ -116,6 +126,18 @@ const precisionModel = computed<string>({
       }),
     };
   },
+});
+
+/** The colour the chronology gives doubtful dates, shown as it is chosen. */
+const datesTone = computed(() => {
+  switch (datePrecisionTone(precisionModel.value as DatePrecision)) {
+    case 'warning':
+      return 'text-text-warning';
+    case 'alert':
+      return 'text-text-error';
+    default:
+      return undefined;
+  }
 });
 
 /**
@@ -142,6 +164,21 @@ const noteModel = computed<string>({
     model.value = { ...model.value, precisionNote };
   },
 });
+
+/** Bound as typed: the name is formatted where it is shown, never here. */
+const labelModel = computed<string>({
+  get: () => model.value?.label ?? '',
+  set: (label) => {
+    if (!model.value) return;
+    model.value = { ...model.value, label };
+  },
+});
+
+function confirmFromLabel(event: KeyboardEvent) {
+  if (event.isComposing || !model.value || !props.confirmLabel) return;
+  event.preventDefault();
+  emit('confirm');
+}
 </script>
 
 <template>
@@ -159,27 +196,30 @@ const noteModel = computed<string>({
         max-w-full flex-col overflow-y-auto overscroll-contain rounded-normal
         border border-border-1 bg-bg-2"
     >
-      <template v-if="certaintyShown">
-        <div
-          class="flex items-center gap-xs border-b border-border-1 py-xs pr-xs
-            pl-sm"
-        >
-          <span class="min-w-0 grow text-sm font-semibold">
-            {{ periodLabel }}
-          </span>
-          <Button
-            ref="editButton"
-            type="button"
-            size="icon-sm"
-            variant="secondary"
-            :aria-label="`${phrase.edit}: ${periodLabel}`"
-            :data-title-popup="phrase.edit"
-            @click="editDates"
-          >
-            <Icon name="edit" />
-          </Button>
-        </div>
-        <div class="flex flex-col gap-md p-sm">
+      <div v-if="detailsShown && model" class="flex flex-col gap-sm p-sm">
+        <!-- Each field says what it is in its placeholder, so the form stays
+             as small as the popup it sits in. -->
+        <FieldInput
+          v-if="labelled"
+          v-model="labelModel"
+          class="text-sm"
+          autocomplete="off"
+          :maxlength="PERIOD_LABEL_MAX_LENGTH"
+          :aria-label="phrase.period_label"
+          :placeholder="phrase.period_label_placeholder"
+          @element="labelInput = $event"
+          @keydown.enter="confirmFromLabel"
+        />
+        <FieldDateButton
+          ref="datesButton"
+          class="text-sm"
+          :label="`${phrase.period_dates_edit}: ${datesText}`"
+          :text="datesText"
+          :icon="precisionModel === 'exact' ? 'calendar' : 'approximate'"
+          :tone="datesTone"
+          @click="editDates"
+        />
+        <template v-if="precision">
           <FieldDiscreteBar
             v-model="precisionModel"
             :stops="precisionStops"
@@ -189,12 +229,17 @@ const noteModel = computed<string>({
           <FieldTextarea
             v-if="precisionModel !== 'exact'"
             v-model="noteModel"
-            class="text-xs"
+            class="text-sm"
             :aria-label="phrase.date_precision_note"
-            :placeholder="phrase.date_precision_note_placeholder"
+            :placeholder="phrase.date_precision_note"
           />
-        </div>
-      </template>
+        </template>
+        <Button v-if="confirmLabel" type="button" @click="emit('confirm')">
+          <Icon name="check" />
+          {{ confirmLabel }}
+        </Button>
+      </div>
+      <!-- A single day is a period picked twice on the same date. -->
       <FieldDateRangePicker
         v-else
         ref="calendar"
@@ -203,10 +248,7 @@ const noteModel = computed<string>({
         :max-date
         @picked="onPicked"
       />
-      <div
-        v-if="confirmLabel && (certaintyShown || !precision)"
-        class="border-t border-border-1 p-sm"
-      >
+      <div v-if="confirmLabel && !hasDetails" class="p-sm pt-0">
         <Button
           type="button"
           class="w-full"

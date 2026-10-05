@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import { formatMediaTime } from '#layers/thei/shared/audio';
+
 const props = defineProps<{
   isPaused: boolean;
   currentTime: number;
@@ -20,44 +22,14 @@ const emit = defineEmits<{
 const scrubTime = ref<number | null>(null);
 const shownTime = computed(() => scrubTime.value ?? props.currentTime);
 
-const seekPct = computed(() =>
-  props.duration > 0
-    ? `${Math.min(100, (shownTime.value / props.duration) * 100)}%`
-    : '0%',
-);
-
-const volumePct = computed(() =>
-  props.isMuted ? '0%' : `${props.volume * 100}%`,
-);
-
-function formatTime(seconds: number): string {
-  if (!isFinite(seconds) || seconds < 0) return '0:00';
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
-function rangeValue(e: Event): number | undefined {
-  const value = parseFloat((e.target as HTMLInputElement).value);
-  return Number.isFinite(value) ? value : undefined;
-}
-
-function onSeekInput(e: Event): void {
-  const value = rangeValue(e);
-  if (value === undefined) return;
+function onSeekInput(value: number): void {
   scrubTime.value = value;
   emit('seek', value);
 }
 
-function onSeekChange(e: Event): void {
-  const value = rangeValue(e);
+function onSeekChange(value: number): void {
   scrubTime.value = null;
-  if (value !== undefined) emit('seek', value);
-}
-
-function emitVolume(e: Event): void {
-  const value = rangeValue(e);
-  if (value !== undefined) emit('volume', value);
+  emit('seek', value);
 }
 </script>
 
@@ -84,18 +56,14 @@ function emitVolume(e: Event): void {
     </button>
 
     <span class="shrink-0 text-xs text-text-1/70 tabular-nums select-none">
-      {{ formatTime(shownTime) }}
+      {{ formatMediaTime(shownTime) }}
     </span>
 
-    <input
-      type="range"
-      class="seek-bar mx-sm"
-      min="0"
+    <MediaRange
+      class="mx-sm"
       :max="duration || 0"
       :value="shownTime"
-      step="0.01"
-      :aria-label="phrase.video_seek"
-      :style="{ '--pct': seekPct }"
+      :label="phrase.video_seek"
       @input="onSeekInput"
       @change="onSeekChange"
       @blur="scrubTime = null"
@@ -105,7 +73,7 @@ function emitVolume(e: Event): void {
       class="shrink-0 text-xs text-text-1/70 tabular-nums select-none"
       :class="hasAudio === false ? 'pr-xs' : ''"
     >
-      {{ formatTime(duration) }}
+      {{ formatMediaTime(duration) }}
     </span>
 
     <!--
@@ -114,93 +82,15 @@ function emitVolume(e: Event): void {
       own margin from the edge instead of running into it.
     -->
     <div v-if="hasAudio !== false" class="flex shrink-0 items-center">
-      <button
-        type="button"
-        class="flex shrink-0 cursor-pointer items-center justify-center
-          rounded-full p-xs text-text-1/70 transition hocus:text-text-1"
-        :aria-label="isMuted ? phrase.video_unmute : phrase.video_mute"
-        @click="emit('toggleMute')"
-      >
-        <Icon :name="isMuted || volume === 0 ? 'volume-off' : 'volume-on'" />
-      </button>
-
-      <input
-        type="range"
-        class="volume-bar mr-xs"
-        min="0"
-        max="1"
-        :value="isMuted ? 0 : volume"
-        step="0.01"
-        :aria-label="phrase.video_volume"
-        :style="{ '--pct': volumePct }"
-        @input="emitVolume"
+      <MediaVolumeControl
+        :volume
+        :muted="isMuted"
+        button-class="justify-center rounded-full p-xs text-text-1/70
+          transition hocus:text-text-1"
+        range-class="mr-xs"
+        @toggle="emit('toggleMute')"
+        @volume="emit('volume', $event)"
       />
     </div>
   </div>
 </template>
-
-<style scoped>
-.seek-bar,
-.volume-bar {
-  /* Native media ranges require browser-specific track and thumb selectors. */
-  appearance: none;
-  -webkit-appearance: none;
-  height: var(--spacing);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  outline: none;
-  background: linear-gradient(
-    to right,
-    color-mix(in oklch, var(--color-text-1) 70%, transparent) 0%,
-    color-mix(in oklch, var(--color-text-1) 70%, transparent) var(--pct, 0%),
-    color-mix(in oklch, var(--color-text-1) 20%, transparent) var(--pct, 0%),
-    color-mix(in oklch, var(--color-text-1) 20%, transparent) 100%
-  );
-}
-
-.seek-bar {
-  flex: 1;
-  min-width: 0;
-}
-
-.volume-bar {
-  width: calc(var(--spacing) * 10);
-  flex-shrink: 0;
-}
-
-.seek-bar::-webkit-slider-thumb,
-.volume-bar::-webkit-slider-thumb {
-  appearance: none;
-  -webkit-appearance: none;
-  width: calc(var(--spacing) * 3);
-  height: calc(var(--spacing) * 3);
-  border-radius: 50%;
-  background: var(--color-text-1);
-  cursor: pointer;
-  transition: transform 0.15s;
-}
-
-@media (hover: hover) {
-  .seek-bar::-webkit-slider-thumb:hover,
-  .volume-bar::-webkit-slider-thumb:hover {
-    transform: scale(1.3);
-  }
-}
-
-.seek-bar::-moz-range-thumb,
-.volume-bar::-moz-range-thumb {
-  width: calc(var(--spacing) * 3);
-  height: calc(var(--spacing) * 3);
-  border-radius: 50%;
-  border: none;
-  background: var(--color-text-1);
-  cursor: pointer;
-}
-
-.seek-bar::-moz-range-track,
-.volume-bar::-moz-range-track {
-  height: var(--spacing);
-  border-radius: var(--radius-sm);
-  background: transparent;
-}
-</style>

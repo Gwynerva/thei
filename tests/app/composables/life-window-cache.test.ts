@@ -46,6 +46,18 @@ describe('bounded life windows', () => {
     ]);
     expect(rows.map((row) => row.kind)).toEqual(['point', 'point']);
   });
+  it('marks a gap a period runs across, so the rail goes on through it', () => {
+    const older = windowData('2026-06-01');
+    older.days[0]!.bridged = true;
+    const rows = lifeFeedRows([
+      cacheLifeWindow(windowData('2026-09-02'), {}),
+      cacheLifeWindow(older, {}),
+      cacheLifeWindow(windowData('2026-01-01'), {}),
+    ]);
+    expect(
+      rows.flatMap((row) => (row.kind === 'gap' ? [row.bridged] : [])),
+    ).toEqual([true, false]);
+  });
   it('evicts distant payloads, retaining focus, the active window and reload cursors', () => {
     const windows = Array.from({ length: 30 }, (_, index) => {
       const date = `2026-09-${String(30 - index).padStart(2, '0')}`;

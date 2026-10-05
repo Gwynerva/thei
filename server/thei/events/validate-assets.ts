@@ -8,7 +8,14 @@ export async function validateEventAssets(data: ValidatedEventEditData) {
     assetUuid: string;
     maxSize: number;
     imageOnly?: boolean;
+    mediaOnly?: boolean;
   }> = [];
+  if (data.bannerAssetUuid)
+    checks.push({
+      assetUuid: data.bannerAssetUuid,
+      maxSize: ASSET_UPLOAD_LIMITS.media,
+      mediaOnly: true,
+    });
   for (const file of data.otherAssets ?? [])
     checks.push({
       assetUuid: file.assetUuid,
@@ -39,5 +46,11 @@ export async function validateEventAssets(data: ValidatedEventEditData) {
       return 'Event asset exceeds size limit';
     if (check.imageOnly && asset.type !== AssetType.Image)
       return 'Action image must be an image';
+    if (
+      check.mediaOnly &&
+      asset.type !== AssetType.Image &&
+      asset.type !== AssetType.Video
+    )
+      return 'Event banner must be an image or a video';
   }
 }

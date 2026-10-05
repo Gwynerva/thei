@@ -15,7 +15,6 @@ export const OG_TARGET_KINDS: OgTargetKind[] = [
   'site',
   'service',
   'project',
-  'stage',
   'section',
   'event',
   'page',

@@ -133,10 +133,10 @@ describe('drawableContent', () => {
 
   it('falls back to the parent title, then to the kind', () => {
     const withParent = {
-      ...emptyOgContent('stage', 's', '🚀', site, accent),
+      ...emptyOgContent('section', 's', '🚀', site, accent),
       parent: { title: 'Parent project' },
     };
-    expect(drawableContent(withParent, 'Stage').headline).toBe(
+    expect(drawableContent(withParent, 'Section').headline).toBe(
       'Parent project',
     );
     expect(

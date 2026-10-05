@@ -1,9 +1,9 @@
 import type { PublicProjectSectionResponse } from '#layers/thei/shared/api/public';
 import {
-  publicIdFromProjectChildUrlPart,
+  publicIdFromProjectSectionUrlPart,
   publicIdFromProjectUrlPart,
 } from '#layers/thei/shared/project-url';
-import { getProjectContentSections } from '../../../../thei/projects/content-sections';
+import { listProjectSections } from '../../../../thei/projects/content-sections';
 import {
   buildPublicProjectSection,
   canOpenPublicEntity,
@@ -18,7 +18,7 @@ export default defineEventHandler(
     );
     if (!project)
       throw createError({ statusCode: 404, statusText: 'Project not found' });
-    // A share link on the project covers its stages and sections too.
+    // A share link on the project covers its sections too.
     const viewer = await resolveEntityViewer(
       event,
       'project',
@@ -26,10 +26,10 @@ export default defineEventHandler(
     );
     if (!canOpenPublicEntity(project.access, viewer.asOwner))
       throw createError({ statusCode: 404, statusText: 'Section not found' });
-    const publicId = publicIdFromProjectChildUrlPart(
+    const publicId = publicIdFromProjectSectionUrlPart(
       getRouterParam(event, 'section') ?? '',
     );
-    const sections = await getProjectContentSections(project.projectUuid);
+    const sections = listProjectSections(project.projectUuid);
     const section = sections.find((item) => item.publicId === publicId);
     if (!section || (section.isPrivate && !viewer.asOwner))
       throw createError({ statusCode: 404, statusText: 'Section not found' });

@@ -116,11 +116,21 @@ function lifePointTier(point: Pick<LifeBoundaryLike, 'entityKind'>) {
  * point kind, but only a project's own carry its uuid in `projectUuids`, so the
  * person's statuses never count as anyone's part.
  */
-const PROJECT_PART_KINDS = new Set([
-  'project-stage',
-  'project-section',
-  'profile-status',
-]);
+const PROJECT_PART_KINDS = new Set(['project-section', 'profile-status']);
+
+/**
+ * The project a point is a piece of: its creation, a section, one of
+ * its statuses. An event or a diary entry may relate to a project, and that
+ * is all — it is never a part of one.
+ */
+function owningProject(point: LifeBoundaryLike): string | undefined {
+  if (
+    point.entityKind !== 'project' &&
+    !PROJECT_PART_KINDS.has(point.entityKind)
+  )
+    return undefined;
+  return point.projectUuids?.[0];
+}
 
 export function sortLifePoints<T extends LifeBoundaryLike>(points: T[]) {
   const sorted = [...points].sort(
@@ -134,42 +144,44 @@ export function sortLifePoints<T extends LifeBoundaryLike>(points: T[]) {
       left.entityKind.localeCompare(right.entityKind) ||
       left.identity.localeCompare(right.identity),
   );
-  return withProjectsBelowTheirParts(sorted);
+  return withProjectsTogether(sorted);
 }
 
 /**
- * A project created on the same day as some of its stages, sections or
- * statuses is placed under them: the project came first, so read newest first
- * its parts are above it. Done as a pass over the sorted list, because a pairwise "a part
- * before its project" rule next to the rank rule would not be a consistent
- * order.
+ * Keeps a project's pieces of one day together: they stand where the first of
+ * them would, in their own order, and nothing of anything else — an event, a
+ * diary entry, another project — comes between them. A project created that
+ * day closes its group: it came first, so read newest first its parts are
+ * above it.
+ *
+ * Done as a pass over the sorted list, because a pairwise "beside its project"
+ * rule next to the rank rule would not be a consistent order.
  */
-function withProjectsBelowTheirParts<T extends LifeBoundaryLike>(
-  points: T[],
-): T[] {
-  const result = [...points];
-  for (let index = result.length - 1; index >= 0; index--) {
-    const project = result[index]!;
-    if (project.entityKind !== 'project' || project.transition !== 'created')
+function withProjectsTogether<T extends LifeBoundaryLike>(points: T[]): T[] {
+  const result: T[] = [];
+  const placed = new Set<string>();
+  for (const [index, point] of points.entries()) {
+    const project = owningProject(point);
+    if (!project) {
+      result.push(point);
       continue;
-    const projectUuid = project.projectUuids?.[0];
-    if (!projectUuid) continue;
-    let lastPart = -1;
+    }
+    const key = `${point.date}:${project}`;
+    if (placed.has(key)) continue;
+    placed.add(key);
+    const group: T[] = [];
     for (
-      let cursor = index + 1;
-      cursor < result.length && result[cursor]!.date === project.date;
+      let cursor = index;
+      cursor < points.length && points[cursor]!.date === point.date;
       cursor++
     ) {
-      const point = result[cursor]!;
-      if (
-        PROJECT_PART_KINDS.has(point.entityKind) &&
-        point.projectUuids?.includes(projectUuid)
-      )
-        lastPart = cursor;
+      const candidate = points[cursor]!;
+      if (owningProject(candidate) === project) group.push(candidate);
     }
-    if (lastPart < 0) continue;
-    result.splice(index, 1);
-    result.splice(lastPart, 0, project);
+    const created = group.filter(
+      (part) => part.entityKind === 'project' && part.transition === 'created',
+    );
+    result.push(...group.filter((part) => !created.includes(part)), ...created);
   }
   return result;
 }

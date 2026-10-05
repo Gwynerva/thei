@@ -11,6 +11,7 @@ import {
   contentPlainText,
   extractContentAssetRefs,
   normalizeContentData,
+  normalizeContentMediaCaption,
   summarizeContentData,
 } from '../../shared/content';
 
@@ -424,6 +425,38 @@ describe('content normalization', () => {
         type: 'entityLink',
         data: { entityType: 'page', entityId: 'page-1' },
       },
+    ]);
+  });
+
+  it('keeps the place inside the target an entity link leads to', () => {
+    const data = normalizeContentData({
+      blocks: [
+        {
+          id: 'to-a-heading',
+          type: 'entityLink',
+          data: {
+            entityType: 'event',
+            entityId: 'event-1',
+            fragment: '#глава 2',
+            note: 'why',
+          },
+        },
+        {
+          id: 'to-nowhere',
+          type: 'entityLink',
+          data: { entityType: 'event', entityId: 'event-1', fragment: ' ' },
+        },
+      ],
+    });
+
+    expect(data.blocks.map((block) => block.data)).toEqual([
+      {
+        entityType: 'event',
+        entityId: 'event-1',
+        fragment: '%D0%B3%D0%BB%D0%B0%D0%B2%D0%B0%202',
+        note: 'why',
+      },
+      { entityType: 'event', entityId: 'event-1' },
     ]);
   });
 
@@ -970,5 +1003,189 @@ describe('content preview', () => {
         ],
       }),
     ).toEqual({ text: '' });
+  });
+});
+
+describe('content audio', () => {
+  const hydrated = {
+    assetUuid: 'a-audio',
+    type: 'audio',
+    extension: 'weba',
+    size: 72_000,
+    assetUrl: '/api/admin/assets/a-audio/content',
+    audio: { duration: 6, peaks: [0, 40, 100], channels: 1 },
+  };
+
+  it('keeps a recording, its title and its caption, plain', () => {
+    const data = normalizeContentData({
+      blocks: [
+        {
+          id: 'voice',
+          type: 'contentAudio',
+          data: {
+            asset: hydrated,
+            title: '  Grandma’s   song ',
+            caption: 'Recorded 	 in 1998 ',
+          },
+        },
+      ],
+    });
+    expect(data.blocks[0]!.data).toEqual({
+      asset: { ...hydrated, media: undefined },
+      title: 'Grandma’s song',
+      caption: 'Recorded in 1998',
+    });
+  });
+
+  it('drops a recording block with no file', () => {
+    expect(
+      normalizeContentData({
+        blocks: [{ type: 'contentAudio', data: { title: 'Nothing' } }],
+      }).blocks,
+    ).toEqual([]);
+  });
+
+  it('stores and keys the file by its id alone', () => {
+    const block = (asset: object) => ({
+      id: 'voice',
+      type: 'contentAudio',
+      data: { asset, title: 'Song' },
+    });
+    expect(
+      canonicalizeContentData({ blocks: [block(hydrated)] }).blocks[0]!.data,
+    ).toEqual({
+      asset: { assetUuid: 'a-audio' },
+      title: 'Song',
+      caption: undefined,
+    });
+    // What the player was told is not a change to the text.
+    expect(contentSemanticKey({ blocks: [block(hydrated)] })).toBe(
+      contentSemanticKey({ blocks: [block({ assetUuid: 'a-audio' })] }),
+    );
+  });
+
+  it('counts the file as the text’s, privately inside a private section', () => {
+    const data = {
+      blocks: [
+        {
+          type: 'privateSectionBoundary',
+          data: { sectionId: 'voice', edge: 'start' },
+        },
+        { id: 'inside', type: 'contentAudio', data: { asset: hydrated } },
+        {
+          type: 'privateSectionBoundary',
+          data: { sectionId: 'voice', edge: 'end' },
+        },
+      ],
+    };
+    expect(extractContentAssetRefs(data)).toEqual([
+      {
+        assetUuid: 'a-audio',
+        blockId: 'inside',
+        blockType: 'contentAudio',
+        isPrivate: true,
+      },
+    ]);
+    expect(summarizeContentData(normalizeContentData(data))).toMatchObject({
+      assetCount: 1,
+    });
+    expect(analyzeContentData(data).summary.assetTotalSize).toBe(72_000);
+  });
+
+  it('reads its title and caption as text, and never as a preview picture', () => {
+    const data = {
+      blocks: [
+        {
+          type: 'contentAudio',
+          data: { asset: hydrated, title: 'Song', caption: 'At the dacha' },
+        },
+      ],
+    };
+    expect(contentPlainText(data)).toBe('Song At the dacha');
+    expect(buildContentPreview(data).media).toBeUndefined();
+  });
+});
+
+describe('the endings of captions and headings', () => {
+  const asset = { assetUuid: 'media' };
+  const normalized = normalizeContentData({
+    blocks: [
+      { type: 'header', data: { text: 'Итоги года.', level: 2 } },
+      {
+        type: 'contentMedia',
+        data: { layout: 'natural', asset, caption: '<i>Кот на окне.</i>' },
+      },
+      {
+        type: 'contentGallery',
+        data: {
+          items: [
+            { id: 'one', asset, caption: 'Кот спит. <b>Пёс</b>' },
+            { id: 'two', asset, caption: 'Москва, 1990 г.' },
+          ],
+        },
+      },
+      {
+        type: 'quote',
+        data: { text: 'Слова', caption: 'А. С. Пушкин.' },
+      },
+      {
+        type: 'contentAttachment',
+        data: { asset, title: 'Отчёт.', caption: 'Итоги. Планы' },
+      },
+      {
+        type: 'contentAudio',
+        data: { asset, title: 'Запись!', caption: 'Голос.' },
+      },
+      {
+        type: 'externalLink',
+        data: { url: 'https://example.com/', note: 'Мой профиль.' },
+      },
+      { type: 'paragraph', data: { text: 'Абзац остаётся.' } },
+    ],
+  });
+
+  it('settles them where a block is normalized', () => {
+    expect(normalized.blocks.map((block) => block.data)).toEqual([
+      { text: 'Итоги года', level: 2 },
+      { layout: 'natural', asset, caption: '<i>Кот на окне</i>' },
+      {
+        items: [
+          { id: 'one', asset, caption: 'Кот спит. <b>Пёс</b>.' },
+          { id: 'two', asset, caption: 'Москва, 1990 г.' },
+        ],
+      },
+      { text: 'Слова', caption: 'А. С. Пушкин', alignment: 'left' },
+      { asset, title: 'Отчёт', caption: 'Итоги. Планы.' },
+      { asset, title: 'Запись!', caption: 'Голос' },
+      { url: 'https://example.com/', note: 'Мой профиль' },
+      { text: 'Абзац остаётся.' },
+    ]);
+  });
+
+  it('does not count a full stop typed after one sentence as a change', () => {
+    const caption = (value: string) => ({
+      blocks: [
+        {
+          type: 'contentMedia',
+          data: { layout: 'natural', asset, caption: value },
+        },
+      ],
+    });
+    expect(
+      contentDataIsSemanticallyEqual(
+        caption('Кот на окне') as never,
+        caption('Кот на окне.') as never,
+      ),
+    ).toBe(true);
+    expect(
+      contentDataIsSemanticallyEqual(
+        caption('Кот спит. Пёс') as never,
+        caption('Кот спит. Пёс лает') as never,
+      ),
+    ).toBe(false);
+  });
+
+  it('leaves the caption being typed as it is', () => {
+    expect(normalizeContentMediaCaption('Кот на окне.')).toBe('Кот на окне.');
   });
 });

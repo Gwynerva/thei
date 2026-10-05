@@ -106,9 +106,9 @@ describe('migration runner', () => {
     baseline.up(context());
     expect(hasLedger(rawDb)).toBe(false);
 
-    await expect(
-      runPendingMigrations(rawDb, options('0.0.1')),
-    ).rejects.toThrow('no migration ledger');
+    await expect(runPendingMigrations(rawDb, options('0.0.1'))).rejects.toThrow(
+      'no migration ledger',
+    );
   });
 
   it('rolls back a failing migration and records nothing for it', async () => {

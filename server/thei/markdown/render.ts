@@ -3,13 +3,19 @@ import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
 import {
   isPublicSecret,
   type PublicEntityReference,
+  type PublicProjectSection,
 } from '#layers/thei/shared/api/public';
-import { contentEntityReference } from '#layers/thei/shared/content-link';
-import type { RelationEndpoint } from '#layers/thei/shared/relation';
 import {
-  RELATION_GROUP_ORDER,
-  relationGroupPhraseKey,
-} from '#layers/thei/shared/relation-display';
+  contentEntityReference,
+  normalizeLinkFragment,
+  withLinkFragment,
+} from '#layers/thei/shared/content-link';
+import {
+  RELATION_ENTITY_TYPES,
+  type RelationEndpoint,
+  type RelationEntityType,
+} from '#layers/thei/shared/relation';
+import { relationLabel } from '#layers/thei/shared/relation-display';
 import {
   findContentEntity,
   type ContentEntityRecord,
@@ -20,7 +26,7 @@ import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import {
-  buildProjectChildUrl,
+  buildProjectSectionUrl,
   buildProjectUrl,
 } from '#layers/thei/shared/project-url';
 import {
@@ -29,15 +35,20 @@ import {
   buildPublicPage,
   buildPublicProject,
   buildPublicProjectSection,
-  buildPublicProjectStage,
   canOpenPublicEntity,
 } from '../public/entities';
 import { listPublicRelatedAll } from '../public/related';
-import { getProjectStages } from '../projects/stages';
-import { getProjectContentSections } from '../projects/content-sections';
+import { listProjectSections } from '../projects/content-sections';
 import { siteUrl } from '../site-url';
 import { STRANGER } from '../access-links/viewer';
 import { ownerText } from '../owner-text';
+import type { Period } from '#layers/thei/shared/period';
+import {
+  isApproximateDate,
+  type DatedPeriod,
+} from '#layers/thei/shared/date-precision';
+import { lifeArrivalCutoff } from '#layers/thei/shared/life';
+import { publicPeriodState } from '#layers/thei/shared/public-timeline';
 
 /**
  * Public pages as Markdown.
@@ -76,22 +87,7 @@ export async function renderProjectMarkdown(
     await body(event, data.description),
   ];
 
-  if (data.stages.length) {
-    lines.push(`## ${THEI_SERVER.phrase.project_stages}`);
-    for (const stage of data.stages)
-      lines.push(
-        `- [${ownerText(stage.title)}](${siteUrl(event, stage.href)})` +
-          (stage.summary ? ` — ${ownerText(stage.summary)}` : ''),
-      );
-  }
-  if (data.sections.length) {
-    lines.push(`## ${THEI_SERVER.phrase.project_content_sections}`);
-    for (const section of data.sections)
-      lines.push(
-        `- [${ownerText(section.title)}](${siteUrl(event, section.href)})` +
-          (section.summary ? ` — ${ownerText(section.summary)}` : ''),
-      );
-  }
+  lines.push(...sectionList(event, data.sections));
   lines.push(
     ...(await relatedEntities(event, {
       type: 'project',
@@ -103,30 +99,23 @@ export async function renderProjectMarkdown(
   return { body: join(lines), canonical: siteUrl(event, canonical) };
 }
 
-export async function renderProjectChildMarkdown(
+export async function renderProjectSectionMarkdown(
   event: H3Event,
-  kind: 'stages' | 'sections',
   projectPart: string,
-  childPart: string,
+  sectionPart: string,
 ): Promise<MarkdownDocument | undefined> {
   const project = await THEI_SERVER.projects.findByPublicId(projectPart);
   if (!project || !canOpenPublicEntity(project.access, false)) return undefined;
-  const children =
-    kind === 'stages'
-      ? await getProjectStages(project.projectUuid)
-      : await getProjectContentSections(project.projectUuid);
-  const child = children.find((item) => item.publicId === childPart);
-  if (!child || child.isPrivate) return undefined;
-  const data =
-    kind === 'stages'
-      ? await buildPublicProjectStage(project, child as never, STRANGER)
-      : await buildPublicProjectSection(project, child as never, STRANGER);
-  const canonical = buildProjectChildUrl(
+  const section = listProjectSections(project.projectUuid).find(
+    (item) => item.publicId === sectionPart,
+  );
+  if (!section || section.isPrivate) return undefined;
+  const data = await buildPublicProjectSection(project, section, STRANGER);
+  const canonical = buildProjectSectionUrl(
     project.humanReadableSlug,
     project.publicId,
-    kind === 'stages' ? 'stages' : 'sections',
-    child.humanReadableSlug,
-    child.publicId,
+    section.humanReadableSlug,
+    section.publicId,
   );
   const lines = [
     `# ${ownerText(data.title)}`,
@@ -135,6 +124,7 @@ export async function renderProjectChildMarkdown(
       event,
       buildProjectUrl(project.humanReadableSlug, project.publicId),
     )})`,
+    ...periodLines(data.periods),
     await body(event, data.content),
   ];
   return { body: join(lines), canonical: siteUrl(event, canonical) };
@@ -151,17 +141,7 @@ export async function renderEventMarkdown(
   const lines = [
     `# ${ownerText(data.title)}`,
     ownerText(data.summary),
-    ...(data.periods.length
-      ? [
-          data.periods
-            .map((period) =>
-              period.endDate && period.endDate !== period.startDate
-                ? `${period.startDate} — ${period.endDate}`
-                : period.startDate,
-            )
-            .join(', '),
-        ]
-      : []),
+    ...periodLines(data.periods),
     await body(event, data.content),
     ...(await relatedEntities(event, { type: 'event', id: stored.eventUuid })),
     ...tagList(event, data.tags),
@@ -173,6 +153,46 @@ export async function renderEventMarkdown(
       buildEventUrl(stored.humanReadableSlug, stored.publicId),
     ),
   };
+}
+
+/**
+ * When an event or a section happened, on one line: each period's dates, then
+ * the owner's name for it and whether it is still running or yet to come.
+ */
+function periodLines(periods: Period[]): string[] {
+  if (!periods.length) return [];
+  const cutoff = lifeArrivalCutoff();
+  return [
+    periods
+      .map((period) => {
+        const state = publicPeriodState(period, cutoff);
+        const notes = [
+          ...(period.label ? [ownerText(period.label)] : []),
+          ...(state === 'upcoming'
+            ? [THEI_SERVER.phrase.period_state_upcoming]
+            : state === 'ongoing'
+              ? [THEI_SERVER.phrase.period_state_ongoing]
+              : []),
+        ];
+        const dates = periodDates(period);
+        return notes.length ? `${dates} (${notes.join(', ')})` : dates;
+      })
+      .join(', '),
+  ];
+}
+
+/**
+ * A period's dates as sure as the owner is of them: cut to the month or the
+ * year they know, and marked `~` when they are a guess, so the copy never
+ * reads more definite than the page.
+ */
+function periodDates(period: DatedPeriod): string {
+  const length =
+    period.precision === 'year' ? 4 : period.precision === 'month' ? 7 : 10;
+  const start = period.startDate.slice(0, length);
+  const end = period.endDate.slice(0, length);
+  const doubt = isApproximateDate(period.precision) ? '~' : '';
+  return `${doubt}${start === end ? start : `${start} — ${end}`}`;
 }
 
 export async function renderDiaryMarkdown(
@@ -224,13 +244,18 @@ async function body(
   return contentToMarkdown(await withEntityAddresses(content), {
     absolute: (path) => siteUrl(event, path),
     privateSectionLabel: THEI_SERVER.phrase.secret_hint,
+    audioLabel: THEI_SERVER.phrase.audio,
     format: ownerText,
   });
 }
 
-/** An entity anchor in the canonical form stored content writes it in. */
+/**
+ * An entity anchor in the canonical form stored content writes it in, with
+ * the place inside the target it leads to, if any — escaped as an attribute
+ * already, which is what the address is written back as.
+ */
 const ENTITY_ANCHOR =
-  /<a data-content-link="entity" data-entity-type="([a-z-]+)" data-entity-id="([^"]*)"/g;
+  /<a data-content-link="entity" data-entity-type="([a-z-]+)" data-entity-id="([^"]*)"(?: data-entity-fragment="([^"]*)")?/g;
 
 /**
  * Gives every link to an entity of this site the address it opens.
@@ -241,7 +266,7 @@ const ENTITY_ANCHOR =
  * its address, and a link block its title too; a link to what a stranger may
  * not open keeps its words and loses the link.
  */
-async function withEntityAddresses(
+export async function withEntityAddresses(
   content: Parameters<typeof contentToMarkdown>[0],
 ): Promise<Parameters<typeof contentToMarkdown>[0]> {
   if (!content) return content;
@@ -269,10 +294,15 @@ async function withEntityAddresses(
         const entity = await target(entityType, entityId);
         if (entity) hrefs.set(`${entityType}:${entityId}`, entity.href);
       }
-      return value.replace(ENTITY_ANCHOR, (anchor, entityType, entityId) => {
-        const href = hrefs.get(`${entityType}:${entityId}`);
-        return href ? `<a href="${href}"${anchor.slice(2)}` : anchor;
-      });
+      return value.replace(
+        ENTITY_ANCHOR,
+        (anchor, entityType, entityId, fragment?: string) => {
+          const href = hrefs.get(`${entityType}:${entityId}`);
+          return href
+            ? `<a href="${withLinkFragment(href, fragment)}"${anchor.slice(2)}`
+            : anchor;
+        },
+      );
     }
     if (Array.isArray(value)) return Promise.all(value.map(inline));
     if (value && typeof value === 'object')
@@ -296,7 +326,14 @@ async function withEntityAddresses(
         return entity
           ? {
               ...block,
-              data: { ...block.data, url: entity.href, title: entity.title },
+              data: {
+                ...block.data,
+                url: withLinkFragment(
+                  entity.href,
+                  normalizeLinkFragment(block.data.fragment),
+                ),
+                title: entity.title,
+              },
             }
           : block;
       }),
@@ -305,9 +342,37 @@ async function withEntityAddresses(
 }
 
 /**
- * Relations as the page lists them: grouped by what they say, the directed
- * kinds first, each named from this entity's side. A diary entry is listed
- * by its day with its opening line, since it has no title to be called by.
+ * A project's sections as its page shows them: the general ones in the
+ * owner's order, then the stages, newest first, each with its stretch.
+ */
+function sectionList(event: H3Event, sections: PublicProjectSection[]) {
+  if (!sections.length) return [];
+  const phrase = THEI_SERVER.phrase;
+  const lines = [`## ${phrase.project_content_sections}`];
+  const groups = [
+    [phrase.project_sections_undated, sections.filter((item) => !item.period)],
+    [phrase.project_sections_dated, sections.filter((item) => item.period)],
+  ] as const;
+  for (const [title, group] of groups) {
+    if (!group.length) continue;
+    lines.push(`### ${title}`);
+    for (const section of group)
+      lines.push(
+        `- [${ownerText(section.title)}](${siteUrl(event, section.href)})` +
+          (section.period ? ` (${periodDates(section.period)})` : '') +
+          (section.summary ? ` — ${ownerText(section.summary)}` : ''),
+      );
+  }
+  return lines;
+}
+
+/**
+ * Relations as the page lists them: one list per kind of entity, in the
+ * order of its tabs, the directed relations first. A directed one says its
+ * word for the other end — "Influences", "Depends" — run into the owner's
+ * reason; a plain one says no word, and each falls back on what the entity
+ * says of itself. A diary entry is called by its day, since it has no title.
+ * A codename is left out: a copy for machines lists only what it can link.
  */
 async function relatedEntities(
   event: H3Event,
@@ -318,19 +383,28 @@ async function relatedEntities(
   );
   if (!links.length) return [];
   const phrase = THEI_SERVER.phrase;
+  const kindTitles: Record<RelationEntityType, string> = {
+    project: phrase.projects,
+    event: phrase.events,
+    'diary-entry': phrase.diary,
+  };
   const lines = [`## ${phrase.related_entities}`];
-  for (const type of RELATION_GROUP_ORDER) {
-    const group = links.filter(
-      (link) => (link.relationType ?? 'related') === type,
-    );
+  for (const kind of RELATION_ENTITY_TYPES) {
+    const group = links.filter((link) => link.entityType === kind);
     if (!group.length) continue;
-    lines.push(`### ${phrase[relationGroupPhraseKey(type)]}`);
+    lines.push(`### ${kindTitles[kind]}`);
     for (const link of group) {
-      const text =
-        link.note || (link.entityType === 'diary-entry' ? link.summary : '');
+      const type = link.relationType ?? 'related';
+      const text = link.note || link.summary;
+      const said = [
+        type === 'related' ? '' : relationLabel(phrase, type),
+        text ? ownerText(text) : '',
+      ]
+        .filter(Boolean)
+        .join(' · ');
       lines.push(
         `- [${ownerText(link.title)}](${siteUrl(event, link.href)})` +
-          (text ? ` — ${ownerText(text)}` : ''),
+          (said ? ` — ${said}` : ''),
       );
     }
   }

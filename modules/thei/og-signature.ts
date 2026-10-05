@@ -23,6 +23,7 @@ export const OG_SIGNATURE_SOURCES = [
   'server/thei/og',
   'server/thei/media/generated-icon.ts',
   'server/thei/assets/image-color.ts',
+  'server/thei/assets/svg-raster-input.ts',
   'shared/oklch.ts',
   'shared/accent-color.ts',
   'shared/cloud-outline.ts',

@@ -9,8 +9,8 @@ import type { OgTone } from './palette';
  *
  * Every kind of thing has one layout of its own, built around the shape of
  * its picture, and no two kinds look alike: a project is its page's header,
- * its icon beside the title and its banner behind; a stage, a section or an
- * event gives the right half of the card to its first picture; a diary
+ * its icon beside the title and its banner behind; a section or an event
+ * gives the right half of the card to its first picture; a diary
  * entry is a calendar leaf; a page holds up its icon; a tag stands centred
  * under its own. Their tones are fixed as well, so a kind always reads as
  * itself. Only the site's own pages — the chronology, the search, the
@@ -50,8 +50,8 @@ export interface OgDesign {
 }
 
 /**
- * The tones each layout may take. A project, a stage, a section and an event
- * are dark, as a project's header is; a page and a tag are a field of their
+ * The tones each layout may take. A project, a section and an event are
+ * dark, as a project's header is; a page and a tag are a field of their
  * icon's colour; a calendar leaf takes the shade its picture calls for.
  */
 export const OG_LAYOUT_TONES: Record<OgLayoutName, OgTone[]> = {
@@ -96,7 +96,6 @@ export function chooseLayout(
       return tiles >= 2 ? 'collection' : 'poster';
     case 'project':
       return 'project';
-    case 'stage':
     case 'section':
     case 'event':
       return 'media';

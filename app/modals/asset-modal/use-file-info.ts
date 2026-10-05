@@ -1,4 +1,5 @@
 import {
+  audioExtensionProfile,
   imageExtensionProfile,
   isExtensionAllowed,
   videoExtensionProfile,
@@ -37,12 +38,13 @@ function svgDimensions(svg: Element): FileInfoDimensions | undefined {
 
 export function useFileInfo(objectUrl: string, extension: string) {
   const dimensions = ref<FileInfoDimensions | undefined>(undefined);
-  /** Seconds of a video, once the browser has read its header. */
+  /** Seconds of a video or a recording, once the browser has read its header. */
   const duration = ref<number | undefined>(undefined);
 
   if (import.meta.client) {
     const isImage = isExtensionAllowed(extension, imageExtensionProfile);
     const isVideo = isExtensionAllowed(extension, videoExtensionProfile);
+    const isAudio = isExtensionAllowed(extension, audioExtensionProfile);
 
     let cleanup: (() => void) | undefined;
 
@@ -70,24 +72,30 @@ export function useFileInfo(objectUrl: string, extension: string) {
           img.src = '';
         };
       }
-    } else if (isVideo) {
-      const video = document.createElement('video');
-      video.muted = true;
-      video.preload = 'metadata';
+    } else if (isVideo || isAudio) {
+      // A format this browser cannot play has no length here; the server's
+      // reading of the draft stands in once it is staged.
+      const media = document.createElement(isVideo ? 'video' : 'audio');
+      media.muted = true;
+      media.preload = 'metadata';
       const onMeta = () => {
-        dimensions.value = {
-          width: video.videoWidth,
-          height: video.videoHeight,
-        };
-        if (Number.isFinite(video.duration) && video.duration > 0) {
-          duration.value = video.duration;
+        if (media instanceof HTMLVideoElement) {
+          dimensions.value = {
+            width: media.videoWidth,
+            height: media.videoHeight,
+          };
+        }
+        if (Number.isFinite(media.duration) && media.duration > 0) {
+          duration.value = media.duration;
         }
       };
-      video.addEventListener('loadedmetadata', onMeta, { once: true });
-      video.src = objectUrl;
+      media.addEventListener('loadedmetadata', onMeta, { once: true });
+      media.src = objectUrl;
       cleanup = () => {
-        video.removeEventListener('loadedmetadata', onMeta);
-        video.src = '';
+        media.removeEventListener('loadedmetadata', onMeta);
+        // An element keeps what it loaded until it is told to load nothing.
+        media.removeAttribute('src');
+        media.load();
       };
     }
 

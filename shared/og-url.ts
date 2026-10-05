@@ -6,7 +6,6 @@ export type OgImageKind =
   | 'site'
   | 'service'
   | 'project'
-  | 'stage'
   | 'section'
   | 'event'
   | 'page'

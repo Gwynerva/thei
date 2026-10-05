@@ -23,6 +23,7 @@ import { opensGrantOwner, resolvePublicViewer } from '../access-links/viewer';
 interface AttachmentContext {
   ownerType:
     | 'project'
+    | 'project-section'
     | 'event'
     | 'page'
     | 'diary-entry'
@@ -79,45 +80,24 @@ export async function contentAttachmentAccess(
   ];
   const privateOwners = new Set<string>();
   if (ownerType === 'project') {
-    const stages = db
-      .select()
-      .from(schema.projectStages)
-      .where(eq(schema.projectStages.projectUuid, ownerId))
-      .all();
     const sections = db
       .select()
       .from(schema.projectContentSections)
       .where(eq(schema.projectContentSections.projectUuid, ownerId))
       .all();
-    for (const [type, children] of [
-      [
-        'project-stage',
-        stages.map((stage) => ({
-          id: stage.stageUuid,
-          isPrivate: stage.isPrivate,
-        })),
-      ],
-      [
-        'project-section',
-        sections.map((section) => ({
-          id: section.sectionUuid,
-          isPrivate: section.isPrivate,
-        })),
-      ],
-    ] as const) {
-      if (children.length)
-        owners.push(
-          and(
-            eq(schema.content.ownerType, type),
-            inArray(
-              schema.content.ownerId,
-              children.map(({ id }) => id),
-            ),
-          )!,
-        );
-      for (const child of children)
-        if (child.isPrivate) privateOwners.add(`${type}:${child.id}`);
-    }
+    if (sections.length)
+      owners.push(
+        and(
+          eq(schema.content.ownerType, 'project-section'),
+          inArray(
+            schema.content.ownerId,
+            sections.map((section) => section.sectionUuid),
+          ),
+        )!,
+      );
+    for (const section of sections)
+      if (section.isPrivate)
+        privateOwners.add(`project-section:${section.sectionUuid}`);
   }
   const uses = db
     .select({
@@ -162,7 +142,7 @@ export async function sendContextAsset(
   setHeader(event, 'Cache-Control', SHARED_ASSET_CACHE_CONTROL);
   const viewer = await resolvePublicViewer(event);
   // A share link reaches the media of the entity it was made for, including
-  // files inside its private stages and sections, and nothing else.
+  // files inside its private sections, and nothing else.
   const opens = opensGrantOwner(
     viewer,
     context.grantOwner ?? defaultGrantOwner(context),

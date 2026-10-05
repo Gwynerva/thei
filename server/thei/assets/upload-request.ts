@@ -5,6 +5,7 @@ import {
   ASSET_TRANSFORM_MAX_DIMENSION,
   createFileZipSettings,
   createOriginalAssetSettings,
+  type AssetAudioTransformRequest,
   type AssetFileZipSettings,
   type AssetImageFormat,
   type AssetImageTransformRequest,
@@ -65,6 +66,14 @@ export function parseAssetUploadSettings(value: string): AssetUploadRequest {
       ...pickGeometry(settings),
       stripAudio: settings.stripAudio,
       fastConversion: settings.fastConversion,
+    };
+  }
+
+  if (isAudioTransformRequest(settings)) {
+    return {
+      type: 'audio-transform',
+      quality: settings.quality,
+      mono: settings.mono,
     };
   }
 
@@ -293,6 +302,17 @@ function isVideoTransformRequest(
     hasGeometry(settings) &&
     typeof settings.stripAudio === 'boolean' &&
     typeof settings.fastConversion === 'boolean'
+  );
+}
+
+function isAudioTransformRequest(
+  settings: unknown,
+): settings is AssetAudioTransformRequest {
+  if (!isRecord(settings)) return false;
+  return (
+    settings.type === 'audio-transform' &&
+    isQuality(settings.quality) &&
+    typeof settings.mono === 'boolean'
   );
 }
 

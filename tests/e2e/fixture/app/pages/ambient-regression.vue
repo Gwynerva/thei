@@ -6,6 +6,7 @@ import type { ContentFieldModelValue } from '#layers/thei/shared/content';
 definePageMeta({ layout: 'public' });
 const route = useRoute();
 const scenario = ref(String(route.query.banner || 'wide'));
+const kind = String(route.query.kind || 'project');
 const dimensions: Record<string, [number, number]> = {
   wide: [640, 180],
   portrait: [180, 480],
@@ -59,6 +60,19 @@ const showcase = [
     size: 100,
     media: icon,
   },
+  {
+    key: 'video',
+    title: 'Showcase video',
+    href: '/regression-video.mp4',
+    extension: 'mp4',
+    size: 100,
+    media: {
+      kind: 'video' as const,
+      src: '/regression-video.mp4',
+      previewSrc: '/ambient-square.svg',
+      accent: { hue: 140, chroma: 0.15 },
+    },
+  },
 ];
 const fieldValue = computed<ContentFieldModelValue>(() => ({
   data: {
@@ -77,7 +91,29 @@ const fieldValue = computed<ContentFieldModelValue>(() => ({
 
 <template>
   <main>
-    <PublicProjectHero
+    <!-- An event or a section opens with the hero once it has a banner. -->
+    <PublicHero
+      v-if="kind === 'event' || kind === 'section'"
+      :title="
+        kind === 'event' ? 'A moment worth keeping' : 'A part of a project'
+      "
+      summary="Only the words: nothing under them gives the hero its height."
+      :banner-media="banner"
+      :kind="kind === 'event' ? { icon: 'event', label: 'Event' } : undefined"
+      :parent="
+        kind === 'section'
+          ? {
+              label: 'Project section',
+              href: '#',
+              title: 'The project',
+              iconMedia: icon,
+            }
+          : undefined
+      "
+      data-test-hero
+    />
+    <PublicHero
+      v-else
       title="Project with a long title to verify the banner layout"
       summary="A description that stays readable while the media loads and plays."
       :icon-media="icon"

@@ -2,23 +2,11 @@
 import {
   isPublicSecret,
   type PublicEntityLink,
-  type PublicReferenceLink,
   type PublicRelatedCounts,
   type PublicRelatedPage,
-  type PublicSecretReference,
 } from '#layers/thei/shared/api/public';
-import {
-  RELATION_ENTITY_TYPES,
-  type RelationEntityType,
-} from '#layers/thei/shared/relation';
-import {
-  RELATION_GROUP_ORDER,
-  relationEntityIcon,
-  relationGroupPhraseKey,
-  relationTypeIcon,
-} from '#layers/thei/shared/relation-display';
+import type { RelationEntityType } from '#layers/thei/shared/relation';
 import type { ContentHeading } from '#layers/thei/app/components/content/content-headings';
-import type { TabStripItem } from '../TabStrip.vue';
 
 /**
  * Everything related to a page's entity, at the foot of the page.
@@ -26,8 +14,9 @@ import type { TabStripItem } from '../TabStrip.vue';
  * The page carries only how many there are of each kind; the lists come one
  * kind and one page at a time, the way the home page's heatmap fetches a day
  * on demand. One tab per kind that has anything, so a project's hundreds of
- * diary entries never bury the two projects it grew out of. Inside a tab the
- * relations are grouped by what they say, the directed kinds first.
+ * diary entries never bury the two projects it grew out of. Each relation
+ * is a card that says what it is (`PublicRelationCard`), and the directed
+ * kinds come first, as the server lists them.
  */
 const { counts, url } = defineProps<{
   counts: PublicRelatedCounts;
@@ -36,20 +25,8 @@ const { counts, url } = defineProps<{
 }>();
 
 const total = computed(() => publicRelatedTotal(counts));
-const kindLabels = computed<Record<RelationEntityType, string>>(() => ({
-  project: phrase.value.projects,
-  event: phrase.value.events,
-  'diary-entry': phrase.value.diary,
-}));
-const tabs = computed<TabStripItem<RelationEntityType>[]>(() =>
-  RELATION_ENTITY_TYPES.filter((type) => (counts[type] ?? 0) > 0).map(
-    (type) => ({
-      key: type,
-      label: kindLabels.value[type],
-      icon: relationEntityIcon(type),
-      count: counts[type],
-    }),
-  ),
+const tabs = computed(() =>
+  relationKindTabs(counts).filter((tab) => (tab.count ?? 0) > 0),
 );
 const kind = ref<RelationEntityType>(tabs.value[0]?.key ?? 'project');
 
@@ -69,67 +46,44 @@ const loadingMore = ref(false);
 const moreError = ref(false);
 const more = computed(() => (page.value?.pageCount ?? 0) >= nextPage.value);
 
+/**
+ * Each request for more is numbered; one answered after another took its
+ * place — the reader moved to another tab — is ignored.
+ */
+let moreRequest = 0;
+
 watch(kind, () => {
+  moreRequest++;
   extra.value = [];
   nextPage.value = 2;
+  loadingMore.value = false;
   moreError.value = false;
 });
 
 async function loadMore() {
   if (!more.value || loadingMore.value) return;
+  const request = ++moreRequest;
   loadingMore.value = true;
   moreError.value = false;
-  const current = kind.value;
   try {
     const loaded = await $fetch<PublicRelatedPage>(url, {
-      query: { kind: current, page: nextPage.value },
+      query: { kind: kind.value, page: nextPage.value },
     });
-    if (kind.value !== current) return;
+    if (request !== moreRequest) return;
     extra.value = [...extra.value, ...loaded.items];
     nextPage.value += 1;
   } catch {
-    if (kind.value === current) moreError.value = true;
+    if (request === moreRequest) moreError.value = true;
   } finally {
-    if (kind.value === current) loadingMore.value = false;
+    if (request === moreRequest) loadingMore.value = false;
   }
-}
-
-function asReferenceLink(
-  entity: PublicEntityLink,
-): PublicReferenceLink | PublicSecretReference {
-  return isPublicSecret(entity)
-    ? entity
-    : {
-        kind: entity.entityType,
-        title: entity.title,
-        href: entity.href,
-        description: entity.summary,
-        note: entity.note || undefined,
-        iconMedia: entity.iconMedia,
-        ...(entity.date ? { date: entity.date } : {}),
-      };
 }
 
 const items = computed(() => [...(page.value?.items ?? []), ...extra.value]);
 
-/**
- * The list split by what the relation says, named from this entity's side.
- * A lone plain group needs no name; a directed one is named even alone,
- * since the name is the whole point of it.
- */
-const groups = computed(() =>
-  RELATION_GROUP_ORDER.map((type) => ({
-    key: type,
-    icon: relationTypeIcon(type),
-    title: phrase.value[relationGroupPhraseKey(type)],
-    items: items.value
-      .filter((item) => (item.relationType ?? 'related') === type)
-      .map(asReferenceLink),
-  })).filter((group) => group.items.length > 0),
-);
-const titled = computed(
-  () => groups.value.length > 1 || groups.value[0]?.key !== 'related',
-);
+function itemKey(item: PublicEntityLink) {
+  return isPublicSecret(item) ? item.key : `${item.entityType}:${item.href}`;
+}
 </script>
 
 <script lang="ts">
@@ -165,8 +119,7 @@ export function publicRelatedHeading(title: string): ContentHeading {
       :title="phrase.related_entities"
       icon="arrow-cycle"
     />
-    <TabStrip
-      v-if="tabs.length > 1"
+    <UnderlineTabs
       v-model="kind"
       :tabs="tabs"
       :label="phrase.related_entities"
@@ -175,55 +128,37 @@ export function publicRelatedHeading(title: string): ContentHeading {
     <div
       id="related-entities-panel"
       role="tabpanel"
+      :aria-labelledby="`related-entities-panel-${kind}-tab`"
       class="flex min-w-0 flex-col gap-sm"
     >
       <p v-if="loading" class="text-sm text-text-3">
         <Icon name="loading" class="mr-xs" />{{ phrase.life_activity_loading }}
       </p>
       <template v-else>
-        <div
-          v-for="group in groups"
-          :key="group.key"
-          class="flex min-w-0 flex-col gap-xs"
-        >
-          <!-- The mark is drawn larger than the label: it is the one thing
-               that says which way the relation runs. -->
-          <div
-            v-if="titled"
-            class="flex items-center gap-xs px-1 text-xs font-semibold
-              text-text-3"
-          >
-            <Icon
-              :name="group.icon"
-              class="shrink-0 text-xl"
-              aria-hidden="true"
-            />
-            <span>{{ group.title }}</span>
-            <span class="h-px min-w-0 flex-1 bg-border-1" aria-hidden="true" />
-          </div>
-          <!-- The tab already says what kind of thing these are, so the
-               tiles carry no kind badge of their own. The main column has
-               room for more of each description than the sidebar. -->
-          <PublicReferenceLinks
-            :links="group.items"
-            hide-kind
-            :description-lines="3"
-            class="sm:grid sm:grid-cols-2"
+        <div class="grid min-w-0 gap-xs sm:grid-cols-2">
+          <PublicRelationCard
+            v-for="item in items"
+            :key="itemKey(item)"
+            :link="item"
+            :kind="kind"
           />
         </div>
-        <button
+        <!-- A button a thumb can find: the full width on a phone. -->
+        <Button
           v-if="more"
           type="button"
+          variant="secondary"
           :disabled="loadingMore"
-          class="cursor-pointer self-start px-1 text-xs font-semibold
-            text-accent transition hocus:underline"
+          class="flex min-h-10 w-full items-center justify-center gap-xs
+            font-semibold sm:w-auto sm:self-start"
+          data-relation-more
           @click="loadMore"
         >
           <Icon v-if="loadingMore" name="loading" />
           <span v-else>{{
             moreError ? phrase.profile_load_error : phrase.profile_more
           }}</span>
-        </button>
+        </Button>
       </template>
     </div>
   </section>

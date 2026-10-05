@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { PublicProjectSectionResponse } from '#layers/thei/shared/api/public';
-import { buildProjectChildUrl } from '#layers/thei/shared/project-url';
+import { buildProjectSectionUrl } from '#layers/thei/shared/project-url';
 import {
   createdAndUpdatedTimelineItems,
   type PublicDetailPanelData,
@@ -14,10 +14,9 @@ const resource = await useFetch<PublicProjectSectionResponse>(
 );
 const data = useRequiredResource(resource);
 const canonical = computed(() =>
-  buildProjectChildUrl(
+  buildProjectSectionUrl(
     data.value.project.humanReadableSlug,
     data.value.project.publicId,
-    'sections',
     data.value.humanReadableSlug,
     data.value.publicId,
   ),
@@ -35,8 +34,8 @@ usePublicSeo({
   ogImage,
   markdown: true,
   ogType: 'article',
-  // The project is the context a stage or a section is read in, so the tab
-  // and a shared link name it: "Stage - Project - Owner".
+  // The project is the context a section is read in, so the tab and a
+  // shared link name it: "Section - Project - Owner".
   title: () => `${data.value.title} - ${data.value.project.title}`,
   description: () => data.value.summary,
   canonical,
@@ -58,6 +57,10 @@ usePublicSeo({
         ? { dateModified: data.value.chronology.updatedAt }
         : {}),
       ...(seoImage.value ? { image: seoImage.value } : {}),
+      // The stretch a dated section tells about, not when it was written.
+      ...(data.value.period
+        ? { temporalCoverage: publicSeoTemporalCoverage(data.value.period) }
+        : {}),
       isPartOf: {
         '@type': 'CreativeWork',
         '@id': `${data.value.project.href}#project`,
@@ -70,6 +73,7 @@ usePublicSeo({
 const details = computed(
   () =>
     ({
+      periods: data.value.periods,
       neighbours: data.value.neighbours && {
         kind: 'project-section',
         ...data.value.neighbours,
@@ -84,24 +88,42 @@ const details = computed(
 </script>
 
 <template>
-  <main class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
-    <PublicPageHeader
-      icon="file-tray-stack"
+  <main class="flex flex-col">
+    <!-- A banner opens the page with it; without one, the plain header. -->
+    <PublicHero
+      v-if="data.bannerMedia"
       :title="data.title"
-      :description="data.summary"
+      :summary="data.summary"
+      :banner-media="data.bannerMedia"
       :parent="{ ...data.project, label: phrase.content_section }"
     />
-    <PublicDetailLayout :details="details" :content="data.content">
-      <ContentRenderer
-        v-if="data.content.blocks.length"
-        :data="data.content"
-        asset-viewer
+    <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
+      <PublicPageHeader
+        v-if="!data.bannerMedia"
+        icon="project-section"
+        :title="data.title"
+        :description="data.summary"
+        :parent="{ ...data.project, label: phrase.content_section }"
       />
-      <PublicEmptyState
-        v-else
-        :title="phrase.public_section_content_empty"
-        :description="phrase.public_section_content_empty_description"
-      />
-    </PublicDetailLayout>
+      <PublicDetailLayout :details="details" :content="data.content">
+        <ContentRenderer
+          v-if="data.content.blocks.length"
+          :data="data.content"
+          asset-viewer
+        />
+        <!-- A stage may be only its dates; a general section that
+             shows nothing has a body the visitor may not read. -->
+        <PublicEmptyState
+          v-else-if="data.periods.length"
+          :title="phrase.public_section_dates_only"
+          :description="phrase.public_section_dates_only_description"
+        />
+        <PublicEmptyState
+          v-else
+          :title="phrase.public_section_content_empty"
+          :description="phrase.public_section_content_empty_description"
+        />
+      </PublicDetailLayout>
+    </div>
   </main>
 </template>

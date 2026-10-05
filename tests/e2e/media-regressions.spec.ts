@@ -91,6 +91,40 @@ for (const viewport of [
   });
 }
 
+test('a content video in view plays through its loops without a pause', async ({
+  page,
+}) => {
+  const frame = page
+    .locator('[data-renderer] figure')
+    .filter({ hasText: 'Video caption' });
+  await frame.scrollIntoViewIfNeeded();
+  const main = frame.locator('video[data-media-main]');
+  const backdrop = frame.locator('video[data-media-backdrop-video]');
+  await expect
+    .poll(() => main.evaluate((v: HTMLVideoElement) => v.paused))
+    .toBe(false);
+  // Every pause shows a phone's controls over the video, so a loop, a stall or
+  // the backdrop catching up must not cause one.
+  type Watched = HTMLVideoElement & { loops: number; pauses: number };
+  await main.evaluate((v: Watched) => {
+    let last = v.currentTime;
+    v.loops = v.pauses = 0;
+    v.addEventListener('pause', () => v.pauses++);
+    v.addEventListener('timeupdate', () => {
+      if (v.currentTime < last) v.loops++;
+      last = v.currentTime;
+    });
+  });
+  await expect
+    .poll(() => main.evaluate((v: Watched) => v.loops), { timeout: 15_000 })
+    .toBeGreaterThanOrEqual(2);
+  expect(await main.evaluate((v: Watched) => v.pauses)).toBe(0);
+  expect(await main.evaluate((v: HTMLVideoElement) => v.paused)).toBe(false);
+  expect(await backdrop.evaluate((v: HTMLVideoElement) => v.paused)).toBe(
+    false,
+  );
+});
+
 test('content video controls work inline; showcase videos still open a modal', async ({
   page,
   browserName,
@@ -233,6 +267,25 @@ test('admin and public CTA share all color modes and the standard fallback', asy
   expect(await background('missing-color')).toBe(
     await background('standard-gradient'),
   );
+});
+
+test('a CTA shadows only its built-in glyph, never an image icon', async ({
+  page,
+}) => {
+  const filters = (mode: string, selector: string) =>
+    page
+      .locator(`[data-action="${mode}"] .project-action-button ${selector}`)
+      .evaluateAll((icons) =>
+        icons.map((icon) => getComputedStyle(icon).filter),
+      );
+  // Preview and public button alike.
+  expect(await filters('standard-gradient', '.media-surface')).toEqual([
+    'none',
+    'none',
+  ]);
+  const glyphs = await filters('missing-color', '.action-glyph');
+  expect(glyphs).toHaveLength(2);
+  for (const filter of glyphs) expect(filter).toContain('drop-shadow');
 });
 
 test('media hydration, gallery selection and snapshot restore do not flash dirty state', async ({

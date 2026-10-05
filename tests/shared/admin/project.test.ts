@@ -507,20 +507,23 @@ describe('validateProjectData asset metadata', () => {
     };
     const project = baseProject({
       descriptionContent: repeatedAssetContent,
-      stages: [
+      sections: [
         {
-          title: 'Stage',
+          title: 'Dated',
           summary: '',
+          humanReadableSlug: '',
+          publicId: 'Dated',
           isPrivate: false,
           periods: [{ startDate: '2026-01-01', endDate: '2026-01-02' }],
           content: repeatedAssetContent,
         },
-      ],
-      contentSections: [
         {
           title: 'Section',
           summary: '',
+          humanReadableSlug: '',
+          publicId: 'Section',
           isPrivate: false,
+          periods: [],
           content: repeatedAssetContent,
         },
       ],
@@ -531,12 +534,14 @@ describe('validateProjectData asset metadata', () => {
     });
   });
 
-  it('reads tag context from stages and project sections', () => {
+  it('reads tag context from the project sections', () => {
     const project = baseProject({
-      stages: [
+      sections: [
         {
           title: 'Discovery',
           summary: 'Interviews',
+          humanReadableSlug: '',
+          publicId: 'Discovery',
           isPrivate: false,
           periods: [{ startDate: '2026-01-01', endDate: '2026-01-02' }],
           content: {
@@ -547,12 +552,13 @@ describe('validateProjectData asset metadata', () => {
             },
           },
         },
-      ],
-      contentSections: [
         {
           title: 'Design system',
           summary: 'Reusable patterns',
+          humanReadableSlug: '',
+          publicId: 'DesignSystem',
           isPrivate: false,
+          periods: [],
           content: {
             data: {
               blocks: [
@@ -744,5 +750,33 @@ describe('validateProjectData asset metadata', () => {
         }),
       ),
     ).not.toBe('string');
+  });
+});
+
+describe('validateProjectData endings', () => {
+  it('ends titles as headings and captions as captions', () => {
+    const result = validateProjectData(
+      baseProject({
+        title: 'Дом у моря.',
+        showcaseAssets: [
+          { assetUuid: 'asset-1', caption: 'Кот на окне.', isPrivate: false },
+        ],
+        otherAssets: [
+          {
+            assetUuid: 'asset-2',
+            title: 'Отчёт.',
+            caption: 'Итоги года. Планы',
+            isPrivate: false,
+          },
+        ],
+      }),
+    );
+    if (typeof result === 'string') throw new Error(result);
+    expect(result.title).toBe('Дом у моря');
+    expect(result.showcaseAssets?.[0]?.caption).toBe('Кот на окне');
+    expect(result.otherAssets?.[0]).toMatchObject({
+      title: 'Отчёт',
+      caption: 'Итоги года. Планы.',
+    });
   });
 });

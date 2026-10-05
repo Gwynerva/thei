@@ -7,7 +7,7 @@ import {
 const saved = JSON.stringify({
   title: 'Project',
   descriptionContent: { data: { blocks: [] } },
-  stages: [
+  sections: [
     { title: 'One', isPrivate: false, content: { data: { blocks: ['a'] } } },
     { title: 'Two', isPrivate: false, content: { data: { blocks: ['b'] } } },
   ],
@@ -22,29 +22,29 @@ describe('changedOnlyIn', () => {
     expect(changedOnlyIn(current, saved, FIELDS)).toBe(true);
   });
 
-  it('accepts a change to the content of a stage several levels down', () => {
+  it('accepts a change to the content of a section several levels down', () => {
     const current = JSON.parse(saved);
-    current.stages[1].content = { data: { blocks: ['edited'] } };
+    current.sections[1].content = { data: { blocks: ['edited'] } };
     expect(changedOnlyIn(current, saved, FIELDS)).toBe(true);
   });
 
   it('refuses when anything outside the content fields differs', () => {
     const current = JSON.parse(saved);
-    current.stages[0].title = 'Renamed';
-    current.stages[1].content = { data: { blocks: ['edited'] } };
+    current.sections[0].title = 'Renamed';
+    current.sections[1].content = { data: { blocks: ['edited'] } };
     expect(changedOnlyIn(current, saved, FIELDS)).toBe(false);
   });
 
   it('refuses when an item was added, even with the same content', () => {
     const current = JSON.parse(saved);
-    current.stages.push({ title: 'Three', content: null });
+    current.sections.push({ title: 'Three', content: null });
     expect(changedOnlyIn(current, saved, FIELDS)).toBe(false);
   });
 
   it('ignores the order of keys in an item rebuilt elsewhere', () => {
-    // A stage handed back by its modal lists its fields in another order.
+    // A section handed back by its modal lists its fields in another order.
     const current = JSON.parse(saved);
-    current.stages[1] = {
+    current.sections[1] = {
       content: { data: { blocks: ['edited'] } },
       isPrivate: false,
       title: 'Two',
@@ -81,18 +81,18 @@ describe('stampSavedContent', () => {
 
   it('matches list items by public ID, not by position', () => {
     const saved = {
-      stages: [
+      sections: [
         { publicId: 'A', content: { data: blocks('a'), updatedAt: 1 } },
         { publicId: 'B', content: { data: blocks('b'), updatedAt: 1 } },
       ],
     };
     const current = structuredClone(saved);
-    current.stages.reverse();
-    current.stages[1]!.content.data = blocks('a, edited');
+    current.sections.reverse();
+    current.sections[1]!.content.data = blocks('a, edited');
     stampSavedContent(current, JSON.stringify(saved), ['content'], 9);
-    expect(current.stages.map((stage) => stage.content.updatedAt)).toEqual([
-      1, 9,
-    ]);
+    expect(
+      current.sections.map((section) => section.content.updatedAt),
+    ).toEqual([1, 9]);
   });
 
   it('stamps content that did not exist at the last save', () => {

@@ -65,7 +65,7 @@ const backgroundSize = computed(() => {
 const buttonStyle = computed(() => ({
   '--action-color': gradientColor.value,
   '--action-image': props.backgroundMedia
-    ? `url("${props.backgroundMedia.src.replaceAll('"', '\\"')}")`
+    ? siteCssUrl(props.backgroundMedia.src)
     : 'none',
   '--action-size': backgroundSize.value,
   '--action-repeat': props.backgroundRepeat,
@@ -90,12 +90,12 @@ const buttonStyle = computed(() => ({
     <Media
       v-if="displayedIcon"
       v-bind="displayedIcon"
-      class="action-icon size-6 shrink-0 rounded-xs object-cover"
+      class="size-6 shrink-0 rounded-xs"
     />
     <Icon
       v-else
       :name="target === 'file' ? 'file' : 'external-link'"
-      class="action-icon shrink-0 text-xl"
+      class="action-glyph shrink-0 text-xl"
     />
     <span class="action-label truncate">{{
       publicText(text) || phrase.project_action_placeholder
@@ -144,7 +144,13 @@ const buttonStyle = computed(() => ({
     0 0 0.28em var(--action-dark-shadow),
     0 0.08em 0.18em var(--action-dark-shadow);
 }
-.action-icon {
+/*
+ * The built-in glyph is white like the label and wears its shadow. An image
+ * icon is shown as it was made: a shadow follows a transparent picture's own
+ * outline and smears a dark halo around it, so an image that wants a shadow
+ * carries it in the file.
+ */
+.action-glyph {
   filter: drop-shadow(0 0 0.24em var(--action-dark-shadow))
     drop-shadow(0 0.08em 0.14em var(--action-dark-shadow));
 }

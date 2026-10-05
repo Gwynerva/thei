@@ -6,8 +6,8 @@ import type {
 import {
   launchAssetBatchWizard,
   launchAssetEditor,
-  launchAssetWizard,
   mapAssetVariantToReplaceResult,
+  type AssetBatchResult,
 } from '#layers/thei/app/composables/asset-wizard';
 import type { AssetVariantsResponse } from '#layers/thei/shared/api/asset';
 import { AssetType, type AssetMeta } from '#layers/thei/shared/asset';
@@ -16,7 +16,6 @@ import {
   imageExtensionProfile,
   videoExtensionProfile,
 } from '#layers/thei/shared/assets/extensions';
-import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
 import { ASSET_UPLOAD_LIMITS } from '#layers/thei/shared/asset-upload-limits';
 import { DEFAULT_ASSET_IMAGE_FORMAT } from '#layers/thei/shared/asset-upload-settings';
 import AssetTile from '#layers/thei/app/components/AssetTile.vue';
@@ -42,12 +41,16 @@ import {
   showcaseItemsKey,
   currentProjectUuidKey,
 } from '../composables';
-import type { MediaDescriptor } from '#layers/thei/shared/media';
 import { assetDetailsModal } from '#layers/thei/app/modals/asset-details/modal';
 import { useOrderedAssetList } from '#layers/thei/app/composables/ordered-asset-list';
 import { useSingleMediaAsset } from '#layers/thei/app/composables/single-media-asset';
 
-const { filesOnly = false } = defineProps<{ filesOnly?: boolean }>();
+/**
+ * A project's files: icon, banner, showcase and the rest. An event, which
+ * borrows this form, has only a banner and the rest.
+ */
+const { kind = 'project' } = defineProps<{ kind?: 'project' | 'event' }>();
+const isProject = computed(() => kind === 'project');
 
 const projectData = inject(projectDataInjectionKey)!;
 const savedProjectData = inject(savedProjectDataInjectionKey)!;
@@ -101,37 +104,6 @@ function extensionFromUrl(url: string | undefined, fallback: string) {
   return dot === -1 ? fallback : filename.slice(dot + 1).toLowerCase();
 }
 
-async function pickProjectMediaAsset(
-  uploadProfile?: AssetUploadProfile,
-): Promise<PickedAsset | undefined> {
-  const asset = await launchProjectAssetWizard({
-    accept: [imageExtensionProfile, videoExtensionProfile],
-    maxSize: ASSET_UPLOAD_LIMITS.media,
-    sizeLimitPolicy: 'media',
-    uploadProfile,
-  });
-  if (
-    !asset ||
-    (asset.type !== AssetType.Image && asset.type !== AssetType.Video)
-  ) {
-    return undefined;
-  }
-
-  const result = mapAssetVariantToReplaceResult(asset);
-  return result.media ? { asset, result } : undefined;
-}
-
-async function launchProjectAssetWizard(
-  options: Parameters<typeof launchAssetWizard>[0],
-) {
-  try {
-    return await launchAssetWizard(options);
-  } catch (error) {
-    console.error(error);
-    return undefined;
-  }
-}
-
 async function editProjectAsset(
   assetUuid: string,
   options: Parameters<typeof launchAssetEditor>[1],
@@ -174,8 +146,9 @@ const iconSlot = useSingleMediaAsset({
 });
 
 const bannerSlot = useSingleMediaAsset({
-  uploadProfile: 'project-banner',
-  asideTitle: () => phrase.value.project_banner,
+  uploadProfile: 'entity-banner',
+  asideTitle: () =>
+    isProject.value ? phrase.value.project_banner : phrase.value.event_banner,
   getAssetUuid: () => projectData.value.bannerAssetUuid,
   setAssetUuid: (assetUuid) => {
     projectData.value.bannerAssetUuid = assetUuid;
@@ -249,21 +222,44 @@ const {
   otherRoot,
 );
 
-// Showcase handlers
+/**
+ * The file one pick settled on, when it was a single one: made in the editor,
+ * chosen among the variants of a duplicate, or taken from the library. A
+ * batch is placed as it is, and each of its tiles is described later.
+ */
+function singleSettledAsset(result: AssetBatchResult) {
+  return result.assets.length === 1 &&
+    !result.uploads.length &&
+    !result.errors.length
+    ? result.assets[0]
+    : undefined;
+}
 
-async function openShowcaseAdd() {
-  batchErrorMessage.value = '';
-  const result = await launchAssetBatchWizard({
-    accept: [imageExtensionProfile, videoExtensionProfile],
-    maxSize: ASSET_UPLOAD_LIMITS.media,
-    sizeLimitPolicy: 'media',
-  });
-  if (!result) return;
-  for (const asset of result.assets) placeShowcaseAsset(asset);
-  showcaseUploads.follow(result.uploads);
+function reportBatchErrors(result: AssetBatchResult) {
   batchErrorMessage.value = result.errors
     .map((error) => `${error.fileName}: ${error.message}`)
     .join(' · ');
+}
+
+// Showcase handlers
+
+// One flow: the picker, the editor and the details a single file goes on to,
+// where its caption is written, replace one another.
+function openShowcaseAdd() {
+  return runModalFlow(async () => {
+    batchErrorMessage.value = '';
+    const result = await launchAssetBatchWizard({
+      accept: [imageExtensionProfile, videoExtensionProfile],
+      maxSize: ASSET_UPLOAD_LIMITS.media,
+      sizeLimitPolicy: 'media',
+    });
+    if (!result) return;
+    for (const asset of result.assets) placeShowcaseAsset(asset);
+    showcaseUploads.follow(result.uploads);
+    reportBatchErrors(result);
+    const single = singleSettledAsset(result);
+    if (single) await runShowcaseDetails(single.assetUuid);
+  });
 }
 
 function placeShowcaseAsset(asset: AssetVariantInfo) {
@@ -281,8 +277,19 @@ function placeShowcaseAsset(asset: AssetVariantInfo) {
   );
 }
 
-async function openShowcaseAsset(index: number) {
-  const snapshot = showcaseItems.value[index];
+function openShowcaseAsset(index: number) {
+  const item = showcaseItems.value[index];
+  if (item) return runModalFlow(() => runShowcaseDetails(item.assetUuid));
+}
+
+/**
+ * A tile's details: its caption and who sees it. "Change" goes through the
+ * editor and comes back here; closing keeps the tile as it is.
+ */
+async function runShowcaseDetails(assetUuid: string) {
+  const snapshot = showcaseItems.value.find(
+    (item) => item.assetUuid === assetUuid,
+  );
   if (!snapshot) return;
   let currentAssetUuid = snapshot.assetUuid;
   let current: AssetReplaceResult = {
@@ -346,19 +353,21 @@ async function openShowcaseAsset(index: number) {
 
 // Other-files handlers
 
-async function openOtherAdd() {
-  batchErrorMessage.value = '';
-  const result = await launchAssetBatchWizard({
-    accept: anyFileExtensionProfile,
-    maxSize: ASSET_UPLOAD_LIMITS.file,
-    sizeLimitPolicy: 'file',
+function openOtherAdd() {
+  return runModalFlow(async () => {
+    batchErrorMessage.value = '';
+    const result = await launchAssetBatchWizard({
+      accept: anyFileExtensionProfile,
+      maxSize: ASSET_UPLOAD_LIMITS.file,
+      sizeLimitPolicy: 'file',
+    });
+    if (!result) return;
+    for (const asset of result.assets) placeOtherAsset(asset);
+    otherUploads.follow(result.uploads);
+    reportBatchErrors(result);
+    const single = singleSettledAsset(result);
+    if (single) await runOtherDetails(single.assetUuid);
   });
-  if (!result) return;
-  for (const asset of result.assets) placeOtherAsset(asset);
-  otherUploads.follow(result.uploads);
-  batchErrorMessage.value = result.errors
-    .map((error) => `${error.fileName}: ${error.message}`)
-    .join(' · ');
 }
 
 function placeOtherAsset(asset: AssetVariantInfo) {
@@ -366,8 +375,16 @@ function placeOtherAsset(asset: AssetVariantInfo) {
   addOtherItem(pickedToOtherItem(picked, { title: phrase.value.project_file }));
 }
 
-async function openOtherAsset(index: number) {
-  const snapshot = otherItems.value[index];
+function openOtherAsset(index: number) {
+  const item = otherItems.value[index];
+  if (item) return runModalFlow(() => runOtherDetails(item.assetUuid));
+}
+
+/** A file's details: its title, description and who sees it. */
+async function runOtherDetails(assetUuid: string) {
+  const snapshot = otherItems.value.find(
+    (item) => item.assetUuid === assetUuid,
+  );
   if (!snapshot) return;
   let currentAssetUuid = snapshot.assetUuid;
   let current: AssetReplaceResult = {
@@ -447,11 +464,11 @@ async function openOtherAsset(index: number) {
   <div>
     <SectionHeader
       icon="files"
-      :title="filesOnly ? phrase.event_files : phrase.project_files"
+      :title="isProject ? phrase.project_files : phrase.event_files"
       :description="
-        filesOnly
-          ? phrase.event_files_description
-          : phrase.project_files_description
+        isProject
+          ? phrase.project_files_description
+          : phrase.event_files_description
       "
       class="mb-md"
     />
@@ -464,9 +481,12 @@ async function openOtherAsset(index: number) {
         <Icon name="warning" class="mr-xs" />
         {{ batchErrorMessage }}
       </div>
-      <div v-if="!filesOnly" class="flex flex-wrap gap-md p-sm sm:p-md">
+      <div
+        class="flex flex-wrap gap-md p-sm sm:p-md"
+        :class="{ 'border-b border-border-1': !isProject }"
+      >
         <!-- Project Icon -->
-        <div class="flex flex-1 items-center gap-sm">
+        <div v-if="isProject" class="flex flex-1 items-center gap-sm">
           <AssetTile
             :media="iconMedia"
             :overlay="{
@@ -484,8 +504,8 @@ async function openOtherAsset(index: number) {
           </div>
         </div>
 
-        <!-- Project Banner -->
-        <div class="flex flex-1 items-center gap-sm">
+        <!-- Banner -->
+        <div class="flex flex-1 items-center gap-sm" data-banner-field>
           <AssetTile
             :media="bannerMedia"
             :overlay="{
@@ -493,21 +513,31 @@ async function openOtherAsset(index: number) {
               showSize: bannerSize != null,
               editable: true,
             }"
-            :aria-label="phrase.project_banner"
+            :aria-label="
+              isProject ? phrase.project_banner : phrase.event_banner
+            "
             class="aspect-video h-18 shrink-0 cursor-pointer"
             @click="bannerSlot.open"
           />
           <div class="tracking-tight">
-            <div class="font-semibold">{{ phrase.project_banner }}</div>
-            <p class="text-sm text-text-2">{{ phrase.project_banner_hint }}</p>
-            <AssetAspectHint profile="project-banner" class="mt-1" />
+            <div class="font-semibold">
+              {{ isProject ? phrase.project_banner : phrase.event_banner }}
+            </div>
+            <p class="text-sm text-text-2">
+              {{
+                isProject
+                  ? phrase.project_banner_hint
+                  : phrase.event_banner_hint
+              }}
+            </p>
+            <AssetAspectHint profile="entity-banner" class="mt-1" />
           </div>
         </div>
       </div>
 
       <!-- Showcase header -->
       <div
-        v-if="!filesOnly"
+        v-if="isProject"
         class="border-y border-border-1 bg-bg-3 px-md py-xs text-sm
           tracking-tight"
       >
@@ -517,7 +547,7 @@ async function openOtherAsset(index: number) {
 
       <!-- Showcase grid -->
       <div
-        v-if="!filesOnly"
+        v-if="isProject"
         ref="showcaseRoot"
         class="flex flex-wrap gap-sm p-sm sm:p-md"
       >
@@ -569,7 +599,7 @@ async function openOtherAsset(index: number) {
 
       <!-- Other-files header -->
       <div
-        v-if="!filesOnly"
+        v-if="isProject"
         class="border-y border-border-1 bg-bg-3 px-md py-xs text-sm
           tracking-tight"
       >

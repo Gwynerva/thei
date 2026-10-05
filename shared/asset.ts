@@ -18,6 +18,7 @@ export const ASSET_CONTAINER_TYPES = [
   'profile-status',
   'project-status',
   'project',
+  'project-section',
   'event',
   'page',
   'diary-entry',
@@ -91,7 +92,22 @@ export interface VideoAssetMeta extends AssetMetaBase {
   previewScore?: number;
 }
 
-export interface AudioAssetMeta extends AssetMetaBase {}
+export interface AudioAssetMeta extends AssetMetaBase {
+  /**
+   * Seconds of sound, counted from the decoded samples. 0 only for a file the
+   * 0.0.4 update could not read.
+   */
+  duration: number;
+  /**
+   * Loudness along the recording, `AUDIO_WAVEFORM_PEAKS` values from 0 to
+   * 100, start to end: what a player draws before a byte of sound is loaded.
+   * Empty only for a file the 0.0.4 update could not read.
+   */
+  peaks: number[];
+  channels?: number;
+  /** Bits per second of the sound, or of the whole file when no stream says. */
+  bitrate?: number;
+}
 
 export interface ArchivedOriginalFileMeta {
   extension: string;

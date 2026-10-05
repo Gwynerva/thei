@@ -1,4 +1,5 @@
 import type { MediaDescriptor } from './media';
+import { normalizeCaptionText } from './terminal-punctuation';
 
 export const EXTERNAL_LINK_TEXT_LIMIT = 300;
 export const EXTERNAL_LINK_LIST_LIMIT = 100;
@@ -260,7 +261,8 @@ function validateLinkList<T extends object>(
 
 function readLinkNote(value: unknown, fail: Fail): string | undefined {
   if (value === undefined) return undefined;
-  const note = typeof value === 'string' ? value.trim() : '';
+  const note =
+    typeof value === 'string' ? normalizeCaptionText(value.trim()) : '';
   if (Array.from(note).length > EXTERNAL_LINK_NOTE_LIMIT)
     fail('External link note is too long');
   return note;

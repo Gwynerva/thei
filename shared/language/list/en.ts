@@ -176,7 +176,7 @@ export default defineI18nBase({
   ],
   phrases: {
     asset_library: 'File storage',
-    asset_library_search: 'Search captions and titles…',
+    asset_library_search: 'Search files',
     asset_aspect_hint: (ratio, size) =>
       `Works best with an image or video in ${ratio}, for example ${size} pixels`,
     asset_library_pending_deletion: (date) =>
@@ -187,7 +187,8 @@ export default defineI18nBase({
     asset_library_unused: 'Unused',
     asset_library_unused_hint:
       'Unused files are automatically removed after 24 hours.',
-    asset_library_all: 'All',
+    asset_library_anywhere: 'Anywhere',
+    asset_library_widen: 'Look wider',
     asset_library_used: 'In use',
     asset_library_more: 'Show more',
     asset_library_insert: 'Insert selected',
@@ -207,6 +208,8 @@ export default defineI18nBase({
     asset_recipe_lossless: 'lossless',
     asset_recipe_no_audio: 'no sound',
     asset_recipe_fast: 'fast conversion',
+    asset_recipe_bitrate: (kbps) => `${kbps} kbit/s`,
+    asset_recipe_mono: 'mono',
     asset_quality_minimal: 'Minimal',
     asset_quality_low: 'Low',
     asset_quality_medium: 'Medium',
@@ -268,9 +271,8 @@ export default defineI18nBase({
     project_tabs: 'Project page tabs',
     project_tab_overview: 'Overview',
     project_tab_timeline: 'Chronology',
-    project_timeline_latest: 'Latest from the chronology',
     project_timeline_seo_description: (title) =>
-      `The chronology of “${title}”: stages, sections, statuses, related events and diary entries.`,
+      `The chronology of “${title}”: its sections, statuses, related events and diary entries.`,
     project_status_hint: 'Short descriptions of the states the project is in.',
     project_new_status: 'New project status',
     project_status_empty: 'No statuses yet',
@@ -327,8 +329,6 @@ export default defineI18nBase({
     life_activity_events: (count) => plural(count, 'event', 'events'),
     life_activity_projects: (count) => plural(count, 'project', 'projects'),
     life_activity_pages: (count) => plural(count, 'page', 'pages'),
-    life_activity_stages: (count) =>
-      plural(count, 'project stage', 'project stages'),
     life_activity_sections: (count) =>
       plural(count, 'project section', 'project sections'),
     life_activity_profile: (count) =>
@@ -361,7 +361,11 @@ export default defineI18nBase({
       'There are no entries for this date in previous years yet. There is still a whole life to explore, with other moments to revisit.',
     life_rewind_explore_life: 'Explore Life',
     event_ongoing: 'An event is in progress',
-    stage_ongoing: 'A project stage is in progress',
+    event_was_ongoing: 'An event was under way',
+    period_until: (date) => `until ${date}`,
+    period_state_ongoing: 'ongoing',
+    period_state_upcoming: 'upcoming',
+    public_timeline_ongoing_until: (date) => `Ongoing, until ${date}`,
     view_all: 'View all',
     life_empty: 'Life has no public moments yet',
     event_started: 'An event started',
@@ -369,16 +373,17 @@ export default defineI18nBase({
     event_occurred: 'An event took place',
     project_created: 'A project was created',
     page_created: 'A page was created',
-    stage_started: 'A project stage started',
-    stage_ended: 'A project stage ended',
-    stage_occurred: 'A project stage took place',
-    section_created: 'A project section was created',
+    section_created: 'A section was created',
+    section_started: 'A section started',
+    section_ended: 'A section ended',
+    section_occurred: 'A section took place',
+    section_ongoing: 'A section is in progress',
+    section_was_ongoing: 'A section was under way',
     diary_written: 'Written in the diary',
     secret_event: (codename: string) => `Secret event ${codename}`,
     secret_project: (codename: string) => `Secret project ${codename}`,
     secret_page: (codename: string) => `Secret page ${codename}`,
     secret_diary_entry: (codename: string) => `Secret entry ${codename}`,
-    secret_stage: (codename: string) => `Secret stage ${codename}`,
     secret_section: (codename: string) => `Secret section ${codename}`,
     secret_media: (codename: string) => `Secret media ${codename}`,
     secret_file: (codename: string) => `Secret file ${codename}`,
@@ -393,7 +398,6 @@ export default defineI18nBase({
         event: 'Events',
         project: 'Projects',
         page: 'Pages',
-        'project-stage': 'Project stages',
         'project-section': 'Project sections',
         'profile-avatar': 'Avatars',
         'profile-status': 'Statuses',
@@ -402,14 +406,11 @@ export default defineI18nBase({
     public_timeline_from: (date) => `From ${date}`,
     public_timeline_until: (date) => `To ${date}`,
     public_timeline_duration: formatDuration,
-    projects_count: (count) =>
-      `${count} ${count === 1 ? 'project' : 'projects'}`,
-    events_count: (count) => `${count} ${count === 1 ? 'event' : 'events'}`,
     public_life_description:
-      'A continuous timeline of events, projects, and important stages.',
+      'A continuous timeline of events, projects and diary entries.',
     home: 'Home',
     llms_txt_intro:
-      'A personal archive of one life. Three main kinds of record, simplest first: a diary entry is a dated thought with no title, an event is a memorable moment written up, a project is a substantial episode with its own stages and sections. Alongside them, pages are standalone writing, tags are threads across all of it, and Life is the single timeline they land on.',
+      'A personal archive of one life. Three main kinds of record, simplest first: a diary entry is a dated thought with no title, an event is a memorable moment written up, a project is a substantial episode made of its own sections — general ones about a part of it, and stages, the sections with dates it went through. Relations join projects, events and diary entries: each lists the others it is related to, marking those that influence it or depend on it. Alongside them, pages are standalone writing, tags are threads across all of it, and Life is the single timeline they land on.',
     llms_txt_sections: 'Sections',
     llms_txt_home:
       'who this is, current status, best projects and the latest moments',
@@ -420,9 +421,9 @@ export default defineI18nBase({
     llms_txt_sitemap: 'every public address on this site',
     llms_txt_markdown_title: 'Markdown',
     llms_txt_markdown:
-      'Any public project, event, page or diary entry is also served as Markdown: add index.md to its address, for example /projects/name-id/index.md. Private parts are absent there, exactly as they are for any other visitor.',
+      'Any public project, project section, event, page or diary entry is also served as Markdown: add index.md to its address, for example /projects/name-id/index.md. Private parts are absent there, exactly as they are for any other visitor.',
     public_life_period_description: (period, siteName) =>
-      `Events, projects, and important stages for ${period} — ${siteName}.`,
+      `Events, projects and diary entries for ${period} — ${siteName}.`,
     public_pages_description:
       'Standalone static content: each piece stands on its own, unconnected to projects, events or anything else on the site.',
     public_tags_description:
@@ -477,32 +478,20 @@ export default defineI18nBase({
     public_details_from_content: 'From the content',
     public_details_overview: 'Summary',
     public_details_contents: 'Contents',
-    public_details_neighbour_stages: 'Nearby stages',
     public_details_neighbour_sections: 'Nearby sections',
     public_details_neighbour_entries: 'Nearby entries',
     public_neighbour_next: 'Next',
     public_neighbour_previous: 'Back',
-    public_details_chronology: 'Key dates',
+    public_details_chronology: 'Technical dates',
     public_details_timeline: 'Timeline',
     project_chronology_page: 'Project page',
-    project_chronology_first_stage: 'First project stage',
-    project_chronology_last_stage: 'Last project stage',
     project_chronology_updated: 'Project update',
-    project_chronology_stage: 'Project stage',
-    project_chronology_first_section: 'First project section',
-    project_chronology_last_section: 'Last project section',
-    project_chronology_section: 'Project section',
-    project_chronology_first_status: 'First status',
-    project_chronology_last_status: 'Latest status',
     page_chronology_created: 'Page created',
     page_chronology_updated: 'Page updated',
     section_chronology_created: 'Section created',
     section_chronology_updated: 'Section updated',
-    stage_chronology_created: 'Stage created',
-    stage_chronology_updated: 'Stage updated',
     event_chronology_created: 'Event created',
     event_chronology_updated: 'Event updated',
-    diary_chronology_day: 'Entry is about',
     diary_chronology_created: 'Entry created',
     diary_chronology_updated: 'Entry updated',
     install_thei: 'Install Thei',
@@ -650,7 +639,7 @@ export default defineI18nBase({
       'Short dated thoughts: one entry a day, with no title and nothing else to fill in.',
     admin_kind_project_title: 'What a project is',
     admin_kind_project_what:
-      'A project is a self-contained, substantial episode of a life with a structure of its own: stages of work, topical sections, a showcase, files and links.',
+      'A project is a self-contained, substantial episode of a life with a structure of its own: sections — general ones and stages with dates — a showcase, files and links.',
     admin_kind_project_rank:
       'The weightiest kind. A project gathers events and diary entries around it, and its relations to them are set here. If a title and a couple of paragraphs are enough, it is probably an event.',
     admin_kind_project_examples:
@@ -659,7 +648,7 @@ export default defineI18nBase({
     admin_kind_event_what:
       'An event is a small memorable moment worth not forgetting: it has a title, dates, tags and media.',
     admin_kind_event_rank:
-      'Weightier than a diary entry, lighter than a project: no stages or sections. An event is never a part of a project; a project can only be related to it.',
+      'Weightier than a diary entry, lighter than a project: no sections. An event is never a part of a project; a project can only be related to it.',
     admin_kind_event_examples:
       "For example: a favourite band's concert, a meetup talk, getting a driving licence, a weekend trip.",
     admin_kind_diary_title: 'What a diary entry is',
@@ -678,6 +667,7 @@ export default defineI18nBase({
     x_projects: (count: number) => plural(count, 'project', 'projects'),
     event: 'Event',
     x_events: (count: number) => plural(count, 'event', 'events'),
+    section: 'Section',
     page: 'Page',
     new_project: 'New Project',
     new_event: 'New Event',
@@ -814,7 +804,7 @@ export default defineI18nBase({
       'Try a different query or clear the search.',
     reset_search: 'Clear search',
     admin_projects_empty_description:
-      'Create your first project: describe the idea and add stages, materials and an action button.',
+      'Create your first project: describe the idea and add sections, materials and an action button.',
     admin_events_empty_description:
       'Create your first event to mark an important moment on the Life timeline.',
     admin_pages_empty_description:
@@ -962,7 +952,7 @@ export default defineI18nBase({
     project_action_icon_site: 'From site',
     project_action_icon_custom: 'Custom',
     project_action_icon_custom_hint:
-      'A square image, ideally with a transparent background',
+      'A square image, ideally with a transparent background. Shown as is, without a shadow',
     project_action_icon_select: 'Select action button icon',
     project_action_icon_edit: 'Edit action button icon',
     project_action_background: 'Background',
@@ -1000,34 +990,45 @@ export default defineI18nBase({
     project_action_issue_color: 'a background color as #RRGGBB',
     project_content_sections: 'Project sections',
     project_content_sections_hint:
-      'Independent sections with details about the project.',
-    project_stages: 'Project stages',
-    project_stages_hint: 'Key periods in the project timeline.',
-    relation_group_related: 'Related',
-    relation_group_depends_on: 'Depends on',
-    relation_group_affects: 'Affects',
+      "Detailed write-ups of the project's parts and of the stages it went through.",
+    project_sections_dated: 'Dated stages',
+    project_sections_undated: 'General sections',
     related_entities: 'Related entities',
     related_entities_hint:
       'Projects, events and diary entries tied to this one. A relation is visible from both sides.',
     related_entity_add: 'Add a relation',
     relation_direction: 'Kind of relation',
-    relation_short_related: () => 'related to',
-    relation_short_depends_on: 'depends on',
-    relation_short_affects: 'affects',
+    relation_label_related: 'Related',
+    relation_label_influencing: 'Influences',
+    relation_label_dependent: 'Depends',
     relation_popup_related: (current, other) =>
       `“${current}” and “${other}” are related`,
     relation_popup_depends_on: (current, other) =>
       `“${current}” depends on “${other}”`,
     relation_popup_affects: (current, other) =>
       `“${current}” affects “${other}”`,
-    relations_empty: 'No relations yet.',
-    project_stages_empty: 'No stages yet.',
-    project_content_sections_empty: 'No sections yet.',
+    relations_empty_of: (kind) =>
+      kind === 'project'
+        ? 'No related projects yet.'
+        : kind === 'event'
+          ? 'No related events yet.'
+          : 'No related diary entries yet.',
+    project_sections_empty_of: (group) =>
+      group === 'dated' ? 'No dated stages yet.' : 'No general sections yet.',
+    relation_entity: 'Related entity',
+    relation_entity_choose: 'A project, an event or a diary entry',
+    relation: 'Relation',
+    relation_edit: (title) => `Edit the relation to “${title}”`,
+    relation_note: 'Explanation',
     relation_note_placeholder: 'Reason for the relation…',
-    relation_note_for: (title) => `Explanation in “${title}”`,
-    split_relation_note: 'Split the explanation for both sides',
-    merge_relation_note: 'Merge explanations',
+    relation_note_shared_hint: 'Shown on the pages of both.',
+    relation_note_split: 'Separately',
+    relation_note_split_hint: 'A separate explanation for each page',
+    relation_note_on_page: 'Explanation on the page of',
     delete_relation: 'Delete relation',
+    recommended_relations: 'Recommended relations',
+    relation_recommendation_add: (title) => `Add a relation to “${title}”`,
+    relation_recommendation_reason: 'Linked in the text',
     project_external_links: 'Project external links',
     project_external_links_hint:
       'Websites, publications, and other pages related to the project.',
@@ -1051,28 +1052,23 @@ export default defineI18nBase({
     search_entity_placeholder: 'A title, or the date of a diary entry…',
     search_entity_no_results: 'Nothing matches.',
     search_entity_error: 'Could not search.',
-    entity_search_mentioned: 'Linked in the text',
     content_section: 'Project section',
     content_section_delete_entity: 'project section',
-    project_stage: 'Project stage',
-    project_stage_delete_entity: 'project stage',
-    project_stage_title: 'Stage title',
-    project_stage_summary: 'Stage summary',
-    project_stage_private: 'Private stage',
-    project_stage_private_hint: 'Visible only to you in the admin panel.',
-    project_stage_period: 'Time period',
-    project_stage_period_empty: 'Add at least one time period!',
-    public_stage_content_empty: 'This stage has no content',
-    public_stage_content_empty_description:
+    section_periods: 'Time periods',
+    section_undated_hint: 'No dates: a general section.',
+    section_needs_body_or_period:
+      'Write the section or give it at least one time period.',
+    public_section_dates_only: 'This section has no text',
+    public_section_dates_only_description:
       'The details were never written down…',
     public_section_content_empty: 'Nothing to read here yet',
     public_section_content_empty_description:
       'This section has no content open to readers.',
-    project_stage_content: 'Stage content',
-    project_stage_add: 'Add stage',
-    delete_project_stage: 'Delete stage',
     content_section_title: 'Section title',
     content_section_summary: 'Section summary',
+    content_section_banner: 'Banner',
+    content_section_banner_hint:
+      'Wide image at the top of the section page and on its cards.',
     content_section_private: 'Private section',
     content_section_private_hint: 'Visible only to you in the admin panel.',
     content_section_content: 'Section content',
@@ -1171,6 +1167,7 @@ export default defineI18nBase({
       delimiter: 'Delimiter',
       media: 'Media',
       gallery: 'Gallery',
+      audio: 'Audio',
       file: 'File',
       enter_quote: 'Enter a quote',
       enter_caption: 'Enter a caption',
@@ -1197,10 +1194,15 @@ export default defineI18nBase({
     content_gallery_tile: 'Show this picture',
     content_add_media: 'Add image or video',
     content_choose_file: 'Choose file',
+    content_choose_audio: 'Choose audio',
+    content_audio_as_player: 'Show as a player',
+    content_audio_as_file: 'Show as a file',
     content_choose_entity: 'Choose what to link to',
     content_make_gallery: 'Turn into a gallery',
     content_link_internal_detected:
       'This is a page of this site, so the link will be stored as an internal one.',
+    content_link_fragment: 'Leads to this place on the page',
+    content_link_fragment_remove: 'Link to the page as a whole',
     content_caption: 'Caption',
     content_media_centered: 'Centered',
     content_media_natural: 'Natural size',
@@ -1209,7 +1211,6 @@ export default defineI18nBase({
     content_description: 'Description',
     edit_event: 'Edit Event',
     edit_diary_entry: 'Edit Entry',
-    edit_project_stage: 'Edit Stage',
     edit_content_section: 'Edit Section',
     diary_access: 'Entry access',
     diary_date: 'Entry date',
@@ -1230,6 +1231,7 @@ export default defineI18nBase({
     clear: 'Clear',
     delete: 'Delete',
     close_modal: 'Close dialog',
+    done: 'Done',
     public_link: (entityName) => `${entityName} Link`,
     human_readable_url: 'Readable URL',
     public_id: 'Public ID',
@@ -1251,7 +1253,6 @@ export default defineI18nBase({
     site_access_close_priority: 'Site closed! Only you will have access!',
     view_event: 'View on Site',
     view_page: 'View on Site',
-    view_project_stage: 'View on Site',
     view_content_section: 'View on Site',
     view_tag: 'View on Site',
     saved: 'Saved',
@@ -1297,7 +1298,10 @@ export default defineI18nBase({
     page_slug_already_taken: 'A page with this slug already exists.',
     delete_page: 'Delete Page',
     event_files: 'Event files',
-    event_files_description: 'Arbitrary event files in any format.',
+    event_files_description: 'Banner and arbitrary event files in any format.',
+    event_banner: 'Event Banner',
+    event_banner_hint:
+      'Wide image at the top of the event page and on its cards.',
     event_action: 'Event action button',
     event_action_hint: 'The primary action available from this event.',
     event_external_links: 'Event external links',
@@ -1312,7 +1316,7 @@ export default defineI18nBase({
     project_icon_hint:
       'Square image for cards, links and previews. Without one, a generated icon is used.',
     project_banner: 'Project Banner',
-    project_banner_hint: 'Wide image for the project page.',
+    project_banner_hint: 'Wide image at the top of the project page.',
     delete_project: 'Delete Project',
     delete_confirmation_description: (entityType, entityName) =>
       `You are about to delete the ${entityType} "${entityName}". This action cannot be undone.`,
@@ -1395,6 +1399,16 @@ export default defineI18nBase({
     video_unmute: 'Unmute',
     video_volume: 'Volume',
     video_no_audio: 'This video has no audio track',
+    audio_position: (current, total) => `${current} of ${total}`,
+    audio_speed: (rate) => `Playback speed: ${rate}`,
+    audio_download: 'Download',
+    audio_unsupported: 'This browser cannot play this recording',
+    audio_channel_count: (count) =>
+      count === 1 ? 'mono' : count === 2 ? 'stereo' : `${count} channels`,
+    upload_audio_mono: 'Mono',
+    upload_audio_mono_hint:
+      'One channel instead of two: half the size, and all a voice needs.',
+    upload_audio_source_mono: 'The source is mono',
     asset_variant_current: 'Used now',
     asset_variant_current_tag: 'Current',
     asset_variant_usage_count: (count) => `Usages: ${count}`,
@@ -1441,6 +1455,8 @@ export default defineI18nBase({
     file_info_size: 'Size',
     file_info_dimensions: 'Resolution',
     file_info_duration: 'Duration',
+    file_info_channels: 'Channels',
+    file_info_bitrate: 'Bitrate',
     file_info_empty: 'empty',
     file_info_archived_extension: 'Extension before ZIP',
     file_info_archived_size: 'Size before ZIP',
@@ -1453,8 +1469,10 @@ export default defineI18nBase({
     date_precision_day_short: 'Day',
     date_precision_month_short: 'Month',
     date_precision_year_short: 'Year',
-    date_precision_note: 'Why it is uncertain',
-    date_precision_note_placeholder: 'Comment on the uncertainty',
+    date_precision_note: 'Comment on the uncertainty',
+    period_label: 'Label',
+    period_label_placeholder: 'Period label',
+    period_dates_edit: 'Change the dates',
     entity_notes_section: 'Notes',
     entity_notes_section_description:
       'A reminder and private notes. Only you ever see them — they stay out of the page, the search and the Markdown copy.',
@@ -1494,7 +1512,7 @@ export default defineI18nBase({
     search_preset_cv_description:
       'The professional part of the archive: the projects that make up a working history.',
     og_personal_archive: 'Personal archive',
-    og_stage_position: (index, total) => `Stage ${index} of ${total}`,
+    og_section_position: (index, total) => `Stage ${index} of ${total}`,
     og_updated: (date) => `Updated ${date}`,
     og_life_headline: (years) =>
       `${plural(years, 'year', 'years')} in one chronicle`,
@@ -1503,7 +1521,6 @@ export default defineI18nBase({
     og_pages_headline: (count) =>
       `${plural(count, 'text', 'texts')} outside the timeline`,
     og_image_alt: (kind, title, site) => `${kind} “${title}” — ${site}`,
-    x_stages: (count) => plural(count, 'stage', 'stages'),
     x_sections: (count) => plural(count, 'section', 'sections'),
   },
 });

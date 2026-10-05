@@ -1,3 +1,4 @@
+import type { ContentEntitySearchItem } from './admin/content-entity-search';
 import type { MediaDescriptor } from './media';
 
 /**
@@ -62,6 +63,35 @@ export type RelationEditItem = {
   iconMedia?: MediaDescriptor;
 };
 
+/**
+ * The other end of a relation as the entity search found it: what a chip
+ * and the modal show of it. `date` is always set, absent or not, so the end
+ * picked replaces every field of the one before.
+ */
+export function relationEndOf(
+  entity: Pick<
+    ContentEntitySearchItem,
+    | 'entityId'
+    | 'title'
+    | 'summary'
+    | 'humanReadableSlug'
+    | 'publicId'
+    | 'date'
+    | 'previewMedia'
+  > & { entityType: RelationEntityType },
+): Omit<RelationEditItem, 'type' | 'note'> {
+  return {
+    entityType: entity.entityType,
+    entityId: entity.entityId,
+    title: entity.title,
+    summary: entity.summary,
+    humanReadableSlug: entity.humanReadableSlug,
+    publicId: entity.publicId,
+    date: entity.date,
+    iconMedia: entity.previewMedia,
+  };
+}
+
 export type RelationGetItem = RelationEditItem & {
   title: string;
   humanReadableSlug: string;
@@ -72,6 +102,46 @@ export type RelationGetItem = RelationEditItem & {
    */
   iconMedia?: MediaDescriptor;
 };
+
+/** Whether a relation says anything of its own, on either side. */
+export function relationHasNote(note: RelationNote | undefined): boolean {
+  if (!note) return false;
+  return note.type === 'shared'
+    ? Boolean(note.text?.trim())
+    : Boolean(note.currentText?.trim() || note.relatedText?.trim());
+}
+
+/**
+ * A note written once, made into one per side: each side starts from what
+ * was written for both, to be told apart from there.
+ */
+export function splitRelationNote(
+  note: RelationNote | undefined,
+): RelationNote {
+  if (note?.type === 'split') return note;
+  const text = note?.text ?? '';
+  return { type: 'split', currentText: text, relatedText: text };
+}
+
+/**
+ * Notes per side, made into one again. Nothing written is lost: the same
+ * text stays as it is, a lone side's text is taken, and two different texts
+ * are joined with a dash.
+ */
+export function mergeRelationNote(
+  note: RelationNote | undefined,
+): RelationNote {
+  if (note?.type !== 'split') return { type: 'shared', text: note?.text ?? '' };
+  const current = note.currentText ?? '';
+  const related = note.relatedText ?? '';
+  const text =
+    current === related || !related
+      ? current
+      : !current
+        ? related
+        : `${current} — ${related}`;
+  return { type: 'shared', text };
+}
 
 export function relationEndpointKey(endpoint: RelationEndpoint) {
   return `${endpoint.type}:${endpoint.id}`;

@@ -7,7 +7,7 @@ import {
   diaryContent,
   eventContent,
   pageContent,
-  projectChildContent,
+  sectionContent,
   projectContent,
   tagContent,
 } from './entities';
@@ -37,9 +37,8 @@ export async function resolveOgContent(
     case 'project':
       content = await projectContent(target.id, site);
       break;
-    case 'stage':
     case 'section':
-      content = await projectChildContent(target.kind, target.id, site);
+      content = await sectionContent(target.id, site);
       break;
     case 'event':
       content = await eventContent(target.id, site);

@@ -8,6 +8,7 @@ import {
 import type { PageEditData, ValidatedPageEditData } from '../page';
 import { normalizeUrlSegment } from '../language/slugify';
 import { isOneOf } from '../utils/isOneOf';
+import { normalizeHeadingText } from '../terminal-punctuation';
 import { optionalContentDraftRef } from '../content-history';
 
 export function normalizePageSlug(value: unknown) {
@@ -40,7 +41,7 @@ export function validatePageData(
   data: PageEditData | null | undefined,
 ): string | ValidatedPageEditData {
   if (!data || typeof data !== 'object') return 'Invalid page data';
-  const title = data.title?.trim();
+  const title = normalizeHeadingText(data.title?.trim() ?? '');
   if (!title) return 'Title cannot be empty';
   const summary = data.summary?.trim();
   if (!summary) return 'Summary cannot be empty';

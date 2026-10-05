@@ -1,19 +1,20 @@
 import { ProjectEventAccessLevel } from '../access-level';
 import { normalizeEntityNotes, normalizeEntityReminder } from '../entity-notes';
 import {
-  ContentValidationError,
   contentPlainText,
   isContentEmpty,
   normalizeContentData,
   type ContentFieldModelValue,
 } from '../content';
-import {
-  normalizeStagePeriods,
-  ProjectContentItemError,
-} from '../project-content-item';
+import { normalizePeriods } from '../period';
 import { normalizeProjectAction } from '../project-action';
 import { validateExternalLinkList } from '../external-link';
 import { isOneOf } from '../utils/isOneOf';
+import {
+  normalizeHeadingText,
+  optionalCaption,
+  optionalHeading,
+} from '../terminal-punctuation';
 import { optionalContentDraftRef } from '../content-history';
 import {
   normalizeHumanReadableSlug,
@@ -21,7 +22,7 @@ import {
   publicIdIsValid,
 } from '../public-link';
 import type { EventEditData, ValidatedEventEditData } from '../event';
-import { RelationValidationError, validateRelations } from '../relation';
+import { validateRelations } from '../relation';
 import { normalizeTagEditItems } from '../tag';
 import { joinTagContextText, type TagContext } from '../tag-recommendation';
 
@@ -40,7 +41,7 @@ export function validateEventData(
   data: EventEditData,
 ): string | ValidatedEventEditData {
   try {
-    const title = data.title?.trim();
+    const title = normalizeHeadingText(data.title?.trim() ?? '');
     if (!title) return 'Title cannot be empty';
     const summary = data.summary?.trim();
     if (!summary) return 'Summary cannot be empty';
@@ -60,8 +61,12 @@ export function validateEventData(
       humanReadableSlug,
       publicId,
       access: data.access,
-      periods: normalizeStagePeriods(data.periods),
+      periods: normalizePeriods(data.periods),
       content: validateRequiredContent(data.content),
+      bannerAssetUuid:
+        typeof data.bannerAssetUuid === 'string' && data.bannerAssetUuid
+          ? data.bannerAssetUuid
+          : undefined,
       otherAssets: validateFiles(data.otherAssets),
       externalLinks: validateExternalLinks(data.externalLinks),
       tags: validateTags(data.tags),
@@ -71,13 +76,7 @@ export function validateEventData(
       notes: normalizeEntityNotes(data.notes),
     };
   } catch (error) {
-    if (
-      error instanceof ContentValidationError ||
-      error instanceof ProjectContentItemError ||
-      error instanceof RelationValidationError ||
-      error instanceof Error
-    )
-      return error.message;
+    if (error instanceof Error) return error.message;
     throw error;
   }
 }
@@ -107,14 +106,14 @@ function validateFiles(files: EventEditData['otherAssets']) {
     if (!assetUuid) throw new Error('Invalid event file');
     if (seen.has(assetUuid)) throw new Error('Duplicate event file');
     seen.add(assetUuid);
-    const title = optionalText(file.title);
+    const title = optionalHeading(optionalText(file.title));
     if (!title) throw new Error('Event file title cannot be empty');
     if (typeof file.isPrivate !== 'boolean')
       throw new Error('Invalid file privacy');
     return {
       assetUuid,
       title,
-      caption: optionalText(file.caption),
+      caption: optionalCaption(optionalText(file.caption)),
       isPrivate: file.isPrivate,
     };
   });

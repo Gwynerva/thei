@@ -21,7 +21,7 @@ const {
 } = defineProps<{
   media?: MediaDescriptor;
   side?: 'left' | 'right';
-  fade?: 'row' | 'preview' | 'card';
+  fade?: 'row' | 'preview' | 'card' | 'chip';
   playback?: MediaPlayback;
   engaged?: boolean;
   loop?: boolean;
@@ -58,6 +58,7 @@ const {
 </template>
 
 <style scoped>
+@reference "../styles/main.css";
 /*
  * Registered so that the window can open smoothly under a pointer: an
  * unregistered custom property would jump.
@@ -70,33 +71,14 @@ const {
 
 /*
  * The strip itself, blurred backdrop included, holds up to `--media-edge-hold`
- * and dissolves into the parent along a smoothstep over the rest of its width.
+ * and dissolves into the parent over the rest of its width (`mask-ease`).
  * The window of the sharp media inside it is drawn by `Media`.
  */
 .media-edge-strip {
-  --media-edge-rest: calc(100% - var(--media-edge-hold));
-  mask-image: linear-gradient(
-    var(--media-edge-inward),
-    #000 var(--media-edge-hold),
-    rgb(0 0 0 / 97.2%)
-      calc(var(--media-edge-hold) + var(--media-edge-rest) * 0.1),
-    rgb(0 0 0 / 89.6%)
-      calc(var(--media-edge-hold) + var(--media-edge-rest) * 0.2),
-    rgb(0 0 0 / 78.4%)
-      calc(var(--media-edge-hold) + var(--media-edge-rest) * 0.3),
-    rgb(0 0 0 / 64.8%)
-      calc(var(--media-edge-hold) + var(--media-edge-rest) * 0.4),
-    rgb(0 0 0 / 50%) calc(var(--media-edge-hold) + var(--media-edge-rest) * 0.5),
-    rgb(0 0 0 / 35.2%)
-      calc(var(--media-edge-hold) + var(--media-edge-rest) * 0.6),
-    rgb(0 0 0 / 21.6%)
-      calc(var(--media-edge-hold) + var(--media-edge-rest) * 0.7),
-    rgb(0 0 0 / 10.4%)
-      calc(var(--media-edge-hold) + var(--media-edge-rest) * 0.8),
-    rgb(0 0 0 / 2.8%)
-      calc(var(--media-edge-hold) + var(--media-edge-rest) * 0.9),
-    transparent 100%
-  );
+  @apply mask-ease;
+  --ease-direction: var(--media-edge-inward);
+  --ease-from: var(--media-edge-hold);
+  --ease-to: 100%;
   transition: --media-edge-clear 300ms ease-out;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -128,6 +110,15 @@ const {
   --media-edge-clear-open: 36%;
   --media-edge-dissolve: 46%;
   --media-edge-hold: 15%;
+}
+/* A chip is a few lines tall: the picture keeps the outer half, its name
+   starts where it has all but dissolved. */
+.media-edge-strip[data-fade='chip'] {
+  --media-edge-focus: 0.35;
+  --media-edge-clear: 30%;
+  --media-edge-clear-open: 42%;
+  --media-edge-dissolve: 45%;
+  --media-edge-hold: 25%;
 }
 /* A card's strip is the whole card, its text over the inner three quarters. */
 .media-edge-strip[data-fade='card'] {

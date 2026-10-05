@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { resolveEntityIconMedia } from '../../../thei/media/generated-icon';
+import { buildAdminAssetUrls } from '../../../thei/assets/urls';
 import { contentPlainText } from '#layers/thei/shared/content';
 import type { EventListResponse } from '#layers/thei/shared/api/event';
 import {
@@ -108,7 +109,7 @@ export default defineEventHandler(async (event): Promise<EventListResponse> => {
       .where(
         and(
           eq(schema.assetUsages.containerType, 'event'),
-          eq(schema.assetUsages.role, 'other-asset'),
+          inArray(schema.assetUsages.role, ['other-asset', 'banner']),
           inArray(schema.assetUsages.containerId, eventUuids),
         ),
       ),
@@ -136,6 +137,28 @@ export default defineEventHandler(async (event): Promise<EventListResponse> => {
         ),
       ),
   ]);
+  // The banners of the whole page at once: each stands for its event.
+  const banners = new Map(
+    db
+      .select({
+        eventUuid: schema.assetUsages.containerId,
+        asset: schema.assets,
+      })
+      .from(schema.assetUsages)
+      .innerJoin(
+        schema.assets,
+        eq(schema.assets.assetUuid, schema.assetUsages.assetUuid),
+      )
+      .where(
+        and(
+          eq(schema.assetUsages.containerType, 'event'),
+          eq(schema.assetUsages.role, 'banner'),
+          inArray(schema.assetUsages.containerId, eventUuids),
+        ),
+      )
+      .all()
+      .map((row) => [row.eventUuid, row.asset]),
+  );
   const sizes = new Map<string, Map<string, number>>();
   for (const row of [...fileRows, ...contentRows]) {
     const current = sizes.get(row.eventUuid) ?? new Map<string, number>();
@@ -147,11 +170,14 @@ export default defineEventHandler(async (event): Promise<EventListResponse> => {
     ...result,
     items: await Promise.all(
       result.items.map(async (item) => {
-        const media = await THEI_SERVER.content.buildPreviewMedia(
-          'event',
-          item.eventUuid,
-          'event-body',
-        );
+        const banner = banners.get(item.eventUuid);
+        const media = banner
+          ? (await buildAdminAssetUrls(banner)).media
+          : await THEI_SERVER.content.buildPreviewMedia(
+              'event',
+              item.eventUuid,
+              'event-body',
+            );
         return {
           eventUuid: item.eventUuid,
           title: item.title,

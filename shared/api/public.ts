@@ -2,6 +2,7 @@ import type { ProjectEventAccessLevel } from '../access-level';
 import type { PublicContentOutputData } from '../content';
 import type { ContentEntityType } from '../content-link';
 import type { DatedPeriod } from '../date-precision';
+import type { Period } from '../period';
 import type {
   ProjectActionBackgroundMode,
   ProjectActionBackgroundRepeat,
@@ -14,7 +15,6 @@ import type { RelationEntityType, RelationType } from '../relation';
 import type { PublicSearchFilters } from '../public-search';
 import type { StatusHistoryItem } from '../status';
 import type { PaginatedResponse } from '../pagination';
-import type { LifePoint } from '../life';
 
 export type PublicTagSummary = {
   title: string;
@@ -88,7 +88,10 @@ export type PublicEntitySummary = {
   access: ProjectEventAccessLevel;
   media?: MediaDescriptor;
   tags: PublicTagSummary[];
+  /** The day a card is dated by: an event's last day, a project's first. */
   date: string;
+  /** The stretch an event's periods cover, as sure as the owner is of it. */
+  period?: DatedPeriod;
   showcase?: boolean;
   cv?: boolean;
   relatedEntities?: PublicEntityLink[];
@@ -136,13 +139,11 @@ export type PublicReferenceLink = {
   href: string;
   description?: string;
   /**
-   * The owner's word on why the link is there, or why the entity is related.
-   * It is shown under the target's own title and description, never in
-   * place of them.
+   * The owner's word on why the link is there. It is shown under the
+   * target's own title and description, never in place of them.
    */
   note?: string;
   iconMedia?: MediaDescriptor;
-  relationType?: RelationType;
 };
 
 export type PublicReferenceGroup = {
@@ -180,35 +181,34 @@ export type PublicAction = {
   backgroundRepeat: ProjectActionBackgroundRepeat;
 };
 
-export type PublicProjectStage = {
-  title: string;
-  summary: string;
-  href: string;
-  date: string;
-  period: DatedPeriod;
-  periods: DatedPeriod[];
-  media?: MediaDescriptor;
-};
-
+/**
+ * A part of a project as its pages list it. A stage — a dated section —
+ * carries its periods and the stretch they cover; a general one says no
+ * date, since the day it was written says nothing of it.
+ */
 export type PublicProjectSection = {
   title: string;
   summary: string;
   href: string;
-  date: string;
+  /** The stretch the periods cover; absent for a general section. */
+  period?: DatedPeriod;
+  /** Empty for an undated section. */
+  periods: Period[];
+  /** What stands for the section in a card: its banner, its first picture, or its icon. */
   media?: MediaDescriptor;
 };
 
-/** A stage, section or diary entry beside the one on the page. */
+/** A section or a diary entry beside the one on the page. */
 export type PublicNeighbour = {
   title: string;
   href: string;
   media?: MediaDescriptor;
   /** The day of a diary entry, shown in place of the title it lacks. */
   date?: string;
-  /** When a stage was, shown under its title. */
+  /** When a dated section was, shown under its title. */
   period?: DatedPeriod;
   /**
-   * What a section is about, or how a diary entry begins, as the viewer may
+   * What an undated section is about, or how a diary entry begins, as the viewer may
    * read it.
    */
   summary?: string;
@@ -216,7 +216,8 @@ export type PublicNeighbour = {
 
 /**
  * The ones just before and just after, in the order a reader goes through
- * them: stages and diary entries by time, sections as the project sorts them.
+ * them: dated sections and diary entries by time, undated sections as the
+ * project sorts them — each section among its own kind.
  * Only what the viewer could open, and only when there is one.
  */
 export type PublicNeighbours = {
@@ -224,31 +225,21 @@ export type PublicNeighbours = {
   next?: PublicNeighbour;
 };
 
-export type PublicProjectChildParent = PublicEntityReference & {
+export type PublicSectionParent = PublicEntityReference & {
   access: ProjectEventAccessLevel;
   humanReadableSlug: string;
   publicId: string;
 };
 
-export type PublicProjectStageResponse = PublicProjectStage & {
-  humanReadableSlug: string;
-  publicId: string;
-  content?: PublicContentOutputData;
-  /** `updatedAt` only when the stage was edited on a later day. */
-  chronology: { createdAt: string; updatedAt?: string };
-  project: PublicProjectChildParent;
-  references: PublicReferences;
-  /** Set by the page's own route; the Markdown representation has none. */
-  neighbours?: PublicNeighbours;
-};
-
 export type PublicProjectSectionResponse = PublicProjectSection & {
+  /** The picture the page opens with, when the section has one. */
+  bannerMedia?: MediaDescriptor;
   humanReadableSlug: string;
   publicId: string;
   content: PublicContentOutputData;
   /** `updatedAt` only when the section was edited on a later day. */
   chronology: { createdAt: string; updatedAt?: string };
-  project: PublicProjectChildParent;
+  project: PublicSectionParent;
   references: PublicReferences;
   /** Set by the page's own route; the Markdown representation has none. */
   neighbours?: PublicNeighbours;
@@ -260,18 +251,14 @@ export type PublicProjectResponse = {
   access: ProjectEventAccessLevel;
   humanReadableSlug: string;
   publicId: string;
-  chronology: {
-    createdAt: string;
-    /** When the project's oldest status was set. */
-    firstStatusAt?: string;
-    updatedAt?: string;
-  };
+  /** `updatedAt` only when the project was edited on a later day. */
+  chronology: { createdAt: string; updatedAt?: string };
   isShowcase: boolean;
   isCv: boolean;
   iconMedia: MediaDescriptor;
   bannerMedia?: MediaDescriptor;
   description?: PublicContentOutputData;
-  stages: PublicProjectStage[];
+  /** The undated sections in the owner's order, then the dated ones, newest first. */
   sections: PublicProjectSection[];
   showcase: (PublicAssetDescriptor | PublicSecretReference)[];
   files: (PublicFile | PublicSecretReference)[];
@@ -280,11 +267,8 @@ export type PublicProjectResponse = {
   /** The newest status, if the project keeps any; `statusCount` counts them. */
   currentStatus?: StatusHistoryItem;
   statusCount: number;
-  /**
-   * The newest points of the project's own chronology, for the overview tab;
-   * `total` is the counter on the "Chronology" tab.
-   */
-  timeline: { latest: LifePoint[]; total: number };
+  /** How many points the project's chronology tab holds, for its counter. */
+  timeline: { total: number };
   references: PublicReferences;
   action?: PublicAction;
   /**
@@ -301,11 +285,13 @@ export type PublicEventResponseFull = {
   access: ProjectEventAccessLevel;
   humanReadableSlug: string;
   publicId: string;
-  periods: DatedPeriod[];
+  periods: Period[];
   /** `updatedAt` only when the event was edited on a later day. */
   chronology: { createdAt: string; updatedAt?: string };
-  /** What stands for the event in a card: its first picture, or its icon. */
+  /** What stands for the event in a card: its banner, its first picture, or its icon. */
   media: MediaDescriptor;
+  /** The picture the page opens with, when the event has one. */
+  bannerMedia?: MediaDescriptor;
   content: PublicContentOutputData;
   references: PublicReferences;
   tags: PublicTagSummary[];

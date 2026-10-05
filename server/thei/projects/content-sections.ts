@@ -1,5 +1,8 @@
 import { eq, inArray } from 'drizzle-orm';
-import type { ProjectSectionContentItem } from '#layers/thei/shared/project-content-item';
+import {
+  orderProjectSections,
+  type ProjectSectionItem,
+} from '#layers/thei/shared/project-content-item';
 import { createEmptyContentFieldValue } from '#layers/thei/shared/content';
 import { EntityPrefix, generateUniqueId } from '../entity-id';
 import {
@@ -8,6 +11,12 @@ import {
   type PreparedContentSave,
 } from '../content/repository';
 import {
+  deletePeriods,
+  periodsEqual,
+  readPeriodsOf,
+  replacePeriods,
+} from '../periods';
+import {
   deleteProjectContentItemContent,
   prepareProjectContentItems,
   projectContentItemIdsToRemove,
@@ -15,17 +24,22 @@ import {
   ProjectContentItemStorageError,
 } from './content-items';
 import type { projectContentSections } from '../db/schema/project-content-sections';
+import {
+  deleteEntityBanners,
+  readEntityBannerUuids,
+  syncEntityBanner,
+} from '../entity-banner';
 
 type ProjectContentSectionRow = typeof projectContentSections.$inferSelect;
 
-type PreparedSection = ProjectSectionContentItem & {
+type PreparedSection = ProjectSectionItem & {
   sectionUuid: string;
   contentSave: PreparedContentSave;
 };
 
-export async function prepareProjectContentSections(
+export async function prepareProjectSections(
   projectUuid: string,
-  sections: ProjectSectionContentItem[] | undefined,
+  sections: ProjectSectionItem[] | undefined,
 ): Promise<PreparedSection[] | undefined> {
   if (sections === undefined) return undefined;
   const { db, schema } = THEI_SERVER.useDb();
@@ -68,8 +82,10 @@ export async function prepareProjectContentSections(
             .where(eq(schema.projectContentSections.sectionUuid, id))
             .get(),
       ),
-    label: 'content section',
+    label: 'section',
     prepare: async (section, sectionUuid) => {
+      // An empty body is no body: a section that is only its dates keeps
+      // no text at all.
       const contentSave = await prepareContentForSave(
         'project-section',
         sectionUuid,
@@ -81,7 +97,7 @@ export async function prepareProjectContentSections(
   });
 }
 
-export function applyProjectContentSections(
+export function applyProjectSections(
   tx: any,
   schema: any,
   projectUuid: string,
@@ -98,21 +114,65 @@ export function applyProjectContentSections(
     existing.map((item) => item.sectionUuid),
     sections.map((section) => section.sectionUuid),
   );
+  const banners = readEntityBannerUuids(
+    tx,
+    schema,
+    'project-section',
+    existing.map((item) => item.sectionUuid),
+  );
+  const storedPeriods = readPeriodsOf(
+    tx,
+    schema,
+    'project-section',
+    existing.map((item) => item.sectionUuid),
+  );
   deleteProjectContentItemContent(tx, schema, 'project-section', removed);
+  deletePeriods(tx, schema, 'project-section', removed);
+  deleteEntityBanners(tx, schema, 'project-section', removed);
   if (removed.length) {
     tx.delete(schema.projectContentSections)
       .where(inArray(schema.projectContentSections.sectionUuid, removed))
       .run();
   }
 
+  // Public IDs may change hands within one save — two sections swapping
+  // theirs — and the column is unique at every step, not only at the end:
+  // each one that changes is let go before any is taken.
+  for (const section of sections) {
+    const stored = existingById.get(section.sectionUuid);
+    if (stored && stored.publicId !== section.publicId)
+      tx.update(schema.projectContentSections)
+        .set({ publicId: `~${section.sectionUuid}` })
+        .where(
+          eq(schema.projectContentSections.sectionUuid, section.sectionUuid),
+        )
+        .run();
+  }
+
   const now = Date.now();
-  for (let index = 0; index < sections.length; index++) {
-    const section = sections[index]!;
+  const ordered = orderProjectSections(sections);
+  for (let index = 0; index < ordered.length; index++) {
+    const section = ordered[index]!;
+    const stored = existingById.get(section.sectionUuid);
+    const bannerChanged = syncEntityBanner(
+      tx,
+      schema,
+      'project-section',
+      section.sectionUuid,
+      banners.get(section.sectionUuid),
+      section.bannerAssetUuid,
+    );
     const updatedAt = projectContentItemUpdatedAt(
-      existingById.get(section.sectionUuid),
+      stored,
       section,
       section.contentSave,
       now,
+      Boolean(stored) &&
+        (bannerChanged ||
+          !periodsEqual(
+            storedPeriods.get(section.sectionUuid) ?? [],
+            section.periods,
+          )),
     );
     tx.insert(schema.projectContentSections)
       .values({
@@ -140,6 +200,13 @@ export function applyProjectContentSections(
         },
       })
       .run();
+    replacePeriods(
+      tx,
+      schema,
+      'project-section',
+      section.sectionUuid,
+      section.periods,
+    );
     applyPreparedContentSave(
       tx,
       schema,
@@ -151,7 +218,7 @@ export function applyProjectContentSections(
   }
 }
 
-export function deleteProjectContentSections(
+export function deleteProjectSections(
   tx: any,
   schema: any,
   projectUuid: string,
@@ -163,13 +230,20 @@ export function deleteProjectContentSections(
     .all();
   const ids = rows.map((row: { sectionUuid: string }) => row.sectionUuid);
   deleteProjectContentItemContent(tx, schema, 'project-section', ids);
+  deletePeriods(tx, schema, 'project-section', ids);
+  deleteEntityBanners(tx, schema, 'project-section', ids);
   if (!ids.length) return;
   tx.delete(schema.projectContentSections)
     .where(eq(schema.projectContentSections.projectUuid, projectUuid))
     .run();
 }
 
-export async function getProjectContentSections(projectUuid: string) {
+/**
+ * A project's sections in their order, without their bodies: what every
+ * page but the editor reads — a list, a card, an address — where preparing
+ * every section's text would only be thrown away.
+ */
+export function listProjectSections(projectUuid: string) {
   const { db, schema } = THEI_SERVER.useDb();
   const rows = db
     .select()
@@ -177,10 +251,11 @@ export async function getProjectContentSections(projectUuid: string) {
     .where(eq(schema.projectContentSections.projectUuid, projectUuid))
     .orderBy(schema.projectContentSections.sortOrder)
     .all();
-
-  return await Promise.all(
-    rows.map(async (section) => ({
-      isStage: false as const,
+  const ids = rows.map((row) => row.sectionUuid);
+  const periods = readPeriodsOf(db, schema, 'project-section', ids);
+  const banners = readEntityBannerUuids(db, schema, 'project-section', ids);
+  return orderProjectSections(
+    rows.map((section) => ({
       sectionUuid: section.sectionUuid,
       title: section.title,
       summary: section.summary,
@@ -189,6 +264,23 @@ export async function getProjectContentSections(projectUuid: string) {
       isPrivate: section.isPrivate,
       createdAt: section.createdAt,
       updatedAt: section.updatedAt,
+      periods: periods.get(section.sectionUuid) ?? [],
+      ...(banners.has(section.sectionUuid)
+        ? { bannerAssetUuid: banners.get(section.sectionUuid) }
+        : {}),
+    })),
+  );
+}
+
+export type ProjectSectionRecord = ReturnType<
+  typeof listProjectSections
+>[number];
+
+/** A project's sections with their bodies, as the editor opens them. */
+export async function getProjectSections(projectUuid: string) {
+  return await Promise.all(
+    listProjectSections(projectUuid).map(async (section) => ({
+      ...section,
       content:
         (await THEI_SERVER.content.buildFieldValue(
           'project-section',

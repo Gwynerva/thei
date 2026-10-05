@@ -17,7 +17,7 @@ import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
 import {
-  buildProjectChildUrl,
+  buildProjectSectionUrl,
   buildProjectUrl,
 } from '#layers/thei/shared/project-url';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
@@ -29,6 +29,7 @@ import {
   buildPublicTagMedia,
 } from './assets/urls';
 import { resolveEntityIconMedia } from './media/generated-icon';
+import { buildAdminEntityBanner, buildPublicBanner } from './entity-banner';
 import { opensPrivate, type PublicViewer } from './access-links/viewer';
 import {
   buildPublicContentPreviewMedia,
@@ -40,8 +41,8 @@ import {
  *
  * The link resolver, the picker and the sidebar each used to spell out the
  * kinds they knew and look each one up by hand; this is the one place that
- * knows how a project, a stage, a section, an event, a diary entry, a page and
- * a tag are found, what they are called, where they live and who may open
+ * knows how a project, a section, an event, a diary entry, a page and a tag
+ * are found, what they are called, where they live and who may open
  * them.
  */
 export type ContentEntityRecord = {
@@ -51,8 +52,8 @@ export type ContentEntityRecord = {
   summary: string;
   href: string;
   /**
-   * Who may open it. A stage or a section is as open as its project, unless
-   * it is marked private on its own.
+   * Who may open it. A section is as open as its project, unless it is
+   * marked private on its own.
    */
   access: ProjectEventAccessLevel;
   updatedAt: number;
@@ -60,16 +61,16 @@ export type ContentEntityRecord = {
   publicId?: string;
   /** The day of a diary entry, which is also its title. */
   date?: string;
-  /** The project a stage or a section belongs to. */
+  /** The project a section belongs to. */
   parent?: { title: string; href: string };
   /**
    * The entity whose share link opens this one: itself, or the project of a
-   * stage or a section. A tag has none; it is never private on its own.
+   * section. A tag has none; it is never private on its own.
    */
   grantOwner?: ShareGrantOwner;
   /**
-   * The picture that stands for the entity: its icon, or the first picture of
-   * its body. Drawn on demand, because a search lists far more entities than
+   * The picture that stands for the entity: its icon, its banner, or the
+   * first picture of its body. Drawn on demand, because a search lists far more entities than
    * it ever shows. `admin` serves the files through the admin's own preview
    * addresses; `public` through the entity's public ones, from the public part
    * of its body unless `includePrivate`.
@@ -146,16 +147,19 @@ function iconMedia(
 }
 
 /**
- * The first picture of the body, or the drawn icon of the kind when the body
- * opens with none — the same fallback a project without an icon gets.
+ * The banner of an event or a section, else the first picture of the body,
+ * else the drawn icon of the kind when the body opens with none — the same
+ * fallback a project without an icon gets.
  */
 function bodyMedia(
   ownerType: BodyEntityKind,
   id: string,
   slot: ContentSlot,
   context: PublicContentEntity,
+  banner?: (view: MediaView) => Promise<MediaDescriptor | undefined>,
 ) {
   return async (view: MediaView, includePrivate = false) =>
+    (await banner?.(view)) ??
     resolveEntityIconMedia(
       ownerType,
       id,
@@ -176,7 +180,7 @@ function bodyMedia(
 
 type BodyEntityKind = Extract<
   ContentOwnerType,
-  'event' | 'project-stage' | 'project-section' | 'diary-entry'
+  'event' | 'project-section' | 'diary-entry'
 >;
 
 function projectRecord(project: ProjectRow): ContentEntityRecord {
@@ -197,21 +201,19 @@ function projectRecord(project: ProjectRow): ContentEntityRecord {
   };
 }
 
-function childRecord(
-  kind: 'project-stage' | 'project-section',
+function sectionRecord(
   id: string,
   child: ChildRow,
   project: ProjectRow,
 ): ContentEntityRecord {
   return {
-    entityType: kind,
+    entityType: 'project-section',
     entityId: id,
     title: child.title,
     summary: child.summary,
-    href: buildProjectChildUrl(
+    href: buildProjectSectionUrl(
       project.humanReadableSlug,
       project.publicId,
-      kind === 'project-stage' ? 'stages' : 'sections',
       child.humanReadableSlug,
       child.publicId,
     ),
@@ -225,10 +227,18 @@ function childRecord(
     },
     grantOwner: { entityType: 'project', entityId: child.projectUuid },
     media: bodyMedia(
-      kind,
+      'project-section',
       id,
-      kind === 'project-stage' ? 'project-stage-body' : 'project-section-body',
+      'project-section-body',
       { type: 'project', ...project },
+      (view) =>
+        view === 'admin'
+          ? buildAdminEntityBanner('project-section', id)
+          : buildPublicBanner({
+              type: 'project-section',
+              project,
+              section: { ...child, sectionUuid: id },
+            }),
     ),
   };
 }
@@ -245,10 +255,16 @@ function eventRecord(event: EventRow): ContentEntityRecord {
     humanReadableSlug: event.humanReadableSlug,
     publicId: event.publicId,
     grantOwner: { entityType: 'event', entityId: event.eventUuid },
-    media: bodyMedia('event', event.eventUuid, 'event-body', {
-      type: 'event',
-      ...event,
-    }),
+    media: bodyMedia(
+      'event',
+      event.eventUuid,
+      'event-body',
+      { type: 'event', ...event },
+      (view) =>
+        view === 'admin'
+          ? buildAdminEntityBanner('event', event.eventUuid)
+          : buildPublicBanner({ type: 'event', event }),
+    ),
   };
 }
 
@@ -385,22 +401,17 @@ export async function findContentEntity(
       const project = await THEI_SERVER.projects.findByUuid(entityId);
       return project && projectRecord(project);
     }
-    case 'project-stage':
     case 'project-section': {
       const { db, schema } = THEI_SERVER.useDb();
-      const table =
-        entityType === 'project-stage'
-          ? schema.projectStages
-          : schema.projectContentSections;
-      const key =
-        entityType === 'project-stage'
-          ? schema.projectStages.stageUuid
-          : schema.projectContentSections.sectionUuid;
-      const child = db.select().from(table).where(eq(key, entityId)).get();
+      const child = db
+        .select()
+        .from(schema.projectContentSections)
+        .where(eq(schema.projectContentSections.sectionUuid, entityId))
+        .get();
       const project =
         child && (await THEI_SERVER.projects.findByUuid(child.projectUuid));
       return child && project
-        ? childRecord(entityType, entityId, child, project)
+        ? sectionRecord(entityId, child, project)
         : undefined;
     }
     case 'event': {
@@ -437,8 +448,8 @@ export async function findContentEntity(
 
 /**
  * The entity an address of this site names, found by the public parts of
- * that address. A stage or a section must belong to the project the address
- * puts it under: a public ID moved to another project is a different link.
+ * that address. A section must belong to the project the address puts it
+ * under: a public ID moved to another project is a different link.
  */
 export async function findContentEntityByTarget(
   target: InternalUrlTarget,
@@ -451,28 +462,12 @@ export async function findContentEntityByTarget(
       );
       return project && projectRecord(project);
     }
-    case 'project-stage':
     case 'project-section': {
       const project = await THEI_SERVER.projects.findByPublicId(
         target.projectPublicId,
       );
       if (!project) return undefined;
       const { db, schema } = THEI_SERVER.useDb();
-      if (target.entityType === 'project-stage') {
-        const stage = db
-          .select()
-          .from(schema.projectStages)
-          .where(
-            and(
-              eq(schema.projectStages.projectUuid, project.projectUuid),
-              eq(schema.projectStages.publicId, target.publicId),
-            ),
-          )
-          .get();
-        return stage
-          ? childRecord('project-stage', stage.stageUuid, stage, project)
-          : undefined;
-      }
       const section = db
         .select()
         .from(schema.projectContentSections)
@@ -484,7 +479,7 @@ export async function findContentEntityByTarget(
         )
         .get();
       return section
-        ? childRecord('project-section', section.sectionUuid, section, project)
+        ? sectionRecord(section.sectionUuid, section, project)
         : undefined;
     }
     case 'event': {
@@ -528,10 +523,7 @@ export async function listContentEntities(
 ): Promise<ContentEntityRecord[]> {
   const { db, schema } = THEI_SERVER.useDb();
   const records: ContentEntityRecord[] = [];
-  const needsProjects =
-    types.has('project') ||
-    types.has('project-stage') ||
-    types.has('project-section');
+  const needsProjects = types.has('project') || types.has('project-section');
   const projects = needsProjects
     ? new Map(
         db
@@ -543,14 +535,6 @@ export async function listContentEntities(
     : new Map<string, ProjectRow>();
   if (types.has('project'))
     records.push(...[...projects.values()].map(projectRecord));
-  if (types.has('project-stage'))
-    for (const stage of db.select().from(schema.projectStages).all()) {
-      const project = projects.get(stage.projectUuid);
-      if (project)
-        records.push(
-          childRecord('project-stage', stage.stageUuid, stage, project),
-        );
-    }
   if (types.has('project-section'))
     for (const section of db
       .select()
@@ -558,9 +542,7 @@ export async function listContentEntities(
       .all()) {
       const project = projects.get(section.projectUuid);
       if (project)
-        records.push(
-          childRecord('project-section', section.sectionUuid, section, project),
-        );
+        records.push(sectionRecord(section.sectionUuid, section, project));
     }
   if (types.has('event'))
     records.push(...db.select().from(schema.events).all().map(eventRecord));

@@ -28,10 +28,6 @@ import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
  * A picker opened over some text passes it as `suggest`: until something is
  * typed, the list starts with what the text names. The text never goes into
  * the field, so typing searches just as it would without it.
- *
- * A picker for something a text already links to passes those links as
- * `prefer`, `type:uuid` keys: until something is typed they take the first
- * places, marked, within the same number of rows.
  */
 const props = withDefaults(
   defineProps<{
@@ -41,12 +37,10 @@ const props = withDefaults(
     limit?: number;
     chosen?: ContentEntityChoice;
     suggest?: string;
-    prefer?: string[];
   }>(),
   {
     entityTypes: () => [...CONTENT_ENTITY_TYPES],
     exclude: () => [],
-    prefer: () => [],
     limit: CONTENT_ENTITY_SEARCH_LIMIT,
   },
 );
@@ -89,7 +83,6 @@ const search = debounce(async (current: number) => {
         query: {
           query: text,
           suggest,
-          prefer: (!text && props.prefer.join(',')) || undefined,
           entityTypes: props.entityTypes.join(','),
           exclude: props.exclude.join(','),
           publicOnly: props.publicOnly ? 'true' : undefined,
@@ -127,12 +120,6 @@ function optionId(index: number) {
 
 function secondary(item: ContentEntityChoice) {
   return [item.parent?.title, item.summary].filter(Boolean).join(' · ');
-}
-
-/** Shown first because the text links to it, while nothing is typed. */
-const preferred = computed(() => new Set(props.prefer));
-function isPreferred(item: ContentEntityChoice) {
-  return !query.value.trim() && preferred.value.has(itemKey(item));
 }
 
 function isChosen(item: ContentEntityChoice) {
@@ -245,26 +232,19 @@ defineExpose({ focus: () => input.value?.focus({ preventScroll: true }) });
           <!-- A truncated line clips its own halo, which draws a hard seam
                across the picture: each gets room for the halo all round. -->
           <span
-            class="entity-search-text relative flex min-w-0 flex-1 flex-col
-              gap-0.5 py-1 pr-16 pl-xs"
+            class="relative flex min-w-0 flex-1 flex-col gap-0.5 py-1 pr-16
+              pl-xs text-halo-bg-1"
           >
             <span class="flex min-w-0 items-center gap-1 text-sm font-semibold"
               ><Icon
                 :name="entityTypeIcon(row.item.entityType)"
                 :aria-label="entityTypeLabel(row.item.entityType)"
                 role="img"
-                class="shrink-0 text-xs text-text-2" /><span
-                class="-m-[0.75em] min-w-0 truncate p-[0.75em]"
-                >{{ entityDisplayTitle(row.item) }}</span
-              ><Icon
-                v-if="isPreferred(row.item)"
-                name="link"
-                role="img"
-                :aria-label="phrase.entity_search_mentioned"
-                :data-title-popup="phrase.entity_search_mentioned"
-                data-entity-search-mentioned
-                class="shrink-0 text-xs text-accent"
-            /></span>
+                class="shrink-0 text-xs text-text-2"
+              /><span class="-m-[0.75em] min-w-0 truncate p-[0.75em]">{{
+                entityDisplayTitle(row.item)
+              }}</span></span
+            >
             <span
               v-if="secondary(row.item)"
               class="-m-[0.75em] block truncate p-[0.75em] text-xs text-text-3"
@@ -295,11 +275,5 @@ defineExpose({ focus: () => input.value?.focus({ preventScroll: true }) });
   );
   outline: 1.5px solid var(--color-accent);
   outline-offset: -1.5px;
-}
-
-.entity-search-text {
-  text-shadow:
-    0 0 0.5em var(--color-bg-1),
-    0 0 0.9em var(--color-bg-1);
 }
 </style>

@@ -227,4 +227,33 @@ describe('inline markdown for the newer markup', () => {
       ),
     ).toBe('the Kara (a bay) sea');
   });
+
+  it('links a recording with its length, its title typeset', () => {
+    const format = (text: string) => text.replace(/"([^"]*)"/g, '«$1»');
+    const recording = (data: object) =>
+      contentToMarkdown(
+        {
+          blocks: [
+            {
+              type: 'contentAudio',
+              data: {
+                asset: {
+                  assetUuid: 'song',
+                  assetUrl: '/projects/p/content/song.weba',
+                  audio: { duration: 185.4, peaks: [] },
+                },
+                ...data,
+              },
+            },
+          ],
+        },
+        { ...options, audioLabel: 'Audio', format },
+      );
+    expect(recording({ title: 'The "song"', caption: 'At the "dacha"' })).toBe(
+      '[The «song»](https://example.com/projects/p/content/song.weba) (3:05)\n\nAt the «dacha»',
+    );
+    expect(recording({})).toBe(
+      '[Audio](https://example.com/projects/p/content/song.weba) (3:05)',
+    );
+  });
 });

@@ -4,7 +4,6 @@ import type { IconName } from '#thei/icons';
 export type PublicSectionHeaderAction = {
   href: string;
   label: string;
-  count?: number;
   icon?: IconName;
 };
 
@@ -31,10 +30,9 @@ defineProps<{
       </p>
     </div>
     <!--
-      On a narrow screen the label gives way to an arrow: the count and the
-      direction are the whole message, and the words were taking the room the
-      heading needed. Every one of these buttons now looks the same, with or
-      without a count.
+      On a narrow screen the label gives way to a short word and an arrow:
+      the direction is the whole message, and the words were taking the room
+      the heading needed.
     -->
     <TheiLink
       v-if="action"
@@ -48,9 +46,6 @@ defineProps<{
     >
       <span class="hidden sm:inline">{{ action.label }}</span>
       <span class="sm:hidden">{{ phrase.view_all_short }}</span>
-      <span v-if="action.count !== undefined" class="text-text-3 tabular-nums">
-        {{ action.count }}
-      </span>
       <Icon :name="action.icon ?? 'chevron-right'" class="shrink-0" />
     </TheiLink>
   </header>

@@ -28,6 +28,26 @@ describe('asset upload request parsing', () => {
     });
   });
 
+  it('reads an audio transform request and nothing it does not know', () => {
+    expect(
+      parseAssetUploadSettings(
+        JSON.stringify({
+          type: 'audio-transform',
+          quality: 60,
+          mono: true,
+          dimensions: { width: 10 },
+        }),
+      ),
+    ).toEqual({ type: 'audio-transform', quality: 60, mono: true });
+    for (const mono of [undefined, 'yes', 1]) {
+      expect(() =>
+        parseAssetUploadSettings(
+          JSON.stringify({ type: 'audio-transform', quality: 60, mono }),
+        ),
+      ).toThrow('Invalid upload settings');
+    }
+  });
+
   it('reads a quarter turn and rejects any other angle', () => {
     const request = (rotation: unknown) =>
       JSON.stringify({

@@ -59,6 +59,15 @@ export async function validateProjectAssets(
       maxSize: ASSET_UPLOAD_LIMITS.file,
     });
 
+  for (const section of data.sections ?? [])
+    if (section.bannerAssetUuid)
+      checks.push({
+        assetUuid: section.bannerAssetUuid,
+        label: 'Section banner',
+        maxSize: ASSET_UPLOAD_LIMITS.media,
+        mediaOnly: true,
+      });
+
   for (const item of data.showcaseAssets ?? []) {
     checks.push({
       assetUuid: item.assetUuid,

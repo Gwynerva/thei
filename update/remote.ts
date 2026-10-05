@@ -91,7 +91,6 @@ export function getCachedCheck(): CachedCheck | undefined {
   return cache;
 }
 
-
 export function isNewer(candidate: string, current: string): boolean {
   return (
     isVersion(candidate) &&

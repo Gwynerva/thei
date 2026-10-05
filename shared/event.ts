@@ -1,5 +1,5 @@
 import type { ContentFieldModelValue } from './content';
-import type { DatedPeriod } from './date-precision';
+import type { Period } from './period';
 import type { ProjectEventAccessLevel } from './access-level';
 import type { ProjectActionEditData } from './project-action';
 import type { OtherAssetSaveItem } from './admin/project';
@@ -17,8 +17,10 @@ export type EventEditData = {
   access: ProjectEventAccessLevel | '';
   humanReadableSlug: string;
   publicId: string;
-  periods: DatedPeriod[];
+  periods: Period[];
   content: ContentFieldModelValue | null;
+  /** The picture the event's page opens with and its cards show. */
+  bannerAssetUuid?: string;
   otherAssets?: OtherAssetSaveItem[];
   externalLinks?: ExternalLinkListItem[];
   tags?: TagEditItem[];

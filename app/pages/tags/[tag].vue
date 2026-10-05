@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { PublicTagResponse } from '#layers/thei/shared/api/public';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
-import TheiLink from '#layers/thei/app/components/TheiLink';
+import type { TabItem } from '#layers/thei/app/components/UnderlineTabs.vue';
 import { tagAccentCssColor } from '#layers/thei/shared/tag';
 
 definePageMeta({ layout: 'public', key: (route) => String(route.params.tag) });
@@ -58,25 +58,25 @@ usePublicSeo({
   ],
 });
 
-const tabs = computed(() => [
-  {
-    name: 'projects' as const,
-    count: tag.value.projectCount,
-    label: phrase.value.projects_count(tag.value.projectCount),
-  },
-  {
-    name: 'events' as const,
-    count: tag.value.eventCount,
-    label: phrase.value.events_count(tag.value.eventCount),
-  },
-]);
-
-function tabTo(tab: 'projects' | 'events') {
-  return {
-    path: baseCanonical.value,
-    query: tab === 'events' ? { tab: 'events' } : {},
-  };
-}
+/** Each tab is an address of its own; one with nothing in it is not a link. */
+const tabs = computed<TabItem<'projects' | 'events'>[]>(() =>
+  (
+    [
+      ['projects', 'project', tag.value.projectCount, phrase.value.projects],
+      ['events', 'event', tag.value.eventCount, phrase.value.events],
+    ] as const
+  ).map(([key, icon, count, label]) => ({
+    key,
+    icon,
+    count,
+    label,
+    to: {
+      path: baseCanonical.value,
+      query: key === 'events' ? { tab: 'events' } : {},
+    },
+    disabled: !count,
+  })),
+);
 </script>
 
 <template>
@@ -90,36 +90,22 @@ function tabTo(tab: 'projects' | 'events') {
       :description="tag.description"
     />
 
-    <div
-      role="tablist"
-      class="grid grid-cols-2 rounded-normal bg-bg-3 p-1 text-sm font-semibold"
-      :aria-label="publicText(tag.title)"
-    >
-      <component
-        :is="tab.count ? TheiLink : 'span'"
-        v-for="tab in tabs"
-        :key="tab.name"
-        :to="tab.count ? tabTo(tab.name) : undefined"
-        role="tab"
-        :aria-selected="tag.activeTab === tab.name"
-        :aria-disabled="tab.count ? undefined : 'true'"
-        aria-controls="tag-entities"
-        class="flex items-center justify-center gap-xs rounded-sm px-xs py-xs
-          transition"
-        :class="
-          tag.activeTab === tab.name
-            ? 'bg-bg-1 text-text-1 shadow-sm'
-            : tab.count
-              ? 'text-text-2 hocus:text-accent'
-              : 'cursor-not-allowed text-text-3'
-        "
-      >
-        <Icon :name="tab.name === 'projects' ? 'project' : 'event'" />
-        {{ tab.label }}
-      </component>
-    </div>
+    <!-- Each tab is an address of its own, so the row links rather than
+         switches. -->
+    <UnderlineTabs
+      :model-value="tag.activeTab"
+      :tabs
+      :label="publicText(tag.title)"
+      controls="tag-entities"
+      class="max-sm:justify-center"
+    />
 
-    <section id="tag-entities" role="tabpanel" class="flex flex-col gap-sm">
+    <section
+      id="tag-entities"
+      role="tabpanel"
+      :aria-labelledby="`tag-entities-${tag.activeTab}-tab`"
+      class="flex flex-col gap-sm"
+    >
       <div class="grid grid-cols-cards gap-md">
         <PublicEntityCard
           v-for="entity in tag.items.items"

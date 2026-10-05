@@ -16,6 +16,7 @@ import {
 import {
   ASSET_QUALITY_LEVEL_QUALITY,
   assetQualityLevelOf,
+  DEFAULT_AUDIO_QUALITY_LEVEL,
   DEFAULT_IMAGE_QUALITY_LEVEL,
   DEFAULT_VIDEO_QUALITY_LEVEL,
   type AssetQualityStop,
@@ -26,6 +27,9 @@ import {
   assetImageFormatsFor,
   buildAssetSettingsKey,
   resolveAssetUploadSettings,
+  type AssetAudioSource,
+  type AssetAudioTransformRequest,
+  type AssetAudioTransformSettings,
   type AssetImageFormat,
   type AssetTransformRequest,
   type AssetTransformSettings,
@@ -50,6 +54,12 @@ const DEFAULT_IMAGE_QUALITY =
   ASSET_QUALITY_LEVEL_QUALITY[DEFAULT_IMAGE_QUALITY_LEVEL];
 const DEFAULT_VIDEO_QUALITY =
   ASSET_QUALITY_LEVEL_QUALITY[DEFAULT_VIDEO_QUALITY_LEVEL];
+const DEFAULT_AUDIO_QUALITY =
+  ASSET_QUALITY_LEVEL_QUALITY[DEFAULT_AUDIO_QUALITY_LEVEL];
+
+/** What the editor asks a new variant to be, a recording included. */
+export type EditRequest = AssetTransformRequest | AssetAudioTransformRequest;
+export type EditSettings = AssetTransformSettings | AssetAudioTransformSettings;
 
 /**
  * What the admin is asking a new variant to be.
@@ -67,12 +77,15 @@ const DEFAULT_VIDEO_QUALITY =
  * so it is a flag of its own: leaving it goes back to the level it was left
  * from.
  *
+ * A recording has no frame: only its quality and whether it keeps two
+ * channels. The geometry below stays unset for it.
+ *
  * The place's defaults are applied once, when the source is first known, and
  * never again over the admin's own changes.
  */
 export function useEditSettings(options: {
-  kind: () => 'image' | 'video' | undefined;
-  source: () => AssetTransformSource | undefined;
+  kind: () => 'image' | 'video' | 'audio' | undefined;
+  source: () => AssetTransformSource | AssetAudioSource | undefined;
   profile: () => AssetUploadProfileConfig | undefined;
   /** Size each format comes out at with the current settings, once known. */
   formatSizes: () => Partial<Record<AssetImageFormat, number>>;
@@ -91,7 +104,15 @@ export function useEditSettings(options: {
   const exact = ref<FileDimensions | undefined>();
   const stripAudio = ref(false);
   const fastConversion = ref(false);
+  /** A recording folded into one channel. */
+  const mono = ref(false);
   const touched = ref(false);
+
+  /** The source as a picture or a video: what every geometry reads. */
+  const frameSource = computed<AssetTransformSource | undefined>(() => {
+    const source = options.source();
+    return source && 'width' in source ? source : undefined;
+  });
 
   const lockedAspect = computed(() => {
     const aspect = options.profile()?.aspect;
@@ -119,7 +140,7 @@ export function useEditSettings(options: {
 
   /** The source as turned: the frame the crop is measured in. */
   const frame = computed(() => {
-    const source = options.source();
+    const source = frameSource.value;
     return source ? rotatedDimensions(source, rotation.value) : undefined;
   });
 
@@ -137,8 +158,13 @@ export function useEditSettings(options: {
   );
 
   /** The request with every choice made except, for images, the format. */
-  const geometryRequest = computed<AssetTransformRequest | null>(() => {
+  const geometryRequest = computed<EditRequest | null>(() => {
     const kind = options.kind();
+    if (kind === 'audio') {
+      return options.source()
+        ? { type: 'audio-transform', quality: quality.value, mono: mono.value }
+        : null;
+    }
     if (!kind || !cropRect.value) return null;
     const common = {
       quality: quality.value,
@@ -159,9 +185,11 @@ export function useEditSettings(options: {
   });
 
   const outputDimensions = computed<FileDimensions | undefined>(() => {
-    const source = options.source();
+    const source = frameSource.value;
     const request = geometryRequest.value;
-    if (!source || !request) return undefined;
+    if (!source || !request || request.type === 'audio-transform') {
+      return undefined;
+    }
     return (
       resolveAssetUploadSettings(request, source) as AssetTransformSettings
     ).dimensions;
@@ -169,7 +197,7 @@ export function useEditSettings(options: {
 
   const autoFormat = computed<AutoImageFormat | undefined>(() =>
     outputDimensions.value
-      ? recommendImageFormat(options.formatSizes(), options.source()?.isVector)
+      ? recommendImageFormat(options.formatSizes(), frameSource.value?.isVector)
       : undefined,
   );
 
@@ -188,7 +216,7 @@ export function useEditSettings(options: {
     if (on && formatChoice.value === 'avif') formatChoice.value = 'auto';
   });
 
-  const request = computed<AssetTransformRequest | null>(() => {
+  const request = computed<EditRequest | null>(() => {
     const geometry = geometryRequest.value;
     if (!geometry) return null;
     return geometry.type === 'image-transform' && format.value
@@ -198,7 +226,7 @@ export function useEditSettings(options: {
 
   /** Every format this source can be written in, the choice among them. */
   const availableFormats = computed(() =>
-    assetImageFormatsFor(Boolean(options.source()?.isVector)),
+    assetImageFormatsFor(Boolean(frameSource.value?.isVector)),
   );
 
   /**
@@ -214,24 +242,21 @@ export function useEditSettings(options: {
       at.quality === undefined
         ? geometry
         : { ...geometry, quality: at.quality };
-    const request: AssetTransformRequest =
+    const request: EditRequest =
       withQuality.type === 'image-transform'
         ? { ...withQuality, format: at.format ?? format.value }
         : withQuality;
     const settings = resolveAssetUploadSettings(
       request,
       source,
-    ) as AssetTransformSettings;
+    ) as EditSettings;
     return { request, settings, key: buildAssetSettingsKey(settings) };
   }
 
   const resolved = computed(() => {
     const source = options.source();
     return request.value && source
-      ? (resolveAssetUploadSettings(
-          request.value,
-          source,
-        ) as AssetTransformSettings)
+      ? (resolveAssetUploadSettings(request.value, source) as EditSettings)
       : undefined;
   });
   const settingsKey = computed(() =>
@@ -249,14 +274,16 @@ export function useEditSettings(options: {
 
   const placeDefaults = computed(() => {
     const profile = options.profile();
-    const source = options.source();
+    const source = frameSource.value;
     const kind = options.kind();
     // A place's quality is one of the levels; anything else lands on the
     // nearest, so the bar always stands on a stop.
     const placeQuality =
-      kind === 'video'
-        ? (profile?.videoQuality ?? DEFAULT_VIDEO_QUALITY)
-        : (profile?.imageQuality ?? DEFAULT_IMAGE_QUALITY);
+      kind === 'audio'
+        ? DEFAULT_AUDIO_QUALITY
+        : kind === 'video'
+          ? (profile?.videoQuality ?? DEFAULT_VIDEO_QUALITY)
+          : (profile?.imageQuality ?? DEFAULT_IMAGE_QUALITY);
     return {
       quality: ASSET_QUALITY_LEVEL_QUALITY[assetQualityLevelOf(placeQuality)],
       outputBox: profile?.box ? { ...profile.box } : undefined,
@@ -286,6 +313,7 @@ export function useEditSettings(options: {
       exact,
       stripAudio,
       fastConversion,
+      mono,
     ],
     () => {
       if (!applying) touched.value = true;
@@ -316,7 +344,7 @@ export function useEditSettings(options: {
   // brought back to the field's exact proportions if the frame changed shape.
   watch(
     () => {
-      const source = options.source();
+      const source = frameSource.value;
       return source ? `${source.width}x${source.height}` : '';
     },
     (key, previous) => {
@@ -348,6 +376,7 @@ export function useEditSettings(options: {
       aspectChoice.value = 'free';
       stripAudio.value = target.stripAudio;
       fastConversion.value = false;
+      mono.value = false;
     });
   }
 
@@ -485,6 +514,7 @@ export function useEditSettings(options: {
     outputBox,
     stripAudio,
     fastConversion,
+    mono,
     touched,
     lockedAspect,
     fixedFormat,

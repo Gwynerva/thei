@@ -37,10 +37,10 @@ function insertEvents(count: number, access = ProjectEventAccessLevel.Public) {
         updatedAt: 1,
       })
       .run();
-    db.insert(schema.stagePeriods)
+    db.insert(schema.periods)
       .values({
-        stageType: 'event-stage',
-        stageUuid: id,
+        ownerType: 'event',
+        ownerId: id,
         sortOrder: 0,
         startDate: '2025-09-01',
         endDate: '2025-09-20',

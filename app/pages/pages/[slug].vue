@@ -79,7 +79,7 @@ const ownerNotesContents = computed(() =>
       :extra-contents="ownerNotesContents"
     >
       <ContentRenderer :data="data.content" asset-viewer />
-      <PublicOwnerNotes :notes="data.notes" />
+      <PublicOwnerNotes :notes="data.notes" class="mt-lg" />
     </PublicDetailLayout>
   </main>
 </template>

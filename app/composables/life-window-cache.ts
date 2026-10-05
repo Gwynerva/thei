@@ -27,7 +27,13 @@ type RowBase = { key: string; windowId: string; date: string };
 export type LifeFeedRow = RowBase &
   (
     | { kind: 'point'; point: LifePoint; first: boolean; last: boolean }
-    | { kind: 'gap'; newerDate: string; duration: LifeGapDuration }
+    | {
+        kind: 'gap';
+        newerDate: string;
+        duration: LifeGapDuration;
+        /** A period runs across it: a stretch, not a pause. */
+        bridged: boolean;
+      }
     | { kind: 'window'; height: number }
   );
 
@@ -79,6 +85,7 @@ export function lifeFeedRows(windows: LifeCachedWindow[]): LifeFeedRow[] {
           date: day.date,
           newerDate: previousDate,
           duration,
+          bridged: Boolean(day.bridged),
         });
       day.points.forEach((point, index) =>
         rows.push({

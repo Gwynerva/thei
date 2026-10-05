@@ -6,7 +6,7 @@ import {
 } from '../../shared/asset-upload-settings';
 
 describe('isLongCommit', () => {
-  it('runs a video encode or a zip as a job, and the rest in the request', () => {
+  it('runs a video or audio encode or a zip as a job, and the rest in the request', () => {
     expect(
       isLongCommit({
         type: 'video-transform',
@@ -17,6 +17,9 @@ describe('isLongCommit', () => {
       }),
     ).toBe(true);
     expect(isLongCommit(createFileZipSettings())).toBe(true);
+    expect(
+      isLongCommit({ type: 'audio-transform', quality: 75, mono: false }),
+    ).toBe(true);
     expect(
       isLongCommit({ type: 'image-transform', quality: 75, dimensions: {} }),
     ).toBe(false);

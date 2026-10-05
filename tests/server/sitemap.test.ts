@@ -40,13 +40,11 @@ function input(overrides: Partial<SitemapInput> = {}): SitemapInput {
   return {
     projects: [],
     sections: [],
-    stages: [],
     events: [],
     pages: [],
     diaryEntries: [],
     tags: [],
     tagUsages: [],
-    periods: [],
     ...overrides,
   };
 }
@@ -97,7 +95,7 @@ describe('sitemap privacy', () => {
     expect(listed).not.toContain('/pages/hidden/');
   });
 
-  it('withholds a private stage or section inside a public project', () => {
+  it('withholds a private section inside a public project', () => {
     const parent = project('pub', ProjectEventAccessLevel.Public);
     const listed = paths(
       input({
@@ -118,15 +116,6 @@ describe('sitemap privacy', () => {
             updatedAt: EPOCH,
           },
         ],
-        stages: [
-          {
-            projectUuid: parent.projectUuid,
-            humanReadableSlug: 'secret-stage',
-            publicId: 'g1',
-            isPrivate: true,
-            updatedAt: EPOCH,
-          },
-        ],
       }),
     );
     expect(listed).toContain(
@@ -135,9 +124,6 @@ describe('sitemap privacy', () => {
     expect(listed).not.toContain(
       '/projects/slug-pub-pub/sections/secret-section-s2/',
     );
-    expect(listed).not.toContain(
-      '/projects/slug-pub-pub/stages/secret-stage-g1/',
-    );
   });
 
   it('withholds every child of a project that is not listable', () => {
@@ -145,10 +131,10 @@ describe('sitemap privacy', () => {
     const listed = paths(
       input({
         projects: [parent],
-        stages: [
+        sections: [
           {
             projectUuid: parent.projectUuid,
-            humanReadableSlug: 'open-stage',
+            humanReadableSlug: 'open-section',
             publicId: 'g1',
             isPrivate: false,
             updatedAt: EPOCH,
@@ -157,7 +143,7 @@ describe('sitemap privacy', () => {
       }),
     );
     expect(listed).not.toContain(
-      '/projects/slug-link-link/stages/open-stage-g1/',
+      '/projects/slug-link-link/sections/open-section-g1/',
     );
   });
 
@@ -195,20 +181,6 @@ describe('sitemap privacy', () => {
     const listed = paths(
       input({
         events: [open, hidden],
-        periods: [
-          {
-            stageType: 'event-stage',
-            stageUuid: open.eventUuid,
-            startDate: '2024-01-01',
-            endDate: '2025-06-01',
-          },
-          {
-            stageType: 'event-stage',
-            stageUuid: hidden.eventUuid,
-            startDate: '2019-01-01',
-            endDate: '2019-02-01',
-          },
-        ],
       }),
     );
     // A day now travels in the query string, and a year is no longer an
@@ -240,7 +212,7 @@ describe('sitemap privacy', () => {
     ]);
   });
 
-  it('lists both tabs of a public project and its stage and section views', () => {
+  it('lists both tabs of a public project and no filter of its chronology', () => {
     const listed = paths(
       input({ projects: [project('Open', ProjectEventAccessLevel.Public)] }),
     );
@@ -248,12 +220,13 @@ describe('sitemap privacy', () => {
       expect.arrayContaining([
         '/projects/slug-Open-Open/',
         '/projects/slug-Open-Open/timeline/',
-        '/projects/slug-Open-Open/timeline/?f=project-stage',
-        '/projects/slug-Open-Open/timeline/?f=project-section',
       ]),
     );
-    // Related events redirect into the chronology but are not a page of
-    // their own.
+    // The sections are a block of the overview; a filter of the chronology
+    // is only a way of reading it.
+    expect(listed).not.toContain(
+      '/projects/slug-Open-Open/timeline/?f=project-section',
+    );
     expect(listed).not.toContain('/projects/slug-Open-Open/timeline/?f=event');
   });
 

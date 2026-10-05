@@ -58,7 +58,7 @@ describe('Life periods', () => {
     expect(parseLifeFilter('nonsense')).toBeUndefined();
     expect(
       parseLifeFilter(
-        'event,project,page,project-stage,project-section,profile-avatar,profile-status,diary-entry',
+        'event,project,page,project-section,profile-avatar,profile-status,diary-entry',
       ),
     ).toBeUndefined();
     expect(serializeLifeFilter(undefined)).toBeUndefined();
@@ -70,7 +70,7 @@ describe('Life periods', () => {
     expect(parseLifeFilter('event,profile-avatar', scope)).toEqual(['event']);
     expect(
       parseLifeFilter(
-        'event,project-stage,project-section,profile-status,diary-entry',
+        'event,project-section,profile-status,diary-entry',
         scope,
       ),
     ).toBeUndefined();
@@ -140,23 +140,23 @@ describe('Life point construction', () => {
     ).toHaveLength(2);
   });
 
-  it('merges event and project-stage periods independently', () => {
+  it('merges event and section periods independently', () => {
     const merged = mergeLifeBoundaryPoints([
       point('event:a:period:0', '2026-08-21', 'started'),
       point('event:a:period:0', '2026-08-22', 'ended'),
       point(
-        'project-stage:a:period:0',
+        'project-section:a:period:0',
         '2026-08-21',
         'started',
         undefined,
-        'project-stage',
+        'project-section',
       ),
       point(
-        'project-stage:a:period:0',
+        'project-section:a:period:0',
         '2026-08-22',
         'ended',
         undefined,
-        'project-stage',
+        'project-section',
       ),
     ]);
     expect(merged).toHaveLength(2);
@@ -242,11 +242,11 @@ describe('Life point construction', () => {
       },
       {
         ...point(
-          'project-stage:s',
+          'project-section:s',
           '2026-08-22',
           'started',
           0,
-          'project-stage',
+          'project-section',
         ),
         projectUuids: ['a'],
       },
@@ -257,27 +257,70 @@ describe('Life point construction', () => {
       },
       {
         ...point(
-          'project-stage:o',
+          'project-section:o',
           '2026-08-22',
           'started',
           0,
-          'project-stage',
+          'project-section',
         ),
         projectUuids: ['b'],
       },
       point('event:z', '2026-08-22', 'started'),
       {
-        ...point('project-stage:y', '2026-08-21', 'ended', 0, 'project-stage'),
+        ...point(
+          'project-section:y',
+          '2026-08-21',
+          'ended',
+          0,
+          'project-section',
+        ),
         projectUuids: ['a'],
       },
     ]);
     expect(ordered.map((item) => item.identity)).toEqual([
       'project-section:x',
-      'event:z',
-      'project-stage:o',
-      'project-stage:s',
+      'project-section:s',
       'project:a',
-      'project-stage:y',
+      'event:z',
+      'project-section:o',
+      'project-section:y',
+    ]);
+  });
+
+  it("keeps a project's cards of one day together, with nothing between", () => {
+    const part = (
+      identity: string,
+      transition: 'started' | 'ended' | 'occurred' | 'created',
+      entityKind: string,
+      projectUuids: string[],
+      sortTime = 0,
+    ) => ({
+      ...point(identity, '2026-08-22', transition, sortTime),
+      entityKind,
+      projectUuids,
+    });
+    const ordered = sortLifePoints([
+      part('project-section:end', 'ended', 'project-section', ['a']),
+      part('event:e', 'ended', 'event', ['a']),
+      part('diary-entry:d', 'created', 'diary-entry', ['a']),
+      part('project-section:other', 'occurred', 'project-section', ['b']),
+      part('profile-status:p', 'created', 'profile-status', ['a'], 2),
+      part('profile-status:me', 'created', 'profile-status', [], 3),
+      part('project-section:start', 'started', 'project-section', ['a']),
+      part('event:f', 'started', 'event', []),
+    ]);
+    expect(ordered.map((item) => item.identity)).toEqual([
+      // A diary entry still opens the day.
+      'diary-entry:d',
+      // An event related to project a is no part of it.
+      'event:e',
+      // Project a stands where its first card would, all of it at once.
+      'project-section:end',
+      'profile-status:p',
+      'project-section:start',
+      'profile-status:me',
+      'project-section:other',
+      'event:f',
     ]);
   });
 

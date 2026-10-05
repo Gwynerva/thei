@@ -2,12 +2,11 @@
 import type { PublicProjectResponse } from '#layers/thei/shared/api/public';
 import {
   createdAndUpdatedTimelineItems,
-  firstAndLastTimelineItems,
   type PublicDetailPanelData,
 } from '#layers/thei/app/components/public/public-detail';
 import {
-  buildProjectTimelineUrl,
   buildProjectUrl,
+  PROJECT_SECTIONS_ANCHOR,
 } from '#layers/thei/shared/project-url';
 import {
   buildContentHeadings,
@@ -27,8 +26,6 @@ const resource = await useFetch<PublicProjectResponse>(
   () => `/api/projects/${encodeURIComponent(String(route.params.projectUuid))}`,
 );
 const data = useRequiredResource(resource);
-// The hero already paints the page top.
-usePublicPageGlow({ enabled: false });
 const canonical = computed(() =>
   buildProjectUrl(data.value.humanReadableSlug, data.value.publicId),
 );
@@ -71,31 +68,20 @@ usePublicSeo({
       ...(data.value.tags.length
         ? { keywords: data.value.tags.map((tag) => tag.title).join(', ') }
         : {}),
-      ...(data.value.stages.length + data.value.sections.length
+      ...(data.value.sections.length
         ? {
-            // The same nodes the parts' own pages describe, by their @id.
-            hasPart: [
-              ...data.value.sections.map((part) => ({
-                '@type': 'Article',
-                '@id': `${part.href}#section`,
-                headline: part.title,
-                url: part.href,
-              })),
-              ...data.value.stages.map((part) => ({
-                '@type': 'Article',
-                '@id': `${part.href}#stage`,
-                headline: part.title,
-                url: part.href,
-              })),
-            ],
+            // The same nodes the sections' own pages describe, by their @id.
+            hasPart: data.value.sections.map((part) => ({
+              '@type': 'Article',
+              '@id': `${part.href}#section`,
+              headline: part.title,
+              url: part.href,
+            })),
           }
         : {}),
     },
   ],
 });
-const timelineHref = computed(() =>
-  buildProjectTimelineUrl(data.value.humanReadableSlug, data.value.publicId),
-);
 const relatedUrl = computed(
   () =>
     `/api/projects/${encodeURIComponent(String(route.params.projectUuid))}/related`,
@@ -109,16 +95,10 @@ const contents = computed<ContentHeading[]>(() => {
     shown: boolean;
   }[] = [
     {
-      id: 'project-sections',
+      id: PROJECT_SECTIONS_ANCHOR,
       title: phrase.value.project_content_sections,
-      icon: 'file-tray-stack',
+      icon: 'project-section',
       shown: data.value.sections.length > 0,
-    },
-    {
-      id: 'project-timeline',
-      title: phrase.value.project_timeline_latest,
-      icon: 'heart',
-      shown: data.value.timeline.latest.length > 0,
     },
     {
       id: PUBLIC_RELATED_SECTION_ID,
@@ -147,48 +127,10 @@ const details = computed(
   () =>
     ({
       contents: contents.value,
-      chronology: createdAndUpdatedTimelineItems(
-        data.value.chronology,
-        {
-          created: phrase.value.project_chronology_page,
-          updated: phrase.value.project_chronology_updated,
-        },
-        [
-          ...firstAndLastTimelineItems(
-            data.value.stages,
-            (stage) => ({ date: stage.period.startDate, href: stage.href }),
-            {
-              icon: 'calendar',
-              first: phrase.value.project_chronology_first_stage,
-              last: phrase.value.project_chronology_last_stage,
-              only: phrase.value.project_chronology_stage,
-            },
-          ),
-          ...firstAndLastTimelineItems(
-            data.value.sections,
-            (section) => ({ date: section.date, href: section.href }),
-            {
-              icon: 'file-tray-stack',
-              first: phrase.value.project_chronology_first_section,
-              last: phrase.value.project_chronology_last_section,
-              only: phrase.value.project_chronology_section,
-            },
-          ),
-          ...firstAndLastTimelineItems(
-            [data.value.chronology.firstStatusAt, data.value.currentStatus],
-            (mark) =>
-              typeof mark === 'string'
-                ? { date: mark, href: '#statuses' }
-                : mark && { date: mark.date, href: '#statuses' },
-            {
-              icon: 'pulse',
-              first: phrase.value.project_chronology_first_status,
-              last: phrase.value.project_chronology_last_status,
-              only: phrase.value.project_status,
-            },
-          ),
-        ],
-      ),
+      chronology: createdAndUpdatedTimelineItems(data.value.chronology, {
+        created: phrase.value.project_chronology_page,
+        updated: phrase.value.project_chronology_updated,
+      }),
       tags: data.value.tags,
       references: data.value.references,
     }) satisfies PublicDetailPanelData,
@@ -203,7 +145,7 @@ const ownerNotesContents = computed(() =>
 
 <template>
   <main class="flex flex-col">
-    <PublicProjectHero
+    <PublicHero
       :title="data.title"
       :summary="data.summary"
       :icon-media="data.iconMedia"
@@ -222,7 +164,7 @@ const ownerNotesContents = computed(() =>
           active="overview"
         />
       </template>
-    </PublicProjectHero>
+    </PublicHero>
 
     <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
       <PublicReminderNotice :reminder="data.reminder" />
@@ -246,57 +188,7 @@ const ownerNotesContents = computed(() =>
             asset-viewer
           />
 
-          <section
-            v-if="data.sections.length"
-            id="project-sections"
-            aria-labelledby="sections-heading"
-            class="flex scroll-mt-[var(--public-anchor-offset,8rem)] flex-col
-              gap-sm"
-          >
-            <PublicSectionHeader
-              heading-id="sections-heading"
-              :title="phrase.project_content_sections"
-              icon="file-tray-stack"
-            />
-            <div class="grid gap-md">
-              <PublicProjectChildCard
-                v-for="section in data.sections"
-                :key="section.href"
-                :item="section"
-                kind="section"
-              />
-            </div>
-          </section>
-
-          <section
-            v-if="data.timeline.latest.length"
-            id="project-timeline"
-            aria-labelledby="timeline-heading"
-            class="flex scroll-mt-[var(--public-anchor-offset,8rem)] flex-col
-              gap-sm"
-          >
-            <PublicSectionHeader
-              heading-id="timeline-heading"
-              :title="phrase.project_timeline_latest"
-              icon="heart"
-              :action="{
-                href: timelineHref,
-                label: phrase.view_all,
-                count: data.timeline.total,
-                icon: 'arrow-outward',
-              }"
-            />
-            <!-- One card per row: the sidebar already narrows this column. -->
-            <div class="flex flex-col gap-md">
-              <LifePointCard
-                v-for="point in data.timeline.latest"
-                :key="point.key"
-                :point="point"
-                date-style="long"
-                compact
-              />
-            </div>
-          </section>
+          <PublicProjectSections :sections="data.sections" />
           <PublicRelatedBlock :counts="data.related" :url="relatedUrl" />
           <PublicOwnerNotes :notes="data.notes" />
         </div>

@@ -347,4 +347,16 @@ describe('status dates', () => {
       }),
     ).toThrow('Status ID already exists');
   });
+
+  it('ends a status as a caption, and takes it resent with a full stop as the same', () => {
+    const input = (text: string) => ({
+      newStatuses: [
+        { id: 'ending', kind: 'regular' as const, text, date: '2024-06-01' },
+      ],
+    });
+    save(projectC, input('Работаю над домом.'));
+    expect(stored('ending')?.text).toBe('Работаю над домом');
+    save(projectC, input('Работаю над домом'));
+    expect(stored('ending')?.text).toBe('Работаю над домом');
+  });
 });

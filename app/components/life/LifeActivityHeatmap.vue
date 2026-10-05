@@ -9,6 +9,7 @@ import {
   type LifeDay,
   type LifePoint,
 } from '#layers/thei/shared/life';
+import { toDateString } from '#layers/thei/shared/date-range';
 import { lifeEntityKindIcon } from './life-entity-icon';
 import { heatmapMonthLayout } from './heatmap-months';
 import TheiLink from '../TheiLink';
@@ -99,7 +100,6 @@ const kindLabels: Record<LifeActivityKind, (count: number) => string> = {
   event: (count) => phrase.value.life_activity_events(count),
   project: (count) => phrase.value.life_activity_projects(count),
   page: (count) => phrase.value.life_activity_pages(count),
-  'project-stage': (count) => phrase.value.life_activity_stages(count),
   'project-section': (count) => phrase.value.life_activity_sections(count),
   'profile-avatar': (count) => phrase.value.life_activity_profile(count),
   'profile-status': (count) => phrase.value.life_activity_statuses(count),
@@ -202,8 +202,14 @@ const levelClasses = [
   'bg-accent/75',
   'bg-accent',
 ];
+/**
+ * The viewer's own day, not UTC's, so the mark sits where their calendar is.
+ * The server cannot know their time zone, so it is set once the page runs.
+ */
+const today = ref<string>();
 const grid = useTemplateRef<HTMLElement>('grid');
 onMounted(() => {
+  today.value = toDateString(new Date());
   // Narrow screens scroll: the recent weeks are the interesting end.
   if (grid.value) grid.value.scrollLeft = grid.value.scrollWidth;
 });
@@ -360,11 +366,16 @@ onMounted(() => {
                 :class="[
                   levelClasses[item.level],
                   // The ring stands off the cell, so a gap of the block's own
-                  // colour keeps the cell's shade readable inside it.
+                  // colour keeps the cell's shade readable inside it. Today
+                  // always keeps one, so the eye finds its place in the year;
+                  // picking it only recolours it.
                   selectedDate === item.date
                     ? 'ring-1 ring-text-1 ring-offset-1 ring-offset-bg-2'
-                    : undefined,
+                    : today === item.date
+                      ? 'ring-1 ring-accent ring-offset-1 ring-offset-bg-2'
+                      : undefined,
                 ]"
+                :aria-current="today === item.date ? 'date' : undefined"
                 :data-title-popup="popup(item.date)"
                 :aria-label="popup(item.date)"
                 @click="selectDay(item.date)"

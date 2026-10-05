@@ -85,7 +85,6 @@ describe('chooseLayout', () => {
     ['a preset with pictures', card('service:showcase'), 2, 'collection'],
     ['a preset with one picture', card('service:cv'), 1, 'poster'],
     ['a project', card('project'), 0, 'project'],
-    ['a stage', card('stage'), 0, 'media'],
     ['a section', card('section'), 0, 'media'],
     ['an event', card('event'), 0, 'media'],
     ['a diary entry', card('diary'), 0, 'calendar'],
@@ -103,14 +102,7 @@ describe('chooseLayout', () => {
       { type: 'generated' as const, kind: 'project' as const, hue: 10 },
       undefined,
     ];
-    for (const kind of [
-      'project',
-      'stage',
-      'section',
-      'event',
-      'page',
-      'tag',
-    ] as const)
+    for (const kind of ['project', 'section', 'event', 'page', 'tag'] as const)
       expect(
         new Set(
           pictures.map((picture) =>

@@ -15,11 +15,16 @@ import {
   type AssetLibraryItem,
   type AssetSelectionConstraints,
   type AssetLibraryAvailability,
+  type AssetLibraryAssetsResponse,
+  type AssetLibraryFacets,
+  type AssetLibraryResponse,
+  type AssetLibrarySourceFilter,
 } from '../../../shared/asset-library';
 import { normalizeAssetExtension } from '../../../shared/assets/formats';
+import { dayQueryRank, parseDayQuery } from '../../../shared/day-query';
 import { richTextToPlainText } from '../../../shared/rich-text';
 import {
-  buildProjectChildUrl,
+  buildProjectSectionUrl,
   buildProjectUrl,
 } from '../../../shared/project-url';
 import { buildEventUrl } from '../../../shared/event-url';
@@ -33,13 +38,14 @@ export interface LibraryQuery extends AssetSelectionConstraints {
   q?: string;
   type?: string;
   usage?: string;
+  /** Only the groups of this kind of entity; sections listing only. */
+  source?: AssetLibrarySourceFilter;
   page?: number;
 }
 
 // Resolve owners in SQL. Only page assets and their placements are materialized;
 // rendering the library never hydrates content or invokes media processing.
-// A stage or a section is a source of its own, carrying its project as the
-// parent; a private project makes everything in it private.
+// A section is a source of its own, carrying its project as the parent; a private project makes everything in it private.
 const ownersSql = `
 WITH sources AS (
   SELECT 'project' AS sourceType, projectUuid AS sourceId, title, summary,
@@ -50,9 +56,6 @@ WITH sources AS (
   UNION ALL SELECT 'diary-entry',diaryUuid,date,'',date,'',updatedAt,access='private','','','','' FROM "diary-entries"
   UNION ALL SELECT 'tag',tagUuid,title,description,slug,publicId,0,0,'','','','' FROM tags
   UNION ALL SELECT 'profile',profileId,displayName,slogan,'','',0,0,'','','','' FROM profiles
-  UNION ALL SELECT 'project-stage',st.stageUuid,st.title,st.summary,st.humanReadableSlug,st.publicId,st.updatedAt,
-    (st.isPrivate OR p.access='private'),p.projectUuid,p.title,p.humanReadableSlug,p.publicId
-    FROM "project-stages" st JOIN projects p ON p.projectUuid=st.projectUuid
   UNION ALL SELECT 'project-section',se.sectionUuid,se.title,se.summary,se.humanReadableSlug,se.publicId,se.updatedAt,
     (se.isPrivate OR p.access='private'),p.projectUuid,p.title,p.humanReadableSlug,p.publicId
     FROM "project-content-sections" se JOIN projects p ON p.projectUuid=se.projectUuid
@@ -78,8 +81,11 @@ members AS (
 /**
  * Matches an asset by the text the site itself gives it: captions and titles
  * of its placements, captions inside editor blocks, and the titles of whatever
- * holds it. What the uploaded file was called is never kept, so it is never
- * searchable. `scoped` restricts the match to the member row's own source.
+ * holds it. A diary entry has no title: it is found by its day, written in
+ * any way (`day-query.ts`), and never by the characters of its stored date,
+ * so a lone `0` or `-` does not find every entry. What the uploaded file
+ * was called is never kept, so it is never searchable. `scoped` restricts the
+ * match to the member row's own source. Takes the query four times.
  */
 function siteTextMatchSql(scoped: boolean) {
   const scope = scoped
@@ -87,7 +93,8 @@ function siteTextMatchSql(scoped: boolean) {
     : '';
   return `(EXISTS (
       SELECT 1 FROM placements p WHERE p.assetUuid=a.assetUuid${scope}
-      AND instr(asset_search_text(coalesce(p.title,'') || ' ' || coalesce(p.summary,'') || ' ' || p.description || ' ' || coalesce(json_extract(p.meta,'$.caption'),'') || ' ' || coalesce(json_extract(p.meta,'$.title'),'')),?)>0)
+      AND (instr(asset_search_text(CASE WHEN p.sourceType='diary-entry' THEN '' ELSE coalesce(p.title,'') END || ' ' || coalesce(p.summary,'') || ' ' || p.description || ' ' || coalesce(json_extract(p.meta,'$.caption'),'') || ' ' || coalesce(json_extract(p.meta,'$.title'),'')),?)>0
+        OR (p.sourceType='diary-entry' AND asset_day_match(p.slug,?))))
     OR EXISTS (
       SELECT 1 FROM placements p JOIN content c ON p.containerType='content' AND c.contentUuid=p.containerId,
         json_each(c.data,'$.blocks') b
@@ -113,11 +120,33 @@ function connection() {
           typeof value === 'string' ? richTextToPlainText(value) : '',
         ),
     );
+    // Asked once per diary placement with the same query each time, so the
+    // query is read once.
+    let lastQuery: string | undefined;
+    let lastDay: ReturnType<typeof parseDayQuery>;
+    context.rawDb.function(
+      'asset_day_match',
+      { deterministic: true },
+      (date: unknown, query: unknown) => {
+        if (typeof date !== 'string' || typeof query !== 'string') return 0;
+        if (query !== lastQuery) {
+          lastQuery = query;
+          lastDay = parseDayQuery(query);
+        }
+        return lastDay && dayQueryRank(date, lastDay) !== undefined ? 1 : 0;
+      },
+    );
     registered.add(context.rawDb);
   }
   return context;
 }
-function matchSql(query: LibraryQuery, source = false) {
+/**
+ * What a listing matches. `scoped` reads it per member row, a file in one
+ * source, as the groups are listed; otherwise per file. A kind of entity
+ * (`source`) is the member row's kind in a group listing, and any placement
+ * of the file in an entity of that kind in a flat one.
+ */
+function matchSql(query: LibraryQuery, scoped = false) {
   const parts = ['a.settings IS NOT NULL'];
   const args: (string | number)[] = [];
   if (query.imageOnly) {
@@ -147,8 +176,16 @@ function matchSql(query: LibraryQuery, source = false) {
   }
   const q = normalizeAdminSearchText(query.q ?? '');
   if (q) {
-    parts.push(siteTextMatchSql(source));
-    args.push(q, q, q);
+    parts.push(siteTextMatchSql(scoped));
+    args.push(q, q, q, q);
+  }
+  if (query.source) {
+    parts.push(
+      scoped
+        ? 'm.sourceType=?'
+        : 'EXISTS (SELECT 1 FROM placements p WHERE p.assetUuid=a.assetUuid AND p.sourceType=?)',
+    );
+    args.push(query.source);
   }
   if (query.usage === 'used')
     parts.push(
@@ -169,7 +206,7 @@ interface SourceRow {
   publicId: string;
   updatedAt: number;
   sourcePrivate: number;
-  /** The project of a stage or a section; empty for every other source. */
+  /** The project of a section; empty for every other source. */
   parentId: string;
   parentTitle: string;
   parentSlug: string;
@@ -190,20 +227,18 @@ function sourceInfo(row: SourceRow): AssetSource {
     summary: row.summary ?? '',
     updatedAt: row.updatedAt,
   };
-  if (type === 'project-stage' || type === 'project-section') {
-    // A stage or a section has no editor of its own: the project's editor
-    // opens with that part's modal already up, as the admin bar does.
-    const isStage = type === 'project-stage';
+  if (type === 'project-section') {
+    // A section has no editor of its own: the project's editor opens with
+    // its modal already up, as the admin bar does.
     return {
       ...base,
-      url: buildProjectChildUrl(
+      url: buildProjectSectionUrl(
         row.parentSlug,
         row.parentPublicId,
-        isStage ? 'stages' : 'sections',
         slug,
         publicId,
       ),
-      editUrl: `/admin/projects/${row.parentId}/edit/?${isStage ? 'stage' : 'section'}=${encodeURIComponent(publicId)}`,
+      editUrl: `/admin/projects/${row.parentId}/edit/?section=${encodeURIComponent(publicId)}`,
       parent: {
         title: row.parentTitle,
         url: buildProjectUrl(row.parentSlug, row.parentPublicId),
@@ -342,7 +377,56 @@ function pageIds(
   }[];
   return { ...page, ids: rows.map((r) => r.assetUuid) };
 }
-export function listLibraryAssets(query: LibraryQuery = {}) {
+/**
+ * How many results each choice of the filters would give: each filter counted
+ * with everything else applied but itself (`AssetLibraryFacets`). `scoped`
+ * counts places by groups, as the reuse picker lists them; otherwise by files.
+ */
+function libraryFacets(
+  query: LibraryQuery,
+  scoped: boolean,
+): AssetLibraryFacets {
+  const { rawDb } = connection();
+  const counted = <T>(sql: string, args: (string | number)[]) =>
+    rawDb.prepare(ownersSql + sql).all(...args) as T[];
+  const files = 'FROM members m JOIN assets a ON a.assetUuid=m.assetUuid';
+  const byType = matchSql({ ...query, type: undefined }, scoped);
+  const types = counted<{ value: AssetType; count: number }>(
+    `SELECT a.type AS value,count(DISTINCT a.assetUuid) AS count ${files} WHERE ${byType.where} GROUP BY a.type`,
+    byType.args,
+  );
+  const byPlace = matchSql(
+    { ...query, source: undefined, usage: undefined },
+    scoped,
+  );
+  const places = scoped
+    ? counted<{ value: AssetSource['type']; count: number }>(
+        `SELECT sourceType AS value,count(*) AS count FROM (SELECT m.sourceType ${files} WHERE ${byPlace.where} GROUP BY m.sourceType,m.sourceId) GROUP BY sourceType`,
+        byPlace.args,
+      )
+    : counted<{ value: AssetSource['type']; count: number }>(
+        `SELECT m.sourceType AS value,count(DISTINCT a.assetUuid) AS count ${files} WHERE ${byPlace.where} GROUP BY m.sourceType`,
+        byPlace.args,
+      );
+  const anywhere = scoped
+    ? places.reduce((sum, row) => sum + row.count, 0)
+    : (
+        rawDb
+          .prepare(
+            ownersSql +
+              `SELECT count(*) AS count FROM assets a WHERE ${byPlace.where}`,
+          )
+          .get(...byPlace.args) as { count: number }
+      ).count;
+  return {
+    types: Object.fromEntries(types.map((row) => [row.value, row.count])),
+    sources: Object.fromEntries(places.map((row) => [row.value, row.count])),
+    anywhere,
+  };
+}
+export function listLibraryAssets(
+  query: LibraryQuery = {},
+): AssetLibraryAssetsResponse {
   const { where, args } = matchSql(query);
   const { ids, ...page } = pageIds(
     `SELECT a.assetUuid,a.touchedAt FROM assets a WHERE ${where}`,
@@ -350,16 +434,28 @@ export function listLibraryAssets(query: LibraryQuery = {}) {
     query,
     40,
   );
-  return { ...page, items: readItems(ids, query) };
+  return {
+    ...page,
+    items: readItems(ids, query),
+    facets: libraryFacets(query, false),
+  };
 }
-export function listLibrarySections(query: LibraryQuery = {}) {
+/**
+ * The groups of files the reuse picker lists: files nothing holds first, then
+ * every entity holding a matching file, the one changed last first. The
+ * profile and tags keep no date of change; they follow, the one whose files
+ * were placed most recently first.
+ */
+export function listLibrarySections(
+  query: LibraryQuery = {},
+): AssetLibraryResponse {
   const { rawDb } = connection();
   const { where, args } = matchSql(query, true);
-  const from = `SELECT m.sourceType,m.sourceId,s.title,s.summary,s.slug,s.publicId,s.sourcePrivate,
+  const from = `SELECT * FROM (SELECT m.sourceType,m.sourceId,s.title,s.summary,s.slug,s.publicId,s.sourcePrivate,
     s.parentId,s.parentTitle,s.parentSlug,s.parentPublicId,
-    max(max(a.touchedAt,coalesce(s.updatedAt,0))) AS updatedAt,count(DISTINCT a.assetUuid) AS count
+    coalesce(s.updatedAt,0) AS updatedAt,max(a.touchedAt) AS touchedAt,count(DISTINCT a.assetUuid) AS count
     FROM members m JOIN assets a ON a.assetUuid=m.assetUuid LEFT JOIN sources s ON s.sourceType=m.sourceType AND s.sourceId=m.sourceId
-    WHERE ${where} GROUP BY m.sourceType,m.sourceId`;
+    WHERE ${where} GROUP BY m.sourceType,m.sourceId)`;
   const total = (
     rawDb
       .prepare(ownersSql + `SELECT count(*) AS total FROM (${from})`)
@@ -374,8 +470,8 @@ export function listLibrarySections(query: LibraryQuery = {}) {
       ownersSql +
         from +
         ` ORDER BY
-    CASE WHEN m.sourceType='unused' THEN 0 ELSE 1 END,
-    updatedAt DESC,m.sourceType,m.sourceId LIMIT ? OFFSET ?`,
+    CASE WHEN sourceType='unused' THEN 0 ELSE 1 END,
+    updatedAt DESC,touchedAt DESC,sourceType,sourceId LIMIT ? OFFSET ?`,
     )
     .all(
       ...args,
@@ -385,6 +481,7 @@ export function listLibrarySections(query: LibraryQuery = {}) {
   return {
     ...page,
     items: rows.map((row) => ({ ...sourceInfo(row), count: row.count })),
+    ...(page.page === 1 ? { facets: libraryFacets(query, true) } : {}),
   };
 }
 export function listSourceAssets(

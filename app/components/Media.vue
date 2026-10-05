@@ -86,6 +86,7 @@ defineExpose({
 </template>
 
 <style scoped>
+@reference "../styles/main.css";
 :deep(.media-main) {
   object-fit: var(--media-fit);
   object-position: var(--media-align);
@@ -98,34 +99,13 @@ defineExpose({
 }
 /*
  * Both fades below run from opaque at `--media-edge-from` to clear at
- * `--media-edge-to` along a smoothstep: a straight ramp shows where it starts
- * and where it ends, which reads as an edge.
+ * `--media-edge-to`, along `mask-ease`.
  */
 .media-edge :deep(:is(.media-foreground, .media-main)) {
-  --media-edge-span: calc(var(--media-edge-to) - var(--media-edge-from));
-  mask-image: linear-gradient(
-    var(--media-edge-inward),
-    #000 var(--media-edge-from),
-    rgb(0 0 0 / 97.2%)
-      calc(var(--media-edge-from) + var(--media-edge-span) * 0.1),
-    rgb(0 0 0 / 89.6%)
-      calc(var(--media-edge-from) + var(--media-edge-span) * 0.2),
-    rgb(0 0 0 / 78.4%)
-      calc(var(--media-edge-from) + var(--media-edge-span) * 0.3),
-    rgb(0 0 0 / 64.8%)
-      calc(var(--media-edge-from) + var(--media-edge-span) * 0.4),
-    rgb(0 0 0 / 50%) calc(var(--media-edge-from) + var(--media-edge-span) * 0.5),
-    rgb(0 0 0 / 35.2%)
-      calc(var(--media-edge-from) + var(--media-edge-span) * 0.6),
-    rgb(0 0 0 / 21.6%)
-      calc(var(--media-edge-from) + var(--media-edge-span) * 0.7),
-    rgb(0 0 0 / 10.4%)
-      calc(var(--media-edge-from) + var(--media-edge-span) * 0.8),
-    rgb(0 0 0 / 2.8%)
-      calc(var(--media-edge-from) + var(--media-edge-span) * 0.9),
-    transparent var(--media-edge-to)
-  );
-  mask-repeat: no-repeat;
+  @apply mask-ease;
+  --ease-direction: var(--media-edge-inward);
+  --ease-from: var(--media-edge-from);
+  --ease-to: var(--media-edge-to);
 }
 /*
  * The window: the sharp media stays clear across the outer part of the strip

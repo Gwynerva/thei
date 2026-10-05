@@ -30,17 +30,17 @@ Simplest first. Each one asks more of you than the last, and gives more back.
   lose. An event has dates, media and tags, relates to projects, other
   events and diary entries, but it stands on its own.
 - **Projects** are the big episodes: self-contained, structured and substantial.
-  A project is told through its own **stages** — dated periods of work — and
-  **sections** — topical write-ups — with media, a showcase, files, links and
-  relations to other projects, events and diary entries. Mark the ones that
-  belong in your CV or in the showcase on the home page.
+  A project is told through its own **sections** — topical write-ups, or
+  dated stretches of work that land on its timeline — with media, a showcase,
+  files, links and relations to other projects, events and diary entries.
+  Mark the ones that belong in your CV or in the showcase on the home page.
 - **Relations** run between any two of these: "related", "depends on" or
   "affects", with a note on why, drawn from either side and seen from both.
 
 Around them:
 
 - **Life** — one timeline of everything dated: events, diary entries, project
-  stages, pages, avatar and status changes. **Rewind** shows this same day in
+  sections, pages, avatar and status changes. **Rewind** shows this same day in
   previous years.
 - **Pages** — standalone writing that belongs to no timeline.
 - **Tags** — the threads running through projects and events.

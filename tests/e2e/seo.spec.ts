@@ -169,6 +169,119 @@ test('Open Graph cards render as pictures', async ({ page, request }) => {
   }
 });
 
+test.describe('a page reached by a click', () => {
+  const adminState = fileURLToPath(
+    new URL('./.artifacts/admin.json', import.meta.url),
+  );
+  let settings: Record<string, any> | undefined;
+
+  async function admin() {
+    return playwright.newContext({
+      baseURL: E2E_ORIGIN,
+      storageState: adminState,
+    });
+  }
+
+  // Verification codes on: tags the server writes into the head, which the
+  // browser has to recognise as its own when it takes the page over.
+  test.beforeAll(async () => {
+    const owner = await admin();
+    settings = await (await owner.get('/api/admin/settings')).json();
+    const saved = await owner.put('/api/admin/settings', {
+      data: {
+        ...settings,
+        password: '',
+        analytics: {
+          ...settings!.analytics,
+          googleSiteVerification: 'google_Verify-12345',
+          yandexVerification: 'yandexVerify123',
+        },
+      },
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    await owner.dispose();
+  });
+
+  test.afterAll(async () => {
+    if (!settings) return;
+    const owner = await admin();
+    await owner.put('/api/admin/settings', {
+      data: { ...settings, password: '' },
+    });
+    await owner.dispose();
+  });
+
+  async function settle(page: Page) {
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-nuxt-hydrated',
+      'true',
+    );
+    // The head is written to the document a moment after the tree is ready.
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+  }
+
+  /** What the head says, in an order neither way of arriving decides. */
+  function head(page: Page) {
+    return page.evaluate(() => ({
+      title: document.title,
+      meta: [...document.head.querySelectorAll('meta[name], meta[property]')]
+        .map(
+          (tag) =>
+            `${tag.getAttribute('name') ?? tag.getAttribute('property')}=${tag.getAttribute('content')}`,
+        )
+        .sort(),
+      link: [
+        ...document.head.querySelectorAll(
+          'link[rel="canonical"], link[rel="alternate"]',
+        ),
+      ]
+        .map(
+          (tag) =>
+            `${tag.getAttribute('rel')} ${tag.getAttribute('type') ?? ''} ${tag.getAttribute('href')}`,
+        )
+        .sort(),
+      graph: [
+        ...document.head.querySelectorAll('script[type="application/ld+json"]'),
+      ].map((tag) => tag.textContent),
+    }));
+  }
+
+  test('carries the head it has when opened directly', async ({ page }) => {
+    await page.goto('/pages/');
+    await settle(page);
+    const link = page.locator('a[href^="/pages/page-"]').first();
+    const path = (await link.getAttribute('href'))!;
+    await link.click();
+    await page.waitForURL(`**${path}`);
+    // The card is asked for once the page is shown.
+    await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
+      'content',
+      /\/og\/page\/page-\d+\.png\?v=/,
+    );
+    await settle(page);
+    const clicked = await head(page);
+
+    await page.goto(path);
+    await settle(page);
+    const opened = await head(page);
+
+    expect(opened.meta).toContain(
+      'google-site-verification=google_Verify-12345',
+    );
+    // Without a picture of its own, the page is shown by its card in the
+    // graph too.
+    expect(opened.graph[0]).toContain('/og/page/');
+    for (const { meta } of [clicked, opened])
+      expect(new Set(meta).size, meta.join('\n')).toBe(meta.length);
+    expect(clicked).toEqual(opened);
+  });
+});
+
 test('robots.txt points at the sitemap and holds back the private areas', async ({
   request,
 }) => {

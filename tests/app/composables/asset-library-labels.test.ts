@@ -30,12 +30,11 @@ describe('assetPlacementContentContext', () => {
     expect(assetPlacementContentContext(placement(source))).toBe(expected);
   });
 
-  it.each(['project-stage', 'project-section'] as const)(
-    'keeps %s content generic',
-    (kind) => {
-      expect(assetPlacementContentContext(placement(kind))).toBe('content');
-    },
-  );
+  it('keeps section content generic', () => {
+    expect(assetPlacementContentContext(placement('project-section'))).toBe(
+      'content',
+    );
+  });
 
   it('describes only content by where it is', () => {
     expect(

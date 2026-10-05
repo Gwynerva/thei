@@ -1,6 +1,10 @@
 <script lang="ts" setup>
+import { normalizeHeadingText } from '#layers/thei/shared/terminal-punctuation';
 import { ProjectEventAccessLevel } from '#layers/thei/shared/access-level';
-import { isContentEmpty } from '#layers/thei/shared/content';
+import {
+  analyzeContentData,
+  isContentEmpty,
+} from '#layers/thei/shared/content';
 import type { EventEditData } from '#layers/thei/shared/event';
 import { eventTagContext } from '#layers/thei/shared/admin/event';
 import type {
@@ -46,8 +50,7 @@ type EventFormData = EventEditData & {
   cv: false;
   descriptionContent: EventEditData['content'];
   showcaseAssets: [];
-  contentSections: [];
-  stages: [];
+  sections: [];
 };
 const eventData = ref<EventFormData>(emptyData());
 provide(eventDataInjectionKey, eventData as Ref<EventEditData>);
@@ -60,9 +63,20 @@ provide(savedProjectDataInjectionKey, savedAdapter);
 const publicIdError = ref<string>();
 provide(publicIdErrorKey, publicIdError);
 provide(iconMediaKey, ref<MediaDescriptor>());
-provide(bannerMediaKey, ref<MediaDescriptor>());
+const bannerMedia = ref<MediaDescriptor>();
+provide(bannerMediaKey, bannerMedia);
+/**
+ * What stands for the event beside its relations, as on its cards: its
+ * banner, else the first picture of its text.
+ */
+const ownerMedia = computed(
+  () =>
+    bannerMedia.value ??
+    analyzeContentData(eventData.value.content?.data).preview.media,
+);
 provide(iconSizeKey, ref<number>());
-provide(bannerSizeKey, ref<number>());
+const bannerSize = ref<number>();
+provide(bannerSizeKey, bannerSize);
 provide(currentProjectUuidKey, ref<string>());
 provide(showcaseItemsKey, ref([]));
 const otherItems = ref<EventGetResponse['otherAssets']>([]);
@@ -111,6 +125,7 @@ if (isEdit.value) {
     periods: data.periods,
     content: data.content,
     descriptionContent: data.content,
+    bannerAssetUuid: data.bannerAssetUuid,
     otherAssets: data.otherAssets.map((item) => ({
       assetUuid: item.assetUuid,
       title: item.title,
@@ -125,6 +140,8 @@ if (isEdit.value) {
     notes: data.notes ?? null,
   };
   otherItems.value = data.otherAssets;
+  bannerMedia.value = data.bannerMedia;
+  bannerSize.value = data.bannerAssetSize;
   externalLinks.seed(data.externalLinks);
   actionMedia.applyLoaded(data);
   markSaved();
@@ -172,6 +189,8 @@ async function save() {
     const previousAction = eventData.value.action;
     eventData.value.action = result.action;
     actionMedia.applySaved(previousAction, result.action);
+    // The title as the server stored it, its ending settled.
+    eventData.value.title = normalizeHeadingText(eventData.value.title.trim());
     stampSavedContent(eventData.value, savedSnapshot.value, CONTENT_FIELDS);
     markSaved();
     await refreshNuxtData('admin-bar');
@@ -226,8 +245,7 @@ function emptyData(): EventFormData {
     showcase: false,
     cv: false,
     showcaseAssets: [],
-    contentSections: [],
-    stages: [],
+    sections: [],
   };
 }
 
@@ -241,6 +259,7 @@ function eventPayload(): EventEditData {
     publicId: value.publicId,
     periods: value.periods,
     content: value.content,
+    bannerAssetUuid: value.bannerAssetUuid,
     otherAssets: value.otherAssets,
     externalLinks: value.externalLinks,
     tags: value.tags,
@@ -410,7 +429,7 @@ function clone<T>(value: T): T {
       :section-title="phrase.event_action"
       :section-description="phrase.event_action_hint"
     />
-    <ProjectAssets files-only />
+    <ProjectAssets kind="event" />
     <ProjectExternalLinks
       :title="phrase.event_external_links"
       :description="phrase.event_external_links_hint"
@@ -429,6 +448,7 @@ function clone<T>(value: T): T {
       :owner="eventUuid ? { type: 'event', id: eventUuid } : undefined"
       owner-type="event"
       :owner-title="eventData.title.trim() || phrase.new_event"
+      :owner-media
       :text="eventData.content?.data"
     />
     <AdminShareLinks

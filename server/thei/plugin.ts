@@ -1,5 +1,6 @@
 import { bootTheiServer } from './boot/process';
 import { invalidateOgCardInfo } from './og/cache';
+import { invalidateLifeIndex } from './public/life';
 import { invalidatePublicSearchIndex } from './public/search-index';
 import { isContentWriteRequest } from './read-only-request';
 import { invalidateTagRecommendationIndex } from './tag-recommendations';
@@ -17,6 +18,7 @@ export default defineNitroPlugin(async (nitroApp) => {
   nitroApp.hooks.hook('afterResponse', (event) => {
     if (!isContentWriteRequest(event)) return;
     invalidatePublicSearchIndex();
+    invalidateLifeIndex();
     invalidateTagRecommendationIndex();
     invalidateOgCardInfo();
   });

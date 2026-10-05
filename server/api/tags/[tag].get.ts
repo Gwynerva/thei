@@ -1,5 +1,5 @@
 import type { PublicTagResponse } from '#layers/thei/shared/api/public';
-import { asc, desc, eq } from 'drizzle-orm';
+import { asc, desc, eq, sql } from 'drizzle-orm';
 import { publicIdFromTagUrlPart } from '#layers/thei/shared/tag-url';
 import {
   buildPublicEventSummary,
@@ -17,7 +17,7 @@ import { PUBLIC_PAGE_SIZE } from '../../thei/public/pagination';
 export default defineEventHandler(async (event): Promise<PublicTagResponse> => {
   const {
     db,
-    schema: { tags, projects, events },
+    schema: { tags, projects, events, periods },
   } = THEI_SERVER.useDb();
   const tag = db
     .select()
@@ -73,7 +73,18 @@ export default defineEventHandler(async (event): Promise<PublicTagResponse> => {
             .select()
             .from(events)
             .where(eventFilter)
-            .orderBy(desc(events.updatedAt), asc(events.eventUuid))
+            // By the day each card is dated by — its last day, as search
+            // orders them too — then its first, so the dates read in order.
+            .orderBy(
+              desc(
+                sql`coalesce((SELECT max(${periods.endDate}) FROM ${periods} WHERE ${periods.ownerType} = 'event' AND ${periods.ownerId} = ${events.eventUuid}), date(${events.createdAt} / 1000, 'unixepoch'))`,
+              ),
+              desc(
+                sql`(SELECT min(${periods.startDate}) FROM ${periods} WHERE ${periods.ownerType} = 'event' AND ${periods.ownerId} = ${events.eventUuid})`,
+              ),
+              desc(events.createdAt),
+              asc(events.eventUuid),
+            )
             .limit(pagination.pageSize)
             .offset(offset)
             .all()

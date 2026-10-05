@@ -65,9 +65,7 @@ export function setTheiConfigHead(head: TheiConfigHead): void {
 }
 
 export function toTheiConfigHead(raw: Record<string, unknown>): TheiConfigHead {
-  const problems = [
-    ...stringFields(raw, ['version', 'languageCode']),
-  ];
+  const problems = [...stringFields(raw, ['version', 'languageCode'])];
   if (problems.length) throw configShapeError(problems);
   return {
     version: raw.version as string,
@@ -102,11 +100,7 @@ export function toTheiConfig(raw: Record<string, unknown>): TheiConfig {
         )
       : ['password']),
     ...(analytics
-      ? stringFields(
-          analytics,
-          Object.keys(emptySiteAnalytics),
-          'analytics.',
-        )
+      ? stringFields(analytics, Object.keys(emptySiteAnalytics), 'analytics.')
       : ['analytics']),
     ...(raw.backup === undefined
       ? []

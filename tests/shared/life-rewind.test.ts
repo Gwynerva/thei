@@ -49,7 +49,7 @@ describe('Life rewind selection', () => {
     );
   });
 
-  it.each(['event', 'project-stage'])(
+  it.each(['event', 'project-section'])(
     'keeps the boundaries and middle of %s periods',
     (kind) => {
       const points = period(`${kind}:id`, '2025-09-09', '2025-09-11');
@@ -97,7 +97,7 @@ describe('Life rewind selection', () => {
 
   it('keeps one match for each past year of a long stage, newest first', () => {
     const selected = selectLifeRewindPoints(
-      period('project-stage:id', '2023-01-01', '2027-01-01'),
+      period('project-section:id', '2023-01-01', '2027-01-01'),
       today,
     );
     expect(selected.map((item) => item.point.date)).toEqual([

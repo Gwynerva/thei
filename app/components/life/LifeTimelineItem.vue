@@ -81,18 +81,19 @@ const pointIcon = computed(() =>
         :class="{ 'row-start-2': first }"
       >
         <span
-          class="life-point-marker flex size-7 items-center justify-center
-            rounded-full border-2 border-bg-1 text-sm text-white shadow-md
-            shadow-shadow-2 sm:size-10 sm:border-4 sm:text-lg"
-          :class="{ 'life-point-marker--warning': isNew }"
+          class="flex size-7 items-center justify-center rounded-full border-2
+            border-bg-1 text-sm text-white shadow-md shadow-shadow-2 sm:size-10
+            sm:border-4 sm:text-lg"
+          :class="isNew ? 'marker-shade-text-warning' : 'marker-shade-accent'"
         >
           <Icon :name="pointIcon" />
         </span>
         <span
           v-if="isNew"
-          class="life-new-marker mt-1 flex size-4 items-center justify-center
-            rounded-full border border-bg-1 text-xs text-white shadow-sm ring-2
-            shadow-shadow-2 ring-bg-1 sm:size-5 sm:ring-4"
+          class="mt-1 flex size-4 items-center justify-center rounded-full
+            border border-bg-1 text-xs text-white shadow-sm ring-2
+            shadow-shadow-2 ring-bg-1 marker-shade-text-warning sm:size-5
+            sm:ring-4"
           aria-hidden="true"
         >
           <Icon name="fire" />
@@ -112,8 +113,8 @@ const pointIcon = computed(() =>
     />
     <!--
       The day's header already dates every card under it. A card keeps its
-      own date only when it says more: the span of a merged start and end,
-      or a date the owner is not sure of.
+      own date only when it says more: the period it is a start, an end or
+      the whole of, or a date the owner is not sure of.
     -->
     <LifePointCard
       :point="point"
@@ -123,22 +124,3 @@ const pointIcon = computed(() =>
     />
   </LifeTimelineGrid>
 </template>
-
-<style scoped>
-.life-point-marker {
-  background: radial-gradient(
-    circle,
-    color-mix(in oklab, var(--color-accent), black 32%) 0%,
-    var(--color-accent) 72%
-  );
-}
-
-.life-point-marker--warning,
-.life-new-marker {
-  background: radial-gradient(
-    circle,
-    color-mix(in oklab, var(--color-text-warning), black 32%) 0%,
-    var(--color-text-warning) 72%
-  );
-}
-</style>

@@ -11,20 +11,10 @@ const subfolder = {
 };
 
 describe('parseInternalUrl', () => {
-  it('recognises all seven kinds of entity address', () => {
+  it('recognises all six kinds of entity address', () => {
     expect(
       parseInternalUrl('https://example.com/projects/studio-Pr0j/', site),
     ).toEqual({ entityType: 'project', publicId: 'Pr0j' });
-    expect(
-      parseInternalUrl(
-        'https://example.com/projects/studio-Pr0j/stages/launch-St4g/',
-        site,
-      ),
-    ).toEqual({
-      entityType: 'project-stage',
-      projectPublicId: 'Pr0j',
-      publicId: 'St4g',
-    });
     expect(
       parseInternalUrl(
         'https://example.com/projects/studio-Pr0j/sections/notes-S3c/',

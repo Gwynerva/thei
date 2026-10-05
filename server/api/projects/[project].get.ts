@@ -4,14 +4,8 @@ import {
   buildPublicProject,
   canOpenPublicEntity,
 } from '../../thei/public/entities';
-import { countLifePoints, getLatestLifePoints } from '../../thei/public/life';
-import {
-  resolveEntityViewer,
-  scopedViewer,
-} from '../../thei/access-links/viewer';
-
-/** How many of the newest chronology points the overview tab shows. */
-const PROJECT_TIMELINE_PREVIEW_SIZE = 3;
+import { countLifePoints } from '../../thei/public/life';
+import { resolveEntityViewer } from '../../thei/access-links/viewer';
 
 export default defineEventHandler(
   async (event): Promise<PublicProjectResponse> => {
@@ -34,22 +28,16 @@ export default defineEventHandler(
       throw createError({ statusCode: 404, statusText: 'Project not found' });
     if (project.access === 'link-only')
       setHeader(event, 'X-Robots-Tag', 'noindex, nofollow');
-    const scope = {
-      kind: 'project' as const,
-      projectUuid: project.projectUuid,
-    };
-    const [response, latest] = await Promise.all([
-      buildPublicProject(project, viewer),
-      // A share link opens this project's own points, not the private points
-      // of the events and diary entries gathered around it.
-      getLatestLifePoints(PROJECT_TIMELINE_PREVIEW_SIZE, {
-        scope,
-        viewer: scopedViewer(viewer, 'project', project.projectUuid),
-      }),
-    ]);
+    // The chronology itself is a tab of its own: the page only says how
+    // many points it holds. What the newest of them would repeat is on the
+    // page already — the status, the stages, the related entities.
     return {
-      ...response,
-      timeline: { latest, total: countLifePoints({ scope }) },
+      ...(await buildPublicProject(project, viewer)),
+      timeline: {
+        total: countLifePoints({
+          scope: { kind: 'project', projectUuid: project.projectUuid },
+        }),
+      },
     };
   },
 );

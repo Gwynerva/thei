@@ -7,8 +7,9 @@ export const EntityPrefix = {
   DiaryEntry: 'd',
   Asset: 'a',
   Content: 'c',
+  // Sections that began as stages keep their `pst-` ids: an id is opaque, and
+  // its prefix says nothing about what it names.
   ProjectContentSection: 'pcs',
-  ProjectStage: 'pst',
   Session: 's',
   Tag: 't',
   Share: 'sh',

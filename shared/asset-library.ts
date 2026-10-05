@@ -10,12 +10,10 @@ import { normalizeAssetExtension } from './assets/formats';
 
 /**
  * What holds a file, as the library groups files: an entity of the site, a
- * stage or a section of a project (with the project as its parent), or
- * nothing at all.
+ * section of a project (with the project as its parent), or nothing at all.
  */
 export const ASSET_SOURCE_TYPES = [
   'project',
-  'project-stage',
   'project-section',
   'event',
   'page',
@@ -33,7 +31,7 @@ export interface AssetSource {
   url?: string;
   editUrl?: string;
   updatedAt: number;
-  /** The project a stage or a section belongs to; its title as typed. */
+  /** The project a section belongs to; its title as typed. */
   parent?: { title: string; url: string };
 }
 export interface AssetPlacement {
@@ -72,8 +70,75 @@ export interface AssetLibraryItem {
 export interface AssetLibrarySection extends AssetSource {
   count: number;
 }
-export type AssetLibraryResponse = PaginatedResponse<AssetLibrarySection>;
+/** The longest search the library takes. */
+export const ASSET_LIBRARY_QUERY_LIMIT = 500;
+/**
+ * The kinds of entity the library can be narrowed to. The profile and tags
+ * hold few files and are found by name; files nothing holds are a group of
+ * their own, not an entity.
+ */
+export const ASSET_LIBRARY_SOURCE_FILTERS = [
+  'project',
+  'project-section',
+  'event',
+  'diary-entry',
+  'page',
+] as const satisfies readonly AssetSourceType[];
+export type AssetLibrarySourceFilter =
+  (typeof ASSET_LIBRARY_SOURCE_FILTERS)[number];
+export function isAssetLibrarySourceFilter(
+  value: unknown,
+): value is AssetLibrarySourceFilter {
+  return ASSET_LIBRARY_SOURCE_FILTERS.includes(
+    value as AssetLibrarySourceFilter,
+  );
+}
+/**
+ * Where the files a search finds are used, as one choice: anywhere, in an
+ * entity of one kind, anywhere at all, or nowhere. The server reads it as two
+ * filters — `source` for a kind, `usage` for the rest.
+ */
+export type AssetLibraryWhere =
+  'all' | AssetLibrarySourceFilter | 'used' | 'unused';
+export function assetLibraryWhereQuery(where: AssetLibraryWhere): {
+  source?: AssetLibrarySourceFilter;
+  usage?: 'used' | 'unused';
+} {
+  if (where === 'used' || where === 'unused') return { usage: where };
+  return where === 'all' ? {} : { source: where };
+}
+export function assetLibraryWhereFromQuery(query: {
+  source?: unknown;
+  usage?: unknown;
+}): AssetLibraryWhere {
+  if (query.usage === 'used' || query.usage === 'unused') return query.usage;
+  return isAssetLibrarySourceFilter(query.source) ? query.source : 'all';
+}
+/**
+ * How many results each choice of the filters would give for the search, so
+ * a choice that finds nothing is seen before it is made. Each filter is
+ * counted with the other applied and without its own: `types` by kind of
+ * file, `sources` by where the files are used, `anywhere` for no place at
+ * all. A listing of groups counts groups by place and files by kind; a
+ * listing of files counts files.
+ */
+export interface AssetLibraryFacets {
+  types: Partial<Record<AssetType, number>>;
+  sources: Partial<Record<AssetSourceType, number>>;
+  anywhere: number;
+}
+export type AssetLibraryResponse = PaginatedResponse<AssetLibrarySection> & {
+  /**
+   * With the first page only: the picker loads the next ones onto it, and
+   * the counts do not change with the page.
+   */
+  facets?: AssetLibraryFacets;
+};
 export type AssetLibraryFilesResponse = PaginatedResponse<AssetLibraryItem>;
+/** The flat list of the storage page: files, and how the filters count them. */
+export type AssetLibraryAssetsResponse = AssetLibraryFilesResponse & {
+  facets: AssetLibraryFacets;
+};
 export interface AssetLibraryAvailability {
   total: number;
   types: Partial<Record<AssetType, number>>;

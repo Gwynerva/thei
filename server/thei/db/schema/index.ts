@@ -16,11 +16,8 @@ import { projects } from './projects';
 import { pages } from './pages';
 import { adminSessions } from './admin-sessions';
 import { shareLinks, signInLinks } from './access-links';
-import {
-  projectContentSections,
-  projectStages,
-} from './project-content-sections';
-import { stagePeriods } from './stage-periods';
+import { projectContentSections } from './project-content-sections';
+import { periods } from './periods';
 import { entityRelations } from './entity-relations';
 import { tags } from './tags';
 import { tagUsages } from './tag-usages';
@@ -47,8 +44,7 @@ export const schema = {
   signInLinks,
   shareLinks,
   projectContentSections,
-  projectStages,
-  stagePeriods,
+  periods,
   entityRelations,
   tags,
   tagUsages,

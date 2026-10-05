@@ -211,9 +211,7 @@ test('the editor opened on a pasted picture makes new variants from the kept ori
   const source = dialog
     .locator('select')
     .filter({ has: page.locator('option', { hasText: 'Unprocessed' }) });
-  await expect(source.locator('option:checked')).toHaveText(
-    /PNG.*Unprocessed/,
-  );
+  await expect(source.locator('option:checked')).toHaveText(/PNG.*Unprocessed/);
   await expect(
     dialog.getByText('This source is already compressed', { exact: false }),
   ).toHaveCount(0);
@@ -325,6 +323,37 @@ test('a pasted vector is kept as it is', async ({ page }) => {
   expect(stored.settings.type).toBe('original');
 });
 
+test('a paste goes to the paragraph the caret is in, whichever block Editor.js takes for current', async ({
+  page,
+}) => {
+  await openFixture(page);
+  const before = await figures(page).count();
+  await emptyParagraph(page);
+  const count = await blocks(page).count();
+  // A press on the first block makes it Editor.js's current one. The caret
+  // then comes back to the empty paragraph without a press, as it does when a
+  // closing dialog gives the focus back, and Editor.js does not follow it.
+  await page.evaluate(() => {
+    const all = document.querySelectorAll('.content-editor .ce-block');
+    all[0]!
+      .querySelector('.ce-block__content')!
+      .dispatchEvent(
+        new MouseEvent('mousedown', { bubbles: true, cancelable: true }),
+      );
+    const field = all[all.length - 1]!.querySelector<HTMLElement>(
+      '[contenteditable="true"]',
+    )!;
+    field.focus();
+    getSelection()!.collapse(field, 0);
+  });
+  await paste(page, [await png()]);
+
+  // The picture takes the empty paragraph's place.
+  await expect(figures(page)).toHaveCount(before + 1, { timeout: 30_000 });
+  await expect(blocks(page)).toHaveCount(count);
+  await expect(blocks(page).last().locator('figure')).toBeVisible();
+});
+
 test('several pasted pictures become one gallery', async ({ page }) => {
   await openFixture(page);
   const galleries = page.locator('[data-content-gallery]');
@@ -355,4 +384,122 @@ test('several pasted pictures become one gallery', async ({ page }) => {
       .locator('[data-upload-errors]')
       .getAttribute('data-upload-errors'),
   ).toBe('');
+});
+
+/** A tone of `seconds`, silent for its first half: 16-bit stereo WAV. */
+function wav(seconds: number) {
+  const rate = 22_050;
+  const samples = Math.round(seconds * rate);
+  const bytes = Buffer.alloc(44 + samples * 4);
+  bytes.write('RIFF', 0, 'latin1');
+  bytes.writeUInt32LE(36 + samples * 4, 4);
+  bytes.write('WAVEfmt ', 8, 'latin1');
+  bytes.writeUInt32LE(16, 16);
+  bytes.writeUInt16LE(1, 20);
+  bytes.writeUInt16LE(2, 22);
+  bytes.writeUInt32LE(rate, 24);
+  bytes.writeUInt32LE(rate * 4, 28);
+  bytes.writeUInt16LE(4, 32);
+  bytes.writeUInt16LE(16, 34);
+  bytes.write('data', 36, 'latin1');
+  bytes.writeUInt32LE(samples * 4, 40);
+  for (let index = 0; index < samples; index++) {
+    const loud = index > samples / 2 ? 0.6 : 0;
+    const value = Math.round(
+      Math.sin((2 * Math.PI * 440 * index) / rate) * loud * 32_767,
+    );
+    bytes.writeInt16LE(value, 44 + index * 4);
+    bytes.writeInt16LE(value, 46 + index * 4);
+  }
+  return bytes;
+}
+
+test('a pasted recording becomes a player, and playing it changes nothing', async ({
+  page,
+}) => {
+  await openFixture(page);
+  const committed = page.waitForRequest((request) =>
+    /\/drafts\/[^/]+\/commit$/.test(new URL(request.url()).pathname),
+  );
+  await emptyParagraph(page);
+  const count = await blocks(page).count();
+  await paste(page, [
+    {
+      name: 'Voice memo.wav',
+      type: 'audio/wav',
+      base64: wav(12).toString('base64'),
+    },
+  ]);
+
+  // Converted without asking: Opus at medium, both channels kept.
+  expect((await committed).postDataJSON().settings).toEqual({
+    type: 'audio-transform',
+    quality: 75,
+    mono: false,
+  });
+  const card = page.locator('.content-editor [data-content-audio]');
+  await expect(card).toHaveCount(1, { timeout: 60_000 });
+  await expect(blocks(page)).toHaveCount(count);
+  await expect(card.locator('[data-content-media-size]')).toBeVisible();
+  await expect(card.locator('[data-audio-time]')).toHaveText('0:00 / 0:12');
+  await expect(page.locator('[data-transitions]')).toHaveAttribute(
+    'data-transitions',
+    'Save',
+  );
+  expect(
+    await page
+      .locator('[data-upload-errors]')
+      .getAttribute('data-upload-errors'),
+  ).toBe('');
+
+  // Playing, seeking and changing the speed are not changes to the text,
+  // and the keys stay with the player.
+  const audio = card.locator('audio');
+  await card.locator('[data-audio-play]').click();
+  await expect
+    .poll(() => audio.evaluate((element) => element.currentTime))
+    .toBeGreaterThan(0);
+  await card.locator('[data-audio-speed]').click();
+  await expect(card.locator('[data-audio-speed]')).toHaveText('1.25×');
+  const waveform = card.locator('[data-audio-waveform]');
+  await waveform.focus();
+  await page.keyboard.press('Home');
+  await page.keyboard.press('Space');
+  await expect
+    .poll(() => audio.evaluate((element) => element.paused))
+    .toBe(true);
+  await page.keyboard.press('ArrowRight');
+  await expect(waveform).toHaveAttribute('aria-valuenow', '5');
+  await expect(waveform).toBeFocused();
+
+  // Dragging along the waveform holds the sound, and it goes on from where
+  // the pointer let go.
+  await card.locator('[data-audio-play]').click();
+  await expect
+    .poll(() => audio.evaluate((element) => element.paused))
+    .toBe(false);
+  const box = (await waveform.boundingBox())!;
+  const y = box.y + box.height / 2;
+  await page.mouse.move(box.x + box.width * 0.2, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.5, y, { steps: 5 });
+  await expect
+    .poll(() => audio.evaluate((element) => element.paused))
+    .toBe(true);
+  await page.mouse.move(box.x + box.width * 0.75, y, { steps: 5 });
+  await page.waitForTimeout(300);
+  expect(await audio.evaluate((element) => element.paused)).toBe(true);
+  await page.mouse.up();
+  await expect
+    .poll(() => audio.evaluate((element) => element.paused))
+    .toBe(false);
+  const resumedAt = await audio.evaluate((element) => element.currentTime);
+  expect(resumedAt).toBeGreaterThan(8.5);
+  expect(resumedAt).toBeLessThan(10);
+  await card.locator('[data-audio-play]').click();
+
+  await expect(page.locator('[data-transitions]')).toHaveAttribute(
+    'data-transitions',
+    'Save',
+  );
 });

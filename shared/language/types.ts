@@ -80,6 +80,7 @@ export type EditorJsPhrases = {
   delimiter: string;
   media: string;
   gallery: string;
+  audio: string;
   file: string;
   enter_quote: string;
   enter_caption: string;
@@ -109,7 +110,10 @@ export type LanguagePhrases = {
   asset_library_empty: string;
   asset_library_unused: string;
   asset_library_unused_hint: string;
-  asset_library_all: string;
+  /** Files used anywhere at all: no kind of entity singled out. */
+  asset_library_anywhere: string;
+  /** Leads the ways out of a narrowed search that found nothing. */
+  asset_library_widen: string;
   asset_library_used: string;
   asset_library_more: string;
   asset_library_insert: string;
@@ -128,6 +132,8 @@ export type LanguagePhrases = {
   asset_recipe_lossless: string;
   asset_recipe_no_audio: string;
   asset_recipe_fast: string;
+  asset_recipe_bitrate: (kbps: number) => string;
+  asset_recipe_mono: string;
   // Quality levels
   asset_quality_minimal: string;
   asset_quality_low: string;
@@ -185,7 +191,6 @@ export type LanguagePhrases = {
   project_tabs: string;
   project_tab_overview: string;
   project_tab_timeline: string;
-  project_timeline_latest: string;
   project_timeline_seo_description: (title: string) => string;
   project_status_hint: string;
   project_new_status: string;
@@ -237,7 +242,6 @@ export type LanguagePhrases = {
   life_activity_events: (count: number) => string;
   life_activity_projects: (count: number) => string;
   life_activity_pages: (count: number) => string;
-  life_activity_stages: (count: number) => string;
   life_activity_sections: (count: number) => string;
   life_activity_profile: (count: number) => string;
   life_activity_statuses: (count: number) => string;
@@ -264,7 +268,11 @@ export type LanguagePhrases = {
   life_rewind_empty_description: string;
   life_rewind_explore_life: string;
   event_ongoing: string;
-  stage_ongoing: string;
+  event_was_ongoing: string;
+  period_until: (date: string) => string;
+  period_state_ongoing: string;
+  period_state_upcoming: string;
+  public_timeline_ongoing_until: (date: string) => string;
   view_all: string;
   life_empty: string;
   event_started: string;
@@ -272,16 +280,17 @@ export type LanguagePhrases = {
   event_occurred: string;
   project_created: string;
   page_created: string;
-  stage_started: string;
-  stage_ended: string;
-  stage_occurred: string;
   section_created: string;
+  section_started: string;
+  section_ended: string;
+  section_occurred: string;
+  section_ongoing: string;
+  section_was_ongoing: string;
   diary_written: string;
   secret_event: (codename: string) => string;
   secret_project: (codename: string) => string;
   secret_page: (codename: string) => string;
   secret_diary_entry: (codename: string) => string;
-  secret_stage: (codename: string) => string;
   secret_section: (codename: string) => string;
   secret_media: (codename: string) => string;
   secret_file: (codename: string) => string;
@@ -298,8 +307,6 @@ export type LanguagePhrases = {
     months: number,
     days: number,
   ) => string;
-  projects_count: (count: number) => string;
-  events_count: (count: number) => string;
   public_life_description: string;
   home: string;
   llms_txt_intro: string;
@@ -355,7 +362,6 @@ export type LanguagePhrases = {
   public_details_files: string;
   public_details_overview: string;
   public_details_contents: string;
-  public_details_neighbour_stages: string;
   public_details_neighbour_sections: string;
   public_details_neighbour_entries: string;
   public_neighbour_next: string;
@@ -363,24 +369,13 @@ export type LanguagePhrases = {
   public_details_chronology: string;
   public_details_timeline: string;
   project_chronology_page: string;
-  project_chronology_first_stage: string;
-  project_chronology_last_stage: string;
   project_chronology_updated: string;
-  project_chronology_stage: string;
-  project_chronology_first_section: string;
-  project_chronology_last_section: string;
-  project_chronology_section: string;
-  project_chronology_first_status: string;
-  project_chronology_last_status: string;
   page_chronology_created: string;
   page_chronology_updated: string;
   section_chronology_created: string;
   section_chronology_updated: string;
-  stage_chronology_created: string;
-  stage_chronology_updated: string;
   event_chronology_created: string;
   event_chronology_updated: string;
-  diary_chronology_day: string;
   diary_chronology_created: string;
   diary_chronology_updated: string;
   install_thei: string;
@@ -514,6 +509,8 @@ export type LanguagePhrases = {
   x_projects: (count: number) => string;
   event: string;
   x_events: (count: number) => string;
+  /** A section of a project, named by its kind alone, as on a life card. */
+  section: string;
   page: string;
   new_project: string;
   new_event: string;
@@ -753,31 +750,37 @@ export type LanguagePhrases = {
   project_action_issue_background: string;
   project_action_issue_color: string;
   project_content_sections: string;
-  project_stages: string;
-  project_stages_hint: string;
   project_content_sections_hint: string;
-  relation_group_related: string;
-  relation_group_depends_on: string;
-  relation_group_affects: string;
+  project_sections_dated: string;
+  project_sections_undated: string;
   related_entities: string;
   related_entities_hint: string;
   related_entity_add: string;
   relation_direction: string;
-  /** What a relation is, said between the two icons it joins. */
-  relation_short_related: (owner: RelationEntityType) => string;
-  relation_short_depends_on: string;
-  relation_short_affects: string;
+  /** What the other end is to this entity, in one word under its name. */
+  relation_label_related: string;
+  relation_label_influencing: string;
+  relation_label_dependent: string;
   relation_popup_related: (current: string, other: string) => string;
   relation_popup_depends_on: (current: string, other: string) => string;
   relation_popup_affects: (current: string, other: string) => string;
-  relations_empty: string;
-  project_stages_empty: string;
-  project_content_sections_empty: string;
+  relations_empty_of: (kind: RelationEntityType) => string;
+  project_sections_empty_of: (group: 'undated' | 'dated') => string;
+  relation: string;
+  relation_entity: string;
+  relation_entity_choose: string;
+  relation_edit: (title: string) => string;
+  relation_note: string;
   relation_note_placeholder: string;
-  relation_note_for: (title: string) => string;
-  split_relation_note: string;
-  merge_relation_note: string;
+  relation_note_shared_hint: string;
+  relation_note_split: string;
+  relation_note_split_hint: string;
+  /** Labels a side's note; that side's picture and name follow it. */
+  relation_note_on_page: string;
   delete_relation: string;
+  recommended_relations: string;
+  relation_recommendation_add: (title: string) => string;
+  relation_recommendation_reason: string;
   project_external_links: string;
   project_external_links_hint: string;
   add_external_link: string;
@@ -796,26 +799,19 @@ export type LanguagePhrases = {
   search_entity_placeholder: string;
   search_entity_no_results: string;
   search_entity_error: string;
-  entity_search_mentioned: string;
   content_section: string;
   content_section_delete_entity: string;
-  project_stage: string;
-  project_stage_delete_entity: string;
-  project_stage_title: string;
-  project_stage_summary: string;
-  project_stage_private: string;
-  project_stage_private_hint: string;
-  project_stage_period: string;
-  project_stage_period_empty: string;
-  public_stage_content_empty: string;
-  public_stage_content_empty_description: string;
+  section_periods: string;
+  section_needs_body_or_period: string;
+  section_undated_hint: string;
+  public_section_dates_only: string;
+  public_section_dates_only_description: string;
   public_section_content_empty: string;
   public_section_content_empty_description: string;
-  project_stage_content: string;
-  project_stage_add: string;
-  delete_project_stage: string;
   content_section_title: string;
   content_section_summary: string;
+  content_section_banner: string;
+  content_section_banner_hint: string;
   content_section_private: string;
   content_section_private_hint: string;
   content_section_content: string;
@@ -885,9 +881,15 @@ export type LanguagePhrases = {
   content_gallery_tile: string;
   content_add_media: string;
   content_choose_file: string;
+  content_choose_audio: string;
+  content_audio_as_player: string;
+  content_audio_as_file: string;
   content_choose_entity: string;
   content_make_gallery: string;
   content_link_internal_detected: string;
+  /** Names the place inside the target a link leads to, its `#…`. */
+  content_link_fragment: string;
+  content_link_fragment_remove: string;
   content_caption: string;
   content_media_centered: string;
   content_media_natural: string;
@@ -896,7 +898,6 @@ export type LanguagePhrases = {
   content_description: string;
   edit_event: string;
   edit_diary_entry: string;
-  edit_project_stage: string;
   edit_content_section: string;
   diary_access: string;
   diary_date: string;
@@ -915,6 +916,7 @@ export type LanguagePhrases = {
   clear: string;
   delete: string;
   close_modal: string;
+  done: string;
   asset_pick_upload: string;
   asset_pick_reuse: string;
   asset_pick_reuse_hint: string;
@@ -937,7 +939,6 @@ export type LanguagePhrases = {
   site_access_close_priority: string;
   view_event: string;
   view_page: string;
-  view_project_stage: string;
   view_content_section: string;
   view_tag: string;
   saved: string;
@@ -979,6 +980,8 @@ export type LanguagePhrases = {
   delete_page: string;
   event_files: string;
   event_files_description: string;
+  event_banner: string;
+  event_banner_hint: string;
   event_action: string;
   event_action_hint: string;
   event_external_links: string;
@@ -1066,6 +1069,14 @@ export type LanguagePhrases = {
   video_unmute: string;
   video_volume: string;
   video_no_audio: string;
+  audio_position: (current: string, total: string) => string;
+  audio_speed: (rate: string) => string;
+  audio_download: string;
+  audio_unsupported: string;
+  audio_channel_count: (count: number) => string;
+  upload_audio_mono: string;
+  upload_audio_mono_hint: string;
+  upload_audio_source_mono: string;
   asset_variant_current: string;
   asset_variant_current_tag: string;
   asset_variant_usage_count: (count: number) => string;
@@ -1108,6 +1119,8 @@ export type LanguagePhrases = {
   file_info_size: string;
   file_info_dimensions: string;
   file_info_duration: string;
+  file_info_channels: string;
+  file_info_bitrate: string;
   file_info_empty: string;
   file_info_archived_extension: string;
   file_info_archived_size: string;
@@ -1122,7 +1135,9 @@ export type LanguagePhrases = {
   date_precision_month_short: string;
   date_precision_year_short: string;
   date_precision_note: string;
-  date_precision_note_placeholder: string;
+  period_label: string;
+  period_label_placeholder: string;
+  period_dates_edit: string;
   // Private notes and reminders
   entity_notes_section: string;
   entity_notes_section_description: string;
@@ -1155,12 +1170,11 @@ export type LanguagePhrases = {
   search_preset_cv_title: string;
   search_preset_cv_description: string;
   og_personal_archive: string;
-  og_stage_position: (index: number, total: number) => string;
+  og_section_position: (index: number, total: number) => string;
   og_updated: (date: string) => string;
   og_life_headline: (years: number) => string;
   og_tags_headline: (count: number) => string;
   og_pages_headline: (count: number) => string;
   og_image_alt: (kind: string, title: string, site: string) => string;
-  x_stages: (count: number) => string;
   x_sections: (count: number) => string;
 };

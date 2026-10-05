@@ -36,7 +36,9 @@ const statusLabels: Partial<Record<string, () => string>> = {
 };
 
 const statusLabel = computed(() =>
-  state.value ? (statusLabels[state.value.status]?.() ?? state.value.status) : '',
+  state.value
+    ? (statusLabels[state.value.status]?.() ?? state.value.status)
+    : '',
 );
 
 const availability = computed(() => {

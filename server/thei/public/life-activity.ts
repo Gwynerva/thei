@@ -17,8 +17,8 @@ export type LifeActivityEntityPoint = {
 };
 
 /**
- * Distinct entities per kind. A stage that started and ended within the year
- * is two points but one stage; what the visitor may not see is left out, as
+ * Distinct entities per kind. A section that started and ended within the year
+ * is two points but one section; what the visitor may not see is left out, as
  * the grid already reports it only as "something hidden".
  */
 export function countLifeActivityEntities(

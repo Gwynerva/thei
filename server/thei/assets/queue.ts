@@ -11,12 +11,15 @@ import { AssetType } from '#layers/thei/shared/asset';
  *
  * Video is serialized outright — a VP9 encode already saturates the machine,
  * so a second one buys nothing and doubles the memory. Images get a small
- * pool, since AVIF encoding is CPU-bound but short. Probing a file is quick
- * and light, and has a lane of its own so reading a video's size never waits
- * behind a whole encode.
+ * pool, since AVIF encoding is CPU-bound but short. Sound has a lane of its
+ * own: libopus takes a single core and little memory, so a recording never
+ * has to wait minutes behind a video, nor hold up the pictures. Probing a
+ * file is quick and light, and has a lane of its own so reading a video's
+ * size never waits behind a whole encode.
  */
 const IMAGE_CONCURRENCY = Math.max(1, Math.min(cpus().length - 1, 3));
 const VIDEO_CONCURRENCY = 1;
+const AUDIO_CONCURRENCY = 1;
 const PROBE_CONCURRENCY = 2;
 /**
  * Reading a remote page for a link's details is mostly waiting, but a save
@@ -24,7 +27,7 @@ const PROBE_CONCURRENCY = 2;
  */
 const EXTERNAL_LINK_CONCURRENCY = 4;
 
-type Lane = 'image' | 'video' | 'probe' | 'externalLink';
+type Lane = 'image' | 'video' | 'audio' | 'probe' | 'externalLink';
 
 /**
  * `low` is work nobody is waiting on: dry runs of settings beyond the one
@@ -46,6 +49,7 @@ interface LaneState {
 const lanes: Record<Lane, LaneState> = {
   image: { limit: IMAGE_CONCURRENCY, active: 0, waiting: [] },
   video: { limit: VIDEO_CONCURRENCY, active: 0, waiting: [] },
+  audio: { limit: AUDIO_CONCURRENCY, active: 0, waiting: [] },
   probe: { limit: PROBE_CONCURRENCY, active: 0, waiting: [] },
   externalLink: { limit: EXTERNAL_LINK_CONCURRENCY, active: 0, waiting: [] },
 };
@@ -57,7 +61,9 @@ export interface ProcessingSlotOptions {
 }
 
 function laneFor(type: AssetType): Lane {
-  return type === AssetType.Video ? 'video' : 'image';
+  if (type === AssetType.Video) return 'video';
+  if (type === AssetType.Audio) return 'audio';
+  return 'image';
 }
 
 /** True when a job of this type would have to wait for a slot. */

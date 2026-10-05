@@ -17,8 +17,8 @@ const props = defineProps<{
   /** Accent for the fallback icon and the page glow, e.g. a tag color. */
   accentColor?: string;
   /**
-   * What this page is a part of — a stage's or a section's project. Read as a
-   * line of text, not a button: "Project stage" and then the project, with
+   * What this page is a part of — a section's project. Read as a line of
+   * text, not a button: "Project section" and then the project, with
    * only the project itself being the link back.
    */
   parent?: {
@@ -48,7 +48,7 @@ usePublicPageGlow({ color: accent });
 
 <template>
   <!--
-    Header rhythm shared with PublicProjectHero: the title, back link and
+    Header rhythm shared with PublicHero: the title, back link and
     description sit together (sm), and whatever follows them — a call to
     action — keeps a clear md gap.
   -->
@@ -58,47 +58,58 @@ usePublicPageGlow({ color: accent });
     :style="accent ? { '--page-header-accent': accent } : undefined"
   >
     <div class="flex max-w-full flex-col items-center gap-sm sm:items-start">
-      <!-- Desktop: above the title. On a phone it sits under the icon instead. -->
-      <div v-if="parent" class="hidden max-w-full min-w-0 sm:block">
-        <PublicPageParent :parent />
-      </div>
-      <div
-        class="flex max-w-full min-w-0 flex-col items-center gap-sm sm:flex-row"
-      >
-        <span
-          v-if="isCustom"
-          class="flex size-20 shrink-0 items-center justify-center
-            overflow-hidden rounded-normal text-4xl
-            text-[var(--page-header-accent,var(--color-accent))] sm:size-14
-            sm:text-3xl"
-          :class="iconMedia && !iconMedia.generated ? '' : 'bg-bg-accent'"
-        >
-          <Media v-if="iconMedia" v-bind="iconMedia" class="size-full" />
-          <Icon v-else :name="icon" />
-        </span>
-        <template v-else>
-          <span
-            class="mb-xs flex size-18 items-center justify-center rounded-full
-              border border-accent/25 bg-bg-accent text-4xl text-accent
-              shadow-lg ring-8 shadow-accent/15 ring-bg-accent/40 sm:hidden"
-            aria-hidden="true"
-          >
-            <Icon :name="icon" />
-          </span>
-          <Icon
-            :name="icon"
-            class="hidden shrink-0 text-3xl text-text-3 sm:block"
-          />
-        </template>
-        <div v-if="parent" class="max-w-full min-w-0 sm:hidden">
+      <!-- The project a section is part of stands close over its title. -->
+      <div class="flex max-w-full flex-col items-center gap-xs sm:items-start">
+        <!-- Desktop: above the title. On a phone it sits under the icon instead. -->
+        <div v-if="parent" class="hidden max-w-full min-w-0 sm:block">
           <PublicPageParent :parent />
         </div>
-        <h1
-          class="max-w-full text-3xl font-bold tracking-tight text-balance
-            wrap-break-word sm:text-4xl"
+        <div
+          class="flex max-w-full min-w-0 flex-col items-center gap-sm
+            sm:flex-row"
         >
-          {{ publicText(title) }}
-        </h1>
+          <span
+            v-if="isCustom"
+            class="flex size-20 shrink-0 items-center justify-center
+              overflow-hidden rounded-normal text-4xl
+              text-[var(--page-header-accent,var(--color-accent))] sm:size-14
+              sm:text-3xl"
+            :class="iconMedia && !iconMedia.generated ? '' : 'bg-bg-accent'"
+          >
+            <Media v-if="iconMedia" v-bind="iconMedia" class="size-full" />
+            <Icon v-else :name="icon" />
+          </span>
+          <template v-else>
+            <span
+              class="mb-xs flex size-18 items-center justify-center rounded-full
+                border border-accent/25 bg-bg-accent text-4xl text-accent
+                shadow-lg ring-8 shadow-accent/15 ring-bg-accent/40 sm:hidden"
+              aria-hidden="true"
+            >
+              <Icon :name="icon" />
+            </span>
+            <Icon
+              :name="icon"
+              class="hidden shrink-0 text-3xl text-text-3 sm:block"
+            />
+          </template>
+          <!-- On a phone the project and the title are one group under the
+             icon; on a wider screen the title stands in the row alone. -->
+          <div
+            class="flex max-w-full min-w-0 flex-col items-center gap-xs
+              sm:contents"
+          >
+            <div v-if="parent" class="max-w-full min-w-0 sm:hidden">
+              <PublicPageParent :parent />
+            </div>
+            <h1
+              class="max-w-full text-3xl font-bold tracking-tight text-balance
+                wrap-break-word sm:text-4xl"
+            >
+              {{ publicText(title) }}
+            </h1>
+          </div>
+        </div>
       </div>
       <p
         v-if="description"

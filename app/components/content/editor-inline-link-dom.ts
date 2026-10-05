@@ -1,4 +1,7 @@
-import type { ContentEntityType } from '#layers/thei/shared/content-link';
+import {
+  withLinkFragment,
+  type ContentEntityType,
+} from '#layers/thei/shared/content-link';
 
 /**
  * The attributes an inline link is written with. `undefined` removes one, so
@@ -6,16 +9,21 @@ import type { ContentEntityType } from '#layers/thei/shared/content-link';
  */
 export type InlineLinkAttributes = Record<string, string | undefined>;
 
-/** A link to one of the site's own entities. */
+/**
+ * A link to one of the site's own entities, to the place inside it a
+ * `fragment` names, if any. The address is only for the editor to show:
+ * storage keeps the entity and the fragment, never the address.
+ */
 export function entityLinkAttributes(
   entity: { entityType: ContentEntityType; entityId: string; url?: string },
-  note?: string,
+  { note, fragment }: { note?: string; fragment?: string } = {},
 ): InlineLinkAttributes {
   return {
-    href: entity.url,
+    href: entity.url && withLinkFragment(entity.url, fragment),
     'data-content-link': 'entity',
     'data-entity-type': entity.entityType,
     'data-entity-id': entity.entityId,
+    'data-entity-fragment': fragment,
     'data-content-note': note,
   };
 }
@@ -30,6 +38,7 @@ export function externalLinkAttributes(
     'data-content-link': 'external',
     'data-entity-type': undefined,
     'data-entity-id': undefined,
+    'data-entity-fragment': undefined,
     'data-content-note': note,
   };
 }

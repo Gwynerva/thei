@@ -18,6 +18,7 @@ import type {
 import {
   type AssetFileZipSettings,
   type AssetImageTransformSettings,
+  type AssetAudioTransformSettings,
   type AssetOriginalSettings,
   type AssetUploadSettings,
   type AssetVideoTransformSettings,
@@ -437,7 +438,8 @@ export function describeStoredAsset(
       ...base,
       type: AssetType.Audio,
       meta: asset.meta as AudioAssetMeta | null,
-      settings: asset.settings as AssetOriginalSettings | null,
+      settings: asset.settings as
+        AssetOriginalSettings | AssetAudioTransformSettings | null,
     };
   }
 

@@ -8,10 +8,17 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import sharp from 'sharp';
-import { AssetType, type VideoAssetMeta } from '../../../shared/asset';
+import { mkdir, writeFile } from 'node:fs/promises';
+import {
+  AssetType,
+  type ImageAssetMeta,
+  type VideoAssetMeta,
+} from '../../../shared/asset';
 import { createOriginalAssetSettings } from '../../../shared/asset-upload-settings';
 import {
+  findSvgAssetsWithUnsizedUses,
   findVideosWithUnscoredPreviews,
+  refreshSvgUsePreviews,
   refreshVideoPreviews,
 } from '../../../server/thei/assets/preview-refresh';
 import { storeAsset } from '../../../server/thei/assets/storage';
@@ -210,5 +217,84 @@ describe('video preview refresh', () => {
     // Still without a chosen frame: it keeps its old preview, and the file
     // card in the library can remake it by hand.
     expect(await findVideosWithUnscoredPreviews()).toHaveLength(1);
+  }, 60_000);
+});
+
+/** An SVG stored as an original, written where the library keeps it. */
+async function storeSvg(name: string, svg: string) {
+  const hash = createHash('sha256').update(svg).digest('hex');
+  const path = THEI_SERVER.assets.filePath(hash, 'svg');
+  await mkdir(join(path, '..'), { recursive: true });
+  await writeFile(path, svg);
+  await createAsset({
+    assetUuid: `a-${name}`,
+    slug: name,
+    extension: 'svg',
+    familyUuid: `af-${name}`,
+    contentHash: hash,
+    settingsKey: 'original',
+    settings: createOriginalAssetSettings(),
+    type: AssetType.Image,
+    size: svg.length,
+    touchedAt: Date.now(),
+    meta: { width: 200, height: 100, accent: { hue: 250, chroma: 0.02 } },
+  });
+  return `a-${name}`;
+}
+
+describe('SVG symbol preview refresh', () => {
+  // A light field under a dark mark repeated as a sized symbol: librsvg
+  // alone draws every mark as large as the whole picture.
+  const uses = Array.from(
+    { length: 20 },
+    (_, index) => `<use href="#m" x="${index * 10}" y="${(index % 2) * 50}"/>`,
+  ).join('');
+  const pattern = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100"><symbol id="m" viewBox="0 0 10 10" width="8" height="8"><rect width="10" height="10" fill="#123"/></symbol><rect width="200" height="100" fill="#f2c94c"/><g fill-opacity="0.3">${uses}</g></svg>`;
+  const plain =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="10"><rect width="20" height="10" fill="#2474c8"/></svg>';
+
+  it('redraws the previews of SVGs drawn with symbols and names their bitmaps', async () => {
+    const banner = await storeSvg('banner', pattern);
+    await storeSvg('plain', plain);
+    // A bitmap saved from the banner once, and one from the other file.
+    for (const [name, family] of [
+      ['banner-webp', 'af-banner'],
+      ['plain-webp', 'af-plain'],
+    ])
+      await createAsset({
+        assetUuid: `a-${name}`,
+        slug: name,
+        extension: 'webp',
+        familyUuid: family!,
+        contentHash: `hash-${name}`,
+        settingsKey: `image:${name}`,
+        settings: createOriginalAssetSettings(),
+        type: AssetType.Image,
+        size: 10,
+        touchedAt: Date.now(),
+        meta: { width: 200, height: 100 },
+      });
+
+    expect(
+      (await findSvgAssetsWithUnsizedUses()).map((asset) => asset.assetUuid),
+    ).toEqual([banner]);
+
+    const result = await refreshSvgUsePreviews();
+
+    expect(result).toMatchObject({ total: 1, failed: 0 });
+    expect(result.rasterised.map((asset) => asset.assetUuid)).toEqual([
+      'a-banner-webp',
+    ]);
+    const preview = (await findAssetsByContainer('asset', banner)).find(
+      (usage) => usage.role === 'preview',
+    )?.asset;
+    const image = await readFile(
+      THEI_SERVER.assets.filePath(preview!.contentHash, preview!.extension),
+    );
+    const { channels } = await sharp(image).stats();
+    // The yellow field, lightly marked, not the dark mass of blown-up marks.
+    expect(Math.round(channels[0]!.mean)).toBeGreaterThan(180);
+    const meta = (await findAssetByUuid(banner))!.meta as ImageAssetMeta;
+    expect(meta.accent?.chroma).toBeGreaterThan(0.05);
   }, 60_000);
 });

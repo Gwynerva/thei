@@ -64,7 +64,7 @@ function popupOf(entity: PublicEntityLink) {
           class="pointer-events-auto relative z-3 inline-flex min-w-0
             items-center gap-xs text-text-3"
         >
-          <BeveledIcon
+          <EntityTokenIcon
             :media="entity.iconMedia"
             :icon="relationEntityIcon(entity.entityType ?? 'project')"
             class="size-6 sm:size-7"
@@ -83,7 +83,7 @@ function popupOf(entity: PublicEntityLink) {
             focus-visible:ring-2 focus-visible:ring-accent
             focus-visible:outline-none"
         >
-          <BeveledIcon
+          <EntityTokenIcon
             :media="entity.iconMedia"
             :icon="relationEntityIcon(entity.entityType)"
             class="size-6 transition group-hocus/entity:brightness-125

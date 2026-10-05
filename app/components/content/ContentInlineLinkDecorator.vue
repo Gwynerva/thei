@@ -4,6 +4,7 @@ import {
   contentEntityHasIcon,
   contentLinkIsRestricted,
   contentLinkReferenceFromAnchor,
+  withLinkFragment,
   type ContentLinkReference,
   type ContentLinkResolver,
   type ResolvedContentLink,
@@ -122,7 +123,7 @@ function writeRuntimeState(
     const picture = mediaUrl(resolved.media);
     if (picture) {
       link.dataset.contentLinkMedia = '';
-      link.style.setProperty('--content-link-media', `url("${picture}")`);
+      link.style.setProperty('--content-link-media', picture);
       link.style.setProperty(
         '--content-link-media-size',
         chipEdgeSize(resolved.media),
@@ -138,7 +139,7 @@ function writeRuntimeState(
   const favicon = mediaUrl(resolved.iconMedia);
   if (favicon) {
     link.dataset.contentLinkIcon = 'image';
-    link.style.setProperty('--content-link-icon', `url("${favicon}")`);
+    link.style.setProperty('--content-link-icon', favicon);
   }
 }
 
@@ -157,17 +158,22 @@ function mediaUrl(media: { previewSrc?: string; src?: string } | undefined) {
   // A style's `url()` is a DOM address the router does not own: it carries
   // the site's base path only if it is added here.
   const url = media?.previewSrc || media?.src;
-  return url ? cssUrl(sitePath(url)) : undefined;
+  return url ? siteCssUrl(url) : undefined;
 }
 
+/**
+ * Where a link opens: its target's address — leading, for an entity, to the
+ * place inside it the link names — with the site's base path, since an
+ * `href` written here is an attribute the router does not own.
+ */
 function setNavigation(link: HTMLAnchorElement, href: string) {
-  link.href = href;
+  const fragment =
+    link.dataset.contentLink === 'entity'
+      ? link.dataset.entityFragment
+      : undefined;
+  link.href = sitePath(withLinkFragment(href, fragment));
   link.target = '_blank';
   link.rel = 'noopener noreferrer';
-}
-
-function cssUrl(value: string) {
-  return value.replace(/["\\\n\r\f]/g, (character) => `\\${character}`);
 }
 
 function attach(root: HTMLElement | null) {
@@ -185,6 +191,7 @@ function attach(root: HTMLElement | null) {
       'data-content-link',
       'data-entity-type',
       'data-entity-id',
+      'data-entity-fragment',
       'data-content-note',
     ],
   });

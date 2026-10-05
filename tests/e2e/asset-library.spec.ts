@@ -39,11 +39,18 @@ async function upload(api: APIRequestContext, color = '#4368a2') {
 }
 
 async function uploadVideo(api: APIRequestContext) {
-  const buffer = await readFile(
+  const video = await readFile(
     fileURLToPath(
       new URL('./fixture/media/regression-video.mp4', import.meta.url),
     ),
   );
+  // A `free` box after the file gives the same video new bytes, so it is
+  // stored and given its preview afresh, not found as an earlier run left it.
+  const filler = Buffer.from(randomUUID());
+  const free = Buffer.alloc(8);
+  free.writeUInt32BE(free.length + filler.length, 0);
+  free.write('free', 4, 'latin1');
+  const buffer = Buffer.concat([video, free, filler]);
   const response = await api.post('/api/admin/assets', {
     headers: buildUploadHeaders({
       settings: createOriginalAssetSettings(),
@@ -346,6 +353,137 @@ for (const width of [1280, 390]) {
   });
 }
 
+test('the library narrows to one kind of entity and finds a diary entry by its day in words', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const { asset } = await upload(request, '#3d6b4f');
+  // One file nothing holds, so the unused ones are never an empty choice.
+  await upload(request, '#6b3d5a');
+  // A day no earlier run is likely to have taken: one entry per day.
+  const random = (size: number) => 1 + Math.floor(Math.random() * size);
+  // Past the 12th, the day cannot be read as a month the other way round.
+  const [year, month, day] = [1900 + random(99), random(12), 12 + random(16)];
+  const date = [year, month, day]
+    .map((part) => String(part).padStart(2, '0'))
+    .join('-');
+  const created = await request.post('/api/admin/diary', {
+    data: {
+      date,
+      access: 'public',
+      content: {
+        data: {
+          blocks: [
+            {
+              id: 'media',
+              type: 'contentMedia',
+              data: {
+                layout: 'centered',
+                asset: { assetUuid: asset.assetUuid },
+              },
+            },
+          ],
+        },
+      },
+    },
+  });
+  const saved = await created.json();
+  expect(saved.type, JSON.stringify(saved)).toBe('success');
+  const monthName = new Intl.DateTimeFormat('en', {
+    month: 'long',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(year, month - 1, day)));
+
+  await library(page);
+  // Every kind of file is offered, audio too, whatever this picker takes.
+  const type = page.getByRole('button', { name: /^Format: / });
+  await expect(type).toHaveAccessibleName('Format: Any file');
+  await type.click();
+  await expect(
+    page.getByRole('listbox', { name: 'Format' }).getByRole('option'),
+  ).toHaveText([/Any file/, /Image/, /Video/, /Audio/, /Other Files/]);
+  await page.keyboard.press('Escape');
+
+  const source = page.getByRole('button', { name: /^Used in: / });
+  await expect(source).toHaveAccessibleName('Used in: Anywhere');
+  await source.click();
+  const kinds = page.getByRole('listbox', { name: 'Used in' });
+  await expect(kinds.getByRole('option')).toHaveText([
+    /Anywhere/,
+    /Projects/,
+    /Project sections/,
+    /Events/,
+    /Diary entries/,
+    /Pages/,
+    /In\suse/,
+    /Unused/,
+  ]);
+  await kinds.getByRole('option').filter({ hasText: 'Diary entries' }).click();
+  await expect(source).toHaveAccessibleName('Used in: Diary entries');
+  await page.getByRole('searchbox').fill(`${monthName} ${day}, ${year}`);
+  const sections = page.locator('[data-asset-library-section]');
+  await expect(sections).toHaveCount(1);
+  // Named by its day written out, not by the stored date.
+  await expect(sections).toContainText(`${monthName} ${day}, ${year}`);
+  await expect(
+    page.locator(`[data-asset-uuid="${asset.assetUuid}"]`).first(),
+  ).toBeVisible();
+
+  // The same day in numbers: one diary entry, and no page to narrow to.
+  await page.getByRole('searchbox').fill(`${day}.${month}.${year}`);
+  await expect(sections).toHaveCount(1);
+  await source.click();
+  await expect(
+    kinds.getByRole('option').filter({ hasText: 'Diary entries' }),
+  ).toContainText('1');
+  await expect(
+    kinds.getByRole('option').filter({ hasText: 'Pages' }),
+  ).toHaveAttribute('aria-disabled', 'true');
+  await kinds.getByRole('option').filter({ hasText: 'Anywhere' }).click();
+  await expect(source).toHaveAccessibleName('Used in: Anywhere');
+  await expect(sections).toHaveCount(1);
+
+  // Narrowed to where nothing is found, the list says so and how to widen.
+  await source.click();
+  await kinds.getByRole('option').filter({ hasText: 'Diary entries' }).click();
+  await page.getByRole('searchbox').fill(`${day}.${month}.${year} nowhere`);
+  const empty = page.locator('[data-asset-library-empty]');
+  await expect(empty).toBeVisible();
+  await empty.getByRole('button', { name: /Anywhere/ }).click();
+  await expect(source).toHaveAccessibleName('Used in: Anywhere');
+  await page.keyboard.press('Escape');
+
+  // The storage page searches the same way, and keeps it in its address.
+  await page.goto('/admin/assets/');
+  await expect(page.locator('[data-admin-assets-ready]')).toHaveAttribute(
+    'data-admin-assets-ready',
+    'true',
+  );
+  await page.getByRole('button', { name: /^Used in: / }).click();
+  await page
+    .getByRole('listbox', { name: 'Used in' })
+    .getByRole('option')
+    .filter({ hasText: 'Diary entries' })
+    .click();
+  await expect(page).toHaveURL(/[?&]source=diary-entry/);
+  await page.getByRole('searchbox').fill(`${monthName} ${day}, ${year}`);
+  await expect(page).toHaveURL(/[?&]q=/);
+  await expect(
+    page.locator(`[data-asset-uuid="${asset.assetUuid}"]`),
+  ).toBeVisible();
+  await page.getByRole('searchbox').fill('');
+  await expect(page).not.toHaveURL(/[?&]q=/);
+  await page.getByRole('button', { name: /^Used in: / }).click();
+  await page
+    .getByRole('listbox', { name: 'Used in' })
+    .getByRole('option')
+    .filter({ hasText: 'Unused' })
+    .click();
+  await expect(page).toHaveURL(/[?&]usage=unused/);
+  await expect(page).not.toHaveURL(/source=/);
+});
+
 test('library endpoints require admin access', async ({ playwright }) => {
   const api = await playwright.request.newContext({
     baseURL: E2E_ORIGIN,
@@ -382,36 +520,38 @@ test('video previews play on hover and keyboard focus in both library views', as
     focusTarget = tile,
   ) {
     await page.mouse.move(0, 0);
-    await expect(tile.locator('[data-media-preview-pair]')).toBeVisible();
     const video = tile.locator('video.media-main');
-    await expect
-      .poll(() => video.evaluate((el: HTMLVideoElement) => el.paused), {
-        timeout: 3_000,
-      })
-      .toBe(true);
+    // At rest a tile shows the preview, and the video is not even fetched
+    // until the tile is engaged.
+    await expect(tile.locator('[data-media-preview-state]')).toHaveAttribute(
+      'data-media-preview-state',
+      'visible',
+    );
+    await expect(video).toHaveCount(0);
+    // `evaluateAll` reads the video as it is; `evaluate` would wait for one
+    // still being mounted, past the poll's own timeout.
+    const playing = () =>
+      video.evaluateAll((elements) =>
+        elements.every((element) => !(element as HTMLVideoElement).paused),
+      );
     await focusTarget.focus();
-    await expect
-      .poll(() => video.evaluate((el: HTMLVideoElement) => !el.paused), {
-        timeout: 3_000,
-      })
-      .toBe(true);
+    await expect(video).toHaveCount(1);
+    await expect.poll(playing, { timeout: 3_000 }).toBe(true);
     await page.getByRole('searchbox').focus();
-    await expect
-      .poll(() => video.evaluate((el: HTMLVideoElement) => el.paused), {
-        timeout: 3_000,
-      })
-      .toBe(true);
+    await expect.poll(playing, { timeout: 3_000 }).toBe(false);
     await tile.hover();
     await expect(tile.locator('[data-media-original-pair]')).toBeVisible();
-    await expect
-      .poll(() => video.evaluate((el: HTMLVideoElement) => !el.paused), {
-        timeout: 3_000,
-      })
-      .toBe(true);
+    await expect.poll(playing, { timeout: 3_000 }).toBe(true);
   }
 
   await page.goto('/admin/assets/');
-  await page.getByRole('combobox', { name: 'Used in' }).selectOption('unused');
+  await page.getByRole('button', { name: /^Used in: / }).click();
+  await page
+    .getByRole('listbox', { name: 'Used in' })
+    .getByRole('option')
+    .filter({ hasText: 'Unused' })
+    .click();
+  await expect(page).toHaveURL(/[?&]usage=unused/);
   const storageRow = page.locator(`[data-asset-uuid="${asset.assetUuid}"]`);
   await expect(storageRow).toBeVisible();
   await expectInteractionPlayback(storageRow);

@@ -28,6 +28,19 @@ async function images(page: Page) {
 }
 
 /**
+ * Opens a page and waits until it has hydrated. Before that a scroll is undone
+ * by the router's first navigation, which puts the page at its top, and a
+ * pointer already resting on a tile never tells it so.
+ */
+async function open(page: Page, path: string) {
+  await page.goto(path);
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-nuxt-hydrated',
+    'true',
+  );
+}
+
+/**
  * Edge media spans the whole strip height and always reaches the outer edge.
  * Centred media too wide to sit whole around the strip's focus puts its middle
  * there and runs past the edge; anything else is pinned to the edge.
@@ -79,7 +92,7 @@ for (const width of [390, 1280]) {
       'transparent',
       'unknown',
     ]) {
-      await page.goto(`/ambient-regression?banner=${shape}`);
+      await open(page, `/ambient-regression?banner=${shape}`);
       const hero = page.locator('[data-test-hero]');
       const banner = hero.locator('.hero-banner');
       await expect(banner).toHaveAttribute('data-media-final-state', 'visible');
@@ -147,6 +160,40 @@ for (const width of [390, 1280]) {
         expect(background!.y + background!.height).toBeGreaterThanOrEqual(
           box!.y + box!.height,
         );
+        // Edge media along the right of the content's column: the banner's
+        // middle stays within the column, its right side covers the
+        // column's edge, never leaving a glow there, and may run past it.
+        // Its window rises after the words. Every fade is the eased curve
+        // of `mask-ease`, a stop at every twentieth of it rather than a
+        // straight ramp, so none of them shows a line.
+        const columnRight =
+          box!.x + (box!.width + Math.min(1100, box!.width)) / 2;
+        expect(mainBox!.x + mainBox!.width).toBeGreaterThanOrEqual(
+          columnRight - 1,
+        );
+        expect(mainBox!.x + mainBox!.width / 2).toBeLessThanOrEqual(
+          columnRight + 1,
+        );
+        for (const [layer, direction] of [
+          [
+            banner.locator(
+              '[data-media-original-pair] [data-media-foreground]',
+            ),
+            'right',
+          ],
+          [foreground, 'right'],
+          [hero.locator('[data-hero-shade]'), 'right'],
+        ] as const) {
+          const mask = await layer.evaluate(
+            (element) => getComputedStyle(element).maskImage,
+          );
+          expect(mask).toMatch(
+            new RegExp(`^linear-gradient\\(to ${direction},`),
+          );
+          // Both changes of 21 stops each, the rise's often collapsed.
+          expect(mask.match(/rgba?\(/g)).toHaveLength(42);
+          expect(mask).toContain('rgba(0, 0, 0, 0.5)');
+        }
       }
       const tags = hero.locator('[data-hero-tags]');
       await expect(tags.locator('a')).toHaveText(['Tag 1', 'Tag 2', 'Tag 3']);
@@ -212,7 +259,7 @@ for (const width of [390, 1280]) {
   }) => {
     await page.setViewportSize({ width, height: 900 });
     for (const count of [0, 1, 3, 5]) {
-      await page.goto(`/ambient-regression?banner=none&tags=${count}`);
+      await open(page, `/ambient-regression?banner=none&tags=${count}`);
       const hero = page.locator('[data-test-hero]');
       expect(await hero.locator('.hero-banner').count()).toBe(0);
       expect(await hero.locator('[data-hero-tags] a').count()).toBe(
@@ -224,12 +271,69 @@ for (const width of [390, 1280]) {
       expect(await shade.boundingBox()).toEqual(await hero.boundingBox());
       expect(
         await hero.evaluate((element) =>
-          getComputedStyle(element)
-            .getPropertyValue('--project-hero-accent')
-            .trim(),
+          getComputedStyle(element).getPropertyValue('--hero-accent').trim(),
         ),
       ).not.toBe('');
       await expect(hero).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    }
+  });
+
+  test(`an event or a section opens with its banner and only its words at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    for (const kind of ['event', 'section'] as const) {
+      await open(page, `/ambient-regression?banner=wide&kind=${kind}`);
+      const hero = page.locator('[data-test-hero]');
+      const banner = hero.locator('.hero-banner');
+      await expect(banner).toHaveAttribute('data-media-final-state', 'visible');
+      // An event says what it is in a pill; a section says it in the one
+      // line naming its project, as its plain header does.
+      if (kind === 'event') {
+        await expect(hero.locator('[data-hero-kind]')).toHaveText('Event');
+        await expect(hero.locator('[data-hero-parent]')).toHaveCount(0);
+      } else {
+        await expect(hero.locator('[data-hero-kind]')).toHaveCount(0);
+        await expect(hero.locator('[data-hero-parent]')).toHaveText(
+          // The owner's words carry a no-break space after a short word.
+          /Project\ssection\s*The\sproject/,
+        );
+      }
+      await expect(
+        hero.locator('[data-hero-icon], [data-hero-tags]'),
+      ).toHaveCount(0);
+      const box = (await hero.boundingBox())!;
+      const main = (await banner.locator('[data-media-main]').boundingBox())!;
+      const title = (await hero.locator('h1').boundingBox())!;
+      // The words begin with the event's pill, or the section's project.
+      const pills = (await hero
+        .locator('[data-hero-pills], [data-hero-parent]')
+        .first()
+        .boundingBox())!;
+      const summary = (await hero.locator('.hero-summary').boundingBox())!;
+      if (width === 390) {
+        // The sharp band on top, the words centred under it.
+        const band = (box.width * 9) / 16;
+        expect(main.height).toBeCloseTo(band, 0);
+        expect(pills.y).toBeGreaterThan(box.y + band);
+        expect(title.x + title.width / 2).toBeCloseTo(box.x + box.width / 2, 0);
+      } else {
+        // Words alone keep a height the banner reads at, in its middle, and
+        // within the two thirds of the column the banner leaves them.
+        expect(box.height).toBeGreaterThanOrEqual(320);
+        expect(pills.y - box.y).toBeCloseTo(
+          box.y + box.height - (summary.y + summary.height),
+          0,
+        );
+        const column = Math.min(1100, box.width);
+        const columnStart = box.x + (box.width - column) / 2;
+        expect(title.x + title.width).toBeLessThanOrEqual(
+          columnStart + (column * 2) / 3 + 1,
+        );
+        expect(main.x + main.width).toBeGreaterThanOrEqual(
+          columnStart + column - 1,
+        );
+      }
     }
   });
 }
@@ -245,7 +349,7 @@ test('slow video keeps the color pulse until ready, then both layers play and fo
     await gate;
     await route.continue();
   });
-  await page.goto('/ambient-regression?banner=video');
+  await open(page, '/ambient-regression?banner=video');
   const banner = page.locator('.hero-banner');
   await expect(banner).toHaveAttribute('data-media-preview-state', 'visible');
   await expect(banner.locator('[data-media-loading]')).toBeVisible();
@@ -366,7 +470,7 @@ test('preview failures, final failures and source changes recover without stale 
   page,
 }) => {
   for (const scenario of ['missing-preview', 'error', 'no-preview']) {
-    await page.goto(`/ambient-regression?banner=${scenario}`);
+    await open(page, `/ambient-regression?banner=${scenario}`);
     const banner = page.locator('.hero-banner');
     await expect(banner).toHaveAttribute(
       'data-media-final-state',
@@ -382,7 +486,7 @@ test('preview failures, final failures and source changes recover without stale 
         '1',
       );
   }
-  await page.goto('/ambient-regression?banner=slow');
+  await open(page, '/ambient-regression?banner=slow');
   const banner = page.locator('.hero-banner');
   await expect(banner).toHaveAttribute('data-media-final-state', 'loading');
   await page.locator('[data-switch-source]').click();
@@ -401,14 +505,14 @@ test('reduced motion disables ambient playback and pulse; background failure lea
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/ambient-regression?banner=slow');
+  await open(page, '/ambient-regression?banner=slow');
   const banner = page.locator('.hero-banner');
   await expect(banner.locator('[data-media-loading] > span')).toHaveCSS(
     'animation-name',
     'none',
   );
   releaseAmbientSlow();
-  await page.goto('/ambient-regression?banner=video');
+  await open(page, '/ambient-regression?banner=video');
   await expect(banner).toHaveAttribute('data-media-final-state', 'visible');
   const main = banner.locator('video[data-media-main]');
   expect(await main.evaluate((v: HTMLVideoElement) => v.paused)).toBe(true);
@@ -448,7 +552,7 @@ test('a delayed backdrop decode holds the entire pair, including with a cached f
         await gate;
     };
   });
-  await page.goto('/ambient-regression?banner=wide');
+  await open(page, '/ambient-regression?banner=wide');
   const banner = page.locator('.hero-banner');
   await expect(banner.locator('[data-media-main]')).toHaveJSProperty(
     'complete',
@@ -521,7 +625,7 @@ for (const width of [390, 1280]) {
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 });
-    await page.goto('/ambient-regression?banner=wide');
+    await open(page, '/ambient-regression?banner=wide');
     await expect(page.locator('[data-test-hero] .hero-banner')).toHaveAttribute(
       'data-media-final-state',
       'visible',
@@ -547,7 +651,7 @@ for (const width of [390, 1280]) {
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 });
-    await page.goto('/ambient-regression?banner=wide');
+    await open(page, '/ambient-regression?banner=wide');
     const card = page.locator('[data-narrow-card] .public-content-card');
     await card.scrollIntoViewIfNeeded();
     const surface = card.locator('[data-media-variant="ambient"]');
@@ -576,28 +680,28 @@ test('an internal link card keeps most of a narrow column for its words', async 
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 900 });
-  await page.goto('/ambient-regression?banner=wide');
+  await open(page, '/ambient-regression?banner=wide');
   const link = page.locator('[data-narrow-card] .entity-link-preview');
   await link.scrollIntoViewIfNeeded();
   const linkBox = (await link.boundingBox())!;
   const words = await link
-    .locator('.entity-preview-text')
+    .locator('[data-entity-preview-text]')
     .evaluate(
       (element) =>
-        element.clientWidth - parseFloat(getComputedStyle(element).paddingRight),
+        element.clientWidth -
+        parseFloat(getComputedStyle(element).paddingRight),
     );
   expect(words).toBeGreaterThan(linkBox.width * 0.6);
   // A truncated title ends in an ellipsis rather than a cut letter.
-  await expect(link.locator('.entity-preview-text .truncate').first()).toHaveCSS(
-    'text-overflow',
-    'ellipsis',
-  );
+  await expect(
+    link.locator('[data-entity-preview-text] .truncate').first(),
+  ).toHaveCSS('text-overflow', 'ellipsis');
 });
 
 test('admin previews play only while hovered or focused, including nested focus', async ({
   page,
 }) => {
-  await page.goto('/ambient-regression?banner=video');
+  await open(page, '/ambient-regression?banner=video');
   await expect(page.locator('[data-test-hero] .hero-banner')).toHaveAttribute(
     'data-media-final-state',
     'visible',
@@ -642,4 +746,29 @@ test('admin previews play only while hovered or focused, including nested focus'
       .poll(() => backdrop.evaluate((v: HTMLVideoElement) => v.paused))
       .toBe(true);
   }
+});
+
+test('a video in the hero showcase wears its mark and plays only while pointed at or focused', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await open(page, '/ambient-regression');
+  const hero = page.locator('[data-test-hero]');
+  const image = hero.getByRole('button', { name: 'Showcase image' });
+  const video = hero.getByRole('button', { name: 'Showcase video' });
+  // The mark every tile of a video wears; a picture's tile has none.
+  await expect(video.locator('use[href*="play-circle"]')).toHaveCount(1);
+  await expect(image.locator('use[href*="play-circle"]')).toHaveCount(0);
+
+  const main = video.locator('video[data-media-main]');
+  const paused = () => main.evaluate((v: HTMLVideoElement) => v.paused);
+  await video.hover();
+  await expect.poll(paused).toBe(false);
+  await page.mouse.move(0, 0);
+  await expect.poll(paused).toBe(true);
+
+  await video.focus();
+  await expect.poll(paused).toBe(false);
+  await image.focus();
+  await expect.poll(paused).toBe(true);
 });
