@@ -32,13 +32,13 @@ const buildSources = [
   'bun.lock',
   'tsconfig.json',
 ];
-const skippedInSources = new Set([
-  'node_modules',
-  '.nuxt',
-  '.output',
-  '.thei',
-  'content',
-]);
+const skippedInSources = new Set(['node_modules', '.nuxt', '.output', '.thei']);
+/**
+ * The fixture's own data, which the tests write to: skipped by its path, not
+ * by its name, or every folder called `content` — the editor's components
+ * among them — would go unwatched and leave the build stale.
+ */
+const skippedSourcePaths = new Set(['tests/e2e/fixture/content']);
 const name = process.argv[2] as keyof typeof targets;
 const target = targets[name];
 if (!target) {
@@ -110,8 +110,9 @@ function newerThan(path: string, time: number): boolean {
   if (!existsSync(full)) return false;
   if (!statSync(full).isDirectory()) return statSync(full).mtimeMs > time;
   for (const entry of readdirSync(full, { withFileTypes: true })) {
-    if (skippedInSources.has(entry.name)) continue;
     const child = `${path}/${entry.name}`;
+    if (skippedInSources.has(entry.name) || skippedSourcePaths.has(child))
+      continue;
     if (
       entry.isDirectory() ? newerThan(child, time) : modifiedAt(child)! > time
     )
