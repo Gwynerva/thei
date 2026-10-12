@@ -498,6 +498,14 @@ test('a pasted recording becomes a player, and playing it changes nothing', asyn
   expect(resumedAt).toBeLessThan(10);
   await card.locator('[data-audio-play]').click();
 
+  // A mouse resting over the waveform lights the way to where a click would
+  // go, until it leaves; a press shows what plays instead.
+  const reach = waveform.locator('[data-audio-reach]');
+  await page.mouse.move(box.x + box.width * 0.3, y);
+  await expect(reach).toBeVisible();
+  await page.mouse.move(box.x + box.width * 0.3, box.y - 40);
+  await expect(reach).toHaveCount(0);
+
   await expect(page.locator('[data-transitions]')).toHaveAttribute(
     'data-transitions',
     'Save',
