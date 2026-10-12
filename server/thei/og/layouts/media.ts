@@ -1,56 +1,49 @@
 import { frame } from '../blocks';
 import {
   accentCover,
+  COVER_MARK_CENTRE,
   COVER_WORDS_WIDTH,
   coverShade,
   pictureCover,
 } from '../cover';
-import { OG_HEIGHT, OG_WIDTH, SAFE } from '../geometry';
+import { OG_HEIGHT, SAFE } from '../geometry';
 import { ogIcon } from '../icons';
-import { iconImage } from '../picture';
 import { el } from '../render';
 import { kindIcon, textColumn, type OgLayout } from './common';
 
-/** Where a picture shown whole sits: in the part of the card left clear. */
-const CENTRE = OG_WIDTH - Math.round((OG_WIDTH / 2) * 0.38);
 const ICON = 340;
 
 /**
- * A section or an event, as their cards in a feed show them, laid the way a
- * project's card is (`cover.ts`). A photograph — its banner, or else the
- * first picture of its body — is the card's cover. An icon or a see-through
- * drawing stands whole on a field of its accent, and a thing without a
- * picture has that field with its kind's mark.
+ * A section or an event, laid the way a project's card is (`cover.ts`): its
+ * banner, or else the first picture of its body, is the card's cover, and a
+ * thing without one has the picture the site draws for it there instead —
+ * the same picture its cards in the feed show. Only a picture that cannot be
+ * read leaves a field of the accent, with the kind's mark on it.
  */
 export const media: OgLayout = async (input) => {
   const { content, palette, picture } = input;
   const accent = picture?.analysis.accent ?? content.accent;
-  const photo =
-    picture && !picture.analysis.iconLike
-      ? await pictureCover(picture)
-      : undefined;
-  const ground = photo ?? accentCover(accent);
+  const cover = picture && (await pictureCover(picture));
+  const ground = cover ?? accentCover(accent);
   const shade = coverShade(accent, ground.bright, palette);
 
-  const marks = [];
-  if (!photo) {
-    const whole =
-      picture && (await iconImage(picture, ICON, { shadow: true, key: 'art' }));
-    marks.push(
-      el(
-        'div',
-        {
-          style: {
-            display: 'flex',
-            position: 'absolute',
-            left: CENTRE - ICON / 2,
-            top: (OG_HEIGHT - ICON) / 2,
+  const marks = cover
+    ? []
+    : [
+        el(
+          'div',
+          {
+            key: 'art',
+            style: {
+              display: 'flex',
+              position: 'absolute',
+              left: COVER_MARK_CENTRE - ICON / 2,
+              top: (OG_HEIGHT - ICON) / 2,
+            },
           },
-        },
-        whole ?? ogIcon(kindIcon(content), '#ffffff', ICON, { opacity: 0.9 }),
-      ),
-    );
-  }
+          ogIcon(kindIcon(content), '#ffffff', ICON, { opacity: 0.9 }),
+        ),
+      ];
 
   const text = await textColumn(
     { ...input, palette: shade.palette },

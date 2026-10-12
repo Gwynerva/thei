@@ -362,6 +362,7 @@ export type LanguagePhrases = {
   public_details_files: string;
   public_details_overview: string;
   public_details_contents: string;
+  public_project_description: string;
   public_details_neighbour_sections: string;
   public_details_neighbour_entries: string;
   public_neighbour_next: string;
@@ -1095,7 +1096,6 @@ export type LanguagePhrases = {
   upload_reset: string;
   upload_rotation: string;
   upload_rotate: string;
-  upload_crop_locked: (ratio: string) => string;
   upload_crop_hint: string;
   upload_resize: string;
   upload_resize_linked: string;

@@ -11,6 +11,9 @@ export function buildProjectUrl(
 /** The id of the sections block on a project's overview, for a link to it. */
 export const PROJECT_SECTIONS_ANCHOR = 'project-sections';
 
+/** The id of the start of a project's description, on its overview. */
+export const PROJECT_DESCRIPTION_ANCHOR = 'project-description';
+
 /**
  * A project's own chronology — the second tab of its page.
  *

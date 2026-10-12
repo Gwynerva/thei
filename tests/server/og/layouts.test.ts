@@ -16,8 +16,9 @@ import {
   OG_LAYOUT_NAMES,
   type OgLayoutName,
 } from '../../../server/thei/og/design';
-import { SAFE } from '../../../server/thei/og/geometry';
+import { OG_WIDTH, SAFE } from '../../../server/thei/og/geometry';
 import type { OgCardContent } from '../../../server/thei/og/model';
+import { iconImage } from '../../../server/thei/og/picture';
 import type { OgTone } from '../../../server/thei/og/palette';
 import {
   onOgMissingGlyphs,
@@ -206,6 +207,56 @@ describe('card layouts', () => {
       height: 630,
       format: 'png',
     });
+  });
+
+  // A section's or an event's card is laid as a project's: its picture
+  // stands whole at full height on the right, in its own proportions — a
+  // portrait is never cropped — and the one the site draws for a thing
+  // without a picture spans as much of the card as a banner does.
+  it('lay every cover whole, at full height on the right', async () => {
+    let covers = 0;
+    for (const fixture of fixtures) {
+      if (fixture.name === 'a picture that cannot be read') continue;
+      const { card, nodes } = await draw(fixture.content);
+      const cover = nodes.find(({ key }) => key === 'cover');
+      if (card.design.layout === 'media')
+        expect(cover, `${fixture.name}: a cover`).toBeDefined();
+      if (!cover) continue;
+      covers++;
+      const shown =
+        card.design.layout === 'project'
+          ? fixture.content.banner!
+          : fixture.content.picture!;
+      const width =
+        shown.type === 'generated'
+          ? 1000
+          : Math.min(
+              1000,
+              Math.round(630 * (await analyzePicture(shown))!.aspect),
+            );
+      expect(
+        {
+          left: cover.left,
+          top: cover.top,
+          width: cover.width,
+          height: cover.height,
+        },
+        fixture.name,
+      ).toEqual({ left: OG_WIDTH - width, top: 0, width, height: 630 });
+    }
+    expect(covers).toBeGreaterThan(5);
+  }, 240_000);
+
+  it('draw an icon to fill its square, a small vector included', async () => {
+    for (const picture of [art.vector, art.tiny, art.square]) {
+      const analysis = (await analyzePicture(picture))!;
+      const node = (await iconImage({ picture, analysis }, 132))!;
+      const img = node.props.children as {
+        props: { width: number; height: number };
+      };
+      const longSide = Math.max(img.props.width, img.props.height);
+      expect(longSide, picture.type === 'file' ? picture.key : '').toBe(132);
+    }
   });
 
   it('draw a card without the pictures that cannot be read', async () => {

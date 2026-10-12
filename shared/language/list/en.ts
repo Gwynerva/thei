@@ -478,6 +478,7 @@ export default defineI18nBase({
     public_details_from_content: 'From the content',
     public_details_overview: 'Summary',
     public_details_contents: 'Contents',
+    public_project_description: 'Project description',
     public_details_neighbour_sections: 'Nearby sections',
     public_details_neighbour_entries: 'Nearby entries',
     public_neighbour_next: 'Next',
@@ -1427,8 +1428,6 @@ export default defineI18nBase({
     upload_reset: 'Reset',
     upload_rotation: 'Rotation',
     upload_rotate: 'Rotate 90° clockwise',
-    upload_crop_locked: (ratio) =>
-      `The chosen role needs a fixed aspect ratio: ${ratio}`,
     upload_crop_hint:
       'Drag the frame or its corners; double-click stretches it as far as it goes.',
     upload_resize: 'Resize',

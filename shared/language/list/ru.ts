@@ -535,6 +535,7 @@ export default defineI18nModule({
     public_details_from_content: 'Из содержимого',
     public_details_overview: 'Сводка',
     public_details_contents: 'Содержание',
+    public_project_description: 'Описание проекта',
     public_details_neighbour_sections: 'Соседние разделы',
     public_details_neighbour_entries: 'Соседние записи',
     public_neighbour_next: 'Вперёд',
@@ -1486,8 +1487,6 @@ export default defineI18nModule({
     upload_reset: 'Сбросить',
     upload_rotation: 'Поворот',
     upload_rotate: 'Повернуть на 90° по часовой',
-    upload_crop_locked: (ratio) =>
-      `Для выбранной роли требуется фиксированное соотношение сторон: ${ratio}`,
     upload_crop_hint:
       'Перетаскивайте рамку и её углы, двойной щелчок растягивает её до предела.',
     upload_resize: 'Изменить размеры',

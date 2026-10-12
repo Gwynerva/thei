@@ -32,6 +32,8 @@ const TOUCH_SLOP_PX = 8;
 const root = useTemplateRef<HTMLElement>('root');
 const barCount = ref(SERVER_BARS);
 const scrubbing = ref<number | null>(null);
+/** Where a mouse or a pen rests over the waveform, before any press. */
+const hovered = ref<number | null>(null);
 
 const bars = computed(() => {
   const pooled = poolAudioPeaks(props.peaks, barCount.value);
@@ -40,11 +42,17 @@ const bars = computed(() => {
     : Array.from({ length: barCount.value }, () => FLOOR);
 });
 const shown = computed(() => scrubbing.value ?? props.current);
-const played = computed(() =>
-  props.duration > 0
-    ? `${Math.min(100, Math.max(0, (shown.value / props.duration) * 100))}%`
-    : '0%',
+const played = computed(() => share(shown.value));
+/** Up to the pointer, lighter than what has played: where a click goes. */
+const reach = computed(() =>
+  hovered.value === null ? null : share(hovered.value),
 );
+
+function share(seconds: number) {
+  return props.duration > 0
+    ? `${Math.min(100, Math.max(0, (seconds / props.duration) * 100))}%`
+    : '0%';
+}
 
 let observer: ResizeObserver | undefined;
 onMounted(() => {
@@ -90,6 +98,7 @@ function onPointerDown(event: PointerEvent) {
 }
 
 function startScrub(event: PointerEvent) {
+  hovered.value = null;
   root.value?.setPointerCapture(event.pointerId);
   scrubbing.value = timeAt(event.clientX);
   emit('scrub', scrubbing.value);
@@ -104,9 +113,17 @@ function onPointerMove(event: PointerEvent) {
     startScrub(event);
     return;
   }
-  if (scrubbing.value === null) return;
+  if (scrubbing.value === null) {
+    // A finger has nothing resting over the track: it only ever presses.
+    if (event.pointerType !== 'touch') hovered.value = timeAt(event.clientX);
+    return;
+  }
   scrubbing.value = timeAt(event.clientX);
   emit('scrub', scrubbing.value);
+}
+
+function onPointerLeave() {
+  hovered.value = null;
 }
 
 function onPointerUp(event: PointerEvent) {
@@ -195,10 +212,20 @@ function onKeydown(event: KeyboardEvent) {
     @pointermove="onPointerMove"
     @pointerup="onPointerUp"
     @pointercancel="onPointerCancel"
+    @pointerleave="onPointerLeave"
     @lostpointercapture="onPointerCancel"
     @keydown="onKeydown"
   >
     <AudioWaveformBars :bars class="text-text-3/50" />
+    <span
+      v-if="reach !== null"
+      class="absolute inset-0 text-accent/40"
+      :style="{ clipPath: `inset(0 calc(100% - ${reach}) 0 0)` }"
+      data-audio-reach
+      aria-hidden="true"
+    >
+      <AudioWaveformBars :bars />
+    </span>
     <!-- Only this clip follows the sound; the bars under it stay put. -->
     <span
       class="absolute inset-0 text-accent"

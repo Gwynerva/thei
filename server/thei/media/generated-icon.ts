@@ -215,3 +215,41 @@ export function buildIconSvg(kind: GeneratedIconKind, hue: number) {
     <g fill="${foreground}"${transform}>${body}</g>
   </svg>`;
 }
+
+/**
+ * The same drawing as `buildIconSvg` — its tones, its light gathered on the
+ * glyph — spread over a field of any shape: the glyph centred at `glyph.x`
+ * across it, as large as in a square icon `glyph.size` wide. A picture to lay
+ * as a card's ground where a thing has none of its own. Kept apart from the
+ * square so that the icons already drawn on disk keep their template
+ * signature.
+ */
+export function buildIconFieldSvg(
+  kind: GeneratedIconKind,
+  hue: number,
+  field: { width: number; height: number },
+  glyph: { x: number; size: number },
+) {
+  const center = oklchToHex(0.74, 0.12, hue);
+  const edge = oklchToHex(0.44, 0.15, hue);
+  const foreground = oklchToHex(0.18, 0.04, hue);
+  const symbol = kindSymbol(kind);
+  const [x = 0, y = 0, width = 24, height = 24] = symbol.viewBox
+    .split(/[\s,]+/)
+    .map(Number);
+  // The glyph and its light keep the proportions they have in the square.
+  const box = (glyph.size * GLYPH_SIZE) / 960;
+  const scale = box / Math.max(width, height);
+  const cy = field.height / 2;
+  const radius = (glyph.size * 680) / 960;
+  const body = symbol.body.replaceAll('currentColor', foreground);
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${field.width}" height="${field.height}" viewBox="0 0 ${field.width} ${field.height}">
+    <defs><radialGradient id="g" cx="${glyph.x}" cy="${cy}" r="${radius}" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="${center}"/>
+      <stop offset="1" stop-color="${edge}"/>
+    </radialGradient></defs>
+    <rect width="${field.width}" height="${field.height}" fill="url(#g)"/>
+    <g fill="${foreground}" transform="translate(${glyph.x} ${cy}) scale(${scale}) translate(${-(x + width / 2)} ${-(y + height / 2)})">${body}</g>
+  </svg>`;
+}

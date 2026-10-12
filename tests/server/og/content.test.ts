@@ -232,8 +232,16 @@ function diary(
       .run();
 }
 
-/** A stored picture or video; a video may have a still to stand in by. */
-function asset(uuid: string, type: 'image' | 'video', still?: string) {
+/**
+ * A stored picture or video, with the size it was stored at if given; a
+ * video may have a still to stand in by, of the same size.
+ */
+function asset(
+  uuid: string,
+  type: 'image' | 'video',
+  still?: string,
+  size?: { width: number; height: number },
+) {
   const { db, schema } = context;
   db.insert(schema.assets)
     .values({
@@ -247,11 +255,11 @@ function asset(uuid: string, type: 'image' | 'video', still?: string) {
       type: type as never,
       size: 1,
       touchedAt: 1,
-      meta: null,
+      meta: (size ?? null) as never,
     })
     .run();
   if (!still) return;
-  asset(still, 'image');
+  asset(still, 'image', undefined, size);
   db.insert(schema.assetUsages)
     .values({
       assetUuid: still,
@@ -551,6 +559,32 @@ describe('Open Graph content', () => {
     expect(await pictureOf('event', 'e')).toMatchObject({
       type: 'file',
       key: 'image-2-hash.webp',
+    });
+  });
+
+  // A vector opened without its size would be measured at the density it
+  // is read at, and every drawing would look like a small icon.
+  it('gives a picture from a body the size it was stored at', async () => {
+    project('p', Public);
+    datedSection('drawing', 'p', ['2020-01-01', '2020-02-01']);
+    event('e', Public);
+    asset('chart', 'image', undefined, { width: 1920, height: 1080 });
+    asset('film', 'video', 'film-still', { width: 720, height: 1280 });
+    body('project-section', 'drawing', 'project-section-body', [
+      { asset: 'chart' },
+    ]);
+    body('event', 'e', 'event-body', [{ asset: 'film' }]);
+    expect(
+      (await resolve({ kind: 'section', id: 'drawing' }))!.picture,
+    ).toMatchObject({
+      key: 'chart-hash.webp',
+      width: 1920,
+      height: 1080,
+    });
+    expect((await resolve({ kind: 'event', id: 'e' }))!.picture).toMatchObject({
+      key: 'film-still-hash.webp',
+      width: 720,
+      height: 1280,
     });
   });
 

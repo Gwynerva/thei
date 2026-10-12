@@ -401,6 +401,82 @@ test('an address pasted over selected text links that text instead of replacing 
   await expect(field).toHaveText('Before tail');
 });
 
+test('links pasted with rich text are links at once, and saved as they are shown', async ({
+  page,
+}) => {
+  await page.goto('/editor-regression');
+  await expect(page.locator('[data-ready]')).toHaveAttribute(
+    'data-ready',
+    'true',
+  );
+  await page.route('**/api/admin/content-entities/by-url**', (route) =>
+    route.fulfill({
+      json: {
+        entity: {
+          entityType: 'event',
+          entityId: 'e-encore',
+          title: 'Concert',
+          summary: '',
+          url: '/events/concert-Encore1/',
+          humanReadableSlug: 'concert',
+          publicId: 'Encore1',
+          updatedAt: 1,
+        },
+      },
+    }),
+  );
+  const origin = new URL(page.url()).origin;
+  const field = page.locator('[data-id="p0"] [contenteditable]');
+  await field.click();
+  const html =
+    '<meta charset="utf-8"><p>See <a href="https://example.org/one">one</a>, ' +
+    '<a href="https://example.org/two?x=1">two</a>, ' +
+    `<a href="${origin}/events/concert-Encore1/#second-set">the concert</a> ` +
+    'and <a href="/about/">about</a>. </p>';
+  await field.evaluate((element, value) => {
+    (element as HTMLElement).focus();
+    getSelection()!.collapse(element, 0);
+    const data = new DataTransfer();
+    data.setData('text/html', value);
+    data.setData('text/plain', 'See one, two, the concert and about. ');
+    element.dispatchEvent(
+      new ClipboardEvent('paste', {
+        clipboardData: data,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  }, html);
+
+  // Every web address is a link of the editor's own as soon as it lands,
+  // however many came at once; one of this site names what it opens.
+  const one = field.locator('a', { hasText: 'one' });
+  const two = field.locator('a', { hasText: 'two' });
+  const concert = field.locator('a', { hasText: 'the concert' });
+  await expect(one).toHaveAttribute('data-content-link', 'external');
+  await expect(one).toHaveAttribute('href', 'https://example.org/one');
+  await expect(two).toHaveAttribute('data-content-link', 'external');
+  await expect(concert).toHaveAttribute('data-content-link', 'entity');
+  await expect(concert).toHaveAttribute('data-entity-id', 'e-encore');
+  await expect(concert).toHaveAttribute('data-entity-fragment', 'second-set');
+  // A relative address stays the plain link storage keeps it as.
+  const about = field.locator('a', { hasText: 'about' });
+  await expect(about).toHaveAttribute('href', '/about/');
+  await expect(about).not.toHaveAttribute('data-content-link', /./);
+  await expect(field).toContainText('See one, two, the concert and about.');
+
+  // Saved, the text stays saved: making the links changed nothing after.
+  // Editor.js reports changes in batches of 400 ms.
+  const bar = page.locator('[data-transitions]');
+  await page.waitForTimeout(600);
+  await expect(bar).toHaveAttribute('data-snapshot-pending', 'false');
+  await page.locator('[data-save]').click();
+  await expect(page.locator('[data-save]')).toHaveText('Saved');
+  await page.waitForTimeout(1000);
+  await expect(bar).toHaveAttribute('data-transitions', '');
+  await expect(page.locator('[data-save]')).toHaveText('Saved');
+});
+
 test('life cache evicts distant windows, preserves focus and reloads both directions', async ({
   page,
 }) => {

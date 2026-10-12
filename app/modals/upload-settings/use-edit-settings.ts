@@ -39,7 +39,7 @@ import {
 
 export type FormatChoice = 'auto' | AssetImageFormat;
 
-/** Crop proportions offered when the place does not fix one. */
+/** Crop proportions offered, whatever the place shows. */
 export const CROP_ASPECT_CHOICES = {
   free: undefined,
   source: undefined,
@@ -48,7 +48,8 @@ export const CROP_ASPECT_CHOICES = {
   '3:2': 3 / 2,
   '16:9': 16 / 9,
 } as const;
-export type CropAspectChoice = keyof typeof CROP_ASPECT_CHOICES;
+/** One of the offered proportions, or the place's own when none of them is it. */
+export type CropAspectChoice = keyof typeof CROP_ASPECT_CHOICES | 'place';
 
 const DEFAULT_IMAGE_QUALITY =
   ASSET_QUALITY_LEVEL_QUALITY[DEFAULT_IMAGE_QUALITY_LEVEL];
@@ -81,7 +82,8 @@ export type EditSettings = AssetTransformSettings | AssetAudioTransformSettings;
  * channels. The geometry below stays unset for it.
  *
  * The place's defaults are applied once, when the source is first known, and
- * never again over the admin's own changes.
+ * never again over the admin's own changes. A place's proportions are where
+ * the crop starts, not a rule: the admin may choose others, or none.
  */
 export function useEditSettings(options: {
   kind: () => 'image' | 'video' | 'audio' | undefined;
@@ -114,9 +116,22 @@ export function useEditSettings(options: {
     return source && 'width' in source ? source : undefined;
   });
 
-  const lockedAspect = computed(() => {
+  /** The proportions the place shows, where the crop starts. */
+  const placeAspect = computed(() => {
     const aspect = options.profile()?.aspect;
     return aspect ? aspect.width / aspect.height : undefined;
+  });
+  /** The choice that stands for the place's proportions. */
+  const placeAspectChoice = computed<CropAspectChoice | undefined>(() => {
+    const aspect = placeAspect.value;
+    if (!aspect) return undefined;
+    const offered = (
+      Object.keys(CROP_ASPECT_CHOICES) as (keyof typeof CROP_ASPECT_CHOICES)[]
+    ).find((choice) => {
+      const value = CROP_ASPECT_CHOICES[choice];
+      return value !== undefined && Math.abs(value - aspect) < 0.0005;
+    });
+    return offered ?? 'place';
   });
   const fixedFormat = computed(() => options.profile()?.imageFormat);
   /** A place that fixes the format must not get another one, lossless included. */
@@ -146,7 +161,7 @@ export function useEditSettings(options: {
 
   /** Width over height the crop keeps, in source pixels. */
   const aspect = computed<number | undefined>(() => {
-    if (lockedAspect.value) return lockedAspect.value;
+    if (aspectChoice.value === 'place') return placeAspect.value;
     if (aspectChoice.value === 'source') {
       return frame.value ? frame.value.width / frame.value.height : undefined;
     }
@@ -288,12 +303,13 @@ export function useEditSettings(options: {
       quality: ASSET_QUALITY_LEVEL_QUALITY[assetQualityLevelOf(placeQuality)],
       outputBox: profile?.box ? { ...profile.box } : undefined,
       crop:
-        source && lockedAspect.value
+        source && placeAspect.value
           ? cropRectToFraction(
-              maximizeCropRect(source, lockedAspect.value),
+              maximizeCropRect(source, placeAspect.value),
               source,
             )
           : FULL_CROP_FRACTION,
+      aspectChoice: placeAspectChoice.value ?? 'free',
       stripAudio: Boolean(profile?.stripAudio) && source?.hasAudio !== false,
     };
   });
@@ -373,7 +389,7 @@ export function useEditSettings(options: {
       exact.value = undefined;
       crop.value = target.crop;
       formatChoice.value = 'auto';
-      aspectChoice.value = 'free';
+      aspectChoice.value = target.aspectChoice;
       stripAudio.value = target.stripAudio;
       fastConversion.value = false;
       mono.value = false;
@@ -383,6 +399,9 @@ export function useEditSettings(options: {
   function setAspectChoice(choice: CropAspectChoice) {
     aspectChoice.value = choice;
     reshapeToAspect();
+    // A frame the new proportions could make larger — the place's crop under
+    // "Free" — can be reset to that: the whole picture, there.
+    if (!isLargestCrop.value) cropEdited.value = true;
   }
 
   /**
@@ -397,8 +416,9 @@ export function useEditSettings(options: {
     const edited = cropEdited.value;
     rotation.value = ((rotation.value + 90) % 360) as AssetRotation;
     crop.value = rotateCropFraction(crop.value);
-    // The size turns with the picture, unless the place fixes its shape.
-    if (!lockedAspect.value) {
+    // The size turns with the picture, unless the place has a shape of its
+    // own: its box is the largest it stores, whichever way the picture lies.
+    if (!placeAspect.value) {
       outputBox.value = outputBox.value && swapSides(outputBox.value);
       exact.value = exact.value && (swapSides(exact.value) as FileDimensions);
     }
@@ -516,7 +536,8 @@ export function useEditSettings(options: {
     fastConversion,
     mono,
     touched,
-    lockedAspect,
+    placeAspect,
+    placeAspectChoice,
     fixedFormat,
     linked,
     canResetSize,
