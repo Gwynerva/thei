@@ -10,6 +10,7 @@ import {
 } from '#layers/thei/shared/internal-url';
 import { trimInlineRange } from '#layers/thei/app/components/content/editor-inline-selection';
 import {
+  applyLinkAttributes,
   entityLinkAttributes,
   externalLinkAttributes,
   linkRange,
@@ -29,6 +30,11 @@ import {
  * context menu, a phone's "Paste". A browser that skips it for its own
  * clipboard strip still announces the insertion as a cancelable
  * `beforeinput`, which is handled the same way.
+ *
+ * Rich text pasted or dropped from elsewhere brings its links along as bare
+ * `<a href>`: they are made links of the editor's own the moment they land,
+ * by the same rules, so they look and behave as links at once, not only once
+ * the saved text is opened again.
  */
 
 export type PastedLinkTarget =
@@ -131,49 +137,113 @@ export function bindEditorLinkPaste(
     void link(range, target);
   }
 
+  /**
+   * What a link to a target is written with: an address of this site is
+   * asked about, and names what it opens. A site path that opens nothing has
+   * nothing to link to.
+   */
+  async function attributesFor(
+    target: PastedLinkTarget,
+  ): Promise<InlineLinkAttributes | undefined> {
+    if (target.kind === 'external') return externalLinkAttributes(target.url);
+    const entity = await options.findEntity(target.raw).catch(() => undefined);
+    if (entity)
+      return entityLinkAttributes(entity, {
+        fragment: linkFragment(target.raw),
+      });
+    if (!/^https?:\/\//i.test(target.raw)) return undefined;
+    try {
+      return externalLinkAttributes(normalizeExternalLinkUrl(target.raw));
+    } catch {
+      // Neither an entity nor an address of its own: nothing to link.
+      return undefined;
+    }
+  }
+
   async function link(range: Range, target: PastedLinkTarget) {
     if (!bound) return;
     const text = range.toString();
-    let attributes: InlineLinkAttributes | undefined;
-    if (target.kind === 'internal') {
-      const entity = await options
-        .findEntity(target.raw)
-        .catch(() => undefined);
-      // The text may have been edited while the site was asked; a range that
-      // no longer holds the same words is left alone.
-      if (!bound || !rangeStillHolds(range, text)) return;
-      if (entity)
-        attributes = entityLinkAttributes(entity, {
-          fragment: linkFragment(target.raw),
-        });
-      else if (/^https?:\/\//i.test(target.raw)) {
-        try {
-          const url = normalizeExternalLinkUrl(target.raw);
-          attributes = externalLinkAttributes(url);
-        } catch {
-          // Neither an entity nor an address of its own: nothing to link.
-        }
-      }
-      if (!attributes) {
-        // A site path that opens nothing is pasted as the text it is.
-        const selection = window.getSelection();
-        selection?.removeAllRanges();
-        selection?.addRange(range);
-        document.execCommand('insertText', false, target.raw);
-        return;
-      }
-    } else {
-      attributes = externalLinkAttributes(target.url);
+    const attributes = await attributesFor(target);
+    // The text may have been edited while the site was asked; a range that
+    // no longer holds the same words is left alone.
+    if (!bound || !rangeStillHolds(range, text)) return;
+    if (!attributes) {
+      // A site path that opens nothing is pasted as the text it is.
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      document.execCommand(
+        'insertText',
+        false,
+        target.kind === 'internal' ? target.raw : target.url,
+      );
+      return;
     }
     const element = linkRange(range, attributes);
     placeCaretAfter(element);
     editor.inlineToolbar.close();
   }
 
+  /** The anchors being made links, so that none is asked about twice. */
+  const adopting = new WeakSet<HTMLAnchorElement>();
+
+  /**
+   * A bare link that rich text brought into a linkable field: one with a web
+   * address and nothing of the editor's own. A relative address is left
+   * alone, as storage keeps it; so is every link the editor made, which is
+   * all a saved text holds, so opening one changes nothing.
+   */
+  function bareLink(anchor: HTMLAnchorElement) {
+    if (adopting.has(anchor) || anchor.hasAttribute('data-content-link'))
+      return undefined;
+    const href = anchor.getAttribute('href')?.trim() ?? '';
+    if (!/^https?:\/\//i.test(href)) return undefined;
+    const field = editableOf(anchor);
+    if (!field || !root.contains(field)) return undefined;
+    if (field.closest('[data-mutation-free="true"]')) return undefined;
+    const block = editor.blocks.getBlockByElement(field);
+    return block && options.linkBlocks.has(block.name) ? href : undefined;
+  }
+
+  async function adopt(anchor: HTMLAnchorElement, href: string) {
+    const target = pastedLinkTarget(href, options.site);
+    if (!target) return;
+    adopting.add(anchor);
+    try {
+      const attributes = await attributesFor(target);
+      // Removed, rewritten or made a link by hand while the site was asked:
+      // the link is no longer the one that was pasted.
+      const unchanged =
+        anchor.isConnected &&
+        !anchor.hasAttribute('data-content-link') &&
+        anchor.getAttribute('href')?.trim() === href;
+      if (bound && unchanged && attributes)
+        applyLinkAttributes(anchor, attributes);
+    } finally {
+      adopting.delete(anchor);
+    }
+  }
+
+  const observer = new MutationObserver((records) => {
+    for (const record of records)
+      for (const node of record.addedNodes) {
+        if (!(node instanceof Element)) continue;
+        const anchors = node.matches('a')
+          ? [node as HTMLAnchorElement]
+          : Array.from(node.querySelectorAll<HTMLAnchorElement>('a'));
+        for (const anchor of anchors) {
+          const href = bareLink(anchor);
+          if (href) void adopt(anchor, href);
+        }
+      }
+  });
+
   root.addEventListener('paste', onPaste, true);
   root.addEventListener('beforeinput', onBeforeInput, true);
+  observer.observe(root, { childList: true, subtree: true });
   return () => {
     bound = false;
+    observer.disconnect();
     root.removeEventListener('paste', onPaste, true);
     root.removeEventListener('beforeinput', onBeforeInput, true);
   };
