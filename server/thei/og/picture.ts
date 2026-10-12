@@ -152,11 +152,9 @@ export async function pictureBox(
 /**
  * An icon as the site shows one: the picture itself, rounded, with nothing
  * around it — no plate, no frame, and a see-through one stays see-through.
- * A square icon fills its square, any other shape fits inside it.
- *
- * An uploaded icon is never drawn larger than twice its own pixels, where a
- * small file starts to blur: it is drawn smaller, centred in its square,
- * instead. The site's drawn icons are vectors and take any size.
+ * A square icon fills its square, any other shape fits inside it, whatever
+ * the size of the file: a vector is drawn afresh at that size, and a small
+ * raster is scaled up, as the page scales it.
  */
 export async function iconImage(
   shown: OgShownPicture,
@@ -165,12 +163,8 @@ export async function iconImage(
 ): Promise<OgNode | undefined> {
   const { analysis, picture } = shown;
   const longSide = Math.max(analysis.width, analysis.height);
-  const box = Math.min(
-    size,
-    picture.type === 'generated' ? size : longSide * 2,
-  );
-  const width = Math.max(1, Math.round((analysis.width / longSide) * box));
-  const height = Math.max(1, Math.round((analysis.height / longSide) * box));
+  const width = Math.max(1, Math.round((analysis.width / longSide) * size));
+  const height = Math.max(1, Math.round((analysis.height / longSide) * size));
   const alpha = analysis.transparent > 0;
   const src = await pictureDataUri(picture, width, height, {
     fit: 'contain',

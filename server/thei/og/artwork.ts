@@ -333,6 +333,29 @@ export async function pictureDataUri(
   }
 }
 
+/**
+ * A drawing made for the card itself, as `pictureDataUri` makes a stored
+ * picture: an SVG of the size it is drawn at, scaled to `width` × `height`.
+ */
+export async function drawingDataUri(
+  svg: string,
+  width: number,
+  height: number,
+  options: Parameters<typeof pictureDataUri>[3],
+): Promise<string | undefined> {
+  try {
+    return await drawPicture(
+      Buffer.from(svg),
+      undefined,
+      Math.max(1, Math.round(width)),
+      Math.max(1, Math.round(height)),
+      options,
+    );
+  } catch {
+    return undefined;
+  }
+}
+
 async function drawPicture(
   input: string | Buffer,
   density: number | undefined,

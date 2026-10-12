@@ -45,13 +45,18 @@ export async function ogPictureOfAsset(
   const meta = asset.meta;
   const accent =
     size.accent ?? (meta && 'accent' in meta ? meta.accent : undefined);
+  // The size the drawn file was stored with: a vector read without it would
+  // be measured at whatever density it is opened at.
+  const stored = file.meta;
+  const width =
+    size.width ?? (stored && 'width' in stored ? stored.width : undefined);
+  const height =
+    size.height ?? (stored && 'height' in stored ? stored.height : undefined);
   return {
     type: 'file',
     key: `${file.contentHash}.${file.extension}`,
     file: assetFilePath(file.contentHash, file.extension),
-    ...(size.width && size.height
-      ? { width: size.width, height: size.height }
-      : {}),
+    ...(width && height ? { width, height } : {}),
     ...(accent ? { accent } : {}),
   };
 }

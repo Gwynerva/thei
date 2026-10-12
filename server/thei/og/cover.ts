@@ -5,7 +5,8 @@ import {
   withAlpha,
 } from '#layers/thei/shared/oklch';
 import { accentField, place } from './blocks';
-import { easedShadeStops, pictureDataUri } from './artwork';
+import { buildIconFieldSvg } from '../media/generated-icon';
+import { drawingDataUri, easedShadeStops, pictureDataUri } from './artwork';
 import { OG_HEIGHT, OG_WIDTH } from './geometry';
 import { coverScrim, vividPlate, type OgPalette } from './palette';
 import type { OgShownPicture } from './picture';
@@ -13,18 +14,31 @@ import { el, type OgNode } from './render';
 
 /**
  * A picture as the ground of a card, the way a page's hero lays its banner:
- * at full height on the right in its own proportions, dissolving leftwards
- * into a blurred copy of itself that fills the card, with a light shade
- * under the words that lets go along an eased curve, so that nowhere shows a
- * line. A project's card lays its banner so, a section's or an event's its
- * picture; one without lays a field of its accent there instead.
+ * whole, at full height on the right in its own proportions, dissolving
+ * leftwards into a blurred copy of itself that fills the card, with a light
+ * shade under the words that lets go along an eased curve, so that nowhere
+ * shows a line. A project's card lays its banner so, a section's or an
+ * event's its banner or the first picture of its body, whatever that is — a
+ * photograph, a drawing, a screenshot. A section or an event without one
+ * lays the picture the site draws for it, spread across the same part of the
+ * card; a project without a banner lays a field of its accent.
  */
 
 const WHITE = '#ffffff';
 /** The column the words take: two thirds, as on the page. */
 export const COVER_WORDS_WIDTH = 700;
-/** The picture's widest; a wider one loses its sides to fit. */
+/**
+ * The picture's widest: a wider one loses its sides to fit. A narrower one
+ * is never cropped, its top and bottom least of all: a portrait stands whole.
+ */
 const PICTURE_MAX = 1000;
+/**
+ * Where a mark on the ground stands — the glyph of a drawn picture, the
+ * kind's mark on a field — in the part of the card left clear of the words.
+ */
+export const COVER_MARK_CENTRE = OG_WIDTH - Math.round((OG_WIDTH / 2) * 0.38);
+/** A drawn picture's glyph is as large as in an icon of this size. */
+const GLYPH_ICON = 560;
 /** How much of the picture, from its left edge, dissolves into the card. */
 const PICTURE_FADE = 0.55;
 /**
@@ -61,13 +75,44 @@ export interface OgCoverGround {
 export async function pictureCover(
   shown: OgShownPicture,
 ): Promise<OgCoverGround | undefined> {
-  const width = Math.min(
-    PICTURE_MAX,
-    Math.round(OG_HEIGHT * shown.analysis.aspect),
+  const { picture, analysis } = shown;
+  if (picture.type === 'generated') {
+    const field = buildIconFieldSvg(
+      picture.kind,
+      picture.hue,
+      { width: PICTURE_MAX, height: OG_HEIGHT },
+      { x: COVER_MARK_CENTRE - (OG_WIDTH - PICTURE_MAX), size: GLYPH_ICON },
+    );
+    return await cover(
+      (width, height, options) => drawingDataUri(field, width, height, options),
+      PICTURE_MAX,
+      analysis.coverBright,
+      true,
+    );
+  }
+  return await cover(
+    (width, height, options) => pictureDataUri(picture, width, height, options),
+    Math.min(PICTURE_MAX, Math.round(OG_HEIGHT * analysis.aspect)),
+    analysis.coverBright,
+    // Blurred, a see-through drawing is flattened into a grey haze: it lies
+    // on the card's own ground instead, as it would on the page.
+    analysis.transparent === 0,
   );
+}
+
+async function cover(
+  draw: (
+    width: number,
+    height: number,
+    options: Parameters<typeof pictureDataUri>[3],
+  ) => Promise<string | undefined>,
+  width: number,
+  bright: number,
+  blurred: boolean,
+): Promise<OgCoverGround | undefined> {
   const [backdrop, src] = await Promise.all([
-    pictureDataUri(shown.picture, 300, 158, { fit: 'cover', blur: 6 }),
-    pictureDataUri(shown.picture, width, OG_HEIGHT, {
+    blurred ? draw(300, 158, { fit: 'cover', blur: 6 }) : undefined,
+    draw(width, OG_HEIGHT, {
       fit: 'cover',
       fade: { from: 0, to: PICTURE_FADE },
     }),
@@ -93,7 +138,7 @@ export async function pictureCover(
         style: { position: 'absolute', left: OG_WIDTH - width, top: 0 },
       }),
     ],
-    bright: shown.analysis.coverBright,
+    bright,
   };
 }
 
