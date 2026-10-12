@@ -362,6 +362,7 @@ export type LanguagePhrases = {
   public_details_files: string;
   public_details_overview: string;
   public_details_contents: string;
+  public_project_description: string;
   public_details_neighbour_sections: string;
   public_details_neighbour_entries: string;
   public_neighbour_next: string;

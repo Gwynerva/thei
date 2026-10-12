@@ -6,6 +6,7 @@ import {
 } from '#layers/thei/app/components/public/public-detail';
 import {
   buildProjectUrl,
+  PROJECT_DESCRIPTION_ANCHOR,
   PROJECT_SECTIONS_ANCHOR,
 } from '#layers/thei/shared/project-url';
 import {
@@ -87,13 +88,24 @@ const relatedUrl = computed(
     `/api/projects/${encodeURIComponent(String(route.params.projectUuid))}/related`,
 );
 // Headings of the description, then the page's own sections in page order.
+// A description without headings is one entry of its own.
 const contents = computed<ContentHeading[]>(() => {
+  const headings = buildContentHeadings(
+    data.value.description,
+    language.value.slugify,
+  );
   const sections: {
     id: string;
     title: string;
     icon: IconName;
     shown: boolean;
   }[] = [
+    {
+      id: PROJECT_DESCRIPTION_ANCHOR,
+      title: phrase.value.public_project_description,
+      icon: 'paragraph',
+      shown: Boolean(data.value.description?.blocks.length) && !headings.length,
+    },
     {
       id: PROJECT_SECTIONS_ANCHOR,
       title: phrase.value.project_content_sections,
@@ -108,9 +120,7 @@ const contents = computed<ContentHeading[]>(() => {
     },
   ];
   return [
-    ...(data.value.description
-      ? buildContentHeadings(data.value.description, language.value.slugify)
-      : []),
+    ...headings,
     ...sections
       .filter((section) => section.shown)
       .map(({ id, title, icon }) => ({
@@ -184,8 +194,10 @@ const ownerNotesContents = computed(() =>
 
           <ContentRenderer
             v-if="data.description?.blocks.length"
+            :id="PROJECT_DESCRIPTION_ANCHOR"
             :data="data.description"
             asset-viewer
+            class="scroll-mt-[var(--public-anchor-offset,8rem)]"
           />
 
           <PublicProjectSections :sections="data.sections" />

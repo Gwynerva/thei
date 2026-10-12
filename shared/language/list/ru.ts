@@ -535,6 +535,7 @@ export default defineI18nModule({
     public_details_from_content: 'Из содержимого',
     public_details_overview: 'Сводка',
     public_details_contents: 'Содержание',
+    public_project_description: 'Описание проекта',
     public_details_neighbour_sections: 'Соседние разделы',
     public_details_neighbour_entries: 'Соседние записи',
     public_neighbour_next: 'Вперёд',
