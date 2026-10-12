@@ -76,10 +76,12 @@ for (const viewport of [
     const counts = countRequests(page);
     await openBannerEditor(page, await photo(1600, 1200));
 
-    // The place fixes 16:9, and the result is the largest it stores.
+    // The crop starts at the place's 16:9, and the result is the largest
+    // the place stores.
+    await expect(page.getByRole('switch', { name: 'Crop' })).toBeChecked();
     await expect(
-      page.getByLabel(/fixed\s+aspect\s+ratio:\s+16:9/),
-    ).toBeVisible();
+      page.getByRole('button', { name: '16:9', exact: true }),
+    ).toHaveClass(/border-accent/);
     const useResult = page.getByRole('button', {
       name: 'Use result',
       exact: true,
@@ -154,6 +156,46 @@ for (const viewport of [
     expect(asset.meta.sourceDimensions).toEqual({ width: 1600, height: 1200 });
   });
 }
+
+test("a place's proportions are where the crop starts, not a rule", async ({
+  page,
+  request,
+}) => {
+  await openBannerEditor(page, await photo(1600, 1200));
+  const useResult = page.getByRole('button', {
+    name: 'Use result',
+    exact: true,
+  });
+  await expect(useResult).toBeEnabled({ timeout: 20_000 });
+  await expect(page.getByText('1200 × 675').first()).toBeVisible();
+
+  // Free, then reset: the whole picture, at the largest the place stores.
+  await page.getByRole('button', { name: 'Free', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Reset', exact: true })
+    .first()
+    .click();
+  await expect(
+    page.getByRole('group', { name: /Crop\s+area/ }),
+  ).toHaveAccessibleName(/1600\s+×\s+1200/);
+  await expect(useResult).toBeEnabled({ timeout: 20_000 });
+  await expect(page.getByText('900 × 675').first()).toBeVisible();
+  await useResult.click();
+  await expect(page.locator('[data-result]')).toContainText('assetUuid');
+
+  const [stored] = JSON.parse(
+    (await page.locator('[data-result]').textContent())!,
+  ) as { assetUuid: string }[];
+  const usages = await request.get(
+    `/api/admin/assets/${stored!.assetUuid}/usages`,
+  );
+  const { asset } = await usages.json();
+  expect(asset.settings.crop).toBeUndefined();
+  expect({ width: asset.meta.width, height: asset.meta.height }).toEqual({
+    width: 900,
+    height: 675,
+  });
+});
 
 test('a free crop is taken on request, and the picture can be turned', async ({
   page,

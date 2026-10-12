@@ -16,6 +16,16 @@ const avatarShadow = computed(() =>
     0.45,
   ),
 );
+/**
+ * A banner near the frame's 3:1 fills it, losing a little at its edges; one
+ * of another shape is shown whole on a blurred copy of itself, as a page's
+ * hero shows its banner.
+ */
+const bannerFills = computed(() => {
+  const media = props.profile.bannerMedia;
+  if (!media?.width || !media.height) return true;
+  return Math.abs(Math.log(media.width / media.height / 3)) <= Math.log(1.25);
+});
 async function toggle() {
   open.value = !open.value;
   if (open.value) await history.load();
@@ -33,7 +43,8 @@ useHashDisclosure('#avatars', open, history.load);
       <Media
         v-if="profile.bannerMedia"
         v-bind="profile.bannerMedia"
-        fit="cover"
+        :fit="bannerFills ? 'cover' : 'contain'"
+        :backdrop="!bannerFills"
         playback="autoplay"
         autoplay-reduced-motion
         loop

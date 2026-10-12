@@ -1487,8 +1487,6 @@ export default defineI18nModule({
     upload_reset: 'Сбросить',
     upload_rotation: 'Поворот',
     upload_rotate: 'Повернуть на 90° по часовой',
-    upload_crop_locked: (ratio) =>
-      `Для выбранной роли требуется фиксированное соотношение сторон: ${ratio}`,
     upload_crop_hint:
       'Перетаскивайте рамку и её углы, двойной щелчок растягивает её до предела.',
     upload_resize: 'Изменить размеры',

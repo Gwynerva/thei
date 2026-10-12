@@ -133,8 +133,11 @@ const selectedUuid = ref(sourceAsset?.assetUuid ?? '');
 /** The stored variant new settings apply to; empty for the picked file. */
 const processingUuid = ref(sourceAsset?.assetUuid ?? '');
 const previewMode = ref<'edit' | 'compare'>('edit');
-/** The crop frame is out for editing; a place with fixed proportions keeps it out. */
-const cropping = ref(false);
+/**
+ * The crop frame is out for editing: from the start where the place has
+ * proportions of its own, since the crop starts at them.
+ */
+const cropping = ref(Boolean(profile?.aspect));
 
 // ---------------------------------------------------------------------------
 // The file new settings are applied to.
@@ -644,14 +647,12 @@ const qualityDetail = computed(() => {
     : undefined;
 });
 
-/** Why the frame keeps its proportions, when the place fixes them. */
-const lockedTitle = computed(() => {
-  const uploadProfile = props.modalData.uploadProfile;
-  if (!profile?.aspect || !uploadProfile) return undefined;
-  return phrase.value.upload_crop_locked(
-    getAssetUploadProfileAspect(uploadProfile)?.ratio ?? '1:1',
-  );
-});
+/** The place's proportions, offered as a choice of their own when none is. */
+const placeRatio = computed(() =>
+  edit.placeAspectChoice.value === 'place'
+    ? getAssetUploadProfileAspect(props.modalData.uploadProfile)?.ratio
+    : undefined,
+);
 
 /**
  * Each format with the size the current settings come out at in it.
@@ -1083,10 +1084,6 @@ const editingSource = computed(
     Boolean(transformKind.value) &&
     Boolean(transformSource.value),
 );
-/** Cropping is always on where the place fixes the proportions. */
-const cropActive = computed(
-  () => cropping.value || Boolean(edit.lockedAspect.value),
-);
 /**
  * The frame is out while cropping, and stays on show, untouchable, when a
  * crop was made and cropping ended, so the preview says what will be kept.
@@ -1097,7 +1094,7 @@ const showCrop = computed(
     // A video's comparison goes as soon as its settings change, since the
     // file it showed no longer matches them; the frame is back at once.
     !compare.value &&
-    (cropActive.value || !edit.isWholeFrame.value),
+    (cropping.value || !edit.isWholeFrame.value),
 );
 const previewDimensions = computed(() =>
   editingSource.value && previewSource.value.key.startsWith('source:')
@@ -1191,7 +1188,7 @@ const directHref = computed(() =>
             :source="edit.frame.value"
             :aspect="edit.aspect.value"
             :shape="profile?.shape"
-            :disabled="Boolean(busy) || !cropActive"
+            :disabled="Boolean(busy) || !cropping"
           />
         </template>
       </AssetModalPreviewMedia>
@@ -1401,9 +1398,9 @@ const directHref = computed(() =>
               :disabled="Boolean(busy)"
               :rotation="edit.rotation.value"
               :aspect-choice="edit.aspectChoice.value"
-              :cropping="cropActive"
+              :cropping="cropping"
               :can-reset-crop="edit.canResetCrop.value"
-              :locked-title="lockedTitle"
+              :place-ratio="placeRatio"
               :crop-size="edit.cropRect.value"
               :output="edit.outputDimensions.value"
               :linked="edit.linked.value"

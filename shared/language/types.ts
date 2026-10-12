@@ -1096,7 +1096,6 @@ export type LanguagePhrases = {
   upload_reset: string;
   upload_rotation: string;
   upload_rotate: string;
-  upload_crop_locked: (ratio: string) => string;
   upload_crop_hint: string;
   upload_resize: string;
   upload_resize_linked: string;

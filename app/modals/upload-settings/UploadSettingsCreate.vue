@@ -45,8 +45,8 @@ const props = defineProps<{
   /** The crop frame is out for editing. */
   cropping: boolean;
   canResetCrop: boolean;
-  /** Why the frame keeps its proportions, when the place fixes them. */
-  lockedTitle?: string;
+  /** The place's proportions, such as `3:1`, when no offered choice is them. */
+  placeRatio?: string;
   /** Size of the crop: the largest output there can be. */
   cropSize?: FileDimensions;
   output?: FileDimensions;
@@ -89,6 +89,7 @@ const resetClass = (enabled: boolean) => [CHIP, enabled ? '' : 'invisible'];
 const aspectOptions = computed<FieldOptions>(() => ({
   free: { title: phrase.value.upload_crop_free },
   source: { title: phrase.value.upload_crop_source },
+  ...(props.placeRatio ? { place: { title: props.placeRatio } } : {}),
   '1:1': { title: '1:1' },
   '4:3': { title: '4:3' },
   '3:2': { title: '3:2' },
@@ -165,28 +166,19 @@ function parsePositive(value: string): number | undefined {
         >
           {{ phrase.upload_reset }}
         </button>
-        <span
-          v-if="lockedTitle"
-          class="flex text-text-3"
-          :aria-label="lockedTitle"
-          :data-title-popup="lockedTitle"
-        >
-          <Icon name="lock-close" />
-        </span>
         <FieldToggle
-          v-else
           :model-value="cropping"
           :switch-label="phrase.upload_crop"
           @update:model-value="emit('toggleCrop')"
         />
       </div>
       <FieldOptions
-        v-if="cropping && !lockedTitle"
+        v-if="cropping"
         v-model="aspectModel"
         :options="aspectOptions"
         classes="text-xs"
       />
-      <p v-if="cropping && !lockedTitle" class="text-xs text-text-3">
+      <p v-if="cropping" class="text-xs text-text-3">
         {{ phrase.upload_crop_hint }}
       </p>
     </div>
