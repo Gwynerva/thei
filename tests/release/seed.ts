@@ -4,7 +4,7 @@
  * and copied out once for every scenario to restore.
  *
  * It holds one of everything a site can hold rather than a lot of anything:
- * each kind of entity at each access level, stages with several periods,
+ * each kind of entity at each access level, sections with several periods,
  * every content block, tags, relations, statuses, and media of each type
  * used in each place a file can go. Links point at an address the server
  * refuses to fetch, so nothing here reaches the network.
@@ -58,7 +58,7 @@ export interface SeedManifest {
     uuid: string;
     /** The title, or a diary entry's date. */
     name: string;
-    stages?: number;
+    /** A project's sections, dated or not. */
     sections?: number;
     /** The words written for each of a project's hand-made links. */
     links?: string[];
@@ -262,7 +262,7 @@ function createSite(
     kind: EntityKind,
     uuid: string,
     name: string,
-    parts?: { stages: number; sections: number; links?: string[] },
+    parts?: { sections: number; links?: string[] },
   ) => manifest.entities.push({ kind, uuid, name, ...parts });
 
   // Pages first: the article links to one.
@@ -317,9 +317,19 @@ function createSite(
         type: 'contentMedia',
         data: { asset: { assetUuid: files.wide }, layout: 'stretch' },
       }),
-      stages: [
+      // A general section, then two dated ones: stages.
+      sections: [
         {
-          isStage: true,
+          title: 'Устройство',
+          summary: 'Все виды блоков.',
+          humanReadableSlug: 'ustroystvo',
+          publicId: 'BenchSection',
+          isPrivate: false,
+          periods: [],
+          content: article(files, page.pageUuid),
+          bannerAssetUuid: files.wide,
+        },
+        {
           title: 'Начало',
           summary: 'Первые шаги.',
           humanReadableSlug: 'nachalo',
@@ -332,7 +342,6 @@ function createSite(
           content: content(paragraph('Этап с двумя периодами.')),
         },
         {
-          isStage: true,
           title: 'Выпуск',
           summary: '',
           humanReadableSlug: 'vypusk',
@@ -346,18 +355,6 @@ function createSite(
               precisionNote: '',
             },
           ],
-          content: null,
-        },
-      ],
-      contentSections: [
-        {
-          isStage: false,
-          title: 'Устройство',
-          summary: 'Все виды блоков.',
-          humanReadableSlug: 'ustroystvo',
-          publicId: 'BenchSection',
-          isPrivate: false,
-          content: article(files, page.pageUuid),
         },
       ],
       externalLinks: [
@@ -393,8 +390,7 @@ function createSite(
     'a public project',
   );
   add('projects', project.projectUuid, projectTitle, {
-    stages: 2,
-    sections: 1,
+    sections: 3,
     links: ['Сайт проекта'],
   });
 
@@ -407,24 +403,21 @@ function createSite(
       humanReadableSlug: 'lichnyy',
       publicId: 'BenchPrivate',
       access: 'private',
-      stages: [
+      sections: [
         {
-          isStage: true,
           title: 'Тихо',
           summary: '',
           humanReadableSlug: 'tikho',
           publicId: 'BenchPrivateStage',
           isPrivate: false,
           periods: [{ startDate: '2023-06-01', endDate: '2023-06-30' }],
-          content: null,
         },
       ],
     },
     'a private project',
   );
   add('projects', hiddenProject.projectUuid, 'Личный проект', {
-    stages: 1,
-    sections: 0,
+    sections: 1,
   });
 
   const linkProject = create(
@@ -440,7 +433,6 @@ function createSite(
     'a link-only project',
   );
   add('projects', linkProject.projectUuid, 'По ссылке', {
-    stages: 0,
     sections: 0,
   });
 
@@ -573,15 +565,11 @@ export function checkSeedSite(server: Server, manifest: SeedManifest): void {
       `${entity.kind} "${entity.name}" opens (${response.status})`,
     );
     if (entity.kind === 'projects') {
-      // Until 0.0.4 a project kept stages and sections apart; since then a
-      // stage is a section with dates, and they come back as one list.
-      const parts =
-        (body.sections ?? body.contentSections ?? []).length +
-        (body.stages?.length ?? 0);
-      const expected = (entity.stages ?? 0) + (entity.sections ?? 0);
+      const parts = (body.sections ?? []).length;
+      const expected = entity.sections ?? 0;
       check(
         parts === expected,
-        `"${entity.name}" keeps its ${expected} part(s) (${parts})`,
+        `"${entity.name}" keeps its ${expected} section(s) (${parts})`,
       );
     }
     if (entity.links) {
@@ -627,17 +615,7 @@ export function checkSeedSite(server: Server, manifest: SeedManifest): void {
     }).status;
     return status >= 200 && status < 400;
   };
-  // Stage addresses are dropped on purpose in 0.0.4, not redirected: a stage
-  // became a section with the same slug and public ID, and has to answer at
-  // that section's address instead.
-  const lost = manifest.sitemap.filter(
-    (path) =>
-      !answers(path) &&
-      !(
-        /^\/projects\/[^/]+\/stages\/[^/]+\/$/.test(path) &&
-        answers(path.replace(/\/stages\//, '/sections/'))
-      ),
-  );
+  const lost = manifest.sitemap.filter((path) => !answers(path));
   check(
     lost.length === 0,
     `all ${manifest.sitemap.length} addresses the site had answer${failing(lost)}`,
