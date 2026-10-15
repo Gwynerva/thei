@@ -65,11 +65,10 @@ Either kind of `<a>` may carry `data-content-note="…"`: the owner's words abou
 why the link is there, stored trimmed and ended as a caption (see "Endings"
 below); an empty note is no attribute.
 It never stands in for what the target says of itself: the target's own title
-and description are shown, and the note under them — in the popup over the
-link and in the sidebar. A link block carries the same kind of note in its
-data (see below), shown as the last line of its card. When the same address is attached by hand too, the sidebar
-lists it once if only one of them has a note or both say the same, and twice
-if they say different things.
+and description are shown, and the note under them, in the popup over the
+link. A link block carries the same kind of note in its data (see below),
+shown as the last line of its card. The sidebar of a public page lists only
+what the owner attached by hand, never what the text links to.
 
 An entity link names its target by kind and uuid, never by address, so it
 survives the site moving to another domain. The kinds are those of
@@ -215,3 +214,47 @@ assetTotalSize }`) and nothing else;
   language, as on the page; markup, addresses, file names and the titles of
   other sites stay as they are. None of it is stored: the content keeps what
   was typed.
+- `contentToEditMarkdown(data)` in `shared/content-edit-markdown/serialize.ts`
+  — the stored document as editing Markdown, which is how an AI client reads
+  a text over MCP and writes one back (see "Editing Markdown" below).
+
+## Editing Markdown
+
+The public Markdown copy leaves things out and typesets the rest. Editing
+Markdown is the other kind: everything a document holds, exactly as stored,
+in a form a model reads and writes well. Whatever it writes reads back into
+the same blocks. `shared/content-edit-markdown/reference.ts` explains it to the
+model; it changes with this table.
+
+It is CommonMark with directives, strikethrough and task list items, and
+nothing else: a bare address stays text.
+
+| Stored                          | Editing Markdown                                                   |
+| ------------------------------- | ------------------------------------------------------------------ |
+| `paragraph`                     | a paragraph; a `<br>` is a backslash at the end of a line          |
+| `header` level 2 / 3            | `## text` / `### text`                                             |
+| `quote`, no caption, left       | `> text`                                                           |
+| `quote` with caption or centred | `:::quote[caption]{align="center"}` … `:::`                        |
+| `list`                          | `-`, `1.` (from `meta.start`), `- [ ]` / `- [x]`; nested by indent |
+| `list` with another counter     | the list inside `:::list{counter="lower-roman"}` … `:::`           |
+| `delimiter`                     | `---`                                                              |
+| `contentMedia`                  | `::media[caption]{asset="a-…" layout="centered"}`                  |
+| `contentGallery`                | `:::gallery` with `::media[caption]{#id asset="a-…"}` per item     |
+| `contentAudio`                  | `::audio[caption]{asset="a-…" title="…"}`                          |
+| `contentAttachment`             | `::file[caption]{asset="a-…" title="…"}`                           |
+| `externalLink`                  | `::link[note]{url="…"}`                                            |
+| `entityLink`                    | `::card[note]{to="thei:<kind>/<id>#fragment"}`                     |
+| `integration`                   | `::embed{url="…"}`, the provider's canonical address               |
+| a private section               | `:::private{#sectionId}` … `:::` around its blocks                 |
+| `tunes.spoiler`                 | consecutive spoiler blocks inside `:::spoiler` … `:::`             |
+
+Inline: `**bold**`, `*italic*`, `~~strikethrough~~`, `[text](https://… "note")`
+for an external link, `[text](/path)` for a relative one,
+`[text](thei:<kind>/<id>#fragment "note")` for an entity link, and
+`:hint[text]{note="…"}` for a hint. A diary entry may also be named by its day
+on the way in, `thei:diary-entry/2026-10-14`: the server turns the day into the
+entry's uuid, and it is always written back by uuid. A `thei:` address that
+names no kind and id keeps only its words, and the reader is warned. Where
+containers nest, the outer one takes more colons. A line break at either end of
+a text is left out: Markdown cannot write one there, and it breaks nothing a
+reader sees.

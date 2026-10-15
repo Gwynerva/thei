@@ -37,6 +37,7 @@ import {
   recordContentSave,
   touchReleasedAssets,
 } from './history';
+import { deleteUsagesReleasing } from '../assets/repository/usages/release';
 
 export async function findContentByOwner(
   ownerType: ContentOwnerType,
@@ -486,14 +487,14 @@ function buildPreparedAssetUsages(
 }
 
 function deleteContentRowAndUsages(tx: any, schema: any, contentUuid: string) {
-  tx.delete(schema.assetUsages)
-    .where(
-      and(
-        eq(schema.assetUsages.containerType, 'content'),
-        eq(schema.assetUsages.containerId, contentUuid),
-      ),
-    )
-    .run();
+  deleteUsagesReleasing(
+    tx,
+    schema,
+    and(
+      eq(schema.assetUsages.containerType, 'content'),
+      eq(schema.assetUsages.containerId, contentUuid),
+    ),
+  );
   tx.delete(schema.content)
     .where(eq(schema.content.contentUuid, contentUuid))
     .run();

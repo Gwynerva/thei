@@ -112,15 +112,27 @@ import {
   isNewContentOwnerRef,
   type ContentHistoryEntryMeta,
   type ContentHistoryField,
+  type ContentHistoryStoredResponse,
 } from '#layers/thei/shared/content-history';
 import ContentHistoryPanel from '#layers/thei/app/components/content/ContentHistoryPanel.vue';
-import ContentRestoreBar from '#layers/thei/app/components/content/ContentRestoreBar.vue';
 import {
   offerRestoreTarget,
   type RestoreTarget,
 } from '#layers/thei/app/composables/content-history/restore-target';
-import ContentHistoryDiff from '#layers/thei/app/components/content/ContentHistoryDiff.vue';
-import { historyTime } from '#layers/thei/app/composables/content-history/time-labels';
+import {
+  historyTime,
+  useHistoryTimeLabels,
+} from '#layers/thei/app/composables/content-history/time-labels';
+import type { AiActionItem, AiTextReviews } from '#layers/thei/shared/ai';
+import {
+  versionReview,
+  type ContentReview as ContentReviewModel,
+  type ReviewDecision,
+} from '#layers/thei/shared/content-review';
+import { partComment, storedDecisions, textEditReview } from './review/review';
+import { registerDismissLayer } from '#layers/thei/app/composables/modal';
+import ContentReview from './review/ContentReview.vue';
+import ContentEditorNotices from './ContentEditorNotices.vue';
 
 const props = defineProps<{
   modalData: {
@@ -151,6 +163,16 @@ const props = defineProps<{
      * is still open; this is how the editor shows that time without reopening.
      */
     current?: () => ContentFieldModelValue | null | undefined;
+    /**
+     * An AI's edit of this text to go through at once: the editor opens on
+     * its review, from the proposal under the field.
+     */
+    review?: string;
+    /**
+     * The AI's edits taken here, handed to the form with the text: the form
+     * tells their sessions once it is saved, and only then.
+     */
+    onTaken?: (taken: Record<string, Record<string, ReviewDecision>>) => void;
   };
 }>();
 
@@ -207,23 +229,6 @@ const errorMessage = ref<string | undefined>();
 const historyPopupOpen = ref(false);
 const historyButton = useTemplateRef<HTMLElement>('historyButton');
 const restoredLabel = ref('');
-/** What a restore is being confirmed for, in the header's third row. */
-const restoring = shallowRef<{ target: RestoreTarget; fromList: boolean }>();
-/**
- * While a restore is being confirmed, the text is shown read-only in the
- * editor's place, marked with what the restore would change. The editor
- * itself is left alone and is back as it was when the question is gone.
- */
-const diff = shallowRef<{
-  current: ContentOutputData;
-  version: ContentOutputData;
-}>();
-
-function showDiff(version: ContentOutputData | undefined) {
-  diff.value = version
-    ? { current: editorSession.current(), version }
-    : undefined;
-}
 const initialData = normalizeContentData(props.modalData.value?.data);
 const openedKey = contentSemanticKey(initialData);
 const opened = { data: initialData, key: openedKey };
@@ -339,7 +344,7 @@ const historyStatusText = computed(() => {
 });
 const undoLabel = computed(() =>
   lastRestore.value
-    ? `${phrase.value.content_restore_undo} · ${phrase.value.content_restored(restoredLabel.value)}`
+    ? `${phrase.value.content_restore_undo} · ${phrase.value.content_taken_from(restoredLabel.value)}`
     : '',
 );
 /** When the offered draft was last written; it follows the other tab. */
@@ -389,52 +394,293 @@ function applyEditorData(state: EditorHistoryCurrent) {
 }
 
 function toggleHistory() {
-  if (historyPopupOpen.value) {
-    historyPopupOpen.value = false;
-    return;
+  historyPopupOpen.value = !historyPopupOpen.value;
+}
+
+// ---- Going through another version, or an AI's edit -------------------------------
+
+/**
+ * A change gone through over the editor's text, on the review screen in its
+ * place: another version of the text — a draft, a version from the history —
+ * or an AI's edit of it. What is taken lands in the editor as one change,
+ * undone at a click, and is kept as any change is: once the form is saved.
+ */
+type Review =
+  | {
+      kind: 'version';
+      target: RestoreTarget;
+      model: ContentReviewModel;
+      title: string;
+      why: string;
+    }
+  | { kind: 'ai'; action: AiActionItem; model: ContentReviewModel };
+const review = shallowRef<Review>();
+const reviewBusy = ref(false);
+const reviewError = ref('');
+let removeReviewLayer: (() => void) | undefined;
+const { time: versionTime, dayLabel } = useHistoryTimeLabels();
+
+function openReview(next: Review) {
+  historyPopupOpen.value = false;
+  reviewError.value = '';
+  review.value = next;
+  // Escape and Back leave the review before they close the editor.
+  removeReviewLayer?.();
+  removeReviewLayer = registerDismissLayer(() => closeReview());
+}
+
+function closeReview() {
+  removeReviewLayer?.();
+  removeReviewLayer = undefined;
+  review.value = undefined;
+}
+
+/** What a version is called on its screen: its day and time, or its kind. */
+function versionLabel(target: RestoreTarget) {
+  if (target.kind === 'opened')
+    return phrase.value.content_history_opened_version;
+  if (!target.time) return '';
+  if (target.kind === 'offer')
+    return phrase.value.content_draft_notice(historyTime(target.time));
+  if (target.kind === 'stored')
+    return phrase.value.content_stored_notice(historyTime(target.time));
+  return `${dayLabel(target.time)}, ${versionTime(target.time)}`;
+}
+
+async function compareWith(target: RestoreTarget) {
+  historyPopupOpen.value = false;
+  errorMessage.value = undefined;
+  try {
+    const { data, missingAssets } = await target.load();
+    // Over the text as it is this moment: the last words typed included.
+    const now = await editorSession.synchronize();
+    if (disposed) return;
+    const model = versionReview(now, data, {
+      formatText: publicText,
+    });
+    if (!model.parts.length) {
+      showToast(phrase.value.content_restore_same);
+      return;
+    }
+    const reason =
+      target.kind === 'revision' && target.reason
+        ? `${phrase.value.content_history_reasons[target.reason]}. `
+        : '';
+    openReview({
+      kind: 'version',
+      target,
+      model,
+      title: phrase.value.ai_review_compare_title(versionLabel(target)),
+      why: `${reason}${phrase.value.ai_review_compare_why}${
+        missingAssets
+          ? ` ${phrase.value.content_history_missing_assets(missingAssets)}.`
+          : ''
+      }`,
+    });
+  } catch {
+    errorMessage.value = phrase.value.content_history_load_error;
   }
-  closeRestore();
-  historyPopupOpen.value = true;
+}
+
+// The text may be saved elsewhere — another device, another tab — while
+// this one is written in; it is offered to compare, as a draft is.
+const seenStoredAt = ref(
+  props.modalData.current?.()?.updatedAt ??
+    props.modalData.value?.updatedAt ??
+    0,
+);
+const storedElsewhere = computed(() => {
+  const stored = editorSession.stored.value;
+  if (!stored || stored.updatedAt <= seenStoredAt.value) return undefined;
+  if ((props.modalData.current?.()?.updatedAt ?? 0) >= stored.updatedAt)
+    return undefined;
+  if (stored.key === currentKey.value || stored.key === savedKey.value)
+    return undefined;
+  return stored;
+});
+
+function compareStored() {
+  const stored = storedElsewhere.value;
+  const field = editorSession.field();
+  if (!stored || !field) return;
+  void compareWith({
+    kind: 'stored',
+    time: stored.updatedAt,
+    load: async () => {
+      const { data } = await $fetch<ContentHistoryStoredResponse>(
+        '/api/admin/content-history/stored',
+        { query: field },
+      );
+      return { data, missingAssets: 0 };
+    },
+  });
+}
+
+function dismissStored() {
+  seenStoredAt.value = storedElsewhere.value?.updatedAt ?? seenStoredAt.value;
 }
 
 function chooseVersion(target: RestoreTarget) {
-  historyPopupOpen.value = false;
-  restoring.value = { target, fromList: true };
+  void compareWith(target);
 }
 
 function openOffer() {
   if (!draftOffer.value) return;
-  historyPopupOpen.value = false;
-  restoring.value = {
-    target: offerRestoreTarget(draftOffer.value, editorSession),
-    fromList: false,
-  };
-}
-
-function backToList() {
-  closeRestore();
-  historyPopupOpen.value = true;
-}
-
-function closeRestore() {
-  restoring.value = undefined;
-  diff.value = undefined;
+  void compareWith(offerRestoreTarget(draftOffer.value, editorSession));
 }
 
 function dismissOffer() {
-  if (restoring.value?.target.kind === 'offer') closeRestore();
   void editorSession.dismissOffer();
 }
 
-function onRestored(label: string) {
-  const offer = restoring.value?.target.offer;
-  closeRestore();
-  if (offer) editorSession.clearOffer(offer);
-  restoredLabel.value = label;
+function undoRestore() {
+  // An edit taken and put back waits again, in its session and here.
+  if (lastTaken) {
+    takenHere.delete(lastTaken);
+    const again = new Set(reviewedHere.value);
+    again.delete(lastTaken);
+    reviewedHere.value = again;
+    lastTaken = undefined;
+  }
+  void editorSession.undoRestore();
 }
 
-function undoRestore() {
-  void editorSession.undoRestore();
+// An AI's edits of this text wait in its sessions; the editor offers them.
+const aiEnabled = useAiEnabled();
+const aiReviews = shallowRef<AiActionItem[]>([]);
+/** Edits gone through in this editor: they wait for the form to be saved. */
+const reviewedHere = ref(new Set<string>());
+const waitingReviews = computed(() =>
+  aiReviews.value.filter(
+    (action) => !reviewedHere.value.has(action.actionUuid),
+  ),
+);
+/**
+ * The owner's word on each edit taken here, told to its session once the
+ * form is saved with it — or let go if the change is undone first.
+ */
+const takenHere = new Map<string, Record<string, ReviewDecision>>();
+let lastTaken: string | undefined;
+
+async function loadAiReviews() {
+  const field = props.modalData.history?.field;
+  if (!aiEnabled.value || !field || isNewContentOwnerRef(field.ownerRef))
+    return;
+  try {
+    const { actions } = await $fetch<AiTextReviews>(
+      '/api/admin/ai/texts/reviews',
+      {
+        query: {
+          ownerType: field.ownerType,
+          ownerId: field.ownerRef,
+          slot: field.slot,
+        },
+      },
+    );
+    aiReviews.value = actions;
+  } catch {
+    aiReviews.value = [];
+  }
+}
+
+/** Over the text as it is this moment: the last words typed included. */
+async function openAiReview(action: AiActionItem) {
+  const data = await editorSession.synchronize();
+  if (disposed) return;
+  openReview({ kind: 'ai', action, model: textEditReview(action, data) });
+}
+
+/**
+ * Written back to the form: what was taken here goes with the text, for the
+ * form to tell once it is saved. Saved, a take is no longer undone here.
+ */
+function handTaken() {
+  if (takenHere.size) props.modalData.onTaken?.(Object.fromEntries(takenHere));
+  takenHere.clear();
+  lastTaken = undefined;
+  editorSession.forgetRestore();
+}
+
+const reviewInitial = computed(() => {
+  const current = review.value;
+  return current?.kind === 'ai' ? storedDecisions(current.action) : undefined;
+});
+
+/** The owner's «as it was» is final: the session hears of it at once. */
+function keepParts(
+  action: AiActionItem,
+  decisions: Record<string, ReviewDecision>,
+) {
+  const kept = Object.fromEntries(
+    Object.entries(decisions).filter(([, decision]) => decision === 'kept'),
+  );
+  if (Object.keys(kept).length)
+    void aiApi.decideParts(action.actionUuid, kept).catch(() => undefined);
+}
+
+async function reviewDone(decisions: Record<string, ReviewDecision>) {
+  const current = review.value;
+  if (!current || reviewBusy.value) return;
+  reviewBusy.value = true;
+  reviewError.value = '';
+  const taken = Object.values(decisions).filter(
+    (decision) => decision === 'accepted',
+  ).length;
+  try {
+    const result = current.model.result(decisions);
+    const restored = await editorSession.restore(
+      result,
+      current.kind === 'version' && current.target.adoptRef
+        ? { adoptRef: current.target.adoptRef }
+        : {},
+    );
+    if (!restored) {
+      reviewError.value = phrase.value.content_editor_save_error;
+      return;
+    }
+    lastTaken = undefined;
+    if (current.kind === 'version') {
+      if (current.target.offer) editorSession.clearOffer(current.target.offer);
+      if (current.target.kind === 'stored' && current.target.time)
+        seenStoredAt.value = current.target.time;
+      restoredLabel.value = versionLabel(current.target);
+      showToast(phrase.value.ai_review_taken(taken), undoToast());
+    } else {
+      keepParts(current.action, decisions);
+      takenHere.set(current.action.actionUuid, decisions);
+      lastTaken = current.action.actionUuid;
+      reviewedHere.value = new Set(reviewedHere.value).add(
+        current.action.actionUuid,
+      );
+      restoredLabel.value = phrase.value.ai_review_title;
+      showToast(phrase.value.ai_review_applied(taken), undoToast());
+    }
+    closeReview();
+  } finally {
+    reviewBusy.value = false;
+  }
+}
+
+/** What was just taken can be put back at once, from its word too. */
+function undoToast() {
+  return { label: phrase.value.ai_action_undo, run: undoRestore };
+}
+
+function reviewClosed(decisions: Record<string, ReviewDecision>) {
+  const current = review.value;
+  if (current?.kind === 'ai') keepParts(current.action, decisions);
+  closeReview();
+}
+
+function reviewComment(partId: string, words: string) {
+  const current = review.value;
+  if (current?.kind !== 'ai') return;
+  void aiApi
+    .comment(
+      current.action.actionUuid,
+      partComment(current.model, partId, words),
+    )
+    .catch(() => showToast(phrase.value.ai_error));
 }
 
 useModalCloseGuard(() => {
@@ -520,7 +766,18 @@ function headerTextOffset(root: HTMLElement, node: Node, offset: number) {
   return range.toString().length;
 }
 
+/** The AI's edits of this text, once read. */
+let reviewsRead: Promise<void> = Promise.resolve();
+
+/** The editor opened for one edit: its review comes up once both are ready. */
+async function openAskedReview(actionUuid: string) {
+  await reviewsRead;
+  const action = aiReviews.value.find((item) => item.actionUuid === actionUuid);
+  if (action && !disposed && !review.value) void openAiReview(action);
+}
+
 onMounted(async () => {
+  reviewsRead = loadAiReviews();
   document.body.classList.add('content-editor-modal-open');
   editorLayoutQuery = window.matchMedia(EDITOR_MOBILE_LAYOUT_QUERY);
   editorLayoutQuery.addEventListener('change', applyEditorLayout);
@@ -777,6 +1034,7 @@ onMounted(async () => {
   if (disposed) return;
   editorAcceptsChanges = true;
   void editorSession.loadOffers();
+  if (props.modalData.review) void openAskedReview(props.modalData.review);
   cleanupEditorPopoverLayer = createEditorPopoverLayer(holder.value!);
   cleanupEditorDrag = createEditorBlockDrag(holder.value!, editor, {
     canMove: editorPrivateSections.canMove,
@@ -874,6 +1132,7 @@ async function save() {
     };
     headerSummary.value = summary;
     props.modalData.onSave(savedValue);
+    handTaken();
     await props.modalData.onSaved?.();
     // Saving the form lets drafts of the field go; the fields and the other
     // tabs look again.
@@ -895,6 +1154,7 @@ useSaveShortcut(save, {
 });
 
 async function clearContent() {
+  historyPopupOpen.value = false;
   if (!editor || headerSummary.value.blockCount === 0) return;
   if (!window.confirm(phrase.value.content_editor_clear_confirm)) return;
   const target = editor;
@@ -1185,7 +1445,7 @@ function editorJsI18nMessages() {
 </script>
 
 <template>
-  <ModalContainer ref="modalContainer" class="max-w-200">
+  <ModalContainer v-show="!review" ref="modalContainer" class="max-w-200">
     <ContentInlineLinkDecorator
       playback="interaction"
       :root="holder"
@@ -1210,175 +1470,161 @@ function editorJsI18nMessages() {
       <ContentEntitySearchPopup ref="entityPicker" @select="selectEntity" />
     </FloatingPopup>
     <template #header>
-      <div class="flex flex-col gap-xs p-sm">
-        <!-- Until a restore is decided, the question is the whole header. -->
-        <template v-if="!restoring">
-          <div class="flex min-w-0 items-center gap-xs">
-            <ModalTitle
-              icon="edit"
-              :title="modalData.title || phrase.content_editor_title"
-              class="flex-1"
-            />
-            <div
-              v-if="errorMessage"
-              class="min-w-0 truncate text-sm text-text-error"
-            >
-              {{ errorMessage }}
-            </div>
-            <ModalHeaderButton
-              icon="delete"
-              variant="delete"
-              :label="phrase.clear"
-              :disabled="headerSummary.blockCount === 0"
-              @click="clearContent"
-            />
-            <ModalHeaderButton
-              icon="close"
-              :label="phrase.close_modal"
-              @click="closeModal"
-            />
-            <ModalHeaderButton
-              variant="accent"
-              :label="phrase.save"
-              :disabled="saving || !isDirty"
-              @click="save"
-            >
-              <Icon v-if="saving" name="loading" />
-              {{ isDirty ? phrase.save : phrase.saved }}
-            </ModalHeaderButton>
-          </div>
-          <div class="flex min-w-0 items-center justify-between gap-sm">
-            <div class="flex min-w-0 items-center gap-xs">
-              <div ref="historyButton" class="flex shrink-0">
-                <ModalHeaderButton
-                  icon="history"
-                  size="compact"
-                  :label="phrase.content_history"
-                  :disabled="!hasHistory"
-                  :aria-expanded="historyPopupOpen"
-                  aria-haspopup="dialog"
-                  data-history-button
-                  @click="toggleHistory"
-                />
-              </div>
-              <ModalHeaderButton
-                v-if="lastRestore"
-                size="compact"
-                :label="undoLabel"
-                :data-title-popup="undoLabel"
-                data-restore-undo
-                @click="undoRestore"
-              >
-                <Icon name="rotate-right" class="-scale-x-100" />
-              </ModalHeaderButton>
-              <div
-                v-if="draftOffer"
-                class="flex min-w-0 shrink items-center rounded-full
-                  bg-bg-warning text-xs text-text-warning"
-                :data-draft-offer="offerUpdatedAt"
-              >
-                <button
-                  type="button"
-                  class="min-w-0 cursor-pointer truncate py-1 pr-1 pl-xs
-                    hocus:underline"
-                  :aria-label="phrase.content_draft_offer(offerTime)"
-                  :data-title-popup="phrase.content_draft_offer(offerTime)"
-                  data-draft-offer-open
-                  @click="openOffer"
-                >
-                  {{ phrase.content_draft_chip(offerTime) }}
-                </button>
-                <button
-                  type="button"
-                  class="flex shrink-0 cursor-pointer items-center rounded-full
-                    p-1 transition-colors hocus:bg-text-warning/15"
-                  :aria-label="phrase.content_draft_dismiss"
-                  :data-title-popup="phrase.content_draft_dismiss"
-                  data-draft-dismiss
-                  @click="dismissOffer"
-                >
-                  <Icon name="close" />
-                </button>
-              </div>
-              <ContentStats v-bind="headerSummary" compact class="min-w-0" />
-            </div>
-            <div class="flex shrink-0 items-center gap-1 text-xs text-text-3">
-              <span
-                v-if="
-                  historyStatus === 'offline' || historyStatus === 'refused'
-                "
-                class="inline-flex items-center gap-1 text-text-warning"
-                :data-title-popup="historyStatusText"
-                data-history-status
-              >
-                <Icon name="warning" />
-                {{
-                  historyStatus === 'offline'
-                    ? phrase.content_draft_status_offline_short
-                    : phrase.content_draft_status_refused_short
-                }}
-              </span>
-              <span
-                v-else-if="historyStatusText"
-                class="inline-flex"
-                role="img"
-                :aria-label="historyStatusText"
-                :data-title-popup="historyStatusText"
-                data-history-status
-              >
-                <Icon name="cloud-upload" />
-              </span>
-              <TheiTime v-if="updatedAt" :datetime="updatedAt" />
-              <template v-else>{{ phrase.content_never_saved }}</template>
-            </div>
-            <FloatingPopup
-              v-model:open="historyPopupOpen"
-              :anchor="historyButton"
-              placement="bottom-start"
-              :teleport-to="holder?.closest('dialog') ?? undefined"
-              fit-content
-            >
-              <div class="rounded-normal border border-border-1 bg-bg-2">
-                <ContentHistoryPanel
-                  :session="editorSession"
-                  :current="headerSummary"
-                  :current-key="currentKey"
-                  :opened="opened"
-                  @choose="chooseVersion"
-                />
-              </div>
-            </FloatingPopup>
-          </div>
-        </template>
-        <ContentRestoreBar
-          v-else
-          :key="restoring.target.key"
-          :session="editorSession"
-          :target="restoring.target"
-          :from-list="restoring.fromList"
-          :current="headerSummary"
-          :current-key="currentKey"
-          :error="errorMessage"
-          @preview="showDiff"
-          @back="backToList"
-          @close="closeRestore"
-          @restored="onRestored"
+      <!-- One slim row: what is edited and whether it is kept, its history,
+           close and save. What waits for the owner opens the text instead. -->
+      <div class="flex min-w-0 items-center gap-xs p-sm">
+        <ModalTitle
+          icon="edit"
+          :title="modalData.title || phrase.content_editor_title"
+          class="min-w-0 flex-1"
         />
+        <span
+          v-if="historyStatus === 'offline' || historyStatus === 'refused'"
+          class="inline-flex shrink-0 text-text-warning"
+          role="img"
+          :aria-label="historyStatusText"
+          :data-title-popup="historyStatusText"
+          data-history-status
+          ><Icon name="warning"
+        /></span>
+        <span
+          v-else-if="historyStatusText"
+          class="inline-flex shrink-0 text-text-3"
+          role="img"
+          :aria-label="historyStatusText"
+          :data-title-popup="historyStatusText"
+          data-history-status
+          ><Icon name="cloud-upload"
+        /></span>
+        <div
+          v-if="errorMessage"
+          class="min-w-0 truncate text-sm text-text-error"
+        >
+          {{ errorMessage }}
+        </div>
+        <ModalHeaderButton
+          v-if="lastRestore"
+          :label="undoLabel"
+          :data-title-popup="undoLabel"
+          data-restore-undo
+          @click="undoRestore"
+        >
+          <Icon name="rotate-right" class="-scale-x-100" />
+        </ModalHeaderButton>
+        <div ref="historyButton" class="relative flex shrink-0">
+          <ModalHeaderButton
+            icon="history"
+            :label="phrase.content_history"
+            :disabled="!hasHistory"
+            :aria-expanded="historyPopupOpen"
+            aria-haspopup="dialog"
+            data-history-button
+            @click="toggleHistory"
+          />
+          <span
+            v-if="draftOffer"
+            class="pointer-events-none absolute top-1 right-1 size-2
+              rounded-full bg-text-warning ring-2 ring-bg-2"
+            aria-hidden="true"
+          ></span>
+        </div>
+        <ModalHeaderButton
+          icon="close"
+          :label="phrase.close_modal"
+          @click="closeModal"
+        />
+        <ModalHeaderButton
+          variant="accent"
+          :label="phrase.save"
+          :disabled="saving || !isDirty"
+          data-editor-save
+          @click="save"
+        >
+          <Icon v-if="saving" name="loading" />
+          {{ isDirty ? phrase.save : phrase.saved }}
+        </ModalHeaderButton>
       </div>
+      <FloatingPopup
+        v-model:open="historyPopupOpen"
+        :anchor="historyButton"
+        placement="bottom-end"
+        fit-content
+      >
+        <div class="rounded-normal border border-border-1 bg-bg-2">
+          <ContentHistoryPanel
+            :session="editorSession"
+            :current="headerSummary"
+            :current-key="currentKey"
+            :opened="opened"
+            :clearable="headerSummary.blockCount > 0"
+            @choose="chooseVersion"
+            @clear="clearContent"
+          />
+        </div>
+      </FloatingPopup>
     </template>
 
-    <ContentHistoryDiff
-      v-if="diff"
-      :current="diff.current"
-      :version="diff.version"
-      :link-resolver="contentLinkResolver"
-    />
+    <div class="px-sm pt-md empty:hidden">
+      <ContentEditorNotices
+        :status="
+          historyStatus === 'offline' || historyStatus === 'refused'
+            ? historyStatus
+            : undefined
+        "
+        :offer-time="draftOffer ? offerTime : undefined"
+        :offer-at="offerUpdatedAt"
+        :stored-time="
+          storedElsewhere ? historyTime(storedElsewhere.updatedAt) : undefined
+        "
+        @compare-stored="compareStored"
+        @dismiss-stored="dismissStored"
+        :reviews="waitingReviews"
+        @compare-offer="openOffer"
+        @dismiss-offer="dismissOffer"
+        @open-review="openAiReview"
+      />
+    </div>
     <div
-      v-show="!diff"
       ref="holder"
       class="content-editor content-prose relative w-full px-sm py-md"
       @click.capture="preventEditorLinkNavigation"
       @auxclick.capture="preventEditorLinkNavigation"
     ></div>
+    <!-- What the text holds, and when it was last kept. -->
+    <div
+      class="mx-sm mb-md flex flex-wrap items-center gap-x-3.5 gap-y-1 border-t
+        border-border-1 pt-sm text-xs text-text-2"
+      data-editor-foot
+    >
+      <ContentStats v-bind="headerSummary" compact class="min-w-0" />
+      <span class="inline-flex items-center gap-1 text-text-3">
+        <TheiTime v-if="updatedAt" :datetime="updatedAt" />
+        <template v-else>{{ phrase.content_never_saved }}</template>
+      </span>
+    </div>
   </ModalContainer>
+
+  <ContentReview
+    v-if="review"
+    :review="review.model"
+    :mode="review.kind"
+    :title="review.kind === 'version' ? review.title : phrase.ai_review_title"
+    :context="modalData.title || phrase.content_editor_title"
+    :why="
+      review.kind === 'version'
+        ? review.why
+        : review.action.reason
+          ? publicText(review.action.reason)
+          : undefined
+    "
+    :initial="reviewInitial"
+    target="editor"
+    :busy="reviewBusy"
+    :error="reviewError"
+    :commentable="review.kind === 'ai'"
+    :link-resolver="contentLinkResolver"
+    @close="reviewClosed"
+    @done="reviewDone"
+    @comment="reviewComment"
+  />
 </template>

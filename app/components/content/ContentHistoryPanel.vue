@@ -20,9 +20,10 @@ import {
 } from '#layers/thei/app/composables/content-history/time-labels';
 
 /**
- * The versions of a text, one line each: when it was written and how much
- * it differs from the text now. Choosing one does not restore it: the editor
- * asks first, showing what would change and why the version was kept.
+ * The versions of a text, one line each: when it was written, why it was
+ * kept and how much it differs from the text now. Choosing one compares it
+ * with the text, to take all of it or a part. Clearing the text is here
+ * too, at the end: the text cleared is kept as a version like any other.
  */
 const props = defineProps<{
   session: EditorHistorySession;
@@ -31,9 +32,11 @@ const props = defineProps<{
   currentKey: string;
   /** The text as the editor opened with it. */
   opened?: { data: ContentOutputData; key: string };
+  /** The text holds anything to clear. */
+  clearable?: boolean;
 }>();
 
-const emit = defineEmits<{ choose: [target: RestoreTarget] }>();
+const emit = defineEmits<{ choose: [target: RestoreTarget]; clear: [] }>();
 
 const entries = shallowRef<ContentHistoryEntryMeta[]>();
 const listError = ref(false);
@@ -102,7 +105,7 @@ const row =
     role="dialog"
     :aria-label="phrase.content_history"
     class="flex scrollbar-mini
-      max-h-[min(22rem,var(--floating-popup-available-height))] w-64 max-w-full
+      max-h-[min(26rem,var(--floating-popup-available-height))] w-76 max-w-full
       flex-col gap-xs overflow-y-auto p-xs text-sm"
     data-content-history-panel
   >
@@ -145,9 +148,19 @@ const row =
           :class="row"
           @click="chooseRevision(entry)"
         >
-          <span class="shrink-0 text-text-1 tabular-nums">{{
-            time(entry.updatedAt)
-          }}</span>
+          <span class="flex min-w-0 items-baseline gap-1.5">
+            <span class="shrink-0 text-text-1 tabular-nums">{{
+              time(entry.updatedAt)
+            }}</span>
+            <span
+              v-if="entry.reason"
+              class="min-w-0 truncate text-xs"
+              :class="
+                entry.reason === 'before-ai' ? 'text-accent' : 'text-text-2'
+              "
+              >{{ phrase.content_history_reasons[entry.reason] }}</span
+            >
+          </span>
           <ContentStatsDelta
             :from="current"
             :to="entry"
@@ -168,5 +181,23 @@ const row =
         }}
       </p>
     </template>
+
+    <div
+      class="mt-xs flex flex-col gap-xs border-t border-border-1 px-xs pt-sm
+        pb-xs"
+    >
+      <p class="text-xs leading-snug text-text-3">
+        {{ phrase.content_history_keeps }}
+      </p>
+      <Button
+        variant="delete"
+        class="flex h-8 items-center gap-xs self-start text-sm
+          pointer-coarse:h-11"
+        :disabled="!clearable"
+        data-history-clear
+        @click="emit('clear')"
+        ><Icon name="delete" />{{ phrase.content_history_clear }}</Button
+      >
+    </div>
   </div>
 </template>

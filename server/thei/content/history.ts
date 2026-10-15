@@ -7,6 +7,7 @@ import {
   eq,
   gt,
   inArray,
+  isNull,
   like,
   lt,
   sql,
@@ -37,9 +38,11 @@ import {
   type ContentHistoryHint,
   type ContentHistoryIndexResponse,
   type ContentHistoryReason,
+  type ContentHistoryStored,
   type ContentHistorySyncResponse,
 } from '#layers/thei/shared/content-history';
 import { isOneOf } from '#layers/thei/shared/utils/isOneOf';
+import { assetHeldByAiSql } from '../assets/ai-hold-sql';
 
 /**
  * The server side of content history: the drafts of a field and the versions
@@ -77,7 +80,7 @@ export class ContentHistoryOwnerGoneError extends Error {
 }
 
 /** The table and key each kind of owner lives under. */
-function ownerKeys(
+export function contentOwnerKeys(
   schema: any,
 ): Record<ContentOwnerType, { table: any; id: any }> {
   return {
@@ -99,7 +102,7 @@ function ownerKeys(
 /** Refuses a write for an owner that is gone; a new one has none yet. */
 function assertOwnerExists(tx: any, schema: any, field: ContentHistoryField) {
   if (isNewContentOwnerRef(field.ownerRef)) return;
-  const { table, id } = ownerKeys(schema)[field.ownerType];
+  const { table, id } = contentOwnerKeys(schema)[field.ownerType];
   if (!tx.select({ id }).from(table).where(eq(id, field.ownerRef)).get())
     throw new ContentHistoryOwnerGoneError();
 }
@@ -199,11 +202,14 @@ function latestRevision(
  * The semantic key of what is saved in the field, or of nothing when the
  * owner does not exist yet or keeps no text there.
  */
-function savedKey(tx: any, schema: any, field: ContentHistoryField): string {
-  const row = field.ownerRef.startsWith(CONTENT_HISTORY_NEW_REF_PREFIX)
+function savedRow(tx: any, schema: any, field: ContentHistoryField) {
+  return field.ownerRef.startsWith(CONTENT_HISTORY_NEW_REF_PREFIX)
     ? undefined
-    : tx
-        .select({ data: schema.content.data })
+    : (tx
+        .select({
+          data: schema.content.data,
+          updatedAt: schema.content.updatedAt,
+        })
         .from(schema.content)
         .where(
           and(
@@ -212,8 +218,28 @@ function savedKey(tx: any, schema: any, field: ContentHistoryField): string {
             eq(schema.content.slot, field.slot),
           ),
         )
-        .get();
-  return contentSemanticKey(row?.data ?? { blocks: [] });
+        .get() as { data: unknown; updatedAt: number } | undefined);
+}
+
+function savedKey(tx: any, schema: any, field: ContentHistoryField): string {
+  return contentSemanticKey(
+    (savedRow(tx, schema, field)?.data ?? { blocks: [] }) as never,
+  );
+}
+
+/** The text saved now: when, and what it says. */
+function storedOf(
+  tx: any,
+  schema: any,
+  field: ContentHistoryField,
+): ContentHistoryStored | null {
+  const row = savedRow(tx, schema, field);
+  return row
+    ? {
+        updatedAt: row.updatedAt,
+        key: contentSemanticKey(row.data as never),
+      }
+    : null;
 }
 
 function insertRow(
@@ -430,10 +456,11 @@ export function syncContentDraft(
       }
     }
 
+    const stored = storedOf(tx, schema, field);
     if (isSaved) {
       for (const row of own ? [own, ...twins] : twins)
         deleteRow(tx, schema, row, now);
-      return { draft: null, others };
+      return { draft: null, others, stored };
     }
 
     let draft: Row;
@@ -449,7 +476,7 @@ export function syncContentDraft(
         : insertDraft(tx, schema, field, described, input.writer, now);
     }
     for (const twin of twins) deleteRow(tx, schema, twin, now);
-    return { draft: historyEntryMeta(draft), others };
+    return { draft: historyEntryMeta(draft), others, stored };
   });
 }
 
@@ -721,6 +748,110 @@ export function findHistoryEntry(id: string): Row | undefined {
     .get() as Row | undefined;
 }
 
+/**
+ * A text a field held, found by its digest among the versions kept: what an
+ * undo puts back. Gone once the history has let it go.
+ */
+export function findHistoryText(
+  field: ContentHistoryField,
+  digest: string,
+): ContentOutputData | undefined {
+  const { db, schema } = THEI_SERVER.useDb();
+  return (
+    db
+      .select({ data: schema.contentHistory.data })
+      .from(schema.contentHistory)
+      .where(
+        and(
+          fieldWhere(schema, field),
+          eq(schema.contentHistory.digest, digest),
+        ),
+      )
+      .orderBy(desc(schema.contentHistory.createdAt))
+      .get() as { data: ContentOutputData } | undefined
+  )?.data;
+}
+
+// --- Held for AI actions ---------------------------------------------------
+
+/**
+ * Holds the version of a text an AI action replaced, for as long as the
+ * action may be undone: the history's own limits — two days, a size a field
+ * may keep — pass it by. Called in the transaction that applies the action,
+ * after the save recorded the text it replaced; the newest version saying the
+ * same is held, or, held by another action already, a copy of it.
+ */
+export function holdHistoryText(
+  tx: any,
+  schema: any,
+  field: ContentHistoryField,
+  digest: string,
+  actionUuid: string,
+  now = Date.now(),
+) {
+  const row = tx
+    .select()
+    .from(schema.contentHistory)
+    .where(
+      and(
+        fieldWhere(schema, field),
+        eq(schema.contentHistory.kind, 'revision'),
+        eq(schema.contentHistory.digest, digest),
+      ),
+    )
+    .orderBy(desc(schema.contentHistory.createdAt))
+    .get() as Row | undefined;
+  if (!row) return;
+  if (!row.heldBy) {
+    tx.update(schema.contentHistory)
+      .set({ heldBy: actionUuid, reason: 'before-ai' })
+      .where(eq(schema.contentHistory.id, row.id))
+      .run();
+    return;
+  }
+  if (row.heldBy === actionUuid) return;
+  const copy = insertRow(
+    tx,
+    schema,
+    field,
+    {
+      data: row.data,
+      digest: row.digest,
+      wordCount: row.wordCount,
+      blockCount: row.blockCount,
+      assetCount: row.assetCount,
+      size: row.size,
+      assetUuids: row.assetUuids,
+    } as DescribedData,
+    {
+      kind: 'revision',
+      reason: 'before-ai',
+      createdAt: now,
+      updatedAt: row.updatedAt,
+    },
+  );
+  tx.update(schema.contentHistory)
+    .set({ heldBy: actionUuid })
+    .where(eq(schema.contentHistory.id, copy.id))
+    .run();
+}
+
+/**
+ * Lets go of the versions these actions held — undone, or their session
+ * gone: from now on they live as long as any version does.
+ */
+export function releaseHistoryHolds(
+  tx: any,
+  schema: any,
+  actionUuids: readonly string[],
+) {
+  for (const chunk of chunks(actionUuids, 500))
+    tx.update(schema.contentHistory)
+      .set({ heldBy: null })
+      .where(inArray(schema.contentHistory.heldBy, chunk))
+      .run();
+}
+
 // --- Files ------------------------------------------------------------------
 
 /** SQL for "some history row refers to this asset", with `alias` the assets row. */
@@ -771,8 +902,9 @@ function claimAssets(
 }
 
 /**
- * Files nothing refers to any more — no usage, no history row — are touched,
- * so they get the day of grace every file that falls out of use gets.
+ * Files nothing refers to any more — no usage, no history row, no AI action
+ * that still needs them — are touched, so they get the day of grace every
+ * file that falls out of use gets.
  */
 export function touchReleasedAssets(
   tx: any,
@@ -789,6 +921,7 @@ export function touchReleasedAssets(
           inArray(schema.assets.assetUuid, chunk),
           sql`NOT EXISTS (SELECT 1 FROM "asset-usages" u WHERE u.assetUuid = ${schema.assets.assetUuid})`,
           sql`NOT ${assetHeldByHistorySql(schema.assets.assetUuid)}`,
+          sql`NOT ${assetHeldByAiSql(schema.assets.assetUuid)}`,
         ),
       )
       .run();
@@ -808,6 +941,7 @@ function enforceFieldCap(
       id: schema.contentHistory.id,
       size: schema.contentHistory.size,
       assetUuids: schema.contentHistory.assetUuids,
+      heldBy: schema.contentHistory.heldBy,
     })
     .from(schema.contentHistory)
     .where(
@@ -817,13 +951,15 @@ function enforceFieldCap(
       ),
     )
     .orderBy(desc(schema.contentHistory.createdAt))
-    .all() as Pick<Row, 'id' | 'size' | 'assetUuids'>[];
+    .all() as Pick<Row, 'id' | 'size' | 'assetUuids' | 'heldBy'>[];
   let total = 0;
   const excess: typeof revisions = [];
-  // The newest version is always kept, however large it is.
+  // The newest version is always kept, however large it is; so is one an AI
+  // action holds, while it may be undone.
   for (const [index, revision] of revisions.entries()) {
     total += revision.size;
-    if (index > 0 && total > CONTENT_HISTORY_FIELD_CAP) excess.push(revision);
+    if (index > 0 && total > CONTENT_HISTORY_FIELD_CAP && !revision.heldBy)
+      excess.push(revision);
   }
   if (!excess.length) return;
   tx.delete(schema.contentHistory)
@@ -923,8 +1059,9 @@ export async function refreshContentHistoryFingerprints(
 }
 
 /**
- * Lets versions go once they are two days old, and turns drafts of things
- * never created into versions after a week untouched.
+ * Lets versions go once they are two days old — but not one an AI action
+ * holds — and turns drafts of things never created into versions after a
+ * week untouched.
  */
 export function runContentHistoryMaintenance(now = Date.now()) {
   const { db, schema } = THEI_SERVER.useDb();
@@ -962,6 +1099,8 @@ export function runContentHistoryMaintenance(now = Date.now()) {
             schema.contentHistory.createdAt,
             now - CONTENT_HISTORY_REVISION_TTL_MS,
           ),
+          // Held by an AI action that may still be undone.
+          isNull(schema.contentHistory.heldBy),
         ),
       )
       .all() as Pick<Row, 'id' | 'assetUuids'>[];

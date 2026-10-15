@@ -52,6 +52,7 @@ export const CONTENT_HISTORY_REASONS = [
   'cleared',
   'deleted',
   'abandoned',
+  'before-ai',
 ] as const;
 export type ContentHistoryReason = (typeof CONTENT_HISTORY_REASONS)[number];
 
@@ -116,6 +117,23 @@ export interface ContentHistorySyncResponse {
   draft: ContentHistoryEntryMeta | null;
   /** The drafts other tabs keep of the same field, newest first. */
   others: ContentHistoryEntryMeta[];
+  /**
+   * The text saved now: when, and what it says as a semantic key — for an
+   * editor to tell that it was saved elsewhere while it was being written.
+   * None for an owner not created yet, or a field never saved.
+   */
+  stored?: ContentHistoryStored | null;
+}
+
+export interface ContentHistoryStored {
+  updatedAt: number;
+  key: string;
+}
+
+/** The text saved now, as the editor reads it, to compare with. */
+export interface ContentHistoryStoredResponse {
+  data: ContentOutputData;
+  updatedAt: number;
 }
 
 export interface ContentHistoryDiscardRequest extends ContentHistoryField {

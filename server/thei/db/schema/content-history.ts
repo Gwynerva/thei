@@ -43,6 +43,12 @@ export const contentHistory = sqliteTable(
     writer: text().notNull().default(''),
     createdAt: integer().notNull(),
     updatedAt: integer().notNull(),
+    /**
+     * The AI action this version is the text before: kept while the action
+     * may still be undone — the session lives — whatever the history's own
+     * limits say.
+     */
+    heldBy: text(),
   },
   (t) => [
     index('content-history-field-idx').on(
