@@ -171,34 +171,6 @@ export function moveItemById<T>(
   return next;
 }
 
-export function moveItemToGroup<T, TGroup extends string>(
-  items: readonly T[],
-  id: string,
-  targetGroup: TGroup,
-  newIndex: number,
-  groupOrder: readonly TGroup[],
-  getId: (item: T) => string,
-  getGroup: (item: T) => TGroup,
-  setGroup: (item: T, group: TGroup) => T,
-): T[] {
-  const moved = items.find((item) => getId(item) === id);
-  if (!moved) return [...items];
-  const grouped = new Map(
-    groupOrder.map((group) => [
-      group,
-      items.filter((item) => getGroup(item) === group && getId(item) !== id),
-    ]),
-  );
-  const target = grouped.get(targetGroup);
-  if (!target) return [...items];
-  target.splice(
-    Math.max(0, Math.min(newIndex, target.length)),
-    0,
-    setGroup(moved, targetGroup),
-  );
-  return groupOrder.flatMap((group) => grouped.get(group) ?? []);
-}
-
 function normalizeDrop(event: SortableEvent): SortableDrop | undefined {
   const id = dragId(event.item);
   if (

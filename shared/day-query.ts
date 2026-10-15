@@ -154,12 +154,6 @@ export function dayQueryRank(
   return best;
 }
 
-/** Whether a day — `YYYY-MM-DD` — answers a query typed as text. */
-export function matchesDayQuery(date: string, query: string): boolean {
-  const parsed = parseDayQuery(query);
-  return parsed !== undefined && dayQueryRank(date, parsed) !== undefined;
-}
-
 const MONTH_FORMS: string[][] = Array.from({ length: 12 }, (_, index) =>
   Object.values(dateWords).flatMap(({ months }) => [...(months[index] ?? [])]),
 );

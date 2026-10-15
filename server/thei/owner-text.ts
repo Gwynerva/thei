@@ -17,7 +17,3 @@ function formatter() {
 export function ownerText(value: string | undefined | null): string {
   return formatter().text(value);
 }
-
-export function ownerRichText(value: string | undefined | null): string {
-  return formatter().richText(value);
-}

@@ -226,8 +226,6 @@ export function createPendingUploadList(options: {
   };
 }
 
-export type PendingUploadList = ReturnType<typeof createPendingUploadList>;
-
 /** A file stored as it is, the way a batch of files is added to a list. */
 export class PendingOriginalUpload extends PendingUploadBase {
   private readonly send: typeof uploadOriginalFile;

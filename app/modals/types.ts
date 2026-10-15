@@ -12,13 +12,6 @@ interface ModalResultError {
 export type BaseModalResult = ModalResultEmpty | ModalResultError;
 
 /**
- * Expands a custom result type into the full modal result union by adding
- * the base results (empty, error) that every modal can produce.
- *
- * Use this in modal components to type the `@modalResult` emit.
- */
-export type ModalResultOf<T extends { type: string }> = T | BaseModalResult;
-/**
  * Extracts the type of the `modalData` prop from a Vue component.
  * Resolves to `never` when the component declares no such prop.
  */

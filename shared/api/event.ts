@@ -59,8 +59,3 @@ export type EventListItem = {
 };
 
 export type EventListResponse = PaginatedResponse<EventListItem>;
-
-export type PublicEventResponse = Pick<
-  EventGetResponse,
-  'title' | 'summary' | 'periods' | 'humanReadableSlug' | 'publicId' | 'access'
->;

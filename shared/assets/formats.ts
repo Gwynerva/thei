@@ -22,9 +22,6 @@ export const AUDIO_EXTENSIONS = [
   'aiff',
 ] as const;
 
-export type ImageExtension = (typeof IMAGE_EXTENSIONS)[number];
-export type VideoExtension = (typeof VIDEO_EXTENSIONS)[number];
-export type AudioExtension = (typeof AUDIO_EXTENSIONS)[number];
 export type AssetMediaKind = 'image' | 'video' | 'audio' | 'other';
 
 const IMAGE_EXTS = new Set<string>(IMAGE_EXTENSIONS);

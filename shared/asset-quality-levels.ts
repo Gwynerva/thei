@@ -60,10 +60,6 @@ export function isAssetQualityLevel(
   );
 }
 
-export function isAssetQualityStop(value: unknown): value is AssetQualityStop {
-  return value === 'lossless' || isAssetQualityLevel(value);
-}
-
 /** The level nearest to a stored quality; halfway between two, the higher. */
 export function assetQualityLevelOf(quality: number): AssetQualityLevel {
   let nearest: AssetQualityLevel = ASSET_QUALITY_LEVELS[0];

@@ -198,17 +198,6 @@ export function projectCreatedUtcDate(createdAt: number | string | Date) {
   return utcDayOf(createdAt);
 }
 
-export function lifeGapDays(newerDate: string, olderDate: string) {
-  return Math.max(
-    0,
-    Math.round(
-      (Date.parse(`${newerDate}T00:00:00Z`) -
-        Date.parse(`${olderDate}T00:00:00Z`)) /
-        86_400_000,
-    ),
-  );
-}
-
 export type LifeGapDuration = {
   years: number;
   months: number;

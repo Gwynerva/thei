@@ -19,16 +19,12 @@ export interface DiscreteBarStop {
 }
 
 /**
+ * The inset of the track from each end of the row, as a percentage.
+ *
  * Every stop owns an equal column of the row and sits at its centre, so the
  * captions under the track line up with the stops without measuring anything.
  * The track itself runs from the first centre to the last.
  */
-export function stopPosition(index: number, count: number): number {
-  if (count <= 0) return 0;
-  return ((index + 0.5) / count) * 100;
-}
-
-/** The inset of the track from each end of the row, as a percentage. */
 export function trackInset(count: number): number {
   return count > 0 ? 50 / count : 0;
 }

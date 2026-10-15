@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
 
 /**
  * The bytes of an asset, either already in memory or staged on disk.
@@ -61,19 +60,4 @@ export function assetBytesSize(bytes: AssetBytes): number {
 
 export function assetBytesHash(bytes: AssetBytes): string {
   return bytes.buffer ? sha256(bytes.buffer) : bytes.hash;
-}
-
-/** Reads staged bytes into memory. Only for inputs known to be small. */
-export async function readAssetBytes(bytes: AssetBytes): Promise<Buffer> {
-  if (bytes.buffer) return bytes.buffer;
-  const { readFile } = await import('node:fs/promises');
-  return await readFile(bytes.path);
-}
-
-export async function assetBytesExist(bytes: AssetBytes): Promise<boolean> {
-  if (bytes.buffer) return true;
-  return await stat(bytes.path).then(
-    (entry) => entry.isFile(),
-    () => false,
-  );
 }

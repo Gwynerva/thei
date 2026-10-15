@@ -28,11 +28,6 @@ export function entityNotesSlot(owner: EntityNotesOwner): ContentSlot {
   return ENTITY_NOTES_SLOTS[owner];
 }
 
-export interface EntityNotesEditData {
-  reminder: string;
-  notes: ContentFieldModelValue | null;
-}
-
 export function normalizeEntityReminder(value: unknown): string {
   if (typeof value !== 'string') return '';
   return value.trim().slice(0, ENTITY_REMINDER_MAX_LENGTH);

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  centeredCropRect,
   clampCropRect,
   cropFractionToRect,
   cropRectToFraction,
@@ -17,13 +16,13 @@ const photo = { width: 4000, height: 3000 };
 
 describe('crop geometry', () => {
   it('centres the largest crop of an aspect', () => {
-    expect(centeredCropRect(photo, 1)).toEqual({
+    expect(maximizeCropRect(photo, 1)).toEqual({
       left: 500,
       top: 0,
       width: 3000,
       height: 3000,
     });
-    expect(centeredCropRect(photo, 16 / 9)).toEqual({
+    expect(maximizeCropRect(photo, 16 / 9)).toEqual({
       left: 0,
       top: 375,
       width: 4000,

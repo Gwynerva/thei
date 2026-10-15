@@ -121,15 +121,6 @@ export interface OtherAssetMeta extends AssetMetaBase {
 export type AssetMeta =
   ImageAssetMeta | VideoAssetMeta | AudioAssetMeta | OtherAssetMeta;
 
-export type AssetMetaForType<TType extends AssetType> =
-  TType extends AssetType.Image
-    ? ImageAssetMeta
-    : TType extends AssetType.Video
-      ? VideoAssetMeta
-      : TType extends AssetType.Audio
-        ? AudioAssetMeta
-        : OtherAssetMeta;
-
 export interface ShowcaseAssetUsageMeta {
   role: 'showcase-asset';
   /** Sort order within the project showcase (lower = earlier). */

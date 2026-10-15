@@ -51,24 +51,6 @@ export function isApproximateDate(precision: DatePrecision): boolean {
   return precision !== 'exact';
 }
 
-/**
- * What is worth printing of a date at this precision: the whole date, the
- * month and the year, or the year alone.
- */
-export type DatePrecisionUnit = 'day' | 'month' | 'year';
-
-export function datePrecisionUnit(precision: DatePrecision): DatePrecisionUnit {
-  switch (precision) {
-    case 'exact':
-    case 'day':
-      return 'day';
-    case 'month':
-      return 'month';
-    case 'year':
-      return 'year';
-  }
-}
-
 /** A precision carried alongside a date or a period. */
 export interface DatePrecisionInfo {
   precision: DatePrecision;
