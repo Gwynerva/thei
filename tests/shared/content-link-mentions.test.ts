@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   contentEntityMentions,
-  extractContentReferenceCandidates,
-} from '../../shared/public-content-reference';
+  contentLinkMentions,
+} from '../../shared/content-link-mentions';
 
-describe('public content reference extraction', () => {
+describe('the links a text makes', () => {
   const content = {
     blocks: [
       {
@@ -98,91 +98,17 @@ describe('public content reference extraction', () => {
     ],
   } as any;
 
-  it('collects ordered unique public links and attachments only', () => {
+  it('lists each link once, in order, private sections too', () => {
     const before = structuredClone(content);
-    const result = extractContentReferenceCandidates(content);
-
-    expect(result.links).toEqual([
+    expect(contentLinkMentions(content)).toEqual([
       { kind: 'external', url: 'https://example.com/reference' },
       { kind: 'external', url: 'https://other.example/' },
       { kind: 'entity', entityType: 'project', entityId: 'project-one' },
       { kind: 'entity', entityType: 'event', entityId: 'event-one' },
       { kind: 'entity', entityType: 'page', entityId: 'page-one' },
-    ]);
-    expect(result.files).toEqual([
-      {
-        asset: {
-          assetUuid: 'document',
-          assetUrl: '/content/document.pdf',
-          extension: 'pdf',
-          size: 42,
-        },
-        title: 'Document',
-        caption: 'Reference document',
-      },
+      { kind: 'external', url: 'https://private.example/' },
     ]);
     expect(content).toEqual(before);
-  });
-
-  it('lists a recording among the files, once, whichever block shows it', () => {
-    const recording = {
-      assetUuid: 'song',
-      assetUrl: '/content/song.weba',
-      extension: 'weba',
-    };
-    expect(
-      extractContentReferenceCandidates({
-        blocks: [
-          {
-            type: 'contentAudio',
-            data: { asset: recording, title: 'Song', caption: 'Live' },
-          },
-          { type: 'contentAttachment', data: { asset: recording } },
-        ],
-      } as any).files,
-    ).toEqual([{ asset: recording, title: 'Song', caption: 'Live' }]);
-  });
-
-  it('can include references from private sections for an administrator', () => {
-    expect(
-      extractContentReferenceCandidates(content, true).links,
-    ).toContainEqual({ kind: 'external', url: 'https://private.example/' });
-  });
-
-  it('does not expose links or files from private sections to visitors', () => {
-    const sectionContent = {
-      blocks: [
-        {
-          type: 'privateSectionBoundary',
-          data: { sectionId: 'section', edge: 'start' },
-        },
-        {
-          type: 'externalLink',
-          data: { url: 'https://section-secret.example/' },
-        },
-        {
-          type: 'contentAttachment',
-          data: {
-            asset: { assetUuid: 'section-file', assetUrl: '/secret.pdf' },
-          },
-        },
-        {
-          type: 'privateSectionBoundary',
-          data: { sectionId: 'section', edge: 'end' },
-        },
-      ],
-    } as any;
-
-    expect(extractContentReferenceCandidates(sectionContent)).toEqual({
-      links: [],
-      files: [],
-    });
-    expect(
-      extractContentReferenceCandidates(sectionContent, true),
-    ).toMatchObject({
-      links: [{ kind: 'external', url: 'https://section-secret.example/' }],
-      files: [{ asset: { assetUuid: 'section-file' } }],
-    });
   });
 
   it('reads the notes of link blocks, and the first note written wins', () => {
@@ -216,7 +142,7 @@ describe('public content reference extraction', () => {
       ],
     } as any;
 
-    expect(extractContentReferenceCandidates(noted).links).toEqual([
+    expect(contentLinkMentions(noted)).toEqual([
       { kind: 'external', url: 'https://a.example/', note: 'Why a' },
       {
         kind: 'entity',

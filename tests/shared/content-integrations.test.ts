@@ -9,7 +9,7 @@ import {
   collectContentExternalLinkUrls,
   normalizeContentData,
 } from '../../shared/content';
-import { extractContentReferenceCandidates } from '../../shared/public-content-reference';
+import { contentLinkMentions } from '../../shared/content-link-mentions';
 
 describe('YouTube integration', () => {
   it.each([
@@ -85,8 +85,8 @@ describe('integration blocks in content', () => {
   it('lists the video as an external link of the content', () => {
     const url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
     expect(collectContentExternalLinkUrls({ blocks: [block] })).toEqual([url]);
-    expect(
-      extractContentReferenceCandidates({ blocks: [block] } as never).links,
-    ).toEqual([{ kind: 'external', url }]);
+    expect(contentLinkMentions({ blocks: [block] } as never)).toEqual([
+      { kind: 'external', url },
+    ]);
   });
 });

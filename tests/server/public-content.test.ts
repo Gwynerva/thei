@@ -7,7 +7,6 @@ import {
   selectPublicContentMediaAssetUuids,
 } from '../../server/thei/public/content';
 import {
-  buildPublicContentReferenceGroup,
   buildPublicManualReferenceGroup,
   buildPublicReferences,
   resolveSiteEntityCandidate,
@@ -811,117 +810,7 @@ describe('public content media previews', () => {
   });
 });
 
-describe('public content reference groups', () => {
-  it('resolves accessible projects and attachments after privacy filtering', async () => {
-    const projects = new Map([
-      [
-        'public-project',
-        {
-          projectUuid: 'public-project',
-          title: 'Public project',
-          summary: 'Available reference',
-          access: ProjectEventAccessLevel.Public,
-          humanReadableSlug: 'public-project',
-          publicId: 'PublicProject',
-        },
-      ],
-      [
-        'private-project',
-        {
-          projectUuid: 'private-project',
-          title: 'Private project',
-          summary: 'Hidden reference',
-          access: ProjectEventAccessLevel.Private,
-          humanReadableSlug: 'private-project',
-          publicId: 'PrivateProject',
-        },
-      ],
-    ]);
-    (globalThis as any).THEI_SERVER = {
-      projects: {
-        findByUuid: async (projectUuid: string) => projects.get(projectUuid),
-      },
-      assets: { usages: { findByContainer: async () => [] } },
-    };
-    const content = {
-      blocks: [
-        {
-          type: 'entityLink',
-          data: { entityType: 'project', entityId: 'public-project' },
-        },
-        {
-          type: 'entityLink',
-          data: { entityType: 'project', entityId: 'private-project' },
-        },
-        {
-          type: 'entityLink',
-          data: { entityType: 'project', entityId: 'missing-project' },
-        },
-        {
-          type: 'contentAttachment',
-          data: {
-            asset: {
-              assetUuid: 'guide',
-              assetUrl: '/projects/project/content/guide.pdf',
-              extension: 'pdf',
-              size: 120,
-            },
-            title: 'Guide',
-          },
-        },
-        {
-          type: 'privateSectionBoundary',
-          data: { sectionId: 'private-section-5', edge: 'start' },
-        },
-        {
-          type: 'contentAttachment',
-          data: {
-            asset: {
-              assetUuid: 'private-guide',
-              assetUrl: '/projects/project/content/private.pdf',
-              extension: 'pdf',
-            },
-          },
-        },
-        {
-          type: 'privateSectionBoundary',
-          data: { sectionId: 'private-section-5', edge: 'end' },
-        },
-      ],
-    } as any;
-
-    const visitor = await buildPublicContentReferenceGroup(content, STRANGER);
-    expect(visitor.links).toHaveLength(1);
-    expect(visitor.links[0]).toMatchObject({
-      kind: 'project',
-      title: 'Public project',
-      href: '/projects/public-project-PublicProject/',
-    });
-    expect(visitor.files).toEqual([
-      {
-        key: 'guide',
-        title: 'Guide',
-        description: undefined,
-        href: '/projects/project/content/guide.pdf',
-        extension: 'pdf',
-        size: 120,
-        media: undefined,
-        archivedOriginal: undefined,
-      },
-    ]);
-
-    const administrator = await buildPublicContentReferenceGroup(
-      content,
-      OWNER,
-    );
-    expect(administrator.links.map((link) => link.title)).toEqual([
-      'Public project',
-      'Private project',
-    ]);
-    expect(administrator.files).toHaveLength(2);
-    expect(administrator.files[1]?.title).toBe('');
-  });
-
+describe('the links and files attached by hand', () => {
   it('keeps manual event links separate and respects their privacy', () => {
     const iconMedia = {
       kind: 'image' as const,
@@ -978,7 +867,7 @@ describe('public content reference groups', () => {
   });
 });
 
-describe('merged public references', () => {
+describe('the references a project or an event lists', () => {
   const project = {
     projectUuid: 'project-uuid',
     title: 'Linked project',
@@ -1034,7 +923,7 @@ describe('merged public references', () => {
       });
   });
 
-  it('merges a manual site address with an entity link from the content, keeping its note', async () => {
+  it('shows an address of this site as its entity, keeping the note, and one file once', async () => {
     mockServer();
     const references = await buildPublicReferences(
       {
@@ -1045,29 +934,23 @@ describe('merged public references', () => {
             href: 'https://me.example/projects/linked-LinkedProject/',
             note: 'Where it began',
           },
+          {
+            kind: 'external',
+            title: 'Elsewhere',
+            href: 'https://other.example/',
+          },
         ],
         files: [
           {
             key: 'manual-slug',
-            title: 'Manual copy',
+            title: 'First copy',
             href: '/a.pdf',
             extension: 'pdf',
             size: 1,
           },
-        ],
-      },
-      {
-        links: [
-          {
-            kind: 'project',
-            title: 'Linked project',
-            href: '/projects/linked-LinkedProject/',
-          },
-        ],
-        files: [
           {
             key: 'content-slug',
-            title: 'Content copy',
+            title: 'Same bytes',
             href: '/b.pdf',
             extension: 'pdf',
             size: 1,
@@ -1076,20 +959,16 @@ describe('merged public references', () => {
       },
       STRANGER,
     );
-    expect(references.links.shared).toMatchObject([
+    expect(references.links).toMatchObject([
       {
         kind: 'project',
         title: 'Linked project',
         href: '/projects/linked-LinkedProject/',
         note: 'Where it began',
       },
+      { kind: 'external', href: 'https://other.example/' },
     ]);
-    expect(references.links.manual).toEqual([]);
-    expect(references.links.content).toEqual([]);
-    expect(references.files.shared.map((file) => file.title)).toEqual([
-      'Manual copy',
-    ]);
-    expect(references.files.content).toEqual([]);
+    expect(references.files.map((file) => file.title)).toEqual(['First copy']);
   });
 });
 

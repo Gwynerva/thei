@@ -146,24 +146,13 @@ export type PublicReferenceLink = {
   iconMedia?: MediaDescriptor;
 };
 
-export type PublicReferenceGroup = {
+/**
+ * The links and files the owner attached to a project or an event by hand,
+ * as its sidebar lists them. What its text links to is read in the text.
+ */
+export type PublicReferences = {
   links: PublicReferenceLink[];
   files: (PublicFile | PublicSecretReference)[];
-};
-
-/**
- * One kind of reference, split by where it was added. `shared` holds what was
- * both attached by hand and mentioned in the content.
- */
-export type PublicReferenceSplit<T> = {
-  shared: T[];
-  manual: T[];
-  content: T[];
-};
-
-export type PublicReferences = {
-  links: PublicReferenceSplit<PublicReferenceLink>;
-  files: PublicReferenceSplit<PublicFile | PublicSecretReference>;
 };
 
 export type PublicAction = {
@@ -240,7 +229,6 @@ export type PublicProjectSectionResponse = PublicProjectSection & {
   /** `updatedAt` only when the section was edited on a later day. */
   chronology: { createdAt: string; updatedAt?: string };
   project: PublicSectionParent;
-  references: PublicReferences;
   /** Set by the page's own route; the Markdown representation has none. */
   neighbours?: PublicNeighbours;
 };
@@ -317,7 +305,6 @@ export type PublicDiaryResponse = {
   /** What stands for the entry in a card: its first picture, or its icon. */
   media: MediaDescriptor;
   content: PublicContentOutputData;
-  references: PublicReferences;
   related: PublicRelatedCounts;
   /** Set by the page's own route; the Markdown representation has none. */
   neighbours?: PublicNeighbours;

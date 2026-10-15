@@ -89,7 +89,6 @@ const details = computed(
         created: phrase.value.diary_chronology_created,
         updated: phrase.value.diary_chronology_updated,
       }),
-      references: data.value.references,
     }) satisfies PublicDetailPanelData,
 );
 

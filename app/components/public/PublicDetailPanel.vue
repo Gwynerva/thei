@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import type { PublicDetailPanelData } from './public-detail';
-import { publicReferenceSplitSize } from '#layers/thei/shared/public-references';
 
 const { data } = defineProps<{ data: PublicDetailPanelData }>();
 
@@ -12,24 +11,6 @@ const neighboursTitle = computed(() => {
       return phrase.value.public_details_neighbour_entries;
   }
 });
-
-/** Manual entries first, then whatever the content itself mentions. */
-function referenceGroups<T>(split: { manual: T[]; content: T[] }) {
-  return [
-    {
-      key: 'manual',
-      icon: 'edit' as const,
-      title: phrase.value.public_details_manual,
-      items: split.manual,
-    },
-    {
-      key: 'content',
-      icon: 'text' as const,
-      title: phrase.value.public_details_from_content,
-      items: split.content,
-    },
-  ];
-}
 </script>
 
 <template>
@@ -62,28 +43,20 @@ function referenceGroups<T>(split: { manual: T[]; content: T[] }) {
       <PublicTagLinks :tags="data.tags" />
     </PublicCollapsibleSection>
     <PublicCollapsibleSection
-      v-if="publicReferenceSplitSize(data.references.links)"
+      v-if="data.references?.links.length"
       :title="phrase.public_details_links"
     >
-      <PublicReferenceSplitList
-        v-slot="{ items }"
-        :shared="data.references.links.shared"
-        :groups="referenceGroups(data.references.links)"
-      >
+      <PublicLimitedList v-slot="{ items }" :items="data.references.links">
         <PublicReferenceLinks :links="items" />
-      </PublicReferenceSplitList>
+      </PublicLimitedList>
     </PublicCollapsibleSection>
     <PublicCollapsibleSection
-      v-if="publicReferenceSplitSize(data.references.files)"
+      v-if="data.references?.files.length"
       :title="phrase.public_details_files"
     >
-      <PublicReferenceSplitList
-        v-slot="{ items }"
-        :shared="data.references.files.shared"
-        :groups="referenceGroups(data.references.files)"
-      >
+      <PublicLimitedList v-slot="{ items }" :items="data.references.files">
         <PublicFiles :files="items" compact />
-      </PublicReferenceSplitList>
+      </PublicLimitedList>
     </PublicCollapsibleSection>
   </div>
 </template>
