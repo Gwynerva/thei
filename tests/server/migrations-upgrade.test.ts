@@ -11,6 +11,7 @@ import { migrations_0_0_2, schema_0_0_2 } from './fixtures/schema-0.0.2';
 import { migrations_0_0_3, schema_0_0_3 } from './fixtures/schema-0.0.3';
 import { migrations_0_0_4, schema_0_0_4 } from './fixtures/schema-0.0.4';
 import { migrations_0_0_5, schema_0_0_5 } from './fixtures/schema-0.0.5';
+import { writeSiteConfig_0_0_2 } from '../helpers/site-config';
 
 /**
  * The upgrade every existing site takes: a database and a config exactly as
@@ -117,6 +118,8 @@ const contentPath = (...parts: string[]) => join(directory, ...parts);
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'thei-upgrade-'));
   rawDb = new Database(contentPath('thei.db'));
+  // Replaced by a 0.0.1 site's own, older config where a test starts there.
+  await writeSiteConfig_0_0_2(contentPath);
 });
 
 afterEach(async () => {
@@ -381,6 +384,14 @@ describe('upgrading a 0.0.1 site', () => {
     expect(config.backup).toEqual({
       tokenHash: createHash('sha256').update('backup-token').digest('hex'),
       createdAt: '2026-09-01T00:00:00Z',
+    });
+    // AI arrives switched off: nothing changes until the owner says so, and
+    // the site's model has no provider, so nothing is spent.
+    expect(config.mcp).toEqual({
+      enabled: false,
+      instructions: '',
+      model: { provider: 'none', apiKey: '', baseUrl: '', model: '' },
+      monthlyTokens: 10_000_000,
     });
   });
 });

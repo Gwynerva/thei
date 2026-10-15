@@ -33,6 +33,7 @@ describe('asset cleanup', () => {
         CREATE TABLE "profile-avatars" (id text PRIMARY KEY);
         CREATE TABLE statuses (id text PRIMARY KEY);
         CREATE TABLE "diary-entries" (diaryUuid text PRIMARY KEY);
+        CREATE TABLE "ai-sessions" (sessionUuid text PRIMARY KEY);
         CREATE TABLE "project-content-sections" (sectionUuid text PRIMARY KEY);
         CREATE TABLE assets (
           assetUuid text PRIMARY KEY,

@@ -19,7 +19,7 @@ import {
 } from '#layers/thei/shared/admin/content-entity-search';
 import type { ContentOutputData } from '#layers/thei/shared/content';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
-import { contentEntityMentions } from '#layers/thei/shared/public-content-reference';
+import { contentEntityMentions } from '#layers/thei/shared/content-link-mentions';
 import { moveItemById } from '#layers/thei/app/composables/drag-sort';
 import { useRelationRecommendations } from '#layers/thei/app/composables/relation-recommendations';
 import { relationModal } from '#layers/thei/app/modals/relation/modal';
@@ -345,6 +345,12 @@ const { guardClick } = useDragSort(panel, {
           {{ phrase.relations_empty_of(selected) }}
         </p>
       </div>
+
+      <!-- What an AI proposes to relate, each opening its proposal. -->
+      <AiOfferChips
+        place="relations"
+        class="border-t border-border-1 p-sm sm:p-md"
+      />
 
       <!-- What the text links to and is not related yet: one tap relates it
            as plainly related, with nothing said of it. -->

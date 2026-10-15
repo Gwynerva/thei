@@ -92,6 +92,15 @@ export async function sendAssetFile(
 
   setHeader(event, 'Content-Type', getAssetMimeType(extension));
   setHeader(event, 'X-Content-Type-Options', 'nosniff');
+  // A drawing opened on its own is a document of the site's: whatever came
+  // with it — an upload, an app's file, a model's — runs nothing and loads
+  // nothing but what it embeds.
+  if (normalizeAssetExtension(extension) === 'svg')
+    setHeader(
+      event,
+      'Content-Security-Policy',
+      "default-src 'none'; img-src data:; font-src data:; style-src 'unsafe-inline'; sandbox",
+    );
   setHeader(event, 'Cache-Control', options.cacheControl);
   setHeader(event, 'Accept-Ranges', 'bytes');
   if (options.etag) {

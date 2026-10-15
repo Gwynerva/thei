@@ -52,6 +52,17 @@ const notesModel = computed({
 const isEdit = computed(() => Boolean(diaryUuid));
 const saving = ref(false);
 const savedSnapshot = ref(JSON.stringify(diaryPayload()));
+/**
+ * When the entity last changed, as the form read it. A save names it, and
+ * one over a change made elsewhere since — another tab, an AI client — is
+ * refused rather than written over it.
+ */
+const formVersion = ref<number>();
+provideEntityAi({
+  ref: () => (diaryUuid ? `diary-entry:${diaryUuid}` : undefined),
+  form: () => diaryData.value,
+  version: () => formVersion.value,
+});
 const headerError = ref<string>();
 const isDirty = computed(
   () => JSON.stringify(diaryPayload()) !== savedSnapshot.value,
@@ -98,6 +109,7 @@ if (isEdit.value) {
     notes: data.notes ?? null,
   };
   markSaved();
+  formVersion.value = data.version;
 }
 
 async function save() {
@@ -107,13 +119,17 @@ async function save() {
   try {
     const result = await $fetch<DiarySaveResponse>(
       isEdit.value ? `/api/admin/diary/${diaryUuid}` : '/api/admin/diary',
-      { method: isEdit.value ? 'PUT' : 'POST', body: diaryPayload() },
+      {
+        method: isEdit.value ? 'PUT' : 'POST',
+        body: { ...diaryPayload(), version: formVersion.value },
+      },
     );
     if (result.type === 'error') {
       headerError.value = result.message;
       if (result.code === 'date-taken') await refreshTakenDates();
       return;
     }
+    formVersion.value = result.version;
     stampSavedContent(diaryData.value, savedSnapshot.value, CONTENT_FIELDS);
     markSaved();
     // A new entry leaves for its own edit page, which loads the days afresh.
@@ -226,6 +242,7 @@ useRegisterAdminBarContextButton(
         }}</span>
       </div>
       <div class="flex items-center gap-xs">
+        <AiEntityButton />
         <Button
           v-if="isEdit"
           variant="delete"
@@ -247,6 +264,7 @@ useRegisterAdminBarContextButton(
   </StickyGlassHeader>
 
   <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
+    <AiFormOffers />
     <Box class="flex flex-col gap-md p-sm sm:p-md">
       <div class="flex flex-wrap gap-md">
         <Field class="min-w-50 flex-1">
@@ -268,7 +286,7 @@ useRegisterAdminBarContextButton(
             <span>{{ phrase.diary_date_taken_open }}</span>
           </TheiLink>
         </Field>
-        <Field class="min-w-50">
+        <Field ai="access" class="min-w-50">
           <FieldLabel required>{{ phrase.diary_access }}</FieldLabel>
           <FieldOptions
             v-model="diaryData.access"
@@ -310,6 +328,7 @@ useRegisterAdminBarContextButton(
       entity-type="diary-entry"
       :entity-uuid="diaryUuid"
     />
+    <AiMemoryBlock />
     <AdminNotesBlock
       v-model:reminder="reminderModel"
       v-model:notes="notesModel"

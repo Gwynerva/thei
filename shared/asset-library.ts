@@ -10,7 +10,8 @@ import { normalizeAssetExtension } from './assets/formats';
 
 /**
  * What holds a file, as the library groups files: an entity of the site, a
- * section of a project (with the project as its parent), or nothing at all.
+ * section of a project (with the project as its parent), an AI session the
+ * file was brought into, or nothing at all.
  */
 export const ASSET_SOURCE_TYPES = [
   'project',
@@ -20,6 +21,7 @@ export const ASSET_SOURCE_TYPES = [
   'diary-entry',
   'tag',
   'profile',
+  'ai-session',
   'unused',
 ] as const;
 export type AssetSourceType = (typeof ASSET_SOURCE_TYPES)[number];

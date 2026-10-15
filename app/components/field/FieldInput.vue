@@ -98,7 +98,37 @@ function onBlur() {
 
 <template>
   <div :class="wrapperClass">
+    <!-- With a unit after the value, the field's border goes round both, so
+         the unit reads as part of the field and the two never part. -->
+    <div
+      v-if="$slots.suffix"
+      class="flex min-w-0 items-stretch overflow-hidden border-2 bg-bg-1
+        transition focus-within:border-border-3 hocus:border-border-3"
+      :class="[
+        shownError
+          ? 'rounded-t-lg border-border-error'
+          : 'rounded-normal border-border-1',
+      ]"
+    >
+      <input
+        v-bind="attrs"
+        ref="input"
+        v-model="model"
+        data-label-focus
+        class="w-full min-w-0 flex-1 bg-transparent p-xs text-text-1
+          outline-none placeholder:text-text-3"
+        @focus="onFocus"
+        @blur="onBlur"
+        @keyup.enter.prevent="$emit('submit')"
+      />
+      <span
+        class="flex shrink-0 items-center border-l-2 border-border-1 bg-bg-3
+          px-sm text-sm whitespace-nowrap text-text-2"
+        ><slot name="suffix"></slot
+      ></span>
+    </div>
     <input
+      v-else
       v-bind="attrs"
       ref="input"
       v-model="model"

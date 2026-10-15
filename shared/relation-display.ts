@@ -1,4 +1,9 @@
-import type { RelationEntityType, RelationType } from './relation';
+import {
+  RELATION_TYPE_OF_WORD,
+  type RelationEntityType,
+  type RelationType,
+  type RelationWord,
+} from './relation';
 import type { LanguagePhrases } from './language/types';
 import { entityTypeIcon } from './entity-icon';
 
@@ -44,6 +49,11 @@ const RELATION_TYPE_DISPLAY = {
  */
 export function relationTypeIcon(type: RelationType) {
   return RELATION_TYPE_DISPLAY[type].icon;
+}
+
+/** The same icon for a relation in the words an AI reads it in. */
+export function relationWordIcon(word: RelationWord) {
+  return relationTypeIcon(RELATION_TYPE_OF_WORD[word] ?? 'related');
 }
 
 /**

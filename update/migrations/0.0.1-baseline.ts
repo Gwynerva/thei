@@ -11,7 +11,8 @@ export const baselineSql: string[] = [
 	\`currentAvatarId\` text,
 	\`bannerAssetUuid\` text,
 	\`faviconAssetUuid\` text,
-	\`facts\` text DEFAULT '[]' NOT NULL
+	\`facts\` text DEFAULT '[]' NOT NULL,
+	\`updatedAt\` integer DEFAULT 0 NOT NULL
 );
 `,
   `CREATE TABLE \`profile-avatars\` (
@@ -118,7 +119,8 @@ export const baselineSql: string[] = [
 	\`assetUuids\` text NOT NULL,
 	\`writer\` text DEFAULT '' NOT NULL,
 	\`createdAt\` integer NOT NULL,
-	\`updatedAt\` integer NOT NULL
+	\`updatedAt\` integer NOT NULL,
+	\`heldBy\` text
 );
 `,
   `CREATE INDEX \`content-history-field-idx\` ON \`content-history\` (\`ownerType\`,\`ownerRef\`,\`slot\`,\`kind\`,\`createdAt\`);`,
@@ -251,7 +253,8 @@ export const baselineSql: string[] = [
 	\`slug\` text NOT NULL,
 	\`publicId\` text NOT NULL,
 	\`description\` text DEFAULT '' NOT NULL,
-	\`synonyms\` text DEFAULT '[]' NOT NULL
+	\`synonyms\` text DEFAULT '[]' NOT NULL,
+	\`updatedAt\` integer DEFAULT 0 NOT NULL
 );
 `,
   `CREATE UNIQUE INDEX \`tags_normalizedTitle_unique\` ON \`tags\` (\`normalizedTitle\`);`,
@@ -301,6 +304,211 @@ export const baselineSql: string[] = [
 );
 `,
   `CREATE INDEX \`event-external-links-event-idx\` ON \`event-external-links\` (\`eventUuid\`,\`sortOrder\`);`,
+  `CREATE TABLE \`api-tokens\` (
+	\`tokenUuid\` text PRIMARY KEY NOT NULL,
+	\`label\` text NOT NULL,
+	\`tokenHash\` text NOT NULL,
+	\`scopes\` text NOT NULL,
+	\`createdAt\` integer NOT NULL,
+	\`lastUsedAt\` integer,
+	\`lastClient\` text,
+	\`kind\` text DEFAULT 'token' NOT NULL,
+	\`clientId\` text,
+	\`resource\` text,
+	\`accessExpiresAt\` integer,
+	\`refreshHash\` text,
+	\`refreshExpiresAt\` integer,
+	\`previousRefreshHash\` text,
+	\`refreshedAt\` integer
+);
+`,
+  `CREATE UNIQUE INDEX \`api-tokens_tokenHash_unique\` ON \`api-tokens\` (\`tokenHash\`);`,
+  `CREATE UNIQUE INDEX \`api-tokens-refresh-idx\` ON \`api-tokens\` (\`refreshHash\`);`,
+  `CREATE INDEX \`api-tokens-previous-refresh-idx\` ON \`api-tokens\` (\`previousRefreshHash\`);`,
+  `CREATE TABLE \`oauth-clients\` (
+	\`clientId\` text PRIMARY KEY NOT NULL,
+	\`kind\` text NOT NULL,
+	\`name\` text NOT NULL,
+	\`uri\` text,
+	\`redirectUris\` text NOT NULL,
+	\`createdAt\` integer NOT NULL,
+	\`fetchedAt\` integer,
+	\`staleAt\` integer,
+	\`lastUsedAt\` integer
+);
+`,
+  `CREATE TABLE \`oauth-authorizations\` (
+	\`requestId\` text PRIMARY KEY NOT NULL,
+	\`clientId\` text NOT NULL,
+	\`redirectUri\` text NOT NULL,
+	\`codeChallenge\` text NOT NULL,
+	\`state\` text,
+	\`resource\` text NOT NULL,
+	\`requestedScopes\` text NOT NULL,
+	\`createdAt\` integer NOT NULL,
+	\`expiresAt\` integer NOT NULL,
+	\`codeHash\` text,
+	\`grantedScopes\` text,
+	\`label\` text,
+	\`tokenUuid\` text,
+	\`usedAt\` integer
+);
+`,
+  `CREATE UNIQUE INDEX \`oauth-authorizations_codeHash_unique\` ON \`oauth-authorizations\` (\`codeHash\`);`,
+  `CREATE INDEX \`oauth-authorizations-expires-idx\` ON \`oauth-authorizations\` (\`expiresAt\`);`,
+  `CREATE TABLE \`ai-usage\` (
+	\`day\` text PRIMARY KEY NOT NULL,
+	\`inputTokens\` integer DEFAULT 0 NOT NULL,
+	\`outputTokens\` integer DEFAULT 0 NOT NULL,
+	\`cacheReadTokens\` integer DEFAULT 0 NOT NULL,
+	\`cacheWriteTokens\` integer DEFAULT 0 NOT NULL,
+	\`calls\` integer DEFAULT 0 NOT NULL
+);
+`,
+  `CREATE TABLE \`ai-sessions\` (
+	\`sessionUuid\` text PRIMARY KEY NOT NULL,
+	\`title\` text DEFAULT '' NOT NULL,
+	\`origin\` text NOT NULL,
+	\`tokenUuid\` text,
+	\`client\` text,
+	\`templateId\` text,
+	\`model\` text,
+	\`state\` text DEFAULT 'idle' NOT NULL,
+	\`pinned\` integer DEFAULT false NOT NULL,
+	\`waiting\` integer DEFAULT 0 NOT NULL,
+	\`applied\` integer DEFAULT 0 NOT NULL,
+	\`rejected\` integer DEFAULT 0 NOT NULL,
+	\`summary\` text DEFAULT '' NOT NULL,
+	\`tokens\` integer DEFAULT 0 NOT NULL,
+	\`error\` text,
+	\`createdAt\` integer NOT NULL,
+	\`lastActiveAt\` integer NOT NULL,
+	\`closedAt\` integer,
+	\`archivedAt\` integer,
+	\`purgedAt\` integer
+);
+`,
+  `CREATE INDEX \`ai-sessions-active-idx\` ON \`ai-sessions\` (\`archivedAt\`,\`lastActiveAt\`);`,
+  `CREATE INDEX \`ai-sessions-app-idx\` ON \`ai-sessions\` (\`tokenUuid\`,\`client\`,\`lastActiveAt\`);`,
+  `CREATE INDEX \`ai-sessions-template-idx\` ON \`ai-sessions\` (\`templateId\`,\`createdAt\`);`,
+  `CREATE INDEX \`ai-sessions-waiting-idx\` ON \`ai-sessions\` (\`waiting\`);`,
+  `CREATE TABLE \`ai-messages\` (
+	\`messageUuid\` text PRIMARY KEY NOT NULL,
+	\`sessionUuid\` text NOT NULL,
+	\`seq\` integer NOT NULL,
+	\`role\` text NOT NULL,
+	\`text\` text DEFAULT '' NOT NULL,
+	\`parts\` text DEFAULT '[]' NOT NULL,
+	\`transcript\` text DEFAULT '[]' NOT NULL,
+	\`tokens\` integer DEFAULT 0 NOT NULL,
+	\`createdAt\` integer NOT NULL
+);
+`,
+  `CREATE UNIQUE INDEX \`ai-messages-seq-idx\` ON \`ai-messages\` (\`sessionUuid\`,\`seq\`);`,
+  `CREATE TABLE \`ai-actions\` (
+	\`actionUuid\` text PRIMARY KEY NOT NULL,
+	\`sessionUuid\` text NOT NULL,
+	\`messageUuid\` text,
+	\`bundleUuid\` text,
+	\`bundleOrder\` integer DEFAULT 0 NOT NULL,
+	\`atomic\` integer DEFAULT false NOT NULL,
+	\`kind\` text NOT NULL,
+	\`targetType\` text,
+	\`targetId\` text,
+	\`payload\` text NOT NULL,
+	\`parts\` text,
+	\`base\` text,
+	\`certainty\` text NOT NULL,
+	\`reason\` text DEFAULT '' NOT NULL,
+	\`state\` text NOT NULL,
+	\`supersedes\` text,
+	\`fingerprint\` text NOT NULL,
+	\`undo\` text,
+	\`assetUuids\` text DEFAULT '[]' NOT NULL,
+	\`appliedBy\` text,
+	\`createdAt\` integer NOT NULL,
+	\`decidedAt\` integer,
+	\`error\` text
+);
+`,
+  `CREATE INDEX \`ai-actions-session-idx\` ON \`ai-actions\` (\`sessionUuid\`,\`createdAt\`);`,
+  `CREATE INDEX \`ai-actions-target-idx\` ON \`ai-actions\` (\`targetType\`,\`targetId\`,\`state\`);`,
+  `CREATE INDEX \`ai-actions-state-idx\` ON \`ai-actions\` (\`state\`);`,
+  `CREATE INDEX \`ai-actions-fingerprint-idx\` ON \`ai-actions\` (\`fingerprint\`);`,
+  `CREATE TABLE \`ai-session-entities\` (
+	\`sessionUuid\` text NOT NULL,
+	\`entityType\` text NOT NULL,
+	\`entityId\` text NOT NULL,
+	\`role\` text NOT NULL,
+	\`at\` integer NOT NULL,
+	PRIMARY KEY(\`sessionUuid\`, \`entityType\`, \`entityId\`)
+);
+`,
+  `CREATE INDEX \`ai-session-entities-entity-idx\` ON \`ai-session-entities\` (\`entityType\`,\`entityId\`,\`at\`);`,
+  `CREATE TABLE \`ai-memory\` (
+	\`memoryUuid\` text PRIMARY KEY NOT NULL,
+	\`anchor\` text NOT NULL,
+	\`anchorType\` text DEFAULT '' NOT NULL,
+	\`anchorId\` text DEFAULT '' NOT NULL,
+	\`otherType\` text,
+	\`otherId\` text,
+	\`type\` text NOT NULL,
+	\`text\` text NOT NULL,
+	\`fingerprint\` text,
+	\`sessionUuid\` text,
+	\`createdAt\` integer NOT NULL,
+	\`updatedAt\` integer NOT NULL
+);
+`,
+  `CREATE INDEX \`ai-memory-anchor-idx\` ON \`ai-memory\` (\`anchor\`,\`anchorType\`,\`anchorId\`);`,
+  `CREATE INDEX \`ai-memory-other-idx\` ON \`ai-memory\` (\`otherType\`,\`otherId\`);`,
+  `CREATE INDEX \`ai-memory-fingerprint-idx\` ON \`ai-memory\` (\`fingerprint\`);`,
+  `CREATE TABLE \`ai-terms\` (
+	\`word\` text PRIMARY KEY NOT NULL,
+	\`display\` text NOT NULL,
+	\`note\` text DEFAULT '' NOT NULL,
+	\`forms\` text DEFAULT '[]' NOT NULL,
+	\`keep\` integer DEFAULT true NOT NULL,
+	\`createdAt\` integer NOT NULL,
+	\`updatedAt\` integer NOT NULL
+);
+`,
+  `CREATE TABLE \`ai-digests\` (
+	\`entityType\` text NOT NULL,
+	\`entityId\` text NOT NULL,
+	\`text\` text NOT NULL,
+	\`fingerprint\` text NOT NULL,
+	\`model\` text DEFAULT '' NOT NULL,
+	\`at\` integer NOT NULL,
+	PRIMARY KEY(\`entityType\`, \`entityId\`)
+);
+`,
+  `CREATE TABLE \`ai-templates\` (
+	\`templateId\` text PRIMARY KEY NOT NULL,
+	\`builtin\` text,
+	\`title\` text,
+	\`instruction\` text,
+	\`model\` text DEFAULT '' NOT NULL,
+	\`schedule\` text NOT NULL,
+	\`enabled\` integer DEFAULT true NOT NULL,
+	\`nextRunAt\` integer,
+	\`lastRunAt\` integer,
+	\`lastSessionUuid\` text,
+	\`createdAt\` integer NOT NULL,
+	\`updatedAt\` integer NOT NULL
+);
+`,
+  `CREATE INDEX \`ai-templates-next-idx\` ON \`ai-templates\` (\`nextRunAt\`);`,
+  `CREATE TABLE \`ai-template-marks\` (
+	\`templateId\` text NOT NULL,
+	\`entityType\` text NOT NULL,
+	\`entityId\` text NOT NULL,
+	\`fingerprint\` text NOT NULL,
+	\`blocks\` text DEFAULT '[]' NOT NULL,
+	\`at\` integer NOT NULL,
+	PRIMARY KEY(\`templateId\`, \`entityType\`, \`entityId\`)
+);
+`,
 ];
 
 export default defineMigration({

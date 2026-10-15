@@ -13,6 +13,7 @@ import { findOrphanedAssets } from './repository/find-orphaned';
 import { deleteStoredAsset } from './storage';
 import { sweepDraftDirectories } from './drafts';
 import { sweepTheiTempDir } from './temp';
+import { forgetAiAnchors } from '../ai/memory/forget';
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const GENERATED_MEDIA_MAX_AGE_MS = 30 * ONE_DAY_MS;
@@ -154,6 +155,7 @@ async function cleanupDanglingUsages() {
     ['profile-avatar', 'profile-avatars', 'id'],
     ['profile-status', 'statuses', 'id'],
     ['project-status', 'statuses', 'id'],
+    ['ai-session', 'ai-sessions', 'sessionUuid'],
   ];
 
   // Every container type must have an owner table here. Without this, adding a
@@ -360,6 +362,7 @@ function deleteAssetRecordsAndUsages(
       tx.delete(schema.assets)
         .where(eq(schema.assets.assetUuid, row.assetUuid))
         .run();
+      forgetAiAnchors(tx, schema, 'asset', [row.assetUuid]);
     }
 
     return rows.length;

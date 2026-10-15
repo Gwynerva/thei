@@ -17,7 +17,7 @@ import {
 
 const isAdmin = useIsAdmin();
 const adminBarData = isAdmin.value
-  ? (await useFetch('/api/admin/dashboard-summary', { key: 'admin-bar' })).data
+  ? (await useAdminSummary()).data
   : shallowRef();
 
 const publicAdmin = await usePublicAdmin();
@@ -61,8 +61,18 @@ async function signOut() {
   await navigateTo(sitePath('/sign-in/'), { external: true });
 }
 
+/**
+ * A form registers its button while it sets up — on the server after the
+ * bar has already rendered, so the server never draws it, but the state
+ * reaches the browser with the page and is there before the bar hydrates.
+ * Taken only once mounted, the bar hydrates as the server drew it and gains
+ * the button right after.
+ */
+const mounted = ref(false);
+onMounted(() => (mounted.value = true));
+
 const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
-  if (registeredContextButton.value?.routePath === route.path)
+  if (mounted.value && registeredContextButton.value?.routePath === route.path)
     return registeredContextButton.value.props;
 
   // A section has no editor of its own: the button opens the project's
@@ -233,6 +243,8 @@ const contextAdminButton = computed<AdminBarButtonProps | undefined>(() => {
             compact-label
             class="font-semibold"
           />
+
+          <AdminBarAi v-if="adminBarData.aiEnabled" />
 
           <AdminBarButton
             v-if="contextAdminButton"

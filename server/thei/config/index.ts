@@ -1,3 +1,9 @@
+import {
+  AI_PROVIDERS,
+  DEFAULT_AI_MODEL,
+  DEFAULT_MONTHLY_TOKENS,
+  type AiModelConfig,
+} from '#layers/thei/shared/ai-model';
 import type { SiteAccessLevel } from '#layers/thei/shared/access-level';
 import type { LanguageCode } from '#layers/thei/shared/language';
 import {
@@ -33,6 +39,20 @@ export interface TheiConfig {
   backup?: {
     tokenHash: string;
     createdAt: string;
+  };
+  /**
+   * Whether AI clients may work with the site over MCP. Off, the endpoint
+   * does not exist and tokens open nothing; everything else works as if
+   * there were no MCP at all.
+   */
+  mcp: {
+    enabled: boolean;
+    /** The owner's own words to every AI client: how they write, what to mind. */
+    instructions: string;
+    /** The one model the site calls, for sessions and templates. */
+    model: AiModelConfig;
+    /** What that model may spend a month, in counted tokens. */
+    monthlyTokens: number;
   };
 }
 
@@ -84,6 +104,7 @@ export function toTheiConfig(raw: Record<string, unknown>): TheiConfig {
   const password = asRecord(raw.password);
   const analytics = asRecord(raw.analytics);
   const backup = raw.backup === undefined ? undefined : asRecord(raw.backup);
+  const mcp = asRecord(raw.mcp);
   const problems = [
     ...stringFields(raw, [
       'version',
@@ -107,8 +128,30 @@ export function toTheiConfig(raw: Record<string, unknown>): TheiConfig {
       : backup
         ? stringFields(backup, ['tokenHash', 'createdAt'], 'backup.')
         : ['backup']),
+    ...(typeof mcp?.enabled === 'boolean' ? [] : ['mcp.enabled']),
+    ...(typeof mcp?.instructions === 'string' ? [] : ['mcp.instructions']),
   ];
   if (problems.length) throw configShapeError(problems);
+  // The settings of the model are nothing the site needs to run: a hand
+  // edit gone wrong turns the model off rather than take the site down.
+  // Each field falls back on its own, so the next save of any setting
+  // writes back what was sound — the API key above all.
+  const model = asRecord(mcp?.model);
+  const modelIssues = modelProblems(model);
+  const tokensSound =
+    typeof mcp?.monthlyTokens === 'number' && mcp.monthlyTokens >= 0;
+  if (modelIssues.length)
+    THEI_SERVER.console?.warn?.(
+      `thei.config.json: ${modelIssues.join(', ')} malformed; the model is off until it is saved again.`,
+    );
+  if (!tokensSound)
+    THEI_SERVER.console?.warn?.(
+      `thei.config.json: mcp.monthlyTokens malformed; the limit is ${DEFAULT_MONTHLY_TOKENS} until it is saved again.`,
+    );
+  const modelText = (field: 'apiKey' | 'baseUrl' | 'model') =>
+    typeof model?.[field] === 'string'
+      ? (model[field] as string)
+      : DEFAULT_AI_MODEL[field];
 
   return {
     version: raw.version as string,
@@ -119,7 +162,35 @@ export function toTheiConfig(raw: Record<string, unknown>): TheiConfig {
     secretPhrase: raw.secretPhrase as string,
     password: password as unknown as TheiConfig['password'],
     ...(backup ? { backup: backup as unknown as TheiConfig['backup'] } : {}),
+    mcp: {
+      enabled: mcp!.enabled as boolean,
+      instructions: mcp!.instructions as string,
+      model: {
+        provider: modelIssues.length
+          ? 'none'
+          : (model!.provider as AiModelConfig['provider']),
+        apiKey: modelText('apiKey'),
+        baseUrl: modelText('baseUrl'),
+        model: modelText('model'),
+      },
+      monthlyTokens: tokensSound
+        ? (mcp!.monthlyTokens as number)
+        : DEFAULT_MONTHLY_TOKENS,
+    },
   };
+}
+
+/** What is wrong with the model's settings, field by field. */
+function modelProblems(model: Record<string, unknown> | undefined) {
+  if (!model) return ['mcp.model'];
+  return [
+    ...(['apiKey', 'baseUrl', 'model'] as const)
+      .filter((field) => typeof model[field] !== 'string')
+      .map((field) => `mcp.model.${field}`),
+    ...((AI_PROVIDERS as readonly unknown[]).includes(model.provider)
+      ? []
+      : ['mcp.model.provider']),
+  ];
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {

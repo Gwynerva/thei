@@ -31,6 +31,8 @@ import ProjectContentItemRow from './ProjectContentItemRow.vue';
  */
 
 const projectData = inject(projectDataInjectionKey)!;
+/** The project's AI: a section's own reads again when the project saves. */
+const projectAi = useEntityAi();
 const savedProjectData = inject(savedProjectDataInjectionKey)!;
 const saveAfterItemEdit = inject(saveAfterItemEditKey, undefined);
 const currentProjectUuid = inject(currentProjectUuidKey)!;
@@ -177,6 +179,7 @@ function openItem(target?: ProjectSectionItem) {
       projectHumanReadableSlug: projectData.value.humanReadableSlug,
       projectPublicId: projectData.value.publicId,
       item: target,
+      saved: () => projectAi?.panel.value,
       onSave: (item: ProjectSectionItem) => {
         const merged = mergeSaved(current, item);
         replaceItem(current, merged);
@@ -209,14 +212,15 @@ function openItem(target?: ProjectSectionItem) {
 
 /**
  * `?section=<publicId>` opens that section straight away, in its tab: it is
- * how the admin bar on a public section page lands here.
+ * how the admin bar on a public section page lands here, and a link to a
+ * section from anywhere in the admin — the form's own AI memory too.
  *
  * Only on the UUID address — reached by public ID, the editor first moves
  * there, and the page mounted at the old address must not open it too. The
  * query is dropped before the modal opens, so going back or reloading does
  * not open it again.
  */
-onMounted(async () => {
+async function openWanted() {
   const wanted = route.query.section;
   if (typeof wanted !== 'string') return;
   if (route.params.projectUuid !== currentProjectUuid.value) return;
@@ -230,7 +234,9 @@ onMounted(async () => {
   if (!target) return;
   selected.value = groupOf(target);
   await openItem(target);
-});
+}
+onMounted(openWanted);
+watch(() => route.query.section, openWanted);
 
 /**
  * Moving a row moves its element, and an element moved in the document

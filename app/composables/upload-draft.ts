@@ -13,6 +13,7 @@ import {
   createOriginalAssetSettings,
   type AssetUploadRequest,
 } from '#layers/thei/shared/asset-upload-settings';
+import { sendDelete } from './keepalive-delete';
 import { trackUploadProgress } from './upload-progress';
 
 /** The limits of the place a file is going to, sent along with it. */
@@ -216,16 +217,9 @@ export async function commitDraftRequest(
   return await awaitUploadJob(uploadId, { signal, onStatus });
 }
 
-/** A DELETE sent with keepalive, so a tab that is closing still sends it. */
-function sendDelete(path: string) {
-  void fetch(sitePath(path), { method: 'DELETE', keepalive: true }).catch(
-    () => {},
-  );
-}
-
 /** Stops a job on the server. */
 function cancelUploadJob(uploadId: string) {
-  sendDelete(`/api/admin/uploads/${uploadId}`);
+  void sendDelete(`/api/admin/uploads/${uploadId}`).catch(() => {});
 }
 
 /**
@@ -311,7 +305,7 @@ function jobLost() {
 
 /** Frees the server's copy. */
 export function deleteDraft(draftId: string) {
-  sendDelete(`/api/admin/assets/drafts/${draftId}`);
+  void sendDelete(`/api/admin/assets/drafts/${draftId}`).catch(() => {});
 }
 
 /** What went wrong with a request, in the words the server gave if any. */

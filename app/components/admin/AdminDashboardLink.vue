@@ -34,8 +34,8 @@ const compactNumber = useCompactNumber();
         <span
           v-if="count !== undefined"
           class="shrink-0 text-2xl font-bold text-text-2"
-          :title="count.toLocaleString()"
-          :aria-label="count.toLocaleString()"
+          :title="count.toLocaleString(language.code)"
+          :aria-label="count.toLocaleString(language.code)"
         >
           {{ compactNumber(count) }}
         </span>

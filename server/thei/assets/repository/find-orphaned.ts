@@ -1,5 +1,5 @@
 import { and, eq, isNull, lt, not } from 'drizzle-orm';
-import { assetHeldByHistorySql } from '../../content/history';
+import { assetHeldSql } from '../holds';
 
 export async function findOrphanedAssets(cutoffMs: number) {
   const { db, schema } = THEI_SERVER.useDb();
@@ -20,9 +20,9 @@ export async function findOrphanedAssets(cutoffMs: number) {
       and(
         isNull(schema.assetUsages.assetUuid),
         lt(schema.assets.touchedAt, cutoffMs),
-        // A file a draft or a version still shows is not unused: it is kept
-        // for as long as that row lives.
-        not(assetHeldByHistorySql(schema.assets.assetUuid)),
+        // A file a draft or a version still shows, or an AI action still
+        // needs, is not unused: it is kept for as long as that lives.
+        not(assetHeldSql(schema.assets.assetUuid)),
       ),
     );
 }

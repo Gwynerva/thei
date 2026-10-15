@@ -276,6 +276,30 @@ describe('the sweep', () => {
     expect(await exists(path)).toBe(true);
   });
 
+  it('keeps the sites a session points at while it is kept', async () => {
+    storeRow('https://report.example/');
+    storeRow('https://report-card.example/');
+    storeRow('https://gone.example/');
+    context.rawDb
+      .prepare(
+        "INSERT INTO `ai-messages` (messageUuid, sessionUuid, seq, role, text, createdAt) VALUES ('aim-1', 'ais-1', 1, 'model', ?, 1)",
+      )
+      .run(
+        'Read [the source](https://report.example/) again.\n\n::link[A card]{url="https://report-card.example/"}',
+      );
+    await sweepExternalLinks();
+    expect(await findExternalLink('https://report.example/')).toBeDefined();
+    expect(
+      await findExternalLink('https://report-card.example/'),
+    ).toBeDefined();
+    expect(await findExternalLink('https://gone.example/')).toBeUndefined();
+
+    // Forgotten with its session, as with any other home of a link.
+    context.rawDb.prepare('DELETE FROM `ai-messages`').run();
+    await sweepExternalLinks();
+    expect(await findExternalLink('https://report.example/')).toBeUndefined();
+  });
+
   it('tolerates malformed content and never throws', async () => {
     storeRow('https://kept.example/');
     context.db

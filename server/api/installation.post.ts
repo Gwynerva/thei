@@ -4,6 +4,10 @@ import type { InstallData } from '#layers/thei/shared/api/install';
 import { languageCodes } from '#layers/thei/shared/language';
 import { normalizeSiteUrl } from '#layers/thei/shared/site-url';
 import { emptySiteAnalytics } from '#layers/thei/shared/analytics';
+import {
+  DEFAULT_AI_MODEL,
+  DEFAULT_MONTHLY_TOKENS,
+} from '#layers/thei/shared/ai-model';
 import { writeConfigFile } from '#layers/thei/update/config-file';
 import { generatePasswordData } from '../thei/password';
 import { createFreshDbContext } from '../thei/db/utils';
@@ -72,6 +76,12 @@ export default defineEventHandler(async (event): Promise<InstallResponse> => {
         hash: passwordData.hash,
         salt: passwordData.salt,
         iterations: passwordData.iterations,
+      },
+      mcp: {
+        enabled: false,
+        instructions: '',
+        model: { ...DEFAULT_AI_MODEL },
+        monthlyTokens: DEFAULT_MONTHLY_TOKENS,
       },
     } satisfies TheiConfig);
     await bootTheiServer();

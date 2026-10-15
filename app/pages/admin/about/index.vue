@@ -38,6 +38,11 @@ const {
   isDirty,
   markSaved,
 } = useSerializableState(initial.data, { serialize });
+provideEntityAi({
+  ref: () => 'profile',
+  form: () => data.value,
+  version: () => data.value.version,
+});
 const saved = ref(structuredClone(initial.data));
 const avatarMedia = ref(
   initial.currentAvatar ? initial.avatarMedia : undefined,
@@ -120,7 +125,10 @@ async function save() {
       'public-latest-life',
     ]);
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e);
+    // A refused save says why, a form read before a newer change included.
+    error.value =
+      (e as { data?: { message?: string } }).data?.message ??
+      (e instanceof Error ? e.message : String(e));
   } finally {
     saving.value = false;
   }
@@ -165,18 +173,20 @@ const birthDateMax = new Date();
       :can-save="canSave"
       :error="error"
       @save="save"
-    />
+      ><AiEntityButton
+    /></AdminSaveHeader>
     <fieldset
       :disabled="saving"
       class="m-auto flex w-(--width-wide) min-w-0 flex-col gap-lg px-window
         py-lg"
     >
+      <AiFormOffers />
       <Box class="flex flex-col gap-md p-sm sm:p-md">
         <div class="grid gap-md sm:grid-cols-2">
           <Field
             ><FieldLabel required>{{ phrase.profile_name }}</FieldLabel
             ><FieldInput v-model="data.displayName" /></Field
-          ><Field
+          ><Field ai="field:slogan"
             ><FieldLabel>{{ phrase.profile_slogan }}</FieldLabel
             ><FieldInput v-model="data.slogan"
           /></Field>

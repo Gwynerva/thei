@@ -5,6 +5,9 @@
 //   bun scripts/dev-server.ts playground          nuxt dev on 3000
 //   bun scripts/dev-server.ts fixture             nuxt dev on 3001
 //   bun scripts/dev-server.ts fixture --build     production build on 3001
+//   bun scripts/dev-server.ts realdata            nuxt dev on 3002, over a
+//                                                 copy of a real backup
+//                                                 (`bun scripts/realdata.ts`)
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -14,6 +17,7 @@ import { E2E_PORT } from '../tests/e2e/fixture-url';
 const targets = {
   playground: { dir: '.playground', port: 3000, fork: true },
   fixture: { dir: 'tests/e2e/fixture', port: E2E_PORT, fork: false },
+  realdata: { dir: '.realdata', port: 3002, fork: true },
 } as const;
 
 const root = fileURLToPath(new URL('..', import.meta.url));

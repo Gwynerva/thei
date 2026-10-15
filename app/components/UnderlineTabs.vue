@@ -8,6 +8,8 @@ export type TabItem<K extends string> = {
   label: string;
   icon?: IconName;
   count?: number;
+  /** Shows a count of none too, where none is worth saying. */
+  countZero?: boolean;
   /** An address of its own: the tab is a link to it, not a switch. */
   to?: RouteLocationRaw;
   /** Nothing to show under it: it is there, and cannot be chosen. */
@@ -19,8 +21,10 @@ export type TabItem<K extends string> = {
  * underlined in the accent — the head of a block rather than a control
  * floating above it.
  *
- * On a narrow screen only the chosen tab keeps its words: the others shrink
- * to their icon and count, which still says what there is to switch to.
+ * Where the row does not fit — on a narrow screen always, elsewhere when it
+ * is measured not to — only the chosen tab keeps its words: the others
+ * shrink to their icon and count, which still says what there is to switch
+ * to.
  * Each tab still names itself in full, count included, for a screen reader,
  * and in a hint where its words are hidden.
  *
@@ -30,7 +34,7 @@ export type TabItem<K extends string> = {
  * A tab's id is the panel's id and its key, `<controls>-<key>-tab`, so the
  * panel can say which tab names it with `aria-labelledby`.
  */
-defineProps<{
+const props = defineProps<{
   tabs: TabItem<K>[];
   label: string;
   /** The id of the panel the tabs switch. */
@@ -40,6 +44,41 @@ defineProps<{
 const model = defineModel<K>({ required: true });
 
 const list = useTemplateRef<HTMLElement>('list');
+
+/**
+ * Whether the row is too long for its place with every tab's words, so the
+ * others give theirs up. Measured with all the words shown, against the
+ * width the row's container offers, so giving them up does not undo itself.
+ */
+const compact = ref(false);
+
+async function measure() {
+  const row = list.value;
+  if (!row) return;
+  compact.value = false;
+  await nextTick();
+  const cut = Array.from(
+    row.querySelectorAll<HTMLElement>('[data-tab-label]'),
+  ).some((label) => label.scrollWidth > label.clientWidth + 1);
+  compact.value = cut || row.scrollWidth > row.clientWidth + 1;
+}
+
+let observer: ResizeObserver | undefined;
+onMounted(() => {
+  const container = list.value?.parentElement;
+  if (!container) return;
+  observer = new ResizeObserver(() => void measure());
+  observer.observe(container);
+  void measure();
+});
+onBeforeUnmount(() => observer?.disconnect());
+watch(
+  [
+    () => props.tabs.map((tab) => `${tab.label}${tab.count ?? ''}`).join(),
+    model,
+  ],
+  () => void measure(),
+);
 
 /**
  * The arrows move along the row and choose as they go, as tabs do; a row of
@@ -137,13 +176,16 @@ function tabName(tab: TabItem<K>) {
       />
       <span
         class="min-w-0 truncate"
-        :class="{ 'max-sm:hidden': model !== tab.key }"
+        :class="{
+          'max-sm:hidden': model !== tab.key,
+          hidden: compact && model !== tab.key,
+        }"
         data-tab-label
         data-title-popup-label
         >{{ tab.label }}</span
       >
       <span
-        v-if="tab.count"
+        v-if="tab.count || (tab.countZero && tab.count === 0)"
         class="shrink-0 rounded-full bg-bg-3 px-2 py-0.5 text-xs leading-none
           tabular-nums"
       >

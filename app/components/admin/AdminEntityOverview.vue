@@ -40,8 +40,8 @@ const compactNumber = useCompactNumber();
       <div class="flex shrink-0 items-center gap-sm">
         <span
           class="text-xl font-bold text-text-2"
-          :title="count.toLocaleString()"
-          :aria-label="count.toLocaleString()"
+          :title="count.toLocaleString(language.code)"
+          :aria-label="count.toLocaleString(language.code)"
           >{{ compactNumber(count) }}</span
         >
         <TheiLink

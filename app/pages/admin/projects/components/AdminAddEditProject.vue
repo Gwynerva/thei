@@ -129,7 +129,21 @@ const statusUsageDelta = computed(() =>
 const isEdit = computed(() => Boolean(projectUuid));
 const saving = ref(false);
 const savedSnapshot = ref(JSON.stringify(projectData.value));
+/**
+ * When the entity last changed, as the form read it. A save names it, and
+ * one over a change made elsewhere since — another tab, an AI client — is
+ * refused rather than written over it.
+ */
+const formVersion = ref<number>();
 const headerError = ref<string | undefined>();
+provideEntityAi({
+  ref: () =>
+    resolvedProjectUuid.value
+      ? `project:${resolvedProjectUuid.value}`
+      : undefined,
+  form: () => projectData.value,
+  version: () => formVersion.value,
+});
 const actionError = computed(() =>
   projectActionValidationError(projectData.value.action),
 );
@@ -206,6 +220,7 @@ if (isEdit.value) {
   bannerSize.value = data.bannerAssetSize;
   actionMedia.applyLoaded(data);
   markProjectSaved();
+  formVersion.value = data.version;
   resolvedProjectUuid.value = data.projectUuid;
   if (projectUuid !== data.projectUuid) {
     // The query may ask for a section to be opened; it has to
@@ -228,7 +243,10 @@ async function handleSave() {
     if (isEdit.value) {
       const result = await $fetch<ProjectSaveResponse>(
         `/api/admin/projects/${projectUuid}`,
-        { method: 'PUT', body: projectData.value },
+        {
+          method: 'PUT',
+          body: { ...projectData.value, version: formVersion.value },
+        },
       );
       if (result.type === 'error') {
         if (result.code === 'public-id-taken') {
@@ -238,6 +256,7 @@ async function handleSave() {
         headerError.value = result.message;
         return;
       }
+      formVersion.value = result.version;
       applySavedContentItemIds(result);
       applySavedAction(result.action);
       applySavedStatuses(result.statuses);
@@ -434,6 +453,7 @@ async function openDeleteProjectModal() {
       </div>
 
       <div class="flex items-center gap-xs">
+        <AiEntityButton />
         <Button
           v-if="isEdit"
           variant="delete"
@@ -458,6 +478,7 @@ async function openDeleteProjectModal() {
     </div>
   </StickyGlassHeader>
   <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
+    <AiFormOffers />
     <ProjectMain />
     <ProjectActionSettings />
     <ProjectAssets />
@@ -506,6 +527,7 @@ async function openDeleteProjectModal() {
       entity-type="project"
       :entity-uuid="resolvedProjectUuid"
     />
+    <AiMemoryBlock />
     <AdminNotesBlock
       v-model:reminder="reminderModel"
       v-model:notes="notesModel"

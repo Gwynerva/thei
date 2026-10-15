@@ -49,6 +49,17 @@ export async function stageUploadBody(
     path?: string;
   },
 ): Promise<StagedUpload> {
+  return stageUploadStream(event.node.req, options);
+}
+
+/**
+ * Streams any body — a request's, or a download's — to a temp file, hashing
+ * it in the same pass and stopping at the size limit.
+ */
+export async function stageUploadStream(
+  body: AsyncIterable<Uint8Array>,
+  options: { maxSizeBytes: number; path?: string },
+): Promise<StagedUpload> {
   const path = options.path ?? theiTempPath(`upload-${randomUUID()}`);
   const digest = createHash('sha256');
   let size = 0;
@@ -60,10 +71,10 @@ export async function stageUploadBody(
 
   try {
     await pipeline(
-      event.node.req,
+      body,
       async function* (source) {
         for await (const chunk of source) {
-          const bytes = chunk as Buffer;
+          const bytes = Buffer.from(chunk as Uint8Array);
           size += bytes.length;
           if (size > options.maxSizeBytes) {
             // Stop reading rather than draining the rest of a file that is

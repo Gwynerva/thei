@@ -227,16 +227,17 @@ be copied anywhere, onto any machine.
 
 ### What is in a copy, and what is not
 
-|                           |                                                              |
-| ------------------------- | ------------------------------------------------------------ |
-| `thei.db`                 | a consistent snapshot, taken through SQLite's own backup API |
-| `thei.config.json`        | version, language, access level, password and token hashes   |
-| `assets/`                 | uploaded originals and every derived variant                 |
-| `external-link-favicons/` | the icons of external links, one file per distinct icon      |
-| `generated-media/`        | **not copied** — a cache the site rebuilds on demand         |
+|                           |                                                                                        |
+| ------------------------- | -------------------------------------------------------------------------------------- |
+| `thei.db`                 | a consistent snapshot, taken through SQLite's own backup API                           |
+| `thei.config.json`        | version, language, access level, password and token hashes, and the AI model's API key |
+| `assets/`                 | uploaded originals and every derived variant                                           |
+| `external-link-favicons/` | the icons of external links, one file per distinct icon                                |
+| `generated-media/`        | **not copied** — a cache the site rebuilds on demand                                   |
 
-A copy therefore contains your site's credentials. Keep the destination folder
-somewhere you would be willing to keep a password file.
+A copy therefore contains your site's credentials — and, when the owner gave
+the site a model, that service's API key in plain text. Keep the destination
+folder somewhere you would be willing to keep a password file.
 
 Anything else found in `content/` is listed as skipped and left alone. Nothing
 the engine creates falls into that category, so if you see a name there, it is

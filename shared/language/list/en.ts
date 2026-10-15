@@ -247,9 +247,11 @@ export default defineI18nBase({
     asset_role_action_icon: 'Button icon',
     asset_role_action_background: 'Button background',
     asset_role_action_file: 'Button file',
+    asset_role_ai_attachment: 'Brought into the session',
     asset_role_avatar: 'Avatar',
     asset_role_status: 'Status',
     asset_source_profile: 'Profile',
+    asset_source_ai_session: 'AI session',
     asset_library_view: 'View entity',
     asset_library_edit: 'Edit entity',
     site_settings: 'Site settings',
@@ -474,8 +476,6 @@ export default defineI18nBase({
     public_details_links: 'Links',
     public_details_files: 'Files',
     content_integration_youtube: 'YouTube video',
-    public_details_manual: 'Added manually',
-    public_details_from_content: 'From the content',
     public_details_overview: 'Summary',
     public_details_contents: 'Contents',
     public_project_description: 'Project description',
@@ -723,6 +723,185 @@ export default defineI18nBase({
     backup_history: 'Recent runs',
     backup_run_summary: (files: number, size: string) =>
       `${files} files, ${size}`,
+    ai_access_on_hint:
+      'On: AI apps connect with access keys, and your model may answer in ' +
+      'sessions. Turn it off, and everything about AI leaves the site.',
+    ai_access_off_hint:
+      'Off: no app can connect, Thei calls no model, and no session or ' +
+      'proposal shows. Keys and settings are kept for when it is on.',
+    api_token_create: 'Create a key',
+    api_token_label: 'What it is for',
+    api_token_label_placeholder: 'Claude Code on the laptop',
+    api_token_label_required: 'Name the key: say what it is for.',
+    api_token_access: 'Access',
+    api_token_preset_reader: 'Reader',
+    api_token_preset_reader_hint:
+      'Reads everything and leaves suggestions for you to take or not. Changes nothing itself.',
+    api_token_preset_editor: 'Editor',
+    api_token_preset_editor_hint:
+      'May do whatever you can: create, edit, upload files, publish and delete. Every change shows in its session and can be undone; a deletion cannot.',
+    api_token_preset_custom: 'Custom',
+    api_token_empty: 'No access keys yet',
+    api_token_never_used: 'Never used',
+    api_token_last_used: 'Last used',
+    api_token_revoke: 'Revoke',
+    api_token_too_many: 'Too many keys. Revoke one that is no longer used.',
+    api_token_shown_once:
+      'Copy it now. The key is shown once and cannot be read back; a lost ' +
+      'key is replaced, not recovered.',
+    api_token_endpoint: 'Address',
+    api_token_connect_hint:
+      'Give the app this address and the key (the Authorization: Bearer ' +
+      'header). For Claude Code, run:',
+    ai_page: 'AI',
+    ai_page_description:
+      'Sessions with AI and what it does, what it remembers about you, and how apps and a model connect.',
+    ai_tab_connection: 'Connection',
+    ai_switch: 'AI in Thei',
+    ai_welcome:
+      'AI in Thei works in sessions: you talk about the archive with a ' +
+      'model or an app, and it reads, proofreads and proposes actions — ' +
+      'relations, tags, notes, edits. Nothing changes without you; what an ' +
+      'Editor key applied shows in its session and can be undone.',
+    ai_ways_facts: {
+      what: 'What',
+      how: 'How',
+      pays: 'Who pays',
+      rights: 'Rights',
+    },
+    ai_ways_cards: {
+      app: {
+        title: 'An AI app works with the archive',
+        what: 'Your AI app reads the archive and helps with it right in your conversation.',
+        how: 'Thei gives out an access key, and the app connects with it.',
+        pays: 'The app, on your usual subscription. Thei spends nothing.',
+        rights:
+          'A Reader only reads and proposes. An Editor makes changes itself; every one shows in its session and can be undone.',
+      },
+      model: {
+        title: 'Thei calls a model itself',
+        what: 'The model answers in sessions on this page: it reads the archive and proposes actions, and you apply them.',
+        how: 'It needs an API key from a service that gives access to a model.',
+        pays: 'You pay that service for each answer, within a monthly limit.',
+        rights: 'Reads and suggests only.',
+      },
+    },
+    api_tokens_title: 'Access keys',
+    api_tokens_hint:
+      'Each app gets its own key; a revoked key stops working at once.',
+    ai_connect_title: 'Connect an app',
+    ai_connect_apps: {
+      claude: 'Claude',
+      chatgpt: 'ChatGPT',
+      'claude-code': 'Claude Code',
+      other: 'Other',
+    },
+    ai_connect_steps: {
+      claude: [
+        'In Claude, open Settings → Connectors → “Add custom connector”. It shows in the desktop and phone apps as well.',
+        'Paste the address below and add the connector.',
+        'A page of this site opens: sign in, choose the rights and allow it.',
+      ],
+      chatgpt: [
+        'In ChatGPT, turn on developer mode: Settings → Connectors → Advanced.',
+        'Create a connector: the address below, authentication OAuth.',
+        'A page of this site opens: sign in, choose the rights and allow it.',
+      ],
+      'claude-code': [
+        'Run the command below in a terminal.',
+        'In Claude Code, type /mcp, pick thei and “Authenticate”: a page of this site opens. Or create an access key below: its command shows at once.',
+      ],
+      other: [
+        'Give the app the address below.',
+        'If it signs in by OAuth, it opens a page of this site itself. If not, create an access key and send it in the Authorization: Bearer header.',
+      ],
+    },
+    ai_connect_no_sign_in:
+      'This app cannot connect by signing in: the site needs HTTPS. Connect it with an access key, or turn HTTPS on.',
+    ai_connect_proxy:
+      'The site lives in a subfolder: for apps to find the sign-in, have the proxy redirect',
+    api_token_signed_in: (client) => `connected by signing in: ${client}`,
+    api_token_signed_in_verified: (client, host) =>
+      `Connected by signing in: ${client}, known by its description at ${host}`,
+    api_token_signed_in_unverified: (client) =>
+      `Connected by signing in: ${client}, which named itself`,
+    oauth_consent: 'Connecting an AI app',
+    oauth_consent_title: (client, site) =>
+      `${client} asks for access to “${site}”`,
+    oauth_verified: (host) => `Known by its own description at ${host}`,
+    oauth_unverified:
+      'The app named itself: its name cannot be checked. Allow it only if you started connecting it.',
+    oauth_redirect_web: (host) => `Once you answer, you go back to ${host}`,
+    oauth_redirect_elsewhere: (host) =>
+      `Once you answer, you go to ${host}, which is not the app’s address. Make sure that is right.`,
+    oauth_redirect_loopback: (port) =>
+      `The answer goes to a program on this computer (port ${port}). Allow it only if you just started it.`,
+    oauth_redirect_app: (scheme) => `The answer opens an app (${scheme})`,
+    oauth_connections: (count) =>
+      `This app has ${count} connection${count === 1 ? '' : 's'} already`,
+    oauth_rights: 'Rights',
+    oauth_requested_edit:
+      'The app asks for Editor rights. You may give it less: it sees what it got.',
+    oauth_allow: 'Allow',
+    oauth_deny: 'Decline',
+    oauth_sign_in_needed:
+      'Sign in to the site’s panel to answer this request. You come back here after signing in.',
+    oauth_gone:
+      'This request has expired or has been answered. Start connecting in the app again.',
+    oauth_returning: 'Going back to the app…',
+    oauth_refused_title: 'Connecting did not start',
+    oauth_refused: {
+      client: 'The site does not know the app that asked for access.',
+      client_document:
+        'The app’s description could not be read, or it is wrong.',
+      redirect_uri: 'The address the app asks to go back to is not its own.',
+      request: 'The request to connect is malformed.',
+    },
+    oauth_restart:
+      'Nothing was sent to the app. Start connecting in it again; if that fails, connect it with an access key.',
+    api_token_history: 'What it did',
+    api_token_history_empty: 'Nothing has been done with this key yet.',
+    ai_settings_link:
+      'AI apps and their access keys, the model with your API key and your ' +
+      'rules for AI live on the AI page.',
+    ai_open_page: 'Open the AI page',
+    ai_instructions_placeholder:
+      'I write slang on purpose. Never touch the titles of my projects.',
+    ai_check: 'Check the key',
+    ai_check_enabled_ok: 'AI in Thei is on',
+    ai_check_enabled_fail: 'AI in Thei is off: turn it on above',
+    ai_check_handshake_ok: (_version: string) => 'AI apps can connect',
+    ai_check_handshake_fail: 'AI apps cannot connect',
+    ai_check_tools_ok: (count: number) => `Tools for AI: ${count}`,
+    ai_check_tools_fail: 'AI apps see no tools',
+    ai_check_read_ok: (projects: number, events: number, diary: number) =>
+      `The site reads: ${projects} projects, ${events} events, ${diary} diary entries`,
+    ai_check_read_fail: 'A tool cannot read the site',
+    ai_check_public_ok:
+      'The public address answers from outside and asks for an access key',
+    ai_check_public_fail: (status: number) =>
+      `The public address answered ${status}: check that the proxy passes /api/mcp on`,
+    ai_check_public_warn:
+      'The site could not reach its own public address; clients outside may still reach it',
+    ai_check_public_skip: 'Not tried from outside while access is off',
+    ai_check_https_ok: 'The address is HTTPS',
+    ai_check_https_warn:
+      'The address is not HTTPS: Claude Code with an access key works, ' +
+      'connectors of claude.ai and ChatGPT need HTTPS',
+    ai_check_https_skip: 'A local address: no HTTPS needed here',
+    ai_check_signin_ok: 'Apps find the OAuth sign-in',
+    ai_check_signin_fail: (where) =>
+      `The OAuth sign-in is not found at ${where}: a site in a subfolder needs a proxy rule`,
+    ai_check_signin_https:
+      'No OAuth sign-in: the site needs HTTPS. Connecting with an access key works',
+    ai_check_clients_ok: (label: string, client: string) =>
+      `Last connection: “${label}”${client ? `, ${client}` : ''}`,
+    ai_check_clients_warn: 'Nothing has connected with this key yet',
+    entity_changed_since:
+      'This has changed since the form was opened — in another tab or by an AI app. Reload the page so as not to write over those changes.',
+    api_token_revoke_confirm: (label: string) =>
+      `Revoke the key “${label}”? An app using it loses access at once.`,
+    api_token_last_client: (client: string) => `via ${client}`,
     admin_updates: 'Updates',
     updates_description:
       'Keep Thei up to date. Updating replaces the engine and restarts the ' +
@@ -1107,6 +1286,7 @@ export default defineI18nBase({
       cleared: 'Saved before clearing',
       deleted: 'Deleted text',
       abandoned: 'Abandoned draft',
+      'before-ai': 'Before an AI edit',
     },
     content_history_row_label: (time, changes) =>
       `Version from ${time}: ${changes}`,
@@ -1116,24 +1296,24 @@ export default defineI18nBase({
         : `${value}, ${Math.abs(delta)} ${delta < 0 ? 'fewer' : 'more'} than now`,
     content_history_missing_assets: (count) =>
       `${plural(count, 'file', 'files')} of this version ${count === 1 ? 'is' : 'are'} already deleted`,
-    content_history_back: 'Back to versions',
-    content_restore: 'Restore',
-    content_restore_cancel: 'Cancel',
-    content_diff_removed: 'Would go',
-    content_diff_added: 'Would come back',
-    content_diff_changed: 'Would change',
-    content_diff_before: 'Now',
-    content_diff_after: 'After restoring',
-    content_restore_title: (time) => `Version from ${time}`,
-    content_restore_keeps_current: 'The current text stays in the history.',
     content_restore_same: 'This version says the same as the current text.',
-    content_restored: (label) => `Restored: ${label}`,
+    content_taken_from: (label) => `Taken: ${label}`,
     content_restore_undo: 'Undo',
-    content_draft_offer: (time) => `Unsaved draft from ${time}`,
     content_draft_dismiss:
       'Decline the draft (it stays in the version history)',
-    content_draft_chip: (time) => `Draft · ${time}`,
     content_draft_status_offline_short: 'Offline',
+    content_draft_offline_hint:
+      'The text is kept in this browser and goes to the server by itself once the connection is back. You may close the window.',
+    content_draft_notice: (time) => `A draft from another tab · ${time}`,
+    content_draft_notice_hint:
+      'Not saved. Compare it and take what you need — your text stays as it is.',
+    content_draft_compare: 'Compare',
+    content_stored_notice: (time) => `Saved on another device · ${time}`,
+    content_stored_notice_hint:
+      'While you were writing, the text was saved there. Compare and take what you need from it — your text stays as it is.',
+    content_history_keeps:
+      'Choose a version to compare it with this text: take all of it or a part. Versions are kept for two days, AI edits while their session lives.',
+    content_history_clear: 'Clear the text',
     content_draft_status_synced: (time) => `Draft kept · ${time}`,
     content_draft_status_offline: 'No connection — kept in the browser',
     content_draft_status_refused_short: 'Not kept',
@@ -1520,6 +1700,618 @@ export default defineI18nBase({
     og_pages_headline: (count) =>
       `${plural(count, 'text', 'texts')} outside the timeline`,
     og_image_alt: (kind, title, site) => `${kind} “${title}” — ${site}`,
+    ai_tab_sessions: 'Sessions',
+    ai_tab_memory: 'Memory',
+    ai_tab_templates: 'Templates',
+    ai_templates_title: 'Session templates',
+    ai_templates_hint:
+      'A request to the AI, ready to go. On its schedule a template simply starts a session: what the model found and proposed waits for you in it. Without a schedule it runs at a click.',
+    ai_templates_new: 'New',
+    ai_templates_builtin: 'Built-in',
+    ai_templates_own: 'Yours',
+    ai_templates_own_empty:
+      'No templates of your own yet: make a new one or copy a built-in one.',
+    ai_template_whens: {
+      manual: { title: 'By hand', hint: 'At a click, with no schedule' },
+      day: { title: 'Every day', hint: 'At the hour chosen' },
+      week: { title: 'Every week', hint: 'On the day and at the hour chosen' },
+      month: { title: 'Every month', hint: 'On the 1st, at the hour chosen' },
+    },
+    ai_template_when_day: (time) => `Every day, ${time}`,
+    ai_template_when_week: (day, time) => `Every ${day}, ${time}`,
+    ai_template_when_month: (time) => `On the 1st, ${time}`,
+    ai_template_next: (when) => `next ${when}`,
+    ai_template_next_full: (when) =>
+      `In your time. The next session is ${when}.`,
+    ai_template_schedule: 'Schedule',
+    ai_template_schedule_on: 'On',
+    ai_template_schedule_off: 'schedule off',
+    ai_template_manual_line: 'no schedule',
+    ai_template_run: 'Run now',
+    ai_template_edit: 'Settings',
+    ai_template_running: 'running now',
+    ai_template_never_run: 'not run yet',
+    ai_template_default_model: 'default model',
+    ai_template_started: (title) => `Session “${title}” started`,
+    ai_template_saved: 'Template saved',
+    ai_template_deleted: 'Template deleted',
+    ai_template_copied: 'Copy made, its schedule off',
+    ai_template_modal_title: 'Template',
+    ai_template_modal_new: 'New template',
+    ai_template_builtin_note:
+      'Built-in: new versions of Thei improve its request. Yours here are its schedule and model. To rewrite the request, make a copy.',
+    ai_template_name: 'Name',
+    ai_template_name_placeholder: 'For example, “A week of travel”',
+    ai_template_instruction: 'Request',
+    ai_template_instruction_placeholder:
+      'What the model should do and read for it — as you would tell a person. For example: “Look at the diary entries changed since last time…”',
+    ai_template_when: 'When',
+    ai_template_time: 'Time, in your time zone',
+    ai_template_day: 'Day of the week',
+    ai_template_model: 'Model',
+    ai_template_model_placeholder: (model) => `As in Connection — ${model}`,
+    ai_template_model_hint:
+      'Empty: the model of Connection. A strong model for reviews that need thought, a cheap one for short checks.',
+    ai_template_sessions: 'Sessions of this template',
+    ai_template_copy: 'Make a copy',
+    ai_template_delete: 'Delete template',
+    ai_template_delete_confirm: (title) =>
+      `Delete the template “${title}”? Its sessions stay.`,
+    ai_sessions_search: 'Find a session',
+    ai_sessions_filter: 'Filter: where from, waiting or not',
+    ai_sessions_filters: {
+      all: { title: 'All sessions', hint: '' },
+      waiting: {
+        title: 'Waiting for you',
+        hint: 'Something undecided, or a question',
+      },
+      applied: {
+        title: 'With something applied',
+        hint: 'What a model or an app changed',
+      },
+      rejected: {
+        title: 'With something declined',
+        hint: 'It can be brought back to decide',
+      },
+      app: {
+        title: 'From apps',
+        hint: 'Claude, ChatGPT and others over MCP',
+      },
+      template: { title: 'From templates', hint: 'Started on a schedule' },
+    },
+    ai_session_new: 'New session',
+    ai_session_groups: {
+      pinned: 'Pinned',
+      waiting: 'Waiting for you',
+      running: 'Working',
+      week: 'This week',
+      earlier: 'Earlier',
+      archive: 'Archive',
+    },
+    ai_session_untitled: 'New session',
+    ai_session_you: 'You',
+    ai_session_template: 'Template',
+    ai_session_running: 'Working',
+    ai_session_waiting: (count) => `Waiting for your decision: ${count}`,
+    ai_sessions_archive_note: 'Deleted after 30 days',
+    ai_sessions_empty: 'No sessions yet',
+    ai_sessions_more: 'Show more',
+    ai_sessions_back: 'To sessions',
+    ai_no_model_title: 'No model is set up',
+    ai_no_model_text:
+      'Sessions here are answered by the model from “Connection”: a service’s key, or your own with Ollama or LM Studio. Sessions of apps over MCP are below.',
+    ai_no_model_action: 'Set up',
+    ai_session_menu: 'Session',
+    ai_session_pin: 'Pin',
+    ai_session_unpin: 'Unpin',
+    ai_session_rename: 'Rename',
+    ai_session_archive: 'Archive',
+    ai_session_unarchive: 'Restore from archive',
+    ai_session_delete: 'Delete',
+    ai_session_delete_confirm: (title) =>
+      `Delete the session “${title}”? What it applied stays, but can no longer be undone from it.`,
+    ai_session_by_you: (when) => `Started by you · ${when}`,
+    ai_session_by_template: (when) => `Started on a schedule · ${when}`,
+    ai_session_via_app: (client) => `${client} over MCP`,
+    ai_session_tokens: (amount) => `${amount} tokens`,
+    ai_session_app_note:
+      'Here is what the app proposed and applied. The conversation itself stayed in the app: write to it there.',
+    ai_session_archived_note: 'Archived: nothing can be written here',
+    ai_session_model: 'Model',
+    ai_steps: {
+      read: (count) => `read ${plural(count, 'entity', 'entities')}`,
+      search: (queries) => `searched ${queries}`,
+      list: 'looked through a list',
+      graph: 'looked at the map of relations',
+      timeline: 'looked at the timeline',
+      tags: 'looked for tags',
+      digests: (count) => `skimmed ${plural(count, 'entity', 'entities')}`,
+      proposed: (count) => `proposed ${plural(count, 'time', 'times')}`,
+      refused: (count) =>
+        `${plural(count, 'proposal', 'proposals')} turned away`,
+      refused_hint:
+        'The code kept them from you: it is so already, the same waits for your decision, or you declined it lately.',
+      files: 'worked with files',
+      failed: (count) => `${plural(count, 'call', 'calls')} refused`,
+    },
+    ai_question: 'Question',
+    ai_question_own: 'Own answer…',
+    ai_notices: {
+      stopped: 'Stopped by you.',
+      limit:
+        'The month’s limit is spent. The session goes on next month, or once you raise the limit.',
+      'no-model': 'No model is set up to answer.',
+      key: 'The service refused the key.',
+      busy: 'The service is busy; try again later.',
+      address: 'The service does not answer at its address.',
+      model: 'The service does not know this model.',
+      refused: 'The model declined to answer.',
+      turns: 'Stopped: it took too many steps.',
+      error: 'Something went wrong.',
+    },
+    ai_notice_connection: 'Connection',
+    ai_comment_on: (what) => `On: ${what}`,
+    ai_answer_to: (question) => `Answer: ${question}`,
+    ai_composer_placeholder: 'What to do? @ — mention an entry',
+    ai_composer_running: 'You can add to it — the model will take it in',
+    ai_composer_attach: 'Attach',
+    ai_composer_files: {
+      title: 'Photo or file',
+      hint: 'You can also paste or drop it here',
+    },
+    ai_composer_file_remove: 'Remove the file',
+    ai_composer_file_failed: 'Did not upload',
+    ai_composer_files_limit: (max) => `At most ${max} files in one message`,
+    ai_composer_file_unnamed:
+      'The file has no extension, which is how the site tells what it is',
+    ai_composer_drop: 'Drop to attach',
+    ai_message_file_gone: 'File deleted',
+    ai_composer_mention: {
+      title: 'An entry, a project, an event',
+      hint: 'The same as @ in the text',
+    },
+    ai_send: 'Send',
+    ai_stop: 'Stop',
+    ai_usage_title: (month) => `Tokens in ${month}`,
+    ai_usage_amount: (spent, limit) => `${spent} of ${limit}`,
+    ai_usage_average: (average, averageText) =>
+      `An answer usually takes ${averageText} ${plural(average, 'token', 'tokens', false)}`,
+    ai_new_title: 'What shall we do?',
+    ai_new_text:
+      'Ask about the archive, have something written up, proofread or put in order. The AI proposes actions; nothing changes until you apply them.',
+    ai_template_builtins: {
+      'diary-week': {
+        title: 'Diary week',
+        instruction:
+          'Read the week’s diary entries. Propose what in them moves projects and events on: relations, notes, the dates of stages. Proofread the texts without changing the voice. Ask about what you are unsure of.',
+      },
+      nightly: {
+        title: 'Nightly look',
+        instruction:
+          'Look over what is new and changed since last time: proofread, propose relations and tags. Nothing big — other templates are for that.',
+      },
+      graph: {
+        title: 'Relations of projects and events',
+        instruction:
+          'Find the relations missing, doubtful or at odds between projects, events and entries — first of all around what is new or changed since last time. A mention is not yet a relation.',
+      },
+      tags: {
+        title: 'Tags',
+        instruction:
+          'Find tags about the same thing, shortened ones and missing ones — first of all around what is new or changed since last time. Propose what to merge, rename or add.',
+      },
+      'year-ago': {
+        title: 'A year ago',
+        instruction:
+          'Show what happened on this day a year ago. If an entry of then belonged to something and is not related to it, propose it. Change nothing for memories’ sake.',
+      },
+    },
+    ai_template_copy_title: (title) => `${title} (copy)`,
+    ai_template_note: (title, scheduled, since) =>
+      `Template “${title}” — ${scheduled ? 'by its schedule' : 'started by you'}${since ? ` · last run ${since}` : ''}`,
+    ai_new_model_line: (model) =>
+      `Answered by the model from “Connection” · ${model}. A conversation in another AI app over MCP shows up here too, with its actions.`,
+    ai_action_kinds: {
+      update: 'Change',
+      field: 'Field',
+      periods: 'Dates',
+      tags: 'Tags',
+      relation: 'Relation',
+      note: 'Into the notes',
+      access: 'Access',
+      write: 'Text',
+      revise: 'Text edit',
+      create: 'Create',
+      delete: 'Delete',
+      remember: 'Remember',
+      term: 'To the dictionary',
+      'memory-compact': 'Compact memory',
+    },
+    ai_memory_owner: 'About you',
+    ai_review_title: 'Text edit',
+    ai_review_compare_title: (when) => `Comparison · ${when}`,
+    ai_review_compare_why:
+      'Compared with the text in this window. Take all of it or only what you need — the rest stays as it is. What you take goes into the text here; save as usual.',
+    ai_review_view: 'Edit view',
+    ai_review_views: {
+      read: 'Reading',
+      diff: 'Before and after',
+      list: 'List',
+    },
+    ai_review_kinds: {
+      spelling: 'Spelling',
+      grammar: 'Grammar',
+      punctuation: 'Punctuation',
+      case: 'Capital letter',
+      'missing-letter': 'Missing letter',
+      link: 'Link',
+      changed: 'Block changed',
+      added: 'New block',
+      removed: 'Block goes',
+      heading: 'New heading',
+      delimiter: 'Delimiter',
+      removal: 'Repeat dropped',
+      split: 'Paragraph split',
+      order: 'New order',
+    },
+    ai_review_where: {
+      caption: 'in a caption',
+      file: 'in a file’s title or caption',
+      link: 'in a link’s note',
+    },
+    ai_review_unsure: 'yours to decide',
+    ai_review_private: 'private part',
+    ai_review_settled: {
+      applied: 'In the text already',
+      stale: 'These words are no longer in the text',
+    },
+    ai_review_modes: {
+      ai: {
+        accept: 'Accept',
+        keep: 'Keep as it was',
+        sure: 'Accept the sure corrections',
+        was: 'Was',
+        will: 'Will be',
+        accepted: 'Accepted',
+        kept: 'As it was',
+        apply: (count) => `Apply · ${count}`,
+        finish: (decided, total) => `${decided} of ${total} decided`,
+        finish_hint:
+          'What you accepted goes into the text now — the text before stays in its history. What is undecided waits in the session.',
+      },
+      version: {
+        accept: 'Take',
+        keep: 'Keep as it is',
+        sure: 'Take all',
+        was: 'Now',
+        will: 'There',
+        accepted: 'Taken',
+        kept: 'As it is',
+        apply: (count) => `Take · ${count}`,
+        finish: (decided, total) => `${decided} of ${total} marked`,
+        finish_hint:
+          'What you take goes into the text here; the rest stays as it is.',
+      },
+    },
+    ai_review_finish_editor:
+      'What you accepted goes into the text here; save as usual. What is undecided waits in the session.',
+    ai_review_close: 'Close',
+    ai_review_go_on: 'Go on',
+    ai_review_undo: 'Undo the decision',
+    ai_review_prev: 'Previous',
+    ai_review_next: 'Next',
+    ai_review_next_pending: 'Next undecided',
+    ai_review_words: (count) =>
+      plural(count, 'change of words', 'changes of words'),
+    ai_review_blocks: (count) =>
+      plural(count, 'change of blocks', 'changes of blocks'),
+    ai_review_unsure_count: (count) => `${count} yours to decide`,
+    ai_review_all_decided: 'all decided',
+    ai_review_filters: {
+      all: 'All',
+      unsure: 'Yours to decide',
+      words: 'Words',
+      blocks: 'Blocks',
+    },
+    ai_review_gone: 'The block goes',
+    ai_review_gone_taken: 'The block is gone',
+    ai_review_comment_placeholder: 'What should be done otherwise?',
+    ai_review_comment_sent:
+      'The comment is in the session: the model will send a new version of the edit.',
+    ai_review_from_session: (title) =>
+      title ? `From the session “${title}”` : 'From the session',
+    ai_review_applied: (count) =>
+      `${plural(count, 'change', 'changes')} in the text`,
+    ai_review_taken: (count) => `${plural(count, 'part', 'parts')} taken`,
+    ai_memory_search: 'Search the memory — a word, a name, a project',
+    ai_memory_owner_hint:
+      'Every model — on the site or in an app — reads this in every session: how you write, what to leave alone, what matters to you.',
+    ai_memory_owner_never: 'Never to be offered anywhere',
+    ai_memory_chars: (count, max) => `${count} of ${max} characters`,
+    ai_memory_terms: 'Dictionary',
+    ai_memory_terms_hint:
+      'Names, places, your own words. A model reads a word when a text has it; proofreading leaves a word kept as written alone.',
+    ai_memory_term_new: 'A name, a place or a word of yours',
+    ai_memory_term_exists: 'This word is in the dictionary already.',
+    ai_memory_term_add: 'Add to the dictionary',
+    ai_memory_term_word: 'Word',
+    ai_memory_term_note: 'What it is',
+    ai_memory_term_note_placeholder:
+      'For example: my brother; islands in the White Sea',
+    ai_memory_term_forms: 'Other forms',
+    ai_memory_term_forms_placeholder: 'Comma-separated',
+    ai_memory_term_keep: 'Keep as written',
+    ai_memory_term_keep_hint: 'Proofreading leaves the word as it is written',
+    ai_memory_term_uses: (count) =>
+      count
+        ? `in ${count} ${plural(count, 'text', 'texts', false)}`
+        : 'nowhere yet',
+    ai_memory_term_remove: 'Remove from the dictionary',
+    ai_memory_kinds_title: 'General rules',
+    ai_memory_kinds_hint:
+      'Not about one thing, but about all things of a kind at once: every diary entry, every project, every file. For example: “All diary entries: offer no tags”. A model keeps to a rule whenever it works with any of them.',
+    ai_memory_entities_title: 'About entities',
+    ai_memory_entities_hint:
+      'A model reads this together with the entity. Its form shows it too.',
+    ai_memory_entity_kinds: {
+      project: 'project',
+      'project-section': 'project section',
+      event: 'event',
+      'diary-entry': 'diary entry',
+      page: 'page',
+      tag: 'tag',
+      asset: 'file',
+    },
+    ai_memory_nothing: 'Nothing yet.',
+    ai_memory_by_you: 'you',
+    ai_memory_edit: 'Edit',
+    ai_memory_forget: 'Forget',
+    ai_memory_allow: 'May be offered again',
+    ai_memory_forgotten: 'Forgotten',
+    ai_memory_restore: 'Bring back',
+    ai_offer_take: 'Accept — the field fills in; save the form',
+    ai_offer_in_session: 'Open in its session',
+    ai_offer_taken: 'Taken into the form — save it',
+    ai_offer_take_back: 'Undo',
+    ai_offer_chip: (label) => `Proposed by AI: ${label}`,
+    ai_field_offers: (count) =>
+      count === 1 ? 'Proposed by AI' : `Proposed by AI: ${count}`,
+    ai_field_offer_prev: 'Previous proposal',
+    ai_field_offer_next: 'Next proposal',
+    ai_remember_title: 'Remember',
+    ai_remember_placeholder:
+      'What should the model know about it? For example: “the route is no secret any more”',
+    ai_remember_hint: 'A model reads it only when it works with this.',
+    ai_remember_save: 'Remember',
+    ai_remember_saved: 'Remembered',
+    ai_memory_block_title: 'What the AI remembers',
+    ai_memory_block_hint: (withIt) =>
+      `A model reads it only when it works with ${withIt}.`,
+    ai_memory_digest_fresh: (when) =>
+      `How the model briefly remembers it · as of ${when}; rewritten once it changes`,
+    ai_memory_digest_stale: (when) =>
+      `Written as of ${when}; it has changed since — the model rewrites it on its next reading`,
+    ai_memory_parts: 'And of its parts:',
+    ai_entity_this: {
+      profile: 'your profile',
+      project: 'this project',
+      'project-section': 'this section',
+      event: 'this event',
+      'diary-entry': 'this entry',
+      page: 'this page',
+      tag: 'this tag',
+    },
+    ai_entity_with: {
+      project: 'this project',
+      'project-section': 'this section',
+      event: 'this event',
+      'diary-entry': 'this entry',
+      page: 'this page',
+      tag: 'this tag',
+    },
+    ai_entity_menu: (it) => `AI and ${it}`,
+    ai_entity_new_session: (title) => `New session about “${title}”`,
+    ai_entity_sessions: (count) => `Sessions · ${count}`,
+    ai_entity_no_sessions: 'No sessions about it yet',
+    ai_entity_all_sessions: 'All sessions about it',
+    ai_session_applied_count: (count) => `Applied: ${count}`,
+    ai_form_outdated: 'Changed in an AI session while the form is open',
+    ai_form_outdated_hint:
+      'Reload the form: saving over the change is refused.',
+    ai_form_reload: 'Reload',
+    ai_sessions_about: 'Only about',
+    ai_sessions_about_clear: 'Show every session',
+    ai_new_about: 'About:',
+    ai_bar_new_plain: 'New session about nothing in particular',
+    ai_bar_waiting_title: (count) => `Waiting for you · ${count}`,
+    ai_bar_nothing_waits: 'Nothing waits for your decision.',
+    ai_bar_all_sessions: 'All sessions',
+    ai_memory_open: 'Open',
+    ai_memory_more: (count) => `${count} more`,
+    ai_memory_cancel: 'Cancel',
+    ai_memory_kinds: {
+      project: 'All projects',
+      'project-section': 'All project sections',
+      event: 'All events',
+      'diary-entry': 'All diary entries',
+      page: 'All pages',
+      tag: 'All tags',
+      asset: 'All files',
+    },
+    ai_action_and: 'and',
+    ai_action_term_keep: 'Keep as written',
+    ai_action_facts: (count) => plural(count, 'fact', 'facts'),
+    ai_action_card_title: (count) => `Actions · ${count}`,
+    ai_action_apply: 'Apply',
+    ai_action_apply_count: (count) => `Apply · ${count}`,
+    ai_action_apply_sure: 'Accept the sure parts',
+    ai_action_apply_final: 'Apply — for good',
+    ai_action_reject: 'Decline',
+    ai_action_reject_all: 'Decline all',
+    ai_action_comment: 'Comment',
+    ai_action_open: 'Open',
+    ai_action_undo: 'Undo',
+    ai_action_restore: 'Back to deciding',
+    ai_action_never: 'Never offer again',
+    ai_action_pick: 'Include in applying',
+    ai_action_unsure: 'Your call.',
+    ai_action_applied: (by, when) => `Applied ${by} · ${when}`,
+    ai_action_by: { owner: 'by you', app: 'by the app' },
+    ai_action_states: {
+      rejected: 'Declined',
+      never: 'Never offered again',
+      undone: 'Undone',
+      stale: 'Overtaken: it changed since',
+      failed: 'Not applied:',
+      superseded: 'Replaced by a new version',
+      applying: 'Applying…',
+    },
+    ai_action_undo_states: {
+      changed: 'Changed again since: undoing would take that too',
+      gone: 'It is gone since',
+      final: 'Cannot be undone',
+      undone: 'Undone already',
+    },
+    ai_action_atomic_hint:
+      'Checked together; on a failure nothing stays half-done',
+    ai_action_unticked_hint: 'Unticked ones are declined',
+    ai_action_final_note: 'A deletion is final — it cannot be undone',
+    ai_action_by_ai: 'written by AI',
+    ai_action_corrections: (count) =>
+      plural(count, 'correction', 'corrections'),
+    ai_action_unsure_count: (count) => `${count} your call`,
+    ai_action_order: 'New order',
+    ai_action_order_parts: (count) => plural(count, 'part', 'parts'),
+    ai_action_relations: {
+      related: 'Related',
+      'depends-on': 'depends on',
+      affects: 'affects',
+    },
+    ai_action_relation_removed: 'Relation taken away',
+    ai_action_write_modes: {
+      new: 'New text',
+      append: 'Add to the text',
+      replace: 'Rewrite',
+    },
+    ai_action_texts: {
+      body: 'text',
+      notes: 'notes',
+      description: 'description',
+      about: 'about',
+    },
+    ai_action_fields: {
+      title: 'Title',
+      summary: 'Summary',
+      reminder: 'Reminder',
+      showcase: 'Showcase',
+      cv: 'Résumé',
+      description: 'Description',
+      synonyms: 'Synonyms',
+      slogan: 'Tagline',
+    },
+    ai_action_flag: { on: 'yes', off: 'no' },
+    ai_action_create: {
+      project: 'Create a project',
+      'project-section': 'Create a section',
+      event: 'Create an event',
+      'diary-entry': 'Create an entry',
+      page: 'Create a page',
+      tag: 'Create a tag',
+    },
+    ai_action_parts: {
+      sections: 'Sections',
+      tags: 'Tags',
+      relations: 'Relations',
+    },
+    ai_action_access: {
+      public: 'Public',
+      'link-only': 'By link',
+      private: 'Private',
+    },
+    ai_action_update_fields: (fields) => `Change: ${fields}`,
+    ai_toast_declined: (count) =>
+      count === 1 ? 'Declined' : `Declined: ${count}`,
+    ai_toast_never: 'It will not be offered again',
+    ai_toast_comment_sent: 'Sent — the model answers with a new version',
+    ai_toast_answer_sent: 'Answer sent — the model goes on',
+    ai_toast_pinned: 'Pinned — it stays on top and never goes to the archive',
+    ai_toast_unpinned: 'Unpinned',
+    ai_toast_undone: 'Undone',
+    ai_toast_restored: 'Back to deciding',
+    ai_comment_label: 'Comment',
+    ai_comment_placeholder: 'What to change?',
+    ai_comment_quick: ['Another option', 'Why so?'],
+    ai_model_states: {
+      ready: 'working',
+      off: 'AI in Thei is off',
+      none: 'no model is set up',
+      'no-key': 'no API key',
+      'no-address': 'no API address',
+      'no-model': 'no model named',
+      budget: 'the month’s limit is spent',
+    },
+    ai_model_provider_label: 'Who answers in sessions',
+    ai_model_provider_cards: {
+      none: {
+        title: 'Only my AI apps',
+        text: 'Sessions here wait for no model: your apps over MCP leave theirs, on your subscription.',
+      },
+      api: {
+        title: 'A model with an API key',
+        text: 'Thei calls the service you choose; you pay as you go, on the key’s account.',
+      },
+    },
+    ai_model_service_label: 'Service',
+    ai_model_service_choose: 'Choose a service',
+    ai_model_service_custom: 'My own address…',
+    ai_model_service_local: (name) => `${name} — on your computer`,
+    ai_model_service_missing: 'Choose a service.',
+    ai_model_base_url: 'API address',
+    ai_model_label: 'Model',
+    ai_model_list_refresh: 'Refresh the list of models',
+    ai_model_unlisted: 'The service gave no list of models: type the name.',
+    ai_model_choose: 'Choose a model',
+    ai_model_other: 'Another…',
+    ai_model_id_placeholder: 'The model’s name',
+    ai_model_missing: 'Name the model.',
+    ai_model_address_invalid:
+      'The API address starts with http:// or https://.',
+    ai_model_key: 'API key',
+    ai_model_key_placeholder: 'Paste the API key',
+    ai_model_key_replace_placeholder: (hint) =>
+      `Key …${hint} is set. Paste a new one to replace it`,
+    ai_model_key_remove: 'Remove the key',
+    ai_model_key_remove_confirm:
+      'Remove the API key? The model stops answering until you paste a new one.',
+    ai_model_key_where: 'Where to get an API key',
+    ai_model_key_optional: 'A model on your computer needs no key.',
+    ai_model_limit_label: 'Monthly limit',
+    ai_model_limit_hint:
+      'Once the limit is reached, Thei calls no model until next month. ' +
+      'The service counts the money: set a spending limit there too.',
+    ai_model_limit_unit: 'million tokens',
+    ai_model_limit_tokens:
+      'A token is what a model spends: about a syllable read or written. ' +
+      'What it reads from its cache counts for a tenth — about what it costs.',
+    ai_model_limit_tokens_link: 'What are tokens?',
+    ai_model_limit_invalid: 'The limit is a number of millions above zero.',
+    ai_model_usage_line: (month, spent, limit) =>
+      `${month}: ${spent} of ${limit} million tokens`,
+    ai_model_average: (thousands) =>
+      `An answer takes about ${thousands}k tokens`,
+    ai_model_check: 'Check',
+    ai_model_check_outcomes: {
+      ok: 'works',
+      key: 'the API key was refused',
+      model: 'no such model',
+      address: 'the address does not answer',
+      busy: 'the provider is busy; try later',
+      error: 'error',
+    },
+    ai_bar_waiting: (count) =>
+      count ? `AI: waiting for you — ${count}` : 'AI',
+    ai_error: 'It did not work. Try again.',
+    ai_off_notice: 'AI in Thei is off.',
     x_sections: (count) => plural(count, 'section', 'sections'),
   },
 });

@@ -14,6 +14,14 @@ describe('closed site routing', () => {
     expect(closedSiteRoute('/api/admin/session')).toBe('unavailable');
   });
 
+  it('asks an AI app signing in to come back later, never to the update page', () => {
+    expect(closedSiteRoute('/oauth/token')).toBe('unavailable');
+    expect(closedSiteRoute('/oauth/authorize')).toBe('unavailable');
+    expect(closedSiteRoute('/.well-known/oauth-authorization-server')).toBe(
+      'unavailable',
+    );
+  });
+
   it('leads every page to the update screen', () => {
     expect(closedSiteRoute('/')).toBe('redirect');
     expect(closedSiteRoute('/admin/')).toBe('redirect');

@@ -37,6 +37,33 @@ export function isRelationType(value: unknown): value is RelationType {
   return RELATION_TYPES.includes(value as RelationType);
 }
 
+/**
+ * The words an AI client reads and writes a relation in, from the side it
+ * names — plainer than the stored ones, which read the other way round.
+ */
+export const RELATION_WORDS = ['related', 'depends-on', 'affects'] as const;
+export type RelationWord = (typeof RELATION_WORDS)[number];
+
+export const RELATION_TYPE_OF_WORD: Record<RelationWord, RelationType> = {
+  related: 'related',
+  'depends-on': 'influencing',
+  affects: 'dependent',
+};
+
+export const RELATION_WORD_OF_TYPE: Record<RelationType, RelationWord> = {
+  related: 'related',
+  influencing: 'depends-on',
+  dependent: 'affects',
+};
+
+/** The same relation in the words of its other end. */
+export const RELATION_WORD_FROM_OTHER_END: Record<RelationWord, RelationWord> =
+  {
+    related: 'related',
+    'depends-on': 'affects',
+    affects: 'depends-on',
+  };
+
 export type RelationNote =
   | { type: 'shared'; text?: string }
   | {

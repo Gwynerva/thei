@@ -90,6 +90,20 @@ const isEdit = computed(() => Boolean(eventUuid));
 provideContentOwner('event', () => eventUuid);
 const saving = ref(false);
 const savedSnapshot = ref(JSON.stringify(eventPayload()));
+/**
+ * When the entity last changed, as the form read it. A save names it, and
+ * one over a change made elsewhere since — another tab, an AI client — is
+ * refused rather than written over it.
+ */
+const formVersion = ref<number>();
+/** The event's uuid, once read: it may have been opened by its public id. */
+const resolvedEventUuid = ref(eventUuid);
+provideEntityAi({
+  ref: () =>
+    resolvedEventUuid.value ? `event:${resolvedEventUuid.value}` : undefined,
+  form: () => eventData.value,
+  version: () => formVersion.value,
+});
 const headerError = ref<string>();
 const showPeriodsHint = ref(false);
 const isDirty = computed(
@@ -145,6 +159,8 @@ if (isEdit.value) {
   externalLinks.seed(data.externalLinks);
   actionMedia.applyLoaded(data);
   markSaved();
+  formVersion.value = data.version;
+  resolvedEventUuid.value = data.eventUuid;
   if (eventUuid !== data.eventUuid)
     await navigateTo(`/admin/events/${data.eventUuid}/edit/`, {
       replace: true,
@@ -178,7 +194,10 @@ async function save() {
   try {
     const result = await $fetch<EventSaveResponse>(
       isEdit.value ? `/api/admin/events/${eventUuid}` : '/api/admin/events',
-      { method: isEdit.value ? 'PUT' : 'POST', body: eventPayload() },
+      {
+        method: isEdit.value ? 'PUT' : 'POST',
+        body: { ...eventPayload(), version: formVersion.value },
+      },
     );
     if (result.type === 'error') {
       if (result.code === 'public-id-taken')
@@ -186,6 +205,7 @@ async function save() {
       else headerError.value = result.message;
       return;
     }
+    formVersion.value = result.version;
     const previousAction = eventData.value.action;
     eventData.value.action = result.action;
     actionMedia.applySaved(previousAction, result.action);
@@ -336,6 +356,7 @@ function clone<T>(value: T): T {
         }}</span>
       </div>
       <div class="flex items-center gap-xs">
+        <AiEntityButton />
         <Button
           v-if="isEdit"
           variant="delete"
@@ -357,9 +378,10 @@ function clone<T>(value: T): T {
   </StickyGlassHeader>
 
   <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
+    <AiFormOffers />
     <Box class="flex flex-col gap-md p-sm sm:p-md">
       <div class="flex flex-wrap gap-md">
-        <Field class="min-w-50 flex-1">
+        <Field ai="field:title" class="min-w-50 flex-1">
           <FieldLabel required>{{ phrase.event_title }}</FieldLabel>
           <FieldInput
             v-model="eventData.title"
@@ -370,7 +392,7 @@ function clone<T>(value: T): T {
           />
           <FieldHint>{{ phrase.event_title_hint }}</FieldHint>
         </Field>
-        <Field class="min-w-50">
+        <Field ai="access" class="min-w-50">
           <FieldLabel required>{{ phrase.event_access }}</FieldLabel>
           <FieldOptions
             v-model="eventData.access"
@@ -392,12 +414,12 @@ function clone<T>(value: T): T {
           />
         </Field>
       </div>
-      <Field>
+      <Field ai="field:summary">
         <FieldLabel required>{{ phrase.event_summary }}</FieldLabel>
         <FieldTextarea v-model="eventData.summary" required />
         <FieldHint>{{ phrase.event_summary_hint }}</FieldHint>
       </Field>
-      <Field>
+      <Field ai="periods">
         <FieldLabel required>{{ phrase.event_periods }}</FieldLabel>
         <FieldDateRanges v-model="eventData.periods" />
         <FieldHint>{{ phrase.event_periods_hint }}</FieldHint>
@@ -456,6 +478,7 @@ function clone<T>(value: T): T {
       entity-type="event"
       :entity-uuid="eventUuid"
     />
+    <AiMemoryBlock />
     <AdminNotesBlock
       v-model:reminder="reminderModel"
       v-model:notes="notesModel"

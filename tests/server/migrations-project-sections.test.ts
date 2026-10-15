@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { migrationRegistry } from '../../update/migrations';
 import { runPendingMigrations, seedLedger } from '../../update/migrations/run';
+import { writeSiteConfig_0_0_2 } from '../helpers/site-config';
 import { migrations_0_0_3, schema_0_0_3 } from './fixtures/schema-0.0.3';
 
 /**
@@ -21,6 +22,7 @@ beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'thei-sections-'));
   rawDb = new Database(contentPath('thei.db'));
   rawDb.pragma('foreign_keys = ON');
+  await writeSiteConfig_0_0_2(contentPath);
   for (const statement of schema_0_0_3) rawDb.prepare(statement).run();
   seedLedger(
     rawDb,

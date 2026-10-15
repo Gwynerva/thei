@@ -1,5 +1,6 @@
 import type { ContentHistoryReason } from '../content-history';
 import type { RelationEntityType } from '../relation';
+import type { ProofreadCategory, TidyCommentKind } from '../ai-revise';
 
 export const languagesInfo = {
   en: 'English',
@@ -167,9 +168,11 @@ export type LanguagePhrases = {
   asset_role_action_icon: string;
   asset_role_action_background: string;
   asset_role_action_file: string;
+  asset_role_ai_attachment: string;
   asset_role_avatar: string;
   asset_role_status: string;
   asset_source_profile: string;
+  asset_source_ai_session: string;
   asset_library_view: string;
   asset_library_edit: string;
   site_settings: string;
@@ -356,8 +359,6 @@ export type LanguagePhrases = {
   next: string;
   public_details_expand: string;
   content_integration_youtube: string;
-  public_details_manual: string;
-  public_details_from_content: string;
   public_details_links: string;
   public_details_files: string;
   public_details_overview: string;
@@ -551,6 +552,103 @@ export type LanguagePhrases = {
   backup_setup_hint: string;
   backup_history: string;
   backup_run_summary: (files: number, size: string) => string;
+  ai_access_on_hint: string;
+  ai_access_off_hint: string;
+  api_token_create: string;
+  api_token_label: string;
+  api_token_label_placeholder: string;
+  api_token_label_required: string;
+  api_token_access: string;
+  api_token_preset_reader: string;
+  api_token_preset_reader_hint: string;
+  api_token_preset_editor: string;
+  api_token_preset_editor_hint: string;
+  api_token_preset_custom: string;
+  api_token_empty: string;
+  api_token_never_used: string;
+  api_token_last_used: string;
+  api_token_revoke: string;
+  api_token_too_many: string;
+  api_token_shown_once: string;
+  api_token_endpoint: string;
+  api_token_connect_hint: string;
+  ai_page: string;
+  ai_page_description: string;
+  ai_tab_connection: string;
+  ai_switch: string;
+  ai_welcome: string;
+  ai_ways_facts: Record<'what' | 'how' | 'pays' | 'rights', string>;
+  ai_ways_cards: Record<
+    'app' | 'model',
+    Record<'title' | 'what' | 'how' | 'pays' | 'rights', string>
+  >;
+  api_tokens_title: string;
+  api_tokens_hint: string;
+  ai_connect_title: string;
+  ai_connect_apps: Record<
+    'claude' | 'chatgpt' | 'claude-code' | 'other',
+    string
+  >;
+  ai_connect_steps: Record<
+    'claude' | 'chatgpt' | 'claude-code' | 'other',
+    string[]
+  >;
+  ai_connect_no_sign_in: string;
+  ai_connect_proxy: string;
+  api_token_signed_in: (client: string) => string;
+  api_token_signed_in_verified: (client: string, host: string) => string;
+  api_token_signed_in_unverified: (client: string) => string;
+  oauth_consent: string;
+  oauth_consent_title: (client: string, site: string) => string;
+  oauth_verified: (host: string) => string;
+  oauth_unverified: string;
+  oauth_redirect_web: (host: string) => string;
+  oauth_redirect_elsewhere: (host: string) => string;
+  oauth_redirect_loopback: (port: string) => string;
+  oauth_redirect_app: (scheme: string) => string;
+  oauth_connections: (count: number) => string;
+  oauth_rights: string;
+  oauth_requested_edit: string;
+  oauth_allow: string;
+  oauth_deny: string;
+  oauth_sign_in_needed: string;
+  oauth_gone: string;
+  oauth_returning: string;
+  oauth_refused_title: string;
+  oauth_refused: Record<
+    'client' | 'client_document' | 'redirect_uri' | 'request',
+    string
+  >;
+  oauth_restart: string;
+  api_token_history: string;
+  api_token_history_empty: string;
+  ai_settings_link: string;
+  ai_open_page: string;
+  ai_instructions_placeholder: string;
+  ai_check: string;
+  ai_check_enabled_ok: string;
+  ai_check_enabled_fail: string;
+  ai_check_handshake_ok: (version: string) => string;
+  ai_check_handshake_fail: string;
+  ai_check_tools_ok: (count: number) => string;
+  ai_check_tools_fail: string;
+  ai_check_read_ok: (projects: number, events: number, diary: number) => string;
+  ai_check_read_fail: string;
+  ai_check_public_ok: string;
+  ai_check_public_fail: (status: number) => string;
+  ai_check_public_warn: string;
+  ai_check_public_skip: string;
+  ai_check_https_ok: string;
+  ai_check_https_warn: string;
+  ai_check_https_skip: string;
+  ai_check_signin_ok: string;
+  ai_check_signin_fail: (where: string) => string;
+  ai_check_signin_https: string;
+  ai_check_clients_ok: (label: string, client: string) => string;
+  ai_check_clients_warn: string;
+  entity_changed_since: string;
+  api_token_revoke_confirm: (label: string) => string;
+  api_token_last_client: (client: string) => string;
   admin_updates: string;
   updates_description: string;
   update_current_version: string;
@@ -840,25 +938,20 @@ export type LanguagePhrases = {
   content_history_row_label: (time: string, changes: string) => string;
   content_history_delta: (value: string, delta: number) => string;
   content_history_missing_assets: (count: number) => string;
-  content_history_back: string;
-  content_restore: string;
-  content_restore_cancel: string;
-  content_diff_removed: string;
-  content_diff_added: string;
-  content_diff_changed: string;
-  /** Above a rewritten block as it is now, before the restore. */
-  content_diff_before: string;
-  /** Above the same block as the restore would leave it. */
-  content_diff_after: string;
-  content_restore_title: (time: string) => string;
-  content_restore_keeps_current: string;
   content_restore_same: string;
-  content_restored: (label: string) => string;
+  /** What the last change taken into the editor was, for its undo. */
+  content_taken_from: (label: string) => string;
   content_restore_undo: string;
-  content_draft_offer: (time: string) => string;
   content_draft_dismiss: string;
-  content_draft_chip: (time: string) => string;
   content_draft_status_offline_short: string;
+  content_draft_offline_hint: string;
+  content_draft_notice: (time: string) => string;
+  content_draft_notice_hint: string;
+  content_draft_compare: string;
+  content_stored_notice: (time: string) => string;
+  content_stored_notice_hint: string;
+  content_history_keeps: string;
+  content_history_clear: string;
   content_draft_status_synced: (time: string) => string;
   content_draft_status_offline: string;
   content_draft_status_refused_short: string;
@@ -1176,5 +1269,438 @@ export type LanguagePhrases = {
   og_tags_headline: (count: number) => string;
   og_pages_headline: (count: number) => string;
   og_image_alt: (kind: string, title: string, site: string) => string;
+  ai_tab_sessions: string;
+  ai_tab_memory: string;
+  ai_tab_templates: string;
+  ai_templates_title: string;
+  ai_templates_hint: string;
+  ai_templates_new: string;
+  ai_templates_builtin: string;
+  ai_templates_own: string;
+  ai_templates_own_empty: string;
+  ai_template_whens: Record<
+    import('../ai').AiTemplateSchedule['kind'],
+    { title: string; hint: string }
+  >;
+  /** When a schedule runs, in a line: the time, and the day where it has one. */
+  ai_template_when_day: (time: string) => string;
+  ai_template_when_week: (day: string, time: string) => string;
+  ai_template_when_month: (time: string) => string;
+  ai_template_next: (when: string) => string;
+  ai_template_next_full: (when: string) => string;
+  ai_template_schedule: string;
+  ai_template_schedule_on: string;
+  ai_template_schedule_off: string;
+  ai_template_manual_line: string;
+  ai_template_run: string;
+  ai_template_edit: string;
+  ai_template_running: string;
+  ai_template_never_run: string;
+  ai_template_default_model: string;
+  ai_template_started: (title: string) => string;
+  ai_template_saved: string;
+  ai_template_deleted: string;
+  ai_template_copied: string;
+  ai_template_modal_title: string;
+  ai_template_modal_new: string;
+  ai_template_builtin_note: string;
+  ai_template_name: string;
+  ai_template_name_placeholder: string;
+  ai_template_instruction: string;
+  ai_template_instruction_placeholder: string;
+  ai_template_when: string;
+  ai_template_time: string;
+  ai_template_day: string;
+  ai_template_model: string;
+  ai_template_model_placeholder: (model: string) => string;
+  ai_template_model_hint: string;
+  ai_template_sessions: string;
+  ai_template_copy: string;
+  ai_template_delete: string;
+  ai_template_delete_confirm: (title: string) => string;
+  ai_sessions_search: string;
+  ai_sessions_filter: string;
+  ai_sessions_filters: Record<
+    'all' | 'waiting' | 'applied' | 'rejected' | 'app' | 'template',
+    { title: string; hint: string }
+  >;
+  ai_session_new: string;
+  ai_session_groups: Record<
+    'pinned' | 'waiting' | 'running' | 'week' | 'earlier' | 'archive',
+    string
+  >;
+  ai_session_untitled: string;
+  ai_session_you: string;
+  ai_session_template: string;
+  ai_session_running: string;
+  ai_session_waiting: (count: number) => string;
+  ai_sessions_archive_note: string;
+  ai_sessions_empty: string;
+  ai_sessions_more: string;
+  ai_sessions_back: string;
+  ai_no_model_title: string;
+  ai_no_model_text: string;
+  ai_no_model_action: string;
+  ai_session_menu: string;
+  ai_session_pin: string;
+  ai_session_unpin: string;
+  ai_session_rename: string;
+  ai_session_archive: string;
+  ai_session_unarchive: string;
+  ai_session_delete: string;
+  ai_session_delete_confirm: (title: string) => string;
+  ai_session_by_you: (when: string) => string;
+  ai_session_by_template: (when: string) => string;
+  ai_session_via_app: (client: string) => string;
+  ai_session_tokens: (amount: string) => string;
+  ai_session_app_note: string;
+  ai_session_archived_note: string;
+  ai_session_model: string;
+  ai_steps: {
+    read: (count: number) => string;
+    search: (queries: string) => string;
+    list: string;
+    graph: string;
+    timeline: string;
+    tags: string;
+    digests: (count: number) => string;
+    proposed: (count: number) => string;
+    refused: (count: number) => string;
+    refused_hint: string;
+    files: string;
+    failed: (count: number) => string;
+  };
+  ai_question: string;
+  ai_question_own: string;
+  ai_notices: Record<
+    | 'stopped'
+    | 'limit'
+    | 'no-model'
+    | 'key'
+    | 'busy'
+    | 'address'
+    | 'model'
+    | 'refused'
+    | 'turns'
+    | 'error',
+    string
+  >;
+  ai_notice_connection: string;
+  ai_comment_on: (what: string) => string;
+  ai_answer_to: (question: string) => string;
+  ai_composer_placeholder: string;
+  ai_composer_running: string;
+  ai_composer_attach: string;
+  ai_composer_files: { title: string; hint: string };
+  ai_composer_file_remove: string;
+  ai_composer_file_failed: string;
+  ai_composer_files_limit: (max: number) => string;
+  ai_composer_file_unnamed: string;
+  ai_composer_drop: string;
+  ai_message_file_gone: string;
+  ai_composer_mention: { title: string; hint: string };
+  ai_send: string;
+  ai_stop: string;
+  /** What the month's answers spent, under the list of sessions. */
+  ai_usage_title: (month: string) => string;
+  ai_usage_amount: (spent: string, limit: string) => string;
+  /** `average` as a number for its word, and as written short beside it. */
+  ai_usage_average: (average: number, averageText: string) => string;
+  ai_new_title: string;
+  ai_new_text: string;
+  ai_new_model_line: (model: string) => string;
+  /** The built-in templates' words: what each is called and asks. */
+  ai_template_builtins: Record<
+    import('../ai-template').AiBuiltinTemplateKey,
+    { title: string; instruction: string }
+  >;
+  ai_template_copy_title: (title: string) => string;
+  /** How a template's session opens: who started it, and the run before. */
+  ai_template_note: (
+    title: string,
+    scheduled: boolean,
+    since: string | null,
+  ) => string;
+  ai_action_kinds: Record<
+    | 'update'
+    | 'field'
+    | 'periods'
+    | 'tags'
+    | 'relation'
+    | 'note'
+    | 'access'
+    | 'write'
+    | 'revise'
+    | 'create'
+    | 'delete'
+    | 'remember'
+    | 'term'
+    | 'memory-compact',
+    string
+  >;
+  /** What a memory record is about when it is not one entity. */
+  ai_memory_owner: string;
+  /** The screen a text edit or another version is gone through on. */
+  ai_review_title: string;
+  ai_review_compare_title: (when: string) => string;
+  ai_review_compare_why: string;
+  ai_review_view: string;
+  ai_review_views: Record<import('../content-review').ReviewView, string>;
+  ai_review_kinds: Record<import('../content-review').ReviewPartKind, string>;
+  /** Where words outside the running text stand. */
+  ai_review_where: Record<'caption' | 'file' | 'link', string>;
+  ai_review_unsure: string;
+  ai_review_private: string;
+  ai_review_settled: Record<'applied' | 'stale', string>;
+  /** The words of each way through: an AI's edit, or another version. */
+  ai_review_modes: Record<
+    'ai' | 'version',
+    {
+      accept: string;
+      keep: string;
+      sure: string;
+      was: string;
+      will: string;
+      accepted: string;
+      kept: string;
+      apply: (count: number) => string;
+      finish: (decided: number, total: number) => string;
+      finish_hint: string;
+    }
+  >;
+  ai_review_finish_editor: string;
+  ai_review_close: string;
+  ai_review_go_on: string;
+  ai_review_undo: string;
+  ai_review_prev: string;
+  ai_review_next: string;
+  ai_review_next_pending: string;
+  ai_review_words: (count: number) => string;
+  ai_review_blocks: (count: number) => string;
+  ai_review_unsure_count: (count: number) => string;
+  ai_review_all_decided: string;
+  ai_review_filters: Record<'all' | 'unsure' | 'words' | 'blocks', string>;
+  ai_review_gone: string;
+  ai_review_gone_taken: string;
+  ai_review_comment_placeholder: string;
+  ai_review_comment_sent: string;
+  ai_review_from_session: (title: string) => string;
+  ai_review_applied: (count: number) => string;
+  ai_review_taken: (count: number) => string;
+  ai_memory_search: string;
+  ai_memory_owner_hint: string;
+  ai_memory_owner_never: string;
+  ai_memory_chars: (count: number, max: number) => string;
+  ai_memory_terms: string;
+  ai_memory_terms_hint: string;
+  ai_memory_term_new: string;
+  ai_memory_term_exists: string;
+  ai_memory_term_add: string;
+  ai_memory_term_word: string;
+  ai_memory_term_note: string;
+  ai_memory_term_note_placeholder: string;
+  ai_memory_term_forms: string;
+  ai_memory_term_forms_placeholder: string;
+  ai_memory_term_keep: string;
+  ai_memory_term_keep_hint: string;
+  /** How many texts of the archive use a word, any form of it. */
+  ai_memory_term_uses: (count: number) => string;
+  ai_memory_term_remove: string;
+  ai_memory_kinds_title: string;
+  ai_memory_kinds_hint: string;
+  ai_memory_entities_title: string;
+  ai_memory_entities_hint: string;
+  /** What an entity is, after its name in the list. */
+  ai_memory_entity_kinds: Record<
+    Exclude<import('../ai').AiEntityType, 'profile'>,
+    string
+  >;
+  ai_memory_nothing: string;
+  ai_memory_by_you: string;
+  ai_memory_edit: string;
+  ai_memory_forget: string;
+  ai_memory_allow: string;
+  ai_memory_forgotten: string;
+  ai_memory_restore: string;
+  ai_offer_take: string;
+  ai_offer_in_session: string;
+  ai_offer_taken: string;
+  ai_offer_take_back: string;
+  ai_offer_chip: (label: string) => string;
+  /** The ✦ at a field's label: what an AI proposes for the field. */
+  ai_field_offers: (count: number) => string;
+  ai_field_offer_prev: string;
+  ai_field_offer_next: string;
+  ai_remember_title: string;
+  ai_remember_placeholder: string;
+  ai_remember_hint: string;
+  ai_remember_save: string;
+  ai_remember_saved: string;
+  ai_memory_block_title: string;
+  ai_memory_block_hint: (withIt: string) => string;
+  ai_memory_digest_fresh: (when: string) => string;
+  ai_memory_digest_stale: (when: string) => string;
+  ai_memory_parts: string;
+  ai_entity_this: {
+    profile: string;
+    project: string;
+    'project-section': string;
+    event: string;
+    'diary-entry': string;
+    page: string;
+    tag: string;
+  };
+  ai_entity_with: {
+    project: string;
+    'project-section': string;
+    event: string;
+    'diary-entry': string;
+    page: string;
+    tag: string;
+  };
+  ai_entity_menu: (it: string) => string;
+  ai_entity_new_session: (title: string) => string;
+  ai_entity_sessions: (count: number) => string;
+  ai_entity_no_sessions: string;
+  ai_entity_all_sessions: string;
+  ai_session_applied_count: (count: number) => string;
+  ai_form_outdated: string;
+  ai_form_outdated_hint: string;
+  ai_form_reload: string;
+  ai_sessions_about: string;
+  ai_sessions_about_clear: string;
+  ai_new_about: string;
+  ai_bar_new_plain: string;
+  ai_bar_waiting_title: (count: number) => string;
+  ai_bar_nothing_waits: string;
+  ai_bar_all_sessions: string;
+  ai_memory_open: string;
+  ai_memory_more: (count: number) => string;
+  ai_memory_cancel: string;
+  ai_memory_kinds: Record<
+    Exclude<import('../ai').AiEntityType, 'profile'>,
+    string
+  >;
+  ai_action_and: string;
+  ai_action_term_keep: string;
+  ai_action_facts: (count: number) => string;
+  ai_action_card_title: (count: number) => string;
+  ai_action_apply: string;
+  ai_action_apply_count: (count: number) => string;
+  ai_action_apply_sure: string;
+  ai_action_apply_final: string;
+  ai_action_reject: string;
+  ai_action_reject_all: string;
+  ai_action_comment: string;
+  ai_action_open: string;
+  ai_action_undo: string;
+  ai_action_restore: string;
+  ai_action_never: string;
+  ai_action_pick: string;
+  ai_action_unsure: string;
+  ai_action_applied: (by: string, when: string) => string;
+  ai_action_by: Record<'owner' | 'app', string>;
+  ai_action_states: Record<
+    | 'rejected'
+    | 'never'
+    | 'undone'
+    | 'stale'
+    | 'failed'
+    | 'superseded'
+    | 'applying',
+    string
+  >;
+  ai_action_undo_states: Record<
+    'changed' | 'gone' | 'final' | 'undone',
+    string
+  >;
+  ai_action_atomic_hint: string;
+  ai_action_unticked_hint: string;
+  ai_action_final_note: string;
+  ai_action_by_ai: string;
+  ai_action_corrections: (count: number) => string;
+  ai_action_unsure_count: (count: number) => string;
+  ai_action_order: string;
+  ai_action_order_parts: (count: number) => string;
+  ai_action_relations: Record<'related' | 'depends-on' | 'affects', string>;
+  ai_action_relation_removed: string;
+  ai_action_write_modes: Record<'new' | 'append' | 'replace', string>;
+  ai_action_texts: Record<'body' | 'notes' | 'description' | 'about', string>;
+  ai_action_fields: Record<
+    | 'title'
+    | 'summary'
+    | 'reminder'
+    | 'showcase'
+    | 'cv'
+    | 'description'
+    | 'synonyms'
+    | 'slogan',
+    string
+  >;
+  ai_action_flag: Record<'on' | 'off', string>;
+  ai_action_create: Record<
+    'project' | 'project-section' | 'event' | 'diary-entry' | 'page' | 'tag',
+    string
+  >;
+  ai_action_parts: Record<'sections' | 'tags' | 'relations', string>;
+  ai_action_access: Record<'public' | 'link-only' | 'private', string>;
+  ai_action_update_fields: (fields: string) => string;
+  ai_toast_declined: (count: number) => string;
+  ai_toast_never: string;
+  ai_toast_comment_sent: string;
+  ai_toast_answer_sent: string;
+  ai_toast_pinned: string;
+  ai_toast_unpinned: string;
+  ai_toast_undone: string;
+  ai_toast_restored: string;
+  ai_comment_label: string;
+  ai_comment_placeholder: string;
+  ai_comment_quick: [string, string];
+  ai_model_states: Record<
+    'ready' | 'off' | 'none' | 'no-key' | 'no-address' | 'no-model' | 'budget',
+    string
+  >;
+  ai_model_provider_label: string;
+  ai_model_provider_cards: Record<
+    'none' | 'api',
+    { title: string; text: string }
+  >;
+  ai_model_service_label: string;
+  ai_model_service_choose: string;
+  ai_model_service_custom: string;
+  ai_model_service_local: (name: string) => string;
+  ai_model_service_missing: string;
+  ai_model_base_url: string;
+  ai_model_label: string;
+  ai_model_list_refresh: string;
+  ai_model_unlisted: string;
+  ai_model_choose: string;
+  ai_model_other: string;
+  ai_model_id_placeholder: string;
+  ai_model_missing: string;
+  ai_model_address_invalid: string;
+  ai_model_key: string;
+  ai_model_key_placeholder: string;
+  ai_model_key_replace_placeholder: (hint: string) => string;
+  ai_model_key_remove: string;
+  ai_model_key_remove_confirm: string;
+  ai_model_key_where: string;
+  ai_model_key_optional: string;
+  ai_model_limit_label: string;
+  ai_model_limit_hint: string;
+  ai_model_limit_unit: string;
+  ai_model_limit_tokens: string;
+  ai_model_limit_tokens_link: string;
+  ai_model_limit_invalid: string;
+  ai_model_usage_line: (month: string, spent: string, limit: string) => string;
+  ai_model_average: (thousands: string) => string;
+  ai_model_check: string;
+  ai_model_check_outcomes: Record<
+    'ok' | 'key' | 'model' | 'address' | 'busy' | 'error',
+    string
+  >;
+  ai_bar_waiting: (count: number) => string;
+  ai_error: string;
+  ai_off_notice: string;
   x_sections: (count: number) => string;
 };

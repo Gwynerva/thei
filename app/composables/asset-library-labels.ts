@@ -14,6 +14,7 @@ export const assetSourceIcon = {
   'diary-entry': entityTypeIcon('diary-entry'),
   tag: entityTypeIcon('tag'),
   profile: 'person',
+  'ai-session': 'ai-chat',
   unused: 'delete',
 } as const satisfies Record<AssetSourceType, string>;
 export function assetSourceLabel(source: Pick<AssetSource, 'type'>) {
@@ -25,6 +26,7 @@ export function assetSourceLabel(source: Pick<AssetSource, 'type'>) {
     'diary-entry': phrase.value.diary_entry,
     tag: phrase.value.tag,
     profile: phrase.value.asset_source_profile,
+    'ai-session': phrase.value.asset_source_ai_session,
     unused: phrase.value.asset_library_unused,
   }[source.type];
 }
@@ -34,6 +36,9 @@ export function assetSourceLabel(source: Pick<AssetSource, 'type'>) {
  */
 export function assetSourceTitle(source: Pick<AssetSource, 'type' | 'title'>) {
   if (source.type === 'unused') return phrase.value.asset_library_unused;
+  // A session not named yet is a new one, as its list calls it.
+  if (source.type === 'ai-session')
+    return publicText(source.title) || phrase.value.ai_session_untitled;
   return source.type === 'diary-entry'
     ? entityDisplayTitle({ title: source.title, date: source.title })
     : publicText(source.title);
@@ -84,6 +89,7 @@ export function assetRoleLabel(
     'action-icon': phrase.value.asset_role_action_icon,
     'action-background': phrase.value.asset_role_action_background,
     'action-file': phrase.value.asset_role_action_file,
+    'ai-attachment': phrase.value.asset_role_ai_attachment,
   }[role];
 }
 
@@ -118,6 +124,7 @@ export function assetPlacementContentContext(
       'diary-entry': 'content',
       profile: 'profile-about',
       tag: 'content',
+      'ai-session': 'content',
       unused: 'content',
     } as const
   )[placement.source.type];

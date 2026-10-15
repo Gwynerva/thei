@@ -1,4 +1,5 @@
 import { readdir, rm, stat } from 'node:fs/promises';
+import { messageExternalLinkUrls } from '#layers/thei/shared/ai-message-text';
 import { join } from 'node:path';
 import { eq, inArray } from 'drizzle-orm';
 import {
@@ -282,6 +283,12 @@ export function collectUsedExternalLinkUrls(): Set<string> {
       warn('Skipped malformed content during the sweep', error);
     }
   }
+  // What is said in AI sessions, while they are kept.
+  for (const row of db
+    .select({ text: schema.aiMessages.text })
+    .from(schema.aiMessages)
+    .all())
+    for (const url of messageExternalLinkUrls(row.text)) used.add(url);
   return used;
 }
 

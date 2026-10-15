@@ -24,6 +24,20 @@ import { tagUsages } from './tag-usages';
 import { externalLinks } from './external-links';
 import { projectExternalLinks } from './project-external-links';
 import { eventExternalLinks } from './event-external-links';
+import { apiTokens } from './api-tokens';
+import { oauthAuthorizations, oauthClients } from './oauth';
+import {
+  aiActions,
+  aiDigests,
+  aiMemory,
+  aiMessages,
+  aiSessionEntities,
+  aiSessions,
+  aiTemplateMarks,
+  aiTemplates,
+  aiTerms,
+  aiUsage,
+} from './ai';
 
 export const schema = {
   profiles,
@@ -51,4 +65,17 @@ export const schema = {
   externalLinks,
   projectExternalLinks,
   eventExternalLinks,
+  apiTokens,
+  oauthClients,
+  oauthAuthorizations,
+  aiUsage,
+  aiSessions,
+  aiMessages,
+  aiActions,
+  aiSessionEntities,
+  aiMemory,
+  aiTerms,
+  aiDigests,
+  aiTemplates,
+  aiTemplateMarks,
 };

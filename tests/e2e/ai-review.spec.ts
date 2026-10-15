@@ -1,0 +1,413 @@
+import { expect, test, type Page } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
+import {
+  startFakeModel,
+  type FakeModel,
+  type FakeRequest,
+  type FakeTurn,
+} from '../helpers/fake-model';
+import { expectPopupUsable } from './helpers/popup';
+
+/**
+ * An AI's corrections of a text gone through part by part: on their own
+ * screen from the session, the text as it will read with each part marked
+ * where it stands, accepted or kept as it was and applied at once; and in
+ * the editor, taken into its text as one change the form saves — the save
+ * button changing once, never flickering. On a computer, and on a phone.
+ */
+test.use({
+  storageState: fileURLToPath(
+    new URL('./.artifacts/admin.json', import.meta.url),
+  ),
+});
+test.describe.configure({ mode: 'serial' });
+
+const DESKTOP = { width: 1280, height: 800 };
+const MOBILE = { width: 375, height: 812 };
+const run = Date.now() % 100_000;
+// A day of its own, far from the days other specs write.
+const DATE = new Date(Date.UTC(2014, 0, 1) + (run % 3000) * 86_400_000)
+  .toISOString()
+  .slice(0, 10);
+// The entry a new order is proposed for, on a day of its own as well.
+const ORDER_DATE = new Date(Date.UTC(2010, 0, 1) + (run % 1400) * 86_400_000)
+  .toISOString()
+  .slice(0, 10);
+const REPEAT = 'Morning on the boat, the sea calm.';
+let diaryUuid = '';
+let orderUuid = '';
+let model: FakeModel;
+
+/** The corrections the model proposes, by a word of the owner's message. */
+const CORRECTIONS: Record<string, Record<string, unknown>[]> = {
+  first: [
+    {
+      find: 'wierd',
+      replace: 'weird',
+      category: 'spelling',
+      reason: 'A typo.',
+    },
+    {
+      find: 'We waited',
+      replace: 'We wait',
+      category: 'grammar',
+      certainty: 'unsure',
+      reason: 'The rest of the entry is in the present.',
+    },
+  ],
+  second: [
+    { find: 'teh', replace: 'the', category: 'spelling', reason: 'A typo.' },
+  ],
+  third: [
+    { find: 'peir', replace: 'pier', category: 'spelling', reason: 'A typo.' },
+  ],
+};
+
+function lastOwnerWords(request: FakeRequest): string {
+  const messages: { role: string; content?: unknown }[] =
+    request.body.messages ?? [];
+  for (let index = messages.length - 1; index >= 0; index--)
+    if (messages[index]!.role === 'user')
+      return String(messages[index]!.content ?? '').toLowerCase();
+  return '';
+}
+
+function toolAnswered(request: FakeRequest): boolean {
+  const messages: { role: string }[] = request.body.messages ?? [];
+  const last = messages.map((message) => message.role).lastIndexOf('user');
+  return messages.slice(last + 1).some((message) => message.role === 'tool');
+}
+
+function script(request: FakeRequest): FakeTurn {
+  if (toolAnswered(request)) return { text: 'I proposed corrections.' };
+  const said = lastOwnerWords(request);
+  if (said.includes('tidy'))
+    return {
+      toolCalls: [
+        {
+          name: 'propose',
+          input: {
+            actions: [
+              {
+                kind: 'revise',
+                target: `diary-entry:${ORDER_DATE}`,
+                text: 'body',
+                mode: 'order',
+                reason: 'A repeat dropped, the evening given a heading.',
+                markdown: `${REPEAT}
+
+## Evening
+
+Evening with the photos.`,
+                removals: [
+                  {
+                    quote: 'Morning on the boat',
+                    reason: 'A literal repeat',
+                    duplicateOf: 'Morning on the boat',
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    };
+  const which = Object.keys(CORRECTIONS).find((word) => said.includes(word));
+  if (!which) return { text: 'Say which proofreading.' };
+  return {
+    toolCalls: [
+      {
+        name: 'propose',
+        input: {
+          actions: [
+            {
+              kind: 'revise',
+              target: `diary-entry:${DATE}`,
+              text: 'body',
+              mode: 'proofread',
+              reason: 'Proofread the entry.',
+              corrections: CORRECTIONS[which],
+            },
+          ],
+        },
+      },
+    ],
+  };
+}
+
+test.beforeAll(async ({ request }) => {
+  const entry = await (
+    await request.post('/api/admin/diary', {
+      data: {
+        date: DATE,
+        access: 'public',
+        content: {
+          data: {
+            blocks: [
+              {
+                type: 'paragraph',
+                data: { text: 'It was a wierd morning by the sea.' },
+              },
+              {
+                type: 'paragraph',
+                data: {
+                  text: 'We waited for teh captain on the peir.',
+                },
+              },
+            ],
+          },
+        },
+      },
+    })
+  ).json();
+  expect(entry.type, JSON.stringify(entry)).toBe('success');
+  diaryUuid = entry.diaryUuid;
+  const ordered = await (
+    await request.post('/api/admin/diary', {
+      data: {
+        date: ORDER_DATE,
+        access: 'public',
+        content: {
+          data: {
+            blocks: [REPEAT, REPEAT, 'Evening with the photos.'].map(
+              (text) => ({ type: 'paragraph', data: { text } }),
+            ),
+          },
+        },
+      },
+    })
+  ).json();
+  expect(ordered.type, JSON.stringify(ordered)).toBe('success');
+  orderUuid = ordered.diaryUuid;
+
+  model = await startFakeModel(script, { models: ['fake-e2e'] });
+  expect(
+    (
+      await request.put('/api/admin/ai/settings', { data: { enabled: true } })
+    ).ok(),
+  ).toBe(true);
+  expect(
+    (
+      await request.put('/api/admin/ai/model', {
+        data: {
+          provider: 'openai',
+          baseUrl: model.url,
+          model: 'fake-e2e',
+          monthlyTokens: 10_000_000,
+        },
+      })
+    ).ok(),
+  ).toBe(true);
+});
+
+test.afterAll(async ({ request }) => {
+  await request.put('/api/admin/ai/model', { data: { provider: 'none' } });
+  await request.put('/api/admin/ai/settings', { data: { enabled: false } });
+  await model?.close();
+});
+
+let errors: string[] = [];
+test.beforeEach(({ page }) => {
+  errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+});
+test.afterEach(() => {
+  expect(errors).toEqual([]);
+});
+
+async function open(page: Page, path: string) {
+  await page.goto(path);
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-nuxt-hydrated',
+    'true',
+  );
+}
+
+/** Asks the model in a new session; its proposal comes as an action. */
+async function propose(page: Page, words: string) {
+  await open(page, '/admin/ai/?session=new');
+  await page.locator('[data-composer-field]').click();
+  await page.keyboard.type(words);
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/admin\/ai\/\?session=ais-/);
+  await expect(page.locator('[data-composer-send]')).toHaveAttribute(
+    'data-composer-send',
+    'send',
+    // The first turn after a fresh build may take its time.
+    { timeout: 40_000 },
+  );
+}
+
+async function storedText(page: Page, uuid = diaryUuid) {
+  const entry = await (
+    await page.request.get(`/api/admin/diary/${uuid}`)
+  ).json();
+  return JSON.stringify(entry);
+}
+
+async function openEditor(page: Page) {
+  await open(page, `/admin/diary/${diaryUuid}/edit/`);
+  await page.waitForLoadState('networkidle');
+  await page.locator('button[data-field]').first().click();
+  await expect(
+    page.locator('dialog .content-editor [contenteditable="true"]').first(),
+  ).toBeVisible({ timeout: 15_000 });
+}
+
+const review = (page: Page) => page.locator('[data-review]');
+const card = (page: Page) => page.locator('[data-review-card]');
+
+test('goes through corrections on their own screen and applies what is accepted', async ({
+  page,
+}) => {
+  await page.setViewportSize(DESKTOP);
+  await propose(page, 'Proofread the first time');
+  await page.locator('[data-action-open]').last().click();
+  await expect(review(page)).toBeVisible();
+  await expect(review(page)).toHaveAttribute('data-review-mode', 'ai');
+
+  // Each part is marked where it stands, the text read as it will be.
+  const marks = review(page).locator('.review-mark');
+  await expect(marks).toHaveCount(2);
+  await expect(marks.first()).toHaveText('weird');
+
+  // A part opens where it stands; deciding it goes on to the next.
+  await marks.first().click();
+  await expectPopupUsable(page, card(page));
+  await expect(card(page)).toHaveAttribute('data-review-card', 'c1');
+  await card(page).locator('[data-review-accept]').click();
+  await expect(card(page)).toHaveAttribute('data-review-card', 'c2');
+  await card(page).locator('[data-review-keep]').click();
+  // Kept as it was, its words read as they were.
+  await expect(marks.nth(1)).toHaveText('We waited');
+
+  const finish = page.locator('[data-review-finish]');
+  await expect(finish).toHaveText('Apply · 1');
+  await finish.click();
+  await expect(review(page)).toBeHidden();
+  await expect(page.locator('[data-toast]')).toContainText('1 change');
+  const text = await storedText(page);
+  expect(text).toContain('weird morning');
+  expect(text).toContain('We waited');
+});
+
+test('goes through a new order, a repeat dropped and a heading left out', async ({
+  page,
+}) => {
+  await page.setViewportSize(DESKTOP);
+  await propose(page, 'Tidy the boat day');
+  await page.locator('[data-action-open]').last().click();
+  await expect(review(page)).toBeVisible();
+
+  // The text reads as it will: the repeat folded, the heading tinted.
+  const gone = review(page).locator('button.review-gone');
+  await expect(gone).toHaveCount(1);
+  await expect(gone).toContainText('Morning on the boat');
+  const heading = review(page)
+    .locator('[data-review-block]')
+    .getByRole('heading', { name: 'Evening', exact: true });
+  await expect(heading).toHaveCount(1);
+
+  await gone.click();
+  await expectPopupUsable(page, card(page));
+  await card(page).locator('[data-review-accept]').click();
+  // On to the heading, which is left out: it goes from the text.
+  await expect(card(page)).toContainText('Evening');
+  await card(page).locator('[data-review-keep]').click();
+  await expect(heading).toHaveCount(0);
+
+  const finish = page.locator('[data-review-finish]');
+  await expect(finish).toHaveText('Apply · 1');
+  await finish.click();
+  await expect(review(page)).toBeHidden();
+  const text = await storedText(page, orderUuid);
+  expect(text.split('Morning on the boat')).toHaveLength(2);
+  expect(text).toContain('Evening with the photos.');
+  expect(text).not.toContain('"header"');
+});
+
+test('takes corrections into the editor as one change, the save button never flickering', async ({
+  page,
+}) => {
+  await page.setViewportSize(DESKTOP);
+  await propose(page, 'Proofread the second time');
+  const sessionUuid = new URL(page.url()).searchParams.get('session')!;
+  await openEditor(page);
+  const notice = page.locator('[data-editor-notice="ai"]');
+  await expect(notice).toBeVisible();
+
+  // Every change of the save button's words from here on.
+  const save = page.locator('[data-editor-save]');
+  await expect(save).toHaveText('Saved');
+  await save.evaluate((button) => {
+    const seen: string[] = [];
+    (window as unknown as { saveLabels: string[] }).saveLabels = seen;
+    new MutationObserver(() => seen.push(button.textContent!.trim())).observe(
+      button,
+      { childList: true, characterData: true, subtree: true },
+    );
+  });
+
+  await notice.locator('[data-review-open]').click();
+  await expect(review(page)).toBeVisible();
+  await expect(review(page).locator('.review-mark')).toHaveText('the');
+
+  await page.locator('[data-review-sure]').click();
+  await page.locator('[data-review-finish]').click();
+  await expect(review(page)).toBeHidden();
+  await expect(page.locator('dialog .content-editor')).toContainText(
+    'for the captain',
+  );
+  await expect(notice).toBeHidden();
+  await page.waitForTimeout(1000);
+  const labels = await page.evaluate(
+    () => (window as unknown as { saveLabels: string[] }).saveLabels,
+  );
+  expect([...new Set(labels)]).toEqual(['Save']);
+
+  // Saved, the session hears the correction was made.
+  await save.click();
+  await expect(save).toHaveText('Saved');
+  await expect
+    .poll(async () => (await storedText(page)).includes('for the captain'), {
+      timeout: 10_000,
+    })
+    .toBe(true);
+  await expect
+    .poll(
+      async () => {
+        const detail = await (
+          await page.request.get(`/api/admin/ai/sessions/${sessionUuid}`)
+        ).json();
+        const action = detail.actions[0];
+        return `${action.state}:${action.parts.map((part: { state: string }) => part.state).join()}`;
+      },
+      { timeout: 10_000 },
+    )
+    .toBe('applied:applied');
+});
+
+test('fits a phone, its bar of decisions at the foot of the screen', async ({
+  page,
+}) => {
+  await page.setViewportSize(DESKTOP);
+  await propose(page, 'Proofread the third time');
+  await page.setViewportSize(MOBILE);
+  await openEditor(page);
+  await page.locator('[data-review-open]').click();
+  await expect(review(page)).toBeVisible();
+  expect(
+    await review(page).evaluate((box) => box.scrollWidth - box.clientWidth),
+  ).toBeLessThanOrEqual(1);
+  const bar = await review(page).locator('footer').boundingBox();
+  expect(bar!.y + bar!.height).toBeGreaterThan(MOBILE.height - 4);
+
+  await review(page).locator('.review-mark').first().click();
+  await expectPopupUsable(page, card(page));
+  await card(page).locator('[data-review-accept]').click();
+  await page.locator('[data-review-finish]').click();
+  await expect(review(page)).toBeHidden();
+  await expect(page.locator('dialog .content-editor')).toContainText(
+    'on the pier',
+  );
+});

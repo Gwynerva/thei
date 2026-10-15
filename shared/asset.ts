@@ -25,6 +25,7 @@ export const ASSET_CONTAINER_TYPES = [
   'asset',
   'content',
   'tag',
+  'ai-session',
 ] as const;
 export type AssetContainerType = (typeof ASSET_CONTAINER_TYPES)[number];
 
@@ -39,6 +40,8 @@ export const ASSET_ROLES = [
   'action-icon',
   'action-background',
   'action-file',
+  /** Brought into an AI session, by the owner or an app. */
+  'ai-attachment',
 ] as const;
 export type AssetRole = (typeof ASSET_ROLES)[number];
 

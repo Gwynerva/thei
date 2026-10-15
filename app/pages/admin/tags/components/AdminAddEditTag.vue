@@ -43,14 +43,27 @@ const savedRevision = ref(0);
 /** Placements added from the candidates, which teach the suggestions too. */
 const addedCount = ref(0);
 const saved = ref('');
+/** The version the form was read at, sent back so a newer change is not lost. */
+const formVersion = ref<number>();
+provideEntityAi({
+  ref: () =>
+    resolvedTagUuid.value ? `tag:${resolvedTagUuid.value}` : undefined,
+  form: () => data.value,
+  version: () => formVersion.value,
+});
 const saving = ref(false);
 const error = ref<string>();
 const publicIdError = ref<string>();
 
 if (tagUuid) {
   const response = await useRequestFetch()<
-    TagItem & { synonyms: string[]; usageStats: TagUsageStats }
+    TagItem & {
+      synonyms: string[];
+      usageStats: TagUsageStats;
+      version: number;
+    }
   >(`/api/admin/tags/${tagUuid}`);
+  formVersion.value = response.version;
   data.value = {
     title: response.title,
     slug: response.slug,
@@ -138,7 +151,12 @@ async function save() {
   try {
     const result = await $fetch<TagSaveResponse>(
       tagUuid ? `/api/admin/tags/${tagUuid}` : '/api/admin/tags',
-      { method: tagUuid ? 'PUT' : 'POST', body: data.value },
+      {
+        method: tagUuid ? 'PUT' : 'POST',
+        body: tagUuid
+          ? { ...data.value, version: formVersion.value }
+          : data.value,
+      },
     );
     if (result.type === 'error') {
       if (result.code === 'public-id-taken') {
@@ -149,6 +167,7 @@ async function save() {
       return;
     }
     saved.value = JSON.stringify(data.value);
+    formVersion.value = result.version;
     savedIconAssetUuid.value = data.value.iconAssetUuid;
     savedRevision.value++;
     await refreshNuxtData('admin-tag-count');
@@ -214,7 +233,8 @@ await useAdminTabTitle(
           isEdit ? phrase.edit_tag : phrase.new_tag
         }}</span>
       </div>
-      <div class="flex gap-xs">
+      <div class="flex items-center gap-xs">
+        <AiEntityButton />
         <Button
           v-if="isEdit"
           variant="delete"
@@ -231,7 +251,11 @@ await useAdminTabTitle(
       </div>
     </div>
   </StickyGlassHeader>
-  <div class="m-auto w-(--width-wide) max-w-full px-window py-lg">
+  <div
+    class="m-auto flex w-(--width-wide) max-w-full flex-col gap-lg px-window
+      py-lg"
+  >
+    <AiFormOffers />
     <Box class="flex flex-col gap-md p-sm sm:p-md">
       <div class="flex flex-col gap-md sm:flex-row">
         <Field class="min-w-0 flex-1">
@@ -266,7 +290,7 @@ await useAdminTabTitle(
         </Field>
       </div>
 
-      <Field>
+      <Field ai="field:description">
         <FieldLabel>{{ phrase.tag_description }}</FieldLabel>
         <FieldTextarea
           v-model="data.description"
@@ -287,6 +311,7 @@ await useAdminTabTitle(
       />
 
       <TagSynonymsField
+        ai="field:synonyms"
         v-model="data.synonyms"
         :tag-uuid="resolvedTagUuid"
         :title="data.title"
@@ -307,8 +332,8 @@ await useAdminTabTitle(
       v-if="resolvedTagUuid"
       :tag-uuid="resolvedTagUuid"
       :revision="savedRevision"
-      class="mt-lg"
       @added="countAddedUsage"
     />
+    <AiMemoryBlock />
   </div>
 </template>

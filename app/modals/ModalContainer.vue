@@ -36,6 +36,13 @@ function overlayClick() {
       <main>
         <slot></slot>
       </main>
+      <footer
+        v-if="$slots.footer"
+        class="sticky bottom-0 z-10 border-t border-border-1 bg-bg-2/80
+          backdrop-blur-md"
+      >
+        <slot name="footer"></slot>
+      </footer>
     </div>
   </section>
 </template>

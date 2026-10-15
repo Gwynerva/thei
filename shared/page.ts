@@ -10,6 +10,8 @@ export type PageEditData = {
   content: ContentFieldModelValue | null;
   reminder?: string;
   notes?: ContentFieldModelValue | null;
+  /** The version the form was read at; a save over a newer one is refused. */
+  version?: number;
 };
 
 export type ValidatedPageEditData = Omit<PageEditData, 'access'> & {

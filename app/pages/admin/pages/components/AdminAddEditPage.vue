@@ -32,6 +32,17 @@ const registeredSlugs = ref<string[]>([]);
 const initialSlug = ref('');
 const slugSynchronized = ref(true);
 const savedSnapshot = ref(JSON.stringify(payload()));
+/**
+ * When the entity last changed, as the form read it. A save names it, and
+ * one over a change made elsewhere since — another tab, an AI client — is
+ * refused rather than written over it.
+ */
+const formVersion = ref<number>();
+provideEntityAi({
+  ref: () => (pageUuid ? `page:${pageUuid}` : undefined),
+  form: () => data.value,
+  version: () => formVersion.value,
+});
 const saving = ref(false);
 const error = ref<string>();
 const serverSlugError = ref<string>();
@@ -69,6 +80,7 @@ if (pageUuid) {
       slugSynchronized.value =
         response.slug === language.value.slugify(response.title);
       markSaved();
+      formVersion.value = response.version;
     },
     { immediate: true },
   );
@@ -181,13 +193,17 @@ async function save() {
   try {
     const result = await $fetch<PageSaveResponse>(
       isEdit.value ? `/api/admin/pages/${pageUuid}` : '/api/admin/pages',
-      { method: isEdit.value ? 'PUT' : 'POST', body: payload() },
+      {
+        method: isEdit.value ? 'PUT' : 'POST',
+        body: { ...payload(), version: formVersion.value },
+      },
     );
     if (result.type === 'error') {
       if (result.code === 'slug-taken') serverSlugError.value = result.message;
       else error.value = result.message;
       return;
     }
+    formVersion.value = result.version;
     const previousSlug = initialSlug.value;
     // The title as the server stored it, its ending settled.
     data.value.title = normalizeHeadingText(data.value.title.trim());
@@ -275,6 +291,7 @@ await useAdminTabTitle(
         }}</span>
       </div>
       <div class="flex items-center gap-xs">
+        <AiEntityButton />
         <Button
           v-if="isEdit"
           variant="delete"
@@ -293,9 +310,10 @@ await useAdminTabTitle(
   </StickyGlassHeader>
 
   <div class="m-auto flex w-(--width-wide) flex-col gap-lg px-window py-lg">
+    <AiFormOffers />
     <Box class="flex flex-col gap-md p-sm sm:p-md">
       <div class="flex flex-col gap-md sm:flex-row">
-        <Field class="min-w-0 flex-1">
+        <Field ai="field:title" class="min-w-0 flex-1">
           <FieldLabel required>{{ phrase.page_title }}</FieldLabel>
           <FieldInput
             v-model="data.title"
@@ -307,7 +325,7 @@ await useAdminTabTitle(
           <FieldHint>{{ phrase.page_title_hint }}</FieldHint>
         </Field>
 
-        <Field class="min-w-50">
+        <Field ai="access" class="min-w-50">
           <FieldLabel required>{{ phrase.page_access }}</FieldLabel>
           <FieldOptions
             v-model="data.access"
@@ -330,7 +348,7 @@ await useAdminTabTitle(
         </Field>
       </div>
 
-      <Field>
+      <Field ai="field:summary">
         <FieldLabel required>{{ phrase.page_summary }}</FieldLabel>
         <FieldTextarea
           v-model="data.summary"
@@ -402,6 +420,7 @@ await useAdminTabTitle(
       entity-type="page"
       :entity-uuid="pageUuid"
     />
+    <AiMemoryBlock />
     <AdminNotesBlock
       v-model:reminder="reminderModel"
       v-model:notes="notesModel"

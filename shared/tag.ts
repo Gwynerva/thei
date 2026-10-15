@@ -39,6 +39,8 @@ export type TagEditData = {
   /** Other words the tag is known by. Only the owner sees them. */
   synonyms: string[];
   iconAssetUuid?: string;
+  /** The version the form was read at; a save over a newer one is refused. */
+  version?: number;
 };
 
 /** A match of the tag picker's search. */
@@ -61,10 +63,15 @@ export type TagUsageStats = {
 };
 
 export type TagSaveErrorCode =
-  'title-taken' | 'slug-taken' | 'public-id-taken' | 'name-taken';
+  'title-taken' | 'slug-taken' | 'public-id-taken' | 'name-taken' | 'changed';
 
 export type TagSaveResponse =
-  | { type: 'success'; tagUuid: string }
+  | {
+      type: 'success';
+      tagUuid: string;
+      /** The version the saved form is at, to send with the next save. */
+      version: number;
+    }
   | {
       type: 'error';
       message: string;

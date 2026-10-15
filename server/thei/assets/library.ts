@@ -56,6 +56,7 @@ WITH sources AS (
   UNION ALL SELECT 'diary-entry',diaryUuid,date,'',date,'',updatedAt,access='private','','','','' FROM "diary-entries"
   UNION ALL SELECT 'tag',tagUuid,title,description,slug,publicId,0,0,'','','','' FROM tags
   UNION ALL SELECT 'profile',profileId,displayName,slogan,'','',0,0,'','','','' FROM profiles
+  UNION ALL SELECT 'ai-session',sessionUuid,title,'','','',lastActiveAt,1,'','','','' FROM "ai-sessions" WHERE purgedAt IS NULL
   UNION ALL SELECT 'project-section',se.sectionUuid,se.title,se.summary,se.humanReadableSlug,se.publicId,se.updatedAt,
     (se.isPrivate OR p.access='private'),p.projectUuid,p.title,p.humanReadableSlug,p.publicId
     FROM "project-content-sections" se JOIN projects p ON p.projectUuid=se.projectUuid
@@ -259,6 +260,8 @@ function sourceInfo(row: SourceRow): AssetSource {
               : type === 'profile'
                 ? '/'
                 : undefined;
+  if (type === 'ai-session')
+    return { ...base, editUrl: `/admin/ai/?session=${encodeURIComponent(id)}` };
   const editUrl =
     type === 'unused'
       ? undefined

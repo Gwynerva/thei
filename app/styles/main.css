@@ -14,6 +14,11 @@
 
   --radius-normal: var(--radius-lg);
 
+  /* The one size below Tailwind's own: meta lines under a title, counts in
+     a badge, the small capitals of a group's heading. */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: calc(1 / 0.6875);
+
   --breakpoint-xs: 24rem;
 
   /** Space between element and window edge */
@@ -186,6 +191,26 @@
 
       &::-webkit-scrollbar-thumb {
         border-width: 2px;
+      }
+    }
+  }
+}
+
+/* A thin bar always in sight over no rail of its own: what scrolls sideways
+   inside a surface, as a wide table in a message does. */
+@utility scrollbar-clear {
+  @apply scrollbar-mini;
+
+  @media (hover: hover) and (pointer: fine) {
+    @supports not selector(::-webkit-scrollbar) {
+      scrollbar-color: var(--scrollbar-thumb-color) transparent;
+    }
+
+    @supports selector(::-webkit-scrollbar) {
+      &::-webkit-scrollbar-track,
+      &::-webkit-scrollbar-corner {
+        background: transparent;
+        border: 0;
       }
     }
   }
