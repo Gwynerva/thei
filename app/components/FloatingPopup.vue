@@ -2,6 +2,7 @@
 import {
   autoUpdate,
   flip,
+  hide,
   offset as floatingOffset,
   shift,
   size,
@@ -24,6 +25,11 @@ const props = withDefaults(
     closeOnOutside?: boolean;
     closeOnEscape?: boolean;
     outsideIgnore?: Array<HTMLElement | null>;
+    /**
+     * Where the popup is rendered. Left out, it joins the `<dialog>` its
+     * anchor is in, or the body: a modal is a `<dialog>` in the top layer,
+     * and a popup teleported to the body would open beneath it.
+     */
     teleportTo?: string | HTMLElement;
     fitContent?: boolean;
   }>(),
@@ -35,8 +41,19 @@ const props = withDefaults(
     maxWidth: '20rem',
     closeOnOutside: true,
     closeOnEscape: true,
-    teleportTo: 'body',
   },
+);
+
+/** The `<dialog>` an anchor sits in, a virtual anchor through its context. */
+function dialogOf(anchor: ReferenceElement | null): HTMLElement | undefined {
+  if (!anchor || typeof Element === 'undefined') return undefined;
+  const element =
+    anchor instanceof Element ? anchor : (anchor.contextElement ?? undefined);
+  return element?.closest('dialog') ?? undefined;
+}
+
+const teleportTarget = computed(
+  () => props.teleportTo ?? dialogOf(props.anchor) ?? 'body',
 );
 
 const emit = defineEmits<{
@@ -78,9 +95,12 @@ const middleware = computed(() => [
       );
     },
   }),
+  // An anchor scrolled out of the box it scrolls in takes its popup along,
+  // rather than leave it floating over whatever is there now.
+  hide({ padding: props.viewportPadding }),
 ]);
 
-const { floatingStyles, update } = useFloating(
+const { floatingStyles, middlewareData, update } = useFloating(
   referenceElement,
   floatingElement,
   {
@@ -98,6 +118,9 @@ const { floatingStyles, update } = useFloating(
 const popupStyle = computed(() => ({
   ...floatingStyles.value,
   '--floating-popup-max-width': props.maxWidth,
+  ...(middlewareData.value.hide?.referenceHidden
+    ? { visibility: 'hidden' as const }
+    : {}),
 }));
 
 let viewportFrame: number | undefined;
@@ -187,12 +210,13 @@ defineExpose({ element: floatingElement });
 </script>
 
 <template>
-  <Teleport :to="teleportTo">
+  <Teleport :to="teleportTarget">
     <TransitionFade @after-leave="emit('closed')">
       <div
         v-if="open && anchor"
         ref="floating"
         v-bind="$attrs"
+        data-floating-popup
         :style="popupStyle"
         class="fixed z-9998 max-h-(--floating-popup-available-height)
           max-w-[calc(100dvw-var(--spacing-window)-var(--spacing-window))]

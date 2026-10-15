@@ -304,7 +304,6 @@ function remove() {
           placement="bottom-start"
           :fallback-placements="['top-start']"
           max-width="26rem"
-          teleport-to="dialog"
           @opened="entitySearch?.focus()"
         >
           <ContentEntitySearchPopup

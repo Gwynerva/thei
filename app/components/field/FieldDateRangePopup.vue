@@ -34,7 +34,6 @@ const props = withDefaults(
   }>(),
   {
     placement: 'bottom-end',
-    teleportTo: 'body',
     precision: true,
   },
 );

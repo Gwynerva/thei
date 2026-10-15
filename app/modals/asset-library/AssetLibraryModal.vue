@@ -288,7 +288,6 @@ onBeforeUnmount(() => {
           v-model:type="type"
           v-model:where="where"
           :facets
-          teleport-to="dialog"
           @element="searchInput = $event"
         />
       </div>

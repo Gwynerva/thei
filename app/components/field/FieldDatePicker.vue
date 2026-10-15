@@ -8,7 +8,7 @@ const props = withDefaults(
     label: string;
     maxDate?: Date;
     placement?: Placement;
-    /** Inside a modal the calendar has to join its `dialog` to be on top. */
+    /** Where the calendar goes; left out, the dialog its field is in. */
     teleportTo?: string | HTMLElement;
     /**
      * A date the value cannot be without: no clear button, and a popup

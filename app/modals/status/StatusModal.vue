@@ -128,7 +128,6 @@ useModalCloseGuard(
             :label="phrase.profile_status_date"
             :max-date="today"
             placement="bottom-start"
-            teleport-to="dialog"
             required
           />
         </Field>
