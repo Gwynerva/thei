@@ -7,7 +7,7 @@ import {
   type AssetLibraryWhere,
 } from '#layers/thei/shared/asset-library';
 import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
-import type { PopupSelectOption } from './field/FieldPopupSelect.vue';
+import type { SelectOption } from './field/FieldSelect.vue';
 import { assetSourceIcon } from '../composables/asset-library-labels';
 
 /**
@@ -22,8 +22,6 @@ import { assetSourceIcon } from '../composables/asset-library-labels';
 const props = defineProps<{
   /** How the listing counts each choice; unknown until it answers. */
   facets?: AssetLibraryFacets;
-  /** Where the popups go: `dialog` inside a modal. */
-  teleportTo?: string;
 }>();
 
 const search = defineModel<string>('search', { required: true });
@@ -32,7 +30,7 @@ const where = defineModel<AssetLibraryWhere>('where', { required: true });
 
 const emit = defineEmits<{ element: [HTMLInputElement] }>();
 
-const typeOptions = computed<PopupSelectOption<AssetType | ''>[]>(() => {
+const typeOptions = computed<SelectOption<AssetType | ''>[]>(() => {
   const types = props.facets?.types;
   const value = phrase.value;
   return [
@@ -63,7 +61,7 @@ const typeOptions = computed<PopupSelectOption<AssetType | ''>[]>(() => {
  * Anywhere; then in an entity of one kind; then whether anything holds the
  * file at all, which is what clearing the library up asks.
  */
-const whereOptions = computed<PopupSelectOption<AssetLibraryWhere>[]>(() => {
+const whereOptions = computed<SelectOption<AssetLibraryWhere>[]>(() => {
   const facets = props.facets;
   const unused = facets && (facets.sources.unused ?? 0);
   const value = phrase.value;
@@ -99,7 +97,7 @@ const whereOptions = computed<PopupSelectOption<AssetLibraryWhere>[]>(() => {
 </script>
 
 <template>
-  <div class="flex h-10 items-stretch gap-xs">
+  <div class="flex h-10 items-stretch gap-xs pointer-coarse:h-11">
     <FieldInput
       v-model="search"
       type="search"
@@ -110,20 +108,22 @@ const whereOptions = computed<PopupSelectOption<AssetLibraryWhere>[]>(() => {
       class="h-full min-w-0! text-sm"
       @element="emit('element', $event)"
     />
-    <FieldPopupSelect
+    <FieldSelect
       v-model="type"
       :options="typeOptions"
       :label="phrase.format"
+      filter
+      compact
       collapsible
-      :teleport-to="teleportTo"
       class="max-w-48 shrink-0"
     />
-    <FieldPopupSelect
+    <FieldSelect
       v-model="where"
       :options="whereOptions"
       :label="phrase.asset_library_usage"
+      filter
+      compact
       collapsible
-      :teleport-to="teleportTo"
       class="max-w-56 shrink-0"
     />
   </div>

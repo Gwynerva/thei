@@ -306,7 +306,7 @@ onMounted(() => {
             v-for="month in months.labels"
             :key="`label-${month.key}`"
             class="heatmap-at absolute top-0 h-4 -translate-x-1/2
-              text-[0.625rem] leading-4 whitespace-nowrap text-text-3"
+              text-2xs leading-4 whitespace-nowrap text-text-3"
             :style="{ '--at': month.at }"
             aria-hidden="true"
             >{{ month.label }}</span
@@ -339,7 +339,7 @@ onMounted(() => {
             <span
               v-for="(label, index) in weekdayLabels"
               :key="label"
-              class="h-3 text-[0.625rem] leading-3 text-text-3"
+              class="h-3 text-2xs leading-3 text-text-3"
               :class="index % 2 === 0 && index !== 6 ? undefined : 'invisible'"
               >{{ label }}</span
             >

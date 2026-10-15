@@ -269,6 +269,25 @@ useSavedForm(isDirty, save, canSave);
           class="mb-md"
         /><SettingsBackupBox />
       </div>
+      <div>
+        <SectionHeader
+          icon="sparkles"
+          :title="phrase.ai_page"
+          :description="phrase.ai_settings_link"
+          class="mb-md"
+        >
+          <template #action>
+            <TheiLink
+              to="/admin/ai/?tab=connection"
+              class="flex h-10 items-center gap-xs rounded-normal bg-bg-3 px-md
+                text-sm font-semibold text-text-2 transition hocus:bg-bg-accent
+                hocus:text-accent"
+            >
+              {{ phrase.ai_open_page }}<Icon name="chevron-right" />
+            </TheiLink>
+          </template>
+        </SectionHeader>
+      </div>
     </div>
   </div>
 </template>

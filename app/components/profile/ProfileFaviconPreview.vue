@@ -58,7 +58,7 @@ const windowTheme = {
             draggable="false"
           />
         </span>
-        <span class="text-[0.625rem] opacity-60">{{ size }}px</span>
+        <span class="text-2xs opacity-60">{{ size }}px</span>
       </div>
     </div>
 

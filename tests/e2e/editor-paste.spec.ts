@@ -208,10 +208,13 @@ test('the editor opened on a pasted picture makes new variants from the kept ori
     .getByRole('button', { name: 'Create variant', exact: true })
     .first()
     .click();
-  const source = dialog
-    .locator('select')
-    .filter({ has: page.locator('option', { hasText: 'Unprocessed' }) });
-  await expect(source.locator('option:checked')).toHaveText(/PNG.*Unprocessed/);
+  const source = dialog.getByRole('button', { name: /^Source: / });
+  await expect(source).toHaveAccessibleName('Source: PNG · 640×480');
+  await source.click();
+  await expect(dialog.getByRole('option', { selected: true })).toHaveText(
+    /PNG · 640×480.*Unprocessed/,
+  );
+  await page.keyboard.press('Escape');
   await expect(
     dialog.getByText('This source is already compressed', { exact: false }),
   ).toHaveCount(0);

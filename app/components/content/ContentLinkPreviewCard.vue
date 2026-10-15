@@ -118,14 +118,14 @@ const externalLink = computed(() => externalLinkFromResolved(props.result));
       <span
         v-if="result?.state === 'broken'"
         class="line-clamp-2"
-        :class="flush ? 'text-sm' : 'text-[0.9375rem] leading-snug'"
+        :class="flush ? 'text-sm' : 'text-sm leading-snug'"
       >
         {{ phrase.content_link_broken_description }}
       </span>
       <span
         v-else-if="!result || result.state !== 'restricted'"
         class="text-text-3"
-        :class="flush ? 'text-sm' : 'text-[0.9375rem] leading-snug'"
+        :class="flush ? 'text-sm' : 'text-sm leading-snug'"
       >
         {{ phrase.content_link_loading }}
       </span>

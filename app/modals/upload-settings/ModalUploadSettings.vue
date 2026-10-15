@@ -46,6 +46,7 @@ import {
   isExtensionAllowed,
   videoExtensionProfile,
 } from '#layers/thei/shared/assets/extensions';
+import type { SelectOption } from '../../components/field/FieldSelect.vue';
 import AssetModal from '../asset-modal/AssetModal.vue';
 import AssetModalButton from '../asset-modal/AssetModalButton.vue';
 import AssetModalCompareMedia from '../asset-modal/AssetModalCompareMedia.vue';
@@ -747,25 +748,27 @@ const variantItems = computed(() =>
     recipe: describeAssetRecipe(variant.settings, variant.meta, phrase.value),
   })),
 );
-const processingOptions = computed(() =>
-  Object.fromEntries(
-    sortedVariants.value
-      .filter((variant) => variant.type === sourceAsset?.type)
-      .map((variant) => {
-        const size = assetMetaDimensions(variant.meta);
-        // Worded as the list above words it.
-        return [
-          variant.assetUuid,
-          [
-            variant.extension.toUpperCase(),
-            size ? `${size.width}×${size.height}` : undefined,
-            variantDetail(variant.settings),
-          ]
-            .filter(Boolean)
-            .join(' · '),
-        ];
-      }),
-  ),
+/**
+ * Worded as the list above words them: the format and the size, and under
+ * them how the file was made, which the narrow panel has no room for in the
+ * field itself.
+ */
+const processingOptions = computed<SelectOption[]>(() =>
+  sortedVariants.value
+    .filter((variant) => variant.type === sourceAsset?.type)
+    .map((variant) => {
+      const size = assetMetaDimensions(variant.meta);
+      return {
+        value: variant.assetUuid,
+        label: [
+          variant.extension.toUpperCase(),
+          size ? `${size.width}×${size.height}` : undefined,
+        ]
+          .filter(Boolean)
+          .join(' · '),
+        hint: variantDetail(variant.settings),
+      };
+    }),
 );
 const showFamily = computed(
   () => Boolean(sourceAsset) || variants.value.length > 0,
@@ -1363,7 +1366,7 @@ const directHref = computed(() =>
             @activate="section = 'create'"
           >
             <div
-              v-if="sourceAsset && Object.keys(processingOptions).length > 1"
+              v-if="sourceAsset && processingOptions.length > 1"
               class="flex flex-col gap-xs"
             >
               <span class="text-sm text-text-2">
@@ -1373,6 +1376,8 @@ const directHref = computed(() =>
                 v-model="processingUuid"
                 :options="processingOptions"
                 :disabled="Boolean(busy)"
+                :aria-label="phrase.upload_processing_source"
+                wide
               />
               <p v-if="processingIsCompressed" class="text-xs text-text-3">
                 {{ phrase.upload_processing_source_lossy }}

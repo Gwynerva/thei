@@ -33,17 +33,7 @@ const siteUrlError = computed(() =>
       <div class="flex flex-col gap-md p-sm sm:p-md">
         <Field>
           <FieldLabel>{{ phrase.ui_language }}</FieldLabel>
-          <FieldSelect
-            :options="
-              Object.fromEntries(
-                Object.entries(languagesInfo).map(([code, label]) => [
-                  code,
-                  `${code.toUpperCase()} - ${label}`,
-                ]),
-              )
-            "
-            v-model="languageCode"
-          />
+          <FieldSelect v-model="languageCode" :options="languagesInfo" />
           <FieldHint>{{ phrase.ui_language_hint }}</FieldHint>
         </Field>
 

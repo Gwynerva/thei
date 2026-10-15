@@ -114,7 +114,7 @@ const heading = computed(() => publicText(entityDisplayTitle(props)));
         v-if="summary"
         class="-mx-[0.75em] line-clamp-2 px-[0.75em] text-text-3"
         :class="[
-          compact ? 'text-sm' : 'text-[0.9375rem] leading-snug',
+          compact ? 'text-sm' : 'text-sm leading-snug',
           { italic: date },
         ]"
         >{{ publicText(summary) }}</span

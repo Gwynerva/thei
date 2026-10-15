@@ -17,14 +17,14 @@ const orderOptions = computed(() => ({
       type="search"
       :placeholder="phrase.admin_entity_search_placeholder"
       :aria-label="phrase.admin_entity_search_placeholder"
-      class="h-10 text-sm"
+      class="h-10 text-sm pointer-coarse:h-11"
       wrapper-class="min-w-52 flex-1 basis-72"
     />
     <FieldSelect
       v-model="order"
       :options="orderOptions"
       :aria-label="phrase.sort_order"
-      wrapper-class="h-10"
+      compact
     />
   </div>
 </template>
