@@ -1,5 +1,4 @@
 import type { H3Event } from 'h3';
-
 const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 /**
@@ -8,6 +7,15 @@ const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
  */
 export function markReadOnlyRequest(event: H3Event) {
   event.context.theiReadOnly = true;
+}
+
+/**
+ * Undoes `markReadOnlyRequest` for a request that turned out to write: an
+ * MCP call is marked read-only up front and becomes a write only when a tool
+ * changes something.
+ */
+export function markContentWriteRequest(event: H3Event) {
+  event.context.theiReadOnly = false;
 }
 
 /**

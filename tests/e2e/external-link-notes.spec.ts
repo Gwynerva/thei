@@ -3,8 +3,8 @@ import { fileURLToPath } from 'node:url';
 
 /**
  * The owner's note on a link: why it is there, under what the page says of
- * itself — in the hand-made list, in a link block, in the popup over a link
- * in the text and in the sidebar. The sites are stored by the fixture's seed
+ * itself — in the hand-made list and the sidebar that shows it, in a link
+ * block, and in the popup over a link in the text. The sites are stored by the fixture's seed
  * as though they had been read, so nothing here goes out to the network.
  */
 
@@ -97,7 +97,7 @@ test('a hand-made link the description repeats is marked', async ({ page }) => {
   ).toHaveValue('By hand');
 });
 
-test('the page shows every note once, and both of two that differ', async ({
+test('the page shows each note where it was written', async ({
   page,
 }) => {
   const project = await createProject(page);
@@ -114,13 +114,14 @@ test('the page shows every note once, and both of two that differ', async ({
     'italic',
   );
 
-  // The same address by hand and in the text, with different notes: both.
+  // The sidebar lists what the owner attached by hand, with its notes; what
+  // the text links to is read in the text.
   const sidebar = page.locator('aside').first();
   await expect(sidebar.getByText('By hand')).toBeVisible();
-  await expect(sidebar.getByText('In the text')).toBeVisible();
-  // One of a link's copies has a note, the other none: one line.
-  await expect(sidebar.getByText('Why the block')).toHaveCount(1);
-  await expect(sidebar.getByText('Noted site', { exact: true })).toHaveCount(2);
+  await expect(sidebar.getByText('In the text')).toHaveCount(0);
+  await expect(sidebar.getByText('Why the block')).toHaveCount(0);
+  await expect(sidebar.getByText('Block site', { exact: true })).toHaveCount(0);
+  await expect(sidebar.getByText('Noted site', { exact: true })).toHaveCount(1);
   await expect(sidebar.getByText('Listed site', { exact: true })).toHaveCount(
     1,
   );

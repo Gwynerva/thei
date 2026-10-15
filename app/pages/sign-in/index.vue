@@ -1,6 +1,12 @@
 <script lang="ts" setup>
+import { signInReturnPath } from '#layers/thei/shared/oauth';
+
+// Signed in for an AI app's request, the owner goes back to it; nowhere
+// else may the address lead.
+const returnPath = signInReturnPath(useRoute().query.next) ?? '/admin/';
+
 if (useIsAdmin().value) {
-  await navigateTo('/admin/');
+  await navigateTo(returnPath);
 }
 
 await useAdminTabTitle(computed(() => phrase.value.sign_in));
@@ -50,7 +56,7 @@ async function signIn() {
       throw signInResponse.message;
     }
 
-    window.location.href = sitePath('/admin/');
+    window.location.href = sitePath(returnPath);
   } catch (error) {
     signInError.value = error instanceof Error ? error.message : String(error);
     signingIn.value = false;
