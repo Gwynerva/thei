@@ -1,3 +1,4 @@
+import { assertEntityVersion, type EntityEditOptions } from './entity-edit';
 import { assetSelectionError } from '../../shared/asset-library';
 import { and, asc, count, desc, eq, inArray } from 'drizzle-orm';
 import { createError } from 'h3';
@@ -48,6 +49,7 @@ import {
   getExternalLinkList,
 } from './external-links/lists';
 import { buildPublicPageIcon } from './public/entities';
+import { deleteUsagesReleasing } from './assets/repository/usages/release';
 
 export function getProfile() {
   const { db, schema } = THEI_SERVER.useDb();
@@ -252,6 +254,7 @@ export async function getAdminProfile(): Promise<AdminProfileResponse> {
       updatedStatuses: [],
       deletedAvatarIds: [],
       deletedStatusIds: [],
+      version: p.updatedAt,
     },
   };
 }
@@ -290,7 +293,14 @@ function ids(value: unknown): string[] {
   return [...new Set(value)];
 }
 
-export async function saveProfile(input: ProfileEditData) {
+/**
+ * Saves the profile's form over what it holds. A form read before a change
+ * made since is refused (`EntityEditConflict`) rather than written over it.
+ */
+export async function saveProfile(
+  input: ProfileEditData,
+  options: EntityEditOptions = {},
+) {
   if (!input || typeof input !== 'object') invalid('Invalid profile');
   const displayName = text(input.displayName, 200, true);
   const slogan = text(input.slogan, 1000);
@@ -388,15 +398,22 @@ export async function saveProfile(input: ProfileEditData) {
   await ensureExternalLinks(links.map((link) => link.url));
   const now = Date.now();
   db.transaction((tx) => {
+    assertEntityVersion(
+      tx,
+      schema.profiles,
+      schema.profiles.profileId,
+      PROFILE_ID,
+      options.expectedUpdatedAt,
+    );
     function detach(containerType: AssetContainerType, containerId: string) {
-      tx.delete(schema.assetUsages)
-        .where(
-          and(
-            eq(schema.assetUsages.containerType, containerType),
-            eq(schema.assetUsages.containerId, containerId),
-          ),
-        )
-        .run();
+      deleteUsagesReleasing(
+        tx,
+        schema,
+        and(
+          eq(schema.assetUsages.containerType, containerType),
+          eq(schema.assetUsages.containerId, containerId),
+        ),
+      );
     }
     function attach(
       assetUuid: string | null,
@@ -449,6 +466,7 @@ export async function saveProfile(input: ProfileEditData) {
         currentAvatarId: changedAvatar ? avatarId : current.currentAvatarId,
         bannerAssetUuid: bannerUuid,
         faviconAssetUuid: faviconUuid,
+        updatedAt: now,
       })
       .where(eq(schema.profiles.profileId, PROFILE_ID))
       .run();
@@ -488,6 +506,7 @@ export async function saveProfile(input: ProfileEditData) {
           .run(),
       );
     applyExternalLinkList(tx, schema, { type: 'profile' }, links);
+    options.onWrite?.(tx, schema);
   });
   scheduleExternalLinkSweep();
   return getAdminProfile();

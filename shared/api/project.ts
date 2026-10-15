@@ -41,6 +41,8 @@ export type OtherAssetGetItem = {
 
 export type ProjectGetResponse = {
   projectUuid: string;
+  /** When the entity last changed; a save names it back. */
+  version: number;
   title: string;
   summary: string;
   humanReadableSlug: string;
@@ -100,13 +102,15 @@ export type ProjectSaveResponse =
       projectUuid: string;
       action: ProjectActionEditData;
       sections: ProjectContentItemIdentity[];
+      /** The version the project is at now, for the form's next save. */
+      version: number;
       /** The first page of statuses as saved, like the profile save returns. */
       statuses: ProfileHistoryPage<StatusHistoryItem>;
     }
   | {
       type: 'error';
       message: string;
-      code?: 'public-id-taken';
+      code?: 'public-id-taken' | 'changed';
     };
 
 export type ProjectListItem = {

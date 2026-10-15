@@ -1,0 +1,389 @@
+import { and, eq } from 'drizzle-orm';
+import { AssetType, type AssetRole } from '#layers/thei/shared/asset';
+import { validateEventData } from '#layers/thei/shared/admin/event';
+import type { EventEditData } from '#layers/thei/shared/event';
+import type {
+  EventGetResponse,
+  EventSaveResponse,
+} from '#layers/thei/shared/api/event';
+import type { OtherAssetGetItem } from '#layers/thei/shared/api/project';
+import { DEFAULT_PROJECT_ACTION } from '#layers/thei/shared/project-action';
+import { validateEventAssets } from './validate-assets';
+import {
+  prepareContentForSave,
+  applyPreparedContentSave,
+  deleteContentForOwner,
+} from '../content/repository';
+import { applyEventPeriods, getEventPeriods } from './periods';
+import {
+  applyRelations,
+  deleteRelations,
+  getRelations,
+  prepareRelations,
+} from '../relations';
+import { deleteShareLinks } from '../access-links/share-links';
+import {
+  applyExternalLinkList,
+  deleteExternalLinkList,
+  getExternalLinkList,
+} from '../external-links/lists';
+import {
+  prepareTagUsages,
+  applyTagUsages,
+  listTagsForContainer,
+  deleteTagUsagesForContainer,
+} from '../tags';
+import { syncEntityActionUsages } from '../projects/action-usages';
+import { syncEntityBanner } from '../entity-banner';
+import { deletePeriods } from '../periods';
+import {
+  ensureExternalLinks,
+  entityExternalLinkUrls,
+  findExternalLink,
+  scheduleExternalLinkSweep,
+} from '../external-links/repository';
+import { archivedOriginalFromMeta, buildAdminAssetUrls } from '../assets/urls';
+
+import {
+  assertEntityVersion,
+  EntityEditConflict,
+  type EntityEditOptions,
+  storedVersion,
+} from '../entity-edit';
+import { deleteUsagesReleasing } from '../assets/repository/usages/release';
+import { forgetAiAnchors } from '../ai/memory/forget';
+
+/**
+ * An event as its edit form reads and saves it — the admin form, and an AI
+ * client that reads the same form, changes what it was asked to and saves it
+ * back. Saving is a whole replace: whatever the form leaves out is cleared.
+ */
+
+/** Saves an event's edit form over the event, or says what is wrong. */
+export async function saveEventEdit(
+  eventUuid: string,
+  body: EventEditData,
+  options: EntityEditOptions = {},
+): Promise<EventSaveResponse> {
+  const result = validateEventData(body);
+  if (typeof result === 'string')
+    return { type: 'error', message: result } satisfies EventSaveResponse;
+  if (await THEI_SERVER.events.findByPublicId(result.publicId, eventUuid))
+    return {
+      type: 'error',
+      code: 'public-id-taken',
+      message: THEI_SERVER.phrase.public_id_already_taken,
+    } satisfies EventSaveResponse;
+  const assetError = await validateEventAssets(result);
+  if (assetError)
+    return { type: 'error', message: assetError } satisfies EventSaveResponse;
+  let preparedRelations;
+  try {
+    preparedRelations = await prepareRelations(
+      { type: 'event', id: eventUuid },
+      result.relations,
+    );
+  } catch (error) {
+    return {
+      type: 'error',
+      message: error instanceof Error ? error.message : 'Invalid relations',
+    } satisfies EventSaveResponse;
+  }
+
+  try {
+    await ensureExternalLinks(
+      entityExternalLinkUrls(result.externalLinks, result.action),
+    );
+    const [contentSave, notesSave, tags, usages, currentFiles] =
+      await Promise.all([
+        prepareContentForSave('event', eventUuid, 'event-body', result.content),
+        prepareContentForSave('event', eventUuid, 'event-notes', result.notes),
+        prepareTagUsages(result.tags),
+        THEI_SERVER.assets.usages.findByContainer('event', eventUuid),
+        THEI_SERVER.assets.usages.findOtherForContainer('event', eventUuid),
+      ]);
+    if (contentSave.type !== 'save')
+      return {
+        type: 'error',
+        message: 'Event content is required',
+      } satisfies EventSaveResponse;
+    const nextFiles = result.otherAssets ?? [];
+    const currentIds = new Set(
+      currentFiles.map(({ asset }) => asset.assetUuid),
+    );
+    const nextIds = new Set(nextFiles.map((file) => file.assetUuid));
+    const { db, schema } = THEI_SERVER.useDb();
+    const now = Date.now();
+    db.transaction((tx) => {
+      assertEntityVersion(
+        tx,
+        schema.events,
+        schema.events.eventUuid,
+        eventUuid,
+        options.expectedUpdatedAt,
+      );
+      tx.update(schema.events)
+        .set({
+          title: result.title,
+          summary: result.summary,
+          access: result.access,
+          humanReadableSlug: result.humanReadableSlug,
+          publicId: result.publicId,
+          action: result.action,
+          reminder: result.reminder,
+          updatedAt: now,
+        })
+        .where(eq(schema.events.eventUuid, eventUuid))
+        .run();
+      applyEventPeriods(tx, schema, eventUuid, result.periods);
+      applyPreparedContentSave(
+        tx,
+        schema,
+        'event',
+        eventUuid,
+        'event-body',
+        contentSave,
+      );
+      applyPreparedContentSave(
+        tx,
+        schema,
+        'event',
+        eventUuid,
+        'event-notes',
+        notesSave,
+      );
+      applyExternalLinkList(
+        tx,
+        schema,
+        { type: 'event', id: eventUuid },
+        result.externalLinks,
+      );
+      applyTagUsages(tx, schema, 'event', eventUuid, tags);
+      applyRelations(
+        tx,
+        schema,
+        { type: 'event', id: eventUuid },
+        preparedRelations,
+      );
+      syncEntityActionUsages(
+        tx,
+        schema,
+        usages,
+        'event',
+        eventUuid,
+        result.action,
+      );
+      syncEntityBanner(
+        tx,
+        schema,
+        'event',
+        eventUuid,
+        usages.find((usage) => usage.role === 'banner')?.asset.assetUuid,
+        result.bannerAssetUuid,
+      );
+
+      for (const { asset } of currentFiles) {
+        if (!nextIds.has(asset.assetUuid))
+          detachUsage(tx, schema, asset.assetUuid, eventUuid, 'other-asset');
+      }
+      nextFiles.forEach((file, order) => {
+        if (!currentIds.has(file.assetUuid)) {
+          tx.insert(schema.assetUsages)
+            .values({
+              assetUuid: file.assetUuid,
+              containerType: 'event',
+              containerId: eventUuid,
+              role: 'other-asset',
+            })
+            .run();
+        }
+        tx.update(schema.assetUsages)
+          .set({
+            meta: {
+              role: 'other-asset',
+              order,
+              title: file.title,
+              caption: file.caption,
+              isPrivate: file.isPrivate,
+            },
+          })
+          .where(usageWhere(schema, file.assetUuid, eventUuid, 'other-asset'))
+          .run();
+      });
+      options.onWrite?.(tx, schema);
+    });
+    scheduleExternalLinkSweep();
+    return {
+      type: 'success',
+      eventUuid,
+      version: storedVersion('event', eventUuid),
+      action: result.action,
+    } satisfies EventSaveResponse;
+  } catch (error) {
+    if (error instanceof EntityEditConflict)
+      return {
+        type: 'error',
+        code: 'changed',
+        message: error.message,
+      } satisfies EventSaveResponse;
+    return {
+      type: 'error',
+      message: error instanceof Error ? error.message : 'Failed to save event',
+    } satisfies EventSaveResponse;
+  }
+}
+
+/** Deletes an event with everything that is its own. */
+export async function deleteEvent(
+  eventUuid: string,
+  options: Pick<EntityEditOptions, 'onWrite' | 'beforeWrite'> = {},
+) {
+  const usages = await THEI_SERVER.assets.usages.findByContainer(
+    'event',
+    eventUuid,
+  );
+  const { db, schema } = THEI_SERVER.useDb();
+  db.transaction((tx) => {
+    options.beforeWrite?.(tx, schema);
+    deletePeriods(tx, schema, 'event', [eventUuid]);
+    deleteRelations(tx, schema, { type: 'event', id: eventUuid });
+    deleteShareLinks(tx, schema, 'event', eventUuid);
+    deleteExternalLinkList(tx, schema, { type: 'event', id: eventUuid });
+    deleteTagUsagesForContainer(tx, schema, 'event', eventUuid);
+    deleteContentForOwner(tx, schema, 'event', eventUuid);
+    forgetAiAnchors(tx, schema, 'event', [eventUuid]);
+    usages.forEach((usage) =>
+      detachUsage(tx, schema, usage.asset.assetUuid, eventUuid, usage.role),
+    );
+    tx.delete(schema.events)
+      .where(eq(schema.events.eventUuid, eventUuid))
+      .run();
+    options.onWrite?.(tx, schema);
+  });
+  scheduleExternalLinkSweep();
+}
+
+export async function readEventEdit(
+  stored: NonNullable<
+    Awaited<ReturnType<typeof THEI_SERVER.events.findByUuid>>
+  >,
+) {
+  const eventUuid = stored.eventUuid;
+  const usages = await THEI_SERVER.assets.usages.findByContainer(
+    'event',
+    eventUuid,
+  );
+  const actionIcon = usages.find((usage) => usage.role === 'action-icon');
+  const actionBackground = usages.find(
+    (usage) => usage.role === 'action-background',
+  );
+  const actionFile = usages.find((usage) => usage.role === 'action-file');
+  const banner = usages.find((usage) => usage.role === 'banner');
+  const [
+    bannerUrls,
+    iconUrls,
+    backgroundUrls,
+    fileUrls,
+    actionLink,
+    rawFiles,
+    content,
+    notes,
+    periods,
+    externalLinks,
+    tags,
+    relations,
+  ] = await Promise.all([
+    banner ? buildAdminAssetUrls(banner.asset) : undefined,
+    actionIcon ? buildAdminAssetUrls(actionIcon.asset) : undefined,
+    actionBackground ? buildAdminAssetUrls(actionBackground.asset) : undefined,
+    actionFile ? buildAdminAssetUrls(actionFile.asset) : undefined,
+    stored.action?.externalUrl
+      ? findExternalLink(stored.action.externalUrl)
+      : undefined,
+    THEI_SERVER.assets.usages.findOtherForContainer('event', eventUuid),
+    THEI_SERVER.content.buildFieldValue('event', eventUuid, 'event-body'),
+    THEI_SERVER.content.buildFieldValue('event', eventUuid, 'event-notes'),
+    getEventPeriods(eventUuid),
+    getExternalLinkList({ type: 'event', id: eventUuid }),
+    listTagsForContainer('event', eventUuid),
+    getRelations({ type: 'event', id: eventUuid }),
+  ]);
+  if (!content)
+    throw createError({ statusCode: 500, message: 'Event content is missing' });
+  const otherAssets: OtherAssetGetItem[] = await Promise.all(
+    rawFiles.map(async ({ asset, meta }) => {
+      const urls = await buildAdminAssetUrls(asset);
+      return {
+        assetUuid: asset.assetUuid,
+        media: urls.media,
+        assetUrl: urls.assetUrl,
+        size: asset.size,
+        extension: asset.extension,
+        archivedOriginal:
+          asset.type === AssetType.Other
+            ? archivedOriginalFromMeta(asset.meta)
+            : undefined,
+        title: meta?.role === 'other-asset' ? (meta.title ?? '') : '',
+        caption: meta?.role === 'other-asset' ? meta.caption : undefined,
+        isPrivate: meta?.role === 'other-asset' ? meta.isPrivate : false,
+      };
+    }),
+  );
+  return {
+    eventUuid,
+    version: stored.updatedAt,
+    title: stored.title,
+    summary: stored.summary,
+    access: stored.access,
+    humanReadableSlug: stored.humanReadableSlug,
+    publicId: stored.publicId,
+    periods,
+    content,
+    reminder: stored.reminder,
+    notes,
+    bannerAssetUuid: banner?.asset.assetUuid,
+    bannerMedia: bannerUrls?.media,
+    bannerAssetSize: banner?.asset.size,
+    otherAssets,
+    externalLinks,
+    tags,
+    relations,
+    action: stored.action ?? { ...DEFAULT_PROJECT_ACTION },
+    actionIconMedia: iconUrls?.media,
+    actionIconAssetSize: actionIcon?.asset.size,
+    actionBackgroundMedia: backgroundUrls?.media,
+    actionBackgroundAssetSize: actionBackground?.asset.size,
+    actionFileMedia: fileUrls?.media,
+    actionFileExtension: actionFile?.asset.extension,
+    actionFileSize: actionFile?.asset.size,
+    actionLink,
+  } satisfies EventGetResponse;
+}
+
+function detachUsage(
+  tx: any,
+  schema: any,
+  assetUuid: string,
+  eventUuid: string,
+  role: AssetRole,
+) {
+  deleteUsagesReleasing(
+    tx,
+    schema,
+    usageWhere(schema, assetUuid, eventUuid, role),
+  );
+}
+
+function usageWhere(
+  schema: any,
+  assetUuid: string,
+  eventUuid: string,
+  role: AssetRole,
+) {
+  return and(
+    eq(schema.assetUsages.assetUuid, assetUuid),
+    eq(schema.assetUsages.containerType, 'event'),
+    eq(schema.assetUsages.containerId, eventUuid),
+    eq(schema.assetUsages.role, role),
+  );
+}

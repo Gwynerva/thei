@@ -9,6 +9,7 @@ import {
   findTagNameConflict,
   prepareTagUsages,
 } from '../../server/thei/tags';
+import { createContentHistoryTable } from './fixtures/content-history-table';
 
 let rawDb: Database.Database | undefined;
 afterEach(() => {
@@ -220,7 +221,8 @@ function createDb() {
       slug text NOT NULL UNIQUE,
       publicId text NOT NULL UNIQUE,
       description text DEFAULT '' NOT NULL,
-      synonyms text DEFAULT '[]' NOT NULL
+      synonyms text DEFAULT '[]' NOT NULL,
+      updatedAt integer DEFAULT 0 NOT NULL
     );
     CREATE TABLE "tag-usages" (
       tagUuid text NOT NULL,
@@ -238,6 +240,7 @@ function createDb() {
       PRIMARY KEY (assetUuid, containerType, containerId, role)
     );
   `);
+  createContentHistoryTable(rawDb);
   return drizzle(rawDb, { schema });
 }
 

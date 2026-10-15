@@ -2,10 +2,11 @@ import type { ProjectEventAccessLevel } from '../access-level';
 import type { PaginatedResponse } from '../pagination';
 import type { ContentFieldValue, PublicContentOutputData } from '../content';
 import type { MediaDescriptor } from '../media';
-import type { PublicReferences } from './public';
 
 export type PageGetResponse = {
   pageUuid: string;
+  /** When the entity last changed; a save names it back. */
+  version: number;
   title: string;
   summary: string;
   slug: string;
@@ -19,8 +20,8 @@ export type PageGetResponse = {
 };
 
 export type PageSaveResponse =
-  | { type: 'success'; pageUuid: string; slug: string }
-  | { type: 'error'; message: string; code?: 'slug-taken' };
+  | { type: 'success'; pageUuid: string; slug: string; version: number }
+  | { type: 'error'; message: string; code?: 'slug-taken' | 'changed' };
 
 export type PageListItem = {
   pageUuid: string;
@@ -58,7 +59,6 @@ export type PublicPageResponse = {
   };
   iconMedia: MediaDescriptor;
   content: PublicContentOutputData;
-  references: PublicReferences;
   /**
    * Owner only. A visitor never receives either field — not here, not in the
    * Markdown representation, not in search.

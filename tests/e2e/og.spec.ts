@@ -206,10 +206,14 @@ test('an edit that changes a card gives it a new address', async ({
   const before = await cardOf(page, path);
   const first = await expectPicture(request, before.url);
 
+  // A save names the version it was read at, as the form does.
+  const { version } = await (
+    await owner.get(`/api/admin/events/${created.eventUuid}`)
+  ).json();
   expect(
     await (
       await owner.put(`/api/admin/events/${created.eventUuid}`, {
-        data: { ...data, title: 'After the edit' },
+        data: { ...data, title: 'After the edit', version },
       })
     ).json(),
   ).toMatchObject({ type: 'success' });
