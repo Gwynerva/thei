@@ -5,8 +5,8 @@ import {
   mapAssetVariantToReplaceResult,
 } from '#layers/thei/app/composables/asset-wizard';
 import type {
+  AssetReplaceResult,
   AssetVariantInfo,
-  AssetVariantsResponse,
 } from '#layers/thei/shared/api/asset';
 import {
   imageExtensionProfile,
@@ -214,15 +214,24 @@ function clearFile() {
   fileSize.value = undefined;
 }
 
-async function openFileDetails(initialAsset: AssetVariantInfo) {
-  let current = initialAsset;
+/**
+ * The file's details, then the editor and back. The file the action holds is
+ * known by its uuid alone until the details window, open at once, has fetched
+ * it; one just picked or made is known whole.
+ */
+async function openFileDetails(initial: AssetVariantInfo | string) {
+  let current: AssetReplaceResult | { assetUuid: string } =
+    typeof initial === 'string'
+      ? { assetUuid: initial }
+      : mapAssetVariantToReplaceResult(initial);
   while (true) {
     const result = await openModal(assetDetailsModal, {
       asideTitle: phrase.value.project_action_file,
-      asset: mapAssetVariantToReplaceResult(current),
+      asset: current,
     });
     if (result.type === 'replace') {
-      const replacement = await launchAssetEditor(current, {
+      if (result.asset) current = result.asset;
+      const replacement = await launchAssetEditor(current.assetUuid, {
         accept: anyFileExtensionProfile,
         maxSize: ASSET_UPLOAD_LIMITS.file,
         sizeLimitPolicy: 'file',
@@ -230,7 +239,7 @@ async function openFileDetails(initialAsset: AssetVariantInfo) {
       });
       if (!replacement) continue;
       applyFile(replacement);
-      current = replacement;
+      current = mapAssetVariantToReplaceResult(replacement);
       continue;
     }
     if (result.type === 'detach') clearFile();
@@ -241,13 +250,7 @@ async function openFileDetails(initialAsset: AssetVariantInfo) {
 function openFileAsset() {
   return runModalFlow(async () => {
     if (action.value.fileAssetUuid) {
-      const family = await $fetch<AssetVariantsResponse>(
-        `/api/admin/assets/${action.value.fileAssetUuid}/variants`,
-      );
-      const current = family.variants.find(
-        (variant) => variant.assetUuid === action.value.fileAssetUuid,
-      );
-      if (current) await openFileDetails(current);
+      await openFileDetails(action.value.fileAssetUuid);
       return;
     }
     const picked = await launchAssetWizard({

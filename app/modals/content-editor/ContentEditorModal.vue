@@ -10,10 +10,7 @@ import type {
   OutputData,
   ToolConstructable,
 } from '@editorjs/editorjs';
-import type {
-  AssetReplaceResult,
-  AssetVariantsResponse,
-} from '#layers/thei/shared/api/asset';
+import type { AssetReplaceResult } from '#layers/thei/shared/api/asset';
 import {
   ContentValidationError,
   collectContentAssetSizeMap,
@@ -1392,14 +1389,8 @@ async function replaceAsset(
   kind: ContentEditorAssetKind,
 ) {
   try {
-    const response = await $fetch<AssetVariantsResponse>(
-      `/api/admin/assets/${current.assetUuid}/variants`,
-    );
-    const stored = response.variants.find(
-      (variant) => variant.assetUuid === current.assetUuid,
-    );
-    if (!stored) return undefined;
-    const edited = await launchAssetEditor(stored, {
+    // The editor opens at once and fetches the file itself.
+    const edited = await launchAssetEditor(current.assetUuid, {
       ...contentAssetOptions(kind),
       usageDelta: await buildDraftUsageDelta(),
     });

@@ -2,8 +2,10 @@
 import AsideModalButton from './AssetModalButton.vue';
 import { provideAssetModalActions } from './actions';
 
-const props = defineProps<{
+const { closable = true } = defineProps<{
   asideTitle?: string;
+  /** A window waiting between two steps of a flow has nothing to close. */
+  closable?: boolean;
 }>();
 
 const isAsideOpen = ref(true);
@@ -25,6 +27,7 @@ defineExpose({ root });
           sm:flex-col"
       >
         <AsideModalButton
+          v-if="closable"
           icon="close"
           :aria-label="phrase.close_modal"
           @click="closeModal"

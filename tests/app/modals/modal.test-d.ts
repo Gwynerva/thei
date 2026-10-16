@@ -105,3 +105,17 @@ test('defineModal descriptor satisfies ModalDescriptor shape', () => {
     ModalDescriptor<{ type: 'picked'; id: number } | BaseModalResult>
   >();
 });
+
+test('defineModal types the frame title by the modal data', () => {
+  defineModal(
+    'test',
+    () => Promise.resolve({ default: {} as WithDataAndEmit & Component }),
+    { kind: 'file', title: (data) => data.label },
+  );
+  defineModal(
+    'test',
+    () => Promise.resolve({ default: {} as WithDataAndEmit & Component }),
+    // @ts-expect-error: the data has no such field
+    { kind: 'file', title: (data) => data.missing },
+  );
+});

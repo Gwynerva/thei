@@ -18,6 +18,14 @@ whole site. This page says how, and what is allowed to skip it.
 - What appears or disappears fades: `app/components/TransitionFade.vue`. A
   popup also grows from its arrow as it opens and back into it as it closes,
   and a sheet slides up from the bottom ([Popups](../components/popups.md)).
+  A modal fades in over what it covers and stays whole until the next one is
+  in ([Modals](../components/modals.md)); the same pair of duration and
+  easing, read by `app/modals/layer-motion.ts`.
+- A wait shows its `loading` icon only once a transition's length has passed
+  (`app/modals/ModalWaiting.vue`): what comes quickly never flashes it.
+- Something that leaves room behind gives it up as it goes, as "Reuse" does
+  to "Upload" in the file picker, rather than leaving a hole that closes at
+  once.
 - What comes with the page is rendered with it, on the server. Only what shows
   up later — a box that appears when its first item does — fades in; nothing
   pops in after the page has drawn.

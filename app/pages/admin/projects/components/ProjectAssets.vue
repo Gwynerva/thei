@@ -9,7 +9,6 @@ import {
   mapAssetVariantToReplaceResult,
   type AssetBatchResult,
 } from '#layers/thei/app/composables/asset-wizard';
-import type { AssetVariantsResponse } from '#layers/thei/shared/api/asset';
 import { archivedOriginalFromMeta, AssetType } from '#layers/thei/shared/asset';
 import {
   anyFileExtensionProfile,
@@ -105,14 +104,8 @@ async function editProjectAsset(
   options: Parameters<typeof launchAssetEditor>[1],
 ): Promise<PickedAsset | undefined> {
   try {
-    const family = await $fetch<AssetVariantsResponse>(
-      `/api/admin/assets/${assetUuid}/variants`,
-    );
-    const current = family.variants.find(
-      (variant) => variant.assetUuid === assetUuid,
-    );
-    if (!current) return undefined;
-    const asset = await launchAssetEditor(current, {
+    // The editor opens at once and fetches the file itself.
+    const asset = await launchAssetEditor(assetUuid, {
       ...options,
       usageDelta: projectAssetUsageDelta(
         projectData.value,

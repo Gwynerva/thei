@@ -13,6 +13,7 @@ import {
 } from '#layers/thei/shared/asset-upload-limits';
 import { editFileModal } from '#layers/thei/app/modals/upload-settings/modal';
 import { pickReuseFileModal } from '#layers/thei/app/modals/pick-file/modal';
+import { fetchReuseAvailability } from '#layers/thei/app/modals/pick-file/availability';
 import type { PickedFile } from '#layers/thei/app/modals/pick-file/picked-file';
 import type { PickedFiles } from '#layers/thei/app/modals/pick-file/picked-file';
 import { runAssetBatch } from '#layers/thei/shared/asset-batch';
@@ -58,9 +59,15 @@ export interface AssetBatchResult {
  *
  * A wizard settles one modal before it opens the next, so the stack drops by
  * one between steps — to zero when the wizard was launched from a page rather
- * than from another modal. The flow marker tells the history interceptor that
- * the layer is still occupied, so it does not hand the sentinel entry back and
- * race the next step.
+ * than from another modal. The flow marker keeps the dialog open over the gap,
+ * waiting in the frame of the step that left, and tells the history
+ * interceptor that the layer is still occupied, so it does not hand the
+ * sentinel entry back and race the next step.
+ *
+ * What a step needs from the server it fetches itself, after it has opened:
+ * the editor takes a stored file by its uuid. Only what the picker needs to be
+ * drawn whole — whether the library has anything to reuse — is asked for up
+ * front, along with the picker's code, and kept for the whole flow.
  */
 export function launchAssetWizard(
   options: AssetWizardOptions = {},
@@ -79,6 +86,10 @@ async function runAssetWizard(
   let step: 'pick' | 'edit' = 'pick';
   let pickedFile: PickedFile | undefined;
   let notice: string | undefined;
+  const availability = fetchReuseAvailability({
+    acceptedExtensions,
+    sizeLimitPolicy: options.sizeLimitPolicy,
+  });
 
   function cleanupPickedFile() {
     if (!pickedFile) return;
@@ -92,15 +103,14 @@ async function runAssetWizard(
         cleanupPickedFile();
         // Both possible next steps are preloaded, so replacing this modal costs
         // a microtask instead of a chunk fetch.
-        editFileModal.component();
-        assetLibraryModal.component();
+        void preloadModal(editFileModal);
+        void preloadModal(assetLibraryModal);
 
         const pickResult = await openModal(pickReuseFileModal, {
           accept,
           maxSize,
           notice,
-          acceptedExtensions,
-          sizeLimitPolicy: options.sizeLimitPolicy,
+          availability,
           uploadProfile: options.uploadProfile,
         });
         notice = undefined;
@@ -130,7 +140,7 @@ async function runAssetWizard(
 
       const editResult = await openModal(editFileModal, {
         source: pickedFile!.existingAsset
-          ? { kind: 'asset', asset: pickedFile!.existingAsset }
+          ? { kind: 'asset', assetUuid: pickedFile!.existingAsset.assetUuid }
           : {
               kind: 'file',
               file: pickedFile!,
@@ -182,12 +192,16 @@ async function runAssetBatchWizard(
   const maxSize = resolveAssetMaxSize(options.sizeLimitPolicy, options.maxSize);
   const acceptedExtensions =
     options.acceptedExtensions ?? acceptedExtensionsFromAccept(accept);
+  void preloadModal(editFileModal);
+  void preloadModal(assetLibraryModal);
   const result = await openModal(pickReuseFileModal, {
     accept,
     maxSize,
     multiple: true,
-    acceptedExtensions,
-    sizeLimitPolicy: options.sizeLimitPolicy,
+    availability: fetchReuseAvailability({
+      acceptedExtensions,
+      sizeLimitPolicy: options.sizeLimitPolicy,
+    }),
     uploadProfile: options.uploadProfile,
   });
   if (result.type === 'library') {
@@ -257,7 +271,7 @@ async function runAssetBatchWizard(
   for (const file of picked.files.filter((file) => file.existingAsset)) {
     try {
       const selected = await openModal(editFileModal, {
-        source: { kind: 'asset', asset: file.existingAsset! },
+        source: { kind: 'asset', assetUuid: file.existingAsset!.assetUuid },
         maxSize,
         acceptedExtensions,
         sizeLimitPolicy: options.sizeLimitPolicy,
@@ -297,20 +311,21 @@ async function runAssetBatchWizard(
   };
 }
 
+/** The editor of a stored file, which it fetches itself once it is open. */
 export function launchAssetEditor(
-  asset: AssetVariantInfo,
+  assetUuid: string,
   options: AssetWizardOptions = {},
 ): Promise<AssetVariantInfo | undefined> {
-  return runModalFlow(() => runAssetEditor(asset, options));
+  return runModalFlow(() => runAssetEditor(assetUuid, options));
 }
 
 async function runAssetEditor(
-  asset: AssetVariantInfo,
+  assetUuid: string,
   options: AssetWizardOptions,
 ): Promise<AssetVariantInfo | undefined> {
   while (true) {
     const editResult = await openModal(editFileModal, {
-      source: { kind: 'asset', asset },
+      source: { kind: 'asset', assetUuid },
       maxSize: resolveAssetMaxSize(options.sizeLimitPolicy, options.maxSize),
       acceptedExtensions:
         options.acceptedExtensions ??

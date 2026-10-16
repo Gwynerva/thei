@@ -1,5 +1,11 @@
 <script lang="ts" setup>
-import type { AssetReplaceResult } from '#layers/thei/shared/api/asset';
+import type {
+  AssetReplaceResult,
+  AssetVariantsResponse,
+} from '#layers/thei/shared/api/asset';
+import { mapAssetVariantToReplaceResult } from '#layers/thei/app/composables/asset-wizard';
+import { errorMessage } from '#layers/thei/app/composables/upload-draft';
+import ModalWaiting from '#layers/thei/app/modals/ModalWaiting.vue';
 import {
   archivedOriginalFromMeta,
   type ArchivedOriginalFileMeta,
@@ -19,13 +25,14 @@ import {
 type AssetDetailsResult =
   | {
       type: 'confirm';
-      asset: AssetReplaceResult;
       title?: string;
       caption?: string;
       isPrivate?: boolean;
     }
   | {
       type: 'replace';
+      /** The file as the window knew it, so coming back needs no fetch. */
+      asset?: AssetReplaceResult;
       title?: string;
       caption?: string;
       isPrivate?: boolean;
@@ -39,7 +46,11 @@ const emit = defineEmits<{
 const props = defineProps<{
   modalData: {
     asideTitle: string;
-    asset: AssetReplaceResult;
+    /**
+     * The file, or only its uuid: a place that keeps no more of it than that
+     * opens the window at once, and the window fetches the rest.
+     */
+    asset: AssetReplaceResult | { assetUuid: string };
     archivedOriginal?: ArchivedOriginalFileMeta;
     primaryLabel?: string;
     showTitle?: boolean;
@@ -58,6 +69,32 @@ const props = defineProps<{
 const mediaPreview =
   useTemplateRef<InstanceType<typeof AssetModalPreviewMedia>>('mediaPreview');
 
+const given = props.modalData.asset;
+const fetched = shallowRef<AssetReplaceResult>();
+const loadFailure = ref('');
+/** The file, once known; the window and its fields are there before it. */
+const asset = computed(() => ('assetUrl' in given ? given : fetched.value));
+
+async function load() {
+  loadFailure.value = '';
+  try {
+    const family = await $fetch<AssetVariantsResponse>(
+      `/api/admin/assets/${given.assetUuid}/variants`,
+    );
+    const stored = family.variants.find(
+      (variant) => variant.assetUuid === given.assetUuid,
+    );
+    if (stored) fetched.value = mapAssetVariantToReplaceResult(stored);
+    else loadFailure.value = phrase.value.asset_library_missing;
+  } catch (error) {
+    loadFailure.value = errorMessage(
+      error,
+      phrase.value.upload_error_load_variants,
+    );
+  }
+}
+if (!('assetUrl' in given) && import.meta.client) void load();
+
 const title = ref(props.modalData.initialTitle ?? '');
 const caption = ref(props.modalData.initialCaption ?? '');
 const isPrivate = ref(props.modalData.initialIsPrivate ?? false);
@@ -75,36 +112,36 @@ const titleError = computed(() => {
 });
 
 const directHref = computed(
-  () => props.modalData.asset.assetUrl ?? props.modalData.asset.media?.src,
+  () => asset.value?.assetUrl ?? asset.value?.media?.src,
 );
-const isMedia = computed(() => Boolean(props.modalData.asset.media));
+const isMedia = computed(() => Boolean(asset.value?.media));
 /** A browser opens the file in a tab of its own; any other is downloaded. */
 const opensInTab = computed(
   () =>
     isMedia.value ||
-    isAssetExtensionSafeInline(props.modalData.asset.extension),
+    (asset.value ? isAssetExtensionSafeInline(asset.value.extension) : false),
 );
 const archivedOriginal = computed(
   () =>
     props.modalData.archivedOriginal ??
-    archivedOriginalFromMeta(props.modalData.asset.meta),
+    archivedOriginalFromMeta(asset.value?.meta),
 );
 /** A recording is played where a picture would be shown. */
 const audioPlayers = computed(() => {
-  const { asset } = props.modalData;
-  if (!asset.audio || !asset.assetUrl) return [];
+  const file = asset.value;
+  if (!file?.audio || !file.assetUrl) return [];
   return [
     {
-      key: asset.assetUuid,
-      src: asset.assetUrl,
-      extension: asset.extension,
-      duration: asset.audio.duration,
-      peaks: asset.audio.peaks,
+      key: file.assetUuid,
+      src: file.assetUrl,
+      extension: file.extension,
+      duration: file.audio.duration,
+      peaks: file.audio.peaks,
     },
   ];
 });
 const previewSrc = computed(
-  () => props.modalData.asset.media?.src ?? props.modalData.asset.assetUrl,
+  () => asset.value?.media?.src ?? asset.value?.assetUrl,
 );
 function currentPatch() {
   return {
@@ -128,15 +165,15 @@ function confirm() {
     return;
   }
 
-  emit('modalResult', {
-    type: 'confirm',
-    asset: props.modalData.asset,
-    ...currentPatch(),
-  });
+  emit('modalResult', { type: 'confirm', ...currentPatch() });
 }
 
 function replace() {
-  emit('modalResult', { type: 'replace', ...currentPatch() });
+  emit('modalResult', {
+    type: 'replace',
+    asset: asset.value,
+    ...currentPatch(),
+  });
 }
 
 // Where the primary button saves the details, the shortcut saves them too.
@@ -152,25 +189,26 @@ useSaveShortcut(confirm, {
 <template>
   <AssetModal ref="assetModal" :aside-title="modalData.asideTitle">
     <template #preview>
+      <ModalWaiting v-if="!asset && !loadFailure" />
       <AssetModalPreviewMedia
-        v-if="isMedia && previewSrc"
-        :key="`media:${modalData.asset.assetUuid}:${previewSrc}`"
+        v-else-if="asset && isMedia && previewSrc"
+        :key="`media:${asset.assetUuid}:${previewSrc}`"
         ref="mediaPreview"
-        :extension="modalData.asset.extension"
+        :extension="asset.extension"
         :src="previewSrc"
-        :poster="videoPosterOf(modalData.asset.media)"
-        :has-audio="modalData.asset.media?.hasAudio"
+        :poster="videoPosterOf(asset.media)"
+        :has-audio="asset.media?.hasAudio"
       />
       <AssetModalPreviewAudio
         v-else-if="audioPlayers.length"
         :players="audioPlayers"
       />
       <FilePreviewContent
-        v-else
-        :key="`file:${modalData.asset.assetUuid}:${modalData.asset.extension}`"
-        :src="modalData.asset.assetUrl"
-        :extension="modalData.asset.extension"
-        :size="modalData.asset.size"
+        v-else-if="asset"
+        :key="`file:${asset.assetUuid}:${asset.extension}`"
+        :src="asset.assetUrl"
+        :extension="asset.extension"
+        :size="asset.size"
         :archived-original="archivedOriginal"
         :title="modalData.asideTitle"
       />
@@ -187,12 +225,10 @@ useSaveShortcut(confirm, {
         :aria-label="phrase.direct_link_to_asset"
       />
       <AssetModalButton
-        v-if="!isMedia && modalData.asset.assetUrl"
+        v-if="asset && !isMedia && asset.assetUrl"
         icon="download"
-        :download="
-          downloadName(modalData.asset.assetUrl, modalData.asset.extension)
-        "
-        :href="sitePath(modalData.asset.assetUrl)"
+        :download="downloadName(asset.assetUrl, asset.extension)"
+        :href="sitePath(asset.assetUrl)"
         :data-title-popup="phrase.download_asset"
         :aria-label="phrase.download_asset"
         data-asset-download
@@ -210,12 +246,26 @@ useSaveShortcut(confirm, {
     <template #aside>
       <div class="flex flex-col">
         <div class="flex flex-col gap-sm p-sm">
+          <div
+            v-if="loadFailure"
+            role="alert"
+            class="flex flex-col items-start gap-sm text-sm text-text-error"
+          >
+            <span><Icon name="warning" class="mr-xs" />{{ loadFailure }}</span>
+            <Button variant="secondary" @click="load">
+              {{ phrase.asset_library_retry }}
+            </Button>
+          </div>
+          <!-- Until the file is known its rows wait in place, so the fields
+               under them do not move when it is. -->
           <AssetModalFileInfo
-            :extension="modalData.asset.extension"
-            :size="modalData.asset.size"
-            :duration="modalData.asset.audio?.duration"
-            :channels="modalData.asset.audio?.channels"
+            v-else
+            :extension="asset?.extension"
+            :size="asset?.size"
+            :duration="asset?.audio?.duration"
+            :channels="asset?.audio?.channels"
             :archived-original="modalData.archivedOriginal"
+            :pending="!asset"
           />
         </div>
 

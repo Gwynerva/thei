@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { createOriginalAssetSettings } from '../../shared/asset-upload-settings';
 import { buildUploadHeaders } from '../../shared/api/asset-upload-headers';
+import { topModal } from './helpers/modal';
 
 test.use({
   storageState: fileURLToPath(
@@ -135,11 +136,13 @@ test('going back from Reuse and uploading instead still delivers the asset', asy
 
   // A colour of its own: the original of the variant stored below stays in
   // the library for a day, and the next run must still be uploading anew.
-  await page.locator('input[type=file]').setInputFiles({
-    name: 'after-back.png',
-    mimeType: 'image/png',
-    buffer: await png(`#${randomUUID().slice(0, 6)}`),
-  });
+  await topModal(page)
+    .locator('input[type=file]')
+    .setInputFiles({
+      name: 'after-back.png',
+      mimeType: 'image/png',
+      buffer: await png(`#${randomUUID().slice(0, 6)}`),
+    });
   // "Create variant", then "Use result" — the two clicks from the report. The
   // first click opens the section, the second runs the encode inside it.
   const createVariant = page.getByRole('button', {

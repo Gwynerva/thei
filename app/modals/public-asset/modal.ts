@@ -3,6 +3,14 @@ import type { PublicAssetDescriptor } from '#layers/thei/shared/api/public';
 export const publicAssetModal = defineModal(
   'public-asset',
   () => import('./PublicAssetModal.vue'),
+  {
+    kind: 'file',
+    title: (data) => {
+      const start =
+        data.items.find((item) => item.key === data.startKey) ?? data.items[0];
+      return start ? publicText(start.title) : phrase.value.asset;
+    },
+  },
 );
 
 /**

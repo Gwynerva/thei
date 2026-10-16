@@ -1,8 +1,5 @@
 <script lang="ts" setup>
-import type {
-  AssetVariantInfo,
-  AssetWizardResult,
-} from '#layers/thei/shared/api/asset';
+import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
 import {
   archivedOriginalFromMeta,
   AssetType,
@@ -93,10 +90,9 @@ import { useEditSettings } from './use-edit-settings';
 import {
   useUploadSettingsAssets,
   type UploadSettingsModalData,
+  type UploadSettingsResult,
 } from './use-upload-settings-assets';
 
-type UploadSettingsResult =
-  { type: 'upload-new' } | { type: 'asset-missing' } | AssetWizardResult;
 type Section = 'source' | 'family' | 'create';
 
 const emit = defineEmits<{
@@ -119,21 +115,20 @@ const sourceAsset =
   props.modalData.source.kind === 'asset' ? props.modalData.source.asset : null;
 const profile = getAssetUploadProfileConfig(props.modalData.uploadProfile);
 
-const {
-  variants,
-  loadingVariants,
-  status,
-  loadVariants,
-  commit,
-  cancelCommit,
-  touch,
-} = useUploadSettingsAssets(props.modalData);
+const { variants, status, commit, cancelCommit, touch } =
+  useUploadSettingsAssets(props.modalData);
 
 const errorText = ref('');
 const busy = ref<'commit' | 'finish' | null>(null);
 const selectedUuid = ref(sourceAsset?.assetUuid ?? '');
-/** The stored variant new settings apply to; empty for the picked file. */
-const processingUuid = ref(sourceAsset?.assetUuid ?? '');
+/**
+ * The stored variant new settings apply to; empty for the picked file. The
+ * family came with the file, so it is the best of it from the start, and
+ * nothing in the panel changes under the admin once it is drawn.
+ */
+const processingUuid = ref(
+  sourceAsset ? pickProcessingSource(variants.value) : '',
+);
 const previewMode = ref<'edit' | 'compare'>('edit');
 /**
  * The crop frame is out for editing: from the start where the place has
@@ -775,19 +770,6 @@ const showFamily = computed(
   () => Boolean(sourceAsset) || variants.value.length > 0,
 );
 
-onMounted(async () => {
-  try {
-    const loaded = await loadVariants();
-    if (sourceAsset) processingUuid.value = pickProcessingSource(loaded);
-  } catch (error) {
-    if (!handleAssetMissing(error))
-      errorText.value = errorMessage(
-        error,
-        phrase.value.upload_error_load_variants,
-      );
-  }
-});
-
 watch(originKey, () => {
   renders.reset();
   shownRender.value = undefined;
@@ -1338,9 +1320,6 @@ const directHref = computed(() =>
             :title="phrase.upload_section_family"
             @activate="section = 'family'"
           >
-            <template #header-extra>
-              <Icon v-if="loadingVariants" name="loading" class="text-text-2" />
-            </template>
             <UploadSettingsVariantList
               v-if="variantItems.length"
               :items="variantItems"
@@ -1348,11 +1327,7 @@ const directHref = computed(() =>
               @select="selectVariant"
             />
             <div v-else class="text-sm text-text-3">
-              {{
-                loadingVariants
-                  ? phrase.upload_searching
-                  : phrase.upload_no_matches
-              }}
+              {{ phrase.upload_no_matches }}
             </div>
             <Button
               variant="primary"

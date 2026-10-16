@@ -7,7 +7,9 @@ import {
   interceptModalNavigation,
   modalHistorySettled,
   modalStack,
+  modalWait,
   openModal,
+  preloadModal,
   registerDismissLayer,
   runModalFlow,
   settleModal,
@@ -426,4 +428,117 @@ test('the released history entry settles once the router has navigated', async (
   await Promise.resolve();
   expect(settled).toBe(true);
   uninstall();
+});
+
+/** A modal whose code arrives when the test says so. */
+function deferredModal() {
+  let arrive!: () => void;
+  let fail!: (error: Error) => void;
+  const descriptor: ModalDescriptor<TestModalResult, Component> = {
+    name: 'deferred',
+    frame: { kind: 'card', width: 'max-w-140', title: () => 'Deferred' },
+    component: () =>
+      new Promise((resolve, reject) => {
+        arrive = () => resolve({ default: TestComponent });
+        fail = reject;
+      }),
+  };
+  return { descriptor, arrive: () => arrive(), fail: (e: Error) => fail(e) };
+}
+
+test('a modal is on the stack at once, its frame standing in until its code arrives', async () => {
+  const { descriptor, arrive } = deferredModal();
+  const result = openModal(descriptor);
+  const modal = modalStack.value[0]!;
+  expect(modal.frame?.kind).toBe('card');
+  expect(modal.component).toBeUndefined();
+
+  arrive();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(modalStack.value[0]).toBe(modal);
+  expect(modal.component).toBe(TestComponent);
+
+  settleModal(modal, { type: 'done', value: 1 });
+  await expect(result).resolves.toEqual({ type: 'done', value: 1 });
+});
+
+test('a modal closed while its code loads stays closed when the code arrives', async () => {
+  const { descriptor, arrive } = deferredModal();
+  const result = openModal(descriptor);
+  expect(closeModal()).toBe(true);
+  await expect(result).resolves.toEqual({ type: 'empty' });
+
+  arrive();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(modalStack.value).toEqual([]);
+});
+
+test('code that fails to load closes its modal with an error', async () => {
+  const { descriptor, fail } = deferredModal();
+  const result = openModal(descriptor);
+  fail(new Error('chunk gone'));
+  await expect(result).resolves.toEqual({
+    type: 'error',
+    message: 'chunk gone',
+  });
+  expect(modalStack.value).toEqual([]);
+});
+
+test('a preloaded modal opens with its component and no shell', async () => {
+  const { descriptor, arrive } = deferredModal();
+  const loading = preloadModal(descriptor);
+  arrive();
+  await loading;
+  const result = openModal(descriptor);
+  expect(modalStack.value[0]!.component).toBe(TestComponent);
+  closeModal();
+  await result;
+});
+
+test('a flow between two steps waits in the frame of the step that left', async () => {
+  const flow = runModalFlow(async () => {
+    expect(modalWait.value).toBeNull();
+    const first = openModal(testModal);
+    const step = modalStack.value[0]!;
+    expect(modalWait.value).toBeNull();
+    settleModal(step, { type: 'done', value: 1 });
+    await first;
+
+    // Nothing is open, and yet the flow is not over: it waits in its frame.
+    expect(modalStack.value).toEqual([]);
+    expect(modalWait.value?.last).toBe(step);
+
+    const second = openModal(testModal);
+    expect(modalWait.value).toBeNull();
+    settleModal(modalStack.value[0]!, { type: 'done', value: 2 });
+    await second;
+    expect(modalWait.value).not.toBeNull();
+  });
+  await flow;
+  expect(modalWait.value).toBeNull();
+});
+
+test('a flow begun inside a modal waits over it, and one handed over keeps its wait', async () => {
+  const parentResult = openModal(testModal);
+  const parent = modalStack.value[0]!;
+
+  await runModalFlow(async () => {
+    let waitId: number | undefined;
+    await runModalFlow(async () => {
+      const step = openModal(testModal);
+      settleModal(modalStack.value[1]!, { type: 'done', value: 1 });
+      await step;
+      expect(modalStack.value).toEqual([parent]);
+      waitId = modalWait.value?.id;
+      expect(waitId).toBeDefined();
+    });
+    // The inner flow is over; the outer one goes on waiting, in one wait.
+    expect(modalWait.value?.id).toBe(waitId);
+  });
+
+  expect(modalWait.value).toBeNull();
+  settleModal(parent, { type: 'done', value: 0 });
+  await parentResult;
 });

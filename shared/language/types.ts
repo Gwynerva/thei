@@ -1009,7 +1009,9 @@ export type LanguagePhrases = {
   clear: string;
   delete: string;
   close_modal: string;
+  modal_waiting: string;
   done: string;
+  asset_pick_title: string;
   asset_pick_upload: string;
   asset_pick_reuse: string;
   asset_pick_reuse_hint: string;
@@ -1157,7 +1159,6 @@ export type LanguagePhrases = {
   upload_section_zip: string;
   upload_use: string;
   upload_use_variant: string;
-  upload_searching: string;
   upload_no_matches: string;
   upload_apply_settings: string;
   upload_processing: string;

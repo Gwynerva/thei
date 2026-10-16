@@ -13,6 +13,7 @@ import {
   type AssetSelectionConstraints,
 } from '#layers/thei/shared/asset-library';
 import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
+import ModalScreenBar from '../ModalScreenBar.vue';
 import { editFileModal } from '../upload-settings/modal';
 import {
   assetDeletionLabel,
@@ -189,7 +190,7 @@ async function choose(asset: AssetVariantInfo) {
   try {
     const result = await openModal(editFileModal, {
       ...props.modalData,
-      source: { kind: 'asset', asset },
+      source: { kind: 'asset', assetUuid: asset.assetUuid },
       librarySelection: true,
     });
     if (result.type === 'asset-missing') {
@@ -267,22 +268,9 @@ onBeforeUnmount(() => {
   >
     <header class="shrink-0 border-b border-border-1 bg-bg-2 p-sm sm:p-md">
       <div class="mx-auto flex w-full max-w-280 flex-col gap-sm">
-        <div class="flex items-center justify-between gap-sm">
-          <div class="flex min-w-0 flex-wrap items-center gap-x-sm gap-y-xs">
-            <h2 class="flex items-center gap-xs text-xl font-bold">
-              <Icon name="gallery" />{{ phrase.asset_library }}
-            </h2>
-            <AssetAspectHint :profile="modalData.uploadProfile" />
-          </div>
-          <button
-            type="button"
-            :aria-label="phrase.close_modal"
-            class="cursor-pointer rounded-normal p-xs hocus:bg-bg-3"
-            @click="closeModal"
-          >
-            <Icon name="close" />
-          </button>
-        </div>
+        <ModalScreenBar icon="gallery" :title="phrase.asset_library">
+          <AssetAspectHint :profile="modalData.uploadProfile" />
+        </ModalScreenBar>
         <AssetLibrarySearch
           v-model:search="search"
           v-model:type="type"

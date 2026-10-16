@@ -12,6 +12,7 @@ const {
   channels,
   bitrate,
   archivedOriginal,
+  pending,
 } = defineProps<{
   extension?: string;
   size?: number;
@@ -23,6 +24,8 @@ const {
   /** Bits per second of a recording's sound. */
   bitrate?: number;
   archivedOriginal?: ArchivedOriginalFileMeta;
+  /** The file is still being fetched: what every file has waits in place. */
+  pending?: boolean;
 }>();
 
 const humanSize = useHumanSize();
@@ -43,10 +46,12 @@ const rows = computed<InfoBlockRow[]>(() => [
     label: phrase.value.file_info_extension,
     value: extension,
     uppercase: true,
+    pending,
   },
   {
     label: phrase.value.file_info_size,
     value: formattedSize.value,
+    pending,
   },
   {
     label: phrase.value.file_info_dimensions,

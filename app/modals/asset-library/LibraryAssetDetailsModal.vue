@@ -23,6 +23,7 @@ import AssetModalButton from '../asset-modal/AssetModalButton.vue';
 import AssetModalPreviewAudio from '../asset-modal/AssetModalPreviewAudio.vue';
 import AssetModalPreviewMedia from '../asset-modal/AssetModalPreviewMedia.vue';
 import AssetModalFileInfo from '../asset-modal/AssetModalFileInfo.vue';
+import ModalWaiting from '../ModalWaiting.vue';
 import FilePreviewContent from '#layers/thei/app/components/file-preview/FilePreviewContent.vue';
 import { isAssetExtensionSafeInline } from '#layers/thei/shared/assets/formats';
 import { errorMessage } from '#layers/thei/app/composables/upload-draft';
@@ -194,11 +195,15 @@ const usageGroups = computed(() => {
       <div class="border-t border-border-1 p-sm">
         <div class="mb-sm flex flex-col items-start gap-xs">
           <h3 class="font-semibold">{{ phrase.asset_library_usage }}</h3>
-          <AssetUsageBadges v-if="data" :counts="data.counts" />
+          <AssetUsageBadges
+            v-if="data || status === 'pending'"
+            :counts="data?.counts"
+          />
         </div>
-        <div v-if="status === 'pending'" role="status">
-          <Icon name="loading" />
-        </div>
+        <ModalWaiting
+          v-if="status === 'pending'"
+          class="justify-start! text-base"
+        />
         <button
           v-else-if="error"
           type="button"
