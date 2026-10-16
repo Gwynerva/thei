@@ -155,6 +155,7 @@ export async function createProject(
         cv: result.cv,
         action: result.action,
         reminder: result.reminder,
+        synonyms: result.synonyms,
         createdAt: now,
         updatedAt: now,
       })

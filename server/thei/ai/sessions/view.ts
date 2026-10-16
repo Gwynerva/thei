@@ -1,13 +1,15 @@
 import { and, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
-import type {
-  AiActionItem,
-  AiEntityRef,
-  AiEntityType,
-  AiMessageItem,
-  AiSessionDetail,
-  AiSessionItem,
-  AiSessionListResponse,
-  AiSessionOrigin,
+import {
+  aiSessionStanding,
+  type AiActionItem,
+  type AiEntityRef,
+  type AiEntityType,
+  type AiMessageItem,
+  type AiSessionDetail,
+  type AiSessionItem,
+  type AiSessionListResponse,
+  type AiSessionOrigin,
+  type AiSessionOverview,
 } from '#layers/thei/shared/ai';
 import { normalizeTermText } from '#layers/thei/shared/text-terms';
 import {
@@ -298,6 +300,73 @@ export function listSessions(
     modelReady: Boolean(sessionModel()),
     waiting: aiWaiting(),
   };
+}
+
+/**
+ * The latest sessions that wait for the owner, that work now, and that were
+ * done within the week, archived ones aside: `room` of them in all, shared
+ * evenly, what one kind cannot fill going to the others.
+ */
+export function sessionOverview(room = 9): AiSessionOverview {
+  const now = Date.now();
+  // What waits may be older than the latest page; it is read on its own.
+  const latest = listSessions({ archived: false }).sessions;
+  const waiting = listSessions({ archived: false, waiting: true }).sessions;
+  const standing = (
+    items: AiSessionItem[],
+    wanted: ReturnType<typeof aiSessionStanding>,
+  ) => items.filter((item) => aiSessionStanding(item, now) === wanted);
+  const lists = [
+    standing(waiting, 'waiting'),
+    standing(latest, 'running'),
+    standing(latest, 'recent'),
+  ];
+  const shown = shareRoom(
+    lists.map((list) => list.length),
+    room,
+  );
+  const [waitingShown, running, recent] = lists.map((list, index) =>
+    list.slice(0, shown[index]),
+  ) as [AiSessionItem[], AiSessionItem[], AiSessionItem[]];
+  const { db, schema } = THEI_SERVER.useDb();
+  return {
+    total: Number(
+      db
+        .select({ total: sql<number>`count(*)` })
+        .from(schema.aiSessions)
+        .where(
+          and(
+            isNull(schema.aiSessions.purgedAt),
+            isNull(schema.aiSessions.archivedAt),
+          ),
+        )
+        .get()?.total ?? 0,
+    ),
+    waiting: waitingShown,
+    running,
+    recent,
+  };
+}
+
+/**
+ * How many of each list `room` places hold: even shares, and what a short
+ * list leaves goes to the longer ones.
+ */
+function shareRoom(lengths: number[], room: number): number[] {
+  const shown = lengths.map(() => 0);
+  let left = room;
+  for (;;) {
+    const open = lengths
+      .map((_, index) => index)
+      .filter((index) => shown[index]! < lengths[index]!);
+    if (!left || !open.length) return shown;
+    const each = Math.max(1, Math.floor(left / open.length));
+    for (const index of open) {
+      const take = Math.min(each, lengths[index]! - shown[index]!, left);
+      shown[index] = shown[index]! + take;
+      left -= take;
+    }
+  }
 }
 
 /**

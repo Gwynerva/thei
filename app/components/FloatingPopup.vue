@@ -56,6 +56,39 @@ const teleportTarget = computed(
   () => props.teleportTo ?? dialogOf(props.anchor) ?? 'body',
 );
 
+/**
+ * A popup opened from inside another is its child: the parent is the popup
+ * its anchor stands in. Clicks in a child — a select's options, a picker —
+ * are inside the parent too, though the child is not inside it in the page.
+ */
+const popupId = useId();
+const parentPopupId = computed(() => {
+  const anchor = props.anchor;
+  if (!anchor || typeof Element === 'undefined') return undefined;
+  const element =
+    anchor instanceof Element ? anchor : (anchor.contextElement ?? undefined);
+  return (
+    element?.closest<HTMLElement>('[data-floating-popup]')?.dataset
+      .floatingPopup || undefined
+  );
+});
+
+/** Whether a node is in this popup or in one opened from it, at any depth. */
+function withinFamily(target: Node) {
+  const element = target instanceof Element ? target : target.parentElement;
+  let popup = element?.closest<HTMLElement>('[data-floating-popup]');
+  for (let depth = 0; popup && depth < 10; depth++) {
+    if (popup.dataset.floatingPopup === popupId) return true;
+    const parent = popup.dataset.floatingPopupParent;
+    popup = parent
+      ? document.querySelector<HTMLElement>(
+          `[data-floating-popup="${CSS.escape(parent)}"]`,
+        )
+      : null;
+  }
+  return false;
+}
+
 const emit = defineEmits<{
   opened: [];
   closed: [];
@@ -100,11 +133,12 @@ const middleware = computed(() => [
   hide({ padding: props.viewportPadding }),
 ]);
 
-const { floatingStyles, middlewareData, update } = useFloating(
+const { floatingStyles, middlewareData, update, isPositioned } = useFloating(
   referenceElement,
   floatingElement,
   {
     strategy: 'fixed',
+    open,
     placement: computed(() => props.placement),
     middleware,
     whileElementsMounted(reference, floating, performUpdate) {
@@ -147,7 +181,7 @@ function onDocumentPointerDown(event: PointerEvent) {
   if (!props.closeOnOutside) return;
   const target = event.target;
   if (!(target instanceof Node)) return;
-  if (floatingElement.value?.contains(target)) return;
+  if (floatingElement.value?.contains(target) || withinFamily(target)) return;
   if (props.anchor instanceof Node && props.anchor.contains(target)) return;
   if (props.outsideIgnore?.some((element) => element?.contains(target))) return;
   emit('dismiss', 'outside');
@@ -191,12 +225,25 @@ watch(
   { immediate: true },
 );
 
+// Opened once drawn where it stands: until then it may still be hidden as
+// its anchor was when it last closed, and nothing hidden takes the focus.
+let whenPositioned: (() => void) | undefined;
+watch([isPositioned, open], ([positioned, still]) => {
+  if (!positioned && still) return;
+  whenPositioned?.();
+  whenPositioned = undefined;
+});
+
 watch(
   floatingElement,
   async (element) => {
     if (!element || !open.value) return;
     await nextTick();
-    await update();
+    update();
+    if (!isPositioned.value)
+      await new Promise<void>((resolve) => (whenPositioned = resolve));
+    if (!open.value || !floatingElement.value) return;
+    await nextTick();
     emit('opened');
   },
   { flush: 'post' },
@@ -204,6 +251,7 @@ watch(
 
 onBeforeUnmount(() => {
   if (import.meta.client) removeOpenListeners();
+  whenPositioned?.();
 });
 
 defineExpose({ element: floatingElement });
@@ -211,24 +259,31 @@ defineExpose({ element: floatingElement });
 
 <template>
   <Teleport :to="teleportTarget">
-    <TransitionFade @after-leave="emit('closed')">
-      <div
-        v-if="open && anchor"
-        ref="floating"
-        v-bind="$attrs"
-        data-floating-popup
-        :style="popupStyle"
-        class="fixed z-9998 max-h-(--floating-popup-available-height)
-          max-w-[calc(100dvw-var(--spacing-window)-var(--spacing-window))]
-          overflow-hidden rounded-normal shadow-xl shadow-shadow-3"
-        :class="
-          fitContent
-            ? 'w-fit'
-            : 'w-[min(var(--floating-popup-max-width),var(--floating-popup-available-width))]'
-        "
-      >
-        <slot></slot>
-      </div>
-    </TransitionFade>
+    <!-- A box of its own around the popup: a teleport moved to a new target
+         puts what it holds after its own end, so the popup's next sibling
+         there could be the marker of a popup inside it, gone by the time the
+         closed popup's placeholder is put before it. -->
+    <div class="contents">
+      <TransitionFade @after-leave="emit('closed')">
+        <div
+          v-if="open && anchor"
+          ref="floating"
+          v-bind="$attrs"
+          :data-floating-popup="popupId"
+          :data-floating-popup-parent="parentPopupId"
+          :style="popupStyle"
+          class="fixed z-9998 max-h-(--floating-popup-available-height)
+            max-w-[calc(100dvw-var(--spacing-window)-var(--spacing-window))]
+            overflow-hidden rounded-normal shadow-xl shadow-shadow-3"
+          :class="
+            fitContent
+              ? 'w-fit'
+              : 'w-[min(var(--floating-popup-max-width),var(--floating-popup-available-width))]'
+          "
+        >
+          <slot></slot>
+        </div>
+      </TransitionFade>
+    </div>
   </Teleport>
 </template>

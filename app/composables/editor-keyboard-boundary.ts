@@ -7,6 +7,11 @@
  * it, and a "/" typed there opens the toolbox of an empty block. It cannot
  * be told to stop, and a popup cannot stand inside the editor without the
  * editor's own styles reaching it.
+ *
+ * In the text itself, a "/" is only a slash: Editor.js would open its
+ * toolbox for one typed in an empty block, a key that on many layouts takes
+ * a switch of layout first. Blocks are added from the "+", or with
+ * Ctrl/Cmd+Shift+/ (`editor-block-toolbox.ts`).
  */
 export function bindEditorKeyboardBoundary(
   scope: HTMLElement,
@@ -15,13 +20,26 @@ export function bindEditorKeyboardBoundary(
   function hide(event: KeyboardEvent) {
     const target = event.target;
     if (!(target instanceof Node)) return;
-    if (!scope.contains(target) || editor.contains(target)) return;
+    if (!scope.contains(target)) return;
+    if (editor.contains(target)) {
+      if (event.key === '/' && !event.ctrlKey && !event.metaKey)
+        hideSlashFromEditor(event);
+      return;
+    }
     hideKeyFromEditor(event);
   }
 
   // The window hears the event before the document, where Editor.js listens.
   window.addEventListener('keydown', hide, true);
   return () => window.removeEventListener('keydown', hide, true);
+}
+
+/**
+ * Shows a "/" to Editor.js as no character, so it opens nothing; the browser
+ * types it all the same, from the key itself.
+ */
+function hideSlashFromEditor(event: KeyboardEvent) {
+  Object.defineProperty(event, 'key', { value: '', configurable: true });
 }
 
 /**

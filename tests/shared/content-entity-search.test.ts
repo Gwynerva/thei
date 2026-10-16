@@ -305,3 +305,74 @@ describe('entities a text links to, picked by their keys', () => {
     expect(pickContentEntities(all, [], 5)).toEqual([]);
   });
 });
+
+describe('synonyms in the entity search', () => {
+  const named: ContentEntitySearchItem[] = [
+    {
+      entityType: 'project',
+      entityId: 'bg3',
+      title: "Baldur's Gate 3",
+      summary: 'A game played with friends',
+      url: '/projects/baldurs-gate-3-P1/',
+      humanReadableSlug: 'baldurs-gate-3',
+      publicId: 'P1',
+      synonyms: ['bg3', 'бг3'],
+      updatedAt: 1,
+    },
+    {
+      entityType: 'event',
+      entityId: 'bgx',
+      title: 'BG3 launch party',
+      summary: 'Event',
+      url: '/events/bg3-launch-party-E1/',
+      humanReadableSlug: 'bg3-launch-party',
+      publicId: 'E1',
+      updatedAt: 2,
+    },
+    {
+      entityType: 'project',
+      entityId: 'hrt',
+      title: 'Транспереход',
+      summary: 'Медицина и документы',
+      url: '/projects/transperekhod-P2/',
+      humanReadableSlug: 'transperekhod',
+      publicId: 'P2',
+      synonyms: ['ЗГТ', 'HRT'],
+      updatedAt: 3,
+    },
+  ];
+
+  it('finds an entity by a synonym said whole, just after a whole title', () => {
+    expect(
+      rankContentEntities(named, 'бг3').map((item) => item.entityId),
+    ).toEqual(['bg3']);
+    expect(
+      rankContentEntities(named, 'bg3').map((item) => item.entityId),
+    ).toEqual(['bg3', 'bgx']);
+    expect(
+      rankContentEntities(named, 'згт').map((item) => item.entityId),
+    ).toEqual(['hrt']);
+  });
+
+  it('suggests what a synonym among the selected words names', () => {
+    expect(
+      suggestContentEntities(
+        named,
+        'мы наконец прошли бг3 всей компанией',
+        1,
+      ).map((item) => item.entityId),
+    ).toEqual(['bg3']);
+    expect(
+      suggestContentEntities(named, 'начала ЗГТ весной', 1).map(
+        (item) => item.entityId,
+      ),
+    ).toEqual(['hrt']);
+  });
+
+  it('reads «ё» as «е» and ignores case', () => {
+    const items: ContentEntitySearchItem[] = [
+      { ...named[2]!, entityId: 'yo', title: 'Ёлка', synonyms: [] },
+    ];
+    expect(rankContentEntities(items, 'елка')).toHaveLength(1);
+  });
+});

@@ -21,10 +21,7 @@ watch(open, async (opened) => {
 
 function start(about?: string) {
   open.value = false;
-  void navigateTo({
-    path: '/admin/ai/',
-    query: { session: 'new', ...(about ? { about } : {}) },
-  });
+  void navigateTo(newSessionLocation({ about }));
 }
 </script>
 

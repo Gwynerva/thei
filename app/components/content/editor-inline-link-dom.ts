@@ -2,6 +2,7 @@ import {
   withLinkFragment,
   type ContentEntityType,
 } from '#layers/thei/shared/content-link';
+import { insertInlineElement } from './editor-edit-commands';
 
 /**
  * The attributes an inline link is written with. `undefined` removes one, so
@@ -74,30 +75,22 @@ export function linkAroundRange(range: Range): HTMLAnchorElement | undefined {
 
 /**
  * Makes a range a link: the link it already lies in is rewritten, otherwise
- * its content is wrapped in a new one. Returns the link.
+ * its content is wrapped in a new one, put in as one editing command that
+ * Ctrl+Z takes back whole. Returns the link, if it is in the text.
  */
 export function linkRange(
   range: Range,
   attributes: InlineLinkAttributes,
-): HTMLAnchorElement {
-  let link = linkAroundRange(range);
-  if (!link) {
-    link = document.createElement('a');
-    link.append(range.extractContents());
-    range.insertNode(link);
+): HTMLAnchorElement | undefined {
+  const around = linkAroundRange(range);
+  if (around) {
+    unwrapNestedLinks(around);
+    applyLinkAttributes(around, attributes);
+    return around;
   }
+  const link = document.createElement('a');
+  link.append(range.cloneContents());
   unwrapNestedLinks(link);
   applyLinkAttributes(link, attributes);
-  return link;
-}
-
-/** Puts the caret right after an element. */
-export function placeCaretAfter(element: Node) {
-  const selection = window.getSelection();
-  if (!selection) return;
-  const after = document.createRange();
-  after.setStartAfter(element);
-  after.collapse(true);
-  selection.removeAllRanges();
-  selection.addRange(after);
+  return insertInlineElement(range, link) as HTMLAnchorElement | undefined;
 }

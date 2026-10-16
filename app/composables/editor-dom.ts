@@ -15,3 +15,37 @@ export function editorBlockOf(
   const block = target.closest<HTMLElement>(EDITOR_BLOCK_SELECTOR);
   return block && root.contains(block) ? block : undefined;
 }
+
+/**
+ * The block a button of Editor.js's toolbar stands beside: the one level
+ * with its middle, or the nearest. Read from where the button is, not from
+ * what the pointer last crossed, which can be a block gone since. Between
+ * two about as near — on a phone the toolbar stands in the gap — `prefer`,
+ * the block of the caret, is the one.
+ */
+export function editorBlockNextTo(
+  root: HTMLElement,
+  element: HTMLElement,
+  prefer?: HTMLElement,
+): HTMLElement | undefined {
+  const box = element.getBoundingClientRect();
+  const y = box.top + box.height / 2;
+  let nearest: { block: HTMLElement; distance: number } | undefined;
+  for (const block of root.querySelectorAll<HTMLElement>(
+    EDITOR_BLOCK_SELECTOR,
+  )) {
+    if (!block.dataset.id) continue;
+    const rect = block.getBoundingClientRect();
+    const distance =
+      y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
+    if (!nearest || distance < nearest.distance) nearest = { block, distance };
+    if (distance === 0) break;
+  }
+  if (prefer && nearest && prefer !== nearest.block && root.contains(prefer)) {
+    const rect = prefer.getBoundingClientRect();
+    const distance =
+      y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
+    if (distance <= nearest.distance + 2) return prefer;
+  }
+  return nearest?.block;
+}

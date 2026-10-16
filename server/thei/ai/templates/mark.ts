@@ -18,7 +18,7 @@ export function settleTemplateTurn(
 ) {
   const reads = takeTemplateReads(sessionUuid);
   const session = findSession(sessionUuid);
-  if (!session?.templateId) return;
+  if (!session?.templateId || session.origin !== 'template') return;
   const messages = sessionMessages(sessionUuid);
   const parts = messages.flatMap((message) => message.parts as AiMessagePart[]);
   if (!wentThrough) {

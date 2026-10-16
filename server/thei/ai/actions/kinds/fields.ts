@@ -28,7 +28,7 @@ export const fieldAction: AiActionKindDef<'field'> = {
     .map(([kind, fields]) => `${kind} — ${fields.join(', ')}`)
     .join(
       '; ',
-    )}. showcase and cv take true or false, synonyms a list of words, the rest text. A summary is a couple of short sentences, the length of a search engine's description — not a one-liner.`,
+    )}. showcase and cv take true or false, synonyms a list of names — only names really used for it: an abbreviation, a nickname, its name in another language (bg3, бг3; ЗГТ, HRT), never a description or a piece of the title — the rest text. A summary is a couple of short sentences, the length of a search engine's description — not a one-liner.`,
   schema: z.object({
     field: z.string(),
     value: z.union([z.string(), z.boolean(), z.array(z.string())]),
@@ -43,7 +43,11 @@ export const fieldAction: AiActionKindDef<'field'> = {
       fail(
         `${refOf(entity)} takes ${allowed.join(', ') || 'no fields'} this way, not ${input.field}.`,
       );
-    const value = checkFieldValue(input.field, input.value);
+    const value = checkFieldValue(
+      input.field,
+      input.value,
+      String(currentField(entity, 'title') ?? ''),
+    );
     const current = currentField(entity, input.field);
     if (sameValue(current, value)) fail('That is already its value.');
     return {

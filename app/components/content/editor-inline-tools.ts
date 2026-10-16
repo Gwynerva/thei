@@ -17,10 +17,14 @@ import type {
 import { editorIcon } from './editor-icons';
 import {
   applyLinkAttributes,
-  placeCaretAfter,
   unwrapNestedLinks,
   type InlineLinkAttributes,
 } from './editor-inline-link-dom';
+import {
+  insertInlineElement,
+  placeCaretAfter,
+  unlinkElement,
+} from './editor-edit-commands';
 import {
   copyInlineLinkRect,
   inlineLinkPopupAnchorRect,
@@ -150,6 +154,9 @@ abstract class ContentInlineMarkupTool<
         ? document.activeElement.closest<HTMLElement>('button, [role="button"]')
         : null);
     if (!trigger) return;
+    // Looked up again: Editor.js keeps the menu it rendered for one
+    // selection while another is made, and the tool with it.
+    this.existing = this.findExisting();
     const range = this.existing ? undefined : trimCurrentInlineSelection();
     if (!this.existing && !range) return;
     // Read before the highlight goes on; reading changes nothing.
@@ -162,7 +169,11 @@ abstract class ContentInlineMarkupTool<
       .trim();
 
     const anchor = createInlineLinkAnchor(trigger);
-    this.options.api.selection.setFakeBackground();
+    // Shown as a highlight, not written into the text: Editor.js's own
+    // "fake background" is an editing command, two steps Ctrl+Z would undo.
+    const selection = window.getSelection();
+    if (selection?.rangeCount)
+      showPendingSelection(selection.getRangeAt(0).cloneRange());
     this.options.api.selection.save();
     this.highlighted = true;
     const request = this.createRequest({
@@ -180,29 +191,35 @@ abstract class ContentInlineMarkupTool<
   private restoreSelection() {
     if (!this.highlighted) return;
     this.options.api.selection.restore();
-    this.options.api.selection.removeFakeBackground();
+    clearPendingSelection();
     this.highlighted = false;
   }
 
   /**
-   * The element the outcome is written to: the existing one, or a new one
-   * wrapped around the remembered selection. Nothing when there is neither.
+   * The element the outcome is written to: the existing one, given what
+   * `prepare` sets, or a new one around the remembered selection, made with
+   * it and put in as one editing command, which Ctrl+Z takes back whole.
+   * Nothing when there is neither.
    */
   protected wrapSelection(
     create: () => HTMLElement,
+    prepare: (element: HTMLElement) => void,
     emptyContent?: string,
   ): HTMLElement | undefined {
     this.restoreSelection();
     const selection = window.getSelection();
     const range = selection?.rangeCount ? selection.getRangeAt(0) : undefined;
     if (!range) return undefined;
-    if (this.existing) return this.existing;
+    if (this.existing) {
+      prepare(this.existing);
+      return this.existing;
+    }
     if (range.collapsed && !emptyContent) return undefined;
     const element = create();
     if (range.collapsed) element.textContent = emptyContent!;
-    else element.append(range.extractContents());
-    range.insertNode(element);
-    return element;
+    else element.append(range.cloneContents());
+    prepare(element);
+    return insertInlineElement(range.cloneRange(), element);
   }
 
   /** Done: the caret goes after the element and the toolbar closes. */
@@ -215,7 +232,10 @@ abstract class ContentInlineMarkupTool<
     this.restoreSelection();
     const element = this.existing;
     if (!element) return;
-    element.replaceWith(...Array.from(element.childNodes));
+    // A link comes off as an editing command. A hint has none: it is taken
+    // off by hand, and Ctrl+Z does not reach past it.
+    if (element instanceof HTMLAnchorElement) unlinkElement(element);
+    else element.replaceWith(...Array.from(element.childNodes));
     this.options.api.inlineToolbar.close();
   }
 }
@@ -252,32 +272,32 @@ export class ContentHintTool extends ContentInlineMarkupTool<ContentHintRequest>
       this.remove();
       return;
     }
-    const element = this.wrapSelection(() => document.createElement('abbr'));
+    const element = this.wrapSelection(
+      () => document.createElement('abbr'),
+      (abbr) => {
+        abbr.dataset.contentHint = value;
+      },
+    );
     if (!element) return;
-    element.dataset.contentHint = value;
     this.finish(element);
   }
 }
 
-abstract class ContentInlineLinkTool extends ContentInlineMarkupTool<ContentInlineLinkRequest> {
+/**
+ * A link of the words: to an entity, a place inside it, or another site,
+ * chosen in the one link picker (`link-picker/`). The words in a link
+ * already — of either kind — edit that link.
+ */
+export class ContentLinkTool extends ContentInlineMarkupTool<ContentInlineLinkRequest> {
+  static title = 'Link';
   static sanitize = { a: contentInlineLinkSanitizeConfig() };
 
-  protected abstract matches(link: HTMLAnchorElement): boolean;
+  protected readonly menuName = 'contentLink';
+  protected readonly menuIcon = editorIcon('link');
 
-  /**
-   * Any link the selection is in, of either kind: a link is never nested in
-   * a link, so the other kind's tool rewrites the same element instead.
-   * Only a link of its own kind lights the tool up in the toolbar, though.
-   */
   protected findExisting() {
     const link = this.options.api.selection.findParentTag('A');
     return link instanceof HTMLAnchorElement ? link : undefined;
-  }
-
-  protected override menuActive() {
-    return (
-      this.existing instanceof HTMLAnchorElement && this.matches(this.existing)
-    );
   }
 
   protected createRequest(
@@ -302,33 +322,32 @@ abstract class ContentInlineLinkTool extends ContentInlineMarkupTool<ContentInli
   }
 
   private applyLink(label: string, attributes: InlineLinkAttributes) {
-    const link = this.wrapSelection(() => document.createElement('a'), label);
+    const link = this.wrapSelection(
+      () => document.createElement('a'),
+      (element) => {
+        const anchor = element as HTMLAnchorElement;
+        unwrapNestedLinks(anchor);
+        applyLinkAttributes(anchor, attributes);
+        if (!anchor.textContent?.trim()) anchor.textContent = label;
+      },
+      label,
+    );
     if (!(link instanceof HTMLAnchorElement)) return;
-    unwrapNestedLinks(link);
-    applyLinkAttributes(link, attributes);
-    if (!link.textContent?.trim()) link.textContent = label;
     this.finish(link);
   }
 }
 
-export class ContentEntityLinkTool extends ContentInlineLinkTool {
-  static title = 'Internal link';
-  protected readonly menuName = 'contentEntityLink';
-  protected readonly menuIcon = editorIcon('link');
+const PENDING_HIGHLIGHT = 'content-editor-pending';
 
-  protected matches(link: HTMLAnchorElement) {
-    return link.dataset.contentLink === 'entity';
-  }
+/** Marks the words a popup is about, without touching the text. */
+function showPendingSelection(range: Range) {
+  if (typeof CSS === 'undefined' || !('highlights' in CSS)) return;
+  CSS.highlights.set(PENDING_HIGHLIGHT, new Highlight(range));
 }
 
-export class ContentExternalInlineLinkTool extends ContentInlineLinkTool {
-  static title = 'External link';
-  protected readonly menuName = 'contentExternalInlineLink';
-  protected readonly menuIcon = editorIcon('external-link');
-
-  protected matches(link: HTMLAnchorElement) {
-    return link.dataset.contentLink === 'external';
-  }
+function clearPendingSelection() {
+  if (typeof CSS === 'undefined' || !('highlights' in CSS)) return;
+  CSS.highlights.delete(PENDING_HIGHLIGHT);
 }
 
 function runInlineCommand(command: string) {

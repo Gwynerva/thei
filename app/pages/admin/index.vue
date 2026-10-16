@@ -65,7 +65,7 @@ const eventItems = computed(() =>
   <div class="m-auto flex w-(--width-wide) flex-col px-window py-lg">
     <AdminSiteStatus />
     <div class="mb-lg grid gap-md sm:grid-cols-2">
-      <AdminAiWaiting class="min-w-0 sm:col-span-2" />
+      <AdminAiSessions class="min-w-0 sm:col-span-2" />
       <AdminEntityOverview
         class="min-w-0"
         entity-type="project"

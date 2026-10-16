@@ -4,7 +4,15 @@ import {
   type AiModelSettings,
 } from '#layers/thei/shared/ai-model';
 import type { AiEntityRef } from '#layers/thei/shared/ai';
-import type { AiComposerFile } from '#layers/thei/app/composables/ai-session';
+import type {
+  AiComposerExpose,
+  AiComposerFile,
+} from '#layers/thei/app/composables/ai-session';
+import type { AiPresetItem } from '#layers/thei/shared/ai-template';
+import {
+  isPresetTemplate,
+  type AiTemplateListResponse,
+} from '#layers/thei/shared/ai-template';
 import ContentInlineLinkDecorator from '#layers/thei/app/components/content/ContentInlineLinkDecorator.vue';
 
 /**
@@ -12,7 +20,8 @@ import ContentInlineLinkDecorator from '#layers/thei/app/components/content/Cont
  * or, on a phone, one of them at a time. The session open travels in the
  * address (`?session=`), so a link can open it; `new` is a session about to
  * be started. An entity's form sends its owner here with `?about=`: the
- * list shows the sessions about it, and a new one is about it.
+ * list shows the sessions about it, and a new one is about it; a template's
+ * row with `?template=`: the new one opens with that ready-made request.
  */
 const route = useRoute();
 const router = useRouter();
@@ -85,12 +94,45 @@ const linkResolver = useContentLinkResolver('admin');
 
 // ---- A new session -----------------------------------------------------------
 
+const { data: templates } = await useAsyncData('ai-templates', () =>
+  requestFetch<AiTemplateListResponse>('/api/admin/ai/templates'),
+);
+const presets = computed(
+  () => templates.value?.templates.filter(isPresetTemplate) ?? [],
+);
+const composer = ref<AiComposerExpose>();
+
+function usePreset(preset: AiPresetItem) {
+  composer.value?.prefill(preset.instruction, preset.templateId);
+}
+
+// Opened with one: its words go in once, as the screen comes up.
+const presetAsked = computed(() =>
+  selected.value === 'new' && typeof route.query.template === 'string'
+    ? route.query.template
+    : undefined,
+);
+watch(
+  [presetAsked, presets, composer],
+  ([asked]) => {
+    if (!asked || !composer.value) return;
+    const preset = presets.value.find((item) => item.templateId === asked);
+    if (!preset) return;
+    usePreset(preset);
+    const query = { ...route.query };
+    delete query.template;
+    void router.replace({ path: route.path, query });
+  },
+  { immediate: true },
+);
+
 const starting = ref(false);
 async function start(
   text: string,
   mentioned: string[],
   files: AiComposerFile[],
   restore: () => void,
+  templateId: string | undefined,
 ) {
   starting.value = true;
   try {
@@ -100,6 +142,7 @@ async function start(
       about: about.value
         ? [...new Set([about.value.ref, ...mentioned])]
         : mentioned,
+      templateId,
     });
     open(sessionUuid);
     await list.value?.refresh();
@@ -193,6 +236,13 @@ async function deleted() {
               :root="aboutRoot"
               :resolver="linkResolver"
             />
+            <AiPresetChips
+              v-if="modelReady"
+              class="mt-xs"
+              :presets
+              :heading="phrase.ai_templates_presets"
+              @choose="usePreset"
+            />
           </div>
         </div>
         <div
@@ -200,6 +250,7 @@ async function deleted() {
             pb-[calc(var(--spacing-sm)+env(safe-area-inset-bottom,0px))]"
         >
           <AiComposer
+            ref="composer"
             :busy="starting"
             :disabled="!modelReady"
             :placeholder="

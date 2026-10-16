@@ -30,6 +30,27 @@ export function correctionFingerprint(
   ]);
 }
 
+/**
+ * A link of a text mended one way: where it led, with what words, and where
+ * it would lead — not where it stands, which other links taken off move.
+ */
+export function relinkFingerprint(
+  key: EntityKey,
+  text: string,
+  link: { from: string; words: string },
+  to: string | null,
+): string {
+  return fingerprintOf([
+    key.kind,
+    key.id,
+    'relink',
+    text,
+    link.from,
+    link.words,
+    to ?? '',
+  ]);
+}
+
 /** Of these fingerprints, the ones the owner said never to offer again. */
 export function neverOffered(fingerprints: string[]): Set<string> {
   if (!fingerprints.length) return new Set();
@@ -69,13 +90,10 @@ export function declinedLately(fingerprints: string[]): Set<string> {
 }
 
 /**
- * Corrections of a text the owner kept as written in a session that still
- * lives: each by its fingerprint.
+ * Parts of an edit of a text the owner kept as it is in a session that still
+ * lives — corrections, links mended — each by its fingerprint.
  */
-export function correctionsKeptLately(
-  key: EntityKey,
-  text: string,
-): Set<string> {
+export function partsKeptLately(key: EntityKey, text: string): Set<string> {
   const { db, schema } = THEI_SERVER.useDb();
   const rows = db
     .select({
@@ -101,8 +119,11 @@ export function correctionsKeptLately(
       (row.parts ?? []).map((part) => [part.id, part.state]),
     );
     for (const part of row.payload.parts ?? [])
-      if (part.type === 'correction' && states.get(part.id) === 'kept')
+      if (states.get(part.id) !== 'kept') continue;
+      else if (part.type === 'correction')
         kept.add(correctionFingerprint(key, text, part));
+      else if (part.type === 'relink')
+        kept.add(relinkFingerprint(key, text, part, part.to));
   }
   return kept;
 }

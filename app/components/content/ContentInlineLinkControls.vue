@@ -1,31 +1,4 @@
 <script lang="ts" setup>
-import type {
-  ContentEntityChoice,
-  ContentEntitySearchItem,
-} from '#layers/thei/shared/admin/content-entity-search';
-import {
-  linkFragment,
-  type ContentEntityReference,
-} from '#layers/thei/shared/content-link';
-import {
-  EXTERNAL_LINK_NOTE_LIMIT,
-  externalLinkHostname,
-  normalizeExternalLinkUrl,
-} from '#layers/thei/shared/external-link';
-import ExternalLinkPreviewCard from '#layers/thei/app/components/external-links/ExternalLinkPreviewCard.vue';
-import EntityLinkPreviewCard from './EntityLinkPreviewCard.vue';
-import ContentLinkFragment from './ContentLinkFragment.vue';
-import { parseInternalUrl } from '#layers/thei/shared/internal-url';
-import { normalizeCaptionText } from '#layers/thei/shared/terminal-punctuation';
-import {
-  createExternalLinkDraft,
-  useExternalLinks,
-  useExternalLinkTyping,
-} from '#layers/thei/app/composables/external-links';
-import {
-  invalidateContentLinks,
-  useContentLinkResolver,
-} from '#layers/thei/app/composables/content-link-resolver';
 import {
   entityLinkAttributes,
   externalLinkAttributes,
@@ -34,280 +7,68 @@ import type {
   ContentInlineLinkControlsExpose,
   ContentInlineLinkRequest,
 } from './editor-inline-links';
+import type { ContentLinkPick, ContentLinkTarget } from './link-picker/types';
 
 /**
- * The popup behind the two inline link tools.
- *
- * One panel, two modes. An internal link is picked from a search of the
- * site's own entities; an external one is typed as an address and read from
- * the site it points to. Both may carry a note — why the link is there —
- * shown under the target's own details, and neither is written until ✓:
- * picking an entity only makes it the choice, so a note can still be added
- * before the link is.
- *
- * An internal link may lead to a place inside its target — the `#…` of the
- * address it was made from. It is kept while the link is edited, shown so it
- * can be let go of, and dropped when the link is pointed elsewhere.
+ * The popup of the inline «Link» tool: the link picker over the words, and
+ * whatever it gives written as a link of them — to an entity, a place in
+ * it, or another site — with its note. Nothing is written until the picker
+ * applies; closed without that, the words are as they were.
  */
-defineProps<{ teleportTo?: string | HTMLElement }>();
-
 const open = ref(false);
-const mode = ref<'entity' | 'external'>('entity');
 const request = shallowRef<ContentInlineLinkRequest>();
-const note = ref('');
-/** The entity an internal link will point to once applied. */
-const chosen = shallowRef<ContentEntityChoice>();
-/** Where inside the chosen entity the link leads, if anywhere. */
-const fragment = ref<string>();
-const resolver = useContentLinkResolver('admin');
-const draft = createExternalLinkDraft(useExternalLinks(), {
-  errorText: () => phrase.value.content_link_broken_description,
-});
-const typing = useExternalLinkTyping(commitUrl);
-/**
- * The entity an address typed as an external link turned out to open. Such a
- * link is stored as an internal one, so it outlives a change of domain.
- */
-const internalEntity = ref<ContentEntitySearchItem>();
-const internalEntityUrl = ref<string>();
-const internalLoading = ref(false);
-const refreshing = ref(false);
-const internalSite = useInternalUrlSite();
-const entityPopup = useTemplateRef<{ focus: () => void }>('entityPopup');
-const externalInput = ref<HTMLInputElement>();
-const noteInput = ref<HTMLInputElement>();
-let internalVersion = 0;
-let chosenVersion = 0;
+/** Each opening is a picker of its own, fresh. */
+const opening = ref(0);
+const picker = useTemplateRef<{ focus: () => void }>('picker');
 
-const externalUrl = computed({
-  get: () => draft.url,
-  set: (value: string) => {
-    // Typing changes the text and whether it is a valid address at once; the
-    // address is looked up once typing pauses or the address is done.
-    internalEntity.value = undefined;
-    internalEntityUrl.value = undefined;
-    draft.url = value;
-  },
+const initial = computed<ContentLinkTarget | undefined>(() => {
+  const current = request.value;
+  if (current?.initialEntity)
+    return {
+      kind: 'entity',
+      entityType: current.initialEntity.entityType,
+      entityId: current.initialEntity.entityId,
+      ...(current.initialFragment ? { fragment: current.initialFragment } : {}),
+    };
+  if (current?.initialUrl) return { kind: 'external', url: current.initialUrl };
+  return undefined;
 });
-const externalPreview = computed(() => draft.preview);
-const externalError = computed(() => draft.error);
-const externalLoading = computed(() => draft.loading || internalLoading.value);
-/** Where inside the entity a typed address of this site leads. */
-const internalFragment = computed(() =>
-  internalEntity.value ? linkFragment(draft.url) : undefined,
-);
-const canRefresh = computed(
-  () =>
-    Boolean(externalPreview.value || externalError.value) &&
-    !internalEntity.value,
-);
 
-/** An address of this site is looked up as an entity before anything else. */
-async function findInternal(raw: string) {
-  const version = ++internalVersion;
-  internalLoading.value = true;
-  try {
-    const entity = await findEntityByInternalUrl(raw, internalSite).catch(
-      () => undefined,
+function openLink(next: ContentInlineLinkRequest) {
+  request.value = next;
+  opening.value++;
+  open.value = true;
+}
+
+function applied(pick: ContentLinkPick) {
+  const current = request.value;
+  if (!current) return;
+  if (pick.kind === 'entity')
+    current.apply(
+      pick.heading ?? entityDisplayTitle(pick.entity),
+      entityLinkAttributes(pick.entity, {
+        note: pick.note,
+        fragment: pick.fragment,
+      }),
     );
-    if (version !== internalVersion) return undefined;
-    internalEntity.value = entity;
-    internalEntityUrl.value = entity ? raw : undefined;
-    return entity;
-  } finally {
-    if (version === internalVersion) internalLoading.value = false;
-  }
-}
-
-/**
- * The address is done — pasted, left, or confirmed with Enter — or, with
- * `typing`, typing into it paused. An address of this site that opens no
- * entity is read as a site only once it is done: while it is typed, it is
- * most likely an entity's address not finished yet.
- */
-async function commitUrl({ typing: paused = false } = {}) {
-  if (!paused) typing.cancel();
-  const raw = draft.url.trim();
-  if (parseInternalUrl(raw, internalSite)) {
-    if ((await findInternal(raw)) || paused) return;
-  }
-  await draft.commit({ typing: paused });
-}
-
-/** Reads the site again, and lets every chip on the page know it changed. */
-async function refreshExternal() {
-  if (refreshing.value || !draft.url.trim()) return;
-  refreshing.value = true;
-  try {
-    await draft.refresh();
-    invalidateContentLinks();
-  } finally {
-    refreshing.value = false;
-  }
-}
-
-function openEntity(next: ContentInlineLinkRequest) {
-  mode.value = 'entity';
-  request.value = next;
-  note.value = next.initialNote ?? '';
-  fragment.value = next.initialEntity ? next.initialFragment : undefined;
-  chosen.value = undefined;
-  if (next.initialEntity) void showChosen(next.initialEntity);
-  open.value = true;
-}
-
-/**
- * The target of the link being edited, as the chips see it. A target that
- * is gone still shows, named as such, so the link can be pointed elsewhere.
- */
-async function showChosen(reference: ContentEntityReference) {
-  const version = ++chosenVersion;
-  const resolved = await resolver(reference).catch(() => undefined);
-  if (version !== chosenVersion) return;
-  chosen.value =
-    resolved?.state === 'resolved' && resolved.kind === 'entity'
-      ? {
-          entityType: resolved.entityType,
-          entityId: resolved.entityId,
-          title: resolved.title,
-          summary: resolved.summary,
-          date: resolved.date,
-          parent: resolved.parent,
-          previewMedia: resolved.media,
-        }
-      : {
-          entityType: reference.entityType,
-          entityId: reference.entityId,
-          title: phrase.value.content_link_broken_title,
-          summary: '',
-        };
-}
-
-function openExternal(next: ContentInlineLinkRequest) {
-  mode.value = 'external';
-  request.value = next;
-  note.value = next.initialNote ?? '';
-  internalEntity.value = undefined;
-  internalEntityUrl.value = undefined;
-  typing.cancel();
-  draft.reset();
-  draft.url = next.initialUrl ?? '';
-  open.value = true;
-  if (next.initialUrl) void openExisting(next.initialUrl);
-}
-
-/** An existing link shows what is known about it; the site is not read. */
-async function openExisting(url: string) {
-  const raw = url.trim();
-  if (parseInternalUrl(raw, internalSite) && (await findInternal(raw))) return;
-  await draft.open(raw);
-}
-
-/**
- * A picked entity becomes the choice, and the note is next. A place inside
- * the entity the link led to belongs to that entity only.
- */
-function choose(entity: ContentEntitySearchItem) {
-  chosenVersion++;
-  const initial = request.value?.initialEntity;
-  if (
-    initial?.entityType !== entity.entityType ||
-    initial.entityId !== entity.entityId
-  )
-    fragment.value = undefined;
-  chosen.value = entity;
-  focusNote();
-}
-
-/** The typed address, leading to its page as a whole. */
-function dropInternalFragment() {
-  const raw = draft.url.replace(/#.*$/, '');
-  draft.url = raw;
-  internalEntityUrl.value = raw.trim();
-}
-
-function focusNote() {
-  void nextTick(() => noteInput.value?.focus({ preventScroll: true }));
-}
-
-/** An empty note is an absent attribute, never an empty one. */
-function noteAttribute() {
-  return normalizeCaptionText(note.value.trim()) || undefined;
-}
-
-function applyEntity() {
-  const entity = chosen.value;
-  if (!entity) return;
-  request.value?.apply(
-    entity.title,
-    entityLinkAttributes(
-      { ...entity, url: (entity as Partial<ContentEntitySearchItem>).url },
-      { note: noteAttribute(), fragment: fragment.value },
-    ),
-  );
+  else if (pick.kind === 'external')
+    current.apply(pick.title, externalLinkAttributes(pick.url, pick.note));
   open.value = false;
 }
 
-async function submitExternal() {
-  const raw = draft.url.trim();
-  if (parseInternalUrl(raw, internalSite)) {
-    const entity =
-      internalEntityUrl.value === raw
-        ? internalEntity.value
-        : await findInternal(raw);
-    if (entity) {
-      request.value?.apply(
-        entity.title,
-        entityLinkAttributes(entity, {
-          note: noteAttribute(),
-          fragment: linkFragment(raw),
-        }),
-      );
-      open.value = false;
-      return;
-    }
-  }
-  let url: string;
-  try {
-    url = normalizeExternalLinkUrl(raw);
-  } catch {
-    // The draft already shows why.
-    return;
-  }
-  const preview = await draft.commit();
-  request.value?.apply(
-    preview?.title || externalLinkHostname(url),
-    externalLinkAttributes(url, noteAttribute()),
-  );
-  open.value = false;
-}
-
-function removeLink() {
+function removed() {
   request.value?.remove();
   open.value = false;
 }
 
-function focusPopup() {
-  if (mode.value === 'entity') entityPopup.value?.focus();
-  else externalInput.value?.focus({ preventScroll: true });
-}
-
 function popupClosed() {
-  typing.cancel();
-  note.value = '';
-  fragment.value = undefined;
-  chosenVersion++;
-  chosen.value = undefined;
-  internalVersion++;
-  internalEntity.value = undefined;
-  internalEntityUrl.value = undefined;
-  internalLoading.value = false;
-  draft.reset();
+  // Opened again while it faded: the new opening is kept.
+  if (open.value) return;
   request.value?.restore();
   request.value = undefined;
 }
 
-defineExpose<ContentInlineLinkControlsExpose>({ openEntity, openExternal });
+defineExpose<ContentInlineLinkControlsExpose>({ open: openLink });
 </script>
 
 <template>
@@ -319,155 +80,21 @@ defineExpose<ContentInlineLinkControlsExpose>({ openEntity, openExternal });
     :offset="0"
     shift-cross-axis
     max-width="20rem"
-    :teleport-to="teleportTo"
-    @opened="focusPopup"
+    @opened="picker?.focus()"
     @dismiss="request?.restore()"
     @closed="popupClosed"
   >
-    <ContentEntitySearchPopup
-      v-if="mode === 'entity'"
-      ref="entityPopup"
-      :chosen
-      :suggest="request?.selectionText"
-      @select="choose"
-      @confirm="focusNote"
-    >
-      <template #footer>
-        <form class="flex flex-col gap-xs" @submit.prevent="applyEntity">
-          <ContentLinkFragment
-            v-if="fragment && chosen"
-            :fragment
-            removable
-            @remove="fragment = undefined"
-          />
-          <FieldInput
-            v-model="note"
-            type="text"
-            :maxlength="EXTERNAL_LINK_NOTE_LIMIT"
-            autocomplete="off"
-            spellcheck="true"
-            class="h-9 py-1 text-sm"
-            :aria-label="phrase.content_link_note"
-            :placeholder="phrase.content_link_note_placeholder"
-            @element="noteInput = $event"
-          />
-          <div class="flex justify-end gap-1">
-            <Button
-              v-if="request?.existing"
-              type="button"
-              variant="delete"
-              size="icon"
-              :aria-label="phrase.content_link_remove"
-              @click="removeLink"
-            >
-              <Icon name="delete" />
-            </Button>
-            <Button
-              type="submit"
-              size="icon"
-              :disabled="!chosen"
-              :aria-label="phrase.save"
-            >
-              <Icon name="check" />
-            </Button>
-          </div>
-        </form>
-      </template>
-    </ContentEntitySearchPopup>
-    <form
-      v-else
-      class="flex scrollbar-hover max-h-(--floating-popup-available-height)
-        min-h-0 flex-col gap-xs overflow-y-auto rounded-normal border
-        border-border-1 bg-bg-2 p-xs"
-      @submit.prevent="submitExternal"
-    >
-      <FieldInput
-        v-model="externalUrl"
-        type="text"
-        inputmode="url"
-        autocomplete="url"
-        spellcheck="false"
-        class="h-9 py-1 text-sm"
-        :placeholder="phrase.content_link_url"
-        :error="externalError"
-        @element="externalInput = $event"
-        @input="typing.onInput"
-        @change="commitUrl()"
-      />
-      <template v-if="internalEntity">
-        <EntityLinkPreviewCard
-          :entity-type="internalEntity.entityType"
-          :title="internalEntity.title"
-          :summary="internalEntity.summary"
-          :date="internalEntity.date"
-          :parent="internalEntity.parent"
-          :icon-media="internalEntity.previewMedia"
-          :note
-          :interactive="false"
-          compact
-        />
-        <ContentLinkFragment
-          v-if="internalFragment"
-          :fragment="internalFragment"
-          removable
-          @remove="dropInternalFragment"
-        />
-        <p class="flex items-start gap-1 px-1 text-xs text-text-3">
-          <Icon name="link" class="mt-0.5 shrink-0 text-accent" />
-          {{ phrase.content_link_internal_detected }}
-        </p>
-      </template>
-      <ExternalLinkPreviewCard
-        v-else-if="externalPreview || externalLoading"
-        :link="externalPreview"
-        :url="draft.url"
-        :loading="externalLoading"
-        :loading-text="phrase.external_link_loading"
-        :note
-        :interactive="true"
-      />
-      <FieldInput
-        v-model="note"
-        type="text"
-        :maxlength="EXTERNAL_LINK_NOTE_LIMIT"
-        autocomplete="off"
-        spellcheck="true"
-        class="h-9 py-1 text-sm"
-        :aria-label="phrase.content_link_note"
-        :placeholder="phrase.content_link_note_placeholder"
-      />
-      <div class="flex justify-end gap-1">
-        <Button
-          v-if="canRefresh"
-          type="button"
-          variant="secondary"
-          size="icon"
-          :disabled="externalLoading"
-          :aria-label="phrase.refresh_external_link"
-          :data-title-popup="phrase.refresh_external_link"
-          @click="refreshExternal"
-        >
-          <Icon :name="refreshing ? 'loading' : 'refresh'" />
-        </Button>
-        <Button
-          v-if="request?.existing"
-          type="button"
-          variant="delete"
-          size="icon"
-          :aria-label="phrase.content_link_remove"
-          @click="removeLink"
-        >
-          <Icon name="delete" />
-        </Button>
-        <Button
-          type="submit"
-          size="icon"
-          :aria-label="phrase.content_external_link"
-          :aria-busy="externalLoading"
-        >
-          <Icon :name="externalLoading ? 'loading' : 'check'" />
-        </Button>
-      </div>
-    </form>
+    <ContentLinkPicker
+      v-if="request"
+      ref="picker"
+      :key="opening"
+      mode="inline"
+      :suggest="request.selectionText"
+      :initial
+      :initial-note="request.initialNote"
+      :existing="request.existing"
+      @apply="applied"
+      @remove="removed"
+    />
   </FloatingPopup>
 </template>

@@ -320,6 +320,14 @@ export const ENTITY_TEXT_SLOTS: Record<EntityKind, EntityText[]> = {
   profile: [{ name: 'about', slot: 'profile-about', private: false }],
 };
 
+/**
+ * The text an entity's page shows: its headings are the page's, and a link
+ * to a place in the entity names one of them. None for a tag.
+ */
+export function entityPageText(kind: EntityKind) {
+  return ENTITY_TEXT_SLOTS[kind].find((text) => !text.private);
+}
+
 /** One of an entity's texts by its name. */
 export function entityText(kind: EntityKind, name: unknown) {
   return ENTITY_TEXT_SLOTS[kind].find((text) => text.name === name);

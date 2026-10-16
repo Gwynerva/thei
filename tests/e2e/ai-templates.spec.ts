@@ -119,7 +119,7 @@ test('keeps a built-in request as written, and copies it off', async ({
   await modal.locator('[data-template-copy]').click();
   await expect(modal).toHaveCount(0);
   const copy = page
-    .locator('[data-templates-own] [data-template-row]')
+    .locator('[data-templates-group="scheduled"] [data-template-row]')
     .filter({ hasText: '(copy)' })
     .first();
   await expect(copy).toBeVisible();
@@ -148,7 +148,7 @@ test('writes a template of its own and runs it into a session', async ({
   // When it runs is chosen in a popup inside the modal, each way saying what
   // it means; the keyboard walks it as it would a select.
   const when = modal.locator('[data-template-when]');
-  await expect(when).toHaveAccessibleName('When: By hand');
+  await expect(when).toHaveAccessibleName('When: No schedule');
   await when.click();
   await expectPopupUsable(page, whenPopup(page));
   await expect(
@@ -158,23 +158,36 @@ test('writes a template of its own and runs it into a session', async ({
   await expect(whenPopup(page)).toHaveCount(0);
   await expect(when).toBeFocused();
   await page.keyboard.press('ArrowDown');
+  // The filter takes the keys; the choice is where the arrows start.
+  const filter = whenPopup(page).locator('[data-select-filter]');
+  await expect(filter).toBeFocused();
   const manual = whenPopup(page).locator('[data-select-option="manual"]');
-  await expect(manual).toBeFocused();
+  await expect(manual).toHaveAttribute('data-active', 'true');
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowDown');
   await expect(
     whenPopup(page).locator('[data-select-option="week"]'),
-  ).toBeFocused();
+  ).toHaveAttribute('data-active', 'true');
   await page.keyboard.press('Enter');
   await expect(when).toHaveAccessibleName('When: Every week');
   await expect(when).toBeFocused();
+  // A few letters and Enter pick an option as well.
+  await when.click();
+  await page.keyboard.type('mon');
+  await expect(whenPopup(page).locator('[data-select-option]')).toHaveCount(1);
+  await page.keyboard.press('Enter');
+  await expect(when).toHaveAccessibleName('When: Every month');
+  await when.click();
+  await page.keyboard.type('week');
+  await page.keyboard.press('Enter');
+  await expect(when).toHaveAccessibleName('When: Every week');
   await modal.locator('[data-template-day="3"]').click();
   await modal.locator('[data-template-time]').fill('10:30');
   await save.click();
   await expect(modal).toHaveCount(0);
 
   const row = page
-    .locator('[data-templates-own] [data-template-row]')
+    .locator('[data-templates-group="scheduled"] [data-template-row]')
     .filter({ hasText: TITLE });
   await expect(row).toContainText('Every Wed, 10:30');
   await expect(row).toContainText('not run yet');
@@ -201,7 +214,7 @@ test('lists the sessions a template started, and deletes it', async ({
 }) => {
   await open(page);
   const row = page
-    .locator('[data-templates-own] [data-template-row]')
+    .locator('[data-templates-group="scheduled"] [data-template-row]')
     .filter({ hasText: TITLE });
   await expect(row.locator('[data-template-last]')).toBeVisible();
   await row.locator('[data-template-edit]').click();

@@ -1,12 +1,18 @@
 <script lang="ts" setup>
-import type { ContentEntitySearchItem } from '#layers/thei/shared/admin/content-entity-search';
+import type { ContentEntityType } from '#layers/thei/shared/content-link';
+import type { ContentLinkPick } from '#layers/thei/app/components/content/link-picker/types';
 import { typedLines } from '#layers/thei/shared/ai-message-text';
 import ContentInlineLinkDecorator from '#layers/thei/app/components/content/ContentInlineLinkDecorator.vue';
 import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
 import { libraryAssetDetailsModal } from '#layers/thei/app/modals/asset-library/details-modal';
 import { getPathExtension } from '#layers/thei/shared/assets/extensions';
 import { getAssetMediaKind } from '#layers/thei/shared/assets/formats';
-import type { AiComposerFile } from '#layers/thei/app/composables/ai-session';
+import type {
+  AiComposerExpose,
+  AiComposerFile,
+  AiMentionItem,
+} from '#layers/thei/app/composables/ai-session';
+import { runEditCommand } from '#layers/thei/app/components/content/editor-edit-commands';
 
 /**
  * Where the owner writes in a session: one row — attach, the words, send —
@@ -35,6 +41,8 @@ const emit = defineEmits<{
     about: string[],
     files: AiComposerFile[],
     restore: () => void,
+    /** The ready-made request the words began from. */
+    templateId: string | undefined,
   ];
   stop: [];
 }>();
@@ -43,9 +51,10 @@ const field = ref<HTMLDivElement>();
 const empty = ref(true);
 const picking = ref(false);
 const picker = ref<{ focus: () => void }>();
-const pickAnchor = shallowRef<{ getBoundingClientRect: () => DOMRect } | null>(
-  null,
-);
+const pickAnchor = shallowRef<{
+  getBoundingClientRect: () => DOMRect;
+  contextElement?: Element;
+} | null>(null);
 const menuOpen = ref(false);
 const menuButton = ref<HTMLElement>();
 /** Where the `@` was typed, to put the chip in its place. */
@@ -53,12 +62,16 @@ let mentionRange: Range | null = null;
 
 const MENTION_CLASS = 'ai-mention';
 
+/** The ready-made request the words began from, while words are there. */
+const template = ref<string>();
+
 function updateEmpty() {
   const element = field.value;
   empty.value =
     !element ||
     (!element.textContent?.trim() &&
       !element.querySelector(`.${MENTION_CLASS}`));
+  if (!element?.textContent?.trim()) template.value = undefined;
 }
 
 /** The words as editing Markdown, and the entities they name. */
@@ -257,17 +270,26 @@ function send() {
   if (!text && !files.length) return;
   const written = field.value?.innerHTML ?? '';
   const kept = brought.value;
+  const began = template.value;
   clear();
   // A file that did not upload stays out of the message, and goes.
   for (const item of kept) if (!item.asset) forget(item);
   brought.value = [];
-  emit('send', text, about, files, () => {
-    // Back only into an empty field: nothing written since is lost.
-    if (!field.value || !empty.value || brought.value.length) return;
-    field.value.innerHTML = written;
-    brought.value = kept.filter((item) => item.asset);
-    updateEmpty();
-  });
+  emit(
+    'send',
+    text,
+    about,
+    files,
+    () => {
+      // Back only into an empty field: nothing written since is lost.
+      if (!field.value || !empty.value || brought.value.length) return;
+      field.value.innerHTML = written;
+      brought.value = kept.filter((item) => item.asset);
+      updateEmpty();
+      template.value = began;
+    },
+    began,
+  );
 }
 
 function primary() {
@@ -392,6 +414,8 @@ function input(event: Event) {
       range.getBoundingClientRect().height
         ? range.getBoundingClientRect()
         : field.value!.getBoundingClientRect(),
+    // Where it stands: in a popup, the picker is that popup's own.
+    contextElement: field.value,
   };
   picking.value = true;
 }
@@ -400,9 +424,11 @@ function input(event: Event) {
 
 /**
  * A mention: the archive's own link to an entity, drawn and resolved as in
- * any text, whole and not editable. What is sent names it by `target`.
+ * any text, whole and not editable. What is sent names it by `target` — with
+ * `#` and an anchor for a heading inside it, which the model reads as a link
+ * to that place.
  */
-function mentionNode(item: ContentEntitySearchItem) {
+function mentionNode(item: AiMentionItem, place?: MentionPlace) {
   const chip = document.createElement('a');
   chip.className = MENTION_CLASS;
   chip.contentEditable = 'false';
@@ -414,21 +440,41 @@ function mentionNode(item: ContentEntitySearchItem) {
     item.entityType === 'diary-entry' && item.date
       ? `diary-entry/${item.date}`
       : `${item.entityType}/${item.entityId}`;
-  chip.dataset.target = target;
+  chip.dataset.target = place?.fragment
+    ? `${target}#${place.fragment}`
+    : target;
+  if (place?.fragment) chip.dataset.entityFragment = place.fragment;
   chip.dataset.ref = target.replace('/', ':');
-  // A diary entry by its day, as the picker named it.
-  chip.textContent = item.date
-    ? entityDisplayTitle(item)
-    : publicText(item.title);
+  // A diary entry by its day, as the picker named it; a place by its path.
+  chip.textContent = place?.path.length
+    ? [...place.path, ...(place.heading ? [place.heading] : [])]
+        .map((part) => publicText(part))
+        .join(' › ')
+    : item.date
+      ? entityDisplayTitle(item)
+      : publicText(item.title);
   return chip;
 }
 
-function choose(item: ContentEntitySearchItem) {
+/** Where inside it a mention leads, and the path down to it. */
+type MentionPlace = { fragment?: string; heading?: string; path: string[] };
+
+/** The picker's pick, as a chip: an entity, or a place inside it. */
+function mentionPicked(pick: ContentLinkPick) {
+  if (pick.kind !== 'entity') return;
+  choose(pick.entity, {
+    fragment: pick.fragment,
+    heading: pick.heading,
+    path: pick.path,
+  });
+}
+
+function choose(item: AiMentionItem, place?: MentionPlace) {
   picking.value = false;
   const element = field.value;
   if (!element) return;
   element.focus();
-  const chip = mentionNode(item);
+  const chip = mentionNode(item, place);
   const space = document.createTextNode(' ');
   const selection = window.getSelection();
   if (mentionRange) {
@@ -488,7 +534,55 @@ function pickerDismissed(reason: 'outside' | 'escape') {
   selection?.addRange(caret);
 }
 
-defineExpose({ focus: () => field.value?.focus() });
+/** The caret at the end of the words, in the field. */
+function caretAtEnd(element: HTMLElement) {
+  element.focus();
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  range.collapse(false);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+/**
+ * Words put in for the owner to go on with — a ready-made request's: into
+ * an empty field as they are, after what is there on a line of their own.
+ * Typed in as one edit, so Ctrl+Z takes them back.
+ */
+function prefill(text: string, templateId?: string) {
+  const element = field.value;
+  if (!element || !text) return;
+  caretAtEnd(element);
+  // After words, on a line of their own; after chips alone, beside them.
+  const written = [...element.childNodes].some(
+    (node) =>
+      !(
+        node instanceof HTMLElement && node.classList.contains(MENTION_CLASS)
+      ) && node.textContent?.trim(),
+  );
+  const words = written ? `\n\n${text}` : text;
+  if (!runEditCommand('insertText', words))
+    element.append(document.createTextNode(words));
+  updateEmpty();
+  if (templateId) template.value = templateId;
+}
+
+/** A chip for an entity at the end of the words: what they are about. */
+function mention(item: AiMentionItem) {
+  const element = field.value;
+  if (!element) return;
+  mentionRange = null;
+  caretAtEnd(element);
+  choose(item);
+}
+
+defineExpose<AiComposerExpose>({
+  focus: () => field.value?.focus(),
+  prefill,
+  mention,
+  templateId: () => template.value,
+});
 </script>
 
 <template>
@@ -756,7 +850,7 @@ defineExpose({ focus: () => field.value?.focus() });
       @opened="picker?.focus()"
       @dismiss="pickerDismissed"
     >
-      <ContentEntitySearchPopup ref="picker" @select="choose" />
+      <ContentLinkPicker ref="picker" mode="mention" @apply="mentionPicked" />
     </FloatingPopup>
 
     <ContentInlineLinkDecorator

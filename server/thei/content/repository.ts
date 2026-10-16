@@ -38,6 +38,10 @@ import {
   touchReleasedAssets,
 } from './history';
 import { deleteUsagesReleasing } from '../assets/repository/usages/release';
+import {
+  forgetContentAnchors,
+  recordContentAnchors,
+} from '../content-links/anchor-ledger';
 
 export async function findContentByOwner(
   ownerType: ContentOwnerType,
@@ -218,6 +222,16 @@ export function applyPreparedContentSave(
         .all()
         .map((row: { assetUuid: string }) => row.assetUuid)
     : [];
+  // The anchors its headings had and have, for a link to one renamed since;
+  // a form resends texts it did not change, which have nothing new to tell.
+  if (prepared.type === 'delete' || prepared.changed || !previous)
+    recordContentAnchors(
+      tx,
+      schema,
+      { ownerType, ownerId, slot },
+      [previous?.data, prepared.type === 'delete' ? undefined : prepared.data],
+      now,
+    );
   const recordHistory = (saved: ContentOutputData) =>
     recordContentSave(
       tx,
@@ -334,6 +348,7 @@ export function deleteContentForOwner(
 
   // What the owner held, saved or still a draft, stays in the history.
   recordContentDeletion(tx, schema, ownerType, ownerId, rows);
+  forgetContentAnchors(tx, schema, ownerType, ownerId);
   for (const row of rows) {
     deleteContentRowAndUsages(tx, schema, row.contentUuid);
   }

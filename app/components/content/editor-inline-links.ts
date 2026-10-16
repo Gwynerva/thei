@@ -35,8 +35,7 @@ export interface ContentInlineLinkRequest extends ContentInlineMarkupRequest {
 }
 
 export interface ContentInlineLinkControlsExpose {
-  openEntity: (request: ContentInlineLinkRequest) => void;
-  openExternal: (request: ContentInlineLinkRequest) => void;
+  open: (request: ContentInlineLinkRequest) => void;
 }
 
 /** The same shape for the hint tool: a note attached to a span of text. */

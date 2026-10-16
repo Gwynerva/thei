@@ -746,6 +746,188 @@ describe('a text edit', () => {
     });
   });
 
+  describe('mending links', () => {
+    const link = (id: string, words: string, fragment?: string) =>
+      `<a data-content-link="entity" data-entity-type="project" data-entity-id="${id}"${fragment ? ` data-entity-fragment="${fragment}"` : ''}>${words}</a>`;
+    const linksBlock = () =>
+      JSON.parse(
+        one("SELECT data FROM content WHERE contentUuid = 'c-2'")!.data,
+      ).blocks[2].data.text as string;
+
+    beforeEach(() => {
+      context.rawDb
+        .prepare(
+          "INSERT INTO content (contentUuid, ownerType, ownerId, slot, data, createdAt, updatedAt) VALUES ('c-3', 'project', ?, 'project-description', ?, 1, 1)",
+        )
+        .run(
+          PROJECT,
+          JSON.stringify({
+            blocks: [
+              {
+                id: 'h1',
+                type: 'header',
+                data: { text: 'Outcomes', level: 2 },
+              },
+            ],
+          }),
+        );
+      const data = JSON.parse(
+        one("SELECT data FROM content WHERE contentUuid = 'c-2'")!.data,
+      );
+      data.blocks.push({
+        id: 'b3',
+        type: 'paragraph',
+        data: {
+          text: `See ${link(PROJECT, 'the results', 'results')}, ${link('p-gone', 'the old one')} and ${link(PROJECT, 'the outcomes', 'outcomes')}.`,
+        },
+      });
+      context.rawDb
+        .prepare("UPDATE content SET data = ? WHERE contentUuid = 'c-2'")
+        .run(JSON.stringify(data));
+    });
+
+    it('points a link at the heading it became and takes one to nothing off, its words kept', async () => {
+      const actionUuid = await proposed(session(), {
+        kind: 'revise',
+        target: 'diary-entry:2026-10-13',
+        text: 'body',
+        mode: 'relink',
+        relinks: [
+          {
+            link: 'b3/0/0',
+            to: `thei:project/${PROJECT}#outcomes`,
+            reason: 'Renamed',
+          },
+          { link: 'b3/0/1', to: null, reason: 'Gone' },
+        ],
+      });
+      expect(findAction(actionUuid)!.payload).toMatchObject({
+        mode: 'relink',
+        parts: [
+          {
+            id: 'l1',
+            type: 'relink',
+            words: 'the results',
+            from: `thei:project/${PROJECT}#results`,
+            fromTitle: 'Parapet › results',
+            toTitle: 'Parapet › Outcomes',
+          },
+          { id: 'l2', type: 'relink', to: null, fromTitle: '' },
+        ],
+      });
+      const before = linksBlock();
+      await applyActions({ actionUuids: [actionUuid], by: 'owner' });
+      expect(linksBlock()).toBe(
+        `See ${link(PROJECT, 'the results', 'outcomes')}, the old one and ${link(PROJECT, 'the outcomes', 'outcomes')}.`,
+      );
+      expect(findAction(actionUuid)?.state).toBe('applied');
+
+      await undoAction(actionUuid);
+      expect(linksBlock()).toBe(before);
+    });
+
+    it('mends only what is broken, as only a gone target may lose its link', async () => {
+      const { results } = await propose(session(), {
+        kind: 'revise',
+        target: 'diary-entry:2026-10-13',
+        text: 'body',
+        mode: 'relink',
+        relinks: [
+          { link: 'b3/0/0', to: null },
+          { link: 'b3/0/2', to: `thei:project/${PROJECT}` },
+          { link: 'b3/0/1', to: `thei:project/${PROJECT}#nowhere` },
+          { link: 'b3/0/9', to: `thei:project/${PROJECT}` },
+        ],
+      });
+      expect(results[0]).toMatchObject({
+        refused: expect.stringMatching(/Nothing left to propose/),
+      });
+      const refused = (results[0] as { refused: string }).refused;
+      expect(refused).toMatch(/b3\/0\/0: what it led to is still there/);
+      expect(refused).toMatch(/b3\/0\/2: it leads where it says/);
+      expect(refused).toMatch(/b3\/0\/1: .*no heading of it has that anchor/);
+      expect(refused).toMatch(/b3\/0\/9: no link stands there now/);
+    });
+
+    it('finds a link again when one before it in its field was taken off', async () => {
+      const data = JSON.parse(
+        one("SELECT data FROM content WHERE contentUuid = 'c-2'")!.data,
+      );
+      data.blocks.push({
+        id: 'b4',
+        type: 'paragraph',
+        data: {
+          text: `${link('p-gone', 'first')} then ${link(PROJECT, 'second', 'results')}`,
+        },
+      });
+      context.rawDb
+        .prepare("UPDATE content SET data = ? WHERE contentUuid = 'c-2'")
+        .run(JSON.stringify(data));
+      const actionUuid = await proposed(session(), {
+        kind: 'revise',
+        target: 'diary-entry:2026-10-13',
+        text: 'body',
+        mode: 'relink',
+        relinks: [
+          { link: 'b4/0/0', to: null },
+          {
+            link: 'b4/0/1',
+            to: `thei:project/${PROJECT}#outcomes`,
+            certainty: 'unsure',
+          },
+        ],
+      });
+      // The sure one goes first; the other one still waits, not overtaken.
+      await applyActions({ actionUuids: [actionUuid], by: 'owner' });
+      await settleActions([findAction(actionUuid)!]);
+      expect(findAction(actionUuid)).toMatchObject({
+        state: 'pending',
+        parts: [
+          { id: 'l1', state: 'applied' },
+          { id: 'l2', state: 'pending' },
+        ],
+      });
+      await applyActions({
+        actionUuids: [actionUuid],
+        by: 'owner',
+        parts: { [actionUuid]: { l2: 'accepted' } },
+      });
+      expect(findAction(actionUuid)?.state).toBe('applied');
+      expect(
+        JSON.parse(
+          one("SELECT data FROM content WHERE contentUuid = 'c-2'")!.data,
+        ).blocks[3].data.text,
+      ).toBe(`first then ${link(PROJECT, 'second', 'outcomes')}`);
+    });
+
+    it('offers no mending the owner kept as it is', async () => {
+      const relink = {
+        link: 'b3/0/0',
+        to: `thei:project/${PROJECT}#outcomes`,
+      };
+      const actionUuid = await proposed(session(), {
+        kind: 'revise',
+        target: 'diary-entry:2026-10-13',
+        text: 'body',
+        mode: 'relink',
+        relinks: [relink],
+      });
+      decideParts(actionUuid, { l1: 'kept' });
+      await settleActions([findAction(actionUuid)!]);
+      expect(findAction(actionUuid)?.state).toBe('rejected');
+      const again = await propose(session(), {
+        kind: 'revise',
+        target: 'diary-entry:2026-10-13',
+        text: 'body',
+        mode: 'relink',
+        relinks: [relink],
+      });
+      expect(again.results[0]).toMatchObject({
+        refused: expect.stringMatching(/kept it as it is/),
+      });
+    });
+  });
+
   it('refuses a rewrite dressed as a correction', async () => {
     const { results } = await propose(session(), {
       kind: 'revise',

@@ -4,7 +4,8 @@ import { markReadOnlyRequest } from '../../../../thei/read-only-request';
 
 /**
  * Starts a session of the owner's: about what they name, with their first
- * words and the files they bring, which the model answers at once.
+ * words and the files they bring, which the model answers at once — words
+ * that may have begun as a template's, which the session then remembers.
  */
 export default defineEventHandler(async (event) => {
   requireAiOn();
@@ -15,6 +16,7 @@ export default defineEventHandler(async (event) => {
     about: body.about,
     text: typeof body.text === 'string' ? body.text : undefined,
     files: body.files,
+    templateId: body.templateId,
   });
   return { sessionUuid };
 });

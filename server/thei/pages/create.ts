@@ -51,6 +51,7 @@ export async function createPage(
           slug: result.slug,
           access: result.access,
           reminder: result.reminder,
+          synonyms: result.synonyms,
           createdAt: now,
           updatedAt: now,
         })

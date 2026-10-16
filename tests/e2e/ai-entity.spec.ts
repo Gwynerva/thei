@@ -455,6 +455,91 @@ test('the ✦ of the form remembers, starts a session and lists them', async ({
   await expectPopupUsable(page, menu);
 });
 
+test('the ✦ sends a ready-made request about the entity, and the form stays', async ({
+  page,
+}) => {
+  const preset = (await (
+    await page.request.post('/api/admin/ai/templates', {
+      data: {
+        title: `Look over ${run}`,
+        instruction: 'Look over this one and say what you think.',
+      },
+    })
+  ).json()) as { templateId: string };
+  try {
+    for (const size of [MOBILE, DESKTOP]) {
+      await page.setViewportSize(size);
+      await openForm(page);
+      const form = page.url();
+      await page.locator('[data-ai-entity]').click();
+      const menu = page.locator('[data-ai-entity-menu]');
+      await expectPopupUsable(page, menu);
+      // The message names the entity before a word is written.
+      const composer = menu.locator('[data-ai-entity-composer]');
+      await expect(composer.locator('[data-mention]')).toContainText(NEW_TITLE);
+      await menu.locator(`[data-ai-preset="${preset.templateId}"]`).click();
+      await expect(composer).toContainText('Look over this one');
+      await composer.locator('[contenteditable="true"]').press('End');
+      await page.keyboard.type(' Briefly.');
+      await menu.getByRole('button', { name: /send/i }).click();
+      const sent = menu.locator('[data-ai-entity-sent]');
+      await expect(sent).toBeVisible();
+      await expect(sent).toContainText(`Look over ${run}`);
+      expect(page.url()).toBe(form);
+      // The field is ready for the next message, about the entity again.
+      await expect(composer.locator('[data-mention]')).toHaveCount(1);
+      await page.keyboard.press('Escape');
+    }
+    const sessions = (await (
+      await page.request.get(
+        `/api/admin/ai/sessions?about=${encodeURIComponent(event())}`,
+      )
+    ).json()) as { sessions: { templateId: string | null; origin: string }[] };
+    expect(
+      sessions.sessions.filter(
+        (session) => session.templateId === preset.templateId,
+      ),
+    ).toHaveLength(2);
+    expect(sessions.sessions[0]!.origin).toBe('owner');
+  } finally {
+    await page.request.delete(`/api/admin/ai/templates/${preset.templateId}`);
+  }
+});
+
+test('a ready-made request opens in a new session from its row', async ({
+  page,
+}) => {
+  await page.setViewportSize(DESKTOP);
+  const preset = (await (
+    await page.request.post('/api/admin/ai/templates', {
+      data: {
+        title: `Row request ${run}`,
+        instruction: 'Write me a short plan.',
+        offerOn: [],
+      },
+    })
+  ).json()) as { templateId: string };
+  try {
+    await open(page, '/admin/ai/?tab=templates');
+    const row = page.locator(
+      `[data-templates-group="presets"] [data-template-row="${preset.templateId}"]`,
+    );
+    await expect(row).toContainText('only in a new session');
+    await row.locator('[data-template-run]').click();
+    await expect(page).toHaveURL(/session=new/);
+    await expect(page).not.toHaveURL(/template=/);
+    const composer = page.locator('[data-session-new-screen] [data-composer]');
+    await expect(composer).toContainText('Write me a short plan.');
+    await expect(
+      page.locator(
+        `[data-session-new-screen] [data-ai-preset="${preset.templateId}"]`,
+      ),
+    ).toBeVisible();
+  } finally {
+    await page.request.delete(`/api/admin/ai/templates/${preset.templateId}`);
+  }
+});
+
 test('the admin bar starts a session about the form in hand', async ({
   page,
 }) => {

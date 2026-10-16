@@ -151,6 +151,7 @@ if (isEdit.value) {
     relations: data.relations ?? [],
     action: data.action,
     reminder: data.reminder,
+    synonyms: data.synonyms,
     notes: data.notes ?? null,
   };
   otherItems.value = data.otherAssets;
@@ -261,6 +262,7 @@ function emptyData(): EventFormData {
     relations: [],
     action: { ...DEFAULT_PROJECT_ACTION },
     reminder: '',
+    synonyms: [],
     notes: null,
     showcase: false,
     cv: false,
@@ -286,6 +288,7 @@ function eventPayload(): EventEditData {
     relations: value.relations,
     action: value.action,
     reminder: value.reminder,
+    synonyms: value.synonyms,
     notes: value.notes,
   };
 }
@@ -322,6 +325,12 @@ const relationsModel = computed({
   get: () => eventData.value.relations ?? [],
   set: (value) => {
     eventData.value.relations = value;
+  },
+});
+const synonymsModel = computed({
+  get: () => eventData.value.synonyms ?? [],
+  set: (value: string[]) => {
+    eventData.value.synonyms = value;
   },
 });
 const reminderModel = computed({
@@ -419,6 +428,11 @@ function clone<T>(value: T): T {
         <FieldTextarea v-model="eventData.summary" required />
         <FieldHint>{{ phrase.event_summary_hint }}</FieldHint>
       </Field>
+      <FieldSynonyms
+        v-model="synonymsModel"
+        ai="field:synonyms"
+        :title="eventData.title"
+      />
       <Field ai="periods">
         <FieldLabel required>{{ phrase.event_periods }}</FieldLabel>
         <FieldDateRanges v-model="eventData.periods" />

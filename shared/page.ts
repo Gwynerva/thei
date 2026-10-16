@@ -9,6 +9,8 @@ export type PageEditData = {
   iconAssetUuid?: string;
   content: ContentFieldModelValue | null;
   reminder?: string;
+  /** Other names it is found by, every one; absent is none. */
+  synonyms?: string[];
   notes?: ContentFieldModelValue | null;
   /** The version the form was read at; a save over a newer one is refused. */
   version?: number;

@@ -7,7 +7,7 @@ import { addNever, isMemoryKind, type MemoryAnchor } from '../memory/store';
 import { publishActions } from '../sessions/bus';
 import { refreshSessionCounts } from '../sessions/store';
 import { settleActions } from './apply';
-import { correctionFingerprint } from './declined';
+import { correctionFingerprint, relinkFingerprint } from './declined';
 import { actionDef } from './registry';
 import { findActions, targetOf } from './rows';
 import type { ActionRow, PartStateRow } from './types';
@@ -157,15 +157,22 @@ export function neverPart(
     parts?: AiRevisePart[];
   };
   const part = payload.parts?.find((item) => item.id === partId);
-  if (payload.kind !== 'revise' || part?.type !== 'correction')
-    fail('Only a correction of a word is kept as written for good.');
+  if (
+    payload.kind !== 'revise' ||
+    (part?.type !== 'correction' && part?.type !== 'relink')
+  )
+    fail('Only a correction of a word or a link is kept as it is for good.');
   const { db, schema } = THEI_SERVER.useDb();
   db.transaction((tx) => {
     insertNever(
       tx,
       row,
-      correctionFingerprint(target, payload.text!, part),
-      `"${part.find}" stays as written in ${refOf(target)}, not "${part.replace}"`,
+      part.type === 'correction'
+        ? correctionFingerprint(target, payload.text!, part)
+        : relinkFingerprint(target, payload.text!, part, part.to),
+      part.type === 'correction'
+        ? `"${part.find}" stays as written in ${refOf(target)}, not "${part.replace}"`
+        : `The link "${part.words}" in ${refOf(target)} stays leading to ${part.from}, not ${part.to ?? 'no link'}`,
       now,
     );
     if (row.state === 'pending' && row.parts) {

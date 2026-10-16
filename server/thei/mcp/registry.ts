@@ -9,6 +9,7 @@ import { mayEdit } from './scope';
 import { registerChangesTool } from './tools/changes';
 import { registerDigestTools } from './tools/digests';
 import { registerFileTools } from './tools/files';
+import { registerLinkTools } from './tools/links';
 import { registerListTool } from './tools/list';
 import { registerMemoryTool } from './tools/memory';
 import { registerOverviewTool } from './tools/overview';
@@ -35,6 +36,7 @@ export function registerTheiTools(server: McpServer, context: McpCallContext) {
   registerMemoryTool(server, context);
   registerTimelineTool(server, context);
   registerTagCandidatesTool(server, context);
+  registerLinkTools(server, context);
   registerSessionTools(server, context);
   if (mayEdit(context.principal.scopes)) registerFileTools(server, context);
 }

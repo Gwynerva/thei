@@ -23,7 +23,11 @@ const url = computed(() => contentIntegrationUrl(props.data));
 </script>
 
 <template>
-  <div v-if="integration" class="flex w-full min-w-0 flex-col gap-xs">
+  <div
+    v-if="integration"
+    class="flex w-full min-w-0 flex-col gap-xs"
+    :data-content-integration="integration.provider"
+  >
     <ContentYouTubePlayer
       v-if="integration.provider === 'youtube'"
       :data="integration"

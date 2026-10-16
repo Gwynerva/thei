@@ -94,6 +94,8 @@ export interface McpLinkedEntity {
   title: string;
   /** Linked in the text; whether a relation joins the two as well. */
   related: boolean;
+  /** What the link names is gone: broken_links offers where it may lead. */
+  gone?: true;
 }
 
 export interface McpEntityView {
@@ -246,9 +248,16 @@ async function linkedInText(
   if (!links.length) return [];
   const described = await describeEntityLinks(links);
   const related = new Set(relations.map((relation) => relation.ref));
-  return links.flatMap((link) => {
+  return links.map((link) => {
     const found = described.get(`${link.entityType}:${link.entityId}`);
-    return found ? [{ ...found, related: related.has(found.ref) }] : [];
+    return found
+      ? { ...found, related: related.has(found.ref) }
+      : {
+          ref: `${link.entityType}:${link.entityId}`,
+          title: '',
+          related: false,
+          gone: true as const,
+        };
   });
 }
 
@@ -374,6 +383,7 @@ async function readEntityView(
           showcase: row.showcase,
           cv: row.cv,
           reminder: row.reminder,
+          synonyms: row.synonyms,
           slug: row.humanReadableSlug,
           publicId: row.publicId,
           createdAt: row.createdAt,
@@ -459,6 +469,7 @@ async function readEntityView(
           summary: row.summary,
           access: row.access,
           reminder: row.reminder,
+          synonyms: row.synonyms,
           slug: row.humanReadableSlug,
           publicId: row.publicId,
           createdAt: row.createdAt,
@@ -519,6 +530,7 @@ async function readEntityView(
           summary: row.summary,
           access: row.access,
           reminder: row.reminder,
+          synonyms: row.synonyms,
           slug: row.slug,
         },
         texts: stripData(texts),

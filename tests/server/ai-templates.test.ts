@@ -25,6 +25,8 @@ import {
   saveTemplate,
 } from '../../server/thei/ai/templates/store';
 import { marksOf } from '../../server/thei/ai/templates/reads';
+import { entityPanel } from '../../server/thei/ai/entity-panel';
+import { startOwnerSession } from '../../server/thei/ai/sessions/owner';
 import {
   runDueTemplates,
   runTemplate,
@@ -155,7 +157,10 @@ afterEach(async () => {
   await rm(folder, { recursive: true, force: true });
 });
 
-function diaryTemplate(schedule: unknown = { kind: 'manual' }) {
+/** A template of a schedule: the owner may run it now as well. */
+function diaryTemplate(
+  schedule: unknown = { kind: 'week', day: 1, time: '03:00', timeZone: 'UTC' },
+) {
   return saveTemplate(null, {
     title: 'Diary look',
     instruction: 'Proofread the diary entries changed since last time.',
@@ -383,7 +388,7 @@ describe('gathering what a request names', () => {
     const template = saveTemplate(null, {
       title: 'Diary week',
       instruction: 'Read the diary entries of the last week.',
-      schedule: { kind: 'manual' },
+      schedule: { kind: 'week', day: 1, time: '03:00', timeZone: 'UTC' },
     });
     await useModel([
       {
@@ -437,5 +442,123 @@ describe('what changed', () => {
       kinds: ['project'],
     });
     expect(none).toContain('_(nothing)_');
+  });
+});
+
+describe('a scheduled run and the owner away', () => {
+  it('waits while its last run waits for the owner, then reads everything since', async () => {
+    await useModel([
+      { text: 'Proposed a fix.' },
+      { text: 'Read what changed since.' },
+    ]);
+    const template = diaryTemplate({
+      kind: 'day',
+      time: '03:00',
+      timeZone: 'UTC',
+    });
+    await runDueTemplates(template.nextRunAt!);
+    await turnsSettled();
+    const first = findTemplate(template.templateId)!;
+    const firstSession = first.lastSession!.sessionUuid;
+    // Something in it waits for the owner: the next nights skip.
+    context.rawDb
+      .prepare(
+        'UPDATE `ai-sessions` SET waiting = 1, archivedAt = NULL WHERE sessionUuid = ?',
+      )
+      .run(firstSession);
+    for (const night of [1, 2, 3]) {
+      const due = findTemplate(template.templateId)!.nextRunAt!;
+      await runDueTemplates(due);
+      expect(findTemplate(template.templateId)!.lastSession!.sessionUuid).toBe(
+        firstSession,
+      );
+      expect(findTemplate(template.templateId)!.lastRunAt).toBe(
+        first.lastRunAt,
+      );
+      expect(night).toBeGreaterThan(0);
+    }
+    expect(
+      listSessions({ templateId: template.templateId }).sessions,
+    ).toHaveLength(1);
+
+    // Archived, the next night runs once, from the last run that read.
+    context.rawDb
+      .prepare('UPDATE `ai-sessions` SET archivedAt = 1 WHERE sessionUuid = ?')
+      .run(firstSession);
+    await runDueTemplates(findTemplate(template.templateId)!.nextRunAt!);
+    await turnsSettled();
+    const after = findTemplate(template.templateId)!;
+    expect(after.lastSession!.sessionUuid).not.toBe(firstSession);
+    expect(templatePart(after.lastSession!.sessionUuid).since).toBe(
+      first.lastRunAt,
+    );
+  });
+});
+
+describe('a ready-made request', () => {
+  it('is offered on the kinds it names, and only without a schedule', async () => {
+    const diary = saveTemplate(null, {
+      title: 'Proofread',
+      instruction: 'Proofread this entry.',
+      offerOn: ['diary-entry', 'nonsense'],
+    });
+    saveTemplate(null, {
+      title: 'Project only',
+      instruction: 'Look at this project.',
+      offerOn: ['project'],
+    });
+    saveTemplate(null, {
+      title: 'Nightly',
+      instruction: 'Look at everything.',
+      schedule: { kind: 'day', time: '03:00', timeZone: 'UTC' },
+      offerOn: ['diary-entry'],
+    });
+    expect(diary.offerOn).toEqual(['diary-entry']);
+    const panel = await entityPanel({
+      kind: 'diary-entry',
+      id: DIARY,
+      date: DAY,
+    } as never);
+    expect(panel.templates).toEqual([
+      {
+        templateId: diary.templateId,
+        title: 'Proofread',
+        instruction: 'Proofread this entry.',
+      },
+    ]);
+    expect(
+      saveTemplate(null, { title: 'New', instruction: 'Something.' }).offerOn,
+    ).toEqual(['project', 'project-section', 'event', 'diary-entry', 'page']);
+  });
+
+  it('starts the owner’s session, which reads nothing for the template', async () => {
+    await useModel([READ_DIARY, { text: 'Read it.' }]);
+    const preset = saveTemplate(null, {
+      title: 'Proofread',
+      instruction: 'Proofread this entry.',
+    });
+    const sessionUuid = startOwnerSession({
+      text: 'Proofread this entry, and mind the names.',
+      about: [`diary-entry:${DAY}`],
+      templateId: preset.templateId,
+    });
+    await turnsSettled();
+    const session = findSession(sessionUuid)!;
+    expect(session.origin).toBe('owner');
+    expect(session.templateId).toBe(preset.templateId);
+    expect(session.title).toBe('Proofread');
+    expect(marksOf(preset.templateId).size).toBe(0);
+    // It is the owner's to send: never run as a template is.
+    await expect(runTemplate(preset.templateId)).rejects.toThrow(
+      /ready-made request/,
+    );
+    const scheduled = diaryTemplate({
+      kind: 'day',
+      time: '03:00',
+      timeZone: 'UTC',
+    });
+    expect(() =>
+      startOwnerSession({ text: 'Go.', templateId: scheduled.templateId }),
+    ).toThrow();
   });
 });

@@ -18,7 +18,16 @@ import {
   orderChoices,
   takenParts,
   type Correction,
+  type Relink,
 } from './content-revise';
+import {
+  contentLinkFrom,
+  locateContentEntityLinks,
+  markContentLink,
+  retargetContentLink,
+  type LocatedContentLink,
+} from './content-link-locate';
+import { parseTheiLinkUrl } from './content-edit-markdown/links';
 
 /**
  * A change to a text, seen part by part before it is made: an AI's edit of
@@ -76,6 +85,11 @@ export interface ReviewPart {
   diff?: ContentTextDiffPart[];
   /** A whole block that comes or goes: its words, for a line about it. */
   quote?: string;
+  /**
+   * A link mended: its words, where it leads now — none when what it led to
+   * is gone — and where it would, none taking it off.
+   */
+  link?: { words: string; from?: string; to?: string };
   /** A whole block: its mark is on the margin, not in a line. */
   whole: boolean;
   /** Words outside the running text: a caption, a title, a note. */
@@ -235,10 +249,24 @@ const decisionIn =
   (decisions: Readonly<Record<string, ReviewDecision>>) => (id: string) =>
     decisions[id] ?? 'pending';
 
+/** Where a relink's link stands in the text, while it leads where it did. */
+function relinkPlaces(base: ContentOutputData, relinks: readonly Relink[]) {
+  const order = new Map(
+    locateContentEntityLinks(base).map((link, index) => [link.id, index]),
+  );
+  const places = new Map<string, { link: LocatedContentLink; index: number }>();
+  for (const part of relinks) {
+    const link = contentLinkFrom(base, part);
+    if (link) places.set(part.id, { link, index: order.get(link.id)! });
+  }
+  return places;
+}
+
 /**
- * An AI's corrections of a text's words, over the text as it is. A correction
- * whose words no longer stand in it once is shown as settled, with what the
- * action says of it.
+ * An AI's corrections of a text's words, and its mending of links that lead
+ * nowhere, over the text as it is. A correction whose words no longer stand
+ * in it once, or a link that leads elsewhere since, is shown as settled,
+ * with what the action says of it.
  */
 export function proofreadReview(
   base: ContentOutputData,
@@ -254,6 +282,16 @@ export function proofreadReview(
   });
   const { places } = placeTextEdits(base, waiting, (_id, stored) => stored);
   const layout = outline(base.blocks);
+  const relinks = parts.filter(
+    (part): part is Relink => part.type === 'relink',
+  );
+  const linkPlaces = relinkPlaces(
+    base,
+    relinks.filter((part) => {
+      const state = states.get(part.id);
+      return state !== 'applied' && state !== 'stale';
+    }),
+  );
 
   const reviewParts: ReviewPart[] = corrections.map((part) => {
     const place = places.get(part.id);
@@ -283,15 +321,48 @@ export function proofreadReview(
           : { settled: 'stale' as const }),
     };
   });
+  for (const part of relinks) {
+    const place = linkPlaces.get(part.id);
+    const state = states.get(part.id);
+    const block = place ? base.blocks[place.link.block] : undefined;
+    reviewParts.push({
+      id: part.id,
+      kind: 'link',
+      sure: part.certainty === 'sure',
+      reason: part.reason,
+      link: {
+        words: part.words,
+        ...(part.fromTitle ? { from: part.fromTitle } : {}),
+        ...(part.toTitle ? { to: part.toTitle } : {}),
+      },
+      whole: false,
+      aside: Boolean(block && !RUNNING_TEXT.has(block.type)),
+      // A link block is the link itself: no note of it is meant.
+      ...(block && block.type !== 'entityLink' && ASIDE_PLACES[block.type]
+        ? { place: ASIDE_PLACES[block.type] }
+        : {}),
+      heading: place ? layout[place.link.block]?.heading : undefined,
+      private: place?.link.private ?? false,
+      ...(state === 'applied' || state === 'stale'
+        ? { settled: state }
+        : place
+          ? {}
+          : { settled: 'stale' as const }),
+    });
+  }
   // In the order they stand in the text; what is settled after the rest.
   const standing = (id: string) => {
     const place = places.get(id);
+    const link = linkPlaces.get(id);
     return place
       ? place.block * 1_000_000 + place.before.length
-      : Number.MAX_SAFE_INTEGER;
+      : link
+        ? link.link.block * 1_000_000 + link.index
+        : Number.MAX_SAFE_INTEGER;
   };
   reviewParts.sort((left, right) => standing(left.id) - standing(right.id));
   const placed = waiting.filter((part) => places.has(part.id));
+  const placedRelinks = relinks.filter((part) => linkPlaces.has(part.id));
   const asideOf = new Map(
     reviewParts.filter((part) => part.aside).map((part) => [part.id, part]),
   );
@@ -313,21 +384,45 @@ export function proofreadReview(
           ? `${markOpen(id)}${REVIEW_MARK.was}${stored}${REVIEW_MARK.becomes}${after}${REVIEW_MARK.close}`
           : `${markOpen(id)}${after}${REVIEW_MARK.close}`;
       });
-      return data.blocks.map((block, index): ReviewRow =>
+      // A link mended keeps its words: they are marked, and lead where they
+      // would — later links in a field first, so none moves another's place.
+      let shown = data;
+      for (const part of [...placedRelinks].sort(
+        (left, right) =>
+          linkPlaces.get(right.id)!.index - linkPlaces.get(left.id)!.index,
+      )) {
+        const { link } = linkPlaces.get(part.id)!;
+        const block = link.block;
+        if (asideOf.has(part.id)) {
+          aside.set(block, [...(aside.get(block) ?? []), part.id]);
+          if (decisions[part.id] === 'kept') continue;
+        } else
+          shown = markContentLink(
+            shown,
+            link.id,
+            (inner) => `${markOpen(part.id)}${inner}${REVIEW_MARK.close}`,
+          );
+        if (decisions[part.id] === 'kept') continue;
+        const to = part.to ? parseTheiLinkUrl(part.to) : null;
+        if (to !== undefined)
+          shown = retargetContentLink(shown, link.id, to) ?? shown;
+      }
+      return shown.blocks.map((block, index): ReviewRow =>
         block.type === 'privateSectionBoundary'
           ? { type: 'edge', edge: edgeOf(block) }
           : { type: 'block', block, parts: aside.get(index) ?? [] },
       );
     },
     result(decisions) {
+      const all = [...placed, ...placedRelinks];
       const taken = new Set(
-        placed
+        all
           .filter((part) => decisions[part.id] === 'accepted')
           .map((part) => part.id),
       );
       if (!taken.size) return base;
       return (
-        applyRevise(base, { mode: 'proofread', parts: placed }, taken)?.data ??
+        applyRevise(base, { mode: 'proofread', parts: all }, taken)?.data ??
         base
       );
     },
@@ -555,7 +650,7 @@ export function orderReview(
     aligned ? base.blocks[aligned.map[from]!] : undefined;
 
   const reviewParts: ReviewPart[] = parts.flatMap((part): ReviewPart[] => {
-    if (part.type === 'correction') return [];
+    if (part.type === 'correction' || part.type === 'relink') return [];
     const state = states.get(part.id);
     const source = part.type === 'split' ? sourceOf(part.from) : undefined;
     return [

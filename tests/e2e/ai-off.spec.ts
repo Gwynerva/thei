@@ -174,7 +174,7 @@ test('no admin page asks about AI while it is off', async ({
     // Nothing points to sessions: no button in the bar, nothing waiting,
     // no ✦ in a form or at a field's label, no memory or proposal in it.
     await expect(page.locator('[data-ai-bar]')).toHaveCount(0);
-    await expect(page.locator('[data-ai-waiting]')).toHaveCount(0);
+    await expect(page.locator('[data-ai-sessions]')).toHaveCount(0);
     await expect(page.locator('[data-ai-entity]')).toHaveCount(0);
     await expect(page.locator('[data-ai-memory-block]')).toHaveCount(0);
     await expect(page.locator('[data-ai-offers]')).toHaveCount(0);

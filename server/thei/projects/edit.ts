@@ -208,6 +208,7 @@ export async function readProjectEdit(project: ProjectRow) {
       'project-description',
     ),
     reminder: project.reminder,
+    synonyms: project.synonyms,
     notes: await THEI_SERVER.content.buildFieldValue(
       'project',
       projectUuid,
@@ -388,6 +389,7 @@ export async function saveProjectEdit(
           cv: result.cv,
           action: result.action,
           reminder: result.reminder,
+          synonyms: result.synonyms,
           updatedAt: Date.now(),
         })
         .where(eq(schema.projects.projectUuid, projectUuid))

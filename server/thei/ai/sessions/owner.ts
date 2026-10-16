@@ -1,6 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { createError } from 'h3';
 import type { AiEntityType, AiMessagePart } from '#layers/thei/shared/ai';
+import { isPresetTemplate } from '#layers/thei/shared/ai-template';
+import { findTemplate } from '../templates/store';
 import { findEntity, refOf, type EntityKey } from '../../entity-kinds';
 import { actionDef } from '../actions/registry';
 import { findAction, targetOf } from '../actions/rows';
@@ -177,18 +179,39 @@ export function postOwnerMessage(
   return row.messageUuid;
 }
 
+/** A template the owner may start a session from: one without a schedule. */
+function presetOf(templateId: unknown) {
+  const template =
+    typeof templateId === 'string' ? findTemplate(templateId) : undefined;
+  if (!template || !isPresetTemplate(template))
+    refused('There is no such ready-made request.');
+  return template;
+}
+
 /** Starts a session of the owner's, about what they name, with their first words. */
 export function startOwnerSession(
-  input: { title?: string; about?: unknown; text?: string; files?: unknown },
+  input: {
+    title?: string;
+    about?: unknown;
+    text?: string;
+    files?: unknown;
+    /** The ready-made request the words began from, if any. */
+    templateId?: unknown;
+  },
   now = Date.now(),
 ): string {
   // The files are checked before a session is made for them.
   sessionFilesOf(input.files);
+  const template =
+    input.templateId === undefined || input.templateId === null
+      ? undefined
+      : presetOf(input.templateId);
   const given = cleanSessionTitle(input.title ?? '');
   const sessionUuid = createSession(
     {
       origin: 'owner',
-      title: given || titleFromWords(input.text ?? ''),
+      title: given || template?.title || titleFromWords(input.text ?? ''),
+      ...(template ? { templateId: template.templateId } : {}),
     },
     now,
   );

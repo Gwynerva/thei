@@ -36,6 +36,12 @@ const ORDER_DATE = new Date(Date.UTC(2010, 0, 1) + (run % 1400) * 86_400_000)
 const REPEAT = 'Morning on the boat, the sea calm.';
 let diaryUuid = '';
 let orderUuid = '';
+// The entry whose links lead nowhere, on a day of its own too.
+const LINKS_DATE = new Date(Date.UTC(2006, 0, 1) + (run % 1400) * 86_400_000)
+  .toISOString()
+  .slice(0, 10);
+let linksUuid = '';
+let harbourUuid = '';
 let model: FakeModel;
 
 /** The corrections the model proposes, by a word of the owner's message. */
@@ -81,6 +87,38 @@ function toolAnswered(request: FakeRequest): boolean {
 function script(request: FakeRequest): FakeTurn {
   if (toolAnswered(request)) return { text: 'I proposed corrections.' };
   const said = lastOwnerWords(request);
+  if (said.includes('mend'))
+    return {
+      toolCalls: [
+        {
+          name: 'propose',
+          input: {
+            actions: [
+              {
+                kind: 'revise',
+                target: `diary-entry:${LINKS_DATE}`,
+                text: 'body',
+                mode: 'relink',
+                reason: 'Links that lead nowhere.',
+                relinks: [
+                  {
+                    link: 'rl-1/0/0',
+                    to: `thei:project/${harbourUuid}#outcomes`,
+                    reason: 'The heading was renamed.',
+                  },
+                  {
+                    link: 'rl-1/0/1',
+                    to: null,
+                    certainty: 'unsure',
+                    reason: 'What it led to is gone.',
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    };
   if (said.includes('tidy'))
     return {
       toolCalls: [
@@ -179,6 +217,52 @@ test.beforeAll(async ({ request }) => {
   ).json();
   expect(ordered.type, JSON.stringify(ordered)).toBe('success');
   orderUuid = ordered.diaryUuid;
+
+  const harbour = await (
+    await request.post('/api/admin/projects', {
+      data: {
+        title: `Harbour ${run}`,
+        summary: 'A harbour.',
+        access: 'public',
+        humanReadableSlug: 'harbour',
+        publicId: `hb${run}`,
+        showcase: false,
+        cv: false,
+        descriptionContent: {
+          data: {
+            blocks: [{ type: 'header', data: { text: 'Outcomes', level: 2 } }],
+          },
+        },
+      },
+    })
+  ).json();
+  expect(harbour.type, JSON.stringify(harbour)).toBe('success');
+  harbourUuid = harbour.projectUuid;
+  const link = (id: string, words: string, fragment?: string) =>
+    `<a data-content-link="entity" data-entity-type="project" data-entity-id="${id}"${fragment ? ` data-entity-fragment="${fragment}"` : ''}>${words}</a>`;
+  const linked = await (
+    await request.post('/api/admin/diary', {
+      data: {
+        date: LINKS_DATE,
+        access: 'public',
+        content: {
+          data: {
+            blocks: [
+              {
+                id: 'rl-1',
+                type: 'paragraph',
+                data: {
+                  text: `We read ${link(harbourUuid, 'the results', 'results')} and ${link('p-gone', 'the old one')}.`,
+                },
+              },
+            ],
+          },
+        },
+      },
+    })
+  ).json();
+  expect(linked.type, JSON.stringify(linked)).toBe('success');
+  linksUuid = linked.diaryUuid;
 
   model = await startFakeModel(script, { models: ['fake-e2e'] });
   expect(
@@ -385,6 +469,39 @@ test('takes corrections into the editor as one change, the save button never fli
       { timeout: 10_000 },
     )
     .toBe('applied:applied');
+});
+
+test('mends links that lead nowhere, each where it should lead', async ({
+  page,
+}) => {
+  await page.setViewportSize(DESKTOP);
+  await propose(page, 'Mend the links');
+  await page.locator('[data-action-open]').last().click();
+  await expect(review(page)).toBeVisible();
+
+  // Each link's words are marked where they stand.
+  const marks = review(page).locator('.review-mark');
+  await expect(marks).toHaveCount(2);
+  await expect(marks.first()).toHaveText('the results');
+  await marks.first().click();
+  const lines = card(page).locator('[data-review-link]');
+  await expect(lines).toContainText(`Harbour ${run} › results`);
+  await expect(lines).toContainText(`Harbour ${run} › Outcomes`);
+  await card(page).locator('[data-review-accept]').click();
+  // What it led to is gone: the words stay without the link.
+  await expect(card(page)).toHaveAttribute('data-review-card', 'l2');
+  await expect(lines).toContainText('what it led to is gone');
+  await expect(lines).toContainText('no link, the words stay');
+  await card(page).locator('[data-review-accept]').click();
+
+  const finish = page.locator('[data-review-finish]');
+  await expect(finish).toHaveText('Apply · 2');
+  await finish.click();
+  await expect(review(page)).toBeHidden();
+  const text = await storedText(page, linksUuid);
+  expect(text).toContain('data-entity-fragment=\\"outcomes\\"');
+  expect(text).toContain('and the old one.');
+  expect(text).not.toContain('p-gone');
 });
 
 test('fits a phone, its bar of decisions at the foot of the screen', async ({

@@ -159,6 +159,20 @@ const stateOf = (part: ReviewPart) => props.decisions[part.id] ?? 'pending';
             ><ReviewMark kind="added">{{ part.words.after }}</ReviewMark
             >{{ part.words.around[1] }}</template
           >
+          <template v-else-if="part.link"
+            ><template v-if="part.link.words"
+              >«{{ part.link.words }}» → </template
+            ><ReviewMark kind="removed">{{
+              part.link.from
+                ? publicText(part.link.from)
+                : phrase.ai_review_link_gone
+            }}</ReviewMark
+            ><ReviewMark kind="added">{{
+              part.link.to
+                ? publicText(part.link.to)
+                : phrase.ai_review_link_off
+            }}</ReviewMark></template
+          >
           <template v-else-if="part.diff"
             ><template v-for="(words, index) in part.diff" :key="index"
               ><ReviewMark v-if="words.kind !== 'same'" :kind="words.kind">{{
@@ -182,7 +196,12 @@ const stateOf = (part: ReviewPart) => props.decisions[part.id] ?? 'pending';
           ><template v-if="!part.sure">
             · {{ phrase.ai_review_unsure }}</template
           ><template v-if="part.settled">
-            · {{ phrase.ai_review_settled[part.settled] }}</template
+            ·
+            {{
+              part.link && part.settled === 'stale'
+                ? phrase.ai_review_link_changed
+                : phrase.ai_review_settled[part.settled]
+            }}</template
           >
         </p>
         <span

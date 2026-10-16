@@ -69,6 +69,15 @@ export function normalizeLinkFragment(value: unknown): string | undefined {
     : undefined;
 }
 
+/** A fragment as it reads: `%D0%B3%D0%BB%D0%B0%D0%B2%D0%B0` is «глава». */
+export function decodeLinkFragment(fragment: string): string {
+  try {
+    return decodeURIComponent(fragment);
+  } catch {
+    return fragment;
+  }
+}
+
 /** The fragment of an address, absolute or a path of the site. */
 export function linkFragment(address: string): string | undefined {
   const index = address.indexOf('#');
@@ -189,7 +198,7 @@ export function normalizeContentInlineHtml(value: unknown): string {
       const tag = INLINE_TAG_ALIASES[name] ?? name;
       if (source.startsWith('</')) return tag === 'br' ? '' : `</${tag}>`;
       if (tag === 'abbr') {
-        const hint = parseAttributes(String(rawAttrs))['data-content-hint'];
+        const hint = parseHtmlAttributes(String(rawAttrs))['data-content-hint'];
         // A hint with nothing to say is not a hint; the text survives, the
         // markup does not.
         return hint?.trim()
@@ -198,7 +207,7 @@ export function normalizeContentInlineHtml(value: unknown): string {
       }
       if (tag !== 'a') return tag === 'br' ? '<br>' : `<${tag}>`;
 
-      const attributes = parseAttributes(String(rawAttrs));
+      const attributes = parseHtmlAttributes(String(rawAttrs));
       const kind = attributes['data-content-link'];
       const entityType = attributes['data-entity-type'];
       const entityId = attributes['data-entity-id']?.trim();
@@ -380,7 +389,7 @@ function commonStack(left: InlineFrame[], right: InlineFrame[]) {
 export function extractContentInlineLinks(html: string): ContentInlineLink[] {
   const links: ContentInlineLink[] = [];
   for (const match of html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)) {
-    const attributes = parseAttributes(match[1] ?? '');
+    const attributes = parseHtmlAttributes(match[1] ?? '');
     const label = plainInlineText(match[2] ?? '');
     const href = attributes.href;
     // The owner's own words about why the link is there; the sidebar shows
@@ -511,7 +520,8 @@ function collectStrings(value: unknown, visit: (value: string) => void) {
   }
 }
 
-function parseAttributes(source: string): Record<string, string> {
+/** The attributes of a tag as written, their values decoded. */
+export function parseHtmlAttributes(source: string): Record<string, string> {
   const result: Record<string, string> = {};
   for (const match of source.matchAll(
     /([^\s=/>]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g,

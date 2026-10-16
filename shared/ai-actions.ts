@@ -82,19 +82,20 @@ export type AiRememberAbout = (typeof AI_REMEMBER_ABOUT)[number];
 
 /** Fields a `field` action may set, by entity kind. */
 export const AI_FIELD_ACTIONS = {
-  project: ['title', 'summary', 'reminder', 'showcase', 'cv'],
+  project: ['title', 'summary', 'reminder', 'synonyms', 'showcase', 'cv'],
   'project-section': ['title', 'summary'],
-  event: ['title', 'summary', 'reminder'],
+  event: ['title', 'summary', 'reminder', 'synonyms'],
   'diary-entry': ['reminder'],
-  page: ['title', 'summary', 'reminder'],
+  page: ['title', 'summary', 'reminder', 'synonyms'],
   tag: ['description', 'synonyms'],
   profile: ['slogan'],
 } as const;
 
 /**
  * One part of a text edit, decided on its own: a correction inside a block,
- * or a piece of a new order of the blocks — a heading, a repeat dropped, a
- * paragraph split, the blocks moved. A part of a new order depends on the
+ * a link that leads nowhere pointed where it should, or a piece of a new
+ * order of the blocks — a heading, a repeat dropped, a paragraph split, the
+ * blocks moved. A part of a new order depends on the
  * order itself, when it moves blocks: without the moves there is no plan.
  */
 export type AiRevisePart =
@@ -141,6 +142,27 @@ export type AiRevisePart =
       type: 'split';
       /** The block's place in the text as it was. */
       from: number;
+      certainty: AiCertainty;
+      reason: string;
+    }
+  | {
+      id: string;
+      type: 'relink';
+      /**
+       * The link, as it is found again (`ContentLinkPlace`): where it stood,
+       * and the `nth` of its field's links leading `from` with `words`.
+       */
+      link: string;
+      nth: number;
+      /** Its words; a link block's card has none. */
+      words: string;
+      /** Where it leads now: `thei:<kind>/<id>#place`. */
+      from: string;
+      /** Where it would lead; none takes the link off, its words kept. */
+      to: string | null;
+      /** How each reads: the entity, and the heading inside it. */
+      fromTitle: string;
+      toTitle?: string;
       certainty: AiCertainty;
       reason: string;
     }
@@ -240,8 +262,11 @@ export type AiActionPayload =
   | {
       kind: 'revise';
       text: string;
-      /** Corrections of words, or a new order of the owner's own blocks. */
-      mode: 'proofread' | 'order';
+      /**
+       * Corrections of words, links that lead nowhere mended, or a new
+       * order of the owner's own blocks.
+       */
+      mode: 'proofread' | 'relink' | 'order';
       parts: AiRevisePart[];
       /** For a new order: the plan its parts are pieces of. */
       plan?: { keys: string[]; items: TidyItem[]; comments: TidyComment[] };

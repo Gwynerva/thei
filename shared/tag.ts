@@ -5,6 +5,11 @@ import type { ImageAccent } from './accent-color';
 import { imageAccentCssColor } from './accent-color';
 import { stringColorHue } from './utils/string-color';
 import { normalizeTermText } from './text-terms';
+import {
+  normalizeSynonyms,
+  SYNONYM_LIMIT,
+  SYNONYM_SEPARATOR,
+} from './synonyms';
 
 export const TAG_CONTAINER_TYPES = ['project', 'event'] as const;
 export type TagContainerType = (typeof TAG_CONTAINER_TYPES)[number];
@@ -84,10 +89,10 @@ export const TAG_TITLE_MAX_LENGTH = 100;
 export const TAG_SEARCH_LIMIT = 5;
 
 /** More than this is a description, not a list of names. */
-export const TAG_SYNONYM_LIMIT = 20;
+export const TAG_SYNONYM_LIMIT = SYNONYM_LIMIT;
 
 /** What separates synonyms typed or pasted as one line. */
-export const TAG_SYNONYM_SEPARATOR = /[,;\n]/u;
+export const TAG_SYNONYM_SEPARATOR = SYNONYM_SEPARATOR;
 
 /**
  * A tag's identity: its title without case, compatibility forms or the
@@ -181,25 +186,10 @@ export function normalizeTagSynonyms(
   value: unknown,
   title: string,
 ): string[] | string {
-  if (value === undefined) return [];
-  if (!Array.isArray(value)) return 'Invalid synonyms';
-  const seen = new Set([normalizeTagTitle(title)]);
-  const synonyms: string[] = [];
-  for (const item of value) {
-    if (typeof item !== 'string') return 'Invalid synonyms';
-    for (const part of item.split(TAG_SYNONYM_SEPARATOR)) {
-      const synonym = cleanTagTitle(part);
-      if (!synonym) continue;
-      if (synonym.length > TAG_TITLE_MAX_LENGTH)
-        return 'Tag synonym is too long';
-      const identity = normalizeTagTitle(synonym);
-      if (seen.has(identity)) continue;
-      seen.add(identity);
-      synonyms.push(synonym);
-    }
-  }
-  if (synonyms.length > TAG_SYNONYM_LIMIT) return 'Too many tag synonyms';
-  return synonyms;
+  return normalizeSynonyms(value, title, {
+    tooLong: 'Tag synonym is too long',
+    tooMany: 'Too many tag synonyms',
+  });
 }
 
 /** Whether a query is a tag's title or one of its synonyms, word for word. */

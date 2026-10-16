@@ -1,6 +1,7 @@
 import type EditorJS from '@editorjs/editorjs';
 import {
   EDITOR_BLOCK_SELECTOR as BLOCK_SELECTOR,
+  editorBlockNextTo,
   editorBlockOf,
 } from './editor-dom';
 
@@ -97,27 +98,13 @@ export function createEditorBlockDrag(
   }
 
   /**
-   * The block the settings button stands next to.
-   *
-   * Read from where the button is, not from what the pointer last crossed:
-   * a block inserted from the toolbox opens a file picker straight away, and
-   * nothing is hovered while it is up, so the remembered block can be one
-   * that no longer exists or a neighbour.
+   * The block the settings button stands next to: a block inserted from the
+   * toolbox opens a file picker straight away, and nothing is hovered while
+   * it is up, so the remembered block can be one that no longer exists.
    */
   function blockAtSettingsButton() {
-    const button = settingsButton!.getBoundingClientRect();
-    const y = button.top + button.height / 2;
-    let nearest: { id: string; distance: number } | undefined;
-    for (const block of root.querySelectorAll<HTMLElement>(BLOCK_SELECTOR)) {
-      const id = block.dataset.id;
-      if (!id) continue;
-      const rect = block.getBoundingClientRect();
-      const distance =
-        y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
-      if (!nearest || distance < nearest.distance) nearest = { id, distance };
-      if (distance === 0) break;
-    }
-    return nearest ? editor.blocks.getById(nearest.id) : null;
+    const id = editorBlockNextTo(root, settingsButton!)?.dataset.id;
+    return id ? editor.blocks.getById(id) : null;
   }
 
   function onMouseDown(event: MouseEvent) {

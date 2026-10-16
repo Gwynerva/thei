@@ -8,6 +8,8 @@ import {
   type PreparedTextEdit,
 } from './content-edit-markdown/patch-core';
 import { applyTidy, type TidyChoices } from './content-edit-markdown/tidy';
+import { parseTheiLinkUrl } from './content-edit-markdown/links';
+import { contentLinkFrom, retargetContentLink } from './content-link-locate';
 
 /**
  * An AI's edit of a text, made with the parts the owner took: one way for
@@ -16,9 +18,10 @@ import { applyTidy, type TidyChoices } from './content-edit-markdown/tidy';
  */
 
 export type Correction = Extract<AiRevisePart, { type: 'correction' }>;
+export type Relink = Extract<AiRevisePart, { type: 'relink' }>;
 
 export interface RevisePayload {
-  mode: 'proofread' | 'order';
+  mode: 'proofread' | 'relink' | 'order';
   parts: readonly AiRevisePart[];
   plan?: { keys: string[]; items: TidyItem[]; comments?: TidyComment[] };
 }
@@ -89,6 +92,34 @@ export function orderChoices(
 }
 
 /**
+ * The text with its links mended: each taken part's link pointed where it
+ * would have it, or taken off — as long as it still leads where the part
+ * found it leading. Each is found anew by where it leads and its words, so
+ * one taken off moves no other.
+ */
+export function applyRelinks(
+  data: ContentOutputData,
+  parts: readonly Relink[],
+): { data: ContentOutputData; problems: Map<string, string> } {
+  const problems = new Map<string, string>();
+  let text = data;
+  for (const part of parts) {
+    const now = contentLinkFrom(text, part);
+    const to = part.to ? parseTheiLinkUrl(part.to) : null;
+    const made =
+      now && to !== undefined
+        ? retargetContentLink(text, now.id, to)
+        : undefined;
+    if (!made) {
+      problems.set(part.id, 'The link has changed since: it stays as it is.');
+      continue;
+    }
+    text = made;
+  }
+  return { data: text, problems };
+}
+
+/**
  * The text with the parts taken, and the parts that could not be made — a
  * correction whose words are gone, a split of a paragraph changed since, a
  * removal of a block changed since. Undefined when a new order no longer
@@ -120,6 +151,14 @@ export function applyRevise(
         problems.set(part.id, 'The block has changed since: it stays.');
     }
     text = { ...text, blocks: tidied.blocks };
+  }
+  const relinks = payload.parts.filter(
+    (part): part is Relink => part.type === 'relink' && isTaken(part),
+  );
+  if (relinks.length) {
+    const mended = applyRelinks(text, relinks);
+    for (const [id, problem] of mended.problems) problems.set(id, problem);
+    text = mended.data;
   }
   const corrections = payload.parts.filter(
     (part): part is Correction => part.type === 'correction' && isTaken(part),

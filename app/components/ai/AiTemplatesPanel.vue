@@ -1,25 +1,29 @@
 <script lang="ts" setup>
-import type {
-  AiTemplateItem,
-  AiTemplateListResponse,
+import {
+  isPresetTemplate,
+  type AiTemplateItem,
+  type AiTemplateListResponse,
 } from '#layers/thei/shared/ai-template';
 import { aiTemplateModal } from '#layers/thei/app/modals/ai-template/modal';
 
 /**
- * The templates tab: requests to the AI ready to go, the built-in ones and
- * the owner's own, one per row across the page. A schedule is switched on
- * the row, a run started from it; the rest is set in the template's window.
+ * The templates tab: requests to the AI ready to go, in two groups. The
+ * ready-made ones, without a schedule, the owner opens in a new session with
+ * their words to add to; the scheduled ones start by themselves, switched on
+ * the row. The rest is set in the template's window.
  */
 const requestFetch = useRequestFetch();
 const { data, refresh } = await useAsyncData('ai-templates', () =>
   requestFetch<AiTemplateListResponse>('/api/admin/ai/templates'),
 );
 
-const builtins = computed(
-  () => data.value?.templates.filter((template) => template.builtin) ?? [],
+const presets = computed(
+  () => data.value?.templates.filter(isPresetTemplate) ?? [],
 );
-const own = computed(
-  () => data.value?.templates.filter((template) => !template.builtin) ?? [],
+const scheduled = computed(
+  () =>
+    data.value?.templates.filter((template) => !isPresetTemplate(template)) ??
+    [],
 );
 
 // While a run answers, the list looks again now and then to see it end.
@@ -68,8 +72,23 @@ async function toggle(template: AiTemplateItem, enabled: boolean) {
   }
 }
 
+function startedToast(title: string, sessionUuid: string) {
+  showToast(phrase.value.ai_template_started(publicText(title)), {
+    label: phrase.value.ai_action_open,
+    run: () => {
+      void navigateTo({ path: '/admin/ai/', query: { session: sessionUuid } });
+    },
+  });
+}
+
+/** A ready-made request opens in a new session, its words to add to. */
+function open(template: AiTemplateItem) {
+  void navigateTo(newSessionLocation({ template: template.templateId }));
+}
+
 const starting = ref<string>();
 async function run(template: AiTemplateItem) {
+  if (isPresetTemplate(template)) return open(template);
   if (starting.value) return;
   starting.value = template.templateId;
   try {
@@ -81,15 +100,7 @@ async function run(template: AiTemplateItem) {
       },
     );
     await refresh();
-    showToast(phrase.value.ai_template_started(publicText(template.title)), {
-      label: phrase.value.ai_action_open,
-      run: () => {
-        void navigateTo({
-          path: '/admin/ai/',
-          query: { session: sessionUuid },
-        });
-      },
-    });
+    startedToast(template.title, sessionUuid);
   } catch (caught) {
     showToast(errorMessage(caught, phrase.value.ai_error));
   } finally {
@@ -101,18 +112,14 @@ async function edit(template?: AiTemplateItem) {
   const result = await openModal(aiTemplateModal, {
     templateId: template?.templateId,
   });
-  if (result.type === 'empty' || result.type === 'error') return;
+  if (
+    result.type === 'empty' ||
+    result.type === 'error' ||
+    result.type === 'opened'
+  )
+    return;
   await refresh();
-  if (result.type === 'started')
-    showToast(phrase.value.ai_template_started(publicText(result.title)), {
-      label: phrase.value.ai_action_open,
-      run: () => {
-        void navigateTo({
-          path: '/admin/ai/',
-          query: { session: result.sessionUuid },
-        });
-      },
-    });
+  if (result.type === 'started') startedToast(result.title, result.sessionUuid);
   else
     showToast(
       result.type === 'deleted'
@@ -122,6 +129,23 @@ async function edit(template?: AiTemplateItem) {
           : phrase.value.ai_template_saved,
     );
 }
+
+const groups = computed(() => [
+  {
+    key: 'presets',
+    title: phrase.value.ai_templates_presets,
+    hint: phrase.value.ai_templates_presets_hint,
+    empty: phrase.value.ai_templates_presets_empty,
+    templates: presets.value,
+  },
+  {
+    key: 'scheduled',
+    title: phrase.value.ai_templates_scheduled,
+    hint: phrase.value.ai_templates_scheduled_hint,
+    empty: '',
+    templates: scheduled.value,
+  },
+]);
 </script>
 
 <template>
@@ -140,49 +164,33 @@ async function edit(template?: AiTemplateItem) {
     </div>
     <p class="text-sm text-text-2">{{ phrase.ai_templates_hint }}</p>
 
-    <h3
-      class="mt-xs text-2xs font-bold tracking-wider text-text-3
-        uppercase"
+    <section
+      v-for="group in groups"
+      :key="group.key"
+      class="flex flex-col gap-xs"
+      :data-templates-group="group.key"
     >
-      {{ phrase.ai_templates_builtin }}
-    </h3>
-    <div
-      class="rounded-normal border border-border-1 bg-bg-1"
-      data-templates-builtin
-    >
-      <AiTemplateRow
-        v-for="template in builtins"
-        :key="template.templateId"
-        :template
-        :starting="starting === template.templateId"
-        @toggle="toggle(template, $event)"
-        @run="run(template)"
-        @edit="edit(template)"
-      />
-    </div>
-
-    <h3
-      class="mt-xs text-2xs font-bold tracking-wider text-text-3
-        uppercase"
-    >
-      {{ phrase.ai_templates_own }}
-    </h3>
-    <div
-      class="rounded-normal border border-border-1 bg-bg-1"
-      data-templates-own
-    >
-      <AiTemplateRow
-        v-for="template in own"
-        :key="template.templateId"
-        :template
-        :starting="starting === template.templateId"
-        @toggle="toggle(template, $event)"
-        @run="run(template)"
-        @edit="edit(template)"
-      />
-      <p v-if="!own.length" class="px-md py-sm text-sm text-text-3">
-        {{ phrase.ai_templates_own_empty }}
-      </p>
-    </div>
+      <h3 class="mt-xs text-2xs font-bold tracking-wider text-text-3 uppercase">
+        {{ group.title }}
+      </h3>
+      <p class="text-xs text-text-3">{{ group.hint }}</p>
+      <div class="rounded-normal border border-border-1 bg-bg-1">
+        <AiTemplateRow
+          v-for="template in group.templates"
+          :key="template.templateId"
+          :template
+          :starting="starting === template.templateId"
+          @toggle="toggle(template, $event)"
+          @run="run(template)"
+          @edit="edit(template)"
+        />
+        <p
+          v-if="!group.templates.length && group.empty"
+          class="px-md py-sm text-sm text-text-3"
+        >
+          {{ group.empty }}
+        </p>
+      </div>
+    </section>
   </div>
 </template>

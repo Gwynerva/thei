@@ -1,4 +1,5 @@
 import { ProjectEventAccessLevel } from '../access-level';
+import { normalizeSynonyms } from '../synonyms';
 import type { StatusEditData } from '../status';
 import {
   RelationValidationError,
@@ -88,6 +89,8 @@ export type ProjectEditData = Partial<StatusEditData> & {
   tags?: TagEditItem[];
   action?: ProjectActionEditData;
   reminder?: string;
+  /** Other names it is found by, every one; absent is none. */
+  synonyms?: string[];
   notes?: ContentFieldModelValue | null;
   /** The version the form was read at; a save over a newer one is refused. */
   version?: number;
@@ -242,6 +245,9 @@ export function validateProjectData(
       );
     }
 
+    const synonyms = normalizeSynonyms(data.synonyms, title);
+    if (typeof synonyms === 'string') return synonyms;
+
     return {
       ...data,
       title,
@@ -249,6 +255,7 @@ export function validateProjectData(
       humanReadableSlug,
       publicId,
       access: data.access,
+      synonyms,
       descriptionContent,
       sections,
       showcaseAssets,

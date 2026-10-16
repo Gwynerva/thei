@@ -4,11 +4,14 @@ import type { AiTemplateSchedule } from '#layers/thei/shared/ai';
 import {
   AI_BUILTIN_TEMPLATE_KEYS,
   AI_BUILTIN_TEMPLATES,
+  AI_TEMPLATE_DEFAULT_OFFER,
   AI_TEMPLATE_INSTRUCTION_MAX,
+  AI_TEMPLATE_OFFER_KINDS,
   AI_TEMPLATE_TITLE_MAX,
   builtinTemplateId,
   type AiBuiltinTemplateKey,
   type AiTemplateItem,
+  type AiTemplateOfferKind,
 } from '#layers/thei/shared/ai-template';
 import { EntityPrefix } from '../../entity-id';
 import { refuse as fail } from '../../entity-patch/text';
@@ -49,6 +52,7 @@ function lastSessionOf(row: TemplateRow | undefined) {
           sessionUuid: session.sessionUuid,
           waiting: session.waiting,
           state: session.state,
+          archived: session.archivedAt !== null,
         },
       }
     : {};
@@ -74,6 +78,7 @@ function builtinItem(key: AiBuiltinTemplateKey): AiTemplateItem {
     model: row?.model ?? '',
     schedule: row?.schedule ?? (defaults.schedule as AiTemplateSchedule),
     enabled: row?.enabled ?? false,
+    offerOn: row?.offerOn ?? AI_TEMPLATE_DEFAULT_OFFER,
     ...runs(row),
   };
 }
@@ -86,6 +91,7 @@ function ownItem(row: TemplateRow): AiTemplateItem {
     model: row.model,
     schedule: row.schedule,
     enabled: row.enabled,
+    offerOn: row.offerOn,
     ...runs(row),
   };
 }
@@ -123,6 +129,7 @@ export interface TemplateInput {
   model?: unknown;
   schedule?: unknown;
   enabled?: unknown;
+  offerOn?: unknown;
 }
 
 /**
@@ -152,6 +159,10 @@ export function saveTemplate(
     input.enabled === undefined
       ? (current?.enabled ?? true)
       : Boolean(input.enabled);
+  const offerOn =
+    input.offerOn === undefined
+      ? (current?.offerOn ?? AI_TEMPLATE_DEFAULT_OFFER)
+      : checkedOfferOn(input.offerOn);
   const words = builtin
     ? { title: null, instruction: null }
     : {
@@ -179,6 +190,7 @@ export function saveTemplate(
       model,
       schedule,
       enabled,
+      offerOn,
       nextRunAt: next,
       createdAt: now,
       updatedAt: now,
@@ -190,12 +202,20 @@ export function saveTemplate(
         model,
         schedule,
         enabled,
+        offerOn,
         nextRunAt: next,
         updatedAt: now,
       },
     })
     .run();
   return findTemplate(id)!;
+}
+
+/** The kinds a template is offered on: known ones, each once, in their order. */
+function checkedOfferOn(value: unknown): AiTemplateOfferKind[] {
+  if (!Array.isArray(value)) fail('Where it is offered is a list of kinds.');
+  const asked = new Set(value);
+  return AI_TEMPLATE_OFFER_KINDS.filter((kind) => asked.has(kind));
 }
 
 /** A copy of a template as the owner's own, off until they turn it on. */
@@ -211,6 +231,7 @@ export function copyTemplate(templateId: string, now = Date.now()) {
       model: source.model,
       schedule: source.schedule,
       enabled: false,
+      offerOn: source.offerOn,
     },
     now,
   );
@@ -254,6 +275,7 @@ export function recordRun(
       model: template.model,
       schedule: template.schedule,
       enabled: template.enabled,
+      offerOn: template.offerOn,
       nextRunAt: next,
       lastRunAt: run.sessionUuid ? run.at : null,
       lastSessionUuid: run.sessionUuid ?? null,

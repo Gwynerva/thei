@@ -78,6 +78,8 @@ export type ProjectGetResponse = {
   /** The first page of the project's status history, newest first. */
   statuses?: ProfileHistoryPage<StatusHistoryItem>;
   reminder: string;
+  /** Other names it is found by; only the owner sees them. */
+  synonyms: string[];
   notes?: ContentFieldValue;
 };
 

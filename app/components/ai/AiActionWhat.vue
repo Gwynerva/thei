@@ -247,12 +247,19 @@ const createTitle = computed(() => {
 
     <template v-else-if="action.kind === 'revise'">
       <b v-if="!plain">{{
-        payload.mode === 'order' ? phrase.ai_action_order : kindWords
+        payload.mode === 'order'
+          ? phrase.ai_action_order
+          : payload.mode === 'relink'
+            ? phrase.ai_action_relink
+            : kindWords
       }}</b>
       <AiEntityChip v-if="showTarget" :entity="action.target" />
       <span class="text-text-2">{{ textName }}</span>
       <AiPill v-if="payload.mode === 'order'">{{
         phrase.ai_action_order_parts(reviseParts.length)
+      }}</AiPill>
+      <AiPill v-else-if="payload.mode === 'relink'">{{
+        phrase.ai_action_relinks(reviseParts.length)
       }}</AiPill>
       <AiPill v-else>{{ phrase.ai_action_corrections(corrections) }}</AiPill>
       <AiPill v-if="unsure" tone="warning">{{

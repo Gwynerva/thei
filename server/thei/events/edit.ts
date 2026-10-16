@@ -131,6 +131,7 @@ export async function saveEventEdit(
           publicId: result.publicId,
           action: result.action,
           reminder: result.reminder,
+          synonyms: result.synonyms,
           updatedAt: now,
         })
         .where(eq(schema.events.eventUuid, eventUuid))
@@ -340,6 +341,7 @@ export async function readEventEdit(
     periods,
     content,
     reminder: stored.reminder,
+    synonyms: stored.synonyms,
     notes,
     bannerAssetUuid: banner?.asset.assetUuid,
     bannerMedia: bannerUrls?.media,

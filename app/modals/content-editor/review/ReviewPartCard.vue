@@ -77,9 +77,7 @@ function send(text: string) {
       class="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2.5
         gap-y-1 text-sm wrap-anywhere"
     >
-      <dt
-        class="text-2xs font-bold tracking-wide text-text-3 uppercase"
-      >
+      <dt class="text-2xs font-bold tracking-wide text-text-3 uppercase">
         {{ words.was }}
       </dt>
       <dd>
@@ -87,15 +85,41 @@ function send(text: string) {
         }}<ReviewMark kind="removed">{{ part.words.before }}</ReviewMark
         >{{ part.words.around[1] }}
       </dd>
-      <dt
-        class="text-2xs font-bold tracking-wide text-text-3 uppercase"
-      >
+      <dt class="text-2xs font-bold tracking-wide text-text-3 uppercase">
         {{ words.will }}
       </dt>
       <dd>
         {{ part.words.around[0]
         }}<ReviewMark kind="added">{{ part.words.after }}</ReviewMark
         >{{ part.words.around[1] }}
+      </dd>
+    </dl>
+    <!-- A link mended: its words, where they lead now and would. -->
+    <dl
+      v-else-if="part.link"
+      class="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2.5
+        gap-y-1 text-sm wrap-anywhere"
+      data-review-link
+    >
+      <dt class="text-2xs font-bold tracking-wide text-text-3 uppercase">
+        {{ words.was }}
+      </dt>
+      <dd>
+        <template v-if="part.link.words">«{{ part.link.words }}» → </template
+        ><ReviewMark kind="removed">{{
+          part.link.from
+            ? publicText(part.link.from)
+            : phrase.ai_review_link_gone
+        }}</ReviewMark>
+      </dd>
+      <dt class="text-2xs font-bold tracking-wide text-text-3 uppercase">
+        {{ words.will }}
+      </dt>
+      <dd>
+        <template v-if="part.link.words">«{{ part.link.words }}» → </template
+        ><ReviewMark kind="added">{{
+          part.link.to ? publicText(part.link.to) : phrase.ai_review_link_off
+        }}</ReviewMark>
       </dd>
     </dl>
     <!-- A block another version rewrote, its words compared. -->
@@ -117,9 +141,7 @@ function send(text: string) {
       class="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2.5
         text-sm wrap-anywhere"
     >
-      <dt
-        class="text-2xs font-bold tracking-wide text-text-3 uppercase"
-      >
+      <dt class="text-2xs font-bold tracking-wide text-text-3 uppercase">
         {{ part.kind === 'removed' ? words.was : words.will }}
       </dt>
       <dd
@@ -133,12 +155,11 @@ function send(text: string) {
     <p v-if="part.reason" class="text-xs leading-snug text-text-2">
       {{ publicText(part.reason) }}
     </p>
-    <p
-      v-if="part.settled"
-      class="flex items-center gap-1 text-xs text-text-2"
-    >
+    <p v-if="part.settled" class="flex items-center gap-1 text-xs text-text-2">
       <Icon :name="part.settled === 'applied' ? 'check' : 'warning'" />{{
-        phrase.ai_review_settled[part.settled]
+        part.link && part.settled === 'stale'
+          ? phrase.ai_review_link_changed
+          : phrase.ai_review_settled[part.settled]
       }}
     </p>
 

@@ -5,9 +5,11 @@ import type {
   AiSessionDetail,
   AiSessionItem,
   AiSessionListResponse,
+  AiSessionOverview,
 } from '#layers/thei/shared/ai';
 import type { AiRevisePartState } from '#layers/thei/shared/ai-actions';
 import type { AiEntityPanel } from '#layers/thei/shared/ai-entity';
+import type { ContentEntityType } from '#layers/thei/shared/content-link';
 
 /**
  * One session as the page follows it: read whole once, then kept up to date
@@ -219,11 +221,49 @@ export function useAiSession(sessionUuid: Ref<string | undefined>) {
   return { detail, missing, refresh: refreshIfPolling };
 }
 
-/** What the page asks of actions and sessions. */
 /** A file the owner brings along: in the library, with its name. */
 export interface AiComposerFile {
   assetUuid: string;
   name: string;
+}
+
+/** An entity a message names, as its chip shows it. */
+export interface AiMentionItem {
+  entityType: ContentEntityType;
+  entityId: string;
+  title: string;
+  /** A diary entry's day, which names it. */
+  date?: string;
+}
+
+/** What a page may ask of the message field. */
+export interface AiComposerExpose {
+  focus: () => void;
+  /**
+   * Words put in for the owner to go on with; a ready-made request's carry
+   * its id, which the message is sent with while its words are there.
+   */
+  prefill: (text: string, templateId?: string) => void;
+  mention: (item: AiMentionItem) => void;
+  /** The ready-made request the words began from, if any. */
+  templateId: () => string | undefined;
+}
+
+/**
+ * The page of a new session: about an entity, a ready-made request's words
+ * written in.
+ */
+export function newSessionLocation(
+  options: { about?: string; template?: string } = {},
+) {
+  return {
+    path: '/admin/ai/',
+    query: {
+      session: 'new',
+      ...(options.about ? { about: options.about } : {}),
+      ...(options.template ? { template: options.template } : {}),
+    },
+  };
 }
 
 const ARCHIVED: InjectionKey<Readonly<Ref<boolean>>> = Symbol('ai-archived');
@@ -259,6 +299,12 @@ export const aiApi = {
       query: { waiting: 'true', archived: 'false' },
     }).catch(() => null);
     return list?.sessions.slice(0, 5) ?? [];
+  },
+  /** The few sessions the dashboard shows; none when unread. */
+  sessionOverview(): Promise<AiSessionOverview | null> {
+    return $fetch<AiSessionOverview>('/api/admin/ai/overview').catch(
+      () => null,
+    );
   },
   apply(
     actionUuids: string[],
@@ -327,6 +373,8 @@ export const aiApi = {
     about?: string[];
     title?: string;
     files?: AiComposerFile[];
+    /** The ready-made request the words began from. */
+    templateId?: string;
   }) {
     return $fetch<{ sessionUuid: string }>('/api/admin/ai/sessions', {
       method: 'POST',

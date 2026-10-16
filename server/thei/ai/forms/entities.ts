@@ -27,6 +27,7 @@ export function startingForm(kind: FormKind, title: string): unknown {
         access: 'private',
         showcase: false,
         cv: false,
+        synonyms: [],
         sections: [],
       };
     case 'event':
@@ -36,11 +37,19 @@ export function startingForm(kind: FormKind, title: string): unknown {
         humanReadableSlug: slug,
         publicId: randomId(14),
         access: 'private',
+        synonyms: [],
         periods: [],
         content: null,
       };
     case 'page':
-      return { title, summary: '', slug, access: 'private', content: null };
+      return {
+        title,
+        summary: '',
+        slug,
+        access: 'private',
+        synonyms: [],
+        content: null,
+      };
     case 'tag':
       return {
         title,

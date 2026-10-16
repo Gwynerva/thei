@@ -1,4 +1,5 @@
 import type { AiActionItem, AiEntityRef, AiSessionItem } from './ai';
+import type { AiPresetItem } from './ai-template';
 import type { AiEntityMemory } from './ai-memory';
 import type { ContentSlot } from './content';
 
@@ -44,8 +45,8 @@ export interface AiEntityPanel {
   /** The latest sessions about it, and how many there are in all. */
   sessions: AiSessionItem[];
   sessionCount: number;
-  /** Templates run by hand, which a session about it may start from. */
-  templates: { templateId: string; title: string }[];
+  /** Ready-made requests offered for this kind of entity, with their words. */
+  templates: AiPresetItem[];
   /** Whether a model is set to answer a session started here. */
   modelReady: boolean;
 }

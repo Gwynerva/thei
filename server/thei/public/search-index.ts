@@ -56,6 +56,8 @@ export interface PublicSearchTag {
   slug: string;
   publicId: string;
   description: string;
+  /** Found by, never shown. */
+  synonyms: string[];
 }
 
 export interface PublicSearchIndex {
@@ -169,6 +171,7 @@ export function buildPublicSearchIndex(): PublicSearchIndex {
         slug: tag.slug,
         publicId: tag.publicId,
         description: tag.description,
+        synonyms: tag.synonyms,
       },
     ]),
   );
@@ -211,7 +214,13 @@ export function buildPublicSearchIndex(): PublicSearchIndex {
           // The readable part of the address: a reader who remembers a
           // link finds what it led to.
           row.humanReadableSlug,
-          ...tagUuids.map((tagUuid) => tagsByUuid.get(tagUuid)?.title ?? ''),
+          // Other names, found by and never shown: the owner's own and
+          // those of its tags.
+          ...row.synonyms,
+          ...tagUuids.flatMap((tagUuid) => {
+            const tag = tagsByUuid.get(tagUuid);
+            return tag ? [tag.title, ...tag.synonyms] : [];
+          }),
           textByOwner.get(key) ?? '',
         ].join('\n'),
       ),

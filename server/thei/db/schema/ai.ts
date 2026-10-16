@@ -6,6 +6,7 @@ import {
   text,
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
+import type { AiTemplateOfferKind } from '#layers/thei/shared/ai-template';
 import type {
   AiActionState,
   AiAppliedBy,
@@ -265,6 +266,11 @@ export const aiTemplates = sqliteTable(
     model: text().notNull().default(''),
     schedule: text({ mode: 'json' }).notNull().$type<AiTemplateSchedule>(),
     enabled: integer({ mode: 'boolean' }).notNull().default(true),
+    /** The kinds of entity a template without a schedule is offered on. */
+    offerOn: text({ mode: 'json' })
+      .notNull()
+      .default([])
+      .$type<AiTemplateOfferKind[]>(),
     nextRunAt: integer(),
     lastRunAt: integer(),
     lastSessionUuid: text(),

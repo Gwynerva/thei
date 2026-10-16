@@ -33,16 +33,33 @@ import type {
   AiRevisePart,
   AiRevisePartState,
 } from '#layers/thei/shared/ai-actions';
+import {
+  parseTheiLinkUrl,
+  theiLinkUrl,
+} from '#layers/thei/shared/content-edit-markdown/links';
+import { contentPlaceLabel } from '#layers/thei/shared/content-headings';
+import {
+  contentLinkFrom,
+  contentLinkLeads,
+  contentLinkPlace,
+  type ContentLinkTarget,
+} from '#layers/thei/shared/content-link-locate';
+import {
+  brokenLinkAt,
+  linkProblem,
+  outlineCache,
+} from '../../../content-links/broken';
 import { describeHistoryData } from '../../../content/history';
 import { refuse as fail } from '../../../entity-patch/text';
-import { refOf } from '../../../entity-kinds';
+import { findEntity, refOf } from '../../../entity-kinds';
 import { textFromMarkdown } from '../../../mcp/text-input';
 import { keptWordsIn } from '../../terms';
 import { currentNotesText, currentText, notesSlotOf } from '../current';
 import {
   correctionFingerprint,
-  correctionsKeptLately,
+  partsKeptLately,
   neverOffered,
+  relinkFingerprint,
 } from '../declined';
 import { assetIdsIn, prepareLinkCorrection } from '../values';
 import { applyText } from '../write';
@@ -56,6 +73,7 @@ import { clipped, target } from './common';
  */
 
 type Correction = Extract<AiRevisePart, { type: 'correction' }>;
+type Relink = Extract<AiRevisePart, { type: 'relink' }>;
 
 /** Words alone, for telling whether a text already says something. */
 function words(value: string) {
@@ -278,6 +296,144 @@ function tidyParts(
   return parts;
 }
 
+const relinkInput = z.object({
+  link: z.string(),
+  to: z.string().nullable(),
+  certainty: z.enum(['sure', 'unsure']).default('sure'),
+  reason: z.string().default(''),
+});
+
+type Outlines = ReturnType<typeof outlineCache>;
+
+/** A target as a model names it, a diary entry by its day too. */
+function linkTarget(ref: string): ContentLinkTarget | undefined {
+  const parsed = parseTheiLinkUrl(ref);
+  if (!parsed || parsed.entityType !== 'diary-entry') return parsed;
+  const key = findEntity(`diary-entry:${parsed.entityId}`);
+  return key ? { ...parsed, entityId: key.id } : undefined;
+}
+
+/** How a target reads: the entity, and the place inside it. */
+async function targetTitle(target: ContentLinkTarget, outlines: Outlines) {
+  const outline = await outlines(target.entityType, target.entityId);
+  if (!outline) return '';
+  const fragment = target.fragment;
+  if (!fragment) return outline.title;
+  const heading = outline.headings.find((item) => item.id === fragment);
+  return `${outline.title} › ${heading?.title ?? contentPlaceLabel(fragment)}`;
+}
+
+/**
+ * Links of a text that lead nowhere now, each pointed where it should lead:
+ * found where the model says it stands, and checked by the code — it is
+ * broken now, its new target is there with the place it names, and only an
+ * entity gone lets the words lose their link. A link block is pointed
+ * elsewhere, never taken off.
+ */
+async function prepareRelinks(
+  entity: ReturnType<typeof target>,
+  textName: string,
+  data: ContentOutputData,
+  relinks: z.infer<typeof relinkInput>[],
+  dropped: string[],
+): Promise<AiRevisePart[]> {
+  const parts: Relink[] = [];
+  const kept = partsKeptLately(entity, textName);
+  for (const relink of relinks) {
+    const why = (problem: string) => dropped.push(`${relink.link}: ${problem}`);
+    if (parts.some((part) => part.link === relink.link)) {
+      why('one link is mended one way.');
+      continue;
+    }
+    const found = await brokenLinkAt(data, relink.link);
+    if (!found) {
+      why('no link stands there now: read broken_links again.');
+      continue;
+    }
+    if (!found.problem) {
+      why('it leads where it says: there is nothing to mend.');
+      continue;
+    }
+    let to: ContentLinkTarget | null = null;
+    if (relink.to === null) {
+      if (found.link.kind === 'card') {
+        why('a link block is pointed elsewhere, never taken off.');
+        continue;
+      }
+      if (found.problem !== 'entity-gone') {
+        why(
+          'what it led to is still there: point it at the whole of it or at another heading, rather than take the link off.',
+        );
+        continue;
+      }
+    } else {
+      const target = linkTarget(relink.to);
+      if (!target) {
+        why(
+          `"${relink.to}" is no link of this site: thei:<kind>/<id>#<anchor>.`,
+        );
+        continue;
+      }
+      const problem = await linkProblem(target, found.outlines);
+      if (problem) {
+        why(
+          problem === 'entity-gone'
+            ? `${relink.to} names nothing.`
+            : `${relink.to}: no heading of it has that anchor; read outline.`,
+        );
+        continue;
+      }
+      // A text links to a heading of its own page only as it did already.
+      const own = (link: ContentLinkTarget) =>
+        link.entityType === entity.kind && link.entityId === entity.id;
+      if (own(target) && !own(found.link)) {
+        why('a text does not link to its own entity.');
+        continue;
+      }
+      to = target;
+    }
+    const place = contentLinkPlace(data, found.link);
+    const fingerprint = relinkFingerprint(
+      entity,
+      textName,
+      place,
+      to && theiLinkUrl(to),
+    );
+    if (kept.has(fingerprint) || neverOffered([fingerprint]).size) {
+      why('the owner has kept it as it is.');
+      continue;
+    }
+    parts.push({
+      id: `l${parts.length + 1}`,
+      type: 'relink',
+      ...place,
+      to: to && theiLinkUrl(to),
+      fromTitle: await targetTitle(found.link, found.outlines),
+      ...(to ? { toTitle: await targetTitle(to, found.outlines) } : {}),
+      certainty: relink.certainty,
+      reason: relink.reason.slice(0, 200),
+    });
+  }
+  return parts;
+}
+
+/**
+ * A mended link as the text has it now: made once its link leads where the
+ * part would have it — or, taken off, once it no longer leads where it did
+ * and its words are still there — open while it leads where it did, and
+ * overtaken otherwise.
+ */
+function relinkState(
+  data: ContentOutputData | null | undefined,
+  part: Relink,
+): 'applied' | 'stale' | 'pending' {
+  if (!data) return 'stale';
+  if (contentLinkFrom(data, part)) return 'pending';
+  if (part.to)
+    return contentLinkLeads(data, part, part.to) ? 'applied' : 'stale';
+  return countTextMatches(data, part.words) ? 'applied' : 'stale';
+}
+
 const correctionInput = z.object({
   find: z.string(),
   replace: z.string(),
@@ -316,11 +472,12 @@ function partStates(
 export const reviseAction: AiActionKindDef<'revise'> = {
   kind: 'revise',
   reference:
-    'An edit of the owner’s text, decided part by part. text, then either mode proofread with corrections [{ find, replace, category, certainty?, reason }] — local fixes of clear mistakes, find standing once in the text, never typography; category link makes a mention a link to an entity, every word kept — only its first mention in a part of the text, from one level-two heading to the next — or mode order with markdown: the whole text with its blocks moved, split, given headings or a repeat dropped, nothing reworded, with expectedVersion (the version you read), removals [{ quote, reason, duplicateOf? }] and comments [{ quote?, kind, comment }].',
+    'An edit of the owner’s text, decided part by part. text, then either mode proofread with corrections [{ find, replace, category, certainty?, reason }] — local fixes of clear mistakes, find standing once in the text, never typography; category link makes a mention a link to an entity, every word kept — only its first mention in a part of the text, from one level-two heading to the next — or mode relink with relinks [{ link, to, certainty?, reason }]: a link broken_links names (link is its id there) pointed at to, thei:<kind>/<id>#<anchor> — the heading it became, or another place outline gives — or, only when what it led to is gone, to null: its words kept without the link; or mode order with markdown: the whole text with its blocks moved, split, given headings or a repeat dropped, nothing reworded, with expectedVersion (the version you read), removals [{ quote, reason, duplicateOf? }] and comments [{ quote?, kind, comment }].',
   schema: z.object({
     text: z.string(),
-    mode: z.enum(['proofread', 'order']),
+    mode: z.enum(['proofread', 'relink', 'order']),
     corrections: z.array(correctionInput).optional(),
+    relinks: z.array(relinkInput).optional(),
     markdown: z.string().optional(),
     expectedVersion: z.number().nullable().optional(),
     removals: z
@@ -389,11 +546,30 @@ export const reviseAction: AiActionKindDef<'revise'> = {
         parts: parts.map((part) => part.id),
       };
     }
+    if (input.mode === 'relink') {
+      const relinks = (input.relinks ?? []) as z.infer<typeof relinkInput>[];
+      if (!relinks.length)
+        fail('Give the links to mend: relinks [{ link, to, reason }].');
+      const parts = await prepareRelinks(
+        entity,
+        input.text,
+        text.data,
+        relinks,
+        dropped,
+      );
+      if (!parts.length) fail(`Nothing left to propose: ${dropped.join(' ')}`);
+      return {
+        payload: { kind: 'revise', text: input.text, mode: 'relink', parts },
+        base: { version: text.version },
+        dropped,
+        parts: parts.map((part) => part.id),
+      };
+    }
     const corrections = (input.corrections ?? []) as z.infer<
       typeof correctionInput
     >[];
     if (!corrections.length) fail('Give the corrections.');
-    const kept = correctionsKeptLately(entity, input.text);
+    const kept = partsKeptLately(entity, input.text);
     const never = neverOffered(
       corrections.map((c) => correctionFingerprint(entity, input.text, c)),
     );
@@ -512,19 +688,30 @@ export const reviseAction: AiActionKindDef<'revise'> = {
   identity: (payload) =>
     payload.mode === 'order'
       ? [payload.text, payload.plan?.keys, payload.plan?.items]
-      : [
-          payload.text,
-          payload.parts
-            .flatMap((part) =>
-              part.type === 'correction' ? [[part.find, part.replace]] : [],
-            )
-            .sort(),
-        ],
+      : payload.mode === 'relink'
+        ? [
+            payload.text,
+            payload.parts
+              .flatMap((part) =>
+                part.type === 'relink'
+                  ? [[part.from, part.words, part.nth, part.to]]
+                  : [],
+              )
+              .sort(),
+          ]
+        : [
+            payload.text,
+            payload.parts
+              .flatMap((part) =>
+                part.type === 'correction' ? [[part.find, part.replace]] : [],
+              )
+              .sort(),
+          ],
   async apply(key, row, context, write) {
     const entity = target(key);
     const payload = row.payload as {
       text: string;
-      mode: 'proofread' | 'order';
+      mode: 'proofread' | 'relink' | 'order';
       parts: AiRevisePart[];
       plan?: { keys: string[]; items: TidyItem[]; comments: TidyComment[] };
     };
@@ -572,7 +759,7 @@ export const reviseAction: AiActionKindDef<'revise'> = {
   evaluate(key, row) {
     const payload = row.payload as {
       text: string;
-      mode: 'proofread' | 'order';
+      mode: 'proofread' | 'relink' | 'order';
       parts: AiRevisePart[];
       plan?: { keys: string[] };
     };
@@ -600,18 +787,22 @@ export const reviseAction: AiActionKindDef<'revise'> = {
     // A correction no longer standing in the text waits no more: made — in
     // the editor or by the owner's hand — when its words now read as it
     // would have them, and overtaken when they read otherwise.
-    const fresh: PartStateRow[] = payload.parts.map((part) =>
-      part.type === 'correction' &&
-      open(part) &&
-      !correctionPending(text.data, part)
+    const fresh: PartStateRow[] = payload.parts.map((part) => {
+      const kept = stored.get(part.id) ?? { id: part.id, state: 'pending' };
+      if (!open(part)) return kept;
+      if (part.type === 'relink') {
+        const state = relinkState(text.data, part);
+        return state === 'pending' ? kept : { id: part.id, state };
+      }
+      return part.type === 'correction' && !correctionPending(text.data, part)
         ? {
             id: part.id,
             state: countTextMatches(text.data, part.replacePlain)
               ? 'applied'
               : 'stale',
           }
-        : (stored.get(part.id) ?? { id: part.id, state: 'pending' }),
-    );
+        : kept;
+    });
     if (
       !fresh.some(
         (part) => part.state === 'pending' || part.state === 'accepted',
@@ -625,6 +816,19 @@ export const reviseAction: AiActionKindDef<'revise'> = {
   summary(payload) {
     if (payload.mode === 'order')
       return `A new order for ${payload.text}: ${payload.parts.length} parts`;
+    if (payload.mode === 'relink')
+      return `In ${payload.text}: ${payload.parts
+        .flatMap((part) =>
+          part.type === 'relink'
+            ? [
+                `"${clipped(part.words || part.fromTitle, 40)}" → ${part.toTitle ? clipped(part.toTitle, 60) : 'no link'}`,
+              ]
+            : [],
+        )
+        .slice(0, 3)
+        .join(
+          '; ',
+        )}${payload.parts.length > 3 ? `; and ${payload.parts.length - 3} more` : ''}`;
     const shown = payload.parts
       .flatMap((part) =>
         part.type === 'correction'

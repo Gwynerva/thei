@@ -723,3 +723,56 @@ test('an archived session is the last group, only read until brought back', asyn
     thread.locator('[data-action-undo], [data-action-restore]'),
   ).not.toHaveCount(0);
 });
+
+test('a mention may name a heading inside what it names', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const stamp = Date.now();
+  const title = `Chart room ${stamp}`;
+  const project = await (
+    await page.request.post('/api/admin/projects', {
+      data: {
+        title,
+        summary: 'Charts.',
+        access: 'public',
+        humanReadableSlug: 'chart-room',
+        publicId: `cr${stamp}`,
+        showcase: false,
+        cv: false,
+        descriptionContent: {
+          data: {
+            blocks: [
+              { type: 'header', data: { text: 'Soundings', level: 2 } },
+              { type: 'paragraph', data: { text: 'Depths.' } },
+            ],
+          },
+        },
+        relations: [],
+      },
+    })
+  ).json();
+  expect(project.type, JSON.stringify(project)).toBe('success');
+
+  await open(page, '/admin/ai/?session=new');
+  await composer(page).click();
+  await page.keyboard.type('Check @');
+  const picker = page.locator('[data-link-picker="mention"]');
+  await expect(picker).toBeVisible();
+  await page.keyboard.type(title);
+  await expect(picker.locator('[role="option"]').first()).toContainText(title);
+  // → goes into the project: the select of its places opens.
+  await page.keyboard.press('ArrowRight');
+  await expect(picker).toHaveAttribute('data-link-level', 'entity');
+  await page.keyboard.type('Soundings');
+  await page.keyboard.press('Enter');
+  await expect(picker.locator('[data-link-apply]')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(picker).toHaveCount(0);
+
+  const chip = page.locator('[data-mention]');
+  await expect(chip).toHaveText(`${title} › Soundings`);
+  await expect(chip).toHaveAttribute(
+    'data-target',
+    new RegExp(`^project/${project.projectUuid}#.+`),
+  );
+  await expect(composer(page)).toBeFocused();
+});

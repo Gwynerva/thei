@@ -16,6 +16,8 @@ export type PageGetResponse = {
   iconAssetSize?: number;
   content: ContentFieldValue;
   reminder: string;
+  /** Other names it is found by; only the owner sees them. */
+  synonyms: string[];
   notes?: ContentFieldValue;
 };
 

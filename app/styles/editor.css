@@ -579,3 +579,12 @@ body.content-editor-block-dragging,
 body.content-editor-block-dragging * {
   cursor: grabbing !important;
 }
+
+/*
+ * The words a link or hint popup is about, marked while it is open. A
+ * highlight, not markup: nothing is written into the text, so Ctrl+Z has
+ * nothing of it to undo.
+ */
+.content-editor ::highlight(content-editor-pending) {
+  background-color: var(--content-editor-selection);
+}

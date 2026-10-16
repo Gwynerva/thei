@@ -1140,15 +1140,17 @@ export default defineI18nModule({
       `Это название уже служит синонимом тега «${tag}».`,
     tag_synonym_taken: (synonym, tag) =>
       `«${synonym}» уже называет тег «${tag}».`,
-    tag_synonyms: 'Синонимы',
+    synonyms: 'Синонимы',
+    synonyms_hint:
+      'Другие имена, под которыми это известно: сокращение, прозвище, название на другом языке. Любой поиск находит по ним; видны они только вам.',
+    synonyms_placeholder: 'Добавить синоним…',
+    synonyms_limit: (limit) =>
+      `Не больше ${plural(limit, 'синонима', 'синонимов', 'синонимов')}.`,
+    synonym_remove: (synonym) => `Убрать синоним «${synonym}»`,
+    synonym_suggestion_add: (word) => `Добавить синоним «${word}»`,
     tag_synonyms_hint:
       'Другие слова, по которым узнаётся тег: в текстах проектов и событий и в поле добавления тегов. Формы слова учитываются сами. Синонимы видны только вам.',
-    tag_synonyms_placeholder: 'Добавить синоним…',
-    tag_synonyms_limit: (limit) =>
-      `Не больше ${plural(limit, 'синонима', 'синонимов', 'синонимов')}.`,
-    tag_synonym_remove: (synonym) => `Убрать синоним «${synonym}»`,
     tag_synonym_suggestions: 'Часто встречается в записях с этим тегом',
-    tag_synonym_suggestion_add: (word) => `Добавить синоним «${word}»`,
     tag_synonym_found_in: 'Встречается в',
     tag_synonym_already_added: (synonym, tag) =>
       `«${synonym}» — синоним тега «${tag}», и он уже добавлен.`,
@@ -1385,9 +1387,7 @@ export default defineI18nModule({
     content_field_unsaved_draft: (time) => `Несохранённый черновик · ${time}`,
     sign_out_unsynced_confirm: (count) =>
       `Ещё не на сервере: ${plural(count, 'текст', 'текста', 'текстов')}. Если выйти сейчас, они пропадут. Всё равно выйти?`,
-    content_internal_link: 'Внутренняя ссылка',
     content_external_link: 'Внешняя ссылка',
-    content_link_url: 'Адрес ссылки',
     content_link_loading: 'Загрузка данных ссылки…',
     content_link_broken_title: 'Ссылка недоступна',
     content_link_broken_description:
@@ -1443,8 +1443,6 @@ export default defineI18nModule({
     content_audio_as_file: 'Показать файлом',
     content_choose_entity: 'Выбрать, на что ссылаться',
     content_make_gallery: 'Сделать галереей',
-    content_link_internal_detected:
-      'Это адрес страницы этого сайта — ссылка будет сохранена как внутренняя.',
     content_link_fragment: 'Ведёт к этому месту страницы',
     content_link_fragment_remove: 'Ссылаться на страницу целиком',
     content_caption: 'Подпись',
@@ -1768,14 +1766,22 @@ export default defineI18nModule({
     ai_tab_templates: 'Шаблоны',
     ai_templates_title: 'Шаблоны сессий',
     ai_templates_hint:
-      'Готовая просьба к ИИ. По расписанию шаблон просто начинает сессию: что модель нашла и предложила, ждёт вас в ней. Без расписания он запускается кнопкой.',
+      'Готовая просьба к ИИ. Шаблон без расписания запускаете вы: открывается новая сессия с его текстом — дописать и отправить. Шаблон по расписанию начинает сессию сам, и что модель нашла и предложила, ждёт вас в ней.',
     ai_templates_new: 'Новый',
-    ai_templates_builtin: 'Встроенные',
-    ai_templates_own: 'Ваши',
-    ai_templates_own_empty:
-      'Своих шаблонов пока нет: сделайте новый или копию встроенного.',
+    ai_templates_presets: 'Заготовки',
+    ai_templates_presets_hint:
+      'Открываются отсюда, с экрана новой сессии и из ✦ — сущность там уже названа.',
+    ai_templates_presets_empty:
+      'Заготовок пока нет: заготовкой становится любой шаблон без расписания.',
+    ai_templates_scheduled: 'По расписанию',
+    ai_templates_scheduled_hint:
+      'Запускаются сами, но не раньше, чем вы разберёте прошлый запуск: когда вернётесь, один запуск прочитает всё, что было с тех пор.',
+    ai_template_builtin: 'встроенный',
     ai_template_whens: {
-      manual: { title: 'Вручную', hint: 'Кнопкой, без расписания' },
+      manual: {
+        title: 'Без расписания',
+        hint: 'Заготовка: открывает новую сессию со своим текстом',
+      },
       day: { title: 'Каждый день', hint: 'В выбранный час' },
       week: { title: 'Каждую неделю', hint: 'В выбранный день и час' },
       month: { title: 'Каждый месяц', hint: '1-го числа, в выбранный час' },
@@ -1789,7 +1795,40 @@ export default defineI18nModule({
     ai_template_schedule: 'Расписание',
     ai_template_schedule_on: 'Включено',
     ai_template_schedule_off: 'расписание выключено',
-    ai_template_manual_line: 'без расписания',
+    ai_template_open: 'Открыть в новой сессии',
+    ai_open_full: 'На странице ИИ',
+    select_filter: 'Фильтр',
+    content_link: 'Ссылка',
+    content_link_search_placeholder: 'Название или адрес',
+    content_link_mention_placeholder: 'Что упомянуть',
+    content_link_search: 'Поиск',
+    content_link_path: 'Куда ведёт ссылка',
+    content_link_place: 'Куда внутри',
+    content_link_whole: (kind) =>
+      ({
+        project: 'Весь проект',
+        'project-section': 'Весь раздел',
+        event: 'Всё событие',
+        'diary-entry': 'Вся запись',
+        page: 'Вся страница',
+        tag: 'Весь тег',
+      })[kind],
+    content_link_headings: 'Заголовки',
+    content_link_description_headings: 'Заголовки описания',
+    content_link_sections: 'Разделы',
+    content_link_anchor_gone: (anchor) =>
+      `§ ${anchor} — этого заголовка больше нет`,
+    content_link_target_gone: 'Ссылка вела туда, чего больше нет.',
+    content_link_becomes_video: 'Станет блоком видео',
+    content_link_apply: 'Готово',
+    content_link_change: 'Изменить ссылку',
+    content_block_add: 'Добавить блок',
+    content_block_toolbox: 'Блоки',
+    ai_template_offer_on: 'Где предлагать',
+    ai_template_offer_on_hint:
+      'Предлагается в ✦ сущностей этих видов — сущность там уже названа. Если ни один не выбран — только в новой сессии.',
+    ai_template_offered_nowhere: 'только в новой сессии',
+    ai_template_awaits_review: 'ждёт, пока вы разберёте прошлый запуск',
     ai_template_run: 'Запустить сейчас',
     ai_template_edit: 'Настроить',
     ai_template_running: 'идёт сейчас',
@@ -1849,6 +1888,8 @@ export default defineI18nModule({
     ai_session_you: 'Вы',
     ai_session_template: 'Шаблон',
     ai_session_running: 'Работает',
+    ai_session_recent: 'Недавно завершены',
+    ai_session_none: 'Нет',
     ai_session_waiting: (count) => `Ждут решения: ${count}`,
     ai_sessions_archive_note: 'Старше 30 дней удаляются',
     ai_sessions_empty: 'Сессий пока нет',
@@ -1962,14 +2003,19 @@ export default defineI18nModule({
           'Найди недостающие, сомнительные и противоречащие связи между проектами, событиями и записями — прежде всего у нового и изменённого с прошлого раза. Упоминание — ещё не связь.',
       },
       tags: {
-        title: 'Теги',
+        title: 'Теги и имена',
         instruction:
-          'Найди теги об одном и том же, сокращённые и пропущенные — прежде всего у нового и изменённого с прошлого раза. Предложи, что объединить, переименовать или добавить.',
+          'Найди теги об одном и том же, сокращённые и пропущенные — прежде всего у нового и изменённого с прошлого раза. Предложи, что объединить, переименовать или добавить. Если тег, проект, событие или страницу явно называют и по-другому — сокращением, прозвищем, именем на другом языке, — предложи это как синоним; описаний вместо имён не предлагай.',
       },
       'year-ago': {
         title: 'Год назад',
         instruction:
           'Покажи, что было в этот день год назад. Если запись тогда к чему-то относилась, а связи нет — предложи. Ничего не меняй ради воспоминаний.',
+      },
+      links: {
+        title: 'Битые ссылки',
+        instruction:
+          'Пройди broken_links до конца. Почини каждую ссылку туда, куда она должна вести: сначала переименованный заголовок — тот, которым он стал, — потом место, о котором говорят слова, по outline; снимай ссылку, только если то, куда она вела, удалено и ничто не подходит, слова оставь. Ссылки одного текста предлагай одним действием: revise, mode relink. Если ничего не сломано — скажи об этом одной строкой.',
       },
     },
     ai_template_copy_title: (title) => `${title} (копия)`,
@@ -2249,6 +2295,11 @@ export default defineI18nModule({
     ai_action_unsure_count: (count) => `${count} на решение`,
     ai_action_order: 'Новый порядок',
     ai_action_order_parts: (count) => plural(count, 'часть', 'части', 'частей'),
+    ai_action_relink: 'Починка ссылок',
+    ai_action_relinks: (count) => plural(count, 'ссылка', 'ссылки', 'ссылок'),
+    ai_review_link_gone: 'то, куда она вела, удалено',
+    ai_review_link_off: 'без ссылки, слова остаются',
+    ai_review_link_changed: 'Ссылка ведёт уже в другое место',
     ai_action_relations: {
       related: 'Связаны',
       'depends-on': 'зависит от',

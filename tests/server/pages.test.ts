@@ -12,6 +12,9 @@ import {
   buildPublicEntityChronology,
   buildPublicPageListItem,
 } from '../../server/thei/public/entities';
+import { loadLanguage } from '../../shared/language';
+
+const language = await loadLanguage('en');
 
 let rawDb: Database.Database | undefined;
 afterEach(() => rawDb?.close());
@@ -137,6 +140,7 @@ function createDb() {
       summary text NOT NULL,
       access text NOT NULL,
       reminder text NOT NULL DEFAULT '',
+      synonyms text NOT NULL DEFAULT '[]',
       createdAt integer NOT NULL,
       updatedAt integer NOT NULL
     );
@@ -178,6 +182,7 @@ function createDb() {
   const db = drizzle(rawDb, { schema });
   (globalThis as any).THEI_SERVER = {
     useDb: () => ({ db, schema }),
+    language,
     assets: {
       usages: { findByContainer: async () => [] },
     },

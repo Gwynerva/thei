@@ -65,7 +65,9 @@ export function renderEntity(view: McpEntityView): string {
     lines.push('', '## Linked from its texts', '');
     for (const link of view.linkedInText)
       lines.push(
-        `- ${link.ref} — ${link.title}${link.related ? ' (also related)' : ''}`,
+        link.gone
+          ? `- ${link.ref} — gone: the link leads nowhere (broken_links)`
+          : `- ${link.ref} — ${link.title}${link.related ? ' (also related)' : ''}`,
       );
   }
   lines.push(

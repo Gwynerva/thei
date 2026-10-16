@@ -22,6 +22,7 @@ export default defineEventHandler((event) =>
       model: body.model,
       schedule: body.schedule,
       enabled: body.enabled,
+      offerOn: body.offerOn,
     });
   }),
 );

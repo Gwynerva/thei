@@ -136,13 +136,25 @@ instead of the whole while the entity is unchanged.
 
 ## Templates
 
-A **template** is a request that starts a session — by hand, from an
-entity's ✦, or on a schedule: a day, a week or a month at the owner's hour.
+A **template** is a request that starts a session. Without a schedule it is
+a ready-made request: the owner opens it as a new session with its words
+written in, or from the ✦ of an entity of the kinds it is offered on, the
+entity named already, and sends it as it is or added to. With a schedule — a
+day, a week or a month at the owner's hour — it runs by itself, and waits
+while the session of its last run still waits for the owner: answering, or
+holding actions or a question not decided, and not archived. So a template
+piles up no sessions while the owner is away, and one run once they are back
+reads everything since.
+
 The built-in ones are written in the code, and the owner chooses only when
 they run and with which model; the owner's own are written by the owner. A
 model takes from the request what to read, and may ask for what changed
 since the template last ran (`changes_since`). The schedule is kept in the
 database; a run missed while the site was down happens once when it is back.
+The built-in **Broken links** goes through `broken_links` and mends each
+link with `revise`, mode `relink`: the heading a renamed one became, another
+place `outline` gives, and only when what it led to is gone, the words
+without the link.
 
 ## The model of the site
 
@@ -164,6 +176,8 @@ proposes only, and stops at the monthly limit; the key stays on the server.
 | `life_timeline`                   | The one timeline of everything dated.                                |
 | `relation_graph`                  | The relations around an entity.                                      |
 | `tag_candidates`                  | Entities a tag might belong on.                                      |
+| `outline`                         | The headings and sections a link may lead to inside an entity.       |
+| `broken_links`                    | Links leading nowhere now, with where each may lead instead.         |
 | `read_memory`                     | What is remembered of an entity, a kind or the owner.                |
 | `read_digests`, `write_digest`    | The model's own few lines about entities.                            |
 | `open_session`, `session_actions` | A session to work in, and what became of its actions.                |

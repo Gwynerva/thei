@@ -18,6 +18,9 @@ import {
 import { periodsEqual } from '../../../server/thei/periods';
 import type { Period } from '../../../shared/period';
 import type { ProjectSectionItem } from '../../../shared/project-content-item';
+import { loadLanguage } from '../../../shared/language';
+
+const language = await loadLanguage('en');
 
 let rawDb: Database.Database | undefined;
 
@@ -369,6 +372,7 @@ function createDb() {
 function installServerContext(db: ReturnType<typeof createDb>) {
   (globalThis as any).THEI_SERVER = {
     useDb: () => ({ db, schema }),
+    language,
     content: {
       buildFieldValue: async (
         ownerType: string,

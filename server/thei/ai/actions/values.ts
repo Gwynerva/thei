@@ -8,6 +8,7 @@ import {
 import { prepareTextEdit } from '#layers/thei/shared/content-edit-markdown/patch';
 import { EntityPatchError, refuse as fail } from '../../entity-patch/text';
 import type { EntityKey } from '../../entity-kinds';
+import { normalizeSynonyms } from '#layers/thei/shared/synonyms';
 import { checkedInlineHtml } from '../../mcp/text-input';
 
 /**
@@ -22,22 +23,23 @@ const PLAIN_FIELDS = new Set([
   'slogan',
 ]);
 
-/** A field's value as the site stores it, or a refusal. */
+/**
+ * A field's value as the site stores it, or a refusal; synonyms as the
+ * entity titled `title` keeps them.
+ */
 export function checkFieldValue(
   field: string,
   value: unknown,
+  title = '',
 ): string | boolean | string[] {
   if (field === 'showcase' || field === 'cv') {
     if (typeof value !== 'boolean') fail(`${field} takes true or false.`);
     return value;
   }
   if (field === 'synonyms') {
-    if (!Array.isArray(value) || value.some((item) => typeof item !== 'string'))
-      fail('synonyms takes a list of words.');
-    return (value as string[])
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .slice(0, 20);
+    const synonyms = normalizeSynonyms(value, title);
+    if (typeof synonyms === 'string') fail(`synonyms: ${synonyms}.`);
+    return synonyms;
   }
   if (PLAIN_FIELDS.has(field)) {
     if (typeof value !== 'string') fail(`${field} takes text.`);

@@ -1,14 +1,13 @@
 import type { AiMessagePart } from '#layers/thei/shared/ai';
-import type { AiTemplateItem } from '#layers/thei/shared/ai-template';
+import {
+  templateAwaitsReview,
+  type AiTemplateItem,
+} from '#layers/thei/shared/ai-template';
 import { refuse as fail } from '../../entity-patch/text';
-import { refOf, type EntityKey, type EntityKind } from '../../entity-kinds';
+import type { EntityKind } from '../../entity-kinds';
 import { sessionModel } from '../model/settings';
 import { startTurn } from '../runner/queue';
-import {
-  createSession,
-  insertMessage,
-  linkSessionEntities,
-} from '../sessions/store';
+import { createSession, insertMessage } from '../sessions/store';
 import { changesBetween } from './changes';
 import { dueTemplates, findTemplate, recordRun } from './store';
 
@@ -72,7 +71,6 @@ function brief(
     now: number;
     timeZone?: string;
     since?: number;
-    from?: EntityKey;
   },
 ) {
   const changed = run.since === undefined ? '' : changedSince(run.since);
@@ -90,9 +88,6 @@ function brief(
             ? `Since then the archive changed: ${changed} — changes_since lists them, from that run on.`
             : 'Nothing in the archive changed since.'
         }`,
-    ...(run.from
-      ? [`It was started from ${refOf(run.from)}: that is what it is about.`]
-      : []),
     '',
     'Decide from the request what to read, and gather it with the tools, page after page until you have it all:',
     '- what is dated within days — a diary entry by its day, an event or a project stage by its periods: list_entities with its kind, from and to; a stretch of up to 62 days day by day: life_timeline;',
@@ -112,7 +107,6 @@ function shortDate(at: number) {
 export async function runTemplate(
   templateId: string,
   options: {
-    launchedFrom?: EntityKey;
     now?: number;
     by?: 'owner' | 'schedule';
     /** The owner's time zone, as the browser that started it names it. */
@@ -121,6 +115,11 @@ export async function runTemplate(
 ): Promise<{ sessionUuid: string }> {
   const template =
     findTemplate(templateId) ?? fail('There is no such template.');
+  // A ready-made request is the owner's to send, from a new session.
+  const schedule =
+    template.schedule.kind === 'manual'
+      ? fail('A ready-made request opens as a new session; it is not run.')
+      : template.schedule;
   if (!THEI_SERVER.config.mcp.enabled) fail('AI is off.');
   if (!sessionModel(template.model)) fail('No model is set up to answer.');
   if (template.lastSession?.state === 'running')
@@ -163,32 +162,13 @@ export async function runTemplate(
               by,
               now,
               since,
-              from: options.launchedFrom,
-              timeZone:
-                options.timeZone ??
-                (template.schedule.kind === 'manual'
-                  ? undefined
-                  : template.schedule.timeZone),
+              timeZone: options.timeZone ?? schedule.timeZone,
             }),
           },
         ],
       },
       now,
     );
-    if (options.launchedFrom)
-      linkSessionEntities(
-        tx,
-        schema,
-        sessionUuid,
-        [
-          {
-            type: options.launchedFrom.kind as never,
-            id: options.launchedFrom.id,
-            role: 'about',
-          },
-        ],
-        now,
-      );
   });
   recordRun(templateId, { at: now, sessionUuid });
   startTurn(sessionUuid);
@@ -202,11 +182,12 @@ export async function runDueTemplates(now = Date.now()) {
       if (
         THEI_SERVER.config.mcp.enabled &&
         sessionModel(template.model) &&
-        template.lastSession?.state !== 'running'
+        !templateAwaitsReview(template)
       )
         await runTemplate(template.templateId, { now, by: 'schedule' });
-      // A run that could not happen is not caught up on: the next one is,
-      // and it reads from the last run that did.
+      // A run that could not happen — or waits for the last one to be gone
+      // through — is not caught up on: the next one is, and it reads from
+      // the last run that did.
       else recordRun(template.templateId, { at: now });
     } catch (error) {
       THEI_SERVER.console

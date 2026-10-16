@@ -69,6 +69,7 @@ if (pageUuid) {
         iconAssetUuid: response.iconAssetUuid,
         content: response.content,
         reminder: response.reminder,
+        synonyms: response.synonyms,
         notes: response.notes ?? null,
       };
       iconMedia.value = response.iconMedia;
@@ -105,6 +106,12 @@ function saveAfterContentEdit() {
   void save();
 }
 
+const synonymsModel = computed({
+  get: () => data.value.synonyms ?? [],
+  set: (value: string[]) => {
+    data.value.synonyms = value;
+  },
+});
 const reminderModel = computed({
   get: () => data.value.reminder ?? '',
   set: (value: string) => {
@@ -253,6 +260,7 @@ function payload(): PageEditData {
     iconAssetUuid: data.value.iconAssetUuid,
     content: data.value.content,
     reminder: data.value.reminder,
+    synonyms: data.value.synonyms,
     notes: data.value.notes,
   };
 }
@@ -269,6 +277,7 @@ function emptyData(): PageEditData {
     access: '',
     content: null,
     reminder: '',
+    synonyms: [],
     notes: null,
   };
 }
@@ -358,6 +367,11 @@ await useAdminTabTitle(
         />
         <FieldHint>{{ phrase.page_summary_hint }}</FieldHint>
       </Field>
+      <FieldSynonyms
+        v-model="synonymsModel"
+        ai="field:synonyms"
+        :title="data.title"
+      />
 
       <div class="flex flex-col gap-md sm:flex-row">
         <Field class="min-w-0 flex-1">

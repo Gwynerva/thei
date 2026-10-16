@@ -79,6 +79,7 @@ export async function createEvent(
           publicId: result.publicId,
           action: result.action,
           reminder: result.reminder,
+          synonyms: result.synonyms,
           createdAt: now,
           updatedAt: now,
         })

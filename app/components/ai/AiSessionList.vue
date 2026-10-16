@@ -1,9 +1,10 @@
 <script lang="ts" setup>
 import type { IconName } from '#thei/icons';
-import type {
-  AiEntityRef,
-  AiSessionListResponse,
-  AiSessionItem,
+import {
+  aiSessionStanding,
+  type AiEntityRef,
+  type AiSessionListResponse,
+  type AiSessionItem,
 } from '#layers/thei/shared/ai';
 import ContentInlineLinkDecorator from '#layers/thei/app/components/content/ContentInlineLinkDecorator.vue';
 
@@ -148,15 +149,13 @@ onBeforeUnmount(() => {
 });
 defineExpose({ refresh: load });
 
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 type Group = 'pinned' | 'waiting' | 'running' | 'week' | 'earlier' | 'archive';
 const GROUP_ICONS: Partial<Record<Group, IconName>> = { pinned: 'star' };
 function groupOf(item: AiSessionItem): Group {
   if (item.archivedAt) return 'archive';
   if (item.pinned) return 'pinned';
-  if (item.state === 'running') return 'running';
-  if (item.waiting > 0) return 'waiting';
-  return Date.now() - item.lastActiveAt < WEEK_MS ? 'week' : 'earlier';
+  const standing = aiSessionStanding(item);
+  return standing === 'recent' ? 'week' : standing;
 }
 const groups = computed(() => {
   const order: Group[] = [

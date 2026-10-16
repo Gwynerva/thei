@@ -95,7 +95,9 @@ export function noteTemplateRead(
   key: EntityKey,
   view: McpEntityView,
 ) {
-  if (!findSession(sessionUuid)?.templateId) return;
+  // A session the owner began from a ready-made request is the owner's:
+  // only a template's own run reads for it.
+  if (findSession(sessionUuid)?.origin !== 'template') return;
   const fingerprint = entityFingerprint(key);
   if (!fingerprint) return;
   let reads = turnReads.get(sessionUuid);

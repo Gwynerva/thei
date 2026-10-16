@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import type { AiTemplateSchedule } from '#layers/thei/shared/ai';
 import {
+  AI_TEMPLATE_DEFAULT_OFFER,
   AI_TEMPLATE_INSTRUCTION_MAX,
+  AI_TEMPLATE_OFFER_KINDS,
   AI_TEMPLATE_TITLE_MAX,
   type AiTemplateDetail,
+  type AiTemplateOfferKind,
 } from '#layers/thei/shared/ai-template';
+import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
 import {
   aiModelName,
   type AiModelSettings,
@@ -26,7 +30,8 @@ const { modalData } = defineProps<{
 }>();
 type Result =
   | { type: 'saved' | 'deleted' | 'copied' }
-  | { type: 'started'; sessionUuid: string; title: string };
+  | { type: 'started'; sessionUuid: string; title: string }
+  | { type: 'opened' };
 const emit = defineEmits<{ modalResult: [result: Result] }>();
 
 type Kind = AiTemplateSchedule['kind'];
@@ -38,6 +43,7 @@ interface Draft {
   day: number;
   enabled: boolean;
   model: string;
+  offerOn: AiTemplateOfferKind[];
 }
 
 const detail = ref<AiTemplateDetail>();
@@ -51,6 +57,7 @@ const draft = ref<Draft>({
   day: 1,
   enabled: true,
   model: '',
+  offerOn: [...AI_TEMPLATE_DEFAULT_OFFER],
 });
 const saved = ref('');
 const busy = ref<'save' | 'run' | 'copy' | 'delete'>();
@@ -73,6 +80,7 @@ function draftOf(detail: AiTemplateDetail): Draft {
     day: schedule.kind === 'week' ? schedule.day : 1,
     enabled: template.enabled,
     model: template.model,
+    offerOn: [...template.offerOn],
   };
 }
 
@@ -163,6 +171,7 @@ async function save() {
     model: form.model.trim(),
     schedule: schedule(form),
     enabled: form.enabled,
+    offerOn: form.offerOn,
     ...(builtin.value
       ? {}
       : { title: form.title, instruction: form.instruction }),
@@ -181,8 +190,35 @@ async function save() {
   }
 }
 
+/** The kinds a ready-made request may be offered on, each a toggle. */
+const offerKinds = computed(() =>
+  AI_TEMPLATE_OFFER_KINDS.map((kind) => ({
+    kind,
+    icon: entityTypeIcon(kind),
+    label: entityTypeLabel(kind),
+    on: draft.value.offerOn.includes(kind),
+  })),
+);
+
+function toggleOffer(kind: AiTemplateOfferKind) {
+  const on = new Set(draft.value.offerOn);
+  if (on.has(kind)) on.delete(kind);
+  else on.add(kind);
+  draft.value.offerOn = AI_TEMPLATE_OFFER_KINDS.filter((item) => on.has(item));
+}
+
+const preset = computed(() => template.value?.schedule.kind === 'manual');
+
 async function run() {
   if (busy.value || !template.value) return;
+  // A ready-made request is opened, not run: its words wait to be added to.
+  if (preset.value) {
+    emit('modalResult', { type: 'opened' });
+    void navigateTo(
+      newSessionLocation({ template: template.value.templateId }),
+    );
+    return;
+  }
   busy.value = 'run';
   error.value = '';
   try {
@@ -411,6 +447,34 @@ useModalCloseGuard(
         <FieldHint>{{ whenHint }}</FieldHint>
       </Field>
 
+      <Field v-if="draft.kind === 'manual'">
+        <FieldLabel>{{ phrase.ai_template_offer_on }}</FieldLabel>
+        <div
+          role="group"
+          class="flex flex-wrap gap-1"
+          :aria-label="phrase.ai_template_offer_on"
+        >
+          <button
+            v-for="item in offerKinds"
+            :key="item.kind"
+            type="button"
+            class="flex h-9 cursor-pointer items-center gap-1.5 rounded-full
+              border px-3 text-xs transition pointer-coarse:h-11"
+            :class="
+              item.on
+                ? 'border-accent bg-accent/10 font-semibold text-accent'
+                : 'border-border-1 bg-bg-1 text-text-2 hocus:border-border-3'
+            "
+            :aria-pressed="item.on"
+            :data-template-offer="item.kind"
+            @click="toggleOffer(item.kind)"
+          >
+            <Icon :name="item.icon" class="shrink-0" />{{ item.label }}
+          </button>
+        </div>
+        <FieldHint>{{ phrase.ai_template_offer_on_hint }}</FieldHint>
+      </Field>
+
       <Field>
         <FieldLabel>{{ phrase.ai_template_model }}</FieldLabel>
         <FieldInput
@@ -449,9 +513,11 @@ useModalCloseGuard(
           data-template-run-now
           @click="run"
         >
-          <Icon :name="busy === 'run' ? 'loading' : 'play-circle'" />{{
-            phrase.ai_template_run
-          }}
+          <Icon
+            :name="
+              busy === 'run' ? 'loading' : preset ? 'ai-chat' : 'play-circle'
+            "
+          />{{ preset ? phrase.ai_template_open : phrase.ai_template_run }}
         </Button>
         <Button
           variant="secondary"

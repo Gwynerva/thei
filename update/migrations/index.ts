@@ -22,6 +22,9 @@ import apiTokens from './0.0.6-api-tokens';
 import oauth from './0.0.6-oauth';
 import aiConfig from './0.0.6-ai-config';
 import ai from './0.0.6-ai';
+import entitySynonyms from './0.0.6-entity-synonyms';
+import aiTemplateOffers from './0.0.6-ai-template-offers';
+import contentAnchors from './0.0.6-content-anchors';
 
 /**
  * Every migration Thei has ever shipped, oldest first.
@@ -57,6 +60,9 @@ export const migrationRegistry: TheiMigration[] = [
   oauth,
   aiConfig,
   ai,
+  entitySynonyms,
+  aiTemplateOffers,
+  contentAnchors,
 ];
 
 export { baselineSql } from './0.0.1-baseline';

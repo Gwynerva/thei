@@ -50,8 +50,9 @@ export interface McpDocument {
   words: number;
   relationCount?: number;
   tagRefs?: string[];
-  /** A tag's other names, and the entities it is on. */
+  /** Other names it is found by: a tag's, a project's, an event's, a page's. */
   synonyms?: string[];
+  /** The entities a tag is on. */
   usedBy?: string[];
 }
 
@@ -301,7 +302,13 @@ function buildDocuments(): McpDocument[] {
         periods: projectPeriods.get(row.projectUuid) ?? [],
         updatedAt: row.updatedAt,
         main: own[0]?.text,
-        text: join(row.title, row.summary, ...own.map((text) => text.text)),
+        text: join(
+          row.title,
+          row.summary,
+          ...row.synonyms,
+          ...own.map((text) => text.text),
+        ),
+        synonyms: row.synonyms,
         relationCount: relations.get(`project:${row.projectUuid}`) ?? 0,
         tagRefs: tags.byContainer.get(`project:${row.projectUuid}`) ?? [],
       });
@@ -348,7 +355,13 @@ function buildDocuments(): McpDocument[] {
         periods: periods.get(row.eventUuid) ?? [],
         updatedAt: row.updatedAt,
         main: own[0]?.text,
-        text: join(row.title, row.summary, ...own.map((text) => text.text)),
+        text: join(
+          row.title,
+          row.summary,
+          ...row.synonyms,
+          ...own.map((text) => text.text),
+        ),
+        synonyms: row.synonyms,
         relationCount: relations.get(`event:${row.eventUuid}`) ?? 0,
         tagRefs: tags.byContainer.get(`event:${row.eventUuid}`) ?? [],
       });
@@ -396,7 +409,13 @@ function buildDocuments(): McpDocument[] {
         access: row.access,
         updatedAt: row.updatedAt,
         main: own[0]?.text,
-        text: join(row.title, row.summary, ...own.map((text) => text.text)),
+        text: join(
+          row.title,
+          row.summary,
+          ...row.synonyms,
+          ...own.map((text) => text.text),
+        ),
+        synonyms: row.synonyms,
       });
     }
   }

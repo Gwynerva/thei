@@ -125,6 +125,18 @@ export const baselineSql: string[] = [
 `,
   `CREATE INDEX \`content-history-field-idx\` ON \`content-history\` (\`ownerType\`,\`ownerRef\`,\`slot\`,\`kind\`,\`createdAt\`);`,
   `CREATE INDEX \`content-history-kind-idx\` ON \`content-history\` (\`kind\`,\`createdAt\`);`,
+  `CREATE TABLE \`content-anchors\` (
+	\`ownerType\` text NOT NULL,
+	\`ownerId\` text NOT NULL,
+	\`slot\` text NOT NULL,
+	\`anchor\` text NOT NULL,
+	\`blockId\` text NOT NULL,
+	\`title\` text NOT NULL,
+	\`seenAt\` integer NOT NULL,
+	PRIMARY KEY(\`ownerType\`, \`ownerId\`, \`slot\`, \`anchor\`, \`blockId\`)
+);
+`,
+  `CREATE INDEX \`content-anchors-field-idx\` ON \`content-anchors\` (\`ownerType\`,\`ownerId\`,\`slot\`);`,
   `CREATE TABLE \`events\` (
 	\`eventUuid\` text PRIMARY KEY NOT NULL,
 	\`title\` text NOT NULL,
@@ -134,6 +146,7 @@ export const baselineSql: string[] = [
 	\`publicId\` text NOT NULL,
 	\`action\` text,
 	\`reminder\` text DEFAULT '' NOT NULL,
+	\`synonyms\` text DEFAULT '[]' NOT NULL,
 	\`createdAt\` integer NOT NULL,
 	\`updatedAt\` integer NOT NULL
 );
@@ -160,6 +173,7 @@ export const baselineSql: string[] = [
 	\`cv\` integer DEFAULT false NOT NULL,
 	\`action\` text,
 	\`reminder\` text DEFAULT '' NOT NULL,
+	\`synonyms\` text DEFAULT '[]' NOT NULL,
 	\`createdAt\` integer NOT NULL,
 	\`updatedAt\` integer NOT NULL
 );
@@ -172,6 +186,7 @@ export const baselineSql: string[] = [
 	\`summary\` text NOT NULL,
 	\`access\` text NOT NULL,
 	\`reminder\` text DEFAULT '' NOT NULL,
+	\`synonyms\` text DEFAULT '[]' NOT NULL,
 	\`createdAt\` integer NOT NULL,
 	\`updatedAt\` integer NOT NULL
 );
@@ -491,6 +506,7 @@ export const baselineSql: string[] = [
 	\`model\` text DEFAULT '' NOT NULL,
 	\`schedule\` text NOT NULL,
 	\`enabled\` integer DEFAULT true NOT NULL,
+	\`offerOn\` text DEFAULT '[]' NOT NULL,
 	\`nextRunAt\` integer,
 	\`lastRunAt\` integer,
 	\`lastSessionUuid\` text,

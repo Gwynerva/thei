@@ -24,6 +24,13 @@ const accessHint = computed(() => {
   }
 });
 
+const synonymsModel = computed({
+  get: () => projectData.value.synonyms ?? [],
+  set: (value: string[]) => {
+    projectData.value.synonyms = value;
+  },
+});
+
 /** Provided by the project form; absent when this block is reused elsewhere. */
 const saveAfterContentEdit = inject(saveAfterContentEditKey, undefined);
 </script>
@@ -84,6 +91,12 @@ const saveAfterContentEdit = inject(saveAfterContentEditKey, undefined);
       />
       <FieldHint>{{ phrase.project_summary_hint }}</FieldHint>
     </Field>
+
+    <FieldSynonyms
+      v-model="synonymsModel"
+      ai="field:synonyms"
+      :title="projectData.title"
+    />
 
     <LinkField
       v-model:title="projectData.title"

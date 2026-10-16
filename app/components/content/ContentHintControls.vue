@@ -10,8 +10,6 @@ import type {
  * `FloatingPopup` watches the panel's own size, so a hint of several lines
  * pushes the panel around rather than out of view.
  */
-defineProps<{ teleportTo?: string | HTMLElement }>();
-
 const open = ref(false);
 const request = shallowRef<ContentHintRequest>();
 const text = ref('');
@@ -51,7 +49,6 @@ defineExpose<ContentHintControlsExpose>({ open: openControls });
     :offset="0"
     shift-cross-axis
     max-width="20rem"
-    :teleport-to="teleportTo"
     @opened="field?.focus({ preventScroll: true })"
     @dismiss="request?.restore()"
     @closed="popupClosed"

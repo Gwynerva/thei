@@ -1078,14 +1078,16 @@ export default defineI18nBase({
       `This title is already a synonym of the tag “${tag}”.`,
     tag_synonym_taken: (synonym, tag) =>
       `“${synonym}” already names the tag “${tag}”.`,
-    tag_synonyms: 'Synonyms',
+    synonyms: 'Synonyms',
+    synonyms_hint:
+      'Other names it is known by: an abbreviation, a nickname, its name in another language. Every search finds it by them; only you see them.',
+    synonyms_placeholder: 'Add synonym…',
+    synonyms_limit: (limit) => `No more than ${limit} synonyms.`,
+    synonym_remove: (synonym) => `Remove synonym “${synonym}”`,
+    synonym_suggestion_add: (word) => `Add synonym “${word}”`,
     tag_synonyms_hint:
       'Other words the tag is known by: in the text of projects and events and in the tag field. Word forms are taken care of. Only you see synonyms.',
-    tag_synonyms_placeholder: 'Add synonym…',
-    tag_synonyms_limit: (limit) => `No more than ${limit} synonyms.`,
-    tag_synonym_remove: (synonym) => `Remove synonym “${synonym}”`,
     tag_synonym_suggestions: 'Common in entries with this tag',
-    tag_synonym_suggestion_add: (word) => `Add synonym “${word}”`,
     tag_synonym_found_in: 'Found in',
     tag_synonym_already_added: (synonym, tag) =>
       `“${synonym}” is a synonym of “${tag}”, which is already added.`,
@@ -1322,9 +1324,7 @@ export default defineI18nBase({
     content_field_unsaved_draft: (time) => `Unsaved draft · ${time}`,
     sign_out_unsynced_confirm: (count) =>
       `Not on the server yet: ${plural(count, 'text', 'texts')}. Signing out now loses ${count === 1 ? 'it' : 'them'}. Sign out anyway?`,
-    content_internal_link: 'Internal link',
     content_external_link: 'External link',
-    content_link_url: 'Link URL',
     content_link_loading: 'Loading link details…',
     content_link_broken_title: 'Link unavailable',
     content_link_broken_description:
@@ -1380,8 +1380,6 @@ export default defineI18nBase({
     content_audio_as_file: 'Show as a file',
     content_choose_entity: 'Choose what to link to',
     content_make_gallery: 'Turn into a gallery',
-    content_link_internal_detected:
-      'This is a page of this site, so the link will be stored as an internal one.',
     content_link_fragment: 'Leads to this place on the page',
     content_link_fragment_remove: 'Link to the page as a whole',
     content_caption: 'Caption',
@@ -1705,14 +1703,22 @@ export default defineI18nBase({
     ai_tab_templates: 'Templates',
     ai_templates_title: 'Session templates',
     ai_templates_hint:
-      'A request to the AI, ready to go. On its schedule a template simply starts a session: what the model found and proposed waits for you in it. Without a schedule it runs at a click.',
+      'A request to the AI, ready to go. One without a schedule is yours to start: a new session opens with its words, to add to and send. One on a schedule starts a session by itself, and what it found and proposed waits for you there.',
     ai_templates_new: 'New',
-    ai_templates_builtin: 'Built-in',
-    ai_templates_own: 'Yours',
-    ai_templates_own_empty:
-      'No templates of your own yet: make a new one or copy a built-in one.',
+    ai_templates_presets: 'Ready-made requests',
+    ai_templates_presets_hint:
+      'Opened here, on the new session screen or from an entity’s ✦, with the entity already named.',
+    ai_templates_presets_empty:
+      'None yet: a template without a schedule becomes one.',
+    ai_templates_scheduled: 'On a schedule',
+    ai_templates_scheduled_hint:
+      'They start by themselves, but never while their last run still waits for you: one run, when you are back, reads everything since.',
+    ai_template_builtin: 'built-in',
     ai_template_whens: {
-      manual: { title: 'By hand', hint: 'At a click, with no schedule' },
+      manual: {
+        title: 'No schedule',
+        hint: 'A ready-made request: it opens a new session with its words',
+      },
       day: { title: 'Every day', hint: 'At the hour chosen' },
       week: { title: 'Every week', hint: 'On the day and at the hour chosen' },
       month: { title: 'Every month', hint: 'On the 1st, at the hour chosen' },
@@ -1726,7 +1732,40 @@ export default defineI18nBase({
     ai_template_schedule: 'Schedule',
     ai_template_schedule_on: 'On',
     ai_template_schedule_off: 'schedule off',
-    ai_template_manual_line: 'no schedule',
+    ai_template_open: 'Open in a new session',
+    ai_open_full: 'Open on the AI page',
+    select_filter: 'Filter',
+    content_link: 'Link',
+    content_link_search_placeholder: 'A title or an address',
+    content_link_mention_placeholder: 'What to mention',
+    content_link_search: 'Search',
+    content_link_path: 'Where the link leads',
+    content_link_place: 'Where in it',
+    content_link_whole: (kind) =>
+      ({
+        project: 'The whole project',
+        'project-section': 'The whole section',
+        event: 'The whole event',
+        'diary-entry': 'The whole entry',
+        page: 'The whole page',
+        tag: 'The whole tag',
+      })[kind],
+    content_link_headings: 'Headings',
+    content_link_description_headings: 'Headings of the description',
+    content_link_sections: 'Sections',
+    content_link_anchor_gone: (anchor) => `§ ${anchor} — this heading is gone`,
+    content_link_target_gone:
+      'The link led to something that is no longer there.',
+    content_link_becomes_video: 'Becomes a video block',
+    content_link_apply: 'Done',
+    content_link_change: 'Change link',
+    content_block_add: 'Add a block',
+    content_block_toolbox: 'Blocks',
+    ai_template_offer_on: 'Offered on',
+    ai_template_offer_on_hint:
+      'The ✦ of these kinds of entity offers it, with the entity named. With none chosen, only a new session does.',
+    ai_template_offered_nowhere: 'only in a new session',
+    ai_template_awaits_review: 'waits until you go through its last run',
     ai_template_run: 'Run now',
     ai_template_edit: 'Settings',
     ai_template_running: 'running now',
@@ -1792,6 +1831,8 @@ export default defineI18nBase({
     ai_session_you: 'You',
     ai_session_template: 'Template',
     ai_session_running: 'Working',
+    ai_session_recent: 'Recently done',
+    ai_session_none: 'None',
     ai_session_waiting: (count) => `Waiting for your decision: ${count}`,
     ai_sessions_archive_note: 'Deleted after 30 days',
     ai_sessions_empty: 'No sessions yet',
@@ -1896,14 +1937,19 @@ export default defineI18nBase({
           'Find the relations missing, doubtful or at odds between projects, events and entries — first of all around what is new or changed since last time. A mention is not yet a relation.',
       },
       tags: {
-        title: 'Tags',
+        title: 'Tags and names',
         instruction:
-          'Find tags about the same thing, shortened ones and missing ones — first of all around what is new or changed since last time. Propose what to merge, rename or add.',
+          'Find tags about the same thing, shortened ones and missing ones — first of all around what is new or changed since last time. Propose what to merge, rename or add. Where a tag, a project, an event or a page is plainly known by another name — an abbreviation, a nickname, its name in another language — propose it as a synonym; propose none that is only a description.',
       },
       'year-ago': {
         title: 'A year ago',
         instruction:
           'Show what happened on this day a year ago. If an entry of then belonged to something and is not related to it, propose it. Change nothing for memories’ sake.',
+      },
+      links: {
+        title: 'Broken links',
+        instruction:
+          'Go through broken_links to the end. Mend each link where it should lead: a renamed heading first — the heading it became — then the place the words mean, read with outline; take a link off only when what it led to is gone and nothing fits, its words kept. Propose a text’s links as one action: revise, mode relink. When nothing is broken, say so in a line.',
       },
     },
     ai_template_copy_title: (title) => `${title} (copy)`,
@@ -2182,6 +2228,11 @@ export default defineI18nBase({
     ai_action_unsure_count: (count) => `${count} your call`,
     ai_action_order: 'New order',
     ai_action_order_parts: (count) => plural(count, 'part', 'parts'),
+    ai_action_relink: 'Mending links',
+    ai_action_relinks: (count) => plural(count, 'link', 'links'),
+    ai_review_link_gone: 'what it led to is gone',
+    ai_review_link_off: 'no link, the words stay',
+    ai_review_link_changed: 'The link leads elsewhere now',
     ai_action_relations: {
       related: 'Related',
       'depends-on': 'depends on',

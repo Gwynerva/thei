@@ -329,3 +329,28 @@ export interface AiSessionListResponse {
   /** What waits for the owner across all sessions, as the admin bar counts it. */
   waiting: number;
 }
+
+/** How long a session done since counts as recent: a week. */
+const AI_SESSION_RECENT_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Where a session stands: working now, waiting for the owner, done within
+ * the week, or done before.
+ */
+export function aiSessionStanding(
+  item: Pick<AiSessionItem, 'state' | 'waiting' | 'lastActiveAt'>,
+  now = Date.now(),
+): 'running' | 'waiting' | 'recent' | 'earlier' {
+  if (item.state === 'running') return 'running';
+  if (item.waiting > 0) return 'waiting';
+  return now - item.lastActiveAt < AI_SESSION_RECENT_MS ? 'recent' : 'earlier';
+}
+
+/** The dashboard's sessions: the latest that wait, work, or are done. */
+export interface AiSessionOverview {
+  /** The sessions there are, the archive aside. */
+  total: number;
+  waiting: AiSessionItem[];
+  running: AiSessionItem[];
+  recent: AiSessionItem[];
+}

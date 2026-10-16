@@ -1,3 +1,4 @@
+import { normalizeTermText } from '../text-terms';
 import {
   paginate,
   resolvePagination,
@@ -25,6 +26,8 @@ export type SearchableAdminEntity = {
   createdAt: number;
   updatedAt: number;
   contentText?: string;
+  /** Other names it is found by. */
+  synonyms?: string[];
 };
 
 export type CanonicalAdminEntityListRouteQuery = {
@@ -78,6 +81,7 @@ export function paginateAdminEntities<T extends SearchableAdminEntity>(
             item.humanReadableSlug,
             item.publicId,
             item.contentText ?? '',
+            ...(item.synonyms ?? []),
           ].some((value) => normalizeAdminSearchText(value).includes(q)) ||
           matches?.(item),
       )
@@ -98,7 +102,7 @@ export function paginateAdminEntities<T extends SearchableAdminEntity>(
 }
 
 export function normalizeAdminSearchText(value: string): string {
-  return value.normalize('NFKC').trim().toLocaleLowerCase();
+  return normalizeTermText(value.trim());
 }
 
 /** The page size an admin list asked for, within what it may ask. */

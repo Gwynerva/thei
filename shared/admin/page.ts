@@ -1,4 +1,5 @@
 import { ProjectEventAccessLevel } from '../access-level';
+import { normalizeSynonyms } from '../synonyms';
 import { normalizeEntityNotes, normalizeEntityReminder } from '../entity-notes';
 import {
   ContentValidationError,
@@ -50,6 +51,8 @@ export function validatePageData(
   if (!pageSlugIsValid(slug)) return 'Invalid slug';
   if (!isOneOf(data.access, ProjectEventAccessLevel))
     return 'Invalid access level';
+  const synonyms = normalizeSynonyms(data.synonyms, title);
+  if (typeof synonyms === 'string') return synonyms;
 
   try {
     const contentData = normalizeContentData(data.content?.data);
@@ -71,6 +74,7 @@ export function validatePageData(
         ...optionalContentDraftRef(data.content?.draftRef),
       },
       reminder: normalizeEntityReminder(data.reminder),
+      synonyms,
       notes: normalizeEntityNotes(data.notes),
     };
   } catch (error) {

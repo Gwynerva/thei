@@ -1,3 +1,4 @@
+import { letterSimilarity } from '../text-similarity';
 import type { ContentOutputBlock, ContentOutputData } from '../content';
 import { decodeHtmlEntities, escapeHtmlText } from './html';
 
@@ -126,38 +127,6 @@ function changedWords(edit: TextEdit) {
   };
 }
 
-/**
- * How alike two words are by the letters it takes to make one the other:
- * a letter added, dropped, changed — or two neighbours swapped, the commonest
- * typo of all, counted as one.
- */
-function letterSimilarity(before: string, after: string): number {
-  const longest = Math.max(before.length, after.length);
-  if (!longest) return 1;
-  let beforeLast: number[] = [];
-  let previous = Array.from({ length: after.length + 1 }, (_, index) => index);
-  for (let i = 1; i <= before.length; i++) {
-    const current = [i];
-    for (let j = 1; j <= after.length; j++) {
-      current[j] = Math.min(
-        previous[j]! + 1,
-        current[j - 1]! + 1,
-        previous[j - 1]! + (before[i - 1] === after[j - 1] ? 0 : 1),
-      );
-      if (
-        i > 1 &&
-        j > 1 &&
-        before[i - 1] === after[j - 2] &&
-        before[i - 2] === after[j - 1]
-      )
-        current[j] = Math.min(current[j]!, beforeLast[j - 2]! + 1);
-    }
-    beforeLast = previous;
-    previous = current;
-  }
-  return 1 - previous[after.length]! / longest;
-}
-
 /** A fix, not a rewrite: few words touched, and those still recognisable. */
 export function editIsLocalFix(edit: TextEdit): boolean {
   return editedWordCount(edit) <= 3 && editSimilarity(edit) >= 0.5;
@@ -183,7 +152,7 @@ function runsOf(html: string) {
   return runs;
 }
 
-interface Field {
+export interface ContentTextField {
   get: () => string;
   set: (value: string) => void;
   /** Inline markup; otherwise plain text. */
@@ -192,9 +161,16 @@ interface Field {
   escaped?: boolean;
 }
 
-function fieldsOf(block: ContentOutputBlock): Field[] {
+/** The fields of a block that hold words, each read and written in place. */
+export function contentTextFields(
+  block: ContentOutputBlock,
+): ContentTextField[] {
   const data = block.data as Record<string, any>;
-  const field = (key: string, html: boolean, escaped = false): Field => ({
+  const field = (
+    key: string,
+    html: boolean,
+    escaped = false,
+  ): ContentTextField => ({
     get: () => (typeof data[key] === 'string' ? data[key] : ''),
     set: (value) => {
       data[key] = value;
@@ -210,7 +186,7 @@ function fieldsOf(block: ContentOutputBlock): Field[] {
     case 'quote':
       return [field('text', true), field('caption', true)];
     case 'list': {
-      const fields: Field[] = [];
+      const fields: ContentTextField[] = [];
       const walk = (items: Record<string, any>[]) => {
         for (const item of items ?? []) {
           fields.push({
@@ -247,7 +223,11 @@ function fieldsOf(block: ContentOutputBlock): Field[] {
   }
 }
 
-function storedOffset(raw: string, decodedOffset: number, field: Field) {
+function storedOffset(
+  raw: string,
+  decodedOffset: number,
+  field: ContentTextField,
+) {
   if (!field.html && !field.escaped) return decodedOffset;
   let decoded = 0;
   let index = 0;
@@ -260,7 +240,7 @@ function storedOffset(raw: string, decodedOffset: number, field: Field) {
 }
 
 /** Where `find` stands in a field, as offsets into its stored form. */
-function matchesIn(field: Field, find: string) {
+function matchesIn(field: ContentTextField, find: string) {
   const value = field.get();
   const found: { start: number; end: number; inLink: boolean }[] = [];
   const runs = field.html
@@ -283,7 +263,7 @@ function matchesIn(field: Field, find: string) {
 }
 
 /** A field's markup as a reader sees it: words, tags and entities resolved. */
-function fieldWords(value: string, field: Field) {
+function fieldWords(value: string, field: ContentTextField) {
   const text = field.html ? value.replace(TAG, '') : value;
   return field.html || field.escaped ? decodeHtmlEntities(text) : text;
 }
@@ -317,7 +297,7 @@ export function placeTextEdits(
   for (const edit of edits) {
     if (!edit.find) continue;
     const matches = copy.blocks.flatMap((block, index) =>
-      fieldsOf(block).flatMap((field) =>
+      contentTextFields(block).flatMap((field) =>
         matchesIn(field, edit.find).map((match) => ({
           block: index,
           field,
@@ -359,7 +339,7 @@ export function overlappingEdits(
   edits.forEach((edit, index) => {
     if (!edit.find) return;
     const matches = data.blocks.flatMap((block, blockIndex) =>
-      fieldsOf(block).flatMap((field, fieldIndex) =>
+      contentTextFields(block).flatMap((field, fieldIndex) =>
         matchesIn(field, edit.find).map((match) => ({
           block: blockIndex,
           field: fieldIndex,
@@ -392,7 +372,7 @@ export function countTextMatches(
 ): number {
   if (!data || !find) return 0;
   return data.blocks
-    .flatMap(fieldsOf)
+    .flatMap(contentTextFields)
     .reduce((total, field) => total + matchesIn(field, find).length, 0);
 }
 
@@ -422,7 +402,7 @@ export function correctionPending(
   if (makesLinkOnly(edit))
     return Boolean(
       data?.blocks
-        .flatMap(fieldsOf)
+        .flatMap(contentTextFields)
         .some((field) =>
           matchesIn(field, edit.find).some((match) => !match.inLink),
         ),
@@ -460,7 +440,7 @@ export function applyPreparedTextEdits(
       continue;
     }
     const matches = copy.blocks
-      .flatMap(fieldsOf)
+      .flatMap(contentTextFields)
       .flatMap((field) =>
         matchesIn(field, edit.find).map((match) => ({ field, ...match })),
       );

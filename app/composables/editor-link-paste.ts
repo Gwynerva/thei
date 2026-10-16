@@ -10,11 +10,14 @@ import {
 } from '#layers/thei/shared/internal-url';
 import { trimInlineRange } from '#layers/thei/app/components/content/editor-inline-selection';
 import {
+  placeCaretAfter,
+  replaceRangeText,
+} from '#layers/thei/app/components/content/editor-edit-commands';
+import {
   applyLinkAttributes,
   entityLinkAttributes,
   externalLinkAttributes,
   linkRange,
-  placeCaretAfter,
   type InlineLinkAttributes,
 } from '#layers/thei/app/components/content/editor-inline-link-dom';
 
@@ -169,18 +172,14 @@ export function bindEditorLinkPaste(
     if (!bound || !rangeStillHolds(range, text)) return;
     if (!attributes) {
       // A site path that opens nothing is pasted as the text it is.
-      const selection = window.getSelection();
-      selection?.removeAllRanges();
-      selection?.addRange(range);
-      document.execCommand(
-        'insertText',
-        false,
+      replaceRangeText(
+        range,
         target.kind === 'internal' ? target.raw : target.url,
       );
       return;
     }
     const element = linkRange(range, attributes);
-    placeCaretAfter(element);
+    if (element) placeCaretAfter(element);
     editor.inlineToolbar.close();
   }
 

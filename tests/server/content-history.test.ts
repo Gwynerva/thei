@@ -29,6 +29,9 @@ import {
   type ContentHistoryField,
 } from '../../shared/content-history';
 import type { ContentOutputData } from '../../shared/content';
+import { loadLanguage } from '../../shared/language';
+
+const language = await loadLanguage('en');
 
 let rawDb: Database.Database;
 let db: ReturnType<typeof drizzle<typeof schema>>;
@@ -45,7 +48,7 @@ beforeEach(() => {
       .run(pageUuid, pageUuid);
   db = drizzle(rawDb, { schema });
   Object.assign(globalThis, {
-    THEI_SERVER: { useDb: () => ({ db, schema, rawDb }) },
+    THEI_SERVER: { useDb: () => ({ db, schema, rawDb }), language },
   });
 });
 

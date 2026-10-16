@@ -67,6 +67,7 @@ describe('asset cleanup', () => {
           cv integer NOT NULL DEFAULT false,
           action text,
           reminder text NOT NULL DEFAULT '',
+          synonyms text NOT NULL DEFAULT '[]',
           createdAt integer NOT NULL,
           updatedAt integer NOT NULL
         );
@@ -79,6 +80,7 @@ describe('asset cleanup', () => {
           publicId text NOT NULL UNIQUE,
           action text,
           reminder text NOT NULL DEFAULT '',
+          synonyms text NOT NULL DEFAULT '[]',
           createdAt integer NOT NULL,
           updatedAt integer NOT NULL
         );
@@ -89,6 +91,7 @@ describe('asset cleanup', () => {
           summary text NOT NULL,
           access text NOT NULL,
           reminder text NOT NULL DEFAULT '',
+          synonyms text NOT NULL DEFAULT '[]',
           createdAt integer NOT NULL,
           updatedAt integer NOT NULL
         );

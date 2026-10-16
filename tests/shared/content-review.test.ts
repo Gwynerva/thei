@@ -472,3 +472,122 @@ describe('the rules a new order and corrections keep', () => {
     );
   });
 });
+
+describe('links mended, part by part', () => {
+  const link = (id: string, words: string, fragment?: string) =>
+    `<a data-content-link="entity" data-entity-type="project" data-entity-id="${id}"${fragment ? ` data-entity-fragment="${fragment}"` : ''}>${words}</a>`;
+  const text: ContentOutputData = {
+    blocks: [
+      {
+        id: 'p1',
+        type: 'paragraph',
+        data: {
+          text: `See ${link('a', 'the results', 'results')} and ${link('gone', 'the old one')}.`,
+        },
+      },
+      {
+        id: 'k1',
+        type: 'entityLink',
+        data: { entityType: 'project', entityId: 'a', fragment: 'results' },
+      },
+    ],
+  };
+  const parts: AiRevisePart[] = [
+    {
+      id: 'l1',
+      type: 'relink',
+      link: 'p1/0/0',
+      nth: 0,
+      words: 'the results',
+      from: 'thei:project/a#results',
+      to: 'thei:project/a#outcomes',
+      fromTitle: 'Harbour › results',
+      toTitle: 'Harbour › Outcomes',
+      certainty: 'sure',
+      reason: 'Renamed',
+    },
+    {
+      id: 'l2',
+      type: 'relink',
+      link: 'p1/0/1',
+      nth: 0,
+      words: 'the old one',
+      from: 'thei:project/gone',
+      to: null,
+      fromTitle: '',
+      certainty: 'unsure',
+      reason: 'Gone',
+    },
+    {
+      id: 'l3',
+      type: 'relink',
+      link: 'k1/card',
+      nth: 0,
+      words: '',
+      from: 'thei:project/a#results',
+      to: 'thei:project/a',
+      fromTitle: 'Harbour › results',
+      toTitle: 'Harbour',
+      certainty: 'sure',
+      reason: 'The whole of it',
+    },
+  ];
+
+  it('says where each link leads now and would, a card on its margin', () => {
+    const review = proofreadReview(text, parts);
+    expect(
+      review.parts.map((part) => [part.id, part.kind, part.aside]),
+    ).toEqual([
+      ['l1', 'link', false],
+      ['l2', 'link', false],
+      ['l3', 'link', true],
+    ]);
+    expect(review.parts[1]!.link).toEqual({ words: 'the old one' });
+    expect(review.parts[2]).not.toHaveProperty('place');
+  });
+
+  it('marks the words of each and shows them leading where they would', () => {
+    const review = proofreadReview(text, parts);
+    const rows = review.rows({}, 'read');
+    const shown = JSON.stringify(rows[0]);
+    expect(shown).toContain(
+      `${REVIEW_MARK.open}l1${REVIEW_MARK.id}the results`,
+    );
+    expect(shown).toContain('data-entity-fragment=\\"outcomes\\"');
+    // The words of a link taken off stay, marked, without it.
+    expect(shown).toContain(
+      `${REVIEW_MARK.open}l2${REVIEW_MARK.id}the old one`,
+    );
+    expect(shown).not.toContain('data-entity-id=\\"gone\\"');
+    expect(rows[1]).toMatchObject({ type: 'block', parts: ['l3'] });
+    // Kept, a link leads where it did.
+    expect(JSON.stringify(review.rows({ l1: 'kept' }, 'read')[0])).toContain(
+      'data-entity-fragment=\\"results\\"',
+    );
+  });
+
+  it('gives the text with the links taken, and a link changed since as settled', () => {
+    const review = proofreadReview(text, parts);
+    const result = review.result({ l1: 'accepted', l3: 'accepted' });
+    expect((result.blocks[0]!.data as { text: string }).text).toBe(
+      `See ${link('a', 'the results', 'outcomes')} and ${link('gone', 'the old one')}.`,
+    );
+    expect(result.blocks[1]!.data).toEqual({
+      entityType: 'project',
+      entityId: 'a',
+    });
+    const moved = proofreadReview(
+      {
+        blocks: [
+          {
+            id: 'p1',
+            type: 'paragraph',
+            data: { text: `See ${link('a', 'the results', 'elsewhere')}.` },
+          },
+        ],
+      },
+      parts.slice(0, 1),
+    );
+    expect(moved.parts[0]!.settled).toBe('stale');
+  });
+});

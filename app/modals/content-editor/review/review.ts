@@ -84,9 +84,11 @@ export function partComment(
   words: string,
 ): string {
   const part = review.parts.find((item) => item.id === partId);
-  return part?.words
-    ? `«${part.words.before}» → «${part.words.after}»: ${words}`
-    : words;
+  if (part?.words)
+    return `«${part.words.before}» → «${part.words.after}»: ${words}`;
+  if (part?.link)
+    return `The link «${part.link.words}» → ${part.link.from ?? 'what it led to is gone'} → ${part.link.to ?? 'no link'}: ${words}`;
+  return words;
 }
 
 /** An edit's parts that still wait: neither made, kept as they were, nor gone. */
@@ -110,7 +112,7 @@ export function textEditReview(
   text: ContentOutputData,
 ): ContentReview {
   const payload = action.payload as {
-    mode: 'proofread' | 'order';
+    mode: 'proofread' | 'relink' | 'order';
     parts: AiRevisePart[];
     plan?: { keys: string[]; items: TidyItem[] };
   };

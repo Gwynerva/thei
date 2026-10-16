@@ -59,6 +59,7 @@ export async function readPageEdit(
     iconAssetSize: icon?.asset.size,
     content,
     reminder: stored.reminder,
+    synonyms: stored.synonyms,
     notes: await THEI_SERVER.content.buildFieldValue(
       'page',
       pageUuid,
@@ -126,6 +127,7 @@ export async function savePageEdit(
           slug: result.slug,
           access: result.access,
           reminder: result.reminder,
+          synonyms: result.synonyms,
           updatedAt: now,
         })
         .where(eq(schema.pages.pageUuid, pageUuid))

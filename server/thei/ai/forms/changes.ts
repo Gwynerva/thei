@@ -20,6 +20,7 @@ import { refuse as fail } from '../../entity-patch/text';
 import type { ProfileEditData } from '#layers/thei/shared/profile';
 import { tagIdOf, type EntityKey } from '../../entity-kinds';
 import { textFromMarkdown } from '../../mcp/text-input';
+import { normalizeSynonyms } from '#layers/thei/shared/synonyms';
 import {
   checkedAccess,
   checkedPeriods,
@@ -42,6 +43,7 @@ export const FORM_FIELDS = {
     'showcase',
     'cv',
     'reminder',
+    'synonyms',
     'slug',
     'publicId',
     'icon',
@@ -71,6 +73,7 @@ export const FORM_FIELDS = {
     'summary',
     'access',
     'reminder',
+    'synonyms',
     'slug',
     'publicId',
     'periods',
@@ -88,6 +91,7 @@ export const FORM_FIELDS = {
     'summary',
     'access',
     'reminder',
+    'synonyms',
     'slug',
     'icon',
     'body',
@@ -109,11 +113,11 @@ export type FormKind = keyof typeof FORM_FIELDS;
 
 export const FORM_REFERENCE = `\
 Fields by kind — a change names only the fields it changes:
-- project: title, summary, access (public | link-only | private), showcase and cv (true/false: among chosen projects, in the résumé), reminder, slug, publicId, icon and banner (a file id, or null), showcaseFiles [{ file, caption?, private? }], files [{ file, title, caption?, private? }], links [{ url, note?, private? }], tags [names], relations [{ ref, kind?: related | depends-on | affects, note? or notes? }], description and notes (editing Markdown), sections [{ id?, …section fields }] (merged by id; one without an id is added; remove one with a delete action on its ref), sectionOrder [section ids].
+- project: title, summary, access (public | link-only | private), showcase and cv (true/false: among chosen projects, in the résumé), reminder, synonyms [names], slug, publicId, icon and banner (a file id, or null), showcaseFiles [{ file, caption?, private? }], files [{ file, title, caption?, private? }], links [{ url, note?, private? }], tags [names], relations [{ ref, kind?: related | depends-on | affects, note? or notes? }], description and notes (editing Markdown), sections [{ id?, …section fields }] (merged by id; one without an id is added; remove one with a delete action on its ref), sectionOrder [section ids].
 - project-section: title, summary, private (true/false), periods [{ startDate, endDate, precision?, precisionNote?, label? }], body (editing Markdown), banner, slug, publicId. A section with periods is a stage; it needs a body or periods.
-- event: title, summary, access, reminder, slug, publicId, periods (at least one), banner, files, links, tags, relations, body (needed) and notes.
+- event: title, summary, access, reminder, synonyms [names], slug, publicId, periods (at least one), banner, files, links, tags, relations, body (needed) and notes.
 - diary-entry: date (YYYY-MM-DD, one entry a day), access (public | private), reminder, body (needed), notes, relations. No title, no tags, ever.
-- page: title, summary, access, reminder, slug, icon, body, notes.
+- page: title, summary, access, reminder, synonyms [names], slug, icon, body, notes.
 - tag: title, description, synonyms [names], slug, publicId, icon.
 - profile: displayName, slogan, nickname, about (editing Markdown), banner, favicon, links [{ url, name?, note?, private? }].
 A list given replaces the list it names: what it leaves out goes. Each item names what it is — a relation its ref, a file its file id, a link its url — and keeps whatever else it leaves out: a relation its kind and note, a file its title, caption and privacy, a link its note and name. read_entity lists them in this very shape. A relation's note is one for both sides (note) or one per side (notes: { this, other }). A file is an id from upload_file, import_file or read_entity; in a text it is ::media{asset=<id>}. Pictures, files and links are the owner's choice: change them only when the owner asks.`;
@@ -453,6 +457,9 @@ export async function projectChanges(
       case 'reminder':
         next[field] = text(value, field);
         break;
+      case 'synonyms':
+        next.synonyms = names(value, next.title);
+        break;
       case 'access':
         next.access = checkedAccess(key.kind, value) as never;
         break;
@@ -563,6 +570,9 @@ export async function eventChanges(
       case 'reminder':
         next[field] = text(value, field);
         break;
+      case 'synonyms':
+        next.synonyms = names(value, next.title);
+        break;
       case 'access':
         next.access = checkedAccess(key.kind, value) as never;
         break;
@@ -644,6 +654,9 @@ export async function pageChanges(form: PageEditData, changes: Changes) {
       case 'reminder':
         (next as Record<string, unknown>)[field] = text(value, field);
         break;
+      case 'synonyms':
+        next.synonyms = names(value, next.title);
+        break;
       case 'access':
         next.access = checkedAccess('page', value) as never;
         break;
@@ -664,6 +677,13 @@ export async function pageChanges(form: PageEditData, changes: Changes) {
   return next;
 }
 
+/** Other names, as the entity titled `title` keeps them. */
+function names(value: unknown, title: string): string[] {
+  const synonyms = normalizeSynonyms(value, title);
+  if (typeof synonyms === 'string') fail(`synonyms: ${synonyms}.`);
+  return synonyms;
+}
+
 export function tagChanges(form: TagEditData, changes: Changes) {
   const next: TagEditData = { ...form };
   for (const [field, value] of Object.entries(changes)) {
@@ -675,8 +695,7 @@ export function tagChanges(form: TagEditData, changes: Changes) {
         (next as Record<string, unknown>)[field] = text(value, field);
         break;
       case 'synonyms':
-        if (!Array.isArray(value)) fail('synonyms takes a list of names.');
-        next.synonyms = value.map((name) => text(name, 'synonym'));
+        next.synonyms = names(value, next.title);
         break;
       case 'icon':
         next.iconAssetUuid = file(value, field);

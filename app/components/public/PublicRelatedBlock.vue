@@ -87,8 +87,10 @@ function itemKey(item: PublicEntityLink) {
 </script>
 
 <script lang="ts">
+import { PUBLIC_RELATED_SECTION_ID } from '#layers/thei/shared/content-headings';
+
 /** The anchor the table of contents points at. */
-export const PUBLIC_RELATED_SECTION_ID = 'related-entities';
+export { PUBLIC_RELATED_SECTION_ID };
 
 export function publicRelatedTotal(counts: PublicRelatedCounts): number {
   return Object.values(counts).reduce((sum, count) => sum + (count ?? 0), 0);

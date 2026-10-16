@@ -769,13 +769,14 @@ export type LanguagePhrases = {
   tag_title_taken: string;
   tag_title_is_synonym: (tag: string) => string;
   tag_synonym_taken: (synonym: string, tag: string) => string;
-  tag_synonyms: string;
+  synonyms: string;
+  synonyms_hint: string;
+  synonyms_placeholder: string;
+  synonyms_limit: (limit: number) => string;
+  synonym_remove: (synonym: string) => string;
+  synonym_suggestion_add: (word: string) => string;
   tag_synonyms_hint: string;
-  tag_synonyms_placeholder: string;
-  tag_synonyms_limit: (limit: number) => string;
-  tag_synonym_remove: (synonym: string) => string;
   tag_synonym_suggestions: string;
-  tag_synonym_suggestion_add: (word: string) => string;
   tag_synonym_found_in: string;
   tag_synonym_already_added: (synonym: string, tag: string) => string;
   tag_slug_taken: string;
@@ -958,9 +959,7 @@ export type LanguagePhrases = {
   content_draft_status_refused: string;
   content_field_unsaved_draft: (time: string) => string;
   sign_out_unsynced_confirm: (count: number) => string;
-  content_internal_link: string;
   content_external_link: string;
-  content_link_url: string;
   content_link_loading: string;
   content_link_broken_title: string;
   content_link_broken_description: string;
@@ -980,7 +979,6 @@ export type LanguagePhrases = {
   content_audio_as_file: string;
   content_choose_entity: string;
   content_make_gallery: string;
-  content_link_internal_detected: string;
   /** Names the place inside the target a link leads to, its `#…`. */
   content_link_fragment: string;
   content_link_fragment_remove: string;
@@ -1275,9 +1273,12 @@ export type LanguagePhrases = {
   ai_templates_title: string;
   ai_templates_hint: string;
   ai_templates_new: string;
-  ai_templates_builtin: string;
-  ai_templates_own: string;
-  ai_templates_own_empty: string;
+  ai_templates_presets: string;
+  ai_templates_presets_hint: string;
+  ai_templates_presets_empty: string;
+  ai_templates_scheduled: string;
+  ai_templates_scheduled_hint: string;
+  ai_template_builtin: string;
   ai_template_whens: Record<
     import('../ai').AiTemplateSchedule['kind'],
     { title: string; hint: string }
@@ -1291,7 +1292,34 @@ export type LanguagePhrases = {
   ai_template_schedule: string;
   ai_template_schedule_on: string;
   ai_template_schedule_off: string;
-  ai_template_manual_line: string;
+  ai_template_open: string;
+  ai_open_full: string;
+  select_filter: string;
+  content_link: string;
+  content_link_search_placeholder: string;
+  content_link_mention_placeholder: string;
+  content_link_search: string;
+  content_link_path: string;
+  content_link_place: string;
+  content_link_whole: (
+    kind: import('../content-link').ContentEntityType,
+  ) => string;
+  content_link_headings: string;
+  content_link_description_headings: string;
+  content_link_sections: string;
+  content_link_anchor_gone: (anchor: string) => string;
+  content_link_target_gone: string;
+  content_link_becomes_video: string;
+  content_link_apply: string;
+  content_link_change: string;
+  /** The hint of the editor's "+". */
+  content_block_add: string;
+  /** The grid of blocks the "+" opens. */
+  content_block_toolbox: string;
+  ai_template_offer_on: string;
+  ai_template_offer_on_hint: string;
+  ai_template_offered_nowhere: string;
+  ai_template_awaits_review: string;
   ai_template_run: string;
   ai_template_edit: string;
   ai_template_running: string;
@@ -1333,6 +1361,10 @@ export type LanguagePhrases = {
   ai_session_you: string;
   ai_session_template: string;
   ai_session_running: string;
+  /** The dashboard's group of sessions done within the week. */
+  ai_session_recent: string;
+  /** A group of sessions on the dashboard with none in it. */
+  ai_session_none: string;
   ai_session_waiting: (count: number) => string;
   ai_sessions_archive_note: string;
   ai_sessions_empty: string;
@@ -1619,6 +1651,14 @@ export type LanguagePhrases = {
   ai_action_final_note: string;
   ai_action_by_ai: string;
   ai_action_corrections: (count: number) => string;
+  /** Links that lead nowhere, mended: the action, and how many. */
+  ai_action_relink: string;
+  ai_action_relinks: (count: number) => string;
+  /** A mended link in a review: what it led to is gone; no link after. */
+  ai_review_link_gone: string;
+  ai_review_link_off: string;
+  /** A mended link whose link leads elsewhere since. */
+  ai_review_link_changed: string;
   ai_action_unsure_count: (count: number) => string;
   ai_action_order: string;
   ai_action_order_parts: (count: number) => string;

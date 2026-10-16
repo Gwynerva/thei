@@ -54,12 +54,12 @@ import {
   type ContentLinkResolver,
 } from '#layers/thei/shared/content-link';
 import ContentEntityLinkBlock from './ContentEntityLinkBlock.vue';
+import type { ContentLinkPick, ContentLinkTarget } from './link-picker/types';
 import ContentLinkPreviewCard from './ContentLinkPreviewCard.vue';
 export {
   ContentBoldTool,
-  ContentEntityLinkTool,
-  ContentExternalInlineLinkTool,
   ContentHintTool,
+  ContentLinkTool,
   ContentItalicTool,
   ContentStrikeTool,
 } from './editor-inline-tools';
@@ -103,6 +103,7 @@ interface ContentToolLabels {
   refreshExternalLink: string;
   linkNote: string;
   chooseEntity: string;
+  changeLink: string;
   makeGallery: string;
   retryUpload: string;
   cancelUpload: string;
@@ -148,10 +149,14 @@ interface ContentAttachmentToolConfig {
   audio?: boolean;
 }
 
+/** Opens the link picker beside a block; where it leads, or nothing. */
+export type ContentEditorPickLink = (
+  anchor: HTMLElement,
+  initial?: ContentLinkTarget,
+) => Promise<ContentLinkPick | undefined>;
+
 interface EntityLinkToolConfig {
-  pickEntity: (
-    anchor: HTMLElement,
-  ) => Promise<ContentEntitySearchItem | undefined>;
+  pickLink: ContentEditorPickLink;
   /** The entity an address of this site opens, if it opens one. */
   findEntityByUrl: (
     url: string,
@@ -168,6 +173,7 @@ interface PrivateSectionBoundaryToolConfig {
 
 interface ExternalLinkToolConfig {
   labels: ContentToolLabels;
+  pickLink: ContentEditorPickLink;
   /** The page's records of external links, shared with every other card on it. */
   links: ExternalLinkStore;
 }
@@ -237,12 +243,44 @@ export class ExternalLinkTool extends VueBlockTool implements BlockTool {
   renderSettings() {
     return [
       {
+        icon: editorIcon('link'),
+        title: this.config.labels.changeLink,
+        closeOnActivate: true,
+        onActivate: () => void this.change(),
+      },
+      {
         icon: editorIcon('refresh'),
         title: this.config.labels.refreshExternalLink,
         closeOnActivate: true,
         onActivate: () => void this.refresh(),
       },
     ];
+  }
+
+  /**
+   * Points the card elsewhere with the link picker: another address, an
+   * entity of the site, a video — each the block it takes.
+   */
+  private async change() {
+    if (!this.element) return;
+    const pick = await this.config.pickLink(this.element, {
+      kind: 'external',
+      url: this.url,
+    });
+    if (!pick || this.destroyed) return;
+    if (pick.kind === 'external') {
+      if (pick.url === this.url) return;
+      this.url = pick.url;
+      this.dispatchChange();
+      void this.refresh();
+      return;
+    }
+    await replaceWithPick(
+      this.options.api,
+      this.options.block,
+      pick,
+      this.note,
+    );
   }
 
   /**
@@ -341,7 +379,7 @@ export class IntegrationTool extends VueBlockTool implements BlockTool {
 
 export class EntityLinkTool extends VueBlockTool implements BlockTool {
   static toolbox = {
-    title: 'Internal link',
+    title: 'Link',
     icon: editorIcon('link'),
     data: { autoOpen: true },
   };
@@ -438,24 +476,60 @@ export class EntityLinkTool extends VueBlockTool implements BlockTool {
     this.commit();
   }
 
+  renderSettings() {
+    if (!this.entityType || !this.entityId) return [];
+    return [
+      {
+        icon: editorIcon('link'),
+        title: contentToolConfig(this.options.config).labels.changeLink,
+        closeOnActivate: true,
+        onActivate: () => void this.pick(),
+      },
+    ];
+  }
+
+  /**
+   * The link picker, on where the block leads now. An entity, or a place in
+   * it, is this block's; another site's address becomes a card of its own,
+   * and an address a block of its own takes — a video — that block.
+   */
   private async pick() {
     if (!this.element) return;
-    const selected = await contentToolConfig(this.options.config).pickEntity(
+    const pick = await contentToolConfig(this.options.config).pickLink(
       this.element,
+      this.entityType && this.entityId
+        ? {
+            kind: 'entity',
+            entityType: this.entityType,
+            entityId: this.entityId,
+            ...(this.fragment ? { fragment: this.fragment } : {}),
+          }
+        : undefined,
     );
-    if (!selected || this.destroyed) {
+    if (!pick || this.destroyed) {
       // Keep the skeleton available in this editor session. Validation and
       // content normalization omit it from persisted data until it is chosen.
       this.finishTransientSelection(false);
       return;
     }
+    if (pick.kind !== 'entity') {
+      await replaceWithPick(
+        this.options.api,
+        this.options.block,
+        pick,
+        this.note,
+      );
+      // Kept once the block it became is there.
+      this.finishTransientSelection(true);
+      return;
+    }
     const changed =
-      this.entityType !== selected.entityType ||
-      this.entityId !== selected.entityId;
-    this.entityType = selected.entityType;
-    this.entityId = selected.entityId;
-    // A place inside the entity the link led to belongs to that entity only.
-    if (changed) this.fragment = undefined;
+      this.entityType !== pick.entity.entityType ||
+      this.entityId !== pick.entity.entityId ||
+      this.fragment !== pick.fragment;
+    this.entityType = pick.entity.entityType;
+    this.entityId = pick.entity.entityId;
+    this.fragment = pick.fragment;
     this.renderContent();
     this.finishTransientSelection(true);
     if (changed) this.dispatchChange();
@@ -1392,6 +1466,7 @@ function getLabels(
       refreshExternalLink: 'Refresh link',
       linkNote: 'A note for the link',
       chooseEntity: 'Choose what to link to',
+      changeLink: 'Change link',
       makeGallery: 'Turn into a gallery',
       retryUpload: 'Try again',
       cancelUpload: 'Cancel',
@@ -1403,6 +1478,49 @@ function getLabels(
 function contentToolConfig<T extends object>(config: T | undefined): T {
   if (!config) throw new Error('Content editor tool config is required.');
   return config;
+}
+
+/**
+ * The block a pick takes in place of the block it was made from: an
+ * entity's card, a video for an address one of the integrations claims, or
+ * another site's card. The note written on the block goes along.
+ */
+async function replaceWithPick(
+  api: API,
+  block: BlockAPI,
+  pick: ContentLinkPick,
+  note: string,
+) {
+  const kept = note.trim() ? { note: note.trim() } : {};
+  if (pick.kind === 'entity') {
+    await replaceBlock(
+      api,
+      block,
+      'entityLink',
+      {
+        entityType: pick.entity.entityType,
+        entityId: pick.entity.entityId,
+        ...(pick.fragment ? { fragment: pick.fragment } : {}),
+        ...kept,
+      },
+      false,
+    );
+    return;
+  }
+  if (pick.kind === 'integration') {
+    const data = matchContentIntegration(pick.url);
+    if (data) {
+      await replaceBlock(api, block, 'integration', data, false);
+      return;
+    }
+  }
+  await replaceBlock(
+    api,
+    block,
+    'externalLink',
+    { url: pick.url, ...kept },
+    false,
+  );
 }
 
 /**

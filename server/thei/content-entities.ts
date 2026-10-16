@@ -59,6 +59,8 @@ export type ContentEntityRecord = {
   updatedAt: number;
   humanReadableSlug: string;
   publicId?: string;
+  /** Other names it is found by: never shown, only searched. */
+  synonyms?: string[];
   /** The day of a diary entry, which is also its title. */
   date?: string;
   /** The project a section belongs to. */
@@ -90,6 +92,7 @@ type ProjectRow = {
   access: ProjectEventAccessLevel;
   humanReadableSlug: string;
   publicId: string;
+  synonyms?: string[];
   updatedAt: number;
 };
 type ChildRow = {
@@ -108,6 +111,7 @@ type PageRow = {
   summary: string;
   access: ProjectEventAccessLevel;
   slug: string;
+  synonyms?: string[];
   updatedAt: number;
 };
 type DiaryRow = {
@@ -123,6 +127,7 @@ type TagRow = {
   slug: string;
   publicId: string;
   description: string;
+  synonyms?: string[];
 };
 
 function iconMedia(
@@ -194,6 +199,7 @@ function projectRecord(project: ProjectRow): ContentEntityRecord {
     updatedAt: project.updatedAt,
     humanReadableSlug: project.humanReadableSlug,
     publicId: project.publicId,
+    synonyms: project.synonyms,
     grantOwner: { entityType: 'project', entityId: project.projectUuid },
     media: iconMedia('project', project.projectUuid, (asset) =>
       buildPublicProjectMedia(project, asset, 'icon'),
@@ -254,6 +260,7 @@ function eventRecord(event: EventRow): ContentEntityRecord {
     updatedAt: event.updatedAt,
     humanReadableSlug: event.humanReadableSlug,
     publicId: event.publicId,
+    synonyms: event.synonyms,
     grantOwner: { entityType: 'event', entityId: event.eventUuid },
     media: bodyMedia(
       'event',
@@ -278,6 +285,7 @@ function pageRecord(page: PageRow): ContentEntityRecord {
     access: page.access,
     updatedAt: page.updatedAt,
     humanReadableSlug: page.slug,
+    synonyms: page.synonyms,
     grantOwner: { entityType: 'page', entityId: page.pageUuid },
     media: iconMedia('page', page.pageUuid, (asset) =>
       buildPublicPageMedia(page, asset),
@@ -302,6 +310,7 @@ function tagRecord(tag: TagRow, isPublic: boolean): ContentEntityRecord {
     updatedAt: 0,
     humanReadableSlug: tag.slug,
     publicId: tag.publicId,
+    synonyms: tag.synonyms,
     media: iconMedia('tag', tag.tagUuid, (asset) =>
       buildPublicTagMedia(tag, asset),
     ),

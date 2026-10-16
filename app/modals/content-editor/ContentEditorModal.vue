@@ -1,8 +1,11 @@
 <script lang="ts" setup>
 import type EditorJS from '@editorjs/editorjs';
+import type { VirtualElement } from '@floating-ui/vue';
 import type {
   API,
+  BlockAPI,
   BlockMutationEvent,
+  EditorConfig,
   InlineToolConstructable,
   OutputData,
   ToolConstructable,
@@ -49,8 +52,10 @@ import ContentStats from '#layers/thei/app/components/content/ContentStats.vue';
 import ContentInlineLinkDecorator from '#layers/thei/app/components/content/ContentInlineLinkDecorator.vue';
 import ContentInlineLinkControls from '#layers/thei/app/components/content/ContentInlineLinkControls.vue';
 import ContentHintControls from '#layers/thei/app/components/content/ContentHintControls.vue';
-import ContentEntitySearchPopup from '#layers/thei/app/components/content/ContentEntitySearchPopup.vue';
-import type { ContentEntitySearchItem } from '#layers/thei/shared/admin/content-entity-search';
+import type {
+  ContentLinkPick,
+  ContentLinkTarget,
+} from '#layers/thei/app/components/content/link-picker/types';
 import {
   ContentAttachmentTool,
   ContentAudioTool,
@@ -59,8 +64,7 @@ import {
   ContentStrikeTool,
   ContentGalleryTool,
   ContentItalicTool,
-  ContentEntityLinkTool,
-  ContentExternalInlineLinkTool,
+  ContentLinkTool,
   ContentMediaTool,
   ExternalLinkTool,
   IntegrationTool,
@@ -83,9 +87,26 @@ import {
 } from '#layers/thei/app/components/content/editor-spoiler-tune';
 import { assetDetailsModal } from '#layers/thei/app/modals/asset-details/modal';
 import { createEditorBlockDrag } from '#layers/thei/app/composables/editor-block-drag';
+import {
+  bindEditorBlockToolbox,
+  editorToolboxEntries,
+  insertToolboxBlock,
+  orderToolboxEntries,
+  storeToolboxOrder,
+  storedToolboxOrder,
+  type EditorToolboxEntry,
+} from '#layers/thei/app/composables/editor-block-toolbox';
+import ContentBlockToolbox from '#layers/thei/app/components/content/ContentBlockToolbox.vue';
+import {
+  editableFieldOf,
+  selectRange,
+} from '#layers/thei/app/components/content/editor-edit-commands';
 import { bindEditorGutterClick } from '#layers/thei/app/composables/editor-gutter-click';
 import { bindEditorCurrentBlock } from '#layers/thei/app/composables/editor-current-block';
 import { bindEditorLinkPaste } from '#layers/thei/app/composables/editor-link-paste';
+import { bindEditorTextDrop } from '#layers/thei/app/composables/editor-text-drop';
+import { bindEditorTextPaste } from '#layers/thei/app/composables/editor-text-paste';
+import { bindEditorNativeUndo } from '#layers/thei/app/composables/editor-native-undo';
 import { bindEditorKeyboardBoundary } from '#layers/thei/app/composables/editor-keyboard-boundary';
 import { createEditorPrivateSections } from '#layers/thei/app/composables/editor-private-sections';
 import { createEditorPrivatePattern } from '#layers/thei/app/composables/editor-private-pattern';
@@ -189,6 +210,9 @@ let cleanupGutterClick: (() => void) | undefined;
 let cleanupCurrentBlock: (() => void) | undefined;
 let cleanupLinkPaste: (() => void) | undefined;
 let cleanupKeyboardBoundary: (() => void) | undefined;
+let cleanupTextDrop: (() => void) | undefined;
+let cleanupTextPaste: (() => void) | undefined;
+let cleanupNativeUndo: (() => void) | undefined;
 /**
  * Editor.js switches to its mobile layout at this width — its own constant,
  * not the project's breakpoint — and the styling follows the same switch, so
@@ -220,10 +244,25 @@ externalLinks.seed(
     .map((block) => block.data as Partial<ExternalLink>),
 );
 const internalSite = useInternalUrlSite();
-const entityPickerOpen = ref(false);
-const entityPickerAnchor = ref<HTMLElement>();
-const entityPicker = useTemplateRef<{ focus: () => void }>('entityPicker');
-let entityPickerResolve: ((item?: ContentEntitySearchItem) => void) | undefined;
+/** The grid of blocks the "+" opens, and the block it opened beside. */
+const toolboxOpen = ref(false);
+const toolboxAnchor = shallowRef<VirtualElement>();
+const toolboxEntries = shallowRef<EditorToolboxEntry[]>([]);
+const toolboxOrder = ref(storedToolboxOrder());
+const orderedToolbox = computed(() =>
+  orderToolboxEntries(toolboxEntries.value, toolboxOrder.value),
+);
+const toolbox = useTemplateRef<{ focus: () => void }>('toolbox');
+let toolboxBlock: BlockAPI | undefined;
+let blockToolbox: ReturnType<typeof bindEditorBlockToolbox> | undefined;
+
+const linkPickerOpen = ref(false);
+const linkPicker = useTemplateRef<{ focus: () => void }>('linkPicker');
+const linkPickerAnchor = ref<HTMLElement>();
+const linkPickerInitial = shallowRef<ContentLinkTarget>();
+/** Each opening is a picker of its own, fresh. */
+const linkPickerOpening = ref(0);
+let linkPickerResolve: ((pick?: ContentLinkPick) => void) | undefined;
 const saving = ref(false);
 const errorMessage = ref<string | undefined>();
 const historyPopupOpen = ref(false);
@@ -268,26 +307,73 @@ let cleanupEditorPrivatePattern: (() => void) | undefined;
 let editorPrivateSections:
   ReturnType<typeof createEditorPrivateSections> | undefined;
 
-function pickEntity(anchor: HTMLElement) {
-  entityPickerResolve?.();
-  entityPickerAnchor.value = anchor;
-  entityPickerOpen.value = true;
-  return new Promise<ContentEntitySearchItem | undefined>((resolve) => {
-    entityPickerResolve = resolve;
+/** Where the caret was in the block when the grid opened over it. */
+let toolboxCaret: Range | undefined;
+
+function openToolbox(anchor: VirtualElement, block: BlockAPI) {
+  toolboxBlock = block;
+  const selection = window.getSelection();
+  const range = selection?.rangeCount ? selection.getRangeAt(0) : undefined;
+  toolboxCaret =
+    range && block.holder.contains(range.startContainer)
+      ? range.cloneRange()
+      : undefined;
+  toolboxAnchor.value = anchor;
+  toolboxOpen.value = true;
+}
+
+async function toolboxPicked(entry: EditorToolboxEntry) {
+  const block = toolboxBlock;
+  toolboxOpen.value = false;
+  if (editor && block) await insertToolboxBlock(editor, block, entry);
+}
+
+/**
+ * Escaped: the caret goes back where it was, or into the block the grid
+ * opened beside. Closed by a tap or a click elsewhere, the focus goes there.
+ */
+function toolboxDismissed(reason: 'outside' | 'escape') {
+  const block = toolboxBlock;
+  if (reason !== 'escape' || !editor || !block) return;
+  const caret = toolboxCaret;
+  const field = caret && editableFieldOf(caret.startContainer);
+  if (caret && field?.isConnected) {
+    field.focus({ preventScroll: true });
+    selectRange(caret);
+  } else if (editor.blocks.getById(block.id))
+    editor.caret.setToBlock(block, 'end');
+}
+
+function toolboxReordered(keys: string[]) {
+  toolboxOrder.value = keys;
+  storeToolboxOrder(keys);
+}
+
+/** The link picker beside a link block, on where it leads now. */
+function pickLink(anchor: HTMLElement, initial?: ContentLinkTarget) {
+  linkPickerResolve?.();
+  linkPickerAnchor.value = anchor;
+  linkPickerInitial.value = initial;
+  linkPickerOpening.value++;
+  linkPickerOpen.value = true;
+  return new Promise<ContentLinkPick | undefined>((resolve) => {
+    linkPickerResolve = resolve;
   });
 }
 
-function selectEntity(item: ContentEntitySearchItem) {
-  const resolve = entityPickerResolve;
-  entityPickerResolve = undefined;
-  entityPickerOpen.value = false;
-  resolve?.(item);
+function linkPicked(pick: ContentLinkPick) {
+  const resolve = linkPickerResolve;
+  linkPickerResolve = undefined;
+  linkPickerOpen.value = false;
+  resolve?.(pick);
 }
 
-function closeEntityPicker() {
-  const resolve = entityPickerResolve;
-  entityPickerResolve = undefined;
-  entityPickerAnchor.value = undefined;
+function closeLinkPicker() {
+  // Opened again while it faded: the new opening waits for its own choice.
+  if (linkPickerOpen.value) return;
+  const resolve = linkPickerResolve;
+  linkPickerResolve = undefined;
+  linkPickerAnchor.value = undefined;
   resolve?.();
 }
 
@@ -379,6 +465,10 @@ function beginTransientEntitySelection() {
 function endTransientEntitySelection(persisted: boolean) {
   if (persisted) {
     transientEntitySelections = Math.max(0, transientEntitySelections - 1);
+    // A choice kept is a change, said here: Editor.js tells its changes in
+    // batches, and one that comes while another block waits for its choice
+    // is passed over whole.
+    if (editorAcceptsChanges) editorSession.recordChange();
     return;
   }
   requestAnimationFrame(() =>
@@ -824,6 +914,185 @@ onMounted(async () => {
     }
   }
 
+  // Bound before the editor, so its listeners stand in front of Editor.js's
+  // own drop handling on the same holder.
+  cleanupTextDrop = bindEditorTextDrop(holder.value!, {
+    closeInlineToolbar: () => editor?.inlineToolbar.close(),
+  });
+  const tools: EditorConfig['tools'] = {
+    spoiler: {
+      class: ContentSpoilerTune as unknown as ToolConstructable,
+      config: {
+        title: phrase.value.content_spoiler,
+      } satisfies ContentSpoilerTuneConfig,
+    },
+    contentBold: {
+      class: ContentBoldTool as unknown as InlineToolConstructable,
+    },
+    contentItalic: {
+      // Editor.js 2.x still types constructable render() as HTMLElement even
+      // though its current InlineTool API accepts MenuConfig.
+      class: ContentItalicTool as unknown as InlineToolConstructable,
+    },
+    contentStrike: {
+      class: ContentStrikeTool as unknown as InlineToolConstructable,
+    },
+    contentHint: {
+      class: ContentHintTool as unknown as InlineToolConstructable,
+      config: {
+        open: (request: ContentHintRequest) =>
+          hintControls.value?.open(request),
+      },
+    },
+    contentLink: {
+      class: ContentLinkTool as unknown as InlineToolConstructable,
+      config: {
+        open: (request: ContentInlineLinkRequest) =>
+          inlineLinkControls.value?.open(request),
+      },
+    },
+    paragraph: {
+      toolbox: {
+        title: phrase.value.content_editor_i18n.text,
+        icon: editorIcon('paragraph'),
+      },
+    },
+    header: {
+      class: PlainTextHeader,
+      toolbox: [
+        {
+          title: phrase.value.content_editor_i18n.heading,
+          icon: editorIcon('heading'),
+          data: { level: 2 },
+        },
+        {
+          title: phrase.value.content_editor_i18n.subheading,
+          icon: editorIcon('subheading'),
+          data: { level: 3 },
+        },
+      ],
+      inlineToolbar: false,
+      config: {
+        levels: [2, 3],
+        defaultLevel: 2,
+      },
+    },
+    list: {
+      class: TheiList,
+      toolbox: {
+        title: phrase.value.content_editor_i18n.list,
+        icon: editorIcon('list-unordered'),
+        data: { style: 'unordered' },
+      },
+      inlineToolbar: true,
+      config: {
+        defaultStyle: 'unordered',
+      },
+    },
+    quote: {
+      class: Quote,
+      inlineToolbar: true,
+      toolbox: {
+        title: phrase.value.content_editor_i18n.quote,
+        icon: editorIcon('quote'),
+      },
+    },
+    delimiter: {
+      class: ContentDelimiterTool,
+      // A divider has nothing to hide.
+      tunes: [],
+      toolbox: {
+        title: phrase.value.content_editor_i18n.delimiter,
+        icon: editorIcon('asterisk'),
+      },
+    },
+    contentMedia: {
+      class: ContentMediaTool,
+      inlineToolbar: true,
+      config: {
+        pickAsset,
+        editAsset,
+        uploads,
+        labels: contentToolLabels(),
+      },
+    },
+    contentGallery: {
+      class: ContentGalleryTool,
+      inlineToolbar: true,
+      config: {
+        pickAssets,
+        editAsset,
+        uploads,
+        labels: contentToolLabels(),
+      },
+    },
+    contentAudio: {
+      class: ContentAudioTool,
+      inlineToolbar: false,
+      config: {
+        pickAsset,
+        editAsset,
+        uploads: audioUploads,
+        labels: contentToolLabels(),
+      },
+    },
+    contentAttachment: {
+      class: ContentAttachmentTool,
+      inlineToolbar: false,
+      config: {
+        pickAsset,
+        editAsset,
+        labels: contentToolLabels(),
+        audio: true,
+      },
+    },
+    // Before externalLink: Editor.js hands a paste to the first tool whose
+    // pattern matches, so a playable address never becomes a plain link,
+    // and an address of this site becomes a link to what it opens.
+    integration: {
+      class: IntegrationTool,
+    },
+    entityLink: {
+      class: entityLinkToolWithPaste(internalUrlPastePattern(internalSite)),
+      config: {
+        pickLink,
+        findEntityByUrl: (url: string) =>
+          findEntityByInternalUrl(url, internalSite),
+        resolver: contentLinkResolver,
+        labels: contentToolLabels(),
+        beginTransientSelection: beginTransientEntitySelection,
+        endTransientSelection: endTransientEntitySelection,
+      },
+    },
+    externalLink: {
+      class: ExternalLinkTool,
+      config: {
+        labels: contentToolLabels(),
+        links: externalLinks,
+        pickLink,
+      },
+    },
+    privateSectionBoundary: {
+      class: PrivateSectionBoundaryTool,
+      inlineToolbar: false,
+      // The edge of a section is not content; it cannot be a spoiler.
+      tunes: [],
+      toolbox: {
+        title: phrase.value.content_private_section,
+        icon: editorIcon('lock-close'),
+        data: { edge: 'start', createPair: true },
+      },
+      config: {
+        labels: contentToolLabels(),
+      },
+    },
+  };
+  toolboxEntries.value = editorToolboxEntries(
+    tools as Record<string, unknown>,
+    (title) =>
+      (editorJsI18nMessages().toolNames as Record<string, string>)[title] ??
+      title,
+  );
   editor = new Editor({
     holder: holder.value!,
     data: toEditorData(props.modalData.value?.data),
@@ -841,187 +1110,12 @@ onMounted(async () => {
       'contentItalic',
       'contentStrike',
       'contentHint',
-      'contentEntityLink',
-      'contentExternalInlineLink',
+      'contentLink',
     ],
     // What may stay in inline text is decided by each inline tool's own
     // `sanitize` and, on the way out, by `readCleanEditorOutput`; Editor.js
     // 2.31 never reads a top-level sanitizer.
-    tools: {
-      spoiler: {
-        class: ContentSpoilerTune as unknown as ToolConstructable,
-        config: {
-          title: phrase.value.content_spoiler,
-        } satisfies ContentSpoilerTuneConfig,
-      },
-      contentBold: {
-        class: ContentBoldTool as unknown as InlineToolConstructable,
-      },
-      contentItalic: {
-        // Editor.js 2.x still types constructable render() as HTMLElement even
-        // though its current InlineTool API accepts MenuConfig.
-        class: ContentItalicTool as unknown as InlineToolConstructable,
-      },
-      contentStrike: {
-        class: ContentStrikeTool as unknown as InlineToolConstructable,
-      },
-      contentHint: {
-        class: ContentHintTool as unknown as InlineToolConstructable,
-        config: {
-          open: (request: ContentHintRequest) =>
-            hintControls.value?.open(request),
-        },
-      },
-      contentEntityLink: {
-        class: ContentEntityLinkTool as unknown as InlineToolConstructable,
-        config: {
-          open: (request: ContentInlineLinkRequest) =>
-            inlineLinkControls.value?.openEntity(request),
-        },
-      },
-      contentExternalInlineLink: {
-        class:
-          ContentExternalInlineLinkTool as unknown as InlineToolConstructable,
-        config: {
-          open: (request: ContentInlineLinkRequest) =>
-            inlineLinkControls.value?.openExternal(request),
-        },
-      },
-      paragraph: {
-        toolbox: {
-          title: phrase.value.content_editor_i18n.text,
-          icon: editorIcon('paragraph'),
-        },
-      },
-      header: {
-        class: PlainTextHeader,
-        toolbox: [
-          {
-            title: phrase.value.content_editor_i18n.heading,
-            icon: editorIcon('heading'),
-            data: { level: 2 },
-          },
-          {
-            title: phrase.value.content_editor_i18n.subheading,
-            icon: editorIcon('subheading'),
-            data: { level: 3 },
-          },
-        ],
-        inlineToolbar: false,
-        config: {
-          levels: [2, 3],
-          defaultLevel: 2,
-        },
-      },
-      list: {
-        class: TheiList,
-        toolbox: {
-          title: phrase.value.content_editor_i18n.list,
-          icon: editorIcon('list-unordered'),
-          data: { style: 'unordered' },
-        },
-        inlineToolbar: true,
-        config: {
-          defaultStyle: 'unordered',
-        },
-      },
-      quote: {
-        class: Quote,
-        inlineToolbar: true,
-        toolbox: {
-          title: phrase.value.content_editor_i18n.quote,
-          icon: editorIcon('quote'),
-        },
-      },
-      delimiter: {
-        class: ContentDelimiterTool,
-        // A divider has nothing to hide.
-        tunes: [],
-        toolbox: {
-          title: phrase.value.content_editor_i18n.delimiter,
-          icon: editorIcon('asterisk'),
-        },
-      },
-      contentMedia: {
-        class: ContentMediaTool,
-        inlineToolbar: true,
-        config: {
-          pickAsset,
-          editAsset,
-          uploads,
-          labels: contentToolLabels(),
-        },
-      },
-      contentGallery: {
-        class: ContentGalleryTool,
-        inlineToolbar: true,
-        config: {
-          pickAssets,
-          editAsset,
-          uploads,
-          labels: contentToolLabels(),
-        },
-      },
-      contentAudio: {
-        class: ContentAudioTool,
-        inlineToolbar: false,
-        config: {
-          pickAsset,
-          editAsset,
-          uploads: audioUploads,
-          labels: contentToolLabels(),
-        },
-      },
-      contentAttachment: {
-        class: ContentAttachmentTool,
-        inlineToolbar: false,
-        config: {
-          pickAsset,
-          editAsset,
-          labels: contentToolLabels(),
-          audio: true,
-        },
-      },
-      // Before externalLink: Editor.js hands a paste to the first tool whose
-      // pattern matches, so a playable address never becomes a plain link,
-      // and an address of this site becomes a link to what it opens.
-      integration: {
-        class: IntegrationTool,
-      },
-      entityLink: {
-        class: entityLinkToolWithPaste(internalUrlPastePattern(internalSite)),
-        config: {
-          pickEntity,
-          findEntityByUrl: (url: string) =>
-            findEntityByInternalUrl(url, internalSite),
-          resolver: contentLinkResolver,
-          labels: contentToolLabels(),
-          beginTransientSelection: beginTransientEntitySelection,
-          endTransientSelection: endTransientEntitySelection,
-        },
-      },
-      externalLink: {
-        class: ExternalLinkTool,
-        config: {
-          labels: contentToolLabels(),
-          links: externalLinks,
-        },
-      },
-      privateSectionBoundary: {
-        class: PrivateSectionBoundaryTool,
-        inlineToolbar: false,
-        // The edge of a section is not content; it cannot be a spoiler.
-        tunes: [],
-        toolbox: {
-          title: phrase.value.content_private_section,
-          icon: editorIcon('lock-close'),
-          data: { edge: 'start', createPair: true },
-        },
-        config: {
-          labels: contentToolLabels(),
-        },
-      },
-    },
+    tools,
   });
 
   await editor.isReady;
@@ -1046,6 +1140,10 @@ onMounted(async () => {
     audio: true,
   });
   cleanupGutterClick = bindEditorGutterClick(holder.value!, editor);
+  blockToolbox = bindEditorBlockToolbox(holder.value!, editor, {
+    open: openToolbox,
+  });
+  blockToolbox.hint(phrase.value.content_block_add);
   cleanupCurrentBlock = bindEditorCurrentBlock(holder.value!, editor, {
     // The blocks whose Enter is Editor.js's own: split, before, after.
     textBlocks: new Set(['paragraph', 'header', 'list', 'quote']),
@@ -1061,6 +1159,12 @@ onMounted(async () => {
     linkBlocks: new Set(['paragraph', 'list', 'quote']),
     findEntity: (url) => findEntityByInternalUrl(url, internalSite),
   });
+  // After the media and link pastes, which claim theirs first.
+  cleanupTextPaste = bindEditorTextPaste(holder.value!);
+  cleanupNativeUndo = bindEditorNativeUndo(
+    holder.value!,
+    holder.value!.closest('dialog') ?? document.body,
+  );
 });
 
 onBeforeUnmount(() => {
@@ -1081,6 +1185,14 @@ onBeforeUnmount(() => {
   cleanupCurrentBlock = undefined;
   cleanupLinkPaste?.();
   cleanupLinkPaste = undefined;
+  cleanupTextDrop?.();
+  cleanupTextDrop = undefined;
+  cleanupTextPaste?.();
+  cleanupTextPaste = undefined;
+  cleanupNativeUndo?.();
+  cleanupNativeUndo = undefined;
+  blockToolbox?.destroy();
+  blockToolbox = undefined;
   cleanupKeyboardBoundary?.();
   cleanupKeyboardBoundary = undefined;
   cleanupEditorPopoverLayer?.();
@@ -1368,6 +1480,7 @@ function contentToolLabels() {
     refreshExternalLink: phrase.value.refresh_external_link,
     linkNote: phrase.value.content_link_note_placeholder,
     chooseEntity: phrase.value.content_choose_entity,
+    changeLink: phrase.value.content_link_change,
     makeGallery: phrase.value.content_make_gallery,
     retryUpload: phrase.value.asset_upload_retry,
     cancelUpload: phrase.value.upload_cancel,
@@ -1397,8 +1510,7 @@ function editorJsI18nMessages() {
       Italic: text.italic,
       Strikethrough: phrase.value.content_strikethrough,
       Hint: phrase.value.content_hint,
-      'External link': phrase.value.content_external_link,
-      'Internal link': phrase.value.content_internal_link,
+      Link: phrase.value.content_link,
       Heading: text.heading,
       List: text.list,
       Quote: text.quote,
@@ -1445,186 +1557,204 @@ function editorJsI18nMessages() {
 </script>
 
 <template>
-  <ModalContainer v-show="!review" ref="modalContainer" class="max-w-200">
-    <ContentInlineLinkDecorator
-      playback="interaction"
-      :root="holder"
-      :resolver="contentLinkResolver"
-    />
-    <ContentInlineLinkControls
-      ref="inlineLinkControls"
-      :teleport-to="holder?.closest('dialog') ?? undefined"
-    />
-    <ContentHintControls
-      ref="hintControls"
-      :teleport-to="holder?.closest('dialog') ?? undefined"
-    />
-    <FloatingPopup
-      v-model:open="entityPickerOpen"
-      :anchor="entityPickerAnchor ?? null"
-      placement="bottom-start"
-      :teleport-to="holder?.closest('dialog') ?? undefined"
-      @opened="entityPicker?.focus()"
-      @closed="closeEntityPicker"
-    >
-      <ContentEntitySearchPopup ref="entityPicker" @select="selectEntity" />
-    </FloatingPopup>
-    <template #header>
-      <!-- One slim row: what is edited and whether it is kept, its history,
-           close and save. What waits for the owner opens the text instead. -->
-      <div class="flex min-w-0 items-center gap-xs p-sm">
-        <ModalTitle
-          icon="edit"
-          :title="modalData.title || phrase.content_editor_title"
-          class="min-w-0 flex-1"
+  <!-- One root: the host hides it while another modal is on top. -->
+  <div class="contents">
+    <ModalContainer v-show="!review" ref="modalContainer" class="max-w-200">
+      <ContentInlineLinkDecorator
+        playback="interaction"
+        :root="holder"
+        :resolver="contentLinkResolver"
+      />
+      <ContentInlineLinkControls ref="inlineLinkControls" />
+      <ContentHintControls ref="hintControls" />
+      <FloatingPopup
+        v-model:open="toolboxOpen"
+        :anchor="toolboxAnchor ?? null"
+        placement="bottom-start"
+        :fallback-placements="['top-start']"
+        fit-content
+        @opened="toolbox?.focus()"
+        @dismiss="toolboxDismissed"
+      >
+        <ContentBlockToolbox
+          ref="toolbox"
+          :entries="orderedToolbox"
+          @pick="toolboxPicked"
+          @reorder="toolboxReordered"
         />
-        <span
-          v-if="historyStatus === 'offline' || historyStatus === 'refused'"
-          class="inline-flex shrink-0 text-text-warning"
-          role="img"
-          :aria-label="historyStatusText"
-          :data-title-popup="historyStatusText"
-          data-history-status
-          ><Icon name="warning"
-        /></span>
-        <span
-          v-else-if="historyStatusText"
-          class="inline-flex shrink-0 text-text-3"
-          role="img"
-          :aria-label="historyStatusText"
-          :data-title-popup="historyStatusText"
-          data-history-status
-          ><Icon name="cloud-upload"
-        /></span>
-        <div
-          v-if="errorMessage"
-          class="min-w-0 truncate text-sm text-text-error"
-        >
-          {{ errorMessage }}
-        </div>
-        <ModalHeaderButton
-          v-if="lastRestore"
-          :label="undoLabel"
-          :data-title-popup="undoLabel"
-          data-restore-undo
-          @click="undoRestore"
-        >
-          <Icon name="rotate-right" class="-scale-x-100" />
-        </ModalHeaderButton>
-        <div ref="historyButton" class="relative flex shrink-0">
-          <ModalHeaderButton
-            icon="history"
-            :label="phrase.content_history"
-            :disabled="!hasHistory"
-            :aria-expanded="historyPopupOpen"
-            aria-haspopup="dialog"
-            data-history-button
-            @click="toggleHistory"
+      </FloatingPopup>
+      <FloatingPopup
+        v-model:open="linkPickerOpen"
+        :anchor="linkPickerAnchor ?? null"
+        placement="bottom-start"
+        @opened="linkPicker?.focus()"
+        @closed="closeLinkPicker"
+      >
+        <ContentLinkPicker
+          ref="linkPicker"
+          :key="linkPickerOpening"
+          mode="block"
+          :initial="linkPickerInitial"
+          @apply="linkPicked"
+        />
+      </FloatingPopup>
+      <template #header>
+        <!-- One slim row: what is edited and whether it is kept, its history,
+           close and save. What waits for the owner opens the text instead. -->
+        <div class="flex min-w-0 items-center gap-xs p-sm">
+          <ModalTitle
+            icon="edit"
+            :title="modalData.title || phrase.content_editor_title"
+            class="min-w-0 flex-1"
           />
           <span
-            v-if="draftOffer"
-            class="pointer-events-none absolute top-1 right-1 size-2
-              rounded-full bg-text-warning ring-2 ring-bg-2"
-            aria-hidden="true"
-          ></span>
-        </div>
-        <ModalHeaderButton
-          icon="close"
-          :label="phrase.close_modal"
-          @click="closeModal"
-        />
-        <ModalHeaderButton
-          variant="accent"
-          :label="phrase.save"
-          :disabled="saving || !isDirty"
-          data-editor-save
-          @click="save"
-        >
-          <Icon v-if="saving" name="loading" />
-          {{ isDirty ? phrase.save : phrase.saved }}
-        </ModalHeaderButton>
-      </div>
-      <FloatingPopup
-        v-model:open="historyPopupOpen"
-        :anchor="historyButton"
-        placement="bottom-end"
-        fit-content
-      >
-        <div class="rounded-normal border border-border-1 bg-bg-2">
-          <ContentHistoryPanel
-            :session="editorSession"
-            :current="headerSummary"
-            :current-key="currentKey"
-            :opened="opened"
-            :clearable="headerSummary.blockCount > 0"
-            @choose="chooseVersion"
-            @clear="clearContent"
+            v-if="historyStatus === 'offline' || historyStatus === 'refused'"
+            class="inline-flex shrink-0 text-text-warning"
+            role="img"
+            :aria-label="historyStatusText"
+            :data-title-popup="historyStatusText"
+            data-history-status
+            ><Icon name="warning"
+          /></span>
+          <span
+            v-else-if="historyStatusText"
+            class="inline-flex shrink-0 text-text-3"
+            role="img"
+            :aria-label="historyStatusText"
+            :data-title-popup="historyStatusText"
+            data-history-status
+            ><Icon name="cloud-upload"
+          /></span>
+          <div
+            v-if="errorMessage"
+            class="min-w-0 truncate text-sm text-text-error"
+          >
+            {{ errorMessage }}
+          </div>
+          <ModalHeaderButton
+            v-if="lastRestore"
+            :label="undoLabel"
+            :data-title-popup="undoLabel"
+            data-restore-undo
+            @click="undoRestore"
+          >
+            <Icon name="rotate-right" class="-scale-x-100" />
+          </ModalHeaderButton>
+          <div ref="historyButton" class="relative flex shrink-0">
+            <ModalHeaderButton
+              icon="history"
+              :label="phrase.content_history"
+              :disabled="!hasHistory"
+              :aria-expanded="historyPopupOpen"
+              aria-haspopup="dialog"
+              data-history-button
+              @click="toggleHistory"
+            />
+            <span
+              v-if="draftOffer"
+              class="pointer-events-none absolute top-1 right-1 size-2
+                rounded-full bg-text-warning ring-2 ring-bg-2"
+              aria-hidden="true"
+            ></span>
+          </div>
+          <ModalHeaderButton
+            icon="close"
+            :label="phrase.close_modal"
+            @click="closeModal"
           />
+          <ModalHeaderButton
+            variant="accent"
+            :label="phrase.save"
+            :disabled="saving || !isDirty"
+            data-editor-save
+            @click="save"
+          >
+            <Icon v-if="saving" name="loading" />
+            {{ isDirty ? phrase.save : phrase.saved }}
+          </ModalHeaderButton>
         </div>
-      </FloatingPopup>
-    </template>
+        <FloatingPopup
+          v-model:open="historyPopupOpen"
+          :anchor="historyButton"
+          placement="bottom-end"
+          fit-content
+        >
+          <div class="rounded-normal border border-border-1 bg-bg-2">
+            <ContentHistoryPanel
+              :session="editorSession"
+              :current="headerSummary"
+              :current-key="currentKey"
+              :opened="opened"
+              :clearable="headerSummary.blockCount > 0"
+              @choose="chooseVersion"
+              @clear="clearContent"
+            />
+          </div>
+        </FloatingPopup>
+      </template>
 
-    <div class="px-sm pt-md empty:hidden">
-      <ContentEditorNotices
-        :status="
-          historyStatus === 'offline' || historyStatus === 'refused'
-            ? historyStatus
+      <div class="px-sm pt-md empty:hidden">
+        <ContentEditorNotices
+          :status="
+            historyStatus === 'offline' || historyStatus === 'refused'
+              ? historyStatus
+              : undefined
+          "
+          :offer-time="draftOffer ? offerTime : undefined"
+          :offer-at="offerUpdatedAt"
+          :stored-time="
+            storedElsewhere ? historyTime(storedElsewhere.updatedAt) : undefined
+          "
+          @compare-stored="compareStored"
+          @dismiss-stored="dismissStored"
+          :reviews="waitingReviews"
+          @compare-offer="openOffer"
+          @dismiss-offer="dismissOffer"
+          @open-review="openAiReview"
+        />
+      </div>
+      <div
+        ref="holder"
+        class="content-editor content-prose relative w-full px-sm py-md"
+        @click.capture="preventEditorLinkNavigation"
+        @auxclick.capture="preventEditorLinkNavigation"
+      ></div>
+      <!-- What the text holds, and when it was last kept. -->
+      <div
+        class="mx-sm mb-md flex flex-wrap items-center gap-x-3.5 gap-y-1
+          border-t border-border-1 pt-sm text-xs text-text-2"
+        data-editor-foot
+      >
+        <ContentStats v-bind="headerSummary" compact class="min-w-0" />
+        <span class="inline-flex items-center gap-1 text-text-3">
+          <TheiTime v-if="updatedAt" :datetime="updatedAt" />
+          <template v-else>{{ phrase.content_never_saved }}</template>
+        </span>
+      </div>
+    </ModalContainer>
+
+    <ContentReview
+      v-if="review"
+      :review="review.model"
+      :mode="review.kind"
+      :title="review.kind === 'version' ? review.title : phrase.ai_review_title"
+      :context="modalData.title || phrase.content_editor_title"
+      :why="
+        review.kind === 'version'
+          ? review.why
+          : review.action.reason
+            ? publicText(review.action.reason)
             : undefined
-        "
-        :offer-time="draftOffer ? offerTime : undefined"
-        :offer-at="offerUpdatedAt"
-        :stored-time="
-          storedElsewhere ? historyTime(storedElsewhere.updatedAt) : undefined
-        "
-        @compare-stored="compareStored"
-        @dismiss-stored="dismissStored"
-        :reviews="waitingReviews"
-        @compare-offer="openOffer"
-        @dismiss-offer="dismissOffer"
-        @open-review="openAiReview"
-      />
-    </div>
-    <div
-      ref="holder"
-      class="content-editor content-prose relative w-full px-sm py-md"
-      @click.capture="preventEditorLinkNavigation"
-      @auxclick.capture="preventEditorLinkNavigation"
-    ></div>
-    <!-- What the text holds, and when it was last kept. -->
-    <div
-      class="mx-sm mb-md flex flex-wrap items-center gap-x-3.5 gap-y-1 border-t
-        border-border-1 pt-sm text-xs text-text-2"
-      data-editor-foot
-    >
-      <ContentStats v-bind="headerSummary" compact class="min-w-0" />
-      <span class="inline-flex items-center gap-1 text-text-3">
-        <TheiTime v-if="updatedAt" :datetime="updatedAt" />
-        <template v-else>{{ phrase.content_never_saved }}</template>
-      </span>
-    </div>
-  </ModalContainer>
-
-  <ContentReview
-    v-if="review"
-    :review="review.model"
-    :mode="review.kind"
-    :title="review.kind === 'version' ? review.title : phrase.ai_review_title"
-    :context="modalData.title || phrase.content_editor_title"
-    :why="
-      review.kind === 'version'
-        ? review.why
-        : review.action.reason
-          ? publicText(review.action.reason)
-          : undefined
-    "
-    :initial="reviewInitial"
-    target="editor"
-    :busy="reviewBusy"
-    :error="reviewError"
-    :commentable="review.kind === 'ai'"
-    :link-resolver="contentLinkResolver"
-    @close="reviewClosed"
-    @done="reviewDone"
-    @comment="reviewComment"
-  />
+      "
+      :initial="reviewInitial"
+      target="editor"
+      :busy="reviewBusy"
+      :error="reviewError"
+      :commentable="review.kind === 'ai'"
+      :link-resolver="contentLinkResolver"
+      @close="reviewClosed"
+      @done="reviewDone"
+      @comment="reviewComment"
+    />
+  </div>
 </template>

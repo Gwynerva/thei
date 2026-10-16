@@ -10,6 +10,7 @@ import { statuses } from './statuses';
 import { assetUsages } from './asset-usages';
 import { content } from './content';
 import { contentHistory } from './content-history';
+import { contentAnchors } from './content-anchors';
 import { events } from './events';
 import { diaryEntries } from './diary-entries';
 import { projects } from './projects';
@@ -50,6 +51,7 @@ export const schema = {
   backups,
   content,
   contentHistory,
+  contentAnchors,
   events,
   diaryEntries,
   projects,

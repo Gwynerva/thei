@@ -73,6 +73,7 @@ const projectData = ref<ProjectEditData>({
   tags: [],
   action: { ...DEFAULT_PROJECT_ACTION },
   reminder: '',
+  synonyms: [],
   notes: null,
   ...emptyStatusEditData(),
 });
@@ -207,6 +208,7 @@ if (isEdit.value) {
     tags: data.tags ?? [],
     action: data.action ?? { ...DEFAULT_PROJECT_ACTION },
     reminder: data.reminder,
+    synonyms: data.synonyms,
     notes: data.notes ?? null,
     ...emptyStatusEditData(),
   };

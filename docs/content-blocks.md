@@ -98,9 +98,15 @@ attribute. The link opens its target's address with `#` and the fragment
 appended; whether the target still has that place is not checked, and a
 browser simply opens the page when it does not.
 
+A heading's place is the anchor its page gives it (`contentHeadingAnchors`
+in `shared/content-headings.ts`): the headings a stranger reads are numbered
+first and the private ones after them, so the owner and a stranger read the
+same anchors, and the fixed anchors of a page — `project-description`,
+`project-sections`, `related-entities` — are never a heading's.
+
 An address of this very site is never stored as an external link when the
 editor can tell what it opens: pasted into an empty paragraph, pasted over
-selected text or typed as an external link, it is stored as an entity link
+selected text or written in the link popup, it is stored as an entity link
 instead, with the address's `#…` as its fragment.
 
 A target the reader may not open arrives without its uuid:
@@ -133,6 +139,11 @@ an HTML document is.
 | `integration`            | `{ provider: 'youtube', videoId, … }`, see `shared/content-integrations.ts`                                        |
 | `entityLink`             | `{ entityType, entityId, fragment?, note? }` — a card for something on this site; see inline markup                |
 | `privateSectionBoundary` | `{ sectionId, edge: 'start' \| 'end' }`                                                                            |
+
+The editor's link block is stored as what it was pointed at: an
+`entityLink` for something on this site, an `integration` for an address a
+block of its own takes (a video), and an `externalLink` for any other
+address. One nothing was chosen for is not stored.
 
 `asset` is `{ assetUuid }` when stored. What a reader receives is hydrated: the
 asset carries its media descriptor and address, or is `null` when the reader

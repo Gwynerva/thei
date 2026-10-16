@@ -66,6 +66,8 @@ type Rankable = {
   title: string;
   humanReadableSlug: string;
   publicId?: string;
+  /** Other names it is found by, as well as by its title. */
+  synonyms?: string[];
   date?: string;
   updatedAt: number;
 };
@@ -75,7 +77,7 @@ export function rankContentEntities<T extends Rankable>(
   query: string,
   limit = CONTENT_ENTITY_SEARCH_LIMIT,
 ): T[] {
-  const normalized = query.trim().toLocaleLowerCase();
+  const normalized = normalizeTermText(query.trim());
   if (!normalized)
     return [...items]
       .sort(
@@ -102,8 +104,11 @@ export function rankContentEntities<T extends Rankable>(
 
 /**
  * How well an entity answers a query, lower being better: by its title, then
- * its public ID, then its slug — the whole of one, its start, or any part of
- * it; 0 to 2 for the title, 10 to 12 for the public ID, and so on.
+ * its synonyms, then its public ID, then its slug — the whole of one, its
+ * start, or any part of it; 0 to 2 for the title, 10 to 12 for the public
+ * ID, and so on. A synonym said whole ranks just below the title said whole,
+ * since the owner gave that name to it; one found in part, below any title
+ * found in part. Case, compatibility forms and «ё» set aside.
  *
  * A diary entry has no name to search by, only its day, written however the
  * person is used to (`day-query.ts`): a whole day as written ranks with a
@@ -113,21 +118,26 @@ function bestRank(item: Rankable, query: string, day?: DayQuery) {
   if (item.date)
     return (day && dayQueryRank(item.date, day)) ?? Number.POSITIVE_INFINITY;
   let best = Number.POSITIVE_INFINITY;
-  [item.title, item.publicId, item.humanReadableSlug].forEach(
-    (value, index) => {
-      if (!value) return;
-      const field = value.toLocaleLowerCase();
-      const rank =
-        field === query
-          ? 0
-          : field.startsWith(query)
-            ? 1
-            : field.includes(query)
-              ? 2
-              : 3;
-      if (rank < 3) best = Math.min(best, index * 10 + rank);
-    },
-  );
+  const consider = (
+    value: string | undefined,
+    ranks: [number, number, number],
+  ) => {
+    if (!value) return;
+    const field = normalizeTermText(value);
+    const rank =
+      field === query
+        ? ranks[0]
+        : field.startsWith(query)
+          ? ranks[1]
+          : field.includes(query)
+            ? ranks[2]
+            : Number.POSITIVE_INFINITY;
+    best = Math.min(best, rank);
+  };
+  consider(item.title, [0, 1, 2]);
+  for (const synonym of item.synonyms ?? []) consider(synonym, [0.5, 3, 4]);
+  consider(item.publicId, [10, 11, 12]);
+  consider(item.humanReadableSlug, [20, 21, 22]);
   return best;
 }
 
@@ -141,6 +151,10 @@ type SuggestProfile = {
   summaryStems: Set<string>;
   /** The title as a phrase to look for in the text, and to find the text in. */
   titlePhrase: string;
+  /** The words of the synonyms, each naming the entity whole. */
+  synonymStems: Set<string>;
+  /** The synonyms as phrases, found in the text as a title is. */
+  synonymPhrases: string[];
 };
 
 /** Case and runs of space set aside, for comparing phrases. */
@@ -155,6 +169,12 @@ function suggestProfile(item: Suggestible): SuggestProfile {
     titleStems: new Set(titleWords.map(stemTerm)),
     summaryStems: new Set(wordTokens(item.summary).map(stemTerm)),
     titlePhrase: item.date ? '' : normalizePhrase(item.title),
+    synonymStems: new Set(
+      (item.synonyms ?? []).flatMap((synonym) =>
+        wordTokens(synonym).map(stemTerm),
+      ),
+    ),
+    synonymPhrases: (item.synonyms ?? []).map(normalizePhrase),
   };
 }
 
@@ -207,12 +227,17 @@ export function suggestContentEntities<T extends Suggestible>(
       const profile = profiles[index]!;
       let title = 0;
       let summary = 0;
+      let named = false;
       const titleMatched = new Set<string>();
       for (const { token, stem } of terms) {
         const weight = idf(stem);
         if (profile.titleStems.has(stem)) {
           title += 3 * weight;
           titleMatched.add(stem);
+        } else if (profile.synonymStems.has(stem)) {
+          // A synonym is a whole name of its own: «бг3» names the game.
+          title += 3 * weight;
+          named = true;
         } else if (
           token.length >= 3 &&
           profile.titleWords.some((word) => word.startsWith(token))
@@ -227,7 +252,7 @@ export function suggestContentEntities<T extends Suggestible>(
         titleWeight += idf(stem);
         if (titleMatched.has(stem)) titleCovered += idf(stem);
       }
-      const coverage = titleWeight ? titleCovered / titleWeight : 0;
+      const coverage = named ? 1 : titleWeight ? titleCovered / titleWeight : 0;
       const whole =
         profile.titlePhrase.length >= 2 &&
         phrase.length >= 2 &&
@@ -236,9 +261,12 @@ export function suggestContentEntities<T extends Suggestible>(
           [...profile.titleStems].some((stem) => !isCommon(stem))) &&
         (containsPhrase(phrase, profile.titlePhrase) ||
           containsPhrase(profile.titlePhrase, phrase));
+      const wholeSynonym = profile.synonymPhrases.some(
+        (synonym) => synonym.length >= 2 && containsPhrase(phrase, synonym),
+      );
       return {
         item,
-        whole,
+        whole: whole || wholeSynonym,
         score: title * (0.5 + 0.5 * coverage) + summary,
       };
     })

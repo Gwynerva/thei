@@ -26,6 +26,7 @@ Rules:
 - A relation is for a real dependency, never because one names the other: a mere mention deserves an inline link. What a diary entry implies for a project or an event is a proposal, never applied by you.
 - Nothing is deleted unless the owner asked for it: a deletion cannot be undone. Every other applied action stays in its session; take back a mistake of yours with undo_action rather than writing over it.
 - What the owner declined is not proposed again; session_actions says what became of yours, with the owner's comments.
+- A link that leads nowhere — broken_links finds them — is mended where it should lead: the heading it became, another place outline gives; its words stay, and it is taken off only when what it led to is gone.
 - Refer to entities by the refs tools return (kind:id).`;
 
 /**
@@ -48,6 +49,9 @@ Projects
 
 Pages
 - Standalone writing outside the timeline: title, summary, body, private notes, an icon and an address of its own (slug). No tags, no relations; a page may be pinned to the profile.
+
+Synonyms
+- Tags, projects, events and pages keep synonyms: other names the owner really uses for them — an abbreviation, a nickname, the name in another language or alphabet (Baldur's Gate 3: bg3, бг3; a transition: ЗГТ, HRT). Every search finds the entity by them; no page shows them. Propose one only when it is such a name, used in the archive or common for the thing: never a description, a paraphrase, a generic word or a piece of the title. With no strong one, leave synonyms alone.
 
 Titles and summaries
 - A summary — of a project, a section, an event, a page — says what the entity is, the way a search engine's description of its page would: a couple of short sentences, about 120 to 200 characters. It is not held to one line; the site also uses it as that description.
