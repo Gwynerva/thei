@@ -152,11 +152,9 @@ async function goTo(event: MouseEvent, href: string) {
     <template #aside>
       <div ref="aside" class="flex flex-col divide-y divide-border-1 text-sm">
         <!-- A text's caption keeps its marks, links and hints, which work
-             here as they do on the page. -->
-        <AssetPanelSection
-          v-if="current.caption"
-          :key="`caption:${current.key}`"
-        >
+             here as they do on the page. Keyed by its place: one file may
+             stand twice in a set, captioned differently. -->
+        <AssetPanelSection v-if="current.caption" :key="`caption:${index}`">
           <p
             class="content-prose leading-relaxed wrap-anywhere text-text-1"
             data-public-asset-caption
