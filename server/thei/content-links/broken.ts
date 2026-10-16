@@ -1,5 +1,5 @@
 import { theiLinkUrl } from '#layers/thei/shared/content-edit-markdown/links';
-import { asc, gt } from 'drizzle-orm';
+import { and, asc, gt, inArray } from 'drizzle-orm';
 import type { ContentEntityOutline } from '#layers/thei/shared/admin/content-entity-outline';
 import type { ContentOutputData } from '#layers/thei/shared/content';
 import {
@@ -134,9 +134,15 @@ async function brokenIn(
  * The broken links of the archive, a page at a time: texts are read in a
  * steady order from after `cursor`, until `limit` links are found or
  * `budget` texts are read; `next` goes on from there, none at the end.
+ * `owners` reads only the texts of these entities.
  */
 export async function scanBrokenLinks(
-  options: { cursor?: string; limit?: number; budget?: number } = {},
+  options: {
+    cursor?: string;
+    limit?: number;
+    budget?: number;
+    owners?: { kind: EntityKind; id: string }[];
+  } = {},
 ): Promise<{ links: BrokenLink[]; next?: string }> {
   const { db, schema } = THEI_SERVER.useDb();
   const limit = options.limit ?? 20;
@@ -156,7 +162,19 @@ export async function scanBrokenLinks(
         data: schema.content.data,
       })
       .from(schema.content)
-      .where(gt(schema.content.contentUuid, cursor))
+      .where(
+        and(
+          gt(schema.content.contentUuid, cursor),
+          ...(options.owners
+            ? [
+                inArray(
+                  schema.content.ownerId,
+                  options.owners.map((owner) => owner.id),
+                ),
+              ]
+            : []),
+        ),
+      )
       .orderBy(asc(schema.content.contentUuid))
       .limit(Math.min(50, budget - read))
       .all();
@@ -165,6 +183,13 @@ export async function scanBrokenLinks(
       read++;
       cursor = row.contentUuid;
       const kind = row.ownerType as EntityKind;
+      if (
+        options.owners &&
+        !options.owners.some(
+          (owner) => owner.kind === kind && owner.id === row.ownerId,
+        )
+      )
+        continue;
       const text = entityTextOfSlot(kind, row.slot);
       const face = text && entityFace({ kind, id: row.ownerId });
       if (!text || !face) continue;

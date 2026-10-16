@@ -175,7 +175,8 @@ function cutOff(parts: AiMessagePart[], transcript: AiTranscriptTurn[]) {
  * What the last process left half-done is put right at start: a session it
  * was answering is idle again, an answer it cut off is made whole for the
  * conversation to go on and says it was cut off; an action it was applying
- * waits again.
+ * waits again, and what checks' runs were given is let go — no turn of the
+ * last process goes on.
  */
 export function recoverAiSessions() {
   const { db, schema } = THEI_SERVER.useDb();
@@ -204,4 +205,5 @@ export function recoverAiSessions() {
     .set({ state: 'pending' })
     .where(eq(schema.aiActions.state, 'applying'))
     .run();
+  db.delete(schema.aiTemplateBatches).run();
 }

@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { isContentEntityType } from '#layers/thei/shared/content-link';
 import { entityOutline } from '../../content-links/anchors';
-import { scanBrokenLinks } from '../../content-links/broken';
+import { scanBrokenLinks, type BrokenLink } from '../../content-links/broken';
 import { READS } from '../annotations';
 import type { McpCallContext } from '../context';
 import { resolveRef } from '../entities';
@@ -12,6 +12,19 @@ const PROBLEMS = {
   'entity-gone': 'what it led to is gone',
   'heading-gone': 'the heading it led to is gone',
 } as const;
+
+/** A broken link as a model is told of it: where it stands, where it may lead. */
+export function brokenLinkText(item: BrokenLink): string {
+  return [
+    `- In ${item.in.ref} «${item.in.title}», ${item.in.text}: link ${item.link.id}${item.link.kind === 'card' ? ' (a link block)' : ` «${item.link.words}»`} → ${item.link.to}: ${PROBLEMS[item.problem]}${item.named ? ` (it named «${item.named}»)` : ''}${item.link.private ? '; in a private part' : ''}.`,
+    `  May lead instead: ${item.candidates
+      .map(
+        (candidate) =>
+          `${candidate.to ?? 'no link, the words kept'} (${candidate.why}${candidate.to ? `: ${candidate.title}` : ''})`,
+      )
+      .join('; ')}`,
+  ].join('\n');
+}
 
 /**
  * The places inside an entity a link may lead to, and the links of the
@@ -100,17 +113,7 @@ export function registerLinkTools(server: McpServer, _context: McpCallContext) {
     ({ cursor, limit }) =>
       guardTool(async () => {
         const page = await scanBrokenLinks({ cursor, limit });
-        const lines = page.links.map((item) =>
-          [
-            `- In ${item.in.ref} «${item.in.title}», ${item.in.text}: link ${item.link.id}${item.link.kind === 'card' ? ' (a link block)' : ` «${item.link.words}»`} → ${item.link.to}: ${PROBLEMS[item.problem]}${item.named ? ` (it named «${item.named}»)` : ''}${item.link.private ? '; in a private part' : ''}.`,
-            `  May lead instead: ${item.candidates
-              .map(
-                (candidate) =>
-                  `${candidate.to ?? 'no link, the words kept'} (${candidate.why}${candidate.to ? `: ${candidate.title}` : ''})`,
-              )
-              .join('; ')}`,
-          ].join('\n'),
-        );
+        const lines = page.links.map(brokenLinkText);
         return toolResult(
           page,
           [

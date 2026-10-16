@@ -14,6 +14,7 @@ import {
   touchSession,
 } from '../sessions/store';
 import { publishActions } from '../sessions/bus';
+import { coverApplied } from '../templates/coverage';
 import { actionLocks, withEntityLocks } from './lock';
 import { actionDef } from './registry';
 import { findActions, targetOf } from './rows';
@@ -153,6 +154,8 @@ export async function settleActions(rows: ActionRow[]): Promise<ActionRow[]> {
         refreshSessionCounts(tx, schema, sessionUuid);
     });
   publishActions(touched);
+  // What the owner's own hand made counts as checked as well.
+  coverApplied(touched.map((row) => row.actionUuid));
   return result;
 }
 
@@ -257,6 +260,7 @@ async function applyOne(
     },
   );
   if (!written || !own) fail('The change was not saved.');
+  coverApplied([row.actionUuid]);
   return { entity, own };
 }
 
@@ -607,4 +611,5 @@ export function markTakenInEditor(
     refreshSessionCounts(tx, schema, row.sessionUuid);
   });
   publishActions([row]);
+  coverApplied([actionUuid]);
 }

@@ -13,7 +13,8 @@ const HOLD_TABLES = [
   'ai-actions',
   'ai-memory',
   'ai-digests',
-  'ai-template-marks',
+  'ai-template-coverage',
+  'ai-template-batches',
   'ai-session-entities',
 ];
 

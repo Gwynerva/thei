@@ -1,14 +1,14 @@
 import { expect, test, type Page } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import { startFakeModel, type FakeModel } from '../helpers/fake-model';
-import { expectPopupUsable } from './helpers/popup';
 
 /**
- * The Templates tab as the owner uses it: the built-in templates switched
- * on and off from their rows, one of the owner's own written — a request,
- * a weekly schedule — run at once into a session of its own, a built-in one
- * copied, and an own one deleted, its sessions kept. On a computer, and on
- * a phone.
+ * The Templates tab as the owner uses it: the three built-in checks and the
+ * owner's own requests in one list, no schedule anywhere; a check run from
+ * its row over the archive and from an entity's ✦ over the entity, saying
+ * so when there is nothing new and looking again when asked; a built-in one
+ * copied into a request of the owner's, which opens in a new session, and
+ * deleted. On a computer, and on a phone.
  */
 test.use({
   storageState: fileURLToPath(
@@ -18,16 +18,43 @@ test.use({
 test.describe.configure({ mode: 'serial' });
 
 const run = Date.now() % 100_000;
-const TITLE = `Harbour week ${run}`;
+const TITLE = `Harbour look ${run}`;
+const DAY = new Date(Date.UTC(2012, 0, 1) + (run % 700) * 86_400_000)
+  .toISOString()
+  .slice(0, 10);
+let eventUuid = '';
 let model: FakeModel;
 
 test.beforeAll(async ({ request }) => {
-  model = await startFakeModel(
-    () => ({ text: 'Read the week: all is well.' }),
-    {
-      models: ['fake-e2e'],
-    },
-  );
+  const made = await (
+    await request.post('/api/admin/events', {
+      data: {
+        title: `Harbour night ${run}`,
+        summary: 'A night by the harbour.',
+        access: 'public',
+        humanReadableSlug: 'harbour-night',
+        publicId: `hn${run}`,
+        content: {
+          data: {
+            blocks: [
+              {
+                type: 'paragraph',
+                data: {
+                  text: `Lanterns all along the pier, as told in <a data-content-link="entity" data-entity-type="project" data-entity-id="p-gone-${run}">the old plan</a>.`,
+                },
+              },
+            ],
+          },
+        },
+        periods: [{ startDate: DAY, endDate: DAY }],
+      },
+    })
+  ).json();
+  expect(made.type, JSON.stringify(made)).toBe('success');
+  eventUuid = made.eventUuid;
+  model = await startFakeModel(() => ({ text: 'Looked: all is well.' }), {
+    models: ['fake-e2e'],
+  });
   expect(
     (
       await request.put('/api/admin/ai/settings', { data: { enabled: true } })
@@ -54,11 +81,7 @@ test.afterAll(async ({ request }) => {
     templates: { templateId: string; builtin?: string; title: string }[];
   };
   for (const template of list.templates)
-    if (template.builtin)
-      await request.patch(`/api/admin/ai/templates/${template.templateId}`, {
-        data: { enabled: false },
-      });
-    else if (template.title.includes(String(run)))
+    if (!template.builtin && template.title.includes(String(run)))
       await request.delete(`/api/admin/ai/templates/${template.templateId}`);
   await request.put('/api/admin/ai/model', { data: { provider: 'none' } });
   await request.put('/api/admin/ai/settings', { data: { enabled: false } });
@@ -74,173 +97,168 @@ test.afterEach(() => {
   expect(errors).toEqual([]);
 });
 
-async function open(page: Page) {
-  await page.goto('/admin/ai/?tab=templates');
+async function open(page: Page, path = '/admin/ai/?tab=templates') {
+  await page.goto(path);
   await expect(page.locator('html')).toHaveAttribute(
     'data-nuxt-hydrated',
     'true',
   );
-  await expect(page.locator('[data-templates-panel]')).toBeVisible();
 }
 
-const nightly = (page: Page) =>
-  page.locator('[data-template-row="builtin-nightly"]');
+const row = (page: Page, templateId: string) =>
+  page.locator(`[data-template-row="${templateId}"]`);
+const toast = (page: Page) => page.locator('[data-toast]');
 
-/** The popup of the select of when a template runs, while it is open. */
-const whenPopup = (page: Page) =>
-  page.locator('[data-floating-popup]').filter({
-    has: page.locator('[data-select-popup]'),
-  });
-
-test('switches a built-in schedule from its row', async ({ page }) => {
-  await open(page);
-  const toggle = nightly(page).getByRole('switch');
-  await expect(toggle).toHaveAttribute('aria-checked', 'false');
-  await expect(nightly(page)).toContainText('schedule off');
-  await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-checked', 'true');
-  await expect(nightly(page)).toContainText('next ');
-  await open(page);
-  await expect(nightly(page).getByRole('switch')).toHaveAttribute(
-    'aria-checked',
-    'true',
-  );
-});
-
-test('keeps a built-in request as written, and copies it off', async ({
+test('lists the three checks and the owner’s requests, no schedule anywhere', async ({
   page,
 }) => {
   await open(page);
-  await nightly(page).locator('[data-template-edit]').click();
+  const list = page.locator('[data-templates-list]');
+  await expect(list.locator('[data-template-row^="builtin-"]')).toHaveCount(3);
+  for (const key of ['proofread', 'links', 'graph'])
+    await expect(row(page, `builtin-${key}`)).toBeVisible();
+  await expect(row(page, 'builtin-proofread')).toContainText(
+    'Fixing text mistakes',
+  );
+  await expect(list.getByRole('switch')).toHaveCount(0);
+  await row(page, 'builtin-graph').locator('[data-template-edit]').click();
   const modal = page.locator('[data-template-modal]');
   await expect(modal).toBeVisible();
+  await expect(modal.locator('[data-template-when]')).toHaveCount(0);
   await expect(modal.locator('[data-template-instruction]')).toHaveCount(0);
-  await expect(modal.locator('[data-template-title]')).toHaveCount(0);
+  await expect(
+    modal.locator('[data-template-offer="diary-entry"]'),
+  ).toHaveAttribute('aria-pressed', 'true');
+  // Offered only where it can look: projects, events and diary entries.
+  await expect(modal.locator('[data-template-offer]')).toHaveCount(3);
+  await page.keyboard.press('Escape');
+  await expect(modal).toHaveCount(0);
+});
+
+test('runs a check from its row, and says when nothing new is left', async ({
+  page,
+}) => {
+  await open(page);
+  const links = row(page, 'builtin-links');
+  // Each run takes up to forty links; the last says there is nothing new.
+  let started = 0;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    await links.locator('[data-template-run]').click();
+    await expect(toast(page)).toBeVisible();
+    const said = await toast(page).innerText();
+    if (said.includes('nothing new to check')) break;
+    expect(said).toContain('Fixing broken links');
+    started++;
+    await expect(links.locator('[data-template-last]')).toBeVisible({
+      timeout: 20_000,
+    });
+  }
+  expect(started).toBeGreaterThan(0);
+  await expect(toast(page)).toContainText(
+    '“Fixing broken links”: nothing new to check',
+  );
+  // From the whole archive there is no looking again from the start.
+  await expect(toast(page).getByRole('button')).toHaveCount(0);
+  const asked = JSON.stringify(
+    model.requests.find((request) =>
+      JSON.stringify(request.body.messages).includes(`p-gone-${run}`),
+    )?.body.messages,
+  );
+  expect(asked).toContain('Mend these links that lead nowhere');
+});
+
+test('runs a check from an entity’s ✦, and looks at it again when asked', async ({
+  page,
+}) => {
+  await open(page, `/admin/events/${eventUuid}/edit/`);
+  const menu = page.locator('[data-ai-entity-menu]');
+  const check = menu.locator('[data-ai-preset="builtin-proofread"]');
+  await page.locator('[data-ai-entity]').click();
+  await check.click();
+  const sent = menu.locator('[data-ai-entity-sent]');
+  await expect(sent).toContainText(
+    `Fixing text mistakes · Harbour night ${run}`,
+  );
+  await expect(sent.locator('[data-ai-entity-stop]')).toHaveCount(0, {
+    timeout: 20_000,
+  });
+  // Looked at already: nothing new, and a way to look again.
+  await check.click();
+  await expect(toast(page)).toContainText(
+    '“Fixing text mistakes”: nothing new to check',
+  );
+  await toast(page).getByRole('button', { name: 'Check again' }).click();
+  await expect(sent).toBeVisible();
+  await expect(sent.locator('[data-ai-entity-stop]')).toHaveCount(0, {
+    timeout: 20_000,
+  });
+  const sessions = (await (
+    await page.request.get(
+      `/api/admin/ai/sessions?about=${encodeURIComponent(`event:${eventUuid}`)}`,
+    )
+  ).json()) as { sessions: { templateId: string | null; origin: string }[] };
+  expect(
+    sessions.sessions.filter(
+      (session) =>
+        session.templateId === 'builtin-proofread' &&
+        session.origin === 'template',
+    ),
+  ).toHaveLength(2);
+});
+
+test('copies a check into a request of the owner’s, opened in a new session', async ({
+  page,
+}) => {
+  await open(page);
+  await row(page, 'builtin-graph').locator('[data-template-edit]').click();
+  const modal = page.locator('[data-template-modal]');
   await modal.locator('[data-template-copy]').click();
   await expect(modal).toHaveCount(0);
   const copy = page
-    .locator('[data-templates-group="scheduled"] [data-template-row]')
-    .filter({ hasText: '(copy)' })
+    .locator('[data-template-row]')
+    .filter({ hasText: 'Finding possible relations (copy)' })
     .first();
   await expect(copy).toBeVisible();
-  await expect(copy).toContainText('schedule off');
-  // A copy is the owner's own: it is deleted, unlike a built-in one.
   await copy.locator('[data-template-edit]').click();
-  page.once('dialog', (dialog) => void dialog.accept());
-  await modal.locator('[data-template-delete]').click();
-  await expect(modal).toHaveCount(0);
-});
-
-test('writes a template of its own and runs it into a session', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await open(page);
-  await page.locator('[data-template-new]').click();
-  const modal = page.locator('[data-template-modal]');
-  const save = modal.locator('[data-template-save]');
-  await expect(save).toBeDisabled();
   await modal.locator('[data-template-title]').fill(TITLE);
-  await modal
-    .locator('[data-template-instruction]')
-    .fill('Read the diary entries of the last week and proofread them.');
-
-  // When it runs is chosen in a popup inside the modal, each way saying what
-  // it means; the keyboard walks it as it would a select.
-  const when = modal.locator('[data-template-when]');
-  await expect(when).toHaveAccessibleName('When: No schedule');
-  await when.click();
-  await expectPopupUsable(page, whenPopup(page));
-  await expect(
-    whenPopup(page).locator('[data-select-option="week"]'),
-  ).toContainText('On the day and at the hour chosen');
-  await page.keyboard.press('Escape');
-  await expect(whenPopup(page)).toHaveCount(0);
-  await expect(when).toBeFocused();
-  await page.keyboard.press('ArrowDown');
-  // The filter takes the keys; the choice is where the arrows start.
-  const filter = whenPopup(page).locator('[data-select-filter]');
-  await expect(filter).toBeFocused();
-  const manual = whenPopup(page).locator('[data-select-option="manual"]');
-  await expect(manual).toHaveAttribute('data-active', 'true');
-  await page.keyboard.press('ArrowDown');
-  await page.keyboard.press('ArrowDown');
-  await expect(
-    whenPopup(page).locator('[data-select-option="week"]'),
-  ).toHaveAttribute('data-active', 'true');
-  await page.keyboard.press('Enter');
-  await expect(when).toHaveAccessibleName('When: Every week');
-  await expect(when).toBeFocused();
-  // A few letters and Enter pick an option as well.
-  await when.click();
-  await page.keyboard.type('mon');
-  await expect(whenPopup(page).locator('[data-select-option]')).toHaveCount(1);
-  await page.keyboard.press('Enter');
-  await expect(when).toHaveAccessibleName('When: Every month');
-  await when.click();
-  await page.keyboard.type('week');
-  await page.keyboard.press('Enter');
-  await expect(when).toHaveAccessibleName('When: Every week');
-  await modal.locator('[data-template-day="3"]').click();
-  await modal.locator('[data-template-time]').fill('10:30');
-  await save.click();
+  await modal.locator('[data-template-save]').click();
   await expect(modal).toHaveCount(0);
 
-  const row = page
-    .locator('[data-templates-group="scheduled"] [data-template-row]')
-    .filter({ hasText: TITLE });
-  await expect(row).toContainText('Every Wed, 10:30');
-  await expect(row).toContainText('not run yet');
-
-  await row.locator('[data-template-run]').click();
-  await page.locator('[data-toast] button').click();
-  await expect(page).toHaveURL(/[?&]session=/);
-  const note = page.locator('[data-message]').first();
-  await expect(note).toContainText(TITLE);
-  await expect(note).toContainText('started by you');
-  await expect(page.locator('[data-message-role="model"]')).toContainText(
-    'all is well',
-    { timeout: 20_000 },
+  const own = page.locator('[data-template-row]').filter({ hasText: TITLE });
+  await expect(own).toContainText('Find the relations missing');
+  await own.locator('[data-template-run]').click();
+  await expect(page).toHaveURL(/[?&]session=new/);
+  await expect(page.locator('[data-composer-field]')).toContainText(
+    'Find the relations missing',
   );
-  // The model was told its request, and which day it is for the owner.
-  const asked = JSON.stringify(model.requests.at(-1)!.body.messages);
-  expect(asked).toContain('Read the diary entries of the last week');
-  expect(asked).toContain('in the owner’s time zone');
-  expect(asked).toContain('list_entities with its kind, from and to');
-});
 
-test('lists the sessions a template started, and deletes it', async ({
-  page,
-}) => {
+  // The owner's own is deleted, unlike a built-in one.
   await open(page);
-  const row = page
-    .locator('[data-templates-group="scheduled"] [data-template-row]')
-    .filter({ hasText: TITLE });
-  await expect(row.locator('[data-template-last]')).toBeVisible();
-  await row.locator('[data-template-edit]').click();
-  const modal = page.locator('[data-template-modal]');
-  await expect(modal.locator('[data-template-sessions] li')).toHaveCount(1);
+  await own.locator('[data-template-edit]').click();
+  await expect(modal.locator('[data-template-delete]')).toBeVisible();
   page.once('dialog', (dialog) => void dialog.accept());
   await modal.locator('[data-template-delete]').click();
-  await expect(row).toHaveCount(0);
+  await expect(own).toHaveCount(0);
+  await row(page, 'builtin-graph').locator('[data-template-edit]').click();
+  await expect(modal.locator('[data-template-delete]')).toHaveCount(0);
 });
 
 test('fits a phone', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await open(page);
-  await expect(nightly(page).locator('[data-template-run]')).toBeVisible();
+  await expect(
+    row(page, 'builtin-proofread').locator('[data-template-run]'),
+  ).toBeVisible();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
-  await nightly(page).locator('[data-template-edit]').click();
+  await row(page, 'builtin-proofread').locator('[data-template-edit]').click();
   await expect(page.locator('[data-template-modal]')).toBeVisible();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
-  await page.locator('[data-template-modal] [data-template-when]').click();
-  await expectPopupUsable(page, whenPopup(page));
 });

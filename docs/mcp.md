@@ -8,7 +8,7 @@ Thei can work with AI two ways, each optional and independent of the other:
   itself. The app pays for its model as it always does.
 - **Thei's own model answers in sessions.** With an API key from a service
   the owner chooses, the owner talks to a model on the AI page, and
-  templates run it on a schedule. It reads and proposes only. The owner pays
+  runs its built-in checks. It reads and proposes only. The owner pays
   that service, within a monthly limit.
 
 All of it is off until the owner turns **AI in Thei** on, on the
@@ -140,25 +140,25 @@ instead of the whole while the entity is unchanged.
 
 ## Templates
 
-A **template** is a request that starts a session. Without a schedule it is
-a ready-made request: the owner opens it as a new session with its words
-written in, or from the ✦ of an entity of the kinds it is offered on, the
-entity named already, and sends it as it is or added to. With a schedule — a
-day, a week or a month at the owner's hour — it runs by itself, and waits
-while the session of its last run still waits for the owner: answering, or
-holding actions or a question not decided, and not archived. So a template
-piles up no sessions while the owner is away, and one run once they are back
-reads everything since.
+A **template** is a request that starts a session; none runs by itself.
 
-The built-in ones are written in the code, and the owner chooses only when
-they run and with which model; the owner's own are written by the owner. A
-model takes from the request what to read, and may ask for what changed
-since the template last ran (`changes_since`). The schedule is kept in the
-database; a run missed while the site was down happens once when it is back.
-The built-in **Broken links** goes through `broken_links` and mends each
-link with `revise`, mode `relink`: the heading a renamed one became, another
-place `outline` gives, and only when what it led to is gone, the words
-without the link.
+The built-in ones are **checks**: **Fixing text mistakes** proofreads the
+archive's texts, **Fixing broken links** mends the links that lead nowhere,
+and **Finding possible relations** looks for the relations projects, events
+and diary entries lack. The code keeps count of what each has looked at — a
+paragraph, a link, an entity, as it read then — so a run from the
+**Templates** tab is given only what is new or changed since, a run's worth
+at a time, and with nothing new no session starts and nothing is spent. What
+a check reads is counted, never what it writes: a fix the owner accepts
+leaves its paragraph checked, while the owner's own change beside it waits
+for the next run, and a relation applied does not hand its entity back. From
+an entity's ✦ a check looks at that entity alone, and may look at it again
+from the start. Of a check the owner chooses only its model and the kinds it
+is offered on; to rewrite its words, they copy it.
+
+The owner's own templates are ready-made requests: opened as a new session
+with their words written in, or from the ✦ of an entity of the kinds they
+are offered on, the entity named already, and sent as they are or added to.
 
 ## The model of the site
 
@@ -182,7 +182,7 @@ a restart cut off says so.
 | `site_overview`                   | The site, its kinds of entities, and what the owner asks of models.  |
 | `search_archive`                  | Words across every text.                                             |
 | `list_entities`                   | Entities of a kind, by dates too.                                    |
-| `read_entity`                     | One entity whole, with its memory; `since` gives only what changed.  |
+| `read_entity`                     | One entity whole, with its memory.                                   |
 | `changes_since`                   | What changed in a span of time.                                      |
 | `life_timeline`                   | The one timeline of everything dated.                                |
 | `relation_graph`                  | The relations around an entity.                                      |

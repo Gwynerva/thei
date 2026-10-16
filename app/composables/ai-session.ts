@@ -9,6 +9,7 @@ import type {
 } from '#layers/thei/shared/ai';
 import type { AiRevisePartState } from '#layers/thei/shared/ai-actions';
 import type { AiEntityPanel } from '#layers/thei/shared/ai-entity';
+import type { AiTemplateRunResponse } from '#layers/thei/shared/ai-template';
 import type { ContentEntityType } from '#layers/thei/shared/content-link';
 
 /**
@@ -385,6 +386,16 @@ export const aiApi = {
     return $fetch(`/api/admin/ai/sessions/${sessionUuid}/stop`, {
       method: 'POST',
     });
+  },
+  /**
+   * Runs a built-in check: over what it has not looked at yet, or over one
+   * entity — again from the start with `force`. No session when nothing new.
+   */
+  runCheck(templateId: string, body: { about?: string; force?: boolean } = {}) {
+    return $fetch<AiTemplateRunResponse>(
+      `/api/admin/ai/templates/${templateId}/run`,
+      { method: 'POST', body },
+    );
   },
   change(
     sessionUuid: string,

@@ -3,7 +3,8 @@ import type { AiPresetItem } from '#layers/thei/shared/ai-template';
 
 /**
  * The ready-made requests to start from, as a row of chips under a small
- * heading: one chosen puts its words into the message, to add to and send.
+ * heading: one of the owner's puts its words into the message, to add to
+ * and send; a built-in check, marked by its own icon, runs.
  */
 defineProps<{ presets: readonly AiPresetItem[]; heading: string }>();
 const emit = defineEmits<{ choose: [preset: AiPresetItem] }>();
@@ -25,7 +26,10 @@ const emit = defineEmits<{ choose: [preset: AiPresetItem] }>();
         :data-title-popup="publicText(preset.instruction)"
         @click="emit('choose', preset)"
       >
-        <Icon name="template" class="shrink-0" />
+        <Icon
+          :name="preset.builtin ? 'list-check' : 'template'"
+          class="shrink-0"
+        />
         <span class="truncate">{{ publicText(preset.title) }}</span>
       </Button>
     </div>

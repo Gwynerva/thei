@@ -18,7 +18,6 @@ import type {
   AiMessageRole,
   AiSessionOrigin,
   AiSessionState,
-  AiTemplateSchedule,
   AiTranscriptTurn,
 } from '#layers/thei/shared/ai';
 
@@ -253,47 +252,68 @@ export const aiDigests = sqliteTable(
 
 /**
  * Session templates: the owner's own, and the owner's settings of the
- * built-in ones (`builtin` names it; its words live in the code).
+ * built-in checks (`builtin` names one; its words live in the code).
  */
-export const aiTemplates = sqliteTable(
-  'ai-templates',
+export const aiTemplates = sqliteTable('ai-templates', {
+  templateId: text().primaryKey(),
+  builtin: text(),
+  title: text(),
+  instruction: text(),
+  /** The model to use; empty for the one of the connection. */
+  model: text().notNull().default(''),
+  /** The kinds of entity it is offered on, from their ✦. */
+  offerOn: text({ mode: 'json' })
+    .notNull()
+    .default([])
+    .$type<AiTemplateOfferKind[]>(),
+  lastSessionUuid: text(),
+  createdAt: integer().notNull(),
+  updatedAt: integer().notNull(),
+});
+
+/**
+ * What a built-in check has looked at: each subject — a text, a link, an
+ * entity, a file — as it read then, by a fingerprint of what the check reads
+ * and, where it looks at less than the whole, the parts it went over (the
+ * paragraphs of a text). A subject that reads otherwise now is due again.
+ * The entity it belongs to, if any, forgets it when deleted.
+ */
+export const aiTemplateCoverage = sqliteTable(
+  'ai-template-coverage',
   {
-    templateId: text().primaryKey(),
-    builtin: text(),
-    title: text(),
-    instruction: text(),
-    /** The model to use; empty for the one of the connection. */
-    model: text().notNull().default(''),
-    schedule: text({ mode: 'json' }).notNull().$type<AiTemplateSchedule>(),
-    enabled: integer({ mode: 'boolean' }).notNull().default(true),
-    /** The kinds of entity a template without a schedule is offered on. */
-    offerOn: text({ mode: 'json' })
-      .notNull()
-      .default([])
-      .$type<AiTemplateOfferKind[]>(),
-    nextRunAt: integer(),
-    lastRunAt: integer(),
-    lastSessionUuid: text(),
-    createdAt: integer().notNull(),
-    updatedAt: integer().notNull(),
+    templateId: text().notNull(),
+    subject: text().notNull(),
+    entityType: text().$type<AiEntityType>(),
+    entityId: text(),
+    fingerprint: text().notNull(),
+    parts: text({ mode: 'json' }).notNull().default([]).$type<string[]>(),
+    at: integer().notNull(),
   },
-  (t) => [index('ai-templates-next-idx').on(t.nextRunAt)],
+  (t) => [
+    primaryKey({ columns: [t.templateId, t.subject] }),
+    index('ai-template-coverage-entity-idx').on(t.entityType, t.entityId),
+  ],
 );
 
 /**
- * What a template's runs last read of each entity, with the fingerprint and
- * the hashes of its paragraphs: a later run may read of it only what changed
- * since.
+ * What a run of a check was given, until its turn is over: gone through, it
+ * becomes what the check has looked at; failed, it is let go. Meanwhile no
+ * other run is given the same.
  */
-export const aiTemplateMarks = sqliteTable(
-  'ai-template-marks',
+export const aiTemplateBatches = sqliteTable(
+  'ai-template-batches',
   {
+    sessionUuid: text().notNull(),
     templateId: text().notNull(),
-    entityType: text().notNull().$type<AiEntityType>(),
-    entityId: text().notNull(),
+    subject: text().notNull(),
+    entityType: text().$type<AiEntityType>(),
+    entityId: text(),
     fingerprint: text().notNull(),
-    blocks: text({ mode: 'json' }).notNull().default([]).$type<string[]>(),
-    at: integer().notNull(),
+    parts: text({ mode: 'json' }).notNull().default([]).$type<string[]>(),
   },
-  (t) => [primaryKey({ columns: [t.templateId, t.entityType, t.entityId] })],
+  (t) => [
+    primaryKey({ columns: [t.sessionUuid, t.subject] }),
+    index('ai-template-batches-template-idx').on(t.templateId),
+    index('ai-template-batches-entity-idx').on(t.entityType, t.entityId),
+  ],
 );

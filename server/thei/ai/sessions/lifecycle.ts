@@ -3,6 +3,7 @@ import {
   releaseHistoryHolds,
   touchReleasedAssets,
 } from '../../content/history';
+import { dropBatches } from '../templates/coverage';
 import { publishSession } from './bus';
 import { releaseSessionFiles } from './files';
 
@@ -44,7 +45,8 @@ export function archiveQuietSessions(now = Date.now()): number {
 /**
  * Drops what was said and proposed in sessions, inside `tx`, letting go of
  * what their actions held — the versions of texts kept for an undo, and the
- * files they brought or freed — and of the files brought into them.
+ * files they brought or freed — of the files brought into them, and of what
+ * a check's run in them was given.
  */
 function dropContents(
   tx: any,
@@ -79,6 +81,7 @@ function dropContents(
     now,
   );
   releaseSessionFiles(tx, schema, sessionUuids, now);
+  dropBatches(tx, schema, sessionUuids);
 }
 
 /** Purges sessions a month in the archive, the pinned ones aside. */

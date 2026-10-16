@@ -1,5 +1,4 @@
 import { and, count, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { isPresetTemplate } from '#layers/thei/shared/ai-template';
 import type {
   AiEntityOffer,
   AiEntityPanel,
@@ -163,15 +162,12 @@ export async function entityPanel(key: EntityKey): Promise<AiEntityPanel> {
     sessions: listSessions({ about: key }).sessions.slice(0, SESSIONS_SHOWN),
     sessionCount: sessionCount(key),
     templates: listTemplates()
-      .filter(
-        (template) =>
-          isPresetTemplate(template) &&
-          (template.offerOn as string[]).includes(key.kind),
-      )
-      .map(({ templateId, title, instruction }) => ({
+      .filter((template) => (template.offerOn as string[]).includes(key.kind))
+      .map(({ templateId, title, instruction, builtin }) => ({
         templateId,
         title,
         instruction,
+        ...(builtin ? { builtin } : {}),
       })),
     modelReady: Boolean(sessionModel()),
   };
