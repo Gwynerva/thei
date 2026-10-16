@@ -56,6 +56,32 @@ const relation = computed(() => {
 });
 
 const fieldWords = computed(() => fieldName(String(payload.value.field)));
+/**
+ * What a change of a form says: each field in words, and the new words of a
+ * short text — a button, a status line — where it sets them.
+ */
+const SHORT_TEXTS = new Set([
+  'title',
+  'summary',
+  'reminder',
+  'slogan',
+  'displayName',
+  'nickname',
+  'actionText',
+]);
+const updateLines = computed(() =>
+  Object.entries((payload.value.changes ?? {}) as Record<string, unknown>).map(
+    ([field, value]) => ({
+      field: fieldName(field),
+      words:
+        SHORT_TEXTS.has(field) && typeof value === 'string'
+          ? [value]
+          : field === 'statuses' && Array.isArray(value)
+            ? value.map((item) => String((item as { text?: unknown }).text))
+            : [],
+    }),
+  ),
+);
 
 const textName = computed(() => {
   const name = payload.value.text as string;
@@ -103,10 +129,18 @@ const createTitle = computed(() => {
     <template v-else-if="action.kind === 'update'">
       <b v-if="!plain">{{
         phrase.ai_action_update_fields(
-          Object.keys(payload.changes ?? {}).join(', '),
+          updateLines.map((line) => line.field).join(', '),
         )
       }}</b>
       <AiEntityChip v-if="showTarget" :entity="action.target" />
+      <template v-for="line in updateLines" :key="line.field">
+        <span
+          v-for="(words, index) in line.words.slice(0, 3)"
+          :key="index"
+          class="text-text-2"
+          >«{{ publicText(words) }}»</span
+        >
+      </template>
     </template>
 
     <template v-else-if="action.kind === 'periods'">

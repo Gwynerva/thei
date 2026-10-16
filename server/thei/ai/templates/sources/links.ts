@@ -1,17 +1,12 @@
 import { createHash } from 'node:crypto';
-import { eq } from 'drizzle-orm';
 import {
   scanBrokenLinks,
   type BrokenLink,
 } from '../../../content-links/broken';
-import {
-  entityText,
-  findEntity,
-  parseRef,
-  type EntityKey,
-} from '../../../entity-kinds';
+import { entityText, findEntity, parseRef } from '../../../entity-kinds';
 import { brokenLinkText } from '../../../mcp/tools/links';
 import type { CheckItem, TemplateSource } from './index';
+import { withSections } from './scope';
 
 /**
  * «Fixing broken links»: the links of the archive's texts that lead nowhere
@@ -23,24 +18,6 @@ import type { CheckItem, TemplateSource } from './index';
 
 /** How many links one run is given. */
 const BATCH = 40;
-
-/** The entities whose texts a run from one entity reads: a project's sections too. */
-function ownersOf(scope: EntityKey) {
-  if (scope.kind !== 'project') return [scope];
-  const { db, schema } = THEI_SERVER.useDb();
-  return [
-    scope,
-    ...db
-      .select({ id: schema.projectContentSections.sectionUuid })
-      .from(schema.projectContentSections)
-      .where(eq(schema.projectContentSections.projectUuid, scope.id))
-      .all()
-      .map((row: { id: string }) => ({
-        kind: 'project-section' as const,
-        id: row.id,
-      })),
-  ];
-}
 
 function itemOf(link: BrokenLink): Omit<CheckItem, 'shown'> | undefined {
   const where = parseRef(link.in.ref);
@@ -64,8 +41,10 @@ function itemOf(link: BrokenLink): Omit<CheckItem, 'shown'> | undefined {
 }
 
 export const linksSource: TemplateSource = {
+  areas: { links: 'links inside texts that lead nowhere now' },
+
   async due({ scope, covered, busy, force }) {
-    const owners = scope ? ownersOf(scope) : undefined;
+    const owners = withSections(scope);
     const batch: CheckItem[] = [];
     let cursor: string | undefined;
     do {

@@ -140,25 +140,37 @@ instead of the whole while the entity is unchanged.
 
 ## Templates
 
-A **template** is a request that starts a session; none runs by itself.
+A **template** is a request that starts a session; none runs by itself, and
+every one is offered everywhere: on the **Templates** tab, on a new session
+and in every entity's ✦.
 
-The built-in ones are **checks**: **Fixing text mistakes** proofreads the
-archive's texts, **Fixing broken links** mends the links that lead nowhere,
-and **Finding possible relations** looks for the relations projects, events
-and diary entries lack. The code keeps count of what each has looked at — a
-paragraph, a link, an entity, as it read then — so a run from the
-**Templates** tab is given only what is new or changed since, a run's worth
-at a time, and with nothing new no session starts and nothing is spent. What
-a check reads is counted, never what it writes: a fix the owner accepts
-leaves its paragraph checked, while the owner's own change beside it waits
-for the next run, and a relation applied does not hand its entity back. From
-an entity's ✦ a check looks at that entity alone, and may look at it again
-from the start. Of a check the owner chooses only its model and the kinds it
-is offered on; to rewrite its words, they copy it.
+The built-in ones are **checks**: **Fixing text mistakes** proofreads
+whatever the owner typed — the texts, with the captions and titles of their
+pictures and files, and every short text beside them: titles, summaries,
+reminders, what a dated stretch is called, status lines, notes on links and
+relations, the titles and captions of placed files, the owner's name and
+slogan, a project's button; **Fixing broken links** mends the links that
+lead nowhere; **Finding possible relations** looks for the relations
+projects, events and diary entries lack. The code keeps count of what each
+has looked at — a paragraph, a short text, a link, an entity, as it read
+then — so a run is given only what is new or changed since, a run's worth
+at a time, and with nothing new no session starts and nothing is spent.
+What a check reads is counted, never what it writes: a fix the owner
+accepts leaves what it mended checked, while the owner's own change beside
+it waits for the next run, and a relation applied does not hand its entity
+back.
+
+A check runs from its row over the whole archive, or is sent from a new
+session or an entity's ✦ like any request: the entity in hand and the ones
+the words mention bound it — and may be looked at again from the start —
+and words added to the check's own narrow it further, «only the captions of
+files»: its model reads them and asks for what they name with
+`check_batch`, and is given only what of that is due. Of a check the owner
+chooses only its model; to rewrite its words, they copy it.
 
 The owner's own templates are ready-made requests: opened as a new session
-with their words written in, or from the ✦ of an entity of the kinds they
-are offered on, the entity named already, and sent as they are or added to.
+with their words written in, the entity named already when it comes from
+its ✦, and sent as they are or added to.
 
 ## The model of the site
 

@@ -161,14 +161,15 @@ export async function entityPanel(key: EntityKey): Promise<AiEntityPanel> {
     offers: await offersFor(key),
     sessions: listSessions({ about: key }).sessions.slice(0, SESSIONS_SHOWN),
     sessionCount: sessionCount(key),
-    templates: listTemplates()
-      .filter((template) => (template.offerOn as string[]).includes(key.kind))
-      .map(({ templateId, title, instruction, builtin }) => ({
+    // Every template is offered everywhere: the owner's words narrow it.
+    templates: listTemplates().map(
+      ({ templateId, title, instruction, builtin }) => ({
         templateId,
         title,
         instruction,
         ...(builtin ? { builtin } : {}),
-      })),
+      }),
+    ),
     modelReady: Boolean(sessionModel()),
   };
 }

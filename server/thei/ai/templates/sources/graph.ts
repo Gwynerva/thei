@@ -6,6 +6,7 @@ import type { EntityKind } from '../../../entity-kinds';
 import { digestLine, loadDocuments } from '../../../mcp/documents';
 import { changesBetween } from '../changes';
 import type { CheckItem, TemplateSource } from './index';
+import { inScope } from './scope';
 
 /**
  * «Finding possible relations»: the projects, events and diary entries it
@@ -18,8 +19,13 @@ import type { CheckItem, TemplateSource } from './index';
 /** How many entities one run is given. */
 const BATCH = 8;
 
-/** The kinds a relation joins. */
+/** The kinds a relation joins, each an area of its own. */
 const KINDS: EntityKind[] = ['project', 'event', 'diary-entry'];
+const AREAS: Record<string, string> = {
+  project: 'projects',
+  event: 'events',
+  'diary-entry': 'diary entries',
+};
 
 /** Every text of these kinds, by `kind:id`, in editing Markdown. */
 function textsByOwner(): Map<string, string[]> {
@@ -55,8 +61,9 @@ function textsByOwner(): Map<string, string[]> {
 }
 
 export const graphSource: TemplateSource = {
-  async due({ scope, covered, busy, force }) {
-    if (scope && !KINDS.includes(scope.kind)) return [];
+  areas: AREAS,
+
+  async due({ scope, areas, covered, busy, force }) {
     const documents = new Map(
       loadDocuments(KINDS).map((document) => [
         `${document.kind}:${document.id}`,
@@ -68,7 +75,8 @@ export const graphSource: TemplateSource = {
     for (const change of changesBetween({ from: 0, kinds: KINDS })) {
       if (batch.length >= BATCH) break;
       const id = `${change.key.kind}:${change.key.id}`;
-      if (scope && id !== `${scope.kind}:${scope.id}`) continue;
+      if (!inScope(scope, change.key)) continue;
+      if (areas && !areas.has(change.key.kind)) continue;
       const subject = `entity:${id}`;
       const document = documents.get(id);
       if (!document || busy.has(subject)) continue;

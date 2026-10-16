@@ -17,7 +17,6 @@ export default defineEventHandler((event) =>
       title: body.title,
       instruction: body.instruction,
       model: body.model,
-      offerOn: body.offerOn,
     });
   }),
 );

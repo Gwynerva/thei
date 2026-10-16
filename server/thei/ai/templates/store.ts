@@ -2,25 +2,21 @@ import { randomUUID } from 'node:crypto';
 import { asc, eq } from 'drizzle-orm';
 import {
   AI_BUILTIN_TEMPLATE_KEYS,
-  AI_BUILTIN_TEMPLATES,
-  AI_TEMPLATE_DEFAULT_OFFER,
   AI_TEMPLATE_INSTRUCTION_MAX,
   AI_TEMPLATE_TITLE_MAX,
   builtinTemplateId,
-  templateOfferKinds,
   type AiBuiltinTemplateKey,
   type AiTemplateItem,
-  type AiTemplateOfferKind,
 } from '#layers/thei/shared/ai-template';
 import { EntityPrefix } from '../../entity-id';
 import { refuse as fail } from '../../entity-patch/text';
 import { findSession } from '../sessions/store';
 
 /**
- * The templates: the built-in checks, written in the code and set by the
- * owner — with which model, offered where — and the owner's own ready-made
- * requests, written by the owner. A built-in one's settings are a row under
- * its id, made the first time the owner changes them or runs it.
+ * The templates: the built-in checks, written in the code — the owner sets
+ * only which model answers them — and the owner's own ready-made requests,
+ * written by the owner. A built-in one's settings are a row under its id,
+ * made the first time the owner changes them or runs it.
  */
 
 type TemplateRow = typeof import('../../db/schema/ai').aiTemplates.$inferSelect;
@@ -66,7 +62,6 @@ function builtinItem(key: AiBuiltinTemplateKey): AiTemplateItem {
     title: words.title,
     instruction: words.instruction,
     model: row?.model ?? '',
-    offerOn: row?.offerOn ?? [...AI_BUILTIN_TEMPLATES[key].offerOn],
     ...lastSessionOf(row),
   };
 }
@@ -77,7 +72,6 @@ function ownItem(row: TemplateRow): AiTemplateItem {
     title: row.title ?? '',
     instruction: row.instruction ?? '',
     model: row.model,
-    offerOn: row.offerOn,
     ...lastSessionOf(row),
   };
 }
@@ -113,13 +107,12 @@ export interface TemplateInput {
   title?: unknown;
   instruction?: unknown;
   model?: unknown;
-  offerOn?: unknown;
 }
 
 /**
  * Saves a template: a new one of the owner's when `templateId` is null, or
- * what the owner changed of one. Of a built-in one only its model and where
- * it is offered are the owner's; its words are the code's.
+ * what the owner changed of one. Of a built-in one only its model is the
+ * owner's; its words are the code's.
  */
 export function saveTemplate(
   templateId: string | null,
@@ -135,10 +128,6 @@ export function saveTemplate(
       : typeof input.model === 'string'
         ? input.model.trim().slice(0, 200)
         : fail('The model is named by a word.');
-  const offerOn =
-    input.offerOn === undefined
-      ? (current?.offerOn ?? AI_TEMPLATE_DEFAULT_OFFER)
-      : checkedOfferOn(input.offerOn, builtin);
   const words = builtin
     ? { title: null, instruction: null }
     : {
@@ -163,29 +152,15 @@ export function saveTemplate(
       builtin: builtin ?? null,
       ...words,
       model,
-      offerOn,
       createdAt: now,
       updatedAt: now,
     })
     .onConflictDoUpdate({
       target: schema.aiTemplates.templateId,
-      set: { ...words, model, offerOn, updatedAt: now },
+      set: { ...words, model, updatedAt: now },
     })
     .run();
   return findTemplate(id)!;
-}
-
-/**
- * The kinds a template is offered on: those it may be, each once, in their
- * order.
- */
-function checkedOfferOn(
-  value: unknown,
-  builtin: AiBuiltinTemplateKey | undefined,
-): AiTemplateOfferKind[] {
-  if (!Array.isArray(value)) fail('Where it is offered is a list of kinds.');
-  const asked = new Set(value);
-  return templateOfferKinds(builtin).filter((kind) => asked.has(kind));
 }
 
 /** A copy of a template as the owner's own ready-made request. */
@@ -199,7 +174,6 @@ export function copyTemplate(templateId: string, now = Date.now()) {
         .slice(0, AI_TEMPLATE_TITLE_MAX),
       instruction: source.instruction,
       model: source.model,
-      offerOn: source.offerOn,
     },
     now,
   );
@@ -227,7 +201,6 @@ export function recordRun(templateId: string, sessionUuid: string, at: number) {
       title: null,
       instruction: null,
       model: template.model,
-      offerOn: template.offerOn,
       lastSessionUuid: sessionUuid,
       createdAt: at,
       updatedAt: at,

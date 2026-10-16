@@ -6,7 +6,6 @@ import {
   text,
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
-import type { AiTemplateOfferKind } from '#layers/thei/shared/ai-template';
 import type {
   AiActionState,
   AiAppliedBy,
@@ -261,11 +260,6 @@ export const aiTemplates = sqliteTable('ai-templates', {
   instruction: text(),
   /** The model to use; empty for the one of the connection. */
   model: text().notNull().default(''),
-  /** The kinds of entity it is offered on, from their ✦. */
-  offerOn: text({ mode: 'json' })
-    .notNull()
-    .default([])
-    .$type<AiTemplateOfferKind[]>(),
   lastSessionUuid: text(),
   createdAt: integer().notNull(),
   updatedAt: integer().notNull(),

@@ -552,7 +552,6 @@ test('a ready-made request opens in a new session from its row', async ({
       data: {
         title: `Row request ${run}`,
         instruction: 'Write me a short plan.',
-        offerOn: [],
       },
     })
   ).json()) as { templateId: string };
@@ -561,7 +560,7 @@ test('a ready-made request opens in a new session from its row', async ({
     const row = page.locator(
       `[data-templates-list] [data-template-row="${preset.templateId}"]`,
     );
-    await expect(row).toContainText('only in a new session');
+    await expect(row).toContainText('Write me a short plan.');
     await row.locator('[data-template-run]').click();
     await expect(page).toHaveURL(/session=new/);
     await expect(page).not.toHaveURL(/template=/);

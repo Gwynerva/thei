@@ -1,13 +1,9 @@
 <script setup lang="ts">
 import {
-  AI_TEMPLATE_DEFAULT_OFFER,
   AI_TEMPLATE_INSTRUCTION_MAX,
   AI_TEMPLATE_TITLE_MAX,
-  templateOfferKinds,
   type AiTemplateDetail,
-  type AiTemplateOfferKind,
 } from '#layers/thei/shared/ai-template';
-import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
 import {
   aiModelName,
   type AiModelSettings,
@@ -17,11 +13,10 @@ import ModalContainer from '../ModalContainer.vue';
 import ModalHeaderButton from '../ModalHeaderButton.vue';
 
 /**
- * One template's settings: its request in the owner's words, where it is
- * offered and which model answers it, with the sessions it started. A
- * built-in check keeps its words: the owner sets its model and where it is
- * offered, or makes a copy to rewrite as a request of their own. A new one
- * starts here too.
+ * One template's settings: its request in the owner's words and which model
+ * answers it, with the sessions it started. A built-in check keeps its
+ * words: the owner sets its model, or makes a copy to rewrite as a request
+ * of their own. A new one starts here too.
  */
 const { modalData } = defineProps<{
   modalData: { templateId?: string };
@@ -33,7 +28,6 @@ interface Draft {
   title: string;
   instruction: string;
   model: string;
-  offerOn: AiTemplateOfferKind[];
 }
 
 const detail = ref<AiTemplateDetail>();
@@ -43,7 +37,6 @@ const draft = ref<Draft>({
   title: '',
   instruction: '',
   model: '',
-  offerOn: [...AI_TEMPLATE_DEFAULT_OFFER],
 });
 const saved = ref('');
 const busy = ref<'save' | 'run' | 'copy' | 'delete'>();
@@ -61,7 +54,6 @@ function draftOf(detail: AiTemplateDetail): Draft {
     title: template.title,
     instruction: template.instruction,
     model: template.model,
-    offerOn: [...template.offerOn],
   };
 }
 
@@ -115,7 +107,6 @@ async function save() {
   error.value = '';
   const body = {
     model: form.model.trim(),
-    offerOn: form.offerOn,
     ...(builtin.value
       ? {}
       : { title: form.title, instruction: form.instruction }),
@@ -132,24 +123,6 @@ async function save() {
     error.value = errorMessage(caught, phrase.value.error_title);
     busy.value = undefined;
   }
-}
-
-/** The kinds it may be offered on, each a toggle. */
-const offerable = computed(() => templateOfferKinds(template.value?.builtin));
-const offerKinds = computed(() =>
-  offerable.value.map((kind) => ({
-    kind,
-    icon: entityTypeIcon(kind),
-    label: entityTypeLabel(kind),
-    on: draft.value.offerOn.includes(kind),
-  })),
-);
-
-function toggleOffer(kind: AiTemplateOfferKind) {
-  const on = new Set(draft.value.offerOn);
-  if (on.has(kind)) on.delete(kind);
-  else on.add(kind);
-  draft.value.offerOn = offerable.value.filter((item) => on.has(item));
 }
 
 async function run() {
@@ -312,34 +285,6 @@ useModalCloseGuard(
           :placeholder="phrase.ai_template_instruction_placeholder"
           data-template-instruction
         />
-      </Field>
-
-      <Field>
-        <FieldLabel>{{ phrase.ai_template_offer_on }}</FieldLabel>
-        <div
-          role="group"
-          class="flex flex-wrap gap-1"
-          :aria-label="phrase.ai_template_offer_on"
-        >
-          <button
-            v-for="item in offerKinds"
-            :key="item.kind"
-            type="button"
-            class="flex h-9 cursor-pointer items-center gap-1.5 rounded-full
-              border px-3 text-xs transition pointer-coarse:h-11"
-            :class="
-              item.on
-                ? 'border-accent bg-accent/10 font-semibold text-accent'
-                : 'border-border-1 bg-bg-1 text-text-2 hocus:border-border-3'
-            "
-            :aria-pressed="item.on"
-            :data-template-offer="item.kind"
-            @click="toggleOffer(item.kind)"
-          >
-            <Icon :name="item.icon" class="shrink-0" />{{ item.label }}
-          </button>
-        </div>
-        <FieldHint>{{ phrase.ai_template_offer_on_hint }}</FieldHint>
       </Field>
 
       <Field>

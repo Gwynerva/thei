@@ -1793,7 +1793,7 @@ export default defineI18nModule({
     ai_tab_templates: 'Шаблоны',
     ai_templates_title: 'Шаблоны сессий',
     ai_templates_hint:
-      'Готовые просьбы к ИИ. Встроенная проверка смотрит только новое с прошлого раза — отсюда весь архив, из ✦ одну сущность, — а если нового нет, ничего не тратится. Ваши просьбы открывают новую сессию со своим текстом.',
+      'Готовые просьбы к ИИ — здесь, в новой сессии и в каждом ✦. Встроенная проверка смотрит только новое с прошлого раза — если нового нет, ничего не тратится, — а дописанные слова говорят, на что смотреть. Ваши просьбы открывают новую сессию со своим текстом.',
     ai_templates_new: 'Новый',
     ai_templates_presets: 'Заготовки',
     ai_template_builtin: 'встроенный',
@@ -1827,11 +1827,6 @@ export default defineI18nModule({
     content_block_add: 'Добавить блок',
     content_block_settings: 'Настройки блока. Потяните, чтобы переместить',
     content_block_toolbox: 'Блоки',
-    ai_template_offer_on: 'Где предлагать',
-    ai_template_offer_on_hint:
-      'Предлагается в ✦ сущностей этих видов — о той сущности, что открыта.',
-    ai_template_offered_nowhere: (check) =>
-      check ? 'только отсюда' : 'только в новой сессии',
     ai_template_run: 'Проверить новое',
     ai_template_run_again: 'Проверить снова',
     ai_template_nothing_new: (title) => `«${title}»: нового для проверки нет`,
@@ -2008,7 +2003,9 @@ export default defineI18nModule({
     },
     ai_template_copy_title: (title) => `${title} (копия)`,
     ai_template_note: (title, count) =>
-      `«${title}» — запущено вами · к проверке: ${count}`,
+      count === null
+        ? `«${title}» — запущено вами`
+        : `«${title}» — запущено вами · к проверке: ${count}`,
     ai_new_model_line: (model) =>
       `Отвечает модель из «Подключения» · ${model}. Разговор в другом приложении ИИ через MCP тоже появится здесь — с его действиями.`,
     ai_action_kinds: {
@@ -2314,6 +2311,8 @@ export default defineI18nModule({
       description: 'Описание',
       synonyms: 'Синонимы',
       slogan: 'Слоган',
+      statuses: 'Статусы',
+      actionText: 'Текст кнопки',
     },
     ai_action_flag: { on: 'да', off: 'нет' },
     ai_action_create: {

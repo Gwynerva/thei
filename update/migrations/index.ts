@@ -26,6 +26,7 @@ import entitySynonyms from './0.0.6-entity-synonyms';
 import aiTemplateOffers from './0.0.6-ai-template-offers';
 import contentAnchors from './0.0.6-content-anchors';
 import aiTemplateCoverage from './0.0.6-ai-template-coverage';
+import aiTemplatesEverywhere from './0.0.6-ai-templates-everywhere';
 
 /**
  * Every migration Thei has ever shipped, oldest first.
@@ -65,6 +66,7 @@ export const migrationRegistry: TheiMigration[] = [
   aiTemplateOffers,
   contentAnchors,
   aiTemplateCoverage,
+  aiTemplatesEverywhere,
 ];
 
 export { baselineSql } from './0.0.1-baseline';

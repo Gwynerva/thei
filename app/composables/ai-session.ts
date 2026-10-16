@@ -388,10 +388,14 @@ export const aiApi = {
     });
   },
   /**
-   * Runs a built-in check: over what it has not looked at yet, or over one
-   * entity — again from the start with `force`. No session when nothing new.
+   * Runs a built-in check: over what it has not looked at yet, of the
+   * entities named or of the whole archive — again from the start with
+   * `force` — narrowed by the owner's words. No session when nothing new.
    */
-  runCheck(templateId: string, body: { about?: string; force?: boolean } = {}) {
+  runCheck(
+    templateId: string,
+    body: { about?: string[]; request?: string; force?: boolean } = {},
+  ) {
     return $fetch<AiTemplateRunResponse>(
       `/api/admin/ai/templates/${templateId}/run`,
       { method: 'POST', body },

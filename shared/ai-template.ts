@@ -8,64 +8,23 @@ import type { AiSessionItem } from './ai';
  * only what is new or changed since. From an entity's ✦ it looks at that
  * entity alone. The owner's own are ready-made requests: opened in a new
  * session with their words, to add to and send. Nothing runs by itself.
+ * Both are offered everywhere; the owner's words narrow what they do.
  */
 
 export const AI_TEMPLATE_TITLE_MAX = 120;
 export const AI_TEMPLATE_INSTRUCTION_MAX = 2000;
 
-/** The kinds of entity a template may be offered on, from their ✦. */
-export const AI_TEMPLATE_OFFER_KINDS = [
-  'project',
-  'project-section',
-  'event',
-  'diary-entry',
-  'page',
-  'tag',
+/**
+ * The built-in checks. Their words are phrases (`ai_template_builtins`), in
+ * the site's language. Every template is offered everywhere — on the AI page
+ * and in every entity's ✦ — and the owner's words say what it looks at.
+ */
+export const AI_BUILTIN_TEMPLATE_KEYS = [
+  'proofread',
+  'links',
+  'graph',
 ] as const;
-export type AiTemplateOfferKind = (typeof AI_TEMPLATE_OFFER_KINDS)[number];
-
-/** Where a new template of the owner's is offered: every kind with a text. */
-export const AI_TEMPLATE_DEFAULT_OFFER: AiTemplateOfferKind[] = [
-  'project',
-  'project-section',
-  'event',
-  'diary-entry',
-  'page',
-];
-
-/**
- * The built-in checks, each offered — until the owner says otherwise — on
- * the kinds it can look at. Their words are phrases (`ai_template_builtins`),
- * in the site's language.
- */
-export const AI_BUILTIN_TEMPLATES = {
-  proofread: {
-    offerOn: ['project', 'project-section', 'event', 'diary-entry', 'page'],
-  },
-  links: {
-    offerOn: ['project', 'project-section', 'event', 'diary-entry', 'page'],
-  },
-  graph: { offerOn: ['project', 'event', 'diary-entry'] },
-} as const satisfies Record<
-  string,
-  { offerOn: readonly AiTemplateOfferKind[] }
->;
-export type AiBuiltinTemplateKey = keyof typeof AI_BUILTIN_TEMPLATES;
-export const AI_BUILTIN_TEMPLATE_KEYS = Object.keys(
-  AI_BUILTIN_TEMPLATES,
-) as AiBuiltinTemplateKey[];
-
-/**
- * The kinds a template may be offered on: a check only on those it can look
- * at, the owner's own request on any.
- */
-export function templateOfferKinds(
-  builtin: AiBuiltinTemplateKey | undefined,
-): readonly AiTemplateOfferKind[] {
-  return builtin
-    ? AI_BUILTIN_TEMPLATES[builtin].offerOn
-    : AI_TEMPLATE_OFFER_KINDS;
-}
+export type AiBuiltinTemplateKey = (typeof AI_BUILTIN_TEMPLATE_KEYS)[number];
 
 /** A built-in template's id, the one its settings are kept under. */
 export function builtinTemplateId(key: AiBuiltinTemplateKey) {
@@ -80,8 +39,6 @@ export interface AiTemplateItem {
   instruction: string;
   /** The model it is answered by; empty for the one of the connection. */
   model: string;
-  /** The kinds of entity it is offered on. */
-  offerOn: AiTemplateOfferKind[];
   /** The session its last run started, and what waits in it. */
   lastSession?: {
     sessionUuid: string;

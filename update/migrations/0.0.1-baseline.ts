@@ -504,7 +504,6 @@ export const baselineSql: string[] = [
 	\`title\` text,
 	\`instruction\` text,
 	\`model\` text DEFAULT '' NOT NULL,
-	\`offerOn\` text DEFAULT '[]' NOT NULL,
 	\`lastSessionUuid\` text,
 	\`createdAt\` integer NOT NULL,
 	\`updatedAt\` integer NOT NULL

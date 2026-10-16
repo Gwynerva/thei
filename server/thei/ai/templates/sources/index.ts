@@ -7,11 +7,13 @@ import { proofreadSource } from './proofread';
 
 /**
  * Where a built-in check finds its work. Each looks at subjects of its own —
- * the paragraphs of a text, a link, an entity, a file — and says which are
- * due: those it never looked at, and those that read otherwise now than when
- * it last did. What it reads of a subject is fingerprinted, and never what
- * it writes there, so its own accepted proposals do not hand the same
- * subject back to it.
+ * the paragraphs of a text, the short texts of an entity, a link, an entity,
+ * a file — and says which are due: those it never looked at, and those that
+ * read otherwise now than when it last did. What it reads of a subject is
+ * fingerprinted, and never what it writes there, so its own accepted
+ * proposals do not hand the same subject back to it. A subject's parts each
+ * belong to an area — titles, captions, statuses… — which the owner's words
+ * may narrow a run to.
  */
 
 /** What a check has looked at of one subject. */
@@ -24,7 +26,7 @@ export interface Covered {
 
 /** One subject a run is given. */
 export interface CheckItem extends Covered {
-  /** `text:<kind>:<id>:<slot>`, `link:<ref>:<slot>:<link>`, `file:<family>`… */
+  /** `text:<kind>:<id>:<slot>`, `fields:<kind>:<id>`, `link:…`, `file:…` */
   subject: string;
   /** The entity it belongs to, if any: deleting it forgets the subject. */
   entity?: EntityKey;
@@ -33,8 +35,10 @@ export interface CheckItem extends Covered {
 }
 
 export interface DueInput {
-  /** A run from an entity's ✦: only what belongs to it. */
-  scope?: EntityKey;
+  /** Only what belongs to these entities: a run from a ✦, or one they name. */
+  scope?: readonly EntityKey[];
+  /** Only these areas of the source's own, as the owner's words ask. */
+  areas?: ReadonlySet<string>;
   /** What the check has looked at, by subject. */
   covered: ReadonlyMap<string, Covered>;
   /** Subjects another run is looking at now. */
@@ -44,6 +48,8 @@ export interface DueInput {
 }
 
 export interface TemplateSource {
+  /** The areas it looks at, each with what it holds, in English. */
+  areas: Record<string, string>;
   /** What is due, one run's worth at most: the rest waits for the next. */
   due(input: DueInput): Promise<CheckItem[]>;
   /** What the model is asked to do with what it is given, in English. */

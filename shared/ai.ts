@@ -106,8 +106,16 @@ export type AiMessagePart =
       /** What the service said, for the owner; the page says the rest. */
       text: string;
     }
-  /** The run of a built-in check that opens its session. */
-  | { type: 'template'; templateId: string };
+  /**
+   * The run of a built-in check that opens its session: the entities it is
+   * about, by ref, and whether it looks at them again from the start.
+   */
+  | {
+      type: 'template';
+      templateId: string;
+      scope?: string[];
+      force?: true;
+    };
 
 /**
  * A turn of the conversation as the model saw it, kept so the session can go

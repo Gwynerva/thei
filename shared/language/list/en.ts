@@ -1729,7 +1729,7 @@ export default defineI18nBase({
     ai_tab_templates: 'Templates',
     ai_templates_title: 'Session templates',
     ai_templates_hint:
-      'Requests to the AI, ready to go. A built-in check looks only at what is new since it last looked — the archive from here, one entity from its ✦ — and with nothing new, nothing is spent. Your own requests open a new session with their words.',
+      'Requests to the AI, ready to go, offered here, on a new session and in every ✦. A built-in check looks only at what is new since it last looked — with nothing new, nothing is spent — and the words you add say what to look at. Your own requests open a new session with their words.',
     ai_templates_new: 'New',
     ai_templates_presets: 'Ready-made requests',
     ai_template_builtin: 'built-in',
@@ -1763,11 +1763,6 @@ export default defineI18nBase({
     content_block_add: 'Add a block',
     content_block_settings: 'Block settings. Drag to move',
     content_block_toolbox: 'Blocks',
-    ai_template_offer_on: 'Offered on',
-    ai_template_offer_on_hint:
-      'The ✦ of these kinds of entity offers it, about the entity in hand.',
-    ai_template_offered_nowhere: (check) =>
-      check ? 'only from here' : 'only in a new session',
     ai_template_run: 'Check what is new',
     ai_template_run_again: 'Check again',
     ai_template_nothing_new: (title) => `“${title}”: nothing new to check`,
@@ -1941,7 +1936,9 @@ export default defineI18nBase({
     },
     ai_template_copy_title: (title) => `${title} (copy)`,
     ai_template_note: (title, count) =>
-      `“${title}” — started by you · ${count} to look at`,
+      count === null
+        ? `“${title}” — started by you`
+        : `“${title}” — started by you · ${count} to look at`,
     ai_new_model_line: (model) =>
       `Answered by the model from “Connection” · ${model}. A conversation in another AI app over MCP shows up here too, with its actions.`,
     ai_action_kinds: {
@@ -2246,6 +2243,8 @@ export default defineI18nBase({
       description: 'Description',
       synonyms: 'Synonyms',
       slogan: 'Tagline',
+      statuses: 'Statuses',
+      actionText: 'Button text',
     },
     ai_action_flag: { on: 'yes', off: 'no' },
     ai_action_create: {
