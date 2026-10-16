@@ -6,13 +6,33 @@ defineOptions({ inheritAttrs: false });
  * takes the page's own (`ground="page"`), so a text is written on what it
  * is read on.
  */
-const { ground = 'surface' } = defineProps<{ ground?: 'surface' | 'page' }>();
+const { ground = 'surface', dismiss } = defineProps<{
+  ground?: 'surface' | 'page';
+  /**
+   * What a click around the card does: closing the modal, or — for a card
+   * standing in another's place, as a comparison does in the editor's —
+   * leaving it.
+   */
+  dismiss?: () => void;
+}>();
 
 const root = useTemplateRef<HTMLElement>('root');
 defineExpose({ root });
 
+/**
+ * A click around the card is one step, as Escape is: with a popup open it
+ * only closes the popup, which the press already did.
+ */
+let armed = false;
+function overlayPress(event: PointerEvent) {
+  armed = !closedPopup(event);
+}
+
 function overlayClick() {
-  closeModal();
+  if (!armed) return;
+  armed = false;
+  if (dismiss) dismiss();
+  else closeModal();
 }
 </script>
 
@@ -24,6 +44,7 @@ function overlayClick() {
     <!-- Around the card a click closes it. The blurred page under it is the
          dialog's own, one for every card (`Modal.vue`). -->
     <div
+      @pointerdown="overlayPress"
       @click="overlayClick"
       class="absolute inset-0 max-sm:pointer-events-none"
     ></div>

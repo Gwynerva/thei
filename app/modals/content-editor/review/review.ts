@@ -10,6 +10,7 @@ import {
   type ContentOutputBlock,
   type ContentOutputData,
 } from '#layers/thei/shared/content';
+import type { BlockChange } from '#layers/thei/shared/content-block-changes';
 import {
   orderReview,
   proofreadReview,
@@ -42,6 +43,23 @@ export function reviewPartIcon(part: Pick<ReviewPart, 'kind'>): IconName {
   return KIND_ICONS[part.kind];
 }
 
+/**
+ * How a part's quoted block is marked: struck for one that goes, marked
+ * new for one that comes, plain for one that stays and changes elsewhere.
+ */
+export function reviewQuoteMark(
+  part: Pick<ReviewPart, 'kind'>,
+): 'removed' | 'added' | undefined {
+  if (part.kind === 'removed' || part.kind === 'removal') return 'removed';
+  if (
+    part.kind === 'added' ||
+    part.kind === 'heading' ||
+    part.kind === 'delimiter'
+  )
+    return 'added';
+  return undefined;
+}
+
 export const REVIEW_VIEW_ICONS: Record<ReviewView, IconName> = {
   read: 'visibility',
   diff: 'compare',
@@ -72,6 +90,66 @@ export function describeReviewBlock(block: ContentOutputBlock): string {
     files.length,
     extensions.length > NAMED_FILES ? `${named}, …` : named,
   );
+}
+
+/** A kind of block by the name the editor gives it; none for the rest. */
+function blockName(type: string) {
+  const names = phrase.value.content_editor_i18n;
+  return (
+    (
+      {
+        paragraph: names.text,
+        header: names.heading,
+        quote: names.quote,
+        list: names.list,
+        delimiter: names.delimiter,
+      } as Record<string, string>
+    )[type] ?? ''
+  );
+}
+
+/** A list's style by the name the editor gives it. */
+function listStyleName(style: string) {
+  const names = phrase.value.content_editor_i18n;
+  return (
+    (
+      {
+        unordered: names.unordered,
+        ordered: names.ordered,
+        checklist: names.checklist,
+      } as Record<string, string>
+    )[style] ?? style
+  );
+}
+
+/** What changed in a block besides its words, in a few words. */
+export function reviewChangeWords(change: BlockChange): string {
+  const said = phrase.value.ai_review_changes;
+  switch (change.what) {
+    case 'type':
+      return said.type(blockName(change.from), blockName(change.to));
+    case 'level':
+      return said.level(change.from, change.to);
+    case 'style':
+      return said.style(listStyleName(change.from), listStyleName(change.to));
+    case 'spoiler':
+      return said.spoiler(change.on);
+    default:
+      return said[change.what];
+  }
+}
+
+/**
+ * What a part changes besides the words it shows, in a line: a block's
+ * level, style or files, the blocks a new order moves, the paragraphs a
+ * split makes.
+ */
+export function reviewChangesLine(part: ReviewPart): string {
+  return [
+    ...(part.changes ?? []).map(reviewChangeWords),
+    ...(part.moved ? [phrase.value.ai_review_moved(part.moved)] : []),
+    ...(part.pieces ? [phrase.value.ai_review_split_into(part.pieces)] : []),
+  ].join(' · ');
 }
 
 const VIEW_KEY = 'thei-review-view';
@@ -114,6 +192,8 @@ export function partComment(
   words: string,
 ): string {
   const part = review.parts.find((item) => item.id === partId);
+  if (part?.link?.made)
+    return `A link on «${part.link.words}» → ${part.link.to ?? 'an entity'}: ${words}`;
   if (part?.words)
     return `«${part.words.before}» → «${part.words.after}»: ${words}`;
   if (part?.link)

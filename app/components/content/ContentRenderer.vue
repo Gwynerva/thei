@@ -37,6 +37,8 @@ const props = withDefaults(
     assetViewer?: boolean;
     contentHeadings?: ContentHeading[];
     pathPrefix?: string;
+    /** Spoilers drawn open: a text compared, whose change must be seen. */
+    spoilersOpen?: boolean;
   }>(),
   { pathPrefix: '' },
 );
@@ -200,7 +202,7 @@ function fileGroupEntries(items: unknown): ContentFileGroupEntry[] {
 <template>
   <div ref="root" class="content-renderer content-prose min-w-0">
     <template v-for="{ block, path } in blocks" :key="blockKey(block, path)">
-      <ContentSpoiler :spoiler="blockIsSpoiler(block)">
+      <ContentSpoiler :spoiler="!spoilersOpen && blockIsSpoiler(block)">
         <p
           v-if="block.type === 'paragraph'"
           v-html="publicRichText(block.data.text as string)"

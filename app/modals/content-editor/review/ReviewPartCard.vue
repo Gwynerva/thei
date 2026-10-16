@@ -5,7 +5,8 @@ import type {
   ReviewPart,
 } from '#layers/thei/shared/content-review';
 import AiCommentBox from '#layers/thei/app/components/ai/AiCommentBox.vue';
-import { reviewPartIcon } from './review';
+import ReviewFiles from './ReviewFiles.vue';
+import { reviewChangesLine, reviewPartIcon } from './review';
 
 /**
  * One part, in hand: what it is, what it changes — the words as they are
@@ -29,6 +30,11 @@ const emit = defineEmits<{
 }>();
 
 const words = computed(() => phrase.value.ai_review_modes[props.mode]);
+/** A block that goes is quoted as it is, struck; one that comes as it will be. */
+const goes = computed(
+  () => props.part.kind === 'removed' || props.part.kind === 'removal',
+);
+const changes = computed(() => reviewChangesLine(props.part));
 const commenting = ref(false);
 const commented = ref(false);
 
@@ -67,9 +73,45 @@ function send(text: string) {
       }}</span>
     </div>
 
+    <!-- A link mended or made: its words, where they lead now and would. -->
+    <dl
+      v-if="part.link"
+      class="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2.5
+        gap-y-1 text-sm wrap-anywhere"
+      data-review-link
+    >
+      <dt class="text-2xs font-bold tracking-wide text-text-3 uppercase">
+        {{ words.was }}
+      </dt>
+      <dd>
+        <template v-if="part.link.words">«{{ part.link.words }}» → </template
+        ><ReviewMark kind="removed">{{
+          part.link.made
+            ? phrase.ai_review_link_none
+            : part.link.from
+              ? publicText(part.link.from)
+              : phrase.ai_review_link_gone
+        }}</ReviewMark>
+      </dd>
+      <dt class="text-2xs font-bold tracking-wide text-text-3 uppercase">
+        {{ words.will }}
+      </dt>
+      <dd>
+        <template v-if="part.link.words">«{{ part.link.words }}» → </template
+        ><ReviewMark kind="added"
+          ><Icon v-if="part.link.made" name="link" class="mr-0.5" />{{
+            part.link.to
+              ? publicText(part.link.to)
+              : part.link.made
+                ? phrase.ai_review_kinds.link
+                : phrase.ai_review_link_off
+          }}</ReviewMark
+        >
+      </dd>
+    </dl>
     <!-- Words: as they are, and as they would be. -->
     <dl
-      v-if="part.words"
+      v-else-if="part.words"
       class="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2.5
         gap-y-1 text-sm wrap-anywhere"
     >
@@ -88,34 +130,6 @@ function send(text: string) {
         {{ part.words.around[0]
         }}<ReviewMark kind="added">{{ part.words.after }}</ReviewMark
         >{{ part.words.around[1] }}
-      </dd>
-    </dl>
-    <!-- A link mended: its words, where they lead now and would. -->
-    <dl
-      v-else-if="part.link"
-      class="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2.5
-        gap-y-1 text-sm wrap-anywhere"
-      data-review-link
-    >
-      <dt class="text-2xs font-bold tracking-wide text-text-3 uppercase">
-        {{ words.was }}
-      </dt>
-      <dd>
-        <template v-if="part.link.words">«{{ part.link.words }}» → </template
-        ><ReviewMark kind="removed">{{
-          part.link.from
-            ? publicText(part.link.from)
-            : phrase.ai_review_link_gone
-        }}</ReviewMark>
-      </dd>
-      <dt class="text-2xs font-bold tracking-wide text-text-3 uppercase">
-        {{ words.will }}
-      </dt>
-      <dd>
-        <template v-if="part.link.words">«{{ part.link.words }}» → </template
-        ><ReviewMark kind="added">{{
-          part.link.to ? publicText(part.link.to) : phrase.ai_review_link_off
-        }}</ReviewMark>
       </dd>
     </dl>
     <!-- A block another version rewrote, its words compared. -->
@@ -142,13 +156,13 @@ function send(text: string) {
         {{ words.was }}
       </dt>
       <dd class="line-clamp-4">
-        <ReviewMark kind="removed">{{ part.before }}</ReviewMark>
+        <ReviewMark kind="removed">{{ publicText(part.before) }}</ReviewMark>
       </dd>
       <dt class="text-2xs font-bold tracking-wide text-text-3 uppercase">
         {{ words.will }}
       </dt>
       <dd class="line-clamp-4">
-        <ReviewMark kind="added">{{ part.quote }}</ReviewMark>
+        <ReviewMark kind="added">{{ publicText(part.quote ?? '') }}</ReviewMark>
       </dd>
     </dl>
     <!-- A block that comes or goes; one that says nothing is seen in the text. -->
@@ -158,15 +172,21 @@ function send(text: string) {
         text-sm wrap-anywhere"
     >
       <dt class="text-2xs font-bold tracking-wide text-text-3 uppercase">
-        {{ part.kind === 'removed' ? words.was : words.will }}
+        {{ goes ? words.was : words.will }}
       </dt>
-      <dd
-        class="line-clamp-4"
-        :class="{ 'line-through': part.kind === 'removed' }"
-      >
-        {{ part.quote }}
+      <dd class="line-clamp-4" :class="{ 'line-through': goes }">
+        {{ publicText(part.quote) }}
       </dd>
     </dl>
+    <!-- What else changes: a heading's level, a caption, the files. -->
+    <p
+      v-if="changes"
+      class="flex items-start gap-1 text-xs leading-snug text-text-2"
+      data-review-changes
+    >
+      <Icon name="edit" class="mt-0.5 shrink-0" />{{ changes }}
+    </p>
+    <ReviewFiles v-if="part.files" :files="part.files" />
 
     <p v-if="part.reason" class="text-xs leading-snug text-text-2">
       {{ publicText(part.reason) }}

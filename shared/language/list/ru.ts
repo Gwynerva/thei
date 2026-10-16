@@ -2131,7 +2131,6 @@ export default defineI18nModule({
     ai_review_undo: 'Отменить решение',
     ai_review_prev: 'Предыдущая',
     ai_review_next: 'Следующая',
-    ai_review_next_pending: 'Следующая нерешённая',
     ai_review_words: (count) =>
       plural(count, 'правка слов', 'правки слов', 'правок слов'),
     ai_review_blocks: (count) =>
@@ -2148,8 +2147,34 @@ export default defineI18nModule({
     ai_review_gone_taken: 'Блок убран',
     ai_review_files: (count, extensions) =>
       count === 1
-        ? `Файл ${extensions}`
-        : `${plural(count, 'файл', 'файла', 'файлов')}: ${extensions}`,
+        ? extensions
+          ? `Файл ${extensions}`
+          : 'Файл'
+        : `${plural(count, 'файл', 'файла', 'файлов')}${extensions ? `: ${extensions}` : ''}`,
+    ai_review_not_added: 'Блок не добавлен',
+    ai_review_file_added: 'Новый файл',
+    ai_review_file_removed: 'Файл уходит',
+    ai_review_changes: {
+      type: (from, to) => (from && to ? `${from} → ${to}` : 'Другой вид блока'),
+      level: (from, to) => `Уровень заголовка ${from} → ${to}`,
+      style: (from, to) => `Список: ${from} → ${to}`,
+      spoiler: (on) => (on ? 'Спрятан под спойлер' : 'Спойлер снят'),
+      numbering: 'Нумерация списка',
+      checks: 'Отметки в списке',
+      markup: 'Оформление слов',
+      alignment: 'Выравнивание цитаты',
+      layout: 'Размер на странице',
+      title: 'Название',
+      caption: 'Подпись',
+      files: 'Файлы',
+      target: 'Куда ведёт',
+      note: 'Заметка к ссылке',
+      other: 'Настройки блока',
+    },
+    ai_review_moved: (count) =>
+      `Переставит ${plural(count, 'блок', 'блока', 'блоков')}`,
+    ai_review_split_into: (count) =>
+      `Разделится на ${plural(count, 'абзац', 'абзаца', 'абзацев')}`,
     ai_review_comment_placeholder: 'Что сделать иначе?',
     ai_review_comment_sent:
       'Комментарий в сессии: модель пришлёт новую версию правки.',
@@ -2322,6 +2347,7 @@ export default defineI18nModule({
     ai_action_relinks: (count) => plural(count, 'ссылка', 'ссылки', 'ссылок'),
     ai_review_link_gone: 'то, куда она вела, удалено',
     ai_review_link_off: 'без ссылки, слова остаются',
+    ai_review_link_none: 'без ссылки',
     ai_review_link_changed: 'Ссылка ведёт уже в другое место',
     ai_action_relations: {
       related: 'Связаны',

@@ -2064,7 +2064,6 @@ export default defineI18nBase({
     ai_review_undo: 'Undo the decision',
     ai_review_prev: 'Previous',
     ai_review_next: 'Next',
-    ai_review_next_pending: 'Next undecided',
     ai_review_words: (count) =>
       plural(count, 'change of words', 'changes of words'),
     ai_review_blocks: (count) =>
@@ -2081,8 +2080,34 @@ export default defineI18nBase({
     ai_review_gone_taken: 'The block is gone',
     ai_review_files: (count, extensions) =>
       count === 1
-        ? `File ${extensions}`
-        : `${plural(count, 'file', 'files')}: ${extensions}`,
+        ? extensions
+          ? `File ${extensions}`
+          : 'File'
+        : `${plural(count, 'file', 'files')}${extensions ? `: ${extensions}` : ''}`,
+    ai_review_not_added: 'Block left out',
+    ai_review_file_added: 'File added',
+    ai_review_file_removed: 'File goes',
+    ai_review_changes: {
+      type: (from, to) =>
+        from && to ? `${from} → ${to}` : 'Another kind of block',
+      level: (from, to) => `Heading level ${from} → ${to}`,
+      style: (from, to) => `List: ${from} → ${to}`,
+      spoiler: (on) => (on ? 'Hidden under a spoiler' : 'Spoiler taken off'),
+      numbering: 'List numbering',
+      checks: 'Ticks in the list',
+      markup: 'Formatting of words',
+      alignment: 'Quote alignment',
+      layout: 'Size on the page',
+      title: 'Title',
+      caption: 'Caption',
+      files: 'Files',
+      target: 'Where it leads',
+      note: 'Note on the link',
+      other: 'Block settings',
+    },
+    ai_review_moved: (count) => `Moves ${plural(count, 'block', 'blocks')}`,
+    ai_review_split_into: (count) =>
+      `Splits into ${plural(count, 'paragraph', 'paragraphs')}`,
     ai_review_comment_placeholder: 'What should be done otherwise?',
     ai_review_comment_sent:
       'The comment is in the session: the model will send a new version of the edit.',
@@ -2254,6 +2279,7 @@ export default defineI18nBase({
     ai_action_relinks: (count) => plural(count, 'link', 'links'),
     ai_review_link_gone: 'what it led to is gone',
     ai_review_link_off: 'no link, the words stay',
+    ai_review_link_none: 'no link',
     ai_review_link_changed: 'The link leads elsewhere now',
     ai_action_relations: {
       related: 'Related',

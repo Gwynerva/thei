@@ -161,7 +161,6 @@ import {
   storedDecisions,
   textEditReview,
 } from './review/review';
-import { registerDismissLayer } from '#layers/thei/app/composables/modal';
 import ContentReview from './review/ContentReview.vue';
 import ContentEditorNotices from './ContentEditorNotices.vue';
 
@@ -532,23 +531,24 @@ type Review =
     }
   | { kind: 'ai'; action: AiActionItem; model: ContentReviewModel };
 const review = shallowRef<Review>();
+/** Each review opened is a screen of its own, its decisions its own. */
+const reviewKey = ref(0);
 const reviewBusy = ref(false);
 const reviewError = ref('');
-let removeReviewLayer: (() => void) | undefined;
 const { time: versionTime, dayLabel } = useHistoryTimeLabels();
 
+/**
+ * The review stands in the editor's place; Escape and Back leave it, as its
+ * close does, before they close the editor.
+ */
 function openReview(next: Review) {
   historyPopupOpen.value = false;
   reviewError.value = '';
+  reviewKey.value++;
   review.value = next;
-  // Escape and Back leave the review before they close the editor.
-  removeReviewLayer?.();
-  removeReviewLayer = registerDismissLayer(() => closeReview());
 }
 
 function closeReview() {
-  removeReviewLayer?.();
-  removeReviewLayer = undefined;
   review.value = undefined;
 }
 
@@ -1778,6 +1778,7 @@ function editorJsI18nMessages() {
 
     <ContentReview
       v-if="review"
+      :key="reviewKey"
       :review="review.model"
       :mode="review.kind"
       :title="review.kind === 'version' ? review.title : phrase.ai_review_title"

@@ -67,6 +67,15 @@ const CORRECTIONS: Record<string, Record<string, unknown>[]> = {
   third: [
     { find: 'peir', replace: 'pier', category: 'spelling', reason: 'A typo.' },
   ],
+  fourth: [
+    {
+      find: 'morning by',
+      replace: 'morning, by',
+      category: 'punctuation',
+      reason: 'A pause.',
+    },
+    { find: 'sea', replace: 'Sea', category: 'case', reason: 'A name.' },
+  ],
 };
 
 function lastOwnerWords(request: FakeRequest): string {
@@ -373,6 +382,50 @@ test('goes through corrections on their own screen and applies what is accepted'
   expect(text).toContain('We waited');
 });
 
+test('keeps a part left as it was in reach, and closing keeps the word on it', async ({
+  page,
+}) => {
+  await page.setViewportSize(DESKTOP);
+  await propose(page, 'Proofread the fourth time');
+  const sessionUuid = new URL(page.url()).searchParams.get('session')!;
+  await page.locator('[data-action-open]').last().click();
+  await expect(review(page)).toBeVisible();
+  const marks = review(page).locator('.review-mark');
+  await expect(marks).toHaveCount(2);
+
+  await marks.first().click();
+  const left = (await card(page).getAttribute('data-review-card'))!;
+  await card(page).locator('[data-review-keep]').click();
+  await expect(card(page)).not.toHaveAttribute('data-review-card', left);
+  // Back from the foot, the part left as it was opens, to be undone.
+  await page.locator('[data-review-prev-part]').click();
+  await expect(card(page)).toHaveAttribute('data-review-card', left);
+  await expect(card(page).locator('[data-review-undo]')).toBeVisible();
+
+  // A click around the review with a part's card open closes only the card.
+  await page.mouse.click(12, DESKTOP.height / 2);
+  await expect(card(page)).toBeHidden();
+  await expect(review(page)).toBeVisible();
+
+  // Nothing taken, the finish only closes; Escape does the same, and the
+  // word on the part left goes to its session.
+  await expect(page.locator('[data-review-finish]')).toHaveText('Close');
+  await page.keyboard.press('Escape');
+  await expect(review(page)).toBeHidden();
+  await expect
+    .poll(async () => {
+      const detail = await (
+        await page.request.get(`/api/admin/ai/sessions/${sessionUuid}`)
+      ).json();
+      return detail.actions[0].parts
+        .map(
+          (part: { id: string; state: string }) => `${part.id}:${part.state}`,
+        )
+        .join();
+    })
+    .toContain(`${left}:kept`);
+});
+
 test('goes through a new order, a repeat dropped and a heading left out', async ({
   page,
 }) => {
@@ -397,6 +450,9 @@ test('goes through a new order, a repeat dropped and a heading left out', async 
   await expect(card(page)).toContainText('Evening');
   await card(page).locator('[data-review-keep]').click();
   await expect(heading).toHaveCount(0);
+  // Left out, the heading stays a line to go back to.
+  await expect(gone).toHaveCount(2);
+  await expect(gone.last()).toContainText('Evening');
 
   const finish = page.locator('[data-review-finish]');
   await expect(finish).toHaveText('Apply · 1');

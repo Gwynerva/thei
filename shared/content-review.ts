@@ -5,6 +5,12 @@ import {
 } from './content';
 import type { AiRevisePart, AiRevisePartState } from './ai-actions';
 import type { ProofreadCategory, TidyItem } from './ai-revise';
+import {
+  blockChanges,
+  blockFileChanges,
+  type BlockChange,
+  type BlockFileChange,
+} from './content-block-changes';
 import { diffContentBlocks, type ContentTextDiffPart } from './content-diff';
 import { newEditBlockId } from './content-edit-markdown/block-key';
 import { escapeHtmlText } from './content-edit-markdown/html';
@@ -91,11 +97,20 @@ export interface ReviewPart {
   quote?: string;
   /** Of a block changed elsewhere than in its words, how it reads now. */
   before?: string;
+  /** Of a block another version has otherwise: what changed but its words. */
+  changes?: BlockChange[];
+  /** Of a block of files: each of them, as it stays, comes or goes. */
+  files?: BlockFileChange[];
+  /** Of a new order: how many blocks it moves. */
+  moved?: number;
+  /** Of a paragraph split: how many it becomes. */
+  pieces?: number;
   /**
    * A link mended: its words, where it leads now — none when what it led to
-   * is gone — and where it would, none taking it off.
+   * is gone — and where it would, none taking it off. A link `made` is put
+   * on words that had none.
    */
-  link?: { words: string; from?: string; to?: string };
+  link?: { words: string; from?: string; to?: string; made?: boolean };
   /** A whole block: its mark is on the margin, not in a line. */
   whole: boolean;
   /** Words outside the running text: a caption, a title, a note. */
@@ -124,7 +139,10 @@ export type ReviewRow =
       /** Shown as it is now, struck: what a part would take away. */
       was?: boolean;
     }
-  /** A block a part takes away, folded to a line in the text as it will read. */
+  /**
+   * A block folded to a line in the text as it will read: one a part takes
+   * away, or one a part would bring and the owner left out.
+   */
   | { type: 'gone'; part: string; quote: string }
   | { type: 'edge'; edge: 'start' | 'end' };
 
@@ -138,6 +156,16 @@ export interface ContentReview {
   result(
     decisions: Readonly<Record<string, ReviewDecision>>,
   ): ContentOutputData;
+  /**
+   * What else a decision decides, for parts that stand on one another: a
+   * new order's heading taken takes its moves, the moves left as they were
+   * leave the rest as it is.
+   */
+  implied?(
+    decisions: Readonly<Record<string, ReviewDecision>>,
+    id: string,
+    decision: ReviewDecision,
+  ): Record<string, ReviewDecision>;
 }
 
 /** Blocks whose words are drawn as a run of text, where a mark can stand. */
@@ -314,6 +342,16 @@ export function proofreadReview(
         after: part.replacePlain,
         around: place ? [tail(place.before), head(place.after)] : ['', ''],
       },
+      // A link made keeps its words: what changes is where they lead.
+      ...(part.category === 'link'
+        ? {
+            link: {
+              words: part.replacePlain,
+              ...(part.toTitle ? { to: part.toTitle } : {}),
+              made: true,
+            },
+          }
+        : {}),
       whole: false,
       aside: Boolean(block && !RUNNING_TEXT.has(block.type)),
       ...(block && ASIDE_PLACES[block.type]
@@ -503,6 +541,17 @@ export function versionReview(
     const at = item.kind === 'removed' ? now : then;
     const id = `v${index}`;
     partOf.set(index, id);
+    const files =
+      item.kind === 'added'
+        ? blockFileChanges(undefined, item.block)
+        : item.kind === 'removed'
+          ? blockFileChanges(item.block, undefined)
+          : blockFileChanges(item.previous, item.block);
+    const changes =
+      item.kind === 'changed' ? blockChanges(item.previous, item.block) : [];
+    // A change nothing names, and no words to show it by, is still said.
+    if (item.kind === 'changed' && !item.words && !changes.length)
+      changes.push({ what: 'other' });
     parts.push({
       id,
       kind: item.kind,
@@ -513,6 +562,8 @@ export function versionReview(
         : item.words
           ? { diff: item.words, quote: quoteOf(item.block) }
           : changedQuotes(item.previous, item.block)),
+      ...(changes.length ? { changes } : {}),
+      ...(files.length ? { files } : {}),
       whole: true,
       aside: false,
       heading: at?.heading,
@@ -559,11 +610,15 @@ export function versionReview(
   return {
     parts,
     rows(decisions, view) {
+      // A part left as it is keeps its place, to be gone back to.
       const placed = pieces<ReviewRow>(decisions, true, (item, id) => {
         if (!id) return [{ type: 'block', block: item.block, parts: [] }];
         const kept = decisions[id] === 'kept';
         if (item.kind === 'changed') {
-          if (kept) return [{ type: 'block', block: item.previous, parts: [] }];
+          if (kept)
+            return [
+              { type: 'block', block: item.previous, parts: [], part: id },
+            ];
           if (view === 'diff' && item.words)
             return [
               {
@@ -589,9 +644,10 @@ export function versionReview(
         }
         if (item.kind === 'added')
           return kept
-            ? []
+            ? [{ type: 'gone', part: id, quote: quoteOf(item.block) }]
             : [{ type: 'block', block: item.block, parts: [], part: id }];
-        if (kept) return [{ type: 'block', block: item.block, parts: [] }];
+        if (kept)
+          return [{ type: 'block', block: item.block, parts: [], part: id }];
         if (view === 'diff')
           return [
             {
@@ -705,6 +761,14 @@ export function orderReview(
             : source
               ? { quote: blockWords(source) }
               : {}),
+        ...(part.type === 'order' ? { moved: part.moved.length } : {}),
+        ...(part.type === 'split'
+          ? {
+              pieces: plan.items.filter(
+                (item) => item.type === 'part' && item.from === part.from,
+              ).length,
+            }
+          : {}),
         whole: true,
         aside: false,
         private: false,
@@ -721,18 +785,39 @@ export function orderReview(
   const shownChoices = (decisions: Readonly<Record<string, ReviewDecision>>) =>
     orderChoices(parts, (part) => decisions[part.id] !== 'kept');
 
-  const plainRows = (): ReviewRow[] =>
-    base.blocks.map((block): ReviewRow =>
+  /** Where the blocks the order moves stand in the text as it is. */
+  const movedHere = new Set(
+    aligned && order?.type === 'order'
+      ? order.moved.map((from) => aligned.map[from])
+      : [],
+  );
+  /**
+   * The text as it is. With the order left as it was, the blocks it would
+   * move keep its mark, to be gone back to.
+   */
+  const plainRows = (orderLeft: boolean): ReviewRow[] =>
+    base.blocks.map((block, index): ReviewRow =>
       block.type === 'privateSectionBoundary'
         ? { type: 'edge', edge: edgeOf(block) }
-        : { type: 'block', block, parts: [] },
+        : {
+            type: 'block',
+            block,
+            parts: [],
+            ...(orderLeft && order && movedHere.has(index)
+              ? { part: order.id }
+              : {}),
+          },
     );
+  /** The parts that stand on the order's moves. */
+  const onTheOrder = reviewParts.filter(
+    (part) => part.kind !== 'order' && !part.settled,
+  );
 
   return {
     parts: reviewParts,
     rows(decisions, view) {
-      if (!aligned || (order && decisions[order.id] === 'kept'))
-        return plainRows();
+      if (!aligned) return plainRows(false);
+      if (order && decisions[order.id] === 'kept') return plainRows(true);
       const { skip = [], keep = [], whole = [] } = shownChoices(decisions);
       // A paragraph changed since it was split stays whole, as it applies.
       for (const item of plan.items)
@@ -742,7 +827,17 @@ export function orderReview(
       const placedWhole = new Set<number>();
       plan.items.forEach((item, index) => {
         if (item.type === 'heading' || item.type === 'delimiter') {
-          if (skip.includes(index)) return;
+          // Left out, it stays a line to go back to.
+          if (skip.includes(index)) {
+            const left = byItem.get(index);
+            if (left)
+              rows.push({
+                type: 'gone',
+                part: left,
+                quote: item.type === 'heading' ? item.text : '',
+              });
+            return;
+          }
           rows.push({
             type: 'block',
             block: (item.type === 'heading'
@@ -797,16 +892,46 @@ export function orderReview(
           );
           return;
         }
+        // A part left as it is marks what it left: the repeat that stays,
+        // the paragraph kept whole.
+        const left =
+          removal && decisions[removal] === 'kept' ? removal : undefined;
+        const splitId =
+          item.type === 'part' ? bySplit.get(item.from) : undefined;
         const split =
-          item.type === 'part' && !kept ? bySplit.get(item.from) : undefined;
+          splitId && (!kept || decisions[splitId] === 'kept')
+            ? splitId
+            : undefined;
         rows.push({
           type: 'block',
           block: piece,
           parts: [],
-          part: split ?? (order && moved.has(item.from) ? order.id : undefined),
+          part:
+            left ??
+            split ??
+            (order && moved.has(item.from) ? order.id : undefined),
         });
       });
       return rows;
+    },
+    implied(decisions, id, decision) {
+      if (!order || reviewParts.find((part) => part.id === order.id)?.settled)
+        return {};
+      // The moves left as they were leave every part that stands on them.
+      if (id === order.id && decision === 'kept')
+        return Object.fromEntries(
+          onTheOrder
+            .filter((part) => decisions[part.id] !== 'kept')
+            .map((part) => [part.id, 'kept' as const]),
+        );
+      // A part taken takes the moves it stands on.
+      if (
+        id !== order.id &&
+        decision === 'accepted' &&
+        decisions[order.id] !== 'accepted'
+      )
+        return { [order.id]: 'accepted' };
+      return {};
     },
     result(decisions) {
       if (!aligned) return base;

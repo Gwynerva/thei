@@ -11,6 +11,7 @@ import type { SelectOption } from '#layers/thei/app/components/field/FieldSelect
 import ModalContainer from '#layers/thei/app/modals/ModalContainer.vue';
 import ModalHeaderButton from '#layers/thei/app/modals/ModalHeaderButton.vue';
 import FloatingPopup from '#layers/thei/app/components/FloatingPopup.vue';
+import { registerDismissLayer } from '#layers/thei/app/composables/modal';
 import ReviewDocument from './ReviewDocument.vue';
 import ReviewList from './ReviewList.vue';
 import ReviewPartCard from './ReviewPartCard.vue';
@@ -76,12 +77,12 @@ const pending = computed(() =>
 const accepted = computed(() =>
   open.value.filter((part) => stateOf(part.id) === 'accepted'),
 );
-/** What «take the sure ones» would take: words an AI is sure of, or all. */
-const sure = computed(() =>
-  pending.value.filter(
-    (part) => props.mode === 'version' || (part.sure && !part.whole),
-  ),
-);
+/** Whether «take the sure ones» would take a part: words an AI is sure of, or all. */
+const takenAsSure = (part: (typeof open.value)[number]) =>
+  props.mode === 'version' || (part.sure && !part.whole);
+const sure = computed(() => pending.value.filter(takenAsSure));
+/** An edit with nothing it could take that way — a new order — offers none. */
+const offersSure = computed(() => open.value.some(takenAsSure));
 const words = computed(() => phrase.value.ai_review_modes[props.mode]);
 
 const summary = computed(() => {
@@ -115,11 +116,17 @@ function pick(id: string, anchor: HTMLElement) {
   cardOpen.value = true;
 }
 
+/** The card opens once the text has scrolled the part into sight. */
+const SCROLL_SETTLES = 280;
+let opening: ReturnType<typeof setTimeout> | undefined;
+onBeforeUnmount(() => clearTimeout(opening));
+
 /**
  * Brings a part into sight and opens it there; a list's row, which holds
  * its own decisions, is only marked.
  */
 async function focusPart(id: string | undefined) {
+  clearTimeout(opening);
   cardOpen.value = false;
   if (!id) return;
   current.value = id;
@@ -131,14 +138,25 @@ async function focusPart(id: string | undefined) {
   const anchor = documentView.value?.anchorOf(id);
   if (!anchor) return;
   anchor.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  setTimeout(() => {
+  opening = setTimeout(() => {
+    if (current.value !== id) return;
     cardAnchor.value = documentView.value?.anchorOf(id) ?? anchor;
     cardOpen.value = true;
-  }, 280);
+  }, SCROLL_SETTLES);
+}
+
+/**
+ * The parts the way goes through: in the text, those it shows a mark of —
+ * a part that stands on another left as it was has none — and in the list,
+ * all of them.
+ */
+function reachable() {
+  if (view.value === 'list') return open.value;
+  return open.value.filter((part) => documentView.value?.anchorOf(part.id));
 }
 
 function nextPending(after?: string) {
-  const list = open.value;
+  const list = reachable();
   const from = list.findIndex((part) => part.id === after);
   return (
     list.find(
@@ -147,23 +165,41 @@ function nextPending(after?: string) {
   )?.id;
 }
 
-function decide(id: string, decision: ReviewDecision) {
+function setDecision(id: string, decision: ReviewDecision) {
   if (decision === 'pending') delete decisions[id];
   else decisions[id] = decision;
+}
+
+/** A decision, with what it decides of the parts that stand on it. */
+function settle(id: string, decision: ReviewDecision) {
+  const implied = props.review.implied?.(decisions, id, decision) ?? {};
+  setDecision(id, decision);
+  for (const [other, also] of Object.entries(implied)) setDecision(other, also);
+}
+
+/** A part decided, and the way on to the next that waits. */
+function decide(id: string, decision: ReviewDecision) {
+  settle(id, decision);
   if (decision !== 'pending' && view.value !== 'list')
     void focusPart(nextPending(id));
 }
 
-/** The part before or after the one in hand, from its card. */
+/** The part before or after the one in hand. */
 function go(step: -1 | 1) {
-  const list = open.value;
+  const list = reachable();
   if (!list.length) return;
   const index = list.findIndex((part) => part.id === current.value);
-  void focusPart(list[(index + step + list.length) % list.length]!.id);
+  const next =
+    index === -1
+      ? step === 1
+        ? 0
+        : list.length - 1
+      : (index + step + list.length) % list.length;
+  void focusPart(list[next]!.id);
 }
 
 function acceptSure() {
-  for (const part of sure.value) decisions[part.id] = 'accepted';
+  for (const part of sure.value) settle(part.id, 'accepted');
   cardOpen.value = false;
 }
 
@@ -172,12 +208,14 @@ function acceptSure() {
 const finishButton = useTemplateRef<HTMLElement>('finishButton');
 const finishOpen = ref(false);
 
+/**
+ * Nothing taken, it closes, the owner's word kept; with something taken and
+ * parts still waiting, it asks first.
+ */
 function finish() {
-  if (pending.value.length) {
-    finishOpen.value = true;
-    return;
-  }
-  done();
+  if (!accepted.value.length) close();
+  else if (pending.value.length) finishOpen.value = true;
+  else done();
 }
 
 function done() {
@@ -199,6 +237,11 @@ function decided() {
 function close() {
   emit('close', decided());
 }
+
+// Escape and Back leave the review — and say what was decided in it —
+// before they reach whatever it was opened over.
+const removeDismissLayer = registerDismissLayer(close);
+onBeforeUnmount(removeDismissLayer);
 </script>
 
 <template>
@@ -209,6 +252,7 @@ function close() {
       class="grid max-w-200 grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr_auto]
         max-sm:min-h-full"
       ground="page"
+      :dismiss="close"
       data-review
       :data-review-mode="mode"
     >
@@ -298,6 +342,7 @@ function close() {
           :parts="partsById"
           :decisions
           :view
+          :mode
           :current
           :link-resolver
           @pick="pick"
@@ -325,23 +370,42 @@ function close() {
             ></span>
           </div>
           <div class="mx-auto flex max-w-176 items-center gap-1.5 px-sm">
-            <span class="mr-0.5 text-sm whitespace-nowrap tabular-nums">
+            <!-- The way through the parts, as the card's own arrows go. -->
+            <Button
+              variant="secondary"
+              size="icon-sm"
+              class="bg-transparent pointer-coarse:size-11"
+              :disabled="!open.length"
+              :aria-label="phrase.ai_review_prev"
+              :data-title-popup="phrase.ai_review_prev"
+              data-review-prev-part
+              @click="go(-1)"
+              ><Icon name="chevron-left"
+            /></Button>
+            <span
+              class="text-sm whitespace-nowrap tabular-nums"
+              :aria-label="
+                words.finish(open.length - pending.length, open.length)
+              "
+              data-review-count
+            >
               <b>{{ open.length - pending.length }}</b>
               <span class="text-text-2"> / {{ open.length }}</span>
             </span>
             <Button
               variant="secondary"
               size="icon-sm"
-              class="pointer-coarse:size-11"
-              :disabled="!pending.length"
-              :aria-label="phrase.ai_review_next_pending"
-              :data-title-popup="phrase.ai_review_next_pending"
+              class="bg-transparent pointer-coarse:size-11"
+              :disabled="!open.length"
+              :aria-label="phrase.ai_review_next"
+              :data-title-popup="phrase.ai_review_next"
               data-review-next
-              @click="focusPart(nextPending(current))"
+              @click="go(1)"
               ><Icon name="chevron-right"
             /></Button>
             <span class="flex-1"></span>
             <Button
+              v-if="offersSure"
               variant="secondary"
               class="flex h-8 items-center gap-1 px-2 text-sm
                 pointer-coarse:h-11"

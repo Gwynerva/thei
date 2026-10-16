@@ -614,12 +614,12 @@ export function createEditorHistorySession(
     fieldRef.value = next;
   }
 
-  /** Puts back the text the last restore replaced. */
   /** Saved: what was restored stays, with no undo of it offered any more. */
   function forgetRestore() {
     lastRestore.value = undefined;
   }
 
+  /** Puts back the text the last restore replaced. */
   async function undoRestore() {
     const previous = lastRestore.value;
     if (!previous) return false;

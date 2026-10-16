@@ -113,6 +113,8 @@ export type AiRevisePart =
       replaceHtml: string;
       /** Its words alone, for a field of plain text: a caption, a title. */
       replacePlain: string;
+      /** Of a link made: how what it leads to reads, its heading too. */
+      toTitle?: string;
     }
   | {
       id: string;

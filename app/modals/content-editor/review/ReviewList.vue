@@ -4,7 +4,8 @@ import type {
   ReviewDecision,
   ReviewPart,
 } from '#layers/thei/shared/content-review';
-import { reviewPartIcon } from './review';
+import ReviewFiles from './ReviewFiles.vue';
+import { reviewChangesLine, reviewPartIcon, reviewQuoteMark } from './review';
 
 /**
  * Every part in a row, under the heading each stands in, with the owner's
@@ -153,16 +154,10 @@ const stateOf = (part: ReviewPart) => props.decisions[part.id] ?? 'pending';
           ><Icon :name="reviewPartIcon(part)"
         /></span>
         <p class="text-sm leading-normal wrap-anywhere">
-          <template v-if="part.words"
-            >{{ part.words.around[0]
-            }}<ReviewMark kind="removed">{{ part.words.before }}</ReviewMark
-            ><ReviewMark kind="added">{{ part.words.after }}</ReviewMark
-            >{{ part.words.around[1] }}</template
-          >
-          <template v-else-if="part.link"
+          <template v-if="part.link"
             ><template v-if="part.link.words"
               >«{{ part.link.words }}» → </template
-            ><ReviewMark kind="removed">{{
+            ><ReviewMark v-if="!part.link.made" kind="removed">{{
               part.link.from
                 ? publicText(part.link.from)
                 : phrase.ai_review_link_gone
@@ -170,8 +165,16 @@ const stateOf = (part: ReviewPart) => props.decisions[part.id] ?? 'pending';
             ><ReviewMark kind="added">{{
               part.link.to
                 ? publicText(part.link.to)
-                : phrase.ai_review_link_off
+                : part.link.made
+                  ? phrase.ai_review_kinds.link
+                  : phrase.ai_review_link_off
             }}</ReviewMark></template
+          >
+          <template v-else-if="part.words"
+            >{{ part.words.around[0]
+            }}<ReviewMark kind="removed">{{ part.words.before }}</ReviewMark
+            ><ReviewMark kind="added">{{ part.words.after }}</ReviewMark
+            >{{ part.words.around[1] }}</template
           >
           <template v-else-if="part.diff"
             ><template v-for="(words, index) in part.diff" :key="index"
@@ -182,20 +185,32 @@ const stateOf = (part: ReviewPart) => props.decisions[part.id] ?? 'pending';
             ></template
           >
           <template v-else-if="part.before !== undefined"
-            ><ReviewMark kind="removed">{{ part.before }}</ReviewMark
-            ><ReviewMark kind="added">{{ part.quote }}</ReviewMark></template
+            ><ReviewMark kind="removed">{{
+              publicText(part.before)
+            }}</ReviewMark
+            ><ReviewMark kind="added">{{
+              publicText(part.quote ?? '')
+            }}</ReviewMark></template
           >
-          <template v-else-if="part.kind === 'removed'"
-            ><ReviewMark kind="removed">{{ part.quote }}</ReviewMark></template
+          <template v-else-if="part.quote"
+            ><ReviewMark
+              v-if="reviewQuoteMark(part)"
+              :kind="reviewQuoteMark(part)!"
+              >{{ publicText(part.quote) }}</ReviewMark
+            ><template v-else>{{ publicText(part.quote) }}</template></template
           >
-          <template v-else-if="part.kind === 'added'"
-            ><ReviewMark kind="added">{{ part.quote }}</ReviewMark></template
-          >
-          <template v-else>{{ part.quote }}</template>
+          <template v-else>{{ reviewChangesLine(part) }}</template>
         </p>
+        <ReviewFiles
+          v-if="part.files"
+          :files="part.files"
+          class="col-start-2 mt-1"
+        />
         <p class="col-start-2 text-xs leading-snug text-text-2">
           {{ phrase.ai_review_kinds[part.kind]
-          }}<template v-if="part.place">
+          }}<template v-if="part.quote && reviewChangesLine(part)">
+            · {{ reviewChangesLine(part) }}</template
+          ><template v-if="part.place">
             · {{ phrase.ai_review_where[part.place] }}</template
           ><template v-if="!part.sure">
             · {{ phrase.ai_review_unsure }}</template

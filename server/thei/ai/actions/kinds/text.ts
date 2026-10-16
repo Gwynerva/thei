@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import type { ContentOutputData } from '#layers/thei/shared/content';
+import type {
+  ContentOutputBlock,
+  ContentOutputData,
+} from '#layers/thei/shared/content';
 import {
   correctionPending,
   countTextMatches,
@@ -42,6 +45,7 @@ import {
   contentLinkFrom,
   contentLinkLeads,
   contentLinkPlace,
+  locateContentEntityLinks,
   type ContentLinkTarget,
 } from '#layers/thei/shared/content-link-locate';
 import {
@@ -574,6 +578,7 @@ export const reviseAction: AiActionKindDef<'revise'> = {
       corrections.map((c) => correctionFingerprint(entity, input.text, c)),
     );
     const parts: AiRevisePart[] = [];
+    const outlines = outlineCache();
     for (const correction of corrections) {
       const why = (problem: string) =>
         dropped.push(
@@ -605,6 +610,15 @@ export const reviseAction: AiActionKindDef<'revise'> = {
           );
           continue;
         }
+        const [made] = locateContentEntityLinks({
+          blocks: [
+            {
+              type: 'paragraph',
+              data: { text: link.replaceHtml },
+            } as ContentOutputBlock,
+          ],
+        });
+        const toTitle = made ? await targetTitle(made, outlines) : '';
         parts.push({
           id: `c${parts.length + 1}`,
           type: 'correction',
@@ -615,6 +629,7 @@ export const reviseAction: AiActionKindDef<'revise'> = {
           replace: correction.replace,
           replaceHtml: link.replaceHtml,
           replacePlain: plainOfHtml(link.replaceHtml),
+          ...(toTitle ? { toTitle } : {}),
         });
         continue;
       }

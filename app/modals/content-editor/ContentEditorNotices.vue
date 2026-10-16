@@ -28,10 +28,15 @@ const emit = defineEmits<{
   openReview: [action: AiActionItem];
 }>();
 
+/** What an edit waits with: changes of words, of blocks, and the unsure. */
 function counts(action: AiActionItem) {
   const waiting = waitingParts(action);
+  const words = waiting.filter(
+    (part) => part.type === 'correction' || part.type === 'relink',
+  ).length;
   return {
-    all: waiting.length,
+    words,
+    blocks: waiting.length - words,
     unsure: waiting.filter((part) => part.certainty === 'unsure').length,
   };
 }
@@ -171,9 +176,12 @@ const shown = computed(
         <Icon name="sparkles" class="text-accent" />
         <span class="flex min-w-0 flex-col text-sm leading-snug">
           <b class="font-semibold"
-            >{{ phrase.ai_review_title }} ·
-            {{ phrase.ai_review_words(counts(action).all)
-            }}<template v-if="counts(action).unsure">
+            >{{ phrase.ai_review_title
+            }}<template v-if="counts(action).words">
+              · {{ phrase.ai_review_words(counts(action).words) }}</template
+            ><template v-if="counts(action).blocks">
+              · {{ phrase.ai_review_blocks(counts(action).blocks) }}</template
+            ><template v-if="counts(action).unsure">
               · {{ phrase.ai_review_unsure_count(counts(action).unsure) }}
             </template></b
           >

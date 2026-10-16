@@ -256,8 +256,125 @@ describe('another version’s files', () => {
         kind: 'changed',
         before: 'psd',
         quote: 'psd, txt',
+        changes: [{ what: 'files' }],
+        files: [
+          expect.objectContaining({ change: 'same' }),
+          expect.objectContaining({ change: 'added' }),
+        ],
       }),
     ]);
+  });
+
+  it('shows each file of a block that comes or goes', () => {
+    const review = versionReview(
+      { blocks: [group('g', [file('x', 'psd')])] } as never,
+      { blocks: [] } as never,
+    );
+    expect(review.parts[0]?.files).toEqual([
+      { asset: expect.objectContaining({ assetUuid: 'x' }), change: 'removed' },
+    ]);
+  });
+});
+
+describe('what a version changes besides the words', () => {
+  const compare = (before: unknown, after: unknown) =>
+    versionReview(
+      { blocks: [{ id: 'x', ...(before as object) }] } as never,
+      { blocks: [{ id: 'x', ...(after as object) }] } as never,
+    ).parts[0];
+
+  it('names a heading’s level, a list’s style and its ticks', () => {
+    expect(
+      compare(
+        { type: 'header', data: { text: 'День', level: 2 } },
+        { type: 'header', data: { text: 'День', level: 3 } },
+      )?.changes,
+    ).toEqual([{ what: 'level', from: 2, to: 3 }]);
+    const list = (style: string, checked = false) => ({
+      type: 'list',
+      data: {
+        style,
+        meta: {},
+        items: [{ content: 'Хлеб', meta: { checked }, items: [] }],
+      },
+    });
+    expect(compare(list('unordered'), list('ordered'))?.changes).toEqual([
+      { what: 'style', from: 'unordered', to: 'ordered' },
+    ]);
+    expect(
+      compare(list('checklist'), list('checklist', true))?.changes,
+    ).toEqual([{ what: 'checks' }]);
+  });
+
+  it('names words dressed otherwise, and a block hidden as a spoiler', () => {
+    const part = compare(
+      { type: 'paragraph', data: { text: 'Вечером дождь.' } },
+      {
+        type: 'paragraph',
+        data: { text: 'Вечером <b>дождь</b>.' },
+        tunes: { spoiler: true },
+      },
+    );
+    expect(part?.changes).toEqual([
+      { what: 'spoiler', on: true },
+      { what: 'markup' },
+    ]);
+    expect(part?.diff).toBeUndefined();
+  });
+
+  it('says a change it cannot name, and nothing beside words rewritten', () => {
+    expect(
+      compare(
+        {
+          type: 'integration',
+          data: { provider: 'youtube', videoId: 'aaaaaaaaaaa' },
+        },
+        {
+          type: 'integration',
+          data: { provider: 'youtube', videoId: 'bbbbbbbbbbb' },
+        },
+      )?.changes,
+    ).toEqual([{ what: 'target' }]);
+    const rewritten = compare(
+      { type: 'paragraph', data: { text: 'Утром туман.' } },
+      { type: 'paragraph', data: { text: 'Утром был туман.' } },
+    );
+    expect(rewritten?.diff).toBeDefined();
+    expect(rewritten?.changes).toBeUndefined();
+  });
+});
+
+describe('a part left as it was', () => {
+  const now = {
+    blocks: [paragraph('a', 'Утро.'), paragraph('b', 'Обед на берегу.')],
+  } as never;
+  const then = {
+    blocks: [
+      paragraph('a', 'Раннее утро.'),
+      paragraph('c', 'Новый абзац о реке.'),
+    ],
+  } as never;
+  const review = versionReview(now, then);
+  const ids = Object.fromEntries(
+    review.parts.map((part) => [part.kind, part.id]),
+  );
+
+  it('keeps its place in the text, to be gone back to', () => {
+    const left = Object.fromEntries(
+      review.parts.map((part) => [part.id, 'kept' as const]),
+    );
+    const rows = review.rows(left, 'read');
+    expect(rows).toContainEqual(
+      expect.objectContaining({ type: 'block', part: ids.changed }),
+    );
+    expect(rows).toContainEqual(
+      expect.objectContaining({ type: 'gone', part: ids.added }),
+    );
+    expect(rows).toContainEqual(
+      expect.objectContaining({ type: 'block', part: ids.removed }),
+    );
+    // And the text stays as it is.
+    expect(review.result(left)).toEqual(now);
   });
 });
 
@@ -312,9 +429,17 @@ describe('an AI’s new order', () => {
       'block',
     ]);
     expect(rows[2]).toMatchObject({ part: 'h2' });
-    // Kept as it was, the repeat stays; left out, the heading goes.
+    // Kept as it was, the repeat stays, marked by its part; left out, the
+    // heading folds to a line: both are there to go back to.
     const kept = review.rows({ r1: 'kept', h2: 'kept' }, 'read');
-    expect(kept.map((row) => row.type)).toEqual(['block', 'block', 'block']);
+    expect(kept.map((row) => row.type)).toEqual([
+      'block',
+      'block',
+      'gone',
+      'block',
+    ]);
+    expect(kept[1]).toMatchObject({ part: 'r1' });
+    expect(kept[2]).toMatchObject({ part: 'h2', quote: 'Evening' });
   });
 
   it('takes only what is accepted', () => {
@@ -458,6 +583,21 @@ describe('the rules a new order and corrections keep', () => {
     const review = orderReview(base, parts, plan);
     expect(ids(review.result({ h0: 'accepted' })).length).toBe(3);
     expect(review.result({ h0: 'accepted', order: 'kept' })).toBe(base);
+
+    // The screen decides alike: a heading taken takes the moves, the moves
+    // kept keep the heading, and the text as it is still marks the moves.
+    expect(review.implied?.({}, 'h0', 'accepted')).toEqual({
+      order: 'accepted',
+    });
+    expect(review.implied?.({ h0: 'accepted' }, 'order', 'kept')).toEqual({
+      h0: 'kept',
+    });
+    const rows = review.rows({ order: 'kept', h0: 'kept' }, 'read');
+    expect(rows).toEqual([
+      expect.objectContaining({ type: 'block', parts: [] }),
+      expect.objectContaining({ type: 'block', part: 'order' }),
+    ]);
+    expect(review.parts.find((part) => part.id === 'order')?.moved).toBe(1);
   });
 
   it('a removed repeat changed since stays', () => {

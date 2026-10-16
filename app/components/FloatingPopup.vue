@@ -220,6 +220,7 @@ function onDocumentPointerDown(event: PointerEvent) {
   if (floatingElement.value?.contains(target) || withinFamily(target)) return;
   if (props.anchor instanceof Node && props.anchor.contains(target)) return;
   if (props.outsideIgnore?.some((element) => element?.contains(target))) return;
+  noteClosingPress(event);
   emit('dismiss', 'outside');
   close();
 }

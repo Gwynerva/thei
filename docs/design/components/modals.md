@@ -50,7 +50,11 @@ Closing:
 
 - Escape and browser Back undo exactly one step, and agree on which: the
   innermost popup or menu first, then the modal.
-- A click on the blurred page behind a desktop modal closes it.
+- A click on the blurred page behind a desktop modal closes it — one step,
+  as Escape is: with a popup open, the press closes the popup and the click
+  nothing more. A card standing in another's place, as the review of a text
+  does in its editor's, is left by that click instead (`ModalContainer`'s
+  `dismiss`).
 - A modal holding unsaved work asks before it closes.
 - Deleting an entity is confirmed against its name in
   `app/modals/DeleteConfirmationPane.vue`.

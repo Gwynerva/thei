@@ -107,6 +107,8 @@ export type LanguagePhrases = {
   asset_aspect_hint: (ratio: string, size: string) => string;
   asset_library_pending_deletion: (date: string) => string;
   asset_library_in_history: string;
+  /** Unused, but kept while an AI action still needs it. */
+  asset_library_held_by_ai: string;
   asset_library_empty: string;
   asset_library_unused: string;
   asset_library_unused_hint: string;
@@ -154,6 +156,7 @@ export type LanguagePhrases = {
   asset_library_other_variants: string;
   asset_library_unused_line: string;
   asset_library_history_line: string;
+  asset_library_held_by_ai_line: string;
   asset_open_place: (title: string) => string;
   asset_open_variant: string;
   asset_description_save: string;
@@ -1513,7 +1516,6 @@ export type LanguagePhrases = {
   ai_review_undo: string;
   ai_review_prev: string;
   ai_review_next: string;
-  ai_review_next_pending: string;
   ai_review_words: (count: number) => string;
   ai_review_blocks: (count: number) => string;
   ai_review_unsure_count: (count: number) => string;
@@ -1523,6 +1525,32 @@ export type LanguagePhrases = {
   ai_review_gone_taken: string;
   /** A block's files in a line about it: how many, and their extensions. */
   ai_review_files: (count: number, extensions: string) => string;
+  /** A block a part would bring, left out. */
+  ai_review_not_added: string;
+  ai_review_file_added: string;
+  ai_review_file_removed: string;
+  /** What changed in a block besides its words, in a few words each. */
+  ai_review_changes: {
+    type: (from: string, to: string) => string;
+    level: (from: number, to: number) => string;
+    style: (from: string, to: string) => string;
+    spoiler: (on: boolean) => string;
+    numbering: string;
+    checks: string;
+    markup: string;
+    alignment: string;
+    layout: string;
+    title: string;
+    caption: string;
+    files: string;
+    target: string;
+    note: string;
+    other: string;
+  };
+  /** Of a new order: how many blocks it moves. */
+  ai_review_moved: (count: number) => string;
+  /** Of a paragraph split: how many it becomes. */
+  ai_review_split_into: (count: number) => string;
   ai_review_comment_placeholder: string;
   ai_review_comment_sent: string;
   ai_review_from_session: (title: string) => string;
@@ -1666,6 +1694,8 @@ export type LanguagePhrases = {
   /** A mended link in a review: what it led to is gone; no link after. */
   ai_review_link_gone: string;
   ai_review_link_off: string;
+  /** Words that lead nowhere yet, before a link is made of them. */
+  ai_review_link_none: string;
   /** A mended link whose link leads elsewhere since. */
   ai_review_link_changed: string;
   ai_action_unsure_count: (count: number) => string;

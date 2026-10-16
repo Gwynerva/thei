@@ -134,6 +134,19 @@ export function hasDismissLayer() {
   return dismissLayers.length > 0;
 }
 
+/** Presses that closed a popup on their way, so they close nothing more. */
+const popupClosingPresses = new WeakSet<Event>();
+
+/** A popup closed by a press outside it says so of the press. */
+export function noteClosingPress(event: Event) {
+  popupClosingPresses.add(event);
+}
+
+/** Whether this press closed a popup already: it is a step of its own. */
+export function closedPopup(event: Event) {
+  return popupClosingPresses.has(event);
+}
+
 /** Undo one step: the innermost dismissible layer, else the top modal. */
 export function dismissOneStep(): boolean {
   const layer = dismissLayers.pop();
