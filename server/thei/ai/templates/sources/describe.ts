@@ -62,7 +62,8 @@ export const describeSource: TemplateSource = {
 
   brief(batch) {
     return [
-      'Describe the files that have none yet. Look at each with look_at_file, then propose its description with describe, as describe says: what the file shows or is about, in the language of the site — sure when what you were shown leaves no doubt, unsure when the places’ captions and titles had to help. A file look_at_file could not show you is not described by guess: say which, and leave it. Propose nothing else.',
+      'Describe the files that have none yet. Look at each with look_at_file, then propose its description with describe, as describe says: what the file shows or is about, in the language of the site — sure when what you were shown leaves no doubt, unsure when what its places say had to help. A file look_at_file could not show you is not described by guess: say which, and leave it. Propose nothing else.',
+      'Read what each file’s places say before you describe it: the captions and titles the owner gave it there, the heading it stands under, the text just around it. They tell what the file alone may not — who is in a picture, where and when it was taken, what a recording or a document is of — so name them as the owner does, but only what the file and its places agree on. A description of a file on a public page is read by everyone: what only a [private] place says stays out of it.',
       '',
       ...batch.map((item) => item.shown),
     ].join('\n');

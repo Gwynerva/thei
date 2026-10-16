@@ -278,6 +278,45 @@ function sourceInfo(row: SourceRow): AssetSource {
           : `/admin/${type === 'page' ? 'pages' : type === 'tag' ? 'tags' : type + 's'}/${id}/edit/`;
   return { ...base, url, editUrl };
 }
+/**
+ * One use of a file with what holds it, as the library resolves it: the
+ * place, the container the use is kept in, its meta, and the text of a
+ * status the file is the picture of. What a place says of the file is read
+ * from these (`place-words.ts`).
+ */
+export interface AssetPlaceUse {
+  source: AssetSource;
+  role: AssetPlacement['role'];
+  containerType: string;
+  containerId: string;
+  meta: AssetUsageMeta | null;
+  /** The whole place is the owner's alone. */
+  sourcePrivate: boolean;
+  statusText?: string;
+}
+export function readAssetPlaceUses(assetUuid: string): AssetPlaceUse[] {
+  const rows = connection()
+    .rawDb.prepare(
+      ownersSql +
+        `SELECT * FROM placements WHERE assetUuid=? ORDER BY sourceType,sourceId,containerType,containerId,role`,
+    )
+    .all(assetUuid) as (PlacementRow & {
+    containerType: string;
+    containerId: string;
+    description: string;
+  })[];
+  return rows.map((row) => ({
+    source: sourceInfo(row),
+    role: row.role,
+    containerType: row.containerType,
+    containerId: row.containerId,
+    meta: row.meta ? (JSON.parse(row.meta) as AssetUsageMeta) : null,
+    sourcePrivate: Boolean(row.sourcePrivate),
+    ...(row.detail === 'status' && row.description
+      ? { statusText: row.description }
+      : {}),
+  }));
+}
 /** Where each of the files is placed, by the file's uuid. */
 export function readPlacements(ids: string[]) {
   const result = new Map<string, AssetPlacement[]>();

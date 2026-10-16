@@ -878,6 +878,10 @@ describe('the files of the archive', () => {
     ]);
     expect(batch[0]!.shown).toContain('# File a-5');
     expect(batch[0]!.shown).toContain('none yet: propose one with describe');
+    // What its places say of it comes with it.
+    expect(batch[0]!.shown).toContain(
+      `- project:${PROJECT} — Harbour, its files: titled “File 5”`,
+    );
   });
 
   it('are kept as looked at when they could not be shown, until their bytes change', async () => {
@@ -889,6 +893,9 @@ describe('the files of the archive', () => {
     };
     const sessionUuid = await run('describe');
     expect(brief(sessionUuid!)).toContain('Describe the files that have none');
+    expect(brief(sessionUuid!)).toContain(
+      'Read what each file’s places say before you describe it',
+    );
     const told = model!.requests[1]!.body.messages.find(
       (item: any) => item.role === 'tool',
     ).content as string;

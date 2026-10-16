@@ -228,7 +228,7 @@ a restart cut off says so.
 | `describe_actions`                | The kinds of actions, and what each takes.                           |
 | `propose`                         | Actions for the owner; with `apply`, an editor applies them at once. |
 | `undo_action`                     | Takes back an action applied.                                        |
-| `find_files`, `read_file`         | Library files by their descriptions and places; one with its places. |
+| `find_files`, `read_file`         | Files found by description and place; one with what its places say.  |
 | `look_at_file`                    | A library file shown as the model's service takes it.                |
 | `download_file`                   | A one-time address to download a library file as stored.             |
 | `upload_file`, `import_file`      | A file into the library, as the admin uploads one (editor).          |

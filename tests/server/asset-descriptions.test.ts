@@ -448,6 +448,102 @@ describe('files over MCP', () => {
     expect(notes).toContain('only the owner reads it');
   });
 
+  it('reads a file with what its places say of it', async () => {
+    insert('content', {
+      contentUuid: 'c-project',
+      ownerType: 'project',
+      ownerId: PROJECT,
+      slot: 'project-description',
+      data: {
+        blocks: [
+          { id: 'h', type: 'header', data: { text: 'Summer', level: 2 } },
+          { id: 'p', type: 'paragraph', data: { text: 'We went in June.' } },
+          {
+            id: 'm',
+            type: 'contentMedia',
+            data: {
+              layout: 'centered',
+              caption: 'Grandmother <b>at</b> the dacha',
+              asset: { assetUuid: 'a-photo' },
+            },
+          },
+        ],
+      },
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    insert('content', {
+      contentUuid: 'c-notes',
+      ownerType: 'project',
+      ownerId: PROJECT,
+      slot: 'project-notes',
+      data: {
+        blocks: [
+          { id: 'n', type: 'paragraph', data: { text: 'Her name is Vera.' } },
+          {
+            id: 'm2',
+            type: 'contentMedia',
+            data: { layout: 'centered', asset: { assetUuid: 'a-photo' } },
+          },
+        ],
+      },
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    for (const [containerId, refs] of [
+      [
+        'c-project',
+        [{ blockId: 'm', blockType: 'contentMedia', isPrivate: false }],
+      ],
+      [
+        'c-notes',
+        [{ blockId: 'm2', blockType: 'contentMedia', isPrivate: false }],
+      ],
+    ] as const)
+      insert('asset-usages', {
+        assetUuid: 'a-photo',
+        containerType: 'content',
+        containerId,
+        role: 'content',
+        meta: { role: 'content', refs, isPrivate: false },
+      });
+    insert('asset-usages', {
+      assetUuid: 'a-photo',
+      containerType: 'project',
+      containerId: PROJECT,
+      role: 'showcase-asset',
+      meta: {
+        role: 'showcase-asset',
+        order: 0,
+        caption: 'The old house',
+        isPrivate: false,
+      },
+    });
+    insert('asset-usages', {
+      assetUuid: 'a-photo',
+      containerType: 'project',
+      containerId: PROJECT,
+      role: 'banner',
+    });
+
+    const read = text(
+      await tools().get('read_file')!.call({ file: 'a-photo' }),
+    );
+    expect(read).toContain('## What its places say');
+    expect(read).toContain(
+      `- project:${PROJECT} — Parapet, its description, under “Summer”: captioned “Grandmother at the dacha”\n  before: “We went in June.”`,
+    );
+    // The owner's notes are theirs alone, and say so.
+    expect(read).toContain(
+      `- project:${PROJECT} — Parapet, its notes [private]: no words of its own\n  before: “Her name is Vera.”`,
+    );
+    expect(read).toContain(
+      `- project:${PROJECT} — Parapet, its showcase: captioned “The old house”`,
+    );
+    // A banner gives the file no words of its own: it is only a place.
+    expect(read).not.toContain('Parapet, its banner');
+  });
+
   it('shows a file to a model, and opens a one-time download for an app', async () => {
     const reader = tools();
     const looked = await reader.get('look_at_file')!.call({ file: 'a-photo' });

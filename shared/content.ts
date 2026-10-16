@@ -260,6 +260,38 @@ export function contentBlockFiles(block: ContentOutputBlock): unknown[] {
     : [];
 }
 
+/** What a text gives one of its files, as stored: titles plain, a caption inline HTML. */
+export interface ContentFileWords {
+  /** The title of the list the file is in: a group's. */
+  group?: string;
+  title?: string;
+  caption?: string;
+}
+
+/**
+ * What a block says of a file at each of its places in it. A list that holds
+ * the file twice gives it twice.
+ */
+export function contentBlockFileWords(
+  block: ContentOutputBlock,
+  assetUuid: string,
+): ContentFileWords[] {
+  if (!isContentFileBlockType(block.type)) return [];
+  const data = block.data as Record<string, unknown>;
+  const holds = (value: unknown) =>
+    isRecord(value) && value.assetUuid === assetUuid;
+  const words = (source: Record<string, unknown>): ContentFileWords => ({
+    title: optionalString(source.title),
+    caption: optionalString(source.caption),
+  });
+  if (CONTENT_FILE_BLOCKS[block.type].holds === 'one')
+    return holds(data.asset) ? [words(data)] : [];
+  const group = optionalString(data.title);
+  return (Array.isArray(data.items) ? data.items : [])
+    .filter((item) => isRecord(item) && holds(item.asset))
+    .map((item) => ({ group, ...words(item) }));
+}
+
 /**
  * The block's data with its files as `hydrate` gives them: a single file the
  * reader may not have becomes `null`, a file of a list is left out of it.

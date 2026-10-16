@@ -1,7 +1,11 @@
 import type { CallToolResult, McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { AssetType } from '#layers/thei/shared/asset';
-import type { AssetPlacement } from '#layers/thei/shared/asset-library';
+import type {
+  AssetPlacement,
+  AssetSource,
+} from '#layers/thei/shared/asset-library';
+import { richTextToPlainText } from '#layers/thei/shared/rich-text';
 import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
 import { READS } from '../annotations';
 import type { McpCallContext } from '../context';
@@ -11,6 +15,7 @@ import { aboutFileDescription } from '../text-about';
 import { siteUrl } from '../../site-url';
 import { getAssetUsages, listLibraryAssets } from '../../assets/library';
 import { readAssetDescription } from '../../assets/descriptions';
+import { filePlaceWords, type FilePlaceWords } from '../../assets/place-words';
 import { libraryFile, modelFiles } from '../../ai/sessions/files';
 import type { StreamFile } from '../../ai/model/stream';
 
@@ -52,9 +57,8 @@ function fileLine(file: AssetVariantInfo): string {
   return parts.join(', ');
 }
 
-/** Where a file is placed, as a ref and in words. */
-function placeLine(place: AssetPlacement): string {
-  const { source } = place;
+/** What holds a file, as a ref and its title. */
+function sourceLabel(source: AssetSource): string {
   const ref =
     source.type === 'profile'
       ? 'profile'
@@ -69,8 +73,41 @@ function placeLine(place: AssetPlacement): string {
       : source.title
         ? ` — ${source.title}`
         : '';
-  return `- ${ref}${title}: ${place.role}${place.count > 1 ? ` ×${place.count}` : ''}${place.isPrivate ? ' [private]' : ''}`;
+  return `${ref}${title}`;
 }
+
+/** Where a file is placed, as a ref and in words. */
+function placeLine(place: AssetPlacement): string {
+  return `- ${sourceLabel(place.source)}: ${place.role}${place.count > 1 ? ` ×${place.count}` : ''}${place.isPrivate ? ' [private]' : ''}`;
+}
+
+/** How many places' words a file is read with. */
+const PLACE_WORDS_SHOWN = 10;
+
+const WHERE: Record<string, string> = {
+  showcase: 'its showcase',
+  files: 'its files',
+  status: 'a status',
+};
+
+/** What one place says of a file: its words, then the text around it. */
+function placeWordsLines(place: FilePlaceWords): string[] {
+  const { words } = place;
+  const said = [
+    ...(words.group ? [`in the group “${plain(words.group)}”`] : []),
+    ...(words.title ? [`titled “${plain(words.title)}”`] : []),
+    ...(words.caption ? [`captioned “${plain(words.caption)}”`] : []),
+  ];
+  const where = WHERE[place.where] ?? `its ${place.where}`;
+  return [
+    `- ${sourceLabel(place.source)}, ${where}${place.heading ? `, under “${place.heading}”` : ''}${place.isPrivate ? ' [private]' : ''}: ${said.join(', ') || 'no words of its own'}`,
+    ...(place.before ? [`  before: “${place.before}”`] : []),
+    ...(place.after ? [`  after: “${place.after}”`] : []),
+  ];
+}
+
+/** A caption's words without its marks. */
+const plain = (value: string) => richTextToPlainText(value);
 
 /** Whether a stranger sees the file anywhere. */
 function shownPublicly(places: readonly AssetPlacement[]): boolean {
@@ -91,11 +128,15 @@ function requireFile(assetUuid: string): AssetVariantInfo {
   );
 }
 
-/** A file read whole: what it is, its description, its places. */
+/**
+ * A file read whole: what it is, its description, its places and what they
+ * say of it.
+ */
 export function fileFacts(assetUuid: string): string {
   const file = requireFile(assetUuid);
   const usages = getAssetUsages(assetUuid);
   const description = readAssetDescription(assetUuid);
+  const placeWords = filePlaceWords(assetUuid);
   const lines = [
     `# File ${file.assetUuid}`,
     fileLine(file),
@@ -115,6 +156,17 @@ export function fileFacts(assetUuid: string): string {
             ? 'Used nowhere now; a version of some text still shows it.'
             : 'Used nowhere: cleanup takes it a day after it was last touched.',
         ]),
+    ...(placeWords.length
+      ? [
+          '',
+          '## What its places say',
+          'The words the owner gave the file where it is, as stored, with the heading it stands under and the text just around it: they tell what the file alone may not — who or what is in it, where, when. [private]: only the owner reads it.',
+          ...placeWords.slice(0, PLACE_WORDS_SHOWN).flatMap(placeWordsLines),
+          ...(placeWords.length > PLACE_WORDS_SHOWN
+            ? [`- …and ${placeWords.length - PLACE_WORDS_SHOWN} more`]
+            : []),
+        ]
+      : []),
   ];
   return lines.join('\n');
 }
@@ -200,9 +252,10 @@ export function registerLibraryTools(
       title: 'Read a file',
       description:
         'A library file: what it is, its description — what it shows or is ' +
-        'about, one for the file and its variants — and every place it is ' +
-        'in. look_at_file shows it to you; describe proposes its ' +
-        'description.',
+        'about, one for the file and its variants — every place it is in, ' +
+        'and what those places say of it: its captions and titles there, ' +
+        'the heading and the text around it. look_at_file shows it to you; ' +
+        'describe proposes its description.',
       inputSchema: z.object({
         file: z.string().describe('The file id, a-…'),
       }),
