@@ -100,7 +100,10 @@ told of every file by its name and id, so a text it proposes can take one in.
 
 The site's model may make a file the owner asks for with `make_file` — any
 kind, as its name says, written as text or as base64 — which joins the
-session's files under its answer. A table it answers with is shown as one.
+session's files under its answer. A file is opened alone, with no files
+beside it, so it is told to carry inside whatever it needs: a report is one
+page with its styles, scripts and pictures in it. A table it answers with is
+shown as one.
 
 ## Actions
 

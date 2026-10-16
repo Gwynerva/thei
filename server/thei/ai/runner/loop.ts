@@ -102,7 +102,7 @@ const NAME_TOOL = {
 const FILE_TOOL = {
   name: 'make_file',
   description:
-    'Makes a file the owner asked for out of what you write: any format, as its name says. It goes into the library, kept in this session, and the owner sees it under your answer. To put it in place, propose that with its id.',
+    'Makes a file the owner asked for out of what you write: any format, as its name says. It is opened alone, with no files beside it, so whatever it needs goes inside it. It goes into the library, kept in this session, and the owner sees it under your answer. To put it in place, propose that with its id.',
   inputSchema: {
     type: 'object',
     properties: {
