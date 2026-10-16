@@ -1342,11 +1342,9 @@ export default defineI18nModule({
     content_editor_placeholder: 'Начните писать...',
     content_editor_save_error: 'Не удалось сохранить контент.',
     content_editor_title: 'Редактор контента',
-    content_editor_clear_confirm: 'Очистить весь контент в редакторе?',
     content_never_saved: 'Не было сохранено',
     content_history: 'История версий',
-    content_history_empty:
-      'Версий пока нет. Они появляются по ходу работы и хранятся двое суток.',
+    content_history_empty: 'Версий пока нет.',
     content_history_unavailable: 'История версий сейчас недоступна.',
     content_history_load_error: 'Не удалось загрузить эту версию.',
     content_history_opened_version: 'Как при открытии',
@@ -1387,10 +1385,7 @@ export default defineI18nModule({
     content_stored_notice_hint:
       'Пока вы писали, текст сохранили там. Сравните и возьмите нужное оттуда — ваш текст останется как есть.',
     content_history_keeps:
-      'Откройте версию — она встанет рядом с текстом, и из неё можно взять всё или часть. Версии хранятся двое суток, правки ИИ — пока жива их сессия.',
-    content_history_clear: 'Очистить текст',
-    content_history_clear_hint:
-      'Убирает весь текст. Вернуть его можно отсюда же: он станет версией.',
+      'Версии хранятся двое суток, правки ИИ — пока жива их сессия.',
     content_draft_status_synced: (time) => `Черновик сохранён · ${time}`,
     content_draft_status_offline: 'Нет связи — хранится в браузере',
     content_draft_status_refused_short: 'Не сохраняется',
@@ -1982,6 +1977,8 @@ export default defineI18nModule({
     ai_question_own: 'Свой ответ…',
     ai_notices: {
       stopped: 'Остановлено вами.',
+      timeout: 'Остановлено: слишком долго.',
+      interrupted: 'Прервано перезапуском сайта.',
       limit:
         'Месячный лимит исчерпан. Сессия продолжится в следующем месяце или когда вы поднимете лимит.',
       'no-model': 'Модель для ответа не настроена.',

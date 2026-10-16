@@ -8,7 +8,7 @@
   },
   "dependencies": {
     "better-sqlite3": "13.0.3",
-    "nuxt": "4.5.2",
+    "nuxt": "4.6.1",
     "thei": "__THEI_SOURCE__"
   },
   "trustedDependencies": ["@ffmpeg-installer/ffmpeg", "esbuild", "sharp"]

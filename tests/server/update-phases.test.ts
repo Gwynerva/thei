@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -18,6 +19,11 @@ import { applyPhaseRunnerLine, createBuiltinSteps } from '../../update/process';
 import { exec } from '../../update/exec';
 import { updatePhaseRegistry } from '../../update/phases/index';
 import sqliteDriver from '../../update/phases/0.0.3-sqlite-driver';
+import nodeVersion, {
+  satisfiesNodeRange,
+  supportedNode,
+} from '../../update/phases/0.0.6-node-version';
+import { siteNode } from '../../update/phases/site-node';
 import { createUpdateState } from '../../update/state';
 
 let projectPath: string;
@@ -182,23 +188,23 @@ describe('update phases', () => {
   });
 });
 
-describe('the 0.0.3 check of the SQLite driver', () => {
-  const context = (
-    exec: UpdatePhaseContext['exec'],
-    languageCode?: string,
-  ): UpdatePhaseContext => ({
-    projectPath,
-    theiPath: join(import.meta.dirname, '..', '..'),
-    contentPath: (...parts) => join(projectPath, 'content', ...parts),
-    fromVersion: '0.0.2',
-    toVersion: '0.0.3',
-    languageCode,
-    readConfig: async () => ({}),
-    writeConfig: async () => {},
-    exec,
-    log: () => {},
-  });
+const context = (
+  exec: UpdatePhaseContext['exec'],
+  languageCode?: string,
+): UpdatePhaseContext => ({
+  projectPath,
+  theiPath: join(import.meta.dirname, '..', '..'),
+  contentPath: (...parts) => join(projectPath, 'content', ...parts),
+  fromVersion: '0.0.2',
+  toVersion: '0.0.3',
+  languageCode,
+  readConfig: async () => ({}),
+  writeConfig: async () => {},
+  exec,
+  log: () => {},
+});
 
+describe('the 0.0.3 check of the SQLite driver', () => {
   it('runs on the update from 0.0.2', () => {
     expect(
       selectUpdatePhases(updatePhaseRegistry, '0.0.2', '0.0.3').map(
@@ -234,5 +240,93 @@ describe('the 0.0.3 check of the SQLite driver', () => {
     await expect(sqliteDriver.run(context(failing))).rejects.toThrow(
       /keeps its current version.*glibc 2\.34/,
     );
+  });
+});
+
+describe('the 0.0.6 check of the Node version', () => {
+  const versions = {
+    'v20.19.0': false,
+    'v22.22.2': false,
+    'v22.22.3': true,
+    'v22.23.0': true,
+    'v23.11.0': false,
+    'v24.14.9': false,
+    'v24.15.0': true,
+    'v24.19.1': true,
+    'v25.9.0': false,
+    'v26.0.0': true,
+    'v27.1.0': true,
+  };
+  const answering =
+    (version: string): UpdatePhaseContext['exec'] =>
+    async () => ({ code: 0, output: `${version}\n` });
+
+  it('runs on every update that reaches 0.0.6', () => {
+    expect(
+      selectUpdatePhases(updatePhaseRegistry, '0.0.5', '0.0.6').map(
+        (item) => item.id,
+      ),
+    ).toEqual([nodeVersion.id]);
+    expect(
+      selectUpdatePhases(updatePhaseRegistry, '0.0.2', '0.0.6').map(
+        (item) => item.id,
+      ),
+    ).toEqual([sqliteDriver.id, nodeVersion.id]);
+  });
+
+  it('asks for what the installed Nuxt asks for', () => {
+    const nuxt = createRequire(import.meta.url)('nuxt/package.json');
+    expect(supportedNode).toBe(nuxt.engines.node);
+  });
+
+  it('reads the range the way Nuxt means it', () => {
+    for (const [version, supported] of Object.entries(versions)) {
+      expect([version, satisfiesNodeRange(version, supportedNode)]).toEqual([
+        version,
+        supported,
+      ]);
+    }
+    expect(satisfiesNodeRange('24.15.0', supportedNode)).toBe(true);
+    expect(satisfiesNodeRange('not a version', supportedNode)).toBe(false);
+  });
+
+  it('agrees with the installer', async () => {
+    const installer = await readFile(
+      join(import.meta.dirname, '..', '..', 'update', 'install.sh'),
+      'utf8',
+    );
+    expect(/^NODE_RANGE='(.+)'$/m.exec(installer)?.[1]).toBe(supportedNode);
+    const program = /node -e '([^']+)'/.exec(installer)![1]!;
+    for (const [version, supported] of Object.entries(versions)) {
+      let code: number | undefined;
+      new Function('process', program)({
+        versions: { node: version.slice(1) },
+        exit: (value: number) => (code = value),
+      });
+      expect([version, code]).toEqual([version, supported ? 0 : 1]);
+    }
+  });
+
+  it('asks the Node that runs the site', async () => {
+    const calls: string[][] = [];
+    await nodeVersion.run(
+      context(async (command, args) => {
+        calls.push([command, ...args]);
+        return { code: 0, output: 'v24.15.0\n' };
+      }),
+    );
+    expect(calls).toEqual([[siteNode(), '--version']]);
+  });
+
+  it('stops the update, in the site language, on an older Node', async () => {
+    await expect(
+      nodeVersion.run(context(answering('v24.11.0'), 'ru')),
+    ).rejects.toThrow(/v24\.11\.0.*\^24\.15\.0.*остаётся на текущей версии/);
+    await expect(
+      nodeVersion.run(context(answering('v22.12.0'))),
+    ).rejects.toThrow(/v22\.12\.0.*\^22\.22\.3.*keeps its current version/);
+    await expect(
+      nodeVersion.run(context(answering('v26.1.0'))),
+    ).resolves.toBeUndefined();
   });
 });

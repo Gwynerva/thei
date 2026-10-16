@@ -244,7 +244,7 @@ export function registerSessionTools(
       }),
       annotations: editor ? CHANGES : SUGGESTS,
     },
-    (args) =>
+    (args, ctx) =>
       guardTool(async () => {
         const { session, actions, atomic, sources } = args;
         const apply = (args as { apply?: boolean }).apply === true;
@@ -258,6 +258,10 @@ export function registerSessionTools(
           actions: actions as never,
           atomic,
           sources,
+          // A call left for taking too long proposes nothing either.
+          live: context.session
+            ? () => context.session!.live() && !ctx.mcpReq.signal.aborted
+            : undefined,
         });
         const lines = [
           `In session ${sessionUuid}${bundleUuid ? `, as one bundle${atomic ? ' (atomic)' : ''}` : ''}:`,

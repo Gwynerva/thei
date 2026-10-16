@@ -55,8 +55,16 @@ export function sessionUnnamed(session: SessionRow): boolean {
   return Boolean(first) && session.title === titleFromWords(first!.text);
 }
 
-/** The model names a session still going by its first words; says what came of it. */
-export function nameSession(sessionUuid: string, name: unknown): string {
+/**
+ * The model names a session still going by its first words; says what came
+ * of it. `live` says whether its turn may still write.
+ */
+export function nameSession(
+  sessionUuid: string,
+  name: unknown,
+  live: () => boolean = () => true,
+): string {
+  if (!live()) return 'The turn was stopped; it was not named.';
   const session = findSession(sessionUuid);
   if (!session || !sessionUnnamed(session)) return 'It has its name already.';
   const title =

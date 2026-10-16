@@ -22,8 +22,7 @@ import {
 /**
  * The versions of a text, one line each: when it was written, why it was
  * kept and how much it differs from the text now. Choosing one compares it
- * with the text, to take all of it or a part. Clearing the text is here
- * too, at the end: the text cleared is kept as a version like any other.
+ * with the text, to take all of it or a part.
  */
 const props = defineProps<{
   session: EditorHistorySession;
@@ -32,11 +31,9 @@ const props = defineProps<{
   currentKey: string;
   /** The text as the editor opened with it. */
   opened?: { data: ContentOutputData; key: string };
-  /** The text holds anything to clear. */
-  clearable?: boolean;
 }>();
 
-const emit = defineEmits<{ choose: [target: RestoreTarget]; clear: [] }>();
+const emit = defineEmits<{ choose: [target: RestoreTarget] }>();
 
 const entries = shallowRef<ContentHistoryEntryMeta[]>();
 const listError = ref(false);
@@ -194,23 +191,5 @@ const row =
         }}
       </p>
     </template>
-
-    <!-- The one action, last, as a menu's: the text it clears comes back
-         from this same list. -->
-    <div class="mt-0.5 border-t border-border-1 pt-xs">
-      <button
-        type="button"
-        class="flex popup-item items-center text-text-2
-          [--popup-item-hover:var(--color-bg-error)] disabled:cursor-default
-          disabled:text-text-3/60 not-disabled:hocus:text-text-error"
-        :disabled="!clearable"
-        :data-title-popup="phrase.content_history_clear_hint"
-        data-history-clear
-        @click="emit('clear')"
-      >
-        <Icon name="delete" class="shrink-0" />
-        {{ phrase.content_history_clear }}
-      </button>
-    </div>
   </div>
 </template>

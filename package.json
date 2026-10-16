@@ -8,6 +8,7 @@
     "type": "git",
     "url": "git+https://github.com/Gwynerva/thei.git"
   },
+  "type": "module",
   "main": "./nuxt.config.ts",
   "scripts": {
     "dev": "bun scripts/dev-server.ts playground",
@@ -74,7 +75,7 @@
   },
   "peerDependencies": {
     "better-sqlite3": "^13.0.3",
-    "nuxt": "^4.5.2"
+    "nuxt": "^4.6.1"
   },
   "peerDependenciesMeta": {
     "better-sqlite3": {
@@ -92,7 +93,7 @@
     "better-sqlite3": "13.0.3",
     "drizzle-kit": "^0.31.10",
     "golar": "^0.1.10",
-    "nuxt": "^4.5.2",
+    "nuxt": "^4.6.1",
     "prettier": "^3.9.6",
     "prettier-plugin-classnames": "^0.10.4",
     "prettier-plugin-merge": "^0.10.1",

@@ -187,35 +187,28 @@ test('a text closed without saving is kept as a version and comes back', async (
   expect(await editorText(page)).toContain(marker);
 });
 
-test('clearing, at the end of the history, keeps what the editor held', async ({
+test('the text as opened comes first once it differs, and brings it back', async ({
   page,
 }) => {
   await page.setViewportSize(DESKTOP);
-  const marker = `About to be cleared ${Date.now()}`;
-  const pageUuid = await createPage(page, 'cleared');
+  const marker = `Typed after opening ${Date.now()}`;
+  const pageUuid = await createPage(page, 'opened');
   await openPageEditor(page, `/admin/pages/${pageUuid}/edit/`);
   await typeInEditor(page, marker);
   await waitForDraft(page);
 
   await page.getByRole('button', { name: 'Version history' }).click();
-  page.once('dialog', (dialog) => dialog.accept());
-  await page.locator('[data-history-clear]').click();
-  await expect(page.locator('dialog .content-editor')).not.toContainText(
-    marker,
-  );
-
-  await page.getByRole('button', { name: 'Version history' }).click();
-  // The text differs from the one opened now, so that comes first.
-  await expect(page.locator('[data-history-row]').first()).toHaveAttribute(
+  const list = page.locator('[data-content-history-panel]');
+  await expect(list.locator('[data-history-row]').first()).toHaveAttribute(
     'data-history-row',
     'opened',
   );
-  const row = page.locator('[data-history-row="version"]').first();
-  await expect(row).toContainText('Before clearing');
-  await row.click();
-  await expect(reviewScreen(page)).toContainText(marker);
+  // The history is only versions: nothing in it empties the text.
+  await expect(list.getByRole('button', { name: /clear/i })).toHaveCount(0);
+  await list.locator('[data-history-row="opened"]').click();
+  await expect(reviewScreen(page)).toContainText('The saved text of the page.');
   await takeAll(page);
-  expect(await editorText(page)).toContain(marker);
+  expect(await editorText(page)).not.toContain(marker);
 });
 
 test('without a connection the text waits in the browser and is sent when it returns', async ({

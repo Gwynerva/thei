@@ -126,8 +126,10 @@ export function uploadLimit(entry: Pick<UploadTicket, 'sourceType'>) {
 export async function storeStagedFile(
   staged: StagedUpload,
   kind: Pick<UploadTicket, 'extension' | 'sourceType' | 'settings'>,
+  signal?: AbortSignal,
 ): Promise<AssetUploadResponse> {
   try {
+    signal?.throwIfAborted();
     const match = await findStoredAssetByHash(staged.hash, staged.size);
     if (match && kind.settings.type === 'original')
       return { ...(await buildAssetVariantInfo(match)), created: false };
@@ -142,17 +144,22 @@ export async function storeStagedFile(
       familyUuid: match?.familyUuid ?? `af-${staged.hash}`,
       sourceType: kind.sourceType,
       settings: kind.settings,
+      signal,
     });
   } finally {
     await staged.discard();
   }
 }
 
-/** Downloads a file from the web into the library, streamed to disk. */
+/**
+ * Downloads a file from the web into the library, streamed to disk; `signal`
+ * stops the download and the encoding.
+ */
 export async function importFile(
   url: string,
   name: string | undefined,
   settings: AssetUploadRequest,
+  signal?: AbortSignal,
 ): Promise<AssetUploadResponse> {
   const fileName =
     name ?? decodeURIComponent(new URL(url).pathname.split('/').pop() ?? '');
@@ -160,6 +167,7 @@ export async function importFile(
   const { response } = await openGuarded(url, {
     accept: '*/*',
     deadline: Date.now() + 5 * 60 * 1000,
+    signal,
   }).catch((error: unknown) =>
     fail(
       `The file could not be fetched: ${error instanceof Error ? error.message : String(error)}.`,
@@ -175,17 +183,18 @@ export async function importFile(
   ).catch((error: unknown) =>
     fail(error instanceof Error ? error.message : 'The download failed.'),
   );
-  return storeStagedFile(staged, { ...kind, settings });
+  return storeStagedFile(staged, { ...kind, settings }, signal);
 }
 
 /**
  * Makes a new variant of a library file with other settings — smaller,
  * cropped, another format. The file it was made from stays where it is; the
- * new one goes wherever it is put.
+ * new one goes wherever it is put. `signal` stops the encoding.
  */
 export async function reprocessFile(
   assetUuid: string,
   settings: AssetUploadRequest,
+  signal?: AbortSignal,
 ): Promise<AssetUploadResponse> {
   const asset =
     (await THEI_SERVER.assets.findByUuid(assetUuid)) ??
@@ -201,6 +210,7 @@ export async function reprocessFile(
     familyUuid: asset.familyUuid,
     sourceType: asset.type as AssetType,
     settings,
+    signal,
   });
 }
 

@@ -263,11 +263,13 @@ export function sessionFilesNote(files: readonly SessionFile[]): string {
  * Makes a file a model wrote — whatever it is, as its name says — into the
  * library, kept in the session like a file the owner brought. The content is
  * text, or base64 for bytes. Returns the file, or why it could not be made,
- * in words for the model.
+ * in words for the model. A turn stopped while it was made keeps nothing:
+ * the file has no place, and the library lets it go.
  */
 export async function makeSessionFile(
   sessionUuid: string,
   input: { name?: unknown; content?: unknown; base64?: unknown },
+  live: () => boolean = () => true,
 ): Promise<{ file: SessionFile } | { refused: string }> {
   const { name, content } = input;
   if (typeof name !== 'string' || typeof content !== 'string' || !content)
@@ -287,9 +289,12 @@ export async function makeSessionFile(
       settings: fileSettings(undefined),
     });
     const { db, schema } = THEI_SERVER.useDb();
-    db.transaction((tx) =>
-      placeSessionFiles(tx, schema, sessionUuid, [assetUuid], Date.now()),
-    );
+    const placed = db.transaction((tx) => {
+      if (!live()) return false;
+      placeSessionFiles(tx, schema, sessionUuid, [assetUuid], Date.now());
+      return true;
+    });
+    if (!placed) return { refused: 'The turn was stopped; nothing was kept.' };
     return { file: { assetUuid, name: fileName } };
   } catch (error) {
     return {
@@ -336,19 +341,23 @@ function keepReady(id: string, blocks: StreamFile[]) {
 }
 
 /** A picture as a model is shown it: a JPEG, no larger than it needs. */
-async function picture(path: string): Promise<string> {
-  const data = await withProcessingSlot(AssetType.Image, () =>
-    sharp(path, { animated: false })
-      .autoOrient()
-      .resize({
-        width: PICTURE_SIDE,
-        height: PICTURE_SIDE,
-        fit: 'inside',
-        withoutEnlargement: true,
-      })
-      .flatten({ background: '#ffffff' })
-      .jpeg({ quality: 80 })
-      .toBuffer(),
+async function picture(path: string, signal?: AbortSignal): Promise<string> {
+  const data = await withProcessingSlot(
+    AssetType.Image,
+    () =>
+      sharp(path, { animated: false })
+        .autoOrient()
+        .resize({
+          width: PICTURE_SIDE,
+          height: PICTURE_SIDE,
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .flatten({ background: '#ffffff' })
+        .jpeg({ quality: 80 })
+        .toBuffer(),
+    // A stopped turn gives its place in the queue up.
+    { signal },
   );
   return data.toString('base64');
 }
@@ -362,30 +371,39 @@ async function sound(
   path: string,
   name: string,
   duration: number | undefined,
+  signal?: AbortSignal,
 ): Promise<StreamFile | null> {
   const out = theiTempPath(`model-sound-${randomUUID()}.mp3`);
   try {
-    const code = await withProcessingSlot(AssetType.Audio, () =>
-      runFfmpeg([
-        '-hide_banner',
-        '-loglevel',
-        'error',
-        '-y',
-        '-i',
-        path,
-        '-vn',
-        '-t',
-        String(SOUND_SECONDS),
-        '-ac',
-        '1',
-        '-ar',
-        '16000',
-        '-b:a',
-        '32k',
-        '-f',
-        'mp3',
-        out,
-      ]),
+    const code = await withProcessingSlot(
+      AssetType.Audio,
+      () =>
+        runFfmpeg(
+          [
+            '-hide_banner',
+            '-loglevel',
+            'error',
+            '-y',
+            '-i',
+            path,
+            '-vn',
+            '-t',
+            String(SOUND_SECONDS),
+            '-ac',
+            '1',
+            '-ar',
+            '16000',
+            '-b:a',
+            '32k',
+            '-f',
+            'mp3',
+            out,
+          ],
+          // A stopped turn kills the encode.
+          { signal },
+        ),
+      // A stopped turn gives its place in the queue up.
+      { signal },
     );
     if (code !== 0) return null;
     const { size } = await stat(out);
@@ -415,6 +433,7 @@ async function blocksOf(
   asset: StoredAssetRecord,
   name: string,
   preview: StoredAssetRecord | undefined,
+  signal?: AbortSignal,
 ): Promise<StreamFile[]> {
   const path = (record: StoredAssetRecord) =>
     THEI_SERVER.assets.filePath(record.contentHash, record.extension);
@@ -422,23 +441,25 @@ async function blocksOf(
   switch (asset.type) {
     case AssetType.Image:
       if (asset.extension !== 'svg')
-        return [{ kind: 'image', name, data: await picture(path(asset)) }];
+        return [
+          { kind: 'image', name, data: await picture(path(asset), signal) },
+        ];
       return preview
-        ? [{ kind: 'image', name, data: await picture(path(preview)) }]
+        ? [{ kind: 'image', name, data: await picture(path(preview), signal) }]
         : [];
     case AssetType.Video: {
       const blocks: StreamFile[] = preview
-        ? [{ kind: 'image', name, data: await picture(path(preview)) }]
+        ? [{ kind: 'image', name, data: await picture(path(preview), signal) }]
         : [];
       // A video with no sound track is its frame alone.
       const track =
         meta.hasAudio === false
           ? null
-          : await sound(path(asset), name, meta.duration);
+          : await sound(path(asset), name, meta.duration, signal);
       return track ? [...blocks, track] : blocks;
     }
     case AssetType.Audio: {
-      const track = await sound(path(asset), name, meta.duration);
+      const track = await sound(path(asset), name, meta.duration, signal);
       return track ? [track] : [];
     }
     default:
@@ -463,11 +484,12 @@ async function blocksOf(
  * The files these turns show — what the owner brought, what a tool showed —
  * made ready for a model by id. One that cannot be shown — gone, too large,
  * of a kind no model reads — is left out: the words around it still name
- * it.
+ * it. `signal` stops it for a stopped turn.
  */
 export async function modelFiles(
   turns: readonly { role: string; files?: string[] }[],
   names: ReadonlyMap<string, string>,
+  signal?: AbortSignal,
 ): Promise<Map<string, StreamFile[]>> {
   const ids = [
     ...new Set(
@@ -498,8 +520,10 @@ export async function modelFiles(
             asset,
             names.get(id) ?? id,
             previews.get(previewIds.get(id) ?? ''),
+            signal,
           );
         } catch (error) {
+          if (signal?.aborted) throw error;
           THEI_SERVER.console
             .tag('AI')
             .warn(

@@ -86,13 +86,14 @@ if (process.argv.includes('--build')) {
     PORT: String(target.port),
   });
 } else {
-  // The lock records this server in `.nuxt/nuxt.lock`, which is how the next
-  // run recognises it, and nuxi refuses a second one over the same directory.
+  // The CLI records this server in `.nuxt/nuxt.lock`, which is how the next
+  // run recognises it. Left to itself, a second `nuxt dev` stops a server
+  // that was started without a terminal and takes its place: `--no-takeover`
+  // makes it refuse instead, and `--strictPort` keeps it off any other port.
   const args = ['x', 'nuxt', 'dev', target.dir, '--port', String(target.port)];
-  args.push('--host', host);
+  args.push('--host', host, '--strictPort', '--no-takeover');
   if (!target.fork) args.push('--no-fork');
   run(bun, args, {
-    NUXT_LOCK: '1',
     // Nitro's dev worker takes requests from the dev server over a named pipe
     // on Windows, where reading an upload's body from it can stall the worker
     // for seconds, every request with it. A port on localhost has no stall.

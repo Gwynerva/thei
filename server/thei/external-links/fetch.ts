@@ -561,6 +561,8 @@ interface GuardedFetchOptions {
   userAgent?: string;
   /** How many redirects to follow; none for an address that must answer itself. */
   maxRedirects?: number;
+  /** Stops the exchange before its deadline. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -577,16 +579,20 @@ export async function openGuarded(
     deadline,
     userAgent = BOT_USER_AGENT,
     maxRedirects = MAX_REDIRECTS,
+    signal,
   }: Omit<GuardedFetchOptions, 'maxBytes'>,
 ): Promise<{ response: Response; url: string }> {
   let url = guardedUrl(value);
   for (let redirects = 0; ; redirects += 1) {
+    signal?.throwIfAborted();
     await withDeadline(assertPublicUrl(url), deadline);
     let response: Response;
     try {
       response = await fetch(url, {
         redirect: 'manual',
-        signal: deadlineSignal(deadline),
+        signal: signal
+          ? AbortSignal.any([deadlineSignal(deadline), signal])
+          : deadlineSignal(deadline),
         headers: {
           accept,
           'accept-language': 'en,ru;q=0.9',

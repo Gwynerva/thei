@@ -225,13 +225,18 @@ export function registerLibraryTools(
       }),
       annotations: READS,
     },
-    ({ file }) =>
+    ({ file }, ctx) =>
       guardTool(async () => {
         const facts = fileFacts(file);
+        // A stopped call stops making the file ready: an encode is killed.
         const blocks =
-          (await modelFiles([{ role: 'tool', files: [file] }], new Map())).get(
-            file,
-          ) ?? [];
+          (
+            await modelFiles(
+              [{ role: 'tool', files: [file] }],
+              new Map(),
+              ctx?.mcpReq?.signal,
+            )
+          ).get(file) ?? [];
         return {
           content: [
             {

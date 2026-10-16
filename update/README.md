@@ -49,6 +49,15 @@ a native Node addon that does not load under Bun. The unit file records where
 each one lives (`ExecStart` and `THEI_BUN`) and which repository updates come
 from (`THEI_REPOSITORY`).
 
+Node has to be a version Nuxt supports: 22.22.3 or a later 22, 24.15.0 or a
+later 24, or 26 and later. The installer brings Node 24 from NodeSource when
+the server has none of these, and refuses to go on with any other. The update
+to 0.0.6 asks the Node that runs the site before building anything
+(`phases/0.0.6-node-version.ts`): on an older one it stops with the site as it
+was and says so. `apt-get update && apt-get install nodejs` brings a server
+the installer set up to the newest Node of its line; restart the site and
+update again.
+
 `better-sqlite3` carries its binaries in the package — Linux with glibc 2.34
 or newer (Debian 12, Ubuntu 22.04 and later) or musl, on x64 and arm64 — and
 nothing compiles at install, from GitHub or anywhere else. The installer and

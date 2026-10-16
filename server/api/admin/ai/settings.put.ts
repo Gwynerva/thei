@@ -4,11 +4,14 @@ import {
   type AiSettings,
 } from '#layers/thei/shared/ai-settings';
 import { updateTheiConfig } from '../../../thei/config/write';
+import { stopAllTurns } from '../../../thei/ai/runner/queue';
 
 /**
  * Turns AI access on or off, and saves the owner's instructions to AI
  * clients. Both take effect at once. Off, the MCP endpoint is gone and every
- * token opens nothing, though the tokens are kept for when it is on again.
+ * token opens nothing, though the tokens are kept for when it is on again;
+ * whatever the model or an app has under way stops — the route that would
+ * stop a turn is gone with it.
  */
 export default defineEventHandler(async (event): Promise<AiSettings> => {
   markReadOnlyRequest(event);
@@ -32,6 +35,7 @@ export default defineEventHandler(async (event): Promise<AiSettings> => {
           : config.mcp.instructions,
     },
   }));
+  if (body?.enabled === false) stopAllTurns();
   return {
     enabled: THEI_SERVER.config.mcp.enabled,
     instructions: THEI_SERVER.config.mcp.instructions,

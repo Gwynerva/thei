@@ -158,6 +158,11 @@ function toolAnswered(request: FakeRequest): boolean {
 
 function script(request: FakeRequest): FakeTurn {
   if (toolAnswered(request)) return { text: 'Proposed.' };
+  if (lastOwnerWords(request).includes('slowly'))
+    return {
+      text: Array(40).fill('A walk is told word by word.').join(' '),
+      delayMs: 150,
+    };
   const actions = proposals(lastOwnerWords(request));
   if (!actions) return { text: 'Noted.' };
   return { toolCalls: [{ name: 'propose', input: { actions } }] };
@@ -271,11 +276,9 @@ async function ask(page: Page, words: string) {
   await page.keyboard.type(words);
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/admin\/ai\/\?session=ais-/);
-  await expect(page.locator('[data-composer-send]')).toHaveAttribute(
-    'data-composer-send',
-    'send',
-    { timeout: 40_000 },
-  );
+  await expect(page.locator('[data-composer-stop]')).toHaveCount(0, {
+    timeout: 40_000,
+  });
   return new URL(page.url()).searchParams.get('session')!;
 }
 
@@ -537,6 +540,40 @@ test('the ✦ sends a ready-made request about the entity, and the form stays', 
   } finally {
     await page.request.delete(`/api/admin/ai/templates/${preset.templateId}`);
   }
+});
+
+test('the ✦ stops the session it sent while it answers', async ({ page }) => {
+  await page.setViewportSize(DESKTOP);
+  await openForm(page);
+  await page.locator('[data-ai-entity]').click();
+  const menu = page.locator('[data-ai-entity-menu]');
+  const composer = menu.locator('[data-ai-entity-composer]');
+  await composer.locator('[contenteditable="true"]').press('End');
+  await page.keyboard.type(' Tell it slowly.');
+  await page.keyboard.press('Enter');
+  const sent = menu.locator('[data-ai-entity-sent]');
+  const stop = sent.locator('[data-ai-entity-stop]');
+  await expect(stop).toBeVisible();
+  const sessionUuid = new URL(
+    (await sent.locator('a').getAttribute('href'))!,
+    page.url(),
+  ).searchParams.get('session')!;
+  await stop.click();
+  await expect(stop).toHaveCount(0);
+  const detail = (await (
+    await page.request.get(`/api/admin/ai/sessions/${sessionUuid}`)
+  ).json()) as {
+    session: { state: string };
+    messages: { role: string; parts: { type: string; kind?: string }[] }[];
+  };
+  expect(detail.session.state).toBe('idle');
+  expect(
+    detail.messages
+      .filter((message) => message.role === 'model')
+      .at(-1)!
+      .parts.find((part) => part.type === 'notice')?.kind,
+  ).toBe('stopped');
+  await page.keyboard.press('Escape');
 });
 
 test('a ready-made request opens in a new session from its row', async ({

@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { AiTranscriptTurn } from '#layers/thei/shared/ai';
+import { TURN_LIMITS } from '../runner/turns';
 import type { ModelSettings } from './settings';
 import type { ModelUsage } from './usage';
 
@@ -131,12 +132,12 @@ function turnFiles(turn: AiTranscriptTurn): string[] {
 
 /**
  * Why a turn could not be had: a key the service refused, a service busy or
- * out of reach, a model it does not know, or anything else it said. `detail`
- * is what it said, for the owner.
+ * out of reach, a model it does not know, a service that fell silent, or
+ * anything else it said. `detail` is what it said, for the owner.
  */
 export class ModelError extends Error {
   constructor(
-    readonly kind: 'key' | 'busy' | 'address' | 'model' | 'error',
+    readonly kind: 'key' | 'busy' | 'address' | 'model' | 'timeout' | 'error',
     readonly detail = '',
   ) {
     super(detail || kind);
@@ -151,11 +152,54 @@ const CUT_OFF =
 /** How many times a turn is asked again when its tool input would not parse. */
 const UNPARSED_RETRIES = 2;
 
-export function streamTurn(input: StreamTurnInput): Promise<StreamTurnOutput> {
-  return input.settings.provider === 'anthropic'
-    ? streamAnthropic(input)
-    : streamOpenAi(input);
+export async function streamTurn(
+  input: StreamTurnInput,
+): Promise<StreamTurnOutput> {
+  const quiet = silenceWatch(input.signal);
+  const watched = { ...input, signal: quiet.signal, heard: quiet.heard };
+  try {
+    return await (input.settings.provider === 'anthropic'
+      ? streamAnthropic(watched)
+      : streamOpenAi(watched));
+  } catch (error) {
+    if (quiet.silent && !input.signal.aborted)
+      throw new ModelError(
+        'timeout',
+        `The service said nothing for ${Math.round(TURN_LIMITS.silenceMs / 1000)} s.`,
+      );
+    throw error;
+  } finally {
+    quiet.stop();
+  }
 }
+
+/**
+ * A service that stops mid-answer and never says another word would hold a
+ * turn for good: one silent for too long once it began to answer is given
+ * up on. `heard` is called on every sign of life, the first when it answers
+ * at all — a model on a laptop may think long before that, and the turn's
+ * own clock bounds the wait.
+ */
+function silenceWatch(signal: AbortSignal) {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const heard = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => controller.abort(), TURN_LIMITS.silenceMs);
+    timer.unref?.();
+  };
+  return {
+    signal: AbortSignal.any([signal, controller.signal]),
+    heard,
+    get silent() {
+      return controller.signal.aborted;
+    },
+    stop: () => clearTimeout(timer),
+  };
+}
+
+/** A turn as a provider is asked for it, told when the service is heard. */
+type WatchedInput = StreamTurnInput & { heard: () => void };
 
 // --- Anthropic ---------------------------------------------------------------
 
@@ -289,7 +333,8 @@ async function streamAnthropic({
   tools,
   signal,
   onText,
-}: StreamTurnInput): Promise<StreamTurnOutput> {
+  heard,
+}: WatchedInput): Promise<StreamTurnOutput> {
   const unshown = new Set(unshownBefore ?? []);
   const client = new Anthropic({ apiKey: settings.apiKey, maxRetries: 2 });
   const params: Anthropic.MessageCreateParamsNonStreaming = {
@@ -320,6 +365,8 @@ async function streamAnthropic({
     params.messages = anthropicMessages(turns, files, unshown);
     try {
       const stream = client.messages.stream(params, { signal });
+      stream.on('connect', heard);
+      stream.on('streamEvent', heard);
       stream.on('text', (delta) => {
         written += delta;
         onText(delta);
@@ -620,7 +667,8 @@ async function streamOpenAi({
   tools,
   signal,
   onText,
-}: StreamTurnInput): Promise<StreamTurnOutput> {
+  heard,
+}: WatchedInput): Promise<StreamTurnOutput> {
   const unshown = new Set(unshownBefore ?? []);
   const base = {
     model: settings.model,
@@ -651,6 +699,7 @@ async function streamOpenAi({
       },
       signal,
     );
+    heard();
     if (response.status !== 400) break;
     const said = await response.text().catch(() => '');
     // Ollama and LM Studio may not know stream_options: asked again without.
@@ -758,6 +807,7 @@ async function streamOpenAi({
   for (;;) {
     const { value, done } = await reader.read();
     if (done) break;
+    heard();
     buffer += decoder.decode(value, { stream: true });
     let newline = buffer.indexOf('\n');
     while (newline !== -1) {
