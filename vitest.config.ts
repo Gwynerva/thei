@@ -9,6 +9,8 @@ const testExclude = [
   // The release bench runs in Docker, and may keep a clone of this repository
   // in its artifacts.
   'tests/release/**',
+  // Sessions working in parallel keep their own checkouts here.
+  '.claude/**',
 ];
 
 export default defineConfig({

@@ -57,10 +57,7 @@ export const CONTENT_HISTORY_REASONS = [
 export type ContentHistoryReason = (typeof CONTENT_HISTORY_REASONS)[number];
 
 /** What an editor may say about the write it sends. */
-export const CONTENT_HISTORY_HINTS = [
-  'before-restore',
-  'before-clear',
-] as const;
+export const CONTENT_HISTORY_HINTS = ['before-restore'] as const;
 export type ContentHistoryHint = (typeof CONTENT_HISTORY_HINTS)[number];
 
 export type ContentHistoryKind = 'draft' | 'revision';

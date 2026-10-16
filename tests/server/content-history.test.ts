@@ -100,7 +100,7 @@ function rows() {
 function sync(
   data: ContentOutputData,
   now: number,
-  options: { writer?: string; hint?: 'before-restore' | 'before-clear' } = {},
+  options: { writer?: string; hint?: 'before-restore' } = {},
   target: ContentHistoryField = field,
 ) {
   return syncContentDraft(
@@ -185,13 +185,11 @@ describe('content drafts', () => {
     expect(history.revisions[0]!.wordCount).toBe(150);
   });
 
-  it('keeps the text before a restore or a clear when the editor says so', () => {
+  it('keeps the text before a restore when the editor says so', () => {
     sync(text('Before'), 0);
     sync(text('Restored'), 1_000, { hint: 'before-restore' });
-    sync(text(''), 2_000, { hint: 'before-clear' });
 
     expect(readFieldHistory(field).revisions.map((row) => row.reason)).toEqual([
-      'before-clear',
       'before-restore',
     ]);
   });
@@ -432,7 +430,7 @@ describe('files shown by drafts and versions', () => {
 
     sync(media('a-kept'), 10 * day);
     sync(text('No picture any more'), 10 * day + 1_000, {
-      hint: 'before-clear',
+      hint: 'before-restore',
     });
 
     const orphans = await findOrphanedAssets(20 * day);

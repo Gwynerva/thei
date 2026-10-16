@@ -928,7 +928,6 @@ export type LanguagePhrases = {
   content_editor_placeholder: string;
   content_editor_save_error: string;
   content_editor_title: string;
-  content_editor_clear_confirm: string;
   content_never_saved: string;
   content_history: string;
   content_history_empty: string;
@@ -952,8 +951,6 @@ export type LanguagePhrases = {
   content_stored_notice: (time: string) => string;
   content_stored_notice_hint: string;
   content_history_keeps: string;
-  content_history_clear: string;
-  content_history_clear_hint: string;
   content_draft_status_synced: (time: string) => string;
   content_draft_status_offline: string;
   content_draft_status_refused_short: string;

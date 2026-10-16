@@ -112,9 +112,13 @@ fi
 # Two runtimes, on purpose: Bun installs and builds (it is much faster), Node
 # runs the site, because better-sqlite3 is a native Node addon that does not
 # load under Bun. Distribution packages are too old for Nuxt, hence NodeSource.
+# Nuxt's `engines.node`. An update checks the same range before it builds
+# (update/phases/0.0.6-node-version.ts).
+NODE_RANGE='^22.22.3 || ^24.15.0 || >=26.0.0'
 node_usable() {
-  node -e 'const [major, minor] = process.versions.node.split(".").map(Number);
-    process.exit(major > 22 || (major === 22 && minor >= 12) || (major === 20 && minor >= 19) ? 0 : 1)' 2>/dev/null
+  node -e 'const [major, minor, patch] = process.versions.node.split(".").map(Number);
+    const from = (m, p) => minor > m || (minor === m && patch >= p);
+    process.exit((major === 22 && from(22, 3)) || (major === 24 && from(15, 0)) || major >= 26 ? 0 : 1)' 2>/dev/null
 }
 if ! node_usable; then
   say "Installing Node.js $NODE_MAJOR"
@@ -124,6 +128,7 @@ fi
 
 NODE_BIN="$(command -v node || true)"
 [ -x "$NODE_BIN" ] || die "Node.js is not available."
+node_usable || die "Node.js $(node --version) is installed, but Nuxt needs $NODE_RANGE. Install a supported version (NODE_MAJOR=24 or 26) and run this again."
 
 # When a native addon has to compile itself, node-gyp uses the headers of the
 # Node that will run the site rather than downloading them. The update engine

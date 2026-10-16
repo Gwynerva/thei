@@ -1268,11 +1268,9 @@ export default defineI18nBase({
     content_editor_placeholder: 'Start writing...',
     content_editor_save_error: 'Failed to save content.',
     content_editor_title: 'Content editor',
-    content_editor_clear_confirm: 'Clear all content in the editor?',
     content_never_saved: 'Never saved',
     content_history: 'Version history',
-    content_history_empty:
-      'No versions yet. They appear as you write and are kept for two days.',
+    content_history_empty: 'No versions yet.',
     content_history_unavailable: 'Version history is unavailable right now.',
     content_history_load_error: 'Could not load this version.',
     content_history_opened_version: 'As when opened',
@@ -1314,10 +1312,7 @@ export default defineI18nBase({
     content_stored_notice_hint:
       'While you were writing, the text was saved there. Compare and take what you need from it — your text stays as it is.',
     content_history_keeps:
-      'Open a version to see it beside the text and take all of it or a part. Versions are kept for two days, AI edits while their session lives.',
-    content_history_clear: 'Clear the text',
-    content_history_clear_hint:
-      'Removes the whole text. It can be brought back from here: it becomes a version.',
+      'Versions are kept for two days; AI edits, while their session lives.',
     content_draft_status_synced: (time) => `Draft kept · ${time}`,
     content_draft_status_offline: 'No connection — kept in the browser',
     content_draft_status_refused_short: 'Not kept',
