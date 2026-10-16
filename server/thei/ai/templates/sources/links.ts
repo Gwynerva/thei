@@ -6,7 +6,7 @@ import {
 import { entityText, findEntity, parseRef } from '../../../entity-kinds';
 import { brokenLinkText } from '../../../mcp/tools/links';
 import type { CheckItem, TemplateSource } from './index';
-import { withSections } from './scope';
+import { entitiesOf, withSections } from './scope';
 
 /**
  * «Fixing broken links»: the links of the archive's texts that lead nowhere
@@ -44,7 +44,9 @@ export const linksSource: TemplateSource = {
   areas: { links: 'links inside texts that lead nowhere now' },
 
   async due({ scope, covered, busy, force }) {
-    const owners = withSections(scope);
+    const owners = entitiesOf(withSections(scope));
+    // A run about files alone has no texts to look in.
+    if (owners && !owners.length) return [];
     const batch: CheckItem[] = [];
     let cursor: string | undefined;
     do {

@@ -18,7 +18,8 @@ import { targetOf } from '../../actions/rows';
 import { isFileKey } from '../../actions/target';
 import { backgroundEvent } from '../../runner/background-event';
 import type { CheckItem, Covered, DueInput, TemplateSource } from './index';
-import { inScope, withSections } from './scope';
+import { fileFamilies } from './files';
+import { entitiesOf, inScope, withSections } from './scope';
 import { shortTexts, touchedKeys, type ShortText } from './short-texts';
 
 /**
@@ -54,6 +55,7 @@ const AREAS = {
   relations: 'the notes on relations',
   profile: 'the owner’s name, nickname and slogan',
   action: 'the words on a project’s button',
+  descriptions: 'the descriptions of files: what a file is, in words',
 };
 
 /** The kinds whose texts it reads. */
@@ -267,7 +269,7 @@ class Budget {
 /** Of the entities' short texts, those not proofread as they read now. */
 function shortItems(input: DueInput, budget: Budget): CheckItem[] {
   const { scope, areas, covered, busy, force } = input;
-  const entities = [...shortTexts(scope).values()].sort(
+  const entities = [...shortTexts(entitiesOf(scope)).values()].sort(
     (left, right) => right.at - left.at,
   );
   const faces = entityFaces(entities.map((entity) => entity.key));
@@ -303,6 +305,36 @@ function shortItems(input: DueInput, budget: Budget): CheckItem[] {
   return items;
 }
 
+/** A file description's subject: one for the family. */
+function descriptionSubject(familyUuid: string) {
+  return `description:${familyUuid}`;
+}
+
+/** Of the files' descriptions, those not proofread as they read now. */
+function descriptionItems(input: DueInput, budget: Budget): CheckItem[] {
+  const { scope, areas, covered, busy, force } = input;
+  if (areas && !areas.has('descriptions')) return [];
+  const items: CheckItem[] = [];
+  for (const family of fileFamilies(scope)) {
+    if (budget.room <= 0) break;
+    if (!family.description) continue;
+    const subject = descriptionSubject(family.familyUuid);
+    const part = hashOf(family.description.replace(/\s+/g, ' ').trim());
+    if (busy.has(subject)) continue;
+    if (!force && covered.get(subject)?.parts.includes(part)) continue;
+    if (!budget.fits(family.description.length)) continue;
+    budget.take(family.description.length);
+    items.push({
+      subject,
+      family: family.familyUuid,
+      fingerprint: part,
+      parts: [part],
+      shown: `## File asset:${family.assetUuid}: its description\n- «${family.description}»`,
+    });
+  }
+  return items;
+}
+
 /** Of the texts, the paragraphs not proofread as they read now. */
 async function textItems(
   input: DueInput,
@@ -317,7 +349,7 @@ async function textItems(
     given: Set<number>;
     kept: Set<string>;
   }[] = [];
-  for (const text of textsOf(scope)) {
+  for (const text of textsOf(entitiesOf(scope))) {
     if (budget.room <= 0) break;
     const subject = textSubject(text.key, text.slot);
     if (busy.has(subject)) continue;
@@ -455,7 +487,8 @@ export const proofreadSource: TemplateSource = {
     const scoped = { ...input, scope: withSections(input.scope) };
     const budget = new Budget();
     const short = shortItems(scoped, budget);
-    return [...short, ...(await textItems(scoped, budget))];
+    const described = descriptionItems(scoped, budget);
+    return [...short, ...described, ...(await textItems(scoped, budget))];
   },
 
   brief(batch) {
@@ -463,6 +496,7 @@ export const proofreadSource: TemplateSource = {
       'Proofread what the owner wrote here: local fixes of clear mistakes, in the author’s own voice and words; whatever is a matter of taste, or doubtful, is the owner’s — leave it, or propose it unsure with why. Read revise with describe_actions before you first propose one.',
       '- A text’s fixes go as one action: revise, mode proofread, the text by its name; a find must stand once in the whole text — read the text whole when an excerpt is not enough to be sure. A caption or a title of a picture or a file in a text is fixed the same way. A mention of an entity may become a link at its first mention in a part of the text, as a correction of its own, category link.',
       '- A short text is fixed on its entity: a title, a summary, a reminder, a tag’s description or the slogan with field; the owner’s name and nickname, a project’s button (actionText) and status lines (statuses [{ id, text }]) with update; dated stretches with periods, the whole list as read_entity gives it; notes on links and relations and the titles and captions of placed files with update, the list whole as read_entity gives it, every item kept.',
+      '- A file’s description is fixed with describe: file and the whole text, corrected.',
       '- A caption takes no full stop when it is one sentence; a title never ends with one. The names an entity is found by, addresses and slugs are not words to fix.',
       '- What needs nothing gets nothing.',
       '',
@@ -472,6 +506,20 @@ export const proofreadSource: TemplateSource = {
 
   coveredBy(action, covered) {
     if (action.kind === 'revise') return textCovered(action, covered);
+    // A description the owner took is proofread as it reads.
+    if (action.kind === 'describe') {
+      const payload = action.payload as { family: string; text: string };
+      const part = hashOf(payload.text.replace(/\s+/g, ' ').trim());
+      return [
+        {
+          subject: descriptionSubject(payload.family),
+          family: payload.family,
+          fingerprint: part,
+          parts: [part],
+          shown: '',
+        },
+      ];
+    }
     const key = targetOf(action);
     if (!key || isFileKey(key)) return [];
     const touched = touchedKeys(

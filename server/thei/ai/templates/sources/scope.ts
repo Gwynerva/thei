@@ -1,12 +1,16 @@
 import { inArray } from 'drizzle-orm';
 import type { EntityKey } from '../../../entity-kinds';
+import { isFileKey, type ActionTarget } from '../../actions/target';
 
-/** What a run from a ✦, or one the owner's words name entities for, covers. */
+/**
+ * What a run from a ✦, or one the owner's words name entities for, covers:
+ * entities, and files of the library.
+ */
 
-/** Whether an entity is one of the scope's, by kind and stored id. */
+/** Whether an entity or a file is one of the scope's, by kind and id. */
 export function inScope(
-  scope: readonly EntityKey[] | undefined,
-  key: Pick<EntityKey, 'kind' | 'id'>,
+  scope: readonly ActionTarget[] | undefined,
+  key: Pick<ActionTarget, 'kind' | 'id'>,
 ) {
   return (
     !scope || scope.some((item) => item.kind === key.kind && item.id === key.id)
@@ -18,8 +22,8 @@ export function inScope(
  * the project.
  */
 export function withSections(
-  scope: readonly EntityKey[] | undefined,
-): EntityKey[] | undefined {
+  scope: readonly ActionTarget[] | undefined,
+): ActionTarget[] | undefined {
   if (!scope) return undefined;
   const projects = scope.filter((key) => key.kind === 'project');
   if (!projects.length) return [...scope];
@@ -41,4 +45,14 @@ export function withSections(
       id: section.id,
     })),
   ];
+}
+
+/**
+ * The entities of a scope, files left out: none when it names only files,
+ * every one when there is no scope.
+ */
+export function entitiesOf(
+  scope: readonly ActionTarget[] | undefined,
+): EntityKey[] | undefined {
+  return scope?.filter((key): key is EntityKey => !isFileKey(key));
 }

@@ -270,7 +270,8 @@ export const aiTemplates = sqliteTable('ai-templates', {
  * entity, a file — as it read then, by a fingerprint of what the check reads
  * and, where it looks at less than the whole, the parts it went over (the
  * paragraphs of a text). A subject that reads otherwise now is due again.
- * The entity it belongs to, if any, forgets it when deleted.
+ * The entity it belongs to, if any, forgets it when deleted; a family of
+ * files — `asset` by its family's id — once no file of it is left.
  */
 export const aiTemplateCoverage = sqliteTable(
   'ai-template-coverage',

@@ -1933,6 +1933,11 @@ export default defineI18nBase({
         instruction:
           'Proofread the texts: fix clear mistakes where they stand, in my own words and voice, and leave whatever is doubtful to me. Only what was not proofread yet, or changed since.',
       },
+      describe: {
+        title: 'File descriptions',
+        instruction:
+          'Describe the files that have none yet: what each shows or is about, from the file itself. A file that cannot be shown is left to me.',
+      },
       links: {
         title: 'Fixing broken links',
         instruction:

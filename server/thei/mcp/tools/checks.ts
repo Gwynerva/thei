@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { AiMessagePart } from '#layers/thei/shared/ai';
-import { findEntity, type EntityKey } from '../../entity-kinds';
+import { findTarget, type ActionTarget } from '../../ai/actions/target';
 import { findSession, sessionMessages } from '../../ai/sessions/store';
 import {
   busySubjects,
@@ -45,7 +45,10 @@ export function registerCheckTools(server: McpServer, context: McpCallContext) {
         'areas or refs out for all of them. Once a turn.',
       inputSchema: z.object({
         areas: z.array(z.string()).optional(),
-        refs: z.array(z.string()).optional().describe('Entities, by ref'),
+        refs: z
+          .array(z.string())
+          .optional()
+          .describe('Entities and files, by ref (asset:<id> for a file)'),
       }),
       annotations: READS,
     },
@@ -62,10 +65,10 @@ export function registerCheckTools(server: McpServer, context: McpCallContext) {
           throw new McpToolError(
             `This check has no area ${unknown.join(', ')}; its areas are ${Object.keys(source.areas).join(', ')}.`,
           );
-        const bound = part?.scope?.flatMap((ref) => findEntity(ref) ?? []);
+        const bound = part?.scope?.flatMap((ref) => findTarget(ref) ?? []);
         const named = refs?.map(
           (ref) =>
-            findEntity(ref) ??
+            findTarget(ref) ??
             (() => {
               throw new McpToolError(`There is no entity ${ref}.`);
             })(),
@@ -80,7 +83,7 @@ export function registerCheckTools(server: McpServer, context: McpCallContext) {
           throw new McpToolError(
             `This run looks only at ${part!.scope!.join(', ')}.`,
           );
-        const scope: EntityKey[] | undefined = named?.length ? named : bound;
+        const scope: ActionTarget[] | undefined = named?.length ? named : bound;
         const templateId = template.templateId;
         const { db, schema } = THEI_SERVER.useDb();
         const holds = db

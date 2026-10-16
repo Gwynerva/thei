@@ -14,6 +14,11 @@ import {
   markTakenInEditor,
 } from '../../server/thei/ai/actions/apply';
 import { entityPanel } from '../../server/thei/ai/entity-panel';
+import {
+  readAssetDescription,
+  writeAssetDescription,
+} from '../../server/thei/assets/descriptions';
+import { deleteAsset } from '../../server/thei/assets/repository/delete';
 import { forgetAiAnchors } from '../../server/thei/ai/memory/forget';
 import { turnsSettled } from '../../server/thei/ai/runner/queue';
 import { startOwnerSession } from '../../server/thei/ai/sessions/owner';
@@ -259,11 +264,17 @@ async function toolText(name: string, args: unknown) {
 }
 
 describe('the built-in checks', () => {
-  it('are three, with no schedule and offered everywhere', () => {
-    expect(AI_BUILTIN_TEMPLATE_KEYS).toEqual(['proofread', 'links', 'graph']);
+  it('are four, with no schedule and offered everywhere', () => {
+    expect(AI_BUILTIN_TEMPLATE_KEYS).toEqual([
+      'proofread',
+      'describe',
+      'links',
+      'graph',
+    ]);
     const builtins = listTemplates().filter((template) => template.builtin);
     expect(builtins.map((template) => template.title)).toEqual([
       'Fixing text mistakes',
+      'File descriptions',
       'Fixing broken links',
       'Finding possible relations',
     ]);
@@ -557,6 +568,7 @@ describe('a ready-made request', () => {
       panel.templates.map((item) => [item.title, item.builtin ?? null]),
     ).toEqual([
       ['Fixing text mistakes', 'proofread'],
+      ['File descriptions', 'describe'],
       ['Fixing broken links', 'links'],
       ['Finding possible relations', 'graph'],
       ['Look over', null],
@@ -787,6 +799,203 @@ describe('every short text the owner typed', () => {
     ]);
     const [item] = await due('proofread');
     expect(item!.subject).toBe(`text:diary-entry:${DIARY}:diary-body`);
+  });
+});
+
+describe('the files of the archive', () => {
+  /** A file of its own family, placed where named. */
+  function addFile(
+    n: number,
+    place: { containerType: string; containerId: string } | null,
+    type = 'image',
+  ) {
+    insert('assets', {
+      assetUuid: `a-${n}`,
+      slug: `file-${n}`,
+      extension: type === 'image' ? 'png' : 'pdf',
+      familyUuid: `af-${n}`,
+      contentHash: `hash-${n}`,
+      settingsKey: 'original',
+      settings: {},
+      type,
+      size: 1,
+      touchedAt: 100 + n,
+    });
+    if (place)
+      insert('asset-usages', {
+        assetUuid: `a-${n}`,
+        ...place,
+        role: 'other-asset',
+        meta: {
+          role: 'other-asset',
+          order: n,
+          title: `File ${n}`,
+          caption: '',
+          isPrivate: false,
+        },
+      });
+  }
+  const onProject = { containerType: 'project', containerId: PROJECT };
+
+  beforeEach(() => {
+    for (const n of [2, 3, 4, 5]) addFile(n, onProject);
+    // One in the diary's text.
+    addFile(1, {
+      containerType: 'content',
+      containerId: `c-${DIARY}-diary-body`,
+    });
+    // One described already, one only brought into a session.
+    addFile(6, onProject);
+    writeAssetDescription('a-6', 'The pier at dawn', {
+      expectedUpdatedAt: null,
+    });
+    addFile(7, { containerType: 'ai-session', containerId: 's-1' });
+    // A preview of a file is no file of the library.
+    insert('assets', {
+      assetUuid: 'a-5-preview',
+      slug: 'file-5-preview',
+      extension: 'webp',
+      familyUuid: 'af-5',
+      contentHash: 'hash-5-preview',
+      settingsKey: 'preview',
+      type: 'image',
+      size: 1,
+      touchedAt: 200,
+    });
+  });
+
+  const subjects = async (
+    key: AiBuiltinTemplateKey,
+    options: Parameters<typeof due>[1] = {},
+  ) => (await due(key, options)).map((item) => item.subject);
+
+  it('are described where they have no description, three a run, the latest first', async () => {
+    const batch = await due('describe');
+    expect(batch.map((item) => [item.subject, item.fingerprint])).toEqual([
+      ['file:af-5', 'hash-5'],
+      ['file:af-4', 'hash-4'],
+      ['file:af-3', 'hash-3'],
+    ]);
+    expect(batch[0]!.shown).toContain('# File a-5');
+    expect(batch[0]!.shown).toContain('none yet: propose one with describe');
+  });
+
+  it('are kept as looked at when they could not be shown, until their bytes change', async () => {
+    let asked = false;
+    reply = () => {
+      if (asked) return { text: 'a-5 could not be shown.' };
+      asked = true;
+      return { toolCalls: [{ name: 'look_at_file', input: { file: 'a-5' } }] };
+    };
+    const sessionUuid = await run('describe');
+    expect(brief(sessionUuid!)).toContain('Describe the files that have none');
+    const told = model!.requests[1]!.body.messages.find(
+      (item: any) => item.role === 'tool',
+    ).content as string;
+    expect(told).toContain('This file cannot be shown');
+    expect(await subjects('describe')).toEqual(['file:af-2', 'file:af-1']);
+    // Another file in its place is looked at anew.
+    context.rawDb
+      .prepare(
+        "UPDATE assets SET contentHash = 'hash-5b' WHERE assetUuid = 'a-5'",
+      )
+      .run();
+    expect(await subjects('describe')).toEqual([
+      'file:af-5',
+      'file:af-2',
+      'file:af-1',
+    ]);
+  });
+
+  it('are those of the entities and files a run is about', async () => {
+    expect(
+      await subjects('describe', {
+        scope: [{ kind: 'diary-entry', id: DIARY }],
+      } as never),
+    ).toEqual(['file:af-1']);
+    expect(
+      await subjects('describe', {
+        scope: [{ kind: 'asset', id: 'a-2' }],
+      } as never),
+    ).toEqual(['file:af-2']);
+    // A project's are its sections' too.
+    insert('project-content-sections', {
+      sectionUuid: 's-1',
+      projectUuid: PROJECT,
+      title: 'Pier',
+      humanReadableSlug: 'pier',
+      publicId: 'S1',
+      sortOrder: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    addFile(8, { containerType: 'project-section', containerId: 's-1' });
+    expect(
+      await subjects('describe', {
+        scope: [{ kind: 'project', id: PROJECT }],
+      } as never),
+    ).toEqual(['file:af-8', 'file:af-5', 'file:af-4']);
+    const sessionUuid = await run('describe', { about: ['asset:a-2'] });
+    expect(findSession(sessionUuid!)!.title).toContain('file-2');
+    expect(await subjects('describe')).not.toContain('file:af-2');
+    // Asked again, the file is looked at again.
+    expect(
+      await subjects('describe', {
+        scope: [{ kind: 'asset', id: 'a-2' }],
+        force: true,
+      } as never),
+    ).toEqual(['file:af-2']);
+  });
+
+  it('have their descriptions proofread, one taken from a proposal as it reads', async () => {
+    const proofread = async () =>
+      (await due('proofread')).filter((item) =>
+        item.subject.startsWith('description:'),
+      );
+    const [item] = await proofread();
+    expect(item).toMatchObject({
+      subject: 'description:af-6',
+      family: 'af-6',
+    });
+    expect(item!.shown).toContain('File asset:a-6: its description');
+    expect(item!.shown).toContain('«The pier at dawn»');
+    await run('proofread');
+    expect(await proofread()).toEqual([]);
+    const sessionUuid = createSession({ origin: 'owner', title: 'Files' });
+    const { results } = await proposeActions({
+      sessionUuid,
+      actions: [
+        { kind: 'describe', file: 'a-5', text: 'A boat at the pier' } as never,
+      ],
+    });
+    const outcome = await applyActions({
+      actionUuids: [(results[0] as { actionUuid: string }).actionUuid],
+      by: 'owner',
+    });
+    expect(outcome.applied).toHaveLength(1);
+    expect(await proofread()).toEqual([]);
+    expect(await subjects('describe')).not.toContain('file:af-5');
+    // The owner's own words are proofread anew.
+    writeAssetDescription('a-5', 'A boat at the peir', {
+      expectedUpdatedAt: readAssetDescription('a-5')!.updatedAt,
+    });
+    expect((await proofread()).map((entry) => entry.subject)).toEqual([
+      'description:af-5',
+    ]);
+  });
+
+  it('are forgotten with the last file of their family', async () => {
+    await run('describe');
+    expect(coverageOf(id('describe')).has('file:af-5')).toBe(true);
+    context.rawDb
+      .prepare("DELETE FROM `asset-usages` WHERE assetUuid = 'a-5'")
+      .run();
+    await deleteAsset('a-5');
+    // A preview left keeps it.
+    expect(coverageOf(id('describe')).has('file:af-5')).toBe(true);
+    await deleteAsset('a-5-preview');
+    expect(coverageOf(id('describe')).has('file:af-5')).toBe(false);
+    expect(coverageOf(id('describe')).has('file:af-4')).toBe(true);
   });
 });
 

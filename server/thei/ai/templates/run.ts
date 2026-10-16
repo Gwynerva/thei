@@ -1,11 +1,13 @@
 import type { AiEntityType, AiMessagePart } from '#layers/thei/shared/ai';
 import { refuse as fail } from '../../entity-patch/text';
+import { entityFace } from '../../entity-kinds';
 import {
-  entityFace,
-  findEntity,
-  refOf,
-  type EntityKey,
-} from '../../entity-kinds';
+  findTarget,
+  isFileKey,
+  targetRef,
+  type ActionTarget,
+} from '../actions/target';
+import { libraryFile } from '../sessions/files';
 import { sessionModel } from '../model/settings';
 import { startTurn } from '../runner/queue';
 import {
@@ -45,18 +47,25 @@ function shortDate(at: number) {
   }).format(at);
 }
 
-/** The entities a run is about, by their refs; one gone is refused. */
+/** The entities and files a run is about, by their refs; one gone is refused. */
 function scopeOf(about: readonly string[] | undefined) {
   if (!about?.length) return undefined;
   return [...new Set(about)].map(
-    (ref) => findEntity(ref) ?? fail(`There is no entity ${ref}.`),
+    (ref) => findTarget(ref) ?? fail(`There is no entity ${ref}.`),
   );
+}
+
+/** What a run is about, as its session's title and its model name it. */
+function faceOf(key: ActionTarget) {
+  if (!isFileKey(key)) return entityFace(key);
+  const file = libraryFile(key.id);
+  return file && { ref: targetRef(key), title: file.slug };
 }
 
 export async function runTemplate(
   templateId: string,
   options: {
-    /** Only what belongs to these entities, by their refs. */
+    /** Only what belongs to these entities and files, by their refs. */
     about?: readonly string[];
     /** The owner's words the run was asked with, editing Markdown. */
     request?: string;
@@ -89,7 +98,7 @@ export async function runTemplate(
   if (!due.length) return { sessionUuid: null };
 
   const now = options.now ?? Date.now();
-  const faces = (scope ?? []).flatMap((item) => entityFace(item) ?? []);
+  const faces = (scope ?? []).flatMap((item) => faceOf(item) ?? []);
   const { db, schema } = THEI_SERVER.useDb();
   const sessionUuid = db.transaction((tx) => {
     // Another run may have taken some of it meanwhile.
@@ -114,7 +123,7 @@ export async function runTemplate(
     const part: AiMessagePart = {
       type: 'template',
       templateId,
-      ...(scope ? { scope: scope.map(refOf) } : {}),
+      ...(scope ? { scope: scope.map(targetRef) } : {}),
       ...(options.force ? { force: true } : {}),
     };
     insertMessage(
@@ -142,7 +151,7 @@ export async function runTemplate(
       },
       now,
     );
-    const about: EntityKey[] = scope ?? [
+    const about: ActionTarget[] = scope ?? [
       ...new Map(
         free.flatMap((item) =>
           item.entity
@@ -175,7 +184,7 @@ function brief(
   template: { title: string; instruction: string },
   key: keyof typeof TEMPLATE_SOURCES,
   run: {
-    scope: EntityKey[] | undefined;
+    scope: ActionTarget[] | undefined;
     faces: { ref: string; title: string }[];
     request: string | undefined;
     batch: readonly CheckItem[];
@@ -199,7 +208,7 @@ function brief(
     `What this check looks at, by area:\n${Object.entries(source.areas)
       .map(([area, what]) => `- ${area}: ${what}`)
       .join('\n')}`,
-    `First call ${CHECK_BATCH_TOOL} with the areas — and the entities, by ref — the owner's words ask for; leave out what they do not narrow. It gives you what of that is due: only what this check has not looked at yet, as it reads now. Then do as the check says below with what it gives you, and nothing beyond what the owner asked. When the words ask for nothing this check looks at, say so and stop.`,
+    `First call ${CHECK_BATCH_TOOL} with the areas — and the entities and files, by ref — the owner's words ask for; leave out what they do not narrow. It gives you what of that is due: only what this check has not looked at yet, as it reads now. Then do as the check says below with what it gives you, and nothing beyond what the owner asked. When the words ask for nothing this check looks at, say so and stop.`,
     source.brief([]),
     'End with a short account of what you looked at and proposed — or say plainly that nothing needed it.',
   ].join('\n\n');

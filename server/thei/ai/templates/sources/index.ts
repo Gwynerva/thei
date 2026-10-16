@@ -1,6 +1,8 @@
 import type { AiBuiltinTemplateKey } from '#layers/thei/shared/ai-template';
 import type { EntityKey } from '../../../entity-kinds';
+import type { ActionTarget } from '../../actions/target';
 import type { ActionRow } from '../../actions/types';
+import { describeSource } from './describe';
 import { graphSource } from './graph';
 import { linksSource } from './links';
 import { proofreadSource } from './proofread';
@@ -30,13 +32,15 @@ export interface CheckItem extends Covered {
   subject: string;
   /** The entity it belongs to, if any: deleting it forgets the subject. */
   entity?: EntityKey;
+  /** The family of files it belongs to: gone with the family, it is forgotten. */
+  family?: string;
   /** What the model is shown of it in the run's request. */
   shown: string;
 }
 
 export interface DueInput {
-  /** Only what belongs to these entities: a run from a ✦, or one they name. */
-  scope?: readonly EntityKey[];
+  /** Only what belongs to these entities and files: a ✦'s, or those named. */
+  scope?: readonly ActionTarget[];
   /** Only these areas of the source's own, as the owner's words ask. */
   areas?: ReadonlySet<string>;
   /** What the check has looked at, by subject. */
@@ -67,6 +71,7 @@ export interface TemplateSource {
 
 export const TEMPLATE_SOURCES: Record<AiBuiltinTemplateKey, TemplateSource> = {
   proofread: proofreadSource,
+  describe: describeSource,
   links: linksSource,
   graph: graphSource,
 };

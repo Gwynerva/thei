@@ -3,10 +3,10 @@ import type { AiSessionItem } from './ai';
 /**
  * A session template. A built-in one is a check written in the code: it
  * looks over what it has not looked at yet — the archive's texts for
- * mistakes, its links that lead nowhere, its entities for relations they
- * lack — and the code keeps count of what it checked, so a run goes over
- * only what is new or changed since. From an entity's ✦ it looks at that
- * entity alone. The owner's own are ready-made requests: opened in a new
+ * mistakes, its files for a description they lack, its links that lead
+ * nowhere, its entities for relations they lack — and the code keeps count
+ * of what it checked, so a run goes over only what is new or changed since.
+ * From an entity's ✦ it looks at that entity alone. The owner's own are ready-made requests: opened in a new
  * session with their words, to add to and send. Nothing runs by itself.
  * Both are offered everywhere; the owner's words narrow what they do.
  */
@@ -21,6 +21,7 @@ export const AI_TEMPLATE_INSTRUCTION_MAX = 2000;
  */
 export const AI_BUILTIN_TEMPLATE_KEYS = [
   'proofread',
+  'describe',
   'links',
   'graph',
 ] as const;

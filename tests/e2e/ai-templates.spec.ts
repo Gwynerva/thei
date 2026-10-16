@@ -109,13 +109,13 @@ const row = (page: Page, templateId: string) =>
   page.locator(`[data-template-row="${templateId}"]`);
 const toast = (page: Page) => page.locator('[data-toast]');
 
-test('lists the three checks and the owner’s requests, no schedule anywhere', async ({
+test('lists the four checks and the owner’s requests, no schedule anywhere', async ({
   page,
 }) => {
   await open(page);
   const list = page.locator('[data-templates-list]');
-  await expect(list.locator('[data-template-row^="builtin-"]')).toHaveCount(3);
-  for (const key of ['proofread', 'links', 'graph'])
+  await expect(list.locator('[data-template-row^="builtin-"]')).toHaveCount(4);
+  for (const key of ['proofread', 'describe', 'links', 'graph'])
     await expect(row(page, `builtin-${key}`)).toBeVisible();
   await expect(row(page, 'builtin-proofread')).toContainText(
     'Fixing text mistakes',
