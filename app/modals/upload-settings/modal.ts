@@ -1,4 +1,5 @@
 export const editFileModal = defineModal(
   'upload-settings',
-  () => import('./ModalUploadSettings.vue'),
+  () => import('./ModalEditFile.vue'),
+  { kind: 'file', title: () => phrase.value.upload_how },
 );

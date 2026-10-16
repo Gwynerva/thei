@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
+import type {
+  AssetVariantInfo,
+  AssetVariantsResponse,
+} from '#layers/thei/shared/api/asset';
 import {
   archivedOriginalFromMeta,
   AssetType,
@@ -12,31 +15,49 @@ import {
   type AssetUsagesResponse,
 } from '#layers/thei/shared/asset-library';
 import {
+  assetDeletionLabel,
   assetFileLabel,
-  assetPlacementLabel,
-  assetSourceIcon,
-  assetSourceLabel,
-  assetSourceTitle,
+  assetKindIcon,
+  assetKindLabel,
 } from '../../composables/asset-library-labels';
 import AssetModal from '../asset-modal/AssetModal.vue';
 import AssetModalButton from '../asset-modal/AssetModalButton.vue';
 import AssetModalPreviewAudio from '../asset-modal/AssetModalPreviewAudio.vue';
 import AssetModalPreviewMedia from '../asset-modal/AssetModalPreviewMedia.vue';
 import AssetModalFileInfo from '../asset-modal/AssetModalFileInfo.vue';
+import AssetPanelSection from '../asset-modal/AssetPanelSection.vue';
+import AssetUsageChip from './AssetUsageChip.vue';
 import FilePreviewContent from '#layers/thei/app/components/file-preview/FilePreviewContent.vue';
 import { isAssetExtensionSafeInline } from '#layers/thei/shared/assets/formats';
-import { errorMessage } from '#layers/thei/app/composables/upload-draft';
+import { variantDetail } from '../upload-settings/format-labels';
+
+/**
+ * A file of the library, on its own: what it is, its description, where it
+ * is used, how it was made, and the other variants of it, any of which the
+ * window turns to in place.
+ */
 const props = defineProps<{
   modalData: {
     asset: AssetVariantInfo;
-    /** Told when the file's preview was made again, with the file as it is now. */
-    onRefreshed?: (asset: AssetVariantInfo) => void;
   };
 }>();
+
+/** The variant the window shows: the one it was opened with, or another. */
+const shownUuid = ref(props.modalData.asset.assetUuid);
 const { data, status, error, refresh } = useFetch<AssetUsagesResponse>(
-  `/api/admin/assets/${props.modalData.asset.assetUuid}/usages`,
+  () => `/api/admin/assets/${shownUuid.value}/usages`,
 );
-const asset = computed(() => data.value?.asset ?? props.modalData.asset);
+const { data: family } = useFetch<AssetVariantsResponse>(
+  `/api/admin/assets/${props.modalData.asset.assetUuid}/variants`,
+);
+const asset = computed<AssetVariantInfo>(() => {
+  if (data.value?.asset.assetUuid === shownUuid.value) return data.value.asset;
+  return (
+    family.value?.variants.find(
+      (variant) => variant.assetUuid === shownUuid.value,
+    ) ?? props.modalData.asset
+  );
+});
 const videoMeta = computed(() =>
   asset.value.type === AssetType.Video && asset.value.meta
     ? asset.value.meta
@@ -52,28 +73,6 @@ const audioMeta = computed(() =>
  * A video's preview, made again from a frame that shows it. Only videos
  * have one worth remaking: an image's preview is the image, smaller.
  */
-const refreshing = ref(false);
-const refreshError = ref('');
-async function refreshPreview() {
-  if (refreshing.value) return;
-  refreshing.value = true;
-  refreshError.value = '';
-  try {
-    const updated = await $fetch<AssetVariantInfo>(
-      `/api/admin/assets/${asset.value.assetUuid}/preview`,
-      { method: 'POST' },
-    );
-    await refresh();
-    props.modalData.onRefreshed?.(updated);
-  } catch (reason) {
-    refreshError.value = errorMessage(
-      reason,
-      phrase.value.asset_library_refresh_preview,
-    );
-  } finally {
-    refreshing.value = false;
-  }
-}
 const dimensions = computed(() => assetMetaDimensions(asset.value.meta));
 /** A browser opens the file in a tab of its own; any other is downloaded. */
 const opensInTab = computed(
@@ -86,6 +85,7 @@ const archivedOriginal = computed(() =>
 const recipe = computed(() =>
   describeAssetRecipe(asset.value.settings, asset.value.meta, phrase.value),
 );
+/** The places it is used in, each with every way it is used there. */
 const usageGroups = computed(() => {
   const groups = new Map<
     string,
@@ -102,12 +102,26 @@ const usageGroups = computed(() => {
   }
   return [...groups.values()];
 });
+const usagesShown = computed(
+  () => data.value?.asset.assetUuid === shownUuid.value,
+);
+/** Every variant but the one in view: that one is the window itself. */
+const otherVariants = computed(() =>
+  [...(family.value?.variants ?? [])]
+    .filter((variant) => variant.assetUuid !== shownUuid.value)
+    .sort((a, b) => a.size - b.size),
+);
+const humanSize = useHumanSize();
 </script>
 <template>
-  <AssetModal :aside-title="phrase.asset_library_properties">
+  <AssetModal
+    :aside-title="assetKindLabel(asset.type)"
+    :aside-icon="assetKindIcon[asset.type]"
+  >
     <template #preview>
       <AssetModalPreviewMedia
         v-if="asset.media"
+        :key="`media:${asset.assetUuid}`"
         :extension="asset.extension"
         :src="asset.media.src"
         :poster="videoPosterOf(asset.media)"
@@ -154,163 +168,151 @@ const usageGroups = computed(() => {
         :aria-label="phrase.download_asset"
         data-asset-download
       />
-      <AssetModalButton
-        v-if="asset.type === AssetType.Video"
-        :icon="refreshing ? 'loading' : 'refresh'"
-        :disabled="refreshing"
-        :data-title-popup="phrase.asset_library_refresh_preview_hint"
-        :aria-label="phrase.asset_library_refresh_preview"
-        @click="refreshPreview"
-      />
     </template>
     <template #aside>
-      <div class="flex flex-col gap-sm p-sm text-sm">
-        <h2 class="text-base font-semibold wrap-anywhere">
-          {{ assetFileLabel(asset) }}
-        </h2>
-        <AssetModalFileInfo
-          :extension="asset.extension"
-          :size="asset.size"
-          :dimensions="dimensions"
-          :duration="
-            videoMeta && 'duration' in videoMeta
-              ? videoMeta.duration
-              : audioMeta?.duration
-          "
-          :channels="audioMeta?.channels"
-          :bitrate="audioMeta?.bitrate"
-          :archived-original="archivedOriginal"
-        />
-        <p v-if="refreshError" class="text-text-error" role="alert">
-          {{ refreshError }}
-        </p>
-        <div v-if="recipe" class="rounded-normal bg-bg-1 p-xs">
-          <p class="text-xs text-text-3">{{ phrase.asset_library_settings }}</p>
-          <p class="mt-1 wrap-anywhere text-text-2 tabular-nums">
-            {{ recipe }}
-          </p>
-        </div>
-      </div>
-      <div class="border-t border-border-1 p-sm text-sm">
-        <FileDescriptionField :asset-uuid="asset.assetUuid" />
-      </div>
-      <div class="border-t border-border-1 p-sm">
-        <div class="mb-sm flex flex-col items-start gap-xs">
-          <h3 class="font-semibold">{{ phrase.asset_library_usage }}</h3>
-          <AssetUsageBadges v-if="data" :counts="data.counts" />
-        </div>
-        <div v-if="status === 'pending'" role="status">
-          <Icon name="loading" />
-        </div>
-        <button
-          v-else-if="error"
-          type="button"
-          class="cursor-pointer text-text-error"
-          @click="refresh()"
+      <div class="flex flex-col divide-y divide-border-1 text-sm">
+        <AssetPanelSection>
+          <AssetModalFileInfo
+            :key="asset.assetUuid"
+            :extension="asset.extension"
+            :size="asset.size"
+            :dimensions="dimensions"
+            :duration="
+              videoMeta && 'duration' in videoMeta
+                ? videoMeta.duration
+                : audioMeta?.duration
+            "
+            :channels="audioMeta?.channels"
+            :bitrate="audioMeta?.bitrate"
+            :archived-original="archivedOriginal"
+          />
+        </AssetPanelSection>
+        <AssetPanelSection>
+          <FileDescriptionField :asset-uuid="asset.assetUuid" />
+        </AssetPanelSection>
+        <AssetPanelSection
+          :title="phrase.asset_library_usage"
+          :count="usagesShown ? usageGroups.length : undefined"
+          data-asset-usages
         >
-          {{ phrase.asset_library_retry }}
-        </button>
-        <p v-else-if="!data?.placements.length" class="text-sm text-text-3">
-          {{ phrase.asset_library_no_usage }}
-          {{
-            data?.inHistory
-              ? phrase.asset_library_in_history
-              : phrase.asset_library_unused_hint
-          }}
-        </p>
-        <ul v-else class="space-y-sm">
-          <li
-            v-for="group in usageGroups"
-            :key="assetSourceKey(group.source)"
-            class="rounded-normal bg-bg-1 p-xs text-sm"
+          <div
+            v-if="status === 'pending' || !usagesShown"
+            class="flex flex-col gap-1.5"
+            aria-hidden="true"
           >
-            <div class="flex items-center justify-between gap-xs">
-              <span class="flex min-w-0 items-center gap-xs text-text-3">
-                <Icon
-                  :name="assetSourceIcon[group.source.type]"
-                  class="shrink-0"
-                />
-                <span class="truncate">{{
-                  assetSourceLabel(group.source)
-                }}</span>
-              </span>
-              <span class="flex shrink-0 items-center gap-xs">
-                <a
-                  v-if="group.source.url"
-                  :href="sitePath(group.source.url)"
-                  target="_blank"
-                  rel="noopener"
-                  :aria-label="phrase.asset_library_view"
-                  :data-title-popup="phrase.asset_library_view"
-                  class="flex size-7 items-center justify-center rounded-full
-                    bg-bg-3 text-text-3 transition hocus:text-accent"
-                >
-                  <Icon name="visibility" />
-                </a>
-                <a
-                  v-if="group.source.editUrl"
-                  :href="sitePath(group.source.editUrl)"
-                  target="_blank"
-                  rel="noopener"
-                  :aria-label="phrase.asset_library_edit"
-                  :data-title-popup="phrase.asset_library_edit"
-                  class="flex size-7 items-center justify-center rounded-full
-                    bg-bg-3 text-text-3 transition hocus:text-accent"
-                >
-                  <Icon name="edit" />
-                </a>
-              </span>
-            </div>
-            <p
-              v-if="group.source.parent"
-              class="mt-xs flex min-w-0 items-center gap-1 text-xs font-semibold
-                text-text-3"
+            <span
+              v-for="index in 2"
+              :key="index"
+              class="h-12 animate-pulse rounded-normal bg-bg-3
+                motion-reduce:animate-none"
+            ></span>
+          </div>
+          <button
+            v-else-if="error"
+            type="button"
+            class="cursor-pointer self-start text-text-error"
+            @click="refresh()"
+          >
+            {{ phrase.asset_library_retry }}
+          </button>
+          <!-- Used nowhere: one quiet line, and why it matters in its hint. -->
+          <p
+            v-else-if="!usageGroups.length"
+            class="flex items-center gap-1.5 text-text-3"
+            data-asset-unused
+          >
+            <Icon :name="data?.inHistory ? 'history' : 'minus'" />
+            {{
+              data?.inHistory
+                ? phrase.asset_library_history_line
+                : phrase.asset_library_unused_line
+            }}
+            <span
+              class="ml-auto flex cursor-help"
+              :aria-label="
+                data?.inHistory
+                  ? phrase.asset_library_in_history
+                  : phrase.asset_library_unused_hint
+              "
+              :data-title-popup="
+                data?.inHistory
+                  ? phrase.asset_library_in_history
+                  : phrase.asset_library_unused_hint
+              "
+              ><Icon name="question"
+            /></span>
+          </p>
+          <div v-else class="flex flex-col gap-1.5">
+            <AssetUsageChip
+              v-for="group in usageGroups"
+              :key="assetSourceKey(group.source)"
+              :source="group.source"
+              :placements="group.placements"
+            />
+          </div>
+        </AssetPanelSection>
+        <AssetPanelSection v-if="recipe" :title="phrase.asset_library_settings">
+          <p class="wrap-anywhere text-text-2 tabular-nums">{{ recipe }}</p>
+        </AssetPanelSection>
+        <AssetPanelSection
+          v-if="otherVariants.length"
+          :title="phrase.asset_library_other_variants"
+          :count="otherVariants.length"
+          data-asset-other-variants
+        >
+          <div class="-mx-xs flex flex-col">
+            <button
+              v-for="variant in otherVariants"
+              :key="variant.assetUuid"
+              type="button"
+              class="flex cursor-pointer items-center gap-xs rounded-normal
+                px-xs py-1.5 text-left transition-colors hocus:bg-bg-3"
+              :data-title-popup="phrase.asset_open_variant"
+              :data-asset-variant="variant.assetUuid"
+              @click="shownUuid = variant.assetUuid"
             >
-              <Icon name="project" class="shrink-0" /><span
-                class="min-w-0 truncate"
-                >{{ publicText(group.source.parent.title) }}</span
-              ><Icon name="corner-down" class="shrink-0" aria-hidden="true" />
-            </p>
-            <p class="mt-xs font-semibold wrap-anywhere">
-              {{ assetSourceTitle(group.source) }}
-            </p>
-            <ul class="mt-xs divide-y divide-border-1 border-t border-border-1">
-              <li
-                v-for="(placement, index) in group.placements"
-                :key="`${placement.role}:${placement.isPrivate}:${index}`"
-                class="py-xs first:pt-xs last:pb-0"
-              >
-                <div class="flex items-start justify-between gap-xs">
-                  <p class="min-w-0 text-text-2">
-                    {{ assetPlacementLabel(placement) }}
-                  </p>
-                  <span
-                    v-if="placement.count > 1 || placement.isPrivate"
-                    class="flex shrink-0 items-center gap-xs text-xs
-                      text-text-3"
+              <span class="flex min-w-0 flex-1 flex-col">
+                <span class="truncate font-semibold">
+                  {{ variant.extension.toUpperCase()
+                  }}<template v-if="assetMetaDimensions(variant.meta)">
+                    · {{ assetMetaDimensions(variant.meta)!.width }} ×
+                    {{ assetMetaDimensions(variant.meta)!.height }}</template
                   >
-                    <span
-                      v-if="placement.count > 1"
-                      class="tabular-nums"
-                      :aria-label="phrase.asset_library_places(placement.count)"
-                      :data-title-popup="
-                        phrase.asset_library_places(placement.count)
-                      "
-                    >
-                      ×{{ placement.count }}
-                    </span>
-                    <Icon
-                      v-if="placement.isPrivate"
-                      name="lock-close"
-                      :aria-label="phrase.asset_private_access"
-                      :data-title-popup="phrase.asset_private_access"
-                    />
-                  </span>
-                </div>
-              </li>
-            </ul>
-          </li>
-        </ul>
+                </span>
+                <span
+                  v-if="variantDetail(variant.settings)"
+                  class="truncate text-2xs text-text-3"
+                  >{{ variantDetail(variant.settings) }}</span
+                >
+              </span>
+              <span class="shrink-0 text-xs text-text-2 tabular-nums">{{
+                humanSize(variant.size)
+              }}</span>
+              <span
+                v-if="variant.usageCount"
+                class="flex shrink-0 items-center gap-0.5 text-2xs text-text-3
+                  tabular-nums"
+                :data-title-popup="
+                  phrase.asset_variant_usage_count(variant.usageCount)
+                "
+                ><Icon name="link" />{{ variant.usageCount }}</span
+              >
+              <Icon
+                v-else-if="variant.deleteAfter"
+                name="delete"
+                class="shrink-0 text-text-error"
+                :data-title-popup="assetDeletionLabel(variant.deleteAfter)"
+              />
+              <Icon
+                v-else-if="variant.inHistory"
+                name="history"
+                class="shrink-0 text-text-3"
+                :data-title-popup="phrase.asset_library_in_history"
+              />
+              <Icon name="chevron-right" class="shrink-0 text-text-3" />
+            </button>
+          </div>
+        </AssetPanelSection>
       </div>
     </template>
   </AssetModal>

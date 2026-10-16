@@ -1,4 +1,5 @@
 import { type Component } from 'vue';
+import type { IconName } from '#thei/icons';
 
 interface ModalResultEmpty {
   type: 'empty';
@@ -41,12 +42,47 @@ export type ModalData<TDescriptor> =
     ? ExtractModalData<TComponent>
     : never;
 
+/**
+ * What a modal looks like before its code has arrived. `openModal` draws this
+ * frame the moment it is called — a shell with the modal's title — and the
+ * component takes its place once loaded, so a slow network never leaves an
+ * empty screen. The title is worked out from the data the modal is opened
+ * with.
+ */
+export type ModalFrame<TData = any> =
+  | {
+      /** A card over the blurred page (`ModalContainer`), `width` wide. */
+      kind: 'card';
+      width: string;
+      icon?: IconName;
+      title: (data: TData) => string;
+    }
+  | {
+      /** A file's window (`AssetModal`): the file, its panel beside it. */
+      kind: 'file';
+      title: (data: TData) => string;
+    }
+  | {
+      /** A picker that fills the window, under a bar of its own. */
+      kind: 'screen';
+      /** How wide the bar's row is, when narrower than the window. */
+      width?: string;
+      icon?: IconName;
+      title: (data: TData) => string;
+    }
+  | {
+      /** A sheet that moves in and out by itself; only a wait stands in. */
+      kind: 'sheet';
+    };
+
 export interface ModalDescriptor<
   TResult extends { type: string },
   TComponent extends Component = Component,
 > {
   name: string;
   component: () => Promise<{ default: TComponent }>;
+  /** The shell drawn while the component loads; a bare wait without one. */
+  frame?: ModalFrame;
   // Phantom types — carry result/component types for openModal inference.
   _result?: TResult;
 }
@@ -66,13 +102,17 @@ export interface ModalDescriptor<
  * `error` (thrown / errorModal()).
  *
  * Usage:
- *   export const myModal = defineModal('my-modal', () => import('./MyModal.vue'));
+ *   export const myModal = defineModal('my-modal', () => import('./MyModal.vue'), {
+ *     kind: 'card',
+ *     width: 'max-w-140',
+ *     title: () => phrase.value.my_modal,
+ *   });
  */
 export function defineModal<TComponent extends Component>(
   name: string,
   component: () => Promise<{ default: TComponent }>,
-  ..._: [ExtractModalResult<TComponent>] extends [{ type: string }]
-    ? []
+  ...frame: [ExtractModalResult<TComponent>] extends [{ type: string }]
+    ? [frame?: ModalFrame<ExtractModalData<TComponent>>]
     : ['ERROR: modalResult emit result type must satisfy { type: string }']
 ): [ExtractModalResult<TComponent>] extends [never]
   ? ModalDescriptor<BaseModalResult, TComponent>
@@ -80,13 +120,15 @@ export function defineModal<TComponent extends Component>(
       ExtractModalResult<TComponent> | BaseModalResult,
       TComponent
     > {
-  return { name, component } as any;
+  return { name, component, frame: frame[0] } as any;
 }
 
 export interface ActiveModal {
   id: number;
   name: string;
-  component: Component;
+  /** Absent until the modal's code has loaded; its frame's shell meanwhile. */
+  component?: Component;
+  frame?: ModalFrame;
   props: Record<string, unknown>;
   /** Element that opened this modal and should regain focus on return. */
   returnFocus?: {

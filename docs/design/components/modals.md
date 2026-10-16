@@ -11,7 +11,8 @@ row that says what is open and holds its actions; the body below scrolls.
 - A short flow that must end in a result, such as a wizard of steps.
 
 Not for a choice or a short note anchored to a control — that is a popup (see
-[Popups](popups.md)).
+[Popups](popups.md)). A file opens in a window of its own kind, described in
+[File window](file-window.md).
 
 ## Rules
 
@@ -49,19 +50,73 @@ Closing:
 - Deleting an entity is confirmed against its name in
   `app/modals/DeleteConfirmationPane.vue`.
 
+Opening and waiting:
+
+- A modal is on screen the moment it is opened. Until its code has arrived,
+  a shell of its frame stands in for it — the same card, file window or
+  screen, with its title — and closes as the modal would. The modal then
+  fills it in.
+- Declare the frame with the modal (`defineModal`'s third argument): `card`
+  with its width, `file` for a file's window, `screen` for a picker that fills
+  the window, `sheet` for one that moves by itself. Its title is worked out
+  from the data the modal is opened with and matches the modal's own.
+- What a modal fetches, it fetches after it has opened, and waits for in its
+  own frame. Never fetch before `openModal`: the screen shows nothing in the
+  meantime. A place that knows a file only by its uuid opens the window with
+  the uuid.
+- The wait is the `loading` icon of `app/modals/ModalWaiting.vue`, which
+  shows only once a transition's length has passed, so a quick open never
+  flashes it. What arrives later in a panel holds its place meanwhile — a
+  file's facts drawn `pending`, placeholders of the chips to come — rather
+  than pushing the rest down when it comes.
+- A choice that depends on an answer still due is drawn from the start,
+  waiting (`aria-busy`), and goes with a transition if the answer rules it
+  out: the picker's "Reuse" waits for the library's answer, which its flow
+  asks for along with the picker's code.
+
+Flows:
+
+- Modals that replace one another — a wizard, a file's details handing over
+  to its editor and back — run in one `runModalFlow`. The dialog stays open
+  between two steps: the step that left stays under the next one until that
+  one is in, and a wait that lasts shows the frame of the step that left,
+  waiting.
+- A flow begun inside a modal covers it between steps; it is shown again only
+  when the flow is over.
+- A step loads its code ahead for the steps that may follow
+  (`preloadModal`), so going on costs no wait.
+
+Motion:
+
+- A modal fades in over what it covers, and out from over what it uncovers,
+  at the site's one transition; a layer replaced by another stays whole under
+  it until that one is in, so the page never shows through. With reduced
+  motion all of it is at once.
+- A shell that was seen gives way by fading off the modal drawn beneath it;
+  one up for less than a transition's length, whose wait never showed, goes
+  at once, since it was still coming in with its layer.
+
 ## How it is built
 
 - `app/components/Modal.vue` holds one `<dialog>`, opened with `showModal()`
-  so it is in the top layer, and the stack of open modals; only the top one is
-  shown.
-- `app/composables/modal.ts` opens them — `openModal(descriptor, data)`
-  resolves with the modal's result — keeps the stack, ties it to browser
-  history, and keeps the dismiss layers: an open popup calls
-  `registerDismissLayer`, and `dismissOneStep` closes the innermost layer or
-  else the top modal. `useModalCloseGuard` asks before an unsaved modal
-  closes.
-- A modal is declared with `defineModal` (`app/modals/types.ts`) and lazily
-  imported.
+  so it is in the top layer, and its layers: one per open modal, and the wait
+  of a flow between two steps. Only the top one is shown, except while one
+  fades in over another; the ones beneath are `inert`. The dialog closes
+  once the last layer has faded out.
+- `app/composables/modal.ts` opens them — `openModal(descriptor, data)` puts
+  the modal on the stack at once and resolves with its result — keeps the
+  stack, ties it to browser history, and keeps the dismiss layers: an open
+  popup calls `registerDismissLayer`, and `dismissOneStep` closes the
+  innermost layer or else the top modal. `useModalCloseGuard` asks before an
+  unsaved modal closes. `runModalFlow` marks a flow, `modalWait` is its wait
+  between two steps, and `preloadModal` loads a modal's code ahead.
+- A modal is declared with `defineModal` (`app/modals/types.ts`), with its
+  frame, and lazily imported.
+- `app/modals/ModalShell.vue` draws a frame waiting; a modal that loads its
+  data draws it too, and puts a failure and its retry in its default slot, as
+  `app/modals/upload-settings/ModalEditFile.vue` does.
+  `app/modals/ModalScreenBar.vue` is the title row of a screen and of its
+  shell. `app/modals/layer-motion.ts` fades the layers and the shells.
 - `app/modals/ModalContainer.vue` draws it: the full screen on a phone; from
   `sm:` a card of `rounded-normal`, `border` and `shadow-xl` over a blurred
   page. Its `header` slot is sticky glass with a bottom border, `z-10`; the
@@ -98,6 +153,25 @@ Closing:
 
 (Shortened from `app/modals/relation/RelationModal.vue`.)
 
+Its descriptor says how the shell draws it while its code loads — the same
+width, icon and title:
+
+```ts
+export const relationModal = defineModal(
+  'relation',
+  () => import('./RelationModal.vue'),
+  {
+    kind: 'card',
+    width: 'max-w-140',
+    icon: 'arrow-cycle',
+    title: (data) =>
+      data.relation ? phrase.value.relation : phrase.value.related_entity_add,
+  },
+);
+```
+
+(From `app/modals/relation/modal.ts`.)
+
 Popups opened inside a modal join its `<dialog>` by themselves; see
 [Popups](popups.md).
 
@@ -112,11 +186,20 @@ Popups opened inside a modal join its `<dialog>` by themselves; see
 - A template editor whose header then held back, icon, name, owner, last run
   and a run button was rebuilt into one slim row, with the meta moved into the
   body: sticky chrome eats a phone's view.
+- On a slow network a step of a wizard used to close, leave the page bare
+  while the next one's code and data came, and only then open it: "it closed
+  — and nothing, something broke". The picker showed only "Upload" at first
+  and "Reuse" a moment later. Hence the frame at once, the flow that keeps the
+  dialog open, and the choice that waits in place.
 
 ## How it is checked
 
 - `tests/app/modals/modal-stack.test.ts` covers the stack: closing only the
-  top modal, focus given back, close guards, browser Back one modal at a time.
+  top modal, focus given back, close guards, browser Back one modal at a time,
+  a modal on the stack before its code, a flow's wait between two steps.
+- `tests/e2e/modal-slow-network.spec.ts` slows chunks and the file storage's
+  answers down and checks that each frame shows its title at once and that,
+  frame by frame, the dialog never closes or lets the page through mid-flow.
 - `tests/e2e/modal-history.spec.ts` checks in a browser that Back closes one
   nested modal per press and that Escape undoes the same single step.
 - `tests/e2e/popups.spec.ts` checks that pickers open inside their modal.

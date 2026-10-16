@@ -8,9 +8,10 @@ import {
 import type { PickedFile, PickedFiles } from './picked-file';
 import { hashLocalAsset } from '../../composables/asset-hash';
 import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
-import type { AssetLibraryAvailability } from '#layers/thei/shared/asset-library';
-import type { AssetUploadLimitPolicy } from '#layers/thei/shared/asset-upload-limits';
 import type { AssetUploadProfile } from '#layers/thei/shared/asset-upload-profiles';
+import ModalScreenBar from '../ModalScreenBar.vue';
+import ModalWaiting from '../ModalWaiting.vue';
+import type { ReuseAvailability } from './availability';
 
 const props = defineProps<{
   modalData: {
@@ -18,9 +19,8 @@ const props = defineProps<{
     maxSize?: number;
     multiple?: boolean;
     notice?: string;
-    acceptedExtensions?: string[] | '*';
-    sizeLimitPolicy?: AssetUploadLimitPolicy;
-    imageOnly?: boolean;
+    /** What the library could offer, asked for by the flow that opened this. */
+    availability: ReuseAvailability;
     uploadProfile?: AssetUploadProfile;
   };
 }>();
@@ -30,21 +30,15 @@ const emit = defineEmits<{
 }>();
 
 const humanSize = useHumanSize();
-const availabilityQuery = computed(() => ({
-  acceptedExtensions:
-    props.modalData.acceptedExtensions === '*'
-      ? '*'
-      : props.modalData.acceptedExtensions
-        ? JSON.stringify(props.modalData.acceptedExtensions)
-        : undefined,
-  sizeLimitPolicy: props.modalData.sizeLimitPolicy,
-  imageOnly: props.modalData.imageOnly || undefined,
-}));
-const { data: availability } = useFetch<AssetLibraryAvailability>(
-  '/api/admin/assets/availability',
-  { query: availabilityQuery },
-);
-const canReuse = computed(() => Boolean(availability.value?.total));
+/**
+ * "Reuse" is drawn from the start, waiting, until the library has answered;
+ * with nothing in it to take, it goes, and "Upload" takes the room.
+ */
+const reuse = computed<'waiting' | 'ready' | 'none'>(() => {
+  const availability = props.modalData.availability.value;
+  if (availability === undefined) return 'waiting';
+  return availability?.total ? 'ready' : 'none';
+});
 
 const errorMessage = ref(props.modalData.notice ?? '');
 const checking = ref(false);
@@ -224,11 +218,8 @@ onUnmounted(() => document.removeEventListener('paste', handlePaste));
 
 <template>
   <section class="absolute flex h-dvh w-dvw flex-col bg-bg-1 backdrop-blur">
-    <header
-      class="flex shrink-0 items-center justify-between gap-sm border-b
-        border-border-1 bg-bg-2 p-sm sm:p-md"
-    >
-      <div class="flex min-w-0 flex-wrap items-center gap-x-md gap-y-xs">
+    <header class="shrink-0 border-b border-border-1 bg-bg-2 p-sm sm:p-md">
+      <ModalScreenBar icon="upload" :title="phrase.asset_pick_title">
         <div class="flex min-w-0 items-baseline gap-xs font-semibold">
           <span class="shrink-0 text-text-3">{{ phrase.format }}</span>
           <span class="min-w-0 text-text-2">
@@ -249,21 +240,11 @@ onUnmounted(() => document.removeEventListener('paste', handlePaste));
           <span class="text-text-2">{{ humanSize(modalData.maxSize) }}</span>
         </div>
         <AssetAspectHint :profile="modalData.uploadProfile" />
-      </div>
-      <button
-        type="button"
-        :aria-label="phrase.close_modal"
-        class="shrink-0 cursor-pointer rounded-normal p-xs text-xl text-text-3
-          transition hocus:bg-bg-3 hocus:text-text-1"
-        @click="closeModal"
-      >
-        <Icon name="close" />
-      </button>
+      </ModalScreenBar>
     </header>
 
     <div
-      class="flex min-h-0 flex-1 flex-col gap-sm p-sm select-none sm:flex-row
-        sm:p-md"
+      class="flex min-h-0 flex-1 flex-col p-sm select-none sm:flex-row sm:p-md"
     >
       <div
         role="button"
@@ -340,36 +321,47 @@ onUnmounted(() => document.removeEventListener('paste', handlePaste));
         </div>
       </div>
 
-      <button
-        v-if="canReuse"
-        type="button"
-        :disabled="checking"
-        :aria-label="phrase.asset_pick_reuse"
-        class="group/reuse flex min-h-0 flex-1 cursor-pointer flex-col
-          items-center justify-center gap-md overflow-clip rounded-xl border-4
-          border-dashed border-border-1 p-md text-center transition
-          disabled:cursor-wait disabled:opacity-70 sm:gap-lg sm:border-8 sm:p-lg
-          hocus:border-border-2"
-        @click="emit('modalResult', { type: 'library' })"
+      <!-- Gone, it gives its room up to "Upload" rather than leaving a hole. -->
+      <Transition
+        leave-active-class="transition-all motion-reduce:duration-0"
+        leave-to-class="m-0! grow-0! border-0! p-0! opacity-0"
       >
-        <span
-          class="rounded-full border-2 border-border-1/50 bg-bg-2 p-md text-5xl
-            text-text-2 shadow-lg shadow-black/20 transition
-            group-hocus/reuse:bg-bg-3 group-hocus/reuse:text-text-1 sm:p-lg
-            sm:text-8xl"
+        <button
+          v-if="reuse !== 'none'"
+          type="button"
+          :disabled="checking || reuse === 'waiting'"
+          :aria-busy="reuse === 'waiting'"
+          :aria-label="phrase.asset_pick_reuse"
+          class="group/reuse flex min-h-0 min-w-0 flex-1 cursor-pointer flex-col
+            items-center justify-center gap-md overflow-clip rounded-xl border-4
+            border-dashed border-border-1 p-md text-center transition
+            disabled:cursor-wait disabled:opacity-70 max-sm:mt-sm sm:ml-sm
+            sm:gap-lg sm:border-8 sm:p-lg hocus:border-border-2"
+          @click="emit('modalResult', { type: 'library' })"
         >
-          <Icon name="gallery" />
-        </span>
-        <span
-          class="text-xl font-bold text-text-2 transition
-            group-hocus/reuse:text-text-1 sm:text-3xl"
-        >
-          {{ phrase.asset_pick_reuse }}
-        </span>
-        <span class="text-sm font-semibold text-text-3 sm:text-base">
-          {{ phrase.asset_pick_reuse_hint }}
-        </span>
-      </button>
+          <span
+            class="rounded-full border-2 border-border-1/50 bg-bg-2 p-md
+              text-5xl text-text-2 shadow-lg shadow-black/20 transition
+              group-hocus/reuse:bg-bg-3 group-hocus/reuse:text-text-1 sm:p-lg
+              sm:text-8xl"
+          >
+            <Icon name="gallery" />
+          </span>
+          <span
+            class="text-xl font-bold text-text-2 transition
+              group-hocus/reuse:text-text-1 sm:text-3xl"
+          >
+            {{ phrase.asset_pick_reuse }}
+          </span>
+          <span
+            class="flex items-center gap-xs text-sm font-semibold text-text-3
+              sm:text-base"
+          >
+            {{ phrase.asset_pick_reuse_hint }}
+            <ModalWaiting v-if="reuse === 'waiting'" class="text-base" />
+          </span>
+        </button>
+      </Transition>
     </div>
     <input
       ref="file"

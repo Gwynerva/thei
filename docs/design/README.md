@@ -116,6 +116,9 @@ Components:
   at a label.
 - [Modals](components/modals.md) — the slim header, the body, sticky footer,
   tabs, closing one step at a time.
+- [File window](components/file-window.md) — a file and its panel: sections
+  under small captions, facts, the file's description, places as chips, the
+  editor's screens, a visitor's «Где ещё используется».
 - [Icons](components/icons.md) — the sprite, adding an icon, fixed meanings.
 - [Hints](components/hints.md) — which elements get a `data-title-popup`, how
   its text is laid out, and never the native `title`.

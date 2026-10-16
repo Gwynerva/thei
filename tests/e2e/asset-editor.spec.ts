@@ -3,6 +3,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { screenshot } from './screenshots';
+import { skipDescription, uploadControls } from './helpers/upload';
 
 test.use({
   storageState: fileURLToPath(
@@ -62,6 +63,8 @@ async function openBannerEditor(
   await page
     .locator('input[type=file]')
     .setInputFiles({ name: 'banner.png', mimeType: 'image/png', buffer });
+  // The editor asks first how to take the file: here, as a new variant.
+  await uploadControls(page).newVariant.click();
 }
 
 for (const viewport of [
@@ -82,10 +85,7 @@ for (const viewport of [
     await expect(
       page.getByRole('button', { name: '16:9', exact: true }),
     ).toHaveClass(/border-accent/);
-    const useResult = page.getByRole('button', {
-      name: 'Use result',
-      exact: true,
-    });
+    const useResult = uploadControls(page).next;
     await expect(useResult).toBeEnabled({ timeout: 20_000 });
     await expect(page.getByText('1200 × 675').first()).toBeVisible();
     // "Auto" names whichever format came out smallest.
@@ -132,6 +132,7 @@ for (const viewport of [
       .toBe(true);
     const rendersBeforeUse = counts.renders;
     await useResult.click();
+    await skipDescription(page);
     await expect(page.locator('[data-result]')).toContainText('assetUuid');
 
     // The file went up once, and "Use" stored the render instead of
@@ -162,10 +163,7 @@ test("a place's proportions are where the crop starts, not a rule", async ({
   request,
 }) => {
   await openBannerEditor(page, await photo(1600, 1200));
-  const useResult = page.getByRole('button', {
-    name: 'Use result',
-    exact: true,
-  });
+  const useResult = uploadControls(page).next;
   await expect(useResult).toBeEnabled({ timeout: 20_000 });
   await expect(page.getByText('1200 × 675').first()).toBeVisible();
 
@@ -181,6 +179,7 @@ test("a place's proportions are where the crop starts, not a rule", async ({
   await expect(useResult).toBeEnabled({ timeout: 20_000 });
   await expect(page.getByText('900 × 675').first()).toBeVisible();
   await useResult.click();
+  await skipDescription(page);
   await expect(page.locator('[data-result]')).toContainText('assetUuid');
 
   const [stored] = JSON.parse(
@@ -202,10 +201,7 @@ test('a free crop is taken on request, and the picture can be turned', async ({
   request,
 }) => {
   await openBannerEditor(page, await photo(1600, 900), '[data-pick]');
-  const useResult = page.getByRole('button', {
-    name: 'Use result',
-    exact: true,
-  });
+  const useResult = uploadControls(page).next;
   await expect(useResult).toBeEnabled({ timeout: 20_000 });
 
   // Nothing is cut until the admin asks for it; then the frame covers it all.
@@ -232,6 +228,7 @@ test('a free crop is taken on request, and the picture can be turned', async ({
   await expect(frame).toHaveAccessibleName(/×/);
   await expect(useResult).toBeEnabled({ timeout: 20_000 });
   await useResult.click();
+  await skipDescription(page);
   await expect(page.locator('[data-result]')).toContainText('assetUuid');
 
   const [stored] = JSON.parse(
@@ -280,9 +277,7 @@ test('a flat graphic takes lossless WebP when that is the smallest', async ({
   await expect(page.getByText(/WebP\s+lossless:\s+the\s+smallest/)).toBeVisible(
     { timeout: 20_000 },
   );
-  await expect(
-    page.getByRole('button', { name: 'Use result', exact: true }),
-  ).toBeEnabled({ timeout: 20_000 });
+  await expect(uploadControls(page).next).toBeEnabled({ timeout: 20_000 });
   // The bar stays: lossless is its last stop, and "Auto" landing on it at a
   // lossy level is the format list's business.
   await expect(page.getByRole('slider', { name: 'Quality' })).toHaveAttribute(
@@ -309,6 +304,7 @@ test('an SVG is cropped and stays a vector', async ({ page, request }) => {
     mimeType: 'image/svg+xml',
     buffer: svg,
   });
+  await uploadControls(page).newVariant.click();
 
   // Auto keeps a vector a vector, and every other format is sized too.
   const formats = page.getByRole('radiogroup', { name: 'Format' });
@@ -317,14 +313,12 @@ test('an SVG is cropped and stays a vector', async ({ page, request }) => {
   await expect(
     formats.getByRole('radio', { name: /^Auto\s+SVG/ }),
   ).toBeVisible();
-  const useResult = page.getByRole('button', {
-    name: 'Use result',
-    exact: true,
-  });
+  const useResult = uploadControls(page).next;
   await expect(useResult).toBeEnabled({ timeout: 20_000 });
   // Auto, SVG, AVIF and WebP; lossless is a stop on the quality bar instead.
   await expect(formats.getByText(/%$/)).toHaveCount(4, { timeout: 20_000 });
   await useResult.click();
+  await skipDescription(page);
   await expect(page.locator('[data-result]')).toContainText('assetUuid');
 
   const [stored] = JSON.parse(
@@ -341,7 +335,7 @@ test('an SVG is cropped and stays a vector', async ({ page, request }) => {
   expect(text).toContain('<circle');
 });
 
-test('"Use result" is ready with the render "Auto" stands on, before the other formats are weighed', async ({
+test('"Next" is ready with the render "Auto" stands on, before the other formats are weighed', async ({
   page,
 }) => {
   // Every render but the AVIF stand-in is held back.
@@ -354,10 +348,7 @@ test('"Use result" is ready with the render "Auto" stands on, before the other f
     else held.push(route);
   });
   await openBannerEditor(page, await photo(800, 600));
-  const useResult = page.getByRole('button', {
-    name: 'Use result',
-    exact: true,
-  });
+  const useResult = uploadControls(page).next;
   await expect(useResult).toBeEnabled({ timeout: 20_000 });
   expect(held.length).toBeGreaterThan(0);
   // "Auto" has not settled: nothing is named the smallest yet.
@@ -408,19 +399,17 @@ test('a commit under way can be cancelled', async ({ page }) => {
     held.push(route);
   });
   await openBannerEditor(page, await photo(800, 600));
-  const useResult = page.getByRole('button', {
-    name: 'Use result',
-    exact: true,
-  });
+  const useResult = uploadControls(page).next;
   await expect(useResult).toBeEnabled({ timeout: 20_000 });
   await useResult.click();
   // While the commit runs, the button says so instead, and Cancel appears.
   await expect.poll(() => held.length).toBe(1);
-  await expect(useResult).toHaveCount(0);
+  await expect(useResult).not.toHaveText('Next');
   const cancel = page.getByRole('button', { name: 'Cancel', exact: true });
   await expect(cancel).toBeVisible();
   await cancel.click();
 
+  await expect(useResult).toHaveText('Next');
   await expect(useResult).toBeEnabled();
   await expect(cancel).toHaveCount(0);
   await expect(page.locator('[data-result]')).toHaveText('[]');
@@ -445,13 +434,10 @@ test('a video variant is made as a job the editor follows', async ({
       ),
     );
 
-  // The editor opens on the video with "Use as is" up; the settings live in
-  // the "Create variant" section, whose action carries the same name.
-  const createVariant = page.getByRole('button', {
-    name: 'Create variant',
-    exact: true,
-  });
-  await createVariant.first().click();
+  // The editor asks how to take the video; a new variant opens its
+  // settings, and the foot's button makes it.
+  const { newVariant, next } = uploadControls(page);
+  await newVariant.click();
   await page.getByText('Fast conversion', { exact: true }).click();
   const polls: string[] = [];
   page.on('request', (req) => {
@@ -461,17 +447,17 @@ test('a video variant is made as a job the editor follows', async ({
   const commit = page.waitForResponse((response) =>
     /\/drafts\/[^/]+\/commit$/.test(new URL(response.url()).pathname),
   );
-  await createVariant.last().click();
+  await expect(next).toHaveText('Create variant');
+  await next.click();
   // The request is answered at once; the encode is followed by polling.
   expect((await commit).status()).toBe(202);
 
-  const useResult = page.getByRole('button', {
-    name: 'Use result',
-    exact: true,
-  });
-  await expect(useResult).toBeEnabled({ timeout: 90_000 });
+  // Made, the variant is looked at, then taken.
+  await expect(next).toHaveText('Next', { timeout: 90_000 });
+  await expect(next).toBeEnabled();
   expect(polls.length).toBeGreaterThan(0);
-  await useResult.click();
+  await next.click();
+  await skipDescription(page);
   await expect(page.locator('[data-result]')).toContainText('assetUuid');
   const [stored] = JSON.parse(
     (await page.locator('[data-result]').textContent())!,
@@ -490,10 +476,7 @@ test('the quality bar walks its stops from the keyboard and by a tap', async ({
   await openBannerEditor(page, await photo(800, 600));
   const bar = page.getByRole('slider', { name: 'Quality' });
   await expect(bar).toHaveAttribute('aria-valuetext', 'High');
-  const useResult = page.getByRole('button', {
-    name: 'Use result',
-    exact: true,
-  });
+  const useResult = uploadControls(page).next;
   await expect(useResult).toBeEnabled({ timeout: 20_000 });
 
   // Every stop is captioned with a size once its dry run is in.

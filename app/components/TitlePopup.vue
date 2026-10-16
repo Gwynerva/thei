@@ -19,8 +19,17 @@ const { anchor, lines, visible, popupClass, placement } = useTitlePopup();
 const floatingEl = ref<HTMLElement>();
 const arrowEl = ref<HTMLElement>();
 
+/**
+ * The anchor the hint was last shown at. A hidden hint fades out where it
+ * was: moved from a modal's dialog to the page under it as its anchor goes,
+ * it would vanish at once behind the dialog.
+ */
+const shownAt = shallowRef<HTMLElement>();
+watch(anchor, (el) => {
+  if (el) shownAt.value = el;
+});
 const teleportTarget = computed<string | HTMLElement>(
-  () => anchor.value?.closest('dialog') ?? 'body',
+  () => shownAt.value?.closest('dialog') ?? 'body',
 );
 
 const hasText = computed(() =>

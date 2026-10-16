@@ -131,14 +131,7 @@ onMounted(() => {
         class="aspect-square w-full cursor-pointer"
         @focus="focusedAssetUuid = item.asset.assetUuid"
         @blur="focusedAssetUuid = undefined"
-        @click="
-          openModal(libraryAssetDetailsModal, {
-            asset: item.asset,
-            // A preview made again shows in the tile only once the list is
-            // read again.
-            onRefreshed: () => refresh(),
-          })
-        "
+        @click="openModal(libraryAssetDetailsModal, { asset: item.asset })"
       />
     </div>
     <template v-else-if="status !== 'pending' && !error">

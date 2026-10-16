@@ -13,6 +13,7 @@ import sharp from 'sharp';
 import { createOriginalAssetSettings } from '../../shared/asset-upload-settings';
 import { buildUploadHeaders } from '../../shared/api/asset-upload-headers';
 import { screenshot } from './screenshots';
+import { skipDescription, uploadControls } from './helpers/upload';
 
 test.use({
   storageState: fileURLToPath(
@@ -82,28 +83,15 @@ async function choose(page: Page, assetUuid: string) {
   if (!(await assetButton.isVisible())) await unused.click();
   await expect(assetButton).toBeVisible();
   await assetButton.click();
+  // The editor asks how to take the stored file; as it is goes on at once.
+  const controls = uploadControls(page);
+  await expect(controls.newVariant).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Processing source', exact: true }),
   ).toHaveCount(0);
-  await expect(
-    page.getByRole('button', { name: 'Saved variants', exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: 'Create variant', exact: true }),
-  ).toBeVisible();
-  const variantButtons = page.getByRole('button', {
-    name: 'Choose this variant',
-    exact: true,
-  });
-  await expect(variantButtons.last()).toBeVisible();
-  for (let index = 0; index < (await variantButtons.count()); index += 1) {
-    const button = variantButtons.nth(index);
-    if (await button.isEnabled()) {
-      await button.click();
-      return;
-    }
-  }
-  throw new Error('No usable asset variant button was rendered');
+  await expect(controls.next).toBeEnabled();
+  await controls.next.click();
+  await skipDescription(page);
 }
 
 /** A picture nothing else has uploaded: the bytes differ on every run. */
@@ -208,21 +196,11 @@ test('hash lookup reuses stored bytes without multipart upload, including rename
   await page
     .locator('input[type=file]')
     .setInputFiles({ name: 'renamed.png', mimeType: 'image/png', buffer });
-  await expect(
-    page.getByText('This file has already been uploaded', { exact: true }),
-  ).toBeVisible();
-  const variantButtons = page.getByRole('button', {
-    name: 'Choose this variant',
-    exact: true,
-  });
-  await expect(variantButtons.last()).toBeVisible();
-  for (let index = 0; index < (await variantButtons.count()); index += 1) {
-    const button = variantButtons.nth(index);
-    if (await button.isEnabled()) {
-      await button.click();
-      break;
-    }
-  }
+  // The same bytes are the stored file: as it is, it is taken again.
+  const { next } = uploadControls(page);
+  await expect(next).toBeEnabled();
+  await next.click();
+  await skipDescription(page);
   await expect(page.locator('[data-result]')).toContainText(asset.assetUuid);
   expect(uploads).toBe(0);
 });
@@ -322,16 +300,20 @@ for (const width of [1280, 390]) {
     await expect(assetRow).toBeVisible();
     await assetRow.click();
     await expect(page.getByRole('heading', { name: 'Used in' })).toBeVisible();
-    await expect(
-      page.getByText('Library usage test', { exact: true }).first(),
-    ).toBeVisible();
-    await expect(page.getByText('Page content', { exact: true })).toBeVisible();
-    await expect(
-      page.getByRole('link', { name: 'View entity', exact: true }).first(),
-    ).toHaveAttribute('target', '_blank');
-    await expect(
-      page.getByRole('link', { name: 'Edit entity' }).first(),
-    ).toHaveAttribute('target', '_blank');
+    // One chip for the page, every use of the file there on it, opening the
+    // page's editor beside the window.
+    const chip = page
+      .locator('[data-asset-usage]')
+      .filter({ hasText: 'Library usage test' });
+    await expect(chip).toHaveCount(1);
+    const uses = chip.locator('[data-asset-usage-uses]');
+    await expect(uses).toContainText('Page content');
+    await expect(uses).toContainText('Icon');
+    await expect(chip).toHaveAttribute('target', '_blank');
+    await expect(chip).toHaveAttribute(
+      'href',
+      new RegExp(`/admin/pages/${saved.pageUuid}/edit/$`),
+    );
     expect(
       await page
         .locator('body')

@@ -1,5 +1,6 @@
 import { AssetType, type AssetMeta, type AssetRole } from './asset';
 import type { AssetVariantInfo } from './api/asset';
+import type { MediaDescriptor } from './media';
 import type { PaginatedResponse } from './pagination';
 import {
   ASSET_UPLOAD_LIMITS,
@@ -35,6 +36,12 @@ export interface AssetSource {
   updatedAt: number;
   /** The project a section belongs to; its title as typed. */
   parent?: { title: string; url: string };
+  /**
+   * The picture that stands for the place — an icon, a banner, the first
+   * picture of a body — through the admin's own addresses. Only the file's
+   * window asks for it.
+   */
+  media?: MediaDescriptor;
 }
 export interface AssetPlacement {
   source: AssetSource;

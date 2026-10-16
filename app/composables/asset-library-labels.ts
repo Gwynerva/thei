@@ -5,6 +5,7 @@ import type {
   AssetPlacement,
 } from '#layers/thei/shared/asset-library';
 import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
+import type { IconName } from '#thei/icons';
 
 export const assetSourceIcon = {
   project: entityTypeIcon('project'),
@@ -54,14 +55,26 @@ export function assetFileLabel(asset: {
   extension: string;
   size: number;
 }) {
-  const type = {
+  return `${assetKindLabel(asset.type)} · ${asset.extension.toUpperCase()} · ${useHumanSize()(asset.size)}`;
+}
+
+/** What kind of file it is, in a word: the name of a file's window. */
+export function assetKindLabel(type: AssetType) {
+  return {
     [AssetType.Image]: phrase.value.image,
     [AssetType.Video]: phrase.value.video,
     [AssetType.Audio]: phrase.value.audio,
     [AssetType.Other]: phrase.value.asset,
-  }[asset.type];
-  return `${type} · ${asset.extension.toUpperCase()} · ${useHumanSize()(asset.size)}`;
+  }[type];
 }
+
+/** The icon a file's window is named with, by the kind of file. */
+export const assetKindIcon = {
+  [AssetType.Image]: 'media',
+  [AssetType.Video]: 'media',
+  [AssetType.Audio]: 'audio',
+  [AssetType.Other]: 'file',
+} as const satisfies Record<AssetType, IconName>;
 
 export function assetDeletionLabel(deleteAfter: number) {
   return phrase.value.asset_library_pending_deletion(
@@ -94,16 +107,26 @@ export function assetRoleLabel(
 }
 
 export function assetPlacementLabel(placement: AssetPlacement) {
-  if (placement.role !== 'content') {
-    return assetRoleLabel(placement.role, placement.detail);
-  }
+  return assetUseLabel(placement.role, placement.source.type, placement.detail);
+}
+
+/**
+ * How a file is used in a place, in a word or two: a text names whose it
+ * is. The admin's window and a visitor's say it alike.
+ */
+export function assetUseLabel(
+  role: AssetRole,
+  sourceType: AssetSourceType,
+  detail?: AssetPlacement['detail'],
+) {
+  if (role !== 'content') return assetRoleLabel(role, detail);
   return {
     content: phrase.value.asset_role_content,
     'project-description': phrase.value.asset_role_project_description,
     'event-description': phrase.value.asset_role_event_description,
     'page-content': phrase.value.asset_role_page_content,
     'profile-about': phrase.value.asset_role_profile_about,
-  }[assetPlacementContentContext(placement)];
+  }[assetContentContext(sourceType)];
 }
 
 export function assetPlacementContentContext(
@@ -115,6 +138,10 @@ export function assetPlacementContentContext(
   | 'page-content'
   | 'profile-about' {
   if (placement.role !== 'content') return 'content';
+  return assetContentContext(placement.source.type);
+}
+
+function assetContentContext(sourceType: AssetSourceType) {
   return (
     {
       project: 'project-description',
@@ -127,5 +154,5 @@ export function assetPlacementContentContext(
       'ai-session': 'content',
       unused: 'content',
     } as const
-  )[placement.source.type];
+  )[sourceType];
 }

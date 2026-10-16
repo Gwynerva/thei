@@ -77,7 +77,9 @@ it has a width of its own.
   the text.
 - **It goes where its anchor is.** The popup teleports into the `<dialog>` its
   anchor sits in, else into `body`: a modal is a dialog in the top layer, and
-  a popup sent to the body would open beneath it.
+  a popup sent to the body would open beneath it. It stays there while it
+  fades out, its anchor gone: moved to the body then, a hint in a modal
+  vanished at once.
 - **One stacking scale:** popups `z-9998`, hints `z-9999`, sticky headers
   `z-10` inside their dialog. No new values. Small values inside one component
   — the badges over a tile, Editor.js's own levels of a menu — are its own

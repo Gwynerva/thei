@@ -46,9 +46,12 @@ A file's description («Описание файла», "File description") is th
 field of a file (`app/components/FileDescriptionField.vue`): it stands in
 every window of a file once the file is in the library, and is saved on its
 own — a button under it, or Ctrl+Enter — since it belongs to the file and its
-variants, not to the place the window was opened from. What an AI proposes for it waits at
+variants, not to the place the window was opened from. Where the window is
+about one place it is marked «Глобально» (`global`); as the editor's last step
+it is `required`, has no button of its own (`embedded`), and the window's
+«Готово» saves it. What an AI proposes for it waits at
 its label as for an entity's field (`provideFileAi`), its new words compared
-with the old.
+with the old. See [File window](file-window.md).
 
 ## How it is built
 

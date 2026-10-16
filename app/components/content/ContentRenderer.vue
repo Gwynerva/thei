@@ -97,17 +97,17 @@ function externalLink(
 
 /**
  * A file as the viewer shows it: the title the text gives it, and its
- * caption with the marks it was written with. `key` tells apart two places
- * of one file in a list.
+ * caption with the marks it was written with. Its key is the file's public
+ * id, which the window asks the file's other places by.
  */
 function assetDescriptor(
   value: unknown,
-  words: { title?: string; caption?: string; key?: string } = {},
+  words: { title?: string; caption?: string } = {},
 ): PublicAssetDescriptor | undefined {
   const item = asset(value);
   if (!item.assetUrl || !item.extension) return undefined;
   return {
-    key: words.key ?? item.assetUuid,
+    key: item.assetUuid,
     title: words.title ?? '',
     caption: words.caption || undefined,
     href: item.assetUrl,
@@ -131,14 +131,30 @@ function openGalleryItem(
   item: ContentGalleryItem,
 ) {
   if (!props.assetViewer) return;
-  const descriptors = items
-    .map((tile) =>
-      assetDescriptor(tile.asset, { caption: tile.caption, key: tile.id }),
-    )
-    .filter((descriptor) => descriptor !== undefined);
+  openPublicAssetSet(
+    items.map((tile) => ({
+      tile,
+      descriptor: assetDescriptor(tile.asset, { caption: tile.caption }),
+    })),
+    item,
+  );
+}
+
+/**
+ * Opens the files of a set at the one pressed. One file may stand twice in a
+ * set, so the pressed one is found by its place, not by the file.
+ */
+function openPublicAssetSet<T>(
+  entries: { tile: T; descriptor: PublicAssetDescriptor | undefined }[],
+  pressed: T,
+) {
+  const shown = entries.filter(
+    (entry): entry is { tile: T; descriptor: PublicAssetDescriptor } =>
+      entry.descriptor !== undefined,
+  );
   openPublicAssets(
-    descriptors,
-    descriptors.find((descriptor) => descriptor.key === item.id),
+    shown.map((entry) => entry.descriptor),
+    shown.find((entry) => entry.tile === pressed)?.descriptor,
   );
 }
 
@@ -151,28 +167,26 @@ function openFileGroupItem(
   item: ContentFileGroupItem,
 ) {
   if (!props.assetViewer) return;
-  const descriptors = items
-    .filter(
-      (file) =>
-        file.asset.type !== AssetType.Audio &&
-        (file.asset.media ||
-          (file.asset.extension &&
-            isAssetPreviewable(
-              file.asset.extension,
-              file.asset.archivedOriginal,
-            ))),
-    )
-    .map((file) =>
-      assetDescriptor(file.asset, {
-        title: file.title,
-        caption: file.caption,
-        key: file.id,
-      }),
-    )
-    .filter((descriptor) => descriptor !== undefined);
-  openPublicAssets(
-    descriptors,
-    descriptors.find((descriptor) => descriptor.key === item.id),
+  openPublicAssetSet(
+    items
+      .filter(
+        (file) =>
+          file.asset.type !== AssetType.Audio &&
+          (file.asset.media ||
+            (file.asset.extension &&
+              isAssetPreviewable(
+                file.asset.extension,
+                file.asset.archivedOriginal,
+              ))),
+      )
+      .map((file) => ({
+        tile: file,
+        descriptor: assetDescriptor(file.asset, {
+          title: file.title,
+          caption: file.caption,
+        }),
+      })),
+    item,
   );
 }
 

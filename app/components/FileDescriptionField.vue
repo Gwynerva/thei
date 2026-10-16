@@ -12,8 +12,18 @@ import {
  * the file and all its variants, read and saved through any of them over the
  * version it was read at. What an AI proposes for it waits at its label;
  * with AI off it is just a field.
+ *
+ * Where a file is placed, `global` says the description is the file's,
+ * wherever else it shows. `embedded`, the last step of the editor saves it
+ * with its own «Готово» (`save()`), so the field has no button of its own;
+ * `required` asks for it there, saying why under it.
  */
-const props = defineProps<{ assetUuid: string }>();
+const props = defineProps<{
+  assetUuid: string;
+  global?: boolean;
+  embedded?: boolean;
+  required?: boolean;
+}>();
 const emit = defineEmits<{ saved: [description: AssetDescription] }>();
 
 const form = reactive({ description: '' });
@@ -77,8 +87,11 @@ onMounted(() => {
   );
 });
 
-async function save() {
-  if (!dirty.value || saving.value || tooLong.value || !loaded.value) return;
+/** Saves what was typed; true once nothing is left unsaved. */
+async function save(): Promise<boolean> {
+  if (!loaded.value || tooLong.value) return false;
+  if (!dirty.value) return true;
+  if (saving.value) return false;
   saving.value = true;
   notice.value = null;
   try {
@@ -90,10 +103,12 @@ async function save() {
       },
     });
     take(saved);
-    notice.value = { text: phrase.value.asset_description_saved };
+    if (!props.embedded)
+      notice.value = { text: phrase.value.asset_description_saved };
     emit('saved', saved);
     // What was proposed is settled against the description saved.
     if (offers.value.length) await load();
+    return true;
   } catch (caught) {
     const status = (caught as { statusCode?: number }).statusCode;
     const current = (caught as { data?: { data?: AssetDescription } }).data
@@ -109,10 +124,17 @@ async function save() {
         text: errorMessage(caught, phrase.value.asset_description_error),
         error: true,
       };
+    return false;
   } finally {
     saving.value = false;
   }
 }
+
+/** Something is written, or was already: what a required step waits for. */
+const filled = computed(
+  () => loaded.value && cleanAssetDescription(form.description).length > 0,
+);
+defineExpose({ save, filled, saving });
 
 watch(
   () => form.description,
@@ -124,22 +146,34 @@ watch(
 
 <template>
   <Field ai="field:description" data-file-description>
-    <FieldLabel>
-      <span :data-title-popup="phrase.asset_description_hint">{{
-        phrase.asset_description
-      }}</span>
-    </FieldLabel>
+    <div class="flex items-center gap-xs">
+      <FieldLabel :required class="min-w-0">
+        <span :data-title-popup="phrase.asset_description_hint">{{
+          phrase.asset_description
+        }}</span>
+      </FieldLabel>
+      <span
+        v-if="global"
+        class="ml-auto flex shrink-0 cursor-help items-center gap-1 text-xs
+          font-semibold text-text-warning"
+        :data-title-popup="phrase.asset_description_global_hint"
+        data-file-description-global
+      >
+        <Icon name="globe" />{{ phrase.asset_description_global }}
+      </span>
+    </div>
     <FieldTextarea
       v-model="form.description"
       :placeholder="phrase.asset_description_placeholder"
       :disabled="!loaded"
       class="max-h-60"
       data-file-description-input
-      @keydown.enter.ctrl.exact.prevent="save"
-      @keydown.enter.meta.exact.prevent="save"
+      @keydown.enter.ctrl.exact.prevent="!embedded && save()"
+      @keydown.enter.meta.exact.prevent="!embedded && save()"
     />
+    <FieldHint v-if="required">{{ phrase.asset_description_why }}</FieldHint>
     <div
-      v-if="dirty || notice || tooLong"
+      v-if="(dirty && !embedded) || notice || tooLong"
       class="flex min-h-9 items-center justify-end gap-xs"
     >
       <p
@@ -156,7 +190,7 @@ watch(
         }}
       </p>
       <Button
-        v-if="dirty"
+        v-if="dirty && !embedded"
         variant="secondary"
         class="flex h-9 items-center gap-xs"
         :disabled="saving || tooLong || !loaded"

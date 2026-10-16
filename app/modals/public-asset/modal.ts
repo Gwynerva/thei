@@ -3,6 +3,13 @@ import type { PublicAssetDescriptor } from '#layers/thei/shared/api/public';
 export const publicAssetModal = defineModal(
   'public-asset',
   () => import('./PublicAssetModal.vue'),
+  {
+    kind: 'file',
+    title: (data) => {
+      const start = data.items[data.start ?? 0] ?? data.items[0];
+      return start ? publicText(start.title) : phrase.value.asset;
+    },
+  },
 );
 
 /**
@@ -12,8 +19,11 @@ export const publicAssetModal = defineModal(
  */
 export type PublicAssetModalData = {
   items: PublicAssetDescriptor[];
-  /** The file to show first; the first one when absent or not found. */
-  startKey?: string;
+  /**
+   * Where the file to show first stands; the first one when absent. A place
+   * rather than a key, since one file may stand twice in a gallery.
+   */
+  start?: number;
 };
 
 export function openPublicAssets(
@@ -21,5 +31,9 @@ export function openPublicAssets(
   start?: PublicAssetDescriptor,
 ) {
   if (!items.length) return;
-  void openModal(publicAssetModal, { items, startKey: start?.key });
+  const index = start ? items.indexOf(start) : -1;
+  void openModal(publicAssetModal, {
+    items,
+    start: index < 0 ? undefined : index,
+  });
 }
