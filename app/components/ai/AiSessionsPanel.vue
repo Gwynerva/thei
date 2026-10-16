@@ -8,10 +8,9 @@ import type {
   AiComposerExpose,
   AiComposerFile,
 } from '#layers/thei/app/composables/ai-session';
-import type { AiPresetItem } from '#layers/thei/shared/ai-template';
-import {
-  isPresetTemplate,
-  type AiTemplateListResponse,
+import type {
+  AiPresetItem,
+  AiTemplateListResponse,
 } from '#layers/thei/shared/ai-template';
 import ContentInlineLinkDecorator from '#layers/thei/app/components/content/ContentInlineLinkDecorator.vue';
 
@@ -97,8 +96,10 @@ const linkResolver = useContentLinkResolver('admin');
 const { data: templates } = await useAsyncData('ai-templates', () =>
   requestFetch<AiTemplateListResponse>('/api/admin/ai/templates'),
 );
+// A new session starts from the owner's own requests; a check runs itself.
 const presets = computed(
-  () => templates.value?.templates.filter(isPresetTemplate) ?? [],
+  () =>
+    templates.value?.templates.filter((template) => !template.builtin) ?? [],
 );
 const composer = ref<AiComposerExpose>();
 

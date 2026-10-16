@@ -1,7 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { createError } from 'h3';
 import type { AiEntityType, AiMessagePart } from '#layers/thei/shared/ai';
-import { isPresetTemplate } from '#layers/thei/shared/ai-template';
 import { findTemplate } from '../templates/store';
 import { findEntity, refOf, type EntityKey } from '../../entity-kinds';
 import { actionDef } from '../actions/registry';
@@ -179,11 +178,11 @@ export function postOwnerMessage(
   return row.messageUuid;
 }
 
-/** A template the owner may start a session from: one without a schedule. */
+/** A template the owner may start a session from: one of their own. */
 function presetOf(templateId: unknown) {
   const template =
     typeof templateId === 'string' ? findTemplate(templateId) : undefined;
-  if (!template || !isPresetTemplate(template))
+  if (!template || template.builtin)
     refused('There is no such ready-made request.');
   return template;
 }

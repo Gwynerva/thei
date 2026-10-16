@@ -48,8 +48,14 @@ export interface DirectTool {
   /** Its arguments as JSON Schema, for the model's service. */
   inputSchema: Record<string, unknown>;
   annotations?: ToolAnnotations;
-  /** Checks the arguments as the MCP server would, then runs it. */
-  call(args: unknown): Promise<CallToolResult>;
+  /**
+   * Checks the arguments as the MCP server would, then runs it. A tool that
+   * can stop midway listens to `signal`, as it does to a client's.
+   */
+  call(
+    args: unknown,
+    options?: { signal?: AbortSignal },
+  ): Promise<CallToolResult>;
 }
 
 type Callback = (
@@ -78,8 +84,10 @@ export function directTools(context: McpCallContext): DirectTool[] {
         description: config.description ?? '',
         inputSchema: json,
         annotations: config.annotations,
-        async call(args) {
-          if (!schema) return callback({});
+        async call(args, { signal = new AbortController().signal } = {}) {
+          // A tool hears it was stopped where it hears a client cancel.
+          const extra = { mcpReq: { signal } };
+          if (!schema) return callback(extra);
           const parsed = schema.safeParse(args ?? {});
           if (!parsed.success)
             return {
@@ -97,7 +105,7 @@ export function directTools(context: McpCallContext): DirectTool[] {
               ],
               isError: true,
             };
-          return callback(parsed.data, {});
+          return callback(parsed.data, extra);
         },
       });
     },

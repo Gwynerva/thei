@@ -149,6 +149,8 @@ const cards = computed(() => actionCards(props.actions));
 
 const NOTICE_ICONS = {
   stopped: 'pause-circle',
+  timeout: 'pause-circle',
+  interrupted: 'refresh',
   limit: 'warning',
   'no-model': 'power',
   key: 'key',

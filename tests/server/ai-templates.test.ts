@@ -1,120 +1,157 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { H3Event } from 'h3';
-import { DEFAULT_AI_MODEL } from '../../shared/ai-model';
 import type { AiMessagePart } from '../../shared/ai';
-import { builtinTemplateId } from '../../shared/ai-template';
 import {
-  sessionMessages,
-  findSession,
-} from '../../server/thei/ai/sessions/store';
-import { listSessions } from '../../server/thei/ai/sessions/view';
+  AI_BUILTIN_TEMPLATE_KEYS,
+  builtinTemplateId,
+  type AiBuiltinTemplateKey,
+} from '../../shared/ai-template';
+import { proposeActions } from '../../server/thei/ai/actions/propose';
+import {
+  applyActions,
+  markTakenInEditor,
+} from '../../server/thei/ai/actions/apply';
+import { entityPanel } from '../../server/thei/ai/entity-panel';
+import { forgetAiAnchors } from '../../server/thei/ai/memory/forget';
 import { turnsSettled } from '../../server/thei/ai/runner/queue';
+import { startOwnerSession } from '../../server/thei/ai/sessions/owner';
 import {
-  checkedSchedule,
-  nextRunAt,
-} from '../../server/thei/ai/templates/schedule';
+  createSession,
+  findSession,
+  sessionMessages,
+} from '../../server/thei/ai/sessions/store';
+import {
+  busySubjects,
+  coverageOf,
+} from '../../server/thei/ai/templates/coverage';
+import { runTemplate } from '../../server/thei/ai/templates/run';
+import { TEMPLATE_SOURCES } from '../../server/thei/ai/templates/sources';
 import {
   copyTemplate,
   deleteTemplate,
-  dueTemplates,
   findTemplate,
   listTemplates,
   saveTemplate,
 } from '../../server/thei/ai/templates/store';
-import { marksOf } from '../../server/thei/ai/templates/reads';
-import { entityPanel } from '../../server/thei/ai/entity-panel';
-import { startOwnerSession } from '../../server/thei/ai/sessions/owner';
-import {
-  runDueTemplates,
-  runTemplate,
-} from '../../server/thei/ai/templates/run';
-import { entityFingerprint } from '../../server/thei/ai/digests';
 import { setTheiConfig, theiConfig } from '../../server/thei/config/index';
-import { directTools } from '../../server/thei/mcp/registry';
 import { invalidateMcpDocuments } from '../../server/thei/mcp/documents';
+import { directTools } from '../../server/thei/mcp/registry';
 import {
   startFakeModel,
   type FakeModel,
-  type FakeScript,
+  type FakeTurn,
 } from '../helpers/fake-model';
 import { freshTestDb } from '../helpers/fresh-db';
 import { serverRepositories } from '../helpers/server-repositories';
 
 /**
- * Templates: built-in ones the owner only schedules and switches, the
- * owner's own, a schedule kept as the next moment in the owner's time zone,
- * and a run whose model takes from the request what to read — told what
- * changed since the run before, and reading of an entity it read then only
- * what changed, kept as read once its turn went through.
+ * The built-in checks and the owner's ready-made requests. A check is given
+ * only what it has not looked at yet, as it reads now — a paragraph, a
+ * link, an entity — kept as looked at once its turn went through; with
+ * nothing new no session starts. Its own accepted fixes leave what they
+ * mended looked at, while the owner's own changes come back to it. From an
+ * entity's ✦ it looks at that entity alone, and again from the start when
+ * asked; two runs never share what they look at.
  */
 let context: Awaited<ReturnType<typeof freshTestDb>>;
-let folder: string;
 let model: FakeModel | undefined;
+/** What the model answers next; it may take its time. */
+let reply: () => FakeTurn | Promise<FakeTurn> = () => ({ text: 'Looked.' });
 
 const DIARY = 'd-1';
 const DAY = '2026-10-13';
+const PROJECT = 'p-1';
 const PARAGRAPHS = [
-  'Went to the Kuzova islands with Lyosha today.',
-  'The boat left at nine; the sea was calm all the way.',
+  'Went to the Kuzova islnds with Lyosha today.',
+  'The boat lft at nine; the sea was calm all the way.',
   'On the way back we saw seals on the rocks.',
+  'Evening tea at the pier.',
 ];
 
-function config(modelUrl?: string) {
-  setTheiConfig({
-    version: '0.0.6',
-    siteUrl: 'https://example.test',
-    languageCode: 'en',
-    mcp: {
-      enabled: true,
-      instructions: '',
-      model: modelUrl
-        ? {
-            provider: 'openai',
-            apiKey: '',
-            baseUrl: modelUrl,
-            model: 'fake-small',
-          }
-        : { ...DEFAULT_AI_MODEL },
-      monthlyTokens: 10_000_000,
-    },
-  } as never);
-}
+const header = (id: string, text: string) => ({
+  id,
+  type: 'header',
+  data: { text, level: 2 },
+});
+const paragraph = (id: string, text: string) => ({
+  id,
+  type: 'paragraph',
+  data: { text },
+});
+const link = (type: string, id: string, words: string, fragment?: string) =>
+  `<a data-content-link="entity" data-entity-type="${type}" data-entity-id="${id}"${fragment ? ` data-entity-fragment="${fragment}"` : ''}>${words}</a>`;
 
-async function useModel(script: FakeScript) {
-  model = await startFakeModel(script);
-  config(model.url);
-}
-
-function writeDiary(paragraphs: string[], at: number) {
+function insert(table: string, row: Record<string, unknown>) {
   context.rawDb
-    .prepare('UPDATE content SET data = ?, updatedAt = ? WHERE contentUuid = ?')
+    .prepare(
+      `INSERT INTO \`${table}\` (${Object.keys(row)
+        .map((key) => `\`${key}\``)
+        .join(', ')}) VALUES (${Object.keys(row)
+        .map(() => '?')
+        .join(', ')})`,
+    )
     .run(
-      JSON.stringify({
-        blocks: paragraphs.map((text, index) => ({
-          id: `b${index}`,
-          type: 'paragraph',
-          data: { text },
-        })),
-      }),
-      at,
-      'c-1',
+      ...Object.values(row).map((value) =>
+        value !== null && typeof value === 'object'
+          ? JSON.stringify(value)
+          : value,
+      ),
     );
-  context.rawDb
-    .prepare('UPDATE `diary-entries` SET updatedAt = ? WHERE diaryUuid = ?')
-    .run(at, DIARY);
+}
+
+let clock = 10;
+/** Writes a text as the owner's form would: the text, and its entity's version. */
+function writeText(
+  ownerType: string,
+  ownerId: string,
+  slot: string,
+  blocks: unknown[],
+) {
+  clock++;
+  const data = JSON.stringify({ blocks });
+  const updated = context.rawDb
+    .prepare(
+      'UPDATE content SET data = ?, updatedAt = ? WHERE ownerType = ? AND ownerId = ? AND slot = ?',
+    )
+    .run(data, clock, ownerType, ownerId, slot);
+  if (!updated.changes)
+    insert('content', {
+      contentUuid: `c-${ownerId}-${slot}`,
+      ownerType,
+      ownerId,
+      slot,
+      data,
+      createdAt: clock,
+      updatedAt: clock,
+    });
   invalidateMcpDocuments();
+}
+
+function writeDiary(paragraphs: string[]) {
+  writeText(
+    'diary-entry',
+    DIARY,
+    'diary-body',
+    paragraphs.map((text, index) => paragraph(`b${index}`, text)),
+  );
+}
+
+function addDiary(id: string, day: string, text: string) {
+  insert('diary-entries', {
+    diaryUuid: id,
+    date: day,
+    access: 'public',
+    createdAt: 1,
+    updatedAt: 1,
+  });
+  writeText('diary-entry', id, 'diary-body', [paragraph(`${id}-b`, text)]);
 }
 
 beforeEach(async () => {
   context = await freshTestDb();
-  folder = await mkdtemp(join(tmpdir(), 'thei-ai-templates-'));
   Object.assign(context.server, {
     useDb: () => context,
     version: '0.0.6',
-    contentPath: (...parts: string[]) => join(folder, ...parts),
     console: {
       log() {},
       warn() {},
@@ -123,7 +160,23 @@ beforeEach(async () => {
     },
     ...serverRepositories,
   });
-  config();
+  model = await startFakeModel(() => reply());
+  setTheiConfig({
+    version: '0.0.6',
+    siteUrl: 'https://example.test',
+    languageCode: 'en',
+    mcp: {
+      enabled: true,
+      instructions: '',
+      model: {
+        provider: 'openai',
+        apiKey: '',
+        baseUrl: model.url,
+        model: 'fake-small',
+      },
+      monthlyTokens: 10_000_000,
+    },
+  } as never);
   Object.defineProperty(context.server, 'config', {
     configurable: true,
     get: () => theiConfig,
@@ -131,22 +184,26 @@ beforeEach(async () => {
   Object.assign(globalThis, {
     useRuntimeConfig: () => ({ app: { baseURL: '/' } }),
   });
-  context.rawDb
-    .prepare(
-      "INSERT INTO profiles (profileId, displayName) VALUES ('profile', 'Owner')",
-    )
-    .run();
-  context.rawDb
-    .prepare(
-      "INSERT INTO `diary-entries` (diaryUuid, date, access, createdAt, updatedAt) VALUES (?, ?, 'public', 1, 4)",
-    )
-    .run(DIARY, DAY);
-  context.rawDb
-    .prepare(
-      "INSERT INTO content (contentUuid, ownerType, ownerId, slot, data, createdAt, updatedAt) VALUES ('c-1', 'diary-entry', ?, 'diary-body', '{}', 1, 4)",
-    )
-    .run(DIARY);
-  writeDiary(PARAGRAPHS, 5);
+  insert('profiles', { profileId: 'profile', displayName: 'Owner' });
+  insert('projects', {
+    projectUuid: PROJECT,
+    title: 'Harbour',
+    summary: 'A harbour.',
+    access: 'public',
+    humanReadableSlug: 'harbour',
+    publicId: 'P1',
+    createdAt: 1,
+    updatedAt: 1,
+  });
+  insert('diary-entries', {
+    diaryUuid: DIARY,
+    date: DAY,
+    access: 'public',
+    createdAt: 1,
+    updatedAt: 1,
+  });
+  writeDiary(PARAGRAPHS);
+  reply = () => ({ text: 'Looked.' });
 });
 
 afterEach(async () => {
@@ -154,18 +211,38 @@ afterEach(async () => {
   await model?.close();
   model = undefined;
   await context.close();
-  await rm(folder, { recursive: true, force: true });
 });
 
-/** A template of a schedule: the owner may run it now as well. */
-function diaryTemplate(
-  schedule: unknown = { kind: 'week', day: 1, time: '03:00', timeZone: 'UTC' },
+const id = (key: AiBuiltinTemplateKey) => builtinTemplateId(key);
+
+/** Runs a check and waits for its turn. */
+async function run(
+  key: AiBuiltinTemplateKey,
+  options: Parameters<typeof runTemplate>[1] = {},
 ) {
-  return saveTemplate(null, {
-    title: 'Diary look',
-    instruction: 'Proofread the diary entries changed since last time.',
-    schedule,
-  });
+  const { sessionUuid } = await runTemplate(id(key), options);
+  await turnsSettled();
+  return sessionUuid;
+}
+
+/** What a check would be given now. */
+function due(
+  key: AiBuiltinTemplateKey,
+  options: { scope?: Parameters<typeof runTemplate>[1]; force?: boolean } = {},
+) {
+  return TEMPLATE_SOURCES[key].due({
+    covered: coverageOf(id(key)),
+    busy: busySubjects(id(key)),
+    ...options,
+  } as never);
+}
+
+/** What the model was asked in a run's session. */
+function brief(sessionUuid: string) {
+  return sessionMessages(sessionUuid)
+    .flatMap((message) => message.transcript)
+    .map((turn) => ('text' in turn ? turn.text : ''))
+    .join('\n');
 }
 
 async function toolText(name: string, args: unknown) {
@@ -179,327 +256,298 @@ async function toolText(name: string, args: unknown) {
     .join('\n');
 }
 
-function asked(index: number) {
-  return JSON.stringify(model!.requests[index]!.body.messages);
-}
-
-function templatePart(sessionUuid: string) {
-  return sessionMessages(sessionUuid)
-    .flatMap((message) => message.parts as AiMessagePart[])
-    .find((part) => part.type === 'template') as Extract<
-    AiMessagePart,
-    { type: 'template' }
-  >;
-}
-
-const READ_DIARY = {
-  toolCalls: [{ name: 'read_entity', input: { ref: `diary-entry:${DAY}` } }],
-};
-
-describe('a schedule', () => {
-  const at = (iso: string) => Date.parse(iso);
-
-  it('is a time of day in the owner’s time zone', () => {
-    const daily = {
-      kind: 'day',
-      time: '09:00',
-      timeZone: 'Europe/Moscow',
-    } as const;
-    // 08:00 in Moscow: today's run is still ahead.
-    expect(nextRunAt(daily, at('2026-10-15T05:00:00Z'))).toBe(
-      at('2026-10-15T06:00:00Z'),
+describe('the built-in checks', () => {
+  it('are three, offered where they can look, with no schedule', () => {
+    expect(AI_BUILTIN_TEMPLATE_KEYS).toEqual(['proofread', 'links', 'graph']);
+    const builtins = listTemplates().filter((template) => template.builtin);
+    expect(builtins.map((template) => template.title)).toEqual([
+      'Fixing text mistakes',
+      'Fixing broken links',
+      'Finding possible relations',
+    ]);
+    expect(findTemplate(id('graph'))!.offerOn).toEqual([
+      'project',
+      'event',
+      'diary-entry',
+    ]);
+    expect(Object.keys(findTemplate(id('proofread'))!)).not.toContain(
+      'schedule',
     );
-    // 10:00 in Moscow: tomorrow's.
-    expect(nextRunAt(daily, at('2026-10-15T07:00:00Z'))).toBe(
-      at('2026-10-16T06:00:00Z'),
-    );
-  });
-
-  it('runs on its day of the week and on the first of the month', () => {
-    // 15 October 2026 is a Thursday; the Monday after is the 19th.
+    // Only their model and where they are offered are the owner's.
+    const changed = saveTemplate(id('links'), {
+      model: 'fake-large',
+      offerOn: ['page'],
+      title: 'Mine',
+    });
+    expect(changed).toMatchObject({
+      title: 'Fixing broken links',
+      model: 'fake-large',
+      offerOn: ['page'],
+    });
+    // A check is offered only where it can look.
     expect(
-      nextRunAt(
-        { kind: 'week', day: 1, time: '20:00', timeZone: 'UTC' },
-        at('2026-10-15T12:00:00Z'),
-      ),
-    ).toBe(at('2026-10-19T20:00:00Z'));
-    // New York leaves summer time at 02:00 on 1 November 2026: 03:00 that
-    // day is five hours behind UTC, not four.
-    expect(
-      nextRunAt(
-        { kind: 'month', time: '03:00', timeZone: 'America/New_York' },
-        at('2026-10-15T12:00:00Z'),
-      ),
-    ).toBe(at('2026-11-01T08:00:00Z'));
-  });
-
-  it('has no next run when it is manual, and is checked as it comes', () => {
-    expect(nextRunAt({ kind: 'manual' }, Date.now())).toBeNull();
-    expect(() => checkedSchedule({ kind: 'day', time: '25:00' })).toThrow();
-    expect(() =>
-      checkedSchedule({ kind: 'week', day: 8, time: '10:00' }),
-    ).toThrow();
-    expect(
-      checkedSchedule({ kind: 'day', time: '07:30', timeZone: 'Nowhere/Land' }),
-    ).toEqual({ kind: 'day', time: '07:30', timeZone: 'UTC' });
-  });
-});
-
-describe('the templates', () => {
-  it('lists the built-in ones off, and keeps only their settings', () => {
-    const builtins = listTemplates().filter((item) => item.builtin);
-    expect(builtins.length).toBeGreaterThan(0);
-    expect(builtins.every((item) => !item.enabled)).toBe(true);
-
-    const id = builtinTemplateId('nightly');
-    const before = findTemplate(id)!;
-    const now = Date.parse('2026-10-15T12:00:00Z');
-    const saved = saveTemplate(
-      id,
-      {
-        title: 'Renamed',
-        enabled: true,
-        schedule: { kind: 'day', time: '03:00', timeZone: 'UTC' },
-      },
-      now,
-    );
-    // Its words are the code's; its switch and schedule the owner's.
-    expect(saved.title).toBe(before.title);
-    expect(saved.enabled).toBe(true);
-    expect(saved.nextRunAt).toBe(Date.parse('2026-10-16T03:00:00Z'));
-    expect(dueTemplates(Date.parse('2026-10-16T03:00:00Z'))).toHaveLength(1);
-    expect(() => deleteTemplate(id)).toThrow();
-  });
-
-  it('makes the owner’s own, and copies any of them off', () => {
-    const own = diaryTemplate();
-    expect(own.builtin).toBeUndefined();
-    expect(own.enabled).toBe(true);
-    const copy = copyTemplate(builtinTemplateId('graph'));
+      saveTemplate(id('graph'), { offerOn: ['page', 'event'] }).offerOn,
+    ).toEqual(['event']);
+    expect(() => deleteTemplate(id('links'))).toThrow();
+    const copy = copyTemplate(id('links'));
+    expect(copy.title).toBe('Fixing broken links (copy)');
     expect(copy.builtin).toBeUndefined();
-    expect(copy.enabled).toBe(false);
-    expect(copy.title).toContain(
-      findTemplate(builtinTemplateId('graph'))!.title,
-    );
-    deleteTemplate(copy.templateId);
-    expect(findTemplate(copy.templateId)).toBeUndefined();
   });
 });
 
 describe('a run', () => {
-  it('reads what the request asks, and next time only what changed', async () => {
-    const template = diaryTemplate();
-    await useModel([
-      READ_DIARY,
-      { text: 'Proofread it; nothing to fix.' },
-      { toolCalls: [{ name: 'changes_since', input: {} }] },
-      {
-        toolCalls: [
-          {
-            name: 'read_entity',
-            input: { ref: `diary-entry:${DAY}`, since: template.templateId },
-          },
-        ],
-      },
-      { text: 'Proofread what changed; nothing to fix.' },
+  it('starts no session when nothing new is there to look at', async () => {
+    const first = await run('proofread');
+    expect(first).not.toBeNull();
+    expect(brief(first!)).toContain('Proofread these parts');
+    expect(brief(first!)).toContain('Went to the Kuzova islnds');
+    expect(findSession(first!)).toMatchObject({
+      origin: 'template',
+      templateId: id('proofread'),
+      state: 'idle',
+    });
+    const part = sessionMessages(first!)
+      .flatMap((message) => message.parts as AiMessagePart[])
+      .find((item) => item.type === 'template');
+    expect(part).toEqual({ type: 'template', templateId: id('proofread') });
+    expect(model!.requests).toHaveLength(1);
+
+    expect(await run('proofread')).toBeNull();
+    expect(model!.requests).toHaveLength(1);
+  });
+
+  it('is given, of a text changed since, only the paragraph changed', async () => {
+    await run('proofread');
+    writeDiary([
+      PARAGRAPHS[0]!,
+      PARAGRAPHS[1]!,
+      'On the way back we saw seals on the rocks, and a whale.',
+      PARAGRAPHS[3]!,
     ]);
-
-    const first = await runTemplate(template.templateId);
-    await turnsSettled();
-    const session = findSession(first.sessionUuid)!;
-    expect(session.origin).toBe('template');
-    expect(session.templateId).toBe(template.templateId);
-    expect(templatePart(first.sessionUuid)).toMatchObject({ by: 'owner' });
-    expect(templatePart(first.sessionUuid).since).toBeUndefined();
-    expect(asked(0)).toContain('The template has not run before.');
-    expect(asked(0)).toContain('in the owner’s time zone (UTC)');
-    expect(asked(0)).toContain('Proofread the diary entries changed');
-    // What its model read in full is the template's once the turn is through.
-    const key = { kind: 'diary-entry' as const, id: DIARY, date: DAY };
-    expect(
-      marksOf(template.templateId).get(`diary-entry:${DIARY}`),
-    ).toMatchObject({ fingerprint: entityFingerprint(key) });
-    const ranAt = findTemplate(template.templateId)!.lastRunAt!;
-
-    // One paragraph changes; the next run hears of it and reads only it.
-    writeDiary(
-      [PARAGRAPHS[0]!, PARAGRAPHS[1]!, 'On the way back we saw a seal pup.'],
-      Date.now() + 1000,
-    );
-    const second = await runTemplate(template.templateId);
-    await turnsSettled();
-    expect(templatePart(second.sessionUuid).since).toBe(ranAt);
-    expect(asked(2)).toContain('Since then the archive changed: 1 diary entry');
-    expect(asked(3)).toContain('read by this template before, changed since');
-    expect(asked(4)).toContain('a seal pup');
-    expect(asked(4)).toContain(PARAGRAPHS[1]);
-    expect(asked(4)).not.toContain('Went to the Kuzova');
-    expect(
-      marksOf(template.templateId).get(`diary-entry:${DIARY}`),
-    ).toMatchObject({ fingerprint: entityFingerprint(key) });
-    expect(
-      listSessions({ templateId: template.templateId }).sessions.map(
-        (item) => item.sessionUuid,
+    const [item, ...rest] = await due('proofread');
+    expect(rest).toEqual([]);
+    expect(item!.subject).toBe(`text:diary-entry:${DIARY}:diary-body`);
+    expect(item!.shown).toContain('and a whale');
+    // The paragraph before and after it stand by it; the rest is left out.
+    expect(item!.shown).toContain('The boat lft');
+    expect(item!.shown).not.toContain('Kuzova');
+    expect(item!.shown).toContain('…');
+    // A link a paragraph gains leaves it as proofread.
+    await run('proofread');
+    writeText('diary-entry', DIARY, 'diary-body', [
+      paragraph('b0', PARAGRAPHS[0]!),
+      paragraph('b1', PARAGRAPHS[1]!),
+      paragraph(
+        'b2',
+        `On the way back we saw ${link('project', PROJECT, 'seals')} on the rocks, and a whale.`,
       ),
-    ).toEqual([second.sessionUuid, first.sessionUuid]);
-  });
-
-  it('keeps nothing it read when the turn failed', async () => {
-    await useModel([READ_DIARY, { error: { status: 401 } }]);
-    const template = diaryTemplate();
-    await runTemplate(template.templateId);
-    await turnsSettled();
-    expect(marksOf(template.templateId).size).toBe(0);
-  });
-
-  it('puts a scheduled run that left nothing to decide into the archive', async () => {
-    await useModel([
-      { text: 'Nothing changed: nothing to do.' },
-      { text: 'Nothing changed: nothing to do.' },
+      paragraph('b3', PARAGRAPHS[3]!),
     ]);
-    const template = diaryTemplate();
-    const scheduled = await runTemplate(template.templateId, {
-      by: 'schedule',
-    });
-    await turnsSettled();
-    expect(findSession(scheduled.sessionUuid)!.archivedAt).toBeTruthy();
-    // Started by the owner, it stays in sight: they asked for the answer.
-    const own = await runTemplate(template.templateId);
-    await turnsSettled();
-    expect(findSession(own.sessionUuid)!.archivedAt).toBeFalsy();
+    expect(await due('proofread')).toEqual([]);
   });
 
-  it('skips a run that cannot happen without moving «since»', async () => {
-    const template = diaryTemplate({
-      kind: 'day',
-      time: '03:00',
-      timeZone: 'UTC',
-    });
-    // No model is set up: the run is skipped, and only the next one moves.
-    await runDueTemplates(template.nextRunAt!);
-    const after = findTemplate(template.templateId)!;
-    expect(after.lastRunAt).toBeUndefined();
-    expect(after.nextRunAt).toBeGreaterThan(template.nextRunAt!);
+  it('covers nothing when its turn failed', async () => {
+    reply = () => ({ error: { status: 500 } });
+    const failed = await run('proofread');
+    expect(findSession(failed!)!.error).toBe('busy');
+    expect(coverageOf(id('proofread')).size).toBe(0);
+    expect(busySubjects(id('proofread')).size).toBe(0);
+    reply = () => ({ text: 'Looked.' });
+    expect(await run('proofread')).not.toBeNull();
+    expect(coverageOf(id('proofread')).size).toBe(1);
   });
-});
 
-describe('gathering what a request names', () => {
-  it('finds the diary of a week by its days, in the owner’s time zone', async () => {
-    const template = saveTemplate(null, {
-      title: 'Diary week',
-      instruction: 'Read the diary entries of the last week.',
-      schedule: { kind: 'week', day: 1, time: '03:00', timeZone: 'UTC' },
+  it('is given a run’s worth, and the rest the next time', async () => {
+    for (let day = 1; day <= 9; day++)
+      addDiary(`d-x${day}`, `2026-09-0${day}`, `Day ${day} by the sea.`);
+    const first = await run('graph');
+    expect(brief(first!).match(/^- diary-entry:/gm)).toHaveLength(8);
+    const second = await run('graph');
+    // Ten entries and a project: three were left.
+    expect(brief(second!).match(/^- (diary-entry|project):/gm)).toHaveLength(3);
+    expect(await run('graph')).toBeNull();
+  });
+
+  it('never gives two runs the same', async () => {
+    for (let day = 1; day <= 9; day++)
+      addDiary(`d-x${day}`, `2026-09-0${day}`, `Day ${day} by the sea.`);
+    let open!: () => void;
+    const held = new Promise<void>((resolve) => (open = resolve));
+    reply = async () => {
+      await held;
+      return { text: 'Looked.' };
+    };
+    const first = await runTemplate(id('graph'));
+    const second = await runTemplate(id('graph'));
+    const { db, schema } = context;
+    const bySession = db.select().from(schema.aiTemplateBatches).all();
+    const ofFirst = bySession
+      .filter((row) => row.sessionUuid === first.sessionUuid)
+      .map((row) => row.subject);
+    const ofSecond = bySession
+      .filter((row) => row.sessionUuid === second.sessionUuid)
+      .map((row) => row.subject);
+    expect(ofFirst).toHaveLength(8);
+    expect(ofSecond).toHaveLength(3);
+    expect(ofFirst.filter((subject) => ofSecond.includes(subject))).toEqual([]);
+    // A third finds everything taken.
+    expect((await runTemplate(id('graph'))).sessionUuid).toBeNull();
+    open();
+    await turnsSettled();
+    expect(coverageOf(id('graph')).size).toBe(11);
+  });
+
+  it('looks at one entity from its ✦, and at it again when asked', async () => {
+    insert('pages', {
+      pageUuid: 'pg-1',
+      title: 'Notes',
+      slug: 'notes',
+      summary: 'Notes.',
+      access: 'public',
+      createdAt: 1,
+      updatedAt: 1,
     });
-    await useModel([
-      {
-        toolCalls: [
-          {
-            name: 'list_entities',
-            input: {
-              kind: 'diary-entry',
-              from: '2026-10-08',
-              to: '2026-10-14',
-            },
-          },
-        ],
-      },
-      {
-        toolCalls: [
-          {
-            name: 'list_entities',
-            input: {
-              kind: 'diary-entry',
-              from: '2026-10-14',
-              to: '2026-10-20',
-            },
-          },
-        ],
-      },
-      { text: 'Read the week.' },
+    writeText('page', 'pg-1', 'page-body', [
+      paragraph('n1', 'A page nobody proofread.'),
     ]);
-    // 23:30 in UTC on the 14th is already the 15th in Moscow.
-    await runTemplate(template.templateId, {
-      now: Date.parse('2026-10-14T23:30:00Z'),
-      timeZone: 'Europe/Moscow',
+    const scoped = await run('proofread', { about: `diary-entry:${DAY}` });
+    expect(findSession(scoped!)!.title).toBe(`Fixing text mistakes · ${DAY}`);
+    expect(brief(scoped!)).toContain('Kuzova');
+    expect(brief(scoped!)).not.toContain('nobody proofread');
+    expect([...coverageOf(id('proofread')).keys()]).toEqual([
+      `text:diary-entry:${DIARY}:diary-body`,
+    ]);
+    expect(await run('proofread', { about: `diary-entry:${DAY}` })).toBeNull();
+    const again = await run('proofread', {
+      about: `diary-entry:${DAY}`,
+      force: true,
     });
-    await turnsSettled();
-    expect(asked(0)).toContain(
-      'Today is 2026-10-15 in the owner’s time zone (Europe/Moscow).',
+    expect(brief(again!)).toContain('Kuzova');
+    await expect(runTemplate(id('proofread'), { force: true })).rejects.toThrow(
+      /one entity/,
     );
-    expect(asked(0)).toContain('list_entities with its kind, from and to');
-    expect(asked(1)).toContain(`diary-entry:${DAY}`);
-    expect(asked(2)).toContain('0 in all');
-  });
-});
-
-describe('what changed', () => {
-  it('lists what was made or changed from a moment on', async () => {
-    expect(await toolText('changes_since', {})).toContain('Name from');
-    const listed = await toolText('changes_since', { from: '1970-01-01' });
-    expect(listed).toContain(`diary-entry:${DAY}`);
-    const none = await toolText('changes_since', {
-      from: '1970-01-01',
-      kinds: ['project'],
-    });
-    expect(none).toContain('_(nothing)_');
-  });
-});
-
-describe('a scheduled run and the owner away', () => {
-  it('waits while its last run waits for the owner, then reads everything since', async () => {
-    await useModel([
-      { text: 'Proposed a fix.' },
-      { text: 'Read what changed since.' },
+    // The page is still due for the whole archive.
+    expect((await due('proofread')).map((item) => item.subject)).toEqual([
+      'text:page:pg-1:page-body',
     ]);
-    const template = diaryTemplate({
-      kind: 'day',
-      time: '03:00',
-      timeZone: 'UTC',
-    });
-    await runDueTemplates(template.nextRunAt!);
-    await turnsSettled();
-    const first = findTemplate(template.templateId)!;
-    const firstSession = first.lastSession!.sessionUuid;
-    // Something in it waits for the owner: the next nights skip.
-    context.rawDb
-      .prepare(
-        'UPDATE `ai-sessions` SET waiting = 1, archivedAt = NULL WHERE sessionUuid = ?',
-      )
-      .run(firstSession);
-    for (const night of [1, 2, 3]) {
-      const due = findTemplate(template.templateId)!.nextRunAt!;
-      await runDueTemplates(due);
-      expect(findTemplate(template.templateId)!.lastSession!.sessionUuid).toBe(
-        firstSession,
-      );
-      expect(findTemplate(template.templateId)!.lastRunAt).toBe(
-        first.lastRunAt,
-      );
-      expect(night).toBeGreaterThan(0);
-    }
-    expect(
-      listSessions({ templateId: template.templateId }).sessions,
-    ).toHaveLength(1);
+  });
 
-    // Archived, the next night runs once, from the last run that read.
-    context.rawDb
-      .prepare('UPDATE `ai-sessions` SET archivedAt = 1 WHERE sessionUuid = ?')
-      .run(firstSession);
-    await runDueTemplates(findTemplate(template.templateId)!.nextRunAt!);
-    await turnsSettled();
-    const after = findTemplate(template.templateId)!;
-    expect(after.lastSession!.sessionUuid).not.toBe(firstSession);
-    expect(templatePart(after.lastSession!.sessionUuid).since).toBe(
-      first.lastRunAt,
+  it('is forgotten with the entity it looked at', async () => {
+    await run('graph');
+    expect(coverageOf(id('graph')).has(`entity:diary-entry:${DIARY}`)).toBe(
+      true,
     );
+    const { db, schema } = context;
+    db.transaction((tx) => forgetAiAnchors(tx, schema, 'diary-entry', [DIARY]));
+    expect(coverageOf(id('graph')).has(`entity:diary-entry:${DIARY}`)).toBe(
+      false,
+    );
+  });
+});
+
+describe('what an accepted fix leaves', () => {
+  const fix = (find: string, replace: string) => ({
+    kind: 'revise',
+    target: `diary-entry:${DAY}`,
+    text: 'body',
+    mode: 'proofread',
+    corrections: [{ find, replace, category: 'spelling', reason: 'A typo' }],
+  });
+
+  it('proofread, while the owner’s own change waits for the next run', async () => {
+    await run('proofread');
+    const sessionUuid = createSession({ origin: 'owner', title: 'Fixes' });
+    const proposed = async (action: Record<string, unknown>) => {
+      const { results } = await proposeActions({
+        sessionUuid,
+        actions: [action as never],
+      });
+      return (results[0] as { actionUuid: string }).actionUuid;
+    };
+
+    // Applied from its session: the paragraph it mended stays proofread.
+    await applyActions({
+      actionUuids: [await proposed(fix('islnds', 'islands'))],
+      by: 'owner',
+    });
+    expect(await due('proofread')).toEqual([]);
+
+    // Taken in the editor, saved with a change of the owner's beside it.
+    const actionUuid = await proposed(fix('lft', 'left'));
+    writeDiary([
+      'Went to the Kuzova islands with Lyosha today.',
+      'The boat left at nine; the sea was calm all the way.',
+      PARAGRAPHS[2]!,
+      'Evening tea at the pier, and cards.',
+    ]);
+    markTakenInEditor(actionUuid, { c1: 'accepted' });
+    const [item, ...rest] = await due('proofread');
+    expect(rest).toEqual([]);
+    expect(item!.shown).toContain('and cards');
+    expect(item!.shown).not.toContain('The boat left');
+  });
+
+  it('leaves an entity related since as looked at for relations', async () => {
+    await run('graph');
+    expect(await due('graph')).toEqual([]);
+    const sessionUuid = createSession({ origin: 'owner', title: 'Relations' });
+    const { results } = await proposeActions({
+      sessionUuid,
+      actions: [
+        {
+          kind: 'relation',
+          target: `diary-entry:${DAY}`,
+          other: `project:${PROJECT}`,
+          relation: 'related',
+          whyNotInlineLink: 'The day the harbour began.',
+          reason: 'The entry tells of the harbour.',
+        },
+      ],
+    });
+    const outcome = await applyActions({
+      actionUuids: [(results[0] as { actionUuid: string }).actionUuid],
+      by: 'owner',
+    });
+    expect(outcome.applied).toHaveLength(1);
+    invalidateMcpDocuments();
+    expect(await due('graph')).toEqual([]);
+  });
+});
+
+describe('a link the model left', () => {
+  beforeEach(() => {
+    writeText('project', PROJECT, 'project-description', [
+      header('h1', 'Goals'),
+    ]);
+    writeText('diary-entry', DIARY, 'diary-body', [
+      paragraph(
+        'b0',
+        `Read ${link('project', PROJECT, 'the results', 'results')} again.`,
+      ),
+    ]);
+  });
+
+  it('comes back once a heading it could lead to appears', async () => {
+    const first = await run('links');
+    expect(brief(first!)).toContain('the heading it led to is gone');
+    expect(await run('links')).toBeNull();
+    writeText('project', PROJECT, 'project-description', [
+      header('h1', 'Goals'),
+      header('h2', 'Result'),
+    ]);
+    const [item] = await due('links');
+    expect(item!.subject).toMatch(
+      new RegExp(`^link:diary-entry:${DAY}:diary-body:`),
+    );
+    expect(item!.shown).toContain('#result');
   });
 });
 
 describe('a ready-made request', () => {
-  it('is offered on the kinds it names, and only without a schedule', async () => {
-    const diary = saveTemplate(null, {
-      title: 'Proofread',
-      instruction: 'Proofread this entry.',
+  it('is offered on the kinds it names, beside the checks', async () => {
+    const own = saveTemplate(null, {
+      title: 'Look over',
+      instruction: 'Look over this entry.',
       offerOn: ['diary-entry', 'nonsense'],
     });
     saveTemplate(null, {
@@ -507,58 +555,58 @@ describe('a ready-made request', () => {
       instruction: 'Look at this project.',
       offerOn: ['project'],
     });
-    saveTemplate(null, {
-      title: 'Nightly',
-      instruction: 'Look at everything.',
-      schedule: { kind: 'day', time: '03:00', timeZone: 'UTC' },
-      offerOn: ['diary-entry'],
-    });
-    expect(diary.offerOn).toEqual(['diary-entry']);
+    expect(own.offerOn).toEqual(['diary-entry']);
     const panel = await entityPanel({
       kind: 'diary-entry',
       id: DIARY,
       date: DAY,
     } as never);
-    expect(panel.templates).toEqual([
-      {
-        templateId: diary.templateId,
-        title: 'Proofread',
-        instruction: 'Proofread this entry.',
-      },
-    ]);
     expect(
-      saveTemplate(null, { title: 'New', instruction: 'Something.' }).offerOn,
-    ).toEqual(['project', 'project-section', 'event', 'diary-entry', 'page']);
+      panel.templates.map((item) => [item.title, item.builtin ?? null]),
+    ).toEqual([
+      ['Fixing text mistakes', 'proofread'],
+      ['Fixing broken links', 'links'],
+      ['Finding possible relations', 'graph'],
+      ['Look over', null],
+    ]);
   });
 
-  it('starts the owner’s session, which reads nothing for the template', async () => {
-    await useModel([READ_DIARY, { text: 'Read it.' }]);
-    const preset = saveTemplate(null, {
-      title: 'Proofread',
-      instruction: 'Proofread this entry.',
+  it('opens the owner’s session, and is never run as a check is', async () => {
+    const own = saveTemplate(null, {
+      title: 'Look over',
+      instruction: 'Look over this entry.',
     });
     const sessionUuid = startOwnerSession({
-      text: 'Proofread this entry, and mind the names.',
+      text: 'Look over this entry, and mind the names.',
       about: [`diary-entry:${DAY}`],
-      templateId: preset.templateId,
+      templateId: own.templateId,
     });
     await turnsSettled();
-    const session = findSession(sessionUuid)!;
-    expect(session.origin).toBe('owner');
-    expect(session.templateId).toBe(preset.templateId);
-    expect(session.title).toBe('Proofread');
-    expect(marksOf(preset.templateId).size).toBe(0);
-    // It is the owner's to send: never run as a template is.
-    await expect(runTemplate(preset.templateId)).rejects.toThrow(
+    expect(findSession(sessionUuid)).toMatchObject({
+      origin: 'owner',
+      templateId: own.templateId,
+      title: 'Look over',
+    });
+    await expect(runTemplate(own.templateId)).rejects.toThrow(
       /ready-made request/,
     );
-    const scheduled = diaryTemplate({
-      kind: 'day',
-      time: '03:00',
-      timeZone: 'UTC',
-    });
     expect(() =>
-      startOwnerSession({ text: 'Go.', templateId: scheduled.templateId }),
+      startOwnerSession({ text: 'Go.', templateId: id('proofread') }),
     ).toThrow();
+  });
+});
+
+describe('what changed', () => {
+  it('lists what was made or changed from the moment named', async () => {
+    expect(await toolText('changes_since', {})).toContain(
+      'The arguments do not fit',
+    );
+    const listed = await toolText('changes_since', { from: '1970-01-01' });
+    expect(listed).toContain(`diary-entry:${DAY}`);
+    const none = await toolText('changes_since', {
+      from: '1970-01-01',
+      kinds: ['page'],
+    });
+    expect(none).toContain('_(nothing)_');
   });
 });

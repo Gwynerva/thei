@@ -252,11 +252,13 @@ export function sessionFilesNote(files: readonly SessionFile[]): string {
  * Makes a file a model wrote — whatever it is, as its name says — into the
  * library, kept in the session like a file the owner brought. The content is
  * text, or base64 for bytes. Returns the file, or why it could not be made,
- * in words for the model.
+ * in words for the model. A turn stopped while it was made keeps nothing:
+ * the file has no place, and the library lets it go.
  */
 export async function makeSessionFile(
   sessionUuid: string,
   input: { name?: unknown; content?: unknown; base64?: unknown },
+  live: () => boolean = () => true,
 ): Promise<{ file: SessionFile } | { refused: string }> {
   const { name, content } = input;
   if (typeof name !== 'string' || typeof content !== 'string' || !content)
@@ -276,9 +278,12 @@ export async function makeSessionFile(
       settings: fileSettings(undefined),
     });
     const { db, schema } = THEI_SERVER.useDb();
-    db.transaction((tx) =>
-      placeSessionFiles(tx, schema, sessionUuid, [assetUuid], Date.now()),
-    );
+    const placed = db.transaction((tx) => {
+      if (!live()) return false;
+      placeSessionFiles(tx, schema, sessionUuid, [assetUuid], Date.now());
+      return true;
+    });
+    if (!placed) return { refused: 'The turn was stopped; nothing was kept.' };
     return { file: { assetUuid, name: fileName } };
   } catch (error) {
     return {
@@ -299,19 +304,23 @@ const ready = new Map<string, StreamFile | null>();
 const READY_KEPT = 32;
 
 /** A picture as a model is shown it: a JPEG, no larger than it needs. */
-async function picture(path: string): Promise<string> {
-  const data = await withProcessingSlot(AssetType.Image, () =>
-    sharp(path, { animated: false })
-      .autoOrient()
-      .resize({
-        width: PICTURE_SIDE,
-        height: PICTURE_SIDE,
-        fit: 'inside',
-        withoutEnlargement: true,
-      })
-      .flatten({ background: '#ffffff' })
-      .jpeg({ quality: 80 })
-      .toBuffer(),
+async function picture(path: string, signal?: AbortSignal): Promise<string> {
+  const data = await withProcessingSlot(
+    AssetType.Image,
+    () =>
+      sharp(path, { animated: false })
+        .autoOrient()
+        .resize({
+          width: PICTURE_SIDE,
+          height: PICTURE_SIDE,
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .flatten({ background: '#ffffff' })
+        .jpeg({ quality: 80 })
+        .toBuffer(),
+    // A stopped turn gives its place in the queue up.
+    { signal },
   );
   return data.toString('base64');
 }
@@ -320,15 +329,16 @@ async function prepare(
   asset: StoredAssetRecord,
   name: string,
   preview: StoredAssetRecord | undefined,
+  signal?: AbortSignal,
 ): Promise<StreamFile | null> {
   const path = (record: StoredAssetRecord) =>
     THEI_SERVER.assets.filePath(record.contentHash, record.extension);
   // A drawing or a video is shown by its preview; a photo by itself.
   if (asset.type === AssetType.Image && asset.extension !== 'svg')
-    return { kind: 'image', data: await picture(path(asset)) };
+    return { kind: 'image', data: await picture(path(asset), signal) };
   if (asset.type === AssetType.Image || asset.type === AssetType.Video)
     return preview
-      ? { kind: 'image', data: await picture(path(preview)) }
+      ? { kind: 'image', data: await picture(path(preview), signal) }
       : null;
   if (asset.extension === 'pdf' && asset.size <= PDF_MAX)
     return {
@@ -349,11 +359,12 @@ async function prepare(
 /**
  * The files these turns bring, made ready for a model by id. One that cannot
  * be shown — gone, too large, of a kind no model reads — is left out: the
- * words of its message still name it.
+ * words of its message still name it. `signal` stops it for a stopped turn.
  */
 export async function modelFiles(
   turns: readonly { role: string; files?: string[] }[],
   names: ReadonlyMap<string, string>,
+  signal?: AbortSignal,
 ): Promise<Map<string, StreamFile>> {
   const ids = [
     ...new Set(
@@ -382,8 +393,10 @@ export async function modelFiles(
             asset,
             names.get(id) ?? id,
             previews.get(previewIds.get(id) ?? ''),
+            signal,
           );
         } catch (error) {
+          if (signal?.aborted) throw error;
           THEI_SERVER.console
             .tag('AI')
             .warn(`A file of a session could not be read: ${String(error)}`);

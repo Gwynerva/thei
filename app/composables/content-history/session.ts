@@ -627,17 +627,6 @@ export function createEditorHistorySession(
     return restore(previous.data, { remember: false });
   }
 
-  /** Runs a change that empties the editor, keeping what it held. */
-  function clear(action: () => Promise<void>) {
-    return replace(
-      'before-clear',
-      async () => {
-        await action();
-      },
-      false,
-    );
-  }
-
   // --- Drafts of other tabs -------------------------------------------------
 
   /** Drafts other tabs keep of this field, newest first. */
@@ -887,7 +876,6 @@ export function createEditorHistorySession(
     restore,
     undoRestore,
     forgetRestore,
-    clear,
     loadOffers,
     dismissOffer,
     clearOffer,

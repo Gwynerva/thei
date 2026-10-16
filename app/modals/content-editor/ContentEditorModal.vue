@@ -1291,17 +1291,6 @@ useSaveShortcut(save, {
   exclusive: true,
 });
 
-async function clearContent() {
-  historyPopupOpen.value = false;
-  if (!editor || headerSummary.value.blockCount === 0) return;
-  if (!window.confirm(phrase.value.content_editor_clear_confirm)) return;
-  const target = editor;
-  // What the editor held is kept as a version before it is emptied.
-  await editorSession.clear(async () => {
-    await target.clear();
-  });
-}
-
 async function pickAsset(kind: ContentEditorAssetKind) {
   const asset = await launchContentAssetWizard(contentAssetOptions(kind));
 
@@ -1709,9 +1698,7 @@ function editorJsI18nMessages() {
               :current="headerSummary"
               :current-key="currentKey"
               :opened="opened"
-              :clearable="headerSummary.blockCount > 0"
               @choose="chooseVersion"
-              @clear="clearContent"
             />
           </div>
         </FloatingPopup>

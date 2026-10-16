@@ -928,7 +928,6 @@ export type LanguagePhrases = {
   content_editor_placeholder: string;
   content_editor_save_error: string;
   content_editor_title: string;
-  content_editor_clear_confirm: string;
   content_never_saved: string;
   content_history: string;
   content_history_empty: string;
@@ -952,8 +951,6 @@ export type LanguagePhrases = {
   content_stored_notice: (time: string) => string;
   content_stored_notice_hint: string;
   content_history_keeps: string;
-  content_history_clear: string;
-  content_history_clear_hint: string;
   content_draft_status_synced: (time: string) => string;
   content_draft_status_offline: string;
   content_draft_status_refused_short: string;
@@ -1299,24 +1296,7 @@ export type LanguagePhrases = {
   ai_templates_hint: string;
   ai_templates_new: string;
   ai_templates_presets: string;
-  ai_templates_presets_hint: string;
-  ai_templates_presets_empty: string;
-  ai_templates_scheduled: string;
-  ai_templates_scheduled_hint: string;
   ai_template_builtin: string;
-  ai_template_whens: Record<
-    import('../ai').AiTemplateSchedule['kind'],
-    { title: string; hint: string }
-  >;
-  /** When a schedule runs, in a line: the time, and the day where it has one. */
-  ai_template_when_day: (time: string) => string;
-  ai_template_when_week: (day: string, time: string) => string;
-  ai_template_when_month: (time: string) => string;
-  ai_template_next: (when: string) => string;
-  ai_template_next_full: (when: string) => string;
-  ai_template_schedule: string;
-  ai_template_schedule_on: string;
-  ai_template_schedule_off: string;
   ai_template_open: string;
   ai_open_full: string;
   select_filter: string;
@@ -1344,9 +1324,11 @@ export type LanguagePhrases = {
   content_block_toolbox: string;
   ai_template_offer_on: string;
   ai_template_offer_on_hint: string;
-  ai_template_offered_nowhere: string;
-  ai_template_awaits_review: string;
+  /** Offered on no kind: a check only from its tab, a request only in a new session. */
+  ai_template_offered_nowhere: (check: boolean) => string;
   ai_template_run: string;
+  ai_template_run_again: string;
+  ai_template_nothing_new: (title: string) => string;
   ai_template_edit: string;
   ai_template_running: string;
   ai_template_never_run: string;
@@ -1362,9 +1344,6 @@ export type LanguagePhrases = {
   ai_template_name_placeholder: string;
   ai_template_instruction: string;
   ai_template_instruction_placeholder: string;
-  ai_template_when: string;
-  ai_template_time: string;
-  ai_template_day: string;
   ai_template_model: string;
   ai_template_model_placeholder: (model: string) => string;
   ai_template_model_hint: string;
@@ -1408,7 +1387,6 @@ export type LanguagePhrases = {
   ai_session_delete: string;
   ai_session_delete_confirm: (title: string) => string;
   ai_session_by_you: (when: string) => string;
-  ai_session_by_template: (when: string) => string;
   ai_session_via_app: (client: string) => string;
   ai_session_tokens: (amount: string) => string;
   ai_session_app_note: string;
@@ -1432,6 +1410,8 @@ export type LanguagePhrases = {
   ai_question_own: string;
   ai_notices: Record<
     | 'stopped'
+    | 'timeout'
+    | 'interrupted'
     | 'limit'
     | 'no-model'
     | 'key'
@@ -1467,18 +1447,14 @@ export type LanguagePhrases = {
   ai_new_title: string;
   ai_new_text: string;
   ai_new_model_line: (model: string) => string;
-  /** The built-in templates' words: what each is called and asks. */
+  /** The built-in checks' words: what each is called and asks. */
   ai_template_builtins: Record<
     import('../ai-template').AiBuiltinTemplateKey,
     { title: string; instruction: string }
   >;
   ai_template_copy_title: (title: string) => string;
-  /** How a template's session opens: who started it, and the run before. */
-  ai_template_note: (
-    title: string,
-    scheduled: boolean,
-    since: string | null,
-  ) => string;
+  /** How a check's session opens: who started it, and how much it was given. */
+  ai_template_note: (title: string, count: number) => string;
   ai_action_kinds: Record<
     | 'update'
     | 'field'

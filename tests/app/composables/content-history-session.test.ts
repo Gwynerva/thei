@@ -331,16 +331,6 @@ describe('editor history session', () => {
     expect(await restoring).toBe(true);
   });
 
-  it('keeps what the editor held before clearing it', async () => {
-    const { session, transport, editor } = setup(text('Precious'));
-    await session.initialize();
-    await session.clear(async () => {
-      Object.assign(editor(), { blocks: [] });
-    });
-    await vi.advanceTimersByTimeAsync(0);
-    expect(transport.writes.at(-1)?.hint).toBe('before-clear');
-  });
-
   it('keeps unconfirmed text in the browser and sends it when the connection returns', async () => {
     const { session, transport, buffer, lifecycle, type } = setup();
     await session.initialize();

@@ -1,14 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { asc, eq } from 'drizzle-orm';
-import type { AiTemplateSchedule } from '#layers/thei/shared/ai';
 import {
   AI_BUILTIN_TEMPLATE_KEYS,
   AI_BUILTIN_TEMPLATES,
   AI_TEMPLATE_DEFAULT_OFFER,
   AI_TEMPLATE_INSTRUCTION_MAX,
-  AI_TEMPLATE_OFFER_KINDS,
   AI_TEMPLATE_TITLE_MAX,
   builtinTemplateId,
+  templateOfferKinds,
   type AiBuiltinTemplateKey,
   type AiTemplateItem,
   type AiTemplateOfferKind,
@@ -16,13 +15,12 @@ import {
 import { EntityPrefix } from '../../entity-id';
 import { refuse as fail } from '../../entity-patch/text';
 import { findSession } from '../sessions/store';
-import { checkedSchedule, nextRunAt } from './schedule';
 
 /**
- * The templates: the built-in ones, written in the code and set by the
- * owner — when they run, with which model, whether at all — and the owner's
- * own, written by the owner. A built-in one's settings are a row under its
- * id, made the first time the owner changes them.
+ * The templates: the built-in checks, written in the code and set by the
+ * owner — with which model, offered where — and the owner's own ready-made
+ * requests, written by the owner. A built-in one's settings are a row under
+ * its id, made the first time the owner changes them or runs it.
  */
 
 type TemplateRow = typeof import('../../db/schema/ai').aiTemplates.$inferSelect;
@@ -53,33 +51,23 @@ function lastSessionOf(row: TemplateRow | undefined) {
           waiting: session.waiting,
           state: session.state,
           archived: session.archivedAt !== null,
+          startedAt: session.createdAt,
         },
       }
     : {};
 }
 
-function runs(row: TemplateRow | undefined) {
-  return {
-    ...(row?.nextRunAt ? { nextRunAt: row.nextRunAt } : {}),
-    ...(row?.lastRunAt ? { lastRunAt: row.lastRunAt } : {}),
-    ...lastSessionOf(row),
-  };
-}
-
 function builtinItem(key: AiBuiltinTemplateKey): AiTemplateItem {
   const row = rowOf(builtinTemplateId(key));
   const words = THEI_SERVER.phrase.ai_template_builtins[key];
-  const defaults = AI_BUILTIN_TEMPLATES[key];
   return {
     templateId: builtinTemplateId(key),
     builtin: key,
     title: words.title,
     instruction: words.instruction,
     model: row?.model ?? '',
-    schedule: row?.schedule ?? (defaults.schedule as AiTemplateSchedule),
-    enabled: row?.enabled ?? false,
-    offerOn: row?.offerOn ?? AI_TEMPLATE_DEFAULT_OFFER,
-    ...runs(row),
+    offerOn: row?.offerOn ?? [...AI_BUILTIN_TEMPLATES[key].offerOn],
+    ...lastSessionOf(row),
   };
 }
 
@@ -89,10 +77,8 @@ function ownItem(row: TemplateRow): AiTemplateItem {
     title: row.title ?? '',
     instruction: row.instruction ?? '',
     model: row.model,
-    schedule: row.schedule,
-    enabled: row.enabled,
     offerOn: row.offerOn,
-    ...runs(row),
+    ...lastSessionOf(row),
   };
 }
 
@@ -127,15 +113,13 @@ export interface TemplateInput {
   title?: unknown;
   instruction?: unknown;
   model?: unknown;
-  schedule?: unknown;
-  enabled?: unknown;
   offerOn?: unknown;
 }
 
 /**
  * Saves a template: a new one of the owner's when `templateId` is null, or
- * what the owner changed of one. Of a built-in one only its model, schedule
- * and switch are the owner's; its words are the code's.
+ * what the owner changed of one. Of a built-in one only its model and where
+ * it is offered are the owner's; its words are the code's.
  */
 export function saveTemplate(
   templateId: string | null,
@@ -144,25 +128,17 @@ export function saveTemplate(
 ): AiTemplateItem {
   const current = templateId ? findTemplate(templateId) : undefined;
   if (templateId && !current) fail('There is no such template.');
-  const builtin = current?.builtin as AiBuiltinTemplateKey | undefined;
+  const builtin = current?.builtin;
   const model =
     input.model === undefined
       ? (current?.model ?? '')
       : typeof input.model === 'string'
         ? input.model.trim().slice(0, 200)
         : fail('The model is named by a word.');
-  const schedule =
-    input.schedule === undefined
-      ? (current?.schedule ?? { kind: 'manual' as const })
-      : checkedSchedule(input.schedule);
-  const enabled =
-    input.enabled === undefined
-      ? (current?.enabled ?? true)
-      : Boolean(input.enabled);
   const offerOn =
     input.offerOn === undefined
       ? (current?.offerOn ?? AI_TEMPLATE_DEFAULT_OFFER)
-      : checkedOfferOn(input.offerOn);
+      : checkedOfferOn(input.offerOn, builtin);
   const words = builtin
     ? { title: null, instruction: null }
     : {
@@ -180,7 +156,6 @@ export function saveTemplate(
               ),
       };
   const id = templateId ?? `${EntityPrefix.AiTemplate}-${randomUUID()}`;
-  const next = enabled ? nextRunAt(schedule, now) : null;
   const { db, schema } = THEI_SERVER.useDb();
   db.insert(schema.aiTemplates)
     .values({
@@ -188,37 +163,32 @@ export function saveTemplate(
       builtin: builtin ?? null,
       ...words,
       model,
-      schedule,
-      enabled,
       offerOn,
-      nextRunAt: next,
       createdAt: now,
       updatedAt: now,
     })
     .onConflictDoUpdate({
       target: schema.aiTemplates.templateId,
-      set: {
-        ...words,
-        model,
-        schedule,
-        enabled,
-        offerOn,
-        nextRunAt: next,
-        updatedAt: now,
-      },
+      set: { ...words, model, offerOn, updatedAt: now },
     })
     .run();
   return findTemplate(id)!;
 }
 
-/** The kinds a template is offered on: known ones, each once, in their order. */
-function checkedOfferOn(value: unknown): AiTemplateOfferKind[] {
+/**
+ * The kinds a template is offered on: those it may be, each once, in their
+ * order.
+ */
+function checkedOfferOn(
+  value: unknown,
+  builtin: AiBuiltinTemplateKey | undefined,
+): AiTemplateOfferKind[] {
   if (!Array.isArray(value)) fail('Where it is offered is a list of kinds.');
   const asked = new Set(value);
-  return AI_TEMPLATE_OFFER_KINDS.filter((kind) => asked.has(kind));
+  return templateOfferKinds(builtin).filter((kind) => asked.has(kind));
 }
 
-/** A copy of a template as the owner's own, off until they turn it on. */
+/** A copy of a template as the owner's own ready-made request. */
 export function copyTemplate(templateId: string, now = Date.now()) {
   const source = findTemplate(templateId) ?? fail('There is no such template.');
   return saveTemplate(
@@ -229,8 +199,6 @@ export function copyTemplate(templateId: string, now = Date.now()) {
         .slice(0, AI_TEMPLATE_TITLE_MAX),
       instruction: source.instruction,
       model: source.model,
-      schedule: source.schedule,
-      enabled: false,
       offerOn: source.offerOn,
     },
     now,
@@ -240,66 +208,33 @@ export function copyTemplate(templateId: string, now = Date.now()) {
 export function deleteTemplate(templateId: string) {
   const template =
     findTemplate(templateId) ?? fail('There is no such template.');
-  if (template.builtin) fail('A built-in template is turned off, not deleted.');
+  if (template.builtin) fail('A built-in template is not deleted.');
   const { db, schema } = THEI_SERVER.useDb();
-  db.transaction((tx) => {
-    tx.delete(schema.aiTemplates)
-      .where(eq(schema.aiTemplates.templateId, templateId))
-      .run();
-    tx.delete(schema.aiTemplateMarks)
-      .where(eq(schema.aiTemplateMarks.templateId, templateId))
-      .run();
-  });
-}
-
-/**
- * Records a run: the session it started, when, and the next one. A run that
- * could not happen moves only the next one on: «since the last run» stays
- * since the last run that read anything.
- */
-export function recordRun(
-  templateId: string,
-  run: { at: number; sessionUuid?: string },
-) {
-  const template = findTemplate(templateId);
-  if (!template) return;
-  const { db, schema } = THEI_SERVER.useDb();
-  const next = template.enabled ? nextRunAt(template.schedule, run.at) : null;
-  const builtin = template.builtin ?? null;
-  db.insert(schema.aiTemplates)
-    .values({
-      templateId,
-      builtin,
-      title: null,
-      instruction: null,
-      model: template.model,
-      schedule: template.schedule,
-      enabled: template.enabled,
-      offerOn: template.offerOn,
-      nextRunAt: next,
-      lastRunAt: run.sessionUuid ? run.at : null,
-      lastSessionUuid: run.sessionUuid ?? null,
-      createdAt: run.at,
-      updatedAt: run.at,
-    })
-    .onConflictDoUpdate({
-      target: schema.aiTemplates.templateId,
-      set: {
-        nextRunAt: next,
-        ...(run.sessionUuid
-          ? { lastRunAt: run.at, lastSessionUuid: run.sessionUuid }
-          : {}),
-      },
-    })
+  db.delete(schema.aiTemplates)
+    .where(eq(schema.aiTemplates.templateId, templateId))
     .run();
 }
 
-/** The templates whose time has come: switched on, and due. */
-export function dueTemplates(now: number): AiTemplateItem[] {
-  return listTemplates().filter(
-    (template) =>
-      template.enabled &&
-      template.nextRunAt !== undefined &&
-      template.nextRunAt <= now,
-  );
+/** Records the session a check's run started. */
+export function recordRun(templateId: string, sessionUuid: string, at: number) {
+  const template = findTemplate(templateId);
+  if (!template) return;
+  const { db, schema } = THEI_SERVER.useDb();
+  db.insert(schema.aiTemplates)
+    .values({
+      templateId,
+      builtin: template.builtin ?? null,
+      title: null,
+      instruction: null,
+      model: template.model,
+      offerOn: template.offerOn,
+      lastSessionUuid: sessionUuid,
+      createdAt: at,
+      updatedAt: at,
+    })
+    .onConflictDoUpdate({
+      target: schema.aiTemplates.templateId,
+      set: { lastSessionUuid: sessionUuid },
+    })
+    .run();
 }

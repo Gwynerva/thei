@@ -17,8 +17,6 @@ export default defineEventHandler((event) =>
       title: body.title,
       instruction: body.instruction,
       model: body.model,
-      schedule: body.schedule,
-      enabled: body.enabled,
       offerOn: body.offerOn,
     });
   }),

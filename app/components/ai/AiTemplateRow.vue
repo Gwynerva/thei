@@ -1,16 +1,12 @@
 <script lang="ts" setup>
-import {
-  isPresetTemplate,
-  templateAwaitsReview,
-  type AiTemplateItem,
-} from '#layers/thei/shared/ai-template';
+import type { AiTemplateItem } from '#layers/thei/shared/ai-template';
 import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
 
 /**
- * One template across the list: what it asks, which model answers it and
- * what its last run left — and, at the right, its schedule with the switch,
- * or, for a ready-made request, where it is offered; then the button that
- * starts it and the settings. On a phone those end the row.
+ * One template across the list: what it asks, which model answers it and,
+ * for a check, what its last run left; at the right where it is offered,
+ * then the button that runs a check — or opens a request in a new session —
+ * and the settings. On a phone those end the row.
  */
 const props = defineProps<{
   template: AiTemplateItem;
@@ -18,25 +14,14 @@ const props = defineProps<{
   starting?: boolean;
 }>();
 const emit = defineEmits<{
-  toggle: [enabled: boolean];
   run: [];
   edit: [];
 }>();
 
-const preset = computed(() => isPresetTemplate(props.template));
-/** A schedule switched off: the row is quieter. */
-const off = computed(() => !preset.value && !props.template.enabled);
+const check = computed(() => Boolean(props.template.builtin));
 const running = computed(
   () => props.starting || props.template.lastSession?.state === 'running',
 );
-const next = computed(() => {
-  if (!props.template.enabled) return phrase.value.ai_template_schedule_off;
-  if (templateAwaitsReview(props.template))
-    return phrase.value.ai_template_awaits_review;
-  return props.template.nextRunAt
-    ? phrase.value.ai_template_next(aheadWhen(props.template.nextRunAt))
-    : '';
-});
 const offeredOn = computed(() =>
   props.template.offerOn.map((kind) => ({
     kind,
@@ -45,7 +30,7 @@ const offeredOn = computed(() =>
   })),
 );
 const action = computed(() =>
-  preset.value ? phrase.value.ai_template_open : phrase.value.ai_template_run,
+  check.value ? phrase.value.ai_template_run : phrase.value.ai_template_open,
 );
 </script>
 
@@ -60,7 +45,6 @@ const action = computed(() =>
       <span
         class="flex min-w-0 items-baseline gap-xs text-sm leading-snug
           font-semibold"
-        :class="{ 'opacity-60': off }"
         ><span class="min-w-0">{{ publicText(template.title) }}</span
         ><span
           v-if="template.builtin"
@@ -68,10 +52,7 @@ const action = computed(() =>
           >{{ phrase.ai_template_builtin }}</span
         ></span
       >
-      <p
-        class="line-clamp-2 text-xs leading-normal text-text-2"
-        :class="{ 'opacity-60': off }"
-      >
+      <p class="line-clamp-2 text-xs leading-normal text-text-2">
         {{ publicText(template.instruction) }}
       </p>
       <div
@@ -83,50 +64,50 @@ const action = computed(() =>
             template.model || phrase.ai_template_default_model
           }}
         </span>
-        <TheiLink
-          v-if="!preset && running && template.lastSession"
-          :to="{
-            path: '/admin/ai/',
-            query: { session: template.lastSession.sessionUuid },
-          }"
-          class="inline-flex items-center gap-1 text-text-2 underline
-            decoration-text-2/35 underline-offset-2 transition
-            hocus:text-accent"
-        >
-          <AiRunningDots />{{ phrase.ai_template_running }}
-        </TheiLink>
-        <TheiLink
-          v-else-if="!preset && template.lastSession && template.lastRunAt"
-          :to="{
-            path: '/admin/ai/',
-            query: { session: template.lastSession.sessionUuid },
-          }"
-          class="inline-flex items-center gap-1 text-text-2 underline
-            decoration-text-2/35 underline-offset-2 transition
-            hocus:text-accent"
-          data-template-last
-        >
-          <Icon name="ai-chat" class="shrink-0 text-text-3" />{{
-            shortWhen(template.lastRunAt)
-          }}
-          <template v-if="template.lastSession.waiting">
-            ·
-            <b class="font-semibold text-accent">{{
-              phrase.ai_session_waiting(template.lastSession.waiting)
-            }}</b>
-          </template>
-        </TheiLink>
-        <span v-else-if="!preset" class="inline-flex items-center gap-1">
-          <Icon name="ai-chat" class="shrink-0 text-text-3" />{{
-            template.lastRunAt
-              ? shortWhen(template.lastRunAt)
-              : phrase.ai_template_never_run
-          }}
-        </span>
+        <template v-if="check">
+          <TheiLink
+            v-if="running && template.lastSession"
+            :to="{
+              path: '/admin/ai/',
+              query: { session: template.lastSession.sessionUuid },
+            }"
+            class="inline-flex items-center gap-1 text-text-2 underline
+              decoration-text-2/35 underline-offset-2 transition
+              hocus:text-accent"
+          >
+            <AiRunningDots />{{ phrase.ai_template_running }}
+          </TheiLink>
+          <TheiLink
+            v-else-if="template.lastSession"
+            :to="{
+              path: '/admin/ai/',
+              query: { session: template.lastSession.sessionUuid },
+            }"
+            class="inline-flex items-center gap-1 text-text-2 underline
+              decoration-text-2/35 underline-offset-2 transition
+              hocus:text-accent"
+            data-template-last
+          >
+            <Icon name="ai-chat" class="shrink-0 text-text-3" />{{
+              shortWhen(template.lastSession.startedAt)
+            }}
+            <template v-if="template.lastSession.waiting">
+              ·
+              <b class="font-semibold text-accent">{{
+                phrase.ai_session_waiting(template.lastSession.waiting)
+              }}</b>
+            </template>
+          </TheiLink>
+          <span v-else class="inline-flex items-center gap-1">
+            <Icon name="ai-chat" class="shrink-0 text-text-3" />{{
+              phrase.ai_template_never_run
+            }}
+          </span>
+        </template>
       </div>
     </div>
 
-    <div v-if="preset" class="flex min-w-0 flex-col gap-0.5 text-xs">
+    <div class="flex min-w-0 flex-col gap-0.5 text-xs">
       <b class="truncate font-semibold">{{ phrase.ai_template_offer_on }}</b>
       <span
         v-if="offeredOn.length"
@@ -143,33 +124,8 @@ const action = computed(() =>
         />
       </span>
       <span v-else class="truncate text-text-2">{{
-        phrase.ai_template_offered_nowhere
+        phrase.ai_template_offered_nowhere(check)
       }}</span>
-    </div>
-    <div v-else class="flex min-w-0 items-center gap-2">
-      <FieldToggle
-        :model-value="template.enabled"
-        :switch-label="phrase.ai_template_schedule"
-        data-template-switch
-        @update:model-value="emit('toggle', Boolean($event))"
-      />
-      <span class="flex min-w-0 flex-col text-xs leading-tight">
-        <b
-          class="truncate font-semibold"
-          :class="{ 'font-medium text-text-2': off }"
-          >{{ scheduleLine(template.schedule) }}</b
-        >
-        <span
-          class="truncate text-xs"
-          :class="
-            templateAwaitsReview(template) && template.enabled
-              ? 'text-accent'
-              : 'text-text-2'
-          "
-          data-template-next
-          >{{ next }}</span
-        >
-      </span>
     </div>
 
     <div class="flex gap-1">
@@ -179,13 +135,11 @@ const action = computed(() =>
         class="bg-transparent pointer-coarse:size-11"
         :aria-label="action"
         :data-title-popup="action"
-        :disabled="!preset && running"
+        :disabled="starting"
         data-template-run
         @click="emit('run')"
       >
-        <Icon
-          :name="starting ? 'loading' : preset ? 'ai-chat' : 'play-circle'"
-        />
+        <Icon :name="starting ? 'loading' : check ? 'list-check' : 'ai-chat'" />
       </Button>
       <Button
         variant="secondary"

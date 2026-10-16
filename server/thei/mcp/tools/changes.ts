@@ -1,33 +1,12 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import type { AiMessagePart } from '#layers/thei/shared/ai';
 import { READS } from '../annotations';
 import type { McpCallContext } from '../context';
 import { guardTool, McpToolError, toolResult } from '../result';
-import { entityFingerprint } from '../../ai/digests';
-import { findSession, sessionMessages } from '../../ai/sessions/store';
 import { changesBetween, CHANGE_KINDS } from '../../ai/templates/changes';
-import { marksOf } from '../../ai/templates/reads';
 
 /** Changes one call lists; the rest come with offset. */
 const PAGE = 100;
-
-/**
- * The template a session runs, and when it ran before: what «since last
- * time» means in it. None outside a template's session.
- */
-function templateRun(context: McpCallContext) {
-  const sessionUuid = context.session?.sessionUuid;
-  const session = sessionUuid ? findSession(sessionUuid) : undefined;
-  if (!session?.templateId) return undefined;
-  const part = sessionMessages(session.sessionUuid)
-    .flatMap((message) => message.parts as AiMessagePart[])
-    .find(
-      (item): item is Extract<AiMessagePart, { type: 'template' }> =>
-        item.type === 'template',
-    );
-  return { templateId: session.templateId, since: part?.since };
-}
 
 function moment(value: string, name: string): number {
   const at = Date.parse(value);
@@ -40,7 +19,7 @@ function moment(value: string, name: string): number {
 
 export function registerChangesTool(
   server: McpServer,
-  context: McpCallContext,
+  _context: McpCallContext,
 ) {
   server.registerTool(
     'changes_since',
@@ -49,17 +28,9 @@ export function registerChangesTool(
       description:
         'What in the archive was made or changed within a stretch of time — ' +
         'its fields or any of its texts — the latest first, with refs to ' +
-        'read. In a session a template started, from defaults to the ' +
-        'template’s run before, and each entry says whether the template ' +
-        'read it then: of those, read_entity with since gives only what ' +
-        'changed.',
+        'read.',
       inputSchema: z.object({
-        from: z
-          .string()
-          .optional()
-          .describe(
-            'A day (YYYY-MM-DD) or a moment (ISO 8601); in a template’s session, its run before by default',
-          ),
+        from: z.string().describe('A day (YYYY-MM-DD) or a moment (ISO 8601)'),
         to: z.string().optional().describe('A day or a moment; now by default'),
         kinds: z
           .array(z.enum(CHANGE_KINDS as [string, ...string[]]))
@@ -76,14 +47,7 @@ export function registerChangesTool(
     },
     ({ from, to, kinds, offset }) =>
       guardTool(() => {
-        const run = templateRun(context);
-        const fromAt = from !== undefined ? moment(from, 'from') : run?.since;
-        if (fromAt === undefined)
-          throw new McpToolError(
-            run
-              ? 'This template has not run before: name from.'
-              : 'Name from: the day or moment to look from.',
-          );
+        const fromAt = moment(from, 'from');
         const toAt = to === undefined ? undefined : moment(to, 'to');
         const changes = changesBetween({
           from: fromAt,
@@ -92,20 +56,9 @@ export function registerChangesTool(
         });
         const start = offset ?? 0;
         const page = changes.slice(start, start + PAGE);
-        const marks = run ? marksOf(run.templateId) : undefined;
         const lines = page.map((change) => {
           const day = new Date(change.changedAt).toISOString().slice(0, 10);
-          const title = change.date ?? change.title;
-          let read = '';
-          if (marks) {
-            const mark = marks.get(`${change.key.kind}:${change.key.id}`);
-            read = !mark
-              ? ' · not read by this template yet'
-              : mark.fingerprint === entityFingerprint(change.key)
-                ? ' · read by this template as it is'
-                : ' · read by this template before, changed since';
-          }
-          return `- ${change.ref} — ${title} — changed ${day}${read}`;
+          return `- ${change.ref} — ${change.date ?? change.title} — changed ${day}`;
         });
         return toolResult(
           {},

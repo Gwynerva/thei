@@ -4,11 +4,11 @@ import type { AiMessagePiece } from './ai-message-text';
 /**
  * The words of AI sessions that both ends share: where a session comes from,
  * what a message carries beside its words, the states an action goes
- * through, how memory is anchored and what a template reads.
+ * through and how memory is anchored.
  *
- * A session is a conversation about the archive. The owner starts one, a
- * template starts one on its schedule, or an app over MCP leaves one. In it
- * a model answers, asks, and proposes actions; the owner applies them.
+ * A session is a conversation about the archive. The owner starts one, or
+ * runs a built-in check that starts one, or an app over MCP leaves one. In
+ * it a model answers, asks, and proposes actions; the owner applies them.
  */
 
 /** Who started a session. */
@@ -56,12 +56,16 @@ export interface AiStep {
 }
 
 /**
- * Why a turn ended early: stopped by the owner, the month's limit reached, no
- * model set, the key refused, the service busy, out of reach or not knowing
- * the model, the model refusing, too many steps, anything else.
+ * Why a turn ended early: stopped by the owner, out of time (the turn took
+ * too long, or the service fell silent), cut off when the site restarted,
+ * the month's limit reached, no model set, the key refused, the service
+ * busy, out of reach or not knowing the model, the model refusing, too many
+ * steps, anything else.
  */
 export const AI_NOTICE_KINDS = [
   'stopped',
+  'timeout',
+  'interrupted',
   'limit',
   'no-model',
   'key',
@@ -102,17 +106,8 @@ export type AiMessagePart =
       /** What the service said, for the owner; the page says the rest. */
       text: string;
     }
-  /**
-   * The run of a template that opens its session: who started it, and when
-   * the template ran before — what «since last time» means to its model.
-   */
-  | {
-      type: 'template';
-      templateId: string;
-      by: 'owner' | 'schedule';
-      /** The run before this one; none for the first. */
-      since?: number;
-    };
+  /** The run of a built-in check that opens its session. */
+  | { type: 'template'; templateId: string };
 
 /**
  * A turn of the conversation as the model saw it, kept so the session can go
@@ -192,17 +187,6 @@ export const AI_TERM_NOTE_MAX = 300;
 export const AI_OWNER_MEMORY_MAX = 1500;
 /** How long an entity's memory may grow before the model offers to shorten it. */
 export const AI_ANCHOR_MEMORY_MAX = 1200;
-
-/**
- * When a template runs, in the owner's time: `HH:MM`, days 1–7 from Monday,
- * a month's run on its first day. `timeZone` is the owner's, as their
- * browser named it when they set the time.
- */
-export type AiTemplateSchedule =
-  | { kind: 'manual' }
-  | { kind: 'day'; time: string; timeZone: string }
-  | { kind: 'week'; day: number; time: string; timeZone: string }
-  | { kind: 'month'; time: string; timeZone: string };
 
 /** An entity a session names, as a list shows it. */
 export interface AiEntityRef {

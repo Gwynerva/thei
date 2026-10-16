@@ -9,7 +9,7 @@ import { markReadOnlyRequest } from '../../../../thei/read-only-request';
 
 /**
  * The owner changes a template: of their own, anything; of a built-in one,
- * its model, its schedule and whether it runs.
+ * its model and where it is offered.
  */
 export default defineEventHandler((event) =>
   withRefusals(async (): Promise<AiTemplateItem> => {
@@ -20,8 +20,6 @@ export default defineEventHandler((event) =>
       title: body.title,
       instruction: body.instruction,
       model: body.model,
-      schedule: body.schedule,
-      enabled: body.enabled,
       offerOn: body.offerOn,
     });
   }),

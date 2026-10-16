@@ -6,7 +6,8 @@ import type { AiSessionItem } from '#layers/thei/shared/ai';
 /**
  * The menu a ✦ opens: what it can start, at the top, and under a heading
  * the sessions it lists — a word when there are none, and a way to the
- * rest of them.
+ * rest of them. A session answering may be stopped from the list, where
+ * `stoppable` allows it.
  */
 defineProps<{
   heading: string;
@@ -16,8 +17,10 @@ defineProps<{
   empty?: string;
   /** Where the rest of them are, when the list is not all of them. */
   more?: { to: RouteLocationRaw; label: string };
+  /** Which sessions answering get a button that stops them. */
+  stoppable?: (item: AiSessionItem) => boolean;
 }>();
-const emit = defineEmits<{ close: [] }>();
+const emit = defineEmits<{ close: []; stop: [sessionUuid: string] }>();
 </script>
 
 <template>
@@ -36,12 +39,18 @@ const emit = defineEmits<{ close: [] }>();
       >
         <Icon :name="headingIcon" class="shrink-0" />{{ heading }}
       </p>
-      <AiSessionLink
+      <div
         v-for="item in sessions"
         :key="item.sessionUuid"
-        :item
-        @click="emit('close')"
-      />
+        class="flex min-w-0 items-center"
+      >
+        <AiSessionLink :item class="min-w-0 flex-1" @click="emit('close')" />
+        <AiStopButton
+          v-if="item.state === 'running' && stoppable?.(item)"
+          :data-session-stop="item.sessionUuid"
+          @click="emit('stop', item.sessionUuid)"
+        />
+      </div>
       <p v-if="empty" class="px-xs pb-1 text-sm text-text-3">
         {{ empty }}
       </p>

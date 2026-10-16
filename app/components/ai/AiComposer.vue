@@ -22,8 +22,9 @@ import { rangeAnchor } from '#layers/thei/app/composables/popup-placement';
  * whose words grow upward as they come, up to a height of their own. `@`
  * looks for an entry, a project, an event, as a link in the editor does, and
  * puts it in as a chip, removed whole. Enter sends, Shift+Enter breaks the
- * line — on a touch screen Enter breaks it and the button sends; while the
- * model answers, the button stops it. What is sent is
+ * line — on a touch screen Enter breaks it and the button sends. While the
+ * model answers, a button of its own stops it, whatever is typed: what is
+ * sent meanwhile the model takes in. What is sent is
  * editing Markdown: the chips become links to what they name.
  *
  * Files come along from the «+» menu, pasted — several at once — or dropped
@@ -269,11 +270,6 @@ function openFile(asset: AssetVariantInfo) {
   void openModal(libraryAssetDetailsModal, { asset });
 }
 
-/** The button stops the model while there is nothing to send. */
-const stopping = computed(
-  () => Boolean(props.running) && empty.value && !brought.value.length,
-);
-
 /** Words or files to send, and nothing still on its way up. */
 const sendable = computed(
   () => (!empty.value || ready.value.length > 0) && !uploading.value,
@@ -309,11 +305,6 @@ function send() {
     },
     began,
   );
-}
-
-function primary() {
-  if (stopping.value) emit('stop');
-  else send();
 }
 
 // ---- Typing ------------------------------------------------------------------
@@ -750,23 +741,25 @@ defineExpose<AiComposerExpose>({
           >{{ placeholder }}</span
         >
       </div>
+      <AiStopButton
+        v-if="running"
+        class="text-xl"
+        data-composer-stop
+        @click="emit('stop')"
+      />
       <button
         type="button"
         class="flex size-9 shrink-0 cursor-pointer items-center justify-center
           bg-transparent text-xl text-accent transition-opacity
           disabled:cursor-default disabled:text-text-3 disabled:opacity-100
           pointer-coarse:size-11 hocus:opacity-75"
-        :disabled="disabled || busy || (!stopping && !sendable)"
-        :aria-label="stopping ? phrase.ai_stop : phrase.ai_send"
-        :data-title-popup="stopping ? phrase.ai_stop : phrase.ai_send"
-        :data-composer-send="stopping ? 'stop' : 'send'"
-        @click="primary"
+        :disabled="disabled || busy || !sendable"
+        :aria-label="phrase.ai_send"
+        :data-title-popup="phrase.ai_send"
+        data-composer-send
+        @click="send"
       >
-        <Icon
-          :name="
-            busy || uploading ? 'loading' : stopping ? 'pause-circle' : 'send'
-          "
-        />
+        <Icon :name="busy || uploading ? 'loading' : 'send'" />
       </button>
     </div>
 

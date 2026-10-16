@@ -12,7 +12,14 @@ export interface McpCallContext {
   client?: string;
   /**
    * The session a call belongs to: Thei's own model works in one, and what
-   * it proposes lands there, under the message it is writing.
+   * it proposes lands there, under the message it is writing. A turn can be
+   * stopped while a tool runs: `live()` says whether it may still write, and
+   * `signal` aborts when it is stopped.
    */
-  session?: { sessionUuid: string; messageUuid?: string };
+  session?: {
+    sessionUuid: string;
+    messageUuid: string;
+    live: () => boolean;
+    signal: AbortSignal;
+  };
 }

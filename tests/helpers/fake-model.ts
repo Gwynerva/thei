@@ -25,6 +25,11 @@ export type FakeTurn = {
   error?: { status: number; body?: unknown };
   /** A pause before every streamed piece, to watch a reply arrive. */
   delayMs?: number;
+  /**
+   * Stream this many pieces, then say nothing more and hold the answer
+   * open: a service gone silent midway.
+   */
+  stallAfter?: number;
 };
 
 export type FakeRequest = {
@@ -135,7 +140,9 @@ export async function startFakeModel(
       ) {
         response.writeHead(400, { 'content-type': 'application/json' });
         response.end(
-          JSON.stringify({ error: { message: 'unknown field stream_options' } }),
+          JSON.stringify({
+            error: { message: 'unknown field stream_options' },
+          }),
         );
         return;
       }
@@ -169,6 +176,13 @@ export async function startFakeModel(
       cacheRead: turn.usage?.cacheRead ?? 0,
     };
     const stream = request.body.stream === true;
+    let sent = 0;
+    /** Before every streamed piece: its pause, or silence for good. */
+    const next = async () => {
+      if (turn.stallAfter !== undefined && sent++ >= turn.stallAfter)
+        await new Promise(() => {});
+      await wait(turn.delayMs);
+    };
     if (request.api === 'anthropic') {
       const stop = calls.length ? 'tool_use' : 'end_turn';
       if (!stream) {
@@ -230,7 +244,7 @@ export async function startFakeModel(
           content_block: { type: 'text', text: '' },
         });
         for (const piece of pieces(turn.text)) {
-          await wait(turn.delayMs);
+          await next();
           send('content_block_delta', {
             type: 'content_block_delta',
             index,
@@ -252,7 +266,7 @@ export async function startFakeModel(
           },
         });
         for (const piece of jsonPieces(call.input)) {
-          await wait(turn.delayMs);
+          await next();
           send('content_block_delta', {
             type: 'content_block_delta',
             index,
@@ -332,7 +346,7 @@ export async function startFakeModel(
       );
     chunk({ role: 'assistant', content: '' });
     for (const piece of pieces(turn.text ?? '')) {
-      await wait(turn.delayMs);
+      await next();
       chunk({ content: piece });
     }
     for (const [index, call] of calls.entries()) {
@@ -347,7 +361,7 @@ export async function startFakeModel(
         ],
       });
       for (const piece of jsonPieces(call.input)) {
-        await wait(turn.delayMs);
+        await next();
         chunk({ tool_calls: [{ index, function: { arguments: piece } }] });
       }
     }

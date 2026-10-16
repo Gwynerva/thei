@@ -5,7 +5,6 @@ import { runContentHistoryMaintenance } from '../content/history';
 import { sweepUsage } from '../ai/model/usage';
 import { maintainAiSessions } from '../ai/sessions/lifecycle';
 import { recoverAiSessions } from '../ai/runner/queue';
-import { startTemplateClock } from '../ai/templates/run';
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const ONE_DAY_MS = 24 * ONE_HOUR_MS;
@@ -56,12 +55,6 @@ export function bootTheiAssets() {
     THEI_SERVER.console
       .tag('MCP')
       .error('Failed to put back the sessions the last run had left');
-  }
-  // Templates run on their schedule; the clock stays quiet while AI is off.
-  try {
-    startTemplateClock();
-  } catch {
-    THEI_SERVER.console.tag('MCP').error('Failed to start the template clock');
   }
 }
 

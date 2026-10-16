@@ -55,7 +55,7 @@ Around them:
 | Browser test fixture, `tests/e2e/fixture` | `http://127.0.0.1:3001` | `bun run e2e:dev`; `bun run test:e2e` builds and starts its own |
 | Release bench, `tests/release/`           | `127.0.0.1:3100`–`3105` | `bun run test:release`, in Docker                               |
 
-- Start servers only through these scripts (`scripts/dev-server.ts`). Each keeps to its own port: when the port is taken it says so and stops, rather than let Nuxt move elsewhere. When it says the server already runs, use that one.
+- Start servers only through these scripts (`scripts/dev-server.ts`), never with `nuxt dev` itself: the Nuxt CLI stops a dev server started without a terminal, such as the preview pane's, and takes its place. Each keeps to its own port: when the port is taken it says so and stops, rather than let Nuxt move elsewhere. When it says the server already runs, use that one.
 - A server that was running before you began is the user's: use it, and never restart or stop it. Stop only a server you started for the task, after checking that its PID is still yours (a dev server records it in `.nuxt/nuxt.lock`). Remove bench containers left by `--keep` once done.
 
 ## Updates and Migrations

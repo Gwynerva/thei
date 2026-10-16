@@ -1,7 +1,7 @@
 # Select
 
 `FieldSelect` is the one way to choose one option among several from a list
-that opens: a sort order, a format, a model, when a template runs. Its trigger
+that opens: a sort order, a format, a model, the service it comes from. Its trigger
 stands where a field would and shows the chosen option; the options open in a
 popup under it, with a small filter at its foot. It is the same everywhere, so no
 select of the site is the browser's own while another is a popup.
@@ -96,8 +96,7 @@ two filter selects beside the search field, `compact` and `collapsible`.
 
 ## How it is checked
 
-- `tests/e2e/ai-templates.spec.ts` and `tests/e2e/link-picker.spec.ts` open
-  selects, pick by filter and keys, and check their popups with
-  `expectPopupUsable`.
+- `tests/e2e/link-picker.spec.ts` opens selects, picks by filter and keys,
+  and checks their popups with `expectPopupUsable`.
 - A new use is checked in the browser at a phone's width, where `collapsible`
   and the popup's placement matter.

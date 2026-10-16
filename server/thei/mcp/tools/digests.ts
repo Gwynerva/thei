@@ -112,6 +112,8 @@ export function registerDigestTools(
         spendWrite(context);
         const key = findEntity(ref);
         if (!key) throw new McpToolError(`There is no ${ref}.`);
+        if (context.session && !context.session.live())
+          throw new McpToolError('The turn was stopped; nothing was kept.');
         writeDigest(
           key,
           digest,

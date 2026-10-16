@@ -11,9 +11,12 @@ import type { ContentEntityType } from '#layers/thei/shared/content-link';
  * The ✦ of a form's header: the AI and the entity in hand. Its badge counts
  * the proposals waiting in the form; its menu has a message to write about
  * the entity — named in it already — with the ready-made requests offered
- * for its kind, then the sessions about it, and a way to remember something
- * of it. Sent, the session goes on in the background and the page stays:
- * its proposals come to the fields' labels as they are made. Nothing with
+ * for its kind — a built-in check runs on the entity at once, a request of
+ * the owner's goes into the message — then the sessions about it, and a way
+ * to remember something of it. Sent, the session goes on in the background and the page stays:
+ * its proposals come to the fields' labels as they are made, and while it
+ * answers it can be stopped from here, as any session about the entity
+ * that is answering. Nothing with
  * AI off, or before the entity exists. What is remembered of the owner is
  * «about you», on the memory tab: the profile's menu remembers nothing.
  */
@@ -65,15 +68,35 @@ function remember() {
   remembering.value = true;
 }
 
-function usePreset(preset: AiPresetItem) {
-  composer.value?.prefill(preset.instruction, preset.templateId);
-}
-
 /** The session sent from here, followed while the page stays. */
 const sent = ref<string>();
 const followed = useAiSession(sent);
 const sentSession = computed(() => followed.detail.value?.session);
 const sending = ref(false);
+
+function usePreset(preset: AiPresetItem) {
+  if (preset.builtin) void check(preset);
+  else composer.value?.prefill(preset.instruction, preset.templateId);
+}
+
+/** A built-in check run on the entity, followed here as a message sent. */
+async function check(preset: AiPresetItem) {
+  if (!ai?.ref.value || sending.value) return;
+  sending.value = true;
+  try {
+    await runAiCheck(preset, {
+      about: ai.ref.value,
+      // Started again from the toast, the menu comes back to show it.
+      started: (sessionUuid) => {
+        sent.value = sessionUuid;
+        open.value = true;
+        void ai.refresh();
+      },
+    });
+  } finally {
+    sending.value = false;
+  }
+}
 
 async function send(
   text: string,
@@ -99,6 +122,16 @@ async function send(
     showToast(errorMessage(caught, phrase.value.ai_error));
   } finally {
     sending.value = false;
+  }
+}
+
+/** Stops a session answering; the list says so once it has stopped. */
+async function stop(sessionUuid: string) {
+  try {
+    await aiApi.stop(sessionUuid);
+    void ai?.refresh();
+  } catch (caught) {
+    showToast(errorMessage(caught, phrase.value.ai_error));
   }
 }
 
@@ -176,8 +209,10 @@ function openFull() {
               }
             : undefined
         "
+        :stoppable="(item) => item.sessionUuid !== sent"
         data-ai-entity-menu
         @close="open = false"
+        @stop="stop"
       >
         <AiComposer
           ref="composer"
@@ -197,30 +232,43 @@ function openFull() {
           :heading="phrase.ai_templates_presets"
           @choose="usePreset"
         />
-        <TheiLink
+        <div
           v-if="sentSession"
-          :to="{
-            path: '/admin/ai/',
-            query: { session: sentSession.sessionUuid },
-          }"
-          class="flex min-w-0 items-center gap-xs rounded-sm border
-            border-border-1 bg-bg-1 px-2 py-1.5 text-sm transition
-            hocus:border-border-3"
+          class="flex min-w-0 items-center rounded-sm border border-border-1
+            bg-bg-1 transition has-hocus:border-border-3"
           data-ai-entity-sent
-          @click="open = false"
         >
-          <AiRunningDots v-if="sentSession.state === 'running'" />
-          <Icon v-else name="sparkles" class="shrink-0 text-accent" />
-          <span class="min-w-0 flex-1 truncate">{{
-            publicText(sentSession.title)
-          }}</span>
-          <b
-            v-if="sentSession.waiting"
-            class="shrink-0 text-xs font-semibold text-accent"
-            >{{ phrase.ai_session_waiting(sentSession.waiting) }}</b
+          <TheiLink
+            :to="{
+              path: '/admin/ai/',
+              query: { session: sentSession.sessionUuid },
+            }"
+            class="flex min-h-9 min-w-0 flex-1 items-center gap-xs px-2 py-1.5
+              text-sm pointer-coarse:min-h-11"
+            @click="open = false"
           >
-          <Icon name="chevron-right" class="shrink-0 text-text-3" />
-        </TheiLink>
+            <AiRunningDots v-if="sentSession.state === 'running'" />
+            <Icon v-else name="sparkles" class="shrink-0 text-accent" />
+            <span class="min-w-0 flex-1 truncate">{{
+              publicText(sentSession.title)
+            }}</span>
+            <b
+              v-if="sentSession.waiting"
+              class="shrink-0 text-xs font-semibold text-accent"
+              >{{ phrase.ai_session_waiting(sentSession.waiting) }}</b
+            >
+            <Icon
+              v-if="sentSession.state !== 'running'"
+              name="chevron-right"
+              class="shrink-0 text-text-3"
+            />
+          </TheiLink>
+          <AiStopButton
+            v-if="sentSession.state === 'running'"
+            data-ai-entity-stop
+            @click="stop(sentSession.sessionUuid)"
+          />
+        </div>
         <div class="flex gap-1">
           <Button
             v-if="ai.ref.value !== 'profile'"
