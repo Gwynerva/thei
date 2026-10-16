@@ -10,7 +10,12 @@ import { MCP_INSTRUCTIONS } from '../../mcp/instructions';
 import { REFUSED_META } from '../../mcp/result';
 import { directTools, type DirectTool } from '../../mcp/registry';
 import { withOwnerInstructions } from '../../mcp/server';
-import { ModelError, streamTurn, type StreamCall } from '../model/stream';
+import {
+  ModelError,
+  streamTurn,
+  type StreamCall,
+  type StreamFile,
+} from '../model/stream';
 import { sessionModel } from '../model/settings';
 import { countedTokens, recordUsage, tokensLeft } from '../model/usage';
 import { publishSession, setWriting } from '../sessions/bus';
@@ -23,6 +28,17 @@ import {
 import { findTemplate } from '../templates/store';
 import { settleTemplateTurn } from '../templates/mark';
 import { backgroundEvent } from './background-event';
+import { repairTranscript } from './transcript';
+import {
+  beginTurn,
+  endTurn,
+  haltOf,
+  TookTooLong,
+  TURN_LIMITS,
+  turnLive,
+  within,
+  type TurnHalt,
+} from './turns';
 import {
   addSessionTokens,
   findSession,
@@ -194,107 +210,201 @@ class TurnStop extends Error {
   }
 }
 
+/** The turn was closed while it waited: it goes no further, and writes nothing. */
+class TurnClosed extends Error {}
+
+/**
+ * How the queue reaches a turn that does not end when stopped: it closes
+ * the turn for it, keeping what the turn wrote so far, as stopped or out of
+ * time. Set once the turn has begun.
+ */
+export interface TurnHandle {
+  close?: (halt: TurnHalt) => void;
+}
+
+/** What ended a turn early, as its notice says; none for Thei's own failure. */
+function stopOf(error: unknown, signal: AbortSignal): TurnStop | undefined {
+  if (error instanceof TurnStop) return error;
+  if (error instanceof ModelError)
+    return new TurnStop(error.kind, error.detail);
+  if (signal.aborted) return new TurnStop(haltOf(signal));
+  return undefined;
+}
+
+/** A tool call that took too long, as the model is told of it. */
+function tookTooLong(name: string) {
+  return {
+    text: `${name} took longer than ${Math.round(TURN_LIMITS.toolMs / 1000)} s and was left; nothing it would still do is kept. Ask for less at a time.`,
+    error: true,
+  };
+}
+
 /**
  * Runs one turn of a session: the model answers the conversation so far.
- * Never throws; whatever stops it is said in the session as a notice.
+ * Never throws; whatever stops it is said in the session as a notice. A
+ * turn stopped while it waits ends at once; one that does not is closed
+ * for it through `handle`, and whatever it gets after that is dropped.
  */
 export async function runSessionTurn(
   sessionUuid: string,
   signal: AbortSignal,
+  handle: TurnHandle = {},
 ): Promise<void> {
-  const session = findSession(sessionUuid);
-  if (!session || session.purgedAt) return;
-  const { db, schema } = THEI_SERVER.useDb();
-  /** Still going by the owner's first words: the model names it now. */
-  const unnamed = sessionUnnamed(session);
-  // A template's session is answered with the template's own model, if it
-  // names one.
-  const settings = sessionModel(
-    session.templateId ? findTemplate(session.templateId)?.model : undefined,
-  );
-  const said = sessionMessages(sessionUuid);
-  const history: AiTranscriptTurn[] = said.flatMap(
-    (message) => message.transcript,
-  );
-  /** What the owner's files were called, for a model shown them. */
-  const fileNames = new Map(
-    said.flatMap((message) =>
-      message.parts.flatMap((part) =>
-        part.type === 'file' ? [[part.assetUuid, part.name] as const] : [],
-      ),
-    ),
-  );
-  const message = db.transaction((tx) =>
-    insertMessage(tx, schema, sessionUuid, { role: 'model' }),
-  );
-  updateSession(sessionUuid, {
-    state: 'running',
-    error: null,
-    ...(settings ? { model: settings.model } : {}),
-  });
-  publishSession(sessionUuid, {
-    type: 'message',
-    messageUuid: message.messageUuid,
-  });
-  publishSession(sessionUuid, { type: 'session' });
-
-  let text = '';
-  const steps: AiStep[] = [];
-  const parts: AiMessagePart[] = [];
-  const transcript: AiTranscriptTurn[] = [];
-  let spent = 0;
-  let savedAt = 0;
-  const partsNow = (): AiMessagePart[] => [
-    ...(steps.length ? [{ type: 'steps' as const, steps: [...steps] }] : []),
-    ...parts,
-  ];
-  const save = () => {
-    updateMessage(message.messageUuid, {
-      text,
-      parts: partsNow(),
-      transcript,
-      tokens: spent,
-    });
-    setWriting(message.messageUuid, null);
-    publishSession(sessionUuid, {
-      type: 'message',
-      messageUuid: message.messageUuid,
-    });
-  };
-
+  /** Writes what the turn leaves, once: set once the turn has begun. */
+  let close: ((stop?: TurnStop) => void) | undefined;
   try {
+    const session = findSession(sessionUuid);
+    if (!session || session.purgedAt) return;
+    const { db, schema } = THEI_SERVER.useDb();
+    /** Still going by the owner's first words: the model names it now. */
+    const unnamed = sessionUnnamed(session);
+    // A template's session is answered with the template's own model, if it
+    // names one.
+    const settings = sessionModel(
+      session.templateId ? findTemplate(session.templateId)?.model : undefined,
+    );
+    const said = sessionMessages(sessionUuid);
+    // A turn the last process left half-done is put right before it is
+    // read again.
+    const history = repairTranscript(
+      said.flatMap((message) => message.transcript),
+    );
+    /** What the owner's files were called, for a model shown them. */
+    const fileNames = new Map(
+      said.flatMap((message) =>
+        message.parts.flatMap((part) =>
+          part.type === 'file' ? [[part.assetUuid, part.name] as const] : [],
+        ),
+      ),
+    );
+    const message = db.transaction((tx) =>
+      insertMessage(tx, schema, sessionUuid, { role: 'model' }),
+    );
+    const messageUuid = message.messageUuid;
+    beginTurn(sessionUuid, messageUuid);
+    updateSession(sessionUuid, {
+      state: 'running',
+      error: null,
+      ...(settings ? { model: settings.model } : {}),
+    });
+    publishSession(sessionUuid, { type: 'message', messageUuid });
+    publishSession(sessionUuid, { type: 'session' });
+
+    let text = '';
+    const steps: AiStep[] = [];
+    const parts: AiMessagePart[] = [];
+    const transcript: AiTranscriptTurn[] = [];
+    let spent = 0;
+    let savedAt = 0;
+    let closed = false;
+    const live = () => !closed && turnLive(sessionUuid, messageUuid);
+    /** After every wait: a turn closed meanwhile goes no further. */
+    const going = () => {
+      if (closed) throw new TurnClosed();
+    };
+    const partsNow = (): AiMessagePart[] => [
+      ...(steps.length ? [{ type: 'steps' as const, steps: [...steps] }] : []),
+      ...parts,
+    ];
+    const save = () => {
+      updateMessage(messageUuid, {
+        text,
+        parts: partsNow(),
+        transcript,
+        tokens: spent,
+      });
+      setWriting(messageUuid, null);
+      publishSession(sessionUuid, { type: 'message', messageUuid });
+    };
+    close = (stop) => {
+      if (closed) return;
+      closed = true;
+      endTurn(sessionUuid, messageUuid);
+      if (stop)
+        parts.push({
+          type: 'notice',
+          kind: stop.kind,
+          text: stop.detail.slice(0, 500),
+        });
+      // A call asked for and never answered would leave the conversation
+      // unable to go on: each gets its answer.
+      transcript.splice(0, transcript.length, ...repairTranscript(transcript));
+      save();
+      updateSession(sessionUuid, {
+        state: 'idle',
+        ...(stop && stop.kind !== 'stopped' ? { error: stop.kind } : {}),
+      });
+      db.transaction((tx) => {
+        touchSession(tx, schema, sessionUuid);
+        refreshSessionCounts(tx, schema, sessionUuid);
+      });
+      // A template's turn keeps what it read once it went through, and a
+      // scheduled run that left nothing to decide goes to the archive —
+      // after the touch above, which brings a session back out of it.
+      try {
+        settleTemplateTurn(sessionUuid, !stop);
+      } catch {
+        THEI_SERVER.console
+          .tag('MCP')
+          .error('Failed to settle what a template run read');
+      }
+      publishSession(sessionUuid, { type: 'session' });
+    };
+    handle.close = (halt) => close?.(new TurnStop(halt));
+
     if (!settings) throw new TurnStop('no-model');
     const principal: ApiTokenPrincipal = {
       tokenUuid: SESSION_TOKEN,
       label: 'Thei',
       scopes: ['read'],
     };
-    const context = {
+    const all = directTools({
       event: backgroundEvent(),
       principal,
-      session: { sessionUuid, messageUuid: message.messageUuid },
-    };
-    const all = directTools(context);
+      session: { sessionUuid, messageUuid, live, signal },
+    });
+    // The overview is read for the model, unless it takes too long: then
+    // the model may read it itself.
+    const overview = await within(
+      all.find((tool) => tool.name === 'site_overview')!.call({}, { signal }),
+      signal,
+      TURN_LIMITS.toolMs,
+    ).catch((error: unknown) => {
+      if (error instanceof TookTooLong) return undefined;
+      throw error;
+    });
+    going();
     const tools = new Map<string, DirectTool>(
       all
-        .filter((tool) => !HIDDEN_TOOLS.has(tool.name))
+        .filter((tool) => !overview || !HIDDEN_TOOLS.has(tool.name))
         .map((tool) => [tool.name, tool]),
     );
-    const overview = await all
-      .find((tool) => tool.name === 'site_overview')!
-      .call({});
     const system = [
       withOwnerInstructions(MCP_INSTRUCTIONS),
       sessionNote(THEI_SERVER.phrase.language_name),
-      `What site_overview says, read for you:\n\n${overview.content
-        .map((part) => ('text' in part ? part.text : ''))
-        .join('\n')}`,
+      overview
+        ? `What site_overview says, read for you:\n\n${overview.content
+            .map((part) => ('text' in part ? part.text : ''))
+            .join('\n')}`
+        : '',
       aboutLines(sessionUuid),
       unnamed ? nameNote(THEI_SERVER.phrase.language_name) : '',
     ]
       .filter(Boolean)
       .join('\n\n');
-    const files = await modelFiles(history, fileNames);
+    // Files that take too long to make ready are told of in words alone.
+    const files = await within(
+      modelFiles(history, fileNames, signal),
+      signal,
+      TURN_LIMITS.toolMs,
+    ).catch((error: unknown) => {
+      if (!(error instanceof TookTooLong)) throw error;
+      THEI_SERVER.console
+        .tag('AI')
+        .warn('The files of a session took too long to make ready.');
+      return new Map<string, StreamFile>();
+    });
+    going();
     const offered = [
       ...[...tools.values()].map(({ name, description, inputSchema }) => ({
         name,
@@ -312,7 +422,7 @@ export async function runSessionTurn(
         throw new TurnStop('no-model');
       if (tokensLeft() <= 0) throw new TurnStop('limit');
       if (spent > TURN_TOKEN_CAP) throw new TurnStop('turns');
-      if (signal.aborted) throw new TurnStop('stopped');
+      if (signal.aborted) throw new TurnStop(haltOf(signal));
       // Words of a later call stand apart from those before them.
       const before = text.length;
       const separator = text ? '\n\n' : '';
@@ -325,26 +435,29 @@ export async function runSessionTurn(
         tools: offered,
         signal,
         onText(delta) {
+          if (closed) return;
           const piece = first ? separator + delta : delta;
           first = false;
           const at = text.length;
           text += piece;
-          setWriting(message.messageUuid, text);
+          setWriting(messageUuid, text);
           publishSession(sessionUuid, {
             type: 'delta',
-            messageUuid: message.messageUuid,
+            messageUuid,
             text: piece,
             at,
           });
           if (Date.now() - savedAt > SAVE_EVERY_MS) {
             savedAt = Date.now();
-            updateMessage(message.messageUuid, { text });
+            updateMessage(messageUuid, { text });
           }
         },
       });
+      // What a call spent is spent, whatever became of the turn.
+      recordUsage(turn.usage);
+      going();
       // What came streamed is what the provider gave in the end.
       text = text.slice(0, before) + (turn.text ? separator + turn.text : '');
-      recordUsage(turn.usage);
       const counted = countedTokens(turn.usage);
       spent += counted;
       addSessionTokens(sessionUuid, counted);
@@ -367,6 +480,7 @@ export async function runSessionTurn(
 
       let asked = false;
       for (const call of turn.calls) {
+        if (signal.aborted) throw new TurnStop(haltOf(signal));
         const answer = async (): Promise<{
           text: string;
           error: boolean;
@@ -378,14 +492,24 @@ export async function runSessionTurn(
               text: nameSession(
                 sessionUuid,
                 (call.input as { name?: unknown } | undefined)?.name,
+                live,
               ),
               error: false,
             };
           if (call.name === FILE_TOOL.name) {
-            const made = await makeSessionFile(
-              sessionUuid,
-              (call.input ?? {}) as Record<string, unknown>,
-            );
+            const made = await within(
+              makeSessionFile(
+                sessionUuid,
+                (call.input ?? {}) as Record<string, unknown>,
+                live,
+              ),
+              signal,
+              TURN_LIMITS.toolMs,
+            ).catch((error: unknown) => {
+              if (error instanceof TookTooLong) return undefined;
+              throw error;
+            });
+            if (!made) return tookTooLong(call.name);
             if ('refused' in made) return { text: made.refused, error: true };
             parts.push({ type: 'file', ...made.file });
             return {
@@ -426,7 +550,20 @@ export async function runSessionTurn(
           const tool = tools.get(call.name);
           if (!tool)
             return { text: `There is no tool ${call.name} here.`, error: true };
-          const result = await tool.call(call.input);
+          // A call left for taking too long hears it was, and may stop too.
+          const left = new AbortController();
+          const result = await within(
+            tool.call(call.input, {
+              signal: AbortSignal.any([signal, left.signal]),
+            }),
+            signal,
+            TURN_LIMITS.toolMs,
+          ).catch((error: unknown) => {
+            if (!(error instanceof TookTooLong)) throw error;
+            left.abort();
+            return undefined;
+          });
+          if (!result) return tookTooLong(call.name);
           const refused = result._meta?.[REFUSED_META];
           return {
             refused: typeof refused === 'number' ? refused : 0,
@@ -439,6 +576,7 @@ export async function runSessionTurn(
           };
         };
         const result = await answer();
+        going();
         if (!OWN_TOOLS.has(call.name))
           steps.push(stepOf(call, result.error, result.refused));
         transcript.push({
@@ -453,60 +591,20 @@ export async function runSessionTurn(
       if (asked) break;
     }
   } catch (error) {
-    const stop =
-      error instanceof TurnStop
-        ? error
-        : error instanceof ModelError
-          ? new TurnStop(error.kind, error.detail)
-          : signal.aborted
-            ? new TurnStop('stopped')
-            : undefined;
+    if (error instanceof TurnClosed) return;
+    const stop = stopOf(error, signal);
     if (!stop)
       THEI_SERVER.console.error(
         '[AI] A session turn failed:',
         error instanceof Error ? (error.stack ?? error.message) : error,
       );
-    const notice =
-      stop ?? new TurnStop('error', 'Thei could not finish this turn.');
-    // A call asked for and never answered would leave the conversation
-    // unable to go on: each gets its answer.
-    const last = transcript.at(-1);
-    if (last?.role === 'assistant')
-      for (const call of last.calls ?? [])
-        transcript.push({
-          role: 'tool',
-          id: call.id,
-          name: call.name,
-          output: 'Stopped before it ran.',
-          error: true,
-        });
-    parts.push({
-      type: 'notice',
-      kind: notice.kind,
-      text: notice.detail.slice(0, 500),
-    });
-    if (notice.kind !== 'stopped')
-      updateSession(sessionUuid, { error: notice.kind });
-  } finally {
-    save();
-    updateSession(sessionUuid, { state: 'idle' });
-    db.transaction((tx) => {
-      touchSession(tx, schema, sessionUuid);
-      refreshSessionCounts(tx, schema, sessionUuid);
-    });
-    // A template's turn keeps what it read once it went through, and a
-    // scheduled run that left nothing to decide goes to the archive — after
-    // the touch above, which brings a session back out of it.
-    try {
-      settleTemplateTurn(
-        sessionUuid,
-        !parts.some((part) => part.type === 'notice'),
-      );
-    } catch {
-      THEI_SERVER.console
-        .tag('MCP')
-        .error('Failed to settle what a template run read');
+    if (close)
+      close(stop ?? new TurnStop('error', 'Thei could not finish this turn.'));
+    else {
+      updateSession(sessionUuid, { state: 'idle' });
+      publishSession(sessionUuid, { type: 'session' });
     }
-    publishSession(sessionUuid, { type: 'session' });
+    return;
   }
+  close?.();
 }

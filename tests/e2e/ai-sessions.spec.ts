@@ -235,9 +235,9 @@ const sendButton = (page: Page) => page.locator('[data-composer-send]');
 const modelMessages = (page: Page) =>
   page.locator('[data-message-role="model"]');
 
-/** The answer has come whole: the button sends again. */
+/** The answer has come whole: nothing is left to stop. */
 async function answered(page: Page) {
-  await expect(sendButton(page)).toHaveAttribute('data-composer-send', 'send', {
+  await expect(page.locator('[data-composer-stop]')).toHaveCount(0, {
     timeout: 20_000,
   });
   await expect(page.locator('[data-message-writing]')).toHaveCount(0);
@@ -485,12 +485,18 @@ test('an answer read whole across a reload, and one stopped halfway', async ({
 
   await say(page, 'Slowly once more');
   await expect(page.locator('[data-message-writing]')).toBeVisible();
-  await expect(sendButton(page)).toHaveAttribute('data-composer-send', 'stop');
-  await sendButton(page).click();
+  // Words typed meanwhile neither hide the stop nor go with it.
+  await composer(page).click();
+  await page.keyboard.type('Not sent yet');
+  await expect(sendButton(page)).toBeEnabled();
+  await page.locator('[data-composer-stop]').click();
   await expect(
     modelMessages(page).last().locator('[data-notice="stopped"]'),
   ).toBeVisible();
   await answered(page);
+  await expect(composer(page)).toHaveText('Not sent yet');
+  await composer(page).press('ControlOrMeta+a');
+  await composer(page).press('Backspace');
 });
 
 test('the list finds a session by what was said in it', async ({ page }) => {

@@ -56,12 +56,16 @@ export interface AiStep {
 }
 
 /**
- * Why a turn ended early: stopped by the owner, the month's limit reached, no
- * model set, the key refused, the service busy, out of reach or not knowing
- * the model, the model refusing, too many steps, anything else.
+ * Why a turn ended early: stopped by the owner, out of time (the turn took
+ * too long, or the service fell silent), cut off when the site restarted,
+ * the month's limit reached, no model set, the key refused, the service
+ * busy, out of reach or not knowing the model, the model refusing, too many
+ * steps, anything else.
  */
 export const AI_NOTICE_KINDS = [
   'stopped',
+  'timeout',
+  'interrupted',
   'limit',
   'no-model',
   'key',

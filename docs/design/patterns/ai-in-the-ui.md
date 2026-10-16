@@ -54,6 +54,16 @@ attention.
 - An accepted proposal is laid into the form and counts as applied once the
   form is saved.
 
+## Stopping
+
+- While the model answers, `app/components/ai/AiStopButton.vue` stops it:
+  `pause-circle`, an icon alone in the accent. It stands beside the
+  composer's send button whatever is typed — words sent meanwhile the model
+  takes in — and beside a session answering in a form's ✦ menu.
+- Stopped, a turn ends at once, and for sure: what was written stays, with a
+  notice saying why it stopped — by the owner, out of time, or cut off by a
+  restart.
+
 ## Marks and words
 
 - Things AI makes carry the sparkle in their own icon, as the speech bubble of
@@ -84,4 +94,7 @@ attention.
 - `tests/server/ai-actions-contract.test.ts` fails when an action or a field
   misses a part: its reference, its card, its place in a form.
 - `tests/e2e/ai-entity.spec.ts` opens proposals at labels and in the ✦ menu and
-  checks each with `expectPopupUsable`.
+  checks each with `expectPopupUsable`, and stops a session from the ✦;
+  `tests/e2e/ai-sessions.spec.ts` stops an answer with words typed.
+- `tests/server/ai-stop.test.ts` stops turns stuck in a tool, in a silent
+  service and past their clock, and checks what they leave.

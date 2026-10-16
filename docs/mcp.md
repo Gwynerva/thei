@@ -88,8 +88,9 @@ A session waits for the owner while an action in it is undecided or a
 question unanswered; the admin bar counts what waits. Archived by the owner,
 or quiet for a week, a session goes to the archive, the last group of the
 list; there it is only read until the owner brings it back, and an app may not
-go on with one the owner archived. A month in the archive and it is deleted,
-unless pinned, leaving its summary.
+go on with one the owner archived: the files it still has on their way into
+it are cancelled. A month in the archive and it is deleted, unless pinned,
+leaving its summary.
 
 The owner may bring files along with a message — from the «+» menu, pasted or
 dropped, several at once — and an app's uploads, imports and re-encodings are
@@ -166,6 +167,13 @@ of the owner's own, a model on their computer included — its API key, and
 the model, chosen from the service's own list where it gives one. It works
 through the site's own tools with a reader's rights, so it reads and
 proposes only, and stops at the monthly limit; the key stays on the server.
+
+The owner may stop it while it answers, and it stops for sure: what it wrote
+stays, put right for the conversation to go on, and nothing it would still
+do lands. It stops by itself when a turn runs past 15 minutes or its service
+says nothing for two; a tool that takes more than a minute is given up on,
+and the model told so. Turning AI off stops everything under way, and a turn
+a restart cut off says so.
 
 ## Tools
 

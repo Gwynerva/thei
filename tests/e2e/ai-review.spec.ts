@@ -314,12 +314,10 @@ async function propose(page: Page, words: string) {
   await page.keyboard.type(words);
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/admin\/ai\/\?session=ais-/);
-  await expect(page.locator('[data-composer-send]')).toHaveAttribute(
-    'data-composer-send',
-    'send',
-    // The first turn after a fresh build may take its time.
-    { timeout: 40_000 },
-  );
+  // The first turn after a fresh build may take its time.
+  await expect(page.locator('[data-composer-stop]')).toHaveCount(0, {
+    timeout: 40_000,
+  });
 }
 
 async function storedText(page: Page, uuid = diaryUuid) {
