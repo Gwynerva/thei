@@ -55,7 +55,7 @@ function rememberDimensions(width: number, height: number) {
   --ease-to: 100%;
 }
 :deep(.media-backdrop) {
-  --tw-blur: blur(calc(2 * var(--blur-3xl)));
+  --media-backdrop-blur: calc(2 * var(--blur-3xl));
   inset: calc(-6 * var(--blur-3xl));
   width: calc(100% + 12 * var(--blur-3xl));
   height: calc(100% + 12 * var(--blur-3xl));
@@ -127,7 +127,7 @@ function rememberDimensions(width: number, height: number) {
   }
   :deep(.media-backdrop) {
     /* Same centre as the banner; enlarged uniformly to reach every edge. */
-    --tw-blur: blur(var(--blur-3xl));
+    --media-backdrop-blur: var(--blur-3xl);
     opacity: 1;
     inset: auto;
     top: 50%;

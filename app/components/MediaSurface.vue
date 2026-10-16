@@ -37,7 +37,10 @@ const {
   previewPhase,
   ratio,
   status,
+  frameBackdrop,
+  canvasFiltered,
   register,
+  registerFrameBackdrop,
   events,
   play,
   pause,
@@ -150,21 +153,27 @@ defineExpose({ play, pause });
       :inert="!revealed"
       data-media-original-pair
     >
-      <component
-        :is="kind === 'video' ? 'video' : 'img'"
-        v-if="backdrop && status.backdrop !== 'error'"
+      <div
+        v-if="frameBackdrop"
+        :ref="
+          (el: Element | ComponentPublicInstance | null) =>
+            registerFrameBackdrop(el)
+        "
+        class="media-backdrop pointer-events-none absolute opacity-70"
+        :class="{ 'blur-3xl': !canvasFiltered }"
+        data-media-backdrop-canvas
+        aria-hidden="true"
+      >
+        <canvas class="absolute inset-0 size-full" />
+        <canvas class="absolute inset-0 size-full" />
+      </div>
+      <img
+        v-else-if="backdrop && status.backdrop !== 'error'"
         :ref="
           (el: Element | ComponentPublicInstance | null) =>
             register('backdrop', el)
         "
         :src="mediaSrc"
-        :poster="videoPoster"
-        :muted="kind === 'video' ? true : undefined"
-        :loop="kind === 'video' ? loop : undefined"
-        :playsinline="kind === 'video' ? true : undefined"
-        :preload="kind === 'video' ? 'auto' : undefined"
-        :tabindex="kind === 'video' ? -1 : undefined"
-        :data-media-backdrop-video="kind === 'video' ? '' : undefined"
         class="media-backdrop pointer-events-none absolute max-w-none
           object-cover opacity-70 blur-3xl"
         alt=""
@@ -217,7 +226,18 @@ defineExpose({ play, pause });
 </template>
 
 <style scoped>
+/*
+ * How far the backdrop is blurred: a length, so that a copy drawn on a canvas
+ * (`frame-backdrop.ts`) can read it and blur itself alike.
+ */
+@property --media-backdrop-blur {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
 .media-backdrop {
+  --media-backdrop-blur: var(--blur-3xl);
+  --tw-blur: blur(var(--media-backdrop-blur));
   /* Keep the transparent fringe of the filter beyond the clipped frame. */
   inset: calc(-3 * var(--blur-3xl));
   width: calc(100% + 6 * var(--blur-3xl));

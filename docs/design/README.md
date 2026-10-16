@@ -100,7 +100,8 @@ Foundations:
 - [Layout](foundations/layout.md) — the rem scale, `sm:` alone, container
   queries, the admin grid and opaque surfaces, one line on a phone.
 - [Motion](foundations/motion.md) — a transition on every change of state,
-  reduced motion, the self-animating `loading`.
+  reduced motion, the self-animating `loading`, a video's blurred copy drawn
+  from its own frames.
 - [Interaction](foundations/interaction.md) — `hocus:`, touch, hints and long
   presses, keyboard focus.
 - [Styling code](foundations/styling-code.md) — Tailwind first, scoped CSS,
