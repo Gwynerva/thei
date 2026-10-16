@@ -109,13 +109,13 @@ const row = (page: Page, templateId: string) =>
   page.locator(`[data-template-row="${templateId}"]`);
 const toast = (page: Page) => page.locator('[data-toast]');
 
-test('lists the three checks and the owner’s requests, no schedule anywhere', async ({
+test('lists the four checks and the owner’s requests, no schedule anywhere', async ({
   page,
 }) => {
   await open(page);
   const list = page.locator('[data-templates-list]');
-  await expect(list.locator('[data-template-row^="builtin-"]')).toHaveCount(3);
-  for (const key of ['proofread', 'links', 'graph'])
+  await expect(list.locator('[data-template-row^="builtin-"]')).toHaveCount(4);
+  for (const key of ['proofread', 'describe', 'links', 'graph'])
     await expect(row(page, `builtin-${key}`)).toBeVisible();
   await expect(row(page, 'builtin-proofread')).toContainText(
     'Fixing text mistakes',
@@ -126,11 +126,8 @@ test('lists the three checks and the owner’s requests, no schedule anywhere', 
   await expect(modal).toBeVisible();
   await expect(modal.locator('[data-template-when]')).toHaveCount(0);
   await expect(modal.locator('[data-template-instruction]')).toHaveCount(0);
-  await expect(
-    modal.locator('[data-template-offer="diary-entry"]'),
-  ).toHaveAttribute('aria-pressed', 'true');
-  // Offered only where it can look: projects, events and diary entries.
-  await expect(modal.locator('[data-template-offer]')).toHaveCount(3);
+  // Offered everywhere: nothing to choose.
+  await expect(modal.locator('[data-template-offer]')).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(modal).toHaveCount(0);
 });
@@ -167,14 +164,18 @@ test('runs a check from its row, and says when nothing new is left', async ({
   expect(asked).toContain('Mend these links that lead nowhere');
 });
 
-test('runs a check from an entity’s ✦, and looks at it again when asked', async ({
+test('runs a check sent from an entity’s ✦, and looks at it again when asked', async ({
   page,
 }) => {
   await open(page, `/admin/events/${eventUuid}/edit/`);
   const menu = page.locator('[data-ai-entity-menu]');
   const check = menu.locator('[data-ai-preset="builtin-proofread"]');
+  const field = menu.locator('[data-ai-entity-composer] [data-composer-field]');
   await page.locator('[data-ai-entity]').click();
+  // Chosen, its words go into the message, sent as they are.
   await check.click();
+  await expect(field).toContainText('Proofread the texts');
+  await field.press('Enter');
   const sent = menu.locator('[data-ai-entity-sent]');
   await expect(sent).toContainText(
     `Fixing text mistakes · Harbour night ${run}`,
@@ -182,11 +183,13 @@ test('runs a check from an entity’s ✦, and looks at it again when asked', as
   await expect(sent.locator('[data-ai-entity-stop]')).toHaveCount(0, {
     timeout: 20_000,
   });
-  // Looked at already: nothing new, and a way to look again.
+  // Looked at already: nothing new, the words kept, and a way to look again.
   await check.click();
+  await field.press('Enter');
   await expect(toast(page)).toContainText(
     '“Fixing text mistakes”: nothing new to check',
   );
+  await expect(field).toContainText('Proofread the texts');
   await toast(page).getByRole('button', { name: 'Check again' }).click();
   await expect(sent).toBeVisible();
   await expect(sent.locator('[data-ai-entity-stop]')).toHaveCount(0, {
@@ -204,6 +207,29 @@ test('runs a check from an entity’s ✦, and looks at it again when asked', as
         session.origin === 'template',
     ),
   ).toHaveLength(2);
+});
+
+test('narrows a check by the words added on a new session', async ({
+  page,
+}) => {
+  await open(page, '/admin/ai/?session=new');
+  const screen = page.locator('[data-session-new-screen]');
+  await screen.locator('[data-ai-preset="builtin-proofread"]').click();
+  const field = page.locator('[data-composer-field]');
+  await expect(field).toContainText('Proofread the texts');
+  await field.press('End');
+  await page.keyboard.type(` Only the titles ${run}.`);
+  const asked = model.requests.length;
+  await field.press('Enter');
+  await expect(page).toHaveURL(/[?&]session=ais-/);
+  await expect(page.locator('[data-message-role="model"]')).toContainText(
+    'all is well',
+    { timeout: 20_000 },
+  );
+  const brief = JSON.stringify(model.requests[asked]!.body.messages);
+  expect(brief).toContain('asked, in their own words');
+  expect(brief).toContain(`Only the titles ${run}.`);
+  expect(brief).toContain('check_batch');
 });
 
 test('copies a check into a request of the owner’s, opened in a new session', async ({

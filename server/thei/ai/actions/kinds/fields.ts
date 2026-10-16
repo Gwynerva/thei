@@ -7,7 +7,11 @@ import {
   hasPeriods,
 } from '../../../entity-patch/validate';
 import { refOf } from '../../../entity-kinds';
-import { assertKnown, type FormKind } from '../../forms/changes';
+import {
+  assertKnown,
+  FORM_WRITE_ONLY,
+  type FormKind,
+} from '../../forms/changes';
 import { changedForm, loadForm } from '../../forms/load';
 import { currentField, currentPeriods } from '../current';
 import { assetIdsIn, checkFieldValue, sameValue } from '../values';
@@ -188,8 +192,10 @@ export const updateAction: AiActionKindDef<'update'> = {
     assertKnown(entity.kind as FormKind, changes);
     const loaded = await loadForm(entity);
     const next = await changedForm(entity, loaded, changes);
+    // Status edits are only written; what they change reads in statusTexts.
     const fields = Object.keys(next).filter(
       (field) =>
+        !FORM_WRITE_ONLY.has(field) &&
         JSON.stringify(next[field]) !== JSON.stringify(loaded.form[field]),
     );
     if (!fields.length)

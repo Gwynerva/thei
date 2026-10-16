@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { EntityEditConflict, type EntityEditOptions } from '../../entity-edit';
 import { refuse as fail } from '../../entity-patch/text';
 import { readProjectEdit, saveProjectEdit } from '../../projects/edit';
@@ -47,6 +47,33 @@ export async function found<T>(
   return (await find) ?? fail(`Nothing found for ${refOf(key)}.`);
 }
 
+/**
+ * Every status line of an owner, by id: what a change of them is told
+ * against, the whole history and not only the page a form shows.
+ */
+function statusTextsOf(type: 'project' | 'profile', id: string) {
+  const { db, schema } = THEI_SERVER.useDb();
+  return Object.fromEntries(
+    db
+      .select({ id: schema.statuses.id, text: schema.statuses.text })
+      .from(schema.statuses)
+      .where(
+        and(
+          eq(schema.statuses.ownerType, type),
+          eq(schema.statuses.ownerId, id),
+        ),
+      )
+      .all()
+      .map((row: { id: string; text: string }) => [row.id, row.text]),
+  ) as Record<string, string>;
+}
+
+/** A form as its save takes it: what was read only for the AI left out. */
+function writable(form: any) {
+  const { statusTexts: _texts, ...rest } = form;
+  return rest;
+}
+
 export function tagRow(key: EntityKey) {
   const { db, schema } = THEI_SERVER.useDb();
   return (
@@ -77,9 +104,13 @@ export async function loadForm(key: EntityKey): Promise<LoadedForm> {
       const project = await found(THEI_SERVER.projects.findByUuid(key.id), key);
       return {
         owner: key,
-        form: await readProjectEdit(project),
+        form: {
+          ...(await readProjectEdit(project)),
+          statusTexts: statusTextsOf('project', key.id),
+        },
         version: project.updatedAt,
-        save: (form, options) => saveProjectEdit(key.id, form, options),
+        save: (form, options) =>
+          saveProjectEdit(key.id, writable(form), options),
       };
     }
     case 'project-section':
@@ -126,12 +157,12 @@ export async function loadForm(key: EntityKey): Promise<LoadedForm> {
       const { data } = await getAdminProfile();
       return {
         owner: key,
-        form: data,
+        form: { ...data, statusTexts: statusTextsOf('profile', key.id) },
         version: data.version ?? 0,
         async save(form, options) {
           try {
             // The record is written in the save's own transaction.
-            await saveProfile(form, options);
+            await saveProfile(writable(form), options);
           } catch (error) {
             if (error instanceof EntityEditConflict)
               return { type: 'error', code: 'changed' };

@@ -96,11 +96,8 @@ const linkResolver = useContentLinkResolver('admin');
 const { data: templates } = await useAsyncData('ai-templates', () =>
   requestFetch<AiTemplateListResponse>('/api/admin/ai/templates'),
 );
-// A new session starts from the owner's own requests; a check runs itself.
-const presets = computed(
-  () =>
-    templates.value?.templates.filter((template) => !template.builtin) ?? [],
-);
+// Every template is offered: a built-in check sent from here runs.
+const presets = computed(() => templates.value?.templates ?? []);
 const composer = ref<AiComposerExpose>();
 
 function usePreset(preset: AiPresetItem) {
@@ -136,13 +133,34 @@ async function start(
   templateId: string | undefined,
 ) {
   starting.value = true;
+  const refs = about.value
+    ? [...new Set([about.value.ref, ...mentioned])]
+    : mentioned;
+  // A built-in check runs over what the words and mentions name.
+  const check = presets.value.find(
+    (item) => item.templateId === templateId && item.builtin,
+  );
+  if (check) {
+    try {
+      await runAiCheck(check, {
+        about: refs,
+        request: text,
+        restore,
+        started: (sessionUuid) => {
+          open(sessionUuid);
+          void list.value?.refresh();
+        },
+      });
+    } finally {
+      starting.value = false;
+    }
+    return;
+  }
   try {
     const { sessionUuid } = await aiApi.start({
       text,
       files,
-      about: about.value
-        ? [...new Set([about.value.ref, ...mentioned])]
-        : mentioned,
+      about: refs,
       templateId,
     });
     open(sessionUuid);

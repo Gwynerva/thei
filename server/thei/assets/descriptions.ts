@@ -222,7 +222,8 @@ export function writeAssetDescription(
 
 /**
  * Takes away the descriptions of these families once no file of them is
- * left, inside `tx`: called wherever a row of `assets` is deleted.
+ * left, inside `tx`: called wherever a row of `assets` is deleted. What the
+ * AI's checks looked at of such a family goes with it.
  */
 export function forgetFamilyDescriptions(
   tx: any,
@@ -231,19 +232,29 @@ export function forgetFamilyDescriptions(
 ) {
   const unique = [...new Set(familyUuids)];
   if (!unique.length) return;
+  const gone = (familyUuid: unknown) =>
+    notExists(
+      tx
+        .select({ assetUuid: schema.assets.assetUuid })
+        .from(schema.assets)
+        .where(eq(schema.assets.familyUuid, familyUuid)),
+    );
   tx.delete(schema.assetDescriptions)
     .where(
       and(
         inArray(schema.assetDescriptions.familyUuid, unique),
-        notExists(
-          tx
-            .select({ assetUuid: schema.assets.assetUuid })
-            .from(schema.assets)
-            .where(
-              eq(schema.assets.familyUuid, schema.assetDescriptions.familyUuid),
-            ),
-        ),
+        gone(schema.assetDescriptions.familyUuid),
       ),
     )
     .run();
+  for (const table of [schema.aiTemplateCoverage, schema.aiTemplateBatches])
+    tx.delete(table)
+      .where(
+        and(
+          eq(table.entityType, 'asset'),
+          inArray(table.entityId, unique),
+          gone(table.entityId),
+        ),
+      )
+      .run();
 }

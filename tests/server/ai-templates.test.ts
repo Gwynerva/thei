@@ -1,17 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { H3Event } from 'h3';
 import type { AiMessagePart } from '../../shared/ai';
+import { DEFAULT_PROJECT_ACTION } from '../../shared/project-action';
 import {
   AI_BUILTIN_TEMPLATE_KEYS,
   builtinTemplateId,
   type AiBuiltinTemplateKey,
 } from '../../shared/ai-template';
 import { proposeActions } from '../../server/thei/ai/actions/propose';
+import { findAction } from '../../server/thei/ai/actions/rows';
 import {
   applyActions,
   markTakenInEditor,
 } from '../../server/thei/ai/actions/apply';
 import { entityPanel } from '../../server/thei/ai/entity-panel';
+import {
+  readAssetDescription,
+  writeAssetDescription,
+} from '../../server/thei/assets/descriptions';
+import { deleteAsset } from '../../server/thei/assets/repository/delete';
 import { forgetAiAnchors } from '../../server/thei/ai/memory/forget';
 import { turnsSettled } from '../../server/thei/ai/runner/queue';
 import { startOwnerSession } from '../../server/thei/ai/sessions/owner';
@@ -257,37 +264,32 @@ async function toolText(name: string, args: unknown) {
 }
 
 describe('the built-in checks', () => {
-  it('are three, offered where they can look, with no schedule', () => {
-    expect(AI_BUILTIN_TEMPLATE_KEYS).toEqual(['proofread', 'links', 'graph']);
+  it('are four, with no schedule and offered everywhere', () => {
+    expect(AI_BUILTIN_TEMPLATE_KEYS).toEqual([
+      'proofread',
+      'describe',
+      'links',
+      'graph',
+    ]);
     const builtins = listTemplates().filter((template) => template.builtin);
     expect(builtins.map((template) => template.title)).toEqual([
       'Fixing text mistakes',
+      'File descriptions',
       'Fixing broken links',
       'Finding possible relations',
     ]);
-    expect(findTemplate(id('graph'))!.offerOn).toEqual([
-      'project',
-      'event',
-      'diary-entry',
-    ]);
-    expect(Object.keys(findTemplate(id('proofread'))!)).not.toContain(
-      'schedule',
-    );
-    // Only their model and where they are offered are the owner's.
+    const keys = Object.keys(findTemplate(id('proofread'))!);
+    expect(keys).not.toContain('schedule');
+    expect(keys).not.toContain('offerOn');
+    // Only their model is the owner's.
     const changed = saveTemplate(id('links'), {
       model: 'fake-large',
-      offerOn: ['page'],
       title: 'Mine',
     });
     expect(changed).toMatchObject({
       title: 'Fixing broken links',
       model: 'fake-large',
-      offerOn: ['page'],
     });
-    // A check is offered only where it can look.
-    expect(
-      saveTemplate(id('graph'), { offerOn: ['page', 'event'] }).offerOn,
-    ).toEqual(['event']);
     expect(() => deleteTemplate(id('links'))).toThrow();
     const copy = copyTemplate(id('links'));
     expect(copy.title).toBe('Fixing broken links (copy)');
@@ -299,7 +301,7 @@ describe('a run', () => {
   it('starts no session when nothing new is there to look at', async () => {
     const first = await run('proofread');
     expect(first).not.toBeNull();
-    expect(brief(first!)).toContain('Proofread these parts');
+    expect(brief(first!)).toContain('Proofread what the owner wrote here');
     expect(brief(first!)).toContain('Went to the Kuzova islnds');
     expect(findSession(first!)).toMatchObject({
       origin: 'template',
@@ -354,7 +356,9 @@ describe('a run', () => {
     expect(busySubjects(id('proofread')).size).toBe(0);
     reply = () => ({ text: 'Looked.' });
     expect(await run('proofread')).not.toBeNull();
-    expect(coverageOf(id('proofread')).size).toBe(1);
+    expect([...coverageOf(id('proofread')).keys()]).toContain(
+      `text:diary-entry:${DIARY}:diary-body`,
+    );
   });
 
   it('is given a run’s worth, and the rest the next time', async () => {
@@ -410,26 +414,28 @@ describe('a run', () => {
     writeText('page', 'pg-1', 'page-body', [
       paragraph('n1', 'A page nobody proofread.'),
     ]);
-    const scoped = await run('proofread', { about: `diary-entry:${DAY}` });
+    const scoped = await run('proofread', { about: [`diary-entry:${DAY}`] });
     expect(findSession(scoped!)!.title).toBe(`Fixing text mistakes · ${DAY}`);
     expect(brief(scoped!)).toContain('Kuzova');
     expect(brief(scoped!)).not.toContain('nobody proofread');
     expect([...coverageOf(id('proofread')).keys()]).toEqual([
       `text:diary-entry:${DIARY}:diary-body`,
     ]);
-    expect(await run('proofread', { about: `diary-entry:${DAY}` })).toBeNull();
+    expect(
+      await run('proofread', { about: [`diary-entry:${DAY}`] }),
+    ).toBeNull();
     const again = await run('proofread', {
-      about: `diary-entry:${DAY}`,
+      about: [`diary-entry:${DAY}`],
       force: true,
     });
     expect(brief(again!)).toContain('Kuzova');
     await expect(runTemplate(id('proofread'), { force: true })).rejects.toThrow(
-      /one entity/,
+      /entities named/,
     );
-    // The page is still due for the whole archive.
-    expect((await due('proofread')).map((item) => item.subject)).toEqual([
-      'text:page:pg-1:page-body',
-    ]);
+    // The page is still due for the whole archive, its title too.
+    expect((await due('proofread')).map((item) => item.subject)).toEqual(
+      expect.arrayContaining(['text:page:pg-1:page-body', 'fields:page:pg-1']),
+    );
   });
 
   it('is forgotten with the entity it looked at', async () => {
@@ -544,18 +550,15 @@ describe('a link the model left', () => {
 });
 
 describe('a ready-made request', () => {
-  it('is offered on the kinds it names, beside the checks', async () => {
-    const own = saveTemplate(null, {
+  it('is offered everywhere, beside the checks', async () => {
+    saveTemplate(null, {
       title: 'Look over',
       instruction: 'Look over this entry.',
-      offerOn: ['diary-entry', 'nonsense'],
     });
     saveTemplate(null, {
-      title: 'Project only',
+      title: 'Project look',
       instruction: 'Look at this project.',
-      offerOn: ['project'],
     });
-    expect(own.offerOn).toEqual(['diary-entry']);
     const panel = await entityPanel({
       kind: 'diary-entry',
       id: DIARY,
@@ -565,9 +568,11 @@ describe('a ready-made request', () => {
       panel.templates.map((item) => [item.title, item.builtin ?? null]),
     ).toEqual([
       ['Fixing text mistakes', 'proofread'],
+      ['File descriptions', 'describe'],
       ['Fixing broken links', 'links'],
       ['Finding possible relations', 'graph'],
       ['Look over', null],
+      ['Project look', null],
     ]);
   });
 
@@ -593,6 +598,404 @@ describe('a ready-made request', () => {
     expect(() =>
       startOwnerSession({ text: 'Go.', templateId: id('proofread') }),
     ).toThrow();
+  });
+});
+
+describe('the owner’s words', () => {
+  /** The model: asks for the batch the words name, then is done. */
+  function narrowing(areas: string[]) {
+    reply = () => ({ text: 'Looked.' });
+    let asked = false;
+    reply = () => {
+      if (asked) return { text: 'Looked.' };
+      asked = true;
+      return { toolCalls: [{ name: 'check_batch', input: { areas } }] };
+    };
+  }
+
+  it('narrow a run to what they name, and only that is checked', async () => {
+    narrowing(['titles']);
+    const sessionUuid = await run('proofread', {
+      request: 'Only the titles, please.',
+    });
+    expect(brief(sessionUuid!)).toContain('asked, in their own words');
+    expect(brief(sessionUuid!)).toContain('Only the titles, please.');
+    // The tool's answer is the batch: the project's title, no text.
+    const told = model!.requests[1]!.body.messages.find(
+      (item: any) => item.role === 'tool',
+    ).content as string;
+    expect(told).toContain('title: «Harbour»');
+    expect(told).not.toContain('Kuzova');
+    expect(told).not.toContain('A harbour.');
+    // What it was not given waits.
+    const left = (await due('proofread')).map((item) => item.shown).join('\n');
+    expect(left).toContain('Kuzova');
+    expect(left).toContain('summary: «A harbour.»');
+    expect(left).not.toContain('title: «Harbour»');
+  });
+
+  it('as the check says them start the run with its batch', async () => {
+    const sessionUuid = await run('proofread', {
+      request: findTemplate(id('proofread'))!.instruction,
+    });
+    expect(brief(sessionUuid!)).toContain('Kuzova');
+    expect(brief(sessionUuid!)).not.toContain('check_batch');
+  });
+
+  it('name entities the run is bound to, and only those', async () => {
+    narrowing(['texts']);
+    const sessionUuid = await run('proofread', {
+      about: [`diary-entry:${DAY}`],
+      request: 'The text, not the names.',
+    });
+    const part = sessionMessages(sessionUuid!)
+      .flatMap((message) => message.parts as AiMessagePart[])
+      .find((item) => item.type === 'template');
+    expect(part).toEqual({
+      type: 'template',
+      templateId: id('proofread'),
+      scope: [`diary-entry:${DAY}`],
+    });
+    expect([...coverageOf(id('proofread')).keys()]).toEqual([
+      `text:diary-entry:${DIARY}:diary-body`,
+    ]);
+  });
+});
+
+describe('every short text the owner typed', () => {
+  beforeEach(() => {
+    insert('statuses', {
+      id: 'st-1',
+      ownerType: 'project',
+      ownerId: PROJECT,
+      kind: 'regular',
+      text: 'Bilding the pier',
+      createdAt: 1,
+      date: '2026-10-01',
+    });
+    insert('external-links', {
+      url: 'https://example.com/pier',
+      faviconKey: '',
+      touchedAt: 1,
+    });
+    insert('project-external-links', {
+      projectUuid: PROJECT,
+      url: 'https://example.com/pier',
+      sortOrder: 0,
+      note: 'The piers plan',
+    });
+    insert('entity-relations', {
+      firstType: 'diary-entry',
+      firstId: DIARY,
+      secondType: 'project',
+      secondId: PROJECT,
+      type: 'related',
+      note: { type: 'shared', text: 'The day it bagan' },
+      firstSortOrder: 0,
+      secondSortOrder: 0,
+    });
+    insert('assets', {
+      assetUuid: 'a-1',
+      slug: 'plan',
+      extension: 'pdf',
+      familyUuid: 'af-1',
+      contentHash: 'hash-1',
+      settingsKey: 'original',
+      type: 'other',
+      size: 1,
+      touchedAt: 1,
+    });
+    insert('asset-usages', {
+      assetUuid: 'a-1',
+      containerType: 'project',
+      containerId: PROJECT,
+      role: 'other-asset',
+      meta: {
+        role: 'other-asset',
+        order: 0,
+        title: 'Plan of the pier',
+        caption: 'Drawn in wintr',
+        isPrivate: false,
+      },
+    });
+    context.rawDb
+      .prepare('UPDATE projects SET action = ? WHERE projectUuid = ?')
+      .run(
+        JSON.stringify({
+          ...DEFAULT_PROJECT_ACTION,
+          enabled: true,
+          text: 'Visti the harbour',
+          externalUrl: 'https://example.com',
+        }),
+        PROJECT,
+      );
+    writeText('diary-entry', DIARY, 'diary-body', [
+      paragraph('b0', PARAGRAPHS[0]!),
+      {
+        id: 'b1',
+        type: 'contentAttachment',
+        data: { asset: { assetUuid: 'a-1' }, title: 'Old plan', caption: '' },
+      },
+    ]);
+    invalidateMcpDocuments();
+  });
+
+  it('is given to proofread, each with how it is named', async () => {
+    const shown = (await due('proofread')).map((item) => item.shown).join('\n');
+    for (const line of [
+      'title: «Harbour»',
+      'summary: «A harbour.»',
+      'statuses st-1 (2026-10-01): «Bilding the pier»',
+      'links https://example.com/pier: note: «The piers plan»',
+      'relations project:p-1: note: «The day it bagan»',
+      'files a-1: title: «Plan of the pier»',
+      'files a-1: caption: «Drawn in wintr»',
+      'actionText (its button): «Visti the harbour»',
+      'displayName: «Owner»',
+      'title="Old plan"',
+    ])
+      expect(shown).toContain(line);
+  });
+
+  it('stays proofread once a fix of it is applied, and comes back when changed', async () => {
+    await run('proofread');
+    expect(await due('proofread')).toEqual([]);
+    const sessionUuid = createSession({ origin: 'owner', title: 'Fixes' });
+    const { results } = await proposeActions({
+      sessionUuid,
+      actions: [
+        {
+          kind: 'update',
+          target: `project:${PROJECT}`,
+          changes: {
+            statuses: [{ id: 'st-1', text: 'Building the pier' }],
+            actionText: 'Visit the harbour',
+          },
+        } as never,
+      ],
+    });
+    const actionUuid = (results[0] as { actionUuid: string }).actionUuid;
+    const outcome = await applyActions({
+      actionUuids: [actionUuid],
+      by: 'owner',
+    });
+    expect(outcome.refused ?? outcome.failed?.error).toBeUndefined();
+    expect(outcome.applied).toHaveLength(1);
+    expect(
+      context.rawDb
+        .prepare("SELECT text FROM statuses WHERE id = 'st-1'")
+        .get(),
+    ).toEqual({ text: 'Building the pier' });
+    expect(findAction(actionUuid)!.state).toBe('applied');
+    expect(await due('proofread')).toEqual([]);
+    // A title changed in a file block hands its paragraph back.
+    writeText('diary-entry', DIARY, 'diary-body', [
+      paragraph('b0', PARAGRAPHS[0]!),
+      {
+        id: 'b1',
+        type: 'contentAttachment',
+        data: { asset: { assetUuid: 'a-1' }, title: 'Old pln', caption: '' },
+      },
+    ]);
+    const [item] = await due('proofread');
+    expect(item!.subject).toBe(`text:diary-entry:${DIARY}:diary-body`);
+  });
+});
+
+describe('the files of the archive', () => {
+  /** A file of its own family, placed where named. */
+  function addFile(
+    n: number,
+    place: { containerType: string; containerId: string } | null,
+    type = 'image',
+  ) {
+    insert('assets', {
+      assetUuid: `a-${n}`,
+      slug: `file-${n}`,
+      extension: type === 'image' ? 'png' : 'pdf',
+      familyUuid: `af-${n}`,
+      contentHash: `hash-${n}`,
+      settingsKey: 'original',
+      settings: {},
+      type,
+      size: 1,
+      touchedAt: 100 + n,
+    });
+    if (place)
+      insert('asset-usages', {
+        assetUuid: `a-${n}`,
+        ...place,
+        role: 'other-asset',
+        meta: {
+          role: 'other-asset',
+          order: n,
+          title: `File ${n}`,
+          caption: '',
+          isPrivate: false,
+        },
+      });
+  }
+  const onProject = { containerType: 'project', containerId: PROJECT };
+
+  beforeEach(() => {
+    for (const n of [2, 3, 4, 5]) addFile(n, onProject);
+    // One in the diary's text.
+    addFile(1, {
+      containerType: 'content',
+      containerId: `c-${DIARY}-diary-body`,
+    });
+    // One described already, one only brought into a session.
+    addFile(6, onProject);
+    writeAssetDescription('a-6', 'The pier at dawn', {
+      expectedUpdatedAt: null,
+    });
+    addFile(7, { containerType: 'ai-session', containerId: 's-1' });
+    // A preview of a file is no file of the library.
+    insert('assets', {
+      assetUuid: 'a-5-preview',
+      slug: 'file-5-preview',
+      extension: 'webp',
+      familyUuid: 'af-5',
+      contentHash: 'hash-5-preview',
+      settingsKey: 'preview',
+      type: 'image',
+      size: 1,
+      touchedAt: 200,
+    });
+  });
+
+  const subjects = async (
+    key: AiBuiltinTemplateKey,
+    options: Parameters<typeof due>[1] = {},
+  ) => (await due(key, options)).map((item) => item.subject);
+
+  it('are described where they have no description, three a run, the latest first', async () => {
+    const batch = await due('describe');
+    expect(batch.map((item) => [item.subject, item.fingerprint])).toEqual([
+      ['file:af-5', 'hash-5'],
+      ['file:af-4', 'hash-4'],
+      ['file:af-3', 'hash-3'],
+    ]);
+    expect(batch[0]!.shown).toContain('# File a-5');
+    expect(batch[0]!.shown).toContain('none yet: propose one with describe');
+  });
+
+  it('are kept as looked at when they could not be shown, until their bytes change', async () => {
+    let asked = false;
+    reply = () => {
+      if (asked) return { text: 'a-5 could not be shown.' };
+      asked = true;
+      return { toolCalls: [{ name: 'look_at_file', input: { file: 'a-5' } }] };
+    };
+    const sessionUuid = await run('describe');
+    expect(brief(sessionUuid!)).toContain('Describe the files that have none');
+    const told = model!.requests[1]!.body.messages.find(
+      (item: any) => item.role === 'tool',
+    ).content as string;
+    expect(told).toContain('This file cannot be shown');
+    expect(await subjects('describe')).toEqual(['file:af-2', 'file:af-1']);
+    // Another file in its place is looked at anew.
+    context.rawDb
+      .prepare(
+        "UPDATE assets SET contentHash = 'hash-5b' WHERE assetUuid = 'a-5'",
+      )
+      .run();
+    expect(await subjects('describe')).toEqual([
+      'file:af-5',
+      'file:af-2',
+      'file:af-1',
+    ]);
+  });
+
+  it('are those of the entities and files a run is about', async () => {
+    expect(
+      await subjects('describe', {
+        scope: [{ kind: 'diary-entry', id: DIARY }],
+      } as never),
+    ).toEqual(['file:af-1']);
+    expect(
+      await subjects('describe', {
+        scope: [{ kind: 'asset', id: 'a-2' }],
+      } as never),
+    ).toEqual(['file:af-2']);
+    // A project's are its sections' too.
+    insert('project-content-sections', {
+      sectionUuid: 's-1',
+      projectUuid: PROJECT,
+      title: 'Pier',
+      humanReadableSlug: 'pier',
+      publicId: 'S1',
+      sortOrder: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    addFile(8, { containerType: 'project-section', containerId: 's-1' });
+    expect(
+      await subjects('describe', {
+        scope: [{ kind: 'project', id: PROJECT }],
+      } as never),
+    ).toEqual(['file:af-8', 'file:af-5', 'file:af-4']);
+    const sessionUuid = await run('describe', { about: ['asset:a-2'] });
+    expect(findSession(sessionUuid!)!.title).toContain('file-2');
+    expect(await subjects('describe')).not.toContain('file:af-2');
+    // Asked again, the file is looked at again.
+    expect(
+      await subjects('describe', {
+        scope: [{ kind: 'asset', id: 'a-2' }],
+        force: true,
+      } as never),
+    ).toEqual(['file:af-2']);
+  });
+
+  it('have their descriptions proofread, one taken from a proposal as it reads', async () => {
+    const proofread = async () =>
+      (await due('proofread')).filter((item) =>
+        item.subject.startsWith('description:'),
+      );
+    const [item] = await proofread();
+    expect(item).toMatchObject({
+      subject: 'description:af-6',
+      family: 'af-6',
+    });
+    expect(item!.shown).toContain('File asset:a-6: its description');
+    expect(item!.shown).toContain('«The pier at dawn»');
+    await run('proofread');
+    expect(await proofread()).toEqual([]);
+    const sessionUuid = createSession({ origin: 'owner', title: 'Files' });
+    const { results } = await proposeActions({
+      sessionUuid,
+      actions: [
+        { kind: 'describe', file: 'a-5', text: 'A boat at the pier' } as never,
+      ],
+    });
+    const outcome = await applyActions({
+      actionUuids: [(results[0] as { actionUuid: string }).actionUuid],
+      by: 'owner',
+    });
+    expect(outcome.applied).toHaveLength(1);
+    expect(await proofread()).toEqual([]);
+    expect(await subjects('describe')).not.toContain('file:af-5');
+    // The owner's own words are proofread anew.
+    writeAssetDescription('a-5', 'A boat at the peir', {
+      expectedUpdatedAt: readAssetDescription('a-5')!.updatedAt,
+    });
+    expect((await proofread()).map((entry) => entry.subject)).toEqual([
+      'description:af-5',
+    ]);
+  });
+
+  it('are forgotten with the last file of their family', async () => {
+    await run('describe');
+    expect(coverageOf(id('describe')).has('file:af-5')).toBe(true);
+    context.rawDb
+      .prepare("DELETE FROM `asset-usages` WHERE assetUuid = 'a-5'")
+      .run();
+    await deleteAsset('a-5');
+    // A preview left keeps it.
+    expect(coverageOf(id('describe')).has('file:af-5')).toBe(true);
+    await deleteAsset('a-5-preview');
+    expect(coverageOf(id('describe')).has('file:af-5')).toBe(false);
+    expect(coverageOf(id('describe')).has('file:af-4')).toBe(true);
   });
 });
 

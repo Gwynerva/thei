@@ -7,6 +7,7 @@ import { z } from 'zod';
 import type { McpCallContext } from './context';
 import { mayEdit } from './scope';
 import { registerChangesTool } from './tools/changes';
+import { registerCheckTools } from './tools/checks';
 import { registerDigestTools } from './tools/digests';
 import { registerFileTools } from './tools/files';
 import { registerLibraryTools } from './tools/library';
@@ -40,6 +41,7 @@ export function registerTheiTools(server: McpServer, context: McpCallContext) {
   registerLinkTools(server, context);
   registerLibraryTools(server, context);
   registerSessionTools(server, context);
+  registerCheckTools(server, context);
   if (mayEdit(context.principal.scopes)) registerFileTools(server, context);
 }
 

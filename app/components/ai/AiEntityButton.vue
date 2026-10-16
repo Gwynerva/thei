@@ -10,10 +10,10 @@ import type { ContentEntityType } from '#layers/thei/shared/content-link';
 /**
  * The ✦ of a form's header: the AI and the entity in hand. Its badge counts
  * the proposals waiting in the form; its menu has a message to write about
- * the entity — named in it already — with the ready-made requests offered
- * for its kind — a built-in check runs on the entity at once, a request of
- * the owner's goes into the message — then the sessions about it, and a way
- * to remember something of it. Sent, the session goes on in the background and the page stays:
+ * the entity — named in it already — with every ready-made request to
+ * start from: a built-in check sent from it runs on the entity, narrowed by
+ * the words added; then the sessions about it, and a way to remember
+ * something of it. Sent, the session goes on in the background and the page stays:
  * its proposals come to the fields' labels as they are made, and while it
  * answers it can be stopped from here, as any session about the entity
  * that is answering. Nothing with
@@ -75,27 +75,7 @@ const sentSession = computed(() => followed.detail.value?.session);
 const sending = ref(false);
 
 function usePreset(preset: AiPresetItem) {
-  if (preset.builtin) void check(preset);
-  else composer.value?.prefill(preset.instruction, preset.templateId);
-}
-
-/** A built-in check run on the entity, followed here as a message sent. */
-async function check(preset: AiPresetItem) {
-  if (!ai?.ref.value || sending.value) return;
-  sending.value = true;
-  try {
-    await runAiCheck(preset, {
-      about: ai.ref.value,
-      // Started again from the toast, the menu comes back to show it.
-      started: (sessionUuid) => {
-        sent.value = sessionUuid;
-        open.value = true;
-        void ai.refresh();
-      },
-    });
-  } finally {
-    sending.value = false;
-  }
+  composer.value?.prefill(preset.instruction, preset.templateId);
 }
 
 async function send(
@@ -107,11 +87,35 @@ async function send(
 ) {
   if (!ai?.ref.value || sending.value) return;
   sending.value = true;
+  const about = [...new Set([ai.ref.value, ...mentioned])];
+  // A built-in check runs on the entity, narrowed by the words.
+  const check = panel.value?.templates.find(
+    (item) => item.templateId === templateId && item.builtin,
+  );
+  if (check) {
+    try {
+      await runAiCheck(check, {
+        about,
+        request: text,
+        restore,
+        // Started again from the toast, the menu comes back to show it.
+        started: (sessionUuid) => {
+          sent.value = sessionUuid;
+          open.value = true;
+          nameEntity();
+          void ai.refresh();
+        },
+      });
+    } finally {
+      sending.value = false;
+    }
+    return;
+  }
   try {
     const { sessionUuid } = await aiApi.start({
       text,
       files,
-      about: [...new Set([ai.ref.value, ...mentioned])],
+      about,
       templateId,
     });
     sent.value = sessionUuid;

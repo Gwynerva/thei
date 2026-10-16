@@ -18,6 +18,7 @@ import type { ExternalLinkListItem } from '#layers/thei/shared/external-link';
 import { randomId } from '#layers/thei/shared/utils/random-id';
 import { refuse as fail } from '../../entity-patch/text';
 import type { ProfileEditData } from '#layers/thei/shared/profile';
+import type { StatusHistoryItem } from '#layers/thei/shared/status';
 import { tagIdOf, type EntityKey } from '../../entity-kinds';
 import { textFromMarkdown } from '../../mcp/text-input';
 import { normalizeSynonyms } from '#layers/thei/shared/synonyms';
@@ -57,6 +58,8 @@ export const FORM_FIELDS = {
     'notes',
     'sections',
     'sectionOrder',
+    'statuses',
+    'actionText',
   ],
   'project-section': [
     'title',
@@ -106,6 +109,7 @@ export const FORM_FIELDS = {
     'banner',
     'favicon',
     'links',
+    'statuses',
   ],
 } as const;
 
@@ -113,14 +117,65 @@ export type FormKind = keyof typeof FORM_FIELDS;
 
 export const FORM_REFERENCE = `\
 Fields by kind — a change names only the fields it changes:
-- project: title, summary, access (public | link-only | private), showcase and cv (true/false: among chosen projects, in the résumé), reminder, synonyms [names], slug, publicId, icon and banner (a file id, or null), showcaseFiles [{ file, caption?, private? }], files [{ file, title, caption?, private? }], links [{ url, note?, private? }], tags [names], relations [{ ref, kind?: related | depends-on | affects, note? or notes? }], description and notes (editing Markdown), sections [{ id?, …section fields }] (merged by id; one without an id is added; remove one with a delete action on its ref), sectionOrder [section ids].
+- project: title, summary, access (public | link-only | private), showcase and cv (true/false: among chosen projects, in the résumé), reminder, synonyms [names], slug, publicId, icon and banner (a file id, or null), showcaseFiles [{ file, caption?, private? }], files [{ file, title, caption?, private? }], links [{ url, note?, private? }], tags [names], relations [{ ref, kind?: related | depends-on | affects, note? or notes? }], description and notes (editing Markdown), sections [{ id?, …section fields }] (merged by id; one without an id is added; remove one with a delete action on its ref), sectionOrder [section ids], statuses [{ id, text }] (its status lines rewritten in place, each by its id; the rest stay), actionText (the words on its button).
 - project-section: title, summary, private (true/false), periods [{ startDate, endDate, precision?, precisionNote?, label? }], body (editing Markdown), banner, slug, publicId. A section with periods is a stage; it needs a body or periods.
 - event: title, summary, access, reminder, synonyms [names], slug, publicId, periods (at least one), banner, files, links, tags, relations, body (needed) and notes.
 - diary-entry: date (YYYY-MM-DD, one entry a day), access (public | private), reminder, body (needed), notes, relations. No title, no tags, ever.
 - page: title, summary, access, reminder, synonyms [names], slug, icon, body, notes.
 - tag: title, description, synonyms [names], slug, publicId, icon.
-- profile: displayName, slogan, nickname, about (editing Markdown), banner, favicon, links [{ url, name?, note?, private? }].
+- profile: displayName, slogan, nickname, about (editing Markdown), banner, favicon, links [{ url, name?, note?, private? }], statuses [{ id, text }] (as a project's).
 A list given replaces the list it names: what it leaves out goes. Each item names what it is — a relation its ref, a file its file id, a link its url — and keeps whatever else it leaves out: a relation its kind and note, a file its title, caption and privacy, a link its note and name. read_entity lists them in this very shape. A relation's note is one for both sides (note) or one per side (notes: { this, other }). A file is an id from upload_file, import_file or read_entity; in a text it is ::media{asset=<id>}. Pictures, files and links are the owner's choice: change them only when the owner asks.`;
+
+/**
+ * Keys a form carries only to be written — the edits of a status history —
+ * never read back as such: what they change reads in `statusTexts`.
+ */
+export const FORM_WRITE_ONLY = new Set([
+  'newStatuses',
+  'updatedStatuses',
+  'deletedStatusIds',
+]);
+
+/**
+ * Status lines rewritten in place, each by its id, its picture and day kept:
+ * what an owner's history reads afterwards, and the edits that write it.
+ */
+function statusChanges(
+  form: { statusTexts?: Record<string, string>; updatedStatuses?: unknown[] },
+  value: unknown,
+) {
+  const items = list(value, 'statuses');
+  const texts = { ...(form.statusTexts ?? {}) };
+  const { db, schema } = THEI_SERVER.useDb();
+  const pictures = new Map(
+    (
+      db
+        .select({
+          id: schema.statuses.id,
+          assetUuid: schema.statuses.assetUuid,
+        })
+        .from(schema.statuses)
+        .where(
+          inArray(
+            schema.statuses.id,
+            items.map((item) => String(item.id)),
+          ),
+        )
+        .all() as { id: string; assetUuid: string | null }[]
+    ).map((row) => [row.id, row.assetUuid]),
+  );
+  const updated = items.map((item) => {
+    const id = String(item.id);
+    if (!(id in texts)) fail(`There is no status ${id} here.`);
+    texts[id] = text(item.text, 'a status');
+    const assetUuid = pictures.get(id);
+    return { id, text: texts[id]!, ...(assetUuid ? { assetUuid } : {}) };
+  });
+  return {
+    statusTexts: texts,
+    updatedStatuses: [...(form.updatedStatuses ?? []), ...updated],
+  };
+}
 
 export function assertKnown(kind: FormKind, changes: Changes) {
   const known = FORM_FIELDS[kind] as readonly string[];
@@ -342,6 +397,11 @@ export function formView(kind: FormKind, form: any): Record<string, unknown> {
       ...(item.caption ? { caption: item.caption } : {}),
       private: item.isPrivate,
     }));
+  // The latest status lines, each with the id a change names.
+  const statuses = (page: { items?: StatusHistoryItem[] } | undefined) =>
+    (page?.items ?? [])
+      .filter((item) => item.kind === 'regular' && item.text)
+      .map((item) => ({ id: item.id, date: item.date, text: item.text }));
   const others = (items: OtherFile[] | undefined) =>
     (items ?? []).map((item) => ({
       file: item.assetUuid,
@@ -366,6 +426,8 @@ export function formView(kind: FormKind, form: any): Record<string, unknown> {
         showcaseFiles: showcase(form.showcaseAssets),
         files: others(form.otherAssets),
         links: linkList(form.externalLinks),
+        statuses: statuses(form.statuses),
+        ...(form.action?.enabled ? { actionText: form.action.text } : {}),
       };
     case 'event':
       return {
@@ -381,6 +443,7 @@ export function formView(kind: FormKind, form: any): Record<string, unknown> {
         banner: fileId(form.bannerAssetUuid),
         favicon: fileId(form.faviconAssetUuid),
         links: linkList(form.externalLinks),
+        statuses: statuses(form.statuses),
       };
     default:
       return {};
@@ -466,6 +529,13 @@ export async function projectChanges(
       case 'showcase':
       case 'cv':
         next[field] = flag(value, field);
+        break;
+      case 'statuses':
+        Object.assign(next, statusChanges(next as never, value));
+        break;
+      case 'actionText':
+        if (!next.action) fail('The project has no button.');
+        next.action = { ...next.action, text: text(value, field) };
         break;
       case 'slug':
         next.humanReadableSlug = text(value, field);
@@ -713,6 +783,9 @@ export async function profileChanges(form: ProfileEditData, changes: Changes) {
       case 'slogan':
       case 'nickname':
         next[field] = text(value, field);
+        break;
+      case 'statuses':
+        Object.assign(next, statusChanges(next as never, value));
         break;
       case 'about':
         next.aboutContent = await markdown(value, form.aboutContent, field);

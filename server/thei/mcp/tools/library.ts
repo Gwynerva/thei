@@ -92,7 +92,7 @@ function requireFile(assetUuid: string): AssetVariantInfo {
 }
 
 /** A file read whole: what it is, its description, its places. */
-function fileFacts(assetUuid: string): string {
+export function fileFacts(assetUuid: string): string {
   const file = requireFile(assetUuid);
   const usages = getAssetUsages(assetUuid);
   const description = readAssetDescription(assetUuid);

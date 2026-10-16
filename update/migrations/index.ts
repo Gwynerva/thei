@@ -27,6 +27,7 @@ import aiTemplateOffers from './0.0.6-ai-template-offers';
 import contentAnchors from './0.0.6-content-anchors';
 import assetDescriptions from './0.0.6-asset-descriptions';
 import aiTemplateCoverage from './0.0.6-ai-template-coverage';
+import aiTemplatesEverywhere from './0.0.6-ai-templates-everywhere';
 import fileCaptions from './0.0.6-file-captions';
 
 /**
@@ -68,6 +69,7 @@ export const migrationRegistry: TheiMigration[] = [
   contentAnchors,
   assetDescriptions,
   aiTemplateCoverage,
+  aiTemplatesEverywhere,
   fileCaptions,
 ];
 

@@ -6,7 +6,6 @@ import {
   text,
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
-import type { AiTemplateOfferKind } from '#layers/thei/shared/ai-template';
 import type {
   AiActionState,
   AiAppliedBy,
@@ -261,11 +260,6 @@ export const aiTemplates = sqliteTable('ai-templates', {
   instruction: text(),
   /** The model to use; empty for the one of the connection. */
   model: text().notNull().default(''),
-  /** The kinds of entity it is offered on, from their ✦. */
-  offerOn: text({ mode: 'json' })
-    .notNull()
-    .default([])
-    .$type<AiTemplateOfferKind[]>(),
   lastSessionUuid: text(),
   createdAt: integer().notNull(),
   updatedAt: integer().notNull(),
@@ -276,7 +270,8 @@ export const aiTemplates = sqliteTable('ai-templates', {
  * entity, a file — as it read then, by a fingerprint of what the check reads
  * and, where it looks at less than the whole, the parts it went over (the
  * paragraphs of a text). A subject that reads otherwise now is due again.
- * The entity it belongs to, if any, forgets it when deleted.
+ * The entity it belongs to, if any, forgets it when deleted; a family of
+ * files — `asset` by its family's id — once no file of it is left.
  */
 export const aiTemplateCoverage = sqliteTable(
   'ai-template-coverage',

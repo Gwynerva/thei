@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import aiTemplateCoverage from '../../update/migrations/0.0.6-ai-template-coverage';
+import aiTemplatesEverywhere from '../../update/migrations/0.0.6-ai-templates-everywhere';
 
 let rawDb: Database.Database | undefined;
 afterEach(() => rawDb?.close());
@@ -112,5 +113,20 @@ describe('0.0.6/014: templates become checks', () => {
     expect(parts('m-2')).toEqual([
       { type: 'notice', kind: 'stopped', text: 'the template' },
     ]);
+  });
+});
+
+describe('0.0.6/015: templates offered everywhere', () => {
+  it('lets go of where a template was offered', () => {
+    const db = scheduledDb();
+    aiTemplateCoverage.up!({ rawDb: db } as never);
+    aiTemplatesEverywhere.up!({ rawDb: db } as never);
+    const columns = (
+      db.pragma("table_info('ai-templates')") as { name: string }[]
+    ).map((column) => column.name);
+    expect(columns).not.toContain('offerOn');
+    expect(
+      db.prepare('SELECT count(*) AS count FROM `ai-templates`').get(),
+    ).toEqual({ count: 3 });
   });
 });

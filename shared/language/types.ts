@@ -1338,10 +1338,6 @@ export type LanguagePhrases = {
   content_block_settings: string;
   /** The grid of blocks the "+" opens. */
   content_block_toolbox: string;
-  ai_template_offer_on: string;
-  ai_template_offer_on_hint: string;
-  /** Offered on no kind: a check only from its tab, a request only in a new session. */
-  ai_template_offered_nowhere: (check: boolean) => string;
   ai_template_run: string;
   ai_template_run_again: string;
   ai_template_nothing_new: (title: string) => string;
@@ -1470,7 +1466,7 @@ export type LanguagePhrases = {
   >;
   ai_template_copy_title: (title: string) => string;
   /** How a check's session opens: who started it, and how much it was given. */
-  ai_template_note: (title: string, count: number) => string;
+  ai_template_note: (title: string, count: number | null) => string;
   ai_action_kinds: Record<AiActionKind, string>;
   /** What a memory record is about when it is not one entity. */
   ai_memory_owner: string;
@@ -1676,7 +1672,9 @@ export type LanguagePhrases = {
     | 'cv'
     | 'description'
     | 'synonyms'
-    | 'slogan',
+    | 'slogan'
+    | 'statuses'
+    | 'actionText',
     string
   >;
   ai_action_flag: Record<'on' | 'off', string>;

@@ -47,7 +47,10 @@ export function busySubjects(templateId: string, tx?: any): Set<string> {
   );
 }
 
-function entityColumns(item: Pick<CheckItem, 'entity'>) {
+/** What a subject is forgotten with: its entity, or its family of files. */
+function entityColumns(item: Pick<CheckItem, 'entity' | 'family'>) {
+  if (item.family)
+    return { entityType: 'asset' as const, entityId: item.family };
   return {
     entityType: (item.entity?.kind as AiEntityType | undefined) ?? null,
     entityId: item.entity?.id ?? null,
