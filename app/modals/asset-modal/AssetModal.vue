@@ -8,7 +8,8 @@ import { provideAssetModalActions } from './actions';
  * panel. The panel's header is one slim row: what is open, by its kind's icon
  * and its name, after a Back of the `lead` slot when the panel goes screen by
  * screen; a phone folds the panel from it. The `aside` slot scrolls; the
- * `footer` slot is the panel's slim foot, its main action.
+ * `footer` slot is the panel's slim foot, its main action, right under what
+ * the panel holds.
  */
 const { closable = true } = defineProps<{
   asideTitle?: string;
@@ -106,8 +107,10 @@ defineExpose({ root });
         class="aside-content-panel min-h-0"
         :style="{ '--aside-h': isAsideOpen ? 'auto' : '0px' }"
       >
+        <!-- The foot follows what the panel holds rather than the bottom of
+             a tall screen; only a panel that overflows scrolls above it. -->
         <div class="flex h-full flex-col">
-          <div class="min-h-0 flex-1 overflow-y-auto">
+          <div class="min-h-0 overflow-y-auto">
             <slot name="aside"></slot>
           </div>
           <div

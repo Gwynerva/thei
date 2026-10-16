@@ -31,7 +31,9 @@ The panel:
   still coming hold their place with placeholders of their size.
 - A footer, when there is one, is slim: the main action as one wide button,
   and square icon buttons for a way out — removing the file from its place,
-  cancelling what runs, going on without a description.
+  cancelling what runs, going on without a description. It stands right
+  under what the panel holds, never at the bottom of a tall screen; only a
+  panel too long for the screen scrolls above it, the footer staying in view.
 
 The file's description:
 

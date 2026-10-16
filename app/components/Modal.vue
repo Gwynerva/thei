@@ -110,11 +110,49 @@ function movesItself(element: Element) {
   return element instanceof HTMLElement && 'modalMotion' in element.dataset;
 }
 
+function isCard(layer: ModalLayer | undefined) {
+  return layer?.framed?.frame?.kind === 'card';
+}
+
+/**
+ * The blurred page under cards is one for all of them, drawn beneath every
+ * layer while a card is anywhere on the stack: a card over a card never
+ * blurs it twice, and the blur fades by itself. Inside a fading layer it
+ * would draw nothing until the fade ended, and then snap in.
+ */
+const backdropShown = computed(() => layers.value.some(isCard));
+
+function layerElement(key: string | undefined) {
+  if (!key) return undefined;
+  return (
+    dialogElement.value?.querySelector<HTMLElement>(
+      `:scope > [data-modal-layer="${CSS.escape(key)}"]`,
+    ) ?? undefined
+  );
+}
+
+/**
+ * Two cards of a stack, the one coming and the one it covers or uncovers,
+ * cross over the blurred page they share: each of another size, neither may
+ * vanish at once from around the other. A wait keeps the card that left
+ * whole beneath it, as any layer does.
+ */
+function crossing(coming: Element, other: HTMLElement | undefined) {
+  return (
+    other !== undefined &&
+    other !== coming &&
+    'modalCard' in (coming as HTMLElement).dataset &&
+    'modalCard' in other.dataset &&
+    !(coming as HTMLElement).dataset.modalLayer!.startsWith('wait:') &&
+    !other.dataset.modalLayer!.startsWith('wait:')
+  );
+}
+
 /**
  * A layer fades in over the one it covers. The wait between two steps does so
  * only once a transition's length has passed: a step that follows at once, or
  * a flow that ends, never shows it, and the step that left stays beneath it
- * until then.
+ * until then. A card over a card takes the other's place as it comes.
  */
 function onLayerEnter(element: Element, done: () => void) {
   const key = (element as HTMLElement).dataset.modalLayer!;
@@ -125,6 +163,11 @@ function onLayerEnter(element: Element, done: () => void) {
   };
   enteringKeys.add(key);
   if (movesItself(element)) return settle();
+  // The card it covers, still on the stack; one leaving fades by itself.
+  const covered = layers.value.some((layer) => layer.key === settledTop.value)
+    ? layerElement(settledTop.value)
+    : undefined;
+  if (crossing(element, covered)) void fadeElement(covered!, 0);
   void fadeElement(element, 1, { late: key.startsWith('wait:') }).then(settle);
 }
 
@@ -144,9 +187,13 @@ function onLayerLeave(element: Element, done: () => void) {
   if (movesItself(element)) return finish();
   // Replaced by a layer coming in, it stays beneath that one until it is
   // whole, so nothing behind them shows through; closed, it fades off what
-  // it uncovers.
+  // it uncovers. A card and a card cross instead: the uncovered one comes
+  // back as this one goes, the coming one as this one gives way.
   const replaced = Boolean(topKey.value) && settledTop.value !== topKey.value;
-  void (replaced ? whenTopSettled() : Promise.resolve())
+  const top = layerElement(topKey.value);
+  const crossed = crossing(element, top);
+  if (crossed && !replaced) void fadeElement(top!, 1);
+  void (replaced && !crossed ? whenTopSettled() : Promise.resolve())
     .then(() => fadeElement(element, 0))
     .then(finish);
 }
@@ -311,6 +358,17 @@ function onNativeClose() {
   }
 }
 
+/**
+ * The dialog's own close request undoes one step. A file input inside it
+ * fires a `cancel` of its own when its picker is dismissed, and that one
+ * bubbles here: it closes nothing.
+ */
+function onDialogCancel(e: Event) {
+  if (e.target !== dialogElement.value) return;
+  e.preventDefault();
+  dismissOneStep();
+}
+
 function onBackdropClick(e: MouseEvent) {
   if (e.target === dialogElement.value) closeModal();
 }
@@ -323,18 +381,37 @@ function onBackdropClick(e: MouseEvent) {
     class="m-0 h-dvh max-h-none w-dvw max-w-none overflow-hidden border-0
       bg-transparent p-0 outline-none backdrop:bg-transparent"
     @close="onNativeClose"
-    @cancel.prevent="dismissOneStep"
+    @cancel="onDialogCancel"
     @click="onBackdropClick"
   >
+    <Transition
+      enter-from-class="opacity-0"
+      enter-active-class="transition-opacity motion-reduce:transition-none"
+      leave-to-class="opacity-0"
+      leave-active-class="transition-opacity motion-reduce:transition-none"
+    >
+      <div
+        v-if="backdropShown"
+        class="absolute inset-0 bg-bg-2 sm:bg-bg-1/40 sm:backdrop-blur-md
+          dark:sm:bg-bg-1/80"
+        aria-hidden="true"
+        data-modal-backdrop
+      ></div>
+    </Transition>
     <TransitionGroup :css="false" @enter="onLayerEnter" @leave="onLayerLeave">
+      <!-- Each layer, and the modal and shell in it, is a stacking of its
+           own: they lie in their order, and a z-index inside the one beneath
+           — Editor.js has several — never reaches over one fading in or out
+           above it. -->
       <div
         v-for="layer in layers"
         :key="layer.key"
-        class="absolute inset-0"
+        class="absolute inset-0 isolate *:isolate"
         :data-modal-layer="layer.key"
         :data-modal-motion="
           layer.framed?.frame?.kind === 'sheet' ? 'self' : undefined
         "
+        :data-modal-card="isCard(layer) || undefined"
         :hidden="layer.key !== topKey && layer.key !== settledTop"
         :inert="layer.key !== topKey"
         :aria-hidden="layer.key === topKey ? undefined : 'true'"

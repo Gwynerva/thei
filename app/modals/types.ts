@@ -54,6 +54,8 @@ export type ModalFrame<TData = any> =
       /** A card over the blurred page (`ModalContainer`), `width` wide. */
       kind: 'card';
       width: string;
+      /** The page's own ground rather than a surface's: a text's editor. */
+      ground?: 'page';
       icon?: IconName;
       title: (data: TData) => string;
     }

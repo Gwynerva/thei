@@ -26,7 +26,11 @@ defineProps<{
 </script>
 
 <template>
-  <ModalContainer v-if="frame?.kind === 'card'" :class="frame.width">
+  <ModalContainer
+    v-if="frame?.kind === 'card'"
+    :class="frame.width"
+    :ground="frame.ground"
+  >
     <template #header>
       <div class="flex items-center gap-sm p-sm">
         <ModalTitle :icon="frame.icon" :title="title ?? ''" class="flex-1" />

@@ -36,10 +36,15 @@ The header:
 The body:
 
 - It sits on the modal's own ground (`bg-bg-2`). No nested box with another
-  background inside it.
+  background inside it. A text's editor and the comparison in its place sit
+  on the page's ground instead (`ModalContainer`'s `ground="page"`, `bg-bg-1`,
+  and the frame's `ground: 'page'` for its shell), so a text is written on
+  what it is read on, its blocks looking as they do on the page.
 - Context lines — the entity, a date, a source — live in the body, not in the
   sticky header or footer.
-- A sticky footer, when there is one, is as slim as the header.
+- A sticky footer, when there is one, is as slim as the header. A text's
+  editor keeps what the text holds and when it was last kept there, in sight
+  however long the text, rather than after its last block.
 
 Closing:
 
@@ -95,6 +100,16 @@ Motion:
 - A shell that was seen gives way by fading off the modal drawn beneath it;
   one up for less than a transition's length, whose wait never showed, goes
   at once, since it was still coming in with its layer.
+- Each layer, and the modal and the shell in it, is a stacking context of its
+  own (`isolate *:isolate`), so what fades lies above what it covers all the
+  way: a z-index inside the one beneath — Editor.js has several — never
+  reaches over it, and nothing jumps to the top once the fade is done.
+- The blurred page under cards is one, the dialog's own, beneath every layer
+  while a card is on the stack, and it fades by itself: a blur inside a
+  fading layer draws nothing until the fade ends, and then snaps in. A card
+  over a card crosses with it — the covered one gives way as the new one
+  comes, and comes back as that one goes — since cards differ in size and
+  neither may vanish at once from around the other.
 
 ## How it is built
 
@@ -118,10 +133,12 @@ Motion:
   `app/modals/ModalScreenBar.vue` is the title row of a screen and of its
   shell. `app/modals/layer-motion.ts` fades the layers and the shells.
 - `app/modals/ModalContainer.vue` draws it: the full screen on a phone; from
-  `sm:` a card of `rounded-normal`, `border` and `shadow-xl` over a blurred
-  page. Its `header` slot is sticky glass with a bottom border, `z-10`; the
-  default slot is the body; the optional `footer` slot is sticky at the bottom.
-  The width is the caller's, most often `max-w-140`.
+  `sm:` a card of `rounded-normal`, `border` and `shadow-xl` over the blurred
+  page `Modal.vue` draws under every card. Around the card a click closes it.
+  Its `header` slot is sticky glass with a bottom border, `z-10`; the default
+  slot is the body; the optional `footer` slot is sticky at the bottom. The
+  width is the caller's, most often `max-w-140`; `ground="page"` puts it on
+  `bg-bg-1`.
 - `app/modals/ModalTitle.vue` is the icon and the truncated title;
   `app/modals/ModalHeaderButton.vue` the header's buttons (see
   [Buttons](buttons.md)).

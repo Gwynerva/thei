@@ -100,10 +100,14 @@ export function createEditorBlockDrag(
   /**
    * The block the settings button stands next to: a block inserted from the
    * toolbox opens a file picker straight away, and nothing is hovered while
-   * it is up, so the remembered block can be one that no longer exists.
+   * it is up, so the remembered block can be one that no longer exists. On a
+   * phone it is the caret's block, as for the "+".
    */
   function blockAtSettingsButton() {
-    const id = editorBlockNextTo(root, settingsButton!)?.dataset.id;
+    const index = editor.blocks.getCurrentBlockIndex();
+    const current =
+      index >= 0 ? editor.blocks.getBlockByIndex(index)?.holder : undefined;
+    const id = editorBlockNextTo(root, settingsButton!, current)?.dataset.id;
     return id ? editor.blocks.getById(id) : null;
   }
 
