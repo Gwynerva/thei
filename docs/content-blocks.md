@@ -132,7 +132,7 @@ an HTML document is.
 | `list`                   | `{ style: 'unordered' \| 'ordered' \| 'checklist', items, meta }`; an item is `{ content, items, meta }` and nests |
 | `delimiter`              | `{}`                                                                                                               |
 | `contentMedia`           | `{ asset, layout: 'centered' \| 'natural' \| 'stretch', caption }`                                                 |
-| `contentGallery`         | `{ items: [{ id, asset, caption }] }` — an item without an `id` is dropped                                         |
+| `contentGallery`         | `{ title, items: [{ id, asset, caption }] }` — an item without an `id` is dropped                                  |
 | `contentAudio`           | `{ asset, title, caption }` — an audio file, played in place                                                       |
 | `contentAttachment`      | `{ asset, title, caption }` — any file, shown as a download                                                        |
 | `contentFileGroup`       | `{ title, items: [{ id, asset, title, caption }] }` — files listed together, each shown as it would be alone       |
@@ -192,8 +192,8 @@ normalized (`shared/terminal-punctuation.ts`), never while it is typed:
   any length, and with a mark when it has several: a full stop is added after
   a last sentence left open.
 - A heading — `header.text`, the `title` of `contentAudio`,
-  `contentAttachment`, a `contentFileGroup` and each of its files — never
-  ends with a full stop.
+  `contentAttachment`, a `contentGallery`, a `contentFileGroup` and each of
+  its files — never ends with a full stop.
 - Both keep `?`, `!`, `…` and `...` as typed, and the full stop that closes an
   abbreviation or an initial ("1990 г.", "и т. д.", "А. С."). Spaces before
   the last mark, a doubled full stop and a trailing comma or semicolon go.
@@ -238,8 +238,9 @@ assetTotalSize }`) and nothing else;
   recording's link, `[title](url "description")`; without one a picture's
   alt is its caption. A group of files is its title on a line of its own,
   not a heading, and then a list: each file as it would be alone, its caption
-  after it, `- [title](url) (m:ss) — caption`. With `options.format` the
-  owner's words — text, captions, group titles,
+  after it, `- [title](url) (m:ss) — caption`. A gallery is its title the
+  same way, then its pictures. With `options.format` the owner's words —
+  text, captions, group and gallery titles,
   attachment and recording titles, hints, link notes, entity link titles,
   file descriptions —
   get the typography of the site's
@@ -271,7 +272,7 @@ nothing else: a bare address stays text.
 | `list` with another counter     | the list inside `:::list{counter="lower-roman"}` … `:::`           |
 | `delimiter`                     | `---`                                                              |
 | `contentMedia`                  | `::media[caption]{asset="a-…" layout="centered"}`                  |
-| `contentGallery`                | `:::gallery` with `::media[caption]{#id asset="a-…"}` per item     |
+| `contentGallery`                | `:::gallery{title="…"}` with `::media[caption]{#id asset="a-…"}`   |
 | `contentAudio`                  | `::audio[caption]{asset="a-…" title="…"}`                          |
 | `contentAttachment`             | `::file[caption]{asset="a-…" title="…"}`                           |
 | `contentFileGroup`              | `:::files{title="…"}` with a `::file` line per file (below)        |

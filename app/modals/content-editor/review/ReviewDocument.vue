@@ -232,7 +232,9 @@ defineExpose({
             ? phrase.ai_review_gone_taken
             : phrase.ai_review_gone
         }}</b>
-        <span class="min-w-0 flex-1 truncate italic">«{{ row.quote }}»</span>
+        <span v-if="row.quote" class="min-w-0 flex-1 truncate italic"
+          >«{{ row.quote }}»</span
+        >
       </button>
 
       <div

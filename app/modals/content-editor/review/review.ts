@@ -5,7 +5,11 @@ import type {
   AiRevisePartState,
 } from '#layers/thei/shared/ai-actions';
 import type { TidyItem } from '#layers/thei/shared/ai-revise';
-import type { ContentOutputData } from '#layers/thei/shared/content';
+import {
+  contentBlockFiles,
+  type ContentOutputBlock,
+  type ContentOutputData,
+} from '#layers/thei/shared/content';
 import {
   orderReview,
   proofreadReview,
@@ -43,6 +47,32 @@ export const REVIEW_VIEW_ICONS: Record<ReviewView, IconName> = {
   diff: 'compare',
   list: 'list-unordered',
 };
+
+/** Extensions a line about a block names before it trails off. */
+const NAMED_FILES = 5;
+
+/**
+ * What a block holds besides its words, for a line about it: its files by
+ * their extensions, or a delimiter by its kind. A block whose words say it
+ * all gets nothing.
+ */
+export function describeReviewBlock(block: ContentOutputBlock): string {
+  if (block.type === 'delimiter')
+    return phrase.value.content_editor_i18n.delimiter;
+  const files = contentBlockFiles(block);
+  if (!files.length) return '';
+  const extensions = files.flatMap((file) => {
+    const extension = (file as { extension?: unknown } | null)?.extension;
+    return typeof extension === 'string' && extension
+      ? [extension.toUpperCase()]
+      : [];
+  });
+  const named = extensions.slice(0, NAMED_FILES).join(', ');
+  return phrase.value.ai_review_files(
+    files.length,
+    extensions.length > NAMED_FILES ? `${named}, …` : named,
+  );
+}
 
 const VIEW_KEY = 'thei-review-view';
 

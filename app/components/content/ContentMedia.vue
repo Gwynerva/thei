@@ -5,6 +5,11 @@ import type {
 } from '#layers/thei/shared/content';
 import { contentMediaAutoplays } from '#layers/thei/shared/content-media';
 
+/**
+ * A picture or a video as a text lays it out, and what stands right under
+ * it — its caption — as wide as it is. `framed`, the two share one frame on
+ * the ground of a surface, as a gallery's picture and caption do.
+ */
 const props = withDefaults(
   defineProps<{
     asset: ContentAssetData;
@@ -12,8 +17,9 @@ const props = withDefaults(
     alt?: string;
     rounded?: boolean;
     naturalSize?: boolean;
+    framed?: boolean;
   }>(),
-  { rounded: true, naturalSize: true },
+  { rounded: true, naturalSize: true, framed: false },
 );
 
 const measuredWidth = ref<number>();
@@ -30,21 +36,21 @@ const frameStyle = computed(() => {
   const aspectRatio = hasDimensions.value
     ? `${width.value} / ${height.value}`
     : '16 / 9';
-  if (props.layout === 'stretch') return { aspectRatio };
-  if (props.layout === 'centered') {
-    return {
-      aspectRatio,
-      ...(hasDimensions.value
-        ? { maxHeight: `min(36rem, ${height.value}px)` }
-        : {}),
-    };
-  }
-  if (!hasDimensions.value) return { aspectRatio, width: '100%' };
-  return {
-    aspectRatio,
-    width: `min(100%, ${width.value}px, calc(36rem * ${width.value} / ${height.value}))`,
-  };
+  if (props.layout === 'centered' && hasDimensions.value)
+    return { aspectRatio, maxHeight: `min(36rem, ${height.value}px)` };
+  return { aspectRatio };
 });
+/**
+ * How wide the picture and what is under it are: the column, or, as it is,
+ * no wider than the picture itself, nor than a picture 36rem high would be.
+ */
+const boxStyle = computed(() =>
+  props.layout === 'natural' && hasDimensions.value
+    ? {
+        width: `min(100%, ${width.value}px, calc(36rem * ${width.value} / ${height.value}))`,
+      }
+    : undefined,
+);
 
 function rememberDimensions(nextWidth: number, nextHeight: number) {
   if (media.value?.width && media.value.height) return;
@@ -56,31 +62,40 @@ function rememberDimensions(nextWidth: number, nextHeight: number) {
 <template>
   <div
     v-if="media"
-    class="relative isolate overflow-hidden"
+    class="min-w-0"
     :class="[
       layout === 'natural' ? 'mr-auto max-w-full' : 'w-full',
       {
-        'max-h-144': layout !== 'stretch',
-        'rounded-normal': rounded,
+        'overflow-hidden rounded-normal border border-border-1 bg-bg-2': framed,
       },
     ]"
-    :style="frameStyle"
-    :data-content-media-layout="layout"
+    :style="boxStyle"
   >
-    <Media
-      v-bind="media"
-      :autoplay
-      :loop="autoplay"
-      :controls="media.kind === 'video'"
-      fit="contain"
-      :natural-size="naturalSize && layout !== 'stretch'"
-      :backdrop="layout === 'centered'"
-      :width
-      :height
-      :alt="alt ?? media.alt"
-      class="size-full bg-bg-1"
-      @dimensions="rememberDimensions"
-    />
-    <slot />
+    <div
+      class="relative isolate w-full overflow-hidden"
+      :class="{
+        'max-h-144': layout !== 'stretch',
+        'rounded-normal': rounded && !framed,
+      }"
+      :style="frameStyle"
+      :data-content-media-layout="layout"
+    >
+      <Media
+        v-bind="media"
+        :autoplay
+        :loop="autoplay"
+        :controls="media.kind === 'video'"
+        fit="contain"
+        :natural-size="naturalSize && layout !== 'stretch'"
+        :backdrop="layout === 'centered'"
+        :width
+        :height
+        :alt="alt ?? media.alt"
+        class="size-full bg-bg-1"
+        @dimensions="rememberDimensions"
+      />
+      <slot />
+    </div>
+    <slot name="below" />
   </div>
 </template>

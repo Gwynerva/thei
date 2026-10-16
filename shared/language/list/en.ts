@@ -1391,6 +1391,7 @@ export default defineI18nBase({
     content_make_gallery: 'Turn into a gallery',
     content_make_file_group: 'Turn into a group',
     content_file_group_title: 'Group title',
+    content_gallery_title: 'Gallery title',
     content_add_files: 'Add files',
     content_remove_file: 'Remove from the group',
     content_move_file: 'Move',
@@ -2078,6 +2079,10 @@ export default defineI18nBase({
     },
     ai_review_gone: 'The block goes',
     ai_review_gone_taken: 'The block is gone',
+    ai_review_files: (count, extensions) =>
+      count === 1
+        ? `File ${extensions}`
+        : `${plural(count, 'file', 'files')}: ${extensions}`,
     ai_review_comment_placeholder: 'What should be done otherwise?',
     ai_review_comment_sent:
       'The comment is in the session: the model will send a new version of the edit.',

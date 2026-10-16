@@ -6,7 +6,8 @@ import type { ContentAssetData } from '#layers/thei/shared/content';
  * A recording in a text: its title, the player, and a caption under it, as
  * a picture has one. The title is plain text and the caption takes markup,
  * as a file's do, so the block turns into a file and back without losing a
- * word.
+ * word. As a row of a group's list it has no frame of its own, and its
+ * caption is a line of the row.
  */
 const props = withDefaults(
   defineProps<{
@@ -17,6 +18,7 @@ const props = withDefaults(
     editLabel?: string;
     titlePlaceholder?: string;
     captionPlaceholder?: string;
+    listed?: boolean;
   }>(),
   {
     title: '',
@@ -25,6 +27,7 @@ const props = withDefaults(
     editLabel: '',
     titlePlaceholder: '',
     captionPlaceholder: '',
+    listed: false,
   },
 );
 
@@ -50,8 +53,8 @@ const shownTitle = computed(() => publicText(props.title));
 <template>
   <figure class="min-w-0" data-content-audio>
     <div
-      class="audio-card flex min-w-0 flex-col gap-xs rounded-normal border
-        border-border-1 bg-bg-2 p-xs text-text-1 sm:px-sm"
+      class="flex min-w-0 flex-col gap-xs p-xs text-text-1 sm:px-sm"
+      :class="{ 'audio-card rounded-normal border border-border-1': !listed }"
     >
       <div
         v-if="editable || shownTitle"
@@ -112,8 +115,17 @@ const shownTitle = computed(() => publicText(props.title));
       <p v-if="!editable && asset.alt" class="sr-only" data-audio-alt>
         {{ publicText(asset.alt) }}
       </p>
+      <ContentCaption
+        v-if="listed"
+        :model-value="caption"
+        :editable
+        :placeholder="captionPlaceholder"
+        class="audio-row-caption"
+        @update:model-value="emit('caption', $event)"
+      />
     </div>
     <ContentCaption
+      v-if="!listed"
       :model-value="caption"
       :editable
       :placeholder="captionPlaceholder"
@@ -134,5 +146,10 @@ const shownTitle = computed(() => publicText(props.title));
     var(--color-accent) 4%,
     var(--color-bg-2)
   );
+}
+
+/* A line of the row, close under the player. */
+.audio-row-caption {
+  margin-top: 0;
 }
 </style>

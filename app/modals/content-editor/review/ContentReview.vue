@@ -208,6 +208,7 @@ function close() {
     <ModalContainer
       class="grid max-w-200 grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr_auto]
         max-sm:min-h-full"
+      ground="page"
       data-review
       :data-review-mode="mode"
     >

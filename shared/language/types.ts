@@ -992,6 +992,7 @@ export type LanguagePhrases = {
   content_make_gallery: string;
   content_make_file_group: string;
   content_file_group_title: string;
+  content_gallery_title: string;
   content_add_files: string;
   content_remove_file: string;
   content_move_file: string;
@@ -1520,6 +1521,8 @@ export type LanguagePhrases = {
   ai_review_filters: Record<'all' | 'unsure' | 'words' | 'blocks', string>;
   ai_review_gone: string;
   ai_review_gone_taken: string;
+  /** A block's files in a line about it: how many, and their extensions. */
+  ai_review_files: (count: number, extensions: string) => string;
   ai_review_comment_placeholder: string;
   ai_review_comment_sent: string;
   ai_review_from_session: (title: string) => string;

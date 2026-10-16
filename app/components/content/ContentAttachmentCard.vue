@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { ContentAssetData } from '#layers/thei/shared/content';
-import { isAssetPreviewable } from '#layers/thei/shared/assets/preview';
+import { useContentFileCard } from './content-file-card';
 
 const props = withDefaults(
   defineProps<{
@@ -34,62 +34,8 @@ const emit = defineEmits<{
   open: [];
 }>();
 
-const humanSize = useHumanSize();
-
-/**
- * A file with something to show — a picture, a video, a text, a table, a
- * page, a PDF, an archive's list — opens in the asset viewer; any other is
- * simply downloaded. Opening goes through the viewer, which needs the
- * file's address too. Without the viewer, a picture or a video opens in a
- * tab of its own.
- */
-const viewable = computed(() => !!props.asset.media);
-const previewable = computed(
-  () =>
-    viewable.value ||
-    (!!props.asset.extension &&
-      isAssetPreviewable(props.asset.extension, props.asset.archivedOriginal)),
-);
-const mode = computed(() => {
-  if (props.editable || !props.href) return 'static';
-  return props.openable && previewable.value ? 'open' : 'link';
-});
-function onPreviewClick(event: MouseEvent) {
-  if (!props.editable) return;
-  event.stopPropagation();
-  emit('edit');
-}
-
-/**
- * A picture or a video shown as a file still shows what it is, by its small
- * preview: the page loads only that, never the file, until it is opened. An
- * older video stored without a preview of its own has none to give.
- */
-const thumbnailFailed = ref(false);
-const thumbnail = computed(() => {
-  const media = props.asset.media;
-  if (!media || thumbnailFailed.value) return undefined;
-  if (media.kind === 'video')
-    return media.previewSrc && media.previewSrc !== media.src
-      ? media.previewSrc
-      : undefined;
-  return media.previewSrc || media.src;
-});
-watch(
-  () => props.asset.media?.previewSrc,
-  () => (thumbnailFailed.value = false),
-);
-
-// The owner's title gets their typography; a file name stays as it is.
-const resolvedTitle = computed(
-  () => publicText(props.title) || props.fallbackTitle,
-);
-const details = computed(() =>
-  [
-    props.asset.extension?.toUpperCase(),
-    props.asset.size !== undefined ? humanSize(props.asset.size) : undefined,
-  ].filter(Boolean),
-);
+const { viewable, mode, resolvedTitle, details, actionIcon } =
+  useContentFileCard(props);
 </script>
 
 <template>
@@ -114,54 +60,12 @@ const details = computed(() =>
       "
       @click="mode === 'open' ? emit('open') : undefined"
     >
-      <component
-        :is="editable ? 'button' : 'span'"
-        :type="editable ? 'button' : undefined"
-        :data-drag-ignore="editable || undefined"
-        :aria-label="editable ? editLabel : undefined"
-        :data-title-popup="editable ? editLabel : undefined"
-        class="attachment-card-tile relative flex size-14 shrink-0 items-center
-          justify-center rounded-sm text-accent transition-colors sm:size-16"
-        :class="{
-          [`attachment-card-tile-editable cursor-pointer outline-none
-          focus-visible:ring-2 focus-visible:ring-accent`]: editable,
-        }"
-        @click="onPreviewClick"
-      >
-        <img
-          v-if="thumbnail"
-          :src="sitePath(thumbnail)"
-          alt=""
-          loading="lazy"
-          decoding="async"
-          draggable="false"
-          class="size-full rounded-sm object-cover"
-          data-attachment-thumbnail
-          @error="thumbnailFailed = true"
-        />
-        <FilePreview
-          v-else
-          :extension="asset.extension"
-          class="size-10 sm:size-11"
-        />
-        <span
-          v-if="thumbnail && asset.media?.kind === 'video'"
-          class="pointer-events-none absolute bottom-1 left-1 rounded-full
-            bg-black/30 p-0.5 text-xs leading-none text-white backdrop-blur-sm"
-          aria-hidden="true"
-        >
-          <Icon name="play-circle" />
-        </span>
-        <span
-          v-if="editable"
-          class="absolute -right-1 -bottom-1 flex size-6 items-center
-            justify-center rounded-full border border-border-1 bg-bg-2 text-xs
-            text-text-2 shadow-sm"
-          aria-hidden="true"
-        >
-          <Icon name="edit" />
-        </span>
-      </component>
+      <ContentFileTile
+        :asset
+        :editable
+        :edit-label="editLabel"
+        @edit="emit('edit')"
+      />
 
       <component
         :is="editable ? 'div' : 'span'"
@@ -207,15 +111,7 @@ const details = computed(() =>
           group-hocus:text-white"
         aria-hidden="true"
       >
-        <Icon
-          :name="
-            mode === 'open'
-              ? 'expand-diagonal'
-              : viewable
-                ? 'arrow-outward'
-                : 'download'
-          "
-        />
+        <Icon :name="actionIcon" />
       </span>
     </component>
     <ContentCaption
@@ -233,14 +129,6 @@ const details = computed(() =>
  * as transparency: the card may lie on a pattern — the locks of a private
  * section — and a translucent tint would let it show through.
  */
-.attachment-card-tile {
-  background-color: color-mix(
-    in oklab,
-    var(--color-accent) 10%,
-    var(--color-bg-2)
-  );
-}
-
 .attachment-card-interactive:focus-visible {
   background-color: color-mix(
     in oklab,
@@ -259,8 +147,7 @@ const details = computed(() =>
   }
 }
 
-.attachment-card-interactive:focus-visible .attachment-card-tile,
-.attachment-card-tile-editable:focus-visible {
+.attachment-card-interactive:focus-visible .file-tile {
   background-color: color-mix(
     in oklab,
     var(--color-accent) 20%,
@@ -269,8 +156,7 @@ const details = computed(() =>
 }
 
 @media (hover: hover) {
-  .attachment-card-interactive:hover .attachment-card-tile,
-  .attachment-card-tile-editable:hover {
+  .attachment-card-interactive:hover .file-tile {
     background-color: color-mix(
       in oklab,
       var(--color-accent) 20%,

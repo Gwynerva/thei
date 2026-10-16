@@ -155,7 +155,12 @@ import {
   type ContentReview as ContentReviewModel,
   type ReviewDecision,
 } from '#layers/thei/shared/content-review';
-import { partComment, storedDecisions, textEditReview } from './review/review';
+import {
+  describeReviewBlock,
+  partComment,
+  storedDecisions,
+  textEditReview,
+} from './review/review';
 import { registerDismissLayer } from '#layers/thei/app/composables/modal';
 import ContentReview from './review/ContentReview.vue';
 import ContentEditorNotices from './ContentEditorNotices.vue';
@@ -569,6 +574,7 @@ async function compareWith(target: RestoreTarget) {
     if (disposed) return;
     const model = versionReview(now, data, {
       formatText: publicText,
+      describeBlock: describeReviewBlock,
     });
     if (!model.parts.length) {
       showToast(phrase.value.content_restore_same);
@@ -1242,8 +1248,15 @@ onBeforeUnmount(() => {
     'content-editor-block-dragging',
     'content-editor-modal-open',
   );
+  // Editor.js takes its blocks out at once, while the modal still fades out
+  // around them, which would fold it to its header: what was on screen stays
+  // in the holder, a still copy, until the modal is gone.
+  const still = Array.from(holder.value?.childNodes ?? [], (node) =>
+    node.cloneNode(true),
+  );
   editor?.destroy();
   editor = undefined;
+  holder.value?.replaceChildren(...still);
 });
 
 async function save() {
@@ -1481,6 +1494,7 @@ function contentToolLabels() {
     showAsPicture: phrase.value.content_show_as_picture,
     makeFileGroup: phrase.value.content_make_file_group,
     groupTitle: phrase.value.content_file_group_title,
+    galleryTitle: phrase.value.content_gallery_title,
     addFiles: phrase.value.content_add_files,
     removeFile: phrase.value.content_remove_file,
     moveFile: phrase.value.content_move_file,
@@ -1574,7 +1588,15 @@ function editorJsI18nMessages() {
 <template>
   <!-- One root: the host hides it while another modal is on top. -->
   <div class="contents">
-    <ModalContainer v-show="!review" ref="modalContainer" class="max-w-200">
+    <!-- On the page's ground; on a phone it fills the screen, its foot at
+         the bottom, as the comparison in its place does. -->
+    <ModalContainer
+      v-show="!review"
+      ref="modalContainer"
+      class="grid max-w-200 grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr_auto]
+        max-sm:min-h-full"
+      ground="page"
+    >
       <ContentInlineLinkDecorator
         playback="interaction"
         :root="holder"
@@ -1737,18 +1759,21 @@ function editorJsI18nMessages() {
         @click.capture="preventEditorLinkNavigation"
         @auxclick.capture="preventEditorLinkNavigation"
       ></div>
-      <!-- What the text holds, and when it was last kept. -->
-      <div
-        class="mx-sm mb-md flex flex-wrap items-center gap-x-3.5 gap-y-1
-          border-t border-border-1 pt-sm text-xs text-text-2"
-        data-editor-foot
-      >
-        <ContentStats v-bind="headerSummary" compact class="min-w-0" />
-        <span class="inline-flex items-center gap-1 text-text-3">
-          <TheiTime v-if="updatedAt" :datetime="updatedAt" />
-          <template v-else>{{ phrase.content_never_saved }}</template>
-        </span>
-      </div>
+      <!-- What the text holds, and when it was last kept: the slim foot,
+           in sight however long the text. -->
+      <template #footer>
+        <div
+          class="flex min-h-9 flex-wrap items-center gap-x-3.5 gap-y-1 px-sm
+            py-xs text-xs text-text-2"
+          data-editor-foot
+        >
+          <ContentStats v-bind="headerSummary" compact class="min-w-0" />
+          <span class="inline-flex items-center gap-1 text-text-3">
+            <TheiTime v-if="updatedAt" :datetime="updatedAt" />
+            <template v-else>{{ phrase.content_never_saved }}</template>
+          </span>
+        </div>
+      </template>
     </ModalContainer>
 
     <ContentReview

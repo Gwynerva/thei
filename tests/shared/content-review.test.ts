@@ -209,6 +209,58 @@ describe('another version', () => {
   });
 });
 
+describe('another version’s files', () => {
+  const file = (assetUuid: string, extension: string) => ({
+    id: assetUuid,
+    asset: { assetUuid, type: 'other', extension, size: 1 },
+  });
+  const group = (id: string, items: ReturnType<typeof file>[]) => ({
+    id,
+    type: 'contentFileGroup' as const,
+    data: { items },
+  });
+  const describeBlock = (block: { data: unknown }) => {
+    const items = (block.data as { items?: { asset: { extension: string } }[] })
+      .items;
+    return items ? items.map((item) => item.asset.extension).join(', ') : '';
+  };
+
+  it('says what a block without words holds', () => {
+    const review = versionReview(
+      { blocks: [paragraph('a', 'Утром.')] } as never,
+      {
+        blocks: [
+          paragraph('a', 'Утром.'),
+          group('g', [file('x', 'psd'), file('y', 'txt')]),
+        ],
+      } as never,
+      { describeBlock },
+    );
+    expect(review.parts).toEqual([
+      expect.objectContaining({ kind: 'added', quote: 'psd, txt' }),
+    ]);
+  });
+
+  it('shows a block whose files changed as it is and as it would be', () => {
+    const titled = (items: ReturnType<typeof file>[]) => ({
+      ...group('g', items),
+      data: { title: 'Сканы', items },
+    });
+    const review = versionReview(
+      { blocks: [titled([file('x', 'psd')])] } as never,
+      { blocks: [titled([file('x', 'psd'), file('y', 'txt')])] } as never,
+      { describeBlock },
+    );
+    expect(review.parts).toEqual([
+      expect.objectContaining({
+        kind: 'changed',
+        before: 'psd',
+        quote: 'psd, txt',
+      }),
+    ]);
+  });
+});
+
 describe('an AI’s new order', () => {
   const base: ContentOutputData = {
     blocks: [

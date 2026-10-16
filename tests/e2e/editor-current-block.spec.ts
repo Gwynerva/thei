@@ -314,11 +314,14 @@ test.describe('on a desktop', () => {
     await page.keyboard.press('Enter');
     expect(await blockAfter(page, 'gallery')).toEqual(NEW_PARAGRAPH);
 
-    // From the block itself, Tab reaches the first tile, and Enter is its own.
+    // From the block itself, Tab reaches its title, then the first tile, and
+    // Enter is the tile's own.
     const point = await besideBlock(gallery);
     await page.mouse.click(point.x, point.y);
     await expectCurrent(page, 'gallery');
     const count = await blockCount(page);
+    await page.keyboard.press('Tab');
+    await expect(gallery.locator('[data-gallery-title]')).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(tiles.nth(0)).toBeFocused();
     await page.keyboard.press('Enter');
@@ -733,6 +736,8 @@ test.describe('on a phone, by touch', () => {
     await gallery.evaluate((item) => (item as HTMLElement).focus());
     const count = await blockCount(page);
     await page.keyboard.press('Tab');
+    await expect(gallery.locator('[data-gallery-title]')).toBeFocused();
+    await page.keyboard.press('Tab');
     await expect(tiles.nth(0)).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(tiles.nth(0)).toHaveAttribute('aria-pressed', 'true');
@@ -1129,6 +1134,26 @@ test.describe('in the text editor of a page', () => {
       viewport: { width: 375, height: 812 },
       hasTouch: true,
       isMobile: true,
+    });
+
+    test('the settings button opens the settings of its own block, not of the one under it', async ({
+      page,
+    }) => {
+      // The toolbar stands in the gap below its block and reaches over the
+      // top of the next one, the divider.
+      await openEditor(page, 'phone-settings');
+      const first = editorBlocks(page).first();
+      await first.locator('[contenteditable="true"]').tap();
+      const settings = page.locator('dialog .ce-toolbar__settings-btn');
+      await expect(settings).toBeVisible();
+      await settings.tap();
+      await expect(
+        page.locator('.ce-settings .ce-popover--opened .ce-popover__container'),
+      ).toBeVisible();
+      await expect(first).toHaveClass(/ce-block--selected/);
+      await expect(editorBlocks(page).nth(1)).not.toHaveClass(
+        /ce-block--selected/,
+      );
     });
 
     for (const width of [375, 320]) {

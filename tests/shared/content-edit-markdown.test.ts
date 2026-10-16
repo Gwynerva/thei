@@ -70,6 +70,7 @@ const everyBlock = normalizeContentData({
     {
       type: 'contentGallery',
       data: {
+        title: 'Арена',
         items: [
           { id: 'g1', asset: asset('a-2'), caption: 'раз' },
           { id: 'g2', asset: asset('a-3') },
@@ -165,7 +166,7 @@ describe('editing markdown: serialize', () => {
 
 ::media[Кадр **босса**]{asset="a-1" layout="centered"}
 
-:::gallery
+:::gallery{title="Арена"}
 ::media[раз]{#g1 asset="a-2"}
 
 ::media{#g2 asset="a-3"}

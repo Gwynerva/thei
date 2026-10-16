@@ -1454,6 +1454,7 @@ export default defineI18nModule({
     content_make_gallery: 'Сделать галереей',
     content_make_file_group: 'Сделать группой',
     content_file_group_title: 'Название группы',
+    content_gallery_title: 'Название галереи',
     content_add_files: 'Добавить файлы',
     content_remove_file: 'Убрать из группы',
     content_move_file: 'Переставить',
@@ -2145,6 +2146,10 @@ export default defineI18nModule({
     },
     ai_review_gone: 'Блок уйдёт',
     ai_review_gone_taken: 'Блок убран',
+    ai_review_files: (count, extensions) =>
+      count === 1
+        ? `Файл ${extensions}`
+        : `${plural(count, 'файл', 'файла', 'файлов')}: ${extensions}`,
     ai_review_comment_placeholder: 'Что сделать иначе?',
     ai_review_comment_sent:
       'Комментарий в сессии: модель пришлёт новую версию правки.',

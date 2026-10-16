@@ -263,6 +263,7 @@ function fileGroupEntries(items: unknown): ContentFileGroupEntry[] {
         />
         <ContentGallery
           v-else-if="block.type === 'contentGallery'"
+          :title="block.data.title as string | undefined"
           :items="block.data.items as any[]"
           :choose-label="phrase.content_gallery_tile"
           :openable="assetViewer"

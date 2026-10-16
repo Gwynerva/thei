@@ -651,6 +651,7 @@ export function contentBlockTextParts(
       appendPreviewText(textParts, (block.data as any).caption);
       break;
     case 'contentGallery':
+      appendPreviewText(textParts, (block.data as any).title);
       collectFilePreviewText(textParts, (block.data as any).items);
       break;
     case 'contentAttachment':
@@ -891,6 +892,7 @@ function normalizeBlockData(
 
     case 'contentGallery':
       return {
+        title: optionalHeadingText(data.title),
         items: Array.isArray(data.items)
           ? data.items.map(normalizeGalleryItem).filter(Boolean)
           : [],

@@ -181,6 +181,10 @@ const stateOf = (part: ReviewPart) => props.decisions[part.id] ?? 'pending';
               ><template v-else>{{ words.text }}</template></template
             ></template
           >
+          <template v-else-if="part.before !== undefined"
+            ><ReviewMark kind="removed">{{ part.before }}</ReviewMark
+            ><ReviewMark kind="added">{{ part.quote }}</ReviewMark></template
+          >
           <template v-else-if="part.kind === 'removed'"
             ><ReviewMark kind="removed">{{ part.quote }}</ReviewMark></template
           >

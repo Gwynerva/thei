@@ -110,6 +110,7 @@ interface ContentToolLabels {
   showAsPicture: string;
   makeFileGroup: string;
   groupTitle: string;
+  galleryTitle: string;
   addFiles: string;
   removeFile: string;
   moveFile: string;
@@ -1044,8 +1045,10 @@ export class ContentMediaTool
 }
 
 export class ContentGalleryTool extends VueBlockTool implements BlockTool {
-  static sanitize = { items: true };
+  // The title is plain words; the captions were made canonical as typed.
+  static sanitize = { title: true, items: true };
 
+  private title: string;
   private items: ContentGalleryItem[];
   private selectedId?: string;
   /**
@@ -1068,11 +1071,12 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
 
   constructor(
     private options: ContentToolOptions<
-      { items?: ContentGalleryItem[] },
+      { title?: string; items?: ContentGalleryItem[] },
       ContentFileToolConfig
     >,
   ) {
     super(options.block);
+    this.title = options.data.title ?? '';
     this.items = options.data.items ?? [];
     this.selectedId = this.items[0]?.id;
   }
@@ -1101,7 +1105,7 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
   }
 
   save(): Record<string, unknown> {
-    return { items: this.items };
+    return { title: this.title.trim() || undefined, items: this.items };
   }
 
   validate(data: { items?: ContentGalleryItem[] }): boolean {
@@ -1110,8 +1114,10 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
 
   protected view() {
     return h(ContentGallery, {
+      title: this.title,
       items: this.items,
       editable: !this.options.readOnly,
+      titlePlaceholder: this.labels.galleryTitle,
       selectedId: this.selectedId,
       chooseLabel: this.labels.chooseMedia,
       addLabel: this.labels.addMedia,
@@ -1123,6 +1129,11 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
       dismissUploadLabel: this.labels.dismissUpload,
       'onUpdate:selectedId': (id: string | undefined) => {
         this.selectedId = id;
+      },
+      onTitle: (value: string) => {
+        if (value === this.title) return;
+        this.title = value;
+        this.commit();
       },
       onCancelPending: (id: string) => {
         const upload = this.uploads.uploads.find((other) => other.id === id);
@@ -1700,6 +1711,7 @@ function getLabels(
       showAsPicture: 'Show as a picture',
       makeFileGroup: 'Turn into a group',
       groupTitle: 'Group title',
+      galleryTitle: 'Gallery title',
       addFiles: 'Add files',
       removeFile: 'Remove from the group',
       moveFile: 'Move',

@@ -19,7 +19,7 @@ Text:
 
 Blocks:
 - \`::media[caption]{asset="a-…" layout="centered"}\` — a picture or a video; layout is centered, natural or stretch.
-- \`:::gallery\` holding \`::media[caption]{#id asset="a-…"}\` lines, \`:::\`.
+- \`:::gallery{title="…"}\` holding \`::media[caption]{#id asset="a-…"}\` lines, \`:::\` — pictures and videos shown together, under a title when it has one.
 - \`::audio[caption]{asset="a-…" title="…"}\` — a recording; \`::file[caption]{asset="a-…" title="…"}\` — a file to download.
 - \`:::files{title="…"}\` holding \`::file[caption]{#id asset="a-…" title="…"}\` lines, \`:::\` — files listed together under one title; a recording among them is played in place.
 - A caption of any file may carry the same marks, links and hints as a paragraph; a title is plain words.

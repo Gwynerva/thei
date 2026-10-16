@@ -161,7 +161,7 @@ function blockToNodes(block: ContentOutputBlock): RootContent[] {
         {
           type: 'containerDirective',
           name: 'gallery',
-          attributes: {},
+          attributes: attributes({ title: data.title }),
           children: (Array.isArray(data.items) ? data.items : []).map(
             (item: Record<string, unknown>) =>
               ({

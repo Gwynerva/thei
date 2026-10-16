@@ -11,8 +11,11 @@ import { richTextToPlainText } from '#layers/thei/shared/rich-text';
 
 const props = withDefaults(
   defineProps<{
+    /** Plain words heading the gallery, as a group of files has. */
+    title?: string;
     items: ContentGalleryItem[];
     editable?: boolean;
+    titlePlaceholder?: string;
     selectedId?: string;
     chooseLabel?: string;
     addLabel?: string;
@@ -25,7 +28,7 @@ const props = withDefaults(
     retryUploadLabel?: string;
     dismissUploadLabel?: string;
   }>(),
-  { editable: false, pending: () => [] },
+  { title: '', editable: false, pending: () => [] },
 );
 
 /**
@@ -43,6 +46,7 @@ function tileLabel(item: ContentGalleryItem) {
 }
 
 const emit = defineEmits<{
+  title: [value: string];
   'update:selectedId': [id: string | undefined];
   add: [];
   edit: [id: string];
@@ -105,9 +109,38 @@ const dragSort = useDragSort(
 <template>
   <section
     v-if="editable || items.length || pending.length"
-    class="min-w-0 overflow-hidden rounded-normal bg-bg-3"
+    class="min-w-0 overflow-hidden rounded-normal border border-border-1
+      bg-bg-2"
     data-content-gallery
   >
+    <!-- The title heads the gallery, a step up from it, as a group of
+         files has its own: only while edited, or when there is one. -->
+    <div
+      v-if="editable || title"
+      class="flex min-h-10 min-w-0 items-center border-b border-border-1 bg-bg-3
+        px-sm py-1.5"
+      data-gallery-head
+    >
+      <ContentPlainTextField
+        v-if="editable"
+        :model-value="title"
+        :editable="true"
+        :placeholder="titlePlaceholder"
+        class="min-h-6 min-w-0 flex-1 truncate font-semibold tracking-tight
+          text-text-1 outline-none empty:before:pointer-events-none
+          empty:before:text-text-3 empty:before:content-[attr(data-placeholder)]
+          focus:before:hidden"
+        data-gallery-title
+        @update:model-value="emit('title', $event)"
+      />
+      <p
+        v-else
+        class="min-w-0 font-semibold tracking-tight text-text-1"
+        data-gallery-title
+      >
+        {{ publicText(title) }}
+      </p>
+    </div>
     <div ref="tileRoot" class="flex flex-wrap items-start gap-xs p-xs sm:p-sm">
       <AssetTile
         v-for="item in items"
@@ -188,6 +221,7 @@ const dragSort = useDragSort(
       :media-natural-size="false"
       :openable
       caption-class="px-xs pb-xs"
+      bare
       class="border-t border-border-1"
       data-gallery-view
       @edit="emit('edit', activeItem.id)"

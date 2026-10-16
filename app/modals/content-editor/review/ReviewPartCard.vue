@@ -131,9 +131,29 @@ function send(text: string) {
         ><template v-else>{{ item.text }}</template></template
       >
     </p>
-    <!-- A block that comes or goes. -->
+    <!-- A block changed elsewhere than in its words: as it is, as it would be. -->
     <dl
-      v-else-if="part.quote !== undefined"
+      v-else-if="part.before !== undefined"
+      class="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2.5
+        gap-y-1 text-sm wrap-anywhere"
+      data-review-quotes
+    >
+      <dt class="text-2xs font-bold tracking-wide text-text-3 uppercase">
+        {{ words.was }}
+      </dt>
+      <dd class="line-clamp-4">
+        <ReviewMark kind="removed">{{ part.before }}</ReviewMark>
+      </dd>
+      <dt class="text-2xs font-bold tracking-wide text-text-3 uppercase">
+        {{ words.will }}
+      </dt>
+      <dd class="line-clamp-4">
+        <ReviewMark kind="added">{{ part.quote }}</ReviewMark>
+      </dd>
+    </dl>
+    <!-- A block that comes or goes; one that says nothing is seen in the text. -->
+    <dl
+      v-else-if="part.quote"
       class="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2.5
         text-sm wrap-anywhere"
     >

@@ -10,10 +10,12 @@ import { hideKeyFromEditor } from '#layers/thei/app/composables/editor-keyboard-
 import type { ContentFileGroupEntry } from './file-group-state';
 
 /**
- * Files listed together under one title, each shown as it would be alone —
- * a recording played in place, any other file as a card — closer together
- * than blocks are. While edited, each file has a grip to move it by, and the
- * group a button to add more.
+ * Files listed together: one frame headed by their title, a row for each
+ * file — a recording played in place, any other file by its square, its
+ * title, its facts and its caption — with hairlines between. While edited,
+ * each row ends with a grip to move it by and a button to take it out, shown
+ * where the pointer is and always under a finger, and the frame ends with a
+ * row that adds more.
  */
 const props = withDefaults(
   defineProps<{
@@ -105,57 +107,75 @@ function named(label: string | undefined, item: ContentFileGroupItem) {
     publicText(item.title) || props.fallbackTitle?.(item.asset.extension);
   return name ? `${label}: ${name}` : label;
 }
+
+/**
+ * A row's own buttons: where the pointer or the focus is, and always under a
+ * finger, which has nothing to point with. They stand level with the file's
+ * square, or with a recording's title, whatever the caption under them.
+ */
+const ROW_BUTTON = `shrink-0 opacity-0 transition-opacity
+  group-hocus/file:opacity-100 group-focus-within/file:opacity-100
+  pointer-coarse:size-11 pointer-coarse:opacity-100`;
+
+function rowButtonClass(item: ContentFileGroupItem) {
+  return [
+    ROW_BUTTON,
+    isRecording(item)
+      ? 'mt-xs'
+      : `mt-[calc(var(--spacing-xs)+0.5rem)]
+        pointer-coarse:mt-[calc(var(--spacing-xs)+0.125rem)]`,
+  ];
+}
 </script>
 
 <template>
   <section
     v-if="editable || entries.length"
-    class="flex min-w-0 flex-col gap-xs"
+    class="flex min-w-0 flex-col divide-y divide-border-1 overflow-clip
+      rounded-normal border border-border-1 bg-bg-2"
     data-content-file-group
   >
-    <ContentPlainTextField
-      v-if="editable"
-      :model-value="title"
-      :editable="true"
-      :placeholder="titlePlaceholder"
-      class="min-h-6 truncate font-semibold tracking-tight text-text-1
-        outline-none empty:before:pointer-events-none empty:before:text-text-3
-        empty:before:content-[attr(data-placeholder)] focus:before:hidden"
-      data-file-group-title
-      @update:model-value="emit('title', $event)"
-    />
-    <p
-      v-else-if="title"
-      class="font-semibold tracking-tight text-text-1"
-      data-file-group-title
+    <!-- The title heads the frame, a step up from its rows, as a table's
+         head is. -->
+    <div
+      v-if="editable || title"
+      class="flex min-h-10 min-w-0 items-center bg-bg-3 px-sm py-1.5"
+      data-file-group-head
     >
-      {{ publicText(title) }}
-    </p>
+      <ContentPlainTextField
+        v-if="editable"
+        :model-value="title"
+        :editable="true"
+        :placeholder="titlePlaceholder"
+        class="min-h-6 min-w-0 flex-1 truncate font-semibold tracking-tight
+          text-text-1 outline-none empty:before:pointer-events-none
+          empty:before:text-text-3 empty:before:content-[attr(data-placeholder)]
+          focus:before:hidden"
+        data-file-group-title
+        @update:model-value="emit('title', $event)"
+      />
+      <p
+        v-else
+        class="min-w-0 font-semibold tracking-tight text-text-1"
+        data-file-group-title
+      >
+        {{ publicText(title) }}
+      </p>
+    </div>
 
-    <div ref="list" class="flex min-w-0 flex-col gap-xs">
+    <div
+      ref="list"
+      class="flex min-w-0 flex-col divide-y divide-border-1 empty:hidden"
+    >
       <div
         v-for="entry in entries"
         :key="entry.id"
         :data-drag-id="editable ? entry.id : undefined"
-        class="flex min-w-0 items-start gap-xs"
+        class="group/file flex min-w-0 items-start gap-1"
+        :class="{ 'pr-xs': editable }"
         data-file-group-entry
       >
         <template v-if="entry.item">
-          <Button
-            v-if="editable"
-            type="button"
-            size="icon-sm"
-            variant="secondary"
-            drag-handle
-            class="mt-xs shrink-0 pointer-coarse:size-11"
-            data-file-group-handle
-            :aria-label="named(moveLabel, entry.item)"
-            :data-title-popup="named(moveLabel, entry.item)"
-            @keydown.up="nudge($event, entry.id, -1)"
-            @keydown.down="nudge($event, entry.id, 1)"
-          >
-            <Icon name="grip" />
-          </Button>
           <ContentAudioCard
             v-if="isRecording(entry.item)"
             :asset="entry.item.asset"
@@ -165,12 +185,13 @@ function named(label: string | undefined, item: ContentFileGroupItem) {
             :edit-label="editLabel"
             :title-placeholder="fileTitlePlaceholder"
             :caption-placeholder="captionPlaceholder"
+            listed
             class="min-w-0 flex-1"
             @edit="emit('edit', entry.id)"
             @title="emit('item-title', entry.id, $event)"
             @caption="emit('item-caption', entry.id, $event)"
           />
-          <ContentAttachmentCard
+          <ContentFileRow
             v-else
             :asset="entry.item.asset"
             :title="entry.item.title"
@@ -192,8 +213,23 @@ function named(label: string | undefined, item: ContentFileGroupItem) {
             v-if="editable"
             type="button"
             size="icon-sm"
+            variant="secondary"
+            drag-handle
+            :class="rowButtonClass(entry.item)"
+            data-file-group-handle
+            :aria-label="named(moveLabel, entry.item)"
+            :data-title-popup="named(moveLabel, entry.item)"
+            @keydown.up="nudge($event, entry.id, -1)"
+            @keydown.down="nudge($event, entry.id, 1)"
+          >
+            <Icon name="grip" />
+          </Button>
+          <Button
+            v-if="editable"
+            type="button"
+            size="icon-sm"
             variant="delete"
-            class="mt-xs shrink-0 pointer-coarse:size-11"
+            :class="rowButtonClass(entry.item)"
             data-drag-ignore
             :aria-label="named(removeLabel, entry.item)"
             :data-title-popup="named(removeLabel, entry.item)"
@@ -202,21 +238,13 @@ function named(label: string | undefined, item: ContentFileGroupItem) {
             <Icon name="delete" />
           </Button>
         </template>
-        <!-- A file on its way stands where it will land, under the grips of
-             the others, with its name until it has a title of its own. -->
+        <!-- A file on its way stands where it will land, with its name until
+             it has a title of its own. -->
         <template v-else-if="entry.upload">
-          <span
-            v-if="editable"
-            class="size-8 shrink-0 pointer-coarse:size-11"
-            aria-hidden="true"
-          />
-          <div
-            class="flex min-w-0 flex-1 items-center gap-sm rounded-normal border
-              border-dashed border-border-1 bg-bg-2 p-xs"
-          >
+          <div class="flex min-w-0 flex-1 items-center gap-sm p-xs">
             <AssetPendingTile
               :upload="entry.upload"
-              class="size-14 shrink-0 sm:size-16"
+              class="size-12 shrink-0"
               @cancel="emit('cancel-pending', entry.id)"
               @retry="emit('retry-pending', entry.id)"
             />
@@ -228,17 +256,25 @@ function named(label: string | undefined, item: ContentFileGroupItem) {
       </div>
     </div>
 
-    <Button
+    <button
       v-if="editable"
       type="button"
-      variant="secondary"
-      class="flex h-9 shrink-0 items-center gap-xs self-start whitespace-nowrap"
+      class="flex min-h-10 w-full cursor-pointer items-center gap-sm px-xs
+        text-left text-sm font-semibold text-text-2 transition-colors
+        outline-none focus-visible:ring-2 focus-visible:ring-accent
+        focus-visible:ring-inset pointer-coarse:min-h-11 hocus:text-accent"
       data-drag-ignore
       data-file-group-add
       @click="emit('add')"
     >
-      <Icon name="plus" />
+      <!-- The plus under the files' squares, the words under their titles. -->
+      <span
+        class="flex w-12 shrink-0 items-center justify-center"
+        aria-hidden="true"
+      >
+        <Icon name="plus" />
+      </span>
       <span>{{ addLabel }}</span>
-    </Button>
+    </button>
   </section>
 </template>

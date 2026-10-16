@@ -80,11 +80,18 @@ function renderBlock(
       return '---';
     case 'contentMedia':
       return renderMedia(data.asset, data.caption, options);
-    case 'contentGallery':
-      return (Array.isArray(data.items) ? data.items : [])
+    case 'contentGallery': {
+      // The pictures one after another; the gallery's title a line of its
+      // own above them, not a heading, as a group's is.
+      const pictures = (Array.isArray(data.items) ? data.items : [])
         .map((item: any) => renderMedia(item?.asset, item?.caption, options))
         .filter(Boolean)
         .join('\n\n');
+      if (!pictures) return '';
+      const title =
+        typeof data.title === 'string' ? typeset(data.title, options) : '';
+      return title ? `${title}\n\n${pictures}` : pictures;
+    }
     case 'contentAttachment':
     case 'contentAudio': {
       const file = renderFile(data, block.type === 'contentAudio', options);

@@ -208,9 +208,12 @@ export function contentTextFields(
     case 'contentMedia':
       return [field('caption', true)];
     case 'contentGallery':
-      return (data.items ?? []).map((item: Record<string, any>) =>
-        itemField(item, 'caption', true),
-      );
+      return [
+        field('title', false),
+        ...(data.items ?? []).map((item: Record<string, any>) =>
+          itemField(item, 'caption', true),
+        ),
+      ];
     case 'contentAudio':
     case 'contentAttachment':
       return [field('title', false), field('caption', true)];

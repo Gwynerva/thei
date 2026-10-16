@@ -374,3 +374,41 @@ describe('a group of files in the Markdown copy', () => {
     );
   });
 });
+
+describe('a gallery in the Markdown copy', () => {
+  const format = (text: string) => text.replace(/"([^"]*)"/g, '«$1»');
+  const picture = (id: string) => ({
+    id,
+    asset: {
+      assetUuid: id,
+      type: 'image',
+      media: { kind: 'image', src: `/events/e/content/${id}.avif` },
+    },
+  });
+
+  it('is its title on a line of its own, then its pictures', () => {
+    const markdown = contentToMarkdown(
+      {
+        blocks: [
+          {
+            type: 'contentGallery',
+            data: { title: 'The "arena"', items: [picture('a'), picture('b')] },
+          },
+        ],
+      } as never,
+      { ...options, format },
+    );
+    expect(markdown.startsWith('The «arena»\n\n![')).toBe(true);
+    expect(markdown.match(/!\[/g)).toHaveLength(2);
+  });
+
+  it('is its pictures alone without one', () => {
+    const markdown = contentToMarkdown(
+      {
+        blocks: [{ type: 'contentGallery', data: { items: [picture('a')] } }],
+      } as never,
+      options,
+    );
+    expect(markdown.startsWith('![')).toBe(true);
+  });
+});

@@ -83,8 +83,14 @@ export interface ReviewPart {
   words?: { before: string; after: string; around: [string, string] };
   /** A whole block's words compared, for a block another version rewrote. */
   diff?: ContentTextDiffPart[];
-  /** A whole block that comes or goes: its words, for a line about it. */
+  /**
+   * A whole block that comes or goes: its words, for a line about it — or,
+   * with none, what it holds. Of a block changed elsewhere than in its
+   * words, how it would read.
+   */
   quote?: string;
+  /** Of a block changed elsewhere than in its words, how it reads now. */
+  before?: string;
   /**
    * A link mended: its words, where it leads now — none when what it led to
    * is gone — and where it would, none taking it off.
@@ -443,9 +449,38 @@ export function proofreadReview(
 export function versionReview(
   current: ContentOutputData,
   version: ContentOutputData,
-  options: { formatText?: (text: string) => string } = {},
+  options: {
+    formatText?: (text: string) => string;
+    /**
+     * What a block holds besides its words, in a line: its files, or its
+     * kind for one that holds nothing else; empty when its words say it all.
+     */
+    describeBlock?: (block: ContentOutputBlock) => string;
+  } = {},
 ): ContentReview {
   const items = diffContentBlocks(current, version, options);
+  const describe = (block: ContentOutputBlock) =>
+    options.describeBlock?.(block) ?? '';
+  const quoteOf = (block: ContentOutputBlock) =>
+    blockWords(block) || describe(block);
+  /**
+   * A block changed elsewhere than in its words — a file added to it, one
+   * replaced — reads as it is and as it would be: by its words where they
+   * differ, else by what it holds.
+   */
+  const changedQuotes = (
+    previous: ContentOutputBlock,
+    block: ContentOutputBlock,
+  ): Pick<ReviewPart, 'quote' | 'before'> => {
+    const before = quoteOf(previous);
+    const quote = quoteOf(block);
+    if (before !== quote) return { before, quote };
+    const held = describe(previous);
+    const holds = describe(block);
+    return held && holds && held !== holds
+      ? { before: held, quote: holds }
+      : { quote };
+  };
   const versionPlaces = outline(version.blocks);
   const currentPlaces = outline(current.blocks);
   const parts: ReviewPart[] = [];
@@ -473,8 +508,11 @@ export function versionReview(
       kind: item.kind,
       sure: true,
       reason: '',
-      ...(item.kind === 'changed' && item.words ? { diff: item.words } : {}),
-      quote: blockWords(item.block),
+      ...(item.kind !== 'changed'
+        ? { quote: quoteOf(item.block) }
+        : item.words
+          ? { diff: item.words, quote: quoteOf(item.block) }
+          : changedQuotes(item.previous, item.block)),
       whole: true,
       aside: false,
       heading: at?.heading,
@@ -564,7 +602,7 @@ export function versionReview(
               was: true,
             },
           ];
-        return [{ type: 'gone', part: id, quote: blockWords(item.block) }];
+        return [{ type: 'gone', part: id, quote: quoteOf(item.block) }];
       });
       return withPrivateEdges(placed, (_id, side) => ({
         type: 'edge',

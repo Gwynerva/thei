@@ -385,7 +385,11 @@ function readContainerDirective(node: ContainerDirective, state: ParseState) {
             ]
           : [];
       });
-      if (items.length) push(state, 'contentGallery', { items });
+      if (items.length)
+        push(state, 'contentGallery', {
+          title: attribute(node, 'title') ?? '',
+          items,
+        });
       return;
     }
     // A recording in a group is played as one alone is, whether it is
