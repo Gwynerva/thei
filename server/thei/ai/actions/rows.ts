@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { AiActionState } from '#layers/thei/shared/ai';
 import type { EntityKey } from '../../entity-kinds';
+import type { ActionTarget } from './target';
 import type { ActionRow } from './types';
 
 /**
@@ -63,9 +64,19 @@ export function actionsAbout(
     .all() as ActionRow[];
 }
 
-/** The entity an action is about, when it names one. */
-export function targetOf(row: Pick<ActionRow, 'targetType' | 'targetId'>) {
+/** The entity or the file an action is about, when it names one. */
+export function targetOf(
+  row: Pick<ActionRow, 'targetType' | 'targetId'>,
+): ActionTarget | undefined {
   return row.targetType && row.targetId
-    ? ({ kind: row.targetType, id: row.targetId } as EntityKey)
+    ? ({ kind: row.targetType, id: row.targetId } as ActionTarget)
     : undefined;
+}
+
+/** The entity an action is about, for the kinds that are about one. */
+export function entityTargetOf(
+  row: Pick<ActionRow, 'targetType' | 'targetId'>,
+): EntityKey | undefined {
+  const key = targetOf(row);
+  return key && key.kind !== 'asset' ? key : undefined;
 }

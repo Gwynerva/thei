@@ -20,6 +20,13 @@ export function toolResult(
 export const REFUSED_META = 'thei/refused';
 
 /**
+ * The `_meta` key under which a tool names the library files it shows, by
+ * id: Thei's own model is shown them beside the tool's answer, made into the
+ * blocks its service takes.
+ */
+export const FILES_META = 'thei/files';
+
+/**
  * A refusal the model can read and act on. It is a result, not a protocol
  * error, so the model sees why and can try something else.
  */

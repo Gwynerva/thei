@@ -3,6 +3,7 @@ import { contentReviewModal } from '#layers/thei/app/modals/content-review/modal
 import type { IconName } from '#thei/icons';
 import type { AiActionItem } from '#layers/thei/shared/ai';
 import { relationWordIcon } from '#layers/thei/shared/relation-display';
+import { diffContentText } from '#layers/thei/shared/content-diff';
 import {
   AI_ACTION_INFO,
   type AiActionKind,
@@ -222,6 +223,18 @@ const fieldChange = computed(() => {
     before: fieldValueWords(base.value.value),
     after: fieldValueWords(payload.value.value),
   };
+});
+
+/**
+ * A description said again, word by word: what goes and what comes. A new
+ * one is all words that come.
+ */
+const descriptionChange = computed(() => {
+  if (props.action.kind !== 'describe') return null;
+  return diffContentText(
+    publicText(String(base.value.text ?? '')),
+    publicText(String(payload.value.text ?? '')),
+  );
 });
 
 /** In a form: accepting lays it into the form, or opens its session. */
@@ -486,6 +499,26 @@ function sendComment(text: string) {
         >{{ fieldChange.after }}</span
       >
     </div>
+    <p
+      v-else-if="descriptionChange"
+      class="col-start-2 col-end-4 min-w-0 border-l-2 border-border-2 pl-2.5
+        text-sm leading-normal wrap-anywhere"
+      data-action-description
+    >
+      <template v-for="(part, index) in descriptionChange" :key="index">
+        <span
+          v-if="part.kind === 'removed'"
+          class="line-through decoration-1"
+          :class="live ? 'text-text-error' : 'text-text-3'"
+          >{{ part.text }}</span
+        ><span
+          v-else-if="part.kind === 'added'"
+          class="font-medium"
+          :class="live ? 'text-text-success' : 'text-text-2'"
+          >{{ part.text }}</span
+        ><span v-else>{{ part.text }}</span>
+      </template>
+    </p>
     <p
       v-else-if="quote"
       class="col-start-2 col-end-4 line-clamp-3 min-w-0 border-l-2 border-accent

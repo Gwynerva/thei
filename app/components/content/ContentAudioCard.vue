@@ -108,6 +108,9 @@ const shownTitle = computed(() => publicText(props.title));
         :title="shownTitle || undefined"
         :download="!editable"
       />
+      <p v-if="!editable && asset.alt" class="sr-only" data-audio-alt>
+        {{ publicText(asset.alt) }}
+      </p>
     </div>
     <ContentPlainTextField
       v-if="editable"

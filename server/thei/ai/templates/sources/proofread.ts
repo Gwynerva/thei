@@ -15,6 +15,7 @@ import {
 import { readEntity } from '../../../mcp/entities';
 import { currentText } from '../../actions/current';
 import { targetOf } from '../../actions/rows';
+import { isFileKey } from '../../actions/target';
 import { backgroundEvent } from '../../runner/background-event';
 import type { CheckItem, Covered, DueInput, TemplateSource } from './index';
 import { inScope, withSections } from './scope';
@@ -404,7 +405,9 @@ function textCovered(
     parts: AiRevisePart[];
   };
   if (payload.mode !== 'proofread') return [];
-  const key = targetOf(action);
+  // A text is always an entity's: a file has none.
+  const target = targetOf(action);
+  const key = isFileKey(target) ? undefined : target;
   const slot = key && entityText(key.kind, payload.text)?.slot;
   const text = key && slot ? currentText(key, payload.text) : undefined;
   if (!key || !slot || !text) return [];
@@ -470,7 +473,7 @@ export const proofreadSource: TemplateSource = {
   coveredBy(action, covered) {
     if (action.kind === 'revise') return textCovered(action, covered);
     const key = targetOf(action);
-    if (!key) return [];
+    if (!key || isFileKey(key)) return [];
     const touched = touchedKeys(
       action.kind,
       (action.payload ?? {}) as Record<string, unknown>,

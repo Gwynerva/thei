@@ -274,6 +274,8 @@ function takeInto(
         ?.after;
       return after ? setFields(form, after) : undefined;
     }
+    case 'describe':
+      return setFields(form, { description: payload.text });
     default:
       return undefined;
   }
@@ -522,4 +524,131 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
         });
     },
   };
+}
+
+// ---- A file's description ------------------------------------------------------------
+
+export interface FileAiOptions {
+  /** The file, as a ref: `asset:<uuid>`. */
+  ref: () => string;
+  /** What waits for its description, as its field read it. */
+  offers: () => AiEntityOffer[];
+  /** The field's data, which a proposal is laid into: `{ description }`. */
+  form: () => Record<string, unknown>;
+  /** Reads the description and its proposals again. */
+  reload: () => Promise<void>;
+}
+
+/**
+ * The AI around a file's description field, as a form has it around its
+ * fields: the descriptions proposed for the file wait at the label, and one
+ * accepted is laid into the field — applied once the field is saved, when
+ * the server finds the description reading as it would leave it. A file is
+ * no entity: it is never in hand for the admin bar's ✦, and nothing of it
+ * is remembered here. With AI off nothing is shown.
+ */
+export function provideFileAi(options: FileAiOptions): EntityAi {
+  const aiEnabled = useAiEnabled();
+  const target = computed(() => options.ref());
+  const taken = ref(new Map<string, Take>());
+  const answered = ref(new Set<string>());
+
+  function stillTaken(id: string) {
+    const done = taken.value.get(id);
+    return Boolean(done && fieldsOf(options.form(), done.keys) === done.after);
+  }
+  const offers = computed(() =>
+    aiEnabled.value
+      ? options
+          .offers()
+          .filter(
+            (offer) =>
+              !stillTaken(offer.action.actionUuid) &&
+              !answered.value.has(offer.action.actionUuid),
+          )
+      : [],
+  );
+  function answer(id: string, on = true) {
+    const next = new Set(answered.value);
+    if (on) next.add(id);
+    else next.delete(id);
+    answered.value = next;
+  }
+  async function refresh() {
+    await options.reload();
+    taken.value = new Map();
+    answered.value = new Set();
+  }
+
+  const ai: EntityAi = {
+    ref: target,
+    panel: shallowRef(null),
+    shown: computed(() => aiEnabled.value),
+    offers,
+    offersAt: (place) => (place === 'field:description' ? offers.value : []),
+    outdated: ref(false),
+    refresh,
+    modeOf: () => 'takes',
+    async accept(offer) {
+      const undo = takeInto(options.form(), offer.action, target.value);
+      if (!undo) return;
+      const id = offer.action.actionUuid;
+      taken.value = new Map(taken.value).set(id, undo);
+      showToast(phrase.value.ai_offer_taken, {
+        label: phrase.value.ai_offer_take_back,
+        run: () => {
+          const back = taken.value.get(id);
+          if (!back || !stillTaken(id)) return;
+          back.undo();
+          const next = new Map(taken.value);
+          next.delete(id);
+          taken.value = next;
+        },
+      });
+    },
+    async reject(offer) {
+      const id = offer.action.actionUuid;
+      answer(id);
+      try {
+        await aiApi.reject(id);
+      } catch (caught) {
+        answer(id, false);
+        showToast(errorMessage(caught, phrase.value.ai_error));
+        return;
+      }
+      showToast(phrase.value.ai_toast_declined(1), {
+        label: phrase.value.ai_action_never,
+        run: () => {
+          void aiApi
+            .never(id)
+            .then(() => showToast(phrase.value.ai_toast_never))
+            .catch((caught) =>
+              showToast(errorMessage(caught, phrase.value.ai_error)),
+            );
+        },
+      });
+    },
+    async comment(offer, text) {
+      try {
+        await aiApi.comment(offer.action.actionUuid, text);
+        showToast(phrase.value.ai_toast_comment_sent);
+      } catch (caught) {
+        showToast(errorMessage(caught, phrase.value.ai_error));
+      }
+    },
+    noteTaken: () => {},
+    remember: async () => {},
+  };
+  provide(KEY, ai);
+
+  // Applied or undone from a session: the field reads the file again.
+  if (import.meta.client) {
+    const heard = (refs: string[]) => {
+      if (refs.includes(target.value)) void refresh();
+    };
+    entityChannel();
+    listeners.add(heard);
+    onScopeDispose(() => listeners.delete(heard));
+  }
+  return ai;
 }

@@ -27,7 +27,15 @@ import { actionLocks, withEntityLocks } from './lock';
 import { CHANGED_AFTER, loadForm, saved } from '../forms/load';
 import { publishActions } from '../sessions/bus';
 import { refreshSessionCounts } from '../sessions/store';
-import { findAction, targetOf } from './rows';
+import { entityTargetOf, findAction, targetOf } from './rows';
+import type { ActionTarget } from './target';
+import {
+  AssetDescriptionConflict,
+  familyExists,
+  fileOfFamily,
+  readFamilyDescription,
+  writeAssetDescription,
+} from '../../assets/descriptions';
 import { memoryUndoReady, undoMemory } from './kinds/memory';
 import { pick } from './write';
 import type { ActionRow, ActionUndo } from './types';
@@ -170,6 +178,11 @@ export async function undoState(row: ActionRow): Promise<UndoState> {
   switch (undo.kind) {
     case 'memory':
       return memoryUndoReady(undo) ? 'ready' : 'changed';
+    case 'description':
+      if (!familyExists(undo.familyUuid)) return 'gone';
+      return readFamilyDescription(undo.familyUuid).text === undo.after
+        ? 'ready'
+        : 'changed';
     case 'text': {
       const target = textTargetOf(undo);
       const key = { kind: target.ownerType, id: target.ownerId } as EntityKey;
@@ -195,7 +208,7 @@ export async function undoState(row: ActionRow): Promise<UndoState> {
       return 'ready';
     }
     case 'form': {
-      const key = targetOf(row);
+      const key = entityTargetOf(row);
       if (!key || !entityFace(key)) return 'gone';
       if (
         undo.versionAfter !== undefined &&
@@ -259,7 +272,7 @@ export interface RollbackTo {
 export async function undoAction(
   actionUuid: string,
   options: { rollback?: RollbackTo; now?: number } = {},
-): Promise<EntityKey | undefined> {
+): Promise<ActionTarget | undefined> {
   try {
     return await undoNow(actionUuid, options);
   } finally {
@@ -271,7 +284,7 @@ export async function undoAction(
 async function undoNow(
   actionUuid: string,
   options: { rollback?: RollbackTo; now?: number },
-): Promise<EntityKey | undefined> {
+): Promise<ActionTarget | undefined> {
   const row =
     findAction(actionUuid) ?? fail(`There is no action ${actionUuid}.`);
   const undo = (options.rollback?.own ?? row.undo) as StoredUndo | null;
@@ -306,12 +319,64 @@ async function undoNow(
     });
     return targetOf(row);
   }
+  // A description changes no entity either: it is put back as it was, over
+  // the version it left.
+  if (undo!.kind === 'description') {
+    const kept = undo!;
+    const current = readFamilyDescription(kept.familyUuid);
+    if (current.text !== kept.after) fail(UNDO_REFUSALS.changed);
+    const carrier = fileOfFamily(kept.familyUuid) ?? fail(UNDO_REFUSALS.gone);
+    try {
+      writeAssetDescription(carrier, kept.before, {
+        expectedUpdatedAt: current.updatedAt,
+        now,
+        onWrite: (tx, schema, written) => {
+          const table = schema.aiActions;
+          const rollback = options.rollback;
+          const result = tx
+            .update(table)
+            .set(
+              rollback
+                ? {
+                    state: rollback.state,
+                    parts: rollback.parts,
+                    undo: rollback.undo,
+                    appliedBy: rollback.appliedBy,
+                    decidedAt: rollback.decidedAt,
+                  }
+                : {
+                    state: 'undone',
+                    undo: {
+                      ...kept,
+                      undone: {
+                        at: now,
+                        before: current.updatedAt ?? undefined,
+                        after: written.updatedAt ?? undefined,
+                      },
+                    },
+                  },
+            )
+            .where(
+              and(eq(table.actionUuid, actionUuid), eq(table.state, row.state)),
+            )
+            .run() as { changes: number };
+          if (!result.changes) fail(UNDO_REFUSALS.undone);
+          refreshSessionCounts(tx, schema, row.sessionUuid);
+        },
+      });
+    } catch (error) {
+      if (error instanceof AssetDescriptionConflict)
+        fail(UNDO_REFUSALS.changed);
+      throw error;
+    }
+    return { kind: 'asset', id: carrier };
+  }
   const affected: EntityKey =
     undo!.kind === 'create'
       ? undo!.created
       : undo!.kind === 'text'
         ? ({ kind: undo!.ownerType, id: undo!.ownerId } as EntityKey)
-        : targetOf(row)!;
+        : entityTargetOf(row)!;
   const owner = formOwnerOf(affected) ?? affected;
   const ownerBefore = formOwnerVersion(owner);
   const finish = (tx: any, schema: any) => {
@@ -353,7 +418,7 @@ async function undoNow(
 
   switch (undo!.kind) {
     case 'form': {
-      const key = targetOf(row)!;
+      const key = entityTargetOf(row)!;
       const loaded = await loadForm(key);
       // Checked again on the very read written over: a save that landed
       // since the check is refused, never taken with the undo.
@@ -425,7 +490,7 @@ async function undoNow(
  */
 export async function undoActionHeld(
   actionUuid: string,
-): Promise<EntityKey | undefined> {
+): Promise<ActionTarget | undefined> {
   const row =
     findAction(actionUuid) ?? fail(`There is no action ${actionUuid}.`);
   const undo = row.undo as StoredUndo | null;

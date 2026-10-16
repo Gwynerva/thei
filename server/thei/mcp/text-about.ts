@@ -42,6 +42,18 @@ function when(view: McpEntityView): string {
     : '';
 }
 
+/**
+ * What a file's description is, said before it: whose it is, what it is for
+ * and who reads it. It describes the file — never the text inside it.
+ */
+export function aboutFileDescription(publicly: boolean): string {
+  return `The description of a file of the library, in the owner's words: what the file shows or is about — not its text, not a transcript — read in place of the file by search, by models and by whoever cannot see it. One serves the file and all its variants. ${
+    publicly
+      ? 'Public: whoever sees the file reads it, as the alt of a picture and in the window of the file.'
+      : 'The file is on no public page: only the owner reads it.'
+  }`;
+}
+
 export function aboutText(view: McpEntityView, text: McpText): string {
   const title = `“${view.title}”`;
   const seen = readers(view, text);

@@ -77,7 +77,7 @@ function rememberDimensions(nextWidth: number, nextHeight: number) {
       :backdrop="layout === 'centered'"
       :width
       :height
-      :alt
+      :alt="alt ?? media.alt"
       class="size-full bg-bg-1"
       @dimensions="rememberDimensions"
     />

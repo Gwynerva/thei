@@ -134,7 +134,15 @@ export type AiTranscriptTurn =
        */
       native?: { provider: string; content: unknown };
     }
-  | { role: 'tool'; id: string; name: string; output: string; error?: boolean };
+  | {
+      role: 'tool';
+      id: string;
+      name: string;
+      output: string;
+      error?: boolean;
+      /** Library files the tool showed, shown to a model that can see them. */
+      files?: string[];
+    };
 
 /** The states of an action, from proposed to settled. */
 export const AI_ACTION_STATES = [
@@ -286,6 +294,8 @@ export interface AiActionItem {
   undo: AiUndoState | null;
   /** The owner said never to offer it again. */
   never: boolean;
+  /** A file it is about, as the library has it now. */
+  file?: import('./api/asset').AssetVariantInfo;
 }
 
 /**

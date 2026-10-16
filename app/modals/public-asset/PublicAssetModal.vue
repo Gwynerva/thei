@@ -113,6 +113,21 @@ const opensInTab = computed(
         >
           {{ publicText(current.description) }}
         </p>
+        <!-- The file's own description: what it shows, said for whoever
+             cannot see it. -->
+        <section
+          v-if="current.alt"
+          :key="`alt:${current.key}`"
+          class="flex flex-col gap-1 text-sm"
+          data-public-asset-description
+        >
+          <h3 class="text-xs font-semibold text-text-3">
+            {{ phrase.asset_description }}
+          </h3>
+          <p class="leading-relaxed wrap-anywhere whitespace-pre-line">
+            {{ publicText(current.alt) }}
+          </p>
+        </section>
         <AssetModalFileInfo
           :key="current.key"
           :extension="current.extension"

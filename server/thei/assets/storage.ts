@@ -38,6 +38,7 @@ import {
   type AssetBytes,
 } from './bytes';
 import { forgetAiAnchors } from '../ai/memory/forget';
+import { forgetFamilyDescriptions } from './descriptions';
 
 export { sha256, type AssetBytes };
 
@@ -593,6 +594,8 @@ export async function deleteStoredAsset(
       .where(eq(schema.assets.assetUuid, assetUuid))
       .run();
     forgetAiAnchors(tx, schema, 'asset', [assetUuid]);
+    // Its family's description goes with the last file of it.
+    forgetFamilyDescriptions(tx, schema, [current.familyUuid]);
 
     // The file is shared: several rows can point at one blob when the same
     // bytes were derived from different sources. It only goes when the last

@@ -219,8 +219,14 @@ assetTotalSize }`) and nothing else;
   with its fragment: `[text](https://…/pages/cv/#skills)`. A
   recording is a link to its file followed by its length,
   `[title](url) (m:ss)`, named `options.audioLabel` when it has no title, and
-  then its caption. With `options.format` the owner's words — text, captions,
-  attachment and recording titles, hints, link notes, entity link titles —
+  then its caption. A file's own description (`shared/asset-description.ts`),
+  which the public content carries as `asset.alt` for a file shown publicly
+  and never stores, is a picture's alt — `![description](url)`, its caption
+  following as words of their own — and the title of an attachment's or a
+  recording's link, `[title](url "description")`; without one a picture's
+  alt is its caption. With `options.format` the owner's words — text, captions,
+  attachment and recording titles, hints, link notes, entity link titles,
+  file descriptions —
   get the typography of the site's
   language, as on the page; markup, addresses, file names and the titles of
   other sites stay as they are. None of it is stored: the content keeps what

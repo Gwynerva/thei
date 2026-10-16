@@ -93,7 +93,8 @@ function renderBlock(
         '';
       if (!url) return '';
       const caption = inlineToMarkdown(data.caption, options);
-      const link = `[${title || url}](${options.absolute(url)})`;
+      // The file's description is the link's title, as a link's note is.
+      const link = `[${title || url}](${options.absolute(url)}${linkTitle(data.asset?.alt, options)})`;
       return caption ? `${link}\n\n${caption}` : link;
     }
     case 'contentAudio': {
@@ -102,9 +103,10 @@ function renderBlock(
       const title =
         inlineToMarkdown(data.title, options) || options.audioLabel || url;
       const duration = data.asset?.audio?.duration;
-      const link = `[${title}](${options.absolute(url)})${
-        duration > 0 ? ` (${formatMediaTime(duration)})` : ''
-      }`;
+      const link = `[${title}](${options.absolute(url)}${linkTitle(
+        data.asset?.alt,
+        options,
+      )})${duration > 0 ? ` (${formatMediaTime(duration)})` : ''}`;
       const caption = inlineToMarkdown(data.caption, options);
       return caption ? `${link}\n\n${caption}` : link;
     }
@@ -148,7 +150,15 @@ function renderMedia(
   const src = asset?.media?.src ?? asset?.assetUrl;
   if (!src) return '';
   const text = inlineToMarkdown(caption, options);
-  return `![${text}](${options.absolute(src)})`;
+  // The file's description is what the picture shows: its alt, and the
+  // caption follows as words of its own.
+  const alt =
+    typeof asset?.alt === 'string'
+      ? typeset(asset.alt.replace(/\s+/g, ' ').trim(), options)
+      : '';
+  if (!alt) return `![${text}](${options.absolute(src)})`;
+  const image = `![${alt.replace(/[[\]\\]/g, '\\$&')}](${options.absolute(src)})`;
+  return text ? `${image}\n\n${text}` : image;
 }
 
 function renderList(
