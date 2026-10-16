@@ -4,9 +4,8 @@ import { loadDocuments } from '../../mcp/documents';
 
 /**
  * What in the archive was made or changed within a stretch of time: an
- * entity changes with its fields, and with any of its texts. It is how a
- * template's model learns what «since last time» holds, whatever its
- * request is about.
+ * entity changes with its fields, and with any of its texts. A model asks
+ * for it with `changes_since`; a check goes over the latest changed first.
  */
 
 /** The kinds a change is looked for in. */

@@ -34,7 +34,8 @@ import {
   aiMessages,
   aiSessionEntities,
   aiSessions,
-  aiTemplateMarks,
+  aiTemplateBatches,
+  aiTemplateCoverage,
   aiTemplates,
   aiTerms,
   aiUsage,
@@ -79,5 +80,6 @@ export const schema = {
   aiTerms,
   aiDigests,
   aiTemplates,
-  aiTemplateMarks,
+  aiTemplateCoverage,
+  aiTemplateBatches,
 };

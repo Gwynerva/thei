@@ -1,9 +1,5 @@
 import type { IconName } from '#thei/icons';
-import type {
-  AiActionItem,
-  AiSessionItem,
-  AiTemplateSchedule,
-} from '#layers/thei/shared/ai';
+import type { AiActionItem, AiSessionItem } from '#layers/thei/shared/ai';
 import { stripMarks } from '#layers/thei/shared/content-edit-markdown/patch-core';
 import { entityTypeIcon } from '#layers/thei/shared/entity-icon';
 import { isContentEntityType } from '#layers/thei/shared/content-link';
@@ -52,49 +48,6 @@ export function sentWhen(at: number, now = Date.now()): string {
   if (ago < 6 * HOUR_MS)
     return relative.format(-Math.floor(ago / HOUR_MS), 'hour');
   return shortWhen(at, now);
-}
-
-/**
- * A moment ahead, as a schedule names it: the time today, the day within the
- * week, the date further on.
- */
-export function aheadWhen(at: number, now = Date.now()): string {
-  const code = language.value.code;
-  const date = new Date(at);
-  const time = date.toLocaleTimeString(code, {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-  if (date.toDateString() === new Date(now).toDateString()) return time;
-  if (at - now < 6 * DAY_MS)
-    return `${date.toLocaleDateString(code, { weekday: 'short' })} ${time}`;
-  return `${date.toLocaleDateString(code, { day: 'numeric', month: 'short' })}, ${time}`;
-}
-
-/** A day of the week by its number from Monday, short: «пн», «Mon». */
-export function weekdayName(day: number): string {
-  return new Intl.DateTimeFormat(language.value.code, {
-    weekday: 'short',
-    timeZone: 'UTC',
-  }).format(Date.UTC(2024, 0, day));
-}
-
-/** When a template's schedule runs, in a line. */
-export function scheduleLine(schedule: AiTemplateSchedule): string {
-  const said = phrase.value;
-  switch (schedule.kind) {
-    case 'manual':
-      return said.ai_template_whens.manual.title;
-    case 'day':
-      return said.ai_template_when_day(schedule.time);
-    case 'week':
-      return said.ai_template_when_week(
-        weekdayName(schedule.day),
-        schedule.time,
-      );
-    case 'month':
-      return said.ai_template_when_month(schedule.time);
-  }
 }
 
 /** A moment in full, for a hint: «14 October 2026, 19:40». */

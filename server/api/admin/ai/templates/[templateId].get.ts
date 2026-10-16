@@ -3,10 +3,7 @@ import { requireAiOn } from '../../../../thei/ai-on';
 import { listSessions } from '../../../../thei/ai/sessions/view';
 import { findTemplate } from '../../../../thei/ai/templates/store';
 
-/**
- * One template for its window, with the sessions it started — those in the
- * archive too: a scheduled run that found nothing to decide goes there.
- */
+/** One template for its window, with the sessions it started, archived too. */
 export default defineEventHandler((event): AiTemplateDetail => {
   requireAiOn();
   const template = findTemplate(getRouterParam(event, 'templateId') ?? '');

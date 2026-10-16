@@ -1734,35 +1734,10 @@ export default defineI18nBase({
     ai_tab_templates: 'Templates',
     ai_templates_title: 'Session templates',
     ai_templates_hint:
-      'A request to the AI, ready to go. One without a schedule is yours to start: a new session opens with its words, to add to and send. One on a schedule starts a session by itself, and what it found and proposed waits for you there.',
+      'Requests to the AI, ready to go. A built-in check looks only at what is new since it last looked — the archive from here, one entity from its ✦ — and with nothing new, nothing is spent. Your own requests open a new session with their words.',
     ai_templates_new: 'New',
     ai_templates_presets: 'Ready-made requests',
-    ai_templates_presets_hint:
-      'Opened here, on the new session screen or from an entity’s ✦, with the entity already named.',
-    ai_templates_presets_empty:
-      'None yet: a template without a schedule becomes one.',
-    ai_templates_scheduled: 'On a schedule',
-    ai_templates_scheduled_hint:
-      'They start by themselves, but never while their last run still waits for you: one run, when you are back, reads everything since.',
     ai_template_builtin: 'built-in',
-    ai_template_whens: {
-      manual: {
-        title: 'No schedule',
-        hint: 'A ready-made request: it opens a new session with its words',
-      },
-      day: { title: 'Every day', hint: 'At the hour chosen' },
-      week: { title: 'Every week', hint: 'On the day and at the hour chosen' },
-      month: { title: 'Every month', hint: 'On the 1st, at the hour chosen' },
-    },
-    ai_template_when_day: (time) => `Every day, ${time}`,
-    ai_template_when_week: (day, time) => `Every ${day}, ${time}`,
-    ai_template_when_month: (time) => `On the 1st, ${time}`,
-    ai_template_next: (when) => `next ${when}`,
-    ai_template_next_full: (when) =>
-      `In your time. The next session is ${when}.`,
-    ai_template_schedule: 'Schedule',
-    ai_template_schedule_on: 'On',
-    ai_template_schedule_off: 'schedule off',
     ai_template_open: 'Open in a new session',
     ai_open_full: 'Open on the AI page',
     select_filter: 'Filter',
@@ -1795,10 +1770,12 @@ export default defineI18nBase({
     content_block_toolbox: 'Blocks',
     ai_template_offer_on: 'Offered on',
     ai_template_offer_on_hint:
-      'The ✦ of these kinds of entity offers it, with the entity named. With none chosen, only a new session does.',
-    ai_template_offered_nowhere: 'only in a new session',
-    ai_template_awaits_review: 'waits until you go through its last run',
-    ai_template_run: 'Run now',
+      'The ✦ of these kinds of entity offers it, about the entity in hand.',
+    ai_template_offered_nowhere: (check) =>
+      check ? 'only from here' : 'only in a new session',
+    ai_template_run: 'Check what is new',
+    ai_template_run_again: 'Check again',
+    ai_template_nothing_new: (title) => `“${title}”: nothing new to check`,
     ai_template_edit: 'Settings',
     ai_template_running: 'running now',
     ai_template_never_run: 'not run yet',
@@ -1806,19 +1783,16 @@ export default defineI18nBase({
     ai_template_started: (title) => `Session “${title}” started`,
     ai_template_saved: 'Template saved',
     ai_template_deleted: 'Template deleted',
-    ai_template_copied: 'Copy made, its schedule off',
+    ai_template_copied: 'Copy made: a ready-made request of yours',
     ai_template_modal_title: 'Template',
     ai_template_modal_new: 'New template',
     ai_template_builtin_note:
-      'Built-in: new versions of Thei improve its request. Yours here are its schedule and model. To rewrite the request, make a copy.',
+      'Built-in: new versions of Thei improve how it checks, and it keeps count of what it has checked. Yours here are its model and where it is offered. To make a request of your own from its words, make a copy.',
     ai_template_name: 'Name',
     ai_template_name_placeholder: 'For example, “A week of travel”',
     ai_template_instruction: 'Request',
     ai_template_instruction_placeholder:
-      'What the model should do and read for it — as you would tell a person. For example: “Look at the diary entries changed since last time…”',
-    ai_template_when: 'When',
-    ai_template_time: 'Time, in your time zone',
-    ai_template_day: 'Day of the week',
+      'What the model should do — as you would tell a person. For example: “Look over this entry and say what is missing…”',
     ai_template_model: 'Model',
     ai_template_model_placeholder: (model) => `As in Connection — ${model}`,
     ai_template_model_hint:
@@ -1884,7 +1858,6 @@ export default defineI18nBase({
     ai_session_delete_confirm: (title) =>
       `Delete the session “${title}”? What it applied stays, but can no longer be undone from it.`,
     ai_session_by_you: (when) => `Started by you · ${when}`,
-    ai_session_by_template: (when) => `Started on a schedule · ${when}`,
     ai_session_via_app: (client) => `${client} over MCP`,
     ai_session_tokens: (amount) => `${amount} tokens`,
     ai_session_app_note:
@@ -1955,40 +1928,25 @@ export default defineI18nBase({
     ai_new_text:
       'Ask about the archive, have something written up, proofread or put in order. The AI proposes actions; nothing changes until you apply them.',
     ai_template_builtins: {
-      'diary-week': {
-        title: 'Diary week',
+      proofread: {
+        title: 'Fixing text mistakes',
         instruction:
-          'Read the week’s diary entries. Propose what in them moves projects and events on: relations, notes, the dates of stages. Proofread the texts without changing the voice. Ask about what you are unsure of.',
-      },
-      nightly: {
-        title: 'Nightly look',
-        instruction:
-          'Look over what is new and changed since last time: proofread, propose relations and tags. Nothing big — other templates are for that.',
-      },
-      graph: {
-        title: 'Relations of projects and events',
-        instruction:
-          'Find the relations missing, doubtful or at odds between projects, events and entries — first of all around what is new or changed since last time. A mention is not yet a relation.',
-      },
-      tags: {
-        title: 'Tags and names',
-        instruction:
-          'Find tags about the same thing, shortened ones and missing ones — first of all around what is new or changed since last time. Propose what to merge, rename or add. Where a tag, a project, an event or a page is plainly known by another name — an abbreviation, a nickname, its name in another language — propose it as a synonym; propose none that is only a description.',
-      },
-      'year-ago': {
-        title: 'A year ago',
-        instruction:
-          'Show what happened on this day a year ago. If an entry of then belonged to something and is not related to it, propose it. Change nothing for memories’ sake.',
+          'Proofread the texts: fix clear mistakes where they stand, in my own words and voice, and leave whatever is doubtful to me. Only what was not proofread yet, or changed since.',
       },
       links: {
-        title: 'Broken links',
+        title: 'Fixing broken links',
         instruction:
-          'Go through broken_links to the end. Mend each link where it should lead: a renamed heading first — the heading it became — then the place the words mean, read with outline; take a link off only when what it led to is gone and nothing fits, its words kept. Propose a text’s links as one action: revise, mode relink. When nothing is broken, say so in a line.',
+          'Mend the links that lead nowhere: to the heading a renamed one became, or to the place the words mean; take a link off only when what it led to is gone and nothing fits, its words kept.',
+      },
+      graph: {
+        title: 'Finding possible relations',
+        instruction:
+          'Find the relations missing between projects, events and diary entries, and say which look doubtful. A mention is not yet a relation.',
       },
     },
     ai_template_copy_title: (title) => `${title} (copy)`,
-    ai_template_note: (title, scheduled, since) =>
-      `Template “${title}” — ${scheduled ? 'by its schedule' : 'started by you'}${since ? ` · last run ${since}` : ''}`,
+    ai_template_note: (title, count) =>
+      `“${title}” — started by you · ${count} to look at`,
     ai_new_model_line: (model) =>
       `Answered by the model from “Connection” · ${model}. A conversation in another AI app over MCP shows up here too, with its actions.`,
     ai_action_kinds: {

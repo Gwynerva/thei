@@ -2,62 +2,17 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import { READS } from '../annotations';
 import { z } from 'zod';
 import type { McpCallContext } from '../context';
-import { readEntity, resolveRef, type McpEntityView } from '../entities';
-import type { EntityKey } from '../../entity-kinds';
+import { readEntity, resolveRef } from '../entities';
 import { actionDef } from '../../ai/actions/registry';
 import { actionsAbout } from '../../ai/actions/rows';
 import { digestOf } from '../../ai/digests';
 import { memoryLines } from '../../ai/memory/read';
 import { termLines } from '../../ai/terms';
-import { findTemplate } from '../../ai/templates/store';
-import {
-  changedParts,
-  markOf,
-  noteTemplateRead,
-} from '../../ai/templates/reads';
-import { entityFingerprint } from '../../ai/digests';
 import { pageOfText, renderEntity, TEXT_PAGE } from '../render';
 import { guardTool, McpToolError, toolResult } from '../result';
 
 /** Declined actions a read shows, newest first. */
 const DECLINED_SHOWN = 15;
-
-/**
- * An entity as a template's run reads it again: of each text, only the
- * paragraphs changed since the template last read it, with one around each.
- * A text whose changes would not fit a page is shown as it is.
- */
-function sinceTemplate(
-  view: McpEntityView,
-  key: EntityKey,
-  templateId: string,
-): McpEntityView {
-  if (!findTemplate(templateId))
-    throw new McpToolError(`There is no template "${templateId}".`);
-  const mark = markOf(templateId, key);
-  if (!mark) return view;
-  if (mark.fingerprint === entityFingerprint(key))
-    return {
-      ...view,
-      texts: view.texts.map((text) => ({
-        ...text,
-        markdown: '_(unchanged since the template last read it)_',
-      })),
-    };
-  const kept = new Set(mark.blocks);
-  return {
-    ...view,
-    texts: view.texts.map((text) => {
-      const part = changedParts(text.markdown, text.name, kept);
-      if (part.length > TEXT_PAGE) return text;
-      return {
-        ...text,
-        about: `${text.about} Shown here: only the paragraphs changed since the template last read it, with one around each; … marks what is left out. Read it whole with text "${text.name}" before you rewrite it.`,
-        markdown: part,
-      };
-    }),
-  };
-}
 
 export function registerReadTool(server: McpServer, context: McpCallContext) {
   server.registerTool(
@@ -72,8 +27,7 @@ export function registerReadTool(server: McpServer, context: McpCallContext) {
         'those the owner declined lately, what is remembered about it and ' +
         'the words of the owner’s dictionary it uses. Refs come from search, list and ' +
         `other reads. A text longer than ${TEXT_PAGE} characters comes in ` +
-        'parts: read the rest with text and offset. A template’s run reads ' +
-        'with since: only what changed since the template last read it.',
+        'parts: read the rest with text and offset.',
       inputSchema: z.object({
         ref: z
           .string()
@@ -91,29 +45,13 @@ export function registerReadTool(server: McpServer, context: McpCallContext) {
           .min(0)
           .optional()
           .describe('Where in the text to go on, as a cut-off part names it'),
-        since: z
-          .string()
-          .optional()
-          .describe(
-            'A template’s id: of its texts, only the paragraphs changed since that template last read it',
-          ),
       }),
       annotations: READS,
     },
-    ({ ref, text: textName, offset, since }) =>
+    ({ ref, text: textName, offset }) =>
       guardTool(async () => {
         const key = resolveRef(ref);
-        const full = await readEntity(key, context);
-        if (since !== undefined && textName !== undefined)
-          throw new McpToolError(
-            'since reads the whole entity: leave text out, or since.',
-          );
-        const view =
-          since === undefined ? full : sinceTemplate(full, key, since);
-        // In a template's session, a whole read is what the template read:
-        // kept as such once the turn goes through.
-        if (textName === undefined && context.session)
-          noteTemplateRead(context.session.sessionUuid, key, full);
+        const view = await readEntity(key, context);
         if (textName !== undefined) {
           const text = view.texts.find((item) => item.name === textName);
           if (!text)

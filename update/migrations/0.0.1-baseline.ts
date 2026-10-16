@@ -504,27 +504,37 @@ export const baselineSql: string[] = [
 	\`title\` text,
 	\`instruction\` text,
 	\`model\` text DEFAULT '' NOT NULL,
-	\`schedule\` text NOT NULL,
-	\`enabled\` integer DEFAULT true NOT NULL,
 	\`offerOn\` text DEFAULT '[]' NOT NULL,
-	\`nextRunAt\` integer,
-	\`lastRunAt\` integer,
 	\`lastSessionUuid\` text,
 	\`createdAt\` integer NOT NULL,
 	\`updatedAt\` integer NOT NULL
 );
 `,
-  `CREATE INDEX \`ai-templates-next-idx\` ON \`ai-templates\` (\`nextRunAt\`);`,
-  `CREATE TABLE \`ai-template-marks\` (
+  `CREATE TABLE \`ai-template-coverage\` (
 	\`templateId\` text NOT NULL,
-	\`entityType\` text NOT NULL,
-	\`entityId\` text NOT NULL,
+	\`subject\` text NOT NULL,
+	\`entityType\` text,
+	\`entityId\` text,
 	\`fingerprint\` text NOT NULL,
-	\`blocks\` text DEFAULT '[]' NOT NULL,
+	\`parts\` text DEFAULT '[]' NOT NULL,
 	\`at\` integer NOT NULL,
-	PRIMARY KEY(\`templateId\`, \`entityType\`, \`entityId\`)
+	PRIMARY KEY(\`templateId\`, \`subject\`)
 );
 `,
+  `CREATE INDEX \`ai-template-coverage-entity-idx\` ON \`ai-template-coverage\` (\`entityType\`,\`entityId\`);`,
+  `CREATE TABLE \`ai-template-batches\` (
+	\`sessionUuid\` text NOT NULL,
+	\`templateId\` text NOT NULL,
+	\`subject\` text NOT NULL,
+	\`entityType\` text,
+	\`entityId\` text,
+	\`fingerprint\` text NOT NULL,
+	\`parts\` text DEFAULT '[]' NOT NULL,
+	PRIMARY KEY(\`sessionUuid\`, \`subject\`)
+);
+`,
+  `CREATE INDEX \`ai-template-batches-template-idx\` ON \`ai-template-batches\` (\`templateId\`);`,
+  `CREATE INDEX \`ai-template-batches-entity-idx\` ON \`ai-template-batches\` (\`entityType\`,\`entityId\`);`,
 ];
 
 export default defineMigration({

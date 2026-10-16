@@ -559,7 +559,7 @@ test('a ready-made request opens in a new session from its row', async ({
   try {
     await open(page, '/admin/ai/?tab=templates');
     const row = page.locator(
-      `[data-templates-group="presets"] [data-template-row="${preset.templateId}"]`,
+      `[data-templates-list] [data-template-row="${preset.templateId}"]`,
     );
     await expect(row).toContainText('only in a new session');
     await row.locator('[data-template-run]').click();

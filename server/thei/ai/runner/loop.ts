@@ -26,7 +26,7 @@ import {
   sessionUnnamed,
 } from '../sessions/names';
 import { findTemplate } from '../templates/store';
-import { settleTemplateTurn } from '../templates/mark';
+import { settleTemplateTurn } from '../templates/coverage';
 import { backgroundEvent } from './background-event';
 import { repairTranscript } from './transcript';
 import {
@@ -338,15 +338,14 @@ export async function runSessionTurn(
         touchSession(tx, schema, sessionUuid);
         refreshSessionCounts(tx, schema, sessionUuid);
       });
-      // A template's turn keeps what it read once it went through, and a
-      // scheduled run that left nothing to decide goes to the archive —
-      // after the touch above, which brings a session back out of it.
+      // What a check's run was given counts as looked at once its turn
+      // went through, and is let go either way.
       try {
         settleTemplateTurn(sessionUuid, !stop);
       } catch {
         THEI_SERVER.console
           .tag('MCP')
-          .error('Failed to settle what a template run read');
+          .error('Failed to settle what a check’s run was given');
       }
       publishSession(sessionUuid, { type: 'session' });
     };

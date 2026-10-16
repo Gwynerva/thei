@@ -59,15 +59,7 @@ const origin = computed(() => {
   if (!item) return '';
   if (item.origin === 'app')
     return phrase.value.ai_session_via_app(item.client ?? 'MCP');
-  // A template's run says who started it: its schedule, or the owner.
-  const scheduled = detail.value?.messages.some((message) =>
-    message.parts.some(
-      (part) => part.type === 'template' && part.by === 'schedule',
-    ),
-  );
-  return scheduled
-    ? phrase.value.ai_session_by_template(shortWhen(item.createdAt))
-    : phrase.value.ai_session_by_you(shortWhen(item.createdAt));
+  return phrase.value.ai_session_by_you(shortWhen(item.createdAt));
 });
 
 /** The actions of each message; an app's have no message of their own. */

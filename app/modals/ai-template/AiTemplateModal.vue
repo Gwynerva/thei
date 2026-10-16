@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import type { AiTemplateSchedule } from '#layers/thei/shared/ai';
 import {
   AI_TEMPLATE_DEFAULT_OFFER,
   AI_TEMPLATE_INSTRUCTION_MAX,
-  AI_TEMPLATE_OFFER_KINDS,
   AI_TEMPLATE_TITLE_MAX,
+  templateOfferKinds,
   type AiTemplateDetail,
   type AiTemplateOfferKind,
 } from '#layers/thei/shared/ai-template';
@@ -14,34 +13,25 @@ import {
   type AiModelSettings,
   type AiModelsResponse,
 } from '#layers/thei/shared/ai-model';
-import type { SelectOption } from '#layers/thei/app/components/field/FieldSelect.vue';
 import ModalContainer from '../ModalContainer.vue';
 import ModalHeaderButton from '../ModalHeaderButton.vue';
 
 /**
- * One template's settings: its request — what to do and what to read for
- * it, in the owner's words — when it runs and which model answers it, with
- * the sessions it started. A built-in one keeps its words: the owner sets
- * its schedule and model, or makes a copy to rewrite. A new one starts here
- * too.
+ * One template's settings: its request in the owner's words, where it is
+ * offered and which model answers it, with the sessions it started. A
+ * built-in check keeps its words: the owner sets its model and where it is
+ * offered, or makes a copy to rewrite as a request of their own. A new one
+ * starts here too.
  */
 const { modalData } = defineProps<{
   modalData: { templateId?: string };
 }>();
-type Result =
-  | { type: 'saved' | 'deleted' | 'copied' }
-  | { type: 'started'; sessionUuid: string; title: string }
-  | { type: 'opened' };
+type Result = { type: 'saved' | 'deleted' | 'copied' | 'started' | 'opened' };
 const emit = defineEmits<{ modalResult: [result: Result] }>();
 
-type Kind = AiTemplateSchedule['kind'];
 interface Draft {
   title: string;
   instruction: string;
-  kind: Kind;
-  time: string;
-  day: number;
-  enabled: boolean;
   model: string;
   offerOn: AiTemplateOfferKind[];
 }
@@ -52,10 +42,6 @@ const models = ref<string[]>([]);
 const draft = ref<Draft>({
   title: '',
   instruction: '',
-  kind: 'manual',
-  time: '09:00',
-  day: 1,
-  enabled: true,
   model: '',
   offerOn: [...AI_TEMPLATE_DEFAULT_OFFER],
 });
@@ -71,14 +57,9 @@ const dirty = computed(() => JSON.stringify(draft.value) !== saved.value);
 
 function draftOf(detail: AiTemplateDetail): Draft {
   const { template } = detail;
-  const schedule = template.schedule;
   return {
     title: template.title,
     instruction: template.instruction,
-    kind: schedule.kind,
-    time: schedule.kind === 'manual' ? '09:00' : schedule.time,
-    day: schedule.kind === 'week' ? schedule.day : 1,
-    enabled: template.enabled,
     model: template.model,
     offerOn: [...template.offerOn],
   };
@@ -123,44 +104,9 @@ function modelsWanted() {
     .catch(() => {});
 }
 
-/** Each way of running says what it means before it is chosen. */
-const whenOptions = computed<SelectOption<Kind>[]>(() => {
-  const whens = phrase.value.ai_template_whens;
-  return (Object.keys(whens) as Kind[]).map((value) => ({
-    value,
-    label: whens[value].title,
-    hint: whens[value].hint,
-  }));
-});
-const days = computed(() =>
-  [1, 2, 3, 4, 5, 6, 7].map((day) => ({ day, name: weekdayName(day) })),
-);
-
-/** When it runs, and its next session while the schedule is as saved. */
-const whenHint = computed(() => {
-  const said = phrase.value;
-  const next = template.value?.nextRunAt;
-  return [
-    `${said.ai_template_whens[draft.value.kind].hint}.`,
-    next && !dirty.value && draft.value.kind !== 'manual'
-      ? said.ai_template_next_full(aheadWhen(next))
-      : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
-});
-
 const connectionModel = computed(() =>
   connection.value ? aiModelName(connection.value) : '',
 );
-
-function schedule(form: Draft): AiTemplateSchedule {
-  if (form.kind === 'manual') return { kind: 'manual' };
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  return form.kind === 'week'
-    ? { kind: 'week', day: form.day, time: form.time, timeZone }
-    : { kind: form.kind, time: form.time, timeZone };
-}
 
 async function save() {
   if (busy.value) return;
@@ -169,8 +115,6 @@ async function save() {
   error.value = '';
   const body = {
     model: form.model.trim(),
-    schedule: schedule(form),
-    enabled: form.enabled,
     offerOn: form.offerOn,
     ...(builtin.value
       ? {}
@@ -190,9 +134,10 @@ async function save() {
   }
 }
 
-/** The kinds a ready-made request may be offered on, each a toggle. */
+/** The kinds it may be offered on, each a toggle. */
+const offerable = computed(() => templateOfferKinds(template.value?.builtin));
 const offerKinds = computed(() =>
-  AI_TEMPLATE_OFFER_KINDS.map((kind) => ({
+  offerable.value.map((kind) => ({
     kind,
     icon: entityTypeIcon(kind),
     label: entityTypeLabel(kind),
@@ -204,15 +149,13 @@ function toggleOffer(kind: AiTemplateOfferKind) {
   const on = new Set(draft.value.offerOn);
   if (on.has(kind)) on.delete(kind);
   else on.add(kind);
-  draft.value.offerOn = AI_TEMPLATE_OFFER_KINDS.filter((item) => on.has(item));
+  draft.value.offerOn = offerable.value.filter((item) => on.has(item));
 }
-
-const preset = computed(() => template.value?.schedule.kind === 'manual');
 
 async function run() {
   if (busy.value || !template.value) return;
   // A ready-made request is opened, not run: its words wait to be added to.
-  if (preset.value) {
+  if (!builtin.value) {
     emit('modalResult', { type: 'opened' });
     void navigateTo(
       newSessionLocation({ template: template.value.templateId }),
@@ -220,24 +163,9 @@ async function run() {
     return;
   }
   busy.value = 'run';
-  error.value = '';
-  try {
-    const { sessionUuid } = await $fetch<{ sessionUuid: string }>(
-      `/api/admin/ai/templates/${template.value.templateId}/run`,
-      {
-        method: 'POST',
-        body: { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
-      },
-    );
-    emit('modalResult', {
-      type: 'started',
-      sessionUuid,
-      title: template.value.title,
-    });
-  } catch (caught) {
-    error.value = errorMessage(caught, phrase.value.error_title);
-    busy.value = undefined;
-  }
+  const started = await runAiCheck(template.value);
+  busy.value = undefined;
+  if (started) emit('modalResult', { type: 'started' });
 }
 
 async function copy() {
@@ -387,67 +315,6 @@ useModalCloseGuard(
       </Field>
 
       <Field>
-        <div class="flex items-center justify-between gap-sm">
-          <FieldLabel>{{ phrase.ai_template_when }}</FieldLabel>
-          <FieldToggle
-            v-if="draft.kind !== 'manual'"
-            v-model="draft.enabled"
-            :switch-label="phrase.ai_template_schedule"
-            data-template-enabled
-          >
-            <span class="text-sm text-text-2">{{
-              draft.enabled
-                ? phrase.ai_template_schedule_on
-                : phrase.ai_template_schedule_off
-            }}</span>
-          </FieldToggle>
-        </div>
-        <div class="flex flex-wrap items-center gap-1.5">
-          <FieldSelect
-            v-model="draft.kind"
-            :options="whenOptions"
-            :aria-label="phrase.ai_template_when"
-            data-template-when
-          />
-          <FieldInput
-            v-if="draft.kind !== 'manual'"
-            v-model="draft.time"
-            type="time"
-            wrapper-class="w-28"
-            :aria-label="phrase.ai_template_time"
-            data-template-time
-          />
-        </div>
-        <div
-          v-if="draft.kind === 'week'"
-          role="group"
-          class="flex flex-wrap gap-1"
-          :aria-label="phrase.ai_template_day"
-        >
-          <button
-            v-for="{ day, name } in days"
-            :key="day"
-            type="button"
-            class="flex size-9 cursor-pointer items-center justify-center
-              rounded-full border text-xs transition-colors
-              pointer-coarse:size-11"
-            :class="
-              draft.day === day
-                ? `border-accent bg-accent font-semibold text-white
-                  dark:text-bg-1`
-                : 'border-border-1 bg-bg-1 text-text-2 hocus:border-border-3'
-            "
-            :aria-pressed="draft.day === day"
-            :data-template-day="day"
-            @click="draft.day = day"
-          >
-            {{ name }}
-          </button>
-        </div>
-        <FieldHint>{{ whenHint }}</FieldHint>
-      </Field>
-
-      <Field v-if="draft.kind === 'manual'">
         <FieldLabel>{{ phrase.ai_template_offer_on }}</FieldLabel>
         <div
           role="group"
@@ -515,9 +382,9 @@ useModalCloseGuard(
         >
           <Icon
             :name="
-              busy === 'run' ? 'loading' : preset ? 'ai-chat' : 'play-circle'
+              busy === 'run' ? 'loading' : builtin ? 'list-check' : 'ai-chat'
             "
-          />{{ preset ? phrase.ai_template_open : phrase.ai_template_run }}
+          />{{ builtin ? phrase.ai_template_run : phrase.ai_template_open }}
         </Button>
         <Button
           variant="secondary"

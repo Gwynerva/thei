@@ -1,21 +1,19 @@
-import type { AiSessionItem, AiTemplateSchedule } from './ai';
+import type { AiSessionItem } from './ai';
 
 /**
- * A session template: a request to the AI that starts a session — on its
- * schedule, from its button, or when the owner asks for it in a
- * conversation. What to read the model takes from the request itself: it
- * may ask for what changed since the template last ran. The built-in ones
- * are written in the code, and the owner sets only when they run and with
- * which model; the owner's own are written by the owner.
+ * A session template. A built-in one is a check written in the code: it
+ * looks over what it has not looked at yet — the archive's texts for
+ * mistakes, its links that lead nowhere, its entities for relations they
+ * lack — and the code keeps count of what it checked, so a run goes over
+ * only what is new or changed since. From an entity's ✦ it looks at that
+ * entity alone. The owner's own are ready-made requests: opened in a new
+ * session with their words, to add to and send. Nothing runs by itself.
  */
 
 export const AI_TEMPLATE_TITLE_MAX = 120;
 export const AI_TEMPLATE_INSTRUCTION_MAX = 2000;
 
-/**
- * The kinds of entity a template without a schedule may be offered on, from
- * their ✦: a ready-made request about the entity in hand.
- */
+/** The kinds of entity a template may be offered on, from their ✦. */
 export const AI_TEMPLATE_OFFER_KINDS = [
   'project',
   'project-section',
@@ -26,7 +24,7 @@ export const AI_TEMPLATE_OFFER_KINDS = [
 ] as const;
 export type AiTemplateOfferKind = (typeof AI_TEMPLATE_OFFER_KINDS)[number];
 
-/** Where a new template without a schedule is offered: every kind with a text. */
+/** Where a new template of the owner's is offered: every kind with a text. */
 export const AI_TEMPLATE_DEFAULT_OFFER: AiTemplateOfferKind[] = [
   'project',
   'project-section',
@@ -36,43 +34,38 @@ export const AI_TEMPLATE_DEFAULT_OFFER: AiTemplateOfferKind[] = [
 ];
 
 /**
- * A template without a schedule is a ready-made request: the owner starts
- * it, in a new session with its words to add to; one with a schedule runs
- * by itself.
- */
-export function isPresetTemplate(template: Pick<AiTemplateItem, 'schedule'>) {
-  return template.schedule.kind === 'manual';
-}
-
-/**
- * The built-in templates: when each runs until the owner says otherwise. Their words are phrases (`ai_template_builtins`), in the
- * site's language; they are off until the owner turns one on, since a run
- * spends tokens.
+ * The built-in checks, each offered — until the owner says otherwise — on
+ * the kinds it can look at. Their words are phrases (`ai_template_builtins`),
+ * in the site's language.
  */
 export const AI_BUILTIN_TEMPLATES = {
-  'diary-week': {
-    schedule: { kind: 'week', day: 1, time: '03:00', timeZone: 'UTC' },
-  },
-  nightly: {
-    schedule: { kind: 'day', time: '03:00', timeZone: 'UTC' },
-  },
-  graph: {
-    schedule: { kind: 'month', time: '04:00', timeZone: 'UTC' },
-  },
-  tags: {
-    schedule: { kind: 'week', day: 1, time: '03:00', timeZone: 'UTC' },
-  },
-  'year-ago': {
-    schedule: { kind: 'day', time: '09:00', timeZone: 'UTC' },
+  proofread: {
+    offerOn: ['project', 'project-section', 'event', 'diary-entry', 'page'],
   },
   links: {
-    schedule: { kind: 'week', day: 1, time: '04:00', timeZone: 'UTC' },
+    offerOn: ['project', 'project-section', 'event', 'diary-entry', 'page'],
   },
-} as const satisfies Record<string, { schedule: AiTemplateSchedule }>;
+  graph: { offerOn: ['project', 'event', 'diary-entry'] },
+} as const satisfies Record<
+  string,
+  { offerOn: readonly AiTemplateOfferKind[] }
+>;
 export type AiBuiltinTemplateKey = keyof typeof AI_BUILTIN_TEMPLATES;
 export const AI_BUILTIN_TEMPLATE_KEYS = Object.keys(
   AI_BUILTIN_TEMPLATES,
 ) as AiBuiltinTemplateKey[];
+
+/**
+ * The kinds a template may be offered on: a check only on those it can look
+ * at, the owner's own request on any.
+ */
+export function templateOfferKinds(
+  builtin: AiBuiltinTemplateKey | undefined,
+): readonly AiTemplateOfferKind[] {
+  return builtin
+    ? AI_BUILTIN_TEMPLATES[builtin].offerOn
+    : AI_TEMPLATE_OFFER_KINDS;
+}
 
 /** A built-in template's id, the one its settings are kept under. */
 export function builtinTemplateId(key: AiBuiltinTemplateKey) {
@@ -81,47 +74,29 @@ export function builtinTemplateId(key: AiBuiltinTemplateKey) {
 
 export interface AiTemplateItem {
   templateId: string;
-  /** For a built-in one, which: its words are the code's. */
-  builtin?: string;
+  /** For a built-in check, which: its words are the code's. */
+  builtin?: AiBuiltinTemplateKey;
   title: string;
   instruction: string;
   /** The model it is answered by; empty for the one of the connection. */
   model: string;
-  schedule: AiTemplateSchedule;
-  enabled: boolean;
-  /** Without a schedule: the kinds of entity it is offered on. */
+  /** The kinds of entity it is offered on. */
   offerOn: AiTemplateOfferKind[];
-  nextRunAt?: number;
-  lastRunAt?: number;
   /** The session its last run started, and what waits in it. */
   lastSession?: {
     sessionUuid: string;
     waiting: number;
     state: string;
     archived: boolean;
+    startedAt: number;
   };
 }
 
-/** A ready-made request as it is offered: its name and its words. */
+/** A template as an entity's ✦ offers it: run, or put into the message. */
 export type AiPresetItem = Pick<
   AiTemplateItem,
-  'templateId' | 'title' | 'instruction'
+  'templateId' | 'title' | 'instruction' | 'builtin'
 >;
-
-/**
- * Whether a template's last run still waits for the owner: answering, or
- * holding actions or a question not yet decided, and not archived. Its next
- * scheduled run waits too, so a template piles up no sessions while the
- * owner is away — one run, once they are back, reads everything since.
- */
-export function templateAwaitsReview(
-  template: Pick<AiTemplateItem, 'lastSession'>,
-) {
-  const last = template.lastSession;
-  return Boolean(
-    last && !last.archived && (last.state === 'running' || last.waiting > 0),
-  );
-}
 
 export interface AiTemplateListResponse {
   templates: AiTemplateItem[];
@@ -131,4 +106,9 @@ export interface AiTemplateListResponse {
 export interface AiTemplateDetail {
   template: AiTemplateItem;
   sessions: AiSessionItem[];
+}
+
+/** A check run: its session, or none when nothing new was there to look at. */
+export interface AiTemplateRunResponse {
+  sessionUuid: string | null;
 }

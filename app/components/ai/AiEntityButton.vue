@@ -11,8 +11,9 @@ import type { ContentEntityType } from '#layers/thei/shared/content-link';
  * The ✦ of a form's header: the AI and the entity in hand. Its badge counts
  * the proposals waiting in the form; its menu has a message to write about
  * the entity — named in it already — with the ready-made requests offered
- * for its kind, then the sessions about it, and a way to remember something
- * of it. Sent, the session goes on in the background and the page stays:
+ * for its kind — a built-in check runs on the entity at once, a request of
+ * the owner's goes into the message — then the sessions about it, and a way
+ * to remember something of it. Sent, the session goes on in the background and the page stays:
  * its proposals come to the fields' labels as they are made, and while it
  * answers it can be stopped from here, as any session about the entity
  * that is answering. Nothing with
@@ -67,15 +68,35 @@ function remember() {
   remembering.value = true;
 }
 
-function usePreset(preset: AiPresetItem) {
-  composer.value?.prefill(preset.instruction, preset.templateId);
-}
-
 /** The session sent from here, followed while the page stays. */
 const sent = ref<string>();
 const followed = useAiSession(sent);
 const sentSession = computed(() => followed.detail.value?.session);
 const sending = ref(false);
+
+function usePreset(preset: AiPresetItem) {
+  if (preset.builtin) void check(preset);
+  else composer.value?.prefill(preset.instruction, preset.templateId);
+}
+
+/** A built-in check run on the entity, followed here as a message sent. */
+async function check(preset: AiPresetItem) {
+  if (!ai?.ref.value || sending.value) return;
+  sending.value = true;
+  try {
+    await runAiCheck(preset, {
+      about: ai.ref.value,
+      // Started again from the toast, the menu comes back to show it.
+      started: (sessionUuid) => {
+        sent.value = sessionUuid;
+        open.value = true;
+        void ai.refresh();
+      },
+    });
+  } finally {
+    sending.value = false;
+  }
+}
 
 async function send(
   text: string,
