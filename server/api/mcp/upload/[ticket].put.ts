@@ -8,6 +8,7 @@ import {
   uploadLimit,
 } from '../../../thei/mcp/files';
 import { placeAppFile } from '../../../thei/ai/sessions/files';
+import { findSession } from '../../../thei/ai/sessions/store';
 
 /**
  * The one-time address `upload_file` hands an AI client: the raw bytes of one
@@ -28,6 +29,13 @@ export default defineEventHandler(async (event) => {
       statusCode: 404,
       message:
         'This upload address is used up or has lapsed; ask for a new one.',
+    });
+  // An archived session takes nothing more in.
+  const session = findSession(ticket.sessionUuid);
+  if (!session || session.closedAt || session.purgedAt)
+    throw createError({
+      statusCode: 404,
+      message: 'The owner archived the session this address was opened in.',
     });
   const staged = await stageUploadBody(event, {
     maxSizeBytes: uploadLimit(ticket),

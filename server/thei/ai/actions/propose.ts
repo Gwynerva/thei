@@ -48,6 +48,8 @@ export interface ProposeInput {
   atomic?: boolean;
   /** What the proposer read on the way, as refs. */
   sources?: string[];
+  /** For a turn of Thei's own model: whether it may still write. */
+  live?: () => boolean;
 }
 
 export type ProposeResult =
@@ -289,6 +291,9 @@ export async function proposeActions(
       .where(eq(schema.aiSessions.sessionUuid, input.sessionUuid))
       .get() as { purgedAt: number | null } | undefined;
     if (!live || live.purgedAt) fail('The session is gone.');
+    // Nor does a turn stopped while its proposals were checked.
+    if (input.live && !input.live())
+      fail('The turn was stopped; nothing was proposed.');
     accepted.forEach((item, order) => {
       if (item.supersedes) {
         const replaced = tx

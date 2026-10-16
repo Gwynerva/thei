@@ -1431,6 +1431,8 @@ export type LanguagePhrases = {
   ai_question_own: string;
   ai_notices: Record<
     | 'stopped'
+    | 'timeout'
+    | 'interrupted'
     | 'limit'
     | 'no-model'
     | 'key'

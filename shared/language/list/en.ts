@@ -1911,6 +1911,8 @@ export default defineI18nBase({
     ai_question_own: 'Own answer…',
     ai_notices: {
       stopped: 'Stopped by you.',
+      timeout: 'Stopped: it took too long.',
+      interrupted: 'Cut off when the site restarted.',
       limit:
         'The month’s limit is spent. The session goes on next month, or once you raise the limit.',
       'no-model': 'No model is set up to answer.',
