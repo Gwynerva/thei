@@ -14,6 +14,7 @@ import type { ActiveModal } from '#layers/thei/app/modals/types';
 import {
   fadeElement,
   fadeShellOut,
+  markShellShown,
 } from '#layers/thei/app/modals/layer-motion';
 import ModalShell from '#layers/thei/app/modals/ModalShell.vue';
 
@@ -347,7 +348,12 @@ function onBackdropClick(e: MouseEvent) {
           "
         />
         <!-- What arrives is drawn beneath its shell, which fades off it. -->
-        <Transition :css="false" @leave="fadeShellOut">
+        <Transition
+          :css="false"
+          appear
+          @enter="markShellShown"
+          @leave="fadeShellOut"
+        >
           <ModalShell
             v-if="!layer.modal?.component"
             :frame="layer.framed?.frame"

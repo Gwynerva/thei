@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { AssetVariantsResponse } from '#layers/thei/shared/api/asset';
 import { errorMessage } from '#layers/thei/app/composables/upload-draft';
-import { fadeShellOut } from '../layer-motion';
+import { fadeShellOut, markShellShown } from '../layer-motion';
 import ModalShell from '../ModalShell.vue';
 import ModalUploadSettings from './ModalUploadSettings.vue';
 import { editFileModal } from './modal';
@@ -67,7 +67,7 @@ if (source.kind === 'asset' && import.meta.client) void load(source.assetUuid);
     :modal-data="ready"
     @modal-result="emit('modalResult', $event)"
   />
-  <Transition :css="false" @leave="fadeShellOut">
+  <Transition :css="false" appear @enter="markShellShown" @leave="fadeShellOut">
     <ModalShell
       v-if="!ready"
       :frame="editFileModal.frame"

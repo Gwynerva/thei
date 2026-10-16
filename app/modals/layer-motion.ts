@@ -59,11 +59,31 @@ export function fadeElement(
   );
 }
 
+/** When each shell on screen was put there. */
+const shellShownAt = new WeakMap<Element, number>();
+
+/** The enter hook of a shell: it only notes the moment it went up. */
+export function markShellShown(element: Element, done: () => void) {
+  shellShownAt.set(element, performance.now());
+  done();
+}
+
 /**
  * The leave hook of a shell giving way to what it stood in for: what came is
- * already drawn beneath it, and the shell fades off it.
+ * already drawn beneath it. A shell up for less than a transition's length,
+ * whose wait never showed, goes at once — it was still coming in with its
+ * layer; one that was seen fades off what replaced it.
  */
 export function fadeShellOut(element: Element, done: () => void) {
-  if (element instanceof HTMLElement) element.style.pointerEvents = 'none';
+  if (element instanceof HTMLElement) {
+    element.style.pointerEvents = 'none';
+    element.setAttribute('aria-hidden', 'true');
+  }
+  const shownAt = shellShownAt.get(element);
+  if (
+    shownAt !== undefined &&
+    performance.now() - shownAt < modalMotion().duration
+  )
+    return done();
   void fadeElement(element, 0).then(done);
 }

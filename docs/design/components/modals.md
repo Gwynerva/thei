@@ -91,7 +91,9 @@ Motion:
   at the site's one transition; a layer replaced by another stays whole under
   it until that one is in, so the page never shows through. With reduced
   motion all of it is at once.
-- A shell gives way by fading off the modal drawn beneath it.
+- A shell that was seen gives way by fading off the modal drawn beneath it;
+  one up for less than a transition's length, whose wait never showed, goes
+  at once, since it was still coming in with its layer.
 
 ## How it is built
 
