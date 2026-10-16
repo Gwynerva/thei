@@ -147,7 +147,7 @@ export type LanguagePhrases = {
   asset_library_refresh_preview: string;
   asset_library_refresh_preview_hint: string;
   asset_library_description: string;
-  /** A file's own description («Расшифровка»): its field and its public block. */
+  /** A file's own description («Описание файла»): its field and its public block. */
   asset_description: string;
   asset_description_hint: string;
   asset_description_placeholder: string;

@@ -10,7 +10,7 @@ export default defineMigration({
   version: '0.0.6',
   title: {
     en: 'Add descriptions to files',
-    ru: 'Расшифровки файлов',
+    ru: 'Описания файлов',
   },
   description: {
     en: 'What a file shows or is about, in words: for search, for AI and for those who cannot see it.',

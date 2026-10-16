@@ -1,13 +1,14 @@
 import type { AiEntityOffer } from './ai-entity';
 
 /**
- * A file's description — «Расшифровка» in the owner's Russian, "Description"
- * in English, the `alt` of a picture: what the file is, in words. What a
- * picture shows (its text retold, not copied out), what a recording is and
- * what it is about, what a video shows, what a document or an archive is.
- * Not the text of a document, not a transcript of speech: a sentence or a
- * few. One is kept per family of a file — the original and its variants —
- * and read by models, by search and by whoever cannot see the file.
+ * A file's description — «Описание файла», "File description" — the `alt`
+ * of a picture: what the file is, in words. What a picture shows (its text
+ * retold, not copied out), what a recording is and what it is about, what a
+ * video shows, what a document or an archive is. Not the text of a
+ * document, not a transcript of speech: a sentence or a few. One is kept per
+ * family of a file — the original and its variants — and read by models, by
+ * search and by whoever cannot see the file. A place's own caption or
+ * description of a file is another thing.
  */
 
 /** The longest description kept, in characters. */

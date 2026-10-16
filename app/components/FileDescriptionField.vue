@@ -8,8 +8,8 @@ import {
 } from '#layers/thei/shared/asset-description';
 
 /**
- * A file's description — «Расшифровка» — as a field of its own: one for the
- * file and all its variants, read and saved through any of them over the
+ * A file's description — «Описание файла» — as a field of its own: one for
+ * the file and all its variants, read and saved through any of them over the
  * version it was read at. What an AI proposes for it waits at its label;
  * with AI off it is just a field.
  */

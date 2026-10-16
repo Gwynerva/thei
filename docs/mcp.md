@@ -130,7 +130,7 @@ applied when the form is saved. A declined one may be marked **never to be offer
 remembered, and the same proposal is not made again. An applied action can
 be undone while what it changed reads as it left it.
 
-A file's **description** («Расшифровка») is what the file is, in words —
+A file's **description** («Описание файла») is what the file is, in words —
 what a picture shows, what a recording is and what it is about, what a
 document is; never its text nor a transcript — one for the file and all its
 variants (`describe`, `shared/asset-description.ts`). It waits at the
@@ -192,7 +192,7 @@ proposes only, and stops at the monthly limit; the key stays on the server.
 | `site_overview`                   | The site, its kinds of entities, and what the owner asks of models.  |
 | `search_archive`                  | Words across every text.                                             |
 | `list_entities`                   | Entities of a kind, by dates too.                                    |
-| `read_entity`                     | One entity whole, with its memory; `since` gives only what changed.  |
+| `read_entity`                     | One entity whole, its memory, its files; `since`: only what changed. |
 | `changes_since`                   | What changed in a span of time.                                      |
 | `life_timeline`                   | The one timeline of everything dated.                                |
 | `relation_graph`                  | The relations around an entity.                                      |

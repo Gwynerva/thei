@@ -222,12 +222,12 @@ export default defineI18nBase({
       'Picks a frame that shows the video, past a black or blank opening.',
     asset_library_description:
       'Every uploaded file: where it is used, how much it weighs and which variants it has.',
-    asset_description: 'Description',
+    asset_description: 'File description',
     asset_description_hint:
       'What the file shows or is about, in a sentence or a few: for search, for AI and for those who cannot see it. One for the file and all its variants.',
     asset_description_placeholder: 'What is in this file?',
-    asset_description_save: 'Save the description',
-    asset_description_saved: 'Description saved',
+    asset_description_save: 'Save the file description',
+    asset_description_saved: 'File description saved',
     asset_description_conflict:
       'It was changed elsewhere in the meantime: this is how it reads now.',
     asset_description_too_long: (max) => `At most ${max} characters`,
@@ -2014,7 +2014,7 @@ export default defineI18nBase({
       remember: 'Remember',
       term: 'To the dictionary',
       'memory-compact': 'Compact memory',
-      describe: 'Description',
+      describe: 'File description',
     },
     ai_memory_owner: 'About you',
     ai_review_title: 'Text edit',

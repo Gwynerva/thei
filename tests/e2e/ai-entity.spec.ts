@@ -693,7 +693,7 @@ test('a file’s description waits at its label in the file’s window', async (
   });
   await page.locator('[data-file-description-save]').click();
   await expect(page.locator('[data-file-description-notice]')).toHaveText(
-    'Description saved',
+    'File description saved',
   );
   await expect
     .poll(() => actionStates(page, sessionUuid))

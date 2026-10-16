@@ -122,6 +122,29 @@ export function readFamilyDescriptions(
   );
 }
 
+/**
+ * The descriptions of these library files, by file — an empty one for a
+ * file that has none yet; a file not in the library is left out.
+ */
+export function describeFiles(
+  assetUuids: readonly string[],
+): Map<string, string> {
+  const unique = [...new Set(assetUuids)];
+  if (!unique.length) return new Map();
+  const { rawDb } = THEI_SERVER.useDb();
+  const rows = rawDb
+    .prepare(
+      `SELECT a.assetUuid, coalesce(d.text, '') AS text FROM assets a
+        LEFT JOIN "asset-descriptions" d ON d.familyUuid = a.familyUuid
+        WHERE a.settings IS NOT NULL AND a.assetUuid IN (${unique.map(() => '?').join(',')})`,
+    )
+    .all(...unique) as { assetUuid: string; text: string }[];
+  const texts = new Map(rows.map((row) => [row.assetUuid, row.text]));
+  return new Map(
+    unique.flatMap((id) => (texts.has(id) ? [[id, texts.get(id)!]] : [])),
+  );
+}
+
 /** A file's description, read through its family; none for a file not there. */
 export function readAssetDescription(
   assetUuid: string,

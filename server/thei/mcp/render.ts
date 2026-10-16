@@ -61,6 +61,19 @@ export function renderEntity(view: McpEntityView): string {
         : ['_(none)_']),
     );
   }
+  if (view.files?.length) {
+    lines.push(
+      '',
+      '## Its files',
+      '',
+      'Each with its description, in the owner’s words: what the file shows or is about. read_file reads one with its places, look_at_file shows it.',
+      '',
+    );
+    for (const file of view.files)
+      lines.push(
+        `- ${file.id} — ${file.description ? file.description.replace(/\s+/g, ' ') : '(no description yet)'}`,
+      );
+  }
   if (view.linkedInText?.length) {
     lines.push('', '## Linked from its texts', '');
     for (const link of view.linkedInText)

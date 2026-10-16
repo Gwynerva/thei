@@ -980,6 +980,7 @@ function normalizeContentAsset(value: unknown): ContentAssetData | null {
   if (!assetUuid) return null;
   const archivedOriginal = normalizeArchivedOriginal(value.archivedOriginal);
   const audio = normalizeAudioDescriptor(value.audio);
+  const alt = optionalString(value.alt);
 
   return {
     assetUuid,
@@ -990,6 +991,8 @@ function normalizeContentAsset(value: unknown): ContentAssetData | null {
     ...(audio ? { audio } : {}),
     assetUrl: optionalString(value.assetUrl),
     ...(archivedOriginal ? { archivedOriginal } : {}),
+    // Hydrated only: a stored file is its id alone (`contentAssetIdentity`).
+    ...(alt ? { alt } : {}),
   };
 }
 
@@ -1006,6 +1009,7 @@ function normalizeMediaDescriptor(value: unknown): MediaDescriptor | undefined {
   if (!src || !previewSrc || (kind !== 'image' && kind !== 'video')) {
     return undefined;
   }
+  const alt = optionalString(value.alt);
   return {
     src,
     previewSrc,
@@ -1013,6 +1017,7 @@ function normalizeMediaDescriptor(value: unknown): MediaDescriptor | undefined {
     accent: normalizeImageAccent(value.accent),
     width: optionalNumber(value.width),
     height: optionalNumber(value.height),
+    ...(alt ? { alt } : {}),
   };
 }
 

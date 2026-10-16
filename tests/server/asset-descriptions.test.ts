@@ -32,7 +32,7 @@ import { freshTestDb } from '../helpers/fresh-db';
 import { serverRepositories } from '../helpers/server-repositories';
 
 /**
- * A file's description — «Расшифровка»: one for a family of files, saved over
+ * A file's description — «Описание файла»: one for a family of files, saved over
  * the version it was read at, gone with the last file of the family, found
  * by every search, proposed and taken back as an action, and read by an app
  * with the file's places.
@@ -471,6 +471,43 @@ describe('files over MCP', () => {
 
     const refused = await reader.get('look_at_file')!.call({ file: 'a-none' });
     expect(refused.isError).toBe(true);
+  });
+
+  it('tells a model reading an entity what each of its files is', async () => {
+    writeAssetDescription('a-photo', 'Grandmother at the dacha', {
+      expectedUpdatedAt: null,
+    });
+    insert('content', {
+      contentUuid: 'c-project',
+      ownerType: 'project',
+      ownerId: PROJECT,
+      slot: 'project-description',
+      data: {
+        blocks: [
+          { id: 'p', type: 'paragraph', data: { text: 'The summer.' } },
+          {
+            id: 'm',
+            type: 'contentMedia',
+            data: { layout: 'centered', asset: { assetUuid: 'a-photo' } },
+          },
+          {
+            id: 'f',
+            type: 'contentAttachment',
+            data: { title: 'Notes', asset: { assetUuid: 'a-notes' } },
+          },
+        ],
+      },
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const read = text(
+      await tools()
+        .get('read_entity')!
+        .call({ ref: `project:${PROJECT}` }),
+    );
+    expect(read).toContain('## Its files');
+    expect(read).toContain('- a-photo — Grandmother at the dacha');
+    expect(read).toContain('- a-notes — (no description yet)');
   });
 
   it('proposes a description, and an editor applies it', async () => {

@@ -42,11 +42,11 @@ card's own row of buttons. A text edit opens in the text's own editor instead.
 With AI off, or nothing proposed, there is no ✦ and the label is plain. See
 [AI in the UI](../patterns/ai-in-the-ui.md).
 
-A file's description («Расшифровка») is the one field of a file
-(`app/components/FileDescriptionField.vue`): it stands in every window of a
-file once the file is in the library, and is saved on its own — a button
-under it, or Ctrl+Enter — since it belongs to the file and its variants, not
-to the place the window was opened from. What an AI proposes for it waits at
+A file's description («Описание файла», "File description") is the one
+field of a file (`app/components/FileDescriptionField.vue`): it stands in
+every window of a file once the file is in the library, and is saved on its
+own — a button under it, or Ctrl+Enter — since it belongs to the file and its
+variants, not to the place the window was opened from. What an AI proposes for it waits at
 its label as for an entity's field (`provideFileAi`), its new words compared
 with the old.
 

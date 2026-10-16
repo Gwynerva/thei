@@ -183,7 +183,8 @@ defineExpose({ play, pause });
           :poster="videoPoster"
           :width
           :height
-          :alt
+          :alt="kind === 'video' ? undefined : alt"
+          :aria-label="kind === 'video' ? alt || undefined : undefined"
           :muted="
             kind === 'video'
               ? muted || playback === 'autoplay' || playback === 'interaction'
