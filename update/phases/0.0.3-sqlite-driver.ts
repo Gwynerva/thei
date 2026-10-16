@@ -1,6 +1,6 @@
-import { readlinkSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 import { resolveUpdateText } from '../text';
+import { siteNode } from './site-node';
 import { defineUpdatePhase } from './types';
 
 /**
@@ -18,22 +18,6 @@ import { defineUpdatePhase } from './types';
  * or arm64. On an older server this phase fails, so the update stops before
  * the build and the site goes on as it was.
  */
-
-/**
- * The Node that runs the site: the process that started this runner, which
- * is the update engine inside the service. `node` on the service's PATH is
- * the same one on any server the installer set up.
- */
-function siteNode(): string {
-  try {
-    const parent = readlinkSync(`/proc/${process.ppid}/exe`);
-    if (basename(parent).startsWith('node')) return parent;
-  } catch {
-    // No /proc: not Linux, where the question does not come up this way.
-  }
-  return 'node';
-}
-
 export default defineUpdatePhase({
   id: '0.0.3/001-sqlite-driver',
   version: '0.0.3',

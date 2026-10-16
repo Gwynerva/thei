@@ -1,5 +1,6 @@
 import type { TheiUpdatePhase } from './types';
 import sqliteDriver from './0.0.3-sqlite-driver';
+import nodeVersion from './0.0.6-node-version';
 
 /**
  * Every scripted update phase Thei ships, oldest first.
@@ -9,4 +10,7 @@ import sqliteDriver from './0.0.3-sqlite-driver';
  * here. An update runs, in this order, every phase whose version is newer than
  * the installed one and not newer than the version being installed.
  */
-export const updatePhaseRegistry: TheiUpdatePhase[] = [sqliteDriver];
+export const updatePhaseRegistry: TheiUpdatePhase[] = [
+  sqliteDriver,
+  nodeVersion,
+];
