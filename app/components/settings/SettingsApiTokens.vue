@@ -296,14 +296,12 @@ async function create() {
       :anchor="addButton?.element ?? null"
       placement="bottom-end"
       max-width="24rem"
+      density="card"
+      complex
       @opened="labelInput?.focus()"
       @closed="addButton?.focus?.()"
     >
-      <form
-        class="flex flex-col gap-sm rounded-normal border border-border-1
-          bg-bg-2 p-sm"
-        @submit.prevent="create"
-      >
+      <form class="flex flex-col gap-sm" @submit.prevent="create">
         <Field>
           <FieldLabel class="text-sm" required>{{
             phrase.api_token_label

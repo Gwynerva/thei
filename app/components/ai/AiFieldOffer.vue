@@ -20,9 +20,17 @@ const offers = computed(() =>
 
 /** The proposal shown, of several. */
 const index = ref(0);
-const shown = computed(
+const current = computed(
   () => offers.value[Math.min(index.value, offers.value.length - 1)],
 );
+/**
+ * The last one decided stays in the popup while it goes, and the ✦ with it:
+ * a popup taken away with its anchor would vanish rather than close.
+ */
+const kept = shallowRef<typeof current.value>();
+watch(current, (offer) => offer && (kept.value = offer), { immediate: true });
+const shown = computed(() => current.value ?? kept.value);
+const closing = ref(false);
 function page(step: -1 | 1) {
   const count = offers.value.length;
   index.value = (index.value + step + count) % count;
@@ -70,8 +78,10 @@ watch(open, (now) => {
 watch(
   () => offers.value.length,
   (count) => {
-    if (!count) open.value = false;
-    else if (index.value >= count) index.value = count - 1;
+    if (!count) {
+      closing.value = open.value;
+      open.value = false;
+    } else if (index.value >= count) index.value = count - 1;
   },
 );
 onBeforeUnmount(() => clearTimeout(timer));
@@ -81,7 +91,7 @@ const decisions = {};
 </script>
 
 <template>
-  <template v-if="ai && offers.length">
+  <template v-if="ai && (offers.length || closing)">
     <button
       ref="button"
       v-bind="$attrs"
@@ -89,7 +99,8 @@ const decisions = {};
       class="relative -top-px inline-flex h-6 min-w-6 cursor-pointer
         items-center justify-center gap-0.5 rounded-full px-1 align-middle
         text-sm text-accent transition-colors pointer-coarse:-my-2.5
-        pointer-coarse:h-11 pointer-coarse:min-w-11 hocus:bg-bg-accent"
+        pointer-coarse:h-11 pointer-coarse:min-w-11 popup-open:bg-bg-accent
+        hocus:bg-bg-accent"
       :aria-label="phrase.ai_field_offers(offers.length)"
       aria-haspopup="dialog"
       :aria-expanded="open"
@@ -104,19 +115,15 @@ const decisions = {};
       }}</span>
     </button>
     <FloatingPopup
-      v-if="open"
       v-model:open="open"
       :anchor="button ?? null"
       placement="bottom-start"
       max-width="26rem"
       @pointerenter="entered"
       @pointerleave="left"
+      @closed="closing = false"
     >
-      <div
-        class="@container overflow-hidden rounded-normal border border-border-1
-          bg-bg-2"
-        :data-ai-offers="place"
-      >
+      <div class="@container" :data-ai-offers="place">
         <AiActionRow
           v-if="shown"
           :key="shown.action.actionUuid"

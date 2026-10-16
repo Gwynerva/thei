@@ -98,13 +98,10 @@ async function save() {
     :anchor
     placement="bottom-end"
     max-width="22rem"
+    density="card"
+    complex
   >
-    <form
-      class="flex flex-col gap-sm rounded-normal border border-border-1 bg-bg-2
-        p-sm"
-      data-term-popup
-      @submit.prevent="save"
-    >
+    <form class="flex flex-col gap-sm" data-term-popup @submit.prevent="save">
       <Field>
         <FieldLabel class="text-sm" required>{{
           phrase.ai_memory_term_word

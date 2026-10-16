@@ -78,6 +78,12 @@ const projectData = ref<ProjectEditData>({
   ...emptyStatusEditData(),
 });
 provide(projectDataInjectionKey, projectData);
+const synonymsModel = computed({
+  get: () => projectData.value.synonyms ?? [],
+  set: (value: string[]) => {
+    projectData.value.synonyms = value;
+  },
+});
 const savedProjectData = ref<ProjectEditData>(
   cloneProjectData(projectData.value),
 );
@@ -535,5 +541,13 @@ async function openDeleteProjectModal() {
       v-model:notes="notesModel"
       @notes-saved="saveAfterContentEdit()"
     />
+    <!-- The other names: the least needed setting, so the last one. -->
+    <Box class="p-sm sm:p-md">
+      <FieldSynonyms
+        v-model="synonymsModel"
+        ai="field:synonyms"
+        :title="projectData.title"
+      />
+    </Box>
   </div>
 </template>

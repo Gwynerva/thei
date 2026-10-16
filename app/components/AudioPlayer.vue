@@ -61,14 +61,9 @@ function onScrub(time: number | null) {
   }
 }
 const rateLabel = computed(() => `${rate.value}×`);
-/**
- * A page's address already ends in the file's name; the library's does not,
- * and a download from there would be saved as "content".
- */
-const downloadName = computed(() =>
-  /\.[a-z0-9]+$/i.test(props.src) || !props.extension
-    ? ''
-    : `audio.${props.extension}`,
+/** A page's address names the file; the library's does not. */
+const savedName = computed(() =>
+  downloadName(props.src, props.extension ?? '', 'audio'),
 );
 </script>
 
@@ -150,7 +145,7 @@ const downloadName = computed(() =>
       <a
         v-if="download"
         :href="sitePath(src)"
-        :download="downloadName"
+        :download="savedName"
         data-drag-ignore
         class="flex items-center rounded-sm p-0.5 text-base transition
           outline-none focus-visible:ring-2 focus-visible:ring-accent

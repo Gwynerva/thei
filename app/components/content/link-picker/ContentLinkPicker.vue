@@ -697,6 +697,8 @@ defineExpose({
     level.value === 'search'
       ? field.value?.focus({ preventScroll: true })
       : place.value?.focus(),
+  /** What was typed in the search, as typed. */
+  query: () => search.query.value,
 });
 
 const entityTitle = computed(() =>
@@ -712,8 +714,7 @@ const queryLine = computed(() => {
   <section
     ref="root"
     class="flex max-h-(--floating-popup-available-height) min-h-0 flex-col
-      gap-xs overflow-hidden rounded-normal border border-border-1 bg-bg-2 p-xs
-      text-text-1"
+      gap-xs overflow-hidden p-xs text-text-1"
     role="dialog"
     :aria-label="phrase.content_link"
     :data-link-picker="mode"

@@ -12,6 +12,7 @@ export default defineNuxtConfig({
         'ambient-regression',
         'asset-regression',
         'press-hint-regression',
+        'file-preview-regression',
       ]) {
         pages.push({
           name,

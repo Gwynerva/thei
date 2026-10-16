@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
-import { AssetType, assetMetaDimensions } from '#layers/thei/shared/asset';
+import {
+  archivedOriginalFromMeta,
+  AssetType,
+  assetMetaDimensions,
+} from '#layers/thei/shared/asset';
 import { describeAssetRecipe } from '#layers/thei/shared/asset-recipe';
 import {
   assetSourceKey,
@@ -19,6 +23,8 @@ import AssetModalButton from '../asset-modal/AssetModalButton.vue';
 import AssetModalPreviewAudio from '../asset-modal/AssetModalPreviewAudio.vue';
 import AssetModalPreviewMedia from '../asset-modal/AssetModalPreviewMedia.vue';
 import AssetModalFileInfo from '../asset-modal/AssetModalFileInfo.vue';
+import FilePreviewContent from '#layers/thei/app/components/file-preview/FilePreviewContent.vue';
+import { isAssetExtensionSafeInline } from '#layers/thei/shared/assets/formats';
 import { errorMessage } from '#layers/thei/app/composables/upload-draft';
 const props = defineProps<{
   modalData: {
@@ -69,6 +75,14 @@ async function refreshPreview() {
   }
 }
 const dimensions = computed(() => assetMetaDimensions(asset.value.meta));
+/** A browser opens the file in a tab of its own; any other is downloaded. */
+const opensInTab = computed(
+  () =>
+    !!asset.value.media || isAssetExtensionSafeInline(asset.value.extension),
+);
+const archivedOriginal = computed(() =>
+  archivedOriginalFromMeta(asset.value.meta),
+);
 const recipe = computed(() =>
   describeAssetRecipe(asset.value.settings, asset.value.meta, phrase.value),
 );
@@ -111,21 +125,34 @@ const usageGroups = computed(() => {
           },
         ]"
       />
-      <FilePreview
+      <FilePreviewContent
         v-else
+        :key="asset.assetUuid"
+        :src="asset.assetUrl"
         :extension="asset.extension"
-        class="w-1/2 max-w-132 text-text-2"
+        :size="asset.size"
+        :archived-original="archivedOriginal"
+        :title="assetFileLabel(asset)"
       />
     </template>
     <template #buttons>
       <AssetModalButton
-        v-if="asset.assetUrl"
+        v-if="asset.assetUrl && opensInTab"
         icon="arrow-outward"
         target="_blank"
         rel="noopener"
         :href="sitePath(asset.assetUrl)"
         :data-title-popup="phrase.direct_link_to_asset"
         :aria-label="phrase.direct_link_to_asset"
+      />
+      <AssetModalButton
+        v-if="asset.assetUrl && !asset.media"
+        icon="download"
+        :download="downloadName(asset.assetUrl, asset.extension)"
+        :href="sitePath(asset.assetUrl)"
+        :data-title-popup="phrase.download_asset"
+        :aria-label="phrase.download_asset"
+        data-asset-download
       />
       <AssetModalButton
         v-if="asset.type === AssetType.Video"
@@ -152,11 +179,7 @@ const usageGroups = computed(() => {
           "
           :channels="audioMeta?.channels"
           :bitrate="audioMeta?.bitrate"
-          :archived-original="
-            asset.meta && 'archivedOriginal' in asset.meta
-              ? asset.meta.archivedOriginal
-              : undefined
-          "
+          :archived-original="archivedOriginal"
         />
         <p v-if="refreshError" class="text-text-error" role="alert">
           {{ refreshError }}

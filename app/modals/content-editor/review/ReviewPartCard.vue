@@ -40,11 +40,7 @@ function send(text: string) {
 </script>
 
 <template>
-  <div
-    class="flex flex-col gap-2.5 rounded-normal border border-border-1 bg-bg-2
-      p-sm shadow-lg shadow-shadow-1"
-    :data-review-card="part.id"
-  >
+  <div class="flex flex-col gap-xs" :data-review-card="part.id">
     <div class="flex flex-wrap items-center gap-1.5">
       <span
         class="inline-flex h-6 items-center gap-1 rounded-full px-2 text-xs

@@ -1,18 +1,23 @@
 <script lang="ts" setup>
-import {
-  useFloating,
-  offset,
-  flip,
-  shift,
-  size,
-  hide,
-  autoUpdate,
-} from '@floating-ui/vue';
 import { isTitlePopupGap } from '#layers/thei/app/composables/title-popup-content';
+import {
+  POPUP_ARROW_SIZE,
+  POPUP_ARROW_TIP,
+  POPUP_GAP,
+  POPUP_VIEWPORT_PADDING,
+  usePopupPlacement,
+} from '#layers/thei/app/composables/popup-placement';
 
+/**
+ * The hint of the site: a small dark label by what it explains, with an
+ * arrow at it, placed as every popup is (`usePopupPlacement`). Under a
+ * pointer it hangs below; a finger would cover it there, so a hint a finger
+ * opened sits above. It points, and takes no pointer and no focus.
+ */
 const { anchor, lines, visible, popupClass, placement } = useTitlePopup();
 
 const floatingEl = ref<HTMLElement>();
+const arrowEl = ref<HTMLElement>();
 
 const teleportTarget = computed<string | HTMLElement>(
   () => anchor.value?.closest('dialog') ?? 'body',
@@ -21,65 +26,84 @@ const teleportTarget = computed<string | HTMLElement>(
 const hasText = computed(() =>
   lines.value.some((line) => !isTitlePopupGap(line) && line.spans.length),
 );
+const shown = computed(() => visible.value && hasText.value);
 
-/** Keeps clear of the viewport edge, like a native tooltip. */
-const EDGE_PADDING = 8;
-
-// `fixed` keeps the popup out of the document flow: an absolutely positioned
-// popup near the page edge would grow the page and bring scrollbars with it.
-// Under a pointer it hangs below; a finger would cover it there, so a hint a
-// finger opened sits above.
-const { floatingStyles, middlewareData } = useFloating(anchor, floatingEl, {
-  strategy: 'fixed',
-  placement,
-  middleware: [
-    offset(6),
-    flip({ padding: EDGE_PADDING }),
-    shift({ padding: EDGE_PADDING }),
+const { floatingStyles, side, hidden, arrowStyle, origin } = usePopupPlacement(
+  anchor,
+  floatingEl,
+  arrowEl,
+  {
+    open: shown,
+    placement,
+    gap: POPUP_GAP,
+    padding: POPUP_VIEWPORT_PADDING,
+    arrowSize: POPUP_ARROW_SIZE.hint,
+    border: 0,
     // Too much text for the room left: cut at the edge rather than spill out.
-    size({
-      padding: EDGE_PADDING,
-      apply({ availableWidth, availableHeight, elements }) {
-        Object.assign(elements.floating.style, {
-          maxWidth: `min(18.75rem, ${Math.max(0, availableWidth)}px)`,
-          maxHeight: `${Math.max(0, availableHeight)}px`,
-        });
-      },
-    }),
-    hide(),
-  ],
-  whileElementsMounted: autoUpdate,
-});
-
-const hidden = computed(() => middlewareData.value.hide?.referenceHidden);
+    onRoom: (room, element) => {
+      Object.assign(element.style, {
+        maxWidth: `min(18.75rem, ${room.width}px)`,
+        maxHeight: `${room.height}px`,
+      });
+      element.style.setProperty('--hint-room', `${room.height}px`);
+    },
+  },
+);
 </script>
 
 <template>
   <Teleport :to="teleportTarget">
-    <TransitionFade>
+    <Transition
+      enter-from-class="scale-95 opacity-0 motion-reduce:scale-100"
+      enter-active-class="transition-[opacity,scale] motion-reduce:duration-0"
+      leave-to-class="scale-95 opacity-0 motion-reduce:scale-100"
+      leave-active-class="transition-[opacity,scale] motion-reduce:duration-0"
+    >
       <div
-        v-if="visible && hasText"
+        v-if="shown"
         ref="floatingEl"
         role="tooltip"
         data-title-popup-el
-        :style="[floatingStyles, hidden ? { visibility: 'hidden' } : {}]"
+        :data-popup-side="side"
+        :style="[
+          floatingStyles,
+          { transformOrigin: origin },
+          hidden ? { visibility: 'hidden' } : {},
+        ]"
         :class="popupClass || undefined"
-        class="pointer-events-none z-9999 w-max max-w-75 overflow-hidden rounded
-          bg-bw-reverse px-2 py-1 text-xs font-normal wrap-break-word text-bw
-          shadow-md"
+        class="pointer-events-none z-9999 w-max max-w-75 rounded bg-bw-reverse
+          px-2 py-1 text-xs font-normal wrap-break-word text-bw shadow-hint"
       >
-        <template v-for="(line, index) in lines" :key="index">
-          <div v-if="isTitlePopupGap(line)" class="h-1.5" aria-hidden="true" />
-          <div v-else :class="line.clamp && 'line-clamp-3'">
-            <span
-              v-for="(span, spanIndex) in line.spans"
-              :key="spanIndex"
-              :class="[span.italic && 'italic', span.bold && 'font-semibold']"
-              >{{ span.text }}</span
-            >
-          </div>
-        </template>
+        <!-- Its lines are cut inside the label's padding: the label itself
+             may not clip, or its arrow would go with what it cuts. -->
+        <div
+          class="max-h-[calc(var(--hint-room,100dvh)-0.5rem)] overflow-hidden"
+        >
+          <template v-for="(line, index) in lines" :key="index">
+            <div
+              v-if="isTitlePopupGap(line)"
+              class="h-1.5"
+              aria-hidden="true"
+            />
+            <div v-else :class="line.clamp && 'line-clamp-3'">
+              <span
+                v-for="(span, spanIndex) in line.spans"
+                :key="spanIndex"
+                :class="[span.italic && 'italic', span.bold && 'font-semibold']"
+                >{{ span.text }}</span
+              >
+            </div>
+          </template>
+        </div>
+        <span
+          ref="arrowEl"
+          class="absolute rotate-45 bg-bw-reverse"
+          :class="POPUP_ARROW_TIP[side]"
+          :style="arrowStyle"
+          aria-hidden="true"
+          data-popup-arrow
+        ></span>
       </div>
-    </TransitionFade>
+    </Transition>
   </Teleport>
 </template>

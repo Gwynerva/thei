@@ -121,6 +121,13 @@ export interface OtherAssetMeta extends AssetMetaBase {
   archivedOriginal?: ArchivedOriginalFileMeta;
 }
 
+/** The file a variant keeps zipped, as its meta tells it, if it is one. */
+export function archivedOriginalFromMeta(
+  meta: AssetMeta | null | undefined,
+): ArchivedOriginalFileMeta | undefined {
+  return meta && 'archivedOriginal' in meta ? meta.archivedOriginal : undefined;
+}
+
 export type AssetMeta =
   ImageAssetMeta | VideoAssetMeta | AudioAssetMeta | OtherAssetMeta;
 

@@ -124,22 +124,20 @@ const triggerClass = computed(() => {
       :anchor="anchor"
       :placement="variant === 'header' ? 'bottom-start' : 'bottom-end'"
       max-width="16rem"
+      density="list"
     >
       <section
-        class="flex flex-col gap-1 rounded-normal border border-border-1 bg-bg-2
-          p-xs text-left text-text-1"
+        class="flex flex-col gap-0.5 text-left"
         role="dialog"
         :aria-label="phrase.life_filter"
       >
         <button
           type="button"
-          class="flex cursor-pointer items-center gap-sm rounded-sm px-xs py-1
-            text-left text-sm transition"
-          :class="
-            isCustom
-              ? 'hocus:bg-bg-3'
-              : 'bg-accent/10 font-semibold text-accent'
-          "
+          class="flex popup-item items-center"
+          :class="{
+            [`bg-accent/10 font-semibold text-accent
+            [--popup-item-hover:var(--color-bg-accent)]`]: !isCustom,
+          }"
           :aria-pressed="!isCustom"
           @click="showAll"
         >
@@ -147,17 +145,15 @@ const triggerClass = computed(() => {
             phrase.life_filter_all
           }}</span>
         </button>
-        <hr class="my-1 border-border-1" />
+        <hr class="my-0.5 border-border-1" />
         <label
           v-for="kind in kinds"
           :key="kind"
-          class="flex items-center gap-sm rounded-sm px-xs py-1 text-sm
-            transition"
-          :class="
-            isOffered(kind)
-              ? 'cursor-pointer hocus:bg-bg-3'
-              : 'cursor-not-allowed opacity-40'
-          "
+          class="flex popup-item items-center"
+          :class="{
+            'cursor-not-allowed opacity-40 [--popup-item-hover:transparent]':
+              !isOffered(kind),
+          }"
         >
           <input
             type="checkbox"

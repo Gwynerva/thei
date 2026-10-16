@@ -303,7 +303,8 @@ function remove() {
           :anchor="entityAnchor"
           placement="bottom-start"
           :fallback-placements="['top-start']"
-          max-width="26rem"
+          max-width="max(26rem, var(--floating-popup-anchor-width, 0px))"
+          complex
           @opened="entitySearch?.focus()"
         >
           <ContentEntitySearchPopup

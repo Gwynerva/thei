@@ -188,7 +188,7 @@ export default defineEventHandler(async (event) => {
 
       const route = closedSiteRoute(path);
       if (route === 'unavailable') {
-        setHeader(event, 'Retry-After', String(CLOSED_SITE_RETRY_AFTER));
+        setHeader(event, 'Retry-After', CLOSED_SITE_RETRY_AFTER);
         throw createError({
           statusCode: 503,
           statusMessage: 'Thei is updating',

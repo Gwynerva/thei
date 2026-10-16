@@ -90,8 +90,7 @@ defineExpose({ focus: () => input.value?.focus({ preventScroll: true }) });
 <template>
   <section
     class="flex max-h-(--floating-popup-available-height) min-h-0 flex-col
-      gap-xs overflow-hidden rounded-normal border border-border-1 bg-bg-2 p-xs
-      text-text-1"
+      gap-xs overflow-hidden p-xs text-text-1"
     role="dialog"
   >
     <div class="relative">

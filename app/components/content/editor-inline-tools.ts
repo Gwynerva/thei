@@ -4,7 +4,6 @@ import type {
   InlineToolConstructorOptions,
 } from '@editorjs/editorjs';
 import type { MenuConfig } from '@editorjs/editorjs/types/tools/menu-config';
-import type { VirtualElement } from '@floating-ui/vue';
 import {
   contentEntityReference,
   contentInlineLinkSanitizeConfig,
@@ -19,18 +18,15 @@ import {
   applyLinkAttributes,
   unwrapNestedLinks,
   type InlineLinkAttributes,
+  highlightWords,
 } from './editor-inline-link-dom';
 import {
   insertInlineElement,
   placeCaretAfter,
   unlinkElement,
 } from './editor-edit-commands';
-import {
-  copyInlineLinkRect,
-  inlineLinkPopupAnchorRect,
-  translateInlineLinkRect,
-  trimCurrentInlineSelection,
-} from './editor-inline-selection';
+import { rangeAnchor } from '#layers/thei/app/composables/popup-placement';
+import { trimCurrentInlineSelection } from './editor-inline-selection';
 
 export class ContentBoldTool implements InlineTool {
   static isInline = true as const;
@@ -168,12 +164,22 @@ abstract class ContentInlineMarkupTool<
       .replace(/\s+/g, ' ')
       .trim();
 
-    const anchor = createInlineLinkAnchor(trigger);
     // Shown as a highlight, not written into the text: Editor.js's own
     // "fake background" is an editing command, two steps Ctrl+Z would undo.
     const selection = window.getSelection();
-    if (selection?.rangeCount)
-      showPendingSelection(selection.getRangeAt(0).cloneRange());
+    const selected = selection?.rangeCount
+      ? selection.getRangeAt(0).cloneRange()
+      : document.createRange();
+    showPendingSelection(selected);
+    // The popup points at the words, or at the whole of the link or hint they
+    // are in — never at an element of the text, which the mark of an open
+    // popup's anchor would change.
+    const words = this.existing ? document.createRange() : selected;
+    if (this.existing) words.selectNodeContents(this.existing);
+    const anchor = rangeAnchor(
+      words,
+      trigger.closest<HTMLElement>('.content-editor') ?? trigger,
+    );
     this.options.api.selection.save();
     this.highlighted = true;
     const request = this.createRequest({
@@ -337,48 +343,13 @@ export class ContentLinkTool extends ContentInlineMarkupTool<ContentInlineLinkRe
   }
 }
 
+/** The words a popup is about, marked while it is open. */
 const PENDING_HIGHLIGHT = 'content-editor-pending';
-
-/** Marks the words a popup is about, without touching the text. */
-function showPendingSelection(range: Range) {
-  if (typeof CSS === 'undefined' || !('highlights' in CSS)) return;
-  CSS.highlights.set(PENDING_HIGHLIGHT, new Highlight(range));
-}
-
-function clearPendingSelection() {
-  if (typeof CSS === 'undefined' || !('highlights' in CSS)) return;
-  CSS.highlights.delete(PENDING_HIGHLIGHT);
-}
+const showPendingSelection = (range: Range) =>
+  highlightWords(PENDING_HIGHLIGHT, range);
+const clearPendingSelection = () => highlightWords(PENDING_HIGHLIGHT);
 
 function runInlineCommand(command: string) {
   if (!trimCurrentInlineSelection()) return;
   document.execCommand(command);
-}
-
-function createInlineLinkAnchor(trigger: HTMLElement): VirtualElement {
-  const toolbar = trigger.closest<HTMLElement>('.ce-inline-toolbar') ?? trigger;
-  const popupAnchorRect = inlineLinkPopupAnchorRect(
-    copyInlineLinkRect(toolbar.getBoundingClientRect()),
-  );
-  const tracker = trigger.closest<HTMLElement>('.content-editor') ?? trigger;
-  const trackerRect = copyInlineLinkRect(tracker.getBoundingClientRect());
-  const contextElement =
-    trigger.closest<HTMLElement>('.content-editor') ?? tracker;
-
-  return {
-    contextElement,
-    getBoundingClientRect: () =>
-      translateInlineLinkRect(
-        popupAnchorRect,
-        trackerRect,
-        tracker.getBoundingClientRect(),
-      ),
-    getClientRects: () => [
-      translateInlineLinkRect(
-        popupAnchorRect,
-        trackerRect,
-        tracker.getBoundingClientRect(),
-      ),
-    ],
-  };
 }

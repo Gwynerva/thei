@@ -238,8 +238,16 @@ const sessionPath = computed(() =>
 
 // ---- Comment -------------------------------------------------------------------
 
-const commentButton = ref<HTMLElement>();
+/** The comment button itself, which its popup points at and marks open. */
+const commentTrigger = useTemplateRef<{ $el: HTMLElement }>('commentTrigger');
+const commentButton = computed(() => commentTrigger.value?.$el);
 const commenting = ref(false);
+/**
+ * The comment's popup, mounted once first asked for: a list of proposals
+ * needs no popup per row until then, and keeps it to close it.
+ */
+const commentMounted = ref(false);
+watch(commenting, (now) => now && (commentMounted.value = true));
 const commentAbout = computed(() =>
   phrase.value.ai_comment_on(actionLabel(props.action)),
 );
@@ -354,8 +362,9 @@ function sendComment(text: string) {
         >
           <Icon name="chevron-right" />
         </Button>
-        <span v-else ref="commentButton" class="inline-flex">
+        <span v-else class="inline-flex">
           <Button
+            ref="commentTrigger"
             variant="secondary"
             size="icon-sm"
             class="pointer-coarse:size-11"
@@ -656,23 +665,21 @@ function sendComment(text: string) {
         @send="sendComment"
       />
     </div>
+    <!-- Kept in the page while closed, so it closes as it opened. -->
     <FloatingPopup
-      v-else-if="commenting"
-      v-model:open="commenting"
+      v-if="commentMounted && !inlineComment"
+      :open="commenting"
       :anchor="commentButton ?? null"
       max-width="22rem"
       placement="bottom-end"
+      complex
+      @update:open="commenting = $event"
     >
-      <div
-        class="rounded-normal border border-border-1 bg-bg-2 shadow-md
-          shadow-shadow-1"
-      >
-        <AiCommentBox
-          :about="commentAbout"
-          about-icon="comment"
-          @send="sendComment"
-        />
-      </div>
+      <AiCommentBox
+        :about="commentAbout"
+        about-icon="comment"
+        @send="sendComment"
+      />
     </FloatingPopup>
   </div>
 </template>

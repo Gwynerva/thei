@@ -604,3 +604,251 @@ test('a link block left without a choice is not kept', async ({ page }) => {
     .poll(async () => JSON.stringify(await stored(['paragraph'])))
     .toContain('Still.');
 });
+
+// ---- A link made while typing, and leaving the markup of words -------------
+
+const atHighlighted = (page: Page) =>
+  page.evaluate(() => CSS.highlights.has('content-editor-at'));
+const pickerPopup = (page: Page) =>
+  page
+    .locator('[data-floating-popup]')
+    .filter({ has: page.locator('[data-link-picker]') });
+
+test('an @ standing alone opens the picker at it, and the link it makes is typed over', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const project = await createProject(page);
+  const { save, stored } = await openEditor(page, 'We went');
+  await paragraph(page).click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' @');
+  await expect(field(page)).toBeFocused();
+  expect(await atHighlighted(page)).toBe(true);
+  await expectPopupUsable(page, pickerPopup(page));
+
+  await field(page).fill(project.title);
+  await expect(picker(page).locator('[role="option"]').first()).toContainText(
+    project.title,
+  );
+  await page.keyboard.press('Enter');
+  await expect(apply(page)).toBeFocused();
+  await page.keyboard.press('Enter');
+
+  // The @ is the link now, named after what it leads to, the name selected.
+  const link = paragraph(page).locator('a[data-content-link="entity"]');
+  await expect(link).toHaveText(project.title);
+  await expect(link).toHaveAttribute('data-entity-id', project.projectUuid);
+  expect(await page.evaluate(() => getSelection()!.toString())).toBe(
+    project.title,
+  );
+  expect(await atHighlighted(page)).toBe(false);
+  // Editor.js's own toolbar stays away from that selection.
+  await page.waitForTimeout(400);
+  await expect(
+    page.locator('.ce-inline-toolbar .ce-popover--opened'),
+  ).toHaveCount(0);
+
+  // Typed over, the words change and the link stays.
+  await page.keyboard.type('the trip');
+  await expect(link).toHaveText('the trip');
+  // → steps out of it; what follows is no part of the link.
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.type(' together');
+  await expect(link).toHaveText('the trip');
+  await expect(paragraph(page)).toHaveText('We went the trip together');
+
+  await save.click();
+  await expect(save).toHaveText('Saved');
+  const [block] = await stored(['paragraph']);
+  expect(block!.data.text).toContain('>the trip</a> together');
+
+  // Back step by step — the words after, the link's own letter by letter,
+  // the link — to the @ as typed, and never past a step into nonsense.
+  const seen: string[] = [];
+  // A space typed at the end of a line is the browser's no-break one.
+  const nbsp = String.fromCharCode(160);
+  for (let step = 0; step < 16; step++) {
+    const text = ((await paragraph(page).textContent()) ?? '')
+      .split(nbsp)
+      .join(' ');
+    seen.push(text);
+    if (text === 'We went @') break;
+    await page.keyboard.press('Control+z');
+  }
+  expect(seen.at(-1)).toBe('We went @');
+  expect(seen).toContain('We went the trip');
+  expect(seen).toContain(`We went ${project.title}`);
+  await expect(link).toHaveCount(0);
+});
+
+test('a space after a link the @ made keeps its name, and a composed word goes into it', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const project = await createProject(page);
+  await openEditor(page, 'We went');
+  const nbsp = String.fromCharCode(160);
+  const words = async () =>
+    ((await paragraph(page).textContent()) ?? '').split(nbsp).join(' ');
+
+  async function pick() {
+    await page.keyboard.type(' @');
+    await expect(field(page)).toBeFocused();
+    await field(page).fill(project.title);
+    await expect(picker(page).locator('[role="option"]').first()).toContainText(
+      project.title,
+    );
+    await page.keyboard.press('Enter');
+    await expect(apply(page)).toBeFocused();
+    await page.keyboard.press('Enter');
+  }
+
+  await paragraph(page).click();
+  await page.keyboard.press('End');
+  await pick();
+  const links = paragraph(page).locator('a[data-content-link="entity"]');
+  await expect(links.first()).toHaveText(project.title);
+  // A space accepts the name: it is typed after the link, and so is what
+  // follows it.
+  await page.keyboard.type(' by boat');
+  await expect(links.first()).toHaveText(project.title);
+  expect(await words()).toBe(`We went ${project.title} by boat`);
+
+  // A word a phone's keyboard composes over the selected name replaces it,
+  // and the link stays.
+  await pick();
+  await expect(links).toHaveCount(2);
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.imeSetComposition', {
+    text: 'по',
+    selectionStart: 2,
+    selectionEnd: 2,
+  });
+  await cdp.send('Input.imeSetComposition', {
+    text: 'поход',
+    selectionStart: 5,
+    selectionEnd: 5,
+  });
+  await cdp.send('Input.insertText', { text: 'поход' });
+  await expect(links).toHaveCount(2);
+  await expect(links.nth(1)).toHaveText('поход');
+});
+
+test('an @ beside a letter is only typed, and one given up keeps what was typed after it', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await openEditor(page, 'Write to');
+  await paragraph(page).click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' me@home');
+  await expect(picker(page)).toHaveCount(0);
+  // Right before a word, too.
+  await page.keyboard.press('Home');
+  await page.keyboard.type('@');
+  await expect(picker(page)).toHaveCount(0);
+
+  // Given up with Escape: the @ and the search, as if typed in the text.
+  await page.keyboard.press('End');
+  await page.keyboard.type(' @');
+  await expect(field(page)).toBeFocused();
+  await expectPopupUsable(page, pickerPopup(page));
+  await page.keyboard.type('gwy');
+  await page.keyboard.press('Escape');
+  await expect(picker(page)).toHaveCount(0);
+  expect(await atHighlighted(page)).toBe(false);
+  await expect(paragraph(page)).toHaveText('@Write to me@home @gwy');
+  // The caret stands after it, and typing goes on there.
+  await page.keyboard.type('nerva');
+  await expect(paragraph(page)).toHaveText('@Write to me@home @gwynerva');
+
+  // Given up by a tap elsewhere in the text — on a phone the picker is a
+  // sheet, and the tap lands on the shade over the text: the same.
+  await page.keyboard.type(' @');
+  await expect(field(page)).toBeFocused();
+  await page.keyboard.type('x');
+  const text = (await paragraph(page).boundingBox())!;
+  await page.mouse.click(text.x + 4, text.y + 4);
+  await expect(picker(page)).toHaveCount(0);
+  await expect(paragraph(page)).toHaveText('@Write to me@home @gwynerva @x');
+});
+
+/** The caret at an offset of the first text inside `selector`. */
+async function caretIn(page: Page, selector: string, offset: 'start' | 'end') {
+  await page.evaluate(
+    ({ selector, offset }) => {
+      const element = document.querySelector(selector)!;
+      const text = element.firstChild as Text;
+      const range = document.createRange();
+      range.setStart(text, offset === 'start' ? 0 : text.data.length);
+      range.collapse(true);
+      (element.closest('[contenteditable="true"]') as HTMLElement).focus();
+      const selection = getSelection()!;
+      selection.removeAllRanges();
+      selection.addRange(range);
+    },
+    { selector, offset },
+  );
+}
+
+test('→ at the last letter of bold or a hint steps out of it, ← at its first, as one step back', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const { save, stored } = await openEditor(
+    page,
+    'A <abbr data-content-hint="what it is">hint</abbr> and <b>bold</b>',
+  );
+  const bold = paragraph(page).locator('b');
+  const hint = paragraph(page).locator('abbr');
+  await paragraph(page).click();
+  await page.keyboard.press('End');
+  // The browser would type into the bold here; → steps out first.
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.type('!?');
+  await expect(bold).toHaveText('bold');
+  await expect(paragraph(page)).toHaveText('A hint and bold!?');
+  // The letters typed outside come back off; the bold stays as it was.
+  await page.keyboard.press('Control+z');
+  await expect(bold).toHaveText('bold');
+  await expect(paragraph(page)).not.toContainText('!?');
+
+  await caretIn(page, 'dialog .ce-paragraph abbr', 'start');
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.type('«');
+  await expect(hint).toHaveText('hint');
+  await expect(paragraph(page)).toContainText('A «hint');
+
+  // A word a phone's keyboard composes is moved out when it is done.
+  await caretIn(page, 'dialog .ce-paragraph b', 'end');
+  await page.keyboard.press('ArrowRight');
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.imeSetComposition', {
+    text: 'да',
+    selectionStart: 2,
+    selectionEnd: 2,
+  });
+  await cdp.send('Input.insertText', { text: 'да' });
+  await expect(bold).toHaveText('bold');
+  await expect(paragraph(page)).toContainText('boldда');
+
+  await save.click();
+  await expect(save).toHaveText('Saved');
+  const [block] = await stored(['paragraph']);
+  expect(block!.data.text).toContain('«<abbr');
+  expect(block!.data.text).toContain('<b>bold</b>да');
+});
+
+test('a click past the end of bold at the end of a line puts the caret outside it', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openEditor(page, 'Read <b>this</b>');
+  const bold = paragraph(page).locator('b');
+  const box = (await bold.boundingBox())!;
+  await page.mouse.click(box.x + box.width + 40, box.y + box.height / 2);
+  await page.keyboard.type(' now');
+  await expect(bold).toHaveText('this');
+  await expect(paragraph(page)).toHaveText('Read this now');
+});

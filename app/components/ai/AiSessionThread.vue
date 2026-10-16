@@ -171,7 +171,9 @@ const placeholder = computed(() =>
 // ---- The menu ------------------------------------------------------------------
 
 const menuOpen = ref(false);
-const menuButton = ref<HTMLElement>();
+/** The menu's button itself, which its popup points at and marks open. */
+const menuTrigger = useTemplateRef<{ $el: HTMLElement }>('menuTrigger');
+const menuButton = computed(() => menuTrigger.value?.$el);
 const renaming = ref(false);
 const newTitle = ref('');
 
@@ -267,8 +269,9 @@ async function remove() {
       >
         {{ title }}
       </h2>
-      <span ref="menuButton" class="inline-flex">
+      <span class="inline-flex">
         <Button
+          ref="menuTrigger"
           variant="secondary"
           size="icon-sm"
           class="bg-transparent pointer-coarse:size-11"
@@ -433,16 +436,16 @@ async function remove() {
     </div>
 
     <FloatingPopup
-      v-if="menuOpen && session"
       v-model:open="menuOpen"
       :anchor="menuButton ?? null"
       placement="bottom-end"
       max-width="16rem"
+      density="list"
     >
       <div
+        v-if="session"
         role="menu"
-        class="flex min-w-52 flex-col rounded-normal border border-border-1
-          bg-bg-2 p-1 shadow-md shadow-shadow-1"
+        class="flex min-w-52 flex-col gap-0.5"
         data-session-menu-popup
       >
         <button
@@ -484,8 +487,7 @@ async function remove() {
           :key="item.key"
           type="button"
           role="menuitem"
-          class="flex min-h-10 cursor-pointer items-center gap-2.5 rounded-md
-            bg-transparent px-2.5 text-left text-sm hocus:bg-accent/10"
+          class="flex popup-item items-center"
           :data-session-menu-item="item.key"
           @click="item.run"
         >
@@ -494,13 +496,12 @@ async function remove() {
             :class="item.on ? 'text-accent' : 'text-text-2'"
           />{{ item.label }}
         </button>
-        <hr class="my-1 border-border-1" />
+        <hr class="my-0.5 border-border-1" />
         <button
           type="button"
           role="menuitem"
-          class="flex min-h-10 cursor-pointer items-center gap-2.5 rounded-md
-            bg-transparent px-2.5 text-left text-sm text-text-error
-            hocus:bg-bg-error"
+          class="flex popup-item items-center text-text-error
+            [--popup-item-hover:var(--color-bg-error)]"
           data-session-menu-item="delete"
           @click="remove"
         >

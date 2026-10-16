@@ -21,8 +21,8 @@ const labels = computed(
     <span
       v-for="(count, type) in counts"
       :key="type"
-      :title="labels[type]"
       :aria-label="`${labels[type]}: ${count}`"
+      :data-title-popup="labels[type]"
       class="inline-flex items-center gap-1 rounded-normal bg-bg-3 px-xs py-1
         tabular-nums"
       ><Icon :name="assetSourceIcon[type]" />{{ count }}</span

@@ -8,8 +8,6 @@ const props = withDefaults(
     label: string;
     maxDate?: Date;
     placement?: Placement;
-    /** Where the calendar goes; left out, the dialog its field is in. */
-    teleportTo?: string | HTMLElement;
     /**
      * A date the value cannot be without: no clear button, and a popup
      * deselection leaves the current day in place.
@@ -64,7 +62,6 @@ const range = computed<DateRange | undefined>({
       v-model:open="open"
       :anchor
       :placement
-      :teleport-to
       :max-date
       :precision="false"
       single

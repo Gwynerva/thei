@@ -953,6 +953,7 @@ export type LanguagePhrases = {
   content_stored_notice_hint: string;
   content_history_keeps: string;
   content_history_clear: string;
+  content_history_clear_hint: string;
   content_draft_status_synced: (time: string) => string;
   content_draft_status_offline: string;
   content_draft_status_refused_short: string;
@@ -1119,6 +1120,29 @@ export type LanguagePhrases = {
   file_wrong_type: (ext: string) => string;
   file_too_large: (size: string) => string;
   direct_link_to_asset: string;
+  download_asset: string;
+  file_preview_shown_part: (shown: string, total: string) => string;
+  file_preview_rows_shown: (count: number) => string;
+  file_preview_too_large: string;
+  file_preview_failed: string;
+  file_preview_no_pdf: string;
+  file_preview_page: string;
+  archive_summary: (files: number, size: string) => string;
+  archive_packed: (size: string) => string;
+  archive_more: (count: number) => string;
+  archive_partial: string;
+  archive_back: string;
+  archive_root: string;
+  archive_name: string;
+  archive_size: string;
+  archive_files: (count: number) => string;
+  archive_levels: string;
+  archive_entry_download: string;
+  archive_entry_nested: string;
+  asset_zoom: string;
+  archive_entry_locked: string;
+  archive_entry_unavailable: string;
+  archive_entry_too_large: (size: string) => string;
   asset_previous: string;
   asset_next: string;
   asset_pager: (position: number, count: number) => string;
@@ -1314,6 +1338,7 @@ export type LanguagePhrases = {
   content_link_change: string;
   /** The hint of the editor's "+". */
   content_block_add: string;
+  content_block_settings: string;
   /** The grid of blocks the "+" opens. */
   content_block_toolbox: string;
   ai_template_offer_on: string;

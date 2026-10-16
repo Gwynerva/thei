@@ -96,7 +96,7 @@ function active(to: string) {
     :anchor="settingsButton"
     placement="bottom-end"
     max-width="24rem"
-    class="bg-bg-1/92 text-sm backdrop-blur-xl"
+    class="text-sm"
   >
     <SettingsVisualsBox
       :show-public-view-mode="isAdmin"

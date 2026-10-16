@@ -31,7 +31,6 @@ const open = ref(false);
 const anchor = ref<HTMLElement | null>(null);
 const placement = ref<'bottom-start' | 'top-start'>('bottom-start');
 const popup = useTemplateRef<{ element: HTMLElement | null }>('popup');
-const teleportTarget = computed(() => props.root?.closest('dialog') ?? 'body');
 const id = useId();
 
 const provider: PressHintProvider = {
@@ -50,8 +49,8 @@ const provider: PressHintProvider = {
     emit('show', link);
   },
   hide() {
+    // The card keeps what it shows and where until it has gone.
     open.value = false;
-    anchor.value = null;
     emit('hide');
   },
   owns: (node) => Boolean(popup.value?.element?.contains(node)),
@@ -87,10 +86,9 @@ onBeforeUnmount(() => {
     :anchor="anchor"
     :placement
     max-width="22rem"
-    :teleport-to="teleportTarget"
     :close-on-outside="false"
     :close-on-escape="false"
-    class="border border-border-1 bg-bg-2"
+    @closed="anchor = null"
   >
     <slot v-if="anchor" :anchor="anchor" />
   </FloatingPopup>

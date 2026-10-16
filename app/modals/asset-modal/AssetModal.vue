@@ -1,11 +1,14 @@
 <script lang="ts" setup>
 import AsideModalButton from './AssetModalButton.vue';
+import { provideAssetModalActions } from './actions';
 
 const props = defineProps<{
   asideTitle?: string;
 }>();
 
 const isAsideOpen = ref(true);
+/** The buttons of a view inside: a file opened out of an archive's. */
+const viewActions = provideAssetModalActions();
 
 const root = useTemplateRef<HTMLElement>('root');
 defineExpose({ root });
@@ -26,7 +29,24 @@ defineExpose({ root });
           :aria-label="phrase.close_modal"
           @click="closeModal"
         />
-        <slot name="buttons"></slot>
+        <AsideModalButton
+          v-for="action in viewActions"
+          :key="action.key"
+          :icon="action.icon"
+          :href="action.href"
+          :download="action.href ? action.download : undefined"
+          :aria-label="action.label"
+          :data-title-popup="action.label"
+          :data-asset-action="action.key"
+          @click="action.onClick?.()"
+        >
+          <span v-if="action.text" class="text-xs font-bold tabular-nums">{{
+            action.text
+          }}</span>
+        </AsideModalButton>
+        <!-- The window's own are the file's: a file opened out of it brings
+             its own, and they come back with the file. -->
+        <slot v-if="!viewActions.length" name="buttons"></slot>
       </div>
       <div v-if="$slots.nav" class="absolute top-0 left-0 z-10 p-sm">
         <slot name="nav"></slot>

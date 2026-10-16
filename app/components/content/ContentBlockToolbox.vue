@@ -96,10 +96,7 @@ defineExpose({ focus: () => focusTile(0) });
 </script>
 
 <template>
-  <div
-    class="rounded-normal border border-border-1 bg-bg-2 p-1.5"
-    data-block-toolbox
-  >
+  <div data-block-toolbox>
     <!--
       Tiles fade their colours and ring only: Sortable slides a moved tile with
       a transform of its own, which a transition of transforms would undo.

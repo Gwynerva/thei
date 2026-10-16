@@ -1,12 +1,16 @@
 <script lang="ts" setup>
 import type { AssetReplaceResult } from '#layers/thei/shared/api/asset';
-import type { ArchivedOriginalFileMeta } from '#layers/thei/shared/asset';
+import {
+  archivedOriginalFromMeta,
+  type ArchivedOriginalFileMeta,
+} from '#layers/thei/shared/asset';
 import AssetModal from '#layers/thei/app/modals/asset-modal/AssetModal.vue';
 import AssetModalButton from '#layers/thei/app/modals/asset-modal/AssetModalButton.vue';
 import AssetModalFileInfo from '#layers/thei/app/modals/asset-modal/AssetModalFileInfo.vue';
 import AssetModalPreviewAudio from '#layers/thei/app/modals/asset-modal/AssetModalPreviewAudio.vue';
 import AssetModalPreviewMedia from '#layers/thei/app/modals/asset-modal/AssetModalPreviewMedia.vue';
-import FilePreview from '#layers/thei/app/components/FilePreview.vue';
+import FilePreviewContent from '#layers/thei/app/components/file-preview/FilePreviewContent.vue';
+import { isAssetExtensionSafeInline } from '#layers/thei/shared/assets/formats';
 import {
   normalizeCaptionText,
   normalizeHeadingText,
@@ -74,6 +78,17 @@ const directHref = computed(
   () => props.modalData.asset.assetUrl ?? props.modalData.asset.media?.src,
 );
 const isMedia = computed(() => Boolean(props.modalData.asset.media));
+/** A browser opens the file in a tab of its own; any other is downloaded. */
+const opensInTab = computed(
+  () =>
+    isMedia.value ||
+    isAssetExtensionSafeInline(props.modalData.asset.extension),
+);
+const archivedOriginal = computed(
+  () =>
+    props.modalData.archivedOriginal ??
+    archivedOriginalFromMeta(props.modalData.asset.meta),
+);
 /** A recording is played where a picture would be shown. */
 const audioPlayers = computed(() => {
   const { asset } = props.modalData;
@@ -150,22 +165,37 @@ useSaveShortcut(confirm, {
         v-else-if="audioPlayers.length"
         :players="audioPlayers"
       />
-      <FilePreview
+      <FilePreviewContent
         v-else
         :key="`file:${modalData.asset.assetUuid}:${modalData.asset.extension}`"
+        :src="modalData.asset.assetUrl"
         :extension="modalData.asset.extension"
-        class="w-1/2 max-w-132 text-text-2"
+        :size="modalData.asset.size"
+        :archived-original="archivedOriginal"
+        :title="modalData.asideTitle"
       />
     </template>
 
     <template #buttons>
       <AssetModalButton
-        v-if="directHref"
+        v-if="directHref && opensInTab"
         :key="`direct:${directHref}`"
         icon="arrow-outward"
         target="_blank"
         :href="sitePath(directHref)"
         :data-title-popup="phrase.direct_link_to_asset"
+        :aria-label="phrase.direct_link_to_asset"
+      />
+      <AssetModalButton
+        v-if="!isMedia && modalData.asset.assetUrl"
+        icon="download"
+        :download="
+          downloadName(modalData.asset.assetUrl, modalData.asset.extension)
+        "
+        :href="sitePath(modalData.asset.assetUrl)"
+        :data-title-popup="phrase.download_asset"
+        :aria-label="phrase.download_asset"
+        data-asset-download
       />
       <AssetModalButton
         v-if="isMedia"

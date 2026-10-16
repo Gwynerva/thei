@@ -19,7 +19,9 @@ const open = ref(false);
 const request = shallowRef<ContentInlineLinkRequest>();
 /** Each opening is a picker of its own, fresh. */
 const opening = ref(0);
-const picker = useTemplateRef<{ focus: () => void }>('picker');
+const picker = useTemplateRef<{ focus: () => void; query: () => string }>(
+  'picker',
+);
 
 const initial = computed<ContentLinkTarget | undefined>(() => {
   const current = request.value;
@@ -77,11 +79,11 @@ defineExpose<ContentInlineLinkControlsExpose>({ open: openLink });
     :anchor="request?.anchor ?? null"
     placement="bottom-start"
     :fallback-placements="['top-start']"
-    :offset="0"
     shift-cross-axis
     max-width="20rem"
+    complex
     @opened="picker?.focus()"
-    @dismiss="request?.restore()"
+    @dismiss="request?.restore(picker?.query())"
     @closed="popupClosed"
   >
     <ContentLinkPicker

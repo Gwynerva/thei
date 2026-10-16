@@ -24,7 +24,8 @@ import {
 } from '#layers/thei/shared/asset';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
 import { audioDescriptorFromMeta } from '#layers/thei/shared/audio';
-import { buildAdminAssetUrls, archivedOriginalFromMeta } from '../assets/urls';
+import { buildAdminAssetUrls } from '../assets/urls';
+import { archivedOriginalFromMeta } from '#layers/thei/shared/asset';
 import {
   createExternalLinkLoader,
   ensureExternalLinks,

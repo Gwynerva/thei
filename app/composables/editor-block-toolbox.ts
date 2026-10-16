@@ -106,8 +106,9 @@ export function orderToolboxEntries(
 /**
  * Opens the grid where Editor.js would open its list: for the block beside
  * the "+", and from the keyboard, Ctrl/Cmd+Shift+/, for the block the caret
- * is in. The "+" keeps no tooltip of Editor.js's own: its hint is the
- * site's, and names no "/", which types a slash.
+ * is in. The "+" and the settings button keep no tooltip of Editor.js's
+ * own: their hints are the site's, and the "+"'s names no "/", which types
+ * a slash.
  */
 export function bindEditorBlockToolbox(
   root: HTMLElement,
@@ -137,9 +138,13 @@ export function bindEditorBlockToolbox(
       options.open(anchorAt(plus.getBoundingClientRect(), block.holder), block);
   }
 
-  // Reaches the "+" before the tooltip Editor.js hangs on it.
+  // Reaches the buttons before the tooltips Editor.js hangs on them.
   function onMouseEnter(event: MouseEvent) {
-    if (plusOf(event.target) === event.target) event.stopPropagation();
+    if (
+      event.target instanceof Element &&
+      event.target.matches('.ce-toolbar__plus, .ce-toolbar__settings-btn')
+    )
+      event.stopPropagation();
   }
 
   function onKeydown(event: KeyboardEvent) {
@@ -164,14 +169,22 @@ export function bindEditorBlockToolbox(
   root.addEventListener('mouseenter', onMouseEnter, true);
   window.addEventListener('keydown', onKeydown, true);
   const plus = root.querySelector<HTMLElement>('.ce-toolbar__plus');
+  const settings = root.querySelector<HTMLElement>('.ce-toolbar__settings-btn');
   return {
-    /** Sets the hint the "+" shows, in the site's own way. */
-    hint(text: string) {
-      if (!plus) return;
-      // Named, not a button of its own: the keyboard opens the grid with
-      // Ctrl/Cmd+Shift+/ from the text.
-      plus.dataset.titlePopup = text;
-      plus.setAttribute('aria-label', text);
+    /** Sets the hints the "+" and the settings button show, the site's way. */
+    hint(text: { add: string; settings: string }) {
+      // Named, not buttons of their own: the keyboard opens the grid with
+      // Ctrl/Cmd+Shift+/ from the text, and the settings with Ctrl/Cmd+/.
+      for (const [button, words] of [
+        [plus, text.add],
+        [settings, text.settings],
+      ] as const) {
+        if (!button) continue;
+        button.dataset.titlePopup = words;
+        // A tap is the button's: its action is Editor.js's handler.
+        button.dataset.titlePopupPress = 'hold';
+        button.setAttribute('aria-label', words);
+      }
     },
     destroy() {
       root.removeEventListener('click', onClick, true);

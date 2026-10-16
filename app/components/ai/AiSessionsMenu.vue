@@ -21,16 +21,17 @@ const emit = defineEmits<{ close: [] }>();
 </script>
 
 <template>
-  <div class="flex flex-col rounded-normal border border-border-1 bg-bg-2">
+  <!-- In a popup, which draws its surface: what starts, then the list. -->
+  <div class="flex flex-col">
     <div class="flex flex-col gap-xs border-b border-border-1 p-sm">
       <slot />
     </div>
     <div
-      class="flex scrollbar-mini max-h-80 flex-col overflow-y-auto p-1"
+      class="flex scrollbar-mini max-h-80 flex-col gap-0.5 overflow-y-auto p-xs"
       data-ai-menu-sessions
     >
       <p
-        class="flex items-center gap-1.5 px-2 pt-1.5 pb-1 text-xs font-bold
+        class="flex items-center gap-1.5 px-xs pt-1 pb-0.5 text-xs font-bold
           text-text-2"
       >
         <Icon :name="headingIcon" class="shrink-0" />{{ heading }}
@@ -41,13 +42,13 @@ const emit = defineEmits<{ close: [] }>();
         :item
         @click="emit('close')"
       />
-      <p v-if="empty" class="px-2 pb-2 text-sm text-text-3">
+      <p v-if="empty" class="px-xs pb-1 text-sm text-text-3">
         {{ empty }}
       </p>
       <TheiLink
         v-if="more"
         :to="more.to"
-        class="flex items-center px-2 py-1.5 text-sm font-semibold text-accent
+        class="flex items-center px-xs py-1.5 text-sm font-semibold text-accent
           pointer-coarse:min-h-11 hocus:underline"
         data-ai-menu-more
         @click="emit('close')"

@@ -30,7 +30,9 @@ const kindName = computed(() => {
 });
 const waiting = computed(() => ai?.offers.value.length ?? 0);
 
-const button = ref<HTMLElement>();
+/** The ✦ itself, which its popups point at and mark as open. */
+const trigger = useTemplateRef<{ $el: HTMLElement }>('trigger');
+const button = computed(() => trigger.value?.$el);
 const open = ref(false);
 const remembering = ref(false);
 const composer = ref<AiComposerExpose>();
@@ -129,8 +131,9 @@ function openFull() {
 
 <template>
   <template v-if="ai?.shown.value">
-    <span ref="button" class="relative inline-flex">
+    <span class="relative inline-flex">
       <Button
+        ref="trigger"
         variant="secondary"
         size="icon"
         :aria-label="phrase.ai_entity_menu(kindName)"
@@ -151,11 +154,11 @@ function openFull() {
     </span>
 
     <FloatingPopup
-      v-if="open"
       v-model:open="open"
       :anchor="button ?? null"
       placement="bottom-end"
       max-width="24rem"
+      complex
       @opened="composer?.focus()"
     >
       <AiSessionsMenu

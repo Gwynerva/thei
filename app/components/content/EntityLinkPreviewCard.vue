@@ -28,6 +28,7 @@ const props = defineProps<{
   href?: string;
   interactive: boolean;
   playback?: MediaPlayback;
+  /** Laid on a popup's surface: no border or ground of its own. */
   flush?: boolean;
   /** For a narrow popup: a thinner picture, so the text keeps its room. */
   compact?: boolean;
@@ -51,12 +52,16 @@ const heading = computed(() => publicText(entityDisplayTitle(props)));
     :target="href && interactive ? '_blank' : undefined"
     :rel="href && interactive ? 'noopener noreferrer' : undefined"
     class="entity-link-preview group relative flex w-full min-w-0 items-center
-      gap-xs overflow-hidden rounded-normal border border-border-1 bg-bg-2
-      text-text-1 no-underline transition-colors"
+      gap-xs overflow-hidden text-text-1 no-underline transition-colors"
     :class="[
       { 'entity-link-preview-interactive cursor-pointer': href && interactive },
       compact ? 'min-h-16' : 'min-h-18',
-      flush ? '' : compact ? 'px-sm py-xs' : 'p-sm',
+      flush
+        ? ''
+        : [
+            'rounded-normal border border-border-1 bg-bg-2',
+            compact ? 'px-sm py-xs' : 'p-sm',
+          ],
     ]"
   >
     <MediaEdge

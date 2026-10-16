@@ -10,7 +10,7 @@ import {
   type AssetBatchResult,
 } from '#layers/thei/app/composables/asset-wizard';
 import type { AssetVariantsResponse } from '#layers/thei/shared/api/asset';
-import { AssetType, type AssetMeta } from '#layers/thei/shared/asset';
+import { archivedOriginalFromMeta, AssetType } from '#layers/thei/shared/asset';
 import {
   anyFileExtensionProfile,
   imageExtensionProfile,
@@ -91,10 +91,6 @@ type PickedAsset = {
   asset: AssetVariantInfo;
   result: AssetReplaceResult;
 };
-
-function archivedOriginalFromMeta(meta: AssetMeta | null | undefined) {
-  return meta && 'archivedOriginal' in meta ? meta.archivedOriginal : undefined;
-}
 
 function extensionFromUrl(url: string | undefined, fallback: string) {
   if (!url) return fallback;

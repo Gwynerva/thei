@@ -5,7 +5,13 @@ import FieldDateRangePopup from '#layers/thei/app/components/field/FieldDateRang
 
 const model = defineModel<Period[]>({ required: true });
 const popupOpen = ref(false);
-const anchor = useTemplateRef<HTMLElement>('anchor');
+const addButton = useTemplateRef<HTMLElement>('addButton');
+const chipList = useTemplateRef<HTMLElement>('chipList');
+/**
+ * What the popup points at: the period being changed, or the button that
+ * adds one. Kept while the popup closes, so it goes back where it came from.
+ */
+const anchor = shallowRef<HTMLElement | null>(null);
 
 /**
  * The period being composed. It is committed on a click rather than the
@@ -16,6 +22,12 @@ const pending = ref<Period>();
 const editedIndex = ref<number>();
 
 function open(index?: number) {
+  anchor.value =
+    (index === undefined
+      ? undefined
+      : chipList.value?.querySelectorAll<HTMLElement>('[data-date-range-chip]')[
+          index
+        ]) ?? addButton.value;
   editedIndex.value = index;
   pending.value =
     index === undefined ? undefined : { ...(model.value[index] as Period) };
@@ -48,7 +60,7 @@ function remove(index: number) {
 
 <template>
   <div class="flex flex-col gap-xs">
-    <div class="flex flex-wrap gap-xs">
+    <div ref="chipList" class="flex flex-wrap gap-xs">
       <DateRangeChip
         v-for="(period, index) in model"
         :key="`${period.startDate}:${period.endDate}:${period.label}`"
@@ -59,11 +71,11 @@ function remove(index: number) {
         @remove="remove(index)"
       />
       <button
-        ref="anchor"
+        ref="addButton"
         type="button"
         class="flex h-10 cursor-pointer items-center gap-xs rounded-normal
-          bg-bg-3 px-sm text-sm text-text-2 transition hocus:bg-bg-accent
-          hocus:text-accent"
+          bg-bg-3 px-sm text-sm text-text-2 transition popup-open:bg-bg-accent
+          popup-open:text-accent hocus:bg-bg-accent hocus:text-accent"
         @click="popupOpen ? (popupOpen = false) : open()"
       >
         <Icon name="plus" />

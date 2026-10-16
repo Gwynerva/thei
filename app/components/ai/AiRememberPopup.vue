@@ -50,10 +50,11 @@ function keydown(event: KeyboardEvent) {
     :anchor="props.anchor"
     placement="bottom-end"
     max-width="22rem"
+    density="card"
+    complex
   >
     <form
-      class="flex flex-col gap-sm rounded-normal border border-border-1 bg-bg-2
-        p-sm"
+      class="flex flex-col gap-sm"
       data-remember-popup
       @submit.prevent="save"
     >

@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { ContentAssetData } from '#layers/thei/shared/content';
+import { isAssetPreviewable } from '#layers/thei/shared/assets/preview';
 
 const props = withDefaults(
   defineProps<{
@@ -36,14 +37,22 @@ const emit = defineEmits<{
 const humanSize = useHumanSize();
 
 /**
- * Only a picture or a video has something to show in the asset viewer, and
- * only those open there; any other file is simply downloaded. Opening goes
- * through the viewer, which needs the file's address too.
+ * A file with something to show — a picture, a video, a text, a table, a
+ * page, a PDF, an archive's list — opens in the asset viewer; any other is
+ * simply downloaded. Opening goes through the viewer, which needs the
+ * file's address too. Without the viewer, a picture or a video opens in a
+ * tab of its own.
  */
 const viewable = computed(() => !!props.asset.media);
+const previewable = computed(
+  () =>
+    viewable.value ||
+    (!!props.asset.extension &&
+      isAssetPreviewable(props.asset.extension, props.asset.archivedOriginal)),
+);
 const mode = computed(() => {
   if (props.editable || !props.href) return 'static';
-  return props.openable && viewable.value ? 'open' : 'link';
+  return props.openable && previewable.value ? 'open' : 'link';
 });
 function onPreviewClick(event: MouseEvent) {
   if (!props.editable) return;

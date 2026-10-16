@@ -132,26 +132,26 @@ Around them:
 - Uploads are streamed to `.thei/tmp/` and handed to sharp and ffmpeg as a path. Never read an uploaded file, a stored asset, or an ffmpeg output into a `Buffer` as a whole: the file limit is 500 MB and the installer asks for 2 GB of RAM. The one exception is a file shown to a model, which an API takes whole: only under a small cap (a PDF up to 10 MB, a text up to 100 KB, `server/thei/ai/sessions/files.ts`). Media processing runs through the concurrency limiter in `server/thei/assets/queue.ts`.
 - Every directory the engine owns inside `content/` is declared in `server/thei/content-layout.ts`. Cleanup only sweeps directories it knows about, so a layout that moves without updating that list leaves files behind that nothing will ever reclaim.
 
-## Styling
+## Design
 
-- Use Tailwind CSS 4 utilities as the default styling approach in Vue templates.
-- Use custom classes only when existing Tailwind utilities cannot reasonably express the required behavior, such as complex masks or animations, native pseudo-elements, computed geometry, or third-party DOM integration.
-- Use `<style scoped>` for component-local custom CSS. Do not use CSS Modules, unscoped component style blocks, `useCssModule`, or `$style`.
-- Keep third-party library overrides locally constrained with `:deep()` whenever the DOM remains inside the component. Put unavoidable global overrides for teleported or body-level library UI in a dedicated integration stylesheet, scoped beneath a library-specific root or body state.
-- Use the colors, shadows, spacing, radii, and other design tokens already exposed by `app/styles/main.css`. Do not invent hardcoded design values when an existing token or Tailwind utility is suitable.
-- Do not add or change design tokens, colors, shadows, spacing constants, radii, or breakpoints without explicitly asking the user for permission first.
-- Use the existing `sm` responsive convention. Ask the user before using another responsive breakpoint, adding a breakpoint, or writing an inline media breakpoint.
-- A container query needs no permission when a component really has to answer to the room it is given rather than to the screen: a row that sits both across a page and in a narrow card or column. Mark the container with `@container` and write its size inline (`@max-[24rem]:`), as `ExternalLinkPreviewCard.vue` does. Where the screen is what matters, keep to `sm:`.
-- Numeric Tailwind utilities such as `w-16`, `max-w-75`, and `size-6` are appropriate for specific one-off geometry. Prefer their `rem`-based scale over fixed pixel values so the existing mobile root font size can proportionally tighten dimensions and spacing.
-- Do not create a named token for every one-off size. When the same numeric value is repeated for the same semantic purpose, reuse an existing project token or ask the user before introducing a new one.
-- Project spacing tokens named `xs`, `sm`, `md`, `lg`, and `xl` also affect similarly named Tailwind dimension utilities. Verify the generated value before using utilities such as `max-w-sm`, `max-w-md`, or `max-w-lg`; use an appropriate numeric utility when a standard container width is intended. The responsive `sm:` prefix is unrelated to this collision and remains the project's allowed breakpoint convention.
-- Keep arbitrary Tailwind values to the minimum. Use them only when no semantically correct project token or standard utility exists, including CSS-variable calculations and intrinsic or container-relative geometry.
-- Preserve accessibility media queries such as pointer capability and reduced-motion queries when they describe user or device capabilities rather than layout breakpoints.
-- The admin lies on a grid background. Anything that is a surface — a pane, a card, a box, a field — is opaque (`bg-bg-1`…`bg-bg-4`), so the grid never shows through it; fade what is inside a disabled surface, never the surface itself. The glass of the admin bar and of sticky headers is the one deliberate exception.
-- The `loading` icon animates itself: never spin it.
-- No state of a control or a surface changes in an instant. A change of background, text or icon colour, border, outline, shadow or opacity — on hover, focus, press, selection, an active row, a chosen option — goes through Tailwind's `transition` (or `transition-colors`) at its default duration and easing, which are Thei's; scoped CSS uses `var(--default-transition-duration)` and `var(--default-transition-timing-function)`. Only what must follow the pointer or a drag at once, and `prefers-reduced-motion`, go without.
-- `hocus:` is a mouse or pen pointing, or the keyboard's focus; a touch screen never matches it, as with Tailwind's own `hover:`. Write a scoped `:hover` the same way, under `@media (hover: hover)`. A control that only appears on hover needs a way to show on touch (`pointer-coarse:`), or a phone never reaches it.
-- Every select-like field — a choice of one option among several — is the one shared `FieldSelect` (`app/components/field/FieldSelect.vue`): never a native `<select>`, never a dropdown made by hand. It opens its options in a popup, with icons where they mean something, and keeps a stable height: a text field's in a form, a toolbar's with `compact`. Its options are real choices only: while nothing is chosen, its faded `placeholder` says so, and no «choose…» option can be picked.
-- Hints (`data-title-popup`, and the link cards of `LinkHoverPopup`) open on hover, on keyboard focus, on a tap of something that has no action of its own, and on a first long press of a link or a control, whose tap stays its action (`app/composables/press-hint.ts`). Mark an element whose action lives only in a script handler with `data-title-popup-press="hold"`.
-- A popup goes where its anchor is. `FloatingPopup` teleports into the `<dialog>` its anchor sits in, else into `body`; never set `teleport-to` by hand, or a popup opened from a modal lands under it, since a modal dialog lives in the top layer. There is one z-index scale: popups `9998`, hints `9999`, sticky headers `z-10` inside their dialog — no new values. A popup whose anchor scrolls out of its container hides with it.
-- Every new popup is checked in e2e with `expectPopupUsable` (`tests/e2e/helpers/popup.ts`) at 1280×800 and 375×812: whole in the window, on top where it is drawn, inside the open dialog, its first control clickable.
+- The design rules live in `docs/design/`, and bind like this file. Before changing anything a person sees — a page, a form, a modal, a popup, a style — read `docs/design/README.md` and the pages of what you touch.
+- A change to a shared component or to a rule updates its page in the same commit. Tokens, colours, shadows, radii, spacing, type sizes and breakpoints change only with the owner's explicit permission, asked for first.
+- `tests/docs/design-docs.test.ts` keeps the pages honest: every path in backticks exists, links between pages resolve, and every page is in the README's index.
+- Every popup — a menu, a picker, a small form, a card, a proposal — is a `FloatingPopup`, and every hint is `data-title-popup`. Nothing places, teleports or stacks a surface of its own; `tests/app/components/popup-usage.test.ts` fails when something does.
+
+| What you touch                                                    | Read                                                                     |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Colours, shadows, radii, spacing, type sizes, fonts               | [`foundations/tokens.md`](docs/design/foundations/tokens.md)             |
+| Breakpoints, page width, surfaces on the admin grid, phone layout | [`foundations/layout.md`](docs/design/foundations/layout.md)             |
+| Transitions, animation, the `loading` icon                        | [`foundations/motion.md`](docs/design/foundations/motion.md)             |
+| Hover, touch, keyboard focus, hints (`data-title-popup`)          | [`foundations/interaction.md`](docs/design/foundations/interaction.md)   |
+| A `<style>` block, `app/styles/`, a library's CSS                 | [`foundations/styling-code.md`](docs/design/foundations/styling-code.md) |
+| A choice of one option among several                              | [`components/select.md`](docs/design/components/select.md)               |
+| Buttons                                                           | [`components/buttons.md`](docs/design/components/buttons.md)             |
+| Form fields, labels, hints under a field                          | [`components/fields.md`](docs/design/components/fields.md)               |
+| A modal                                                           | [`components/modals.md`](docs/design/components/modals.md)               |
+| Icons                                                             | [`components/icons.md`](docs/design/components/icons.md)                 |
+| A popup, a menu, a picker, a link card, Editor.js's menus         | [`components/popups.md`](docs/design/components/popups.md)               |
+| Which elements get a hint, and its words                          | [`components/hints.md`](docs/design/components/hints.md)                 |
+| An admin page, a list, a dashboard box, an empty state            | [`patterns/admin-pages.md`](docs/design/patterns/admin-pages.md)         |
+| Anything AI shows                                                 | [`patterns/ai-in-the-ui.md`](docs/design/patterns/ai-in-the-ui.md)       |

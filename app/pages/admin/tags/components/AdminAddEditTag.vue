@@ -310,14 +310,6 @@ await useAdminTabTitle(
         :public-id-error="publicIdError"
       />
 
-      <TagSynonymsField
-        ai="field:synonyms"
-        v-model="data.synonyms"
-        :tag-uuid="resolvedTagUuid"
-        :title="data.title"
-        :revision="savedRevision + addedCount"
-      />
-
       <footer
         v-if="isEdit"
         class="flex flex-col gap-1 border-t border-border-1 pt-sm text-sm"
@@ -335,5 +327,15 @@ await useAdminTabTitle(
       @added="countAddedUsage"
     />
     <AiMemoryBlock />
+    <!-- The other names: the least needed setting, so the last one. -->
+    <Box class="p-sm sm:p-md">
+      <TagSynonymsField
+        ai="field:synonyms"
+        v-model="data.synonyms"
+        :tag-uuid="resolvedTagUuid"
+        :title="data.title"
+        :revision="savedRevision + addedCount"
+      />
+    </Box>
   </div>
 </template>

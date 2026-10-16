@@ -7,7 +7,7 @@ import type { RouteLocationRaw } from 'vue-router';
  * title leading to the whole list, how many there are, and a "+" that starts
  * a new one.
  */
-defineProps<{
+const props = defineProps<{
   icon: IconName;
   title: string;
   to: RouteLocationRaw;
@@ -17,6 +17,7 @@ defineProps<{
 }>();
 
 const compactNumber = useCompactNumber();
+const exact = computed(() => props.count.toLocaleString(language.value.code));
 </script>
 
 <template>
@@ -32,10 +33,11 @@ const compactNumber = useCompactNumber();
       </h2>
     </TheiLink>
     <div class="flex shrink-0 items-center gap-sm">
+      <!-- Shortened, the whole number is in its hint. -->
       <span
         class="text-xl font-bold text-text-2"
-        :title="count.toLocaleString(language.code)"
-        :aria-label="count.toLocaleString(language.code)"
+        :aria-label="exact"
+        :data-title-popup="exact !== compactNumber(count) ? exact : undefined"
         >{{ compactNumber(count) }}</span
       >
       <TheiLink

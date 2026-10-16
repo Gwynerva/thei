@@ -104,6 +104,8 @@ import {
 import { bindEditorGutterClick } from '#layers/thei/app/composables/editor-gutter-click';
 import { bindEditorCurrentBlock } from '#layers/thei/app/composables/editor-current-block';
 import { bindEditorLinkPaste } from '#layers/thei/app/composables/editor-link-paste';
+import { bindEditorAtLink } from '#layers/thei/app/composables/editor-at-link';
+import { bindEditorInlineBoundary } from '#layers/thei/app/composables/editor-inline-boundary';
 import { bindEditorTextDrop } from '#layers/thei/app/composables/editor-text-drop';
 import { bindEditorTextPaste } from '#layers/thei/app/composables/editor-text-paste';
 import { bindEditorNativeUndo } from '#layers/thei/app/composables/editor-native-undo';
@@ -209,6 +211,8 @@ let cleanupMediaPaste: (() => void) | undefined;
 let cleanupGutterClick: (() => void) | undefined;
 let cleanupCurrentBlock: (() => void) | undefined;
 let cleanupLinkPaste: (() => void) | undefined;
+let cleanupAtLink: (() => void) | undefined;
+let cleanupInlineBoundary: (() => void) | undefined;
 let cleanupKeyboardBoundary: (() => void) | undefined;
 let cleanupTextDrop: (() => void) | undefined;
 let cleanupTextPaste: (() => void) | undefined;
@@ -266,7 +270,9 @@ let linkPickerResolve: ((pick?: ContentLinkPick) => void) | undefined;
 const saving = ref(false);
 const errorMessage = ref<string | undefined>();
 const historyPopupOpen = ref(false);
-const historyButton = useTemplateRef<HTMLElement>('historyButton');
+/** The history's button itself, which its popup points at and marks open. */
+const historyTrigger = useTemplateRef<{ $el: HTMLElement }>('historyTrigger');
+const historyButton = computed(() => historyTrigger.value?.$el ?? null);
 const restoredLabel = ref('');
 const initialData = normalizeContentData(props.modalData.value?.data);
 const openedKey = contentSemanticKey(initialData);
@@ -1143,7 +1149,10 @@ onMounted(async () => {
   blockToolbox = bindEditorBlockToolbox(holder.value!, editor, {
     open: openToolbox,
   });
-  blockToolbox.hint(phrase.value.content_block_add);
+  blockToolbox.hint({
+    add: phrase.value.content_block_add,
+    settings: phrase.value.content_block_settings,
+  });
   cleanupCurrentBlock = bindEditorCurrentBlock(holder.value!, editor, {
     // The blocks whose Enter is Editor.js's own: split, before, after.
     textBlocks: new Set(['paragraph', 'header', 'list', 'quote']),
@@ -1153,12 +1162,18 @@ onMounted(async () => {
     holder.value!.closest('dialog') ?? document.body,
     holder.value!,
   );
+  // The heading is plain text; captions are the media blocks' own.
+  const linkBlocks = new Set(['paragraph', 'list', 'quote']);
   cleanupLinkPaste = bindEditorLinkPaste(holder.value!, editor, {
     site: internalSite,
-    // The heading is plain text; captions are the media blocks' own.
-    linkBlocks: new Set(['paragraph', 'list', 'quote']),
+    linkBlocks,
     findEntity: (url) => findEntityByInternalUrl(url, internalSite),
   });
+  cleanupAtLink = bindEditorAtLink(holder.value!, editor, {
+    linkBlocks,
+    open: (request) => inlineLinkControls.value?.open(request),
+  });
+  cleanupInlineBoundary = bindEditorInlineBoundary(holder.value!);
   // After the media and link pastes, which claim theirs first.
   cleanupTextPaste = bindEditorTextPaste(holder.value!);
   cleanupNativeUndo = bindEditorNativeUndo(
@@ -1185,6 +1200,10 @@ onBeforeUnmount(() => {
   cleanupCurrentBlock = undefined;
   cleanupLinkPaste?.();
   cleanupLinkPaste = undefined;
+  cleanupAtLink?.();
+  cleanupAtLink = undefined;
+  cleanupInlineBoundary?.();
+  cleanupInlineBoundary = undefined;
   cleanupTextDrop?.();
   cleanupTextDrop = undefined;
   cleanupTextPaste?.();
@@ -1573,6 +1592,7 @@ function editorJsI18nMessages() {
         placement="bottom-start"
         :fallback-placements="['top-start']"
         fit-content
+        density="compact"
         @opened="toolbox?.focus()"
         @dismiss="toolboxDismissed"
       >
@@ -1587,6 +1607,7 @@ function editorJsI18nMessages() {
         v-model:open="linkPickerOpen"
         :anchor="linkPickerAnchor ?? null"
         placement="bottom-start"
+        complex
         @opened="linkPicker?.focus()"
         @closed="closeLinkPicker"
       >
@@ -1640,8 +1661,9 @@ function editorJsI18nMessages() {
           >
             <Icon name="rotate-right" class="-scale-x-100" />
           </ModalHeaderButton>
-          <div ref="historyButton" class="relative flex shrink-0">
+          <div class="relative flex shrink-0">
             <ModalHeaderButton
+              ref="historyTrigger"
               icon="history"
               :label="phrase.content_history"
               :disabled="!hasHistory"
@@ -1678,8 +1700,9 @@ function editorJsI18nMessages() {
           :anchor="historyButton"
           placement="bottom-end"
           fit-content
+          complex
         >
-          <div class="rounded-normal border border-border-1 bg-bg-2">
+          <div>
             <ContentHistoryPanel
               :session="editorSession"
               :current="headerSummary"

@@ -4,6 +4,8 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { createError } from 'h3';
 import sharp from 'sharp';
 import { AssetType } from '#layers/thei/shared/asset';
+import { TEXT_FILE_EXTENSIONS } from '#layers/thei/shared/assets/preview';
+import { decodeText } from '#layers/thei/shared/text-bytes';
 import type { AiMessageFile, AiMessagePart } from '#layers/thei/shared/ai';
 import { touchReleasedAssets } from '../../content/history';
 import { withProcessingSlot } from '../../assets/queue';
@@ -291,24 +293,6 @@ const PICTURE_SIDE = 1568;
 const PDF_MAX = 10 * 1024 * 1024;
 /** The largest text file given to a model. */
 const TEXT_MAX = 100 * 1024;
-const TEXT_EXTENSIONS = new Set([
-  'txt',
-  'md',
-  'markdown',
-  'csv',
-  'tsv',
-  'json',
-  'xml',
-  'html',
-  'htm',
-  'yaml',
-  'yml',
-  'log',
-  'ics',
-  'vcf',
-  'srt',
-  'vtt',
-]);
 
 /** Files made ready for a model lately: a session rereads them every turn. */
 const ready = new Map<string, StreamFile | null>();
@@ -352,8 +336,13 @@ async function prepare(
       name,
       data: (await readFile(path(asset))).toString('base64'),
     };
-  if (TEXT_EXTENSIONS.has(asset.extension) && asset.size <= TEXT_MAX)
-    return { kind: 'text', name, text: await readFile(path(asset), 'utf8') };
+  if (TEXT_FILE_EXTENSIONS.has(asset.extension) && asset.size <= TEXT_MAX)
+    // Read in the encoding it was written in, as the owner sees it.
+    return {
+      kind: 'text',
+      name,
+      text: decodeText(await readFile(path(asset))),
+    };
   return null;
 }
 

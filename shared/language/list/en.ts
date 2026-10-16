@@ -1314,8 +1314,10 @@ export default defineI18nBase({
     content_stored_notice_hint:
       'While you were writing, the text was saved there. Compare and take what you need from it — your text stays as it is.',
     content_history_keeps:
-      'Choose a version to compare it with this text: take all of it or a part. Versions are kept for two days, AI edits while their session lives.',
+      'Open a version to see it beside the text and take all of it or a part. Versions are kept for two days, AI edits while their session lives.',
     content_history_clear: 'Clear the text',
+    content_history_clear_hint:
+      'Removes the whole text. It can be brought back from here: it becomes a version.',
     content_draft_status_synced: (time) => `Draft kept · ${time}`,
     content_draft_status_offline: 'No connection — kept in the browser',
     content_draft_status_refused_short: 'Not kept',
@@ -1531,6 +1533,35 @@ export default defineI18nBase({
     file_wrong_type: (ext) => `Unsupported file type: .${ext}`,
     file_too_large: (size) => `File is too large: ${size}`,
     direct_link_to_asset: 'Direct link to asset',
+    download_asset: 'Download',
+    file_preview_shown_part: (shown: string, total: string) =>
+      `The first ${shown} of ${total} is shown. Download the file to read all of it.`,
+    file_preview_rows_shown: (count: number) =>
+      `The first ${plural(count, 'row', 'rows')} are shown. The rest are in the file.`,
+    file_preview_too_large:
+      'This file is too large to show here. Download it to open it.',
+    file_preview_failed: 'This file could not be read. Download it to open it.',
+    file_preview_no_pdf:
+      'This browser does not show PDF files inside a page. Download the file to open it.',
+    file_preview_page: 'Contents of the file',
+    archive_summary: (files: number, size: string) =>
+      `${plural(files, 'file', 'files')}, ${size}`,
+    archive_packed: (size: string) => `${size} packed`,
+    archive_more: (count: number) =>
+      `And ${plural(count, 'more file', 'more files')}`,
+    archive_partial: 'The archive holds more files than could be listed.',
+    archive_back: 'Back to the archive',
+    archive_root: 'Archive',
+    archive_name: 'Name',
+    archive_size: 'Size',
+    archive_files: (count: number) => plural(count, 'file', 'files'),
+    archive_levels: 'Folders up to here',
+    archive_entry_download: 'Download this file',
+    archive_entry_nested: 'An archive inside an archive opens once downloaded',
+    asset_zoom: 'Zoom',
+    archive_entry_locked: 'This file is encrypted',
+    archive_entry_unavailable: 'This file cannot be opened here',
+    archive_entry_too_large: (size: string) => `Files up to ${size} open here`,
     asset_previous: 'Previous file',
     asset_next: 'Next file',
     asset_pager: (position: number, count: number) => `${position} of ${count}`,
@@ -1736,7 +1767,7 @@ export default defineI18nBase({
     ai_open_full: 'Open on the AI page',
     select_filter: 'Filter',
     content_link: 'Link',
-    content_link_search_placeholder: 'A title or an address',
+    content_link_search_placeholder: 'Search or a link',
     content_link_mention_placeholder: 'What to mention',
     content_link_search: 'Search',
     content_link_path: 'Where the link leads',
@@ -1760,6 +1791,7 @@ export default defineI18nBase({
     content_link_apply: 'Done',
     content_link_change: 'Change link',
     content_block_add: 'Add a block',
+    content_block_settings: 'Block settings. Drag to move',
     content_block_toolbox: 'Blocks',
     ai_template_offer_on: 'Offered on',
     ai_template_offer_on_hint:

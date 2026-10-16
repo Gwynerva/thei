@@ -4,6 +4,8 @@ import AssetModalButton from '#layers/thei/app/modals/asset-modal/AssetModalButt
 import AssetModalFileInfo from '#layers/thei/app/modals/asset-modal/AssetModalFileInfo.vue';
 import AssetModalPager from '#layers/thei/app/modals/asset-modal/AssetModalPager.vue';
 import AssetModalPreviewMedia from '#layers/thei/app/modals/asset-modal/AssetModalPreviewMedia.vue';
+import FilePreviewContent from '#layers/thei/app/components/file-preview/FilePreviewContent.vue';
+import { isAssetExtensionSafeInline } from '#layers/thei/shared/assets/formats';
 import type { PublicAssetModalData } from './modal';
 
 const props = defineProps<{ modalData: PublicAssetModalData }>();
@@ -36,6 +38,12 @@ const dimensions = computed(() => {
   const { width, height } = current.value.media ?? {};
   return width && height ? { width, height } : undefined;
 });
+/** A browser opens the file in a tab of its own; any other is downloaded. */
+const opensInTab = computed(
+  () =>
+    !!current.value.media ||
+    isAssetExtensionSafeInline(current.value.extension),
+);
 </script>
 
 <template>
@@ -51,11 +59,15 @@ const dimensions = computed(() => {
         :has-audio="current.media.hasAudio"
         :display-dimensions="dimensions"
       />
-      <FilePreview
+      <FilePreviewContent
         v-else
         :key="current.key"
+        :src="current.href"
         :extension="current.extension"
-        class="w-1/2 max-w-132 text-text-2"
+        :size="current.size"
+        :archived-original="current.archivedOriginal"
+        :title="publicText(current.title)"
+        :paged="count > 1"
       />
     </template>
     <template v-if="count > 1" #nav>
@@ -68,10 +80,21 @@ const dimensions = computed(() => {
     </template>
     <template #buttons>
       <AssetModalButton
+        v-if="opensInTab"
         icon="arrow-outward"
         target="_blank"
-        :href="current.href"
+        :href="sitePath(current.href)"
         :data-title-popup="phrase.direct_link_to_asset"
+        :aria-label="phrase.direct_link_to_asset"
+      />
+      <AssetModalButton
+        v-if="!current.media"
+        icon="download"
+        download
+        :href="sitePath(current.href)"
+        :data-title-popup="phrase.download_asset"
+        :aria-label="phrase.download_asset"
+        data-asset-download
       />
       <AssetModalButton
         v-if="current.media"

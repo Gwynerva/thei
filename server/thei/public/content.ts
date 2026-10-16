@@ -22,8 +22,8 @@ import { audioDescriptorFromMeta } from '#layers/thei/shared/audio';
 import { buildProjectUrl } from '#layers/thei/shared/project-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
+import { archivedOriginalFromMeta } from '#layers/thei/shared/asset';
 import {
-  archivedOriginalFromMeta,
   buildPublicEventContentMedia,
   buildPublicProjectContentMedia,
   buildPublicPageContentMedia,

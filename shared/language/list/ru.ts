@@ -1377,8 +1377,10 @@ export default defineI18nModule({
     content_stored_notice_hint:
       'Пока вы писали, текст сохранили там. Сравните и возьмите нужное оттуда — ваш текст останется как есть.',
     content_history_keeps:
-      'Нажмите версию — откроется сравнение с этим текстом: можно взять всё или часть. Версии хранятся двое суток, правки ИИ — пока жива их сессия.',
+      'Откройте версию — она встанет рядом с текстом, и из неё можно взять всё или часть. Версии хранятся двое суток, правки ИИ — пока жива их сессия.',
     content_history_clear: 'Очистить текст',
+    content_history_clear_hint:
+      'Убирает весь текст. Вернуть его можно отсюда же: он станет версией.',
     content_draft_status_synced: (time) => `Черновик сохранён · ${time}`,
     content_draft_status_offline: 'Нет связи — хранится в браузере',
     content_draft_status_refused_short: 'Не сохраняется',
@@ -1596,6 +1598,36 @@ export default defineI18nModule({
     file_wrong_type: (ext) => `Неподдерживаемый тип файла: .${ext}!`,
     file_too_large: (size) => `Файл слишком большой: ${size}!`,
     direct_link_to_asset: 'Прямая ссылка на файл',
+    download_asset: 'Скачать',
+    file_preview_shown_part: (shown: string, total: string) =>
+      `Показано ${shown} из ${total}. Скачайте файл, чтобы прочитать его целиком.`,
+    file_preview_rows_shown: (count: number) =>
+      `Показаны первые ${plural(count, 'строка', 'строки', 'строк')}. Остальные — в файле.`,
+    file_preview_too_large:
+      'Файл слишком большой, чтобы показать его здесь. Скачайте его.',
+    file_preview_failed: 'Не удалось прочитать файл. Скачайте его.',
+    file_preview_no_pdf:
+      'Этот браузер не показывает PDF внутри страницы. Скачайте файл.',
+    file_preview_page: 'Содержимое файла',
+    archive_summary: (files: number, size: string) =>
+      `${plural(files, 'файл', 'файла', 'файлов')}, ${size}`,
+    archive_packed: (size: string) => `в архиве ${size}`,
+    archive_more: (count: number) =>
+      `И ещё ${plural(count, 'файл', 'файла', 'файлов')}`,
+    archive_partial: 'В архиве больше файлов, чем удалось перечислить.',
+    archive_back: 'Назад к архиву',
+    archive_root: 'Архив',
+    archive_name: 'Имя',
+    archive_size: 'Размер',
+    archive_files: (count: number) => plural(count, 'файл', 'файла', 'файлов'),
+    archive_levels: 'Папки до этой',
+    archive_entry_download: 'Скачать этот файл',
+    archive_entry_nested: 'Архив внутри архива откроется после скачивания',
+    asset_zoom: 'Масштаб',
+    archive_entry_locked: 'Файл зашифрован',
+    archive_entry_unavailable: 'Этот файл здесь не открыть',
+    archive_entry_too_large: (size: string) =>
+      `Здесь открываются файлы до ${size}`,
     asset_previous: 'Предыдущий файл',
     asset_next: 'Следующий файл',
     asset_pager: (position: number, count: number) => `${position} из ${count}`,
@@ -1799,7 +1831,7 @@ export default defineI18nModule({
     ai_open_full: 'На странице ИИ',
     select_filter: 'Фильтр',
     content_link: 'Ссылка',
-    content_link_search_placeholder: 'Название или адрес',
+    content_link_search_placeholder: 'Поиск или ссылка',
     content_link_mention_placeholder: 'Что упомянуть',
     content_link_search: 'Поиск',
     content_link_path: 'Куда ведёт ссылка',
@@ -1823,6 +1855,7 @@ export default defineI18nModule({
     content_link_apply: 'Готово',
     content_link_change: 'Изменить ссылку',
     content_block_add: 'Добавить блок',
+    content_block_settings: 'Настройки блока. Потяните, чтобы переместить',
     content_block_toolbox: 'Блоки',
     ai_template_offer_on: 'Где предлагать',
     ai_template_offer_on_hint:

@@ -20,6 +20,7 @@ describe('asset formats', () => {
     expect(getAssetMimeType('avi')).toBe('video/x-msvideo');
     expect(getAssetMimeType('svg')).toBe('image/svg+xml');
     expect(getAssetMimeType('zip')).toBe('application/zip');
+    expect(getAssetMimeType('pdf')).toBe('application/pdf');
     expect(getAssetMimeType('unknown')).toBe('application/octet-stream');
   });
 
@@ -28,5 +29,10 @@ describe('asset formats', () => {
     expect(isAssetExtensionSafeInline('mp4')).toBe(true);
     expect(isAssetExtensionSafeInline('svg')).toBe(false);
     expect(isAssetExtensionSafeInline('txt')).toBe(false);
+    expect(isAssetExtensionSafeInline('html')).toBe(false);
+  });
+
+  it('serves a PDF inline, for the browser viewer', () => {
+    expect(isAssetExtensionSafeInline('PDF')).toBe(true);
   });
 });

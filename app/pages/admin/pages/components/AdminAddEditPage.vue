@@ -367,11 +367,6 @@ await useAdminTabTitle(
         />
         <FieldHint>{{ phrase.page_summary_hint }}</FieldHint>
       </Field>
-      <FieldSynonyms
-        v-model="synonymsModel"
-        ai="field:synonyms"
-        :title="data.title"
-      />
 
       <div class="flex flex-col gap-md sm:flex-row">
         <Field class="min-w-0 flex-1">
@@ -440,5 +435,13 @@ await useAdminTabTitle(
       v-model:notes="notesModel"
       @notes-saved="saveAfterContentEdit()"
     />
+    <!-- The other names: the least needed setting, so the last one. -->
+    <Box class="p-sm sm:p-md">
+      <FieldSynonyms
+        v-model="synonymsModel"
+        ai="field:synonyms"
+        :title="data.title"
+      />
+    </Box>
   </div>
 </template>

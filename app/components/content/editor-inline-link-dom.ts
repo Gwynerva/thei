@@ -2,7 +2,40 @@ import {
   withLinkFragment,
   type ContentEntityType,
 } from '#layers/thei/shared/content-link';
-import { insertInlineElement } from './editor-edit-commands';
+import type EditorJS from '@editorjs/editorjs';
+import { editableFieldOf, insertInlineElement } from './editor-edit-commands';
+
+/**
+ * Marks words of the text with a highlight of `editor.css`, or takes the
+ * mark away: drawn over the text, never written into it, so Ctrl+Z has
+ * nothing of it to undo and the text is not changed.
+ */
+export function highlightWords(name: string, range?: Range) {
+  if (typeof CSS === 'undefined' || !('highlights' in CSS)) return;
+  if (range) CSS.highlights.set(name, new Highlight(range));
+  else CSS.highlights.delete(name);
+}
+
+/**
+ * The editor's text field a node is in, when that text takes links: one of
+ * `linkBlocks`, and none a block draws itself, outside Editor.js's watch.
+ */
+export function linkableFieldOf(
+  root: HTMLElement,
+  editor: EditorJS,
+  linkBlocks: ReadonlySet<string>,
+  node: Node | null | undefined,
+): HTMLElement | undefined {
+  const field = editableFieldOf(node);
+  if (
+    !field ||
+    !root.contains(field) ||
+    field.closest('[data-mutation-free="true"]')
+  )
+    return undefined;
+  const block = editor.blocks.getBlockByElement(field);
+  return block && linkBlocks.has(block.name) ? field : undefined;
+}
 
 /**
  * The attributes an inline link is written with. `undefined` removes one, so

@@ -23,7 +23,7 @@ const src = computed(() => {
   >
     <iframe
       :src
-      :title="phrase.content_integration_youtube"
+      :aria-label="phrase.content_integration_youtube"
       class="size-full"
       loading="lazy"
       :allow

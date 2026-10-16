@@ -11,7 +11,8 @@ import type {
 import { AssetType, type AssetRole } from '#layers/thei/shared/asset';
 import { ContentValidationError } from '#layers/thei/shared/content';
 import { and, eq } from 'drizzle-orm';
-import { archivedOriginalFromMeta, buildAdminAssetUrls } from '../assets/urls';
+import { buildAdminAssetUrls } from '../assets/urls';
+import { archivedOriginalFromMeta } from '#layers/thei/shared/asset';
 import {
   ensureExternalLinks,
   entityExternalLinkUrls,

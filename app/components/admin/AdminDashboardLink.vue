@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { IconName } from '#thei/icons';
 
-defineProps<{
+const props = defineProps<{
   to: string;
   icon: IconName;
   title: string;
@@ -10,6 +10,7 @@ defineProps<{
 }>();
 
 const compactNumber = useCompactNumber();
+const exact = computed(() => props.count?.toLocaleString(language.value.code));
 </script>
 
 <template>
@@ -31,11 +32,12 @@ const compactNumber = useCompactNumber();
             <p class="text-sm text-text-3">{{ description }}</p>
           </div>
         </div>
+        <!-- Shortened, the whole number is in its hint. -->
         <span
           v-if="count !== undefined"
           class="shrink-0 text-2xl font-bold text-text-2"
-          :title="count.toLocaleString(language.code)"
-          :aria-label="count.toLocaleString(language.code)"
+          :aria-label="exact"
+          :data-title-popup="exact !== compactNumber(count) ? exact : undefined"
         >
           {{ compactNumber(count) }}
         </span>

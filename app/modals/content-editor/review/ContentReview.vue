@@ -383,6 +383,7 @@ function close() {
       :anchor="cardAnchor"
       placement="bottom"
       max-width="24rem"
+      density="card"
     >
       <ReviewPartCard
         v-if="currentPart"
@@ -403,12 +404,9 @@ function close() {
       :anchor="finishButton"
       placement="top-end"
       max-width="22rem"
+      density="card"
     >
-      <div
-        class="flex flex-col gap-2.5 rounded-normal border border-border-1
-          bg-bg-2 p-sm"
-        data-review-finish-popup
-      >
+      <div class="flex flex-col gap-sm" data-review-finish-popup>
         <b>{{ words.finish(open.length - pending.length, open.length) }}</b>
         <p class="text-xs leading-snug text-text-2">
           {{

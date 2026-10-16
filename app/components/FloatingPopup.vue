@@ -1,60 +1,92 @@
 <script lang="ts" setup>
+import type { Placement, ReferenceElement } from '@floating-ui/vue';
 import {
-  autoUpdate,
-  flip,
-  hide,
-  offset as floatingOffset,
-  shift,
-  size,
-  useFloating,
-  type Placement,
-  type ReferenceElement,
-} from '@floating-ui/vue';
+  POPUP_ARROW_CLASS,
+  POPUP_ARROW_EDGES,
+  POPUP_ARROW_SIZE,
+  POPUP_GAP,
+  POPUP_VIEWPORT_PADDING,
+  POPUP_ARROW_TIP,
+  usePopupPlacement,
+} from '#layers/thei/app/composables/popup-placement';
 
 defineOptions({ inheritAttrs: false });
 
+/**
+ * The one popup of the site: a surface by its anchor, with an arrow at it,
+ * growing from that arrow as it opens and back into it as it closes. Its
+ * anchor shows it is open (`data-popup-open`) for as long as it is. On a
+ * phone a `complex` popup — a form, a search, levels to go down — comes up
+ * from the bottom as a sheet instead; small, quick ones stay by their
+ * anchor everywhere.
+ *
+ * It draws the surface itself; what it holds draws none of its own. Its
+ * `density` gives what it holds the room around it, one of three: `compact`
+ * for rows of icons, `list` for menus, lists and pickers, `card` for text
+ * and forms. `none` leaves the room to a content that scrolls inside itself
+ * and keeps its own.
+ *
+ * It is rendered in the `<dialog>` its anchor is in, or the body: a modal
+ * is a `<dialog>` in the top layer, and a popup in the body would open
+ * beneath it.
+ */
 const props = withDefaults(
   defineProps<{
     anchor: ReferenceElement | null;
     placement?: Placement;
     fallbackPlacements?: Placement[];
     shiftCrossAxis?: boolean;
+    /** Between the anchor and the tip of the arrow. */
     offset?: number;
     viewportPadding?: number;
     maxWidth?: string;
     closeOnOutside?: boolean;
     closeOnEscape?: boolean;
     outsideIgnore?: Array<HTMLElement | null>;
-    /**
-     * Where the popup is rendered. Left out, it joins the `<dialog>` its
-     * anchor is in, or the body: a modal is a `<dialog>` in the top layer,
-     * and a popup teleported to the body would open beneath it.
-     */
-    teleportTo?: string | HTMLElement;
     fitContent?: boolean;
+    density?: 'none' | 'compact' | 'list' | 'card';
+    arrow?: boolean;
+    /** A form, a search or levels to go down: a sheet on a phone. */
+    complex?: boolean;
   }>(),
   {
     placement: 'bottom-end',
     shiftCrossAxis: false,
-    offset: 8,
-    viewportPadding: 8,
+    offset: POPUP_GAP,
+    viewportPadding: POPUP_VIEWPORT_PADDING,
     maxWidth: '20rem',
     closeOnOutside: true,
     closeOnEscape: true,
+    density: 'none',
+    arrow: true,
   },
 );
 
-/** The `<dialog>` an anchor sits in, a virtual anchor through its context. */
-function dialogOf(anchor: ReferenceElement | null): HTMLElement | undefined {
+const DENSITY = {
+  none: '',
+  compact: 'p-1.5',
+  list: 'p-xs',
+  card: 'p-sm',
+} as const;
+
+/** The element an anchor stands for: itself, or a virtual one's context. */
+function elementOf(anchor: ReferenceElement | null): Element | undefined {
   if (!anchor || typeof Element === 'undefined') return undefined;
-  const element =
-    anchor instanceof Element ? anchor : (anchor.contextElement ?? undefined);
-  return element?.closest('dialog') ?? undefined;
+  return anchor instanceof Element
+    ? anchor
+    : (anchor.contextElement ?? undefined);
 }
 
-const teleportTarget = computed(
-  () => props.teleportTo ?? dialogOf(props.anchor) ?? 'body',
-);
+/**
+ * The `<dialog>` the anchor is in, else the body — kept while the anchor
+ * is taken away, so a closing popup is not moved under a modal.
+ */
+let lastTarget: Element | 'body' = 'body';
+const teleportTarget = computed(() => {
+  const element = elementOf(props.anchor);
+  if (element) lastTarget = element.closest('dialog') ?? 'body';
+  return lastTarget;
+});
 
 /**
  * A popup opened from inside another is its child: the parent is the popup
@@ -62,16 +94,11 @@ const teleportTarget = computed(
  * are inside the parent too, though the child is not inside it in the page.
  */
 const popupId = useId();
-const parentPopupId = computed(() => {
-  const anchor = props.anchor;
-  if (!anchor || typeof Element === 'undefined') return undefined;
-  const element =
-    anchor instanceof Element ? anchor : (anchor.contextElement ?? undefined);
-  return (
-    element?.closest<HTMLElement>('[data-floating-popup]')?.dataset
-      .floatingPopup || undefined
-  );
-});
+const parentPopupId = computed(
+  () =>
+    elementOf(props.anchor)?.closest<HTMLElement>('[data-floating-popup]')
+      ?.dataset.floatingPopup || undefined,
+);
 
 /** Whether a node is in this popup or in one opened from it, at any depth. */
 function withinFamily(target: Node) {
@@ -103,59 +130,68 @@ const emit = defineEmits<{
 
 const open = defineModel<boolean>('open', { required: true });
 const floatingElement = useTemplateRef<HTMLElement>('floating');
-const referenceElement = computed(() => props.anchor);
+const arrowElement = useTemplateRef<HTMLElement>('arrowElement');
 
-const middleware = computed(() => [
-  floatingOffset(props.offset),
-  flip({
-    padding: props.viewportPadding,
-    fallbackPlacements: props.fallbackPlacements,
-  }),
-  shift({
-    padding: props.viewportPadding,
-    crossAxis: props.shiftCrossAxis,
-  }),
-  size({
-    padding: props.viewportPadding,
-    apply({ availableHeight, availableWidth, elements }) {
-      elements.floating.style.setProperty(
-        '--floating-popup-available-height',
-        `${Math.max(0, availableHeight)}px`,
-      );
-      elements.floating.style.setProperty(
-        '--floating-popup-available-width',
-        `${Math.max(0, availableWidth)}px`,
-      );
-    },
-  }),
-  // An anchor scrolled out of the box it scrolls in takes its popup along,
-  // rather than leave it floating over whatever is there now.
-  hide({ padding: props.viewportPadding }),
-]);
+const phone = usePhoneWidth();
+const sheet = computed(() => props.complex && phone.value);
 
-const { floatingStyles, middlewareData, update, isPositioned } = useFloating(
-  referenceElement,
+const {
+  floatingStyles,
+  side,
+  hidden,
+  arrowStyle,
+  origin,
+  isPositioned,
+  update,
+} = usePopupPlacement(
+  computed(() => (sheet.value ? null : props.anchor)),
   floatingElement,
+  arrowElement,
   {
-    strategy: 'fixed',
     open,
-    placement: computed(() => props.placement),
-    middleware,
-    whileElementsMounted(reference, floating, performUpdate) {
-      return autoUpdate(reference, floating, performUpdate, {
-        animationFrame: false,
-      });
+    placement: () => props.placement,
+    fallbackPlacements: () => props.fallbackPlacements,
+    gap: () => props.offset,
+    padding: () => props.viewportPadding,
+    shiftCrossAxis: () => props.shiftCrossAxis,
+    arrowSize: () => (props.arrow ? POPUP_ARROW_SIZE.popup : undefined),
+    onRoom: (room, element) => {
+      element.style.setProperty(
+        '--floating-popup-available-height',
+        `${room.height}px`,
+      );
+      element.style.setProperty(
+        '--floating-popup-available-width',
+        // No wider than the popup may be, kept off the window's sides.
+        `min(${room.width}px, 100dvw - 2 * var(--spacing-window))`,
+      );
+      // For what is to be as wide as its anchor: a list under its field.
+      element.style.setProperty(
+        '--floating-popup-anchor-width',
+        `${room.anchorWidth}px`,
+      );
     },
   },
 );
 
-const popupStyle = computed(() => ({
-  ...floatingStyles.value,
-  '--floating-popup-max-width': props.maxWidth,
-  ...(middlewareData.value.hide?.referenceHidden
-    ? { visibility: 'hidden' as const }
-    : {}),
-}));
+const popupStyle = computed(() =>
+  sheet.value
+    ? {
+        // What a sheet holds may take most of the screen, under the top.
+        '--floating-popup-available-height': 'calc(85dvh - 2rem)',
+        '--floating-popup-available-width': '100dvw',
+      }
+    : {
+        ...floatingStyles.value,
+        '--floating-popup-max-width': props.maxWidth,
+        transformOrigin: origin.value,
+        // Unseen until placed: drawn first at the window's corner, it could
+        // come up under the pointer and take the hover from its own anchor.
+        ...(hidden.value || !isPositioned.value
+          ? { visibility: 'hidden' as const }
+          : {}),
+      },
+);
 
 let viewportFrame: number | undefined;
 
@@ -225,6 +261,30 @@ watch(
   { immediate: true },
 );
 
+/** The anchor says which popup of it is open, for its own look of it. */
+let marked: Element | undefined;
+function markAnchor(element: Element | undefined) {
+  if (marked === element) return;
+  // Another popup of the same anchor may have marked it since: its mark stays.
+  if (marked?.getAttribute('data-popup-open') === popupId)
+    marked.removeAttribute('data-popup-open');
+  marked = element;
+  marked?.setAttribute('data-popup-open', popupId);
+}
+// Not an anchor in a text being edited, such as a link the pointer rests on:
+// a change of it would be a change of the text.
+watch(
+  () =>
+    open.value &&
+    typeof Element !== 'undefined' &&
+    props.anchor instanceof Element &&
+    !(props.anchor instanceof HTMLElement && props.anchor.isContentEditable)
+      ? props.anchor
+      : undefined,
+  markAnchor,
+  { immediate: true },
+);
+
 // Opened once drawn where it stands: until then it may still be hidden as
 // its anchor was when it last closed, and nothing hidden takes the focus.
 let whenPositioned: (() => void) | undefined;
@@ -239,9 +299,11 @@ watch(
   async (element) => {
     if (!element || !open.value) return;
     await nextTick();
-    update();
-    if (!isPositioned.value)
-      await new Promise<void>((resolve) => (whenPositioned = resolve));
+    if (!sheet.value) {
+      update();
+      if (!isPositioned.value)
+        await new Promise<void>((resolve) => (whenPositioned = resolve));
+    }
     if (!open.value || !floatingElement.value) return;
     await nextTick();
     emit('opened');
@@ -252,6 +314,7 @@ watch(
 onBeforeUnmount(() => {
   if (import.meta.client) removeOpenListeners();
   whenPositioned?.();
+  markAnchor(undefined);
 });
 
 defineExpose({ element: floatingElement });
@@ -264,26 +327,88 @@ defineExpose({ element: floatingElement });
          there could be the marker of a popup inside it, gone by the time the
          closed popup's placeholder is put before it. -->
     <div class="contents">
-      <TransitionFade @after-leave="emit('closed')">
+      <Transition
+        appear
+        enter-from-class="opacity-0"
+        enter-active-class="transition-opacity motion-reduce:duration-0"
+        leave-to-class="opacity-0"
+        leave-active-class="transition-opacity motion-reduce:duration-0"
+      >
         <div
-          v-if="open && anchor"
+          v-if="open && sheet"
+          class="fixed inset-0 z-9998 bg-black/40"
+          aria-hidden="true"
+          data-popup-scrim
+        ></div>
+      </Transition>
+      <!-- Mounted open, it still grows in. -->
+      <Transition
+        appear
+        :enter-from-class="
+          sheet
+            ? 'translate-y-full motion-reduce:translate-y-0 opacity-0'
+            : 'scale-95 opacity-0 motion-reduce:scale-100'
+        "
+        enter-active-class="transition-[opacity,scale,translate] motion-reduce:duration-0"
+        :leave-to-class="
+          sheet
+            ? 'translate-y-full motion-reduce:translate-y-0 opacity-0'
+            : 'scale-95 opacity-0 motion-reduce:scale-100'
+        "
+        leave-active-class="transition-[opacity,scale,translate] motion-reduce:duration-0"
+        @after-leave="emit('closed')"
+      >
+        <div
+          v-if="open && (anchor || sheet)"
           ref="floating"
           v-bind="$attrs"
           :data-floating-popup="popupId"
           :data-floating-popup-parent="parentPopupId"
+          :data-popup-side="sheet ? 'sheet' : side"
           :style="popupStyle"
-          class="fixed z-9998 max-h-(--floating-popup-available-height)
-            max-w-[calc(100dvw-var(--spacing-window)-var(--spacing-window))]
-            overflow-hidden rounded-normal shadow-xl shadow-shadow-3"
+          class="z-9998 border-border-1 bg-bg-2 text-text-1 shadow-popup"
           :class="
-            fitContent
-              ? 'w-fit'
-              : 'w-[min(var(--floating-popup-max-width),var(--floating-popup-available-width))]'
+            sheet
+              ? `fixed inset-x-0 bottom-0 rounded-t-normal border-t
+                pb-[env(safe-area-inset-bottom)]`
+              : [
+                  'fixed rounded-normal border',
+                  'max-w-[calc(100dvw-var(--spacing-window)-var(--spacing-window))]',
+                  fitContent
+                    ? 'w-fit'
+                    : 'w-[min(var(--floating-popup-max-width),var(--floating-popup-available-width))]',
+                ]
           "
         >
-          <slot></slot>
+          <div
+            v-if="sheet"
+            class="mx-auto mt-2 mb-1 h-1 w-10 rounded-full bg-border-2"
+            aria-hidden="true"
+          ></div>
+          <!-- The room the popup has is what it holds may take; a block, so
+               a content of a fixed width centres in a sheet and any other
+               stretches. -->
+          <div
+            class="max-h-(--floating-popup-available-height) overflow-hidden
+              rounded-[inherit]"
+            :class="[DENSITY[density], sheet && '*:mx-auto']"
+          >
+            <slot></slot>
+          </div>
+          <span
+            v-if="props.arrow && !sheet"
+            ref="arrowElement"
+            :class="[
+              POPUP_ARROW_CLASS,
+              POPUP_ARROW_EDGES[side],
+              POPUP_ARROW_TIP[side],
+            ]"
+            :style="arrowStyle"
+            aria-hidden="true"
+            data-popup-arrow
+          ></span>
         </div>
-      </TransitionFade>
+      </Transition>
     </div>
   </Teleport>
 </template>

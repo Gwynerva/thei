@@ -42,7 +42,8 @@ import {
   findExternalLink,
   scheduleExternalLinkSweep,
 } from '../external-links/repository';
-import { archivedOriginalFromMeta, buildAdminAssetUrls } from '../assets/urls';
+import { buildAdminAssetUrls } from '../assets/urls';
+import { archivedOriginalFromMeta } from '#layers/thei/shared/asset';
 
 import {
   assertEntityVersion,

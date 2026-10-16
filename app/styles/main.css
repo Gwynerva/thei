@@ -14,6 +14,25 @@
 
   --radius-normal: var(--radius-lg);
 
+  /* A popup lifted off the page: a near edge, a soft lift and a wide far
+     shadow. Dark in both themes, as a shadow is; the dark theme adds a
+     hairline of light on top, and the popup's lighter surface does the rest
+     of the lift there. */
+  --shadow-popup:
+    inset 0 1px 0 light-dark(transparent, oklch(100% 0 0 / 0.06)),
+    0 1px 2px
+      light-dark(oklch(20% 0.04 var(--hue-accent) / 0.08), oklch(0% 0 0 / 0.5)),
+    0 10px 24px -8px
+      light-dark(oklch(25% 0.05 var(--hue-accent) / 0.16), oklch(0% 0 0 / 0.55)),
+    0 30px 60px -24px
+      light-dark(oklch(25% 0.06 var(--hue-accent) / 0.24), oklch(0% 0 0 / 0.7));
+  /* The smaller lift of a hint. */
+  --shadow-hint:
+    0 2px 4px
+      light-dark(oklch(20% 0.04 var(--hue-accent) / 0.14), oklch(0% 0 0 / 0.5)),
+    0 8px 16px -6px
+      light-dark(oklch(25% 0.05 var(--hue-accent) / 0.2), oklch(0% 0 0 / 0.6));
+
   /* The one size below Tailwind's own: meta lines under a title, counts in
      a badge, the small capitals of a group's heading. */
   --text-2xs: 0.6875rem;
@@ -49,6 +68,14 @@
   --color-bg-accent: light-dark(
     oklch(95% 0.04 var(--hue-accent)),
     oklch(24% 0.04 var(--hue-accent))
+  );
+
+  /* The ground a document is read on in a file's window: the page, with the
+     faintest touch of the accent. */
+  --color-bg-document: color-mix(
+    in oklab,
+    var(--color-accent) 7%,
+    var(--color-bg-1)
   );
 
   --color-bg-1: light-dark(
@@ -110,6 +137,9 @@
 
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
+/* An anchor whose popup is open (`FloatingPopup` marks it). */
+@custom-variant popup-open (&[data-popup-open]);
+
 /*
  * Pointed at or reached with the keyboard. Pointing needs a pointer that can
  * point, as for Tailwind's own `hover:`: a phone reports the last tap as a
@@ -127,6 +157,20 @@
 }
 
 @custom-variant sticky-stuck (&:where([data-sticky-stuck], [data-sticky-stuck] *));
+
+/*
+ * A row of a popup's menu or list: one height, one rounding, one shade under
+ * the pointer. It says no `display`: a row is `flex` with its icon, or a
+ * `grid` with a line of hint under its name. A row that deletes gives its
+ * shade with `[--popup-item-hover:var(--color-bg-error)]`.
+ */
+@utility popup-item {
+  @apply min-h-9 w-full cursor-pointer gap-sm rounded-sm px-xs py-1.5 text-left
+    text-sm transition pointer-coarse:min-h-11;
+  @variant hocus {
+    background-color: var(--popup-item-hover, var(--color-bg-3));
+  }
+}
 
 @utility tr-normal {
   @apply transition hocus:bg-accent/8;
@@ -439,6 +483,17 @@
 }
 
 @layer base {
+  /*
+   * A control whose popup is open stays pressed while it is, so it is plain
+   * where the popup comes from. Any utility of its own wins over this; a
+   * control drawn in a colour of its own says how it looks with
+   * `popup-open:`.
+   */
+  :where(button, a, [role='button'])[data-popup-open] {
+    background-color: var(--color-bg-3);
+    color: var(--color-text-1);
+  }
+
   :root {
     --width-narrow: min(700px, 100%);
     --width-wide: min(1100px, 100%);

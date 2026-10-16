@@ -71,6 +71,11 @@ const popupOpen = computed({
     if (!value) opened.value = undefined;
   },
 });
+/** The offer the card shows, kept while the card fades out. */
+const shownOffer = shallowRef<typeof openOffer.value>();
+watch(openOffer, (offer) => {
+  if (offer) shownOffer.value = offer;
+});
 const decisions = {};
 </script>
 
@@ -93,7 +98,7 @@ const decisions = {};
       class="inline-flex h-8 max-w-full cursor-pointer items-center gap-1.5
         rounded-normal border border-dashed border-accent bg-bg-1 px-2.5 text-sm
         font-semibold text-accent transition-colors pointer-coarse:h-11
-        hocus:bg-bg-accent"
+        popup-open:bg-bg-accent hocus:bg-bg-accent"
       :class="{ 'line-through': chipOf(offer).removal }"
       :aria-label="phrase.ai_offer_chip(chipOf(offer).label)"
       :aria-expanded="opened === offer.action.actionUuid"
@@ -112,27 +117,24 @@ const decisions = {};
     </button>
 
     <FloatingPopup
-      v-if="openOffer"
       v-model:open="popupOpen"
-      :anchor="anchors.get(openOffer.action.actionUuid) ?? null"
+      :anchor="
+        shownOffer ? (anchors.get(shownOffer.action.actionUuid) ?? null) : null
+      "
       placement="bottom-start"
       max-width="26rem"
     >
-      <div
-        class="@container overflow-hidden rounded-normal border border-border-1
-          bg-bg-2"
-        data-ai-offer-card
-      >
+      <div v-if="shownOffer" class="@container" data-ai-offer-card>
         <AiActionRow
-          :action="openOffer.action"
-          :from="openOffer.session"
-          :form="ai.modeOf(openOffer)"
+          :action="shownOffer.action"
+          :from="shownOffer.session"
+          :form="ai.modeOf(shownOffer)"
           inline-comment
           :here="ai.ref.value"
           :decisions
-          @apply="(ai.accept(openOffer), (opened = undefined))"
-          @reject="(ai.reject(openOffer), (opened = undefined))"
-          @comment="(text) => ai!.comment(openOffer!, text)"
+          @apply="(ai.accept(shownOffer), (opened = undefined))"
+          @reject="(ai.reject(shownOffer), (opened = undefined))"
+          @comment="(text) => ai!.comment(shownOffer!, text)"
         />
       </div>
     </FloatingPopup>

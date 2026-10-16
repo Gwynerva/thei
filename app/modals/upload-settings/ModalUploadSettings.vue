@@ -4,6 +4,7 @@ import type {
   AssetWizardResult,
 } from '#layers/thei/shared/api/asset';
 import {
+  archivedOriginalFromMeta,
   AssetType,
   assetMetaDimensions,
   type AudioAssetMeta,
@@ -53,7 +54,7 @@ import AssetModalCompareMedia from '../asset-modal/AssetModalCompareMedia.vue';
 import AssetModalFileInfo from '../asset-modal/AssetModalFileInfo.vue';
 import AssetModalPreviewAudio from '../asset-modal/AssetModalPreviewAudio.vue';
 import AssetModalPreviewMedia from '../asset-modal/AssetModalPreviewMedia.vue';
-import FilePreview from '../../components/FilePreview.vue';
+import FilePreviewContent from '../../components/file-preview/FilePreviewContent.vue';
 import { useFileInfo } from '../asset-modal/use-file-info';
 import { detectVideoAudio } from '../asset-modal/video-audio';
 import AssetCropBox from './AssetCropBox.vue';
@@ -1015,6 +1016,9 @@ const previewSource = computed(() => {
       hasAudio:
         variant.type === AssetType.Video ? variant.meta?.hasAudio : undefined,
       dimensions: assetMetaDimensions(variant.meta),
+      size: variant.size,
+      file: undefined,
+      archivedOriginal: archivedOriginalFromMeta(variant?.meta),
     };
   }
   return {
@@ -1026,6 +1030,10 @@ const previewSource = computed(() => {
     isMedia: Boolean(frameKind.value),
     hasAudio: transformSource.value?.hasAudio,
     dimensions: sourceDimensions.value,
+    size: processingVariant.value?.size ?? pickedFile?.size ?? 0,
+    // A file not uploaded yet is read where it lies.
+    file: processingVariant.value ? undefined : pickedFile?.file,
+    archivedOriginal: archivedOriginalFromMeta(processingVariant.value?.meta),
   };
 });
 
@@ -1195,11 +1203,14 @@ const directHref = computed(() =>
           />
         </template>
       </AssetModalPreviewMedia>
-      <FilePreview
+      <FilePreviewContent
         v-else
         :key="`file:${previewSource.key}`"
+        :src="previewSource.file ? undefined : previewSource.href"
+        :file="previewSource.file"
         :extension="previewSource.extension"
-        class="w-1/2 max-w-132 text-text-2"
+        :size="previewSource.size"
+        :archived-original="previewSource.archivedOriginal"
       />
     </template>
 

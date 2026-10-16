@@ -39,8 +39,9 @@ defineExpose({
     type="button"
     class="flex cursor-pointer items-center justify-center gap-xs rounded-normal
       bg-bg-3 text-text-2 transition-colors disabled:cursor-not-allowed
-      disabled:bg-bg-3/40 disabled:text-text-3/80
-      hocus:not-disabled:bg-bg-accent hocus:not-disabled:text-accent"
+      disabled:bg-bg-3/40 disabled:text-text-3/80 popup-open:bg-bg-accent
+      popup-open:text-accent hocus:not-disabled:bg-bg-accent
+      hocus:not-disabled:text-accent"
     :class="iconOnly ? 'size-10 shrink-0' : 'h-10 px-md sm:size-12 sm:px-0'"
     :aria-label="label"
     :data-title-popup="label"

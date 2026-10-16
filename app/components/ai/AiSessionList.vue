@@ -234,15 +234,13 @@ const spending = computed(() => {
           :aria-label="phrase.ai_sessions_search"
           data-session-search
         />
-        <span
-          ref="filterButton"
-          class="absolute top-1/2 right-0.5 inline-flex -translate-y-1/2"
-        >
+        <span class="absolute top-1/2 right-0.5 inline-flex -translate-y-1/2">
           <button
+            ref="filterButton"
             type="button"
             class="flex size-8 cursor-pointer items-center justify-center
               rounded-md bg-transparent transition pointer-coarse:size-11
-              hocus:text-accent"
+              popup-open:bg-bg-3 popup-open:text-accent hocus:text-accent"
             :class="filter === 'all' ? 'text-text-3' : 'text-accent'"
             aria-haspopup="listbox"
             :aria-expanded="filterOpen"
@@ -440,16 +438,15 @@ const spending = computed(() => {
     </div>
 
     <FloatingPopup
-      v-if="filterOpen"
       v-model:open="filterOpen"
       :anchor="filterButton ?? null"
       placement="bottom-end"
       max-width="18rem"
+      density="list"
     >
       <div
         role="listbox"
-        class="flex flex-col rounded-normal border border-border-1 bg-bg-2 p-1
-          shadow-md shadow-shadow-1"
+        class="flex flex-col gap-0.5"
         data-session-filter-menu
       >
         <button
@@ -458,9 +455,7 @@ const spending = computed(() => {
           type="button"
           role="option"
           :aria-selected="filter === key"
-          class="grid min-h-10 cursor-pointer grid-cols-[auto_1fr_auto]
-            items-center gap-x-2.5 rounded-md bg-transparent px-2.5 py-1.5
-            text-left hocus:bg-accent/10"
+          class="grid popup-item grid-cols-[auto_1fr_auto] items-center gap-y-0"
           :data-session-filter-option="key"
           @click="choose(key as Filter)"
         >

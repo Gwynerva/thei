@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { ReferenceElement } from '@floating-ui/vue';
 import type { ContentEntityType } from '#layers/thei/shared/content-link';
 import type { ContentLinkPick } from '#layers/thei/app/components/content/link-picker/types';
 import { typedLines } from '#layers/thei/shared/ai-message-text';
@@ -13,6 +14,8 @@ import type {
   AiMentionItem,
 } from '#layers/thei/app/composables/ai-session';
 import { runEditCommand } from '#layers/thei/app/components/content/editor-edit-commands';
+import { typedAt } from '#layers/thei/app/composables/at-trigger';
+import { rangeAnchor } from '#layers/thei/app/composables/popup-placement';
 
 /**
  * Where the owner writes in a session: one row — attach, the words, send —
@@ -50,11 +53,10 @@ const emit = defineEmits<{
 const field = ref<HTMLDivElement>();
 const empty = ref(true);
 const picking = ref(false);
+/** Each mention gets a picker of its own, fresh. */
+const pickOpening = ref(0);
 const picker = ref<{ focus: () => void }>();
-const pickAnchor = shallowRef<{
-  getBoundingClientRect: () => DOMRect;
-  contextElement?: Element;
-} | null>(null);
+const pickAnchor = shallowRef<ReferenceElement | null>(null);
 const menuOpen = ref(false);
 const menuButton = ref<HTMLElement>();
 /** Where the `@` was typed, to put the chip in its place. */
@@ -134,6 +136,23 @@ interface Brought {
 }
 
 const brought = ref<Brought[]>([]);
+
+/**
+ * A file's hint: its name, which a picture hides and a narrow chip may cut,
+ * and why it failed. A name shown whole needs no hint.
+ */
+function broughtHint(item: Brought) {
+  return {
+    ...titlePopup(
+      item.failed ? { text: item.name, bold: true } : item.name,
+      TITLE_POPUP_GAP,
+      item.failed,
+    ),
+    'data-title-popup-clipped':
+      item.picture || item.failed ? undefined : ('' as const),
+  };
+}
+
 const uploading = computed(() =>
   brought.value.some((item) => !item.asset && !item.failed),
 );
@@ -382,41 +401,19 @@ function paste(event: ClipboardEvent) {
   document.execCommand('insertText', false, text);
 }
 
-/**
- * Whether an `@` was just typed where a word starts: the character before
- * the caret, whatever way it came — a key, a phone's keyboard, a paste of
- * one character.
- */
-function atTyped(event: Event): Range | undefined {
-  const inputType = (event as InputEvent).inputType ?? '';
-  if (!inputType.startsWith('insert')) return undefined;
-  const selection = window.getSelection();
-  if (!selection?.rangeCount) return undefined;
-  const range = selection.getRangeAt(0);
-  const node = range.startContainer;
-  if (!range.collapsed || node.nodeType !== Node.TEXT_NODE) return undefined;
-  const text = (node as Text).data;
-  const at = range.startOffset;
-  if (text[at - 1] !== '@') return undefined;
-  const before = text[at - 2];
-  if (before !== undefined && !/\s/.test(before)) return undefined;
-  return range.cloneRange();
-}
-
 function input(event: Event) {
   updateEmpty();
-  const range = atTyped(event);
-  if (!range) return;
-  mentionRange = range;
-  pickAnchor.value = {
-    getBoundingClientRect: () =>
-      range.getBoundingClientRect().width ||
-      range.getBoundingClientRect().height
-        ? range.getBoundingClientRect()
-        : field.value!.getBoundingClientRect(),
-    // Where it stands: in a popup, the picker is that popup's own.
-    contextElement: field.value,
-  };
+  // An `@` just typed where it stands alone, as the editor's text takes one
+  // (`typedAt`): the same rule in both places.
+  const at = field.value && typedAt(event, field.value);
+  if (!at) return;
+  // The chip goes where the caret is, right after it; the picker points at
+  // it. Its context is the field: in a popup, the picker is that popup's own.
+  mentionRange = document.createRange();
+  mentionRange.setStart(at.endContainer, at.endOffset);
+  mentionRange.collapse(true);
+  pickAnchor.value = rangeAnchor(at, field.value!);
+  pickOpening.value++;
   picking.value = true;
 }
 
@@ -612,7 +609,7 @@ defineExpose<AiComposerExpose>({
           item.failed ? 'border-border-error' : 'border-border-1',
           item.picture ? 'w-14' : 'max-w-52 min-w-32',
         ]"
-        :title="item.failed ?? item.name"
+        v-bind="broughtHint(item)"
         :data-composer-file="
           item.failed ? 'failed' : item.asset ? 'ready' : 'uploading'
         "
@@ -644,9 +641,11 @@ defineExpose<AiComposerExpose>({
               :class="item.failed ? 'text-text-error' : 'text-text-2'"
             />
             <span class="flex min-w-0 flex-col">
-              <span class="truncate text-xs font-semibold">{{
-                item.name
-              }}</span>
+              <span
+                class="truncate text-xs font-semibold"
+                data-title-popup-clip
+                >{{ item.name }}</span
+              >
               <span
                 class="truncate text-2xs"
                 :class="item.failed ? 'text-text-error' : 'text-text-3'"
@@ -703,13 +702,14 @@ defineExpose<AiComposerExpose>({
     >
       <!-- The two controls are icons alone, in the accent: a shape of their
            own would quarrel with the field's rounded one. -->
-      <span ref="menuButton" class="inline-flex">
+      <span class="inline-flex">
         <button
+          ref="menuButton"
           type="button"
           class="flex size-9 shrink-0 cursor-pointer items-center justify-center
             bg-transparent text-xl text-accent transition-opacity
             disabled:cursor-default disabled:text-text-3 disabled:opacity-100
-            pointer-coarse:size-11 hocus:opacity-75"
+            pointer-coarse:size-11 popup-open:opacity-75 hocus:opacity-75"
           :disabled="disabled"
           aria-haspopup="menu"
           :aria-expanded="menuOpen"
@@ -771,23 +771,17 @@ defineExpose<AiComposerExpose>({
     </div>
 
     <FloatingPopup
-      v-if="menuOpen"
       v-model:open="menuOpen"
       :anchor="menuButton ?? null"
       placement="top-start"
       max-width="20rem"
+      density="list"
     >
-      <div
-        role="menu"
-        class="flex flex-col rounded-normal border border-border-1 bg-bg-2 p-1
-          shadow-md shadow-shadow-1"
-      >
+      <div role="menu" class="flex flex-col gap-0.5">
         <button
           type="button"
           role="menuitem"
-          class="grid cursor-pointer grid-cols-[auto_1fr] items-center gap-x-2.5
-            rounded-md bg-transparent px-2.5 py-2 text-left
-            pointer-coarse:min-h-11 hocus:bg-accent/10"
+          class="grid popup-item grid-cols-[auto_1fr] items-center gap-y-0"
           data-composer-mention
           @click="attachFromMenu"
         >
@@ -802,9 +796,7 @@ defineExpose<AiComposerExpose>({
         <button
           type="button"
           role="menuitem"
-          class="grid cursor-pointer grid-cols-[auto_1fr] items-center gap-x-2.5
-            rounded-md bg-transparent px-2.5 py-2 text-left
-            pointer-coarse:min-h-11 hocus:bg-accent/10"
+          class="grid popup-item grid-cols-[auto_1fr] items-center gap-y-0"
           data-composer-files-pick
           @click="pickFiles"
         >
@@ -842,15 +834,21 @@ defineExpose<AiComposerExpose>({
     />
 
     <FloatingPopup
-      v-if="picking"
       v-model:open="picking"
-      :anchor="pickAnchor as never"
+      :anchor="pickAnchor"
       placement="top-start"
       max-width="22rem"
+      complex
       @opened="picker?.focus()"
       @dismiss="pickerDismissed"
     >
-      <ContentLinkPicker ref="picker" mode="mention" @apply="mentionPicked" />
+      <!-- A picker of its own for each mention, fresh. -->
+      <ContentLinkPicker
+        :key="pickOpening"
+        ref="picker"
+        mode="mention"
+        @apply="mentionPicked"
+      />
     </FloatingPopup>
 
     <ContentInlineLinkDecorator

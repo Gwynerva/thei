@@ -29,9 +29,10 @@ export type SelectOption<V extends string = string> = {
  * have icons; the options open in a popup under it. The same everywhere, so
  * no select of the site is the browser's own and another a popup.
  *
- * The popup opens with a small filter on top, in focus: a few letters and
- * Enter pick an option, and the arrows still walk them. It grows to 20rem
- * at most; a longer list scrolls inside it.
+ * The popup opens with a small filter at its foot, in focus: a few letters
+ * and Enter pick the option ringed as the one Enter takes, and the arrows
+ * still walk them. It grows to 20rem at most; a longer list scrolls inside
+ * it, the filter staying in sight.
  *
  * `options` is a list, or a record of labels by value for options with no
  * more to them: only real choices, never a «choose…» standing for none —
@@ -157,11 +158,8 @@ function choose(option: SelectOption<V>) {
   trigger.value?.focus({ preventScroll: true });
 }
 
-/** The popup is at least as wide as the trigger it opens from. */
-const triggerWidth = ref(0);
 function toggle() {
   if (props.disabled) return;
-  triggerWidth.value = trigger.value?.offsetWidth ?? 0;
   open.value = !open.value;
 }
 
@@ -358,11 +356,13 @@ defineExpose({
     >
       <div
         class="flex max-h-[min(20rem,var(--floating-popup-available-height))]
-          flex-col rounded-normal border border-border-1 bg-bg-2 p-xs
-          text-text-1"
+          flex-col p-xs"
         :style="{
-          minWidth: `${triggerWidth}px`,
-          maxWidth: `max(18rem, ${triggerWidth}px)`,
+          // At least as wide as the trigger it opens from.
+          minWidth:
+            'min(var(--floating-popup-anchor-width), var(--floating-popup-available-width))',
+          maxWidth:
+            'min(max(18rem, var(--floating-popup-anchor-width)), var(--floating-popup-available-width))',
         }"
         data-select-popup
       >
@@ -372,35 +372,6 @@ defineExpose({
         >
           {{ label }}
         </p>
-        <div class="relative mb-1 shrink-0">
-          <Icon
-            name="search"
-            class="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2
-              text-xs text-text-3"
-            aria-hidden="true"
-          />
-          <input
-            ref="search"
-            v-model="query"
-            type="text"
-            autocomplete="off"
-            spellcheck="false"
-            role="combobox"
-            aria-autocomplete="list"
-            :aria-controls="listId"
-            :aria-expanded="true"
-            :aria-activedescendant="
-              active === undefined ? undefined : optionId(active)
-            "
-            :aria-label="phrase.select_filter"
-            :placeholder="phrase.select_filter"
-            class="h-8 w-full rounded-sm border-2 border-border-1 bg-bg-1 pr-2
-              pl-6 text-sm text-text-1 transition outline-none
-              placeholder:text-text-3 focus:border-accent pointer-coarse:h-10"
-            data-select-filter
-            @keydown="onKeydown"
-          />
-        </div>
         <div
           :id="listId"
           ref="list"
@@ -437,8 +408,10 @@ defineExpose({
                     : option.value === active
                       ? 'cursor-pointer bg-bg-3'
                       : 'cursor-pointer hocus:bg-bg-3',
-                option.value === model && option.value === active
-                  ? 'ring-1 ring-accent/40 ring-inset'
+                // The option Enter picks, marked as the keyboard's focus is:
+                // a ring, apart from the shade a pointer gives.
+                option.value === active
+                  ? 'ring-2 ring-accent/60 ring-inset'
                   : '',
               ]"
               :data-select-option="option.value"
@@ -501,6 +474,38 @@ defineExpose({
           >
             {{ phrase.search_entity_no_results }}
           </p>
+        </div>
+        <!-- Below the options and always in sight: above them it would come
+             between a group's heading and its choices. A popup turned up
+             over the field brings it next to the field. -->
+        <div class="relative mt-1 shrink-0">
+          <Icon
+            name="search"
+            class="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2
+              text-xs text-text-3"
+            aria-hidden="true"
+          />
+          <input
+            ref="search"
+            v-model="query"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            role="combobox"
+            aria-autocomplete="list"
+            :aria-controls="listId"
+            :aria-expanded="true"
+            :aria-activedescendant="
+              active === undefined ? undefined : optionId(active)
+            "
+            :aria-label="phrase.select_filter"
+            :placeholder="phrase.select_filter"
+            class="h-8 w-full rounded-sm border-2 border-border-1 bg-bg-1 pr-2
+              pl-6 text-sm text-text-1 transition outline-none
+              placeholder:text-text-3 focus:border-accent pointer-coarse:h-10"
+            data-select-filter
+            @keydown="onKeydown"
+          />
         </div>
       </div>
     </FloatingPopup>

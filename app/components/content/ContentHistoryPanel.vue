@@ -114,6 +114,19 @@ const row =
     </div>
 
     <template v-else>
+      <div class="flex items-center justify-between gap-xs px-xs pt-0.5">
+        <span class="text-xs font-semibold text-text-3">{{
+          phrase.content_history
+        }}</span>
+        <!-- How it works, for whoever asks: not a paragraph over the list. -->
+        <Icon
+          name="question"
+          class="shrink-0 text-text-3"
+          :data-title-popup="phrase.content_history_keeps"
+          tabindex="0"
+          data-history-help
+        />
+      </div>
       <button
         v-if="showOpened && openedStats"
         type="button"
@@ -182,22 +195,22 @@ const row =
       </p>
     </template>
 
-    <div
-      class="mt-xs flex flex-col gap-xs border-t border-border-1 px-xs pt-sm
-        pb-xs"
-    >
-      <p class="text-xs leading-snug text-text-3">
-        {{ phrase.content_history_keeps }}
-      </p>
-      <Button
-        variant="delete"
-        class="flex h-8 items-center gap-xs self-start text-sm
-          pointer-coarse:h-11"
+    <!-- The one action, last, as a menu's: the text it clears comes back
+         from this same list. -->
+    <div class="mt-0.5 border-t border-border-1 pt-xs">
+      <button
+        type="button"
+        class="flex popup-item items-center text-text-2
+          [--popup-item-hover:var(--color-bg-error)] disabled:cursor-default
+          disabled:text-text-3/60 not-disabled:hocus:text-text-error"
         :disabled="!clearable"
+        :data-title-popup="phrase.content_history_clear_hint"
         data-history-clear
         @click="emit('clear')"
-        ><Icon name="delete" />{{ phrase.content_history_clear }}</Button
       >
+        <Icon name="delete" class="shrink-0" />
+        {{ phrase.content_history_clear }}
+      </button>
     </div>
   </div>
 </template>

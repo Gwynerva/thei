@@ -44,6 +44,37 @@ export function editableFieldOf(node: Node | null | undefined) {
 const MARK = 'data-thei-inserting';
 let marks = 0;
 
+/** An element as HTML with a one-time mark, to find it by once it is in. */
+function markedHtml(element: HTMLElement) {
+  const mark = `m${++marks}`;
+  element.setAttribute(MARK, mark);
+  const html = element.outerHTML;
+  element.removeAttribute(MARK);
+  return { mark, html };
+}
+
+/**
+ * Puts HTML in place of a range by one editing command, then finds the
+ * element marked in it. `undefined` when the browser refused the command;
+ * `null` when it merged the element away, which is then not to be put in
+ * a second time.
+ */
+function insertMarkedHtml(
+  range: Range,
+  html: string,
+  mark: string,
+): HTMLElement | null | undefined {
+  const field = editableFieldOf(range.commonAncestorContainer);
+  if (field) field.focus({ preventScroll: true });
+  if (!selectRange(range) || !runEditCommand('insertHTML', html))
+    return undefined;
+  const inserted = (field ?? document).querySelector<HTMLElement>(
+    `[${MARK}="${mark}"]`,
+  );
+  inserted?.removeAttribute(MARK);
+  return inserted;
+}
+
 /**
  * Replaces a range with an element, as one undoable step: the element goes
  * in as HTML with a one-time mark, and is found by the mark afterwards. The
@@ -53,19 +84,9 @@ export function insertInlineElement(
   range: Range,
   element: HTMLElement,
 ): HTMLElement | undefined {
-  const field = editableFieldOf(range.commonAncestorContainer);
-  const mark = `m${++marks}`;
-  element.setAttribute(MARK, mark);
-  const html = element.outerHTML;
-  element.removeAttribute(MARK);
-  if (field) field.focus({ preventScroll: true });
-  if (selectRange(range) && runEditCommand('insertHTML', html)) {
-    // Run, it is in: found by its mark, or — merged away by the browser —
-    // not to be put in a second time.
-    const inserted = (field ?? document).querySelector<HTMLElement>(
-      `[${MARK}="${mark}"]`,
-    );
-    inserted?.removeAttribute(MARK);
+  const { mark, html } = markedHtml(element);
+  const inserted = insertMarkedHtml(range, html, mark);
+  if (inserted !== undefined) {
     if (inserted) placeCaretAfter(inserted);
     return inserted ?? undefined;
   }
@@ -74,6 +95,71 @@ export function insertInlineElement(
   range.insertNode(element);
   placeCaretAfter(element);
   return element;
+}
+
+/**
+ * Text as HTML to put in by a command. A space at its edge goes in as a
+ * no-break space, as the browser types one there: a plain one at the edge
+ * of what is put in would be collapsed away. The text's own normalization
+ * reads both as one space.
+ */
+function textAsHtml(text: string) {
+  return text
+    .replace(
+      /[&<>]/g,
+      (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[char]!,
+    )
+    .replace(/^ | $/g, '&nbsp;');
+}
+
+/**
+ * Writes text right outside an inline element — after it, or before it —
+ * as one undoable step: the element is put back with the text beside it.
+ * A browser asked to type there types into the element instead, which is
+ * how its markup would never be left. The caret ends after the text.
+ */
+export function writeBesideElement(
+  element: HTMLElement,
+  text: string,
+  side: 'before' | 'after',
+  /** What goes back in the element's place, when not the element as it is. */
+  replacement: HTMLElement = element,
+): boolean {
+  const marked = markedHtml(replacement);
+  const html =
+    side === 'after'
+      ? marked.html + textAsHtml(text)
+      : textAsHtml(text) + marked.html;
+  const range = document.createRange();
+  range.selectNode(element);
+  const inserted = insertMarkedHtml(range, html, marked.mark);
+  if (inserted !== undefined) {
+    const written =
+      side === 'after' ? inserted?.nextSibling : inserted?.previousSibling;
+    if (written?.nodeType === Node.TEXT_NODE) {
+      // The text may have joined the words already beside the element:
+      // after it, the text starts that node; before it, it ends it.
+      const length = (written as Text).data.length;
+      const caret = document.createRange();
+      caret.setStart(
+        written,
+        side === 'after' ? Math.min(text.length, length) : length,
+      );
+      caret.collapse(true);
+      selectRange(caret);
+    }
+    return true;
+  }
+  // Refused: the same change by hand, outside the browser's history.
+  if (replacement !== element) element.replaceWith(replacement);
+  const node = document.createTextNode(text);
+  if (side === 'after') replacement.after(node);
+  else replacement.before(node);
+  const caret = document.createRange();
+  caret.setStart(node, text.length);
+  caret.collapse(true);
+  selectRange(caret);
+  return false;
 }
 
 /** Replaces a range with plain text, as one undoable step. */

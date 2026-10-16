@@ -428,11 +428,6 @@ function clone<T>(value: T): T {
         <FieldTextarea v-model="eventData.summary" required />
         <FieldHint>{{ phrase.event_summary_hint }}</FieldHint>
       </Field>
-      <FieldSynonyms
-        v-model="synonymsModel"
-        ai="field:synonyms"
-        :title="eventData.title"
-      />
       <Field ai="periods">
         <FieldLabel required>{{ phrase.event_periods }}</FieldLabel>
         <FieldDateRanges v-model="eventData.periods" />
@@ -498,5 +493,13 @@ function clone<T>(value: T): T {
       v-model:notes="notesModel"
       @notes-saved="saveAfterContentEdit()"
     />
+    <!-- The other names: the least needed setting, so the last one. -->
+    <Box class="p-sm sm:p-md">
+      <FieldSynonyms
+        v-model="synonymsModel"
+        ai="field:synonyms"
+        :title="eventData.title"
+      />
+    </Box>
   </div>
 </template>

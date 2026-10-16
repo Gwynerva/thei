@@ -51,8 +51,8 @@ import {
 import type { TagItem } from '#layers/thei/shared/tag';
 import { buildTagUrl } from '#layers/thei/shared/tag-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
+import { archivedOriginalFromMeta } from '#layers/thei/shared/asset';
 import {
-  archivedOriginalFromMeta,
   buildPublicProjectMedia,
   buildPublicEventMedia,
   buildPublicTagMedia,

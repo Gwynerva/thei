@@ -31,7 +31,8 @@ function start(about?: string) {
     type="button"
     class="flex h-full shrink-0 cursor-pointer items-center gap-2 bg-transparent
       px-2 opacity-80 transition max-xs:gap-1.5 max-xs:px-1.5 sm:gap-3 sm:px-3
-      hocus:bg-accent/25 hocus:opacity-100"
+      popup-open:bg-accent/25 popup-open:opacity-100 hocus:bg-accent/25
+      hocus:opacity-100"
     :aria-label="phrase.ai_bar_waiting(waiting)"
     :data-title-popup="phrase.ai_bar_waiting(waiting)"
     aria-haspopup="dialog"
@@ -48,7 +49,6 @@ function start(about?: string) {
   </button>
 
   <FloatingPopup
-    v-if="open"
     v-model:open="open"
     :anchor="button ?? null"
     placement="bottom-end"

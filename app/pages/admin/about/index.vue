@@ -377,11 +377,9 @@ const birthDateMax = new Date();
       :anchor="factAnchor"
       placement="bottom-end"
       max-width="24rem"
-      ><form
-        class="flex flex-col gap-sm rounded-normal border border-border-1
-          bg-bg-2 p-md"
-        @submit.prevent="addFact"
-      >
+      density="card"
+      complex
+      ><form class="flex flex-col gap-sm" @submit.prevent="addFact">
         <Field
           ><FieldLabel>{{ phrase.profile_field }}</FieldLabel
           ><FieldInput v-model="factName" /></Field
@@ -400,6 +398,7 @@ const birthDateMax = new Date();
       :anchor="pageAnchor?.element ?? null"
       placement="bottom-end"
       max-width="28rem"
+      complex
       ><ContentEntitySearchPopup
         :entity-types="['page']"
         public-only

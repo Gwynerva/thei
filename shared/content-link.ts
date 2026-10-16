@@ -168,6 +168,11 @@ const INLINE_TAGS = new Set([
   'br',
 ]);
 
+/** The markup of words a caret can stand inside of: all of it but a break. */
+export const CONTENT_INLINE_MARKUP_SELECTOR = [...INLINE_TAGS]
+  .filter((tag) => tag !== 'br')
+  .join(', ');
+
 /** `execCommand` still writes the ancient `strike`; storage keeps only `s`. */
 const INLINE_TAG_ALIASES: Record<string, string> = { strike: 's' };
 

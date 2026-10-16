@@ -253,8 +253,7 @@ function recommendationPopup(tag: RecommendedTag) {
         :id="listboxId"
         role="listbox"
         :aria-label="phrase.tag_search_results"
-        class="flex max-h-72 flex-col gap-1.5 overflow-auto rounded-normal
-          border border-border-1 bg-bg-2 p-1.5"
+        class="flex max-h-72 flex-col gap-1.5 overflow-auto p-1.5"
       >
         <div
           v-if="createOptionVisible || visibleSuggestions.length"

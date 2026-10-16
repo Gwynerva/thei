@@ -1,6 +1,6 @@
 import { buildAssetPreviewUrl } from '#layers/thei/shared/api/asset';
 import type { AssetRole } from '#layers/thei/shared/asset';
-import { AssetType, type AssetMeta } from '#layers/thei/shared/asset';
+import { AssetType } from '#layers/thei/shared/asset';
 import {
   buildProjectSectionUrl,
   buildProjectUrl,
@@ -135,8 +135,4 @@ export async function buildAdminAssetUrls(asset: StoredAsset) {
     assetUrl,
     media: undefined,
   };
-}
-
-export function archivedOriginalFromMeta(meta: AssetMeta | null | undefined) {
-  return meta && 'archivedOriginal' in meta ? meta.archivedOriginal : undefined;
 }

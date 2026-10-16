@@ -6,6 +6,7 @@ import {
 } from '#layers/thei/app/scripts/visuals';
 import type { FieldOptionValue } from '#layers/thei/app/components/field/FieldOptions.vue';
 import { accentHueCssColor } from '#layers/thei/shared/accent-color';
+import Box from '#layers/thei/app/components/Box.vue';
 
 const {
   showPublicViewMode = false,
@@ -48,10 +49,11 @@ const publicViewOptions = computed<Record<string, FieldOptionValue>>(() => ({
 </script>
 
 <template>
-  <Box>
+  <!-- Compact, it is a popup's, which draws the surface: no box of its own. -->
+  <component :is="compact ? 'div' : Box">
     <div
       class="flex flex-col"
-      :class="compact ? 'gap-sm p-xs text-xs' : 'gap-md p-sm sm:p-md'"
+      :class="compact ? 'gap-xs p-sm text-xs' : 'gap-md p-sm sm:p-md'"
     >
       <Field>
         <FieldLabel>{{ phrase.theme }}</FieldLabel>
@@ -100,5 +102,5 @@ const publicViewOptions = computed<Record<string, FieldOptionValue>>(() => ({
       </Field>
     </div>
     <slot></slot>
-  </Box>
+  </component>
 </template>

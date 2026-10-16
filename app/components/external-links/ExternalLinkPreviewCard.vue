@@ -22,6 +22,7 @@ const props = defineProps<{
   loading?: boolean;
   errorText?: string;
   loadingText?: string;
+  /** Laid on a popup's surface: no border or ground of its own. */
   flush?: boolean;
   interactive: boolean;
   playback?: MediaPlayback;
@@ -83,11 +84,12 @@ const { engaged, events: mediaEvents } = useMediaInteraction();
       :target="interactiveHref ? '_blank' : undefined"
       :rel="interactiveHref ? 'noopener noreferrer' : undefined"
       class="external-link-preview flex min-h-16 w-full min-w-0 items-center
-        gap-xs rounded-normal border border-border-1 bg-bg-2 text-text-1
-        no-underline transition-colors"
+        gap-xs text-text-1 no-underline transition-colors"
       :class="[
         { 'cursor-pointer': interactiveHref },
-        flush ? '' : 'px-sm py-xs',
+        flush
+          ? ''
+          : 'rounded-normal border border-border-1 bg-bg-2 px-sm py-xs',
       ]"
       :style="{ '--external-link-accent': accentColor }"
     >
