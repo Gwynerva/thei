@@ -1,6 +1,10 @@
 <script lang="ts" setup>
 import type { AiSessionOverview } from '#layers/thei/shared/ai';
 
+// The page's classes go to the box by hand: a server render of a transition
+// hands its child none of them.
+defineOptions({ inheritAttrs: false });
+
 /**
  * The AI on the dashboard, headed as every box there is: the latest sessions
  * that wait for the owner, that work now, and that were done within the
@@ -8,9 +12,16 @@ import type { AiSessionOverview } from '#layers/thei/shared/ai';
  * sessions stand side by side as far as there is room, then one under
  * another. Nothing at all with AI off, or while there is no session to show.
  */
+// Read with the page, so the box is there from the first paint rather than
+// pushing the page down after it; with AI off, nothing is asked.
+await useAdminSummary();
 const enabled = useAiEnabled();
 const waiting = useAiWaiting();
-const overview = ref<AiSessionOverview>();
+const { data: first } = await useFetch<AiSessionOverview>(
+  '/api/admin/ai/overview',
+  { key: 'admin-ai-overview', immediate: enabled.value },
+);
+const overview = ref(first.value);
 
 const groups = computed(() => {
   const value = overview.value;
@@ -34,10 +45,15 @@ const groups = computed(() => {
   ].filter((group) => group.items.length);
 });
 
-// A session at work is followed closely, the rest now and then; what waits
-// is read again as soon as the admin bar counts it anew.
+// Then a session at work is followed closely, the rest now and then; what
+// waits is read again as soon as the admin bar counts it anew. A read that
+// fails leaves what is shown.
 let timer: ReturnType<typeof setTimeout> | undefined;
 let reading = 0;
+function later() {
+  clearTimeout(timer);
+  timer = setTimeout(load, overview.value?.running.length ? 5_000 : 30_000);
+}
 async function load() {
   clearTimeout(timer);
   const ticket = ++reading;
@@ -50,9 +66,9 @@ async function load() {
     if (ticket !== reading) return;
     if (read) overview.value = read;
   }
-  timer = setTimeout(load, overview.value?.running.length ? 5_000 : 30_000);
+  later();
 }
-onMounted(load);
+onMounted(later);
 watch([enabled, waiting], load);
 onBeforeUnmount(() => {
   reading++;
@@ -61,11 +77,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <!-- It comes once the sessions are read, after the page: it fades in
-       rather than appearing at a stroke. -->
+  <!-- It comes with the page; one that shows up later, when a first
+       session does, fades in. -->
   <TransitionFade>
     <Box
       v-if="overview && groups.length"
+      v-bind="$attrs"
       class="flex flex-col overflow-hidden"
       data-ai-sessions
     >
