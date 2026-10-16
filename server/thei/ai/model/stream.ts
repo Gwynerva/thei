@@ -18,21 +18,64 @@ export interface StreamTool {
 }
 
 /**
- * A file the owner brought into the session, as a model is shown it: a
- * picture made small, a PDF whole, a text's words. Any other file is told of
- * in the words of the message alone.
+ * A block of a file, as a model is shown it (`server/thei/ai/sessions/files.ts`
+ * makes them): a picture made small, a PDF whole, a text's words, a
+ * recording as MP3. A file may be several — a video is its frame and its
+ * sound — and any other is told of in words alone.
  */
 export type StreamFile =
-  | { kind: 'image'; data: string }
+  | { kind: 'image'; name: string; data: string }
   | { kind: 'pdf'; name: string; data: string }
-  | { kind: 'text'; name: string; text: string };
+  | { kind: 'text'; name: string; text: string }
+  | {
+      kind: 'audio';
+      name: string;
+      /** Base64 of an MP3. */
+      data: string;
+      /** Seconds it was cut at, when the recording runs longer. */
+      cutAt?: number;
+    };
+
+/** The kinds of block a provider may turn away. */
+export type StreamFileKind = Exclude<StreamFile['kind'], 'text'>;
+
+/**
+ * Given up in this order when a provider refuses a request that carries
+ * them: the rarest kind first. Each is then told of in words.
+ */
+const DROPPED_FIRST: StreamFileKind[] = ['audio', 'pdf', 'image'];
+
+const BLOCK_WORDS: Record<StreamFileKind, string> = {
+  image: 'a picture',
+  pdf: 'a PDF',
+  audio: 'a recording',
+};
+
+/**
+ * What a model is told of a block it could not be shown: so it neither
+ * pretends to have seen the file nor guesses what is in it.
+ */
+function unshownNote(file: Exclude<StreamFile, { kind: 'text' }>): string {
+  return `(«${file.name}» is ${BLOCK_WORDS[file.kind]} that could not be shown to you here. Do not guess what is in it.)`;
+}
+
+/** A recording cut short, said before it. */
+function cutNote(file: Extract<StreamFile, { kind: 'audio' }>): string {
+  const minutes = Math.round((file.cutAt ?? 0) / 60);
+  return `(You hear the first ${minutes} minutes of «${file.name}»: it runs longer.)`;
+}
 
 export interface StreamTurnInput {
   settings: ModelSettings;
   system: string;
   turns: AiTranscriptTurn[];
-  /** The files the turns name, by id; one missing is told of in words only. */
-  files?: ReadonlyMap<string, StreamFile>;
+  /**
+   * The blocks of the files the turns name — what the owner brought, what a
+   * tool showed — by id; one missing is told of in words only.
+   */
+  files?: ReadonlyMap<string, StreamFile[]>;
+  /** Kinds of block this provider turned away already: told in words. */
+  unshown?: ReadonlySet<StreamFileKind>;
   tools: StreamTool[];
   signal: AbortSignal;
   /** Words as they come, in order. */
@@ -54,6 +97,36 @@ export interface StreamTurnOutput {
   usage: ModelUsage;
   /** The model ended its turn, asked for tools, ran out of room, or refused. */
   stop: 'end' | 'tools' | 'length' | 'refusal';
+  /**
+   * Kinds of block the provider turned away, now and before: the next call
+   * of the turn tells of them in words from the start.
+   */
+  unshown: Set<StreamFileKind>;
+}
+
+/** The files a request carries blocks of, by kind, given what is unshown. */
+function kindsCarried(
+  turns: AiTranscriptTurn[],
+  files: ReadonlyMap<string, StreamFile[]>,
+  unshown: ReadonlySet<StreamFileKind>,
+): Set<StreamFileKind> {
+  const kinds = new Set<StreamFileKind>();
+  for (const turn of turns)
+    for (const id of turnFiles(turn))
+      for (const file of files.get(id) ?? [])
+        if (file.kind !== 'text' && !unshown.has(file.kind))
+          kinds.add(file.kind);
+  return kinds;
+}
+
+/** The kind of block to give up next, when a request with them is refused. */
+function nextToDrop(carried: ReadonlySet<StreamFileKind>) {
+  return DROPPED_FIRST.find((kind) => carried.has(kind));
+}
+
+/** The files a turn shows: what the owner brought, or what a tool showed. */
+function turnFiles(turn: AiTranscriptTurn): string[] {
+  return turn.role === 'user' || turn.role === 'tool' ? (turn.files ?? []) : [];
 }
 
 /**
@@ -86,23 +159,44 @@ export function streamTurn(input: StreamTurnInput): Promise<StreamTurnOutput> {
 
 // --- Anthropic ---------------------------------------------------------------
 
-function anthropicFile(file: StreamFile): Anthropic.ContentBlockParam {
+/** What Anthropic's API takes: pictures and PDFs, and no sound. */
+const ANTHROPIC_SENDS = (kind: StreamFileKind) => kind !== 'audio';
+
+function anthropicFile(
+  file: StreamFile,
+  unshown: ReadonlySet<StreamFileKind>,
+):
+  | Anthropic.TextBlockParam
+  | Anthropic.ImageBlockParam
+  | Anthropic.DocumentBlockParam {
+  if (file.kind === 'text') return { type: 'text', text: textFile(file) };
+  if (!ANTHROPIC_SENDS(file.kind) || unshown.has(file.kind))
+    return { type: 'text', text: unshownNote(file) };
   if (file.kind === 'image')
     return {
       type: 'image',
       source: { type: 'base64', media_type: 'image/jpeg', data: file.data },
     };
-  if (file.kind === 'pdf')
-    return {
-      type: 'document',
-      title: file.name,
-      source: {
-        type: 'base64',
-        media_type: 'application/pdf',
-        data: file.data,
-      },
-    };
-  return { type: 'text', text: textFile(file) };
+  return {
+    type: 'document',
+    title: file.name,
+    source: {
+      type: 'base64',
+      media_type: 'application/pdf',
+      data: file.data,
+    },
+  };
+}
+
+/** The blocks of the files a turn shows. */
+function anthropicFiles(
+  turn: AiTranscriptTurn,
+  files: ReadonlyMap<string, StreamFile[]>,
+  unshown: ReadonlySet<StreamFileKind>,
+) {
+  return turnFiles(turn).flatMap((id) =>
+    (files.get(id) ?? []).map((file) => anthropicFile(file, unshown)),
+  );
 }
 
 /** A text file, set apart from the words of the message. */
@@ -112,7 +206,8 @@ function textFile(file: { name: string; text: string }) {
 
 function anthropicMessages(
   turns: AiTranscriptTurn[],
-  files: ReadonlyMap<string, StreamFile> = new Map(),
+  files: ReadonlyMap<string, StreamFile[]> = new Map(),
+  unshown: ReadonlySet<StreamFileKind> = new Set(),
 ): Anthropic.MessageParam[] {
   const messages: Anthropic.MessageParam[] = [];
   const push = (
@@ -128,21 +223,22 @@ function anthropicMessages(
     if (turn.role === 'user')
       push('user', [
         { type: 'text', text: turn.text },
-        ...(turn.files ?? []).flatMap((id) => {
-          const file = files.get(id);
-          return file ? [anthropicFile(file)] : [];
-        }),
+        ...anthropicFiles(turn, files, unshown),
       ]);
-    else if (turn.role === 'tool')
+    else if (turn.role === 'tool') {
+      // A file a tool showed goes along with its answer.
+      const shown = anthropicFiles(turn, files, unshown);
       push('user', [
         {
           type: 'tool_result',
           tool_use_id: turn.id,
-          content: turn.output,
+          content: shown.length
+            ? [{ type: 'text', text: turn.output }, ...shown]
+            : turn.output,
           ...(turn.error ? { is_error: true } : {}),
         },
       ]);
-    else if (turn.native?.provider === 'anthropic')
+    } else if (turn.native?.provider === 'anthropic')
       push('assistant', turn.native.content as Anthropic.ContentBlockParam[]);
     else
       push('assistant', [
@@ -188,11 +284,13 @@ async function streamAnthropic({
   settings,
   system,
   turns,
-  files,
+  files = new Map(),
+  unshown: unshownBefore,
   tools,
   signal,
   onText,
 }: StreamTurnInput): Promise<StreamTurnOutput> {
+  const unshown = new Set(unshownBefore ?? []);
   const client = new Anthropic({ apiKey: settings.apiKey, maxRetries: 2 });
   const params: Anthropic.MessageCreateParamsNonStreaming = {
     model: settings.model,
@@ -213,12 +311,13 @@ async function streamAnthropic({
       // against the tool's schema before the tool runs.
       eager_input_streaming: true,
     })),
-    messages: anthropicMessages(turns, files),
+    messages: anthropicMessages(turns, files, unshown),
     // The conversation so far is reread on every turn: cached, for a tenth.
     cache_control: { type: 'ephemeral' },
   };
   for (let attempt = 0; ; attempt++) {
     let written = '';
+    params.messages = anthropicMessages(turns, files, unshown);
     try {
       const stream = client.messages.stream(params, { signal });
       stream.on('text', (delta) => {
@@ -257,9 +356,25 @@ async function streamAnthropic({
               : cut
                 ? 'length'
                 : 'end',
+        unshown,
       };
     } catch (error) {
       if (signal.aborted) throw error;
+      // A request the service refuses while it carries a file's blocks is
+      // asked again without them, one kind at a time: the model is told in
+      // words what it could not be shown.
+      if (error instanceof Anthropic.BadRequestError && !written) {
+        const drop = nextToDrop(
+          new Set(
+            [...kindsCarried(turns, files, unshown)].filter(ANTHROPIC_SENDS),
+          ),
+        );
+        if (drop) {
+          unshown.add(drop);
+          attempt--;
+          continue;
+        }
+      }
       // Tool input that would not parse at all rejects the read of the
       // stream: the turn is asked again, a few times.
       if (
@@ -276,17 +391,15 @@ async function streamAnthropic({
 
 // --- Chat completions ----------------------------------------------------------
 
+type ChatPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } }
+  | { type: 'input_audio'; input_audio: { data: string; format: 'mp3' } }
+  | { type: 'file'; file: { filename: string; file_data: string } };
+
 type ChatMessage =
   | { role: 'system'; content: string }
-  | {
-      role: 'user';
-      content:
-        | string
-        | (
-            | { type: 'text'; text: string }
-            | { type: 'image_url'; image_url: { url: string } }
-          )[];
-    }
+  | { role: 'user'; content: string | ChatPart[] }
   | {
       role: 'assistant';
       content: string | null;
@@ -299,56 +412,87 @@ type ChatMessage =
   | { role: 'tool'; tool_call_id: string; content: string };
 
 /**
- * The conversation in the chat completions format. Pictures go as images,
- * unless `pictures` is off for a model that sees none; a PDF is not a part
- * every server of the format takes, so it is only named.
+ * A block of a file in the chat completions format: a picture as an image,
+ * a PDF as a file, a recording as sound; what the provider turned away is
+ * told in words.
+ */
+function chatParts(
+  file: StreamFile,
+  unshown: ReadonlySet<StreamFileKind>,
+): ChatPart[] {
+  if (file.kind === 'text') return [{ type: 'text', text: textFile(file) }];
+  if (unshown.has(file.kind))
+    return [{ type: 'text', text: unshownNote(file) }];
+  if (file.kind === 'image')
+    return [
+      {
+        type: 'image_url',
+        image_url: { url: `data:image/jpeg;base64,${file.data}` },
+      },
+    ];
+  if (file.kind === 'pdf')
+    return [
+      {
+        type: 'file',
+        file: {
+          filename: file.name,
+          file_data: `data:application/pdf;base64,${file.data}`,
+        },
+      },
+    ];
+  return [
+    ...(file.cutAt ? [{ type: 'text' as const, text: cutNote(file) }] : []),
+    { type: 'input_audio', input_audio: { data: file.data, format: 'mp3' } },
+  ];
+}
+
+/**
+ * The conversation in the chat completions format. The files a message
+ * brings go in it as parts; a tool's answer is words only in this format, so
+ * the files the tools of one call showed follow their answers, in a message
+ * of their own.
  */
 function chatMessages(
   system: string,
   turns: AiTranscriptTurn[],
-  files: ReadonlyMap<string, StreamFile> = new Map(),
-  pictures = true,
+  files: ReadonlyMap<string, StreamFile[]> = new Map(),
+  unshown: ReadonlySet<StreamFileKind> = new Set(),
 ): ChatMessage[] {
   const messages: ChatMessage[] = [{ role: 'system', content: system }];
-  for (const turn of turns) {
-    const brought = (turn.role === 'user' ? (turn.files ?? []) : []).flatMap(
-      (id) => {
-        const file = files.get(id);
-        return file ? [file] : [];
-      },
+  const partsOf = (turn: AiTranscriptTurn) =>
+    turnFiles(turn).flatMap((id) =>
+      (files.get(id) ?? []).flatMap((file) => chatParts(file, unshown)),
     );
-    if (turn.role === 'user' && brought.length)
+  let shownByTools: ChatPart[] = [];
+  const showToolFiles = () => {
+    if (!shownByTools.length) return;
+    messages.push({
+      role: 'user',
+      content: [
+        { type: 'text', text: 'The files your tools showed above:' },
+        ...shownByTools,
+      ],
+    });
+    shownByTools = [];
+  };
+  for (const turn of turns) {
+    if (turn.role !== 'tool') showToolFiles();
+    if (turn.role === 'user') {
+      const brought = partsOf(turn);
       messages.push({
         role: 'user',
-        content: [
-          { type: 'text', text: turn.text },
-          ...brought.map((file) =>
-            file.kind === 'image' && pictures
-              ? {
-                  type: 'image_url' as const,
-                  image_url: { url: `data:image/jpeg;base64,${file.data}` },
-                }
-              : {
-                  type: 'text' as const,
-                  text:
-                    file.kind === 'text'
-                      ? textFile(file)
-                      : file.kind === 'pdf'
-                        ? `(«${file.name}» is a PDF this model is not shown.)`
-                        : '(A picture this model is not shown.)',
-                },
-          ),
-        ],
+        content: brought.length
+          ? [{ type: 'text', text: turn.text }, ...brought]
+          : turn.text,
       });
-    else if (turn.role === 'user')
-      messages.push({ role: 'user', content: turn.text });
-    else if (turn.role === 'tool')
+    } else if (turn.role === 'tool') {
       messages.push({
         role: 'tool',
         tool_call_id: turn.id,
         content: turn.error ? `Error: ${turn.output}` : turn.output,
       });
-    else
+      shownByTools.push(...partsOf(turn));
+    } else
       messages.push({
         role: 'assistant',
         content: turn.text || null,
@@ -366,6 +510,7 @@ function chatMessages(
           : {}),
       });
   }
+  showToolFiles();
   return messages;
 }
 
@@ -470,11 +615,13 @@ async function streamOpenAi({
   settings,
   system,
   turns,
-  files,
+  files = new Map(),
+  unshown: unshownBefore,
   tools,
   signal,
   onText,
 }: StreamTurnInput): Promise<StreamTurnOutput> {
+  const unshown = new Set(unshownBefore ?? []);
   const base = {
     model: settings.model,
     ...(tools.length
@@ -493,18 +640,13 @@ async function streamOpenAi({
     stream: true,
   };
   let counted = true;
-  let pictures = turns.some(
-    (turn) =>
-      turn.role === 'user' &&
-      turn.files?.some((id) => files?.get(id)?.kind === 'image'),
-  );
   let response: Response;
   for (;;) {
     response = await chatRequest(
       settings,
       {
         ...base,
-        messages: chatMessages(system, turns, files, pictures),
+        messages: chatMessages(system, turns, files, unshown),
         ...(counted ? { stream_options: { include_usage: true } } : {}),
       },
       signal,
@@ -512,9 +654,14 @@ async function streamOpenAi({
     if (response.status !== 400) break;
     const said = await response.text().catch(() => '');
     // Ollama and LM Studio may not know stream_options: asked again without.
-    if (counted && /stream_options|include_usage/i.test(said)) counted = false;
-    // A model that sees no pictures is told of them in words.
-    else if (pictures) pictures = false;
+    if (counted && /stream_options|include_usage/i.test(said)) {
+      counted = false;
+      continue;
+    }
+    // A model that takes no sound, no PDF or no pictures is asked again
+    // without them, one kind at a time, and told of them in words.
+    const drop = nextToDrop(kindsCarried(turns, files, unshown));
+    if (drop) unshown.add(drop);
     else
       throw new ModelError(
         /model/i.test(said) ? 'model' : 'error',
@@ -557,6 +704,7 @@ async function streamOpenAi({
       calls,
       usage: usageOf(body.usage),
       stop: calls.length ? 'tools' : cut ? 'length' : 'end',
+      unshown,
     };
   }
 
@@ -630,5 +778,6 @@ async function streamOpenAi({
     calls: made,
     usage: usageOf(usage),
     stop: made.length ? 'tools' : cut ? 'length' : 'end',
+    unshown,
   };
 }

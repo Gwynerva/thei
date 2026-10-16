@@ -7,7 +7,8 @@ import {
 import type { AiCertainty, AiEntityType } from '#layers/thei/shared/ai';
 import { EntityPrefix } from '../../entity-id';
 import { EntityPatchError, refuse as fail } from '../../entity-patch/text';
-import { findEntity, refOf, type EntityKey } from '../../entity-kinds';
+import { findEntity } from '../../entity-kinds';
+import { findTarget, targetRef, type ActionTarget } from './target';
 import {
   linkSessionEntities,
   refreshSessionCounts,
@@ -63,7 +64,7 @@ const OWN_FIELDS = new Set([
 
 interface Checked {
   kind: AiActionKind;
-  target: EntityKey | undefined;
+  target: ActionTarget | undefined;
   prepared: PreparedAction<AiActionKind>;
   fingerprint: string;
   certainty: AiCertainty;
@@ -90,9 +91,9 @@ async function check(
 ): Promise<Checked> {
   const def = actionDef(proposal.kind);
   const kind = def.kind;
-  let target: EntityKey | undefined;
+  let target: ActionTarget | undefined;
   if (proposal.target !== undefined && proposal.target !== null) {
-    target = findEntity(proposal.target);
+    target = findTarget(proposal.target);
     if (!target) fail(`There is no ${String(proposal.target)}.`);
     if (!def.targets.includes(target.kind))
       fail(
@@ -109,9 +110,11 @@ async function check(
       ? proposal.reason.replace(/\s+/g, ' ').trim().slice(0, 500)
       : '';
   const prepared = await def.prepare(target, parsed.data, { reason, sources });
+  // A kind that names what it is about in its own fields — a file — says so.
+  if (prepared.target) target = prepared.target;
   const fingerprint = fingerprintOf([
     kind,
-    def.identityHasTarget || !target ? null : refOf(target),
+    def.identityHasTarget || !target ? null : targetRef(target),
     def.identity(prepared.payload, target),
   ]);
   const info = AI_ACTION_INFO[kind];
@@ -151,7 +154,7 @@ async function check(
  */
 function changes(item: Checked): string[] {
   if (!item.target) return [];
-  const on = refOf(item.target);
+  const on = targetRef(item.target);
   const payload = item.prepared.payload as {
     field?: string;
     changes?: Record<string, unknown>;
@@ -168,6 +171,11 @@ function changes(item: Checked): string[] {
     case 'write':
     case 'revise':
       return [`the text ${payload.text} of ${on}`];
+    case 'describe':
+      // One description serves a whole family.
+      return [
+        `the description of ${(item.prepared.payload as { family?: string }).family ?? on}`,
+      ];
     default:
       return [];
   }
@@ -337,7 +345,7 @@ export async function proposeActions(
     const touched = accepted
       .filter((item) => !late.has(item))
       .flatMap((item) => {
-        const ends: EntityKey[] = item.target ? [item.target] : [];
+        const ends: ActionTarget[] = item.target ? [item.target] : [];
         const payload = item.prepared.payload as {
           kind: string;
           other?: string;

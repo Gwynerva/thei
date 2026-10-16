@@ -56,6 +56,11 @@ describe('asset cleanup', () => {
           meta text,
           PRIMARY KEY(assetUuid, containerType, containerId, role)
         );
+        CREATE TABLE "asset-descriptions" (
+          familyUuid text PRIMARY KEY,
+          text text NOT NULL,
+          updatedAt integer NOT NULL
+        );
         CREATE TABLE projects (
           projectUuid text PRIMARY KEY,
           title text NOT NULL,

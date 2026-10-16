@@ -222,6 +222,16 @@ export default defineI18nBase({
       'Picks a frame that shows the video, past a black or blank opening.',
     asset_library_description:
       'Every uploaded file: where it is used, how much it weighs and which variants it has.',
+    asset_description: 'Description',
+    asset_description_hint:
+      'What the file shows or is about, in a sentence or a few: for search, for AI and for those who cannot see it. One for the file and all its variants.',
+    asset_description_placeholder: 'What is in this file?',
+    asset_description_save: 'Save the description',
+    asset_description_saved: 'Description saved',
+    asset_description_conflict:
+      'It was changed elsewhere in the meantime: this is how it reads now.',
+    asset_description_too_long: (max) => `At most ${max} characters`,
+    asset_description_error: 'Could not save the description.',
     asset_hash_check: 'Checking file',
     asset_hash_error: 'Could not check this file. Select it again to retry.',
     asset_hash_match: 'This file has already been uploaded',
@@ -2004,6 +2014,7 @@ export default defineI18nBase({
       remember: 'Remember',
       term: 'To the dictionary',
       'memory-compact': 'Compact memory',
+      describe: 'Description',
     },
     ai_memory_owner: 'About you',
     ai_review_title: 'Text edit',
@@ -2345,6 +2356,8 @@ export default defineI18nBase({
       },
     },
     ai_model_service_label: 'Service',
+    ai_model_no_sound:
+      'Claude sees pictures, PDFs and texts, but hears no sound: of a recording, or of a video’s sound, it is only told that it could not be shown.',
     ai_model_service_choose: 'Choose a service',
     ai_model_service_custom: 'My own address…',
     ai_model_service_local: (name) => `${name} — on your computer`,

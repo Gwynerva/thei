@@ -6,6 +6,7 @@ import { findTemplate } from '../templates/store';
 import { findEntity, refOf, type EntityKey } from '../../entity-kinds';
 import { actionDef } from '../actions/registry';
 import { findAction, targetOf } from '../actions/rows';
+import { targetRef } from '../actions/target';
 import { startTurn } from '../runner/queue';
 import { publishSession } from './bus';
 import {
@@ -112,7 +113,7 @@ export function postOwnerMessage(
       refused('There is no such action in this session');
     parts.push({ type: 'comment', actionUuid: action.actionUuid });
     const target = targetOf(action);
-    said = `About ${action.actionUuid} (${action.kind}${target ? ` on ${refOf(target)}` : ''}: ${actionDef(action.kind).summary(action.payload as never)}): ${text}`;
+    said = `About ${action.actionUuid} (${action.kind}${target ? ` on ${targetRef(target)}` : ''}: ${actionDef(action.kind).summary(action.payload as never)}): ${text}`;
   }
   for (const file of files) parts.push({ type: 'file', ...file });
   said = [said, sessionFilesNote(files)].filter(Boolean).join('\n\n');

@@ -265,6 +265,16 @@ export default defineI18nModule({
       'Подбирает кадр, по которому видно видео, минуя чёрное или пустое начало.',
     asset_library_description:
       'Все загруженные файлы: где используется каждый, сколько весит и какие у него варианты.',
+    asset_description: 'Расшифровка',
+    asset_description_hint:
+      'Что показано в файле или о чём он, в одном или нескольких предложениях: для поиска, для AI и для тех, кто его не видит. Одна на файл и все его варианты.',
+    asset_description_placeholder: 'Что в этом файле?',
+    asset_description_save: 'Сохранить расшифровку',
+    asset_description_saved: 'Расшифровка сохранена',
+    asset_description_conflict:
+      'Её изменили в другом месте: вот какая она сейчас.',
+    asset_description_too_long: (max) => `Не больше ${max} символов`,
+    asset_description_error: 'Не удалось сохранить расшифровку.',
     asset_hash_check: 'Проверка файла',
     asset_hash_error: 'Не удалось проверить файл. Выберите его ещё раз.',
     asset_hash_match: 'Этот файл уже загружен',
@@ -2071,6 +2081,7 @@ export default defineI18nModule({
       remember: 'Запомнить',
       term: 'В словарь',
       'memory-compact': 'Сжать память',
+      describe: 'Расшифровка',
     },
     ai_memory_owner: 'О вас',
     ai_review_title: 'Правка текста',
@@ -2413,6 +2424,8 @@ export default defineI18nModule({
       },
     },
     ai_model_service_label: 'Сервис',
+    ai_model_no_sound:
+      'Claude видит картинки, PDF и тексты, но не слышит звук: о записи или о звуке видео ему только скажут, что их не удалось показать.',
     ai_model_service_choose: 'Выберите сервис',
     ai_model_service_custom: 'Свой адрес…',
     ai_model_service_local: (name) => `${name} — на вашем компьютере`,

@@ -8,6 +8,8 @@ import { AI_ENTITY_TYPES } from '../../shared/ai';
 import { ENTITY_KINDS } from '../../server/thei/entity-kinds';
 import { FORM_FIELDS } from '../../server/thei/ai/forms/changes';
 import { AI_ACTION_DEFS } from '../../server/thei/ai/actions/registry';
+import enModule from '../../shared/language/list/en';
+import ruModule from '../../shared/language/list/ru';
 
 /**
  * Every kind of action is whole: the site knows how to check it, apply it,
@@ -29,14 +31,36 @@ describe('the kinds of action', () => {
       expect(typeof def.evaluate).toBe('function');
       expect(typeof def.summary).toBe('function');
       expect(typeof def.identity).toBe('function');
-      // Every kind is about some entity but a word of the dictionary.
+      // Every kind is about some entity — or a file — but a word of the
+      // dictionary.
       if (kind !== 'term') expect(def.targets.length).toBeGreaterThan(0);
       for (const target of def.targets) {
-        expect(ENTITY_KINDS).toContain(target);
+        // A file is named as `asset:<id>` and is no entity of the archive.
+        if (target !== 'asset') expect(ENTITY_KINDS).toContain(target);
         expect(AI_ENTITY_TYPES).toContain(target);
       }
       expect(AI_ACTION_INFO[kind]).toBeDefined();
+      expect(def.reference.length).toBeGreaterThan(40);
     }
+  });
+
+  it('keep a file out of the entities, and its description in its kind', () => {
+    expect(ENTITY_KINDS).not.toContain('asset');
+    const fileKinds = AI_ACTION_KINDS.filter((kind) =>
+      (AI_ACTION_DEFS[kind].targets as readonly string[]).includes('asset'),
+    );
+    expect(fileKinds).toEqual(['describe']);
+    expect(AI_ACTION_INFO.describe.group).toBe('media');
+  });
+
+  it('name every kind in both languages', () => {
+    for (const language of [enModule.phrases, ruModule.phrases])
+      for (const kind of AI_ACTION_KINDS)
+        expect(
+          (language.ai_action_kinds as Record<string, string> | undefined)?.[
+            kind
+          ],
+        ).toBeTruthy();
   });
 
   it('leave a final one to the owner, always', () => {

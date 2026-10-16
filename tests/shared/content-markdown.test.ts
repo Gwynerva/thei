@@ -257,3 +257,70 @@ describe('inline markdown for the newer markup', () => {
     );
   });
 });
+
+describe('a file’s description in the Markdown copy', () => {
+  const format = (text: string) => text.replace(/"([^"]*)"/g, '«$1»');
+  const render = (block: object) =>
+    contentToMarkdown({ blocks: [block as never] }, { ...options, format });
+
+  it('is a picture’s alt, its caption following', () => {
+    const picture = (asset: object, caption?: string) =>
+      render({
+        type: 'contentMedia',
+        data: {
+          asset: {
+            assetUuid: 'p',
+            media: { src: '/events/e/content/p.webp' },
+            ...asset,
+          },
+          ...(caption ? { caption } : {}),
+        },
+      });
+    expect(
+      picture({ alt: 'Grandmother at the "dacha" [1985]' }, 'Summer'),
+    ).toBe(
+      '![Grandmother at the «dacha» \\[1985\\]](https://example.com/events/e/content/p.webp)\n\nSummer',
+    );
+    expect(picture({ alt: 'A red square' })).toBe(
+      '![A red square](https://example.com/events/e/content/p.webp)',
+    );
+    // Without one, the caption stays the alt.
+    expect(picture({}, 'Summer')).toBe(
+      '![Summer](https://example.com/events/e/content/p.webp)',
+    );
+  });
+
+  it('is the title of a file’s and a recording’s link', () => {
+    expect(
+      render({
+        type: 'contentAttachment',
+        data: {
+          title: 'Tickets',
+          asset: {
+            assetUuid: 't',
+            assetUrl: '/events/e/content/t.pdf',
+            alt: 'Two "train" tickets',
+          },
+        },
+      }),
+    ).toBe(
+      '[Tickets](https://example.com/events/e/content/t.pdf "Two «train» tickets")',
+    );
+    expect(
+      render({
+        type: 'contentAudio',
+        data: {
+          title: 'Talk',
+          asset: {
+            assetUuid: 's',
+            assetUrl: '/events/e/content/s.weba',
+            audio: { duration: 65, peaks: [] },
+            alt: 'A talk about the move',
+          },
+        },
+      }),
+    ).toBe(
+      '[Talk](https://example.com/events/e/content/s.weba "A talk about the move") (1:05)',
+    );
+  });
+});

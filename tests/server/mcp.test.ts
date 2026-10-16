@@ -250,6 +250,10 @@ describe('the MCP endpoint', () => {
       'relation_graph',
       'session_actions',
       'describe_actions',
+      'find_files',
+      'read_file',
+      'look_at_file',
+      'download_file',
     ];
     expect(tools.map((t) => t.name)).toEqual(expect.arrayContaining(reading));
     // A reader proposes; it never applies or undoes.
@@ -469,6 +473,10 @@ describe('proposing over MCP', () => {
       outline: 'reads',
       broken_links: 'reads',
       file_status: 'reads',
+      find_files: 'reads',
+      read_file: 'reads',
+      look_at_file: 'reads',
+      download_file: 'reads',
       session_actions: 'reads',
       describe_actions: 'reads',
       open_session: 'adds',

@@ -7,10 +7,15 @@ import type {
 import type { ApiTokenPrincipal } from '../../api-tokens';
 import { entityFace, findEntity, refOf } from '../../entity-kinds';
 import { MCP_INSTRUCTIONS } from '../../mcp/instructions';
-import { REFUSED_META } from '../../mcp/result';
+import { FILES_META, REFUSED_META } from '../../mcp/result';
 import { directTools, type DirectTool } from '../../mcp/registry';
 import { withOwnerInstructions } from '../../mcp/server';
-import { ModelError, streamTurn, type StreamCall } from '../model/stream';
+import {
+  ModelError,
+  streamTurn,
+  type StreamCall,
+  type StreamFileKind,
+} from '../model/stream';
 import { sessionModel } from '../model/settings';
 import { countedTokens, recordUsage, tokensLeft } from '../model/usage';
 import { publishSession, setWriting } from '../sessions/bus';
@@ -295,6 +300,8 @@ export async function runSessionTurn(
       .filter(Boolean)
       .join('\n\n');
     const files = await modelFiles(history, fileNames);
+    /** Kinds of a file's blocks the model's service turned away. */
+    let unshown = new Set<StreamFileKind>();
     const offered = [
       ...[...tools.values()].map(({ name, description, inputSchema }) => ({
         name,
@@ -322,6 +329,7 @@ export async function runSessionTurn(
         system,
         turns: [...history, ...transcript],
         files,
+        unshown,
         tools: offered,
         signal,
         onText(delta) {
@@ -344,6 +352,7 @@ export async function runSessionTurn(
       });
       // What came streamed is what the provider gave in the end.
       text = text.slice(0, before) + (turn.text ? separator + turn.text : '');
+      unshown = turn.unshown;
       recordUsage(turn.usage);
       const counted = countedTokens(turn.usage);
       spent += counted;
@@ -371,6 +380,8 @@ export async function runSessionTurn(
           text: string;
           error: boolean;
           refused?: number;
+          /** Library files the tool showed. */
+          files?: string[];
         }> => {
           if (call.broken) return { text: call.broken, error: true };
           if (call.name === NAME_TOOL.name)
@@ -428,8 +439,12 @@ export async function runSessionTurn(
             return { text: `There is no tool ${call.name} here.`, error: true };
           const result = await tool.call(call.input);
           const refused = result._meta?.[REFUSED_META];
+          const shown = result._meta?.[FILES_META];
           return {
             refused: typeof refused === 'number' ? refused : 0,
+            ...(Array.isArray(shown) && shown.length
+              ? { files: shown.filter((id) => typeof id === 'string') }
+              : {}),
             text: cutAnswer(
               result.content
                 .map((part) => ('text' in part ? part.text : ''))
@@ -447,7 +462,15 @@ export async function runSessionTurn(
           name: call.name,
           output: result.text,
           ...(result.error ? { error: true } : {}),
+          ...(result.files ? { files: result.files } : {}),
         });
+        // What a tool showed is made ready for the model's next call.
+        if (result.files)
+          for (const [id, blocks] of await modelFiles(
+            [{ role: 'tool', files: result.files }],
+            fileNames,
+          ))
+            files.set(id, blocks);
         save();
       }
       if (asked) break;

@@ -49,6 +49,8 @@ export type FakeModel = {
   url: string;
   /** Every chat call so far, in order; model listings are not kept. */
   requests: FakeRequest[];
+  /** The calls turned away for a block the model does not take. */
+  refused: FakeRequest[];
   close: () => Promise<void>;
 };
 
@@ -61,7 +63,25 @@ export type FakeModelOptions = {
    * is expected to ask again without it.
    */
   refuseStreamOptions?: boolean;
+  /**
+   * Kinds of content block the model does not take — `input_audio`,
+   * `file`, `document`, `image`… — refused with a 400, as a service
+   * refuses a request that carries one: a client is expected to ask again
+   * without it.
+   */
+  refuseBlocks?: string[];
 };
+
+/** Whether a body carries a content block of one of these types anywhere. */
+function carriesBlock(value: unknown, types: readonly string[]): boolean {
+  if (Array.isArray(value))
+    return value.some((item) => carriesBlock(item, types));
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  if (typeof record.type === 'string' && types.includes(record.type))
+    return true;
+  return Object.values(record).some((item) => carriesBlock(item, types));
+}
 
 const NO_MORE: FakeTurn = {
   error: { status: 500, body: { error: 'the script has no more turns' } },
@@ -94,6 +114,7 @@ export async function startFakeModel(
   options: FakeModelOptions = {},
 ): Promise<FakeModel> {
   const requests: FakeRequest[] = [];
+  const refused: FakeRequest[] = [];
   const models = options.models ?? ['fake-small', 'fake-large'];
   const turnFor = async (request: FakeRequest, index: number) =>
     (typeof script === 'function'
@@ -135,11 +156,36 @@ export async function startFakeModel(
       ) {
         response.writeHead(400, { 'content-type': 'application/json' });
         response.end(
-          JSON.stringify({ error: { message: 'unknown field stream_options' } }),
+          JSON.stringify({
+            error: { message: 'unknown field stream_options' },
+          }),
         );
         return;
       }
       const fake: FakeRequest = { api, path, headers: request.headers, body };
+      if (
+        options.refuseBlocks?.length &&
+        carriesBlock(body.messages, options.refuseBlocks)
+      ) {
+        refused.push(fake);
+        response.writeHead(400, { 'content-type': 'application/json' });
+        response.end(
+          JSON.stringify(
+            api === 'anthropic'
+              ? {
+                  type: 'error',
+                  error: {
+                    type: 'invalid_request_error',
+                    message: 'This model does not take that content.',
+                  },
+                }
+              : {
+                  error: { message: 'This model does not take that content.' },
+                },
+          ),
+        );
+        return;
+      }
       requests.push(fake);
       void turnFor(fake, requests.length - 1).then((turn) =>
         answer(turn, fake, response),
@@ -372,6 +418,7 @@ export async function startFakeModel(
   return {
     url: `http://127.0.0.1:${port}`,
     requests,
+    refused,
     close: () =>
       new Promise<void>((resolve) => {
         server.closeAllConnections();

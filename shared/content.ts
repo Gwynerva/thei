@@ -156,6 +156,11 @@ export interface ContentAssetData {
   audio?: AudioDescriptor;
   assetUrl?: string;
   archivedOriginal?: ArchivedOriginalFileMeta;
+  /**
+   * Hydrated on public pages: the file's own description, what it shows or
+   * is about. As typed; never stored in the content.
+   */
+  alt?: string;
 }
 
 export interface ContentAssetRef {

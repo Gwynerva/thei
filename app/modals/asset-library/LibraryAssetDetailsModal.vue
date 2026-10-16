@@ -191,6 +191,9 @@ const usageGroups = computed(() => {
           </p>
         </div>
       </div>
+      <div class="border-t border-border-1 p-sm text-sm">
+        <FileDescriptionField :asset-uuid="asset.assetUuid" />
+      </div>
       <div class="border-t border-border-1 p-sm">
         <div class="mb-sm flex flex-col items-start gap-xs">
           <h3 class="font-semibold">{{ phrase.asset_library_usage }}</h3>

@@ -95,8 +95,17 @@ The owner may bring files along with a message — from the «+» menu, pasted o
 dropped, several at once — and an app's uploads, imports and re-encodings are
 brought into its session the same way. Each goes into the library with its
 place there, in the session, and goes a day after the session does unless
-something else holds it. The model is shown pictures, PDFs and texts, and
-told of every file by its name and id, so a text it proposes can take one in.
+something else holds it. Every file is told of by its name and id, so a
+text it proposes can take one in, and shown to the model in the form its
+service takes — one table of it in `server/thei/ai/sessions/files.ts`: a
+picture made small; a drawing by its preview; a PDF whole; a text's words; a
+recording as a small MP3 of its first ten minutes; a video as its frame and
+its sound. A file of any other kind is not shown. A service that turns a
+kind of block away — no sound, no PDF — is asked again without it, and the
+model is told in words what it could not be shown, so it never describes a
+file by guess. Claude takes no sound. The site's model looks at a library
+file with `look_at_file` the same way: Anthropic's service gets the file in
+the tool's answer, the chat completions format in a message after it.
 
 The site's model may make a file the owner asks for with `make_file` — any
 kind, as its name says, written as text or as base64 — which joins the
@@ -109,8 +118,8 @@ shown as one.
 
 A change a model wants is an **action**, of one of the kinds in
 `shared/ai-actions.ts` — a field, periods, tags, a relation, who sees it, a
-text written or edited, a new entity, a deletion, something remembered —
-each with a reason, and sure or left to the owner. Several make a bundle,
+text written or edited, a new entity, a deletion, something remembered, a
+file's description — each with a reason, and sure or left to the owner. Several make a bundle,
 checked whole and applied in order; an atomic one is undone whole when one
 of its parts fails. A deletion is final and never proposed as sure.
 
@@ -120,6 +129,15 @@ the label of the field it changes, behind a ✦. Taken in the form, it is
 applied when the form is saved. A declined one may be marked **never to be offered again**: it is
 remembered, and the same proposal is not made again. An applied action can
 be undone while what it changed reads as it left it.
+
+A file's **description** («Расшифровка») is what the file is, in words —
+what a picture shows, what a recording is and what it is about, what a
+document is; never its text nor a transcript — one for the file and all its
+variants (`describe`, `shared/asset-description.ts`). It waits at the
+label of the description field in the file's window, and a new version of
+one shows its words compared. The library, the site's search and models find
+files by it, and a public page shows it wherever the file is shown publicly:
+as the alt of a picture, in the file's window and in the Markdown copy.
 
 An edit of a text is gone through part by part on its own screen — read as
 it will be, word changes beside each other, or as a list — and the same
@@ -187,5 +205,8 @@ proposes only, and stops at the monthly limit; the key stays on the server.
 | `describe_actions`                | The kinds of actions, and what each takes.                           |
 | `propose`                         | Actions for the owner; with `apply`, an editor applies them at once. |
 | `undo_action`                     | Takes back an action applied.                                        |
+| `find_files`, `read_file`         | Library files by their descriptions and places; one with its places. |
+| `look_at_file`                    | A library file shown as the model's service takes it.                |
+| `download_file`                   | A one-time address to download a library file as stored.             |
 | `upload_file`, `import_file`      | A file into the library, as the admin uploads one (editor).          |
 | `reprocess_file`, `file_status`   | A new variant of a library file, and how its processing goes.        |

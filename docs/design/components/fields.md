@@ -42,6 +42,14 @@ card's own row of buttons. A text edit opens in the text's own editor instead.
 With AI off, or nothing proposed, there is no ✦ and the label is plain. See
 [AI in the UI](../patterns/ai-in-the-ui.md).
 
+A file's description («Расшифровка») is the one field of a file
+(`app/components/FileDescriptionField.vue`): it stands in every window of a
+file once the file is in the library, and is saved on its own — a button
+under it, or Ctrl+Enter — since it belongs to the file and its variants, not
+to the place the window was opened from. What an AI proposes for it waits at
+its label as for an entity's field (`provideFileAi`), its new words compared
+with the old.
+
 ## How it is built
 
 - `app/components/field/Field.vue` — the column (`flex flex-col gap-xs`), and
@@ -50,6 +58,8 @@ With AI off, or nothing proposed, there is no ✦ and the label is plain. See
   `required` adds an accent asterisk.
 - `app/components/field/FieldHint.vue` — `text-sm tracking-tight text-text-2`.
 - `app/components/ai/AiFieldOffer.vue` — the ✦ and its popup.
+- `app/components/FileDescriptionField.vue` — a file's description, read and
+  saved through any file of its family over the version it was read at.
 
 ```vue
 <Field ai="field:title" class="min-w-50 flex-1">

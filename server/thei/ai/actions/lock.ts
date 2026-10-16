@@ -4,14 +4,15 @@
  * order, so two batches never wait on each other.
  */
 
-import { findEntity, type EntityKey } from '../../entity-kinds';
+import { findEntity } from '../../entity-kinds';
+import type { ActionTarget } from './target';
 import type { ActionRow } from './types';
 import { targetOf } from './rows';
 
 const tails = new Map<string, Promise<void>>();
 
 /** An entity's lock, by kind and stored id: a diary entry by its day or id is one. */
-function entityLock(key: Pick<EntityKey, 'kind' | 'id'>): string {
+function entityLock(key: Pick<ActionTarget, 'kind' | 'id'>): string {
   return `${key.kind}:${key.id}`;
 }
 
@@ -21,7 +22,7 @@ function entityLock(key: Pick<EntityKey, 'kind' | 'id'>): string {
  */
 export function actionLocks(
   row: Pick<ActionRow, 'kind' | 'payload' | 'targetType' | 'targetId'>,
-  target: EntityKey | undefined = targetOf(row),
+  target: ActionTarget | undefined = targetOf(row),
 ): string[] {
   const keys = target ? [entityLock(target)] : [`new:${row.kind}`];
   const payload = row.payload as { kind?: string; other?: string };

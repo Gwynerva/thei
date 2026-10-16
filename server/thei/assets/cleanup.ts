@@ -14,6 +14,7 @@ import { deleteStoredAsset } from './storage';
 import { sweepDraftDirectories } from './drafts';
 import { sweepTheiTempDir } from './temp';
 import { forgetAiAnchors } from '../ai/memory/forget';
+import { forgetFamilyDescriptions } from './descriptions';
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const GENERATED_MEDIA_MAX_AGE_MS = 30 * ONE_DAY_MS;
@@ -337,7 +338,10 @@ function deleteAssetRecordsAndUsages(
     }
 
     const rows = tx
-      .select({ assetUuid: schema.assets.assetUuid })
+      .select({
+        assetUuid: schema.assets.assetUuid,
+        familyUuid: schema.assets.familyUuid,
+      })
       .from(schema.assets)
       .where(
         and(
@@ -364,6 +368,11 @@ function deleteAssetRecordsAndUsages(
         .run();
       forgetAiAnchors(tx, schema, 'asset', [row.assetUuid]);
     }
+    forgetFamilyDescriptions(
+      tx,
+      schema,
+      rows.map((row) => row.familyUuid),
+    );
 
     return rows.length;
   });

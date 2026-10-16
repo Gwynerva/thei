@@ -7,6 +7,9 @@ import {
   type FakeTurn,
 } from '../helpers/fake-model';
 import { namedExternalLinkListItems } from '../../shared/external-link';
+import sharp from 'sharp';
+import { createOriginalAssetSettings } from '../../shared/asset-upload-settings';
+import { buildUploadHeaders } from '../../shared/api/asset-upload-headers';
 import { expectPopupUsable } from './helpers/popup';
 
 /**
@@ -39,13 +42,25 @@ const NEW_TITLE = `Ice walk on the lake ${run}`;
 const TAG = `Winter ${run}`;
 const FACT = 'The route is no secret any more.';
 const SLOGAN = `Walks on ice ${run}`;
+const DESCRIPTION = `A frozen lake at dawn ${run}`;
 let eventUuid = '';
+/** A picture of the walk, for its description. */
+let fileUuid = '';
 let model: FakeModel;
 
 const event = () => `event:${eventUuid}`;
 
 /** The proposals the model makes, by a word of the owner's message. */
 function proposals(said: string): Record<string, unknown>[] | undefined {
+  if (said.includes('describe the picture'))
+    return [
+      {
+        kind: 'describe',
+        file: fileUuid,
+        text: DESCRIPTION,
+        reason: 'What the picture shows.',
+      },
+    ];
   if (said.includes('everything'))
     return [
       {
@@ -187,6 +202,24 @@ test.beforeAll(async ({ request }) => {
   ).json();
   expect(made.type, JSON.stringify(made)).toBe('success');
   eventUuid = made.eventUuid;
+  const picture = await request.post('/api/admin/assets', {
+    headers: buildUploadHeaders({
+      settings: createOriginalAssetSettings(),
+      extension: 'png',
+    }),
+    data: await sharp({
+      create: {
+        width: 64,
+        height: 48,
+        channels: 3,
+        background: { r: run % 256, g: 200, b: 255 },
+      },
+    })
+      .png()
+      .toBuffer(),
+  });
+  expect(picture.ok(), await picture.text()).toBe(true);
+  fileUuid = (await picture.json()).assetUuid;
 
   model = await startFakeModel(script, { models: ['fake-e2e'] });
   expect(
@@ -629,4 +662,41 @@ test('the profile takes what is proposed for it', async ({ page }) => {
       })
     ).ok(),
   ).toBe(true);
+});
+
+test('a file’s description waits at its label in the file’s window', async ({
+  page,
+}) => {
+  await page.setViewportSize(DESKTOP);
+  const sessionUuid = await ask(page, 'Describe the picture of the walk');
+  await open(page, '/admin/assets/');
+  await expect(page.locator('[data-admin-assets-ready]')).toHaveAttribute(
+    'data-admin-assets-ready',
+    'true',
+  );
+  await page.locator(`[data-asset-uuid="${fileUuid}"]`).first().click();
+  const input = page.locator('[data-file-description-input]');
+  await expect(input).toHaveValue('');
+
+  // The proposal waits at the label: the words it would write, compared
+  // with none.
+  const offer = await fieldOffer(page, 'field:description');
+  await expect(offer.locator('[data-action-description]')).toHaveText(
+    DESCRIPTION,
+  );
+  await expectPopupUsable(page, offer);
+  await offer.locator('[data-action-apply]').click();
+  await expect(input).toHaveValue(DESCRIPTION);
+  // Taken into the field, it is applied once the field is saved.
+  expect(await actionStates(page, sessionUuid)).toEqual({
+    describe: 'pending',
+  });
+  await page.locator('[data-file-description-save]').click();
+  await expect(page.locator('[data-file-description-notice]')).toHaveText(
+    'Description saved',
+  );
+  await expect
+    .poll(() => actionStates(page, sessionUuid))
+    .toEqual({ describe: 'applied' });
+  await expect(star(page, 'field:description')).toHaveCount(0);
 });

@@ -1,6 +1,7 @@
 import type { ContentHistoryReason } from '../content-history';
 import type { RelationEntityType } from '../relation';
 import type { ProofreadCategory, TidyCommentKind } from '../ai-revise';
+import type { AiActionKind } from '../ai-actions';
 
 export const languagesInfo = {
   en: 'English',
@@ -146,6 +147,15 @@ export type LanguagePhrases = {
   asset_library_refresh_preview: string;
   asset_library_refresh_preview_hint: string;
   asset_library_description: string;
+  /** A file's own description («Расшифровка»): its field and its public block. */
+  asset_description: string;
+  asset_description_hint: string;
+  asset_description_placeholder: string;
+  asset_description_save: string;
+  asset_description_saved: string;
+  asset_description_conflict: string;
+  asset_description_too_long: (max: number) => string;
+  asset_description_error: string;
   asset_hash_check: string;
   asset_hash_error: string;
   asset_hash_match: string;
@@ -1478,23 +1488,7 @@ export type LanguagePhrases = {
     scheduled: boolean,
     since: string | null,
   ) => string;
-  ai_action_kinds: Record<
-    | 'update'
-    | 'field'
-    | 'periods'
-    | 'tags'
-    | 'relation'
-    | 'note'
-    | 'access'
-    | 'write'
-    | 'revise'
-    | 'create'
-    | 'delete'
-    | 'remember'
-    | 'term'
-    | 'memory-compact',
-    string
-  >;
+  ai_action_kinds: Record<AiActionKind, string>;
   /** What a memory record is about when it is not one entity. */
   ai_memory_owner: string;
   /** The screen a text edit or another version is gone through on. */
@@ -1731,6 +1725,8 @@ export type LanguagePhrases = {
     { title: string; text: string }
   >;
   ai_model_service_label: string;
+  /** Under a service that takes no sound: how its model meets recordings. */
+  ai_model_no_sound: string;
   ai_model_service_choose: string;
   ai_model_service_custom: string;
   ai_model_service_local: (name: string) => string;

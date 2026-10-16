@@ -106,6 +106,7 @@ function assetDescriptor(
     size: item.size ?? 0,
     media: item.media,
     archivedOriginal: item.archivedOriginal,
+    alt: item.alt,
   };
 }
 

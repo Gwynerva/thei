@@ -214,3 +214,59 @@ export function describeFile(file: AssetUploadResponse) {
     created: file.created,
   };
 }
+
+// ---- Downloads -------------------------------------------------------------------
+
+/** How long a one-time download address stays open. */
+const DOWNLOAD_LIFETIME_MS = 15 * 60 * 1000;
+/** Open download addresses one token may hold at once. */
+const DOWNLOADS_PER_TOKEN = 20;
+
+interface DownloadTicket {
+  tokenUuid: string;
+  assetUuid: string;
+  expiresAt: number;
+}
+
+const downloads = new Map<string, DownloadTicket>();
+
+function sweepDownloads(now = Date.now()) {
+  for (const [ticket, entry] of downloads)
+    if (entry.expiresAt <= now) downloads.delete(ticket);
+}
+
+/**
+ * Opens a one-time address an app downloads one library file from — to
+ * describe it with a model of its own, say. Like an upload address, the
+ * address itself is the permission: good for one download and a few
+ * minutes, closed with the token that opened it.
+ */
+export function issueDownloadTicket(
+  principal: ApiTokenPrincipal,
+  assetUuid: string,
+) {
+  sweepDownloads();
+  const held = [...downloads.values()].filter(
+    (entry) => entry.tokenUuid === principal.tokenUuid,
+  ).length;
+  if (held >= DOWNLOADS_PER_TOKEN)
+    fail(
+      'Too many download addresses are open; use them or wait for them to lapse.',
+    );
+  const ticket = randomBytes(24).toString('base64url');
+  const expiresAt = Date.now() + DOWNLOAD_LIFETIME_MS;
+  downloads.set(ticket, {
+    tokenUuid: principal.tokenUuid,
+    assetUuid,
+    expiresAt,
+  });
+  return { ticket, expiresAt };
+}
+
+/** Takes a download address up, once: it serves one download. */
+export function takeDownloadTicket(ticket: string) {
+  sweepDownloads();
+  const entry = downloads.get(ticket);
+  if (entry) downloads.delete(ticket);
+  return entry;
+}

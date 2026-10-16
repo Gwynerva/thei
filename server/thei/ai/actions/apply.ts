@@ -1,12 +1,8 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import type { AiAppliedBy } from '#layers/thei/shared/ai';
 import { EntityPatchError, refuse as fail } from '../../entity-patch/text';
-import {
-  entityFace,
-  formOwnerVersion,
-  refOf,
-  type EntityKey,
-} from '../../entity-kinds';
+import { entityFace, formOwnerVersion } from '../../entity-kinds';
+import { isFileKey, targetRef, type ActionTarget } from './target';
 import { loadForm } from '../forms/load';
 import {
   linkSessionEntities,
@@ -16,7 +12,7 @@ import {
 import { publishActions } from '../sessions/bus';
 import { actionLocks, withEntityLocks } from './lock';
 import { actionDef } from './registry';
-import { findActions, targetOf } from './rows';
+import { entityTargetOf, findActions, targetOf } from './rows';
 import { undoAction, type RollbackTo, type StoredUndo } from './undo';
 import { assetIdsIn } from './values';
 import { currentText } from './current';
@@ -64,8 +60,8 @@ export interface ApplyOutcome {
   refused?: string;
   /** The action that failed, with why; the ones before it were taken back. */
   failed?: { actionUuid: string; error: string };
-  /** Entities whose open forms should read themselves again. */
-  changed: EntityKey[];
+  /** Entities — and files — whose open forms should read themselves again. */
+  changed: ActionTarget[];
 }
 
 /** Where an action stands now, as its kind tells. */
@@ -73,7 +69,8 @@ export async function evaluateAction(
   row: ActionRow,
 ): Promise<ActionEvaluation> {
   const key = targetOf(row);
-  if (key && row.kind !== 'delete' && !entityFace(key))
+  // A file's kind tells for itself: its family outlives the file named.
+  if (key && !isFileKey(key) && row.kind !== 'delete' && !entityFace(key))
     return { state: 'gone' };
   return actionDef(row.kind).evaluate(key, row);
 }
@@ -176,7 +173,7 @@ function mergedUndo(previous: unknown, next: ActionUndo): ActionUndo {
 async function keepAfter(row: ActionRow) {
   const undo = row.undo as StoredUndo | null;
   if (undo?.kind !== 'form' || !undo.before) return;
-  const key = targetOf(row);
+  const key = entityTargetOf(row);
   if (!key) return;
   const loaded = await loadForm(key).catch(() => undefined);
   if (!loaded || formOwnerVersion(key) !== undo.versionAfter) return;
@@ -216,7 +213,7 @@ async function applyOne(
   row: ActionRow,
   context: ApplyContext,
   now: number,
-): Promise<{ entity: EntityKey | undefined; own: ActionUndo }> {
+): Promise<{ entity: ActionTarget | undefined; own: ActionUndo }> {
   const def = actionDef(row.kind);
   const target = targetOf(row);
   let written = false;
@@ -325,7 +322,7 @@ async function applyChosen(
   request: ApplyRequest,
   now: number,
 ): Promise<ApplyOutcome> {
-  const changed: EntityKey[] = [];
+  const changed: ActionTarget[] = [];
   const rows = findActions([...new Set(request.actionUuids)]);
   if (rows.length !== new Set(request.actionUuids).size)
     return {
@@ -405,7 +402,7 @@ async function applyChosen(
       const done: {
         row: ActionRow;
         before: RollbackTo;
-        entity?: EntityKey;
+        entity?: ActionTarget;
         own: ActionUndo;
       }[] = [];
       for (const row of fresh) {
@@ -452,7 +449,7 @@ async function applyChosen(
               .filter((item) => stuck.includes(item.row.actionUuid))
               .map((item) => ({
                 actionUuid: item.row.actionUuid,
-                entity: item.entity && refOf(item.entity),
+                entity: item.entity && targetRef(item.entity),
               })),
             failed: {
               actionUuid: row.actionUuid,
@@ -495,7 +492,7 @@ async function applyChosen(
       return {
         applied: done.map((item) => ({
           actionUuid: item.row.actionUuid,
-          entity: item.entity && refOf(item.entity),
+          entity: item.entity && targetRef(item.entity),
         })),
         changed,
       };
@@ -552,7 +549,7 @@ export function markTakenInEditor(
     findActions([actionUuid])[0] ?? fail(`There is no action ${actionUuid}.`);
   if (row.state !== 'pending' || row.kind !== 'revise') return;
   const payload = row.payload as RevisePayload & { text: string };
-  const key = targetOf(row);
+  const key = entityTargetOf(row);
   const text = key ? currentText(key, payload.text) : undefined;
   if (!text) return;
   const taken = takenParts(payload, (id) => {

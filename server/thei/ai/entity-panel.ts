@@ -66,10 +66,21 @@ function relationsNaming(key: EntityKey): ActionRow[] {
 }
 
 async function offersFor(key: EntityKey): Promise<AiEntityOffer[]> {
-  const rows = await settleActions([
-    ...actionsAbout(key, ['pending']),
-    ...relationsNaming(key),
-  ]);
+  return waitingOffers(
+    [...actionsAbout(key, ['pending']), ...relationsNaming(key)],
+    (row) => placeOf(row, key),
+  );
+}
+
+/**
+ * Proposals as a form shows them, each at its place: settled against the
+ * archive first, and only those of sessions not in the archive.
+ */
+export async function waitingOffers(
+  candidates: ActionRow[],
+  place: (row: ActionRow) => AiOfferPlace,
+): Promise<AiEntityOffer[]> {
+  const rows = await settleActions(candidates);
   const pending = rows.filter((row) => row.state === 'pending');
   if (!pending.length) return [];
   const { db, schema } = THEI_SERVER.useDb();
@@ -98,7 +109,7 @@ async function offersFor(key: EntityKey): Promise<AiEntityOffer[]> {
   return items
     .map((action, index) => ({
       action,
-      place: placeOf(waiting[index]!, key),
+      place: place(waiting[index]!),
       session: {
         sessionUuid: waiting[index]!.sessionUuid,
         title: sessions.get(waiting[index]!.sessionUuid) ?? '',

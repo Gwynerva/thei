@@ -44,8 +44,8 @@ export interface PublicSearchDocument {
   createdAt: number;
   tagUuids: string[];
   /**
-   * Normalized title, summary, readable URL part, tag titles and description
-   * text.
+   * Normalized title, summary, readable URL part, tag titles, description
+   * text and the descriptions of the files its page shows to anyone.
    */
   text: string;
 }
@@ -99,6 +99,49 @@ function latestDates(rows: { owner: string; date: string }[]) {
     if ((dates.get(owner) ?? '') < date) dates.set(owner, date);
   }
   return dates;
+}
+
+/** A usage of a file that a stranger sees on the page: not all private. */
+function shownPublicly(meta: string | null): boolean {
+  if (!meta) return true;
+  const value = JSON.parse(meta) as {
+    isPrivate?: boolean;
+    refs?: { isPrivate?: boolean }[];
+  };
+  return Array.isArray(value.refs)
+    ? value.refs.some((ref) => !ref.isPrivate)
+    : !value.isPrivate;
+}
+
+/**
+ * The descriptions of the files each project and event shows on its page —
+ * its icon, banner, showcase and files, and the files of its description or
+ * story — where a stranger sees them, by `type:uuid`.
+ */
+function shownFileDescriptions(): Map<string, string[]> {
+  const { rawDb } = THEI_SERVER.useDb();
+  const rows = rawDb
+    .prepare(
+      `SELECT u.containerType AS type, u.containerId AS id, u.meta, d.text
+        FROM "asset-usages" u JOIN assets a ON a.assetUuid=u.assetUuid
+        JOIN "asset-descriptions" d ON d.familyUuid=a.familyUuid
+        WHERE u.containerType IN ('project','event')
+      UNION ALL
+      SELECT c.ownerType, c.ownerId, u.meta, d.text
+        FROM "asset-usages" u JOIN content c ON u.containerType='content' AND c.contentUuid=u.containerId
+        JOIN assets a ON a.assetUuid=u.assetUuid
+        JOIN "asset-descriptions" d ON d.familyUuid=a.familyUuid
+        WHERE (c.ownerType='project' AND c.slot='project-description')
+          OR (c.ownerType='event' AND c.slot='event-body')`,
+    )
+    .all() as { type: string; id: string; meta: string | null; text: string }[];
+  const shown = new Map<string, string[]>();
+  for (const row of rows) {
+    if (!shownPublicly(row.meta)) continue;
+    const key = `${row.type}:${row.id}`;
+    shown.set(key, [...(shown.get(key) ?? []), row.text]);
+  }
+  return shown;
 }
 
 export function buildPublicSearchIndex(): PublicSearchIndex {
@@ -183,6 +226,7 @@ export function buildPublicSearchIndex(): PublicSearchIndex {
       usage.tagUuid,
     ]);
   }
+  const filesByOwner = shownFileDescriptions();
   const textByOwner = new Map(
     contents.map((row) => [
       `${row.ownerType}:${row.ownerId}`,
@@ -222,6 +266,8 @@ export function buildPublicSearchIndex(): PublicSearchIndex {
             return tag ? [tag.title, ...tag.synonyms] : [];
           }),
           textByOwner.get(key) ?? '',
+          // What its files show, said in words.
+          ...(filesByOwner.get(key) ?? []),
         ].join('\n'),
       ),
     };

@@ -219,6 +219,12 @@ useSaveShortcut(confirm, {
           />
         </div>
 
+        <!-- The file's own description, saved on its own: it is the file's,
+             wherever it is placed. -->
+        <div class="border-t border-border-1 p-sm text-sm">
+          <FileDescriptionField :asset-uuid="modalData.asset.assetUuid" />
+        </div>
+
         <template
           v-if="
             modalData.showTitle || modalData.showCaption || modalData.showAccess
