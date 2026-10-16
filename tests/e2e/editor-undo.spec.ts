@@ -345,6 +345,33 @@ test.describe('pasting', () => {
       .toBe('start a pasted lineend');
   });
 
+  test('a paste the moment the editor shows is still one undo step', async ({
+    page,
+  }) => {
+    // Editor.js binds its blocks' keys at the first idle moment after it
+    // shows them, and the paste and undo handlers come after that; on a busy
+    // page that moment comes late. The text shows once they are all bound.
+    await page.addInitScript(() => {
+      const idle = window.requestIdleCallback.bind(window);
+      window.requestIdleCallback = ((callback, options) =>
+        window.setTimeout(() => idle(callback, options), 500)) as typeof idle;
+    });
+    await openEditor(page, 'paste-early', [
+      { type: 'paragraph', data: { text: 'start end' } },
+    ]);
+    const field = fields(page).first();
+    await caretAfter(field, 'start ');
+    await paste(page, {
+      'text/html': '<p>a <i>pasted</i> line</p>',
+      'text/plain': 'a pasted line',
+    });
+    await expect
+      .poll(async () => (await texts(page))[0])
+      .toBe('start a pasted lineend');
+    await undo(page);
+    await expect.poll(async () => (await texts(page))[0]).toBe('start end');
+  });
+
   test('a copied paragraph pasted into a heading is plain words', async ({
     page,
   }) => {

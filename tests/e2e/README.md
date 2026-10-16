@@ -18,6 +18,8 @@ development server's.
 
 While writing a spec, `bun run e2e:dev` serves the fixture from `nuxt dev`
 instead; `test:e2e` uses a fixture already running on 3001 as it is.
+`THEI_E2E_PORT` moves the fixture and the specs to another port, for a run
+from a second checkout while another one's fixture holds 3001.
 
 Before the specs, `setup.ts` installs the fixture through the real API if it
 has no database yet, signs in, and reseeds it: 2000 pages, 500 of them on one

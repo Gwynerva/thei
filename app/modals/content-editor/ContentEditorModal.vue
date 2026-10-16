@@ -305,6 +305,13 @@ const headerSummary = ref<ContentSummary>({
 let editor: EditorJS | undefined;
 /** Set once the modal is on its way out, so an editor still loading stops. */
 let disposed = false;
+/**
+ * The text shows once the editor takes input as it should. Editor.js shows
+ * its blocks before it binds their keys, at the first idle moment, and the
+ * paste, undo and typing handlers are bound after that: words pasted or
+ * typed sooner would go in behind their back, uncleaned and past Ctrl+Z.
+ */
+const editorReady = ref(false);
 let editorAcceptsChanges = false;
 let transientEntitySelections = 0;
 let cleanupEditorDrag: (() => void) | undefined;
@@ -872,7 +879,7 @@ async function openAskedReview(actionUuid: string) {
   if (action && !disposed && !review.value) void openAiReview(action);
 }
 
-onMounted(async () => {
+async function startEditor() {
   reviewsRead = loadAiReviews();
   document.body.classList.add('content-editor-modal-open');
   editorLayoutQuery = window.matchMedia(EDITOR_MOBILE_LAYOUT_QUERY);
@@ -1180,7 +1187,10 @@ onMounted(async () => {
     holder.value!,
     holder.value!.closest('dialog') ?? document.body,
   );
-});
+}
+
+// Shown as well when starting failed halfway, so the text is still there.
+onMounted(() => startEditor().finally(() => (editorReady.value = true)));
 
 onBeforeUnmount(() => {
   disposed = true;
@@ -1739,6 +1749,7 @@ function editorJsI18nMessages() {
       <div
         ref="holder"
         class="content-editor content-prose relative w-full px-sm py-md"
+        :class="{ invisible: !editorReady }"
         @click.capture="preventEditorLinkNavigation"
         @auxclick.capture="preventEditorLinkNavigation"
       ></div>
