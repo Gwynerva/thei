@@ -133,8 +133,9 @@ an HTML document is.
 | `delimiter`              | `{}`                                                                                                               |
 | `contentMedia`           | `{ asset, layout: 'centered' \| 'natural' \| 'stretch', caption }`                                                 |
 | `contentGallery`         | `{ items: [{ id, asset, caption }] }` — an item without an `id` is dropped                                         |
-| `contentAudio`           | `{ asset, title, caption }` — an audio file, played in place; both plain text, as a file's                         |
+| `contentAudio`           | `{ asset, title, caption }` — an audio file, played in place                                                       |
 | `contentAttachment`      | `{ asset, title, caption }` — any file, shown as a download                                                        |
+| `contentFileGroup`       | `{ title, items: [{ id, asset, title, caption }] }` — files listed together, each shown as it would be alone       |
 | `externalLink`           | `{ url, note? }` — rendered as a preview card                                                                      |
 | `integration`            | `{ provider: 'youtube', videoId, … }`, see `shared/content-integrations.ts`                                        |
 | `entityLink`             | `{ entityType, entityId, fragment?, note? }` — a card for something on this site; see inline markup                |
@@ -147,11 +148,20 @@ address. One nothing was chosen for is not stored.
 
 `asset` is `{ assetUuid }` when stored. What a reader receives is hydrated: the
 asset carries its media descriptor and address, or is `null` when the reader
-may not see it. A recording's asset also carries `audio: { duration, peaks,
-channels? }` — its length in seconds and up to 128 loudness values from 0 to
-100 — which is what its player draws before it loads anything. A
-`contentAudio` block holds only audio files; it and a `contentAttachment` have
-the same data, so either turns into the other as it is.
+may not see it; a file of a list the reader may not see is left out of it. A
+recording's asset also carries `audio: { duration, peaks, channels? }` — its
+length in seconds and up to 128 loudness values from 0 to 100 — which is what
+its player draws before it loads anything.
+
+What each block holds is declared once, in `CONTENT_FILE_BLOCKS`
+(`shared/content.ts`): `contentMedia` and `contentGallery` show pictures and
+videos within the media limit, `contentAudio` recordings, `contentAttachment`
+and `contentFileGroup` any file. In a group a recording is played in place and
+any other file — a picture too — is shown as a file. A file's `caption`, in
+every one of these blocks, is one line of inline HTML, as a paragraph's text
+without line breaks; its `title`, and a group's, is plain text. A
+`contentAudio` and a `contentAttachment` have the same data, so either turns
+into the other as it is.
 
 A link block's `note` is the owner's plain-text word on why the link is there,
 like `data-content-note` inline: whitespace collapsed, ended as a caption, and
@@ -176,12 +186,14 @@ The last mark of a caption or a heading is settled where a block is
 normalized (`shared/terminal-punctuation.ts`), never while it is typed:
 
 - A caption — `contentMedia.caption`, a gallery item's `caption`,
-  `quote.caption`, the `caption` of `contentAudio` and `contentAttachment`,
-  a link block's `note` and `data-content-note` — ends without a full stop
-  when it is one sentence, of any length, and with a mark when it has several:
-  a full stop is added after a last sentence left open.
-- A heading — `header.text`, the `title` of `contentAudio` and
-  `contentAttachment` — never ends with a full stop.
+  `quote.caption`, the `caption` of `contentAudio`, `contentAttachment` and a
+  file of a `contentFileGroup`, a link block's `note` and
+  `data-content-note` — ends without a full stop when it is one sentence, of
+  any length, and with a mark when it has several: a full stop is added after
+  a last sentence left open.
+- A heading — `header.text`, the `title` of `contentAudio`,
+  `contentAttachment`, a `contentFileGroup` and each of its files — never
+  ends with a full stop.
 - Both keep `?`, `!`, `…` and `...` as typed, and the full stop that closes an
   abbreviation or an initial ("1990 г.", "и т. д.", "А. С."). Spaces before
   the last mark, a doubled full stop and a trailing comma or semicolon go.
@@ -224,7 +236,10 @@ assetTotalSize }`) and nothing else;
   and never stores, is a picture's alt — `![description](url)`, its caption
   following as words of their own — and the title of an attachment's or a
   recording's link, `[title](url "description")`; without one a picture's
-  alt is its caption. With `options.format` the owner's words — text, captions,
+  alt is its caption. A group of files is its title on a line of its own,
+  not a heading, and then a list: each file as it would be alone, its caption
+  after it, `- [title](url) (m:ss) — caption`. With `options.format` the
+  owner's words — text, captions, group titles,
   attachment and recording titles, hints, link notes, entity link titles,
   file descriptions —
   get the typography of the site's
@@ -259,11 +274,16 @@ nothing else: a bare address stays text.
 | `contentGallery`                | `:::gallery` with `::media[caption]{#id asset="a-…"}` per item     |
 | `contentAudio`                  | `::audio[caption]{asset="a-…" title="…"}`                          |
 | `contentAttachment`             | `::file[caption]{asset="a-…" title="…"}`                           |
+| `contentFileGroup`              | `:::files{title="…"}` with a `::file` line per file (below)        |
 | `externalLink`                  | `::link[note]{url="…"}`                                            |
 | `entityLink`                    | `::card[note]{to="thei:<kind>/<id>#fragment"}`                     |
 | `integration`                   | `::embed{url="…"}`, the provider's canonical address               |
 | a private section               | `:::private{#sectionId}` … `:::` around its blocks                 |
 | `tunes.spoiler`                 | consecutive spoiler blocks inside `:::spoiler` … `:::`             |
+
+A file of a group is `::file[caption]{#id asset="a-…" title="…"}`, whatever
+its kind; `::audio` is read there too. Every file's caption takes the inline
+markup below; a title is plain words.
 
 Inline: `**bold**`, `*italic*`, `~~strikethrough~~`, `[text](https://… "note")`
 for an external link, `[text](/path)` for a relative one,

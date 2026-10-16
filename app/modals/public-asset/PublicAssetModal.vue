@@ -5,10 +5,14 @@ import AssetModalFileInfo from '#layers/thei/app/modals/asset-modal/AssetModalFi
 import AssetModalPager from '#layers/thei/app/modals/asset-modal/AssetModalPager.vue';
 import AssetModalPreviewMedia from '#layers/thei/app/modals/asset-modal/AssetModalPreviewMedia.vue';
 import FilePreviewContent from '#layers/thei/app/components/file-preview/FilePreviewContent.vue';
+import ContentInlineLinkDecorator from '#layers/thei/app/components/content/ContentInlineLinkDecorator.vue';
+import { useContentLinkResolver } from '#layers/thei/app/composables/content-link-resolver';
 import { isAssetExtensionSafeInline } from '#layers/thei/shared/assets/formats';
 import type { PublicAssetModalData } from './modal';
 
 const props = defineProps<{ modalData: PublicAssetModalData }>();
+const aside = useTemplateRef<HTMLElement>('aside');
+const linkResolver = useContentLinkResolver();
 
 /**
  * Which of the files is shown. Kept here rather than reopening the viewer for
@@ -106,9 +110,19 @@ const opensInTab = computed(
       </AssetModalButton>
     </template>
     <template #aside>
-      <div class="flex flex-col gap-sm p-sm">
+      <div ref="aside" class="flex flex-col gap-sm p-sm">
+        <!-- A text's caption keeps its marks, links and hints, which work
+             here as they do on the page. -->
         <p
-          v-if="current.description"
+          v-if="current.caption"
+          :key="`caption:${current.key}`"
+          class="content-prose text-sm leading-relaxed wrap-anywhere
+            text-text-2"
+          data-public-asset-caption
+          v-html="publicRichText(current.caption)"
+        ></p>
+        <p
+          v-else-if="current.description"
           class="text-sm leading-relaxed text-text-2"
         >
           {{ publicText(current.description) }}
@@ -136,6 +150,7 @@ const opensInTab = computed(
           :archived-original="current.archivedOriginal"
         />
       </div>
+      <ContentInlineLinkDecorator :root="aside" :resolver="linkResolver" />
     </template>
   </AssetModal>
 </template>

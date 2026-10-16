@@ -27,6 +27,7 @@ import aiTemplateOffers from './0.0.6-ai-template-offers';
 import contentAnchors from './0.0.6-content-anchors';
 import assetDescriptions from './0.0.6-asset-descriptions';
 import aiTemplateCoverage from './0.0.6-ai-template-coverage';
+import fileCaptions from './0.0.6-file-captions';
 
 /**
  * Every migration Thei has ever shipped, oldest first.
@@ -67,6 +68,7 @@ export const migrationRegistry: TheiMigration[] = [
   contentAnchors,
   assetDescriptions,
   aiTemplateCoverage,
+  fileCaptions,
 ];
 
 export { baselineSql } from './0.0.1-baseline';

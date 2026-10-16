@@ -143,6 +143,7 @@ const ASIDE_PLACES: Record<string, ReviewPart['place']> = {
   contentGallery: 'caption',
   contentAudio: 'file',
   contentAttachment: 'file',
+  contentFileGroup: 'file',
   externalLink: 'link',
   entityLink: 'link',
 };

@@ -2,6 +2,7 @@ import type { ContentHistoryReason } from '../content-history';
 import type { RelationEntityType } from '../relation';
 import type { ProofreadCategory, TidyCommentKind } from '../ai-revise';
 import type { AiActionKind } from '../ai-actions';
+import type { ContentFileSkip } from '../content-file-placement';
 
 export const languagesInfo = {
   en: 'English',
@@ -80,9 +81,6 @@ export type EditorJsPhrases = {
   checklist: string;
   quote: string;
   delimiter: string;
-  media: string;
-  gallery: string;
-  audio: string;
   file: string;
   enter_quote: string;
   enter_caption: string;
@@ -983,10 +981,19 @@ export type LanguagePhrases = {
   content_add_media: string;
   content_choose_file: string;
   content_choose_audio: string;
-  content_audio_as_player: string;
-  content_audio_as_file: string;
+  content_show_as_player: string;
+  content_show_as_file: string;
+  content_show_as_picture: string;
   content_choose_entity: string;
   content_make_gallery: string;
+  content_make_file_group: string;
+  content_file_group_title: string;
+  content_add_files: string;
+  content_remove_file: string;
+  content_move_file: string;
+  content_upload_as_file: string;
+  /** A file brought into a text that the site cannot store, and why. */
+  content_file_skipped: (name: string, reason: ContentFileSkip) => string;
   /** Names the place inside the target a link leads to, its `#…`. */
   content_link_fragment: string;
   content_link_fragment_remove: string;

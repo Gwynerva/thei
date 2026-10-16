@@ -295,7 +295,7 @@ function readLeafDirective(node: LeafDirective, state: ParseState) {
         {
           asset: file,
           title: attribute(node, 'title') ?? '',
-          caption: phrasingToPlainText(node.children),
+          caption: phrasingToInlineHtml(node.children),
         },
       );
       return;
@@ -386,6 +386,34 @@ function readContainerDirective(node: ContainerDirective, state: ParseState) {
           : [];
       });
       if (items.length) push(state, 'contentGallery', { items });
+      return;
+    }
+    // A recording in a group is played as one alone is, whether it is
+    // written as a file or as a recording.
+    case 'files': {
+      const items = children.flatMap((child) => {
+        if (
+          child.type !== 'leafDirective' ||
+          (child.name !== 'file' && child.name !== 'audio')
+        )
+          return [];
+        const file = asset(child, state);
+        return file
+          ? [
+              {
+                id: attribute(child, 'id') ?? newEditBlockId(),
+                asset: file,
+                title: attribute(child, 'title') ?? '',
+                caption: phrasingToInlineHtml(child.children),
+              },
+            ]
+          : [];
+      });
+      if (items.length)
+        push(state, 'contentFileGroup', {
+          title: attribute(node, 'title') ?? '',
+          items,
+        });
       return;
     }
     case 'private': {

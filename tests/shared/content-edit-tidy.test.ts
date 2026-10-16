@@ -178,6 +178,29 @@ describe('tidying a text', () => {
     expect(rewrite.problems.join(' ')).toContain('would disappear');
   });
 
+  it('refuses to drop a group of files, even with a reason', () => {
+    const stored = normalizeContentData({
+      blocks: [
+        ...blocks,
+        {
+          id: 'g1',
+          type: 'contentFileGroup',
+          data: {
+            title: 'Бумаги',
+            items: [{ id: 'f1', asset: { assetUuid: 'a-2' }, title: 'Билет' }],
+          },
+        },
+      ],
+    }).blocks;
+    const result = plan(
+      contentToEditMarkdown({ blocks: blocks.slice(1) }),
+      [{ quote: 'Бумаги', reason: 'Повтор' }],
+      [],
+      stored,
+    );
+    expect(result.problems.join(' ')).toContain('contentFileGroup');
+  });
+
   it('refuses a split through bold, and a piece dropped without a reason', () => {
     const afterBold = plan(
       [

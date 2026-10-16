@@ -28,15 +28,19 @@ import {
   type ContentSummary,
 } from '#layers/thei/shared/content';
 import {
-  launchAssetWizard,
   acceptedExtensionsFromAccept,
   contentAssetFromVariant,
-  launchAssetBatchWizard,
   launchAssetEditor,
   launchPendingFileEditor,
+  pickAssetFiles,
   type AssetWizardOptions,
 } from '#layers/thei/app/composables/asset-wizard';
-import { bindEditorMediaPaste } from '#layers/thei/app/composables/editor-media-paste';
+import { bindEditorFilePaste } from '#layers/thei/app/composables/editor-file-paste';
+import { bindEditorPlainFields } from '#layers/thei/app/composables/editor-plain-fields';
+import {
+  prepareContentFiles,
+  skippedContentFilesMessage,
+} from '#layers/thei/app/composables/content-files';
 import {
   anyFileExtensionProfile,
   audioExtensionProfile,
@@ -60,6 +64,7 @@ import {
   ContentAttachmentTool,
   ContentAudioTool,
   ContentBoldTool,
+  ContentFileGroupTool,
   ContentHintTool,
   ContentStrikeTool,
   ContentGalleryTool,
@@ -71,6 +76,7 @@ import {
   entityLinkToolWithPaste,
   PrivateSectionBoundaryTool,
   type ContentEditorAssetKind,
+  type ContentEditorPickedFiles,
   type ContentEditorUploads,
 } from '#layers/thei/app/components/content/editor-tools';
 import type {
@@ -207,7 +213,8 @@ const updatedAt = computed(
       : undefined) ?? props.modalData.value?.updatedAt,
 );
 let cleanupSmartTypography: (() => void) | undefined;
-let cleanupMediaPaste: (() => void) | undefined;
+let cleanupFilePaste: (() => void) | undefined;
+let cleanupPlainFields: (() => void) | undefined;
 let cleanupGutterClick: (() => void) | undefined;
 let cleanupCurrentBlock: (() => void) | undefined;
 let cleanupLinkPaste: (() => void) | undefined;
@@ -487,6 +494,11 @@ function endTransientEntitySelection(persisted: boolean) {
   requestAnimationFrame(() =>
     requestAnimationFrame(() => {
       transientEntitySelections = Math.max(0, transientEntitySelections - 1);
+      // A change told while the choice was open — a file that landed — was
+      // passed over. Looking again is harmless: an unchanged text keys the
+      // same, and nothing shows.
+      if (editorAcceptsChanges && !transientEntitySelections)
+        editorSession.recordChange();
     }),
   );
 }
@@ -1019,45 +1031,33 @@ async function startEditor() {
         icon: editorIcon('asterisk'),
       },
     },
+    // Every block of files is offered by one tile, the file's: what is
+    // picked there becomes whichever of them it should be. Their captions
+    // take the marks a paragraph takes.
     contentMedia: {
       class: ContentMediaTool,
       inlineToolbar: true,
-      config: {
-        pickAsset,
-        editAsset,
-        uploads,
-        labels: contentToolLabels(),
-      },
+      config: fileToolConfig(mediaUploads),
     },
     contentGallery: {
       class: ContentGalleryTool,
       inlineToolbar: true,
-      config: {
-        pickAssets,
-        editAsset,
-        uploads,
-        labels: contentToolLabels(),
-      },
+      config: fileToolConfig(mediaUploads),
     },
     contentAudio: {
       class: ContentAudioTool,
-      inlineToolbar: false,
-      config: {
-        pickAsset,
-        editAsset,
-        uploads: audioUploads,
-        labels: contentToolLabels(),
-      },
+      inlineToolbar: true,
+      config: fileToolConfig(audioUploads),
     },
     contentAttachment: {
       class: ContentAttachmentTool,
-      inlineToolbar: false,
-      config: {
-        pickAsset,
-        editAsset,
-        labels: contentToolLabels(),
-        audio: true,
-      },
+      inlineToolbar: true,
+      config: fileToolConfig(fileUploads),
+    },
+    contentFileGroup: {
+      class: ContentFileGroupTool,
+      inlineToolbar: true,
+      config: fileToolConfig(fileUploads),
     },
     // Before externalLink: Editor.js hands a paste to the first tool whose
     // pattern matches, so a playable address never becomes a plain link,
@@ -1149,9 +1149,12 @@ async function startEditor() {
   // One binding for the whole editor: the events bubble up from whichever
   // block is being typed in, and the rules read the caret, not the target.
   cleanupSmartTypography = bindSmartTypography(holder.value!);
-  cleanupMediaPaste = bindEditorMediaPaste(holder.value!, editor, {
-    audio: true,
+  cleanupFilePaste = bindEditorFilePaste(holder.value!, editor, {
+    onSkipped: (skipped) => {
+      errorMessage.value = skippedContentFilesMessage(skipped);
+    },
   });
+  cleanupPlainFields = bindEditorPlainFields(holder.value!, editor);
   cleanupGutterClick = bindEditorGutterClick(holder.value!, editor);
   blockToolbox = bindEditorBlockToolbox(holder.value!, editor, {
     open: openToolbox,
@@ -1228,8 +1231,10 @@ onBeforeUnmount(() => {
   cleanupEditorPopoverLayer = undefined;
   cleanupSmartTypography?.();
   cleanupSmartTypography = undefined;
-  cleanupMediaPaste?.();
-  cleanupMediaPaste = undefined;
+  cleanupFilePaste?.();
+  cleanupFilePaste = undefined;
+  cleanupPlainFields?.();
+  cleanupPlainFields = undefined;
   cleanupEditorDrag?.();
   cleanupEditorDrag = undefined;
   cleanupEditorPrivatePattern?.();
@@ -1294,35 +1299,45 @@ useSaveShortcut(save, {
   exclusive: true,
 });
 
-async function pickAsset(kind: ContentEditorAssetKind) {
-  const asset = await launchContentAssetWizard(contentAssetOptions(kind));
-
-  return asset ? mapAsset(asset) : undefined;
-}
-
-async function pickAssets(kind: ContentEditorAssetKind) {
+/**
+ * Files picked for a text, of any kind or, for a gallery, pictures and
+ * videos: one new file opens its editor; several go in at the defaults of the
+ * blocks they land in, as pasted files do. A file the site cannot store is
+ * told of, with whatever went wrong in the picker.
+ */
+async function pickFiles(
+  kind: 'media' | 'any',
+): Promise<ContentEditorPickedFiles> {
   try {
-    const result = await launchAssetBatchWizard(contentAssetOptions(kind));
-    if (result?.errors.length) {
-      errorMessage.value = result.errors
-        .map((error) => `${error.fileName}: ${error.message}`)
-        .join(' · ');
-    }
-    return {
-      assets: result?.assets.map(mapAsset) ?? [],
-      uploads: result?.uploads ?? [],
-    };
+    const result = await pickAssetFiles({
+      ...contentAssetOptions(kind),
+      usageDelta: await buildDraftUsageDelta(),
+    });
+    const { files, skipped } = prepareContentFiles(result?.files ?? []);
+    const problems = [
+      ...(result?.errors ?? []).map(
+        (error) => `${error.fileName}: ${error.message}`,
+      ),
+      skippedContentFilesMessage(skipped),
+    ].filter(Boolean);
+    if (problems.length) errorMessage.value = problems.join(' · ');
+    return { assets: result?.assets.map(mapAsset) ?? [], files };
   } catch (error) {
     console.error(error);
     errorMessage.value = phrase.value.content_asset_pick_error;
-    return { assets: [], uploads: [] };
+    return { assets: [], files: [] };
   }
 }
 
-/** Pasted files on their way into the library; closing the editor asks first. */
+/** New files on their way into the library; closing the editor asks first. */
 const pendingUploads = ref(0);
-const uploads = pastedUploads('media');
+const mediaUploads = pastedUploads('media');
 const audioUploads = pastedUploads('audio');
+const fileUploads = pastedUploads('any');
+
+function fileToolConfig(uploads: ContentEditorUploads) {
+  return { pickFiles, editAsset, uploads, labels: contentToolLabels() };
+}
 
 function pastedUploads(kind: ContentEditorAssetKind): ContentEditorUploads {
   const options = contentAssetOptions(kind);
@@ -1443,18 +1458,6 @@ function countContentUsageByAsset(data: ContentOutputData) {
   );
 }
 
-async function launchContentAssetWizard(
-  options: Parameters<typeof launchAssetWizard>[0],
-) {
-  try {
-    return await launchAssetWizard(options);
-  } catch (error) {
-    console.error(error);
-    errorMessage.value = phrase.value.content_asset_pick_error;
-    return undefined;
-  }
-}
-
 const mapAsset = contentAssetFromVariant;
 
 function contentAssetReplaceResult(
@@ -1482,14 +1485,20 @@ function contentToolLabels() {
     removeMedia: phrase.value.delete,
     chooseFile: phrase.value.content_choose_file,
     chooseAudio: phrase.value.content_choose_audio,
-    audioAsFile: phrase.value.content_audio_as_file,
-    audioAsPlayer: phrase.value.content_audio_as_player,
+    showAsFile: phrase.value.content_show_as_file,
+    showAsPlayer: phrase.value.content_show_as_player,
+    showAsPicture: phrase.value.content_show_as_picture,
+    makeFileGroup: phrase.value.content_make_file_group,
+    groupTitle: phrase.value.content_file_group_title,
+    addFiles: phrase.value.content_add_files,
+    removeFile: phrase.value.content_remove_file,
+    moveFile: phrase.value.content_move_file,
+    uploadAsFile: phrase.value.content_upload_as_file,
     caption: phrase.value.content_caption,
     mediaCentered: phrase.value.content_media_centered,
     mediaNatural: phrase.value.content_media_natural,
     mediaStretch: phrase.value.content_media_stretch,
     title: phrase.value.content_title,
-    description: phrase.value.content_description,
     fileWithExtension: phrase.value.content_file_with_extension,
     privateSection: phrase.value.content_private_section,
     privateSectionStart: phrase.value.content_private_section_start,
@@ -1533,9 +1542,6 @@ function editorJsI18nMessages() {
       List: text.list,
       Quote: text.quote,
       Delimiter: text.delimiter,
-      Media: text.media,
-      Gallery: text.gallery,
-      Audio: text.audio,
       File: text.file,
     },
     tools: {

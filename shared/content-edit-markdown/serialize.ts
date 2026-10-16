@@ -9,10 +9,7 @@ import type {
   Root,
   RootContent,
 } from 'mdast';
-import type {
-  ContainerDirective,
-  LeafDirective,
-} from 'mdast-util-directive';
+import type { ContainerDirective, LeafDirective } from 'mdast-util-directive';
 import type { ContentOutputBlock, ContentOutputData } from '../content';
 import { contentIntegrationUrl } from '../content-integrations';
 import { isContentEntityType } from '../content-link';
@@ -96,9 +93,7 @@ function label(children: PhrasingContent[]): Paragraph {
 }
 
 function textLabel(value: unknown): PhrasingContent[] {
-  return typeof value === 'string' && value
-    ? [{ type: 'text', value }]
-    : [];
+  return typeof value === 'string' && value ? [{ type: 'text', value }] : [];
 }
 
 function attributes(
@@ -115,8 +110,7 @@ function attributes(
 }
 
 function assetUuid(value: unknown): string | undefined {
-  const uuid = (value as { assetUuid?: unknown } | null | undefined)
-    ?.assetUuid;
+  const uuid = (value as { assetUuid?: unknown } | null | undefined)?.assetUuid;
   return typeof uuid === 'string' ? uuid : undefined;
 }
 
@@ -132,7 +126,10 @@ function blockToNodes(block: ContentOutputBlock): RootContent[] {
           type: 'heading',
           depth: data.level === 3 ? 3 : 2,
           children: [
-            { type: 'text', value: decodeHtmlEntities(String(data.text ?? '')) },
+            {
+              type: 'text',
+              value: decodeHtmlEntities(String(data.text ?? '')),
+            },
           ],
         } satisfies Heading,
       ];
@@ -190,8 +187,33 @@ function blockToNodes(block: ContentOutputBlock): RootContent[] {
             asset: assetUuid(data.asset),
             title: data.title,
           }),
-          children: textLabel(data.caption),
+          children: inlineHtmlToPhrasing(data.caption),
         } satisfies LeafDirective,
+      ];
+
+    // Each file of a group is shown as its kind is shown alone, so every
+    // one of them is written as a file.
+    case 'contentFileGroup':
+      return [
+        {
+          type: 'containerDirective',
+          name: 'files',
+          attributes: attributes({ title: data.title }),
+          children: (Array.isArray(data.items) ? data.items : []).map(
+            (item: Record<string, unknown>) =>
+              ({
+                type: 'leafDirective',
+                name: 'file',
+                attributes: attributes({
+                  asset: assetUuid(item.asset),
+                  id: typeof item.id === 'string' ? item.id : undefined,
+                  title:
+                    typeof item.title === 'string' ? item.title : undefined,
+                }),
+                children: inlineHtmlToPhrasing(item.caption),
+              }) satisfies LeafDirective,
+          ),
+        } satisfies ContainerDirective,
       ];
 
     case 'externalLink':
@@ -271,7 +293,11 @@ function listBlock(data: Record<string, any>): RootContent {
   const meta = (data.meta ?? {}) as Record<string, unknown>;
   const list = listNode(style, data.items, meta);
   const counter = meta.counterType;
-  if (style === 'ordered' && typeof counter === 'string' && counter !== 'numeric')
+  if (
+    style === 'ordered' &&
+    typeof counter === 'string' &&
+    counter !== 'numeric'
+  )
     return {
       type: 'containerDirective',
       name: 'list',
@@ -308,7 +334,10 @@ function listNode(
           spread: false,
           checked:
             style === 'checklist' ? Boolean(item?.meta?.checked) : undefined,
-          children: [...(content.length ? [paragraph(content)] : []), ...nested],
+          children: [
+            ...(content.length ? [paragraph(content)] : []),
+            ...nested,
+          ],
         };
       },
     ),

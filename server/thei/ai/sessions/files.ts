@@ -253,7 +253,7 @@ export function sessionFilesNote(files: readonly SessionFile[]): string {
   return [
     'The owner brought these files; they are in the library already, kept in this session. Pictures, PDFs, texts, recordings and videos — a frame and their sound — among them are shown to you, as far as your service takes them.',
     ...lines,
-    'A text takes one in by its id: ::media[caption]{asset="…"} for a picture or a video, ::audio[caption]{asset="…" title="…"}, ::file[caption]{asset="…" title="…"} for any file.',
+    'A text takes one in by its id: ::media[caption]{asset="…"} for a picture or a video, ::audio[caption]{asset="…" title="…"}, ::file[caption]{asset="…" title="…"} for any file; several files listed together are ::file lines inside :::files{title="…"} … :::.',
   ].join('\n');
 }
 

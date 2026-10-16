@@ -6,6 +6,8 @@ import {
   ContentValidationError,
   collectContentAssetUuids,
   contentBlockIsInPrivateSection,
+  hydrateContentBlockFiles,
+  isContentFileBlockType,
   normalizedContentPrivateSectionRanges,
   normalizeContentData,
   summarizeContentData,
@@ -398,27 +400,8 @@ async function hydratePublicContentData(
         (await entityLinkAccess(entityType, entityId)) === 'restricted'
       )
         return { ...block, data: { entityType, restricted: true } };
-    } else if (
-      block.type === 'contentMedia' ||
-      block.type === 'contentAudio' ||
-      block.type === 'contentAttachment'
-    ) {
-      const assetUuid = (block.data as any).asset?.assetUuid;
-      data.asset = assetUuid ? await hydrateAsset(assetUuid) : null;
-    } else if (block.type === 'contentGallery') {
-      const items = Array.isArray((block.data as any).items)
-        ? (block.data as any).items
-        : [];
-      data.items = (
-        await Promise.all(
-          items.map(async (item: any) => {
-            const asset = item?.asset?.assetUuid
-              ? await hydrateAsset(item.asset.assetUuid)
-              : undefined;
-            return asset ? { ...item, asset } : undefined;
-          }),
-        )
-      ).filter(Boolean);
+    } else if (isContentFileBlockType(block.type)) {
+      Object.assign(data, await hydrateContentBlockFiles(block, hydrateAsset));
     } else if (block.type === 'externalLink') {
       const url = (block.data as any).url;
       const link = url ? await loadExternalLink(url) : undefined;

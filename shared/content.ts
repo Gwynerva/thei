@@ -1,5 +1,9 @@
 import { normalizeImageAccent } from './accent-color';
 import { AssetType, type ArchivedOriginalFileMeta } from './asset';
+import {
+  ASSET_UPLOAD_LIMITS,
+  type AssetUploadLimitPolicy,
+} from './asset-upload-limits';
 import { normalizeAudioDescriptor, type AudioDescriptor } from './audio';
 import type { MediaDescriptor } from './media';
 import { normalizeExternalLinkUrl, type ExternalLink } from './external-link';
@@ -57,6 +61,7 @@ export const CONTENT_BLOCK_TYPES = [
   'contentGallery',
   'contentAudio',
   'contentAttachment',
+  'contentFileGroup',
   'externalLink',
   'integration',
   'entityLink',
@@ -174,6 +179,129 @@ export interface ContentGalleryItem {
   id: string;
   asset: ContentAssetData;
   caption?: string;
+}
+
+/** A file of a group: its own title and caption, as a single file's. */
+export interface ContentFileGroupItem {
+  id: string;
+  asset: ContentAssetData;
+  title?: string;
+  caption?: string;
+}
+
+/**
+ * What a block that shows files holds, and which files it takes. Whatever
+ * reads the files of a text — their sizes and uses, the checks on a save,
+ * hydration — asks this rather than naming the blocks, so another way of
+ * showing files is one more entry here.
+ */
+export interface ContentFileBlock {
+  /** One file as `data.asset`, or a list of them as `data.items[].asset`. */
+  holds: 'one' | 'items';
+  /** The kinds of file it shows, or `any`. */
+  accepts: readonly AssetType[] | 'any';
+  /** The limit its files keep to (`ASSET_UPLOAD_LIMITS`). */
+  sizeLimitPolicy: AssetUploadLimitPolicy;
+}
+
+const VISUAL_ASSET_TYPES = [AssetType.Image, AssetType.Video] as const;
+
+export const CONTENT_FILE_BLOCKS = {
+  contentMedia: {
+    holds: 'one',
+    accepts: VISUAL_ASSET_TYPES,
+    sizeLimitPolicy: 'media',
+  },
+  contentGallery: {
+    holds: 'items',
+    accepts: VISUAL_ASSET_TYPES,
+    sizeLimitPolicy: 'media',
+  },
+  contentAudio: {
+    holds: 'one',
+    accepts: [AssetType.Audio],
+    sizeLimitPolicy: 'file',
+  },
+  contentAttachment: { holds: 'one', accepts: 'any', sizeLimitPolicy: 'file' },
+  contentFileGroup: { holds: 'items', accepts: 'any', sizeLimitPolicy: 'file' },
+} as const satisfies Partial<Record<ContentBlockType, ContentFileBlock>>;
+
+export type ContentFileBlockType = keyof typeof CONTENT_FILE_BLOCKS;
+
+export function isContentFileBlockType(
+  type: string,
+): type is ContentFileBlockType {
+  return Object.hasOwn(CONTENT_FILE_BLOCKS, type);
+}
+
+/**
+ * Whether a block of this kind shows a file of this type and size. The size
+ * is the one its limit is measured on: a stored file's `assetSizeForLimit`,
+ * a new file's own.
+ */
+export function contentFileBlockAccepts(
+  type: ContentFileBlockType,
+  file: { type: AssetType; size: number },
+): boolean {
+  const block: ContentFileBlock = CONTENT_FILE_BLOCKS[type];
+  return (
+    (block.accepts === 'any' || block.accepts.includes(file.type)) &&
+    file.size <= ASSET_UPLOAD_LIMITS[block.sizeLimitPolicy]
+  );
+}
+
+/** The files a block holds, in its order, as its data has them. */
+export function contentBlockFiles(block: ContentOutputBlock): unknown[] {
+  if (!isContentFileBlockType(block.type)) return [];
+  const data = block.data as Record<string, unknown>;
+  if (CONTENT_FILE_BLOCKS[block.type].holds === 'one') return [data.asset];
+  return Array.isArray(data.items)
+    ? data.items.map((item) => (isRecord(item) ? item.asset : undefined))
+    : [];
+}
+
+/**
+ * The block's data with its files as `hydrate` gives them: a single file the
+ * reader may not have becomes `null`, a file of a list is left out of it.
+ */
+export async function hydrateContentBlockFiles(
+  block: ContentOutputBlock,
+  hydrate: (assetUuid: string) => Promise<unknown>,
+): Promise<Record<string, unknown>> {
+  const data = block.data as Record<string, unknown>;
+  if (!isContentFileBlockType(block.type)) return data;
+  const load = async (value: unknown) => {
+    const assetUuid = isRecord(value) ? optionalString(value.assetUuid) : '';
+    return (assetUuid && (await hydrate(assetUuid))) || undefined;
+  };
+  if (CONTENT_FILE_BLOCKS[block.type].holds === 'one')
+    return { ...data, asset: (await load(data.asset)) ?? null };
+  const items = Array.isArray(data.items) ? data.items : [];
+  const hydrated = await Promise.all(
+    items.map(async (item) => {
+      const asset = await load(item?.asset);
+      return asset ? { ...item, asset } : undefined;
+    }),
+  );
+  return { ...data, items: hydrated.filter(Boolean) };
+}
+
+/** The block's data with each of its files put through `map`. */
+function mapContentBlockFiles(
+  block: ContentOutputBlock,
+  map: (asset: unknown) => unknown,
+): Record<string, unknown> {
+  const data = block.data as Record<string, unknown>;
+  if (!isContentFileBlockType(block.type)) return data;
+  if (CONTENT_FILE_BLOCKS[block.type].holds === 'one')
+    return { ...data, asset: map(data.asset) };
+  return {
+    ...data,
+    items: (Array.isArray(data.items) ? data.items : []).map((item) => ({
+      ...item,
+      asset: map(item?.asset),
+    })),
+  };
 }
 
 export const CONTENT_MEDIA_LAYOUTS = [
@@ -294,46 +422,15 @@ export function canonicalizeContentData(
 function canonicalizeNormalizedContentData(
   normalized: ContentOutputData,
 ): ContentOutputData {
+  // Normalized data has its keys in their own order and no others, so only
+  // the files have anything to drop.
   return {
     ...normalized,
-    blocks: normalized.blocks.map((block) => {
-      if (block.type === 'contentMedia') {
-        return {
-          ...block,
-          data: {
-            asset: contentAssetIdentity((block.data as any).asset),
-            layout: (block.data as any).layout,
-            caption: (block.data as any).caption,
-          },
-        };
-      }
-      if (block.type === 'contentGallery') {
-        const items = Array.isArray((block.data as any).items)
-          ? (block.data as any).items
-          : [];
-        return {
-          ...block,
-          data: {
-            items: items.map((item: ContentGalleryItem) => ({
-              id: item.id,
-              asset: contentAssetIdentity(item.asset),
-              caption: item.caption,
-            })),
-          },
-        };
-      }
-      if (block.type === 'contentAttachment' || block.type === 'contentAudio') {
-        return {
-          ...block,
-          data: {
-            asset: contentAssetIdentity((block.data as any).asset),
-            title: (block.data as any).title,
-            caption: (block.data as any).caption,
-          },
-        };
-      }
-      return block;
-    }),
+    blocks: normalized.blocks.map((block) =>
+      isContentFileBlockType(block.type)
+        ? { ...block, data: mapContentBlockFiles(block, contentAssetIdentity) }
+        : block,
+    ),
   };
 }
 
@@ -496,8 +593,8 @@ function contentPlainTextFromNormalized(
 
 /**
  * The pieces of text a block shows, in reading order, as plain text: a
- * paragraph, a quote and then its caption, each item of a list, each caption
- * of a gallery.
+ * paragraph, a quote and then its caption, each item of a list, a file's
+ * title and caption, a group's title and then each of its files'.
  */
 export function contentBlockTextParts(
   block: ContentOutputBlock,
@@ -522,12 +619,16 @@ export function contentBlockTextParts(
       appendPreviewText(textParts, (block.data as any).caption);
       break;
     case 'contentGallery':
-      collectGalleryPreviewText(textParts, (block.data as any).items);
+      collectFilePreviewText(textParts, (block.data as any).items);
       break;
     case 'contentAttachment':
     case 'contentAudio':
       appendPreviewText(textParts, (block.data as any).title);
       appendPreviewText(textParts, (block.data as any).caption);
+      break;
+    case 'contentFileGroup':
+      appendPreviewText(textParts, (block.data as any).title);
+      collectFilePreviewText(textParts, (block.data as any).items);
       break;
     case 'externalLink':
       if (includeExternalLinks) {
@@ -631,21 +732,8 @@ function collectNormalizedContentAssetSizeMap(
   normalized: ContentOutputData,
 ): Map<string, number> {
   const sizes = new Map<string, number>();
-
-  for (const block of normalized.blocks) {
-    if (hasSingleContentAsset(block.type)) {
-      addAssetSize(sizes, (block.data as any).asset);
-      continue;
-    }
-
-    if (block.type === 'contentGallery') {
-      const items = Array.isArray((block.data as any).items)
-        ? (block.data as any).items
-        : [];
-      for (const item of items) addAssetSize(sizes, item?.asset);
-    }
-  }
-
+  for (const block of normalized.blocks)
+    for (const asset of contentBlockFiles(block)) addAssetSize(sizes, asset);
   return sizes;
 }
 
@@ -659,41 +747,22 @@ function extractNormalizedContentAssetRefs(
   normalized: ContentOutputData,
 ): ContentAssetRef[] {
   const ranges = normalizedContentPrivateSectionRanges(normalized);
-  const refs: ContentAssetRef[] = [];
-  for (const [index, block] of normalized.blocks.entries()) {
+  return normalized.blocks.flatMap((block, index) => {
     const isPrivate = contentBlockIsInPrivateSection(ranges, index);
-    const blockId = block.id;
-
-    if (hasSingleContentAsset(block.type)) {
-      const asset = normalizeContentAsset((block.data as any).asset);
-      if (asset) {
-        refs.push({
-          assetUuid: asset.assetUuid,
-          blockId,
-          blockType: block.type,
-          isPrivate,
-        });
-      }
-      continue;
-    }
-
-    if (block.type === 'contentGallery') {
-      const items = Array.isArray((block.data as any).items)
-        ? (block.data as any).items
+    return contentBlockFiles(block).flatMap((value): ContentAssetRef[] => {
+      const asset = normalizeContentAsset(value);
+      return asset
+        ? [
+            {
+              assetUuid: asset.assetUuid,
+              blockId: block.id,
+              blockType: block.type,
+              isPrivate,
+            },
+          ]
         : [];
-      for (const item of items) {
-        const asset = normalizeContentAsset(item?.asset);
-        if (!asset) continue;
-        refs.push({
-          assetUuid: asset.assetUuid,
-          blockId,
-          blockType: block.type,
-          isPrivate,
-        });
-      }
-    }
-  }
-  return refs;
+    });
+  });
 }
 
 export function collectContentAssetUuids(
@@ -712,19 +781,6 @@ function addAssetSize(sizes: Map<string, number>, value: unknown) {
   const asset = normalizeContentAsset(value);
   if (!asset || typeof asset.size !== 'number') return;
   sizes.set(asset.assetUuid, asset.size);
-}
-
-export function isContentAssetBlockType(type: ContentBlockType): boolean {
-  return hasSingleContentAsset(type) || type === 'contentGallery';
-}
-
-/** Blocks that hold one file, as `data.asset`. */
-function hasSingleContentAsset(type: ContentBlockType): boolean {
-  return (
-    type === 'contentMedia' ||
-    type === 'contentAudio' ||
-    type === 'contentAttachment'
-  );
 }
 
 function normalizeContentBlock(value: unknown): ContentOutputBlock {
@@ -798,7 +854,7 @@ function normalizeBlockData(
       return {
         asset: normalizeContentAsset(data.asset),
         layout: normalizeContentMediaLayout(data.layout),
-        caption: optionalContentMediaCaption(data.caption),
+        caption: optionalContentCaption(data.caption),
       };
 
     case 'contentGallery':
@@ -808,14 +864,22 @@ function normalizeBlockData(
           : [],
       };
 
-    // A recording is shaped as a file is: plain title and caption, so either
-    // turns into the other without losing a word.
+    // A recording is shaped as a file is — a plain title, and a caption with
+    // markup like every file's — so either turns into the other as it is.
     case 'contentAttachment':
     case 'contentAudio':
       return {
         asset: normalizeContentAsset(data.asset),
         title: optionalHeadingText(data.title),
-        caption: optionalCaptionText(data.caption),
+        caption: optionalContentCaption(data.caption),
+      };
+
+    case 'contentFileGroup':
+      return {
+        title: optionalHeadingText(data.title),
+        items: Array.isArray(data.items)
+          ? data.items.map(normalizeFileGroupItem).filter(Boolean)
+          : [],
       };
 
     case 'externalLink':
@@ -877,17 +941,11 @@ function isContentBlockEmpty(block: ContentOutputBlock): boolean {
       return false;
 
     case 'contentMedia':
+    case 'contentGallery':
     case 'contentAudio':
     case 'contentAttachment':
-      return !normalizeContentAsset((block.data as any).asset);
-
-    case 'contentGallery':
-      return !(
-        Array.isArray((block.data as any).items) &&
-        (block.data as any).items.some((item: any) =>
-          normalizeContentAsset(item?.asset),
-        )
-      );
+    case 'contentFileGroup':
+      return !contentBlockFiles(block).some(normalizeContentAsset);
 
     case 'externalLink':
       try {
@@ -1029,7 +1087,20 @@ function normalizeGalleryItem(value: unknown): ContentGalleryItem | null {
   return {
     id,
     asset,
-    caption: optionalContentMediaCaption(value.caption),
+    caption: optionalContentCaption(value.caption),
+  };
+}
+
+function normalizeFileGroupItem(value: unknown): ContentFileGroupItem | null {
+  if (!isRecord(value)) return null;
+  const id = optionalTrimmedString(value.id);
+  const asset = normalizeContentAsset(value.asset);
+  if (!id || !asset) return null;
+  return {
+    id,
+    asset,
+    title: optionalHeadingText(value.title),
+    caption: optionalContentCaption(value.caption),
   };
 }
 
@@ -1059,21 +1130,21 @@ function normalizeContentMediaLayout(value: unknown): ContentMediaLayout {
 }
 
 /**
- * A media caption's markup, made canonical. It runs on every keystroke in the
+ * A file's caption markup, made canonical: one line of inline markup, the
+ * same in every block that shows files. It runs on every keystroke in the
  * caption, so its ending is left as typed here: that is settled where the
- * block is, by `optionalContentMediaCaption`.
+ * block is, by `optionalContentCaption`.
  */
-export function normalizeContentMediaCaption(value: unknown): string {
+export function normalizeContentCaption(value: unknown): string {
   if (typeof value !== 'string') return '';
   return normalizeContentInlineHtml(
     value.replace(/<br\s*\/?>/gi, ' ').replace(/[\r\n]+/g, ' '),
   );
 }
 
-function optionalContentMediaCaption(value: unknown): string | undefined {
+function optionalContentCaption(value: unknown): string | undefined {
   return (
-    punctuatedInlineHtml(normalizeContentMediaCaption(value), 'caption') ||
-    undefined
+    punctuatedInlineHtml(normalizeContentCaption(value), 'caption') || undefined
   );
 }
 
@@ -1160,10 +1231,12 @@ function collectListPreviewText(parts: string[], items: unknown) {
   }
 }
 
-function collectGalleryPreviewText(parts: string[], items: unknown) {
+/** The title, where its files have one, and the caption of each file. */
+function collectFilePreviewText(parts: string[], items: unknown) {
   if (!Array.isArray(items)) return;
   for (const item of items) {
     if (!isRecord(item)) continue;
+    appendPreviewText(parts, item.title);
     appendPreviewText(parts, item.caption);
   }
 }

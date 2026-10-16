@@ -1,3 +1,4 @@
+import { AssetType } from './asset';
 import { formatMediaTime } from './audio';
 import type { ContentOutputBlock, PublicContentOutputData } from './content';
 import { contentIntegrationUrl } from './content-integrations';
@@ -84,31 +85,31 @@ function renderBlock(
         .map((item: any) => renderMedia(item?.asset, item?.caption, options))
         .filter(Boolean)
         .join('\n\n');
-    case 'contentAttachment': {
-      const url = data.asset?.assetUrl ?? data.asset?.media?.src;
-      const title =
-        inlineToMarkdown(data.title, options) ||
-        data.asset?.fileName ||
-        data.asset?.slug ||
-        '';
-      if (!url) return '';
-      const caption = inlineToMarkdown(data.caption, options);
-      // The file's description is the link's title, as a link's note is.
-      const link = `[${title || url}](${options.absolute(url)}${linkTitle(data.asset?.alt, options)})`;
-      return caption ? `${link}\n\n${caption}` : link;
-    }
+    case 'contentAttachment':
     case 'contentAudio': {
-      const url = data.asset?.assetUrl;
-      if (!url) return '';
+      const file = renderFile(data, block.type === 'contentAudio', options);
+      return file?.caption
+        ? `${file.link}\n\n${file.caption}`
+        : (file?.link ?? '');
+    }
+    case 'contentFileGroup': {
+      // Each file as it would be alone, a line of a list, its caption after
+      // it; the group's title a line of its own above, not a heading.
+      const lines = (Array.isArray(data.items) ? data.items : []).flatMap(
+        (item: any) => {
+          const file = renderFile(
+            item ?? {},
+            item?.asset?.type === AssetType.Audio,
+            options,
+          );
+          if (!file) return [];
+          return [`- ${file.link}${file.caption ? ` — ${file.caption}` : ''}`];
+        },
+      );
+      if (!lines.length) return '';
       const title =
-        inlineToMarkdown(data.title, options) || options.audioLabel || url;
-      const duration = data.asset?.audio?.duration;
-      const link = `[${title}](${options.absolute(url)}${linkTitle(
-        data.asset?.alt,
-        options,
-      )})${duration > 0 ? ` (${formatMediaTime(duration)})` : ''}`;
-      const caption = inlineToMarkdown(data.caption, options);
-      return caption ? `${link}\n\n${caption}` : link;
+        typeof data.title === 'string' ? typeset(data.title, options) : '';
+      return title ? `${title}\n\n${lines.join('\n')}` : lines.join('\n');
     }
     case 'externalLink': {
       const url = data.url;
@@ -140,6 +141,33 @@ function renderBlock(
     default:
       return '';
   }
+}
+
+/**
+ * A file as a link to it, named by the owner's title — a recording also by
+ * its length, then — with the file's description as the link's title, as a
+ * link's note is; and its caption.
+ */
+function renderFile(
+  data: Record<string, any>,
+  recording: boolean,
+  options: ContentMarkdownOptions,
+): { link: string; caption: string } | undefined {
+  const url = recording
+    ? data.asset?.assetUrl
+    : (data.asset?.assetUrl ?? data.asset?.media?.src);
+  if (!url) return undefined;
+  const title =
+    (typeof data.title === 'string' ? typeset(data.title, options) : '') ||
+    (recording ? options.audioLabel : undefined) ||
+    url;
+  const duration = data.asset?.audio?.duration;
+  const length =
+    recording && duration > 0 ? ` (${formatMediaTime(duration)})` : '';
+  return {
+    link: `[${title}](${options.absolute(url)}${linkTitle(data.asset?.alt, options)})${length}`,
+    caption: inlineToMarkdown(data.caption, options),
+  };
 }
 
 function renderMedia(

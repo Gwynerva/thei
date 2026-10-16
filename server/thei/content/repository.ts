@@ -7,12 +7,15 @@ import {
   contentPreviewAssets,
   createEmptyContentData,
   ContentValidationError,
+  CONTENT_FILE_BLOCKS,
   extractContentAssetRefs,
-  isContentAssetBlockType,
+  hydrateContentBlockFiles,
+  isContentFileBlockType,
   normalizeContentData,
   summarizeContentData,
   type ContentEditValue,
   type ContentFieldValue,
+  type ContentFileBlock,
   type ContentOutputBlock,
   type ContentOutputData,
   type ContentOwnerType,
@@ -373,35 +376,20 @@ async function validateContentAssets(data: ContentOutputData) {
   const assetByUuid = new Map(assets.map((asset) => [asset.assetUuid, asset]));
 
   for (const block of data.blocks) {
-    if (!isContentAssetBlockType(block.type)) continue;
-    const refs = extractContentAssetRefs({ blocks: [block] });
-    for (const ref of refs) {
+    if (!isContentFileBlockType(block.type)) continue;
+    const { accepts, sizeLimitPolicy }: ContentFileBlock =
+      CONTENT_FILE_BLOCKS[block.type];
+    for (const ref of extractContentAssetRefs({ blocks: [block] })) {
       const asset = assetByUuid.get(ref.assetUuid);
       if (!asset) continue;
-      const selectionError = assetSelectionError(asset, {
-        sizeLimitPolicy:
-          block.type === 'contentAttachment' || block.type === 'contentAudio'
-            ? 'file'
-            : 'media',
-      });
-      if (selectionError === 'size')
+      if (accepts !== 'any' && !accepts.includes(asset.type))
+        throw new ContentValidationError(
+          `A ${block.type} block cannot show a file of this kind`,
+        );
+      if (assetSelectionError(asset, { sizeLimitPolicy }) === 'size')
         throw new ContentValidationError(
           'Content asset exceeds the maximum allowed size',
         );
-      if (
-        (block.type === 'contentMedia' || block.type === 'contentGallery') &&
-        asset.type !== AssetType.Image &&
-        asset.type !== AssetType.Video
-      ) {
-        throw new ContentValidationError(
-          'Content media and gallery blocks can only use images or videos',
-        );
-      }
-      if (block.type === 'contentAudio' && asset.type !== AssetType.Audio) {
-        throw new ContentValidationError(
-          'Content audio blocks can only use audio files',
-        );
-      }
     }
   }
 
@@ -443,27 +431,8 @@ export async function hydrateContentData(
   const blocks: ContentOutputBlock[] = [];
   for (const block of normalized.blocks) {
     const data = { ...block.data };
-    if (
-      block.type === 'contentMedia' ||
-      block.type === 'contentAudio' ||
-      block.type === 'contentAttachment'
-    ) {
-      const assetUuid = (block.data as any).asset?.assetUuid;
-      data.asset = assetUuid ? await hydrateAsset(assetUuid) : null;
-    } else if (block.type === 'contentGallery') {
-      const items = Array.isArray((block.data as any).items)
-        ? (block.data as any).items
-        : [];
-      data.items = (
-        await Promise.all(
-          items.map(async (item: any) => {
-            const asset = item?.asset?.assetUuid
-              ? await hydrateAsset(item.asset.assetUuid)
-              : undefined;
-            return asset ? { ...item, asset } : undefined;
-          }),
-        )
-      ).filter(Boolean);
+    if (isContentFileBlockType(block.type)) {
+      Object.assign(data, await hydrateContentBlockFiles(block, hydrateAsset));
     } else if (block.type === 'externalLink') {
       const url = (block.data as any).url;
       const link = url ? await loadExternalLink(url) : undefined;

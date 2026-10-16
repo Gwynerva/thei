@@ -200,7 +200,7 @@ test.describe('on a desktop', () => {
   }) => {
     // The toolbox's way: Editor.js reads the fields of a placeholder, and the
     // caption appears only once a picture is chosen.
-    await page.getByRole('button', { name: 'Insert media' }).click();
+    await page.getByRole('button', { name: 'Insert file' }).click();
     await page.getByRole('button', { name: 'Choose picture' }).click();
     const id = await page
       .locator('.codex-editor .ce-block')

@@ -219,7 +219,7 @@ test('the tiles keep the order they are given, in this browser', async ({
 
   // Dragged by the mouse, as a hand does: the sorter follows the pointer on
   // a clock of its own.
-  const from = (await tile(page, before[11]!).boundingBox())!;
+  const from = (await tile(page, before.at(-1)!).boundingBox())!;
   const to = (await tiles(page).first().boundingBox())!;
   const start = { x: from.x + from.width / 2, y: from.y + from.height / 2 };
   const end = { x: to.x + 6, y: to.y + to.height / 2 };
@@ -234,7 +234,7 @@ test('the tiles keep the order they are given, in this browser', async ({
   }
   await page.waitForTimeout(200);
   await page.mouse.up();
-  await expect.poll(async () => (await tileOrder(page))[0]).toBe(before[11]);
+  await expect.poll(async () => (await tileOrder(page))[0]).toBe(before.at(-1));
   const after = await tileOrder(page);
   // A drop is no choice: the grid is still open.
   await expect(grid(page)).toHaveCount(1);

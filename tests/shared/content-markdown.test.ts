@@ -324,3 +324,53 @@ describe('a file’s description in the Markdown copy', () => {
     );
   });
 });
+
+describe('a group of files in the Markdown copy', () => {
+  const format = (text: string) => text.replace(/"([^"]*)"/g, '«$1»');
+
+  it('is its title on a line of its own, then each file as alone', () => {
+    expect(
+      contentToMarkdown(
+        {
+          blocks: [
+            {
+              type: 'contentFileGroup',
+              data: {
+                title: 'The "papers"',
+                items: [
+                  {
+                    id: 'f1',
+                    title: 'Contract',
+                    caption: 'Signed <b>today</b>',
+                    asset: {
+                      assetUuid: 't',
+                      type: 'other',
+                      assetUrl: '/events/e/content/t.pdf',
+                      alt: 'Two pages',
+                    },
+                  },
+                  {
+                    id: 'f2',
+                    asset: {
+                      assetUuid: 's',
+                      type: 'audio',
+                      assetUrl: '/events/e/content/s.weba',
+                      audio: { duration: 65, peaks: [] },
+                    },
+                  },
+                  // A file the reader may not see arrives as nothing.
+                  { id: 'f3', asset: null },
+                ],
+              },
+            },
+          ],
+        } as never,
+        { ...options, audioLabel: 'Audio', format },
+      ),
+    ).toBe(
+      'The «papers»\n\n' +
+        '- [Contract](https://example.com/events/e/content/t.pdf "Two pages") — Signed **today**\n' +
+        '- [Audio](https://example.com/events/e/content/s.weba) (1:05)',
+    );
+  });
+});

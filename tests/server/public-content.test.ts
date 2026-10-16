@@ -488,6 +488,91 @@ describe('public content media previews', () => {
     });
   });
 
+  it('hydrates a group of files and leaves out the ones a visitor may not see', async () => {
+    const stored = (assetUuid: string, extension: string, type: AssetType) => ({
+      assetUuid,
+      familyUuid: `${assetUuid}-family`,
+      contentHash: `${assetUuid}-hash`,
+      slug: assetUuid,
+      extension,
+      settingsKey: 'original',
+      settings: null,
+      type,
+      size: 10,
+      meta: null,
+    });
+    const assets = new Map<string, any>([
+      ['contract', stored('contract', 'pdf', AssetType.Other)],
+      ['secret', stored('secret', 'pdf', AssetType.Other)],
+    ]);
+    (globalThis as any).THEI_SERVER = {
+      content: {
+        findByOwner: async () => ({
+          contentUuid: 'project-content',
+          data: {
+            blocks: [
+              {
+                type: 'contentFileGroup',
+                data: {
+                  title: 'Papers',
+                  items: [
+                    {
+                      id: 'f1',
+                      asset: { assetUuid: 'contract' },
+                      title: 'Contract',
+                      caption: 'Signed <b>today</b>',
+                    },
+                    { id: 'f2', asset: { assetUuid: 'secret' } },
+                  ],
+                },
+              },
+            ],
+          },
+        }),
+      },
+      assets: {
+        findByUuid: async (assetUuid: string) => assets.get(assetUuid),
+        usages: {
+          // The second file is placed only inside a private part elsewhere.
+          findOne: async (assetUuid: string) => ({
+            meta: {
+              role: 'content',
+              refs: [{ isPrivate: assetUuid === 'secret' }],
+            },
+          }),
+          findByContainer: async () => [],
+        },
+      },
+    };
+
+    const result = await buildPublicContentData(
+      'project',
+      'project-uuid',
+      'project-description',
+      { type: 'project', humanReadableSlug: 'project', publicId: 'Project' },
+    );
+
+    expect(result?.blocks).toMatchObject([
+      {
+        type: 'contentFileGroup',
+        data: {
+          title: 'Papers',
+          items: [
+            {
+              id: 'f1',
+              title: 'Contract',
+              caption: 'Signed <b>today</b>',
+              asset: {
+                assetUuid: 'contract',
+                assetUrl: '/projects/project-Project/content/contract.pdf',
+              },
+            },
+          ],
+        },
+      },
+    ]);
+  });
+
   it('replaces private sections with stats without leaking their payload', async () => {
     const secretAsset = {
       assetUuid: 'secret-asset-uuid',

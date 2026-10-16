@@ -116,8 +116,13 @@ export type PublicSearchResponse = PaginatedResponse<PublicEntitySummary> & {
 export type PublicAssetDescriptor = {
   key: string;
   title: string;
-  /** The caption of the place it is shown in. */
+  /** The caption of the place it is shown in, as plain text. */
   description?: string;
+  /**
+   * The caption a text gives the file, as the inline markup it is stored in;
+   * shown with its marks, links and hints in place of `description`.
+   */
+  caption?: string;
   /**
    * The file's own description: what it shows or is about, the same
    * wherever it is placed. As typed; formatted where it is drawn.

@@ -31,8 +31,6 @@ describe('Editor.js phrases', () => {
   it('provides English block names and controls', () => {
     expect(enModule.phrases.content_editor_i18n).toMatchObject({
       text: 'Text',
-      media: 'Media',
-      gallery: 'Gallery',
       file: 'File',
       add: 'Add',
       click_to_delete: 'Really delete?',

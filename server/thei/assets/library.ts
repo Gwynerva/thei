@@ -81,8 +81,8 @@ members AS (
 `;
 /**
  * Matches an asset by the text the site itself gives it: captions and titles
- * of its placements, captions inside editor blocks, and the titles of whatever
- * holds it. A diary entry has no title: it is found by its day, written in
+ * of its placements, captions and titles inside editor blocks — of a file in
+ * a group, the group's title too — and the titles of whatever holds it. A diary entry has no title: it is found by its day, written in
  * any way (`day-query.ts`), and never by the characters of its stored date,
  * so a lone `0` or `-` does not find every entry. What the uploaded file
  * was called is never kept, so it is never searchable. The file's own
@@ -106,7 +106,7 @@ function siteTextMatchSql(scoped: boolean) {
           instr(asset_search_text(coalesce(json_extract(b.value,'$.data.caption'),'') || ' ' || coalesce(json_extract(b.value,'$.data.title'),'')),?)>0)
         OR EXISTS (SELECT 1 FROM json_each(b.value,'$.data.items') i
           WHERE json_extract(i.value,'$.asset.assetUuid')=a.assetUuid
-            AND instr(asset_search_text(json_extract(i.value,'$.caption')),?)>0)
+            AND instr(asset_search_text(coalesce(json_extract(i.value,'$.caption'),'') || ' ' || coalesce(json_extract(i.value,'$.title'),'') || ' ' || coalesce(json_extract(b.value,'$.data.title'),'')),?)>0)
       )
     )
     OR EXISTS (

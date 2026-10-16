@@ -34,6 +34,13 @@ neutral — and in square icon-only sizes.
   `max-sm:w-9 max-sm:justify-center max-sm:px-0` on the button,
   `max-sm:hidden` on the words, and an `aria-label`.
 - Under a finger, small square buttons grow: `pointer-coarse:size-11`.
+- A row of a list the owner orders by hand — the profile's links, the files
+  of a group in a text — has a grip: a square `Button` with `dragHandle` and
+  the `grip` icon, named by what it moves. A drag starts from it alone
+  (`useDragSort`'s `handle`), so the row's fields and buttons stay what they
+  are under the pointer, and the arrow keys on it move the row by one. Inside
+  a text the grip keeps those keys from Editor.js, which would move the caret
+  to another block.
 
 ## How it is built
 

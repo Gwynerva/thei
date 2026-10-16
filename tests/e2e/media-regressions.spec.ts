@@ -208,12 +208,13 @@ test('modal labels use captions and preserve file descriptions', async ({
   await expect(header).not.toHaveText('');
   await close(page);
   // A file with nothing to show is downloaded rather than opened, and says
-  // what it is on its own card.
-  const document = root.getByRole('link', {
-    name: 'Document title Document description',
-  });
+  // what it is on its own card; its caption stands under it, as a picture's.
+  const document = root.getByRole('link', { name: /Document title/ });
   await expect(document).toHaveAttribute('download', '');
   await expect(document).not.toHaveAttribute('target', /.+/);
+  await expect(
+    root.locator('[data-content-attachment]').getByText('Document description'),
+  ).toBeVisible();
   const listed = page.locator('[data-files]').getByRole('button');
   await listed.click();
   await expect(page.locator('dialog')).toContainText('Listed file');

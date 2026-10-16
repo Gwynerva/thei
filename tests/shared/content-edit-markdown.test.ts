@@ -81,12 +81,27 @@ const everyBlock = normalizeContentData({
       data: {
         asset: asset('a-4'),
         title: 'Голос',
-        caption: 'Запись с прогулки',
+        caption: 'Запись с <b>прогулки</b>',
       },
     },
     {
       type: 'contentAttachment',
       data: { asset: asset('a-5'), title: 'Документ' },
+    },
+    {
+      type: 'contentFileGroup',
+      data: {
+        title: 'Бумаги',
+        items: [
+          {
+            id: 'f1',
+            asset: asset('a-6'),
+            title: 'Договор',
+            caption: 'Подписан <a href="https://example.com/">здесь</a>',
+          },
+          { id: 'f2', asset: asset('a-7') },
+        ],
+      },
     },
     {
       type: 'externalLink',
@@ -156,9 +171,15 @@ describe('editing markdown: serialize', () => {
 ::media{#g2 asset="a-3"}
 :::
 
-::audio[Запись с прогулки]{asset="a-4" title="Голос"}
+::audio[Запись с **прогулки**]{asset="a-4" title="Голос"}
 
 ::file{asset="a-5" title="Документ"}
+
+:::files{title="Бумаги"}
+::file[Подписан [здесь](https://example.com/)]{#f1 asset="a-6" title="Договор"}
+
+::file{#f2 asset="a-7"}
+:::
 
 ::link[Почему ссылка]{url="https://example.com/"}
 
@@ -240,6 +261,36 @@ describe('editing markdown: serialize', () => {
   it('writes nothing for an empty text', () => {
     expect(contentToEditMarkdown(null)).toBe('');
     expect(contentToEditMarkdown({ blocks: [] })).toBe('');
+  });
+
+  it('reads a file’s caption written when it was plain text as the same words', () => {
+    // What an action kept from before captions took markup: a plain caption,
+    // escaped as Markdown escapes words.
+    const parsed = parseEditMarkdownToBlocks(
+      '::file[Q1 < Q2 & a \\*star\\* \\[1\\]]{asset="a-1" title="Prices"}',
+    );
+    expect(parsed.warnings).toEqual([]);
+    expect(parsed.blocks).toMatchObject([
+      {
+        type: 'contentAttachment',
+        data: { title: 'Prices', caption: 'Q1 &lt; Q2 &amp; a *star* [1]' },
+      },
+    ]);
+  });
+
+  it('reads a recording in a group as a file of it', () => {
+    const parsed = parseEditMarkdownToBlocks(
+      ':::files\n::audio[Голос]{#r asset="a-1"}\n\n::media{asset="a-2"}\n:::',
+    );
+    expect(parsed.blocks).toMatchObject([
+      {
+        type: 'contentFileGroup',
+        data: {
+          title: '',
+          items: [{ id: 'r', asset: { assetUuid: 'a-1' }, caption: 'Голос' }],
+        },
+      },
+    ]);
   });
 });
 

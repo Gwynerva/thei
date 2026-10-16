@@ -6,31 +6,31 @@ const props = withDefaults(
   defineProps<{
     asset: ContentAssetData;
     title?: string;
-    description?: string;
+    caption?: string;
     editable?: boolean;
     href?: string;
     fallbackTitle?: string;
     editLabel?: string;
     titlePlaceholder?: string;
-    descriptionPlaceholder?: string;
+    captionPlaceholder?: string;
     openable?: boolean;
   }>(),
   {
     title: '',
-    description: '',
+    caption: '',
     editable: false,
     href: undefined,
     fallbackTitle: '',
     editLabel: '',
     titlePlaceholder: '',
-    descriptionPlaceholder: '',
+    captionPlaceholder: '',
   },
 );
 
 const emit = defineEmits<{
   edit: [];
   title: [value: string];
-  description: [value: string];
+  caption: [value: string];
   open: [];
 }>();
 
@@ -60,6 +60,26 @@ function onPreviewClick(event: MouseEvent) {
   emit('edit');
 }
 
+/**
+ * A picture or a video shown as a file still shows what it is, by its small
+ * preview: the page loads only that, never the file, until it is opened. An
+ * older video stored without a preview of its own has none to give.
+ */
+const thumbnailFailed = ref(false);
+const thumbnail = computed(() => {
+  const media = props.asset.media;
+  if (!media || thumbnailFailed.value) return undefined;
+  if (media.kind === 'video')
+    return media.previewSrc && media.previewSrc !== media.src
+      ? media.previewSrc
+      : undefined;
+  return media.previewSrc || media.src;
+});
+watch(
+  () => props.asset.media?.previewSrc,
+  () => (thumbnailFailed.value = false),
+);
+
 // The owner's title gets their typography; a file name stays as it is.
 const resolvedTitle = computed(
   () => publicText(props.title) || props.fallbackTitle,
@@ -73,122 +93,138 @@ const details = computed(() =>
 </script>
 
 <template>
-  <component
-    :is="mode === 'open' ? 'button' : mode === 'link' ? 'a' : 'div'"
-    :type="mode === 'open' ? 'button' : undefined"
-    :href="mode === 'link' ? sitePath(href) : undefined"
-    :target="mode === 'link' && viewable ? '_blank' : undefined"
-    :rel="mode === 'link' ? 'noopener noreferrer' : undefined"
-    :download="mode === 'link' && !viewable ? '' : undefined"
-    class="attachment-card group relative flex w-full min-w-0 items-center
-      gap-sm rounded-normal border border-border-1 bg-bg-2 p-xs text-left
-      text-text-1 no-underline transition-colors outline-none sm:pr-sm"
-    :class="
-      mode === 'static'
-        ? 'focus-within:border-accent/50'
-        : `attachment-card-interactive cursor-pointer focus-visible:ring-2
-          focus-visible:ring-accent hocus:border-accent/40`
-    "
-    @click="mode === 'open' ? emit('open') : undefined"
-  >
+  <!-- The caption stands under the card, as a picture's does: it may hold a
+       link, which the card's own link or button cannot. -->
+  <figure class="min-w-0" data-content-attachment>
     <component
-      :is="editable ? 'button' : 'span'"
-      :type="editable ? 'button' : undefined"
-      :data-drag-ignore="editable || undefined"
-      :aria-label="editable ? editLabel : undefined"
-      :data-title-popup="editable ? editLabel : undefined"
-      class="attachment-card-tile relative flex size-14 shrink-0 items-center
-        justify-center rounded-sm text-accent transition-colors sm:size-16"
-      :class="{
-        [`attachment-card-tile-editable cursor-pointer outline-none
-        focus-visible:ring-2 focus-visible:ring-accent`]: editable,
-      }"
-      @click="onPreviewClick"
+      :is="mode === 'open' ? 'button' : mode === 'link' ? 'a' : 'div'"
+      :type="mode === 'open' ? 'button' : undefined"
+      :href="mode === 'link' ? sitePath(href) : undefined"
+      :target="mode === 'link' && viewable ? '_blank' : undefined"
+      :rel="mode === 'link' ? 'noopener noreferrer' : undefined"
+      :download="mode === 'link' && !viewable ? '' : undefined"
+      class="attachment-card group relative flex w-full min-w-0 items-center
+        gap-sm rounded-normal border border-border-1 bg-bg-2 p-xs text-left
+        text-text-1 no-underline transition-colors outline-none sm:pr-sm"
+      :class="
+        mode === 'static'
+          ? 'focus-within:border-accent/50'
+          : `attachment-card-interactive cursor-pointer focus-visible:ring-2
+            focus-visible:ring-accent hocus:border-accent/40`
+      "
+      @click="mode === 'open' ? emit('open') : undefined"
     >
-      <FilePreview :extension="asset.extension" class="size-10 sm:size-11" />
+      <component
+        :is="editable ? 'button' : 'span'"
+        :type="editable ? 'button' : undefined"
+        :data-drag-ignore="editable || undefined"
+        :aria-label="editable ? editLabel : undefined"
+        :data-title-popup="editable ? editLabel : undefined"
+        class="attachment-card-tile relative flex size-14 shrink-0 items-center
+          justify-center rounded-sm text-accent transition-colors sm:size-16"
+        :class="{
+          [`attachment-card-tile-editable cursor-pointer outline-none
+          focus-visible:ring-2 focus-visible:ring-accent`]: editable,
+        }"
+        @click="onPreviewClick"
+      >
+        <img
+          v-if="thumbnail"
+          :src="sitePath(thumbnail)"
+          alt=""
+          loading="lazy"
+          decoding="async"
+          draggable="false"
+          class="size-full rounded-sm object-cover"
+          data-attachment-thumbnail
+          @error="thumbnailFailed = true"
+        />
+        <FilePreview
+          v-else
+          :extension="asset.extension"
+          class="size-10 sm:size-11"
+        />
+        <span
+          v-if="thumbnail && asset.media?.kind === 'video'"
+          class="pointer-events-none absolute bottom-1 left-1 rounded-full
+            bg-black/30 p-0.5 text-xs leading-none text-white backdrop-blur-sm"
+          aria-hidden="true"
+        >
+          <Icon name="play-circle" />
+        </span>
+        <span
+          v-if="editable"
+          class="absolute -right-1 -bottom-1 flex size-6 items-center
+            justify-center rounded-full border border-border-1 bg-bg-2 text-xs
+            text-text-2 shadow-sm"
+          aria-hidden="true"
+        >
+          <Icon name="edit" />
+        </span>
+      </component>
+
+      <component
+        :is="editable ? 'div' : 'span'"
+        class="flex min-w-0 flex-1 flex-col gap-0.5"
+      >
+        <ContentPlainTextField
+          v-if="editable"
+          :model-value="title"
+          :editable="true"
+          :placeholder="fallbackTitle || titlePlaceholder"
+          class="min-h-6 truncate font-semibold tracking-tight outline-none
+            empty:before:pointer-events-none empty:before:text-text-3
+            empty:before:content-[attr(data-placeholder)] focus:before:hidden"
+          @update:model-value="emit('title', $event)"
+        />
+        <span
+          v-else
+          class="truncate font-semibold tracking-tight transition-colors"
+          :class="{ 'group-hocus:text-accent': mode !== 'static' }"
+        >
+          {{ resolvedTitle }}
+        </span>
+        <!-- What the file is, for whoever cannot see it: its window shows it. -->
+        <span v-if="!editable && asset.alt" class="sr-only">{{
+          publicText(asset.alt)
+        }}</span>
+
+        <span
+          v-if="details.length"
+          class="flex min-w-0 items-center gap-1.5 text-xs text-text-3"
+        >
+          <template v-for="(detail, index) in details" :key="index">
+            <span v-if="index" aria-hidden="true">·</span>
+            <span class="truncate">{{ detail }}</span>
+          </template>
+        </span>
+      </component>
+
       <span
-        v-if="editable"
-        class="absolute -right-1 -bottom-1 flex size-6 items-center
-          justify-center rounded-full border border-border-1 bg-bg-2 text-xs
-          text-text-2 shadow-sm"
+        v-if="mode !== 'static'"
+        class="flex size-9 shrink-0 items-center justify-center rounded-full
+          bg-bg-3 text-text-2 transition-colors group-hocus:bg-accent
+          group-hocus:text-white"
         aria-hidden="true"
       >
-        <Icon name="edit" />
+        <Icon
+          :name="
+            mode === 'open'
+              ? 'expand-diagonal'
+              : viewable
+                ? 'arrow-outward'
+                : 'download'
+          "
+        />
       </span>
     </component>
-
-    <component
-      :is="editable ? 'div' : 'span'"
-      class="flex min-w-0 flex-1 flex-col gap-0.5"
-    >
-      <ContentPlainTextField
-        v-if="editable"
-        :model-value="title"
-        :editable="true"
-        :placeholder="fallbackTitle || titlePlaceholder"
-        class="min-h-6 truncate font-semibold tracking-tight outline-none
-          empty:before:pointer-events-none empty:before:text-text-3
-          empty:before:content-[attr(data-placeholder)] focus:before:hidden"
-        @update:model-value="emit('title', $event)"
-      />
-      <span
-        v-else
-        class="truncate font-semibold tracking-tight transition-colors"
-        :class="{ 'group-hocus:text-accent': mode !== 'static' }"
-      >
-        {{ resolvedTitle }}
-      </span>
-
-      <ContentPlainTextField
-        v-if="editable"
-        :model-value="description"
-        :editable="true"
-        :placeholder="descriptionPlaceholder"
-        class="min-h-5 truncate text-sm text-text-2 outline-none
-          empty:before:pointer-events-none empty:before:text-text-3
-          empty:before:content-[attr(data-placeholder)] focus:before:hidden"
-        @update:model-value="emit('description', $event)"
-      />
-      <span
-        v-else-if="description"
-        class="line-clamp-2 text-sm leading-snug text-text-2"
-      >
-        {{ publicText(description) }}
-      </span>
-      <!-- What the file is, for whoever cannot see it: its window shows it. -->
-      <span v-if="!editable && asset.alt" class="sr-only">{{
-        publicText(asset.alt)
-      }}</span>
-
-      <span
-        v-if="details.length"
-        class="flex min-w-0 items-center gap-1.5 text-xs text-text-3"
-      >
-        <template v-for="(detail, index) in details" :key="index">
-          <span v-if="index" aria-hidden="true">·</span>
-          <span class="truncate">{{ detail }}</span>
-        </template>
-      </span>
-    </component>
-
-    <span
-      v-if="mode !== 'static'"
-      class="flex size-9 shrink-0 items-center justify-center rounded-full
-        bg-bg-3 text-text-2 transition-colors group-hocus:bg-accent
-        group-hocus:text-white"
-      aria-hidden="true"
-    >
-      <Icon
-        :name="
-          mode === 'open'
-            ? 'expand-diagonal'
-            : viewable
-              ? 'arrow-outward'
-              : 'download'
-        "
-      />
-    </span>
-  </component>
+    <ContentCaption
+      :model-value="caption"
+      :editable
+      :placeholder="captionPlaceholder"
+      @update:model-value="emit('caption', $event)"
+    />
+  </figure>
 </template>
 
 <style scoped>

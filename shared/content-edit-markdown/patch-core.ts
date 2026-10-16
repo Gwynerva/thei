@@ -166,18 +166,21 @@ export function contentTextFields(
   block: ContentOutputBlock,
 ): ContentTextField[] {
   const data = block.data as Record<string, any>;
-  const field = (
+  const itemField = (
+    item: Record<string, any>,
     key: string,
     html: boolean,
     escaped = false,
   ): ContentTextField => ({
-    get: () => (typeof data[key] === 'string' ? data[key] : ''),
+    get: () => (typeof item[key] === 'string' ? item[key] : ''),
     set: (value) => {
-      data[key] = value;
+      item[key] = value;
     },
     html,
     escaped,
   });
+  const field = (key: string, html: boolean, escaped = false) =>
+    itemField(data, key, html, escaped);
   switch (block.type) {
     case 'paragraph':
       return [field('text', true)];
@@ -205,16 +208,20 @@ export function contentTextFields(
     case 'contentMedia':
       return [field('caption', true)];
     case 'contentGallery':
-      return (data.items ?? []).map((item: Record<string, any>) => ({
-        get: () => (typeof item.caption === 'string' ? item.caption : ''),
-        set: (value: string) => {
-          item.caption = value;
-        },
-        html: true,
-      }));
+      return (data.items ?? []).map((item: Record<string, any>) =>
+        itemField(item, 'caption', true),
+      );
     case 'contentAudio':
     case 'contentAttachment':
-      return [field('title', false), field('caption', false)];
+      return [field('title', false), field('caption', true)];
+    case 'contentFileGroup':
+      return [
+        field('title', false),
+        ...(data.items ?? []).flatMap((item: Record<string, any>) => [
+          itemField(item, 'title', false),
+          itemField(item, 'caption', true),
+        ]),
+      ];
     case 'externalLink':
     case 'entityLink':
       return [field('note', false)];

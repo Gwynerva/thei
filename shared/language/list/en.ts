@@ -1353,9 +1353,6 @@ export default defineI18nBase({
       checklist: 'Checklist',
       quote: 'Quote',
       delimiter: 'Delimiter',
-      media: 'Media',
-      gallery: 'Gallery',
-      audio: 'Audio',
       file: 'File',
       enter_quote: 'Enter a quote',
       enter_caption: 'Enter a caption',
@@ -1383,10 +1380,23 @@ export default defineI18nBase({
     content_add_media: 'Add image or video',
     content_choose_file: 'Choose file',
     content_choose_audio: 'Choose audio',
-    content_audio_as_player: 'Show as a player',
-    content_audio_as_file: 'Show as a file',
+    content_show_as_player: 'Show as a player',
+    content_show_as_file: 'Show as a file',
+    content_show_as_picture: 'Show as a picture',
     content_choose_entity: 'Choose what to link to',
     content_make_gallery: 'Turn into a gallery',
+    content_make_file_group: 'Turn into a group',
+    content_file_group_title: 'Group title',
+    content_add_files: 'Add files',
+    content_remove_file: 'Remove from the group',
+    content_move_file: 'Move',
+    content_upload_as_file: 'Upload as a file',
+    content_file_skipped: (name, reason) =>
+      reason === 'extension'
+        ? `“${name}” was not added: the file has no extension`
+        : reason === 'empty'
+          ? `“${name}” was not added: the file is empty`
+          : `“${name}” was not added: it is over 500 MB`,
     content_link_fragment: 'Leads to this place on the page',
     content_link_fragment_remove: 'Link to the page as a whole',
     content_caption: 'Caption',

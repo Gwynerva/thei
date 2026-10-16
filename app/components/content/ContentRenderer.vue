@@ -17,8 +17,13 @@ import ContentSpoiler from './ContentSpoiler.vue';
 import { openPublicAssets } from '#layers/thei/app/modals/public-asset/modal';
 import type { PublicAssetDescriptor } from '#layers/thei/shared/api/public';
 import type { ContentEntityType } from '#layers/thei/shared/content-link';
-import type { ContentGalleryItem } from '#layers/thei/shared/content';
-import { richTextToPlainText } from '#layers/thei/shared/rich-text';
+import type {
+  ContentFileGroupItem,
+  ContentGalleryItem,
+} from '#layers/thei/shared/content';
+import { AssetType } from '#layers/thei/shared/asset';
+import { isAssetPreviewable } from '#layers/thei/shared/assets/preview';
+import type { ContentFileGroupEntry } from './file-group-state';
 import {
   buildContentHeadings,
   visibleContentBlocks,
@@ -90,17 +95,21 @@ function externalLink(
   };
 }
 
+/**
+ * A file as the viewer shows it: the title the text gives it, and its
+ * caption with the marks it was written with. `key` tells apart two places
+ * of one file in a list.
+ */
 function assetDescriptor(
   value: unknown,
-  title?: string,
-  description?: string,
+  words: { title?: string; caption?: string; key?: string } = {},
 ): PublicAssetDescriptor | undefined {
   const item = asset(value);
   if (!item.assetUrl || !item.extension) return undefined;
   return {
-    key: item.assetUuid,
-    title: richTextToPlainText(title ?? ''),
-    description: description ? richTextToPlainText(description) : undefined,
+    key: words.key ?? item.assetUuid,
+    title: words.title ?? '',
+    caption: words.caption || undefined,
     href: item.assetUrl,
     extension: item.extension,
     size: item.size ?? 0,
@@ -110,9 +119,9 @@ function assetDescriptor(
   };
 }
 
-function openAsset(value: unknown, title?: string, description?: string) {
+function openAsset(value: unknown, title?: string, caption?: string) {
   if (!props.assetViewer) return;
-  const descriptor = assetDescriptor(value, title, description);
+  const descriptor = assetDescriptor(value, { title, caption });
   if (descriptor) openPublicAssets([descriptor], descriptor);
 }
 
@@ -123,11 +132,53 @@ function openGalleryItem(
 ) {
   if (!props.assetViewer) return;
   const descriptors = items
-    .map((tile) => assetDescriptor(tile.asset, tile.caption))
+    .map((tile) =>
+      assetDescriptor(tile.asset, { caption: tile.caption, key: tile.id }),
+    )
     .filter((descriptor) => descriptor !== undefined);
   openPublicAssets(
     descriptors,
-    descriptors.find((descriptor) => descriptor.key === item.asset?.assetUuid),
+    descriptors.find((descriptor) => descriptor.key === item.id),
+  );
+}
+
+/**
+ * A group opens as a set too, of the files in it the viewer shows: its
+ * recordings play in place, and a file with nothing to show is downloaded.
+ */
+function openFileGroupItem(
+  items: ContentFileGroupItem[],
+  item: ContentFileGroupItem,
+) {
+  if (!props.assetViewer) return;
+  const descriptors = items
+    .filter(
+      (file) =>
+        file.asset.type !== AssetType.Audio &&
+        (file.asset.media ||
+          (file.asset.extension &&
+            isAssetPreviewable(
+              file.asset.extension,
+              file.asset.archivedOriginal,
+            ))),
+    )
+    .map((file) =>
+      assetDescriptor(file.asset, {
+        title: file.title,
+        caption: file.caption,
+        key: file.id,
+      }),
+    )
+    .filter((descriptor) => descriptor !== undefined);
+  openPublicAssets(
+    descriptors,
+    descriptors.find((descriptor) => descriptor.key === item.id),
+  );
+}
+
+function fileGroupEntries(items: unknown): ContentFileGroupEntry[] {
+  return (Array.isArray(items) ? (items as ContentFileGroupItem[]) : []).map(
+    (item) => ({ id: item.id, item }),
   );
 }
 </script>
@@ -191,6 +242,7 @@ function openGalleryItem(
           @open="
             openAsset(
               block.data.asset,
+              undefined,
               block.data.caption as string | undefined,
             )
           "
@@ -220,7 +272,7 @@ function openGalleryItem(
           "
           :asset="asset(block.data.asset)"
           :title="block.data.title as string | undefined"
-          :description="block.data.caption as string | undefined"
+          :caption="block.data.caption as string | undefined"
           :fallback-title="
             phrase.content_file_with_extension(
               asset(block.data.asset).extension,
@@ -234,6 +286,20 @@ function openGalleryItem(
               block.data.title as string | undefined,
               block.data.caption as string | undefined,
             )
+          "
+        />
+        <ContentFileGroup
+          v-else-if="block.type === 'contentFileGroup'"
+          :title="block.data.title as string | undefined"
+          :entries="fileGroupEntries(block.data.items)"
+          :openable="assetViewer"
+          :fallback-title="phrase.content_file_with_extension"
+          @open="
+            (item: ContentFileGroupItem) =>
+              openFileGroupItem(
+                block.data.items as ContentFileGroupItem[],
+                item,
+              )
           "
         />
         <ExternalLinkPreviewCard

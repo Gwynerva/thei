@@ -4,8 +4,9 @@ import type { ContentAssetData } from '#layers/thei/shared/content';
 
 /**
  * A recording in a text: its title, the player, and a caption under it, as
- * a picture has one. The title and caption are plain text, as a file's are,
- * so the block turns into a file and back without losing a word.
+ * a picture has one. The title is plain text and the caption takes markup,
+ * as a file's do, so the block turns into a file and back without losing a
+ * word.
  */
 const props = withDefaults(
   defineProps<{
@@ -112,19 +113,12 @@ const shownTitle = computed(() => publicText(props.title));
         {{ publicText(asset.alt) }}
       </p>
     </div>
-    <ContentPlainTextField
-      v-if="editable"
+    <ContentCaption
       :model-value="caption"
-      :editable="true"
+      :editable
       :placeholder="captionPlaceholder"
-      class="mt-xs min-h-6 w-full text-sm text-text-2 outline-none
-        empty:before:pointer-events-none empty:before:text-text-3
-        empty:before:content-[attr(data-placeholder)] focus:before:hidden"
       @update:model-value="emit('caption', $event)"
     />
-    <figcaption v-else-if="caption" class="mt-xs text-sm text-text-2">
-      {{ publicText(caption) }}
-    </figcaption>
   </figure>
 </template>
 

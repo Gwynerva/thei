@@ -1,5 +1,6 @@
 import { beforeAll, beforeEach, afterEach, describe, it, expect } from 'vitest';
 import Database from 'better-sqlite3';
+import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import {
   generateSQLiteDrizzleJson,
@@ -332,6 +333,36 @@ describe('asset library', () => {
       .set({ access: 'private' as any })
       .run();
     expect(getAssetUsages('b').placements[0]?.isPrivate).toBe(true);
+  });
+  it('finds a file of a group by its own words and by the group’s title', () => {
+    addLaunch();
+    db.update(schema.content)
+      .set({
+        data: {
+          blocks: [
+            {
+              type: 'contentFileGroup',
+              data: {
+                title: 'Бумаги полёта',
+                items: [
+                  {
+                    id: 'f1',
+                    asset: { assetUuid: 'b' },
+                    title: 'Билет',
+                    caption: 'Купленный <b>заранее</b>',
+                  },
+                ],
+              },
+            },
+          ],
+        } as never,
+      })
+      .where(eq(schema.content.contentUuid, 'launch-content'))
+      .run();
+    for (const q of ['билет', 'купленный заранее', 'бумаги'])
+      expect(
+        listLibraryAssets({ q }).items.map((i) => i.asset.assetUuid),
+      ).toEqual(['b']);
   });
   it('searches site-defined text without exposing internal previews', () => {
     expect(

@@ -92,13 +92,14 @@ export function tidyBlockText(block: Pick<Block, 'type' | 'data'>): string {
     case 'contentAttachment':
       return text(data.title, data.caption);
     case 'contentGallery':
-      return Array.isArray(data.items)
-        ? text(
-            ...data.items.map(
-              (item) => (item as { caption?: unknown }).caption,
-            ),
-          )
-        : '';
+    case 'contentFileGroup':
+      return text(
+        data.title,
+        ...(Array.isArray(data.items) ? data.items : []).flatMap((item) => [
+          (item as { title?: unknown }).title,
+          (item as { caption?: unknown }).caption,
+        ]),
+      );
     case 'externalLink':
       return text(data.url, data.note);
     case 'entityLink':
@@ -157,6 +158,7 @@ const ALWAYS_KEPT = new Set([
   'contentGallery',
   'contentAudio',
   'contentAttachment',
+  'contentFileGroup',
   'privateSectionBoundary',
 ]);
 

@@ -11,6 +11,7 @@ import {
   type AssetUploadRequest,
 } from './asset-upload-settings';
 import { AUDIO_OUTPUT_EXTENSION } from './audio';
+import type { ContentFileBlockType } from './content';
 
 /**
  * Kept as they are: the image pipeline reads one frame with `animated:
@@ -57,4 +58,20 @@ export function pastedMediaRequest(
     };
   }
   return createOriginalAssetSettings();
+}
+
+/**
+ * What a new file is stored as in the block it goes to: shown in place — a
+ * picture, a gallery, a recording played in a group or alone — at the paste
+ * defaults; a file to download as it was brought, so a long video attached
+ * as a file is never encoded for an hour first.
+ */
+export function contentFileRequest(
+  block: ContentFileBlockType,
+  draft: Pick<AssetDraftSource, 'type' | 'extension' | 'codec'>,
+): AssetUploadRequest {
+  const shown =
+    block !== 'contentAttachment' &&
+    (block !== 'contentFileGroup' || draft.type === AssetType.Audio);
+  return shown ? pastedMediaRequest(draft) : createOriginalAssetSettings();
 }

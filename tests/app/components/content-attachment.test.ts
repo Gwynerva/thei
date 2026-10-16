@@ -1,20 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import {
   contentAssetSelectionChanged,
-  contentAttachmentAssetChanged,
   normalizeContentAttachmentPaste,
 } from '../../../app/components/content/content-attachment';
 
 describe('content attachment state', () => {
   it('treats replacement with the same asset as a presentation-only refresh', () => {
     expect(
-      contentAttachmentAssetChanged(
+      contentAssetSelectionChanged(
         { assetUuid: 'same', extension: 'txt' },
         { assetUuid: 'same', extension: 'txt', size: 12 },
       ),
     ).toBe(false);
     expect(
-      contentAttachmentAssetChanged(
+      contentAssetSelectionChanged(
         { assetUuid: 'before' },
         { assetUuid: 'after' },
       ),

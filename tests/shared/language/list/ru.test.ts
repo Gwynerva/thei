@@ -25,8 +25,6 @@ describe('Editor.js phrases', () => {
   it('provides Russian block names and controls', () => {
     expect(ruModule.phrases.content_editor_i18n).toMatchObject({
       text: 'Текст',
-      media: 'Медиа',
-      gallery: 'Галерея',
       file: 'Файл',
       add: 'Добавить',
       click_to_delete: 'Точно удалить?',

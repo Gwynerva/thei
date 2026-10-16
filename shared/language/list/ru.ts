@@ -1416,9 +1416,6 @@ export default defineI18nModule({
       checklist: 'Чекбоксовый',
       quote: 'Цитата',
       delimiter: 'Разделитель',
-      media: 'Медиа',
-      gallery: 'Галерея',
-      audio: 'Аудио',
       file: 'Файл',
       enter_quote: 'Введите цитату',
       enter_caption: 'Введите подпись',
@@ -1446,10 +1443,23 @@ export default defineI18nModule({
     content_add_media: 'Добавить изображение или видео',
     content_choose_file: 'Выбрать файл',
     content_choose_audio: 'Выбрать аудио',
-    content_audio_as_player: 'Показать плеером',
-    content_audio_as_file: 'Показать файлом',
+    content_show_as_player: 'Показать плеером',
+    content_show_as_file: 'Показать файлом',
+    content_show_as_picture: 'Показать картинкой',
     content_choose_entity: 'Выбрать, на что ссылаться',
     content_make_gallery: 'Сделать галереей',
+    content_make_file_group: 'Сделать группой',
+    content_file_group_title: 'Название группы',
+    content_add_files: 'Добавить файлы',
+    content_remove_file: 'Убрать из группы',
+    content_move_file: 'Переставить',
+    content_upload_as_file: 'Загрузить как файл',
+    content_file_skipped: (name, reason) =>
+      reason === 'extension'
+        ? `«${name}» не добавлен: у файла нет расширения`
+        : reason === 'empty'
+          ? `«${name}» не добавлен: файл пустой`
+          : `«${name}» не добавлен: он больше 500 МБ`,
     content_link_fragment: 'Ведёт к этому месту страницы',
     content_link_fragment_remove: 'Ссылаться на страницу целиком',
     content_caption: 'Подпись',

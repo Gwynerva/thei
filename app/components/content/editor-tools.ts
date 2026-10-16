@@ -7,34 +7,50 @@ import type {
 import { h } from 'vue';
 import type { IconName } from '#thei/icons';
 import { VueBlockTool } from './editor-vue-block-tool';
-import { AssetType } from '#layers/thei/shared/asset';
+import { contentFileRequest } from '#layers/thei/shared/asset-paste-defaults';
 import { contentAssetFromVariant } from '#layers/thei/app/composables/asset-wizard';
 import type { UploadConstraints } from '#layers/thei/app/composables/upload-draft';
 import {
   createPendingUploadList,
   PendingMediaUpload,
   type PendingMediaHandover,
-  type PendingUpload,
 } from '#layers/thei/app/composables/pending-upload';
+import {
+  insertPlacedFiles,
+  placeContentFilesOf,
+} from '#layers/thei/app/composables/content-files';
 import type {
   ContentAssetData,
+  ContentFileBlockType,
+  ContentFileGroupItem,
   ContentGalleryItem,
   ContentMediaLayout,
   ContentPrivateSectionBoundaryData,
   ContentPrivateSectionEdge,
 } from '#layers/thei/shared/content';
-import { normalizeContentMediaCaption } from '#layers/thei/shared/content';
+import { normalizeContentCaption } from '#layers/thei/shared/content';
+import {
+  contentFileBlockTakes,
+  type PlacedContentFiles,
+} from '#layers/thei/shared/content-file-placement';
 import ContentMediaCard from '#layers/thei/app/components/content/ContentMediaCard.vue';
 import ContentGallery from '#layers/thei/app/components/content/ContentGallery.vue';
 import ContentAssetSkeleton from '#layers/thei/app/components/content/ContentAssetSkeleton.vue';
 import ContentAttachmentCard from '#layers/thei/app/components/content/ContentAttachmentCard.vue';
 import ContentAudioCard from '#layers/thei/app/components/content/ContentAudioCard.vue';
-import { CONTENT_CAPTION_SANITIZE } from '#layers/thei/app/components/content/content-caption-config';
+import ContentFileGroup from '#layers/thei/app/components/content/ContentFileGroup.vue';
+import {
+  CONTENT_CAPTION_SANITIZE,
+  contentFileSanitize,
+} from '#layers/thei/app/components/content/content-caption-config';
 import { gallerySelectedIdAfterRemoval } from '#layers/thei/app/components/content/gallery-state';
 import {
-  contentAssetSelectionChanged,
-  contentAttachmentAssetChanged,
-} from '#layers/thei/app/components/content/content-attachment';
+  fileGroupItems,
+  landFileGroupEntry,
+  orderFileGroupEntries,
+  type ContentFileGroupEntry,
+} from '#layers/thei/app/components/content/file-group-state';
+import { contentAssetSelectionChanged } from '#layers/thei/app/components/content/content-attachment';
 import ExternalLinkBlockCard from '#layers/thei/app/components/external-links/ExternalLinkBlockCard.vue';
 import type { ExternalLinkStore } from '#layers/thei/app/composables/external-links';
 import ContentIntegration from '#layers/thei/app/components/content/ContentIntegration.vue';
@@ -64,18 +80,20 @@ export {
   ContentStrikeTool,
 } from './editor-inline-tools';
 
+/** What a block's file may be: a picture or a video, a recording, any file. */
 export type ContentEditorAssetKind = 'media' | 'audio' | 'any';
-export type ContentEditorPickAsset = (
-  kind: ContentEditorAssetKind,
-) => Promise<ContentAssetData | undefined>;
 /**
- * Files added to a gallery: those known at once — picked from the library,
- * or duplicates settled through the editor — and those still on their way,
- * shown as tiles until each lands.
+ * Files picked for a text: those known at once — picked from the library, or
+ * duplicates settled in the editor — and new ones, which the block they land
+ * in stores. `media` picks pictures and videos alone, as a gallery takes.
  */
-export type ContentEditorPickAssets = (
-  kind: ContentEditorAssetKind,
-) => Promise<{ assets: ContentAssetData[]; uploads: PendingUpload[] }>;
+export interface ContentEditorPickedFiles {
+  assets: ContentAssetData[];
+  files: File[];
+}
+export type ContentEditorPickFiles = (
+  kind: 'media' | 'any',
+) => Promise<ContentEditorPickedFiles>;
 export type ContentEditorEditAsset = (
   asset: ContentAssetData,
   kind: ContentEditorAssetKind,
@@ -87,14 +105,20 @@ interface ContentToolLabels {
   removeMedia: string;
   chooseFile: string;
   chooseAudio: string;
-  audioAsFile: string;
-  audioAsPlayer: string;
+  showAsFile: string;
+  showAsPlayer: string;
+  showAsPicture: string;
+  makeFileGroup: string;
+  groupTitle: string;
+  addFiles: string;
+  removeFile: string;
+  moveFile: string;
+  uploadAsFile: string;
   caption: string;
   mediaCentered: string;
   mediaNatural: string;
   mediaStretch: string;
   title: string;
-  description: string;
   fileWithExtension: (extension?: string) => string;
   privateSection: string;
   privateSectionStart: string;
@@ -110,7 +134,7 @@ interface ContentToolLabels {
   dismissUpload: string;
 }
 
-/** How a tool stores the files pasted into it. */
+/** How a tool stores the new files that come into it. */
 export interface ContentEditorUploads {
   /** The limits of the place the files go to. */
   constraints: UploadConstraints;
@@ -125,28 +149,12 @@ export interface ContentEditorUploads {
   track?: (delta: 1 | -1) => void;
 }
 
-/** A block that holds one file a paste may bring: media, a recording. */
-interface ContentUploadBlockToolConfig {
-  pickAsset: ContentEditorPickAsset;
+/** Every block that shows files: a picture, a gallery, a recording, a file, a group. */
+interface ContentFileToolConfig {
+  pickFiles: ContentEditorPickFiles;
   editAsset: ContentEditorEditAsset;
   uploads: ContentEditorUploads;
   labels: ContentToolLabels;
-}
-
-interface ContentGalleryToolConfig {
-  pickAssets: ContentEditorPickAssets;
-  editAsset: ContentEditorEditAsset;
-  uploads: ContentEditorUploads;
-  labels: ContentToolLabels;
-}
-
-/** A file is picked or edited, never dropped in, so there is no upload here. */
-interface ContentAttachmentToolConfig {
-  pickAsset: ContentEditorPickAsset;
-  editAsset: ContentEditorEditAsset;
-  labels: ContentToolLabels;
-  /** The editor has a player block a recording can be shown in instead. */
-  audio?: boolean;
 }
 
 /** Opens the link picker beside a block; where it leads, or nothing. */
@@ -616,58 +624,85 @@ async function withPasteUploadSlot(job: () => Promise<void>) {
   }
 }
 
-type ContentUploadBlockData = {
+type ContentFileBlockData = {
   asset?: ContentAssetData;
   autoOpen?: boolean;
-  files?: File[];
 };
 
 /**
- * A block that holds one file, which a paste may bring: a picture or a
- * video, a recording. Until a pasted file has landed the block is its
- * skeleton, following the upload, and the asset editor may take the draft
- * over; the block's data changes only once the file is in the library.
+ * Where picked files go from a block: the first block they make takes this
+ * one's place — this very block, given its file, when it is of that kind and
+ * `take` takes it — and the others follow it, each storing its own new files.
  */
-abstract class ContentUploadBlockTool<
-  TData extends ContentUploadBlockData,
+async function placeFiles(
+  api: API,
+  block: BlockAPI,
+  placed: readonly PlacedContentFiles[],
+  take: (data: Record<string, unknown>) => boolean,
+) {
+  const [first, ...rest] = placed;
+  if (!first) return;
+  const anchor =
+    first.type === block.name && take(first.data)
+      ? block
+      : await replaceBlock(api, block, first.type, first.data, true);
+  if (!anchor) return;
+  const index = api.blocks.getBlockIndex(anchor.id);
+  rest.forEach((next, offset) =>
+    insertPlacedFiles(api.blocks, next, index + 1 + offset, false, false),
+  );
+}
+
+/**
+ * A block that holds one file: a picture or a video, a recording, a file to
+ * download. Until a new file has landed the block is its skeleton, following
+ * the upload, and the asset editor may take the draft over; the block's data
+ * changes only once the file is in the library. An empty one picks files of
+ * any kind, which the one rule places — in this block, when it is theirs.
+ */
+abstract class ContentFileBlockTool<
+  TData extends ContentFileBlockData,
 > extends VueBlockTool {
   protected asset: ContentAssetData | null;
   private autoOpen: boolean;
-  /** A pasted file, kept until the block is on the page. Never saved. */
-  private pendingFile?: File;
-  /** The pasted file on its way into the library. */
+  /** The new file on its way into the library, and the file itself. */
   private pending?: PendingMediaUpload;
+  private pendingFile?: File;
 
   protected constructor(
     protected readonly options: ContentToolOptions<
       TData,
-      ContentUploadBlockToolConfig
+      ContentFileToolConfig
     >,
+    /** The block this tool makes, which decides how a new file is stored. */
+    private readonly type: ContentFileBlockType,
+    /** The files its file may be replaced with. */
     private readonly kind: ContentEditorAssetKind,
   ) {
     super(options.block);
     this.asset = options.data.asset ?? null;
     this.autoOpen = options.data.autoOpen === true;
-    this.pendingFile = options.data.files?.[0];
   }
 
   /** What the block says of its file, which goes when the file does. */
   protected abstract clearWords(): void;
 
   protected override afterRender() {
-    if (this.options.readOnly) return;
-    if (this.pendingFile) {
-      queueMicrotask(() => this.startPending());
-    } else if (this.autoOpen) {
-      this.autoOpen = false;
-      queueMicrotask(() => void this.pick());
-    }
+    if (this.options.readOnly || !this.autoOpen) return;
+    this.autoOpen = false;
+    queueMicrotask(() => void this.pick());
   }
 
   protected override onDestroy() {
+    this.dropPending();
+  }
+
+  /** The new file is let go of, its upload stopped. */
+  private dropPending() {
     if (!this.pending) return;
     this.pending.dispose();
     this.pending = undefined;
+    this.pendingFile = undefined;
     this.config.uploads.track?.(-1);
   }
 
@@ -679,35 +714,22 @@ abstract class ContentUploadBlockTool<
     return getLabels(this.config);
   }
 
-  /** The block before it holds a file: a place to pick one, or an upload. */
-  protected skeleton(icon: IconName, label: string) {
-    return h(ContentAssetSkeleton, {
-      icon,
-      label,
-      readOnly: this.options.readOnly || Boolean(this.pendingFile),
-      upload: this.pending,
-      editLabel: this.pending ? label : undefined,
-      retryLabel: this.labels.retryUpload,
-      onPick: () => void this.pick(),
-      onEdit: () => void this.editPending(),
-      onRetry: () => this.pending?.retry(),
-    });
-  }
-
   /**
-   * The pasted file goes into the library at the defaults, from here on.
-   * The skeleton follows its status by itself; the block only changes once
-   * the file has landed, and a failure waits in the skeleton for a retry.
+   * New files for the block, handed to it once it is on the page: it stores
+   * the first, at its own defaults (`contentFileRequest`), through the slots
+   * every new file shares.
    */
-  private startPending() {
-    const file = this.pendingFile;
-    this.pendingFile = undefined;
-    if (!file || this.destroyed) return;
+  adoptFiles(files: File[]) {
+    const [file] = files;
+    if (!file || this.options.readOnly || this.destroyed || this.pending)
+      return;
     const { uploads } = this.config;
     const pending = new PendingMediaUpload(file, {
       constraints: uploads.constraints,
+      request: (draft) => contentFileRequest(this.type, draft),
     });
     this.pending = pending;
+    this.pendingFile = file;
     uploads.track?.(1);
     this.renderContent();
     this.runPending(pending);
@@ -718,7 +740,43 @@ abstract class ContentUploadBlockTool<
     });
   }
 
-  /** Stores the pasted file at the defaults, once a slot is free. */
+  /** The block before it holds a file: a place to pick one, or an upload. */
+  protected skeleton(icon: IconName, editLabel: string) {
+    return h(ContentAssetSkeleton, {
+      icon,
+      label: this.labels.chooseFile,
+      readOnly: this.options.readOnly,
+      upload: this.pending,
+      editLabel: this.pending ? editLabel : undefined,
+      retryLabel: this.labels.retryUpload,
+      fallbackLabel:
+        this.type === 'contentMedia' ? this.labels.uploadAsFile : undefined,
+      onPick: () => void this.pick(),
+      onEdit: () => void this.editPending(),
+      onRetry: () => this.pending?.retry(),
+      onFallback: () => void this.uploadAsFile(),
+    });
+  }
+
+  /**
+   * A picture or a video that would not go in — its encode over the limit
+   * a picture keeps to, say — stored as it came, in a file block in this
+   * one's place, rather than tried again and again.
+   */
+  private async uploadAsFile() {
+    const file = this.pendingFile;
+    if (!file) return;
+    this.dropPending();
+    await replaceBlock(
+      this.options.api,
+      this.options.block,
+      'contentAttachment',
+      { files: [file] },
+      true,
+    );
+  }
+
+  /** Stores the new file at the defaults, once a slot is free. */
   private runPending(pending: PendingMediaUpload) {
     void withPasteUploadSlot(async () => {
       // Gone, or landed through the editor, while it waited for its turn.
@@ -732,6 +790,7 @@ abstract class ContentUploadBlockTool<
     const pending = this.pending;
     if (!pending) return;
     this.pending = undefined;
+    this.pendingFile = undefined;
     pending.dispose();
     this.config.uploads.track?.(-1);
     this.asset = asset;
@@ -759,10 +818,28 @@ abstract class ContentUploadBlockTool<
   }
 
   private async pick() {
-    const asset = await this.config.pickAsset(this.kind);
-    if (!asset || this.destroyed) return;
+    const picked = await this.config.pickFiles('any');
+    if (this.destroyed) return;
+    await placeFiles(
+      this.options.api,
+      this.options.block,
+      placeContentFilesOf(picked.assets, picked.files),
+      (data) => this.take(data),
+    );
+  }
+
+  /** Files of this block's own kind, placed in it. */
+  private take(data: Record<string, unknown>) {
+    const files = data.files as File[] | undefined;
+    if (files?.length) {
+      this.adoptFiles(files);
+      return true;
+    }
+    const asset = data.asset as ContentAssetData | undefined;
+    if (!asset) return false;
     this.asset = asset;
     this.commit();
+    return true;
   }
 
   protected async edit() {
@@ -775,35 +852,85 @@ abstract class ContentUploadBlockTool<
     this.renderContent();
     if (changed) this.dispatchChange();
   }
+
+  /** The block's file shown another way, its words going along. */
+  protected showAs(
+    type: ContentFileBlockType,
+    words: { title?: string; caption?: string },
+  ) {
+    if (!this.asset) return;
+    void replaceBlock(
+      this.options.api,
+      this.options.block,
+      type,
+      fileShownAs(type, this.asset, words),
+      true,
+    );
+  }
+
+  /** A setting that shows the file another way. */
+  protected showAsSetting(
+    icon: IconName,
+    title: string,
+    type: ContentFileBlockType,
+    words: { title?: string; caption?: string },
+  ) {
+    return {
+      icon: editorIcon(icon),
+      title,
+      closeOnActivate: true,
+      onActivate: () => this.showAs(type, words),
+    };
+  }
 }
 
-type ContentMediaData = ContentUploadBlockData & {
+/**
+ * A file as a block of the given kind holds it, with the words that kind has
+ * a place for: every kind has the caption, a file and a recording — alone or
+ * in a group — also the title. A picture's title has nowhere to go.
+ */
+function fileShownAs(
+  type: ContentFileBlockType,
+  asset: ContentAssetData,
+  words: { title?: string; caption?: string },
+): Record<string, unknown> {
+  const title = words.title?.trim() || undefined;
+  const caption = normalizeContentCaption(words.caption) || undefined;
+  switch (type) {
+    case 'contentMedia':
+      return { asset, layout: 'centered', caption };
+    case 'contentGallery':
+      return { items: [{ id: crypto.randomUUID(), asset, caption }] };
+    case 'contentFileGroup':
+      return { items: [{ id: crypto.randomUUID(), asset, title, caption }] };
+    case 'contentAudio':
+    case 'contentAttachment':
+      return { asset, title, caption };
+  }
+}
+
+type ContentMediaData = ContentFileBlockData & {
   caption?: string;
   layout?: ContentMediaLayout;
 };
 
 export class ContentMediaTool
-  extends ContentUploadBlockTool<ContentMediaData>
+  extends ContentFileBlockTool<ContentMediaData>
   implements BlockTool
 {
-  static toolbox = {
-    title: 'Media',
-    icon: editorIcon('media'),
-    data: { layout: 'centered', autoOpen: true },
-  };
-
-  static sanitize = {
+  static sanitize = contentFileSanitize({
+    asset: true,
     caption: CONTENT_CAPTION_SANITIZE,
-  };
+  });
 
   private caption = '';
   private layout: ContentMediaLayout;
 
   constructor(
-    options: ContentToolOptions<ContentMediaData, ContentUploadBlockToolConfig>,
+    options: ContentToolOptions<ContentMediaData, ContentFileToolConfig>,
   ) {
-    super(options, 'media');
-    this.caption = normalizeContentMediaCaption(options.data.caption);
+    super(options, 'contentMedia', 'media');
+    this.caption = normalizeContentCaption(options.data.caption);
     const layout = options.data.layout;
     const isEditorServiceInstance =
       layout === undefined && !options.data.asset && !options.data.caption;
@@ -829,7 +956,7 @@ export class ContentMediaTool
     return {
       asset: this.asset,
       layout: this.layout,
-      caption: normalizeContentMediaCaption(this.caption) || undefined,
+      caption: normalizeContentCaption(this.caption) || undefined,
     };
   }
 
@@ -868,15 +995,24 @@ export class ContentMediaTool
         isActive: () => this.layout === 'stretch',
         onActivate: () => this.setLayout('stretch'),
       },
-      // A picture that turned out to have company: the gallery starts with it.
+      // A picture that turned out to have company: the gallery starts with
+      // it. One kept to download rather than look at is a file.
       ...(this.asset
         ? [
-            {
-              icon: editorIcon('gallery'),
-              title: this.labels.makeGallery,
-              closeOnActivate: true,
-              onActivate: () => this.convertToGallery(),
-            },
+            this.showAsSetting(
+              'gallery',
+              this.labels.makeGallery,
+              'contentGallery',
+              { caption: this.caption },
+            ),
+            this.showAsSetting(
+              'file',
+              this.labels.showAsFile,
+              'contentAttachment',
+              {
+                caption: this.caption,
+              },
+            ),
           ]
         : []),
     ];
@@ -900,30 +1036,6 @@ export class ContentMediaTool
     });
   }
 
-  /**
-   * A block's type is fixed in Editor.js, so the gallery is a new block put
-   * in this one's place, with this picture and its caption as the first tile.
-   */
-  private convertToGallery() {
-    if (!this.asset) return;
-    const caption = normalizeContentMediaCaption(this.caption) || undefined;
-    void replaceBlock(
-      this.options.api,
-      this.options.block,
-      'contentGallery',
-      {
-        items: [
-          {
-            id: crypto.randomUUID(),
-            asset: this.asset,
-            ...(caption ? { caption } : {}),
-          },
-        ],
-      },
-      true,
-    );
-  }
-
   private setLayout(layout: ContentMediaLayout) {
     if (layout === this.layout) return;
     this.layout = layout;
@@ -932,19 +1044,10 @@ export class ContentMediaTool
 }
 
 export class ContentGalleryTool extends VueBlockTool implements BlockTool {
-  static toolbox = {
-    title: 'Gallery',
-    icon: editorIcon('gallery'),
-    data: { items: [], autoOpen: true },
-  };
-
   static sanitize = { items: true };
 
   private items: ContentGalleryItem[];
   private selectedId?: string;
-  private autoOpen: boolean;
-  /** Pasted files, kept until the block is on the page. Never saved. */
-  private pendingFiles?: File[];
   /**
    * Files on their way into the library, shown as tiles of their own until
    * each lands. Never saved: a gallery with nothing landed yet is empty. The
@@ -965,24 +1068,13 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
 
   constructor(
     private options: ContentToolOptions<
-      { items?: ContentGalleryItem[]; autoOpen?: boolean; files?: File[] },
-      ContentGalleryToolConfig
+      { items?: ContentGalleryItem[] },
+      ContentFileToolConfig
     >,
   ) {
     super(options.block);
     this.items = options.data.items ?? [];
     this.selectedId = this.items[0]?.id;
-    this.autoOpen = options.data.autoOpen === true;
-    if (options.data.files?.length) this.pendingFiles = options.data.files;
-  }
-
-  protected override afterRender() {
-    if (this.pendingFiles && !this.options.readOnly) {
-      queueMicrotask(() => this.startPasted());
-    } else if (this.autoOpen && !this.options.readOnly) {
-      this.autoOpen = false;
-      queueMicrotask(() => void this.add());
-    }
   }
 
   protected override onDestroy() {
@@ -990,34 +1082,22 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
   }
 
   /**
-   * The pasted files go into the library at the defaults, through the slots
-   * every pasted file shares.
+   * New pictures and videos, stored at the defaults through the slots every
+   * new file shares, a tile each until it lands.
    */
-  private startPasted() {
-    const files = this.pendingFiles;
-    this.pendingFiles = undefined;
-    if (!files?.length || this.destroyed) return;
+  adoptFiles(files: File[]) {
+    if (!files.length || this.options.readOnly) return;
+    if (this.destroyed) return;
     const { constraints } = contentToolConfig(this.options.config).uploads;
-    this.startUploads(
-      files.map((file) => new PendingMediaUpload(file, { constraints })),
-      true,
+    const uploads = files.map(
+      (file) =>
+        new PendingMediaUpload(file, {
+          constraints,
+          request: (draft) => contentFileRequest('contentGallery', draft),
+        }),
     );
-  }
-
-  /**
-   * Shows uploads as tiles until each lands. `run` starts them here, a slot
-   * at a time; without it they are already running, started by whoever
-   * picked them.
-   */
-  private startUploads(uploads: PendingUpload[], run = false) {
-    if (this.destroyed) {
-      for (const upload of uploads) upload.dispose();
-      return;
-    }
     this.uploads.follow(uploads);
-    if (run)
-      for (const upload of uploads)
-        void withPasteUploadSlot(() => upload.run());
+    for (const upload of uploads) void withPasteUploadSlot(() => upload.run());
   }
 
   save(): Record<string, unknown> {
@@ -1058,7 +1138,7 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
         this.commit();
       },
       onCaption: (id: string, value: string) => {
-        const normalized = normalizeContentMediaCaption(value) || undefined;
+        const normalized = normalizeContentCaption(value) || undefined;
         const current = this.items.find((item) => item.id === id);
         if (!current || current.caption === normalized) return;
         this.items = this.items.map((item) =>
@@ -1070,14 +1150,12 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
   }
 
   private async add() {
-    const config = contentToolConfig(this.options.config);
-    const { assets, uploads } = await config.pickAssets('media');
-    if (this.destroyed) {
-      for (const upload of uploads) upload.dispose();
-      return;
-    }
-    this.append(assets);
-    this.startUploads(uploads);
+    const picked = await contentToolConfig(this.options.config).pickFiles(
+      'media',
+    );
+    if (this.destroyed) return;
+    this.append(picked.assets);
+    this.adoptFiles(picked.files);
   }
 
   private append(assets: ContentAssetData[]) {
@@ -1131,32 +1209,31 @@ export class ContentGalleryTool extends VueBlockTool implements BlockTool {
   }
 }
 
-type ContentAudioData = ContentUploadBlockData & {
+type ContentFileData = ContentFileBlockData & {
   title?: string;
   caption?: string;
 };
 
 export class ContentAudioTool
-  extends ContentUploadBlockTool<ContentAudioData>
+  extends ContentFileBlockTool<ContentFileData>
   implements BlockTool
 {
-  static toolbox = {
-    title: 'Audio',
-    icon: editorIcon('audio'),
-    data: { autoOpen: true },
-  };
+  // The title is plain words, kept as typed: only the caption takes marks.
+  static sanitize = contentFileSanitize({
+    asset: true,
+    title: true,
+    caption: CONTENT_CAPTION_SANITIZE,
+  });
 
   private title = '';
   private caption = '';
 
   constructor(
-    options: ContentToolOptions<ContentAudioData, ContentUploadBlockToolConfig>,
+    options: ContentToolOptions<ContentFileData, ContentFileToolConfig>,
   ) {
-    // A pasted recording goes into the library at the defaults: Opus, at
-    // medium.
-    super(options, 'audio');
+    super(options, 'contentAudio', 'audio');
     this.title = options.data.title ?? '';
-    this.caption = options.data.caption ?? '';
+    this.caption = normalizeContentCaption(options.data.caption);
   }
 
   protected clearWords() {
@@ -1168,7 +1245,7 @@ export class ContentAudioTool
     return {
       asset: this.asset,
       title: this.title.trim() || undefined,
-      caption: this.caption.trim() || undefined,
+      caption: normalizeContentCaption(this.caption) || undefined,
     };
   }
 
@@ -1178,20 +1255,20 @@ export class ContentAudioTool
 
   renderSettings() {
     if (!this.asset) return [];
+    const words = { title: this.title, caption: this.caption };
     return [
-      {
-        icon: editorIcon('file'),
-        title: this.labels.audioAsFile,
-        closeOnActivate: true,
-        onActivate: () =>
-          moveFileToBlock(
-            this.options,
-            'contentAttachment',
-            this.asset,
-            this.title,
-            this.caption,
-          ),
-      },
+      this.showAsSetting(
+        'file',
+        this.labels.showAsFile,
+        'contentAttachment',
+        words,
+      ),
+      this.showAsSetting(
+        'files',
+        this.labels.makeFileGroup,
+        'contentFileGroup',
+        words,
+      ),
     ];
   }
 
@@ -1221,72 +1298,49 @@ export class ContentAudioTool
 }
 
 /**
- * The same file in a block of the other kind — a recording kept as a file
- * to download, or a file played in place — its title and caption kept.
+ * The file block, and the one the "+" offers for every file: picked empty,
+ * it places what it is given by the one rule — a picture becomes a picture,
+ * a recording a player, several files a gallery and a group — and keeps a
+ * file to download itself.
  */
-function moveFileToBlock(
-  options: Pick<ContentToolOptions<object, object>, 'api' | 'block'>,
-  type: 'contentAudio' | 'contentAttachment',
-  asset: ContentAssetData | null,
-  title: string,
-  caption: string,
-) {
-  if (!asset) return;
-  void replaceBlock(
-    options.api,
-    options.block,
-    type,
-    {
-      asset,
-      ...(title.trim() ? { title: title.trim() } : {}),
-      ...(caption.trim() ? { caption: caption.trim() } : {}),
-    },
-    true,
-  );
-}
-
-export class ContentAttachmentTool extends VueBlockTool implements BlockTool {
+export class ContentAttachmentTool
+  extends ContentFileBlockTool<ContentFileData>
+  implements BlockTool
+{
   static toolbox = {
     title: 'File',
     icon: editorIcon('file'),
     data: { autoOpen: true },
   };
 
-  private asset: ContentAssetData | null;
+  // The title is plain words, kept as typed: only the caption takes marks.
+  static sanitize = contentFileSanitize({
+    asset: true,
+    title: true,
+    caption: CONTENT_CAPTION_SANITIZE,
+  });
+
   private title = '';
   private caption = '';
-  private autoOpen: boolean;
 
   constructor(
-    private options: ContentToolOptions<
-      {
-        asset?: ContentAssetData;
-        title?: string;
-        caption?: string;
-        autoOpen?: boolean;
-      },
-      ContentAttachmentToolConfig
-    >,
+    options: ContentToolOptions<ContentFileData, ContentFileToolConfig>,
   ) {
-    super(options.block);
-    this.asset = options.data.asset ?? null;
+    super(options, 'contentAttachment', 'any');
     this.title = options.data.title ?? '';
-    this.caption = options.data.caption ?? '';
-    this.autoOpen = options.data.autoOpen === true;
+    this.caption = normalizeContentCaption(options.data.caption);
   }
 
-  protected override afterRender() {
-    if (this.autoOpen && !this.options.readOnly) {
-      this.autoOpen = false;
-      queueMicrotask(() => void this.pick());
-    }
+  protected clearWords() {
+    this.title = '';
+    this.caption = '';
   }
 
   save(): Record<string, unknown> {
     return {
       asset: this.asset,
       title: this.title.trim() || undefined,
-      caption: this.caption.trim() || undefined,
+      caption: normalizeContentCaption(this.caption) || undefined,
     };
   }
 
@@ -1295,85 +1349,277 @@ export class ContentAttachmentTool extends VueBlockTool implements BlockTool {
   }
 
   renderSettings() {
-    const config = contentToolConfig(this.options.config);
-    if (!config.audio || this.asset?.type !== AssetType.Audio) return [];
+    if (!this.asset) return [];
+    const words = { title: this.title, caption: this.caption };
     return [
-      {
-        icon: editorIcon('audio'),
-        title: this.labels.audioAsPlayer,
-        closeOnActivate: true,
-        onActivate: () =>
-          moveFileToBlock(
-            this.options,
-            'contentAudio',
-            this.asset,
-            this.title,
-            this.caption,
-          ),
-      },
+      ...(contentFileBlockTakes('contentAudio', this.asset)
+        ? [
+            this.showAsSetting(
+              'audio',
+              this.labels.showAsPlayer,
+              'contentAudio',
+              words,
+            ),
+          ]
+        : []),
+      ...(contentFileBlockTakes('contentMedia', this.asset)
+        ? [
+            this.showAsSetting(
+              'media',
+              this.labels.showAsPicture,
+              'contentMedia',
+              words,
+            ),
+          ]
+        : []),
+      this.showAsSetting(
+        'files',
+        this.labels.makeFileGroup,
+        'contentFileGroup',
+        words,
+      ),
     ];
   }
 
   protected view() {
-    if (!this.asset)
-      return h(ContentAssetSkeleton, {
-        icon: 'file',
-        label: this.labels.chooseFile,
-        readOnly: this.options.readOnly,
-        onPick: () => void this.pick(),
-      });
+    if (!this.asset) return this.skeleton('file', this.labels.chooseFile);
     return h(ContentAttachmentCard, {
       asset: this.asset,
       title: this.title,
-      description: this.caption,
+      caption: this.caption,
       fallbackTitle: this.labels.fileWithExtension(this.asset.extension),
       editable: !this.options.readOnly,
       editLabel: this.labels.chooseFile,
       titlePlaceholder: this.labels.title,
-      descriptionPlaceholder: this.labels.description,
+      captionPlaceholder: this.labels.caption,
       onEdit: () => void this.edit(),
       onTitle: (value: string) => {
         if (value === this.title) return;
         this.title = value;
         this.commit();
       },
-      onDescription: (value: string) => {
+      onCaption: (value: string) => {
         if (value === this.caption) return;
         this.caption = value;
         this.commit();
       },
     });
   }
+}
 
-  private async pick() {
-    const config = contentToolConfig(this.options.config);
-    const asset = await config.pickAsset('any');
-    if (!asset || this.destroyed) return;
-    this.asset = asset;
-    this.commit();
+/**
+ * Files listed together under one title: what several files that are not
+ * pictures become, and what a single file may be turned into. Each file is
+ * shown as it would be alone, and has its own title and caption; a grip
+ * moves it. Files added here stay here, whatever their kind.
+ *
+ * A file on its way holds the place it was added at and lands there; it is
+ * never saved, and only its landing is a change.
+ */
+export class ContentFileGroupTool extends VueBlockTool implements BlockTool {
+  // The titles are plain words; the captions were made canonical as typed.
+  static sanitize = { title: true, items: true };
+
+  private title: string;
+  private entries: ContentFileGroupEntry[];
+  private tracking = false;
+
+  constructor(
+    private options: ContentToolOptions<
+      { title?: string; items?: ContentFileGroupItem[] },
+      ContentFileToolConfig
+    >,
+  ) {
+    super(options.block);
+    this.title = options.data.title ?? '';
+    this.entries = (options.data.items ?? []).map((item) => ({
+      id: item.id,
+      item,
+    }));
   }
 
-  private async edit() {
-    if (!this.asset) return;
-    const config = contentToolConfig(this.options.config);
-    const asset = await config.editAsset(this.asset, 'any');
-    if (asset === undefined || this.destroyed) return;
-    if (asset === null) {
-      this.asset = null;
-      this.title = '';
-      this.caption = '';
-      this.commit();
-      return;
-    }
-    const previousTitle = this.title;
-    const changed = contentAttachmentAssetChanged(this.asset, asset);
-    this.asset = asset;
+  protected override onDestroy() {
+    for (const entry of this.entries) entry.upload?.dispose();
+    this.entries = this.entries.filter((entry) => entry.item);
+    this.track();
+  }
+
+  /** New files for the group: each stored at its own defaults, in its place. */
+  adoptFiles(files: File[]) {
+    if (!files.length || this.options.readOnly || this.destroyed) return;
+    const { constraints } = this.config.uploads;
+    const added = files.map((file) => {
+      const upload = new PendingMediaUpload(file, {
+        constraints,
+        request: (draft) => contentFileRequest('contentFileGroup', draft),
+      });
+      return { id: upload.id, upload };
+    });
+    this.entries = [...this.entries, ...added];
+    this.track();
     this.renderContent();
-    if (changed || this.title !== previousTitle) this.dispatchChange();
+    for (const { id, upload } of added) {
+      void withPasteUploadSlot(async () => {
+        if (!this.holds(id)) return;
+        await upload.run();
+      });
+      void upload.result.then((asset) => {
+        if (!this.holds(id) || this.destroyed) return;
+        upload.dispose();
+        if (!asset) {
+          this.drop(id);
+          return;
+        }
+        this.entries = landFileGroupEntry(this.entries, id, {
+          id: crypto.randomUUID(),
+          asset: contentAssetFromVariant(asset),
+        });
+        this.track();
+        this.commit();
+      });
+    }
+  }
+
+  save(): Record<string, unknown> {
+    return {
+      title: this.title.trim() || undefined,
+      items: fileGroupItems(this.entries),
+    };
+  }
+
+  validate(data: { items?: ContentFileGroupItem[] }): boolean {
+    return Boolean(data.items?.length);
+  }
+
+  protected view() {
+    const labels = this.labels;
+    return h(ContentFileGroup, {
+      title: this.title,
+      entries: this.entries,
+      editable: !this.options.readOnly,
+      titlePlaceholder: labels.groupTitle,
+      fileTitlePlaceholder: labels.title,
+      captionPlaceholder: labels.caption,
+      editLabel: labels.chooseFile,
+      addLabel: labels.addFiles,
+      removeLabel: labels.removeFile,
+      moveLabel: labels.moveFile,
+      fallbackTitle: labels.fileWithExtension,
+      onTitle: (value: string) => {
+        if (value === this.title) return;
+        this.title = value;
+        this.commit();
+      },
+      onItemTitle: (id: string, value: string) =>
+        this.change(id, (item) =>
+          value === (item.title ?? '') ? item : { ...item, title: value },
+        ),
+      onItemCaption: (id: string, value: string) =>
+        this.change(id, (item) => {
+          const caption = normalizeContentCaption(value) || undefined;
+          return caption === item.caption ? item : { ...item, caption };
+        }),
+      onEdit: (id: string) => void this.edit(id),
+      onRemove: (id: string) => this.remove(id),
+      onReorder: (ids: string[]) => this.reorder(ids),
+      onAdd: () => void this.add(),
+      onCancelPending: (id: string) => {
+        this.entries.find((entry) => entry.id === id)?.upload?.dispose();
+        this.drop(id);
+      },
+      onRetryPending: (id: string) =>
+        this.entries.find((entry) => entry.id === id)?.upload?.retry(),
+    });
+  }
+
+  private get config() {
+    return contentToolConfig(this.options.config);
   }
 
   private get labels() {
-    return getLabels(contentToolConfig(this.options.config));
+    return getLabels(this.config);
+  }
+
+  private holds(id: string) {
+    return this.entries.some((entry) => entry.id === id);
+  }
+
+  /** Counts the group among the blocks with uploads under way, or not. */
+  private track() {
+    const uploading = this.entries.some((entry) => entry.upload);
+    if (uploading === this.tracking) return;
+    this.tracking = uploading;
+    this.config.uploads.track?.(uploading ? 1 : -1);
+  }
+
+  /** A file on its way goes: nothing saved changes. */
+  private drop(id: string) {
+    this.entries = this.entries.filter((entry) => entry.id !== id);
+    this.track();
+    this.renderContent();
+  }
+
+  private change(
+    id: string,
+    next: (item: ContentFileGroupItem) => ContentFileGroupItem,
+  ) {
+    const entry = this.entries.find((other) => other.id === id);
+    if (!entry?.item) return;
+    const item = next(entry.item);
+    if (item === entry.item) return;
+    this.entries = this.entries.map((other) =>
+      other.id === id ? { id, item } : other,
+    );
+    this.commit();
+  }
+
+  private async add() {
+    const picked = await this.config.pickFiles('any');
+    if (this.destroyed) return;
+    if (picked.assets.length) {
+      this.entries = [
+        ...this.entries,
+        ...picked.assets.map((asset) => {
+          const id = crypto.randomUUID();
+          return { id, item: { id, asset } };
+        }),
+      ];
+      this.commit();
+    }
+    this.adoptFiles(picked.files);
+  }
+
+  private async edit(id: string) {
+    if (this.options.readOnly) return;
+    const current = this.entries.find((entry) => entry.id === id)?.item;
+    if (!current) return;
+    const result = await this.config.editAsset(current.asset, 'any');
+    if (result === undefined || this.destroyed) return;
+    if (result === null) {
+      this.remove(id);
+      return;
+    }
+    const changed = contentAssetSelectionChanged(current.asset, result);
+    this.entries = this.entries.map((entry) =>
+      entry.id === id ? { id, item: { ...current, asset: result } } : entry,
+    );
+    this.renderContent();
+    if (changed) this.dispatchChange();
+  }
+
+  private remove(id: string) {
+    if (!this.entries.some((entry) => entry.id === id && entry.item)) return;
+    this.entries = this.entries.filter((entry) => entry.id !== id);
+    this.commit();
+  }
+
+  /** Files moved by their grips; only a move among the files is a change. */
+  private reorder(ids: string[]) {
+    const before = fileGroupItems(this.entries).map((item) => item.id);
+    this.entries = orderFileGroupEntries(this.entries, ids);
+    const after = fileGroupItems(this.entries).map((item) => item.id);
+    if (after.every((id, index) => id === before[index])) this.renderContent();
+    else this.commit();
   }
 }
 
@@ -1449,14 +1695,20 @@ function getLabels(
       removeMedia: 'Remove image or video',
       chooseFile: 'Choose file',
       chooseAudio: 'Choose audio',
-      audioAsFile: 'Show as a file',
-      audioAsPlayer: 'Show as a player',
+      showAsFile: 'Show as a file',
+      showAsPlayer: 'Show as a player',
+      showAsPicture: 'Show as a picture',
+      makeFileGroup: 'Turn into a group',
+      groupTitle: 'Group title',
+      addFiles: 'Add files',
+      removeFile: 'Remove from the group',
+      moveFile: 'Move',
+      uploadAsFile: 'Upload as a file',
       caption: 'Caption',
       mediaCentered: 'Centered',
       mediaNatural: 'As is',
       mediaStretch: 'Stretch',
       title: 'Title',
-      description: 'Description',
       fileWithExtension: (extension) =>
         extension ? `File with extension ${extension.toUpperCase()}` : 'File',
       privateSection: 'Private section',
@@ -1524,27 +1776,48 @@ async function replaceWithPick(
 }
 
 /**
- * Puts a block of another kind in the place of this one, keeping its tunes:
- * a media block turned into a gallery is still a spoiler if it was one.
- * Editor.js's `insert` with `replace` leaves the tunes behind.
+ * Puts a block of another kind in the place of this one, under its id and
+ * with its tunes: a picture shown as a file is the same block to the history
+ * and the review, and a media block turned into a gallery is still a spoiler
+ * if it was one. Editor.js's `insert` with `replace` leaves the tunes behind.
+ *
+ * New files in `data` are handed to the block once it is the one that stays:
+ * the tunes are put on by building the block again from what it saves, and
+ * a block saves no file it has yet to store.
  */
 async function replaceBlock(
   api: API,
   block: BlockAPI,
   type: string,
-  data: object,
+  data: Record<string, unknown>,
   needToFocus: boolean,
-) {
+): Promise<BlockAPI | undefined> {
+  const { files, ...rest } = data as { files?: File[] };
   const saved = (await block.save()) as
     { tunes?: Record<string, unknown> } | undefined;
-  const tunes = saved?.tunes;
-  const index = api.blocks.getBlockIndex(block.id);
-  api.blocks.insert(type, data, undefined, index, needToFocus, true);
-  if (!tunes || !Object.keys(tunes).length) return;
-  const inserted = api.blocks.getBlockByIndex(index);
-  if (!inserted) return;
-  await api.blocks.update(inserted.id, undefined, tunes);
-  // `update` builds a fresh block and drops this one without a word to its
-  // tool, whose view would stay mounted in a detached element.
-  inserted.call('destroy');
+  // A tune that is off still has its key, and building the block again for
+  // nothing would cost it what it holds.
+  const tunes = Object.fromEntries(
+    Object.entries(saved?.tunes ?? {}).filter(([, value]) => value != null),
+  );
+  const { id } = block;
+  const index = api.blocks.getBlockIndex(id);
+  let inserted: BlockAPI | undefined = api.blocks.insert(
+    type,
+    rest,
+    undefined,
+    index,
+    needToFocus,
+    true,
+    id,
+  );
+  if (Object.keys(tunes).length) {
+    await api.blocks.update(id, undefined, tunes);
+    // `update` builds a fresh block and drops this one without a word to its
+    // tool, whose view would stay mounted in a detached element.
+    inserted.call('destroy');
+    inserted = api.blocks.getById(id) ?? undefined;
+  }
+  if (files?.length) inserted?.call('adoptFiles', files);
+  return inserted;
 }
