@@ -27,6 +27,14 @@ whole site. This page says how, and what is allowed to skip it.
   `@media (prefers-reduced-motion: reduce)` block in scoped CSS.
 - The `loading` icon animates itself (`app/assets/icons/loading.svg` carries
   its own keyframes). Never spin it with `animate-spin` or a rotation.
+- A video's blurred copy — behind a card's strip, a hero, a picture in the
+  text, a gallery or a tile — is drawn from the video's own frames on a small
+  canvas, never from a second playing video
+  (`app/composables/frame-backdrop.ts`, used by every `MediaSurface`). It is
+  drawn up to ten times a second, less often where the processor rather than a
+  GPU draws it, and each drawing fades over the last, so the copy never jumps.
+  How far it is blurred is `--media-backdrop-blur`, the one value a place
+  changes to blur it more.
 
 ## How it is built
 
@@ -57,6 +65,11 @@ reach for elsewhere.
 - A box that pops in after the page has drawn moves what the reader was
   looking at; the dashboard's AI box was moved to render with the page for
   this.
+- A phone with three diary entries on screen, each with a video, could not
+  keep up: every card decoded its video twice and blurred a copy larger than
+  itself on every frame. A copy drawn from the video keeps its colours, which
+  a still frame would not; drawings that stepped caught the eye, so they
+  blend. It cost a hero as much, so the owner had it everywhere.
 
 ## How it is checked
 
@@ -64,3 +77,6 @@ By eye in the browser; no test reads durations. Where a flicker would be a
 bug — a save control flashing from "Saved" to "Save" and back — e2e specs
 record every state the control shows, as `tests/e2e/editor-undo.spec.ts` and
 `tests/e2e/external-link-notes.spec.ts` do.
+`tests/e2e/ambient-regressions.spec.ts` checks that a diary cloud and a hero
+decode their video once and that the copy shows the poster at rest and the
+frames once the video plays.

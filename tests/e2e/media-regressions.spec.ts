@@ -99,12 +99,11 @@ test('a content video in view plays through its loops without a pause', async ({
     .filter({ hasText: 'Video caption' });
   await frame.scrollIntoViewIfNeeded();
   const main = frame.locator('video[data-media-main]');
-  const backdrop = frame.locator('video[data-media-backdrop-video]');
   await expect
     .poll(() => main.evaluate((v: HTMLVideoElement) => v.paused))
     .toBe(false);
-  // Every pause shows a phone's controls over the video, so a loop, a stall or
-  // the backdrop catching up must not cause one.
+  // Every pause shows a phone's controls over the video, so neither a loop nor
+  // a stall may cause one.
   type Watched = HTMLVideoElement & { loops: number; pauses: number };
   await main.evaluate((v: Watched) => {
     let last = v.currentTime;
@@ -120,9 +119,9 @@ test('a content video in view plays through its loops without a pause', async ({
     .toBeGreaterThanOrEqual(2);
   expect(await main.evaluate((v: Watched) => v.pauses)).toBe(0);
   expect(await main.evaluate((v: HTMLVideoElement) => v.paused)).toBe(false);
-  expect(await backdrop.evaluate((v: HTMLVideoElement) => v.paused)).toBe(
-    false,
-  );
+  // Its blurred copy is drawn from its frames: one decoder.
+  await expect(frame.locator('video')).toHaveCount(1);
+  await expect(frame.locator('[data-media-backdrop-canvas]')).toHaveCount(1);
 });
 
 test('content video controls work inline; showcase videos still open a modal', async ({
