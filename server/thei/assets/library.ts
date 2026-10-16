@@ -85,8 +85,10 @@ members AS (
  * holds it. A diary entry has no title: it is found by its day, written in
  * any way (`day-query.ts`), and never by the characters of its stored date,
  * so a lone `0` or `-` does not find every entry. What the uploaded file
- * was called is never kept, so it is never searchable. `scoped` restricts the
- * match to the member row's own source. Takes the query four times.
+ * was called is never kept, so it is never searchable. The file's own
+ * description, kept for its family, finds it wherever it is placed.
+ * `scoped` restricts the match by placements to the member row's own
+ * source. Takes the query five times.
  */
 function siteTextMatchSql(scoped: boolean) {
   const scope = scoped
@@ -106,6 +108,10 @@ function siteTextMatchSql(scoped: boolean) {
           WHERE json_extract(i.value,'$.asset.assetUuid')=a.assetUuid
             AND instr(asset_search_text(json_extract(i.value,'$.caption')),?)>0)
       )
+    )
+    OR EXISTS (
+      SELECT 1 FROM "asset-descriptions" d WHERE d.familyUuid=a.familyUuid
+      AND instr(asset_search_text(d.text),?)>0
     ))`;
 }
 const registered = new WeakSet<Database.Database>();
@@ -178,7 +184,7 @@ function matchSql(query: LibraryQuery, scoped = false) {
   const q = normalizeAdminSearchText(query.q ?? '');
   if (q) {
     parts.push(siteTextMatchSql(scoped));
-    args.push(q, q, q, q);
+    args.push(q, q, q, q, q);
   }
   if (query.source) {
     parts.push(

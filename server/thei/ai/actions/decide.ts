@@ -2,14 +2,15 @@ import { and, eq, inArray } from 'drizzle-orm';
 import type { AiRevisePart } from '#layers/thei/shared/ai-actions';
 import { touchReleasedAssets } from '../../content/history';
 import { refuse as fail } from '../../entity-patch/text';
-import { findEntity, refOf } from '../../entity-kinds';
+import { findEntity, refOf, type EntityKey } from '../../entity-kinds';
 import { addNever, isMemoryKind, type MemoryAnchor } from '../memory/store';
 import { publishActions } from '../sessions/bus';
 import { refreshSessionCounts } from '../sessions/store';
 import { settleActions } from './apply';
 import { correctionFingerprint, relinkFingerprint } from './declined';
 import { actionDef } from './registry';
-import { findActions, targetOf } from './rows';
+import { entityTargetOf, findActions, targetOf } from './rows';
+import { isFileKey } from './target';
 import type { ActionRow, PartStateRow } from './types';
 
 /**
@@ -31,7 +32,10 @@ function partsKept(row: ActionRow): PartStateRow[] | null {
 
 /** Where a «never» of this action is anchored. */
 function neverAnchor(row: ActionRow): MemoryAnchor {
-  const target = targetOf(row);
+  const found = targetOf(row);
+  // A «never» about a file is anchored to the file as to an entity, and
+  // forgotten with it.
+  const target = isFileKey(found) ? (found as unknown as EntityKey) : found;
   const payload = row.payload as {
     kind: string;
     other?: string;
@@ -150,7 +154,7 @@ export function neverPart(
 ) {
   const row =
     findActions([actionUuid])[0] ?? fail(`There is no action ${actionUuid}.`);
-  const target = targetOf(row) ?? fail('It is about no entity.');
+  const target = entityTargetOf(row) ?? fail('It is about no entity.');
   const payload = row.payload as {
     kind: string;
     text?: string;

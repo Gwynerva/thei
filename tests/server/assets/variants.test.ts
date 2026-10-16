@@ -64,6 +64,11 @@ describe('asset variants', () => {
         meta text,
         PRIMARY KEY(assetUuid, containerType, containerId, role)
       );
+      CREATE TABLE "asset-descriptions" (
+        familyUuid text PRIMARY KEY,
+        text text NOT NULL,
+        updatedAt integer NOT NULL
+      );
     `);
     createContentHistoryTable(rawDb);
 

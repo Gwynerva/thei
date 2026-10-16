@@ -10,8 +10,28 @@ import { buildTagUrl } from '#layers/thei/shared/tag-url';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { buildPageUrl } from '#layers/thei/shared/page-url';
 import { buildStoredMediaDescriptor, type StoredAssetRecord } from './storage';
+import { describedText } from './descriptions';
 
 type StoredAsset = Parameters<typeof buildStoredMediaDescriptor>[0];
+
+/**
+ * A file as a public page shows it, from its own public address: a picture
+ * says what it shows to whoever cannot see it — its file's description, as
+ * the owner typed it, formatted where it is drawn.
+ */
+function publicMedia(
+  media: Awaited<ReturnType<typeof buildStoredMediaDescriptor>>,
+  asset: StoredAssetRecord,
+  src: string,
+) {
+  const alt = describedText(asset);
+  return {
+    ...media,
+    src,
+    previewSrc: `${src}?preview=1`,
+    ...(alt ? { alt } : {}),
+  };
+}
 
 export async function buildPublicProfileMedia(
   asset: StoredAssetRecord,
@@ -21,7 +41,7 @@ export async function buildPublicProfileMedia(
 ) {
   const media = await buildStoredMediaDescriptor(asset);
   const src = `/profile/media/${container}/${id}/${role}/${asset.slug}.${asset.extension}`;
-  return { ...media, src, previewSrc: `${src}?preview=1` };
+  return publicMedia(media, asset, src);
 }
 
 /** A project's status icon, served from under the project's own address. */
@@ -32,7 +52,7 @@ export async function buildPublicProjectStatusMedia(
 ) {
   const media = await buildStoredMediaDescriptor(asset);
   const src = `${buildProjectUrl(project.humanReadableSlug, project.publicId)}status/${statusId}/${asset.slug}.${asset.extension}`;
-  return { ...media, src, previewSrc: `${src}?preview=1` };
+  return publicMedia(media, asset, src);
 }
 
 export async function buildPublicProjectMedia(
@@ -42,7 +62,7 @@ export async function buildPublicProjectMedia(
 ) {
   const media = await buildStoredMediaDescriptor(asset);
   const src = `${buildProjectUrl(project.humanReadableSlug, project.publicId)}media/${role}/${asset.slug}.${asset.extension}`;
-  return { ...media, src, previewSrc: `${src}?preview=1` };
+  return publicMedia(media, asset, src);
 }
 
 /** A section's own file, such as its banner, served from its own address. */
@@ -54,7 +74,7 @@ export async function buildPublicProjectSectionMedia(
 ) {
   const media = await buildStoredMediaDescriptor(asset);
   const src = `${buildProjectSectionUrl(project.humanReadableSlug, project.publicId, section.humanReadableSlug, section.publicId)}media/${role}/${asset.slug}.${asset.extension}`;
-  return { ...media, src, previewSrc: `${src}?preview=1` };
+  return publicMedia(media, asset, src);
 }
 
 export async function buildPublicEventContentMedia(
@@ -63,7 +83,7 @@ export async function buildPublicEventContentMedia(
 ) {
   const media = await buildStoredMediaDescriptor(asset);
   const src = `${buildEventUrl(event.humanReadableSlug, event.publicId)}content/${asset.slug}.${asset.extension}`;
-  return { ...media, src, previewSrc: `${src}?preview=1` };
+  return publicMedia(media, asset, src);
 }
 
 export async function buildPublicEventMedia(
@@ -73,7 +93,7 @@ export async function buildPublicEventMedia(
 ) {
   const media = await buildStoredMediaDescriptor(asset);
   const src = `${buildEventUrl(event.humanReadableSlug, event.publicId)}${role}/${asset.slug}.${asset.extension}`;
-  return { ...media, src, previewSrc: `${src}?preview=1` };
+  return publicMedia(media, asset, src);
 }
 
 export async function buildPublicDiaryContentMedia(
@@ -82,7 +102,7 @@ export async function buildPublicDiaryContentMedia(
 ) {
   const media = await buildStoredMediaDescriptor(asset);
   const src = `${buildDiaryUrl(entry.date)}content/${asset.slug}.${asset.extension}`;
-  return { ...media, src, previewSrc: `${src}?preview=1` };
+  return publicMedia(media, asset, src);
 }
 
 export async function buildPublicProjectContentMedia(
@@ -91,7 +111,7 @@ export async function buildPublicProjectContentMedia(
 ) {
   const media = await buildStoredMediaDescriptor(asset);
   const src = `${buildProjectUrl(project.humanReadableSlug, project.publicId)}content/${asset.slug}.${asset.extension}`;
-  return { ...media, src, previewSrc: `${src}?preview=1` };
+  return publicMedia(media, asset, src);
 }
 
 export async function buildPublicTagMedia(
@@ -100,7 +120,7 @@ export async function buildPublicTagMedia(
 ) {
   const media = await buildStoredMediaDescriptor(asset);
   const src = `${buildTagUrl(tag.slug, tag.publicId)}icon/${asset.slug}.${asset.extension}`;
-  return { ...media, src, previewSrc: `${src}?preview=1` };
+  return publicMedia(media, asset, src);
 }
 
 export async function buildPublicPageMedia(
@@ -109,7 +129,7 @@ export async function buildPublicPageMedia(
 ) {
   const media = await buildStoredMediaDescriptor(asset);
   const src = `${buildPageUrl(page.slug)}icon/${asset.slug}.${asset.extension}`;
-  return { ...media, src, previewSrc: `${src}?preview=1` };
+  return publicMedia(media, asset, src);
 }
 
 export async function buildPublicPageContentMedia(
@@ -118,7 +138,7 @@ export async function buildPublicPageContentMedia(
 ) {
   const media = await buildStoredMediaDescriptor(asset);
   const src = `${buildPageUrl(page.slug)}content/${asset.slug}.${asset.extension}`;
-  return { ...media, src, previewSrc: `${src}?preview=1` };
+  return publicMedia(media, asset, src);
 }
 
 export async function buildAdminAssetUrls(asset: StoredAsset) {

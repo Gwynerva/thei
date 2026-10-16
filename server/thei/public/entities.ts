@@ -58,6 +58,7 @@ import {
   buildPublicTagMedia,
   buildPublicPageMedia,
 } from '../assets/urls';
+import { describedText } from '../assets/descriptions';
 import { resolveEntityIconMedia } from '../media/generated-icon';
 import {
   listProjectSections,
@@ -631,6 +632,7 @@ export async function buildPublicEvent(
         extension: asset.extension,
         size: asset.size,
         archivedOriginal: archivedOriginalFromMeta(asset.meta),
+        ...publicAltOf(asset),
       } satisfies PublicFile;
     }),
   );
@@ -892,6 +894,12 @@ export async function buildPublicTagListItems(
   }));
 }
 
+/** A file's description, where a public page shows the file. */
+function publicAltOf(asset: { familyUuid: string }): { alt?: string } {
+  const alt = describedText(asset);
+  return alt ? { alt } : {};
+}
+
 function buildPublicDirectFile(
   project: ProjectRow,
   asset: any,
@@ -909,6 +917,7 @@ function buildPublicDirectFile(
     extension: asset.extension,
     size: asset.size,
     archivedOriginal: archivedOriginalFromMeta(asset.meta),
+    ...publicAltOf(asset),
   };
 }
 
@@ -928,6 +937,7 @@ function buildPublicAssetDescriptor(
     size: asset.size,
     media,
     archivedOriginal: archivedOriginalFromMeta(asset.meta),
+    ...publicAltOf(asset),
   };
 }
 

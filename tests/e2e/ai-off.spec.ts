@@ -184,6 +184,38 @@ test('no admin page asks about AI while it is off', async ({
   expect(errors).toEqual([]);
 });
 
+test('a file’s description is a field like any other while AI is off', async ({
+  page,
+  request,
+}) => {
+  await setAccess(request, false);
+  const listed = (
+    await (
+      await request.get('/api/admin/assets', { params: { page: 1 } })
+    ).json()
+  ).items as { asset: { assetUuid: string } }[];
+  const assetUuid = listed[0]!.asset.assetUuid;
+  const read = await (
+    await request.get(`/api/admin/assets/${assetUuid}/description`)
+  ).json();
+  // Nothing is said of what an AI proposes.
+  expect(read).not.toHaveProperty('offers');
+
+  const asked: string[] = [];
+  page.on('request', (sent) => {
+    const url = new URL(sent.url());
+    if (ASKS_ABOUT_AI.test(url.pathname)) asked.push(url.pathname);
+  });
+  await open(page, '/admin/assets/');
+  await page.locator(`[data-asset-uuid="${assetUuid}"]`).first().click();
+  await expect(page.locator('[data-file-description]')).toBeVisible();
+  await expect(page.locator('[data-file-description-input]')).toBeEnabled();
+  await expect(page.locator('[data-ai-field-offer]')).toHaveCount(0);
+  expect(asked).toEqual([]);
+  // An app's one-time download is no address at all.
+  expect((await request.get('/api/mcp/download/none')).status()).toBe(404);
+});
+
 test('the tabs that need AI point to the switch', async ({ page }) => {
   for (const tab of ['sessions', 'memory']) {
     await open(page, `/admin/ai/?tab=${tab}`);

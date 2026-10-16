@@ -41,6 +41,7 @@ import { siteUrl } from '../site-url';
 import type { McpCallContext } from './context';
 import { McpToolError } from './result';
 import { aboutText } from './text-about';
+import { describeFiles } from '../assets/descriptions';
 import { formView, type FormKind } from '../ai/forms/changes';
 import { loadForm } from '../ai/forms/load';
 
@@ -121,7 +122,30 @@ export interface McpEntityView {
   project?: { ref: string; title: string };
   /** A section with dates: its place among the project's stages, in time. */
   stage?: { index: number; count: number };
+  /**
+   * The library files its fields and texts name, each with its description —
+   * what the file shows or is about — empty while it has none.
+   */
+  files?: { id: string; description: string }[];
   urls: { admin: string; public?: string };
+}
+
+/** Where a form's view names a library file: an icon, a banner, a file of a list. */
+const FILE_FIELDS = new Set(['icon', 'banner', 'file']);
+
+/** The ids of the library files a form's fields hold, however deep. */
+function fieldFileIds(value: unknown, into: string[] = []): string[] {
+  if (Array.isArray(value)) for (const item of value) fieldFileIds(item, into);
+  else if (value && typeof value === 'object')
+    for (const [key, item] of Object.entries(value))
+      if (typeof item === 'string' && FILE_FIELDS.has(key)) into.push(item);
+      else fieldFileIds(item, into);
+  return into;
+}
+
+/** The files a text takes in: `::media{asset="…"}` and the like. */
+function textFileIds(markdown: string): string[] {
+  return [...markdown.matchAll(/\basset="([^"]+)"/g)].map((match) => match[1]!);
 }
 
 function readText(
@@ -271,13 +295,26 @@ export async function readEntity(
   context: McpCallContext,
 ): Promise<McpEntityView> {
   const view = await readEntityView(key, context);
+  const fields = { ...view.fields, ...(await editableFields(key)) };
+  const described = describeFiles([
+    ...fieldFileIds(fields),
+    ...view.texts.flatMap((text) => textFileIds(text.markdown)),
+  ]);
   return {
     ...view,
-    fields: { ...view.fields, ...(await editableFields(key)) },
+    fields,
     texts: view.texts.map((text) => ({
       ...text,
       about: aboutText(view, text),
     })),
+    ...(described.size
+      ? {
+          files: [...described].map(([id, description]) => ({
+            id,
+            description,
+          })),
+        }
+      : {}),
   };
 }
 

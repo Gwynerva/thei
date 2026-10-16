@@ -10,6 +10,7 @@ import { applyActions } from '../../ai/actions/apply';
 import { proposeActions } from '../../ai/actions/propose';
 import { AI_ACTION_DEFS, actionDef } from '../../ai/actions/registry';
 import { findAction, sessionActions, targetOf } from '../../ai/actions/rows';
+import { targetRef } from '../../ai/actions/target';
 import { undoActionHeld } from '../../ai/actions/undo';
 import type { PartStateRow } from '../../ai/actions/types';
 import { FORM_REFERENCE } from '../../ai/forms/changes';
@@ -20,7 +21,6 @@ import {
   sessionForCall,
 } from '../../ai/sessions/app';
 import { findSession } from '../../ai/sessions/store';
-import { refOf } from '../../entity-kinds';
 import { markContentWriteRequest } from '../../read-only-request';
 import { ADDS, CHANGES, READS, SUGGESTS } from '../annotations';
 import type { McpCallContext } from '../context';
@@ -44,7 +44,7 @@ function actionLine(row: ReturnType<typeof findAction> & {}): string[] {
   const target = targetOf(row);
   const summary = actionDef(row.kind).summary(row.payload as never);
   const lines = [
-    `- ${row.actionUuid}: ${row.kind}${target ? ` on ${refOf(target)}` : ''} — ${summary} — ${row.state}${row.state === 'pending' ? ` (${row.certainty})` : ''}${row.supersedes ? `, replaces ${row.supersedes}` : ''}`,
+    `- ${row.actionUuid}: ${row.kind}${target ? ` on ${targetRef(target)}` : ''} — ${summary} — ${row.state}${row.state === 'pending' ? ` (${row.certainty})` : ''}${row.supersedes ? `, replaces ${row.supersedes}` : ''}`,
   ];
   const parts = (row.parts ?? []) as PartStateRow[];
   if (parts.length)
@@ -188,7 +188,9 @@ export function registerSessionTools(
             // A new entity has no target, but for a section: its project.
             def.kind === 'create'
               ? 'Target: none, but a new section names its project.'
-              : `Targets: ${def.targets.join(', ')}.`,
+              : def.kind === 'describe'
+                ? 'Target: the file, named by file (or as target asset:<id>).'
+                : `Targets: ${def.targets.join(', ')}.`,
             '',
             `Fields: ${JSON.stringify(schema)}`,
             '',
@@ -326,7 +328,7 @@ export function registerSessionTools(
           markContentWriteRequest(context.event);
           return toolResult(
             {},
-            `Undone${entity ? `: ${refOf(entity)} reads as before` : ''}.`,
+            `Undone${entity ? `: ${targetRef(entity)} reads as before` : ''}.`,
           );
         }),
     );

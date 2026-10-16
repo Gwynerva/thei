@@ -66,6 +66,12 @@ export const baselineSql: string[] = [
   `CREATE UNIQUE INDEX \`assets_family_content_settings_idx\` ON \`assets\` (\`familyUuid\`,\`contentHash\`,\`settingsKey\`);`,
   `CREATE INDEX \`assets_family_idx\` ON \`assets\` (\`familyUuid\`);`,
   `CREATE INDEX \`assets_content_hash_idx\` ON \`assets\` (\`contentHash\`);`,
+  `CREATE TABLE \`asset-descriptions\` (
+	\`familyUuid\` text PRIMARY KEY NOT NULL,
+	\`text\` text NOT NULL,
+	\`updatedAt\` integer NOT NULL
+);
+`,
   `CREATE TABLE \`asset-usages\` (
 	\`assetUuid\` text NOT NULL,
 	\`containerType\` text NOT NULL,

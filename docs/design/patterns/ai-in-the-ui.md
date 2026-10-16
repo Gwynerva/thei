@@ -28,7 +28,7 @@ about how it looks.
 | --------------- | ------------------------------------------ | --------------------------------------------------------------------------- |
 | A form's header | `app/components/ai/AiEntityButton.vue`     | A badge counting the proposals in the form; a menu to ask about the entity. |
 | The admin bar   | `app/components/admin/bar/AdminBarAi.vue`  | How much waits for the owner; the sessions that wait; a new session.        |
-| A field's label | `app/components/ai/AiFieldOffer.vue`       | The proposals for that field.                                               |
+| A field's label | `app/components/ai/AiFieldOffer.vue`       | The proposals for that field, a file's description in its window too.       |
 | The dashboard   | `app/components/admin/AdminAiSessions.vue` | The sessions, under the `sparkles` icon of their box.                       |
 
 The AI page itself is named by `sparkles` wherever it is linked. Nowhere else:

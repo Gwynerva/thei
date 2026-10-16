@@ -23,6 +23,7 @@ function descriptor(
     media: item.media,
     extension: item.media.src.split('?')[0]!.split('.').at(-1)!,
     size: 0,
+    alt: item.media.alt,
   };
 }
 

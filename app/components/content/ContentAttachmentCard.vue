@@ -155,6 +155,10 @@ const details = computed(() =>
       >
         {{ publicText(description) }}
       </span>
+      <!-- What the file is, for whoever cannot see it: its window shows it. -->
+      <span v-if="!editable && asset.alt" class="sr-only">{{
+        publicText(asset.alt)
+      }}</span>
 
       <span
         v-if="details.length"

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AssetType } from '../../shared/asset';
 import { ProjectEventAccessLevel } from '../../shared/access-level';
 import {
@@ -13,6 +13,12 @@ import {
   buildPublicProjectSectionSummary,
 } from '../../server/thei/public/entities';
 import { OWNER, STRANGER } from '../../server/thei/access-links/viewer';
+
+// The files here have no family in a database: none has a description.
+vi.mock('../../server/thei/assets/descriptions', async (original) => ({
+  ...(await original<typeof import('../../server/thei/assets/descriptions')>()),
+  describedText: () => '',
+}));
 
 afterEach(() => {
   delete (globalThis as any).THEI_SERVER;

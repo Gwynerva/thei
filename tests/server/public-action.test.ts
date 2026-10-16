@@ -4,6 +4,11 @@ import { DEFAULT_PROJECT_ACTION } from '../../shared/project-action';
 import { buildPublicAction } from '../../server/thei/public/entities';
 import { findExternalLink } from '../../server/thei/external-links/repository';
 
+// The files here have no family in a database: none has a description.
+vi.mock('../../server/thei/assets/descriptions', async (original) => ({
+  ...(await original<typeof import('../../server/thei/assets/descriptions')>()),
+  describedText: () => '',
+}));
 vi.mock('../../server/thei/external-links/repository', () => ({
   findExternalLink: vi.fn(),
   createExternalLinkLoader: vi.fn(),

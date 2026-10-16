@@ -13,6 +13,7 @@ import {
 import { readEntity } from '../../../mcp/entities';
 import { currentText } from '../../actions/current';
 import { targetOf } from '../../actions/rows';
+import { isFileKey } from '../../actions/target';
 import { backgroundEvent } from '../../runner/background-event';
 import type { CheckItem, TemplateSource } from './index';
 
@@ -270,7 +271,9 @@ export const proofreadSource: TemplateSource = {
       parts: AiRevisePart[];
     };
     if (payload.mode !== 'proofread') return [];
-    const key = targetOf(action);
+    // A text is always an entity's: a file has none.
+    const target = targetOf(action);
+    const key = isFileKey(target) ? undefined : target;
     const slot = key && entityText(key.kind, payload.text)?.slot;
     const text = key && slot ? currentText(key, payload.text) : undefined;
     if (!key || !slot || !text) return [];

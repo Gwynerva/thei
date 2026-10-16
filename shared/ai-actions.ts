@@ -27,6 +27,7 @@ export const AI_ACTION_KINDS = [
   'remember',
   'term',
   'memory-compact',
+  'describe',
 ] as const;
 export type AiActionKind = (typeof AI_ACTION_KINDS)[number];
 
@@ -71,6 +72,7 @@ export const AI_ACTION_INFO: Record<AiActionKind, AiActionKindInfo> = {
   remember: { group: 'memory', icon: 'brain' },
   term: { group: 'memory', icon: 'case-important' },
   'memory-compact': { group: 'memory', icon: 'collapse-vertical' },
+  describe: { group: 'media', icon: 'visibility' },
 };
 
 /**
@@ -287,7 +289,18 @@ export type AiActionPayload =
       /** Form fields of the new entity, as `update` names them. */
       fields: Record<string, unknown>;
     }
-  | { kind: 'delete' };
+  | { kind: 'delete' }
+  | {
+      /**
+       * A file's description (`shared/asset-description.ts`), new or said
+       * again: the file named, its family — whose description it is — and
+       * the words.
+       */
+      kind: 'describe';
+      file: string;
+      family: string;
+      text: string;
+    };
 
 /** The payload of one kind. */
 export type AiActionPayloadOf<K extends AiActionKind> = Extract<

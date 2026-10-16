@@ -782,6 +782,18 @@ watch(section, () => {
 // ---------------------------------------------------------------------------
 // Actions.
 
+/**
+ * The file whose description the window shows: once the file has a row —
+ * the library file worked on, the variant picked or the one just made. One
+ * description serves them all.
+ */
+const describedUuid = computed(
+  () =>
+    currentCreated.value?.assetUuid ??
+    selectedVariant.value?.assetUuid ??
+    sourceAsset?.assetUuid,
+);
+
 const selectionError = computed(() => {
   const asset =
     section.value === 'family' ? selectedVariant.value : currentCreated.value;
@@ -1491,6 +1503,13 @@ const directHref = computed(() =>
               </Button>
             </UploadSettingsResultPanel>
           </UploadSettingsSection>
+        </template>
+
+        <template v-if="describedUuid">
+          <UploadSettingsDivider />
+          <div class="p-sm text-sm">
+            <FileDescriptionField :asset-uuid="describedUuid" />
+          </div>
         </template>
       </div>
     </template>
