@@ -15,6 +15,9 @@ import AssetModalButton from '#layers/thei/app/modals/asset-modal/AssetModalButt
 import AssetModalFileInfo from '#layers/thei/app/modals/asset-modal/AssetModalFileInfo.vue';
 import AssetModalPreviewAudio from '#layers/thei/app/modals/asset-modal/AssetModalPreviewAudio.vue';
 import AssetModalPreviewMedia from '#layers/thei/app/modals/asset-modal/AssetModalPreviewMedia.vue';
+import AssetPanelSection from '#layers/thei/app/modals/asset-modal/AssetPanelSection.vue';
+import ModalHeaderButton from '#layers/thei/app/modals/ModalHeaderButton.vue';
+import type { IconName } from '#thei/icons';
 import FilePreviewContent from '#layers/thei/app/components/file-preview/FilePreviewContent.vue';
 import { isAssetExtensionSafeInline } from '#layers/thei/shared/assets/formats';
 import {
@@ -46,6 +49,8 @@ const emit = defineEmits<{
 const props = defineProps<{
   modalData: {
     asideTitle: string;
+    /** The window's icon; the file's kind by default, once the file is known. */
+    icon?: IconName;
     /**
      * The file, or only its uuid: a place that keeps no more of it than that
      * opens the window at once, and the window fetches the rest.
@@ -58,7 +63,8 @@ const props = defineProps<{
     initialTitle?: string;
     showCaption?: boolean;
     initialCaption?: string;
-    captionPlaceholder?: string;
+    /** The caption's label, where it is more than a caption: a description. */
+    captionLabel?: string;
     captionAsTextarea?: boolean;
     showAccess?: boolean;
     initialIsPrivate?: boolean;
@@ -115,6 +121,29 @@ const directHref = computed(
   () => asset.value?.assetUrl ?? asset.value?.media?.src,
 );
 const isMedia = computed(() => Boolean(asset.value?.media));
+/** The window says what it holds by its kind, once the file is known. */
+const windowIcon = computed<IconName | undefined>(
+  () =>
+    props.modalData.icon ??
+    (asset.value?.media
+      ? 'media'
+      : asset.value?.audio
+        ? 'audio'
+        : asset.value
+          ? 'file'
+          : undefined),
+);
+const dimensions = computed(() => {
+  const { width, height } = asset.value?.media ?? {};
+  return width && height ? { width, height } : undefined;
+});
+const captionLabel = computed(
+  () =>
+    props.modalData.captionLabel ??
+    (props.modalData.captionAsTextarea
+      ? phrase.value.content_description
+      : phrase.value.content_caption),
+);
 /** A browser opens the file in a tab of its own; any other is downloaded. */
 const opensInTab = computed(
   () =>
@@ -187,7 +216,11 @@ useSaveShortcut(confirm, {
 </script>
 
 <template>
-  <AssetModal ref="assetModal" :aside-title="modalData.asideTitle">
+  <AssetModal
+    ref="assetModal"
+    :aside-title="modalData.asideTitle"
+    :aside-icon="windowIcon"
+  >
     <template #preview>
       <ModalWaiting v-if="!asset && !loadFailure" />
       <AssetModalPreviewMedia
@@ -244,115 +277,117 @@ useSaveShortcut(confirm, {
     </template>
 
     <template #aside>
-      <div class="flex flex-col">
-        <div class="flex flex-col gap-sm p-sm">
+      <div class="flex flex-col divide-y divide-border-1 text-sm">
+        <AssetPanelSection>
           <div
             v-if="loadFailure"
             role="alert"
-            class="flex flex-col items-start gap-sm text-sm text-text-error"
+            class="flex flex-col items-start gap-sm text-text-error"
           >
             <span><Icon name="warning" class="mr-xs" />{{ loadFailure }}</span>
             <Button variant="secondary" @click="load">
               {{ phrase.asset_library_retry }}
             </Button>
           </div>
-          <!-- Until the file is known its rows wait in place, so the fields
+          <!-- Until the file is known its facts wait in place, so the fields
                under them do not move when it is. -->
           <AssetModalFileInfo
             v-else
             :extension="asset?.extension"
             :size="asset?.size"
+            :dimensions="dimensions"
             :duration="asset?.audio?.duration"
             :channels="asset?.audio?.channels"
             :archived-original="modalData.archivedOriginal"
             :pending="!asset"
           />
-        </div>
+        </AssetPanelSection>
 
-        <!-- The file's own description, saved on its own: it is the file's,
-             wherever it is placed. -->
-        <div class="border-t border-border-1 p-sm text-sm">
-          <FileDescriptionField :asset-uuid="modalData.asset.assetUuid" />
-        </div>
-
-        <template
+        <!-- What belongs to this place: its title, its caption, who sees it. -->
+        <AssetPanelSection
           v-if="
             modalData.showTitle || modalData.showCaption || modalData.showAccess
           "
+          :title="phrase.asset_here"
+          data-asset-here
         >
-          <div
-            class="flex flex-col gap-sm border-t border-border-1 p-sm text-sm
-              text-text-2"
-          >
+          <div class="flex flex-col gap-sm">
             <Field v-if="modalData.showTitle">
+              <FieldLabel :required="modalData.requireTitle">{{
+                phrase.content_title
+              }}</FieldLabel>
               <FieldInput
                 v-model="title"
                 :required="modalData.requireTitle"
                 :error="titleError"
-                :placeholder="phrase.content_title"
+                :aria-label="phrase.content_title"
                 @submit="confirm"
               />
             </Field>
 
             <Field v-if="modalData.showCaption">
+              <FieldLabel>{{ captionLabel }}</FieldLabel>
               <FieldTextarea
                 v-if="modalData.captionAsTextarea"
                 v-model="caption"
-                :placeholder="
-                  modalData.captionPlaceholder ?? phrase.content_description
-                "
+                :aria-label="captionLabel"
               />
-              <FieldInput
-                v-else
-                v-model="caption"
-                :placeholder="
-                  modalData.captionPlaceholder ?? phrase.content_caption
-                "
-              />
+              <FieldInput v-else v-model="caption" :aria-label="captionLabel" />
             </Field>
 
             <FieldToggle v-if="modalData.showAccess" v-model="isPrivate">
               <div
                 @click="isPrivate = !isPrivate"
                 :data-title-popup="phrase.asset_private_access_hint"
-                class="flex-1 cursor-help"
+                class="flex-1 cursor-help text-text-2"
               >
                 <Icon name="lock-close" class="mr-xs" />
                 <span>{{ phrase.asset_private_access }}</span>
               </div>
             </FieldToggle>
           </div>
-        </template>
+        </AssetPanelSection>
 
-        <div class="flex flex-col gap-sm border-t border-border-1 p-sm">
-          <Button
-            v-if="modalData.primaryLabel"
-            variant="primary"
-            class="font-semibold"
-            @click="confirm"
-          >
-            <span>{{ modalData.primaryLabel }}</span>
-            <Icon name="chevron-right" class="ml-xs" />
-          </Button>
-
-          <div class="flex flex-col gap-sm">
-            <Button variant="secondary" class="w-full" @click="replace">
-              <Icon name="edit" class="mr-xs" />
-              <span>{{ phrase.asset_replace }}</span>
-            </Button>
-
-            <Button
-              v-if="modalData.showDetach ?? true"
-              variant="delete"
-              class="w-full"
-              @click="emit('modalResult', { type: 'detach' })"
-            >
-              <Icon name="delete" class="mr-xs" />
-              <span>{{ phrase.delete }}</span>
-            </Button>
-          </div>
-        </div>
+        <!-- The file's own description, saved on its own: it is the file's,
+             wherever it is placed. -->
+        <AssetPanelSection :title="phrase.asset">
+          <FileDescriptionField
+            :asset-uuid="modalData.asset.assetUuid"
+            global
+          />
+        </AssetPanelSection>
       </div>
+    </template>
+
+    <template #footer>
+      <ModalHeaderButton
+        v-if="modalData.showDetach ?? true"
+        icon="delete"
+        variant="delete"
+        :label="phrase.asset_detach_hint"
+        data-asset-detach
+        @click="emit('modalResult', { type: 'detach' })"
+      />
+      <!-- Two words side by side in a panel 300px wide: each takes half. -->
+      <Button
+        variant="secondary"
+        class="flex h-9 min-w-0 flex-1 items-center justify-center gap-xs"
+        data-asset-replace
+        @click="replace"
+      >
+        <Icon v-if="!modalData.primaryLabel" name="edit" class="shrink-0" />
+        <span class="truncate">{{ phrase.asset_replace }}</span>
+      </Button>
+      <Button
+        v-if="modalData.primaryLabel"
+        variant="primary"
+        class="flex h-9 min-w-0 flex-1 items-center justify-center
+          font-semibold"
+        data-asset-confirm
+        @click="confirm"
+      >
+        <span class="truncate">{{ modalData.primaryLabel }}</span>
+      </Button>
     </template>
   </AssetModal>
 </template>

@@ -40,12 +40,13 @@ const humanSize = useHumanSize();
 
 <template>
   <!--
-    Laid out like the format list: what the file is on the first line, with
-    its size; how it differs on the second, with one mark of where it
-    stands — its places, or when the cleanup takes it.
+    One row a variant, a dot for the one chosen: what the file is on the
+    first line, with its size; how it differs on the second, with one mark of
+    where it stands — its places, or when the cleanup takes it. Rows on the
+    panel's own ground, the chosen one tinted.
   -->
   <div
-    class="flex flex-col gap-1 rounded-normal bg-bg-3 p-1 text-sm"
+    class="-mx-xs flex flex-col gap-0.5 text-sm"
     role="radiogroup"
     :aria-label="phrase.upload_section_family"
   >
@@ -55,31 +56,30 @@ const humanSize = useHumanSize();
       type="button"
       role="radio"
       :aria-checked="selectedUuid === item.assetUuid"
-      class="flex cursor-pointer flex-col gap-0.5 rounded-normal border-2 px-xs
-        py-1.5 text-left transition"
+      class="flex cursor-pointer items-center gap-xs rounded-normal px-xs py-1.5
+        text-left transition-colors"
       :class="
-        selectedUuid === item.assetUuid
-          ? 'border-accent bg-bg-accent text-accent'
-          : `border-border-1 bg-bg-1 text-text-2 hocus:border-border-3
-            hocus:text-text-1`
+        selectedUuid === item.assetUuid ? 'bg-bg-accent' : 'hocus:bg-bg-3'
       "
       :data-title-popup="item.recipe"
       @click="emit('select', item.assetUuid)"
     >
-      <span class="flex items-baseline justify-between gap-sm">
-        <span class="min-w-0 truncate">
+      <span
+        class="size-3.5 shrink-0 rounded-full transition-colors"
+        :class="
+          selectedUuid === item.assetUuid
+            ? 'border-4 border-accent'
+            : 'border-2 border-border-2'
+        "
+      ></span>
+      <span class="flex min-w-0 flex-1 flex-col">
+        <span class="truncate">
           <span class="font-semibold">{{ item.extension.toUpperCase() }}</span>
           <template v-if="item.dimensions">
             · {{ item.dimensions.width }}×{{ item.dimensions.height }}
           </template>
         </span>
-        <span class="shrink-0 text-xs tabular-nums">
-          {{ humanSize(item.size) }}
-        </span>
-      </span>
-
-      <span class="flex items-center justify-between gap-sm text-xs">
-        <span class="flex min-w-0 items-center gap-xs text-text-3">
+        <span class="flex min-w-0 items-center gap-xs text-2xs text-text-3">
           <span v-if="item.detail" class="truncate">{{ item.detail }}</span>
           <span
             v-if="item.isCurrent"
@@ -88,48 +88,39 @@ const humanSize = useHumanSize();
           >
             {{ phrase.asset_variant_current_tag }}
           </span>
-        </span>
-        <span class="flex shrink-0 items-center gap-xs tabular-nums">
           <Icon
             v-if="item.type === AssetType.Video && item.hasAudio === false"
             name="volume-off"
-            class="text-text-3"
+            class="shrink-0"
             :data-title-popup="phrase.video_no_audio"
           />
-          <span
-            v-if="item.usageCount"
-            class="inline-flex items-center gap-1"
-            :data-title-popup="
-              phrase.asset_variant_usage_count(item.usageCount)
-            "
-          >
-            <Icon name="link" />
-            {{ item.usageCount }}
-          </span>
-          <Icon
-            v-else-if="item.deleteAfter"
-            name="delete"
-            class="text-text-error"
-            :data-title-popup="assetDeletionLabel(item.deleteAfter)"
-            data-asset-pending-deletion
-          />
-          <Icon
-            v-else-if="item.inHistory"
-            name="history"
-            class="text-text-3"
-            :data-title-popup="phrase.asset_library_in_history"
-            data-asset-in-history
-          />
-          <span
-            v-else
-            class="inline-flex items-center gap-1 text-text-3"
-            :data-title-popup="phrase.asset_variant_usage_count(0)"
-          >
-            <Icon name="link" />
-            0
-          </span>
         </span>
       </span>
+      <span class="shrink-0 text-xs text-text-2 tabular-nums">
+        {{ humanSize(item.size) }}
+      </span>
+      <span
+        v-if="item.usageCount"
+        class="inline-flex shrink-0 items-center gap-0.5 text-2xs text-text-3
+          tabular-nums"
+        :data-title-popup="phrase.asset_variant_usage_count(item.usageCount)"
+      >
+        <Icon name="link" />{{ item.usageCount }}
+      </span>
+      <Icon
+        v-else-if="item.deleteAfter"
+        name="delete"
+        class="shrink-0 text-text-error"
+        :data-title-popup="assetDeletionLabel(item.deleteAfter)"
+        data-asset-pending-deletion
+      />
+      <Icon
+        v-else-if="item.inHistory"
+        name="history"
+        class="shrink-0 text-text-3"
+        :data-title-popup="phrase.asset_library_in_history"
+        data-asset-in-history
+      />
     </button>
   </div>
 </template>

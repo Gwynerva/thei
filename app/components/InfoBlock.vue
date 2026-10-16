@@ -11,7 +11,7 @@ const props = defineProps<{
 }>();
 
 const visibleRows = computed(() =>
-  props.rows.filter((row) => row.pending || row.value !== undefined),
+  props.rows.filter((row) => row.value !== undefined),
 );
 
 function hasValue(value: InfoBlockValue) {
@@ -65,13 +65,7 @@ function isComparisonValue(
     >
       <div class="shrink-0">{{ row.label }}</div>
       <div class="flex min-w-0 items-center justify-end gap-1 font-semibold">
-        <span
-          v-if="row.pending"
-          class="h-lh w-12 animate-pulse rounded-normal bg-bg-3
-            motion-reduce:animate-none"
-          aria-hidden="true"
-        ></span>
-        <template v-else-if="shouldCompare(row)">
+        <template v-if="shouldCompare(row)">
           <span
             class="min-w-0 truncate text-xs font-medium text-text-3"
             :class="row.uppercase ? 'uppercase' : ''"
@@ -83,11 +77,7 @@ function isComparisonValue(
           </span>
           <Icon name="chevron-right" class="shrink-0 text-xs text-text-3" />
         </template>
-        <span
-          v-if="!row.pending"
-          class="min-w-0 truncate"
-          :class="currentValueClass(row)"
-        >
+        <span class="min-w-0 truncate" :class="currentValueClass(row)">
           <template v-if="hasValue(currentValue(row))">
             {{ currentValue(row) }}
           </template>

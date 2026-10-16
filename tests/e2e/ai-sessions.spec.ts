@@ -620,9 +620,10 @@ test('brings files along, shows them to the model, and opens them as the library
 
   // A file opens in the library's window of it, placed in this session.
   await sent.locator('[data-message-file]').first().click();
-  const dialog = page.locator('dialog[open]').last();
-  await expect(dialog).toContainText('AI session');
-  await expect(dialog).toContainText('Brought into the session');
+  const place = page.locator('dialog[open] [data-asset-usage]');
+  await expect(place).toHaveCount(1);
+  await expect(place).toContainText('Brought into the session');
+  await expect(place).toHaveAttribute('href', /\/admin\/ai\/\?session=/);
   await page.keyboard.press('Escape');
 });
 
@@ -692,8 +693,13 @@ test('makes a file asked for, and shows it under its answer', async ({
   await expect(file).toHaveCount(1);
   await expect(file).toContainText('lanterns.csv');
   await file.click();
-  const dialog = page.locator('dialog[open]').last();
-  await expect(dialog).toContainText('AI session');
+  // Its window places it in this session.
+  const place = page.locator('dialog[open] [data-asset-usage]');
+  await expect(place).toHaveCount(1);
+  await expect(place).toHaveAttribute(
+    'href',
+    new RegExp(`/admin/ai/\\?session=${sessionUuid}$`),
+  );
   await page.keyboard.press('Escape');
 });
 

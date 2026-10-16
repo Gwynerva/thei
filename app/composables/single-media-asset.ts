@@ -59,6 +59,7 @@ export function useSingleMediaAsset(options: SingleMediaAssetOptions) {
       const asideTitle = options.asideTitle();
       const result = await openModal(assetDetailsModal, {
         asideTitle,
+        icon: 'media',
         asset: current,
       });
 

@@ -227,6 +227,7 @@ async function openFileDetails(initial: AssetVariantInfo | string) {
   while (true) {
     const result = await openModal(assetDetailsModal, {
       asideTitle: phrase.value.project_action_file,
+      icon: 'file',
       asset: current,
     });
     if (result.type === 'replace') {

@@ -12,6 +12,4 @@ export interface InfoBlockRow {
   label: string;
   value?: InfoBlockRowValue;
   uppercase?: boolean;
-  /** The value is on its way: the row holds its place until it comes. */
-  pending?: boolean;
 }

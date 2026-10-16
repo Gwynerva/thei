@@ -10,7 +10,7 @@ import type {
   ProjectActionTarget,
 } from '../project-action';
 import type { MediaDescriptor } from '../media';
-import type { ArchivedOriginalFileMeta } from '../asset';
+import type { ArchivedOriginalFileMeta, AssetRole } from '../asset';
 import type { RelationEntityType, RelationType } from '../relation';
 import type { PublicSearchFilters } from '../public-search';
 import type { StatusHistoryItem } from '../status';
@@ -131,6 +131,30 @@ export type PublicAssetDescriptor = {
 };
 
 export type PublicFile = PublicAssetDescriptor;
+
+/** The pages a file's window may send a visitor on to. */
+export type PublicFilePlaceKind = Extract<
+  ContentEntityType,
+  'project' | 'project-section' | 'event' | 'page' | 'diary-entry'
+>;
+
+/**
+ * Another page a file is shown on, as a visitor's window of the file lists
+ * it: a page anyone may find, where a stranger sees the file. Titles as
+ * typed.
+ */
+export type PublicFilePlace = {
+  kind: PublicFilePlaceKind;
+  /** A diary entry's day, which is its title. */
+  title: string;
+  href: string;
+  /** What stands for the page on a card: its icon, banner or first picture. */
+  media?: MediaDescriptor;
+  /** The project a section belongs to. */
+  parent?: { title: string; href: string };
+  /** How the file is shown there, each way once. */
+  uses: AssetRole[];
+};
 
 export type PublicReferenceLink = {
   kind: 'external' | ContentEntityType;

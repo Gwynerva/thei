@@ -121,7 +121,9 @@ test('a description typed in the file’s window finds the file in the library',
   );
   expect(stale.status()).toBe(409);
 
+  // The page answers once the window has faded out.
   await page.keyboard.press('Escape');
+  await expect(page.locator('dialog[open]')).toHaveCount(0);
   await page.getByRole('searchbox').fill(`gulls ${run}`);
   await expect(page).toHaveURL(/[?&]q=/);
   await expect(

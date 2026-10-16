@@ -46,9 +46,10 @@ import {
 } from '#layers/thei/shared/assets/extensions';
 import type { SelectOption } from '../../components/field/FieldSelect.vue';
 import AssetModal from '../asset-modal/AssetModal.vue';
+import ModalHeaderButton from '../ModalHeaderButton.vue';
+import FileDescriptionField from '../../components/FileDescriptionField.vue';
 import AssetModalButton from '../asset-modal/AssetModalButton.vue';
 import AssetModalCompareMedia from '../asset-modal/AssetModalCompareMedia.vue';
-import AssetModalFileInfo from '../asset-modal/AssetModalFileInfo.vue';
 import AssetModalPreviewAudio from '../asset-modal/AssetModalPreviewAudio.vue';
 import AssetModalPreviewMedia from '../asset-modal/AssetModalPreviewMedia.vue';
 import FilePreviewContent from '../../components/file-preview/FilePreviewContent.vue';
@@ -57,9 +58,7 @@ import { detectVideoAudio } from '../asset-modal/video-audio';
 import AssetCropBox from './AssetCropBox.vue';
 import UploadSettingsCreate from './UploadSettingsCreate.vue';
 import UploadSettingsCreateAudio from './UploadSettingsCreateAudio.vue';
-import UploadSettingsDivider from './UploadSettingsDivider.vue';
 import UploadSettingsResultPanel from './UploadSettingsResultPanel.vue';
-import UploadSettingsSection from './UploadSettingsSection.vue';
 import UploadSettingsVariantList from './UploadSettingsVariantList.vue';
 import {
   autoImageFormatDetail,
@@ -94,6 +93,13 @@ import {
 } from './use-upload-settings-assets';
 
 type Section = 'source' | 'family' | 'create';
+/**
+ * The panel goes one screen at a time: how to take the file, then what that
+ * way needs — a saved variant to choose, the settings of a new one — and
+ * last the file's description. `section` is what the preview and the
+ * settings work on; a screen sets it as it opens.
+ */
+type Screen = 'root' | 'family' | 'create' | 'describe';
 
 const emit = defineEmits<{
   modalResult: [result: UploadSettingsResult];
@@ -340,7 +346,13 @@ const processingIsCompressed = computed(
 // ---------------------------------------------------------------------------
 // Settings for a new variant, and what they produce.
 
-const section = ref<Section>(initialSection());
+const screen = ref<Screen>('root');
+/** The screen the file was taken on: where Back from the description goes. */
+const takenOn = ref<Screen>('root');
+/** The file being handed over, stored, waiting only for its description. */
+const taken = shallowRef<AssetVariantInfo>();
+/** As it is: the stored file itself, or the picked one as it came. */
+const section = ref<Section>(rootSection());
 
 // "Auto" picks by the sizes the renders below measure, and the renders are
 // asked for by these settings: the sizes reach the settings through a
@@ -766,10 +778,6 @@ const processingOptions = computed<SelectOption[]>(() =>
       };
     }),
 );
-const showFamily = computed(
-  () => Boolean(sourceAsset) || variants.value.length > 0,
-);
-
 watch(originKey, () => {
   renders.reset();
   shownRender.value = undefined;
@@ -781,18 +789,6 @@ watch(section, () => {
 
 // ---------------------------------------------------------------------------
 // Actions.
-
-/**
- * The file whose description the window shows: once the file has a row —
- * the library file worked on, the variant picked or the one just made. One
- * description serves them all.
- */
-const describedUuid = computed(
-  () =>
-    currentCreated.value?.assetUuid ??
-    selectedVariant.value?.assetUuid ??
-    sourceAsset?.assetUuid,
-);
 
 const selectionError = computed(() => {
   const asset =
@@ -834,7 +830,7 @@ const busyLabel = computed(() =>
 
 async function useUnchanged() {
   await commitAndThen(createOriginalAssetSettings(), (asset) =>
-    finish(asset, false),
+    take(asset, false),
   );
 }
 
@@ -844,16 +840,16 @@ async function useRender() {
   // Dry runs of the other stops would otherwise have the encoder's slots
   // first; the one being used is the only one still worth finishing.
   renders.hold(primaryRenderKey.value);
-  let finished = false;
+  let taken = false;
   await commitAndThen(request, async (asset) => {
-    finished = await finish(asset, false);
+    taken = await take(asset, false);
   });
-  if (!finished) renders.release();
+  if (!taken) renders.release();
 }
 
 async function useAudio() {
   if (currentCreated.value) {
-    await finish(currentCreated.value);
+    await take(currentCreated.value);
     return;
   }
   const request = edit.request.value;
@@ -865,7 +861,7 @@ async function useAudio() {
       // Stored either way: when this place cannot take it, the modal stays
       // on it and says why, and the next "Use" does not store it again.
       created.value = { key, asset };
-      return finish(asset, false);
+      return take(asset, false);
     });
   } finally {
     usingDirectly.value = false;
@@ -928,16 +924,20 @@ async function commitAndThen(
   }
 }
 
-/** Hands the asset over; false when the modal stays open instead. */
-async function finish(asset: AssetVariantInfo, confirm = true) {
+/**
+ * Takes the file it will hand over, and goes on to its description; false
+ * when the modal stays where it is instead.
+ */
+async function take(asset: AssetVariantInfo, confirm = true) {
   if (assetSelectionError(asset, props.modalData)) return false;
   busy.value = 'finish';
   try {
     // A variant picked from the list may have gone since it was listed; one
     // just stored has been confirmed by storing it.
     if (confirm) await touch(asset.assetUuid);
-    draftSession.close();
-    emit('modalResult', { type: 'asset-ready', asset });
+    taken.value = asset;
+    takenOn.value = screen.value;
+    screen.value = 'describe';
     return true;
   } catch (error) {
     if (!handleAssetMissing(error))
@@ -948,23 +948,146 @@ async function finish(asset: AssetVariantInfo, confirm = true) {
   }
 }
 
+/** Hands the file over: the last step is done, or skipped on purpose. */
+function done() {
+  if (!taken.value) return;
+  draftSession.close();
+  emit('modalResult', { type: 'asset-ready', asset: taken.value });
+}
+
+const descriptionField =
+  useTemplateRef<InstanceType<typeof FileDescriptionField>>('descriptionField');
+/** «Готово»: the description saved, the file handed over. */
+async function describeAndFinish() {
+  if (await descriptionField.value?.save()) done();
+}
+
+/** The section a screen works on, as it opens. */
+function rootSection(): Section {
+  if (sourceAsset) {
+    selectedUuid.value = sourceAsset.assetUuid;
+    return 'family';
+  }
+  return 'source';
+}
+
+function open(next: Screen) {
+  errorText.value = '';
+  if (next === 'root') section.value = rootSection();
+  if (next === 'family') section.value = 'family';
+  if (next === 'create') section.value = 'create';
+  screen.value = next;
+}
+
+/**
+ * One screen back. From the description, the file taken stays stored: the
+ * next way chosen is taken anew, and what nothing uses goes with the
+ * cleanup.
+ */
+function back() {
+  if (busy.value) cancelCommit();
+  if (screen.value === 'describe') {
+    taken.value = undefined;
+    renders.release();
+    screen.value = takenOn.value;
+    return;
+  }
+  open('root');
+}
+
+/** «Далее» on the first screen: the file as it is. */
+async function takeAsIs() {
+  if (!sourceAsset) {
+    await useUnchanged();
+    return;
+  }
+  if (selectedVariant.value) await take(selectedVariant.value);
+}
+
 function selectVariant(assetUuid: string) {
   selectedUuid.value = assetUuid;
   section.value = 'family';
 }
 
-function initialSection(): Section {
-  if (props.modalData.librarySelection || sourceAsset) return 'family';
-  const type = processingType.value;
-  // An image is worth preparing for its place, and a recording is worth
-  // compressing, which is quick; a video or another file is taken as it is
-  // unless asked, since creating a variant of it takes time.
-  return type === AssetType.Image ||
-    type === AssetType.Audio ||
-    (profile && type === AssetType.Video)
-    ? 'create'
-    : 'source';
-}
+const screenTitle = computed(
+  () =>
+    ({
+      root: phrase.value.upload_how,
+      family: phrase.value.upload_section_family,
+      create: canZip.value
+        ? phrase.value.upload_section_zip
+        : phrase.value.upload_new_variant,
+      describe: phrase.value.asset,
+    })[screen.value],
+);
+
+/** The file as it is, in a line: what «Как есть» takes. */
+const asIsSummary = computed(() => {
+  const info = sourceAsset
+    ? {
+        extension: sourceAsset.extension,
+        size: sourceAsset.size,
+        dimensions: assetMetaDimensions(sourceAsset.meta),
+      }
+    : sourceFileInfo.value;
+  return [
+    info.extension?.toUpperCase(),
+    info.dimensions
+      ? `${info.dimensions.width} × ${info.dimensions.height}`
+      : undefined,
+    info.size !== undefined ? humanSize(info.size) : undefined,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+});
+/** Stored variants other than the file as it is. */
+const savedCount = computed(
+  () =>
+    variants.value.filter(
+      (variant) => variant.assetUuid !== sourceAsset?.assetUuid,
+    ).length,
+);
+const newVariantHint = computed(() =>
+  canZip.value
+    ? phrase.value.upload_new_zip_hint
+    : transformKind.value === 'audio'
+      ? phrase.value.upload_new_audio_hint
+      : phrase.value.upload_new_variant_hint,
+);
+
+/** What the foot's one button does on this screen, and whether it can. */
+const step = computed<{ label: string; can: boolean; run: () => unknown }>(
+  () => {
+    const next = phrase.value.upload_next;
+    if (screen.value === 'root')
+      return {
+        label: next,
+        can: sourceAsset ? canUseSelected.value : !busy.value,
+        run: takeAsIs,
+      };
+    if (screen.value === 'family')
+      return {
+        label: next,
+        can: canUseSelected.value,
+        run: () => selectedVariant.value && take(selectedVariant.value),
+      };
+    if (transformKind.value === 'image')
+      return { label: next, can: canUseRender.value, run: useRender };
+    if (transformKind.value === 'audio')
+      return { label: next, can: canUseAudio.value, run: useAudio };
+    // A video or an archive is made first, and looked at, then taken.
+    if (!currentCreated.value)
+      return {
+        label: canZip.value
+          ? phrase.value.upload_compress_to_zip
+          : phrase.value.upload_apply_settings,
+        can: !busy.value,
+        run: createVariant,
+      };
+    const made = currentCreated.value;
+    return { label: next, can: canUseCreated.value, run: () => take(made) };
+  },
+);
 
 /** The best file to derive from: the unprocessed original, or the largest. */
 function pickProcessingSource(loaded: AssetVariantInfo[]): string {
@@ -1161,7 +1284,10 @@ const directHref = computed(() =>
 </script>
 
 <template>
-  <AssetModal :aside-title="phrase.upload_variants">
+  <AssetModal
+    :aside-title="screenTitle"
+    :aside-icon="screen === 'root' ? 'tune' : undefined"
+  >
     <template #preview>
       <AssetModalCompareMedia
         v-if="compare"
@@ -1236,20 +1362,22 @@ const directHref = computed(() =>
       </AssetModalButton>
     </template>
 
+    <template v-if="screen !== 'root'" #lead>
+      <ModalHeaderButton
+        icon="chevron-left"
+        size="compact"
+        :label="phrase.upload_back"
+        data-upload-back
+        @click="back"
+      />
+    </template>
+
     <template #aside>
-      <div class="flex flex-col">
+      <div class="flex flex-col text-sm" :data-upload-screen="screen">
         <p
-          v-if="modalData.duplicateNotice"
+          v-if="selectionError && screen !== 'describe'"
           role="status"
-          class="m-sm rounded-normal bg-bg-accent p-sm text-sm text-accent"
-        >
-          <Icon name="media" class="mr-xs" />{{ phrase.asset_hash_match }}
-        </p>
-        <p
-          v-if="selectionError"
-          role="status"
-          class="m-sm rounded-normal bg-bg-warning p-sm text-sm
-            text-text-warning"
+          class="m-sm rounded-normal bg-bg-warning p-sm text-text-warning"
         >
           {{
             selectionError === 'size'
@@ -1257,261 +1385,250 @@ const directHref = computed(() =>
               : phrase.asset_selection_type
           }}
         </p>
-        <div v-if="!modalData.librarySelection" class="p-sm">
-          <Button
-            variant="secondary"
-            class="w-full"
-            :data-title-popup="
-              sourceAsset ? phrase.upload_replace_with_new_file_hint : undefined
-            "
-            @click="emit('modalResult', { type: 'upload-new' })"
-          >
-            <Icon name="file" class="mr-xs" />
-            <span>
-              {{
-                sourceAsset
-                  ? phrase.upload_replace_with_new_file
-                  : phrase.pick_another_file
-              }}
-            </span>
-          </Button>
-        </div>
-
         <div
           v-if="errorText"
           role="alert"
-          class="relative top-px border-y border-border-error bg-bg-error p-sm
-            text-sm text-text-error"
+          class="border-b border-border-error bg-bg-error p-sm text-text-error"
         >
           <Icon name="warning" class="mr-xs" />
           <span>{{ errorText }}</span>
         </div>
 
-        <template v-if="pickedFile">
-          <UploadSettingsDivider />
-          <UploadSettingsSection
-            :active="section === 'source'"
-            :title="phrase.upload_section_selected_file"
-            @activate="section = 'source'"
+        <!-- How to take the file: as it is goes on at once; a saved variant
+             and a new one open their own screen; another file goes back to
+             the picker. The last row closes the list. -->
+        <div
+          v-if="screen === 'root'"
+          role="radiogroup"
+          :aria-label="phrase.upload_how"
+          class="flex flex-col divide-y divide-border-1 border-b
+            border-border-1"
+        >
+          <button
+            type="button"
+            role="radio"
+            aria-checked="true"
+            class="flex w-full cursor-default items-center gap-xs px-sm py-2.5
+              text-left"
+            data-upload-as-is
           >
-            <AssetModalFileInfo v-bind="sourceFileInfo" />
-            <Button
-              variant="primary"
-              :disabled="Boolean(busy)"
-              class="font-semibold"
-              @click="useUnchanged"
-            >
-              <Icon
-                :name="
-                  busy && section === 'source' ? 'loading' : 'cloud-upload'
-                "
-                class="mr-xs"
-              />
-              <span>
-                {{
-                  busy === 'commit' && section === 'source'
-                    ? busyLabel
-                    : phrase.upload_use_unchanged
-                }}
-              </span>
-            </Button>
-            <Button
-              v-if="busy === 'commit' && section === 'source'"
-              variant="secondary"
-              @click="cancelCommit"
-            >
-              {{ phrase.upload_cancel }}
-            </Button>
-          </UploadSettingsSection>
-        </template>
-
-        <template v-if="showFamily">
-          <UploadSettingsDivider />
-          <UploadSettingsSection
-            :active="section === 'family'"
-            :title="phrase.upload_section_family"
-            @activate="section = 'family'"
+            <span
+              class="size-4 shrink-0 rounded-full border-4 border-accent"
+            ></span>
+            <span class="flex min-w-0 flex-1 flex-col">
+              <span class="font-semibold">{{ phrase.upload_as_is }}</span>
+              <span class="truncate text-xs text-text-3 tabular-nums">{{
+                asIsSummary
+              }}</span>
+            </span>
+          </button>
+          <button
+            v-if="savedCount"
+            type="button"
+            role="radio"
+            aria-checked="false"
+            class="flex w-full cursor-pointer items-center gap-xs px-sm py-2.5
+              text-left transition-colors hocus:bg-bg-3"
+            data-upload-saved
+            @click="open('family')"
           >
-            <UploadSettingsVariantList
-              v-if="variantItems.length"
-              :items="variantItems"
-              :selected-uuid="selectedUuid"
-              @select="selectVariant"
-            />
-            <div v-else class="text-sm text-text-3">
-              {{ phrase.upload_no_matches }}
-            </div>
-            <Button
-              variant="primary"
-              :disabled="!canUseSelected"
-              class="font-semibold"
-              @click="selectedVariant && finish(selectedVariant)"
-            >
-              <Icon v-if="busy === 'finish'" name="loading" class="mr-xs" />
-              <span>{{ phrase.upload_use_variant }}</span>
-              <Icon name="chevron-right" class="ml-xs" />
-            </Button>
-          </UploadSettingsSection>
-        </template>
-
-        <template v-if="canCreate">
-          <UploadSettingsDivider />
-          <UploadSettingsSection
-            :active="section === 'create'"
-            :title="
-              canZip ? phrase.upload_section_zip : phrase.upload_section_create
-            "
-            @activate="section = 'create'"
+            <span
+              class="size-4 shrink-0 rounded-full border-2 border-border-2"
+            ></span>
+            <span class="flex min-w-0 flex-1 flex-col">
+              <span class="font-semibold">{{
+                phrase.upload_saved_variant
+              }}</span>
+              <span class="truncate text-xs text-text-3 tabular-nums">{{
+                phrase.upload_saved_count(savedCount)
+              }}</span>
+            </span>
+            <Icon name="chevron-right" class="shrink-0 text-text-3" />
+          </button>
+          <button
+            v-if="canCreate"
+            type="button"
+            role="radio"
+            aria-checked="false"
+            class="flex w-full cursor-pointer items-center gap-xs px-sm py-2.5
+              text-left transition-colors hocus:bg-bg-3"
+            data-upload-new
+            @click="open('create')"
           >
-            <div
-              v-if="sourceAsset && processingOptions.length > 1"
-              class="flex flex-col gap-xs"
-            >
-              <span class="text-sm text-text-2">
-                {{ phrase.upload_processing_source }}
-              </span>
-              <FieldSelect
-                v-model="processingUuid"
-                :options="processingOptions"
-                :disabled="Boolean(busy)"
-                :aria-label="phrase.upload_processing_source"
-                wide
-              />
-              <p v-if="processingIsCompressed" class="text-xs text-text-3">
-                {{ phrase.upload_processing_source_lossy }}
-              </p>
-            </div>
+            <span
+              class="size-4 shrink-0 rounded-full border-2 border-border-2"
+            ></span>
+            <span class="flex min-w-0 flex-1 flex-col">
+              <span class="font-semibold">{{ phrase.upload_new_variant }}</span>
+              <span class="truncate text-xs text-text-3">{{
+                newVariantHint
+              }}</span>
+            </span>
+            <Icon name="chevron-right" class="shrink-0 text-text-3" />
+          </button>
+          <button
+            v-if="!modalData.librarySelection"
+            type="button"
+            class="flex w-full cursor-pointer items-center gap-xs px-sm py-2.5
+              text-left transition-colors hocus:bg-bg-3"
+            data-upload-other
+            @click="emit('modalResult', { type: 'upload-new' })"
+          >
+            <Icon name="file" class="shrink-0 text-text-2" />
+            <span class="flex min-w-0 flex-1 flex-col">
+              <span class="font-semibold">{{
+                phrase.upload_replace_with_new_file
+              }}</span>
+              <span class="truncate text-xs text-text-3">{{
+                phrase.upload_other_file_hint
+              }}</span>
+            </span>
+          </button>
+        </div>
 
-            <UploadSettingsCreateAudio
-              v-if="transformKind === 'audio'"
-              v-model:quality-level="edit.qualityLevel.value"
-              v-model:mono="edit.mono.value"
+        <div v-else-if="screen === 'family'" class="p-sm">
+          <UploadSettingsVariantList
+            :items="variantItems"
+            :selected-uuid="selectedUuid"
+            @select="selectVariant"
+          />
+        </div>
+
+        <div v-else-if="screen === 'create'" class="flex flex-col gap-sm p-sm">
+          <div
+            v-if="sourceAsset && processingOptions.length > 1"
+            class="flex flex-col gap-xs"
+          >
+            <span class="text-text-2">
+              {{ phrase.upload_processing_source }}
+            </span>
+            <FieldSelect
+              v-model="processingUuid"
+              :options="processingOptions"
               :disabled="Boolean(busy)"
-              :quality-stops="qualityStops"
-              :quality-detail="qualityDetail"
-              :source-channels="audioSource?.channels"
+              :aria-label="phrase.upload_processing_source"
+              wide
             />
-            <UploadSettingsCreate
-              v-else-if="frameKind"
-              v-model:quality-level="edit.qualityLevel.value"
-              v-model:format-choice="edit.formatChoice.value"
-              v-model:strip-audio="edit.stripAudio.value"
-              v-model:fast-conversion="edit.fastConversion.value"
-              :kind="frameKind"
-              :disabled="Boolean(busy)"
-              :rotation="edit.rotation.value"
-              :aspect-choice="edit.aspectChoice.value"
-              :cropping="cropping"
-              :can-reset-crop="edit.canResetCrop.value"
-              :place-ratio="placeRatio"
-              :crop-size="edit.cropRect.value"
-              :output="edit.outputDimensions.value"
-              :linked="edit.linked.value"
-              :can-reset-size="edit.canResetSize.value"
-              :format-options="formatOptions"
-              :source-size="sourceFileInfo.size"
-              :quality-stops="qualityStops"
-              :quality-detail="qualityDetail"
-              :vector-kept="vectorKept"
-              :source-has-audio="transformSource?.hasAudio"
-              @aspect="edit.setAspectChoice"
-              @toggle-crop="toggleCropping"
-              @rotate="rotate"
-              @reset-crop="resetCrop"
-              @output-width="edit.setOutputWidth"
-              @output-height="edit.setOutputHeight"
-              @output-long-side="edit.setOutputLongSide"
-              @linked="edit.setLinked"
-              @reset-size="edit.resetSize"
-            />
-            <div v-else class="text-sm text-text-2">
-              {{ phrase.upload_compress_to_zip_hint }}
-            </div>
-
-            <UploadSettingsResultPanel
-              :pending="
-                transformKind === 'image' &&
-                (renderPending || draftSession.stagingProgress.value !== null)
-              "
-              :error="
-                transformKind === 'image' ? renders.error.value : undefined
-              "
-              :source="sourceFileInfo"
-              :result="result ?? expectedResult"
-              :include-dimensions="Boolean(frameKind)"
-              @retry="renders.retry()"
-            >
-              <Button
-                v-if="transformKind !== 'image'"
-                variant="secondary"
-                :disabled="Boolean(busy) || Boolean(currentCreated)"
-                @click="createVariant"
-              >
-                <Icon
-                  :name="
-                    busy === 'commit' && !usingDirectly ? 'loading' : 'tune'
-                  "
-                  class="mr-xs"
-                />
-                <span>
-                  {{
-                    busy === 'commit' && !usingDirectly
-                      ? busyLabel
-                      : canZip
-                        ? phrase.upload_compress_to_zip
-                        : phrase.upload_apply_settings
-                  }}
-                </span>
-              </Button>
-              <Button
-                variant="primary"
-                :disabled="
-                  transformKind === 'image'
-                    ? !canUseRender
-                    : transformKind === 'audio'
-                      ? !canUseAudio
-                      : !canUseCreated
-                "
-                class="font-semibold"
-                @click="
-                  transformKind === 'image'
-                    ? useRender()
-                    : transformKind === 'audio'
-                      ? useAudio()
-                      : currentCreated && finish(currentCreated)
-                "
-              >
-                <Icon
-                  v-if="busy && (transformKind === 'image' || usingDirectly)"
-                  name="loading"
-                  class="mr-xs"
-                />
-                <span>{{
-                  busy === 'commit' &&
-                  (transformKind === 'image' || usingDirectly)
-                    ? busyLabel
-                    : phrase.upload_use
-                }}</span>
-                <Icon name="chevron-right" class="ml-xs" />
-              </Button>
-              <Button
-                v-if="busy === 'commit' && section === 'create'"
-                variant="secondary"
-                @click="cancelCommit"
-              >
-                {{ phrase.upload_cancel }}
-              </Button>
-            </UploadSettingsResultPanel>
-          </UploadSettingsSection>
-        </template>
-
-        <template v-if="describedUuid">
-          <UploadSettingsDivider />
-          <div class="p-sm text-sm">
-            <FileDescriptionField :asset-uuid="describedUuid" />
+            <p v-if="processingIsCompressed" class="text-xs text-text-3">
+              {{ phrase.upload_processing_source_lossy }}
+            </p>
           </div>
-        </template>
+
+          <UploadSettingsCreateAudio
+            v-if="transformKind === 'audio'"
+            v-model:quality-level="edit.qualityLevel.value"
+            v-model:mono="edit.mono.value"
+            :disabled="Boolean(busy)"
+            :quality-stops="qualityStops"
+            :quality-detail="qualityDetail"
+            :source-channels="audioSource?.channels"
+          />
+          <UploadSettingsCreate
+            v-else-if="frameKind"
+            v-model:quality-level="edit.qualityLevel.value"
+            v-model:format-choice="edit.formatChoice.value"
+            v-model:strip-audio="edit.stripAudio.value"
+            v-model:fast-conversion="edit.fastConversion.value"
+            :kind="frameKind"
+            :disabled="Boolean(busy)"
+            :rotation="edit.rotation.value"
+            :aspect-choice="edit.aspectChoice.value"
+            :cropping="cropping"
+            :can-reset-crop="edit.canResetCrop.value"
+            :place-ratio="placeRatio"
+            :crop-size="edit.cropRect.value"
+            :output="edit.outputDimensions.value"
+            :linked="edit.linked.value"
+            :can-reset-size="edit.canResetSize.value"
+            :format-options="formatOptions"
+            :source-size="sourceFileInfo.size"
+            :quality-stops="qualityStops"
+            :quality-detail="qualityDetail"
+            :vector-kept="vectorKept"
+            :source-has-audio="transformSource?.hasAudio"
+            @aspect="edit.setAspectChoice"
+            @toggle-crop="toggleCropping"
+            @rotate="rotate"
+            @reset-crop="resetCrop"
+            @output-width="edit.setOutputWidth"
+            @output-height="edit.setOutputHeight"
+            @output-long-side="edit.setOutputLongSide"
+            @linked="edit.setLinked"
+            @reset-size="edit.resetSize"
+          />
+          <div v-else class="text-text-2">
+            {{ phrase.upload_compress_to_zip_hint }}
+          </div>
+
+          <UploadSettingsResultPanel
+            :pending="
+              transformKind === 'image' &&
+              (renderPending || draftSession.stagingProgress.value !== null)
+            "
+            :error="transformKind === 'image' ? renders.error.value : undefined"
+            :source="sourceFileInfo"
+            :result="result ?? expectedResult"
+            :include-dimensions="Boolean(frameKind)"
+            @retry="renders.retry()"
+          />
+        </div>
+
+        <!-- Last, what the file is: the same for every place it goes. -->
+        <div v-else-if="taken" class="p-sm">
+          <FileDescriptionField
+            ref="descriptionField"
+            :key="taken.assetUuid"
+            :asset-uuid="taken.assetUuid"
+            global
+            embedded
+            required
+          />
+        </div>
       </div>
+    </template>
+
+    <template #footer>
+      <template v-if="screen === 'describe'">
+        <ModalHeaderButton
+          icon="face-dead"
+          :label="phrase.upload_skip_description"
+          data-upload-skip-description
+          @click="done"
+        />
+        <Button
+          variant="primary"
+          class="flex h-9 flex-1 items-center justify-center gap-xs
+            font-semibold"
+          :disabled="!descriptionField?.filled || descriptionField?.saving"
+          data-upload-done
+          @click="describeAndFinish"
+        >
+          <Icon v-if="descriptionField?.saving" name="loading" />
+          <span>{{ phrase.done }}</span>
+        </Button>
+      </template>
+      <template v-else>
+        <Button
+          variant="primary"
+          class="flex h-9 min-w-0 flex-1 items-center justify-center gap-xs
+            font-semibold"
+          :disabled="!step.can"
+          data-upload-next
+          @click="step.run()"
+        >
+          <Icon v-if="busy" name="loading" class="shrink-0" />
+          <span class="truncate">{{
+            busy === 'commit' ? busyLabel : step.label
+          }}</span>
+        </Button>
+        <ModalHeaderButton
+          v-if="busy === 'commit'"
+          icon="close"
+          :label="phrase.upload_cancel"
+          data-upload-cancel
+          @click="cancelCommit"
+        />
+      </template>
     </template>
   </AssetModal>
 </template>

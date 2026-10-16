@@ -16,7 +16,6 @@ import {
   videoExtensionProfile,
 } from '#layers/thei/shared/assets/extensions';
 import { ASSET_UPLOAD_LIMITS } from '#layers/thei/shared/asset-upload-limits';
-import { DEFAULT_ASSET_IMAGE_FORMAT } from '#layers/thei/shared/asset-upload-settings';
 import AssetTile from '#layers/thei/app/components/AssetTile.vue';
 import AssetPendingTile from '#layers/thei/app/components/AssetPendingTile.vue';
 import {
@@ -90,14 +89,6 @@ type PickedAsset = {
   asset: AssetVariantInfo;
   result: AssetReplaceResult;
 };
-
-function extensionFromUrl(url: string | undefined, fallback: string) {
-  if (!url) return fallback;
-  const path = url.split('?')[0]?.replace(/\/$/, '') ?? '';
-  const filename = path.split('/').pop() ?? '';
-  const dot = filename.lastIndexOf('.');
-  return dot === -1 ? fallback : filename.slice(dot + 1).toLowerCase();
-}
 
 async function editProjectAsset(
   assetUuid: string,
@@ -281,13 +272,10 @@ async function runShowcaseDetails(assetUuid: string) {
   );
   if (!snapshot) return;
   let currentAssetUuid = snapshot.assetUuid;
-  let current: AssetReplaceResult = {
+  // A tile keeps the file's picture, not what the file is: the window reads
+  // the file itself.
+  let current: AssetReplaceResult | { assetUuid: string } = {
     assetUuid: snapshot.assetUuid,
-    slug: snapshot.assetUuid,
-    extension: extensionFromUrl(snapshot.media.src, DEFAULT_ASSET_IMAGE_FORMAT),
-    size: snapshot.size,
-    media: snapshot.media,
-    assetUrl: snapshot.media.src,
   };
   let patch = {
     caption: snapshot.caption,
@@ -403,7 +391,7 @@ async function runOtherDetails(assetUuid: string) {
       showCaption: true,
       initialCaption: patch.caption,
       captionAsTextarea: true,
-      captionPlaceholder: phrase.value.other_description,
+      captionLabel: phrase.value.other_description,
       showAccess: true,
       initialIsPrivate: patch.isPrivate,
     });

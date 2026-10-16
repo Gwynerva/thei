@@ -71,7 +71,7 @@ if (source.kind === 'asset' && import.meta.client) void load(source.assetUuid);
     <ModalShell
       v-if="!ready"
       :frame="editFileModal.frame"
-      :title="phrase.upload_variants"
+      :title="phrase.upload_how"
       closable
     >
       <div

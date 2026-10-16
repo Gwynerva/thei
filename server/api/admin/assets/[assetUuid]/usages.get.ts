@@ -1,5 +1,8 @@
 import { getAssetUsages } from '../../../../thei/assets/library';
-export default defineEventHandler((event) => {
+import { withPlaceMedia } from '../../../../thei/assets/usage-media';
+
+export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'assetUuid') ?? '';
-  return getAssetUsages(id);
+  const usages = getAssetUsages(id);
+  return { ...usages, placements: await withPlaceMedia(usages.placements) };
 });

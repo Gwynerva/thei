@@ -4,8 +4,16 @@ import AssetModalButton from '#layers/thei/app/modals/asset-modal/AssetModalButt
 import AssetModalFileInfo from '#layers/thei/app/modals/asset-modal/AssetModalFileInfo.vue';
 import AssetModalPager from '#layers/thei/app/modals/asset-modal/AssetModalPager.vue';
 import AssetModalPreviewMedia from '#layers/thei/app/modals/asset-modal/AssetModalPreviewMedia.vue';
+import AssetPanelSection from '#layers/thei/app/modals/asset-modal/AssetPanelSection.vue';
+import AssetPlaceChip from '#layers/thei/app/modals/asset-modal/AssetPlaceChip.vue';
 import FilePreviewContent from '#layers/thei/app/components/file-preview/FilePreviewContent.vue';
 import { isAssetExtensionSafeInline } from '#layers/thei/shared/assets/formats';
+import type { PublicFilePlace } from '#layers/thei/shared/api/public';
+import {
+  assetSourceIcon,
+  assetSourceTitle,
+  assetUseLabel,
+} from '#layers/thei/app/composables/asset-library-labels';
 import type { PublicAssetModalData } from './modal';
 
 const props = defineProps<{ modalData: PublicAssetModalData }>();
@@ -44,10 +52,47 @@ const opensInTab = computed(
     !!current.value.media ||
     isAssetExtensionSafeInline(current.value.extension),
 );
+
+/**
+ * The other pages the file is shown on, to go on to: only those anyone may
+ * find, where a stranger sees it too (`server/thei/public/file-places.ts`).
+ * The page the window was opened over is the one the visitor is on.
+ */
+const { data: placesData } = useFetch<{ places: PublicFilePlace[] }>(
+  () => `/api/files/${encodeURIComponent(current.value.key)}/places`,
+  { server: false, lazy: true },
+);
+const route = useRoute();
+const withSlash = (path: string) => (path.endsWith('/') ? path : `${path}/`);
+const places = computed(() =>
+  (placesData.value?.places ?? []).filter(
+    (place) => withSlash(place.href) !== withSlash(route.path),
+  ),
+);
+
+/**
+ * A place opens where the visitor is: the windows close and let go of the
+ * history, then the page goes on. A click asking for a new tab is the
+ * browser's.
+ */
+async function goTo(event: MouseEvent, href: string) {
+  if (
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey
+  )
+    return;
+  event.preventDefault();
+  while (activeModal.value && (await closeModalAndWait()));
+  await modalHistorySettled();
+  await navigateTo(href);
+}
 </script>
 
 <template>
-  <AssetModal :aside-title="publicText(current.title)">
+  <AssetModal :aside-title="publicText(current.title)" title-strong>
     <template #preview>
       <AssetModalPreviewMedia
         v-if="current.media"
@@ -106,35 +151,59 @@ const opensInTab = computed(
       </AssetModalButton>
     </template>
     <template #aside>
-      <div class="flex flex-col gap-sm p-sm">
-        <p
-          v-if="current.description"
-          class="text-sm leading-relaxed text-text-2"
-        >
-          {{ publicText(current.description) }}
-        </p>
-        <!-- The file's own description: what it shows, said for whoever
-             cannot see it. -->
-        <section
-          v-if="current.alt"
-          :key="`alt:${current.key}`"
-          class="flex flex-col gap-1 text-sm"
-          data-public-asset-description
-        >
-          <h3 class="text-xs font-semibold text-text-3">
-            {{ phrase.asset_description }}
-          </h3>
-          <p class="leading-relaxed wrap-anywhere whitespace-pre-line">
+      <div class="flex flex-col divide-y divide-border-1 text-sm">
+        <AssetPanelSection v-if="current.description">
+          <p class="leading-relaxed wrap-anywhere text-text-1">
+            {{ publicText(current.description) }}
+          </p>
+        </AssetPanelSection>
+        <!-- The file itself: what it shows, said for whoever cannot see it,
+             and what it is. -->
+        <AssetPanelSection :key="`file:${current.key}`" :title="phrase.asset">
+          <p
+            v-if="current.alt"
+            class="leading-relaxed wrap-anywhere whitespace-pre-line
+              text-text-2"
+            data-public-asset-description
+          >
             {{ publicText(current.alt) }}
           </p>
-        </section>
-        <AssetModalFileInfo
-          :key="current.key"
-          :extension="current.extension"
-          :size="current.size"
-          :dimensions="dimensions"
-          :archived-original="current.archivedOriginal"
-        />
+          <AssetModalFileInfo
+            :extension="current.extension"
+            :size="current.size"
+            :dimensions="dimensions"
+            :archived-original="current.archivedOriginal"
+          />
+        </AssetPanelSection>
+        <AssetPanelSection
+          v-if="places.length"
+          :key="`places:${current.key}`"
+          :title="phrase.asset_used_elsewhere"
+          :count="places.length"
+          data-asset-places
+        >
+          <div class="flex flex-col gap-1.5">
+            <AssetPlaceChip
+              v-for="place in places"
+              :key="place.href"
+              :href="place.href"
+              :media="place.media"
+              :icon="assetSourceIcon[place.kind]"
+              :title="
+                assetSourceTitle({ type: place.kind, title: place.title })
+              "
+              :parent="
+                place.parent ? publicText(place.parent.title) : undefined
+              "
+              :uses="
+                place.uses
+                  .map((use) => assetUseLabel(use, place.kind))
+                  .join(' · ')
+              "
+              @click="goTo($event, place.href)"
+            />
+          </div>
+        </AssetPanelSection>
       </div>
     </template>
   </AssetModal>

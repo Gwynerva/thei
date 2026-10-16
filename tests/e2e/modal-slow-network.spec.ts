@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { createOriginalAssetSettings } from '../../shared/asset-upload-settings';
 import { buildUploadHeaders } from '../../shared/api/asset-upload-headers';
+import { skipDescription, uploadControls } from './helpers/upload';
 
 /**
  * On a slow network a modal opens at once in its frame, with its title, and
@@ -195,16 +196,14 @@ test('the picker, the library and the editor each stand in their frame at once',
 
   // The editor opens over the library at once and fetches the file itself.
   await expect(
-    dialog(page).getByText('File Variants', { exact: true }),
+    dialog(page).getByText('How to take the file', { exact: true }).first(),
   ).toBeVisible({ timeout: 600 });
-  const choose = dialog(page).getByRole('button', {
-    name: 'Choose this variant',
-    exact: true,
-  });
-  await expect(choose).toBeEnabled({ timeout: 10_000 });
+  const { next } = uploadControls(page);
+  await expect(next).toBeEnabled({ timeout: 10_000 });
   await expectNeverEmpty(page);
 
-  await choose.click();
+  await next.click();
+  await skipDescription(page, 10_000);
   await expect(page.locator('[data-result]')).toContainText(assetUuid, {
     timeout: 10_000,
   });
@@ -247,13 +246,11 @@ test('a file goes from its details to the editor and back without the page showi
       mimeType: 'image/png',
       buffer: await picture(),
     });
-  await dialog(page)
-    .getByRole('button', { name: 'Selected file', exact: true })
-    .click();
-  await dialog(page)
-    .getByRole('button', { name: 'Use as is', exact: true })
-    .click();
-  await expect(dialog(page).getByPlaceholder('Caption')).toBeVisible({
+  await uploadControls(page).next.click();
+  await skipDescription(page);
+  await expect(
+    dialog(page).getByRole('textbox', { name: 'Caption', exact: true }),
+  ).toBeVisible({
     timeout: 20_000,
   });
   await page.keyboard.press('Escape');
@@ -265,7 +262,9 @@ test('a file goes from its details to the editor and back without the page showi
     .first()
     .click();
   await watchCover(page);
-  await expect(dialog(page).getByPlaceholder('Caption')).toBeVisible({
+  await expect(
+    dialog(page).getByRole('textbox', { name: 'Caption', exact: true }),
+  ).toBeVisible({
     timeout: 10_000,
   });
 
@@ -274,15 +273,17 @@ test('a file goes from its details to the editor and back without the page showi
     .getByRole('button', { name: 'Change', exact: true })
     .click();
   await expect(
-    dialog(page).getByText('File Variants', { exact: true }),
+    dialog(page).getByText('How to take the file', { exact: true }).first(),
   ).toBeVisible({ timeout: 600 });
-  await expect(
-    dialog(page).getByRole('button', { name: 'Choose this variant' }),
-  ).toBeVisible({ timeout: 10_000 });
+  await expect(uploadControls(page).newVariant).toBeVisible({
+    timeout: 10_000,
+  });
 
   // Closed, the editor gives the details back.
   await page.keyboard.press('Escape');
-  await expect(dialog(page).getByPlaceholder('Caption')).toBeVisible({
+  await expect(
+    dialog(page).getByRole('textbox', { name: 'Caption', exact: true }),
+  ).toBeVisible({
     timeout: 10_000,
   });
   await expectNeverEmpty(page);

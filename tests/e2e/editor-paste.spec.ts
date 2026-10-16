@@ -1,6 +1,7 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
+import { skipDescription, uploadControls } from './helpers/upload';
 
 test.use({
   storageState: fileURLToPath(
@@ -197,17 +198,18 @@ test('the editor opened on a pasted picture makes new variants from the kept ori
   if (!(await tile.isVisible())) await unused.click();
   await tile.click();
 
-  // The original is listed, marked as going unless something uses it.
+  // The original is among the saved variants, marked as going unless
+  // something uses it.
   const dialog = page.locator('dialog[open]').last();
+  const controls = uploadControls(page);
+  await controls.savedVariants.click();
   const kept = dialog.getByRole('radio', { name: /^PNG · 640×480 / });
   await expect(kept).toHaveCount(1, { timeout: 20_000 });
   await expect(kept.locator('[data-asset-pending-deletion]')).toBeVisible();
 
   // A new variant starts from it, not from the compressed picture.
-  await dialog
-    .getByRole('button', { name: 'Create variant', exact: true })
-    .first()
-    .click();
+  await controls.back.click();
+  await controls.newVariant.click();
   const source = dialog.getByRole('button', { name: /^Source: / });
   await expect(source).toHaveAccessibleName('Source: PNG · 640×480');
   await source.click();
@@ -244,10 +246,8 @@ test('the editor opens on the pasted file while it is being stored, and the bloc
   // The editor took the draft over: the file did not go up again, and the
   // default has been given up.
   const dialog = page.locator('dialog[open]');
-  const useResult = dialog.getByRole('button', {
-    name: 'Use result',
-    exact: true,
-  });
+  await uploadControls(page).newVariant.click();
+  const useResult = uploadControls(page).next;
   await expect(useResult).toBeEnabled({ timeout: 20_000 });
   expect(counts.stage).toBe(1);
   await expect(dialog.getByRole('slider', { name: 'Quality' })).toHaveAttribute(
@@ -280,17 +280,16 @@ test('what the editor settles on lands in the block', async ({ page }) => {
   await page.locator('[data-content-asset-edit]').click();
 
   const dialog = page.locator('dialog[open]');
+  await uploadControls(page).newVariant.click();
   const bar = dialog.getByRole('slider', { name: 'Quality' });
   await bar.focus();
   await page.keyboard.press('Home');
   await expect(bar).toHaveAttribute('aria-valuetext', 'Minimal');
-  const useResult = dialog.getByRole('button', {
-    name: 'Use result',
-    exact: true,
-  });
+  const useResult = uploadControls(page).next;
   await expect(useResult).toBeEnabled({ timeout: 20_000 });
   hold = false;
   await useResult.click();
+  await skipDescription(page);
 
   await expect(dialog).toHaveCount(0);
   await expect(figures(page)).toHaveCount(before + 1, { timeout: 30_000 });

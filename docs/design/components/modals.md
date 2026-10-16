@@ -11,7 +11,8 @@ row that says what is open and holds its actions; the body below scrolls.
 - A short flow that must end in a result, such as a wizard of steps.
 
 Not for a choice or a short note anchored to a control — that is a popup (see
-[Popups](popups.md)).
+[Popups](popups.md)). A file opens in a window of its own kind, described in
+[File window](file-window.md).
 
 ## Rules
 
@@ -65,9 +66,9 @@ Opening and waiting:
   the uuid.
 - The wait is the `loading` icon of `app/modals/ModalWaiting.vue`, which
   shows only once a transition's length has passed, so a quick open never
-  flashes it. What arrives later in a panel holds its place meanwhile — a row
-  of `InfoBlock` with `pending`, a badge's placeholder — rather than pushing
-  the rest down when it comes.
+  flashes it. What arrives later in a panel holds its place meanwhile — a
+  file's facts drawn `pending`, placeholders of the chips to come — rather
+  than pushing the rest down when it comes.
 - A choice that depends on an answer still due is drawn from the start,
   waiting (`aria-busy`), and goes with a transition if the answer rules it
   out: the picker's "Reuse" waits for the library's answer, which its flow

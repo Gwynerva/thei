@@ -278,7 +278,8 @@ function sourceInfo(row: SourceRow): AssetSource {
           : `/admin/${type === 'page' ? 'pages' : type === 'tag' ? 'tags' : type + 's'}/${id}/edit/`;
   return { ...base, url, editUrl };
 }
-function readPlacements(ids: string[]) {
+/** Where each of the files is placed, by the file's uuid. */
+export function readPlacements(ids: string[]) {
   const result = new Map<string, AssetPlacement[]>();
   if (!ids.length) return result;
   const rows = connection()
