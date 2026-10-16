@@ -30,13 +30,16 @@ const props = withDefaults(
 
 /**
  * What a tile is called: while editing, the action it opens; on the page,
- * the action of showing the picture, named by its caption when it has one —
- * distinct from the picture's own button, which opens the viewer.
+ * the action of showing the picture, named by its caption when it has one,
+ * else by what the picture shows — distinct from the picture's own button,
+ * which opens the viewer.
  */
 function tileLabel(item: ContentGalleryItem) {
-  const caption =
-    !props.editable && item.caption && richTextToPlainText(item.caption);
-  return caption ? `${props.chooseLabel}: ${caption}` : props.chooseLabel;
+  const named =
+    !props.editable &&
+    ((item.caption && richTextToPlainText(item.caption)) ||
+      publicText(item.asset.alt));
+  return named ? `${props.chooseLabel}: ${named}` : props.chooseLabel;
 }
 
 const emit = defineEmits<{

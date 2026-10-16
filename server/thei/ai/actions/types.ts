@@ -11,7 +11,16 @@ import type {
   AiEntityType,
   AiTerm,
 } from '#layers/thei/shared/ai';
-import type { EntityKey, EntityKind } from '../../entity-kinds';
+import type { EntityKey } from '../../entity-kinds';
+import type { ActionTargetKind, FileKey } from './target';
+
+/**
+ * What a kind of action is about: a file for a description, an entity for
+ * everything else.
+ */
+export type TargetOf<K extends AiActionKind> = K extends 'describe'
+  ? FileKey
+  : EntityKey;
 
 /**
  * What undoing an applied action needs, written in the transaction that
@@ -58,6 +67,16 @@ export type ActionUndo =
       /** «About you» as it was and as it left it. */
       owner?: { before: string; after: string };
     }
+  | {
+      kind: 'description';
+      familyUuid: string;
+      /** The words as they were — empty for none — and as it left them. */
+      before: string;
+      after: string;
+      /** The version it found and the one it left. */
+      versionBefore: number | null;
+      versionAfter: number | null;
+    }
   | { kind: 'final' };
 
 /** An action as it is stored. */
@@ -101,6 +120,8 @@ export interface PreparedAction<K extends AiActionKind> {
   assetUuids?: string[];
   /** The parts the owner decides one by one, by id. */
   parts?: string[];
+  /** What it is about, when it names that in its own fields: a file. */
+  target?: TargetOf<K>;
 }
 
 /**
@@ -156,10 +177,10 @@ export interface AiActionKindDef<K extends AiActionKind> {
    * What it may be about. Every kind but a new entity needs a target; a new
    * section's is its project.
    */
-  targets: readonly EntityKind[];
+  targets: readonly ActionTargetKind[];
   /** Checks it against the archive as it is now; throws a refusal. */
   prepare(
-    target: EntityKey | undefined,
+    target: TargetOf<K> | undefined,
     input: any,
     context: { reason: string; sources: string[] },
   ): Promise<PreparedAction<K>>;
@@ -169,20 +190,20 @@ export interface AiActionKindDef<K extends AiActionKind> {
    */
   identity(
     payload: AiActionPayloadOf<K>,
-    target: EntityKey | undefined,
+    target: TargetOf<K> | undefined,
   ): unknown;
   /** Its identity names its target itself: a relation, read from either end. */
   identityHasTarget?: true;
   /** Applies it, calling `write` inside the save's transaction. */
   apply(
-    target: EntityKey | undefined,
+    target: TargetOf<K> | undefined,
     row: ActionRow,
     context: ApplyContext,
     write: ApplyWrite,
-  ): Promise<EntityKey | undefined>;
+  ): Promise<TargetOf<K> | EntityKey | undefined>;
   /** Where it stands now. */
   evaluate(
-    target: EntityKey | undefined,
+    target: TargetOf<K> | undefined,
     row: ActionRow,
   ): ActionEvaluation | Promise<ActionEvaluation>;
   /** One line saying what it proposes, for a model and for memory. */

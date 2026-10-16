@@ -1,7 +1,7 @@
 import { requireAiOn } from '../../../../../thei/ai-on';
 import { withRefusals } from '../../../../../thei/ai/refusals';
 import { undoActionHeld } from '../../../../../thei/ai/actions/undo';
-import { refOf } from '../../../../../thei/entity-kinds';
+import { targetRef } from '../../../../../thei/ai/actions/target';
 
 /** Takes back an applied action, while nothing has changed it since. */
 export default defineEventHandler((event) =>
@@ -10,6 +10,6 @@ export default defineEventHandler((event) =>
     const entity = await undoActionHeld(
       getRouterParam(event, 'actionUuid') ?? '',
     );
-    return { entity: entity ? refOf(entity) : undefined };
+    return { entity: entity ? targetRef(entity) : undefined };
   }),
 );

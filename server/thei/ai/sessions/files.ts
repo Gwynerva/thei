@@ -1,4 +1,5 @@
-import { readFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { readFile, rm, stat } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { and, eq, inArray } from 'drizzle-orm';
 import { createError } from 'h3';
@@ -7,8 +8,11 @@ import { AssetType } from '#layers/thei/shared/asset';
 import { TEXT_FILE_EXTENSIONS } from '#layers/thei/shared/assets/preview';
 import { decodeText } from '#layers/thei/shared/text-bytes';
 import type { AiMessageFile, AiMessagePart } from '#layers/thei/shared/ai';
+import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
 import { touchReleasedAssets } from '../../content/history';
 import { withProcessingSlot } from '../../assets/queue';
+import { runFfmpeg } from '../../assets/ffmpeg';
+import { theiTempPath } from '../../assets/temp';
 import {
   describeStoredAsset,
   type StoredAssetRecord,
@@ -181,6 +185,13 @@ export function messageFiles(parts: readonly AiMessagePart[]): AiMessageFile[] {
   });
 }
 
+/** A library file as the page describes it, with its preview; none when gone. */
+export function libraryFile(assetUuid: string): AssetVariantInfo | undefined {
+  const asset = findAssets([assetUuid])[0];
+  if (!asset || asset.settings === null) return undefined;
+  return describeStoredAsset(asset, previewsOf([assetUuid]).get(assetUuid));
+}
+
 /** The previews of these files, by the file they are of. */
 function previewsOf(assetUuids: readonly string[]): Map<string, string> {
   if (!assetUuids.length) return new Map();
@@ -240,7 +251,7 @@ export function sessionFilesNote(files: readonly SessionFile[]): string {
     return `- «${file.name}»: ${KINDS[asset.type]}${size}, ${asset.extension.toUpperCase()}, ${megabytes(asset.size)} — ${asset.assetUuid}`;
   });
   return [
-    'The owner brought these files; they are in the library already, kept in this session. Pictures, PDFs and texts among them are shown to you, as far as you can see them.',
+    'The owner brought these files; they are in the library already, kept in this session. Pictures, PDFs, texts, recordings and videos — a frame and their sound — among them are shown to you, as far as your service takes them.',
     ...lines,
     'A text takes one in by its id: ::media[caption]{asset="…"} for a picture or a video, ::audio[caption]{asset="…" title="…"}, ::file[caption]{asset="…" title="…"} for any file.',
   ].join('\n');
@@ -298,10 +309,36 @@ const PICTURE_SIDE = 1568;
 const PDF_MAX = 10 * 1024 * 1024;
 /** The largest text file given to a model. */
 const TEXT_MAX = 100 * 1024;
+/** How much of a recording a model hears: the rest is cut, and it is told. */
+const SOUND_SECONDS = 10 * 60;
+/**
+ * The largest sound given to a model whole: ten minutes of the MP3 made for
+ * it are 2.4 MB, so only a broken encode meets it.
+ */
+const SOUND_MAX = 6 * 1024 * 1024;
 
-/** Files made ready for a model lately: a session rereads them every turn. */
-const ready = new Map<string, StreamFile | null>();
-const READY_KEPT = 32;
+/**
+ * Files made ready for a model lately, by id: a session rereads them every
+ * turn. Kept within a budget of bytes, the oldest given up first.
+ */
+const ready = new Map<string, { blocks: StreamFile[]; bytes: number }>();
+const READY_BYTES = 48 * 1024 * 1024;
+let readyBytes = 0;
+
+function keepReady(id: string, blocks: StreamFile[]) {
+  const bytes = blocks.reduce(
+    (sum, block) =>
+      sum + ('data' in block ? block.data.length : block.text.length),
+    0,
+  );
+  ready.set(id, { blocks, bytes });
+  readyBytes += bytes;
+  while (readyBytes > READY_BYTES && ready.size > 1) {
+    const oldest = ready.keys().next().value!;
+    readyBytes -= ready.get(oldest)!.bytes;
+    ready.delete(oldest);
+  }
+}
 
 /** A picture as a model is shown it: a JPEG, no larger than it needs. */
 async function picture(path: string, signal?: AbortSignal): Promise<string> {
@@ -325,53 +362,143 @@ async function picture(path: string, signal?: AbortSignal): Promise<string> {
   return data.toString('base64');
 }
 
-async function prepare(
+/**
+ * The sound of a recording or of a video as a model hears it: a small MP3
+ * of one channel, its first minutes at most, made in the sound lane on disk
+ * and read whole only under the cap. None for a file with no sound.
+ */
+async function sound(
+  path: string,
+  name: string,
+  duration: number | undefined,
+  signal?: AbortSignal,
+): Promise<StreamFile | null> {
+  const out = theiTempPath(`model-sound-${randomUUID()}.mp3`);
+  try {
+    const code = await withProcessingSlot(
+      AssetType.Audio,
+      () =>
+        runFfmpeg(
+          [
+            '-hide_banner',
+            '-loglevel',
+            'error',
+            '-y',
+            '-i',
+            path,
+            '-vn',
+            '-t',
+            String(SOUND_SECONDS),
+            '-ac',
+            '1',
+            '-ar',
+            '16000',
+            '-b:a',
+            '32k',
+            '-f',
+            'mp3',
+            out,
+          ],
+          // A stopped turn kills the encode.
+          { signal },
+        ),
+      // A stopped turn gives its place in the queue up.
+      { signal },
+    );
+    if (code !== 0) return null;
+    const { size } = await stat(out);
+    if (!size || size > SOUND_MAX) return null;
+    return {
+      kind: 'audio',
+      name,
+      data: (await readFile(out)).toString('base64'),
+      ...(duration && duration > SOUND_SECONDS + 1
+        ? { cutAt: SOUND_SECONDS }
+        : {}),
+    };
+  } finally {
+    await rm(out, { force: true }).catch(() => {});
+  }
+}
+
+/**
+ * How each kind of file is shown to a model — the one table of it. A file
+ * becomes the blocks a model's API takes: a photo a picture; a drawing by
+ * its preview; a video its frame and its sound; a recording its sound; a
+ * PDF itself; a text its words. Any other file is told of by its name and
+ * id alone. Whether a model's service takes each block is for the stream to
+ * find out (`model/stream.ts`): what it turns away is told in words.
+ */
+async function blocksOf(
   asset: StoredAssetRecord,
   name: string,
   preview: StoredAssetRecord | undefined,
   signal?: AbortSignal,
-): Promise<StreamFile | null> {
+): Promise<StreamFile[]> {
   const path = (record: StoredAssetRecord) =>
     THEI_SERVER.assets.filePath(record.contentHash, record.extension);
-  // A drawing or a video is shown by its preview; a photo by itself.
-  if (asset.type === AssetType.Image && asset.extension !== 'svg')
-    return { kind: 'image', data: await picture(path(asset), signal) };
-  if (asset.type === AssetType.Image || asset.type === AssetType.Video)
-    return preview
-      ? { kind: 'image', data: await picture(path(preview), signal) }
-      : null;
-  if (asset.extension === 'pdf' && asset.size <= PDF_MAX)
-    return {
-      kind: 'pdf',
-      name,
-      data: (await readFile(path(asset))).toString('base64'),
-    };
-  if (TEXT_FILE_EXTENSIONS.has(asset.extension) && asset.size <= TEXT_MAX)
-    // Read in the encoding it was written in, as the owner sees it.
-    return {
-      kind: 'text',
-      name,
-      text: decodeText(await readFile(path(asset))),
-    };
-  return null;
+  const meta = (asset.meta ?? {}) as { hasAudio?: boolean; duration?: number };
+  switch (asset.type) {
+    case AssetType.Image:
+      if (asset.extension !== 'svg')
+        return [
+          { kind: 'image', name, data: await picture(path(asset), signal) },
+        ];
+      return preview
+        ? [{ kind: 'image', name, data: await picture(path(preview), signal) }]
+        : [];
+    case AssetType.Video: {
+      const blocks: StreamFile[] = preview
+        ? [{ kind: 'image', name, data: await picture(path(preview), signal) }]
+        : [];
+      // A video with no sound track is its frame alone.
+      const track =
+        meta.hasAudio === false
+          ? null
+          : await sound(path(asset), name, meta.duration, signal);
+      return track ? [...blocks, track] : blocks;
+    }
+    case AssetType.Audio: {
+      const track = await sound(path(asset), name, meta.duration, signal);
+      return track ? [track] : [];
+    }
+    default:
+      if (asset.extension === 'pdf' && asset.size <= PDF_MAX)
+        return [
+          {
+            kind: 'pdf',
+            name,
+            data: (await readFile(path(asset))).toString('base64'),
+          },
+        ];
+      if (TEXT_FILE_EXTENSIONS.has(asset.extension) && asset.size <= TEXT_MAX)
+        // Read in the encoding it was written in, as the owner sees it.
+        return [
+          { kind: 'text', name, text: decodeText(await readFile(path(asset))) },
+        ];
+      return [];
+  }
 }
 
 /**
- * The files these turns bring, made ready for a model by id. One that cannot
- * be shown — gone, too large, of a kind no model reads — is left out: the
- * words of its message still name it. `signal` stops it for a stopped turn.
+ * The files these turns show — what the owner brought, what a tool showed —
+ * made ready for a model by id. One that cannot be shown — gone, too large,
+ * of a kind no model reads — is left out: the words around it still name
+ * it. `signal` stops it for a stopped turn.
  */
 export async function modelFiles(
   turns: readonly { role: string; files?: string[] }[],
   names: ReadonlyMap<string, string>,
   signal?: AbortSignal,
-): Promise<Map<string, StreamFile>> {
+): Promise<Map<string, StreamFile[]>> {
   const ids = [
     ...new Set(
-      turns.flatMap((turn) => (turn.role === 'user' ? (turn.files ?? []) : [])),
+      turns.flatMap((turn) =>
+        turn.role === 'user' || turn.role === 'tool' ? (turn.files ?? []) : [],
+      ),
     ),
   ];
-  const result = new Map<string, StreamFile>();
+  const result = new Map<string, StreamFile[]>();
   if (!ids.length) return result;
   const assets = new Map(
     findAssets(ids).map((asset) => [asset.assetUuid, asset]),
@@ -386,10 +513,10 @@ export async function modelFiles(
   for (const id of ids) {
     if (!ready.has(id)) {
       const asset = assets.get(id);
-      let file: StreamFile | null = null;
+      let blocks: StreamFile[] = [];
       if (asset)
         try {
-          file = await prepare(
+          blocks = await blocksOf(
             asset,
             names.get(id) ?? id,
             previews.get(previewIds.get(id) ?? ''),
@@ -399,15 +526,16 @@ export async function modelFiles(
           if (signal?.aborted) throw error;
           THEI_SERVER.console
             .tag('AI')
-            .warn(`A file of a session could not be read: ${String(error)}`);
+            .warn(
+              `A file could not be made ready for a model: ${String(error)}`,
+            );
         }
       // One not shown yet — a video's preview still on its way — is tried
       // again next turn.
-      if (file) ready.set(id, file);
-      while (ready.size > READY_KEPT) ready.delete(ready.keys().next().value!);
+      if (blocks.length) keepReady(id, blocks);
     }
-    const file = ready.get(id);
-    if (file) result.set(id, file);
+    const kept = ready.get(id);
+    if (kept) result.set(id, kept.blocks);
   }
   return result;
 }

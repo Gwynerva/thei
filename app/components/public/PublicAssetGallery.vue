@@ -65,7 +65,9 @@ function openItem(item: PublicAssetDescriptor) {
             item.key === active?.key ? 'border-accent' : 'border-transparent'
           "
           :aria-pressed="item.key === active?.key"
-          :aria-label="publicText(item.title) || phrase.asset"
+          :aria-label="
+            publicText(item.title) || publicText(item.alt) || phrase.asset
+          "
           @click="selectedKey = item.key"
         >
           <Media

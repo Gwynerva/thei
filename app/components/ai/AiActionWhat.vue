@@ -279,6 +279,19 @@ const createTitle = computed(() => {
       </template>
     </template>
 
+    <!-- A file described: the file itself, small, so the words can be
+         checked against it -->
+    <template v-else-if="action.kind === 'describe'">
+      <b v-if="!plain">{{ kindWords }}</b>
+      <span
+        v-if="action.file?.media"
+        class="size-8 shrink-0 overflow-hidden rounded-sm bg-bg-3"
+        data-action-file
+        ><Media v-bind="action.file.media" class="size-full"
+      /></span>
+      <AiEntityChip v-if="showTarget" :entity="action.target" />
+    </template>
+
     <template v-else-if="action.kind === 'delete'">
       <b v-if="!plain">{{ kindWords }}</b>
       <AiEntityChip v-if="showTarget" :entity="action.target" />

@@ -7,7 +7,7 @@ import type {
 import type { ApiTokenPrincipal } from '../../api-tokens';
 import { entityFace, findEntity, refOf } from '../../entity-kinds';
 import { MCP_INSTRUCTIONS } from '../../mcp/instructions';
-import { REFUSED_META } from '../../mcp/result';
+import { FILES_META, REFUSED_META } from '../../mcp/result';
 import { directTools, type DirectTool } from '../../mcp/registry';
 import { withOwnerInstructions } from '../../mcp/server';
 import {
@@ -15,6 +15,7 @@ import {
   streamTurn,
   type StreamCall,
   type StreamFile,
+  type StreamFileKind,
 } from '../model/stream';
 import { sessionModel } from '../model/settings';
 import { countedTokens, recordUsage, tokensLeft } from '../model/usage';
@@ -391,19 +392,26 @@ export async function runSessionTurn(
     ]
       .filter(Boolean)
       .join('\n\n');
-    // Files that take too long to make ready are told of in words alone.
-    const files = await within(
-      modelFiles(history, fileNames, signal),
-      signal,
-      TURN_LIMITS.toolMs,
-    ).catch((error: unknown) => {
-      if (!(error instanceof TookTooLong)) throw error;
-      THEI_SERVER.console
-        .tag('AI')
-        .warn('The files of a session took too long to make ready.');
-      return new Map<string, StreamFile>();
-    });
+    /**
+     * The files these turns show, made ready within the time a tool call
+     * has; ones that take longer are told of in words alone.
+     */
+    const readyFiles = (turns: readonly { role: string; files?: string[] }[]) =>
+      within(
+        modelFiles(turns, fileNames, signal),
+        signal,
+        TURN_LIMITS.toolMs,
+      ).catch((error: unknown) => {
+        if (!(error instanceof TookTooLong)) throw error;
+        THEI_SERVER.console
+          .tag('AI')
+          .warn('The files of a session took too long to make ready.');
+        return new Map<string, StreamFile[]>();
+      });
+    const files = await readyFiles(history);
     going();
+    /** Kinds of a file's blocks the model's service turned away. */
+    let unshown = new Set<StreamFileKind>();
     const offered = [
       ...[...tools.values()].map(({ name, description, inputSchema }) => ({
         name,
@@ -431,6 +439,7 @@ export async function runSessionTurn(
         system,
         turns: [...history, ...transcript],
         files,
+        unshown,
         tools: offered,
         signal,
         onText(delta) {
@@ -457,6 +466,7 @@ export async function runSessionTurn(
       going();
       // What came streamed is what the provider gave in the end.
       text = text.slice(0, before) + (turn.text ? separator + turn.text : '');
+      unshown = turn.unshown;
       const counted = countedTokens(turn.usage);
       spent += counted;
       addSessionTokens(sessionUuid, counted);
@@ -484,6 +494,8 @@ export async function runSessionTurn(
           text: string;
           error: boolean;
           refused?: number;
+          /** Library files the tool showed. */
+          files?: string[];
         }> => {
           if (call.broken) return { text: call.broken, error: true };
           if (call.name === NAME_TOOL.name)
@@ -564,8 +576,12 @@ export async function runSessionTurn(
           });
           if (!result) return tookTooLong(call.name);
           const refused = result._meta?.[REFUSED_META];
+          const shown = result._meta?.[FILES_META];
           return {
             refused: typeof refused === 'number' ? refused : 0,
+            ...(Array.isArray(shown) && shown.length
+              ? { files: shown.filter((id) => typeof id === 'string') }
+              : {}),
             text: cutAnswer(
               result.content
                 .map((part) => ('text' in part ? part.text : ''))
@@ -584,7 +600,16 @@ export async function runSessionTurn(
           name: call.name,
           output: result.text,
           ...(result.error ? { error: true } : {}),
+          ...(result.files ? { files: result.files } : {}),
         });
+        // What a tool showed is made ready for the model's next call.
+        if (result.files) {
+          for (const [id, blocks] of await readyFiles([
+            { role: 'tool', files: result.files },
+          ]))
+            files.set(id, blocks);
+          going();
+        }
         save();
       }
       if (asked) break;

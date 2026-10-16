@@ -61,7 +61,7 @@ defineExpose({
     :accent
     :width
     :height
-    :alt
+    :alt="alt && publicText(alt)"
     :controls
     :engaged
     :suspended

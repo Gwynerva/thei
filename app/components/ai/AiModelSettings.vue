@@ -386,6 +386,10 @@ const checkIcons = {
           :placeholder="phrase.ai_model_service_choose"
           wide
         />
+        <!-- What files its model is shown: Claude takes no sound. -->
+        <FieldHint v-if="service?.provider === 'anthropic'">{{
+          phrase.ai_model_no_sound
+        }}</FieldHint>
       </Field>
       <Field v-if="addressShown">
         <FieldLabel required>{{ phrase.ai_model_base_url }}</FieldLabel>

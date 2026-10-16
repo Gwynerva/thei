@@ -17,6 +17,7 @@ import {
   termAction,
 } from './kinds/memory';
 import { createAction, deleteAction } from './kinds/structure';
+import { describeAction } from './kinds/media';
 import type { AiActionKindDef } from './types';
 
 /**
@@ -38,6 +39,7 @@ export const AI_ACTION_DEFS: { [K in AiActionKind]: AiActionKindDef<K> } = {
   remember: rememberAction,
   term: termAction,
   'memory-compact': memoryCompactAction,
+  describe: describeAction,
 };
 
 export function isActionKind(value: unknown): value is AiActionKind {

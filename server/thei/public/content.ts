@@ -30,6 +30,7 @@ import {
   buildPublicDiaryContentMedia,
   buildPublicProfileMedia,
 } from '../assets/urls';
+import { describedText } from '../assets/descriptions';
 import { createExternalLinkLoader } from '../external-links/repository';
 import { canResolveContentEntityLink } from '../content-links/access';
 import {
@@ -377,6 +378,7 @@ async function hydratePublicContentData(
         asset.type === AssetType.Other
           ? archivedOriginalFromMeta(asset.meta)
           : undefined,
+      alt: describedText(asset) || undefined,
     };
     assetCache.set(assetUuid, hydrated);
     return hydrated;

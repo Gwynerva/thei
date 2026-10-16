@@ -21,11 +21,15 @@ import {
 import { settleActions } from '../actions/apply';
 import { neverOffered } from '../actions/declined';
 import { findActions, sessionActions } from '../actions/rows';
+import { fileRef, isFileKey, type ActionTarget } from '../actions/target';
+import { fileOfFamily } from '../../assets/descriptions';
+import { AssetType } from '#layers/thei/shared/asset';
+import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
 import type { ActionRow } from '../actions/types';
 import { undoState } from '../actions/undo';
 import { messageFromMarkdown } from '../../mcp/text-input';
 import { writingOf } from './bus';
-import { messageFiles } from './files';
+import { libraryFile, messageFiles } from './files';
 import { sessionModel } from '../model/settings';
 import {
   findMessage,
@@ -145,15 +149,46 @@ export function messageItem(row: MessageRow): AiMessageItem {
   };
 }
 
+/** A file as a chip names it: what it is, its format and its size. */
+function fileTitle(file: AssetVariantInfo): string {
+  const said = THEI_SERVER.phrase;
+  const kind = {
+    [AssetType.Image]: said.image,
+    [AssetType.Video]: said.video,
+    [AssetType.Audio]: said.audio,
+    [AssetType.Other]: said.asset,
+  }[file.type];
+  const size =
+    file.size < 1024 * 1024
+      ? `${Math.max(1, Math.round(file.size / 1024))} KB`
+      : `${(file.size / 1024 / 1024).toFixed(1)} MB`;
+  return `${kind} · ${file.extension.toUpperCase()} · ${size}`;
+}
+
+/**
+ * The file an action is about, as the library has it now: the one named, or
+ * another of its family when that one is gone.
+ */
+function actionFile(row: ActionRow, key: ActionTarget) {
+  const family = (row.payload as { family?: string } | null)?.family;
+  return (
+    libraryFile(key.id) ??
+    (family ? libraryFile(fileOfFamily(family) ?? '') : undefined)
+  );
+}
+
 export async function actionItems(rows: ActionRow[]): Promise<AiActionItem[]> {
   const items: AiActionItem[] = [];
   const never = neverOffered(rows.map((row) => row.fingerprint));
   for (const row of rows) {
-    const key =
+    const key: ActionTarget | undefined =
       row.targetType && row.targetId
-        ? (findEntity(`${row.targetType}:${row.targetId}`) ??
-          ({ kind: row.targetType, id: row.targetId } as EntityKey))
+        ? row.targetType === 'asset'
+          ? { kind: 'asset', id: row.targetId }
+          : (findEntity(`${row.targetType}:${row.targetId}`) ??
+            ({ kind: row.targetType, id: row.targetId } as EntityKey))
         : undefined;
+    const file = key && isFileKey(key) ? actionFile(row, key) : undefined;
     items.push({
       actionUuid: row.actionUuid,
       messageUuid: row.messageUuid,
@@ -161,7 +196,17 @@ export async function actionItems(rows: ActionRow[]): Promise<AiActionItem[]> {
       bundleOrder: row.bundleOrder,
       atomic: row.atomic,
       kind: row.kind,
-      target: key ? entityRef(key) : null,
+      target: key
+        ? isFileKey(key)
+          ? {
+              ref: fileRef(key.id),
+              type: 'asset',
+              id: key.id,
+              title: file ? fileTitle(file) : key.id,
+            }
+          : entityRef(key)
+        : null,
+      ...(file ? { file } : {}),
       payload: row.payload,
       base: row.base,
       refs: refsIn(row.payload),

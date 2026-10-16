@@ -47,7 +47,11 @@ const humanSize = useHumanSize();
         type="button"
         class="absolute inset-0 z-10 cursor-zoom-in focus-visible:ring-2
           focus-visible:ring-accent focus-visible:ring-inset"
-        :aria-label="richTextToPlainText(caption ?? '') || phrase.asset"
+        :aria-label="
+          richTextToPlainText(caption ?? '') ||
+          publicText(asset.alt) ||
+          phrase.asset
+        "
         @click="$emit('open')"
       ></button>
       <!-- The file's size beside the edit button, as a tile shows it: what a
