@@ -6,16 +6,33 @@ import type {
 import { aiTemplateModal } from '#layers/thei/app/modals/ai-template/modal';
 
 /**
- * The templates tab: requests to the AI ready to go, the built-in checks
- * first. A check runs from its row over what it has not looked at yet; a
- * request of the owner's opens a new session with its words to add to. The
- * rest is set in the template's window.
+ * The templates tab: requests to the AI ready to go, as a table in two
+ * sections — the built-in checks, then the owner's own. A check runs from
+ * its row over what is new in the archive; a request of the owner's opens a
+ * new session with its words to add to. The rest is set in the template's
+ * window.
  */
 const requestFetch = useRequestFetch();
 const { data, refresh } = await useAsyncData('ai-templates', () =>
   requestFetch<AiTemplateListResponse>('/api/admin/ai/templates'),
 );
 const templates = computed(() => data.value?.templates ?? []);
+
+/** The built-in checks, then the owner's own requests, each a section. */
+const groups = computed(() => [
+  {
+    key: 'builtin',
+    title: phrase.value.ai_templates_builtin_section,
+    hint: phrase.value.ai_templates_builtin_section_hint,
+    templates: templates.value.filter((template) => template.builtin),
+  },
+  {
+    key: 'own',
+    title: phrase.value.ai_templates_own_section,
+    hint: phrase.value.ai_templates_own_section_hint,
+    templates: templates.value.filter((template) => !template.builtin),
+  },
+]);
 
 // While a run answers, the list looks again now and then to see it end.
 const anyRunning = computed(() =>
@@ -100,18 +117,57 @@ async function edit(template?: AiTemplateItem) {
     </div>
     <p class="text-sm text-text-2">{{ phrase.ai_templates_hint }}</p>
 
-    <div
-      class="rounded-normal border border-border-1 bg-bg-1"
-      data-templates-list
-    >
-      <AiTemplateRow
-        v-for="template in templates"
-        :key="template.templateId"
-        :template
-        :starting="starting === template.templateId"
-        @run="run(template)"
-        @edit="edit(template)"
-      />
-    </div>
+    <Box data-templates-list>
+      <div class="overflow-auto">
+        <table class="w-full">
+          <thead>
+            <tr class="th">
+              <th
+                scope="col"
+                class="w-full rounded-tl-normal p-td-tight text-left"
+              >
+                {{ phrase.ai_templates_column_template }}
+              </th>
+              <th
+                scope="col"
+                class="min-w-44 p-td-tight text-left max-sm:hidden"
+              >
+                {{ phrase.ai_template_model }}
+              </th>
+              <th
+                scope="col"
+                class="min-w-44 p-td-tight text-left max-sm:hidden"
+              >
+                {{ phrase.ai_templates_column_last }}
+              </th>
+              <th scope="col" class="rounded-tr-normal"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <template v-for="group in groups" :key="group.key">
+              <tr class="tr-section" :data-templates-group="group.key">
+                <td colspan="4" class="p-td-tight text-sm">
+                  <div class="text-text-2">{{ group.title }}</div>
+                  <div class="text-text-3">{{ group.hint }}</div>
+                </td>
+              </tr>
+              <AiTemplateRow
+                v-for="template in group.templates"
+                :key="template.templateId"
+                :template
+                :starting="starting === template.templateId"
+                @run="run(template)"
+                @edit="edit(template)"
+              />
+              <tr v-if="!group.templates.length">
+                <td colspan="4" class="p-td text-sm text-text-3">
+                  {{ phrase.ai_templates_own_empty }}
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </Box>
   </div>
 </template>

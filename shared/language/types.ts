@@ -1322,9 +1322,15 @@ export type LanguagePhrases = {
   ai_tab_templates: string;
   ai_templates_title: string;
   ai_templates_hint: string;
+  ai_templates_column_template: string;
+  ai_templates_column_last: string;
+  ai_templates_builtin_section: string;
+  ai_templates_builtin_section_hint: string;
+  ai_templates_own_section: string;
+  ai_templates_own_section_hint: string;
+  ai_templates_own_empty: string;
   ai_templates_new: string;
   ai_templates_presets: string;
-  ai_template_builtin: string;
   ai_template_open: string;
   ai_open_full: string;
   select_filter: string;

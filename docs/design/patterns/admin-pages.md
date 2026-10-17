@@ -56,6 +56,12 @@ rather than from a switch.
   `app/components/AssetLibrarySearch.vue` is the model.
 - A list grouped by state shows its groups as headings, not as a switch: the
   AI sessions list ends with its archive as the last group, its titles faded.
+- A table of things of more than one kind is one table in sections: a `th`
+  head, then each kind under a `tr-section` row with its name and a line of
+  what it means, as the sign-in sessions
+  (`app/components/admin/AdminSessions.vue`) and the AI templates
+  (`app/components/ai/AiTemplatesPanel.vue`) are. On a phone the side
+  columns hide and what matters of them moves under the row's name.
 - A row of such a list is one line: the title alone, in the regular weight,
   the chosen row told by its background and the accent — never bold — and the
   whole title in a hint only when it is cut (`data-title-popup-clipped`).
