@@ -47,8 +47,11 @@ export interface DueInput {
   covered: ReadonlyMap<string, Covered>;
   /** Subjects another run is looking at now. */
   busy: ReadonlySet<string>;
-  /** Look at the scope again from the start, looked at or not. */
-  force?: boolean;
+  /**
+   * All of the scope at once, however much a run takes: what a run on
+   * entities looked at already lets go of, to look at them from the start.
+   */
+  whole?: boolean;
 }
 
 export interface TemplateSource {

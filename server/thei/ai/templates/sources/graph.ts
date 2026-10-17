@@ -68,7 +68,7 @@ function textsByOwner(): Map<string, string[]> {
 export const graphSource: TemplateSource = {
   areas: AREAS,
 
-  async due({ scope, areas, covered, busy, force }) {
+  async due({ scope, areas, covered, busy, whole }) {
     const documents = new Map(
       loadDocuments(KINDS).map((document) => [
         `${document.kind}:${document.id}`,
@@ -78,7 +78,7 @@ export const graphSource: TemplateSource = {
     const texts = textsByOwner();
     const batch: CheckItem[] = [];
     for (const change of changesBetween({ from: 0, kinds: KINDS })) {
-      if (batch.length >= BATCH) break;
+      if (!whole && batch.length >= BATCH) break;
       const id = `${change.key.kind}:${change.key.id}`;
       if (!inScope(scope, change.key)) continue;
       if (areas && !areas.has(change.key.kind)) continue;
@@ -95,7 +95,7 @@ export const graphSource: TemplateSource = {
         )
         .digest('hex')
         .slice(0, 16);
-      if (!force && covered.get(subject)?.fingerprint === fingerprint) continue;
+      if (covered.get(subject)?.fingerprint === fingerprint) continue;
       batch.push({
         subject,
         entity: change.key,

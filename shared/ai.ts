@@ -108,14 +108,13 @@ export type AiMessagePart =
       text: string;
     }
   /**
-   * The run of a built-in check that opens its session: the entities it is
-   * about, by ref, and whether it looks at them again from the start.
+   * The run of a built-in check that opens its session, and the entities it
+   * is about, by ref.
    */
   | {
       type: 'template';
       templateId: string;
       scope?: string[];
-      force?: true;
     };
 
 /**

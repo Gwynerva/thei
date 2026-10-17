@@ -100,7 +100,6 @@ export function registerCheckTools(server: McpServer, context: McpCallContext) {
           areas: areas?.length ? new Set(areas) : undefined,
           covered: coverageOf(templateId),
           busy: busySubjects(templateId),
-          force: part?.force === true,
         });
         const given = db.transaction((tx) =>
           own.live()

@@ -194,7 +194,7 @@ async function run(
 /** What a check would be given now. */
 function due(
   key: AiBuiltinTemplateKey,
-  options: { scope?: Parameters<typeof runTemplate>[1]; force?: boolean } = {},
+  options: { scope?: Parameters<typeof runTemplate>[1]; whole?: boolean } = {},
 ) {
   return TEMPLATE_SOURCES[key].due({
     covered: coverageOf(id(key)),
@@ -360,7 +360,7 @@ describe('a run', () => {
     expect(coverageOf(id('graph')).size).toBe(11);
   });
 
-  it('looks at one entity from its ✦, and at it again when asked', async () => {
+  it('looks at one entity from its ✦, and over again once all of it is looked at', async () => {
     insert('pages', {
       pageUuid: 'pg-1',
       title: 'Notes',
@@ -380,17 +380,10 @@ describe('a run', () => {
     expect([...coverageOf(id('proofread')).keys()]).toEqual([
       `text:diary-entry:${DIARY}:diary-body`,
     ]);
-    expect(
-      await run('proofread', { about: [`diary-entry:${DAY}`] }),
-    ).toBeNull();
-    const again = await run('proofread', {
-      about: [`diary-entry:${DAY}`],
-      force: true,
-    });
+    // Nothing of it new: it is looked at from the start, by itself.
+    const again = await run('proofread', { about: [`diary-entry:${DAY}`] });
+    expect(again).not.toBe(scoped);
     expect(brief(again!)).toContain('Kuzova');
-    await expect(runTemplate(id('proofread'), { force: true })).rejects.toThrow(
-      /entities named/,
-    );
     // The page is still due for the whole archive, its title too.
     expect((await due('proofread')).map((item) => item.subject)).toEqual(
       expect.arrayContaining(['text:page:pg-1:page-body', 'fields:page:pg-1']),
@@ -547,6 +540,16 @@ describe('a ready-made request', () => {
       ['Look over', null],
       ['Project look', null],
     ]);
+  });
+
+  it('keeps the paragraphs of a request, one empty line between them', () => {
+    const own = saveTemplate(null, {
+      title: '  Two   parts  ',
+      instruction:
+        'First part.  \r\n\r\n\r\nSecond   part,\nits next line.\n\n',
+    });
+    expect(own.title).toBe('Two parts');
+    expect(own.instruction).toBe('First part.\n\nSecond part,\nits next line.');
   });
 
   it('opens the owner’s session, and is never run as a check is', async () => {
@@ -945,6 +948,22 @@ describe('the files of the archive', () => {
     );
   });
 
+  it('go by on a chosen entity a run at a time, over again once all are looked at', async () => {
+    const given = async () => {
+      const sessionUuid = await run('describe', {
+        about: [`project:${PROJECT}`],
+      });
+      return ['af-2', 'af-3', 'af-4', 'af-5'].filter((family) =>
+        brief(sessionUuid!).includes(`a-${family.slice(3)}`),
+      );
+    };
+    expect(await given()).toEqual(['af-3', 'af-4', 'af-5']);
+    expect(await given()).toEqual(['af-2']);
+    // All looked at: from the start, and on from there, never round the first.
+    expect(await given()).toEqual(['af-3', 'af-4', 'af-5']);
+    expect(await given()).toEqual(['af-2']);
+  });
+
   it('are kept as looked at when they could not be shown, until their bytes change', async () => {
     let asked = false;
     reply = () => {
@@ -1006,13 +1025,10 @@ describe('the files of the archive', () => {
     const sessionUuid = await run('describe', { about: ['asset:a-2'] });
     expect(findSession(sessionUuid!)!.title).toContain('file-2');
     expect(await subjects('describe')).not.toContain('file:af-2');
-    // Asked again, the file is looked at again.
-    expect(
-      await subjects('describe', {
-        scope: [{ kind: 'asset', id: 'a-2' }],
-        force: true,
-      } as never),
-    ).toEqual(['file:af-2']);
+    // Asked again, the file is looked at again from the start.
+    const again = await run('describe', { about: ['asset:a-2'] });
+    expect(again).not.toBe(sessionUuid);
+    expect(brief(again!)).toContain('a-2');
   });
 
   it('have their descriptions proofread, one taken from a proposal as it reads', async () => {

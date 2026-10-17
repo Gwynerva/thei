@@ -113,6 +113,29 @@ export function findTemplate(templateId: string): AiTemplateItem | undefined {
 function cleanLine(value: unknown, max: number, what: string): string {
   const text =
     typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
+  return checkedLength(text, max, what);
+}
+
+/**
+ * A request as the owner wrote it: its lines and paragraphs kept, the
+ * spaces at the ends of lines dropped, and at most one empty line between
+ * two paragraphs.
+ */
+function cleanParagraphs(value: unknown, max: number, what: string): string {
+  const text =
+    typeof value === 'string'
+      ? value
+          .replace(/\r\n?/g, '\n')
+          .split('\n')
+          .map((line) => line.replace(/[^\S\n]+/g, ' ').trimEnd())
+          .join('\n')
+          .replace(/\n{3,}/g, '\n\n')
+          .trim()
+      : '';
+  return checkedLength(text, max, what);
+}
+
+function checkedLength(text: string, max: number, what: string): string {
   if (!text) fail(`Write its ${what}.`);
   if (text.length > max) fail(`Its ${what} is at most ${max} characters.`);
   return text;
@@ -153,7 +176,7 @@ export function saveTemplate(
         instruction:
           input.instruction === undefined && current
             ? current.instruction
-            : cleanLine(
+            : cleanParagraphs(
                 input.instruction,
                 AI_TEMPLATE_INSTRUCTION_MAX,
                 'request',

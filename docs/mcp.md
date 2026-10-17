@@ -183,13 +183,15 @@ counted, never what it writes: a fix the owner accepts leaves what it
 mended checked, while the owner's own change beside it waits for the next
 run, and a relation applied does not hand its entity back.
 
-A check runs from its row over the whole archive, or is sent from a new
-session or an entity's ✦ like any request: the entity in hand and the ones
-the words mention bound it — and may be looked at again from the start —
-and words added to the check's own narrow it further, «only the captions of
-files»: its model reads them and asks for what they name with
-`check_batch`, and is given only what of that is due. Of a check the owner
-chooses only its model; to rewrite its words, they copy it.
+A check runs from its row over what is new or changed in the whole
+archive, or is sent from a new session or an entity's ✦ like any request:
+the entity in hand and the ones the words mention bound it, and once all of
+them is looked at, the next run lets that go and goes over them again from
+the start, a run's worth at a time. Words added to the check's own narrow
+it further, «only the captions of files»: its model reads them and asks for
+what they name with `check_batch`, and is given only what of that is due.
+Of a check the owner chooses only its model; to rewrite its words, they
+copy it. A request keeps its paragraphs as written.
 
 The owner's own templates are ready-made requests: opened as a new session
 with their words written in, the entity named already when it comes from

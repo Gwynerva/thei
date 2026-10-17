@@ -45,7 +45,7 @@ function itemOf(link: BrokenLink): Omit<CheckItem, 'shown'> | undefined {
 export const linksSource: TemplateSource = {
   areas: { links: 'links inside texts that lead nowhere now' },
 
-  async due({ scope, covered, busy, force }) {
+  async due({ scope, covered, busy, whole }) {
     const owners = entitiesOf(withSections(scope));
     // A run about files alone has no texts to look in.
     if (owners && !owners.length) return [];
@@ -59,13 +59,10 @@ export const linksSource: TemplateSource = {
         if (!item) continue;
         broken.add(item.subject);
         if (busy.has(item.subject)) continue;
-        if (
-          !force &&
-          covered.get(item.subject)?.fingerprint === item.fingerprint
-        )
+        if (covered.get(item.subject)?.fingerprint === item.fingerprint)
           continue;
         batch.push({ ...item, shown: brokenLinkText(link) });
-        if (batch.length >= BATCH) return batch;
+        if (!whole && batch.length >= BATCH) return batch;
       }
       cursor = page.next;
     } while (cursor);

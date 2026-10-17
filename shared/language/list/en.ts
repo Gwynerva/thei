@@ -1793,9 +1793,9 @@ export default defineI18nBase({
     content_block_add: 'Add a block',
     content_block_settings: 'Block settings. Drag to move',
     content_block_toolbox: 'Blocks',
-    ai_template_run: 'Check what is new',
-    ai_template_run_again: 'Check again',
+    ai_template_run: 'Check what is new in the archive',
     ai_template_nothing_new: (title) => `“${title}”: nothing new to check`,
+    ai_template_nothing_here: (title) => `“${title}”: nothing here to check`,
     ai_template_edit: 'Settings',
     ai_template_running: 'running now',
     ai_template_never_run: 'not run yet',
@@ -1806,8 +1806,6 @@ export default defineI18nBase({
     ai_template_copied: 'Copy made: a ready-made request of yours',
     ai_template_modal_title: 'Template',
     ai_template_modal_new: 'New template',
-    ai_template_builtin_note:
-      'Built-in: new versions of Thei improve how it checks, and it keeps count of what it has checked. Yours here are its model and where it is offered. To make a request of your own from its words, make a copy.',
     ai_template_name: 'Name',
     ai_template_name_placeholder: 'For example, “A week of travel”',
     ai_template_instruction: 'Request',
@@ -1953,22 +1951,27 @@ export default defineI18nBase({
       proofread: {
         title: 'Mistakes in the text',
         instruction:
-          'Find and fix obvious mistakes in the text. Where in doubt, comment and leave the choice to me. Only what was not proofread yet or changed since. Do not correct the author’s style of telling or the swearing. You check that the text is written correctly, not its “propriety”, “beauty”, “conciseness” or other subjective criteria!',
+          'Find and fix obvious mistakes in the text. Where in doubt, comment and leave the choice to me. Only what was not proofread yet or changed since.\n\n' +
+          'Do not correct the author’s style of telling or the swearing. You check that the text is written correctly, not its “propriety”, “beauty”, “conciseness” or other subjective criteria!',
       },
       describe: {
         title: 'File descriptions',
         instruction:
-          'Add descriptions to the files that have none. When you write one, look not only at the file itself but at the places it is used in (the entity it belongs to, captions, the text around it and so on). If you are not sure, or cannot describe a file for any reason, tell me.',
+          'Add descriptions to the files that have none. When you write one, look not only at the file itself but at the places it is used in (the entity it belongs to, captions, the text around it and so on).\n\n' +
+          'If you are not sure, or cannot describe a file for any reason, tell me.',
       },
       links: {
         title: 'Broken links',
         instruction:
-          'Find the broken internal links. For each, work out why it broke: the entity it led to was deleted, the heading it led to was removed or renamed, and so on. Try to mend it, finding a sure replacement that keeps what the link meant. Taking the link off altogether is the last resort.',
+          'Find the broken internal links. For each, work out why it broke: the entity it led to was deleted, the heading it led to was removed or renamed, and so on.\n\n' +
+          'Try to mend it, finding a sure replacement that keeps what the link meant. Taking the link off altogether is the last resort.',
       },
       graph: {
         title: 'Relations and links between entities',
         instruction:
-          'Look over the relations and links between projects, events and diary entries. Propose the relations that are missing, and removing the weak ones — those without good grounds. Every relation must be well grounded: relations build the graph of the whole site, and it should hold no clutter. A mention of an entity, or a link to it, does not yet make a relation. But a diary entry that plainly speaks of working on a project or of taking part in an event almost surely makes one. Links are simpler: look in the texts for mentions of other entities without a link and, where you are quite sure a link belongs, propose it — to the sections of projects and to particular headings too. A link that is plainly wrong or redundant, propose removing.',
+          'Look over the relations and links between projects, events and diary entries.\n\n' +
+          'Propose the relations that are missing, and removing the weak ones — those without good grounds. Every relation must be well grounded: relations build the graph of the whole site, and it should hold no clutter. A mention of an entity, or a link to it, does not yet make a relation. But a diary entry that plainly speaks of working on a project or of taking part in an event almost surely makes one.\n\n' +
+          'Links are simpler: look in the texts for mentions of other entities without a link and, where you are quite sure a link belongs, propose it — to the sections of projects and to particular headings too. A link that is plainly wrong or redundant, propose removing.',
       },
     },
     ai_template_copy_title: (title) => `${title} (copy)`,

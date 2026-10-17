@@ -16,7 +16,12 @@ import {
   linkSessionEntities,
 } from '../sessions/store';
 import { CHECK_BATCH_TOOL } from '../../mcp/tools/checks';
-import { busySubjects, coverageOf, holdBatch } from './coverage';
+import {
+  busySubjects,
+  coverageOf,
+  forgetSubjects,
+  holdBatch,
+} from './coverage';
 import { TEMPLATE_SOURCES, type CheckItem } from './sources';
 import { findTemplate, recordRun } from './store';
 
@@ -69,8 +74,6 @@ export async function runTemplate(
     about?: readonly string[];
     /** The owner's words the run was asked with, editing Markdown. */
     request?: string;
-    /** The entities again from the start, looked at before or not. */
-    force?: boolean;
     now?: number;
   } = {},
 ): Promise<{ sessionUuid: string | null }> {
@@ -82,19 +85,38 @@ export async function runTemplate(
   if (!THEI_SERVER.config.mcp.enabled) fail('AI is off.');
   if (!sessionModel(template.model)) fail('No model is set up to answer.');
   const scope = scopeOf(options.about);
-  if (options.force && !scope)
-    fail('Only the entities named are checked again from the start.');
   const source = TEMPLATE_SOURCES[key];
   const request = options.request?.trim() ?? '';
   const worded =
     plainWords(request) !== '' &&
     plainWords(request) !== plainWords(template.instruction);
-  const due = await source.due({
-    scope,
-    covered: coverageOf(templateId),
-    busy: busySubjects(templateId),
-    force: options.force,
-  });
+  const dueNow = () =>
+    source.due({
+      scope,
+      covered: coverageOf(templateId),
+      busy: busySubjects(templateId),
+    });
+  let due = await dueNow();
+  // Entities the owner chose, all of them looked at already, are looked at
+  // again from the start: what was looked at of them is let go, and the
+  // runs go over them as over anything new, a run's worth at a time. The
+  // whole archive is only ever looked at for what is new.
+  if (!due.length && scope) {
+    const every = await source.due({
+      scope,
+      covered: new Map(),
+      busy: new Set(),
+      whole: true,
+    });
+    const busy = busySubjects(templateId);
+    if (every.length && !every.some((item) => busy.has(item.subject))) {
+      forgetSubjects(
+        templateId,
+        every.map((item) => item.subject),
+      );
+      due = await dueNow();
+    }
+  }
   if (!due.length) return { sessionUuid: null };
 
   const now = options.now ?? Date.now();
@@ -124,7 +146,6 @@ export async function runTemplate(
       type: 'template',
       templateId,
       ...(scope ? { scope: scope.map(targetRef) } : {}),
-      ...(options.force ? { force: true } : {}),
     };
     insertMessage(
       tx,

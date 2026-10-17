@@ -32,17 +32,16 @@ export const describeSource: TemplateSource = {
     documents: 'documents, archives and every other file',
   },
 
-  async due({ scope, areas, covered, busy, force }) {
+  async due({ scope, areas, covered, busy, whole }) {
     const batch: CheckItem[] = [];
     for (const family of fileFamilies(withSections(scope))) {
-      if (batch.length >= BATCH) break;
+      if (!whole && batch.length >= BATCH) break;
       // A described file is the owner's: proofreading goes over its words.
       if (family.description || !family.placed) continue;
       if (areas && !areas.has(AREA_OF[family.type])) continue;
       const subject = `file:${family.familyUuid}`;
       if (busy.has(subject)) continue;
-      if (!force && covered.get(subject)?.fingerprint === family.originalHash)
-        continue;
+      if (covered.get(subject)?.fingerprint === family.originalHash) continue;
       let shown: string;
       try {
         shown = fileFacts(family.assetUuid);

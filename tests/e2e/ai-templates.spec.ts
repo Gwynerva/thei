@@ -148,7 +148,7 @@ test('runs a check from its row, and says when nothing new is left', async ({
   expect(asked).toContain('Mend these links that lead nowhere');
 });
 
-test('runs a check sent from an entity’s ✦, and looks at it again when asked', async ({
+test('runs a check sent from an entity’s ✦, and over again once it is all looked at', async ({
   page,
 }) => {
   await open(page, `/admin/events/${eventUuid}/edit/`);
@@ -167,15 +167,11 @@ test('runs a check sent from an entity’s ✦, and looks at it again when asked
   await expect(sent.locator('[data-ai-entity-stop]')).toHaveCount(0, {
     timeout: 20_000,
   });
-  // Looked at already: nothing new, the words kept, and a way to look again.
+  // All of it looked at already: sent again, it is looked at from the start.
   await check.click();
   await field.press('Enter');
-  await expect(toast(page)).toContainText(
-    '“Mistakes in the text”: nothing new to check',
-  );
-  await expect(field).toContainText('Find and fix obvious mistakes');
-  await toast(page).getByRole('button', { name: 'Check again' }).click();
   await expect(sent).toBeVisible();
+  await expect(toast(page)).toHaveCount(0);
   await expect(sent.locator('[data-ai-entity-stop]')).toHaveCount(0, {
     timeout: 20_000,
   });

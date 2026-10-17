@@ -276,16 +276,8 @@ useModalCloseGuard(
         <Icon name="warning" class="mr-xs" />{{ error }}
       </p>
 
-      <!-- On the modal's own ground: a note, and the check's words quoted. -->
-      <p
-        v-if="builtin"
-        class="flex items-start gap-xs text-xs leading-normal text-text-2"
-      >
-        <Icon name="hint" class="mt-0.5 shrink-0" />{{
-          phrase.ai_template_builtin_note
-        }}
-      </p>
-      <Field v-else>
+      <!-- A check's words are the code's: quoted on the modal's own ground. -->
+      <Field v-if="!builtin">
         <FieldLabel required>{{ phrase.ai_template_name }}</FieldLabel>
         <FieldInput
           v-model="draft.title"
@@ -302,7 +294,8 @@ useModalCloseGuard(
         }}</FieldLabel>
         <p
           v-if="builtin && template"
-          class="border-l-2 border-border-2 pl-sm leading-normal"
+          class="border-l-2 border-border-2 pl-sm leading-normal
+            whitespace-pre-line"
         >
           {{ publicText(template.instruction) }}
         </p>

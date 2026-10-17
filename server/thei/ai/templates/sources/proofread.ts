@@ -267,8 +267,8 @@ async function aboutTexts(keys: readonly EntityKey[]) {
 
 /** What a run gives, its pieces counted against one budget. */
 class Budget {
-  room = BATCH_CHARS;
   taken = 0;
+  constructor(public room = BATCH_CHARS) {}
   /** At least one piece a run, however long. */
   fits(length: number) {
     return this.room > 0 && (!this.taken || length <= this.room);
@@ -281,7 +281,7 @@ class Budget {
 
 /** Of the entities' short texts, those not proofread as they read now. */
 function shortItems(input: DueInput, budget: Budget): CheckItem[] {
-  const { scope, areas, covered, busy, force } = input;
+  const { scope, areas, covered, busy } = input;
   const entities = [...shortTexts(entitiesOf(scope)).values()].sort(
     (left, right) => right.at - left.at,
   );
@@ -292,7 +292,7 @@ function shortItems(input: DueInput, budget: Budget): CheckItem[] {
     const subject = shortSubject(entity.key);
     if (busy.has(subject)) continue;
     const parts = entity.texts.map(shortPart);
-    const kept = new Set(force ? [] : (covered.get(subject)?.parts ?? []));
+    const kept = new Set(covered.get(subject)?.parts ?? []);
     const given = entity.texts.filter((text, index) => {
       if (kept.has(parts[index]!)) return false;
       if (areas && !areas.has(text.area)) return false;
@@ -325,7 +325,7 @@ function descriptionSubject(familyUuid: string) {
 
 /** Of the files' descriptions, those not proofread as they read now. */
 function descriptionItems(input: DueInput, budget: Budget): CheckItem[] {
-  const { scope, areas, covered, busy, force } = input;
+  const { scope, areas, covered, busy } = input;
   if (areas && !areas.has('descriptions')) return [];
   const items: CheckItem[] = [];
   for (const family of fileFamilies(scope)) {
@@ -334,7 +334,7 @@ function descriptionItems(input: DueInput, budget: Budget): CheckItem[] {
     const subject = descriptionSubject(family.familyUuid);
     const part = hashOf(family.description.replace(/\s+/g, ' ').trim());
     if (busy.has(subject)) continue;
-    if (!force && covered.get(subject)?.parts.includes(part)) continue;
+    if (covered.get(subject)?.parts.includes(part)) continue;
     if (!budget.fits(family.description.length)) continue;
     budget.take(family.description.length);
     items.push({
@@ -353,7 +353,7 @@ async function textItems(
   input: DueInput,
   budget: Budget,
 ): Promise<CheckItem[]> {
-  const { scope, areas, covered, busy, force } = input;
+  const { scope, areas, covered, busy } = input;
   const picked: {
     text: StoredText;
     subject: string;
@@ -368,7 +368,7 @@ async function textItems(
     if (busy.has(subject)) continue;
     const parts = paragraphsOf(text.markdown);
     const hashes = parts.map(paragraphHash);
-    const kept = new Set(force ? [] : (covered.get(subject)?.parts ?? []));
+    const kept = new Set(covered.get(subject)?.parts ?? []);
     const given = new Set<number>();
     parts.forEach((part, index) => {
       if (kept.has(hashes[index]!)) return;
@@ -498,7 +498,7 @@ export const proofreadSource: TemplateSource = {
 
   async due(input) {
     const scoped = { ...input, scope: withSections(input.scope) };
-    const budget = new Budget();
+    const budget = new Budget(input.whole ? Infinity : BATCH_CHARS);
     const short = shortItems(scoped, budget);
     const described = descriptionItems(scoped, budget);
     return [...short, ...described, ...(await textItems(scoped, budget))];

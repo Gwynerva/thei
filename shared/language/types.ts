@@ -1351,8 +1351,8 @@ export type LanguagePhrases = {
   /** The grid of blocks the "+" opens. */
   content_block_toolbox: string;
   ai_template_run: string;
-  ai_template_run_again: string;
   ai_template_nothing_new: (title: string) => string;
+  ai_template_nothing_here: (title: string) => string;
   ai_template_edit: string;
   ai_template_running: string;
   ai_template_never_run: string;
@@ -1363,7 +1363,6 @@ export type LanguagePhrases = {
   ai_template_copied: string;
   ai_template_modal_title: string;
   ai_template_modal_new: string;
-  ai_template_builtin_note: string;
   ai_template_name: string;
   ai_template_name_placeholder: string;
   ai_template_instruction: string;
