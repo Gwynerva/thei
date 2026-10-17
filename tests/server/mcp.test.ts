@@ -227,6 +227,7 @@ describe('the MCP endpoint', () => {
       'search_archive',
       'tag_candidates',
       'outline',
+      'links_in',
       'broken_links',
       'life_timeline',
       'read_digests',
@@ -525,6 +526,7 @@ describe('proposing over MCP', () => {
       life_timeline: 'reads',
       tag_candidates: 'reads',
       outline: 'reads',
+      links_in: 'reads',
       broken_links: 'reads',
       file_status: 'reads',
       find_files: 'reads',
@@ -709,6 +711,84 @@ describe('proposing over MCP', () => {
       link('Parapet again', `[Parapet](thei:project/${PROJECT}) again`),
     ]);
     expect(proposedIn(below)).toHaveLength(1);
+  });
+
+  it('lists every link of an entity, and takes off a repeat only with why', async () => {
+    const reader = handlerFor(['read']);
+    await propose(
+      handlerFor(['read', 'edit']),
+      [
+        {
+          kind: 'write',
+          target: 'diary-entry:2026-10-13',
+          text: 'body',
+          mode: 'replace',
+          markdown: [
+            `[Parapet](thei:project/${PROJECT}) first.`,
+            '',
+            `[Parapet](thei:project/${PROJECT}) once more.`,
+            '',
+            '## Evening',
+            '',
+            'We sat on the pier and talked about the boss until the lights went out.',
+          ].join('\n'),
+        },
+      ],
+      { apply: true },
+    );
+    // A link is the few words that say where it leads, never the sentence.
+    const sentence =
+      'We sat on the pier and talked about the boss until the lights went out.';
+    expect(
+      await propose(reader, [
+        {
+          kind: 'revise',
+          target: 'diary-entry:2026-10-13',
+          text: 'body',
+          mode: 'proofread',
+          corrections: [
+            {
+              find: sentence,
+              replace: `[${sentence}](thei:project/${PROJECT})`,
+              category: 'link',
+              reason: 'It is about it',
+            },
+          ],
+        },
+      ]),
+    ).toContain('not a sentence');
+    const again = (
+      await tool(reader, 'links_in', { ref: 'diary-entry:2026-10-13' })
+    ).content[0]!.text.split('\n');
+    expect(again[0]).not.toContain('repeats');
+    expect(again[1]).toContain('repeats a link to it earlier in its part');
+    const repeat = /link (\S+) /.exec(again[1]!)![1]!;
+    const takeOff = (reason: string) =>
+      propose(reader, [
+        {
+          kind: 'revise',
+          target: 'diary-entry:2026-10-13',
+          text: 'body',
+          mode: 'relink',
+          relinks: [{ link: repeat, to: null, reason }],
+        },
+      ]);
+    expect(await takeOff('')).toContain('goes only with its reason');
+    expect(proposedIn(await takeOff('A repeat in its part'))).toHaveLength(1);
+    // Pointed where it leads already, it changes nothing.
+    expect(
+      await propose(reader, [
+        {
+          kind: 'revise',
+          target: 'diary-entry:2026-10-13',
+          text: 'body',
+          mode: 'relink',
+          relinks: [
+            { link: repeat, to: `thei:project/${PROJECT}`, reason: 'Same' },
+          ],
+        },
+      ]),
+    ).toContain('it leads there already');
   });
 
   it("leaves the owner's own words alone, but lets them become links", async () => {

@@ -223,6 +223,7 @@ a restart cut off says so.
 | `relation_graph`                  | The relations around an entity.                                      |
 | `tag_candidates`                  | Entities a tag might belong on.                                      |
 | `outline`                         | The headings and sections a link may lead to inside an entity.       |
+| `links_in`                        | Every link of an entity, where it leads, and which repeat in a part. |
 | `broken_links`                    | Links leading nowhere now, with where each may lead instead.         |
 | `read_memory`                     | What is remembered of entities or a kind, and the dictionary.        |
 | `read_digests`, `write_digest`    | The model's own few lines about entities.                            |

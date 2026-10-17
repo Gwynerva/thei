@@ -1,5 +1,5 @@
 import { theiLinkUrl } from '#layers/thei/shared/content-edit-markdown/links';
-import { and, asc, gt, inArray } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray } from 'drizzle-orm';
 import type { ContentEntityOutline } from '#layers/thei/shared/admin/content-entity-outline';
 import type { ContentOutputData } from '#layers/thei/shared/content';
 import {
@@ -216,4 +216,88 @@ export async function brokenLinkAt(data: ContentOutputData, id: string) {
   if (!link) return undefined;
   const outlines = outlineCache();
   return { link, problem: await linkProblem(link, outlines), outlines };
+}
+
+/** A link of an entity's texts, as a model is told of it to mend or drop. */
+export interface EntityLink {
+  /** The text's name. */
+  text: string;
+  id: string;
+  kind: 'inline' | 'card';
+  words: string;
+  /** Where it leads: `thei:<kind>/<id>#place`, and how that place reads. */
+  to: string;
+  title?: string;
+  problem?: BrokenLinkProblem;
+  /** It leads to an entity linked already earlier in its part of the text. */
+  repeat: boolean;
+  private: boolean;
+}
+
+/** How a place a link leads to reads: the entity, and the place inside it. */
+export async function linkTargetTitle(
+  target: ContentLinkTarget,
+  outlines: Outlines,
+): Promise<string> {
+  const outline = await outlines(target.entityType, target.entityId);
+  if (!outline) return '';
+  const fragment = target.fragment;
+  if (!fragment) return outline.title;
+  const heading = outline.headings.find((item) => item.id === fragment);
+  return `${outline.title} › ${heading?.title ?? contentPlaceLabel(fragment)}`;
+}
+
+/**
+ * Every link of an entity's texts to the site's own entities, in the order
+ * they stand: where each leads, whether it leads nowhere, and whether it
+ * repeats a link to the same entity earlier in its part of the text — from
+ * one heading of the second level to the next — where a link stands once.
+ */
+export async function entityLinks(owner: {
+  kind: EntityKind;
+  id: string;
+}): Promise<EntityLink[]> {
+  const { db, schema } = THEI_SERVER.useDb();
+  const rows = db
+    .select({ slot: schema.content.slot, data: schema.content.data })
+    .from(schema.content)
+    .where(
+      and(
+        eq(schema.content.ownerType, owner.kind as never),
+        eq(schema.content.ownerId, owner.id),
+      ),
+    )
+    .all() as { slot: string; data: ContentOutputData }[];
+  const outlines = outlineCache();
+  const found: EntityLink[] = [];
+  for (const row of rows) {
+    const text = entityTextOfSlot(owner.kind, row.slot);
+    if (!text) continue;
+    const partOf: number[] = [];
+    row.data.blocks.forEach((block, index) => {
+      const opens =
+        block.type === 'header' &&
+        (block.data as { level?: number }).level === 2;
+      partOf[index] = (partOf[index - 1] ?? 0) + (opens ? 1 : 0);
+    });
+    const seen = new Set<string>();
+    for (const link of locateContentEntityLinks(row.data)) {
+      const entity = `${partOf[link.block]}:${link.entityType}:${link.entityId}`;
+      const problem = await linkProblem(link, outlines);
+      const title = await linkTargetTitle(link, outlines);
+      found.push({
+        text: text.name,
+        id: link.id,
+        kind: link.kind,
+        words: link.words,
+        to: theiLinkUrl(link),
+        ...(title ? { title } : {}),
+        ...(problem ? { problem } : {}),
+        repeat: link.kind === 'inline' && seen.has(entity),
+        private: link.private,
+      });
+      seen.add(entity);
+    }
+  }
+  return found;
 }

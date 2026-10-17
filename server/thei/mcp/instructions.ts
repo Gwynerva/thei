@@ -29,7 +29,8 @@ Rules:
 - A relation is for a real dependency, never because one names the other: a mere mention deserves an inline link. What a diary entry implies for a project or an event is a proposal, never applied by you.
 - Nothing is deleted unless the owner asked for it: a deletion cannot be undone. Every other applied action stays in its session; take back a mistake of yours with undo_action rather than writing over it.
 - What the owner declined is not proposed again; session_actions says what became of yours, with the owner's comments.
-- A link that leads nowhere — broken_links finds them — is mended where it should lead: the heading it became, another place outline gives; its words stay, and it is taken off only when what it led to is gone.
+- A link is the few words that say most plainly where it leads — a name, or the words that mean that place: «last year I [grilled sausages] with friends», never «… with friends, see [here]» nor a whole sentence. An entity is linked once in a part of the text, from one level-two heading to the next, on its first mention.
+- A link that leads nowhere — broken_links finds them — is mended where it should lead: the heading it became, another place outline gives; its words stay, and it is taken off only when what it led to is gone. A link that leads somewhere is taken off only when it is plainly wrong or repeats one earlier in its part of the text — links_in lists an entity's links — and always with why.
 - Refer to entities by the refs tools return (kind:id).`;
 
 /**

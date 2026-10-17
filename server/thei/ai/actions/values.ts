@@ -89,6 +89,13 @@ export function assetIdsIn(value: unknown, into = new Set<string>()) {
 }
 
 /**
+ * The most words a model may make a link: a link is the few words that say
+ * where it leads — a name, the words that mean that place — never a whole
+ * sentence, as on the web at large.
+ */
+const LINK_WORDS_MAX = 8;
+
+/**
  * A mention made a link: the words stay as they are, and only the markup of
  * a link to an entity of the site is new. Its stored markup is worked out
  * here, diary days named by id, so it is applied as it is.
@@ -102,6 +109,14 @@ export async function prepareLinkCorrection(
     return {
       problem:
         'a link keeps every word as it is and only makes some of them a link to an entity of this site: "[Parapet](thei:project/<id>)".',
+    };
+  if (
+    [...correction.replace.matchAll(/\[([^\]]*)\]\(thei:/g)].some(
+      (match) => match[1]!.trim().split(/\s+/).length > LINK_WORDS_MAX,
+    )
+  )
+    return {
+      problem: `a link is the few words that say most plainly where it leads — at most ${LINK_WORDS_MAX} — not a sentence.`,
     };
   const prepared = prepareTextEdit(correction);
   const [outcome] = applyPreparedTextEdits(data, [prepared]).outcomes;

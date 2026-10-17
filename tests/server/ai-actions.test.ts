@@ -845,7 +845,7 @@ describe('a text edit', () => {
       expect(linksBlock()).toBe(before);
     });
 
-    it('mends only what is broken, as only a gone target may lose its link', async () => {
+    it('refuses a relink that leads where it did, or names nothing', async () => {
       const { results } = await propose(session(), {
         kind: 'revise',
         target: 'diary-entry:2026-10-13',
@@ -853,7 +853,7 @@ describe('a text edit', () => {
         mode: 'relink',
         relinks: [
           { link: 'b3/0/0', to: null },
-          { link: 'b3/0/2', to: `thei:project/${PROJECT}` },
+          { link: 'b3/0/2', to: `thei:project/${PROJECT}#outcomes` },
           { link: 'b3/0/1', to: `thei:project/${PROJECT}#nowhere` },
           { link: 'b3/0/9', to: `thei:project/${PROJECT}` },
         ],
@@ -863,7 +863,7 @@ describe('a text edit', () => {
       });
       const refused = (results[0] as { refused: string }).refused;
       expect(refused).toMatch(/b3\/0\/0: what it led to is still there/);
-      expect(refused).toMatch(/b3\/0\/2: it leads where it says/);
+      expect(refused).toMatch(/b3\/0\/2: it leads there already/);
       expect(refused).toMatch(/b3\/0\/1: .*no heading of it has that anchor/);
       expect(refused).toMatch(/b3\/0\/9: no link stands there now/);
     });

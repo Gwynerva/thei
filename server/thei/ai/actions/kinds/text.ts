@@ -40,7 +40,6 @@ import {
   parseTheiLinkUrl,
   theiLinkUrl,
 } from '#layers/thei/shared/content-edit-markdown/links';
-import { contentPlaceLabel } from '#layers/thei/shared/content-headings';
 import {
   contentLinkFrom,
   contentLinkLeads,
@@ -51,6 +50,7 @@ import {
 import {
   brokenLinkAt,
   linkProblem,
+  linkTargetTitle,
   outlineCache,
 } from '../../../content-links/broken';
 import { describeHistoryData } from '../../../content/history';
@@ -307,8 +307,6 @@ const relinkInput = z.object({
   reason: z.string().default(''),
 });
 
-type Outlines = ReturnType<typeof outlineCache>;
-
 /** A target as a model names it, a diary entry by its day too. */
 function linkTarget(ref: string): ContentLinkTarget | undefined {
   const parsed = parseTheiLinkUrl(ref);
@@ -317,21 +315,12 @@ function linkTarget(ref: string): ContentLinkTarget | undefined {
   return key ? { ...parsed, entityId: key.id } : undefined;
 }
 
-/** How a target reads: the entity, and the place inside it. */
-async function targetTitle(target: ContentLinkTarget, outlines: Outlines) {
-  const outline = await outlines(target.entityType, target.entityId);
-  if (!outline) return '';
-  const fragment = target.fragment;
-  if (!fragment) return outline.title;
-  const heading = outline.headings.find((item) => item.id === fragment);
-  return `${outline.title} › ${heading?.title ?? contentPlaceLabel(fragment)}`;
-}
-
 /**
- * Links of a text that lead nowhere now, each pointed where it should lead:
- * found where the model says it stands, and checked by the code — it is
- * broken now, its new target is there with the place it names, and only an
- * entity gone lets the words lose their link. A link block is pointed
+ * Links of a text pointed where they should lead, or taken off: found where
+ * the model says they stand, and checked by the code — the new target is
+ * there with the place it names; a link that leads nowhere loses its words'
+ * link only when what it led to is gone, and one that leads somewhere only
+ * with the reason it is wrong or a repeat. A link block is pointed
  * elsewhere, never taken off.
  */
 async function prepareRelinks(
@@ -351,11 +340,7 @@ async function prepareRelinks(
     }
     const found = await brokenLinkAt(data, relink.link);
     if (!found) {
-      why('no link stands there now: read broken_links again.');
-      continue;
-    }
-    if (!found.problem) {
-      why('it leads where it says: there is nothing to mend.');
+      why('no link stands there now: read links_in or broken_links again.');
       continue;
     }
     let to: ContentLinkTarget | null = null;
@@ -364,9 +349,15 @@ async function prepareRelinks(
         why('a link block is pointed elsewhere, never taken off.');
         continue;
       }
-      if (found.problem !== 'entity-gone') {
+      if (found.problem === 'heading-gone') {
         why(
           'what it led to is still there: point it at the whole of it or at another heading, rather than take the link off.',
+        );
+        continue;
+      }
+      if (!found.problem && !relink.reason.trim()) {
+        why(
+          'a link that leads somewhere goes only with its reason: plainly wrong, or a repeat in its part of the text.',
         );
         continue;
       }
@@ -394,6 +385,10 @@ async function prepareRelinks(
         why('a text does not link to its own entity.');
         continue;
       }
+      if (theiLinkUrl(target) === theiLinkUrl(found.link)) {
+        why('it leads there already.');
+        continue;
+      }
       to = target;
     }
     const place = contentLinkPlace(data, found.link);
@@ -412,8 +407,8 @@ async function prepareRelinks(
       type: 'relink',
       ...place,
       to: to && theiLinkUrl(to),
-      fromTitle: await targetTitle(found.link, found.outlines),
-      ...(to ? { toTitle: await targetTitle(to, found.outlines) } : {}),
+      fromTitle: await linkTargetTitle(found.link, found.outlines),
+      ...(to ? { toTitle: await linkTargetTitle(to, found.outlines) } : {}),
       certainty: relink.certainty,
       reason: relink.reason.slice(0, 200),
     });
@@ -490,7 +485,7 @@ function partStates(
 export const reviseAction: AiActionKindDef<'revise'> = {
   kind: 'revise',
   reference:
-    'An edit of the owner’s text, decided part by part. text, then either mode proofread with corrections [{ find, replace, category, certainty?, reason }] — local fixes of clear mistakes, find standing once in the text, never typography; category link makes a mention a link to an entity, every word kept — only its first mention in a part of the text, from one level-two heading to the next — or mode relink with relinks [{ link, to, certainty?, reason }]: a link broken_links names (link is its id there) pointed at to, thei:<kind>/<id>#<anchor> — the heading it became, or another place outline gives — or, only when what it led to is gone, to null: its words kept without the link; or mode order with markdown: the whole text with its blocks moved, split, given headings or a repeat dropped, nothing reworded, with expectedVersion (the version you read), removals [{ quote, reason, duplicateOf? }] and comments [{ quote?, kind, comment }].',
+    'An edit of the owner’s text, decided part by part. text, then either mode proofread with corrections [{ find, replace, category, certainty?, reason }] — local fixes of clear mistakes, find standing once in the text, never typography; category link makes a mention a link to an entity, every word kept: the few words that say most plainly where it leads, never a sentence nor a «here» — only its first mention in a part of the text, from one level-two heading to the next — or mode relink with relinks [{ link, to, certainty?, reason }]: a link by its id — broken_links names those that lead nowhere, links_in every link of an entity — pointed at to, thei:<kind>/<id>#<anchor> — the heading it became, or another place outline gives — or to null: its words kept without the link, when what it led to is gone, or with the reason a link that leads somewhere is plainly wrong or a repeat in its part of the text; or mode order with markdown: the whole text with its blocks moved, split, given headings or a repeat dropped, nothing reworded, with expectedVersion (the version you read), removals [{ quote, reason, duplicateOf? }] and comments [{ quote?, kind, comment }].',
   schema: z.object({
     text: z.string(),
     mode: z.enum(['proofread', 'relink', 'order']),
@@ -632,7 +627,7 @@ export const reviseAction: AiActionKindDef<'revise'> = {
             } as ContentOutputBlock,
           ],
         });
-        const toTitle = made ? await targetTitle(made, outlines) : '';
+        const toTitle = made ? await linkTargetTitle(made, outlines) : '';
         parts.push({
           id: `c${parts.length + 1}`,
           type: 'correction',

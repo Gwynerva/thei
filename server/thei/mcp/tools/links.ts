@@ -2,7 +2,11 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { isContentEntityType } from '#layers/thei/shared/content-link';
 import { entityOutline } from '../../content-links/anchors';
-import { scanBrokenLinks, type BrokenLink } from '../../content-links/broken';
+import {
+  entityLinks,
+  scanBrokenLinks,
+  type BrokenLink,
+} from '../../content-links/broken';
 import { READS } from '../annotations';
 import type { McpCallContext } from '../context';
 import { resolveRef } from '../entities';
@@ -27,9 +31,10 @@ export function brokenLinkText(item: BrokenLink): string {
 }
 
 /**
- * The places inside an entity a link may lead to, and the links of the
- * archive that lead nowhere now, with where each may lead instead. Both
- * read; a link is mended with `propose` — revise, mode relink.
+ * The places inside an entity a link may lead to, its links, and the links
+ * of the archive that lead nowhere now, with where each may lead instead.
+ * All read; a link is mended or taken off with `propose` — revise, mode
+ * relink.
  */
 export function registerLinkTools(server: McpServer, _context: McpCallContext) {
   server.registerTool(
@@ -64,6 +69,40 @@ export function registerLinkTools(server: McpServer, _context: McpCallContext) {
           ),
         ];
         return toolResult(lines.join('\n'));
+      }),
+  );
+
+  server.registerTool(
+    'links_in',
+    {
+      title: 'The links of an entity',
+      description:
+        'Every link of an entity’s texts to the site’s own entities, in the ' +
+        'order they stand, each by its id with where it leads, whether it ' +
+        'leads nowhere, and whether it repeats a link to the same entity ' +
+        'earlier in its part of the text — a part links an entity once. A ' +
+        'link is pointed elsewhere or taken off with propose: revise, mode ' +
+        'relink.',
+      inputSchema: z.object({
+        ref: z
+          .string()
+          .describe('project:<id>, event:<id>, diary-entry:<day>, …'),
+      }),
+      annotations: READS,
+    },
+    ({ ref }) =>
+      guardTool(async () => {
+        const key = resolveRef(ref);
+        const links = await entityLinks(key);
+        if (!links.length) return toolResult(`${ref} links nowhere.`);
+        return toolResult(
+          links
+            .map(
+              (link) =>
+                `- ${link.text}: link ${link.id}${link.kind === 'card' ? ' (a link block)' : ` «${link.words}»`} → ${link.to}${link.title ? ` (${link.title})` : ''}${link.problem ? `: ${PROBLEMS[link.problem]}` : ''}${link.repeat ? '; repeats a link to it earlier in its part' : ''}${link.private ? '; in a private part' : ''}`,
+            )
+            .join('\n'),
+        );
       }),
   );
 
