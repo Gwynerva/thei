@@ -70,10 +70,10 @@ Titles and summaries
 - A summary — of a project, a section, an event, a page — says what the entity is, the way a search engine's description of its page would: a couple of short sentences, about 120 to 200 characters. It is not held to one line; the site also uses it as that description.
 
 Tags
-- Threads across projects and events, with a description and synonyms — other words for the same thread. A tag with no description, synonyms or icon is a simple tag, and goes away with the last entity it is on. Diary entries carry none. In an action a project's or an event's tags are given by name: a name no tag has makes a new one, so check list_entities (kind: tag) first.
+- Threads across projects and events, with a description and synonyms — other words for the same thread. They classify the archive: a tag is a trait that surely runs through several entities and is worth following on its own — never one added just to have some, nor one for a single entity. A tag with no description, synonyms or icon is a simple tag, and goes away with the last entity it is on. Diary entries carry none. In an action a project's or an event's tags are given by name: a name no tag has makes a new one, so check list_entities (kind: tag) first.
 
 Relations
-- One per pair, read from either side: related; depends on — this one depends on the other; affects — this one affects the other. A note is one for both sides, or one per side. Drawing or changing a relation moves the version of the other end too: read it again before you change it. relation_graph shows them all at once.
+- One per pair, read from either side: related; depends on — this one depends on the other; affects — this one affects the other. They build the graph of the owner's life, so each must be well grounded: a mention or a link is not one, but a diary entry that plainly speaks of working on a project or of taking part in an event almost surely is. A note is one for both sides, or one per side. Drawing or changing a relation moves the version of the other end too: read it again before you change it. relation_graph shows them all at once.
 
 Life
 - The one timeline everything dated lands on, once its day has come somewhere on Earth. A period still running shows by its start; life_timeline reads a stretch of it day by day.
