@@ -32,15 +32,18 @@ export function forgetAiAnchors(
       ),
     )
     .run();
-  tx.delete(schema.aiDigests)
-    .where(
-      and(
-        eq(schema.aiDigests.entityType, type),
-        inArray(schema.aiDigests.entityId, ids),
-      ),
-    )
-    .run();
-  forgetCoverage(tx, schema, type, ids);
+  // A file has no digest, and what a check looked at of it is its family's.
+  if (type !== 'asset') {
+    tx.delete(schema.aiDigests)
+      .where(
+        and(
+          eq(schema.aiDigests.entityType, type),
+          inArray(schema.aiDigests.entityId, ids),
+        ),
+      )
+      .run();
+    forgetCoverage(tx, schema, type, ids);
+  }
   tx.delete(schema.aiSessionEntities)
     .where(
       and(

@@ -1,6 +1,6 @@
 import { inArray } from 'drizzle-orm';
 import { PROFILE_ID } from '#layers/thei/shared/profile';
-import type { EntityKey, EntityKind } from '../../../entity-kinds';
+import { refOf, type EntityKey, type EntityKind } from '../../../entity-kinds';
 import { inScope } from './scope';
 
 /**
@@ -255,29 +255,25 @@ export function shortTexts(
   for (const row of db.select().from(schema.entityRelations).all()) {
     const first = keyOf(row.firstType, row.firstId);
     const second = keyOf(row.secondType, row.secondId);
-    const refOfEnd = (key: EntityKey) =>
-      key.kind === 'diary-entry'
-        ? `diary-entry:${key.date ?? key.id}`
-        : `${key.kind}:${key.id}`;
     const note = row.note;
     if (note?.type === 'shared')
       add(first, atOf(first.kind, first.id), {
-        key: `relation:${refOfEnd(second)}`,
+        key: `relation:${refOf(second)}`,
         area: 'relations',
-        label: `relations ${refOfEnd(second)}: note`,
+        label: `relations ${refOf(second)}: note`,
         value: note.text,
       });
     else if (note?.type === 'split') {
       add(first, atOf(first.kind, first.id), {
-        key: `relation:${refOfEnd(second)}`,
+        key: `relation:${refOf(second)}`,
         area: 'relations',
-        label: `relations ${refOfEnd(second)}: notes.this`,
+        label: `relations ${refOf(second)}: notes.this`,
         value: note.firstText,
       });
       add(second, atOf(second.kind, second.id), {
-        key: `relation:${refOfEnd(first)}`,
+        key: `relation:${refOf(first)}`,
         area: 'relations',
-        label: `relations ${refOfEnd(first)}: notes.this`,
+        label: `relations ${refOf(first)}: notes.this`,
         value: note.secondText,
       });
     }
@@ -322,11 +318,9 @@ export function touchedKeys(
       ? [String(payload.field)]
       : kind === 'periods'
         ? ['periods']
-        : kind === 'relation'
-          ? ['relations']
-          : kind === 'update'
-            ? Object.keys((payload.changes ?? {}) as Record<string, unknown>)
-            : [];
+        : kind === 'update'
+          ? Object.keys((payload.changes ?? {}) as Record<string, unknown>)
+          : [];
   const statuses = new Set(
     (
       ((payload.changes as Record<string, unknown> | undefined)?.statuses ??

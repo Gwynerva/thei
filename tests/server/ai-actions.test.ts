@@ -17,10 +17,15 @@ import {
   settleActions,
 } from '../../server/thei/ai/actions/apply';
 import {
+  neverAgain,
   neverPart,
   rejectActions,
   restoreActions,
 } from '../../server/thei/ai/actions/decide';
+import { actionLocks } from '../../server/thei/ai/actions/lock';
+import { loadForm } from '../../server/thei/ai/forms/load';
+import { subscribeSession } from '../../server/thei/ai/sessions/bus';
+import { saveProjectEdit } from '../../server/thei/projects/edit';
 import { undoAction, undoState } from '../../server/thei/ai/actions/undo';
 import { findAction } from '../../server/thei/ai/actions/rows';
 import { assetIdsIn } from '../../server/thei/ai/actions/values';
@@ -1110,5 +1115,405 @@ describe('files an action needs', () => {
     expect([...assetsHeldByAi(['a-cat', 'a-dog'])]).toEqual(['a-cat']);
     rejectActions(['aia-1']);
     expect([...assetsHeldByAi(['a-cat'])]).toEqual([]);
+  });
+
+  it('are found as a form keeps them, so a change that frees one holds it', () => {
+    expect([
+      ...assetIdsIn({
+        iconAssetUuid: 'a-icon',
+        otherAssets: [{ assetUuid: 'a-file', title: 'Notes' }],
+        sections: [{ title: 'Prototype', bannerAssetUuid: 'a-banner' }],
+        descriptionContent: {
+          data: {
+            blocks: [{ type: 'image', data: { file: { assetUuid: 'a-cat' } } }],
+          },
+        },
+      }),
+    ]).toEqual(['a-icon', 'a-file', 'a-banner', 'a-cat']);
+  });
+});
+
+describe('a change of a form', () => {
+  const ids = (results: { actionUuid?: string; refused?: string }[]) =>
+    results.map((result) => {
+      if (result.refused) throw new Error(result.refused);
+      return result.actionUuid!;
+    });
+
+  it('takes a status line back with its undo', async () => {
+    context.rawDb
+      .prepare(
+        "INSERT INTO statuses (id, ownerType, ownerId, kind, text, createdAt, date) VALUES ('st-1', 'project', ?, 'regular', 'Bilding the pier', 1, '2026-10-01')",
+      )
+      .run(PROJECT);
+    const status = () =>
+      one("SELECT text FROM statuses WHERE id = 'st-1'")!.text;
+    const actionUuid = await proposed(session(), {
+      kind: 'update',
+      target: `project:${PROJECT}`,
+      changes: { statuses: [{ id: 'st-1', text: 'Building the pier.' }] },
+    });
+    await applyActions({ actionUuids: [actionUuid], by: 'owner' });
+    // A status is a caption: one sentence takes no full stop.
+    expect(status()).toBe('Building the pier');
+    await tick();
+    await undoAction(actionUuid);
+    expect(findAction(actionUuid)?.state).toBe('undone');
+    expect(status()).toBe('Bilding the pier');
+  });
+
+  it('settles as applied once the form took it and was saved, lists too', async () => {
+    const actionUuid = await proposed(session(), {
+      kind: 'update',
+      target: `project:${PROJECT}`,
+      changes: {
+        tags: ['Games', 'Remakes'],
+        relations: [{ ref: 'diary-entry:2026-10-13', kind: 'related' }],
+      },
+    });
+    const { after } = findAction(actionUuid)!.base as {
+      after: Record<string, unknown>;
+    };
+    // The owner's form lays it in as it is kept, and saves.
+    const loaded = await loadForm({ kind: 'project', id: PROJECT });
+    const { statusTexts: _texts, ...form } = loaded.form;
+    expect(
+      (
+        await saveProjectEdit(
+          PROJECT,
+          { ...form, ...after },
+          { expectedUpdatedAt: loaded.version },
+        )
+      ).type,
+    ).toBe('success');
+    const [settled] = await settleActions([findAction(actionUuid)!]);
+    expect(settled!.state).toBe('applied');
+    // What the form holds already is no change at all.
+    const { results } = await propose(session(), {
+      kind: 'update',
+      target: `project:${PROJECT}`,
+      changes: { tags: ['games', 'Remakes'] },
+    });
+    expect(results[0]).toMatchObject({
+      refused: expect.stringMatching(/changes nothing/),
+    });
+  });
+
+  it('checks a title as its save settles it', async () => {
+    const field = await proposed(session(), {
+      kind: 'field',
+      target: `project:${PROJECT}`,
+      field: 'title',
+      value: 'Parapet II.',
+    });
+    expect(findAction(field)?.payload).toMatchObject({ value: 'Parapet II' });
+    const { results } = await propose(session(), {
+      kind: 'update',
+      target: `project:${PROJECT}`,
+      changes: { title: 'Parapet.' },
+    });
+    expect(results[0]).toMatchObject({
+      refused: expect.stringMatching(/changes nothing/),
+    });
+  });
+
+  it('keeps of a section only the section, whatever its project’s other sections do', async () => {
+    const made = ids(
+      (
+        await propose(
+          session(),
+          {
+            kind: 'create',
+            target: `project:${PROJECT}`,
+            entity: 'project-section',
+            fields: { title: 'Prototype', body: 'First steps.' },
+          },
+          {
+            kind: 'create',
+            target: `project:${PROJECT}`,
+            entity: 'project-section',
+            fields: { title: 'Release', body: 'Out at last.' },
+          },
+        )
+      ).results as never,
+    );
+    const outcome = await applyActions({ actionUuids: made, by: 'owner' });
+    const [first, second] = outcome.applied.map((item) => item.entity!);
+    const summaryOf = (ref: string) =>
+      one(
+        'SELECT summary FROM `project-content-sections` WHERE sectionUuid = ?',
+        ref.slice('project-section:'.length),
+      )!.summary;
+    const change = await proposed(session(), {
+      kind: 'update',
+      target: first,
+      changes: { summary: 'The first one' },
+    });
+    expect(findAction(change)?.base).toEqual({
+      fields: ['summary'],
+      before: { summary: '' },
+      after: { summary: 'The first one' },
+    });
+    await tick();
+    const other = await proposed(session(), {
+      kind: 'field',
+      target: second,
+      field: 'summary',
+      value: 'The last one',
+    });
+    await applyActions({ actionUuids: [other], by: 'owner' });
+    expect((await settleActions([findAction(change)!]))[0]!.state).toBe(
+      'pending',
+    );
+    await tick();
+    await applyActions({ actionUuids: [change], by: 'owner' });
+    expect(findAction(change)?.undo).toMatchObject({
+      before: { summary: '' },
+    });
+    await tick();
+    await undoAction(other);
+    expect(await undoState(findAction(change)!)).toBe('ready');
+    await undoAction(change);
+    expect([summaryOf(first!), summaryOf(second!)]).toEqual(['', '']);
+  });
+
+  it('locks the form it writes, and the other ends of its relations', () => {
+    expect(
+      actionLocks({
+        kind: 'update',
+        payload: {
+          kind: 'update',
+          changes: {
+            relations: [{ ref: 'diary-entry:2026-10-13', kind: 'related' }],
+          },
+        },
+        targetType: 'project',
+        targetId: PROJECT,
+      }),
+    ).toEqual([`project:${PROJECT}`, `diary-entry:${DIARY}`]);
+  });
+});
+
+describe('a bundle', () => {
+  it('lets a section made after a change of its project be undone', async () => {
+    const { results } = await propose(
+      session(),
+      {
+        kind: 'field',
+        target: `project:${PROJECT}`,
+        field: 'summary',
+        value: 'A remake',
+      },
+      {
+        kind: 'create',
+        target: `project:${PROJECT}`,
+        entity: 'project-section',
+        fields: { title: 'Prototype', body: 'First steps.' },
+      },
+    );
+    const [field, create] = results.map(
+      (result) => (result as { actionUuid: string }).actionUuid,
+    );
+    await applyActions({ actionUuids: [field!, create!], by: 'owner' });
+    expect(await undoState(findAction(create!)!)).toBe('ready');
+    // Nor does a fact remembered of the project stand in its way.
+    await tick();
+    const remember = await proposed(session(), {
+      kind: 'remember',
+      target: `project:${PROJECT}`,
+      text: 'The editor came first.',
+    });
+    await applyActions({ actionUuids: [remember], by: 'owner' });
+    expect(await undoState(findAction(create!)!)).toBe('ready');
+  });
+
+  it('takes back a section it made when a later part of it fails', async () => {
+    const { results } = await propose(
+      session(),
+      {
+        kind: 'create',
+        target: `project:${PROJECT}`,
+        entity: 'project-section',
+        fields: { title: 'Prototype', body: 'First steps.' },
+      },
+      // Made against the project as it is: the section moves it on.
+      { kind: 'delete', target: `project:${PROJECT}`, reason: 'Done with it' },
+    );
+    const ids = results.map(
+      (result) => (result as { actionUuid: string }).actionUuid,
+    );
+    const outcome = await applyActions({ actionUuids: ids, by: 'owner' });
+    expect(outcome.failed?.actionUuid).toBe(ids[1]);
+    expect(outcome.applied).toEqual([]);
+    expect(outcome.changed).toContain(`project:${PROJECT}`);
+    expect(
+      one(
+        'SELECT COUNT(*) AS n FROM `project-content-sections` WHERE projectUuid = ?',
+        PROJECT,
+      )?.n,
+    ).toBe(0);
+    expect(findAction(ids[0]!)).toMatchObject({ state: 'pending', undo: null });
+  });
+
+  it('that goes whole goes not at all once a part of it is overtaken', async () => {
+    const { results } = await proposeActions({
+      sessionUuid: session(),
+      atomic: true,
+      actions: [
+        {
+          kind: 'field',
+          target: `project:${PROJECT}`,
+          field: 'summary',
+          value: 'A remake of a browser game',
+        },
+        {
+          kind: 'field',
+          target: `project:${PROJECT}`,
+          field: 'title',
+          value: 'Parapet II',
+        },
+      ],
+    });
+    const ids = results.map(
+      (result) => (result as { actionUuid: string }).actionUuid,
+    );
+    context.rawDb
+      .prepare(
+        "UPDATE projects SET summary = 'Something else', updatedAt = 99 WHERE projectUuid = ?",
+      )
+      .run(PROJECT);
+    await settleActions([findAction(ids[0]!)!]);
+    expect(findAction(ids[0]!)?.state).toBe('stale');
+    const outcome = await applyActions({ actionUuids: [ids[1]!], by: 'owner' });
+    expect(outcome.applied).toEqual([]);
+    expect(outcome.refused).toMatch(/whole bundle/);
+  });
+
+  it('that goes whole is not proposed without a version decided meanwhile', async () => {
+    const sessionUuid = session();
+    const first = await proposed(sessionUuid, {
+      kind: 'field',
+      target: `project:${PROJECT}`,
+      field: 'summary',
+      value: 'A remake',
+    });
+    const { results } = await proposeActions({
+      sessionUuid,
+      atomic: true,
+      // The owner declines the old one while the new are checked.
+      live: () => {
+        context.rawDb
+          .prepare(
+            "UPDATE `ai-actions` SET state = 'rejected' WHERE actionUuid = ?",
+          )
+          .run(first);
+        return true;
+      },
+      actions: [
+        {
+          kind: 'field',
+          target: `project:${PROJECT}`,
+          field: 'summary',
+          value: 'A remake, again',
+          supersedes: first,
+        },
+        {
+          kind: 'field',
+          target: `project:${PROJECT}`,
+          field: 'title',
+          value: 'Parapet II',
+        },
+      ],
+    });
+    expect(results).toEqual([
+      {
+        refused: expect.stringMatching(
+          /was decided while this version was made/,
+        ),
+      },
+      { refused: expect.stringMatching(/atomic bundle/) },
+    ]);
+    expect(
+      // Nothing of it was made.
+      one('SELECT COUNT(*) AS n FROM `ai-actions`')?.n,
+    ).toBe(1);
+  });
+});
+
+describe('a relation', () => {
+  it('keeps its note as a relation does, and tells both ends they changed', async () => {
+    const actionUuid = await proposed(session(), {
+      kind: 'relation',
+      target: `project:${PROJECT}`,
+      other: 'diary-entry:2026-10-13',
+      relation: 'related',
+      note: 'The day the boss fell',
+      reason: 'Named together',
+      whyNotInlineLink: 'The day is a part of the work',
+    });
+    expect(findAction(actionUuid)?.payload).toMatchObject({
+      note: { type: 'shared', text: 'The day the boss fell' },
+    });
+    const outcome = await applyActions({
+      actionUuids: [actionUuid],
+      by: 'owner',
+    });
+    expect(outcome.changed).toEqual(
+      expect.arrayContaining([`project:${PROJECT}`, 'diary-entry:2026-10-13']),
+    );
+    expect(
+      JSON.parse(one('SELECT note FROM `entity-relations`')!.note),
+    ).toEqual({ type: 'shared', text: 'The day the boss fell' });
+  });
+
+  it('taken away is known by its pair, whatever word it is named by', async () => {
+    const add = await proposed(session(), {
+      kind: 'relation',
+      target: `project:${PROJECT}`,
+      other: 'diary-entry:2026-10-13',
+      relation: 'related',
+      reason: 'Named together',
+      whyNotInlineLink: 'The day is a part of the work',
+    });
+    await applyActions({ actionUuids: [add], by: 'owner' });
+    const removal = await proposed(session(), {
+      kind: 'relation',
+      op: 'remove',
+      target: `project:${PROJECT}`,
+      other: 'diary-entry:2026-10-13',
+      reason: 'Not really',
+    });
+    rejectActions([removal], { never: true });
+    const { results } = await propose(session(), {
+      kind: 'relation',
+      op: 'remove',
+      target: 'diary-entry:2026-10-13',
+      other: `project:${PROJECT}`,
+      relation: 'affects',
+      reason: 'Not really',
+    });
+    expect(results[0]).toMatchObject({
+      refused: expect.stringMatching(/never to offer/),
+    });
+  });
+});
+
+describe('never again', () => {
+  it('said of a declined action reaches a page watching its session', async () => {
+    const sessionUuid = session();
+    const actionUuid = await proposed(sessionUuid, {
+      kind: 'field',
+      target: `project:${PROJECT}`,
+      field: 'summary',
+      value: 'A remake',
+    });
+    rejectActions([actionUuid]);
+    const heard: string[] = [];
+    const stop = subscribeSession(sessionUuid, (signal) => {
+      if (signal.type === 'actions') heard.push(...signal.actionUuids);
+    });
+    neverAgain(actionUuid);
+    stop();
+    expect(heard).toEqual([actionUuid]);
   });
 });

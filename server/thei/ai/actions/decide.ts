@@ -144,6 +144,8 @@ export function neverAgain(actionUuid: string, now = Date.now()) {
       now,
     ),
   );
+  // Its card says «never» now, on whatever page shows it.
+  publishActions([row]);
 }
 
 /** Never to offer one correction of a text edit again: the word stays as written. */

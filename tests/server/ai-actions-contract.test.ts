@@ -6,7 +6,16 @@ import {
 } from '../../shared/ai-actions';
 import { AI_ENTITY_TYPES } from '../../shared/ai';
 import { ENTITY_KINDS } from '../../server/thei/entity-kinds';
-import { FORM_FIELDS } from '../../server/thei/ai/forms/changes';
+import {
+  diaryChanges,
+  eventChanges,
+  FORM_FIELDS,
+  pageChanges,
+  profileChanges,
+  projectChanges,
+  tagChanges,
+} from '../../server/thei/ai/forms/changes';
+import { FIELD_PLACES } from '../../server/thei/ai/entity-panel';
 import { AI_ACTION_DEFS } from '../../server/thei/ai/actions/registry';
 import enModule from '../../shared/language/list/en';
 import ruModule from '../../shared/language/list/ru';
@@ -84,5 +93,61 @@ describe('the kinds of action', () => {
     expect([...AI_ACTION_DEFS.update.targets].sort()).toEqual(
       Object.keys(FORM_FIELDS).sort(),
     );
+  });
+});
+
+describe('the fields of a form', () => {
+  const kinds = Object.keys(FORM_FIELDS) as (keyof typeof FORM_FIELDS)[];
+
+  it('each have a place in their form, where a change of them waits', () => {
+    for (const kind of kinds) {
+      const places = FIELD_PLACES[kind] as Record<string, string>;
+      expect(Object.keys(places).sort()).toEqual([...FORM_FIELDS[kind]].sort());
+      for (const place of Object.values(places))
+        expect(place).toMatch(
+          /^(field:[a-z]+|periods|access|tags|relations|form)$/,
+        );
+    }
+    // A field set on its own waits at its own label.
+    for (const [kind, fields] of Object.entries(AI_FIELD_ACTIONS))
+      for (const field of fields)
+        expect([`field:${field}`, 'form']).toContain(
+          (
+            FIELD_PLACES[kind as keyof typeof FIELD_PLACES] as Record<
+              string,
+              string
+            >
+          )[field],
+        );
+  });
+
+  it('are named in both languages, as a card of a change says them', () => {
+    const fields = new Set(kinds.flatMap((kind) => FORM_FIELDS[kind]));
+    for (const language of [enModule.phrases, ruModule.phrases])
+      for (const field of fields)
+        expect(
+          (language.ai_action_fields as Record<string, string>)[field],
+        ).toBeTruthy();
+  });
+
+  it('refuse a field their form does not take, rather than pass it over', async () => {
+    const key = { kind: 'project', id: 'p-1' } as never;
+    const changes = { colour: 'red' };
+    await expect(projectChanges({} as never, changes, key)).rejects.toThrow(
+      /no field "colour"/,
+    );
+    await expect(eventChanges({} as never, changes, key)).rejects.toThrow(
+      /no field "colour"/,
+    );
+    await expect(diaryChanges({} as never, changes, key)).rejects.toThrow(
+      /no field "colour"/,
+    );
+    await expect(pageChanges({} as never, changes)).rejects.toThrow(
+      /no field "colour"/,
+    );
+    await expect(profileChanges({} as never, changes)).rejects.toThrow(
+      /no field "colour"/,
+    );
+    expect(() => tagChanges({} as never, changes)).toThrow(/no field "colour"/);
   });
 });

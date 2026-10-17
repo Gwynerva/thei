@@ -1,9 +1,15 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import type { AiAppliedBy } from '#layers/thei/shared/ai';
 import { EntityPatchError, refuse as fail } from '../../entity-patch/text';
-import { entityFace, formOwnerVersion } from '../../entity-kinds';
+import {
+  entityFace,
+  findEntity,
+  formOwnerOf,
+  formOwnerVersion,
+  refOf,
+} from '../../entity-kinds';
 import { isFileKey, targetRef, type ActionTarget } from './target';
-import { loadForm } from '../forms/load';
+import { formPart, loadForm } from '../forms/load';
 import {
   linkSessionEntities,
   refreshSessionCounts,
@@ -11,21 +17,23 @@ import {
 } from '../sessions/store';
 import { publishActions } from '../sessions/bus';
 import { coverApplied } from '../templates/coverage';
-import { actionLocks, withEntityLocks } from './lock';
+import { actionLocks, relationEnds, withEntityLocks } from './lock';
 import { actionDef } from './registry';
-import { entityTargetOf, findActions, targetOf } from './rows';
+import {
+  entityTargetOf,
+  findActions,
+  inArchivedSession,
+  targetOf,
+} from './rows';
 import { undoAction, type RollbackTo, type StoredUndo } from './undo';
 import { assetIdsIn } from './values';
 import { currentText } from './current';
+import { fixState } from './kinds/text';
 import {
   AI_ACTION_INFO,
   type AiActionKind,
   type AiRevisePart,
 } from '#layers/thei/shared/ai-actions';
-import {
-  correctionPending,
-  countTextMatches,
-} from '#layers/thei/shared/content-edit-markdown/patch-core';
 import { alignTidyBase } from '#layers/thei/shared/content-edit-markdown/tidy';
 import {
   takenParts,
@@ -48,27 +56,29 @@ import type {
  * before it are taken back in reverse, and the failed one says why.
  */
 
-export interface ApplyRequest {
+interface ApplyRequest {
   actionUuids: string[];
   by: AiAppliedBy;
   /** For text edits and new entities: the owner's word on each part. */
   parts?: Record<string, PartDecisions>;
 }
 
-export interface ApplyOutcome {
+interface ApplyOutcome {
   applied: { actionUuid: string; entity?: string }[];
   /** Why nothing was applied, when nothing was. */
   refused?: string;
   /** The action that failed, with why; the ones before it were taken back. */
   failed?: { actionUuid: string; error: string };
-  /** Entities — and files — whose open forms should read themselves again. */
-  changed: ActionTarget[];
+  /**
+   * The entities — and files — whose open forms read an older state now, as
+   * refs: what was applied, a relation's other end too, and what a failed
+   * bundle wrote and took back, which moved their versions all the same.
+   */
+  changed: string[];
 }
 
 /** Where an action stands now, as its kind tells. */
-export async function evaluateAction(
-  row: ActionRow,
-): Promise<ActionEvaluation> {
+async function evaluateAction(row: ActionRow): Promise<ActionEvaluation> {
   const key = targetOf(row);
   // A file's kind tells for itself: its family outlives the file named.
   if (key && !isFileKey(key) && row.kind !== 'delete' && !entityFace(key))
@@ -179,8 +189,9 @@ async function keepAfter(row: ActionRow) {
   const key = entityTargetOf(row);
   if (!key) return;
   const loaded = await loadForm(key).catch(() => undefined);
-  if (!loaded || formOwnerVersion(key) !== undo.versionAfter) return;
-  const after = pick(loaded.form, [
+  const part = loaded && formPart(key, loaded.form);
+  if (!part || formOwnerVersion(key) !== undo.versionAfter) return;
+  const after = pick(part, [
     ...Object.keys(undo.before),
     ...(undo.cleared ?? []),
   ]);
@@ -257,8 +268,23 @@ async function applyOne(
     },
   );
   if (!written || !own) fail('The change was not saved.');
-  coverApplied([row.actionUuid]);
   return { entity, own };
+}
+
+/**
+ * What applying an action moves the version of beside what it changes or
+ * makes, as refs, read before it is applied: its target, a section's
+ * project — whose form it is — and the other ends of the relations it moves.
+ */
+export function movedBy(row: ActionRow): string[] {
+  const target = targetOf(row);
+  const refs = target ? [targetRef(target)] : [];
+  if (target && !isFileKey(target) && target.kind === 'project-section') {
+    const owner = formOwnerOf(target);
+    if (owner) refs.push(refOf(owner));
+  }
+  for (const end of relationEnds(row)) refs.push(refOf(end));
+  return refs;
 }
 
 /** Claims actions for applying, so a second click or an app can't apply them twice. */
@@ -322,11 +348,44 @@ export async function applyActions(
   return outcome;
 }
 
+/**
+ * Why an atomic bundle would not go whole, if it would not: every member of
+ * it is chosen, or applied already — one declined, overtaken or replaced
+ * leaves the rest nothing to go with.
+ */
+function partedBundle(rows: ActionRow[]): string | undefined {
+  const chosen = new Set(rows.map((row) => row.actionUuid));
+  const bundles = new Set(
+    rows.flatMap((row) =>
+      row.atomic && row.bundleUuid ? [row.bundleUuid] : [],
+    ),
+  );
+  if (!bundles.size) return undefined;
+  const { db, schema } = THEI_SERVER.useDb();
+  const members = db
+    .select({
+      actionUuid: schema.aiActions.actionUuid,
+      state: schema.aiActions.state,
+    })
+    .from(schema.aiActions)
+    .where(inArray(schema.aiActions.bundleUuid, [...bundles]))
+    .all();
+  if (
+    members.some((member) =>
+      member.state === 'pending'
+        ? !chosen.has(member.actionUuid)
+        : member.state !== 'applied',
+    )
+  )
+    return 'These actions go together: apply the whole bundle, or none of it — and none of it once a part of it is declined or overtaken.';
+  return undefined;
+}
+
 async function applyChosen(
   request: ApplyRequest,
   now: number,
 ): Promise<ApplyOutcome> {
-  const changed: ActionTarget[] = [];
+  const changed: string[] = [];
   const rows = findActions([...new Set(request.actionUuids)]);
   if (rows.length !== new Set(request.actionUuids).size)
     return {
@@ -343,30 +402,15 @@ async function applyChosen(
         .join(', ')}.`,
       changed,
     };
-  // An atomic bundle goes whole.
-  const chosen = new Set(rows.map((row) => row.actionUuid));
-  for (const row of rows)
-    if (row.atomic && row.bundleUuid) {
-      const { db, schema } = THEI_SERVER.useDb();
-      const missing = db
-        .select({ actionUuid: schema.aiActions.actionUuid })
-        .from(schema.aiActions)
-        .where(
-          and(
-            eq(schema.aiActions.bundleUuid, row.bundleUuid),
-            eq(schema.aiActions.state, 'pending'),
-          ),
-        )
-        .all()
-        .filter((item) => !chosen.has(item.actionUuid));
-      if (missing.length)
-        return {
-          applied: [],
-          refused:
-            'These actions go together: apply the whole bundle, or none of it.',
-          changed,
-        };
-    }
+  if (inArchivedSession(rows))
+    return {
+      applied: [],
+      refused:
+        'Its session is in the archive: nothing is decided in it until the owner brings it back.',
+      changed,
+    };
+  const parted = partedBundle(rows);
+  if (parted) return { applied: [], refused: parted, changed };
   // In order, but what cannot be taken back last: nothing after it can fail
   // and leave it standing while the rest is rolled back.
   const final = (row: ActionRow) =>
@@ -379,6 +423,16 @@ async function applyChosen(
       a.bundleOrder - b.bundleOrder,
   );
 
+  const moved = new Map(rows.map((row) => [row.actionUuid, movedBy(row)]));
+  // As its form knows it: a diary entry by its day.
+  const changedBy = (item: { row: ActionRow; entity?: ActionTarget }) =>
+    [
+      ...(item.entity ? [targetRef(item.entity)] : []),
+      ...(moved.get(item.row.actionUuid) ?? []),
+    ].map((ref) => {
+      const key = ref.startsWith('asset:') ? undefined : findEntity(ref);
+      return key ? refOf(key) : ref;
+    });
   return withEntityLocks(
     rows.flatMap((row) => actionLocks(row)),
     async () => {
@@ -397,6 +451,9 @@ async function applyChosen(
           changed,
         };
       const fresh = settled;
+      // Settled whole, an atomic bundle may have lost a part meanwhile.
+      const parted = partedBundle(fresh);
+      if (parted) return { applied: [], refused: parted, changed };
       if (!claim(fresh))
         return {
           applied: [],
@@ -431,7 +488,8 @@ async function applyChosen(
               : 'It could not be applied.';
           if (!(error instanceof EntityPatchError))
             console.error('[thei] applying an AI action failed', error);
-          // Take back what this call applied, last first.
+          // Take back what this call applied, last first. Written and taken
+          // back, the forms they changed read an older version all the same.
           const stuck: string[] = [];
           for (const item of [...done].reverse()) {
             try {
@@ -461,11 +519,11 @@ async function applyChosen(
                 ? `${text} What was applied before it could not all be taken back.`
                 : text,
             },
-            changed: done.flatMap((item) => (item.entity ? [item.entity] : [])),
+            changed: [...new Set(done.flatMap(changedBy))],
           };
         }
       }
-      for (const item of done) if (item.entity) changed.push(item.entity);
+      changed.push(...new Set(done.flatMap(changedBy)));
       const { db, schema } = THEI_SERVER.useDb();
       db.transaction((tx) => {
         for (const sessionUuid of new Set(
@@ -493,6 +551,8 @@ async function applyChosen(
           refreshSessionCounts(tx, schema, sessionUuid);
         }
       });
+      // Only what stands counts as checked: a bundle taken back leaves none.
+      coverApplied(done.map((item) => item.row.actionUuid));
       return {
         applied: done.map((item) => ({
           actionUuid: item.row.actionUuid,
@@ -552,6 +612,8 @@ export function markTakenInEditor(
   const row =
     findActions([actionUuid])[0] ?? fail(`There is no action ${actionUuid}.`);
   if (row.state !== 'pending' || row.kind !== 'revise') return;
+  // What waits in the archive is offered nowhere, and decided by nothing.
+  if (inArchivedSession([row])) return;
   const payload = row.payload as RevisePayload & { text: string };
   const key = entityTargetOf(row);
   const text = key ? currentText(key, payload.text) : undefined;
@@ -563,9 +625,8 @@ export function markTakenInEditor(
       : 'pending';
   });
   const made = (part: AiRevisePart) =>
-    part.type === 'correction'
-      ? !correctionPending(text.data, part) &&
-        countTextMatches(text.data, part.replacePlain) > 0
+    part.type === 'correction' || part.type === 'relink'
+      ? fixState(text.data, part) === 'applied'
       : Boolean(payload.plan) &&
         !alignTidyBase(text.data?.blocks ?? [], payload.plan!.keys);
   const parts = ((row.parts ?? []) as PartStateRow[]).map(

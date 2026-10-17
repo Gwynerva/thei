@@ -9,7 +9,13 @@ import {
 } from '../../entity-kinds';
 import { entityRef } from '../sessions/view';
 import { digestOf } from '../digests';
-import { factsSize, memoryItem, type MemoryRow } from './store';
+import {
+  anchorRows,
+  anchorWhere,
+  factsSize,
+  memoryItem,
+  type MemoryRow,
+} from './store';
 
 /**
  * What a model reads of the memory with an entity: the records about it,
@@ -28,11 +34,8 @@ export function memoryAbout(
     .from(t)
     .where(
       or(
-        and(
-          eq(t.anchor, 'entity'),
-          eq(t.anchorType, key.kind),
-          eq(t.anchorId, key.id),
-        ),
+        anchorWhere(schema, { anchor: 'entity', entity: key }),
+        // A pair with any other: either end of it.
         and(
           eq(t.anchor, 'pair'),
           or(
@@ -42,7 +45,7 @@ export function memoryAbout(
         ),
         ...(options.kind === false
           ? []
-          : [and(eq(t.anchor, 'kind'), eq(t.anchorType, key.kind))]),
+          : [anchorWhere(schema, { anchor: 'kind', kind: key.kind as never })]),
       ),
     )
     .orderBy(t.createdAt)
@@ -51,14 +54,7 @@ export function memoryAbout(
 
 /** The records about every entity of a kind. */
 export function kindMemory(kind: string): MemoryRow[] {
-  const { db, schema } = THEI_SERVER.useDb();
-  const t = schema.aiMemory;
-  return db
-    .select()
-    .from(t)
-    .where(and(eq(t.anchor, 'kind'), eq(t.anchorType, kind)))
-    .orderBy(t.createdAt)
-    .all() as MemoryRow[];
+  return anchorRows({ anchor: 'kind', kind: kind as never });
 }
 
 /**

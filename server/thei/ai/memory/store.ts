@@ -36,8 +36,16 @@ export type MemoryAnchor =
   | { anchor: 'pair'; entity: EntityKey; other: EntityKey }
   | { anchor: 'kind'; kind: AiEntityType };
 
+/**
+ * A kind every entity of which a record may be about: an entity's, never the
+ * profile — there is one, and «about you» is its memory — nor a file.
+ */
 export function isMemoryKind(value: unknown): value is AiEntityType {
-  return AI_ENTITY_TYPES.includes(value as AiEntityType) && value !== 'profile';
+  return (
+    AI_ENTITY_TYPES.includes(value as AiEntityType) &&
+    value !== 'profile' &&
+    value !== 'asset'
+  );
 }
 
 /** The columns an anchor is written in. */
@@ -65,7 +73,7 @@ export function anchorColumns(anchor: MemoryAnchor) {
 }
 
 /** The rows of one anchor; a pair is the same pair read either way. */
-function anchorWhere(schema: any, anchor: MemoryAnchor) {
+export function anchorWhere(schema: any, anchor: MemoryAnchor) {
   const t = schema.aiMemory;
   switch (anchor.anchor) {
     case 'owner':
@@ -139,7 +147,8 @@ export function anchorOf(row: MemoryRow): MemoryAnchor | undefined {
   }
 }
 
-function cleanText(text: unknown): string {
+/** A record's words as kept: one line, a sentence or two. */
+export function memoryText(text: unknown): string {
   const value =
     typeof text === 'string' ? text.replace(/\s+/g, ' ').trim() : '';
   if (!value) fail('Say what to remember.');
@@ -151,7 +160,11 @@ function cleanText(text: unknown): string {
 }
 
 /** Refuses a fact the anchor has no room for. */
-function assertRoom(anchor: MemoryAnchor, adding: number, without?: string) {
+export function assertMemoryRoom(
+  anchor: MemoryAnchor,
+  adding: number,
+  without?: string,
+) {
   const rows = anchorRows(anchor).filter((row) => row.memoryUuid !== without);
   if (factsSize(rows) + adding > AI_ANCHOR_MEMORY_MAX)
     fail(
@@ -195,9 +208,9 @@ export function addMemory(
 ): string {
   if (anchor.anchor === 'owner' && (input.type ?? 'fact') === 'fact')
     fail('What to remember about the owner goes into «about you».');
-  const text = cleanText(input.text);
+  const text = memoryText(input.text);
   const type = input.type ?? 'fact';
-  if (type === 'fact') assertRoom(anchor, text.length);
+  if (type === 'fact') assertMemoryRoom(anchor, text.length);
   return insertMemory(
     tx ?? THEI_SERVER.useDb().db,
     anchor,
@@ -245,10 +258,10 @@ export function updateMemory(
   now = Date.now(),
 ): MemoryRow {
   const row = findMemory(memoryUuid) ?? fail('There is no such record.');
-  const value = cleanText(text);
+  const value = memoryText(text);
   const anchor = anchorOf(row);
   if (anchor && row.type === 'fact')
-    assertRoom(anchor, value.length, memoryUuid);
+    assertMemoryRoom(anchor, value.length, memoryUuid);
   const { db, schema } = THEI_SERVER.useDb();
   db.update(schema.aiMemory)
     .set({ text: value, updatedAt: now })
@@ -257,11 +270,10 @@ export function updateMemory(
   return { ...row, text: value, updatedAt: now };
 }
 
-export function deleteMemory(memoryUuids: string[], tx?: any) {
+export function deleteMemory(memoryUuids: string[]) {
   if (!memoryUuids.length) return;
   const { db, schema } = THEI_SERVER.useDb();
-  (tx ?? db)
-    .delete(schema.aiMemory)
+  db.delete(schema.aiMemory)
     .where(inArray(schema.aiMemory.memoryUuid, memoryUuids))
     .run();
 }
@@ -280,7 +292,7 @@ export function memoryItem(row: MemoryRow): AiMemoryItem {
     ...(anchor?.anchor === 'kind' ? { kind: anchor.kind } : {}),
     type: row.type,
     text: row.text,
-    ...(session && !session.purgedAt
+    ...(session
       ? {
           session: {
             sessionUuid: session.sessionUuid,

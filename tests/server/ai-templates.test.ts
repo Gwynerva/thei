@@ -12,13 +12,14 @@ import { findAction } from '../../server/thei/ai/actions/rows';
 import {
   applyActions,
   markTakenInEditor,
+  settleActions,
 } from '../../server/thei/ai/actions/apply';
 import { entityPanel } from '../../server/thei/ai/entity-panel';
 import {
   readAssetDescription,
   writeAssetDescription,
 } from '../../server/thei/assets/descriptions';
-import { deleteAsset } from '../../server/thei/assets/repository/delete';
+import { deleteAssetRow } from '../helpers/delete-asset';
 import { forgetAiAnchors } from '../../server/thei/ai/memory/forget';
 import { turnsSettled } from '../../server/thei/ai/runner/queue';
 import { startOwnerSession } from '../../server/thei/ai/sessions/owner';
@@ -547,6 +548,20 @@ describe('a link the model left', () => {
     );
     expect(item!.shown).toContain('#result');
   });
+
+  it('is let go of once it is gone from its text', async () => {
+    await run('links');
+    const links = () =>
+      [...coverageOf(id('links')).keys()].filter((subject) =>
+        subject.startsWith('link:'),
+      );
+    expect(links()).toHaveLength(1);
+    writeText('diary-entry', DIARY, 'diary-body', [
+      paragraph('b0', 'Read the results again.'),
+    ]);
+    expect(await due('links')).toEqual([]);
+    expect(links()).toEqual([]);
+  });
 });
 
 describe('a ready-made request', () => {
@@ -802,6 +817,94 @@ describe('every short text the owner typed', () => {
   });
 });
 
+describe('what an applied action leaves proofread', () => {
+  const shortTextsDue = async () =>
+    (await due('proofread'))
+      .filter((item) => item.subject.startsWith('fields:'))
+      .map((item) => item.shown)
+      .join('\n');
+  const propose = async (...actions: Record<string, unknown>[]) => {
+    const sessionUuid = createSession({ origin: 'owner', title: 'Fixes' });
+    const { results } = await proposeActions({
+      sessionUuid,
+      actions: actions as never,
+    });
+    return results.map(
+      (result) => (result as { actionUuid: string }).actionUuid,
+    );
+  };
+
+  it('is only what stands: an overtaken fix leaves the owner’s words due', async () => {
+    const [fix] = await propose({
+      kind: 'field',
+      target: `project:${PROJECT}`,
+      field: 'title',
+      value: 'Harbor',
+    });
+    context.rawDb
+      .prepare(
+        "UPDATE projects SET title = 'Harbour Towm', updatedAt = 50 WHERE projectUuid = ?",
+      )
+      .run(PROJECT);
+    await settleActions([findAction(fix!)!]);
+    expect(findAction(fix!)?.state).toBe('stale');
+    expect(await shortTextsDue()).toContain('title: «Harbour Towm»');
+  });
+
+  it('is every fix of one entity applied together', async () => {
+    const ids = await propose(
+      {
+        kind: 'field',
+        target: `project:${PROJECT}`,
+        field: 'title',
+        value: 'Harbour Bay',
+      },
+      {
+        kind: 'field',
+        target: `project:${PROJECT}`,
+        field: 'summary',
+        value: 'A small harbour.',
+      },
+    );
+    expect(
+      (await applyActions({ actionUuids: ids, by: 'owner' })).applied,
+    ).toHaveLength(2);
+    const shown = await shortTextsDue();
+    expect(shown).not.toContain('title: «Harbour Bay»');
+    expect(shown).not.toContain('summary: «A small harbour.»');
+  });
+
+  it('is of a relation the note of its pair alone', async () => {
+    addDiary('d-2', '2026-10-14', 'The next day.');
+    insert('entity-relations', {
+      firstType: 'project',
+      firstId: PROJECT,
+      secondType: 'diary-entry',
+      secondId: 'd-2',
+      type: 'related',
+      note: { type: 'shared', text: 'The day aftr' },
+      firstSortOrder: 0,
+      secondSortOrder: 0,
+    });
+    invalidateMcpDocuments();
+    const [relation] = await propose({
+      kind: 'relation',
+      target: `diary-entry:${DAY}`,
+      other: `project:${PROJECT}`,
+      relation: 'depends-on',
+      note: 'The day it began',
+      reason: 'The harbour began that day.',
+      whyNotInlineLink: 'The day is a stage of the work.',
+    });
+    expect(
+      (await applyActions({ actionUuids: [relation!], by: 'owner' })).applied,
+    ).toHaveLength(1);
+    const shown = await shortTextsDue();
+    expect(shown).not.toContain('«The day it began»');
+    expect(shown).toContain('«The day aftr»');
+  });
+});
+
 describe('the files of the archive', () => {
   /** A file of its own family, placed where named. */
   function addFile(
@@ -997,10 +1100,10 @@ describe('the files of the archive', () => {
     context.rawDb
       .prepare("DELETE FROM `asset-usages` WHERE assetUuid = 'a-5'")
       .run();
-    await deleteAsset('a-5');
+    deleteAssetRow('a-5');
     // A preview left keeps it.
     expect(coverageOf(id('describe')).has('file:af-5')).toBe(true);
-    await deleteAsset('a-5-preview');
+    deleteAssetRow('a-5-preview');
     expect(coverageOf(id('describe')).has('file:af-5')).toBe(false);
     expect(coverageOf(id('describe')).has('file:af-4')).toBe(true);
   });

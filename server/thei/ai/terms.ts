@@ -189,25 +189,30 @@ export function termMatcher(text: string) {
 }
 
 /** The dictionary's words a text has, with their notes. */
-export function termsIn(text: string, terms = listTerms()): AiTerm[] {
-  if (!terms.length || !text) return [];
-  const matches = termMatcher(text);
-  return terms.filter(matches);
+export function termsIn(text: string): AiTerm[] {
+  if (!text) return [];
+  const terms = listTerms();
+  if (!terms.length) return [];
+  return terms.filter(termMatcher(text));
 }
 
 /**
  * The words of a phrase proofreading must leave as written: those of a word
- * kept as written, in any of its forms.
+ * kept as written, in any of its forms. A word of several is kept in the
+ * form the phrase has it in — «в Нижнем Новгороде» of «Нижний Новгород».
  */
-export function keptWordsIn(phrase: string, terms = listTerms()): string[] {
-  const kept = terms.filter((term) => term.keep);
-  if (!kept.length || !phrase) return [];
-  const tokens = wordTokens(normalizeTermText(phrase));
+export function keptWordsIn(phrase: string): string[] {
+  if (!phrase) return [];
+  const kept = listTerms().filter((term) => term.keep);
+  if (!kept.length) return [];
+  const normalized = normalizeTermText(phrase);
+  const tokens = wordTokens(normalized);
   const words = new Set<string>();
   for (const term of kept)
     if (term.word.includes(' ')) {
-      if (termMatcher(phrase)(term))
-        for (const token of wordTokens(term.word)) words.add(token);
+      for (const form of [term.word, ...term.forms.map(termKey)])
+        if (containsPhrase(normalized, form))
+          for (const token of wordTokens(form)) words.add(token);
     } else
       for (const token of tokens)
         if (termMatcher(token)(term)) words.add(token);
@@ -249,11 +254,8 @@ function matcherOf(document: McpDocument) {
 }
 
 /** How many texts of the archive use each word, for the Memory tab. */
-export function termItems(
-  terms = listTerms(),
-  documents: McpDocument[] = loadDocuments(),
-): AiTermItem[] {
-  const matchers = documents.map(matcherOf);
+export function termItems(terms = listTerms()): AiTermItem[] {
+  const matchers = loadDocuments().map(matcherOf);
   return terms.map((term) => ({
     ...term,
     uses: matchers.filter((matches) => matches(term)).length,

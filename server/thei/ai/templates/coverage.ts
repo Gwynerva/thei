@@ -5,6 +5,7 @@ import {
 } from '#layers/thei/shared/ai-template';
 import type { AiEntityType } from '#layers/thei/shared/ai';
 import { findActions } from '../actions/rows';
+import { linkSessionEntities } from '../sessions/store';
 import { TEMPLATE_SOURCES, type CheckItem, type Covered } from './sources';
 
 /**
@@ -59,7 +60,8 @@ function entityColumns(item: Pick<CheckItem, 'entity' | 'family'>) {
 
 /**
  * Gives a run what it is to look at, inside `tx`: what another run took
- * meanwhile is left out. Returns what it was given.
+ * meanwhile is left out. The entities it is given are what its session is
+ * about — given at once or when its model asks. Returns what it was given.
  */
 export function holdBatch(
   tx: any,
@@ -67,22 +69,42 @@ export function holdBatch(
   templateId: string,
   sessionUuid: string,
   batch: readonly CheckItem[],
+  now = Date.now(),
 ): CheckItem[] {
   const busy = busySubjects(templateId, tx);
   const free = batch.filter((item) => !busy.has(item.subject));
-  if (free.length)
-    tx.insert(schema.aiTemplateBatches)
-      .values(
-        free.map((item) => ({
-          sessionUuid,
-          templateId,
-          subject: item.subject,
-          ...entityColumns(item),
-          fingerprint: item.fingerprint,
-          parts: item.parts,
-        })),
-      )
-      .run();
+  if (!free.length) return free;
+  tx.insert(schema.aiTemplateBatches)
+    .values(
+      free.map((item) => ({
+        sessionUuid,
+        templateId,
+        subject: item.subject,
+        ...entityColumns(item),
+        fingerprint: item.fingerprint,
+        parts: item.parts,
+      })),
+    )
+    .run();
+  linkSessionEntities(
+    tx,
+    schema,
+    sessionUuid,
+    [
+      ...new Map(
+        free.flatMap((item) =>
+          item.entity
+            ? [[`${item.entity.kind}:${item.entity.id}`, item.entity]]
+            : [],
+        ),
+      ).values(),
+    ].map((entity) => ({
+      type: entity.kind as AiEntityType,
+      id: entity.id,
+      role: 'about' as const,
+    })),
+    now,
+  );
   return free;
 }
 
@@ -156,26 +178,39 @@ export function settleTemplateTurn(
 export function coverApplied(actionUuids: readonly string[], now = Date.now()) {
   if (!actionUuids.length) return;
   try {
-    const rows = findActions([...actionUuids]);
+    // Only what stands: an action applied, or a text edit some parts of
+    // which are — never one overtaken or declined, whose words are the
+    // owner's own.
+    const rows = findActions([...actionUuids]).filter(
+      (row) =>
+        row.state === 'applied' ||
+        (row.state === 'pending' && row.kind === 'revise'),
+    );
+    if (!rows.length) return;
     const { db, schema } = THEI_SERVER.useDb();
     for (const key of AI_BUILTIN_TEMPLATE_KEYS) {
       const source = TEMPLATE_SOURCES[key];
       if (!source.coveredBy) continue;
       const templateId = builtinTemplateId(key);
-      // Read only for an action this check counts.
+      // Read only for an action this check counts; a subject two of them
+      // mend builds on what the one before left.
       let kept: Map<string, Covered> | undefined;
-      const items = rows.flatMap((row) =>
-        source.coveredBy!(row, (subject) =>
-          (kept ??= coverageOf(templateId)).get(subject),
-        ),
-      );
-      if (items.length)
+      const items = new Map<string, CheckItem>();
+      for (const row of rows)
+        for (const item of source.coveredBy(
+          row,
+          (subject) =>
+            items.get(subject) ??
+            (kept ??= coverageOf(templateId)).get(subject),
+        ))
+          items.set(item.subject, item);
+      if (items.size)
         db.transaction((tx) =>
           cover(
             tx,
             schema,
             templateId,
-            items.map((item) => ({
+            [...items.values()].map((item) => ({
               subject: item.subject,
               ...entityColumns(item),
               fingerprint: item.fingerprint,
@@ -191,6 +226,26 @@ export function coverApplied(actionUuids: readonly string[], now = Date.now()) {
       error,
     );
   }
+}
+
+/**
+ * Forgets what a check looked at of subjects that are no more — a link
+ * mended, or taken out of its text — so its rows do not stay for as long as
+ * the text does.
+ */
+export function forgetSubjects(templateId: string, subjects: string[]) {
+  if (!subjects.length) return;
+  const { db, schema } = THEI_SERVER.useDb();
+  const table = schema.aiTemplateCoverage;
+  for (let index = 0; index < subjects.length; index += 500)
+    db.delete(table)
+      .where(
+        and(
+          eq(table.templateId, templateId),
+          inArray(table.subject, subjects.slice(index, index + 500)),
+        ),
+      )
+      .run();
 }
 
 /** Lets go of what runs of these sessions were given: they are gone. */

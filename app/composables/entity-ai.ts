@@ -14,6 +14,7 @@ import {
   type RelationWord,
 } from '#layers/thei/shared/relation';
 import type { TagEditItem } from '#layers/thei/shared/tag';
+import { namesTag } from '#layers/thei/shared/ai-actions';
 
 /**
  * The AI around one entity's form: what it remembers of the entity, the
@@ -196,9 +197,10 @@ function takeTags(
     const title = action.refs[tag.ref ?? '']?.title ?? tag.title;
     if (
       tags.some((item) =>
-        tagUuid
-          ? item.tagUuid === tagUuid
-          : item.title.toLowerCase() === title.toLowerCase(),
+        namesTag(
+          { ref: tagUuid && tag.ref, title },
+          { ref: item.tagUuid && `tag:${item.tagUuid}`, title: item.title },
+        ),
       )
     )
       continue;

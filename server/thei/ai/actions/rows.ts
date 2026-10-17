@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm';
 import type { AiActionState } from '#layers/thei/shared/ai';
 import type { EntityKey } from '../../entity-kinds';
 import type { ActionTarget } from './target';
@@ -8,12 +8,9 @@ import type { ActionRow } from './types';
  * Actions as stored, read by id, by session, by bundle.
  */
 
-export function findAction(
-  actionUuid: string,
-  tx?: any,
-): ActionRow | undefined {
+export function findAction(actionUuid: string): ActionRow | undefined {
   const { db, schema } = THEI_SERVER.useDb();
-  return (tx ?? db)
+  return db
     .select()
     .from(schema.aiActions)
     .where(eq(schema.aiActions.actionUuid, actionUuid))
@@ -42,6 +39,28 @@ export function sessionActions(sessionUuid: string): ActionRow[] {
     .where(eq(schema.aiActions.sessionUuid, sessionUuid))
     .orderBy(asc(schema.aiActions.createdAt), asc(schema.aiActions.bundleOrder))
     .all() as ActionRow[];
+}
+
+/**
+ * Whether any of these actions is in a session in the archive: only read
+ * until the owner brings it back, nothing is decided in it.
+ */
+export function inArchivedSession(rows: Pick<ActionRow, 'sessionUuid'>[]) {
+  const sessions = [...new Set(rows.map((row) => row.sessionUuid))];
+  if (!sessions.length) return false;
+  const { db, schema } = THEI_SERVER.useDb();
+  return Boolean(
+    db
+      .select({ sessionUuid: schema.aiSessions.sessionUuid })
+      .from(schema.aiSessions)
+      .where(
+        and(
+          inArray(schema.aiSessions.sessionUuid, sessions),
+          isNotNull(schema.aiSessions.archivedAt),
+        ),
+      )
+      .get(),
+  );
 }
 
 /** Actions about an entity, in these states. */

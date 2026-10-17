@@ -64,7 +64,7 @@ async function done(decisions: Record<string, ReviewDecision>) {
     const outcome = await aiApi.apply([modalData.actionUuid], {
       [modalData.actionUuid]: decisions,
     });
-    tellEntitiesChanged(outcome.applied.map((applied) => applied.entity));
+    tellEntitiesChanged(outcome.changed);
     if (outcome.failed) {
       error.value = outcome.failed.error;
       return;

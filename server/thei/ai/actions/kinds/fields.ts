@@ -7,17 +7,13 @@ import {
   hasPeriods,
 } from '../../../entity-patch/validate';
 import { refOf } from '../../../entity-kinds';
-import {
-  assertKnown,
-  FORM_WRITE_ONLY,
-  type FormKind,
-} from '../../forms/changes';
-import { changedForm, loadForm } from '../../forms/load';
+import { assertKnown, type FormKind } from '../../forms/changes';
+import { changedForm, formPart, loadForm } from '../../forms/load';
 import { currentField, currentPeriods } from '../current';
 import { assetIdsIn, checkFieldValue, sameValue } from '../values';
-import { applyFormChanges, pick } from '../write';
+import { alike, applyFormChanges, changedFields, pick } from '../write';
 import type { AiActionKindDef } from '../types';
-import { clipped, target } from './common';
+import { clipped, standing, target } from './common';
 
 /**
  * Actions on an entity's form: a field set, its dates, who may see it, and
@@ -70,11 +66,11 @@ export const fieldAction: AiActionKindDef<'field'> = {
   evaluate(key, row) {
     const payload = row.payload as { field: string; value: unknown };
     const base = (row.base ?? {}) as { value?: unknown };
-    const current = currentField(key!, payload.field);
-    if (sameValue(current, payload.value)) return { state: 'done' };
-    return sameValue(current, base.value)
-      ? { state: 'open' }
-      : { state: 'stale' };
+    return standing(
+      currentField(key!, payload.field),
+      payload.value,
+      base.value,
+    );
   },
   summary(payload) {
     const value = Array.isArray(payload.value)
@@ -115,11 +111,7 @@ export const periodsAction: AiActionKindDef<'periods'> = {
   evaluate(key, row) {
     const payload = row.payload as { periods: unknown };
     const base = (row.base ?? {}) as { periods?: unknown };
-    const current = currentPeriods(key!);
-    if (sameValue(current, payload.periods)) return { state: 'done' };
-    return sameValue(current, base.periods)
-      ? { state: 'open' }
-      : { state: 'stale' };
+    return standing(currentPeriods(key!), payload.periods, base.periods);
   },
   summary: (payload) =>
     `Periods: ${payload.periods
@@ -157,9 +149,7 @@ export const accessAction: AiActionKindDef<'access'> = {
   evaluate(key, row) {
     const payload = row.payload as { access: string };
     const base = (row.base ?? {}) as { access?: unknown };
-    const current = currentField(key!, 'access');
-    if (current === payload.access) return { state: 'done' };
-    return current === base.access ? { state: 'open' } : { state: 'stale' };
+    return standing(currentField(key!, 'access'), payload.access, base.access);
   },
   summary: (payload) => `Access → ${payload.access}`,
 };
@@ -168,8 +158,10 @@ export const accessAction: AiActionKindDef<'access'> = {
  * Any change an entity's form takes, as an editor's key may make it: the
  * fields it names are laid over the form as it is, and it waits — or applies
  * at once — like any action. What it changes is told against the form it was
- * made over: open while those fields still read so, done once they read as it
- * would leave them, stale when they moved another way.
+ * made over — a section's own item of its project's — compared as `alike`
+ * says: open while those fields still read so, done once they read as it
+ * would leave them, stale when they moved another way. What it keeps of them
+ * is as a form has them, for a form to take it.
  */
 export const updateAction: AiActionKindDef<'update'> = {
   kind: 'update',
@@ -192,20 +184,18 @@ export const updateAction: AiActionKindDef<'update'> = {
     assertKnown(entity.kind as FormKind, changes);
     const loaded = await loadForm(entity);
     const next = await changedForm(entity, loaded, changes);
-    // Status edits are only written; what they change reads in statusTexts.
-    const fields = Object.keys(next).filter(
-      (field) =>
-        !FORM_WRITE_ONLY.has(field) &&
-        JSON.stringify(next[field]) !== JSON.stringify(loaded.form[field]),
-    );
+    const before = formPart(entity, loaded.form);
+    const after = formPart(entity, next);
+    if (!before || !after) fail(`There is no ${refOf(entity)}.`);
+    const fields = changedFields(before, after);
     if (!fields.length)
       fail('It changes nothing: the entity already reads so.');
     return {
       payload: { kind: 'update', changes },
       base: {
         fields,
-        before: pick(loaded.form, fields),
-        after: pick(next, fields),
+        before: pick(before, fields),
+        after: pick(after, fields),
       },
       dropped: [],
       assetUuids: [...assetIdsIn(changes)],
@@ -225,10 +215,15 @@ export const updateAction: AiActionKindDef<'update'> = {
       after?: unknown;
     };
     const loaded = await loadForm(key!).catch(() => undefined);
-    if (!loaded) return { state: 'gone' };
-    const now = pick(loaded.form, base.fields ?? []);
-    if (sameValue(now, base.after)) return { state: 'done' };
-    return sameValue(now, base.before) ? { state: 'open' } : { state: 'stale' };
+    const part = loaded && formPart(key!, loaded.form);
+    if (!part) return { state: 'gone' };
+    const fields = base.fields ?? [];
+    return standing(
+      alike(part, fields),
+      alike(base.after, fields),
+      alike(base.before, fields),
+      (left, right) => left === right,
+    );
   },
   summary: (payload) => `Change ${Object.keys(payload.changes).join(', ')}`,
 };

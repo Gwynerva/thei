@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { asc, eq } from 'drizzle-orm';
+import { asc, desc, eq } from 'drizzle-orm';
 import {
   AI_BUILTIN_TEMPLATE_KEYS,
   AI_TEMPLATE_INSTRUCTION_MAX,
@@ -36,11 +36,26 @@ function builtinKeyOf(templateId: string): AiBuiltinTemplateKey | undefined {
   );
 }
 
-function lastSessionOf(row: TemplateRow | undefined) {
-  const session = row?.lastSessionUuid
-    ? findSession(row.lastSessionUuid)
-    : undefined;
-  return session && !session.purgedAt
+/**
+ * The latest session a template started: a check's run, kept with its
+ * settings, or — for the owner's own ready-made request, never run — the
+ * latest session begun from it.
+ */
+function lastSessionOf(templateId: string, row: TemplateRow | undefined) {
+  const { db, schema } = THEI_SERVER.useDb();
+  const sessionUuid =
+    row?.lastSessionUuid ??
+    (
+      db
+        .select({ sessionUuid: schema.aiSessions.sessionUuid })
+        .from(schema.aiSessions)
+        .where(eq(schema.aiSessions.templateId, templateId))
+        .orderBy(desc(schema.aiSessions.createdAt))
+        .limit(1)
+        .get() as { sessionUuid: string } | undefined
+    )?.sessionUuid;
+  const session = sessionUuid ? findSession(sessionUuid) : undefined;
+  return session
     ? {
         lastSession: {
           sessionUuid: session.sessionUuid,
@@ -62,7 +77,7 @@ function builtinItem(key: AiBuiltinTemplateKey): AiTemplateItem {
     title: words.title,
     instruction: words.instruction,
     model: row?.model ?? '',
-    ...lastSessionOf(row),
+    ...lastSessionOf(builtinTemplateId(key), row),
   };
 }
 
@@ -72,7 +87,7 @@ function ownItem(row: TemplateRow): AiTemplateItem {
     title: row.title ?? '',
     instruction: row.instruction ?? '',
     model: row.model,
-    ...lastSessionOf(row),
+    ...lastSessionOf(row.templateId, row),
   };
 }
 

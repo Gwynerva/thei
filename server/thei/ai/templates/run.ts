@@ -119,7 +119,7 @@ export async function runTemplate(
     // A worded run is given its batch when its model asks for it.
     const free = worded
       ? []
-      : holdBatch(tx, schema, templateId, sessionUuid, due);
+      : holdBatch(tx, schema, templateId, sessionUuid, due, now);
     const part: AiMessagePart = {
       type: 'template',
       templateId,
@@ -151,20 +151,13 @@ export async function runTemplate(
       },
       now,
     );
-    const about: ActionTarget[] = scope ?? [
-      ...new Map(
-        free.flatMap((item) =>
-          item.entity
-            ? [[`${item.entity.kind}:${item.entity.id}`, item.entity]]
-            : [],
-        ),
-      ).values(),
-    ];
+    // What it is about: what the owner named; what it is given is linked as
+    // it is given (`holdBatch`).
     linkSessionEntities(
       tx,
       schema,
       sessionUuid,
-      about.map((entity) => ({
+      (scope ?? []).map((entity) => ({
         type: entity.kind as AiEntityType,
         id: entity.id,
         role: 'about' as const,

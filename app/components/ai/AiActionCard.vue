@@ -119,7 +119,8 @@ async function applyNow(actions: AiActionItem[]) {
     actions.map((action) => action.actionUuid),
     partsOf(actions),
   );
-  tellEntitiesChanged(outcome.applied.map((applied) => applied.entity));
+  // Every entity whose version moved: a relation's other end too.
+  tellEntitiesChanged(outcome.changed);
   if (outcome.refused) showToast(outcome.refused);
   else if (outcome.failed) showToast(outcome.failed.error);
   return !outcome.refused && !outcome.failed;
@@ -171,8 +172,8 @@ function never(action: AiActionItem) {
 
 function undo(action: AiActionItem) {
   return run(async () => {
-    await aiApi.undo(action.actionUuid);
-    tellEntitiesChanged([action.target?.ref]);
+    const answer = await aiApi.undo(action.actionUuid);
+    tellEntitiesChanged([action.target?.ref, ...answer.changed]);
     showToast(phrase.value.ai_toast_undone);
   });
 }
@@ -220,7 +221,7 @@ const settled = computed(() =>
     <template v-else>
       <div class="flex min-w-0 items-center gap-2 px-3 py-2.5">
         <span
-          class="flex size-7 shrink-0 items-center justify-center rounded-md
+          class="flex size-7 shrink-0 items-center justify-center rounded-normal
             bg-bg-accent text-accent"
         >
           <Icon :name="icon" />

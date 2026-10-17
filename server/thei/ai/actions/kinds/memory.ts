@@ -1,9 +1,6 @@
 import { eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
-import {
-  AI_ANCHOR_MEMORY_MAX,
-  AI_OWNER_MEMORY_MAX,
-} from '#layers/thei/shared/ai';
+import { AI_OWNER_MEMORY_MAX, type AiTerm } from '#layers/thei/shared/ai';
 import { AI_MEMORY_TEXT_MAX } from '#layers/thei/shared/ai-memory';
 import { AI_REMEMBER_ABOUT } from '#layers/thei/shared/ai-actions';
 import { refuse as fail } from '../../../entity-patch/text';
@@ -12,8 +9,10 @@ import { updateTheiConfig } from '../../../config/write';
 import {
   addMemory,
   anchorRows,
+  assertMemoryRoom,
   factsSize,
   isMemoryKind,
+  memoryText,
   type MemoryAnchor,
   type MemoryRow,
 } from '../../memory/store';
@@ -41,6 +40,38 @@ const REMEMBERED = [
 const sameWords = (left: string, right: string) =>
   left.replace(/\s+/g, ' ').trim().toLowerCase() ===
   right.replace(/\s+/g, ' ').trim().toLowerCase();
+
+/** Whether a word of the dictionary reads alike: its spelling, note, forms, keep. */
+function sameTerm(
+  left: Pick<AiTerm, 'display' | 'note' | 'forms' | 'keep'> | null | undefined,
+  right: Pick<AiTerm, 'display' | 'note' | 'forms' | 'keep'> | null | undefined,
+): boolean {
+  if (!left || !right) return !left && !right;
+  return (
+    left.display === right.display &&
+    left.note === right.note &&
+    left.keep === right.keep &&
+    JSON.stringify(left.forms) === JSON.stringify(right.forms)
+  );
+}
+
+/** The facts of an anchor as a compaction was made over: each by id and words. */
+function factsOf(anchor: MemoryAnchor) {
+  return anchorRows(anchor)
+    .filter((row) => row.type === 'fact')
+    .map((row) => ({ memoryUuid: row.memoryUuid, text: row.text }));
+}
+
+function sameFacts(
+  left: { memoryUuid: string; text: string }[],
+  right: { memoryUuid: string; text: string }[],
+) {
+  const key = (facts: { memoryUuid: string; text: string }[]) =>
+    JSON.stringify(
+      [...facts].sort((a, b) => a.memoryUuid.localeCompare(b.memoryUuid)),
+    );
+  return key(left) === key(right);
+}
 
 interface AnchorInput {
   about?: string;
@@ -142,9 +173,7 @@ export const rememberAction: AiActionKindDef<'remember'> = {
   targets: REMEMBERED,
   async prepare(key, input) {
     const anchor = anchorFrom(key, input);
-    const text = (input.text as string).replace(/\s+/g, ' ').trim();
-    if (!text) fail('Say what to remember.');
-    if (text.length > AI_MEMORY_TEXT_MAX) fail('A fact is a sentence or two.');
+    const text = memoryText(input.text);
     if (anchor.anchor === 'owner') {
       if (ownerText().includes(text)) fail('«About you» says so already.');
       if (withOwnerLine(ownerText(), text).length > AI_OWNER_MEMORY_MAX)
@@ -152,13 +181,13 @@ export const rememberAction: AiActionKindDef<'remember'> = {
           `«About you» would pass ${AI_OWNER_MEMORY_MAX} characters: tell the owner to make room in it.`,
         );
     } else {
-      const rows = anchorRows(anchor);
-      if (rows.some((row) => row.type === 'fact' && sameWords(row.text, text)))
+      if (
+        anchorRows(anchor).some(
+          (row) => row.type === 'fact' && sameWords(row.text, text),
+        )
+      )
         fail('It is remembered so already.');
-      if (factsSize(rows) + text.length > AI_ANCHOR_MEMORY_MAX)
-        fail(
-          `Its memory would pass ${AI_ANCHOR_MEMORY_MAX} characters: propose memory-compact for it first, in the same call.`,
-        );
+      assertMemoryRoom(anchor, text.length);
     }
     return {
       payload: { kind: 'remember', ...anchorPayload(anchor), text },
@@ -308,16 +337,20 @@ export const termAction: AiActionKindDef<'term'> = {
     });
     return undefined;
   },
+  // Done once the word reads as it would leave it, its forms and spelling
+  // too; stale once it reads otherwise than when it was proposed.
   evaluate(_key, row): ActionEvaluation {
     const payload = row.payload as {
       word: string;
       note: string;
+      forms: string[];
       keep: boolean;
     };
+    const base = row.base as { before?: AiTerm } | null;
     const now = findTerm(payload.word);
-    return now && now.note === payload.note && now.keep === payload.keep
-      ? { state: 'done' }
-      : { state: 'open' };
+    if (sameTerm(now, { ...payload, display: payload.word }))
+      return { state: 'done' };
+    return sameTerm(now, base?.before) ? { state: 'open' } : { state: 'stale' };
   },
   summary: (payload) =>
     `Dictionary: ${payload.word}${payload.keep ? ' (keep)' : ''}${payload.note ? ` — ${clipped(payload.note, 80)}` : ''}`,
@@ -358,7 +391,14 @@ export const memoryCompactAction: AiActionKindDef<'memory-compact'> = {
         }),
         facts,
       },
-      base: { memoryUuids: now.map((row) => row.memoryUuid) },
+      // The facts it says again, each as it read: one the owner changed
+      // since is not written over with words summed up from the old.
+      base: {
+        facts: now.map((row) => ({
+          memoryUuid: row.memoryUuid,
+          text: row.text,
+        })),
+      },
       dropped: [],
     };
   },
@@ -374,7 +414,8 @@ export const memoryCompactAction: AiActionKindDef<'memory-compact'> = {
     const payload = row.payload as { facts: string[] } & AnchorInput;
     const anchor =
       anchorOfPayload(key, payload) ?? fail('What it is about is gone.');
-    const base = row.base as { memoryUuids: string[] };
+    const base = row.base as { facts: { memoryUuid: string; text: string }[] };
+    const ids = base.facts.map((fact) => fact.memoryUuid);
     const { db, schema } = THEI_SERVER.useDb();
     const now = Date.now();
     db.transaction((tx) => {
@@ -382,19 +423,15 @@ export const memoryCompactAction: AiActionKindDef<'memory-compact'> = {
         tx
           .select()
           .from(schema.aiMemory)
-          .where(inArray(schema.aiMemory.memoryUuid, base.memoryUuids))
+          .where(inArray(schema.aiMemory.memoryUuid, ids))
           .all() as MemoryRow[]
       ).filter((item) => item.type === 'fact');
-      const current = anchorRows(anchor).filter((item) => item.type === 'fact');
-      if (
-        facts.length !== base.memoryUuids.length ||
-        current.length !== facts.length
-      )
+      if (!sameFacts(factsOf(anchor), base.facts))
         fail(
           'Its memory changed since: compact it again from what is there now.',
         );
       tx.delete(schema.aiMemory)
-        .where(inArray(schema.aiMemory.memoryUuid, base.memoryUuids))
+        .where(inArray(schema.aiMemory.memoryUuid, ids))
         .run();
       const added = payload.facts.map((text, index) => {
         const memoryUuid = addMemory(
@@ -415,13 +452,8 @@ export const memoryCompactAction: AiActionKindDef<'memory-compact'> = {
     const payload = row.payload as AnchorInput;
     const anchor = anchorOfPayload(key, payload);
     if (!anchor) return { state: 'gone' };
-    const base = row.base as { memoryUuids: string[] };
-    const current = anchorRows(anchor)
-      .filter((item) => item.type === 'fact')
-      .map((item) => item.memoryUuid)
-      .sort();
-    return JSON.stringify(current) ===
-      JSON.stringify([...base.memoryUuids].sort())
+    const base = row.base as { facts: { memoryUuid: string; text: string }[] };
+    return sameFacts(factsOf(anchor), base.facts)
       ? { state: 'open' }
       : { state: 'stale' };
   },
@@ -435,10 +467,7 @@ type MemoryUndo = {
   kind: 'memory';
   added?: { memoryUuid: string; text: string }[];
   removed?: Record<string, unknown>[];
-  term?: {
-    before: import('#layers/thei/shared/ai').AiTerm | null;
-    after: import('#layers/thei/shared/ai').AiTerm;
-  };
+  term?: { before: AiTerm | null; after: AiTerm };
   owner?: { before: string; after: string };
 };
 
@@ -446,16 +475,8 @@ type MemoryUndo = {
 export function memoryUndoReady(undo: MemoryUndo): boolean {
   const { db, schema } = THEI_SERVER.useDb();
   if (undo.owner && ownerText() !== undo.owner.after) return false;
-  if (undo.term) {
-    const now = findTerm(undo.term.after.word);
-    if (
-      !now ||
-      now.note !== undo.term.after.note ||
-      now.keep !== undo.term.after.keep ||
-      now.display !== undo.term.after.display
-    )
-      return false;
-  }
+  if (undo.term && !sameTerm(findTerm(undo.term.after.word), undo.term.after))
+    return false;
   if (undo.added?.length) {
     const rows = db
       .select()

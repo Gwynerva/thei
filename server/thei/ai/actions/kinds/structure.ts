@@ -58,7 +58,7 @@ type CreatedKind = (typeof CREATED_KINDS)[number];
 const PART_LISTS = ['sections', 'tags', 'relations'] as const;
 
 /** The parts of a new entity, by the id the owner decides them under. */
-export function createPartIds(fields: Changes): string[] {
+function createPartIds(fields: Changes): string[] {
   return PART_LISTS.flatMap((list) =>
     Array.isArray(fields[list])
       ? (fields[list] as unknown[]).map((_, index) => `${list}:${index}`)
@@ -195,7 +195,8 @@ export const createAction: AiActionKindDef<'create'> = {
     const outcome = parts.length ? { parts } : undefined;
     let created: EntityKey | undefined;
     const onCreate =
-      (kind: EntityKey['kind']) => (tx: any, schema: any, id: string) => {
+      (kind: EntityKey['kind'], versionBefore?: number) =>
+      (tx: any, schema: any, id: string) => {
         created = { kind, id } as EntityKey;
         write(
           tx,
@@ -203,6 +204,7 @@ export const createAction: AiActionKindDef<'create'> = {
           {
             kind: 'create',
             created,
+            ...(versionBefore === undefined ? {} : { versionBefore }),
             versionAfter: formOwnerVersion(created, tx),
           },
           outcome,
@@ -235,7 +237,7 @@ export const createAction: AiActionKindDef<'create'> = {
                 )
                 .get() as { id: string } | undefined;
               if (!made) fail('The section was not made.');
-              onCreate('project-section')(tx, schema, made.id);
+              onCreate('project-section', loaded.version)(tx, schema, made.id);
             },
           }),
         );

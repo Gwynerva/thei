@@ -42,7 +42,7 @@ export const AI_ACTION_DEFS: { [K in AiActionKind]: AiActionKindDef<K> } = {
   describe: describeAction,
 };
 
-export function isActionKind(value: unknown): value is AiActionKind {
+function isActionKind(value: unknown): value is AiActionKind {
   return (AI_ACTION_KINDS as readonly unknown[]).includes(value);
 }
 

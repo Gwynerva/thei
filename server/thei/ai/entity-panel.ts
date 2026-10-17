@@ -6,6 +6,7 @@ import type {
   AiOfferPlace,
 } from '#layers/thei/shared/ai-entity';
 import { entityText, refOf, type EntityKey } from '../entity-kinds';
+import type { FORM_FIELDS, FormKind } from './forms/changes';
 import { settleActions } from './actions/apply';
 import { actionsAbout } from './actions/rows';
 import type { ActionRow } from './actions/types';
@@ -24,9 +25,112 @@ import { listTemplates } from './templates/store';
 /** How many sessions about it the form's menu names. */
 const SESSIONS_SHOWN = 5;
 
+/**
+ * Where each kind's form shows a change of one of its fields: at the label
+ * of a field the form has for it, or at its head — a list the form edits as
+ * a whole, a text, a file, an address. A new field of a form names its
+ * place here; `tests/server/ai-actions-contract.test.ts` checks it does.
+ */
+export const FIELD_PLACES: {
+  [K in FormKind]: Record<(typeof FORM_FIELDS)[K][number], AiOfferPlace>;
+} = {
+  project: {
+    title: 'field:title',
+    summary: 'field:summary',
+    access: 'access',
+    showcase: 'field:showcase',
+    cv: 'field:cv',
+    reminder: 'field:reminder',
+    synonyms: 'field:synonyms',
+    slug: 'form',
+    publicId: 'form',
+    icon: 'form',
+    banner: 'form',
+    showcaseFiles: 'form',
+    files: 'form',
+    links: 'form',
+    tags: 'form',
+    relations: 'form',
+    description: 'form',
+    notes: 'form',
+    sections: 'form',
+    sectionOrder: 'form',
+    statuses: 'form',
+    actionText: 'form',
+  },
+  'project-section': {
+    title: 'field:title',
+    summary: 'field:summary',
+    private: 'form',
+    periods: 'periods',
+    body: 'form',
+    banner: 'form',
+    slug: 'form',
+    publicId: 'form',
+  },
+  event: {
+    title: 'field:title',
+    summary: 'field:summary',
+    access: 'access',
+    reminder: 'field:reminder',
+    synonyms: 'field:synonyms',
+    slug: 'form',
+    publicId: 'form',
+    periods: 'periods',
+    banner: 'form',
+    files: 'form',
+    links: 'form',
+    tags: 'form',
+    relations: 'form',
+    body: 'form',
+    notes: 'form',
+  },
+  'diary-entry': {
+    date: 'form',
+    access: 'access',
+    reminder: 'field:reminder',
+    body: 'form',
+    notes: 'form',
+    relations: 'form',
+  },
+  page: {
+    title: 'field:title',
+    summary: 'field:summary',
+    access: 'access',
+    reminder: 'field:reminder',
+    synonyms: 'field:synonyms',
+    slug: 'form',
+    icon: 'form',
+    body: 'form',
+    notes: 'form',
+  },
+  tag: {
+    title: 'form',
+    description: 'field:description',
+    synonyms: 'field:synonyms',
+    slug: 'form',
+    publicId: 'form',
+    icon: 'form',
+  },
+  profile: {
+    displayName: 'form',
+    slogan: 'field:slogan',
+    nickname: 'form',
+    about: 'form',
+    banner: 'form',
+    favicon: 'form',
+    links: 'form',
+    statuses: 'form',
+  },
+};
+
 /** Where the form shows a proposal of this kind. */
 function placeOf(row: ActionRow, key: EntityKey): AiOfferPlace {
-  const payload = (row.payload ?? {}) as { field?: string; text?: string };
+  const payload = row.payload as {
+    field?: string;
+    text?: string;
+    changes?: Record<string, unknown>;
+  };
   switch (row.kind) {
     case 'field':
       return `field:${payload.field}`;
@@ -39,6 +143,13 @@ function placeOf(row: ActionRow, key: EntityKey): AiOfferPlace {
     case 'revise': {
       const text = entityText(key.kind, payload.text);
       return text ? `text:${text.slot}` : 'form';
+    }
+    // A change of one field waits where the field is; of several, at the head.
+    case 'update': {
+      const fields = Object.keys(payload.changes ?? {});
+      const places = FIELD_PLACES[key.kind as FormKind] as
+        Record<string, AiOfferPlace> | undefined;
+      return (fields.length === 1 && places?.[fields[0]!]) || 'form';
     }
     default:
       return 'form';
@@ -155,12 +266,7 @@ function sessionCount(key: EntityKey): number {
     db
       .select({ total: count() })
       .from(schema.aiSessions)
-      .where(
-        and(
-          inArray(schema.aiSessions.sessionUuid, about),
-          isNull(schema.aiSessions.purgedAt),
-        ),
-      )
+      .where(inArray(schema.aiSessions.sessionUuid, about))
       .get()?.total ?? 0
   );
 }

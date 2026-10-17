@@ -1,8 +1,10 @@
 import { z } from 'zod';
+import { namesTag } from '#layers/thei/shared/ai-actions';
 import {
   RELATION_WORD_FROM_OTHER_END,
   RELATION_WORDS,
   type RelationEditItem,
+  type RelationNote,
 } from '#layers/thei/shared/relation';
 import { refuse as fail } from '../../../entity-patch/text';
 import {
@@ -10,12 +12,12 @@ import {
   existingTag,
 } from '../../../entity-patch/validate';
 import { findEntity, refOf, type EntityKey } from '../../../entity-kinds';
+import { relationNote, relationNoteInput } from '../../forms/changes';
 import { loadForm } from '../../forms/load';
 import { currentRelation, currentTags } from '../current';
-import { sameValue } from '../values';
 import { applyFormChanges } from '../write';
 import type { AiActionKindDef } from '../types';
-import { target } from './common';
+import { standing, target } from './common';
 
 /**
  * Actions on what an entity is joined to: its tags, and the relations of the
@@ -61,12 +63,7 @@ export const tagsAction: AiActionKindDef<'tags'> = {
       return found;
     });
     const pending = add.filter(
-      (tag) =>
-        !current.some((item) =>
-          tag.ref
-            ? item.ref === tag.ref
-            : item.title.toLowerCase() === tag.title.toLowerCase(),
-        ),
+      (tag) => !current.some((item) => namesTag(tag, item)),
     );
     if (!pending.length && !remove.length)
       fail('It already carries those tags.');
@@ -103,11 +100,7 @@ export const tagsAction: AiActionKindDef<'tags'> = {
     };
     const current = currentTags(key!);
     const has = (tag: { ref?: string; title: string }) =>
-      current.some((item) =>
-        tag.ref
-          ? item.ref === tag.ref
-          : item.title.toLowerCase() === tag.title.toLowerCase(),
-      );
+      current.some((item) => namesTag(tag, item));
     return payload.add.every(has) && !payload.remove.some(has)
       ? { state: 'done' }
       : { state: 'open' };
@@ -126,12 +119,15 @@ export const tagsAction: AiActionKindDef<'tags'> = {
 export const relationAction: AiActionKindDef<'relation'> = {
   kind: 'relation',
   reference:
-    'A relation of the owner’s map, between projects, events and diary entries: other (a ref), relation — related | depends-on (the target depends on the other) | affects — op add | change | remove, a note, and whyNotInlineLink: why a link in the text would not do. A relation is a deliberate claim of a real dependency; a mere mention deserves a link (revise, category link). It needs its reason.',
+    'A relation of the owner’s map, between projects, events and diary entries: other (a ref), relation — related | depends-on (the target depends on the other) | affects — op add | change | remove, a note — one for both sides (note), or one per side (notes: { this, other }) — and whyNotInlineLink: why a link in the text would not do. A relation is a deliberate claim of a real dependency; a mere mention deserves a link (revise, category link). It needs its reason.',
   schema: z.object({
     op: z.enum(['add', 'change', 'remove']).default('add'),
     other: z.string(),
     relation: z.enum(RELATION_WORDS).default('related'),
-    note: z.unknown().optional(),
+    note: z.string().nullable().optional(),
+    notes: z
+      .object({ this: z.string().optional(), other: z.string().optional() })
+      .optional(),
     whyNotInlineLink: z.string().optional(),
   }),
   targets: ['project', 'event', 'diary-entry'],
@@ -149,13 +145,18 @@ export const relationAction: AiActionKindDef<'relation'> = {
       fail('There is no such relation to remove.');
     if (input.op !== 'remove' && current === input.relation)
       fail('That relation is already there.');
+    // Kept as a relation keeps it, read by the form that takes it.
+    const note =
+      input.op === 'remove'
+        ? undefined
+        : relationNote({ note: input.note, notes: input.notes }, undefined);
     return {
       payload: {
         kind: 'relation',
         op: input.op === 'remove' ? 'remove' : current ? 'change' : 'add',
         other: refOf(other),
         relation: input.relation,
-        ...(input.note ? { note: input.note } : {}),
+        ...(note ? { note } : {}),
         ...(input.whyNotInlineLink
           ? { whyNotInlineLink: input.whyNotInlineLink }
           : {}),
@@ -164,18 +165,21 @@ export const relationAction: AiActionKindDef<'relation'> = {
       dropped: [],
     };
   },
-  // One relation read from either end: A depends on B is B affects A.
+  // One relation read from either end: A depends on B is B affects A. One
+  // taken away is the pair alone, whatever word it is named by.
   identityHasTarget: true,
   identity(payload, key) {
     const self = key ? refOf(key) : '';
-    return self < payload.other
-      ? [payload.op === 'remove', self, payload.other, payload.relation]
-      : [
-          payload.op === 'remove',
-          payload.other,
-          self,
-          RELATION_WORD_FROM_OTHER_END[payload.relation],
-        ];
+    const ends =
+      self < payload.other ? [self, payload.other] : [payload.other, self];
+    if (payload.op === 'remove') return [true, ...ends];
+    return [
+      false,
+      ...ends,
+      self < payload.other
+        ? payload.relation
+        : RELATION_WORD_FROM_OTHER_END[payload.relation],
+    ];
   },
   async apply(key, row, _context, write) {
     const entity = target(key);
@@ -183,7 +187,7 @@ export const relationAction: AiActionKindDef<'relation'> = {
       op: 'add' | 'change' | 'remove';
       other: string;
       relation: string;
-      note?: unknown;
+      note?: RelationNote;
     };
     const other =
       findEntity(payload.other) ?? fail(`There is no ${payload.other} now.`);
@@ -200,16 +204,7 @@ export const relationAction: AiActionKindDef<'relation'> = {
       items.push({
         ref: payload.other,
         kind: payload.relation,
-        ...(payload.note && typeof payload.note === 'object'
-          ? 'text' in payload.note
-            ? { note: (payload.note as { text?: string }).text ?? '' }
-            : {
-                notes: {
-                  this: (payload.note as { currentText?: string }).currentText,
-                  other: (payload.note as { relatedText?: string }).relatedText,
-                },
-              }
-          : {}),
+        ...relationNoteInput(payload.note),
       });
     await applyFormChanges(entity, { relations: items }, write);
     return entity;
@@ -226,10 +221,7 @@ export const relationAction: AiActionKindDef<'relation'> = {
     const current = currentRelation(key!, other);
     if (payload.op === 'remove')
       return current ? { state: 'open' } : { state: 'done' };
-    if (current === payload.relation) return { state: 'done' };
-    return sameValue(current ?? null, base.relation ?? null)
-      ? { state: 'open' }
-      : { state: 'stale' };
+    return standing(current ?? null, payload.relation, base.relation ?? null);
   },
   summary: (payload) =>
     payload.op === 'remove'

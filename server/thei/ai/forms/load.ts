@@ -1,4 +1,5 @@
 import { and, eq } from 'drizzle-orm';
+import type { ProjectSectionItem } from '#layers/thei/shared/project-content-item';
 import { EntityEditConflict, type EntityEditOptions } from '../../entity-edit';
 import { refuse as fail } from '../../entity-patch/text';
 import { readProjectEdit, saveProjectEdit } from '../../projects/edit';
@@ -47,31 +48,66 @@ export async function found<T>(
   return (await find) ?? fail(`Nothing found for ${refOf(key)}.`);
 }
 
+type StatusOwner = { type: 'project' | 'profile'; id: string };
+
+function statusRows(owner: StatusOwner) {
+  const { db, schema } = THEI_SERVER.useDb();
+  return db
+    .select({
+      id: schema.statuses.id,
+      text: schema.statuses.text,
+      assetUuid: schema.statuses.assetUuid,
+    })
+    .from(schema.statuses)
+    .where(
+      and(
+        eq(schema.statuses.ownerType, owner.type),
+        eq(schema.statuses.ownerId, owner.id),
+      ),
+    )
+    .all() as { id: string; text: string; assetUuid: string | null }[];
+}
+
 /**
  * Every status line of an owner, by id: what a change of them is told
  * against, the whole history and not only the page a form shows.
  */
-function statusTextsOf(type: 'project' | 'profile', id: string) {
-  const { db, schema } = THEI_SERVER.useDb();
+function statusTextsOf(owner: StatusOwner) {
   return Object.fromEntries(
-    db
-      .select({ id: schema.statuses.id, text: schema.statuses.text })
-      .from(schema.statuses)
-      .where(
-        and(
-          eq(schema.statuses.ownerType, type),
-          eq(schema.statuses.ownerId, id),
-        ),
-      )
-      .all()
-      .map((row: { id: string; text: string }) => [row.id, row.text]),
+    statusRows(owner).map((row) => [row.id, row.text]),
   ) as Record<string, string>;
 }
 
-/** A form as its save takes it: what was read only for the AI left out. */
-function writable(form: any) {
-  const { statusTexts: _texts, ...rest } = form;
-  return rest;
+/**
+ * A form as its save takes it. Its status lines are read as `statusTexts`,
+ * and written as the edits of those that read otherwise now — each its
+ * picture and day kept — so a change of them and its undo are one field.
+ */
+function writable(form: any, owner: StatusOwner) {
+  const { statusTexts, ...rest } = form;
+  const texts = (statusTexts ?? {}) as Record<string, string>;
+  const updated = statusRows(owner).flatMap((row) =>
+    row.id in texts && texts[row.id] !== row.text
+      ? [
+          {
+            id: row.id,
+            text: texts[row.id]!,
+            ...(row.assetUuid ? { assetUuid: row.assetUuid } : {}),
+          },
+        ]
+      : [],
+  );
+  if (!updated.length) return rest;
+  const named = new Set(updated.map((status) => status.id));
+  return {
+    ...rest,
+    updatedStatuses: [
+      ...((rest.updatedStatuses ?? []) as { id: string }[]).filter(
+        (status) => !named.has(status.id),
+      ),
+      ...updated,
+    ],
+  };
 }
 
 export function tagRow(key: EntityKey) {
@@ -106,11 +142,15 @@ export async function loadForm(key: EntityKey): Promise<LoadedForm> {
         owner: key,
         form: {
           ...(await readProjectEdit(project)),
-          statusTexts: statusTextsOf('project', key.id),
+          statusTexts: statusTextsOf({ type: 'project', id: key.id }),
         },
         version: project.updatedAt,
         save: (form, options) =>
-          saveProjectEdit(key.id, writable(form), options),
+          saveProjectEdit(
+            key.id,
+            writable(form, { type: 'project', id: key.id }),
+            options,
+          ),
       };
     }
     case 'project-section':
@@ -154,15 +194,24 @@ export async function loadForm(key: EntityKey): Promise<LoadedForm> {
       };
     }
     case 'profile': {
-      const { data } = await getAdminProfile();
+      const { data, statuses } = await getAdminProfile();
       return {
         owner: key,
-        form: { ...data, statusTexts: statusTextsOf('profile', key.id) },
+        form: {
+          ...data,
+          // Read with the form, as a project's are, for a model to name
+          // them; the profile's save takes them as `statusTexts` alone.
+          statuses,
+          statusTexts: statusTextsOf({ type: 'profile', id: key.id }),
+        },
         version: data.version ?? 0,
-        async save(form, options) {
+        async save({ statuses: _shown, ...form }, options) {
           try {
             // The record is written in the save's own transaction.
-            await saveProfile(writable(form), options);
+            await saveProfile(
+              writable(form, { type: 'profile', id: key.id }),
+              options,
+            );
           } catch (error) {
             if (error instanceof EntityEditConflict)
               return { type: 'error', code: 'changed' };
@@ -178,6 +227,29 @@ export async function loadForm(key: EntityKey): Promise<LoadedForm> {
       };
     }
   }
+}
+
+/**
+ * What of the form an entity is: a section its own item among its project's
+ * sections, any other entity the whole form. What an action on it kept and
+ * compares is this part alone, so another section's change leaves it be.
+ */
+export function formPart(key: EntityKey, form: any): any {
+  if (key.kind !== 'project-section') return form;
+  return ((form.sections ?? []) as ProjectSectionItem[]).find(
+    (section) => section.sectionUuid === key.id,
+  );
+}
+
+/** The form with the entity's part put back: what is saved. */
+export function withFormPart(key: EntityKey, form: any, part: any): any {
+  if (key.kind !== 'project-section') return part;
+  return {
+    ...form,
+    sections: ((form.sections ?? []) as ProjectSectionItem[]).map((section) =>
+      section.sectionUuid === key.id ? part : section,
+    ),
+  };
 }
 
 /** A change laid over the form it is made in. */

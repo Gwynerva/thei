@@ -313,6 +313,8 @@ export const aiApi = {
   ) {
     return $fetch<{
       applied: { actionUuid: string; entity?: string }[];
+      /** Every entity whose version moved, for open forms to read anew. */
+      changed: string[];
       refused?: string;
       failed?: { actionUuid: string; error: string };
     }>('/api/admin/ai/actions/apply', {
@@ -345,9 +347,10 @@ export const aiApi = {
     });
   },
   undo(actionUuid: string) {
-    return $fetch(`/api/admin/ai/actions/${actionUuid}/undo`, {
-      method: 'POST',
-    });
+    return $fetch<{ entity?: string; changed: string[] }>(
+      `/api/admin/ai/actions/${actionUuid}/undo`,
+      { method: 'POST' },
+    );
   },
   comment(actionUuid: string, text: string) {
     return $fetch(`/api/admin/ai/actions/${actionUuid}/comment`, {

@@ -9,6 +9,7 @@ import { prepareTextEdit } from '#layers/thei/shared/content-edit-markdown/patch
 import { EntityPatchError, refuse as fail } from '../../entity-patch/text';
 import type { EntityKey } from '../../entity-kinds';
 import { normalizeSynonyms } from '#layers/thei/shared/synonyms';
+import { normalizeHeadingText } from '#layers/thei/shared/terminal-punctuation';
 import { checkedInlineHtml } from '../../mcp/text-input';
 
 /**
@@ -45,7 +46,10 @@ export function checkFieldValue(
     if (typeof value !== 'string') fail(`${field} takes text.`);
     const text = value.replace(/\s+/g, ' ').trim();
     if (!text && field === 'title') fail('A title cannot be empty.');
-    return text.slice(0, field === 'reminder' ? 500 : 2000);
+    // A title is a heading: settled as its save settles it.
+    return field === 'title'
+      ? normalizeHeadingText(text.slice(0, 2000))
+      : text.slice(0, field === 'reminder' ? 500 : 2000);
   }
   fail(`${field} is not a field an action can set on its own.`);
 }
@@ -54,13 +58,16 @@ export function sameValue(left: unknown, right: unknown) {
   return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
 }
 
-const FILE_FIELDS = new Set(['icon', 'banner', 'favicon', 'file']);
+/** The fields a file stands in, as a change names them and a form keeps them. */
+const FILE_FIELDS = new Set(['icon', 'banner', 'favicon', 'file', 'assetUuid']);
 
 /**
- * The library files a proposal brings in: by field — an icon, a banner, a
- * file of a list — and inside texts, `::media{asset="<id>"}` and the like.
- * They are held from cleanup while the action waits, so a file uploaded for
- * it stays.
+ * The library files a proposal brings in, or a change leaves behind: by
+ * field — an icon, a banner, a file of a list, as a change names them or as
+ * a form keeps them (`iconAssetUuid`, `otherAssets[].assetUuid`, a file of a
+ * stored text) — and inside texts, `::media{asset="<id>"}` and the like.
+ * They are held from cleanup while the action waits, or may be undone, so a
+ * file uploaded for it, or one it took away, stays.
  */
 export function assetIdsIn(value: unknown, into = new Set<string>()) {
   if (typeof value === 'string')
@@ -70,7 +77,11 @@ export function assetIdsIn(value: unknown, into = new Set<string>()) {
     for (const item of value) assetIdsIn(item, into);
   else if (value && typeof value === 'object')
     for (const [field, item] of Object.entries(value)) {
-      if (FILE_FIELDS.has(field) && typeof item === 'string' && item)
+      if (
+        (FILE_FIELDS.has(field) || field.endsWith('AssetUuid')) &&
+        typeof item === 'string' &&
+        item
+      )
         into.add(item);
       else assetIdsIn(item, into);
     }

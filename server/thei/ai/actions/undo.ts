@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, isNotNull, or } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, or } from 'drizzle-orm';
 import type {
   ContentOwnerType,
   ContentSlot,
@@ -24,7 +24,13 @@ import {
 } from '../../entity-kinds';
 import { removeEntity } from '../forms/entities';
 import { actionLocks, withEntityLocks } from './lock';
-import { CHANGED_AFTER, loadForm, saved } from '../forms/load';
+import {
+  CHANGED_AFTER,
+  formPart,
+  loadForm,
+  saved,
+  withFormPart,
+} from '../forms/load';
 import { publishActions } from '../sessions/bus';
 import { refreshSessionCounts } from '../sessions/store';
 import { entityTargetOf, findAction, targetOf } from './rows';
@@ -37,7 +43,7 @@ import {
   writeAssetDescription,
 } from '../../assets/descriptions';
 import { memoryUndoReady, undoMemory } from './kinds/memory';
-import { pick } from './write';
+import { alike } from './write';
 import type { ActionRow, ActionUndo } from './types';
 
 /**
@@ -79,17 +85,13 @@ function revivedTags(items: TagEditItem[]): TagEditItem[] {
   );
 }
 
-function sameData(left: unknown, right: unknown) {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
 /** The version of its form an applied action found, and the one it left. */
 function ownerVersionsOf(undo: StoredUndo) {
   switch (undo.kind) {
     case 'form':
       return { before: undo.versionBefore, after: undo.versionAfter };
     case 'create':
-      return { before: undefined, after: undo.versionAfter };
+      return { before: undo.versionBefore, after: undo.versionAfter };
     case 'text':
       return { before: undo.ownerBefore, after: undo.ownerVersion };
     default:
@@ -98,11 +100,13 @@ function ownerVersionsOf(undo: StoredUndo) {
 }
 
 /**
- * Whether only actions have changed what `made` made since: every applied
- * or undone action on its form, from the version `made` left, began at the
- * version the one before it left, and the last left the version it is at
- * now. A change by anyone else — the owner's own form, a relation drawn from
- * the other side — breaks the chain.
+ * Whether only actions have changed what `made` made since: from the
+ * version `made` left, each step — an action applied or undone on its form —
+ * began at the version the one before it left, and the last left the version
+ * it is at now. A change by anyone else — the owner's own form, a relation
+ * drawn from the other side — leaves a version no step began at, and the
+ * chain ends short of now. Steps that change no version, or began before,
+ * lead nowhere and are passed over.
  */
 function onlyActionsSince(made: ActionRow, owner: EntityKey): boolean {
   const { db, schema } = THEI_SERVER.useDb();
@@ -116,14 +120,15 @@ function onlyActionsSince(made: ActionRow, owner: EntityKey): boolean {
           .map((section) => section.id)
       : [];
   const t = schema.aiActions;
-  // Only the actions on its form: the entity, and a project's sections.
+  // Only the actions on its form: the entity, and a project's sections. An
+  // action applied before it may have been undone after it, so none is
+  // left out by its clock.
   const rows = db
     .select()
     .from(t)
     .where(
       and(
         isNotNull(t.undo),
-        gte(t.decidedAt, made.decidedAt ?? 0),
         or(
           and(eq(t.targetType, owner.kind as never), eq(t.targetId, owner.id)),
           ...(sections.length
@@ -137,7 +142,6 @@ function onlyActionsSince(made: ActionRow, owner: EntityKey): boolean {
         ),
       ),
     )
-    .orderBy(asc(t.decidedAt))
     .all() as ActionRow[];
   let chain = ownerVersionsOf(made.undo as StoredUndo).after;
   if (chain === undefined) return false;
@@ -149,13 +153,17 @@ function onlyActionsSince(made: ActionRow, owner: EntityKey): boolean {
     if (undo.undone)
       steps.push({ before: undo.undone.before, after: undo.undone.after });
   }
-  // Each step begins where one before it ended, whatever their clocks say.
-  while (steps.length) {
-    const next = steps.findIndex((step) => step.before === chain);
-    if (next === -1) return false;
-    const [step] = steps.splice(next, 1);
-    if (step!.after === undefined) return false;
-    chain = step!.after;
+  // Each step begins where the one before it ended, whatever their clocks
+  // say; one that moved the version to where it began leads nowhere new.
+  for (;;) {
+    const next = steps.findIndex(
+      (step) =>
+        step.before === chain &&
+        step.after !== undefined &&
+        step.after !== chain,
+    );
+    if (next === -1) break;
+    chain = steps.splice(next, 1)[0]!.after!;
   }
   return formOwnerVersion(owner) === chain;
 }
@@ -216,11 +224,9 @@ export async function undoState(row: ActionRow): Promise<UndoState> {
       )
         return 'ready';
       const loaded = await loadForm(key).catch(() => undefined);
-      if (!loaded) return 'gone';
-      const fields = [...Object.keys(undo.before!), ...(undo.cleared ?? [])];
-      return undo.after && sameData(pick(loaded.form, fields), undo.after)
-        ? 'ready'
-        : 'changed';
+      const part = loaded && formPart(key, loaded.form);
+      if (!part) return 'gone';
+      return readsAsLeft(undo, part) ? 'ready' : 'changed';
     }
     case 'create': {
       if (!entityFace(undo.created)) return 'gone';
@@ -229,6 +235,17 @@ export async function undoState(row: ActionRow): Promise<UndoState> {
       return onlyActionsSince(row, owner) ? 'ready' : 'changed';
     }
   }
+}
+
+/**
+ * Whether the fields a form change touched read as a read gave them right
+ * after it — compared as `alike` says, so another end's new title does not
+ * count as a change of a relation.
+ */
+function readsAsLeft(undo: Extract<ActionUndo, { kind: 'form' }>, part: any) {
+  if (!undo.after || !undo.before) return false;
+  const fields = [...Object.keys(undo.before), ...(undo.cleared ?? [])];
+  return alike(part, fields) === alike(undo.after, fields);
 }
 
 const UNDO_REFUSALS = {
@@ -263,6 +280,40 @@ export interface RollbackTo {
 }
 
 /**
+ * Marks an action undone — or, rolled back, as it was before the apply —
+ * inside the transaction that takes its change back: one decided elsewhere
+ * meanwhile refuses the whole.
+ */
+function markUndone(
+  tx: any,
+  schema: any,
+  row: ActionRow,
+  rollback: RollbackTo | undefined,
+  undone: StoredUndo,
+) {
+  const table = schema.aiActions;
+  const result = tx
+    .update(table)
+    .set(
+      rollback
+        ? {
+            state: rollback.state,
+            parts: rollback.parts,
+            undo: rollback.undo,
+            appliedBy: rollback.appliedBy,
+            decidedAt: rollback.decidedAt,
+          }
+        : { state: 'undone', undo: undone },
+    )
+    .where(
+      and(eq(table.actionUuid, row.actionUuid), eq(table.state, row.state)),
+    )
+    .run() as { changes: number };
+  if (!result.changes) fail(UNDO_REFUSALS.undone);
+  refreshSessionCounts(tx, schema, row.sessionUuid);
+}
+
+/**
  * Undoes an applied action while it still can be: puts the fields it changed
  * back as they were, takes back what it made, or puts back the text it
  * replaced. Each is checked again where it is written, so a change landing
@@ -294,29 +345,12 @@ async function undoNow(
   const now = options.now ?? Date.now();
   // Memory changes no entity: it is taken back as it was, nothing to version.
   if (undo!.kind === 'memory') {
-    await undoMemory(undo!, (tx, schema) => {
-      const table = schema.aiActions;
-      const rollback = options.rollback;
-      const result = tx
-        .update(table)
-        .set(
-          rollback
-            ? {
-                state: rollback.state,
-                parts: rollback.parts,
-                undo: rollback.undo,
-                appliedBy: rollback.appliedBy,
-                decidedAt: rollback.decidedAt,
-              }
-            : { state: 'undone', undo: { ...undo, undone: { at: now } } },
-        )
-        .where(
-          and(eq(table.actionUuid, actionUuid), eq(table.state, row.state)),
-        )
-        .run() as { changes: number };
-      if (!result.changes) fail(UNDO_REFUSALS.undone);
-      refreshSessionCounts(tx, schema, row.sessionUuid);
-    });
+    await undoMemory(undo!, (tx, schema) =>
+      markUndone(tx, schema, row, options.rollback, {
+        ...undo!,
+        undone: { at: now },
+      }),
+    );
     return targetOf(row);
   }
   // A description changes no entity either: it is put back as it was, over
@@ -330,39 +364,15 @@ async function undoNow(
       writeAssetDescription(carrier, kept.before, {
         expectedUpdatedAt: current.updatedAt,
         now,
-        onWrite: (tx, schema, written) => {
-          const table = schema.aiActions;
-          const rollback = options.rollback;
-          const result = tx
-            .update(table)
-            .set(
-              rollback
-                ? {
-                    state: rollback.state,
-                    parts: rollback.parts,
-                    undo: rollback.undo,
-                    appliedBy: rollback.appliedBy,
-                    decidedAt: rollback.decidedAt,
-                  }
-                : {
-                    state: 'undone',
-                    undo: {
-                      ...kept,
-                      undone: {
-                        at: now,
-                        before: current.updatedAt ?? undefined,
-                        after: written.updatedAt ?? undefined,
-                      },
-                    },
-                  },
-            )
-            .where(
-              and(eq(table.actionUuid, actionUuid), eq(table.state, row.state)),
-            )
-            .run() as { changes: number };
-          if (!result.changes) fail(UNDO_REFUSALS.undone);
-          refreshSessionCounts(tx, schema, row.sessionUuid);
-        },
+        onWrite: (tx, schema, written) =>
+          markUndone(tx, schema, row, options.rollback, {
+            ...kept,
+            undone: {
+              at: now,
+              before: current.updatedAt ?? undefined,
+              after: written.updatedAt ?? undefined,
+            },
+          }),
       });
     } catch (error) {
       if (error instanceof AssetDescriptionConflict)
@@ -380,63 +390,45 @@ async function undoNow(
   const owner = formOwnerOf(affected) ?? affected;
   const ownerBefore = formOwnerVersion(owner);
   const finish = (tx: any, schema: any) => {
-    const table = schema.aiActions;
     const rollback = options.rollback;
-    const result = tx
-      .update(table)
-      .set(
-        rollback
-          ? {
-              state: rollback.state,
-              parts: rollback.parts,
-              undo: rollback.undo,
-              appliedBy: rollback.appliedBy,
-              decidedAt: rollback.decidedAt,
-            }
-          : {
-              state: 'undone',
-              undo: {
-                ...undo,
-                undone: {
-                  at: now,
-                  before: ownerBefore,
-                  after: formOwnerVersion(owner, tx),
-                },
-              },
-            },
-      )
-      .where(and(eq(table.actionUuid, actionUuid), eq(table.state, row.state)))
-      .run() as { changes: number };
-    if (!result.changes) fail(UNDO_REFUSALS.undone);
+    markUndone(tx, schema, row, rollback, {
+      ...undo!,
+      undone: {
+        at: now,
+        before: ownerBefore,
+        after: formOwnerVersion(owner, tx),
+      },
+    });
     // What the action held in the history lives as any version does now,
     // unless an earlier apply of it still stands.
     if (!rollback?.undo) releaseHistoryHolds(tx, schema, [actionUuid]);
     // Undone, it needs its files no more: they get their grace from now.
     if (!rollback) touchReleasedAssets(tx, schema, row.assetUuids, now);
-    refreshSessionCounts(tx, schema, row.sessionUuid);
   };
 
   switch (undo!.kind) {
     case 'form': {
       const key = entityTargetOf(row)!;
       const loaded = await loadForm(key);
+      const part = formPart(key, loaded.form) ?? fail(UNDO_REFUSALS.gone);
       // Checked again on the very read written over: a save that landed
       // since the check is refused, never taken with the undo.
-      const fields = [...Object.keys(undo!.before!), ...(undo!.cleared ?? [])];
       if (
         !(
           undo!.versionAfter !== undefined &&
           loaded.version === undo!.versionAfter
         ) &&
-        !(undo!.after && sameData(pick(loaded.form, fields), undo!.after))
+        !readsAsLeft(undo!, part)
       )
         fail(UNDO_REFUSALS.changed);
-      const restored = { ...loaded.form, ...undo!.before };
+      // Only the entity's own part goes back — a section's item — laid over
+      // the form as it reads now.
+      const restored = { ...part, ...undo!.before };
       for (const field of undo!.cleared ?? []) delete restored[field];
       if (Array.isArray(restored.tags))
         restored.tags = revivedTags(restored.tags);
       saved(
-        await loaded.save(restored, {
+        await loaded.save(withFormPart(key, loaded.form, restored), {
           expectedUpdatedAt: loaded.version,
           onWrite: finish,
         }),

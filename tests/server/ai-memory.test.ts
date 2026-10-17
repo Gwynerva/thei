@@ -10,10 +10,19 @@ import {
   proposeActions,
   type ActionProposal,
 } from '../../server/thei/ai/actions/propose';
-import { applyActions } from '../../server/thei/ai/actions/apply';
+import {
+  applyActions,
+  settleActions,
+} from '../../server/thei/ai/actions/apply';
+import { rejectActions } from '../../server/thei/ai/actions/decide';
+import { deleteTagUsagesForContainer } from '../../server/thei/tags';
 import { undoAction, undoState } from '../../server/thei/ai/actions/undo';
 import { findAction } from '../../server/thei/ai/actions/rows';
-import { addMemory, anchorRows } from '../../server/thei/ai/memory/store';
+import {
+  addMemory,
+  anchorRows,
+  updateMemory,
+} from '../../server/thei/ai/memory/store';
 import { memoryLines } from '../../server/thei/ai/memory/read';
 import { memoryIndex } from '../../server/thei/ai/memory/index';
 import {
@@ -306,6 +315,96 @@ describe('memory', () => {
   });
 });
 
+describe('memory, as the owner changes it', () => {
+  it('compacts only the facts as they read when it was proposed', async () => {
+    addMemory({ anchor: 'entity', entity: project }, { text: 'One fact.' });
+    addMemory(
+      { anchor: 'entity', entity: project },
+      { text: 'Another fact, said at far greater length than it needs.' },
+    );
+    const sessionUuid = createSession({ origin: 'owner', title: 'Memory' });
+    const { results } = await proposeActions({
+      sessionUuid,
+      actions: [
+        {
+          kind: 'memory-compact',
+          target: `project:${PROJECT}`,
+          facts: ['Two facts.'],
+        },
+      ],
+    });
+    const actionUuid = (results[0] as { actionUuid: string }).actionUuid;
+    const [first] = anchorRows({ anchor: 'entity', entity: project });
+    updateMemory(first!.memoryUuid, 'One fact, said otherwise.');
+    expect(
+      (await applyActions({ actionUuids: [actionUuid], by: 'owner' })).refused,
+    ).toMatch(/moved on/);
+    expect(findAction(actionUuid)?.state).toBe('stale');
+    expect(
+      anchorRows({ anchor: 'entity', entity: project }).map((row) => row.text),
+    ).toContain('One fact, said otherwise.');
+  });
+
+  it('keeps what it knows of a tag kept for its picture', () => {
+    const TAG = 't-1';
+    const insert = (sql: string, ...values: unknown[]) =>
+      context.rawDb.prepare(sql).run(...values);
+    insert(
+      "INSERT INTO tags (tagUuid, title, normalizedTitle, slug, publicId) VALUES (?, 'Boats', 'boats', 'boats', 'Boats1')",
+      TAG,
+    );
+    insert(
+      "INSERT INTO `tag-usages` (tagUuid, containerType, containerId, sortOrder) VALUES (?, 'project', ?, 0)",
+      TAG,
+      PROJECT,
+    );
+    insert(
+      "INSERT INTO assets (assetUuid, slug, extension, familyUuid, contentHash, settingsKey, type, size, touchedAt) VALUES ('a-boat', 'boat', 'png', 'af-boat', 'hash-boat', 'original', 'image', 1, 1)",
+    );
+    insert(
+      "INSERT INTO `asset-usages` (assetUuid, containerType, containerId, role) VALUES ('a-boat', 'tag', ?, 'icon')",
+      TAG,
+    );
+    const tag = { kind: 'tag' as const, id: TAG };
+    addMemory({ anchor: 'entity', entity: tag }, { text: 'Only real boats.' });
+    const { db, schema } = context;
+    db.transaction((tx) =>
+      deleteTagUsagesForContainer(tx, schema, 'project', PROJECT),
+    );
+    expect(one('SELECT title FROM tags WHERE tagUuid = ?', TAG)?.title).toBe(
+      'Boats',
+    );
+    expect(
+      anchorRows({ anchor: 'entity', entity: tag }).map((row) => row.text),
+    ).toEqual(['Only real boats.']);
+  });
+
+  it('lists a «never» about a file, to be let go of', async () => {
+    context.rawDb
+      .prepare(
+        "INSERT INTO assets (assetUuid, slug, extension, familyUuid, contentHash, settingsKey, settings, type, size, touchedAt) VALUES ('a-1', 'plan', 'pdf', 'af-1', 'hash-1', 'original', '{}', 'other', 1, 1)",
+      )
+      .run();
+    const sessionUuid = createSession({ origin: 'owner', title: 'Files' });
+    const { results } = await proposeActions({
+      sessionUuid,
+      actions: [{ kind: 'describe', file: 'a-1', text: 'A plan of the pier.' }],
+    });
+    rejectActions([(results[0] as { actionUuid: string }).actionUuid], {
+      never: true,
+    });
+    const index = await memoryIndex();
+    expect(index.entities.map((group) => group.entity)).toEqual([
+      expect.objectContaining({
+        ref: 'asset:a-1',
+        type: 'asset',
+        title: 'plan',
+      }),
+    ]);
+    expect(index.entities[0]!.items[0]).toMatchObject({ type: 'never' });
+  });
+});
+
 describe('the dictionary', () => {
   it('finds a word in its forms, by its stem, and keeps it from proofreading', () => {
     saveTerm({ display: 'Kuzova', note: 'Islands in the White Sea' });
@@ -316,6 +415,47 @@ describe('the dictionary', () => {
     expect(termsIn('Nothing here.')).toEqual([]);
     expect(keptWordsIn('to the Kuzova islands')).toEqual(['kuzova']);
     expect(termItems().find((t) => t.display === 'Kuzova')!.uses).toBe(1);
+  });
+
+  it('keeps a word of several words in the form a phrase has it in', () => {
+    saveTerm({ display: 'Нижний Новгород', forms: ['Нижнем Новгороде'] });
+    expect(keptWordsIn('жил в Нижнем Новгороде')).toEqual([
+      'нижнем',
+      'новгороде',
+    ]);
+  });
+
+  it('settles a word only once it reads as proposed, its forms too', async () => {
+    saveTerm({ display: 'Lyosha', note: 'My brother' });
+    const sessionUuid = createSession({ origin: 'owner', title: 'Words' });
+    const { results } = await proposeActions({
+      sessionUuid,
+      actions: [{ kind: 'term', word: 'Lyosha', forms: ['Lyoshka'] }],
+    });
+    const actionUuid = (results[0] as { actionUuid: string }).actionUuid;
+    expect((await settleActions([findAction(actionUuid)!]))[0]!.state).toBe(
+      'pending',
+    );
+    // Said otherwise by the owner meanwhile, it no longer stands.
+    saveTerm({ display: 'Lyosha', note: 'A friend' }, 'Lyosha');
+    expect((await settleActions([findAction(actionUuid)!]))[0]!.state).toBe(
+      'stale',
+    );
+  });
+
+  it('is not taken back over forms the owner gave it since', async () => {
+    const [action] = await applied({
+      kind: 'term',
+      word: 'Kuzova',
+      note: 'Islands',
+      forms: ['Kuzovah'],
+    });
+    expect(await undoState(findAction(action!)!)).toBe('ready');
+    saveTerm(
+      { display: 'Kuzova', note: 'Islands', forms: ['Kuzovakh'] },
+      'Kuzova',
+    );
+    expect(await undoState(findAction(action!)!)).toBe('changed');
   });
 
   it('takes a word an action brings, and gives back the one it replaced', async () => {

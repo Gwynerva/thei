@@ -23,6 +23,11 @@ import { tagIdOf, type EntityKey } from '../../entity-kinds';
 import { textFromMarkdown } from '../../mcp/text-input';
 import { normalizeSynonyms } from '#layers/thei/shared/synonyms';
 import {
+  normalizeCaptionText,
+  normalizeHeadingText,
+} from '#layers/thei/shared/terminal-punctuation';
+import { normalizeEntityReminder } from '#layers/thei/shared/entity-notes';
+import {
   checkedAccess,
   checkedPeriods,
   checkedRelationEnd,
@@ -127,54 +132,21 @@ Fields by kind — a change names only the fields it changes:
 A list given replaces the list it names: what it leaves out goes. Each item names what it is — a relation its ref, a file its file id, a link its url — and keeps whatever else it leaves out: a relation its kind and note, a file its title, caption and privacy, a link its note and name. read_entity lists them in this very shape. A relation's note is one for both sides (note) or one per side (notes: { this, other }). A file is an id from upload_file, import_file or read_entity; in a text it is ::media{asset=<id>}. Pictures, files and links are the owner's choice: change them only when the owner asks.`;
 
 /**
- * Keys a form carries only to be written — the edits of a status history —
- * never read back as such: what they change reads in `statusTexts`.
- */
-export const FORM_WRITE_ONLY = new Set([
-  'newStatuses',
-  'updatedStatuses',
-  'deletedStatusIds',
-]);
-
-/**
- * Status lines rewritten in place, each by its id, its picture and day kept:
- * what an owner's history reads afterwards, and the edits that write it.
+ * Status lines rewritten in place, each by its id: what an owner's history
+ * reads afterwards. The save writes those that read otherwise now, each its
+ * picture and day kept (`writable` in `./load`).
  */
 function statusChanges(
-  form: { statusTexts?: Record<string, string>; updatedStatuses?: unknown[] },
+  form: { statusTexts?: Record<string, string> },
   value: unknown,
 ) {
-  const items = list(value, 'statuses');
   const texts = { ...(form.statusTexts ?? {}) };
-  const { db, schema } = THEI_SERVER.useDb();
-  const pictures = new Map(
-    (
-      db
-        .select({
-          id: schema.statuses.id,
-          assetUuid: schema.statuses.assetUuid,
-        })
-        .from(schema.statuses)
-        .where(
-          inArray(
-            schema.statuses.id,
-            items.map((item) => String(item.id)),
-          ),
-        )
-        .all() as { id: string; assetUuid: string | null }[]
-    ).map((row) => [row.id, row.assetUuid]),
-  );
-  const updated = items.map((item) => {
+  for (const item of list(value, 'statuses')) {
     const id = String(item.id);
     if (!(id in texts)) fail(`There is no status ${id} here.`);
-    texts[id] = text(item.text, 'a status');
-    const assetUuid = pictures.get(id);
-    return { id, text: texts[id]!, ...(assetUuid ? { assetUuid } : {}) };
-  });
-  return {
-    statusTexts: texts,
-    updatedStatuses: [...(form.updatedStatuses ?? []), ...updated],
-  };
+    texts[id] = caption(item.text, 'a status');
+  }
+  return { statusTexts: texts };
 }
 
 export function assertKnown(kind: FormKind, changes: Changes) {
@@ -189,6 +161,33 @@ export function assertKnown(kind: FormKind, changes: Changes) {
 function text(value: unknown, field: string): string {
   if (typeof value !== 'string') fail(`${field} takes text.`);
   return value;
+}
+
+/**
+ * A title, a caption: as its save settles it — trimmed, its last mark as a
+ * heading or a caption takes it — so a change is checked against what it
+ * will read (`shared/terminal-punctuation.ts`).
+ */
+function heading(value: unknown, field: string): string {
+  return normalizeHeadingText(text(value, field).trim());
+}
+
+function caption(value: unknown, field: string): string {
+  return normalizeCaptionText(text(value, field).trim());
+}
+
+/** A summary, a reminder: trimmed as their save keeps them. */
+function plainText(value: unknown, field: string): string {
+  return field === 'reminder'
+    ? normalizeEntityReminder(text(value, field))
+    : text(value, field).trim();
+}
+
+/** A field a kind's form does not take: `assertKnown` names those it does. */
+function unknownField(kind: FormKind, field: string): never {
+  fail(
+    `A ${kind} has no field "${field}"; its fields are ${FORM_FIELDS[kind].join(', ')}.`,
+  );
 }
 
 function flag(value: unknown, field: string): boolean {
@@ -234,7 +233,7 @@ function storedBy<T>(stored: T[] | undefined, key: (item: T) => string) {
  * A relation's note: one for both sides (`note`), one per side (`notes`), or
  * — named neither — the note it has now.
  */
-function relationNote(
+export function relationNote(
   item: Record<string, unknown>,
   kept: RelationNote | undefined,
 ): RelationNote | undefined {
@@ -255,6 +254,18 @@ function relationNote(
       ? undefined
       : { type: 'shared', text: text(item.note, 'note') };
   return kept;
+}
+
+/** A note as a relation item names it: what `relationNote` reads back. */
+export function relationNoteInput(
+  note: RelationNote | undefined,
+): Record<string, unknown> {
+  if (note?.type === 'shared') return { note: note.text ?? '' };
+  if (note?.type === 'split')
+    return {
+      notes: { this: note.currentText ?? '', other: note.relatedText ?? '' },
+    };
+  return {};
 }
 
 /**
@@ -328,7 +339,7 @@ function links(
       note:
         item.note === undefined
           ? (before?.note ?? '')
-          : text(item.note, 'note'),
+          : caption(item.note, 'note'),
       isPrivate:
         item.private === undefined
           ? (before?.isPrivate ?? false)
@@ -352,7 +363,7 @@ function showcaseFiles(value: unknown, stored?: ShowcaseFile[]) {
       caption:
         item.caption === undefined
           ? before?.caption
-          : text(item.caption, 'caption'),
+          : caption(item.caption, 'caption'),
       isPrivate:
         item.private === undefined
           ? (before?.isPrivate ?? false)
@@ -372,11 +383,11 @@ function otherFiles(value: unknown, stored?: OtherFile[]) {
       title:
         item.title === undefined
           ? (before?.title ?? '')
-          : text(item.title, 'title'),
+          : heading(item.title, 'title'),
       caption:
         item.caption === undefined
           ? before?.caption
-          : text(item.caption, 'caption'),
+          : caption(item.caption, 'caption'),
       isPrivate:
         item.private === undefined
           ? (before?.isPrivate ?? false)
@@ -461,10 +472,10 @@ async function sectionChanges(
       case 'id':
         break;
       case 'title':
-        next.title = text(value, key);
+        next.title = heading(value, key);
         break;
       case 'summary':
-        next.summary = text(value, key);
+        next.summary = plainText(value, key);
         break;
       case 'private':
         next.isPrivate = flag(value, key);
@@ -487,9 +498,7 @@ async function sectionChanges(
         next.publicId = text(value, key);
         break;
       default:
-        fail(
-          `A section has no field "${key}"; its fields are ${FORM_FIELDS['project-section'].join(', ')}.`,
-        );
+        unknownField('project-section', key);
     }
   }
   return next;
@@ -516,9 +525,11 @@ export async function projectChanges(
   for (const [field, value] of Object.entries(changes)) {
     switch (field) {
       case 'title':
+        next.title = heading(value, field);
+        break;
       case 'summary':
       case 'reminder':
-        next[field] = text(value, field);
+        next[field] = plainText(value, field);
         break;
       case 'synonyms':
         next.synonyms = names(value, next.title);
@@ -622,6 +633,8 @@ export async function projectChanges(
         ];
         break;
       }
+      default:
+        unknownField('project', field);
     }
   }
   return next;
@@ -636,9 +649,11 @@ export async function eventChanges(
   for (const [field, value] of Object.entries(changes)) {
     switch (field) {
       case 'title':
+        next.title = heading(value, field);
+        break;
       case 'summary':
       case 'reminder':
-        next[field] = text(value, field);
+        next[field] = plainText(value, field);
         break;
       case 'synonyms':
         next.synonyms = names(value, next.title);
@@ -679,6 +694,8 @@ export async function eventChanges(
       case 'notes':
         next.notes = await markdown(value, form.notes, field);
         break;
+      default:
+        unknownField('event', field);
     }
   }
   return next;
@@ -699,7 +716,7 @@ export async function diaryChanges(
         next.access = checkedAccess(key.kind, value) as never;
         break;
       case 'reminder':
-        next.reminder = text(value, field);
+        next.reminder = plainText(value, field);
         break;
       case 'body':
         next.content = (await markdown(value, form.content, field)) as never;
@@ -710,6 +727,8 @@ export async function diaryChanges(
       case 'relations':
         next.relations = relations(value, key, form.relations);
         break;
+      default:
+        unknownField('diary-entry', field);
     }
   }
   return next;
@@ -720,9 +739,11 @@ export async function pageChanges(form: PageEditData, changes: Changes) {
   for (const [field, value] of Object.entries(changes)) {
     switch (field) {
       case 'title':
+        next.title = heading(value, field);
+        break;
       case 'summary':
       case 'reminder':
-        (next as Record<string, unknown>)[field] = text(value, field);
+        (next as Record<string, unknown>)[field] = plainText(value, field);
         break;
       case 'synonyms':
         next.synonyms = names(value, next.title);
@@ -742,6 +763,8 @@ export async function pageChanges(form: PageEditData, changes: Changes) {
       case 'notes':
         next.notes = await markdown(value, form.notes, field);
         break;
+      default:
+        unknownField('page', field);
     }
   }
   return next;
@@ -760,9 +783,11 @@ export function tagChanges(form: TagEditData, changes: Changes) {
     switch (field) {
       case 'title':
       case 'description':
+        next[field] = plainText(value, field);
+        break;
       case 'slug':
       case 'publicId':
-        (next as Record<string, unknown>)[field] = text(value, field);
+        next[field] = text(value, field);
         break;
       case 'synonyms':
         next.synonyms = names(value, next.title);
@@ -770,6 +795,8 @@ export function tagChanges(form: TagEditData, changes: Changes) {
       case 'icon':
         next.iconAssetUuid = file(value, field);
         break;
+      default:
+        unknownField('tag', field);
     }
   }
   return next;
@@ -782,7 +809,7 @@ export async function profileChanges(form: ProfileEditData, changes: Changes) {
       case 'displayName':
       case 'slogan':
       case 'nickname':
-        next[field] = text(value, field);
+        next[field] = plainText(value, field);
         break;
       case 'statuses':
         Object.assign(next, statusChanges(next as never, value));
@@ -812,6 +839,8 @@ export async function profileChanges(form: ProfileEditData, changes: Changes) {
         });
         break;
       }
+      default:
+        unknownField('profile', field);
     }
   }
   return next;

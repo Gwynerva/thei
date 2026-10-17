@@ -82,6 +82,19 @@ export const AI_ACTION_INFO: Record<AiActionKind, AiActionKindInfo> = {
 export const AI_REMEMBER_ABOUT = ['entity', 'pair', 'kind', 'owner'] as const;
 export type AiRememberAbout = (typeof AI_REMEMBER_ABOUT)[number];
 
+/**
+ * Whether a tag an entity carries is the one a `tags` action names: by its
+ * ref, or — a tag to be made — by its title, case aside.
+ */
+export function namesTag(
+  tag: { ref?: string; title: string },
+  carried: { ref?: string; title: string },
+): boolean {
+  return tag.ref
+    ? carried.ref === tag.ref
+    : carried.title.toLowerCase() === tag.title.toLowerCase();
+}
+
 /** Fields a `field` action may set, by entity kind. */
 export const AI_FIELD_ACTIONS = {
   project: ['title', 'summary', 'reminder', 'synonyms', 'showcase', 'cv'],
@@ -277,8 +290,8 @@ export type AiActionPayload =
     }
   | {
       /**
-       * A new entity. A section's project is the action's target — or the
-       * project a parent action makes, when the section is a part of it.
+       * A new entity. A section's project is the action's target; a new
+       * project brings its sections in its own fields.
        */
       kind: 'create';
       entity:

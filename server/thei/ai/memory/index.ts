@@ -6,8 +6,11 @@ import type {
 } from '#layers/thei/shared/ai-memory';
 import { normalizeTermText } from '#layers/thei/shared/text-terms';
 import type { AiEntityRef, AiEntityType } from '#layers/thei/shared/ai';
+import type { MediaDescriptor } from '#layers/thei/shared/media';
 import { entityFaces, type EntityKind } from '../../entity-kinds';
 import { relationIconMedia } from '../../relations';
+import { fileRef } from '../actions/target';
+import { libraryFile } from '../sessions/files';
 import { listTerms, termItems } from '../terms';
 import { factsSize, memoryItem, type MemoryRow } from './store';
 
@@ -45,7 +48,7 @@ export async function memoryIndex(
   // gone since is left out.
   const groups = new Map<
     string,
-    { kind: EntityKind; id: string; rows: MemoryRow[] }
+    { kind: EntityKind | 'asset'; id: string; rows: MemoryRow[] }
   >();
   for (const row of rows) {
     if (row.anchor !== 'entity' && row.anchor !== 'pair') continue;
@@ -54,24 +57,44 @@ export async function memoryIndex(
       ...(row.anchor === 'pair' && row.otherType && row.otherId
         ? [[row.otherType, row.otherId]]
         : []),
-    ] as [EntityKind, string][];
+    ] as [EntityKind | 'asset', string][];
     for (const [kind, id] of ends) {
       const group = groups.get(`${kind}:${id}`) ?? { kind, id, rows: [] };
       group.rows.push(row);
       groups.set(`${kind}:${id}`, group);
     }
   }
-  const faces = entityFaces([...groups.values()]);
+  const faces = entityFaces(
+    [...groups.values()].flatMap((group) =>
+      group.kind === 'asset' ? [] : [{ kind: group.kind, id: group.id }],
+    ),
+  );
+  // A file is no entity: what is kept about it — a «never» of its
+  // description — is named by the library.
+  const files = new Map<string, MediaDescriptor | undefined>();
   const found = [...groups.entries()].flatMap(([id, group]) => {
-    const face = faces.get(id);
-    if (!face) return [];
-    const ref: AiEntityRef = {
-      ref: face.ref,
-      type: group.kind as AiEntityType,
-      id: group.id,
-      title: face.title,
-      path: face.path,
-    };
+    let ref: AiEntityRef;
+    if (group.kind === 'asset') {
+      const file = libraryFile(group.id);
+      if (!file) return [];
+      files.set(group.id, file.media);
+      ref = {
+        ref: fileRef(group.id),
+        type: 'asset',
+        id: group.id,
+        title: file.slug,
+      };
+    } else {
+      const face = faces.get(id);
+      if (!face) return [];
+      ref = {
+        ref: face.ref,
+        type: group.kind as AiEntityType,
+        id: group.id,
+        title: face.title,
+        path: face.path,
+      };
+    }
     return has(ref.title) || group.rows.some((row) => has(row.text))
       ? [{ ...group, ref }]
       : [];
@@ -80,12 +103,15 @@ export async function memoryIndex(
   const page = found.slice(offset, offset + GROUPS_PER_PAGE);
   const entities: AiMemoryEntityGroup[] = await Promise.all(
     page.map(async (group) => {
-      const media = PICTURED.has(group.kind)
-        ? await relationIconMedia({
-            type: group.kind as never,
-            id: group.id,
-          }).catch(() => undefined)
-        : undefined;
+      const media =
+        group.kind === 'asset'
+          ? files.get(group.id)
+          : PICTURED.has(group.kind)
+            ? await relationIconMedia({
+                type: group.kind as never,
+                id: group.id,
+              }).catch(() => undefined)
+            : undefined;
       return {
         entity: group.ref,
         ...(media ? { media } : {}),

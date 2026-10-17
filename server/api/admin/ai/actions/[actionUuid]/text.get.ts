@@ -35,7 +35,7 @@ export default defineEventHandler(async (event): Promise<AiReviewText> => {
   return {
     action: action!,
     data: field?.data ?? { blocks: [] },
-    ...(session && !session.purgedAt
+    ...(session
       ? {
           session: {
             sessionUuid: session.sessionUuid,

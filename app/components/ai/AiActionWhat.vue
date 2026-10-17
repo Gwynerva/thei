@@ -98,9 +98,17 @@ const reviseParts = computed(
 const corrections = computed(
   () => reviseParts.value.filter((part) => part.type === 'correction').length,
 );
-const unsure = computed(
-  () => reviseParts.value.filter((part) => part.certainty === 'unsure').length,
-);
+/** Parts left to the owner's judgement that still wait for it. */
+const unsure = computed(() => {
+  const states = new Map(
+    (props.action.parts ?? []).map((part) => [part.id, part.state]),
+  );
+  return reviseParts.value.filter(
+    (part) =>
+      part.certainty === 'unsure' &&
+      (states.get(part.id) ?? 'pending') === 'pending',
+  ).length;
+});
 
 const tagsAdded = computed(
   () => (payload.value.add ?? []) as { ref?: string; title: string }[],
@@ -138,7 +146,7 @@ const createTitle = computed(() => {
           v-for="(words, index) in line.words.slice(0, 3)"
           :key="index"
           class="text-text-2"
-          >«{{ publicText(words) }}»</span
+          >{{ phrase.quoted(publicText(words)) }}</span
         >
       </template>
     </template>

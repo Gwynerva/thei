@@ -16,7 +16,7 @@ import {
 } from '../../../assets/descriptions';
 import { findFile, type FileKey } from '../target';
 import type { ActionEvaluation, AiActionKindDef } from '../types';
-import { clipped } from './common';
+import { clipped, standing } from './common';
 
 /**
  * Files, described: what a picture shows, what a recording or a video is and
@@ -120,11 +120,11 @@ export const describeAction: AiActionKindDef<'describe'> = {
     const payload = row.payload as { family: string; text: string };
     const base = (row.base ?? {}) as { text?: string };
     if (!familyExists(payload.family)) return { state: 'gone' };
-    const current = readFamilyDescription(payload.family);
-    if (current.text === payload.text) return { state: 'done' };
-    return current.text === (base.text ?? '')
-      ? { state: 'open' }
-      : { state: 'stale' };
+    return standing(
+      readFamilyDescription(payload.family).text,
+      payload.text,
+      base.text ?? '',
+    );
   },
   summary: (payload) =>
     `Description of ${payload.file}: "${clipped(payload.text, 100)}"`,

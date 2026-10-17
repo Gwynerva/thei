@@ -4,8 +4,10 @@
  * order, so two batches never wait on each other.
  */
 
-import { findEntity } from '../../entity-kinds';
-import type { ActionTarget } from './target';
+import { isRelationEntityType } from '#layers/thei/shared/relation';
+import { readRelationRows } from '../../relations';
+import { findEntity, formOwnerOf, type EntityKey } from '../../entity-kinds';
+import { isFileKey, type ActionTarget } from './target';
 import type { ActionRow } from './types';
 import { targetOf } from './rows';
 
@@ -16,20 +18,67 @@ function entityLock(key: Pick<ActionTarget, 'kind' | 'id'>): string {
   return `${key.kind}:${key.id}`;
 }
 
+type LockedRow = Pick<
+  ActionRow,
+  'kind' | 'payload' | 'targetType' | 'targetId'
+>;
+
 /**
- * The locks an action takes to be applied or undone: its target — for a
- * new entity, its kind — and a relation's other end, whose version moves too.
+ * The entities besides its own form whose versions an action moves: a
+ * relation's other end, the ends of the relations a change or a new entity
+ * lists — and, for a list given whole, or a deletion, those its target has
+ * now, which it may take away.
+ */
+export function relationEnds(row: LockedRow): EntityKey[] {
+  const payload = (row.payload ?? {}) as {
+    kind?: string;
+    other?: unknown;
+    changes?: { relations?: unknown };
+    fields?: { relations?: unknown };
+  };
+  const refs: unknown[] = [];
+  if (payload.kind === 'relation') refs.push(payload.other);
+  const listed =
+    payload.kind === 'update'
+      ? payload.changes?.relations
+      : payload.kind === 'create'
+        ? payload.fields?.relations
+        : undefined;
+  if (Array.isArray(listed))
+    for (const item of listed) refs.push((item as { ref?: unknown })?.ref);
+  const ends = refs.flatMap((ref) => findEntity(ref) ?? []);
+  const target = targetOf(row);
+  if (
+    target &&
+    !isFileKey(target) &&
+    isRelationEntityType(target.kind) &&
+    ((payload.kind === 'update' && listed !== undefined) ||
+      payload.kind === 'delete')
+  )
+    for (const item of readRelationRows({ type: target.kind, id: target.id }))
+      // Found again, a diary entry with its day: what its form is known by.
+      ends.push(
+        findEntity(`${item.other.type}:${item.other.id}`) ?? {
+          kind: item.other.type,
+          id: item.other.id,
+        },
+      );
+  return ends;
+}
+
+/**
+ * The locks an action takes to be applied or undone: the form it writes —
+ * its target's, a section's project's — or, for a new entity, its kind, and
+ * the other ends of the relations it moves.
  */
 export function actionLocks(
-  row: Pick<ActionRow, 'kind' | 'payload' | 'targetType' | 'targetId'>,
+  row: LockedRow,
   target: ActionTarget | undefined = targetOf(row),
 ): string[] {
-  const keys = target ? [entityLock(target)] : [`new:${row.kind}`];
-  const payload = row.payload as { kind?: string; other?: string };
-  if (payload.kind === 'relation' && payload.other) {
-    const other = findEntity(payload.other);
-    keys.push(other ? entityLock(other) : payload.other);
-  }
+  const form =
+    target && !isFileKey(target) ? (formOwnerOf(target) ?? target) : target;
+  const keys = form ? [entityLock(form)] : [`new:${row.kind}`];
+  for (const end of relationEnds(row)) keys.push(entityLock(end));
   return keys;
 }
 

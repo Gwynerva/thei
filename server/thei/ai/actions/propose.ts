@@ -241,6 +241,13 @@ function metBefore(checked: Checked[]): Map<string, string> {
   return reasons;
 }
 
+/** A new version in an atomic bundle of an action decided meanwhile. */
+class LateInBundle extends Error {
+  constructor(readonly item: Checked) {
+    super('An action of an atomic bundle came too late.');
+  }
+}
+
 /**
  * Proposes actions in a session. Returns, for each in order, its id or why
  * it was refused.
@@ -290,85 +297,105 @@ export async function proposeActions(
   const ids = new Map<Checked, string>();
   /** New versions of an action the owner decided while they were made. */
   const late = new Set<Checked>();
+  const lateWords = (item: Checked) =>
+    `${item.supersedes} was decided while this version was made: read session_actions, and propose it on its own if it still stands.`;
   const { db, schema } = THEI_SERVER.useDb();
-  db.transaction((tx) => {
-    // A session deleted while its turn ran keeps nothing a model left after.
-    const live = tx
-      .select({ purgedAt: schema.aiSessions.purgedAt })
-      .from(schema.aiSessions)
-      .where(eq(schema.aiSessions.sessionUuid, input.sessionUuid))
-      .get() as { purgedAt: number | null } | undefined;
-    if (!live || live.purgedAt) fail('The session is gone.');
-    // Nor does a turn stopped while its proposals were checked.
-    if (input.live && !input.live())
-      fail('The turn was stopped; nothing was proposed.');
-    accepted.forEach((item, order) => {
-      if (item.supersedes) {
-        const replaced = tx
-          .update(schema.aiActions)
-          .set({ state: 'superseded', decidedAt: now })
-          .where(
-            and(
-              eq(schema.aiActions.actionUuid, item.supersedes),
-              eq(schema.aiActions.state, 'pending'),
-            ),
-          )
-          .run() as { changes: number };
-        if (!replaced.changes) {
-          late.add(item);
-          return;
+  try {
+    db.transaction((tx) => {
+      // A session deleted while its turn ran keeps nothing a model left after.
+      const live = tx
+        .select({ sessionUuid: schema.aiSessions.sessionUuid })
+        .from(schema.aiSessions)
+        .where(eq(schema.aiSessions.sessionUuid, input.sessionUuid))
+        .get();
+      if (!live) fail('The session is gone.');
+      // Nor does a turn stopped while its proposals were checked.
+      if (input.live && !input.live())
+        fail('The turn was stopped; nothing was proposed.');
+      accepted.forEach((item, order) => {
+        if (item.supersedes) {
+          const replaced = tx
+            .update(schema.aiActions)
+            .set({ state: 'superseded', decidedAt: now })
+            .where(
+              and(
+                eq(schema.aiActions.actionUuid, item.supersedes),
+                eq(schema.aiActions.state, 'pending'),
+              ),
+            )
+            .run() as { changes: number };
+          if (!replaced.changes) {
+            if (bundleUuid && input.atomic) throw new LateInBundle(item);
+            late.add(item);
+            return;
+          }
         }
-      }
-      const actionUuid = `${EntityPrefix.AiAction}-${randomUUID()}`;
-      ids.set(item, actionUuid);
-      tx.insert(schema.aiActions)
-        .values({
-          actionUuid,
-          sessionUuid: input.sessionUuid,
-          messageUuid: input.messageUuid ?? null,
-          bundleUuid: bundleUuid ?? null,
-          bundleOrder: order,
-          atomic: Boolean(bundleUuid && input.atomic),
-          kind: item.kind,
-          targetType: (item.target?.kind as AiEntityType) ?? null,
-          targetId: item.target?.id ?? null,
-          payload: item.prepared.payload,
-          parts: item.prepared.parts?.length
-            ? item.prepared.parts.map((id) => ({ id, state: 'pending' }))
-            : null,
-          base: item.prepared.base ?? null,
-          certainty: item.certainty,
-          reason: item.reason,
-          state: 'pending',
-          supersedes: item.supersedes ?? null,
-          fingerprint: item.fingerprint,
-          assetUuids: item.prepared.assetUuids ?? [],
-          createdAt: now,
-        })
-        .run();
-    });
-    const touched = accepted
-      .filter((item) => !late.has(item))
-      .flatMap((item) => {
-        const ends: ActionTarget[] = item.target ? [item.target] : [];
-        const payload = item.prepared.payload as {
-          kind: string;
-          other?: string;
-        };
-        if (payload.kind === 'relation' && payload.other) {
-          const other = findEntity(payload.other);
-          if (other) ends.push(other);
-        }
-        return ends.map((key) => ({
-          type: key.kind as AiEntityType,
-          id: key.id,
-          role: 'touched' as const,
-        }));
+        const actionUuid = `${EntityPrefix.AiAction}-${randomUUID()}`;
+        ids.set(item, actionUuid);
+        tx.insert(schema.aiActions)
+          .values({
+            actionUuid,
+            sessionUuid: input.sessionUuid,
+            messageUuid: input.messageUuid ?? null,
+            bundleUuid: bundleUuid ?? null,
+            bundleOrder: order,
+            atomic: Boolean(bundleUuid && input.atomic),
+            kind: item.kind,
+            targetType: (item.target?.kind as AiEntityType) ?? null,
+            targetId: item.target?.id ?? null,
+            payload: item.prepared.payload,
+            parts: item.prepared.parts?.length
+              ? item.prepared.parts.map((id) => ({ id, state: 'pending' }))
+              : null,
+            base: item.prepared.base ?? null,
+            certainty: item.certainty,
+            reason: item.reason,
+            state: 'pending',
+            supersedes: item.supersedes ?? null,
+            fingerprint: item.fingerprint,
+            assetUuids: item.prepared.assetUuids ?? [],
+            createdAt: now,
+          })
+          .run();
       });
-    linkSessionEntities(tx, schema, input.sessionUuid, touched, now);
-    touchSession(tx, schema, input.sessionUuid, now);
-    refreshSessionCounts(tx, schema, input.sessionUuid);
-  });
+      const touched = accepted
+        .filter((item) => !late.has(item))
+        .flatMap((item) => {
+          const ends: ActionTarget[] = item.target ? [item.target] : [];
+          const payload = item.prepared.payload as {
+            kind: string;
+            other?: string;
+          };
+          if (payload.kind === 'relation' && payload.other) {
+            const other = findEntity(payload.other);
+            if (other) ends.push(other);
+          }
+          return ends.map((key) => ({
+            type: key.kind as AiEntityType,
+            id: key.id,
+            role: 'touched' as const,
+          }));
+        });
+      linkSessionEntities(tx, schema, input.sessionUuid, touched, now);
+      touchSession(tx, schema, input.sessionUuid, now);
+      refreshSessionCounts(tx, schema, input.sessionUuid);
+    });
+  } catch (error) {
+    // An atomic bundle goes whole: one of it come too late takes the rest.
+    if (!(error instanceof LateInBundle)) throw error;
+    return {
+      results: decided.map((item) =>
+        'refused' in item
+          ? item
+          : {
+              refused:
+                item === error.item
+                  ? lateWords(item)
+                  : 'Not proposed: another action of this atomic bundle was refused.',
+            },
+      ),
+    };
+  }
   const made = accepted.filter((item) => !late.has(item));
   publishActions([
     ...made.flatMap((item) =>
@@ -386,9 +413,7 @@ export async function proposeActions(
       'refused' in item
         ? item
         : late.has(item)
-          ? {
-              refused: `${item.supersedes} was decided while this version was made: read session_actions, and propose it on its own if it still stands.`,
-            }
+          ? { refused: lateWords(item) }
           : { actionUuid: ids.get(item)!, dropped: item.prepared.dropped },
     ),
     ...(bundleUuid ? { bundleUuid } : {}),

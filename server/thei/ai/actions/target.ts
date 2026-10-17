@@ -1,5 +1,4 @@
 import {
-  entityFace,
   findEntity,
   refOf,
   type EntityKey,
@@ -57,9 +56,4 @@ export function findTarget(ref: unknown): ActionTarget | undefined {
 /** A target as a ref. */
 export function targetRef(key: ActionTarget): string {
   return isFileKey(key) ? fileRef(key.id) : refOf(key);
-}
-
-/** Whether what an action is about is still there. */
-export function targetExists(key: ActionTarget): boolean {
-  return isFileKey(key) ? Boolean(assetFamilyOf(key.id)) : !!entityFace(key);
 }

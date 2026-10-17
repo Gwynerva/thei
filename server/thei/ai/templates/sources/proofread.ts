@@ -17,6 +17,7 @@ import { currentText } from '../../actions/current';
 import { targetOf } from '../../actions/rows';
 import { isFileKey } from '../../actions/target';
 import { backgroundEvent } from '../../runner/background-event';
+import { SESSION_TOKEN } from '../../runner/loop';
 import type { CheckItem, Covered, DueInput, TemplateSource } from './index';
 import { fileFamilies } from './files';
 import { entitiesOf, inScope, withSections } from './scope';
@@ -107,12 +108,13 @@ function wordsOf(paragraph: string): string {
 }
 
 /**
- * The area of a paragraph: a picture, a sound or a file is its caption and
- * title, a link block its note, anything else the text.
+ * The area of a paragraph: a picture, a sound or a file — or a gallery, a
+ * group of files — is its caption and title, a link block its note,
+ * anything else the text.
  */
 function areaOf(paragraph: string) {
   if (/^::(link|card)\b/.test(paragraph)) return 'links';
-  return /^:{2,3}(media|audio|file|gallery)\b/.test(paragraph)
+  return /^:{2,}(media|audio|files?|gallery)\b/.test(paragraph)
     ? 'captions'
     : 'texts';
 }
@@ -241,7 +243,11 @@ async function aboutTexts(keys: readonly EntityKey[]) {
   const context = {
     event: backgroundEvent(),
     // Read as Thei's own model reads.
-    principal: { tokenUuid: 'thei', label: 'Thei', scopes: ['read' as const] },
+    principal: {
+      tokenUuid: SESSION_TOKEN,
+      label: 'Thei',
+      scopes: ['read' as const],
+    },
   };
   const about = new Map<string, string>();
   for (const key of keys) {
@@ -520,19 +526,33 @@ export const proofreadSource: TemplateSource = {
         },
       ];
     }
-    const key = targetOf(action);
-    if (!key || isFileKey(key)) return [];
-    const touched = touchedKeys(
-      action.kind,
-      (action.payload ?? {}) as Record<string, unknown>,
-    );
-    const ends = [key];
-    // A relation's note may be read on its other end.
-    const other = (action.payload as { other?: unknown } | null)?.other;
-    if (action.kind === 'relation' && typeof other === 'string') {
-      const end = findEntity(other);
-      if (end) ends.push(end);
+    const target = targetOf(action);
+    // A diary entry's short texts are known by its day.
+    const key = target && !isFileKey(target) && findEntity(refOf(target));
+    if (!key) return [];
+    // A relation says the note of the pair alone, read at either end — when
+    // it says one.
+    if (action.kind === 'relation') {
+      const payload = action.payload as { other: string; note?: unknown };
+      const other = payload.note ? findEntity(payload.other) : undefined;
+      if (!other) return [];
+      return [
+        ...shortCovered(
+          key,
+          (at) => at === `relation:${refOf(other)}`,
+          covered,
+        ),
+        ...shortCovered(
+          other,
+          (at) => at === `relation:${refOf(key)}`,
+          covered,
+        ),
+      ];
     }
-    return ends.flatMap((end) => shortCovered(end, touched, covered));
+    return shortCovered(
+      key,
+      touchedKeys(action.kind, action.payload as Record<string, unknown>),
+      covered,
+    );
   },
 };

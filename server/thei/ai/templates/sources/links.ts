@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { builtinTemplateId } from '#layers/thei/shared/ai-template';
+import { forgetSubjects } from '../coverage';
 import {
   scanBrokenLinks,
   type BrokenLink,
@@ -48,12 +50,15 @@ export const linksSource: TemplateSource = {
     // A run about files alone has no texts to look in.
     if (owners && !owners.length) return [];
     const batch: CheckItem[] = [];
+    const broken = new Set<string>();
     let cursor: string | undefined;
     do {
       const page = await scanBrokenLinks({ cursor, limit: 50, owners });
       for (const link of page.links) {
         const item = itemOf(link);
-        if (!item || busy.has(item.subject)) continue;
+        if (!item) continue;
+        broken.add(item.subject);
+        if (busy.has(item.subject)) continue;
         if (
           !force &&
           covered.get(item.subject)?.fingerprint === item.fingerprint
@@ -64,6 +69,15 @@ export const linksSource: TemplateSource = {
       }
       cursor = page.next;
     } while (cursor);
+    // Every broken link read: what was looked at of one that leads somewhere
+    // now, or is gone from its text, is let go.
+    if (!owners)
+      forgetSubjects(
+        builtinTemplateId('links'),
+        [...covered.keys()].filter(
+          (subject) => subject.startsWith('link:') && !broken.has(subject),
+        ),
+      );
     return batch;
   },
 

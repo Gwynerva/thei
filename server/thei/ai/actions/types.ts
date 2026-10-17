@@ -44,6 +44,8 @@ export type ActionUndo =
   | {
       kind: 'create';
       created: EntityKey;
+      /** For a section: the version of its project's form it was made in. */
+      versionBefore?: number;
       versionAfter?: number;
     }
   | {

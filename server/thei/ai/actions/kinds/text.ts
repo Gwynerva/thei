@@ -438,6 +438,20 @@ function relinkState(
   return countTextMatches(data, part.words) ? 'applied' : 'stale';
 }
 
+/**
+ * A fix of a text — a correction, a mended link — as the text has it now:
+ * made, whoever made it, once its words or its link read as it would have
+ * them; waiting while they read as they did; overtaken otherwise.
+ */
+export function fixState(
+  data: ContentOutputData | null | undefined,
+  part: Correction | Relink,
+): 'applied' | 'stale' | 'pending' {
+  if (part.type === 'relink') return relinkState(data, part);
+  if (correctionPending(data, part)) return 'pending';
+  return countTextMatches(data, part.replacePlain) ? 'applied' : 'stale';
+}
+
 const correctionInput = z.object({
   find: z.string(),
   replace: z.string(),
@@ -805,18 +819,9 @@ export const reviseAction: AiActionKindDef<'revise'> = {
     const fresh: PartStateRow[] = payload.parts.map((part) => {
       const kept = stored.get(part.id) ?? { id: part.id, state: 'pending' };
       if (!open(part)) return kept;
-      if (part.type === 'relink') {
-        const state = relinkState(text.data, part);
-        return state === 'pending' ? kept : { id: part.id, state };
-      }
-      return part.type === 'correction' && !correctionPending(text.data, part)
-        ? {
-            id: part.id,
-            state: countTextMatches(text.data, part.replacePlain)
-              ? 'applied'
-              : 'stale',
-          }
-        : kept;
+      if (part.type !== 'correction' && part.type !== 'relink') return kept;
+      const state = fixState(text.data, part);
+      return state === 'pending' ? kept : { id: part.id, state };
     });
     if (
       !fresh.some(

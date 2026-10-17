@@ -404,8 +404,9 @@ function cleanupSimpleOrphanTags(tx: any, schema: any, tagUuids: string[]) {
         ),
       )
       .get();
-    if (!icon)
-      tx.delete(schema.tags).where(eq(schema.tags.tagUuid, tagUuid)).run();
+    if (icon) continue;
+    tx.delete(schema.tags).where(eq(schema.tags.tagUuid, tagUuid)).run();
+    // Gone with it is what the AI kept of it; a tag kept stays remembered.
     forgetAiAnchors(tx, schema, 'tag', [tagUuid]);
   }
 }
