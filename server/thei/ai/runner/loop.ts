@@ -10,15 +10,20 @@ import { MCP_INSTRUCTIONS } from '../../mcp/instructions';
 import { FILES_META, REFUSED_META } from '../../mcp/result';
 import { directTools, type DirectTool } from '../../mcp/registry';
 import { withOwnerInstructions } from '../../mcp/server';
+import { ModelError } from '../model/service';
 import {
-  ModelError,
   streamTurn,
   type StreamCall,
   type StreamFile,
   type StreamFileKind,
 } from '../model/stream';
 import { sessionModel } from '../model/settings';
-import { countedTokens, recordUsage, tokensLeft } from '../model/usage';
+import {
+  countedTokens,
+  recordUsage,
+  tokensLeft,
+  type ModelUsage,
+} from '../model/usage';
 import { publishSession, setWriting } from '../sessions/bus';
 import { makeSessionFile, modelFiles } from '../sessions/files';
 import {
@@ -60,7 +65,11 @@ import {
  * come; what it spends is counted against the owner's limit.
  */
 
-/** The key Thei's own model works as. Never a real key's id. */
+/**
+ * The key Thei's own model works as, never a real key's id: in each session
+ * as a key of its own, `thei:<session>`, so a busy check's run spends no
+ * other session's writes a minute.
+ */
 export const SESSION_TOKEN = 'thei';
 /** How many times the model may be called in one turn. */
 const MODEL_CALLS = 40;
@@ -255,7 +264,7 @@ export async function runSessionTurn(
   let close: ((stop?: TurnStop) => void) | undefined;
   try {
     const session = findSession(sessionUuid);
-    if (!session || session.purgedAt) return;
+    if (!session) return;
     const { db, schema } = THEI_SERVER.useDb();
     /** Still going by the owner's first words: the model names it now. */
     const unnamed = sessionUnnamed(session);
@@ -354,7 +363,7 @@ export async function runSessionTurn(
 
     if (!settings) throw new TurnStop('no-model');
     const principal: ApiTokenPrincipal = {
-      tokenUuid: SESSION_TOKEN,
+      tokenUuid: `${SESSION_TOKEN}:${sessionUuid}`,
       label: 'Thei',
       scopes: ['read'],
     };
@@ -380,7 +389,9 @@ export async function runSessionTurn(
         .map((tool) => [tool.name, tool]),
     );
     const system = [
-      withOwnerInstructions(MCP_INSTRUCTIONS),
+      // The overview says the owner's instructions itself: read for the
+      // model, they are not said twice.
+      overview ? MCP_INSTRUCTIONS : withOwnerInstructions(MCP_INSTRUCTIONS),
       sessionNote(THEI_SERVER.phrase.language_name),
       overview
         ? `What site_overview says, read for you:\n\n${overview.content
@@ -423,6 +434,18 @@ export async function runSessionTurn(
       ...(unnamed ? [NAME_TOOL] : []),
     ];
 
+    /**
+     * What a call spent is spent, whatever became of the call or the turn:
+     * counted against the month's limit and the session's at once — one
+     * cut short too, and one that answers after the turn was closed.
+     */
+    const spend = (usage: ModelUsage) => {
+      recordUsage(usage);
+      const counted = countedTokens(usage);
+      spent += counted;
+      addSessionTokens(sessionUuid, counted);
+    };
+
     for (let call = 0; ; call++) {
       if (call >= MODEL_CALLS) throw new TurnStop('turns');
       if (!THEI_SERVER.config.mcp.enabled || !sessionModel())
@@ -442,6 +465,7 @@ export async function runSessionTurn(
         unshown,
         tools: offered,
         signal,
+        onUsage: spend,
         onText(delta) {
           if (closed) return;
           const piece = first ? separator + delta : delta;
@@ -461,31 +485,34 @@ export async function runSessionTurn(
           }
         },
       });
-      // What a call spent is spent, whatever became of the turn.
-      recordUsage(turn.usage);
       going();
       // What came streamed is what the provider gave in the end.
       text = text.slice(0, before) + (turn.text ? separator + turn.text : '');
       unshown = turn.unshown;
-      const counted = countedTokens(turn.usage);
-      spent += counted;
-      addSessionTokens(sessionUuid, counted);
-      transcript.push({
-        role: 'assistant',
-        text: turn.text,
-        ...(turn.calls.length
-          ? {
-              calls: turn.calls.map(({ id, name, input }) => ({
-                id,
-                name,
-                input,
-              })),
-            }
-          : {}),
-        ...(turn.native ? { native: turn.native } : {}),
-      });
+      // An answer with neither words nor calls is kept out of the
+      // conversation: no service takes an empty turn back.
+      if (turn.text || turn.calls.length)
+        transcript.push({
+          role: 'assistant',
+          text: turn.text,
+          ...(turn.calls.length
+            ? {
+                calls: turn.calls.map(({ id, name, input }) => ({
+                  id,
+                  name,
+                  input,
+                })),
+              }
+            : {}),
+          ...(turn.native ? { native: turn.native } : {}),
+        });
       if (turn.stop === 'refusal') throw new TurnStop('refused');
-      if (!turn.calls.length) break;
+      if (!turn.calls.length) {
+        // Words cut off at the most a model may write say so; calls cut
+        // off are told to the model, which makes them again.
+        if (turn.stop === 'length') throw new TurnStop('length');
+        break;
+      }
 
       let asked = false;
       for (const call of turn.calls) {
@@ -508,17 +535,21 @@ export async function runSessionTurn(
               error: false,
             };
           if (call.name === FILE_TOOL.name) {
+            // A file that takes too long is left, and places nothing.
+            const left = new AbortController();
             const made = await within(
               makeSessionFile(
                 sessionUuid,
                 (call.input ?? {}) as Record<string, unknown>,
                 live,
+                AbortSignal.any([signal, left.signal]),
               ),
               signal,
               TURN_LIMITS.toolMs,
             ).catch((error: unknown) => {
-              if (error instanceof TookTooLong) return undefined;
-              throw error;
+              if (!(error instanceof TookTooLong)) throw error;
+              left.abort();
+              return undefined;
             });
             if (!made) return tookTooLong(call.name);
             if ('refused' in made) return { text: made.refused, error: true };

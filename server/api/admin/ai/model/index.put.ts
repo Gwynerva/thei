@@ -4,7 +4,10 @@ import {
   type AiModelSettings,
   type AiProvider,
 } from '#layers/thei/shared/ai-model';
-import { modelSettings } from '../../../../thei/ai/model/admin';
+import {
+  modelSettings,
+  savedModelConfig,
+} from '../../../../thei/ai/model/admin';
 import { updateTheiConfig } from '../../../../thei/config/write';
 import { markReadOnlyRequest } from '../../../../thei/read-only-request';
 
@@ -16,8 +19,9 @@ function fail(message: string): never {
 
 /**
  * Saves the model's settings. The key is only ever written: a new one
- * replaces it, and leaving it out or empty keeps it; it is removed on its
- * own (`model/key.delete.ts`).
+ * replaces it, and leaving it out or empty keeps it — for the same service:
+ * another one chosen keeps no key but one typed for it. It is removed on
+ * its own (`model/key.delete.ts`).
  */
 export default defineEventHandler(async (event): Promise<AiModelSettings> => {
   markReadOnlyRequest(event);
@@ -60,7 +64,7 @@ export default defineEventHandler(async (event): Promise<AiModelSettings> => {
     ...config,
     mcp: {
       ...config.mcp,
-      model: { ...config.mcp.model, ...change },
+      model: savedModelConfig(config.mcp.model, change),
       ...(monthlyTokens === undefined ? {} : { monthlyTokens }),
     },
   }));

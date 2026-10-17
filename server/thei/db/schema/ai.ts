@@ -34,11 +34,11 @@ export const aiUsage = sqliteTable('ai-usage', {
 });
 
 /**
- * AI sessions: conversations about the archive. The owner starts one, a
- * template starts one on its schedule, an app over MCP leaves one. A session
- * keeps what was said and every action proposed in it; closed or quiet for a
- * week it goes to the archive, and a month later it is deleted unless pinned —
- * its summary is what other sessions read of it.
+ * AI sessions: conversations about the archive. The owner starts one, or
+ * runs a check that starts one; an app over MCP leaves one. A session keeps
+ * what was said and every action proposed in it; closed or quiet it goes to
+ * the archive, and a month later it is deleted whole unless pinned
+ * (`server/thei/ai/sessions/lifecycle.ts`).
  *
  * The counts are kept on the row, so the list groups and filters sessions
  * without reading their actions.
@@ -62,8 +62,6 @@ export const aiSessions = sqliteTable(
     waiting: integer().notNull().default(0),
     applied: integer().notNull().default(0),
     rejected: integer().notNull().default(0),
-    /** A few lines on what was asked and done, kept past the session. */
-    summary: text().notNull().default(''),
     /** What the model spent in it, as the limits count. */
     tokens: integer().notNull().default(0),
     /** Why the last turn failed, until the next one. */
@@ -72,11 +70,6 @@ export const aiSessions = sqliteTable(
     lastActiveAt: integer().notNull(),
     closedAt: integer(),
     archivedAt: integer(),
-    /**
-     * Deleted after its month in the archive: what was said and proposed is
-     * gone, its title, summary and the entities it concerned stay.
-     */
-    purgedAt: integer(),
   },
   (t) => [
     index('ai-sessions-active-idx').on(t.archivedAt, t.lastActiveAt),

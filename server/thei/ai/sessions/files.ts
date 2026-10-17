@@ -9,15 +9,15 @@ import { TEXT_FILE_EXTENSIONS } from '#layers/thei/shared/assets/preview';
 import { decodeText } from '#layers/thei/shared/text-bytes';
 import type { AiMessageFile, AiMessagePart } from '#layers/thei/shared/ai';
 import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
-import { touchReleasedAssets } from '../../content/history';
 import { withProcessingSlot } from '../../assets/queue';
 import { runFfmpeg } from '../../assets/ffmpeg';
+import { deleteUsagesReleasing } from '../../assets/repository/usages/release';
 import { theiTempPath } from '../../assets/temp';
 import {
   describeStoredAsset,
   type StoredAssetRecord,
 } from '../../assets/storage';
-import type { StreamFile } from '../model/stream';
+import { turnFiles, type StreamFile } from '../model/stream';
 import { fileKind, fileSettings, storeStagedFile } from '../../mcp/files';
 import { stageUploadStream } from '../../assets/upload-stream';
 import { publishSession } from './bus';
@@ -41,7 +41,8 @@ export interface SessionFile {
   name: string;
 }
 
-function refused(message: string): never {
+/** Refuses what the owner's page sent, saying why. */
+export function refused(message: string): never {
   throw createError({ statusCode: 400, message });
 }
 
@@ -125,7 +126,7 @@ export function placeAppFile(
   now = Date.now(),
 ) {
   const session = findSession(sessionUuid);
-  if (!session || session.purgedAt) return;
+  if (!session) return;
   const { db, schema } = THEI_SERVER.useDb();
   db.transaction((tx) => {
     placeSessionFiles(tx, schema, sessionUuid, [assetUuid], now);
@@ -145,19 +146,15 @@ export function releaseSessionFiles(
   now: number,
 ) {
   if (!sessionUuids.length) return;
-  const where = and(
-    eq(schema.assetUsages.containerType, 'ai-session'),
-    inArray(schema.assetUsages.containerId, [...sessionUuids]),
+  deleteUsagesReleasing(
+    tx,
+    schema,
+    and(
+      eq(schema.assetUsages.containerType, 'ai-session'),
+      inArray(schema.assetUsages.containerId, [...sessionUuids]),
+    ),
+    now,
   );
-  const released = (
-    tx
-      .select({ assetUuid: schema.assetUsages.assetUuid })
-      .from(schema.assetUsages)
-      .where(where)
-      .all() as { assetUuid: string }[]
-  ).map((row) => row.assetUuid);
-  tx.delete(schema.assetUsages).where(where).run();
-  touchReleasedAssets(tx, schema, released, now);
 }
 
 /** The files of a message's parts, as the library describes them now. */
@@ -263,13 +260,15 @@ export function sessionFilesNote(files: readonly SessionFile[]): string {
  * Makes a file a model wrote — whatever it is, as its name says — into the
  * library, kept in the session like a file the owner brought. The content is
  * text, or base64 for bytes. Returns the file, or why it could not be made,
- * in words for the model. A turn stopped while it was made keeps nothing:
- * the file has no place, and the library lets it go.
+ * in words for the model. A turn stopped while it was made, or a file left
+ * for taking too long — `signal` — keeps nothing: the file has no place, and
+ * the library lets it go.
  */
 export async function makeSessionFile(
   sessionUuid: string,
   input: { name?: unknown; content?: unknown; base64?: unknown },
   live: () => boolean = () => true,
+  signal?: AbortSignal,
 ): Promise<{ file: SessionFile } | { refused: string }> {
   const { name, content } = input;
   if (typeof name !== 'string' || typeof content !== 'string' || !content)
@@ -284,13 +283,14 @@ export async function makeSessionFile(
     const staged = await stageUploadStream(Readable.from([bytes]), {
       maxSizeBytes: kind.maxSizeBytes,
     });
-    const { assetUuid } = await storeStagedFile(staged, {
-      ...kind,
-      settings: fileSettings(undefined),
-    });
+    const { assetUuid } = await storeStagedFile(
+      staged,
+      { ...kind, settings: fileSettings(undefined) },
+      signal,
+    );
     const { db, schema } = THEI_SERVER.useDb();
     const placed = db.transaction((tx) => {
-      if (!live()) return false;
+      if (!live() || signal?.aborted) return false;
       placeSessionFiles(tx, schema, sessionUuid, [assetUuid], Date.now());
       return true;
     });
@@ -331,6 +331,12 @@ function keepReady(id: string, blocks: StreamFile[]) {
       sum + ('data' in block ? block.data.length : block.text.length),
     0,
   );
+  // Made twice at once — two turns showing the same file — it is kept once.
+  const before = ready.get(id);
+  if (before) {
+    readyBytes -= before.bytes;
+    ready.delete(id);
+  }
   ready.set(id, { blocks, bytes });
   readyBytes += bytes;
   while (readyBytes > READY_BYTES && ready.size > 1) {
@@ -428,25 +434,31 @@ async function sound(
  * PDF itself; a text its words. Any other file is told of by its name and
  * id alone. Whether a model's service takes each block is for the stream to
  * find out (`model/stream.ts`): what it turns away is told in words.
+ *
+ * `whole` is false while a part waits for its preview — a drawing's, a
+ * video's frame — so what is shown now is not kept for later turns.
  */
 async function blocksOf(
   asset: StoredAssetRecord,
   name: string,
   preview: StoredAssetRecord | undefined,
   signal?: AbortSignal,
-): Promise<StreamFile[]> {
+): Promise<{ blocks: StreamFile[]; whole: boolean }> {
   const path = (record: StoredAssetRecord) =>
     THEI_SERVER.assets.filePath(record.contentHash, record.extension);
   const meta = (asset.meta ?? {}) as { hasAudio?: boolean; duration?: number };
+  const whole = (blocks: StreamFile[]) => ({ blocks, whole: true });
   switch (asset.type) {
     case AssetType.Image:
       if (asset.extension !== 'svg')
-        return [
+        return whole([
           { kind: 'image', name, data: await picture(path(asset), signal) },
-        ];
+        ]);
       return preview
-        ? [{ kind: 'image', name, data: await picture(path(preview), signal) }]
-        : [];
+        ? whole([
+            { kind: 'image', name, data: await picture(path(preview), signal) },
+          ])
+        : { blocks: [], whole: false };
     case AssetType.Video: {
       const blocks: StreamFile[] = preview
         ? [{ kind: 'image', name, data: await picture(path(preview), signal) }]
@@ -456,48 +468,46 @@ async function blocksOf(
         meta.hasAudio === false
           ? null
           : await sound(path(asset), name, meta.duration, signal);
-      return track ? [...blocks, track] : blocks;
+      return {
+        blocks: track ? [...blocks, track] : blocks,
+        whole: Boolean(preview),
+      };
     }
     case AssetType.Audio: {
       const track = await sound(path(asset), name, meta.duration, signal);
-      return track ? [track] : [];
+      return whole(track ? [track] : []);
     }
     default:
       if (asset.extension === 'pdf' && asset.size <= PDF_MAX)
-        return [
+        return whole([
           {
             kind: 'pdf',
             name,
             data: (await readFile(path(asset))).toString('base64'),
           },
-        ];
+        ]);
       if (TEXT_FILE_EXTENSIONS.has(asset.extension) && asset.size <= TEXT_MAX)
         // Read in the encoding it was written in, as the owner sees it.
-        return [
+        return whole([
           { kind: 'text', name, text: decodeText(await readFile(path(asset))) },
-        ];
-      return [];
+        ]);
+      return whole([]);
   }
 }
 
 /**
  * The files these turns show — what the owner brought, what a tool showed —
- * made ready for a model by id. One that cannot be shown — gone, too large,
- * of a kind no model reads — is left out: the words around it still name
- * it. `signal` stops it for a stopped turn.
+ * made ready for a model by id, each under the name it goes by here. One
+ * that cannot be shown — gone, too large, of a kind no model reads — is
+ * left out: the words around it still name it. `signal` stops it for a
+ * stopped turn.
  */
 export async function modelFiles(
   turns: readonly { role: string; files?: string[] }[],
   names: ReadonlyMap<string, string>,
   signal?: AbortSignal,
 ): Promise<Map<string, StreamFile[]>> {
-  const ids = [
-    ...new Set(
-      turns.flatMap((turn) =>
-        turn.role === 'user' || turn.role === 'tool' ? (turn.files ?? []) : [],
-      ),
-    ),
-  ];
+  const ids = [...new Set(turns.flatMap(turnFiles))];
   const result = new Map<string, StreamFile[]>();
   if (!ids.length) return result;
   const assets = new Map(
@@ -511,31 +521,35 @@ export async function modelFiles(
     ]),
   );
   for (const id of ids) {
-    if (!ready.has(id)) {
-      const asset = assets.get(id);
-      let blocks: StreamFile[] = [];
-      if (asset)
-        try {
-          blocks = await blocksOf(
-            asset,
-            names.get(id) ?? id,
-            previews.get(previewIds.get(id) ?? ''),
-            signal,
-          );
-        } catch (error) {
-          if (signal?.aborted) throw error;
-          THEI_SERVER.console
-            .tag('AI')
-            .warn(
-              `A file could not be made ready for a model: ${String(error)}`,
-            );
-        }
-      // One not shown yet — a video's preview still on its way — is tried
-      // again next turn.
-      if (blocks.length) keepReady(id, blocks);
-    }
+    const name = names.get(id) ?? id;
     const kept = ready.get(id);
-    if (kept) result.set(id, kept.blocks);
+    if (kept) {
+      // Kept under the name it was first shown by: told by this one.
+      result.set(
+        id,
+        kept.blocks.map((block) => ({ ...block, name })),
+      );
+      continue;
+    }
+    const asset = assets.get(id);
+    if (!asset) continue;
+    try {
+      const made = await blocksOf(
+        asset,
+        name,
+        previews.get(previewIds.get(id) ?? ''),
+        signal,
+      );
+      // One not whole yet — a video's preview still on its way — is shown
+      // as it is, and made again next turn.
+      if (made.whole && made.blocks.length) keepReady(id, made.blocks);
+      if (made.blocks.length) result.set(id, made.blocks);
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      THEI_SERVER.console
+        .tag('AI')
+        .warn(`A file could not be made ready for a model: ${String(error)}`);
+    }
   }
   return result;
 }

@@ -92,11 +92,8 @@ function halt(sessionUuid: string, turn: Running, why: TurnHalt) {
       '[AI] A turn did not end when stopped; it was closed for it.',
     );
     try {
-      if (turn.handle.close) turn.handle.close(why);
-      else {
-        updateSession(sessionUuid, { state: 'idle' });
-        publishSession(sessionUuid, { type: 'session' });
-      }
+      // Set as the turn begins, before it first waits.
+      turn.handle.close?.(why);
     } catch (error) {
       THEI_SERVER.console.error('[AI] Closing a turn failed:', error);
     }
@@ -129,13 +126,18 @@ export function startTurn(sessionUuid: string) {
   pump();
 }
 
+/** A turn that waited is not taken: its session is idle again. */
+function letGo(sessionUuid: string) {
+  updateSession(sessionUuid, { state: 'idle' });
+  publishSession(sessionUuid, { type: 'session' });
+}
+
 /** Stops a session's turn: what was written stays, with a note it was stopped. */
 export function stopTurn(sessionUuid: string): boolean {
   const index = waiting.indexOf(sessionUuid);
   if (index !== -1) {
     waiting.splice(index, 1);
-    updateSession(sessionUuid, { state: 'idle' });
-    publishSession(sessionUuid, { type: 'session' });
+    letGo(sessionUuid);
     pump();
     return true;
   }
@@ -147,12 +149,15 @@ export function stopTurn(sessionUuid: string): boolean {
 
 /**
  * Stops everything the model and the apps have under way: turns waiting and
- * running, and files on their way. AI turned off leaves nothing working.
+ * running, and files on their way. AI turned off leaves nothing working —
+ * and starts nothing on the way: what waited is let go before a running
+ * turn's slot is free for it.
  */
 export function stopAllTurns() {
-  for (const sessionUuid of [...waiting]) stopTurn(sessionUuid);
-  for (const sessionUuid of [...running.keys()]) stopTurn(sessionUuid);
+  for (const sessionUuid of waiting.splice(0)) letGo(sessionUuid);
+  for (const [sessionUuid, turn] of running) halt(sessionUuid, turn, 'stopped');
   cancelFileJobs();
+  pump();
 }
 
 /** For tests: resolves once no turn runs or waits. */

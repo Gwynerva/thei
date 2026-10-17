@@ -11,6 +11,7 @@ import {
   deleteSession,
   purgeArchivedSessions,
   SESSION_ARCHIVE_MS,
+  SESSION_LEFT_MS,
   SESSION_QUIET_MS,
 } from '../../server/thei/ai/sessions/lifecycle';
 import { postOwnerMessage } from '../../server/thei/ai/sessions/owner';
@@ -355,6 +356,8 @@ describe('the list of sessions', () => {
       role: 'model',
       text: 'Вот что я нашёл: [Ёлку](thei:event/e-1) и ЦИТАТУ.',
     });
+    // What was said in one session finds that one alone.
+    insertMessage(db, schema, titled, { role: 'owner', text: 'Совсем другое' });
     const found = (q: string) =>
       listSessions({ q }).sessions.map((session) => session.sessionUuid);
     expect(found('ЁЛКА')).toEqual([titled]);
@@ -362,6 +365,37 @@ describe('the list of sessions', () => {
     expect(found('цитату')).toEqual([talked]);
     expect(found('ёлку')).toEqual([talked]);
     expect(found('nothing of the kind')).toEqual([]);
+  });
+
+  it('pages on without skipping sessions touched in one moment', () => {
+    const at = (sessionUuid: string, lastActiveAt: number) =>
+      context.rawDb
+        .prepare(
+          'UPDATE `ai-sessions` SET lastActiveAt = ? WHERE sessionUuid = ?',
+        )
+        .run(lastActiveAt, sessionUuid);
+    const made: string[] = [];
+    const session = (lastActiveAt: number) => {
+      const sessionUuid = createSession({ origin: 'owner', title: 'S' });
+      at(sessionUuid, lastActiveAt);
+      made.push(sessionUuid);
+    };
+    // A page's edge falls among thirty sessions an apply touched at once.
+    for (let index = 0; index < 40; index++) session(10_000 + index);
+    for (let index = 0; index < 30; index++) session(5000);
+    for (let index = 0; index < 5; index++) session(100 + index);
+
+    const first = listSessions();
+    expect(first.sessions).toHaveLength(70);
+    expect(first.next).toBe(5000);
+    const second = listSessions({ before: first.next });
+    expect(second.sessions).toHaveLength(5);
+    expect(second.next).toBeUndefined();
+    expect(
+      new Set(
+        [...first.sessions, ...second.sessions].map((item) => item.sessionUuid),
+      ),
+    ).toEqual(new Set(made));
   });
 
   it('gathers proposals without a session into the one the app opened lately', async () => {
@@ -396,19 +430,23 @@ describe('the life of a session', () => {
     expect(findSession(waitingSession)?.archivedAt).toBeNull();
 
     expect(purgeArchivedSessions(now + SESSION_ARCHIVE_MS - 1)).toBe(0);
-    expect(purgeArchivedSessions(now + SESSION_ARCHIVE_MS + 1)).toBe(1);
-    expect(findSession(sessionUuid)).toMatchObject({
-      state: 'closed',
-      purgedAt: now + SESSION_ARCHIVE_MS + 1,
-    });
-    expect(sessionActions(sessionUuid)).toEqual([]);
     expect(
       one(
-        'SELECT COUNT(*) AS n FROM `ai-messages` WHERE sessionUuid = ?',
+        'SELECT COUNT(*) AS n FROM `ai-session-entities` WHERE sessionUuid = ?',
         sessionUuid,
       )?.n,
-    ).toBe(0);
-    // Purged sessions are not listed.
+    ).toBeGreaterThan(0);
+    expect(purgeArchivedSessions(now + SESSION_ARCHIVE_MS + 1)).toBe(1);
+    // Purged, it is deleted whole, the entities it concerned with it.
+    expect(findSession(sessionUuid)).toBeUndefined();
+    expect(sessionActions(sessionUuid)).toEqual([]);
+    for (const table of ['ai-messages', 'ai-session-entities'])
+      expect(
+        one(
+          `SELECT COUNT(*) AS n FROM \`${table}\` WHERE sessionUuid = ?`,
+          sessionUuid,
+        )?.n,
+      ).toBe(0);
     expect(
       listSessions().sessions.map((session) => session.sessionUuid),
     ).toEqual([waitingSession]);
@@ -417,6 +455,26 @@ describe('the life of a session', () => {
       one('SELECT summary FROM projects WHERE projectUuid = ?', PROJECT)
         ?.summary,
     ).toBe('Two');
+  });
+
+  it('archives a session left a month with things waiting, which then count nowhere', async () => {
+    const waiting = await app(['read']).tool('propose', {
+      actions: [summaryAction('Three')],
+    });
+    const sessionUuid = sessionIn(waiting.text);
+    expect(listSessions().waiting).toBe(1);
+    expect(archiveQuietSessions(Date.now() + SESSION_LEFT_MS - 1000)).toBe(0);
+
+    const later = Date.now() + SESSION_LEFT_MS + 1000;
+    expect(archiveQuietSessions(later)).toBe(1);
+    expect(findSession(sessionUuid)).toMatchObject({
+      archivedAt: later,
+      waiting: 1,
+    });
+    expect(listSessions().waiting).toBe(0);
+    // And it goes as any archived session goes, what waited in it too.
+    expect(purgeArchivedSessions(later + SESSION_ARCHIVE_MS + 1)).toBe(1);
+    expect(findSession(sessionUuid)).toBeUndefined();
   });
 
   it('keeps a pinned one; an archived one is only read until brought back', async () => {

@@ -15,6 +15,8 @@ export type FakeToolCall = {
   id?: string;
   name: string;
   input: Record<string, unknown>;
+  /** The input as written instead — JSON or not: a model that slipped. */
+  raw?: string;
 };
 
 export type FakeTurn = {
@@ -30,6 +32,16 @@ export type FakeTurn = {
    * open: a service gone silent midway.
    */
   stallAfter?: number;
+  /**
+   * Stream this many pieces, then put this error in the stream and end it:
+   * a service that fails midway.
+   */
+  failAfter?: { pieces: number; error: unknown };
+  /**
+   * How the answer ends, as the API names it — `max_tokens`, `refusal`,
+   * `length`, `content_filter` — instead of by its calls.
+   */
+  stop?: string;
 };
 
 export type FakeRequest = {
@@ -75,6 +87,11 @@ export type FakeModelOptions = {
    * without it.
    */
   refuseBlocks?: string[];
+  /**
+   * Refuse adaptive thinking with a 400, as Anthropic's older models do: a
+   * client is expected to ask again without it.
+   */
+  refuseThinking?: boolean;
 };
 
 /** Whether a body carries a content block of one of these types anywhere. */
@@ -101,8 +118,7 @@ function pieces(text: string): string[] {
 }
 
 /** A JSON text in a few uneven pieces, as tool arguments arrive. */
-function jsonPieces(value: unknown): string[] {
-  const json = JSON.stringify(value);
+function jsonPieces(json: string): string[] {
   const out: string[] = [];
   for (let at = 0; at < json.length; at += 7) out.push(json.slice(at, at + 7));
   return out.length ? out : ['{}'];
@@ -168,6 +184,21 @@ export async function startFakeModel(
         return;
       }
       const fake: FakeRequest = { api, path, headers: request.headers, body };
+      if (options.refuseThinking && api === 'anthropic' && body.thinking) {
+        refused.push(fake);
+        response.writeHead(400, { 'content-type': 'application/json' });
+        response.end(
+          JSON.stringify({
+            type: 'error',
+            error: {
+              type: 'invalid_request_error',
+              message:
+                "thinking.type: Input tag 'adaptive' found using 'type' does not match any of the expected tags: 'disabled', 'enabled'",
+            },
+          }),
+        );
+        return;
+      }
       if (
         options.refuseBlocks?.length &&
         carriesBlock(body.messages, options.refuseBlocks)
@@ -213,6 +244,7 @@ export async function startFakeModel(
     const calls = (turn.toolCalls ?? []).map((call, index) => ({
       ...call,
       id: call.id ?? `call_${requests.length}_${index}`,
+      written: call.raw ?? JSON.stringify(call.input),
     }));
     const usage = {
       input: turn.usage?.input ?? 100,
@@ -221,14 +253,18 @@ export async function startFakeModel(
     };
     const stream = request.body.stream === true;
     let sent = 0;
-    /** Before every streamed piece: its pause, or silence for good. */
+    /** Thrown to end a stream with the error of `failAfter`. */
+    const FAILED = Symbol('failed');
+    /** Before every streamed piece: its pause, its failure, or silence for good. */
     const next = async () => {
-      if (turn.stallAfter !== undefined && sent++ >= turn.stallAfter)
+      if (turn.failAfter && sent >= turn.failAfter.pieces) throw FAILED;
+      if (turn.stallAfter !== undefined && sent >= turn.stallAfter)
         await new Promise(() => {});
+      sent++;
       await wait(turn.delayMs);
     };
     if (request.api === 'anthropic') {
-      const stop = calls.length ? 'tool_use' : 'end_turn';
+      const stop = turn.stop ?? (calls.length ? 'tool_use' : 'end_turn');
       if (!stream) {
         response.writeHead(200, { 'content-type': 'application/json' });
         response.end(
@@ -281,44 +317,51 @@ export async function startFakeModel(
         },
       });
       let index = 0;
-      if (turn.text) {
-        send('content_block_start', {
-          type: 'content_block_start',
-          index,
-          content_block: { type: 'text', text: '' },
-        });
-        for (const piece of pieces(turn.text)) {
-          await next();
-          send('content_block_delta', {
-            type: 'content_block_delta',
+      try {
+        if (turn.text) {
+          send('content_block_start', {
+            type: 'content_block_start',
             index,
-            delta: { type: 'text_delta', text: piece },
+            content_block: { type: 'text', text: '' },
           });
+          for (const piece of pieces(turn.text)) {
+            await next();
+            send('content_block_delta', {
+              type: 'content_block_delta',
+              index,
+              delta: { type: 'text_delta', text: piece },
+            });
+          }
+          send('content_block_stop', { type: 'content_block_stop', index });
+          index++;
         }
-        send('content_block_stop', { type: 'content_block_stop', index });
-        index++;
-      }
-      for (const call of calls) {
-        send('content_block_start', {
-          type: 'content_block_start',
-          index,
-          content_block: {
-            type: 'tool_use',
-            id: call.id,
-            name: call.name,
-            input: {},
-          },
-        });
-        for (const piece of jsonPieces(call.input)) {
-          await next();
-          send('content_block_delta', {
-            type: 'content_block_delta',
+        for (const call of calls) {
+          send('content_block_start', {
+            type: 'content_block_start',
             index,
-            delta: { type: 'input_json_delta', partial_json: piece },
+            content_block: {
+              type: 'tool_use',
+              id: call.id,
+              name: call.name,
+              input: {},
+            },
           });
+          for (const piece of jsonPieces(call.written)) {
+            await next();
+            send('content_block_delta', {
+              type: 'content_block_delta',
+              index,
+              delta: { type: 'input_json_delta', partial_json: piece },
+            });
+          }
+          send('content_block_stop', { type: 'content_block_stop', index });
+          index++;
         }
-        send('content_block_stop', { type: 'content_block_stop', index });
-        index++;
+      } catch (error) {
+        if (error !== FAILED) throw error;
+        send('error', { type: 'error', error: turn.failAfter!.error });
+        response.end();
+        return;
       }
       send('message_delta', {
         type: 'message_delta',
@@ -330,7 +373,7 @@ export async function startFakeModel(
       return;
     }
 
-    const finish = calls.length ? 'tool_calls' : 'stop';
+    const finish = turn.stop ?? (calls.length ? 'tool_calls' : 'stop');
     const openaiUsage = {
       prompt_tokens: usage.input,
       completion_tokens: usage.output,
@@ -360,7 +403,7 @@ export async function startFakeModel(
                         type: 'function',
                         function: {
                           name: call.name,
-                          arguments: JSON.stringify(call.input),
+                          arguments: call.written,
                         },
                       })),
                     }
@@ -388,26 +431,35 @@ export async function startFakeModel(
           choices: [{ index: 0, delta, finish_reason: finishReason }],
         })}\n\n`,
       );
-    chunk({ role: 'assistant', content: '' });
-    for (const piece of pieces(turn.text ?? '')) {
-      await next();
-      chunk({ content: piece });
-    }
-    for (const [index, call] of calls.entries()) {
-      chunk({
-        tool_calls: [
-          {
-            index,
-            id: call.id,
-            type: 'function',
-            function: { name: call.name, arguments: '' },
-          },
-        ],
-      });
-      for (const piece of jsonPieces(call.input)) {
+    try {
+      chunk({ role: 'assistant', content: '' });
+      for (const piece of pieces(turn.text ?? '')) {
         await next();
-        chunk({ tool_calls: [{ index, function: { arguments: piece } }] });
+        chunk({ content: piece });
       }
+      for (const [index, call] of calls.entries()) {
+        chunk({
+          tool_calls: [
+            {
+              index,
+              id: call.id,
+              type: 'function',
+              function: { name: call.name, arguments: '' },
+            },
+          ],
+        });
+        for (const piece of jsonPieces(call.written)) {
+          await next();
+          chunk({ tool_calls: [{ index, function: { arguments: piece } }] });
+        }
+      }
+    } catch (error) {
+      if (error !== FAILED) throw error;
+      response.write(
+        `data: ${JSON.stringify({ error: turn.failAfter!.error })}\n\n`,
+      );
+      response.end();
+      return;
     }
     chunk({}, finish);
     if (request.body.stream_options?.include_usage)

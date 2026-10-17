@@ -399,14 +399,12 @@ export const baselineSql: string[] = [
 	\`waiting\` integer DEFAULT 0 NOT NULL,
 	\`applied\` integer DEFAULT 0 NOT NULL,
 	\`rejected\` integer DEFAULT 0 NOT NULL,
-	\`summary\` text DEFAULT '' NOT NULL,
 	\`tokens\` integer DEFAULT 0 NOT NULL,
 	\`error\` text,
 	\`createdAt\` integer NOT NULL,
 	\`lastActiveAt\` integer NOT NULL,
 	\`closedAt\` integer,
-	\`archivedAt\` integer,
-	\`purgedAt\` integer
+	\`archivedAt\` integer
 );
 `,
   `CREATE INDEX \`ai-sessions-active-idx\` ON \`ai-sessions\` (\`archivedAt\`,\`lastActiveAt\`);`,

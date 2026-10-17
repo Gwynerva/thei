@@ -59,8 +59,8 @@ export interface AiStep {
  * Why a turn ended early: stopped by the owner, out of time (the turn took
  * too long, or the service fell silent), cut off when the site restarted,
  * the month's limit reached, no model set, the key refused, the service
- * busy, out of reach or not knowing the model, the model refusing, too many
- * steps, anything else.
+ * busy, out of reach or not knowing the model, the model refusing, its
+ * answer out of room, too many steps, anything else.
  */
 export const AI_NOTICE_KINDS = [
   'stopped',
@@ -73,6 +73,7 @@ export const AI_NOTICE_KINDS = [
   'address',
   'model',
   'refused',
+  'length',
   'turns',
   'error',
 ] as const;
@@ -228,7 +229,6 @@ export interface AiSessionItem {
   waiting: number;
   applied: number;
   rejected: number;
-  summary: string;
   tokens: number;
   /** Why the last turn stopped early, until the next one. */
   error: string | null;

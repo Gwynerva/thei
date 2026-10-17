@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MONTHLY_TOKENS } from '../../shared/ai-model';
 import { emptySiteAnalytics } from '../../shared/analytics';
 import { toTheiConfig } from '../../server/thei/config';
+import {
+  draftModelConfig,
+  savedModelConfig,
+} from '../../server/thei/ai/model/admin';
 
 /**
  * The model's settings read from a config a hand edit spoilt: the site runs
@@ -73,5 +77,74 @@ describe('the model in thei.config.json', () => {
     const config = toTheiConfig(raw({ model: null, monthlyTokens: 5000 }));
     expect(config.mcp.model.provider).toBe('none');
     expect(config.mcp.model.apiKey).toBe('');
+  });
+});
+
+describe('the key of the model', () => {
+  const OPENAI = {
+    provider: 'openai' as const,
+    apiKey: 'sk-openai',
+    baseUrl: 'https://api.openai.com/v1',
+    model: 'gpt-x',
+  };
+  const saved = (model: typeof OPENAI | typeof MODEL) =>
+    Object.assign(globalThis.THEI_SERVER, {
+      config: { mcp: { model } },
+    });
+
+  it('goes with the page’s settings to its own service alone', () => {
+    saved(OPENAI);
+    expect(
+      draftModelConfig({ provider: 'openai', baseUrl: OPENAI.baseUrl }).apiKey,
+    ).toBe('sk-openai');
+    expect(
+      draftModelConfig({
+        provider: 'openai',
+        baseUrl: 'https://api.openai.com/v1/',
+      }).apiKey,
+    ).toBe('sk-openai');
+    // Another service chosen on the page is asked with no key …
+    expect(
+      draftModelConfig({
+        provider: 'openai',
+        baseUrl: 'https://openrouter.ai/api/v1',
+      }).apiKey,
+    ).toBe('');
+    expect(
+      draftModelConfig({ provider: 'anthropic', baseUrl: '' }).apiKey,
+    ).toBe('');
+    // … unless one is typed for it.
+    expect(
+      draftModelConfig({
+        provider: 'anthropic',
+        baseUrl: '',
+        apiKey: 'sk-ant-new',
+      }).apiKey,
+    ).toBe('sk-ant-new');
+  });
+
+  it('is dropped when the settings move to another service', () => {
+    expect(savedModelConfig(OPENAI, { model: 'gpt-y' }).apiKey).toBe(
+      'sk-openai',
+    );
+    expect(
+      savedModelConfig(OPENAI, { baseUrl: 'https://api.x.ai/v1' }).apiKey,
+    ).toBe('');
+    expect(
+      savedModelConfig(OPENAI, { provider: 'anthropic', baseUrl: '' }).apiKey,
+    ).toBe('');
+    expect(
+      savedModelConfig(OPENAI, { baseUrl: 'https://api.x.ai/v1', apiKey: 'k' })
+        .apiKey,
+    ).toBe('k');
+    // Turned off and on again at the same service, the key stays.
+    const off = savedModelConfig(OPENAI, { provider: 'none' });
+    expect(off.apiKey).toBe('sk-openai');
+    expect(savedModelConfig(off, { provider: 'openai' }).apiKey).toBe(
+      'sk-openai',
+    );
+    expect(
+      savedModelConfig(off, { provider: 'anthropic', baseUrl: '' }).apiKey,
+    ).toBe('');
   });
 });

@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import ModalWaiting from '#layers/thei/app/modals/ModalWaiting.vue';
 import type { AiActionItem, AiSessionItem } from '#layers/thei/shared/ai';
 import type { AiComposerFile } from '#layers/thei/app/composables/ai-session';
 import ContentInlineLinkDecorator from '#layers/thei/app/components/content/ContentInlineLinkDecorator.vue';
@@ -88,6 +89,16 @@ const writingUuid = computed(() => {
   const last = detail.value?.messages.at(-1);
   return last?.role === 'model' ? last.messageUuid : undefined;
 });
+
+/**
+ * Where the owner last wrote: a question asked before it was passed over,
+ * as the server counts it, and is no longer offered to answer.
+ */
+const ownerSpokeAt = computed(
+  () =>
+    detail.value?.messages.filter((message) => message.role === 'owner').at(-1)
+      ?.seq ?? 0,
+);
 
 // ---- Following the thread ---------------------------------------------------
 
@@ -221,16 +232,7 @@ async function remove() {
       class="flex items-center gap-1 border-b border-border-1/70 px-1 py-1.5
         sm:px-sm"
     >
-      <Button
-        variant="secondary"
-        size="icon-sm"
-        class="bg-transparent sm:hidden pointer-coarse:size-11"
-        :aria-label="phrase.ai_sessions_back"
-        data-session-back
-        @click="emit('back')"
-      >
-        <Icon name="chevron-left" />
-      </Button>
+      <AiSessionsBack @click="emit('back')" />
       <form
         v-if="renaming"
         class="flex min-w-0 flex-1 items-center gap-1"
@@ -359,7 +361,7 @@ async function remove() {
           :message
           :actions="byMessage.get(message.messageUuid) ?? []"
           :writing="message.messageUuid === writingUuid"
-          :answerable="detail.answerable"
+          :answerable="detail.answerable && message.seq > ownerSpokeAt"
           :action-of="actionOf"
           @answer="answer"
         />
@@ -380,9 +382,7 @@ async function remove() {
           />
         </div>
       </div>
-      <div v-else class="flex justify-center py-lg text-text-3">
-        <Icon name="loading" class="text-xl" />
-      </div>
+      <ModalWaiting v-else class="py-lg" />
     </div>
 
     <!-- An archived session is brought back before anything is written in

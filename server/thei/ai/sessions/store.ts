@@ -12,7 +12,7 @@ import { EntityPrefix } from '../../entity-id';
 /**
  * Sessions and what is said in them, as stored: making one, adding to it,
  * keeping its counts and the entities it concerns up to date. What a session
- * is to the owner — its groups, its summary, its end — is built on these.
+ * is to the owner — its groups, its life, its end — is built on these.
  */
 
 export type SessionRow =
@@ -125,6 +125,8 @@ export function touchSession(
 /**
  * Counts what waits for the owner in a session — actions not decided, a
  * question not answered — and what was applied and declined, onto its row.
+ * A question waits only until the owner speaks: a message written on, not
+ * as an answer, passes it over, and the model reads that message instead.
  */
 export function refreshSessionCounts(
   tx: any,
@@ -142,11 +144,29 @@ export function refreshSessionCounts(
     .all() as { state: string; value: number }[];
   const of = (state: string) =>
     counts.find((row) => row.state === state)?.value ?? 0;
+  const spoke =
+    (
+      tx
+        .select({ seq: max(schema.aiMessages.seq) })
+        .from(schema.aiMessages)
+        .where(
+          and(
+            eq(schema.aiMessages.sessionUuid, sessionUuid),
+            eq(schema.aiMessages.role, 'owner'),
+          ),
+        )
+        .get() as { seq: number | null } | undefined
+    )?.seq ?? 0;
   const questions = (
     tx
       .select({ parts: schema.aiMessages.parts })
       .from(schema.aiMessages)
-      .where(eq(schema.aiMessages.sessionUuid, sessionUuid))
+      .where(
+        and(
+          eq(schema.aiMessages.sessionUuid, sessionUuid),
+          gt(schema.aiMessages.seq, spoke),
+        ),
+      )
       .all() as { parts: AiMessagePart[] }[]
   ).filter((row) =>
     row.parts.some((part) => part.type === 'question' && !part.answer),
@@ -271,7 +291,6 @@ export function updateSession(
       | 'pinned'
       | 'error'
       | 'model'
-      | 'summary'
       | 'closedAt'
       | 'archivedAt'
     >

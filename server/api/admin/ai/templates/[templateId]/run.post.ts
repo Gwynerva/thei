@@ -3,6 +3,7 @@ import { requireAiOn } from '../../../../../thei/ai-on';
 import { withRefusals } from '../../../../../thei/ai/refusals';
 import { runTemplate } from '../../../../../thei/ai/templates/run';
 import { markReadOnlyRequest } from '../../../../../thei/read-only-request';
+import { rememberOrigin } from '../../../../../thei/ai/runner/background-event';
 
 /**
  * The owner runs a built-in check: over what it has not looked at yet, of
@@ -15,6 +16,8 @@ export default defineEventHandler((event) =>
   withRefusals(async (): Promise<AiTemplateRunResponse> => {
     requireAiOn();
     markReadOnlyRequest(event);
+    // A site with no address of its own links as the owner reached it.
+    rememberOrigin(event);
     const body =
       (await readBody<{ about?: unknown; request?: unknown; force?: unknown }>(
         event,

@@ -10,6 +10,7 @@ export function deleteUsagesReleasing(
   tx: any,
   schema: any,
   where: SQL | undefined,
+  now = Date.now(),
 ) {
   const released = (
     tx
@@ -19,5 +20,5 @@ export function deleteUsagesReleasing(
       .all() as { assetUuid: string }[]
   ).map((row) => row.assetUuid);
   tx.delete(schema.assetUsages).where(where).run();
-  if (released.length) touchReleasedAssets(tx, schema, released, Date.now());
+  if (released.length) touchReleasedAssets(tx, schema, released, now);
 }

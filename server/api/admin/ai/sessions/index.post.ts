@@ -1,6 +1,7 @@
 import { requireAiOn } from '../../../../thei/ai-on';
 import { startOwnerSession } from '../../../../thei/ai/sessions/owner';
 import { markReadOnlyRequest } from '../../../../thei/read-only-request';
+import { rememberOrigin } from '../../../../thei/ai/runner/background-event';
 
 /**
  * Starts a session of the owner's: about what they name, with their first
@@ -10,6 +11,8 @@ import { markReadOnlyRequest } from '../../../../thei/read-only-request';
 export default defineEventHandler(async (event) => {
   requireAiOn();
   markReadOnlyRequest(event);
+  // The turn this asks for writes addresses where the owner is.
+  rememberOrigin(event);
   const body = (await readBody<Record<string, unknown>>(event)) ?? {};
   const sessionUuid = startOwnerSession({
     title: typeof body.title === 'string' ? body.title : undefined,

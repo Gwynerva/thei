@@ -9,8 +9,9 @@ const UNANSWERED = 'Stopped before it ran.';
  * The conversation put right for a model to go on with: every call the model
  * asked for is answered right after it, in the order it asked — one never
  * answered, because its turn was stopped or the process ended, with a note
- * it did not run — and an answer to no call is dropped. A service refuses a
- * conversation that breaks either rule.
+ * it did not run — and an answer to no call is dropped, as is a turn of the
+ * model with neither words nor calls. A service refuses a conversation that
+ * breaks any of these rules.
  */
 export function repairTranscript(
   turns: readonly AiTranscriptTurn[],
@@ -20,6 +21,8 @@ export function repairTranscript(
   while (at < turns.length) {
     const turn = turns[at++]!;
     if (turn.role === 'tool') continue;
+    if (turn.role === 'assistant' && !turn.text && !turn.calls?.length)
+      continue;
     out.push(turn);
     if (turn.role !== 'assistant') continue;
     const answers = new Map<string, ToolTurn>();

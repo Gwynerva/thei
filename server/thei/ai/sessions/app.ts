@@ -47,8 +47,7 @@ export function openAppSession(
 function ownSession(context: McpCallContext, session: SessionRow) {
   return (
     session.origin === 'app' &&
-    session.tokenUuid === context.principal.tokenUuid &&
-    !session.purgedAt
+    session.tokenUuid === context.principal.tokenUuid
   );
 }
 
@@ -87,7 +86,6 @@ export function sessionForCall(
           ? isNull(schema.aiSessions.client)
           : eq(schema.aiSessions.client, client),
         isNull(schema.aiSessions.closedAt),
-        isNull(schema.aiSessions.purgedAt),
         gte(schema.aiSessions.lastActiveAt, now - APP_SESSION_GAP_MS),
       ),
     )
@@ -107,7 +105,6 @@ export function latestAppSession(context: McpCallContext): string | undefined {
       and(
         eq(schema.aiSessions.origin, 'app'),
         eq(schema.aiSessions.tokenUuid, context.principal.tokenUuid),
-        isNull(schema.aiSessions.purgedAt),
       ),
     )
     .orderBy(desc(schema.aiSessions.lastActiveAt))

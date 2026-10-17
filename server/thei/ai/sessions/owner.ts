@@ -17,7 +17,12 @@ import {
   refreshSessionCounts,
 } from './store';
 import { cleanSessionTitle, titleFromWords } from './names';
-import { placeSessionFiles, sessionFilesNote, sessionFilesOf } from './files';
+import {
+  placeSessionFiles,
+  refused,
+  sessionFilesNote,
+  sessionFilesOf,
+} from './files';
 import { sessionAnswerable } from './view';
 
 /**
@@ -28,8 +33,11 @@ import { sessionAnswerable } from './view';
 
 const MESSAGE_MAX = 20_000;
 
-function refused(message: string): never {
-  throw createError({ statusCode: 400, message });
+/** The owner's words as a message takes them, or why it does not. */
+function messageText(text: string): string {
+  const trimmed = text.trim();
+  if (trimmed.length > MESSAGE_MAX) refused('The message is too long');
+  return trimmed;
 }
 
 /** The entities a message names: links to them, as the composer makes them. */
@@ -72,14 +80,13 @@ export function postOwnerMessage(
   now = Date.now(),
 ): string {
   const session = findSession(sessionUuid);
-  if (!session || session.purgedAt)
+  if (!session)
     throw createError({ statusCode: 404, message: 'No such session' });
   if (session.archivedAt || session.closedAt)
     refused('The session is archived: bring it back to write in it');
-  const text = message.text.trim();
+  const text = messageText(message.text);
   const files = sessionFilesOf(message.files);
   if (!text && !files.length) refused('A message needs words or files');
-  if (text.length > MESSAGE_MAX) refused('The message is too long');
 
   const about = [...mentionedIn(text), ...keysOf(message.about)];
   const parts: AiMessagePart[] = [];
@@ -200,7 +207,8 @@ export function startOwnerSession(
   },
   now = Date.now(),
 ): string {
-  // The files are checked before a session is made for them.
+  // The words and the files are checked before a session is made for them.
+  messageText(input.text ?? '');
   sessionFilesOf(input.files);
   const template =
     input.templateId === undefined || input.templateId === null

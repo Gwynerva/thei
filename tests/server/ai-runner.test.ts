@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, writeFileSync } from 'node:fs';
+import { IncomingMessage, ServerResponse } from 'node:http';
+import { Socket } from 'node:net';
+import { createEvent, getRequestURL } from 'h3';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import sharp from 'sharp';
@@ -22,6 +25,12 @@ import { findAssetByIdentity } from '../../server/thei/assets/repository/find-by
 import { findAssetBySlug } from '../../server/thei/assets/repository/find-by-slug';
 import { stopTurn, turnsSettled } from '../../server/thei/ai/runner/queue';
 import { recordUsage } from '../../server/thei/ai/model/usage';
+import { checkModel } from '../../server/thei/ai/model/check';
+import {
+  backgroundEvent,
+  rememberOrigin,
+} from '../../server/thei/ai/runner/background-event';
+import { spendApiTokenBudget } from '../../server/thei/api-tokens';
 import {
   startFakeModel,
   type FakeModel,
@@ -607,5 +616,250 @@ describe('a session turn', () => {
     expect(second.messages.at(-1).content[0]).toMatchObject({
       type: 'tool_result',
     });
+  });
+});
+
+/** What the model spent, as the month's limit counts it. */
+function usageRow() {
+  return context.rawDb
+    .prepare(
+      'SELECT SUM(calls) AS calls, SUM(inputTokens) AS input, SUM(outputTokens) AS output FROM `ai-usage`',
+    )
+    .get() as {
+    calls: number | null;
+    input: number | null;
+    output: number | null;
+  };
+}
+
+describe('how a turn ends', () => {
+  for (const provider of ['openai', 'anthropic'] as const) {
+    it(`counts a call that fails midway, and says why (${provider})`, async () => {
+      await useModel(
+        [
+          {
+            text: 'A few words before it breaks off and says nothing more',
+            usage: { input: 700 },
+            failAfter: {
+              pieces: 4,
+              error:
+                provider === 'openai'
+                  ? { code: 502, message: 'Provider returned error' }
+                  : { type: 'overloaded_error', message: 'Overloaded' },
+            },
+          },
+        ],
+        provider,
+      );
+      const sessionUuid = startOwnerSession({ text: 'Say something' });
+      await turnsSettled();
+      expect(
+        partOf(modelMessage(sessionUuid)[0]!.parts, 'notice'),
+      ).toMatchObject({ kind: 'busy' });
+      // The call is counted however it ended: what the service said of it,
+      // and the words it wrote.
+      const spent = usageRow();
+      expect(spent.calls).toBe(1);
+      expect(spent.output).toBeGreaterThan(0);
+      if (provider === 'anthropic') expect(spent.input).toBe(700);
+      expect(findSession(sessionUuid)!.tokens).toBeGreaterThan(0);
+    });
+
+    it(`says an answer cut off at its room was cut off (${provider})`, async () => {
+      await useModel(
+        [
+          {
+            text: 'An answer that goes on and on',
+            stop: provider === 'openai' ? 'length' : 'max_tokens',
+          },
+        ],
+        provider,
+      );
+      const sessionUuid = startOwnerSession({ text: 'Tell me all' });
+      await turnsSettled();
+      const [answer] = modelMessage(sessionUuid);
+      expect(answer!.text).toBe('An answer that goes on and on');
+      expect(partOf(answer!.parts, 'notice')?.kind).toBe('length');
+      expect(findSession(sessionUuid)?.error).toBe('length');
+    });
+
+    it(`hears of a call it wrote broken, and writes it again (${provider})`, async () => {
+      await useModel(
+        [
+          {
+            text: 'Let me look.',
+            toolCalls: [
+              {
+                id: 'call_broken',
+                name: 'read_entity',
+                input: {},
+                raw: '{"ref": "pro',
+              },
+            ],
+          },
+          { text: 'Read it.' },
+        ],
+        provider,
+      );
+      const sessionUuid = startOwnerSession({ text: 'Read Parapet' });
+      await turnsSettled();
+      const [answer] = modelMessage(sessionUuid);
+      expect(answer!.text).toBe('Let me look.\n\nRead it.');
+      expect(partOf(answer!.parts, 'notice')).toBeUndefined();
+      expect(JSON.stringify(model!.requests[1]!.body.messages)).toContain(
+        'INVALID_JSON',
+      );
+    });
+  }
+
+  it('takes a filtered answer for a refusal', async () => {
+    await useModel([{ text: '', stop: 'content_filter' }]);
+    const sessionUuid = startOwnerSession({ text: 'Something' });
+    await turnsSettled();
+    expect(partOf(modelMessage(sessionUuid)[0]!.parts, 'notice')?.kind).toBe(
+      'refused',
+    );
+  });
+
+  it('treats a conversation too long for the model as out of room', async () => {
+    await useModel(
+      [{ text: 'Half', stop: 'model_context_window_exceeded' }],
+      'anthropic',
+    );
+    const sessionUuid = startOwnerSession({ text: 'Everything at once' });
+    await turnsSettled();
+    expect(partOf(modelMessage(sessionUuid)[0]!.parts, 'notice')?.kind).toBe(
+      'length',
+    );
+  });
+
+  it('keeps an answer of no words out of the conversation', async () => {
+    await useModel([{ text: '' }, { text: 'Now I answer.' }]);
+    const sessionUuid = startOwnerSession({ text: 'Hello' });
+    await turnsSettled();
+    expect(modelMessage(sessionUuid)[0]!.transcript).toEqual([]);
+    postOwnerMessage(sessionUuid, { text: 'Hello again' });
+    await turnsSettled();
+    const asked = model!.requests[1]!.body.messages;
+    expect(asked.some((item: any) => item.role === 'assistant')).toBe(false);
+    expect(modelMessage(sessionUuid).at(-1)!.text).toBe('Now I answer.');
+  });
+
+  it('ends with the error a service puts in its stream', async () => {
+    await useModel([
+      {
+        text: 'Partly said',
+        failAfter: { pieces: 1, error: 'The model crashed' },
+      },
+    ]);
+    const sessionUuid = startOwnerSession({ text: 'Hello' });
+    await turnsSettled();
+    expect(partOf(modelMessage(sessionUuid)[0]!.parts, 'notice')).toMatchObject(
+      { kind: 'error', text: 'The model crashed' },
+    );
+  });
+
+  it('asks a model that takes no adaptive thinking without it, turn and check alike', async () => {
+    await useModel([{ text: 'OK' }, { text: 'Hi.' }], 'anthropic', {
+      refuseThinking: true,
+    });
+    const old = { ...THEI_SERVER.config.mcp.model, model: 'fake-old' };
+    Object.assign(THEI_SERVER.config.mcp, { model: old });
+    const spent: number[] = [];
+    const outcome = await checkModel(old, 'fake-old', (usage) =>
+      spent.push(usage.inputTokens),
+    );
+    expect(outcome).toEqual({ outcome: 'ok', detail: '' });
+    expect(spent).toHaveLength(1);
+    const sessionUuid = startOwnerSession({ text: 'Hello' });
+    await turnsSettled();
+    expect(modelMessage(sessionUuid)[0]!.text).toBe('Hi.');
+    // Turned away once, by the check; asked without from then on.
+    expect(model!.refused).toHaveLength(1);
+    expect(model!.requests.every((request) => !request.body.thinking)).toBe(
+      true,
+    );
+  });
+
+  it('works under a write budget of the session’s own', async () => {
+    await useModel([{ text: 'Done.' }, { text: 'Done too.' }]);
+    const first = startOwnerSession({ text: 'One' });
+    const second = startOwnerSession({ text: 'Two' });
+    await turnsSettled();
+    // One session spending all its writes leaves the other's whole.
+    for (let index = 0; index < 30; index++)
+      spendApiTokenBudget(`thei:${first}`, 'write');
+    expect(spendApiTokenBudget(`thei:${first}`, 'write')).toBeGreaterThan(0);
+    expect(spendApiTokenBudget(`thei:${second}`, 'write')).toBe(0);
+  });
+
+  it('gives the owner’s instructions once, in the overview', async () => {
+    await useModel([{ text: 'Hi.' }]);
+    Object.assign(THEI_SERVER.config.mcp, {
+      instructions: 'Always answer in rhyme.',
+    });
+    startOwnerSession({ text: 'Hello' });
+    await turnsSettled();
+    const system = model!.requests[0]!.body.messages[0].content as string;
+    expect(system.split('Always answer in rhyme.')).toHaveLength(2);
+  });
+});
+
+describe('the owner’s words', () => {
+  it('passes a question over when the owner writes on', async () => {
+    await useModel([
+      {
+        toolCalls: [
+          {
+            name: 'ask_owner',
+            input: { question: 'Short or long?', options: ['Short', 'Long'] },
+          },
+        ],
+      },
+      { text: 'Then the title.' },
+    ]);
+    const sessionUuid = startOwnerSession({ text: 'Fix the summary' });
+    await turnsSettled();
+    expect(findSession(sessionUuid)?.waiting).toBe(1);
+    postOwnerMessage(sessionUuid, { text: 'Actually, do the title' });
+    expect(findSession(sessionUuid)?.waiting).toBe(0);
+    await turnsSettled();
+    expect(findSession(sessionUuid)?.waiting).toBe(0);
+  });
+
+  it('refuses a first message too long before any session is made', () => {
+    expect(() => startOwnerSession({ text: 'x'.repeat(20_001) })).toThrow(
+      /too long/,
+    );
+    expect(
+      context.rawDb.prepare('SELECT count(*) AS n FROM `ai-sessions`').get(),
+    ).toEqual({ n: 0 });
+  });
+});
+
+describe('the request a turn runs as', () => {
+  it('comes to the site’s address, else where the owner was heard, else where it listens', () => {
+    Object.assign(context.server, { config: { siteUrl: '' } });
+    const port = process.env.NITRO_PORT || process.env.PORT || '3000';
+    expect(getRequestURL(backgroundEvent()).origin).toBe(
+      `http://localhost:${port}`,
+    );
+
+    const request = new IncomingMessage(new Socket());
+    request.headers = {
+      host: 'diary.example:8443',
+      'x-forwarded-proto': 'https',
+    };
+    rememberOrigin(createEvent(request, new ServerResponse(request)));
+    expect(getRequestURL(backgroundEvent()).origin).toBe(
+      'https://diary.example:8443',
+    );
+
+    Object.assign(context.server, {
+      config: { siteUrl: 'https://site.example/diary' },
+    });
+    expect(getRequestURL(backgroundEvent()).origin).toBe(
+      'https://site.example',
+    );
   });
 });

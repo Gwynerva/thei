@@ -1,4 +1,14 @@
-import { and, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  lt,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import {
   aiSessionStanding,
   type AiActionItem,
@@ -11,6 +21,7 @@ import {
   type AiSessionOrigin,
   type AiSessionOverview,
 } from '#layers/thei/shared/ai';
+import type { Database } from 'better-sqlite3';
 import { normalizeTermText } from '#layers/thei/shared/text-terms';
 import {
   entityFace,
@@ -120,7 +131,6 @@ function sessionItem(row: SessionRow, about: AiEntityRef[]): AiSessionItem {
     waiting: row.waiting,
     applied: row.applied,
     rejected: row.rejected,
-    summary: row.summary,
     tokens: row.tokens,
     error: row.error,
     createdAt: row.createdAt,
@@ -234,9 +244,7 @@ export async function actionItems(rows: ActionRow[]): Promise<AiActionItem[]> {
  * one in the archive until it is brought back.
  */
 export function sessionAnswerable(row: SessionRow): boolean {
-  return (
-    row.origin !== 'app' && !row.closedAt && !row.archivedAt && !row.purgedAt
-  );
+  return row.origin !== 'app' && !row.closedAt && !row.archivedAt;
 }
 
 /** Words as a search compares them: case, «ё» and runs of space set aside. */
@@ -244,28 +252,28 @@ function searchable(value: string): string {
   return normalizeTermText(value).replace(/\s+/g, ' ').trim();
 }
 
-/** All that was said in each of these sessions, as one searchable text. */
-function saidIn(sessionUuids: string[]): Map<string, string> {
-  const { db, schema } = THEI_SERVER.useDb();
-  const said = new Map<string, string>();
-  if (!sessionUuids.length) return said;
-  const rows = db
-    .select({
-      sessionUuid: schema.aiMessages.sessionUuid,
-      text: schema.aiMessages.text,
-    })
-    .from(schema.aiMessages)
-    .where(inArray(schema.aiMessages.sessionUuid, sessionUuids))
-    .all();
-  for (const row of rows)
-    said.set(row.sessionUuid, `${said.get(row.sessionUuid) ?? ''} ${row.text}`);
-  return said;
+/** The SQL function a search compares words with, as `searchable` reads them. */
+const SEARCHABLE_SQL = 'thei_searchable';
+const searchableIn = new WeakSet<object>();
+
+/**
+ * Words are looked for in SQL with the site's own reading of them — SQLite's
+ * lower() knows only Latin letters — given to each connection once.
+ */
+function searchableSql(rawDb: Database) {
+  if (searchableIn.has(rawDb)) return;
+  rawDb.function(SEARCHABLE_SQL, { deterministic: true }, (value) =>
+    typeof value === 'string' ? searchable(value) : '',
+  );
+  searchableIn.add(rawDb);
 }
 
 /**
  * The owner's sessions, the latest first, a page at a time: by where they
- * came from, archived or not, and by words of their title, summary, app or
- * of what was said in them.
+ * came from, archived or not, and by words of their title, app or of what
+ * was said in them. Sessions touched in one moment — several at one apply —
+ * stand together: a page never ends among them, so the next one, read from
+ * before that moment, skips none.
  */
 export function listSessions(
   filter: {
@@ -285,7 +293,7 @@ export function listSessions(
     before?: number;
   } = {},
 ): AiSessionListResponse {
-  const { db, schema } = THEI_SERVER.useDb();
+  const { db, schema, rawDb } = THEI_SERVER.useDb();
   const table = schema.aiSessions;
   const words = searchable(filter.q ?? '');
   const about = filter.about
@@ -297,51 +305,69 @@ export function listSessions(
       modelReady: Boolean(sessionModel()),
       waiting: aiWaiting(),
     };
-  const query = db
+  if (words) searchableSql(rawDb);
+  const found = (value: SQL) =>
+    sql`instr(${sql.raw(SEARCHABLE_SQL)}(${value}), ${words}) > 0`;
+  const where = (moment?: SQL) =>
+    and(
+      filter.origin ? eq(table.origin, filter.origin) : undefined,
+      filter.archived === undefined
+        ? undefined
+        : filter.archived
+          ? sql`${table.archivedAt} IS NOT NULL`
+          : isNull(table.archivedAt),
+      filter.waiting ? sql`${table.waiting} > 0` : undefined,
+      filter.applied ? sql`${table.applied} > 0` : undefined,
+      filter.rejected ? sql`${table.rejected} > 0` : undefined,
+      filter.tokenUuid ? eq(table.tokenUuid, filter.tokenUuid) : undefined,
+      filter.templateId ? eq(table.templateId, filter.templateId) : undefined,
+      about ? inArray(table.sessionUuid, about) : undefined,
+      filter.before ? lt(table.lastActiveAt, filter.before) : undefined,
+      words
+        ? or(
+            found(sql`${table.title}`),
+            found(sql`coalesce(${table.client}, '')`),
+            sql`EXISTS (SELECT 1 FROM "ai-messages" said WHERE said."sessionUuid" = "ai-sessions"."sessionUuid" AND ${found(sql`said."text"`)})`,
+          )
+        : undefined,
+      moment,
+    );
+  const rows = db
     .select()
     .from(table)
-    .where(
-      and(
-        isNull(table.purgedAt),
-        filter.origin ? eq(table.origin, filter.origin) : undefined,
-        filter.archived === undefined
-          ? undefined
-          : filter.archived
-            ? sql`${table.archivedAt} IS NOT NULL`
-            : isNull(table.archivedAt),
-        filter.waiting ? sql`${table.waiting} > 0` : undefined,
-        filter.applied ? sql`${table.applied} > 0` : undefined,
-        filter.rejected ? sql`${table.rejected} > 0` : undefined,
-        filter.tokenUuid ? eq(table.tokenUuid, filter.tokenUuid) : undefined,
-        filter.templateId ? eq(table.templateId, filter.templateId) : undefined,
-        about ? inArray(table.sessionUuid, about) : undefined,
-        filter.before ? lt(table.lastActiveAt, filter.before) : undefined,
-      ),
-    )
-    .orderBy(desc(table.lastActiveAt));
-  // Words are looked for here rather than in SQL, whose lower() knows only
-  // Latin letters. Sessions are few — the quiet ones go to the archive in a
-  // week and leave it in a month — so reading them whole costs little.
-  let rows: (typeof table.$inferSelect)[];
-  if (!words) rows = query.limit(PAGE + 1).all();
-  else {
-    const all = query.all();
-    const said = saidIn(all.map((row) => row.sessionUuid));
-    rows = all
-      .filter((row) =>
-        [row.title, row.summary, row.client, said.get(row.sessionUuid)].some(
-          (value) => value && searchable(value).includes(words),
-        ),
-      )
-      .slice(0, PAGE + 1);
+    .where(where())
+    .orderBy(desc(table.lastActiveAt), desc(table.sessionUuid))
+    .limit(PAGE + 1)
+    .all();
+  let page = rows;
+  let next: number | undefined;
+  if (rows.length > PAGE) {
+    const edge = rows[PAGE - 1]!.lastActiveAt;
+    page = [
+      ...rows.filter((row) => row.lastActiveAt > edge),
+      ...db
+        .select()
+        .from(table)
+        .where(where(eq(table.lastActiveAt, edge)))
+        .orderBy(desc(table.sessionUuid))
+        .all(),
+    ];
+    const older =
+      rows[PAGE]!.lastActiveAt < edge ||
+      db
+        .select({ sessionUuid: table.sessionUuid })
+        .from(table)
+        .where(where(lt(table.lastActiveAt, edge)))
+        .limit(1)
+        .get() !== undefined;
+    if (older) next = edge;
   }
-  const page = rows.slice(0, PAGE);
   const named = aboutOf(page.map((row) => row.sessionUuid));
   return {
     sessions: page.map((row) =>
       sessionItem(row, named.get(row.sessionUuid) ?? []),
     ),
-    ...(rows.length > PAGE ? { next: page.at(-1)!.lastActiveAt } : {}),
+    ...(next === undefined ? {} : { next }),
     modelReady: Boolean(sessionModel()),
     waiting: aiWaiting(),
   };
@@ -379,12 +405,7 @@ export function sessionOverview(room = 9): AiSessionOverview {
       db
         .select({ total: sql<number>`count(*)` })
         .from(schema.aiSessions)
-        .where(
-          and(
-            isNull(schema.aiSessions.purgedAt),
-            isNull(schema.aiSessions.archivedAt),
-          ),
-        )
+        .where(isNull(schema.aiSessions.archivedAt))
         .get()?.total ?? 0,
     ),
     waiting: waitingShown,
@@ -426,19 +447,14 @@ export function aiWaiting(): number {
         total: sql<number>`coalesce(sum(${schema.aiSessions.waiting}), 0)`,
       })
       .from(schema.aiSessions)
-      .where(
-        and(
-          isNull(schema.aiSessions.purgedAt),
-          isNull(schema.aiSessions.archivedAt),
-        ),
-      )
+      .where(isNull(schema.aiSessions.archivedAt))
       .get()?.total ?? 0,
   );
 }
 
 export function sessionHead(sessionUuid: string): AiSessionItem | undefined {
   const row = findSession(sessionUuid);
-  if (!row || row.purgedAt) return undefined;
+  if (!row) return undefined;
   return sessionItem(row, aboutOf([sessionUuid]).get(sessionUuid) ?? []);
 }
 
@@ -451,7 +467,7 @@ export async function sessionDetail(
   afterSeq = 0,
 ): Promise<AiSessionDetail | undefined> {
   const row = findSession(sessionUuid);
-  if (!row || row.purgedAt) return undefined;
+  if (!row) return undefined;
   const actions = await settleActions(sessionActions(sessionUuid));
   return {
     session: sessionHead(sessionUuid)!,

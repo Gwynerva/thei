@@ -1,6 +1,20 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { AiTranscriptTurn } from '#layers/thei/shared/ai';
 import { TURN_LIMITS } from '../runner/turns';
+import {
+  anthropicError,
+  anthropicThinking,
+  anthropicUsage,
+  chatAddress,
+  chatBodyError,
+  chatFailure,
+  chatHeaders,
+  chatUsage,
+  ModelError,
+  outputLimit,
+  refusedThinking,
+  type ChatUsage,
+} from './service';
 import type { ModelSettings } from './settings';
 import type { ModelUsage } from './usage';
 
@@ -81,6 +95,12 @@ export interface StreamTurnInput {
   signal: AbortSignal;
   /** Words as they come, in order. */
   onText: (delta: string) => void;
+  /**
+   * What a call to the service spent, once for every call it answered —
+   * one cut short by a stop, a timeout or a failure midway too, as far as
+   * it is known.
+   */
+  onUsage: (usage: ModelUsage) => void;
 }
 
 export interface StreamCall {
@@ -95,14 +115,22 @@ export interface StreamTurnOutput {
   text: string;
   calls: StreamCall[];
   native?: { provider: string; content: unknown };
-  usage: ModelUsage;
-  /** The model ended its turn, asked for tools, ran out of room, or refused. */
-  stop: 'end' | 'tools' | 'length' | 'refusal';
+  /**
+   * Why the model stopped short, if it did: its answer ran out of room — the
+   * longest it may write, or all the conversation it can read — or it
+   * refused to answer.
+   */
+  stop?: 'length' | 'refusal';
   /**
    * Kinds of block the provider turned away, now and before: the next call
    * of the turn tells of them in words from the start.
    */
   unshown: Set<StreamFileKind>;
+}
+
+/** The files a turn shows: what the owner brought, or what a tool showed. */
+export function turnFiles(turn: { role: string; files?: string[] }): string[] {
+  return turn.role === 'user' || turn.role === 'tool' ? (turn.files ?? []) : [];
 }
 
 /** The files a request carries blocks of, by kind, given what is unshown. */
@@ -125,32 +153,75 @@ function nextToDrop(carried: ReadonlySet<StreamFileKind>) {
   return DROPPED_FIRST.find((kind) => carried.has(kind));
 }
 
-/** The files a turn shows: what the owner brought, or what a tool showed. */
-function turnFiles(turn: AiTranscriptTurn): string[] {
-  return turn.role === 'user' || turn.role === 'tool' ? (turn.files ?? []) : [];
-}
-
-/**
- * Why a turn could not be had: a key the service refused, a service busy or
- * out of reach, a model it does not know, a service that fell silent, or
- * anything else it said. `detail` is what it said, for the owner.
- */
-export class ModelError extends Error {
-  constructor(
-    readonly kind: 'key' | 'busy' | 'address' | 'model' | 'timeout' | 'error',
-    readonly detail = '',
-  ) {
-    super(detail || kind);
-    this.name = 'ModelError';
-  }
-}
-
 /** The room a turn may take: a long proposal fits, a runaway does not. */
 const MAX_OUTPUT_TOKENS = 16000;
 const CUT_OFF =
   'Your turn was cut off before this call was whole; make it again, shorter.';
-/** How many times a turn is asked again when its tool input would not parse. */
-const UNPARSED_RETRIES = 2;
+
+/**
+ * A tool's input as the model wrote it: parsed, or why it is not run — cut
+ * off with the turn, or not JSON at all, which the model is shown to write
+ * it again.
+ */
+function parsedCall(
+  call: { id: string; name: string; arguments: string },
+  cut: boolean,
+): StreamCall {
+  if (cut) return { id: call.id, name: call.name, input: {}, broken: CUT_OFF };
+  try {
+    const input: unknown = JSON.parse(call.arguments || '{}');
+    // A tool's input is an object, or nothing a service takes back.
+    if (!input || typeof input !== 'object' || Array.isArray(input))
+      throw new TypeError('Not an object');
+    return { id: call.id, name: call.name, input };
+  } catch {
+    return {
+      id: call.id,
+      name: call.name,
+      input: {},
+      broken: JSON.stringify({ INVALID_JSON: call.arguments }),
+    };
+  }
+}
+
+/**
+ * What one call spent, told once however it ends. A call cut short is
+ * counted as far as the service said, its words written so far at about
+ * four characters a token: the service bills them, and does not say how
+ * many until its answer is over.
+ */
+function callMeter(onUsage: (usage: ModelUsage) => void) {
+  let known: ModelUsage | undefined;
+  let written = 0;
+  let told = false;
+  return {
+    said(usage: ModelUsage) {
+      known = usage;
+    },
+    wrote(characters: number) {
+      written += characters;
+    },
+    /** Once: the call answered whole, or was cut short. */
+    tell(whole: boolean) {
+      if (told) return;
+      told = true;
+      const usage = known ?? {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+      };
+      if (whole) return onUsage(usage);
+      if (!known && !written) return;
+      onUsage({
+        ...usage,
+        outputTokens: Math.max(usage.outputTokens, Math.ceil(written / 4)),
+      });
+    },
+  };
+}
+
+type CallMeter = ReturnType<typeof callMeter>;
 
 export async function streamTurn(
   input: StreamTurnInput,
@@ -298,30 +369,139 @@ function anthropicMessages(
   return messages;
 }
 
-function anthropicError(error: unknown): unknown {
-  if (
-    error instanceof Anthropic.AuthenticationError ||
-    error instanceof Anthropic.PermissionDeniedError
-  )
-    return new ModelError('key', providerDetail(error));
-  if (error instanceof Anthropic.NotFoundError)
-    return new ModelError('model', providerDetail(error));
-  if (
-    error instanceof Anthropic.RateLimitError ||
-    error instanceof Anthropic.InternalServerError
-  )
-    return new ModelError('busy', providerDetail(error));
-  if (error instanceof Anthropic.APIConnectionError)
-    return new ModelError('address', error.message);
-  if (error instanceof Anthropic.APIError)
-    return new ModelError('error', providerDetail(error));
-  return error;
+/** An answer of Anthropic's, gathered from its stream. */
+interface AnthropicAnswer {
+  /** The blocks by the index each came with. */
+  content: (Anthropic.ContentBlock | undefined)[];
+  /** The input of each tool call as it was written, by the call's block. */
+  inputs: Map<number, string>;
+  stop: Anthropic.StopReason | null;
 }
 
-function providerDetail(error: InstanceType<typeof Anthropic.APIError>) {
-  const body = error.error as { error?: { message?: unknown } } | undefined;
-  const said = body?.error?.message;
-  return (typeof said === 'string' ? said : error.message).slice(0, 300);
+/**
+ * Reads an answer of Anthropic's as it streams: its words told as they
+ * come, what it spent told to `meter`. Tool inputs are kept as written and
+ * parsed only at the end, each on its own: a call the model wrote broken
+ * is told so, rather than the whole answer lost.
+ */
+async function readAnthropic(
+  stream: AsyncIterable<Anthropic.RawMessageStreamEvent>,
+  signal: AbortSignal,
+  meter: CallMeter,
+  heard: () => void,
+  onText: (delta: string) => void,
+): Promise<AnthropicAnswer> {
+  const content: Anthropic.ContentBlock[] = [];
+  const inputs = new Map<number, string>();
+  let stop: Anthropic.StopReason | null = null;
+  let usage: Parameters<typeof anthropicUsage>[0] = {};
+  for await (const event of stream) {
+    heard();
+    switch (event.type) {
+      case 'message_start':
+        usage = { ...event.message.usage };
+        meter.said(anthropicUsage(usage));
+        break;
+      case 'message_delta': {
+        // The counts are the call's so far; those it leaves out stand.
+        const delta = event.usage;
+        usage = {
+          ...usage,
+          output_tokens: delta.output_tokens,
+          ...(delta.input_tokens != null
+            ? { input_tokens: delta.input_tokens }
+            : {}),
+          ...(delta.cache_read_input_tokens != null
+            ? { cache_read_input_tokens: delta.cache_read_input_tokens }
+            : {}),
+          ...(delta.cache_creation_input_tokens != null
+            ? { cache_creation_input_tokens: delta.cache_creation_input_tokens }
+            : {}),
+        };
+        meter.said(anthropicUsage(usage));
+        stop = event.delta.stop_reason ?? stop;
+        break;
+      }
+      case 'content_block_start':
+        content[event.index] = { ...event.content_block };
+        break;
+      case 'content_block_delta': {
+        const block = content[event.index];
+        const delta = event.delta;
+        if (delta.type === 'text_delta' && block?.type === 'text') {
+          block.text += delta.text;
+          meter.wrote(delta.text.length);
+          onText(delta.text);
+        } else if (delta.type === 'input_json_delta') {
+          inputs.set(
+            event.index,
+            (inputs.get(event.index) ?? '') + delta.partial_json,
+          );
+          meter.wrote(delta.partial_json.length);
+        } else if (
+          delta.type === 'thinking_delta' &&
+          block?.type === 'thinking'
+        ) {
+          block.thinking += delta.thinking;
+          meter.wrote(delta.thinking.length);
+        } else if (
+          delta.type === 'signature_delta' &&
+          block?.type === 'thinking'
+        )
+          block.signature = delta.signature;
+        else if (delta.type === 'citations_delta' && block?.type === 'text')
+          block.citations = [...(block.citations ?? []), delta.citation];
+        break;
+      }
+    }
+  }
+  // A stream stopped from this side ends quietly: it is no whole answer.
+  signal.throwIfAborted();
+  return { content, inputs, stop };
+}
+
+/** An answer of Anthropic's as a turn: its words, its calls, how it ended. */
+function anthropicTurn(
+  answer: AnthropicAnswer,
+  unshown: Set<StreamFileKind>,
+): StreamTurnOutput {
+  const cut =
+    answer.stop === 'max_tokens' ||
+    answer.stop === 'model_context_window_exceeded';
+  const calls: StreamCall[] = [];
+  // By the index each block came with, as the inputs are kept.
+  const content = answer.content.flatMap(
+    (block, index): Anthropic.ContentBlock[] => {
+      if (!block) return [];
+      if (block.type !== 'tool_use') return [block];
+      const call = parsedCall(
+        {
+          id: block.id,
+          name: block.name,
+          arguments:
+            answer.inputs.get(index) ?? JSON.stringify(block.input ?? {}),
+        },
+        cut,
+      );
+      calls.push(call);
+      // Handed back as the model wrote it, as far as it parses: a call that
+      // does not is an empty one, whose answer says why it was not run.
+      return [{ ...block, input: call.input }];
+    },
+  );
+  return {
+    text: content
+      .flatMap((block) => (block.type === 'text' ? [block.text] : []))
+      .join(''),
+    calls,
+    native: { provider: 'anthropic', content },
+    ...(answer.stop === 'refusal'
+      ? { stop: 'refusal' as const }
+      : cut
+        ? { stop: 'length' as const }
+        : {}),
+    unshown,
+  };
 }
 
 async function streamAnthropic({
@@ -333,80 +513,63 @@ async function streamAnthropic({
   tools,
   signal,
   onText,
+  onUsage,
   heard,
 }: WatchedInput): Promise<StreamTurnOutput> {
   const unshown = new Set(unshownBefore ?? []);
   const client = new Anthropic({ apiKey: settings.apiKey, maxRetries: 2 });
-  const params: Anthropic.MessageCreateParamsNonStreaming = {
-    model: settings.model,
-    max_tokens: MAX_OUTPUT_TOKENS,
-    // The model decides how much to think; its thoughts are shown to no
-    // one, so they are not sent back in full either.
-    thinking: { type: 'adaptive', display: 'omitted' },
-    // The instructions and the tools are the same for every turn of every
-    // session: cached, they are read for a tenth.
-    system: [
-      { type: 'text', text: system, cache_control: { type: 'ephemeral' } },
-    ],
-    tools: tools.map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      input_schema: tool.inputSchema as Anthropic.Tool.InputSchema,
-      // A long proposal streams as it is written; its input is checked
-      // against the tool's schema before the tool runs.
-      eager_input_streaming: true,
-    })),
-    messages: anthropicMessages(turns, files, unshown),
-    // The conversation so far is reread on every turn: cached, for a tenth.
-    cache_control: { type: 'ephemeral' },
-  };
-  for (let attempt = 0; ; attempt++) {
-    let written = '';
-    params.messages = anthropicMessages(turns, files, unshown);
+  for (;;) {
+    const meter = callMeter(onUsage);
+    let written = false;
     try {
-      const stream = client.messages.stream(params, { signal });
-      stream.on('connect', heard);
-      stream.on('streamEvent', heard);
-      stream.on('text', (delta) => {
-        written += delta;
-        onText(delta);
-      });
-      const message = await stream.finalMessage();
-      const usage: ModelUsage = {
-        inputTokens: message.usage.input_tokens,
-        outputTokens: message.usage.output_tokens,
-        cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
-        cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0,
-      };
-      const text = message.content
-        .flatMap((block) => (block.type === 'text' ? [block.text] : []))
-        .join('');
-      const uses = message.content.filter(
-        (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use',
+      const stream = await client.messages.create(
+        {
+          model: settings.model,
+          max_tokens: MAX_OUTPUT_TOKENS,
+          ...anthropicThinking(settings.model),
+          // The instructions and the tools are the same for every turn of
+          // every session: cached, they are read for a tenth.
+          system: [
+            {
+              type: 'text',
+              text: system,
+              cache_control: { type: 'ephemeral' },
+            },
+          ],
+          tools: tools.map((tool) => ({
+            name: tool.name,
+            description: tool.description,
+            input_schema: tool.inputSchema as Anthropic.Tool.InputSchema,
+            // A long proposal streams as it is written; its input is checked
+            // against the tool's schema before the tool runs.
+            eager_input_streaming: true,
+          })),
+          messages: anthropicMessages(turns, files, unshown),
+          // The conversation so far is reread on every turn: cached, for a
+          // tenth.
+          cache_control: { type: 'ephemeral' },
+          stream: true,
+        },
+        { signal },
       );
-      const cut = message.stop_reason === 'max_tokens';
-      return {
-        text,
-        calls: uses.map((use) => ({
-          id: use.id,
-          name: use.name,
-          input: use.input,
-          ...(cut ? { broken: CUT_OFF } : {}),
-        })),
-        native: { provider: 'anthropic', content: message.content },
-        usage,
-        stop:
-          message.stop_reason === 'refusal'
-            ? 'refusal'
-            : uses.length
-              ? 'tools'
-              : cut
-                ? 'length'
-                : 'end',
-        unshown,
-      };
+      heard();
+      const answer = await readAnthropic(
+        stream,
+        signal,
+        meter,
+        heard,
+        (delta) => {
+          written = true;
+          onText(delta);
+        },
+      );
+      meter.tell(true);
+      return anthropicTurn(answer, unshown);
     } catch (error) {
+      meter.tell(false);
       if (signal.aborted) throw error;
+      // A model that takes no adaptive thinking is asked again without it.
+      if (!written && refusedThinking(settings.model, error)) continue;
       // A request the service refuses while it carries a file's blocks is
       // asked again without them, one kind at a time: the model is told in
       // words what it could not be shown.
@@ -418,19 +581,9 @@ async function streamAnthropic({
         );
         if (drop) {
           unshown.add(drop);
-          attempt--;
           continue;
         }
       }
-      // Tool input that would not parse at all rejects the read of the
-      // stream: the turn is asked again, a few times.
-      if (
-        !(error instanceof Anthropic.APIError) &&
-        error instanceof SyntaxError &&
-        attempt < UNPARSED_RETRIES &&
-        !written
-      )
-        continue;
       throw anthropicError(error);
     }
   }
@@ -561,38 +714,8 @@ function chatMessages(
   return messages;
 }
 
-/**
- * OpenAI's own API takes the limit of an answer under its newer name, and
- * refuses the old one for its newer models; other servers of the format
- * know only the old one.
- */
-function outputLimit(settings: ModelSettings, tokens: number) {
-  let host = '';
-  try {
-    host = new URL(settings.baseUrl).hostname;
-  } catch {
-    // An address that does not parse fails on the request itself.
-  }
-  return host === 'api.openai.com'
-    ? { max_completion_tokens: tokens }
-    : { max_tokens: tokens };
-}
-
-interface ChatUsage {
-  prompt_tokens?: number;
-  completion_tokens?: number;
-  prompt_tokens_details?: { cached_tokens?: number };
-}
-
-function usageOf(usage: ChatUsage | undefined): ModelUsage {
-  const cached = usage?.prompt_tokens_details?.cached_tokens ?? 0;
-  return {
-    inputTokens: Math.max(0, (usage?.prompt_tokens ?? 0) - cached),
-    outputTokens: usage?.completion_tokens ?? 0,
-    cacheReadTokens: cached,
-    cacheWriteTokens: 0,
-  };
-}
+/** The longest one request to a chat completions server may take. */
+const CHAT_REQUEST_MS = 10 * 60 * 1000;
 
 async function chatRequest(
   settings: ModelSettings,
@@ -600,20 +723,12 @@ async function chatRequest(
   signal: AbortSignal,
 ): Promise<Response> {
   try {
-    return await fetch(
-      `${settings.baseUrl.replace(/\/+$/, '')}/chat/completions`,
-      {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          ...(settings.apiKey
-            ? { authorization: `Bearer ${settings.apiKey}` }
-            : {}),
-        },
-        body: JSON.stringify(body),
-        signal: AbortSignal.any([signal, AbortSignal.timeout(10 * 60 * 1000)]),
-      },
-    );
+    return await fetch(chatAddress(settings.baseUrl, '/chat/completions'), {
+      method: 'POST',
+      headers: chatHeaders(settings.apiKey),
+      body: JSON.stringify(body),
+      signal,
+    });
   } catch (error) {
     if (signal.aborted) throw error;
     throw new ModelError(
@@ -623,42 +738,35 @@ async function chatRequest(
   }
 }
 
-async function chatFailure(response: Response): Promise<ModelError> {
-  const text = (await response.text().catch(() => '')).slice(0, 300);
-  if (response.status === 401 || response.status === 403)
-    return new ModelError('key', text);
-  if (response.status === 404)
-    return new ModelError(/model/i.test(text) ? 'model' : 'address', text);
-  if (response.status === 429 || response.status >= 500)
-    return new ModelError('busy', text);
-  return new ModelError(
-    /model/i.test(text) ? 'model' : 'error',
-    `${response.status} ${text}`,
-  );
+/** How a chat completions server ended an answer, as a turn says it. */
+function chatStop(finish: string | undefined): StreamTurnOutput['stop'] {
+  if (finish === 'length') return 'length';
+  if (finish === 'content_filter') return 'refusal';
+  return undefined;
 }
 
-function parsedCall(
-  call: { id: string; name: string; arguments: string },
-  cut: boolean,
-): StreamCall {
-  if (cut) return { id: call.id, name: call.name, input: {}, broken: CUT_OFF };
+/**
+ * A turn of a chat completions server, within the longest a request may
+ * take: one that takes longer is out of time, whatever it says meanwhile.
+ */
+async function streamOpenAi(input: WatchedInput): Promise<StreamTurnOutput> {
+  const cap = AbortSignal.timeout(CHAT_REQUEST_MS);
   try {
-    return {
-      id: call.id,
-      name: call.name,
-      input: JSON.parse(call.arguments || '{}'),
-    };
-  } catch {
-    return {
-      id: call.id,
-      name: call.name,
-      input: {},
-      broken: JSON.stringify({ INVALID_JSON: call.arguments }),
-    };
+    return await chatTurn({
+      ...input,
+      signal: AbortSignal.any([input.signal, cap]),
+    });
+  } catch (error) {
+    if (cap.aborted && !input.signal.aborted)
+      throw new ModelError(
+        'timeout',
+        `The service took longer than ${CHAT_REQUEST_MS / 60_000} min.`,
+      );
+    throw error;
   }
 }
 
-async function streamOpenAi({
+async function chatTurn({
   settings,
   system,
   turns,
@@ -667,6 +775,7 @@ async function streamOpenAi({
   tools,
   signal,
   onText,
+  onUsage,
   heard,
 }: WatchedInput): Promise<StreamTurnOutput> {
   const unshown = new Set(unshownBefore ?? []);
@@ -684,7 +793,7 @@ async function streamOpenAi({
           })),
         }
       : {}),
-    ...outputLimit(settings, MAX_OUTPUT_TOKENS),
+    ...outputLimit(settings.baseUrl, MAX_OUTPUT_TOKENS),
     stream: true,
   };
   let counted = true;
@@ -711,72 +820,110 @@ async function streamOpenAi({
     // without them, one kind at a time, and told of them in words.
     const drop = nextToDrop(kindsCarried(turns, files, unshown));
     if (drop) unshown.add(drop);
-    else
-      throw new ModelError(
-        /model/i.test(said) ? 'model' : 'error',
-        `400 ${said.slice(0, 300)}`,
-      );
+    else throw chatFailure(400, said);
   }
-  if (!response.ok) throw await chatFailure(response);
+  if (!response.ok)
+    throw chatFailure(response.status, await response.text().catch(() => ''));
 
-  // A server that does not stream answers at once, as plain JSON.
-  if (!/text\/event-stream/i.test(response.headers.get('content-type') ?? '')) {
-    const body = (await response.json()) as {
-      choices?: {
-        finish_reason?: string;
-        message?: {
-          content?: string | null;
-          tool_calls?: {
-            id: string;
-            function: { name: string; arguments: string };
-          }[];
-        };
-      }[];
-      usage?: ChatUsage;
-    };
-    const choice = body.choices?.[0];
-    const text = choice?.message?.content ?? '';
-    if (text) onText(text);
-    const cut = choice?.finish_reason === 'length';
-    const calls = (choice?.message?.tool_calls ?? []).map((call) =>
-      parsedCall(
-        {
-          id: call.id,
-          name: call.function.name,
-          arguments: call.function.arguments,
-        },
-        cut,
-      ),
+  const meter = callMeter(onUsage);
+  try {
+    const turn = /text\/event-stream/i.test(
+      response.headers.get('content-type') ?? '',
+    )
+      ? await readChatStream(response, meter, heard, onText)
+      : await readChatAnswer(response, meter, onText);
+    meter.tell(true);
+    return { ...turn, unshown };
+  } catch (error) {
+    meter.tell(false);
+    throw error;
+  }
+}
+
+/** A call as a chat completions server gives it, whole or in pieces. */
+interface ChatCall {
+  id?: string;
+  function?: { name?: string; arguments?: string };
+}
+
+/** The calls of an answer, each with an id — a server may give none. */
+function chatCalls(
+  calls: { id?: string; name: string; arguments: string }[],
+  cut: boolean,
+): StreamCall[] {
+  return calls
+    .filter((call) => call.name)
+    .map((call, index) =>
+      parsedCall({ ...call, id: call.id || `call_${index}` }, cut),
     );
-    return {
-      text,
-      calls,
-      usage: usageOf(body.usage),
-      stop: calls.length ? 'tools' : cut ? 'length' : 'end',
-      unshown,
-    };
-  }
+}
 
+/** A server that does not stream answers at once, as plain JSON. */
+async function readChatAnswer(
+  response: Response,
+  meter: CallMeter,
+  onText: (delta: string) => void,
+): Promise<Omit<StreamTurnOutput, 'unshown'>> {
+  let body: {
+    error?: unknown;
+    choices?: {
+      finish_reason?: string;
+      message?: { content?: string | null; tool_calls?: ChatCall[] };
+    }[];
+    usage?: ChatUsage;
+  };
+  try {
+    body = await response.json();
+  } catch {
+    throw new ModelError(
+      'error',
+      'The service answered with what is not JSON.',
+    );
+  }
+  if (body.error) throw chatBodyError(body.error);
+  meter.said(chatUsage(body.usage));
+  const choice = body.choices?.[0];
+  const text = choice?.message?.content ?? '';
+  if (text) onText(text);
+  const stop = chatStop(choice?.finish_reason);
+  return {
+    text,
+    calls: chatCalls(
+      (choice?.message?.tool_calls ?? []).map((call) => ({
+        id: call.id,
+        name: call.function?.name ?? '',
+        arguments: call.function?.arguments ?? '',
+      })),
+      stop === 'length',
+    ),
+    ...(stop ? { stop } : {}),
+  };
+}
+
+/**
+ * Reads a streamed answer of a chat completions server: its words told as
+ * they come, its calls gathered piece by piece. An error the server puts in
+ * the stream ends the turn with it rather than with a silence.
+ */
+async function readChatStream(
+  response: Response,
+  meter: CallMeter,
+  heard: () => void,
+  onText: (delta: string) => void,
+): Promise<Omit<StreamTurnOutput, 'unshown'>> {
   let text = '';
-  let finish = '';
-  let usage: ChatUsage | undefined;
+  let finish: string | undefined;
   const calls: { id: string; name: string; arguments: string }[] = [];
-  const decoder = new TextDecoder();
-  let buffer = '';
-  const reader = response.body!.getReader();
   const take = (line: string) => {
     if (!line.startsWith('data:')) return;
     const data = line.slice(5).trim();
     if (!data || data === '[DONE]') return;
     let chunk: {
+      error?: unknown;
       choices?: {
         delta?: {
           content?: string | null;
-          tool_calls?: {
-            index?: number;
-            id?: string;
-            function?: { name?: string; arguments?: string };
-          }[];
+          tool_calls?: (ChatCall & { index?: number })[];
         };
         finish_reason?: string | null;
       }[];
@@ -787,13 +934,17 @@ async function streamOpenAi({
     } catch {
       return;
     }
-    if (chunk.usage) usage = chunk.usage;
+    if (chunk.error) throw chatBodyError(chunk.error);
+    if (chunk.usage) meter.said(chatUsage(chunk.usage));
     const choice = chunk.choices?.[0];
     if (!choice) return;
+    if (choice.finish_reason === 'error')
+      throw new ModelError('error', 'The service broke its answer off.');
     if (choice.finish_reason) finish = choice.finish_reason;
     const delta = choice.delta;
     if (delta?.content) {
       text += delta.content;
+      meter.wrote(delta.content.length);
       onText(delta.content);
     }
     for (const part of delta?.tool_calls ?? []) {
@@ -801,33 +952,39 @@ async function streamOpenAi({
       const call = (calls[index] ??= { id: '', name: '', arguments: '' });
       if (part.id) call.id = part.id;
       if (part.function?.name) call.name += part.function.name;
-      if (part.function?.arguments) call.arguments += part.function.arguments;
+      if (part.function?.arguments) {
+        call.arguments += part.function.arguments;
+        meter.wrote(part.function.arguments.length);
+      }
     }
   };
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    heard();
-    buffer += decoder.decode(value, { stream: true });
-    let newline = buffer.indexOf('\n');
-    while (newline !== -1) {
-      take(buffer.slice(0, newline).replace(/\r$/, ''));
-      buffer = buffer.slice(newline + 1);
-      newline = buffer.indexOf('\n');
+  const decoder = new TextDecoder();
+  let buffer = '';
+  const reader = response.body!.getReader();
+  let ended = false;
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      heard();
+      buffer += decoder.decode(value, { stream: true });
+      let newline = buffer.indexOf('\n');
+      while (newline !== -1) {
+        take(buffer.slice(0, newline).replace(/\r$/, ''));
+        buffer = buffer.slice(newline + 1);
+        newline = buffer.indexOf('\n');
+      }
     }
+    ended = true;
+  } finally {
+    // An answer given up on midway lets its connection go.
+    if (!ended) void reader.cancel().catch(() => {});
   }
   take(buffer.trim());
-  const cut = finish === 'length';
-  const made = calls
-    .filter((call) => call.name)
-    .map((call, index) =>
-      parsedCall({ ...call, id: call.id || `call_${index}` }, cut),
-    );
+  const stop = chatStop(finish);
   return {
     text,
-    calls: made,
-    usage: usageOf(usage),
-    stop: made.length ? 'tools' : cut ? 'length' : 'end',
-    unshown,
+    calls: chatCalls(calls, stop === 'length'),
+    ...(stop ? { stop } : {}),
   };
 }

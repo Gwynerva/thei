@@ -123,6 +123,26 @@ function body(form: Draft) {
   };
 }
 
+/**
+ * Whether the saved key goes with the service the form has: a key is kept
+ * for the service it was given for alone, and saving another service drops
+ * it (`savedModelConfig` on the server). Turned off, the settings keep the
+ * address of the service the key belongs to.
+ */
+const keyKept = computed(() => {
+  const saved = settings.value;
+  const form = draft.value;
+  if (!saved?.keySet || !form) return false;
+  const provider = body(form).provider;
+  const address = (value: string) => value.trim().replace(/\/+$/, '');
+  return (
+    (provider === saved.provider ||
+      provider === 'none' ||
+      saved.provider === 'none') &&
+    address(form.baseUrl) === address(saved.baseUrl)
+  );
+});
+
 function took(result: AiModelSettings) {
   settings.value = result;
   draft.value = draftOf(result);
@@ -191,7 +211,8 @@ const modelsState = ref<'idle' | 'loading' | 'listed' | 'unlisted'>('idle');
 
 /**
  * Asks the service which models it offers, with the key typed in or the
- * saved one. A service that lists none leaves the name to be typed.
+ * saved one — when it was saved for this service. A service that lists
+ * none leaves the name to be typed.
  */
 async function loadModels() {
   const form = draft.value;
@@ -414,14 +435,14 @@ const checkIcons = {
               autocomplete="off"
               no-typography
               :placeholder="
-                settings.keySet
+                keyKept
                   ? phrase.ai_model_key_replace_placeholder(settings.keyHint)
                   : phrase.ai_model_key_placeholder
               "
               @blur="loadModels"
             />
             <Button
-              v-if="settings.keySet"
+              v-if="keyKept"
               variant="delete"
               size="icon"
               class="pointer-coarse:size-11"

@@ -575,7 +575,7 @@ defineExpose<AiComposerExpose>({
 
 <template>
   <div
-    class="relative mx-auto w-full max-w-184 rounded-[1.4rem] border bg-bg-2 p-1
+    class="relative mx-auto w-full max-w-184 rounded-normal border bg-bg-2 p-1
       shadow-md shadow-shadow-1 transition-colors"
     :class="dragging ? 'border-accent' : 'border-border-2'"
     data-composer
@@ -808,7 +808,7 @@ defineExpose<AiComposerExpose>({
     <div
       v-if="dragging"
       class="pointer-events-none absolute inset-0 flex items-center
-        justify-center rounded-[1.4rem] bg-bg-accent/90 text-sm font-semibold
+        justify-center rounded-normal bg-bg-accent/90 text-sm font-semibold
         text-accent"
       data-composer-drop
     >

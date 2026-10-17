@@ -4,6 +4,7 @@ import sharp from 'sharp';
 import { runFfmpeg } from '../../server/thei/assets/ffmpeg';
 import { startOwnerSession } from '../../server/thei/ai/sessions/owner';
 import { sessionMessages } from '../../server/thei/ai/sessions/store';
+import { modelFiles } from '../../server/thei/ai/sessions/files';
 import { turnsSettled } from '../../server/thei/ai/runner/queue';
 import {
   startFakeModel,
@@ -253,5 +254,71 @@ describe('files shown to the site’s model', () => {
         { type: 'image_url' },
       ],
     });
+  });
+});
+
+describe('files made ready for a model', () => {
+  const shown = (id: string, name: string) =>
+    modelFiles([{ role: 'user', files: [id] }], new Map([[id, name]]));
+
+  it('names a file kept ready by the name it goes by now', async () => {
+    const insert = context.rawDb.prepare(
+      `INSERT INTO assets (assetUuid, slug, extension, familyUuid, contentHash, settingsKey, settings, type, size, touchedAt, meta)
+       VALUES ('a-named', 'named', 'png', 'af-named', 'h-named', 'original', '{"type":"original"}', 'image', 900, 1, '{}')`,
+    );
+    insert.run();
+    // Asked for twice at once, it is made once over and kept once.
+    const [first, again] = await Promise.all([
+      shown('a-named', 'first.png'),
+      shown('a-named', 'first.png'),
+    ]);
+    expect(first.get('a-named')![0]).toMatchObject({ name: 'first.png' });
+    expect(again.get('a-named')![0]).toMatchObject({ name: 'first.png' });
+    const later = await shown('a-named', 'later.png');
+    expect(later.get('a-named')![0]).toMatchObject({
+      kind: 'image',
+      name: 'later.png',
+    });
+  });
+
+  it('keeps a video ready only once its frame came', async () => {
+    const insert = context.rawDb.prepare(
+      `INSERT INTO assets (assetUuid, slug, extension, familyUuid, contentHash, settingsKey, settings, type, size, touchedAt, meta)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 900, 1, '{}')`,
+    );
+    // A video's sound read from the recording, its frame from the picture.
+    insert.run(
+      'a-clip',
+      'clip',
+      'wav',
+      'af-clip',
+      'h-clip',
+      'original',
+      '{"type":"original"}',
+      'video',
+    );
+    const before = await shown('a-clip', 'clip.mp4');
+    expect(before.get('a-clip')!.map((block) => block.kind)).toEqual(['audio']);
+
+    insert.run(
+      'a-clip-preview',
+      'clip-preview',
+      'png',
+      'af-clip',
+      'h-clip-preview',
+      'preview',
+      null,
+      'image',
+    );
+    context.rawDb
+      .prepare(
+        "INSERT INTO \"asset-usages\" (assetUuid, containerType, containerId, role) VALUES ('a-clip-preview', 'asset', 'a-clip', 'preview')",
+      )
+      .run();
+    const after = await shown('a-clip', 'clip.mp4');
+    expect(after.get('a-clip')!.map((block) => block.kind)).toEqual([
+      'image',
+      'audio',
+    ]);
   });
 });

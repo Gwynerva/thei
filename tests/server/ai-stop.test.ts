@@ -61,7 +61,24 @@ const hooks = vi.hoisted(() => ({
   /** Stands in for the model's service when set. */
   stream: undefined as
     ((input: StreamTurnInput) => Promise<StreamTurnOutput>) | undefined,
+  /** What the latest file the model made was told to stop by. */
+  fileSignal: undefined as AbortSignal | undefined,
 }));
+
+vi.mock('../../server/thei/ai/sessions/files', async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import('../../server/thei/ai/sessions/files')
+    >();
+  return {
+    ...actual,
+    async makeSessionFile(...args: Parameters<typeof actual.makeSessionFile>) {
+      hooks.fileSignal = args[3];
+      await hooks.gates.get('make_file');
+      return actual.makeSessionFile(...args);
+    },
+  };
+});
 
 vi.mock('../../server/thei/mcp/registry', async (importOriginal) => {
   const actual =
@@ -287,13 +304,7 @@ describe('stopping a turn', () => {
       return {
         text: 'Too late.',
         calls: [{ id: 'call_late', name: 'propose', input: PROPOSAL }],
-        usage: {
-          inputTokens: 10,
-          outputTokens: 5,
-          cacheReadTokens: 0,
-          cacheWriteTokens: 0,
-        },
-        stop: 'tools',
+        unshown: new Set(),
       };
     };
     const sessionUuid = startOwnerSession({ text: 'Look at Parapet' });
@@ -424,6 +435,34 @@ describe('a turn out of time', () => {
     );
     expect(told.content).toMatch(/hang took longer than 0 s and was left/);
   });
+
+  it('leaves a file that takes too long, and keeps nothing of it', async () => {
+    Object.assign(TURN_LIMITS, { toolMs: 200 });
+    const held = gate();
+    hooks.gates.set('make_file', held.opened);
+    await useModel([
+      {
+        toolCalls: [
+          { name: 'make_file', input: { name: 'notes.txt', content: 'x' } },
+        ],
+      },
+      { text: 'It was left.' },
+    ]);
+    const sessionUuid = startOwnerSession({ text: 'Make me a file' });
+    await turnsSettled();
+    expect(answers(sessionUuid)[0]!.text).toBe('It was left.');
+    // Left, the file is told to stop: what it would still make has no place.
+    expect(hooks.fileSignal?.aborted).toBe(true);
+    held.open();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(
+      context.rawDb
+        .prepare(
+          'SELECT count(*) AS n FROM "asset-usages" WHERE containerType = \'ai-session\' AND containerId = ?',
+        )
+        .get(sessionUuid),
+    ).toEqual({ n: 0 });
+  });
 });
 
 describe('a restart', () => {
@@ -502,7 +541,11 @@ describe('everything at once', () => {
     await until(
       () => hooks.called.filter((name) => name === 'hang').length === 2,
     );
-    const waiting = startOwnerSession({ text: 'Three' });
+    // Two wait: neither is started on the way, only to be stopped.
+    const waiting = [
+      startOwnerSession({ text: 'Three' }),
+      startOwnerSession({ text: 'Four' }),
+    ];
     const app = createSession({ origin: 'app', title: 'App' });
     let job: FileJob | undefined;
     void runFileJob(
@@ -530,13 +573,14 @@ describe('everything at once', () => {
     expect(response.status).toBe(200);
 
     await until(() =>
-      [...running, waiting].every(
+      [...running, ...waiting].every(
         (sessionUuid) => findSession(sessionUuid)!.state === 'idle',
       ),
     );
     for (const sessionUuid of running)
       expect(noticeOf(sessionUuid)?.kind).toBe('stopped');
-    expect(answers(waiting)).toHaveLength(0);
+    for (const sessionUuid of waiting)
+      expect(answers(sessionUuid)).toHaveLength(0);
     await until(() => job !== undefined);
     expect(job!.status).toBe('cancelled');
   });

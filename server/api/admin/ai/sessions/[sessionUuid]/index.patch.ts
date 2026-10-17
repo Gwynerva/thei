@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
   markReadOnlyRequest(event);
   const sessionUuid = getRouterParam(event, 'sessionUuid') ?? '';
   const session = findSession(sessionUuid);
-  if (!session || session.purgedAt) throw createError({ statusCode: 404 });
+  if (!session) throw createError({ statusCode: 404 });
   const body = (await readBody<Record<string, unknown>>(event)) ?? {};
   const now = Date.now();
   updateSession(sessionUuid, {

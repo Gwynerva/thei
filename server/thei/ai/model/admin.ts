@@ -50,20 +50,63 @@ function shortText(value: unknown, max: number): string | undefined {
     : undefined;
 }
 
+/** An address as two of them are compared: no trailing slash. */
+function addressOf(baseUrl: string) {
+  return baseUrl.trim().replace(/\/+$/, '');
+}
+
+/**
+ * Whether a config speaks to the same service as another: a key is given
+ * for one service, and goes to no other. A model turned off speaks to none,
+ * and keeps the address of the one it spoke to — Anthropic's is empty,
+ * another service's never is.
+ */
+function sameService(
+  a: Pick<AiModelConfig, 'provider' | 'baseUrl'>,
+  b: Pick<AiModelConfig, 'provider' | 'baseUrl'>,
+) {
+  return (
+    (a.provider === b.provider ||
+      a.provider === 'none' ||
+      b.provider === 'none') &&
+    addressOf(a.baseUrl) === addressOf(b.baseUrl)
+  );
+}
+
 /**
  * The model's settings as the page has them now, saved or not: a key typed
  * in is used for the one call it is sent with and kept nowhere, the saved
- * key when none is.
+ * key when none is — but only towards the service it was saved for. Another
+ * service chosen on the page is asked with no key until one is typed.
  */
 export function draftModelConfig(body: Record<string, unknown>): AiModelConfig {
   const saved = THEI_SERVER.config.mcp.model;
   const provider = AI_PROVIDERS.includes(body.provider as AiProvider)
     ? (body.provider as AiProvider)
     : saved.provider;
+  const baseUrl = shortText(body.baseUrl, 500) ?? saved.baseUrl;
   return {
     provider,
-    apiKey: shortText(body.apiKey, 500) || saved.apiKey,
-    baseUrl: shortText(body.baseUrl, 500) ?? saved.baseUrl,
+    apiKey:
+      shortText(body.apiKey, 500) ||
+      (sameService({ provider, baseUrl }, saved) ? saved.apiKey : ''),
+    baseUrl,
     model: shortText(body.model, 200) ?? saved.model,
   };
+}
+
+/**
+ * The model's settings once a change is saved over them. The key stays
+ * with its service: moved to another service — another provider or another
+ * address — the settings keep no key but a new one, so the old one is
+ * never sent where it was not given.
+ */
+export function savedModelConfig(
+  saved: AiModelConfig,
+  change: Partial<AiModelConfig>,
+): AiModelConfig {
+  const next = { ...saved, ...change };
+  return change.apiKey === undefined && !sameService(next, saved)
+    ? { ...next, apiKey: '' }
+    : next;
 }
