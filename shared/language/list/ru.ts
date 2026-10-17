@@ -1830,7 +1830,7 @@ export default defineI18nModule({
     ai_templates_own_section: 'Ваши шаблоны',
     ai_templates_own_empty: 'Своих шаблонов пока нет.',
     ai_templates_new: 'Новый',
-    ai_templates_presets: 'Заготовки',
+    ai_templates_presets: 'Шаблоны',
     ai_template_open: 'Открыть в новой сессии',
     ai_open_full: 'На странице ИИ',
     select_filter: 'Фильтр',
@@ -2465,7 +2465,7 @@ export default defineI18nModule({
     ai_model_service_local: (name) => `${name} — на вашем компьютере`,
     ai_model_service_missing: 'Выберите сервис.',
     ai_model_base_url: 'Адрес API',
-    ai_model_label: 'Модель',
+    ai_model_label: 'Модель по умолчанию',
     ai_model_list_refresh: 'Обновить список моделей',
     ai_model_unlisted:
       'Сервис не дал списка моделей — впишите название вручную.',
