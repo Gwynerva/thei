@@ -23,9 +23,13 @@ const props = defineProps<{
   answerable?: boolean;
   /** Any action of the session, by id: what a comment is about. */
   actionOf?: (actionUuid: string) => AiActionItem | undefined;
+  /** The session's last message, with no turn running: a check may go on. */
+  last?: boolean;
 }>();
 const emit = defineEmits<{
   answer: [question: string, text: string];
+  /** The owner goes on with the check: its next batch. */
+  continue: [];
 }>();
 
 const linkResolver = useContentLinkResolver('admin');
@@ -67,6 +71,16 @@ function partsOf<T extends AiMessagePart['type']>(type: T) {
 const steps = computed(() => partsOf('steps').flatMap((part) => part.steps));
 const question = computed(() => partsOf('question')[0]);
 const notices = computed(() => partsOf('notice'));
+/** A check with more to look at, under its last answer. */
+const more = computed(() =>
+  props.last && props.answerable ? partsOf('continue')[0] : undefined,
+);
+const goingOn = ref(false);
+function goOn() {
+  if (goingOn.value) return;
+  goingOn.value = true;
+  emit('continue');
+}
 const comment = computed(() => partsOf('comment')[0]);
 /** What a comment is about, in a few words: the kind and what it is on. */
 const commentAbout = computed(() => {
@@ -340,6 +354,20 @@ function answer(text: string) {
         @send="(text) => answer(text)"
       />
     </div>
+    <Button
+      v-if="more"
+      variant="secondary"
+      class="flex h-9 items-center gap-xs self-start font-semibold
+        pointer-coarse:h-11"
+      :disabled="goingOn"
+      data-message-continue
+      @click="goOn"
+    >
+      {{
+        more.full ? phrase.ai_continue_text : phrase.ai_continue_more(more.next)
+      }}
+      <Icon :name="goingOn ? 'loading' : 'chevron-right'" />
+    </Button>
     <div
       v-for="(notice, index) in notices"
       :key="index"

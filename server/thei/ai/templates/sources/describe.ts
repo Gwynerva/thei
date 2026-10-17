@@ -25,6 +25,7 @@ const AREA_OF: Record<AssetType, string> = {
 };
 
 export const describeSource: TemplateSource = {
+  size: BATCH,
   areas: {
     pictures: 'pictures and drawings',
     videos: 'videos, by their frames and sound',

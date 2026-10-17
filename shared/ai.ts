@@ -115,7 +115,12 @@ export type AiMessagePart =
       type: 'template';
       templateId: string;
       scope?: string[];
-    };
+    }
+  /**
+   * A check's run has more to look at: `next` subjects, `full` when that is
+   * a whole batch, with maybe more after it. Offered as one button to go on.
+   */
+  | { type: 'continue'; next: number; full: boolean };
 
 /**
  * A turn of the conversation as the model saw it, kept so the session can go

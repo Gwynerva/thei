@@ -94,6 +94,8 @@ const writingUuid = computed(() => {
  * Where the owner last wrote: a question asked before it was passed over,
  * as the server counts it, and is no longer offered to answer.
  */
+/** The last message: a check's «go on» stands only under it. */
+const lastSeq = computed(() => detail.value?.messages.at(-1)?.seq ?? 0);
 const ownerSpokeAt = computed(
   () =>
     detail.value?.messages.filter((message) => message.role === 'owner').at(-1)
@@ -150,6 +152,18 @@ async function answer(question: string, text: string) {
   try {
     await aiApi.post(session.value.sessionUuid, { text, answers: question });
     showToast(phrase.value.ai_toast_answer_sent);
+    await refresh();
+  } catch (caught) {
+    showToast(errorMessage(caught, phrase.value.ai_error));
+  }
+}
+
+/** A check goes on: its next batch, or word that nothing is left. */
+async function goOn() {
+  if (!session.value) return;
+  try {
+    const { messageUuid } = await aiApi.continueRun(session.value.sessionUuid);
+    if (!messageUuid) showToast(phrase.value.ai_continue_nothing);
     await refresh();
   } catch (caught) {
     showToast(errorMessage(caught, phrase.value.ai_error));
@@ -364,8 +378,10 @@ async function remove() {
           :actions="byMessage.get(message.messageUuid) ?? []"
           :writing="message.messageUuid === writingUuid"
           :answerable="detail.answerable && message.seq > ownerSpokeAt"
+          :last="message.seq === lastSeq && detail.session.state !== 'running'"
           :action-of="actionOf"
           @answer="answer"
+          @continue="goOn"
         />
 
         <!-- What an app proposed has no message of its own. -->

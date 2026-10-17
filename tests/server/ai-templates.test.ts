@@ -31,8 +31,10 @@ import {
 import {
   busySubjects,
   coverageOf,
+  holdBatch,
+  settleTemplateTurn,
 } from '../../server/thei/ai/templates/coverage';
-import { runTemplate } from '../../server/thei/ai/templates/run';
+import { continueRun, runTemplate } from '../../server/thei/ai/templates/run';
 import { messageItem } from '../../server/thei/ai/sessions/view';
 import { TEMPLATE_SOURCES } from '../../server/thei/ai/templates/sources';
 import {
@@ -1157,5 +1159,98 @@ describe('what changed', () => {
       kinds: ['page'],
     });
     expect(none).toContain('_(nothing)_');
+  });
+});
+
+describe('batches the owner asks for', () => {
+  /** What `check_batch` answered in a run's session, in order. */
+  const batchAnswers = (sessionUuid: string) =>
+    sessionMessages(sessionUuid)
+      .flatMap((message) => message.transcript)
+      .flatMap((turn) =>
+        turn.role === 'tool' && turn.name === 'check_batch'
+          ? [turn.output]
+          : [],
+      );
+
+  it('come one after another in a turn, each looked at once the next is asked', async () => {
+    const subjects = (await due('proofread', { whole: true })).length;
+    expect(subjects).toBeGreaterThan(1);
+    let calls = 0;
+    reply = () =>
+      ++calls <= subjects + 1
+        ? { toolCalls: [{ name: 'check_batch', input: { count: 1 } }] }
+        : { text: 'Looked.' };
+    const sessionUuid = await run('proofread', {
+      request: 'All of it, one thing at a time.',
+    });
+    const answers = batchAnswers(sessionUuid!);
+    expect(answers).toHaveLength(subjects + 1);
+    expect(answers[0]).toMatch(/more of that (is|are) due after this batch/);
+    expect(answers[subjects - 1]).toContain('That is all of it that is due.');
+    expect(answers[subjects]).toContain('Nothing of that is due');
+    expect(coverageOf(id('proofread')).size).toBe(subjects);
+    expect(await due('proofread')).toEqual([]);
+  });
+
+  it('keep, of a run stopped midway, what it proposed something for', async () => {
+    const items = await due('proofread', { whole: true });
+    const sessionUuid = createSession({
+      origin: 'template',
+      templateId: id('proofread'),
+      title: 'Stopped',
+    });
+    const { db, schema } = THEI_SERVER.useDb();
+    db.transaction((tx) =>
+      holdBatch(tx, schema, id('proofread'), sessionUuid, items),
+    );
+    await proposeActions({
+      sessionUuid,
+      actions: [
+        {
+          kind: 'field',
+          target: `project:${PROJECT}`,
+          field: 'summary',
+          value: 'A small harbour.',
+          reason: 'Clearer',
+        } as never,
+      ],
+    });
+    settleTemplateTurn(sessionUuid, false);
+    expect([...coverageOf(id('proofread')).keys()]).toEqual([
+      `fields:project:${PROJECT}`,
+    ]);
+    expect(busySubjects(id('proofread')).size).toBe(0);
+  });
+
+  it('are offered to go on while more is due, and go on in the same session', async () => {
+    let calls = 0;
+    reply = () =>
+      ++calls === 1
+        ? { toolCalls: [{ name: 'check_batch', input: { count: 1 } }] }
+        : { text: 'Looked.' };
+    const sessionUuid = await run('proofread', { request: 'Start with one.' });
+    const offer = () =>
+      sessionMessages(sessionUuid!)
+        .flatMap((message) => message.parts as AiMessagePart[])
+        .find((part) => part.type === 'continue');
+    expect(offer()).toMatchObject({ type: 'continue', full: true });
+
+    calls = 0;
+    reply = () =>
+      ++calls === 1
+        ? { toolCalls: [{ name: 'check_batch', input: {} }] }
+        : { text: 'Looked at the rest.' };
+    const { messageUuid } = await continueRun(sessionUuid!);
+    expect(messageUuid).toBeTruthy();
+    await turnsSettled();
+    const words = sessionMessages(sessionUuid!).find(
+      (message) => message.messageUuid === messageUuid,
+    )!;
+    expect(words).toMatchObject({ role: 'owner', text: 'Go on' });
+    expect(JSON.stringify(words.transcript)).toContain('check_batch');
+    expect(await due('proofread')).toEqual([]);
+    expect(offer()).toBeUndefined();
+    expect(await continueRun(sessionUuid!)).toEqual({ messageUuid: null });
   });
 });

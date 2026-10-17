@@ -393,6 +393,16 @@ export const aiApi = {
     });
   },
   /**
+   * Goes on with a check's run: the next batch of the same. The message the
+   * owner sends, or none when nothing is due any more.
+   */
+  continueRun(sessionUuid: string) {
+    return $fetch<{ messageUuid: string | null }>(
+      `/api/admin/ai/sessions/${sessionUuid}/continue`,
+      { method: 'POST' },
+    );
+  },
+  /**
    * Runs a built-in check: over what it has not looked at yet of the whole
    * archive, or of the entities named — which start over once all of them is
    * looked at — narrowed by the owner's words. No session when there is

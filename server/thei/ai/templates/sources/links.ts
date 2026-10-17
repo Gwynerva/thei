@@ -43,6 +43,7 @@ function itemOf(link: BrokenLink): Omit<CheckItem, 'shown'> | undefined {
 }
 
 export const linksSource: TemplateSource = {
+  size: BATCH,
   areas: { links: 'links inside texts that lead nowhere now' },
 
   async due({ scope, covered, busy, whole }) {

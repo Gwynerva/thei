@@ -1451,6 +1451,12 @@ export type LanguagePhrases = {
   ai_comment_on: (what: string) => string;
   /** The header of the owner's message begun from a template or a check. */
   ai_message_template: (title: string) => string;
+  /** What the owner says, and the button says, to go on with a check's run. */
+  ai_continue_text: string;
+  /** The button to go on, when fewer than a whole batch remain. */
+  ai_continue_more: (count: number) => string;
+  /** Gone on with a check that had nothing left. */
+  ai_continue_nothing: string;
   ai_answer_to: (question: string) => string;
   ai_composer_placeholder: string;
   ai_composer_running: string;

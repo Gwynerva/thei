@@ -4,7 +4,8 @@ import {
   builtinTemplateId,
 } from '#layers/thei/shared/ai-template';
 import type { AiEntityType } from '#layers/thei/shared/ai';
-import { findActions } from '../actions/rows';
+import { findActions, sessionActions } from '../actions/rows';
+import type { ActionRow } from '../actions/types';
 import { linkSessionEntities } from '../sessions/store';
 import { TEMPLATE_SOURCES, type CheckItem, type Covered } from './sources';
 
@@ -12,8 +13,10 @@ import { TEMPLATE_SOURCES, type CheckItem, type Covered } from './sources';
  * What each built-in check has looked at, kept by the code rather than left
  * to a model's memory. A run is given what is due, and holds it while its
  * turn runs, so two runs never look at the same; once the turn went through,
- * what it was given counts as looked at, as it read then. A failed turn lets
- * it go. An action the owner applies leaves what it mended looked at too.
+ * or its model asked for the next batch, what it was given counts as looked
+ * at, as it read then. A turn that failed keeps only what it proposed
+ * something for. An action the owner applies leaves what it mended looked at
+ * too.
  */
 
 type CoverageRow =
@@ -138,9 +141,30 @@ function cover(
       .run();
 }
 
+type HeldRow =
+  typeof import('../../db/schema/ai').aiTemplateBatches.$inferSelect;
+
 /**
- * A turn of a session is over: what a check's run was given counts as
- * looked at if the turn went through, and is let go either way.
+ * Whether a run proposed something for what it was given: an action about
+ * the subject's entity, or a description of its family of files.
+ */
+function workedOn(row: HeldRow, actions: readonly ActionRow[]): boolean {
+  return actions.some(
+    (action) =>
+      (action.targetType === row.entityType &&
+        action.targetId === row.entityId) ||
+      (row.entityType === 'asset' &&
+        (action.payload as { family?: unknown } | null)?.family ===
+          row.entityId),
+  );
+}
+
+/**
+ * What a check's run holds is settled: counted as looked at — as it read
+ * then — if the run went through, and let go either way. A run stopped
+ * midway keeps as looked at what it proposed something for; the rest waits
+ * for the next. A new batch asked for within a turn settles the ones before
+ * it the same way, the run having gone through them.
  */
 export function settleTemplateTurn(
   sessionUuid: string,
@@ -149,23 +173,23 @@ export function settleTemplateTurn(
 ) {
   const { db, schema } = THEI_SERVER.useDb();
   const table = schema.aiTemplateBatches;
+  const actions = wentThrough ? [] : sessionActions(sessionUuid);
   db.transaction((tx) => {
     const held = tx
       .select()
       .from(table)
       .where(eq(table.sessionUuid, sessionUuid))
-      .all() as (typeof table.$inferSelect)[];
+      .all() as HeldRow[];
     if (!held.length) return;
-    if (wentThrough) {
-      const byTemplate = new Map<string, typeof held>();
-      for (const row of held)
+    const byTemplate = new Map<string, HeldRow[]>();
+    for (const row of held)
+      if (wentThrough || workedOn(row, actions))
         byTemplate.set(row.templateId, [
           ...(byTemplate.get(row.templateId) ?? []),
           row,
         ]);
-      for (const [templateId, rows] of byTemplate)
-        cover(tx, schema, templateId, rows, now);
-    }
+    for (const [templateId, rows] of byTemplate)
+      cover(tx, schema, templateId, rows, now);
     tx.delete(table).where(eq(table.sessionUuid, sessionUuid)).run();
   });
 }
@@ -267,4 +291,23 @@ export function forgetCoverage(
     tx.delete(table)
       .where(and(eq(table.entityType, type), inArray(table.entityId, ids)))
       .run();
+}
+
+/** What a check's run last asked for, by session: its areas and refs. */
+const asked = new Map<string, { areas?: string[]; refs?: string[] }>();
+
+/**
+ * What a run's model last asked `check_batch` for, kept for «go on»: the
+ * next batch is of the same. Kept in memory: after a restart the run goes
+ * on over all it is about.
+ */
+export function rememberAsked(
+  sessionUuid: string,
+  ask: { areas?: string[]; refs?: string[] },
+) {
+  asked.set(sessionUuid, ask);
+}
+
+export function lastAsked(sessionUuid: string) {
+  return asked.get(sessionUuid);
 }

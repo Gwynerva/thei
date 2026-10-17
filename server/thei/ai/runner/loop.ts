@@ -47,6 +47,7 @@ import {
   sessionUnnamed,
 } from '../sessions/names';
 import { settleTemplateTurn } from '../templates/coverage';
+import { offerToContinue } from '../templates/continue';
 import { backgroundEvent } from './background-event';
 import { repairTranscript } from './transcript';
 import {
@@ -286,6 +287,8 @@ export async function runSessionTurn(
   let close: ((stop?: TurnStop) => void) | undefined;
   /** Keeps what the session's turns are sent before the conversation. */
   let keepContext: (() => void) | undefined;
+  /** What a turn that went through does last: a check offers to go on. */
+  let afterwards: (() => Promise<void>) | undefined;
   try {
     const session = findSession(sessionUuid);
     if (!session) return;
@@ -386,6 +389,8 @@ export async function runSessionTurn(
     };
     handle.close = (halt) => close?.(new TurnStop(halt));
 
+    if (session.origin === 'template')
+      afterwards = () => offerToContinue(sessionUuid, messageUuid);
     if (!settings) throw new TurnStop('no-model');
     const principal: ApiTokenPrincipal = {
       tokenUuid: `${SESSION_TOKEN}:${sessionUuid}`,
@@ -816,4 +821,5 @@ export async function runSessionTurn(
     return;
   }
   close?.();
+  await afterwards?.();
 }

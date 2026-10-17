@@ -12,6 +12,7 @@ import { sessionModel } from '../model/settings';
 import { startTurn } from '../runner/queue';
 import {
   createSession,
+  findSession,
   insertMessage,
   linkSessionEntities,
 } from '../sessions/store';
@@ -21,9 +22,12 @@ import {
   coverageOf,
   forgetSubjects,
   holdBatch,
+  lastAsked,
 } from './coverage';
 import { TEMPLATE_SOURCES, type CheckItem } from './sources';
 import { findTemplate, recordRun } from './store';
+import { dueNext, withdrawContinue } from './continue';
+import { postOwnerMessage } from '../sessions/owner';
 
 /**
  * A built-in check's run. It asks its source what is due — what it has not
@@ -242,8 +246,45 @@ function brief(
     `What this check looks at, by area:\n${Object.entries(source.areas)
       .map(([area, what]) => `- ${area}: ${what}`)
       .join('\n')}`,
-    `First call ${CHECK_BATCH_TOOL} with the areas — and the entities and files, by ref — the owner's words ask for; leave out what they do not narrow. It gives you what of that is due: only what this check has not looked at yet, as it reads now. Then do with it what the check says below and what the owner's words say. When the words ask for nothing this check looks at, say so and stop.`,
+    `First call ${CHECK_BATCH_TOOL} with the areas — and the entities and files, by ref — the owner's words ask for; leave out what they do not narrow. It gives you what of that is due: only what this check has not looked at yet, as it reads now. Then do with it what the check says below and what the owner's words say. When they ask for more than one batch — a number, or all of it — call it again for the next batch once you have proposed for this one, until it says nothing is due or what they asked for is done. When the words ask for nothing this check looks at, say so and stop.`,
     source.brief([]),
     CHECK_END,
   ].join('\n\n');
+}
+
+/**
+ * The owner goes on with a check's run from its «go on»: the next batch of
+ * what its model last asked for — the same areas, the same entities. The
+ * owner's message says only that; the model is told what to do. Answers
+ * the message's id, or none when nothing is due any more.
+ */
+export async function continueRun(
+  sessionUuid: string,
+): Promise<{ messageUuid: string | null }> {
+  const session = findSession(sessionUuid);
+  if (!session || session.origin !== 'template')
+    fail('Only a check’s run goes on.');
+  if (session.archivedAt || session.closedAt)
+    fail('The session is archived: bring it back to write in it');
+  if (session.state === 'running') fail('The session is answering already.');
+  const template = session.templateId
+    ? findTemplate(session.templateId)
+    : undefined;
+  if (!template?.builtin) fail('There is no such template.');
+  const next = await dueNext(sessionUuid);
+  withdrawContinue(sessionUuid);
+  if (!next) return { messageUuid: null };
+  const ask = lastAsked(sessionUuid);
+  const words = THEI_SERVER.phrase.ai_continue_text;
+  const narrowed = [
+    ask?.areas?.length ? `the areas ${ask.areas.join(', ')}` : '',
+    ask?.refs?.length ? `the refs ${ask.refs.join(', ')}` : '',
+  ]
+    .filter(Boolean)
+    .join(' and ');
+  const messageUuid = postOwnerMessage(sessionUuid, {
+    text: words,
+    brief: `${words}\n\n(Thei: the owner goes on with the check «${template.title}». Call ${CHECK_BATCH_TOOL}${narrowed ? ` with ${narrowed}` : ''} for the next batch and do with it as before; call it again for the one after while what the owner asked for is not done.)`,
+  });
+  return { messageUuid };
 }
