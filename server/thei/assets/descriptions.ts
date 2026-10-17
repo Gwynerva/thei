@@ -99,26 +99,37 @@ export function readFamilyDescription(
   return row ?? { text: '', updatedAt: null };
 }
 
+/**
+ * Ids in groups SQLite takes as the values of one `IN`: a page with a
+ * thousand files asks in a few queries rather than past the limit.
+ */
+function inChunks<T>(ids: readonly T[], size = 500): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < ids.length; index += size)
+    chunks.push(ids.slice(index, index + size));
+  return chunks;
+}
+
 /** The descriptions of these families, by family; those with none left out. */
 export function readFamilyDescriptions(
   familyUuids: readonly string[],
 ): Map<string, string> {
-  const unique = [...new Set(familyUuids)];
-  if (!unique.length) return new Map();
   const { db, schema } = THEI_SERVER.useDb();
   return new Map(
-    db
-      .select({
-        familyUuid: schema.assetDescriptions.familyUuid,
-        text: schema.assetDescriptions.text,
-      })
-      .from(schema.assetDescriptions)
-      .where(inArray(schema.assetDescriptions.familyUuid, unique))
-      .all()
-      .map((row: { familyUuid: string; text: string }) => [
-        row.familyUuid,
-        row.text,
-      ]),
+    inChunks([...new Set(familyUuids)]).flatMap((chunk) =>
+      db
+        .select({
+          familyUuid: schema.assetDescriptions.familyUuid,
+          text: schema.assetDescriptions.text,
+        })
+        .from(schema.assetDescriptions)
+        .where(inArray(schema.assetDescriptions.familyUuid, chunk))
+        .all()
+        .map((row: { familyUuid: string; text: string }) => [
+          row.familyUuid,
+          row.text,
+        ]),
+    ),
   );
 }
 
@@ -132,13 +143,16 @@ export function describeFiles(
   const unique = [...new Set(assetUuids)];
   if (!unique.length) return new Map();
   const { rawDb } = THEI_SERVER.useDb();
-  const rows = rawDb
-    .prepare(
-      `SELECT a.assetUuid, coalesce(d.text, '') AS text FROM assets a
-        LEFT JOIN "asset-descriptions" d ON d.familyUuid = a.familyUuid
-        WHERE a.settings IS NOT NULL AND a.assetUuid IN (${unique.map(() => '?').join(',')})`,
-    )
-    .all(...unique) as { assetUuid: string; text: string }[];
+  const rows = inChunks(unique).flatMap(
+    (chunk) =>
+      rawDb
+        .prepare(
+          `SELECT a.assetUuid, coalesce(d.text, '') AS text FROM assets a
+            LEFT JOIN "asset-descriptions" d ON d.familyUuid = a.familyUuid
+            WHERE a.settings IS NOT NULL AND a.assetUuid IN (${chunk.map(() => '?').join(',')})`,
+        )
+        .all(...chunk) as { assetUuid: string; text: string }[],
+  );
   const texts = new Map(rows.map((row) => [row.assetUuid, row.text]));
   return new Map(
     unique.flatMap((id) => (texts.has(id) ? [[id, texts.get(id)!]] : [])),
