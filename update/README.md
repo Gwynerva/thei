@@ -101,6 +101,11 @@ Thei binds to localhost, so put nginx in front of it. Copy
 `proxy_pass`, if you installed with another `THEI_PORT`), then run
 `certbot --nginx` for TLS. The example file has the exact commands.
 
+Limits per address — sign-in attempts and the like — trust `X-Real-IP` and the
+last hop of `X-Forwarded-For` only from a proxy on the same computer; behind a
+proxy on another host, Docker networking included, every visitor counts as that
+proxy's one address.
+
 ## Update
 
 Open **Updates** in the admin panel. It shows the installed version, checks for
