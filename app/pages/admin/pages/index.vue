@@ -21,14 +21,10 @@ const list = computed<PageListResponse | undefined>(() => data.value);
         <Icon name="page" class="shrink-0" />
         <span class="truncate">{{ phrase.admin_pages }}</span>
       </div>
-      <TheiLink
-        to="/admin/pages/new/"
-        class="flex items-center gap-xs rounded-normal bg-accent/80 px-sm py-xs
-          text-sm text-white transition hocus:bg-accent"
-      >
+      <Button to="/admin/pages/new/" class="flex items-center gap-xs">
         <Icon name="plus-circle" />
         <span>{{ phrase.new_page }}</span>
-      </TheiLink>
+      </Button>
     </div>
   </StickyGlassHeader>
 

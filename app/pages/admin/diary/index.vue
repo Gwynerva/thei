@@ -30,14 +30,10 @@ function dayOf(item: DiaryListItem) {
         <Icon name="thought" class="shrink-0" />
         <span class="truncate">{{ phrase.admin_diary }}</span>
       </div>
-      <TheiLink
-        to="/admin/diary/new/"
-        class="flex items-center gap-xs rounded-normal bg-accent/80 px-sm py-xs
-          text-sm text-white transition hocus:bg-accent"
-      >
+      <Button to="/admin/diary/new/" class="flex items-center gap-xs">
         <Icon name="plus-circle" />
         <span>{{ phrase.new_diary_entry }}</span>
-      </TheiLink>
+      </Button>
     </div>
   </StickyGlassHeader>
 

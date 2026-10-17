@@ -25,15 +25,10 @@ const list = computed<ProjectListResponse | undefined>(() => data.value);
         <Icon name="project" class="shrink-0" />
         <span class="truncate">{{ phrase.admin_projects }}</span>
       </div>
-      <TheiLink
-        to="/admin/projects/new/"
-        class="flex cursor-pointer items-center gap-xs rounded-normal
-          bg-accent/80 px-sm py-xs text-sm text-white transition
-          hocus:bg-accent"
-      >
+      <Button to="/admin/projects/new/" class="flex items-center gap-xs">
         <Icon name="plus-circle" />
         <span>{{ phrase.new_project }}</span>
-      </TheiLink>
+      </Button>
     </div>
   </StickyGlassHeader>
 

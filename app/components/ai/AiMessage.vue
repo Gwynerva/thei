@@ -336,17 +336,16 @@ function answer(text: string) {
         <span v-if="notice.text" class="text-xs wrap-anywhere text-text-2">{{
           notice.text
         }}</span>
-        <TheiLink
+        <Button
           v-if="
             ['limit', 'no-model', 'key', 'address', 'model'].includes(
               notice.kind,
             )
           "
           to="/admin/ai/?tab=connection"
-          class="self-start rounded-normal bg-bg-3 px-sm py-xs text-sm
-            font-semibold text-text-2 transition-colors hocus:bg-accent/25
-            hocus:text-accent"
-          >{{ phrase.ai_notice_connection }}</TheiLink
+          variant="secondary"
+          class="self-start font-semibold"
+          >{{ phrase.ai_notice_connection }}</Button
         >
       </div>
     </div>

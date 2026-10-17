@@ -416,19 +416,17 @@ function sendComment(text: string) {
           >
             <Icon name="chevron-right" />
           </Button>
-          <!-- A link drawn as the accent square of a `Button` is. -->
-          <TheiLink
+          <Button
             v-else-if="from && form === 'session'"
             :to="sessionPath"
-            class="flex size-8 shrink-0 items-center justify-center
-              rounded-normal bg-accent/80 p-1 text-base text-white
-              transition-colors pointer-coarse:size-11 hocus:bg-accent"
+            size="icon-sm"
+            class="pointer-coarse:size-11"
             :aria-label="phrase.ai_offer_in_session"
             :data-title-popup="phrase.ai_offer_in_session"
             data-action-session
           >
             <Icon name="ai-chat" />
-          </TheiLink>
+          </Button>
           <Button
             v-else
             size="icon-sm"

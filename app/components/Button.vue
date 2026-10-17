@@ -1,12 +1,21 @@
 <script lang="ts" setup>
+import type { RouteLocationRaw } from 'vue-router';
+import TheiLink from './TheiLink';
+
 const {
   variant = 'primary',
   size = 'default',
   dragHandle = false,
+  to,
 } = defineProps<{
   variant?: 'primary' | 'secondary' | 'delete';
   size?: 'default' | 'icon-overlay' | 'icon-sm' | 'icon' | 'icon-lg';
   dragHandle?: boolean;
+  /**
+   * Where it leads: a link that looks as the button of its rank does, so a
+   * way somewhere never draws a button of its own.
+   */
+  to?: RouteLocationRaw;
 }>();
 
 // A button whose popup is open looks as it does under the pointer, for as
@@ -39,7 +48,9 @@ const sizeClasses = {
 </script>
 
 <template>
-  <button
+  <component
+    :is="to ? TheiLink : 'button'"
+    :to
     class="text-sm transition-colors disabled:cursor-not-allowed"
     :class="[
       variantClasses[variant],
@@ -48,5 +59,5 @@ const sizeClasses = {
     ]"
   >
     <slot></slot>
-  </button>
+  </component>
 </template>

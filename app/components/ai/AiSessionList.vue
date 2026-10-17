@@ -313,13 +313,11 @@ const spending = computed(() => {
           }}</b
         >
         <span>{{ phrase.ai_no_model_text }}</span>
-        <!-- A link drawn as the main `Button` is. -->
-        <TheiLink
+        <Button
           to="/admin/ai/?tab=connection"
-          class="flex h-9 shrink-0 items-center gap-xs self-start rounded-normal
-            bg-accent/80 px-sm text-sm font-semibold whitespace-nowrap
-            text-white transition-colors pointer-coarse:h-11 hocus:bg-accent"
-          ><Icon name="power" />{{ phrase.ai_no_model_action }}</TheiLink
+          class="flex h-9 shrink-0 items-center gap-xs self-start font-semibold
+            whitespace-nowrap pointer-coarse:h-11"
+          ><Icon name="power" />{{ phrase.ai_no_model_action }}</Button
         >
       </div>
 

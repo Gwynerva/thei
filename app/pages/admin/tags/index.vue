@@ -22,15 +22,13 @@ function placeholderStyle(tag: TagListItem) {
         <Icon name="tag" />
         <span>{{ phrase.admin_tags }}</span>
       </div>
-      <TheiLink
+      <Button
         to="/admin/tags/new/"
-        class="flex shrink-0 items-center gap-xs rounded-normal bg-accent/80
-          px-sm py-xs text-sm font-semibold text-white transition
-          hocus:bg-accent"
+        class="flex shrink-0 items-center gap-xs font-semibold"
       >
         <Icon name="plus-circle" />
         {{ phrase.new_tag }}
-      </TheiLink>
+      </Button>
     </div>
   </StickyGlassHeader>
 

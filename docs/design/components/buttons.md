@@ -11,8 +11,8 @@ neutral — and in square icon-only sizes.
   list's row.
 - `ModalHeaderButton` in a modal's header row: close, delete, the main action
   (Save, Done).
-- Where the action is a navigation, a `TheiLink` styled like the button it
-  stands for, as the "+" of a dashboard box is.
+- Where the action is a navigation, `Button` with `to`: a link that looks as
+  the button of its rank does. Never a link styled by hand as a button.
 
 ## Rules
 
@@ -70,7 +70,8 @@ neutral — and in square icon-only sizes.
 | `icon`         | `size-9`: beside a text button of `h-9`.   |
 | `icon-lg`      | `size-10`.                                 |
 
-`dragHandle` gives it the grab cursor. Disabled, it fades its colours and
+`to` makes it a link (`TheiLink`) with the same look. `dragHandle` gives it
+the grab cursor. Disabled, it fades its colours and
 shows the not-allowed cursor.
 
 `app/modals/ModalHeaderButton.vue` takes `label` (required), `icon`,
