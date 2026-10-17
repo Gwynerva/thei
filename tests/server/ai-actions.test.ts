@@ -484,6 +484,21 @@ describe('applying and undoing', () => {
     ).toEqual(['Games', 'Remakes']);
   });
 
+  it('takes a tag by its ref alone', async () => {
+    const { results } = await proposeActions({
+      sessionUuid: session(),
+      actions: [
+        {
+          kind: 'tags',
+          target: `project:${PROJECT}`,
+          add: [{ ref: `tag:${TAG}` }],
+        },
+      ],
+    });
+    // Read as the tag it names — which the project carries already.
+    expect(JSON.stringify(results)).toMatch(/already carries/);
+  });
+
   it('marks as done what the owner did by hand, and as stale what moved another way', async () => {
     const sessionUuid = session();
     const done = await proposed(sessionUuid, {

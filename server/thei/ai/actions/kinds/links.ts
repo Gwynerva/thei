@@ -36,7 +36,9 @@ export const tagsAction: AiActionKindDef<'tags'> = {
     'Tags of a project or an event: add [{ ref } or { title }], remove [{ ref }]. A title no tag has makes a new tag, so look for one first (list_entities, kind tag). Diary entries carry none.',
   schema: z.object({
     add: z
-      .array(z.object({ ref: z.string().optional(), title: z.string() }))
+      .array(
+        z.object({ ref: z.string().optional(), title: z.string().default('') }),
+      )
       .default([]),
     remove: z
       .array(z.object({ ref: z.string(), title: z.string().default('') }))
