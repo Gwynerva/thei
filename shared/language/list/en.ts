@@ -1962,8 +1962,8 @@ export default defineI18nBase({
       tags: {
         title: 'Tag audit',
         instruction:
-          'Check the tags: which entities need a fitting tag added or a needless one taken off, which tags to create and which to delete.\n\n' +
-          'Tags are an important part of how the archive is classified, never added just to have some. A new tag is only for an important trait that surely runs through a number of entities, is not covered by other tags yet, and is interesting in itself.',
+          'Check the tags: which entities need a fitting tag added or a needless one taken off, which tags to create or delete, and which synonyms to give tags.\n\n' +
+          'Tags are an important part of how the archive is classified, never added just to have some. A new tag is only for an important trait that surely runs through a number of entities, is not covered by other tags yet, and is interesting in itself. Propose creating or deleting a tag only on sure grounds, with examples of the entities it touches.',
       },
     },
     ai_template_copy_title: (title) => `${title} (copy)`,

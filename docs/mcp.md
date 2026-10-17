@@ -178,7 +178,9 @@ text names another of them without one — at its first mention in a part of
 the text, which the code holds to; **Tag audit** looks over the tags of
 projects and events and the tags themselves: a fitting tag added, a wrong
 one taken off, a new tag only for a trait several entities surely share,
-and one that gathers nothing proposed for deletion. The code keeps count of
+one that gathers nothing proposed for deletion — either only on sure
+grounds, with examples — and the other names a tag goes by as its
+synonyms. The code keeps count of
 what each has looked at — a paragraph, a short text, a file, a link, an
 entity, as it read then — so a run is given only what is new or changed
 since, a run's worth at a time, and with nothing new no session starts and

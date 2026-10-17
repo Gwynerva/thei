@@ -87,6 +87,8 @@ export const tagsSource: TemplateSource = {
       '- An entity that lacks a tag that plainly fits it gets it; one that carries a tag that does not fit loses it: tags, add and remove, with why.',
       '- A new tag only for a trait several entities surely share that no tag covers yet: create, entity tag, with a description of what it gathers, then tags on each of them — never for one entity alone.',
       '- A tag that gathers nothing worth following — on one entity or none, or the same as another — is proposed for deletion, never as sure: delete, the tag as the target; its entities moved to the tag it repeats first.',
+      '- A tag is made or deleted only on sure grounds: its reason names examples of the entities it gathers, or of those it leaves and where they go.',
+      '- The other names a tag goes by — a short form, another language, a spelling the owner uses — are its synonyms: field, synonyms, the list whole as read_entity gives it.',
       '- Diary entries carry no tags. What needs nothing gets nothing.',
       '',
       ...batch.map((item) => item.shown),
