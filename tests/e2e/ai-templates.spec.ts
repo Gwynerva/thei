@@ -128,7 +128,7 @@ test('runs a check from its row, and says when nothing new is left', async ({
     await expect(toast(page)).toBeVisible();
     const said = await toast(page).innerText();
     if (said.includes('nothing new to check')) break;
-    expect(said).toContain('Fixing broken links');
+    expect(said).toContain('Broken links');
     started++;
     await expect(links.locator('[data-template-last]')).toBeVisible({
       timeout: 20_000,
@@ -136,7 +136,7 @@ test('runs a check from its row, and says when nothing new is left', async ({
   }
   expect(started).toBeGreaterThan(0);
   await expect(toast(page)).toContainText(
-    '“Fixing broken links”: nothing new to check',
+    '“Broken links”: nothing new to check',
   );
   // From the whole archive there is no looking again from the start.
   await expect(toast(page).getByRole('button')).toHaveCount(0);
@@ -158,7 +158,7 @@ test('runs a check sent from an entity’s ✦, and looks at it again when asked
   await page.locator('[data-ai-entity]').click();
   // Chosen, its words go into the message, sent as they are.
   await check.click();
-  await expect(field).toContainText('Proofread the texts');
+  await expect(field).toContainText('Find and fix obvious mistakes');
   await field.press('Enter');
   const sent = menu.locator('[data-ai-entity-sent]');
   await expect(sent).toContainText(
@@ -173,7 +173,7 @@ test('runs a check sent from an entity’s ✦, and looks at it again when asked
   await expect(toast(page)).toContainText(
     '“Mistakes in the text”: nothing new to check',
   );
-  await expect(field).toContainText('Proofread the texts');
+  await expect(field).toContainText('Find and fix obvious mistakes');
   await toast(page).getByRole('button', { name: 'Check again' }).click();
   await expect(sent).toBeVisible();
   await expect(sent.locator('[data-ai-entity-stop]')).toHaveCount(0, {
@@ -200,7 +200,7 @@ test('narrows a check by the words added on a new session', async ({
   const screen = page.locator('[data-session-new-screen]');
   await screen.locator('[data-ai-preset="builtin-proofread"]').click();
   const field = page.locator('[data-composer-field]');
-  await expect(field).toContainText('Proofread the texts');
+  await expect(field).toContainText('Find and fix obvious mistakes');
   await field.press('End');
   await page.keyboard.type(` Only the titles ${run}.`);
   const asked = model.requests.length;

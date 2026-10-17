@@ -1961,9 +1961,9 @@ export default defineI18nBase({
           'Add descriptions to the files that have none. When you write one, look not only at the file itself but at the places it is used in (the entity it belongs to, captions, the text around it and so on). If you are not sure, or cannot describe a file for any reason, tell me.',
       },
       links: {
-        title: 'Fixing broken links',
+        title: 'Broken links',
         instruction:
-          'Mend the links that lead nowhere: to the heading a renamed one became, or to the place the words mean; take a link off only when what it led to is gone and nothing fits, its words kept.',
+          'Find the broken internal links. For each, work out why it broke: the entity it led to was deleted, the heading it led to was removed or renamed, and so on. Try to mend it, finding a sure replacement that keeps what the link meant. Taking the link off altogether is the last resort.',
       },
       graph: {
         title: 'Finding possible relations',

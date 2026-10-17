@@ -169,17 +169,17 @@ reminders, what a dated stretch is called, status lines, notes on links and
 relations, the titles and captions of placed files, the owner's name and
 slogan, a project's button, the descriptions of files; **File descriptions**
 describes the files of the archive that have none yet, three a run, each
-from the file itself — a file the model cannot be shown is left alone, and
-counted as looked at until its bytes change; **Fixing broken links** mends
-the links that lead nowhere; **Finding possible relations** looks for the
-relations projects, events and diary entries lack. The code keeps count of
-what each has looked at — a paragraph, a short text, a file, a link, an
-entity, as it read then — so a run is given only what is new or changed since, a run's worth
-at a time, and with nothing new no session starts and nothing is spent.
-What a check reads is counted, never what it writes: a fix the owner
-accepts leaves what it mended checked, while the owner's own change beside
-it waits for the next run, and a relation applied does not hand its entity
-back.
+from the file and the places it is used in — a file the model cannot be
+shown is left alone, and counted as looked at until its bytes change;
+**Broken links** mends the links that lead nowhere; **Finding possible
+relations** looks for the relations projects, events and diary entries
+lack. The code keeps count of what each has looked at — a paragraph, a
+short text, a file, a link, an entity, as it read then — so a run is given
+only what is new or changed since, a run's worth at a time, and with
+nothing new no session starts and nothing is spent. What a check reads is
+counted, never what it writes: a fix the owner accepts leaves what it
+mended checked, while the owner's own change beside it waits for the next
+run, and a relation applied does not hand its entity back.
 
 A check runs from its row over the whole archive, or is sent from a new
 session or an entity's ✦ like any request: the entity in hand and the ones

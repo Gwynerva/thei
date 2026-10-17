@@ -234,7 +234,7 @@ describe('the built-in checks', () => {
     expect(builtins.map((template) => template.title)).toEqual([
       'Mistakes in the text',
       'File descriptions',
-      'Fixing broken links',
+      'Broken links',
       'Finding possible relations',
     ]);
     const keys = Object.keys(findTemplate(id('proofread'))!);
@@ -246,12 +246,12 @@ describe('the built-in checks', () => {
       title: 'Mine',
     });
     expect(changed).toMatchObject({
-      title: 'Fixing broken links',
+      title: 'Broken links',
       model: 'fake-large',
     });
     expect(() => deleteTemplate(id('links'))).toThrow();
     const copy = copyTemplate(id('links'));
-    expect(copy.title).toBe('Fixing broken links (copy)');
+    expect(copy.title).toBe('Broken links (copy)');
     expect(copy.builtin).toBeUndefined();
   });
 });
@@ -542,7 +542,7 @@ describe('a ready-made request', () => {
     ).toEqual([
       ['Mistakes in the text', 'proofread'],
       ['File descriptions', 'describe'],
-      ['Fixing broken links', 'links'],
+      ['Broken links', 'links'],
       ['Finding possible relations', 'graph'],
       ['Look over', null],
       ['Project look', null],

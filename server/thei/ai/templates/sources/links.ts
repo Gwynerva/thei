@@ -11,7 +11,7 @@ import type { CheckItem, TemplateSource } from './index';
 import { entitiesOf, withSections } from './scope';
 
 /**
- * «Fixing broken links»: the links of the archive's texts that lead nowhere
+ * «Broken links»: the links of the archive's texts that lead nowhere
  * now, forty a run. One mended leads somewhere and is gone from the list; one
  * the model left, unsure where it should lead, waits until something about
  * it changes — its words, where it leads, or the places it could lead to: a
