@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import {
+  contentEntityReference,
   contentInlineLinksFromData,
-  isContentEntityType,
   type ContentEntityType,
 } from '#layers/thei/shared/content-link';
 import {
@@ -70,22 +70,20 @@ function resolveDiaryDays(value: unknown): unknown {
 
 type EntityLinkRef = { entityType: ContentEntityType; entityId: string };
 
-function entityLinksOf(data: ContentOutputData | null): EntityLinkRef[] {
+/** The entities a text links to, inline or as cards, as often as it does. */
+export function entityLinksOf(data: ContentOutputData | null): EntityLinkRef[] {
   if (!data) return [];
   const links: EntityLinkRef[] = [];
   for (const link of contentInlineLinksFromData(data as never))
     if (link.kind === 'entity') links.push(link);
   for (const block of data.blocks) {
+    if (block.type !== 'entityLink') continue;
     const blockData = block.data as Record<string, unknown>;
-    if (
-      block.type === 'entityLink' &&
-      isContentEntityType(blockData.entityType) &&
-      typeof blockData.entityId === 'string'
-    )
-      links.push({
-        entityType: blockData.entityType,
-        entityId: blockData.entityId,
-      });
+    const reference = contentEntityReference(
+      blockData.entityType,
+      blockData.entityId,
+    );
+    if (reference) links.push(reference);
   }
   return links;
 }

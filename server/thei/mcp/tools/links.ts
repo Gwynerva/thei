@@ -52,44 +52,18 @@ export function registerLinkTools(server: McpServer, _context: McpCallContext) {
           throw new McpToolError('Only an entity of the site is linked to.');
         const outline = await entityOutline(key.kind, key.id);
         if (!outline) throw new McpToolError(`Nothing found for ${ref}.`);
-        const result = {
-          ref,
-          title: outline.title,
-          headings: outline.headings.map((heading) => ({
-            anchor: heading.id,
-            title: heading.title,
-            level: heading.level,
-            ...(heading.private ? { private: true } : {}),
-          })),
-          ...(outline.sections
-            ? {
-                sections: outline.sections.map((section) => ({
-                  ref: `project-section:${section.entityId}`,
-                  title: section.title,
-                  ...(section.stage
-                    ? {
-                        stage: `${section.stage.number} of ${section.stage.count}`,
-                      }
-                    : {}),
-                })),
-              }
-            : {}),
-          ...(outline.parent
-            ? { project: `project:${outline.parent.entityId}` }
-            : {}),
-        };
         const lines = [
           `${ref} — ${outline.title}`,
-          ...result.headings.map(
+          ...outline.headings.map(
             (heading) =>
-              `${heading.level === 3 ? '    ' : '  '}#${heading.anchor} — ${heading.title}${heading.private ? ' (private)' : ''}`,
+              `${heading.level === 3 ? '    ' : '  '}#${heading.id} — ${heading.title}${heading.private ? ' (private)' : ''}`,
           ),
-          ...(result.sections ?? []).map(
+          ...(outline.sections ?? []).map(
             (section) =>
-              `  section ${section.ref} — ${section.title}${section.stage ? ` (stage ${section.stage})` : ''}`,
+              `  section project-section:${section.entityId} — ${section.title}${section.stage ? ` (stage ${section.stage.number} of ${section.stage.count})` : ''}`,
           ),
         ];
-        return toolResult(result, lines.join('\n'));
+        return toolResult(lines.join('\n'));
       }),
   );
 
@@ -115,7 +89,6 @@ export function registerLinkTools(server: McpServer, _context: McpCallContext) {
         const page = await scanBrokenLinks({ cursor, limit });
         const lines = page.links.map(brokenLinkText);
         return toolResult(
-          page,
           [
             lines.length
               ? lines.join('\n')

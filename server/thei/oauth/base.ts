@@ -7,7 +7,8 @@ import { siteRoot } from '../site-url';
  * pointed to are the same string, as RFC 9207 wants.
  */
 
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+/** The names of this computer, as an address's hostname gives them. */
+export const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 /** The issuer: the site's own address, without a trailing slash. */
 export function oauthIssuer(event: H3Event): string {
@@ -36,5 +37,5 @@ export function resourceMetadataUrl(event: H3Event): string {
 export function oauthAvailable(event: H3Event): boolean {
   if (!THEI_SERVER.config.mcp.enabled) return false;
   const url = new URL(siteRoot(event));
-  return url.protocol === 'https:' || LOCAL_HOSTS.has(url.hostname);
+  return url.protocol === 'https:' || LOOPBACK_HOSTS.has(url.hostname);
 }

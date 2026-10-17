@@ -1,4 +1,4 @@
-import { and, eq, isNull, lt, ne, or } from 'drizzle-orm';
+import { and, eq, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import { createError, getHeader, type H3Event } from 'h3';
 import {
   API_TOKEN_LABEL_MAX,
@@ -17,6 +17,7 @@ import {
   isAccessTokenShape,
 } from '../access-links/token';
 import { generateUniqueId, EntityPrefix } from '../entity-id';
+import { clientHost } from '../oauth/clients';
 import { getRequestIp } from '../request';
 
 /**
@@ -49,17 +50,10 @@ function toItem(
   },
   clients: Map<
     string,
-    { name: string; kind: 'cimd' | 'dcr'; uri: string | null }
+    { clientId: string; name: string; kind: 'cimd' | 'dcr'; uri: string | null }
   > = new Map(),
 ): ApiTokenItem {
   const client = row.clientId ? clients.get(row.clientId) : undefined;
-  const host = (value: string | null | undefined) => {
-    try {
-      return value ? new URL(value).hostname : '';
-    } catch {
-      return '';
-    }
-  };
   return {
     tokenUuid: row.tokenUuid,
     label: row.label,
@@ -68,12 +62,11 @@ function toItem(
     lastUsedAt: row.lastUsedAt,
     lastClient: row.lastClient,
     kind: row.kind,
-    ...(client && row.clientId
+    ...(client
       ? {
           client: {
             name: client.name,
-            host:
-              client.kind === 'cimd' ? host(row.clientId) : host(client.uri),
+            host: clientHost(client),
             verified: client.kind === 'cimd',
           },
         }
@@ -160,7 +153,7 @@ function bearerToken(event: H3Event): string | undefined {
  * app finding out how to connect — one that does not exist, a connection's
  * key past its hour, or one issued for another address.
  */
-export type McpRefusal = 'missing' | 'unknown' | 'expired' | 'audience';
+type McpRefusal = 'missing' | 'unknown' | 'expired' | 'audience';
 
 /** The key a request carries, or why it was not let in. */
 export function authenticateMcpRequest(
@@ -210,6 +203,25 @@ export function touchApiToken(tokenUuid: string) {
       ),
     )
     .run();
+}
+
+/**
+ * How much waits for the owner in a key's sessions — actions undecided,
+ * questions unanswered — in all of them but the archived, whose waiting
+ * counts nowhere.
+ */
+export function apiTokenWaiting(tokenUuid: string): number {
+  const { db, schema } = THEI_SERVER.useDb();
+  const sessions = schema.aiSessions;
+  return Number(
+    db
+      .select({ total: sql<number>`coalesce(sum(${sessions.waiting}), 0)` })
+      .from(sessions)
+      .where(
+        and(eq(sessions.tokenUuid, tokenUuid), isNull(sessions.archivedAt)),
+      )
+      .get()?.total ?? 0,
+  );
 }
 
 /** Whether a token still exists: revoked, what it opened opens nothing. */
@@ -270,6 +282,19 @@ type BudgetKind = 'call' | 'write';
 const BUDGET_WINDOW_MS = 60 * 1000;
 const BUDGET_LIMITS: Record<BudgetKind, number> = { call: 120, write: 30 };
 const budgets = new Map<string, number[]>();
+let budgetsPrunedAt = 0;
+
+/**
+ * Forgets the budgets of keys quiet for a minute, at most once a minute: a
+ * budget with nothing spent within its window is no budget at all, and a
+ * revoked key's would otherwise stay for good.
+ */
+function pruneBudgets(now: number) {
+  if (now - budgetsPrunedAt < BUDGET_WINDOW_MS) return;
+  budgetsPrunedAt = now;
+  for (const [key, times] of budgets)
+    if (!times.some((at) => now - at < BUDGET_WINDOW_MS)) budgets.delete(key);
+}
 
 /**
  * Spends one call or write of a token's budget for the current minute.
@@ -279,8 +304,9 @@ export function spendApiTokenBudget(
   tokenUuid: string,
   kind: BudgetKind,
 ): number {
-  const key = `${kind}:${tokenUuid}`;
   const now = Date.now();
+  pruneBudgets(now);
+  const key = `${kind}:${tokenUuid}`;
   const recent = (budgets.get(key) ?? []).filter(
     (at) => now - at < BUDGET_WINDOW_MS,
   );

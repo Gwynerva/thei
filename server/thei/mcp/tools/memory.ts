@@ -86,7 +86,7 @@ export function registerMemoryTool(server: McpServer, context: McpCallContext) {
           throw new McpToolError(
             'Name refs, a kind, or ask for the dictionary.',
           );
-        return toolResult({}, lines.join('\n').trim());
+        return toolResult(lines.join('\n').trim());
       }),
   );
 }

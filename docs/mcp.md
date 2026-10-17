@@ -222,14 +222,14 @@ a restart cut off says so.
 | `tag_candidates`                  | Entities a tag might belong on.                                      |
 | `outline`                         | The headings and sections a link may lead to inside an entity.       |
 | `broken_links`                    | Links leading nowhere now, with where each may lead instead.         |
-| `read_memory`                     | What is remembered of an entity, a kind or the owner.                |
+| `read_memory`                     | What is remembered of entities or a kind, and the dictionary.        |
 | `read_digests`, `write_digest`    | The model's own few lines about entities.                            |
 | `open_session`, `session_actions` | A session to work in, and what became of its actions.                |
 | `describe_actions`                | The kinds of actions, and what each takes.                           |
 | `propose`                         | Actions for the owner; with `apply`, an editor applies them at once. |
-| `undo_action`                     | Takes back an action applied.                                        |
+| `undo_action`                     | Takes back an action the app applied, in a session not archived.     |
 | `find_files`, `read_file`         | Files found by description and place; one with what its places say.  |
 | `look_at_file`                    | A library file shown as the model's service takes it.                |
-| `download_file`                   | A one-time address to download a library file as stored.             |
+| `download_file`                   | A one-time address for an app to download a library file as stored.  |
 | `upload_file`, `import_file`      | A file into the library, as the admin uploads one (editor).          |
 | `reprocess_file`, `file_status`   | A new variant of a library file, and how its processing goes.        |

@@ -60,7 +60,6 @@ export function registerReadTool(server: McpServer, context: McpCallContext) {
             );
           const page = pageOfText(text.markdown, offset ?? 0);
           return toolResult(
-            {},
             [
               `# ${view.ref} — text "${text.name}" (version ${text.version ?? 'none: empty'}), characters ${page.from}–${page.to} of ${text.markdown.length}`,
               '',
@@ -119,7 +118,7 @@ export function registerReadTool(server: McpServer, context: McpCallContext) {
               ? 'Its digest is out of date: once you have read it in full, write it anew with write_digest.'
               : 'It has no digest yet: once you have read it in full, write one with write_digest.',
           );
-        return toolResult({}, lines.join('\n'));
+        return toolResult(lines.join('\n'));
       }),
   );
 }

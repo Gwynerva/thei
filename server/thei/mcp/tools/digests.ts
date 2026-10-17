@@ -89,7 +89,7 @@ export function registerDigestTools(
             ? `${head}\n  ${digest.text.replace(/\n+/g, '\n  ')}`
             : `${line}\n  (a digest was written of it, but it has changed since)`;
         });
-        return toolResult({}, lines.join('\n'));
+        return toolResult(lines.join('\n'));
       }),
   );
 
@@ -121,7 +121,7 @@ export function registerDigestTools(
             ? (sessionModel()?.model ?? '')
             : (context.client ?? context.principal.label),
         );
-        return toolResult({}, `The digest of ${refOf(key)} is kept.`);
+        return toolResult(`The digest of ${refOf(key)} is kept.`);
       }),
   );
 
@@ -187,7 +187,6 @@ export function registerDigestTools(
           ];
         });
         return toolResult(
-          {},
           lines.length
             ? [`${lines.length} relations:`, ...lines].join('\n')
             : 'No relations.',

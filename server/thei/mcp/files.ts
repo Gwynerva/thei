@@ -23,32 +23,59 @@ import { refuse as fail } from '../entity-patch/text';
  * the library. Bytes are streamed to disk, never held whole in memory.
  */
 
-/** How long a one-time upload address stays open. */
+/** How long a one-time address stays open. */
 const TICKET_LIFETIME_MS = 15 * 60 * 1000;
-/** Open upload addresses one token may hold at once. */
+/** Open addresses of each kind one token may hold at once. */
 const TICKETS_PER_TOKEN = 20;
+
+/**
+ * One-time addresses of one kind, by the ticket in them: each serves once,
+ * lapses after a few minutes, and a token holds only so many at a time.
+ */
+function ticketBook<T extends { tokenUuid: string }>(kind: string) {
+  const tickets = new Map<string, T & { expiresAt: number }>();
+  const sweep = (now = Date.now()) => {
+    for (const [ticket, entry] of tickets)
+      if (entry.expiresAt <= now) tickets.delete(ticket);
+  };
+  return {
+    /** Opens an address for `entry`, or refuses when its token holds too many. */
+    issue(entry: T) {
+      sweep();
+      const held = [...tickets.values()].filter(
+        (open) => open.tokenUuid === entry.tokenUuid,
+      ).length;
+      if (held >= TICKETS_PER_TOKEN)
+        fail(
+          `Too many ${kind} addresses are open; use them or wait for them to lapse.`,
+        );
+      const ticket = randomBytes(24).toString('base64url');
+      const expiresAt = Date.now() + TICKET_LIFETIME_MS;
+      tickets.set(ticket, { ...entry, expiresAt });
+      return { ticket, expiresAt };
+    },
+    /** Takes an address up, once. */
+    take(ticket: string) {
+      sweep();
+      const entry = tickets.get(ticket);
+      if (entry) tickets.delete(ticket);
+      return entry;
+    },
+  };
+}
 
 interface UploadTicket {
   tokenUuid: string;
-  /** Who opened it, for the record of what the file was brought in by. */
-  principal: ApiTokenPrincipal;
-  name: string;
   extension: string;
   sourceType: AssetType;
+  maxSizeBytes: number;
   settings: AssetUploadRequest;
-  expiresAt: number;
   /** The session the file is brought into. */
   sessionUuid: string;
 }
 
-const tickets = new Map<string, UploadTicket>();
+const uploads = ticketBook<UploadTicket>('upload');
 
-function sweepTickets(now = Date.now()) {
-  for (const [ticket, entry] of tickets)
-    if (entry.expiresAt <= now) tickets.delete(ticket);
-}
-
-/** What a file's name says it is, or a refusal a model can act on. */
 /** What a file is by its name: its extension, its kind, how large it may be. */
 export function fileKind(name: string) {
   const dot = name.lastIndexOf('.');
@@ -84,42 +111,17 @@ export function issueUploadTicket(
   settings: AssetUploadRequest,
   sessionUuid: string,
 ) {
-  sweepTickets();
-  const held = [...tickets.values()].filter(
-    (entry) => entry.tokenUuid === principal.tokenUuid,
-  ).length;
-  if (held >= TICKETS_PER_TOKEN)
-    fail(
-      'Too many upload addresses are open; use them or wait for them to lapse.',
-    );
-  const { extension, sourceType } = fileKind(name);
-  const ticket = randomBytes(24).toString('base64url');
-  const expiresAt = Date.now() + TICKET_LIFETIME_MS;
-  tickets.set(ticket, {
+  return uploads.issue({
     tokenUuid: principal.tokenUuid,
-    principal,
-    name,
-    extension,
-    sourceType,
+    ...fileKind(name),
     settings,
-    expiresAt,
     sessionUuid,
   });
-  return { ticket, expiresAt };
 }
 
 /** Takes an upload address up, once: it serves one file. */
 export function takeUploadTicket(ticket: string) {
-  sweepTickets();
-  const entry = tickets.get(ticket);
-  if (entry) tickets.delete(ticket);
-  return entry;
-}
-
-export function uploadLimit(entry: Pick<UploadTicket, 'sourceType'>) {
-  return entry.sourceType === AssetType.Other
-    ? ASSET_UPLOAD_LIMITS.file
-    : ASSET_UPLOAD_LIMITS.media;
+  return uploads.take(ticket);
 }
 
 /** Stores staged bytes as a library file, as the admin's upload does. */
@@ -227,23 +229,9 @@ export function describeFile(file: AssetUploadResponse) {
 
 // ---- Downloads -------------------------------------------------------------------
 
-/** How long a one-time download address stays open. */
-const DOWNLOAD_LIFETIME_MS = 15 * 60 * 1000;
-/** Open download addresses one token may hold at once. */
-const DOWNLOADS_PER_TOKEN = 20;
-
-interface DownloadTicket {
-  tokenUuid: string;
-  assetUuid: string;
-  expiresAt: number;
-}
-
-const downloads = new Map<string, DownloadTicket>();
-
-function sweepDownloads(now = Date.now()) {
-  for (const [ticket, entry] of downloads)
-    if (entry.expiresAt <= now) downloads.delete(ticket);
-}
+const downloads = ticketBook<{ tokenUuid: string; assetUuid: string }>(
+  'download',
+);
 
 /**
  * Opens a one-time address an app downloads one library file from — to
@@ -255,28 +243,10 @@ export function issueDownloadTicket(
   principal: ApiTokenPrincipal,
   assetUuid: string,
 ) {
-  sweepDownloads();
-  const held = [...downloads.values()].filter(
-    (entry) => entry.tokenUuid === principal.tokenUuid,
-  ).length;
-  if (held >= DOWNLOADS_PER_TOKEN)
-    fail(
-      'Too many download addresses are open; use them or wait for them to lapse.',
-    );
-  const ticket = randomBytes(24).toString('base64url');
-  const expiresAt = Date.now() + DOWNLOAD_LIFETIME_MS;
-  downloads.set(ticket, {
-    tokenUuid: principal.tokenUuid,
-    assetUuid,
-    expiresAt,
-  });
-  return { ticket, expiresAt };
+  return downloads.issue({ tokenUuid: principal.tokenUuid, assetUuid });
 }
 
 /** Takes a download address up, once: it serves one download. */
 export function takeDownloadTicket(ticket: string) {
-  sweepDownloads();
-  const entry = downloads.get(ticket);
-  if (entry) downloads.delete(ticket);
-  return entry;
+  return downloads.take(ticket);
 }

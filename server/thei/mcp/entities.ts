@@ -3,11 +3,7 @@ import type {
   ContentOutputData,
   ContentSlot,
 } from '#layers/thei/shared/content';
-import {
-  contentEntityReference,
-  contentInlineLinksFromData,
-  type ContentEntityType,
-} from '#layers/thei/shared/content-link';
+import type { ContentEntityType } from '#layers/thei/shared/content-link';
 import { contentToEditMarkdown } from '#layers/thei/shared/content-edit-markdown/serialize';
 import { buildDiaryUrl } from '#layers/thei/shared/diary-url';
 import { buildEventUrl } from '#layers/thei/shared/event-url';
@@ -41,6 +37,7 @@ import { siteUrl } from '../site-url';
 import type { McpCallContext } from './context';
 import { McpToolError } from './result';
 import { aboutText } from './text-about';
+import { entityLinksOf } from './text-input';
 import { describeFiles } from '../assets/descriptions';
 import { formView, type FormKind } from '../ai/forms/changes';
 import { loadForm } from '../ai/forms/load';
@@ -90,7 +87,7 @@ export interface McpRelation {
   note?: RelationNote;
 }
 
-export interface McpLinkedEntity {
+interface McpLinkedEntity {
   ref: string;
   title: string;
   /** Linked in the text; whether a relation joins the two as well. */
@@ -229,7 +226,7 @@ async function relationsOf(
 }
 
 /** Titles for entities linked from texts, as refs a client can follow. */
-export async function describeEntityLinks(
+async function describeEntityLinks(
   links: { entityType: ContentEntityType; entityId: string }[],
 ): Promise<Map<string, { ref: string; title: string }>> {
   const faces = entityFaces(
@@ -246,21 +243,9 @@ function entityLinksIn(texts: { data: ContentOutputData | null }[]) {
     string,
     { entityType: ContentEntityType; entityId: string }
   >();
-  for (const text of texts) {
-    if (!text.data) continue;
-    for (const link of contentInlineLinksFromData(text.data as never))
-      if (link.kind === 'entity')
-        seen.set(`${link.entityType}:${link.entityId}`, link);
-    for (const block of text.data.blocks)
-      if (block.type === 'entityLink') {
-        const reference = contentEntityReference(
-          (block.data as Record<string, unknown>).entityType,
-          (block.data as Record<string, unknown>).entityId,
-        );
-        if (reference)
-          seen.set(`${reference.entityType}:${reference.entityId}`, reference);
-      }
-  }
+  for (const text of texts)
+    for (const link of entityLinksOf(text.data))
+      seen.set(`${link.entityType}:${link.entityId}`, link);
   return [...seen.values()];
 }
 

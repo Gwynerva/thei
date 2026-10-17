@@ -1,4 +1,5 @@
 import type { OAuthRedirectView } from '#layers/thei/shared/oauth';
+import { LOOPBACK_HOSTS } from './base';
 
 /**
  * The address an app has the owner's browser sent back to, with the code that
@@ -6,7 +7,6 @@ import type { OAuthRedirectView } from '#layers/thei/shared/oauth';
  * before anything is said to the app at all.
  */
 
-const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 /** Schemes that run something rather than open an app. */
 const FORBIDDEN_SCHEMES = new Set([
   'javascript:',

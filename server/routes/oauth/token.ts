@@ -19,35 +19,28 @@ export default defineEventHandler(async (event) => {
   requireOAuth(event);
   if (answeredPreflight(event)) return null;
   if (event.method !== 'POST')
-    return oauthError(event, 405, 'invalid_request', 'POST only.');
+    return oauthAnswer(event, oauthError('invalid_request', 'POST only.', 405));
   const ip = getRequestIp(event) ?? 'unknown';
   if (tokenFailureLimit.exceeded(ip))
-    return oauthError(
+    return oauthAnswer(
       event,
-      429,
-      'invalid_request',
-      'Too many failures; wait.',
+      oauthError('invalid_request', 'Too many failures; wait.', 429),
     );
   const form = await readForm(event);
   if (!form)
-    return oauthError(
+    return oauthAnswer(
       event,
-      400,
-      'invalid_request',
-      'A form body, each parameter once.',
+      oauthError('invalid_request', 'A form body, each parameter once.'),
     );
   const answer =
     form.grant_type === 'authorization_code'
       ? exchangeCode(form, mcpResource(event))
       : form.grant_type === 'refresh_token'
         ? renewKeys(form, mcpResource(event))
-        : {
-            status: 400,
-            body: {
-              error: 'unsupported_grant_type',
-              error_description: 'authorization_code or refresh_token.',
-            },
-          };
+        : oauthError(
+            'unsupported_grant_type',
+            'authorization_code or refresh_token.',
+          );
   if (answer.status !== 200) tokenFailureLimit.take(ip);
-  return oauthAnswer(event, answer.status, answer.body);
+  return oauthAnswer(event, answer);
 });

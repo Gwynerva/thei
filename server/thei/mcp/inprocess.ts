@@ -11,7 +11,7 @@ import { serveMcp } from './handler';
 
 const PROTOCOL = '2026-07-28';
 
-export interface McpAnswer {
+interface McpAnswer {
   result?: Record<string, any>;
   error?: { message?: string };
 }

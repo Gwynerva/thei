@@ -76,7 +76,6 @@ export function registerOverviewTool(
           EDITING_MARKDOWN_REFERENCE,
         ];
         return toolResult(
-          {},
           lines
             .filter((line, index) => line !== '' || lines[index - 1] !== '')
             .join('\n'),

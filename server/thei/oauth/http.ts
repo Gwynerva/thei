@@ -6,6 +6,7 @@ import {
   setResponseStatus,
   type H3Event,
 } from 'h3';
+import { readLimitedText } from '../request';
 import { oauthAvailable } from './base';
 
 /**
@@ -20,7 +21,8 @@ export function requireOAuth(event: H3Event) {
   if (!oauthAvailable(event)) throw createError({ statusCode: 404 });
 }
 
-export function allowAnyOrigin(event: H3Event) {
+/** Lets a page of any site call, as an app in a browser does. */
+function allowAnyOrigin(event: H3Event) {
   setResponseHeaders(event, {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -38,43 +40,29 @@ export function answeredPreflight(event: H3Event): boolean {
   return true;
 }
 
-/** An answer that holds keys or codes: never kept by anything on the way. */
-export function oauthAnswer<T>(event: H3Event, status: number, body: T): T {
-  setResponseStatus(event, status);
+/** What an OAuth endpoint answers: its status and its JSON body. */
+export interface OAuthAnswer {
+  status: number;
+  body: Record<string, unknown>;
+}
+
+/** An OAuth error (RFC 6749, 5.2): its code, and why in words. */
+export function oauthError(
+  error: string,
+  description: string,
+  status = 400,
+): OAuthAnswer {
+  return { status, body: { error, error_description: description } };
+}
+
+/** Sends an answer that holds keys or codes: never kept by anything on the way. */
+export function oauthAnswer(event: H3Event, answer: OAuthAnswer) {
+  setResponseStatus(event, answer.status);
   setResponseHeaders(event, {
     'Cache-Control': 'no-store',
     Pragma: 'no-cache',
   });
-  return body;
-}
-
-export function oauthError(
-  event: H3Event,
-  status: number,
-  error: string,
-  description: string,
-) {
-  return oauthAnswer(event, status, {
-    error,
-    error_description: description,
-  });
-}
-
-/** The body as text, read no further than the limit; undefined past it. */
-export async function readLimitedText(
-  event: H3Event,
-  max: number,
-): Promise<string | undefined> {
-  if (Number(getRequestHeader(event, 'content-length') ?? 0) > max)
-    return undefined;
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of event.node.req) {
-    size += (chunk as Buffer).length;
-    if (size > max) return undefined;
-    chunks.push(chunk as Buffer);
-  }
-  return Buffer.concat(chunks).toString('utf8');
+  return answer.body;
 }
 
 /**

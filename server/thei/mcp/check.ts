@@ -4,7 +4,7 @@ import type { AiCheckReport, AiCheckStep } from '#layers/thei/shared/ai-check';
 import { listApiTokens } from '../api-tokens';
 import { siteUrl } from '../site-url';
 import { inProcessMcp } from './inprocess';
-import { oauthAvailable, oauthIssuer } from '../oauth/base';
+import { LOOPBACK_HOSTS, oauthAvailable, oauthIssuer } from '../oauth/base';
 
 /**
  * Tries what an MCP client does, from the site itself: the handshake of
@@ -12,7 +12,7 @@ import { oauthAvailable, oauthIssuer } from '../oauth/base';
  * answering through whatever proxy stands in front. What a client would
  * stumble on shows here first. Given an access key, it goes as that key —
  * with its rights, so the tools are the ones an app holding it sees — and
- * says when the key was last used.
+ * says when the key was last used. It is asked for only with AI on.
  */
 export async function checkAiConnection(
   event: H3Event,
@@ -23,9 +23,7 @@ export async function checkAiConnection(
     : undefined;
   if (tokenUuid && !key) throw new Error('No such access key');
   const endpoint = siteUrl(event, '/api/mcp');
-  const steps: AiCheckStep[] = [];
-  const enabled = THEI_SERVER.config.mcp.enabled;
-  steps.push({ id: 'enabled', status: enabled ? 'ok' : 'fail' });
+  const steps: AiCheckStep[] = [{ id: 'enabled', status: 'ok' }];
 
   const context = {
     event,
@@ -102,32 +100,30 @@ export async function checkAiConnection(
 
   // From outside, as a client reaches it: an answer asking for a token
   // proves the address, the proxy and the switch are all right.
-  if (!enabled) steps.push({ id: 'public', status: 'skip' });
-  else
-    try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: '{}',
-        signal: AbortSignal.timeout(5000),
-      });
-      steps.push(
-        response.status === 401 && response.headers.get('www-authenticate')
-          ? { id: 'public', status: 'ok' }
-          : { id: 'public', status: 'fail', data: { status: response.status } },
-      );
-    } catch (error) {
-      // A server often cannot reach its own public address from inside;
-      // that alone says nothing about clients outside.
-      steps.push({
-        id: 'public',
-        status: 'warn',
-        data: { error: error instanceof Error ? error.message : String(error) },
-      });
-    }
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+      signal: AbortSignal.timeout(5000),
+    });
+    steps.push(
+      response.status === 401 && response.headers.get('www-authenticate')
+        ? { id: 'public', status: 'ok' }
+        : { id: 'public', status: 'fail', data: { status: response.status } },
+    );
+  } catch (error) {
+    // A server often cannot reach its own public address from inside;
+    // that alone says nothing about clients outside.
+    steps.push({
+      id: 'public',
+      status: 'warn',
+      data: { error: error instanceof Error ? error.message : String(error) },
+    });
+  }
 
   const url = new URL(endpoint);
-  const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  const local = LOOPBACK_HOSTS.has(url.hostname);
   steps.push({
     id: 'https',
     status: url.protocol === 'https:' ? 'ok' : local ? 'skip' : 'warn',
@@ -136,8 +132,7 @@ export async function checkAiConnection(
   // Signing in, found where an app looks for it: at the host's root, with
   // the site's path after it — which a site in a subfolder needs its proxy
   // to send on.
-  if (!oauthAvailable(event))
-    steps.push({ id: 'signin', status: enabled ? 'warn' : 'skip' });
+  if (!oauthAvailable(event)) steps.push({ id: 'signin', status: 'warn' });
   else {
     const issuer = new URL(`${oauthIssuer(event)}/`);
     const where = `${issuer.origin}/.well-known/oauth-authorization-server${issuer.pathname.replace(/\/$/, '')}`;

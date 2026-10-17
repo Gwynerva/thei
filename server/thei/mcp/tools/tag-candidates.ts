@@ -141,7 +141,6 @@ export function registerTagCandidatesTool(
           }),
         );
         return toolResult(
-          { candidates },
           candidates.length
             ? candidates
                 .map(

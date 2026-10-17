@@ -66,6 +66,12 @@ type Callback = (
   ...args: unknown[]
 ) => CallToolResult | Promise<CallToolResult>;
 
+/**
+ * Tools only an app has a use for: an address it fetches itself. Thei's own
+ * model, working in a session, has no means to, and is not offered them.
+ */
+const APP_ONLY_TOOLS = new Set(['download_file']);
+
 /** The tools a context may call, ready to be called in the process. */
 export function directTools(context: McpCallContext): DirectTool[] {
   const tools: DirectTool[] = [];
@@ -79,6 +85,7 @@ export function directTools(context: McpCallContext): DirectTool[] {
       },
       callback: Callback,
     ) {
+      if (context.session && APP_ONLY_TOOLS.has(name)) return;
       const schema = config.inputSchema;
       const { $schema: _schema, ...json } = schema
         ? (z.toJSONSchema(schema, { io: 'input' }) as Record<string, unknown>)

@@ -17,5 +17,5 @@ export default defineEventHandler(async (event) => {
     const form = await readForm(event);
     if (form) revokeKey(form);
   }
-  return oauthAnswer(event, 200, {});
+  return oauthAnswer(event, { status: 200, body: {} });
 });

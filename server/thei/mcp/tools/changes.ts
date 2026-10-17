@@ -7,14 +7,19 @@ import { changesBetween, CHANGE_KINDS } from '../../ai/templates/changes';
 
 /** Changes one call lists; the rest come with offset. */
 const PAGE = 100;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-function moment(value: string, name: string): number {
+/**
+ * A moment named by a day or by itself. A day as the end of a stretch means
+ * the whole of it, to its last moment; as its start, from its first.
+ */
+function moment(value: string, name: string, end = false): number {
   const at = Date.parse(value);
   if (Number.isNaN(at))
     throw new McpToolError(
       `${name} is a day (YYYY-MM-DD) or a moment (ISO 8601).`,
     );
-  return at;
+  return end && /^\d{4}-\d{2}-\d{2}$/.test(value.trim()) ? at + DAY_MS - 1 : at;
 }
 
 export function registerChangesTool(
@@ -48,7 +53,7 @@ export function registerChangesTool(
     ({ from, to, kinds, offset }) =>
       guardTool(() => {
         const fromAt = moment(from, 'from');
-        const toAt = to === undefined ? undefined : moment(to, 'to');
+        const toAt = to === undefined ? undefined : moment(to, 'to', true);
         const changes = changesBetween({
           from: fromAt,
           to: toAt,
@@ -61,7 +66,6 @@ export function registerChangesTool(
           return `- ${change.ref} — ${change.date ?? change.title} — changed ${day}`;
         });
         return toolResult(
-          {},
           [
             `# Changed from ${new Date(fromAt).toISOString()} to ${toAt === undefined ? 'now' : new Date(toAt).toISOString()} — ${changes.length}`,
             '',

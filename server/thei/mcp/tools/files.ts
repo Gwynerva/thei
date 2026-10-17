@@ -47,16 +47,16 @@ function jobResult(
   job: FileJob,
   done: (file: NonNullable<FileJob['file']>) => string,
 ) {
-  if (job.status === 'done' && job.file)
-    return toolResult({ ...job.file, job: job.job }, done(job.file));
+  if (job.status === 'done' && job.file) return toolResult(done(job.file));
   if (job.status === 'failed')
-    throw new McpToolError(`${job.what}: ${job.error ?? 'it failed'}.`);
+    throw new McpToolError(
+      `${job.what}: ${(job.error ?? 'it failed').replace(/\.$/, '')}.`,
+    );
   if (job.status === 'cancelled')
     throw new McpToolError(
       `${job.what}: cancelled — the owner archived the session, or turned AI off. Nothing was kept.`,
     );
   return toolResult(
-    { job: job.job, status: 'running' },
     `${job.what} is still on its way. Ask file_status with job ${job.job} in a minute; nothing else waits for it.`,
   );
 }
@@ -103,7 +103,6 @@ export function registerFileTools(server: McpServer, context: McpCallContext) {
         );
         const url = siteUrl(context.event, `/api/mcp/upload/${ticket}`);
         return toolResult(
-          { url, method: 'PUT', expiresAt },
           `PUT the bytes of ${name} to ${url} before ${new Date(expiresAt).toISOString()}, e.g.\ncurl --fail --upload-file '${name}' '${url}'\nThe answer is the new file id.`,
         );
       }),

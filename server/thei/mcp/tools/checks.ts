@@ -109,10 +109,9 @@ export function registerCheckTools(server: McpServer, context: McpCallContext) {
         );
         if (!given.length)
           return toolResult(
-            {},
             'Nothing of that is due: the check has looked at all of it as it reads now.',
           );
-        return toolResult({}, source.brief(given));
+        return toolResult(source.brief(given));
       }),
   );
 }

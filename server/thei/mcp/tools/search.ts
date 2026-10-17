@@ -128,7 +128,6 @@ export function registerSearchTool(server: McpServer, context: McpCallContext) {
         const next =
           start + page.length < found.length ? start + page.length : null;
         return toolResult(
-          { results },
           results.length
             ? [
                 `${found.length} found; showing ${start + 1}–${start + page.length}${next !== null ? ` (next offset: ${next})` : ''}`,
@@ -137,7 +136,9 @@ export function registerSearchTool(server: McpServer, context: McpCallContext) {
                     `- ${result.ref} — ${result.title}${'when' in result ? ` (${result.when})` : ''}${result.access && result.access !== 'public' ? ` [${result.access}]` : ''}\n  ${result.excerpt}${result.keywords.length ? `\n  keywords: ${result.keywords.join(', ')}` : ''}`,
                 ),
               ].join('\n')
-            : 'Nothing found.',
+            : found.length
+              ? `The offset ${start} is past the end: ${found.length} found.`
+              : 'Nothing found.',
         );
       }),
   );

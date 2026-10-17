@@ -1,4 +1,4 @@
-import { and, count, gt, isNull } from 'drizzle-orm';
+import { and, desc, eq, gt, isNull } from 'drizzle-orm';
 import type { H3Event } from 'h3';
 import {
   API_TOKEN_SCOPES,
@@ -24,13 +24,15 @@ import { redirectUriMatches } from './redirect-uri';
  * told to the app, at its address, as OAuth says.
  */
 
-/** Requests waiting for the owner at once, at most. */
+/** Requests waiting for the owner at once, at most: past it the oldest goes. */
 const PENDING_MAX = 50;
 const STATE_MAX = 2048;
 const CODE_CHALLENGE = /^[A-Za-z0-9_-]{43}$/;
 
-export type AuthorizeOutcome =
+type AuthorizeOutcome =
   | { type: 'refused'; reason: OAuthRefusal }
+  /** Too many requests from the address: answered by the site, not the app. */
+  | { type: 'busy' }
   | { type: 'redirect'; url: string }
   | { type: 'consent'; requestId: string };
 
@@ -81,6 +83,9 @@ export async function startAuthorization(
   // A parameter given twice is a request nothing can trust (RFC 6749, 3.1).
   if (Object.values(query).some(Array.isArray))
     return { type: 'refused', reason: 'request' };
+  // Counted before the app is looked up: one not known yet is read from the
+  // address it names, a request out of the site that anyone may ask for.
+  if (!authorizeLimit.take(ip)) return { type: 'busy' };
 
   let client;
   try {
@@ -133,19 +138,24 @@ export async function startAuthorization(
 
   const { db, schema } = THEI_SERVER.useDb();
   const now = Date.now();
-  const pending =
-    db
-      .select({ n: count() })
-      .from(schema.oauthAuthorizations)
-      .where(
-        and(
-          isNull(schema.oauthAuthorizations.codeHash),
-          gt(schema.oauthAuthorizations.expiresAt, now),
-        ),
-      )
-      .get()?.n ?? 0;
-  if (pending >= PENDING_MAX || !authorizeLimit.take(ip, now))
-    return fail('temporarily_unavailable', 'Too many requests; try later.');
+  // A request no one answers makes room for a new one rather than turning
+  // it away: a few addresses asking without end must not close signing in
+  // for every app, and the owner answers theirs within minutes.
+  const waiting = db
+    .select({ requestId: schema.oauthAuthorizations.requestId })
+    .from(schema.oauthAuthorizations)
+    .where(
+      and(
+        isNull(schema.oauthAuthorizations.codeHash),
+        gt(schema.oauthAuthorizations.expiresAt, now),
+      ),
+    )
+    .orderBy(desc(schema.oauthAuthorizations.createdAt))
+    .all();
+  for (const row of waiting.slice(PENDING_MAX - 1))
+    db.delete(schema.oauthAuthorizations)
+      .where(eq(schema.oauthAuthorizations.requestId, row.requestId))
+      .run();
 
   const requestId = createAccessToken();
   db.insert(schema.oauthAuthorizations)

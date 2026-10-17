@@ -3,6 +3,7 @@ import type { AssetUploadResponse } from '#layers/thei/shared/api/asset';
 import type { ApiTokenPrincipal } from '../api-tokens';
 import { refuse as fail } from '../entity-patch/text';
 import { describeFile } from './files';
+import { isRefusal, logToolFailure } from './result';
 
 /**
  * Work on files that may outlast one call. A download or a video's
@@ -14,6 +15,7 @@ import { describeFile } from './files';
  * places, and no action waiting holds, is let go by the library's own sweep.
  * A job is cancelled with its session — archived by the owner — and with AI
  * turned off: its download or encoding stops, and what it made is not kept.
+ * One still running after a few hours is stuck, and is stopped as failed.
  */
 
 /** How long a call waits for its file before handing out the job. */
@@ -22,6 +24,12 @@ const WAIT_MS = 25_000;
 const KEEP_MS = 60 * 60 * 1000;
 /** Files one token may have on their way at once. */
 const RUNNING_PER_TOKEN = 2;
+/**
+ * How long a job may run: no download or encoding of a file within the
+ * upload limit takes hours, as the admin's own jobs go, and a hung one would
+ * hold one of its token's places for good.
+ */
+const MAX_RUN_MS = 4 * 60 * 60 * 1000;
 
 export interface FileJob {
   job: string;
@@ -74,6 +82,11 @@ export async function runFileJob(
   const stopper = new AbortController();
   jobs.set(job.job, job);
   stoppers.set(job.job, stopper);
+  const limit = setTimeout(
+    () => stop(job, 'failed', 'it ran for hours and was stopped'),
+    MAX_RUN_MS,
+  );
+  limit.unref();
   const done = work(stopper.signal)
     .then((file) => {
       if (job.status !== 'running') return;
@@ -83,9 +96,15 @@ export async function runFileJob(
     .catch((error: unknown) => {
       if (job.status !== 'running') return;
       job.status = 'failed';
-      job.error = error instanceof Error ? error.message : String(error);
+      // A refusal says what to do; anything else is logged, and the app
+      // told only where to find it: an encoder's output names paths of
+      // the server.
+      job.error = isRefusal(error)
+        ? error.message
+        : `it could not be finished (error ${logToolFailure(error)})`;
     })
     .finally(() => {
+      clearTimeout(limit);
       stoppers.delete(job.job);
       job.finishedAt ??= Date.now();
     });
@@ -103,10 +122,12 @@ export function fileJob(job: string, tokenUuid: string): FileJob | undefined {
   return found?.tokenUuid === tokenUuid ? found : undefined;
 }
 
-function cancel(job: FileJob, now = Date.now()) {
+/** Stops a job still running: its work aborts, and nothing it makes is kept. */
+function stop(job: FileJob, status: 'cancelled' | 'failed', error?: string) {
   if (job.status !== 'running') return;
-  job.status = 'cancelled';
-  job.finishedAt = now;
+  job.status = status;
+  if (error) job.error = error;
+  job.finishedAt = Date.now();
   stoppers.get(job.job)?.abort();
 }
 
@@ -115,7 +136,7 @@ export function cancelSessionFileJobs(sessionUuid: string): number {
   let count = 0;
   for (const job of jobs.values())
     if (job.sessionUuid === sessionUuid && job.status === 'running') {
-      cancel(job);
+      stop(job, 'cancelled');
       count++;
     }
   return count;
@@ -123,5 +144,5 @@ export function cancelSessionFileJobs(sessionUuid: string): number {
 
 /** Cancels every file still on its way: AI was turned off. */
 export function cancelFileJobs() {
-  for (const job of jobs.values()) cancel(job);
+  for (const job of jobs.values()) stop(job, 'cancelled');
 }

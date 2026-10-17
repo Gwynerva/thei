@@ -1,4 +1,17 @@
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { createMcpHandler } from '@modelcontextprotocol/server';
+import {
+  createApp,
+  createError,
+  defineEventHandler,
+  getRequestHeader,
+  sendWebResponse,
+  setResponseHeader,
+  setResponseStatus,
+  toNodeListener,
+  toWebRequest,
+} from 'h3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ProjectEditData } from '../../shared/admin/project';
 import type { ApiTokenScope } from '../../shared/api-token';
@@ -11,7 +24,15 @@ import {
 import { readEventEdit, saveEventEdit } from '../../server/thei/events/edit';
 import type { EventEditData } from '../../shared/event';
 import { findAction } from '../../server/thei/ai/actions/rows';
-import { settleActions } from '../../server/thei/ai/actions/apply';
+import {
+  applyActions,
+  settleActions,
+} from '../../server/thei/ai/actions/apply';
+import {
+  createApiToken,
+  spendApiTokenBudget,
+} from '../../server/thei/api-tokens';
+import { directTools } from '../../server/thei/mcp/registry';
 import { rejectActions } from '../../server/thei/ai/actions/decide';
 import { undoState } from '../../server/thei/ai/actions/undo';
 import { saveTerm } from '../../server/thei/ai/terms';
@@ -289,7 +310,7 @@ describe('the MCP endpoint', () => {
           target: 'diary-entry:2026-10-13',
           other: `project:${PROJECT}`,
           relation: 'depends-on',
-          note: { type: 'shared', text: 'Boss day' },
+          note: 'Boss day',
           reason: 'The boss was finished that day',
           whyNotInlineLink: 'The day is a stage of the work',
         },
@@ -362,6 +383,104 @@ describe('the MCP endpoint', () => {
       withoutRelations: true,
     });
     expect(result.content[0]!.text).toContain('1 in all');
+  });
+
+  it('says when an offset goes past the end, and how many there are', async () => {
+    const listed = await tool(handlerFor(['read']), 'list_entities', {
+      kind: 'diary-entry',
+      offset: 5,
+    });
+    expect(listed.content[0]!.text).toBe(
+      'The offset 5 is past the end: 1 in all.',
+    );
+    const found = await tool(handlerFor(['read']), 'search_archive', {
+      query: 'teleported',
+      offset: 10,
+    });
+    expect(found.content[0]!.text).toBe(
+      'The offset 10 is past the end: 2 found.',
+    );
+  });
+
+  it('takes a day as the end of a stretch to the end of that day', async () => {
+    // The diary entry of the fixture changed a few moments into 1970.
+    const result = await tool(handlerFor(['read']), 'changes_since', {
+      from: '1970-01-01',
+      to: '1970-01-01',
+    });
+    expect(result.content[0]!.text).toContain('diary-entry:2026-10-13');
+    expect(result.content[0]!.text).toContain('to 1970-01-01T23:59:59.999Z');
+  });
+
+  it('offers the site’s own model no address it could not fetch', () => {
+    const names = (session: boolean) =>
+      directTools({
+        event: {
+          node: { req: { headers: { host: 'example.test' } } },
+          context: {},
+        } as never,
+        principal: {
+          tokenUuid: session ? 'thei' : tokenUuid,
+          label: 'T',
+          scopes: ['read'],
+        },
+        ...(session
+          ? {
+              session: {
+                sessionUuid: 'as-1',
+                messageUuid: 'am-1',
+                live: () => true,
+                signal: new AbortController().signal,
+              },
+            }
+          : {}),
+      }).map((tool) => tool.name);
+    expect(names(false)).toContain('download_file');
+    expect(names(true)).not.toContain('download_file');
+    expect(names(true)).toContain('look_at_file');
+  });
+
+  it('answers a body that is no JSON as JSON-RPC says, at once', async () => {
+    Object.assign(globalThis, {
+      defineEventHandler,
+      createError,
+      getRequestHeader,
+      sendWebResponse,
+      setResponseHeader,
+      setResponseStatus,
+      toWebRequest,
+    });
+    const route = (await import('../../server/api/mcp/index')).default;
+    const server = createServer(
+      toNodeListener(createApp().use('/api/mcp', route)),
+    );
+    await new Promise<void>((resolve) =>
+      server.listen(0, '127.0.0.1', resolve),
+    );
+    try {
+      const { token } = await createApiToken('Laptop', 'reader');
+      const { port } = server.address() as AddressInfo;
+      for (const body of ['', '{"jsonrpc":']) {
+        const response = await fetch(`http://127.0.0.1:${port}/api/mcp`, {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${token}`,
+            'content-type': 'application/json',
+            accept: 'application/json, text/event-stream',
+          },
+          body,
+          signal: AbortSignal.timeout(5000),
+        });
+        expect(response.status).toBe(400);
+        expect(await response.json()).toMatchObject({
+          jsonrpc: '2.0',
+          id: null,
+          error: { code: -32700 },
+        });
+      }
+    } finally {
+      server.close();
+    }
   });
 });
 
@@ -1349,5 +1468,34 @@ describe('undoing over MCP', () => {
       { kind: 'delete', target: 'diary-entry:2026-10-13', reason: 'Asked to' },
     ]);
     expect(await undo(deletion!)).toMatch(/final/);
+  });
+
+  it('takes back only what the key applied, in a session still open', async () => {
+    const [proposed] = proposedIn(
+      await propose(editor(), [summaryOf('By the owner')]),
+    );
+    await applyActions({ actionUuids: [proposed!], by: 'owner' });
+    await tick();
+    expect(await undo(proposed!)).toMatch(/owner’s to undo/);
+    expect(
+      one('SELECT summary FROM projects WHERE projectUuid = ?', PROJECT)
+        ?.summary,
+    ).toBe('By the owner');
+
+    const [own] = await applied([summaryOf('By the app')]);
+    context.rawDb
+      .prepare(
+        'UPDATE `ai-sessions` SET closedAt = 2, archivedAt = 2 WHERE sessionUuid = (SELECT sessionUuid FROM `ai-actions` WHERE actionUuid = ?)',
+      )
+      .run(own);
+    expect(await undo(own!)).toMatch(/archived the session/);
+    expect(findAction(own!)?.state).toBe('applied');
+  });
+
+  it('spends a write on every undo', async () => {
+    const [actionUuid] = await applied([summaryOf('Spent')]);
+    while (!spendApiTokenBudget(tokenUuid, 'write'));
+    expect(await undo(actionUuid!)).toMatch(/Too many changes/);
+    expect(findAction(actionUuid!)?.state).toBe('applied');
   });
 });

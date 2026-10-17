@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { and, count, eq, isNull, lt, or } from 'drizzle-orm';
+import { and, desc, eq, isNull, lt, ne, or } from 'drizzle-orm';
 import { fetchGuarded } from '../external-links/fetch';
 import { EntityPrefix } from '../entity-id';
+import { oauthError, type OAuthAnswer } from './http';
+import { documentLimit } from './limits';
 import { REDIRECT_URI_MAX, redirectUriAllowed } from './redirect-uri';
 
 /**
@@ -33,8 +35,8 @@ const DOCUMENT_MAX_BYTES = 5 * 1024;
 const DOCUMENT_DEADLINE_MS = 5000;
 const CACHE_MIN_MS = 5 * 60 * 1000;
 const CACHE_MAX_MS = 24 * 60 * 60 * 1000;
-/** Apps that registered themselves and never connected, at most. */
-export const UNUSED_REGISTRATIONS_MAX = 50;
+/** Apps of each kind made known and never connected, at most. */
+const UNUSED_MAX = 50;
 
 /** Characters that are not seen: controls, and those that turn text around. */
 function invisible(code: number): boolean {
@@ -48,7 +50,7 @@ function invisible(code: number): boolean {
 }
 
 /** What an app calls itself, made safe to show: one short line. */
-export function cleanClientName(value: unknown, fallback: string): string {
+function cleanClientName(value: unknown, fallback: string): string {
   const name =
     typeof value === 'string'
       ? [...value]
@@ -76,7 +78,7 @@ function cleanClientUri(value: unknown): string | null {
  * Whether an id is the address of a description: HTTPS, a path of its own,
  * no query, fragment or credentials, written as the address itself is.
  */
-export function isClientDocumentId(value: string): boolean {
+function isClientDocumentId(value: string): boolean {
   if (value.length > 2048 || !value.startsWith('https://')) return false;
   try {
     const url = new URL(value);
@@ -90,6 +92,21 @@ export function isClientDocumentId(value: string): boolean {
     );
   } catch {
     return false;
+  }
+}
+
+/**
+ * The host an app is shown to the owner by: of the address of its
+ * description, or of the home page it named — none when it named none.
+ */
+export function clientHost(
+  client: Pick<OAuthClient, 'clientId' | 'kind' | 'uri'>,
+): string {
+  const address = client.kind === 'cimd' ? client.clientId : client.uri;
+  try {
+    return address ? new URL(address).hostname : '';
+  } catch {
+    return '';
   }
 }
 
@@ -122,6 +139,8 @@ const reading = new Map<string, Promise<OAuthClient>>();
 function readClientDocument(clientId: string): Promise<OAuthClient> {
   const pending = reading.get(clientId);
   if (pending) return pending;
+  if (!documentLimit.take('all'))
+    return Promise.reject(new OAuthClientError('client_document'));
   const promise = fetchClientDocument(clientId).finally(() =>
     reading.delete(clientId),
   );
@@ -177,6 +196,7 @@ async function fetchClientDocument(clientId: string): Promise<OAuthClient> {
     fetchedAt: now,
     staleAt: now + lifetime,
   };
+  makeRoomForUnused('cimd', clientId);
   db.insert(schema.oauthClients)
     .values({ ...values, createdAt: now })
     .onConflictDoUpdate({ target: schema.oauthClients.clientId, set: values })
@@ -214,12 +234,34 @@ export function touchClient(clientId: string, now = Date.now()) {
     .run();
 }
 
-export type RegistrationResult =
-  | { ok: true; body: Record<string, unknown> }
-  | { ok: false; status: number; error: string; description: string };
-
 function refuse(description: string, error = 'invalid_client_metadata') {
-  return { ok: false as const, status: 400, error, description };
+  return oauthError(error, description);
+}
+
+/**
+ * Makes room for one more app of a kind that never connected, besides
+ * `clientId`: the oldest past the number go. Letting go rather than
+ * refusing keeps strangers making apps known from closing signing in for
+ * every app — a real one connects within minutes of it.
+ */
+function makeRoomForUnused(kind: OAuthClient['kind'], clientId: string) {
+  const { db, schema } = THEI_SERVER.useDb();
+  const unused = db
+    .select({ clientId: schema.oauthClients.clientId })
+    .from(schema.oauthClients)
+    .where(
+      and(
+        eq(schema.oauthClients.kind, kind),
+        isNull(schema.oauthClients.lastUsedAt),
+        ne(schema.oauthClients.clientId, clientId),
+      ),
+    )
+    .orderBy(desc(schema.oauthClients.createdAt))
+    .all();
+  for (const row of unused.slice(UNUSED_MAX - 1))
+    db.delete(schema.oauthClients)
+      .where(eq(schema.oauthClients.clientId, row.clientId))
+      .run();
 }
 
 /**
@@ -228,9 +270,7 @@ function refuse(description: string, error = 'invalid_client_metadata') {
  * registration is not managed afterwards: an app that needs another
  * registers again.
  */
-export async function registerClient(
-  body: unknown,
-): Promise<RegistrationResult> {
+export async function registerClient(body: unknown): Promise<OAuthAnswer> {
   if (!body || typeof body !== 'object' || Array.isArray(body))
     return refuse('The body is a JSON object.');
   const metadata = body as Record<string, unknown>;
@@ -266,30 +306,11 @@ export async function registerClient(
   )
     return refuse('response_types: code only.');
 
-  const { db, schema } = THEI_SERVER.useDb();
-  // Registering costs nothing to an app: those that never connected are
-  // held to a number, so registering cannot fill the database.
-  const unused =
-    db
-      .select({ n: count() })
-      .from(schema.oauthClients)
-      .where(
-        and(
-          eq(schema.oauthClients.kind, 'dcr'),
-          isNull(schema.oauthClients.lastUsedAt),
-        ),
-      )
-      .get()?.n ?? 0;
-  if (unused >= UNUSED_REGISTRATIONS_MAX)
-    return {
-      ok: false,
-      status: 429,
-      error: 'temporarily_unavailable',
-      description: 'Too many apps registered and never connected.',
-    };
-
   const now = Date.now();
   const clientId = `${EntityPrefix.OAuthClient}-${randomUUID()}`;
+  // Registering costs an app nothing: those that never connected are held
+  // to a number, so registering cannot fill the database.
+  makeRoomForUnused('dcr', clientId);
   const host = (() => {
     try {
       return new URL(redirectUris[0] as string).hostname || 'app';
@@ -304,11 +325,12 @@ export async function registerClient(
     uri: cleanClientUri(metadata.client_uri),
     redirectUris: redirectUris as string[],
   };
+  const { db, schema } = THEI_SERVER.useDb();
   db.insert(schema.oauthClients)
     .values({ ...client, createdAt: now })
     .run();
   return {
-    ok: true,
+    status: 201,
     body: {
       client_id: clientId,
       client_id_issued_at: Math.floor(now / 1000),

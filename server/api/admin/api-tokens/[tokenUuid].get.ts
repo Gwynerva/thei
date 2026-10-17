@@ -1,5 +1,5 @@
 import type { ApiTokenActivityResponse } from '#layers/thei/shared/api-token';
-import { listApiTokens } from '../../../thei/api-tokens';
+import { apiTokenWaiting, listApiTokens } from '../../../thei/api-tokens';
 import { listSessions } from '../../../thei/ai/sessions/view';
 
 /** How much of a key's past its window shows. */
@@ -18,6 +18,6 @@ export default defineEventHandler((event): ApiTokenActivityResponse => {
   return {
     item,
     sessions: sessions.slice(0, RECENT),
-    waiting: sessions.reduce((sum, session) => sum + session.waiting, 0),
+    waiting: apiTokenWaiting(tokenUuid),
   };
 });

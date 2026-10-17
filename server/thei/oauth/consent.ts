@@ -15,6 +15,7 @@ import { createAccessToken, hashAccessToken } from '../access-links/token';
 import { cleanApiTokenLabel } from '../api-tokens';
 import { oauthIssuer } from './base';
 import { answerUrl } from './authorize';
+import { clientHost } from './clients';
 import { describeRedirect } from './redirect-uri';
 
 /**
@@ -58,12 +59,7 @@ export function readRequest(requestId: string): OAuthRequestView | undefined {
     .where(eq(schema.oauthClients.clientId, row.clientId))
     .get();
   if (!client) return undefined;
-  const host =
-    client.kind === 'cimd'
-      ? new URL(client.clientId).hostname
-      : client.uri
-        ? new URL(client.uri).hostname
-        : '';
+  const host = clientHost(client);
   return {
     requestId,
     client: {
@@ -85,7 +81,7 @@ export function readRequest(requestId: string): OAuthRequestView | undefined {
   };
 }
 
-export type DecisionOutcome =
+type DecisionOutcome =
   { type: 'redirect'; url: string } | { type: 'gone' } | { type: 'limit' };
 
 /**

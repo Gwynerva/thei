@@ -83,7 +83,6 @@ export function registerSessionTools(
           spendWrite(context);
           const sessionUuid = openAppSession(context, title);
           return toolResult(
-            {},
             `Opened ${sessionUuid}. Name it as session in propose and session_actions.`,
           );
         }),
@@ -106,7 +105,7 @@ export function registerSessionTools(
     ({ session }) =>
       guardTool(() => {
         const sessionUuid = session ?? latestAppSession(context);
-        if (!sessionUuid) return toolResult({}, 'No session yet.');
+        if (!sessionUuid) return toolResult('No session yet.');
         if (!readableSession(context, sessionUuid))
           throw new McpToolError(
             `There is no session ${sessionUuid} of this key.`,
@@ -144,7 +143,7 @@ export function registerSessionTools(
               ])
             : ['_(nothing proposed yet)_']),
         ];
-        return toolResult({}, lines.join('\n'));
+        return toolResult(lines.join('\n'));
       }),
   );
 
@@ -164,7 +163,6 @@ export function registerSessionTools(
       guardTool(() => {
         if (!kinds?.length)
           return toolResult(
-            {},
             [
               'Kinds of action — name the ones you need in kinds to read them in full:',
               '',
@@ -201,7 +199,7 @@ export function registerSessionTools(
         lines.push(
           'Every action also takes target (a ref), reason (why, for the owner), certainty (sure: the owner can take it at a glance; unsure: theirs to judge, and the reason says what to weigh) and supersedes (an action of the session this one is a new version of).',
         );
-        return toolResult({}, lines.join('\n'));
+        return toolResult(lines.join('\n'));
       }),
   );
 
@@ -293,7 +291,7 @@ export function registerSessionTools(
           );
         }
         return {
-          ...toolResult({}, lines.join('\n')),
+          ...toolResult(lines.join('\n')),
           _meta: { [REFUSED_META]: results.length - proposed.length },
         };
       }),
@@ -305,9 +303,10 @@ export function registerSessionTools(
       {
         title: 'Undo an action',
         description:
-          'Takes back an action applied in a session of yours, while nothing ' +
-          'has changed since what it changed: fields put back, a made entity ' +
-          'taken back, a text given its earlier wording. A deletion is final.',
+          'Takes back an action you applied in a session of yours, while ' +
+          'nothing has changed since what it changed: fields put back, a ' +
+          'made entity taken back, a text given its earlier wording. A ' +
+          'deletion is final; what the owner applied is the owner’s to undo.',
         inputSchema: z.object({ action: z.string() }),
         annotations: CHANGES,
       },
@@ -324,10 +323,21 @@ export function registerSessionTools(
               `There is no action ${action} in a session of this key.`,
             );
           requireScope(context, 'edit', 'undo actions');
+          // An archived session is only read until the owner brings it back.
+          if (session.closedAt)
+            throw new McpToolError(
+              `The owner archived the session ${session.sessionUuid}: nothing in it changes until the owner brings it back.`,
+            );
+          if (row.appliedBy !== 'app')
+            throw new McpToolError(
+              row.appliedBy === 'owner'
+                ? `The owner applied ${action}: it is the owner’s to undo.`
+                : `${action} is not applied; there is nothing to undo.`,
+            );
+          spendWrite(context);
           const entity = await undoActionHeld(action);
           markContentWriteRequest(context.event);
           return toolResult(
-            {},
             `Undone${entity ? `: ${targetRef(entity)} reads as before` : ''}.`,
           );
         }),

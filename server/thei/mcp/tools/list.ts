@@ -73,8 +73,13 @@ export function registerListTool(server: McpServer, context: McpCallContext) {
         const page = all.slice(offset, offset + (input.limit ?? 50));
         const next =
           offset + page.length < all.length ? offset + page.length : null;
+        if (!page.length)
+          return toolResult(
+            all.length
+              ? `The offset ${offset} is past the end: ${all.length} in all.`
+              : '0 in all.',
+          );
         return toolResult(
-          {},
           [
             `${all.length} in all; showing ${offset + 1}–${offset + page.length}${next !== null ? ` (next offset: ${next})` : ''}`,
             ...page.map((document) => {

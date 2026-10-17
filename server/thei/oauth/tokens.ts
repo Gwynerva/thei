@@ -15,6 +15,7 @@ import { createAccessToken, hashAccessToken } from '../access-links/token';
 import { EntityPrefix } from '../entity-id';
 import { requestedScopes, resourceAllowed } from './authorize';
 import { touchClient } from './clients';
+import { oauthError, type OAuthAnswer } from './http';
 
 /**
  * Where an app turns a code into a connection, and renews it. A connection
@@ -22,15 +23,6 @@ import { touchClient } from './clients';
  * rights and its sessions stay its own; only its two keys
  * change with every renewal, and the old access key dies at once.
  */
-
-export interface TokenAnswer {
-  status: number;
-  body: Record<string, unknown>;
-}
-
-function oauthError(error: string, description: string, status = 400) {
-  return { status, body: { error, error_description: description } };
-}
 
 /** What the app keeps: a key for an hour, and the key that renews it. */
 function issueKeys(now: number) {
@@ -51,7 +43,7 @@ function issueKeys(now: number) {
 function keysAnswer(
   keys: { access: string; refresh: string },
   scopes: ApiTokenScope[],
-): TokenAnswer {
+): OAuthAnswer {
   return {
     status: 200,
     body: {
@@ -81,7 +73,7 @@ export function exchangeCode(
   params: Record<string, unknown>,
   expectedResource: string,
   now = Date.now(),
-): TokenAnswer {
+): OAuthAnswer {
   if (typeof params.code !== 'string' || !params.code)
     return oauthError('invalid_request', 'code is missing.');
   const { db, schema } = THEI_SERVER.useDb();
@@ -162,7 +154,7 @@ export function renewKeys(
   params: Record<string, unknown>,
   expectedResource: string,
   now = Date.now(),
-): TokenAnswer {
+): OAuthAnswer {
   if (typeof params.refresh_token !== 'string' || !params.refresh_token)
     return oauthError('invalid_request', 'refresh_token is missing.');
   const hash = hashAccessToken(params.refresh_token);

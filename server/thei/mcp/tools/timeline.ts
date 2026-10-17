@@ -128,7 +128,6 @@ export function registerTimelineTool(
           ]),
         ];
         return toolResult(
-          { from, to, ongoing, days: sorted },
           text.length ? text.join('\n') : 'Nothing on these days.',
         );
       }),

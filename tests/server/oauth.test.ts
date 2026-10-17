@@ -14,6 +14,10 @@ import { startAuthorization } from '../../server/thei/oauth/authorize';
 import { mcpResource, oauthAvailable } from '../../server/thei/oauth/base';
 import { registerClient, resolveClient } from '../../server/thei/oauth/clients';
 import { decideRequest, readRequest } from '../../server/thei/oauth/consent';
+import {
+  pruneOAuthLimits,
+  registerLimit,
+} from '../../server/thei/oauth/limits';
 import { sweepOAuth } from '../../server/thei/oauth/maintenance';
 import {
   authorizationServerMetadata,
@@ -60,6 +64,8 @@ beforeEach(async () => {
     useRuntimeConfig: () => ({ app: { baseURL } }),
   });
   vi.mocked(fetchGuarded).mockReset();
+  // Every test with the limits of an hour from now: none spent.
+  pruneOAuthLimits(Date.now() + 2 * 60 * 60 * 1000);
 });
 
 afterEach(async () => {
@@ -75,7 +81,7 @@ async function registered(redirectUris = [REDIRECT]) {
     client_name: 'Test App',
     redirect_uris: redirectUris,
   });
-  if (!result.ok) throw new Error(result.description);
+  if (result.status !== 201) throw new Error(JSON.stringify(result.body));
   return result.body.client_id as string;
 }
 
@@ -192,27 +198,45 @@ describe('an app registering itself', () => {
       'https://app.test/cb#fragment',
       'https://user:pass@app.test/cb',
     ])
-      expect((await registerClient({ redirect_uris: [uri] })).ok).toBe(false);
+      expect((await registerClient({ redirect_uris: [uri] })).status).toBe(400);
     for (const uri of [
       'https://app.test/cb',
       'http://localhost:33418/callback',
       'com.example.app:/oauth',
     ])
-      expect((await registerClient({ redirect_uris: [uri] })).ok).toBe(true);
+      expect((await registerClient({ redirect_uris: [uri] })).status).toBe(201);
     expect(
-      (
-        await registerClient({
-          redirect_uris: ['https://app.test/cb'],
-          token_endpoint_auth_method: 'client_secret_basic',
-        })
-      ).ok,
-    ).toBe(false);
+      await registerClient({
+        redirect_uris: ['https://app.test/cb'],
+        token_endpoint_auth_method: 'client_secret_basic',
+      }),
+    ).toMatchObject({
+      status: 400,
+      body: { error: 'invalid_client_metadata' },
+    });
   });
 
-  it('is held to a number while it never connects', async () => {
+  it('is held to a number while it never connects, the oldest let go', async () => {
+    const keys = await connected();
+    const first = await registered();
     for (let index = 0; index < 50; index++) await registered();
-    const result = await registerClient({ redirect_uris: [REDIRECT] });
-    expect(result).toMatchObject({ ok: false, status: 429 });
+    // A stranger registering without end closes the way for no one.
+    expect((await registerClient({ redirect_uris: [REDIRECT] })).status).toBe(
+      201,
+    );
+    const unused = context.rawDb
+      .prepare(
+        "SELECT clientId FROM `oauth-clients` WHERE kind = 'dcr' AND lastUsedAt IS NULL",
+      )
+      .all() as { clientId: string }[];
+    expect(unused).toHaveLength(50);
+    expect(unused.map((row) => row.clientId)).not.toContain(first);
+    // An app that connected is no stranger, however many come after.
+    expect(
+      context.rawDb
+        .prepare('SELECT clientId FROM `oauth-clients` WHERE clientId = ?')
+        .get(keys.clientId),
+    ).toBeTruthy();
   });
 });
 
@@ -281,6 +305,71 @@ describe('asking for a connection', () => {
       connections: 0,
       limitReached: false,
     });
+  });
+
+  it('counts a request before it reads the app from its address', async () => {
+    vi.mocked(fetchGuarded).mockResolvedValue({
+      ok: false,
+      status: 404,
+      headers: new Headers(),
+      url: '',
+      bytes: new Uint8Array(),
+    });
+    const ask = (index: number) =>
+      startAuthorization(
+        authorizeQuery(`https://app${index}.test/client.json`),
+        event,
+        'flood',
+      );
+    for (let index = 0; index < 30; index++)
+      expect(await ask(index)).toEqual({
+        type: 'refused',
+        reason: 'client_document',
+      });
+    expect(fetchGuarded).toHaveBeenCalledTimes(30);
+    // Past its allowance, an address makes the site read nothing more.
+    expect(await ask(30)).toEqual({ type: 'busy' });
+    expect(fetchGuarded).toHaveBeenCalledTimes(30);
+    expect(
+      (
+        await startAuthorization(
+          authorizeQuery(await registered()),
+          event,
+          'ip',
+        )
+      ).type,
+    ).toBe('consent');
+  });
+
+  it('makes room for a new request rather than turning it away', async () => {
+    const id = await registered();
+    const requests: string[] = [];
+    for (let index = 0; index <= 50; index++) {
+      const outcome = await startAuthorization(
+        authorizeQuery(id),
+        event,
+        `10.1.0.${index}`,
+      );
+      expect(outcome.type).toBe('consent');
+      requests.push((outcome as { requestId: string }).requestId);
+    }
+    expect(readRequest(requests[0]!)).toBeUndefined();
+    expect(readRequest(requests[50]!)).toBeDefined();
+    expect(
+      context.rawDb
+        .prepare('SELECT COUNT(*) AS n FROM `oauth-authorizations`')
+        .get(),
+    ).toEqual({ n: 50 });
+  });
+
+  it('counts only so many addresses, however many come', () => {
+    for (let index = 0; index < 10; index++) registerLimit.take('first');
+    expect(registerLimit.exceeded('first')).toBe(true);
+    for (let index = 0; index < 10_000; index++)
+      registerLimit.take(`address-${index}`);
+    // The window does not grow past its bound: the one counted longest ago
+    // is let go to make room.
+    expect(registerLimit.exceeded('first')).toBe(false);
   });
 
   it('tells the app when the owner declines', async () => {
@@ -470,6 +559,40 @@ describe('an app known by its own description', () => {
     await expect(resolveClient(secret)).rejects.toMatchObject({
       reason: 'client_document',
     });
+  });
+
+  it('is kept only so many times while it never connects', async () => {
+    const ids = Array.from(
+      { length: 51 },
+      (_, index) => `https://app.test/oauth/${index}.json`,
+    );
+    for (const id of ids) {
+      respond({
+        client_id: id,
+        client_name: 'Many',
+        redirect_uris: [REDIRECT],
+      });
+      await resolveClient(id);
+    }
+    const kept = (
+      context.rawDb
+        .prepare("SELECT clientId FROM `oauth-clients` WHERE kind = 'cimd'")
+        .all() as { clientId: string }[]
+    ).map((row) => row.clientId);
+    expect(kept).toHaveLength(50);
+    expect(kept).not.toContain(ids[0]);
+  });
+
+  it('is read only so many times an hour, whoever asks', async () => {
+    vi.mocked(fetchGuarded).mockRejectedValue(new Error('down'));
+    for (let index = 0; index < 100; index++)
+      await expect(
+        resolveClient(`https://app.test/oauth/down-${index}.json`),
+      ).rejects.toMatchObject({ reason: 'client_document' });
+    await expect(
+      resolveClient('https://app.test/oauth/one-more.json'),
+    ).rejects.toMatchObject({ reason: 'client_document' });
+    expect(fetchGuarded).toHaveBeenCalledTimes(100);
   });
 
   it('is shown as known by its address', async () => {
