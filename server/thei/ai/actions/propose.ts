@@ -8,6 +8,7 @@ import type { AiCertainty, AiEntityType } from '#layers/thei/shared/ai';
 import { EntityPrefix } from '../../entity-id';
 import { EntityPatchError, refuse as fail } from '../../entity-patch/text';
 import { findEntity } from '../../entity-kinds';
+import { lostLettersProblem } from '../../lost-letters';
 import { findTarget, targetRef, type ActionTarget } from './target';
 import {
   linkSessionEntities,
@@ -86,35 +87,13 @@ function zodProblem(error: {
     .join('; ');
 }
 
-/** What a decoder puts where it met bytes that are no letter of UTF-8. */
-const REPLACEMENT_CHARACTER = String.fromCodePoint(0xfffd);
-
-/**
- * Where a proposal holds the replacement character, as a path to the
- * string: an app sending text in another code page than UTF-8 loses every
- * letter outside ASCII to it, and the text would be kept so.
- */
-function brokenTextAt(value: unknown, path: string[] = []): string[] | null {
-  if (typeof value === 'string')
-    return value.includes(REPLACEMENT_CHARACTER) ? path : null;
-  if (!value || typeof value !== 'object') return null;
-  for (const [key, item] of Object.entries(value)) {
-    const found = brokenTextAt(item, [...path, key]);
-    if (found) return found;
-  }
-  return null;
-}
-
 async function check(
   proposal: ActionProposal,
   sessionUuid: string,
   sources: string[],
 ): Promise<Checked> {
-  const broken = brokenTextAt(proposal);
-  if (broken)
-    fail(
-      `${broken.join('.') || 'The action'} holds U+FFFD, the mark of letters lost to a wrong encoding: send the text again as UTF-8.`,
-    );
+  const lostLetters = lostLettersProblem(proposal);
+  if (lostLetters) fail(lostLetters);
   const def = actionDef(proposal.kind);
   const kind = def.kind;
   let target: ActionTarget | undefined;

@@ -4,7 +4,9 @@ import type {
   ToolAnnotations,
 } from '@modelcontextprotocol/server';
 import { z } from 'zod';
+import { lostLettersProblem } from '../lost-letters';
 import type { McpCallContext } from './context';
+import { toolError } from './result';
 import { mayEdit } from './scope';
 import { registerChangesTool } from './tools/changes';
 import { registerCheckTools } from './tools/checks';
@@ -27,8 +29,43 @@ import { registerTimelineTool } from './tools/timeline';
  * the same scopes, the same refusals, without a round of JSON-RPC between.
  */
 
+/**
+ * The server as tools register on it, with every call's arguments read
+ * first: text that lost its letters to an encoding on the way is sent back
+ * before any tool keeps it — a title, a digest, a memory, a proposal.
+ */
+function wholeTextOnly(server: McpServer): McpServer {
+  const registerTool = server.registerTool.bind(server) as (
+    name: string,
+    config: { inputSchema?: unknown },
+    callback: Callback,
+  ) => unknown;
+  return Object.assign(Object.create(server) as McpServer, {
+    registerTool(
+      name: string,
+      config: { inputSchema?: unknown },
+      callback: Callback,
+    ) {
+      return registerTool(
+        name,
+        config,
+        config.inputSchema
+          ? (args: unknown, ...rest: unknown[]) => {
+              const problem = lostLettersProblem(args);
+              return problem ? toolError(problem) : callback(args, ...rest);
+            }
+          : callback,
+      );
+    },
+  });
+}
+
 /** Registers every tool a context's scopes allow on `server`. */
-export function registerTheiTools(server: McpServer, context: McpCallContext) {
+export function registerTheiTools(
+  registerOn: McpServer,
+  context: McpCallContext,
+) {
+  const server = wholeTextOnly(registerOn);
   registerOverviewTool(server, context);
   registerSearchTool(server, context);
   registerListTool(server, context);

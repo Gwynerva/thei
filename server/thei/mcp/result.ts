@@ -27,7 +27,7 @@ export const FILES_META = 'thei/files';
  * A refusal the model can read and act on. It is a result, not a protocol
  * error, so the model sees why and can try something else.
  */
-function toolError(message: string): CallToolResult {
+export function toolError(message: string): CallToolResult {
   return { content: [{ type: 'text', text: message }], isError: true };
 }
 

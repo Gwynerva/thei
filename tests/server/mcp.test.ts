@@ -375,6 +375,16 @@ describe('the MCP endpoint', () => {
     expect(result.content[0]!.text).toContain('to 1970-01-01T23:59:59.999Z');
   });
 
+  it('sends back words that lost their letters on the way, before any tool', async () => {
+    // A client on another code page than UTF-8 turns every Cyrillic letter
+    // into U+FFFD; nothing of it is read, searched or kept.
+    const result = await tool(handlerFor(['read']), 'search_archive', {
+      query: String.fromCodePoint(0xfffd).repeat(4),
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]!.text).toMatch(/^query holds U\+FFFD.*UTF-8/);
+  });
+
   it('offers the site’s own model no address it could not fetch', () => {
     const names = (session: boolean) =>
       directTools({
