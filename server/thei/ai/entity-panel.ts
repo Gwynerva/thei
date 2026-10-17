@@ -14,6 +14,7 @@ import { entityMemory } from './memory/read';
 import { sessionModel } from './model/settings';
 import { sessionName, sessionsAbout } from './sessions/store';
 import { actionItems, entityRef, listSessions } from './sessions/view';
+import { TEMPLATE_SOURCES } from './templates/sources';
 import { listTemplates } from './templates/store';
 
 /**
@@ -278,15 +279,20 @@ export async function entityPanel(key: EntityKey): Promise<AiEntityPanel> {
     offers: await offersFor(key),
     sessions: listSessions({ about: key }).sessions.slice(0, SESSIONS_SHOWN),
     sessionCount: sessionCount(key),
-    // Every template is offered everywhere: the owner's words narrow it.
-    templates: listTemplates().map(
-      ({ templateId, title, instruction, builtin }) => ({
+    // Every template is offered, the owner's words narrowing it — but a
+    // check on what this kind of entity cannot have.
+    templates: listTemplates()
+      .filter(
+        ({ builtin }) =>
+          !builtin ||
+          (TEMPLATE_SOURCES[builtin].kinds?.includes(key.kind) ?? true),
+      )
+      .map(({ templateId, title, instruction, builtin }) => ({
         templateId,
         title,
         instruction,
         ...(builtin ? { builtin } : {}),
-      }),
-    ),
+      })),
     modelReady: Boolean(sessionModel()),
   };
 }

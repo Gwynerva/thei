@@ -223,12 +223,13 @@ async function toolText(name: string, args: unknown) {
 }
 
 describe('the built-in checks', () => {
-  it('are four, with no schedule and offered everywhere', () => {
+  it('are five, with no schedule and offered everywhere', () => {
     expect(AI_BUILTIN_TEMPLATE_KEYS).toEqual([
       'proofread',
       'describe',
       'links',
       'graph',
+      'tags',
     ]);
     const builtins = listTemplates().filter((template) => template.builtin);
     expect(builtins.map((template) => template.title)).toEqual([
@@ -236,6 +237,7 @@ describe('the built-in checks', () => {
       'File descriptions',
       'Broken links',
       'Relations and links between entities',
+      'Tag audit',
     ]);
     const keys = Object.keys(findTemplate(id('proofread'))!);
     expect(keys).not.toContain('schedule');
@@ -253,6 +255,40 @@ describe('the built-in checks', () => {
     const copy = copyTemplate(id('links'));
     expect(copy.title).toBe('Broken links (copy)');
     expect(copy.builtin).toBeUndefined();
+  });
+});
+
+describe('the tag audit', () => {
+  it('looks over what carries tags and the tags, each with what it is on', async () => {
+    insert('tags', {
+      tagUuid: 't-1',
+      title: 'Sea',
+      normalizedTitle: 'sea',
+      slug: 'sea',
+      publicId: 'Sea1',
+    });
+    insert('tag-usages', {
+      tagUuid: 't-1',
+      containerType: 'project',
+      containerId: PROJECT,
+      sortOrder: 0,
+    });
+    const batch = await due('tags');
+    const shown = (subject: string) =>
+      batch.find((item) => item.subject === subject)?.shown ?? '';
+    expect(shown(`entity:project:${PROJECT}`)).toContain('tags: tag:t-1 «Sea»');
+    expect(shown('entity:tag:t-1')).toContain(`on 1: project:${PROJECT}`);
+    // Diary entries carry no tags: none is given.
+    expect(
+      batch.some((item) => item.subject.startsWith('entity:diary-entry')),
+    ).toBe(false);
+    const sessionUuid = await run('tags');
+    expect(brief(sessionUuid!)).toContain('Audit the tags');
+    // A tag taken off is what it proposes: it hands nothing back.
+    context.rawDb
+      .prepare("DELETE FROM `tag-usages` WHERE tagUuid = 't-1'")
+      .run();
+    expect(await run('tags')).toBeNull();
   });
 });
 
@@ -516,7 +552,7 @@ describe('a link the model left', () => {
 });
 
 describe('a ready-made request', () => {
-  it('is offered everywhere, beside the checks', async () => {
+  it('is offered everywhere, beside the checks that fit', async () => {
     saveTemplate(null, {
       title: 'Look over',
       instruction: 'Look over this entry.',
@@ -537,6 +573,7 @@ describe('a ready-made request', () => {
       ['File descriptions', 'describe'],
       ['Broken links', 'links'],
       ['Relations and links between entities', 'graph'],
+      // A diary entry carries no tags: their audit is not offered on it.
       ['Look over', null],
       ['Project look', null],
     ]);

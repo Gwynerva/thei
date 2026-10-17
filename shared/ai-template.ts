@@ -4,11 +4,12 @@ import type { AiSessionItem } from './ai';
  * A session template. A built-in one is a check written in the code: it
  * looks over what it has not looked at yet — the archive's texts for
  * mistakes, its files for a description they lack, its links that lead
- * nowhere, its entities for relations they lack — and the code keeps count
- * of what it checked, so a run goes over only what is new or changed since.
- * From an entity's ✦ it looks at that entity alone. The owner's own are ready-made requests: opened in a new
- * session with their words, to add to and send. Nothing runs by itself.
- * Both are offered everywhere; the owner's words narrow what they do.
+ * nowhere, its entities for relations and tags they lack — and the code
+ * keeps count of what it checked, so a run goes over only what is new or
+ * changed since. From an entity's ✦ it looks at that entity alone. The
+ * owner's own are ready-made requests: opened in a new session with their
+ * words, to add to and send. Nothing runs by itself. The owner's words
+ * narrow what either does.
  */
 
 export const AI_TEMPLATE_TITLE_MAX = 120;
@@ -16,14 +17,15 @@ export const AI_TEMPLATE_INSTRUCTION_MAX = 2000;
 
 /**
  * The built-in checks. Their words are phrases (`ai_template_builtins`), in
- * the site's language. Every template is offered everywhere — on the AI page
- * and in every entity's ✦ — and the owner's words say what it looks at.
+ * the site's language. Each is offered on the AI page and in the ✦ of every
+ * kind of entity it looks at, and the owner's words say what it looks at.
  */
 export const AI_BUILTIN_TEMPLATE_KEYS = [
   'proofread',
   'describe',
   'links',
   'graph',
+  'tags',
 ] as const;
 export type AiBuiltinTemplateKey = (typeof AI_BUILTIN_TEMPLATE_KEYS)[number];
 

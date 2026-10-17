@@ -67,6 +67,7 @@ function textsByOwner(): Map<string, string[]> {
 
 export const graphSource: TemplateSource = {
   areas: AREAS,
+  kinds: KINDS,
 
   async due({ scope, areas, covered, busy, whole }) {
     const documents = new Map(

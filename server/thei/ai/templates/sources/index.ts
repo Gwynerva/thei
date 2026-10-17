@@ -1,11 +1,12 @@
 import type { AiBuiltinTemplateKey } from '#layers/thei/shared/ai-template';
-import type { EntityKey } from '../../../entity-kinds';
+import type { EntityKey, EntityKind } from '../../../entity-kinds';
 import type { ActionTarget } from '../../actions/target';
 import type { ActionRow } from '../../actions/types';
 import { describeSource } from './describe';
 import { graphSource } from './graph';
 import { linksSource } from './links';
 import { proofreadSource } from './proofread';
+import { tagsSource } from './tags';
 
 /**
  * Where a built-in check finds its work. Each looks at subjects of its own —
@@ -57,6 +58,11 @@ export interface DueInput {
 export interface TemplateSource {
   /** The areas it looks at, each with what it holds, in English. */
   areas: Record<string, string>;
+  /**
+   * The kinds of entity it looks at, if not every kind: an entity's ✦
+   * offers it only on those.
+   */
+  kinds?: readonly EntityKind[];
   /** What is due, one run's worth at most: the rest waits for the next. */
   due(input: DueInput): Promise<CheckItem[]>;
   /** What the model is asked to do with what it is given, in English. */
@@ -77,4 +83,5 @@ export const TEMPLATE_SOURCES: Record<AiBuiltinTemplateKey, TemplateSource> = {
   describe: describeSource,
   links: linksSource,
   graph: graphSource,
+  tags: tagsSource,
 };

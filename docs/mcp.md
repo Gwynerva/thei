@@ -159,8 +159,8 @@ instead of the whole while the entity is unchanged.
 ## Templates
 
 A **template** is a request that starts a session; none runs by itself, and
-every one is offered everywhere: on the **Templates** tab, on a new session
-and in every entity's ✦.
+every one is offered on the **Templates** tab, on a new session and in an
+entity's ✦ — a check only on the kinds of entity it looks at.
 
 The built-in ones are **checks**: **Mistakes in the text** proofreads
 whatever the owner typed — the texts, with the captions and titles of their
@@ -175,13 +175,17 @@ shown is left alone, and counted as looked at until its bytes change;
 between entities** proposes the relations projects, events and diary
 entries lack and the removal of those without grounds, and a link where a
 text names another of them without one — at its first mention in a part of
-the text, which the code holds to. The code keeps count of what each has looked at — a paragraph, a
-short text, a file, a link, an entity, as it read then — so a run is given
-only what is new or changed since, a run's worth at a time, and with
-nothing new no session starts and nothing is spent. What a check reads is
-counted, never what it writes: a fix the owner accepts leaves what it
-mended checked, while the owner's own change beside it waits for the next
-run, and a relation applied does not hand its entity back.
+the text, which the code holds to; **Tag audit** looks over the tags of
+projects and events and the tags themselves: a fitting tag added, a wrong
+one taken off, a new tag only for a trait several entities surely share,
+and one that gathers nothing proposed for deletion. The code keeps count of
+what each has looked at — a paragraph, a short text, a file, a link, an
+entity, as it read then — so a run is given only what is new or changed
+since, a run's worth at a time, and with nothing new no session starts and
+nothing is spent. What a check reads is counted, never what it writes: a
+fix the owner accepts leaves what it mended checked, while the owner's own
+change beside it waits for the next run, and a relation applied does not
+hand its entity back.
 
 A check runs from its row over what is new or changed in the whole
 archive, or opens from it in a new session, as the owner's own do, to be
