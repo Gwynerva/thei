@@ -201,7 +201,13 @@ function mcpContent(
         },
       };
     case 'text':
-      return { type: 'text', text: block.text };
+      // Marked as the file it is: Thei's own model is shown it once, with
+      // the files, not again among the tool's words.
+      return {
+        type: 'text',
+        text: block.text,
+        _meta: { [FILES_META]: assetUuid },
+      };
   }
 }
 

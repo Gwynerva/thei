@@ -618,9 +618,12 @@ export async function runSessionTurn(
             ...(Array.isArray(shown) && shown.length
               ? { files: shown.filter((id) => typeof id === 'string') }
               : {}),
+            // The tool's words: a file it shows comes with the files.
             text: cutAnswer(
               result.content
-                .map((part) => ('text' in part ? part.text : ''))
+                .map((part) =>
+                  'text' in part && !part._meta?.[FILES_META] ? part.text : '',
+                )
                 .join('\n'),
             ),
             error: Boolean(result.isError),

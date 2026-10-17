@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import { runFfmpeg } from '../../server/thei/assets/ffmpeg';
@@ -47,7 +48,13 @@ beforeEach(async () => {
       recording,
     ]),
   ).toBe(0);
-  const files: Record<string, string> = { png: picture, wav: recording };
+  const notes = join(context.directory, 'notes.txt');
+  writeFileSync(notes, 'Field notes: the heron came back at dawn.');
+  const files: Record<string, string> = {
+    png: picture,
+    wav: recording,
+    txt: notes,
+  };
   Object.assign(context.server, {
     useDb: () => context,
     version: '0.0.6',
@@ -88,6 +95,7 @@ beforeEach(async () => {
     'audio',
     '{"duration":2,"peaks":[]}',
   );
+  insert.run('a-notes', 'notes', 'txt', 'af-notes', 'h-notes', 'other', '{}');
 });
 
 afterEach(async () => {
@@ -255,6 +263,20 @@ describe('files shown to the site’s model', () => {
       ],
     });
   });
+});
+
+it('shows a text a tool showed once, with the files', async () => {
+  await useModel(
+    [
+      { toolCalls: [{ name: 'look_at_file', input: { file: 'a-notes' } }] },
+      { text: 'Notes about a heron.' },
+    ],
+    'openai',
+  );
+  startOwnerSession({ text: 'What is a-notes?' });
+  await turnsSettled();
+  const body = JSON.stringify(model!.requests[1]!.body.messages);
+  expect(body.split('the heron came back at dawn')).toHaveLength(2);
 });
 
 describe('files made ready for a model', () => {
