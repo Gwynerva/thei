@@ -49,4 +49,12 @@ export interface AiEntityPanel {
   templates: AiPresetItem[];
   /** Whether a model is set to answer a session started here. */
   modelReady: boolean;
+  /** What its fields' ✦ were asked and is still answered, by place. */
+  asking: AiFieldAsk[];
+}
+
+/** An ask at a field still answered: where, and in which session. */
+export interface AiFieldAsk {
+  place: string;
+  sessionUuid: string;
 }

@@ -1,4 +1,4 @@
-import type { AiEntityOffer } from './ai-entity';
+import type { AiEntityOffer, AiFieldAsk } from './ai-entity';
 
 /**
  * A file's description — «Описание файла», "File description" — the `alt`
@@ -26,7 +26,10 @@ export interface AssetDescription {
  * what an AI proposes for it, waiting at its label.
  */
 export interface AssetDescriptionResponse extends AssetDescription {
+  /** With AI on: what is proposed for it, what its ✦ is answering, and whether a model answers. */
   offers?: AiEntityOffer[];
+  asking?: AiFieldAsk[];
+  modelReady?: boolean;
 }
 
 /** What a save sends: the words, and the version they were written over. */

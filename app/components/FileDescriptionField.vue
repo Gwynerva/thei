@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { AiEntityOffer } from '#layers/thei/shared/ai-entity';
+import type { AiEntityOffer, AiFieldAsk } from '#layers/thei/shared/ai-entity';
 import {
   ASSET_DESCRIPTION_MAX,
   cleanAssetDescription,
@@ -30,6 +30,9 @@ const form = reactive({ description: '' });
 const stored = ref('');
 const version = ref<number | null>(null);
 const offers = shallowRef<AiEntityOffer[]>([]);
+/** What its ✦ is answering now, and whether a model answers it. */
+const asking = shallowRef<AiFieldAsk[]>([]);
+const modelReady = ref(false);
 const loaded = ref(false);
 const saving = ref(false);
 const notice = ref<{ text: string; error?: boolean } | null>(null);
@@ -58,6 +61,8 @@ async function load(keepTyped = false) {
     if (ticket !== reading) return;
     take(read, keepTyped && dirty.value);
     offers.value = read.offers ?? [];
+    asking.value = read.asking ?? [];
+    modelReady.value = Boolean(read.modelReady);
     loaded.value = true;
   } catch (caught) {
     if (ticket !== reading) return;
@@ -73,6 +78,8 @@ const fileAi = provideFileAi({
   offers: () => offers.value,
   form: () => form,
   reload: () => load(true),
+  asking: () => asking.value,
+  modelReady: () => modelReady.value,
 });
 
 onMounted(() => {

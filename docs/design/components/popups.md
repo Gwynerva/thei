@@ -36,7 +36,8 @@ The complex popups today:
   (`ExternalLinksEditor`), the forms of access links and access keys
   (`AdminShareLinks`, `SettingsApiTokens`), the forms of the AI's memory and
   dictionary (`AiRememberPopup`, `AiTermPopup`), a comment on a proposal
-  (`AiActionRow`), the about page's forms;
+  (`AiActionRow`), asking at a field's ✦ (`AiFieldOffer`), the about page's
+  forms;
 - a text's history in the editor, the date range (`FieldDateRangePopup`), the
   sessions of an entity with their composer (`AiEntityButton`).
 

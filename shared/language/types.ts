@@ -1451,6 +1451,31 @@ export type LanguagePhrases = {
   ai_comment_on: (what: string) => string;
   /** The hint of a proposed description's file, which opens its window. */
   ai_action_open_file: string;
+  /** The ✦ of a field, asking about it: its hint and its box. */
+  ai_field_ask: (field: string) => string;
+  ai_field_ask_placeholder: string;
+  /** While the model answers what a field was asked. */
+  ai_field_asking: string;
+  /** The model answered a field's ask, proposing nothing. */
+  ai_field_ask_nothing: string;
+  /** The link to the session of a field's ask. */
+  ai_field_ask_open: string;
+  /** Ready requests of a field's ✦, by field. */
+  ai_field_ask_quick: Record<
+    | 'title'
+    | 'summary'
+    | 'description'
+    | 'synonyms'
+    | 'slogan'
+    | 'reminder'
+    | 'periods'
+    | 'tags'
+    | 'relations'
+    | 'text'
+    | 'file'
+    | 'other',
+    readonly string[]
+  >;
   /** Correcting a proposal's words before applying it. */
   ai_action_edit: string;
   ai_action_edit_cancel: string;
@@ -1477,6 +1502,8 @@ export type LanguagePhrases = {
   >;
   /** The header of the owner's message begun from a template or a check. */
   ai_message_template: (title: string) => string;
+  /** The header of the owner's words asked at a field's ✦. */
+  ai_message_field: (field: string) => string;
   /** What the owner says, and the button says, to go on with a check's run. */
   ai_continue_text: string;
   /** The button to go on, when fewer than a whole batch remain. */

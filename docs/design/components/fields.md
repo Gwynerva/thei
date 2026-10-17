@@ -39,8 +39,15 @@ take it into the form, decline it or comment on it. Several proposals at one
 field are gone through one at a time, the pager (‹ 1/2 ›) at the left of the
 card's own row of buttons. A text edit opens in the text's own editor instead.
 
-With AI off, or nothing proposed, there is no ✦ and the label is plain. See
-[AI in the UI](../patterns/ai-in-the-ui.md).
+With AI on and a model to answer, a quiet ✦ stands at every such label but
+a switch's, and asks about the field: a click opens a small box — a sheet on
+a phone — with the field's ready requests («Опиши файл», «Предложи
+название») and room for the owner's own words. A session answers in the
+background; the ✦ runs meanwhile, its box says so and can stop it, and what
+the model proposes waits at the label as any proposal. With AI off there is no
+✦; with nothing proposed the label stays plain. A list with no label of its
+own — tags, relations — asks from its heading (`SectionHeader`'s `ai`), its
+proposals standing among its chips. See [AI in the UI](../patterns/ai-in-the-ui.md).
 
 A file's description («Описание файла», "File description") is the one
 field of a file (`app/components/FileDescriptionField.vue`): it stands in

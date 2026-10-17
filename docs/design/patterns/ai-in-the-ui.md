@@ -24,12 +24,13 @@ about how it looks.
 
 ## Where the ✦ goes
 
-| Place           | Component                                  | What it holds                                                               |
-| --------------- | ------------------------------------------ | --------------------------------------------------------------------------- |
-| A form's header | `app/components/ai/AiEntityButton.vue`     | A badge counting the proposals in the form; a menu to ask about the entity. |
-| The admin bar   | `app/components/admin/bar/AdminBarAi.vue`  | How much waits for the owner; the sessions that wait; a new session.        |
-| A field's label | `app/components/ai/AiFieldOffer.vue`       | The proposals for that field, a file's description in its window too.       |
-| The dashboard   | `app/components/admin/AdminAiSessions.vue` | The sessions, under the `sparkles` icon of their box.                       |
+| Place           | Component                                  | What it holds                                                                |
+| --------------- | ------------------------------------------ | ---------------------------------------------------------------------------- |
+| A form's header | `app/components/ai/AiEntityButton.vue`     | A badge counting the proposals in the form; a menu to ask about the entity.  |
+| The admin bar   | `app/components/admin/bar/AdminBarAi.vue`  | How much waits for the owner; the sessions that wait; a new session.         |
+| A field's label | `app/components/ai/AiFieldOffer.vue`       | Quiet, asks about the field; the proposals for it; a file's description too. |
+| A list's title  | `app/components/SectionHeader.vue` (`ai`)  | Asks about the list — tags, relations — whose proposals are its chips.       |
+| The dashboard   | `app/components/admin/AdminAiSessions.vue` | The sessions, under the `sparkles` icon of their box.                        |
 
 The AI page itself is named by `sparkles` wherever it is linked. Nowhere else:
 never a banner, never a block under a field, never a badge that asks for
@@ -37,6 +38,11 @@ attention.
 
 ## Proposals
 
+- With AI on, every field a proposal can change has its ✦, quiet until it
+  has something: a click asks the model about that field alone — a few ready
+  requests, or the owner's words — and a session answers in the background
+  while the ✦ runs, with a stop in its box. Not at a switch, whose ✦ only
+  brings what was proposed. The owner's words carry a header naming the field.
 - A proposal for a field waits at its label: the label turns to the accent and
   a ✦ beside it opens the proposal on hover, a tap or the keyboard. Several are
   paged one at a time, the pager at the left of the card's own buttons (see

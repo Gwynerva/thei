@@ -44,6 +44,7 @@ const TAG = `Winter ${run}`;
 const FACT = 'The route is no secret any more.';
 const SLOGAN = `Walks on ice ${run}`;
 const DESCRIPTION = `A frozen lake at dawn ${run}`;
+const ASKED_SUMMARY = `A walk across the ice, ${run}`;
 let eventUuid = '';
 /** A picture of the walk, for its description. */
 let fileUuid = '';
@@ -53,6 +54,17 @@ const event = () => `event:${eventUuid}`;
 
 /** The proposals the model makes, by a word of the owner's message. */
 function proposals(said: string): Record<string, unknown>[] | undefined {
+  // Asked at the summary's own ✦: its brief says more than the words.
+  if (said.includes('the owner asks at its summary'))
+    return [
+      {
+        kind: 'field',
+        target: event(),
+        field: 'summary',
+        value: ASKED_SUMMARY,
+        reason: 'Shorter.',
+      },
+    ];
   if (said.includes('describe the picture'))
     return [
       {
@@ -286,9 +298,14 @@ async function actionStates(page: Page, sessionUuid: string) {
 const save = (page: Page) =>
   page.getByRole('button', { name: /^(Save|Saved)$/ });
 
-/** The ✦ at a field's label, where what is proposed for the field waits. */
+/**
+ * The ✦ at a field's label while something is proposed for the field: with AI
+ * on it stands there quiet otherwise, asking about the field.
+ */
 const star = (page: Page, place: string) =>
-  page.locator(`[data-ai-field-offer="${place}"]`);
+  page.locator(
+    `[data-ai-field-offer="${place}"][data-ai-field-state="offers"]`,
+  );
 
 /** Opens what waits at a field from the ✦ at its label. */
 async function fieldOffer(page: Page, place: string) {
@@ -708,10 +725,12 @@ test('a file’s description waits at its label in the file’s window', async (
   await expectPopupUsable(page, offer);
   await offer.locator('[data-action-apply]').click();
   await expect(input).toHaveValue(DESCRIPTION);
-  // Taken into the field, it is applied once the field is saved.
+  // Taken into the field, it is applied once the field is saved — with the
+  // owner's words, corrected there before saving.
   expect(await actionStates(page, sessionUuid)).toEqual({
     describe: 'pending',
   });
+  await input.fill(`${DESCRIPTION}, the ice still grey`);
   await page.locator('[data-file-description-save]').click();
   await expect(page.locator('[data-file-description-notice]')).toHaveText(
     'File description saved',
@@ -720,4 +739,38 @@ test('a file’s description waits at its label in the file’s window', async (
     .poll(() => actionStates(page, sessionUuid))
     .toEqual({ describe: 'applied' });
   await expect(star(page, 'field:description')).toHaveCount(0);
+  const detail = await (
+    await page.request.get(`/api/admin/ai/sessions/${sessionUuid}`)
+  ).json();
+  expect(detail.actions[0]).toMatchObject({
+    payload: { text: `${DESCRIPTION}, the ice still grey` },
+    proposed: { text: DESCRIPTION },
+  });
+});
+
+test('a field’s quiet ✦ asks about the field, and its proposal comes there', async ({
+  page,
+}) => {
+  await page.setViewportSize(DESKTOP);
+  await openForm(page);
+  const quiet = page.locator('[data-ai-field-offer="field:summary"]');
+  await expect(quiet).toHaveAttribute('data-ai-field-state', 'idle');
+  // A switch's ✦ only brings what was proposed.
+  await expect(page.locator('[data-ai-field-offer="access"]')).toHaveCount(0);
+  await quiet.click();
+  const box = page.locator(
+    '[data-floating-popup] [data-ai-field-ask="field:summary"]',
+  );
+  await expectPopupUsable(page, box);
+  await box.getByRole('button', { name: 'Make it shorter' }).click();
+  // Answered in the background, the proposal takes the box's place.
+  const card = page.locator(
+    '[data-floating-popup] [data-ai-offers="field:summary"]',
+  );
+  await expect(card).toBeVisible({ timeout: 40_000 });
+  await expect(card).toContainText(ASKED_SUMMARY);
+  await expect(star(page, 'field:summary')).toBeVisible();
+  // Left as it came: declined, the ✦ is quiet again.
+  await card.locator('[data-action-reject]').click();
+  await expect(quiet).toHaveAttribute('data-ai-field-state', 'idle');
 });

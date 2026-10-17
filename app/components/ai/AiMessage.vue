@@ -6,6 +6,7 @@ import type {
   AiStep,
 } from '#layers/thei/shared/ai';
 import { messageBody } from '#layers/thei/shared/ai-message-text';
+import { placeField } from '#layers/thei/shared/ai-field-ask';
 
 /**
  * One message of a session. The owner's is a bubble on the right — what it
@@ -88,6 +89,17 @@ const commentAbout = computed(() => {
   const action = id ? props.actionOf?.(id) : undefined;
   if (!action) return phrase.value.ai_action_comment;
   return phrase.value.ai_comment_on(actionLabel(action));
+});
+
+/** The field the owner's words were asked at, by its ✦. */
+const fieldAbout = computed(() => {
+  const part = partsOf('field')[0];
+  if (!part) return '';
+  return phrase.value.ai_message_field(
+    part.ref.startsWith('asset:')
+      ? phrase.value.asset_description
+      : fieldName(placeField(part.place)),
+  );
 });
 
 /** The template the owner's words began from, named as now. */
@@ -214,6 +226,20 @@ function answer(text: string) {
         class="truncate"
         data-title-popup-clip
         >{{ commentAbout }}</span
+      >
+    </p>
+    <!-- Asked at a field's ✦: which field. -->
+    <p
+      v-else-if="fieldAbout"
+      class="flex items-center gap-1 text-xs text-text-2"
+      :data-title-popup="fieldAbout"
+      data-title-popup-clipped
+      data-message-field
+    >
+      <Icon name="sparkles" class="shrink-0" /><span
+        class="truncate"
+        data-title-popup-clip
+        >{{ fieldAbout }}</span
       >
     </p>
     <!-- Begun from a ready-made request: which, as the picker names it. -->

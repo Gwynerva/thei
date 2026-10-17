@@ -16,6 +16,7 @@ import { sessionName, sessionsAbout } from './sessions/store';
 import { actionItems, entityRef, listSessions } from './sessions/view';
 import { TEMPLATE_SOURCES } from './templates/sources';
 import { listTemplates } from './templates/store';
+import { asksRunning } from './field-ask';
 
 /**
  * What an entity's form shows of the AI, read whole when the form opens and
@@ -294,5 +295,6 @@ export async function entityPanel(key: EntityKey): Promise<AiEntityPanel> {
         ...(builtin ? { builtin } : {}),
       })),
     modelReady: Boolean(sessionModel()),
+    asking: asksRunning(refOf(key)),
   };
 }

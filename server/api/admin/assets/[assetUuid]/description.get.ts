@@ -1,6 +1,8 @@
 import type { AssetDescriptionResponse } from '#layers/thei/shared/asset-description';
 import { readAssetDescription } from '../../../../thei/assets/descriptions';
 import { fileOffers } from '../../../../thei/ai/file-panel';
+import { asksRunning } from '../../../../thei/ai/field-ask';
+import { sessionModel } from '../../../../thei/ai/model/settings';
 import { markReadOnlyRequest } from '../../../../thei/read-only-request';
 
 /**
@@ -18,7 +20,11 @@ export default defineEventHandler(
     return {
       ...kept,
       ...(THEI_SERVER.config.mcp.enabled
-        ? { offers: await fileOffers(assetUuid) }
+        ? {
+            offers: await fileOffers(assetUuid),
+            asking: asksRunning(`asset:${assetUuid}`),
+            modelReady: Boolean(sessionModel()),
+          }
         : {}),
     };
   },

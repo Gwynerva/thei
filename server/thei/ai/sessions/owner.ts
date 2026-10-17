@@ -245,6 +245,9 @@ export function startOwnerSession(
     templateId?: unknown;
     /** The model chosen for it; none for the connection's. */
     model?: string;
+    /** Parts and a brief of the first message's own (`OwnerMessage`). */
+    parts?: AiMessagePart[];
+    brief?: string;
   },
   now = Date.now(),
 ): string {
@@ -289,9 +292,13 @@ export function startOwnerSession(
         text: input.text ?? '',
         files: input.files,
         // Begun from a template, the message says so.
-        ...(template
-          ? { parts: [{ type: 'template', templateId: template.templateId }] }
-          : {}),
+        parts: [
+          ...(template
+            ? [{ type: 'template' as const, templateId: template.templateId }]
+            : []),
+          ...(input.parts ?? []),
+        ],
+        ...(input.brief ? { brief: input.brief } : {}),
       },
       now,
     );

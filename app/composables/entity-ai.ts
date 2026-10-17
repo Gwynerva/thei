@@ -3,8 +3,10 @@ import type { AiActionItem } from '#layers/thei/shared/ai';
 import type {
   AiEntityOffer,
   AiEntityPanel,
+  AiFieldAsk,
   AiOfferPlace,
 } from '#layers/thei/shared/ai-entity';
+import { placeField } from '#layers/thei/shared/ai-field-ask';
 import {
   RELATION_TYPE_OF_WORD,
   RELATION_WORD_FROM_OTHER_END,
@@ -67,12 +69,120 @@ export interface EntityAi {
    */
   saved: () => Promise<void>;
   remember: (text: string) => Promise<void>;
+  /** A field's ✦ may be asked: AI on, the entity there, a model to answer. */
+  askable: ComputedRef<boolean>;
+  /** The session answering what a field's ✦ was asked, while it does. */
+  askingAt: (place: AiOfferPlace) => string | undefined;
+  /** An ask that ended with nothing proposed at its field: its session. */
+  answeredAt: (place: AiOfferPlace) => string | undefined;
+  /** Asks the model about one field; what it proposes comes to the label. */
+  ask: (place: AiOfferPlace, text: string) => Promise<void>;
+  /** Stops the session answering at a field. */
+  stopAsk: (place: AiOfferPlace) => Promise<void>;
 }
 
 const KEY: InjectionKey<EntityAi> = Symbol('entity-ai');
 
 /** The forms in hand so far, to tell their entries apart. */
 let hands = 0;
+
+/** How often a form reads again while one of its fields' ✦ is answered. */
+const FOLLOW_MS = 1500;
+
+/**
+ * The asks of a form's fields: started here, or found answered still when
+ * the form was read; followed by reading the form's AI again until their
+ * sessions have answered — what they propose reaches the labels with it.
+ * One that ended with nothing proposed says so at its field.
+ */
+function useFieldAsks(options: {
+  ref: () => string | undefined;
+  /** The asks the server says are answered now. */
+  running: () => readonly AiFieldAsk[];
+  /** What the form holds at a place, unsaved: told to the model. */
+  current: (place: string) => string | undefined;
+  refresh: () => Promise<void>;
+}) {
+  const started = ref(new Map<string, string>());
+  const ended = ref(new Map<string, string>());
+  const asking = computed(() => {
+    const found = new Map(started.value);
+    for (const ask of options.running()) found.set(ask.place, ask.sessionUuid);
+    return found;
+  });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  function follow() {
+    clearTimeout(timer);
+    if (!asking.value.size) return;
+    timer = setTimeout(async () => {
+      await options.refresh().catch(() => undefined);
+      const running = new Set(options.running().map((ask) => ask.place));
+      const left = new Map(started.value);
+      const done = new Map(ended.value);
+      for (const [place, sessionUuid] of started.value)
+        if (!running.has(place)) {
+          left.delete(place);
+          done.set(place, sessionUuid);
+        }
+      started.value = left;
+      ended.value = done;
+      follow();
+    }, FOLLOW_MS);
+  }
+  if (import.meta.client) {
+    // A form opened while an ask is answered follows it too.
+    watch(
+      () => options.running().length,
+      (count) => count && follow(),
+    );
+    onScopeDispose(() => clearTimeout(timer));
+  }
+  async function ask(place: string, text: string) {
+    const target = options.ref();
+    if (!target || !text.trim()) return;
+    const current = options.current(place);
+    const { sessionUuid } = await $fetch<{ sessionUuid: string }>(
+      '/api/admin/ai/ask',
+      {
+        method: 'POST',
+        body: {
+          ref: target,
+          place,
+          text,
+          ...(current !== undefined ? { current } : {}),
+        },
+      },
+    );
+    started.value = new Map(started.value).set(place, sessionUuid);
+    const done = new Map(ended.value);
+    done.delete(place);
+    ended.value = done;
+    follow();
+  }
+  async function stop(place: string) {
+    const sessionUuid = asking.value.get(place);
+    if (!sessionUuid) return;
+    await aiApi.stop(sessionUuid);
+    await options.refresh().catch(() => undefined);
+  }
+  return {
+    askingAt: (place: string) => asking.value.get(place),
+    answeredAt: (place: string) =>
+      asking.value.has(place) ? undefined : ended.value.get(place),
+    ask,
+    stop,
+  };
+}
+
+/** What a form holds at a place, as words: a list one item a line. */
+function wordsAt(form: object | undefined, place: string): string | undefined {
+  if (!form || place.startsWith('text:')) return undefined;
+  const value = (form as Record<string, unknown>)[placeField(place)];
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value) && value.every((item) => typeof item === 'string'))
+    return value.join('\n');
+  return undefined;
+}
 
 /** Kinds that change only what the AI remembers: applied from the form. */
 const MEMORY_KINDS = new Set(['remember', 'term', 'memory-compact']);
@@ -485,6 +595,13 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
       : ('session' as const);
   }
 
+  const asks = useFieldAsks({
+    ref: () => canonical.value,
+    running: () => panel.value?.asking ?? [],
+    current: (place) => wordsAt(options.form?.(), place),
+    refresh,
+  });
+
   async function accept(offer: AiEntityOffer) {
     const mode = modeOf(offer);
     if (mode === 'takes') return take(offer);
@@ -583,6 +700,11 @@ function createEntityAi(options: EntityAiOptions): EntityAi {
     remember,
     // A form tells what it took as its version moves, saved.
     saved: async () => {},
+    askable: computed(() => shown.value && Boolean(panel.value?.modelReady)),
+    askingAt: asks.askingAt,
+    answeredAt: asks.answeredAt,
+    ask: asks.ask,
+    stopAsk: asks.stop,
     noteTaken: (taken) => {
       for (const [actionUuid, parts] of Object.entries(taken))
         takenInTexts.set(actionUuid, {
@@ -604,6 +726,10 @@ export interface FileAiOptions {
   form: () => Record<string, unknown>;
   /** Reads the description and its proposals again. */
   reload: () => Promise<void>;
+  /** What its ✦ was asked and is still answered, as the field read it. */
+  asking: () => readonly AiFieldAsk[];
+  /** Whether a model answers what its ✦ is asked. */
+  modelReady: () => boolean;
 }
 
 /**
@@ -646,6 +772,13 @@ export function provideFileAi(options: FileAiOptions): EntityAi {
     taken.value = new Map();
     answered.value = new Set();
   }
+
+  const asks = useFieldAsks({
+    ref: () => target.value,
+    running: () => options.asking(),
+    current: () => String(options.form().description ?? ''),
+    refresh: () => options.reload(),
+  });
 
   const ai: EntityAi = {
     ref: target,
@@ -704,6 +837,11 @@ export function provideFileAi(options: FileAiOptions): EntityAi {
       }
     },
     noteTaken: () => {},
+    askable: computed(() => aiEnabled.value && options.modelReady()),
+    askingAt: (place) => asks.askingAt(place),
+    answeredAt: (place) => asks.answeredAt(place),
+    ask: (place, text) => asks.ask(place, text),
+    stopAsk: (place) => asks.stop(place),
     async saved() {
       await tellTakenWords(
         [...taken.value.keys()].flatMap(
