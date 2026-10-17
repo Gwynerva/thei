@@ -198,6 +198,14 @@ export async function runTemplate(
   return { sessionUuid };
 }
 
+/**
+ * How a check's answer ends: what the cards under it cannot say. Each
+ * proposal is a card with what it changes and why, so retold in words it
+ * only doubles the page.
+ */
+const CHECK_END =
+  'End with a sentence or two: how much you looked at, what you left aside and why — never what a proposal says, which its card shows — or say plainly that nothing needed it.';
+
 /** What a run's model is asked, in English. */
 function brief(
   template: { title: string; instruction: string },
@@ -218,7 +226,7 @@ function brief(
       `The owner started this session from the built-in check «${template.title}»: ${template.instruction}`,
       about,
       source.brief(run.batch),
-      'End with a short account of what you looked at and proposed — or say plainly that nothing needed it.',
+      CHECK_END,
     ].join('\n\n');
   return [
     `The owner started this session from the built-in check «${template.title}» — ${template.instruction} — and asked, in their own words:`,
@@ -229,6 +237,6 @@ function brief(
       .join('\n')}`,
     `First call ${CHECK_BATCH_TOOL} with the areas — and the entities and files, by ref — the owner's words ask for; leave out what they do not narrow. It gives you what of that is due: only what this check has not looked at yet, as it reads now. Then do as the check says below with what it gives you, and nothing beyond what the owner asked. When the words ask for nothing this check looks at, say so and stop.`,
     source.brief([]),
-    'End with a short account of what you looked at and proposed — or say plainly that nothing needed it.',
+    CHECK_END,
   ].join('\n\n');
 }
