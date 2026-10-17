@@ -150,10 +150,17 @@ function shortSubject(key: Pick<EntityKey, 'kind' | 'id'>) {
 }
 
 /**
- * Of a text, the paragraphs given, with the one before and after each; the
- * rest left out with a mark.
+ * The line a paragraph shown only for what is around it stands under: it was
+ * proofread already, and a fix in it is not asked for. A line of its own, so
+ * no find takes it in with the words.
  */
-function excerpt(parts: readonly string[], given: ReadonlySet<number>) {
+export const CONTEXT_MARK = '[context: proofread already]';
+
+/**
+ * Of a text, the paragraphs given, with the one before and after each — those
+ * under `CONTEXT_MARK` — and the rest left out with a mark.
+ */
+export function excerpt(parts: readonly string[], given: ReadonlySet<number>) {
   const shown = parts.map(
     (_, index) =>
       given.has(index) || given.has(index - 1) || given.has(index + 1),
@@ -164,7 +171,7 @@ function excerpt(parts: readonly string[], given: ReadonlySet<number>) {
     if (shown[index]) {
       if (skipped) out.push('…');
       skipped = false;
-      out.push(part);
+      out.push(given.has(index) ? part : `${CONTEXT_MARK}\n${part}`);
     } else skipped = true;
   });
   if (skipped) out.push('…');
@@ -396,7 +403,7 @@ async function textItems(
         about.get(`${text.key.kind}:${text.key.id}:${text.name}`) ?? '',
         given.size === parts.length
           ? 'All of it, not proofread yet:'
-          : 'The paragraphs not proofread yet, with one around each; … marks what is left out:',
+          : `The paragraphs not proofread yet, with one around each that is proofread already, under ${CONTEXT_MARK}, to read them by — fix nothing in those; … marks what is left out:`,
         '',
         excerpt(parts, given),
       ]
