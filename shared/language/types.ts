@@ -1325,9 +1325,7 @@ export type LanguagePhrases = {
   ai_templates_column_template: string;
   ai_templates_column_last: string;
   ai_templates_builtin_section: string;
-  ai_templates_builtin_section_hint: string;
   ai_templates_own_section: string;
-  ai_templates_own_section_hint: string;
   ai_templates_own_empty: string;
   ai_templates_new: string;
   ai_templates_presets: string;

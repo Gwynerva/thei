@@ -580,7 +580,7 @@ test('a ready-made request opens in a new session from its row', async ({
       `[data-templates-list] [data-template-row="${preset.templateId}"]`,
     );
     await expect(row).toContainText('Write me a short plan.');
-    await row.locator('[data-template-run]').click();
+    await row.locator('[data-template-open]').click();
     await expect(page).toHaveURL(/session=new/);
     await expect(page).not.toHaveURL(/template=/);
     const composer = page.locator('[data-session-new-screen] [data-composer]');

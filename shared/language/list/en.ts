@@ -1762,12 +1762,8 @@ export default defineI18nBase({
       'Requests to the AI, ready to go — here, on a new session and in every ✦.',
     ai_templates_column_template: 'Template',
     ai_templates_column_last: 'Last run',
-    ai_templates_builtin_section: 'Built-in checks',
-    ai_templates_builtin_section_hint:
-      'Over the archive they look only at what is new or changed since the last run: nothing new, nothing spent. From an entity’s ✦, all of it — and over again once it is all looked at.',
+    ai_templates_builtin_section: 'Built-in templates',
     ai_templates_own_section: 'Your templates',
-    ai_templates_own_section_hint:
-      'They open a new session with their words, to add to before sending.',
     ai_templates_own_empty: 'None of your own yet.',
     ai_templates_new: 'New',
     ai_templates_presets: 'Ready-made requests',

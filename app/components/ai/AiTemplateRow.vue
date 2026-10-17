@@ -4,8 +4,9 @@ import type { AiTemplateItem } from '#layers/thei/shared/ai-template';
 /**
  * One template, a row of the templates' table: what it asks, which model
  * answers it and, for a check, what its last run left — under its words on
- * a phone — and at the right the button that runs a check, or opens a
- * request in a new session, and the settings.
+ * a phone — and at the right its buttons: open it in a new session, to add
+ * an entity or words to; for a check, run it over what is new in the
+ * archive at once; and its settings.
  */
 const props = defineProps<{
   template: AiTemplateItem;
@@ -13,14 +14,12 @@ const props = defineProps<{
   starting?: boolean;
 }>();
 const emit = defineEmits<{
+  open: [];
   run: [];
   edit: [];
 }>();
 
 const check = computed(() => Boolean(props.template.builtin));
-const action = computed(() =>
-  check.value ? phrase.value.ai_template_run : phrase.value.ai_template_open,
-);
 </script>
 
 <template>
@@ -54,15 +53,25 @@ const action = computed(() =>
           variant="secondary"
           size="icon"
           class="bg-transparent pointer-coarse:size-11"
-          :aria-label="action"
-          :data-title-popup="action"
+          :aria-label="phrase.ai_template_open"
+          :data-title-popup="phrase.ai_template_open"
+          data-template-open
+          @click="emit('open')"
+        >
+          <Icon name="ai-chat" />
+        </Button>
+        <Button
+          v-if="check"
+          variant="secondary"
+          size="icon"
+          class="bg-transparent pointer-coarse:size-11"
+          :aria-label="phrase.ai_template_run"
+          :data-title-popup="phrase.ai_template_run"
           :disabled="starting"
           data-template-run
           @click="emit('run')"
         >
-          <Icon
-            :name="starting ? 'loading' : check ? 'list-check' : 'ai-chat'"
-          />
+          <Icon :name="starting ? 'loading' : 'list-check'" />
         </Button>
         <Button
           variant="secondary"

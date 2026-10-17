@@ -1826,12 +1826,8 @@ export default defineI18nModule({
       'Готовые просьбы к ИИ — здесь, в новой сессии и в каждом ✦.',
     ai_templates_column_template: 'Шаблон',
     ai_templates_column_last: 'Последний запуск',
-    ai_templates_builtin_section: 'Встроенные проверки',
-    ai_templates_builtin_section_hint:
-      'По всему архиву смотрят только новое и изменённое с прошлого раза: нет нового — ничего не тратится. Из ✦ сущности — её целиком, а когда проверено всё — заново.',
+    ai_templates_builtin_section: 'Встроенные шаблоны',
     ai_templates_own_section: 'Ваши шаблоны',
-    ai_templates_own_section_hint:
-      'Открывают новую сессию со своим текстом — его можно дописать перед отправкой.',
     ai_templates_own_empty: 'Своих шаблонов пока нет.',
     ai_templates_new: 'Новый',
     ai_templates_presets: 'Заготовки',

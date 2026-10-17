@@ -18,18 +18,16 @@ const { data, refresh } = await useAsyncData('ai-templates', () =>
 );
 const templates = computed(() => data.value?.templates ?? []);
 
-/** The built-in checks, then the owner's own requests, each a section. */
+/** The built-in templates, then the owner's own, each a section. */
 const groups = computed(() => [
   {
     key: 'builtin',
     title: phrase.value.ai_templates_builtin_section,
-    hint: phrase.value.ai_templates_builtin_section_hint,
     templates: templates.value.filter((template) => template.builtin),
   },
   {
     key: 'own',
     title: phrase.value.ai_templates_own_section,
-    hint: phrase.value.ai_templates_own_section_hint,
     templates: templates.value.filter((template) => !template.builtin),
   },
 ]);
@@ -69,7 +67,6 @@ function open(template: AiTemplateItem) {
 
 const starting = ref<string>();
 async function run(template: AiTemplateItem) {
-  if (!template.builtin) return open(template);
   if (starting.value) return;
   starting.value = template.templateId;
   try {
@@ -146,9 +143,8 @@ async function edit(template?: AiTemplateItem) {
           <tbody>
             <template v-for="group in groups" :key="group.key">
               <tr class="tr-section" :data-templates-group="group.key">
-                <td colspan="4" class="p-td-tight text-sm">
-                  <div class="text-text-2">{{ group.title }}</div>
-                  <div class="text-text-3">{{ group.hint }}</div>
+                <td colspan="4" class="p-td-tight text-sm text-text-2">
+                  {{ group.title }}
                 </td>
               </tr>
               <AiTemplateRow
@@ -157,6 +153,7 @@ async function edit(template?: AiTemplateItem) {
                 :template
                 :starting="starting === template.templateId"
                 @run="run(template)"
+                @open="open(template)"
                 @edit="edit(template)"
               />
               <tr v-if="!group.templates.length">

@@ -184,7 +184,8 @@ mended checked, while the owner's own change beside it waits for the next
 run, and a relation applied does not hand its entity back.
 
 A check runs from its row over what is new or changed in the whole
-archive, or is sent from a new session or an entity's ✦ like any request:
+archive, or opens from it in a new session, as the owner's own do, to be
+sent from there or an entity's ✦ like any request:
 the entity in hand and the ones the words mention bound it, and once all of
 them is looked at, the next run lets that go and goes over them again from
 the start, a run's worth at a time. Words added to the check's own narrow

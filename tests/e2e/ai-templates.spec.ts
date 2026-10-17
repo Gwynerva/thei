@@ -231,11 +231,11 @@ test('copies a check into a request of the owner’s, opened in a new session', 
   await expect(modal).toHaveCount(0);
 
   const own = page.locator('[data-template-row]').filter({ hasText: TITLE });
-  await expect(own).toContainText('Find the relations missing');
-  await own.locator('[data-template-run]').click();
+  await expect(own).toContainText('Look over the relations and links');
+  await own.locator('[data-template-open]').click();
   await expect(page).toHaveURL(/[?&]session=new/);
   await expect(page.locator('[data-composer-field]')).toContainText(
-    'Find the relations missing',
+    'Look over the relations and links',
   );
 
   // The owner's own is deleted, unlike a built-in one.
