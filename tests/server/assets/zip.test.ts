@@ -77,3 +77,37 @@ describe('zipFileToPath', () => {
     await expect(stat(targetPath)).rejects.toThrow();
   });
 });
+
+describe('zipping a file for a request that goes away', () => {
+  it('stops, rejects with the reason and leaves no archive behind', async () => {
+    const source = join(directory, 'source.bin');
+    // Enough chunks for the loop to yield between them.
+    await writeFile(source, Buffer.alloc(6 * 1024 * 1024, 7));
+    const target = join(directory, 'out.zip');
+    const controller = new AbortController();
+
+    const zipped = zipFileToPath(source, 6 * 1024 * 1024, 'bin', target, {
+      signal: controller.signal,
+      onProgress: (progress) => {
+        if (progress > 0.01) controller.abort(new Error('closed'));
+      },
+    });
+
+    await expect(zipped).rejects.toThrow('closed');
+    await expect(stat(target)).rejects.toThrow();
+  });
+
+  it('refuses a request that is already gone', async () => {
+    const controller = new AbortController();
+    controller.abort(new Error('gone'));
+    await expect(
+      zipFileToPath(
+        join(directory, 'none'),
+        0,
+        'bin',
+        join(directory, 'out.zip'),
+        { signal: controller.signal },
+      ),
+    ).rejects.toThrow('gone');
+  });
+});

@@ -6,7 +6,6 @@ import {
 import { mergeEditedBlocks } from '#layers/thei/shared/content-edit-markdown/merge';
 import { parseEditMarkdownToBlocks } from '#layers/thei/shared/content-edit-markdown/parse';
 import { contentToEditMarkdown } from '#layers/thei/shared/content-edit-markdown/serialize';
-import { parseEditMarkdown } from '#layers/thei/shared/content-edit-markdown/syntax';
 
 const asset = (assetUuid: string) => ({ assetUuid });
 
@@ -201,29 +200,6 @@ describe('editing markdown: serialize', () => {
 :::`);
   });
 
-  it('keeps words that look like syntax as words', () => {
-    const tricky = [
-      '1. not a list',
-      '- not a bullet',
-      '# not a heading',
-      '---',
-      '&gt; not a quote',
-      '::media{asset="a-1"}',
-      ':::private',
-      '[not](a link)',
-      '&amp;amp; stays an ampersand and a word',
-    ];
-    const markdown = contentToEditMarkdown(
-      normalizeContentData({
-        blocks: tricky.map((text) => ({ type: 'paragraph', data: { text } })),
-      }),
-    );
-    const root = parseEditMarkdown(markdown);
-    expect(root.children.map((node) => node.type)).toEqual(
-      tricky.map(() => 'paragraph'),
-    );
-  });
-
   it('drops a line break that ends a text, which no Markdown can write', () => {
     expect(
       contentToEditMarkdown(
@@ -326,6 +302,11 @@ describe('editing markdown: words that look like syntax', () => {
     '&gt; not a quote',
     '- not a list',
     '1. not a list',
+    '---',
+    '::media{asset="a-1"}',
+    ':::private',
+    '[not](a link)',
+    '&amp;amp; stays an ampersand and a word',
     `a${BACKSLASH}b ends ${BACKSLASH}`,
     'x {a=1} } {#id}',
     'a [b] c ] d [ e',

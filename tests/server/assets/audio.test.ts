@@ -155,9 +155,21 @@ describe('audio encode arguments', () => {
       codec: 'pcm_s16le',
       bitrate: 1_411_000,
     });
-    expect(args.join(' ')).toContain(
-      '-i in.wav -map 0:a:0 -vn -map_metadata -1 -map_chapters -1 -c:a libopus -b:a 96000 -vbr on -ar 48000 -ac 2',
-    );
+    for (const [flag, value] of [
+      ['-i', 'in.wav'],
+      ['-map', '0:a:0'],
+      ['-map_metadata', '-1'],
+      ['-map_chapters', '-1'],
+      ['-c:a', 'libopus'],
+      ['-b:a', '96000'],
+      ['-vbr', 'on'],
+      ['-ar', '48000'],
+      ['-ac', '2'],
+    ])
+      expect(args[args.indexOf(flag!) + 1], flag).toBe(value);
+    expect(args).toContain('-vn');
+    // What follows the input is said of the output.
+    expect(args.indexOf('-i')).toBeLessThan(args.indexOf('-map'));
     // ffmpeg does not know `weba`: the muxer is named.
     expect(args.slice(-3)).toEqual(['-f', 'webm', 'out.weba']);
     expect(args).toContain('+bitexact');

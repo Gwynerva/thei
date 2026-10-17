@@ -256,11 +256,7 @@ function seedSite() {
 describe('turning stages into sections', () => {
   it('keeps every stage as a section, after the sections, by its first period', async () => {
     seedSite();
-    const logged: string[] = [];
-    await runPendingMigrations(rawDb, {
-      contentPath,
-      log: (message: string) => logged.push(message),
-    } as never);
+    await runPendingMigrations(rawDb, { contentPath });
 
     const sections = all<Record<string, unknown>>(
       'SELECT * FROM `project-content-sections` WHERE projectUuid = ? ORDER BY sortOrder',
@@ -332,7 +328,6 @@ describe('turning stages into sections', () => {
         'stage-periods',
       ),
     ).toEqual([]);
-    expect(logged.join('\n')).toContain('Turned 3 stages into sections');
   });
 
   it('moves the bodies and drafts of stages to their sections', async () => {

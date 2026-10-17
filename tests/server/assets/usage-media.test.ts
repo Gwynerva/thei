@@ -49,14 +49,26 @@ it('gives each place the picture that stands for it, looked up once', async () =
 });
 
 it('leaves a place that is no entity, or has no record, without one', async () => {
-  findContentEntity.mockResolvedValue(undefined);
+  // Every id but the gone one has a picture, whatever kind it is asked as.
+  findContentEntity.mockImplementation(({ entityId }: { entityId: string }) =>
+    Promise.resolve(
+      entityId === 'gone'
+        ? undefined
+        : { media: () => Promise.resolve(picture(`/${entityId}`)) },
+    ),
+  );
   const placed = await withPlaceMedia([
     placement('profile', 'me'),
     placement('ai-session', 's'),
     placement('event', 'gone'),
+    placement('event', 'kept'),
   ]);
-  expect(placed.every((item) => item.source.media === undefined)).toBe(true);
-  expect(findContentEntity).toHaveBeenCalledTimes(1);
+  expect(placed.map((item) => item.source.media?.src)).toEqual([
+    undefined,
+    undefined,
+    undefined,
+    '/kept',
+  ]);
 });
 
 it('a picture that fails to resolve does not fail the list', async () => {

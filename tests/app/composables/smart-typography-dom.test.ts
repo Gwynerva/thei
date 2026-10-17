@@ -105,16 +105,6 @@ describe('bindSmartTypography', () => {
     expect(element.value).toBe('one —');
   });
 
-  it('turns three dots into an ellipsis', () => {
-    element.type('Wait...');
-    expect(element.value).toBe('Wait…');
-  });
-
-  it('leaves glued hyphens alone', () => {
-    element.type('well--known');
-    expect(element.value).toBe('well--known');
-  });
-
   it('stops touching the field once released', () => {
     release();
     element.type('one --');

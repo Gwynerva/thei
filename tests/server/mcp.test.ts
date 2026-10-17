@@ -20,8 +20,6 @@ import {
   readProjectEdit,
   saveProjectEdit,
 } from '../../server/thei/projects/edit';
-import { readEventEdit, saveEventEdit } from '../../server/thei/events/edit';
-import type { EventEditData } from '../../shared/event';
 import { findAction } from '../../server/thei/ai/actions/rows';
 import {
   applyActions,
@@ -1279,57 +1277,9 @@ describe('undoing over MCP', () => {
     expect(await undo(first!)).toMatch(/changed again since/);
   });
 
-  it('takes back what it made, a section included', async () => {
-    const makeJam = async () => {
-      const text = await propose(
-        editor(),
-        [
-          {
-            kind: 'create',
-            entity: 'event',
-            fields: {
-              title: `Jam ${Math.random()}`,
-              summary: 'A game jam',
-              body: 'Two days.',
-              periods: [{ startDate: '2026-05-01', endDate: '2026-05-02' }],
-            },
-          },
-        ],
-        { apply: true },
-      );
-      await tick();
-      return {
-        id: text.match(/event:(e-[\w-]+)/)![1]!,
-        creation: proposedIn(text)[0]!,
-      };
-    };
-    // What an action did to it after goes with it.
-    const first = await makeJam();
-    await applied([
-      {
-        kind: 'field',
-        target: `event:${first.id}`,
-        field: 'summary',
-        value: 'Two days of games',
-      },
-    ]);
-    expect(await undo(first.creation)).toMatch(/^Undone/);
-    expect(
-      one('SELECT eventUuid FROM events WHERE eventUuid = ?', first.id),
-    ).toBeUndefined();
-
-    // The owner's own change since stays: then it is not taken back.
-    const second = await makeJam();
-    const event = (await THEI_SERVER.events.findByUuid(second.id))!;
-    const form = (await readEventEdit(event)) as unknown as EventEditData;
-    expect(
-      (await saveEventEdit(second.id, { ...form, reminder: 'Mine now' })).type,
-    ).toBe('success');
-    expect(await undo(second.creation)).toMatch(/changed again since/);
-    expect(
-      one('SELECT eventUuid FROM events WHERE eventUuid = ?', second.id),
-    ).toBeDefined();
-
+  // When a made entity may be taken back is the registry's, checked in
+  // ai-actions.test.ts; here the key undoes a made section under its lock.
+  it('takes back a section it made', async () => {
     const [stage] = await applied([
       {
         kind: 'create',

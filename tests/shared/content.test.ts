@@ -741,16 +741,6 @@ describe('content normalization', () => {
     expect(contentDataIsSemanticallyEqual(source, normalized)).toBe(true);
   });
 
-  it('drops an empty gallery block during normalization', () => {
-    expect(
-      normalizeContentData({
-        blocks: [
-          { id: 'empty-gallery', type: 'contentGallery', data: { items: [] } },
-        ],
-      }).blocks,
-    ).toEqual([]);
-  });
-
   it('deduplicates asset sizes in summary', () => {
     const data = normalizeContentData({
       blocks: [

@@ -7,7 +7,6 @@ import {
   fallbackFaviconTile,
   prepareExternalLinkFavicon,
 } from '../../server/thei/external-links/favicon';
-import { extractImageAccent } from '../../server/thei/assets/image-color';
 
 describe('external link favicon files', () => {
   it('converts SVG to 48px WebP and preserves transparency', async () => {
@@ -34,16 +33,17 @@ describe('external link favicon files', () => {
     expect(pixels[center]).toBeGreaterThan(0);
   });
 
-  it('extracts the visible brand color instead of transparent padding', async () => {
-    const source = Buffer.from(
-      `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48">
-        <circle cx="24" cy="24" r="12" fill="#168de2"/>
-      </svg>`,
+  it('takes the accent of the converted favicon from its brand color', async () => {
+    const prepared = await prepareExternalLinkFavicon(
+      Buffer.from(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="12">
+          <circle cx="12" cy="6" r="5" fill="#168de2"/>
+        </svg>`,
+      ),
     );
-    const converted = await convertExternalLinkFavicon(source);
-    const hue = (await extractImageAccent(converted))?.hue;
-    expect(hue).toBeGreaterThan(220);
-    expect(hue).toBeLessThan(280);
+    expect(prepared.accent?.hue).toBeGreaterThan(220);
+    expect(prepared.accent?.hue).toBeLessThan(280);
+    expect(prepared.accent?.chroma).toBeGreaterThan(0.1);
   });
 
   it('addresses a favicon by its name alone, which is its content', () => {

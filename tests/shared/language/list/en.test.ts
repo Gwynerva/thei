@@ -4,11 +4,8 @@ import enModule, { plural } from '../../../../shared/language/list/en';
 const { normalize } = enModule;
 
 describe('normalize', () => {
-  it('replaces ... with ellipsis', () => {
-    expect(normalize!('Wait...')).toBe('Wait\u2026');
-  });
-
-  it('replaces -- with em dash', () => {
+  // What the general step does is checked in general-normalize.test.ts.
+  it('applies the general step first', () => {
     expect(normalize!('one -- two')).toBe('one\u00a0\u2014 two');
   });
 

@@ -28,6 +28,12 @@ describe('accent colors', () => {
       hue: 42,
       chroma: 0.02,
     });
+    // The whole circle of hues, red at zero included.
+    for (const hue of [0, 359])
+      expect(normalizeImageAccent({ hue, chroma: 0.15 })).toEqual({
+        hue,
+        chroma: 0.15,
+      });
     for (const value of [
       null,
       42,
@@ -35,6 +41,7 @@ describe('accent colors', () => {
       { hue: 0 },
       { hue: 0, chroma: -1 },
       { hue: 0, chroma: NaN },
+      { hue: NaN, chroma: 0.1 },
       { hue: 360, chroma: 0.1 },
     ])
       expect(normalizeImageAccent(value)).toBeUndefined();

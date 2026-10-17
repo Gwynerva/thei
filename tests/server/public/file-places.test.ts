@@ -92,6 +92,8 @@ const project = (patch: Record<string, unknown> = {}) => ({
 
 /** Every write on the connection moves it, as SQLite's `total_changes()`. */
 let changes = 0;
+/** Where each file of the family is placed, by its uuid. */
+let placedOn: Record<string, AssetPlacement[]> = {};
 
 beforeEach(() => {
   changes = 0;
@@ -112,6 +114,12 @@ beforeEach(() => {
     diary: { findByUuid: async (id: string) => ({ diaryUuid: id }) },
   };
   readPlacements.mockReset();
+  placedOn = {};
+  // The library answers for the files it is asked about, and no other.
+  readPlacements.mockImplementation(
+    (uuids: string[]) =>
+      new Map(uuids.map((uuid) => [uuid, placedOn[uuid] ?? []])),
+  );
   findContentEntity.mockReset();
   for (const mock of Object.values(builders)) mock.mockReset();
   findContentEntity.mockImplementation(
@@ -127,7 +135,7 @@ beforeEach(() => {
 afterEach(() => delete (globalThis as any).THEI_SERVER);
 
 function placed(...placements: AssetPlacement[]) {
-  readPlacements.mockReturnValue(new Map([['a-photo', placements]]));
+  placedOn = { 'a-photo': placements };
 }
 
 it('lists a public page that shows the file, by how it is used there', async () => {
@@ -218,9 +226,7 @@ it("does not take another place's file on the page for this one", async () => {
 });
 
 it('takes every variant of the file for the file', async () => {
-  readPlacements.mockReturnValue(
-    new Map([['a-crop', [placement('event', 'party', 'banner')]]]),
-  );
+  placedOn = { 'a-crop': [placement('event', 'party', 'banner')] };
   builders.buildPublicEvent.mockResolvedValue({
     bannerMedia: url('cropSlug'),
     content: { blocks: [] },
@@ -230,7 +236,6 @@ it('takes every variant of the file for the file', async () => {
   expect(places.map(({ title, uses }) => ({ title, uses }))).toEqual([
     { title: 'party', uses: ['banner'] },
   ]);
-  expect(readPlacements).toHaveBeenCalledWith(['a-photo', 'a-crop']);
 });
 
 it('answers a file nobody may see as one that never was', async () => {

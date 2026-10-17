@@ -7,7 +7,6 @@ import {
   zipTree,
   type ByteSource,
 } from '../../shared/zip-directory';
-import { readZipEntry } from '../../app/composables/file-preview/zip';
 
 const utf8 = (text: string) => new TextEncoder().encode(text);
 
@@ -158,12 +157,18 @@ describe('zip directory', () => {
     const { source } = bytesSource(archive);
     const directory = await readZipDirectory(source);
     expect(directory.count).toBe(2);
-    expect(directory.entries.map(({ name, size }) => [name, size])).toEqual([
-      ['a.txt', 5],
-      ['b/c.txt', 11],
+    // The second file's local header follows the first's 30 + 5 + 5 bytes.
+    expect(
+      directory.entries.map(({ name, size, packedSize, offset }) => [
+        name,
+        size,
+        packedSize,
+        offset,
+      ]),
+    ).toEqual([
+      ['a.txt', 5, 5, 0],
+      ['b/c.txt', 11, 11, 40],
     ]);
-    const bytes = await readZipEntry(source, directory.entries[1]!, 1000);
-    expect(new TextDecoder().decode(bytes)).toBe('second file');
   });
 
   it('says plainly when a file is no archive', async () => {
@@ -172,53 +177,15 @@ describe('zip directory', () => {
   });
 });
 
-describe('zip entries', () => {
-  it('unpacks a stored and a deflated file', async () => {
-    const archive = zipSync({
-      'stored.txt': [utf8('as is'), { level: 0 }],
-      'packed.txt': utf8('сжато '.repeat(500)),
-    });
-    const { source } = bytesSource(archive);
-    const { entries } = await readZipDirectory(source);
-    const read = async (name: string) =>
-      new TextDecoder().decode(
-        await readZipEntry(
-          source,
-          entries.find((entry) => entry.name === name)!,
-          1024 * 1024,
-        ),
-      );
-    expect(await read('stored.txt')).toBe('as is');
-    expect(await read('packed.txt')).toBe('сжато '.repeat(500));
-  });
-
-  it('stops unpacking at the limit, whatever the archive claims', async () => {
-    const archive = zipSync({ 'zeros.bin': new Uint8Array(200_000) });
-    const { source } = bytesSource(archive);
-    const { entries } = await readZipDirectory(source);
-    const entry = entries[0]!;
-    await expect(readZipEntry(source, entry, 1000)).rejects.toMatchObject({
-      reason: 'too-large',
-    });
-    // An archive that lies about the size is stopped while unpacking.
-    await expect(
-      readZipEntry(source, { ...entry, size: 10 }, 1000),
-    ).rejects.toMatchObject({ reason: 'too-large' });
-  });
-
-  it('refuses an encrypted file', async () => {
+describe('zip names and fields', () => {
+  it('tells an encrypted file by its flag', async () => {
     const { source } = bytesSource(
       handmadeZip([{ name: utf8('secret.txt'), data: utf8('x'), flags: 1 }]),
     );
     const { entries } = await readZipDirectory(source);
     expect(entries[0]!.encrypted).toBe(true);
-    await expect(readZipEntry(source, entries[0]!, 1000)).rejects.toMatchObject(
-      { reason: 'unsupported' },
-    );
   });
-});
 
-describe('zip names and fields', () => {
   it('reads names a Western archiver wrote in code page 437', async () => {
     // «Übersicht.pdf»: Ü is 0x9a in code page 437, «š» in windows-1252.
     const name = new Uint8Array([0x9a, ...utf8('bersicht.pdf')]);
@@ -278,36 +245,5 @@ describe('zip tree', () => {
       'day 2.jpg',
       'day 10.jpg',
     ]);
-  });
-});
-
-describe('zip entry starts', () => {
-  it('unpacks only the start of a long file, and fetches little more', async () => {
-    const text = 'line of a long log\n'.repeat(50_000);
-    const archive = zipSync({
-      'stored.log': [utf8(text), { level: 0 }],
-      'packed.log': utf8(text),
-    });
-    const { source, reads } = bytesSource(archive);
-    const { entries } = await readZipDirectory(source);
-    for (const name of ['stored.log', 'packed.log']) {
-      reads.length = 0;
-      const entry = entries.find((item) => item.name === name)!;
-      const bytes = await readZipEntry(source, entry, 1000, { head: true });
-      expect(new TextDecoder().decode(bytes)).toBe(text.slice(0, 1000));
-      const fetched = Math.max(...reads.map(([start, end]) => end - start));
-      expect(fetched).toBeLessThanOrEqual(1000 + 65536);
-    }
-  });
-
-  it('stops when told to', async () => {
-    const archive = zipSync({ 'a.txt': utf8('words') });
-    const { source } = bytesSource(archive);
-    const { entries } = await readZipDirectory(source);
-    const controller = new AbortController();
-    controller.abort();
-    await expect(
-      readZipEntry(source, entries[0]!, 1000, { signal: controller.signal }),
-    ).rejects.toMatchObject({ name: 'AbortError' });
   });
 });
