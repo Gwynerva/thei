@@ -70,6 +70,16 @@ export function formatMediaTime(seconds: number): string {
     : `${minutes}:${rest}`;
 }
 
+/** A moment of a recording or a video to a tenth of a second: "0:12.4". */
+export function formatMediaMoment(seconds: number): string {
+  // A moment stored as 12.3 may come back a hair under it.
+  const tenths =
+    Number.isFinite(seconds) && seconds > 0
+      ? Math.floor(seconds * 10 + 1e-6)
+      : 0;
+  return `${formatMediaTime(tenths / 10)}.${tenths % 10}`;
+}
+
 const LOSSLESS_AUDIO_CODECS = new Set([
   'flac',
   'alac',

@@ -4,7 +4,7 @@ import { createReadStream, createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 import { buildAssetPreviewUrl } from '#layers/thei/shared/api/asset';
 import type { AssetVariantInfo } from '#layers/thei/shared/api/asset';
 import { AssetType } from '#layers/thei/shared/asset';
@@ -28,6 +28,7 @@ import { EntityPrefix, generateUnique, generateUniqueId } from '../entity-id';
 import { extractImageAccent } from './image-color';
 import { inspectVideoFile, videoSourceInfo } from './process';
 import { createMediaPreview, MEDIA_PREVIEW_EXTENSION } from './media-preview';
+import type { VideoThumbnailOptions } from './video-thumbnail';
 import { withProcessingSlot } from './queue';
 import { assetHeldSql } from './holds';
 import type { MediaDescriptor } from '#layers/thei/shared/media';
@@ -77,7 +78,7 @@ export interface StoreAssetInput {
 export async function createMediaPreviewAsset(
   source: AssetBytes,
   sourceType: AssetType.Image | AssetType.Video,
-  options: { duration?: number } = {},
+  options: VideoThumbnailOptions = {},
 ): Promise<{
   previewAssetUuid: string;
   accent?: ImageAccent;
@@ -150,20 +151,42 @@ export async function findMediaPreviewAsset(asset: StoredAssetRecord) {
   ).find((usage) => usage.role === 'preview')?.asset;
 }
 
+export interface RefreshMediaPreviewOptions {
+  /**
+   * Of a video: seconds into it of the frame the owner chose, or `null` for
+   * a frame picked here again. Left out, a frame chosen by hand stays
+   * chosen, and is taken again from the file as it is.
+   */
+  at?: number | null;
+}
+
 /**
  * Makes a stored picture's or video's preview again, from the file as it is.
  *
  * A video preview made by an older version shows the first frame found
  * lively enough, often a dark one; an SVG preview was drawn at the size of
- * its units. The new preview stands in for the old one, which is left with no
- * usage for the cleanup to take, and the accent colour follows it. Decoding
- * runs in the file's own processing lane, like any other work on it.
+ * its units; and the owner may choose a video's frame by hand. The new
+ * preview stands in for the old one, which is left with no usage for the
+ * cleanup to take, and the accent colour follows it. Decoding runs in the
+ * file's own processing lane, like any other work on it.
  */
 export async function refreshMediaPreview(
   asset: StoredAssetRecord,
+  options: RefreshMediaPreviewOptions = {},
 ): Promise<AssetVariantInfo> {
   const isVideo = asset.type === AssetType.Video;
   const meta = asset.meta as (VideoAssetMeta & ImageAssetMeta) | null;
+  const wanted =
+    options.at === undefined
+      ? meta?.previewChosen
+        ? meta.previewAt
+        : undefined
+      : (options.at ?? undefined);
+  // A thousandth of a second is finer than any frame.
+  const chosenAt =
+    isVideo && wanted !== undefined
+      ? Math.round(Math.max(0, wanted) * 1000) / 1000
+      : undefined;
   const bytes: AssetBytes = {
     path: THEI_SERVER.assets.filePath(asset.contentHash, asset.extension),
     size: asset.size,
@@ -175,22 +198,19 @@ export async function refreshMediaPreview(
       createMediaPreviewAsset(
         bytes,
         isVideo ? AssetType.Video : AssetType.Image,
-        { duration: isVideo ? meta?.duration : undefined },
+        isVideo
+          ? { duration: meta?.duration, fps: meta?.fps, at: chosenAt }
+          : {},
       ),
     );
 
-  const previous = await findMediaPreviewAsset(asset);
-  if (previous && previous.assetUuid !== previewAssetUuid) {
-    await THEI_SERVER.assets.usages.detach(
-      previous.assetUuid,
-      'asset',
-      asset.assetUuid,
-      'preview',
-    );
-  }
-  await attachMediaPreviewUsage(asset.assetUuid, previewAssetUuid);
-
-  const { accent: _previous, ...rest } = meta ?? {};
+  const {
+    accent: _accent,
+    previewAt: _at,
+    previewScore: _score,
+    previewChosen: _chosen,
+    ...rest
+  } = meta ?? {};
   const resolvedMeta: VideoAssetMeta | ImageAssetMeta = {
     ...rest,
     ...(accent !== undefined ? { accent } : {}),
@@ -198,12 +218,104 @@ export async function refreshMediaPreview(
       ? {
           previewAt: frameAt ?? 0,
           ...(frameScore !== undefined ? { previewScore: frameScore } : {}),
+          ...(chosenAt !== undefined ? { previewChosen: true as const } : {}),
         }
       : {}),
   };
-  await THEI_SERVER.assets.update(asset.assetUuid, { meta: resolvedMeta });
+
+  // The file never stands without a preview, nor with two, and its meta
+  // speaks of the one it has.
+  const { db, schema } = THEI_SERVER.useDb();
+  db.transaction((tx) => {
+    tx.delete(schema.assetUsages)
+      .where(
+        and(
+          eq(schema.assetUsages.containerType, 'asset'),
+          eq(schema.assetUsages.containerId, asset.assetUuid),
+          eq(schema.assetUsages.role, 'preview'),
+          ne(schema.assetUsages.assetUuid, previewAssetUuid),
+        ),
+      )
+      .run();
+    tx.insert(schema.assetUsages)
+      .values({
+        assetUuid: previewAssetUuid,
+        containerType: 'asset',
+        containerId: asset.assetUuid,
+        role: 'preview',
+      })
+      .onConflictDoNothing()
+      .run();
+    tx.update(schema.assets)
+      .set({ meta: resolvedMeta })
+      .where(eq(schema.assets.assetUuid, asset.assetUuid))
+      .run();
+  });
+  await THEI_SERVER.assets.touch(previewAssetUuid);
   asset.meta = resolvedMeta;
   return await buildAssetVariantInfo(asset);
+}
+
+/**
+ * The moment the owner chose for the preview frames of a family's videos,
+ * read from any of them that carries the mark; none while their frames are
+ * picked here.
+ */
+export async function familyChosenPreviewAt(
+  familyUuid: string,
+): Promise<number | undefined> {
+  const { db, schema } = THEI_SERVER.useDb();
+  const [chosen] = await db
+    .select({ meta: schema.assets.meta })
+    .from(schema.assets)
+    .where(
+      and(
+        eq(schema.assets.familyUuid, familyUuid),
+        eq(schema.assets.type, AssetType.Video),
+        sql`json_extract(${schema.assets.meta}, '$.previewChosen') = 1`,
+      ),
+    )
+    .limit(1);
+  return (chosen?.meta as VideoAssetMeta | null)?.previewAt;
+}
+
+/**
+ * Chooses the preview frame of a video by hand — the frame at `at` seconds
+ * — or, given `null`, lets it be picked here again, for every video of its
+ * family: they show one moment, each from its own bytes, so a crop or a turn
+ * keeps its own picture. The video asked about comes first in the answer.
+ */
+export async function chooseVideoPreviewFrame(
+  asset: StoredAssetRecord,
+  at: number | null,
+): Promise<AssetVariantInfo[]> {
+  const { db, schema } = THEI_SERVER.useDb();
+  const siblings = await db
+    .select()
+    .from(schema.assets)
+    .where(
+      and(
+        eq(schema.assets.familyUuid, asset.familyUuid),
+        eq(schema.assets.type, AssetType.Video),
+        ne(schema.assets.assetUuid, asset.assetUuid),
+      ),
+    );
+  const answer = [await refreshMediaPreview(asset, { at })];
+  for (const video of siblings) {
+    try {
+      answer.push(await refreshMediaPreview(video, { at }));
+    } catch (error) {
+      // One variant that cannot be read keeps its frame; the rest move on.
+      THEI_SERVER.console
+        .tag('Assets')
+        .warn(
+          `Could not take the preview frame of ${video.assetUuid}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+    }
+  }
+  return answer;
 }
 
 /** Preview asset of each media asset, for several assets in one query. */

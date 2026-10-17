@@ -93,6 +93,12 @@ export interface VideoAssetMeta extends AssetMetaBase {
    * compared by colour, which an update task makes again.
    */
   previewScore?: number;
+  /**
+   * The owner chose the preview frame by hand, at `previewAt`, for every
+   * video of the family: nothing picks another one in its place, and a new
+   * variant takes the same moment. Absent while the frame is picked here.
+   */
+  previewChosen?: true;
 }
 
 export interface AudioAssetMeta extends AssetMetaBase {

@@ -49,19 +49,30 @@ const app = createApp().use(
   }),
 );
 const handle = toWebHandler(app);
+/**
+ * `preview` asks for the file's preview, by a token as a video's still
+ * carries one, or by the value given.
+ */
 const request = (
   role = 'guest',
   headers: Record<string, string> = {},
-  preview = false,
+  preview: boolean | string = false,
 ) =>
   handle(
-    new Request(`http://localhost/file${preview ? '?preview=1' : ''}`, {
-      headers: {
-        'x-role': role,
-        ...(role === 'as-guest' ? { cookie: 'thei-public-view=guest' } : {}),
-        ...headers,
+    new Request(
+      `http://localhost/file${
+        preview === false
+          ? ''
+          : `?preview=${preview === true ? 'c12.4' : preview}`
+      }`,
+      {
+        headers: {
+          'x-role': role,
+          ...(role === 'as-guest' ? { cookie: 'thei-public-view=guest' } : {}),
+          ...headers,
+        },
       },
-    }),
+    ),
   );
 
 beforeAll(async () => {
@@ -285,6 +296,13 @@ describe('contextual attachment authorization before HTTP caching', () => {
     expect(original.headers.get('etag')).toBe('"original-hash"');
     const preview = await request('guest', {}, true);
     expect(preview.headers.get('etag')).toBe('"preview-hash"');
+    // Any token asks for the preview; an empty one asks for nothing.
+    expect((await request('guest', {}, '1')).headers.get('etag')).toBe(
+      '"preview-hash"',
+    );
+    expect((await request('guest', {}, '')).headers.get('etag')).toBe(
+      '"original-hash"',
+    );
     const range = await request('guest', { Range: 'bytes=1-3' });
     expect(range.status).toBe(206);
     expect(await range.text()).toBe('rig');

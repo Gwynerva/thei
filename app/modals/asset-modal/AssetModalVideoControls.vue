@@ -9,7 +9,21 @@ const props = defineProps<{
   volume: number;
   /** `undefined` while unknown: the volume controls stay available. */
   hasAudio?: boolean;
+  /** Seconds marked with a tick on the bar: where the video's still is. */
+  mark?: number;
 }>();
+
+/**
+ * The tick stands where the thumb's middle would at that moment: the thumb
+ * (three spacing units wide) travels the bar less its own width.
+ */
+const markStyle = computed(() => {
+  if (props.mark === undefined || !(props.duration > 0)) return undefined;
+  const share = Math.min(1, Math.max(0, props.mark / props.duration));
+  return {
+    left: `calc(var(--spacing) * 1.5 + (100% - var(--spacing) * 3) * ${share})`,
+  };
+});
 
 const emit = defineEmits<{
   togglePlay: [];
@@ -59,15 +73,27 @@ function onSeekChange(value: number): void {
       {{ formatMediaTime(shownTime) }}
     </span>
 
-    <MediaRange
-      class="mx-sm"
-      :max="duration || 0"
-      :value="shownTime"
-      :label="phrase.video_seek"
-      @input="onSeekInput"
-      @change="onSeekChange"
-      @blur="scrubTime = null"
-    />
+    <div class="relative mx-sm flex min-w-0 flex-1 items-center">
+      <MediaRange
+        :max="duration || 0"
+        :value="shownTime"
+        :label="phrase.video_seek"
+        @input="onSeekInput"
+        @change="onSeekChange"
+        @blur="scrubTime = null"
+      />
+      <TransitionFade>
+        <span
+          v-if="markStyle"
+          class="pointer-events-none absolute top-1/2 h-2.5 w-0.5
+            -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent
+            transition-[left] motion-reduce:transition-none"
+          :style="markStyle"
+          aria-hidden="true"
+          data-video-poster-mark
+        ></span>
+      </TransitionFade>
+    </div>
 
     <span
       class="shrink-0 text-xs text-text-1/70 tabular-nums select-none"

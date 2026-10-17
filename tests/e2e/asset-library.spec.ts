@@ -8,7 +8,11 @@ import {
 import { E2E_ORIGIN } from './fixture-url';
 import { fileURLToPath } from 'node:url';
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import sharp from 'sharp';
 import { createOriginalAssetSettings } from '../../shared/asset-upload-settings';
 import { buildUploadHeaders } from '../../shared/api/asset-upload-headers';
@@ -568,4 +572,150 @@ test('video previews play on hover and keyboard focus in both library views', as
       tile.evaluate((element) => getComputedStyle(element).borderColor),
     )
     .not.toBe(restingBorder);
+});
+
+/**
+ * A video whose frames differ: a grey second, which the automatic pick
+ * passes over, then a colour of this run alone, so its bytes are new.
+ */
+async function uploadChangingVideo(api: APIRequestContext) {
+  const directory = await mkdtemp(join(tmpdir(), 'thei-e2e-frames-'));
+  const path = join(directory, 'frames.mp4');
+  // A full colour of a hue of its own, livelier than grey whatever it is.
+  const hue = Math.random() * 6;
+  const rising = Math.round(255 * (1 - Math.abs((hue % 2) - 1)));
+  const [red, green, blue] = [
+    [255, rising, 0],
+    [rising, 255, 0],
+    [0, 255, rising],
+    [0, rising, 255],
+    [rising, 0, 255],
+    [255, 0, rising],
+  ][Math.floor(hue)]!;
+  const colour = `0x${[red, green, blue]
+    .map((channel) => channel!.toString(16).padStart(2, '0'))
+    .join('')}`;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(
+        ffmpegInstaller.path,
+        [
+          '-y',
+          '-f',
+          'lavfi',
+          '-i',
+          'color=c=gray:s=320x180:r=25:d=1',
+          '-f',
+          'lavfi',
+          '-i',
+          `color=c=${colour}:s=320x180:r=25:d=2`,
+          '-filter_complex',
+          '[0:v][1:v]concat=n=2:v=1:a=0,format=yuv420p',
+          '-c:v',
+          'libx264',
+          path,
+        ],
+        { stdio: 'ignore' },
+      );
+      child.on('error', reject);
+      child.on('close', (code) =>
+        code === 0 ? resolve() : reject(new Error(`ffmpeg exited ${code}`)),
+      );
+    });
+    const response = await api.post('/api/admin/assets', {
+      headers: buildUploadHeaders({
+        settings: createOriginalAssetSettings(),
+        extension: 'mp4',
+      }),
+      data: await readFile(path),
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+    return await response.json();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+test('a video takes the frame its player stands at as its still, and gives it back', async ({
+  page,
+  request,
+}) => {
+  const asset = await uploadChangingVideo(request);
+  await page.goto('/admin/assets/?usage=unused');
+  const tile = page.locator(`[data-asset-uuid="${asset.assetUuid}"]`);
+  const tileStill = tile.locator('[data-media-preview-pair] img.media-main');
+  await expect(tileStill).toHaveAttribute('src', /\/content$/);
+  const automatic = await tileStill.getAttribute('src');
+  await tile.click();
+
+  const section = page.locator('[data-asset-preview-frame]');
+  const state = section.locator('[data-asset-preview-frame-state]');
+  const still = section.locator('[data-asset-preview-frame-poster] img');
+  const take = section.locator('[data-asset-preview-frame-take]');
+  const mark = page.locator('[data-video-poster-mark]');
+  await expect(state).toHaveAttribute('data-asset-preview-frame-state', 'auto');
+  await expect(state).toHaveText('Picked automatically');
+  await expect(still).toHaveAttribute('src', automatic!);
+  await expect(mark).toBeVisible();
+  const automaticMark = await mark.evaluate((element) => element.style.left);
+
+  // The button follows the player.
+  // A range cannot be filled: the owner's drag, as the input tells it.
+  await page
+    .getByRole('slider', { name: 'Playback position' })
+    .evaluate((element) => {
+      const input = element as HTMLInputElement;
+      input.value = '0.5';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  await expect(take).toContainText('0:00.5');
+  await take.click();
+  await expect(state).toHaveAttribute(
+    'data-asset-preview-frame-state',
+    'chosen',
+  );
+  await expect(state).toContainText('0:00');
+  await expect(still).not.toHaveAttribute('src', automatic!);
+  const chosen = await still.getAttribute('src');
+  // At the frame already chosen there is nothing to take.
+  await expect(take).toBeDisabled();
+  await expect
+    .poll(() => mark.evaluate((element) => element.style.left))
+    .not.toBe(automaticMark);
+  // The window's own player shows the still, and the tile behind it too.
+  await expect(page.locator('dialog[open] video')).toHaveAttribute(
+    'poster',
+    chosen!,
+  );
+  await expect(tileStill).toHaveAttribute('src', chosen!);
+
+  const grey = await page.evaluate(async (src) => {
+    const image = new Image();
+    image.src = src;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const context = canvas.getContext('2d')!;
+    context.drawImage(image, 0, 0, 1, 1);
+    const [red, green, blue] = context.getImageData(0, 0, 1, 1).data;
+    return Math.max(red!, green!, blue!) - Math.min(red!, green!, blue!);
+  }, chosen!);
+  expect(grey).toBeLessThan(12);
+
+  // Read again, the library keeps the choice.
+  await page.keyboard.press('Escape');
+  await expect(page.locator('dialog[open]')).toHaveCount(0);
+  await page.reload();
+  await expect(tileStill).toHaveAttribute('src', chosen!);
+  await tile.click();
+  await expect(state).toHaveText('Chosen by hand · 0:00');
+
+  await section.locator('[data-asset-preview-frame-auto]').click();
+  await expect(state).toHaveAttribute('data-asset-preview-frame-state', 'auto');
+  await expect(still).toHaveAttribute('src', automatic!);
+  await expect(section.locator('[data-asset-preview-frame-auto]')).toHaveCount(
+    0,
+  );
+  await expect(tileStill).toHaveAttribute('src', automatic!);
 });

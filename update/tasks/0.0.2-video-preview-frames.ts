@@ -5,8 +5,8 @@ import { defineUpdateTask } from './types';
  * first frame found lively enough. Each video's frames are now compared
  * across its whole length and the most colourful, well exposed one becomes
  * the preview, one video at a time in the video lane. A video that cannot
- * be read keeps its old preview; the file card in the library can remake it
- * by hand.
+ * be read keeps its old preview, until the owner chooses its frame by hand
+ * in its file window.
  */
 export default defineUpdateTask({
   id: '0.0.2/001-video-preview-frames',

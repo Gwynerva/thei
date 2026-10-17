@@ -37,6 +37,7 @@ import {
   buildAssetVariantInfo,
   createMediaPreviewAsset,
   discardAssetScratch,
+  familyChosenPreviewAt,
   storeAsset,
 } from './storage';
 
@@ -280,6 +281,12 @@ export async function commitProcessedAsset(input: {
     return { ...(await buildAssetVariantInfo(existing)), created: false };
   }
 
+  // A family whose frame the owner chose shows that moment in a new variant
+  // too, taken from the variant's own bytes.
+  const previewAt =
+    processed.type === AssetType.Video
+      ? await familyChosenPreviewAt(input.familyUuid)
+      : undefined;
   let described: Awaited<ReturnType<typeof buildProcessedAssetMeta>>;
   try {
     described = await buildProcessedAssetMeta(
@@ -303,6 +310,7 @@ export async function commitProcessedAsset(input: {
       input.source,
       processed.video,
       input.signal,
+      previewAt,
     );
   } catch (error) {
     // Nothing will adopt what was made; the source itself is the caller's.
@@ -345,6 +353,8 @@ async function buildProcessedAssetMeta(
   sourceFile?: { extension: string; size: number },
   video?: { duration?: number; fps?: number; bitrate?: number },
   signal?: AbortSignal,
+  /** Of a video: the moment of the frame the owner chose for its family. */
+  previewAt?: number,
 ): Promise<{ meta: AssetMeta | null; previewAssetUuid?: string }> {
   if (type === AssetType.Image) {
     const preview = await createMediaPreviewAsset(bytes, AssetType.Image);
@@ -358,6 +368,8 @@ async function buildProcessedAssetMeta(
   if (type === AssetType.Video) {
     const preview = await createMediaPreviewAsset(bytes, AssetType.Video, {
       duration: video?.duration,
+      fps: video?.fps,
+      at: previewAt,
     });
     const meta: VideoAssetMeta = {
       ...dimensions,
@@ -370,6 +382,7 @@ async function buildProcessedAssetMeta(
       ...(preview.frameScore !== undefined
         ? { previewScore: preview.frameScore }
         : {}),
+      ...(previewAt !== undefined ? { previewChosen: true as const } : {}),
     };
     return { meta, previewAssetUuid: preview.previewAssetUuid };
   }

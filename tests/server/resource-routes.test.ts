@@ -15,6 +15,8 @@ const newRouteFiles = [
   'server/api/admin/assets/[assetUuid]/content.get.ts',
   'server/api/admin/assets/[assetUuid]/variants.get.ts',
   'server/api/admin/assets/[assetUuid]/touches.post.ts',
+  // A video's frame, chosen by hand in its file window.
+  'server/api/admin/assets/[assetUuid]/preview.post.ts',
   'server/api/admin/assets/drafts/index.post.ts',
   'server/api/admin/assets/drafts/from-asset/[assetUuid].post.ts',
   'server/api/admin/assets/drafts/[draftId].delete.ts',
@@ -54,9 +56,6 @@ const removedRouteFiles = [
   'server/routes/sign-out.ts',
   // Update progress is polled from `/api/update/`, open site and closed.
   'server/api/admin/assets/preview-refresh.get.ts',
-  // A video's frame is chosen as it is stored, and the update to 0.0.2 chose
-  // it again for the older ones: making it once more changed nothing.
-  'server/api/admin/assets/[assetUuid]/preview.post.ts',
 ];
 
 describe('resource routes', () => {

@@ -116,6 +116,19 @@ export interface AssetVariantsResponse {
   variants: AssetVariantWithUsage[];
 }
 
+/**
+ * A video's preview frame, chosen by hand: seconds into it, or `null` to let
+ * the frame be picked by itself again.
+ */
+export interface AssetPreviewFrameRequest {
+  at: number | null;
+}
+
+/** Every video of the family as it shows now, the one asked about first. */
+export interface AssetPreviewFrameResponse {
+  variants: AssetVariantInfo[];
+}
+
 export interface AssetWizardResult {
   type: 'asset-ready';
   asset: AssetVariantInfo;

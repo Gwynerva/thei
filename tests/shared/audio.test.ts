@@ -19,6 +19,7 @@ import {
 } from '../../shared/assets/formats';
 import {
   audioDescriptorFromMeta,
+  formatMediaMoment,
   formatMediaTime,
   isLosslessAudioCodec,
   normalizeAudioDescriptor,
@@ -215,5 +216,13 @@ describe('audio descriptor', () => {
     expect(formatMediaTime(75.9)).toBe('1:15');
     expect(formatMediaTime(3600 + 62)).toBe('1:01:02');
     expect(formatMediaTime(Number.NaN)).toBe('0:00');
+  });
+
+  it('writes a moment to the tenth of a second, never rounding up', () => {
+    expect(formatMediaMoment(0)).toBe('0:00.0');
+    expect(formatMediaMoment(12.46)).toBe('0:12.4');
+    expect(formatMediaMoment(59.99)).toBe('0:59.9');
+    expect(formatMediaMoment(3600 + 62.5)).toBe('1:01:02.5');
+    expect(formatMediaMoment(Number.NaN)).toBe('0:00.0');
   });
 });

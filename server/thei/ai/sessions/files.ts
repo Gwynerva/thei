@@ -325,6 +325,17 @@ const ready = new Map<string, { blocks: StreamFile[]; bytes: number }>();
 const READY_BYTES = 48 * 1024 * 1024;
 let readyBytes = 0;
 
+/**
+ * Gives up what a model was made ready to be shown of a file: a video whose
+ * frame was chosen again is shown by its new frame from the next turn on.
+ */
+export function forgetModelFile(assetUuid: string) {
+  const kept = ready.get(assetUuid);
+  if (!kept) return;
+  readyBytes -= kept.bytes;
+  ready.delete(assetUuid);
+}
+
 function keepReady(id: string, blocks: StreamFile[]) {
   const bytes = blocks.reduce(
     (sum, block) =>

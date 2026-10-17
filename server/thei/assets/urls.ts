@@ -1,5 +1,5 @@
 import { buildAssetPreviewUrl } from '#layers/thei/shared/api/asset';
-import type { AssetRole } from '#layers/thei/shared/asset';
+import type { AssetRole, VideoAssetMeta } from '#layers/thei/shared/asset';
 import { AssetType } from '#layers/thei/shared/asset';
 import {
   buildProjectSectionUrl,
@@ -31,9 +31,23 @@ function publicMedia(
   return {
     ...media,
     src,
-    previewSrc: `${src}?preview=1`,
+    previewSrc: `${src}?preview=${publicPreviewToken(asset)}`,
     ...(alt ? { alt } : {}),
   };
+}
+
+/**
+ * What a public preview's address carries in `?preview=`, so that it moves
+ * whenever the preview does: a browser and a proxy keep a public file a day.
+ * A video's still changes with its frame — its moment, and whether the owner
+ * chose it, since the frame chosen at a moment is not the one picked around
+ * it. Any other preview changes only with its file, whose address is its own.
+ */
+export function publicPreviewToken(asset: StoredAssetRecord): string {
+  if (asset.type !== AssetType.Video) return '1';
+  const meta = asset.meta as VideoAssetMeta | null;
+  if (meta?.previewAt === undefined) return '1';
+  return `${meta.previewChosen ? 'c' : ''}${meta.previewAt}`;
 }
 
 export async function buildPublicProfileMedia(
