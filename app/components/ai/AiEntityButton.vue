@@ -214,10 +214,10 @@ function openFull() {
           data-ai-entity-composer
           @send="send"
         />
-        <AiPresetChips
+        <AiPresetPicker
           v-if="panel?.modelReady"
           :presets="panel.templates"
-          :heading="phrase.ai_templates_presets"
+          :chosen="composer?.templateId()"
           @choose="usePreset"
         />
         <div

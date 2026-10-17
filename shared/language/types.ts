@@ -1781,8 +1781,6 @@ export type LanguagePhrases = {
   ai_model_choose: string;
   ai_model_other: string;
   ai_model_choice: string;
-  ai_model_connection: (model: string) => string;
-  ai_model_default: string;
   ai_model_id_placeholder: string;
   ai_model_missing: string;
   ai_model_address_invalid: string;

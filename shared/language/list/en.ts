@@ -2388,15 +2388,12 @@ export default defineI18nBase({
     ai_model_service_local: (name) => `${name} — on your computer`,
     ai_model_service_missing: 'Choose a service.',
     ai_model_base_url: 'API address',
-    ai_model_label: 'Default model',
+    ai_model_label: 'Model',
     ai_model_list_refresh: 'Refresh the list of models',
     ai_model_unlisted: 'The service gave no list of models: type the name.',
     ai_model_choose: 'Choose a model',
     ai_model_other: 'Another…',
     ai_model_choice: 'Model of the session',
-    ai_model_connection: (model) =>
-      model ? `${model} · default` : 'The default model',
-    ai_model_default: 'the default model',
     ai_model_id_placeholder: 'The model’s name',
     ai_model_missing: 'Name the model.',
     ai_model_address_invalid:

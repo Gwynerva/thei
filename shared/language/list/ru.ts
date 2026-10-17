@@ -2465,16 +2465,13 @@ export default defineI18nModule({
     ai_model_service_local: (name) => `${name} — на вашем компьютере`,
     ai_model_service_missing: 'Выберите сервис.',
     ai_model_base_url: 'Адрес API',
-    ai_model_label: 'Модель по умолчанию',
+    ai_model_label: 'Модель',
     ai_model_list_refresh: 'Обновить список моделей',
     ai_model_unlisted:
       'Сервис не дал списка моделей — впишите название вручную.',
     ai_model_choose: 'Выберите модель',
     ai_model_other: 'Другая…',
     ai_model_choice: 'Модель сессии',
-    ai_model_connection: (model) =>
-      model ? `${model} · по умолчанию` : 'Модель по умолчанию',
-    ai_model_default: 'модель по умолчанию',
     ai_model_id_placeholder: 'Название модели',
     ai_model_missing: 'Укажите модель.',
     ai_model_address_invalid:

@@ -177,6 +177,14 @@ useModalCloseGuard(
           class="flex-1"
         />
         <ModalHeaderButton
+          v-if="template"
+          :icon="busy === 'copy' ? 'loading' : 'template'"
+          :label="phrase.ai_template_copy"
+          :disabled="Boolean(busy)"
+          data-template-copy
+          @click="copy"
+        />
+        <ModalHeaderButton
           icon="close"
           :label="phrase.close_modal"
           @click="closeModal"
@@ -267,18 +275,6 @@ useModalCloseGuard(
         >
           <Icon :name="busy === 'run' ? 'loading' : 'list-check'" />{{
             phrase.ai_template_run
-          }}
-        </Button>
-        <Button
-          variant="secondary"
-          class="flex h-9 shrink-0 items-center gap-xs bg-transparent
-            whitespace-nowrap pointer-coarse:h-11"
-          :disabled="Boolean(busy)"
-          data-template-copy
-          @click="copy"
-        >
-          <Icon :name="busy === 'copy' ? 'loading' : 'template'" />{{
-            phrase.ai_template_copy
           }}
         </Button>
         <Button

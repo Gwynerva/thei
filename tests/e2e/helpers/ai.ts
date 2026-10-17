@@ -1,4 +1,4 @@
-import { expect, type APIRequestContext } from '@playwright/test';
+import { expect, type APIRequestContext, type Locator } from '@playwright/test';
 import type { FakeModel } from '../../helpers/fake-model';
 
 /**
@@ -29,4 +29,13 @@ export async function turnAiOn(request: APIRequestContext, model: FakeModel) {
 export async function turnAiOff(request: APIRequestContext) {
   await request.put('/api/admin/ai/model', { data: { provider: 'none' } });
   await request.put('/api/admin/ai/settings', { data: { enabled: false } });
+}
+
+/** Starts a message from a template, chosen in the picker inside `scope`. */
+export async function chooseTemplate(scope: Locator, templateId: string) {
+  await scope.locator('[data-ai-presets] button').first().click();
+  await scope
+    .page()
+    .locator(`[data-select-popup] [data-select-option="${templateId}"]`)
+    .click();
 }

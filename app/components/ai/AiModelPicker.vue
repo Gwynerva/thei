@@ -39,7 +39,7 @@ const options = computed<SelectOption[]>(() => {
   return [
     {
       value: '',
-      label: phrase.value.ai_model_connection(connectionModel.value),
+      label: connectionModel.value || phrase.value.ai_model_choice,
       divider: others.length > 0,
     },
     ...others.map((name) => ({ value: name, label: name })),

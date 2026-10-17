@@ -54,6 +54,17 @@ attention.
 - An accepted proposal is laid into the form and counts as applied once the
   form is saved.
 
+## Templates and models
+
+- A session starts from a template chosen in a select, beside the select of
+  the model that answers it (`app/components/ai/AiPresetPicker.vue`,
+  `app/components/ai/AiModelPicker.vue`) — never a row of chips. The model is
+  a session's, named by itself, and changes from the session's head; a
+  template names none.
+- Templates are a table in sections, built-in and the owner's own; a row
+  opens its template in a new session, a check's row also runs it over what
+  is new, and a built-in one's window copies it from an icon in its header.
+
 ## Stopping
 
 - While the model answers, `app/components/ai/AiStopButton.vue` stops it:

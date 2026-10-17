@@ -6,7 +6,7 @@ import {
   type FakeRequest,
   type FakeTurn,
 } from '../helpers/fake-model';
-import { turnAiOff, turnAiOn } from './helpers/ai';
+import { chooseTemplate, turnAiOff, turnAiOn } from './helpers/ai';
 import { namedExternalLinkListItems } from '../../shared/external-link';
 import sharp from 'sharp';
 import { createOriginalAssetSettings } from '../../shared/asset-upload-settings';
@@ -499,7 +499,7 @@ test('the ✦ sends a ready-made request about the entity, and the form stays', 
       // The message names the entity before a word is written.
       const composer = menu.locator('[data-ai-entity-composer]');
       await expect(composer.locator('[data-mention]')).toContainText(NEW_TITLE);
-      await menu.locator(`[data-ai-preset="${preset.templateId}"]`).click();
+      await chooseTemplate(menu, preset.templateId);
       await expect(composer).toContainText('Look over this one');
       await composer.locator('[contenteditable="true"]').press('End');
       await page.keyboard.type(' Briefly.');
@@ -585,11 +585,10 @@ test('a ready-made request opens in a new session from its row', async ({
     await expect(page).not.toHaveURL(/template=/);
     const composer = page.locator('[data-session-new-screen] [data-composer]');
     await expect(composer).toContainText('Write me a short plan.');
+    // The picker says which template the words began from.
     await expect(
-      page.locator(
-        `[data-session-new-screen] [data-ai-preset="${preset.templateId}"]`,
-      ),
-    ).toBeVisible();
+      page.locator('[data-session-new-screen] [data-ai-presets]'),
+    ).toContainText(`Row request ${run}`);
   } finally {
     await page.request.delete(`/api/admin/ai/templates/${preset.templateId}`);
   }

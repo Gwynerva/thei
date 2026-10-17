@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import { startFakeModel, type FakeModel } from '../helpers/fake-model';
-import { turnAiOff, turnAiOn } from './helpers/ai';
+import { chooseTemplate, turnAiOff, turnAiOn } from './helpers/ai';
 
 /**
  * The Templates tab as the owner uses it: the three built-in checks and the
@@ -153,11 +153,10 @@ test('runs a check sent from an entity’s ✦, and over again once it is all lo
 }) => {
   await open(page, `/admin/events/${eventUuid}/edit/`);
   const menu = page.locator('[data-ai-entity-menu]');
-  const check = menu.locator('[data-ai-preset="builtin-proofread"]');
   const field = menu.locator('[data-ai-entity-composer] [data-composer-field]');
   await page.locator('[data-ai-entity]').click();
   // Chosen, its words go into the message, sent as they are.
-  await check.click();
+  await chooseTemplate(menu, 'builtin-proofread');
   await expect(field).toContainText('Find and fix obvious mistakes');
   await field.press('Enter');
   const sent = menu.locator('[data-ai-entity-sent]');
@@ -168,7 +167,7 @@ test('runs a check sent from an entity’s ✦, and over again once it is all lo
     timeout: 20_000,
   });
   // All of it looked at already: sent again, it is looked at from the start.
-  await check.click();
+  await chooseTemplate(menu, 'builtin-proofread');
   await field.press('Enter');
   await expect(sent).toBeVisible();
   await expect(toast(page)).toHaveCount(0);
@@ -194,7 +193,7 @@ test('narrows a check by the words added on a new session', async ({
 }) => {
   await open(page, '/admin/ai/?session=new');
   const screen = page.locator('[data-session-new-screen]');
-  await screen.locator('[data-ai-preset="builtin-proofread"]').click();
+  await chooseTemplate(screen, 'builtin-proofread');
   const field = page.locator('[data-composer-field]');
   await expect(field).toContainText('Find and fix obvious mistakes');
   await field.press('End');

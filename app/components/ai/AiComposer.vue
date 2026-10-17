@@ -537,25 +537,36 @@ function caretAtEnd(element: HTMLElement) {
   selection?.addRange(range);
 }
 
+/** The words a ready-made request put in last, while they stand as put. */
+let prefilled: string | undefined;
+
 /**
  * Words put in for the owner to go on with — a ready-made request's: into
- * an empty field as they are, after what is there on a line of their own.
- * Typed in as one edit, so Ctrl+Z takes them back.
+ * an empty field as they are, after what is there on a line of their own,
+ * or in place of another request's words the owner has not touched. Typed
+ * in as one edit, so Ctrl+Z takes them back.
  */
 function prefill(text: string, templateId?: string) {
   const element = field.value;
   if (!element || !text) return;
+  const isChip = (node: Node) =>
+    node instanceof HTMLElement && node.classList.contains(MENTION_CLASS);
+  const wordNodes = () =>
+    [...element.childNodes].filter((node) => !isChip(node));
+  const words = () =>
+    wordNodes()
+      .map((node) => node.textContent ?? '')
+      .join('')
+      .trim();
+  // Another request's words, as they were put in: this one takes their place.
+  if (prefilled !== undefined && words() === prefilled.trim())
+    for (const node of wordNodes()) node.remove();
   caretAtEnd(element);
   // After words, on a line of their own; after chips alone, beside them.
-  const written = [...element.childNodes].some(
-    (node) =>
-      !(
-        node instanceof HTMLElement && node.classList.contains(MENTION_CLASS)
-      ) && node.textContent?.trim(),
-  );
-  const words = written ? `\n\n${text}` : text;
-  if (!runEditCommand('insertText', words))
-    element.append(document.createTextNode(words));
+  const typed = words() ? `\n\n${text}` : text;
+  if (!runEditCommand('insertText', typed))
+    element.append(document.createTextNode(typed));
+  prefilled = words();
   updateEmpty();
   if (templateId) template.value = templateId;
 }

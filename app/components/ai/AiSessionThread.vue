@@ -317,13 +317,10 @@ async function remove() {
               class="inline-flex min-w-0 items-center gap-1"
               data-session-model
               ><Icon name="sparkles" /><AiModelPicker
-                v-if="!archived"
                 :model-value="session.model ?? ''"
+                :disabled="archived"
                 @update:model-value="change({ model: $event })"
-              /><template v-else>{{
-                session.model || phrase.ai_model_default
-              }}</template
-              ><template v-if="session.tokens">
+              /><template v-if="session.tokens">
                 ·
                 {{
                   phrase.ai_session_tokens(compactAmount(session.tokens))

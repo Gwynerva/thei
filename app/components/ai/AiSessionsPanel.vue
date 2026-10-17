@@ -210,13 +210,23 @@ async function deleted() {
               {{ phrase.ai_new_title }}
             </h2>
             <p class="text-text-2">{{ phrase.ai_new_text }}</p>
+            <!-- Which model answers, and the template to start from. -->
             <div
               v-if="modelReady"
-              class="flex items-center gap-1 text-xs"
-              data-session-new-model
+              class="flex flex-wrap items-center gap-xs text-xs"
             >
-              <Icon name="sparkles" class="shrink-0 text-text-3" />
-              <AiModelPicker v-model="newModel" />
+              <span
+                class="flex min-w-0 items-center gap-1"
+                data-session-new-model
+              >
+                <Icon name="sparkles" class="shrink-0 text-text-3" />
+                <AiModelPicker v-model="newModel" />
+              </span>
+              <AiPresetPicker
+                :presets
+                :chosen="composer?.templateId()"
+                @choose="usePreset"
+              />
             </div>
             <p
               v-if="about"
@@ -231,13 +241,6 @@ async function deleted() {
             <ContentInlineLinkDecorator
               :root="aboutRoot"
               :resolver="linkResolver"
-            />
-            <AiPresetChips
-              v-if="modelReady"
-              class="mt-xs"
-              :presets
-              :heading="phrase.ai_templates_presets"
-              @choose="usePreset"
             />
           </div>
         </div>
