@@ -190,9 +190,8 @@ const groups = computed(() => {
 const filterOptions = computed<SelectOption<Filter>[]>(() =>
   (Object.keys(FILTER_ICONS) as Filter[]).map((key, index) => ({
     value: key,
-    label: phrase.value.ai_sessions_filters[key].title,
+    label: phrase.value.ai_sessions_filters[key],
     icon: FILTER_ICONS[key],
-    hint: phrase.value.ai_sessions_filters[key].hint || undefined,
     divider: index === 0,
   })),
 );

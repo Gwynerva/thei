@@ -1384,7 +1384,7 @@ export type LanguagePhrases = {
   ai_sessions_filter: string;
   ai_sessions_filters: Record<
     'all' | 'waiting' | 'applied' | 'rejected' | 'app' | 'template',
-    { title: string; hint: string }
+    string
   >;
   ai_session_new: string;
   ai_session_groups: Record<

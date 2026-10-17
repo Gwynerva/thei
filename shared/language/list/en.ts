@@ -1828,24 +1828,12 @@ export default defineI18nBase({
     ai_sessions_search: 'Find a session',
     ai_sessions_filter: 'Which sessions',
     ai_sessions_filters: {
-      all: { title: 'All sessions', hint: '' },
-      waiting: {
-        title: 'Waiting for you',
-        hint: 'Something undecided, or a question',
-      },
-      applied: {
-        title: 'With something applied',
-        hint: 'What a model or an app changed',
-      },
-      rejected: {
-        title: 'With something declined',
-        hint: 'It can be brought back to decide',
-      },
-      app: {
-        title: 'From apps',
-        hint: 'Claude, ChatGPT and others over MCP',
-      },
-      template: { title: 'From templates', hint: 'Started on a schedule' },
+      all: 'All sessions',
+      waiting: 'Waiting for you',
+      applied: 'With something applied',
+      rejected: 'With something declined',
+      app: 'From apps',
+      template: 'From templates',
     },
     ai_session_new: 'New session',
     ai_session_groups: {

@@ -1892,18 +1892,12 @@ export default defineI18nModule({
     ai_sessions_search: 'Найти сессию',
     ai_sessions_filter: 'Какие сессии',
     ai_sessions_filters: {
-      all: { title: 'Все сессии', hint: '' },
-      waiting: { title: 'Ждут вас', hint: 'Есть нерешённое или вопрос' },
-      applied: {
-        title: 'С применённым',
-        hint: 'Что модель или приложение изменили',
-      },
-      rejected: { title: 'С отклонённым', hint: 'Можно вернуть к решению' },
-      app: {
-        title: 'Из приложений',
-        hint: 'Claude, ChatGPT и другие через MCP',
-      },
-      template: { title: 'Из шаблонов', hint: 'Начатые по расписанию' },
+      all: 'Все сессии',
+      waiting: 'Ждут вас',
+      applied: 'С применённым',
+      rejected: 'С отклонённым',
+      app: 'Из приложений',
+      template: 'Из шаблонов',
     },
     ai_session_new: 'Новая сессия',
     ai_session_groups: {
