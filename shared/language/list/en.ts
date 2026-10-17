@@ -1958,7 +1958,7 @@ export default defineI18nBase({
       describe: {
         title: 'File descriptions',
         instruction:
-          'Describe the files that have none yet: what each shows or is about, from the file itself. A file that cannot be shown is left to me.',
+          'Add descriptions to the files that have none. When you write one, look not only at the file itself but at the places it is used in (the entity it belongs to, captions, the text around it and so on). If you are not sure, or cannot describe a file for any reason, tell me.',
       },
       links: {
         title: 'Fixing broken links',
